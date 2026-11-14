@@ -7,13 +7,11 @@ import type { GitFileChange, ReviewComment, ReviewGuide } from "@thinkrail/contr
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { REVIEW_KEYS } from "../keybindings";
 import type { ChangesTab } from "../store";
 import { splitPath } from "./changesModel";
 import { sendReviewBatch, sendReviewComment } from "./reviewSend";
 import { ownsReviewShortcut } from "./reviewShortcuts";
-
-const NEXT_KEY = "n";
-const PREVIOUS_KEY = "p";
 
 export type GuideStep =
 	| { kind: "read"; path: string; why: string; order: number }
@@ -121,10 +119,10 @@ export function ChangesReviewGuide({
 		const onKey = (event: KeyboardEvent) => {
 			if (!ownsReviewShortcut(event, tab)) return;
 			if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-			if (event.key === NEXT_KEY) {
+			if (event.key === REVIEW_KEYS.nextStep.key) {
 				event.preventDefault();
 				next(true);
-			} else if (event.key === PREVIOUS_KEY) {
+			} else if (event.key === REVIEW_KEYS.previousStep.key) {
 				event.preventDefault();
 				previous(true);
 			}
@@ -265,7 +263,9 @@ export function ChangesReviewGuide({
 				<IconButton
 					variant="outline"
 					icon={ChevronLeft}
-					label={t("changes.guide.previous", { key: PREVIOUS_KEY.toUpperCase() })}
+					label={t("changes.guide.previous", {
+						key: REVIEW_KEYS.previousStep.key.toUpperCase(),
+					})}
 					data-testid="changes-review-guide-prev"
 					disabled={steps.length === 0}
 					onClick={() => previous(false)}
@@ -287,7 +287,7 @@ export function ChangesReviewGuide({
 						{cursor < 0 ? "" : `${cursor + 1} / ${steps.length}`}
 					</span>
 					<kbd className="rounded-xs border border-current px-4 tr-code-text">
-						{NEXT_KEY.toUpperCase()}
+						{REVIEW_KEYS.nextStep.key.toUpperCase()}
 					</kbd>
 				</Button>
 				<Button

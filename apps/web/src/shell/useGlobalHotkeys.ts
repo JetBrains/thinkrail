@@ -25,6 +25,7 @@ type GlobalHotkeyActions = {
 	onCloseTab?: ChordHandler;
 	onSplitRight?: ChordHandler;
 	onMoveTab?: ChordHandler;
+	onShortcuts?: ChordHandler;
 };
 
 const CHORD_ACTIONS = {
@@ -54,13 +55,14 @@ const CHORD_ACTIONS = {
 	"group.splitRight": "onSplitRight",
 	"tab.moveToPreviousGroup": "onMoveTab",
 	"tab.moveToNextGroup": "onMoveTab",
+	"shortcuts.open": "onShortcuts",
 } as const satisfies Record<Exclude<KeybindingId, "chat.history">, keyof GlobalHotkeyActions>;
 
 type GlobalHotkeyCommand = keyof typeof CHORD_ACTIONS;
 
 type GlobalHotkeyEvent = Pick<
 	KeyboardEvent,
-	"altKey" | "code" | "ctrlKey" | "isComposing" | "metaKey" | "shiftKey"
+	"altKey" | "code" | "ctrlKey" | "isComposing" | "key" | "metaKey" | "shiftKey"
 > &
 	Partial<Pick<KeyboardEvent, "getModifierState">>;
 

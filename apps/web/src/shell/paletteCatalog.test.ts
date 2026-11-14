@@ -121,6 +121,7 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 			copyPath: noop,
 			openIn: noop,
 			openSettings: noop,
+			openShortcuts: noop,
 			runTabAction: noop,
 		},
 		...overrides,
@@ -146,6 +147,18 @@ describe("palette project and Settings commands", () => {
 			key: ",",
 			mod: true,
 		});
+	});
+
+	test("Keyboard shortcuts opens the cheatsheet and shows its Mod+? chord", () => {
+		let opened = 0;
+		const shortcuts = row(
+			"shortcuts.open",
+			deps({ actions: { ...deps().actions, openShortcuts: () => (opened += 1) } }),
+		);
+		expect(shortcuts?.title).toBe("Keyboard shortcuts");
+		expect(shortcuts?.shortcut).toEqual({ key: "?", mod: true });
+		shortcuts?.run?.();
+		expect(opened).toBe(1);
 	});
 
 	test("a chat without a project is offered only where one can start, and repository commands only with a repository", () => {

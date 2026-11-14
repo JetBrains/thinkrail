@@ -242,3 +242,9 @@ each step within 300 ms, ignored when another key went down less than 100 ms bef
 reset by any other key, key repeat, IME composition (`isComposing`/229), another held modifier, pointer
 down, blur or a hidden document, and firing on the second release. The sandboxed HTML preview iframe never
 delivers keys to the parent window, so the gesture does not fire from inside it.
+
+## Keyboard settings
+
+`SearchSettings` is the Settings → Keyboard section: the `Mod+K` note, the double-Shift switch and,
+below it, whatever `shortcuts` node the shell injects (the full read-only shortcut list with its own
+filter, [[submodule-web-shell]]) — `search` never imports the shell's list.

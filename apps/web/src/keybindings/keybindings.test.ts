@@ -20,8 +20,9 @@ const PLATFORMS = {
 	other: "",
 } as const;
 
-const press = (code: string, modifiers: Modifiers = {}) => ({
+const press = (code: string, modifiers: Modifiers = {}, key = "") => ({
 	code,
+	key,
 	ctrlKey: false,
 	metaKey: false,
 	altKey: false,
@@ -183,12 +184,16 @@ test("every chord resolves to its own binding and no two bindings share a chord 
 		for (const [id, chords] of entries) {
 			for (const chord of chords as readonly Chord[]) {
 				if (chord.platform !== undefined && (chord.platform === "apple") !== apple) continue;
-				const event = press(chord.code, {
-					ctrlKey: chord.ctrl === true || (chord.mod === true && !apple),
-					metaKey: chord.mod === true && apple,
-					shiftKey: chord.shift === true,
-					altKey: chord.alt === true,
-				});
+				const event = press(
+					chord.code ?? "",
+					{
+						ctrlKey: chord.ctrl === true || (chord.mod === true && !apple),
+						metaKey: chord.mod === true && apple,
+						shiftKey: chord.shift === true,
+						altKey: chord.alt === true,
+					},
+					chord.typed ? chord.key : "",
+				);
 				const signature = JSON.stringify(event);
 				expect(owners.get(signature) ?? id).toBe(id);
 				owners.set(signature, id);
@@ -196,6 +201,44 @@ test("every chord resolves to its own binding and no two bindings share a chord 
 			}
 		}
 	}
+});
+
+describe("Mod+? matches the typed question mark on any layout", () => {
+	const linux = PLATFORMS.linux;
+	const typed = (code: string, key: string, modifiers: Modifiers) =>
+		matchKeybinding(press(code, modifiers, key), linux);
+
+	test("US Ctrl+Shift+/, Russian Ctrl+Shift+7 and German Ctrl+Shift+ß all type ? and open it", () => {
+		const ctrlShift: Modifiers = { ctrlKey: true, shiftKey: true };
+		expect(typed("Slash", "?", ctrlShift)).toBe("shortcuts.open");
+		expect(typed("Digit7", "?", ctrlShift)).toBe("shortcuts.open");
+		expect(typed("Minus", "?", ctrlShift)).toBe("shortcuts.open");
+		expect(
+			matchKeybinding(press("Slash", { metaKey: true, shiftKey: true }, "?"), PLATFORMS.apple),
+		).toBe("shortcuts.open");
+	});
+
+	test("the physical Slash key does not open it where it types something else", () => {
+		const ctrlShift: Modifiers = { ctrlKey: true, shiftKey: true };
+		expect(typed("Slash", ",", ctrlShift)).toBeNull();
+		expect(typed("Slash", "_", ctrlShift)).toBeNull();
+		expect(typed("Slash", "/", { ctrlKey: true })).toBeNull();
+		expect(typed("Minus", "-", { ctrlKey: true })).toBeNull();
+	});
+
+	test("Alt, a foreign modifier or no modifier never opens it", () => {
+		expect(typed("Slash", "?", { shiftKey: true })).toBeNull();
+		expect(typed("Slash", "?", { ctrlKey: true, shiftKey: true, altKey: true })).toBeNull();
+		expect(typed("Slash", "?", { metaKey: true, shiftKey: true })).toBeNull();
+		expect(
+			matchKeybinding(press("Slash", { ctrlKey: true, shiftKey: true }, "?"), PLATFORMS.apple),
+		).toBeNull();
+	});
+
+	test("is shown as Mod+?", () => {
+		expect(keybindingLabel("shortcuts.open", { platform: PLATFORMS.apple })).toBe("⌘?");
+		expect(keybindingLabel("shortcuts.open", { platform: PLATFORMS.windows })).toBe("Ctrl+?");
+	});
 });
 
 describe("keybinding shortcuts", () => {

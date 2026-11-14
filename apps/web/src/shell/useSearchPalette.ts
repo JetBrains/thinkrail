@@ -79,7 +79,7 @@ import {
 } from "./paletteCatalog";
 import { paletteNavigator } from "./paletteNavigation";
 import { focusAdjacentRegion } from "./regions";
-import { readSettingsShortcutLabel } from "./useAppShortcuts";
+import { hasNativeShortcuts } from "./useAppShortcuts";
 import { activeTabActions, runActiveTabAction } from "./workbenchCommands";
 
 const LOCAL_SCOPES: readonly SearchScope[] = ["all", "work", "commands"];
@@ -165,7 +165,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		[protocolVersion, options.hasUpdateSettings],
 	);
 	const editors = useEditors();
-	const [nativeShortcuts] = useState(() => readSettingsShortcutLabel() !== null);
+	const [nativeShortcuts] = useState(hasNativeShortcuts);
 	const [pageZoom] = useState(readNativePageZoomBridge);
 	const [tabActions] = useState(activeTabActions);
 
@@ -294,6 +294,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				copyPath: (workspace) => void copyText(workspace.worktreePath),
 				openIn: openWorkspaceIn,
 				openSettings: (section?: SettingsSection) => store().openSettings(section),
+				openShortcuts: () => store().openShortcuts(),
 				runTabAction: runActiveTabAction,
 			},
 		};

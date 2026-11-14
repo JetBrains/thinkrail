@@ -78,7 +78,8 @@ import { NativeWindowControls } from "./NativeWindowControls";
 import { PROJECT_HOME_PROJECTS_REGION_ID, ProjectHome } from "./ProjectHome";
 import { focusAdjacentRegion, installRegionTracker } from "./regions";
 import { SearchPaletteHost } from "./SearchPaletteHost";
-import { readSettingsShortcutLabel } from "./useAppShortcuts";
+import { ShortcutsDialogHost, ShortcutsReference } from "./ShortcutsDialog";
+import { hasNativeShortcuts, readSettingsShortcutLabel } from "./useAppShortcuts";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { useNativeWindowControls } from "./useNativeWindowControls";
@@ -146,6 +147,9 @@ export function Shell() {
 
 	const homeProjects = useCollapsibleRegion<HTMLDivElement>(PROJECT_HOME_PROJECTS_REGION_ID);
 	const [searchShortcut] = useState(() => keybindingLabel("search.open"));
+	const [newWorkspaceShortcut] = useState(() =>
+		keybindingLabel("workspace.new", { browser: !hasNativeShortcuts() }),
+	);
 
 	const [themeHint] = useState(readThemeHint);
 	const [settingsShortcut] = useState(readSettingsShortcutLabel);
@@ -223,6 +227,7 @@ export function Shell() {
 		onCloseTab: closeActiveItem,
 		...(contextRepoProject || canStartChat ? { onNewWorkspace: () => void openNewWork() } : {}),
 		onSearch: () => useAppStore.getState().openSearch(),
+		onShortcuts: () => useAppStore.getState().openShortcuts(),
 		onFindInFiles: openFindInFiles,
 		onNextRegion: () => focusAdjacentRegion(1),
 		onPreviousRegion: () => focusAdjacentRegion(-1),
@@ -252,6 +257,7 @@ export function Shell() {
 							branchStatus={branchStatus}
 							noteOpenReview={noteOpenReview}
 							refreshBranchStatus={refreshBranchStatus}
+							newWorkspaceShortcut={newWorkspaceShortcut}
 							onNewWorkspace={() => openNewWork()}
 						/>
 					) : null}
@@ -320,7 +326,9 @@ export function Shell() {
 				) : null}
 				<SettingsDialog
 					layoutSettings={<LayoutSettings />}
-					keyboardSettings={<SearchSettings />}
+					keyboardSettings={
+						<SearchSettings shortcuts={<ShortcutsReference className="max-h-[32rem]" />} />
+					}
 					updateSettings={updates ? <UpdateSettings updates={updates} /> : undefined}
 				/>
 				{newWorkspace !== null ? (
@@ -367,6 +375,7 @@ export function Shell() {
 				hasUpdateSettings={updates !== null}
 			/>
 			<FindInFilesHost />
+			<ShortcutsDialogHost />
 			<NotificationPermissionPrompt />
 			<Toaster />
 			<UpdateInstallSurfaces updates={updates} />
