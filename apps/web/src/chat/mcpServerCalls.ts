@@ -1,6 +1,6 @@
+import { MCP_TOOL_PREFIX, readMcpToolDetails } from "@thinkrail/chat-ui/tools/mcp/mcpResult";
+import type { ChatTurn, ToolResultState } from "@thinkrail/chat-ui/types";
 import { assistantToolCallsAreExecutable } from "@thinkrail/contracts";
-import { MCP_TOOL_PREFIX, readMcpToolDetails } from "./tools/mcp/mcpResult";
-import type { ChatTurn, ToolResultState } from "./types";
 
 const MCP_RESOURCE_TOOLS: ReadonlySet<string> = new Set([
 	"list_mcp_resources",

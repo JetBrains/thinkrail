@@ -1,3 +1,4 @@
+import type { ChatMessageOrder } from "@thinkrail/chat-ui/chatMessageOrder";
 import {
 	type ComposerGrowthLimit,
 	isQuestionPanelHeight,
@@ -7,14 +8,17 @@ import {
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
+import {
+	SegmentedControl,
+	type SegmentedControlOption,
+	SettingsGroup,
+	SettingsPageContainer,
+	SettingsRow,
+} from "@thinkrail/ui/settings";
 import { cn } from "@thinkrail/ui/utils";
-import type { ChatMessageOrder } from "@/chat/chatPreferences";
 import { selectActiveWorkspace, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { LineWidthControl } from "./LineWidthSettings";
-import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
-import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
-import { SettingsRow } from "./SettingsRow";
 import { SubagentSettings } from "./SubagentSettings";
 import { saveSettings } from "./saveSettings";
 import { SETTINGS_INPUT, useSettingsDraft } from "./settingsDraft";

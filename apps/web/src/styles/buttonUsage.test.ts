@@ -1,13 +1,17 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
-import { designSourceFiles, designSourceLabel } from "../../scripts/designSources";
-import { normalizeEol } from "../../scripts/generatedFiles";
+import { normalizeEol } from "@thinkrail/design-tokens/scripts/generatedFiles";
+import {
+	designSourceFiles,
+	designSourceLabel,
+	isPhoneShellSource,
+} from "../../scripts/designSources";
 
 const code = (path: string) =>
 	normalizeEol(readFileSync(path, "utf8"))
 		.replace(/\/\*[\s\S]*?\*\//g, "")
 		.replace(/^[ \t]*\/\/.*$/gm, "");
-const FILES = designSourceFiles().filter((f) => f.endsWith(".tsx"));
+const FILES = designSourceFiles().filter((f) => f.endsWith(".tsx") && !isPhoneShellSource(f));
 const BUTTON_SOURCE = "packages/ui/button.tsx";
 
 function openingTags(src: string, tag: string): { text: string; line: number }[] {
@@ -183,13 +187,13 @@ const SPECIALIZED: Exception[] = [
 
 const OVERRIDES: Exception[] = [
 	{
-		file: "chat/ExtUiPrompt.tsx",
+		file: "packages/chat-ui/src/ExtUiPrompt.tsx",
 		contains: 'data-testid="ext-ui-option"',
 		reason:
 			"extension select options must wrap long labels (chat/SPEC.md); the only multi-line button",
 	},
 	{
-		file: "chat/Composer.tsx",
+		file: "packages/chat-ui/src/Composer.tsx",
 		contains: 'data-testid="chat-abort"',
 		reason:
 			"container-query collapse: below @md its label hides and Stop becomes the 24px icon-only square beside the history IconButton",

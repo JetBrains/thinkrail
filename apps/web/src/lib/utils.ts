@@ -1,4 +1,4 @@
-import type { WireUserMessage } from "@thinkrail/contracts";
+import { type CompactAgeUnit, compactAgeOf } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
 import { browserPlatform, isApplePlatform } from "@thinkrail/ui/keyboard";
 
@@ -111,40 +111,6 @@ export function parseTupleKey(key: string, namespace: string): string[] | null {
 	return parts;
 }
 
-export function randomId(prefix = "id"): string {
-	const bytes = crypto.getRandomValues(new Uint8Array(16));
-	const value = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-	return `${prefix}-${value}`;
-}
-
-export function randomUuid(): string {
-	const bytes = crypto.getRandomValues(new Uint8Array(16));
-	bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
-	bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
-	const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-}
-
-export function userText(content: WireUserMessage["content"]): string {
-	if (typeof content === "string") return content;
-	return content
-		.filter((c) => c.type === "text")
-		.map((c) => c.text)
-		.join("");
-}
-
-export function firstNonBlankLine(text: string): string | undefined {
-	let start = 0;
-	while (start < text.length) {
-		const newline = text.indexOf("\n", start);
-		const end = newline === -1 ? text.length : newline;
-		const line = text.slice(start, end).trim();
-		if (line) return line;
-		start = end + 1;
-	}
-	return undefined;
-}
-
 export function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -155,19 +121,6 @@ export function ancestorPaths(path: string): string[] {
 	return segments.map((_, index) => segments.slice(0, index + 1).join("/"));
 }
 
-export function normalizePath(path: string): string {
-	return path.replaceAll("\\", "/").replace(/^\.\/+/, "");
-}
-
-function hasWindowsDriveRoot(path: string): boolean {
-	return /^[A-Za-z]:\//.test(normalizePath(path));
-}
-
-export function isAbsolutePath(path: string): boolean {
-	const normalized = normalizePath(path);
-	return normalized.startsWith("/") || hasWindowsDriveRoot(normalized);
-}
-
 export function shallowEqualArrays(
 	a: readonly unknown[] | undefined,
 	b: readonly unknown[] | undefined,
@@ -175,71 +128,6 @@ export function shallowEqualArrays(
 	if (a === b) return true;
 	if (!a || !b || a.length !== b.length) return false;
 	return a.every((value, i) => Object.is(value, b[i]));
-}
-
-export function fileName(path: string): string {
-	const parts = normalizePath(path).split("/").filter(Boolean);
-	return parts.at(-1) ?? path;
-}
-
-function trimTrailingSlashes(path: string): string {
-	return path === "/" || /^[A-Za-z]:\/$/.test(path) ? path : path.replace(/\/+$/, "");
-}
-
-function canonicalPosixPath(path: string): string {
-	const normalized = normalizePath(path);
-	const drive = /^[A-Za-z]:\//.exec(normalized)?.[0];
-	const absolute = normalized.startsWith("/") || drive !== undefined;
-	const body = drive ? normalized.slice(drive.length) : normalized.replace(/^\/+/, "");
-	const segments: string[] = [];
-	for (const segment of body.split("/")) {
-		if (!segment || segment === ".") continue;
-		if (segment === "..") {
-			const previous = segments.at(-1);
-			if (previous && previous !== "..") segments.pop();
-			else if (!absolute) segments.push(segment);
-			continue;
-		}
-		segments.push(segment);
-	}
-	const prefix = drive ?? (absolute ? "/" : "");
-	return `${prefix}${segments.join("/")}`;
-}
-
-function rootRelative(canonical: string, workspaceRoot: string): string | null {
-	const root = trimTrailingSlashes(canonicalPosixPath(workspaceRoot));
-	const ignoreCase = hasWindowsDriveRoot(canonical) && hasWindowsDriveRoot(root);
-	const comparableCanonical = ignoreCase ? canonical.toLowerCase() : canonical;
-	const comparableRoot = ignoreCase ? root.toLowerCase() : root;
-	const rootPrefix = comparableRoot.endsWith("/") ? comparableRoot : `${comparableRoot}/`;
-	if (
-		!comparableRoot ||
-		(comparableCanonical !== comparableRoot && !comparableCanonical.startsWith(rootPrefix))
-	) {
-		return null;
-	}
-	return canonical.slice(root.length).replace(/^\/+/, "");
-}
-
-export function projectRelativePath(path: string, workspaceRoot?: string | undefined): string {
-	const canonical = canonicalPosixPath(path);
-	if (!canonical || !isAbsolutePath(canonical)) return canonical;
-	const relative = workspaceRoot ? rootRelative(canonical, workspaceRoot) : null;
-	if (relative === null) return canonical;
-	return relative || fileName(canonical);
-}
-
-export function pathWithinRoot(path: string, root: string): string | null {
-	const canonical = canonicalPosixPath(path);
-	return isAbsolutePath(canonical) && isAbsolutePath(root) ? rootRelative(canonical, root) : null;
-}
-
-export function joinWorkspacePath(worktreePath: string, path: string): string {
-	if (!worktreePath || path.startsWith("/") || hasWindowsDriveRoot(path)) return path;
-	const windows = /^(?:[A-Za-z]:\\|\\\\)/.test(worktreePath);
-	const separator = windows ? "\\" : "/";
-	const root = worktreePath.endsWith(separator) ? worktreePath : `${worktreePath}${separator}`;
-	return `${root}${windows ? path.replaceAll("/", "\\") : path}`;
 }
 
 let colorCanvas: CanvasRenderingContext2D | null | undefined;
@@ -325,27 +213,20 @@ export function relativeTime(t: Translator, ms: number, now: number): string {
 
 /** Compact elapsed label for dense rows: `3h`, `12d`, `3w`, `4mo`. */
 export function compactAge(t: Translator, ms: number, now: number): string {
-	const hours = Math.max(0, Math.floor((now - ms) / 3_600_000));
-	if (hours < 1) return t("lib.compactAge.underHour");
-	if (hours < 24) return t("lib.compactAge.hours", { count: hours });
-	const days = Math.floor(hours / 24);
-	if (days < 14) return t("lib.compactAge.days", { count: days });
-	const weeks = Math.floor(days / 7);
-	if (weeks < 10) return t("lib.compactAge.weeks", { count: weeks });
-	return t("lib.compactAge.months", { count: Math.floor(days / 30) });
+	const { unit, count } = compactAgeOf(ms, now);
+	return t(COMPACT_AGE_KEYS[unit], { count });
 }
+
+const COMPACT_AGE_KEYS = {
+	underHour: "lib.compactAge.underHour",
+	hours: "lib.compactAge.hours",
+	days: "lib.compactAge.days",
+	weeks: "lib.compactAge.weeks",
+	months: "lib.compactAge.months",
+} as const satisfies Record<CompactAgeUnit, string>;
 
 export function isShellInert(value: string): boolean {
 	return /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(value);
-}
-
-export async function copyText(text: string): Promise<boolean> {
-	try {
-		await navigator.clipboard.writeText(text);
-		return true;
-	} catch {
-		return false;
-	}
 }
 
 export const MODAL_LAYER_SELECTOR = [

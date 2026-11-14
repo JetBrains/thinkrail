@@ -9,6 +9,11 @@ const roots: string[] = [];
 const modules = {
 	"packages/artifact-tests": "@thinkrail/artifact-tests",
 	"packages/contracts": "@thinkrail/contracts",
+	"packages/chat-ui": "@thinkrail/chat-ui",
+	"packages/design-tokens": "@thinkrail/design-tokens",
+	"packages/nostr-signaling": "@thinkrail/nostr-signaling",
+	"packages/relay": "@thinkrail/relay",
+	"packages/remote-client": "@thinkrail/remote-client",
 	"packages/shared": "@thinkrail/shared",
 	"packages/pi-delegation": "pi-delegation",
 	"packages/pi-background-commands": "pi-background-commands",
@@ -18,6 +23,7 @@ const modules = {
 	"packages/server": "@thinkrail/server",
 	"apps/web": "@thinkrail/web",
 	"apps/cli": "@thinkrail/cli",
+	"apps/mobile": "@thinkrail/mobile",
 	"apps/desktop": "@thinkrail/desktop",
 } as const;
 
@@ -40,6 +46,8 @@ function fixture(): string {
 			"@thinkrail/server": "workspace:*",
 			"@thinkrail/shared": "workspace:*",
 		},
+		"packages/relay": { "@thinkrail/contracts": "workspace:*" },
+		"packages/remote-client": { "@thinkrail/contracts": "workspace:*" },
 		"packages/shared": { "@thinkrail/contracts": "workspace:*" },
 		"packages/pi-subagents": { "pi-delegation": "workspace:*" },
 		"packages/pi-dag": { "pi-delegation": "workspace:*" },
@@ -50,10 +58,16 @@ function fixture(): string {
 			"pi-background-commands": "workspace:*",
 			"pi-subagents": "workspace:*",
 		},
-		"apps/web": { "@thinkrail/contracts": "workspace:*" },
+		"apps/web": {
+			"@thinkrail/contracts": "workspace:*",
+			"@thinkrail/remote-client": "workspace:*",
+		},
 		"apps/cli": {
 			"@thinkrail/server": "workspace:*",
 			"@thinkrail/shared": "workspace:*",
+		},
+		"apps/mobile": {
+			"@thinkrail/design-tokens": "workspace:*",
 		},
 		"apps/desktop": {
 			"@thinkrail/server": "workspace:*",

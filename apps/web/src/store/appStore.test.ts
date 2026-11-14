@@ -1,4 +1,7 @@
 import { beforeEach, expect, test } from "bun:test";
+import type { HydratedRuntime } from "@thinkrail/chat-ui/hydrate";
+import type { PromptImage } from "@thinkrail/chat-ui/promptImageState";
+import type { ChatTurn, FailureRecovery } from "@thinkrail/chat-ui/types";
 import {
 	type AppConfig,
 	DEFAULT_CONFIG,
@@ -15,8 +18,6 @@ import {
 	type WorkspaceFsChangedPayload,
 	type WorkspaceSkillChange,
 } from "@thinkrail/contracts";
-import type { HydratedRuntime } from "../chat/hydrate";
-import type { ChatTurn, FailureRecovery } from "../chat/types";
 import { nullProto, userText } from "../lib";
 import {
 	BUILTIN_LAYOUT_PRESETS,
@@ -37,7 +38,6 @@ import {
 	toast,
 	useAppStore,
 } from "./appStore";
-import type { PromptImage } from "./promptImageState";
 import {
 	selectActiveFilePath,
 	selectChatAttended,

@@ -1,0 +1,32 @@
+{
+	"name": "@thinkrail/mobile",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build": "bun run --cwd ../web build:phone",
+		"typecheck": "tsc --noEmit",
+		"ios:setup": "bun scripts/ios-setup.ts",
+		"ios:sync": "bun run build && bun scripts/ios-setup.ts && cap sync ios",
+		"ios:open": "cap open ios",
+		"ios:run": "bun run ios:sync && cap run ios",
+		"android:setup": "bun scripts/android-setup.ts",
+		"android:sync": "bun run build && bun scripts/android-setup.ts && cap sync android",
+		"android:open": "cap open android",
+		"android:run": "bun run android:sync && cap run android"
+	},
+	"dependencies": {
+		"@capacitor/android": "8.6.0",
+		"@capacitor/app": "catalog:",
+		"@capacitor/barcode-scanner": "catalog:",
+		"@capacitor/core": "catalog:",
+		"@capacitor/ios": "8.6.0",
+		"@capacitor/keyboard": "catalog:"
+	},
+	"devDependencies": {
+		"@capacitor/cli": "8.6.0",
+		"@thinkrail/design-tokens": "workspace:*",
+		"@types/bun": "catalog:",
+		"typescript": "catalog:"
+	}
+}

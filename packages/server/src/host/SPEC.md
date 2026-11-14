@@ -62,7 +62,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   socket's [[submodule-server-speech]] relay, so it never joins the `clientKey → socket` registry, the
   replay cache or any channel: binary 20 ms audio frames would otherwise be hashed and retained
   per request. `host` publishes
-  `speech.changed` whole to v107 sockets, which also get `ServerWelcome.speech`; static serving with
+  `speech.changed` whole to v107 sockets, which also get `ServerWelcome.speech`; and static serving with
   `index.html` fallback, the `server.welcome` push, the **`?client=` page identity** read off the socket URL at
   upgrade (threaded to every handler as `RequestContext`; it addresses terminal output but no longer *owns*
   PTYs — see [[submodule-server-terminal]]) plus the `clientKey → socket` registry and the **replay-namespace

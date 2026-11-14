@@ -63,7 +63,7 @@ let previewOpen = false;
 function preferenceStore(): PreferenceStore {
 	if (!store) {
 		const stable = getStablePreferenceAdapter();
-		store = stable ? stableStore(stable) : browserStore(getTransport().httpBase());
+		store = stable ? stableStore(stable) : browserStore(getTransport().backendKey());
 	}
 	return store;
 }

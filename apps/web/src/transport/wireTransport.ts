@@ -45,12 +45,20 @@ import {
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import { currentLocale } from "@thinkrail/locales/react";
+import type { DeviceWireClient } from "@thinkrail/remote-client";
 import { isChatsContainer, isConnectedGeneration, useAppStore } from "../store";
 import { githubStarToast } from "./githubStar";
-import { createPiEventBatcher, shouldFlushPiEventsBefore } from "./piEventBatcher";
-import { WsTransport } from "./transport";
+import { resetHost } from "./hostReset";
+import {
+	createPiEventBatcher,
+	type PiEventBatcher,
+	shouldFlushPiEventsBefore,
+} from "./piEventBatcher";
+import { RemoteTransport } from "./remoteTransport";
+import { type Transport, WsTransport } from "./transport";
 
-let transport: WsTransport | null = null;
+let transport: Transport | null = null;
+let disposeWiring: (() => void) | null = null;
 
 export function supportsHostUpdateRun(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= HOST_UPDATE_RUN_PROTOCOL_VERSION;
@@ -322,12 +330,13 @@ function refreshWorkspaceCreations(connectionGeneration: number): void {
 }
 
 export function initTransport(): WsTransport {
-	if (transport) return transport;
+	const existing = transport;
+	if (existing instanceof WsTransport) return existing;
 	const piEvents = createPiEventBatcher((payloads) =>
 		useAppStore.getState().handlePiEvents(payloads),
 	);
 
-	transport = new WsTransport(
+	const ws = new WsTransport(
 		{
 			onStatus: (status) => {
 				piEvents.flush();
@@ -340,8 +349,39 @@ export function initTransport(): WsTransport {
 			},
 		},
 	);
+	installTransport(ws, piEvents);
+	ws.connect();
+	return ws;
+}
 
-	transport.subscribe(WS_CHANNELS.serverWelcome, (data) => {
+function installTransport(
+	next: Transport,
+	piEvents: PiEventBatcher,
+	beforeWiring?: () => void,
+): void {
+	const previous = transport;
+	transport = next;
+	if (previous) {
+		disposeWiring?.();
+		previous.close();
+		sessionStateHydration = null;
+		forgetInAppSurvey();
+		resetHost(() => useAppStore.getState().resetHostState());
+	}
+	beforeWiring?.();
+	const unsubscribes = wireChannelsToStore(next, piEvents);
+	disposeWiring = () => {
+		for (const unsubscribe of unsubscribes) unsubscribe();
+		piEvents.dispose();
+	};
+}
+
+function wireChannelsToStore(transport: Transport, piEvents: PiEventBatcher): (() => void)[] {
+	const unsubscribes: (() => void)[] = [];
+	const on = (channel: string, handler: (data: unknown) => void): void => {
+		unsubscribes.push(transport.subscribe(channel, handler));
+	};
+	on(WS_CHANNELS.serverWelcome, (data) => {
 		const welcome = data as Partial<ServerWelcome>;
 		if (typeof welcome.protocolVersion !== "number" || !Array.isArray(welcome.projects)) return;
 		useAppStore.getState().hideSurveyInvitation();
@@ -378,23 +418,23 @@ export function initTransport(): WsTransport {
 		void loadInAppSurvey();
 	});
 
-	transport.subscribe(WS_CHANNELS.hostUpdateAvailable, (data) => {
+	on(WS_CHANNELS.hostUpdateAvailable, (data) => {
 		useAppStore.getState().applyHostUpdate(data as HostUpdateNotice);
 	});
 
-	transport.subscribe(WS_CHANNELS.projectUpdated, (data) => {
+	on(WS_CHANNELS.projectUpdated, (data) => {
 		useAppStore.getState().applyProjectUpdated(data as Project);
 	});
 
-	transport.subscribe(WS_CHANNELS.piEvent, (data) => {
+	on(WS_CHANNELS.piEvent, (data) => {
 		piEvents.enqueue(data as SessionEventPayload);
 	});
 
-	transport.subscribe(WS_CHANNELS.piExtensionUi, (data) => {
+	on(WS_CHANNELS.piExtensionUi, (data) => {
 		useAppStore.getState().applyExtUi(data as ExtUiRequest);
 	});
 
-	transport.subscribe(WS_CHANNELS.sessionCreated, (data) => {
+	on(WS_CHANNELS.sessionCreated, (data) => {
 		const summary = data as SessionCreatedPayload;
 		useAppStore.getState().noteClosedChats(summary.workspaceId, [
 			{
@@ -406,12 +446,12 @@ export function initTransport(): WsTransport {
 		]);
 	});
 
-	transport.subscribe(WS_CHANNELS.sessionDeleted, (data) => {
+	on(WS_CHANNELS.sessionDeleted, (data) => {
 		const { workspaceId, sessionId } = data as SessionDeletedPayload;
 		useAppStore.getState().deleteChat(workspaceId, sessionId, false);
 	});
 
-	transport.subscribe(WS_CHANNELS.sessionState, (data) => {
+	on(WS_CHANNELS.sessionState, (data) => {
 		const record = data as SessionStateRecord;
 		const hydration = sessionStateHydration;
 		const current = useAppStore.getState();
@@ -428,7 +468,7 @@ export function initTransport(): WsTransport {
 		applySessionStateRecord(record);
 	});
 
-	transport.subscribe(WS_CHANNELS.providerLogin, (data) => {
+	on(WS_CHANNELS.providerLogin, (data) => {
 		const push = data as LoginPush;
 		const state = useAppStore.getState();
 		if (push.target && state.removedWorkspaceIds[push.target.workspaceId]) {
@@ -440,11 +480,11 @@ export function initTransport(): WsTransport {
 		state.applyLoginFrame(push);
 	});
 
-	transport.subscribe(WS_CHANNELS.mcpStatus, (data) => {
+	on(WS_CHANNELS.mcpStatus, (data) => {
 		useAppStore.getState().applyMcpStatus(data as McpStatusPayload);
 	});
 
-	transport.subscribe(WS_CHANNELS.providerChanged, () => {
+	on(WS_CHANNELS.providerChanged, () => {
 		useAppStore.getState().noteProviderChanged();
 		const providerVersion = useAppStore.getState().providerVersion;
 		getTransport()
@@ -453,37 +493,37 @@ export function initTransport(): WsTransport {
 			.catch(() => {});
 	});
 
-	transport.subscribe(WS_CHANNELS.localesChanged, () => {
+	on(WS_CHANNELS.localesChanged, () => {
 		refreshLocalLocales(useAppStore.getState().connectionGeneration);
 	});
 
-	transport.subscribe(WS_CHANNELS.themesChanged, () => {
+	on(WS_CHANNELS.themesChanged, () => {
 		refreshUserThemes(useAppStore.getState().connectionGeneration);
 	});
 
-	transport.subscribe(WS_CHANNELS.packagesChanged, () => {
+	on(WS_CHANNELS.packagesChanged, () => {
 		useAppStore.getState().bumpPackagesVersion();
 	});
 
-	transport.subscribe(WS_CHANNELS.fontsChanged, () => {
+	on(WS_CHANNELS.fontsChanged, () => {
 		refreshUserFonts(useAppStore.getState().connectionGeneration);
 	});
 
-	transport.subscribe(WS_CHANNELS.speechChanged, (data) => {
+	on(WS_CHANNELS.speechChanged, (data) => {
 		useAppStore.getState().installSpeechStatus(data as SpeechStatus);
 	});
 
-	transport.subscribe(WS_CHANNELS.feedbackInterview, () => {
+	on(WS_CHANNELS.feedbackInterview, () => {
 		const state = useAppStore.getState();
 		if ((state.protocolVersion ?? 0) < FEEDBACK_SURVEY_PROTOCOL_VERSION) return;
 		state.showSurveyInvitation();
 	});
 
-	transport.subscribe(WS_CHANNELS.feedbackGithubStar, (data) => {
+	on(WS_CHANNELS.feedbackGithubStar, (data) => {
 		useAppStore.getState().pushToast(githubStarToast(data));
 	});
 
-	transport.subscribe(WS_CHANNELS.workspaceCreated, (data) => {
+	on(WS_CHANNELS.workspaceCreated, (data) => {
 		const store = useAppStore.getState();
 		store.addWorkspace(data as Workspace);
 		if (
@@ -495,56 +535,70 @@ export function initTransport(): WsTransport {
 		}
 	});
 
-	transport.subscribe(WS_CHANNELS.workspaceCreationChanged, (data) => {
+	on(WS_CHANNELS.workspaceCreationChanged, (data) => {
 		useAppStore.getState().applyWorkspaceCreation(data as WorkspaceCreation);
 	});
 
-	transport.subscribe(WS_CHANNELS.workspaceCreationRemoved, (data) => {
+	on(WS_CHANNELS.workspaceCreationRemoved, (data) => {
 		useAppStore.getState().applyWorkspaceCreationRemoved(data as WorkspaceCreationRemoved);
 	});
 
-	transport.subscribe(WS_CHANNELS.workspaceUpdated, (data) => {
+	on(WS_CHANNELS.workspaceUpdated, (data) => {
 		useAppStore.getState().updateWorkspace(data as Workspace);
 	});
 
-	transport.subscribe(WS_CHANNELS.chatContinuation, (data) => {
+	on(WS_CHANNELS.chatContinuation, (data) => {
 		useAppStore.getState().applyChatContinuation(data as ChatContinuation);
 	});
-	transport.subscribe(WS_CHANNELS.workspaceRemoved, (data) => {
+	on(WS_CHANNELS.workspaceRemoved, (data) => {
 		const { projectId, id } = data as WorkspaceRemoved;
 		retireWorkspace(projectId, id);
 	});
 
-	transport.subscribe(WS_CHANNELS.reviewChanged, (data) => {
+	on(WS_CHANNELS.reviewChanged, (data) => {
 		const payload = data as ReviewChangedPayload;
 		useAppStore.getState().applyReviewChanged(payload);
 	});
 
-	transport.subscribe(WS_CHANNELS.workspaceFsChanged, (data) => {
+	on(WS_CHANNELS.workspaceFsChanged, (data) => {
 		useAppStore.getState().noteFsChanged(data as WorkspaceFsChangedPayload);
 	});
 
-	transport.subscribe(WS_CHANNELS.workspaceArtifactsChanged, (data) => {
+	on(WS_CHANNELS.workspaceArtifactsChanged, (data) => {
 		useAppStore
 			.getState()
 			.noteArtifactsChanged((data as WorkspaceArtifactsChangedPayload).workspaceId);
 	});
 
-	transport.subscribe(WS_CHANNELS.turnChanged, (data) => {
+	on(WS_CHANNELS.turnChanged, (data) => {
 		useAppStore.getState().applyTurnChanged(data as TurnChangeSet);
 	});
 
-	transport.subscribe(WS_CHANNELS.settingsChanged, (data) => {
+	on(WS_CHANNELS.settingsChanged, (data) => {
 		useAppStore.getState().applyConfig(data as AppConfig);
 	});
+	return unsubscribes;
+}
 
-	transport.connect();
+export function getTransport(): Transport {
+	if (!transport) throw new Error("transport not initialized — call initTransport() first");
 	return transport;
 }
 
-export function getTransport(): WsTransport {
-	if (!transport) throw new Error("transport not initialized — call initTransport() first");
-	return transport;
+/**
+ * Switches the app onto a remote host reached over a WebRTC DataChannel (a project opened by link). It
+ * installs a `RemoteTransport` as the active transport and runs the same channel→store wiring as the local
+ * WS; the host sends its `serverWelcome` over the bridge on connect, so the store bootstraps normally. Byte
+ * URLs (`/files`, `/blob`) are unavailable until that tunnel lands. Replaces the current transport: the previous
+ * one is closed and the store's host state reset, so two hosts never mix.
+ */
+export function mountRemoteSession(client: DeviceWireClient, hostKey: string): Transport {
+	const piEvents = createPiEventBatcher((payloads) =>
+		useAppStore.getState().handlePiEvents(payloads),
+	);
+	const remote = new RemoteTransport(client, hostKey);
+	installTransport(remote, piEvents, () => useAppStore.getState().setStatus("connected"));
+	return remote;
 }
 
 let surveyLoadGeneration = 0;

@@ -13,6 +13,12 @@ not this module; the theme-aware highlighter remains app-local.
 
 ## Boundary
 
+- **Shared half:** the path primitives (`normalizePath`, `isAbsolutePath`, `fileName`,
+  `projectRelativePath`, `pathWithinRoot`, `joinWorkspacePath`), `userText`, `firstNonBlankLine`, `copyText`,
+  `randomId`, `randomUuid`, `skillInvocation.ts` and `mcpState.ts`
+  are implemented in [[module-chat-ui]]'s `lib` (the shared chat renderers need them, and a package cannot
+  import this module); the barrel re-exports `@thinkrail/chat-ui/lib` unchanged, so app code keeps one `@/lib`
+  import and the descriptions below still define them.
 - **Owns:** `utils.ts` → `cssColorToHex()` (canonicalize
   a CSS color to hex — minified CSS serves `#fff`/`gray`-style equivalents, which strict consumers like
   Monaco and xterm reject; `""` when unparseable). Plus the primitives that more than one module needs and
@@ -95,7 +101,8 @@ not this module; the theme-aware highlighter remains app-local.
   chunk deleted by an update), the client stops using the worker until reload: pending and later blocks stay
   plain text. There is no main-thread highlighter. `chatHighlighter.ts` adds `tabindex="0"` to the `<pre>`, because Pierre's HTML has none and WebKit does not make a scrollable block a focus stop on its own. Results live in a bounded LRU (256 entries / 4M chars of
   code + HTML; a result over a quarter of that is not cached) that answers `cachedHighlight()` synchronously;
-  a key owns one entry, so a streaming fence does not fill it. `useHighlightedCode()` is the one component
+  a key owns one entry, so a streaming fence does not fill it. `webCodeHighlighter` hands the cache read,
+  the keyed request and the release to [[module-chat-ui]]'s `CodeHighlighter` seam, whose `useHighlightedCode()` is the one component
   hook: it reads the cache on the client only (static renders, such as the rendered diff, stay plain), applies
   replies in request order, and shows the last highlight plus the newer streamed text as plain until the
   worker catches up. Streaming sends only new lines: the worker renders a key's first request whole, because
@@ -105,9 +112,9 @@ not this module; the theme-aware highlighter remains app-local.
   append. Each tokenizer owns a WASM instance, so at most 8 live, oldest dropped first, and each is freed when
   idle for 30 s or when its block unmounts (`releaseHighlight`); a dropped one rebuilds on the next request.
   The release also drops the block's queued request and ignores line updates still on their way, so the worker keeps no state for a dead key.
-  `highlightHtml.ts` holds the Pierre-free helpers the client and the DOM share: `assembleHighlight` joins the
+  `@thinkrail/chat-ui/highlightHtml` holds the Pierre-free helpers the client and the DOM share: `assembleHighlight` joins the
   lines and marks the unfinished one, and `applyHighlightHtml` parses only the added part into the shown block: `stable` is the shown HTML that later updates keep, and `added` is the unfinished line plus the lines finished since. A block without its tail marker is replaced whole rather than patched.
-  It is the one place outside `highlightCode` that reads the markup. `chat/HighlightedHtml` mounts it. These files stay out of the barrel and are imported per-file (`@/lib/codeLanguages`,
+  It is the one place outside `highlightCode` that reads the markup; chat-ui's `HighlightedHtml` mounts it. These files stay out of the barrel and are imported per-file (`@/lib/codeLanguages`,
   `@/lib/highlightCode`). `shell/AppResourceHost` hands the catalog to the resource renderers, while the
   worker and its one WASM file load on first use; theme
   identity/palettes never live in `lib`. Collision-safe browser identity composition lives here too:
@@ -129,14 +136,12 @@ not this module; the theme-aware highlighter remains app-local.
   `shallowEqualArrays`, `userText`, `firstNonBlankLine` (first trimmed non-empty line, `undefined` when
   the text is blank — shared by chat's thinking-heading extraction and history prompt rows), `isShellInert` (a value made only of characters that stay literal in POSIX, PowerShell,
   and cmd, so it may be interpolated into a command a human copies and runs), `parseSkillInvocation`, `matchesSkillInvocationCommand`,
-  `relativeTime`, `compactAge`, the render-time default names `chatName` / `terminalName` (+ the
+  `relativeTime`, `compactAge` (words contracts' `compactAgeOf` buckets), the render-time default names `chatName` / `terminalName` (+ the
   language-neutral `defaultTerminalTitle` / `defaultTerminalIndex`) / `changesTabName` / `diffTabName` /
   `turnTimeLabel` / `planDocumentName` (stored tab names carry no translated text; these word them for the
   caller's translator), **`chatLabel(t, name, firstPrompt)`** → `{ text, source, tooltip? }` with its
-  projections **`chatDisplayName`** (the text) and **`fallbackChatTitle`** (the one derivation of an unnamed
-  chat's label: a trimmed real name wins as `source: "name"`; else contracts' first-prompt head cut at a word
-  boundary at 48 UTF-16 units with `…` — never inside a surrogate pair — as `source: "prompt"` with the full
-  head as `tooltip`; else `chatName`'s generic label as `source: "default"`; every surface that shows a chat
+  projection **`chatDisplayName`** (the text): contracts' `chatTitle` (name, else the cut first-prompt head
+  with its tooltip), else `chatName`'s generic label as `source: "default"`; every surface that shows a chat
   title renders one `chatLabel`, so trimming, the `data-title-source` marker and the tooltip agree and the
   agent's or user's title replaces the label everywhere at once), `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`, `randomUuid`,
   `MCP_STATE_KEY`, `mcpStateLabel`, `mcpStateTone`, `mcpStatusLabel`, `mcpToolCountLabel`, `isMcpAttentionState`,

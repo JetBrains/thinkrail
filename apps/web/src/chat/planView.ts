@@ -1,4 +1,11 @@
 import {
+	deriveInteractionStates,
+	type InteractionState,
+	latestPendingInteraction,
+	type PendingInteraction,
+} from "@thinkrail/chat-ui/interactionState";
+import type { ChatTurn, ToolResultState } from "@thinkrail/chat-ui/types";
+import {
 	type GitFileChange,
 	isSessionWorking,
 	type ReviewComment,
@@ -8,13 +15,6 @@ import {
 	type TodoItem,
 	type TodoPlan,
 } from "@thinkrail/contracts";
-import {
-	deriveInteractionStates,
-	type InteractionState,
-	latestPendingInteraction,
-	type PendingInteraction,
-} from "./interactionState";
-import type { ChatTurn, ToolResultState } from "./types";
 
 export type ItemChangeSet =
 	| { kind: "commit"; sha: string; files: GitFileChange[] }

@@ -8,7 +8,10 @@ import { E2E_DATA_DIR } from "./fixtures/paths";
 const THEMES_DIR = join(E2E_DATA_DIR, "themes");
 const DARK = JSON.parse(
 	readFileSync(
-		join(dirname(fileURLToPath(import.meta.url)), "../apps/web/src/themes/bundled/dark.theme.json"),
+		join(
+			dirname(fileURLToPath(import.meta.url)),
+			"../packages/design-tokens/themes/dark.theme.json",
+		),
 		"utf8",
 	),
 ) as { colors: Record<string, string | null> };

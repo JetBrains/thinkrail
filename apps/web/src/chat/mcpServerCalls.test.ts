@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
+import type { ChatTurn, ToolResultState } from "@thinkrail/chat-ui/types";
 import type { AssistantMessage } from "@thinkrail/contracts";
 import { mcpServerCalls } from "./mcpServerCalls";
-import type { ChatTurn, ToolResultState } from "./types";
 
 type Call = { type: "toolCall"; id: string; name: string; arguments: Record<string, unknown> };
 

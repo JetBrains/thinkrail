@@ -1,8 +1,8 @@
 import { useT } from "@thinkrail/locales/react";
+import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "@thinkrail/ui/settings";
 import { selectAnalyticsConsentSupported, toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { AnalyticsDescription, AnalyticsPreferences } from "./AnalyticsPreferences";
-import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
 import { SettingsSwitch } from "./SettingsSwitch";
 import { useAnalyticsConsent } from "./useAnalyticsConsent";
 

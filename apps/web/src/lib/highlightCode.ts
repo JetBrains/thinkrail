@@ -1,12 +1,7 @@
-import { useEffect, useId, useState, useSyncExternalStore } from "react";
+import type { CodeHighlighter } from "@thinkrail/chat-ui/highlight";
+import { assembleHighlight, type HighlightLines } from "@thinkrail/chat-ui/highlightHtml";
 import { codeLanguageId } from "./codeLanguages";
 import type { HighlightReply, HighlightRequest } from "./highlighter.worker";
-import {
-	assembleHighlight,
-	escapeHtml,
-	HIGHLIGHT_PRE_END,
-	type HighlightLines,
-} from "./highlightHtml";
 
 interface HighlightWorker {
 	postMessage(request: HighlightRequest): void;
@@ -243,56 +238,9 @@ export function cachedHighlight(code: string, lang: string) {
 	return client.cachedHighlight(code, lang);
 }
 
-function releaseHighlight(key: string) {
-	client.release(key);
-}
-
-export interface ShownHighlight {
-	seq: number;
-	code: string;
-	lang: string;
-	html: string;
-}
-
-export function newerHighlight(shown: ShownHighlight | null, next: ShownHighlight) {
-	return shown && shown.seq > next.seq ? shown : next;
-}
-
-export function staleHighlight(code: string, lang: string, latest: ShownHighlight | null) {
-	if (!latest || latest.lang !== lang || !code.startsWith(latest.code)) return null;
-	const tail = code.slice(latest.code.length);
-	if (!tail) return latest.html;
-	if (!latest.html.endsWith(HIGHLIGHT_PRE_END)) return null;
-	return latest.html.slice(0, -HIGHLIGHT_PRE_END.length) + escapeHtml(tail) + HIGHLIGHT_PRE_END;
-}
-
-let highlightSeq = 0;
-function nextHighlightSeq() {
-	highlightSeq += 1;
-	return highlightSeq;
-}
-
-function subscribeNever() {
-	return () => {};
-}
-
-export function useHighlightedCode(code: string, lang: string) {
-	const key = useId();
-	const cached = useSyncExternalStore(
-		subscribeNever,
-		() => cachedHighlight(code, lang),
-		() => null,
-	);
-	const [latest, setLatest] = useState<ShownHighlight | null>(null);
-
-	useEffect(() => {
-		const seq = nextHighlightSeq();
-		void highlightCode(code, lang, key).then((html) => {
-			if (html !== null) setLatest((shown) => newerHighlight(shown, { seq, code, lang, html }));
-		});
-	}, [code, lang, key]);
-
-	useEffect(() => () => releaseHighlight(key), [key]);
-
-	return cached ?? staleHighlight(code, lang, latest);
-}
+/** The worker-backed highlighter the chat renderers use through `@thinkrail/chat-ui/highlight`. */
+export const webCodeHighlighter: CodeHighlighter = {
+	cached: cachedHighlight,
+	highlight: highlightCode,
+	release: (key) => client.release(key),
+};

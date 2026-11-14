@@ -4,6 +4,8 @@ import {
 	RiCloseLine,
 	RiLoader4Line,
 } from "@remixicon/react";
+import { ToolRendererBody } from "@thinkrail/chat-ui/ToolRendererBody";
+import { mcpArgsSummary } from "@thinkrail/chat-ui/tools/mcp/mcpResult";
 import type { McpServerStatus } from "@thinkrail/contracts";
 import type { ToolStatus } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
@@ -13,8 +15,6 @@ import { useShallow } from "zustand/react/shallow";
 import { turnTimeLabel } from "@/lib";
 import { EMPTY_RUNTIME, useAppStore } from "@/store";
 import { type McpServerCall, mcpServerCalls } from "./mcpServerCalls";
-import { ToolRendererBody } from "./ToolRendererBody";
-import { mcpArgsSummary } from "./tools/mcp/mcpResult";
 
 function CallStatus({ status }: { status: ToolStatus }) {
 	const t = useT();

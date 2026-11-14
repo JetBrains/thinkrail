@@ -5,8 +5,8 @@ import {
 	RiRecordCircleLine as CircleDot,
 	RiShieldCheckLine as ShieldCheck,
 } from "@remixicon/react";
+import { Markdown } from "@thinkrail/chat-ui/Markdown";
 import { useT } from "@thinkrail/locales/react";
-import { Markdown } from "./Markdown";
 import { verificationStatus } from "./planView";
 
 const VERIFICATION_PROSE = [

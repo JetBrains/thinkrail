@@ -8,7 +8,8 @@ test("token adoption scans app, shared UI, and every extension web half only", (
 	const root = mkdtempSync(join(tmpdir(), "thinkrail-design-sources-"));
 	const included = [
 		"apps/web/src/index.css",
-		"apps/web/src/chat/Markdown.tsx",
+		"apps/web/src/chat/ChatView.tsx",
+		"packages/chat-ui/src/Markdown.tsx",
 		"packages/ui/dialog.tsx",
 		"packages/ui/menu-styles.ts",
 		"thinkrail-extensions/visualize/web/MermaidView.tsx",

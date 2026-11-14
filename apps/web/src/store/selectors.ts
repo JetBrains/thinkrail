@@ -17,6 +17,7 @@ import {
 	PROJECT_CLONE_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	type Project,
+	partitionWorkspaces,
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	type ResourceKind,
 	type ResourceRecord,
@@ -28,6 +29,8 @@ import {
 	type SessionResources,
 	type SessionState,
 	type SessionStateRecord,
+	type SettledReason,
+	type SettlingContext,
 	type SpecGraphNode,
 	type SubagentResourceSummary,
 	sameModel,
@@ -37,8 +40,19 @@ import {
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	type Workspace,
 	type WorkspaceArtifactsSnapshot,
+	type WorkspaceOrder,
+	type WorkspacePartition,
+	workspaceSettledReason,
 } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
+
+export type {
+	SettledReason,
+	SettledRow,
+	WorkspaceOrder,
+	WorkspacePartition,
+} from "@thinkrail/contracts";
+
 import type { LoginState } from "../auth";
 import {
 	chatDisplayName,
@@ -392,20 +406,12 @@ export function selectSessionState(
 	return state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.state ?? null;
 }
 
-export type WorkspaceOrder = "created" | "recent";
-
 export function supportsWorkspaceSettling(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION;
 }
 
 export const SETTLED_SHELF_PAGE = 10;
 export const SETTLED_SHELF_MORE = 25;
-const DAY_MS = 24 * 60 * 60_000;
-
-export type SettledReason =
-	| { kind: "override"; since?: number }
-	| { kind: "review"; state: "merged" | "closed" }
-	| { kind: "idle"; since: number };
 
 /** Chip text; `settledReasonTitle` is the long form. */
 export function settledReasonLabel(t: Translator, reason: SettledReason, now: number): string {
@@ -434,16 +440,6 @@ export function settledReasonTitle(t: Translator, reason: SettledReason, now: nu
 	}
 }
 
-export interface SettledRow {
-	workspace: Workspace;
-	reason: SettledReason;
-}
-
-export interface WorkspacePartition {
-	live: Workspace[];
-	settled: SettledRow[];
-}
-
 interface PartitionState extends SessionStateProjection {
 	workspaceSettlingSupported: boolean;
 	activeWorkspaceId: string | null;
@@ -457,39 +453,20 @@ export function selectWorkspaceSettledReason(
 	workspace: Workspace,
 	now: number,
 ): SettledReason | null {
-	if (
-		!state.workspaceSettlingSupported ||
-		isDefaultWorkspace(workspace) ||
-		isChatWorkspace(workspace)
-	)
-		return null;
-	if (
-		selectWorkspaceIsRunning(state, workspace.id) ||
-		selectWorkspaceNeedsAttention(state, workspace.id)
-	) {
-		return null;
-	}
-	if (workspace.settledOverride === "settled") {
-		return workspace.settledAt === undefined
-			? { kind: "override" }
-			: { kind: "override", since: workspace.settledAt };
-	}
-	if (workspace.settledOverride === "active") return null;
-	if (state.activeWorkspaceId === workspace.id && state.activeWorkspaceLiveLatch) return null;
-	const review = workspace.review;
-	if (review?.state === "merged" || review?.state === "closed") {
-		if (review.changedAt === undefined) return null;
-		const workedSince =
-			workspace.lastActiveAt !== undefined && workspace.lastActiveAt > review.changedAt;
-		if (!workedSince) return { kind: "review", state: review.state };
-	} else if (review && (review.state === undefined || review.state === "open")) {
-		return null;
-	}
-	if (state.settleIdleDays === null || workspace.lastActiveAt === undefined) return null;
-	if (now - workspace.lastActiveAt > state.settleIdleDays * DAY_MS) {
-		return { kind: "idle", since: workspace.lastActiveAt };
-	}
-	return null;
+	if (!state.workspaceSettlingSupported) return null;
+	return workspaceSettledReason(workspace, settlingContext(state, now));
+}
+
+function settlingContext(state: PartitionState, now: number): SettlingContext {
+	return {
+		now,
+		settleIdleDays: state.settleIdleDays,
+		busy: (workspace) =>
+			selectWorkspaceIsRunning(state, workspace.id) ||
+			selectWorkspaceNeedsAttention(state, workspace.id),
+		latched: (workspace) =>
+			state.activeWorkspaceId === workspace.id && state.activeWorkspaceLiveLatch,
+	};
 }
 
 /** The Default row stays first; every other row splits into live and settled, newest created first or by `order`. */
@@ -501,21 +478,7 @@ export function selectWorkspacePartition(
 ): WorkspacePartition {
 	const rows = state.workspaces[projectId] ?? [];
 	if (!state.workspaceSettlingSupported) return { live: rows, settled: [] };
-	const live: Workspace[] = [];
-	const settled: SettledRow[] = [];
-	for (const workspace of rows.toReversed()) {
-		if (isDefaultWorkspace(workspace)) continue;
-		const reason = selectWorkspaceSettledReason(state, workspace, now);
-		if (reason) settled.push({ workspace, reason });
-		else live.push(workspace);
-	}
-	if (order === "recent") {
-		const byRecent = (a: Workspace, b: Workspace) => (b.lastActiveAt ?? 0) - (a.lastActiveAt ?? 0);
-		live.sort(byRecent);
-		settled.sort((a, b) => byRecent(a.workspace, b.workspace));
-	}
-	const defaults = rows.filter(isDefaultWorkspace);
-	return { live: [...defaults, ...live], settled };
+	return partitionWorkspaces(rows, settlingContext(state, now), order);
 }
 
 /** Per loaded project, the rows the shelf took on its own (PR merged/closed or idle), never ones parked by hand. */
@@ -583,15 +546,10 @@ export function selectCompletionMarkedUnread(
 	);
 }
 
-export type SessionAttention = "needs-input" | "error" | "unread" | "running";
-
-export function getSessionAttention(state: SessionState): SessionAttention | null {
-	if (state.needsInput !== null) return "needs-input";
-	if (state.completionUnread && state.completion?.outcome === "failed") return "error";
-	if (state.completionUnread) return "unread";
-	if (isSessionWorking(state)) return "running";
-	return null;
-}
+export {
+	type SessionAttention,
+	sessionAttention as getSessionAttention,
+} from "@thinkrail/contracts";
 
 export function selectWorkspaceIsRunning(
 	state: SessionStateProjection,

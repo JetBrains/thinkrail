@@ -4,6 +4,8 @@ import {
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
+	REMOTE_ACCESS_PROTOCOL_VERSION,
+	SPEECH_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
@@ -19,6 +21,8 @@ const LATEST = Math.max(
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
+	REMOTE_ACCESS_PROTOCOL_VERSION,
+	SPEECH_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 );
 const GATED = [
@@ -26,6 +30,7 @@ const GATED = [
 	SettingsSection.Mcp,
 	SettingsSection.Extensions,
 	SettingsSection.Workspaces,
+	SettingsSection.Phone,
 ];
 
 const ids = (protocolVersion: number | null, hasUpdates: boolean) =>
@@ -43,6 +48,7 @@ describe("settingsNavGroups", () => {
 					SettingsSection.Providers,
 					SettingsSection.Mcp,
 					SettingsSection.Templates,
+					SettingsSection.Environment,
 				],
 			],
 			[
@@ -50,8 +56,10 @@ describe("settingsNavGroups", () => {
 				[
 					SettingsSection.Chat,
 					SettingsSection.Appearance,
+					SettingsSection.Language,
 					SettingsSection.Layout,
 					SettingsSection.Keyboard,
+					SettingsSection.Voice,
 					SettingsSection.Terminal,
 				],
 			],
@@ -62,6 +70,7 @@ describe("settingsNavGroups", () => {
 					SettingsSection.Github,
 					SettingsSection.Extensions,
 					SettingsSection.Notifications,
+					SettingsSection.Phone,
 					SettingsSection.Privacy,
 					SettingsSection.Updates,
 				],
@@ -84,6 +93,7 @@ describe("settingsNavGroups", () => {
 			[SettingsSection.Mcp, MCP_PROTOCOL_VERSION],
 			[SettingsSection.Extensions, EXTENSION_CATALOG_PROTOCOL_VERSION],
 			[SettingsSection.Workspaces, WORKSPACE_SETTLE_PROTOCOL_VERSION],
+			[SettingsSection.Phone, REMOTE_ACCESS_PROTOCOL_VERSION],
 		] as const;
 		for (const [id, version] of gates) {
 			expect(ids(version - 1, false)).not.toContain(id);

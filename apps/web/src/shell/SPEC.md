@@ -79,7 +79,17 @@ for Project Home), the branch status from `useBranchStatus`, and the callback th
 New workspace dialog. No selected project
 leaves the logo alone.
 
-Immediately before host connection status, the topbar conditionally renders the **JetBrains recurring-quota
+Right before host connection status sits the **phone access** shortcut (`PhoneAccessTopbar`, only against a host
+at `REMOTE_ACCESS_PROTOCOL_VERSION`, and hidden below the `sm` width, where a phone-width window has no room for it
+and no use pairing a phone): a QR icon, tinted primary while access is on, opening a popover that
+mounts `usePhoneAccess({ autoCode: true })` from panels only while open — the relay switch (so a user never
+needs `--remote`), a one-time pairing QR minted as soon as access is on with its expiry, New code and Copy
+link — or, once a phone pairs from it, "<phone> is paired." with **Pair another phone** — a one-line summary of
+the routes a phone has ("Connects over Wi‑Fi · Nostr relays", or Wi‑Fi only), the paired phones each with
+**Disconnect** (`remote.revokeDevice`), an eye for a read-only one and a Connected mark while live, and **All phone settings**, which
+opens Settings → Phone access. `PhoneAccessPanel` is its props-only half the unit test renders.
+
+Before it, the topbar conditionally renders the **JetBrains recurring-quota
 readout** (protocol v59): a neutral Coins icon + locale-formatted `remaining / total credits`. It exists only
 when the synchronized setting is enabled and the host reports healthy Central; zero has no warning policy.
 Loaded/loading are non-button content with a freshness tooltip. First failure is `Quota unavailable · Retry`;

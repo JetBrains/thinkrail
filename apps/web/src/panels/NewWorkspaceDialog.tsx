@@ -8,6 +8,29 @@ import {
 	RiSparkling2Line as Sparkles,
 	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
+import { type DefaultPairOption, ModelEffortPicker } from "@thinkrail/chat-ui/ModelEffortPicker";
+import {
+	applyTemplateSlotEdit,
+	beginTemplateSlotSession,
+	finalizeTemplateSlotSession,
+	type ParsedTemplate,
+	SlashCommandMenu,
+	selectedSlashCommandValue,
+	slashCommandCatalogOrEmpty,
+	slashCommandQuery,
+	stepTemplateSlotSession,
+	TemplateSlotHint,
+	type TemplateSlotSessionState,
+	templateToSlashCommand,
+	usePendingSelection,
+	useSlashCommandCompletion,
+	useTemplateCommandPicker,
+} from "@thinkrail/chat-ui/prompt";
+import {
+	imagePasteDropHandlers,
+	PromptImageChips,
+	usePromptImages,
+} from "@thinkrail/chat-ui/promptImages";
 import {
 	type ModelDefault,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
@@ -42,7 +65,6 @@ import { Textarea } from "@thinkrail/ui/textarea";
 import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { type DefaultPairOption, ModelEffortPicker } from "@/chat/ModelEffortPicker";
 import {
 	deriveProjectTrustNotice,
 	type ProjectTrustNotice,
@@ -50,29 +72,11 @@ import {
 	trustGrantParams,
 	untrustedNoticeText,
 } from "@/chat/projectTrust";
-import { imagePasteDropHandlers, PromptImageChips, usePromptImages } from "@/chat/promptImages";
 import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
 import { useModelCatalog } from "@/chat/useModelCatalog";
 import { useModelPreferences } from "@/chat/useModelPreferences";
 import { useProjectTrustSummary } from "@/chat/useProjectTrustSummary";
-import {
-	applyTemplateSlotEdit,
-	beginTemplateSlotSession,
-	finalizeTemplateSlotSession,
-	type ParsedTemplate,
-	SlashCommandMenu,
-	selectedSlashCommandValue,
-	slashCommandCatalogOrEmpty,
-	slashCommandQuery,
-	stepTemplateSlotSession,
-	TemplateSlotHint,
-	type TemplateSlotSessionState,
-	templateToSlashCommand,
-	usePendingSelection,
-	useSlashCommandCompletion,
-	useTemplateCommandPicker,
-} from "@/prompt";
 import {
 	selectCatalogModel,
 	selectChatsContainer,

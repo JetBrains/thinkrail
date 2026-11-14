@@ -5,6 +5,7 @@ export {
 } from "./errorReports";
 export { errorText } from "./errorText";
 export { hostUrl, uploadUserFont } from "./fonts";
+export { isHostResetting, onHostReset } from "./hostReset";
 export { requestMcpList, watchMcpWorkspace } from "./mcp";
 export { RequestError, RequestTimeoutError, wsErrorCode } from "./requestError";
 export {
@@ -20,6 +21,7 @@ export {
 	getTransport,
 	initTransport,
 	loadInAppSurvey,
+	mountRemoteSession,
 	respondToTool,
 	runHostUpdate,
 	supportsChangeMutations,

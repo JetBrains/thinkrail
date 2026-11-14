@@ -28,6 +28,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import { SETTINGS_TAG } from "@thinkrail/ui/settings";
 import { SkeletonRows } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
@@ -88,7 +89,6 @@ import {
 	mcpSettingWrite,
 } from "./mcpServerView";
 import { startChatInTab } from "./openChat";
-import { SETTINGS_TAG } from "./SettingsGroup";
 
 const TONE_TEXT: Record<McpStateTone, string> = {
 	success: "text-feedback-success",

@@ -1,3 +1,8 @@
+import {
+	type ChatMessageOrder,
+	DEFAULT_CHAT_MESSAGE_ORDER,
+	isChatMessageOrder,
+} from "@thinkrail/chat-ui/chatMessageOrder";
 import { getStablePreferenceAdapter, type StablePreferenceAdapter } from "../clientPreferences";
 import { STORAGE_PREFIX } from "../constants/branding";
 import { useAppStore } from "../store";
@@ -5,14 +10,7 @@ import { getTransport } from "../transport";
 
 export type { StablePreferenceAdapter } from "../clientPreferences";
 
-export const CHAT_MESSAGE_ORDERS = ["oldest-first", "newest-first"] as const;
-export type ChatMessageOrder = (typeof CHAT_MESSAGE_ORDERS)[number];
-export const DEFAULT_CHAT_MESSAGE_ORDER: ChatMessageOrder = "oldest-first";
 export const CHAT_MESSAGE_ORDER_PREFERENCE_KEY = "chat-message-order";
-
-export function isChatMessageOrder(value: unknown): value is ChatMessageOrder {
-	return CHAT_MESSAGE_ORDERS.some((order) => order === value);
-}
 
 export function chatMessageOrderStorageKey(httpBase: string): string {
 	return `${STORAGE_PREFIX}chat-message-order:${httpBase}`;
@@ -77,7 +75,7 @@ export function chatMessageOrderFromStorageEvent(
 export function initChatPreferencesPersistence(
 	stablePreferences: StablePreferenceAdapter | null = getStablePreferenceAdapter(),
 ): () => void {
-	const httpBase = stablePreferences ? "" : getTransport().httpBase();
+	const httpBase = stablePreferences ? "" : getTransport().backendKey();
 	const messageOrderKey = stablePreferences ? "" : chatMessageOrderStorageKey(httpBase);
 	let storage: Storage | null = null;
 	if (!stablePreferences) {

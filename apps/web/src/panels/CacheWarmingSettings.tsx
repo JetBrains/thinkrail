@@ -7,11 +7,14 @@ import {
 import type { MessageKey } from "@thinkrail/locales";
 import { t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import {
+	SettingsGroup,
+	SettingsRadioCards,
+	type SettingsRadioChoice,
+} from "@thinkrail/ui/settings";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
-import { SettingsGroup } from "./SettingsGroup";
-import { SettingsRadioCards, type SettingsRadioChoice } from "./SettingsRadioCards";
 
 const MODE_LABEL: Record<CacheWarmingMode, MessageKey> = {
 	off: "settings.cacheWarming.mode.off",

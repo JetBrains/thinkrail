@@ -1,8 +1,10 @@
+import { renameSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import { diffsStub } from "./diffsStub";
 import { posthogSourceMapUpload, sourceMapRelease } from "./sourceMapUpload";
 
@@ -18,9 +20,21 @@ function envPort(name: string): number | undefined {
 const hostPort = envPort("THINKRAIL_PORT") ?? 24242;
 const webPort = envPort("THINKRAIL_WEB_PORT");
 
+function phoneEntryAsIndex(): Plugin {
+	return {
+		name: "thinkrail-phone-entry-as-index",
+		enforce: "post",
+		writeBundle(options) {
+			const dir = options.dir ?? "dist-phone";
+			renameSync(join(dir, "phone.html"), join(dir, "index.html"));
+		},
+	};
+}
+
 export default defineConfig(({ mode }) => {
 	const profile = mode === "profile";
-	const release = profile ? null : sourceMapRelease();
+	const phone = mode === "phone";
+	const release = profile || phone ? null : sourceMapRelease();
 	return {
 		plugins: [
 			diffsStub(),
@@ -28,6 +42,7 @@ export default defineConfig(({ mode }) => {
 			babel({ presets: [reactCompilerPreset()] }),
 			tailwindcss(),
 			...(release ? [posthogSourceMapUpload(release)] : []),
+			...(phone ? [phoneEntryAsIndex()] : []),
 		],
 		resolve: {
 			alias: [
@@ -56,6 +71,8 @@ export default defineConfig(({ mode }) => {
 		worker: { format: "es", plugins: () => [diffsStub()] },
 		build: profile
 			? { outDir: "dist-profile", minify: false }
-			: { outDir: "dist", ...(release ? { sourcemap: "hidden" as const } : {}) },
+			: phone
+				? { outDir: "dist-phone", rollupOptions: { input: "phone.html" } }
+				: { outDir: "dist", ...(release ? { sourcemap: "hidden" as const } : {}) },
 	};
 });

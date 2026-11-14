@@ -1,0 +1,200 @@
+import { MermaidView } from "@thinkrail/ext-visualize/web";
+import { cn } from "@thinkrail/ui/utils";
+import { type ComponentProps, memo, type ReactNode, useEffect, useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { CONTENT_WIDTH_BREAKOUT } from "./contentWidth";
+import { HighlightedHtml } from "./HighlightedHtml";
+import { useHighlightedCode } from "./highlight";
+import { createMarkdownSplitter } from "./markdownBlocks";
+
+const CHAT_PROSE =
+	"tr-prose-chat max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_a]:text-primary [&_a]:underline [&_li]:my-2 [&_ol]:my-8 [&_ol]:list-decimal [&_ol]:pl-16 [&_p]:my-8 [&_table]:border-collapse [&_td]:border [&_td]:border-border-muted [&_td]:px-8 [&_td]:py-4 [&_th]:border [&_th]:border-border-muted [&_th]:px-8 [&_th]:py-4 [&_th]:text-left [&_ul]:my-8 [&_ul]:list-disc [&_ul]:pl-16";
+
+type ReactMarkdownProps = ComponentProps<typeof ReactMarkdown>;
+
+interface MarkdownProps {
+	text: string;
+	className?: string;
+	remarkPlugins?: ReactMarkdownProps["remarkPlugins"];
+	rehypePlugins?: ReactMarkdownProps["rehypePlugins"];
+	urlTransform?: ReactMarkdownProps["urlTransform"];
+	components?: ReactMarkdownProps["components"];
+	wideBlocks?: boolean;
+}
+
+interface MarkdownBlockProps extends Omit<MarkdownProps, "text" | "className" | "wideBlocks"> {
+	raw: string;
+	separated: boolean;
+}
+
+export const Markdown = memo(function Markdown({
+	text,
+	className = CHAT_PROSE,
+	remarkPlugins,
+	components,
+	wideBlocks = false,
+	...rest
+}: MarkdownProps) {
+	return (
+		<div className={className}>
+			<ReactMarkdown
+				remarkPlugins={withDefaultPlugins(remarkPlugins)}
+				components={withDefaultComponents(components, wideBlocks)}
+				{...rest}
+			>
+				{text}
+			</ReactMarkdown>
+		</div>
+	);
+});
+
+export const BlockMarkdown = memo(function BlockMarkdown({
+	text,
+	className = CHAT_PROSE,
+	remarkPlugins,
+	components,
+	wideBlocks = false,
+	...rest
+}: MarkdownProps) {
+	const [split] = useState(createMarkdownSplitter);
+	const { blocks } = useMemo(() => split(text), [split, text]);
+	const plugins = useMemo(() => withDefaultPlugins(remarkPlugins), [remarkPlugins]);
+	const merged = useMemo(
+		() => withDefaultComponents(components, wideBlocks),
+		[components, wideBlocks],
+	);
+	return (
+		<div className={className}>
+			{blocks.map((block) => (
+				<MarkdownBlock
+					key={block.start}
+					raw={block.raw}
+					separated={block.start > 0}
+					remarkPlugins={plugins}
+					components={merged}
+					{...rest}
+				/>
+			))}
+		</div>
+	);
+});
+
+const MarkdownBlock = memo(function MarkdownBlock({
+	raw,
+	separated,
+	...props
+}: MarkdownBlockProps) {
+	return (
+		<>
+			{separated && "\n"}
+			<ReactMarkdown {...props}>{raw}</ReactMarkdown>
+		</>
+	);
+});
+
+function Table({ children }: { children?: ReactNode }) {
+	return (
+		<div className="overflow-x-auto">
+			<table>{children}</table>
+		</div>
+	);
+}
+
+function WideTable({ children }: { children?: ReactNode }) {
+	return (
+		<div className={cn("overflow-x-auto", CONTENT_WIDTH_BREAKOUT)}>
+			<table>{children}</table>
+		</div>
+	);
+}
+
+function WidePre({ children }: { children?: ReactNode }) {
+	return <pre className={CONTENT_WIDTH_BREAKOUT}>{children}</pre>;
+}
+
+function Anchor({ href, children }: { href?: string | undefined; children?: ReactNode }) {
+	return (
+		<a href={href} target="_blank" rel="noopener noreferrer">
+			{children}
+		</a>
+	);
+}
+
+export function fenceLanguage(className: string | undefined) {
+	return /language-([\w+#]+)/.exec(className ?? "")?.[1];
+}
+
+function CodeBlock({
+	className,
+	children,
+}: {
+	className?: string | undefined;
+	children?: ReactNode;
+}) {
+	const lang = fenceLanguage(className);
+	const code = String(children ?? "").replace(/\n$/, "");
+	if (lang === "mermaid") return <MermaidBlock code={code} />;
+	if (!lang) {
+		if (!code.includes("\n")) {
+			return <code className="rounded-xs bg-container-elevated-bg px-4 py-2">{children}</code>;
+		}
+		return <pre className="overflow-auto rounded-sm bg-container-elevated-bg p-8">{code}</pre>;
+	}
+	return <HighlightBlock code={code} lang={lang} />;
+}
+
+function MermaidBlock({ code }: { code: string }) {
+	const [settled, setSettled] = useState<string | null>(null);
+	useEffect(() => {
+		const timer = setTimeout(() => setSettled(code), 200);
+		return () => clearTimeout(timer);
+	}, [code]);
+
+	const source = <HighlightBlock code={code} lang="mermaid" />;
+	if (settled !== code) return source;
+	return (
+		<div className="whitespace-normal">
+			<MermaidView source={code} fallback={source} />
+		</div>
+	);
+}
+
+function HighlightBlock({ code, lang }: { code: string; lang: string }) {
+	const html = useHighlightedCode(code, lang);
+
+	if (html === null) {
+		return (
+			<pre className="overflow-auto rounded-sm bg-container-elevated-bg p-8 text-text-default">
+				{code}
+			</pre>
+		);
+	}
+	return (
+		<HighlightedHtml
+			html={html}
+			className="overflow-auto rounded-sm [&_pre]:!m-0 [&_pre]:!bg-container-elevated-bg [&_pre]:p-8"
+		/>
+	);
+}
+
+const DEFAULT_REMARK_PLUGINS: ReactMarkdownProps["remarkPlugins"] = [remarkGfm];
+const DEFAULT_COMPONENTS: ReactMarkdownProps["components"] = {
+	code: CodeBlock,
+	a: Anchor,
+	table: Table,
+};
+const WIDE_COMPONENTS: ReactMarkdownProps["components"] = {
+	...DEFAULT_COMPONENTS,
+	pre: WidePre,
+	table: WideTable,
+};
+
+function withDefaultPlugins(plugins: ReactMarkdownProps["remarkPlugins"]) {
+	return plugins ? [remarkGfm, ...plugins] : DEFAULT_REMARK_PLUGINS;
+}
+
+function withDefaultComponents(components: ReactMarkdownProps["components"], wideBlocks: boolean) {
+	const defaults = wideBlocks ? WIDE_COMPONENTS : DEFAULT_COMPONENTS;
+	return components ? { ...defaults, ...components } : defaults;
+}

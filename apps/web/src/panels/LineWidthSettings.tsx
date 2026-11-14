@@ -6,9 +6,9 @@ import {
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
+import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "@thinkrail/ui/settings";
 import { cn } from "@thinkrail/ui/utils";
 import { useAppStore } from "@/store";
-import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
 import { SettingsSwitch } from "./SettingsSwitch";
 import { saveSettings } from "./saveSettings";
 import { SETTINGS_INPUT, useSettingsDraft } from "./settingsDraft";

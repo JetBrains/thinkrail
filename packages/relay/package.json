@@ -1,0 +1,22 @@
+{
+	"name": "@thinkrail/relay",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"build": "bun build src/main.ts --target=bun --outfile=dist/relay.js",
+		"test": "bun test",
+		"typecheck": "tsc --noEmit",
+		"start": "bun run src/main.ts"
+	},
+	"dependencies": {
+		"@thinkrail/contracts": "workspace:*"
+	},
+	"devDependencies": {
+		"@types/bun": "catalog:",
+		"typescript": "catalog:"
+	}
+}

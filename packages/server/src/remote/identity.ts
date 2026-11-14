@@ -1,0 +1,94 @@
+import {
+	createHash,
+	createPrivateKey,
+	sign as edSign,
+	generateKeyPairSync,
+	hkdfSync,
+	type KeyObject,
+} from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { verifyEd25519 } from "@thinkrail/relay";
+import { dataDir } from "../persistence";
+
+const IDENTITY_FILE = "remote-identity.json";
+const IDENTITY_VERSION = 1;
+
+interface StoredIdentity {
+	version: number;
+	privateKeyPem: string;
+	/** base64url raw Ed25519 public key (32 bytes). */
+	publicKeyRaw: string;
+}
+
+export interface HostIdentity {
+	/** base64url raw Ed25519 public key — what the QR carries and devices verify against. */
+	publicKey: string;
+	/** Short, human-comparable fingerprint of the public key. */
+	fingerprint: string;
+	sign(data: Uint8Array): Uint8Array;
+	/** 32-byte secp256k1 secret for Nostr signaling, derived from the identity so it survives restarts with it. */
+	nostrSecret: Uint8Array;
+}
+
+const NOSTR_SECRET_INFO = "thinkrail/nostr-signaling/v1";
+
+function deriveNostrSecret(privateKey: KeyObject): Uint8Array {
+	const der = privateKey.export({ type: "pkcs8", format: "der" });
+	return new Uint8Array(hkdfSync("sha256", der, new Uint8Array(0), NOSTR_SECRET_INFO, 32));
+}
+
+function rawPublicKey(key: KeyObject): string {
+	const jwk = key.export({ format: "jwk" }) as { x?: string };
+	if (!jwk.x) throw new Error("ed25519 public key missing jwk.x");
+	return jwk.x;
+}
+
+export function fingerprintOf(publicKeyRaw: string): string {
+	return createHash("sha256")
+		.update(Buffer.from(publicKeyRaw, "base64url"))
+		.digest("base64url")
+		.slice(0, 16);
+}
+
+export function verifySignature(
+	publicKeyRaw: string,
+	data: Uint8Array,
+	signature: Uint8Array,
+): boolean {
+	return verifyEd25519(publicKeyRaw, data, signature);
+}
+
+/** Loads the host's long-term Ed25519 identity, creating and persisting it (0600) on first use. */
+export function loadOrCreateIdentity(dir: string = dataDir()): HostIdentity {
+	const path = join(dir, IDENTITY_FILE);
+	let stored: StoredIdentity | null = null;
+	if (existsSync(path)) {
+		try {
+			const parsed = JSON.parse(readFileSync(path, "utf8")) as StoredIdentity;
+			if (parsed.version === IDENTITY_VERSION && parsed.privateKeyPem && parsed.publicKeyRaw) {
+				stored = parsed;
+			}
+		} catch {
+			stored = null;
+		}
+	}
+	if (!stored) {
+		const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+		stored = {
+			version: IDENTITY_VERSION,
+			privateKeyPem: privateKey.export({ type: "pkcs8", format: "pem" }) as string,
+			publicKeyRaw: rawPublicKey(publicKey),
+		};
+		mkdirSync(dir, { recursive: true });
+		writeFileSync(path, `${JSON.stringify(stored, null, "\t")}\n`, { mode: 0o600 });
+	}
+	const privateKey = createPrivateKey(stored.privateKeyPem);
+	const publicKeyRaw = stored.publicKeyRaw;
+	return {
+		publicKey: publicKeyRaw,
+		fingerprint: fingerprintOf(publicKeyRaw),
+		sign: (data) => edSign(null, data, privateKey),
+		nostrSecret: deriveNostrSecret(privateKey),
+	};
+}

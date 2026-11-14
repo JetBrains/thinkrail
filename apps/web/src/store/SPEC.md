@@ -83,9 +83,14 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   `server.welcome` snapshot lands. Every connection-status transition clears `protocolVersion`, so UI
   capabilities remain unavailable between sockets and until the current socket's welcome is installed;
   **`welcomeProtocolVersion`** keeps the last installed welcome's protocol across a reconnect (in memory
-  only), for the one capability that must outlive a blip: **`selectHostSearchAvailable`** (the search
+  only, and host-scoped: a host switch resets it), for the one capability that must outlive a blip: **`selectHostSearchAvailable`** (the search
   palette keeps its host scopes and rows) beside **`selectHostReachable`** (connected and this
   connection's welcome — when a host search request may go out).
+  **`resetHostState()`** returns every host-scoped slice (`initialHostState()`: domain state, the
+  workspace-keyed views and requests, host config to defaults) to its initial value when the transport moves
+  to another host; monotonic counters (`connectionGeneration`, `welcomeGeneration`, provider and revision
+  versions), the workbench frame and client preferences survive, so a reply from the previous host still
+  fails its generation guard.
   **`installWelcomeSnapshot(protocolVersion, projects, recentProjects,
   config?, hostPlatform?, hostUpdate?, hostAppVersion?, speech?)`** installs protocol + both sorted project views + optional config,
   host platform, optional host-update lifecycle snapshot, the voice-input **`speech`** status (`null` from a
@@ -124,7 +129,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   **Settled shelf.** `selectors.ts` owns **`selectWorkspacePartition(state, projectId, now)`** — the one
   derivation of a project's rows into `live` and `settled` (each settled row carrying its reason:
   `override`, `review merged|closed`, or `idle since`), consumed by the rail, the topbar's *Switch to*
-  menu, and the shelf alike so the three can never disagree; **`selectAutoSettledCounts(state, now)`**
+  menu, and the shelf alike so the three can never disagree — it feeds the store's state (support flag,
+  `settleIdleDays`, running/attention, the live latch) into contracts' `partitionWorkspaces`, the rule the phone
+  shares; **`selectAutoSettledCounts(state, now)`**
   reuses its per-row rule to count, per loaded project, only the rows the shelf took on its own (never an
   `override`), which is what the rail's one-time first-move notice announces. Below
   `WORKSPACE_SETTLE_PROTOCOL_VERSION` it returns the host's raw list as `live`, unsorted, and ignores even
@@ -295,8 +302,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   stats read) / `commands` / `draft` / **`readingAnchor`** (browser-local detached transcript position
   that survives the chat tab's unmount; written only by `chat` through `setChatReadingAnchor`) /
   **`promptImages`** (the composer's transient ready images, pending decodes, errors and a fresh generation
-  token; the pure model `PromptImagesState` + `newPromptImagesState` is the store's own
-  `promptImageState.ts`, so runtime creation runs no `chat` code). `updateChatPromptImages(sessionId, update)` changes
+  token; the pure model `PromptImagesState` + `newPromptImagesState` is [[module-chat-ui]]'s
+  `promptImageState` — a dependency-free module beside the composer that reads it — re-exported by the store
+  barrel, so runtime creation runs no renderer code). `updateChatPromptImages(sessionId, update)` changes
   that draft atomically through the same existing-runtime-only boundary as text drafts. Remounts and
   transcript reconciliation retain it; closing the runtime or clearing its workspace releases it.
   A new runtime gets a different generation even when its session id is reused, so old decodes cannot

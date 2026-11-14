@@ -48,7 +48,16 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `inferUrl` defaults to
   same-origin; **`httpBase()`** derives the host's HTTP origin
   from the WS `url` — for building host HTTP URLs like the `/files/<workspaceId>/<path>` worktree-file
-  endpoint the markdown viewer points relative `<img>`s at, targeting the same host the transport dials); `piEventBatcher.ts`
+  endpoint the markdown viewer points relative `<img>`s at, targeting the same host the transport dials);
+  **`backendKey()`** is the host's identity for frontend-local storage keys (the WS `httpBase()`, so existing
+  keys keep their spelling; `remote:<hostKey>` for a remote host, whose `httpBase()` is empty) and
+  **`close()`** ends a transport for good — no reconnect, no further pushes, pending requests rejected;
+  **one host at a time**: installing a transport (`initTransport`, `mountRemoteSession(client, hostKey)`)
+  disposes the previous one's channel wiring and event batcher, closes it, and runs `hostReset.ts`'s
+  `resetHost` — the store's `resetHostState()` with `isHostResetting()` true, so persistence adapters do not
+  write the emptied state under either host's key, then every `onHostReset` listener, which re-reads its
+  frontend-local state under the new `backendKey()` (project expansion, the files tree, the layout). Module
+  caches keyed by host-minted ids or the connection generation need no reset; `piEventBatcher.ts`
   (the browser-side bounded queue for consecutive `pi.event` frames: exact arrival order, no dropped events,
   one atomic delivery at roughly 30 Hz, a 128-event forced-flush ceiling, and `flush`/`dispose` lifecycle);
   `wireTransport.ts` (`initTransport`/
@@ -232,8 +241,10 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for `server.welcome`'s config +
   `settings.changed`); `store`
   (welcome + event routing — a runtime edge owned by the parent graph); `lib` (plain-HTTP-safe random page
-  identity); `@thinkrail/locales` (user-visible request-failure messages); the browser `WebSocket`.
-- **Forbidden:** `server`/`shared`/any `pi` package; importing `panels`/`shell`; or requesting, subscribing to, or folding current-layout state. Browser layout persistence uses only `httpBase()` as part of its frontend-local storage identity; native stable persistence has no transport edge.
+  identity); `@thinkrail/locales` (user-visible request-failure messages); `@thinkrail/remote-client`
+  (`remoteTransport.ts`'s `DeviceWireClient`, whose coded `RemoteRequestError` becomes the same `RequestError`, and
+  only an explicit `timeoutMs` bounds a remote request — the wire client waits out a reconnect); the browser `WebSocket`.
+- **Forbidden:** `server`/`shared`/any `pi` package; importing `panels`/`shell`; or requesting, subscribing to, or folding current-layout state. Browser layout persistence uses only `backendKey()` as part of its frontend-local storage identity; native stable persistence has no transport edge.
 
 ## Get right
 

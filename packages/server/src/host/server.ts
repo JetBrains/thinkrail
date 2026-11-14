@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { hostname } from "node:os";
 import { join, normalize } from "node:path";
 import type {
 	HostPlatform,
@@ -23,6 +24,7 @@ import {
 	MCP_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
+	REMOTE_ACCESS_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
 	SPEECH_SOCKET_ROUTE,
 	TEXT_SEARCH_PROTOCOL_VERSION,
@@ -32,7 +34,7 @@ import {
 	WS_CHANNELS,
 	WS_MAX_FRAME_BYTES,
 } from "@thinkrail/contracts";
-import { errorCodeOf } from "@thinkrail/shared/codedError";
+import { CodedError, errorCodeOf } from "@thinkrail/shared/codedError";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import {
 	admissionContextFor,
@@ -141,6 +143,12 @@ import {
 	setProjectPathGuard,
 	setProjectPublisher,
 } from "../projects";
+import {
+	bridgeRemoteWire,
+	createRemoteAccessControl,
+	type RemoteAccessControl,
+	type RemoteWireBridge,
+} from "../remote-transport";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
 import { getConfig, setSettingsPublisher } from "../settings";
 import {
@@ -201,6 +209,7 @@ import { setFsNudgePublisher } from "./fsNudge";
 import { applyGitCeiling } from "./gitCeiling";
 import {
 	handleRequest,
+	remoteAccessStatus,
 	requestErrorReport,
 	requestMethodDiagnostic,
 	workspaceCreationHandoff,
@@ -251,6 +260,12 @@ import { workspaceToolsHost } from "./workspaceTools";
 export interface CreateServerOptions {
 	port?: number;
 	host?: string;
+	/**
+	 * Turns phone access on for this run (`--remote`), whatever Settings says: paired devices drive the host
+	 * over a signaling relay — `relayUrl` when given, else one the host runs itself, reachable at this
+	 * machine's Wi‑Fi/LAN and Tailscale addresses. Without it, access follows the Settings switch.
+	 */
+	remote?: { relayUrl?: string | undefined };
 	staticDir?: string;
 	projectPath?: string;
 	appVersion?: string;
@@ -284,6 +299,8 @@ export interface CreateServerOptions {
 export interface RunningServer {
 	readonly port: number;
 	startAttributionClaim: () => void;
+	/** Phone access: on/off, pairing links, paired devices. Off unless Settings or `remote` turned it on. */
+	remote: RemoteAccessControl;
 	stop: () => void;
 	shutdown: () => Promise<void>;
 }
@@ -351,6 +368,9 @@ function countMethods(methods: readonly string[]): string {
 	return [...counts].map(([method, count]) => `${method} ×${count}`).join(", ");
 }
 
+/** This machine's name as a paired phone shows it (`Studio-Mac.local` → `Studio-Mac`). */
+const computerName = (): string => hostname().replace(/\.local$/, "");
+
 function clientProtocolVersion(value: string | null): number {
 	const parsed = Number(value);
 	return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
@@ -381,6 +401,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const {
 		port = 24242,
 		host = "localhost",
+		remote,
 		staticDir,
 		projectPath,
 		appVersion,
@@ -441,7 +462,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			clientKey,
 			setTimeout(() => {
 				reapTimers.delete(clientKey);
-				if (sockets.has(clientKey)) return;
+				if (sockets.has(clientKey) || remoteClients.has(clientKey)) return;
 				if (!requestReplays.clearClient(clientKey)) {
 					armClientReap(clientKey);
 					return;
@@ -559,22 +580,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					ws.subscribe(WS_CHANNELS.fontsChanged);
 				const speech = ws.data.protocolVersion >= SPEECH_PROTOCOL_VERSION;
 				if (speech) ws.subscribe(WS_CHANNELS.speechChanged);
-				const hostPlatform: HostPlatform =
-					process.platform === "darwin" || process.platform === "win32"
-						? process.platform
-						: "linux";
+				if (ws.data.protocolVersion >= REMOTE_ACCESS_PROTOCOL_VERSION)
+					ws.subscribe(WS_CHANNELS.remoteStatusChanged);
 				const setupCapture = additionalCapture();
-				const chats = seesChats(ws.data.protocolVersion);
-				const welcome: ServerWelcome = {
-					protocolVersion: PROTOCOL_VERSION,
-					hostPlatform,
-					projects: listProjects().filter((project) => chats || !isChatsContainer(project)),
-					recentProjects: listRecentProjects().filter((project) => !isChatsContainer(project)),
-					config: getConfig(),
-					...(speech ? { speech: speechStatus() } : {}),
-					...(appVersion ? { appVersion } : {}),
-					...(hostUpdateNotice ? { hostUpdate: hostUpdateNotice } : {}),
-				};
+				const welcome: ServerWelcome = buildWelcome(ws.data.protocolVersion);
 				setupObservation.observe(setupCapture, {
 					project_present: welcome.projects.some((project) => !isChatsContainer(project))
 						? "yes"
@@ -645,6 +654,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 									clientKey: ws.data.clientKey,
 									protocolVersion: ws.data.protocolVersion,
 									...(hostUpdate ? { runHostUpdate: requestHostUpdate } : {}),
+									remoteAccess,
 								});
 								return JSON.stringify({ id: requestId, ok: true, result });
 							} catch (err) {
@@ -705,6 +715,119 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			},
 		},
 	});
+
+	const buildWelcome = (protocolVersion: number): ServerWelcome => {
+		const speech = protocolVersion >= SPEECH_PROTOCOL_VERSION;
+		const chats = seesChats(protocolVersion);
+		const hostPlatform: HostPlatform =
+			process.platform === "darwin" || process.platform === "win32" ? process.platform : "linux";
+		return {
+			protocolVersion: PROTOCOL_VERSION,
+			hostPlatform,
+			projects: listProjects().filter((project) => chats || !isChatsContainer(project)),
+			recentProjects: listRecentProjects().filter((project) => !isChatsContainer(project)),
+			config: getConfig(),
+			...(speech ? { speech: speechStatus() } : {}),
+			...(appVersion ? { appVersion } : {}),
+			...(hostUpdateNotice ? { hostUpdate: hostUpdateNotice } : {}),
+		};
+	};
+
+	// Remote (WebRTC) clients are not Bun sockets, so they can't join Bun's native pub/sub. Wrapping
+	// `server.publish` once mirrors every broadcast — already framed as `{ channel, data }` — to each live
+	// remote bridge, with no cost when no device is paired. Targeted `ws.send`s stay host-local by design.
+	const remoteBridges = new Set<RemoteWireBridge>();
+	const nativePublish = server.publish.bind(server);
+	const forwardingPublish: typeof server.publish = (topic, data, compress) => {
+		const status = nativePublish(topic, data, compress);
+		if (typeof data === "string") for (const bridge of remoteBridges) bridge.pushFramed(data);
+		return status;
+	};
+	server.publish = forwardingPublish;
+
+	const deviceBridges = new Map<string, Set<RemoteWireBridge>>();
+	const remoteClients = new Set<string>();
+	const remoteAccess: RemoteAccessControl = createRemoteAccessControl({
+		...(remote?.relayUrl ? { relayUrl: remote.relayUrl } : {}),
+		hostName: computerName(),
+		onPaired: (device, channel) => {
+			const clientKey = `remote:${device.id}`;
+			remoteClients.add(clientKey);
+			const pendingReap = reapTimers.get(clientKey);
+			if (pendingReap !== undefined) {
+				clearTimeout(pendingReap);
+				reapTimers.delete(clientKey);
+			}
+			const bridge = bridgeRemoteWire(channel, {
+				clientKey,
+				replay: {
+					run: (id, method, params, execute) =>
+						requestReplays.run(
+							clientKey,
+							id,
+							createHash("sha256")
+								.update(JSON.stringify([method, params, null]))
+								.digest("hex"),
+							execute,
+							requestMethodDiagnostic(method),
+						),
+					acknowledge: (ids) => reportAbandoned(requestReplays.acknowledge(clientKey, ids)),
+					retain: (ids) => reportAbandoned(requestReplays.retain(clientKey, ids)),
+				},
+				onError: (error, method) => reportError(error, requestErrorReport(method)),
+				dispatch: (method, params) => {
+					const verdict = remoteAccess.mayRequest(device.id, method);
+					if (verdict === "revoked")
+						throw new CodedError("REMOTE_DEVICE_REVOKED", "This device is no longer paired.");
+					if (verdict === "readOnly")
+						throw new CodedError(
+							"REMOTE_DEVICE_READ_ONLY",
+							"This device can only read. Allow changes for it on the computer.",
+						);
+					return handleRequest(method, params, { clientKey, protocolVersion: PROTOCOL_VERSION });
+				},
+				errorCodeOf,
+			});
+			const own = deviceBridges.get(device.id) ?? new Set<RemoteWireBridge>();
+			own.add(bridge);
+			deviceBridges.set(device.id, own);
+			remoteBridges.add(bridge);
+			channel.onClose(() => {
+				remoteBridges.delete(bridge);
+				own.delete(bridge);
+				if (own.size === 0 && deviceBridges.get(device.id) === own) {
+					deviceBridges.delete(device.id);
+					remoteClients.delete(clientKey);
+					if (!stopping && !reapTimers.has(clientKey)) armClientReap(clientKey);
+				}
+			});
+			// The device has no WS "open" event, so hand it the same welcome snapshot over the bridge.
+			bridge.push(WS_CHANNELS.serverWelcome, buildWelcome(PROTOCOL_VERSION));
+			bridge.push(WS_CHANNELS.remoteDeviceAccess, { access: device.access });
+			const routes = remoteAccess.routes();
+			if (routes) bridge.push(WS_CHANNELS.remoteHostRoutes, routes);
+		},
+		onAccessChanged: (deviceId, access) => {
+			for (const bridge of deviceBridges.get(deviceId) ?? []) {
+				bridge.push(WS_CHANNELS.remoteDeviceAccess, { access });
+			}
+		},
+		// Local sockets only: phone access is managed on this computer, so the status never reaches a device.
+		onStatus: (state) =>
+			nativePublish(
+				WS_CHANNELS.remoteStatusChanged,
+				JSON.stringify({
+					channel: WS_CHANNELS.remoteStatusChanged,
+					data: remoteAccessStatus(state),
+				}),
+			),
+	});
+	try {
+		if (remote) remoteAccess.setEnabled(true, { persist: false });
+		else remoteAccess.restore();
+	} catch (err) {
+		log.warn("phone access could not start", err as Error);
+	}
 
 	const backpressureReconciler = setInterval(() => {
 		for (const socket of sockets.values()) {
@@ -1280,6 +1403,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		persistTerminalSessions();
 		closeAllTerminals();
 		restoreSeamDefaults();
+		remoteAccess.stop();
 		server.stop(true);
 	};
 	const shutdown = (): Promise<void> => {
@@ -1312,6 +1436,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			return server.port ?? port;
 		},
 		startAttributionClaim: startAttributionClaimWhenReady,
+		remote: remoteAccess,
 		stop,
 		shutdown,
 	};

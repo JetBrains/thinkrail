@@ -5,6 +5,7 @@ import { Glob } from "bun";
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const SOURCES = [
 	"apps/web/src",
+	"packages/chat-ui/src",
 	"packages/ui",
 	"packages/resource-renderers/src",
 	"thinkrail-extensions/*/web",
@@ -19,6 +20,10 @@ export function designSourceFiles(root = ROOT): string[] {
 		)
 		.sort()
 		.map((path) => join(root, path));
+}
+
+export function isPhoneShellSource(path: string): boolean {
+	return designSourceLabel(path).startsWith("phone/");
 }
 
 export function designSourceLabel(path: string): string {

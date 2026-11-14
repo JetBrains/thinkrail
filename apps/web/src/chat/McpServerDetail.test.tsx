@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
+import type { ChatTurn } from "@thinkrail/chat-ui/types";
 import { renderToStaticMarkup } from "react-dom/server";
 import { McpServerDetailView } from "./McpServerDetail";
 import { mcpServerCalls } from "./mcpServerCalls";
-import type { ChatTurn } from "./types";
 
 const turns = [
 	{

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { createSingleFlight } from "./singleFlight";
+import { createKeyedFlight, createSingleFlight } from "./singleFlight";
 
 function deferred() {
 	let resolve = () => {};
@@ -71,4 +71,31 @@ test("a task that throws synchronously releases the flight", async () => {
 	flight.run(() => ran.push("again"));
 	await flush();
 	expect(ran).toEqual(["next", "again"]);
+});
+
+test("a keyed flight drops a repeat of an in-flight key, runs other keys, and reports what is busy", async () => {
+	const busy: string[][] = [];
+	const run = createKeyedFlight<string>((keys) => busy.push([...keys]));
+	const first = deferred();
+	const ran: string[] = [];
+	run("d1", () => {
+		ran.push("d1");
+		return first.promise;
+	});
+	run("d1", async () => {
+		ran.push("d1 again");
+	});
+	run("d2", async () => {
+		ran.push("d2");
+	});
+	expect(ran).toEqual(["d1", "d2"]);
+	await flush();
+	expect(busy.at(-1)).toEqual(["d1"]);
+	first.reject(new Error("failed"));
+	await flush();
+	expect(busy.at(-1)).toEqual([]);
+	run("d1", async () => {
+		ran.push("d1 later");
+	});
+	expect(ran).toEqual(["d1", "d2", "d1 later"]);
 });

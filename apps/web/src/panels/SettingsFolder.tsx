@@ -1,12 +1,12 @@
 import { RiFileCopyLine as Copy, RiFolderOpenLine as FolderOpen } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { SettingsRow } from "@thinkrail/ui/settings";
 import type { ReactNode } from "react";
 import { copyText } from "@/lib";
 import { toast } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { SettingsNotice } from "./SettingsNotice";
-import { SettingsRow } from "./SettingsRow";
 
 export type RevealFolderMethod = "locales.reveal" | "themes.reveal" | "fonts.reveal";
 

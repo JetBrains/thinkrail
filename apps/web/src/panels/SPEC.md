@@ -517,7 +517,7 @@ the shared **`useProviderAuth`** hook, which `ProvidersSettings` uses too: the s
 (above), re-read once whenever one of them opens — Central's install state and similar host-local facts change
 without a push — `startLogin` / `logout`, and the store-driven
 `LoginDialog` node. For an `anthropic` login started as `oauth` (`LoginState.method`), the node carries the sign-in
-`chat/ExtraUsageNotice` while the report's `warnings.anthropicExtraUsage` is not `false`
+`@thinkrail/chat-ui/ExtraUsageNotice` while the report's `warnings.anthropicExtraUsage` is not `false`
 (`warnsExtraUsageOnSignIn`; an older host's report has no `warnings`, so the notice shows). Exactly one surface mounts that node: Settings → Providers while Settings is open, otherwise the
 connect surface (`ownsLoginDialog`), so a login never renders two stacked dialogs. **Post-connect handoff:**
 when a provider that was not configured when the surface opened becomes configured — an OAuth / API-key
@@ -733,7 +733,7 @@ a project picker, the prompt hero, and the reused
   **store-driven two-pane shell**: one nav list, rendered once, beside a scrollable content pane. At `md`+
   the list is a rail grouped **Agent** (Models, Providers, MCP servers, Prompt templates, Environment) ·
   **Interface** (Chat, Appearance, Language, Layout, Terminal) · **System** (Workspaces, Integrations, Extensions,
-  Notifications, Privacy, Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
+  Notifications, Phone access, Privacy, Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
   and it is the home for further integrations. Below `md` the same list is a horizontal scrolling strip without group labels. The
   Feedback card (`settings-nav-feedback`, “Share feedback”) belongs to that list at
   every width, pinned to the rail's bottom at `md`+. The pure nav data — groups, protocol and
@@ -742,7 +742,8 @@ a project picker, the prompt hero, and the reused
   so the dialog only renders it. `settingsOpen`/`settingsSection` live in the store so the gear AND the
   Welcome banner can open it deep-linked to a section. Escape closes the dialog except while focus is in an
   input carrying `data-settings-draft-input`, where Escape reverts that draft instead.
-  **Shared Settings primitives** keep every page one shape (shell's injected Layout section reuses them):
+  **Shared Settings primitives** keep every page one shape (shell's injected Layout section and the phone's
+  settings screen reuse them; they live in `@thinkrail/ui/settings`):
   `SettingsPageContainer` stacks a page's groups with spacing and a divider drawn only between children
   that actually render (each child keeps its element key, so a conditional group never remounts its
   siblings); `SettingsGroup` is a titled block of `SettingsRow`s — label, optional description, one
@@ -1187,6 +1188,34 @@ a project picker, the prompt hero, and the reused
   channel — the visible, in-app acquisition path that does not depend on an
   out-of-focus event. The notification pipeline, suppression, and away-path permission preface live in
   [[submodule-web-notifications]].
+  **`PhoneAccessSettings`** (`phone`, from `REMOTE_ACCESS_PROTOCOL_VERSION`) is phone access over `remote.*`:
+  the switch applies at once (no draft — it starts or stops a listener), while on it shows a one-time
+  pairing code with its expiry and a Copy link action (a phone that pairs from it closes the code with a
+  toast), and lists paired phones (`PhoneDeviceRow`: marked "Connected now" while live,
+  renamed in place with the pencil, **Read / Write** access applied at once, Revoke).
+  `PhoneAccessNetwork` is the network check below it — one row per route (same Wi‑Fi, Tailscale, Internet,
+  or the `--relay` URL alone, then Nostr relays with how many are live) with the addresses found and what a
+  missing or closed route needs — plus a Wi‑Fi-only notice pointing at Tailscale when no route reaches other
+  networks. `phoneHasNoRoute` (no address and no live Nostr relay) gates the no-network warning. Both views read routes from the one `phoneReach` derivation. The QR is an `<img>` of the `qrcode` SVG, which
+  carries its own black-on-white: a scanner needs dark modules on a light field in every theme, so this image
+  is the one place UI colour is not a token. `PhonePairingCode` is the one shown-code card (QR, until when it
+  works or that it expired, Copy link) in Settings' row and the quick panel's stacked layout.
+  `PhoneAccessView` and shell's `PhoneAccessPanel` are props-only halves taking the hook's `PhoneAccess` whole.
+  **One status source:** `useRemoteAccessStatus` (in `usePhoneAccess.ts`) is the status the topbar icon, its
+  quick panel and Settings all render — one `remote.statusChanged` subscription per transport, one
+  `remote.status` read per connection generation, and every change's reply, last arrival wins (one ordered
+  socket, each reply and push computed when sent, so no ordering gate). `foldRemoteStatus` is the one place a
+  newly paired phone is noticed — a device absent from the previous status on the same connection — and the
+  source toasts it once. There is no client poll: the host pushes every change (see
+  [[submodule-server-remote-transport]]). `usePhoneAccess` adds a view's code lifecycle on top through the
+  pure `phoneAccessState.ts` reducer (unit-tested): a status naming a `paired` phone replaces the shown code
+  with who paired, a code expires on one timer at its `expiresAt`, a failed mint ends the wait, the quick
+  panel's own code waits for the internet check so it carries a public address found, and turning access off
+  bumps a generation so a code minted before it — dead once the relay restarts — is never shown. The switch
+  and each phone's rename / access / revoke run through `createKeyedFlight` (`singleFlight.ts`), which drops a
+  repeat while one is in flight and reports what is busy. Both views say loading until the first status
+  lands and offer Retry when it fails; a code being made and a phone with a change in flight keep their
+  buttons busy until the reply.
   **`PrivacySettings`** manages the additional-data preference and
   confirmation together; the event contract belongs to [[submodule-server-analytics]]. The pane ends with a link to the analytics section of the project readme.
   **`AnalyticsConsentDialog`** mounts once through shell after a capable host's unconfirmed config hydrates,

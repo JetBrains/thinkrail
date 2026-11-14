@@ -13,6 +13,7 @@ import {
 } from "@remixicon/react";
 import type { EditorInfo, Workspace } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { AttentionDot } from "@thinkrail/ui/attention-dot";
 import { IconButton } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
@@ -24,11 +25,10 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import { RunningIcon } from "@thinkrail/ui/running-icon";
 import { cn } from "@thinkrail/ui/utils";
 import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { AttentionDot } from "@/components/AttentionDot";
-import { RunningIcon } from "@/components/RunningIcon";
 import { chatLabel, copyText } from "@/lib";
 import {
 	selectChatsContainer,

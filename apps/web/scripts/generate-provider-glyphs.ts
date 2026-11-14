@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { writeOrCheck } from "./generatedFiles";
+import { writeOrCheck } from "@thinkrail/design-tokens/scripts/generatedFiles";
 import { GENERATED_GLYPHS_PATH, renderGlyphsModule } from "./providerGlyphs";
 
 writeOrCheck({

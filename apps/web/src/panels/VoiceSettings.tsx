@@ -1,13 +1,12 @@
 import type { SpeechModel, SpeechStatus } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { SETTINGS_ROWS_CONTAINER, SegmentedControl, SettingsRow } from "@thinkrail/ui/settings";
 import { useState } from "react";
 import { dictationShortcutLabel, speechErrorKey } from "@/speech";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
-import { SegmentedControl } from "./SegmentedControl";
 import { SettingsNotice } from "./SettingsNotice";
-import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
 import { SettingsSwitch } from "./SettingsSwitch";
 
 function megabytes(bytes: number): string {

@@ -17,6 +17,16 @@ import {
 	RiMore2Line as MoreVertical,
 	RiAddLine as Plus,
 } from "@remixicon/react";
+import { type ChatActions, ChatActionsContext } from "@thinkrail/chat-ui/ChatActions";
+import {
+	awaitingToolCallIdOf,
+	deriveInteractionStates,
+	InteractionStatesContext,
+	type PendingInteraction,
+} from "@thinkrail/chat-ui/interactionState";
+import { Markdown } from "@thinkrail/chat-ui/Markdown";
+import { useToolInteraction } from "@thinkrail/chat-ui/toolInteraction";
+import { getToolRenderer } from "@thinkrail/chat-ui/toolRegistry";
 import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { ResourceScopeProvider } from "@thinkrail/resource-renderers";
@@ -32,14 +42,6 @@ import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { type ChatActions, ChatActionsContext } from "../chat/ChatActions";
-import {
-	awaitingToolCallIdOf,
-	deriveInteractionStates,
-	InteractionStatesContext,
-	type PendingInteraction,
-} from "../chat/interactionState";
-import { Markdown } from "../chat/Markdown";
 import { SectionLabel, VerificationBadge, VerificationGlyph } from "../chat/planKit";
 import { planToMarkdown } from "../chat/planMarkdown";
 import {
@@ -65,8 +67,6 @@ import {
 	sessionGlance,
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
-import { useToolInteraction } from "../chat/toolInteraction";
-import { getToolRenderer } from "../chat/toolRegistry";
 import { hydrateSessionRuntime, useChatTodos } from "../chat/useChatTodos";
 import { copyText } from "../lib";
 import {
@@ -704,6 +704,7 @@ function PlanInteractionCard({
 function PlanSessionLive({ workspaceId, sessionId }: { workspaceId: string; sessionId: string }) {
 	const t = useT();
 	const runtime = useAppStore((s) => s.sessions[sessionId]);
+	const hostProtocol = useAppStore((s) => s.protocolVersion) ?? undefined;
 	const [focusScope] = useState<object>(() => ({}));
 	const actions = useMemo<ChatActions>(
 		() => ({
@@ -713,8 +714,9 @@ function PlanSessionLive({ workspaceId, sessionId }: { workspaceId: string; sess
 			respondToTool: (toolCallId, response) => respondToTool(sessionId, toolCallId, response),
 			resultOpener: () => undefined,
 			revealChatElement: () => {},
+			hostProtocol,
 		}),
-		[sessionId],
+		[sessionId, hostProtocol],
 	);
 	const interactionStates = useMemo(
 		() =>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
+import { normalizeEol } from "@thinkrail/design-tokens/scripts/generatedFiles";
 import { designSourceFiles, designSourceLabel } from "../../scripts/designSources";
-import { normalizeEol } from "../../scripts/generatedFiles";
 
 const code = (path: string) =>
 	normalizeEol(readFileSync(path, "utf8"))
@@ -48,13 +48,13 @@ const DRAWS_FOCUS = (token: string) => {
 };
 
 const SUPPRESSION_DRAWN_ELSEWHERE: Record<string, { match: string; reason: string }[]> = {
-	"chat/Composer.tsx": [
+	"packages/chat-ui/src/Composer.tsx": [
 		{
 			match: "absolute inset-0 size-full resize-none",
 			reason: "the field frame draws has-[textarea:focus-visible]:focus-ring",
 		},
 	],
-	"chat/ChatImage.tsx": [
+	"packages/chat-ui/src/ChatImage.tsx": [
 		{ match: "relative inline-flex max-w-full", reason: "tabIndex=-1 programmatic target" },
 	],
 	"panels/PlanPane.tsx": [
