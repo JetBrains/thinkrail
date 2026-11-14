@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
-import { RemoteConnectError } from "@thinkrail/remote-client";
+import { RemoteConnectError } from "./connectError";
 import { hostStatusOf, recoveryOf } from "./hostStatus";
 
-test("a phone the computer no longer accepts pairs again; a passing failure reconnects; an old app does neither", () => {
+test("a device the host no longer accepts pairs again; a passing failure reconnects; an old app does neither", () => {
 	expect(recoveryOf({ kind: "remote", code: "unknown_device", message: "" })).toBe("repair");
 	expect(recoveryOf({ kind: "remote", code: "identity_mismatch", message: "" })).toBe("repair");
 	expect(recoveryOf({ kind: "remote", code: "code_expired", message: "" })).toBe("repair");

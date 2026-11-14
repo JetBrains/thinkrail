@@ -207,6 +207,23 @@ test("a saved host returns at once and its loop makes the first attempt", async 
 	connection.close();
 });
 
+test("a connection keeps its device key in the store it is given, not the browser's", async () => {
+	const kept = new Map<string, string>();
+	const keyStore = {
+		read: (key: string) => kept.get(key) ?? null,
+		write: (key: string, value: string) => void kept.set(key, value),
+	};
+	const connection = connectSavedHost(
+		{ relayUrl: "ws://host:1", hostKey, label: "laptop" },
+		{},
+		keyStore,
+	);
+	await settle(() => peers[0]?.answered === true);
+	expect(kept.get("thinkrail.remote.deviceKey")).toContain("publicKeyRaw");
+	expect(localStorage.getItem("thinkrail.remote.deviceKey")).toBeNull();
+	connection.close();
+});
+
 test("a relay that opens but never gets ready fails the attempt as relay_lost, socket closed, and is retried", async () => {
 	hostMode = "silent";
 	const { connection, misses } = watched();

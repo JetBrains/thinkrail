@@ -10,6 +10,7 @@ import {
 import { type Translator, useT } from "@thinkrail/locales/react";
 import type {
 	DeviceWireClient,
+	HostStatus,
 	RemoteSessionItem,
 	RemoteSessionsController,
 	SavedHost,
@@ -23,7 +24,7 @@ import { useCallback } from "react";
 import { useNow } from "../components/useNow";
 import type { PairState } from "./App";
 import { HostBanner } from "./HostBanner";
-import { failureText, type HostStatus } from "./hostStatus";
+import { failureText } from "./hostStatus";
 import { useHostAccess, useHostClient, useHostWelcome } from "./hostView";
 import { LoadedList } from "./layout";
 import { scopeStatus } from "./status";

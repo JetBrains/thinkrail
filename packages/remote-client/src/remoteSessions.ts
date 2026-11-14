@@ -12,7 +12,7 @@ import {
 	type RemoteConnection,
 } from "./deviceConnector";
 import type { DeviceWireClient } from "./deviceWireClient";
-import { type SavedHost, withRoutes } from "./hostRegistry";
+import { type KeyValueStore, type SavedHost, withRoutes } from "./hostRegistry";
 
 export interface RemoteSessionItem {
 	hostKey: string;
@@ -101,13 +101,17 @@ const CONNECTING: HostConnectionStatus = { kind: "connecting" };
  * The lightweight mobile core: holds one connection per paired host, aggregates their live sessions into a
  * single list and tracks how each connection stands. A thin viewer/controller — it tracks session state and
  * streams, not the full IDE. The connectors are injected (default `connectSavedHost` / `connectRemoteProject`)
- * so it is unit-tested with fakes.
+ * so it is unit-tested with fakes; `keyStore` is where the default connectors keep the device key.
  */
 export function createRemoteSessions(
-	deps: { connect?: SavedConnector; pair?: Pairer } = {},
+	deps: { connect?: SavedConnector; pair?: Pairer; keyStore?: KeyValueStore } = {},
 ): RemoteSessionsController {
-	const connector = deps.connect ?? connectSavedHost;
-	const pairer = deps.pair ?? connectRemoteProject;
+	const { keyStore } = deps;
+	const connector: SavedConnector =
+		deps.connect ?? ((host, events) => connectSavedHost(host, events, keyStore));
+	const pairer: Pairer =
+		deps.pair ??
+		((link, options) => connectRemoteProject(link, keyStore ? { ...options, keyStore } : options));
 	const hosts = new Map<string, HostEntry>();
 	let statuses: ReadonlyMap<string, HostConnectionStatus> = new Map();
 	let snapshot: RemoteSessionsSnapshot | null = null;

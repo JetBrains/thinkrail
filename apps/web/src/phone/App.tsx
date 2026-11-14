@@ -2,8 +2,13 @@ import { App as CapApp } from "@capacitor/app";
 import { chatTitle, parsePairingUri } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import {
+	browserStore,
 	createHostRegistry,
 	createRemoteSessions,
+	failureOf,
+	type HostFailure,
+	type HostStatus,
+	hostStatusOf,
 	type RemoteSessionItem,
 	type SavedHost,
 } from "@thinkrail/remote-client";
@@ -14,8 +19,6 @@ import { ChatsScreen } from "./ChatsScreen";
 import { ComputersScreen } from "./ComputersScreen";
 import { needsYouCount, useDoneSessions } from "./chats";
 import { deviceLabel } from "./deviceLabel";
-import { localStore } from "./deviceStore";
-import { failureOf, type HostFailure, type HostStatus, hostStatusOf } from "./hostStatus";
 import { useRemoteSessions } from "./hostView";
 import { NewWorktreeScreen } from "./NewWorktreeScreen";
 import {
@@ -49,7 +52,7 @@ export type PairState =
 	| { kind: "failed"; failure: HostFailure };
 
 export function App() {
-	const registry = useMemo(() => createHostRegistry(localStore), []);
+	const registry = useMemo(() => createHostRegistry(browserStore), []);
 	const controller = useMemo(() => createRemoteSessions(), []);
 	const [hosts, setHosts] = useState<SavedHost[]>(() => registry.list());
 	const remote = useRemoteSessions(controller);
@@ -79,11 +82,11 @@ export function App() {
 		return () => clearTimeout(timer);
 	}, [motion.leaving]);
 	const [preferences, setPreferences] = useState<DevicePreferences>(() =>
-		readPreferences(localStore),
+		readPreferences(browserStore),
 	);
 	useLayoutEffect(() => applyDevicePreferences(preferences), [preferences]);
 	const changePreferences = useCallback((next: DevicePreferences) => {
-		writePreferences(localStore, next);
+		writePreferences(browserStore, next);
 		setPreferences(next);
 	}, []);
 	const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
@@ -166,7 +169,7 @@ export function App() {
 		};
 	}, [back]);
 
-	const doneSessions = useDoneSessions(items, localStore);
+	const doneSessions = useDoneSessions(items, browserStore);
 
 	const connecting = pair.kind === "pairing" ? <PairingSplash hostName={pair.hostName} /> : null;
 	if (hosts.length === 0) {

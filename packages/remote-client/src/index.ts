@@ -1,5 +1,5 @@
 export { type RemoteConnectCode, RemoteConnectError } from "./connectError";
-export { connectRemoteProject, type RemoteConnection } from "./deviceConnector";
+export { browserStore, type RemoteConnection } from "./deviceConnector";
 export { type DeviceWireClient, RemoteRequestError } from "./deviceWireClient";
 export {
 	createHostRegistry,
@@ -7,6 +7,14 @@ export {
 	type KeyValueStore,
 	type SavedHost,
 } from "./hostRegistry";
+export {
+	failureOf,
+	type HostFailure,
+	type HostRecovery,
+	type HostStatus,
+	hostStatusOf,
+	recoveryOf,
+} from "./hostStatus";
 export { RelayUnreachableError } from "./relayPicker";
 export {
 	createRemoteSessions,
