@@ -46,8 +46,7 @@ export async function restoreArtifact(workspaceId: string, path: string): Promis
 
 interface PendingRestore {
 	restore: Promise<boolean>;
-	from: WorkspaceArtifact;
-	settled: boolean;
+	deletedAt: number;
 }
 
 export function artifactRestorer(
@@ -55,14 +54,12 @@ export function artifactRestorer(
 ): (artifact: WorkspaceArtifact) => Promise<boolean> {
 	let pending: PendingRestore | null = null;
 	return (artifact) => {
-		if (pending && !(pending.settled && pending.from !== artifact)) return pending.restore;
+		if (pending?.deletedAt === artifact.changedAt) return pending.restore;
 		const entry: PendingRestore = {
 			restore: Promise.resolve(false),
-			from: artifact,
-			settled: false,
+			deletedAt: artifact.changedAt,
 		};
 		entry.restore = restoreArtifact(workspaceId, artifact.path).then((restored) => {
-			entry.settled = true;
 			if (!restored && pending === entry) pending = null;
 			return restored;
 		});

@@ -2265,9 +2265,11 @@ own section. The kebab menu (`plan-menu`, a
   name — restores it silently first (`artifactActions.openArtifact`): opening a file asks for its contents, so
   the restore is implied. The click's center navigation is stamped before the restore, as any async open
   stamps it at request time, so a click elsewhere while the restore runs keeps its tab. A row (`artifactRestorer`, shared by opening and both Restore controls) reuses its
-  restore while it is in flight and, once done, until a newer snapshot of the row arrives: a double click, or
-  a click in the gap before that snapshot, never asks again (the host would refuse a row that is already
-  live), while a row deleted again right after its restore gets a fresh one. A failed restore is dropped at
+  restore, in flight or done, for as long as it shows the same deletion — a deleted row's `changedAt` is
+  when the host saw it gone, while a list refresh only replaces the object: a double click, a click in the
+  gap before the live snapshot, or a refresh in between never asks again (the host would refuse a row that
+  is already live), while a row deleted again right after its restore shows a newer deletion and gets a
+  fresh one. A failed restore is dropped at
   once and opens nothing — not even a new file that has since taken the path — and Restore's error toast
   says why. The panel
   **opens on This chat**: the attended chat's artifacts (`selectArtifactMentionTarget`), following it as the

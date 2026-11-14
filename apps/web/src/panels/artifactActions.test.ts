@@ -24,11 +24,11 @@ const { useAppStore } = await import("../store");
 const { artifactRestorer, openArtifact, restoreArtifact } = await import("./artifactActions");
 const initial = useAppStore.getInitialState();
 const PATH = ".thinkrail/context/report.md";
-const deleted = (): WorkspaceArtifact => ({
+const deleted = (deletedAt = 1): WorkspaceArtifact => ({
 	path: PATH,
 	state: "deleted",
 	size: 1,
-	changedAt: 1,
+	changedAt: deletedAt,
 	firstSeenAt: 1,
 });
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -79,21 +79,20 @@ test("a click made while a deleted artifact restores keeps its place: the restor
 	expect(requests).toEqual(["artifacts.restore"]);
 });
 
-test("a row asks for one restore, in flight or done, until a newer snapshot of it arrives", async () => {
+test("a row asks for one restore per deletion, in flight or done, however often the list refreshes", async () => {
 	let release = () => {};
 	restoreGate = new Promise((resolve) => {
 		release = resolve;
 	});
 	const restore = artifactRestorer("w1");
-	const record = deleted();
-	const first = restore(record);
-	expect(restore(record)).toBe(first);
+	const first = restore(deleted());
+	expect(restore(deleted())).toBe(first);
 	release();
 	expect(await first).toBe(true);
-	expect(await restore(record)).toBe(true);
+	expect(await restore(deleted())).toBe(true);
 	expect(requests).toEqual(["artifacts.restore"]);
 
-	expect(await restore(deleted())).toBe(true);
+	expect(await restore(deleted(2))).toBe(true);
 	expect(requests).toEqual(["artifacts.restore", "artifacts.restore"]);
 });
 
