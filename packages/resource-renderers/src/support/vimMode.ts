@@ -400,7 +400,7 @@ export function createVimController(
 		if (nextIndex === jumpIndex) return;
 		jumpIndex = nextIndex;
 		const position = jumpHistory[jumpIndex];
-		if (position) setPosition(position);
+		if (position) applyPosition(position);
 	};
 
 	const submitSearch = (query: string) => {
@@ -462,6 +462,7 @@ export function createVimController(
 		) {
 			if (lowerKey === "v") {
 				consume(event);
+				count = "";
 				anchor = currentPosition();
 				visualPosition = anchor;
 				update({ mode: "visual", visualMode: "block" });
@@ -470,15 +471,18 @@ export function createVimController(
 			}
 			if (lowerKey === "o" || lowerKey === "i") {
 				consume(event);
+				count = "";
 				jumpHistoryBy(lowerKey === "o" ? -1 : 1);
 				return;
 			}
+			const ctrlCount = clampCount(count);
+			count = "";
 			const visible = codeEditor.getVisibleRanges()[0];
 			const current = motionPosition();
 			if (visible && current) {
 				const page = Math.max(1, visible.endLineNumber - visible.startLineNumber);
 				const delta =
-					lowerKey === "f"
+					(lowerKey === "f"
 						? page
 						: lowerKey === "b"
 							? -page
@@ -486,23 +490,24 @@ export function createVimController(
 								? Math.floor(page / 2)
 								: lowerKey === "u"
 									? -Math.floor(page / 2)
-									: 0;
+									: 0) * ctrlCount;
+				consume(event);
 				if (delta !== 0) {
-					consume(event);
 					const model = codeEditor.getModel();
 					if (model) {
 						const lineNumber = Math.max(
 							1,
 							Math.min(model.getLineCount(), current.lineNumber + delta),
 						);
-						setPosition({
+						applyPosition({
 							lineNumber,
 							column: Math.min(model.getLineMaxColumn(lineNumber), current.column),
 						});
 					}
-					return;
 				}
+				return;
 			}
+			consume(event);
 		}
 
 		if (hasModifier) return;
@@ -546,7 +551,7 @@ export function createVimController(
 				const mark = marks.get(key);
 				if (mark) {
 					const model = codeEditor.getModel();
-					setPosition(
+					applyPosition(
 						command.exact ? mark : model ? lineStart(model, mark.lineNumber, false) : mark,
 						true,
 					);
