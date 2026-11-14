@@ -1458,6 +1458,8 @@
 	"panels.surveyInvitation.take": "Пройти опрос",
 	"panels.surveyInvitation.title": "Помогите создать ThinkRail",
 	"panels.terminalInstance.detached": "Этот терминал открыт где-то ещё.",
+	"panels.terminalInstance.linkHintApple": "Cmd+клик — открыть",
+	"panels.terminalInstance.linkHintOther": "Ctrl+клик — открыть",
 	"panels.terminalInstance.outputTruncated": "[вывод обрезан]",
 	"panels.terminalInstance.processExited": "[процесс завершён]",
 	"panels.terminalInstance.processExitedWithCode": "[процесс завершён с кодом {{code}}]",
