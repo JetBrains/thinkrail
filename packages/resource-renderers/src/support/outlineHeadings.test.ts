@@ -55,9 +55,10 @@ function preferReducedMotion(reduce: boolean) {
 	globalThis.window = { matchMedia: () => ({ matches: reduce }) } as unknown as typeof window;
 }
 
-test("selecting a heading opens its closed details and scrolls only the preview scroller", () => {
+test("selecting a heading opens its closed details, scrolls only the preview scroller and focuses it", () => {
 	const attributes = new Set<string>();
 	const scrolled: ScrollToOptions[] = [];
+	const focused: (FocusOptions | undefined)[] = [];
 	const scroller = {
 		scrollTop: 100,
 		getBoundingClientRect: () => ({ top: 40 }),
@@ -72,12 +73,17 @@ test("selecting a heading opens its closed details and scrolls only the preview 
 	const heading = {
 		tagName: "H2",
 		parentElement: details,
+		tabIndex: 0,
+		hasAttribute: () => false,
+		focus: (options?: FocusOptions) => focused.push(options),
 		getBoundingClientRect: () => ({ top: attributes.has("open") ? 340 : 0 }),
 	} as unknown as HTMLElement;
 	preferReducedMotion(false);
 	scrollToHeading(scroller as unknown as HTMLElement, heading);
 	expect(attributes.has("open")).toBe(true);
 	expect(scrolled).toEqual([{ top: 400, behavior: "smooth" }]);
+	expect(heading.tabIndex).toBe(-1);
+	expect(focused).toEqual([{ preventScroll: true }]);
 	preferReducedMotion(true);
 	scrollToHeading(scroller as unknown as HTMLElement, heading);
 	expect(scrolled[1]).toEqual({ top: 400, behavior: "auto" });

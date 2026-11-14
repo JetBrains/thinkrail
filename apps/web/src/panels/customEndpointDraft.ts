@@ -88,16 +88,21 @@ export function mergeProbe(
 	const known = new Map(draft.models.map((model) => [model.id, model]));
 	const firstDetect = draft.models.length === 0;
 	const reported = new Map(probe.models.map((model) => [model.id, model]));
-	const merged = (model: CustomEndpointModel, previous: EndpointModelRow): EndpointModelRow => ({
-		...model,
-		contextWindow: model.contextWindow ?? previous.contextWindow,
-		maxTokens:
-			model.contextWindow === null ? (model.maxTokens ?? previous.maxTokens) : model.maxTokens,
-		reasoning: model.reasoning ?? previous.reasoning,
-		vision: model.vision ?? previous.vision,
-		chatTemplateThinking: model.chatTemplateThinking ?? previous.chatTemplateThinking,
-		selected: previous.selected,
-	});
+	const merged = (model: CustomEndpointModel, previous: EndpointModelRow): EndpointModelRow => {
+		const contextReplaced =
+			previous.contextWindow !== null &&
+			model.contextWindow !== null &&
+			model.contextWindow !== previous.contextWindow;
+		return {
+			...model,
+			contextWindow: model.contextWindow ?? previous.contextWindow,
+			maxTokens: model.maxTokens ?? (contextReplaced ? null : previous.maxTokens),
+			reasoning: model.reasoning ?? previous.reasoning,
+			vision: model.vision ?? previous.vision,
+			chatTemplateThinking: model.chatTemplateThinking ?? previous.chatTemplateThinking,
+			selected: previous.selected,
+		};
+	};
 	const existing = draft.models.map((row) => {
 		const model = reported.get(row.id);
 		return model ? merged(model, row) : row;

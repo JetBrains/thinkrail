@@ -69,8 +69,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
   (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,
   `NativeQuitHint` / `NativeCommand` / `NativeShortcutsBridge`, and
-  `NativeNotificationInput` / `NativeNotificationBridge`, and `NativeMenuBridge` (translated native menu
-  labels), the optional shell-local desktop capabilities);
+  `NativeNotificationInput` / `NativeNotificationBridge`, `NativePageZoomAction` / `NativePageZoomBridge`,
+  and `NativeMenuBridge` (translated native menu labels), the optional shell-local desktop capabilities);
   `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`;
   **`matchFields`** + `parseMatchTerms` + `foldMatchText` + `MATCH_TIER` and the `Match*` types from
   `match` (the one search matcher: fixed tiers exact > prefix > word start/camel hump/acronym > substring >
@@ -157,7 +157,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   native menu commands, and offer `quit()` for a client that confirms the quit gesture itself;
   `NativeNotificationInput` and `NativeNotificationBridge` carry `show({ title, subtitle?, body,
   silent? })` (fire-and-forget OS notification, no callback or id) and an optional `isWindowFocused()`
-  that reports OS-level window focus (true even when DevTools has renderer focus). The
+  that reports OS-level window focus (true even when DevTools has renderer focus);
+  `NativePageZoomAction` and `NativePageZoomBridge` carry `request("in" | "out" | "reset")`, a
+  fire-and-forget step of the native page zoom. The
   same web bundle discovers these capabilities without importing a native SDK. An optional
   `HostUpdateNotice` carries a closed CLI-host update lifecycle; protocol-gated `host.update` is an empty
   request that can start only the launcher's pre-bound updater. The browser never supplies a command, path,
@@ -431,7 +433,21 @@ the palette ranks with — kept here so host-side search can rank with the same 
   name, refused with `COPY_TOO_LARGE` for a folder past the host's entry bound, stopped with
   `ENTRY_CHANGED` when an entry changes under it) and `fs.delete` (`{ workspaceId, path }` → ack, a move to
   the OS trash, `ENTRY_CHANGED` when the entry changed while it was claimed); a client hides both from
-  older hosts,
+  older hosts, and from **`ARTIFACTS_PROTOCOL_VERSION`** (v121) two more: `fs.rename` (`{ workspaceId, path,
+  name }` → `{ path }`, in place, refused with `ENTRY_EXISTS` when another entry holds the name) and
+  `fs.move` (`fs.copy`'s params → `{ path }`, the Cut-and-Paste move, same or another workspace, refused
+  with `ENTRY_EXISTS` instead of renaming, for a folder into itself, and with `MOVE_ACROSS_DEVICES` when
+  source and destination are on different file systems),
+  the **Artifacts** tool's wire from the same version: `artifacts.list` (`{ workspaceId }` →
+  **`WorkspaceArtifactsSnapshot`**: `dir` (the artifacts folder, `.thinkrail/context`), `artifacts`
+  (**`WorkspaceArtifact`**: worktree-relative `path`, `state: "live" | "deleted"` — deleted means gone from
+  disk but restorable from the host's kept copy — `size`, `changedAt`, `firstSeenAt`, the writing chat's
+  optional `sessionId`) and `outputs` (**`WorkspaceIgnoredOutput`** rows — an ignored file or folder an
+  agent run produced, with its live `files` count and `filesTruncated` — or `null` where there is no git),
+  `artifacts.restore` / `artifacts.discard` (`{ workspaceId, path }` → ack; a deleted row only, otherwise
+  `ARTIFACT_UNKNOWN`; restore refuses a path that exists again with `ENTRY_EXISTS`; discard sends the kept
+  copy to the OS trash), and the pathless **`workspace.artifactsChanged`** nudge
+  (**`WorkspaceArtifactsChangedPayload`**: `{ workspaceId }`) — clients re-list,
   **`ResourceMeta`** (what a resource's bytes *are*, host-decided and pinned by
   `RESOURCE_META_PROTOCOL_VERSION` = v75: sha-256 `hash` + `byteLength`, both `null` when the resource is
   absent; `text` = valid UTF-8, BOM-aware, and not claimed by a recognized binary magic number (an ASCII
@@ -722,7 +738,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **layout preset DTO** — portable **`LayoutPreset`**, the bounded resource-free frame grammar synchronized
   in `AppConfig.customLayoutPresets`: center topology, left/right/bottom group geometry, visibility/folds,
   bottom alignment, and singleton tools (`plan`, the TODO List, is accepted from
-  `LAYOUT_PLAN_PRESET_PROTOCOL_VERSION` = v94), but no workspace, file, diff, chat, document, terminal, preview,
+  `LAYOUT_PLAN_PRESET_PROTOCOL_VERSION` = v94, `artifacts` from `ARTIFACTS_PROTOCOL_VERSION` = v121), but no workspace, file, diff, chat, document, terminal, preview,
   attention, or current/default-selection identity. Every current-layout type—including the projected
   `WorkspaceLayoutDocument`, `WorkbenchFrame`, and `WorkspaceViewState`—is web-local and deliberately absent
   from contracts. There is no current-layout method or push channel.
@@ -740,7 +756,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   no callback or id) and an optional `isWindowFocused()` that reports OS-level window focus — true even
   when DevTools has renderer focus, unlike `document.hasFocus()`. The deep-link bridge pushes
   `NativeOpenFileRequest` (`file`, `line`, optional `column`) from an OS `thinkrail://` URL; it is a
-  desktop-only subscription seam, not host-wire state. A browser
+  desktop-only subscription seam, not host-wire state. The page-zoom bridge's one action
+  `request(action)` asks the native side to step (`in` / `out`) or reset its page zoom; it returns nothing
+  and the web keeps no zoom state. `NativePageZoomAction` is the one definition of the actions; the
+  desktop's zoom chords send the same ones. A browser
   connection has none of these bridges and renders none of their affordances.
 - **quitConfirmation.ts** — the single home of the quit-confirmation gesture shared by the desktop main
   process (macOS Cmd+Q, key state polled through CoreGraphics) and the web shell (Linux Ctrl+Q, key state

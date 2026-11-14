@@ -11,7 +11,10 @@ const parameters = Type.Object({
 			"The question or topic, in the words a spec would use. Pass several phrasings as an array (synonyms, the names the code uses) to widen recall; they are ranked separately and fused.",
 	}),
 	type: Type.Optional(
-		Type.String({ description: "Only search specs with this frontmatter type." }),
+		Type.String({
+			description:
+				'Only search specs with this frontmatter type. Finished task-specs (status: done) are skipped unless this is "task-spec".',
+		}),
 	),
 	tag: Type.Optional(Type.String({ description: "Only search specs carrying this tag." })),
 	parent: Type.Optional(Type.String({ description: "Only search specs whose parent is this id." })),

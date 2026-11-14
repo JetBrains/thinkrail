@@ -11,7 +11,12 @@ import type {
 } from "@thinkrail/contracts";
 import Electrobun, { Electroview } from "electrobun/view";
 import { installExternalLinkRouting } from "./externalNavigation";
-import { handlePageZoomShortcut, installPageZoomGestures } from "./pageZoom";
+import {
+	createPageZoomBridge,
+	handlePageZoomShortcut,
+	installPageZoomGestures,
+	type PageZoomAction,
+} from "./pageZoom";
 import {
 	INITIAL_DESKTOP_PREFERENCES_GLOBAL,
 	isDesktopPreferenceKey,
@@ -79,10 +84,11 @@ const rpc = Electroview.defineRPC<DesktopRpc>({
 const electroview = new Electrobun.Electroview({ rpc });
 installTitleBarDoubleClick(window, () => electroview.rpc?.send.titleBarDoubleClick());
 installExternalLinkRouting(window);
+const requestPageZoom = (action: PageZoomAction) => {
+	electroview.rpc?.send.pageZoomRequested({ action });
+};
 window.addEventListener("keydown", (event) =>
-	handlePageZoomShortcut(event, navigator.platform, (action) => {
-		electroview.rpc?.send.pageZoomRequested({ action });
-	}),
+	handlePageZoomShortcut(event, navigator.platform, requestPageZoom),
 );
 installPageZoomGestures(window, navigator.platform, (gesture) => {
 	electroview.rpc?.send.pageZoomGestureRequested(gesture);
@@ -133,6 +139,12 @@ Object.defineProperty(globals, "__THINKRAIL_NATIVE_DEEP_LINKS__", {
 });
 Object.defineProperty(globals, "__THINKRAIL_NATIVE_NOTIFICATIONS__", {
 	value: notificationBridge,
+	writable: false,
+	configurable: false,
+	enumerable: false,
+});
+Object.defineProperty(globals, "__THINKRAIL_NATIVE_PAGE_ZOOM__", {
+	value: createPageZoomBridge(requestPageZoom),
 	writable: false,
 	configurable: false,
 	enumerable: false,

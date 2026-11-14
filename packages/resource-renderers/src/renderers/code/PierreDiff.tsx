@@ -154,6 +154,8 @@ function HunkToolbar({
 	return (
 		<div
 			data-testid="hunk-toolbar"
+			data-focus-row={contentKey}
+			data-block-id={changeBlockId(block)}
 			data-kept={kept ? true : undefined}
 			className={`mx-12 my-2 flex min-h-24 items-center gap-4 rounded-sm border bg-container-header-bg px-4 text-text-muted ${
 				kept ? "border-feedback-success-muted" : "border-border-muted"
@@ -180,6 +182,7 @@ function HunkToolbar({
 				icon={Revert}
 				label={t("viewer.hunk.revert")}
 				data-testid="hunk-revert"
+				data-focus-row-primary
 				disabled={reverting}
 				onClick={revert}
 			/>
@@ -433,6 +436,7 @@ function PierreDiffSurface({
 		<PierreScroller
 			attach={attach}
 			testId="diff-view"
+			focusList={`hunks:${resource.path}`}
 			className="h-full overflow-auto bg-container-content-bg [overflow-anchor:none] pierre-code-surface pierre-diff-surface"
 		>
 			<StaleComposerNotice visible={pending.stale} />

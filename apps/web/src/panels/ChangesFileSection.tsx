@@ -223,6 +223,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 		<section
 			data-testid="changes-section"
 			data-path={path}
+			data-focus-row={path}
 			data-status={change.status}
 			data-collapsed={collapsed && mode === "stacked" ? true : undefined}
 			data-viewed={viewed ? true : undefined}
@@ -246,6 +247,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 								: t("changes.section.collapseFile", { name: base })
 						}
 						data-testid="changes-section-toggle"
+						data-focus-row-primary
 						aria-expanded={!collapsed}
 						onClick={toggleCollapsed}
 						className="shrink-0"

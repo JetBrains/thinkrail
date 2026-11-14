@@ -231,11 +231,11 @@ export function ChangesPanel({
 						}
 					/>
 				) : (
-					<ul className="motion-safe:animate-reveal">
+					<ul data-focus-list="changes" className="motion-safe:animate-reveal">
 						{status.changes.map((change) => {
 							const { dir, base } = splitPath(change.path);
 							return (
-								<li key={change.path}>
+								<li key={change.path} data-focus-row={change.path}>
 									<ChangeRowActions
 										path={change.path}
 										active={isActive(change.path)}
@@ -247,6 +247,8 @@ export function ChangesPanel({
 												type="button"
 												onContextMenu={onContextMenu}
 												data-testid="change-item"
+												data-path={change.path}
+												data-focus-row-primary
 												data-status={change.status}
 												data-active={isActive(change.path) ? true : undefined}
 												data-viewed={isViewed(change.path) ? true : undefined}

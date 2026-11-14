@@ -67,8 +67,8 @@ Ephemeral files this workflow uses, all under the workspace's gitignored `.think
 - `pr-body.md` — the PR body draft; always passed via `--body-file`, never inline.
 - `pr-shots/` — staged before/after screenshots awaiting attachment.
 
-Both are deleted when the phase that made them completes (screenshots stay while the user is
-uploading by hand — see `screenshots.md`).
+Neither is ever deleted: both stay in the user's Artifacts tab. The next body edit overwrites
+`pr-body.md`, and a re-staged shot overwrites its own name.
 
 ## Ending
 

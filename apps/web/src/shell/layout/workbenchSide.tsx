@@ -153,6 +153,8 @@ export const SideGroupView = memo(function SideGroupView({
 			}
 			data-side={side}
 			data-group-id={group.id}
+			data-region={group.id}
+			data-region-kind={side}
 			data-tools={group.tabs.flatMap((tab) => (tab.kind === "tool" ? [tab.tool] : [])).join(" ")}
 			data-folded="false"
 			className="relative flex h-full min-h-0 flex-col overflow-hidden bg-container-sidebar-bg focus-visible:focus-ring-inset"
@@ -171,6 +173,8 @@ export const SideGroupView = memo(function SideGroupView({
 				id={groupPanelId(location)}
 				role={selected?.kind === "terminal" ? "tabpanel" : undefined}
 				aria-labelledby={selected ? tabDomId(location, selected.id) : undefined}
+				data-focus-default={selected?.kind === "tool" || undefined}
+				data-tool-body={selected?.kind === "tool" ? selected.tool : undefined}
 				className="relative min-h-0 flex-1 overflow-auto"
 			>
 				{selected ? (

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { Workspace } from "@thinkrail/contracts";
+import type { NativePageZoomAction, Workspace } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
+import { type KeybindingId, keybindingShortcut } from "../keybindings";
 import { commandItems } from "../search";
 import { buildCommands, type PaletteCatalogDeps } from "./paletteCatalog";
 
@@ -24,8 +25,11 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 		editors: [],
 		historyAvailable: false,
 		findInFilesAvailable: false,
+		changesAvailable: true,
+		centerGroupCount: 1,
 		canCreateProject: true,
 		nativeShortcuts: false,
+		pageZoom: null,
 		readAction: null,
 		canSettle: true,
 		settled: false,
@@ -44,6 +48,12 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 			toggleRight: noop,
 			toggleBottom: noop,
 			showTool: noop,
+			showFiles: noop,
+			focusRegion: noop,
+			focusComposer: noop,
+			focusProjects: noop,
+			focusTerminal: noop,
+			focusGroup: noop,
 			openHistory: noop,
 			findInFiles: noop,
 			markRead: noop,
@@ -104,6 +114,98 @@ describe("palette project and Settings commands", () => {
 			key: "N",
 			mod: true,
 		});
+	});
+
+	test("every chord-bound command shows its keybinding's shortcut", () => {
+		const bound: readonly KeybindingId[] = [
+			"workspace.new",
+			"files.findInFiles",
+			"chat.history",
+			"view.toggleLeft",
+			"view.toggleRight",
+			"view.toggleBottom",
+			"view.changes",
+			"region.next",
+			"region.previous",
+			"focus.composer",
+			"focus.projects",
+			"focus.terminal",
+			"focus.group1",
+		];
+		for (const nativeShortcuts of [false, true]) {
+			const catalog = deps({ historyAvailable: true, findInFilesAvailable: true, nativeShortcuts });
+			for (const id of bound) {
+				expect(row(id, catalog)?.shortcut).toEqual(
+					keybindingShortcut(id, { browser: !nativeShortcuts }),
+				);
+			}
+		}
+	});
+});
+
+describe("palette focus commands", () => {
+	test("region and Projects focus are always offered with their chords", () => {
+		const home = deps({ activeWorkspace: null, centerGroupCount: 0 });
+		expect(row("region.next", home)?.shortcut).toEqual({ key: "F6" });
+		expect(row("region.previous", home)?.shortcut).toEqual({ key: "F6", shift: true });
+		expect(row("focus.projects", home)?.shortcut).toEqual({ key: "0", mod: true });
+		expect(row("focus.terminal", home)).toBeUndefined();
+		expect(row("focus.group1", home)).toBeUndefined();
+	});
+
+	test("the chat input needs a chat and the terminal an active workspace", () => {
+		expect(row("focus.composer", deps())).toBeUndefined();
+		expect(row("focus.composer", deps({ historyAvailable: true }))?.shortcut).toEqual({
+			key: "L",
+			mod: true,
+		});
+		expect(row("focus.terminal", deps())?.shortcut).toEqual({ key: "`", ctrl: true });
+	});
+
+	test("one group row per existing center group, numbered in visual order", () => {
+		const catalog = deps({ centerGroupCount: 2 });
+		expect(row("focus.group1", catalog)?.title).toBe("Focus center group 1");
+		expect(row("focus.group2", catalog)?.shortcut).toEqual({ key: "2", mod: true });
+		expect(row("focus.group3", catalog)).toBeUndefined();
+	});
+
+	test("Show Files carries Mod+Shift+E and Show Changes exists only where Changes do", () => {
+		const shown: string[] = [];
+		const catalog = deps({
+			actions: { ...deps().actions, showFiles: (mode) => shown.push(mode) },
+		});
+		expect(row("view.show.files", catalog)?.shortcut).toEqual({ key: "E", mod: true, shift: true });
+		expect(row("view.changes", catalog)?.title).toBe("Show Changes");
+		row("view.show.files", catalog)?.run?.();
+		row("view.changes", catalog)?.run?.();
+		expect(shown).toEqual(["all", "changed"]);
+		expect(row("view.changes", deps({ changesAvailable: false }))).toBeUndefined();
+	});
+});
+
+describe("palette page zoom commands", () => {
+	const zoomRows = ["view.zoomIn", "view.zoomOut", "view.zoomReset"] as const;
+
+	test("are offered only where the desktop exposes the page zoom bridge", () => {
+		for (const id of zoomRows) expect(row(id, deps())).toBeUndefined();
+		const catalog = deps({ pageZoom: { request: noop }, activeWorkspace: null });
+		expect(zoomRows.map((id) => row(id, catalog)?.title)).toEqual([
+			"Zoom in",
+			"Zoom out",
+			"Reset zoom",
+		]);
+	});
+
+	test("show the preload's chords and run the matching request", () => {
+		const requested: NativePageZoomAction[] = [];
+		const catalog = deps({ pageZoom: { request: (action) => requested.push(action) } });
+		expect(zoomRows.map((id) => row(id, catalog)?.shortcut)).toEqual([
+			{ key: "=", mod: true },
+			{ key: "-", mod: true },
+			{ key: "Num 0", mod: true },
+		]);
+		for (const id of zoomRows) row(id, catalog)?.run?.();
+		expect(requested).toEqual(["in", "out", "reset"]);
 	});
 });
 

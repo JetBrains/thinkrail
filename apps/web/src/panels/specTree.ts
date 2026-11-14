@@ -44,7 +44,12 @@ export function specRoleTag(t: Translator, type: string): string {
 	return isKnownSpecType(type) ? t(SPEC_ROLES[type].tag) : specRoleLabel(t, type).toUpperCase();
 }
 
-export function buildSpecTree(nodes: SpecGraphNode[]): SpecTreeNode[] {
+function isRetiredTaskSpec(node: Pick<SpecGraphNode, "type" | "status">): boolean {
+	return node.type === "task-spec" && node.status === "done";
+}
+
+export function buildSpecTree(all: SpecGraphNode[]): SpecTreeNode[] {
+	const nodes = all.filter((node) => !isRetiredTaskSpec(node));
 	const ids = new Set(nodes.map((n) => n.id));
 	const roots: SpecGraphNode[] = [];
 	const childrenByParent = new Map<string, SpecGraphNode[]>();

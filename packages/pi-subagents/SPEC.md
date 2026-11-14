@@ -141,9 +141,11 @@ The effective reference follows definition pin → invocation model → parent i
 the invocation reference, including its thinking suffix, without resolving it. References resolve
 against the session's available models (`provider/id` → exact id → unique prefix); no provider
 substitution, custom model synthesis or parent fallback is permitted for an unresolved selection.
-The invocation words `inherit`, `parent` and `default` (any case) are the parent-inheritance
-spelling models carry over from Claude Code: they count as no invocation model and are never looked
-up, so they cannot name a model. A definition pin is not reinterpreted.
+The invocation words `inherit`, `parent` and `default` (any case) are the parent-inheritance spelling
+models carry over from Claude Code. They and a blank value (empty or whitespace only) count as no
+invocation model and are never looked up: a word cannot name a model, and `""` cannot prefix-match
+every model and fail as ambiguous (#1352). Other invocation values are looked up as sent, surrounding
+whitespace included. A definition pin is not reinterpreted; the frontmatter parser drops a blank `model`.
 
 Both definition and invocation model references accept one final `:<thinking>` suffix: `off`,
 `minimal`, `low`, `medium`, `high`, `xhigh` or `max`. Whole-reference resolution always comes first:

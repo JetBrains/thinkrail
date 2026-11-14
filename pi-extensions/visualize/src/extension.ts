@@ -9,10 +9,21 @@ export type MermaidValidator = (source: string) => void | Promise<void>;
 
 export type FileChecker = (path: string, cwd: string) => void | Promise<void>;
 
+export interface SavedVisualization {
+	params: VisualizeParams;
+	markdown: string;
+	cwd: string;
+}
+
+export type VisualizationSaver = (
+	visualization: SavedVisualization,
+) => string | undefined | Promise<string | undefined>;
+
 export interface VisualizeExtensionOptions {
 	validateMermaid?: MermaidValidator;
 	checkFile?: FileChecker;
 	scratchDir?: string;
+	saveVisualization?: VisualizationSaver;
 }
 
 const DESCRIPTION =
@@ -75,6 +86,17 @@ async function checkFileAt(
 	}
 }
 
+async function savedPath(
+	save: VisualizationSaver,
+	visualization: SavedVisualization,
+): Promise<string | undefined> {
+	try {
+		return await save(visualization);
+	} catch {
+		return undefined;
+	}
+}
+
 function resultMarkdown(params: VisualizeParams): string {
 	if (params.type === "diagram") return mermaidFence(params.title, params.mermaid ?? "");
 	if (params.type === "file") return fileMarkdown(params);
@@ -85,7 +107,7 @@ export function createVisualizeExtension(
 	options: VisualizeExtensionOptions = {},
 ): ExtensionFactory {
 	const validate = options.validateMermaid ?? probeRenderability;
-	const { checkFile } = options;
+	const { checkFile, saveVisualization } = options;
 	return (pi: ExtensionAPI): void => {
 		pi.registerTool({
 			name: "visualize",
@@ -104,7 +126,12 @@ export function createVisualizeExtension(
 						await checkFileAt(checkFile, location, path, ctx.cwd);
 					}
 				}
-				const text = resultMarkdown(params);
+				const markdown = resultMarkdown(params);
+				const saved =
+					saveVisualization && params.type !== "file"
+						? await savedPath(saveVisualization, { params, markdown, cwd: ctx.cwd })
+						: undefined;
+				const text = saved ? `${markdown}\n\nSaved to \`${saved}\`.` : markdown;
 				return {
 					content: [{ type: "text", text }],
 					details: params,

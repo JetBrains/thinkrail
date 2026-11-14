@@ -694,7 +694,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   store/transport/highlighter.
 - **Composer focus on arrival** (`composerFocusRequest`, see `store/SPEC.md`): `ChatView` subscribes to
   `selectComposerFocusRequested` for its own chat. When it holds, the view clears the request and refocuses
-  its composer, so typing goes straight to the chat a palette pick opened.
+  its composer, so typing goes straight to the chat a palette pick opened. A request with `dismissHistory`
+  (the shell's `Mod+L`) first closes this chat's history overlay and drops a pending open of it.
 - **Extension edits to the draft** (`composerEdit`, see `store/SPEC.md`): pi's `setEditorText` /
   `pasteToEditor` reach the chat as its runtime's pending edit. `ChatView` applies it in a layout effect
   through **`ComposerHandle.applyEdit(kind, text)`** and then consumes it, so an edit for a chat that is

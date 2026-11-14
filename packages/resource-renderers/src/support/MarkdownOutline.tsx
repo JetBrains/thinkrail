@@ -7,7 +7,7 @@ import {
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { MarkdownOutlineSide } from "../host";
 import {
 	lastElementAtTop,
@@ -109,6 +109,7 @@ export function MarkdownOutline({
 	onOpenChange: (open: boolean) => void;
 }) {
 	const t = useT();
+	const toggleSlot = `markdown-outline-toggle${useId()}`;
 	const listRef = useRef<HTMLDivElement>(null);
 	const tree = useMemo(() => nestOutlineHeadings(headings), [headings]);
 	const active = useActiveHeading(scroller, headings, open);
@@ -132,6 +133,7 @@ export function MarkdownOutline({
 				<IconButton
 					icon={icons.closed}
 					label={label}
+					data-focus-slot={toggleSlot}
 					data-testid="markdown-outline-toggle"
 					aria-pressed={false}
 					onClick={() => onOpenChange(true)}
@@ -154,6 +156,7 @@ export function MarkdownOutline({
 				<IconButton
 					icon={icons.open}
 					label={label}
+					data-focus-slot={toggleSlot}
 					data-testid="markdown-outline-toggle"
 					aria-pressed
 					selected

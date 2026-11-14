@@ -14,6 +14,7 @@ import {
 import type { AnchorDraft, SurfaceReview } from "../registry";
 import { ReviewComposer } from "../support/ReviewComposer";
 import { ReviewThreadCard } from "../support/ReviewThreadCard";
+import { revealReviewCard } from "../support/revealFocus";
 import { useElementSize } from "../support/useElementSize";
 import {
 	containedMediaRect,
@@ -125,7 +126,7 @@ export function RegionReviewSurface({
 		const card = cardsRef.current.get(focusId);
 		if (!card || !threads.some(({ thread }) => thread.id === focusId)) return;
 		handledFocusRef.current = focusId;
-		card.scrollIntoView({ block: "center" });
+		revealReviewCard(card, focusedSurface?.focus?.moveFocus === true);
 		focusedSurface?.onFocusHandled();
 	}, [focusId, focusedSurface, threads]);
 

@@ -54,11 +54,13 @@ function mirrorScroll(
 export function PierreScroller({
 	attach,
 	testId,
+	focusList,
 	className,
 	children,
 }: {
 	attach: RefCallback<HTMLDivElement>;
 	testId: string;
+	focusList?: string;
 	className: string;
 	children: ReactNode;
 }) {
@@ -81,7 +83,12 @@ export function PierreScroller({
 		[attach],
 	);
 	return (
-		<div ref={attachScroller} data-testid={testId} className={className}>
+		<div
+			ref={attachScroller}
+			data-testid={testId}
+			data-focus-list={focusList}
+			className={className}
+		>
 			<div ref={sizerRef}>
 				<div ref={viewportRef} className="sticky top-0 overflow-clip">
 					<div ref={contentRef} className="flex flex-col will-change-transform">

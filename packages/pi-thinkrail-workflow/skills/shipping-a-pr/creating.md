@@ -57,7 +57,7 @@ Red flags — stop, a gate is being rationalized away:
   `gh pr create --base <base> --head <branch> --title "…" --body-file .thinkrail/context/pr-body.md`
   — add `--repo` when the remote is ambiguous; `--draft` only when the user asked for a draft.
   Never pass the body inline: long inline/heredoc bodies have truncated and failed; the body file
-  *is* the recipe. Delete the body file once the PR exists.
+  *is* the recipe. The body file stays as one of the user's artifacts once the PR exists.
 
 ## Next
 

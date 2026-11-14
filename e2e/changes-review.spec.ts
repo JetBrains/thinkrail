@@ -474,9 +474,30 @@ test("the review guide walks the reviewer's reading order and findings with N", 
 		"data-active",
 		"true",
 	);
-	await expect(page.locator('[data-comment-id="finding-1"]')).toBeInViewport();
+	const finding = page.locator('[data-comment-id="finding-1"]');
+	await expect(finding).toBeInViewport();
+	await expect(finding.locator(":focus")).toHaveCount(1);
 	await expect(guide.getByTestId("changes-review-guide-fix")).toBeVisible();
 	await expect(guide.getByTestId("changes-review-guide-next")).toContainText("Restart");
+
+	const previous = guide.getByTestId("changes-review-guide-prev");
+	await previous.focus();
+	await page.keyboard.press("Enter");
+	await expect(guide.getByTestId("changes-review-guide-step").nth(1)).toHaveAttribute(
+		"data-active",
+		"true",
+	);
+	await expect(finding).not.toBeInViewport();
+	await expect(previous).toBeFocused();
+	const next = guide.getByTestId("changes-review-guide-next");
+	await next.focus();
+	await page.keyboard.press("Enter");
+	await expect(guide.getByTestId("changes-review-guide-finding")).toHaveAttribute(
+		"data-active",
+		"true",
+	);
+	await expect(finding).toBeInViewport();
+	await expect(next).toBeFocused();
 
 	await page.getByTestId("changes-review-guide-toggle").click();
 	await expect(guide).toHaveCount(0);

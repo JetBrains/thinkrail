@@ -12,8 +12,9 @@ import type { DetectedAccount, ProviderStatus } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { focusFirstControl } from "@thinkrail/ui/focus";
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactNode, useEffect, useEffectEvent, useState } from "react";
+import { type ReactNode, type RefObject, useEffect, useEffectEvent, useRef, useState } from "react";
 import { PRODUCT_NAME } from "@/constants/branding";
 import { selectAnalyticsConsentPromptOpen, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
@@ -73,25 +74,36 @@ export function OnboardingWizard({
 		onSkip();
 	};
 
+	const shownStep = done ? "done" : step;
+	const titleRef = useRef<HTMLHeadingElement>(null);
+	const titledStep = useRef(shownStep);
+	useEffect(() => {
+		if (titledStep.current === shownStep) return;
+		titledStep.current = shownStep;
+		titleRef.current?.focus();
+	}, [shownStep]);
+
 	return (
 		<div
 			data-testid="onboarding-wizard"
-			data-step={done ? "done" : step}
+			data-step={shownStep}
 			className="flex w-full max-w-[640px] flex-col items-center gap-24"
 		>
 			{step === "intro" ? (
 				<IntroStep
+					titleRef={titleRef}
 					onStart={() => {
 						setStep(consentOpen ? "privacy" : "connect");
 						void detectAccounts().then(setDetected);
 					}}
 				/>
 			) : step === "privacy" ? (
-				<PrivacyStep onContinue={() => setStep("connect")} />
+				<PrivacyStep titleRef={titleRef} onContinue={() => setStep("connect")} />
 			) : done && connected ? (
-				<DoneStep connected={connected} projectCards={projectCards} />
+				<DoneStep titleRef={titleRef} connected={connected} projectCards={projectCards} />
 			) : (
 				<ConnectStep
+					titleRef={titleRef}
 					auth={auth}
 					detected={detected}
 					provider={provider}
@@ -126,7 +138,13 @@ function SkipButton({ onSkip }: { onSkip: () => void }) {
 	);
 }
 
-function IntroStep({ onStart }: { onStart: () => void }) {
+function IntroStep({
+	titleRef,
+	onStart,
+}: {
+	titleRef: RefObject<HTMLHeadingElement | null>;
+	onStart: () => void;
+}) {
 	const t = useT();
 	return (
 		<div data-testid="onboarding-intro" className="flex flex-col items-center gap-24 text-center">
@@ -134,7 +152,12 @@ function IntroStep({ onStart }: { onStart: () => void }) {
 				<span className="tr-text-eyebrow text-text-muted">
 					{t("panels.onboarding.intro.welcomeTo")}
 				</span>
-				<h1 data-testid="welcome-title" className="tr-brand-hero text-primary">
+				<h1
+					ref={titleRef}
+					tabIndex={-1}
+					data-testid="welcome-title"
+					className="tr-brand-hero text-primary"
+				>
 					{PRODUCT_NAME}
 				</h1>
 				<p className="tr-heading-sm text-text-default">{t("panels.onboarding.intro.tagline")}</p>
@@ -165,16 +188,23 @@ function IntroStep({ onStart }: { onStart: () => void }) {
 }
 
 function DoneStep({
+	titleRef,
 	connected,
 	projectCards,
 }: {
+	titleRef: RefObject<HTMLHeadingElement | null>;
 	connected: ConnectedSummary;
 	projectCards: ReactNode;
 }) {
 	const t = useT();
 	return (
 		<div className="flex flex-col items-center gap-24 motion-safe:animate-reveal">
-			<h1 data-testid="welcome-title" className="tr-brand-hero break-words text-primary">
+			<h1
+				ref={titleRef}
+				tabIndex={-1}
+				data-testid="welcome-title"
+				className="tr-brand-hero break-words text-primary"
+			>
 				{t("panels.welcome.connectedTitle")}
 			</h1>
 			<ConnectedLine summary={connected} />
@@ -184,6 +214,7 @@ function DoneStep({
 }
 
 function ConnectStep({
+	titleRef,
 	auth,
 	detected,
 	provider,
@@ -193,6 +224,7 @@ function ConnectStep({
 	onVerified,
 	onSkip,
 }: {
+	titleRef: RefObject<HTMLHeadingElement | null>;
 	auth: ProviderAuth;
 	detected: DetectedAccount[] | null;
 	provider: ProviderStatus | null;
@@ -203,6 +235,20 @@ function ConnectStep({
 	onSkip: () => void;
 }) {
 	const t = useT();
+	const optionsRef = useRef<HTMLDivElement>(null);
+	const back = () => {
+		const picked = provider?.id;
+		onBack();
+		requestAnimationFrame(() => {
+			const options = optionsRef.current;
+			if (!options) return;
+			const option = Array.from(
+				options.querySelectorAll<HTMLButtonElement>("button[data-provider]:not(:disabled)"),
+			).find((button) => button.dataset.provider === picked);
+			if (option) option.focus();
+			else focusFirstControl(options);
+		});
+	};
 	return (
 		<div
 			inert={connected !== null}
@@ -212,13 +258,18 @@ function ConnectStep({
 			)}
 		>
 			<div className="flex flex-col items-center gap-8 text-center">
-				<h1 data-testid="welcome-title" className="tr-heading-xl break-words text-primary">
+				<h1
+					ref={titleRef}
+					tabIndex={-1}
+					data-testid="welcome-title"
+					className="tr-heading-xl break-words text-primary"
+				>
 					{t("panels.connectProvider.title")}
 				</h1>
 				<p className="tr-text-reading text-text-muted">{t("panels.connectProvider.description")}</p>
 			</div>
 			<div className="relative w-full">
-				<div inert={provider !== null}>
+				<div ref={optionsRef} inert={provider !== null}>
 					<ConnectProviderOptions
 						auth={auth}
 						detected={detected}
@@ -227,7 +278,7 @@ function ConnectStep({
 					/>
 				</div>
 				{provider ? (
-					<VerifyConnection provider={provider} onBack={onBack} onVerified={onVerified} />
+					<VerifyConnection provider={provider} onBack={back} onVerified={onVerified} />
 				) : null}
 			</div>
 			<SkipButton onSkip={onSkip} />
@@ -235,7 +286,13 @@ function ConnectStep({
 	);
 }
 
-function PrivacyStep({ onContinue }: { onContinue: () => void }) {
+function PrivacyStep({
+	titleRef,
+	onContinue,
+}: {
+	titleRef: RefObject<HTMLHeadingElement | null>;
+	onContinue: () => void;
+}) {
 	const t = useT();
 	const { draft, toggle, pending, error, confirm } = useConsentDraft();
 
@@ -245,7 +302,12 @@ function PrivacyStep({ onContinue }: { onContinue: () => void }) {
 			className="flex w-full max-w-[480px] flex-col items-center gap-24"
 		>
 			<div className="flex flex-col items-center gap-8 text-center">
-				<h1 data-testid="welcome-title" className="tr-heading-xl text-primary">
+				<h1
+					ref={titleRef}
+					tabIndex={-1}
+					data-testid="welcome-title"
+					className="tr-heading-xl text-primary"
+				>
 					{t("panels.analyticsConsent.title")}
 				</h1>
 				<p className="tr-text-reading text-text-muted">{t("panels.analyticsConsent.subtitle")}</p>

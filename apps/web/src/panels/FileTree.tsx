@@ -1,6 +1,7 @@
 import {
 	RiFileCopyLine as Copy,
 	RiFileCopy2Line as CopyEntry,
+	RiScissorsCutLine as Cut,
 	RiClipboardLine as Paste,
 	RiDeleteBinLine as Trash,
 } from "@remixicon/react";
@@ -24,6 +25,7 @@ import {
 	selectFilesTreeView,
 	selectWorkspaceById,
 	selectWorkspaceIsRunning,
+	supportsArtifacts,
 	type TabIntent,
 	useAppStore,
 } from "../store";
@@ -86,7 +88,7 @@ export function FileTree({
 	if (nodes.length === 0) return <EmptyTree workspaceId={workspaceId} />;
 	return (
 		<>
-			<ul className="flex flex-col motion-safe:animate-reveal">
+			<ul data-focus-list="files" className="flex flex-col motion-safe:animate-reveal">
 				{nodes.map((node) => (
 					<FileNodeRow
 						key={node.path}
@@ -238,7 +240,7 @@ function FileNodeRow({
 			: undefined;
 
 	return (
-		<li>
+		<li data-focus-row={node.path}>
 			<FileTreeMenu
 				workspaceId={workspaceId}
 				path={directory?.path ?? node.path}
@@ -249,6 +251,7 @@ function FileNodeRow({
 					<TreeRow
 						ref={revealRow}
 						testid="file-node"
+						path={directory?.path ?? node.path}
 						kind={isDir ? "dir" : "file"}
 						active={!isDir && focus.activePath === node.path}
 						highlighted={menuOpen}
@@ -292,7 +295,10 @@ function FileNodeRow({
 				)}
 			</FileTreeMenu>
 			{isDir && expanded && children && (
-				<ul className="flex flex-col pl-tree-indent">
+				<ul
+					data-focus-list={`files:${directory?.path ?? node.path}`}
+					className="flex flex-col pl-tree-indent"
+				>
 					{children.map((child) => (
 						<FileNodeRow
 							key={child.path}
@@ -328,6 +334,7 @@ function FileTreeMenu({
 	const t = useT();
 	const [open, setOpen] = useState(false);
 	const mutations = useAppStore((s) => supportsFileMutations(s.protocolVersion));
+	const moves = useAppStore((s) => supportsArtifacts(s.protocolVersion));
 	const canPaste = useAppStore((s) => s.fileClipboard !== null);
 	const copyPath = (absolute: boolean) => {
 		const worktreePath = selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath;
@@ -357,6 +364,17 @@ function FileTreeMenu({
 							<CopyEntry />
 							{t("common.copy")}
 						</ContextMenuItem>
+						{moves ? (
+							<ContextMenuItem
+								data-testid="file-tree-cut"
+								onSelect={() =>
+									useAppStore.getState().setFileClipboard({ workspaceId, path, cut: true })
+								}
+							>
+								<Cut />
+								{t("panels.fileTree.cut")}
+							</ContextMenuItem>
+						) : null}
 						{canPaste ? (
 							<ContextMenuItem
 								data-testid="file-tree-paste"

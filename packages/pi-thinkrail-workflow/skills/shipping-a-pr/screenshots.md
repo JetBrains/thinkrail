@@ -38,7 +38,7 @@ Then update the body — **never rebuild it**: fetch the current one first
 `## Screenshots` section in it referencing each image as
 `https://github.com/<owner>/<repo>/blob/<COMMIT>/<name>.png?raw=true` (pinned to the pushed commit
 SHA so later branch pushes never break the images), then
-`gh pr edit <n> --body-file .thinkrail/context/pr-body.md` and delete the file. A body built from
+`gh pr edit <n> --body-file .thinkrail/context/pr-body.md`. A body built from
 scratch here would erase the PR's summary, testing notes, and issue links.
 
 Fallback (the user sometimes prefers it): leave the PNGs staged and hand over their paths — the
@@ -47,8 +47,8 @@ assets ref is the default.
 
 ## Next
 
-Clean up this phase's throwaways once the body edit lands: delete `.thinkrail/context/pr-shots/`
-(unless the user is uploading by hand — then leave it until they confirm) and every capture
-scaffold (specs, throwaway builds). If any scaffolding was committed, the commit that removes it
+Clean up this phase's capture scaffolds (specs, throwaway builds) once the body edit lands. The
+staged shots in `.thinkrail/context/pr-shots/` and the body file stay: they are the user's artifacts,
+never deleted by a workflow. If any scaffolding was committed, the commit that removes it
 is pushed too — a deletion left in the working tree ships nothing. That push does not change the
 completion mode. Read and follow `checks.md` in the selected mode.

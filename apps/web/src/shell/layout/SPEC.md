@@ -75,7 +75,11 @@ tabs; an empty group is a one-entry cluster. Tools placed nowhere (after *Remove
 trailing, dimmed cluster behind a last separator; activating one restores it to its recorded target.
 Exactly one entry per expanded pane is pressed and none in a folded or hidden one, so the pressed set
 reads as "panes currently open". Clicking an unpressed entry selects it in *its* pane (revealing or
-unfolding the pane); clicking the pressed one folds that pane.
+unfolding the pane); clicking the pressed one folds that pane. A tool entry shows the shell's
+`renderTabAdornment` for its tool — the same adornment its pane-header tab shows (Review's draft count,
+Artifacts' new-arrivals dot) — whether the tool is placed (a rail-mode `WorkbenchTab`) or parked in the
+trailing unplaced cluster (`AuxiliaryRailButton`), so a badge never depends on where the tool sits. The
+layout only draws what it is given; what an adornment means is the shell's business.
 
 **Tools and terminals never share a pane.** A group holding tools is a tool pane; terminals live only in
 tool-free groups (`canJoinAuxiliaryGroup`). Joining a tool into a pane that shows terminals, or a terminal
@@ -210,6 +214,24 @@ recursive center splits without keying the workbench by workspace. The canceled-
 
 Pointer is never the sole arrangement path. Keyboard controls and shadcn menus cover group/tab focus, select/close/keep/reorder/move, directional center splits, absolute and adjacent auxiliary-group creation, explicit group remove/merge, fold/show/hide/tool restore, bottom alignment, and keyboard separator resize, always with an unavailable reason. A tab can reproduce every interior pointer placement through move plus New group. The optional chat-rename menu item replaces the tab label with an inline editor and commits through a shell-injected callback: layout identifies the chat tab and owns the transient edit interaction but never imports transport/store or performs the domain mutation. Resource strips implement WAI-ARIA tabs and visible roving focus. Rails are named toolbars of pressed buttons: arrows move focus, Enter/Space activates, and `aria-controls` links each existing group. Tool bodies are named regions and terminal bodies are tabpanels. A folded auxiliary group retains a linked native-hidden region while unmounting the body; its selected edge-rail control is the focus endpoint when no tab renders. A local fold moves focus to that control and expansion returns it to the selected tab. Separators expose orientation and current/min/max values. `Ctrl+F6` visits upper-row groups in visual order, then visible bottom groups left-to-right.
 
+**Regions.** Every rendered group section is a keyboard region: it carries `data-region` (its group id)
+and `data-region-kind` (`left` | `center` | `right` | `bottom`), beside the shell's top bar (`topbar`)
+and Project Home projects pane (`home`). The shell's tracker marks the one holding focus
+`data-region-active` and veils the others ([[submodule-web-shell]], *Global chords*;
+[COLOR.md](../../styles/COLOR.md), *Active region*); a region root is positioned and isolates its
+stacking, so the veil stays inside it. Folded groups and hidden sides render no section and are no region. `F6` and the focus chords land in a
+region by one rule: the element last focused inside it, if still rendered and focusable there (the root
+itself is never remembered); else a `[data-focus-default]`, innermost markers first (a tool body may hold a
+more specific default, as Files marks its tree or changes list below its mode toolbar, and Artifacts its
+list below its chat filter) — or, when that
+marker is not itself focusable, its first tabbable descendant; else the selected tab; else the root (sections are
+`tabIndex=-1`) or its first tabbable. The defaults are the chat composer's textarea, a terminal's xterm
+host (its helper textarea), the Monaco editor container (its input), the Project Home projects tree
+and the body of a selected auxiliary
+tool, which the panel section marks `data-focus-default` with `data-tool-body=<tool>` — so entering a tool
+group lands in the tool rather than on its rail button. The same landing is the focus-recovery safety net
+for a focused control that disappears with no better neighbour ([[submodule-web-shell]], *Focus recovery*).
+
 Center resource strips and auxiliary terminal-session strips have bounded readable tab widths and no fixed previous/next controls: wheel, trackpad, touch,
 roving-keyboard navigation, active reveal, and the searchable keyboard overflow list scroll the same list.
 Native scrollbars stay hidden; pointer-transparent edge fades appear only where clipped and update without
@@ -241,12 +263,16 @@ it with the tab's file path without importing store or transport.
 Balanced, Focus, and Review are web-owned resource-free frame definitions with a below-center bottom slot:
 Balanced and Review show it; Focus hides it. Balanced and Focus start with one center group; Review provides
 its deliberate vertical pair. Balanced's lower right group opens on the TODO List with Review beside it: on a
-fresh workspace the plan is what there is to look at, while review comments only exist once there is a diff. Custom presets use the same grammar and capture geometry,
+fresh workspace the plan is what there is to look at, while review comments only exist once there is a diff.
+Artifacts sits with the reference tools — after Specs and Files in Balanced's upper right group and
+Review's lower reference group, and last in Focus's one group; it is appended to `LAYOUT_TOOLS` so every existing tool keeps its default
+restore index, and a saved frame from before it shows it as an unplaced entry until placed. Custom presets use the same grammar and capture geometry,
 topology, tools, folds, and empty structural slots, never workspace resources or terminal count. Preset node
 ids are template-local labels: instantiation mints frontend-local frame ids and returns the old→new group map
 used to rehome every workspace view. Only custom definitions cross the wire through settings; a set that
-places the TODO List (`plan`) is saved only to a host at `LAYOUT_PLAN_PRESET_PROTOCOL_VERSION` or newer — an
-older host's validator rejects the tool, so Layout settings explains that instead of sending it. Built-in preset
+places the TODO List (`plan`) is saved only to a host at `LAYOUT_PLAN_PRESET_PROTOCOL_VERSION` or newer, and one
+that places Artifacts only to a host at `ARTIFACTS_PROTOCOL_VERSION` or newer — an older host's validator
+rejects the tool, so Layout settings explains that instead of sending it. Built-in preset
 names are display copy: `layoutPresetName` renders them through the locale catalog by preset id while the
 definition keeps its stable `name`; custom preset names are user data and render verbatim.
 

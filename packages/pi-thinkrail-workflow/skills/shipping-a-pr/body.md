@@ -1,7 +1,7 @@
 # body.md — maintain PR title or body
 
-Entry: an open PR plus a requested title/body change. Saves `.thinkrail/context/pr-body.md` only while
-editing the body. Default completion is snapshot mode; preserve wait mode only when selected by the
+Entry: an open PR plus a requested title/body change. Saves `.thinkrail/context/pr-body.md` when
+editing the body (kept as an artifact; the next edit overwrites it). Default completion is snapshot mode; preserve wait mode only when selected by the
 spine's explicit remote-completion rule.
 
 1. Fetch the current title and body (`gh pr view <n> --json title,body`) and read the repository's
@@ -12,8 +12,8 @@ spine's explicit remote-completion rule.
    fresh body instead of overwriting concurrent edits. Use `gh pr edit <n> --body-file ...`, never an
    inline body. For a title edit, immediately re-fetch the current title too; if it changed, reapply
    only the requested mutation to that fresh title before `gh pr edit <n> --title ...`.
-3. Fetch the resulting title/body once to verify the requested mutation landed, then delete the body
-   file.
+3. Fetch the resulting title/body once to verify the requested mutation landed. Leave the body file
+   in place.
 
 ## Next
 
