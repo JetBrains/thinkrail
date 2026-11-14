@@ -35,6 +35,14 @@ describe("the shortcut catalog", () => {
 		);
 	});
 
+	test("lists the bottom rail's horizontal keys apart from the side rails' vertical ones", () => {
+		const rows = shortcutRows({ desktop: false, platform: LINUX });
+		expect(labels(rows, "rail.move")).toEqual(["↑", "↓", "Home", "End"]);
+		expect(labels(rows, "rail.moveBottom")).toEqual(["←", "→", "Home", "End"]);
+		expect(labels(rows, "rail.reorder")).toEqual(["Alt+Shift+↑", "Alt+Shift+↓"]);
+		expect(labels(rows, "rail.reorderBottom")).toEqual(["Alt+Shift+←", "Alt+Shift+→"]);
+	});
+
 	test("takes table chords from the table, never chords a browser does not deliver", () => {
 		const browser = shortcutRows({ desktop: false, platform: LINUX });
 		expect(labels(browser, "workspace.new")).toEqual(["Ctrl+Alt+N"]);

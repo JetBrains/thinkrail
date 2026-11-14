@@ -53,6 +53,8 @@ export const RAIL_KEYS = {
 	remove: { key: "Delete" },
 	moveUp: { key: "ArrowUp", alt: true, shift: true },
 	moveDown: { key: "ArrowDown", alt: true, shift: true },
+	moveLeft: { key: "ArrowLeft", alt: true, shift: true },
+	moveRight: { key: "ArrowRight", alt: true, shift: true },
 } as const satisfies Record<string, ShortcutKey>;
 
 export const TREE_KEYS = {
@@ -243,6 +245,12 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 		keys: [UP, DOWN, HOME, END],
 	},
 	{
+		id: "rail.moveBottom",
+		title: "shortcuts.rail.moveBottom",
+		surface: "panels",
+		keys: [LEFT, RIGHT, HOME, END],
+	},
+	{
 		id: "rail.toggle",
 		title: "shortcuts.rail.toggle",
 		surface: "panels",
@@ -259,6 +267,12 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 		title: "shortcuts.rail.reorder",
 		surface: "panels",
 		keys: [RAIL_KEYS.moveUp, RAIL_KEYS.moveDown],
+	},
+	{
+		id: "rail.reorderBottom",
+		title: "shortcuts.rail.reorderBottom",
+		surface: "panels",
+		keys: [RAIL_KEYS.moveLeft, RAIL_KEYS.moveRight],
 	},
 	{ id: "trees.move", title: "shortcuts.trees.move", surface: "trees", keys: [UP, DOWN] },
 	{ id: "trees.expand", title: "shortcuts.trees.expand", surface: "trees", keys: [RIGHT, LEFT] },

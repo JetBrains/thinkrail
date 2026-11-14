@@ -9,7 +9,7 @@ import { useT } from "@thinkrail/locales/react";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
-import { RAIL_KEYS, TAB_KEYS } from "../../keybindings";
+import { RAIL_KEYS } from "../../keybindings";
 import { type LayoutAttention, tupleKey } from "../../lib";
 import {
 	AuxiliaryRail,
@@ -368,7 +368,7 @@ export function AuxiliaryRegionRail({
 										if (!event.altKey || !event.shiftKey) return;
 										const [before, after] =
 											region === "bottom"
-												? [TAB_KEYS.moveBefore, TAB_KEYS.moveAfter]
+												? [RAIL_KEYS.moveLeft, RAIL_KEYS.moveRight]
 												: [RAIL_KEYS.moveUp, RAIL_KEYS.moveDown];
 										const target =
 											event.key === before.key
