@@ -234,6 +234,37 @@ async function firstVisibleLine(page: Page) {
 		});
 }
 
+test("read-only Vim mode switches modes and opens directional search", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	writeFileSync(join(workspace.worktreePath, "vim.ts"), longSource("vim"));
+	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("file-node").filter({ hasText: "vim.ts" }).dblclick();
+	await expect(visibleEditor(page)).toContainText("vim0");
+
+	const toggle = page.getByTestId("vim-mode-toggle");
+	await expect(toggle).toContainText("Vim: Off");
+	await toggle.click();
+	await expect(toggle).toContainText("Vim: Normal");
+
+	await visibleEditor(page).click();
+	await page.keyboard.press("i");
+	await expect(toggle).toContainText("Vim: Insert");
+	await page.keyboard.press("Escape");
+	await page.keyboard.press("v");
+	await expect(toggle).toContainText("Vim: Visual");
+	await page.keyboard.press("Escape");
+	await expect(toggle).toContainText("Vim: Normal");
+
+	await page.keyboard.press("/");
+	const search = page.getByTestId("vim-search-input");
+	await expect(search).toBeFocused();
+	await search.fill("vim10");
+	await search.press("Enter");
+	await expect(search).toHaveCount(0);
+	await expect(visibleEditor(page)).toContainText("vim10");
+});
+
 test("Monaco restores scroll across a tab switch", async ({ page }) => {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
