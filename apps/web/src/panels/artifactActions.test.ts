@@ -1,36 +1,49 @@
 import { afterAll, beforeEach, expect, mock, test } from "bun:test";
-import type { WsErrorCode } from "@thinkrail/contracts";
+import type { WorkspaceArtifact, WsErrorCode } from "@thinkrail/contracts";
 
 const requests: string[] = [];
 let restoreFailure: WsErrorCode | null = null;
+let restoreGate: Promise<void> = Promise.resolve();
 const actualTransport = await import("../transport");
 mock.module("../transport", () => ({
 	...actualTransport,
 	getTransport: () => ({
-		request: (method: string) => {
+		request: async (method: string) => {
 			requests.push(method);
-			if (method === "artifacts.restore" && restoreFailure)
-				return Promise.reject(new actualTransport.RequestError(restoreFailure, "refused"));
-			return method === "fs.readFile" ? new Promise(() => {}) : Promise.resolve({ ok: true });
+			if (method === "fs.readFile") return new Promise(() => {});
+			if (method === "artifacts.restore") {
+				await restoreGate;
+				if (restoreFailure) throw new actualTransport.RequestError(restoreFailure, "refused");
+			}
+			return { ok: true };
 		},
 	}),
 }));
 
 const { useAppStore } = await import("../store");
-const { openArtifact, restoreArtifact } = await import("./artifactActions");
+const { artifactRestorer, openArtifact, restoreArtifact } = await import("./artifactActions");
 const initial = useAppStore.getInitialState();
 const PATH = ".thinkrail/context/report.md";
+const deleted = (): WorkspaceArtifact => ({
+	path: PATH,
+	state: "deleted",
+	size: 1,
+	changedAt: 1,
+	firstSeenAt: 1,
+});
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
 	requests.length = 0;
 	restoreFailure = null;
+	restoreGate = Promise.resolve();
 	useAppStore.setState(initial, true);
 });
 afterAll(() => useAppStore.setState(initial, true));
 
 test("opening a deleted artifact restores it before reading it", async () => {
 	void openArtifact("w1", PATH, "preview", () => restoreArtifact("w1", PATH));
-	await new Promise((resolve) => setTimeout(resolve, 0));
+	await settle();
 	expect(requests).toEqual(["artifacts.restore", "fs.readFile"]);
 	expect(useAppStore.getState().toasts).toEqual([]);
 });
@@ -46,4 +59,32 @@ test("a deleted artifact whose path is taken again opens nothing and says why", 
 			message: "report.md exists again, so its kept copy was not restored.",
 		}),
 	]);
+});
+
+test("a row asks for one restore, in flight or done, until a newer snapshot of it arrives", async () => {
+	let release = () => {};
+	restoreGate = new Promise((resolve) => {
+		release = resolve;
+	});
+	const restore = artifactRestorer("w1");
+	const record = deleted();
+	const first = restore(record);
+	expect(restore(record)).toBe(first);
+	release();
+	expect(await first).toBe(true);
+	expect(await restore(record)).toBe(true);
+	expect(requests).toEqual(["artifacts.restore"]);
+
+	expect(await restore(deleted())).toBe(true);
+	expect(requests).toEqual(["artifacts.restore", "artifacts.restore"]);
+});
+
+test("a failed restore is asked again on the next open", async () => {
+	restoreFailure = "ARTIFACT_UNKNOWN";
+	const restore = artifactRestorer("w1");
+	const record = deleted();
+	expect(await restore(record)).toBe(false);
+	restoreFailure = null;
+	expect(await restore(record)).toBe(true);
+	expect(requests).toEqual(["artifacts.restore", "artifacts.restore"]);
 });
