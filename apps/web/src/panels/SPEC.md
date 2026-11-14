@@ -325,7 +325,9 @@ treatment.
   the editor. Right-clicking a file or folder row (a touch long-press, or the Context Menu key / Shift+F10 on
   a focused row) opens its menu: **Copy path** (absolute, through `joinWorkspacePath`) and **Copy relative
   path** (worktree-relative). A compacted folder copies its deepest path, matching its label, and copying
-  neither opens nor selects the row. The row stays highlighted while its menu is open. From a host at
+  neither opens nor selects the row. A file row's menu starts with **Open in tab**, the double-click result
+  (`openFileInTab(…, "keep")`): the file opens as a kept tab that the next single-click preview does not
+  replace. Folders have no open item; they expand in place. The row stays highlighted while its menu is open. From a host at
   `FS_MUTATIONS_PROTOCOL_VERSION` (v118) the menu adds the tree's two mutations, both host-owned and
   watcher-refreshed, never patched into the rows (`fileTreeActions`): **Copy** puts the row's entry — file,
   folder or link, a compacted folder's deepest folder — on the session-only in-app clipboard

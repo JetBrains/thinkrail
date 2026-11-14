@@ -96,6 +96,36 @@ test("Files tree rows copy and paste files and folders, then delete them to the 
 	expect(readFileSync(join(root, "pkg", "a.txt"), "utf8")).toBe("a\n");
 });
 
+test("Open in tab on a Files tree row keeps the file open instead of previewing it", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	mkdirSync(join(workspace.worktreePath, "pkg"));
+	writeFileSync(join(workspace.worktreePath, "pkg", "a.txt"), "a\n");
+	await revealWorkbenchTool(page, "files");
+
+	const row = (name: string) =>
+		page.getByTestId("file-node").filter({ hasText: new RegExp(`^${name}[MAUR]?$`) });
+	const fileTab = (name: string) =>
+		page.locator('[data-testid="editor-tab"][data-kind="file"]').filter({ hasText: name });
+
+	await row("README.md").click({ button: "right" });
+	await page.getByTestId("file-tree-open").click();
+	await expect(fileTab("README.md")).toHaveAttribute("data-active", "true");
+	await expect(fileTab("README.md")).toHaveAttribute("data-preview", "false");
+
+	// A kept tab survives the next single-click preview instead of being replaced by it.
+	await row("pkg").click();
+	await row("a.txt").click();
+	await expect(fileTab("a.txt")).toHaveAttribute("data-preview", "true");
+	await expect(fileTab("README.md")).toHaveCount(1);
+
+	await row("pkg").click({ button: "right" });
+	await expect(page.getByTestId("file-tree-actions")).toBeVisible();
+	await expect(page.getByTestId("file-tree-open")).toHaveCount(0);
+});
+
 test("a copied file pastes into another workspace, including an empty tree", async ({ page }) => {
 	await openFixtureProject(page);
 	const source = await createWorkspaceViaDialog(page);
