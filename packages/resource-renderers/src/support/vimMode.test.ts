@@ -39,7 +39,20 @@ function makeEditor(lines: readonly string[]) {
 			return position(lineNumber, offset - (offsets[lineNumber - 1] ?? 0) + 1);
 		},
 		getLineCount: () => lines.length,
+		getLineContent: (lineNumber: number) => lines[lineNumber - 1] ?? "",
 		getLineMaxColumn: (lineNumber: number) => (lines[lineNumber - 1] ?? "").length + 1,
+		getWordAtPosition: (value: IPosition) => {
+			const line = lines[value.lineNumber - 1] ?? "";
+			const index = value.column - 1;
+			const match = /[A-Za-z0-9_]+/gu;
+			for (const item of line.matchAll(match)) {
+				const start = item.index ?? 0;
+				if (index >= start && index <= start + item[0].length) {
+					return { word: item[0], startColumn: start + 1, endColumn: start + item[0].length + 1 };
+				}
+			}
+			return null;
+		},
 		findMatches: (query: string) => {
 			const matches: Array<{ range: IRange }> = [];
 			for (const [lineIndex, line] of lines.entries()) {
@@ -88,8 +101,24 @@ function makeEditor(lines: readonly string[]) {
 			selection = next;
 			current = position(next.endLineNumber, next.endColumn);
 		},
+		setSelections: (next: readonly ISelection[]) => {
+			const last = next[next.length - 1];
+			if (!last) return;
+			selection = last as unknown as IRange;
+			current = position(last.positionLineNumber, last.positionColumn);
+		},
+		getVisibleRanges: () => [
+			{
+				startLineNumber: 1,
+				startColumn: 1,
+				endLineNumber: Math.min(lines.length, 5),
+				endColumn: 1,
+			} as IRange,
+		],
 		revealPositionInCenter: () => {},
 		revealRangeInCenter: () => {},
+		revealLineNearTop: () => {},
+		revealLineInCenter: () => {},
 		focus: () => {},
 	};
 	return {
@@ -158,6 +187,45 @@ describe("Vim mode", () => {
 		expect(fake.position).toEqual(position(3, 5));
 		fake.emit("N", true);
 		expect(fake.position).toEqual(position(2, 5));
+		controller.dispose();
+	});
+
+	test("supports Vim tiny navigation, Visual variants, marks and viewport jumps", () => {
+		const fake = makeEditor(["  alpha beta", "(gamma)", "delta"]);
+		let state: VimState = initialVimState();
+		const controller = createVimController(fake.editor, (next) => (state = next));
+		controller.toggle();
+
+		fake.emit("^");
+		expect(fake.position).toEqual(position(1, 3));
+		fake.emit("e");
+		expect(fake.position).toEqual(position(1, 7));
+		fake.emit("f");
+		fake.emit("b");
+		expect(fake.position).toEqual(position(1, 9));
+		fake.emit("G");
+		expect(fake.position.lineNumber).toBe(3);
+		fake.emit("g");
+		fake.emit("g");
+		expect(fake.position.lineNumber).toBe(1);
+
+		fake.emit("m");
+		fake.emit("a");
+		fake.emit("G");
+		fake.emit("`");
+		fake.emit("a");
+		expect(fake.position.lineNumber).toBe(1);
+
+		fake.emit("V");
+		expect(state.visualMode).toBe("line");
+		fake.emit("Escape");
+		fake.emit("v");
+		expect(state.visualMode).toBe("character");
+		fake.emit("Escape");
+		fake.emit("v");
+		fake.emit("V", true);
+		expect(state.visualMode).toBe("line");
+		fake.emit("Escape");
 		controller.dispose();
 	});
 

@@ -1,11 +1,18 @@
-import type { editor, IKeyboardEvent, IPosition } from "monaco-editor/editor/editor.api.js";
+import type {
+	editor,
+	IKeyboardEvent,
+	IPosition,
+	ISelection,
+} from "monaco-editor/editor/editor.api.js";
 
 export type VimMode = "normal" | "insert" | "visual";
+export type VimVisualMode = "character" | "line" | "block";
 export type VimSearchDirection = "forward" | "backward";
 
 export interface VimState {
 	enabled: boolean;
 	mode: VimMode;
+	visualMode: VimVisualMode | null;
 	searchOpen: boolean;
 	searchDirection: VimSearchDirection;
 }
@@ -13,8 +20,18 @@ export interface VimState {
 const INITIAL_STATE: VimState = {
 	enabled: false,
 	mode: "normal",
+	visualMode: null,
 	searchOpen: false,
 	searchDirection: "forward",
+};
+
+const BRACKET_PAIRS: Readonly<Record<string, string>> = {
+	"(": ")",
+	")": "(",
+	"[": "]",
+	"]": "[",
+	"{": "}",
+	"}": "{",
 };
 
 let activeOwner: symbol | null = null;
@@ -66,6 +83,14 @@ function moveWordBackward(model: editor.ITextModel, position: IPosition): IPosit
 	return model.getPositionAt(offset);
 }
 
+function moveWordEnd(model: editor.ITextModel, position: IPosition): IPosition {
+	const text = model.getValue();
+	let offset = model.getOffsetAt(position);
+	while (offset < text.length && !isWordCharacter(text[offset])) offset += 1;
+	while (offset < text.length && isWordCharacter(text[offset + 1])) offset += 1;
+	return model.getPositionAt(offset);
+}
+
 function movePosition(
 	model: editor.ITextModel,
 	position: IPosition,
@@ -97,6 +122,8 @@ function movePosition(
 			next = moveWordForward(model, next);
 		} else if (key === "b") {
 			next = moveWordBackward(model, next);
+		} else if (key === "e") {
+			next = moveWordEnd(model, next);
 		} else {
 			return null;
 		}
@@ -114,6 +141,91 @@ function consume(event: IKeyboardEvent): void {
 	event.browserEvent.stopPropagation();
 }
 
+function escapeRegex(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function lineStart(
+	model: editor.ITextModel,
+	lineNumber: number,
+	firstNonBlank: boolean,
+): IPosition {
+	if (!firstNonBlank) return { lineNumber, column: 1 };
+	const match = model.getLineContent(lineNumber).search(/\S/u);
+	return { lineNumber, column: match < 0 ? 1 : match + 1 };
+}
+
+function findCharacter(
+	model: editor.ITextModel,
+	position: IPosition,
+	character: string,
+	direction: "forward" | "backward",
+	before: boolean,
+	count: number,
+): IPosition {
+	let current = position;
+	for (let repetition = 0; repetition < count; repetition += 1) {
+		const line = model.getLineContent(current.lineNumber);
+		const start = direction === "forward" ? current.column : current.column - 2;
+		const found =
+			direction === "forward"
+				? line.indexOf(character, Math.max(0, start))
+				: line.lastIndexOf(character, Math.max(0, start));
+		if (found < 0) return position;
+		const column = found + 1 + (before ? (direction === "forward" ? -1 : 1) : 0);
+		current = { lineNumber: current.lineNumber, column: Math.max(1, column) };
+	}
+	return current;
+}
+
+function matchingBracket(model: editor.ITextModel, position: IPosition): IPosition | null {
+	const text = model.getValue();
+	const offset = model.getOffsetAt(position);
+	let index = offset;
+	let character = text[index];
+	if (!BRACKET_PAIRS[character ?? ""]) {
+		index = offset + 1;
+		while (index < text.length && !BRACKET_PAIRS[text[index] ?? ""]) index += 1;
+		character = text[index];
+	}
+	const pair = BRACKET_PAIRS[character ?? ""];
+	if (!pair) return null;
+	const forward = character === "(" || character === "[" || character === "{";
+	let depth = 0;
+	for (
+		let cursor = index;
+		forward ? cursor < text.length : cursor >= 0;
+		cursor += forward ? 1 : -1
+	) {
+		const current = text[cursor];
+		if (current === character) depth += 1;
+		if (current === pair) {
+			depth -= 1;
+			if (depth === 0) return model.getPositionAt(cursor);
+		}
+	}
+	return null;
+}
+
+function visibleLine(
+	codeEditor: editor.IStandaloneCodeEditor,
+	kind: "top" | "middle" | "bottom",
+	count: number,
+): number | null {
+	const range = codeEditor.getVisibleRanges()[0];
+	if (!range) return null;
+	if (kind === "top") return Math.min(range.startLineNumber + count - 1, range.endLineNumber);
+	if (kind === "bottom") return Math.max(range.endLineNumber - count + 1, range.startLineNumber);
+	return Math.floor((range.startLineNumber + range.endLineNumber) / 2);
+}
+
+type PendingCommand =
+	| { kind: "character"; direction: "forward" | "backward"; before: boolean; count: number }
+	| { kind: "g"; count: number }
+	| { kind: "z"; count: number }
+	| { kind: "mark-set" }
+	| { kind: "mark-jump"; exact: boolean };
+
 export function createVimController(
 	codeEditor: editor.IStandaloneCodeEditor,
 	onStateChange: (state: VimState) => void,
@@ -126,20 +238,77 @@ export function createVimController(
 	let state = INITIAL_STATE;
 	let count = "";
 	let anchor: IPosition | null = null;
-	let lastSearch: { query: string; direction: VimSearchDirection } | null = null;
+	let pending: PendingCommand | null = null;
+	let lastSearch: { query: string; direction: VimSearchDirection; wholeWord: boolean } | null =
+		null;
+	const marks = new Map<string, IPosition>();
+	let jumpHistory: IPosition[] = [];
+	let jumpIndex = -1;
 
 	const update = (patch: Partial<VimState>) => {
 		state = { ...state, ...patch };
 		onStateChange(state);
 	};
 
-	const setPosition = (position: IPosition) => {
+	const currentPosition = () => codeEditor.getPosition();
+
+	const recordJump = (target: IPosition) => {
+		const current = currentPosition();
+		if (!current) return;
+		if (
+			jumpIndex >= 0 &&
+			jumpHistory[jumpIndex]?.lineNumber === current.lineNumber &&
+			jumpHistory[jumpIndex]?.column === current.column
+		) {
+			jumpHistory = jumpHistory.slice(0, jumpIndex + 1);
+		} else {
+			jumpHistory = jumpHistory.slice(0, jumpIndex + 1);
+			jumpHistory.push(current);
+		}
+		jumpHistory.push(target);
+		jumpIndex = jumpHistory.length - 1;
+	};
+
+	const setPosition = (position: IPosition, jump = false) => {
+		if (jump) recordJump(position);
 		codeEditor.setPosition(position);
 		codeEditor.revealPositionInCenter(position);
 	};
 
 	const setVisualPosition = (position: IPosition) => {
-		if (!anchor) anchor = codeEditor.getPosition() ?? position;
+		if (!anchor) anchor = currentPosition() ?? position;
+		if (state.visualMode === "line") {
+			const model = codeEditor.getModel();
+			const end = Math.max(anchor.lineNumber, position.lineNumber);
+			const anchorEnd = model?.getLineMaxColumn(anchor.lineNumber) ?? anchor.column;
+			const positionEnd = model?.getLineMaxColumn(position.lineNumber) ?? position.column;
+			codeEditor.setSelection({
+				selectionStartLineNumber: anchor.lineNumber,
+				selectionStartColumn: anchor.lineNumber <= position.lineNumber ? 1 : anchorEnd,
+				positionLineNumber: position.lineNumber,
+				positionColumn: position.lineNumber >= anchor.lineNumber ? positionEnd : 1,
+			});
+			codeEditor.revealLineInCenter(end);
+			return;
+		}
+		if (state.visualMode === "block") {
+			const startLine = Math.min(anchor.lineNumber, position.lineNumber);
+			const endLine = Math.max(anchor.lineNumber, position.lineNumber);
+			const startColumn = Math.min(anchor.column, position.column);
+			const endColumn = Math.max(anchor.column, position.column);
+			const selections: ISelection[] = [];
+			for (let line = startLine; line <= endLine; line += 1) {
+				selections.push({
+					selectionStartLineNumber: line,
+					selectionStartColumn: startColumn,
+					positionLineNumber: line,
+					positionColumn: endColumn,
+				});
+			}
+			codeEditor.setSelections(selections);
+			codeEditor.revealPositionInCenter(position);
+			return;
+		}
 		codeEditor.setSelection({
 			selectionStartLineNumber: anchor.lineNumber,
 			selectionStartColumn: anchor.column,
@@ -149,17 +318,29 @@ export function createVimController(
 		codeEditor.revealPositionInCenter(position);
 	};
 
-	const performSearch = (query: string, direction: VimSearchDirection, repetitions = 1) => {
+	const applyPosition = (position: IPosition, jump = false) => {
+		if (state.mode === "visual") setVisualPosition(position);
+		else setPosition(position, jump);
+	};
+
+	const performSearch = (
+		query: string,
+		direction: VimSearchDirection,
+		repetitions = 1,
+		wholeWord = false,
+	) => {
 		const model = codeEditor.getModel();
-		const current = codeEditor.getPosition();
+		const current = currentPosition();
 		if (!model || !current || query.length === 0) return;
 		const selection = codeEditor.getSelection();
 		let searchPosition =
 			direction === "forward"
 				? (selection?.getEndPosition() ?? current)
 				: (selection?.getStartPosition() ?? current);
-		const matches = model.findMatches(query, false, false, false, null, false);
+		const searchQuery = wholeWord ? `\\b${escapeRegex(query)}\\b` : query;
+		const matches = model.findMatches(searchQuery, false, wholeWord, false, null, false);
 		if (matches.length === 0) return;
+		recordJump(matches[0]?.range.getStartPosition() ?? current);
 		for (let index = 0; index < repetitions; index += 1) {
 			const currentOffset = positionKey(searchPosition);
 			const match =
@@ -176,7 +357,16 @@ export function createVimController(
 			codeEditor.setSelection(match.range);
 			codeEditor.revealRangeInCenter(match.range);
 		}
-		lastSearch = { query, direction };
+		lastSearch = { query, direction, wholeWord };
+	};
+
+	const jumpHistoryBy = (delta: -1 | 1) => {
+		if (jumpHistory.length === 0) return;
+		const nextIndex = Math.max(0, Math.min(jumpHistory.length - 1, jumpIndex + delta));
+		if (nextIndex === jumpIndex) return;
+		jumpIndex = nextIndex;
+		const position = jumpHistory[jumpIndex];
+		if (position) setPosition(position);
 	};
 
 	const submitSearch = (query: string) => {
@@ -194,7 +384,8 @@ export function createVimController(
 		const enabled = !state.enabled;
 		count = "";
 		anchor = null;
-		update({ enabled, mode: "normal", searchOpen: false });
+		pending = null;
+		update({ enabled, mode: "normal", visualMode: null, searchOpen: false });
 		codeEditor.focus();
 	};
 
@@ -202,14 +393,13 @@ export function createVimController(
 		if (!state.enabled || event.browserEvent.isComposing) return;
 		const key = event.browserEvent.key;
 		const lowerKey = key.toLowerCase();
-		if (event.browserEvent.ctrlKey || event.browserEvent.metaKey || event.browserEvent.altKey) {
-			if (key !== "Escape") return;
-		}
+		const hasModifier =
+			event.browserEvent.ctrlKey || event.browserEvent.metaKey || event.browserEvent.altKey;
 
 		if (state.mode === "insert") {
 			if (key !== "Escape") return;
 			consume(event);
-			update({ mode: "normal" });
+			update({ mode: "normal", visualMode: null });
 			return;
 		}
 
@@ -217,7 +407,111 @@ export function createVimController(
 			consume(event);
 			count = "";
 			anchor = null;
-			update({ mode: "normal" });
+			pending = null;
+			update({ mode: "normal", visualMode: null });
+			return;
+		}
+
+		if (
+			hasModifier &&
+			event.browserEvent.ctrlKey &&
+			(lowerKey === "v" ||
+				lowerKey === "o" ||
+				lowerKey === "i" ||
+				lowerKey === "d" ||
+				lowerKey === "u" ||
+				lowerKey === "f" ||
+				lowerKey === "b")
+		) {
+			if (lowerKey === "v") {
+				consume(event);
+				anchor = currentPosition();
+				update({ mode: "visual", visualMode: "block" });
+				return;
+			}
+			if (lowerKey === "o" || lowerKey === "i") {
+				consume(event);
+				jumpHistoryBy(lowerKey === "o" ? -1 : 1);
+				return;
+			}
+			const visible = codeEditor.getVisibleRanges()[0];
+			const current = currentPosition();
+			if (visible && current) {
+				const page = Math.max(1, visible.endLineNumber - visible.startLineNumber);
+				const delta =
+					lowerKey === "f"
+						? page
+						: lowerKey === "b"
+							? -page
+							: lowerKey === "d"
+								? Math.floor(page / 2)
+								: lowerKey === "u"
+									? -Math.floor(page / 2)
+									: 0;
+				if (delta !== 0) {
+					consume(event);
+					const model = codeEditor.getModel();
+					if (model) {
+						const lineNumber = Math.max(
+							1,
+							Math.min(model.getLineCount(), current.lineNumber + delta),
+						);
+						setPosition({
+							lineNumber,
+							column: Math.min(model.getLineMaxColumn(lineNumber), current.column),
+						});
+					}
+					return;
+				}
+			}
+		}
+
+		if (pending) {
+			const command = pending;
+			pending = null;
+			if (command.kind === "character" && key.length === 1) {
+				const model = codeEditor.getModel();
+				const position = currentPosition();
+				if (model && position)
+					applyPosition(
+						findCharacter(model, position, key, command.direction, command.before, command.count),
+					);
+				consume(event);
+				return;
+			}
+			if (command.kind === "g" && lowerKey === "g") {
+				const model = codeEditor.getModel();
+				if (model) applyPosition(lineStart(model, command.count, false));
+				consume(event);
+				return;
+			}
+			if (command.kind === "z" && (lowerKey === "t" || lowerKey === "z" || lowerKey === "b")) {
+				const line = currentPosition()?.lineNumber ?? null;
+				if (line !== null) {
+					if (lowerKey === "t") codeEditor.revealLineNearTop(line);
+					else codeEditor.revealLineInCenter(line);
+				}
+				consume(event);
+				return;
+			}
+			if (command.kind === "mark-set" && /^[a-z]$/u.test(key)) {
+				const position = currentPosition();
+				if (position) marks.set(key, position);
+				consume(event);
+				return;
+			}
+			if (command.kind === "mark-jump" && /^[a-z]$/u.test(key)) {
+				const mark = marks.get(key);
+				if (mark) {
+					const model = codeEditor.getModel();
+					setPosition(
+						command.exact ? mark : model ? lineStart(model, mark.lineNumber, false) : mark,
+						true,
+					);
+				}
+				consume(event);
+				return;
+			}
 			return;
 		}
 
@@ -239,18 +533,29 @@ export function createVimController(
 			return;
 		}
 
-		if (key === "i" || key === "a") {
+		if (key === "i" || key === "a" || key === "A") {
 			consume(event);
 			count = "";
-			update({ mode: "insert" });
+			update({ mode: "insert", visualMode: null });
 			return;
 		}
 
-		if (key === "v") {
+		if (key === "v" || key === "V") {
 			consume(event);
 			count = "";
-			anchor = codeEditor.getPosition();
-			update({ mode: "visual" });
+			anchor = currentPosition();
+			update({ mode: "visual", visualMode: key === "V" ? "line" : "character" });
+			return;
+		}
+
+		if (state.mode === "visual" && (key === "o" || key === "O")) {
+			const position = currentPosition();
+			if (position && anchor) {
+				const previousAnchor = anchor;
+				anchor = position;
+				setVisualPosition(previousAnchor);
+			}
+			consume(event);
 			return;
 		}
 
@@ -266,7 +571,59 @@ export function createVimController(
 						: "forward"
 					: lastSearch.direction,
 				repetitions,
+				lastSearch.wholeWord,
 			);
+			return;
+		}
+
+		if (key === "*" || key === "#") {
+			const model = codeEditor.getModel();
+			const position = currentPosition();
+			const word = model && position ? model.getWordAtPosition(position)?.word : null;
+			if (word) {
+				consume(event);
+				performSearch(word, key === "*" ? "forward" : "backward", clampCount(count), true);
+			}
+			count = "";
+			return;
+		}
+
+		if (key === "f" || key === "F" || key === "t" || key === "T") {
+			consume(event);
+			pending = {
+				kind: "character",
+				direction: key === "f" || key === "t" ? "forward" : "backward",
+				before: key === "t" || key === "T",
+				count: clampCount(count),
+			};
+			count = "";
+			return;
+		}
+
+		if (key === "g") {
+			consume(event);
+			pending = { kind: "g", count: clampCount(count) };
+			count = "";
+			return;
+		}
+
+		if (key === "z") {
+			consume(event);
+			pending = { kind: "z", count: clampCount(count) };
+			count = "";
+			return;
+		}
+
+		if (key === "m") {
+			consume(event);
+			pending = { kind: "mark-set" };
+			count = "";
+			return;
+		}
+		if (key === "'" || key === "`") {
+			consume(event);
+			pending = { kind: "mark-jump", exact: key === "`" };
+			count = "";
 			return;
 		}
 
@@ -278,39 +635,65 @@ export function createVimController(
 					count.length > 0
 						? Math.min(model.getLineCount(), clampCount(count))
 						: model.getLineCount();
-				const position = { lineNumber, column: 1 };
-				if (state.mode === "visual") setVisualPosition(position);
-				else setPosition(position);
+				applyPosition(lineStart(model, lineNumber, false), true);
 			}
 			count = "";
 			return;
 		}
 
-		if (key === "0" || key === "$") {
+		if (key === "^" || key === "0" || key === "$") {
 			consume(event);
-			const position = codeEditor.getPosition();
+			const position = currentPosition();
 			const model = codeEditor.getModel();
 			if (position && model) {
-				const next = {
-					lineNumber: position.lineNumber,
-					column: key === "0" ? 1 : model.getLineMaxColumn(position.lineNumber),
-				};
-				if (state.mode === "visual") setVisualPosition(next);
-				else setPosition(next);
+				const next =
+					key === "$"
+						? {
+								lineNumber: position.lineNumber,
+								column: model.getLineMaxColumn(position.lineNumber),
+							}
+						: lineStart(model, position.lineNumber, key === "^");
+				applyPosition(next);
+			}
+			count = "";
+			return;
+		}
+
+		if (key === "%") {
+			const model = codeEditor.getModel();
+			const position = currentPosition();
+			const match = model && position ? matchingBracket(model, position) : null;
+			if (match) {
+				consume(event);
+				applyPosition(match, true);
+			}
+			count = "";
+			return;
+		}
+
+		if (key === "H" || key === "M" || key === "L") {
+			const line = visibleLine(
+				codeEditor,
+				key === "H" ? "top" : key === "L" ? "bottom" : "middle",
+				clampCount(count),
+			);
+			const model = codeEditor.getModel();
+			if (line !== null && model) {
+				consume(event);
+				applyPosition(lineStart(model, line, false));
 			}
 			count = "";
 			return;
 		}
 
 		const model = codeEditor.getModel();
-		const position = codeEditor.getPosition();
+		const position = currentPosition();
 		if (!model || !position) return;
-		const next = movePosition(model, position, key, clampCount(count));
+		const next = movePosition(model, position, lowerKey, clampCount(count));
 		if (!next) return;
 		consume(event);
 		count = "";
-		if (state.mode === "visual") setVisualPosition(next);
-		else setPosition(next);
+		applyPosition(next);
 	};
 
 	const listener = codeEditor.onKeyDown(onKeyDown);
