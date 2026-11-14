@@ -27,9 +27,10 @@ export function revealArtifact(workspaceId: string, path: string): void {
 	store.requestToolView(workspaceId, "files");
 }
 
-export async function restoreArtifact(workspaceId: string, path: string): Promise<void> {
+export async function restoreArtifact(workspaceId: string, path: string): Promise<boolean> {
 	try {
 		await getTransport().request("artifacts.restore", { workspaceId, path });
+		return true;
 	} catch (error) {
 		toast.error(
 			wsErrorCode(error) === "ENTRY_EXISTS"
@@ -37,6 +38,7 @@ export async function restoreArtifact(workspaceId: string, path: string): Promis
 				: errorText(error),
 			t("panels.artifacts.restoreFailed"),
 		);
+		return false;
 	}
 }
 
