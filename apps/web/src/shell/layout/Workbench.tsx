@@ -108,7 +108,7 @@ export function Workbench({
 	registerTabCommands,
 	renderTabBody,
 	renderTabAdornment,
-	renderFileTabActions,
+	fileReveal,
 	renderToolBody,
 	renderEmptyCenter,
 	renderCenterActions,
@@ -785,10 +785,11 @@ export function Workbench({
 				canRenameChat: onRenameChat !== undefined,
 				worktreePath,
 				chatFirstPrompts,
+				fileReveal,
 			});
 			return { tab, location, actions };
 		},
-		[chatFirstPrompts, maxBottomGroups, maxSideGroups, onRenameChat, t, worktreePath],
+		[chatFirstPrompts, maxBottomGroups, maxSideGroups, onRenameChat, t, worktreePath, fileReveal],
 	);
 	useEffect(
 		() =>
@@ -807,7 +808,7 @@ export function Workbench({
 					) {
 						return;
 					}
-					tabSelectionEpoch.current += 1;
+					if (action.effect.kind !== "revealFile") tabSelectionEpoch.current += 1;
 					performTabAction(action, {
 						apply,
 						select: (keep) => {
@@ -828,6 +829,7 @@ export function Workbench({
 						focusGroup: (delta) => focusAdjacentGroup(delta, location.groupId),
 						hide: hideSideRegion,
 						revealTool: revealMissingTool,
+						revealFile: fileReveal?.run,
 						close: () => close(tab),
 					});
 				},
@@ -836,6 +838,7 @@ export function Workbench({
 			apply,
 			close,
 			focusAdjacentGroup,
+			fileReveal,
 			hideSideRegion,
 			onUserNavigation,
 			registerTabCommands,
@@ -856,7 +859,7 @@ export function Workbench({
 		draggingTab,
 		renderTabBody,
 		renderTabAdornment,
-		renderFileTabActions,
+		fileReveal,
 		renderToolBody,
 		onNewTerminal,
 		onUserNavigation,

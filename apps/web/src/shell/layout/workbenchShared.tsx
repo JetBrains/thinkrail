@@ -32,7 +32,7 @@ import {
 	type LayoutSide,
 	layoutTabName,
 } from "./model";
-import type { WorkbenchTabCommands } from "./tabActions";
+import type { FileTabReveal, WorkbenchTabCommands } from "./tabActions";
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutCenterTab,
@@ -69,7 +69,7 @@ export interface WorkbenchProps {
 	registerTabCommands?: (commands: WorkbenchTabCommands) => () => void;
 	renderTabBody: (tab: LayoutCenterTab | Extract<LayoutSideTab, { kind: "terminal" }>) => ReactNode;
 	renderTabAdornment: (tab: LayoutTab) => ReactNode;
-	renderFileTabActions?: (path: string) => ReactNode;
+	fileReveal?: FileTabReveal | undefined;
 	renderToolBody: (tool: LayoutToolId) => ReactNode;
 	renderEmptyCenter: (groupId: string) => ReactNode;
 	renderCenterActions: (groupId: string) => ReactNode;
@@ -619,7 +619,7 @@ export interface SharedGroupProps {
 	draggingTab: LayoutTab | null;
 	renderTabBody: WorkbenchProps["renderTabBody"];
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
-	renderFileTabActions: WorkbenchProps["renderFileTabActions"];
+	fileReveal: WorkbenchProps["fileReveal"];
 	renderToolBody: WorkbenchProps["renderToolBody"];
 	onNewTerminal: WorkbenchProps["onNewTerminal"];
 	onUserNavigation: WorkbenchProps["onUserNavigation"];

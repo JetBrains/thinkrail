@@ -379,7 +379,7 @@ function FileTreeMenu({
 					<Copy />
 					{t("panels.fileTree.copyRelativePath")}
 				</ContextMenuItem>
-				<FileRevealMenuItem workspaceId={workspaceId} path={path} showIcon />
+				<FileRevealMenuItem workspaceId={workspaceId} path={path} />
 				{mutations ? (
 					<>
 						<ContextMenuSeparator />
