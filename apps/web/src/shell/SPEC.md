@@ -214,15 +214,26 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
 - `Mod+Shift+F` opens Find in Files ([[submodule-web-find-in-files]]); `files.findInFiles` in the palette's `>` commands is the same action with the chord as its display shortcut, listed while the host serves `search.text` (`supportsTextSearch`) and `selectHasTextSearchScope` holds (an active workspace, or a context project other than the Chats container) — the same scope the window searches, so on the Chats container's Home the chord's window says there is no workspace to search. `FindInFilesHost` mounts the dialog only while its module store says `open` and composes the rest from the shell side: the search context (the active workspace, else the context project, which the host resolves to its Default workspace, provisioning a Default record not listed yet), the scope label (a chat without a project by its displayed title, as the topbar names it), the host state (`ready` / `offline` / `unsupported` from the connection status and `supportsTextSearch`), the welcome generation as `connection` (so a search a reconnect interrupted is asked again), `renderPreview` — a `ResourcePreview` pinned to `SOURCE_RENDERER_ID` with the match as its `reveal` — and `onOpen` (`findInFilesOpen.ts`), which enters the match's workspace through the palette's shared `paletteNavigator` (`paletteNavigation.ts` — the row loaded without diff stats when this client lacks it, a deletion-pending or vanished workspace refused with a toast, a newer pick or any navigation overtaking it) and only then calls `panels/openTabs.openFileAtLine` at the `preview` (`↵`) or `keep` (`⌘↵`) intent; a failed open toasts. Like the other chords it is suppressed behind a modal (so the open window, or the palette, keeps it) and never takes plain `Mod+F` from the browser; the window is a modal other than the search palette, so double Shift does not fire through it.
 - **Regions and focus chords** (VS Code's keymap). `regions.ts`, installed once from `Shell`, owns the
   active region: a document `focusin` listener resolves `closest("[data-region]")` and moves the one
-  `data-region-active` attribute (plus `data-region-tracking` on `<html>`) imperatively, with no React
-  state; focus outside every region (a modal, the palette, a menu portal, `<body>`, a rail button) changes
-  nothing, and a `ResizeObserver` on the active root drops both marks when that root unmounts, hides or
-  collapses. It also remembers the last element focused inside each root (a `WeakMap`; the root itself
-  is never remembered). The regions and the landing rule are [[submodule-web-shell-layout]]'s
-  (*Arrangement and accessibility*); the muting is [COLOR.md](../styles/COLOR.md)'s. `F6` / `Shift+F6`
-  walk the ring of shown regions — top bar, Project Home pane, left groups top to bottom, center groups
-  in `Ctrl+F6` order, right groups top to bottom, bottom groups left to right — from the active region;
-  with none active, `F6` starts at the top bar and `Shift+F6` at the last. `Mod+1…9` land in center
+  `data-region-active` attribute imperatively, with no React state; focus outside every region (a modal,
+  the palette, a menu portal, `<body>`, a rail button) changes nothing, and a `ResizeObserver` on the
+  active root drops the mark when that root unmounts, hides or collapses. It also remembers the last
+  element focused inside each root (a `WeakMap`; the root itself is never remembered). The regions and
+  the landing rule are [[submodule-web-shell-layout]]'s (*Arrangement and accessibility*); the accent
+  line and the frame are [COLOR.md](../styles/COLOR.md)'s (*Active region*). **The frame marks keyboard
+  arrivals only**: when the active region changes and the last input was a key, the tracker sets
+  `data-region-flash` on the new region — so `F6`, the focus chords below, a palette row run from the
+  keyboard and a `Tab` across a border flash it, and a click never does. A capture `keydown` /
+  `pointerdown` pair on `window` records that last input; it is installed with the tracker, before
+  `useGlobalHotkeys` (which stops a chord's propagation at `window`), so a chord that moves focus
+  synchronously already counts as a key. The frame shows 1.5 s (≈1 s held, a 0.5 s fade) or 1 s under
+  `prefers-reduced-motion`, a newer flash replaces it, and the region losing the active mark drops it.
+  `F6` / `Shift+F6` walk the ring of shown regions — top bar, Project Home pane, left groups top to
+  bottom, center groups in `Ctrl+F6` order, right groups top to bottom, bottom groups left to right —
+  from the active region, in two beats (`regionKeyAction`): with no frame showing and focus inside the
+  active region, a press only flashes that region, showing where the keyboard is; a press while the frame
+  shows moves and flashes the destination, so a run of presses walks the ring. Focus on `<body>` or
+  outside every region moves at once; with none active, `F6` starts at the top bar and `Shift+F6` at the
+  last. The palette's Focus next / previous region rows always move. `Mod+1…9` land in center
   group N of that order (no group N: nothing, the chord still swallowed). `Mod+L` focuses the attended
   chat's composer — `selectHistoryTarget`'s chat (the selected tab of the last-focused center group, else
   the workspace's most recent chat tab), opened through `openChatInTab` first when it is not attended —
@@ -241,7 +252,7 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   (`aria-busy="true"`) is waited out for a shorter bounded budget before landing, so a chord that first
   mounts Files lands on its tree's current row rather than the toolbar above the skeleton. Every focus move waits, a bounded number of animation frames, for no modal layer
   and a rendered target, then gives up silently; a newer focus chord cancels an older wait. That wait is
-  what lets the same functions run as palette rows (Focus next / previous region, Focus chat input,
+  what lets the same moves run as palette rows (Focus next / previous region, Focus chat input,
   Focus Projects, Focus terminal, one Focus center group N per existing group, Show Changes, and Show
   Files with `Mod+Shift+E`), after the palette has closed. These chords are app-owned in xterm and
   Monaco too, except that `Ctrl+L` inside a terminal on Windows/Linux stays the shell's clear-screen, like

@@ -76,7 +76,7 @@ import { useLocalLayoutState } from "./layoutState";
 import { LocationBar } from "./locationBar";
 import { NativeWindowControls } from "./NativeWindowControls";
 import { PROJECT_HOME_PROJECTS_REGION_ID, ProjectHome } from "./ProjectHome";
-import { focusAdjacentRegion, installRegionTracker } from "./regions";
+import { installRegionTracker, pressRegionKey } from "./regions";
 import { SearchPaletteHost } from "./SearchPaletteHost";
 import { readSettingsShortcutLabel } from "./useAppShortcuts";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
@@ -224,8 +224,8 @@ export function Shell() {
 		...(contextRepoProject || canStartChat ? { onNewWorkspace: () => void openNewWork() } : {}),
 		onSearch: () => useAppStore.getState().openSearch(),
 		onFindInFiles: openFindInFiles,
-		onNextRegion: () => focusAdjacentRegion(1),
-		onPreviousRegion: () => focusAdjacentRegion(-1),
+		onNextRegion: () => pressRegionKey(1),
+		onPreviousRegion: () => pressRegionKey(-1),
 		onComposer: focusChatComposer,
 		onFocusProjects: () => focusProjects(homeProjects.toggle),
 	});

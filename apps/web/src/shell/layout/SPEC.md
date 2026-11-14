@@ -217,9 +217,9 @@ Pointer is never the sole arrangement path. Keyboard controls, shadcn menus (ope
 **Regions.** Every rendered group section is a keyboard region: it carries `data-region` (its group id)
 and `data-region-kind` (`left` | `center` | `right` | `bottom`), beside the shell's top bar (`topbar`)
 and Project Home projects pane (`home`). The shell's tracker marks the one holding focus
-`data-region-active` and veils the others ([[submodule-web-shell]], *Global chords*;
-[COLOR.md](../../styles/COLOR.md), *Active region*); a region root is positioned and isolates its
-stacking, so the veil stays inside it. Folded groups and hidden sides render no section and are no region. `F6` and the focus chords land in a
+`data-region-active` (its accent line) and flashes a frame on a region a keyboard move enters
+([[submodule-web-shell]], *Global chords*; [COLOR.md](../../styles/COLOR.md), *Active region*); a region
+root is positioned and isolates its stacking, so both stay inside it, under portals and resize handles. Folded groups and hidden sides render no section and are no region. `F6` and the focus chords land in a
 region by one rule: the element last focused inside it, if still rendered and focusable there (the root
 itself is never remembered, nor a treeitem or tab that has since stopped being its roving container's tab
 stop — a row selected while focus was elsewhere, or another selected tab, takes the landing over); else a

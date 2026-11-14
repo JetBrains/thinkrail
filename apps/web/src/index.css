@@ -251,18 +251,36 @@
 	}
 }
 
-/* Active region (COLOR.md): isolation keeps a region's veil inside it, under portals and handles. */
+/* Active region (COLOR.md): isolation keeps the line and the frame inside it, under portals and handles. */
 [data-region] {
 	position: relative;
 	isolation: isolate;
 }
-:root[data-region-tracking] [data-region]:not([data-region-active])::after {
+[data-region][data-region-active]::after,
+[data-region][data-region-flash]::before {
 	content: "";
 	position: absolute;
 	inset: 0;
 	z-index: 2147483647;
 	pointer-events: none;
-	background: var(--region-inactive-scrim);
+}
+[data-region][data-region-active]::after {
+	bottom: auto;
+	border-top: 2px solid var(--color-focus-ring);
+}
+[data-region][data-region-flash]::before {
+	border: 1px solid var(--color-focus-ring);
+	animation: region-flash 0.5s ease-out 1s forwards;
+}
+@keyframes region-flash {
+	to {
+		opacity: 0;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	[data-region][data-region-flash]::before {
+		animation: none;
+	}
 }
 
 .xterm .xterm-rows {
