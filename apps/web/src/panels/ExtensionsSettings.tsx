@@ -19,6 +19,7 @@ import { saveSettings } from "./saveSettings";
 import { UPDATE_CHECK_KEY, usePiPackages } from "./usePiPackages";
 
 const BUNDLED_DESCRIPTIONS: Readonly<Record<string, MessageKey>> = {
+	"next-steps": "settings.extensions.next-steps.description",
 	visualize: "settings.extensions.visualize.description",
 	"web-access": "settings.extensions.web-access.description",
 };

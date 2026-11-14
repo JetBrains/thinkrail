@@ -17,7 +17,7 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
 ## Boundary
 
 - `./web` exposes `ToolStatus`, `ToolRenderProps`, `ToolRenderer`, `ToolSummary`, `ToolChrome`,
-  `ToolProminence`, `ToolWidth`, `ToolRegistrationOptions`, `ToolInteraction`, `ToolInteractionState`,
+  `ToolProminence`, `ToolWidth`, `ComposerSuggestionsReader`, `ToolRegistrationOptions`, `ToolInteraction`, `ToolInteractionState`,
   `ToolPlacement`, `WebExtension`, `defineWebExtension`, and the pure argument/result readers from
   `toolHelpers` and `toolResultContent`.
 - **Images are references.** `parseToolResultContent(result).images` returns `contracts`' `WireImage`s,
@@ -46,6 +46,12 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
     response is still pending": the host writes it on restart repair, and a tool returns it (with
     `terminate: true`) when `awaitToolResponse` resolves `deferred`. It is the one shape both sides read
     (`contracts`: `isToolResponsePending`); a tool must not use it for a real result.
+- `ToolRegistrationOptions.composerSuggestions` (`ComposerSuggestionsReader`, `(args, result) =>
+  readonly string[]`) marks a tool whose call carries **next messages for the user**. The reader is pure:
+  it pulls the strings out of a call's arguments and result. When such a call ends a finished turn, the
+  chat shows the strings as one-click chips above the composer. The decision of *when* is the chat's
+  ([[submodule-web-chat]]). Like `interactive`, the host learns which tools qualify only from this
+  declaration. First consumer: [[module-ext-next-steps]].
 - `ToolRegistrationOptions.width` (`ToolWidth`) is `"column"` by default; `"content"` lets the chat grow
   the renderer's frame past its text column to the content's width, up to the pane, while the user fits
   chat to the pane. It is opt-in because only the extension knows its content reads better wide; the

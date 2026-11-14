@@ -222,6 +222,28 @@ const EXPECTATIONS: Record<string, Expectation> = {
 			},
 		],
 	},
+	"@thinkrail/pi-next-steps": {
+		tools: ["suggest_next_steps"],
+		skills: [],
+		cases: [
+			{
+				tool: "suggest_next_steps",
+				name: "suggestions-end-the-turn",
+				args: { suggestions: ["  Run the   e2e suite ", "run the e2e suite", "Open a PR"] },
+				expectText: ["Shown to the user as one-click next messages"],
+				expectTerminate: true,
+				expectRender: { width: 80, contains: ["1. Run the e2e suite", "2. Open a PR"] },
+			},
+			{
+				tool: "suggest_next_steps",
+				name: "blank-suggestions-still-end-the-turn",
+				args: { suggestions: ["   "] },
+				expectText: ["No usable suggestions"],
+				expectTerminate: true,
+				expectRender: { width: 80, contains: ["No usable suggestions."] },
+			},
+		],
+	},
 	"@thinkrail/pi-visualize": {
 		tools: ["visualize"],
 		skills: [],

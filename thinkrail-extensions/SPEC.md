@@ -112,7 +112,8 @@ What a `./web` half may import:
   infrastructure (desktop's bundled server runtime, `startDesktopHost`, `registerBundledRuntime`'s
   OAuth/Bedrock/trash registration) is unchanged by this.
 - **Web:** `apps/web/src/extensions/registry.ts` exports the ordered web extensions;
-  `registerWebExtensions()` feeds their `toolRenderers` into the chat tool registry. App-local tool
+  `registerWebExtensions()` feeds their `toolRenderers` into the chat tool registry, tagging each
+  registration with its extension's `name`. App-local tool
   registrations retain their side-effect imports; extension descriptors need none.
 
 ## Boundary rules (enforced by `scripts/check-module-boundaries.ts`, with negative tests)
@@ -155,3 +156,4 @@ follow the `.js`, `tsc` stops at the declaration.
 | `visualize` | `@thinkrail/pi-visualize` | shipped. `./server` injects the **strict** mermaid validator (`mermaid` at the web renderer's catalog version, initialised through `linkedom` — required: DOMPurify needs a real `document` for flowchart/class/state/gantt/mindmap, verified under Bun). `./web` carries the diagram/comparison cards and exports `MermaidView`. The guarantee is syntax parsing, not SVG/layout success; the browser renderer keeps its fallback. |
 | `ask-user-question` | `@thinkrail/pi-ask-user-question` | shipped; the first interactive tool. `./server` is session-only: `sessionExtensions` composes the portable tool with ThinkRail's wording and an asker over the host's interactive-tool mailbox (`awaitToolResponse`); `interactiveTools` declares `ask_user_question` with a `describeResponse` that renders a late answer in the package's own envelope wording. `./web` registers the questionnaire card `interactive`, fed entirely by the host through `ToolRenderProps.interaction`; the plan page renders it through the tool registry like the chat does. [[module-ext-ask-user-question]]. |
 | `web-access` | third-party `pi-web-access` | shipped (server half). `./server` composes the package unchanged for parents and children (the host keeps its headless-search policy, which must outlive the switch) and ships its own `librarian` skill (upstream dropped it; `skillPackages` names the extension's own package); the first extension with skills. Renderers stay app-local (`apps/web/src/chat/tools/web`) until `Markdown`, `Collapsible` and `ToolFileLink` join the SDK. [[module-ext-web-access]]. |
+| `next-steps` | `@thinkrail/pi-next-steps` | shipped; the first `composerSuggestions` consumer. `./server` composes the portable package unchanged for parents only (its terminal row stays off because ThinkRail binds pi as `"rpc"`); `./web` registers the routine row plus the reader whose output the chat shows as chips above the composer. [[module-ext-next-steps]]. |

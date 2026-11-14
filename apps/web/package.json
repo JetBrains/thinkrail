@@ -33,6 +33,7 @@
 		"@pierre/highlights": "catalog:",
 		"@thinkrail/contracts": "workspace:*",
 		"@thinkrail/ext-ask-user-question": "workspace:*",
+		"@thinkrail/ext-next-steps": "workspace:*",
 		"@thinkrail/ext-visualize": "workspace:*",
 		"@thinkrail/extension-api": "workspace:*",
 		"@thinkrail/locales": "workspace:*",

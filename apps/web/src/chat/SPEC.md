@@ -466,6 +466,8 @@ remain app-local. A registration is:
 - **`interactive`** (fill `ToolRenderProps.interaction`, below) and **`dock`** (with `interactive`: a call
   the host awaits renders in the interaction dock, the transcript row as its stub — read through
   `isDockedTool`),
+- **`composerSuggestions`**: a reader whose strings become the composer's suggestion chips when the call
+  ends a finished turn (*Composer suggestions*, below), read through `readComposerSuggestions`,
 - **prominence metadata** — `prominence`: `"routine"` (default, incl. unregistered tools — enters the
   outer Activity run, directly before the first thought or under the current nested Thinking disclosure)
   or `"primary"` (escapes the fold; `"bare"` chrome implies it **unconditionally**, even
@@ -575,6 +577,25 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `PlanInteractionCard` — a second runtime subscription, a second provider stack and a second focus scope
   to reconcile with the transcript's. An unanchored extension prompt keeps its own dock inside the
   transcript region, above this one.
+- **Composer suggestions** — a row of one-click next messages directly above the composer (below the
+  dock, QueueStrip, Resources strip and notices), rendered by `ChatView` for top-level chats only.
+  Subagent transcripts never mount `ChatView`. `deriveComposerSuggestions` (`composerSuggestions.ts`)
+  reads them from the transcript alone, so nothing new is stored. Chips show only when all of these hold:
+  - the session is idle with nothing queued;
+  - skipping the round-closer `system` turns, the last turn is a finished assistant message whose
+    **last** tool call has a `composerSuggestions` reader ([[module-extension-api]]);
+  - that call's result is `done`;
+  - the message holds no interactive call;
+  - the owning extension is switched on (registrations carry their extension's name).
+
+  Any later turn (an error, a retry, the next user message) clears the row, and a reload restores it.
+  A call that wasn't last never qualifies: pi only ends the turn when every result in the batch
+  terminates. A click, or `Alt+Digit1…9` (matched on `event.code`), goes through `performSend(text, [],
+  "send")`, the same draft-free path as Try again, so the composer draft survives. The shortcut is a
+  native `keydown` listener on the chat root. It acts only while DOM focus is inside that chat, so
+  React-portal dialogs and other panes are excluded. It calls `preventDefault` so macOS doesn't type
+  `¡™£`. The copy is host keys (`chat.suggestions.*`): the row is generic, and the extension supplies only
+  the strings.
 - **Structured tool-file navigation** — `ChatView` accepts an optional `onOpenFile(path)` from the shell and
   passes it through every `ToolRenderProps` path (routine, primary, card, or bare). The shared tool-file
   primitive offers that action only for a non-empty relative path or an absolute path contained by

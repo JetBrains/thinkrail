@@ -17,7 +17,9 @@ fallback renderer. Re-registering the same list replaces entries rather than acc
 
 Registration ignores the host's extension on/off setting: a web extension's renderers stay registered while
 its server half is disabled, so a transcript that already contains its tool calls keeps rendering them. The
-switch only decides what the host gives the agent next.
+switch only decides what the host gives the agent next. The one live affordance is composer suggestions.
+Each registration carries its extension's `name`, so the chat hides a switched-off extension's chips
+while its past rows keep rendering ([[submodule-web-chat]]).
 
 ## Boundary
 

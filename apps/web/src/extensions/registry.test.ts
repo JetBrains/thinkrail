@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import askUserQuestion from "@thinkrail/ext-ask-user-question/web";
+import nextSteps from "@thinkrail/ext-next-steps/web";
 import visualize, { MermaidView } from "@thinkrail/ext-visualize/web";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import { currentTranslator } from "@thinkrail/locales/react";
@@ -10,6 +11,7 @@ import {
 	getToolSummary,
 	isDockedTool,
 	isInteractiveTool,
+	readComposerSuggestions,
 	resolveProminence,
 } from "../chat/toolRegistry";
 import { registerWebExtensions, webExtensions } from "./index";
@@ -24,7 +26,7 @@ const props: ToolRenderProps = {
 };
 
 test("the ordered web registry composes the public visualize descriptor without replacing fallback", () => {
-	expect(webExtensions).toEqual([visualize, askUserQuestion]);
+	expect(webExtensions).toEqual([visualize, askUserQuestion, nextSteps]);
 	expect(typeof MermaidView).toBe("function");
 	for (let i = 0; i < 2; i++) {
 		registerWebExtensions();
@@ -64,4 +66,24 @@ test("the ask_user_question card registers bare, interactive and docked from its
 	// Interactivity is opt-in per registration: the other extension tool and unknown names are not.
 	expect(isInteractiveTool("visualize")).toBe(false);
 	expect(isInteractiveTool("unregistered-extension-tool")).toBe(false);
+});
+
+test("suggest_next_steps registers a routine row whose result feeds the composer suggestions", () => {
+	registerWebExtensions();
+	const result = { details: { suggestions: ["Run the tests", "Open a PR"] } };
+	expect(resolveProminence("suggest_next_steps").prominence).toBe("routine");
+	expect(isInteractiveTool("suggest_next_steps")).toBe(false);
+	expect(readComposerSuggestions("suggest_next_steps", {}, result)).toEqual([
+		"Run the tests",
+		"Open a PR",
+	]);
+	expect(
+		getToolSummary(currentTranslator(), "suggest_next_steps", {
+			...props,
+			toolName: "suggest_next_steps",
+			result,
+		}),
+	).toBe("Suggested 2 next steps");
+	expect(readComposerSuggestions("suggest_next_steps", {}, result, ["next-steps"])).toBeNull();
+	expect(readComposerSuggestions("visualize", {}, result)).toBeNull();
 });

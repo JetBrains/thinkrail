@@ -56,6 +56,7 @@ import {
 	type MentionCandidate,
 	type SubmitBehavior,
 } from "./Composer";
+import { deriveComposerSuggestions } from "./composerSuggestions";
 import { DEFAULT_DOCK_FOLD, type DockFold, dockCollapsed, withDockCollapsed } from "./dockFold";
 import { ExtraUsageNotice } from "./ExtraUsageNotice";
 import { mentionLookup } from "./fileTargets";
@@ -84,6 +85,7 @@ import {
 } from "./resources";
 import { SkillsDialog } from "./SkillsDialog";
 import { SubagentTranscriptDialog, SubagentTranscriptPane } from "./SubagentTranscriptDialog";
+import { SuggestionChips } from "./SuggestionChips";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { useChatResources, useCommandLog } from "./useChatResources";
 import { useModelCatalog } from "./useModelCatalog";
@@ -130,6 +132,9 @@ export default function ChatView({
 		[imageDraft, sessionId],
 	);
 	const queue = useAppStore((s) => s.sessions[sessionId]?.queue ?? EMPTY_RUNTIME.queue);
+	const suggestions = useAppStore(
+		useShallow((s) => deriveComposerSuggestions(s.sessions[sessionId], s.disabledExtensions)),
+	);
 	const sessionModel = useAppStore((s) => s.sessions[sessionId]?.model ?? null);
 	const thinkingLevel = useAppStore(
 		(s) => s.sessions[sessionId]?.thinkingLevel ?? EMPTY_RUNTIME.thinkingLevel,
@@ -395,8 +400,10 @@ export default function ChatView({
 		[resources.visible, resources.authoritative, resources.groups.activeCount, openInspector],
 	);
 
+	const [chatRoot, setChatRoot] = useState<HTMLDivElement | null>(null);
 	const chatViewRef = useCallback(
 		(element: HTMLDivElement | null) => {
+			setChatRoot(element);
 			if (element) {
 				element.style.setProperty(
 					"--chat-transcript-width",
@@ -813,6 +820,7 @@ export default function ChatView({
 		performSendRef.current = performSend;
 	});
 	const onTryAgain = useCallback(() => performSendRef.current(TRY_AGAIN_PROMPT, [], "send"), []);
+	const sendSuggestion = (text: string) => performSendRef.current(text, [], "send");
 
 	return (
 		<div
@@ -974,6 +982,7 @@ export default function ChatView({
 					disabling={disablingNotice}
 				/>
 			) : null}
+			<SuggestionChips suggestions={suggestions} onSend={sendSuggestion} shortcutScope={chatRoot} />
 			<div className="relative shrink-0">
 				<HistoryOverlay
 					state={historyState}

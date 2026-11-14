@@ -68,6 +68,7 @@
         "@remixicon/react": "catalog:",
         "@thinkrail/contracts": "workspace:*",
         "@thinkrail/ext-ask-user-question": "workspace:*",
+        "@thinkrail/ext-next-steps": "workspace:*",
         "@thinkrail/ext-visualize": "workspace:*",
         "@thinkrail/extension-api": "workspace:*",
         "@thinkrail/locales": "workspace:*",
@@ -341,6 +342,7 @@
         "@stroncium/procfs": "1.2.1",
         "@thinkrail/contracts": "workspace:*",
         "@thinkrail/ext-ask-user-question": "workspace:*",
+        "@thinkrail/ext-next-steps": "workspace:*",
         "@thinkrail/ext-visualize": "workspace:*",
         "@thinkrail/ext-web-access": "workspace:*",
         "@thinkrail/extension-api": "workspace:*",
@@ -448,6 +450,22 @@
         "typebox": "*",
       },
     },
+    "pi-extensions/next-steps": {
+      "name": "@thinkrail/pi-next-steps",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@earendil-works/pi-coding-agent": "catalog:",
+        "@earendil-works/pi-tui": "catalog:",
+        "@types/bun": "catalog:",
+        "typebox": "catalog:",
+        "typescript": "catalog:",
+      },
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "*",
+        "@earendil-works/pi-tui": "*",
+        "typebox": "*",
+      },
+    },
     "pi-extensions/visualize": {
       "name": "@thinkrail/pi-visualize",
       "version": "0.2.1",
@@ -486,6 +504,22 @@
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
         "react-dom": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "thinkrail-extensions/next-steps": {
+      "name": "@thinkrail/ext-next-steps",
+      "version": "0.0.0",
+      "dependencies": {
+        "@thinkrail/extension-api": "workspace:*",
+        "@thinkrail/locales": "workspace:*",
+        "@thinkrail/pi-next-steps": "workspace:*",
+        "react": "catalog:",
+      },
+      "devDependencies": {
+        "@earendil-works/pi-coding-agent": "catalog:",
+        "@types/bun": "catalog:",
+        "@types/react": "catalog:",
         "typescript": "catalog:",
       },
     },
@@ -1237,6 +1271,8 @@
 
     "@thinkrail/ext-ask-user-question": ["@thinkrail/ext-ask-user-question@workspace:thinkrail-extensions/ask-user-question"],
 
+    "@thinkrail/ext-next-steps": ["@thinkrail/ext-next-steps@workspace:thinkrail-extensions/next-steps"],
+
     "@thinkrail/ext-visualize": ["@thinkrail/ext-visualize@workspace:thinkrail-extensions/visualize"],
 
     "@thinkrail/ext-web-access": ["@thinkrail/ext-web-access@workspace:thinkrail-extensions/web-access"],
@@ -1246,6 +1282,8 @@
     "@thinkrail/locales": ["@thinkrail/locales@workspace:packages/locales"],
 
     "@thinkrail/pi-ask-user-question": ["@thinkrail/pi-ask-user-question@workspace:pi-extensions/ask-user-question"],
+
+    "@thinkrail/pi-next-steps": ["@thinkrail/pi-next-steps@workspace:pi-extensions/next-steps"],
 
     "@thinkrail/pi-visualize": ["@thinkrail/pi-visualize@workspace:pi-extensions/visualize"],
 
