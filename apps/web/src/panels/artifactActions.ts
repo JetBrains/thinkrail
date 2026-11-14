@@ -1,8 +1,10 @@
+import type { WorkspaceArtifact } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { fileName } from "../lib";
 import { selectAttentionCenterTab, toast, useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import { mentionText } from "./artifactsModel";
+import { openFileInTab } from "./openTabs";
 
 export function selectArtifactMentionTarget(
 	state: ReturnType<typeof useAppStore.getState>,
@@ -27,9 +29,10 @@ export function revealArtifact(workspaceId: string, path: string): void {
 	store.requestToolView(workspaceId, "files");
 }
 
-export async function restoreArtifact(workspaceId: string, path: string): Promise<void> {
+export async function restoreArtifact(workspaceId: string, path: string): Promise<boolean> {
 	try {
 		await getTransport().request("artifacts.restore", { workspaceId, path });
+		return true;
 	} catch (error) {
 		toast.error(
 			wsErrorCode(error) === "ENTRY_EXISTS"
@@ -37,7 +40,47 @@ export async function restoreArtifact(workspaceId: string, path: string): Promis
 				: errorText(error),
 			t("panels.artifacts.restoreFailed"),
 		);
+		return false;
 	}
+}
+
+interface PendingRestore {
+	restore: Promise<boolean>;
+	from: WorkspaceArtifact;
+	settled: boolean;
+}
+
+export function artifactRestorer(
+	workspaceId: string,
+): (artifact: WorkspaceArtifact) => Promise<boolean> {
+	let pending: PendingRestore | null = null;
+	return (artifact) => {
+		if (pending && !(pending.settled && pending.from !== artifact)) return pending.restore;
+		const entry: PendingRestore = {
+			restore: Promise.resolve(false),
+			from: artifact,
+			settled: false,
+		};
+		entry.restore = restoreArtifact(workspaceId, artifact.path).then((restored) => {
+			entry.settled = true;
+			if (!restored && pending === entry) pending = null;
+			return restored;
+		});
+		pending = entry;
+		return entry.restore;
+	};
+}
+
+export async function openArtifact(
+	workspaceId: string,
+	path: string,
+	intent: "preview" | "keep",
+	restoreFirst?: () => Promise<boolean>,
+): Promise<void> {
+	if (!restoreFirst) return openFileInTab(workspaceId, path, intent);
+	const navigation = useAppStore.getState().beginCenterNavigation(workspaceId);
+	if (!(await restoreFirst())) return;
+	await openFileInTab(workspaceId, path, intent, navigation);
 }
 
 export async function discardArtifact(workspaceId: string, path: string): Promise<void> {
