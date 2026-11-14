@@ -51,7 +51,8 @@ function renderWith(row: ChatRow, request: ExtUiDialogRequest | null): string {
 							reply: () => {},
 							draft: () => undefined,
 							rememberDraft: () => {},
-							claimReveal: () => false,
+							revealOpen: () => false,
+							closeReveal: () => {},
 						}
 					: null
 			}
