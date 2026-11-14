@@ -94,7 +94,10 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   and bottom tool panels, kept local to each window ([[submodule-web-shell-layout]]). The region that holds
   the keyboard stays at full contrast while the others are muted, and VS Code-style chords move between
   regions, into the chat input, Projects, Files and the terminal, from one keybinding table that the
-  palette also shows ([[submodule-web-keybindings]]).
+  palette also shows ([[submodule-web-keybindings]]). Desktop source files also offer an optional,
+  read-only Vim interaction layer with normal, insert and visual modes, directional search and repeat
+  counts; its visible toggle and palette command never make the file editable
+  ([[module-resource-renderers]], [[submodule-web-shell]]).
 - **Chats** — concurrent `pi` sessions per workspace, each with its own model, pi-reported token/cost,
   steering and follow-ups mid-run, skill and prompt-template autocomplete, and history search
   ([[submodule-web-chat]], [[submodule-server-agent]]).
