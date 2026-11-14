@@ -49,6 +49,7 @@ import {
 	selectFilesTreeView,
 	selectReadyCompletionAck,
 	selectSkillsStale,
+	selectUnnamedChatFirstPrompts,
 	selectWorkspaceNavTick,
 	selectWorkspaceSessionIds,
 	selectWorkspaceTick,
@@ -2029,6 +2030,25 @@ test("setTitle refreshes shared chat metadata without requesting activation", ()
 		kind: "open",
 		tab: { id: placementId, name: "Migration plan", sessionId: "a" },
 	});
+});
+
+test("setTitle without a string title falls back to the untitled name", () => {
+	const store = useAppStore.getState();
+	const cacheId = chatTabId("ws1", "a");
+	store.openChatSession("ws1", "a", null, "medium");
+
+	for (const title of [undefined, null, 42]) {
+		store.applyExtUi({
+			id: `named-${title}`,
+			sessionId: "a",
+			kind: "setTitle",
+			title: "Migration plan",
+		});
+		store.applyExtUi({ id: `title-${title}`, sessionId: "a", kind: "setTitle", title } as never);
+		const tab = useAppStore.getState().tabsByWorkspace.ws1?.find((t) => t.id === cacheId);
+		expect(tab?.name).toBe("");
+		expect(() => selectUnnamedChatFirstPrompts(useAppStore.getState(), "ws1")).not.toThrow();
+	}
 });
 
 test("setTitle cannot restore a cache whose structural close is already accepted", () => {

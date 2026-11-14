@@ -339,6 +339,26 @@ test("parent-model words in the call mean no invocation model, never a lookup", 
 	}
 });
 
+test("a blank model in the call means no invocation model, whatever the catalog holds", () => {
+	for (const availableModels of [AVAILABLE, [{ provider: "openai", id: "gpt-5" }], []]) {
+		for (const model of ["", " ", "\t\n"]) {
+			const mapping = toSpawnMapping(definition({ thinking: "low" }), {
+				cwd: "/tmp/x",
+				availableModels,
+				model,
+			});
+			expect(mapping.session.model).toBeUndefined();
+			expect(mapping.session.thinkingLevel).toBe("low");
+		}
+	}
+	const pinned = toSpawnMapping(definition({ model: "openai/gpt-5" }), {
+		cwd: "/tmp/x",
+		availableModels: AVAILABLE,
+		model: "",
+	});
+	expect(pinned.session.model).toEqual({ provider: "openai", id: "gpt-5" });
+});
+
 test("a missing per-call model lists the available refs and says how to use the parent's", () => {
 	expect(() =>
 		toSpawnMapping(definition({ name: "worker" }), {

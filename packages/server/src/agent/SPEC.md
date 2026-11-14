@@ -217,10 +217,13 @@ re-opened transcripts provider-valid.
       written only when reported; otherwise pi's defaults apply — 128K context, with pi's overflow
       recovery compacting and retrying once when the server returns a recognized "context exceeded"
       error (accepted gap: a server that silently truncates, like local Ollama with no Modelfile
-      `num_ctx`, gives it nothing to recover from). `maxTokens` is the reported max output when it fits
-      the context, else ¼ of a known context clamped to 256–16K (pi's 16K default would fail vLLM's
-      prompt + `max_tokens` check on a small context, and compaction cannot recover from that), else
-      omitted. Cost is zero. A new provider
+      `num_ctx`, gives it nothing to recover from). `maxTokens` is the draft's max output when it fits
+      the context, else ¼ of the context clamped to 256–16K (pi's 16K default would fail vLLM's prompt +
+      `max_tokens` check on a small context, and compaction cannot recover from that). With no detected
+      context the draft's value is kept, or omitted when there is none. A user window only widens a
+      detected context and is not used without one, as pi-ai clamps each request to the window pi uses
+      and fitting down would only lose a saved value (#1350). The fit runs only on Save, so a larger user
+      window never raises a value that fits. Cost is zero. A new provider
       gets conservative compat (`supportsStore: false`, `supportsDeveloperRole: false`, `maxTokensField:
       "max_tokens"`) because pi detects compat from the URL and would send OpenAI-only fields to an unknown
       host; every OpenAI-compatible server accepts these. An edit keeps the provider's `compat` and every
@@ -606,10 +609,10 @@ re-opened transcripts provider-valid.
     `colors.accent` is an RGB value) and report pi's detected light/dark appearance. No honest plain
     answer exists for any of them. They cost nothing while an extension colours *through* the theme —
     every such path returns plain text — and only bite one that reads a mode or colour and then emits ANSI
-    on its own, which is the unsanitised-bridge gap tracked outside this module. Its colour table exists
-    **only** to satisfy the constructor signature: every method that would turn a colour into an escape is
-    overridden, and the members that still answer for the terminal read the constructor's *mode* or pi's
-    terminal guesses, never an escape. A pi
+    on its own into text the bridge does not carry, such as a `pi.setSessionName` title (the bridge
+    strips displayed text, below). Its colour table exists **only** to satisfy the constructor signature:
+    every method that would turn a colour into an escape is overridden, and the members that still answer
+    for the terminal read the constructor's *mode* or pi's terminal guesses, never an escape. A pi
     bump that changes the palette breaks the build as a *notice that the theme surface moved*, not as a
     defect.
     **Rejected alternatives** (the one place these decisions are recorded): (1) `{} as
@@ -617,11 +620,24 @@ re-opened transcripts provider-valid.
     `rpc` mode, but `ctx.ui.theme` is called by the **extension**, not by pi's renderer, and pi's own rpc
     mode hands out a live theme. (2) An object literal implementing `Theme` structurally — impossible
     without a cast: `Theme` carries private fields. (3) A real `Theme` built from blank colours, no
-    overrides — pi maps `""` to the *default-colour* escape (`\x1b[39m`), not to nothing, so status text
-    would reach the browser as literal escape bytes. (4) Forwarding pi's exported `theme` singleton — it
+    overrides — pi maps `""` to the *default-colour* escape (`\x1b[39m`), not to nothing, so themed text
+    outside the bridge's frames would keep escapes. (4) Forwarding pi's exported `theme` singleton — it
     is a `Proxy` that throws `Theme not initialized` until `initTheme()` runs, and `initTheme` is called
     only from pi's own CLI entrypoints, never when pi is embedded via `createAgentSession`. Every
     embedder of pi-as-a-library hits this; an upstream fix would not reach us until a deliberate pi bump.
+    **Every extension string the bridge publishes for display is plain text** (#890): stripping, not
+    rendering colours, keeps one look with `plainTextTheme`. Each member strips its own fields, not
+    `publish`, so the stored dialog snapshot stays plain. A complete sequence goes; a broken one (no
+    final byte or terminator) loses only its control byte. **A non-string is absent text** (#1356): pi
+    loads extensions untyped, a throw outside pi's handlers kills the host, and the page trusts the wire
+    contract's `string` (a non-string title once took the whole page down). So the bridge never throws
+    on one and never forwards one: a title or message becomes `""`, a status clears, a widget line is
+    `""`, a placeholder or prefill is omitted, an option is dropped, and a notify or editor edit is
+    skipped. A `select` left with no string option resolves `undefined` without a dialog, `[]` included:
+    a dialog with nothing to pick could only be cancelled by sending a chat message. A `select` answer
+    maps back by index to a copy of the options as passed; options that differ only in colour look alike
+    and the first wins. Built-ins fail: `util.stripVTControlCharacters` leaves OSC tails, `Bun.stripANSI`
+    is missing in the Node workflow harness, and pi-tui's `stripTerminalSequences` keeps DCS strings.
   - `toolResponses` — the host half of **interactive tools** (tools whose `execute` waits for the person):
     the per-session response mailbox (`ToolResponseWaiters`), respondability, restart repair support and
     late responses. The mailbox is **tool-agnostic**: every entry is keyed by `toolCallId`, the response is
