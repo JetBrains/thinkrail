@@ -219,7 +219,9 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   nothing, and a `ResizeObserver` on the active root drops both marks when that root unmounts, hides or
   collapses. It also remembers the last element focused inside each root (a `WeakMap`; the root itself
   is never remembered). The regions and the landing rule are [[submodule-web-shell-layout]]'s
-  (*Arrangement and accessibility*); the muting is [COLOR.md](../styles/COLOR.md)'s. `F6` / `Shift+F6`
+  (*Arrangement and accessibility*); the muting is [COLOR.md](../styles/COLOR.md)'s. `applyRegionDimming`
+  applies the store's `dimInactivePanels` to the same root (`data-region-dim="off"`), which is the only
+  thing that stops the scrim; the tracker, the marks and the chords are untouched either way. `F6` / `Shift+F6`
   walk the ring of shown regions — top bar, Project Home pane, left groups top to bottom, center groups
   in `Ctrl+F6` order, right groups top to bottom, bottom groups left to right — from the active region;
   with none active, `F6` starts at the top bar and `Shift+F6` at the last. `Mod+1…9` land in center

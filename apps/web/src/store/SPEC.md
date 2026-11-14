@@ -590,6 +590,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   **`questionPanelHeight`** (an invalid or absent value reads as the contracts default),
   **`chatLineWidth` / `fileLineWidth`**, their independent **`chatLineWidthBounded` /
   `fileLineWidthBounded`** switches, **`voiceInputEnabled`** (absent from an older host reads as on),
+  **`dimInactivePanels`** (absent from an older host reads as on, the muted default),
   **`customLayoutPresets: LayoutPreset[]`**,
   optional **`defaultModel: WireModel` / `defaultEffort: ThinkingLevel`** for new chats, the picker's
   **`favoriteModels` / `recentModels: WireModel[]`** (defaulting to `[]` so a pre-v77 host reads as "none"),

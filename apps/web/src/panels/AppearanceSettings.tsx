@@ -7,6 +7,7 @@ import {
 } from "@remixicon/react";
 import {
 	type AppConfigUpdate,
+	DIM_INACTIVE_PANELS_PROTOCOL_VERSION,
 	type SystemThemePair,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	type ThemeId,
@@ -47,6 +48,7 @@ import { useFolderActions } from "./SettingsFolder";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
 import { SettingsNotice } from "./SettingsNotice";
 import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
+import { SettingsSwitch } from "./SettingsSwitch";
 
 type Appearance = ThemeDescriptor["appearance"];
 type Contrast = ThemeDescriptor["contrast"];
@@ -476,7 +478,38 @@ export function AppearanceSettings() {
 				<LineWidthControl kind="file" />
 				<MarkdownOutlineSideRow />
 			</SettingsGroup>
+			{protocolVersion !== null && protocolVersion >= DIM_INACTIVE_PANELS_PROTOCOL_VERSION ? (
+				<SettingsGroup title={t("settings.appearance.panelsGroup")}>
+					<DimInactivePanelsRow />
+				</SettingsGroup>
+			) : null}
 		</SettingsPageContainer>
+	);
+}
+
+function DimInactivePanelsRow() {
+	const t = useT();
+	const dim = useAppStore((state) => state.dimInactivePanels);
+	const setDim = (next: boolean) => {
+		getTransport()
+			.request("settings.update", { config: { dimInactivePanels: next } })
+			.catch((err: unknown) =>
+				toast.error(errorText(err), t("settings.appearance.dimInactivePanels.failed")),
+			);
+	};
+	return (
+		<SettingsRow
+			label={t("settings.appearance.dimInactivePanels")}
+			description={t("settings.appearance.dimInactivePanels.description")}
+			control={
+				<SettingsSwitch
+					checked={dim}
+					label={t("settings.appearance.dimInactivePanels")}
+					testId="dim-inactive-panels-toggle"
+					onChange={(next) => void setDim(next)}
+				/>
+			}
+		/>
 	);
 }
 

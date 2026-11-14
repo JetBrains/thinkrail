@@ -1058,7 +1058,11 @@ a project picker, the prompt hero, and the reused
   reaches the page in WKWebView, WebKitGTK and WebView2 is unconfirmed; **Choose files…** is the path that
   never depends on it. An **Editor** group hosts the file
   `LineWidthControl` and a **Markdown outline position** segmented control (Left / Right) over the store's
-  client-local `markdownOutlineSide`, applied at once with no host round trip); **`LineWidthControl({kind})`** (`LineWidthSettings.tsx`, no page of its own — the
+  client-local `markdownOutlineSide`, applied at once with no host round trip); a **Panels** group (from
+  `DIM_INACTIVE_PANELS_PROTOCOL_VERSION`) holds one **Dim inactive panels** switch over
+  `AppConfig.dimInactivePanels` — off leaves every panel at full contrast instead of muting the panels
+  without the keyboard focus, and the switch converges on `settings.changed` like the rest of the page;
+  **`LineWidthControl({kind})`** (`LineWidthSettings.tsx`, no page of its own — the
   `chat` control sits in Chat, the `file` one in Appearance → Editor — a 40–240 integer **Line width** field
   on the auto-save input pattern plus an independent host-synchronized **Fit to pane** switch
   (`${kind}-line-width-bounded`); defaults are 80 (chat) / 120 (file), Fit to pane on. A changed authoritative width from

@@ -232,3 +232,36 @@ test("the palette lists the focus commands with their chords and runs them after
 	await expect(palette).toBeHidden();
 	await expect(terminalInput(page)).toBeFocused();
 });
+
+test("the Appearance switch drops the veil over the regions without the keyboard focus", async ({
+	page,
+}) => {
+	await openChatWorkbench(page);
+	const topbar = page.locator('[data-region-kind="topbar"]');
+	const center = page.locator('[data-region-kind="center"]');
+	const composer = page.getByTestId("chat-input");
+	expect(await veil(topbar)).toBe('""');
+
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-appearance").click();
+	const toggle = page.getByTestId("dim-inactive-panels-toggle");
+	await expect(toggle).toHaveAttribute("data-active", "true");
+
+	await toggle.click();
+	await expect(toggle).toHaveAttribute("data-active", "false");
+	await expect(page.locator("html")).toHaveAttribute("data-region-dim", "off");
+	await page.keyboard.press("Escape");
+	await composer.focus();
+	await expect(center).toHaveAttribute("data-region-active", "");
+	expect(await veil(topbar)).toBe("none");
+
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-appearance").click();
+	await toggle.click();
+	await expect(toggle).toHaveAttribute("data-active", "true");
+	await expect(page.locator("html")).not.toHaveAttribute("data-region-dim");
+	await page.keyboard.press("Escape");
+	await composer.focus();
+	await expect(center).toHaveAttribute("data-region-active", "");
+	expect(await veil(topbar)).toBe('""');
+});

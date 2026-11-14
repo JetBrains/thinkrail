@@ -4368,6 +4368,15 @@ test("applyConfig projects the voice input switch and reads an absent one as on"
 	expect(useAppStore.getState().voiceInputEnabled).toBe(true);
 });
 
+test("applyConfig projects the inactive-panel switch and reads an absent one as dimmed", () => {
+	useAppStore.getState().applyConfig({ ...DEFAULT_CONFIG, dimInactivePanels: false });
+	expect(useAppStore.getState().dimInactivePanels).toBe(false);
+	const older = { ...DEFAULT_CONFIG };
+	Reflect.deleteProperty(older, "dimInactivePanels");
+	useAppStore.getState().applyConfig(older);
+	expect(useAppStore.getState().dimInactivePanels).toBe(true);
+});
+
 test("applyConfig projects the host-wide subagent default", () => {
 	useAppStore.getState().applyConfig({
 		...DEFAULT_CONFIG,

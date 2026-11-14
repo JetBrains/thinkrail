@@ -1517,6 +1517,8 @@ export interface AppConfig extends ThemePreference {
 	fileLineWidthBounded: boolean;
 	/** When false, no text field shows the dictation mic and the chord does nothing. */
 	voiceInputEnabled: boolean;
+	/** When false, panels without the keyboard focus keep full contrast instead of being muted. */
+	dimInactivePanels: boolean;
 	customLayoutPresets: LayoutPreset[];
 	/** The model new chats start with; unset uses the first available model. */
 	defaultModel?: WireModel;
@@ -1901,6 +1903,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	chatLineWidthBounded: true,
 	fileLineWidthBounded: true,
 	voiceInputEnabled: true,
+	dimInactivePanels: true,
 	customLayoutPresets: [],
 	favoriteModels: [],
 	recentModels: [],
