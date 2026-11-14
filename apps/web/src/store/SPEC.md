@@ -252,7 +252,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   labels or a still-queued open, but cannot recreate a locally closed placement or steal focus.
   **The durable-title fold** routes
   `session_info_changed` through the same one-home chat-label mutation already used by extension-UI
-  `setTitle`: normalize an absent name to the empty untitled name (worded at render by `lib`'s
+  `setTitle`; each caller first folds an absent name to the empty untitled name (worded at render by `lib`'s
   `chatDisplayName`, as `selectChatTitle` does; `selectChatName` returns the stored name, and
   `workspaceName(t, ws)` words the host-named default workspace); update the cached `ChatTab` and the same
   session's `PlanTab` (each with its existing local placement and any queued open, matched by resource

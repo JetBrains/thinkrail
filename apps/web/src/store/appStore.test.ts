@@ -2036,10 +2036,14 @@ test("setTitle without a string title falls back to the untitled name", () => {
 	const store = useAppStore.getState();
 	const cacheId = chatTabId("ws1", "a");
 	store.openChatSession("ws1", "a", null, "medium");
-	store.applyExtUi({ id: "title-0", sessionId: "a", kind: "setTitle", title: "Migration plan" });
 
-	for (const title of [undefined, null]) {
-		// Extensions are loaded without a type check, so the wire frame can omit the title.
+	for (const title of [undefined, null, 42]) {
+		store.applyExtUi({
+			id: `named-${title}`,
+			sessionId: "a",
+			kind: "setTitle",
+			title: "Migration plan",
+		});
 		store.applyExtUi({ id: `title-${title}`, sessionId: "a", kind: "setTitle", title } as never);
 		const tab = useAppStore.getState().tabsByWorkspace.ws1?.find((t) => t.id === cacheId);
 		expect(tab?.name).toBe("");

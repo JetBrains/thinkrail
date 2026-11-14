@@ -4722,11 +4722,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	applyExtUi: (request) =>
 		set((s): Partial<AppState> => {
 			if (request.kind === "setTitle") {
-				// pi loads extensions untyped, so `ctx.ui.setTitle(undefined | null)` reaches the
-				// wire as a missing title; fold it to the empty untitled name like session_info_changed.
 				const title = typeof request.title === "string" ? request.title : "";
-				const normalized = title === request.title ? request : { ...request, title };
-				return renameChat(s, normalized.sessionId, title) ?? bufferExtUiOrphan(s, normalized);
+				return renameChat(s, request.sessionId, title) ?? bufferExtUiOrphan(s, request);
 			}
 			if (!s.sessions[request.sessionId]) return bufferExtUiOrphan(s, request);
 			return withRuntime(s, request.sessionId, (rt) => reduceExtUi(rt, request));
