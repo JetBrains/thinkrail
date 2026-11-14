@@ -122,6 +122,13 @@ test("configured worktree directory cannot nest under an existing managed worksp
 	await expect(createWorkspace("p1")).rejects.toThrow("already open in ThinkRail");
 });
 
+test("configured worktree directory may live inside the Default workspace", async () => {
+	await listWorkspaces("p1");
+	setWorktreeDirectoryResolver(() => repo);
+	const ws = await createWorkspace("p1");
+	expect(ws.worktreePath).toBe(join(repo, "repo", ws.branch));
+});
+
 test("createWorkspace cuts a fresh branch from baseRef and records it as the base", async () => {
 	git(repo, "branch", "feature/base");
 	git(repo, "switch", "feature/base");

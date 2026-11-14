@@ -314,7 +314,8 @@ export function managedPathOwned(path: string, opts: { excludeCreationId?: strin
 	return (
 		loadWorkspaces().some(
 			(workspace) =>
-				contains(workspace.worktreePath, wanted) || contains(wanted, workspace.worktreePath),
+				contains(wanted, workspace.worktreePath) ||
+				(workspace.kind === undefined && contains(workspace.worktreePath, wanted)),
 		) ||
 		loadProjects().some((project) => contains(wanted, project.path)) ||
 		creationRecords().some(
