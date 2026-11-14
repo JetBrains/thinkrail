@@ -53,10 +53,10 @@ import {
 } from "../store";
 import { getTransport } from "../transport";
 import {
-	artifactRestorer,
 	discardArtifact,
 	mentionArtifact,
 	openArtifact,
+	restoreDeletedArtifact,
 	revealArtifact,
 	selectArtifactMentionTarget,
 } from "./artifactActions";
@@ -125,6 +125,10 @@ export function ArtifactsPanel({
 	);
 	const requestRemoval: RequestRemoval = (path, kept) => setRemoval({ path, kept, open: true });
 	const openKept = (path: string) => void openFileInTab(workspaceId, path, "keep");
+	const openArtifactKept = (path: string) => {
+		const artifact = snapshot?.artifacts.find((entry) => entry.path === path);
+		if (artifact) void openArtifact(workspaceId, artifact, "keep");
+	};
 
 	if (unsupported) {
 		return (
@@ -219,7 +223,7 @@ export function ArtifactsPanel({
 								title={t("panels.artifacts.sectionArtifacts")}
 								label={t("panels.artifacts.artifactsTree")}
 								count={rows.artifacts.length}
-								onOpenKept={openKept}
+								onOpenKept={openArtifactKept}
 							>
 								{rows.artifacts.map((row) => (
 									<ArtifactRowView
@@ -394,11 +398,9 @@ function ArtifactRowView({
 		onRename: (_target, next) => void renameEntry(workspaceId, artifact.path, next),
 	});
 	const Icon = artifactIcon(row);
-	const [restorer] = useState(() => artifactRestorer(workspaceId));
-	const restore = () => restorer(artifact);
-	const open = (intent: "preview" | "keep") =>
-		void openArtifact(workspaceId, artifact.path, intent, deleted ? restore : undefined);
-	const treeItem = useTreeItem(artifact.path, { level: 1, label: name, openKept: !deleted });
+	const restore = () => void restoreDeletedArtifact(workspaceId, artifact);
+	const open = (intent: "preview" | "keep") => void openArtifact(workspaceId, artifact, intent);
+	const treeItem = useTreeItem(artifact.path, { level: 1, label: name, openKept: true });
 	const detail =
 		taskSpecStatus !== null
 			? t("panels.artifacts.taskSpec", { status: taskSpecStatus || "—" })
@@ -415,7 +417,7 @@ function ArtifactRowView({
 			<EntryMenu
 				workspaceId={workspaceId}
 				path={artifact.path}
-				onRestore={deleted ? () => void restore() : undefined}
+				onRestore={deleted ? restore : undefined}
 				sessionId={artifact.sessionId}
 				onRename={start}
 				onRemove={(path) => onRemove(path, deleted)}
@@ -473,7 +475,7 @@ function ArtifactRowView({
 											type="button"
 											data-testid="artifact-restore"
 											{...treeRowControlProps}
-											onClick={() => void restore()}
+											onClick={restore}
 											className="shrink-0 text-primary hover:underline"
 										>
 											{t("panels.artifacts.restore")}

@@ -21,7 +21,7 @@ mock.module("../transport", () => ({
 }));
 
 const { useAppStore } = await import("../store");
-const { artifactRestorer, openArtifact, restoreArtifact } = await import("./artifactActions");
+const { openArtifact, restoreDeletedArtifact } = await import("./artifactActions");
 const initial = useAppStore.getInitialState();
 const PATH = ".thinkrail/context/report.md";
 const deleted = (deletedAt = 1): WorkspaceArtifact => ({
@@ -42,7 +42,7 @@ beforeEach(() => {
 afterAll(() => useAppStore.setState(initial, true));
 
 test("opening a deleted artifact restores it before reading it", async () => {
-	void openArtifact("w1", PATH, "preview", () => restoreArtifact("w1", PATH));
+	void openArtifact("w1", deleted(), "preview");
 	await settle();
 	expect(requests).toEqual(["artifacts.restore", "fs.readFile"]);
 	expect(useAppStore.getState().toasts).toEqual([]);
@@ -50,7 +50,7 @@ test("opening a deleted artifact restores it before reading it", async () => {
 
 test("a deleted artifact whose path is taken again opens nothing and says why", async () => {
 	restoreFailure = "ENTRY_EXISTS";
-	await openArtifact("w1", PATH, "keep", () => restoreArtifact("w1", PATH));
+	await openArtifact("w2", deleted(), "keep");
 	expect(requests).toEqual(["artifacts.restore"]);
 	expect(useAppStore.getState().toasts).toEqual([
 		expect.objectContaining({
@@ -66,14 +66,14 @@ test("a click made while a deleted artifact restores keeps its place: the restor
 	restoreGate = new Promise((resolve) => {
 		release = resolve;
 	});
-	useAppStore.getState().setLayoutAttention("w1", {
+	useAppStore.getState().setLayoutAttention("w3", {
 		selectedByGroup: {},
 		lastFocusedCenterGroupId: "center",
 		lastFocusedSideGroupId: {},
 		navigationClockByGroup: { center: 0 },
 	});
-	const opened = openArtifact("w1", PATH, "preview", () => restoreArtifact("w1", PATH));
-	useAppStore.getState().beginCenterNavigation("w1");
+	const opened = openArtifact("w3", deleted(), "preview");
+	useAppStore.getState().beginCenterNavigation("w3");
 	release();
 	await opened;
 	expect(requests).toEqual(["artifacts.restore"]);
@@ -84,7 +84,7 @@ test("a row asks for one restore per deletion, in flight or done, however often 
 	restoreGate = new Promise((resolve) => {
 		release = resolve;
 	});
-	const restore = artifactRestorer("w1");
+	const restore = (artifact: WorkspaceArtifact) => restoreDeletedArtifact("w4", artifact);
 	const first = restore(deleted());
 	expect(restore(deleted())).toBe(first);
 	release();
@@ -98,7 +98,7 @@ test("a row asks for one restore per deletion, in flight or done, however often 
 
 test("a failed restore is asked again on the next open", async () => {
 	restoreFailure = "ARTIFACT_UNKNOWN";
-	const restore = artifactRestorer("w1");
+	const restore = (artifact: WorkspaceArtifact) => restoreDeletedArtifact("w5", artifact);
 	const record = deleted();
 	expect(await restore(record)).toBe(false);
 	restoreFailure = null;

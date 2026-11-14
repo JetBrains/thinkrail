@@ -2264,8 +2264,9 @@ own section. The kebab menu (`plan-menu`, a
   marks `deleted` reads "Deleted, not by you" with Restore. Opening it — a click or a double click on its
   name — restores it silently first (`artifactActions.openArtifact`): opening a file asks for its contents, so
   the restore is implied. The click's center navigation is stamped before the restore, as any async open
-  stamps it at request time, so a click elsewhere while the restore runs keeps its tab. A row (`artifactRestorer`, shared by opening and both Restore controls) reuses its
-  restore, in flight or done, for as long as it shows the same deletion — a deleted row's `changedAt` is
+  stamps it at request time, so a click elsewhere while the restore runs keeps its tab. A row's restore (`restoreDeletedArtifact`, kept per workspace and path for the page's
+  life and shared by a click, `Mod+Enter` and both Restore controls) is reused, in flight or done, for as long
+  as the row shows the same deletion — a deleted row's `changedAt` is
   when the host saw it gone, while a list refresh only replaces the object: a double click, a click in the
   gap before the live snapshot, or a refresh in between never asks again (the host would refuse a row that
   is already live), while a row deleted again right after its restore shows a newer deletion and gets a
@@ -2608,15 +2609,16 @@ menu has closed, because a closing menu returns focus to its row; disabled
     row label's prefix (a ~500 ms buffer; Space joins only a live buffer, otherwise it activates). Letters
     belong to a focused tree, so the Changes review's `V`/`J`/`N` do not fire from a focused Changes row.
     Enter is the button's own click; `Mod+Enter` is the row's double-click — Files, Specs and Artifacts open
-    kept, Changes opens its kept diff with `claimPreview`; rows without a double-click treat it as Enter.
+    kept (a deleted artifact restores first), Changes opens its kept diff with `claimPreview`; rows without a double-click treat it as Enter.
   - **Row keys live in each row**, through `treeRowKey`: Shift+F10 / the Menu key open the row's menu
     (context-menu rows through `openContextMenuFromKeyboard`, dropdown rows through `isContextMenuKey`,
     after which the menu returns focus to the row); **Delete** opens the menu's own confirmation (file,
     Remove workspace except on Default, Delete chat — a pending deletion retries directly —, Close project,
     an artifact's or ignored output's Delete — a deleted artifact discards its kept copy; nothing on Changes
     and Specs rows); **F2** renames a project, managed workspace or artifact where the
-    menu offers Rename (chats and ignored outputs have no rename). A pending chat and a deleted artifact stay
-    focusable (`aria-disabled`) so their Retry / Restore is reachable.
+    menu offers Rename (chats and ignored outputs have no rename). A pending chat stays
+    focusable (`aria-disabled`) so its Retry is reachable; a deleted artifact's name is enabled, since opening
+    it restores it.
   - **Inner row buttons leave the Tab order and the accessibility tree** (`treeRowControlProps`:
     `tabIndex=-1` and `aria-hidden` — a `tree` may own only treeitems, and these are pointer duplicates:
     chevrons, kebabs, Settle / Keep active, the project's Create workspace `+`, a creation's retry /

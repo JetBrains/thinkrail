@@ -197,7 +197,7 @@ test("deleting an artifact from the keyboard focuses the next artifact", async (
 	await expect(open("c.md")).toBeFocused();
 });
 
-test("opening a deleted artifact restores it, once on a double click, and a failed restore opens nothing", async ({
+test("opening a deleted artifact restores it, once on a double click or Mod+Enter, and a failed restore opens nothing", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -205,11 +205,11 @@ test("opening a deleted artifact restores it, once on a double click, and a fail
 	const root = workspace.worktreePath;
 	writeArtifact(root, "report.md", "# Report\n");
 	writeArtifact(root, "notes.md", "notes\n");
+	writeArtifact(root, "plan.md", "plan\n");
 	await showArtifacts(page);
-	await expect(artifact(page, "notes.md")).toBeVisible();
-	rmSync(join(root, CONTEXT, "report.md"));
-	rmSync(join(root, CONTEXT, "notes.md"));
-	for (const name of ["report.md", "notes.md"]) {
+	await expect(artifact(page, "plan.md")).toBeVisible();
+	for (const name of ["report.md", "notes.md", "plan.md"]) rmSync(join(root, CONTEXT, name));
+	for (const name of ["report.md", "notes.md", "plan.md"]) {
 		await expect(artifact(page, name)).toHaveAttribute("data-state", "deleted", {
 			timeout: 10_000,
 		});
@@ -222,6 +222,11 @@ test("opening a deleted artifact restores it, once on a double click, and a fail
 	await expect(fileTab("report.md")).toHaveAttribute("data-preview", "false");
 	expect(readFileSync(join(root, CONTEXT, "report.md"), "utf8")).toBe("# Report\n");
 	await expect(page.getByTestId("toast")).toHaveCount(0);
+
+	await artifact(page, "plan.md").getByTestId("artifact-open").focus();
+	await page.keyboard.press("ControlOrMeta+Enter");
+	await expect(artifact(page, "plan.md")).toHaveAttribute("data-state", "live");
+	await expect(fileTab("plan.md")).toHaveAttribute("data-preview", "false");
 
 	rmSync(join(E2E_DATA_DIR, "artifacts", workspace.id, "kept"), { recursive: true });
 	await artifact(page, "notes.md").getByTestId("artifact-open").click();
