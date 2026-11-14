@@ -2261,10 +2261,12 @@ own section. The kebab menu (`plan-menu`, a
   expandable through `fs.readDir`, with its file count), hidden by the header's eye toggle. A row the host
   marks `deleted` reads "Deleted, not by you" with Restore. Opening it — a click or a double click on its
   name — restores it silently first (`artifactActions.openArtifact`): opening a file asks for its contents, so
-  the restore is implied. A row runs one restore at a time and reuses it until the host's snapshot shows the
-  row live, so a double click, or a click in the gap before that snapshot, never asks again (the host would
-  refuse a row that is already live). A failed restore opens nothing — not even a new file that has since
-  taken the path — and Restore's error toast says why. The panel
+  the restore is implied. A row (`artifactRestorer`, shared by opening and both Restore controls) reuses its
+  restore while it is in flight and, once done, until a newer snapshot of the row arrives: a double click, or
+  a click in the gap before that snapshot, never asks again (the host would refuse a row that is already
+  live), while a row deleted again right after its restore gets a fresh one. A failed restore is dropped at
+  once and opens nothing — not even a new file that has since taken the path — and Restore's error toast
+  says why. The panel
   **opens on This chat**: the attended chat's artifacts (`selectArtifactMentionTarget`), following it as the
   center switches chats; with no chat attended it shows all, and All chats is a click away but not
   remembered across mounts. Unattributed artifacts belong to no chat. Whenever the filter hides rows, a

@@ -1,3 +1,4 @@
+import type { WorkspaceArtifact } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { fileName } from "../lib";
 import { selectAttentionCenterTab, toast, useAppStore } from "../store";
@@ -41,6 +42,33 @@ export async function restoreArtifact(workspaceId: string, path: string): Promis
 		);
 		return false;
 	}
+}
+
+interface PendingRestore {
+	restore: Promise<boolean>;
+	from: WorkspaceArtifact;
+	settled: boolean;
+}
+
+export function artifactRestorer(
+	workspaceId: string,
+): (artifact: WorkspaceArtifact) => Promise<boolean> {
+	let pending: PendingRestore | null = null;
+	return (artifact) => {
+		if (pending && !(pending.settled && pending.from !== artifact)) return pending.restore;
+		const entry: PendingRestore = {
+			restore: Promise.resolve(false),
+			from: artifact,
+			settled: false,
+		};
+		entry.restore = restoreArtifact(workspaceId, artifact.path).then((restored) => {
+			entry.settled = true;
+			if (!restored && pending === entry) pending = null;
+			return restored;
+		});
+		pending = entry;
+		return entry.restore;
+	};
 }
 
 export async function openArtifact(

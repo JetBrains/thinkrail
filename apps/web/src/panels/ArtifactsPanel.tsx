@@ -44,10 +44,10 @@ import {
 } from "../store";
 import { getTransport } from "../transport";
 import {
+	artifactRestorer,
 	discardArtifact,
 	mentionArtifact,
 	openArtifact,
-	restoreArtifact,
 	revealArtifact,
 	selectArtifactMentionTarget,
 } from "./artifactActions";
@@ -364,7 +364,8 @@ function ArtifactRowView({
 		onRename: (_target, next) => void renameEntry(workspaceId, artifact.path, next),
 	});
 	const Icon = artifactIcon(row);
-	const restore = useRowRestore(workspaceId, artifact.path, deleted);
+	const [restorer] = useState(() => artifactRestorer(workspaceId));
+	const restore = () => restorer(artifact);
 	const open = (intent: "preview" | "keep") =>
 		void openArtifact(workspaceId, artifact.path, intent, deleted ? restore : undefined);
 	const detail =
@@ -561,26 +562,6 @@ function OutputNode({
 			) : null}
 		</>
 	);
-}
-
-function useRowRestore(
-	workspaceId: string,
-	path: string,
-	deleted: boolean,
-): () => Promise<boolean> {
-	const pending = useRef<Promise<boolean> | null>(null);
-	useEffect(() => {
-		if (!deleted) pending.current = null;
-	}, [deleted]);
-	return () => {
-		if (pending.current) return pending.current;
-		const restore = restoreArtifact(workspaceId, path).then((restored) => {
-			if (!restored && pending.current === restore) pending.current = null;
-			return restored;
-		});
-		pending.current = restore;
-		return restore;
-	};
 }
 
 function EntryMenu({
