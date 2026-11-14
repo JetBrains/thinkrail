@@ -7,7 +7,7 @@ import {
 	RiHeading,
 } from "@remixicon/react";
 import { currentTranslator } from "@thinkrail/locales/react";
-import { EMPTY_LEARNING, recordPick } from "./learning";
+import { EMPTY_LEARNING, recordPick, recordVisit } from "./learning";
 import type { PaletteItem } from "./model";
 import { parseSearchQuery } from "./query";
 import { askEligible, buildSections, flattenRows, startEligible, startPrompt } from "./sections";
@@ -112,6 +112,23 @@ describe("buildSections", () => {
 		const ids = rows.map((row) => row.item.id);
 		expect(new Set(ids).size).toBe(ids.length);
 		expect(ids).toContain("command:theme");
+	});
+
+	test("Recent lists where the user was by any route, newest first, never the place they are in now", () => {
+		let learning = recordPick(EMPTY_LEARNING, "", "command:theme", 1);
+		learning = recordVisit(learning, ["chat:x1", "workspace:w1"], 2);
+		learning = recordVisit(learning, ["workspace:w2"], 3);
+		learning = recordVisit(learning, ["chat:x2", "workspace:w1"], 4);
+		const recent = (currentPlaces: readonly string[]) =>
+			sections("", { learning, currentPlaces })
+				.find((section) => section.id === "recent")
+				?.items.map((row) => row.item.id);
+		expect(recent([])).toEqual(["chat:x2", "workspace:w2", "chat:x1", "command:theme"]);
+		expect(recent(["chat:x2", "workspace:w1"])).toEqual([
+			"workspace:w2",
+			"chat:x1",
+			"command:theme",
+		]);
 	});
 
 	test("a bare prefix lists its scope grouped, without the empty-state sections", () => {

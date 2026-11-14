@@ -6,8 +6,10 @@ import {
 	EMPTY_LEARNING,
 	type LearningSnapshot,
 	parseLearning,
+	recordVisit,
 	serializeLearning,
 } from "./learning";
+import { currentPlaceIds, type PlaceState, samePlaceState } from "./places";
 
 export const DOUBLE_SHIFT_PREFERENCE_KEY = "search-double-shift";
 export const PREVIEW_PREFERENCE_KEY = "search-preview";
@@ -75,7 +77,20 @@ export function initSearchPreferences(): () => void {
 	const storedDoubleShift = preferences.read(DOUBLE_SHIFT_PREFERENCE_KEY);
 	useAppStore.getState().setDoubleShiftSearch(storedDoubleShift !== "0");
 	let previous = useAppStore.getState().doubleShiftSearch;
+	let placeState: PlaceState | null = null;
+	let place = "";
+	const notePlace = (state: PlaceState) => {
+		if (placeState && samePlaceState(state, placeState)) return;
+		placeState = state;
+		const ids = currentPlaceIds(state);
+		const next = ids[0] ?? "";
+		if (next === place) return;
+		place = next;
+		if (next) writeLearning(recordVisit(learning, ids, Date.now()));
+	};
+	notePlace(useAppStore.getState());
 	return useAppStore.subscribe((state) => {
+		notePlace(state);
 		if (state.doubleShiftSearch === previous) return;
 		previous = state.doubleShiftSearch;
 		preferences.write(DOUBLE_SHIFT_PREFERENCE_KEY, previous ? "1" : "0");

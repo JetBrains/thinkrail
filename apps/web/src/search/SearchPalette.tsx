@@ -59,6 +59,7 @@ import type {
 	PaletteSection,
 	PaletteStart,
 } from "./model";
+import { currentPlaceIds } from "./places";
 import { readLearning, readPreviewOpen, writeLearning, writePreviewOpen } from "./preferences";
 import {
 	parseSearchQuery,
@@ -161,6 +162,7 @@ function PaletteContent({
 	const generation = useAppStore((s) => s.welcomeGeneration);
 	const [learning, setLearning] = useState(readLearning);
 	const [nowMs] = useState(Date.now);
+	const [currentPlaces] = useState(() => currentPlaceIds(useAppStore.getState()));
 	const inputRef = useRef<HTMLInputElement>(null);
 	const listRef = useRef<HTMLDivElement>(null);
 	const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -239,6 +241,7 @@ function PaletteContent({
 				learning,
 				nowMs,
 				keep: selectedId,
+				currentPlaces,
 			}),
 		[
 			ranked,
@@ -254,6 +257,7 @@ function PaletteContent({
 			learning,
 			nowMs,
 			selectedId,
+			currentPlaces,
 		],
 	);
 	const rows = useMemo(() => flattenRows(sections), [sections]);
@@ -295,7 +299,7 @@ function PaletteContent({
 	};
 
 	const remember = (item: PaletteItem) => {
-		const next = recordPick(learning, parsed.text, item.id, Date.now());
+		const next = recordPick(readLearning(), parsed.text, item.id, Date.now());
 		setLearning(next);
 		writeLearning(next);
 	};
