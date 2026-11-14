@@ -59,6 +59,10 @@ export function toggleActiveVimMode(): void {
 	activeToggle?.();
 }
 
+function positionKey(position: IPosition): number {
+	return position.lineNumber * 1_000_000 + position.column;
+}
+
 function isWordCharacter(value: string | undefined): boolean {
 	return value !== undefined && /[A-Za-z0-9_]/u.test(value);
 }
@@ -305,28 +309,39 @@ export function createVimController(
 			return;
 		}
 		if (state.visualMode === "block") {
+			const model = codeEditor.getModel();
 			const startLine = Math.min(anchor.lineNumber, position.lineNumber);
 			const endLine = Math.max(anchor.lineNumber, position.lineNumber);
 			const startColumn = Math.min(anchor.column, position.column);
 			const endColumn = Math.max(anchor.column, position.column);
+			const endColumnExclusive = model
+				? Math.min(model.getLineMaxColumn(endLine), endColumn + 1)
+				: endColumn + 1;
 			const selections: ISelection[] = [];
 			for (let line = startLine; line <= endLine; line += 1) {
 				selections.push({
 					selectionStartLineNumber: line,
 					selectionStartColumn: startColumn,
 					positionLineNumber: line,
-					positionColumn: endColumn,
+					positionColumn: endColumnExclusive,
 				});
 			}
 			codeEditor.setSelections(selections);
 			codeEditor.revealPositionInCenter(position);
 			return;
 		}
+		const model = codeEditor.getModel();
+		const anchorIsBefore = positionKey(anchor) <= positionKey(position);
+		const start = anchorIsBefore ? anchor : position;
+		const end = anchorIsBefore ? position : anchor;
+		const endColumnExclusive = model
+			? Math.min(model.getLineMaxColumn(end.lineNumber), end.column + 1)
+			: end.column + 1;
 		codeEditor.setSelection({
-			selectionStartLineNumber: anchor.lineNumber,
-			selectionStartColumn: anchor.column,
-			positionLineNumber: position.lineNumber,
-			positionColumn: position.column,
+			selectionStartLineNumber: start.lineNumber,
+			selectionStartColumn: start.column,
+			positionLineNumber: end.lineNumber,
+			positionColumn: endColumnExclusive,
 		});
 		codeEditor.revealPositionInCenter(position);
 	};
