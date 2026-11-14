@@ -46,6 +46,7 @@ import { getTransport } from "../transport";
 import {
 	discardArtifact,
 	mentionArtifact,
+	openArtifact,
 	restoreArtifact,
 	revealArtifact,
 	selectArtifactMentionTarget,
@@ -364,12 +365,8 @@ function ArtifactRowView({
 	});
 	const Icon = artifactIcon(row);
 	const restore = useRowRestore(workspaceId, artifact.path, deleted);
-	const open = (intent: "preview" | "keep") => {
-		if (!deleted) return void openFileInTab(workspaceId, artifact.path, intent);
-		void restore().then((restored) => {
-			if (restored) void openFileInTab(workspaceId, artifact.path, intent);
-		});
-	};
+	const open = (intent: "preview" | "keep") =>
+		void openArtifact(workspaceId, artifact.path, intent, deleted ? restore : undefined);
 	const detail =
 		taskSpecStatus !== null
 			? t("panels.artifacts.taskSpec", { status: taskSpecStatus || "—" })

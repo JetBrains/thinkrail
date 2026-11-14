@@ -9,6 +9,7 @@ import {
 	openWorkspaceChat,
 	revealWorkbenchTool,
 } from "./fixtures/app";
+import { E2E_DATA_DIR } from "./fixtures/paths";
 
 const CONTEXT = ".thinkrail/context";
 
@@ -194,4 +195,37 @@ test("deleting an artifact from the keyboard focuses the next artifact", async (
 	await page.getByTestId("artifact-delete-confirm").click();
 	await expect(artifact(page, "a.md")).toHaveCount(0);
 	await expect(open("c.md")).toBeFocused();
+});
+
+test("opening a deleted artifact restores it, once on a double click, and a failed restore opens nothing", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const root = workspace.worktreePath;
+	writeArtifact(root, "report.md", "# Report\n");
+	writeArtifact(root, "notes.md", "notes\n");
+	await showArtifacts(page);
+	await expect(artifact(page, "notes.md")).toBeVisible();
+	rmSync(join(root, CONTEXT, "report.md"));
+	rmSync(join(root, CONTEXT, "notes.md"));
+	for (const name of ["report.md", "notes.md"]) {
+		await expect(artifact(page, name)).toHaveAttribute("data-state", "deleted", {
+			timeout: 10_000,
+		});
+	}
+	const fileTab = (name: string) =>
+		page.locator('[data-testid="editor-tab"][data-kind="file"]').filter({ hasText: name });
+
+	await artifact(page, "report.md").getByTestId("artifact-open").dblclick();
+	await expect(artifact(page, "report.md")).toHaveAttribute("data-state", "live");
+	await expect(fileTab("report.md")).toHaveAttribute("data-preview", "false");
+	expect(readFileSync(join(root, CONTEXT, "report.md"), "utf8")).toBe("# Report\n");
+	await expect(page.getByTestId("toast")).toHaveCount(0);
+
+	rmSync(join(E2E_DATA_DIR, "artifacts", workspace.id, "kept"), { recursive: true });
+	await artifact(page, "notes.md").getByTestId("artifact-open").click();
+	await expect(page.getByTestId("toast").filter({ hasText: "Couldn't restore" })).toBeVisible();
+	await expect(fileTab("notes.md")).toHaveCount(0);
+	expect(existsSync(join(root, CONTEXT, "notes.md"))).toBe(false);
 });

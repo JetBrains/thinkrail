@@ -3,6 +3,7 @@ import { fileName } from "../lib";
 import { selectAttentionCenterTab, toast, useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import { mentionText } from "./artifactsModel";
+import { openFileInTab } from "./openTabs";
 
 export function selectArtifactMentionTarget(
 	state: ReturnType<typeof useAppStore.getState>,
@@ -40,6 +41,16 @@ export async function restoreArtifact(workspaceId: string, path: string): Promis
 		);
 		return false;
 	}
+}
+
+export async function openArtifact(
+	workspaceId: string,
+	path: string,
+	intent: "preview" | "keep",
+	restoreFirst?: () => Promise<boolean>,
+): Promise<void> {
+	if (restoreFirst && !(await restoreFirst())) return;
+	await openFileInTab(workspaceId, path, intent);
 }
 
 export async function discardArtifact(workspaceId: string, path: string): Promise<void> {
