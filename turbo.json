@@ -1,7 +1,7 @@
 {
 	"$schema": "https://turbo.build/schema.json",
 	"globalPassThroughEnv": ["THINKRAIL_*", "PI_CODING_AGENT_DIR"],
-	"globalDependencies": ["patches/**"],
+	"globalDependencies": ["patches/**", "tsconfig.base.json"],
 	"tasks": {
 		"build": {
 			"dependsOn": ["^build"],
@@ -14,17 +14,20 @@
 			"cache": false,
 			"persistent": true
 		},
+		"transit": {
+			"dependsOn": ["^transit"]
+		},
 		"typecheck": {
 			"dependsOn": ["^typecheck"],
-			"outputs": [],
-			"cache": false
+			"outputs": []
 		},
 		"//#typecheck:root": {
 			"outputs": [],
 			"cache": false
 		},
 		"test": {
-			"cache": false
+			"dependsOn": ["transit"],
+			"outputs": []
 		},
 		"clean": {
 			"cache": false
