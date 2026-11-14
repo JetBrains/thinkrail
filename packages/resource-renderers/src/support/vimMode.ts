@@ -201,6 +201,7 @@ export function createVimController(
 	const onKeyDown = (event: IKeyboardEvent) => {
 		if (!state.enabled || event.browserEvent.isComposing) return;
 		const key = event.browserEvent.key;
+		const lowerKey = key.toLowerCase();
 		if (event.browserEvent.ctrlKey || event.browserEvent.metaKey || event.browserEvent.altKey) {
 			if (key !== "Escape") return;
 		}
@@ -253,7 +254,7 @@ export function createVimController(
 			return;
 		}
 
-		if (key === "n" && lastSearch) {
+		if (lowerKey === "n" && lastSearch) {
 			consume(event);
 			const repetitions = clampCount(count);
 			count = "";

@@ -156,7 +156,7 @@ describe("Vim mode", () => {
 		expect(fake.position).toEqual(position(2, 5));
 		fake.emit("n");
 		expect(fake.position).toEqual(position(3, 5));
-		fake.emit("n", true);
+		fake.emit("N", true);
 		expect(fake.position).toEqual(position(2, 5));
 		controller.dispose();
 	});
