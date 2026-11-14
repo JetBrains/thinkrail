@@ -231,6 +231,20 @@ describe("learning", () => {
 		expect(parseLearning(JSON.stringify({ version: 1, frecency: {} }), now).lastUsed).toEqual({});
 	});
 
+	test("picking the place the user already stands in keeps it one stamp, still learning the pick", () => {
+		const now = 9 * DAY;
+		const here = ["chat:c1", "workspace:w1"];
+		const inChat = recordVisit(EMPTY_LEARNING, here, now);
+		const picked = recordPick(inChat, "auth", "workspace:w1", now + 1, here);
+		expect(picked.lastUsed["workspace:w1"]).toBeUndefined();
+		expect(picked.lastUsed["chat:c1"]).toBe(now + 1);
+		expect(frecencyScore(picked, "workspace:w1", now + 1)).toBeCloseTo(1, 5);
+		expect(adaptiveCounts(picked, "auth", now + 1).get("workspace:w1")).toBeCloseTo(2, 5);
+		const elsewhere = recordPick(inChat, "", "workspace:w2", now + 1, here);
+		expect(elsewhere.lastUsed["workspace:w2"]).toBe(now + 1);
+		expect(elsewhere.lastUsed["chat:c1"]).toBe(now);
+	});
+
 	test("a query or id spelled like an object property survives a reload", () => {
 		const now = 3 * DAY;
 		let snapshot = recordPick(EMPTY_LEARNING, "__proto__", "command:chat.new", now);

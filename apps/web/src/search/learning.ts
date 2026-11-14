@@ -108,6 +108,7 @@ export function recordPick(
 	query: string,
 	id: string,
 	nowMs: number,
+	currentPlace: readonly string[] = [],
 ): LearningSnapshot {
 	if (!id || id.length > MAX_ID_LENGTH) return snapshot;
 	const today = day(nowMs);
@@ -130,7 +131,13 @@ export function recordPick(
 			Math.max(...Object.values(value).map((entry) => entry.day)),
 		);
 	}
-	return { version: 1, frecency, adaptive, lastUsed: stampUsed(snapshot.lastUsed, id, nowMs) };
+	const picked: LearningSnapshot = {
+		version: 1,
+		frecency,
+		adaptive,
+		lastUsed: stampUsed(snapshot.lastUsed, id, nowMs),
+	};
+	return currentPlace.includes(id) ? recordVisit(picked, currentPlace, nowMs) : picked;
 }
 
 function isAdaptiveEntry(value: unknown): value is AdaptiveEntry {
