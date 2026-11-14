@@ -107,6 +107,16 @@ function entryKind(root: string, dir: string, entry: Dirent): FileNode["kind"] {
 	}
 }
 
+export function worktreeEntryKind(root: string, path: string): FileNode["kind"] | null {
+	try {
+		const stats = statSync(resolveUnderRoot(root, path, true).real);
+		if (stats.isDirectory()) return "dir";
+		return stats.isFile() ? "file" : null;
+	} catch {
+		return null;
+	}
+}
+
 export function readDir(workspaceId: string, path: string): FileNode[] {
 	const { root, abs } = resolveInWorktree(workspaceId, path, true);
 

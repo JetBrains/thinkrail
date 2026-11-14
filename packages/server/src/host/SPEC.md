@@ -889,6 +889,20 @@ enabled/confirmed choice before entering analytics attribution.
   routes, `fonts`' `fontFileKind`/`saveUserFont` for `/fonts/`); Bun/Node.
 - **Forbidden:** being imported by any feature module; importing `web`/`cli`/`desktop`.
 
+- **Terminal link lookup is composed here (`terminalPaths.ts`).** The `terminal.resolvePaths` handler only
+  delegates. `resolveTerminalPaths` validates the wire's candidate list first (an array of at most
+  `MAX_TERMINAL_PATH_CANDIDATES` non-empty strings of at most `MAX_TERMINAL_PATH_LENGTH`), then asks
+  `terminal`'s `terminalCwds(id)` for the PTY's workspace (an unknown id is an error). `locateTerminalPaths`
+  expands a leading `~` / `~/` to the host's home, and only when some candidate is still relative runs the
+  lazy `cwds()` probe (a failing probe leaves the root; relative answers are ignored); the bases are those
+  directories then the worktree root. Every absolute path a candidate could mean goes through `workspaces`'
+  `matchWorkspacePaths` in one batch — the same ownership rule as `workspace.resolvePath`, so realpaths,
+  case folding, `.git` and the root itself are decided once for both — and a match counts only when the
+  terminal's own workspace owns it: a path in another workspace, a project opened inside the worktree
+  included, is out of scope rather than opened in the wrong one. `fs`' `worktreeEntryKind` then confirms it
+  exists under the root and says file or folder; the first base where it exists wins. Nothing here ensures,
+  creates or provisions a workspace. None of the three features imports another.
+
 - **Settled-lifecycle wiring (`settledLifecycle.ts`).** The host is where the three activity sources meet the
   `workspaces` writers: the normalized session-state publisher stamps `recordWorkspaceActivity(record.workspaceId)`
   whenever a record reports `execution: "running"` (a user prompt flips it, so both user and agent turns

@@ -21,6 +21,11 @@ import {
 	type TerminalDeliveryResult,
 } from "./outputBatcher";
 import { createOutputRecorder, type OutputRecorder } from "./outputRecorder";
+import {
+	createWorkingDirectoryCache,
+	processWorkingDirectories,
+	systemProcessTable,
+} from "./processCwd";
 import { terminalPtyEnv } from "./ptyEnv";
 import { nudgePtyRedraw, type PtyGrid, resizePtyIfChanged } from "./ptyGrid";
 import { terminalShell, terminalShellArgs, terminalShellStartFailure } from "./shellArgs";
@@ -85,6 +90,12 @@ const completions = createTerminalCompletionQueue((clientKey, channel, data) =>
 );
 
 const DEFAULT_PTY_SIZE = { cols: 80, rows: 24 } as const;
+const CWD_CACHE_MS = 1_000;
+
+const workingDirectories = createWorkingDirectoryCache({
+	ttlMs: CWD_CACHE_MS,
+	lookup: (pid) => processWorkingDirectories(pid, systemProcessTable()),
+});
 
 function replayBudgetChars(): number {
 	const configured = loadConfig().terminalReplayKb;
@@ -304,6 +315,15 @@ export function attachTerminal(
 	if (isNewTab) membershipChanged(workspaceId);
 	const replay = entry.recorder.snapshot();
 	return { id, created: true, ...(replay ? { replay } : {}) };
+}
+
+export function terminalCwds(
+	id: string,
+): { workspaceId: string; cwds: () => Promise<string[]> } | null {
+	const entry = terminals.get(id);
+	if (!entry) return null;
+	const { pid } = entry.pty;
+	return { workspaceId: entry.workspaceId, cwds: () => workingDirectories(pid) };
 }
 
 export function listTerminals(workspaceId: string): TerminalTabInfo[] {

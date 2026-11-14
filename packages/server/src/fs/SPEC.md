@@ -44,7 +44,11 @@ classification every content read in the host shares. Agent and review writes ar
   file `readFile` would serve, `"missing"` for anything it would refuse or cannot read as a file (an
   escape, `.git`, a directory, a gone, dangling or looping path), `null` when the stat failed otherwise
   (a permission error) — `host` injects it into the search palette's file hits so none leads to a read
-  that fails. This module owns the path safety; its callers own the streaming and the writing. **`workspaceRelativePath(root, path)`** is the one
+  that fails. **`worktreeEntryKind(root, path)`** is the same gate as an existence probe, also without a
+  workspace lookup: `"file"` or `"dir"` for what the path names after following its contained symlink chain,
+  `null` for anything `readFile`/`readDir` would refuse (an escape, `.git`) or that is missing or neither — the
+  terminal's link lookup (`terminal.resolvePaths`, composed by `host`) asks it whether a printed path its
+  workspace owns exists. This module owns the path safety; its callers own the streaming and the writing. **`workspaceRelativePath(root, path)`** is the one
   conversion from a native or absolute path to the wire's worktree-relative POSIX form (architecture
   Decision 22): resolved against the root, `null` when outside (a name such as `..env` is inside), `""` for
   the root itself. `reviews` normalizes anchors through it. It keeps host
@@ -131,7 +135,7 @@ classification every content read in the host shares. Agent and review writes ar
   `null` bytes as absence (`hash`/`byteLength` null, `text: true` — nothing to decode, and the empty
   string it pairs with is valid text).
 - **Public surface (barrel):** `readDir`, `readFile`, `readableFileSize`, `resolveWorktreeFile`,
-  `resolveWorktreeEntry`, `workspaceRelativePath`,
+  `resolveWorktreeEntry`, `workspaceRelativePath`, `worktreeEntryKind`,
   `copyWorktreeEntry`, `deleteWorktreeEntry`, `renameWorktreeEntry`, `moveWorktreeEntry`,
   `classifyBytes`, `CONTENT_SNIFF_BYTES`, `mimeFromPath`,
   `hashBytes`, `decodeText`, `resourceMeta`.

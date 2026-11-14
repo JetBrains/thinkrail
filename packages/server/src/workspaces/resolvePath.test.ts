@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { resolveWorkspacePath } from "./resolvePath";
+import { matchWorkspacePaths, resolveWorkspacePath } from "./resolvePath";
 import { listWorkspaceRecords } from "./workspaces";
 
 const canSymlink = (() => {
@@ -285,4 +285,51 @@ test("an open project whose Default was never listed gets it ensured", async () 
 	expect(listWorkspaceRecords("p1").map(({ id, kind }) => ({ id, kind }))).toEqual([
 		{ id: found?.workspaceId ?? "", kind: "default" },
 	]);
+});
+
+test("a batch is answered in order and never ensures a workspace", async () => {
+	const repo = join(base, "repo");
+	const loose = join(base, "loose");
+	mkdirSync(loose);
+	register(
+		[
+			{ id: "p1", path: repo },
+			{ id: "p2", path: loose },
+		],
+		[project("p1", repo)],
+	);
+	file(join(repo, "src", "a.ts"));
+	file(join(repo, ".git", "config"));
+
+	const answers = await matchWorkspacePaths([
+		join(repo, "src", "a.ts"),
+		"src/a.ts",
+		`${repo}/src/../src/a.ts`,
+		join(loose, "b.ts"),
+		join(repo, ".git", "config"),
+		repo,
+		join(base, "elsewhere", "c.ts"),
+		join(repo, "gone", "d.ts"),
+	]);
+	expect(
+		answers.map(
+			(answer) =>
+				answer && {
+					projectId: answer.project.id,
+					workspaceId: answer.workspace?.id ?? null,
+					relativePath: answer.relativePath,
+				},
+		),
+	).toEqual([
+		{ projectId: "p1", workspaceId: "p1-default", relativePath: "src/a.ts" },
+		null,
+		null,
+		{ projectId: "p2", workspaceId: null, relativePath: "b.ts" },
+		null,
+		null,
+		null,
+		{ projectId: "p1", workspaceId: "p1-default", relativePath: "gone/d.ts" },
+	]);
+	expect(listWorkspaceRecords("p2")).toEqual([]);
+	expect(await matchWorkspacePaths([])).toEqual([]);
 });

@@ -38,7 +38,11 @@ export {
 	stopWorkspaceCreations,
 	WorkspaceCreationStopped,
 } from "./creations";
-export { resolveWorkspacePath } from "./resolvePath";
+export {
+	matchWorkspacePaths,
+	resolveWorkspacePath,
+	type WorkspacePathOwner,
+} from "./resolvePath";
 export {
 	backfillWorkspaceActivity,
 	branchMoveOwed,

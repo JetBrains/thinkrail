@@ -390,6 +390,14 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   `{ workspaceId, projectId, relativePath }` with a POSIX `relativePath` under the real root, or `null` for a
   non-absolute path, any `..` segment (never followed), a path into `.git`, a root itself, or no containing
   open workspace. It reads no file and grants nothing: opening stays `fs.readFile`'s containment check.
+  **`matchWorkspacePaths(paths)`** is the side-effect-free batch core both answers share: per path, in order,
+  `{ project, workspace, relativePath }` (a `WorkspacePathOwner`; `workspace` is `null` for an open
+  repository project whose Default was never ensured) or `null` under the same rules. A batch lists the
+  candidates, `realpath`s each root and probes each root's case folding once, however many paths it holds.
+  It never ensures, creates or provisions anything; `resolveWorkspacePath` is the one caller that ensures the
+  Default it won. The terminal's link lookup (`terminal.resolvePaths`, composed by `host`) runs every path a
+  printed candidate could mean through it and keeps only answers owned by the terminal's own workspace, so a
+  deep link and a terminal link can never disagree about which workspace a path belongs to.
 - **Lifecycle events:** every membership mutation — `createWorkspace` (`created`), `renameWorkspace`
   (`updated`, the agent's `set_title` included since it goes through it), `forgetWorkspace`
   (`removed`) — emits a `WorkspaceLifecycleEvent` through an **injected publisher** (`setWorkspacePublisher`,
@@ -408,7 +416,8 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   `setWorkspaceCreationHandoff`, `CreationHandoff`,
   `setWorkspaceCreationPublisher`, `WorkspaceCreationEvent`, `creationOwnsPath`, `listExistingWorktrees`,
   `openExistingWorktree`,
-  `listWorkspaces`, `listWorkspaceRecords`, `listAllWorkspaceRecords`, `resolveWorkspacePath`, `forgetWorkspace`,
+  `listWorkspaces`, `listWorkspaceRecords`, `listAllWorkspaceRecords`, `resolveWorkspacePath`,
+  `matchWorkspacePaths`, `WorkspacePathOwner`, `forgetWorkspace`,
   `reclaimWorktree`, `removeWorkspace`,
   `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `syncWorkspaceBranch`, `branchMoveOwed`,
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,

@@ -48,6 +48,8 @@ import {
 	isToolResponsePending,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
+	MAX_TERMINAL_PATH_CANDIDATES,
+	MAX_TERMINAL_PATH_LENGTH,
 	MCP_PROTOCOL_VERSION,
 	MCP_TOOL_GRANTS_PROTOCOL_VERSION,
 	MODEL_CONTEXT_WINDOW_LIMITS,
@@ -80,6 +82,7 @@ import {
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
+	TERMINAL_LINKS_PROTOCOL_VERSION,
 	TEXT_SEARCH_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
@@ -300,6 +303,14 @@ test("Files tree copy and delete are pinned to v118", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FS_MUTATIONS_PROTOCOL_VERSION);
 	expect(WS_METHODS.fsCopy).toBe("fs.copy");
 	expect(WS_METHODS.fsDelete).toBe("fs.delete");
+});
+
+test("terminal path links are pinned to v123", () => {
+	expect(TERMINAL_LINKS_PROTOCOL_VERSION).toBe(123);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(TERMINAL_LINKS_PROTOCOL_VERSION);
+	expect(WS_METHODS.terminalResolvePaths).toBe("terminal.resolvePaths");
+	expect(MAX_TERMINAL_PATH_CANDIDATES).toBe(64);
+	expect(MAX_TERMINAL_PATH_LENGTH).toBe(4096);
 });
 
 test("workspace artifacts, rename and move are pinned to v121", () => {

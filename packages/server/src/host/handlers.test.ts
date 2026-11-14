@@ -53,7 +53,7 @@ import {
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import { addComment, getReviewSnapshot } from "../reviews";
 import { resetConfigCache } from "../settings";
-import { listTerminals } from "../terminal";
+import { listTerminals, resetTerminalState } from "../terminal";
 import { todoReviewRecord } from "../todos";
 import { setTrashImplementationForTests } from "../trash";
 import { setWatchPublisher, stopAllWatches } from "../watch";
@@ -169,6 +169,59 @@ afterEach(() => {
 test("every contract method has a registered handler", () => {
 	const unregistered = Object.values(WS_METHODS).filter((m) => requestMethodDiagnostic(m) !== m);
 	expect(unregistered).toEqual([]);
+});
+
+test("terminal.resolvePaths names only existing entries the terminal's workspace owns", async () => {
+	mkdirSync(join(repo, "src"));
+	writeFileSync(join(repo, "src", "a.ts"), "export {};\n");
+	writeFileSync(join(dataDir, "secret.txt"), "secret\n");
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([{ id: "w1", projectId: "p1", name: "w1", worktreePath: repo, createdAt: 1 }]),
+	);
+	try {
+		const { id } = (await handleRequest(
+			"terminal.attach",
+			{ workspaceId: "w1", tabKey: "links" },
+			CTX,
+		)) as { id: string };
+		expect(
+			await handleRequest(
+				"terminal.resolvePaths",
+				{
+					id,
+					candidates: [
+						"src/a.ts",
+						"./src",
+						"../secret.txt",
+						join(dataDir, "secret.txt"),
+						"nope.ts",
+					],
+				},
+				CTX,
+			),
+		).toEqual({
+			targets: [
+				{ kind: "file", relPath: "src/a.ts" },
+				{ kind: "dir", relPath: "src" },
+				{ kind: null, relPath: null },
+				{ kind: null, relPath: null },
+				{ kind: null, relPath: null },
+			],
+		});
+		await expect(
+			handleRequest(
+				"terminal.resolvePaths",
+				{ id: "never-attached", candidates: ["src/a.ts"] },
+				CTX,
+			),
+		).rejects.toThrow("Unknown terminal");
+		await expect(
+			handleRequest("terminal.resolvePaths", { id, candidates: [""] }, CTX),
+		).rejects.toThrow("Invalid path candidates");
+	} finally {
+		resetTerminalState();
+	}
 });
 
 test("file mutation handlers invalidate watcher-ignored paths after success", async () => {

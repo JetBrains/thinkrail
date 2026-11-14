@@ -341,6 +341,7 @@ import { hostSearch, publishSearchText } from "./search";
 import { trailingSingleFlight } from "./sessionStateList";
 import { findWorkspaceReviewOutcome, scheduleLifecyclePass } from "./settledLifecycle";
 import { taskObservation } from "./taskAnalytics";
+import { resolveTerminalPaths } from "./terminalPaths";
 import {
 	claimItemFix,
 	clearChangesRequestedIfResolved,
@@ -1195,6 +1196,9 @@ const handlers: WsHandlers = {
 	"terminal.close": (p) => {
 		return closeTerminalTab(p.workspaceId, p.tabKey, p.force ?? false);
 	},
+	"terminal.resolvePaths": async (p) => ({
+		targets: await resolveTerminalPaths(p.id, p.candidates),
+	}),
 	"skill.list": (params) => {
 		const { projectId } = params;
 		const project = listProjects().find((candidate) => candidate.id === projectId);
