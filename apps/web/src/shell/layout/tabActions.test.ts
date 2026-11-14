@@ -154,6 +154,25 @@ describe("tabActions", () => {
 		});
 	});
 
+	test("file reveal shares the tab path and availability across menu and palette", () => {
+		const document = documentWith();
+		const fileReveal = { label: "Reveal in Finder" };
+		const actions = actionsFor(document, file("a2"), { fileReveal });
+		expect(actions.find((action) => action.id === "tab.revealFile")).toMatchObject({
+			surface: "both",
+			label: fileReveal.label,
+			effect: { kind: "revealFile", path: "src/a2" },
+		});
+		expect(
+			actionsFor(document, file("a2"), {
+				fileReveal: { ...fileReveal, unavailableReason: "Host is offline" },
+			}).find((action) => action.id === "tab.revealFile")?.unavailable?.reason,
+		).toBe("Host is offline");
+		expect(actionsFor(document, terminal, { fileReveal }).map((action) => action.id)).not.toContain(
+			"tab.revealFile",
+		);
+	});
+
 	test("a singleton tool gets no center-only commands and is never closed as a tab", () => {
 		const actions = actionsFor(documentWith(), toolTab("projects"));
 		const all = actions.map((action) => action.id);

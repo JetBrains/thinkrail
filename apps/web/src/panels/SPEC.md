@@ -324,7 +324,13 @@ treatment.
   the editor. Right-clicking a file or folder row (a touch long-press, or the Context Menu key / Shift+F10 on
   a focused row) opens its menu: **Copy path** (absolute, through `joinWorkspacePath`) and **Copy relative
   path** (worktree-relative). A compacted folder copies its deepest path, matching its label, and copying
-  neither opens nor selects the row. The row stays highlighted while its menu is open. From a host at
+  neither opens nor selects the row. **Reveal in Finder** / **Show in Explorer** / **Reveal in file manager**
+  targets the same path and names the host's file manager. The Files menu uses a folder icon.
+  The shared reveal action also supplies the shell's tab actions with the label and availability.
+  It sends `workspace.reveal` with the target's workspace and relative path after rechecking
+  `selectCanRevealWorkspaceItem`. The action is disabled offline or before
+  `WORKSPACE_ITEM_REVEAL_PROTOCOL_VERSION`, and failures use the shared error-toast convention.
+  The row stays highlighted while its menu is open. From a host at
   `FS_MUTATIONS_PROTOCOL_VERSION` (v118) the menu adds the tree's two mutations, both host-owned and
   watcher-refreshed, never patched into the rows (`fileTreeActions`): **Copy** puts the row's entry — file,
   folder or link, a compacted folder's deepest folder — on the session-only in-app clipboard

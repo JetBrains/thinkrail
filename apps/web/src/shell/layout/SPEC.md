@@ -259,6 +259,8 @@ preview, the four splits) and auxiliary terminals carry no splits. File and diff
 and **Copy relative path** in a separate group; other kinds omit them. Copying identifies the clicked
 tab and does not select or keep it. The shell injects the workspace worktree path so the layout can join
 it with the tab's file path without importing store or transport.
+File and diff tabs also offer native reveal after **Copy relative path**. Context Menu / Shift+F10
+opens the focused tab's menu through `openContextMenuFromKeyboard`.
 
 ## Tab actions
 
@@ -274,6 +276,11 @@ reorders, *Show <tool>* and *Remove tool from group* are menu-only; *Move to pre
 palette- and chord-only (the menu already lists every pane by name). Rejected: new `LayoutIntent` kinds
 for these — the operations are pure functions the mounted Workbench applies with its own `apply`, and
 an intent would duplicate that path in the store.
+
+The shell supplies native file reveal's label, availability, and handler. `tabActions` uses the
+tab's current worktree path and exposes the action on both surfaces. The menu acts on its own tab
+and the provider acts on the active tab. The shell's shared reveal handler rechecks host support
+before sending the request.
 
 **Move to previous / next group.** A center tab walks the center groups in visual order (the
 `collectCenterGroups` depth-first order, children left→right / top→bottom — the `Ctrl+F6` and `Mod+1…9`

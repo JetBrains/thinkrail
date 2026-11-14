@@ -1,12 +1,13 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, join, win32 } from "node:path";
+import { delimiter, dirname, join, win32 } from "node:path";
 import {
 	listAvailableEditors,
 	openEditor,
 	pathWhich,
 	revealInFileManager,
+	revealItemInFileManager,
 	type SpawnFn,
 	type WhichFn,
 } from "./editors";
@@ -43,6 +44,63 @@ describe("listAvailableEditors", () => {
 		expect(await listAvailableEditors(whichOnly("webstorm", "idea"))).toEqual([
 			{ id: "jetbrains", label: "IntelliJ IDEA", kind: "gui" },
 		]);
+	});
+});
+
+describe("revealItemInFileManager", () => {
+	const dir = mkdtempSync(join(tmpdir(), "thinkrail-reveal-item-"));
+	const file = join(dir, "generated artifact 日本語.txt");
+	const folder = join(dir, "generated folder 日本語");
+	writeFileSync(file, "artifact\n");
+	mkdirSync(folder);
+	const calls: { cmd: string[]; options: { windowsHide?: boolean } | undefined }[] = [];
+	const record: SpawnFn = (cmd, options) => {
+		calls.push({ cmd, options });
+	};
+	afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+	test("macOS selects files and folders without opening their contents", () => {
+		calls.length = 0;
+		for (const path of [file, folder]) revealItemInFileManager(path, record, "darwin");
+		expect(calls.map((call) => call.cmd)).toEqual([
+			["open", "-R", file],
+			["open", "-R", folder],
+		]);
+	});
+
+	test("Windows selects files and folders using normalized paths and a visible window", () => {
+		calls.length = 0;
+		for (const path of [file, folder]) {
+			revealItemInFileManager(path.replaceAll("\\", "/"), record, "win32");
+		}
+		expect(calls).toEqual(
+			[file, folder].map((path) => ({
+				cmd: ["explorer", "/select,", win32.normalize(path)],
+				options: { windowsHide: false },
+			})),
+		);
+	});
+
+	test("Linux opens the containing folder for either item kind", () => {
+		calls.length = 0;
+		for (const path of [file, folder]) revealItemInFileManager(path, record, "linux");
+		expect(calls.map((call) => call.cmd)).toEqual([
+			["xdg-open", dirname(file)],
+			["xdg-open", dirname(folder)],
+		]);
+	});
+
+	test("rejects a missing target before launching anything", () => {
+		calls.length = 0;
+		expect(() => revealItemInFileManager(join(dir, "gone"), record)).toThrow(/Item not found/);
+		expect(calls).toEqual([]);
+	});
+
+	test("reports a launcher failure", () => {
+		const fail: SpawnFn = () => {
+			throw new Error("ENOENT");
+		};
+		expect(() => revealItemInFileManager(file, fail, "darwin")).toThrow(/darwin/);
 	});
 });
 

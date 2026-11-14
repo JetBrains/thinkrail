@@ -54,6 +54,7 @@ export type TabActionEffect =
 	| { readonly kind: "rename" }
 	| { readonly kind: "focusGroup"; readonly delta: -1 | 1 }
 	| { readonly kind: "copy"; readonly text: string }
+	| { readonly kind: "revealFile"; readonly path: string }
 	| { readonly kind: "hide"; readonly region: LayoutAuxiliaryRegion }
 	| { readonly kind: "revealTool"; readonly tool: LayoutToolId }
 	| { readonly kind: "close" };
@@ -69,6 +70,12 @@ export interface TabAction {
 	readonly effect: TabActionEffect;
 }
 
+export interface FileTabReveal {
+	readonly label: string;
+	readonly unavailableReason?: string | undefined;
+	readonly run: (path: string) => void;
+}
+
 export interface TabActionContext {
 	readonly document: WorkspaceLayoutDocument;
 	readonly tab: LayoutTab;
@@ -81,6 +88,7 @@ export interface TabActionContext {
 	readonly canFocusAdjacentGroup: boolean;
 	readonly canRenameChat: boolean;
 	readonly worktreePath: string;
+	readonly fileReveal?: Pick<FileTabReveal, "label" | "unavailableReason"> | undefined;
 	readonly chatFirstPrompts?: ChatFirstPrompts | undefined;
 }
 
@@ -91,6 +99,7 @@ export interface TabActionHandlers {
 	readonly focusGroup: (delta: -1 | 1) => void;
 	readonly hide: (region: LayoutAuxiliaryRegion) => void;
 	readonly revealTool: (tool: LayoutToolId) => void;
+	readonly revealFile?: FileTabReveal["run"] | undefined;
 	readonly close: () => void;
 }
 
@@ -276,9 +285,12 @@ function primaryActions(t: Translator, context: TabActionContext): TabAction[] {
 	return actions;
 }
 
-function copyActions(t: Translator, { tab, worktreePath }: TabActionContext): TabAction[] {
+function fileActions(
+	t: Translator,
+	{ tab, worktreePath, fileReveal }: TabActionContext,
+): TabAction[] {
 	if (tab.kind !== "file" && tab.kind !== "diff") return [];
-	return [
+	const actions: TabAction[] = [
 		{
 			id: "tab.copyPath",
 			section: "copy",
@@ -296,6 +308,21 @@ function copyActions(t: Translator, { tab, worktreePath }: TabActionContext): Ta
 			effect: { kind: "copy", text: tab.path },
 		},
 	];
+	if (fileReveal) {
+		const { label, unavailableReason } = fileReveal;
+		actions.push({
+			id: "tab.revealFile",
+			section: "copy",
+			surface: "both",
+			label,
+			testId: "file-reveal",
+			...(unavailableReason !== undefined
+				? { unavailable: { label, reason: unavailableReason } }
+				: {}),
+			effect: { kind: "revealFile", path: tab.path },
+		});
+	}
+	return actions;
 }
 
 function splitActions(t: Translator, context: TabActionContext): TabAction[] {
@@ -482,7 +509,7 @@ function groupActions(t: Translator, context: TabActionContext): TabAction[] {
 export function tabActions(t: Translator, context: TabActionContext): TabAction[] {
 	return [
 		...primaryActions(t, context),
-		...copyActions(t, context),
+		...fileActions(t, context),
 		...splitActions(t, context),
 		...moveActions(t, context),
 		...newGroupActions(t, context),
@@ -509,6 +536,9 @@ export function performTabAction(action: TabAction, handlers: TabActionHandlers)
 			return;
 		case "copy":
 			void copyText(effect.text);
+			return;
+		case "revealFile":
+			handlers.revealFile?.(effect.path);
 			return;
 		case "hide":
 			handlers.hide(effect.region);

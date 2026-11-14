@@ -15,6 +15,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
 
 ## Boundary
 
+- **Selected-item reveal:** `workspace.reveal` composes `fs.resolveWorktreeFile` with
+  `editors.revealItemInFileManager` when its optional `path` is present: require a nonempty relative
+  path, apply the shared worktree/metadata/symlink containment rules, and report `FILE_REVEAL_FAILED`
+  for an invalid, missing or unlaunchable target. Omitted `path` retains the existing workspace-folder
+  action. A reveal never changes workspace state or emits a filesystem nudge.
 - **Owns:** `server.ts` (async `createServer` first asks auth to start Central artifact watching and publish
   the initial current PI runtime, falling back to plain PI with closed `load-failed` state when needed, then creates
   `Bun.serve` with `/health`, `/ws` upgrade, a

@@ -27,6 +27,7 @@ import { chatDisplayName, type LayoutAttention, layoutResourceIdentity } from ".
 import { ArtifactsPanel } from "../panels/ArtifactsPanel";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
+import { revealWorkspaceItem, useFileRevealAction } from "../panels/FileRevealMenuItem";
 import { FilesPanel } from "../panels/FilesPanel";
 import { startChatInTab } from "../panels/openChat";
 import { fileComparisonTab, openFileInTab } from "../panels/openTabs";
@@ -336,6 +337,7 @@ function useTerminalReservation(workspaceId: string): void {
 }
 
 export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
+	const fileRevealAction = useFileRevealAction();
 	const t = useT();
 	const status = useAppStore((state) => state.status);
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
@@ -929,6 +931,10 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				registerTabCommands={registerTabCommands}
 				renderTabBody={renderTabBody}
 				renderTabAdornment={renderTabAdornment}
+				fileReveal={{
+					...fileRevealAction,
+					run: (path) => void revealWorkspaceItem(workspaceId, path),
+				}}
 				renderToolBody={renderToolBody}
 				renderEmptyCenter={renderEmptyCenter}
 				renderCenterActions={renderCenterActions}

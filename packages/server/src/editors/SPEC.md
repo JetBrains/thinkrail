@@ -9,8 +9,8 @@ tags: [public-surface-checked]
 
 ## Responsibility
 
-Detect which editors/IDEs the host actually has installed, launch one detached at a worktree, and reveal a
-worktree in the host's file manager — the workspace row's "Open in" menu.
+Detect which editors/IDEs the host actually has installed, launch one detached at a worktree, and open a
+folder or select an existing item in the host's file manager.
 
 ## Boundary
 
@@ -30,6 +30,11 @@ worktree in the host's file manager — the workspace row's "Open in" menu.
   client's failure toast fires instead of Explorer falling back to Documents), hands `explorer` a
   backslash-normalized path (it also opens Documents for a forward-slash path), and launches with
   `windowsHide: false` — `explorer` applies the hide flag to the folder window it opens.
+- **`revealItemInFileManager(path)`** selects a file or folder with `open -R` on macOS and Explorer's
+  `/select,` on Windows; Linux opens its containing folder with `xdg-open`. It shares the folder
+  launcher's existence check, visible-window policy and injectable spawn/platform seams. A missing item
+  fails before launch rather than opening a different location. Workspace lookup and containment stay
+  with the host; this module receives an already validated absolute path.
 - **Vim is `kind: "terminal"`, not launched here.** It has no GUI window of its own — spawning it detached
   with no attached TTY would just print "Warning: Output is not to a terminal" and exit. The **client**
   handles that case itself: open/focus the clicked workspace's embedded terminal and run `vim .` there
@@ -56,10 +61,11 @@ worktree in the host's file manager — the workspace row's "Open in" menu.
   `platform` (default `process.platform`), the same testable-parameter pattern `dialog`'s `pickersFor`
   uses, so its darwin/win32/linux branches are each asserted directly rather than only on whichever OS
   runs the test.
-- **Public surface (barrel):** `listAvailableEditors`, `openEditor`, `revealInFileManager`, `WhichFn`,
-  `SpawnFn`.
+- **Public surface (barrel):** `listAvailableEditors`, `openEditor`, `revealInFileManager`,
+  `revealItemInFileManager`, `WhichFn`, `SpawnFn`.
 - **Allowed deps:** `Bun.which`, `node:fs/promises` (`readdir`), `@thinkrail/shared/spawn` (`spawnDetached`),
-  `node:fs` (`existsSync`), `node:path` (`win32.normalize`), `process.env`/`process.platform`,
+  `node:fs` (`existsSync`), `node:path` (`delimiter`, `dirname`, `win32.normalize`),
+  `process.env`/`process.platform`,
   `contracts` (the `EditorInfo` wire type).
 - **Forbidden:** `host`; sibling features (`workspaces` resolves `worktreePath` before calling in — this
   module never looks up a workspace itself).

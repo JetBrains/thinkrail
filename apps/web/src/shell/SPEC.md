@@ -261,7 +261,7 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   subscription), the chords call `runActiveTabAction(id)`, and the palette lists `activeTabActions()` when
   it opens — every command of the tab's context menu that can run now (close, keep preview, the four
   splits, move to the previous / next group, move to each legal pane, new groups, remove group, hide the
-  region, copy path / relative path, rename chat, focus previous / next group), under an *Active tab*
+  region, copy path / relative path, reveal file, rename chat, focus previous / next group), under an *Active tab*
   group, with the chord where one exists — and runs the picked id through the same channel, which
   re-resolves the target and re-checks availability ([[submodule-web-shell-layout]], *Tab actions*).
   `Mod+Alt+W` and the desktop's `Mod+W` share `chordActions.closeActiveItem` (dismiss a layer, else
