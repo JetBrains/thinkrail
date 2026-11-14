@@ -61,6 +61,24 @@ test("a deleted artifact whose path is taken again opens nothing and says why", 
 	]);
 });
 
+test("a click made while a deleted artifact restores keeps its place: the restored preview does not open", async () => {
+	let release = () => {};
+	restoreGate = new Promise((resolve) => {
+		release = resolve;
+	});
+	useAppStore.getState().setLayoutAttention("w1", {
+		selectedByGroup: {},
+		lastFocusedCenterGroupId: "center",
+		lastFocusedSideGroupId: {},
+		navigationClockByGroup: { center: 0 },
+	});
+	const opened = openArtifact("w1", PATH, "preview", () => restoreArtifact("w1", PATH));
+	useAppStore.getState().beginCenterNavigation("w1");
+	release();
+	await opened;
+	expect(requests).toEqual(["artifacts.restore"]);
+});
+
 test("a row asks for one restore, in flight or done, until a newer snapshot of it arrives", async () => {
 	let release = () => {};
 	restoreGate = new Promise((resolve) => {

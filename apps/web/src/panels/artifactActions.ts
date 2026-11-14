@@ -77,8 +77,10 @@ export async function openArtifact(
 	intent: "preview" | "keep",
 	restoreFirst?: () => Promise<boolean>,
 ): Promise<void> {
-	if (restoreFirst && !(await restoreFirst())) return;
-	await openFileInTab(workspaceId, path, intent);
+	if (!restoreFirst) return openFileInTab(workspaceId, path, intent);
+	const navigation = useAppStore.getState().beginCenterNavigation(workspaceId);
+	if (!(await restoreFirst())) return;
+	await openFileInTab(workspaceId, path, intent, navigation);
 }
 
 export async function discardArtifact(workspaceId: string, path: string): Promise<void> {
