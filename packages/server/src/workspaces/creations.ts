@@ -28,10 +28,11 @@ import { logger } from "../log";
 import {
 	type CreationOrigin,
 	dataDir,
+	landsInChatsRoot,
 	loadWorkspaces,
 	type WorkspaceCreationRecord,
 } from "../persistence";
-import { getProjects } from "../projects";
+import { assertOutsideChatsRoot, getProjects } from "../projects";
 import {
 	addCreation,
 	creationRecords,
@@ -99,6 +100,7 @@ function projectOf(record: WorkspaceCreationRecord): Project {
 }
 
 function isManagedPath(path: string, root: string): boolean {
+	if (landsInChatsRoot(path)) return false;
 	const rel = relative(resolve(root), resolve(path));
 	return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
 }
@@ -264,6 +266,7 @@ function branchStillExists(projectPath: string, ref: string): boolean {
 async function prepare(id: string, project: Project, signal: AbortSignal): Promise<void> {
 	let record = findCreation(id);
 	if (!record) throw new CreationAborted();
+	assertOutsideChatsRoot(record.worktreePath, "used for a managed workspace");
 	assertManagedPathFree(record.worktreePath);
 	if (record.baseOid && !(await cleanupCreation(project.path, record)).clean)
 		fail("WORKTREE_ADD_FAILED", `Could not clear the earlier attempt at ${record.worktreePath}`);

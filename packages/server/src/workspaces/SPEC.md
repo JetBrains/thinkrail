@@ -99,7 +99,7 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   name from the first instant; allocation lists heads once (`for-each-ref`, compared case-insensitively — a
   case-only twin is the same ref file on macOS/Windows) and stays synchronous so a name is reserved atomically
   (issue #1229: one `show-ref` per candidate blocked the event loop ~1 s at 100 `workspace-N` branches); path
-  `<managed-worktree-root>/<project-slug>/<branch>`; **seeds the per-workspace artifacts folder**
+  `<managed-worktree-root>/<project-slug>/<branch>`; the resolved path must stay outside the reserved Chats root, checked before any Git or filesystem mutation; **seeds the per-workspace artifacts folder**
   (`WORKSPACE_CONTEXT_DIR`, with a self-ignoring `*` `.gitignore` — zero git footprint) in the
   new worktree, the home for temp docs and agent outputs ([[submodule-server-artifacts]]) that stay out of git yet remain
   scannable by the spec tools (the path convention lives in `@thinkrail/shared/paths`; see

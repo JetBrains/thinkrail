@@ -46,6 +46,7 @@ import {
 	listWorkspaceRecords,
 	openExistingWorktree,
 	renameWorkspace,
+	setWorktreeDirectoryResolver,
 } from "./workspaces";
 
 const posix = test.skipIf(process.platform === "win32");
@@ -119,10 +120,17 @@ afterEach(async () => {
 	await stopWorkspaceCreations();
 	setWorkspaceCreationPublisher(null);
 	setWorkspaceCreationHandoff(null);
+	setWorktreeDirectoryResolver(null);
 	setCheckoutStallForTests(undefined);
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+});
+
+test("managed creation rejects the reserved Chats root", async () => {
+	mkdirSync(join(dataDir, "chats"), { recursive: true });
+	setWorktreeDirectoryResolver(() => join(dataDir, "chats"));
+	await expect(createWorkspace("p1")).rejects.toThrow("cannot be used for a managed workspace");
 });
 
 posix("a slow checkout never blocks the host's event loop (#874)", async () => {

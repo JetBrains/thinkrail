@@ -48,7 +48,9 @@ export function toChoice(days: number | null): IdleChoice {
 
 function isAbsolutePath(value: string): boolean {
 	const path = value.trim();
-	return path === "" || path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path);
+	return (
+		path === "" || path.startsWith("/") || path.startsWith("\\\\") || /^[A-Za-z]:[\\/]/.test(path)
+	);
 }
 
 export function WorkspacesSettings() {
