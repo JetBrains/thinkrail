@@ -176,7 +176,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		const names = new Map(
 			projects.map((project) => [
 				project.id,
-				isChatsContainer(project) ? t("panels.chats.title") : project.name,
+				isChatsContainer(project) ? t("search.item.noProject") : project.name,
 			]),
 		);
 		const workspaceNames = new Map<string, string>();

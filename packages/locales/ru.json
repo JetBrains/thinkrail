@@ -1841,6 +1841,7 @@
 	"search.hint.scope": "область",
 	"search.hint.select": "выбрать",
 	"search.item.inWorkspace": "{{project}} › {{workspace}}",
+	"search.item.noProject": "Без проекта",
 	"search.item.openFailed": "Не удалось открыть результат",
 	"search.item.projectFolder": "{{project}} · папка проекта",
 	"search.item.settingsPath": "Настройки › {{group}}",

@@ -108,6 +108,31 @@ describe("buildWorkItems", () => {
 		expect(chatRecord(true)).toEqual([]);
 	});
 
+	test("a row names where it lives as its emphasized location, and a chat without a project reads No project", () => {
+		const spans = (item: {
+			subtitle?: string;
+			subtitleEmphasis?: readonly (readonly [number, number])[];
+		}) => (item.subtitleEmphasis ?? []).map(([start, end]) => item.subtitle?.slice(start, end));
+		const inWorkspace = items([waiting]);
+		const chat = inWorkspace.find((item) => item.id === "chat:s-waiting");
+		expect(chat?.subtitle).toBe("Project One › Auth refresh");
+		expect(spans(chat ?? {})).toEqual(["Project One", "Auth refresh"]);
+		const row = inWorkspace.find((item) => item.id === "workspace:w1");
+		expect(row?.subtitle).toBe("Project One · auth-refresh");
+		expect(spans(row ?? {})).toEqual(["Project One"]);
+
+		const container: Project = { ...project, name: "Chats", kind: "chats" };
+		const projectless = items(
+			[waiting],
+			{},
+			{},
+			{ projects: [container], workspaces: { p1: [{ ...workspace, kind: "chat" }] } },
+		).find((item) => item.id === "chat:s-waiting");
+		expect(projectless?.subtitle).toBe("No project");
+		expect(spans(projectless ?? {})).toEqual(["No project"]);
+		expect(projectless?.preview?.()?.subtitle).toBe("No project");
+	});
+
 	test("an idle chat is listed only once its title is known", () => {
 		expect(items([record("s-idle")]).some((item) => item.kind === "chat")).toBe(false);
 		const titled = items([record("s-idle")], { "s-idle": "Spec review" });
