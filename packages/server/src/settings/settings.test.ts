@@ -1088,3 +1088,18 @@ test("invalid font updates are rejected before persistence or broadcast", () => 
 	expect(published).toEqual([]);
 	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
 });
+
+test("the inactive-panel switch round-trips, rejects a non-boolean, and defaults a malformed stored value to dimmed", () => {
+	expect(getConfig().dimInactivePanels).toBe(DEFAULT_CONFIG.dimInactivePanels);
+	expect(updateConfig({ dimInactivePanels: false }).dimInactivePanels).toBe(false);
+	resetConfigCache();
+	expect(getConfig().dimInactivePanels).toBe(false);
+
+	expect(() => updateConfig({ dimInactivePanels: "off" } as unknown as AppConfigUpdate)).toThrow(
+		"dimInactivePanels must be a boolean",
+	);
+
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ dimInactivePanels: "no" }));
+	resetConfigCache();
+	expect(getConfig().dimInactivePanels).toBe(DEFAULT_CONFIG.dimInactivePanels);
+});

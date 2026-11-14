@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { orderRegions, type RegionKind } from "./regions";
+import { orderRegions, type RegionKind, regionDimAttribute } from "./regions";
 
 const region = (name: string, kind: RegionKind, top: number, left: number) => ({
 	name,
@@ -46,5 +46,15 @@ describe("region ring order", () => {
 		expect(
 			names(orderRegions([region("projects", "home", 40, 40), region("topbar", "topbar", 0, 0)])),
 		).toEqual(["topbar", "projects"]);
+	});
+});
+
+describe("the inactive-region scrim switch", () => {
+	test("keeps the scrim when the panels are dimmed", () => {
+		expect(regionDimAttribute(true)).toBeNull();
+	});
+
+	test("drops the scrim when the panels are not dimmed", () => {
+		expect(regionDimAttribute(false)).toBe("off");
 	});
 });

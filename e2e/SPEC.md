@@ -390,7 +390,9 @@ inside xterm), asserting the one `data-region-active` root and the veil through 
 `::after` content rather than pixels, then the focus chords: `Mod+L` from a terminal, `Mod+0` in the
 workbench and on Project Home (collapsed pane included), `Mod+1` / `Mod+2` over a split center,
 `` Ctrl+` `` in and back out and with the bottom hidden, `Mod+Shift+E` / `Mod+Shift+G` landing inside
-Files in the matching mode, and the palette rows with their chords, run after the palette closes.
+Files in the matching mode, and the palette rows with their chords, run after the palette closes. It also
+covers the Appearance **Dim inactive panels** switch: the veil is gone while the switch is off and back
+when it is on, with the active region still marked either way.
 `focus-recovery.spec.ts` pins one site per rule of the shell's focus recovery: a deleted Files row hands
 focus to the next file in its folder, then the previous; removing an MCP server focuses the next server's
 menu and the empty state's Add inside Settings; Enter in a workspace's inline rename returns to the row;

@@ -143,7 +143,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 121;
+export const PROTOCOL_VERSION = 122;
+export const DIM_INACTIVE_PANELS_PROTOCOL_VERSION = 122;
 export const ARTIFACTS_PROTOCOL_VERSION = 121;
 export const IMAGE_REFS_PROTOCOL_VERSION = 120;
 export const IMAGES_ROUTE = "/images/";

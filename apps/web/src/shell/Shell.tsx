@@ -75,7 +75,7 @@ import { useLocalLayoutState } from "./layoutState";
 import { LocationBar } from "./locationBar";
 import { NativeWindowControls } from "./NativeWindowControls";
 import { PROJECT_HOME_PROJECTS_REGION_ID, ProjectHome } from "./ProjectHome";
-import { focusAdjacentRegion, installRegionTracker } from "./regions";
+import { applyRegionDimming, focusAdjacentRegion, installRegionTracker } from "./regions";
 import { SearchPaletteHost } from "./SearchPaletteHost";
 import { readSettingsShortcutLabel } from "./useAppShortcuts";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
@@ -203,6 +203,10 @@ export function Shell() {
 		userFonts,
 	]);
 	useEffect(installRegionTracker, []);
+	const dimInactivePanels = useAppStore((s) => s.dimInactivePanels);
+	useEffect(() => {
+		applyRegionDimming(dimInactivePanels);
+	}, [dimInactivePanels]);
 	useEffect(installFocusRecovery, []);
 	useGlobalHotkeys({
 		onProjects: () => toggleLeftSide(homeProjects.toggle),

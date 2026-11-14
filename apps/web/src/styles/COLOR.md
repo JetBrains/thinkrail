@@ -122,6 +122,10 @@ leaves xterm, Monaco and iframes painting as before and lets each appearance pic
 text reads as dimmer only at a higher step, so dark appearances take 60% and light ones 40% (chosen from
 screenshots, 2026-11-13). Each region root is positioned and
 `isolation: isolate`, so its veil never covers another region, a portal, a toast or a resize handle.
+The veil is the user's to turn off: **Settings → Appearance → Panels → Dim inactive panels**
+(`AppConfig.dimInactivePanels`, on by default) sets `data-region-dim="off"` on the root, and the rule
+that lays the scrim matches on the absence of that attribute, so every region keeps full contrast while
+the focus chords, the landing rules and the active-region mark stay exactly as they are.
 
 ## Transparency: one form only
 

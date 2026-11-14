@@ -256,7 +256,8 @@
 	position: relative;
 	isolation: isolate;
 }
-:root[data-region-tracking] [data-region]:not([data-region-active])::after {
+:root[data-region-tracking]:not([data-region-dim="off"])
+	[data-region]:not([data-region-active])::after {
 	content: "";
 	position: absolute;
 	inset: 0;

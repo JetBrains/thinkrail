@@ -1207,6 +1207,7 @@ interface AppState {
 	chatLineWidthBounded: boolean;
 	fileLineWidthBounded: boolean;
 	voiceInputEnabled: boolean;
+	dimInactivePanels: boolean;
 	chatMessageOrder: ChatMessageOrder;
 	markdownOutlineVisible: boolean | null;
 	markdownOutlineSide: MarkdownOutlineSide;
@@ -1668,6 +1669,10 @@ function configPatch(config: AppConfig) {
 			typeof config.voiceInputEnabled === "boolean"
 				? config.voiceInputEnabled
 				: DEFAULT_CONFIG.voiceInputEnabled,
+		dimInactivePanels:
+			typeof config.dimInactivePanels === "boolean"
+				? config.dimInactivePanels
+				: DEFAULT_CONFIG.dimInactivePanels,
 		customLayoutPresets: config.customLayoutPresets ?? DEFAULT_CONFIG.customLayoutPresets,
 		defaultModel: config.defaultModel,
 		defaultEffort: config.defaultEffort,
@@ -2598,6 +2603,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	chatLineWidthBounded: DEFAULT_CONFIG.chatLineWidthBounded,
 	fileLineWidthBounded: DEFAULT_CONFIG.fileLineWidthBounded,
 	voiceInputEnabled: DEFAULT_CONFIG.voiceInputEnabled,
+	dimInactivePanels: DEFAULT_CONFIG.dimInactivePanels,
 	chatMessageOrder: "oldest-first",
 	markdownOutlineVisible: null,
 	markdownOutlineSide: "right",

@@ -33,6 +33,7 @@ export function orderRegions<T extends RegionBox>(regions: readonly T[]): T[] {
 export const REGION_SELECTOR = "[data-region]";
 const ACTIVE_ATTRIBUTE = "data-region-active";
 const TRACKING_ATTRIBUTE = "data-region-tracking";
+const DIM_ATTRIBUTE = "data-region-dim";
 const FOCUS_DEFAULT_SELECTOR = "[data-focus-default]";
 const SELECTED_TAB_SELECTOR = '[role="tab"][aria-selected="true"]';
 const TERMINAL_SELECTOR = "[data-region] [data-tab-key]";
@@ -153,6 +154,25 @@ export function installRegionTracker(): () => void {
 		regionObserver?.disconnect();
 		regionObserver = null;
 	};
+}
+
+/**
+ * The root attribute `index.css` gates the scrim over the regions that do not hold the
+ * keyboard focus on: `null` keeps the scrim, `"off"` leaves every region at full contrast.
+ */
+export function regionDimAttribute(dim: boolean): string | null {
+	return dim ? null : "off";
+}
+
+/**
+ * The scrim over the regions that do not hold the keyboard focus. `false` leaves every
+ * region at full contrast; the attribute is what `index.css` gates the scrim on.
+ */
+export function applyRegionDimming(dim: boolean): void {
+	const root = document.documentElement;
+	const value = regionDimAttribute(dim);
+	if (value === null) root.removeAttribute(DIM_ATTRIBUTE);
+	else root.setAttribute(DIM_ATTRIBUTE, value);
 }
 
 export function whenSettled<T>(probe: () => T | null, run: (value: T) => void): void {

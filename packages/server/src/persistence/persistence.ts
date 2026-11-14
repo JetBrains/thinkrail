@@ -698,6 +698,10 @@ export function loadConfig(): AppConfig {
 			typeof value.voiceInputEnabled === "boolean"
 				? value.voiceInputEnabled
 				: DEFAULT_CONFIG.voiceInputEnabled,
+		dimInactivePanels:
+			typeof value.dimInactivePanels === "boolean"
+				? value.dimInactivePanels
+				: DEFAULT_CONFIG.dimInactivePanels,
 		reviewAutoFix:
 			typeof value.reviewAutoFix === "boolean" ? value.reviewAutoFix : DEFAULT_CONFIG.reviewAutoFix,
 		agentReviewEnabled:
