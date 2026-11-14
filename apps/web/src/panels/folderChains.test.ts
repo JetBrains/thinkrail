@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { type FolderChainNode, resolveFolderChain } from "./folderChains";
+import { type FolderChainNode, folderRevealPaths, resolveFolderChain } from "./folderChains";
 
 function dir(name: string, path = name): FolderChainNode {
 	return { kind: "dir", name, path };
@@ -56,4 +56,13 @@ test("resolveFolderChain stops at empty, file-only, and branching directories", 
 		deepest: dir("src"),
 		children: branched,
 	});
+});
+
+test("revealing any folder a compact row stands for expands the whole row", () => {
+	const chain = { label: "assets/icons", path: "assets/icons", paths: ["assets", "assets/icons"] };
+	expect(folderRevealPaths(chain, "assets")).toEqual(["assets", "assets/icons"]);
+	expect(folderRevealPaths(chain, "assets/icons")).toEqual(["assets", "assets/icons"]);
+	expect(folderRevealPaths(chain, "assets/icons/svg")).toBeNull();
+	expect(folderRevealPaths(chain, "asset")).toBeNull();
+	expect(folderRevealPaths(chain, null)).toBeNull();
 });

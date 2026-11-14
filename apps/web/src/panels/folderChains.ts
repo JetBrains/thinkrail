@@ -19,6 +19,13 @@ export function startFolderChain(node: FolderChainNode): FolderChain {
 	return { label: node.name, path: node.path, paths: [node.path] };
 }
 
+export function folderRevealPaths(
+	chain: FolderChain,
+	target: string | null,
+): readonly string[] | null {
+	return target !== null && chain.paths.includes(target) ? chain.paths : null;
+}
+
 function hasSingleDirectoryChild<TNode extends FolderChainNode>(
 	children: readonly TNode[],
 ): children is readonly [TNode & { kind: "dir" }] {

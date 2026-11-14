@@ -25,6 +25,7 @@ import { createPtySizeSync, runAfterTerminalRelayout } from "./ptySizeSync";
 import { stripAnsiDim, terminalContrastFloor } from "./terminalContrast";
 import { createTerminalImeBridge } from "./terminalImeBridge";
 import { terminalKeyDecision } from "./terminalKeys";
+import { openTerminalLink, resolveTerminalPaths } from "./terminalLinkActions";
 import { createTerminalLinkProvider } from "./terminalLinks";
 import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
 
@@ -169,7 +170,8 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		const linkProvider = term.registerLinkProvider(
 			createTerminalLinkProvider({
 				buffer: () => term.buffer.active,
-				open: (url) => window.open(url, "_blank", "noopener,noreferrer"),
+				resolve: (candidates) => resolveTerminalPaths(serverIdRef.current, candidates),
+				open: (target) => openTerminalLink(workspaceId, target),
 				isActivation: (event) => hasPlatformModifier(event),
 				showHint: (visible) => showLinkHint(term.element, visible),
 			}),

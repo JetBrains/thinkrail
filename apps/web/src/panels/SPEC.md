@@ -321,7 +321,14 @@ treatment.
   active file or diff tab (`selectActiveFilePath`) gets the selected row look, and when it changes while All
   is showing its folders expand (and stay expanded) and it scrolls `nearest` into view; on return All
   reveals only if the active file differs from the persisted `seenActivePath`, and then skips the scroll
-  restore so the two cannot fight. Auto-reveal never switches the side tab or the mode. Clicks still open
+  restore so the two cannot fight. Auto-reveal never switches the side tab or the mode. A **folder reveal**
+  is the explicit exception: `store.revealFolderInFiles` (a terminal folder link) switches to All, expands
+  the folder and its ancestors, reveals the Files tool and leaves a one-shot `filesRevealRequest`, which All
+  consumes into the same reveal target and which also skips the scroll restore when it is pending at mount.
+  A folder row takes it once its compact chain is read, when the folder is any path that chain stands for
+  (`folderChains.folderRevealPaths`): a compact row is keyed by its deepest folder, so revealing `assets`
+  where the row reads `assets/icons` expands every folder the row stands for, not just `assets`. It never
+  touches `seenActivePath`, so the active file's own reveal is unaffected. Clicks still open
   the editor. Right-clicking a file or folder row (a touch long-press, or the Context Menu key / Shift+F10 on
   a focused row) opens its menu: **Copy path** (absolute, through `joinWorkspacePath`) and **Copy relative
   path** (worktree-relative). A compacted folder copies its deepest path, matching its label, and copying
@@ -2687,8 +2694,8 @@ menu has closed, because a closing menu returns focus to its row; disabled
   preview/source field remains in the pane or tab. A tab's `reveal` (the store's `FileReveal`) is passed
   through to the mounted view as the renderer contract's `reveal`, so the code renderer scrolls to and marks
   that line, and the view's `onRevealHandled` clears it (`clearFileTabReveal`) so a later remount keeps the
-  reading position; `openTabs.ts`' **`openFileAtLine(workspaceId, path, at, intent)`** is Find in Files'
-  open-at-a-line entry (`↵` / `⌘↵`): the ordinary `openFileInTab` at the caller's intent, then
+  reading position; `openTabs.ts`' **`openFileAtLine(workspaceId, path, at, intent)`** is the one
+  open-at-a-line entry — Find in Files (`↵` / `⌘↵`) and the terminal's printed `file:line:col` links: the ordinary `openFileInTab` at the caller's intent, then
   `revealFileTab` naming `SOURCE_RENDERER_ID`, so a Markdown or HTML file opens as source at the line
   rather than as its rendered document (a spec section opened through `specRequest`, below, names no
   renderer, so the rendered spec scrolls to its heading). An open that finds a read of the same file in flight joins it —
@@ -2790,17 +2797,44 @@ menu has closed, because a closing menu returns focus to its row; disabled
   otherwise open inspect-element), so it never writes `^C`; xterm itself encodes Ctrl+letter only without
   Shift. Plain Ctrl+C stays xterm's SIGINT, and macOS keeps xterm's defaults. Ctrl+Shift+V needs no handler:
   xterm leaves it unencoded, so Chromium's paste-as-plain-text reaches xterm's own paste listener.
-- **Terminal URLs.** `TerminalInstance` registers `terminalLinks.createTerminalLinkProvider` with xterm's
-  core link API (no addon): every http(s) URL the terminal printed is underlined with a pointer cursor, and
-  **Cmd+click** (Apple) / **Ctrl+click** (elsewhere, `hasPlatformModifier`) opens it through
-  `window.open(…, "noopener,noreferrer")` — the desktop shell sends that to the system browser. A plain
-  click stays a selection click, and hovering sets the terminal's `title` to the modifier hint. The
-  provider reads one logical line at a time (`readLogicalLine`: up to 32 soft-wrapped rows joined, each
-  UTF-16 unit mapped back to its cell, wide-character spacers skipped, and the empty cell xterm leaves
-  at the end of a row when a wide character wraps not read as a space), so a URL wrapped across rows is
-  one link offered from each row it covers. `parseTerminalUrls` is pure: it trims trailing punctuation and
-  unbalanced closing brackets in one pass, so a long run of closers stays linear. It reads no paths, so it
-  needs nothing from the host.
+- **Terminal links.** `TerminalInstance` registers `terminalLinks.createTerminalLinkProvider` with xterm's
+  core link API (no addon — `addon-web-links` only knows URLs): every http(s) URL the terminal printed, and
+  every printed path the host confirms — `src/a.ts:12:5`, `launcher.py:123`, a Python traceback frame, a
+  `file://` URL, a folder — is underlined with a pointer cursor, and **Cmd+click** (Apple) / **Ctrl+click**
+  (elsewhere, `hasPlatformModifier`) opens it. A plain click stays a selection click (on macOS Ctrl+click
+  stays the context click), and hovering sets the terminal's `title` to the modifier hint.
+  `terminalLinkActions` does the opening: a URL goes to `window.open(…, "noopener,noreferrer")`, which the
+  desktop shell sends to the system browser; a file opens at the `keep` intent (a deliberate gesture, like a
+  double click) through **`openFileAtLine`** with the printed `{ line, column }` when a line was printed
+  (so a Markdown or HTML file opens as source at the line), else `openFileInTab`; a folder runs
+  `store.revealFolderInFiles`. Paths need a host at `TERMINAL_LINKS_PROTOCOL_VERSION` and a live PTY id —
+  `resolveTerminalPaths` sends nothing otherwise, so an older host links URLs only.
+  **Parsing** (`terminalLinkParse.parseTerminalLinks`, pure) over-collects and lets the host decide: any
+  http(s) URL; a `file://` URL (its path decoded segment by segment with `decodeURIComponent`, so `%23` and
+  `%3F` come back as `#` and `?`; a malformed escape is no link); Python's `File "x.py", line 12`; a quoted
+  string with whitespace that looks like a path; and any unquoted token with a letter and either a location
+  suffix (`:12`, `:12:5`, `(12,5)`, `: line 12, col 5`), an explicit prefix (`/`, `./`, `../`, `~/`, a drive
+  letter), a separator, or a final `.ext`. Unquoted spaces split paths (`my file.ts` is a path only when
+  quoted). Tokens stop at whitespace, quotes, `()<>|;,:=*?!{}&`, arrows (U+2190–21FF) and box-drawing
+  glyphs (U+2500–257F, so a miette `╭─[src/a.ts:3:1]` frame yields its path); brackets stay, so
+  `app/[slug]/page.tsx` survives, but a token wrapped in or ending with unbalanced brackets loses them, and
+  trailing dots are sentence punctuation. URLs lose trailing `.,;:!?'"` and unbalanced closers in one
+  linear pass. URL and Python-frame spans are masked from the other scans. Line or column numbers of zero or
+  beyond ten million are dropped. Words like `and/or` become candidates and are simply not confirmed.
+  **The provider** reads one logical line at a time (`readLogicalLine`: up to 32 soft-wrapped rows joined,
+  each UTF-16 unit mapped back to its cell, wide-character spacers skipped, and the empty cell xterm leaves
+  at the end of a row when a wide character wraps not read as a space), so a link wrapped across rows is one
+  link offered from each row it covers. URLs need no request. The line's unique path candidates (at most
+  `MAX_TERMINAL_PATH_CANDIDATES`, none longer than `MAX_TERMINAL_PATH_LENGTH`, which the host would reject
+  together with every valid path beside it) go to the host in **one `terminal.resolvePaths` request**;
+  answers, "no" included, are cached per candidate string for 2 s, so sweeping the mouse costs a request
+  per new line while a file created or a `cd` made a moment later is picked up on the next hover, and a
+  failed request answers "no" for that window. Only confirmed paths become links; where candidates
+  overlap (a quoted path with spaces also yields the tokens inside it) the **longest confirmed one wins**.
+  Each `provideLinks` call supersedes the previous one, and an earlier call whose request resolves late is
+  dropped rather than answered, because xterm lets a late reply land on the row now under the mouse. The
+  host resolves a relative path from the directory of the program that printed it and confirms only
+  entries its own workspace owns ([[submodule-server-terminal]], `host`'s terminal link lookup).
 - **Korean IME replacement bridge (WebKit).** WebKit — Safari and the desktop app's WKWebView — drives
   the macOS Korean input method without `composition*` events: a syllable's first jamo lands as an
   `insertText` input, every re-composition of it (`ㄱ`→`가`→`간`) as `insertReplacementText`, the next

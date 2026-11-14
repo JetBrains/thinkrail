@@ -34,7 +34,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { type ChangeMarks, statusMarkClass } from "./changesModel";
 import { holdEditorWarm, useEditorWarm, warmOnHover } from "./editorWarm";
 import { deleteEntry, pasteDestination, pasteInto, supportsFileMutations } from "./fileTreeActions";
-import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
+import { folderRevealPaths, type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
 import { Tree, treeRowKey } from "./treeNavigation";
@@ -240,10 +240,15 @@ function FileNodeRow({
 	const fileStatus = isDir ? undefined : marks.files.get(node.path);
 	const dirChanged = isDir && marks.dirs.has(directory?.path ?? node.path);
 	const ignored = (directory?.deepest ?? node).gitignored === true;
+	const revealedFolder = directory ? folderRevealPaths(directory, focus.revealTarget) : null;
 	const revealRow =
-		!isDir && focus.revealTarget === node.path
+		revealedFolder || (!isDir && focus.revealTarget === node.path)
 			? (row: HTMLButtonElement | null) => {
 					if (!row) return;
+					if (revealedFolder && !expanded) {
+						setPathsExpanded(revealedFolder, true);
+						reload();
+					}
 					row.scrollIntoView({ block: "nearest" });
 					focus.onRevealed();
 				}

@@ -810,7 +810,11 @@ Files tree's remembered look per workspace: All-mode `expanded` folders, Changed
 folders (one set for every scope), `scroll` per view (`all` / `changedList` / `changedTree`, each tagged with
 the scope and compare target it belongs to, so another scope or target branch starts at the top), and `seenActivePath`. **`revealInFiles`** expands
 every ancestor of a path and records it as seen in one write, so the auto-reveal can tell on return whether
-the active file changed meanwhile; every write is idempotent (an unchanged view keeps its identity) and a
+the active file changed meanwhile; **`revealFolderInFiles(workspaceId, path)`** is the explicit folder
+reveal (a terminal folder link) in one write — `filesMode: "all"`, the folder and its ancestors expanded, a
+`reveal-tool` intent for **Files**, and the transient **`filesRevealRequest`** (`{ workspaceId, path }`,
+dropped with its workspace in `applyWorkspaceRemoved`, cleared by **`clearFilesRevealRequest`** once the tree
+has taken it), leaving `seenActivePath` alone; every write is idempotent (an unchanged view keeps its identity) and a
 removed workspace's view is dropped in `applyWorkspaceRemoved`. Persistence lives outside the store, in
 `panels/filesTreeState`. **`fileClipboard`** (`setFileClipboard`) is the in-app clipboard Files and
 Artifacts share: one `{ workspaceId, path, cut? }`, where `cut` turns the next Paste into a move;

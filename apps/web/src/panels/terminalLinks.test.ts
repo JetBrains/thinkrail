@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import type { TerminalPathTarget } from "@thinkrail/contracts";
 import type { ILink } from "@xterm/xterm";
+import { parseTerminalLinks } from "./terminalLinkParse";
 import {
 	createTerminalLinkProvider,
-	parseTerminalUrls,
 	readLogicalLine,
 	type TerminalBufferLike,
 	type TerminalLineLike,
+	type TerminalLinkTarget,
 } from "./terminalLinks";
 
 const COLS = 20;
@@ -33,65 +35,50 @@ function buffer(...rows: TerminalLineLike[]): TerminalBufferLike {
 	return { length: rows.length, getLine: (y) => rows[y] };
 }
 
-function harness(rows: TerminalLineLike[]) {
-	const opened: string[] = [];
+const exists = (relPath: string): TerminalPathTarget => ({ kind: "file", relPath });
+const folder = (relPath: string): TerminalPathTarget => ({ kind: "dir", relPath });
+const missing: TerminalPathTarget = { kind: null, relPath: null };
+
+function harness(
+	rows: TerminalLineLike[],
+	answer: (candidate: string) => TerminalPathTarget = () => missing,
+) {
+	const asked: string[][] = [];
+	const opened: TerminalLinkTarget[] = [];
 	const hints: boolean[] = [];
+	let now = 0;
+	let resolveImpl = (candidates: string[]) => Promise.resolve(candidates.map(answer));
 	const provider = createTerminalLinkProvider({
 		buffer: () => buffer(...rows),
-		open: (url) => opened.push(url),
+		resolve: (candidates) => {
+			asked.push(candidates);
+			return resolveImpl(candidates);
+		},
+		open: (target) => opened.push(target),
 		isActivation: (event) => event.metaKey,
 		showHint: (visible) => hints.push(visible),
+		now: () => now,
 	});
 	const linksAt = (y: number) =>
 		new Promise<ILink[] | undefined>((resolve) => provider.provideLinks(y, resolve));
-	return { opened, hints, linksAt };
+	return {
+		provider,
+		asked,
+		opened,
+		hints,
+		linksAt,
+		advance: (ms: number) => {
+			now += ms;
+		},
+		setResolve: (next: typeof resolveImpl) => {
+			resolveImpl = next;
+		},
+	};
 }
 
 const click = (metaKey: boolean) => ({ metaKey }) as MouseEvent;
-const urls = (line: string) => parseTerminalUrls(line).map((link) => link.url);
-
-describe("parseTerminalUrls", () => {
-	test("http and https, at their positions", () => {
-		const line = "Local: http://localhost:5173/ and https://example.com/docs";
-		expect(parseTerminalUrls(line)).toEqual([
-			{ start: 7, end: 29, url: "http://localhost:5173/" },
-			{ start: 34, end: 58, url: "https://example.com/docs" },
-		]);
-	});
-
-	test("trailing punctuation is trimmed", () => {
-		expect(urls("See https://example.com/docs.")).toEqual(["https://example.com/docs"]);
-		expect(urls("https://example.com/a, https://example.com/b;")).toEqual([
-			"https://example.com/a",
-			"https://example.com/b",
-		]);
-		expect(urls("'https://example.com/x'")).toEqual(["https://example.com/x"]);
-		expect(urls("<https://example.com>")).toEqual(["https://example.com"]);
-	});
-
-	test("a long run of closers is trimmed in linear time", () => {
-		const started = performance.now();
-		expect(urls(`https://example.com/a${")".repeat(20_000)}`)).toEqual(["https://example.com/a"]);
-		expect(performance.now() - started).toBeLessThan(200);
-	});
-
-	test("brackets are kept only when balanced", () => {
-		expect(urls("(https://example.com/a_(b))")).toEqual(["https://example.com/a_(b)"]);
-		expect(urls("[docs](https://example.com/docs)")).toEqual(["https://example.com/docs"]);
-		expect(urls("https://example.com/x),")).toEqual(["https://example.com/x"]);
-	});
-
-	test("query strings, fragments and ports stay in", () => {
-		expect(urls("https://example.com:8080/q?a=1&b=2#frag")).toEqual([
-			"https://example.com:8080/q?a=1&b=2#frag",
-		]);
-	});
-
-	test("only http(s) links, and a scheme needs a host after its slashes", () => {
-		expect(urls("https: https:// https://. ftp://example.com file:///etc/hosts")).toEqual([]);
-		expect(urls("nothing here 12:30 v1.2.3")).toEqual([]);
-	});
-});
+const urls = (line: string) =>
+	parseTerminalLinks(line).flatMap((link) => (link.kind === "url" ? [link.url] : []));
 
 describe("readLogicalLine", () => {
 	test("joins soft-wrapped rows from any of them", () => {
@@ -137,17 +124,20 @@ describe("readLogicalLine", () => {
 });
 
 describe("createTerminalLinkProvider", () => {
-	test("a URL becomes an underlined link over its cells", async () => {
+	test("a URL becomes an underlined link over its cells without asking the host", async () => {
 		const h = harness([row("see https://x.dev/a")]);
 		const links = await h.linksAt(1);
 		expect(links?.map((link) => link.text)).toEqual(["https://x.dev/a"]);
 		expect(links?.[0]?.range).toEqual({ start: { x: 5, y: 1 }, end: { x: 19, y: 1 } });
 		expect(links?.[0]?.decorations).toEqual({ pointerCursor: true, underline: true });
+		expect(h.asked).toEqual([]);
 	});
 
-	test("a line with no URL answers with no links", async () => {
-		expect(await harness([row("hello world")]).linksAt(1)).toBeUndefined();
+	test("a line with nothing link-shaped answers with no links and no request", async () => {
+		const h = harness([row("hello world")]);
+		expect(await h.linksAt(1)).toBeUndefined();
 		expect(await harness([row("x")]).linksAt(9)).toBeUndefined();
+		expect(h.asked).toEqual([]);
 	});
 
 	test("a URL wrapped across rows spans both and is found from either", async () => {
@@ -170,7 +160,7 @@ describe("createTerminalLinkProvider", () => {
 		link?.activate(click(false), link.text);
 		expect(h.opened).toEqual([]);
 		link?.activate(click(true), link.text);
-		expect(h.opened).toEqual(["https://x.dev"]);
+		expect(h.opened).toEqual([{ kind: "url", url: "https://x.dev" }]);
 	});
 
 	test("hovering shows the hint and leaving hides it", async () => {
@@ -179,5 +169,115 @@ describe("createTerminalLinkProvider", () => {
 		link?.hover?.(click(false), link.text);
 		link?.leave?.(click(false), link.text);
 		expect(h.hints).toEqual([true, false]);
+	});
+
+	test("only paths the host confirms become links, asked in one batch per line", async () => {
+		const h = harness([row("a.ts:3 b.ts a.ts")], (candidate) =>
+			candidate === "a.ts" ? exists("src/a.ts") : missing,
+		);
+		const links = await h.linksAt(1);
+		expect(h.asked).toEqual([["a.ts", "b.ts"]]);
+		expect(links?.map((link) => link.text)).toEqual(["a.ts:3", "a.ts"]);
+		expect(links?.[0]?.decorations).toEqual({ pointerCursor: true, underline: true });
+	});
+
+	test("a candidate the host would refuse as too long is never sent", async () => {
+		const long = `x/${"a".repeat(5_000)}.ts`;
+		const h = harness([row(`${long} b.ts`, false, long.length + 10)], () => exists("b.ts"));
+		const links = await h.linksAt(1);
+		expect(h.asked).toEqual([["b.ts"]]);
+		expect(links?.map((link) => link.text)).toEqual(["b.ts"]);
+	});
+
+	test("at most the host's candidate limit is asked for one line", async () => {
+		const names = Array.from({ length: 70 }, (_, index) => `f${index}.ts`).join(" ");
+		const h = harness([row(names, false, names.length)], (candidate) => exists(candidate));
+		await h.linksAt(1);
+		expect(h.asked).toHaveLength(1);
+		expect(h.asked[0]).toHaveLength(64);
+	});
+
+	test("answers are reused for a short while, then asked again", async () => {
+		const h = harness([row("a.ts"), row("x a.ts")], () => exists("a.ts"));
+		await h.linksAt(1);
+		await h.linksAt(2);
+		expect(h.asked).toEqual([["a.ts"]]);
+		h.advance(2_000);
+		await h.linksAt(1);
+		expect(h.asked).toEqual([["a.ts"], ["a.ts"]]);
+	});
+
+	test("a path wrapped across rows spans both and is found from either", async () => {
+		const rows = [row("src/components/Butto"), row("n.tsx:12:3 ok", true)];
+		const h = harness(rows, () => exists("src/components/Button.tsx"));
+		const expected = { start: { x: 1, y: 1 }, end: { x: 10, y: 2 } };
+		expect((await h.linksAt(1))?.[0]?.range).toEqual(expected);
+		expect((await h.linksAt(2))?.[0]?.range).toEqual(expected);
+	});
+
+	test("overlapping candidates keep the longest that exists", async () => {
+		const line = [row('"my dir/f.ts":3')];
+		const both = harness(line, (candidate) =>
+			candidate === "my dir/f.ts" || candidate === "dir/f.ts" ? exists(candidate) : missing,
+		);
+		expect((await both.linksAt(1))?.map((link) => link.text)).toEqual(['"my dir/f.ts":3']);
+		const innerOnly = harness(line, (candidate) =>
+			candidate === "dir/f.ts" ? exists(candidate) : missing,
+		);
+		expect((await innerOnly.linksAt(1))?.map((link) => link.text)).toEqual(["dir/f.ts"]);
+	});
+
+	test("a file opens at its printed line and column, a URL as a URL", async () => {
+		const h = harness([row("a.ts:3:2 b.ts docs https://x.dev", false, 40)], (candidate) =>
+			candidate === "a.ts" ? exists("src/a.ts") : candidate === "b.ts" ? exists("b.ts") : missing,
+		);
+		const [file, plain, url] = (await h.linksAt(1)) ?? [];
+		file?.activate(click(false), file.text);
+		expect(h.opened).toEqual([]);
+		file?.activate(click(true), file.text);
+		plain?.activate(click(true), plain.text);
+		url?.activate(click(true), url.text);
+		expect(h.opened).toEqual([
+			{ kind: "file", path: "src/a.ts", line: 3, column: 2 },
+			{ kind: "file", path: "b.ts" },
+			{ kind: "url", url: "https://x.dev" },
+		]);
+	});
+
+	test("a folder opens as a folder, without a line", async () => {
+		const h = harness([row("src/")], () => folder("src"));
+		const links = await h.linksAt(1);
+		links?.[0]?.activate(click(true), "src/");
+		expect(h.opened).toEqual([{ kind: "dir", path: "src" }]);
+	});
+
+	test("a host that cannot answer leaves only URLs", async () => {
+		const h = harness([row("a.ts https://x.dev")]);
+		h.setResolve(() => Promise.reject(new Error("Unknown terminal")));
+		expect((await h.linksAt(1))?.map((link) => link.text)).toEqual(["https://x.dev"]);
+	});
+
+	test("a superseded ask is never answered", async () => {
+		const h = harness([row("a.ts"), row("b.ts")], (candidate) => exists(candidate));
+		let release: () => void = () => {};
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		h.setResolve(async (candidates) => {
+			await gate;
+			return candidates.map((candidate) => exists(candidate));
+		});
+		const answers: string[] = [];
+		h.provider.provideLinks(1, () => answers.push("first"));
+		const second = new Promise<void>((resolve) =>
+			h.provider.provideLinks(2, () => {
+				answers.push("second");
+				resolve();
+			}),
+		);
+		release();
+		await second;
+		await Bun.sleep(0);
+		expect(answers).toEqual(["second"]);
 	});
 });
