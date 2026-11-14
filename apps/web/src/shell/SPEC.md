@@ -265,7 +265,8 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   group, with the chord where one exists — and runs the picked id through the same channel, which
   re-resolves the target and re-checks availability ([[submodule-web-shell-layout]], *Tab actions*).
   `Mod+Alt+W` and the desktop's `Mod+W` share `chordActions.closeActiveItem` (dismiss a layer, else
-  close the active tab). Exceptions: `Ctrl+\` inside a terminal on Windows/Linux stays the shell's
+  close the active tab); it is the one table chord not suppressed behind a modal, because dismissing that
+  modal is its first step. Exceptions: `Ctrl+\` inside a terminal on Windows/Linux stays the shell's
   SIGQUIT, like `Ctrl+L` (`⌘\` on a Mac still splits); `⌥⌘W` inside Monaco's find widget stays its
   whole-word toggle. The group moves accept GNOME's grab of `Ctrl+Alt+←/→` on Linux, as VS Code does —
   the palette rows reach the same moves. No Alt chord fires while AltGraph is held

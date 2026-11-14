@@ -244,6 +244,16 @@ describe("tab chords", () => {
 		).toBe("tab.close");
 	});
 
+	test("let tab.close through an open modal so it can dismiss the layer, and only it", () => {
+		expect(globalHotkeyCommand(key("KeyW", { altKey: true }), tabs, true, "Linux")).toBe(
+			"tab.close",
+		);
+		expect(globalHotkeyCommand(key("Backslash"), tabs, true, "Linux")).toBeNull();
+		expect(
+			globalHotkeyCommand(key("ArrowRight", { altKey: true }), tabs, true, "Linux"),
+		).toBeNull();
+	});
+
 	test("ignore an AltGraph chord", () => {
 		const altGraph = { getModifierState: (modifier: string) => modifier === "AltGraph" };
 		expect(

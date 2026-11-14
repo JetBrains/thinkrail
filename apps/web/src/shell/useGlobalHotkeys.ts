@@ -77,9 +77,10 @@ export function globalHotkeyCommand(
 	inTerminal = false,
 	inEditorFind = false,
 ): GlobalHotkeyCommand | null {
-	if (modalOpen || event.isComposing) return null;
+	if (event.isComposing) return null;
 	const id = matchKeybinding(event, platform);
 	if (id === null || id === "chat.history") return null;
+	if (modalOpen && id !== "tab.close") return null;
 	if (SHELL_CTRL_CHORDS.has(id) && inTerminal && event.ctrlKey) return null;
 	if (id === "tab.close" && inEditorFind && event.metaKey) return null;
 	return actions[CHORD_ACTIONS[id]] ? id : null;

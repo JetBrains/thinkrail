@@ -64,9 +64,17 @@ test("Mod+\\ splits the active tab right and the move chords walk it between gro
 	await expect(fileTab(groups.nth(0), "README.md")).toBeVisible();
 });
 
-test("Mod+Alt+W closes the active tab and focus moves to the tab beside it", async ({ page }) => {
+test("Mod+Alt+W first dismisses an open layer, then closes the active tab and focus moves beside it", async ({
+	page,
+}) => {
 	await openWorkbenchWithFiles(page, ["README.md", "notes.txt"]);
 	await fileTab(page, "notes.txt").click();
+
+	await pressPlatformShortcut(page, "k");
+	await expect(page.getByTestId("search-palette")).toBeVisible();
+	await pressPlatformShortcut(page, "Alt+KeyW");
+	await expect(page.getByTestId("search-palette")).toHaveCount(0);
+	await expect(page.getByTestId("editor-tab")).toHaveCount(2);
 
 	await pressPlatformShortcut(page, "Alt+KeyW");
 	await expect(page.getByTestId("editor-tab")).toHaveCount(1);
