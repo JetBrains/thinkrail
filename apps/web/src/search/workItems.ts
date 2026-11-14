@@ -75,6 +75,41 @@ function contextBoost(
 	);
 }
 
+interface Placement {
+	readonly activeAt: number;
+	readonly project: number;
+	readonly workspace: number;
+}
+
+function placements(state: WorkItemsState): {
+	workspace: ReadonlyMap<string, Placement>;
+	project: ReadonlyMap<string, number>;
+} {
+	const projectRank = new Map<string, number>();
+	for (const project of state.projects.filter(isChatsContainer)) {
+		projectRank.set(project.id, projectRank.size);
+	}
+	for (const project of state.projects) {
+		if (!isChatsContainer(project)) projectRank.set(project.id, projectRank.size);
+	}
+	const workspace = new Map<string, Placement>();
+	for (const [projectId, rank] of projectRank) {
+		const rows = state.workspaces[projectId] ?? [];
+		rows.forEach((row, index) => {
+			workspace.set(row.id, {
+				activeAt: row.lastActiveAt ?? 0,
+				project: rank,
+				workspace: isDefaultWorkspace(row) ? -1 : rows.length - index,
+			});
+		});
+	}
+	return { workspace, project: projectRank };
+}
+
+function byFreshness(a: Placement, b: Placement): number {
+	return b.activeAt - a.activeAt || a.project - b.project || a.workspace - b.workspace;
+}
+
 const REVIEW_STATE_LABELS: Record<BranchReviewState, MessageKey> = {
 	open: "search.preview.reviewOpen",
 	merged: "search.preview.reviewMerged",
@@ -113,13 +148,21 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 		}
 	}
 	const attentionByWorkspace = new Map<string, SessionAttention>();
-	const projectOrder = new Map(state.projects.map((project, index) => [project.id, index]));
-	const orderOf = (records: Readonly<Record<string, { projectId: string }>>) =>
-		projectOrder.get(Object.values(records)[0]?.projectId ?? "") ?? state.projects.length;
-	const byProject = Object.entries(state.sessionStateByWorkspace).sort(
-		([, a], [, b]) => orderOf(a) - orderOf(b),
+	const placed = placements(state);
+	const placementOf = (workspaceId: string, projectId: string | undefined): Placement =>
+		placed.workspace.get(workspaceId) ?? {
+			activeAt: 0,
+			project: placed.project.get(projectId ?? "") ?? state.projects.length,
+			workspace: Number.POSITIVE_INFINITY,
+		};
+	const recordsPlacement = (
+		workspaceId: string,
+		records: Readonly<Record<string, { projectId: string }>>,
+	) => placementOf(workspaceId, Object.values(records)[0]?.projectId);
+	const byFreshest = Object.entries(state.sessionStateByWorkspace).sort(([idA, a], [idB, b]) =>
+		byFreshness(recordsPlacement(idA, a), recordsPlacement(idB, b)),
 	);
-	for (const [workspaceId, records] of byProject) {
+	for (const [workspaceId, records] of byFreshest) {
 		const workspace = workspaceById.get(workspaceId);
 		if (workspace?.deletionPending === true) continue;
 		let attention: SessionAttention | undefined;
@@ -172,7 +215,10 @@ export function buildWorkItems(input: WorkItemsInput): PaletteItem[] {
 		}
 		if (attention) attentionByWorkspace.set(workspaceId, attention);
 	}
-	for (const workspace of workspaceById.values()) {
+	const freshestWorkspaces = [...workspaceById.values()].sort((a, b) =>
+		byFreshness(placementOf(a.id, a.projectId), placementOf(b.id, b.projectId)),
+	);
+	for (const workspace of freshestWorkspaces) {
 		if (isChatWorkspace(workspace)) continue;
 		const projectName = projectNames.get(workspace.projectId) ?? "";
 		const review = workspace.review;
