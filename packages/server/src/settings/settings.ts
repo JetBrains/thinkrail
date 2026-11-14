@@ -1,3 +1,4 @@
+import { isAbsolute } from "node:path";
 import {
 	type AppConfig,
 	type AppConfigUpdate,
@@ -63,6 +64,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: true,
 	settleIdleDays: true,
+	worktreeDirectory: true,
 	disabledExtensions: true,
 	extensionSettings: true,
 	otherAgentSkills: true,
@@ -236,6 +238,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		throw new Error("analytics consent must include the sharing preference");
 	}
 	const {
+		worktreeDirectory,
 		defaultModel,
 		defaultEffort,
 		reviewModel,
@@ -314,6 +317,14 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	) {
 		throw new Error("settleIdleDays must be a whole number of days from 1 to 365, or null");
 	}
+	if (
+		runtimeUpdate.worktreeDirectory !== undefined &&
+		runtimeUpdate.worktreeDirectory !== null &&
+		(typeof runtimeUpdate.worktreeDirectory !== "string" ||
+			!isAbsolute(runtimeUpdate.worktreeDirectory.trim()))
+	) {
+		throw new Error("worktreeDirectory must be an absolute path or null");
+	}
 	if (runtimeUpdate.locale !== undefined && !isLocalePreference(runtimeUpdate.locale)) {
 		throw new Error('locale must be "system" or a canonical BCP-47 language tag');
 	}
@@ -365,7 +376,11 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 					),
 				}),
 		...(nextDisabledPackages === undefined ? {} : { disabledPackages: nextDisabledPackages }),
+		...(worktreeDirectory !== undefined && worktreeDirectory !== null
+			? { worktreeDirectory: worktreeDirectory.trim() }
+			: {}),
 	};
+	if (worktreeDirectory === null) delete next.worktreeDirectory;
 	if (defaultModel !== undefined) {
 		if (defaultModel === null) delete next.defaultModel;
 		else next.defaultModel = defaultModel;

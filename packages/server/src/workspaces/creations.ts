@@ -44,6 +44,7 @@ import {
 import {
 	assertManagedPathFree,
 	managedPathOwned,
+	managedWorktreeRoot,
 	planManagedWorkspace,
 	registerManagedWorkspace,
 } from "./workspaces";
@@ -99,7 +100,7 @@ function projectOf(record: WorkspaceCreationRecord): Project {
 }
 
 function isManagedPath(path: string): boolean {
-	const rel = relative(join(dataDir(), "worktrees"), resolve(path));
+	const rel = relative(resolve(managedWorktreeRoot()), resolve(path));
 	return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
 }
 

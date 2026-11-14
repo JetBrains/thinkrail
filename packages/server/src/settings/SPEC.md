@@ -10,7 +10,7 @@ depends-on: [module-contracts]
 ## Responsibility
 
 The server-synchronized app config: opaque fixed-theme selection, fixed/system mode and optional light/dark
-pair, additional-analytics preference and first-run dialog completion marker, host-owned new-chat model and
+pair, the optional absolute root for newly created managed worktrees, additional-analytics preference and first-run dialog completion marker, host-owned new-chat model and
 effort defaults, terminal replay budget and Windows shell preference, chat composer growth preset, chat/file
 visual line widths plus independent pane bounds, bounded custom layout-preset catalog, JetBrains quota
 display/cadence, the host-wide subagent default, plan-review policy, the host-registry extensions the
@@ -37,6 +37,7 @@ interval (`1–3600`, default 30), because those values govern host process cade
 
 ## Boundary
 
+- `worktreeDirectory` is an optional absolute path for the root of future managed worktrees. Missing or malformed stored values use the workspaces module's data-dir default; `null` clears the override. Changing it never moves existing worktrees.
 - `settleIdleDays` — the Settled-shelf idle window: a positive integer number of days (clamped to 1…365) or
   `null` for never; default `7`. Validated like every other known field; a hand-edited non-number falls
   back to the default rather than disabling settling.

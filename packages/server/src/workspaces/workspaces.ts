@@ -82,6 +82,16 @@ function toBranch(name: string): string {
 
 const MAX_DISPLAY_NAME = 60;
 
+let worktreeDirectoryResolver: (() => string | undefined) | null = null;
+
+export function setWorktreeDirectoryResolver(fn: (() => string | undefined) | null): void {
+	worktreeDirectoryResolver = fn;
+}
+
+export function managedWorktreeRoot(): string {
+	return worktreeDirectoryResolver?.() ?? join(dataDir(), "worktrees");
+}
+
 function toDisplayName(raw: string): string | null {
 	const name = raw.trim().replace(/\s+/g, " ").slice(0, MAX_DISPLAY_NAME).trimEnd();
 	return name.length > 0 ? name : null;
@@ -128,7 +138,7 @@ function nextAutoBranch(project: Project): string {
 }
 
 function managedWorktreePath(project: Project, branch: string): string {
-	return join(dataDir(), "worktrees", project.slug, branch);
+	return join(managedWorktreeRoot(), project.slug, branch);
 }
 
 function creationPaths(): Set<string> {

@@ -10,8 +10,8 @@ tags: [public-surface-checked]
 
 ## Responsibility
 
-A workspace is a `git worktree` on its own branch under the data dir — the anchor for files/git/terminals/
-chats. Its **display `name` is decoupled from its git `branch`**: `name` is a human-readable label
+A workspace is a `git worktree` on its own branch under the configured managed-worktree root — the anchor for files/git/terminals/
+chats. The root defaults to the data dir and can be changed for future creations through the host-owned app setting; existing worktrees never move. Its **display `name` is decoupled from its git `branch`**: `name` is a human-readable label
 (Title Case, spaces) and `branch` is a kebab slug derived from it — they were once held equal, and still
 coincide for the auto `workspace-N` placeholder, but a named workspace carries both distinctly.
 
@@ -83,7 +83,7 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   must ask about the same ref. **That full name is resolved to one commit OID, and the OID is what
   `worktree add` gets** — checking one ref and checking out another would leave Git's disambiguation to choose
   or reject the wrong object, and the OID is also what failure cleanup compares the new branch against.
-  `baseBranch` still records the user-visible `<remote>/<branch>`. **The message splits on the same distinction**: a fetch that *failed* carries
+  `baseBranch` still records the user-visible `<remote>/<branch>`. Managed paths are `<worktree root>/<project-slug>/<branch>`; the root is resolved through the host-injected `setWorktreeDirectoryResolver` seam and falls back to `<dataDir>/worktrees`. **The message splits on the same distinction**: a fetch that *failed* carries
   git's stderr, while a fetch that *succeeded* without landing the ref names the refspec instead — its
   stderr is a progress log (`* branch release -> FETCH_HEAD`), so pasting it after "Could not fetch"
   showed the user a successful fetch as the reason a fetch failed. It is the step that knows *why*
@@ -414,7 +414,7 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`, `setWorkspaceDiffBase`, `setWorkspaceSkillOverride`,
   `setWorkspaceSubagentsOverride`, `setWorkspaceSubagentMaxConcurrent`, `recordWorkspaceActivity`, `backfillWorkspaceActivity`,
-  `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`,
+  `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`, `managedWorktreeRoot`, `setWorktreeDirectoryResolver`,
   `chatsRoot`, `isUnderChatsRoot`, `isChatsContainer`, `isChatWorkspace`,
   `isChatsContainerId`, `isChatWorkspaceId`, `resetChatIdCache`, `ensureChatsContainer`,
   `createChatRecord`, `chatWorkspaces`, `getChatWorkspace`, `markChatDeletionPending`,

@@ -658,6 +658,7 @@ export function loadConfig(): AppConfig {
 	delete extensions.layout;
 	delete extensions.themeMode;
 	delete extensions.systemThemePair;
+	delete extensions.worktreeDirectory;
 	return {
 		...extensions,
 		...normalizeThemePreference(value),
@@ -729,6 +730,9 @@ export function loadConfig(): AppConfig {
 		settleIdleDays: isSettleIdleDays(value.settleIdleDays)
 			? value.settleIdleDays
 			: DEFAULT_CONFIG.settleIdleDays,
+		...(isAbsolutePath(value.worktreeDirectory)
+			? { worktreeDirectory: value.worktreeDirectory }
+			: {}),
 		disabledExtensions: storedNameList(value.disabledExtensions),
 		extensionSettings: storedExtensionSettings(value.extensionSettings),
 		otherAgentSkills: typeof value.otherAgentSkills === "boolean" ? value.otherAgentSkills : true,

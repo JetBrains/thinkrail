@@ -1,8 +1,10 @@
 import { WORKSPACE_SETTLE_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
+import { useState } from "react";
 import { toast, useAppStore } from "../store";
 import { getTransport } from "../transport";
+import { SettingsGroup } from "./SettingsGroup";
 import { SettingsRadioCards, type SettingsRadioChoice } from "./SettingsRadioCards";
 
 type IdleChoice = `${number}` | "never";
@@ -14,18 +16,8 @@ type IdleChoiceSpec = Omit<SettingsRadioChoice<IdleChoice>, "label" | "hint" | "
 };
 
 const IDLE_CHOICES: readonly IdleChoiceSpec[] = [
-	{
-		id: "1",
-		days: 1,
-		description: "settings.workspaces.idle.oneDay",
-		testId: "settle-idle-1",
-	},
-	{
-		id: "3",
-		days: 3,
-		description: "settings.workspaces.idle.threeDays",
-		testId: "settle-idle-3",
-	},
+	{ id: "1", days: 1, description: "settings.workspaces.idle.oneDay", testId: "settle-idle-1" },
+	{ id: "3", days: 3, description: "settings.workspaces.idle.threeDays", testId: "settle-idle-3" },
 	{
 		id: "7",
 		days: 7,
@@ -54,6 +46,8 @@ export function toChoice(days: number | null): IdleChoice {
 export function WorkspacesSettings() {
 	const t = useT();
 	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
+	const worktreeDirectory = useAppStore((s) => s.worktreeDirectory);
+	const [directoryDraft, setDirectoryDraft] = useState(worktreeDirectory ?? "");
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const supported =
 		protocolVersion !== null && protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION;
@@ -66,8 +60,61 @@ export function WorkspacesSettings() {
 			.catch(() => toast.error(t("settings.workspaces.changeFailed")));
 	};
 
+	const saveDirectory = (value: string | null) => {
+		if (value === worktreeDirectory || (value === null && worktreeDirectory === undefined)) return;
+		getTransport()
+			.request("settings.update", { config: { worktreeDirectory: value } })
+			.catch(() => toast.error(t("settings.workspaces.changeFailed")));
+	};
+
 	return (
 		<section data-testid="settings-workspaces" className="flex flex-col gap-16">
+			<SettingsGroup
+				title={t("settings.workspaces.directoryTitle")}
+				description={t("settings.workspaces.directoryDescription")}
+			>
+				<div className="flex flex-col gap-8 px-12 py-12">
+					<div className="flex min-w-0 gap-8">
+						<input
+							data-testid="settings-worktree-directory"
+							value={directoryDraft}
+							placeholder={t("settings.workspaces.directoryDefault")}
+							onChange={(event) => setDirectoryDraft(event.currentTarget.value)}
+							onBlur={() => saveDirectory(directoryDraft.trim() || null)}
+							className="min-w-0 flex-1 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default"
+						/>
+						<button
+							type="button"
+							data-testid="settings-worktree-directory-browse"
+							onClick={() =>
+								getTransport()
+									.request("dialog.selectDirectory", {})
+									.then(({ path }) => {
+										if (path) {
+											setDirectoryDraft(path);
+											saveDirectory(path);
+										}
+									})
+									.catch(() => toast.error(t("settings.workspaces.changeFailed")))
+							}
+							className="shrink-0 rounded-sm border border-control-border-default px-8 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
+						>
+							{t("settings.workspaces.directoryBrowse")}
+						</button>
+					</div>
+					<button
+						type="button"
+						data-testid="settings-worktree-directory-reset"
+						onClick={() => {
+							setDirectoryDraft("");
+							saveDirectory(null);
+						}}
+						className="self-start tr-text-metadata text-text-muted hover:text-text-default"
+					>
+						{t("settings.workspaces.directoryReset")}
+					</button>
+				</div>
+			</SettingsGroup>
 			<div className="flex flex-col gap-8">
 				<div className="flex flex-col gap-4">
 					<h3 className="tr-title-section text-text-default">{t("settings.workspaces.title")}</h3>
