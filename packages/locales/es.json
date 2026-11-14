@@ -1685,6 +1685,7 @@
 	"search.hint.scope": "ámbito",
 	"search.hint.select": "seleccionar",
 	"search.item.inWorkspace": "{{project}} › {{workspace}}",
+	"search.item.noProject": "Sin proyecto",
 	"search.item.openFailed": "No se pudo abrir el resultado",
 	"search.item.projectFolder": "{{project}} · carpeta del proyecto",
 	"search.item.settingsPath": "Ajustes › {{group}}",

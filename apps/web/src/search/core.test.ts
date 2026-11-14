@@ -9,6 +9,7 @@ import {
 	MAX_LEARNING_BYTES,
 	parseLearning,
 	recordPick,
+	recordVisit,
 	serializeLearning,
 } from "./learning";
 import type { PaletteItem } from "./model";
@@ -213,6 +214,35 @@ describe("learning", () => {
 		expect(parseLearning(text, now).version).toBe(1);
 		expect(parseLearning("{not json", now)).toBe(EMPTY_LEARNING);
 		expect(parseLearning(JSON.stringify({ version: 2 }), now)).toBe(EMPTY_LEARNING);
+	});
+
+	test("a visit stamps when the place was used without touching the typed ranking, and retires the places it stands for", () => {
+		const now = 7 * DAY;
+		const picked = recordPick(EMPTY_LEARNING, "auth", "workspace:w1", now);
+		expect(picked.lastUsed["workspace:w1"]).toBe(now);
+		const visited = recordVisit(picked, ["chat:c1", "workspace:w1"], now + 1);
+		expect(visited.lastUsed["chat:c1"]).toBe(now + 1);
+		expect(visited.lastUsed["workspace:w1"]).toBeUndefined();
+		expect(visited.frecency).toBe(picked.frecency);
+		expect(visited.adaptive).toBe(picked.adaptive);
+		expect(frecencyScore(visited, "chat:c1", now + 1)).toBe(0);
+		const reloaded = parseLearning(serializeLearning(visited), now);
+		expect(reloaded.lastUsed["chat:c1"]).toBe(now + 1);
+		expect(parseLearning(JSON.stringify({ version: 1, frecency: {} }), now).lastUsed).toEqual({});
+	});
+
+	test("picking the place the user already stands in keeps it one stamp, still learning the pick", () => {
+		const now = 9 * DAY;
+		const here = ["chat:c1", "workspace:w1"];
+		const inChat = recordVisit(EMPTY_LEARNING, here, now);
+		const picked = recordPick(inChat, "auth", "workspace:w1", now + 1, here);
+		expect(picked.lastUsed["workspace:w1"]).toBeUndefined();
+		expect(picked.lastUsed["chat:c1"]).toBe(now + 1);
+		expect(frecencyScore(picked, "workspace:w1", now + 1)).toBeCloseTo(1, 5);
+		expect(adaptiveCounts(picked, "auth", now + 1).get("workspace:w1")).toBeCloseTo(2, 5);
+		const elsewhere = recordPick(inChat, "", "workspace:w2", now + 1, here);
+		expect(elsewhere.lastUsed["workspace:w2"]).toBe(now + 1);
+		expect(elsewhere.lastUsed["chat:c1"]).toBe(now);
 	});
 
 	test("a query or id spelled like an object property survives a reload", () => {

@@ -1549,6 +1549,7 @@
 	"search.hint.scope": "範囲",
 	"search.hint.select": "選択",
 	"search.item.inWorkspace": "{{project}} › {{workspace}}",
+	"search.item.noProject": "プロジェクトなし",
 	"search.item.openFailed": "結果を開けませんでした",
 	"search.item.projectFolder": "{{project}} · プロジェクトフォルダー",
 	"search.item.settingsPath": "設定 › {{group}}",

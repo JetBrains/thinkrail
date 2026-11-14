@@ -21,6 +21,7 @@ export interface LearningSnapshot {
 	readonly version: 1;
 	readonly frecency: Readonly<Record<string, number>>;
 	readonly adaptive: Readonly<Record<string, Readonly<Record<string, AdaptiveEntry>>>>;
+	readonly lastUsed: Readonly<Record<string, number>>;
 }
 
 type Picks = Record<string, AdaptiveEntry>;
@@ -29,6 +30,7 @@ export const EMPTY_LEARNING: LearningSnapshot = {
 	version: 1,
 	frecency: nullProto<Record<string, number>>(),
 	adaptive: nullProto<Record<string, Picks>>(),
+	lastUsed: nullProto<Record<string, number>>(),
 };
 
 function day(nowMs: number): number {
@@ -79,11 +81,34 @@ function prune<T>(
 	return pruned;
 }
 
+function stampUsed(
+	lastUsed: Readonly<Record<string, number>>,
+	id: string,
+	nowMs: number,
+): Record<string, number> {
+	const stamped = nullProto<Record<string, number>>(lastUsed);
+	stamped[id] = nowMs;
+	return prune(stamped, MAX_ITEMS, (value) => value);
+}
+
+export function recordVisit(
+	snapshot: LearningSnapshot,
+	place: readonly string[],
+	nowMs: number,
+): LearningSnapshot {
+	const [id, ...broader] = place;
+	if (!id || id.length > MAX_ID_LENGTH) return snapshot;
+	const lastUsed = stampUsed(snapshot.lastUsed, id, nowMs);
+	for (const covered of broader) delete lastUsed[covered];
+	return { ...snapshot, lastUsed };
+}
+
 export function recordPick(
 	snapshot: LearningSnapshot,
 	query: string,
 	id: string,
 	nowMs: number,
+	currentPlace: readonly string[] = [],
 ): LearningSnapshot {
 	if (!id || id.length > MAX_ID_LENGTH) return snapshot;
 	const today = day(nowMs);
@@ -106,7 +131,13 @@ export function recordPick(
 			Math.max(...Object.values(value).map((entry) => entry.day)),
 		);
 	}
-	return { version: 1, frecency, adaptive };
+	const picked: LearningSnapshot = {
+		version: 1,
+		frecency,
+		adaptive,
+		lastUsed: stampUsed(snapshot.lastUsed, id, nowMs),
+	};
+	return currentPlace.includes(id) ? recordVisit(picked, currentPlace, nowMs) : picked;
 }
 
 function isAdaptiveEntry(value: unknown): value is AdaptiveEntry {
@@ -118,6 +149,14 @@ function isAdaptiveEntry(value: unknown): value is AdaptiveEntry {
 	);
 }
 
+function finiteNumbers(raw: unknown): Record<string, number> {
+	const numbers = nullProto<Record<string, number>>();
+	for (const [id, stored] of Object.entries(raw ?? {})) {
+		if (typeof stored === "number" && Number.isFinite(stored)) numbers[id] = stored;
+	}
+	return numbers;
+}
+
 export function parseLearning(raw: string | null, nowMs: number): LearningSnapshot {
 	if (!raw) return EMPTY_LEARNING;
 	try {
@@ -125,10 +164,8 @@ export function parseLearning(raw: string | null, nowMs: number): LearningSnapsh
 		if (typeof value !== "object" || value === null || Reflect.get(value, "version") !== 1) {
 			return EMPTY_LEARNING;
 		}
-		const frecency = nullProto<Record<string, number>>();
-		for (const [id, stored] of Object.entries(Reflect.get(value, "frecency") ?? {})) {
-			if (typeof stored === "number" && Number.isFinite(stored)) frecency[id] = stored;
-		}
+		const frecency = finiteNumbers(Reflect.get(value, "frecency"));
+		const lastUsed = finiteNumbers(Reflect.get(value, "lastUsed"));
 		const adaptive = nullProto<Record<string, Picks>>();
 		const today = day(nowMs);
 		for (const [query, picks] of Object.entries(Reflect.get(value, "adaptive") ?? {})) {
@@ -140,7 +177,7 @@ export function parseLearning(raw: string | null, nowMs: number): LearningSnapsh
 			}
 			if (Object.keys(kept).length > 0) adaptive[query] = kept;
 		}
-		return { version: 1, frecency, adaptive };
+		return { version: 1, frecency, adaptive, lastUsed };
 	} catch {
 		return EMPTY_LEARNING;
 	}
@@ -159,6 +196,11 @@ export function serializeLearning(snapshot: LearningSnapshot): string {
 			frecency: prune(current.frecency, itemLimit, (value) => value),
 			adaptive: prune(current.adaptive, queryLimit, (value) =>
 				Math.max(...Object.values(value).map((entry) => entry.day)),
+			),
+			lastUsed: prune(
+				current.lastUsed,
+				Math.floor(Object.keys(current.lastUsed).length / 2),
+				(value) => value,
 			),
 		};
 		text = JSON.stringify(current);

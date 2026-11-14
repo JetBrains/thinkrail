@@ -23,6 +23,7 @@ import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import {
+	Fragment,
 	type KeyboardEvent as ReactKeyboardEvent,
 	type MouseEvent as ReactMouseEvent,
 	type ReactNode,
@@ -58,6 +59,7 @@ import type {
 	PaletteSection,
 	PaletteStart,
 } from "./model";
+import { currentPlaceIds } from "./places";
 import { readLearning, readPreviewOpen, writeLearning, writePreviewOpen } from "./preferences";
 import {
 	parseSearchQuery,
@@ -160,6 +162,7 @@ function PaletteContent({
 	const generation = useAppStore((s) => s.welcomeGeneration);
 	const [learning, setLearning] = useState(readLearning);
 	const [nowMs] = useState(Date.now);
+	const [currentPlaces] = useState(() => currentPlaceIds(useAppStore.getState()));
 	const inputRef = useRef<HTMLInputElement>(null);
 	const listRef = useRef<HTMLDivElement>(null);
 	const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -238,6 +241,7 @@ function PaletteContent({
 				learning,
 				nowMs,
 				keep: selectedId,
+				currentPlaces,
 			}),
 		[
 			ranked,
@@ -253,6 +257,7 @@ function PaletteContent({
 			learning,
 			nowMs,
 			selectedId,
+			currentPlaces,
 		],
 	);
 	const rows = useMemo(() => flattenRows(sections), [sections]);
@@ -294,7 +299,7 @@ function PaletteContent({
 	};
 
 	const remember = (item: PaletteItem) => {
-		const next = recordPick(learning, parsed.text, item.id, Date.now());
+		const next = recordPick(readLearning(), parsed.text, item.id, Date.now(), currentPlaces);
 		setLearning(next);
 		writeLearning(next);
 	};
@@ -862,8 +867,11 @@ function Row({
 					<RowTitle title={item.title} lead={item.titleLead ?? 0} ranges={row.ranges.title} />
 				</span>
 				{item.subtitle ? (
-					<span className="truncate tr-text-metadata text-text-subtle">
-						{highlightRanges(item.subtitle, row.ranges.subtitle)}
+					<span
+						data-testid="search-row-subtitle"
+						className="truncate tr-text-metadata text-text-subtle"
+					>
+						{highlightSpans(item.subtitle, row.ranges.subtitle, item.subtitleEmphasis)}
 					</span>
 				) : null}
 			</span>
@@ -891,19 +899,35 @@ function RowTitle({
 	lead: number;
 	ranges: readonly (readonly [number, number])[] | undefined;
 }): ReactNode {
-	if (lead <= 0) return highlightRanges(title, ranges);
-	const before = ranges
-		.filter(([start]) => start < lead)
-		.map(([start, end]): [number, number] => [start, Math.min(end, lead)]);
-	const after = ranges
-		.filter(([, end]) => end > lead)
-		.map(([start, end]): [number, number] => [Math.max(start, lead) - lead, end - lead]);
-	return (
-		<>
-			<span className="text-text-muted">{highlightRanges(title.slice(0, lead), before)}</span>
-			{highlightRanges(title.slice(lead), after)}
-		</>
-	);
+	return highlightSpans(title, ranges, lead > 0 ? [[0, lead]] : undefined);
+}
+
+type Span = readonly [number, number];
+
+function highlightSpans(
+	text: string,
+	ranges: readonly Span[] | undefined,
+	spans: readonly Span[] | undefined,
+): ReactNode {
+	if (!spans?.length) return highlightRanges(text, ranges);
+	const cuts = [...new Set([0, text.length, ...spans.flat()])]
+		.filter((cut) => cut >= 0 && cut <= text.length)
+		.sort((a, b) => a - b);
+	return cuts.slice(1).map((end, index) => {
+		const start = cuts[index] ?? 0;
+		const inner = (ranges ?? [])
+			.filter(([from, to]) => from < end && to > start)
+			.map(([from, to]): Span => [Math.max(from, start) - start, Math.min(to, end) - start]);
+		const content = highlightRanges(text.slice(start, end), inner);
+		const marked = spans.some(([from, to]) => from <= start && end <= to);
+		return marked ? (
+			<span key={start} className="text-text-muted">
+				{content}
+			</span>
+		) : (
+			<Fragment key={start}>{content}</Fragment>
+		);
+	});
 }
 
 function Preview({
