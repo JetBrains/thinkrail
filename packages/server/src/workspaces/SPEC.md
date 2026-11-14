@@ -99,7 +99,7 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   name from the first instant; allocation lists heads once (`for-each-ref`, compared case-insensitively — a
   case-only twin is the same ref file on macOS/Windows) and stays synchronous so a name is reserved atomically
   (issue #1229: one `show-ref` per candidate blocked the event loop ~1 s at 100 `workspace-N` branches); path
-  `dataDir/worktrees/<project-slug>/<branch>`; **seeds the per-workspace artifacts folder**
+  `<managed-worktree-root>/<project-slug>/<branch>`; **seeds the per-workspace artifacts folder**
   (`WORKSPACE_CONTEXT_DIR`, with a self-ignoring `*` `.gitignore` — zero git footprint) in the
   new worktree, the home for temp docs and agent outputs ([[submodule-server-artifacts]]) that stay out of git yet remain
   scannable by the spec tools (the path convention lives in `@thinkrail/shared/paths`; see
@@ -148,7 +148,7 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   fails the create untouched, and a failed `worktree add` compare-and-deletes only the branch it may have
   made and drops the marker. With the marker, cleanup runs `worktree remove --force --force` (it also clears a
   missing or locked registration), removes a leftover directory (async, only once git no longer lists it and
-  only under `dataDir/worktrees`), then `update-ref -d refs/heads/<branch> <baseOid>`, which refuses a branch
+  only under the resolved managed-worktree root), then `update-ref -d refs/heads/<branch> <baseOid>`, which refuses a branch
   that moved. It reports whether nothing of ours remains (`clean`) and whether it removed anything; the record
   keeps `failed` with `cleanedUp: true` only when both hold, and keeps its marker — so Retry and Dismiss clean
   up again — whenever anything is left.
@@ -190,7 +190,7 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   `branchMoveOwed(workspace, opts.by)` (not `renamed`, or `branchNamePending` equals the caller's
   `opts.by`) and only on the workspace's **own branch**: the branch the worktree was created on,
   derived as `basename(worktreePath)`. That is exact because the worktree dir is
-  `<dataDir>/worktrees/<slug>/<creation branch>` and never moves, ThinkRail branch names never contain `/`,
+  `<managed-worktree-root>/<slug>/<creation branch>` and never moves, ThinkRail branch names never contain `/`,
   and the only branch move gives a branch other than the basename. Otherwise the name is still set,
   `renamed: true` is still set, `branchNamePending = opts.by` (the naming chat's session id) records that
   the move is owed to that chat only, and

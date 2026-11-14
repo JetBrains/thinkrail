@@ -37,7 +37,7 @@ interval (`1–3600`, default 30), because those values govern host process cade
 
 ## Boundary
 
-- `worktreeDirectory` is an optional absolute path for the root of future managed worktrees. Missing or malformed stored values use the workspaces module's data-dir default; `null` clears the override. Changing it never moves existing worktrees.
+- `worktreeDirectory` is an optional absolute path for the root of future managed worktrees. It is wire-gated by `WORKTREE_DIRECTORY_PROTOCOL_VERSION` (v122); missing or malformed stored values use the workspaces module's data-dir default; `null` clears the override. Changing it never moves existing worktrees.
 - `settleIdleDays` — the Settled-shelf idle window: a positive integer number of days (clamped to 1…365) or
   `null` for never; default `7`. Validated like every other known field; a hand-edited non-number falls
   back to the default rather than disabling settling.
