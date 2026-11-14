@@ -37,6 +37,7 @@ import {
 	setWorkspaceReview,
 	setWorkspaceSubagentMaxConcurrent,
 	setWorkspaceSubagentsOverride,
+	setWorktreeDirectoryResolver,
 	syncWorkspaceBranch,
 	unsettleWorkspace,
 	type WorkspaceLifecycleEvent,
@@ -101,9 +102,31 @@ beforeEach(() => {
 
 afterEach(() => {
 	setWorkspacePublisher(null);
+	setWorktreeDirectoryResolver(null);
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+});
+
+test("configured worktree directory is used for new managed worktrees", async () => {
+	const root = join(dataDir, "nearby");
+	setWorktreeDirectoryResolver(() => root);
+	const ws = await createWorkspace("p1");
+	expect(ws.worktreePath).toBe(join(root, "repo", ws.branch));
+	expect(existsSync(ws.worktreePath)).toBe(true);
+});
+
+test("configured worktree directory cannot nest under an existing managed workspace", async () => {
+	const first = await createWorkspace("p1");
+	setWorktreeDirectoryResolver(() => first.worktreePath);
+	await expect(createWorkspace("p1")).rejects.toThrow("already open in ThinkRail");
+});
+
+test("configured worktree directory may live inside the Default workspace", async () => {
+	await listWorkspaces("p1");
+	setWorktreeDirectoryResolver(() => repo);
+	const ws = await createWorkspace("p1");
+	expect(ws.worktreePath).toBe(join(repo, "repo", ws.branch));
 });
 
 test("createWorkspace cuts a fresh branch from baseRef and records it as the base", async () => {

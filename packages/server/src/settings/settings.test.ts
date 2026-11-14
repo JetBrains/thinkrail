@@ -986,6 +986,17 @@ test("stored favorites and recents survive reload while malformed ones fall back
 	expect(getConfig().favoriteModels.map((m) => m.id)).toEqual(["ok"]);
 });
 
+test("worktree directory accepts absolute paths, clears to the default, and rejects relative paths", () => {
+	const directory = join(dataDir, "nearby-worktrees");
+	expect(updateConfig({ worktreeDirectory: directory }).worktreeDirectory).toBe(directory);
+	resetConfigCache();
+	expect(getConfig().worktreeDirectory).toBe(directory);
+	expect(() => updateConfig({ worktreeDirectory: "../worktrees" })).toThrow(
+		"worktreeDirectory must be an absolute path or null",
+	);
+	expect(updateConfig({ worktreeDirectory: null }).worktreeDirectory).toBeUndefined();
+});
+
 test("the settle idle window defaults to 7 days, accepts null for never, and rejects fractions", () => {
 	expect(DEFAULT_CONFIG.settleIdleDays).toBe(7);
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ settleIdleDays: "soon" }));

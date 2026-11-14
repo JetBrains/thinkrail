@@ -1104,7 +1104,11 @@ a project picker, the prompt hero, and the reused
   host update capabilities. If a later welcome removes injected content while Updates is selected, Appearance
   is rendered and highlighted rather than leaving no active row);
   **`WorkspacesSettings`** (the **Workspaces** section, listed only at
-  `protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION`) — one `SettingsRadioCards` group, **Settle idle
+  `protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION`) — an optional **Worktree directory** control
+  (shown only at `protocolVersion >= WORKTREE_DIRECTORY_PROTOCOL_VERSION`) writes the absolute future managed
+  worktree root through `settings.update { worktreeDirectory }`, supports native directory selection and reset,
+  and reconciles with authoritative `settings.changed` values through `useSettingsDraft`; plus one
+  `SettingsRadioCards` group, **Settle idle
   workspaces after**: 1 / 3 / 7 (default) / 14 days / Never, written as `settings.update { settleIdleDays }`
   (`null` for Never) and converging through `settings.changed`; a valid host-configured non-preset value
   leaves the preset cards unselected rather than falsely displaying the default. The default is a week, not

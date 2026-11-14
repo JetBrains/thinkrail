@@ -1543,6 +1543,8 @@ export interface AppConfig extends ThemePreference {
 	terminalWindowsShell: TerminalWindowsShell;
 	/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
 	settleIdleDays: number | null;
+	/** Absolute root for newly created managed worktrees; unset keeps the data-dir default. */
+	worktreeDirectory?: string;
 	disabledExtensions: string[];
 	/** Values of settings bundled extensions declare, by extension name then setting key. */
 	extensionSettings: ExtensionSettingValues;
@@ -1607,9 +1609,15 @@ export function isSkillGroupEnabled(
 export type AppConfigUpdate = Partial<
 	Omit<
 		AppConfig,
-		"defaultModel" | "defaultEffort" | "reviewModel" | "reviewEffort" | "recentModels"
+		| "defaultModel"
+		| "defaultEffort"
+		| "reviewModel"
+		| "reviewEffort"
+		| "recentModels"
+		| "worktreeDirectory"
 	>
 > & {
+	worktreeDirectory?: string | null;
 	defaultModel?: WireModel | null;
 	defaultEffort?: ThinkingLevel | null;
 	reviewModel?: WireModel | null;

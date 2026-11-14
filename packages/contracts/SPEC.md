@@ -550,7 +550,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   is what lets a client tell "this host has no reviewer chat" from "this host is older" rather than inferring it;
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
   terminalWindowsShell, composerGrowthLimit, questionPanelHeight, chatLineWidth, fileLineWidth, chatLineWidthBounded,
-  fileLineWidthBounded, voiceInputEnabled, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
+  fileLineWidthBounded, voiceInputEnabled, customLayoutPresets, worktreeDirectory?, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
   favoriteModels, recentModels, reviewAutoFix, agentReviewEnabled, subagentsEnabled, subagentMaxConcurrent,
   jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, extensionSettings, otherAgentSkills,
   onboardingDismissed, interfaceFont, codeFont, codeFontSize, codeLigatures, fontWeightOffset }` — an extensible
@@ -589,7 +589,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`SUBAGENT_CONCURRENCY_PROTOCOL_VERSION`** = v79) is how many subagents one chat runs at once — more
   spawns queue — overridden only by `Workspace.subagentMaxConcurrentOverride`; **`settleIdleDays`** (default `7`, `null` = never; on the wire
   from `WORKSPACE_SETTLE_PROTOCOL_VERSION` = v78) is the idle window after which a quiet workspace settles
-  into its project's shelf — a host-wide number because "how long is quiet" is a habit, not a project fact; `agentReviewEnabled` (default `false`, on the
+  into its project's shelf — a host-wide number because "how long is quiet" is a habit, not a project fact; `worktreeDirectory` (optional absolute root, cleared with `null`, on the wire from `WORKTREE_DIRECTORY_PROTOCOL_VERSION` = v122) controls only future managed worktree creation and never moves existing worktrees; `agentReviewEnabled` (default `false`, on the
   wire from `AGENT_REVIEW_SETTING_PROTOCOL_VERSION` = v68) gates the worker's in-session `request_review`
   tool and applies live to open sessions — the Review button is independent (see [[submodule-server-host-plan-review]]); `disabledExtensions` (default `[]`, on the wire
   from `EXTENSION_CATALOG_PROTOCOL_VERSION` = v82) names the host-registry extensions the user switched off —

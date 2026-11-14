@@ -92,6 +92,7 @@ import {
 	WORKSPACE_PATH_RESOLVE_PROTOCOL_VERSION,
 	WORKSPACE_READ_STATE_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
+	WORKTREE_DIRECTORY_PROTOCOL_VERSION,
 	WS_CHANNELS,
 	WS_METHODS,
 } from "./wsProtocol";
@@ -99,6 +100,11 @@ import {
 test("retired workspace activity keeps only its empty snapshot compatibility method", () => {
 	expect(WS_METHODS.sessionActivityList).toBe("session.activityList");
 	expect(Object.hasOwn(WS_CHANNELS, "sessionActivity")).toBe(false);
+});
+
+test("worktree directory settings advance the protocol", () => {
+	expect(WORKTREE_DIRECTORY_PROTOCOL_VERSION).toBe(122);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(WORKTREE_DIRECTORY_PROTOCOL_VERSION);
 });
 
 test("system theme settings advance the protocol", () => {

@@ -154,6 +154,7 @@ const registrySaves: Array<[string, () => void]> = [
 					branch: "a",
 					baseBranch: "main",
 					worktreePath: join(root, "a"),
+					managedRoot: root,
 					state: "running",
 					phase: "preparing",
 					startedAt: 1,

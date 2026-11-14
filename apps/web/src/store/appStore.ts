@@ -1196,6 +1196,7 @@ interface AppState {
 	subagentsEnabled: boolean;
 	subagentMaxConcurrent: number;
 	settleIdleDays: number | null;
+	worktreeDirectory: string | undefined;
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
 	terminalReplayKb: number;
@@ -1639,6 +1640,8 @@ function configPatch(config: AppConfig) {
 		settleIdleDays: isSettleIdleDays(config.settleIdleDays)
 			? config.settleIdleDays
 			: DEFAULT_CONFIG.settleIdleDays,
+		worktreeDirectory:
+			typeof config.worktreeDirectory === "string" ? config.worktreeDirectory : undefined,
 		jbcentralQuotaEnabled: config.jbcentralQuotaEnabled ?? DEFAULT_CONFIG.jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds:
 			config.jbcentralQuotaRefreshSeconds ?? DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
@@ -2587,6 +2590,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	subagentsEnabled: DEFAULT_CONFIG.subagentsEnabled,
 	subagentMaxConcurrent: DEFAULT_CONFIG.subagentMaxConcurrent,
 	settleIdleDays: DEFAULT_CONFIG.settleIdleDays,
+	worktreeDirectory: undefined,
 	jbcentralQuotaEnabled: DEFAULT_CONFIG.jbcentralQuotaEnabled,
 	jbcentralQuotaRefreshSeconds: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
