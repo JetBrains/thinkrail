@@ -971,7 +971,13 @@ test("a shell that dies during a reclaim is not presented as alive", async ({ pa
 	await page2.close();
 });
 
-async function terminalTextPoint(page: Page, text: string): Promise<{ x: number; y: number }> {
+interface TerminalTextPoint {
+	x: number;
+	y: number;
+	cellWidth: number;
+}
+
+async function terminalTextPoint(page: Page, text: string): Promise<TerminalTextPoint> {
 	await expect(visibleTerminalScreen(page)).toContainText(text);
 	const point = await visibleTerminalScreen(page).evaluate((rows, needle) => {
 		for (const row of Array.from(rows.children)) {
@@ -990,7 +996,11 @@ async function terminalTextPoint(page: Page, text: string): Promise<{ x: number;
 					range.setStart(node, offset);
 					range.setEnd(node, offset + 1);
 					const rect = range.getBoundingClientRect();
-					return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+					return {
+						x: rect.left + rect.width / 2,
+						y: rect.top + rect.height / 2,
+						cellWidth: rect.width,
+					};
 				}
 				offset -= node.data.length;
 			}
@@ -1033,8 +1043,12 @@ function terminalLinkCursor(page: Page) {
 	return visibleTerminal(page).locator(".xterm-screen");
 }
 
-async function hoverTerminalText(page: Page, text: string): Promise<{ x: number; y: number }> {
+// xterm asks for links only when the pointer reaches a new cell, and it remembers the last cell across a
+// mouseleave, so arrive from the neighbouring cell: coming back straight onto the cell the pointer left
+// would find no link.
+async function hoverTerminalText(page: Page, text: string): Promise<TerminalTextPoint> {
 	const point = await terminalTextPoint(page, text);
+	await page.mouse.move(point.x + point.cellWidth, point.y);
 	await page.mouse.move(point.x, point.y);
 	return point;
 }
@@ -1149,7 +1163,9 @@ test("Mod+click reveals a printed folder in Files, again after a collapse, a com
 	await expect(fileTreeRow(page, "file", "readme.txt")).toBeVisible();
 	await fileTreeRow(page, "dir", "assets").click();
 	await expect(fileTreeRow(page, "file", "readme.txt")).toHaveCount(0);
-	await modClick(page, folder);
+	const again = await hoverTerminalText(page, "assets/");
+	await expect(terminalLinkCursor(page)).toHaveClass(/xterm-cursor-pointer/);
+	await modClick(page, again);
 	await expect(fileTreeRow(page, "file", "readme.txt")).toBeVisible();
 
 	// `media` holds only `fonts`, so the tree shows one compact `media/fonts` row keyed by its deepest

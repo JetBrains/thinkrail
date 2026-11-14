@@ -2839,7 +2839,10 @@ menu has closed, because a closing menu returns focus to its row; disabled
   failed request answers "no" for that window. Only confirmed paths become links; where candidates
   overlap (a quoted path with spaces also yields the tokens inside it) the **longest confirmed one wins**.
   Each `provideLinks` call supersedes the previous one, and an earlier call whose request resolves late is
-  dropped rather than answered, because xterm lets a late reply land on the row now under the mouse. The
+  dropped rather than answered, because xterm lets a late reply land on the row now under the mouse.
+  xterm asks only when the pointer reaches a new cell and remembers the last cell across a `mouseleave`, so a
+  pointer that leaves and comes back onto exactly that cell sees no link until it moves one cell (the e2e
+  helpers approach a link from its neighbouring cell for this reason). The
   host resolves a relative path from the directory of the program that printed it and confirms only
   entries its own workspace owns ([[submodule-server-terminal]], `host`'s terminal link lookup).
 - **Korean IME replacement bridge (WebKit).** WebKit — Safari and the desktop app's WKWebView — drives
