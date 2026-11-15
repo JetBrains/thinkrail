@@ -2469,8 +2469,10 @@ menu has closed, because a closing menu returns focus to its row; disabled
   finding resolved from under it yields to its successor instead of skipping one. The rail never renders
   on phone-class viewports — 280px of a 390px
   screen would leave no diff to guide through. A keyboard step (`Alt+↑` / `Alt+↓`, `V` advancing, `J`, `N`,
-  `P`) and a click on a reading step or finding move focus to what it revealed — the section header's first
-  control, or the finding card's first control once `useReviewReveal` scrolls it into view; the
+  `P`) and a click on a reading step or finding move focus to what it revealed — the section's collapse
+  toggle (stacked layout) or its header itself (single-file layout, `tabIndex=-1`; never the header's first
+  control, which there is Revert file, so a following Enter or Space cannot revert), or the finding card
+  once `useReviewReveal` scrolls it into view (a draft's text, a sent card itself); the
   `Prev / Next`, guide and bottom-bar buttons keep focus, so they can be pressed again (the reveal reaches
   the renderer as a review focus with `moveFocus: false`: it scrolls to a finding without focusing it), and
   one that disables at the end hands focus to its nearest enabled sibling through the shell's recovery

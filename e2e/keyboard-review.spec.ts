@@ -478,6 +478,29 @@ test("a rendered Markdown preview takes a block cursor and comments on whole blo
 	expect(lineRangeOf(persistedComments()[0])).toMatchObject({ startLine: 3, endLine: 5 });
 });
 
+test("a review jump in the single-file layout lands on the file header, so Enter never reverts it", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	await commitAndModify(workspace.id, "cursor.ts", CURSOR_ORIGINAL, CURSOR_MODIFIED);
+	writeFileSync(join(worktree(), "second.ts"), "export const second = 2;\n");
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("change-item").filter({ hasText: "cursor.ts" }).click();
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="changes"]')).toHaveCount(1);
+	await page.getByTestId("changes-review-layout-single").click();
+	const header = page.getByTestId("changes-section-header");
+	await expect(header).toBeVisible();
+	await page.locator('[data-testid="editor-tab"][data-active="true"]').click();
+
+	await page.keyboard.press("j");
+	await expect(header).toBeFocused();
+	await expect(page.getByTestId("changes-section-revert")).not.toBeFocused();
+	await page.keyboard.press("Enter");
+	await page.keyboard.press(" ");
+	await expect(page.getByText(/^Reverted /)).toHaveCount(0);
+});
+
 test("the Markdown block cursor stays visible on a table row", async ({ page }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
