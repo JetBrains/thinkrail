@@ -1,9 +1,9 @@
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { useEffect, useRef, useState } from "react";
-import type { ResourceContent, ResourceDiffProps } from "../../registry";
+import type { DiffSideLabels, ResourceContent, ResourceDiffProps } from "../../registry";
 import type { Size } from "../regionReview";
 import { contentStamp, diffContentStamp } from "../reviewComposerState";
-import { VisualDiff, type VisualDiffSide } from "../VisualDiff";
+import { sideCaption, VisualDiff, type VisualDiffSide } from "../VisualDiff";
 import { formatByteLength, imageDiffViewState, imageSourceUrl } from "./imageState";
 
 type LoadedSize = { identity: string; size: Size } | null;
@@ -55,13 +55,12 @@ function caption(
 	side: "old" | "new",
 	size: Size | null,
 	content: ResourceContent,
+	labels: DiffSideLabels | undefined,
 ): string {
 	const dimensions = size ? `${size.width} × ${size.height}` : t("viewer.image.noDimensions");
 	const bytes =
 		content.kind === "bytes" ? formatByteLength(t, content.byteLength) : t("viewer.image.noImage");
-	return t(side === "old" ? "viewer.side.oldCaption" : "viewer.side.newCaption", {
-		detail: `${dimensions} · ${bytes}`,
-	});
+	return sideCaption(t, side, `${dimensions} · ${bytes}`, labels);
 }
 
 export default function ImageDiff({
@@ -73,6 +72,7 @@ export default function ImageDiff({
 	onPlacedThreadIds,
 	viewState,
 	onViewState,
+	sideLabels,
 }: ResourceDiffProps) {
 	const t = useT();
 	const originalIdentity = imageIdentity(original);
@@ -99,7 +99,7 @@ export default function ImageDiff({
 				onSize={setLoadedOriginal}
 			/>
 		),
-		caption: caption(t, "old", originalSize, original),
+		caption: caption(t, "old", originalSize, original, sideLabels),
 		intrinsicSize: originalSize,
 		review: review?.base,
 	};
@@ -113,7 +113,7 @@ export default function ImageDiff({
 				onSize={setLoadedModified}
 			/>
 		),
-		caption: caption(t, "new", modifiedSize, modified),
+		caption: caption(t, "new", modifiedSize, modified, sideLabels),
 		intrinsicSize: modifiedSize,
 		review: review?.worktree,
 	};
@@ -129,6 +129,7 @@ export default function ImageDiff({
 			onPlacedThreadIds={onPlacedThreadIds}
 			initialMode={imageDiffViewState(viewState)}
 			onViewState={onViewState}
+			labels={sideLabels}
 		/>
 	);
 }

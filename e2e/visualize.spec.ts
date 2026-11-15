@@ -577,6 +577,11 @@ test("a before/after preview opens as a diff tab over the two files that survive
 			`${MOCKUP_DIR}/before.html → ${MOCKUP_DIR}/after.html`,
 		);
 		await expect(pane.locator("iframe")).toHaveCount(2);
+		await expect(pane.locator("iframe").first()).toHaveAttribute("sandbox", "allow-same-origin");
+		await pane.getByTestId("html-diff-swipe").click();
+		await expect(pane.getByTestId("html-diff-divider")).toBeVisible();
+		await expect(pane.locator("iframe")).toHaveCount(2);
+		await pane.getByTestId("html-diff-2-up").click();
 		await page.screenshot({ path: test.info().outputPath("diff-tab.png") });
 
 		await page.reload();

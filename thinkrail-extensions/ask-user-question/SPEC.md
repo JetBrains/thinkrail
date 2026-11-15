@@ -53,10 +53,11 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
 - The card imports `extension-api/web`, the package's argument/result **types** (type-only, from
   `@thinkrail/pi-ask-user-question/core`; a value import of the pi package stays forbidden in browser code,
   so the result guard `readAskUserQuestionResult` and the answer model in `web/state.ts` are the card's own),
-  `@thinkrail/ui` (`attention-line`, `button`, `keyboard`, `textarea`, `utils`), `@thinkrail/resource-renderers`
-  (`useOptionalResourceHost` for the host's Markdown — mermaid included — and `FramedResourcePreview` +
-  `useResourceScope` for file previews), `@thinkrail/locales` (types) and `/react`, React and Remix Icon. It
-  never imports the visualize extension: previews keep working with visualize switched off.
+  `@thinkrail/ui` (`attention-line`, `button`, `dialog`, `dropdown-menu`, `keyboard`, `textarea`, `utils`),
+  `@thinkrail/resource-renderers` (`useOptionalResourceHost` for the host's Markdown — mermaid included —,
+  `FramedResourcePreview` + `useResourceScope` for file previews, and `ResourcePreview` + `HtmlViewportSwitch`
+  for the compare overlay), `@thinkrail/locales` (types) and `/react`, React and Remix Icon. It never imports
+  the visualize extension: previews keep working with visualize switched off.
 - It never reaches app or host internals. Everything it needs from the chat arrives in
   `ToolRenderProps.interaction` ([[module-extension-api]]):
   - the response delivered after a restart, the superseded and ended verdicts, and `accepting` (Submit and
@@ -147,7 +148,11 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   `@2xl` wide — a container query, since the chat column decides; stacked below that) showing the preview
   of the option under the cursor (on Other or the button, the picked option's): markdown (mermaid renders), or a workspace file or
   before → after diff through `FramedResourcePreview` in its compact chrome — Open in tab and Full screen
-  only, with width presets and Split/Inline in full screen. An option without one says "No preview for this
+  only. On a question with option previews every full-screen button of the page opens the **compare
+  overlay** below instead of the one-file dialog: the frame's own button on a file preview, a button in the
+  label row on a markdown preview or an option without one, and the question preview's (on Current).
+  Without option previews the question preview keeps the one-file dialog, with width presets and
+  Split/Inline. An option without a preview says "No preview for this
   option", never another option's preview; rows that have one carry a type glyph. PgUp/PgDn on an option
   row scroll the pane's markdown: WebKit does not make a scroll container a tab stop, and the lint rules
   reject a `tabindex` on a non-interactive region. Each file gets its own frame (keyed by its path), so one
@@ -156,6 +161,31 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   file preview degrades to its path and an Open file link; the plan page provides the session's resource
   scope and `onOpenFile` so previews render there as in chat. A picked file preview is echoed as its path.
   The 240 px fold, the 380 px pane and the 8-line field cap are unconfirmed starting values.
+- **Compare overlay** (`compareModel.ts`, `CompareOverlay.tsx`). A near-full-window dialog for comparing a
+  single-select question's alternatives, HTML mockups above all, where the 380 px pane shows one at a time
+  and comparison was from memory. Its items are **Current** (the question's own preview, never choosable)
+  then every option, an option without a preview saying so as in the card. It opens in **One at a time** on
+  the item whose button opened it; **Side by side** puts Current (else the recommended, else the first
+  option) on the left and that item on the right — strip clicks and ←/→ change the right side, the left has
+  its own menu and a swap, and choosing a side already shown swaps rather than showing one item twice;
+  **All** shows every item (at most five), a pane title opening it alone. Two files of one visual kind (HTML,
+  raster image, SVG; neither itself a diff) pair through the type's comparison renderer with its option
+  labels as side names, so HTML gets 2-up, swipe, onion and difference with both documents scrolling
+  together ([[module-resource-renderers]]); any other pair is two independent panes. One width control in
+  the header drives every HTML pane (`ResourcePreview.htmlViewport`) and is remembered for the session; the
+  panes drop review surfaces (`reviewable={false}`), since commenting belongs to the file's own tab. The
+  view switch is hidden on narrow screens, so a phone gets one at a time only.
+  **Choose and stay** (chosen by the user): Choose on a shown option, or Enter while the overlay body itself
+  has focus (so it never fights a focused button), picks it through the card's own `onSelect` — the note
+  follows the selection as in the card — and the overlay stays open; notes and Submit stay in the card, and
+  closing returns focus to the chosen row. Keys: ←/→ flip (wrapping), 1–9 jump, Esc closes; keys owned by a
+  slider, a field or a menu, and anything typed inside a frame, stay there. The dialog is portaled, so its
+  keys never reach the card's handler (`contains` fails), exactly like the one-file dialog. Its open state is
+  the page's own: a dock remount closes it. From the **receipt**, a pair whose question had option previews
+  offers **Compare**, which opens the same overlay read-only on the chosen option. Rejected: turning the
+  options into one generated interactive HTML page with the switcher and the pick inside it — it needs
+  scripts in the frame, lets a mockup pick an answer for the user, works only for HTML, and loses the card's
+  keys, theme and locales. Scripts in mockups and opening one in a browser are separate, unbuilt asks.
 - **Discuss first.** A ghost **Discuss** toggle beside each question (or `d` on an option) marks it; a
   panel under the question offers optional reason chips (Unclear / Not relevant / Need more context) and
   optional text. The options stay visible, muted; choosing one, checking one, opening a
@@ -172,7 +202,7 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   the answer (Other with a pencil, multi-select picks comma-joined with "+" before own text, "Let’s discuss
   first · <reason>", or "Skipped") and the quoted note, and its own **Options** toggle lists every option
   with its description and the own-answer row — selection status as screen-reader text, never by icon or
-  colour alone. Only manual toggles are stored (a module map keyed by call and pair, like the chat's fold
+  colour alone; a question with option previews also offers **Compare** (the overlay, read-only). Only manual toggles are stored (a module map keyed by call and pair, like the chat's fold
   state), and each toggle routes through `interaction.prepareLayoutChange`. A skipped round, a superseded
   question, a stopped call and an error are one muted line each. No answer time: the renderer has no
   timestamp and a contract field for it was not worth it.

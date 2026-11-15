@@ -10,6 +10,7 @@ export { anchorLabel, isPlaceable, outdatedReason, threadLabel } from "./review"
 export { rendererImplementationKey, rendererTestId, selectResourceRenderer } from "./selection";
 export type {
 	AnchorDraft,
+	DiffSideLabels,
 	HunkActions,
 	HunkTriage,
 	ResourceAnchorCapability,

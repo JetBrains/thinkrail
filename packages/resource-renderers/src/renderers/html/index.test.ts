@@ -2,9 +2,13 @@ import { expect, test } from "bun:test";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { ResourceEnvironmentProvider } from "../../host";
+import { sideCaption } from "../VisualDiff";
 import { htmlRenderer } from ".";
 import { HtmlFrame } from "./HtmlFrame";
 import { HTML_PREVIEW_CSP, prepareHtmlPreviewDocument } from "./htmlDocument";
+import { createScrollLink } from "./scrollLink";
+import { HtmlPreviewNotice } from "./ViewportSwitch";
 
 interface FakeAttribute {
 	name: string;
@@ -197,16 +201,120 @@ test("HTML preview CSP is exact", () => {
 	);
 });
 
-test("HTML frames carry exactly an empty sandbox capability set", () => {
-	const markup = renderToStaticMarkup(
-		createElement(HtmlFrame, {
-			title: "HTML preview",
-			document: "<!doctype html><html><body>preview</body></html>",
-		}),
-	);
+function frameSandbox(props: Parameters<typeof HtmlFrame>[0]): string[] {
+	const markup = renderToStaticMarkup(createElement(HtmlFrame, props));
 	const iframeAt = markup.indexOf("<iframe");
 	const openingTag = markup.slice(iframeAt, markup.indexOf(">", iframeAt) + 1);
 	expect(markup.match(/<iframe/g)).toHaveLength(1);
-	expect([...openingTag.matchAll(/\ssandbox="([^"]*)"/g)].map((match) => match[1])).toEqual([""]);
-	expect(openingTag).not.toContain("allow-");
+	return [...openingTag.matchAll(/\ssandbox="([^"]*)"/g)].map((match) => match[1] ?? "");
+}
+
+const PREVIEW = "<!doctype html><html><body>preview</body></html>";
+
+test("HTML frames carry exactly an empty sandbox capability set", () => {
+	expect(frameSandbox({ title: "HTML preview", document: PREVIEW })).toEqual([""]);
+});
+
+test("paired HTML frames add only same-origin access, never scripts", () => {
+	expect(
+		frameSandbox({ title: "HTML preview", document: PREVIEW, scrollLink: createScrollLink() }),
+	).toEqual(["allow-same-origin"]);
+});
+
+class FakeView {
+	readonly scroller = { scrollTop: 0, scrollLeft: 0, maxTop: Number.POSITIVE_INFINITY };
+	readonly document: { scrollingElement: { scrollTop: number; scrollLeft: number } };
+	private listener: (() => void) | null = null;
+
+	constructor(maxTop = Number.POSITIVE_INFINITY) {
+		const scroller = this.scroller;
+		scroller.maxTop = maxTop;
+		this.document = {
+			scrollingElement: {
+				get scrollTop() {
+					return scroller.scrollTop;
+				},
+				set scrollTop(value: number) {
+					scroller.scrollTop = Math.min(value, scroller.maxTop);
+				},
+				get scrollLeft() {
+					return scroller.scrollLeft;
+				},
+				set scrollLeft(value: number) {
+					scroller.scrollLeft = value;
+				},
+			},
+		};
+	}
+	addEventListener(_type: string, listener: () => void) {
+		this.listener = listener;
+	}
+	removeEventListener() {
+		this.listener = null;
+	}
+	userScroll(top: number) {
+		this.document.scrollingElement.scrollTop = top;
+		this.listener?.();
+	}
+	echo() {
+		this.listener?.();
+	}
+	get attached() {
+		return this.listener !== null;
+	}
+}
+
+function asWindow(view: FakeView): Window {
+	return view as unknown as Window;
+}
+
+test("a scroll link mirrors the scrolled document onto its pair and ignores the echo", () => {
+	const link = createScrollLink();
+	const left = new FakeView();
+	const right = new FakeView(300);
+	link.attach(asWindow(left));
+	link.attach(asWindow(right));
+
+	left.userScroll(500);
+	expect(right.scroller.scrollTop).toBe(300);
+	right.echo();
+	expect(left.scroller.scrollTop).toBe(500);
+
+	right.userScroll(120);
+	expect(left.scroller.scrollTop).toBe(120);
+});
+
+test("a scroll link places a reloaded frame at the last offset and detaches cleanly", () => {
+	const link = createScrollLink();
+	const left = new FakeView();
+	const detach = link.attach(asWindow(left));
+	left.userScroll(240);
+	detach();
+	expect(left.attached).toBe(false);
+
+	const reloaded = new FakeView();
+	link.attach(asWindow(reloaded));
+	expect(reloaded.scroller.scrollTop).toBe(240);
+	left.userScroll(10);
+	expect(reloaded.scroller.scrollTop).toBe(240);
+});
+
+test("a caller-fixed HTML width hides the notice and its presets", () => {
+	const notice = (environment: { mobile: boolean; htmlViewport?: "tablet" }) =>
+		renderToStaticMarkup(
+			createElement(
+				ResourceEnvironmentProvider,
+				{ value: environment },
+				createElement(HtmlPreviewNotice, { viewport: "desktop", onViewport: () => {} }),
+			),
+		);
+	expect(notice({ mobile: false })).toContain('data-testid="html-viewport"');
+	expect(notice({ mobile: false, htmlViewport: "tablet" })).toBe("");
+});
+
+test("labelled sides name both visual captions", () => {
+	const t = currentTranslator();
+	const labels = { original: "Sidebar", modified: "Top tabs" };
+	expect(sideCaption(t, "old", "1280 × 800", labels)).toBe("Sidebar: 1280 × 800");
+	expect(sideCaption(t, "new", "1280 × 800", undefined)).toBe("New: 1280 × 800");
 });

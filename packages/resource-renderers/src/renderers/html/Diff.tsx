@@ -1,10 +1,11 @@
 import { useT } from "@thinkrail/locales/react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { ResourceContent, ResourceDiffProps } from "../../registry";
 import { diffContentStamp } from "../reviewComposerState";
-import { VisualDiff, type VisualDiffSide } from "../VisualDiff";
+import { sideCaption, VisualDiff, type VisualDiffSide } from "../VisualDiff";
 import { HtmlFrame } from "./HtmlFrame";
 import { buildHtmlPreviewDocument } from "./htmlDocument";
+import { createScrollLink, type ScrollLink } from "./scrollLink";
 import { useHtmlViewport } from "./useHtmlViewport";
 import { HtmlPreviewNotice } from "./ViewportSwitch";
 import type { HtmlViewport } from "./viewport";
@@ -17,13 +18,17 @@ function HtmlSide({
 	text,
 	title,
 	viewport,
+	scrollLink,
 }: {
 	text: string;
 	title: string;
 	viewport: HtmlViewport;
+	scrollLink: ScrollLink;
 }) {
 	const document = useMemo(() => buildHtmlPreviewDocument(text), [text]);
-	return <HtmlFrame title={title} document={document} viewport={viewport} />;
+	return (
+		<HtmlFrame title={title} document={document} viewport={viewport} scrollLink={scrollLink} />
+	);
 }
 
 export default function HtmlDiff({
@@ -33,10 +38,12 @@ export default function HtmlDiff({
 	modified,
 	viewState,
 	onViewState,
+	sideLabels,
 }: ResourceDiffProps) {
 	const t = useT();
 	const noDocument = t("viewer.html.noDocument");
 	const [viewport, selectViewport] = useHtmlViewport(viewState, onViewState);
+	const [scrollLink] = useState(createScrollLink);
 	const originalText = textOf(original);
 	const modifiedText = textOf(modified);
 	const originalSide: VisualDiffSide = {
@@ -47,12 +54,13 @@ export default function HtmlDiff({
 					text={originalText}
 					title={t("viewer.html.originalPreview", { path: originalResource.path })}
 					viewport={viewport}
+					scrollLink={scrollLink}
 				/>
 			),
 		caption:
 			originalText === null
-				? t("viewer.side.oldCaption", { detail: noDocument })
-				: t("viewer.html.oldDocument"),
+				? sideCaption(t, "old", noDocument, sideLabels)
+				: (sideLabels?.original ?? t("viewer.html.oldDocument")),
 		intrinsicSize: null,
 	};
 	const modifiedSide: VisualDiffSide = {
@@ -63,12 +71,13 @@ export default function HtmlDiff({
 					text={modifiedText}
 					title={t("viewer.html.modifiedPreview", { path: resource.path })}
 					viewport={viewport}
+					scrollLink={scrollLink}
 				/>
 			),
 		caption:
 			modifiedText === null
-				? t("viewer.side.newCaption", { detail: noDocument })
-				: t("viewer.html.newDocument"),
+				? sideCaption(t, "new", noDocument, sideLabels)
+				: (sideLabels?.modified ?? t("viewer.html.newDocument")),
 		intrinsicSize: null,
 	};
 	return (
@@ -84,8 +93,8 @@ export default function HtmlDiff({
 					modified={modifiedSide}
 					contentStamp={diffContentStamp(original, modified)}
 					initialMode="2-up"
-					modes={["2-up"]}
 					emptyLabel={noDocument}
+					labels={sideLabels}
 				/>
 			</div>
 		</div>

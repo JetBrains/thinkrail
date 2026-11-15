@@ -2,6 +2,7 @@ import {
 	RiCodeSSlashLine as CodeGlyph,
 	RiFlowChart as DiagramGlyph,
 	RiGitPullRequestLine as DiffGlyph,
+	RiFullscreenLine as FullscreenGlyph,
 	RiHtml5Line as HtmlGlyph,
 	RiImageLine as ImageGlyph,
 	RiMarkdownLine as MarkdownFileGlyph,
@@ -16,7 +17,7 @@ import {
 	useOptionalResourceHost,
 	useResourceScope,
 } from "@thinkrail/resource-renderers";
-import { Button } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { useLayoutEffect, useRef, useState } from "react";
 import { useGhostPage, useTestId } from "./ghost";
@@ -50,50 +51,32 @@ export function PreviewGlyph({ source }: { source: PreviewSource }) {
 	return <Icon aria-hidden="true" className="size-14 shrink-0" />;
 }
 
-function PreviewMarkdown({ text }: { text: string }) {
+export function PreviewMarkdown({ text }: { text: string }) {
 	const Markdown = useOptionalResourceHost()?.markdown;
 	if (Markdown) return <Markdown text={text} />;
 	return <pre className="whitespace-pre-wrap tr-text-ui text-text-default">{text}</pre>;
 }
 
-function fileTitle(source: Extract<PreviewSource, { kind: "file" }>): string {
+type FilePreviewSource = Extract<PreviewSource, { kind: "file" }>;
+
+function fileTitle(source: FilePreviewSource): string {
 	return source.before === undefined ? source.path : `${source.before} → ${source.path}`;
 }
 
 function FileFrame({
 	source,
 	onOpenFile,
+	onFullscreen,
 }: {
-	source: Extract<PreviewSource, { kind: "file" }>;
+	source: FilePreviewSource;
 	onOpenFile?: ((path: string) => void) | undefined;
+	onFullscreen?: (() => void) | undefined;
 }) {
-	const t = useT();
-	const tid = useTestId();
 	const ghost = useGhostPage();
 	const host = useOptionalResourceHost();
 	const workspaceId = useResourceScope()?.workspaceId;
 	if (ghost) return <div className="h-full rounded-sm border border-border-default" />;
-	if (!host || !workspaceId) {
-		return (
-			<div className="flex h-full flex-col items-center justify-center gap-8 rounded-sm border border-border-default border-dashed px-12 text-center">
-				<span className="min-w-0 break-all text-text-muted tr-text-metadata">
-					{fileTitle(source)}
-				</span>
-				{onOpenFile ? (
-					<Button
-						variant="outline"
-						size="s"
-						iconLeft={OpenTab}
-						tabIndex={0}
-						data-testid={tid("ask-preview-open-file")}
-						onClick={() => onOpenFile(source.path)}
-					>
-						{t("tools.ask.openPreviewFile")}
-					</Button>
-				) : null}
-			</div>
-		);
-	}
+	if (!host || !workspaceId) return <FileUnavailable source={source} onOpenFile={onOpenFile} />;
 	return (
 		<FramedResourcePreview
 			path={source.path}
@@ -102,7 +85,38 @@ function FileFrame({
 			frameClassName="h-full"
 			compact
 			testIdPrefix="ask-preview"
+			onFullscreen={onFullscreen}
 		/>
+	);
+}
+
+export function FileUnavailable({
+	source,
+	onOpenFile,
+}: {
+	source: FilePreviewSource;
+	onOpenFile?: ((path: string) => void) | undefined;
+}) {
+	const t = useT();
+	const tid = useTestId();
+	return (
+		<div className="flex h-full flex-col items-center justify-center gap-8 rounded-sm border border-border-default border-dashed px-12 text-center">
+			<span className="min-w-0 break-all text-text-muted tr-text-metadata">
+				{fileTitle(source)}
+			</span>
+			{onOpenFile ? (
+				<Button
+					variant="outline"
+					size="s"
+					iconLeft={OpenTab}
+					tabIndex={0}
+					data-testid={tid("ask-preview-open-file")}
+					onClick={() => onOpenFile(source.path)}
+				>
+					{t("tools.ask.openPreviewFile")}
+				</Button>
+			) : null}
+		</div>
 	);
 }
 
@@ -166,16 +180,34 @@ function FoldedMarkdown({
 	);
 }
 
+function CompareButton({ onClick }: { onClick: () => void }) {
+	const t = useT();
+	const tid = useTestId();
+	return (
+		<IconButton
+			icon={FullscreenGlyph}
+			size="s"
+			label={t("tools.ask.compare.open")}
+			tabIndex={0}
+			data-testid={tid("ask-compare-open")}
+			onClick={onClick}
+			className="ml-auto shrink-0"
+		/>
+	);
+}
+
 export function QuestionPreview({
 	source,
 	expanded,
 	onToggleExpanded,
 	onOpenFile,
+	onFullscreen,
 }: {
 	source: PreviewSource;
 	expanded: boolean;
 	onToggleExpanded: () => void;
 	onOpenFile?: ((path: string) => void) | undefined;
+	onFullscreen?: (() => void) | undefined;
 }) {
 	const t = useT();
 	const tid = useTestId();
@@ -190,6 +222,8 @@ export function QuestionPreview({
 				<span className="shrink-0">{t("tools.ask.questionPreview")}</span>
 				{source.kind === "file" ? (
 					<span className="min-w-0 truncate text-text-subtle">{fileTitle(source)}</span>
+				) : onFullscreen ? (
+					<CompareButton onClick={onFullscreen} />
 				) : null}
 			</div>
 			{source.kind === "markdown" ? (
@@ -201,7 +235,7 @@ export function QuestionPreview({
 				/>
 			) : (
 				<div className="h-[240px]">
-					<FileFrame source={source} onOpenFile={onOpenFile} />
+					<FileFrame source={source} onOpenFile={onOpenFile} onFullscreen={onFullscreen} />
 				</div>
 			)}
 		</div>
@@ -213,11 +247,13 @@ export function OptionPreviewPane({
 	source,
 	scrollRef,
 	onOpenFile,
+	onFullscreen,
 }: {
 	label: string | null;
 	source: PreviewSource | null;
 	scrollRef: (node: HTMLDivElement | null) => void;
 	onOpenFile?: ((path: string) => void) | undefined;
+	onFullscreen?: (() => void) | undefined;
 }) {
 	const t = useT();
 	const tid = useTestId();
@@ -234,6 +270,8 @@ export function OptionPreviewPane({
 				{label ? <span className="shrink-0">{t("tools.ask.preview", { label })}</span> : null}
 				{source?.kind === "file" ? (
 					<span className="min-w-0 truncate text-text-subtle">{fileTitle(source)}</span>
+				) : onFullscreen && !ghost ? (
+					<CompareButton onClick={onFullscreen} />
 				) : null}
 			</div>
 			<div className="min-h-0 flex-1">
@@ -255,7 +293,12 @@ export function OptionPreviewPane({
 						<PreviewMarkdown text={source.text} />
 					</div>
 				) : (
-					<FileFrame key={fileTitle(source)} source={source} onOpenFile={onOpenFile} />
+					<FileFrame
+						key={fileTitle(source)}
+						source={source}
+						onOpenFile={onOpenFile}
+						onFullscreen={onFullscreen}
+					/>
 				)}
 			</div>
 		</div>

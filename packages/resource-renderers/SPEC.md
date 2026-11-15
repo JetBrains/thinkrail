@@ -51,10 +51,20 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   state and a caller needs no reset, and a `reveal` it forwards to the view renderer). Its `compact` flag (carried to the lazy views as
   `ResourceEnvironment.compact`, and reset by an explicit `compact={false}`) drops the renderer toggles,
   Send review, the HTML notice with its viewport presets and the Markdown outline — the chrome a small
-  embedded frame cannot afford; the views themselves are unchanged;
+  embedded frame cannot afford; the views themselves are unchanged, and a compact preview given neither
+  `leading` nor `actions` draws no toolbar at all rather than an empty row. `reviewable={false}` skips the
+  host's review surfaces — no commenting, no unplaced strip — for a surface whose purpose is looking, not
+  reviewing (the questionnaire's compare overlay). `htmlViewport` (carried the same way as
+  `ResourceEnvironment.htmlViewport`) fixes the preview width of every HTML view and diff beneath it and
+  hides their own presets, for a caller that shows one width control for several frames — it renders
+  **`HtmlViewportSwitch`** (typed by `HtmlViewport`), the same segments the notice uses.
+  `sideLabels` (`DiffSideLabels`, also `ResourceDiffProps.sideLabels`) names a diff's two sides where "Old" /
+  "New" would mislead, as when two alternatives are compared: the visual diffs (HTML, image, SVG) use them
+  for the 2-up headings and captions, the rest ignore them;
 - **`FramedResourcePreview`** — `ResourcePreview` in a caller-sized frame with **Open in tab** (the file, or
   the comparison for a diff) and **Full screen** (a dialog with the full chrome, sharing renderer and view
-  state), every action an explicit tab stop; nothing without a host and a workspace scope. It is the one
+  state; an `onFullscreen` handler replaces that dialog with the caller's own), every action an explicit tab
+  stop; nothing without a host and a workspace scope. It is the one
   framed preview of visualize's file card and the questionnaire's previews ([[module-ext-visualize]],
   [[module-ext-ask-user-question]]) — lifted from visualize when the second consumer arrived;
 - **`ResourceReveal`** and **`SOURCE_RENDERER_ID`** (`thinkrail/code`) — the open-at-a-line contract: a
@@ -503,15 +513,25 @@ iframe. The sanitizer removes active, navigational, embedding, and form elements
 non-`data:` resource URLs; and turns anchors into inert text-bearing elements. Styles remain. Notebook HTML
 output uses this same sanitizer. The injected CSP is exactly `default-src 'none'; img-src data: blob:;
 style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src
-'none'; child-src 'none'`. The diff is the shared visual frame constrained to 2-up sandboxed documents only.
-It advertises no anchor geometry, so HTML threads remain in the pane-owned unplaced strip and Source is the
-only authoring candidate. View and diff share a **preview width** switch in the notice bar — Desktop 1280 /
+'none'; child-src 'none'`. The diff is the shared visual frame with all four modes (2-up, swipe, onion,
+difference), and its two documents **scroll together** in every mode: a per-diff `ScrollLink` mirrors the
+absolute scroll offset of whichever document the user scrolls onto the other, ignores the echo of its own
+write (read back after the write, so a shorter document's clamped offset never drags the longer one back),
+and re-applies the last offset to a frame that reloads, so a mode switch keeps the position. Only these
+paired frames carry `sandbox="allow-same-origin"`, which lets the host attach the scroll listener and read
+the offset; they still have no `allow-scripts`, so nothing in the document runs (the sanitizer strips
+scripts and handlers too, and the CSP has no script source) — the dangerous pair is `allow-scripts` with
+`allow-same-origin`, never granted. A single HTML view keeps `sandbox=""`. The layered modes drop the
+"comment on old/new" side picker when neither side carries a review surface: it only chooses whose regions
+a drag authors. The diff advertises no anchor geometry, so HTML threads remain in the pane-owned unplaced
+strip and Source is the only authoring candidate. Known limitation: the comparison still mounts through
+`GuardedRendererDiff`, so two large *unrelated* documents (two alternatives rather than two revisions) can
+wait behind the expensive-diff notice although the rendered comparison computes no text diff. View and diff share a **preview width** switch in the notice bar — Desktop 1280 /
 Tablet 768 / Phone 390 / Fill, default Desktop, persisted as `{ viewport }` view state and adopted whenever the
 caller's view state changes (`useHtmlViewport`, so a chat card follows a width chosen in its full screen): the frame renders at
 the design width and is CSS-scaled down to its box (never up), keeping its own vertical scroll, so a narrow
 pane, a 2-up half or a chat card shows the true layout shrunk rather than an accidental mobile reflow; Fill
-is the old reflow. Scaling is pure geometry on the wrapper — the iframe keeps `sandbox=""` and nothing
-measures the document (no `allow-same-origin`); the wrapper's box is measured in a layout effect (the package's
+is the old reflow. Scaling is pure geometry on the wrapper — nothing measures the document's size; the wrapper's box is measured in a layout effect (the package's
 one `useElementSize`, shared with the SVG view and the region surfaces), so the first paint is already fitted
 instead of reflowing the document at the pane width for a frame. The sanitizer also strips form controls, so mockups draw
 buttons and inputs with styled elements; spot (region) comments on HTML are not offered yet.

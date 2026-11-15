@@ -1,8 +1,8 @@
 import type { MessageKey } from "@thinkrail/locales";
-import { useT } from "@thinkrail/locales/react";
+import { type Translator, useT } from "@thinkrail/locales/react";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import type { AnchorDraft, SurfaceReview } from "../registry";
+import type { AnchorDraft, DiffSideLabels, SurfaceReview } from "../registry";
 import { RegionReviewSurface } from "./RegionReviewSurface";
 import { placedRegionThreadIds, type Region, type Size } from "./regionReview";
 import { swipeDividerValue } from "./swipeDivider";
@@ -36,6 +36,17 @@ const OPACITY_LABELS = {
 	page: "viewer.visualDiff.opacityPage",
 	output: "viewer.visualDiff.opacityOutput",
 } as const satisfies Record<VisualDiffNoun, MessageKey>;
+
+export function sideCaption(
+	t: Translator,
+	side: "old" | "new",
+	detail: string,
+	labels: DiffSideLabels | undefined,
+): string {
+	const label = labels ? (side === "old" ? labels.original : labels.modified) : undefined;
+	if (label !== undefined) return t("viewer.side.labelledCaption", { label, detail });
+	return t(side === "old" ? "viewer.side.oldCaption" : "viewer.side.newCaption", { detail });
+}
 
 export interface VisualDiffSide {
 	present: boolean;
@@ -123,6 +134,7 @@ export function VisualDiff({
 	onViewState,
 	modes = ALL_MODES,
 	emptyLabel,
+	labels,
 }: {
 	prefix: "image" | "svg" | "html";
 	noun: VisualDiffNoun;
@@ -136,6 +148,7 @@ export function VisualDiff({
 	onViewState?: ((state: unknown) => void) | undefined;
 	modes?: readonly VisualDiffMode[] | undefined;
 	emptyLabel?: string | undefined;
+	labels?: DiffSideLabels | undefined;
 }) {
 	const t = useT();
 	const emptyText = emptyLabel ?? t("viewer.image.noImage");
@@ -202,7 +215,7 @@ export function VisualDiff({
 							/>
 						))}
 					</div>
-					{mode !== "2-up" ? (
+					{mode !== "2-up" && (original.review || modified.review) ? (
 						<div data-testid={`${prefix}-diff-side`} className="ml-auto flex items-center gap-2">
 							<ToggleSegment
 								testid={`${prefix}-diff-side-base`}
@@ -224,7 +237,7 @@ export function VisualDiff({
 				{mode === "2-up" ? (
 					<div className="grid min-h-full grid-cols-1 gap-12 md:grid-cols-2">
 						<SideSurface
-							label={t("viewer.side.old")}
+							label={labels?.original ?? t("viewer.side.old")}
 							selectionKey={`${selectionKey}:base`}
 							side={original}
 							commentLabel={commentLabel}
@@ -232,7 +245,7 @@ export function VisualDiff({
 							emptyLabel={emptyText}
 						/>
 						<SideSurface
-							label={t("viewer.side.new")}
+							label={labels?.modified ?? t("viewer.side.new")}
 							selectionKey={`${selectionKey}:worktree`}
 							side={modified}
 							commentLabel={commentLabel}
