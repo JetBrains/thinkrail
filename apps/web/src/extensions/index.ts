@@ -1,1 +1,6 @@
-export { registerWebExtensions, webExtensions } from "./registry";
+export {
+	enabledWebExtensions,
+	registerWebExtensions,
+	webExtensions,
+	webOnlyExtensions,
+} from "./registry";

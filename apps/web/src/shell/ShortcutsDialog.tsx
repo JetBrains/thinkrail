@@ -5,6 +5,7 @@ import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Keycaps } from "@thinkrail/ui/keycaps";
 import { cn } from "@thinkrail/ui/utils";
 import { useId, useRef, useState } from "react";
+import { enabledWebExtensions } from "../extensions";
 import {
 	keybindingKeys,
 	matchKeybinding,
@@ -19,8 +20,13 @@ import { AuxiliaryRailActionButton, type AuxiliaryRailControlProps } from "./lay
 import { shortcutSurfaceOf } from "./shortcutSurface";
 import { hasNativeShortcuts } from "./useAppShortcuts";
 
-function readRows(): ShortcutRow[] {
-	return shortcutRows({ desktop: hasNativeShortcuts() });
+function useShortcutRows(): ShortcutRow[] {
+	const [desktop] = useState(hasNativeShortcuts);
+	const disabled = useAppStore((state) => state.disabledExtensions);
+	const extra = enabledWebExtensions(disabled).flatMap(({ shortcuts = [] }) =>
+		shortcuts.map((shortcut) => ({ ...shortcut, surface: "general" as const })),
+	);
+	return shortcutRows({ desktop, extra });
 }
 
 const SCROLL_PAGES: ReadonlyMap<string, number> = new Map([
@@ -78,7 +84,7 @@ export function ShortcutsReference({
 	className?: string;
 }) {
 	const t = useT();
-	const [rows] = useState(readRows);
+	const rows = useShortcutRows();
 	const [query, setQuery] = useState("");
 	const list = useRef<HTMLDivElement>(null);
 	const needle = query.trim().toLocaleLowerCase();

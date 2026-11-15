@@ -62,6 +62,7 @@ export const RAIL_KEYS = {
 } as const satisfies Record<string, ShortcutKey>;
 
 export const TREE_KEYS = {
+	search: { key: "s" },
 	openKept: { key: "Enter", mod: true },
 	rename: { key: "F2" },
 	delete: { key: "Delete" },
@@ -303,8 +304,18 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 		surface: "panels",
 		keys: [RAIL_KEYS.moveLeft, RAIL_KEYS.moveRight],
 	},
-	{ id: "trees.move", title: "shortcuts.trees.move", surface: "trees", keys: [UP, DOWN] },
-	{ id: "trees.expand", title: "shortcuts.trees.expand", surface: "trees", keys: [RIGHT, LEFT] },
+	{
+		id: "trees.move",
+		title: "shortcuts.trees.move",
+		surface: "trees",
+		keys: [UP, DOWN, HJKL_KEYS.up, HJKL_KEYS.down],
+	},
+	{
+		id: "trees.expand",
+		title: "shortcuts.trees.expand",
+		surface: "trees",
+		keys: [RIGHT, LEFT, HJKL_KEYS.right, HJKL_KEYS.left],
+	},
 	{
 		id: "trees.firstLast",
 		title: "shortcuts.trees.firstLast",
@@ -312,10 +323,23 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 		keys: [HOME, END],
 	},
 	{
-		id: "trees.typeAhead",
-		title: "shortcuts.trees.typeAhead",
+		id: "trees.search",
+		title: "shortcuts.trees.search",
 		surface: "trees",
-		keys: [{ key: "A–Z" }],
+		keys: [TREE_KEYS.search],
+	},
+	{
+		id: "trees.searchStep",
+		title: "shortcuts.trees.searchStep",
+		surface: "trees",
+		keys: [DOWN, UP],
+	},
+	{ id: "trees.searchKeep", title: "shortcuts.trees.searchKeep", surface: "trees", keys: [ENTER] },
+	{
+		id: "trees.searchCancel",
+		title: "shortcuts.trees.searchCancel",
+		surface: "trees",
+		keys: [ESCAPE],
 	},
 	{ id: "trees.open", title: "shortcuts.trees.open", surface: "trees", keys: [ENTER] },
 	{
@@ -767,6 +791,7 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 export interface ShortcutContext {
 	readonly desktop: boolean;
 	readonly platform?: string;
+	readonly extra?: readonly ShortcutCatalogEntry[];
 }
 
 export interface ShortcutChordView {
@@ -832,8 +857,8 @@ function chordView(keys: readonly string[], platform?: string): ShortcutChordVie
 }
 
 export function shortcutRows(context: ShortcutContext): ShortcutRow[] {
-	const { platform } = context;
-	return SHORTCUT_CATALOG.flatMap((entry): ShortcutRow[] => {
+	const { platform, extra = [] } = context;
+	return [...SHORTCUT_CATALOG, ...extra].flatMap((entry): ShortcutRow[] => {
 		if (entry.desktop && !context.desktop) return [];
 		const chords = entry.bindings
 			? [chordView(bindingCaps(entry.bindings, context), platform)]

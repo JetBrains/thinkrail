@@ -14,9 +14,18 @@ A **ThinkRail extension** is a workspace package `thinkrail-extensions/<name>/` 
 private) that composes a pi capability — usually a [[module-pi-extensions]] package, possibly a
 third-party pi package — with its ThinkRail-specific halves: what the host bundles into sessions and how
 the web client presents the capability's tools. The host composes extensions from **one registry file per
-side**. A user sees the server registry in Settings → Extensions and can switch each extension off (a
-host-level setting keyed on the descriptor `name`; the extension declares nothing for it); how a user would
-install or discover a new extension is deliberately not designed.
+side**. A user sees the server registry in Settings → Extensions — plus the web-only entries below — and can
+switch each extension off (a host-level setting keyed on the descriptor `name`; the extension declares
+nothing for it); how a user would install or discover a new extension is deliberately not designed.
+
+A **web-only extension** has no pi capability and no `./server` (hint mode, [[module-ext-hint-mode]]). The
+server catalog cannot list it, so Settings → Extensions also lists every web registry entry that declares a
+`title` and that the catalog lacks, with the same `disabledExtensions` switch (the host carries unknown
+names through and reloads no session for them); it applies at once. A stub server extension just to get a
+row was rejected: an older host would not list it either, and an extension here composes a pi capability.
+**Global contributions are mounted only while enabled; tool renderers stay regardless** — a switched-off
+extension's `globalOverlay` unmounts and its `shortcuts` leave the cheatsheet, while its renderers keep
+drawing old transcripts.
 
 The first extension (`visualize`, [[module-ext-visualize]]) ships both halves; the host composes them from
 the two registry files below ([[submodule-server-extensions]], [[submodule-web-extensions]]). **Per-extension
@@ -40,9 +49,13 @@ extension contributes — its factories, its tools in live sessions, and the ski
   reads to the model ([[module-extension-api]]).
   `skillPackages` are **package specifiers** whose `pi.skills` directories the host stages — explicit module
   identity for the build step, never inferred from a function. Server-only; may value-import pi.
-- `./web` — default export `defineWebExtension({ name, toolRenderers })` keyed by tool name, **plus named
-  exports** for components the host uses directly (visualize exports `MermaidView` for fenced mermaid in
-  chat markdown). Browser-only; never value-imports pi; heavy renderers stay lazy.
+- `./web` — default export `defineWebExtension({ name, title?, description?, toolRenderers?, globalOverlay?,
+  shortcuts? })`: `toolRenderers` keyed by tool name; `title` / `description` locale keys for a web-only
+  Settings row; `globalOverlay` a component the host mounts once in `Shell` while the extension is enabled,
+  handed host helpers as props (`isTextEntry`, `activeLayer`, `platform`) because the half cannot import
+  the app; `shortcuts` display rows (with physical `code`s) the cheatsheet's General section lists while
+  enabled. **Plus named exports** for components the host uses directly (visualize exports `MermaidView`
+  for fenced mermaid in chat markdown). Browser-only; never value-imports pi; heavy renderers stay lazy.
 
 The `define*` objects and the named `./web` exports are the whole contract: named `./web` exports are
 components the host renders directly. `./server` has no named exports the host consumes — everything the
@@ -66,7 +79,8 @@ What a `./web` half may import:
 
 - `@thinkrail/extension-api` ([[module-extension-api]]) — types and `define*` helpers only, no React
   components. `./web`: `ToolRenderProps`, `ToolRenderer`, `ToolRegistrationOptions`, `ToolStatus`,
-  `WebExtension`, `defineWebExtension`, and the pure renderer helpers (`toolHelpers`, `toolResultContent`).
+  `WebExtension`, `GlobalOverlayProps`, `ExtensionShortcut`, `ExtensionShortcutKey`, `defineWebExtension`,
+  and the pure renderer helpers (`toolHelpers`, `toolResultContent`).
   `./server`: `ServerExtension`, `defineServerExtension`. Its own package because server pi types would
   contaminate the wire boundary in `contracts`, and the server contract in `ui` would give the host a
   presentation dependency.
@@ -112,8 +126,10 @@ What a `./web` half may import:
   infrastructure (desktop's bundled server runtime, `startDesktopHost`, `registerBundledRuntime`'s
   OAuth/Bedrock/trash registration) is unchanged by this.
 - **Web:** `apps/web/src/extensions/registry.ts` exports the ordered web extensions;
-  `registerWebExtensions()` feeds their `toolRenderers` into the chat tool registry. App-local tool
-  registrations retain their side-effect imports; extension descriptors need none.
+  `registerWebExtensions()` feeds their `toolRenderers` into the chat tool registry, ignoring the switch.
+  `Shell` mounts the `globalOverlay` of each extension not in `disabledExtensions`, and the cheatsheet adds
+  their `shortcuts` ([[submodule-web-extensions]]). App-local tool registrations retain their side-effect
+  imports; extension descriptors need none.
 
 ## Boundary rules (enforced by `scripts/check-module-boundaries.ts`, with negative tests)
 
@@ -154,4 +170,5 @@ follow the `.js`, `tsc` stops at the declaration.
 | --- | --- | --- |
 | `visualize` | `@thinkrail/pi-visualize` | shipped. `./server` injects the **strict** mermaid validator (`mermaid` at the web renderer's catalog version, initialised through `linkedom` — required: DOMPurify needs a real `document` for flowchart/class/state/gantt/mindmap, verified under Bun). `./web` carries the diagram/comparison cards and exports `MermaidView`. The guarantee is syntax parsing, not SVG/layout success; the browser renderer keeps its fallback. |
 | `ask-user-question` | `@thinkrail/pi-ask-user-question` | shipped; the first interactive tool. `./server` is session-only: `sessionExtensions` composes the portable tool with ThinkRail's wording and an asker over the host's interactive-tool mailbox (`awaitToolResponse`); `interactiveTools` declares `ask_user_question` with a `describeResponse` that renders a late answer in the package's own envelope wording. `./web` registers the questionnaire card `interactive`, fed entirely by the host through `ToolRenderProps.interaction`; the plan page renders it through the tool registry like the chat does. [[module-ext-ask-user-question]]. |
+| `hint-mode` | none (web-only) | shipped; on by default. A `globalOverlay` that labels everything clickable on F (outside text entry) or Mod+; and presses a typed label; its `shortcuts` join the cheatsheet while enabled. [[module-ext-hint-mode]]. |
 | `web-access` | third-party `pi-web-access` | shipped (server half). `./server` composes the package unchanged for parents and children (the host keeps its headless-search policy, which must outlive the switch) and ships its own `librarian` skill (upstream dropped it; `skillPackages` names the extension's own package); the first extension with skills. Renderers stay app-local (`apps/web/src/chat/tools/web`) until `Markdown`, `Collapsible` and `ToolFileLink` join the SDK. [[module-ext-web-access]]. |

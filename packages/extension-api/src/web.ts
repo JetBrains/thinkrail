@@ -1,5 +1,6 @@
+import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 export { languageFromPath, numArg, resultText, strArg } from "./toolHelpers";
 export {
@@ -64,9 +65,34 @@ export interface ToolRegistrationOptions {
 	dock?: boolean;
 }
 
+export interface GlobalOverlayProps {
+	isTextEntry: (target: EventTarget | null) => boolean;
+	activeLayer: () => ParentNode;
+	platform: string;
+}
+
+export interface ExtensionShortcutKey {
+	readonly code: string;
+	readonly key: string;
+	readonly mod?: boolean;
+	readonly ctrl?: boolean;
+	readonly alt?: boolean;
+	readonly shift?: boolean;
+}
+
+export interface ExtensionShortcut {
+	readonly id: string;
+	readonly title: MessageKey;
+	readonly keys: readonly [ExtensionShortcutKey, ...ExtensionShortcutKey[]];
+}
+
 export interface WebExtension {
 	name: string;
-	toolRenderers: Record<string, { renderer: ToolRenderer; options?: ToolRegistrationOptions }>;
+	title?: MessageKey;
+	description?: MessageKey;
+	toolRenderers?: Record<string, { renderer: ToolRenderer; options?: ToolRegistrationOptions }>;
+	globalOverlay?: ComponentType<GlobalOverlayProps>;
+	shortcuts?: readonly ExtensionShortcut[];
 }
 
 export function defineWebExtension<T extends WebExtension>(extension: T): T {

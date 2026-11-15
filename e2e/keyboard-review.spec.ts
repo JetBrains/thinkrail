@@ -47,6 +47,7 @@ function lineRangeOf(comment: Comment | undefined) {
 }
 
 async function commitAndModify(
+	page: Page,
 	workspaceId: string,
 	name: string,
 	original: string | Buffer,
@@ -56,7 +57,7 @@ async function commitAndModify(
 	execSync(`git -C "${worktree()}" add ${name} && git -C "${worktree()}" commit -m "add ${name}"`, {
 		stdio: "ignore",
 	});
-	const wire = await E2eWire.connect();
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
 	try {
 		await wire.request("workspace.setDiffBase", { id: workspaceId, ref: "HEAD" });
 	} finally {
@@ -135,7 +136,7 @@ async function openCursorDiff(page: Page): Promise<{
 }> {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
-	await commitAndModify(workspace.id, "cursor.ts", CURSOR_ORIGINAL, CURSOR_MODIFIED);
+	await commitAndModify(page, workspace.id, "cursor.ts", CURSOR_ORIGINAL, CURSOR_MODIFIED);
 	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "cursor.ts" }).dblclick();
 	const diff = page.getByTestId("diff-view");
@@ -253,6 +254,7 @@ test("a virtualized diff scrolls the cursor's line into view as it jumps between
 		index === 4 || index === 1_399 ? `${line} edited` : line,
 	);
 	await commitAndModify(
+		page,
 		workspace.id,
 		"FAR.txt",
 		`${lines.join("\n")}\n`,
@@ -358,7 +360,7 @@ test("Show in file lands in a draft's text, not on its Send button; a sent card 
 	const sentSoon = persistedComments().find((candidate) => candidate.body === "Sent soon.");
 	const reveal = persistedComments().find((candidate) => candidate.body === "Reveal me.");
 	markSentOnDisk(sentSoon?.id ?? "");
-	const wire = await E2eWire.connect();
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
 	try {
 		await wire.request("review.commentUpdate", {
 			workspaceId,
@@ -401,7 +403,7 @@ test("in Changes review the cursor owns J while V still marks the file viewed", 
 }) => {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
-	await commitAndModify(workspace.id, "cursor.ts", CURSOR_ORIGINAL, CURSOR_MODIFIED);
+	await commitAndModify(page, workspace.id, "cursor.ts", CURSOR_ORIGINAL, CURSOR_MODIFIED);
 	writeFileSync(join(worktree(), "notes.txt"), "a note edited by e2e\n");
 	await revealWorkbenchTool(page, "changes");
 	const row = page.getByTestId("change-item").filter({ hasText: "cursor.ts" });
@@ -483,7 +485,7 @@ test("a review jump in the single-file layout lands on the file header, so Enter
 }) => {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
-	await commitAndModify(workspace.id, "cursor.ts", CURSOR_ORIGINAL, CURSOR_MODIFIED);
+	await commitAndModify(page, workspace.id, "cursor.ts", CURSOR_ORIGINAL, CURSOR_MODIFIED);
 	writeFileSync(join(worktree(), "second.ts"), "export const second = 2;\n");
 	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "cursor.ts" }).click();
@@ -616,6 +618,7 @@ test("the swipe divider is a slider: arrows, h/l, Shift, PageUp/PageDown, Home/E
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
 	await commitAndModify(
+		page,
 		workspace.id,
 		"SWIPE.png",
 		png(200, 100, [40, 120, 200]),

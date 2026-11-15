@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import type { ExtensionCatalogEntry } from "@thinkrail/contracts";
+import { currentTranslator } from "@thinkrail/locales/react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ExtensionsCatalog } from "./ExtensionsSettings";
+import { ExtensionsCatalog, withWebOnlyEntries } from "./ExtensionsSettings";
 import { nextDisabledPackages } from "./usePiPackages";
 
 const VISUALIZE: ExtensionCatalogEntry = {
@@ -46,6 +47,21 @@ test("an empty registry renders the empty state", () => {
 	const markup = render([]);
 	expect(markup).toContain('data-testid="extensions-empty"');
 	expect(markup).not.toContain('role="switch"');
+});
+
+test("a web-only extension the host catalog lacks gets its own row and switch, without tool chips", () => {
+	const entries = withWebOnlyEntries(currentTranslator(), [VISUALIZE]);
+	expect(entries.map((entry) => entry.name)).toEqual(["visualize", "hint-mode"]);
+	const markup = render(entries, ["hint-mode"]);
+	expect(markup).toContain('data-testid="extension-row-hint-mode"');
+	expect(markup).toContain("Hint mode");
+	expect(markup).toContain("press F outside a text field");
+	expect(markup).toContain('data-testid="extension-toggle-hint-mode" data-active="false"');
+	expect(markup.split('data-testid="extension-tool-').length).toBe(2);
+	const hosted = { ...VISUALIZE, name: "hint-mode", title: "Hint mode", tools: [] };
+	expect(withWebOnlyEntries(currentTranslator(), [hosted]).map((entry) => entry.name)).toEqual([
+		"hint-mode",
+	]);
 });
 
 test("loading and failure render no rows", () => {

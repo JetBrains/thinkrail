@@ -1,38 +1,49 @@
 import { describe, expect, it } from "bun:test";
-import { extendTypeAhead, treeRowKey, typeAheadTarget } from "./treeNavigation";
+import {
+	type TreeSearchRow,
+	treeRowKey,
+	treeSearchMatches,
+	treeSearchStep,
+	treeSearchTarget,
+} from "./treeNavigation";
 
-describe("type-ahead", () => {
-	const labels = ["README.md", "readme-old", "src", "scripts", "Spec notes"];
+describe("tree search", () => {
+	const rows: TreeSearchRow[] = [
+		{ id: "readme", label: "README.md" },
+		{ id: "src", label: "src" },
+		{ id: "scripts", label: "scripts" },
+		{ id: "spec", label: "Spec notes" },
+		{ id: "notes", label: "notes.txt" },
+	];
 
-	it("buffers keys typed within half a second and restarts after a pause", () => {
-		const first = extendTypeAhead({ text: "", at: 0 }, "s", 1_000);
-		expect(first).toEqual({ text: "s", at: 1_000 });
-		if (!first) throw new Error("no buffer");
-		expect(extendTypeAhead(first, "c", 1_300)).toEqual({ text: "sc", at: 1_300 });
-		expect(extendTypeAhead(first, "c", 1_600)).toEqual({ text: "c", at: 1_600 });
+	it("matches a substring of the label case-insensitively, in row order", () => {
+		expect(treeSearchMatches(rows, "S")).toEqual(["src", "scripts", "spec", "notes"]);
+		expect(treeSearchMatches(rows, "note")).toEqual(["spec", "notes"]);
+		expect(treeSearchMatches(rows, "ME.m")).toEqual(["readme"]);
+		expect(treeSearchMatches(rows, "")).toEqual([]);
+		expect(treeSearchMatches(rows, "zzz")).toEqual([]);
 	});
 
-	it("lets Space join only a live buffer", () => {
-		expect(extendTypeAhead({ text: "", at: 0 }, " ", 100)).toBeNull();
-		expect(extendTypeAhead({ text: "spec", at: 1_000 }, " ", 1_400)).toEqual({
-			text: "spec ",
-			at: 1_400,
-		});
-		expect(extendTypeAhead({ text: "spec", at: 1_000 }, " ", 2_000)).toBeNull();
+	it("lands on the first match at or after the anchor, wrapping, and stays while it still matches", () => {
+		expect(treeSearchTarget(rows, "note", "src")).toBe("spec");
+		expect(treeSearchTarget(rows, "note", "notes")).toBe("notes");
+		expect(treeSearchTarget(rows, "src", "notes")).toBe("src");
+		expect(treeSearchTarget(rows, "s", "scripts")).toBe("scripts");
+		expect(treeSearchTarget(rows, "note", null)).toBe("spec");
+		expect(treeSearchTarget(rows, "zzz", "src")).toBeNull();
+		expect(treeSearchTarget(rows, "", "src")).toBeNull();
 	});
 
-	it("matches a label prefix case-insensitively, from the next row for one letter", () => {
-		expect(typeAheadTarget(labels, 0, "r")).toBe(1);
-		expect(typeAheadTarget(labels, 1, "r")).toBe(0);
-		expect(typeAheadTarget(labels, 2, "sc")).toBe(3);
-		expect(typeAheadTarget(labels, 2, "sr")).toBe(2);
-		expect(typeAheadTarget(labels, 0, "spec ")).toBe(4);
-		expect(typeAheadTarget(labels, 0, "x")).toBeNull();
-	});
-
-	it("cycles through rows sharing a letter when that letter repeats", () => {
-		expect(typeAheadTarget(labels, 2, "ss")).toBe(3);
-		expect(typeAheadTarget(labels, 3, "sss")).toBe(4);
+	it("steps to the next and previous match, wrapping at both ends", () => {
+		expect(treeSearchStep(rows, "note", "spec", 1)).toBe("notes");
+		expect(treeSearchStep(rows, "note", "notes", 1)).toBe("spec");
+		expect(treeSearchStep(rows, "note", "spec", -1)).toBe("notes");
+		expect(treeSearchStep(rows, "note", "notes", -1)).toBe("spec");
+		expect(treeSearchStep(rows, "note", "readme", 1)).toBe("spec");
+		expect(treeSearchStep(rows, "note", "readme", -1)).toBe("notes");
+		expect(treeSearchStep(rows, "note", null, 1)).toBe("spec");
+		expect(treeSearchStep(rows, "note", null, -1)).toBe("notes");
+		expect(treeSearchStep(rows, "zzz", "src", 1)).toBeNull();
 	});
 });
 

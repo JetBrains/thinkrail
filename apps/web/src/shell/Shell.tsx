@@ -68,6 +68,7 @@ import {
 	toggleLeftSide,
 	toggleRightSide,
 } from "./chordActions";
+import { ExtensionOverlays } from "./ExtensionOverlays";
 import { FindInFilesHost } from "./FindInFilesHost";
 import { installFocusRecovery } from "./focusRecovery";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
@@ -380,6 +381,7 @@ export function Shell() {
 			<Toaster />
 			<UpdateInstallSurfaces updates={updates} />
 			<AppShortcuts />
+			<ExtensionOverlays />
 		</div>
 	);
 }
