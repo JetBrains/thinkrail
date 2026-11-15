@@ -355,7 +355,7 @@ export const TabStrip = memo(function TabStrip({
 							tabRefs.current.get(targetId)?.focus();
 						}}
 					>
-						<Command>
+						<Command label={t("workbench.tabs.findPlaceholder")}>
 							<CommandInput placeholder={t("workbench.tabs.findPlaceholder")} />
 							<CommandList>
 								<CommandEmpty>{t("workbench.tabs.noMatches")}</CommandEmpty>

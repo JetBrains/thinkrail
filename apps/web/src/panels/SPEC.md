@@ -843,6 +843,9 @@ a project picker, the prompt hero, and the reused
   `mcp-add`, button `mcp-add`); then two groups, **User servers** (scope tag *All projects*,
   `mcp-user-servers`, list `mcp:user`) and **Project servers** (scope tag *This project*,
   `mcp-project-servers`, list `mcp:project`; the untrusted line, or "No servers in this repository's
+  MCP form fields associate their visible labels with the input or textarea; segmented choices
+  are named groups. The format/scope groups and raw JSON editor also have localized accessible
+  names.
   .pi/mcp.json…" when it lists none). In a workspace it reads `mcp.list` through
   `transport`'s `watchMcpWorkspace` — on mount, every welcome, a project-trust change, and with bounded
   backoff while a live chat still reports a server `starting`, because the host pushes no connected edge.

@@ -881,7 +881,7 @@ function ProjectPicker({
 				<ChevronDown className="size-16 shrink-0 text-text-muted" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[280px] p-0">
-				<Command>
+				<Command label={t("panels.newWorkspace.searchProjects")}>
 					<CommandInput placeholder={t("panels.newWorkspace.searchProjects")} />
 					<CommandList>
 						<CommandEmpty>{t("panels.newWorkspace.noProjects")}</CommandEmpty>

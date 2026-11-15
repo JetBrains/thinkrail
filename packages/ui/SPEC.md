@@ -167,6 +167,8 @@ moved here from the app when the resource renderers became a package, because bo
   file-level, and each allow-list entry carries its reason.
 - React 19 refs pass through controls; dialog/popover portals preserve accessible focus and scroll
   behavior. Popover accepts a host Dialog container for scroll-lock compatibility.
+- `Command` requires a caller-localized `label`: cmdk's hidden label names the search input, so a
+  placeholder alone cannot name it. The suggestion list keeps its independently localized label.
 - Icon-only controls use `IconTooltip` with `aria-label`, not native `title`; one root `TooltipProvider`
   sets the delay. Native `title` remains only for non-control truncation fallbacks or surfaces outside
   the provider (the app's review widgets). `wrapTrigger` supplies the interactive flex span for a disabled

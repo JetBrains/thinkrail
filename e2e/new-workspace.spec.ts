@@ -84,12 +84,16 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	await expect(page.getByTestId("create-workspace")).toHaveText(/Create/);
 
 	await expect(dialog.getByTestId("ws-project-picker")).toContainText("sample-project");
+	await dialog.getByTestId("ws-project-picker").click();
+	await expect(page.getByRole("combobox", { name: "Search projects…", exact: true })).toBeVisible();
+	await page.keyboard.press("Escape");
 
 	const branchPicker = dialog.getByTestId("ws-branch-picker");
 	await expect(branchPicker).toContainText("From");
 	await expect(branchPicker).toContainText("main");
 
 	await branchPicker.click();
+	await expect(page.getByRole("combobox", { name: "Search branches…", exact: true })).toBeVisible();
 	const mainOption = page.locator('[data-testid="branch-option"][data-branch="main"]');
 	await expect(mainOption).toBeVisible();
 	await expect(mainOption).toContainText("default");

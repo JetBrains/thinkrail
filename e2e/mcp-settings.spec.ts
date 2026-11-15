@@ -44,6 +44,31 @@ function userEntry(name: string): Record<string, unknown> | undefined {
 	return config.mcpServers?.[name];
 }
 
+test("MCP form fields and segment groups have accessible names", async ({ page }) => {
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await openMcpSettings(page);
+	await page.getByTestId("mcp-empty-add").click();
+	const dialog = page.getByTestId("mcp-add-dialog");
+	await dialog.getByText("Name", { exact: true }).click();
+	await shot(dialog, "mcp-settings", "accessible-fields");
+	await expect(dialog.getByRole("textbox", { name: "Name", exact: true })).toBeVisible();
+	await expect(dialog.getByRole("textbox", { name: "Name", exact: true })).toBeFocused();
+	for (const name of ["Command", "Arguments", "Description"]) {
+		await expect(dialog.getByRole("textbox", { name, exact: true })).toBeVisible();
+	}
+	await expect(
+		dialog.getByRole("group", { name: "Configuration format", exact: true }),
+	).toBeVisible();
+	await expect(dialog.getByRole("group", { name: "Scope", exact: true })).toBeVisible();
+	await expect(dialog.getByRole("group", { name: "Exposure", exact: true })).toBeVisible();
+	const transport = dialog.getByRole("group", { name: "Transport", exact: true });
+	await transport.getByRole("button", { name: "HTTP URL", exact: true }).click();
+	await expect(dialog.getByRole("textbox", { name: "URL", exact: true })).toBeVisible();
+	await dialog.getByRole("button", { name: "Paste JSON", exact: true }).click();
+	await expect(dialog.getByRole("textbox", { name: "mcpServers JSON", exact: true })).toBeVisible();
+});
+
 type McpWrite = WsRequest<"mcp.add"> | WsRequest<"mcp.setProjectOverride">;
 
 async function interceptMcpWrites(
@@ -459,6 +484,9 @@ test("a repository-defined server flags the chat, waits for approval and starts 
 		await row.getByTestId("mcp-server-menu").click();
 		await page.getByTestId("mcp-menu-edit").click();
 		const editor = page.getByTestId("mcp-edit-dialog");
+		await expect(
+			editor.getByRole("textbox", { name: "Server configuration JSON", exact: true }),
+		).toBeVisible();
 		await expect(editor.getByTestId("mcp-edit-input")).toHaveValue(
 			/"FIXTURE_SECRET": "<literal value hidden>"/,
 		);
