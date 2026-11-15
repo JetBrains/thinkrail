@@ -441,7 +441,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   the **Artifacts** tool's wire from the same version: `artifacts.list` (`{ workspaceId }` →
   **`WorkspaceArtifactsSnapshot`**: `dir` (the artifacts folder, `.thinkrail/context`), `artifacts`
   (**`WorkspaceArtifact`**: worktree-relative `path`, `state: "live" | "deleted"` — deleted means gone from
-  disk but restorable from the host's kept copy — `size`, `changedAt`, `firstSeenAt`, the writing chat's
+  disk but restorable from the host's kept copy — `size`, `changedAt` (for a deleted row, when the host saw
+  it gone, so a new deletion of the same path carries a new value), `firstSeenAt`, the writing chat's
   optional `sessionId`) and `outputs` (**`WorkspaceIgnoredOutput`** rows — an ignored file or folder an
   agent run produced, with its live `files` count and `filesTruncated` — or `null` where there is no git),
   `artifacts.restore` / `artifacts.discard` (`{ workspaceId, path }` → ack; a deleted row only, otherwise

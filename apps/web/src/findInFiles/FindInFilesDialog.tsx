@@ -6,7 +6,7 @@ import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef } from "react";
 import { shortcutKeys } from "../commands";
-import { KeyHint } from "../components/Keycaps";
+import { KeyHint } from "../components/KeyHint";
 import { highlightRanges } from "../components/MatchHighlight";
 import { hasPlatformModifier } from "../lib";
 import { contextKeyOf, requestKeyOf, runTextSearch, wasRequested } from "./runner";

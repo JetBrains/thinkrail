@@ -32,18 +32,33 @@ export type KeybindingId =
 	| "tab.moveToPreviousGroup"
 	| "tab.moveToNextGroup"
 	| "group.splitRight"
+	| "shortcuts.open"
 	| (typeof FOCUS_GROUP_BINDINGS)[number];
 
 type PlatformScope = "apple" | "other";
 
-interface KeyChord extends CommandShortcut {
-	readonly code: string;
+interface ChordScope extends CommandShortcut {
 	readonly browserReserved?: boolean;
 	readonly displayOnly?: boolean;
 	readonly platform?: PlatformScope;
 }
 
-type KeybindingEvent = Pick<KeyboardEvent, "code" | "altKey" | "ctrlKey" | "metaKey" | "shiftKey"> &
+interface PhysicalChord extends ChordScope {
+	readonly code: string;
+	readonly typed?: never;
+}
+
+interface TypedChord extends ChordScope {
+	readonly typed: true;
+	readonly code?: never;
+}
+
+type KeyChord = PhysicalChord | TypedChord;
+
+type KeybindingEvent = Pick<
+	KeyboardEvent,
+	"code" | "key" | "altKey" | "ctrlKey" | "metaKey" | "shiftKey"
+> &
 	Partial<Pick<KeyboardEvent, "getModifierState">>;
 
 export const KEYBINDINGS: Readonly<Record<KeybindingId, readonly [KeyChord, ...KeyChord[]]>> = {
@@ -86,6 +101,7 @@ export const KEYBINDINGS: Readonly<Record<KeybindingId, readonly [KeyChord, ...K
 		{ code: "ArrowRight", key: "→", ctrl: true, alt: true, platform: "other" },
 	],
 	"group.splitRight": [{ code: "Backslash", key: "\\", mod: true }],
+	"shortcuts.open": [{ typed: true, key: "?", mod: true }],
 };
 
 function onPlatform(chord: KeyChord, apple: boolean): boolean {
@@ -98,10 +114,11 @@ function pressed(chord: KeyChord, event: KeybindingEvent, apple: boolean): boole
 		!chord.displayOnly &&
 		onPlatform(chord, apple) &&
 		!(chord.alt && !apple && event.getModifierState?.("AltGraph")) &&
-		event.code === chord.code &&
+		(chord.typed
+			? event.key === chord.key
+			: event.code === chord.code && event.shiftKey === (chord.shift === true)) &&
 		event.ctrlKey === (chord.ctrl === true || (mod && !apple)) &&
 		event.metaKey === (mod && apple) &&
-		event.shiftKey === (chord.shift === true) &&
 		event.altKey === (chord.alt === true)
 	);
 }
@@ -121,6 +138,7 @@ function platformChords(id: KeybindingId, platform?: string): KeyChord[] {
 
 function displayShortcut({
 	code: _code,
+	typed: _typed,
 	browserReserved: _reserved,
 	displayOnly: _displayOnly,
 	platform: _platform,
@@ -141,15 +159,15 @@ export function keybindingShortcut(
 	return displayShortcut(chord);
 }
 
-function label(shortcut: CommandShortcut, platform?: string): string {
-	return shortcutKeys(shortcut, platform).join(platformFamily(platform) === "apple" ? "" : "+");
+export function keysLabel(keys: readonly string[], platform?: string): string {
+	return keys.join(platformFamily(platform) === "apple" ? "" : "+");
 }
 
-export function keybindingLabel(
+export function keybindingKeys(
 	id: KeybindingId,
 	{ browser, platform }: { browser?: boolean; platform?: string } = {},
-): string {
-	return label(
+): string[] {
+	return shortcutKeys(
 		keybindingShortcut(id, {
 			...(browser === undefined ? {} : { browser }),
 			...(platform === undefined ? {} : { platform }),
@@ -158,6 +176,15 @@ export function keybindingLabel(
 	);
 }
 
+export function keybindingLabel(
+	id: KeybindingId,
+	options: { browser?: boolean; platform?: string } = {},
+): string {
+	return keysLabel(keybindingKeys(id, options), options.platform);
+}
+
 export function keybindingLabels(id: KeybindingId, platform?: string): string[] {
-	return platformChords(id, platform).map((chord) => label(displayShortcut(chord), platform));
+	return platformChords(id, platform).map((chord) =>
+		keysLabel(shortcutKeys(displayShortcut(chord), platform), platform),
+	);
 }

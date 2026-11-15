@@ -25,10 +25,12 @@ function readNativeShortcutsBridge() {
 	return getNativeShortcutsBridge(Reflect.get(globalThis, NATIVE_SHORTCUTS_GLOBAL));
 }
 
+export function hasNativeShortcuts(): boolean {
+	return shortcutPlatform(readNativeShortcutsBridge() !== null) !== "browser";
+}
+
 export function readSettingsShortcutLabel(): string | null {
-	return shortcutPlatform(readNativeShortcutsBridge() !== null) === "browser"
-		? null
-		: platformShortcutLabel(",");
+	return hasNativeShortcuts() ? platformShortcutLabel(",") : null;
 }
 
 function openSettingsUnlessModal() {

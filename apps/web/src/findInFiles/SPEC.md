@@ -26,7 +26,7 @@ preview renders.
   `mergeFiles`.
 - **Allowed deps:** `contracts` (the Find in Files DTOs and `TEXT_SEARCH_LIMITS`), `transport`
   (`search.text` and the `search.textResults` subscription), `commands` (`shortcutKeys` for the footer's
-  platform keycaps), `components` (`Keycaps`, `highlightRanges`), `lib` (`hasPlatformModifier`),
+  platform keycaps), `components` (`KeyHint`, `highlightRanges`), `lib` (`hasPlatformModifier`),
   `@thinkrail/ui/*`, `zustand`, React, Remix Icon.
 - **Forbidden:** importing `store`, `panels`, `shell`, `search` or `@thinkrail/resource-renderers` — the
   host injects `onOpen` (what `↵` / `⌘↵` do) and `renderPreview` (the source renderer over `fs.readFile`);

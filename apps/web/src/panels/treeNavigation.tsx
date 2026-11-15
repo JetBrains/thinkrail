@@ -12,6 +12,7 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
+import { TREE_KEYS } from "../keybindings";
 import { hasPlatformModifier } from "../lib";
 
 const TREE = '[role="tree"]';
@@ -98,8 +99,8 @@ export function treeRowKey(
 	if (event.defaultPrevented) return null;
 	if (isContextMenuKey(event)) return "menu";
 	if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return null;
-	if (event.key === "Delete") return "delete";
-	if (event.key === "F2") return "rename";
+	if (event.key === TREE_KEYS.delete.key) return "delete";
+	if (event.key === TREE_KEYS.rename.key) return "rename";
 	return null;
 }
 
@@ -238,7 +239,12 @@ export function Tree({
 		const container = event.currentTarget;
 		const item = ownItem(container, event.target);
 		if (!item) return;
-		if (event.key === "Enter" && hasPlatformModifier(event) && !event.altKey && !event.shiftKey) {
+		if (
+			event.key === TREE_KEYS.openKept.key &&
+			hasPlatformModifier(event) &&
+			!event.altKey &&
+			!event.shiftKey
+		) {
 			event.preventDefault();
 			const id = item.dataset.treeItem;
 			if (onOpenKept && id !== undefined && item.dataset.treeKeep !== undefined) onOpenKept(id);

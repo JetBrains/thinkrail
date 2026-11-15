@@ -9,6 +9,7 @@ import { useT } from "@thinkrail/locales/react";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
+import { RAIL_KEYS } from "../../keybindings";
 import { type LayoutAttention, tupleKey } from "../../lib";
 import {
 	AuxiliaryRail,
@@ -100,6 +101,12 @@ export function AuxiliaryRailButton({
 		disabled: !dropEnabled,
 	});
 	const active = entry.selected && entry.expanded;
+	const shortcut =
+		entry.kind === "tool"
+			? shared.chromeShortcuts?.tools[entry.tool]
+			: entry.kind === "terminals" || entry.region === "bottom"
+				? shared.chromeShortcuts?.terminal
+				: undefined;
 	const name =
 		entry.kind === "tool"
 			? layoutTabName(t, toolTab(entry.tool))
@@ -122,6 +129,7 @@ export function AuxiliaryRailButton({
 						name
 					)
 				}
+				shortcut={shortcut}
 				side={railTooltipSide(entry.region)}
 			>
 				<button
@@ -198,11 +206,13 @@ export function AuxiliaryRegionRail({
 	shared,
 	attention,
 	trailing,
+	footer,
 }: {
 	region: LayoutAuxiliaryRegion;
 	shared: SharedGroupProps;
 	attention: LayoutAttention;
 	trailing?: ReactNode;
+	footer?: ((control: AuxiliaryRailControlProps) => ReactNode) | undefined;
 }) {
 	const t = useT();
 	const entries = projectAuxiliaryRail(shared.document, attention, region);
@@ -267,6 +277,7 @@ export function AuxiliaryRegionRail({
 			<AuxiliaryRail
 				region={region}
 				entries={entries}
+				footer={footer}
 				renderBoundary={renderBoundary}
 				trailing={
 					hiddenSideDrop ? (
@@ -313,6 +324,7 @@ export function AuxiliaryRegionRail({
 									rail={{
 										...control,
 										entryKey: entry.key,
+										shortcut: shared.chromeShortcuts?.tools[entry.tool],
 										vertical: region !== "bottom",
 										beforeIndex: anchor(entry),
 										afterIndex,
@@ -344,7 +356,7 @@ export function AuxiliaryRegionRail({
 									onKeyDown={(event) => {
 										if (!entry.tab) return;
 										if (
-											event.key === "Delete" &&
+											event.key === RAIL_KEYS.remove.key &&
 											!event.altKey &&
 											!event.ctrlKey &&
 											!event.metaKey
@@ -354,10 +366,14 @@ export function AuxiliaryRegionRail({
 											return;
 										}
 										if (!event.altKey || !event.shiftKey) return;
+										const [before, after] =
+											region === "bottom"
+												? [RAIL_KEYS.moveLeft, RAIL_KEYS.moveRight]
+												: [RAIL_KEYS.moveUp, RAIL_KEYS.moveDown];
 										const target =
-											event.key === (region === "bottom" ? "ArrowLeft" : "ArrowUp")
+											event.key === before.key
 												? previousIndex
-												: event.key === (region === "bottom" ? "ArrowRight" : "ArrowDown")
+												: event.key === after.key
 													? nextIndex
 													: undefined;
 										if (target === undefined) return;

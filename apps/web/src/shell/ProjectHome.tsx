@@ -1,7 +1,8 @@
 import { useT } from "@thinkrail/locales/react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { QuietScrollArea } from "../components/QuietScrollArea";
+import { keybindingKeys } from "../keybindings";
 import { ProjectTree } from "../panels/ProjectTree";
 import { WelcomePanel } from "../panels/WelcomePanel";
 import { selectOnboardingActive, useAppStore } from "../store";
@@ -14,6 +15,8 @@ import {
 	DEFAULT_LAYOUT_PRESET_ID,
 	resolveLayoutPreset,
 } from "./layout";
+import { renderShortcutsRailButton } from "./ShortcutsDialog";
+import { hasNativeShortcuts } from "./useAppShortcuts";
 import type { CollapsibleRegion } from "./useCollapsibleRegion";
 
 export const PROJECT_HOME_PROJECTS_REGION_ID = "welcome-left";
@@ -45,6 +48,7 @@ export function ProjectHome({
 	} = projects;
 	const t = useT();
 	const onboarding = useAppStore(selectOnboardingActive);
+	const [toggleShortcut] = useState(() => keybindingKeys("view.toggleLeft"));
 	const entry: AuxiliaryRailToolEntry = {
 		key: PROJECTS_RAIL_ENTRY_KEY,
 		region: "left",
@@ -72,9 +76,11 @@ export function ProjectHome({
 							entry={entry}
 							controls={PROJECTS_PANE_ID}
 							control={control}
+							shortcut={toggleShortcut}
 							onActivate={toggle}
 						/>
 					)}
+					footer={renderShortcutsRailButton}
 				/>
 			)}
 			<ResizablePanelGroup
@@ -111,6 +117,7 @@ export function ProjectHome({
 										<AuxiliaryPaneHideButton
 											testId="side-group-fold"
 											controls={PROJECTS_PANE_ID}
+											shortcut={toggleShortcut}
 											onClick={toggle}
 										/>
 									}
@@ -126,7 +133,7 @@ export function ProjectHome({
 										className="min-h-0 flex-1"
 										viewportClassName="p-panel-inset"
 									>
-										<ProjectTree />
+										<ProjectTree nativeShortcuts={hasNativeShortcuts()} />
 									</QuietScrollArea>
 								</div>
 							</section>
