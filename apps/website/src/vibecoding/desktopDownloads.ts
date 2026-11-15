@@ -22,12 +22,17 @@ const installPlatformOptions = {
 		id: "macos",
 		label: "macOS",
 		desktop: {
-			detail: "Apple Silicon",
+			detail: "Apple Silicon / Intel",
 			downloads: [
 				{
 					architecture: "Apple Silicon",
-					label: "Download .dmg",
+					label: "Apple Silicon .dmg",
 					href: `${stableDesktopReleaseUrl}/thinkrail-desktop-darwin-arm64.dmg`,
+				},
+				{
+					architecture: "Intel",
+					label: "Intel .dmg",
+					href: `${stableDesktopReleaseUrl}/thinkrail-desktop-darwin-x64.dmg`,
 				},
 			],
 		},

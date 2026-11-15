@@ -159,7 +159,8 @@ IDE shell.
     live edge; others place beside the trigger, clamped to the viewport and repositioned on resize.
 - The hero install control is three actions in a row: **Download**, **View on GitHub** (the existing
   star count fills in beside the label), and **Join our Discord**. Download starts the file for
-  the detected desktop: the Apple Silicon DMG on macOS, the Windows x64 ZIP on Windows, and a Linux
+  the detected desktop: the Intel DMG on macOS when a browser hint explicitly says x64, otherwise
+  the Apple Silicon DMG; the Windows x64 ZIP on Windows; and a Linux
   archive. Linux uses the ARM64 archive only when a browser hint explicitly says ARM; otherwise the
   button downloads the x64 archive. When the desktop is unknown, including with JavaScript off,
   Download scrolls to `#install` instead of choosing a file. **Other platforms & CLI** sits under that button
@@ -170,7 +171,7 @@ IDE shell.
   choose that file and the initial command tab; they never hide alternatives, treat `MacIntel` as an
   Intel build, or claim to detect an ambiguous mobile platform.
 - The `INSTALL.md` section is the download surface: one compact platform-row matrix (macOS Apple
-  Silicon DMG, Windows x64 ZIP, Linux x64 and ARM64 archives), then **Browser UI via command line**
+  Silicon and Intel DMGs, Windows x64 ZIP, Linux x64 and ARM64 archives), then **Browser UI via command line**
   always visible. Those commands use the same tab chrome as the blog picker, with three tabs —
   **macOS / Linux / WSL**, **Windows CMD**, **Windows PowerShell**. PowerShell runs
   `irm …/install.ps1 | iex`, Command Prompt launches `powershell -c "irm …/install.ps1 | iex"`, and
@@ -251,7 +252,7 @@ site `header` (the title bar and its install popover); one recognized activation
 (`desktop`) followed by `download_started`. When a consented journey context is available, the activation
 creates and stores a canonical per-download bridge ID before `download_started`, and that event carries
 the same ID. A later desktop download replaces only the stored latest bridge ID; a download without
-consent remains bridge-less. A primary click on one of those four downloads also opens the
+consent remains bridge-less. A primary click on one of those five downloads also opens the
 thank-you dialog and does not cancel the file. The dialog records the PostHog survey
 `Thanks for downloading ThinkRail`: `survey shown` when it opens, `survey dismissed` if it
 closes before an answer, and `survey sent` on each Continue or Finish. One

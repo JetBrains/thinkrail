@@ -172,7 +172,9 @@ export function InstallPicker() {
 							<p className="text-[11px] leading-4 text-text-muted">{option.desktop.detail}</p>
 							<div
 								className={
-									option.id === "linux" ? "grid grid-cols-2 gap-2 self-start" : "flex self-start"
+									option.desktop.downloads.length > 1
+										? "grid grid-cols-2 gap-2 self-start"
+										: "flex self-start"
 								}
 							>
 								{option.desktop.downloads.map((download) => (
@@ -180,7 +182,7 @@ export function InstallPicker() {
 										key={download.href}
 										href={download.href}
 										ariaLabel={`${download.label} for ${option.label}`}
-										className={option.id === "linux" ? "min-w-24" : ""}
+										className={option.desktop.downloads.length > 1 ? "min-w-24" : ""}
 									>
 										{download.label}
 									</CompactDownloadAction>
