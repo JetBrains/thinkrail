@@ -1315,7 +1315,12 @@ a project picker, the prompt hero, and the reused
   `ExtensionsCatalog` — title, description, tool-name chips and a `@thinkrail/ui/switch`
   (`extension-toggle-<name>`) whose state is **`store.disabledExtensions`**, not the catalog's snapshot; a
   toggle writes the whole list through `settings.update { disabledExtensions }` and converges on the
-  broadcast. Unknown names already in the list are carried through. A catalog entry's declared `settings`
+  broadcast. Unknown names already in the list are carried through. Once the catalog has loaded, the group
+  also lists the **web-only extensions** it lacks (`withWebOnlyEntries` over `extensions`'
+  `webOnlyExtensions`: titled registry entries, today Hint mode) after the host's rows, with their locale
+  title and description, no tool chips and the same switch; the switch applies at once (the shell
+  unmounts the extension), which the row's own description says, since the page's "when their current
+  turn ends" is about the agent's extensions. A catalog entry's declared `settings`
   render as nested switches under its row (`extension-setting-<name>-<key>`, copy from a static
   `MessageKey` map — a setting without copy is not shown), valued from **`store.extensionSettings`** else the
   declared default, disabled while the extension is off, and written one key at a time through
@@ -2623,10 +2628,26 @@ menu has closed, because a closing menu returns focus to its row; disabled
     landing took the first row). Of Chats and Projects only the tree holding the active workspace marks
     its default (Projects when none is active); of the Artifacts tool's, Artifacts when it has rows, else
     Other agent files.
-  - **Keys** are feature-local (`event.key` in the tree, not the global keybinding table): ↑/↓, Home/End;
-    → expands, else enters the first child; ← collapses, else goes to the parent; type-ahead matches the
-    row label's prefix (a ~500 ms buffer; Space joins only a live buffer, otherwise it activates). Letters
-    belong to a focused tree, so the Changes review's `V`/`J`/`N` do not fire from a focused Changes row.
+  - **Keys** are feature-local (`event.key` in the tree, not the global keybinding table): ↑/↓ and `j`/`k`,
+    Home/End; → / `l` expands, else enters the first child; ← / `h` collapses, else goes to the parent (the
+    letters map onto the arrows before `resolveTreeMove`, unmodified only, never during IME composition).
+    Letters belong to a focused tree, so the Changes review's `V`/`J`/`N` do not fire from a focused Changes
+    row: every other printable key is swallowed, except Space (the button's activation) and `F` (by
+    `code`, unmodified), which belongs to hint mode ([[module-ext-hint-mode]]). Letter type-ahead was
+    removed when F became hint mode's (2026-11-15); search moved to `S`.
+  - **`S` searches the visible rows** (isearch). `Tree` renders a labelled field ("Search Files") as a
+    sticky sibling *before* its `role="tree"` element — outside it, so the tree's `MutationObserver` and
+    roving model never see it — and focuses it. Typing matches the query as a case-insensitive substring of
+    each rendered row's `data-tree-label` (collapsed children are not rendered, so not searched); the
+    cursor (tab stop, `data-focus-default`) moves to the first match at or after the current match, else
+    the row the search started from, wrapping, and is scrolled into view (re-centred if the sticky field
+    covers it). Matches carry `data-tree-match="match"`, the current one `"current"` (`primary-subtle` /
+    `primary-soft` fills through the tree's arbitrary variants); the field shows "n of m" or "No match".
+    ↓ / ↑ step to the next / previous match, wrapping; Enter keeps the current match (or the start row)
+    and Esc returns to the start row — both focus that row **before** the field unmounts, so focus never
+    drops to `<body>`; blur (Tab lands on the current match, the tree's tab stop) keeps the match. Plain
+    `S` types into the field, so `S`-again-as-next (the product brief) is not bound: a query must be able
+    to contain an s. The pure model is `treeSearchMatches` / `treeSearchTarget` / `treeSearchStep`.
     Enter is the button's own click; `Mod+Enter` is the row's double-click — Files, Specs and Artifacts open
     kept (a deleted artifact restores first), Changes opens its kept diff with `claimPreview`; rows without a double-click treat it as Enter.
   - **Row keys live in each row**, through `treeRowKey`: Shift+F10 / the Menu key open the row's menu
@@ -2643,7 +2664,7 @@ menu has closed, because a closing menu returns focus to its row; disabled
     chevrons, kebabs, Settle / Keep active, the project's Create workspace `+`, a creation's retry /
     dismiss, an artifact's chat chip and Restore); each action stays reachable — arrows expand, the row's
     menu carries the rest (Create workspace, Settle, Keep active, Open ‹chat›, Restore), a creation's
-    actions are in the creation view its row opens. dnd-kit's draggable `attributes` stay unspread on the project name
+    actions are in the creation view its row opens; hint mode labels none of them, by the same markup. dnd-kit's draggable `attributes` stay unspread on the project name
     (they would add a second tab stop); dragging needs only its listeners.
 - **Row actions: one menu, two triggers.** Every **file** row (both views) is wrapped in
   **`ChangeRowActions`**: a hover-revealed `⌄` button *and* right-click on the row (Shift+F10 / Menu key on it) open the same

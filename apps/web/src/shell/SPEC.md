@@ -14,9 +14,9 @@ The responsive composition root: top-level app chrome, active-project/workspace 
 
 ## Boundary
 
-- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-project/workspace routing; single Settings, analytics-consent, survey-invitation, survey-window, attention-notification permission-preface, and Toaster mounts plus the keyboard-opened Create workspace dialog, the `Mod+K` / double-Shift search palette host, the `Mod+Shift+F` Find in Files host and the `Mod+?` keyboard-shortcuts dialog (and the once-mounted attention-notification observer from [[submodule-web-notifications]]); theme application and global shortcuts; focus recovery (*Focus recovery*); the command catalog the palette runs ([[submodule-web-commands]], [[submodule-web-search]]); the injected Layout, Keyboard and optional application Update settings sections; and integration of the workbench engine with store, persistence, panels, transport-backed domain state, and error boundaries.
+- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-project/workspace routing; single Settings, analytics-consent, survey-invitation, survey-window, attention-notification permission-preface, and Toaster mounts plus the keyboard-opened Create workspace dialog, the `Mod+K` / double-Shift search palette host, the `Mod+Shift+F` Find in Files host and the `Mod+?` keyboard-shortcuts dialog (and the once-mounted attention-notification observer from [[submodule-web-notifications]]); the enabled web extensions' global overlays (`ExtensionOverlays`, *Global chords*); theme application and global shortcuts; focus recovery (*Focus recovery*); the command catalog the palette runs ([[submodule-web-commands]], [[submodule-web-search]]); the injected Layout, Keyboard and optional application Update settings sections; and integration of the workbench engine with store, persistence, panels, transport-backed domain state, and error boundaries.
 - **Public surface:** `Shell`.
-- **Allowed deps:** child layout modules; `updates`; `search` + `commands` (the palette and the command contract it composes for it); `keybindings` (the app-wide chord table `useGlobalHotkeys` matches through and the palette's shortcuts read, and the shortcut catalog the cheatsheet renders); `findInFiles` (the window `FindInFilesHost` composes); `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types, wire constants, and the shared `createQuitConfirmation` rule), `@thinkrail/ui/*`, `@thinkrail/locales` (UI strings), `i18n` (`useLocaleSync`, mounted once), `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, `themes`, and `clientPreferences` (`markdownOutlinePreference` persists the store's Markdown outline visibility and side per client, through the same adapter `layoutState` uses).
+- **Allowed deps:** child layout modules; `updates`; `search` + `commands` (the palette and the command contract it composes for it); `keybindings` (the app-wide chord table `useGlobalHotkeys` matches through and the palette's shortcuts read, and the shortcut catalog the cheatsheet renders); `findInFiles` (the window `FindInFilesHost` composes); `extensions` (the enabled extensions whose overlays and shortcut rows it mounts); `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types, wire constants, and the shared `createQuitConfirmation` rule), `@thinkrail/ui/*`, `@thinkrail/locales` (UI strings), `i18n` (`useLocaleSync`, mounted once), `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, `themes`, and `clientPreferences` (`markdownOutlinePreference` persists the store's Markdown outline visibility and side per client, through the same adapter `layoutState` uses).
 - **Forbidden:** server/shared/pi imports; being imported by panels/store/transport; putting arrangement knowledge into a feature panel; or sending current frame/view state through transport.
 
 ## Internal modules
@@ -216,7 +216,7 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   only while the store's `shortcutsOpen` is true (`openShortcuts` / `closeShortcuts`); the chord, the
   keyboard icon at the foot of the left tool rail and the palette's *Keyboard shortcuts* row open it. It
   lists the catalog's `shortcutRows` for this client (`desktop` is the native-shortcut bridge read the
-  palette makes) as surface sections under a filter matching a row's title or key label. The section of
+  palette makes), plus the `shortcuts` of every enabled web extension as General rows, as surface sections under a filter matching a row's title or key label. The section of
   the surface focused just before it opened comes first: `shortcutSurface.ts` maps the element Radix is
   about to move focus from (a terminal, the chat input, the chat transcript, the chat history overlay,
   Changes review or any renderer's `data-review-surface` — a diff's or Markdown preview's cursor proxy,
@@ -305,6 +305,19 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   whole-word toggle. The group moves accept GNOME's grab of `Ctrl+Alt+←/→` on Linux, as VS Code does —
   the palette rows reach the same moves. No Alt chord fires while AltGraph is held
   ([[submodule-web-keybindings]]).
+- **Extension overlays and their chords.** `ExtensionOverlays`, mounted once at the tail of `Shell`, renders
+  the `globalOverlay` of every web extension not in the store's `disabledExtensions`
+  ([[submodule-web-extensions]]), so switching one off in Settings unmounts it and its listeners at once. It
+  hands each the host helpers an extension cannot import: `isTextEntry` (`lib`'s `isTextEntryTarget`),
+  `activeLayer` (`shortcutLayers.ts`: the last open modal dialog or open menu in document order — Radix
+  portals append — else the document) and the browser platform. Such an overlay may own its own window
+  capture `keydown` listener for chords outside the keybinding table: hint mode
+  ([[module-ext-hint-mode]]) takes plain `F` outside text entry and `Mod+;` anywhere, and while active
+  swallows every key with `stopImmediatePropagation`, so neither Radix (document) nor the window listeners
+  here act on them. No table chord is a hint chord (`extensions`' tests pin it), so the trigger never
+  competes with `useGlobalHotkeys`; their listener order differs between a mount at startup (the overlay's
+  effect runs first) and a later switch-on, which only decides whether a table chord pressed while labels
+  are showing still runs — accepted.
 - Double Shift is detected by the pure `createDoubleShiftDetector` from capture-phase `keydown`/`keyup`; `pointerdown`, window blur and a hidden document reset it, and it does not fire through another open modal. It is off per client through the `doubleShiftSearch` preference (the Keyboard settings section `search` exports and shell injects into `SettingsDialog`, like Layout and Updates).
 - Row and header glyphs reuse the `ProjectTree` vocabulary: a leading `RiChat2Line` (wrapped in `RunningIcon` while running) and a trailing `AttentionDot` for a session that needs attention — no bespoke per-outcome glyphs.
 

@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
 import askUserQuestion from "@thinkrail/ext-ask-user-question/web";
+import hintMode from "@thinkrail/ext-hint-mode/web";
 import visualize, { MermaidView } from "@thinkrail/ext-visualize/web";
-import type { ToolRenderProps } from "@thinkrail/extension-api/web";
+import type { ExtensionShortcutKey, ToolRenderProps } from "@thinkrail/extension-api/web";
+import { EN } from "@thinkrail/locales";
 import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	DefaultToolRenderer,
@@ -12,7 +14,13 @@ import {
 	isInteractiveTool,
 	resolveProminence,
 } from "../chat/toolRegistry";
-import { registerWebExtensions, webExtensions } from "./index";
+import { matchKeybinding, SHORTCUT_CATALOG } from "../keybindings";
+import {
+	enabledWebExtensions,
+	registerWebExtensions,
+	webExtensions,
+	webOnlyExtensions,
+} from "./index";
 
 const props: ToolRenderProps = {
 	toolCallId: "diagram-1",
@@ -24,7 +32,7 @@ const props: ToolRenderProps = {
 };
 
 test("the ordered web registry composes the public visualize descriptor without replacing fallback", () => {
-	expect(webExtensions).toEqual([visualize, askUserQuestion]);
+	expect(webExtensions).toEqual([visualize, askUserQuestion, hintMode]);
 	expect(typeof MermaidView).toBe("function");
 	for (let i = 0; i < 2; i++) {
 		registerWebExtensions();
@@ -64,4 +72,76 @@ test("the ask_user_question card registers bare, interactive and docked from its
 	// Interactivity is opt-in per registration: the other extension tool and unknown names are not.
 	expect(isInteractiveTool("visualize")).toBe(false);
 	expect(isInteractiveTool("unregistered-extension-tool")).toBe(false);
+});
+
+const PLATFORMS = ["MacIntel", "Linux x86_64", "Win32"];
+
+function chordEvent(chord: ExtensionShortcutKey, platform: string) {
+	const apple = platform === "MacIntel";
+	return {
+		code: chord.code,
+		key: chord.key,
+		altKey: chord.alt === true,
+		shiftKey: chord.shift === true,
+		ctrlKey: chord.ctrl === true || (chord.mod === true && !apple),
+		metaKey: chord.mod === true && apple,
+	};
+}
+
+test("hint mode is a web-only extension: no tool renderers, a global overlay, titled copy and shortcuts", () => {
+	expect(hintMode.name).toBe("hint-mode");
+	expect(hintMode).not.toHaveProperty("toolRenderers");
+	expect(typeof hintMode.globalOverlay).toBe("function");
+	expect([hintMode.title, hintMode.description].every((key) => Object.hasOwn(EN, key))).toBe(true);
+	expect(hintMode.shortcuts.every((row) => Object.hasOwn(EN, row.title))).toBe(true);
+	const catalogIds = new Set(SHORTCUT_CATALOG.map((entry) => entry.id));
+	expect(hintMode.shortcuts.filter((row) => catalogIds.has(row.id))).toEqual([]);
+});
+
+test("the switch decides which global contributions mount; tool renderers stay regardless", () => {
+	expect(enabledWebExtensions([])).toEqual([visualize, askUserQuestion, hintMode]);
+	expect(enabledWebExtensions(["hint-mode", "visualize"])).toEqual([askUserQuestion]);
+	registerWebExtensions();
+	expect(getToolRenderer("visualize")).toBe(visualize.toolRenderers.visualize.renderer);
+});
+
+test("Settings lists only the titled web extensions the server catalog lacks", () => {
+	const server = new Set(["visualize", "ask-user-question", "web-access"]);
+	expect(webOnlyExtensions(server).map((extension) => extension.name)).toEqual(["hint-mode"]);
+	expect(webOnlyExtensions(new Set([...server, "hint-mode"]))).toEqual([]);
+	expect(webOnlyExtensions(new Set()).map((extension) => extension.name)).toEqual(["hint-mode"]);
+});
+
+test("no extension chord collides with the app-wide keybinding table on any platform", () => {
+	const chords = webExtensions.flatMap(({ shortcuts = [] }) =>
+		shortcuts.flatMap((row) => row.keys),
+	);
+	expect(chords.length).toBeGreaterThan(0);
+	for (const platform of PLATFORMS) {
+		for (const chord of chords) {
+			expect([chord.code, matchKeybinding(chordEvent(chord, platform), platform)]).toEqual([
+				chord.code,
+				null,
+			]);
+		}
+	}
+});
+
+test("plain F is bound by neither the keybinding table nor any feature key the catalog lists", () => {
+	for (const platform of PLATFORMS) {
+		const plainF = {
+			code: "KeyF",
+			key: "f",
+			altKey: false,
+			shiftKey: false,
+			ctrlKey: false,
+			metaKey: false,
+		};
+		expect(matchKeybinding(plainF, platform)).toBeNull();
+	}
+	const plainLetterF = SHORTCUT_CATALOG.flatMap((entry) => entry.keys ?? []).filter(
+		(chord) =>
+			chord.key.toLowerCase() === "f" && !chord.mod && !chord.ctrl && !chord.alt && !chord.shift,
+	);
+	expect(plainLetterF).toEqual([]);
 });
