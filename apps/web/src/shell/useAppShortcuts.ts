@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { platformShortcutLabel } from "../lib";
 import { useAppStore } from "../store";
 import { closeActiveItem } from "./chordActions";
+import { keyboardClaimed } from "./extensionCommands";
 import { createWebShortcuts, hasWebShortcuts, shortcutPlatform } from "./shortcutCommands";
 import { hasLayer, isInTerminal, MODAL_LAYER_SELECTOR } from "./shortcutLayers";
 
@@ -102,8 +103,11 @@ export function useAppShortcuts() {
 		function onVisibilityChange() {
 			if (doc.visibilityState === "hidden") shortcuts.cancel();
 		}
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (!keyboardClaimed()) shortcuts.keydown(event);
+		};
 		if (listensForKeys) {
-			window.addEventListener("keydown", shortcuts.keydown, true);
+			window.addEventListener("keydown", onKeyDown, true);
 			window.addEventListener("keyup", shortcuts.keyup, true);
 		}
 		window.addEventListener("blur", shortcuts.cancel);
@@ -111,7 +115,7 @@ export function useAppShortcuts() {
 		return () => {
 			unsubscribe();
 			if (listensForKeys) {
-				window.removeEventListener("keydown", shortcuts.keydown, true);
+				window.removeEventListener("keydown", onKeyDown, true);
 				window.removeEventListener("keyup", shortcuts.keyup, true);
 			}
 			window.removeEventListener("blur", shortcuts.cancel);

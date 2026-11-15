@@ -1,8 +1,11 @@
 import { useEffect, useInsertionEffect, useRef } from "react";
-import { type KeybindingId, matchKeybinding } from "../keybindings";
+import { type KeybindingId, matchKeybinding, type ResolvedKeybindings } from "../keybindings";
+import { isTextEntryTarget } from "../lib";
 import { createDoubleShiftDetector } from "../search";
 import { useAppStore } from "../store";
 import { openChatHistory } from "./chordActions";
+import { deliverExtensionCommand, extensionHotkey, keyboardClaimed } from "./extensionCommands";
+import { currentKeybindings } from "./keybindingState";
 import { hasLayer, isInEditorFind, isInTerminal, MODAL_LAYER_SELECTOR } from "./shortcutLayers";
 
 type ChordHandler = (binding: KeybindingId) => void;
@@ -71,17 +74,21 @@ const SHELL_CTRL_CHORDS: ReadonlySet<KeybindingId> = new Set([
 	"group.splitRight",
 ]);
 
+function isGlobalHotkeyCommand(id: string | null): id is GlobalHotkeyCommand {
+	return id !== null && Object.hasOwn(CHORD_ACTIONS, id);
+}
+
 export function globalHotkeyCommand(
 	event: GlobalHotkeyEvent,
 	actions: GlobalHotkeyActions,
 	modalOpen: boolean,
-	platform?: string,
+	keybindings: ResolvedKeybindings,
 	inTerminal = false,
 	inEditorFind = false,
 ): GlobalHotkeyCommand | null {
 	if (event.isComposing) return null;
-	const id = matchKeybinding(event, platform);
-	if (id === null || id === "chat.history") return null;
+	const id = matchKeybinding(keybindings, event);
+	if (!isGlobalHotkeyCommand(id)) return null;
 	if (modalOpen && id !== "tab.close") return null;
 	if (SHELL_CTRL_CHORDS.has(id) && inTerminal && event.ctrlKey) return null;
 	if (id === "tab.close" && inEditorFind && event.metaKey) return null;
@@ -111,12 +118,22 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
+			if (keyboardClaimed()) return;
+			const keybindings = currentKeybindings();
+			const target = event.composedPath()[0] ?? event.target;
+			const extension = extensionHotkey(event, keybindings, isTextEntryTarget(target));
+			if (extension) {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				if (!event.repeat) deliverExtensionCommand(extension.extension, extension.id);
+				return;
+			}
 			const current = actionsRef.current;
 			const command = globalHotkeyCommand(
 				event,
 				current,
 				hasOpenModal(),
-				undefined,
+				keybindings,
 				isInTerminal(event.target),
 				isInEditorFind(event.target),
 			);
@@ -127,16 +144,19 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 				return;
 			}
 
-			if (matchKeybinding(event) !== "chat.history") return;
+			if (matchKeybinding(keybindings, event) !== "chat.history") return;
 			if (isInTerminal(event.target)) return;
 			event.preventDefault();
 			event.stopPropagation();
 			if (!useAppStore.getState().searchOpen) openChatHistory();
 		};
 		const detector = createDoubleShiftDetector();
-		const onDoubleShiftKeyDown = (event: KeyboardEvent) => detector.keydown(event);
+		const onDoubleShiftKeyDown = (event: KeyboardEvent) => {
+			if (keyboardClaimed()) detector.reset();
+			else detector.keydown(event);
+		};
 		const onDoubleShiftKeyUp = (event: KeyboardEvent) => {
-			if (!detector.keyup(event)) return;
+			if (!detector.keyup(event) || keyboardClaimed()) return;
 			const state = useAppStore.getState();
 			if (!state.doubleShiftSearch || hasModalOtherThanSearch()) return;
 			if (state.searchOpen) state.closeSearch();

@@ -69,15 +69,26 @@ export interface GlobalOverlayProps {
 	isTextEntry: (target: EventTarget | null) => boolean;
 	activeLayer: () => ParentNode;
 	platform: string;
+	onCommand: (listener: (id: string) => void) => () => void;
+	matchCommand: (event: KeyboardEvent) => string | null;
+	claimKeyboard: (active: boolean) => void;
 }
 
-export interface ExtensionShortcutKey {
+export interface ExtensionChord {
 	readonly code: string;
 	readonly key: string;
 	readonly mod?: boolean;
 	readonly ctrl?: boolean;
 	readonly alt?: boolean;
 	readonly shift?: boolean;
+}
+
+export type ExtensionShortcutKey = ExtensionChord;
+
+export interface ExtensionCommand {
+	readonly id: string;
+	readonly title: MessageKey;
+	readonly chords: readonly ExtensionChord[];
 }
 
 export interface ExtensionShortcut {
@@ -92,6 +103,7 @@ export interface WebExtension {
 	description?: MessageKey;
 	toolRenderers?: Record<string, { renderer: ToolRenderer; options?: ToolRegistrationOptions }>;
 	globalOverlay?: ComponentType<GlobalOverlayProps>;
+	commands?: readonly ExtensionCommand[];
 	shortcuts?: readonly ExtensionShortcut[];
 }
 

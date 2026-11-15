@@ -1,13 +1,17 @@
 import { useT } from "@thinkrail/locales/react";
 import { Switch } from "@thinkrail/ui/switch";
-import { type ReactNode, useState } from "react";
-import { keybindingLabel } from "../keybindings";
+import type { ReactNode } from "react";
 import { useAppStore } from "../store";
 
-export function SearchSettings({ shortcuts }: { shortcuts?: ReactNode }) {
+export function SearchSettings({
+	openShortcut,
+	shortcuts,
+}: {
+	openShortcut: string;
+	shortcuts?: ReactNode;
+}) {
 	const t = useT();
 	const doubleShift = useAppStore((state) => state.doubleShiftSearch);
-	const [openShortcut] = useState(() => keybindingLabel("search.open"));
 	return (
 		<section data-testid="settings-keyboard" className="flex flex-col gap-16">
 			<div className="flex flex-col gap-4">

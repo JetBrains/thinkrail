@@ -1,10 +1,17 @@
-import type { ExtensionShortcutKey } from "@thinkrail/extension-api/web";
-import { hasPlatformModifier, isImeComposing } from "@thinkrail/ui/keyboard";
+import type { ExtensionCommand, ExtensionShortcutKey } from "@thinkrail/extension-api/web";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { letterOfCode } from "./labels";
 
+export const SHOW_HINTS = {
+	id: "hint-mode.show",
+	title: "hintMode.shortcuts.show",
+	chords: [
+		{ code: "KeyF", key: "f" },
+		{ code: "Semicolon", key: ";", mod: true },
+	],
+} as const satisfies ExtensionCommand;
+
 export const HINT_KEYS = {
-	show: { code: "KeyF", key: "f" },
-	toggle: { code: "Semicolon", key: ";", mod: true },
 	focusOnly: { code: "ShiftLeft", key: "Shift" },
 	undo: { code: "Backspace", key: "Backspace" },
 	exit: { code: "Escape", key: "Escape" },
@@ -24,55 +31,20 @@ export type HintKeyEvent = Pick<
 >;
 
 export type HintKeyAction =
-	| { kind: "start" }
 	| { kind: "exit" }
 	| { kind: "undo" }
 	| { kind: "letter"; letter: string; focusOnly: boolean }
 	| { kind: "swallow" };
 
-export interface HintKeyContext {
-	active: boolean;
-	platform: string;
-	textEntry: boolean;
-}
-
-function isToggle(event: HintKeyEvent, platform: string): boolean {
-	return (
-		event.code === HINT_KEYS.toggle.code &&
-		hasPlatformModifier(event, platform) &&
-		!event.altKey &&
-		!event.shiftKey
-	);
-}
-
-function isShow(event: HintKeyEvent): boolean {
-	return (
-		event.code === HINT_KEYS.show.code &&
-		!event.altKey &&
-		!event.ctrlKey &&
-		!event.metaKey &&
-		!event.shiftKey
-	);
-}
-
-export function hintKeyAction(
-	event: HintKeyEvent,
-	{ active, platform, textEntry }: HintKeyContext,
-): HintKeyAction | null {
-	if (isImeComposing(event)) return active ? { kind: "swallow" } : null;
-	if (!active) {
-		if (event.repeat) return null;
-		if (isToggle(event, platform)) return { kind: "start" };
-		return isShow(event) && !textEntry ? { kind: "start" } : null;
-	}
-	if (event.repeat) return { kind: "swallow" };
-	if (isToggle(event, platform) || event.key === HINT_KEYS.exit.key) return { kind: "exit" };
+export function hintKeyAction(event: HintKeyEvent, command: string | null): HintKeyAction {
+	if (isImeComposing(event) || event.repeat) return { kind: "swallow" };
+	if (event.key === HINT_KEYS.exit.key) return { kind: "exit" };
 	if (event.key === HINT_KEYS.undo.key) return { kind: "undo" };
 	const letter = letterOfCode(event.code);
 	if (letter !== null && !event.altKey && !event.ctrlKey && !event.metaKey) {
 		return { kind: "letter", letter, focusOnly: event.shiftKey };
 	}
-	return { kind: "swallow" };
+	return command === SHOW_HINTS.id ? { kind: "exit" } : { kind: "swallow" };
 }
 
 export type TypedLetter = { typed: string; chosen: number | null };

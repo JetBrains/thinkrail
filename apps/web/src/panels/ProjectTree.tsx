@@ -62,7 +62,7 @@ import { type MouseEvent, type ReactNode, useCallback, useEffect, useRef, useSta
 import { useShallow } from "zustand/react/shallow";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
-import { keybindingKeys, TREE_KEYS } from "@/keybindings";
+import { TREE_KEYS } from "@/keybindings";
 import { copyText } from "@/lib";
 import { useNow } from "../components/useNow";
 import {
@@ -161,7 +161,7 @@ function groupCreationsByProject(
 	return grouped;
 }
 
-export function ProjectTree({ nativeShortcuts = false }: { nativeShortcuts?: boolean }) {
+export function ProjectTree({ newWorkspaceShortcut }: { newWorkspaceShortcut: readonly string[] }) {
 	const t = useT();
 	const projects = useAppStore(useShallow(selectRepoProjects));
 	const recentProjects = useAppStore((s) => s.recentProjects);
@@ -438,9 +438,7 @@ export function ProjectTree({ nativeShortcuts = false }: { nativeShortcuts?: boo
 									onRegisterNameButton={(element) => registerProjectNameButton(project.id, element)}
 									onRestoreFocus={() => focusProjectNameOrAdd(project.id)}
 									canMove={canMove}
-									newWorkspaceShortcut={keybindingKeys("workspace.new", {
-										browser: !nativeShortcuts,
-									})}
+									newWorkspaceShortcut={newWorkspaceShortcut}
 									onMoveUp={
 										previous ? () => void move(project, previous.id, "before", true) : undefined
 									}

@@ -18,8 +18,8 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
 
 - `./web` exposes `ToolStatus`, `ToolRenderProps`, `ToolRenderer`, `ToolSummary`, `ToolChrome`,
   `ToolProminence`, `ToolWidth`, `ToolRegistrationOptions`, `ToolInteraction`, `ToolInteractionState`,
-  `ToolPlacement`, `WebExtension`, `GlobalOverlayProps`, `ExtensionShortcut`, `ExtensionShortcutKey`,
-  `defineWebExtension`, and the pure argument/result readers from `toolHelpers` and `toolResultContent`.
+  `ToolPlacement`, `WebExtension`, `GlobalOverlayProps`, `ExtensionCommand`, `ExtensionChord`,
+  `ExtensionShortcut`, `ExtensionShortcutKey`, `defineWebExtension`, and the pure argument/result readers from `toolHelpers` and `toolResultContent`.
 - **Images are references.** `parseToolResultContent(result).images` returns `contracts`' `WireImage`s,
   in block order.
   - A host reference (`ref` plus optional `width`/`height`) is accepted when its `ref` lies under
@@ -71,16 +71,29 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   `respond` are the stable contract; the focus/layout members and `placement` are the chat's own services handed
   through and may change with the chat (a renderer must tolerate their absence). Its DOM-typed members
   are the reason the package's `lib` includes `DOM`; the package still never touches the DOM.
-- `WebExtension` is `{ name, title?, description?, toolRenderers?, globalOverlay?, shortcuts? }`. Each
-  tool-name entry carries a `renderer` and optional `ToolRegistrationOptions` under `options`;
+- `WebExtension` is `{ name, title?, description?, toolRenderers?, globalOverlay?, commands?, shortcuts? }`.
+  Each tool-name entry carries a `renderer` and optional `ToolRegistrationOptions` under `options`;
   `toolRenderers` is optional because a web-only extension renders no tool. `title` / `description` are
   `MessageKey`s for the Settings row of an extension the server catalog lacks. `globalOverlay` is a
   `ComponentType<GlobalOverlayProps>` the host mounts once while the extension is enabled; its props are the
   host helpers an extension cannot import — `isTextEntry(target)`, `activeLayer()` (the topmost open modal
-  dialog or menu, else the document) and `platform` — so the SDK stays type-only. `shortcuts` are display
-  rows (`id`, `title` `MessageKey`, non-empty `keys` of `ExtensionShortcutKey`: physical `code`, display
-  `key`, modifiers) the cheatsheet lists while the extension is enabled; the `code`s let the host test them
-  against its keybinding table. `defineWebExtension` is a typed identity helper: it preserves the
+  dialog or menu, else the document), `platform`, and the command channel below — so the SDK stays
+  type-only.
+- **Commands** are the extension's rebindable keybindings: `ExtensionCommand` is `{ id, title, chords }`,
+  each `ExtensionChord` a physical `code`, a display `key` (a `KeyboardEvent.key`-style value, capped like a
+  catalog key) and `mod` / `ctrl` / `alt` / `shift` (`mod` is ⌘ on Apple, Ctrl elsewhere). A chord with no
+  modifier (a plain key) is allowed and fires only outside text entry; such a command may be rebound to
+  another plain key. The host lists the commands in the cheatsheet and Settings → Keyboard, resolves them
+  under the user's overrides and ThinkRail's own chords ([[submodule-web-keybindings]]), and delivers a
+  matched command id to `GlobalOverlayProps.onCommand(listener)` (returns the unsubscribe) only while the
+  extension is enabled. **`claimKeyboard(active)`** tells the host the overlay owns the keyboard: while a
+  claim is held the host dispatches no app chord and no command, and the overlay handles every key itself,
+  asking **`matchCommand(event)`** whether a key is one of its own commands under the effective bindings.
+  An overlay's own key listener must act only while it holds the claim; that is what makes the host's and
+  the overlay's listeners order-independent.
+- `shortcuts` are display rows (`id`, `title` `MessageKey`, non-empty `keys` of `ExtensionShortcutKey` —
+  the same fields as `ExtensionChord`) for keys the extension handles itself and the user cannot rebind
+  (hint mode's in-mode keys); the cheatsheet lists them while the extension is enabled. `defineWebExtension` is a typed identity helper: it preserves the
   descriptor and its inferred keys without registration or default injection.
 - `./server` exposes `ServerExtension` and `defineServerExtension`, with pi `ExtensionFactory` types
   only. Descriptors carry `name` (the identity — the Settings on/off switch and `disabledExtensions` key

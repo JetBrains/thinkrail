@@ -1,13 +1,31 @@
 export {
+	chordFromEvent,
+	formatChord,
+	isBrowserReservedChord,
+	isPlainChord,
+	parseChord,
+	type RecordedChord,
+} from "./chord";
+export {
 	FOCUS_GROUP_BINDINGS,
 	KEYBINDINGS,
 	type KeybindingId,
+	type KeyChord,
+} from "./keybindings";
+export {
+	type ExtensionCommandSet,
+	type KeybindingConflict,
 	keybindingKeys,
 	keybindingLabel,
 	keybindingLabels,
 	keybindingShortcut,
+	keybindingShortcuts,
 	matchKeybinding,
-} from "./keybindings";
+	type ResolvedChord,
+	type ResolvedCommand,
+	type ResolvedKeybindings,
+	resolveKeybindings,
+} from "./resolve";
 export {
 	DESKTOP_KEYS,
 	HISTORY_KEYS,
@@ -17,6 +35,7 @@ export {
 	SHORTCUT_CATALOG,
 	SHORTCUT_SURFACE_TITLES,
 	SHORTCUT_SURFACES,
+	type ShortcutConflictView,
 	type ShortcutRow,
 	type ShortcutSurface,
 	shortcutKeyCaps,

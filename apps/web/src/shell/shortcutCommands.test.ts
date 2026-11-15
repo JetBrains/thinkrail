@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { type NativeQuitHint, QUIT_CONFIRMATION } from "@thinkrail/contracts";
-import { matchKeybinding } from "../keybindings";
+import { matchKeybinding, resolveKeybindings } from "../keybindings";
 import {
 	createWebShortcuts,
 	hasWebShortcuts,
@@ -173,7 +173,7 @@ test("no table chord is also a keybinding", () => {
 	for (const platform of ["Win32", "Linux x86_64"]) {
 		for (const command of SHORTCUT_COMMANDS) {
 			for (const { code } of Object.values(command.chords).flat()) {
-				expect(matchKeybinding(chord(code), platform)).toBeNull();
+				expect(matchKeybinding(resolveKeybindings({ platform }), chord(code))).toBeNull();
 			}
 		}
 	}

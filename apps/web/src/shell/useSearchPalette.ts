@@ -67,6 +67,7 @@ import {
 	toggleLeftSide,
 	toggleRightSide,
 } from "./chordActions";
+import { useResolvedKeybindings } from "./keybindingState";
 import { collectCenterGroups } from "./layout";
 import { readNativePageZoomBridge } from "./nativePageZoom";
 import { type HostHitTargets, openHostHit } from "./openHostHit";
@@ -166,6 +167,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	);
 	const editors = useEditors();
 	const [nativeShortcuts] = useState(hasNativeShortcuts);
+	const keybindings = useResolvedKeybindings();
 	const [pageZoom] = useState(readNativePageZoomBridge);
 	const [tabActions] = useState(activeTabActions);
 
@@ -254,6 +256,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			historyAvailable: historySessionId !== null,
 			canCreateProject: selectSupportsOnboarding({ protocolVersion }),
 			nativeShortcuts,
+			keybindings,
 			pageZoom,
 			findInFilesAvailable: supportsTextSearch(protocolVersion) && textSearchScoped,
 			changesAvailable: activeWorkspace !== null && !isChatWorkspace(activeWorkspace),
@@ -342,6 +345,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		settled,
 		settleBlocked,
 		nativeShortcuts,
+		keybindings,
 		pageZoom,
 		tabActions,
 		options,

@@ -7,7 +7,6 @@ import { cn } from "@thinkrail/ui/utils";
 import { type Ref, useEffect, useId, useRef, useState } from "react";
 import { enabledWebExtensions } from "../extensions";
 import {
-	keybindingKeys,
 	matchKeybinding,
 	SHORTCUT_SURFACE_TITLES,
 	SHORTCUT_SURFACES,
@@ -16,17 +15,19 @@ import {
 	shortcutRows,
 } from "../keybindings";
 import { useAppStore } from "../store";
+import { useKeybindingKeys, useResolvedKeybindings } from "./keybindingState";
 import { AuxiliaryRailActionButton, type AuxiliaryRailControlProps } from "./layout";
 import { shortcutSurfaceOf } from "./shortcutSurface";
 import { hasNativeShortcuts } from "./useAppShortcuts";
 
 function useShortcutRows(): ShortcutRow[] {
 	const [desktop] = useState(hasNativeShortcuts);
+	const keybindings = useResolvedKeybindings();
 	const disabled = useAppStore((state) => state.disabledExtensions);
 	const extra = enabledWebExtensions(disabled).flatMap(({ shortcuts = [] }) =>
 		shortcuts.map((shortcut) => ({ ...shortcut, surface: "general" as const })),
 	);
-	return shortcutRows({ desktop, extra });
+	return shortcutRows({ desktop, keybindings, extra });
 }
 
 const SCROLL_PAGES: ReadonlyMap<string, number> = new Map([
@@ -180,6 +181,7 @@ function ShortcutsDialog() {
 	const t = useT();
 	const [current, setCurrent] = useState<ShortcutSurface | null>(null);
 	const returnFocus = useRef<HTMLElement | null>(null);
+	const keybindings = useResolvedKeybindings();
 	const close = () => useAppStore.getState().closeShortcuts();
 	return (
 		<Dialog
@@ -203,7 +205,7 @@ function ShortcutsDialog() {
 				}}
 				onKeyDown={(event) => {
 					if (isImeComposing(event.nativeEvent)) return;
-					if (matchKeybinding(event.nativeEvent) !== "shortcuts.open") return;
+					if (matchKeybinding(keybindings, event.nativeEvent) !== "shortcuts.open") return;
 					event.preventDefault();
 					close();
 				}}
@@ -222,7 +224,7 @@ export function ShortcutsDialogHost() {
 
 function ShortcutsRailButton({ control }: { control: AuxiliaryRailControlProps }) {
 	const t = useT();
-	const [shortcut] = useState(() => keybindingKeys("shortcuts.open"));
+	const shortcut = useKeybindingKeys("shortcuts.open");
 	return (
 		<AuxiliaryRailActionButton
 			region="left"

@@ -21,12 +21,14 @@ import {
 	type HostEnvironment,
 	isComposerGrowthLimit,
 	isJbcentralQuotaRefreshSeconds,
+	isKeybindingChord,
 	isLineWidth,
 	isLocalePreference,
 	isQuestionPanelHeight,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
+	type KeybindingOverrides,
 	normalizeFontSettings,
 	normalizeThemePreference,
 	type Project,
@@ -650,6 +652,17 @@ function storedExtensionSettings(value: unknown): ExtensionSettingValues {
 	return result;
 }
 
+function storedKeybindings(value: unknown): KeybindingOverrides {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+	const result: KeybindingOverrides = {};
+	for (const [id, chords] of Object.entries(value)) {
+		if (id.trim().length === 0 || !Array.isArray(chords)) continue;
+		const valid = [...new Set(chords.filter(isKeybindingChord))];
+		if (valid.length > 0 || chords.length === 0) result[id] = valid;
+	}
+	return result;
+}
+
 export function loadConfig(): AppConfig {
 	const value = readJson<Record<string, unknown> | null>("config.json", null, isRecord);
 	if (!value) return structuredClone(DEFAULT_CONFIG);
@@ -736,6 +749,7 @@ export function loadConfig(): AppConfig {
 		locale: isLocalePreference(value.locale) ? value.locale : DEFAULT_CONFIG.locale,
 		onboardingDismissed: value.onboardingDismissed === true,
 		...normalizeFontSettings(value),
+		keybindings: storedKeybindings(value.keybindings),
 	};
 }
 
