@@ -216,16 +216,24 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   only while the store's `shortcutsOpen` is true (`openShortcuts` / `closeShortcuts`); the chord, the
   keyboard icon at the foot of the left tool rail and the palette's *Keyboard shortcuts* row open it. It
   lists the catalog's `shortcutRows` for this client (`desktop` is the native-shortcut bridge read the
-  palette makes), plus the `shortcuts` of every enabled web extension as General rows, as surface sections under a filter matching a row's title or key label. The section of
-  the surface focused just before it opened comes first: `shortcutSurface.ts` maps the element Radix is
-  about to move focus from (a terminal, the chat input, the chat transcript, the chat history overlay,
-  Changes review or any renderer's `data-review-surface` — a diff's or Markdown preview's cursor proxy,
-  a region frame, the swipe divider — or a review composer or card, a tree, a tab strip, a rail entry), else
-  the order is fixed. Rows are reference only and hold nothing focusable, so the filter's
-  ↑ / ↓ / PageUp / PageDown scroll the list. Esc closes it and so does `Mod+?` — handled by the dialog,
-  since global chords are suppressed behind a modal — and focus returns to where it was. Settings →
-  Keyboard renders the same `ShortcutsReference` (its own filter) under the double-Shift switch, injected
-  into `search`'s `SearchSettings` the way the section itself is injected.
+  palette makes), plus the `shortcuts` of every enabled web extension as General rows, as surface
+  sections under a filter matching a row's title or key label, with a count beside it ("117 shortcuts",
+  "17 of 117" while filtering). The dialog fills the window less a `--space-24` margin
+  and, only there (`ShortcutsReference`'s `columns`), flows the sections into as many ~18rem columns as
+  fit, never splitting one. The scroller and the column flow are separate elements: a height-constrained
+  multi-column box overflows sideways, so the list scrolls only down. A row wraps between its chords, never
+  inside one, and its title keeps at least half the row. Sections keep the catalog's order (no longer
+  current-first, 2026-11-15); the section of the surface focused just before it opened is highlighted
+  ("you are here", `data-current`) and scrolled into view (`block: "nearest"`; focus stays in the filter).
+  `shortcutSurface.ts` maps the element Radix is about to move focus from (a terminal, the chat input,
+  the chat transcript, the chat history overlay, Changes review or any renderer's `data-review-surface` —
+  a diff's or Markdown preview's cursor proxy, a region frame, the swipe divider — or a review composer or
+  card, a tree, a tab strip, a rail entry); elsewhere nothing is highlighted. Rows are reference only and
+  hold nothing focusable, so the filter's ↑ / ↓ / PageUp / PageDown scroll the list. Esc closes it and so
+  does `Mod+?` — handled by the dialog, since global chords are suppressed behind a modal — and focus
+  returns to where it was. Settings → Keyboard renders the same `ShortcutsReference` (its own filter, one
+  column) under the double-Shift switch, injected into `search`'s `SearchSettings` the way the section
+  itself is injected.
 - **Chords in tooltips.** Every icon button whose action a chord also runs shows the chord's caps after
   its tooltip label (`IconTooltip`'s `shortcut`, [[module-ui]]), computed here with `keybindingKeys` and
   injected into the props-driven layout as `chromeShortcuts`: a pane's Hide shows its side's toggle
