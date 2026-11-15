@@ -183,13 +183,17 @@ function quotedPaths(text: string, masked: readonly Span[]): TerminalLink[] {
 	return found;
 }
 
-// TODO(user): make this linear — count "[" and "]" once, then trim by index
+// Counts each bracket once, then walks the end back: dropping a "]" never
+// changes the "[" count, so only the closer total moves.
 function trimUnbalancedClosers(text: string): string {
-	let trimmed = text;
-	while (trimmed.endsWith("]") && count(trimmed, "]") > count(trimmed, "[")) {
-		trimmed = trimmed.slice(0, -1);
+	const opens = count(text, "[");
+	let closes = count(text, "]");
+	let end = text.length;
+	while (end > 0 && text[end - 1] === "]" && closes > opens) {
+		end -= 1;
+		closes -= 1;
 	}
-	return trimmed;
+	return text.slice(0, end);
 }
 
 function trimToken(token: string): { offset: number; text: string } {
