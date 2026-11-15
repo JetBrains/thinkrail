@@ -89,6 +89,7 @@ import {
 	USER_THEMES_PROTOCOL_VERSION,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
 	WORKSPACE_CREATION_PROTOCOL_VERSION,
+	WORKSPACE_ITEM_REVEAL_PROTOCOL_VERSION,
 	WORKSPACE_PATH_RESOLVE_PROTOCOL_VERSION,
 	WORKSPACE_READ_STATE_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
@@ -293,6 +294,12 @@ test("user-selectable fonts are pinned to v102", () => {
 	expect(WS_METHODS.fontsInstalled).toBe("fonts.installed");
 	expect(WS_METHODS.fontsReveal).toBe("fonts.reveal");
 	expect(WS_CHANNELS.fontsChanged).toBe("fonts.changed");
+});
+
+test("selected workspace item reveal is available from v122", () => {
+	expect(WORKSPACE_ITEM_REVEAL_PROTOCOL_VERSION).toBe(122);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(WORKSPACE_ITEM_REVEAL_PROTOCOL_VERSION);
+	expect(WS_METHODS.workspaceReveal).toBe("workspace.reveal");
 });
 
 test("Files tree copy and delete are pinned to v118", () => {

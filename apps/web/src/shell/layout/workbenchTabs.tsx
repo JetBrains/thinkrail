@@ -98,6 +98,7 @@ export interface TabStripProps {
 	chatFirstPrompts?: WorkbenchProps["chatFirstPrompts"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	fileReveal?: WorkbenchProps["fileReveal"];
 	splitGeometry?: CenterSplitGeometry;
 	trailing?: ReactNode;
 	worktreePath: string;
@@ -132,6 +133,7 @@ export const TabStrip = memo(function TabStrip({
 	chatFirstPrompts,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
+	fileReveal,
 	splitGeometry,
 	trailing,
 	worktreePath,
@@ -242,6 +244,7 @@ export const TabStrip = memo(function TabStrip({
 							{...(chatFirstPrompts ? { chatFirstPrompts } : {})}
 							canFocusAdjacentGroup={canFocusAdjacentGroup}
 							renderTabAdornment={renderTabAdornment}
+							fileReveal={fileReveal}
 							worktreePath={worktreePath}
 							draggingTab={draggingTab}
 							panelId={panelId}
@@ -399,6 +402,7 @@ export interface WorkbenchTabProps {
 	chatFirstPrompts?: WorkbenchProps["chatFirstPrompts"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	fileReveal?: WorkbenchProps["fileReveal"];
 	worktreePath: string;
 	draggingTab: LayoutTab | null;
 	panelId: string;
@@ -431,6 +435,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 	chatFirstPrompts,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
+	fileReveal,
 	worktreePath,
 	draggingTab,
 	panelId,
@@ -737,6 +742,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 						canRenameChat: onRenameChat !== undefined,
 						worktreePath,
 						chatFirstPrompts,
+						fileReveal,
 					}}
 					handlers={{
 						apply: onApply,
@@ -748,6 +754,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 						focusGroup: (delta) => onFocusAdjacentGroup(delta, location.groupId),
 						hide: onHideSide,
 						revealTool: onRevealTool,
+						revealFile: fileReveal?.run,
 						close: onClose,
 					}}
 				/>
@@ -774,6 +781,7 @@ function TabMenuItems({
 			<ContextMenuItem
 				disabled={action.unavailable !== undefined}
 				title={action.unavailable?.reason}
+				aria-description={action.unavailable?.reason}
 				data-testid={action.testId}
 				onSelect={() => performTabAction(action, handlers)}
 				className={action.destructive ? "text-feedback-error focus:text-feedback-error" : undefined}

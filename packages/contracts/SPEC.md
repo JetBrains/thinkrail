@@ -19,6 +19,11 @@ the palette ranks with — kept here so host-side search can rank with the same 
 
 ## Boundary
 
+- **Selected-item reveal:** `workspace.reveal({ id, path? })` keeps the workspace-folder action when
+  `path` is absent. At `WORKSPACE_ITEM_REVEAL_PROTOCOL_VERSION` (v122), a nonempty worktree-relative
+  path selects the existing item in the host's file manager (Linux opens its containing folder).
+  `FILE_REVEAL_FAILED` classifies selected-item validation and launch failures; no fallback location is
+  opened. Clients gate the path-bearing request on that feature version because older hosts ignore it.
 - **Owns:** the wire — entity types, the `pi` event/message types (re-exported), the WS method & channel
   registries, and the protocol version. Including **`WsErrorCode`** — the closed set of failures the *host
   names* (`WsResponse.errorCode`, today `UNKNOWN_COMMIT`, `PUSH_AUTH_FAILED`,

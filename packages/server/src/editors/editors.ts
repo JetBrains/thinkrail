@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
-import { delimiter, win32 } from "node:path";
+import { delimiter, dirname, win32 } from "node:path";
 import type { EditorInfo } from "@thinkrail/contracts";
 import { spawnDetached } from "@thinkrail/shared/spawn";
 
@@ -86,7 +86,10 @@ export async function pathWhich(
 	};
 }
 
-export type SpawnFn = (cmd: string[], options?: { windowsHide?: boolean }) => void;
+export type SpawnFn = (
+	cmd: string[],
+	options?: { windowsHide?: boolean; windowsVerbatimArguments?: boolean },
+) => void;
 
 export const defaultSpawn: SpawnFn = (cmd, options) => {
 	if (!spawnDetached(cmd, options)) throw new Error("Failed to launch the requested application");
@@ -146,15 +149,42 @@ export function revealInFileManager(
 	spawn: SpawnFn = defaultSpawn,
 	platform: NodeJS.Platform = process.platform,
 ): void {
-	if (!existsSync(worktreePath)) throw new Error(`Folder not found: ${worktreePath}`);
-	const cmd =
-		platform === "darwin"
-			? ["open", worktreePath]
-			: platform === "win32"
-				? ["explorer", win32.normalize(worktreePath)]
-				: ["xdg-open", worktreePath];
+	launchFileManager(worktreePath, false, spawn, platform);
+}
+
+export function revealItemInFileManager(
+	path: string,
+	spawn: SpawnFn = defaultSpawn,
+	platform: NodeJS.Platform = process.platform,
+): void {
+	launchFileManager(path, true, spawn, platform);
+}
+
+function launchFileManager(
+	path: string,
+	selectItem: boolean,
+	spawn: SpawnFn,
+	platform: NodeJS.Platform,
+): void {
+	if (!existsSync(path)) throw new Error(`${selectItem ? "Item" : "Folder"} not found: ${path}`);
+	let cmd: string[];
+	const options: NonNullable<Parameters<SpawnFn>[1]> = { windowsHide: false };
+	if (platform === "darwin") {
+		cmd = selectItem ? ["open", "-R", path] : ["open", path];
+	} else if (platform === "win32") {
+		const target = win32.normalize(path);
+		if (selectItem) {
+			if (target.includes('"')) throw new Error("File manager item path contains a double quote");
+			cmd = ["explorer", `/select,"${target}"`];
+			options.windowsVerbatimArguments = true;
+		} else {
+			cmd = ["explorer", target];
+		}
+	} else {
+		cmd = ["xdg-open", selectItem ? dirname(path) : path];
+	}
 	try {
-		spawn(cmd, { windowsHide: false });
+		spawn(cmd, options);
 	} catch {
 		throw new Error(`No file manager launcher available on this host (${platform}).`);
 	}
