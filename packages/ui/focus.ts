@@ -5,6 +5,7 @@ export const TABBABLE_SELECTOR = [
 	"select:not(:disabled)",
 	"textarea:not(:disabled)",
 	'[contenteditable="true"]',
+	"details > summary:first-of-type",
 	'[tabindex]:not([tabindex="-1"])',
 ].join(",");
 

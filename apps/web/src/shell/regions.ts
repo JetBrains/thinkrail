@@ -39,6 +39,7 @@ const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 const FOCUS_DEFAULT_SELECTOR = "[data-focus-default]";
 const SELECTED_TAB_SELECTOR = '[role="tab"][aria-selected="true"]';
 const ROVING_ITEM_SELECTOR = '[role="treeitem"], [role="tab"]';
+const STALE_TRANSCRIPT_ITEM_SELECTOR = "[data-transcript-item]:not([data-transcript-current])";
 const TERMINAL_SELECTOR = "[data-region] [data-tab-key]";
 const FRAME_BUDGET = 120;
 const BUSY_FRAME_BUDGET = 90;
@@ -85,7 +86,10 @@ function rememberedIn(container: HTMLElement): HTMLElement | null {
 	const region = container.closest<HTMLElement>(REGION_SELECTOR);
 	const remembered = region ? lastFocused.get(region) : undefined;
 	if (!remembered || !container.contains(remembered) || !canFocus(remembered)) return null;
-	return remembered.matches(ROVING_ITEM_SELECTOR) && remembered.tabIndex < 0 ? null : remembered;
+	const stale =
+		(remembered.matches(ROVING_ITEM_SELECTOR) && remembered.tabIndex < 0) ||
+		remembered.matches(STALE_TRANSCRIPT_ITEM_SELECTOR);
+	return stale ? null : remembered;
 }
 
 function defaultTarget(container: HTMLElement): HTMLElement | null {

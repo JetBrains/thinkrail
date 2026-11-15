@@ -17,6 +17,7 @@ import { PendingExtUiContext, ToolPromptSlot } from "./ExtUiPrompt";
 import { useFold } from "./foldState";
 import type { ActivityStep, RoutineToolStep, ThinkingStep } from "./rows";
 import { ToolRendererBody } from "./ToolRendererBody";
+import { TranscriptItem } from "./TranscriptItem";
 import { getToolSummary, getToolWidth } from "./toolRegistry";
 
 export function ActivityGroup({
@@ -72,28 +73,28 @@ export function ActivityGroup({
 				/>
 			}
 		>
-			{steps.map((step) =>
-				step.kind === "thinking" ? (
-					<ThinkingGroup
-						key={step.id}
-						id={step.id}
-						parentId={id}
-						thought={step}
-						tools={step.tools}
-						live={false}
-						workspaceRoot={workspaceRoot}
-						onOpenFile={onOpenFile}
-					/>
-				) : (
-					<RoutineToolRow
-						key={step.id}
-						step={step}
-						parentId={id}
-						workspaceRoot={workspaceRoot}
-						onOpenFile={onOpenFile}
-					/>
-				),
-			)}
+			{steps.map((step) => (
+				<TranscriptItem key={step.id} id={step.id} className="rounded-sm">
+					{step.kind === "thinking" ? (
+						<ThinkingGroup
+							id={step.id}
+							parentId={id}
+							thought={step}
+							tools={step.tools}
+							live={false}
+							workspaceRoot={workspaceRoot}
+							onOpenFile={onOpenFile}
+						/>
+					) : (
+						<RoutineToolRow
+							step={step}
+							parentId={id}
+							workspaceRoot={workspaceRoot}
+							onOpenFile={onOpenFile}
+						/>
+					)}
+				</TranscriptItem>
+			))}
 		</GroupDisclosure>
 	);
 }
@@ -152,13 +153,14 @@ export function ThinkingGroup({
 				{thought.text}
 			</div>
 			{tools.map((step) => (
-				<RoutineToolRow
-					key={step.id}
-					step={step}
-					parentId={id}
-					workspaceRoot={workspaceRoot}
-					onOpenFile={onOpenFile}
-				/>
+				<TranscriptItem key={step.id} id={step.id} className="rounded-sm">
+					<RoutineToolRow
+						step={step}
+						parentId={id}
+						workspaceRoot={workspaceRoot}
+						onOpenFile={onOpenFile}
+					/>
+				</TranscriptItem>
 			))}
 		</GroupDisclosure>
 	);

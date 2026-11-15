@@ -697,6 +697,7 @@ export default function ChatView({
 		void removeQueued(kind, index).catch(() => {});
 
 	const onAbort = () => {
+		composerRef.current?.refocus();
 		void getTransport()
 			.request("session.abort", { sessionId, restoreQueue: true })
 			.then(({ restoredQueue }) => {
@@ -880,6 +881,9 @@ export default function ChatView({
 							<ResourcesInspector
 								open={inspectorOpen}
 								onOpenChange={setInspectorOpen}
+								onEscapeKeyDown={(event) => {
+									if (composerRef.current?.ownsEscape()) event.preventDefault();
+								}}
 								onCloseAutoFocus={returnToResources}
 								{...resources.groups}
 								now={now}
@@ -1017,6 +1021,8 @@ export default function ChatView({
 					onSelectThinking={onSelectThinking}
 					onSubmit={onSubmit}
 					onAbort={onAbort}
+					onEnterTranscript={() => transcriptRef.current?.focusNewest()}
+					onScrollTranscript={(direction) => transcriptRef.current?.scrollPage(direction)}
 					onHistoryOpen={onHistoryOpen}
 					onPickTemplate={onPickTemplate}
 					onManageTemplates={onManageTemplates}

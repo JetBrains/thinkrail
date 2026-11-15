@@ -23,7 +23,8 @@ does.
 - **Public surface:** `KeybindingId`, `KEYBINDINGS`, `FOCUS_GROUP_BINDINGS`, `matchKeybinding`,
   `keybindingShortcut`, `keybindingKeys`, `keybindingLabel`, `keybindingLabels`, `SHORTCUT_CATALOG`,
   `SHORTCUT_SURFACES`, `SHORTCUT_SURFACE_TITLES`, `ShortcutSurface`, `ShortcutRow`, `shortcutRows`,
-  `shortcutKeyCaps`, `TAB_KEYS`, `RAIL_KEYS`, `TREE_KEYS`, `REVIEW_KEYS`, `DESKTOP_KEYS`.
+  `shortcutKeyCaps`, `TAB_KEYS`, `RAIL_KEYS`, `HJKL_KEYS`, `TREE_KEYS`, `REVIEW_KEYS`,
+  `TRANSCRIPT_KEYS`, `HISTORY_KEYS`, `DESKTOP_KEYS`.
 - **Allowed deps:** `commands` (`CommandShortcut` and `shortcutKeys`), `lib` (`platformFamily`),
   `@thinkrail/locales` (the catalog's `MessageKey` titles, type-only).
 - **Forbidden:** importing `store`, `transport`, `shell`, `panels`, `chat`, `search` or React; reading
@@ -97,13 +98,16 @@ does.
   marked `desktop` (native menu, `shortcutCommands`, page zoom) is listed only where the native shortcut
   bridge exists. The focus-group bindings are one row shown as a range (`⌘1–9`).
 - **Surfaces** are a fixed ordered set — general, tabs and groups, panels and tool rails, sidebar trees,
-  Changes review, chat input, search palette, Find in Files, terminal, desktop app — each titled by a
-  locale key; `shortcutRows({ desktop, platform })` resolves the catalog for one client into rows of
+  Changes review, chat input, chat transcript, chat history, search palette, Find in Files, terminal,
+  desktop app — each titled by a locale key; `shortcutRows({ desktop, platform })` resolves the catalog for one client into rows of
   caps and a text label (what the filter matches).
 - **Feature handlers keep their matching** (the table never dispatches feature keys) but read the key
   they compare from the catalog's constants — the tab strip and rails (`TAB_KEYS`, `RAIL_KEYS`), the
   sidebar trees (`TREE_KEYS`: `F2`, `Delete`, `Mod+Enter`, project reorder), Changes review
-  (`REVIEW_KEYS`: `V` `J` `N` `P`, `Alt+↑/↓`) — so the listed and the handled key cannot drift; the
-  palette's zoom and Settings shortcuts read `DESKTOP_KEYS`. Keys that stay literal in their handler
-  (composer, palette, Find in Files, xterm, dictation) are display entries only.
+  (`REVIEW_KEYS`: `V` `J` `N` `P`, `Alt+↑/↓`), the chat transcript and the composer's way into it
+  (`TRANSCRIPT_KEYS`: `Mod+↑`, `C`, `O`), the history overlay's entry delete (`HISTORY_KEYS`), and the
+  letter twins of the arrows (`HJKL_KEYS`: h/j/k/l, shared by the transcript, tab strips and rails) — so
+  the listed and the handled key cannot drift; the palette's zoom and Settings shortcuts read
+  `DESKTOP_KEYS`. Keys that stay literal in their handler (composer, palette, Find in Files, xterm,
+  dictation, the transcript's arrows and the history overlay's other keys) are display entries only.
 - Tested: every `KeybindingId` belongs to a titled entry, ids are unique, every title is an English key.

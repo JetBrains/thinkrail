@@ -12,6 +12,8 @@ test("the focused element names the surface the cheatsheet lists first", () => {
 	expect(shortcutSurfaceOf(inside('[role="tablist"]'))).toBe("tabs");
 	expect(shortcutSurfaceOf(inside('[data-testid="changes-review"]'))).toBe("review");
 	expect(shortcutSurfaceOf(inside('[data-testid="chat-composer"]'))).toBe("composer");
+	expect(shortcutSurfaceOf(inside("[data-transcript-feed]"))).toBe("transcript");
+	expect(shortcutSurfaceOf(inside('[data-testid="history-overlay"]'))).toBe("history");
 	expect(shortcutSurfaceOf(inside(".xterm"))).toBe("terminal");
 	expect(shortcutSurfaceOf(inside("[data-rail-entry]"))).toBe("panels");
 	expect(shortcutSurfaceOf(inside("[data-rail-action]"))).toBeNull();

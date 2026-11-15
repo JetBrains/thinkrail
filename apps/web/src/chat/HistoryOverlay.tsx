@@ -8,6 +8,7 @@ import type { HistoryScope, MessageHit, PromptHit } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
+import { isContextMenuKey } from "@thinkrail/ui/context-menu";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -16,8 +17,9 @@ import {
 } from "@thinkrail/ui/dropdown-menu";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useNow } from "@/components/useNow";
+import { HISTORY_KEYS } from "@/keybindings";
 import { fileName, firstNonBlankLine, platformShortcutLabel, relativeTime } from "@/lib";
 import {
 	type ChatLocationRequest,
@@ -120,6 +122,72 @@ function DeleteChatButton({
 	);
 }
 
+type DeletableChat = { workspaceId: string; sessionId: string };
+
+function HistoryEntryMenu({
+	item,
+	deletable,
+	onClose,
+	onOpenMessage,
+	onSaveAsTemplate,
+	onDeleteChat,
+	onRestoreFocus,
+}: {
+	item: HistorySelection;
+	deletable: DeletableChat | null;
+	onClose: () => void;
+	onOpenMessage: (target: ChatLocationRequest) => void;
+	onSaveAsTemplate: (hit: PromptHit) => void;
+	onDeleteChat: (workspaceId: string, sessionId: string) => void;
+	onRestoreFocus: () => void;
+}) {
+	const t = useT();
+	const target = jumpTarget(item.hit);
+	return (
+		<DropdownMenu
+			open
+			onOpenChange={(open) => {
+				if (!open) onClose();
+			}}
+		>
+			<DropdownMenuTrigger asChild>
+				<span aria-hidden className="pointer-events-none absolute bottom-0 left-8 h-0 w-0" />
+			</DropdownMenuTrigger>
+			<DropdownMenuContent
+				align="start"
+				data-testid="history-entry-menu"
+				aria-label={t("chat.history.entryMenu")}
+				onCloseAutoFocus={(event) => {
+					event.preventDefault();
+					onRestoreFocus();
+				}}
+			>
+				{target ? (
+					<DropdownMenuItem data-testid="history-entry-jump" onSelect={() => onOpenMessage(target)}>
+						{t("chat.history.jump")}
+					</DropdownMenuItem>
+				) : null}
+				{item.kind === "prompt" ? (
+					<DropdownMenuItem
+						data-testid="history-entry-save-template"
+						onSelect={() => onSaveAsTemplate(item.hit)}
+					>
+						{t("chat.history.saveTemplate")}
+					</DropdownMenuItem>
+				) : null}
+				{deletable ? (
+					<DropdownMenuItem
+						data-testid="history-entry-delete"
+						onSelect={() => onDeleteChat(deletable.workspaceId, deletable.sessionId)}
+					>
+						{t("chat.history.deleteChat")}
+					</DropdownMenuItem>
+				) : null}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
 function PromptRow({
 	hit,
 	highlight,
@@ -131,6 +199,7 @@ function PromptRow({
 	onOpenMessage,
 	onDeleteChat,
 	canDeleteChat,
+	entryMenu,
 }: {
 	hit: PromptHit;
 	highlight: HighlightTerms;
@@ -142,6 +211,7 @@ function PromptRow({
 	onOpenMessage: (target: ChatLocationRequest) => void;
 	onDeleteChat: (workspaceId: string, sessionId: string) => void;
 	canDeleteChat: (workspaceId: string) => boolean;
+	entryMenu: ReactNode;
 }) {
 	const t = useT();
 	const now = useNow();
@@ -154,7 +224,7 @@ function PromptRow({
 			data-kind="prompt"
 			data-row={isSelected || undefined}
 			data-selected={isSelected}
-			className={`group flex w-full items-center gap-4 rounded-sm border-l-2 py-4 pl-8 pr-4 text-left tr-text-ui ${
+			className={`group relative flex w-full items-center gap-4 rounded-sm border-l-2 py-4 pl-8 pr-4 text-left tr-text-ui ${
 				isSelected
 					? "border-l-primary bg-control-bg-selected text-text-default"
 					: "border-l-transparent text-text-muted"
@@ -228,6 +298,7 @@ function PromptRow({
 				onDeleteChat={onDeleteChat}
 				canDeleteChat={canDeleteChat}
 			/>
+			{entryMenu}
 		</div>
 	);
 }
@@ -239,6 +310,7 @@ function MessageRow({
 	onPick,
 	onDeleteChat,
 	canDeleteChat,
+	entryMenu,
 }: {
 	hit: MessageHit;
 	highlight: HighlightTerms;
@@ -246,6 +318,7 @@ function MessageRow({
 	onPick: () => void;
 	onDeleteChat: (workspaceId: string, sessionId: string) => void;
 	canDeleteChat: (workspaceId: string) => boolean;
+	entryMenu: ReactNode;
 }) {
 	const t = useT();
 	const now = useNow();
@@ -256,7 +329,7 @@ function MessageRow({
 			data-kind="message"
 			data-row={isSelected || undefined}
 			data-selected={isSelected}
-			className={`group flex w-full items-center gap-4 rounded-sm border-l-2 pr-4 tr-text-ui ${
+			className={`group relative flex w-full items-center gap-4 rounded-sm border-l-2 pr-4 tr-text-ui ${
 				isSelected
 					? "border-l-primary bg-control-bg-selected text-text-default"
 					: "border-l-transparent text-text-muted"
@@ -289,6 +362,7 @@ function MessageRow({
 				onDeleteChat={onDeleteChat}
 				canDeleteChat={canDeleteChat}
 			/>
+			{entryMenu}
 		</div>
 	);
 }
@@ -395,6 +469,7 @@ function HistoryPicker({
 	const resultsRef = useRef<HTMLDivElement>(null);
 	const rootRef = useRef<HTMLDivElement>(null);
 	const [scopeMenuOpen, setScopeMenuOpen] = useState(false);
+	const [entryMenuKey, setEntryMenuKey] = useState<string | null>(null);
 	const highlight = useMemo(() => highlightTerms(query), [query]);
 
 	useEffect(() => {
@@ -404,8 +479,18 @@ function HistoryPicker({
 		el.select();
 	}, []);
 
+	const selectedKey = useMemo(() => {
+		const sel = resolveHistorySelection(stage, result, selected);
+		if (!sel) return null;
+		return sel.kind === "prompt"
+			? `p:${sel.hit.sessionId}:${sel.hit.messageIndex ?? sel.hit.timestamp}`
+			: `m:${sel.hit.sessionId}:${sel.hit.messageIndex}`;
+	}, [stage, result, selected]);
+	const entryMenuOpen = entryMenuKey !== null && entryMenuKey === selectedKey;
+	const layerOpen = scopeMenuOpen || entryMenuOpen;
+
 	useEffect(() => {
-		if (scopeMenuOpen) return;
+		if (layerOpen) return;
 		const onWindowKeyDown = (e: globalThis.KeyboardEvent) => {
 			if (e.key !== "Escape" || isImeComposing(e)) return;
 			e.preventDefault();
@@ -414,10 +499,10 @@ function HistoryPicker({
 		};
 		window.addEventListener("keydown", onWindowKeyDown, true);
 		return () => window.removeEventListener("keydown", onWindowKeyDown, true);
-	}, [scopeMenuOpen, onClose]);
+	}, [layerOpen, onClose]);
 
 	useEffect(() => {
-		if (scopeMenuOpen) return;
+		if (layerOpen) return;
 		const onWindowPointerDown = (e: PointerEvent) => {
 			const target = e.target as Element | null;
 			if (!target) return;
@@ -427,15 +512,7 @@ function HistoryPicker({
 		};
 		window.addEventListener("pointerdown", onWindowPointerDown, true);
 		return () => window.removeEventListener("pointerdown", onWindowPointerDown, true);
-	}, [scopeMenuOpen, onOutsidePress]);
-
-	const selectedKey = useMemo(() => {
-		const sel = resolveHistorySelection(stage, result, selected);
-		if (!sel) return null;
-		return sel.kind === "prompt"
-			? `p:${sel.hit.sessionId}:${sel.hit.messageIndex ?? sel.hit.timestamp}`
-			: `m:${sel.hit.sessionId}:${sel.hit.messageIndex}`;
-	}, [stage, result, selected]);
+	}, [layerOpen, onOutsidePress]);
 
 	useEffect(() => {
 		if (selectedKey === null) return;
@@ -444,8 +521,42 @@ function HistoryPicker({
 			?.scrollIntoView({ block: "nearest" });
 	}, [selectedKey]);
 
+	const deletableChat = (item: HistorySelection | null): DeletableChat | null => {
+		const workspaceId = item?.hit.workspaceId;
+		return item && workspaceId && canDeleteChat(workspaceId)
+			? { workspaceId, sessionId: item.hit.sessionId }
+			: null;
+	};
+	const hasEntryActions = (item: HistorySelection | null) =>
+		!!item && (item.kind === "prompt" || !!jumpTarget(item.hit) || !!deletableChat(item));
+
 	const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
 		if (isImeComposing(e.nativeEvent)) return;
+		if (isContextMenuKey(e) && !e.altKey && !e.ctrlKey && !e.metaKey) {
+			if (
+				selectedKey === null ||
+				!hasEntryActions(resolveHistorySelection(stage, result, selected))
+			)
+				return;
+			e.preventDefault();
+			setEntryMenuKey(selectedKey);
+			return;
+		}
+		if (
+			e.key === HISTORY_KEYS.deleteChat.key &&
+			!e.altKey &&
+			!e.ctrlKey &&
+			!e.metaKey &&
+			!e.shiftKey &&
+			e.currentTarget.selectionStart === query.length &&
+			e.currentTarget.selectionEnd === query.length
+		) {
+			const chat = deletableChat(resolveHistorySelection(stage, result, selected));
+			if (!chat) return;
+			e.preventDefault();
+			onDeleteChat(chat.workspaceId, chat.sessionId);
+			return;
+		}
 		if ((e.metaKey || e.ctrlKey) && e.code === "KeyS") {
 			e.preventDefault();
 			const item = resolveHistorySelection(stage, result, selected);
@@ -488,6 +599,18 @@ function HistoryPicker({
 	const isEmpty = !!result && !result.indexing && !hasResults;
 
 	const selectedItem = resolveHistorySelection(stage, result, selected);
+	const entryMenu =
+		entryMenuOpen && selectedItem ? (
+			<HistoryEntryMenu
+				item={selectedItem}
+				deletable={deletableChat(selectedItem)}
+				onClose={() => setEntryMenuKey(null)}
+				onOpenMessage={onOpenMessage}
+				onSaveAsTemplate={onSaveAsTemplate}
+				onDeleteChat={onDeleteChat}
+				onRestoreFocus={() => inputRef.current?.focus()}
+			/>
+		) : null;
 	const selectedWorkspaceName = selectedItem?.hit.workspaceId
 		? workspaceNames[selectedItem.hit.workspaceId]
 		: undefined;
@@ -529,6 +652,7 @@ function HistoryPicker({
 									onOpenMessage={onOpenMessage}
 									onDeleteChat={onDeleteChat}
 									canDeleteChat={canDeleteChat}
+									entryMenu={i === selected ? entryMenu : null}
 								/>
 							))}
 						</div>
@@ -553,6 +677,7 @@ function HistoryPicker({
 									}}
 									onDeleteChat={onDeleteChat}
 									canDeleteChat={canDeleteChat}
+									entryMenu={result.prompts.length + i === selected ? entryMenu : null}
 								/>
 							))}
 						</div>
