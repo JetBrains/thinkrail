@@ -191,10 +191,22 @@ describe("the diff line cursor", () => {
 			side: "additions",
 		});
 		const unified = diffCursorRows(fileDiff, "unified");
-		expect(snapDiffCursor(unified, "unified", { line: 6, side: "deletions" })).toEqual({
-			line: 5,
+		expect(snapDiffCursor(unified, "unified", { line: 42, side: "deletions" })).toEqual({
+			line: 8,
 			side: "deletions",
 		});
 		expect(snapDiffCursor(rows, "split", null)).toEqual({ line: 5, side: "additions" });
+	});
+
+	test("an old-side context line keeps its row in the inline layout, on the row's new side", () => {
+		const unified = diffCursorRows(fileDiff, "unified");
+		expect(snapDiffCursor(unified, "unified", { line: 6, side: "deletions" })).toEqual({
+			line: 7,
+			side: "additions",
+		});
+		expect(snapDiffCursor(unified, "unified", { line: 5, side: "deletions" })).toEqual({
+			line: 5,
+			side: "deletions",
+		});
 	});
 });

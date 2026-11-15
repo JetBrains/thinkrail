@@ -156,6 +156,9 @@ export function snapDiffCursor(
 ): DiffCursor | null {
 	if (!cursor) return initialDiffCursor(rows, layout);
 	if (diffCursorRow(rows, layout, cursor) >= 0) return cursor;
+	const sameRow = rows.find((row) => row[cursor.side] === cursor.line);
+	const mapped = sameRow ? rowCursor(sameRow, layout, cursor.side) : null;
+	if (mapped) return mapped;
 	let best: DiffCursor | null = null;
 	for (const row of rows) {
 		const at = rowCursor(row, layout, cursor.side);

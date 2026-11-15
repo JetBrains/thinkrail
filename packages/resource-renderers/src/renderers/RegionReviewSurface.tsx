@@ -179,7 +179,10 @@ export function RegionReviewSurface({
 	const scrollToCard = (id: string) =>
 		cardsRef.current.get(id)?.scrollIntoView({ block: "center" });
 	const selectionDraft = composer.selection ? draftForRegion(composer.selection) : null;
-	const returnFocus = () => keysRef.current?.focus({ preventScroll: true });
+	const returnFocus = () => {
+		keysRef.current?.focus({ preventScroll: true });
+		keysRef.current?.scrollIntoView({ block: "nearest" });
+	};
 	const onFrameKey = (event: KeyboardEvent<HTMLButtonElement>) => {
 		const command = cursorCommand(event.nativeEvent);
 		const outcome = command ? frameCommand(composer.selection, command) : null;

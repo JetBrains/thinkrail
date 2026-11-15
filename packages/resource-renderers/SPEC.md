@@ -831,11 +831,13 @@ in the package because it cannot import the app; the app's catalog lists the sam
   unchanged runs within `COLLAPSED_CONTEXT_THRESHOLD` shown). Context the reader expands with the mouse is
   not on its path. Split: ↑/↓ skip rows without the cursor's side,
   ←/→ switch side where the row has the other. Unified: every row is a stop on its own side (context is
-  the new side) and ←/→ do nothing. It starts on the first changed line, and a cursor whose line left the
-  diff snaps to the nearest line of its side. Enter / Shift+Mod+M sends the range to the mouse selection's
+  the new side) and ←/→ do nothing. It starts on the first changed line; a cursor whose line is no longer a stop first keeps its
+  row (an old-side context line in the inline layout is that row's new-side stop), and only a line that left
+  the diff snaps to the nearest line of its side. Enter / Shift+Mod+M sends the range to the mouse selection's
   own `openSelection` → `selectionComposer`, so anchors are identical and a cross-side range is blocked as
   before; Esc clears a range (and a blocked notice), then leaves to the enclosing `data-focus-row`'s
-  primary — the Changes section header — or the control before the diff. Tab goes to the nearest card or
+  primary — the section's collapse toggle, or the file header itself in the single-file layout, never a
+  generic first control (there that is Revert file) — or the control before the diff. Tab goes to the nearest card or
   composer at or below the cursor row (revealing it first in a virtualized diff); with none, the browser's
   own order continues into the hunk toolbars, so Keep / Revert / Ask agent stay reachable. A mouse
   selection, the gutter button and Ask agent move the cursor to their line. Only keys the cursor owns are
@@ -854,7 +856,8 @@ in the package because it cannot import the app; the app's catalog lists the sam
 - **Focus return.** `ReviewComposer` takes Shift+Mod+Enter as Send now (Mod+Enter Save draft, Esc cancel,
   unchanged) and, when it closes with focus still inside it or lost, calls `onReturnFocus` — the diff
   and the preview focus their cursor proxy (the diff on the line it was opened from), a region surface
-  its frame button, Monaco its editor. A draft card's Mod+Enter (save), Esc (discard), Send and Delete do
+  its frame button, Monaco its editor; the preview's cursor block and the frame button are scrolled into view
+  (nearest) as focus returns, so a draft edited far below its anchor never leaves the cursor off screen. A draft card's Mod+Enter (save), Esc (discard), Send and Delete do
   the same at the card's own line; a surface without a cursor gets the closest control before the card that is not inside
   another card. A Send that opens its chat keeps the chat's focus: the composer returns focus only when
   nothing else took it.

@@ -499,6 +499,46 @@ test("a review jump in the single-file layout lands on the file header, so Enter
 	await page.keyboard.press("Enter");
 	await page.keyboard.press(" ");
 	await expect(page.getByText(/^Reverted /)).toHaveCount(0);
+
+	const cursor = page.getByTestId("diff-view").getByTestId("review-cursor");
+	await tabTo(page, cursor);
+	await page.keyboard.press("Escape");
+	await expect(header).toBeFocused();
+	await page.keyboard.press("Enter");
+	await expect(page.getByText(/^Reverted /)).toHaveCount(0);
+});
+
+test("returning from a long Markdown draft brings the cursor block back into view", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const paragraphs = Array.from({ length: 30 }, (_, index) => `Paragraph ${index + 1}.`).join(
+		"\n\n",
+	);
+	writeFileSync(join(worktree(), "LONG.md"), `# Long\n\n${paragraphs}\n`);
+	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("file-node").filter({ hasText: "LONG.md" }).click();
+	const preview = page.getByTestId("markdown-preview");
+	await expect(preview).toContainText("Paragraph 30.");
+	await page.locator('[data-testid="editor-tab"][data-active="true"]').click();
+	await tabTo(page, cursorProxy(preview));
+	const heading = preview.getByRole("heading", { name: "Long" });
+	await page.keyboard.press("Enter");
+	await page.keyboard.type("Draft line");
+	for (let line = 2; line <= 40; line += 1) {
+		await page.keyboard.press("Shift+Enter");
+		await page.keyboard.type(`Draft line ${line}`);
+	}
+	await pressPlatformShortcut(page, "Enter");
+	await expect(cursorProxy(preview)).toBeFocused();
+	const card = preview.getByTestId("review-thread-edit");
+	await card.focus();
+	await pressPlatformShortcut(page, "End");
+	await expect(heading).not.toBeInViewport();
+	await page.keyboard.press("Escape");
+	await expect(cursorProxy(preview)).toBeFocused();
+	await expect(heading).toBeInViewport();
 });
 
 test("the Markdown block cursor stays visible on a table row", async ({ page }) => {

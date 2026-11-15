@@ -255,6 +255,11 @@ export function PreviewCommenting({
 	const returnFocus: PreviewReturnFocus = (line) => {
 		if (line !== undefined) setBlockCursor({ line, anchor: null });
 		proxy?.focus({ preventScroll: true });
+		const shown = line ?? blockCursor?.line;
+		const scroller = proxy?.parentElement;
+		if (shown === undefined || !scroller) return;
+		const elements = cursorBlockElements(scroller);
+		elements[blockIndexAt(cursorBlocksOf(elements), shown)]?.scrollIntoView({ block: "nearest" });
 	};
 
 	const onCursorKey = (event: KeyboardEvent<HTMLDivElement>) => {

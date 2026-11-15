@@ -235,6 +235,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 		>
 			<div
 				data-testid="changes-section-header"
+				data-focus-row-primary={mode === "single" || undefined}
 				tabIndex={-1}
 				className={`${mode === "stacked" ? "sticky top-0 z-10" : ""} flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-8 focus-visible:focus-ring-inset`}
 			>
