@@ -1082,6 +1082,7 @@
 	"panels.fileTree.empty": "Empty",
 	"panels.fileTree.label": "Files",
 	"panels.fileTree.moveAcrossDevices": "{{name}} is on another disk than this folder, so it can't be moved here. Copy it instead, then delete the original.",
+	"panels.fileTree.openInTab": "Open in tab",
 	"panels.fileTree.paste": "Paste",
 	"panels.fileTree.pasteChanged": "Files changed while they were being copied, so the paste stopped. Anything already copied was kept.",
 	"panels.fileTree.pasteExists": "{{name}} already exists in this folder.",

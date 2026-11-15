@@ -2,6 +2,7 @@ import {
 	RiFileCopyLine as Copy,
 	RiFileCopy2Line as CopyEntry,
 	RiScissorsCutLine as Cut,
+	RiArrowRightUpLine as OpenTab,
 	RiClipboardLine as Paste,
 	RiDeleteBinLine as Trash,
 } from "@remixicon/react";
@@ -370,6 +371,18 @@ function FileTreeMenu({
 				{children(open)}
 			</ContextMenuTrigger>
 			<ContextMenuContent data-testid="file-tree-actions">
+				{kind === "file" ? (
+					<>
+						<ContextMenuItem
+							data-testid="file-tree-open"
+							onSelect={() => void openFileInTab(workspaceId, path, "keep")}
+						>
+							<OpenTab />
+							{t("panels.fileTree.openInTab")}
+						</ContextMenuItem>
+						<ContextMenuSeparator />
+					</>
+				) : null}
 				<ContextMenuItem data-testid="file-copy-path" onSelect={() => copyPath(true)}>
 					<Copy />
 					{t("panels.fileTree.copyPath")}
