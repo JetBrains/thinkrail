@@ -245,7 +245,12 @@ export async function i18nViolations(api: API, repoRoot: string): Promise<I18nVi
 	return violations;
 }
 
-const KEY_CONSUMER_ROOTS = [...I18N_ROOTS, "apps/desktop/src", "packages/locales/src"] as const;
+const KEY_CONSUMER_ROOTS = [
+	...I18N_ROOTS,
+	"apps/desktop/src",
+	"packages/locales/src",
+	"packages/server/src/host",
+] as const;
 const PLURAL_SUFFIX = /_(?:zero|one|two|few|many|other)$/;
 
 export function catalogProblems(catalogText: string, sources: readonly string[]): string[] {

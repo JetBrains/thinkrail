@@ -32,13 +32,15 @@ path override or merge/close capability.
 Delivery refusals expose `ISSUE_DELIVERY_REFUSED` with closed, non-sensitive reason tags and a concrete
 next action. Read-only preflight failures occur before intent reservation and remain eligible for a
 refreshed confirmation. Once an intent is reserved, only a completed receipt or explicit inspection and
-user-directed recovery can proceed; no replacement ID bypasses uncertainty. Every confirmation prepare/execute refusal is wrapped by host-local `issueContinuations`: return a
-sanitized cause tag, fixed input snapshot and exact continuation questions. A real receipt authorizes
-one memoized attempt; concurrent/replayed calls share it. A successful prepare continuation returns a
-new normal/warned operation card needing separate approval, not remote mutation. Snapshots expire with
-host restart or after 30 minutes, are bounded to 100, and can be disabled by
-`THINKRAIL_ISSUE_CONTINUATIONS=0`. Invalid receipts grant no action. This is universal card offering,
-not a promise that invalid targets/credentials become valid or uncertain writes resend.
+user-directed recovery can proceed; no replacement ID bypasses uncertainty. Confirmation receipt mismatch
+is a distinct `ISSUE_CONFIRMATION_BLOCKED` refusal and does not generate another continuation card: asking
+the user to approve a retry cannot repair a receipt that the host could not verify. Other deterministic
+prepare/execute refusals may use host-local `issueContinuations`, which return a sanitized cause tag, fixed
+input snapshot and exact continuation questions. A real receipt authorizes one memoized attempt;
+concurrent/replayed calls share it. A successful prepare continuation returns a new normal/warned operation
+card needing separate approval, not remote mutation. Snapshots expire with host restart or after 30 minutes,
+are bounded to 100, and can be disabled by `THINKRAIL_ISSUE_CONTINUATIONS=0`. Invalid receipts grant no
+action.
 
 `continueDespiteChecks:true` requests a one-shot warning card, not authorization: stage policy warnings
 include closed Issue, missing design receipt, unexpected workflow labels and uncommitted files; delivery
@@ -53,6 +55,14 @@ rechecks the observed result and records the recovery toolCallId without any rem
 cannot complete during an active original execution in this host. Cross-process termination is a human
 assertion; generic override and uncertain resend are not implemented by this flag. There is no silent or permanent force-continue switch. Bounded failure
 sidecars retain only known sanitized confirmation/delivery reasons for inspection after dispatch.
+
+Lifecycle authorization is per Issue/repository/source/target and freezes a baseline commit. Host callbacks
+bind child delivery, ready, merge and close actions to that receipt; they recheck current request identity,
+checkout ancestry and exact target before each operation. Automatic advancement refuses absent or agent-reported
+validation records. Dependency preflight reads exact upstream MR merge evidence and target-branch SHA, brackets
+the evidence with repeated reads, and never treats independent CI as cross-repository compatibility. When no
+host compatibility evidence producer is available, dependent delivery remains blocked rather than asserting
+API/ABI/protocol compatibility.
 
 ## Responsibility
 
@@ -1579,6 +1589,56 @@ power-loss durability of directory entries is not promised. Reliable local exclu
 semantics and durable root provisioning belong to the caller. This section introduces no wiring,
 agent behavior or UI surface.
 
+
+### Confirmed Issue body replacement
+
+The bound confirmation route accepts `action: "update-body"` with a complete `body`. It freezes
+Issue identity and the complete before/after bodies in the existing confirmation journal, displays
+both, and verifies the actual questionnaire receipt. Execution rechecks identity and the body snapshot
+before reserving intent, writes only description, then reads it back. A changed body invalidates the
+operation; unrelated labels are never supplied in the update. Uncertain results are observed under the
+original operation and adopted only through the existing explicit recovery card, never resent.
+
+### Confirmed Issue closure
+
+The bound confirmation route accepts `action: "close-issue"` with a reason and acceptance summary.
+It freezes the exact Issue reference and open Issue snapshot, presents acceptance/unverified status,
+and uses an independent questionnaire receipt. Execution rechecks the open state and full snapshot
+before calling the provider close primitive, then requires a fresh closed-state and non-null closedAt
+read-back before returning a receipt. A missing/delayed response remains uncertain and is reconciled by
+observing the original operation; closure is never inferred from another action.
+
+### Durable Issue delivery state
+
+`issueDeliveryStatePersistence.ts` stores a bounded append-only revision per bound Issue and local
+repository. It records the selected source/target branches and policy, dependency ids, exact checkout
+SHA/tree, observed MR identity/state, and validation result with command, tree, target, tool version and
+platform. Strict schema checks reject malformed records; CAS prevents overwriting concurrent updates,
+and target/tree changes cannot retain evidence that no longer applies. The implementation session may
+record a state only after the host confirms its repository membership, workspace identity and exact
+checkout. Agent-supplied validation is labeled `agent-reported` and is never proof for automatic merge.
+The host currently has no validation command runner, so no `host-observed` validation is minted; the
+automation policy helper therefore refuses auto-advance until such evidence exists. The policy and
+cross-repository helpers are not wired as public Issue actions. `draft`, `auto-merge` and `manual`
+records do not grant push, ready, merge or close on their own.
+
+The Issue confirmation dispatcher exposes local delivery-state read/record and separately confirmed MR
+ready/merge actions. Ready and merge remain separate operations; merge requires provider-observed head-
+bound checks/approval and target ancestry. Cross-repository dependency ordering, actual merge-SHA
+pairing and compatibility evidence remain a helper, not an integrated delivery gate.
+
+### Confirmed MR ready and merge limits
+
+Ready and merge are separate confirmation operations bound to the selected repository, request iid,
+target branch and expected head SHA. Ready execution requires the request still be a Draft immediately
+before dispatch and verifies the same request identity/head after the provider transition. Merge
+preparation reads provider facts bound to that head: GitLab pipeline SHA/status plus approvals endpoint
+facts, and GitHub GraphQL check rollup/review decision cross-checked with the REST PR identity/head/
+target. Unknown, missing, changed or unsupported facts fail closed; caller-provided status text is
+never evidence. Merge execution rechecks non-Draft state, exact readiness snapshot and target SHA before
+SHA-conditioned dispatch. A successful response alone is insufficient: the host reads back merged MR
+state and requires provider evidence that the actual merge commit is an ancestor of the actual target
+branch SHA. Uncertain writes are observed/reconciled under the original operation and never replayed.
 
 ### Bound Issue agent composition
 

@@ -27,6 +27,12 @@ the session intent. Implementation uses the existing planning/todo, verification
 mechanisms, with no new pipeline, task format, runtime, or implementation approval gate.
 The panel launch is intent to implement, not evidence of design approval or merge authorization.
 
+`SKILL.md` is the public entry and shared-invariants spine. It routes on demand to the 11 internal
+lifecycle documents (`issue-session.md` through `stage-delivery-decoupling.md`); each owns one flow,
+its host capability boundaries and a named handoff. Cross-phase work composes those documents in
+lifecycle order. This is documentation structure only: it adds no runtime, provider operation or
+remote authorization.
+
 ## Capability and trust boundary
 
 Reach `issue_context` and `issue_record_summary` by tool name and their advertised schemas only.
@@ -49,9 +55,12 @@ in the owning spec graph, not a parallel local plan store.
 Stage completion and per-repository delivery each require their own exact host-verified questionnaire
 submission. Only that receipt authorizes the fixed report/label transition or non-force push and Draft
 PR/MR. The skill itself grants no remote authority, bypass, merge, ready transition or Issue closure.
-Design and implementation may alternate; acceptance and closure stay in the tracker. This follows the latest simplified decision in the
-[approved Issue design](../../../../docs/plans/2026-11-04-issues-workflow-design.md#最新简化决定),
-not its superseded gated lifecycle description.
+Design and implementation may alternate; acceptance and closure stay in the tracker. The confirmed
+Issue #62 lifecycle design separates stage records from delivery eligibility, requires independent
+Issue-close authorization, and expects exact target/SHA and operation evidence. Current host support
+remains narrower: the confirmed operation covers Draft delivery; ready/merge orchestration and the
+cross-provider body-update/close confirmation chain are not implemented by this skill slice. Do not
+present those requirements as available host capabilities.
 
 ## Delivery checkout preparation
 
@@ -79,6 +88,7 @@ claiming a complete artifact handoff. The final summary lists documents and conf
 ## Verification
 
 Packaging relies on the existing `pi.skills: ["./skills"]` discovery; no manifest or runtime change
-is needed. Local package tests and skill discovery checks need no real provider. Behavioral use is
-unverified until a real session is observed; the authoritative roster records that debt in
-[[submodule-workflow-skills]].
+is needed. `index.test.ts` checks that the spine routes to every lifecycle document, each document
+has a handoff, and stage/delivery and close-authorization invariants remain explicit. Local package
+tests and skill discovery checks need no real provider. Behavioral use is unverified until a real
+session is observed; the authoritative roster records that debt in [[submodule-workflow-skills]].

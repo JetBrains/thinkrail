@@ -51,6 +51,7 @@ export interface IssueDeliveryActionOptions {
 		onDispatch: () => void,
 	): Promise<void>;
 	verifyAnswer(sessionId: string, payload: DeliveryPayload, toolCallId: string): Promise<void>;
+	authorize?(sessionId: string, payload: DeliveryPayload, authorization: unknown): Promise<void>;
 	journal: IssueConfirmationStore;
 }
 function stop(reason: string = "execution-snapshot-changed"): never {
@@ -258,7 +259,12 @@ export function createIssueDeliveryActions(options: IssueDeliveryActionOptions) 
 		const stored = await options.journal.prepare(sessionId, input.operationId, payload);
 		return { digest: stored.digest, questions: deliveryQuestions(payload) };
 	}
-	async function execute(sessionId: string, operationId: string, toolCallId: string) {
+	async function execute(
+		sessionId: string,
+		operationId: string,
+		toolCallId: string,
+		authorization?: unknown,
+	) {
 		const stored = await options.journal.get(sessionId, operationId);
 		if (!stored) stop();
 		const payload = stored.payload as DeliveryPayload;
@@ -268,7 +274,11 @@ export function createIssueDeliveryActions(options: IssueDeliveryActionOptions) 
 			payload.operationId !== operationId
 		)
 			stop();
-		await options.verifyAnswer(sessionId, payload, toolCallId);
+		if (authorization === undefined) await options.verifyAnswer(sessionId, payload, toolCallId);
+		else {
+			if (!options.authorize) stop("policy-authorization-unavailable");
+			await options.authorize(sessionId, payload, authorization);
+		}
 		const binding = await options.binding(sessionId);
 		if (binding.sessionId !== sessionId) stop("session-mismatch");
 		if (binding.stage !== (payload.sessionStage ?? "implementation")) stop("session-stage-changed");

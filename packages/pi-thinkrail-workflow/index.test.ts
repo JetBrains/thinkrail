@@ -103,6 +103,36 @@ describe("pi-thinkrail-workflow extension", () => {
 		expect(buildSystemPrompt(systemPromptOptions)).toEndWith(block);
 	});
 
+	test("routes Tomato Issue sessions through all lifecycle use cases", () => {
+		const skill = readFileSync(
+			new URL("./skills/tomato-issue-workflow/SKILL.md", import.meta.url),
+			"utf8",
+		);
+		const files = [
+			"issue-session.md",
+			"plan-and-targets.md",
+			"design-and-implementation.md",
+			"validation.md",
+			"draft-delivery.md",
+			"ready-and-merge.md",
+			"cross-repository.md",
+			"issue-acceptance-and-close.md",
+			"waiting-and-resume.md",
+			"refusals-and-recovery.md",
+			"stage-delivery-decoupling.md",
+		];
+		for (const file of files) {
+			const document = readFileSync(
+				new URL(`./skills/tomato-issue-workflow/${file}`, import.meta.url),
+				"utf8",
+			);
+			expect(skill).toContain(`\`${file}\``);
+			expect(document).toContain("## Handoff");
+		}
+		expect(skill).toContain("Stage records are not delivery gates");
+		expect(skill).toContain("Issue closure always needs its own authorization");
+	});
+
 	test("classifies every GitHub merge state before declaring a PR ready", () => {
 		const checks = readFileSync(
 			new URL("./skills/shipping-a-pr/checks.md", import.meta.url),

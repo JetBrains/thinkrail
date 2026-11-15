@@ -55,6 +55,7 @@ async function fixture() {
 	let createdOverrides: Partial<IssueMergeRequest> = {};
 	let race = false;
 	const effects: unknown[] = [];
+	const authorizations: unknown[] = [];
 	const request = (): IssueMergeRequest => ({
 		id: 91,
 		iid: 9,
@@ -82,6 +83,11 @@ async function fixture() {
 			sshUrlToRepo: null,
 		}),
 		issue: async () => structuredClone(issue),
+		closeIssue: async () => ({
+			...issue,
+			state: "closed" as const,
+			closedAt: "2026-11-13T00:00:00Z",
+		}),
 		issues: async () => [],
 		notes: async () => [],
 		addNote: async () => {
@@ -90,6 +96,22 @@ async function fixture() {
 		updateIssue: async () => {
 			throw new Error("Unexpected Issue update");
 		},
+		mergeRequest: async (iid) => {
+			const current = requests.find((item) => item.iid === iid);
+			if (!current) throw new Error("Missing request");
+			return structuredClone(current);
+		},
+		setMergeRequestReady: async (iid) => {
+			const current = requests.find((item) => item.iid === iid);
+			if (!current) throw new Error("Missing request");
+			return { ...current, draft: false };
+		},
+		mergeMergeRequest: async (iid) => {
+			const current = requests.find((item) => item.iid === iid);
+			if (!current) throw new Error("Missing request");
+			return { ...current, state: "merged" };
+		},
+		targetBranchSha: async () => "b".repeat(40),
 		mergeRequests: async () => structuredClone(requests),
 		createMergeRequest: async (input) => {
 			effects.push(input);
@@ -114,6 +136,9 @@ async function fixture() {
 		verifyAnswer: async (_sessionId, _payload: DeliveryPayload, toolCallId) => {
 			if (!answered || toolCallId !== "answer") throw new Error("Unverified answer");
 		},
+		authorize: async (_sessionId: string, _payload: DeliveryPayload, authorization: unknown) => {
+			authorizations.push(authorization);
+		},
 		journal,
 	});
 	const prepare = (targetBranch?: string) =>
@@ -129,6 +154,7 @@ async function fixture() {
 		journal,
 		prepare,
 		effects,
+		authorizations,
 		binding,
 		repository,
 		state,
@@ -669,4 +695,13 @@ test("warned delivery still freezes checkout SHA and branch", async () => {
 		await expect(f.actions.execute("session", "deliver", "answer")).rejects.toThrow();
 		expect(f.effects).toEqual([]);
 	}
+});
+
+test("delivery accepts only the host-provided policy authorization path", async () => {
+	const f = await fixture();
+	await f.prepare();
+	const authorization = { policyOperationId: "policy", payloadDigest: "digest" };
+	await f.actions.execute("session", "deliver", "policy-call", authorization);
+	expect(f.authorizations).toEqual([authorization]);
+	expect((await f.journal.inspect("session", "deliver")).status).toBe("completed");
 });

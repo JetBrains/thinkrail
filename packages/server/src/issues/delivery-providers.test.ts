@@ -128,6 +128,50 @@ describe("provider delivery primitives", () => {
 		expect(query.get("head")).toBe("octo:issue/7");
 	});
 
+	test("GitHub merge returns exact merge SHA and target ancestry evidence", async () => {
+		const mergedSha = "c".repeat(40);
+		let merged = false;
+		const { remote, calls } = fixture((url) => {
+			const parsed = new URL(url);
+			if (parsed.pathname === "/repositories/42") return Response.json(repository);
+			if (parsed.pathname === "/repositories/42/pulls/9")
+				return Response.json({
+					...pull,
+					state: merged ? "closed" : "open",
+					merged_at: merged ? "2026-01-01T00:00:00Z" : null,
+					merged,
+					merge_commit_sha: mergedSha,
+				});
+			if (parsed.pathname.endsWith("/merge")) {
+				merged = true;
+				return Response.json({ merged: true, message: "Merged" });
+			}
+			if (parsed.pathname.endsWith("/branches/main"))
+				return Response.json({
+					name: "main",
+					_links: { self: "https://api.github.com/repositories/42/branches/main" },
+					commit: { sha: "d".repeat(40) },
+				});
+			if (parsed.pathname.endsWith(`/compare/${mergedSha}...${"d".repeat(40)}`))
+				return Response.json({
+					status: "ahead",
+					base_commit: { sha: mergedSha },
+					merge_base_commit: { sha: mergedSha },
+					commits: [{ sha: mergedSha }],
+				});
+			throw new Error(`Unexpected ${url}`);
+		});
+		const result = await remote.mergeMergeRequest(9, "a".repeat(40));
+		expect(result.mergeCommitSha).toBe(mergedSha);
+		if (!remote.mergeEvidence) throw new Error("Missing merge evidence capability");
+		await expect(remote.mergeEvidence(9)).resolves.toMatchObject({
+			mergeCommitSha: mergedSha,
+			targetSha: "d".repeat(40),
+			relationship: "ancestor",
+		});
+		expect(calls.some((call) => call.url.includes("/compare/"))).toBe(true);
+	});
+
 	test("GitHub draft creation uses the native flag and validates the returned PR", async () => {
 		const { remote, calls } = fixture((url) =>
 			Response.json(url.endsWith("/repositories/42") ? repository : pull),
@@ -204,6 +248,41 @@ describe("provider delivery primitives", () => {
 			await unavailable(() => remote.createMergeRequest(input));
 			expect(calls.filter((call) => call.init.method === "POST")).toHaveLength(1);
 		}
+	});
+
+	test("GitLab merge verifies merge SHA ancestry against the bound target branch", async () => {
+		const mergedSha = "c".repeat(40);
+		const remote = createGitLabClient({
+			instanceUrl: "https://gitlab.test",
+			project: 42,
+			token,
+			fetch: async (url) => {
+				const path = new URL(url).pathname;
+				if (path.endsWith("/merge_requests/9/merge") || path.endsWith("/merge_requests/9"))
+					return Response.json({
+						id: 100,
+						iid: 9,
+						web_url: "https://gitlab.test/octo/app/-/merge_requests/9",
+						state: "merged",
+						source_branch: "issue/7",
+						target_branch: "main",
+						sha: "a".repeat(40),
+						merge_commit_sha: mergedSha,
+						merge_status: "can_be_merged",
+					});
+				if (path.endsWith("/repository/branches/main"))
+					return Response.json({ name: "main", commit: { id: "d".repeat(40) } });
+				if (path.endsWith("/repository/merge_base")) return Response.json({ id: mergedSha });
+				throw new Error(`Unexpected ${url}`);
+			},
+		});
+		await remote.mergeMergeRequest(9, "a".repeat(40));
+		if (!remote.mergeEvidence) throw new Error("Missing merge evidence capability");
+		await expect(remote.mergeEvidence(9)).resolves.toMatchObject({
+			mergeCommitSha: mergedSha,
+			targetSha: "d".repeat(40),
+			relationship: "ancestor",
+		});
 	});
 
 	test("GitLab draft creation uses the portable Draft title prefix", async () => {

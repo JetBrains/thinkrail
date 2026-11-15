@@ -45,7 +45,183 @@ async function sanitized(operation: () => Promise<unknown>) {
 	}
 }
 
+function pullRequest(overrides: Record<string, unknown> = {}) {
+	const head = {
+		ref: "feature/topic",
+		sha: "a".repeat(40),
+		repo: { id: 42, full_name: "octo/app" },
+	};
+	const base = { ref: "main", repo: { id: 42, full_name: "octo/app" } };
+	return {
+		id: 90,
+		number: 8,
+		html_url: "https://github.com/octo/app/pull/8",
+		state: "open",
+		title: "Change",
+		body: "Details",
+		draft: true,
+		merged: false,
+		mergeable_state: "clean",
+		merged_at: null,
+		merge_commit_sha: null,
+		head,
+		base,
+		...overrides,
+	};
+}
+
 describe("GitHub Issue reads", () => {
+	test("GitHub merge readiness binds GraphQL checks and review decision to REST head", async () => {
+		const { remote } = client((url) => {
+			const path = new URL(String(url)).pathname;
+			if (path === "/repos/octo/app") return Response.json(repository);
+			if (path === "/repos/octo/app/pulls/8") return Response.json(pullRequest({ draft: false }));
+			if (path === "/graphql")
+				return Response.json({
+					data: {
+						repository: {
+							pullRequest: {
+								number: 8,
+								headRefName: "feature/topic",
+								headRefOid: "a".repeat(40),
+								baseRefName: "main",
+								mergeStateStatus: "CLEAN",
+								reviewDecision: "APPROVED",
+								commits: {
+									nodes: [
+										{ commit: { oid: "a".repeat(40), statusCheckRollup: { state: "SUCCESS" } } },
+									],
+								},
+							},
+						},
+					},
+				});
+			throw new Error(`Unexpected ${path}`);
+		});
+		if (!remote.mergeReadiness) throw new Error("merge readiness unsupported");
+		await expect(remote.mergeReadiness(8, "a".repeat(40))).resolves.toMatchObject({
+			checks: "passed",
+			approval: "satisfied",
+			sourceBranch: "feature/topic",
+			targetBranch: "main",
+		});
+	});
+
+	test("GitHub null check and review evidence remains unknown", async () => {
+		const { remote } = client((url) => {
+			const path = new URL(String(url)).pathname;
+			if (path === "/repos/octo/app") return Response.json(repository);
+			if (path === "/repos/octo/app/pulls/8") return Response.json(pullRequest({ draft: false }));
+			if (path === "/graphql")
+				return Response.json({
+					data: {
+						repository: {
+							pullRequest: {
+								number: 8,
+								headRefName: "feature/topic",
+								headRefOid: "a".repeat(40),
+								baseRefName: "main",
+								mergeStateStatus: "UNKNOWN",
+								reviewDecision: null,
+								commits: { nodes: [{ commit: { oid: "a".repeat(40), statusCheckRollup: null } }] },
+							},
+						},
+					},
+				});
+			throw new Error(`Unexpected ${path}`);
+		});
+		if (!remote.mergeReadiness) throw new Error("merge readiness unsupported");
+		await expect(remote.mergeReadiness(8, "a".repeat(40))).resolves.toMatchObject({
+			checks: "unknown",
+			approval: "unknown",
+		});
+	});
+
+	test("marks a Draft PR ready without changing its source, target or head", async () => {
+		let reads = 0;
+		const { remote, calls } = client((url, init) => {
+			const path = new URL(String(url)).pathname;
+			if (path === "/repos/octo/app") return Response.json(repository);
+			if (path === "/repos/octo/app/pulls/8" && init.method === "GET") {
+				reads++;
+				return Response.json({
+					...pullRequest({ draft: reads > 1 ? false : true }),
+					node_id: "PR_node_8",
+				});
+			}
+			if (path === "/graphql")
+				return Response.json({
+					data: {
+						markPullRequestReadyForReview: { pullRequest: { id: "PR_node_8", isDraft: false } },
+					},
+				});
+			throw new Error(`Unexpected ${path} ${init.method}`);
+		});
+		await expect(remote.setMergeRequestReady(8)).resolves.toMatchObject({
+			iid: 8,
+			draft: false,
+			sourceBranch: "feature/topic",
+			targetBranch: "main",
+		});
+		expect(calls.find((call) => call.url.endsWith("/graphql"))?.init.method).toBe("POST");
+	});
+
+	test("merges only the frozen PR head and reads back the same source and target", async () => {
+		let readback = pullRequest({ state: "open", draft: false });
+		let mergeRequested = false;
+		const { remote } = client((_url, init) => {
+			const path = new URL(String(_url)).pathname;
+			if (path === "/repos/octo/app") return Response.json(repository);
+			if (path === "/repos/octo/app/pulls/8" && init.method === "GET") {
+				if (mergeRequested)
+					readback = pullRequest({
+						state: "closed",
+						draft: false,
+						merged: true,
+						merged_at: "2026-11-13T08:00:00Z",
+					});
+				return Response.json(readback);
+			}
+			if (path === "/repos/octo/app/pulls/8/merge") {
+				mergeRequested = true;
+				return Response.json({ merged: true, message: "Merged" });
+			}
+			if (path === "/repos/octo/app/branches/main")
+				return Response.json({
+					name: "main",
+					_links: { self: "https://api.github.com/repos/octo/app/branches/main" },
+					commit: { sha: "b".repeat(40) },
+				});
+			throw new Error(`Unexpected ${path} ${init.method}`);
+		});
+		const result = await remote.mergeMergeRequest(8, "a".repeat(40));
+		expect(result).toMatchObject({ state: "merged", sha: "a".repeat(40), targetBranch: "main" });
+		expect(await remote.targetBranchSha("main")).toBe("b".repeat(40));
+		readback = pullRequest({
+			...readback,
+			base: { ref: "release", repo: { id: 42, full_name: "octo/app" } },
+		});
+		await sanitized(() => remote.mergeMergeRequest(8, "a".repeat(40)));
+	});
+
+	test("closes an Issue once and reads back its closed timestamp", async () => {
+		const { remote, calls } = client(() =>
+			Response.json({
+				...issuePayload,
+				state: "closed",
+				closed_at: "2026-11-13T08:00:00Z",
+			}),
+		);
+		await expect(remote.closeIssue(7)).resolves.toMatchObject({
+			state: "closed",
+			closedAt: "2026-11-13T08:00:00Z",
+		});
+		expect(calls).toHaveLength(1);
+		expect(calls[0]?.init).toMatchObject({
+			method: "PATCH",
+			body: JSON.stringify({ state: "closed" }),
+		});
+	});
 	test("associating reads the repository and keeps its clone facts", async () => {
 		const { remote, calls } = client(() => Response.json(repository));
 		expect(await remote.project()).toEqual({
@@ -105,6 +281,7 @@ describe("GitHub Issue reads", () => {
 				state: "opened",
 				labels: ["workflow::in-progress", "type::bug"],
 				updatedAt: "2026-01-01T00:00:00Z",
+				closedAt: null,
 			},
 			{
 				iid: 8,
@@ -113,6 +290,7 @@ describe("GitHub Issue reads", () => {
 				state: "closed",
 				labels: ["workflow::in-progress", "type::bug"],
 				updatedAt: "2026-01-01T00:00:00Z",
+				closedAt: null,
 			},
 		]);
 	});

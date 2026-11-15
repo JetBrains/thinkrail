@@ -290,6 +290,13 @@ export function createIssueContinuations(options: IssueContinuationOptions) {
 		} catch (error) {
 			failure = error;
 		}
+		if (
+			failure instanceof CodedError &&
+			failure.code === "ISSUE_CONFIRMATION_BLOCKED" &&
+			"reason" in failure &&
+			failure.reason === "confirmation_mismatch"
+		)
+			throw failure;
 		return offer(sessionId, operationId, phase, input, attempt, failure);
 	}
 	return {

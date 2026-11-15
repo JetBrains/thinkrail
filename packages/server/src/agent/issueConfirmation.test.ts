@@ -53,6 +53,22 @@ test("rejects altered, ambiguous, unsuccessful, pending, or superseded receipts"
 	expect(valid(call(), receipt(), receipt())).toBe(false);
 	expect(valid(call(), receipt(), call())).toBe(false);
 	expect(
+		valid(
+			{
+				role: "assistant",
+				stopReason: "toolUse",
+				content: [{ type: "toolCall", id: "historical-read", name: "read", arguments: {} }],
+			},
+			{
+				role: "assistant",
+				stopReason: "toolUse",
+				content: [{ type: "toolCall", id: "historical-read", name: "read", arguments: {} }],
+			},
+			call(),
+			receipt(),
+		),
+	).toBe(false);
+	expect(
 		valid(call(), {
 			...receipt(),
 			details: { ...result, answers: [{ ...result.answers[0], notes: "extra" }] },

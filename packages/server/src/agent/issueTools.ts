@@ -67,6 +67,24 @@ export interface IssueToolHost {
 			title?: string;
 			body?: string;
 			targetBranch?: string;
+			action?:
+				| "update-body"
+				| "close-issue"
+				| "ready-mr"
+				| "merge-mr"
+				| "record-delivery-state"
+				| "read-delivery-state"
+				| "authorize-automation"
+				| "advance-automation"
+				| "preflight-dependencies";
+			reason?: string;
+			acceptance?: string;
+			mergeRequestId?: number;
+			expectedSha?: string;
+			expectedRevision?: number;
+			deliveryState?: unknown;
+			mode?: "draft" | "auto-merge" | "manual";
+			closeIssue?: boolean;
 		},
 	): Promise<unknown>;
 	executeConfirmation?(
@@ -263,6 +281,29 @@ const PrepareConfirmationSchema = Type.Object(
 			maxLength: 128,
 			pattern: "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
 		}),
+		action: Type.Optional(
+			Type.Union([
+				Type.Literal("update-body"),
+				Type.Literal("close-issue"),
+				Type.Literal("ready-mr"),
+				Type.Literal("merge-mr"),
+				Type.Literal("record-delivery-state"),
+				Type.Literal("read-delivery-state"),
+				Type.Literal("authorize-automation"),
+				Type.Literal("advance-automation"),
+				Type.Literal("preflight-dependencies"),
+			]),
+		),
+		mode: Type.Optional(
+			Type.Union([Type.Literal("draft"), Type.Literal("auto-merge"), Type.Literal("manual")]),
+		),
+		closeIssue: Type.Optional(Type.Boolean()),
+		mergeRequestId: Type.Optional(Type.Integer({ minimum: 1 })),
+		expectedRevision: Type.Optional(Type.Integer({ minimum: 0 })),
+		deliveryState: Type.Optional(Type.Unknown()),
+		expectedSha: Type.Optional(Type.String({ pattern: "^[a-fA-F0-9]{40}$" })),
+		reason: Type.Optional(Type.String({ minLength: 1, maxLength: 8000 })),
+		acceptance: Type.Optional(Type.String({ minLength: 1, maxLength: 8000 })),
 		inspect: Type.Optional(Type.Boolean()),
 		continueDespiteChecks: Type.Optional(Type.Boolean()),
 		recovery: Type.Optional(Type.Literal("reconcile")),
@@ -291,7 +332,7 @@ export function createIssuePrepareConfirmationTool(): ToolDefinition<
 		label: "Prepare Issue Confirmation",
 		parameters: PrepareConfirmationSchema,
 		description:
-			"Prepare a fixed Issue stage report (report) or per-repository delivery (projectId, title, body, optional targetBranch). Returns exact questions to pass unchanged to ask_user_question. Use inspect:true with only operationId to read frozen questions, completion or uncertain status without mutation. Use recovery:'reconcile' with only the original operationId to prepare a card adopting an observed remote result; the real answer must confirm the original request/process ended. Recovery does not resend. Use continueDespiteChecks:true to request an explicit warned one-shot exception card for failed policy checks; the flag is not authorization. Preparation authorizes no writes. Never change the preview. Skip/Discuss/Other does not authorize execution. If unavailable, stop; never bypass through shell.",
+			"Record/read structured per-repository delivery state; authorize and advance per-repository lifecycle policies using action:'authorize-automation' and action:'advance-automation' with the same operationId/projectId. Before changing a downstream pairing, call action:'preflight-dependencies' with its projectId; this reads exact upstream merged requests and target SHAs. It blocks when host-verified API/ABI/protocol compatibility evidence is unavailable—do not substitute independent CI. Policy advancement also requires host-observed validation evidence bound to the exact SHA/tree/target; agent-reported validation never qualifies. Other actions independently confirm MR ready/merge, Issue close, body replacement, stage report and Draft delivery. Pass returned confirmation questions unchanged to ask_user_question. inspect:true and dependency preflight are read-only. Never bypass host operations through shell.",
 		async execute(_id, params, _signal, _update, ctx) {
 			if (!host.prepareConfirmation) throw unavailable();
 			const result = await host.prepareConfirmation(ctx.sessionManager.getSessionId(), params);

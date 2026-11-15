@@ -3,6 +3,8 @@ import { CodedError } from "@thinkrail/shared/codedError";
 import { logger } from "../log";
 import type {
 	IssueDeliveryRemote,
+	IssueMergeEvidence,
+	IssueMergeReadiness,
 	IssueMergeRequest,
 	IssueMergeRequestInput,
 	IssueNote,
@@ -119,6 +121,7 @@ function issue(value: unknown): IssueRecord | null {
 		state: v.state === "open" ? "opened" : "closed",
 		...labels(v.labels),
 		updatedAt: timestamp(v.updated_at),
+		closedAt: v.closed_at == null ? null : timestamp(v.closed_at),
 	};
 }
 function note(value: unknown): IssueNote {
@@ -177,7 +180,7 @@ function pullRequest(
 	const sourceBranch = branchName(head.ref);
 	const targetBranch = branchName(base.ref);
 	if (
-		sourceBranch !== source ||
+		(source !== "" && sourceBranch !== source) ||
 		(target !== undefined && targetBranch !== target) ||
 		positive(sourceRepo.id) !== project.id ||
 		positive(targetRepo.id) !== project.id ||
@@ -239,7 +242,7 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 	async function request(
 		path: string,
 		deadline: number,
-		write?: { method: "POST" | "PATCH"; body: Record<string, unknown> },
+		write?: { method: "POST" | "PATCH" | "PUT"; body: Record<string, unknown> },
 	): Promise<{ value: unknown; next: string | null }> {
 		if (path.includes(token) || path.includes(encodedToken)) invalid();
 		const payload = write && { body: JSON.stringify(write.body) };
@@ -396,6 +399,257 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 	return {
 		provider: "github",
 		project,
+		mergeReadiness: async (iid, expectedSha): Promise<IssueMergeReadiness> => {
+			positive(iid);
+			const expected = sha(expectedSha);
+			if (!expected) invalid();
+			return delivery(async () => {
+				const verified = await project();
+				const before = await decoded(`${base}/pulls/${iid}`, (value) =>
+					pullRequest(value, verified, ""),
+				);
+				if (before.iid !== iid || before.sha !== expected) invalid();
+				const query = `query { repository(owner: "${verified.pathWithNamespace.split("/")[0]}", name: "${verified.pathWithNamespace.split("/")[1]}") { pullRequest(number: ${iid}) { number headRefName headRefOid baseRefName mergeStateStatus reviewDecision commits(last: 1) { nodes { commit { oid statusCheckRollup { state } } } } } } }`;
+				const response = record(
+					(await request("/graphql", Date.now() + timeoutMs, { method: "POST", body: { query } }))
+						.value,
+				);
+				if (response.errors !== undefined) invalid();
+				const data = record(response.data);
+				const repositoryData = record(data.repository);
+				const pr = record(repositoryData.pullRequest);
+				const head = sha(pr.headRefOid);
+				if (
+					pr.number !== iid ||
+					pr.headRefName !== before.sourceBranch ||
+					head !== expected ||
+					pr.baseRefName !== before.targetBranch
+				)
+					invalid();
+				let checks: IssueMergeReadiness["checks"] = "unknown";
+				let approval: IssueMergeReadiness["approval"] = "unknown";
+				if (head === expected && pr.baseRefName === before.targetBranch) {
+					const commits = record(pr.commits);
+					if (Array.isArray(commits.nodes) && commits.nodes.length === 1) {
+						const commit = record(record(commits.nodes[0]).commit);
+						if (commit.oid !== expected) invalid();
+						const rollup =
+							commit.statusCheckRollup == null ? null : record(commit.statusCheckRollup);
+						if (rollup)
+							checks =
+								rollup.state === "SUCCESS"
+									? "passed"
+									: rollup.state === "PENDING"
+										? "pending"
+										: ["FAILURE", "ERROR"].includes(String(rollup.state))
+											? "failed"
+											: "unknown";
+					}
+				}
+				if (pr.reviewDecision === "APPROVED") approval = "satisfied";
+				else if (
+					pr.reviewDecision === "REVIEW_REQUIRED" ||
+					pr.reviewDecision === "CHANGES_REQUESTED"
+				)
+					approval = "required";
+				const after = await decoded(`${base}/pulls/${iid}`, (value) =>
+					pullRequest(value, verified, ""),
+				);
+				if (JSON.stringify(before) !== JSON.stringify(after)) invalid();
+				return {
+					iid,
+					expectedSha: expected,
+					actualSha: before.sha,
+					sourceBranch: before.sourceBranch,
+					targetBranch: before.targetBranch,
+					checks,
+					approval,
+					snapshot: JSON.stringify([
+						before.id,
+						before.iid,
+						before.sha,
+						before.sourceBranch,
+						before.targetBranch,
+						pr.reviewDecision ?? null,
+						pr.mergeStateStatus ?? null,
+						checks,
+						approval,
+					]),
+				};
+			});
+		},
+		mergeRequest: async (iid) => {
+			positive(iid);
+			return delivery(async () => {
+				const verified = await project();
+				return decoded(`${base}/pulls/${iid}`, (value) => {
+					const head = record(record(value).head);
+					return pullRequest(value, verified, branchName(head.ref));
+				});
+			});
+		},
+		setMergeRequestReady: async (iid) => {
+			positive(iid);
+			return delivery(async () => {
+				const verified = await project();
+				let nodeId = "";
+				const current = await decoded(`${base}/pulls/${iid}`, (value) => {
+					const response = record(value);
+					nodeId = identifier(response.node_id);
+					return pullRequest(response, verified, "", undefined);
+				});
+				if (current.iid !== iid || current.state !== "opened" || current.draft !== true) invalid();
+				const response = await request("/graphql", Date.now() + timeoutMs, {
+					method: "POST",
+					body: {
+						query:
+							"mutation($pullRequestId: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $pullRequestId }) { pullRequest { id isDraft } } }",
+						variables: { pullRequestId: nodeId },
+					},
+				});
+				const root = record(response.value);
+				if (root.errors !== undefined) invalid();
+				const data = record(root.data);
+				const mutation = record(data.markPullRequestReadyForReview);
+				const ready = record(mutation.pullRequest);
+				if (ready.id !== nodeId || ready.isDraft !== false) invalid();
+				const result = await decoded(`${base}/pulls/${iid}`, (value) =>
+					pullRequest(value, verified, current.sourceBranch, current.targetBranch),
+				);
+				if (result.iid !== iid || result.draft !== false || result.sha !== current.sha) invalid();
+				return result;
+			});
+		},
+		mergeEvidence: async (iid): Promise<IssueMergeEvidence> => {
+			positive(iid);
+			return delivery(async () => {
+				const verified = await project();
+				const pr = await decoded(`${base}/pulls/${iid}`, (value) =>
+					pullRequest(value, verified, ""),
+				);
+				const targetSha = await decoded(
+					`${base}/branches/${encodeURIComponent(pr.targetBranch)}`,
+					(value) => {
+						const result = record(value);
+						if (branchName(result.name) !== pr.targetBranch) invalid();
+						const self = new URL(text(record(result._links).self));
+						if (
+							self.origin !== API_ROOT ||
+							self.search ||
+							self.hash ||
+							![
+								`${base}/branches/${encodeURIComponent(pr.targetBranch)}`,
+								`/repos/${verified.pathWithNamespace}/branches/${encodeURIComponent(pr.targetBranch)}`,
+							].includes(self.pathname)
+						)
+							invalid();
+						const resultSha = sha(record(result.commit).sha);
+						if (!resultSha) invalid();
+						return resultSha;
+					},
+				);
+				let relationship: IssueMergeEvidence["relationship"] = "unknown";
+				if (pr.mergeCommitSha) {
+					try {
+						const compare = record(
+							(
+								await request(
+									`${base}/compare/${encodeURIComponent(pr.mergeCommitSha)}...${encodeURIComponent(targetSha)}`,
+									Date.now() + timeoutMs,
+								)
+							).value,
+						);
+						if (sha(record(compare.base_commit).sha) !== pr.mergeCommitSha) invalid();
+						const common = sha(record(compare.merge_base_commit).sha);
+						if (common) relationship = common === pr.mergeCommitSha ? "ancestor" : "not-ancestor";
+					} catch {
+						// Missing or malformed comparison remains unknown.
+					}
+				}
+				return {
+					iid,
+					targetBranch: pr.targetBranch,
+					mergeCommitSha: pr.mergeCommitSha,
+					targetSha,
+					relationship,
+					snapshot: JSON.stringify([
+						pr.id,
+						pr.iid,
+						pr.targetBranch,
+						pr.mergeCommitSha,
+						targetSha,
+						relationship,
+					]),
+				};
+			});
+		},
+		mergeMergeRequest: async (iid, shaValue) => {
+			positive(iid);
+			const expectedSha = sha(shaValue);
+			if (!expectedSha) invalid();
+			return delivery(async () => {
+				const verified = await project();
+				const current = await decoded(`${base}/pulls/${iid}`, (value) => {
+					const v = record(value);
+					const head = record(v.head);
+					return pullRequest(value, verified, branchName(head.ref));
+				});
+				if (current.iid !== iid || current.state !== "opened" || current.sha !== expectedSha)
+					invalid();
+				const response = await request(`${base}/pulls/${iid}/merge`, Date.now() + timeoutMs, {
+					method: "PUT",
+					body: { sha: expectedSha },
+				});
+				const result = record(response.value);
+				if (result.merged !== true || typeof result.message !== "string") invalid();
+				const pr = await decoded(`${base}/pulls/${iid}`, (value) =>
+					pullRequest(value, verified, current.sourceBranch, current.targetBranch),
+				);
+				if (pr.iid !== iid || pr.state !== "merged" || pr.sha !== expectedSha) invalid();
+				return pr;
+			});
+		},
+		targetBranchSha: async (branch) => {
+			const target = branchName(branch);
+			return delivery(async () => {
+				const verified = await project();
+				const response = await request(
+					`${base}/branches/${encodeURIComponent(target)}`,
+					Date.now() + timeoutMs,
+				);
+				const result = record(response.value);
+				const commit = record(result.commit);
+				const returnedBranch = branchName(result.name);
+				const self = new URL(text(record(result._links).self));
+				const canonicalRepoPath = `/repos/${verified.pathWithNamespace}`;
+				const branchSuffix = `/branches/${encodeURIComponent(target)}`;
+				if (
+					returnedBranch !== target ||
+					self.origin !== API_ROOT ||
+					(self.pathname !== `${base}${branchSuffix}` &&
+						self.pathname !== `${canonicalRepoPath}${branchSuffix}`) ||
+					self.search ||
+					self.hash ||
+					!verified.pathWithNamespace
+				)
+					invalid();
+				const resultSha = sha(commit.sha);
+				if (!resultSha) invalid();
+				return resultSha;
+			});
+		},
+		closeIssue: async (iid) => {
+			positive(iid);
+			return delivery(async () => {
+				const response = await request(`${base}/issues/${iid}`, Date.now() + timeoutMs, {
+					method: "PATCH",
+					body: { state: "closed" },
+				});
+				const result = issue(response.value);
+				if (!result || result.iid !== iid || result.state !== "closed") invalid();
+				return result;
+			});
+		},
 		updateIssue: async (iid, input) => {
 			positive(iid);
 			record(input);

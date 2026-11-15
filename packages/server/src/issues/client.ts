@@ -3,6 +3,8 @@ import { logger } from "../log";
 import type {
 	IssueLabelEvent,
 	IssueMember,
+	IssueMergeEvidence,
+	IssueMergeReadiness,
 	IssueMergeRequest,
 	IssueMergeRequestInput,
 	IssueNote,
@@ -64,6 +66,9 @@ function timestamp(value: unknown): string {
 	if (!Number.isFinite(Date.parse(result))) invalid();
 	return result;
 }
+function nullableTimestamp(value: unknown): string | null {
+	return value == null ? null : timestamp(value);
+}
 function issue(value: unknown): GitLabIssue {
 	const v = record(value);
 	if (!Array.isArray(v.labels) || (v.state !== "opened" && v.state !== "closed")) invalid();
@@ -90,6 +95,7 @@ function issue(value: unknown): GitLabIssue {
 		labels,
 		...(labelColors.length ? { labelColors } : {}),
 		updatedAt: timestamp(v.updated_at),
+		closedAt: nullableTimestamp(v.closed_at),
 	};
 }
 function identifier(value: unknown): string {
@@ -450,11 +456,144 @@ export function createGitLabClient(options: GitLabClientOptions): GitLabClient {
 		},
 		mergeRequest: async (iid) =>
 			decoded(`/merge_requests/${positive(iid)}`, matchingIid(mergeRequest, iid)),
-		mergeMergeRequest: async (iid, sha) =>
-			decoded(`/merge_requests/${positive(iid)}/merge`, matchingIid(mergeRequest, iid), {
+		mergeReadiness: async (iid, expectedSha): Promise<IssueMergeReadiness> => {
+			const mrId = positive(iid);
+			const expected = commitSha(expectedSha);
+			const before = await decoded(`/merge_requests/${mrId}`, matchingIid(mergeRequest, mrId));
+			let checks: IssueMergeReadiness["checks"] = "unknown";
+			let approval: IssueMergeReadiness["approval"] = "unknown";
+			let approvalFacts: unknown = null;
+			if (before.sha !== expected) throw unavailable();
+			try {
+				approvalFacts = await decoded(`/merge_requests/${mrId}/approvals`, (value) => {
+					const facts = record(value);
+					if (facts.iid !== undefined && facts.iid !== mrId) invalid();
+					if (facts.id !== undefined && facts.id !== before.id) invalid();
+					return facts;
+				});
+				const facts = record(approvalFacts);
+				if (
+					typeof facts.approvals_left === "number" &&
+					Number.isSafeInteger(facts.approvals_left) &&
+					facts.approvals_left >= 0
+				) {
+					approval = facts.approvals_left === 0 ? "satisfied" : "required";
+				}
+			} catch {
+				// CE, permissions and older servers may not expose approval policy.
+				approval = "unknown";
+			}
+			if (before.sha === expected && before.headPipeline?.sha === expected) {
+				const pipelineStatus = before.headPipeline.status.toLowerCase();
+				checks =
+					pipelineStatus === "success"
+						? "passed"
+						: ["failed", "canceled", "skipped"].includes(pipelineStatus)
+							? "failed"
+							: [
+										"pending",
+										"running",
+										"created",
+										"preparing",
+										"waiting_for_resource",
+										"scheduled",
+									].includes(pipelineStatus)
+								? "pending"
+								: "unknown";
+			}
+			const after = await decoded(`/merge_requests/${mrId}`, matchingIid(mergeRequest, mrId));
+			if (JSON.stringify(before) !== JSON.stringify(after)) throw unavailable();
+			return {
+				iid: mrId,
+				expectedSha: expected,
+				actualSha: before.sha,
+				sourceBranch: before.sourceBranch,
+				targetBranch: before.targetBranch,
+				checks,
+				approval,
+				snapshot: JSON.stringify([before, checks, approval]),
+			};
+		},
+
+		setMergeRequestReady: async (iid) => {
+			const id = positive(iid);
+			const current = await decoded(`/merge_requests/${id}`, matchingIid(mergeRequest, id));
+			if (current.state !== "opened" || current.draft !== true) invalid();
+			const detail = record((await request(`/merge_requests/${id}`, Date.now() + timeoutMs)).value);
+			const title = identifier(detail.title);
+			const readyTitle = title.replace(/^(?:Draft|WIP):\s*/i, "");
+			if (!readyTitle || readyTitle === title) invalid();
+			const updated = await decoded(`/merge_requests/${id}`, matchingIid(mergeRequest, id), {
 				method: "PUT",
-				body: { sha: commitSha(sha) },
-			}),
+				body: { title: readyTitle },
+			});
+			if (updated.sha !== current.sha) invalid();
+			return updated;
+		},
+		mergeEvidence: async (iid): Promise<IssueMergeEvidence> => {
+			const mrId = positive(iid);
+			const mr = await decoded(`/merge_requests/${mrId}`, matchingIid(mergeRequest, mrId));
+			const targetSha = await decoded(
+				`/repository/branches/${encodeURIComponent(mr.targetBranch)}`,
+				(value) => {
+					const branch = record(value);
+					if (branch.name !== mr.targetBranch) invalid();
+					return commitSha(record(branch.commit).id);
+				},
+			);
+			let relationship: IssueMergeEvidence["relationship"] = "unknown";
+			if (mr.mergeCommitSha) {
+				try {
+					const common = await decoded(
+						`/repository/merge_base?refs[]=${encodeURIComponent(mr.mergeCommitSha)}&refs[]=${encodeURIComponent(targetSha)}`,
+						(value) => commitSha(record(value).id),
+					);
+					relationship = common === mr.mergeCommitSha ? "ancestor" : "not-ancestor";
+				} catch {
+					// Unavailable ancestry is not negative proof.
+				}
+			}
+			return {
+				iid: mrId,
+				targetBranch: mr.targetBranch,
+				mergeCommitSha: mr.mergeCommitSha,
+				targetSha,
+				relationship,
+				snapshot: JSON.stringify([
+					mr.id,
+					mr.iid,
+					mr.targetBranch,
+					mr.mergeCommitSha,
+					targetSha,
+					relationship,
+				]),
+			};
+		},
+		mergeMergeRequest: async (iid, sha) => {
+			const id = positive(iid);
+			const expectedSha = commitSha(sha);
+			const response = await decoded(`/merge_requests/${id}/merge`, matchingIid(mergeRequest, id), {
+				method: "PUT",
+				body: { sha: expectedSha },
+			});
+			const merged = await decoded(`/merge_requests/${id}`, matchingIid(mergeRequest, id));
+			if (
+				response.state !== "merged" ||
+				response.sha !== expectedSha ||
+				merged.state !== "merged" ||
+				merged.sha !== expectedSha
+			)
+				invalid();
+			return merged;
+		},
+		targetBranchSha: async (branch) => {
+			const name = branchName(branch);
+			return decoded(`/repository/branches/${encodeURIComponent(name)}`, (value) => {
+				const result = record(value);
+				if (result.name !== name) invalid();
+				return commitSha(record(result.commit).id);
+			});
+		},
 		closeIssue: async (iid) =>
 			decoded(`/issues/${positive(iid)}`, matchingIid(issue, iid), {
 				method: "PUT",

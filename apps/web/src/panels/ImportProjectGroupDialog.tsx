@@ -18,7 +18,7 @@ import { useState } from "react";
 import { errorText, getTransport } from "../transport";
 
 const FIELD_CLASS =
-	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active disabled:text-control-disabled-text";
+	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:focus-ring focus-visible:border-control-border-active disabled:text-control-disabled-text";
 
 /** Confirms the repositories a folder scan found and imports the kept ones as one project group. */
 export function ImportProjectGroupDialog({

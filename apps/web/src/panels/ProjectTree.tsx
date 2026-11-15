@@ -113,6 +113,7 @@ import {
 } from "./settledShelfNotice";
 import { startProjectSetupChat } from "./setupPrompt";
 import {
+	focusTreeItemOnMenuClose,
 	Tree,
 	treeRowControlProps,
 	treeRowKey,
@@ -906,7 +907,10 @@ function ProjectRow({
 						aria-label={t("panels.projectTree.projectName")}
 						defaultValue={project.name}
 						{...renameInputProps}
-						className={cn("w-full min-w-0 border-0 bg-transparent p-0 outline-none", nameClass)}
+						className={cn(
+							"w-full min-w-0 border-0 bg-transparent p-0 focus-visible:focus-ring",
+							nameClass,
+						)}
 					/>
 				</div>
 			) : (
@@ -1253,6 +1257,7 @@ function WorkspaceRow({
 			</span>
 		) : null;
 	const displayName = workspaceName(t, workspace);
+	const rowRef = useRef<HTMLFieldSetElement>(null);
 	const [menuOpen, setMenuOpen] = useState(false);
 	const openMenuFromContext = (event: MouseEvent) => {
 		event.preventDefault();
@@ -1270,6 +1275,10 @@ function WorkspaceRow({
 		canRename,
 		onRename: (_target, name) => onRename(name),
 	});
+	const restoreMenuFocus = (event: Event) => {
+		focusTreeItemOnMenuClose(event, rowRef.current);
+		onMenuCloseAutoFocus(event);
+	};
 
 	const identityClass = `flex min-w-0 flex-1 gap-4 text-left ${isTwoLine ? "items-start" : "items-center"}`;
 	const identityIcon = isRunning ? (
@@ -1338,6 +1347,7 @@ function WorkspaceRow({
 	return (
 		<li>
 			<fieldset
+				ref={rowRef}
 				aria-label={displayName}
 				data-testid="workspace-item"
 				data-focus-row={workspace.id}
@@ -1366,7 +1376,7 @@ function WorkspaceRow({
 								aria-label={t("panels.projectTree.workspaceName")}
 								defaultValue={workspace.name}
 								{...renameInputProps}
-								className={`w-full min-w-0 truncate border-0 bg-transparent p-0 tr-text-ui leading-tight outline-none ${isActive ? "text-primary" : "text-text-muted"}`}
+								className={`w-full min-w-0 truncate border-0 bg-transparent p-0 tr-text-ui leading-tight focus-visible:focus-ring ${isActive ? "text-primary" : "text-text-muted"}`}
 							/>
 							{branchLabel}
 						</span>
@@ -1431,7 +1441,7 @@ function WorkspaceRow({
 							align="end"
 							data-testid="workspace-actions"
 							{...treeRowControlProps}
-							onCloseAutoFocus={onMenuCloseAutoFocus}
+							onCloseAutoFocus={restoreMenuFocus}
 						>
 							{editors.length > 0 && (
 								<DropdownMenuSub>

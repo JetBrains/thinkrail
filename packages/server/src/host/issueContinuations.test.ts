@@ -125,6 +125,29 @@ test("delegates the exact frozen questions and real tool id; rejected receipts d
 	expect(calls).toBe(2);
 });
 
+test("receipt mismatch never offers a continuation for the same rejected authorization", async () => {
+	const service = host();
+	const error = Object.assign(
+		new CodedError("ISSUE_CONFIRMATION_BLOCKED", "Receipt does not match the frozen card."),
+		{ reason: "confirmation_mismatch" },
+	);
+	let attempts = 0;
+	await expect(
+		card(service, async () => {
+			attempts++;
+			throw error;
+		}),
+	).rejects.toBe(error);
+	expect(attempts).toBe(1);
+	const blocked = await card(service, async (continued) => {
+		if (!continued) throw refusal();
+		throw error;
+	});
+	await expect(
+		service.execute("session", "operation", blocked.continuationId, "real-receipt"),
+	).rejects.toBe(error);
+});
+
 test("sanitizes every thrown failure and recognized code without echoing messages", async () => {
 	const service = host();
 	for (const error of [

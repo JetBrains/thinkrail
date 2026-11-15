@@ -36,16 +36,20 @@ describe("GitLab provider mutations and MR reads", () => {
 		const api = client(async (url, init) => {
 			expect(url).not.toContain(token);
 			expect(new Headers(init.headers).get("PRIVATE-TOKEN")).toBe(token);
-			expect(new Headers(init.headers).get("Content-Type")).toBe("application/json");
+			expect(new Headers(init.headers).get("Content-Type")).toBe(
+				init.body === undefined ? null : "application/json",
+			);
 			expect(init.redirect).toBe("error");
 			calls.push({
 				path: new URL(url).pathname,
 				method: init.method,
-				body: JSON.parse(String(init.body)),
+				body: init.body === undefined ? undefined : JSON.parse(String(init.body)),
 			});
 			if (url.endsWith("/notes"))
 				return Response.json({ id: 12, body: "handoff", created_at: issue.updated_at });
-			if (url.endsWith("/merge")) return Response.json({ ...mr, state: "merged" });
+			if (url.endsWith("/merge")) return Response.json({ ...mr, iid: 8, state: "merged", sha });
+			if (url.endsWith("/merge_requests/8") && !init.method)
+				return Response.json({ ...mr, state: "merged" });
 			if (String(init.body).includes("state_event"))
 				return Response.json({ ...issue, state: "closed" });
 			return Response.json(url.includes("merge_requests") ? mr : issue);
@@ -98,6 +102,11 @@ describe("GitLab provider mutations and MR reads", () => {
 				body: { sha },
 			},
 			{
+				path: "/sub/api/v4/projects/group%2Frepo/merge_requests/8",
+				method: undefined,
+				body: undefined,
+			},
+			{
 				path: "/sub/api/v4/projects/group%2Frepo/issues/7",
 				method: "PUT",
 				body: { state_event: "close" },
@@ -145,6 +154,96 @@ describe("GitLab provider mutations and MR reads", () => {
 		expect(bodies).toEqual([{ description: "" }, { labels: "" }]);
 		await expect(api.updateIssue(7, {})).rejects.toHaveProperty("code", "RANGE_INVALID");
 		expect(bodies).toHaveLength(2);
+	});
+
+	test("merge readiness is bound to the expected head and repeated MR snapshot", async () => {
+		let reads = 0;
+		const api = client(async (url) => {
+			if (String(url).endsWith("/approvals")) return Response.json({ iid: 8, approvals_left: 0 });
+			reads++;
+			return Response.json({
+				...mr,
+				iid: 8,
+				sha: sha,
+				head_pipeline: { id: 99, sha, status: "success" },
+			});
+		});
+		if (!api.mergeReadiness) throw new Error("merge readiness unsupported");
+		await expect(api.mergeReadiness(8, sha)).resolves.toMatchObject({
+			iid: 8,
+			expectedSha: sha,
+			actualSha: sha,
+			checks: "passed",
+			approval: "satisfied",
+		});
+		expect(reads).toBe(2);
+	});
+
+	test("merge readiness remains unknown without exact pipeline and approval evidence", async () => {
+		const api = client(async (url) => {
+			if (String(url).endsWith("/approvals")) return Response.json({});
+			return Response.json({
+				...mr,
+				iid: 8,
+				sha: sha,
+				head_pipeline: { status: "success", sha: null },
+			});
+		});
+		if (!api.mergeReadiness) throw new Error("merge readiness unsupported");
+		await expect(api.mergeReadiness(8, sha)).resolves.toMatchObject({
+			checks: "unknown",
+			approval: "unknown",
+		});
+	});
+
+	test("marks a Draft MR ready and verifies the fresh MR identity", async () => {
+		const calls: { path: string; init: RequestInit }[] = [];
+		const api = client(async (path, init) => {
+			calls.push({ path, init });
+			if (path.endsWith("/merge_requests/7") && init.method !== "PUT")
+				return Response.json({ ...mr, iid: 7, title: "Draft: Feature", draft: true });
+			if (path.endsWith("/merge_requests/7") && init.method === "PUT")
+				return Response.json({ ...mr, iid: 7, title: "Feature", draft: false });
+			throw new Error(`Unexpected ${init.method} ${path}`);
+		});
+		await expect(api.setMergeRequestReady(7)).resolves.toMatchObject({
+			iid: 7,
+			draft: false,
+			sha: "a".repeat(40),
+		});
+		expect(calls.map(({ init }) => init.method ?? "GET")).toEqual(["GET", "GET", "PUT"]);
+	});
+
+	test("merge endpoint acknowledgement is followed by fresh merge request readback", async () => {
+		const calls: { path: string; init: RequestInit }[] = [];
+		const api = client(async (path, init) => {
+			calls.push({ path, init });
+			if (path.endsWith("/merge_requests/7/merge"))
+				return Response.json({ ...mr, iid: 7, state: "merged", sha: "a".repeat(40) });
+			if (path.endsWith("/merge_requests/7"))
+				return Response.json({ ...mr, iid: 7, state: "merged" });
+			throw new Error(`Unexpected ${init.method} ${path}`);
+		});
+		await expect(api.mergeMergeRequest(7, "a".repeat(40))).resolves.toMatchObject({
+			state: "merged",
+			sha: "a".repeat(40),
+		});
+		expect(calls.map(({ path }) => new URL(path).pathname)).toEqual([
+			"/sub/api/v4/projects/group%2Frepo/merge_requests/7/merge",
+			"/sub/api/v4/projects/group%2Frepo/merge_requests/7",
+		]);
+	});
+
+	test("reads a target branch SHA from the verified project branch endpoint", async () => {
+		const api = client(async (path) => {
+			if (
+				new URL(path).pathname ===
+				"/sub/api/v4/projects/group%2Frepo/repository/branches/release%2F2"
+			)
+				return Response.json({ name: "release/2", commit: { id: "b".repeat(40) } });
+			throw new Error(`Unexpected ${path}`);
+		});
+		await expect(api.targetBranchSha("release/2")).resolves.toBe("b".repeat(40));
 	});
 
 	test("reads paginated source-branch MRs and fresh MR detail with nullable pipeline", async () => {

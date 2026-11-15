@@ -1058,10 +1058,14 @@ re-opened transcripts provider-valid.
     `ISSUE_SUMMARY_RECOVERY_REQUIRED` retains a static actionable message. Neither has a cause, raw message
     or log. Context returns host text, summary returns the host receipt as JSON text and details.
 
-    `issue_prepare_confirmation` freezes a stage report or per-repository delivery preview through the
-    injected host, and `issue_execute_confirmation` supplies only its operation and questionnaire call
-    IDs. These tools are top-level only, use SDK session identity, and do not grant authority through
-    caller assertions. The trusted questionnaire verifier matches exact host arguments against one
+    `issue_prepare_confirmation` freezes an independently authorized Issue close (`action: "close-issue"`,
+    `reason`, `acceptance`), a complete Issue body replacement (`action: "update-body"`, full replacement
+    `body`), a stage report or per-repository delivery preview through the injected
+    host, and `issue_execute_confirmation` supplies only its operation and questionnaire call IDs.
+    Body replacement is a separate action bound to the current Issue body snapshot; it is not an
+    implicit stage/delivery update. These tools are top-level only, use SDK session identity, and do not
+    grant authority through caller assertions. The trusted questionnaire verifier matches exact host
+    arguments against one
     executable call and one submitted `Looks right` response, including the restart custom-response
     path. Skip, custom/multi/discuss, nonempty notes and superseding user replies are refused. Pending
     acknowledgements are not answers. Host composition owns durable one-time consumption and effects.

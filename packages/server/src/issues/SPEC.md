@@ -123,11 +123,12 @@ permission to merge. Provider input/read types are exported through the barrel.
 
 ## Provider write and MR contract
 
-`IssueDeliveryRemote extends IssueRemote` adds partial issue updates, exact-source-branch MR/PR
-listing and MR/PR creation using the shared `IssueMergeRequest` model. `IssueWorkflowRemote`
-extends that delivery port with GitLab-only evidence, merge and closure operations. `GitHubClient`
+`IssueDeliveryRemote extends IssueRemote` adds partial issue updates, single-attempt Issue close, exact-source-branch
+MR/PR listing and MR/PR creation using the shared `IssueMergeRequest` model. `IssueWorkflowRemote`
+extends that delivery port with GitLab-only approval evidence and merge operations. `GitHubClient`
 exposes the delivery port; `remoteFor` deliberately remains the read/comment port. These types grant
-no workflow authorization. GitHub has no merge or closure primitive.
+no workflow authorization. Provider closure responses expose nullable `closedAt`; the confirmed host
+operation requires a non-null read-back before returning a close receipt.
 
 GitHub updates use PATCH with only supplied fields (`description` maps to `body`), so label-only
 writes never replace the description. PR operations first read verified repository identity/path;
@@ -163,8 +164,13 @@ Malformed delivery responses fail with sanitized `RESOURCE_UNAVAILABLE`, without
   GitHub sends the native boolean `draft` flag when supplied and validates the returned flag;
   GitLab uses the CE-compatible `Draft:` title prefix for `draft: true`, preserving existing
   `Draft:`/`WIP:` prefixes. Omission preserves ordinary creation behavior.
-  `mergeMergeRequest(iid, sha)` sends a full SHA as GitLab's merge precondition; it does not schedule
-  auto-merge, authorize the workflow, prove approval/CI, or close the issue itself.
+  `mergeMergeRequest(iid, sha)` sends a full SHA as GitLab's merge precondition; after the single
+  write it performs bounded MR readback. `mergeEvidence(iid)` reads fresh MR detail, the exact named
+  target branch SHA from the verified project/repository, and compares the provider-reported merge
+  commit against that target. It returns the exact observed merge/target SHAs and an explicit
+  `ancestor`, `not-ancestor`, or `unknown` relationship with a snapshot. Merged state or target SHA
+  alone is never ancestry evidence; missing merge SHA or incomplete compare evidence remains
+  unknown. This does not authorize merge, prove approval/CI, or close the issue itself.
 - Writes are single-attempt with bounded response reads and no automatic retries. Non-2xx responses,
   transport failures, deadlines, token echoes, and malformed success bodies (including mismatched
   resource iids) yield static, sanitized `RESOURCE_UNAVAILABLE` errors without causes. An error does

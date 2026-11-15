@@ -28,6 +28,24 @@ export interface IssueAgentSessionHostOptions {
 			title?: string;
 			body?: string;
 			targetBranch?: string;
+			action?:
+				| "update-body"
+				| "close-issue"
+				| "ready-mr"
+				| "merge-mr"
+				| "record-delivery-state"
+				| "read-delivery-state"
+				| "authorize-automation"
+				| "advance-automation"
+				| "preflight-dependencies";
+			reason?: string;
+			acceptance?: string;
+			mergeRequestId?: number;
+			expectedSha?: string;
+			expectedRevision?: number;
+			deliveryState?: unknown;
+			mode?: "draft" | "auto-merge" | "manual";
+			closeIssue?: boolean;
 		},
 	): Promise<unknown>;
 	executeConfirmation?(
