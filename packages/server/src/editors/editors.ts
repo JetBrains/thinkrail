@@ -86,7 +86,10 @@ export async function pathWhich(
 	};
 }
 
-export type SpawnFn = (cmd: string[], options?: { windowsHide?: boolean }) => void;
+export type SpawnFn = (
+	cmd: string[],
+	options?: { windowsHide?: boolean; windowsVerbatimArguments?: boolean },
+) => void;
 
 export const defaultSpawn: SpawnFn = (cmd, options) => {
 	if (!spawnDetached(cmd, options)) throw new Error("Failed to launch the requested application");
@@ -165,17 +168,23 @@ function launchFileManager(
 ): void {
 	if (!existsSync(path)) throw new Error(`${selectItem ? "Item" : "Folder"} not found: ${path}`);
 	let cmd: string[];
+	const options: NonNullable<Parameters<SpawnFn>[1]> = { windowsHide: false };
 	if (platform === "darwin") {
 		cmd = selectItem ? ["open", "-R", path] : ["open", path];
 	} else if (platform === "win32") {
-		cmd = selectItem
-			? ["explorer", "/select,", win32.normalize(path)]
-			: ["explorer", win32.normalize(path)];
+		const target = win32.normalize(path);
+		if (selectItem) {
+			if (target.includes('"')) throw new Error("File manager item path contains a double quote");
+			cmd = ["explorer", `/select,"${target}"`];
+			options.windowsVerbatimArguments = true;
+		} else {
+			cmd = ["explorer", target];
+		}
 	} else {
 		cmd = ["xdg-open", selectItem ? dirname(path) : path];
 	}
 	try {
-		spawn(cmd, { windowsHide: false });
+		spawn(cmd, options);
 	} catch {
 		throw new Error(`No file manager launcher available on this host (${platform}).`);
 	}

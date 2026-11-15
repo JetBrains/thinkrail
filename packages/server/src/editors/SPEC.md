@@ -31,7 +31,9 @@ folder or select an existing item in the host's file manager.
   backslash-normalized path (it also opens Documents for a forward-slash path), and launches with
   `windowsHide: false` — `explorer` applies the hide flag to the folder window it opens.
 - **`revealItemInFileManager(path)`** selects a file or folder with `open -R` on macOS and Explorer's
-  `/select,` on Windows; Linux opens its containing folder with `xdg-open`. It shares the folder
+  `/select,` on Windows; Linux opens its containing folder with `xdg-open`. Explorer selection
+  passes a quoted, normalized path verbatim because Explorer splits unquoted paths at commas.
+  Paths with embedded double quotes are rejected before building this argument. It shares the folder
   launcher's existence check, visible-window policy and injectable spawn/platform seams. A missing item
   fails before launch rather than opening a different location. Workspace lookup and containment stay
   with the host; this module receives an already validated absolute path.

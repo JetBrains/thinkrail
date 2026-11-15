@@ -51,9 +51,11 @@ describe("revealItemInFileManager", () => {
 	const dir = mkdtempSync(join(tmpdir(), "thinkrail-reveal-item-"));
 	const file = join(dir, "generated artifact 日本語.txt");
 	const folder = join(dir, "generated folder 日本語");
+	const commaFile = join(dir, "reveal,report.txt");
 	writeFileSync(file, "artifact\n");
+	writeFileSync(commaFile, "artifact\n");
 	mkdirSync(folder);
-	const calls: { cmd: string[]; options: { windowsHide?: boolean } | undefined }[] = [];
+	const calls: { cmd: string[]; options: Parameters<SpawnFn>[1] }[] = [];
 	const record: SpawnFn = (cmd, options) => {
 		calls.push({ cmd, options });
 	};
@@ -68,15 +70,15 @@ describe("revealItemInFileManager", () => {
 		]);
 	});
 
-	test("Windows selects files and folders using normalized paths and a visible window", () => {
+	test("Windows quotes normalized selection paths, including commas, in a visible window", () => {
 		calls.length = 0;
-		for (const path of [file, folder]) {
+		for (const path of [file, folder, commaFile]) {
 			revealItemInFileManager(path.replaceAll("\\", "/"), record, "win32");
 		}
 		expect(calls).toEqual(
-			[file, folder].map((path) => ({
-				cmd: ["explorer", "/select,", win32.normalize(path)],
-				options: { windowsHide: false },
+			[file, folder, commaFile].map((path) => ({
+				cmd: ["explorer", `/select,"${win32.normalize(path)}"`],
+				options: { windowsHide: false, windowsVerbatimArguments: true },
 			})),
 		);
 	});
