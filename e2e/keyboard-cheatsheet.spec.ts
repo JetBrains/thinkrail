@@ -91,7 +91,7 @@ test("the filter narrows rows by name or by key, and its paging keys scroll the 
 	await expect.poll(() => list.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
 	await expect(filter).toBeFocused();
 
-	await filter.fill("split");
+	await filter.fill("split right");
 	await expect(rows).toHaveCount(1);
 	await expect(rows.first()).toHaveAttribute("data-shortcut", "group.splitRight");
 	await expect(rows.first()).toContainText("Split right");

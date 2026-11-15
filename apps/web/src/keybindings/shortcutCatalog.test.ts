@@ -95,6 +95,37 @@ describe("the shortcut catalog", () => {
 		]);
 	});
 
+	test("lists the review surfaces' cursor, comment and composer keys", () => {
+		const mac = shortcutRows({ desktop: false, platform: MAC });
+		const linux = shortcutRows({ desktop: false, platform: LINUX });
+		expect(labels(linux, "review.cursorMove")).toEqual(["↑", "↓", "K", "J"]);
+		expect(labels(linux, "review.cursorSide")).toEqual(["←", "→", "H", "L"]);
+		expect(labels(linux, "review.cursorExtend")).toEqual([
+			"Shift+↑",
+			"Shift+↓",
+			"Shift+K",
+			"Shift+J",
+		]);
+		expect(labels(linux, "review.comment")).toEqual(["↵", "Ctrl+Shift+M"]);
+		expect(labels(mac, "review.comment")).toEqual(["↵", "⇧⌘M"]);
+		expect(labels(linux, "review.saveDraft")).toEqual(["Ctrl+↵"]);
+		expect(labels(mac, "review.sendNow")).toEqual(["⇧⌘↵"]);
+		expect(labels(linux, "review.regionResize")).toEqual([
+			"Shift+←",
+			"Shift+→",
+			"Shift+↑",
+			"Shift+↓",
+		]);
+		expect(labels(linux, "review.swipeFar")).toEqual([
+			"Shift+←",
+			"Shift+→",
+			"PgUp",
+			"PgDn",
+			"Home",
+			"End",
+		]);
+	});
+
 	test("spells feature keys per platform", () => {
 		const mac = shortcutRows({ desktop: false, platform: MAC });
 		const linux = shortcutRows({ desktop: false, platform: LINUX });

@@ -1,5 +1,6 @@
 import type { ReviewAnchor, ReviewSelector } from "@thinkrail/contracts";
 import type { AnchorDraft, ReviewThread } from "../registry";
+import type { CursorCommand } from "../support/cursorKeys";
 
 export type Region = Extract<ReviewSelector, { kind: "region" }>;
 
@@ -108,4 +109,55 @@ export function placedRegionThreadIds(
 		return new Set();
 	}
 	return new Set(threads.flatMap((thread) => (regionOfAnchor(thread.anchor) ? [thread.id] : [])));
+}
+
+export const FRAME_STEP = 0.02;
+export const FRAME_MIN_SIZE = 0.04;
+const FRAME_SIZE = 0.3;
+
+type FrameCommand =
+	| { kind: "frame"; region: Region }
+	| { kind: "comment"; region: Region }
+	| { kind: "clear" };
+
+export function initialFrame(): Region {
+	const offset = (1 - FRAME_SIZE) / 2;
+	return { kind: "region", x: offset, y: offset, width: FRAME_SIZE, height: FRAME_SIZE };
+}
+
+function moveFrame(region: Region, dx: number, dy: number): Region {
+	return {
+		...region,
+		x: clamp(region.x + dx, 0, 1 - region.width),
+		y: clamp(region.y + dy, 0, 1 - region.height),
+	};
+}
+
+function resizeFrame(region: Region, dw: number, dh: number): Region {
+	return {
+		...region,
+		width: clamp(region.width + dw, FRAME_MIN_SIZE, 1 - region.x),
+		height: clamp(region.height + dh, FRAME_MIN_SIZE, 1 - region.y),
+	};
+}
+
+const FRAME_DELTAS = {
+	left: [-FRAME_STEP, 0],
+	right: [FRAME_STEP, 0],
+	up: [0, -FRAME_STEP],
+	down: [0, FRAME_STEP],
+} as const;
+
+export function frameCommand(region: Region | null, command: CursorCommand): FrameCommand | null {
+	if (command.kind === "comment") {
+		return region ? { kind: "comment", region } : { kind: "frame", region: initialFrame() };
+	}
+	if (!region) return null;
+	if (command.kind === "escape") return { kind: "clear" };
+	if (command.kind !== "move") return null;
+	const [dx, dy] = FRAME_DELTAS[command.direction];
+	return {
+		kind: "frame",
+		region: command.extend ? resizeFrame(region, dx, dy) : moveFrame(region, dx, dy),
+	};
 }

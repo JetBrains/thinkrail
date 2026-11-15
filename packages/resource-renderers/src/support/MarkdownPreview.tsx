@@ -22,7 +22,11 @@ import { alertComponents, remarkGithubAlerts } from "./markdownAlerts";
 import { documentRehypePlugins } from "./markdownHtml";
 import { documentComponents, remarkHeadingIds } from "./markdownLinks";
 import { MARKDOWN_OUTLINE_NARROW_WIDTH, useStampedHeadings } from "./outlineHeadings";
-import { type ComposerInsert, PreviewCommenting } from "./PreviewCommenting";
+import {
+	type ComposerInsert,
+	PreviewCommenting,
+	type PreviewReturnFocus,
+} from "./PreviewCommenting";
 import { ReviewThreadCard } from "./ReviewThreadCard";
 import {
 	frontmatterOffset,
@@ -239,18 +243,26 @@ export default function MarkdownPreview({
 		rehypePlugins: documentRehypePlugins(stampOffset),
 		components: { ...alertComponents, ...components },
 	});
-	const threadInserts: FlowInsert[] = review.threads.flatMap((thread) => {
-		const range = thread.anchor.selectors.find((selector) => selector.kind === "lineRange");
-		return range?.kind === "lineRange"
-			? [
-					{
-						key: thread.id,
-						line: range.endLine,
-						node: <ReviewThreadCard key={thread.id} thread={thread} actions={review.actions} />,
-					},
-				]
-			: [];
-	});
+	const threadInserts = (returnFocus: PreviewReturnFocus): FlowInsert[] =>
+		review.threads.flatMap((thread) => {
+			const range = thread.anchor.selectors.find((selector) => selector.kind === "lineRange");
+			return range?.kind === "lineRange"
+				? [
+						{
+							key: thread.id,
+							line: range.endLine,
+							node: (
+								<ReviewThreadCard
+									key={thread.id}
+									thread={thread}
+									actions={review.actions}
+									onReturnFocus={() => returnFocus(range.endLine)}
+								/>
+							),
+						},
+					]
+				: [];
+		});
 	return (
 		<MarkdownPreviewFrame scroller={scroller}>
 			<PreviewCommenting
@@ -260,10 +272,11 @@ export default function MarkdownPreview({
 				scrollerRef={scrollerRef}
 				attachScroller={attachScroller}
 			>
-				{(composer: ComposerInsert | null) => {
+				{(composer: ComposerInsert | null, returnFocus: PreviewReturnFocus) => {
+					const cards = threadInserts(returnFocus);
 					const inserts = composer
-						? [...threadInserts, { key: "composer", line: composer.line, node: composer.node }]
-						: threadInserts;
+						? [...cards, { key: "composer", line: composer.line, node: composer.node }]
+						: cards;
 					const segments = splicedSegments(stripped, rawOffset, inserts);
 					return (
 						<article ref={articleRef} className="mx-auto max-w-[78ch] px-24 py-16">

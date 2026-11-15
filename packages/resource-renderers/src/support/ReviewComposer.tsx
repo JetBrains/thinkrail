@@ -10,6 +10,8 @@ import {
 	selectedReviewText,
 	useReviewText,
 } from "../renderers/reviewDraftState";
+import { composerSubmit } from "./cursorKeys";
+import { focusLeftIn } from "./revealFocus";
 
 function grow(el: HTMLTextAreaElement): void {
 	el.style.height = "auto";
@@ -24,6 +26,7 @@ export function ReviewComposer({
 	input,
 	notice,
 	onClose,
+	onReturnFocus,
 	className,
 }: {
 	draft: AnchorDraft;
@@ -33,6 +36,7 @@ export function ReviewComposer({
 	input?: ReviewTextBinding | undefined;
 	notice?: string;
 	onClose: () => void;
+	onReturnFocus?: ((from: HTMLElement) => void) | undefined;
 	className?: string;
 }) {
 	const t = useT();
@@ -46,6 +50,7 @@ export function ReviewComposer({
 	const { text, busy } = state;
 	const setInput = input?.onChange ?? setLocal;
 	const inputRef = useRef<HTMLTextAreaElement>(null);
+	const rootRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
 		const element = inputRef.current;
@@ -70,15 +75,20 @@ export function ReviewComposer({
 		if (input && input.read() === undefined) input.onChange(initial.value);
 	}, [initial, input]);
 
+	const close = () => {
+		const root = rootRef.current;
+		onClose();
+		if (root && focusLeftIn(root)) onReturnFocus?.(root);
+	};
 	const submit = (action: SurfaceReview["commenting"]["onSave"]) => {
 		const body = text.trim();
 		if (busy || !body) return;
 		setInput({ ...state, busy: true });
-		action(draft, body).then(onClose, () => setInput({ ...state, busy: false }));
+		action(draft, body).then(close, () => setInput({ ...state, busy: false }));
 	};
 
 	return (
-		<div data-testid="review-composer" className={cn("review-composer", className)}>
+		<div ref={rootRef} data-testid="review-composer" className={cn("review-composer", className)}>
 			<span className="review-composer-label tr-code-text">{label}</span>
 			{notice ? <span className="tr-text-metadata text-text-muted">{notice}</span> : null}
 			<textarea
@@ -99,10 +109,11 @@ export function ReviewComposer({
 				onKeyDown={(event) => {
 					event.stopPropagation();
 					if (isImeComposing(event.nativeEvent)) return;
-					if (event.key === "Escape") onClose();
-					if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+					if (event.key === "Escape") close();
+					const action = composerSubmit(event);
+					if (action) {
 						event.preventDefault();
-						submit(commenting.onSave);
+						submit(action === "send" ? commenting.onSend : commenting.onSave);
 					}
 				}}
 			/>
@@ -125,7 +136,7 @@ export function ReviewComposer({
 				>
 					{t("review.composer.sendNow")}
 				</Button>
-				<Button variant="ghost" size="s" data-testid="review-composer-cancel" onClick={onClose}>
+				<Button variant="ghost" size="s" data-testid="review-composer-cancel" onClick={close}>
 					{t("common.cancel")}
 				</Button>
 			</div>
