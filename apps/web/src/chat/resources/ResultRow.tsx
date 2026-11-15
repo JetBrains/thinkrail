@@ -105,8 +105,7 @@ export function ResultRow({
 	const { name, state, durationMs, exitCode } = resultFacts(source);
 	const command = source.kind === "command";
 	const line = teaser ?? (command ? outputTeaser(source.details.output.text) : "");
-	const headerClass =
-		"flex min-w-0 flex-1 items-center gap-4 rounded-sm px-4 py-2 text-left outline-none";
+	const headerClass = "flex min-w-0 flex-1 items-center gap-4 rounded-sm px-4 py-2 text-left";
 	const header = (
 		<>
 			{onToggle ? (
@@ -169,7 +168,7 @@ export function ResultRow({
 						onClick={onToggle}
 						className={cn(
 							headerClass,
-							"cursor-pointer select-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary",
+							"cursor-pointer select-none hover:bg-control-bg-hovered focus-visible:focus-ring-inset",
 						)}
 					>
 						{header}

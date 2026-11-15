@@ -66,7 +66,7 @@ test("a workspace settles by hand and comes back with Keep active", async ({ pag
 	await page.keyboard.press("Escape");
 
 	// Opening a settled workspace keeps it settled: force-revealed in the shelf, announced in the caption.
-	await settledRow.getByRole("button", { name: first.name, exact: true }).click();
+	await settledRow.getByRole("treeitem", { name: first.name, exact: true }).click();
 	await expect(page.getByTestId("scope-name")).toHaveText(first.name);
 	await expect(page.getByTestId("scope-workspace-settled")).toBeVisible();
 	await expect(settledRow).toHaveAttribute("data-active", "true");

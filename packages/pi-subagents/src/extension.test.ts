@@ -392,23 +392,27 @@ test("a per-call model runs an unpinned agent on a different model than the pare
 	await service.disposeChildrenOf(parent.sessionId);
 });
 
-test("a call that sets model to inherit runs the unpinned agent on the parent's model", async () => {
-	fauxA.setResponses([
-		fauxAssistantMessage(
-			fauxToolCall("Agent", { subagent_type: "worker", task: "Use my model.", model: "inherit" }),
-		),
-		fauxAssistantMessage("INHERIT_CHILD_OK"),
-		fauxAssistantMessage("PARENT_AFTER_INHERIT"),
-	]);
+test.each(["inherit", ""])(
+	"a call that sets model to %p runs the unpinned agent on the parent's model",
+	async (model) => {
+		const tag = model || "blank";
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("Agent", { subagent_type: "worker", task: "Use my model.", model }),
+			),
+			fauxAssistantMessage(`CHILD_OK_${tag}`),
+			fauxAssistantMessage(`PARENT_AFTER_${tag}`),
+		]);
 
-	await parent.prompt("Delegate on the parent's model.");
+		await parent.prompt("Delegate on the parent's model.");
 
-	expect(transcript()).toContain("INHERIT_CHILD_OK");
-	expect(transcript()).toContain("PARENT_AFTER_INHERIT");
-	const child = service.childrenOf(parent.sessionId)[0];
-	expect(child?.snapshot?.details.model).toBe("fauxa/fauxa");
-	await service.disposeChildrenOf(parent.sessionId);
-});
+		expect(lastToolResultText()).toContain(`CHILD_OK_${tag}`);
+		expect(transcript()).toContain(`PARENT_AFTER_${tag}`);
+		const child = service.childrenOf(parent.sessionId)[0];
+		expect(child?.snapshot?.details.model).toBe("fauxa/fauxa");
+		await service.disposeChildrenOf(parent.sessionId);
+	},
+);
 
 test.each([
 	["fauxreasoner", "xhigh", false],

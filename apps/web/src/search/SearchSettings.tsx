@@ -1,13 +1,13 @@
 import { useT } from "@thinkrail/locales/react";
 import { Switch } from "@thinkrail/ui/switch";
 import { useState } from "react";
-import { platformShortcutLabel } from "../lib";
+import { keybindingLabel } from "../keybindings";
 import { useAppStore } from "../store";
 
 export function SearchSettings() {
 	const t = useT();
 	const doubleShift = useAppStore((state) => state.doubleShiftSearch);
-	const [openShortcut] = useState(() => platformShortcutLabel("K"));
+	const [openShortcut] = useState(() => keybindingLabel("search.open"));
 	return (
 		<section data-testid="settings-keyboard" className="flex flex-col gap-16">
 			<div className="flex flex-col gap-4">

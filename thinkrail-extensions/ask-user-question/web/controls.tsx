@@ -113,7 +113,7 @@ export function TabChip({
 			data-discuss={discuss}
 			onClick={onClick}
 			className={cn(
-				"flex shrink-0 items-center gap-4 whitespace-nowrap rounded-full px-8 py-2 tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary",
+				"flex shrink-0 items-center gap-4 whitespace-nowrap rounded-full px-8 py-2 tr-text-metadata focus-visible:focus-ring-inset",
 				active ? "bg-primary-subtle text-primary" : "text-text-muted hover:bg-control-bg-hovered",
 			)}
 		>
@@ -232,7 +232,7 @@ export function OptionRow({
 				onClick();
 			}}
 			className={cn(
-				"flex items-start gap-8 rounded-sm border px-12 py-8 text-left outline-none transition-colors focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary",
+				"flex items-start gap-8 rounded-sm border px-12 py-8 text-left transition-colors focus-visible:focus-ring",
 				selected
 					? "border-primary bg-primary-subtle"
 					: "border-border-default hover:bg-control-bg-hovered",
@@ -336,7 +336,7 @@ export function NoteSlot({
 						aria-describedby={noteId}
 						onClick={onOpen}
 						onKeyDown={onButtonKeyDown}
-						className="flex min-w-0 flex-1 items-start gap-4 rounded-sm px-4 py-2 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+						className="flex min-w-0 flex-1 items-start gap-4 rounded-sm px-4 py-2 text-left transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring"
 					>
 						<Pencil aria-hidden="true" className="mt-2 size-14 shrink-0 text-text-muted" />
 						<span
@@ -417,7 +417,7 @@ export function OtherRow({
 				}
 			}}
 			className={cn(
-				"flex cursor-text items-start gap-8 rounded-sm border px-12 py-8 outline-none transition-colors focus-within:border-control-border-active focus-within:ring-2 focus-within:ring-primary",
+				"flex cursor-text items-start gap-8 rounded-sm border px-12 py-8 transition-colors focus-within:border-control-border-active focus-visible:focus-ring has-[textarea:focus-visible]:focus-ring",
 				active
 					? "border-primary bg-primary-subtle"
 					: "border-border-default hover:bg-control-bg-hovered",
@@ -433,7 +433,7 @@ export function OtherRow({
 						event.preventDefault();
 						onToggle();
 					}}
-					className="flex items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+					className="flex items-center rounded-sm focus-visible:focus-ring"
 				>
 					<Indicator selected={active} multi />
 				</button>
@@ -449,6 +449,7 @@ export function OtherRow({
 					id={inputId}
 					fieldRef={fieldRef}
 					tabIndex={0}
+					className="focus-visible:outline-none"
 					data-testid={tid("ask-custom")}
 					data-ask-page-focus={pageFocus || undefined}
 					aria-label={t("tools.ask.otherLabel")}

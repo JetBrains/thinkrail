@@ -61,6 +61,14 @@ Body.`,
 	expect(parsed?.tools).toEqual(["read", "grep"]);
 });
 
+test("a blank model field leaves the definition unpinned", () => {
+	for (const extra of ["model:\n", 'model: ""\n', "model: '  '\n"]) {
+		const parsed = parseAgentDefinition(definitionFile("blank", extra), "personal");
+		expect(parsed?.name).toBe("blank");
+		expect(parsed).not.toHaveProperty("model");
+	}
+});
+
 test.each(["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const)(
 	"definition thinking %s is preserved independently of a quoted model suffix",
 	(thinking) => {

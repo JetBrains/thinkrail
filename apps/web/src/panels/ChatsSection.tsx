@@ -25,7 +25,7 @@ import {
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { cn } from "@thinkrail/ui/utils";
-import { type MouseEvent, useEffect, useState } from "react";
+import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
@@ -50,6 +50,13 @@ import {
 	startProjectlessChat,
 	supportsChatContinuation,
 } from "./chatActions";
+import {
+	focusTreeItemOnMenuClose,
+	Tree,
+	treeRowControlProps,
+	treeRowKey,
+	useTreeItem,
+} from "./treeNavigation";
 import {
 	loadProjectWorkspaces,
 	markWorkspaceRead,
@@ -99,6 +106,7 @@ export function ChatsSection() {
 					variant="ghost"
 					size="s"
 					data-testid="add-chat"
+					data-focus-fallback="chats"
 					disabled={starting}
 					onClick={newChat}
 				/>
@@ -108,7 +116,12 @@ export function ChatsSection() {
 					{t("panels.chats.empty")}
 				</p>
 			) : (
-				<ul className="flex flex-col">
+				<Tree
+					label={t("panels.chats.title")}
+					focusList="chats"
+					className="flex flex-col"
+					focusDefault={chats.some((chat) => chat.id === activeWorkspaceId)}
+				>
 					{chats.map((chat) => (
 						<ChatRow
 							key={chat.id}
@@ -125,7 +138,7 @@ export function ChatsSection() {
 							editors={editors}
 						/>
 					))}
-				</ul>
+				</Tree>
 			)}
 		</section>
 	);
@@ -167,27 +180,43 @@ function ChatRow({
 		event.preventDefault();
 		setMenuOpen(true);
 	};
+	const rowRef = useRef<HTMLDivElement>(null);
+	const treeItem = useTreeItem(workspace.id, { level: 1, label: label.text, selected: isActive });
 	return (
-		<li>
-			<fieldset
-				aria-label={label.text}
+		<li role="none">
+			<div
+				ref={rowRef}
+				role="none"
 				data-testid="chat-item"
 				data-row
+				data-focus-row={workspace.id}
 				data-active={isActive}
 				data-attention={needsAttention || undefined}
 				data-running={isRunning || undefined}
 				data-deletion-pending={pending || undefined}
 				onContextMenu={openMenuFromContext}
 				className={cn(
-					"group relative flex min-h-panel-row min-w-0 items-center gap-8 rounded-sm border-0 py-2 pr-4 pl-8 transition-colors",
+					"group relative flex min-h-panel-row min-w-0 items-center gap-8 rounded-sm py-2 pr-4 pl-8 transition-colors",
 					isActive || menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered",
 				)}
 			>
 				<button
 					type="button"
-					disabled={pending}
-					onClick={() => useAppStore.getState().activateWorkspace(workspace)}
-					className="flex min-w-0 flex-1 items-center gap-4 text-left"
+					{...treeItem}
+					data-focus-row-primary
+					aria-disabled={pending || undefined}
+					onClick={() => {
+						if (!pending) useAppStore.getState().activateWorkspace(workspace);
+					}}
+					onKeyDown={(event) => {
+						const key = treeRowKey(event);
+						if (key === "menu") setMenuOpen(true);
+						else if (key === "delete" && pending) void deleteProjectlessChat(workspace.id);
+						else if (key === "delete") setConfirming(true);
+						else return;
+						event.preventDefault();
+					}}
+					className="flex min-w-0 flex-1 items-center gap-4 text-left focus-visible:focus-ring-inset"
 				>
 					{isRunning ? (
 						<RunningIcon className={cn("size-14", isActive ? "text-primary" : "text-text-muted")} />
@@ -231,10 +260,15 @@ function ChatRow({
 							variant="ghost"
 							size="s"
 							data-testid="chat-menu"
+							{...treeRowControlProps}
 							className={HOVER_CONTROL_CLASS}
 						/>
 					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end" data-testid="chat-actions">
+					<DropdownMenuContent
+						align="end"
+						data-testid="chat-actions"
+						onCloseAutoFocus={(event) => focusTreeItemOnMenuClose(event, rowRef.current)}
+					>
 						{pending ? null : (
 							<>
 								{editors.length > 0 && (
@@ -303,7 +337,7 @@ function ChatRow({
 						</DropdownMenuItem>
 					</DropdownMenuContent>
 				</DropdownMenu>
-			</fieldset>
+			</div>
 			<ChatDeleteDialog
 				workspaceId={confirming ? workspace.id : null}
 				name={label.text}

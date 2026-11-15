@@ -694,7 +694,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   store/transport/highlighter.
 - **Composer focus on arrival** (`composerFocusRequest`, see `store/SPEC.md`): `ChatView` subscribes to
   `selectComposerFocusRequested` for its own chat. When it holds, the view clears the request and refocuses
-  its composer, so typing goes straight to the chat a palette pick opened.
+  its composer, so typing goes straight to the chat a palette pick opened. A request with `dismissHistory`
+  (the shell's `Mod+L`) first closes this chat's history overlay and drops a pending open of it.
 - **Extension edits to the draft** (`composerEdit`, see `store/SPEC.md`): pi's `setEditorText` /
   `pasteToEditor` reach the chat as its runtime's pending edit. `ChatView` applies it in a layout effect
   through **`ComposerHandle.applyEdit(kind, text)`** and then consumes it, so an edit for a chat that is
@@ -1432,8 +1433,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   now-`bg-transparent` textarea; the input background moves up to the wrapping container instead, clipped
   to the same `rounded-md` so nothing changes visually outside a session). That wrapper
   owns the input border and fill: `bg-clip-padding` keeps the backdrop tint inside the rounded border,
-  while `focus-within:border-control-border-active` is the composer's sole focus indicator rather than a
-  second accent ring on the textarea. The pure `highlightSegments(value, slots, activeIdx)`
+  while focus shows on the wrapper, not the textarea: the `control-border-active` border plus the shared
+  outset focus ring (`styles/COLOR.md`, *Focus ring*). The pure `highlightSegments(value, slots, activeIdx)`
   (from the shared `prompt` module) breaks `value` into ordered
   plain/unfilled/filled/active runs — a slot range is `"active"` when its `slots` index is `activeIdx`
   (`Composer`'s own `slotIdx`), else `"unfilled"`/`"filled"` per its own `filled` flag; everything else is

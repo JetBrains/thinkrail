@@ -481,6 +481,37 @@ export interface WorkspaceFsChangedPayload {
 
 export type FileKind = "file" | "dir";
 
+export type WorkspaceArtifactState = "live" | "deleted";
+
+export interface WorkspaceArtifact {
+	path: string;
+	state: WorkspaceArtifactState;
+	size: number;
+	changedAt: number;
+	firstSeenAt: number;
+	sessionId?: string;
+}
+
+export interface WorkspaceIgnoredOutput {
+	path: string;
+	kind: FileKind;
+	files: number;
+	filesTruncated: boolean;
+	changedAt: number;
+	sessionId?: string;
+}
+
+export interface WorkspaceArtifactsSnapshot {
+	workspaceId: string;
+	dir: string;
+	artifacts: WorkspaceArtifact[];
+	outputs: WorkspaceIgnoredOutput[] | null;
+}
+
+export interface WorkspaceArtifactsChangedPayload {
+	workspaceId: string;
+}
+
 export interface FileNode {
 	path: string;
 	name: string;
@@ -1536,7 +1567,14 @@ export function isFontWeightOffset(value: unknown): value is number {
 	);
 }
 
-export type LayoutToolId = "projects" | "specs" | "files" | "review" | "plan" | "issues";
+export type LayoutToolId =
+	| "projects"
+	| "specs"
+	| "files"
+	| "review"
+	| "plan"
+	| "issues"
+	| "artifacts";
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
 

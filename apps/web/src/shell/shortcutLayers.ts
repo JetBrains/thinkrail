@@ -30,3 +30,9 @@ const TERMINAL_ROOT_SELECTOR = ".xterm";
 export function isInTerminal(target: EventTarget | null) {
 	return target instanceof Element && target.closest(TERMINAL_ROOT_SELECTOR) !== null;
 }
+
+const EDITOR_FIND_SELECTOR = ".monaco-editor .find-widget";
+
+export function isInEditorFind(target: EventTarget | null) {
+	return target instanceof Element && target.closest(EDITOR_FIND_SELECTOR) !== null;
+}

@@ -440,7 +440,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 				inert={failureMessage !== null && !ready}
 				className="absolute inset-12"
 			>
-				<div ref={hostRef} className="absolute inset-0" />
+				<div ref={hostRef} data-focus-default className="absolute inset-0" />
 			</QuietScrollFrame>
 			{detached ? (
 				<div

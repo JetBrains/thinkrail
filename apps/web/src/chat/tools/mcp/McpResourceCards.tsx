@@ -121,7 +121,7 @@ function ListingView({
 					type="button"
 					aria-expanded={all}
 					onClick={toggleAll}
-					className="self-start rounded-xs text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary"
+					className="self-start rounded-xs text-primary hover:underline focus-visible:focus-ring"
 				>
 					{all ? t("mcp.card.showFewer") : t(text.showAll, { count: listing.items.length })}
 				</button>

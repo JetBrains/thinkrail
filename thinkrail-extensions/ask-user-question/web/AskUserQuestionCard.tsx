@@ -578,7 +578,7 @@ export function AskUserQuestionCard({
 				{...cardProps}
 				data-placement="dock"
 				data-collapsed={collapsed}
-				className="@container flex min-h-0 flex-col border-primary border-t-2 bg-container-elevated-bg outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset motion-safe:animate-reveal"
+				className="@container flex min-h-0 flex-col border-primary border-t-2 bg-container-elevated-bg focus-visible:focus-ring-inset motion-safe:animate-reveal"
 			>
 				<div className="flex shrink-0 items-center gap-12 border-border-default border-b px-12 py-4">
 					<div className="shrink-0">
@@ -626,7 +626,7 @@ export function AskUserQuestionCard({
 			<section
 				{...cardProps}
 				className={cn(
-					"@container overflow-hidden rounded-lg border bg-clip-padding bg-container-elevated-bg outline-none focus-visible:ring-2 focus-visible:ring-primary",
+					"@container overflow-hidden rounded-lg border bg-clip-padding bg-container-elevated-bg focus-visible:focus-ring",
 					canRespond ? "border-primary ring-2 ring-primary-soft" : "border-border-default",
 				)}
 			>

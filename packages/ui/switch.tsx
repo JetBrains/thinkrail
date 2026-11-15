@@ -40,7 +40,7 @@ export function Switch({
 				if (!disabled && !event?.defaultPrevented) onCheckedChange(!checked);
 			}}
 			className={cn(
-				"grid h-24 w-40 shrink-0 place-items-center rounded-full bg-transparent outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:hover:bg-transparent motion-reduce:transition-none",
+				"grid h-24 w-40 shrink-0 place-items-center rounded-full bg-transparent transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring disabled:pointer-events-none disabled:hover:bg-transparent motion-reduce:transition-none",
 				className,
 			)}
 		>

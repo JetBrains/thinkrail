@@ -87,6 +87,8 @@ export function scrollToHeading(scroller: HTMLElement, heading: HTMLElement): vo
 		heading.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
 	const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 	scroller.scrollTo({ top, behavior: reduced ? "auto" : "smooth" });
+	if (!heading.hasAttribute("tabindex")) heading.tabIndex = -1;
+	heading.focus({ preventScroll: true });
 }
 
 export function revealInList(list: HTMLElement, entry: HTMLElement): void {

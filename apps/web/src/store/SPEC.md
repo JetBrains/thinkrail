@@ -262,9 +262,11 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   labels or a still-queued open, but cannot recreate a locally closed placement or steal focus.
   **The durable-title fold** routes
   `session_info_changed` through the same one-home chat-label mutation already used by extension-UI
-  `setTitle`: normalize an absent name to the empty untitled name (worded at render by `lib`'s
+  `setTitle`; each caller first folds an absent name to the empty untitled name (worded at render by `lib`'s
   `chatDisplayName`, as `selectChatTitle` does; `selectChatName` returns the stored name, and
-  `workspaceName(t, ws)` words the host-named default workspace); update the cached `ChatTab` and the same
+  `workspaceName(t, ws)` words the host-named default workspace) — `setTitle` folds any non-string, since
+  a host older than #1356 forwards one and a non-string name reaches the app-level error boundary; update
+  the cached `ChatTab` and the same
   session's `PlanTab` (each with its existing local placement and any queued open, matched by resource
   identity), and/or its `closedChatsByWorkspace` row; and change no recency, runtime, placement,
   navigation clock, or attention. The durable Pi event may supersede an extension's presentation-only title.
@@ -817,8 +819,17 @@ the scope and compare target it belongs to, so another scope or target branch st
 every ancestor of a path and records it as seen in one write, so the auto-reveal can tell on return whether
 the active file changed meanwhile; every write is idempotent (an unchanged view keeps its identity) and a
 removed workspace's view is dropped in `applyWorkspaceRemoved`. Persistence lives outside the store, in
-`panels/filesTreeState`. **`fileClipboard`** (`setFileClipboard`) is the Files tree's in-app Copy: one
-`{ workspaceId, path }`, session-only, dropped in `applyWorkspaceRemoved` with its workspace.
+`panels/filesTreeState`. **`fileClipboard`** (`setFileClipboard`) is the in-app clipboard Files and
+Artifacts share: one `{ workspaceId, path, cut? }`, where `cut` turns the next Paste into a move;
+session-only, dropped in `applyWorkspaceRemoved` with its workspace.
+The Artifacts tool's slices are per workspace: **`artifactsByWorkspace`** (`setWorkspaceArtifacts`, the
+host's `artifacts.list` snapshot), **`artifactsTickByWorkspace`** (`noteArtifactsChanged`, bumped by the
+`workspace.artifactsChanged` nudge and read through `selectArtifactsTick`) and **`artifactsSeenByWorkspace`**
+(`markArtifactsSeen`, a watermark that only moves forward; the first snapshot of a workspace seeds it), all
+dropped in `applyWorkspaceRemoved`, plus the app-wide **`artifactsShowIgnored`** toggle; the seen watermarks
+and the toggle hydrate from per-client preferences (`hydrateArtifactsPreferences`).
+**`pasteIntoComposer(sessionId, text)`** (Artifacts' Mention in chat) applies the same composer edit an
+extension's `pasteToEditor` request does, so both paste at the caret the same way.
 **`selectActiveFilePath`** is the path of the active file or diff tab, else `null`.
 **`diffScopeByWorkspace`** + **`setDiffScope(workspaceId, scope)`** hold *what* each workspace's Changes
 panel is diffing (read through **`selectDiffScope`**, which defaults to the shared, referentially stable
@@ -845,13 +856,15 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   by placement-only minting) still selects semantically. That selection deliberately does not focus the tab,
   because the mounted history query owns focus. The shell updates the group's local attention so the target
   body mounts and consumes the request without publishing a structural snapshot. The third sibling,
-  **`composerFocusRequest { workspaceId, sessionId | null, navTick }`** — set by
-  **`requestComposerFocus(workspaceId, sessionId?)`**, cleared by **`clearComposerFocusRequest()`** —
+  **`composerFocusRequest { workspaceId, sessionId | null, navTick, dismissHistory? }`** — set by
+  **`requestComposerFocus(workspaceId, sessionId?, { dismissHistory? })`**, cleared by
+  **`clearComposerFocusRequest()`** —
   carries a palette pick's "type next" intent to the destination chat. It is stamped with the workspace's
   navigation tick instead of queuing a selection, so it never changes which tab shows:
   **`selectComposerFocusRequested`** holds only while that workspace is active, its tick is unchanged (a counted tab
   switch or another navigation expires it), the session matches when one is named, and the chat is attended
-  (`selectChatAttended`). A chat that mounts late (hydration, a route target opening its tab) still takes it.
+  (`selectChatAttended`; with `dismissHistory` — the `Mod+L` chord — its own history overlay does not count,
+  `selectChatAttended(..., { ignoreHistory: true })`). A chat that mounts late (hydration, a route target opening its tab) still takes it.
   **`selectComposerFocusRequestStale`** marks a request that can no longer be consumed: its workspace is no
   longer active, its tick moved, or the destination's layout is loaded and its attended center tab is
   something other than the requested chat. It waits while the layout or the attended tab is still missing,

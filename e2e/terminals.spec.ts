@@ -90,7 +90,7 @@ test("a shell start failure explains recovery and retries the same tab", async (
 	attachFailuresRemaining = 2;
 	await page.getByTestId("project-item").first().click();
 	await expect(page.getByTestId("terminal-panel")).toHaveCount(0);
-	await worktreeRows(page).first().getByRole("button").first().click();
+	await worktreeRows(page).first().getByRole("treeitem").click();
 	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]').getByRole("tab");
 	await expect(chatTab).toBeVisible();
 	await chatTab.focus();
@@ -268,7 +268,7 @@ test("terminals are workspace-scoped and survive workspace switches", async ({ p
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
 	await expect(visibleTerminalScreen(page)).not.toContainText("TR_WS1_BUFFER");
 
-	await worktreeRow(page, "workspace-1").getByRole("button").first().click();
+	await worktreeRow(page, "workspace-1").getByRole("treeitem").click();
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
 	await expect(visibleTerminalScreen(page)).toContainText("TR_WS1_BUFFER");
 });
@@ -330,7 +330,7 @@ test("a shell survives a trip to Project Home and back", async ({ page }) => {
 	await page.getByTestId("project-item").first().click();
 	await expect(page.getByTestId("terminal-panel")).toHaveCount(0);
 
-	await worktreeRow(page, "workspace-1").getByRole("button").first().click();
+	await worktreeRow(page, "workspace-1").getByRole("treeitem").click();
 	await waitTerminalReady(page);
 	await expect(visibleTerminalScreen(page)).toContainText("CHECK=alive");
 
@@ -366,7 +366,7 @@ test("historical terminal queries do not become input on remount", async ({ page
 	writes.length = 0;
 
 	await page.getByTestId("project-item").first().click();
-	await worktreeRows(page).first().getByRole("button").first().click();
+	await worktreeRows(page).first().getByRole("treeitem").click();
 	await waitTerminalReady(page);
 	await expect(visibleTerminalScreen(page)).toContainText("TR_DSR_CONSUMED");
 	expect(writes.filter((data) => CURSOR_POSITION_REPLY.test(data))).toEqual([]);
@@ -415,7 +415,7 @@ test("rapid re-entry never spawns a second shell", async ({ page }) => {
 	for (let round = 0; round < 2; round++) {
 		await page.getByTestId("project-item").first().click();
 		await expect(page.getByTestId("terminal-panel")).toHaveCount(0);
-		await worktreeRow(page, "workspace-1").getByRole("button").first().click();
+		await worktreeRow(page, "workspace-1").getByRole("treeitem").click();
 		await expect(visibleTerminal(page)).toHaveCount(1);
 	}
 	delayAttachMs = 0;
@@ -639,7 +639,7 @@ test("a shell that dies while detached is not re-attached as if alive", async ({
 	await expect(page.getByTestId("terminal-panel")).toHaveCount(0);
 	await page.waitForTimeout(3500);
 
-	await worktreeRow(page, "workspace-1").getByRole("button").first().click();
+	await worktreeRow(page, "workspace-1").getByRole("treeitem").click();
 	const term = visibleTerminal(page);
 	await expect(term).toBeVisible();
 

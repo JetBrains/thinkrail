@@ -425,7 +425,7 @@ function SkillInvocationCard({
 						: t("chat.turn.showSkillInstructions", { skill: invocation.name })
 				}
 				onClick={toggle}
-				className="flex w-full items-center gap-4 px-12 py-8 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex w-full items-center gap-4 px-12 py-8 text-left transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring-inset"
 			>
 				<BookOpen className="size-14 shrink-0 text-text-muted" aria-hidden="true" />
 				<span className="shrink-0 tr-text-ui text-text-muted">{t("chat.turn.skill")}</span>

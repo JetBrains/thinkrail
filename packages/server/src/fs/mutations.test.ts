@@ -19,7 +19,14 @@ import * as fsPromises from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { setTrashImplementationForTests } from "../trash";
-import { copyName, copyWorktreeEntry, deleteWorktreeEntry, MAX_COPY_ENTRIES } from "./mutations";
+import {
+	copyName,
+	copyWorktreeEntry,
+	deleteWorktreeEntry,
+	MAX_COPY_ENTRIES,
+	moveWorktreeEntry,
+	renameWorktreeEntry,
+} from "./mutations";
 
 let dataDir: string;
 let root: string;
@@ -322,4 +329,73 @@ test("a copied folder whose subfolder turns into an outside link mid-copy never 
 	expect(failure).toMatchObject({ code: "ENTRY_CHANGED" });
 	expect(readdirSync(join(root, "pkg copy", "sub"))).toEqual([]);
 	expect(readFileSync(join(root, "pkg", "sub-moved", "secret.txt"), "utf8")).toBe("inside");
+});
+
+test("renameWorktreeEntry renames in place and never replaces another entry", () => {
+	writeFileSync(join(root, "src", "a.md"), "a");
+	writeFileSync(join(root, "src", "b.md"), "b");
+	expect(renameWorktreeEntry("w1", "src/a.md", "c.md")).toEqual({
+		from: "src/a.md",
+		path: "src/c.md",
+		directory: false,
+		written: ["src/c.md"],
+	});
+	expect(readFileSync(join(root, "src", "c.md"), "utf8")).toBe("a");
+	expect(() => renameWorktreeEntry("w1", "src/c.md", "b.md")).toThrow("already exists");
+	for (const name of ["", ".", "..", ".git", "x/y", "x\\y"])
+		expect(() => renameWorktreeEntry("w1", "src/c.md", name)).toThrow();
+	expect(renameWorktreeEntry("w1", "src", "lib")).toMatchObject({ path: "lib", directory: true });
+	expect(existsSync(join(root, "lib", "c.md"))).toBe(true);
+});
+
+test("moveWorktreeEntry moves within and across workspaces without overwriting", () => {
+	const move = (sourcePath: string, destinationWorkspaceId: string, destinationDirectory: string) =>
+		moveWorktreeEntry({
+			sourceWorkspaceId: "w1",
+			sourcePath,
+			destinationWorkspaceId,
+			destinationDirectory,
+		});
+	writeFileSync(join(root, "src", "a.md"), "a");
+	mkdirSync(join(root, "docs"));
+	expect(move("src/a.md", "w1", "docs")).toEqual({
+		from: "src/a.md",
+		path: "docs/a.md",
+		directory: false,
+		written: ["docs/a.md"],
+	});
+	expect(existsSync(join(root, "src", "a.md"))).toBe(false);
+	expect(move("docs/a.md", "w1", "docs")).toMatchObject({ path: "docs/a.md", written: [] });
+	writeFileSync(join(other, "a.md"), "theirs");
+	expect(() => move("docs/a.md", "w2", ".")).toThrow("already exists");
+	rmSync(join(other, "a.md"));
+	move("docs/a.md", "w2", ".");
+	expect(readFileSync(join(other, "a.md"), "utf8")).toBe("a");
+	expect(() => move("docs", "w1", "docs")).toThrow("into itself");
+	mkdirSync(join(root, "docs", "inner"));
+	expect(() => move("docs", "w1", "docs/inner")).toThrow("into itself");
+});
+
+test("a move across file systems is refused and changes nothing", () => {
+	mkdirSync(join(root, "repo", ".git"), { recursive: true });
+	writeFileSync(join(root, "repo", ".git", "HEAD"), "ref: refs/heads/main\n");
+	writeFileSync(join(root, "repo", "a.md"), "a");
+	spyOn(fs, "renameSync").mockImplementation(() => {
+		throw Object.assign(new Error("cross-device link"), { code: "EXDEV" });
+	});
+	let error: unknown;
+	try {
+		moveWorktreeEntry({
+			sourceWorkspaceId: "w1",
+			sourcePath: "repo",
+			destinationWorkspaceId: "w2",
+			destinationDirectory: ".",
+		});
+	} catch (caught) {
+		error = caught;
+	}
+	expect(error).toMatchObject({ code: "MOVE_ACROSS_DEVICES" });
+	expect(readFileSync(join(root, "repo", ".git", "HEAD"), "utf8")).toBe("ref: refs/heads/main\n");
+	expect(readdirSync(other)).toEqual([]);
+	expect(trashed).toEqual([]);
 });

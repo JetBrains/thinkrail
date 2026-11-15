@@ -57,11 +57,18 @@ import {
 } from "../store";
 import { errorText, getTransport, supportsTextSearch } from "../transport";
 import {
+	focusCenterGroup,
+	focusChatComposer,
+	focusProjects,
+	focusTerminal,
 	openChatHistory,
+	showFiles,
 	toggleBottomPanel,
 	toggleLeftSide,
 	toggleRightSide,
 } from "./chordActions";
+import { collectCenterGroups } from "./layout";
+import { readNativePageZoomBridge } from "./nativePageZoom";
 import { type HostHitTargets, openHostHit } from "./openHostHit";
 import { createPaletteBackfill } from "./paletteBackfill";
 import {
@@ -71,7 +78,9 @@ import {
 	type PaletteCatalogDeps,
 } from "./paletteCatalog";
 import { paletteNavigator } from "./paletteNavigation";
+import { focusAdjacentRegion } from "./regions";
 import { readSettingsShortcutLabel } from "./useAppShortcuts";
+import { activeTabActions, runActiveTabAction } from "./workbenchCommands";
 
 const LOCAL_SCOPES: readonly SearchScope[] = ["all", "work", "commands"];
 const HOST_SCOPES: readonly SearchScope[] = ["all", "work", "files", "specs", "commands"];
@@ -157,6 +166,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	);
 	const editors = useEditors();
 	const [nativeShortcuts] = useState(() => readSettingsShortcutLabel() !== null);
+	const [pageZoom] = useState(readNativePageZoomBridge);
+	const [tabActions] = useState(activeTabActions);
 
 	const online = useAppStore(selectHostReachable);
 	const hostSearch = useAppStore(selectHostSearchAvailable);
@@ -233,6 +244,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 
 	const binding = useMemo(() => {
 		const store = () => useAppStore.getState();
+		const activeLayout = activeWorkspaceId ? layoutDocumentsByWorkspace[activeWorkspaceId] : null;
 		const deps: PaletteCatalogDeps = {
 			t,
 			contextProjectId: contextRepoProject?.id ?? null,
@@ -242,12 +254,16 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			historyAvailable: historySessionId !== null,
 			canCreateProject: selectSupportsOnboarding({ protocolVersion }),
 			nativeShortcuts,
+			pageZoom,
 			findInFilesAvailable: supportsTextSearch(protocolVersion) && textSearchScoped,
+			changesAvailable: activeWorkspace !== null && !isChatWorkspace(activeWorkspace),
+			centerGroupCount: activeLayout ? collectCenterGroups(activeLayout.center).length : 0,
 			readAction,
 			canSettle: activeWorkspace !== null && canSettleWorkspace(protocolVersion, activeWorkspace),
 			settled,
 			settleBlocked,
 			settingsGroups,
+			tabActions,
 			actions: {
 				newWorkspace: options.openNewWorkspace,
 				newProjectlessChat: () => void startProjectlessChat(),
@@ -262,6 +278,12 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				toggleRight: toggleRightSide,
 				toggleBottom: toggleBottomPanel,
 				showTool: (workspaceId, tool) => store().requestToolView(workspaceId, tool),
+				showFiles,
+				focusRegion: focusAdjacentRegion,
+				focusComposer: focusChatComposer,
+				focusProjects: () => focusProjects(options.toggleProjectsHome),
+				focusTerminal,
+				focusGroup: focusCenterGroup,
 				openHistory: openChatHistory,
 				findInFiles: openFindInFiles,
 				markRead: markWorkspaceRead,
@@ -272,6 +294,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				copyPath: (workspace) => void copyText(workspace.worktreePath),
 				openIn: openWorkspaceIn,
 				openSettings: (section?: SettingsSection) => store().openSettings(section),
+				runTabAction: runActiveTabAction,
 			},
 		};
 		const workItems = buildWorkItems({
@@ -318,6 +341,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		settled,
 		settleBlocked,
 		nativeShortcuts,
+		pageZoom,
+		tabActions,
 		options,
 		contextProject,
 		contextRepoProject,

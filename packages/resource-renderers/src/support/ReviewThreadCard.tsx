@@ -86,7 +86,7 @@ export function ReviewThreadCard({
 					<button
 						type="button"
 						data-testid="review-thread-anchor"
-						className={`review-thread-label rounded-sm tr-text-eyebrow outline-none focus-visible:ring-2 focus-visible:ring-primary${thread.stale ? " text-feedback-warning" : ""}`}
+						className={`review-thread-label rounded-sm tr-text-eyebrow focus-visible:focus-ring${thread.stale ? " text-feedback-warning" : ""}`}
 						onClick={onActivate}
 						{...(thread.anchorState === "outdated"
 							? { title: outdatedReason(t, thread.anchor) }

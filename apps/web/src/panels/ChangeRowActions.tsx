@@ -12,9 +12,10 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
-import type { MouseEvent, ReactNode } from "react";
-import { useState } from "react";
+import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
+import { useRef, useState } from "react";
 import { copyText } from "@/lib";
+import { focusTreeItemOnMenuClose, treeRowControlProps, treeRowKey } from "./treeNavigation";
 
 export const ROW_MENU_SLOT = "mr-4 size-20 shrink-0";
 
@@ -29,17 +30,27 @@ export function ChangeRowActions({
 	active?: boolean;
 	onView: () => void;
 	onOpenTab: () => void;
-	children: (rowProps: { onContextMenu: (event: MouseEvent) => void }) => ReactNode;
+	children: (rowProps: {
+		onContextMenu: (event: MouseEvent) => void;
+		onKeyDown: (event: KeyboardEvent) => void;
+	}) => ReactNode;
 }) {
 	const t = useT();
 	const [open, setOpen] = useState(false);
+	const rowRef = useRef<HTMLDivElement>(null);
 	const onContextMenu = (event: MouseEvent) => {
+		event.preventDefault();
+		setOpen(true);
+	};
+	const onKeyDown = (event: KeyboardEvent) => {
+		if (treeRowKey(event) !== "menu") return;
 		event.preventDefault();
 		setOpen(true);
 	};
 	return (
 		<DropdownMenu open={open} onOpenChange={setOpen}>
 			<div
+				ref={rowRef}
 				data-testid="change-row"
 				data-row
 				data-active={active || open ? true : undefined}
@@ -47,19 +58,24 @@ export function ChangeRowActions({
 					active || open ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered"
 				}`}
 			>
-				{children({ onContextMenu })}
+				{children({ onContextMenu, onKeyDown })}
 				<DropdownMenuTrigger asChild>
 					<IconButton
 						size="s"
 						icon={ChevronDown}
 						label={t("panels.changeRowActions.menuLabel", { path })}
 						data-testid="change-row-menu"
+						{...treeRowControlProps}
 						wrapTrigger
 						className="mr-4 shrink-0 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
 					/>
 				</DropdownMenuTrigger>
 			</div>
-			<DropdownMenuContent align="end" data-testid="change-row-actions">
+			<DropdownMenuContent
+				align="end"
+				data-testid="change-row-actions"
+				onCloseAutoFocus={(event) => focusTreeItemOnMenuClose(event, rowRef.current)}
+			>
 				<DropdownMenuItem data-testid="change-action-view" onSelect={onView}>
 					<FileDiff />
 					{t("panels.changeRowActions.review")}

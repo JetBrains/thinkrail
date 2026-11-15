@@ -108,7 +108,7 @@ an Issue's Markdown body and images in place, including closed Issues. Only one 
 time; refresh collapses it. The preview does not include comments; use the title link for the full
 provider page. Private attachment images may require access through the provider website.
 
-- **An IDE around the agent.** ThinkRail comes with Monaco editor tabs, a file tree integrated with git to show code changes as they happen, terminals, and document support. Rendered Markdown previews have a heading outline that follows the section you're reading; hide it or move it to either side.
+- **An IDE around the agent.** ThinkRail comes with Monaco editor tabs, a file tree integrated with git to show code changes as they happen, terminals, and document support. Rendered Markdown previews have a heading outline that follows the section you're reading; hide it or move it to either side. The pane you're typing in stays at full contrast while the rest is dimmed, and VS Code-style keys move you around: `F6` steps between panes, `⌘L` jumps to the chat input, `⌘0` to Projects, `⌘1`–`⌘9` to an editor group, and `` ⌃` `` to the terminal; `⌘\` splits the editor and `⌃⌘←` / `⌃⌘→` move a tab between groups.
 
 To connect, enter a **Repository address** and a personal access token in the Issues tool:
 
@@ -125,9 +125,11 @@ and draft delivery require the current host capability; older hosts do not perfo
 
 ## Inherited IDE capabilities
 
-- **Find anything from one box.** `⌘K` (or a double tap of Shift) opens a palette that finds chats and the messages inside them, workspaces and projects, files in the current workspace, specs, and plans, with a preview pane. It also runs the app's commands and opens Settings sections, and with nothing typed it lists the chats waiting for you. Type a task and press `⌘↵` to open Create workspace with it as the prompt. Press `⌘⇧F` to find text inside the workspace's files as you type: matches are grouped by file, with match-case and whole-word toggles and a code preview, and `↵` opens the file at that line.
+- **Find anything from one box.** `⌘K` (or a double tap of Shift) opens a palette that finds chats and the messages inside them, workspaces and projects, files in the current workspace, specs, and plans, with a preview pane. It also runs the app's commands, including the active tab's layout commands (split, move to another group or pane, new or remove group, close), and opens Settings sections, and with nothing typed it lists the chats waiting for you. Type a task and press `⌘↵` to open Create workspace with it as the prompt. Press `⌘⇧F` to find text inside the workspace's files as you type: matches are grouped by file, with match-case and whole-word toggles and a code preview, and `↵` opens the file at that line.
 
 - **Chats without a project.** Ask, plan, or draft without a repository. Each chat gets its own scratch folder under **Chats** for its files, terminal, and plan, with no branch, review, or pull request. Start one from the Welcome screen, the Create dialog, the palette, or the Chats section; deleting a chat moves its whole folder to the Trash. When a chat turns into work, **Continue in workspace** has the agent write a handoff summary and starts a new workspace chat with it.
+
+- **Artifacts that stay.** Everything the agent makes for you, such as design notes, mockups, diagrams, screenshots, and reports, lands in the workspace's git-ignored `.thinkrail/context/` folder. The Artifacts tool lists it with the chat that wrote each file and the ignored files its runs left behind. A dot on its rail icon tells you something new arrived. Nothing there disappears on its own: if the agent deletes a file, it stays listed and you can restore it in one click. The agent is steered away from leaving new files in `/tmp`. Mention an artifact in the chat, reveal it in Files, rename it, or cut and paste it into your project.
 
 - **Always up-to-date specifications.** A connected graph of `SPEC.md` files lives beside the code; the agent reads, searches, and maintains it through dedicated `spec_*` tools, so project intent persists across sessions. The read-only Specs tool renders the graph as a tree in its own view. Type `#` and a question in the palette to find the spec sections that answer it, in any word order and word form, ranked the way the agent's own `spec_search` ranks them. Press `↵` to open the spec at that heading, or `⌥↵` to ask the agent in a new chat when the specs phrase it differently.
 
@@ -170,6 +172,7 @@ this fork's build commit, for example `0.3.2.abcdef01`. The Release title is
 combined `SHA256SUMS` and `build-info.json` that record checksums, the full fork commit and upstream
 version provenance. The upstream version is a label, not a guarantee that this fork contains every
 change in that upstream release. Existing tags/releases are never overwritten.
+
 
 These are **unsigned, independent fork builds**, not JetBrains-signed distributions. Windows
 SmartScreen may warn. Extract the complete ZIP and keep the setup EXE beside its payload when running

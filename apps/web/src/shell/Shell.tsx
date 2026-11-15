@@ -16,7 +16,7 @@ import {
 	installUserFonts,
 	writeFontsHint,
 } from "../fonts";
-import { platformShortcutLabel } from "../lib";
+import { keybindingLabel } from "../keybindings";
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
 import { canStartProjectlessChat } from "../panels/chatActions";
@@ -59,20 +59,33 @@ import {
 import { UpdateInstallSurfaces, UpdateReadyButton, UpdateSettings, useUpdates } from "../updates";
 import { AppShortcuts } from "./AppShortcuts";
 import { BrandLogo } from "./BrandLogo";
-import { toggleBottomPanel, toggleLeftSide, toggleRightSide } from "./chordActions";
+import {
+	closeActiveItem,
+	focusCenterGroup,
+	focusChatComposer,
+	focusProjects,
+	focusTerminal,
+	showFiles,
+	toggleBottomPanel,
+	toggleLeftSide,
+	toggleRightSide,
+} from "./chordActions";
 import { FindInFilesHost } from "./FindInFilesHost";
+import { installFocusRecovery } from "./focusRecovery";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
 import { LocationBar } from "./locationBar";
 import { NativeWindowControls } from "./NativeWindowControls";
 import { PROJECT_HOME_PROJECTS_REGION_ID, ProjectHome } from "./ProjectHome";
+import { focusAdjacentRegion, installRegionTracker } from "./regions";
 import { SearchPaletteHost } from "./SearchPaletteHost";
 import { readSettingsShortcutLabel } from "./useAppShortcuts";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { useNativeWindowControls } from "./useNativeWindowControls";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
+import { runActiveTabAction } from "./workbenchCommands";
 
 const STATUS_LABEL = {
 	connected: "shell.connection.connected",
@@ -135,7 +148,7 @@ export function Shell() {
 	};
 
 	const homeProjects = useCollapsibleRegion<HTMLDivElement>(PROJECT_HOME_PROJECTS_REGION_ID);
-	const [searchShortcut] = useState(() => platformShortcutLabel("K"));
+	const [searchShortcut] = useState(() => keybindingLabel("search.open"));
 
 	const [themeHint] = useState(readThemeHint);
 	const [settingsShortcut] = useState(readSettingsShortcutLabel);
@@ -194,17 +207,37 @@ export function Shell() {
 		fontWeightOffset,
 		userFonts,
 	]);
+	useEffect(installRegionTracker, []);
+	useEffect(installFocusRecovery, []);
 	useGlobalHotkeys({
 		onProjects: () => toggleLeftSide(homeProjects.toggle),
-		...(hasActiveWorkspace ? { onWorkspace: toggleRightSide, onBottom: toggleBottomPanel } : {}),
+		...(hasActiveWorkspace
+			? {
+					onWorkspace: toggleRightSide,
+					onBottom: toggleBottomPanel,
+					onFocusGroup: focusCenterGroup,
+					onTerminal: focusTerminal,
+					onFiles: () => showFiles("all"),
+					...(activeChat ? {} : { onChanges: () => showFiles("changed") }),
+					onSplitRight: runActiveTabAction,
+					onMoveTab: runActiveTabAction,
+				}
+			: {}),
+		onCloseTab: closeActiveItem,
 		...(contextRepoProject || canStartChat ? { onNewWorkspace: () => void openNewWork() } : {}),
 		onSearch: () => useAppStore.getState().openSearch(),
 		onFindInFiles: openFindInFiles,
+		onNextRegion: () => focusAdjacentRegion(1),
+		onPreviousRegion: () => focusAdjacentRegion(-1),
+		onComposer: focusChatComposer,
+		onFocusProjects: () => focusProjects(homeProjects.toggle),
 	});
 	return (
 		<div data-testid="shell" className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr]">
 			<header
 				data-testid="topbar"
+				data-region="topbar"
+				data-region-kind="topbar"
 				className="relative window-drag flex h-topbar-row min-w-0 select-none items-center border-b border-border-default bg-container-header-bg px-16"
 			>
 				<div

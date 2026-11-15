@@ -52,7 +52,7 @@ export interface SurfaceReview {
 		onSend(draft: AnchorDraft, text: string): Promise<void>;
 	};
 	actions: ReviewThreadActions;
-	focus: { id: string; anchor: ReviewAnchor } | null;
+	focus: { id: string; anchor: ReviewAnchor; moveFocus: boolean } | null;
 	onFocusHandled(): void;
 }
 

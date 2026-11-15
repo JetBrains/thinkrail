@@ -288,7 +288,7 @@ function FoldRow({ group, onToggle }: { group: Category; onToggle: () => void })
 				stopped,
 			})}
 			onClick={onToggle}
-			className="flex min-h-28 items-center gap-8 rounded-sm border border-border-muted px-8 text-left text-text-muted tr-text-metadata outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+			className="flex min-h-28 items-center gap-8 rounded-sm border border-border-muted px-8 text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default focus-visible:focus-ring"
 		>
 			<Chevron className="size-14 shrink-0" />
 			<span className="min-w-0 truncate">

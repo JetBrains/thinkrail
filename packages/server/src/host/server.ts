@@ -3,6 +3,7 @@ import { join, normalize } from "node:path";
 import type {
 	HostPlatform,
 	HostUpdateNotice,
+	PiEvent,
 	ServerWelcome,
 	SessionCreatedPayload,
 	SessionDeletedPayload,
@@ -12,6 +13,7 @@ import type {
 	WsChannel,
 } from "@thinkrail/contracts";
 import {
+	ARTIFACTS_PROTOCOL_VERSION,
 	CONTINUATION_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
@@ -100,6 +102,12 @@ import {
 	track,
 } from "../analytics";
 import {
+	type ArtifactSessionEvent,
+	noteArtifactPathsChanged,
+	observeArtifactSessionEvent,
+	setArtifactsPublisher,
+} from "../artifacts";
+import {
 	cancelAllLogins,
 	initializeJbcentralRuntime,
 	setJbcentralAppliedPublisher,
@@ -158,6 +166,7 @@ import { watchUserThemes } from "../themes";
 import { isTodoToolEnd, maybeAttachChangeArtifacts, setSessionMemberWorkspaces } from "../todos";
 import { setTurnPublisher, TurnTracker } from "../turns";
 import {
+	ensureWatch,
 	setIgnoredPathsResolver,
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
@@ -298,6 +307,25 @@ const RECENT_FOLDER_CHECK_BUDGET_MS = 250;
 const log = logger("host");
 
 const isRequestId = (id: unknown): id is string => typeof id === "string";
+
+function artifactSessionEvent(event: PiEvent): ArtifactSessionEvent | null {
+	switch (event.type) {
+		case "agent_start":
+		case "agent_settled":
+			return { type: event.type };
+		case "tool_execution_start":
+			return {
+				type: event.type,
+				toolCallId: event.toolCallId,
+				toolName: event.toolName,
+				args: event.args,
+			};
+		case "tool_execution_end":
+			return { type: event.type, toolCallId: event.toolCallId, toolName: event.toolName };
+		default:
+			return null;
+	}
+}
 
 const onScratchDirPath = (path: string) =>
 	path === WORKSPACE_CONTEXT_DIR ||
@@ -510,6 +538,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.workspaceUpdated);
 				ws.subscribe(WS_CHANNELS.workspaceRemoved);
 				ws.subscribe(WS_CHANNELS.workspaceFsChanged);
+				ws.subscribe(WS_CHANNELS.workspaceArtifactsChanged);
 				if (ws.data.protocolVersion >= WORKSPACE_CREATION_PROTOCOL_VERSION) {
 					ws.subscribe(WS_CHANNELS.workspaceCreationChanged);
 					ws.subscribe(WS_CHANNELS.workspaceCreationRemoved);
@@ -977,6 +1006,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const publishFsChanged = (payload: WorkspaceFsChangedPayload) => {
 		publishScoped(WS_CHANNELS.workspaceFsChanged, payload, { workspaceId: payload.workspaceId });
 		reanchorWorkspace(payload.workspaceId);
+		noteArtifactPathsChanged(payload.workspaceId, payload.paths, payload.truncated);
 		const changedRoot = loadWorkspaces().find((w) => w.id === payload.workspaceId)?.worktreePath;
 		if (changedRoot) hostSearch().invalidateRoot(changedRoot);
 		if (
@@ -1149,10 +1179,24 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setTurnPublisher((turn) => {
 		publishScoped(WS_CHANNELS.turnChanged, turn, { workspaceId: turn.workspaceId });
 	});
+	setArtifactsPublisher((workspaceId) => {
+		publishScoped(
+			WS_CHANNELS.workspaceArtifactsChanged,
+			{ workspaceId },
+			{ workspaceId, belowProtocol: ARTIFACTS_PROTOCOL_VERSION },
+		);
+	});
 	setSessionPublisher((payload, workspaceId) => {
 		runObservation.observe(payload.sessionId, payload.event);
 		observeContinuation(payload.sessionId, payload.event);
 		void turnTracker.observe(payload.sessionId, payload.event);
+		const artifactEvent = artifactSessionEvent(payload.event);
+		if (artifactEvent) {
+			if (artifactEvent.type === "agent_start") void ensureWatch(workspaceId, { prewarm: true });
+			void observeArtifactSessionEvent(workspaceId, payload.sessionId, artifactEvent).catch(
+				(error) => log.warn("artifacts observation failed", error),
+			);
+		}
 		if (payload.event.type === "tool_execution_start") {
 			taskObservation.toolStarted(workspaceId, payload.sessionId, payload.event);
 		}
@@ -1344,6 +1388,7 @@ function restoreSeamDefaults(): void {
 	setMcpStatusPublisher(() => {});
 	setSessionResourcesPublisher(() => {});
 	setTurnPublisher(() => {});
+	setArtifactsPublisher(null);
 	setSessionPublisher(() => {});
 	setExtUiPublisher(() => {});
 	setLoginPublisher(() => {});

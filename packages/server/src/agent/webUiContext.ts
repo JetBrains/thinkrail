@@ -6,6 +6,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { ExtUiRequest, ExtUiResponse, ProviderWarning } from "@thinkrail/contracts";
 import { plainTextTheme } from "./plainTextTheme";
+import { plainText, stripAnsi } from "./stripAnsi";
 
 /** Clients whose protocol version is below `belowProtocol`; absent means every client. */
 export interface ExtUiAudience {
@@ -81,7 +82,10 @@ export function notifyExtUi(
 	level: "info" | "warning" | "error",
 	audience?: ExtUiAudience,
 ): void {
-	publish({ id: nextId(), sessionId, kind: "notify", message, level }, audience);
+	publish(
+		{ id: nextId(), sessionId, kind: "notify", message: stripAnsi(message), level },
+		audience,
+	);
 }
 
 export function publishSessionNotice(sessionId: string, notice: ProviderWarning): void {
@@ -98,10 +102,11 @@ function extensionName(extensionPath: string): string {
 }
 
 export function notifyExtensionError(sessionId: string, error: ExtensionError): void {
+	const plain = stripAnsi(error.error);
 	const cause =
-		error.error.length > MAX_EXTENSION_ERROR_CHARS
-			? `${error.error.slice(0, MAX_EXTENSION_ERROR_CHARS)}…`
-			: error.error;
+		plain.length > MAX_EXTENSION_ERROR_CHARS
+			? `${plain.slice(0, MAX_EXTENSION_ERROR_CHARS)}…`
+			: plain;
 	notifyExtUi(
 		sessionId,
 		`Extension ${extensionName(error.extensionPath)} failed on ${error.event}: ${cause}`,
@@ -150,7 +155,7 @@ export async function selectForToolCall(
 ): Promise<string | undefined> {
 	const v = await bridgeDialog(
 		sessionId,
-		{ id: nextId(), sessionId, kind: "select", title, options, ...call },
+		{ id: nextId(), sessionId, kind: "select", title: stripAnsi(title), options, ...call },
 		opts,
 	);
 	return typeof v === "string" ? v : undefined;
@@ -169,38 +174,74 @@ export function createWebUiContext(
 
 	return {
 		async select(title, options, opts) {
-			const v = await dialog({ id: nextId(), sessionId, kind: "select", title, options }, opts);
-			return typeof v === "string" ? v : undefined;
+			const passed = Array.isArray(options)
+				? Array.from({ length: options.length }, (_, i): unknown => options[i]).filter(
+						(option): option is string => typeof option === "string",
+					)
+				: [];
+			if (passed.length === 0) return undefined;
+			const shown = passed.map(stripAnsi);
+			const v = await dialog(
+				{ id: nextId(), sessionId, kind: "select", title: plainText(title), options: shown },
+				opts,
+			);
+			if (typeof v !== "string") return undefined;
+			return passed[shown.indexOf(v)] ?? v;
 		},
 		async confirm(title, message, opts) {
 			return (
-				(await dialog({ id: nextId(), sessionId, kind: "confirm", title, message }, opts)) === true
+				(await dialog(
+					{
+						id: nextId(),
+						sessionId,
+						kind: "confirm",
+						title: plainText(title),
+						message: plainText(message),
+					},
+					opts,
+				)) === true
 			);
 		},
 		async input(title, placeholder, opts) {
+			const hint = plainText(placeholder);
 			const v = await dialog(
-				{ id: nextId(), sessionId, kind: "input", title, ...(placeholder ? { placeholder } : {}) },
+				{
+					id: nextId(),
+					sessionId,
+					kind: "input",
+					title: plainText(title),
+					...(hint ? { placeholder: hint } : {}),
+				},
 				opts,
 			);
 			return typeof v === "string" ? v : undefined;
 		},
 		async editor(title, prefill) {
+			const draft = plainText(prefill);
 			const v = await dialog({
 				id: nextId(),
 				sessionId,
 				kind: "editor",
-				title,
-				...(prefill ? { prefill } : {}),
+				title: plainText(title),
+				...(draft ? { prefill: draft } : {}),
 			});
 			return typeof v === "string" ? v : undefined;
 		},
 		notify(message, type) {
+			if (typeof message !== "string") return;
 			const level = type ?? "info";
-			if (intercepted(sessionId, message, level)) return;
-			publish({ id: nextId(), sessionId, kind: "notify", message, level });
+			const text = stripAnsi(message);
+			if (intercepted(sessionId, text, level)) return;
+			publish({ id: nextId(), sessionId, kind: "notify", message: text, level });
 		},
 		setStatus(key, text) {
-			publish({ id: nextId(), sessionId, kind: "setStatus", key, text: text ?? null });
+			publish({
+				id: nextId(),
+				sessionId,
+				kind: "setStatus",
+				key,
+				text: typeof text === "string" ? stripAnsi(text) : null,
+			});
 		},
 		setWidget(key, content) {
 			publish({
@@ -208,17 +249,21 @@ export function createWebUiContext(
 				sessionId,
 				kind: "setWidget",
 				key,
-				content: Array.isArray(content) ? content : null,
+				content: Array.isArray(content)
+					? Array.from({ length: content.length }, (_, i) => plainText(content[i]))
+					: null,
 			});
 		},
 		setTitle(title) {
-			publish({ id: nextId(), sessionId, kind: "setTitle", title });
+			publish({ id: nextId(), sessionId, kind: "setTitle", title: plainText(title) });
 		},
 		pasteToEditor(text) {
-			publish({ id: nextId(), sessionId, kind: "pasteToEditor", text });
+			if (typeof text !== "string") return;
+			publish({ id: nextId(), sessionId, kind: "pasteToEditor", text: stripAnsi(text) });
 		},
 		setEditorText(text) {
-			publish({ id: nextId(), sessionId, kind: "setEditorText", text });
+			if (typeof text !== "string") return;
+			publish({ id: nextId(), sessionId, kind: "setEditorText", text: stripAnsi(text) });
 		},
 
 		onTerminalInput: () => () => {},

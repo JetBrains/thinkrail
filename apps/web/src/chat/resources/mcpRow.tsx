@@ -138,7 +138,7 @@ function McpOption({
 				tabIndex={0}
 				onClick={onSelect}
 				onKeyDown={onKeyDown}
-				className="flex min-w-0 cursor-default items-center gap-8 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex min-w-0 cursor-default items-center gap-8 rounded-sm focus-visible:focus-ring"
 			>
 				<McpGlyph server={server} />
 				<span

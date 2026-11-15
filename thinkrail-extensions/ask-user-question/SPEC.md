@@ -209,14 +209,13 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   browser-level keyboard coverage existed). So every control of the card and receipt carries `tabIndex`
   (option rows keep their roving 0/−1), a press on an option row focuses it, a markup test asserts the rule
   platform-independently, and the keyboard specs run in a WebKit lane ([[module-browser-e2e]]).
-- **Every focus indicator in the card is the app-wide accent focus indicator** — the shared buttons'
-  offset `primary` outline (Skip, Next/Submit, Add note, Discuss), and `focus-visible:ring-2` + `ring-primary`
-  on the card's own controls (`focus-within:` on the Other row, whose ring marks the roving cursor passing
-  through a text field) — per the colour system's "accent = focus" rule (`styles/COLOR.md`, Control row). The
-  card originally shipped on `ring-primary-soft`, which the theme refinement's palette flattening
-  composites to near-invisibility (accent @20% over the flattened surfaces), leaving keyboard users
-  with no visible cursor — the one file the app-wide focus-ring sweep missed. `ring-primary-soft`
-  remains only as the awaiting card's decorative active halo, which is not a focus indicator.
+- **Every focus indicator in the card is the shared focus ring** (`styles/COLOR.md`, *Focus ring*): the
+  shared buttons' own, the inset `focus-ring-inset` on the page tabs, and the outset `focus-ring` on option
+  rows, chips and the Other row, so a focused row stays distinct from a checked one that draws an accent
+  border. The Other row shows one ring: through `has-[textarea:focus-visible]` while its text field has
+  focus (the field drops its own ring), and on its own `focus-visible` when focus parks on the label after
+  Enter or Escape. `ring-primary-soft` is only the awaiting card's
+  decorative active halo, not a focus indicator.
 - **Explicit-selection keyboard model** (chosen by the user over the earlier Claude-style "Enter confirms
   and moves on"). One authored choice is in the Tab order. **↑/↓ only move**, wrapping through the
   options, **Other** and the **primary button** (Next on earlier pages, Submit on the last — skipped while

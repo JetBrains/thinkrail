@@ -230,6 +230,7 @@ describe("frontend-local layout state", () => {
 			toolTab("specs"),
 			toolTab("files"),
 			toolTab("issues"),
+			toolTab("artifacts"),
 			toolTab("plan"),
 			toolTab("review"),
 		]);

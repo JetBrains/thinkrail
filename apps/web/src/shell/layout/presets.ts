@@ -79,7 +79,7 @@ export const BUILTIN_LAYOUT_PRESETS: readonly LayoutPreset[] = [
 		center: group("balanced-primary"),
 		left: side(true, 0.18, [{ id: "balanced-left", tools: ["projects"] }]),
 		right: side(true, 0.28, [
-			{ id: "balanced-right-top", tools: ["specs", "files", "issues"], weight: 1.25 },
+			{ id: "balanced-right-top", tools: ["specs", "files", "issues", "artifacts"], weight: 1.25 },
 			{ id: "balanced-right-bottom", tools: ["plan", "review"] },
 		]),
 		bottom: bottom(true, [{ id: "balanced-bottom", tools: [] }]),
@@ -90,7 +90,7 @@ export const BUILTIN_LAYOUT_PRESETS: readonly LayoutPreset[] = [
 		center: group("focus-primary"),
 		left: side(false, 0.18, [{ id: "focus-left", tools: ["projects"] }]),
 		right: side(false, 0.26, [
-			{ id: "focus-right", tools: ["specs", "files", "issues", "review"] },
+			{ id: "focus-right", tools: ["specs", "files", "issues", "review", "artifacts"] },
 		]),
 		bottom: bottom(false, [{ id: "focus-bottom", tools: [] }]),
 	},
@@ -101,7 +101,7 @@ export const BUILTIN_LAYOUT_PRESETS: readonly LayoutPreset[] = [
 		left: side(true, 0.16, [{ id: "review-left", tools: ["projects"] }]),
 		right: side(true, 0.32, [
 			{ id: "review-right-main", tools: ["review"], weight: 1.4 },
-			{ id: "review-right-reference", tools: ["specs", "files", "issues"] },
+			{ id: "review-right-reference", tools: ["specs", "files", "issues", "artifacts"] },
 		]),
 		bottom: bottom(true, [{ id: "review-bottom", tools: [] }]),
 	},

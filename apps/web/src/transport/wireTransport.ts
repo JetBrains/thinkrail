@@ -16,6 +16,7 @@ import type {
 	SpeechStatus,
 	TurnChangeSet,
 	Workspace,
+	WorkspaceArtifactsChangedPayload,
 	WorkspaceCreation,
 	WorkspaceCreationRemoved,
 	WorkspaceFsChangedPayload,
@@ -525,6 +526,12 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.workspaceFsChanged, (data) => {
 		useAppStore.getState().noteFsChanged(data as WorkspaceFsChangedPayload);
+	});
+
+	transport.subscribe(WS_CHANNELS.workspaceArtifactsChanged, (data) => {
+		useAppStore
+			.getState()
+			.noteArtifactsChanged((data as WorkspaceArtifactsChangedPayload).workspaceId);
 	});
 
 	transport.subscribe(WS_CHANNELS.turnChanged, (data) => {

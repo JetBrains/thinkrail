@@ -786,9 +786,15 @@ export default function ChatView({
 	);
 	useEffect(() => {
 		if (!composerFocusRequested) return;
-		useAppStore.getState().clearComposerFocusRequest();
+		const store = useAppStore.getState();
+		const dismissHistory = store.composerFocusRequest?.dismissHistory === true;
+		store.clearComposerFocusRequest();
+		if (dismissHistory) {
+			if (store.historyOpenRequest?.sessionId === sessionId) store.clearHistoryOpen();
+			if (historyOverlayOpen) closeHistory();
+		}
 		composerRef.current?.refocus();
-	}, [composerFocusRequested]);
+	}, [composerFocusRequested, sessionId, historyOverlayOpen, closeHistory]);
 
 	const widgetEntries = Object.entries(extUiWidget);
 	const disableNotice = () => {

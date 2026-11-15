@@ -1,6 +1,7 @@
 import {
 	RiFileCopyLine as Copy,
 	RiFileCopy2Line as CopyEntry,
+	RiScissorsCutLine as Cut,
 	RiClipboardLine as Paste,
 	RiDeleteBinLine as Trash,
 } from "@remixicon/react";
@@ -24,6 +25,7 @@ import {
 	selectFilesTreeView,
 	selectWorkspaceById,
 	selectWorkspaceIsRunning,
+	supportsArtifacts,
 	type TabIntent,
 	useAppStore,
 } from "../store";
@@ -35,6 +37,7 @@ import { deleteEntry, pasteDestination, pasteInto, supportsFileMutations } from 
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
+import { Tree, treeRowKey } from "./treeNavigation";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
 type SetPathsExpanded = (paths: readonly string[], expanded: boolean) => void;
@@ -57,6 +60,7 @@ export function FileTree({
 	marks,
 	...focus
 }: TreeFocus & { workspaceId: string; marks: ChangeMarks }) {
+	const t = useT();
 	const [nodes, setNodes] = useState<FileNode[] | null>(null);
 	const [deleteRequest, setDeleteRequest] = useState<DeleteRequest | null>(null);
 	const expanded = useAppStore((s) => selectFilesTreeView(s, workspaceId).expanded);
@@ -86,11 +90,17 @@ export function FileTree({
 	if (nodes.length === 0) return <EmptyTree workspaceId={workspaceId} />;
 	return (
 		<>
-			<ul className="flex flex-col motion-safe:animate-reveal">
+			<Tree
+				label={t("panels.fileTree.label")}
+				focusList="files"
+				className="flex flex-col motion-safe:animate-reveal"
+				onOpenKept={(path) => void openFileInTab(workspaceId, path, "keep")}
+			>
 				{nodes.map((node) => (
 					<FileNodeRow
 						key={node.path}
 						node={node}
+						level={1}
 						workspaceId={workspaceId}
 						marks={marks}
 						focus={focus}
@@ -100,7 +110,7 @@ export function FileTree({
 						onDelete={(path) => setDeleteRequest({ path, open: true })}
 					/>
 				))}
-			</ul>
+			</Tree>
 			{deleteRequest ? (
 				<DeleteEntryDialog
 					workspaceId={workspaceId}
@@ -173,6 +183,7 @@ function DeleteEntryDialog({
 
 function FileNodeRow({
 	node,
+	level,
 	workspaceId,
 	marks,
 	focus,
@@ -182,6 +193,7 @@ function FileNodeRow({
 	onDelete,
 }: {
 	node: FileNode;
+	level: number;
 	workspaceId: string;
 	marks: ChangeMarks;
 	focus: TreeFocus;
@@ -238,7 +250,7 @@ function FileNodeRow({
 			: undefined;
 
 	return (
-		<li>
+		<li role="none" data-focus-row={node.path}>
 			<FileTreeMenu
 				workspaceId={workspaceId}
 				path={directory?.path ?? node.path}
@@ -249,6 +261,9 @@ function FileNodeRow({
 					<TreeRow
 						ref={revealRow}
 						testid="file-node"
+						treeId={node.path}
+						level={level}
+						path={directory?.path ?? node.path}
 						kind={isDir ? "dir" : "file"}
 						active={!isDir && focus.activePath === node.path}
 						highlighted={menuOpen}
@@ -292,11 +307,16 @@ function FileNodeRow({
 				)}
 			</FileTreeMenu>
 			{isDir && expanded && children && (
-				<ul className="flex flex-col pl-tree-indent">
+				<ul
+					role="none"
+					data-focus-list={`files:${directory?.path ?? node.path}`}
+					className="flex flex-col pl-tree-indent"
+				>
 					{children.map((child) => (
 						<FileNodeRow
 							key={child.path}
 							node={child}
+							level={level + 1}
 							workspaceId={workspaceId}
 							marks={marks}
 							focus={focus}
@@ -328,6 +348,7 @@ function FileTreeMenu({
 	const t = useT();
 	const [open, setOpen] = useState(false);
 	const mutations = useAppStore((s) => supportsFileMutations(s.protocolVersion));
+	const moves = useAppStore((s) => supportsArtifacts(s.protocolVersion));
 	const canPaste = useAppStore((s) => s.fileClipboard !== null);
 	const copyPath = (absolute: boolean) => {
 		const worktreePath = selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath;
@@ -335,7 +356,17 @@ function FileTreeMenu({
 	};
 	return (
 		<ContextMenu open={open} onOpenChange={setOpen}>
-			<ContextMenuTrigger asChild onKeyDown={openContextMenuFromKeyboard}>
+			<ContextMenuTrigger
+				asChild
+				onKeyDown={(event) => {
+					if (mutations && treeRowKey(event) === "delete") {
+						event.preventDefault();
+						onDelete(path);
+						return;
+					}
+					openContextMenuFromKeyboard(event);
+				}}
+			>
 				{children(open)}
 			</ContextMenuTrigger>
 			<ContextMenuContent data-testid="file-tree-actions">
@@ -357,6 +388,17 @@ function FileTreeMenu({
 							<CopyEntry />
 							{t("common.copy")}
 						</ContextMenuItem>
+						{moves ? (
+							<ContextMenuItem
+								data-testid="file-tree-cut"
+								onSelect={() =>
+									useAppStore.getState().setFileClipboard({ workspaceId, path, cut: true })
+								}
+							>
+								<Cut />
+								{t("panels.fileTree.cut")}
+							</ContextMenuItem>
+						) : null}
 						{canPaste ? (
 							<ContextMenuItem
 								data-testid="file-tree-paste"

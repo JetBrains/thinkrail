@@ -15,6 +15,7 @@ import { toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { reconcileCreationReceipt } from "./creationReceipt";
 import { openChatInTab } from "./openChat";
+import { treeRowControlProps, useTreeItem } from "./treeNavigation";
 
 const HOVER_CONTROL_CLASS =
 	"shrink-0 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100";
@@ -95,6 +96,7 @@ function CreationActions({
 					variant="ghost"
 					size="s"
 					data-testid="workspace-creation-retry"
+					{...treeRowControlProps}
 					onClick={() => retryCreation(creation.id)}
 					className={HOVER_CONTROL_CLASS}
 				/>
@@ -106,6 +108,7 @@ function CreationActions({
 						variant="ghost"
 						size="s"
 						data-testid="workspace-creation-edit-retry"
+						{...treeRowControlProps}
 						onClick={() => editAndRetryCreation(creation)}
 						className={HOVER_CONTROL_CLASS}
 					/>
@@ -125,6 +128,7 @@ function CreationActions({
 					variant="ghost"
 					size="s"
 					data-testid="workspace-creation-dismiss"
+					{...treeRowControlProps}
 					onClick={() => dismissCreation(creation.id)}
 					className={HOVER_CONTROL_CLASS}
 				/>
@@ -195,6 +199,7 @@ export function WorkspaceCreationRow({
 	const t = useT();
 	const percent = percentOf(creation);
 	const reason = statusReason(t, creation);
+	const treeItem = useTreeItem(creation.id, { level: 2, label: creation.name, selected: isActive });
 	const label = (
 		<span
 			data-testid="workspace-creation-status"
@@ -211,9 +216,10 @@ export function WorkspaceCreationRow({
 		</span>
 	);
 	return (
-		<li>
+		<li role="none">
 			<div
 				data-testid="workspace-creation-row"
+				data-focus-row={creation.id}
 				data-state={creation.state}
 				data-active={isActive}
 				className={cn(
@@ -223,8 +229,10 @@ export function WorkspaceCreationRow({
 			>
 				<button
 					type="button"
+					{...treeItem}
+					data-focus-row-primary
 					onClick={onSelect}
-					className="flex min-w-0 flex-1 items-start gap-4 text-left"
+					className="flex min-w-0 flex-1 items-start gap-4 text-left focus-visible:focus-ring-inset"
 				>
 					<StateIcon
 						creation={creation}

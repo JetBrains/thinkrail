@@ -18,7 +18,7 @@ result in pi's terminal UI. It knows nothing about ThinkRail. ThinkRail composes
 
 - **Default export** — the pi `ExtensionFactory` with the default configuration; what `pi install`
   loads through the `pi` manifest.
-- **`createVisualizeExtension({ validateMermaid?, checkFile?, scratchDir? })`** — returns an `ExtensionFactory` with an injected
+- **`createVisualizeExtension({ validateMermaid?, checkFile?, scratchDir?, saveVisualization? })`** — returns an `ExtensionFactory` with an injected
   `MermaidValidator: (source) => void | Promise<void>`. The validator **replaces** the default check
   (never supplements it, so a stricter engine can accept syntax the probe would reject). The package
   keeps shape checks, empty-source rejection, source enumeration, awaiting the callback and wrapping any
@@ -26,7 +26,11 @@ result in pi's terminal UI. It knows nothing about ThinkRail. ThinkRail composes
   model to correct and retry. `checkFile: (path, cwd) => void | Promise<void>` is the same seam for
   file previews (every `path`/`before`, wrapped into a `` cannot show `path` `` diagnostic asking the
   model to write the file first); without it paths are not checked, because the package stays
-  `node:`-free. `scratchDir` names where the prompt guideline sends mockups.
+  `node:`-free. `scratchDir` names where the prompt guideline sends mockups. `saveVisualization:
+  ({ params, markdown, cwd }) => path | undefined` (sync or async) is the persistence seam, for the same
+  reason: after a diagram or comparison validates, the host may store its markdown and return where; the
+  model-facing result then ends with `` Saved to `path`. ``. It is best effort — a throw or `undefined`
+  leaves the result as it was — and never called for `type: "file"`, which is already a file.
 - **The tool contract** renderers key on: the name `"visualize"`, its argument shape
   (`type: "diagram" | "comparison" | "file"`, `title?`, `mermaid?`, `options?[]`, `path?`, `before?`),
   and `details` = the validated params. Changing this shape is a breaking change for every renderer,

@@ -223,6 +223,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 		<section
 			data-testid="changes-section"
 			data-path={path}
+			data-focus-row={path}
 			data-status={change.status}
 			data-collapsed={collapsed && mode === "stacked" ? true : undefined}
 			data-viewed={viewed ? true : undefined}
@@ -246,6 +247,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 								: t("changes.section.collapseFile", { name: base })
 						}
 						data-testid="changes-section-toggle"
+						data-focus-row-primary
 						aria-expanded={!collapsed}
 						onClick={toggleCollapsed}
 						className="shrink-0"
@@ -361,14 +363,14 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 							type="button"
 							data-testid="changes-section-expand"
 							onClick={toggleCollapsed}
-							className="text-text-muted underline-offset-2 hover:text-text-default hover:underline"
+							className="text-text-muted underline-offset-2 hover:text-text-default hover:underline focus-visible:focus-ring"
 						>
 							{t("changes.section.expand")}
 						</button>
 						<button
 							type="button"
 							onClick={openAsTab}
-							className="text-text-muted underline-offset-2 hover:text-text-default hover:underline"
+							className="text-text-muted underline-offset-2 hover:text-text-default hover:underline focus-visible:focus-ring"
 						>
 							{t("changes.section.openAsTab")}
 						</button>
@@ -384,7 +386,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 						type="button"
 						data-testid="changes-section-retry"
 						onClick={() => setError(null)}
-						className="text-text-muted underline-offset-2 hover:text-text-default hover:underline"
+						className="text-text-muted underline-offset-2 hover:text-text-default hover:underline focus-visible:focus-ring"
 					>
 						{t("common.retry")}
 					</button>

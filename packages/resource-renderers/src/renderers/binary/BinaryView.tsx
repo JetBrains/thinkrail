@@ -35,7 +35,7 @@ export default function BinaryView({ resource, content }: ResourceViewProps) {
 					<a
 						href={bytes.url}
 						download={fileName(resource.path)}
-						className="mt-16 inline-flex rounded-sm bg-control-primary-bg px-12 py-4 tr-text-action text-control-primary-text hover:bg-control-primary-bg-hovered"
+						className="mt-16 inline-flex rounded-sm bg-control-primary-bg px-12 py-4 tr-text-action text-control-primary-text hover:bg-control-primary-bg-hovered focus-visible:focus-ring"
 					>
 						{t("viewer.binary.openExternally")}
 					</a>

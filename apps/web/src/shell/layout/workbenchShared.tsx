@@ -31,6 +31,7 @@ import {
 	type LayoutSide,
 	layoutTabName,
 } from "./model";
+import type { WorkbenchTabCommands } from "./tabActions";
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutCenterTab,
@@ -48,6 +49,8 @@ export interface LayoutTabFocusRequest {
 	onlyIfFocusLost?: true;
 }
 
+export type RegisterChatRename = (tabId: string, begin: (name: string) => void) => () => void;
+
 export interface PreparedLayoutClose {
 	document: WorkspaceLayoutDocument;
 	onAccepted: (current?: { document: WorkspaceLayoutDocument; attention: LayoutAttention }) => void;
@@ -62,7 +65,7 @@ export interface WorkbenchProps {
 	maxBottomGroups: number;
 	projectionEpoch: number;
 	focusRequest?: LayoutTabFocusRequest;
-	subscribeCloseRequest?: (listener: () => void) => () => void;
+	registerTabCommands?: (commands: WorkbenchTabCommands) => () => void;
 	renderTabBody: (tab: LayoutCenterTab | Extract<LayoutSideTab, { kind: "terminal" }>) => ReactNode;
 	renderTabAdornment: (tab: LayoutTab) => ReactNode;
 	renderToolBody: (tool: LayoutToolId) => ReactNode;
@@ -622,6 +625,7 @@ export interface SharedGroupProps {
 	onHideSide: (region: LayoutAuxiliaryRegion) => void;
 	onRevealTool: (tool: LayoutToolId) => void;
 	onRenameChat: WorkbenchProps["onRenameChat"];
+	registerChatRename: RegisterChatRename;
 	chatFirstPrompts: WorkbenchProps["chatFirstPrompts"];
 	canFocusAdjacentGroup: boolean;
 }

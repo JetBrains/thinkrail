@@ -33,7 +33,8 @@ list for registry extensions.
   `workspaceFiles` (the host's file check shared by extension server halves through the session seam —
   `checkWorkspaceFile` + `MOCKUP_DIR`: a path must be relative, stay inside the session cwd lexically and
   after resolving links, name a regular file and stay out of `.git`, the paths the host's `fs.readFile`
-  then serves; `extension-api` stays contract-only, so the check lives here, not in the SDK), `omitDisabledRegistryExtensions(result, isDisabled)` (drops a disabled
+  then serves; `extension-api` stays contract-only, so the check lives here, not in the SDK; plus
+  `ensureArtifactsDir`, which is `shared`'s `seedArtifactsDir` on the session cwd), `omitDisabledRegistryExtensions(result, isDisabled)` (drops a disabled
   extension's `<inline:…>` entries from a pi `LoadExtensionsResult`, for the parent loader's
   `extensionsOverride`, so a disabled extension is absent rather than present-and-empty),
   `preferRegistryTools(result)` (also composed into that override, after the disabled filter). It moves a
@@ -79,6 +80,7 @@ list for registry extensions.
   headless-search policy: it compensates for the host's UI for any copy of `pi-web-access`, so it is not
   the extension's to own.
 - **Allowed deps:** `@thinkrail/extension-api/server` (types), every `@thinkrail/ext-*/server`,
+  `@thinkrail/shared` (`paths`, `artifactsDir`),
   `@earendil-works/pi-coding-agent` (types only), `@thinkrail/contracts` (the `ExtensionCatalogEntry` type),
   Node `module`/`fs`/`path`.
 - **Forbidden:** `host`; `settings` (the disabled set arrives as a parameter); sibling features; resolving extension-owned packages from the host's own

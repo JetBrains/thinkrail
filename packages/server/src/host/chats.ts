@@ -11,6 +11,7 @@ import {
 	listSessions,
 	trashWorkspaceDelegation,
 } from "../agent";
+import { removeWorkspaceArtifacts } from "../artifacts";
 import { forgetWorkspaceChanges } from "../changes";
 import { logger } from "../log";
 import { removeWorkspaceReviews } from "../reviews";
@@ -193,5 +194,6 @@ async function runChatDeletion(workspace: Workspace): Promise<void> {
 	forgetWorkspaceTurns(id);
 	if (isUnderChatsRoot(cwd) && existsSync(cwd)) await trashFile(cwd);
 	dropChatRecord(id);
+	removeWorkspaceArtifacts(id);
 	log.info(`deleted chat ${id}`);
 }

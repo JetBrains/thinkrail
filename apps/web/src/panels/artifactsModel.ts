@@ -1,0 +1,86 @@
+import type {
+	SpecGraphNode,
+	WorkspaceArtifact,
+	WorkspaceArtifactsSnapshot,
+	WorkspaceIgnoredOutput,
+} from "@thinkrail/contracts";
+import { localeOf, type Translator } from "@thinkrail/locales/react";
+
+export interface ArtifactRow {
+	artifact: WorkspaceArtifact;
+	name: string;
+	folder: string;
+	taskSpecStatus: string | null;
+	fresh: boolean;
+}
+
+export interface OutputRow {
+	output: WorkspaceIgnoredOutput;
+	fresh: boolean;
+}
+
+export interface ArtifactRows {
+	artifacts: ArtifactRow[];
+	outputs: OutputRow[] | null;
+	otherChats: number;
+}
+
+export interface ArtifactRowOptions {
+	sessionId: string | null;
+	highlightSince: number;
+	showIgnored: boolean;
+	specs: readonly SpecGraphNode[] | undefined;
+}
+
+function splitPath(dir: string, path: string): { name: string; folder: string } {
+	const inside = path.startsWith(`${dir}/`) ? path.slice(dir.length + 1) : path;
+	const slash = inside.lastIndexOf("/");
+	return slash < 0
+		? { name: inside, folder: "" }
+		: { name: inside.slice(slash + 1), folder: inside.slice(0, slash) };
+}
+
+export function artifactRows(
+	snapshot: WorkspaceArtifactsSnapshot,
+	options: ArtifactRowOptions,
+): ArtifactRows {
+	const taskSpecs = new Map(
+		(options.specs ?? [])
+			.filter((node) => node.type === "task-spec")
+			.map((node) => [node.path, node.status ?? null]),
+	);
+	const mine = (sessionId: string | undefined) =>
+		options.sessionId === null || sessionId === options.sessionId;
+	const artifacts = snapshot.artifacts
+		.filter((artifact) => mine(artifact.sessionId))
+		.map((artifact) => ({
+			artifact,
+			...splitPath(snapshot.dir, artifact.path),
+			taskSpecStatus: taskSpecs.has(artifact.path) ? (taskSpecs.get(artifact.path) ?? "") : null,
+			fresh: artifact.firstSeenAt > options.highlightSince,
+		}));
+	const shownOutputs = snapshot.outputs === null || !options.showIgnored ? null : snapshot.outputs;
+	const outputs =
+		shownOutputs
+			?.filter((output) => mine(output.sessionId))
+			.map((output) => ({ output, fresh: output.changedAt > options.highlightSince })) ?? null;
+	const otherChats =
+		snapshot.artifacts.length -
+		artifacts.length +
+		(shownOutputs?.length ?? 0) -
+		(outputs?.length ?? 0);
+	return { artifacts, outputs, otherChats };
+}
+
+export function artifactTimeLabel(t: Translator, changedAt: number): string {
+	return t("panels.artifacts.changedAt", {
+		time: new Date(changedAt).toLocaleString(localeOf(t), {
+			dateStyle: "medium",
+			timeStyle: "short",
+		}),
+	});
+}
+
+export function mentionText(path: string): string {
+	return `@${path} `;
+}

@@ -14,4 +14,9 @@ export {
 	resolveWorktreeFile,
 	workspaceRelativePath,
 } from "./files";
-export { copyWorktreeEntry, deleteWorktreeEntry } from "./mutations";
+export {
+	copyWorktreeEntry,
+	deleteWorktreeEntry,
+	moveWorktreeEntry,
+	renameWorktreeEntry,
+} from "./mutations";

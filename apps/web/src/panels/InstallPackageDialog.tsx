@@ -26,7 +26,7 @@ import { SegmentedControl } from "./SegmentedControl";
 import { SettingsNotice } from "./SettingsNotice";
 
 const INPUT_CLASS =
-	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text";
+	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default placeholder:text-text-muted focus-visible:border-control-border-active focus-visible:focus-ring disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text";
 
 /** A light reading of the source for the echo line only; the host is the validator. */
 export function describeSource(t: Translator, raw: string): string | null {

@@ -166,6 +166,16 @@ export function AuxiliaryRailButton({
 					) : (
 						<PanelsTopLeft className={RAIL_ICON} />
 					)}
+					{entry.kind === "tool" ? (
+						<span
+							className={cn(
+								"pointer-events-none absolute -right-4 flex",
+								entry.region === "bottom" ? "top-0" : "-top-4",
+							)}
+						>
+							{shared.renderTabAdornment(toolTab(entry.tool))}
+						</span>
+					) : null}
 					{entry.kind === "terminals" && ordinal > 1 ? (
 						<span
 							aria-hidden="true"

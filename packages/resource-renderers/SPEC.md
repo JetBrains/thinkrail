@@ -255,6 +255,16 @@ is large; a host passes `virtualize` only for a diff large enough to need it. Ev
 in one scroll. `HunkActions.triage` is optional: a surface that tracks kept hunks supplies the kept keys,
 a setter, and a sink for the renderer's hunk content keys; a renderer without it shows no Keep control.
 
+Renderers speak the web shell's focus-recovery markup ([[module-web]], *Get right*) without importing it: a
+Pierre diff's scroller is the `hunks:<path>` list and each hunk toolbar a row keyed by its content key
+(`data-block-id` carries `changeBlockId`), with Revert as its primary, so a reverted hunk hands focus to the
+next one. A review focus always scrolls the revealed thread card (or notebook cell) into view; it moves
+keyboard focus to the card's first control only when `SurfaceReview.focus.moveFocus` asks — **Show in file**
+and the review's keyboard jumps do, a guide's Prev / Next button does not, so its next Enter advances the
+guide instead of sending the draft. Every renderer goes through `support/revealFocus.ts`'s
+`revealReviewCard` (`@thinkrail/ui/focus`'s `focusFirstControl`, with `preventScroll`); Monaco, whose cards
+mount in view zones after the line reveal, polls a bounded number of frames for the card.
+
 `ResourceContent` keeps text, retrievable bytes, and an absent diff side distinct. In particular, absence
 is never represented by a byte payload without a URL. `SurfaceReview` carries authoritative anchors; a
 renderer only projects selectors into geometry. `isPlaceable` answers whether at least one positioned
@@ -637,15 +647,16 @@ content's own height.
   lists exactly the headings GFM, alerts and raw HTML produce, CJK or duplicate titles included, and names
   each by its source-line stamp, the anchor the line reveal and review comments already use; it never
   coordinates slug ids across review segments. Entries nest under the nearest shallower heading (a skipped
-  level still nests) as nested lists. Selecting one opens any closed `<details>` around the heading and
-  scrolls only the preview scroller to it, smoothly unless the reader prefers reduced motion. The current
+  level still nests) as nested lists. Selecting one opens any closed `<details>` around the heading,
+  scrolls only the preview scroller to it, smoothly unless the reader prefers reduced motion, and moves
+  focus to the heading (`tabIndex=-1` if it has none, `preventScroll`). The current
   section — the last laid-out heading at or
   above the scroller top, else the first — is `aria-current="location"`; scroll events are coalesced to
   one binary search per animation frame, so a long document reads O(log n) heading rects per frame, and
   headings inside closed `<details>` are skipped from the search rather than measured. The active entry
   stays visible by adjusting only the outline list's own scroll, never an ancestor's (an enclosing
-  transcript must not jump). The outline shows with two or more headings; a toggle (`aria-pressed`)
-  hides it, and `markdownOutlineVisible` keeps that choice; before any choice it starts open only when
+  transcript must not jump). The outline shows with two or more headings; a toggle (`aria-pressed`, drawn
+  in the outline header and, closed, over the preview — one `data-focus-slot`, so focus stays on it) hides it, and `markdownOutlineVisible` keeps that choice; before any choice it starts open only when
   the preview frame is at least `MARKDOWN_OUTLINE_NARROW_WIDTH` (720px) wide. `markdownOutlineSide`
   places it left or right, in DOM order matching the visual order. A `compact` frame drops it with the
   rest of the chrome. Rendered diffs and source view have no outline.
@@ -700,8 +711,9 @@ content's own height.
   diagnostics by construction. Each editor mount owns its model: the model id is a per-mount `useId` scope
   ahead of the path, so the same file on screen twice (a chat card and its full screen, a card and the
   file's tab) never shares a model that one unmount disposes under the other.
-- **`MonacoEditor` mounts Monaco itself.** A layout effect creates the editor and its model in the commit
-  that mounts the view, with no loading state, then restores the view state and attaches review commenting
+- **`MonacoEditor` mounts Monaco itself.** Its container carries `data-focus-default`, the web shell's
+  keyboard landing marker, so a region focus chord lands in the editor's input. A layout effect creates
+  the editor and its model in the commit that mounts the view, with no loading state, then restores the view state and attaches review commenting
   (review attaches only at mount). Its layout cleanup saves the view state before it disposes the editor
   and the model, in that order. A path change on a live editor swaps the model in place, and the language
   follows the path, because `RendererView` is keyed by implementation, not path. New text calls `setValue`

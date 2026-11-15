@@ -70,7 +70,7 @@ export function ToolCard({
 				aria-expanded={expanded}
 				onClick={toggle}
 				className={cn(
-					"flex w-full cursor-pointer select-none items-center gap-4 px-8 py-4 text-left tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary",
+					"flex w-full cursor-pointer select-none items-center gap-4 px-8 py-4 text-left tr-text-metadata focus-visible:focus-ring-inset",
 					contentWidth && "[contain:inline-size]",
 				)}
 			>
