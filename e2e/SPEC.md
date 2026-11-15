@@ -694,7 +694,7 @@ into the fixture repository (removed in `finally`) and pins the question preview
 before/after, mermaid, none) at one card height, full-screen keys that never page or skip, a file removed
 under its preview, the picked file's path in the persisted answer, and the compare overlay (flip and jump
 keys, Current never choosable, choose-and-stay, a side-by-side pair whose two frames keep one `scrollTop`
-in 2-up and swipe even though the mockups ask for smooth scrolling, All opening a pane alone, focus back on the chosen row, the receipt's read-only reopen); `plan-ask.spec.ts` adds the same file
+in 2-up and swipe even though the mockups ask for smooth scrolling, All at 1400×900 clipping no HTML frame below its pane and opening a pane alone, focus back on the chosen row, the receipt's read-only reopen); `plan-ask.spec.ts` adds the same file
 preview on the plan page. These three specs also run in a **`webkit` Playwright project**: the macOS desktop
 is the system WKWebView, whose Tab skips buttons without an explicit `tabindex` (the regression this lane
 exists for). CI installs WebKit with the system libraries it links, not its media plugins (`.github/SPEC.md`);

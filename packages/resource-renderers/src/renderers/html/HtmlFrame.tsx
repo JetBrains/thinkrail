@@ -1,3 +1,4 @@
+import { cn } from "@thinkrail/ui/utils";
 import { type CSSProperties, type SyntheticEvent, useEffect, useRef } from "react";
 import { useElementSize } from "../../support/useElementSize";
 import type { ScrollLink } from "./scrollLink";
@@ -10,11 +11,13 @@ export function HtmlFrame({
 	document,
 	viewport = "responsive",
 	scrollLink,
+	compact = false,
 }: {
 	title: string;
 	document: string;
 	viewport?: HtmlViewport;
 	scrollLink?: ScrollLink | undefined;
+	compact?: boolean;
 }) {
 	const { ref: boxRef, size } = useElementSize<HTMLDivElement>();
 	const detachRef = useRef<(() => void) | null>(null);
@@ -47,7 +50,10 @@ export function HtmlFrame({
 			data-testid="html-frame-box"
 			data-viewport={viewport}
 			data-scale={geometry.scale.toFixed(3)}
-			className="relative h-full min-h-[360px] w-full overflow-hidden"
+			className={cn(
+				"relative h-full w-full overflow-hidden",
+				compact ? "min-h-0" : "min-h-[360px]",
+			)}
 			style={fitted ? vars : undefined}
 		>
 			<iframe

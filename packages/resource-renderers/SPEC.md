@@ -533,7 +533,9 @@ Tablet 768 / Phone 390 / Fill, default Desktop, persisted as `{ viewport }` view
 caller's view state changes (`useHtmlViewport`, so a chat card follows a width chosen in its full screen): the frame renders at
 the design width and is CSS-scaled down to its box (never up), keeping its own vertical scroll, so a narrow
 pane, a 2-up half or a chat card shows the true layout shrunk rather than an accidental mobile reflow; Fill
-is the old reflow. Scaling is pure geometry on the wrapper — nothing measures the document's size; the wrapper's box is measured in a layout effect (the package's
+is the old reflow. The frame's box fills its host; a full-size view keeps a 360 px floor, but a compact
+one (a chat card, a questionnaire pane, the compare overlay's cells) takes exactly the height it is given,
+because the floor inside a shorter fixed frame clipped the document's end out of reach. Scaling is pure geometry on the wrapper — nothing measures the document's size; the wrapper's box is measured in a layout effect (the package's
 one `useElementSize`, shared with the SVG view and the region surfaces), so the first paint is already fitted
 instead of reflowing the document at the pane width for a frame. The sanitizer also strips form controls, so mockups draw
 buttons and inputs with styled elements; spot (region) comments on HTML are not offered yet.

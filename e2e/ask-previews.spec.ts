@@ -294,6 +294,22 @@ function pairedScrolls(page: Page): Promise<number[]> {
 	);
 }
 
+function clippedHtmlPanes(page: Page): Promise<string[]> {
+	return page.evaluate(() =>
+		[...document.querySelectorAll<HTMLElement>('[data-testid="ask-compare-pane"]')].flatMap(
+			(pane) => {
+				const box = pane.querySelector('[data-testid="html-frame-box"]');
+				if (!box) return [];
+				const frame = box.getBoundingClientRect();
+				const bounds = pane.getBoundingClientRect();
+				return frame.height > 100 && frame.bottom <= bounds.bottom + 1
+					? []
+					: [`${pane.dataset.item}: frame ${frame.top}–${frame.bottom}, pane to ${bounds.bottom}`];
+			},
+		),
+	);
+}
+
 async function scrolledTogether(page: Page): Promise<boolean> {
 	const [left, right] = await pairedScrolls(page);
 	return left !== undefined && left > 0 && left === right;
@@ -351,8 +367,10 @@ test("the compare overlay flips through the options, scrolls a pair together and
 		await expect.poll(() => scrolledTogether(page)).toBe(true);
 		await page.screenshot({ path: test.info().outputPath("compare-swipe.png") });
 
+		await page.setViewportSize({ width: 1400, height: 900 });
 		await overlay.getByTestId("ask-compare-view-grid").click();
 		await expect(overlay.getByTestId("ask-compare-pane")).toHaveCount(5);
+		await expect.poll(() => clippedHtmlPanes(page)).toEqual([]);
 		await page.screenshot({ path: test.info().outputPath("compare-grid.png") });
 		await overlay.getByTestId("ask-compare-pane-title").nth(2).click();
 		await expect(shown).toHaveAttribute("data-item", "option:Top tabs");

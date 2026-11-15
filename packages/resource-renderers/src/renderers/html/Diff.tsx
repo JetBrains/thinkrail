@@ -1,5 +1,6 @@
 import { useT } from "@thinkrail/locales/react";
 import { useMemo, useState } from "react";
+import { useResourceEnvironment } from "../../host";
 import type { ResourceContent, ResourceDiffProps } from "../../registry";
 import { diffContentStamp } from "../reviewComposerState";
 import { sideCaption, VisualDiff, type VisualDiffSide } from "../VisualDiff";
@@ -26,8 +27,15 @@ function HtmlSide({
 	scrollLink: ScrollLink;
 }) {
 	const document = useMemo(() => buildHtmlPreviewDocument(text), [text]);
+	const compact = useResourceEnvironment().compact ?? false;
 	return (
-		<HtmlFrame title={title} document={document} viewport={viewport} scrollLink={scrollLink} />
+		<HtmlFrame
+			title={title}
+			document={document}
+			viewport={viewport}
+			scrollLink={scrollLink}
+			compact={compact}
+		/>
 	);
 }
 

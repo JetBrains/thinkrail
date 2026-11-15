@@ -332,3 +332,13 @@ test("labelled sides name both visual captions", () => {
 	expect(sideCaption(t, "old", "1280 × 800", labels)).toBe("Sidebar: 1280 × 800");
 	expect(sideCaption(t, "new", "1280 × 800", undefined)).toBe("New: 1280 × 800");
 });
+
+test("a compact HTML frame takes its box's height instead of the full-size floor", () => {
+	const box = (compact: boolean) =>
+		renderToStaticMarkup(
+			createElement(HtmlFrame, { title: "HTML preview", document: PREVIEW, compact }),
+		);
+	expect(box(false)).toContain("min-h-[360px]");
+	expect(box(true)).not.toContain("min-h-[360px]");
+	expect(box(true)).toContain("min-h-0");
+});
