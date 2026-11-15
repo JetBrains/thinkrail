@@ -13,6 +13,7 @@ export {
 	resolveWorktreeEntry,
 	resolveWorktreeFile,
 	workspaceRelativePath,
+	worktreeEntryKind,
 } from "./files";
 export {
 	copyWorktreeEntry,

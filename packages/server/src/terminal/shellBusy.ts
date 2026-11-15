@@ -5,12 +5,20 @@ export function parseProcChildren(contents: string): number[] {
 	return contents
 		.split(/\s+/)
 		.map((entry) => Number.parseInt(entry, 10))
-		.filter((pid) => Number.isInteger(pid) && pid > 0);
+		.filter(isPlausiblePid);
+}
+
+export function isPlausiblePid(pid: number): boolean {
+	return Number.isInteger(pid) && pid > 0;
+}
+
+export function procChildrenPath(pid: number): string {
+	return `/proc/${pid}/task/${pid}/children`;
 }
 
 function childrenViaProc(pid: number): boolean | null {
 	try {
-		return parseProcChildren(readFileSync(`/proc/${pid}/task/${pid}/children`, "utf8")).length > 0;
+		return parseProcChildren(readFileSync(procChildrenPath(pid), "utf8")).length > 0;
 	} catch {
 		return null;
 	}
@@ -43,7 +51,7 @@ function childrenViaCim(pid: number): boolean | null {
 }
 
 export function hasChildProcesses(pid: number): boolean {
-	if (!Number.isInteger(pid) || pid <= 0) return false;
+	if (!isPlausiblePid(pid)) return false;
 	if (process.platform === "win32") return childrenViaCim(pid) ?? false;
 	return childrenViaProc(pid) ?? childrenViaPgrep(pid) ?? false;
 }

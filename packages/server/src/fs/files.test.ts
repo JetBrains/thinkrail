@@ -2,7 +2,13 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
-import { readableFileSize, readDir, readFile, workspaceRelativePath } from "./files";
+import {
+	readableFileSize,
+	readDir,
+	readFile,
+	workspaceRelativePath,
+	worktreeEntryKind,
+} from "./files";
 
 let dataDir: string;
 let root: string;
@@ -136,4 +142,29 @@ test("readFile with maxBytes reads at most the cap and refuses a larger file, co
 		content: "",
 		meta: { text: false },
 	});
+});
+
+test("worktreeEntryKind names an existing file or folder and nothing readFile would refuse", () => {
+	mkdirSync(join(root, ".git"));
+	writeFileSync(join(root, ".git", "config"), "[core]\n");
+	writeFileSync(join(dataDir, "secret.txt"), "secret\n");
+	expect(worktreeEntryKind(root, "src/auth/login.ts")).toBe("file");
+	expect(worktreeEntryKind(root, "src/auth")).toBe("dir");
+	expect(worktreeEntryKind(root, "src/missing.ts")).toBeNull();
+	expect(worktreeEntryKind(root, "../secret.txt")).toBeNull();
+	expect(worktreeEntryKind(root, ".git/config")).toBeNull();
+	expect(worktreeEntryKind(root, ".git")).toBeNull();
+});
+
+symlinkTest("worktreeEntryKind follows a symlink only while its target stays inside", () => {
+	mkdirSync(join(dataDir, "outside"));
+	writeFileSync(join(dataDir, "outside", "secret.txt"), "secret\n");
+	symlinkSync(join(root, "src"), join(root, "srclink"));
+	symlinkSync(join(dataDir, "outside"), join(root, "escape"));
+	symlinkSync(join(dataDir, "outside", "secret.txt"), join(root, "leak.txt"));
+	expect(worktreeEntryKind(root, "srclink/auth/login.ts")).toBe("file");
+	expect(worktreeEntryKind(root, "srclink")).toBe("dir");
+	expect(worktreeEntryKind(root, "escape")).toBeNull();
+	expect(worktreeEntryKind(root, "escape/secret.txt")).toBeNull();
+	expect(worktreeEntryKind(root, "leak.txt")).toBeNull();
 });

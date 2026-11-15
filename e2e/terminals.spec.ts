@@ -1,4 +1,6 @@
-import { expect, test, type WebSocketRoute } from "@playwright/test";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { expect, type Page, test, type WebSocketRoute } from "@playwright/test";
 import { INITIAL_TERMINAL_TAB_KEY } from "@thinkrail/contracts";
 import {
 	activeWorktreeRow,
@@ -967,4 +969,211 @@ test("a shell that dies during a reclaim is not presented as alive", async ({ pa
 	await expect(visibleTerminal(page)).toHaveAttribute("data-exited", "true", { timeout: 20_000 });
 
 	await page2.close();
+});
+
+interface TerminalTextPoint {
+	x: number;
+	y: number;
+	cellWidth: number;
+}
+
+async function terminalTextPoint(page: Page, text: string): Promise<TerminalTextPoint> {
+	await expect(visibleTerminalScreen(page)).toContainText(text);
+	const point = await visibleTerminalScreen(page).evaluate((rows, needle) => {
+		for (const row of Array.from(rows.children)) {
+			const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+			const nodes: Text[] = [];
+			for (let node = walker.nextNode(); node; node = walker.nextNode()) nodes.push(node as Text);
+			const content = nodes
+				.map((node) => node.data)
+				.join("")
+				.replace(/\u00a0/g, " ");
+			let offset = content.indexOf(needle);
+			if (offset === -1) continue;
+			for (const node of nodes) {
+				if (offset < node.data.length) {
+					const range = document.createRange();
+					range.setStart(node, offset);
+					range.setEnd(node, offset + 1);
+					const rect = range.getBoundingClientRect();
+					return {
+						x: rect.left + rect.width / 2,
+						y: rect.top + rect.height / 2,
+						cellWidth: rect.width,
+					};
+				}
+				offset -= node.data.length;
+			}
+		}
+		return null;
+	}, text);
+	if (!point) throw new Error(`No terminal row shows ${text}`);
+	return point;
+}
+
+test("Mod+click opens a printed URL; a plain click does not", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	await page.evaluate(() => {
+		const opened: string[] = [];
+		Object.assign(window, { trOpened: opened });
+		window.open = (url?: string | URL) => {
+			opened.push(String(url));
+			return null;
+		};
+	});
+	const opened = () => page.evaluate(() => (window as unknown as { trOpened: string[] }).trOpened);
+
+	// printf assembles the URL so the echoed command line never shows it.
+	await runInTerminal(page, "printf 'TR_URL %s://%s/%s.\\n' https example.com docs");
+	const point = await terminalTextPoint(page, "https://example.com/docs");
+	await page.mouse.move(point.x, point.y);
+	await expect(visibleTerminal(page).locator(".xterm-screen")).toHaveClass(/xterm-cursor-pointer/);
+	await expect(visibleTerminal(page).locator(".xterm")).toHaveAttribute("title", /click to open/);
+
+	await page.mouse.click(point.x, point.y);
+	await page.keyboard.down("ControlOrMeta");
+	await page.mouse.click(point.x, point.y);
+	await page.keyboard.up("ControlOrMeta");
+	await expect.poll(opened).toEqual(["https://example.com/docs"]);
+});
+
+function terminalLinkCursor(page: Page) {
+	return visibleTerminal(page).locator(".xterm-screen");
+}
+
+// xterm asks for links only when the pointer reaches a new cell, and it remembers the last cell across a
+// mouseleave, so arrive from the neighbouring cell: coming back straight onto the cell the pointer left
+// would find no link.
+async function hoverTerminalText(page: Page, text: string): Promise<TerminalTextPoint> {
+	const point = await terminalTextPoint(page, text);
+	await page.mouse.move(point.x + point.cellWidth, point.y);
+	await page.mouse.move(point.x, point.y);
+	return point;
+}
+
+async function modClick(page: Page, point: { x: number; y: number }): Promise<void> {
+	await page.keyboard.down("ControlOrMeta");
+	await page.mouse.move(point.x, point.y);
+	await page.mouse.down();
+	await page.mouse.up();
+	await page.keyboard.up("ControlOrMeta");
+}
+
+function fileTab(page: Page, name: string) {
+	return page.locator('[data-testid="editor-tab"][data-kind="file"]').filter({ hasText: name });
+}
+
+function activeEditorLine(page: Page) {
+	return page.locator(
+		'[data-testid="editor-pane"]:visible .monaco-editor .line-numbers.active-line-number',
+	);
+}
+
+function fileTreeRow(page: Page, kind: "file" | "dir", name: string) {
+	return page.locator(`[data-testid="file-node"][data-kind="${kind}"]`).filter({ hasText: name });
+}
+
+const numberedLines = (count: number) =>
+	`${Array.from({ length: count }, (_, index) => `line ${index + 1}`).join("\n")}\n`;
+
+test("Mod+click on a printed location opens the file at that line; a missing path is not a link", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	mkdirSync(join(workspace.worktreePath, "src"), { recursive: true });
+	writeFileSync(join(workspace.worktreePath, "src", "x.ts"), numberedLines(40));
+	mkdirSync(join(workspace.worktreePath, "docs"), { recursive: true });
+	writeFileSync(
+		join(workspace.worktreePath, "docs", "guide.md"),
+		`# Guide\n\n${numberedLines(40)}`,
+	);
+	await waitTerminalReady(page);
+
+	// printf assembles each path so the echoed command line never shows it.
+	await runInTerminal(page, "printf 'TR_LINKS %s/%s:3:2 %s/%s:1\\n' src x.ts missing nope.ts");
+	const located = await hoverTerminalText(page, "src/x.ts:3:2");
+	await expect(terminalLinkCursor(page)).toHaveClass(/xterm-cursor-pointer/);
+	await expect(visibleTerminal(page).locator(".xterm")).toHaveAttribute(
+		"title",
+		/\+click to open$/,
+	);
+	await hoverTerminalText(page, "missing/nope.ts:1");
+	await expect(terminalLinkCursor(page)).not.toHaveClass(/xterm-cursor-pointer/);
+
+	await page.mouse.move(located.x, located.y);
+	await expect(terminalLinkCursor(page)).toHaveClass(/xterm-cursor-pointer/);
+	await page.mouse.click(located.x, located.y);
+	await expect(fileTab(page, "x.ts")).toHaveCount(0);
+	await modClick(page, located);
+	await expect(fileTab(page, "x.ts")).toBeVisible();
+	await expect(activeEditorLine(page)).toHaveText("3");
+
+	await runInTerminal(page, "printf 'TR_AGAIN %s/%s:30\\n' src x.ts");
+	const again = await hoverTerminalText(page, "src/x.ts:30");
+	await expect(terminalLinkCursor(page)).toHaveClass(/xterm-cursor-pointer/);
+	await modClick(page, again);
+	await expect(fileTab(page, "x.ts")).toHaveCount(1);
+	await expect(activeEditorLine(page)).toHaveText("30");
+
+	await runInTerminal(page, "printf 'TR_DOC %s/%s:20\\n' docs guide.md");
+	const doc = await hoverTerminalText(page, "docs/guide.md:20");
+	await expect(terminalLinkCursor(page)).toHaveClass(/xterm-cursor-pointer/);
+	await modClick(page, doc);
+	await expect(fileTab(page, "guide.md")).toBeVisible();
+	await expect(page.getByTestId("view-toggle-code")).toHaveAttribute("data-active", "true");
+	await expect(activeEditorLine(page)).toHaveText("20");
+});
+
+test("a relative path is looked up from the directory the shell is in", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	mkdirSync(join(workspace.worktreePath, "sub"), { recursive: true });
+	writeFileSync(join(workspace.worktreePath, "sub", "y.py"), numberedLines(5));
+	await waitTerminalReady(page);
+
+	await runInTerminal(page, "cd sub && printf 'TR_SUB %s/%s:2\\n' . y.py");
+	const located = await hoverTerminalText(page, "./y.py:2");
+	await expect(terminalLinkCursor(page)).toHaveClass(/xterm-cursor-pointer/);
+	await modClick(page, located);
+	await expect(fileTab(page, "y.py")).toBeVisible();
+	await expect(activeEditorLine(page)).toHaveText("2");
+});
+
+test("Mod+click reveals a printed folder in Files, again after a collapse, a compacted one included", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	mkdirSync(join(workspace.worktreePath, "assets", "icons"), { recursive: true });
+	writeFileSync(join(workspace.worktreePath, "assets", "icons", "logo.svg"), "<svg/>\n");
+	writeFileSync(join(workspace.worktreePath, "assets", "readme.txt"), "assets\n");
+	mkdirSync(join(workspace.worktreePath, "media", "fonts"), { recursive: true });
+	writeFileSync(join(workspace.worktreePath, "media", "fonts", "mono.woff2"), "font\n");
+	await waitTerminalReady(page);
+
+	await runInTerminal(page, "printf 'TR_DIR %s/\\n' assets");
+	const folder = await hoverTerminalText(page, "assets/");
+	await expect(terminalLinkCursor(page)).toHaveClass(/xterm-cursor-pointer/);
+	await modClick(page, folder);
+	await expect(page.getByTestId("tool-rail-files")).toHaveAttribute("aria-pressed", "true");
+	await expect(page.getByTestId("files-mode-all")).toHaveAttribute("aria-pressed", "true");
+	await expect(fileTreeRow(page, "file", "readme.txt")).toBeVisible();
+	await fileTreeRow(page, "dir", "assets").click();
+	await expect(fileTreeRow(page, "file", "readme.txt")).toHaveCount(0);
+	const again = await hoverTerminalText(page, "assets/");
+	await expect(terminalLinkCursor(page)).toHaveClass(/xterm-cursor-pointer/);
+	await modClick(page, again);
+	await expect(fileTreeRow(page, "file", "readme.txt")).toBeVisible();
+
+	// `media` holds only `fonts`, so the tree shows one compact `media/fonts` row keyed by its deepest
+	// folder: revealing `media` must still open that row.
+	await runInTerminal(page, "printf 'TR_COMPACT %s/\\n' media");
+	const compact = await hoverTerminalText(page, "media/");
+	await expect(terminalLinkCursor(page)).toHaveClass(/xterm-cursor-pointer/);
+	await modClick(page, compact);
+	await expect(fileTreeRow(page, "dir", "media/fonts")).toHaveAttribute("aria-expanded", "true");
+	await expect(fileTreeRow(page, "file", "mono.woff2")).toBeVisible();
 });

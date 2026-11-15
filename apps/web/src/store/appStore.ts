@@ -1160,6 +1160,7 @@ interface AppState {
 		line?: number;
 		navigation: CenterNavigationStamp | null;
 	} | null;
+	filesRevealRequest: { workspaceId: string; path: string } | null;
 	specsByWorkspace: Record<string, SpecGraphNode[]>;
 	artifactsByWorkspace: Record<string, WorkspaceArtifactsSnapshot>;
 	artifactsTickByWorkspace: Record<string, number>;
@@ -1392,6 +1393,8 @@ interface AppState {
 	setFilesTreeExpanded: (workspaceId: string, paths: readonly string[], expanded: boolean) => void;
 	collapseAllFiles: (workspaceId: string) => void;
 	revealInFiles: (workspaceId: string, path: string) => void;
+	revealFolderInFiles: (workspaceId: string, path: string) => void;
+	clearFilesRevealRequest: () => void;
 	setChangedTreeCollapsed: (
 		workspaceId: string,
 		paths: readonly string[],
@@ -2550,6 +2553,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	modelsFresh: false,
 	changesRequest: null,
 	specRequest: null,
+	filesRevealRequest: null,
 	specsByWorkspace: {},
 	artifactsByWorkspace: {},
 	artifactsTickByWorkspace: {},
@@ -2951,6 +2955,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 				changesRequest:
 					state.changesRequest?.workspaceId === workspaceId ? null : state.changesRequest,
 				specRequest: state.specRequest?.workspaceId === workspaceId ? null : state.specRequest,
+				filesRevealRequest:
+					state.filesRevealRequest?.workspaceId === workspaceId ? null : state.filesRevealRequest,
 				chatLocationRequest:
 					state.chatLocationRequest?.workspaceId === workspaceId ? null : state.chatLocationRequest,
 				routeChatTarget:
@@ -3546,6 +3552,24 @@ export const useAppStore = create<AppState>((set, get) => ({
 					: { ...view, expanded, seenActivePath: path };
 			}),
 		),
+	revealFolderInFiles: (workspaceId, path) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
+			return {
+				...patchFilesTreeView(s, workspaceId, (view) => {
+					const expanded = withPathMembership(view.expanded, [...ancestorPaths(path), path], true);
+					return expanded === view.expanded ? view : { ...view, expanded };
+				}),
+				filesMode: "all",
+				filesRevealRequest: { workspaceId, path },
+				layoutIntents: appendLayoutIntent(s.layoutIntents, {
+					kind: "reveal-tool",
+					workspaceId,
+					tool: "files",
+				}),
+			};
+		}),
+	clearFilesRevealRequest: () => set({ filesRevealRequest: null }),
 	collapseAllFiles: (workspaceId) =>
 		set((s) =>
 			patchFilesTreeView(s, workspaceId, (view) =>
@@ -5073,6 +5097,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 			s.toasts.some((t) => t.id === id) ? { toasts: s.toasts.filter((t) => t.id !== id) } : {},
 		),
 }));
+
+useAppStore.subscribe((state, previous) => {
+	const request = state.filesRevealRequest;
+	if (
+		request !== null &&
+		state.activeWorkspaceId !== previous.activeWorkspaceId &&
+		request.workspaceId !== state.activeWorkspaceId
+	) {
+		state.clearFilesRevealRequest();
+	}
+});
 
 useAppStore.subscribe((state) => {
 	const unattended =

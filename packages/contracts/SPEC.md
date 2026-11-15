@@ -817,7 +817,17 @@ the palette ranks with — kept here so host-side search can rank with the same 
   may place passively) / **`attach`** (idempotent get-or-create keyed by `(workspaceId, tabKey)`,
   returning `created` + the `replay` to repaint; the only way a PTY is born, and it replaced
   `create`+`alive`) / **`list`** (the host owns the tab list) / `write` / `resize` /
-  **`close`** (by `tabKey`, refusing a busy shell unless `force`) / `model.list` + **`model.refresh`** (awaits the host's
+  **`close`** (by `tabKey`, refusing a busy shell unless `force`) / **`resolvePaths`** (v123,
+  **`TERMINAL_LINKS_PROTOCOL_VERSION`**; the terminal's Mod+click link lookup: `{ id, candidates }` — the PTY id
+  plus at most **`MAX_TERMINAL_PATH_CANDIDATES`** (64) path strings of at most **`MAX_TERMINAL_PATH_LENGTH`**
+  (4096) each, exactly as printed minus any `:line:col` — answers `{ targets }`, one **`TerminalPathTarget`** per
+  candidate in order: `{ kind: "file" | "dir", relPath }` (worktree-relative, POSIX) for an entry that exists
+  in the PTY's own workspace, else `{ kind: null, relPath: null }`. Which workspace owns a path is the same
+  answer `workspace.resolvePath` gives, so a path inside another open workspace, under `.git`, outside every
+  workspace, or reached through an escaping symlink is never confirmed and the answer cannot probe the rest of
+  the disk; the lookup never creates or provisions a workspace. An unknown id, or a PTY attached to another client
+  (the attachment `write` and `resize` require), is the same error, and a malformed
+  candidate list is rejected before any candidate is looked up) / `model.list` + **`model.refresh`** (awaits the host's
   single-flighted catalog refresh and returns **`RefreshedModels`** — the post-refresh list plus
   **`complete`**, whether that pass settled inside the host's capped wait, since only a settled list is
   authoritative; `force` bypasses pi's 4h freshness throttle, so a user-initiated refresh actually fetches) /

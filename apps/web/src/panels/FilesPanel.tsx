@@ -16,7 +16,7 @@ import {
 	type ChangeMarks,
 	changeTreeFolderPaths,
 } from "./changesModel";
-import { FileTree } from "./FileTree";
+import { FileTree, type RevealTarget } from "./FileTree";
 import { HeaderIconButton } from "./HeaderIconButton";
 import { RememberedScrollArea } from "./RememberedScrollArea";
 import { useGitStatus } from "./useGitStatus";
@@ -99,7 +99,11 @@ function AllFiles({ workspaceId, marks }: { workspaceId: string; marks: ChangeMa
 			activePath !== null &&
 			activePath !== selectFilesTreeView(useAppStore.getState(), workspaceId).seenActivePath,
 	);
-	const [revealTarget, setRevealTarget] = useState<string | null>(null);
+	const folderReveal = useAppStore((s) =>
+		s.filesRevealRequest?.workspaceId === workspaceId ? s.filesRevealRequest : null,
+	);
+	const [restoreScroll] = useState(() => !revealOnMount && folderReveal === null);
+	const [revealTarget, setRevealTarget] = useState<RevealTarget | null>(null);
 	const previousActive = useRef<string | null | undefined>(revealOnMount ? undefined : activePath);
 
 	useEffect(() => {
@@ -107,15 +111,21 @@ function AllFiles({ workspaceId, marks }: { workspaceId: string; marks: ChangeMa
 		previousActive.current = activePath;
 		if (activePath === null || activePath === before) return;
 		useAppStore.getState().revealInFiles(workspaceId, activePath);
-		setRevealTarget(activePath);
+		setRevealTarget({ path: activePath });
 	}, [activePath, workspaceId]);
+
+	useEffect(() => {
+		if (!folderReveal) return;
+		setRevealTarget({ path: folderReveal.path });
+		useAppStore.getState().clearFilesRevealRequest();
+	}, [folderReveal]);
 
 	return (
 		<div data-focus-default className="contents">
 			<RememberedScrollArea
 				workspaceId={workspaceId}
 				view="all"
-				restore={!revealOnMount}
+				restore={restoreScroll}
 				className="min-h-0 flex-1"
 				viewportClassName="p-panel-inset"
 			>

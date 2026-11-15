@@ -53,11 +53,17 @@ function remainder(realRoot: string, target: string, foldCase: boolean): string 
 	return target[realRoot.length] === sep ? target.slice(realRoot.length + 1) : null;
 }
 
-async function within(realRoot: string, target: string): Promise<string | null> {
+type FoldsCase = (realRoot: string) => Promise<boolean>;
+
+async function within(
+	realRoot: string,
+	target: string,
+	foldsCase: FoldsCase,
+): Promise<string | null> {
 	const exact = remainder(realRoot, target, false);
 	if (exact !== null) return exact;
 	const folded = remainder(realRoot, target, true);
-	return folded !== null && (await caseInsensitiveAt(realRoot)) ? folded : null;
+	return folded !== null && (await foldsCase(realRoot)) ? folded : null;
 }
 
 function candidates(): Candidate[] {
@@ -80,23 +86,27 @@ async function ensuredDefault(project: Project): Promise<Workspace | null> {
 	return rows.find((workspace) => workspace.kind === "default") ?? null;
 }
 
-export async function resolveWorkspacePath(path: string): Promise<WorkspacePathMatch | null> {
+export interface WorkspacePathOwner {
+	project: Project;
+	workspace: Workspace | null;
+	relativePath: string;
+}
+
+async function realTarget(path: string): Promise<string | null> {
 	if (!isAbsolute(path) || path.split(/[\\/]/).includes("..")) return null;
-	const target = await realThroughAncestors(resolve(path));
-	if (target === null) return null;
-	const listed = candidates();
-	const realRoots = new Map<string, Promise<string | null>>();
-	for (const { root } of listed) {
-		if (!realRoots.has(root))
-			realRoots.set(
-				root,
-				realpath(root).catch(() => null),
-			);
-	}
+	return realThroughAncestors(resolve(path));
+}
+
+async function owner(
+	target: string,
+	listed: readonly Candidate[],
+	realRoots: ReadonlyMap<string, Promise<string | null>>,
+	foldsCase: FoldsCase,
+): Promise<WorkspacePathOwner | null> {
 	const matches = await Promise.all(
 		listed.map(async (candidate) => {
 			const real = (await realRoots.get(candidate.root)) ?? null;
-			const rest = real === null ? null : await within(real, target);
+			const rest = real === null ? null : await within(real, target, foldsCase);
 			return real === null || rest === null ? null : { ...candidate, real, rest };
 		}),
 	);
@@ -107,11 +117,45 @@ export async function resolveWorkspacePath(path: string): Promise<WorkspacePathM
 	if (!best || best.rest === "") return null;
 	const segments = best.rest.split(sep);
 	if (segments.some((segment) => segment.toLowerCase() === ".git")) return null;
-	const workspace = best.workspace ?? (await ensuredDefault(best.project));
+	return { project: best.project, workspace: best.workspace, relativePath: segments.join("/") };
+}
+
+export async function matchWorkspacePaths(
+	paths: readonly string[],
+): Promise<(WorkspacePathOwner | null)[]> {
+	const targets = await Promise.all(paths.map(realTarget));
+	if (targets.every((target) => target === null)) return targets.map(() => null);
+	const listed = candidates();
+	const realRoots = new Map<string, Promise<string | null>>();
+	for (const { root } of listed) {
+		if (!realRoots.has(root))
+			realRoots.set(
+				root,
+				realpath(root).catch(() => null),
+			);
+	}
+	const folding = new Map<string, Promise<boolean>>();
+	const foldsCase: FoldsCase = (realRoot) => {
+		let folds = folding.get(realRoot);
+		if (!folds) {
+			folds = caseInsensitiveAt(realRoot);
+			folding.set(realRoot, folds);
+		}
+		return folds;
+	};
+	return Promise.all(
+		targets.map((target) => (target === null ? null : owner(target, listed, realRoots, foldsCase))),
+	);
+}
+
+export async function resolveWorkspacePath(path: string): Promise<WorkspacePathMatch | null> {
+	const [match] = await matchWorkspacePaths([path]);
+	if (!match) return null;
+	const workspace = match.workspace ?? (await ensuredDefault(match.project));
 	if (!workspace) return null;
 	return {
 		workspaceId: workspace.id,
-		projectId: best.project.id,
-		relativePath: segments.join("/"),
+		projectId: match.project.id,
+		relativePath: match.relativePath,
 	};
 }

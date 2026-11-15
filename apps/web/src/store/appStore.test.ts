@@ -3531,6 +3531,7 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 		},
 		changesRequest: { workspaceId: "w1", path: "a", navTick: 0, navigation: null },
 		specRequest: { workspaceId: "w1", path: "SPEC.md", navigation: null },
+		filesRevealRequest: { workspaceId: "w1", path: "src" },
 		chatLocationRequest: {
 			workspaceId: "w1",
 			projectId: "p1",
@@ -3576,6 +3577,7 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 	expect(s.toasts[0]?.message).toContain("add-login-flow");
 	expect(s.changesRequest).toBeNull();
 	expect(s.specRequest).toBeNull();
+	expect(s.filesRevealRequest).toBeNull();
 	expect(s.chatLocationRequest).toBeNull();
 	expect(s.historyOpenRequest).toBeNull();
 	expect(s.reviewFocusRequest).toBeNull();
@@ -3707,6 +3709,53 @@ test("revealInFiles expands every ancestor folder and records the revealed file"
 	expect(view.seenActivePath).toBe("src/auth/login.ts");
 	useAppStore.getState().revealInFiles("w1", "src/auth/login.ts");
 	expect(selectFilesTreeView(useAppStore.getState(), "w1")).toBe(view);
+});
+
+test("revealFolderInFiles shows the folder in All files without touching the active-file reveal", () => {
+	useAppStore.setState({
+		filesTreeByWorkspace: {},
+		filesMode: "changed",
+		filesRevealRequest: null,
+		layoutIntents: [],
+		removedWorkspaceIds: nullProto<Record<string, true>>(),
+	});
+	useAppStore.getState().revealFolderInFiles("w1", "src/auth");
+	const state = useAppStore.getState();
+	expect(state.filesMode).toBe("all");
+	expect(selectFilesTreeView(state, "w1").expanded).toEqual(["src", "src/auth"]);
+	expect(selectFilesTreeView(state, "w1").seenActivePath).toBeNull();
+	expect(state.filesRevealRequest).toEqual({ workspaceId: "w1", path: "src/auth" });
+	expect(state.layoutIntents).toEqual([
+		expect.objectContaining({ kind: "reveal-tool", workspaceId: "w1", tool: "files" }),
+	]);
+	useAppStore.getState().clearFilesRevealRequest();
+	expect(useAppStore.getState().filesRevealRequest).toBeNull();
+
+	useAppStore.setState({
+		removedWorkspaceIds: { ...nullProto<Record<string, true>>(), gone: true },
+	});
+	useAppStore.getState().revealFolderInFiles("gone", "src");
+	expect(useAppStore.getState().filesRevealRequest).toBeNull();
+});
+
+test("a pending folder reveal is dropped once another workspace becomes active", () => {
+	const other = pushedWorkspace({ id: "w2", name: "w2" });
+	useAppStore.setState({
+		workspaces: { p1: [pushedWorkspace(), other] },
+		activeWorkspaceId: "w1",
+		filesRevealRequest: null,
+		removedWorkspaceIds: nullProto<Record<string, true>>(),
+	});
+	useAppStore.getState().revealFolderInFiles("w1", "src");
+	useAppStore.getState().activateWorkspace(pushedWorkspace());
+	expect(useAppStore.getState().filesRevealRequest).toMatchObject({ workspaceId: "w1" });
+	useAppStore.getState().activateWorkspace(other);
+	expect(useAppStore.getState().activeWorkspaceId).toBe("w2");
+	expect(useAppStore.getState().filesRevealRequest).toBeNull();
+
+	useAppStore.getState().revealFolderInFiles("w2", "src");
+	useAppStore.getState().selectMain();
+	expect(useAppStore.getState().filesRevealRequest).toBeNull();
 });
 
 test("selectActiveFilePath follows the active file tab and ignores other tabs", () => {

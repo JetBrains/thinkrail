@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Workspace, WS_CHANNELS } from "@thinkrail/contracts";
@@ -17,6 +17,7 @@ import {
 	reviveTerminalSessions,
 	setTerminalPublisher,
 	setTerminalTabsPublisher,
+	terminalCwds,
 	writeTerminal,
 } from "./terminalManager";
 
@@ -370,6 +371,48 @@ test(
 
 		expect(closeTerminalTab(WS, "tab-a")).toEqual({ closed: true, busy: false });
 		expect(listTerminals(WS)).toHaveLength(0);
+	},
+	TERMINAL_TEST_TIMEOUT_MS,
+);
+
+test("an unknown terminal names no working directories", () => {
+	expect(terminalCwds("never-existed", "client-1")).toBeNull();
+});
+
+test(
+	"only the attached client may ask for a terminal's working directories",
+	async () => {
+		const attached = attachTerminal(WS, "tab-cwd-owner", "client-1");
+		expect(terminalCwds(attached.id, "client-1")?.workspaceId).toBe(WS);
+		expect(terminalCwds(attached.id, "client-2")).toBeNull();
+		attachTerminal(WS, "tab-cwd-owner", "client-2");
+		expect(terminalCwds(attached.id, "client-1")).toBeNull();
+		expect(terminalCwds(attached.id, "client-2")?.workspaceId).toBe(WS);
+	},
+	TERMINAL_TEST_TIMEOUT_MS,
+);
+
+const unixTerminalTest = process.platform === "win32" ? test.skip : test;
+
+unixTerminalTest(
+	"a terminal names the directory its shell moved to, with its workspace",
+	async () => {
+		const sub = join(dataDir, "worktree", "sub");
+		mkdirSync(sub);
+		const attached = attachTerminal(WS, "tab-a", "client-1");
+		await waitForTerminalOutput(attached.id);
+		writeTerminal(attached.id, "cd sub && printf 'TR_%s\\n' MOVED\r", "client-1");
+		await waitForTerminalOutput(attached.id, "TR_MOVED");
+		const expected = realpathSync(sub);
+		const terminal = terminalCwds(attached.id, "client-1");
+		expect(terminal?.workspaceId).toBe(WS);
+		const deadline = Date.now() + TERMINAL_CONDITION_TIMEOUT_MS;
+		let cwds = (await terminal?.cwds()) ?? [];
+		while (!cwds.includes(expected) && Date.now() < deadline) {
+			await Bun.sleep(100);
+			cwds = (await terminal?.cwds()) ?? [];
+		}
+		expect(cwds[0]).toBe(expected);
 	},
 	TERMINAL_TEST_TIMEOUT_MS,
 );
