@@ -39,6 +39,8 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   `ResourcePreferences`, `ResourceScope`, `ResourceFileReviewProps`, `ResourceReviewSendProps`,
   `ResourceMarkdown`, `ResourceCodeHost`, `ResourceCodeLanguage`, `ResourceMarkdownProps`,
   `MarkdownRehypePlugins` types;
+- `toggleActiveVimMode` — a narrow host hook for the currently focused desktop Monaco source editor. Vim is
+  renderer-local, off by default, read-only, and never reaches the mobile Pierre view or file persistence;
 - `canonicalWorkspacePath` — the package's copy of the app's workspace-relative path identity (`lib`'s
   `projectRelativePath`: POSIX separators, no `.` or empty segments, inner `..` resolved;
   `apps/web/src/panels/pathIdentity.test.ts` keeps the two equal); `describeResource` and `ResourcePreview`
@@ -384,6 +386,14 @@ re-created from the parsed elements (tag, attributes, `innerHTML`), never wrappe
 prose styles target is unchanged; the boolean attributes the sanitizer lets through (`details[open]`, a
 standalone checkbox's `checked`/`disabled`) are mapped to `true` because React drops an empty-string
 boolean.
+
+The desktop `thinkrail/code` Monaco view optionally exposes read-only Vim interaction. Its visible
+control and the host hook toggle the local mode; `normal`, `insert`, and `visual` are UI/navigation modes,
+not an editing or save path. The supported read-only subset follows the high-value core exposed by compact
+Linux Vim builds: word/line/character/bracket motions, `gg`/`G`, viewport motions, marks and jump history,
+character/line/block Visual selection, search and repeat counts. Mutation operators, registers, clipboard,
+Ex commands, undo/redo and macros remain outside the contract. Search and count handling stay inside the
+Monaco view so the renderer package owns the keyboard contract without importing the web shell.
 
 `thinkrail/image` renders host-backed byte URLs with fit, natural-size, button/wheel zoom, intrinsic
 dimensions, and byte size, always on the `.media-backdrop` transparency checkerboard (the view's image
