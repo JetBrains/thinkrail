@@ -5,6 +5,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { AnchorDraft, SurfaceReview } from "../registry";
 import { RegionReviewSurface } from "./RegionReviewSurface";
 import { placedRegionThreadIds, type Region, type Size } from "./regionReview";
+import { swipeDividerValue } from "./swipeDivider";
 
 const NO_THREADS: ReadonlySet<string> = new Set();
 
@@ -279,9 +280,21 @@ export function VisualDiff({
 								{mode === "swipe" ? (
 									<button
 										type="button"
+										role="slider"
 										aria-label={t(DIVIDER_LABELS[noun])}
+										aria-valuemin={0}
+										aria-valuemax={100}
+										aria-valuenow={Math.round(divider)}
+										data-testid={`${prefix}-diff-divider`}
+										data-review-surface
 										className="absolute inset-y-0 z-20 w-4 -translate-x-1/2 cursor-col-resize bg-primary focus-visible:focus-ring"
 										style={{ left: `${divider}%` }}
+										onKeyDown={(event) => {
+											const next = swipeDividerValue(divider, event.nativeEvent);
+											if (next === null) return;
+											event.preventDefault();
+											setDivider(next);
+										}}
 										onPointerDown={(event) => {
 											event.currentTarget.setPointerCapture(event.pointerId);
 											updateDivider(event.clientX);

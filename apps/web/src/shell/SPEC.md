@@ -219,7 +219,9 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   palette makes) as surface sections under a filter matching a row's title or key label. The section of
   the surface focused just before it opened comes first: `shortcutSurface.ts` maps the element Radix is
   about to move focus from (a terminal, the chat input, the chat transcript, the chat history overlay,
-  Changes review, a tree, a tab strip, a rail entry), else the order is fixed. Rows are reference only and hold nothing focusable, so the filter's
+  Changes review or any renderer's `data-review-surface` — a diff's or Markdown preview's cursor proxy,
+  a region frame, the swipe divider — or a review composer or card, a tree, a tab strip, a rail entry), else
+  the order is fixed. Rows are reference only and hold nothing focusable, so the filter's
   ↑ / ↓ / PageUp / PageDown scroll the list. Esc closes it and so does `Mod+?` — handled by the dialog,
   since global chords are suppressed behind a modal — and focus returns to where it was. Settings →
   Keyboard renders the same `ShortcutsReference` (its own filter) under the double-Shift switch, injected

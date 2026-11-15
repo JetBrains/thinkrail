@@ -1938,7 +1938,9 @@ own section. The kebab menu (`plan-menu`, a
   fold the section the user was reading); **Drafts rows are numbered** (1., 2., …) instead of wearing
   the pending glyph — and the workbench tool router **reveals the Review tool** when such a tab is
   ACTIVATED (keyed on the local selected-resource change, so a draft saved in an already selected resource
-  never yanks attention; `selectActiveReviewedPath` is the shared derivation). Each
+  never yanks attention; `selectActiveReviewedPath` is the shared derivation). The reveal never takes
+  keyboard focus (`focus: false`): a file's first draft also makes its tab "reviewed", and a reveal that
+  focused the Review rail pulled a just-saved keyboard comment away from its line. Each
   comment row is a **navigation gesture**, one rule for every author: a row with a linked chat
   (`comment.sessionId`) opens **the discussion** (its chat tab); one without — every draft, since a
   draft is never sent — opens the file **focused on the comment**. The file stays one hover-action
@@ -2019,7 +2021,8 @@ own section. The kebab menu (`plan-menu`, a
   into the hovered line's number cell whenever the hovered line changes and removes it on
   `pointerleave`. Only a custom `renderGutterUtility`, which we use, puts a `<slot>` in that node; the
   default gutter button does not crash, and the crash does not depend on diff size. Invariant: a Pierre
-  surface never inserts, removes, or moves a `<slot>` synchronously from a pointer or mouse handler.
+  surface never inserts, removes, or moves a `<slot>` synchronously from a pointer or mouse handler; the
+  keyboard line cursor, whose `selectedLines` move the gutter utility too, applies them a frame later.
   `patches/@pierre%2Fdiffs@1.6.4.patch` (root `patchedDependencies`) makes placement a no-op while a
   mouse button is held outside Pierre's own selection session — armed by `pointermove` and by
   `pointerleave`, so a drag whose first move already exits the diff cannot remove the slot — and the
@@ -2048,7 +2051,9 @@ own section. The kebab menu (`plan-menu`, a
   zone nodes keyed by comment id; `MonacoReviewZones` portals the shared React `ReviewThreadCard` and
   `ReviewComposer` into them, while `ResizeObserver` feeds their measured heights back to Monaco. An
   unrelated push therefore keeps the same keyed draft textarea, including the shared card's Escape-cancel
-  and shortcut-save behavior. Threads without a `lineRange` stay in the same unplaced
+  and shortcut-save behavior. `Mod+Shift+M` comments on the selection, or on the caret's line when nothing
+  is selected; the context-menu entry still needs a selection. A closed composer or a card's save,
+  discard, Send or Delete returns focus to the editor (at the card's line). Threads without a `lineRange` stay in the same unplaced
   strip. `monacoMenuIcons.ts` decorates Monaco's standalone file-editor menu; no diff editor or diff-side
   branch remains. **Rendered preview**:
   `MarkdownPreview` splits the stripped document at each insert's
@@ -2473,7 +2478,13 @@ menu has closed, because a closing menu returns focus to its row; disabled
   Plain-letter shortcuts (`V`, `J`, `N`, `P`) belong to the
   review tab the center is looking at (`ownsReviewShortcut`: the attention group's selected tab, no
   modal or menu layer open, no text-entry target, and no earlier handler consumed the event), so two review scopes split side by side cannot both answer
-  one keystroke. These keys, and the trees' `F2` / `Delete` / `Mod+Enter` / project reorder, are compared
+  one keystroke. Inside a diff's **line cursor** ([[module-resource-renderers]], *Keyboard review
+  surfaces*) `j`/`k` move lines and are consumed there, so `J` means next unreviewed only outside it;
+  `V`, `N`, `P` and `Alt+↑/↓` pass through the cursor. A comment authored from the cursor returns focus to
+  its line on save, send or cancel, and so do a draft card's `Mod+Enter`, Esc, Send and Delete — never to
+  `<body>`, another card or another file; Esc on a cursor without a range lands on the section header.
+  **Show in file** and the guide's keyboard steps land in a draft's text (caret at the end), not on its
+  Send button, and on a sent card itself. These keys, and the trees' `F2` / `Delete` / `Mod+Enter` / project reorder, are compared
   against the [[submodule-web-keybindings]] catalog's constants (`REVIEW_KEYS`, `TREE_KEYS`), which the
   keyboard cheatsheet lists; the Prev / Next file buttons show `Alt+↓` / `Alt+↑` (`⌥↓` / `⌥↑` on a Mac)
   as tooltip caps rather than in their label. **Scale rules**:

@@ -4,6 +4,7 @@ import { IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	type CSSProperties,
+	type KeyboardEvent,
 	type ReactNode,
 	type PointerEvent as ReactPointerEvent,
 	useEffect,
@@ -12,6 +13,7 @@ import {
 	useState,
 } from "react";
 import type { AnchorDraft, SurfaceReview } from "../registry";
+import { cursorCommand } from "../support/cursorKeys";
 import { ReviewComposer } from "../support/ReviewComposer";
 import { ReviewThreadCard } from "../support/ReviewThreadCard";
 import { revealReviewCard } from "../support/revealFocus";
@@ -19,6 +21,7 @@ import { useElementSize } from "../support/useElementSize";
 import {
 	containedMediaRect,
 	denormalizeRegion,
+	frameCommand,
 	normalizeRegion,
 	type Rect,
 	type Region,
@@ -62,6 +65,7 @@ export function RegionReviewSurface({
 	commentLabel,
 	draftForRegion = regionDraft,
 	additionalReviews = [],
+	tabStop = true,
 }: {
 	review?: SurfaceReview | undefined;
 	intrinsicSize: Size | null;
@@ -74,12 +78,14 @@ export function RegionReviewSurface({
 	testid?: string | undefined;
 	commentLabel?: string | undefined;
 	draftForRegion?: ((region: Region) => AnchorDraft) | undefined;
+	tabStop?: boolean | undefined;
 }) {
 	const t = useT();
 	const commentText = commentLabel ?? t("viewer.region.commentOnImage");
 	const [drag, setDrag] = useState<DragState | null>(null);
 	const composer = useStampedComposer<Region>(contentStamp, selectionKey);
 	const cardsRef = useRef(new Map<string, HTMLDivElement>());
+	const keysRef = useRef<HTMLButtonElement>(null);
 	const { ref: mediaRef, element: media, size } = useElementSize<HTMLDivElement>();
 	const handledFocusRef = useRef<string | null>(null);
 	const frame = useMemo<Rect | null>(() => (size ? { x: 0, y: 0, ...size } : null), [size]);
@@ -173,6 +179,25 @@ export function RegionReviewSurface({
 	const scrollToCard = (id: string) =>
 		cardsRef.current.get(id)?.scrollIntoView({ block: "center" });
 	const selectionDraft = composer.selection ? draftForRegion(composer.selection) : null;
+	const returnFocus = () => keysRef.current?.focus({ preventScroll: true });
+	const onFrameKey = (event: KeyboardEvent<HTMLButtonElement>) => {
+		const command = cursorCommand(event.nativeEvent);
+		const outcome = command ? frameCommand(composer.selection, command) : null;
+		if (!outcome) return;
+		event.preventDefault();
+		if (outcome.kind === "clear") composer.close();
+		else if (outcome.kind === "comment") composer.open();
+		else composer.select(outcome.region, false);
+	};
+	const percent = (value: number) => Math.round(value * 100);
+	const frameStatus = composer.selection
+		? t("viewer.region.frame", {
+				x: percent(composer.selection.x),
+				y: percent(composer.selection.y),
+				width: percent(composer.selection.width),
+				height: percent(composer.selection.height),
+			})
+		: "";
 
 	return (
 		<div className="flex min-w-0 flex-col gap-8">
@@ -194,6 +219,22 @@ export function RegionReviewSurface({
 							composer.close();
 						}}
 					>
+						{review && primaryBounds ? (
+							<button
+								ref={keysRef}
+								type="button"
+								data-testid="region-keys"
+								data-review-surface
+								aria-label={commentText}
+								tabIndex={tabStop ? 0 : -1}
+								className="pointer-events-none absolute inset-0 focus-visible:focus-ring"
+								onKeyDown={onFrameKey}
+							>
+								<span className="sr-only" aria-live="polite">
+									{frameStatus}
+								</span>
+							</button>
+						) : null}
 						{threads.map(({ thread, region, bounds }, index) => (
 							<div
 								key={thread.id}
@@ -243,6 +284,7 @@ export function RegionReviewSurface({
 					label={selectionDraft.label}
 					commenting={review.commenting}
 					onClose={composer.close}
+					onReturnFocus={returnFocus}
 					className="review-composer-flow"
 				/>
 			) : null}
@@ -260,6 +302,7 @@ export function RegionReviewSurface({
 								thread={thread}
 								actions={surface.actions}
 								onActivate={() => media?.scrollIntoView({ block: "center" })}
+								onReturnFocus={review && primaryBounds ? returnFocus : undefined}
 							/>
 						</div>
 					))}

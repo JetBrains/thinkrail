@@ -110,4 +110,11 @@ does.
   the listed and the handled key cannot drift; the palette's zoom and Settings shortcuts read
   `DESKTOP_KEYS`. Keys that stay literal in their handler (composer, palette, Find in Files, xterm,
   dictation, the transcript's arrows and the history overlay's other keys) are display entries only.
+- **Review surface keys are display entries too.** The diff line cursor, the Markdown block cursor, the
+  region frame, the swipe divider, the review composer and draft cards live in
+  `@thinkrail/resource-renderers`, which cannot import the app, so their handler reads its own
+  `support/cursorKeys.ts` ([[module-resource-renderers]], *Keyboard review surfaces*) and the Changes
+  review section lists the same chords (`review.cursorMove` … `review.swipeFar`). Moving them into
+  `@thinkrail/ui` would make the primitives package own one feature's key map, so they stay where they
+  are handled.
 - Tested: every `KeybindingId` belongs to a titled entry, ids are unique, every title is an English key.

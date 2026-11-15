@@ -4,17 +4,19 @@ import { createPortal } from "react-dom";
 import type { SurfaceReview } from "../registry";
 import { ReviewComposer } from "./ReviewComposer";
 import { ReviewThreadCard } from "./ReviewThreadCard";
-import type { MonacoReviewZoneState } from "./reviewWidgets";
+import { type MonacoReviewZoneState, threadLineRange } from "./reviewWidgets";
 
 export function MonacoReviewZones({
 	zones,
 	review,
 	onCloseComposer,
+	onReturnFocus,
 	onRendered,
 }: {
 	zones: MonacoReviewZoneState;
 	review: SurfaceReview | undefined;
 	onCloseComposer: () => void;
+	onReturnFocus: (line?: number) => void;
 	onRendered: () => void;
 }) {
 	const t = useT();
@@ -28,7 +30,11 @@ export function MonacoReviewZones({
 				const thread = threads.get(zone.commentId);
 				return thread
 					? createPortal(
-							<ReviewThreadCard thread={thread} actions={review.actions} />,
+							<ReviewThreadCard
+								thread={thread}
+								actions={review.actions}
+								onReturnFocus={() => onReturnFocus(threadLineRange(thread)?.endLine)}
+							/>,
 							zone.node,
 							`thread:${zone.commentId}`,
 						)
@@ -54,6 +60,7 @@ export function MonacoReviewZones({
 							}
 							commenting={review.commenting}
 							onClose={onCloseComposer}
+							onReturnFocus={() => onReturnFocus()}
 						/>,
 						composer.node,
 						"composer",

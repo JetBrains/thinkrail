@@ -97,6 +97,8 @@ const UNGUARDED_BY_DESIGN: Record<string, string> = {
 		"its rename input spreads workspaceActions' guarded inputProps; its only onKeyDown opens a row's context menu",
 	"apps/web/src/panels/FontsSettings.tsx":
 		"its only key handler is on the weight range slider; its text field spreads useSettingsDraft's guarded inputProps",
+	"packages/resource-renderers/src/renderers/VisualDiff.tsx":
+		"its only key handler is the swipe divider slider (swipeDividerValue yields to an IME); its only input is the onion opacity range",
 };
 
 function sourceFiles(dir: string): string[] {

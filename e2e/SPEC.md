@@ -420,6 +420,19 @@ the history overlay's Delete (caret at the end only) and entry menu beside its T
 inspector's inert transcript and the @ popup taking Escape first, Stop returning focus to the composer
 (a replayed `agent_start` on the intercepted wire keeps the chat streaming without an agent), and h/l on
 a tab strip and j/k on a side rail.
+`keyboard-review.spec.ts` pins commenting from the keyboard: Tab onto a Pierre diff lands on its cursor
+proxy (`review-cursor`: a listbox whose single selected option, its `aria-activedescendant`, names the
+line and its place among the stops, while the diff container has no role or tabindex and takes the ring's
+outline) and draws the line cursor (j/k and arrows, h/l switching side in split view, Home/End, Shift
+extending a range), Enter opens the composer on that range and `Mod+Enter` saves it with focus back on
+the line, Tab reaches the card at or below the cursor and `Mod+Enter` / Esc return from it, Delete and
+Send keep focus on the card's line and `Shift+Mod+Enter` sends at once (the intercepted
+`review.sendComment` never answers, so no chat opens), a virtualized diff scrolls the cursor between far
+hunks and Tab back onto the proxy leaves the scroll where it was, Show in file lands in a draft's text
+and Tab lands on a sent card, the review tab's `J` stays outside the cursor while `V` passes through, the
+cheatsheet leads with the review section, a Markdown block range (its proxy option naming the block and
+the range) comments on its source lines, an image keyboard frame stores the drag's normalized region, the
+swipe divider moves as a slider, and Monaco's `Shift+Mod+M` comments on the caret line.
 
 ## Isolation contract
 

@@ -507,13 +507,15 @@ export function useLayoutIntentProcessing(
 							: shouldAdvanceAcceptedNavigation(attention, requestNavigation),
 					);
 				}
-				requestFocus({
-					workspaceId,
-					key: layoutIntent.id,
-					location,
-					...(result.focusTabId ? { tabId: result.focusTabId } : {}),
-					...(result.focusOnlyIfLost ? { onlyIfFocusLost: true } : {}),
-				});
+				if (layoutIntent.kind !== "reveal-tool" || layoutIntent.focus !== false) {
+					requestFocus({
+						workspaceId,
+						key: layoutIntent.id,
+						location,
+						...(result.focusTabId ? { tabId: result.focusTabId } : {}),
+						...(result.focusOnlyIfLost ? { onlyIfFocusLost: true } : {}),
+					});
+				}
 			}
 		}
 		if (result.document !== document) commit(result.document, nextAttention);

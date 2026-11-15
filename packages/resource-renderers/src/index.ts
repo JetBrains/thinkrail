@@ -69,5 +69,6 @@ export {
 	usePreloadResourceView,
 	useRendererSelection,
 } from "./support/rendererMount";
+export { focusReviewCard } from "./support/revealFocus";
 export { UnplacedReviewStrip } from "./support/UnplacedReviewStrip";
 export { useScrollViewState, viewStateScrollTop } from "./support/useScrollViewState";
