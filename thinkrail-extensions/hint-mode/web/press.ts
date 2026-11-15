@@ -26,6 +26,7 @@ export function activate(
 	focusOnly: boolean,
 	box: HintRect,
 ): void {
+	if (element.matches(":disabled")) return;
 	if (action === "widget") {
 		(element.querySelector<HTMLElement>(WIDGET_INPUT) ?? element).focus({ preventScroll: true });
 	} else if (action === "focus" || focusOnly) {

@@ -63,11 +63,12 @@ Collected once per activation from `activeLayer()`, so an open dialog or menu sc
   transcript), and `.monaco-editor` / `.xterm` roots. Open shadow roots are searched (Pierre diffs);
   iframes are not entered.
 - **Skipped:** an `inert` element or ancestor (shadow hosts included); `checkVisibility` false (display,
-  visibility, opacity 0) where the engine has it; a native `disabled` control; anything inside a Monaco or
-  xterm root; a box that is empty after clipping by every `overflow` ancestor and the viewport; and, inside
-  a `role="tree"`, `aria-hidden` + `tabindex=-1` pointer duplicates (chevrons, kebabs — the row's keys and
-  menu reach them). `aria-hidden` alone is not a filter: Radix hides the page behind a modal that way,
-  and the layer scope already handles it.
+  visibility, opacity 0) where the engine has it; a control matching `:disabled`, which includes one
+  locked by a disabled `fieldset` (rechecked right before a press, because a save lock can start while
+  labels are shown); anything inside a Monaco or xterm root; a box that is empty after clipping by every
+  `overflow` ancestor and the viewport; and, inside a `role="tree"`, `aria-hidden` + `tabindex=-1`
+  pointer duplicates (chevrons, kebabs — the row's keys and menu reach them). `aria-hidden` alone is not
+  a filter: Radix hides the page behind a modal that way, and the layer scope already handles it.
 - **Anchors:** a zero-size `data-review-surface` (the review cursor proxy) is labelled at its parent.
 
 ## Activation (`press.ts`)

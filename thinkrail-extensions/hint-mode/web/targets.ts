@@ -15,6 +15,7 @@ export interface HintElement<E> {
 	readonly shadowRoot: HintRoot<E> | null;
 	getAttribute(name: string): string | null;
 	hasAttribute(name: string): boolean;
+	matches(selector: string): boolean;
 	getBoundingClientRect(): HintRect;
 	checkVisibility?(options?: { opacityProperty?: boolean; visibilityProperty?: boolean }): boolean;
 }
@@ -56,7 +57,6 @@ const PRESS_ROLES = [
 const FOCUS_ROLES = ["listbox", "slider"];
 const WIDGET_CLASSES = ["monaco-editor", "xterm"];
 const PRESSED_TAGS = new Set(["BUTTON", "A", "AREA", "SUMMARY"]);
-const DISABLEABLE_TAGS = new Set(["BUTTON", "INPUT", "SELECT", "TEXTAREA"]);
 const BUTTON_INPUTS = new Set([
 	"button",
 	"checkbox",
@@ -215,9 +215,7 @@ export function collectTargets<E extends HintElement<E>>(
 		const above = ancestry.above(element, scope);
 		if (above.inert || above.widget || element.hasAttribute("inert")) continue;
 		if (above.tree && isPointerDuplicate(element)) continue;
-		if (DISABLEABLE_TAGS.has(element.tagName.toUpperCase()) && element.hasAttribute("disabled")) {
-			continue;
-		}
+		if (element.matches(":disabled")) continue;
 		const action = hintAction(element, env.isTextEntry);
 		const host = isReviewProxy(element) ? ancestry.parentOf(element, scope) : null;
 		candidates.push(

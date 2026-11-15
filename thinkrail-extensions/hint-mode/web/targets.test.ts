@@ -77,6 +77,14 @@ class FakeElement {
 		return this.attrs.get(name) ?? null;
 	}
 
+	matches(selector: string): boolean {
+		if (selector !== ":disabled") return false;
+		for (let node: FakeElement | null = this; node; node = node.parentElement) {
+			if (node.attrs.has("disabled") && (node === this || node.tagName === "FIELDSET")) return true;
+		}
+		return false;
+	}
+
 	hasAttribute(name: string): boolean {
 		return this.attrs.has(name);
 	}
@@ -128,6 +136,7 @@ describe("collectTargets", () => {
 			el("BUTTON", { rect: box(10, 10, 0, 20) }),
 			el("BUTTON", { rect: box(10, 900, 40, 20) }),
 			el("BUTTON", { attrs: { disabled: "" } }),
+			el("FIELDSET", { attrs: { disabled: "" }, candidate: false, children: [el("BUTTON")] }),
 			kept,
 		);
 		expect(targets.map((target) => target.element)).toEqual([kept]);

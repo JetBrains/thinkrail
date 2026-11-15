@@ -260,6 +260,37 @@ test("with a dialog open only its controls are labelled, and Escape leaves the d
 	await expect(dialog).toBeVisible();
 });
 
+test("a control locked by its fieldset gets no label, and a lock that starts while labels show blocks the press", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-environment").click();
+	const form = page.getByTestId("settings-environment-form");
+	const addVariable = page.getByTestId("settings-environment-add-var");
+	const variables = page.getByTestId("settings-environment-var");
+	await addVariable.scrollIntoViewIfNeeded();
+	const before = await variables.count();
+	const lockForm = (locked: boolean) =>
+		form.evaluate((fieldset, value) => {
+			(fieldset as HTMLFieldSetElement).disabled = value;
+		}, locked);
+
+	await pressPlatformShortcut(page, ";");
+	const label = await labelFor(page, addVariable);
+	await lockForm(true);
+	await typeLabel(page, label);
+	await expect(overlay(page)).toHaveCount(0);
+	await expect(variables).toHaveCount(before);
+
+	await pressPlatformShortcut(page, ";");
+	await expect(labels(page).first()).toBeVisible();
+	await expect(labelFor(page, addVariable)).rejects.toThrow("found: none");
+	await page.keyboard.press("Escape");
+	await lockForm(false);
+	await expect(addVariable).toBeEnabled();
+});
+
 test("Settings → Extensions lists hint mode; off, F and Mod+; do nothing and its shortcuts leave the cheatsheet", async ({
 	page,
 }) => {
