@@ -428,14 +428,22 @@ test("in Changes review the cursor owns J while V still marks the file viewed", 
 	await expect(section.getByTestId("changes-section-toggle")).toBeFocused();
 });
 
-test("the cheatsheet opened from a review surface leads with the review keys", async ({ page }) => {
+test("the cheatsheet opened from a review surface highlights the review keys and shows them", async ({
+	page,
+}) => {
 	const { cursor } = await openCursorDiff(page);
 	await pressPlatformShortcut(page, "Shift+Slash");
 	const shortcuts = page.getByTestId("shortcuts-dialog");
-	const first = shortcuts.getByTestId("shortcuts-section").first();
-	await expect(first).toHaveAttribute("data-surface", "review");
-	await expect(first.locator('[data-shortcut="review.comment"]')).toBeVisible();
-	await expect(first.locator('[data-shortcut="review.sendNow"]')).toBeVisible();
+	await expect(shortcuts.getByTestId("shortcuts-section").first()).toHaveAttribute(
+		"data-surface",
+		"general",
+	);
+	const review = shortcuts.locator('[data-testid="shortcuts-section"][data-surface="review"]');
+	await expect(review).toHaveAttribute("data-current", "true");
+	await expect(shortcuts.locator('[data-current="true"]')).toHaveCount(1);
+	await expect(review).toBeInViewport();
+	await expect(review.locator('[data-shortcut="review.comment"]')).toBeVisible();
+	await expect(review.locator('[data-shortcut="review.sendNow"]')).toBeInViewport();
 	await page.keyboard.press("Escape");
 	await expect(shortcuts).toHaveCount(0);
 	await expect(cursor).toBeFocused();

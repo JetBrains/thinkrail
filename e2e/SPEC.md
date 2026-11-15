@@ -441,9 +441,10 @@ Send keep focus on the card's line and `Shift+Mod+Enter` sends at once (the inte
 `review.sendComment` never answers, so no chat opens), a virtualized diff scrolls the cursor between far
 hunks and Tab back onto the proxy leaves the scroll where it was, Show in file lands in a draft's text
 and Tab lands on a sent card, the review tab's `J` stays outside the cursor while `V` passes through, the
-cheatsheet leads with the review section, a Markdown block range (its proxy option naming the block and
-the range) comments on its source lines, an image keyboard frame stores the drag's normalized region, the
-swipe divider moves as a slider, and Monaco's `Shift+Mod+M` comments on the caret line.
+cheatsheet highlights the review section and scrolls it into view, a Markdown block range (its proxy
+option naming the block and the range) comments on its source lines, an image keyboard frame stores the
+drag's normalized region, the swipe divider moves as a slider, and Monaco's `Shift+Mod+M` comments on the
+caret line.
 
 ## Isolation contract
 
