@@ -409,6 +409,17 @@ before removal on Delete, and ← reaches its project; a chat row, in its own fl
 menu, ignores F2 and deletes after the confirmation; Specs expand/collapse from the keyboard and Changes
 open their menu and kept diff; the Artifacts tree is one Tab stop that ↓ walks, F2 renames, Delete asks
 (Escape returns to the row, confirming removes it and focuses its neighbour) and `Mod+Enter` keeps.
+`keyboard-chat.spec.ts` pins the chat transcript's keyboard model on seeded chats: `Mod+↑` from the
+composer onto the newest message and Esc back with the draft and caret intact (a multi-line draft first
+takes the caret to its start), ↑/↓ with k/j and Home/End, →/← and l/h expanding an Activity and walking
+its nested Thinking and tool steps, C (clipboard), O (a preview tab) and the Shift+F10 item menu, Tab
+walking only the focused item's controls then leaving, PgUp/PgDn from the composer paging the transcript
+with focus kept, Latest from the keyboard and a history jump landing on the message, focus parked on the
+feed when a wheel scroll unmounts the focused row and the next key bringing it back, newest-first order,
+the history overlay's Delete (caret at the end only) and entry menu beside its Tab zoom, the Resources
+inspector's inert transcript and the @ popup taking Escape first, Stop returning focus to the composer
+(a replayed `agent_start` on the intercepted wire keeps the chat streaming without an agent), and h/l on
+a tab strip and j/k on a side rail.
 
 ## Isolation contract
 

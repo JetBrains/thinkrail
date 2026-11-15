@@ -37,10 +37,22 @@ describe("the shortcut catalog", () => {
 
 	test("lists the bottom rail's horizontal keys apart from the side rails' vertical ones", () => {
 		const rows = shortcutRows({ desktop: false, platform: LINUX });
-		expect(labels(rows, "rail.move")).toEqual(["↑", "↓", "Home", "End"]);
-		expect(labels(rows, "rail.moveBottom")).toEqual(["←", "→", "Home", "End"]);
+		expect(labels(rows, "rail.move")).toEqual(["↑", "↓", "K", "J", "Home", "End"]);
+		expect(labels(rows, "rail.moveBottom")).toEqual(["←", "→", "H", "L", "Home", "End"]);
 		expect(labels(rows, "rail.reorder")).toEqual(["Alt+Shift+↑", "Alt+Shift+↓"]);
 		expect(labels(rows, "rail.reorderBottom")).toEqual(["Alt+Shift+←", "Alt+Shift+→"]);
+	});
+
+	test("lists the transcript's and the strips' letters beside the arrows they repeat", () => {
+		const rows = shortcutRows({ desktop: false, platform: LINUX });
+		expect(labels(rows, "transcript.move")).toEqual(["↑", "↓", "K", "J"]);
+		expect(labels(rows, "transcript.expand")).toEqual(["→", "L"]);
+		expect(labels(rows, "transcript.page")).toEqual(["PgUp", "PgDn"]);
+		expect(labels(rows, "tabs.select")).toEqual(["←", "→", "H", "L"]);
+		expect(labels(rows, "composer.enterTranscript")).toEqual(["Ctrl+↑"]);
+		expect(
+			labels(shortcutRows({ desktop: false, platform: MAC }), "composer.enterTranscript"),
+		).toEqual(["⌘↑"]);
 	});
 
 	test("takes table chords from the table, never chords a browser does not deliver", () => {

@@ -38,6 +38,9 @@ not this module; the theme-aware highlighter remains app-local.
   anchored browser-side mirror of Pi's canonical expanded `<skill>` user-message grammar, shared by
   `chat`'s compact renderer and `store`'s optimistic-echo reconciliation; malformed/quoted blocks fail
   closed),
+  **`resolveTreeMove()`** (`treeMove.ts`: the one ↑/↓, Home/End, →/← move rule over levelled rows —
+  expand, else enter the first child; collapse, else go to the parent — shared by `panels`' sidebar trees
+  and `chat`'s transcript, which may not import `panels`),
   **`relativeTime(t, ms, now)`** (`just now` / `5m ago` / `2d ago` against an explicit `now`, never `Date.now`
   — shared by chat history, the tab strip's closed chats, and the Changes scope menu's commit rows; it lives
   here because `chat/` may not import from `panels/`, which is what let three private twins of it

@@ -7,6 +7,7 @@ import {
 	expandDisclosure,
 	openFixtureProject,
 	openPersistedChat,
+	pressPlatformShortcut,
 } from "./fixtures/app";
 import { clickTranscriptControl, waitForScrollStability } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
@@ -337,6 +338,63 @@ test("a file visualization renders the workspace file with the diff-review rende
 		await clickTranscriptControl(preview.getByTestId("view-toggle-code"));
 		await expect(preview.getByTestId("view-toggle-code")).toHaveAttribute("data-active", "true");
 		await expect(preview).toContainText("Save settings");
+	} finally {
+		cleanup();
+	}
+});
+
+test("Tab from a visualized notebook's transcript item reaches its JSON output disclosure", async ({
+	page,
+}) => {
+	const notebook = {
+		nbformat: 4,
+		nbformat_minor: 5,
+		metadata: { kernelspec: { language: "python" } },
+		cells: [
+			{
+				cell_type: "code",
+				id: "json",
+				metadata: {},
+				execution_count: 1,
+				source: ["result"],
+				outputs: [
+					{
+						output_type: "execute_result",
+						execution_count: 1,
+						metadata: {},
+						data: { "application/json": { status: "ok", attempts: [1, 2, 3] } },
+					},
+				],
+			},
+		],
+	};
+	const cleanup = writeMockups({ "result.ipynb": JSON.stringify(notebook) });
+	try {
+		const card = await openVisualization(page, "notebook json", {
+			type: "file",
+			path: `${MOCKUP_DIR}/result.ipynb`,
+		});
+		const disclosure = card.locator("details > summary").first();
+		await expect(disclosure).toBeVisible();
+		await page.getByTestId("chat-input").focus();
+		await pressPlatformShortcut(page, "ArrowUp");
+		const item = page.locator("[data-transcript-current]");
+		await expect(item).toBeFocused();
+		await expect(item.locator("details > summary").first()).toBeVisible();
+		let reached = false;
+		for (let press = 0; press < 30 && !reached; press += 1) {
+			await page.keyboard.press("Tab");
+			const where = await page.evaluate(() => {
+				const active = document.activeElement;
+				return {
+					summary: active?.tagName === "SUMMARY",
+					inside: document.querySelector("[data-transcript-current]")?.contains(active) === true,
+				};
+			});
+			reached = where.summary;
+			if (!where.inside && !reached) break;
+		}
+		expect(reached).toBe(true);
 	} finally {
 		cleanup();
 	}

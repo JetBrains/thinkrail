@@ -2595,7 +2595,8 @@ menu has closed, because a closing menu returns focus to its row; disabled
   Projects are two trees (Projects: project → workspaces and creations → the Settled header as an
   expandable item → settled rows and *Show more*); so are Artifacts (flat; the name is the treeitem) and
   Other agent files (an output folder is its own toggle), their headings outside the trees. No tree is
-  virtualized, so the model is DOM-driven: the visible rows are the tree's treeitems in DOM order, parent and first child come from `aria-level`,
+  virtualized, so the model is DOM-driven: the visible rows are the tree's treeitems in DOM order, parent and first child come from `aria-level`
+  (the pure move rule is `lib`'s `resolveTreeMove`, which the virtualized chat transcript applies to rows it derives from data),
   and →/← click the row's `[data-tree-toggle]` (a Files/Changes folder row is its own toggle; Specs,
   projects and the Settled header use their chevron), so every tree keeps its own expansion state and
   markup.

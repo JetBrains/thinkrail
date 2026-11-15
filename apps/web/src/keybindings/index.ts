@@ -10,6 +10,8 @@ export {
 } from "./keybindings";
 export {
 	DESKTOP_KEYS,
+	HISTORY_KEYS,
+	HJKL_KEYS,
 	RAIL_KEYS,
 	REVIEW_KEYS,
 	SHORTCUT_CATALOG,
@@ -20,5 +22,6 @@ export {
 	shortcutKeyCaps,
 	shortcutRows,
 	TAB_KEYS,
+	TRANSCRIPT_KEYS,
 	TREE_KEYS,
 } from "./shortcutCatalog";
