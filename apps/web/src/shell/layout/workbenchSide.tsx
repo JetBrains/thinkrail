@@ -321,6 +321,11 @@ export function AuxiliaryGroupHeader({
 			<AuxiliaryPaneHideButton
 				testId={region === "bottom" ? "bottom-group-fold" : "side-group-fold"}
 				controls={groupPanelId(location)}
+				shortcut={
+					shared.document[region].groups.filter((each) => !each.folded).length === 1
+						? shared.chromeShortcuts?.hide[region]
+						: undefined
+				}
 				onClick={onFold}
 			/>
 		</>

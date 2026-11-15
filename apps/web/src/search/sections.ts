@@ -1,7 +1,7 @@
 import { RiChatAiLine, RiMoreLine, RiSparkling2Line } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
-import { frecencyScore, type LearningSnapshot } from "./learning";
+import type { LearningSnapshot } from "./learning";
 import type { PaletteAsk, PaletteItem, PaletteRow, PaletteSection, PaletteStart } from "./model";
 import { type ParsedQuery, type SearchScope, stripScopePrefix } from "./query";
 import { compareRanked, pickTopHit, plainRow, type RankedItem, rankItems, toRow } from "./rank";
@@ -30,6 +30,7 @@ export interface SectionsInput {
 	readonly learning: LearningSnapshot;
 	readonly nowMs: number;
 	readonly keep?: string | null;
+	readonly currentPlaces?: readonly string[];
 }
 
 const GROUP_LABELS: Readonly<Record<string, MessageKey>> = {
@@ -188,12 +189,14 @@ function emptyRootSections(input: SectionsInput): PaletteSection[] {
 	const { t } = input;
 	const { scope } = input.parsed;
 	if (scope === "all") {
-		const shown = new Set([...input.waiting, ...input.actions].map((item) => item.id));
+		const shown = new Set(
+			[...input.waiting, ...input.actions].map((item) => item.id).concat(input.currentPlaces ?? []),
+		);
 		const recent = input.rootItems
 			.filter((item) => !shown.has(item.id) && item.kind !== "more")
-			.map((item) => ({ item, frecency: frecencyScore(input.learning, item.id, input.nowMs) }))
-			.filter((entry) => entry.frecency > 0.05)
-			.sort((a, b) => b.frecency - a.frecency)
+			.map((item) => ({ item, usedAt: input.learning.lastUsed[item.id] }))
+			.filter((entry): entry is { item: PaletteItem; usedAt: number } => entry.usedAt !== undefined)
+			.sort((a, b) => b.usedAt - a.usedAt)
 			.slice(0, RECENT_LIMIT)
 			.map((entry) => plainRow(entry.item));
 		const waiting = cappedSection(

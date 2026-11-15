@@ -48,6 +48,7 @@ import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import type { Command } from "../commands";
 import {
+	DESKTOP_KEYS,
 	FOCUS_GROUP_BINDINGS,
 	KEYBINDINGS,
 	type KeybindingId,
@@ -129,6 +130,7 @@ export interface PaletteCatalogActions {
 	readonly copyPath: (workspace: Workspace) => void;
 	readonly openIn: (workspace: Workspace, editor: EditorInfo) => void;
 	readonly openSettings: (section?: SettingsSection) => void;
+	readonly openShortcuts: () => void;
 	readonly runTabAction: (actionId: string) => void;
 }
 
@@ -301,7 +303,7 @@ function pageZoomCommands({ t, pageZoom }: PaletteCatalogDeps): Command[] {
 			group: "view",
 			icon: RiZoomInLine,
 			keywords: ["zoom", "bigger", "larger", "scale"],
-			shortcut: { key: "=", mod: true },
+			shortcut: DESKTOP_KEYS.zoomIn,
 			run: () => pageZoom.request("in"),
 		},
 		{
@@ -310,7 +312,7 @@ function pageZoomCommands({ t, pageZoom }: PaletteCatalogDeps): Command[] {
 			group: "view",
 			icon: RiZoomOutLine,
 			keywords: ["zoom", "smaller", "scale"],
-			shortcut: { key: "-", mod: true },
+			shortcut: DESKTOP_KEYS.zoomOut,
 			run: () => pageZoom.request("out"),
 		},
 		{
@@ -319,7 +321,7 @@ function pageZoomCommands({ t, pageZoom }: PaletteCatalogDeps): Command[] {
 			group: "view",
 			icon: RiResetLeftLine,
 			keywords: ["zoom", "actual size", "100%", "scale"],
-			shortcut: { key: "Num 0", mod: true },
+			shortcut: DESKTOP_KEYS.zoomReset,
 			run: () => pageZoom.request("reset"),
 		},
 	];
@@ -407,15 +409,27 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 			},
 		);
 	}
-	commands.push(...pageZoomCommands(deps), {
-		id: "settings.open",
-		title: t("commands.settings.open"),
-		group: "settings",
-		icon: RiSettings3Line,
-		keywords: ["preferences", "options"],
-		...(deps.nativeShortcuts ? { shortcut: { key: ",", mod: true } } : {}),
-		run: () => actions.openSettings(),
-	});
+	commands.push(
+		...pageZoomCommands(deps),
+		{
+			id: "settings.open",
+			title: t("commands.settings.open"),
+			group: "settings",
+			icon: RiSettings3Line,
+			keywords: ["preferences", "options"],
+			...(deps.nativeShortcuts ? { shortcut: DESKTOP_KEYS.settings } : {}),
+			run: () => actions.openSettings(),
+		},
+		{
+			id: "shortcuts.open",
+			title: t("commands.shortcuts.open"),
+			group: "settings",
+			icon: RiKeyboardLine,
+			keywords: ["keyboard", "hotkeys", "keybindings", "cheatsheet", "help"],
+			shortcut: keybindingShortcut("shortcuts.open"),
+			run: actions.openShortcuts,
+		},
+	);
 	return commands;
 }
 

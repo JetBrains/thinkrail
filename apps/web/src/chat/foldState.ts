@@ -13,6 +13,10 @@ import {
 const foldState = new Map<string, boolean>();
 const noop = () => undefined;
 
+export function foldOverride(id: string): boolean | undefined {
+	return foldState.get(id);
+}
+
 export type FoldAnchorResolver = () => HTMLElement | null;
 type FoldChangeCompletion = () => void;
 type PrepareFoldChange = (

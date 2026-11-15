@@ -61,6 +61,7 @@ not reproduce.
 | `view.toggleLeft/Right/Bottom` (`Mod+B`/`Mod+J`/`Mod+Shift+J`) | `shell/chordActions` (the functions the chords run) | right/bottom need a workspace | yes |
 | `view.zoomIn` / `zoomOut` / `zoomReset` Zoom in / out / Reset zoom (`Mod+=` / `Mod+-` / `Mod+Numpad0`, the desktop preload's chords) | `NativePageZoomBridge.request` | the desktop page-zoom bridge | yes |
 | `settings.open` and every Settings section (incl. Keyboard's double-Shift row, Extensions, MCP servers) | `store.openSettings(section)`; the native menu's `Mod+,` is shown where it exists | protocol-gated sections only | yes |
+| `shortcuts.open` Keyboard shortcuts (`Mod+?`) | `store.openShortcuts` — the shell's cheatsheet dialog, the chord's handler | always | yes |
 | Theme, extension and MCP server switches | their Settings sections — the palette opens them, never flips them in place | — | Settings |
 | `workspace.markRead` / `markUnread` | `panels/workspaceActions` | `supportsWorkspaceReadState` + `selectWorkspaceReadAction` | yes |
 | `workspace.settle` / `unsettle` | `panels/workspaceActions` | `canSettleWorkspace`; Settle disabled while an agent works or a chat needs you (`selectWorkspaceSettleBlocked`), as in the tree | yes |

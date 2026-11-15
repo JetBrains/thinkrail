@@ -422,9 +422,12 @@ covers the no-workspace branch: the fresh start screen and Project Home carry th
 plain Projects pane header with no right/bottom rail, the rail entry / Hide / `Mod+B` toggle with their
 focus endpoints, and rail/header geometry that matches the workbench across a workspace round trip.
 `keyboard-regions.spec.ts` walks the Balanced ring with `F6` / `Shift+F6` (from the composer and from
-inside xterm), asserting the one `data-region-active` root and the veil through attributes and the
-`::after` content rather than pixels, then the focus chords: `Mod+L` from a terminal, `Mod+0` in the
-workbench and on Project Home (collapsed pane included), `Mod+1` / `Mod+2` over a split center,
+inside xterm), asserting the one `data-region-active` root, its accent line and the absence of any veil
+through attributes and pseudo-element styles rather than pixels; the `F6` rhythm (a first press flashes
+the frame in place, the next moves and flashes the destination, a click never flashes, the frame clears
+on its timer, without its fade under reduced motion); then the focus chords: `Mod+L` from a terminal
+(flashing the chat's region), `Mod+0` in the workbench and on Project Home (collapsed pane included),
+`Mod+1` / `Mod+2` over a split center,
 `` Ctrl+` `` in and back out and with the bottom hidden, `Mod+Shift+E` / `Mod+Shift+G` landing inside
 Files in the matching mode, and the palette rows with their chords, run after the palette closes.
 `focus-recovery.spec.ts` pins one site per rule of the shell's focus recovery: a deleted Files row hands
@@ -442,6 +445,17 @@ before removal on Delete, and ← reaches its project; a chat row, in its own fl
 menu, ignores F2 and deletes after the confirmation; Specs expand/collapse from the keyboard and Changes
 open their menu and kept diff; the Artifacts tree is one Tab stop that ↓ walks, F2 renames, Delete asks
 (Escape returns to the row, confirming removes it and focuses its neighbour) and `Mod+Enter` keeps.
+`keyboard-chat.spec.ts` pins the chat transcript's keyboard model on seeded chats: `Mod+↑` from the
+composer onto the newest message and Esc back with the draft and caret intact (a multi-line draft first
+takes the caret to its start), ↑/↓ with k/j and Home/End, →/← and l/h expanding an Activity and walking
+its nested Thinking and tool steps, C (clipboard), O (a preview tab) and the Shift+F10 item menu, Tab
+walking only the focused item's controls then leaving, PgUp/PgDn from the composer paging the transcript
+with focus kept, Latest from the keyboard and a history jump landing on the message, focus parked on the
+feed when a wheel scroll unmounts the focused row and the next key bringing it back, newest-first order,
+the history overlay's Delete (caret at the end only) and entry menu beside its Tab zoom, the Resources
+inspector's inert transcript and the @ popup taking Escape first, Stop returning focus to the composer
+(a replayed `agent_start` on the intercepted wire keeps the chat streaming without an agent), and h/l on
+a tab strip and j/k on a side rail.
 
 ## Isolation contract
 

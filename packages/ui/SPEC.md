@@ -19,7 +19,8 @@ Primitives expose per-file `@thinkrail/ui/<primitive>` subpaths, not a root comp
 lazy chunks independent and preserves the shadcn convention. `./utils` exposes `cn`; `./keyboard` exposes
 `isImeComposing`, `yieldEscapeToIme` and the platform modifier (`isApplePlatform`, `hasPlatformModifier`:
 Cmd on Apple, Ctrl elsewhere — shared so the app's shortcuts and an extension's card read one definition); `./focus` exposes
-the one tabbable-control selector (`TABBABLE_SELECTOR`) and `focusFirstControl(container)` (the first
+the one tabbable-control selector (`TABBABLE_SELECTOR`, which includes a `<details>` element's own
+`<summary>`, natively tabbable) and `focusFirstControl(container)` (the first
 control, focused with `preventScroll`), shared by the app's focus recovery and reveal moves and the
 resource renderers' reveal of a comment card; `./theme` exposes
 only `onThemeSwap`, a DOM MutationObserver subscription to the completed `data-theme` signal, with
@@ -122,7 +123,8 @@ The per-file surface is `button`, `switch`, `dialog`, `dropdown-menu`, `context-
 `aria-pressed`), `skeleton` (`SkeletonRows` / `LoadingRegion`, the one loading placeholder; its usage rules
 live in the web components spec), and `attention-line` (`AttentionLine`, the "Your input is needed · Agent is
 waiting" line; `announced` hides the visible line from assistive tech once the always-mounted polite
-region carries the announcement, `live={false}` drops the region), alongside `utils`, `keyboard`, `theme` and `fonts`.
+region carries the announcement, `live={false}` drops the region), and `keycaps` (`Keycaps`, a row of
+`<kbd>` caps for already-formatted key labels, a repeated key such as double Shift included), alongside `utils`, `keyboard`, `theme` and `fonts`.
 `menu-styles` is shared by the menu primitives and custom app menu rows. `toggle-segment` and `skeleton`
 moved here from the app when the resource renderers became a package, because both the app and
 [[module-resource-renderers]] use them; `attention-line` moved for the same reason when the
@@ -154,7 +156,9 @@ moved here from the app when the resource renderers became a package, because bo
   an open tooltip is the topmost dismissable layer and would swallow the Escape meant for the dialog. For
   the same reason an open `IconTooltip` closes itself synchronously on Escape in a window capture
   listener, before Radix's document-level layer handling, so one Escape dismisses the tooltip *and* the
-  dialog, popover or menu beneath it. Tooltip content stacks at `z-150`, above dialogs and the toast
+  dialog, popover or menu beneath it. An optional `shortcut` (pre-formatted caps — the package never
+  formats a chord, the app passes its own labels) renders as `Keycaps` after the label; `Button` and
+  `IconButton` forward it as `tooltipShortcut`. Tooltip content stacks at `z-150`, above dialogs and the toast
   viewport (`z-[100]`), so a toast's own close tooltip is never painted under the toast.
 - Context and dropdown menus share menu geometry and token classes: content surface, radius/shadow,
   item/icon spacing, separators, semantic action colors, focus rows, and viewport collision behavior.

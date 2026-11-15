@@ -92,9 +92,9 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   steered away from temporary folders ([[submodule-server-artifacts]], [[submodule-web-panels]]).
 - **Workbench** — a splittable layout of files, diffs, documents, chats, and terminals with movable side
   and bottom tool panels, kept local to each window ([[submodule-web-shell-layout]]). The region that holds
-  the keyboard stays at full contrast while the others are muted, and VS Code-style chords move between
-  regions, into the chat input, Projects, Files and the terminal, from one keybinding table that the
-  palette also shows ([[submodule-web-keybindings]]).
+  the keyboard carries an accent line, a keyboard move briefly frames the region it lands in, and
+  VS Code-style chords move between regions, into the chat input, Projects, Files and the terminal, from
+  one keybinding table that the palette also shows ([[submodule-web-keybindings]]).
 - **Chats** — concurrent `pi` sessions per workspace, each with its own model, pi-reported token/cost,
   steering and follow-ups mid-run, skill and prompt-template autocomplete, and history search
   ([[submodule-web-chat]], [[submodule-server-agent]]).

@@ -439,6 +439,57 @@ navigation/fold state, or disturbs Virtuoso's mode-aware latest-edge, reading-ba
 The root-to-leaf labels and chevrons are distinct keyboard targets in a labelled navigation region; visual
 entry/exit obeys reduced motion.
 
+**Transcript keyboard model** (`transcriptNavigation.ts`, `useTranscriptNavigation.ts`, `TranscriptItem.tsx`).
+The transcript is one Tab stop: the Virtuoso list is a labelled `role="feed"` of focusable `<article>`s —
+every row, plus each step of an expanded Activity and each tool of an expanded Thinking step — all
+`tabIndex=-1` (focused only by the model; the feed's Tab handling enters on the cursor item, so no article
+is tabbable on its own, which Biome's non-interactive tabindex rule requires) with the cursor marked
+`data-transcript-current` (the shell's landing skips a remembered item without it). Articles in a feed, not tree items: items hold rich
+content and their own controls, which a treeitem's name would flatten and its role forbids; rows carry
+`aria-posinset`/`aria-setsize`, and expansion stays on each item's existing toggle (`aria-expanded`).
+
+- **Built from data, not the DOM.** The visible items derive from the projected rows plus the fold cache
+  (`foldOverride`), in visual order for both message orders (rows reverse, steps inside a row never do),
+  so a move can target a row Virtuoso unmounted. The sidebar trees' rule (`lib`'s `resolveTreeMove`)
+  resolves ↑/↓ and k/j, Home/End, → and l (expand, else first child), ← and h (collapse, else parent);
+  PgUp/PgDn go to the farthest mounted item within one viewport; Enter toggles. Keys are unmodified,
+  IME-safe, read only on the article itself (inner controls keep theirs) and compared through the
+  catalog's `HJKL_KEYS` / `TRANSCRIPT_KEYS`. Expansion clicks the item's own toggle
+  (`data-activity-node-toggle`, `data-chat-item-toggle`), so fold-geometry preservation still runs.
+- **Item actions.** C copies the message source, a thought's text or a tool call's result text (nothing
+  for an Activity group, a running tool or a skill/review card) with a "Copied" toast; O opens the path of
+  `read`/`edit`/`write` and the single-spec tools (`spec_create`/`spec_get`/`spec_update`) through the same
+  `onOpenFile` preview open a click uses; Shift+F10 / Menu opens a keyboard-anchored `DropdownMenu` with
+  the applicable Expand/Collapse, Copy, Open file, and focus returns to the item. A context menu was
+  rejected: it would take native right-click copy. Esc returns to the composer through `refocus()`, draft
+  and caret intact.
+- **Scrolling stays the controller's.** A mounted target that sticks out is revealed with
+  `revealElement` (`nearest`, user-navigation; nested items keep the breadcrumb inset), an unmounted one
+  with `revealRow` and focused on "found"; a target on the latest row returns to the edge instead, so
+  reaching the newest item re-follows rather than detaching. Focus always uses `preventScroll`, and a
+  target already on screen only moves focus, so walking visible items never detaches a following reader.
+- **Virtualization.** When the focused item's row unmounts (a wheel scroll), its layout cleanup moves
+  focus to the feed (`tabIndex=-1`, no ring) before the browser drops it to `<body>`, so the shell's
+  recovery never sends it to the composer. The cursor survives; the next navigation key or Tab on the
+  feed reveals and refocuses it, and a cursor inside a group that was folded falls back to its nearest
+  visible ancestor.
+- **Tab.** Entering from outside lands on the cursor item when it is on screen, else the newest message,
+  else the topmost visible item, so Tab never scrolls the reader away. Inside, Tab walks only the focused
+  item's own controls — natively when the browser's next stop is one of them, so focus scrolling keeps its
+  keyboard provenance — and the next Tab leaves to the first stop after the transcript (Shift+Tab: before
+  it). Other items' controls stay pointer-focusable and are skipped by intercepting Tab, not by rewriting
+  every control's `tabIndex`, which streamed, expanded, remounted and extension-rendered controls would
+  each have to keep in sync. The cursor item carries no `data-focus-default`: the composer stays the chat
+  region's landing, and F6 returns to the item through the region's remembered focus
+  ([[submodule-web-shell]]).
+- **Ways in.** In the composer, Mod+↑ (checked before plain ↑ recall) focuses the newest content item (a
+  trailing round divider is skipped) when the draft is empty or one visual line, or the caret is already at
+  its start; otherwise it first moves the caret to the start. PgUp/PgDn there page the transcript with
+  keyboard provenance and keep focus. `ChatTranscriptHandle.focusNewest()` / `scrollPage()` are the seams.
+  **Latest** activated from the keyboard (`detail === 0`) parks focus on the feed, returns to the edge and
+  focuses the newest item once it mounts; **Stop** refocuses the composer explicitly; a jump-to-message
+  focuses the row it revealed.
+
 ## Extension point — the tool registry
 
 `toolRegistry.tsx` is **THE extension point**; a tool has two decoupled sides joined by **tool name**:
@@ -724,7 +775,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   outstanding write. Its lifecycle is keyed to request identity rather than streaming row-array churn, and
   its live row-index resolver follows projections that change while the request is pending. A transient
   `flashRowId` (rendered as `data-flash` + a `bg-primary-subtle` transition on the row wrapper, cleared after
-  1600ms) draws the eye only after the row mounts. Resolving a row, explicit reader cancellation, or
+  1600ms) draws the eye only after the row mounts, and the same "found" result focuses the row (with
+  `preventScroll`, in whichever transcript mounted for the jump), so the keyboard lands where the reader looks. Resolving a row, explicit reader cancellation, or
   exhausting the bounded materialization wait (toasted as "couldn't locate the message") clears that exact
   still-current request; an older effect may not clear a newer jump. Cancellation is the user-wins failure
   path and is intentionally silent rather than restarted against the reader. Effect teardown defers its
@@ -1284,6 +1336,13 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
     query included — to `<html>`). Presses on the history button, marked with a dedicated
     `data-history-trigger` attribute rather than its test id, are not outside: the button toggles the
     overlay itself.
+  - **Entry keys on the selection** (the query input keeps them, so Tab stays compact ↔ zoomed):
+    **Delete** does exactly what the entry's Trash does (`onDeleteChat`, no confirmation, same deletable
+    rule), but only with the caret at the end of the query and nothing selected, where forward-delete has
+    nothing to remove — elsewhere it still edits the query. **Shift+F10 / Menu** opens an entry menu
+    (`history-entry-menu`: Go to chat when jumpable, Save as template for a prompt, Move chat to trash when
+    deletable) anchored to the selected row; it is a layer like the scope picker, so the overlay's Escape and
+    outside-press listeners stand down while it is open, and closing it returns focus to the query input.
   - **Dismissal returns focus to the prompt field** (`ChatView.onDismissHistory` → the composer's
     `refocus` handle): opening moved focus into the overlay's query input, and closing unmounts it, so
     without this every post-Escape keystroke would land on `<body>` and be lost. The caret goes back where
@@ -1567,7 +1626,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   recall session (`recallIdxRef`) gated so it can never eat a draft: `↑` only steps in when the field is
   **empty** or a recall is already active (older → higher index), `↓` steps newer (past the newest
   restores `""`), any diverging edit or a submit exits the session, and the recalled text lands with the
-  caret at its end. The session index is a **ref, never state**: nothing renders from it, and stepping
+  caret at its end. Mod+↑ is matched first and belongs to the transcript (*Transcript keyboard model*). The session index is a **ref, never state**: nothing renders from it, and stepping
   writes the index *here* while the draft goes through `onChange` to the **parent's** store, so as state
   the two could commit in separate passes. In that window the textarea already showed the recalled text
   while still carrying the previous render's handlers and their stale index — a second `↑` re-recalled the
@@ -1711,7 +1770,13 @@ strip and the composer (only while the inspector is closed), and the inspector i
 region so the header and composer stay usable; it owns the open/selected state and fills the inspector's
 detail slot — `CommandLogView` fed by `useCommandLog` for a command, `SubagentTranscriptPane` for a
 subagent — and the subagent detail header's `renderSubagentModel` with `RunModelLabel`. No new shell pane, workbench resource
-kind or terminal attachment is involved. Tool/command completion rendering remains in the conversation primitives, joined through tool/custom-message
+kind or terminal attachment is involved. While the inspector is open the transcript underneath (its
+scroller with the breadcrumb trail, the Latest button and the unanchored ext-UI dock) is `inert`, so Tab and
+the region tracker never reach what the panel covers. The inspector is a non-modal Radix dialog whose
+document-capture Escape would close it before the composer saw the key: its `onEscapeKeyDown` yields while
+the focused composer has its own popup (mention list, slash menu, template slot session —
+`ComposerHandle.ownsEscape()`), so the first Escape closes that popup and the next one the inspector, which
+returns focus to its trigger. Tool/command completion rendering remains in the conversation primitives, joined through tool/custom-message
 names rather than imports of the capability packages; the latest turn divider carries the "still
 running" chip as a parent-supplied deep link into the inspector. The resources view has a third list,
 the session's MCP servers (`SessionResources.mcpServers`): `useChatResources` passes it only on an
@@ -1818,7 +1883,7 @@ Unknown custom messages retain their existing behavior.
   **No `index.ts` barrel** — chat pulls the **highlight client**, so per the code-splitting exception imports stay
   **per-file**; the registry is importable from `chat/toolRegistry` **without** pulling it.
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); the lifecycle-neutral
-  `prompt` module; `store` + `transport`
+  `prompt` module; `keybindings` (the transcript, composer and history key constants its handlers compare); `store` + `transport`
   (**app-integration files only** — a renderer that takes props must never reach for either. Today that
   is `ChatView.tsx`, **`ChatTranscript.tsx`** (the churn-isolated transcript child — the Virtuoso list, scroll
   control, transcript sync, completion-ack, the extension-dialog reply, and the

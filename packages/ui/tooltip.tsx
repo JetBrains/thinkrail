@@ -2,6 +2,7 @@ import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import type * as React from "react";
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { Keycaps } from "./keycaps";
 import { cn } from "./utils";
 
 const TooltipProvider = TooltipPrimitive.Provider;
@@ -29,12 +30,14 @@ function TooltipContent({
 
 function IconTooltip({
 	label,
+	shortcut,
 	side,
 	align,
 	wrapTrigger,
 	children,
 }: {
 	label: React.ReactNode;
+	shortcut?: readonly string[] | undefined;
 	side?: React.ComponentProps<typeof TooltipPrimitive.Content>["side"];
 	align?: React.ComponentProps<typeof TooltipPrimitive.Content>["align"];
 	wrapTrigger?: boolean;
@@ -72,7 +75,14 @@ function IconTooltip({
 				</TooltipTrigger>
 			)}
 			<TooltipContent {...(side ? { side } : {})} {...(align ? { align } : {})}>
-				{label}
+				{shortcut?.length ? (
+					<span className="flex items-center gap-8">
+						<span>{label}</span>
+						<Keycaps keys={shortcut} />
+					</span>
+				) : (
+					label
+				)}
 			</TooltipContent>
 		</Tooltip>
 	);

@@ -90,7 +90,11 @@ import {
 } from "./workbenchShared";
 import { SideStack } from "./workbenchSide";
 
-export type { LayoutTabFocusRequest, WorkbenchProps } from "./workbenchShared";
+export type {
+	LayoutTabFocusRequest,
+	WorkbenchChromeShortcuts,
+	WorkbenchProps,
+} from "./workbenchShared";
 
 export function Workbench({
 	workspaceId,
@@ -117,6 +121,8 @@ export function Workbench({
 	onNewChat,
 	onNewTerminal,
 	onGestureCanceled,
+	chromeShortcuts,
+	renderLeftRailFooter,
 }: WorkbenchProps) {
 	const t = useT();
 	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -864,6 +870,7 @@ export function Workbench({
 		registerChatRename,
 		chatFirstPrompts,
 		canFocusAdjacentGroup,
+		chromeShortcuts,
 	};
 	const sideStack = (side: LayoutSide) => (
 		<SideStack
@@ -1117,7 +1124,12 @@ export function Workbench({
 					focusAdjacentGroup(event.shiftKey ? -1 : 1);
 				}}
 			>
-				<AuxiliaryRegionRail region="left" shared={shared} attention={attention} />
+				<AuxiliaryRegionRail
+					region="left"
+					shared={shared}
+					attention={attention}
+					footer={renderLeftRailFooter}
+				/>
 				<div ref={columnsRef} className="min-h-0 min-w-0 flex-1">
 					{workbenchColumns}
 				</div>

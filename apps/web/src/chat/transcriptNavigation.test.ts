@@ -1,0 +1,242 @@
+import { describe, expect, test } from "bun:test";
+import { resolveTreeMove } from "@/lib";
+import { type ActivityStep, type ChatRow, projectRows, type RoutineToolStep } from "./rows";
+import {
+	composerTranscriptStep,
+	isEnterTranscriptKey,
+	newestContentRowId,
+	type TranscriptNavItem,
+	transcriptItemCopyText,
+	transcriptItemFilePath,
+	transcriptItems,
+	transcriptKeyAction,
+} from "./transcriptNavigation";
+
+function tool(id: string, toolName = "read", args: Record<string, unknown> = {}): RoutineToolStep {
+	return {
+		kind: "tool",
+		id,
+		toolCallId: id,
+		toolName,
+		args,
+		tool: { status: "done", raw: { content: [{ type: "text", text: `${id} output` }] } },
+		dead: false,
+		streaming: false,
+	} as RoutineToolStep;
+}
+
+function thinking(id: string, tools: RoutineToolStep[] = []): ActivityStep {
+	return { kind: "thinking", id, text: `${id} thought`, streaming: false, tools };
+}
+
+const user = (id: string, text = id): ChatRow => ({
+	kind: "user",
+	id,
+	message: { role: "user", content: text, timestamp: 0 },
+});
+const answer = (id: string): ChatRow => ({ kind: "markdown", id, text: `${id} answer` });
+const activity = (id: string, steps: ActivityStep[]): ChatRow => ({
+	kind: "activity",
+	id,
+	steps,
+	live: false,
+});
+
+const rows: ChatRow[] = [
+	user("u1"),
+	activity("activity:t1", [tool("t1"), thinking("a1:thinking:1", [tool("t2"), tool("t3")])]),
+	answer("a2"),
+	user("u2"),
+	activity("activity:t4", [tool("t4")]),
+	answer("a3"),
+];
+
+const ids = (items: TranscriptNavItem[]) => items.map((item) => item.id);
+const levels = (items: TranscriptNavItem[]) => items.map((item) => item.level);
+
+describe("transcriptItems", () => {
+	test("lists one item per row while every group is folded", () => {
+		expect(ids(transcriptItems(rows, () => false))).toEqual([
+			"u1",
+			"activity:t1",
+			"a2",
+			"u2",
+			"activity:t4",
+			"a3",
+		]);
+	});
+
+	test("nests the steps of an expanded activity and the tools of an expanded thought", () => {
+		const open = new Set(["activity:t1"]);
+		const items = transcriptItems(rows, (id) => open.has(id));
+		expect(ids(items)).toEqual([
+			"u1",
+			"activity:t1",
+			"t1",
+			"a1:thinking:1",
+			"a2",
+			"u2",
+			"activity:t4",
+			"a3",
+		]);
+		open.add("a1:thinking:1");
+		const deeper = transcriptItems(rows, (id) => open.has(id));
+		expect(ids(deeper).slice(1, 6)).toEqual(["activity:t1", "t1", "a1:thinking:1", "t2", "t3"]);
+		expect(levels(deeper).slice(1, 6)).toEqual([1, 2, 2, 3, 3]);
+		expect(deeper.find((item) => item.id === "t2")?.parentId).toBe("a1:thinking:1");
+		expect(deeper.find((item) => item.id === "t2")?.rowId).toBe("activity:t1");
+	});
+
+	test("never nests the single step a bare activity row already shows", () => {
+		expect(ids(transcriptItems(rows, () => true)).filter((id) => id === "t4")).toEqual([]);
+	});
+
+	test("follows newest-first projection for rows but keeps the steps inside a row in order", () => {
+		const projected = projectRows(rows, "newest-first");
+		const open = new Set(["activity:t1", "a1:thinking:1"]);
+		expect(ids(transcriptItems(projected, (id) => open.has(id)))).toEqual([
+			"a3",
+			"activity:t4",
+			"u2",
+			"a2",
+			"activity:t1",
+			"t1",
+			"a1:thinking:1",
+			"t2",
+			"t3",
+			"u1",
+		]);
+	});
+
+	test("a fold change rebuilds the visible list and tree moves follow it", () => {
+		const open = new Set<string>();
+		const model = () =>
+			transcriptItems(rows, (id) => open.has(id)).map((item) => ({
+				level: item.level,
+				expanded: item.id === "activity:t1" ? open.has(item.id) : undefined,
+			}));
+		expect(resolveTreeMove("ArrowRight", model(), 1)).toEqual({ kind: "toggle" });
+		open.add("activity:t1");
+		expect(resolveTreeMove("ArrowRight", model(), 1)).toEqual({ kind: "focus", index: 2 });
+		expect(resolveTreeMove("ArrowLeft", model(), 3)).toEqual({ kind: "focus", index: 1 });
+		expect(resolveTreeMove("ArrowDown", model(), 3)).toEqual({ kind: "focus", index: 4 });
+	});
+});
+
+describe("transcriptKeyAction", () => {
+	const key = (init: Partial<KeyboardEvent> & { key: string }) =>
+		transcriptKeyAction({
+			shiftKey: false,
+			altKey: false,
+			ctrlKey: false,
+			metaKey: false,
+			...init,
+		});
+
+	test("reads arrows and their h/j/k/l twins as tree moves", () => {
+		expect(key({ key: "ArrowDown" })).toEqual({ kind: "move", key: "ArrowDown" });
+		expect(key({ key: "j" })).toEqual({ kind: "move", key: "ArrowDown" });
+		expect(key({ key: "k" })).toEqual({ kind: "move", key: "ArrowUp" });
+		expect(key({ key: "h" })).toEqual({ kind: "move", key: "ArrowLeft" });
+		expect(key({ key: "l" })).toEqual({ kind: "move", key: "ArrowRight" });
+		expect(key({ key: "Home" })).toEqual({ kind: "move", key: "Home" });
+	});
+
+	test("names the page, item and exit keys", () => {
+		expect(key({ key: "PageDown" })).toEqual({ kind: "page", direction: 1 });
+		expect(key({ key: "PageUp" })).toEqual({ kind: "page", direction: -1 });
+		expect(key({ key: "Enter" })).toEqual({ kind: "toggle" });
+		expect(key({ key: "c" })).toEqual({ kind: "copy" });
+		expect(key({ key: "o" })).toEqual({ kind: "open" });
+		expect(key({ key: "Escape" })).toEqual({ kind: "leave" });
+		expect(key({ key: "F10", shiftKey: true })).toEqual({ kind: "menu" });
+		expect(key({ key: "ContextMenu" })).toEqual({ kind: "menu" });
+	});
+
+	test("leaves modified keys and other letters alone", () => {
+		expect(key({ key: "j", ctrlKey: true })).toBeNull();
+		expect(key({ key: "J", shiftKey: true })).toBeNull();
+		expect(key({ key: "c", metaKey: true })).toBeNull();
+		expect(key({ key: "ArrowDown", altKey: true })).toBeNull();
+		expect(key({ key: "F10" })).toBeNull();
+		expect(key({ key: "F10", shiftKey: true, ctrlKey: true })).toBeNull();
+		expect(key({ key: "x" })).toBeNull();
+	});
+});
+
+describe("the composer's way into the transcript", () => {
+	const event = (init: Partial<KeyboardEvent>) => ({
+		key: "ArrowUp",
+		shiftKey: false,
+		altKey: false,
+		ctrlKey: false,
+		metaKey: false,
+		...init,
+	});
+
+	test("answers Ctrl+↑ off Apple and ⌘↑ on Apple only", () => {
+		expect(isEnterTranscriptKey(event({ ctrlKey: true }), "Linux x86_64")).toBe(true);
+		expect(isEnterTranscriptKey(event({ metaKey: true }), "MacIntel")).toBe(true);
+		expect(isEnterTranscriptKey(event({ ctrlKey: true }), "MacIntel")).toBe(false);
+		expect(isEnterTranscriptKey(event({}), "Linux x86_64")).toBe(false);
+		expect(isEnterTranscriptKey(event({ ctrlKey: true, shiftKey: true }), "Win32")).toBe(false);
+		expect(isEnterTranscriptKey(event({ key: "ArrowDown", ctrlKey: true }), "Win32")).toBe(false);
+	});
+
+	test("enters from one line, else first brings the caret to the start", () => {
+		expect(composerTranscriptStep(false, false)).toBe("enter");
+		expect(composerTranscriptStep(false, true)).toBe("enter");
+		expect(composerTranscriptStep(true, false)).toBe("caretToStart");
+		expect(composerTranscriptStep(true, true)).toBe("enter");
+	});
+});
+
+describe("item actions", () => {
+	const items = transcriptItems(rows, () => true);
+	const item = (id: string) => {
+		const found = items.find((candidate) => candidate.id === id);
+		if (!found) throw new Error(`missing ${id}`);
+		return found;
+	};
+
+	test("copies a message's source, a thought's text and a tool call's result", () => {
+		expect(transcriptItemCopyText(item("u1"))).toBe("u1");
+		expect(transcriptItemCopyText(item("a2"))).toBe("a2 answer");
+		expect(transcriptItemCopyText(item("a1:thinking:1"))).toBe("a1:thinking:1 thought");
+		expect(transcriptItemCopyText(item("t2"))).toBe("t2 output");
+		expect(transcriptItemCopyText(item("activity:t4"))).toBe("t4 output");
+		expect(transcriptItemCopyText(item("activity:t1"))).toBeNull();
+	});
+
+	test("has nothing to copy for a running tool or a skill card", () => {
+		const running = { ...tool("t9"), tool: undefined };
+		const skill = user("s1", '<skill name="x" location="/x/SKILL.md">\nbody\n</skill>');
+		const [runningItem, skillItem] = transcriptItems(
+			[activity("activity:t9", [running]), skill],
+			() => false,
+		);
+		if (!runningItem || !skillItem) throw new Error("missing items");
+		expect(transcriptItemCopyText(runningItem)).toBeNull();
+		expect(transcriptItemCopyText(skillItem)).toBeNull();
+	});
+
+	test("opens the path of read, edit, write and single-spec tools only", () => {
+		const opened = (step: RoutineToolStep) => {
+			const [only] = transcriptItems([activity(`activity:${step.id}`, [step])], () => false);
+			return only ? transcriptItemFilePath(only) : null;
+		};
+		expect(opened(tool("r", "read", { path: "src/a.ts" }))).toBe("src/a.ts");
+		expect(opened(tool("w", "write", { path: "b.md" }))).toBe("b.md");
+		expect(opened(tool("c", "spec_create", { path: "docs/SPEC.md" }))).toBe("docs/SPEC.md");
+		expect(opened(tool("b", "bash", { command: "ls" }))).toBeNull();
+		expect(opened(tool("g", "spec_grep", { pattern: "x" }))).toBeNull();
+		expect(transcriptItemFilePath(item("a2"))).toBeNull();
+	});
+
+	test("skips a trailing round divider when it names the newest content", () => {
+		const divider = { kind: "divider", id: "a3:divider" } as ChatRow;
+		expect(newestContentRowId([...rows, divider])).toBe("a3");
+		expect(newestContentRowId(rows)).toBe("a3");
+		expect(newestContentRowId([])).toBeNull();
+	});
+});

@@ -930,7 +930,7 @@ watched without promoting its watcher for the host's lifetime (on Linux each wat
 inotify watch per folder; background runs in big repositories would otherwise exhaust
 `max_user_watches` for the workspace the user is looking at). The reconciles at every run start, tool end
 and settle do not depend on it. `setArtifactsPublisher` fans
-the index's change out as the pathless `workspace.artifactsChanged` nudge to v121+ sockets of that
+the index's change out as the pathless `workspace.artifactsChanged` nudge to v135+ sockets of that
 workspace. `fs.delete`, `fs.rename` and `fs.move` run their mutation inside `withUserRemoval` (a move locks
 both workspaces in id order), `fs.copy` and `fs.move` first call `prepareArtifactsDestination` for their
 destination folder, and `workspace.remove` / `chat.delete` call `removeWorkspaceArtifacts` once the

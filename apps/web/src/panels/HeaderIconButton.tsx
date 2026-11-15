@@ -7,9 +7,11 @@ export function HeaderIconButton({
 	disabled,
 	onClick,
 	icon,
+	shortcut,
 }: {
 	testid: string;
 	label: string;
+	shortcut?: readonly string[];
 	active?: boolean;
 	disabled?: boolean;
 	onClick: () => void;
@@ -19,6 +21,7 @@ export function HeaderIconButton({
 		<IconButton
 			icon={icon}
 			label={label}
+			tooltipShortcut={shortcut}
 			variant="ghost"
 			size="m"
 			selected={active === true}
