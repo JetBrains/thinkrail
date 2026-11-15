@@ -43,6 +43,36 @@ describe("the shortcut catalog", () => {
 		expect(labels(rows, "rail.reorderBottom")).toEqual(["Alt+Shift+←", "Alt+Shift+→"]);
 	});
 
+	test("lists the trees' letters: hjkl beside the arrows and S for search", () => {
+		const rows = shortcutRows({ desktop: false, platform: LINUX });
+		expect(labels(rows, "trees.move")).toEqual(["↑", "↓", "K", "J"]);
+		expect(labels(rows, "trees.expand")).toEqual(["→", "←", "L", "H"]);
+		expect(labels(rows, "trees.search")).toEqual(["S"]);
+		expect(labels(rows, "trees.searchStep")).toEqual(["↓", "↑"]);
+		expect(labels(rows, "trees.searchKeep")).toEqual(["↵"]);
+		expect(labels(rows, "trees.searchCancel")).toEqual(["Esc"]);
+		expect(labels(rows, "trees.typeAhead")).toBeUndefined();
+	});
+
+	test("appends extra rows, such as an enabled extension's, to their surface", () => {
+		const extra = [
+			{
+				id: "hint-mode.show",
+				title: "hintMode.shortcuts.show",
+				surface: "general",
+				keys: [{ key: "f" }, { key: ";", mod: true }],
+			},
+		] as const;
+		const mac = shortcutRows({ desktop: false, platform: MAC, extra });
+		const linux = shortcutRows({ desktop: false, platform: LINUX, extra });
+		expect(labels(mac, "hint-mode.show")).toEqual(["F", "⌘;"]);
+		expect(labels(linux, "hint-mode.show")).toEqual(["F", "Ctrl+;"]);
+		expect(linux.filter((row) => row.surface === "general").at(-1)?.id).toBe("hint-mode.show");
+		expect(
+			labels(shortcutRows({ desktop: false, platform: LINUX }), "hint-mode.show"),
+		).toBeUndefined();
+	});
+
 	test("lists the transcript's and the strips' letters beside the arrows they repeat", () => {
 		const rows = shortcutRows({ desktop: false, platform: LINUX });
 		expect(labels(rows, "transcript.move")).toEqual(["↑", "↓", "K", "J"]);
@@ -92,6 +122,37 @@ describe("the shortcut catalog", () => {
 		expect(labels(windows, "desktop.settings")).toEqual(["Ctrl+,"]);
 		expect(labels(shortcutRows({ desktop: true, platform: LINUX }), "desktop.quit")).toEqual([
 			"Ctrl+Q",
+		]);
+	});
+
+	test("lists the review surfaces' cursor, comment and composer keys", () => {
+		const mac = shortcutRows({ desktop: false, platform: MAC });
+		const linux = shortcutRows({ desktop: false, platform: LINUX });
+		expect(labels(linux, "review.cursorMove")).toEqual(["↑", "↓", "K", "J"]);
+		expect(labels(linux, "review.cursorSide")).toEqual(["←", "→", "H", "L"]);
+		expect(labels(linux, "review.cursorExtend")).toEqual([
+			"Shift+↑",
+			"Shift+↓",
+			"Shift+K",
+			"Shift+J",
+		]);
+		expect(labels(linux, "review.comment")).toEqual(["↵", "Ctrl+Shift+M"]);
+		expect(labels(mac, "review.comment")).toEqual(["↵", "⇧⌘M"]);
+		expect(labels(linux, "review.saveDraft")).toEqual(["Ctrl+↵"]);
+		expect(labels(mac, "review.sendNow")).toEqual(["⇧⌘↵"]);
+		expect(labels(linux, "review.regionResize")).toEqual([
+			"Shift+←",
+			"Shift+→",
+			"Shift+↑",
+			"Shift+↓",
+		]);
+		expect(labels(linux, "review.swipeFar")).toEqual([
+			"Shift+←",
+			"Shift+→",
+			"PgUp",
+			"PgDn",
+			"Home",
+			"End",
 		]);
 	});
 

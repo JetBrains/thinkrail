@@ -68,6 +68,7 @@
         "@remixicon/react": "catalog:",
         "@thinkrail/contracts": "workspace:*",
         "@thinkrail/ext-ask-user-question": "workspace:*",
+        "@thinkrail/ext-hint-mode": "workspace:*",
         "@thinkrail/ext-visualize": "workspace:*",
         "@thinkrail/extension-api": "workspace:*",
         "@thinkrail/locales": "workspace:*",
@@ -487,6 +488,23 @@
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
         "react-dom": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "thinkrail-extensions/hint-mode": {
+      "name": "@thinkrail/ext-hint-mode",
+      "version": "0.0.0",
+      "dependencies": {
+        "@thinkrail/extension-api": "workspace:*",
+        "@thinkrail/locales": "workspace:*",
+        "@thinkrail/ui": "workspace:*",
+        "react": "catalog:",
+        "react-dom": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@types/react": "catalog:",
+        "@types/react-dom": "catalog:",
         "typescript": "catalog:",
       },
     },
@@ -1237,6 +1255,8 @@
     "@thinkrail/desktop": ["@thinkrail/desktop@workspace:apps/desktop"],
 
     "@thinkrail/ext-ask-user-question": ["@thinkrail/ext-ask-user-question@workspace:thinkrail-extensions/ask-user-question"],
+
+    "@thinkrail/ext-hint-mode": ["@thinkrail/ext-hint-mode@workspace:thinkrail-extensions/hint-mode"],
 
     "@thinkrail/ext-visualize": ["@thinkrail/ext-visualize@workspace:thinkrail-extensions/visualize"],
 

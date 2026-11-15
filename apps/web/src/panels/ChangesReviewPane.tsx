@@ -234,13 +234,15 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 		[setCollapsed, tab.id, workspaceId],
 	);
 	const focusSectionHeader = (path: string) =>
-		focusWhenRevealed(() =>
-			Array.from(
+		focusWhenRevealed(() => {
+			const section = Array.from(
 				rootRef.current?.querySelectorAll<HTMLElement>('[data-testid="changes-section"]') ?? [],
-			)
-				.find((section) => section.dataset.path === path)
-				?.querySelector('[data-testid="changes-section-header"]'),
-		);
+			).find((candidate) => candidate.dataset.path === path);
+			return (
+				section?.querySelector<HTMLElement>('[data-testid="changes-section-toggle"]') ??
+				section?.querySelector<HTMLElement>('[data-testid="changes-section-header"]')
+			);
+		});
 	const reveal = (path: string, commentId: string | undefined, focus: boolean) => {
 		focusNextCommentReveal(focus && commentId !== undefined);
 		requestReveal(workspaceId, tab.id, path, commentId);

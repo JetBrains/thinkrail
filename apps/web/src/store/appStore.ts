@@ -404,7 +404,7 @@ export type LayoutIntent =
 			navigation?: CenterNavigationStamp | null;
 			countNavigation?: boolean;
 	  }
-	| { id: string; kind: "reveal-tool"; workspaceId: string; tool: LayoutToolId }
+	| { id: string; kind: "reveal-tool"; workspaceId: string; tool: LayoutToolId; focus?: false }
 	| { id: string; kind: "remove-session"; workspaceId: string; sessionId: string }
 	| {
 			id: string;

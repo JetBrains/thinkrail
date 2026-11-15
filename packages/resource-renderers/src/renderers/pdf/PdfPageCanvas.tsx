@@ -16,6 +16,7 @@ export function PdfPageCanvas({
 	review,
 	stamp,
 	active,
+	current,
 	onVisibility,
 	onRendered,
 	registerElement,
@@ -27,6 +28,7 @@ export function PdfPageCanvas({
 	review?: SurfaceReview | undefined;
 	stamp: string;
 	active: boolean;
+	current: boolean;
 	onVisibility: (page: number, visible: boolean) => void;
 	onRendered: (page: number, size: Size | null) => void;
 	registerElement: (page: number, element: HTMLElement | null) => void;
@@ -118,6 +120,7 @@ export function PdfPageCanvas({
 				{...(geometry ? { style: geometry } : {})}
 				commentLabel={t("viewer.region.commentOnPageRegion", { page })}
 				draftForRegion={(region) => pdfRegionDraft(region, page)}
+				tabStop={current}
 			>
 				<canvas
 					ref={canvasRef}

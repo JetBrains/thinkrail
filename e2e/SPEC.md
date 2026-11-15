@@ -438,13 +438,24 @@ keeps focus across its two renderings and an entry focuses its heading; One file
 last file hands focus to Prev; and the safety net lands a removed unmarked control on its region's landing
 target while a control the user clicked away from never pulls focus back.
 `keyboard-trees.spec.ts` pins the sidebar trees' keyboard model: the Files tree is one Tab stop that
-arrows, Home/End, →/← and type-ahead walk; Enter previews, `Mod+Enter` keeps, Delete confirms and trashes
+arrows, Home/End, →/← and h/j/k/l walk (another letter does nothing); `S` opens the labelled search field,
+which highlights the matches, steps ↓/↑ with wrap, keeps the row on Enter, returns to the start row on Esc
+and says "No match"; Enter previews, `Mod+Enter` keeps, Delete confirms and trashes
 (focus moving to the next file); after a reload `Mod+Shift+E` lands on the selected row rather than the
 first; a workspace row opens its dropdown on Shift+F10 and returns focus on Escape, renames on F2, asks
 before removal on Delete, and ← reaches its project; a chat row, in its own flat Chats tree, opens its
 menu, ignores F2 and deletes after the confirmation; Specs expand/collapse from the keyboard and Changes
 open their menu and kept diff; the Artifacts tree is one Tab stop that ↓ walks, F2 renames, Delete asks
 (Escape returns to the row, confirming removes it and focuses its neighbour) and `Mod+Enter` keeps.
+`hint-mode.spec.ts` pins the hint-mode extension: `F` types in the chat input while `Mod+;` there and `F`
+elsewhere show labels and the bar, and Esc / `Mod+;` leave them; typing a label presses a rail button,
+opens a Radix dropdown (whose open menu then scopes the labels) and focuses the chat input without typing;
+the first letter narrows the labels, Backspace restores them and Shift on the last letter only focuses a
+Files row; an open Settings dialog scopes the labels and survives the Esc that leaves hint mode; and
+Settings → Extensions lists Hint mode without tool chips, switching it off silences both keys and drops
+its cheatsheet rows until it is switched back on. A label is found by its position at the target's
+top-left; a target must be scrolled into view and its panel's entrance animation finished before the
+labels are taken, since they are measured once (and on scroll / resize).
 `keyboard-chat.spec.ts` pins the chat transcript's keyboard model on seeded chats: `Mod+↑` from the
 composer onto the newest message and Esc back with the draft and caret intact (a multi-line draft first
 takes the caret to its start), ↑/↓ with k/j and Home/End, →/← and l/h expanding an Activity and walking
@@ -456,6 +467,20 @@ the history overlay's Delete (caret at the end only) and entry menu beside its T
 inspector's inert transcript and the @ popup taking Escape first, Stop returning focus to the composer
 (a replayed `agent_start` on the intercepted wire keeps the chat streaming without an agent), and h/l on
 a tab strip and j/k on a side rail.
+`keyboard-review.spec.ts` pins commenting from the keyboard: Tab onto a Pierre diff lands on its cursor
+proxy (`review-cursor`: a listbox whose single selected option, its `aria-activedescendant`, names the
+line and its place among the stops, while the diff container has no role or tabindex and takes the ring's
+outline) and draws the line cursor (j/k and arrows, h/l switching side in split view, Home/End, Shift
+extending a range), Enter opens the composer on that range and `Mod+Enter` saves it with focus back on
+the line, Tab reaches the card at or below the cursor and `Mod+Enter` / Esc return from it, Delete and
+Send keep focus on the card's line and `Shift+Mod+Enter` sends at once (the intercepted
+`review.sendComment` never answers, so no chat opens), a virtualized diff scrolls the cursor between far
+hunks and Tab back onto the proxy leaves the scroll where it was, Show in file lands in a draft's text
+and Tab lands on a sent card, the review tab's `J` stays outside the cursor while `V` passes through, the
+cheatsheet highlights the review section and scrolls it into view, a Markdown block range (its proxy
+option naming the block and the range) comments on its source lines, an image keyboard frame stores the
+drag's normalized region, the swipe divider moves as a slider, and Monaco's `Shift+Mod+M` comments on the
+caret line.
 
 ## Isolation contract
 
@@ -674,8 +699,9 @@ reload. A huge comparison opts in through Show diff anyway while an unrelated fi
 write its own watcher frame, past the 300 ms quiet flush), so updates keep landing inside the expensive first
 mount. These regressions need no provider,
 prompt submission, route mock, or screenshot. Extension on/off coverage (`extensions-settings.spec.ts`) drives the
-real Settings → Extensions switch of every shipped extension (`visualize`, `ask-user-question`) through
-`settings.update`, proves it survives a reload, and seeds a historical `visualize` call that must still render
+real Settings → Extensions switch of every shipped extension (`visualize`, `ask-user-question`,
+`web-access`, and the web-only `hint-mode` row the host catalog lacks) through `settings.update`, proves it
+survives a reload, and seeds a historical `visualize` call that must still render
 its diagram and an answered `ask_user_question` call that must still render its record while the extension is
 off; each test restores every switch in `afterEach` because the shard shares one host. `environment-settings.spec.ts` drives Settings →
 Environment through rejected and accepted saves and a reload; the host was launched with
