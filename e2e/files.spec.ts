@@ -96,6 +96,55 @@ test("Files tree rows copy and paste files and folders, then delete them to the 
 	expect(readFileSync(join(root, "pkg", "a.txt"), "utf8")).toBe("a\n");
 });
 
+test("a Files tree row reveals its file or folder in the host's file manager", async ({ page }) => {
+	// Answer fs.reveal here so the run never opens a real Finder/Explorer window.
+	const reveals: unknown[] = [];
+	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
+		const server = socket.connectToServer();
+		socket.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as {
+				id?: string;
+				method?: string;
+				params?: unknown;
+			};
+			if (frame.method === "fs.reveal") {
+				reveals.push(frame.params);
+				socket.send(JSON.stringify({ id: frame.id, ok: true, result: { ok: true } }));
+				return;
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => socket.send(message));
+	});
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	mkdirSync(join(workspace.worktreePath, "pkg"));
+	writeFileSync(join(workspace.worktreePath, "pkg", "a.txt"), "a\n");
+	await revealWorkbenchTool(page, "files");
+
+	const row = (name: string) =>
+		page.getByTestId("file-node").filter({ hasText: new RegExp(`^${name}[MAUR]?$`) });
+	const label =
+		process.platform === "darwin"
+			? "Reveal in Finder"
+			: process.platform === "win32"
+				? "Show in Explorer"
+				: "Reveal in file manager";
+
+	await row("README.md").click({ button: "right" });
+	await expect(page.getByTestId("file-tree-reveal")).toHaveText(label);
+	await page.getByTestId("file-tree-reveal").click();
+	await row("pkg").focus();
+	await page.keyboard.press("Shift+F10");
+	await page.getByTestId("file-tree-reveal").click();
+	await expect
+		.poll(() => reveals)
+		.toEqual([
+			{ workspaceId: workspace.id, path: "README.md" },
+			{ workspaceId: workspace.id, path: "pkg" },
+		]);
+});
+
 test("a copied file pastes into another workspace, including an empty tree", async ({ page }) => {
 	await openFixtureProject(page);
 	const source = await createWorkspaceViaDialog(page);

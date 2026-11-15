@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join, win32 } from "node:path";
 import {
@@ -8,6 +8,7 @@ import {
 	pathWhich,
 	revealInFileManager,
 	type SpawnFn,
+	selectInFileManager,
 	type WhichFn,
 } from "./editors";
 
@@ -213,5 +214,97 @@ describe("revealInFileManager", () => {
 			throw new Error("ENOENT");
 		};
 		expect(() => revealInFileManager(dir, throwingSpawn, "linux")).toThrow(/linux/);
+	});
+});
+
+describe("selectInFileManager", () => {
+	const dir = mkdtempSync(join(tmpdir(), "thinkrail-select-"));
+	const file = join(dir, "it's #1.txt");
+	writeFileSync(file, "x\n");
+	const calls: { cmd: string[]; options: Parameters<SpawnFn>[1] }[] = [];
+	const recording: SpawnFn = (cmd, options) => {
+		calls.push({ cmd, options });
+	};
+	afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+	test("macOS: Finder selects the entry inside its folder", () => {
+		calls.length = 0;
+		selectInFileManager(file, recording, "darwin");
+		expect(calls.map((call) => call.cmd)).toEqual([["open", "-R", file]]);
+	});
+
+	test("Windows: Explorer gets one quoted /select object, passed verbatim", () => {
+		calls.length = 0;
+		selectInFileManager(file.replaceAll("\\", "/"), recording, "win32");
+		expect(calls).toEqual([
+			{
+				cmd: ["explorer", `/select,"${win32.normalize(file)}"`],
+				options: { windowsHide: false, windowsVerbatimArguments: true },
+			},
+		]);
+	});
+
+	test("Windows: a comma in the path stays inside the selected object", () => {
+		// Explorer splits its command line on commas, so an unquoted `a,evil.bat` would become a
+		// second object for Explorer to open.
+		calls.length = 0;
+		const comma = join(dir, "a,evil.bat");
+		writeFileSync(comma, "x\n");
+		selectInFileManager(comma, recording, "win32");
+		expect(calls[0]?.cmd).toEqual(["explorer", `/select,"${win32.normalize(comma)}"`]);
+	});
+
+	test("Windows: refuses a path that could close the quoted object", () => {
+		calls.length = 0;
+		const quoted = join(dir, 'say "hi".txt');
+		writeFileSync(quoted, "x\n");
+		expect(() => selectInFileManager(quoted, recording, "win32")).toThrow(/quote/);
+		expect(calls).toEqual([]);
+	});
+
+	test("Linux: asks FileManager1 to show the item and falls back to opening its folder", () => {
+		calls.length = 0;
+		selectInFileManager(file, recording, "linux");
+		const [shell, flag, script, name, uri, parent] = calls[0]?.cmd ?? [];
+		expect([shell, flag, name]).toEqual(["sh", "-c", "sh"]);
+		expect(script).toContain("org.freedesktop.FileManager1.ShowItems");
+		expect(script).toContain('xdg-open "$2"');
+		// The URI is a positional argument, never spliced into the script, and a quote in the
+		// name cannot close the GVariant string it is placed in.
+		expect(script).not.toContain(file);
+		expect(uri).toStartWith("file://");
+		expect(uri).not.toContain("'");
+		expect(parent).toBe(dir);
+	});
+
+	test("launches the file manager with a visible window on every platform", () => {
+		for (const platform of ["darwin", "win32", "linux"] as const) {
+			calls.length = 0;
+			selectInFileManager(file, recording, platform);
+			expect(calls[0]?.options?.windowsHide).toBe(false);
+		}
+	});
+
+	test("selects a dangling symlink rather than calling it missing", () => {
+		calls.length = 0;
+		const link = join(dir, "dangling");
+		symlinkSync(join(dir, "nowhere"), link);
+		selectInFileManager(link, recording, "darwin");
+		expect(calls.map((call) => call.cmd)).toEqual([["open", "-R", link]]);
+	});
+
+	test("rejects a missing entry before launching anything", () => {
+		calls.length = 0;
+		expect(() => selectInFileManager(join(dir, "gone.txt"), recording, "darwin")).toThrow(
+			/Path not found/,
+		);
+		expect(calls).toEqual([]);
+	});
+
+	test("names the platform when no file manager launcher is available", () => {
+		const throwingSpawn: SpawnFn = () => {
+			throw new Error("ENOENT");
+		};
+		expect(() => selectInFileManager(file, throwingSpawn, "win32")).toThrow(/win32/);
 	});
 });

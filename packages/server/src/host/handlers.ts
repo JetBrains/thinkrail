@@ -118,7 +118,12 @@ import {
 import { providerFromRemoteUrl } from "../branch-review";
 import { forgetWorkspaceChanges, revertChange, undoChange } from "../changes";
 import { selectDirectory } from "../dialog";
-import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
+import {
+	listAvailableEditors,
+	openEditor,
+	revealInFileManager,
+	selectInFileManager,
+} from "../editors";
 import { hostEnvironmentStatus, updateHostEnvironment } from "../environment";
 import { listExtensionCatalog } from "../extensions";
 import {
@@ -141,6 +146,7 @@ import {
 	readDir,
 	readFile,
 	renameWorktreeEntry,
+	resolveWorktreeEntry,
 } from "../fs";
 import {
 	commitsAheadOf,
@@ -1007,6 +1013,10 @@ const handlers: WsHandlers = {
 			notifyWorkspacePathsChanged(p.destinationWorkspaceId, moved.written);
 			return { path: moved.path };
 		});
+	},
+	"fs.reveal": (p) => {
+		selectInFileManager(resolveWorktreeEntry(p.workspaceId, p.path).abs);
+		return { ok: true } as const;
 	},
 	"artifacts.list": (p) => {
 		void ensureWatch(p.workspaceId);

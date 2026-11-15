@@ -66,7 +66,9 @@ paste into the folder, and extensions
   diagnostic is only ever read as text) and
   `spawnDetached()` (fire-and-forget `unref`) over `Bun.spawnSync` / `Bun.spawn`, always
   `windowsHide: true` except where a `spawnDetached` caller passes `windowsHide: false` to launch a GUI
-  app whose own window is the point (the file-manager reveal). Bun 1.4.0 maps that option to libuv
+  app whose own window is the point (the file-manager reveal). `spawnDetached` also forwards
+  `windowsVerbatimArguments` for a caller that quotes its own Windows command line (Explorer's
+  `/select,"<path>"`); it is off unless asked for. Bun 1.4.0 maps the hide option to libuv
   `UV_PROCESS_WINDOWS_HIDE`; the seam prevents background console spawns from omitting it. The two bespoke bounded runners (`server/subprocess`
   `runBounded`, `jbcentral`'s version/quota runner) set it directly.
 - **Allowed deps:** Bun/Node runtime (`@types/bun`); `contracts` **types** (`JbcentralInstall`, the wire shape `jbcentralInstall`

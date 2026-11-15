@@ -1,6 +1,7 @@
-import { existsSync } from "node:fs";
+import { existsSync, lstatSync } from "node:fs";
 import { readdir } from "node:fs/promises";
-import { delimiter, win32 } from "node:path";
+import { delimiter, dirname, win32 } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { EditorInfo } from "@thinkrail/contracts";
 import { spawnDetached } from "@thinkrail/shared/spawn";
 
@@ -86,7 +87,10 @@ export async function pathWhich(
 	};
 }
 
-export type SpawnFn = (cmd: string[], options?: { windowsHide?: boolean }) => void;
+export type SpawnFn = (
+	cmd: string[],
+	options?: { windowsHide?: boolean; windowsVerbatimArguments?: boolean },
+) => void;
 
 export const defaultSpawn: SpawnFn = (cmd, options) => {
 	if (!spawnDetached(cmd, options)) throw new Error("Failed to launch the requested application");
@@ -153,8 +157,64 @@ export function revealInFileManager(
 			: platform === "win32"
 				? ["explorer", win32.normalize(worktreePath)]
 				: ["xdg-open", worktreePath];
+	launchFileManager(cmd, spawn, platform);
+}
+
+// FileManager1.ShowItems selects the item in Nautilus, Dolphin, Nemo and others; a desktop without
+// that D-Bus service gets the parent folder opened instead. The URI and the folder arrive as
+// positional arguments, never spliced into the script.
+const LINUX_SELECT_SCRIPT =
+	'gdbus call --session --dest org.freedesktop.FileManager1 --object-path /org/freedesktop/FileManager1 --method org.freedesktop.FileManager1.ShowItems "[\'$1\']" "" >/dev/null 2>&1 || exec xdg-open "$2"';
+
+/** Opens the folder holding `path` with `path` selected in it. A dangling symlink is still selectable. */
+export function selectInFileManager(
+	path: string,
+	spawn: SpawnFn = defaultSpawn,
+	platform: NodeJS.Platform = process.platform,
+): void {
+	if (!entryExists(path)) throw new Error(`Path not found: ${path}`);
+	if (platform === "win32") {
+		launchFileManager(explorerSelect(path), spawn, platform, { windowsVerbatimArguments: true });
+		return;
+	}
+	const cmd =
+		platform === "darwin"
+			? ["open", "-R", path]
+			: ["sh", "-c", LINUX_SELECT_SCRIPT, "sh", linuxItemUri(path), dirname(path)];
+	launchFileManager(cmd, spawn, platform);
+}
+
+// Explorer splits its command line on commas, so `a,b.txt` unquoted would hand it a second object to
+// open. The object is quoted here and passed verbatim (no runtime re-quoting), the documented
+// `/select,"<path>"` form. A Windows path cannot contain `"`; one that does is refused, not escaped.
+function explorerSelect(path: string): string[] {
+	const target = win32.normalize(path);
+	if (target.includes('"')) throw new Error(`Can't reveal a path containing a quote: ${path}`);
+	return ["explorer", `/select,"${target}"`];
+}
+
+// A quote would end the GVariant string the URI sits in, and pathToFileURL leaves quotes as they are.
+function linuxItemUri(path: string): string {
+	return pathToFileURL(path).href.replaceAll("'", "%27");
+}
+
+function entryExists(path: string): boolean {
 	try {
-		spawn(cmd, { windowsHide: false });
+		lstatSync(path);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+function launchFileManager(
+	cmd: string[],
+	spawn: SpawnFn,
+	platform: NodeJS.Platform,
+	options: { windowsVerbatimArguments?: boolean } = {},
+): void {
+	try {
+		spawn(cmd, { windowsHide: false, ...options });
 	} catch {
 		throw new Error(`No file manager launcher available on this host (${platform}).`);
 	}
