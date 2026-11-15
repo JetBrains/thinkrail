@@ -247,7 +247,7 @@ const navMockup = (title: string, nav: "sidebar" | "tabs" | "none") => {
 		(_, i) =>
 			`<section style="height:180px;margin-bottom:16px;border-radius:8px;background:#fff;border:1px solid #dde1e8;padding:16px">Setting ${i + 1}</section>`,
 	).join("");
-	return `<!doctype html><html><body style="margin:0;font-family:sans-serif;background:#f6f7f9"><header style="height:56px;display:flex;align-items:center;padding:0 24px;background:#1e2330;color:#fff"><h1 style="font-size:18px;margin:0">${title}</h1></header>${tabs}<div style="display:flex;min-height:3000px">${side}<main style="flex:1;padding:24px">${cards}</main></div></body></html>`;
+	return `<!doctype html><html style="scroll-behavior:smooth"><body style="margin:0;font-family:sans-serif;background:#f6f7f9"><header style="height:56px;display:flex;align-items:center;padding:0 24px;background:#1e2330;color:#fff"><h1 style="font-size:18px;margin:0">${title}</h1></header>${tabs}<div style="display:flex;min-height:3000px">${side}<main style="flex:1;padding:24px">${cards}</main></div></body></html>`;
 };
 
 const COMPARE_FILES = {

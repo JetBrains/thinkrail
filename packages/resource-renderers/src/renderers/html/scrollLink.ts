@@ -27,8 +27,7 @@ export function createScrollLink(): ScrollLink {
 	const place = (view: Window) => {
 		const element = scroller(view);
 		if (!element) return;
-		element.scrollTop = offset.top;
-		element.scrollLeft = offset.left;
+		element.scrollTo({ top: offset.top, left: offset.left, behavior: "instant" });
 		echoes.set(view, offsetOf(element));
 	};
 

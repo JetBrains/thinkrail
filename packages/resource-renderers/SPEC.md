@@ -516,7 +516,9 @@ style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'; 
 'none'; child-src 'none'`. The diff is the shared visual frame with all four modes (2-up, swipe, onion,
 difference), and its two documents **scroll together** in every mode: a per-diff `ScrollLink` mirrors the
 absolute scroll offset of whichever document the user scrolls onto the other, ignores the echo of its own
-write (read back after the write, so a shorter document's clamped offset never drags the longer one back),
+write (read back after the write, so a shorter document's clamped offset never drags the longer one back;
+the write is an explicitly `instant` `scrollTo`, since a mockup's `scroll-behavior: smooth` would otherwise
+turn it into an animation whose intermediate offsets read as user scrolls and leave the pair apart),
 and re-applies the last offset to a frame that reloads, so a mode switch keeps the position. Only these
 paired frames carry `sandbox="allow-same-origin"`, which lets the host attach the scroll listener and read
 the offset; they still have no `allow-scripts`, so nothing in the document runs (the sanitizer strips

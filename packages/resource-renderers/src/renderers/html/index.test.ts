@@ -221,13 +221,21 @@ test("paired HTML frames add only same-origin access, never scripts", () => {
 	).toEqual(["allow-same-origin"]);
 });
 
+interface FakeScroller {
+	scrollTop: number;
+	scrollLeft: number;
+	scrollTo(options: ScrollToOptions): void;
+}
+
 class FakeView {
 	readonly scroller = { scrollTop: 0, scrollLeft: 0, maxTop: Number.POSITIVE_INFINITY };
-	readonly document: { scrollingElement: { scrollTop: number; scrollLeft: number } };
+	readonly behaviors: Array<ScrollBehavior | undefined> = [];
+	readonly document: { scrollingElement: FakeScroller };
 	private listener: (() => void) | null = null;
 
 	constructor(maxTop = Number.POSITIVE_INFINITY) {
 		const scroller = this.scroller;
+		const behaviors = this.behaviors;
 		scroller.maxTop = maxTop;
 		this.document = {
 			scrollingElement: {
@@ -242,6 +250,11 @@ class FakeView {
 				},
 				set scrollLeft(value: number) {
 					scroller.scrollLeft = value;
+				},
+				scrollTo({ top = scroller.scrollTop, left = scroller.scrollLeft, behavior }) {
+					behaviors.push(behavior);
+					scroller.scrollTop = Math.min(top, scroller.maxTop);
+					scroller.scrollLeft = left;
 				},
 			},
 		};
@@ -282,6 +295,7 @@ test("a scroll link mirrors the scrolled document onto its pair and ignores the 
 
 	right.userScroll(120);
 	expect(left.scroller.scrollTop).toBe(120);
+	expect(new Set([...left.behaviors, ...right.behaviors])).toEqual(new Set(["instant"]));
 });
 
 test("a scroll link places a reloaded frame at the last offset and detaches cleanly", () => {
