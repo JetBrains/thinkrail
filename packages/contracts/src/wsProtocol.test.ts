@@ -8,6 +8,7 @@ import {
 	SEARCH_KINDS,
 	SETTLE_IDLE_DAYS,
 	SUBAGENT_MAX_CONCURRENT,
+	WORKSPACE_VIEW_ROUTE,
 } from "./domain";
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
@@ -15,6 +16,7 @@ import {
 	ARTIFACTS_PROTOCOL_VERSION,
 	ASK_DISCUSS_PROTOCOL_VERSION,
 	BRANCH_STATUS_PROTOCOL_VERSION,
+	BROWSER_VIEW_PROTOCOL_VERSION,
 	CACHE_WARMING_MODES,
 	CACHE_WARMING_SETTINGS_PROTOCOL_VERSION,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
@@ -311,6 +313,12 @@ test("workspace artifacts, rename and move are pinned to v121", () => {
 	expect(WS_METHODS.fsRename).toBe("fs.rename");
 	expect(WS_METHODS.fsMove).toBe("fs.move");
 	expect(WS_CHANNELS.workspaceArtifactsChanged).toBe("workspace.artifactsChanged");
+});
+
+test("the browser view route is pinned to v122", () => {
+	expect(BROWSER_VIEW_PROTOCOL_VERSION).toBe(122);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(BROWSER_VIEW_PROTOCOL_VERSION);
+	expect(WORKSPACE_VIEW_ROUTE).toBe("/view/");
 });
 
 test("background workspace creation is pinned to v104", () => {

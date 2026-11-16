@@ -69,6 +69,7 @@ import {
 import { ConfirmDialog } from "./ConfirmDialog";
 import { deleteEntry, pasteInto, renameEntry } from "./fileTreeActions";
 import { HeaderIconButton } from "./HeaderIconButton";
+import { OpenInBrowserMenuItem } from "./OpenInBrowserButton";
 import { openChatInTab } from "./openChat";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
@@ -698,6 +699,11 @@ function EntryMenu({
 							<RiFolderOpenLine />
 							{t("panels.artifacts.reveal")}
 						</ContextMenuItem>
+						<OpenInBrowserMenuItem
+							workspaceId={workspaceId}
+							path={path}
+							testId="artifact-open-in-browser"
+						/>
 					</>
 				)}
 				{sessionId ? <OpenChatItem workspaceId={workspaceId} sessionId={sessionId} /> : null}

@@ -8,6 +8,7 @@ export {
 	ResourceHostProvider,
 	type ResourceMarkdown,
 	type ResourceMarkdownProps,
+	type ResourceOpenInBrowserProps,
 	type ResourcePreferences,
 	ResourcePreferencesProvider,
 	type ResourceReviewSendProps,

@@ -15,6 +15,7 @@ import { isPhoneViewport } from "../lib";
 import type { FileTab } from "../store";
 import { selectWorkspaceById, useAppStore } from "../store";
 import { getTransport } from "../transport";
+import { OpenInBrowserButton } from "./OpenInBrowserButton";
 import { resourceBytesUrl, useResetViewStateOnImplementationChange } from "./resourcePane";
 import { reviewFlagFor } from "./reviewModel";
 import { SendReviewButton } from "./SendReviewButton";
@@ -83,6 +84,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 					aria-label={t("panels.filePane.resourceView")}
 					className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-12"
 				>
+					<OpenInBrowserButton workspaceId={tab.workspaceId} path={tab.path} />
 					<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
 					<RendererToggles
 						candidates={candidates}

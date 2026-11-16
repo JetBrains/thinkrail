@@ -1,3 +1,4 @@
+import { WORKSPACE_VIEW_ROUTE } from "@thinkrail/contracts";
 import { useEffect, useRef } from "react";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
@@ -15,6 +16,18 @@ export function resourceBytesUrl(workspaceId: string, path: string, oid?: string
 	return oid
 		? `${base}${BLOB_ROUTE}/${workspace}/${encodeURIComponent(oid)}/${encodeResourcePath(path)}`
 		: `${base}${FILES_ROUTE}/${workspace}/${encodeResourcePath(path)}`;
+}
+
+export function resourceViewUrl(workspaceId: string, path: string): string {
+	return `${getTransport().httpBase()}${WORKSPACE_VIEW_ROUTE}${encodeURIComponent(workspaceId)}/${encodeResourcePath(path)}`;
+}
+
+export function isBrowserPage(path: string): boolean {
+	return /\.x?html?$/i.test(path);
+}
+
+export function openInBrowser(workspaceId: string, path: string): void {
+	window.open(resourceViewUrl(workspaceId, path), "_blank", "noopener,noreferrer");
 }
 
 export function useResetViewStateOnImplementationChange(

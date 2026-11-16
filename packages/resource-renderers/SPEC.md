@@ -37,6 +37,7 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
 - the host seam — `ResourceHostProvider`, `ResourcePreferencesProvider`, `ResourceEnvironmentProvider`,
   `ResourceScopeProvider`, `useOptionalResourceHost`, `useResourceScope` and the `ResourceHost`,
   `ResourcePreferences`, `ResourceScope`, `ResourceFileReviewProps`, `ResourceReviewSendProps`,
+  `ResourceOpenInBrowserProps`,
   `ResourceMarkdown`, `ResourceCodeHost`, `ResourceCodeLanguage`, `ResourceMarkdownProps`,
   `MarkdownRehypePlugins` types;
 - `canonicalWorkspacePath` — the package's copy of the app's workspace-relative path identity (`lib`'s
@@ -138,6 +139,11 @@ A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` 
   `ReviewSend` — the host's review surface and Send review control; the optional session routes sends. The
   seam is a component, not a hook on the host object: passing hooks around as values breaks React's rules and
   made the React Compiler bail out of the preview; a before/after nests two `FileReview`s.
+- `OpenInBrowser?` (`ResourceOpenInBrowserProps`: `{ workspaceId, path }`) — the host's "Open in browser"
+  control, a component for the same reason as `ReviewSend`; `ResourcePreview`'s toolbar renders it for a
+  single file (never a before/after) just before the caller's `actions`, so every framed preview, compare
+  pane and palette preview gets it. The host decides which files qualify and whether its own host can serve
+  them (ThinkRail: HTML/XHTML, from `BROWSER_VIEW_PROTOCOL_VERSION`), and how to open them.
 Build the value once (the app does at module scope). Its functions are memo inputs: `documentComponents`
 defines its link and image components per call, so a new `bytesUrl`/`openFile` identity would remount every
 link and image in open previews and notebook cells. The reader's line-width preference

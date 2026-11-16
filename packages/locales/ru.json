@@ -3317,6 +3317,7 @@
 	"viewer.preview.fullScreen": "Во весь экран",
 	"viewer.preview.loadFailed": "Не удалось загрузить {{path}}: {{message}}",
 	"viewer.preview.openDiffInTab": "Открыть diff во вкладке",
+	"viewer.preview.openInBrowser": "Открыть в браузере",
 	"viewer.preview.openInTab": "Открыть во вкладке",
 	"viewer.preview.refreshFailed": "Не удалось обновить {{path}}: {{message}}. Показана последняя загруженная версия.",
 	"viewer.region.commentOnDocument": "Комментировать этот документ",
