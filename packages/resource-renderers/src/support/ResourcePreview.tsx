@@ -1,5 +1,6 @@
 import { useT } from "@thinkrail/locales/react";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { Toolbar } from "@thinkrail/ui/toolbar";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import {
@@ -236,9 +237,8 @@ function PreviewToolbar({
 	const { compact } = useResourceEnvironment();
 	if (compact && props.leading === undefined && props.actions === undefined) return null;
 	return (
-		<div
+		<Toolbar
 			data-testid="resource-view-toggle"
-			role="toolbar"
 			aria-label={t("panels.filePane.resourceView")}
 			className="flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-12"
 		>
@@ -258,7 +258,7 @@ function PreviewToolbar({
 				<OpenInBrowser workspaceId={props.workspaceId} path={props.path} />
 			) : null}
 			{props.actions}
-		</div>
+		</Toolbar>
 	);
 }
 

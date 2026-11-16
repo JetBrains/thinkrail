@@ -22,6 +22,7 @@ import {
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { Toolbar } from "@thinkrail/ui/toolbar";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, type ReactNode, type RefObject, useRef, useState } from "react";
 import {
@@ -327,8 +328,7 @@ function ItemStrip({
 }) {
 	const t = useT();
 	return (
-		<div
-			role="toolbar"
+		<Toolbar
 			aria-label={t("tools.ask.compare.itemsLabel")}
 			className="flex min-w-0 flex-wrap gap-4"
 		>
@@ -375,7 +375,7 @@ function ItemStrip({
 					</button>
 				);
 			})}
-		</div>
+		</Toolbar>
 	);
 }
 

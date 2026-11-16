@@ -11,6 +11,7 @@ import {
 	rendererImplementationKey,
 } from "@thinkrail/resource-renderers";
 import { withIconClass } from "@thinkrail/ui/button";
+import { Toolbar } from "@thinkrail/ui/toolbar";
 import { useMemo, useState } from "react";
 import { copyText, isPhoneViewport } from "@/lib";
 import type { DiffTab, FileComparisonTab, GitDiffTab } from "../store";
@@ -152,9 +153,8 @@ function GitDiffPane({ tab }: { tab: GitDiffTab }) {
 
 	return (
 		<div data-testid="diff-pane" className="flex h-full min-h-0 flex-col">
-			<div
+			<Toolbar
 				data-testid="diff-view-toggle"
-				role="toolbar"
 				aria-label={t("panels.diffPane.viewMode")}
 				className="flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-12"
 			>
@@ -210,7 +210,7 @@ function GitDiffPane({ tab }: { tab: GitDiffTab }) {
 						onChange: (layout) => setDiffTabView(tab.id, layout === "unified" ? "inline" : "split"),
 					}}
 				/>
-			</div>
+			</Toolbar>
 			<DiffSurfaceBody
 				surface={surface}
 				view={view}

@@ -3,6 +3,7 @@ import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { Toolbar } from "@thinkrail/ui/toolbar";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { firstClickOnly } from "../lib";
 import {
@@ -156,9 +157,8 @@ export function ChangesPanel({
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
-			<div
+			<Toolbar
 				data-testid="changes-view-toggle"
-				role="toolbar"
 				aria-label={t("changes.panel.toolbar")}
 				className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-x-clip border-border-default border-b px-12"
 			>
@@ -196,7 +196,7 @@ export function ChangesPanel({
 					active={changesView === "tree"}
 					onClick={() => setChangesView("tree")}
 				/>
-			</div>
+			</Toolbar>
 			<RememberedScrollArea
 				key={`${changesView}:${viewKey}`}
 				workspaceId={workspaceId}

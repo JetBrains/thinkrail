@@ -13,6 +13,7 @@ import { diffRendererCapabilities } from "@thinkrail/resource-renderers";
 import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { Toolbar } from "@thinkrail/ui/toolbar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { useShallow } from "zustand/react/shallow";
@@ -311,9 +312,8 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 
 	return (
 		<div ref={rootRef} data-testid="changes-review" className="flex h-full min-h-0 flex-col">
-			<div
+			<Toolbar
 				data-testid="changes-review-toolbar"
-				role="toolbar"
 				aria-label={t("changes.review.toolbar")}
 				className="flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-12"
 			>
@@ -418,7 +418,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 						onClick={() => setLayout("single")}
 					/>
 				</span>
-			</div>
+			</Toolbar>
 			{status === null && error !== null ? (
 				<div data-testid="changes-review-error" className="flex flex-col items-start gap-4 p-12">
 					<p className="tr-text-metadata text-feedback-error">

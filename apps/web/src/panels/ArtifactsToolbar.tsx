@@ -18,6 +18,7 @@ import {
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { Toolbar } from "@thinkrail/ui/toolbar";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ArtifactsView } from "../store";
 import { HeaderIconButton } from "./HeaderIconButton";
@@ -121,9 +122,8 @@ export function ArtifactsToolbar({
 		? t("panels.artifacts.hideIgnored")
 		: t("panels.artifacts.showIgnored");
 	return (
-		<div
+		<Toolbar
 			ref={toolbarRef}
-			role="toolbar"
 			aria-label={t("panels.artifacts.toolbar")}
 			data-fold={fold}
 			className="flex h-panel-header-row shrink-0 items-center overflow-clip border-border-default border-b px-12"
@@ -243,6 +243,6 @@ export function ArtifactsToolbar({
 					) : null}
 				</div>
 			</div>
-		</div>
+		</Toolbar>
 	);
 }

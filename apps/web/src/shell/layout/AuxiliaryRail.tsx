@@ -2,10 +2,10 @@ import type { RemixiconComponentType } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { buttonDataAttributes, buttonVariants } from "@thinkrail/ui/button";
-import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { handleToolbarKeyDown } from "@thinkrail/ui/toolbar";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
-import { Fragment, forwardRef, type ReactNode, useRef, useState } from "react";
+import { Fragment, forwardRef, type ReactNode, useState } from "react";
 import { HJKL_KEYS } from "../../keybindings";
 import {
 	type AuxiliaryRailEntry,
@@ -146,7 +146,6 @@ export function AuxiliaryRail({
 	footer?: ((control: AuxiliaryRailControlProps) => ReactNode) | undefined;
 }) {
 	const t = useT();
-	const root = useRef<HTMLDivElement>(null);
 	const [focused, setFocused] = useState<string | null>(null);
 	const footerFocused = footer !== undefined && focused === FOOTER_KEY;
 	const activeKey =
@@ -169,7 +168,6 @@ export function AuxiliaryRail({
 	};
 	return (
 		<div
-			ref={root}
 			role="toolbar"
 			aria-label={t(RAIL_TOOLBAR_LABELS[region])}
 			aria-orientation={horizontal ? "horizontal" : "vertical"}
@@ -183,38 +181,11 @@ export function AuxiliaryRail({
 				region === "right" && "border-border-muted border-l",
 			)}
 			onKeyDown={(event) => {
-				if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-				if (isImeComposing(event.nativeEvent)) return;
-				if (!(event.target instanceof HTMLElement) || !root.current?.contains(event.target)) return;
-				const current = event.target.closest<HTMLButtonElement>(RAIL_CONTROLS);
-				if (!current) return;
-				const controls = Array.from(
-					root.current.querySelectorAll<HTMLButtonElement>(RAIL_CONTROLS),
-				);
-				const index = controls.indexOf(current);
-				const [previousKeys, nextKeys] = horizontal
-					? [
-							["ArrowLeft", HJKL_KEYS.left.key],
-							["ArrowRight", HJKL_KEYS.right.key],
-						]
-					: [
-							["ArrowUp", HJKL_KEYS.up.key],
-							["ArrowDown", HJKL_KEYS.down.key],
-						];
-				const next =
-					event.key === "Home"
-						? 0
-						: event.key === "End"
-							? controls.length - 1
-							: nextKeys.includes(event.key)
-								? (index + 1) % controls.length
-								: previousKeys.includes(event.key)
-									? (index - 1 + controls.length) % controls.length
-									: null;
-				if (next === null) return;
-				event.preventDefault();
-				controls[next]?.focus();
-				controls[next]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+				handleToolbarKeyDown(event, {
+					selector: RAIL_CONTROLS,
+					previousKey: horizontal ? HJKL_KEYS.left.key : HJKL_KEYS.up.key,
+					nextKey: horizontal ? HJKL_KEYS.right.key : HJKL_KEYS.down.key,
+				});
 			}}
 		>
 			{clusters.map((cluster, clusterIndex) => (
