@@ -21,6 +21,7 @@ import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Keycaps } from "@thinkrail/ui/keycaps";
+import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import {
@@ -41,6 +42,7 @@ import { AttentionDot } from "../components/AttentionDot";
 import { KeyHint } from "../components/KeyHint";
 import { highlightRanges } from "../components/MatchHighlight";
 import { RunningIcon } from "../components/RunningIcon";
+import { LOCAL_KEY_DEFAULTS } from "../keybindings";
 import { hasPlatformModifier, useMediaQuery } from "../lib";
 import { selectHostReachable, useAppStore } from "../store";
 import { hostItems, hostOverflow } from "./hostItems";
@@ -154,6 +156,7 @@ function PaletteContent({
 	notice,
 }: SearchPaletteProps) {
 	const t = useT();
+	const keys = useLocalKeys("palette", LOCAL_KEY_DEFAULTS.palette);
 	const [query, setQuery] = useState("");
 	const [expanded, setExpanded] = useState<ReadonlySet<string>>(NO_GROUPS);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -395,17 +398,18 @@ function PaletteContent({
 			cycleScope(event.shiftKey ? -1 : 1);
 			return;
 		}
-		if (mod && event.key === "Enter" && !event.altKey && !event.shiftKey) {
+		const local = keys.match(event.nativeEvent);
+		if (local === "palette.startWork") {
 			claim();
 			if (!event.repeat) startFromText();
 			return;
 		}
-		if (askInput && event.altKey && event.key === "Enter" && !mod && !event.shiftKey) {
+		if (askInput && local === "palette.ask") {
 			claim();
 			if (!event.repeat) askFromText();
 			return;
 		}
-		if (mod && event.code === "KeyI" && !event.shiftKey && !event.altKey) {
+		if (local === "palette.preview") {
 			claim();
 			if (wide) togglePreview();
 			return;
@@ -566,13 +570,10 @@ function PaletteContent({
 						<KeyHint keys={["↵"]} label={t(enterLabel(selected?.item))} />
 						<KeyHint keys={["Tab"]} label={t("search.hint.scope")} />
 						{startInput ? (
-							<KeyHint
-								keys={shortcutKeys({ key: "↵", mod: true })}
-								label={t("search.hint.start")}
-							/>
+							<KeyHint keys={keys.caps("palette.startWork")} label={t("search.hint.start")} />
 						) : null}
 						{askInput && !askInput.disabledReason && selected?.item.kind !== "ask" ? (
-							<KeyHint keys={shortcutKeys({ key: "↵", alt: true })} label={t("search.hint.ask")} />
+							<KeyHint keys={keys.caps("palette.ask")} label={t("search.hint.ask")} />
 						) : null}
 						<KeyHint keys={["esc"]} label={t(query ? "search.hint.clear" : "search.hint.close")} />
 					</div>
@@ -591,7 +592,7 @@ function PaletteContent({
 							onClick={togglePreview}
 						>
 							{t("search.palette.preview")}
-							<Keycaps keys={shortcutKeys({ key: "I", mod: true })} />
+							<Keycaps keys={keys.caps("palette.preview")} />
 						</Button>
 					) : null}
 				</footer>

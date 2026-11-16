@@ -251,10 +251,6 @@ describe("the shortcut catalog", () => {
 		expect(labels(linux, "review.cursorLeft")).toEqual(["←", "H"]);
 		expect(labels(linux, "review.extendUp")).toEqual(["Shift+↑", "Shift+K"]);
 		expect(labels(mac, "review.extendDown")).toEqual(["⇧↓", "⇧J"]);
-		expect(labels(linux, "review.comment")).toEqual(["↵", "Ctrl+Shift+M"]);
-		expect(labels(mac, "review.comment")).toEqual(["↵", "⇧⌘M"]);
-		expect(labels(linux, "review.saveDraft")).toEqual(["Ctrl+↵"]);
-		expect(labels(mac, "review.sendNow")).toEqual(["⇧⌘↵"]);
 		expect(labels(linux, "review.regionResize")).toEqual([
 			"Shift+←",
 			"Shift+→",

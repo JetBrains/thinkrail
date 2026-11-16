@@ -63,14 +63,20 @@ describe("localKeys", () => {
 		const inField = { target: field };
 		expect(keys.match(press("KeyS", inField))).toBeNull();
 		expect(keys.match(press("Enter", { ...inField, ctrlKey: true }))).toBe("trees.openKept");
+		expect(keys.match(press("KeyS", inField), { textEntry: false })).toBe("trees.search");
+		expect(keys.match(press("KeyS"), { textEntry: true })).toBeNull();
 	});
 
 	test("aria lists every chord of the command for this platform only", () => {
 		const mac = localKeys({ ...keymap(new Map()), platform: "MacIntel" }, "trees", TREE);
 		expect(mac.aria("trees.openKept")).toBe("Meta+Enter");
 		expect(mac.caps("trees.openKept")).toEqual(["⌘", "↵"]);
-		expect(localKeys(keymap(new Map()), "trees", TREE).aria("trees.openKept")).toBe(
-			"Control+Enter",
-		);
+		expect(mac.label("trees.openKept")).toBe("⌘↵");
+		const linux = localKeys(keymap(new Map()), "trees", TREE);
+		expect(linux.aria("trees.openKept")).toBe("Control+Enter");
+		expect(linux.label("trees.openKept")).toBe("Ctrl+↵");
+		expect(linux.aria("arrows.left", "trees.openKept", "trees.missing")).toBe("H Control+Enter");
+		expect(linux.aria("trees.missing")).toBeUndefined();
+		expect(linux.label("trees.missing")).toBe("");
 	});
 });

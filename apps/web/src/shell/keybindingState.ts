@@ -1,5 +1,6 @@
 import type { KeybindingOverrides } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
+import { REVIEW_SURFACE_COMMANDS, REVIEW_SURFACE_SCOPE } from "@thinkrail/resource-renderers";
 import { browserPlatform } from "@thinkrail/ui/keyboard";
 import type { LocalKeymap } from "@thinkrail/ui/local-keys";
 import { webExtensionCommands, webExtensions } from "../extensions";
@@ -28,7 +29,19 @@ type KeybindingSource = Pick<
 
 const NO_OVERRIDES: KeybindingOverrides = {};
 
-const LOCAL_SETS: readonly LocalCommandSet[] = [APP_LOCAL_SET];
+export const LOCAL_SETS: readonly LocalCommandSet[] = [
+	APP_LOCAL_SET,
+	{
+		source: APP_LOCAL_SET.source,
+		enabled: true,
+		commands: REVIEW_SURFACE_COMMANDS.map(({ id, chords }) => ({
+			id,
+			scope: REVIEW_SURFACE_SCOPE,
+			title: null,
+			chords,
+		})),
+	},
+];
 
 let resolvedFor: {
 	overrides: KeybindingOverrides;

@@ -23,14 +23,17 @@ and the pure chord primitives: `chordPressed(chord, event, platform, { ignoreShi
 or typed key, exact modifiers, `Mod` = ⌘ on Apple and Ctrl elsewhere, no Alt chord under AltGraph off
 Apple — the app's keybinding matcher delegates to it, so the two cannot drift), `chordCaps`, `keyCap`,
 `codeLabel` (a code's US label), `ariaKeyShortcuts(chords, platform)` (one platform's modifier names, never
-Meta and Control both), `isTypingChord` and `ARROW_TWIN_COMMANDS` (`arrows.left/down/up/right`, H/J/K/L
-by `code`, in shared scope `ARROW_TWINS_SCOPE`). `./local-keys` is the seam an element matches its
+Meta and Control both), `isTypingChord`, `ARROW_TWIN_COMMANDS` (`arrows.left/down/up/right`, H/J/K/L
+by `code`, in shared scope `ARROW_TWINS_SCOPE`) and `twinArrow(id)` (the arrow a matched twin stands for). `./local-keys` is the seam an element matches its
 rebindable local keys through, whoever renders it (the app, resource renderers, an extension card):
-`useLocalKeys(scope, defaults)` returns `{ match(event, { ignoreShift }), caps(id), aria(id) }` over the
+`useLocalKeys(scope, defaults)` returns `{ match(event, { ignoreShift, textEntry }), caps(id), label(id),
+aria(...ids) }` (`label` joins the caps the platform's way, `""` when unbound; `aria` lists every chord of
+the ids for `aria-keyshortcuts`) over the
 effective chords `LocalKeymapProvider` supplies (the app's resolved table), or over `defaults` when no
 provider is mounted or it lacks the scope — the `./fonts` pattern of a host-published signal with a
 standalone default. `match` ignores an IME composition and a typing chord in text entry (the provider's
-`isTextEntry`, else inputs and contenteditable); `defaults` must be a stable module constant. `./focus` exposes
+`isTextEntry`, else inputs and contenteditable — `textEntry` overrides that verdict for a caller that
+knows a press edits nothing, as the history search's `Delete` at the end of its query); `defaults` must be a stable module constant. `./focus` exposes
 the one tabbable-control selector (`TABBABLE_SELECTOR`, which includes a `<details>` element's own
 `<summary>`, natively tabbable) and `focusFirstControl(container)` (the first
 control, focused with `preventScroll`), shared by the app's focus recovery and reveal moves and the

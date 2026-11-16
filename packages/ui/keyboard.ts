@@ -199,3 +199,11 @@ export const ARROW_TWIN_COMMANDS = [
 ] as const satisfies readonly (LocalKeyCommand & { readonly arrow: string })[];
 
 export const ARROW_TWINS_SCOPE = "arrows";
+
+const TWIN_ARROWS: ReadonlyMap<string, string> = new Map(
+	ARROW_TWIN_COMMANDS.map(({ id, arrow }) => [id, arrow]),
+);
+
+export function twinArrow(id: string | null): string | undefined {
+	return id === null ? undefined : TWIN_ARROWS.get(id);
+}

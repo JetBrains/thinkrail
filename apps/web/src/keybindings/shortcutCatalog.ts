@@ -3,7 +3,6 @@ import { keyCap } from "@thinkrail/ui/keyboard";
 import { type CommandShortcut, shortcutKeys } from "../commands";
 import { platformFamily } from "../lib";
 import { displayShortcut, FOCUS_GROUP_BINDINGS, type KeybindingId, keysLabel } from "./keybindings";
-import { APP_LOCAL_COMMANDS } from "./localKeys";
 import {
 	keybindingShortcut,
 	keybindingShortcuts,
@@ -48,66 +47,6 @@ type ShortcutPlatform = "apple" | "other" | "linux";
 export interface ShortcutKey extends CommandShortcut {
 	readonly platform?: ShortcutPlatform;
 }
-
-function legacyKey(id: string): ShortcutKey {
-	const chord = APP_LOCAL_COMMANDS.find((command) => command.id === id)?.chords[0];
-	if (chord === undefined) throw new Error(`no local command ${id}`);
-	const letter = /^Key([A-Z])$/.exec(chord.code)?.[1];
-	return {
-		key: letter?.toLowerCase() ?? chord.code,
-		...(chord.mod ? { mod: true } : {}),
-		...(chord.alt ? { alt: true } : {}),
-		...(chord.shift ? { shift: true } : {}),
-	};
-}
-
-export const TAB_KEYS = {
-	close: legacyKey("tabs.close"),
-	moveBefore: legacyKey("tabs.moveBefore"),
-	moveAfter: legacyKey("tabs.moveAfter"),
-};
-
-export const RAIL_KEYS = {
-	remove: legacyKey("rails.remove"),
-	moveUp: legacyKey("rails.moveUp"),
-	moveDown: legacyKey("rails.moveDown"),
-	moveLeft: legacyKey("rails.moveLeft"),
-	moveRight: legacyKey("rails.moveRight"),
-};
-
-export const TREE_KEYS = {
-	openKept: legacyKey("trees.openKept"),
-	rename: legacyKey("trees.rename"),
-	delete: legacyKey("trees.delete"),
-	moveUp: legacyKey("trees.reorderUp"),
-	moveDown: legacyKey("trees.reorderDown"),
-};
-
-export const REVIEW_KEYS = {
-	markViewed: legacyKey("review.markViewed"),
-	nextUnreviewed: legacyKey("review.nextUnreviewed"),
-	nextFile: legacyKey("review.nextFile"),
-	previousFile: legacyKey("review.previousFile"),
-	nextStep: legacyKey("review.nextStep"),
-	previousStep: legacyKey("review.previousStep"),
-};
-
-export const HJKL_KEYS = {
-	left: legacyKey("arrows.left"),
-	down: legacyKey("arrows.down"),
-	up: legacyKey("arrows.up"),
-	right: legacyKey("arrows.right"),
-};
-
-export const TRANSCRIPT_KEYS = {
-	enter: legacyKey("composer.enterTranscript"),
-	copy: legacyKey("transcript.copy"),
-	open: legacyKey("transcript.open"),
-};
-
-export const HISTORY_KEYS = {
-	deleteChat: legacyKey("history.deleteChat"),
-};
 
 export const DESKTOP_KEYS = {
 	settings: { key: ",", mod: true },
@@ -581,7 +520,8 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 			id: "review.comment",
 			title: "shortcuts.review.comment",
 			surface: "review",
-			keys: [ENTER, { key: "m", mod: true, shift: true }],
+			local: "review.surface.comment",
+			keys: [ENTER],
 		},
 		{
 			id: "review.cursorClear",
@@ -599,13 +539,13 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 			id: "review.saveDraft",
 			title: "shortcuts.review.saveDraft",
 			surface: "review",
-			keys: [{ key: "Enter", mod: true }],
+			local: "review.surface.saveDraft",
 		},
 		{
 			id: "review.sendNow",
 			title: "shortcuts.review.sendNow",
 			surface: "review",
-			keys: [{ key: "Enter", mod: true, shift: true }],
+			local: "review.surface.sendNow",
 		},
 		{
 			id: "review.cancelComment",

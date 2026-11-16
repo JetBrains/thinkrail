@@ -18,12 +18,13 @@ import {
 	ContextMenuTrigger,
 	openContextMenuFromKeyboard,
 } from "@thinkrail/ui/context-menu";
-import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { isImeComposing, twinArrow } from "@thinkrail/ui/keyboard";
+import { type LocalKeys, useLocalKeys } from "@thinkrail/ui/local-keys";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment, memo, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { HJKL_KEYS, TAB_KEYS } from "../../keybindings";
+import { LOCAL_KEY_DEFAULTS } from "../../keybindings";
 import { chatLabel, DOUBLE_CLICK_SETTLE_MS, type LayoutAttention, tupleKey } from "../../lib";
 import {
 	type AuxiliaryRailControlProps,
@@ -66,14 +67,30 @@ import {
 	useHorizontalOverflow,
 } from "./workbenchShared";
 
-function plainKey(event: React.KeyboardEvent): boolean {
-	return (
-		!event.altKey &&
-		!event.ctrlKey &&
-		!event.metaKey &&
-		!event.shiftKey &&
-		!isImeComposing(event.nativeEvent)
-	);
+const GROUP_SHORTCUTS = "Control+F6 Control+Shift+F6 Shift+F10 ContextMenu";
+
+function tabKeyShortcuts(keys: LocalKeys, rail: WorkbenchTabProps["rail"]): string {
+	const [locked, local] = !rail
+		? [
+				"Home End ArrowLeft ArrowRight",
+				keys.aria("tabs.close", "arrows.left", "arrows.right", "tabs.moveBefore", "tabs.moveAfter"),
+			]
+		: rail.vertical
+			? [
+					"Enter Space Home End ArrowUp ArrowDown",
+					keys.aria("rails.remove", "arrows.up", "arrows.down", "rails.moveUp", "rails.moveDown"),
+				]
+			: [
+					"Enter Space Home End ArrowLeft ArrowRight",
+					keys.aria(
+						"rails.remove",
+						"arrows.left",
+						"arrows.right",
+						"rails.moveLeft",
+						"rails.moveRight",
+					),
+				];
+	return [locked, local, GROUP_SHORTCUTS].filter(Boolean).join(" ");
 }
 
 export interface TabStripProps {
@@ -137,6 +154,7 @@ export const TabStrip = memo(function TabStrip({
 	worktreePath,
 }: TabStripProps) {
 	const t = useT();
+	const keys = useLocalKeys("tabs", LOCAL_KEY_DEFAULTS.tabs);
 	const scroller = useRef<HTMLDivElement>(null);
 	const scrollOverflow = useHorizontalOverflow(scroller);
 	const tabRefs = useRef(new Map<string, HTMLElement>());
@@ -247,28 +265,24 @@ export const TabStrip = memo(function TabStrip({
 							panelId={panelId}
 							{...(splitGeometry ? { splitGeometry } : {})}
 							onKeyDown={(event) => {
-								if (event.altKey && event.shiftKey && event.key === TAB_KEYS.moveBefore.key) {
+								const local = keys.match(event.nativeEvent);
+								const twin = twinArrow(local);
+								if (local === "tabs.moveBefore") {
 									event.preventDefault();
 									if (index > 0) {
 										const moved = moveTabToGroup(document, tab, location, index - 1);
 										if (!isLayoutUnavailable(moved)) applyResult(moved);
 									}
-								} else if (event.altKey && event.shiftKey && event.key === TAB_KEYS.moveAfter.key) {
+								} else if (local === "tabs.moveAfter") {
 									event.preventDefault();
 									if (index < tabs.length - 1) {
 										const moved = moveTabToGroup(document, tab, location, index + 1);
 										if (!isLayoutUnavailable(moved)) applyResult(moved);
 									}
-								} else if (
-									event.key === "ArrowLeft" ||
-									(plainKey(event) && event.key === HJKL_KEYS.left.key)
-								) {
+								} else if (event.key === "ArrowLeft" || twin === "ArrowLeft") {
 									event.preventDefault();
 									selectAt(index === 0 ? tabs.length - 1 : index - 1);
-								} else if (
-									event.key === "ArrowRight" ||
-									(plainKey(event) && event.key === HJKL_KEYS.right.key)
-								) {
+								} else if (event.key === "ArrowRight" || twin === "ArrowRight") {
 									event.preventDefault();
 									selectAt(index === tabs.length - 1 ? 0 : index + 1);
 								} else if (event.key === "Home") {
@@ -277,7 +291,7 @@ export const TabStrip = memo(function TabStrip({
 								} else if (event.key === "End") {
 									event.preventDefault();
 									selectAt(tabs.length - 1);
-								} else if (event.key === TAB_KEYS.close.key) {
+								} else if (local === "tabs.close") {
 									event.preventDefault();
 									closeTab(tab);
 								}
@@ -438,6 +452,10 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 	onKeyDown,
 }: WorkbenchTabProps) {
 	const t = useT();
+	const keys = useLocalKeys(
+		rail ? "rails" : "tabs",
+		rail ? LOCAL_KEY_DEFAULTS.rails : LOCAL_KEY_DEFAULTS.tabs,
+	);
 	const {
 		setNodeRef: setDragRef,
 		isDragging,
@@ -581,13 +599,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 			{...(rail
 				? { "aria-label": name, "aria-pressed": active, ...railEntryButtonProps(active) }
 				: { role: "tab", "aria-selected": active })}
-			aria-keyshortcuts={
-				rail
-					? rail.vertical
-						? "Enter Space Delete Home End ArrowUp ArrowDown K J Alt+Shift+ArrowUp Alt+Shift+ArrowDown Control+F6 Control+Shift+F6 Shift+F10 ContextMenu"
-						: "Enter Space Delete Home End ArrowLeft ArrowRight H L Alt+Shift+ArrowLeft Alt+Shift+ArrowRight Control+F6 Control+Shift+F6 Shift+F10 ContextMenu"
-					: "Delete Home End ArrowLeft ArrowRight H L Alt+Shift+ArrowLeft Alt+Shift+ArrowRight Control+F6 Control+Shift+F6 Shift+F10 ContextMenu"
-			}
+			aria-keyshortcuts={tabKeyShortcuts(keys, rail)}
 			aria-controls={panelId}
 			data-testid={rail && tab.kind === "tool" ? `tool-rail-${tab.tool}` : undefined}
 			data-rail-entry={rail?.entryKey}

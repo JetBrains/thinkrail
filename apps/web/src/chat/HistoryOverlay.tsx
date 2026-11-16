@@ -15,12 +15,13 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
-import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { hasPlatformModifier, isImeComposing } from "@thinkrail/ui/keyboard";
+import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useNow } from "@/components/useNow";
-import { HISTORY_KEYS } from "@/keybindings";
-import { fileName, firstNonBlankLine, platformShortcutLabel, relativeTime } from "@/lib";
+import { LOCAL_KEY_DEFAULTS } from "@/keybindings";
+import { fileName, firstNonBlankLine, relativeTime } from "@/lib";
 import {
 	type ChatLocationRequest,
 	type HistorySearchState,
@@ -43,8 +44,6 @@ const SCOPE_MENU_LABELS = {
 	project: "chat.history.scopeMenu.project",
 	all: "chat.history.scopeMenu.all",
 } satisfies Record<HistoryScope["kind"], MessageKey>;
-
-const SAVE_SHORTCUT_LABEL = platformShortcutLabel("S");
 
 function escapeRegExp(term: string): string {
 	return term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -194,6 +193,7 @@ function PromptRow({
 	scope,
 	workspaceName,
 	isSelected,
+	saveShortcut,
 	onPick,
 	onSaveAsTemplate,
 	onOpenMessage,
@@ -206,6 +206,7 @@ function PromptRow({
 	scope: HistoryScope;
 	workspaceName: string | undefined;
 	isSelected: boolean;
+	saveShortcut: string;
 	onPick: () => void;
 	onSaveAsTemplate: () => void;
 	onOpenMessage: (target: ChatLocationRequest) => void;
@@ -247,12 +248,12 @@ function PromptRow({
 					{relativeTime(t, hit.timestamp, now)}
 				</span>
 			</button>
-			{isSelected ? (
+			{isSelected && saveShortcut !== "" ? (
 				<span
 					data-testid="history-save-shortcut"
 					className="shrink-0 text-text-muted tr-text-metadata"
 				>
-					{SAVE_SHORTCUT_LABEL}
+					{saveShortcut}
 				</span>
 			) : null}
 			<IconButton
@@ -260,7 +261,11 @@ function PromptRow({
 				size="s"
 				data-testid="history-save-template"
 				label={t("chat.history.saveTemplate")}
-				tooltip={t("chat.history.saveTemplateTooltip", { shortcut: SAVE_SHORTCUT_LABEL })}
+				tooltip={
+					saveShortcut === ""
+						? t("chat.history.saveTemplate")
+						: t("chat.history.saveTemplateTooltip", { shortcut: saveShortcut })
+				}
 				onClick={(e) => {
 					e.stopPropagation();
 					onSaveAsTemplate();
@@ -464,6 +469,8 @@ function HistoryPicker({
 	onSetScope,
 }: HistoryOverlayProps) {
 	const t = useT();
+	const keys = useLocalKeys("history", LOCAL_KEY_DEFAULTS.history);
+	const saveShortcut = keys.label("history.saveTemplate");
 	const { stage, query, scope, result, selected, error } = state;
 	const inputRef = useRef<HTMLInputElement>(null);
 	const resultsRef = useRef<HTMLDivElement>(null);
@@ -542,25 +549,32 @@ function HistoryPicker({
 			setEntryMenuKey(selectedKey);
 			return;
 		}
-		if (
-			e.key === HISTORY_KEYS.deleteChat.key &&
-			!e.altKey &&
-			!e.ctrlKey &&
-			!e.metaKey &&
-			!e.shiftKey &&
-			e.currentTarget.selectionStart === query.length &&
-			e.currentTarget.selectionEnd === query.length
-		) {
+		const { selectionStart, selectionEnd } = e.currentTarget;
+		const editsQuery =
+			e.key.length === 1 ||
+			e.key === "Backspace" ||
+			selectionStart !== query.length ||
+			selectionEnd !== query.length;
+		const local = keys.match(e.nativeEvent, { textEntry: editsQuery });
+		if (local === "history.deleteChat") {
 			const chat = deletableChat(resolveHistorySelection(stage, result, selected));
 			if (!chat) return;
 			e.preventDefault();
 			onDeleteChat(chat.workspaceId, chat.sessionId);
 			return;
 		}
-		if ((e.metaKey || e.ctrlKey) && e.code === "KeyS") {
+		if (local === "history.saveTemplate") {
 			e.preventDefault();
 			const item = resolveHistorySelection(stage, result, selected);
 			if (item?.kind === "prompt") onSaveAsTemplate(item.hit);
+			return;
+		}
+		if (local === "history.send") {
+			e.preventDefault();
+			const item = resolveHistorySelection(stage, result, selected);
+			const target = item && item.kind !== "prompt" ? jumpTarget(item.hit) : null;
+			if (item?.kind === "prompt") onInsertAndSend(item.hit);
+			else if (target) onOpenMessage(target);
 			return;
 		}
 		if (e.key === "ArrowDown") {
@@ -583,8 +597,7 @@ function HistoryPicker({
 			const item = resolveHistorySelection(stage, result, selected);
 			if (!item) return;
 			if (item.kind === "prompt" && !e.shiftKey) {
-				if (e.metaKey || e.ctrlKey) onInsertAndSend(item.hit);
-				else onInsert(item.hit);
+				if (!hasPlatformModifier(e.nativeEvent)) onInsert(item.hit);
 				return;
 			}
 			const target = jumpTarget(item.hit);
@@ -647,6 +660,7 @@ function HistoryPicker({
 									scope={scope}
 									workspaceName={hit.workspaceId ? workspaceNames[hit.workspaceId] : undefined}
 									isSelected={i === selected}
+									saveShortcut={saveShortcut}
 									onPick={() => onInsert(hit)}
 									onSaveAsTemplate={() => onSaveAsTemplate(hit)}
 									onOpenMessage={onOpenMessage}

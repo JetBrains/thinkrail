@@ -5,6 +5,7 @@ import {
 	type ChordPressEvent,
 	chordCaps,
 	chordPressed,
+	isApplePlatform,
 	isImeComposing,
 	isTypingChord,
 	keyCap,
@@ -29,12 +30,14 @@ export type LocalKeyEvent = ChordPressEvent &
 
 export interface LocalKeyMatchOptions {
 	readonly ignoreShift?: boolean;
+	readonly textEntry?: boolean;
 }
 
 export interface LocalKeys {
 	readonly match: (event: LocalKeyEvent, options?: LocalKeyMatchOptions) => string | null;
 	readonly caps: (id: string) => string[];
-	readonly aria: (id: string) => string | undefined;
+	readonly label: (id: string) => string;
+	readonly aria: (...ids: string[]) => string | undefined;
 }
 
 const LocalKeymapContext = createContext<LocalKeymap | null>(null);
@@ -71,22 +74,24 @@ export function localKeys(
 	const isTextEntry = keymap?.isTextEntry ?? isPlainTextEntry;
 	const chordsOf = (id: string) =>
 		bindings.flatMap((binding) => (binding.id === id ? [binding.chord] : []));
+	const caps = (id: string) => {
+		const [chord] = chordsOf(id);
+		return chord ? chordCaps(chord, platform) : [];
+	};
 	return {
-		match(event, { ignoreShift = false } = {}) {
+		match(event, { ignoreShift = false, textEntry }: LocalKeyMatchOptions = {}) {
 			if (isImeComposing(event)) return null;
-			const textEntry = isTextEntry(event.composedPath?.()[0] ?? event.target);
+			const typing = textEntry ?? isTextEntry(event.composedPath?.()[0] ?? event.target);
 			for (const { id, chord } of bindings) {
-				if (textEntry && isTypingChord(chord)) continue;
+				if (typing && isTypingChord(chord)) continue;
 				if (chordPressed(chord, event, platform, { ignoreShift })) return id;
 			}
 			return null;
 		},
-		caps(id) {
-			const [chord] = chordsOf(id);
-			return chord ? chordCaps(chord, platform) : [];
-		},
-		aria(id) {
-			const chords = chordsOf(id);
+		caps,
+		label: (id) => caps(id).join(isApplePlatform(platform) ? "" : "+"),
+		aria(...ids) {
+			const chords = ids.flatMap(chordsOf);
 			return chords.length === 0 ? undefined : ariaKeyShortcuts(chords, platform);
 		},
 	};

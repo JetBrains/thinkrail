@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { type LocalKeyEvent, localKeys } from "@thinkrail/ui/local-keys";
+import { LOCAL_KEY_DEFAULTS } from "@/keybindings";
 import { resolveTreeMove } from "@/lib";
 import { type ActivityStep, type ChatRow, projectRows, type RoutineToolStep } from "./rows";
 import {
 	composerTranscriptStep,
-	isEnterTranscriptKey,
 	keyboardLeavesFollow,
 	newestContentRowId,
 	type TranscriptNavItem,
@@ -158,15 +159,24 @@ describe("leaving follow from the keyboard", () => {
 	});
 });
 
+const LETTER_CODE = /^[a-z]$/i;
+
+const press = (init: Partial<KeyboardEvent> & { key: string }): LocalKeyEvent => ({
+	code: LETTER_CODE.test(init.key) ? `Key${init.key.toUpperCase()}` : init.key,
+	shiftKey: false,
+	altKey: false,
+	ctrlKey: false,
+	metaKey: false,
+	isComposing: false,
+	keyCode: 0,
+	target: null,
+	...init,
+});
+
 describe("transcriptKeyAction", () => {
+	const keys = localKeys(null, "transcript", LOCAL_KEY_DEFAULTS.transcript);
 	const key = (init: Partial<KeyboardEvent> & { key: string }) =>
-		transcriptKeyAction({
-			shiftKey: false,
-			altKey: false,
-			ctrlKey: false,
-			metaKey: false,
-			...init,
-		});
+		transcriptKeyAction(press(init), keys);
 
 	test("reads arrows and their h/j/k/l twins as tree moves", () => {
 		expect(key({ key: "ArrowDown" })).toEqual({ kind: "move", key: "ArrowDown" });
@@ -188,6 +198,13 @@ describe("transcriptKeyAction", () => {
 		expect(key({ key: "ContextMenu" })).toEqual({ kind: "menu" });
 	});
 
+	test("matches letters by physical key: a Russian layout's С copies and О opens", () => {
+		expect(key({ key: "с", code: "KeyC" })).toEqual({ kind: "copy" });
+		expect(key({ key: "щ", code: "KeyO" })).toEqual({ kind: "open" });
+		expect(key({ key: "о", code: "KeyJ" })).toEqual({ kind: "move", key: "ArrowDown" });
+		expect(key({ key: "c", code: "KeyX" })).toBeNull();
+	});
+
 	test("leaves modified keys and other letters alone", () => {
 		expect(key({ key: "j", ctrlKey: true })).toBeNull();
 		expect(key({ key: "J", shiftKey: true })).toBeNull();
@@ -196,26 +213,46 @@ describe("transcriptKeyAction", () => {
 		expect(key({ key: "F10" })).toBeNull();
 		expect(key({ key: "F10", shiftKey: true, ctrlKey: true })).toBeNull();
 		expect(key({ key: "x" })).toBeNull();
+		expect(key({ key: "c", isComposing: true })).toBeNull();
+	});
+
+	test("a rebound copy key acts and its default no longer does", () => {
+		const rebound = localKeys(
+			{
+				platform: "Linux x86_64",
+				scopes: new Map([
+					["transcript", [{ id: "transcript.copy", chord: { code: "KeyY", key: "Y" } }]],
+				]),
+				isTextEntry: () => false,
+			},
+			"transcript",
+			LOCAL_KEY_DEFAULTS.transcript,
+		);
+		expect(transcriptKeyAction(press({ key: "y" }), rebound)).toEqual({ kind: "copy" });
+		expect(transcriptKeyAction(press({ key: "c" }), rebound)).toBeNull();
+		expect(transcriptKeyAction(press({ key: "j" }), rebound)).toBeNull();
+		expect(transcriptKeyAction(press({ key: "ArrowDown" }), rebound)).toEqual({
+			kind: "move",
+			key: "ArrowDown",
+		});
 	});
 });
 
 describe("the composer's way into the transcript", () => {
-	const event = (init: Partial<KeyboardEvent>) => ({
-		key: "ArrowUp",
-		shiftKey: false,
-		altKey: false,
-		ctrlKey: false,
-		metaKey: false,
-		...init,
-	});
+	const enters = (platform: string, init: Partial<KeyboardEvent>) =>
+		localKeys(
+			{ platform, scopes: new Map(), isTextEntry: () => true },
+			"composer",
+			LOCAL_KEY_DEFAULTS.composer,
+		).match(press({ key: "ArrowUp", ...init })) === "composer.enterTranscript";
 
-	test("answers Ctrl+↑ off Apple and ⌘↑ on Apple only", () => {
-		expect(isEnterTranscriptKey(event({ ctrlKey: true }), "Linux x86_64")).toBe(true);
-		expect(isEnterTranscriptKey(event({ metaKey: true }), "MacIntel")).toBe(true);
-		expect(isEnterTranscriptKey(event({ ctrlKey: true }), "MacIntel")).toBe(false);
-		expect(isEnterTranscriptKey(event({}), "Linux x86_64")).toBe(false);
-		expect(isEnterTranscriptKey(event({ ctrlKey: true, shiftKey: true }), "Win32")).toBe(false);
-		expect(isEnterTranscriptKey(event({ key: "ArrowDown", ctrlKey: true }), "Win32")).toBe(false);
+	test("answers Ctrl+↑ off Apple and ⌘↑ on Apple only, inside the composer's text field", () => {
+		expect(enters("Linux x86_64", { ctrlKey: true })).toBe(true);
+		expect(enters("MacIntel", { metaKey: true })).toBe(true);
+		expect(enters("MacIntel", { ctrlKey: true })).toBe(false);
+		expect(enters("Linux x86_64", {})).toBe(false);
+		expect(enters("Win32", { ctrlKey: true, shiftKey: true })).toBe(false);
+		expect(enters("Win32", { key: "ArrowDown", ctrlKey: true })).toBe(false);
 	});
 
 	test("enters from one line, else first brings the caret to the start", () => {

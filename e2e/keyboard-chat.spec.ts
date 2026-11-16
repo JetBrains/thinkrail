@@ -1,5 +1,5 @@
 import { existsSync, realpathSync, rmSync, utimesSync } from "node:fs";
-import { expect, type Locator, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test, type WebSocketRoute } from "@playwright/test";
 import {
 	enterDefaultWorkspace,
 	openFixtureProject,
@@ -11,6 +11,7 @@ import {
 	readChatScrollGeometry,
 	waitForScrollStability,
 } from "./fixtures/chatScroll";
+import { resetKeybindings, setKeybindings } from "./fixtures/keybindings";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 import { interceptAppWire, textStreamReplay } from "./fixtures/streamReplay";
@@ -728,4 +729,103 @@ test("h/l walk a tab strip and j/k a side rail like their arrows", async ({ page
 	} finally {
 		rmSync(session.path, { force: true });
 	}
+});
+
+const SUBMIT_METHODS = new Set(["session.prompt", "session.steer", "session.followUp"]);
+
+async function holdComposerSubmits(page: Page) {
+	const submits: { method: string; text: string }[] = [];
+	let socket: WebSocketRoute | null = null;
+	await page.routeWebSocket(/\/ws(\?|$)/, (browser) => {
+		const server = browser.connectToServer();
+		socket = browser;
+		browser.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as {
+				id?: string;
+				method?: string;
+				params?: { text?: string };
+			};
+			if (frame.method && SUBMIT_METHODS.has(frame.method)) {
+				submits.push({ method: frame.method, text: frame.params?.text ?? "" });
+				browser.send(JSON.stringify({ id: frame.id, ok: true, result: { ok: true } }));
+				return;
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => browser.send(message));
+	});
+	const wire = () => {
+		if (!socket) throw new Error("The app wire is not connected");
+		return socket;
+	};
+	return { submits, wire };
+}
+
+test.describe("rebound chat keys", () => {
+	test.afterEach(async ({ page }) => resetKeybindings(page));
+
+	test("a rebound copy key copies a transcript item and C no longer does", async ({ page }) => {
+		await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+		const session = await openToolChat(page);
+		const clipboard = () => page.evaluate(() => navigator.clipboard.readText());
+		try {
+			await setKeybindings(page, { "transcript.copy": ["KeyY"] });
+			await page.evaluate(() => navigator.clipboard.writeText(""));
+			await enterTranscript(page);
+			await expect(row(page, "Summary: nothing else to report.")).toBeFocused();
+			await expect(async () => {
+				await page.keyboard.press("y");
+				expect(await clipboard()).toBe("Summary: nothing else to report.");
+			}).toPass();
+
+			await page.keyboard.press("k");
+			await expect(row(page, "Thanks, summarize again.")).toBeFocused();
+			await page.keyboard.press("c");
+			expect(await clipboard()).toBe("Summary: nothing else to report.");
+			await page.keyboard.press("y");
+			await expect.poll(clipboard).toBe("Thanks, summarize again.");
+		} finally {
+			rmSync(session.path, { force: true });
+		}
+	});
+
+	test("a rebound follow-up chord queues while streaming and Mod+Enter no longer does", async ({
+		page,
+	}) => {
+		const { submits, wire } = await holdComposerSubmits(page);
+		await openFixtureProject(page);
+		const title = "keyboard follow-up";
+		const session = seedWorkspaceSession(repoCwd(), {
+			name: title,
+			messages: [{ role: "user", text: "Start streaming.", timestamp: BASE_TS }],
+		});
+		try {
+			await setKeybindings(page, { "composer.followUp": ["Alt+KeyQ"] });
+			await enterDefaultWorkspace(page);
+			await openPersistedChat(page, title);
+			const replay = textStreamReplay(session.id, "Streaming a long answer.", BASE_TS + 10_000);
+			for (const frame of replay.steps.slice(0, 2).flat()) wire().send(frame);
+			await expect(page.getByTestId("chat-abort")).toBeVisible();
+			const input = page.getByTestId("chat-input");
+
+			await input.fill("first follow-up");
+			await expect(async () => {
+				await page.keyboard.press("Alt+KeyQ");
+				expect(submits).toEqual([{ method: "session.followUp", text: "first follow-up" }]);
+			}).toPass();
+
+			await input.fill("second follow-up");
+			await pressPlatformShortcut(page, "Enter");
+			await expect(input).toHaveValue("second follow-up");
+			await page.keyboard.press("Alt+KeyQ");
+			await expect
+				.poll(() => submits)
+				.toEqual([
+					{ method: "session.followUp", text: "first follow-up" },
+					{ method: "session.followUp", text: "second follow-up" },
+				]);
+		} finally {
+			rmSync(session.path, { force: true });
+		}
+	});
 });

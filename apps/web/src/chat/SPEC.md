@@ -464,8 +464,11 @@ content and their own controls, which a treeitem's name would flatten and its ro
   so a move can target a row Virtuoso unmounted. The sidebar trees' rule (`lib`'s `resolveTreeMove`)
   resolves ↑/↓ and k/j, Home/End, → and l (expand, else first child), ← and h (collapse, else parent);
   PgUp/PgDn go to the farthest mounted item within one viewport; Enter toggles. Keys are unmodified,
-  IME-safe, read only on the article itself (inner controls keep theirs) and compared through the
-  catalog's `HJKL_KEYS` / `TRANSCRIPT_KEYS`. Expansion clicks the item's own toggle
+  IME-safe and read only on the article itself (inner controls keep theirs). The arrow twins, C
+  (`transcript.copy`) and O (`transcript.open`) are rebindable local keys of scope `transcript`
+  ([[submodule-web-keybindings]], *Local keys*), matched by physical `code` (a Russian layout's `с`
+  copies) through `useLocalKeys`, which `useTranscriptNavigation` hands the controller on every render;
+  the arrows, Home/End, PgUp/PgDn, Enter and Esc are locked. Expansion clicks the item's own toggle
   (`data-activity-node-toggle`, `data-chat-item-toggle`), so fold-geometry preservation still runs.
 - **Item actions.** C copies the message source, a thought's text or a tool call's result text (nothing
   for an Activity group, a running tool or a skill/review card) with a "Copied" toast; O opens the path of
@@ -501,7 +504,7 @@ content and their own controls, which a treeitem's name would flatten and its ro
   each have to keep in sync. The cursor item carries no `data-focus-default`: the composer stays the chat
   region's landing, and F6 returns to the item through the region's remembered focus
   ([[submodule-web-shell]]).
-- **Ways in.** In the composer, Mod+↑ (checked before plain ↑ recall) focuses the newest content item (a
+- **Ways in.** In the composer, Mod+↑ (`composer.enterTranscript`, rebindable; checked before plain ↑ recall) focuses the newest content item (a
   trailing round divider is skipped) when the draft is empty or one visual line, or the caret is already at
   its start; otherwise it first moves the caret to the start. PgUp/PgDn there page the transcript with
   keyboard provenance and keep focus. `ChatTranscriptHandle.focusNewest()` / `scrollPage()` are the seams.
@@ -1285,7 +1288,11 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `Composer` yields every keydown to an active IME before slot, menu, recall, or send handling
   ([[module-web]]'s text-field rule). The guard does not cancel the event, so candidate-confirming
   Enter commits; only a later ordinary Enter invokes send semantics.
-  **Interrupt** (`SubmitBehavior: "interrupt"`, Cmd/Ctrl+Shift+Enter while streaming; plain send when
+  **Composer keys** are the local keys of scope `composer`: `composer.followUp` (`Mod+Enter`) and
+  `composer.interrupt` (`Shift+Mod+Enter`) rebind like any chord — non-typing chords, so they match in the
+  textarea — and the send menu shows their resolved labels; only bare Enter (send, or steer while
+  streaming) and Shift+Enter (newline) are locked, and a `Mod+Enter` left unbound by a rebind does nothing.
+  **Interrupt** (`SubmitBehavior: "interrupt"`, `composer.interrupt` while streaming; plain send when
   idle; Shift+Enter alone stays newline) is the "take my message NOW" gesture pi lacks: `ChatView`
   awaits `session.abort` (the ack means idle) then performs an ordinary idle send — the partial reply
   stays in the transcript marked aborted, and messages still queued keep their lanes (they deliver in
@@ -1356,9 +1363,13 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
     `data-history-trigger` attribute rather than its test id, are not outside: the button toggles the
     overlay itself.
   - **Entry keys on the selection** (the query input keeps them, so Tab stays compact ↔ zoomed):
-    **Delete** does exactly what the entry's Trash does (`onDeleteChat`, no confirmation, same deletable
+    **Delete** (`history.deleteChat`) does exactly what the entry's Trash does (`onDeleteChat`, no confirmation, same deletable
     rule), but only with the caret at the end of the query and nothing selected, where forward-delete has
-    nothing to remove — elsewhere it still edits the query. **Shift+F10 / Menu** opens an entry menu
+    nothing to remove — elsewhere it still edits the query. The overlay's keys are the local keys of scope
+    `history` (`history.send` `Mod+Enter`, `history.saveTemplate` `Mod+S`, `history.deleteChat`); the
+    query field is text entry, so a typing chord matches only when the press cannot edit the query (the
+    overlay passes `useLocalKeys`' `textEntry: false` then: caret at the end, nothing selected, no printed
+    character, not Backspace). **Shift+F10 / Menu** opens an entry menu
     (`history-entry-menu`: Go to chat when jumpable, Save as template for a prompt, Move chat to trash when
     deletable) anchored to the selected row; it is a layer like the scope picker, so the overlay's Escape and
     outside-press listeners stand down while it is open, and closing it returns focus to the query input.
@@ -1624,7 +1635,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
     no dialog to render inline into), leaving the row in place — the same pattern `panels/SPEC.md`
     documents for `ProjectTree`'s own workspace-remove row.
   - **Save-as-template** (`HistoryOverlay`'s selected-prompt-row action, `data-testid="history-save-template"`,
-    keyboard **Cmd/Ctrl+S** while a prompt row is selected — the overlay's `onKeyDown` always
+    keyboard **Cmd/Ctrl+S** (`history.saveTemplate`, whose resolved label the row and tooltip show) while a prompt row is selected — the overlay's `onKeyDown` always
     `preventDefault`s the combo, so the browser's own Save dialog never opens regardless of what's
     selected, but only fires the action when the resolved selection is a prompt hit) opens the dialog with
     the body prefilled from that prompt's text — a "new template" case (no existing name/scope identity),

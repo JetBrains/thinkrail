@@ -13,6 +13,7 @@ import {
 	isApplePlatform,
 	isImeComposing,
 	isTypingChord,
+	twinArrow,
 	yieldEscapeToIme,
 } from "./keyboard";
 
@@ -141,6 +142,9 @@ test("the arrow twins are H/J/K/L by physical key, one per arrow", () => {
 		["arrows.up", "ArrowUp", ["KeyK"]],
 		["arrows.right", "ArrowRight", ["KeyL"]],
 	]);
+	expect(twinArrow("arrows.down")).toBe("ArrowDown");
+	expect(twinArrow("trees.search")).toBeUndefined();
+	expect(twinArrow(null)).toBeUndefined();
 });
 
 describe("isImeComposing", () => {

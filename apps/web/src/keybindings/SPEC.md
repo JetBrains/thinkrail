@@ -36,8 +36,7 @@ binding does.
   `KeybindingConflict`, `ExtensionCommandSet`, `matchKeybinding`, `pressesChord`, `keybindingShortcut`,
   `keybindingShortcuts`, `keybindingKeys`, `keybindingLabel`, `keybindingLabels`, `SHORTCUT_CATALOG`,
   `SHORTCUT_SURFACES`, `SHORTCUT_SURFACE_TITLES`, `ShortcutSurface`, `ShortcutRow`,
-  `ShortcutConflictView`, `shortcutRows`, `shortcutKeyCaps`, `TAB_KEYS`, `RAIL_KEYS`, `HJKL_KEYS`,
-  `TREE_KEYS`, `REVIEW_KEYS`, `TRANSCRIPT_KEYS`, `HISTORY_KEYS`, `DESKTOP_KEYS`.
+  `ShortcutConflictView`, `shortcutRows`, `shortcutKeyCaps`, `DESKTOP_KEYS`.
 - **Allowed deps:** `contracts` (the shared chord shape check `isKeybindingChord`, `isModifierKeyCode`,
   `KEYBINDING_MODIFIERS`), `commands` (`CommandShortcut` and `shortcutKeys`), `lib` (`platformFamily`),
   `@thinkrail/ui/keyboard` (the pure chord primitives `chordPressed`, `keyCap`, `codeLabel`,
@@ -161,7 +160,10 @@ binding does.
   `composer`, `history`, `palette`, `findInFiles`, each titled for the editor (`where`, `inside`). An
   extension command with a `scope` is local too ([[module-extension-api]]); its id and scope must start
   with `<extension name>.`, and the resolver drops any extension command, global or local, that does not
-  (so none can shadow `trees.search` or `search.open`). Resource renderers will add their own set.
+  (so none can shadow `trees.search` or `search.open`). Resource renderers add their own set:
+  `shell` resolves `REVIEW_SURFACE_COMMANDS` ([[module-resource-renderers]]) as a ThinkRail set in scope
+  `review.surface`, whose `review.comment` / `review.saveDraft` / `review.sendNow` catalog rows are
+  `local` rows (the comment row behind a locked ↵).
 - **Shared scope `arrows`.** The letter twins of the arrows (`arrows.left/down/up/right`, H/J/K/L by
   `code`) are `@thinkrail/ui/keyboard`'s `ARROW_TWIN_COMMANDS`, declared once in scope `arrows`; `tabs`,
   `rails`, `trees`, `review.surface` and `transcript` include it, so one rebind applies in every element.
@@ -183,10 +185,11 @@ binding does.
   a chord), `globalHolder(resolved, chord)` and `actsIn(resolved, scope)` (the elements a scope's
   commands act in) feed the editor's warnings.
 - **`LOCAL_KEY_DEFAULTS[scope]`** is a scope's declared commands plus its included ones, the defaults a
-  handler hands `useLocalKeys`; with no provider those match.
-- **The handlers' old constants** (`TAB_KEYS`, `RAIL_KEYS`, `TREE_KEYS`, `REVIEW_KEYS`, `HJKL_KEYS`,
-  `TRANSCRIPT_KEYS`, `HISTORY_KEYS`) are derived from these declarations (US typed key of the default)
-  until each handler matches through `useLocalKeys`; then they go. `DESKTOP_KEYS` stays (display only).
+  handler hands `useLocalKeys`; with no provider those match. Every element key handler matches through
+  it — trees, Changes review, transcript, composer, history, tab strips, rails, palette, Find in Files —
+  and shows its caps and `aria-keyshortcuts` from the same hook, so a rebind acts and shows at once. The
+  per-feature typed-key constants (`TAB_KEYS` … `HISTORY_KEYS`) were deleted with that migration;
+  `DESKTOP_KEYS` stays (display only).
 
 ## Resolver
 
@@ -250,18 +253,16 @@ binding does.
   for one client into rows of caps and a text label (what the filter matches), plus each row's
   `conflicts` (a losing chord and its winner, for the editor's marks; a row with neither chords nor
   conflicts — an unbound command — is left out).
-- **Feature handlers keep their matching** (the table never dispatches feature keys): a migrated
-  handler matches its local keys through `useLocalKeys` (the sidebar trees' search and arrow twins);
-  the rest still compare the derived constants of *Local keys* until they migrate, so the listed and the
-  handled key cannot drift at the defaults; the palette's zoom and Settings shortcuts read
-  `DESKTOP_KEYS`. Locked keys stay literal in their handler and are display entries only.
-- **Review surface keys are display entries too.** The diff line cursor, the Markdown block cursor, the
-  region frame, the swipe divider, the review composer and draft cards live in
-  `@thinkrail/resource-renderers`, which cannot import the app, so their handler reads its own
-  `support/cursorKeys.ts` ([[module-resource-renderers]], *Keyboard review surfaces*) and the Changes
-  review section lists the same chords (`review.cursorMove` … `review.swipeFar`). Moving them into
-  `@thinkrail/ui` would make the primitives package own one feature's key map, so they stay where they
-  are handled.
+- **Feature handlers keep their matching** (the table never dispatches feature keys): each element
+  handler matches its local keys through `useLocalKeys`, so the listed and the handled key cannot drift;
+  the palette's zoom and Settings shortcuts read `DESKTOP_KEYS`. Locked keys stay literal in their
+  handler and are display entries only (hint mode's in-mode keys, Monaco's own `Shift+Mod+M`).
+- **Review surface keys.** The diff line cursor, the Markdown block cursor, the region frame, the swipe
+  divider, the review composer and draft cards live in `@thinkrail/resource-renderers`, which cannot
+  import the app, so the package declares its rebindable keys (`REVIEW_SURFACE_COMMANDS`) and matches them
+  through the same `useLocalKeys` seam ([[module-resource-renderers]], *Keyboard review surfaces*); the
+  Changes review section lists them as `local` rows and the locked cursor keys as display entries
+  (`review.cursorUp` … `review.swipeFar`).
 - **Extension rows.** After the catalog, `shortcutRows` lists every enabled extension command, global or
   local, from the resolved table as a General row with all its active chords (hint mode's `F` and `Mod+;`), then the
   `extra` entries: `shell` passes the `shortcuts` (in-mode, display-only keys) of every enabled web

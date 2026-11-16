@@ -9,6 +9,7 @@ import {
 	pressPlatformShortcut,
 	revealWorkbenchTool,
 } from "./fixtures/app";
+import { resetKeybindings, setKeybindings } from "./fixtures/keybindings";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 import { E2eWire } from "./fixtures/wire";
 
@@ -426,6 +427,35 @@ test("in Changes review the cursor owns J while V still marks the file viewed", 
 
 	await page.keyboard.press("Escape");
 	await expect(section.getByTestId("changes-section-toggle")).toBeFocused();
+});
+
+test.describe("rebound review keys", () => {
+	test.afterEach(async ({ page }) => resetKeybindings(page));
+
+	test("a rebound mark-viewed key marks the file viewed and V no longer does", async ({ page }) => {
+		await openFixtureProject(page);
+		await setKeybindings(page, { "review.markViewed": ["KeyU"] });
+		const workspace = await createWorkspaceViaDialog(page);
+		await commitAndModify(page, workspace.id, "cursor.ts", CURSOR_ORIGINAL, CURSOR_MODIFIED);
+		writeFileSync(join(worktree(), "notes.txt"), "a note edited by e2e\n");
+		await revealWorkbenchTool(page, "changes");
+		const row = page.getByTestId("change-item").filter({ hasText: "cursor.ts" });
+		await row.click();
+		const section = page.locator('[data-testid="changes-section"][data-path="cursor.ts"]');
+		await expect(section.getByTestId("diff-view")).toBeVisible();
+		const viewed = page.getByTestId("changes-review-viewed-count");
+		await expect(viewed).toHaveText("0/2 viewed");
+
+		await section.getByTestId("changes-section-toggle").focus();
+		await expect(async () => {
+			await page.keyboard.press("u");
+			await expect(viewed).toHaveText("1/2 viewed", { timeout: 1_000 });
+		}).toPass();
+		await page.keyboard.press("v");
+		await page.keyboard.press("u");
+		await expect(viewed).toHaveText("0/2 viewed");
+		await expect(section).not.toHaveAttribute("data-viewed", "true");
+	});
 });
 
 test("the cheatsheet opened from a review surface highlights the review keys and shows them", async ({

@@ -60,10 +60,6 @@ export {
 export {
 	DESKTOP_KEYS,
 	elementKeyUses,
-	HISTORY_KEYS,
-	HJKL_KEYS,
-	RAIL_KEYS,
-	REVIEW_KEYS,
 	SHORTCUT_CATALOG,
 	SHORTCUT_SURFACE_TITLES,
 	SHORTCUT_SURFACES,
@@ -72,7 +68,4 @@ export {
 	type ShortcutSurface,
 	shortcutKeyCaps,
 	shortcutRows,
-	TAB_KEYS,
-	TRANSCRIPT_KEYS,
-	TREE_KEYS,
 } from "./shortcutCatalog";

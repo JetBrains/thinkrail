@@ -1,6 +1,8 @@
 import { TABBABLE_SELECTOR } from "@thinkrail/ui/focus";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { type LocalKeys, useLocalKeys } from "@thinkrail/ui/local-keys";
 import { useEffect, useInsertionEffect, useState } from "react";
+import { LOCAL_KEY_DEFAULTS } from "@/keybindings";
 import { copyText, resolveTreeMove } from "@/lib";
 import { ACTIVITY_BREADCRUMB_HEIGHT } from "./activityBreadcrumbs";
 import { foldOverride } from "./foldState";
@@ -31,8 +33,10 @@ export interface TranscriptNavigationOptions {
 	onCopied: () => void;
 }
 
+type TranscriptKeys = Pick<LocalKeys, "match">;
+
 export interface TranscriptNavigationController extends TranscriptNavigation {
-	configure: (options: TranscriptNavigationOptions) => void;
+	configure: (options: TranscriptNavigationOptions, keys: TranscriptKeys) => void;
 	attach: (scroller: HTMLElement) => () => void;
 	focusNewest: (returned?: boolean) => void;
 	focusRow: (rowId: string) => void;
@@ -97,6 +101,7 @@ function sticksOut(element: HTMLElement, scroller: HTMLElement, inset: number): 
 
 export function createTranscriptNavigation(): TranscriptNavigationController {
 	let options: TranscriptNavigationOptions | null = null;
+	let keys: TranscriptKeys | null = null;
 	let scroller: HTMLElement | null = null;
 	let cursor: string | null = null;
 	let cursorIndex = 0;
@@ -404,7 +409,7 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 		}
 		const parked = target === feed();
 		if (!parked && ownerOf(target) !== target) return;
-		const action = transcriptKeyAction(event);
+		const action = keys && transcriptKeyAction(event, keys);
 		if (!action) return;
 		event.preventDefault();
 		if (action.kind === "leave") {
@@ -448,8 +453,9 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 	};
 
 	return {
-		configure: (next) => {
+		configure: (next, nextKeys) => {
 			options = next;
+			keys = nextKeys;
 		},
 		attach: (element) => {
 			scroller = element;
@@ -529,7 +535,8 @@ export function useTranscriptNavigation(
 	options: TranscriptNavigationOptions,
 ): TranscriptNavigationController {
 	const [controller] = useState(createTranscriptNavigation);
-	useInsertionEffect(() => controller.configure(options));
+	const keys = useLocalKeys("transcript", LOCAL_KEY_DEFAULTS.transcript);
+	useInsertionEffect(() => controller.configure(options, keys));
 	useEffect(() => (scroller ? controller.attach(scroller) : undefined), [controller, scroller]);
 	return controller;
 }

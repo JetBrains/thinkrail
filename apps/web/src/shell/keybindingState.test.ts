@@ -1,8 +1,15 @@
 import { expect, test } from "bun:test";
 import { KEYBINDINGS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
-import { keybindingLabel, keybindingList, resolveKeybindings } from "../keybindings";
-import { commandTitle, selectKeybindings, selectLocalKeymap } from "./keybindingState";
+import { REVIEW_SURFACE_COMMANDS } from "@thinkrail/resource-renderers";
+import {
+	keybindingLabel,
+	keybindingList,
+	resolveKeybindings,
+	SHORTCUT_CATALOG,
+	shortcutRows,
+} from "../keybindings";
+import { commandTitle, LOCAL_SETS, selectKeybindings, selectLocalKeymap } from "./keybindingState";
 
 const overrides = { "search.open": ["Mod+Alt+KeyS"] };
 
@@ -68,4 +75,31 @@ test("the local keymap follows the resolved table: the same object until a rebin
 	expect(rebound.scopes.get("trees")?.find(({ id }) => id === "trees.search")?.chord.code).toBe(
 		"KeyF",
 	);
+});
+
+test("the review surfaces' set resolves in its scope beside the arrow twins, each command with a titled row", () => {
+	const rows = (platform: string) =>
+		shortcutRows({
+			desktop: false,
+			keybindings: resolveKeybindings({ platform, local: LOCAL_SETS }),
+		});
+	const labels = (platform: string, id: string) =>
+		rows(platform)
+			.find((row) => row.id === id)
+			?.chords.map(({ label }) => label);
+	expect(labels("Linux x86_64", "review.comment")).toEqual(["↵", "Ctrl+Shift+M"]);
+	expect(labels("MacIntel", "review.comment")).toEqual(["↵", "⇧⌘M"]);
+	expect(labels("Linux x86_64", "review.saveDraft")).toEqual(["Ctrl+↵"]);
+	expect(labels("MacIntel", "review.sendNow")).toEqual(["⇧⌘↵"]);
+	const keybindings = resolveKeybindings({ platform: "Linux x86_64", local: LOCAL_SETS });
+	expect(keybindings.conflicts).toEqual([]);
+	expect(keybindings.local.get("review.surface")?.map(({ id }) => id)).toEqual([
+		...REVIEW_SURFACE_COMMANDS.map(({ id }) => id),
+		"arrows.left",
+		"arrows.down",
+		"arrows.up",
+		"arrows.right",
+	]);
+	const listed = new Set(SHORTCUT_CATALOG.flatMap((entry) => entry.local ?? []));
+	expect(REVIEW_SURFACE_COMMANDS.filter(({ id }) => !listed.has(id))).toEqual([]);
 });

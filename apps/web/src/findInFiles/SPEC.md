@@ -25,8 +25,8 @@ preview renders.
   `FindInFilesTarget`, `useFindInFiles`, `openFindInFiles`, `closeFindInFiles`, `effectiveCaseSensitive`,
   `mergeFiles`.
 - **Allowed deps:** `contracts` (the Find in Files DTOs and `TEXT_SEARCH_LIMITS`), `transport`
-  (`search.text` and the `search.textResults` subscription), `commands` (`shortcutKeys` for the footer's
-  platform keycaps), `components` (`KeyHint`, `highlightRanges`), `lib` (`hasPlatformModifier`),
+  (`search.text` and the `search.textResults` subscription), `keybindings` (`LOCAL_KEY_DEFAULTS` for
+  scope `findInFiles`), `components` (`KeyHint`, `highlightRanges`), `lib` (`hasPlatformModifier`),
   `@thinkrail/ui/*`, `zustand`, React, Remix Icon.
 - **Forbidden:** importing `store`, `panels`, `shell`, `search` or `@thinkrail/resource-renderers` — the
   host injects `onOpen` (what `↵` / `⌘↵` do) and `renderPreview` (the source renderer over `fs.readFile`);
@@ -65,7 +65,10 @@ preview renders.
   footer of keycaps. `↑` / `↓` move the selection across file groups and scroll it into view; `↵` opens the
   selected match as a preview tab and `⌘↵` (`Ctrl+↵`) as a kept tab — both through `onOpen` with the
   `FindInFilesTarget` (the host's `root` workspace, path, line, column, length) and close the window; a
-  click on a row does the same, hover selects. Escape closes. Every key yields to an active IME (`isImeComposing` — a composing key or the `229`
+  click on a row does the same, hover selects. Escape closes. `⌘↵` (`findInFiles.openKept`) and the
+  `Alt+C` / `Alt+W` toggles (`findInFiles.matchCase` / `wholeWord`) are rebindable local keys matched
+  through `useLocalKeys` ([[submodule-web-keybindings]], *Local keys*); the footer shows their resolved
+  caps, and a `⌘↵` left unbound by a rebind opens nothing. `↵`, arrows and Escape are locked. Every key yields to an active IME (`isImeComposing` — a composing key or the `229`
   sentinel never moves, opens, toggles or closes; the dialog's own Escape already yields through the
   `@thinkrail/ui` `DialogContent` primitive). Keys are handled on the input; the rows are
   `tabIndex=-1` and `mousedown`-prevented so focus never leaves the field, so the field is the listbox's

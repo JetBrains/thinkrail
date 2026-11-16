@@ -6,6 +6,7 @@ import {
 	revealWorkbenchTool,
 	waitTerminalReady,
 } from "./fixtures/app";
+import { resetKeybindings, setKeybindings } from "./fixtures/keybindings";
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
@@ -156,4 +157,27 @@ test("Ctrl+\\ inside a terminal stays with the shell", async ({ page }) => {
 	await centerTerminal.focus();
 	await pressPlatformShortcut(page, "Backslash");
 	await expect(groups).toHaveCount(2);
+});
+
+test.describe("rebound tab keys", () => {
+	test.afterEach(async ({ page }) => resetKeybindings(page));
+
+	test("a rebound arrow twin walks a tab strip, the tab announces it, and its old letter no longer does", async ({
+		page,
+	}) => {
+		await openWorkbenchWithFiles(page, ["README.md", "notes.txt"]);
+		await setKeybindings(page, { "arrows.right": ["KeyN"] });
+		const readme = fileTab(page, "README.md");
+		const notes = fileTab(page, "notes.txt");
+		await expect(readme).toHaveAttribute("aria-keyshortcuts", /(^| )H N( |$)/);
+
+		await readme.focus();
+		await page.keyboard.press("n");
+		await expect(notes).toBeFocused();
+		await expect(notes).toHaveAttribute("aria-selected", "true");
+		await page.keyboard.press("l");
+		await page.keyboard.press("h");
+		await expect(readme).toBeFocused();
+		await expect(readme).toHaveAttribute("aria-selected", "true");
+	});
 });
