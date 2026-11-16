@@ -830,7 +830,11 @@ export default function ChatView({
 	});
 	const onTryAgain = useCallback(() => performSendRef.current(TRY_AGAIN_PROMPT, [], "send"), []);
 	const disableServerFallback = useCallback(async () => {
-		await getTransport().request("session.disableServerFallback", { sessionId });
+		try {
+			await getTransport().request("session.disableServerFallback", { sessionId });
+		} catch (err) {
+			if (wsErrorCode(err) !== "SERVER_FALLBACK_NOT_USED") throw err;
+		}
 		performSendRef.current(TRY_AGAIN_PROMPT, [], "send");
 	}, [sessionId]);
 

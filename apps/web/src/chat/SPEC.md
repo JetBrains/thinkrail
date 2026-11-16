@@ -90,7 +90,8 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   same field again. On the current failure (the `try-again` recovery) with a v125 host, **Try again** becomes
   **Turn off fallback and retry** (`disableServerFallback`, supplied by `ChatView`): `session.disableServerFallback`
   turns fallback off for the chat's provider and moves the chat onto the updated model, then the ordinary
-  `Try again.` send follows. The button is pending while it runs; a failure shows a localized alert line and
+  `Try again.` send follows — also after `SERVER_FALLBACK_NOT_USED` (the chat's model already sends none, e.g.
+  another chat repaired the provider first), since a plain retry then works. The button is pending while it runs; a failure shows a localized alert line and
   keeps the button. Historical matches keep the explanation only; an older host keeps plain **Try again**.
   Only the current settlement-derived failure carries the
   web-local `try-again` recovery action; its **Try again** button sends one visible ordinary `Try again.` user
