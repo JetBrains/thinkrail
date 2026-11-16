@@ -960,3 +960,10 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   (`ConnectionStatus`, **type-only**); `@thinkrail/locales` (default chat/terminal names, settled-reason
   copy and toasts, resolved when created); `zustand`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `panels`, shell runtime (the web-local layout state edge is type-only), or transport runtime.
+
+## Agent availability preferences
+
+`disabledSubagents` mirrors global `AppConfig.disabledSubagents` through welcome/config application,
+with `[]` for older hosts. Switches use only this authoritative projection, never mutation ACKs.
+`selectActiveSubagentProjectTrust` derives the active repository workspace's project trust for catalog
+lifetime invalidation (Chats containers and no workspace have no project scope).

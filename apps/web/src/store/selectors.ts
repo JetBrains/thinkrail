@@ -971,6 +971,11 @@ export function selectActiveRepoWorkspaceId(state: ActiveWorkspaceState): string
 	return active && !isChatWorkspace(active) ? active.id : undefined;
 }
 
+export function selectActiveSubagentProjectTrust(state: ProjectContextState) {
+	const workspaceId = selectActiveRepoWorkspaceId(state);
+	return workspaceId ? selectContextProject(state)?.piResourceTrust : undefined;
+}
+
 export function selectContextProject(state: ProjectContextState): Project | null {
 	const projectId = selectActiveWorkspace(state)?.projectId ?? state.selectedProjectId;
 	return state.projects.find((project) => project.id === projectId) ?? null;
