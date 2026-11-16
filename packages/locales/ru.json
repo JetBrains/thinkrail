@@ -985,6 +985,7 @@
 	"panels.artifacts.loadFailed": "Не удалось загрузить артефакты",
 	"panels.artifacts.mention": "Упомянуть в чате",
 	"panels.artifacts.mentionNoChat": "Откройте чат, чтобы упомянуть этот файл",
+	"panels.artifacts.more": "Ещё действия",
 	"panels.artifacts.name": "Имя файла",
 	"panels.artifacts.openChat": "Открыть «{{chat}}»",
 	"panels.artifacts.otherChats_few": "Ещё {{count}} из других чатов",

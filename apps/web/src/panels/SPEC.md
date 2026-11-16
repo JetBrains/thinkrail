@@ -2277,7 +2277,12 @@ own section. The kebab menu (`plan-menu`, a
   (files under `.thinkrail/context/`) and **Other agent files · ignored** (one row per ignored output,
   newest first, a folder lazily expandable through `fs.readDir`, with its file count), hidden by the
   header's eye toggle. Artifacts shows as a **List** or a **Tree** (`List | Tree` segments on the toolbar's
-  right; `artifactsView`, default List, remembered per client across workspaces). List answers *what is
+  right; `artifactsView`, default List, remembered per client across workspaces). The toolbar
+  (`ArtifactsToolbar`, which takes the views it offers) stays one row at any sidebar width: when its content
+  overflows it folds the secondary actions (Collapse all, the ignored toggle, Paste) into a **More** menu,
+  then the view segments too, and unfolds once the width it needed is back (measured with a
+  `ResizeObserver`, refolded from scratch when the set of actions changes) — a fixed breakpoint cannot,
+  because the actions come and go. List answers *what is
   new*: newest first, a two-line row — the name, then the folder inside the artifacts folder — or
   `Task spec · <status>` joined from the spec snapshot by path — and a chip naming the writing chat that
   opens it; no relative age, since the order already says what is newest. Tree answers *where is it*: it

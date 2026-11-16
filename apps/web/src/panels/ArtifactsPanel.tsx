@@ -1,16 +1,8 @@
-import {
-	RiClipboardLine,
-	RiCollapseVerticalLine,
-	RiEyeLine,
-	RiEyeOffLine,
-	RiRefreshLine,
-	RiShapesLine,
-} from "@remixicon/react";
+import { RiRefreshLine, RiShapesLine } from "@remixicon/react";
 import type { FileNode } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { QuietScrollArea } from "@/components/QuietScrollArea";
@@ -23,6 +15,7 @@ import {
 	useAppStore,
 } from "../store";
 import { getTransport } from "../transport";
+import { ArtifactsToolbar } from "./ArtifactsToolbar";
 import { ArtifactTreeRows } from "./ArtifactsTree";
 import {
 	discardArtifact,
@@ -46,7 +39,6 @@ import {
 } from "./artifactsModel";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { deleteEntry, pasteInto, renameEntry } from "./fileTreeActions";
-import { HeaderIconButton } from "./HeaderIconButton";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
 import { Tree, treeRowControlProps, useTreeItem } from "./treeNavigation";
@@ -126,66 +118,22 @@ export function ArtifactsPanel({
 
 	return (
 		<div data-testid="artifacts-panel" className="flex h-full min-h-0 flex-col">
-			<div
-				role="toolbar"
-				aria-label={t("panels.artifacts.toolbar")}
-				className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-clip border-border-default border-b px-12"
-			>
-				<ToggleSegment
-					testid="artifacts-filter-all"
-					label={t("panels.artifacts.allChats")}
-					active={sessionId === null}
-					onClick={() => setAllChats(true)}
-				/>
-				<ToggleSegment
-					testid="artifacts-filter-chat"
-					label={t("panels.artifacts.thisChat")}
-					active={sessionId !== null}
-					disabled={mentionTarget === null}
-					onClick={() => setAllChats(false)}
-				/>
-				<div className="ml-auto flex shrink-0 items-center gap-4">
-					<ToggleSegment
-						testid="artifacts-view-list"
-						label={t("panels.artifacts.viewList")}
-						active={view === "list"}
-						onClick={() => useAppStore.getState().setArtifactsView("list")}
-					/>
-					<ToggleSegment
-						testid="artifacts-view-tree"
-						label={t("panels.artifacts.viewTree")}
-						active={view === "tree"}
-						onClick={() => useAppStore.getState().setArtifactsView("tree")}
-					/>
-					{canCollapse ? (
-						<HeaderIconButton
-							testid="artifacts-collapse-all"
-							label={t("panels.artifacts.collapseAll")}
-							icon={RiCollapseVerticalLine}
-							onClick={() => useAppStore.getState().collapseAllArtifacts(workspaceId)}
-						/>
-					) : null}
-					{snapshot?.outputs ? (
-						<HeaderIconButton
-							testid="artifacts-toggle-ignored"
-							label={
-								showIgnored ? t("panels.artifacts.hideIgnored") : t("panels.artifacts.showIgnored")
-							}
-							active={showIgnored}
-							icon={showIgnored ? RiEyeLine : RiEyeOffLine}
-							onClick={() => useAppStore.getState().setArtifactsShowIgnored(!showIgnored)}
-						/>
-					) : null}
-					{canPaste && snapshot ? (
-						<HeaderIconButton
-							testid="artifacts-paste"
-							label={t("panels.artifacts.paste")}
-							icon={RiClipboardLine}
-							onClick={() => void pasteInto(workspaceId, snapshot.dir)}
-						/>
-					) : null}
-				</div>
-			</div>
+			<ArtifactsToolbar
+				allChats={sessionId === null}
+				chatFilterDisabled={mentionTarget === null}
+				onAllChats={setAllChats}
+				views={[
+					{ id: "list", label: t("panels.artifacts.viewList") },
+					{ id: "tree", label: t("panels.artifacts.viewTree") },
+				]}
+				view={view}
+				onView={(next) => useAppStore.getState().setArtifactsView(next)}
+				canCollapse={canCollapse}
+				onCollapseAll={() => useAppStore.getState().collapseAllArtifacts(workspaceId)}
+				showIgnored={snapshot?.outputs ? showIgnored : null}
+				onToggleIgnored={() => useAppStore.getState().setArtifactsShowIgnored(!showIgnored)}
+				onPaste={canPaste && snapshot ? () => void pasteInto(workspaceId, snapshot.dir) : null}
+			/>
 			<QuietScrollArea
 				data-focus-default
 				className="min-h-0 flex-1"

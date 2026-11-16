@@ -937,6 +937,7 @@
 	"panels.artifacts.loadFailed": "Couldn't load artifacts",
 	"panels.artifacts.mention": "Mention in chat",
 	"panels.artifacts.mentionNoChat": "Open a chat to mention this file",
+	"panels.artifacts.more": "More actions",
 	"panels.artifacts.name": "File name",
 	"panels.artifacts.openChat": "Open {{chat}}",
 	"panels.artifacts.otherChats_one": "{{count}} more from other chats",

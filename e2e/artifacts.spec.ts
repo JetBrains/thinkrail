@@ -189,6 +189,33 @@ test("a folder in the Tree offers no Delete and renames from the keyboard, its a
 	expect(readFileSync(join(root, CONTEXT, "mockups/welcome/c.html"), "utf8")).toBe("<h1>c</h1>\n");
 });
 
+test("a narrow Artifacts toolbar folds its actions, then its views, into a More menu", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 900, height: 800 });
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	writeArtifact(workspace.worktreePath, "mockups/a.html", "<h1>a</h1>\n");
+	await showArtifacts(page);
+	const toolbar = page.getByRole("toolbar", { name: "Artifacts" });
+	await expect(toolbar).toHaveAttribute("data-fold", "2");
+	await expect(page.getByTestId("artifacts-view-tree")).toHaveCount(0);
+	await expect(page.getByTestId("artifacts-toggle-ignored")).toHaveCount(0);
+
+	await page.getByTestId("artifacts-more").click();
+	await page.getByTestId("artifacts-more-view-tree").click();
+	await folderRow(page, "mockups").click();
+	await expect(artifact(page, "mockups/a.html")).toBeVisible();
+	await page.getByTestId("artifacts-more").click();
+	await page.getByTestId("artifacts-more-collapse-all").click();
+	await expect(artifact(page, "mockups/a.html")).toHaveCount(0);
+
+	await page.setViewportSize({ width: 1600, height: 800 });
+	await expect(toolbar).toHaveAttribute("data-fold", "0");
+	await expect(page.getByTestId("artifacts-view-tree")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("artifacts-more")).toHaveCount(0);
+});
+
 test("a new artifact lights the rail until the tab is opened, and a cut file pastes into artifacts", async ({
 	page,
 }) => {
