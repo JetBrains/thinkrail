@@ -7,7 +7,7 @@ import { sideCaption } from "../VisualDiff";
 import { htmlRenderer } from ".";
 import { HtmlFrame } from "./HtmlFrame";
 import { HTML_PREVIEW_CSP, prepareHtmlPreviewDocument } from "./htmlDocument";
-import { createScrollLink } from "./scrollLink";
+import { createScrollLink, type ScrollLinkClock } from "./scrollLink";
 import { HtmlPreviewNotice } from "./ViewportSwitch";
 
 interface FakeAttribute {
@@ -265,8 +265,11 @@ class FakeView {
 	removeEventListener() {
 		this.listener = null;
 	}
-	userScroll(top: number) {
+	silentScroll(top: number) {
 		this.document.scrollingElement.scrollTop = top;
+	}
+	userScroll(top: number) {
+		this.silentScroll(top);
 		this.listener?.();
 	}
 	echo() {
@@ -277,12 +280,44 @@ class FakeView {
 	}
 }
 
+class FakeClock implements ScrollLinkClock {
+	private readonly frames = new Map<number, () => void>();
+	private readonly polls = new Set<() => void>();
+	private next = 1;
+	requestFrame(callback: () => void) {
+		const handle = this.next++;
+		this.frames.set(handle, callback);
+		return handle;
+	}
+	cancelFrame(handle: number) {
+		this.frames.delete(handle);
+	}
+	every(_ms: number, callback: () => void) {
+		this.polls.add(callback);
+		return () => this.polls.delete(callback);
+	}
+	poll() {
+		for (const callback of this.polls) callback();
+	}
+	frame() {
+		const pending = [...this.frames.values()];
+		this.frames.clear();
+		for (const callback of pending) callback();
+	}
+	get pendingFrames() {
+		return this.frames.size;
+	}
+	get polling() {
+		return this.polls.size > 0;
+	}
+}
+
 function asWindow(view: FakeView): Window {
 	return view as unknown as Window;
 }
 
 test("a scroll link mirrors the scrolled document onto its pair and ignores the echo", () => {
-	const link = createScrollLink();
+	const link = createScrollLink(new FakeClock());
 	const left = new FakeView();
 	const right = new FakeView(300);
 	link.attach(asWindow(left));
@@ -298,13 +333,41 @@ test("a scroll link mirrors the scrolled document onto its pair and ignores the 
 	expect(new Set([...left.behaviors, ...right.behaviors])).toEqual(new Set(["instant"]));
 });
 
-test("a scroll link places a reloaded frame at the last offset and detaches cleanly", () => {
-	const link = createScrollLink();
+test("without scroll events, as in WebKit's script-less sandbox, polling finds the move and follows it until it settles", () => {
+	const clock = new FakeClock();
+	const link = createScrollLink(clock);
+	const left = new FakeView();
+	const right = new FakeView();
+	link.attach(asWindow(left));
+	link.attach(asWindow(right));
+	expect(clock.polling).toBe(true);
+
+	right.silentScroll(200);
+	clock.poll();
+	expect(left.scroller.scrollTop).toBe(200);
+	expect(clock.pendingFrames).toBe(1);
+
+	right.silentScroll(260);
+	clock.frame();
+	expect(left.scroller.scrollTop).toBe(260);
+	for (let i = 0; i < 30; i++) clock.frame();
+	expect(clock.pendingFrames).toBe(0);
+
+	left.silentScroll(40);
+	clock.poll();
+	expect(right.scroller.scrollTop).toBe(40);
+});
+
+test("a scroll link places a reloaded frame at the last offset and stops polling once empty", () => {
+	const clock = new FakeClock();
+	const link = createScrollLink(clock);
 	const left = new FakeView();
 	const detach = link.attach(asWindow(left));
 	left.userScroll(240);
 	detach();
 	expect(left.attached).toBe(false);
+	expect(clock.polling).toBe(false);
+	expect(clock.pendingFrames).toBe(0);
 
 	const reloaded = new FakeView();
 	link.attach(asWindow(reloaded));

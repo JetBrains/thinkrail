@@ -519,7 +519,12 @@ absolute scroll offset of whichever document the user scrolls onto the other, ig
 write (read back after the write, so a shorter document's clamped offset never drags the longer one back;
 the write is an explicitly `instant` `scrollTo`, since a mockup's `scroll-behavior: smooth` would otherwise
 turn it into an animation whose intermediate offsets read as user scrolls and leave the pair apart),
-and re-applies the last offset to a frame that reloads, so a mode switch keeps the position. Only these
+and re-applies the last offset to a frame that reloads, so a mode switch keeps the position. WebKit
+delivers no events into a document whose sandbox lacks `allow-scripts` — not even to a listener the host
+attached — so the link cannot rely on `scroll`: it also polls both offsets every 100 ms while attached and,
+once one moves, follows it frame by frame until 20 frames pass unchanged. A delivered `scroll` event
+(Chromium, Firefox) only triggers the same check at once. Reading and writing the offsets from the host
+works in every engine. Only these
 paired frames carry `sandbox="allow-same-origin"`, which lets the host attach the scroll listener and read
 the offset; they still have no `allow-scripts`, so nothing in the document runs (the sanitizer strips
 scripts and handlers too, and the CSP has no script source) — the dangerous pair is `allow-scripts` with
