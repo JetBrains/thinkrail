@@ -11,8 +11,8 @@ references: [submodule-web-panels, submodule-web-chat]
 ## Responsibility
 
 Everything that turns a workspace resource into a viewable, reviewable surface: the engine-neutral resource
-description and renderer registry, the eleven bundled file/diff renderers (code, markdown, binary, LFS,
-image, SVG, CSV, JSON, notebook, PDF, HTML) with their review composers, thread cards and region surfaces,
+description and renderer registry, the twelve bundled file/diff renderers (code, markdown, binary, LFS,
+image, SVG, CSV, JSON, notebook, PDF, HTML, interactive HTML) with their review composers, thread cards and region surfaces,
 and the shared Monaco, Pierre and markdown-document machinery they run on. It is presentation: it owns no
 content loading, review persistence, tabs or navigation — a host supplies those.
 
@@ -29,7 +29,10 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   rules every surface shares: `resourceContent(text, meta, url)` (no metadata yet is provisional text, a
   missing hash is an absent side, a binary side without a byte URL is absent), `diffResourceMeta(original,
   modified)` (a diff is described by its modified side unless that side is absent, and is text only when
-  both present sides are) and `PENDING_TEXT_META` — plus `registerBundledResourceRenderers()` (idempotent).
+  both present sides are) and `PENDING_TEXT_META` — plus `registerBundledResourceRenderers(options?)`
+  (idempotent; the first call's options win). `BundledRendererOptions.interactiveHtml` lists the path globs
+  whose HTML gets the Interactive candidate (below); the host passes them because only it knows where its
+  agents write mockups.
   `diffRendererCapabilities` returns, from a path alone (before content loads), the capabilities of the
   diff renderer it would resolve to — inferring the text/binary split from the path's MIME so known image
   and PDF paths resolve to their layout-less renderers; MIME inference itself stays module-internal. A pane
@@ -531,10 +534,11 @@ attached — so the link cannot rely on `scroll`: it also polls both offsets eve
 once one moves, follows it frame by frame until 20 frames pass unchanged. A delivered `scroll` event
 (Chromium, Firefox) only triggers the same check at once. Reading and writing the offsets from the host
 works in every engine. Only these
-paired frames carry `sandbox="allow-same-origin"`, which lets the host attach the scroll listener and read
+paired static frames carry `sandbox="allow-same-origin"`, which lets the host attach the scroll listener and read
 the offset; they still have no `allow-scripts`, so nothing in the document runs (the sanitizer strips
 scripts and handlers too, and the CSP has no script source) — the dangerous pair is `allow-scripts` with
-`allow-same-origin`, never granted. A single HTML view keeps `sandbox=""`. The layered modes drop the
+`allow-same-origin`, never granted. A single HTML view keeps `sandbox=""`. The link talks to each frame
+through a `ScrollEndpoint`: a static frame's window directly, an interactive frame (below) through messages. The layered modes drop the
 "comment on old/new" side picker when neither side carries a review surface: it only chooses whose regions
 a drag authors. The diff advertises no anchor geometry, so HTML threads remain in the pane-owned unplaced
 strip and Source is the only authoring candidate. Known limitation: the comparison still mounts through
@@ -548,8 +552,39 @@ is the old reflow. The frame's box fills its host; a full-size view keeps a 360 
 one (a chat card, a questionnaire pane, the compare overlay's cells) takes exactly the height it is given,
 because the floor inside a shorter fixed frame clipped the document's end out of reach. Scaling is pure geometry on the wrapper — nothing measures the document's size; the wrapper's box is measured in a layout effect (the package's
 one `useElementSize`, shared with the SVG view and the region surfaces), so the first paint is already fitted
-instead of reflowing the document at the pane width for a frame. The sanitizer also strips form controls, so mockups draw
-buttons and inputs with styled elements; spot (region) comments on HTML are not offered yet.
+instead of reflowing the document at the pane width for a frame. The sanitizer also strips form controls, so a static
+preview shows buttons and inputs only as styled elements (interactive mockups keep them); spot (region)
+comments on HTML are not offered yet.
+
+`thinkrail/html-interactive` ("Interactive") is the candidate for HTML matching the host's
+`interactiveHtml` globs — ThinkRail passes its agents' mockup directory (`WORKSPACE_MOCKUP_DIR`,
+`.thinkrail/context/mockups/`) — ranked above `thinkrail/html`, so a mockup opens interactive while tabs keep
+**Preview** (static) and **Source** as toggles. Any other HTML never runs script. The point is clickable
+prototypes (tabs, toggles, form controls) for comparing alternatives. Because the host has no auth
+([[architecture]] Decision 7), a script that could reach it over WebSocket would control the agent, so the
+property that matters is **no network**:
+- **The document** keeps scripts, handlers, forms and controls, drops `<base>` and `<meta http-equiv>`, makes
+  every non-`#` link target inert, and gets a CSP meta first in `<head>`, exactly `default-src 'none';
+  script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data:
+  blob:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; child-src 'none';
+  worker-src 'none'` — no fetch, XHR, WebSocket, external script, style, image or frame. A `data:` or `blob:`
+  document the script navigates to inherits the policy (verified in Chromium, WebKit and Firefox).
+- **The frame** is `sandbox="allow-scripts"` and nothing else: an opaque origin with no access to the app,
+  no popups, no top navigation, no form submission. It is never also `allow-same-origin`, paired or not. It
+  carries the same policy as the `csp` attribute, so Chromium and WebView2 (CSP Embedded Enforcement)
+  refuse any foreign document the frame is navigated to; on the desktop the native navigation rules refuse
+  outside URLs for frames as well ([[module-desktop]]).
+- **Leaving is stopped.** A second `load` of the frame means its document was replaced (script navigation,
+  reload); the frame is unmounted and a notice with **Reload** takes its place — no automatic reload loop.
+  Residual risk, accepted and recorded: in a WebKit or Firefox browser tab the request to an outside page is
+  sent and that page runs until its `load` — with the reach of any page the user visits (Decision 7), no
+  more. Chromium sends the request but refuses the document.
+- **Scroll sync without same-origin.** The document carries a tiny bridge that posts its offset on scroll and
+  applies a posted `scrollTo` instantly, answering with the applied (possibly clamped) offset; the link's
+  message endpoint accepts messages only from that frame's window and only finite numbers, writes
+  optimistically so a pending answer never reads as a user scroll, and takes the answer as the echo. A
+  comparison decides per side: a side runs script only if its own path matches.
+- The notice says scripts run sandboxed without network (`viewer.html.interactiveNotice`).
 
 Pierre parses the two complete text sides (`absent` → `null`) with the current ignore-whitespace value,
 uses the host's `pierreTheme` (registered as `thinkrail`, CSS variables only, highlighted by `@pierre/highlights`), word-level inline changes, collapsed unchanged regions with
