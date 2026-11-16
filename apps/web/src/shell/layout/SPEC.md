@@ -116,7 +116,8 @@ the plain pane header, and its Hide control are the one owner of edge-chrome sty
 rail entry is a `data-active` 32px frame (24px in the bottom rail) around a control that wears the shared
 `ghost` M icon-button skin (`buttonVariants`, [[module-ui]] "Button system": 24px square, 16px icon,
 shared hover — pressed looks the same — and the ghost icon-only focus ring drawn inside the square, so no
-rail margin or strip edge clips it). The control keeps its own element for the roving toolbar, drag and drop and
+rail margin or strip edge clips it). Arrow/Home/End movement delegates to
+`@thinkrail/ui/toolbar` while the rail retains its selected-entry Tab stop and H/J/K/L aliases. The control keeps its own element for the roving toolbar, drag and drop and
 adornments; the open entry sets `data-selected` (the shared `control-bg-selected` fill), while drop cues sit on the
 control — the passive drop hint adds an inset `primary-soft` ring, so it still shows on a selected entry whose
 fill wins the background. Adornments (review badge, terminal ordinal) are offset to the 32px frame's

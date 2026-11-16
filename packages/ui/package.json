@@ -23,6 +23,7 @@
 		"./theme": "./theme.ts",
 		"./toast": "./toast.tsx",
 		"./toggle-segment": "./toggle-segment.tsx",
+		"./toolbar": "./toolbar.tsx",
 		"./tooltip": "./tooltip.tsx",
 		"./utils": "./utils.ts"
 	},

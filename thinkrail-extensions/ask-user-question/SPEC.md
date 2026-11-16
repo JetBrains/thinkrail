@@ -63,7 +63,7 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
 - The card imports `extension-api/web`, the package's argument/result **types** (type-only, from
   `@thinkrail/pi-ask-user-question/core`; a value import of the pi package stays forbidden in browser code,
   so the result guard `readAskUserQuestionResult` and the answer model in `web/state.ts` are the card's own),
-  `@thinkrail/ui` (`attention-line`, `button`, `dialog`, `dropdown-menu`, `keyboard`, `textarea`, `utils`),
+  `@thinkrail/ui` (`attention-line`, `button`, `dialog`, `dropdown-menu`, `keyboard`, `textarea`, `toolbar`, `utils`),
   `@thinkrail/resource-renderers` (`useOptionalResourceHost` for the host's Markdown — mermaid included —,
   `FramedResourcePreview` + `useResourceScope` for file previews, and `ResourcePreview` + `HtmlViewportSwitch`
   for the compare overlay), `@thinkrail/locales` (types) and `/react`, React and Remix Icon. It never imports
@@ -171,12 +171,14 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   file preview degrades to its path and an Open file link; the plan page provides the session's resource
   scope and `onOpenFile` so previews render there as in chat. A picked file preview is echoed as its path.
   The 240 px fold, the 380 px pane and the 8-line field cap are unconfirmed starting values.
+- The compare item strip uses `@thinkrail/ui/toolbar` for one Tab stop and arrow/Home/End focus
+  navigation without changing the displayed item; activation remains Enter/Space or click.
 - **Compare overlay** (`compareModel.ts`, `CompareOverlay.tsx`). A near-full-window dialog for comparing a
   single-select question's alternatives, HTML mockups above all, where the 380 px pane shows one at a time
   and comparison was from memory. Its items are **Current** (the question's own preview, never choosable)
   then every option, an option without a preview saying so as in the card. It opens in **One at a time** on
   the item whose button opened it; **Side by side** puts Current (else the recommended, else the first
-  option) on the left and that item on the right — strip clicks and ←/→ change the right side, the left has
+  option) on the left and that item on the right — strip activation and body ←/→ change the right side, the left has
   its own menu and a swap, and choosing a side already shown swaps rather than showing one item twice;
   **All** shows every item (at most five), a pane title opening it alone. Two files of one visual kind (HTML,
   raster image, SVG; neither itself a diff) pair through the type's comparison renderer with its option
@@ -248,7 +250,7 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   A **failed send undoes the hand-off with the latch**: the form comes back interactive, and since the
   one-shot claim is long spent and could neither re-focus nor re-announce, the card takes focus back itself
   rather than reappearing with the keyboard parked in the composer and nothing to say it had returned.
-- **Every control is an explicit tab stop.** The macOS desktop is the system WKWebView, where Tab skips a
+- **Every control has an explicit tabindex.** The macOS desktop is the system WKWebView, where Tab skips a
   `<button>` without a `tabindex` and a click does not focus it: Add note, Skip and Next/Submit were
   unreachable and arrows after a click went to the page, while Chromium hid both (post-mortem: no
   browser-level keyboard coverage existed). So every control of the card and receipt carries `tabIndex`

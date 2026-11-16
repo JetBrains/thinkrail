@@ -1,6 +1,7 @@
 import { RiCollapseVerticalLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { Toolbar } from "@thinkrail/ui/toolbar";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	isChatWorkspace,
@@ -48,9 +49,8 @@ export function FilesPanel({ workspaceId }: { workspaceId: string }) {
 
 	return (
 		<div data-files-mode={mode} className="flex h-full min-h-0 flex-col">
-			<div
+			<Toolbar
 				data-testid="files-mode-toggle"
-				role="toolbar"
 				aria-label={t("panels.files.toolbar")}
 				className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-clip border-border-default border-b px-12"
 			>
@@ -80,7 +80,7 @@ export function FilesPanel({ workspaceId }: { workspaceId: string }) {
 						/>
 					</div>
 				) : null}
-			</div>
+			</Toolbar>
 			{mode === "all" ? (
 				<AllFiles workspaceId={workspaceId} marks={marks} />
 			) : (

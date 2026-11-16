@@ -375,6 +375,9 @@ treatment.
   candidates, `Split|Inline`, `List|Tree`) is the shared `@thinkrail/ui/toggle-segment` `ToggleSegment` — whose active segment reuses the tab
   grammar's `control-bg-selected` (below), never a container surface, so the selected fill survives the
   high-contrast themes where `container-elevated-bg` collapses onto the toolbar surface.
+  Files, Changes, Changes review, Artifacts, file-view and diff-view header toolbars use `@thinkrail/ui/toolbar`:
+  one Tab stop, horizontal arrows and Home/End move focus without activating controls. Menus retain
+  their own keys and conditional/disabled controls are reconciled by the shared primitive.
   The `ChangesPanel` secondary toolbar paints **no surface of its own**: like the right-panel tab strip
   it shows the panel's `container-sidebar-bg`, so the two chrome rows read as one continuous surface. The **file-style tree row** (chevron/spacer
   lead, folder/file icon, truncated label, trailing slot; `min-w-0` so a row can shrink when it shares a

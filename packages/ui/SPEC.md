@@ -40,6 +40,21 @@ pi, app stores, transport and theme runtime are forbidden. Tokens remain global 
 under `apps/web/src/styles`; utilities follow [[web-color]], [[web-spacing]] and [[web-typography]].
 The app's Tailwind sources and adoption guards include this package and extension web halves.
 
+## Toolbar navigation
+
+`./toolbar` exposes `Toolbar` and `handleToolbarKeyDown`. `Toolbar` is a layout-neutral, labelled
+`role=toolbar` container with one roving Tab stop. The first enabled, visible control is the initial
+stop; focus and pointer interaction remember the last control. Descendant changes, native/ARIA disabling,
+and ancestor/modal or responsive visibility changes repair the stop without activating a control or
+stealing focus.
+Horizontal arrows (reversed for RTL), or vertical arrows for a vertical toolbar, wrap through eligible
+controls; Home/End choose the ends. Tab leaves normally. Text-entry controls keep their native keys,
+and events from nested toolbars or portalled menus are not handled. Modified keys and IME composition
+are ignored. `handleToolbarKeyDown` shares the same navigation with an existing controlled roving
+surface; its optional selector and previous/next key aliases let the auxiliary rail retain its own
+selection and H/J/K/L contract. Toolbar forwards its React 19 DOM ref, including callback cleanup, so
+measured headers retain their existing measurement owner. Neither export owns feature state or layout styling.
+
 ## Button system
 
 `button` is the one implementation of an action button: `Button` (text, optional `iconLeft` /
@@ -125,7 +140,7 @@ on Tab), `skeleton` (`SkeletonRows` / `LoadingRegion`, the one loading placehold
 live in the web components spec), and `attention-line` (`AttentionLine`, the "Your input is needed · Agent is
 waiting" line; `announced` hides the visible line from assistive tech once the always-mounted polite
 region carries the announcement, `live={false}` drops the region), and `keycaps` (`Keycaps`, a row of
-`<kbd>` caps for already-formatted key labels, a repeated key such as double Shift included), alongside `utils`, `keyboard`, `theme` and `fonts`.
+`<kbd>` caps for already-formatted key labels, a repeated key such as double Shift included), alongside `toolbar`, `utils`, `keyboard`, `theme` and `fonts`.
 `menu-styles` is shared by the menu primitives and custom app menu rows. `toggle-segment` and `skeleton`
 moved here from the app when the resource renderers became a package, because both the app and
 [[module-resource-renderers]] use them; `attention-line` moved for the same reason when the

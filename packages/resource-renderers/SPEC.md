@@ -56,7 +56,9 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   `ResourceEnvironment.compact`, and reset by an explicit `compact={false}`) drops the renderer toggles,
   Send review, the HTML notice with its viewport presets and the Markdown outline — the chrome a small
   embedded frame cannot afford; the views themselves are unchanged, and a compact preview given neither
-  `leading` nor `actions` draws no toolbar at all rather than an empty row. `reviewable={false}` skips the
+  `leading` nor `actions` draws no toolbar at all rather than an empty row. Header controls use
+  `@thinkrail/ui/toolbar` for one Tab stop and arrow/Home/End navigation, including injected actions;
+  text fields and portalled menus retain their native key handling. `reviewable={false}` skips the
   host's review surfaces — no commenting, no unplaced strip — for a surface whose purpose is looking, not
   reviewing (the questionnaire's compare overlay). `htmlViewport` (carried the same way as
   `ResourceEnvironment.htmlViewport`) fixes the preview width of every HTML view and diff beneath it and
@@ -67,8 +69,8 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   for the 2-up headings and captions, the rest ignore them;
 - **`FramedResourcePreview`** — `ResourcePreview` in a caller-sized frame with **Open in tab** (the file, or
   the comparison for a diff) and **Full screen** (a dialog with the full chrome, sharing renderer and view
-  state; an `onFullscreen` handler replaces that dialog with the caller's own), every action an explicit tab
-  stop; nothing without a host and a workspace scope. It is the one
+  state; an `onFullscreen` handler replaces that dialog with the caller's own), with actions keyboard-reachable
+  through the shared toolbar; nothing without a host and a workspace scope. It is the one
   framed preview of visualize's file card and the questionnaire's previews ([[module-ext-visualize]],
   [[module-ext-ask-user-question]]) — lifted from visualize when the second consumer arrived;
 - **`ResourceReveal`** and **`SOURCE_RENDERER_ID`** (`thinkrail/code`) — the open-at-a-line contract: a

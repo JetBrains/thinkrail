@@ -10,6 +10,7 @@ import {
 	useRendererSelection,
 } from "@thinkrail/resource-renderers";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { Toolbar } from "@thinkrail/ui/toolbar";
 import { Suspense, useMemo } from "react";
 import { isPhoneViewport } from "../lib";
 import type { FileTab } from "../store";
@@ -79,9 +80,8 @@ export function FilePane({ tab }: { tab: FileTab }) {
 	return (
 		<div className="flex h-full min-h-0 flex-col">
 			{showToolbar ? (
-				<div
+				<Toolbar
 					data-testid="resource-view-toggle"
-					role="toolbar"
 					aria-label={t("panels.filePane.resourceView")}
 					className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-12"
 				>
@@ -92,7 +92,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 						renderer={renderer}
 						onRendererId={(rendererId) => setTabRenderer(tab.workspaceId, tab.id, rendererId)}
 					/>
-				</div>
+				</Toolbar>
 			) : null}
 			<UnplacedReviewStrip
 				reviews={reviews}
