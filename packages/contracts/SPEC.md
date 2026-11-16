@@ -607,7 +607,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v105) maps extension name → setting key → boolean for the settings
   an `ExtensionCatalogEntry` declares — an absent key means the descriptor's `default`, and
   `settings.update { extensionSettings }` merges per key; `keybindings` (`KeybindingOverrides`, default `{}`,
-  on the wire from **`KEYBINDINGS_PROTOCOL_VERSION`** = v122) maps a command id — the app's or a web
+  on the wire from **`KEYBINDINGS_PROTOCOL_VERSION`** = v123) maps a command id — the app's or a web
   extension's — to the user's chords, replacing its defaults (`[]` unbinds, an absent id keeps them); an
   update replaces the whole map, unknown ids are kept, and a malformed value is refused with
   **`KEYBINDINGS_INVALID`** (a client bug Error Tracking tells apart); `customLayoutPresets` is the bounded

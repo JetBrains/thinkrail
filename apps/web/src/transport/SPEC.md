@@ -199,7 +199,7 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   header, answered by that file's `UserFontFile` entry — while `hostUrl` resolves a host-relative path
   (custom face URLs, and chat image references through `chat`'s `ChatMediaContext`) against the endpoint; `supportsExtensionSettings` (v105) lets `ExtensionsSettings`
   offer per-extension setting switches only to a host that stores `extensionSettings`;
-  `supportsKeybindings` (`KEYBINDINGS_PROTOCOL_VERSION`, v122) gates the user's keybindings both ways —
+  `supportsKeybindings` (`KEYBINDINGS_PROTOCOL_VERSION`, v123) gates the user's keybindings both ways —
   `shell` ignores stored overrides below it — and `updateKeybindings(map)` is the one write: it resolves
   `false` without sending to an older host (which would reject the unknown key), else sends the whole map as
   one `settings.update { keybindings }` and resolves `true` once accepted, the store converging on the

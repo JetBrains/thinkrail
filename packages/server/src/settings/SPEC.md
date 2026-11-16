@@ -76,7 +76,7 @@ interval (`1–3600`, default 30), because those values govern host process cade
   binding it keeps) and dedupes each list; **unknown ids are kept** — an extension may be switched off or
   not installed, and which chord a command may take (no plain keys, conflicts) is the client's resolver's
   rule ([[submodule-web-keybindings]]). On load, malformed chords are dropped, an entry left with none falls
-  back to its defaults, and a stored `[]` stays unbound. Gated on `KEYBINDINGS_PROTOCOL_VERSION` (v122):
+  back to its defaults, and a stored `[]` stays unbound. Gated on `KEYBINDINGS_PROTOCOL_VERSION` (v123):
   an older host rejects the key, so the client sends it only above the gate (`supportsKeybindings`).
 - `disabledPackages` is the same shape for installed pi packages, keyed by the package identity the
   catalog reports (`PiPackageSummary.identity`); it exists because pi has no "whole package off" setting

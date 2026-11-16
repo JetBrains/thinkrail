@@ -734,8 +734,8 @@ test("custom endpoints are pinned to v101 and own only custom-* providers", () =
 	expect(isCustomEndpointId("ollama")).toBe(false);
 });
 
-test("keybinding overrides are pinned to v122 and default to none", () => {
-	expect(KEYBINDINGS_PROTOCOL_VERSION).toBe(122);
+test("keybinding overrides are pinned to v123 and default to none", () => {
+	expect(KEYBINDINGS_PROTOCOL_VERSION).toBe(123);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(KEYBINDINGS_PROTOCOL_VERSION);
 	expect(DEFAULT_CONFIG.keybindings).toEqual({});
 });
