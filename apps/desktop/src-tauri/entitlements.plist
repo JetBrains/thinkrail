@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Microphone for voice dictation. The user-facing prompt copy lives in
+	     Info.plist (NSMicrophoneUsageDescription); this entitlement lets the
+	     signed app request audio input at all. -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<!-- Tauri signs the host sidecar (externalBin) with this same file. It is
+	     a Bun executable: JavaScriptCore's JIT needs both of these under the
+	     hardened runtime, or the host dies at launch in a signed build. -->
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+</dict>
+</plist>

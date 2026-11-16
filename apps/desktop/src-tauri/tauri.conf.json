@@ -1,0 +1,42 @@
+{
+	"$schema": "https://schema.tauri.app/config/2",
+	"productName": "ThinkRail",
+	"version": "0.0.0-dev",
+	"identifier": "ai.thinkrail.app",
+	"build": {
+		"frontendDist": "./shell",
+		"beforeDevCommand": {
+			"script": "bun run --cwd ../.. build:web && bun run build:sidecar",
+			"wait": true
+		},
+		"beforeBuildCommand": "bun run --cwd ../.. build:web && bun run build:sidecar"
+	},
+	"app": {
+		"withGlobalTauri": true,
+		"windows": [],
+		"security": {
+			"csp": "default-src 'self' ipc: http://ipc.localhost; connect-src 'self' ipc: http://ipc.localhost http://127.0.0.1:* ws://127.0.0.1:*; img-src 'self' ipc: http://ipc.localhost data: blob: http://127.0.0.1:*"
+		}
+	},
+	"bundle": {
+		"active": true,
+		"targets": ["dmg", "nsis", "appimage", "deb"],
+		"icon": ["icons/icon.ico", "icons/icon.png"],
+		"resources": [],
+		"externalBin": ["binaries/thinkrail-sidecar"],
+		"macOS": {
+			"entitlements": "./entitlements.plist"
+		}
+	},
+	"plugins": {
+		"updater": {
+			"endpoints": [],
+			"pubkey": ""
+		},
+		"deep-link": {
+			"desktop": {
+				"schemes": ["thinkrail"]
+			}
+		}
+	}
+}

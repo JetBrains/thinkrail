@@ -13,6 +13,6 @@
 			"electrobun/view": ["./.hutch/devkit/api/browser/index.ts"]
 		}
 	},
-	"include": ["src", "*.ts"],
-	"exclude": [".hutch", ".stage", "build", "artifacts"]
+	"include": ["src", "scripts", "*.ts"],
+	"exclude": [".hutch", ".stage", "build", "artifacts", "src/sidecar/*.generated.ts"]
 }

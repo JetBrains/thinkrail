@@ -1,0 +1,31 @@
+# Commands the desktop bridge (`apps/desktop/src/bridge/tauri-bootstrap.js`)
+# calls from the sidecar origin. Tauri rejects app commands from a remote
+# origin unless a capability grants them; `bridge.rs` grants this permission to
+# the exact sidecar origin at startup. Keep it in step with `generate_handler!`
+# in `main.rs`: a command missing here is rejected at runtime.
+
+[[permission]]
+identifier = "bridge"
+description = "Commands the ThinkRail web client reaches through the desktop bridge."
+commands.allow = [
+	"get_window_state",
+	"minimize_window",
+	"toggle_maximize_window",
+	"close_window",
+	"start_window_drag",
+	"title_bar_double_click",
+	"page_zoom_requested",
+	"page_zoom_gesture_requested",
+	"quit_app",
+	"show_notification",
+	"route_changed",
+	"deep_link_ready",
+	"preference_write",
+	"preference_remove",
+	"menu_labels_changed",
+	"get_update_state",
+	"check_for_updates",
+	"download_update",
+	"restart_to_update",
+	"dismiss_install_result",
+]
