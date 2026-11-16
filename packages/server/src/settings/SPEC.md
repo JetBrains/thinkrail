@@ -14,7 +14,7 @@ pair, the optional absolute root for newly created managed worktrees, additional
 effort defaults, terminal replay budget and Windows shell preference, chat composer growth preset, chat/file
 visual line widths plus independent pane bounds, bounded custom layout-preset catalog, JetBrains quota
 display/cadence, the host-wide subagent default, plan-review policy, the host-registry extensions the
-user turned off, and the UI language preference (`locale`). `defaultModel` / `defaultEffort`
+user turned off, the UI language preference (`locale`), and the user's keyboard bindings (`keybindings`). `defaultModel` / `defaultEffort`
 select the defaults every new chat receives (unset model means pi's `settings.json` default when available, else the preferred available model — pi's provider default, else the first — among non-environment connections, then among all available connections; unset effort means medium);
 `reviewModel` / `reviewEffort`
 select the reviewer runtime (unset means that same new-chat default); `reviewAutoFix: false` records a `request_changes`
@@ -37,14 +37,14 @@ interval (`1–3600`, default 30), because those values govern host process cade
 
 ## Boundary
 
-- `worktreeDirectory` is an optional absolute path for the root of future managed worktrees. It is wire-gated by `WORKTREE_DIRECTORY_PROTOCOL_VERSION` (v122); missing or malformed stored values use the workspaces module's data-dir default; `null` clears the override. Changing it never moves existing worktrees.
+- `worktreeDirectory` is an optional absolute path for the root of future managed worktrees. It is wire-gated by `WORKTREE_DIRECTORY_PROTOCOL_VERSION` (v125); missing or malformed stored values use the workspaces module's data-dir default; `null` clears the override. Changing it never moves existing worktrees.
 - `settleIdleDays` — the Settled-shelf idle window: a positive integer number of days (clamped to 1…365) or
   `null` for never; default `7`. Validated like every other known field; a hand-edited non-number falls
   back to the default rather than disabling settling.
 - **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (reject a non-object or unknown key → merge → validate known fields → persist → publish the merged `AppConfig` and successful applied `AppConfigUpdate`); the font settings' shape (`interfaceFont` / `codeFont` through `isFontChoice`, `codeFontSize`, `codeLigatures`, `fontWeightOffset`), each normalized back to its own default on load — which family a choice names, and whether it renders, is the client's; line-width and resource-free custom-preset validation/normalization; custom-preset safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
 - **Public surface (barrel):** `getConfig`, `updateConfig`, `noteRecentModel`, `setSettingsPublisher`, `SettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
 - **Allowed deps:** `persistence` (`loadConfig`/`saveConfig`); `contracts` (`AppConfig`, `LayoutPreset`,
-  `isTerminalWindowsShell`).
+  `isTerminalWindowsShell`, `isKeybindingOverrides`); `shared` (`CodedError`).
 - **Forbidden:** host or another feature sibling; current-layout document/snapshot types; workspace ids/resources; current frame validation; owning WS channels; or importing web preset definitions.
 
 ## Get right
@@ -70,6 +70,15 @@ interval (`1–3600`, default 30), because those values govern host process cade
   boolean values, or the whole mutation is rejected; it is **merged per key** into the stored map, so a
   Settings switch never resets an extension's other settings. Like `disabledExtensions`, undeclared names
   and keys are kept and inert — the registry's descriptors decide what a key means.
+- `keybindings` maps a command id to the user's chords (`[]` = unbound; absent = the command's defaults);
+  absent means `{}`. Settings checks **shape and grammar only** (`contracts`' `isKeybindingOverrides`):
+  non-blank ids, lists of `isKeybindingChord` strings; a malformed value rejects the whole mutation with
+  the `CodedError` `KEYBINDINGS_INVALID`. An update **replaces the whole map** (an editor writes every
+  binding it keeps) and dedupes each list; **unknown ids are kept** — an extension may be switched off or
+  not installed, and which chord a command may take (no plain keys, conflicts) is the client's resolver's
+  rule ([[submodule-web-keybindings]]). On load, malformed chords are dropped, an entry left with none falls
+  back to its defaults, and a stored `[]` stays unbound. Gated on `KEYBINDINGS_PROTOCOL_VERSION` (v123):
+  an older host rejects the key, so the client sends it only above the gate (`supportsKeybindings`).
 - `disabledPackages` is the same shape for installed pi packages, keyed by the package identity the
   catalog reports (`PiPackageSummary.identity`); it exists because pi has no "whole package off" setting
   and writing pi's per-resource filters would reset a user's own filters on re-enable. Validation,

@@ -4,6 +4,7 @@ import type {
 	ChatContinuation,
 	ExtUiRequest,
 	HostUpdateNotice,
+	KeybindingOverrides,
 	LoginPush,
 	McpStatusPayload,
 	Project,
@@ -30,6 +31,7 @@ import {
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
+	KEYBINDINGS_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
@@ -62,6 +64,17 @@ export function supportsUserThemes(protocolVersion: number | null): boolean {
 
 export function supportsExtensionSettings(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= EXTENSION_SETTINGS_PROTOCOL_VERSION;
+}
+
+export function supportsKeybindings(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= KEYBINDINGS_PROTOCOL_VERSION;
+}
+
+export function updateKeybindings(keybindings: KeybindingOverrides): Promise<boolean> {
+	if (!supportsKeybindings(useAppStore.getState().protocolVersion)) return Promise.resolve(false);
+	return getTransport()
+		.request("settings.update", { config: { keybindings } })
+		.then(() => true);
 }
 
 export function supportsPiPackages(protocolVersion: number | null): boolean {

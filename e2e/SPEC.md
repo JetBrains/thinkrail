@@ -420,10 +420,23 @@ Settings → Extensions lists Hint mode without tool chips, switching it off sil
 its cheatsheet rows until it is switched back on. A label is found by its position at the target's
 top-left; a target must be scrolled into view and its panel's entrance animation finished before the
 labels are taken, since they are measured once (and on scroll / resize).
+`keyboard-rebinding.spec.ts` pins Settings → Keyboard's editor against the host: a recorded `Mod+Alt+S`
+splits the group (the old chord no longer does) and shows in the palette and the cheatsheet, and Reset
+restores `Mod+\`; Replace moves `Mod+K` to Focus chat input, which it then focuses, leaving the palette
+unbound until Reset all; a plain key, `Mod+T` and `Mod+,` show the modifier message, the browser warning
+and the desktop refusal, Esc and Tab cancel, ↑/↓ walk rows and a locked row ignores Enter; a second page
+sees an override after the broadcast and after a reload; Export writes one entry per row, locked ones
+included, and Import's summary of a crafted file (one change, a locked and an unknown skip, one unchanged)
+applies it; and with hint mode switched off `Mod+;` goes to the palette without a warning, so switching it
+back on marks hint mode's `Mod+;` inactive in Settings and the cheatsheet while `Mod+;` opens the palette
+and `F` still starts hint mode. Each test resets the overrides (and re-enables hint mode) over the host
+wire in `afterEach`.
 `keyboard-chat.spec.ts` pins the chat transcript's keyboard model on seeded chats: `Mod+↑` from the
 composer onto the newest message and Esc back with the draft and caret intact (a multi-line draft first
 takes the caret to its start), ↑/↓ with k/j and Home/End, →/← and l/h expanding an Activity and walking
-its nested Thinking and tool steps, C (clipboard), O (a preview tab) and the Shift+F10 item menu, Tab
+its nested Thinking and tool steps, a keyboard expand of the newest Activity in a chat shortened by the
+bottom Terminal and focus entering an on-screen step of it leaving follow without scrolling the focused
+header or step away, C (clipboard), O (a preview tab) and the Shift+F10 item menu, Tab
 walking only the focused item's controls then leaving, PgUp/PgDn from the composer paging the transcript
 with focus kept, Latest from the keyboard and a history jump landing on the message, focus parked on the
 feed when a wheel scroll unmounts the focused row and the next key bringing it back, newest-first order,
@@ -648,7 +661,11 @@ and counts, the Monaco preview and the open-at-line selection overlay, the resto
 and the `Aa` / `W` toggles, the limit banner, the Project Home scope entering the Default workspace, the
 palette command, double Shift staying inert over the window, the window staying inside a short and a
 narrow window (`expectDialogContained`), and the older-host notice with no `search.text` frame on the
-wire. Visualize coverage
+wire. Open-in-browser coverage (`open-in-browser.spec.ts`) writes a page and its sibling stylesheet into the
+fixture repository and pins the visualize card's action opening a new page at `/view/<workspace>/<path>` whose
+sibling sheet applies, whose inline script runs and whose `fetch` to the host is blocked, the Files tree menu
+offering it for an HTML file and not for Markdown, and the file tab's toolbar carrying it — for an `.xhtml`
+file too, whose single renderer would otherwise hide the toolbar. Visualize coverage
 (`visualize.spec.ts`) independently seeds short historical tool-call/result transcripts through the
 sanctioned session fixture before workspace entry. It pins completed/default-expanded diagrams,
 fullscreen SVG growth, pan/reset/Escape and claimed WebKit pinch gestures, exact comparison pros/cons
@@ -658,8 +675,9 @@ source is seeded as a successful historical tool result (`isError: false`) so bo
 the renderer's plain-source fallback, not the tool-error branch. File previews write mockups into the shared
 fixture repository (removed in `finally`) and pin the HTML renderer in the card, the before/after 2-up diff,
 a region comment's Send carrying the card's chat `sessionId` over the wire, HTML design-width scaling and the
-width switch, full screen, Open in tab, and a before/after opened as a comparison diff tab (paired frames
-with same-origin access only, swipe available) that survives a reload. A huge comparison opts in through Show diff anyway while an unrelated file changes every 400 ms (each
+width switch, full screen, Open in tab, and a before/after opened as a comparison diff tab (mockups
+interactive with scripts only, Preview switching to static frames with same-origin access only, swipe
+available) that survives a reload. A huge comparison opts in through Show diff anyway while an unrelated file changes every 400 ms (each
 write its own watcher frame, past the 300 ms quiet flush), so updates keep landing inside the expensive first
 mount. These regressions need no provider,
 prompt submission, route mock, or screenshot. Extension on/off coverage (`extensions-settings.spec.ts`) drives the
@@ -695,8 +713,24 @@ before/after, mermaid, none) at one card height, full-screen keys that never pag
 under its preview, the picked file's path in the persisted answer, and the compare overlay (flip and jump
 keys, Current never choosable, choose-and-stay, a side-by-side pair whose two frames keep one `scrollTop`
 in 2-up and swipe even though the mockups ask for smooth scrolling, All at 1400×900 clipping no HTML frame below its pane and opening a pane alone, keys still working after a
-pane title or Choose removed the focused control, focus back on the chosen row, the receipt's read-only reopen); `plan-ask.spec.ts` adds the same file
-preview on the plan page. These three specs also run in a **`webkit` Playwright project**: the macOS desktop
+pane title or Choose removed the focused control, focus back on the chosen row, the receipt's read-only reopen),
+and an interactive mockup (`sandbox="allow-scripts"`, its button changes its own page, `fetch`, a
+WebSocket to the host and `RTCPeerConnection` all blocked, leaving its page replaced by the notice until
+Reload — also when it replaces itself while still loading after forging a tokenless `loaded`, and a
+`data:` document it replaces itself with running none of its scripts; the pair above
+syncs through the message bridge, read through Playwright's frame API since the frames are opaque);
+`plan-ask.spec.ts` adds the same file
+preview on the plan page and its live slot taking Esc and a click answer. `ask-keyboard.spec.ts` pins the
+card's keyboard pass: F6 and Mod+1 landing on the current option while Mod+L keeps the composer, Shift+Tab
+from the composer, Esc back with the question docked, a click answer parking on the receipt without a ring
+and a keyboard one in the composer, a question arriving (its seeded session reported idle, then waiting,
+through a routed wire) that announces "F6 to answer" from the transcript or a Tab-focused button and
+takes an empty composer or a button the mouse focused (Chromium only: WebKit never focuses a clicked
+button, and every WebKit `openRound` covers its History-button case), the
+Mod+L remount race, `i` into an HTML frame and Tab back, `c` into compare and Esc back, the collapsed
+chords, Skip in the ↓ ring and ←/→ on the footer, a rebound `d` and a Discuss rebound onto a Mod chord
+(over the host wire), a Russian-layout `d` and the card's Settings → Keyboard section; `fixtures/ask.ts` seeds the pending questions for the three card specs.
+These four specs also run in a **`webkit` Playwright project**: the macOS desktop
 is the system WKWebView, whose Tab skips buttons without an explicit `tabindex` (the regression this lane
 exists for). CI installs WebKit with the system libraries it links, not its media plugins (`.github/SPEC.md`);
 Linux WebKit may not reproduce the macOS Tab rule,

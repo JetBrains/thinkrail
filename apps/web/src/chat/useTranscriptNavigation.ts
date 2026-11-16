@@ -1,12 +1,15 @@
 import { TABBABLE_SELECTOR } from "@thinkrail/ui/focus";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { type LocalKeys, useLocalKeys } from "@thinkrail/ui/local-keys";
 import { useEffect, useInsertionEffect, useState } from "react";
+import { LOCAL_KEY_DEFAULTS } from "@/keybindings";
 import { copyText, resolveTreeMove } from "@/lib";
 import { ACTIVITY_BREADCRUMB_HEIGHT } from "./activityBreadcrumbs";
 import { foldOverride } from "./foldState";
-import type { ChatRow } from "./rows";
+import { type ChatRow, rowIdForToolCall } from "./rows";
 import type { TranscriptMenu, TranscriptMenuAction, TranscriptNavigation } from "./TranscriptItem";
 import {
+	keyboardLeavesFollow,
 	type TranscriptKeyAction,
 	type TranscriptNavItem,
 	transcriptItemCopyText,
@@ -22,6 +25,7 @@ export interface TranscriptNavigationOptions {
 	latestRowId: string | null;
 	revealRow: ChatScroll["revealRow"];
 	revealElement: ChatScroll["revealElement"];
+	leaveFollow: ChatScroll["leaveFollow"];
 	scrollToLatest: () => void;
 	focusComposer: () => void;
 	fileTarget: (path: string) => string | null;
@@ -29,11 +33,14 @@ export interface TranscriptNavigationOptions {
 	onCopied: () => void;
 }
 
+type TranscriptKeys = Pick<LocalKeys, "match">;
+
 export interface TranscriptNavigationController extends TranscriptNavigation {
-	configure: (options: TranscriptNavigationOptions) => void;
+	configure: (options: TranscriptNavigationOptions, keys: TranscriptKeys) => void;
 	attach: (scroller: HTMLElement) => () => void;
 	focusNewest: (returned?: boolean) => void;
 	focusRow: (rowId: string) => void;
+	parkOnToolCall: (toolCallId: string) => void;
 }
 
 const ITEM = "[data-transcript-item]";
@@ -95,6 +102,7 @@ function sticksOut(element: HTMLElement, scroller: HTMLElement, inset: number): 
 
 export function createTranscriptNavigation(): TranscriptNavigationController {
 	let options: TranscriptNavigationOptions | null = null;
+	let keys: TranscriptKeys | null = null;
 	let scroller: HTMLElement | null = null;
 	let cursor: string | null = null;
 	let cursorIndex = 0;
@@ -130,6 +138,7 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 		);
 	const items = () =>
 		options ? transcriptItems(options.rows, (id) => foldOverride(id) === true) : [];
+	const latestRowIds = () => (options ? [options.newestRowId, options.latestRowId] : []);
 	const park = () => feed()?.focus({ preventScroll: true });
 	const cancel = () => {
 		const pending = cancelPending;
@@ -150,8 +159,22 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 				stability: "none",
 				topInset: inset,
 			});
+		} else {
+			const item = owner && items().find((entry) => entry.id === owner.dataset.transcriptItem);
+			if (item && keyboardLeavesFollow(item, latestRowIds(), "focus")) options.leaveFollow();
 		}
 		target.focus({ preventScroll: true });
+	};
+
+	const toggleItem = (item: TranscriptNavItem, itemElement: HTMLElement) => {
+		const control = toggleOf(itemElement);
+		if (
+			control?.getAttribute("aria-expanded") === "false" &&
+			keyboardLeavesFollow(item, latestRowIds(), "expand")
+		) {
+			options?.leaveFollow();
+		}
+		control?.click();
 	};
 
 	const whenMounted = (id: string) => {
@@ -183,8 +206,7 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 		const current = options;
 		if (!current || !scroller) return;
 		if (!holdsFocus()) park();
-		const latestRow = item.rowId === current.newestRowId || item.rowId === current.latestRowId;
-		if (latestRow && item.id === item.rowId) {
+		if (item.id === item.rowId && latestRowIds().includes(item.rowId)) {
 			current.scrollToLatest();
 			whenMounted(item.id);
 			return;
@@ -310,8 +332,7 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 		setCursor(id, index);
 		switch (action.kind) {
 			case "move": {
-				const toggle = toggleOf(itemElement);
-				const state = toggle?.getAttribute("aria-expanded");
+				const state = toggleOf(itemElement)?.getAttribute("aria-expanded");
 				const move = resolveTreeMove(
 					action.key,
 					list.map((entry, at) => ({
@@ -320,7 +341,7 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 					})),
 					index,
 				);
-				if (move?.kind === "toggle") toggle?.click();
+				if (move?.kind === "toggle") toggleItem(item, itemElement);
 				else if (move?.kind === "focus") {
 					moveTo(list, move.index, move.index < index ? "start" : "end");
 				}
@@ -332,7 +353,7 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 				return;
 			}
 			case "toggle":
-				toggleOf(itemElement)?.click();
+				toggleItem(item, itemElement);
 				return;
 			case "copy":
 				copy(item);
@@ -389,7 +410,7 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 		}
 		const parked = target === feed();
 		if (!parked && ownerOf(target) !== target) return;
-		const action = transcriptKeyAction(event);
+		const action = keys && transcriptKeyAction(event, keys);
 		if (!action) return;
 		event.preventDefault();
 		if (action.kind === "leave") {
@@ -433,8 +454,9 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 	};
 
 	return {
-		configure: (next) => {
+		configure: (next, nextKeys) => {
 			options = next;
+			keys = nextKeys;
 		},
 		attach: (element) => {
 			scroller = element;
@@ -463,7 +485,7 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 			if (!itemElement || !item) return;
 			if (action === "copy") copy(item);
 			else if (action === "open") open(item);
-			else toggleOf(itemElement)?.click();
+			else toggleItem(item, itemElement);
 		},
 		closeMenu: (itemId) => {
 			if (menu?.itemId !== itemId) return;
@@ -506,6 +528,19 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 			setCursor(rowId);
 			target.focus({ preventScroll: true });
 		},
+		parkOnToolCall: (toolCallId) => {
+			const rowId = options ? rowIdForToolCall(options.rows, toolCallId) : null;
+			cancel();
+			if (rowId !== null) {
+				setCursor(
+					rowId,
+					items().findIndex((item) => item.id === rowId),
+				);
+			}
+			const target = rowId === null ? null : element(rowId);
+			if (target) target.focus({ preventScroll: true });
+			else park();
+		},
 	};
 }
 
@@ -514,7 +549,8 @@ export function useTranscriptNavigation(
 	options: TranscriptNavigationOptions,
 ): TranscriptNavigationController {
 	const [controller] = useState(createTranscriptNavigation);
-	useInsertionEffect(() => controller.configure(options));
+	const keys = useLocalKeys("transcript", LOCAL_KEY_DEFAULTS.transcript);
+	useInsertionEffect(() => controller.configure(options, keys));
 	useEffect(() => (scroller ? controller.attach(scroller) : undefined), [controller, scroller]);
 	return controller;
 }

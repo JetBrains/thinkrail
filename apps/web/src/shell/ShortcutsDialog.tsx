@@ -1,4 +1,4 @@
-import { RiKeyboardLine, RiSearchLine } from "@remixicon/react";
+import { RiAlertLine, RiKeyboardLine, RiSearchLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
@@ -7,7 +7,6 @@ import { cn } from "@thinkrail/ui/utils";
 import { type Ref, useEffect, useId, useRef, useState } from "react";
 import { enabledWebExtensions } from "../extensions";
 import {
-	keybindingKeys,
 	matchKeybinding,
 	SHORTCUT_SURFACE_TITLES,
 	SHORTCUT_SURFACES,
@@ -16,17 +15,23 @@ import {
 	shortcutRows,
 } from "../keybindings";
 import { useAppStore } from "../store";
+import {
+	commandTitle,
+	useKeybindingKeys,
+	useKeybindingList,
+	useResolvedKeybindings,
+} from "./keybindingState";
 import { AuxiliaryRailActionButton, type AuxiliaryRailControlProps } from "./layout";
 import { shortcutSurfaceOf } from "./shortcutSurface";
 import { hasNativeShortcuts } from "./useAppShortcuts";
 
-function useShortcutRows(): ShortcutRow[] {
-	const [desktop] = useState(hasNativeShortcuts);
+function useShortcutRows(desktop: boolean): ShortcutRow[] {
+	const keybindings = useResolvedKeybindings();
 	const disabled = useAppStore((state) => state.disabledExtensions);
 	const extra = enabledWebExtensions(disabled).flatMap(({ shortcuts = [] }) =>
 		shortcuts.map((shortcut) => ({ ...shortcut, surface: "general" as const })),
 	);
-	return shortcutRows({ desktop, extra });
+	return shortcutRows({ desktop, keybindings, extra });
 }
 
 const SCROLL_PAGES: ReadonlyMap<string, number> = new Map([
@@ -40,11 +45,13 @@ function ShortcutSection({
 	surface,
 	rows,
 	current,
+	winner,
 	ref,
 }: {
 	surface: ShortcutSurface;
 	rows: readonly ShortcutRow[];
 	current: boolean;
+	winner: (command: string) => string;
 	ref?: Ref<HTMLElement>;
 }) {
 	const t = useT();
@@ -79,10 +86,27 @@ function ShortcutSection({
 					>
 						<span className="min-w-0 shrink-0 grow basis-1/2 tr-text-ui text-text-default">
 							{t(row.title)}
+							{row.conflicts.map((conflict) => (
+								<span
+									key={conflict.label}
+									data-testid="shortcuts-conflict"
+									className="flex items-center gap-4 tr-text-metadata text-feedback-warning"
+								>
+									<RiAlertLine aria-hidden className="size-12 shrink-0" />
+									{t("shortcuts.inactive", { winner: winner(conflict.winner) })}
+								</span>
+							))}
 						</span>
 						<span className="flex min-w-0 flex-wrap items-center justify-end gap-x-8 gap-y-4">
 							{row.chords.map((chord) => (
 								<Keycaps key={chord.label} keys={chord.keys} className="whitespace-nowrap" />
+							))}
+							{row.conflicts.map((conflict) => (
+								<Keycaps
+									key={`lost:${conflict.label}`}
+									keys={conflict.keys}
+									className="whitespace-nowrap [&_kbd]:text-text-subtle [&_kbd]:line-through"
+								/>
 							))}
 						</span>
 					</li>
@@ -92,17 +116,11 @@ function ShortcutSection({
 	);
 }
 
-export function ShortcutsReference({
-	current = null,
-	columns = false,
-	className,
-}: {
-	current?: ShortcutSurface | null;
-	columns?: boolean;
-	className?: string;
-}) {
+function ShortcutsReference({ current }: { current: ShortcutSurface | null }) {
 	const t = useT();
-	const rows = useShortcutRows();
+	const [desktop] = useState(hasNativeShortcuts);
+	const rows = useShortcutRows(desktop);
+	const keybindingList = useKeybindingList(desktop);
 	const [query, setQuery] = useState("");
 	const list = useRef<HTMLDivElement>(null);
 	const currentSection = useRef<HTMLElement>(null);
@@ -124,7 +142,7 @@ export function ShortcutsReference({
 		currentSection.current?.scrollIntoView({ block: "nearest" });
 	}, [current]);
 	return (
-		<div className={cn("flex min-h-0 flex-col gap-12", className)}>
+		<div className="flex min-h-0 flex-1 flex-col gap-12">
 			<div className="flex shrink-0 items-center gap-12">
 				<div className="relative min-w-0 flex-1">
 					<RiSearchLine
@@ -159,7 +177,7 @@ export function ShortcutsReference({
 				{sections.length === 0 ? (
 					<p className="tr-text-metadata text-text-muted">{t("shortcuts.noMatch")}</p>
 				) : (
-					<div className={columns ? "columns-2xs gap-x-24" : undefined}>
+					<div className="columns-2xs gap-x-24">
 						{sections.map((section) => (
 							<ShortcutSection
 								key={section.surface}
@@ -167,6 +185,7 @@ export function ShortcutsReference({
 								surface={section.surface}
 								rows={section.rows}
 								current={section.surface === current}
+								winner={(command) => commandTitle(t, keybindingList, command)}
 							/>
 						))}
 					</div>
@@ -180,6 +199,7 @@ function ShortcutsDialog() {
 	const t = useT();
 	const [current, setCurrent] = useState<ShortcutSurface | null>(null);
 	const returnFocus = useRef<HTMLElement | null>(null);
+	const keybindings = useResolvedKeybindings();
 	const close = () => useAppStore.getState().closeShortcuts();
 	return (
 		<Dialog
@@ -203,13 +223,13 @@ function ShortcutsDialog() {
 				}}
 				onKeyDown={(event) => {
 					if (isImeComposing(event.nativeEvent)) return;
-					if (matchKeybinding(event.nativeEvent) !== "shortcuts.open") return;
+					if (matchKeybinding(keybindings, event.nativeEvent) !== "shortcuts.open") return;
 					event.preventDefault();
 					close();
 				}}
 			>
 				<DialogTitle>{t("shortcuts.title")}</DialogTitle>
-				<ShortcutsReference current={current} columns className="flex-1" />
+				<ShortcutsReference current={current} />
 			</DialogContent>
 		</Dialog>
 	);
@@ -222,7 +242,7 @@ export function ShortcutsDialogHost() {
 
 function ShortcutsRailButton({ control }: { control: AuxiliaryRailControlProps }) {
 	const t = useT();
-	const [shortcut] = useState(() => keybindingKeys("shortcuts.open"));
+	const shortcut = useKeybindingKeys("shortcuts.open");
 	return (
 		<AuxiliaryRailActionButton
 			region="left"

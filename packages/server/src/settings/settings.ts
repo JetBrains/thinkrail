@@ -11,6 +11,7 @@ import {
 	isFontChoice,
 	isFontWeightOffset,
 	isJbcentralQuotaRefreshSeconds,
+	isKeybindingOverrides,
 	isLineWidth,
 	isLocalePreference,
 	isQuestionPanelHeight,
@@ -19,12 +20,14 @@ import {
 	isSystemThemePair,
 	isTerminalWindowsShell,
 	isThemeMode,
+	type KeybindingOverrides,
 	LINE_WIDTH_COLUMNS,
 	QUESTION_PANEL_HEIGHT_PERCENT,
 	RECENT_MODELS_LIMIT,
 	sameModel,
 	type WireModel,
 } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import { loadConfig, saveConfig } from "../persistence";
 import { normalizeStoredCustomLayoutPresets, validateCustomLayoutPresets } from "./layoutPresets";
 
@@ -76,6 +79,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	codeFontSize: true,
 	codeLigatures: true,
 	fontWeightOffset: true,
+	keybindings: true,
 	chatMessageOrder: true,
 	layout: true,
 	recentModels: true,
@@ -149,6 +153,18 @@ function validateNameList(value: unknown, setting: string, noun: string): string
 		throw new Error(`${setting} must be a list of ${noun}`);
 	}
 	return [...new Set(value as string[])];
+}
+
+function validateKeybindings(value: unknown): KeybindingOverrides {
+	if (!isKeybindingOverrides(value)) {
+		throw new CodedError(
+			"KEYBINDINGS_INVALID",
+			"keybindings must map command ids to lists of chords such as Mod+Alt+KeyS",
+		);
+	}
+	return Object.fromEntries(
+		Object.entries(value).map(([id, chords]) => [id, [...new Set(chords)]]),
+	);
 }
 
 let publishSettings: SettingsPublisher | null = null;
@@ -255,8 +271,10 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		disabledExtensions,
 		extensionSettings,
 		disabledPackages,
+		keybindings,
 		...rest
 	} = runtimeUpdate;
+	const nextKeybindings = keybindings === undefined ? undefined : validateKeybindings(keybindings);
 	const extensionSettingsUpdate =
 		extensionSettings === undefined ? undefined : validateExtensionSettings(extensionSettings);
 	const nextDisabledExtensions =
@@ -379,6 +397,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		...(worktreeDirectory !== undefined && worktreeDirectory !== null
 			? { worktreeDirectory: worktreeDirectory.trim() }
 			: {}),
+		...(nextKeybindings === undefined ? {} : { keybindings: nextKeybindings }),
 	};
 	if (worktreeDirectory === null) delete next.worktreeDirectory;
 	if (defaultModel !== undefined) {

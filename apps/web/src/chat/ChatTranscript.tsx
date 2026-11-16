@@ -25,6 +25,7 @@ import { type ListProps, Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { useShallow } from "zustand/react/shallow";
 import {
 	EMPTY_RUNTIME,
+	selectArtifactsSmartOffered,
 	selectChatAttended,
 	selectChatsContainer,
 	selectReadyCompletionAck,
@@ -59,6 +60,7 @@ import {
 	projectRows,
 	rowIndexForTurn,
 	rowsHaveToolCall,
+	sessionRoundArtifacts,
 	stabilizeRows,
 } from "./rows";
 import { type StreamStatus, StreamStatusSlot, streamStatus } from "./StreamIndicator";
@@ -66,7 +68,7 @@ import { TranscriptItem, TranscriptNavigationContext } from "./TranscriptItem";
 import { useToolInteraction } from "./toolInteraction";
 import { getToolRenderer } from "./toolRegistry";
 import { newestContentRowId } from "./transcriptNavigation";
-import { ChatTurnView } from "./turns";
+import { ChatTurnView, type DividerReveal } from "./turns";
 import { type ChatReadingPosition, useChatScroll } from "./useChatScroll";
 import { useTranscriptNavigation } from "./useTranscriptNavigation";
 import { useTranscriptSync } from "./useTranscriptSync";
@@ -220,6 +222,8 @@ const ChatTranscript = forwardRef<
 		onOpenFile?: ((path: string) => void) | undefined;
 		workspaceRoot: string | undefined;
 		focusComposer: () => void;
+		mayClaimFocus: () => boolean;
+		landingChord: string;
 		openSubagentTranscript: (childSessionId: string | null) => void;
 		resultOpener: ChatActions["resultOpener"];
 		onTryAgain: () => void;
@@ -241,6 +245,8 @@ const ChatTranscript = forwardRef<
 		onOpenFile,
 		workspaceRoot,
 		focusComposer,
+		mayClaimFocus,
+		landingChord,
 		openSubagentTranscript,
 		resultOpener,
 		onTryAgain,
@@ -300,9 +306,24 @@ const ChatTranscript = forwardRef<
 		() => workspaceTurns?.filter((turn) => turn.sessionId === sessionId) ?? NO_AGENT_TURNS,
 		[sessionId, workspaceTurns],
 	);
+	const artifactsSnapshot = useAppStore((state) => state.artifactsByWorkspace[workspaceId]);
+	const smartArtifacts = useAppStore(selectArtifactsSmartOffered);
+	const roundArtifacts = useMemo(
+		() => sessionRoundArtifacts(artifactsSnapshot, sessionId, smartArtifacts),
+		[artifactsSnapshot, sessionId, smartArtifacts],
+	);
 	const derivedRows = useMemo(
-		() => deriveRows(turns, toolResults, isStreaming, isSpec, agentTurns, workspaceRoot),
-		[turns, toolResults, isStreaming, isSpec, agentTurns, workspaceRoot],
+		() =>
+			deriveRows(
+				turns,
+				toolResults,
+				isStreaming,
+				isSpec,
+				agentTurns,
+				workspaceRoot,
+				roundArtifacts,
+			),
+		[turns, toolResults, isStreaming, isSpec, agentTurns, workspaceRoot, roundArtifacts],
 	);
 	// Keep the stabilized rows in state (never a ref written during render): a render-written ref both
 	// violates apps/web/SPEC.md and makes the React Compiler skip memoizing this component.
@@ -396,6 +417,7 @@ const ChatTranscript = forwardRef<
 		armImmediateTurn,
 		cancelImmediateTurn,
 		cancelAutomaticReveal,
+		leaveFollow,
 		revealElement,
 		revealRow,
 		prepareFoldChange,
@@ -463,6 +485,7 @@ const ChatTranscript = forwardRef<
 		latestRowId: latestRow?.id ?? null,
 		revealRow,
 		revealElement,
+		leaveFollow,
 		scrollToLatest,
 		focusComposer,
 		fileTarget: (path) => (onOpenFile ? workspaceFileTarget(path, workspaceRoot) : null),
@@ -592,7 +615,7 @@ const ChatTranscript = forwardRef<
 		[workspaceId],
 	);
 	const onReveal = useCallback(
-		(tool: "specs" | "changes") => {
+		(tool: DividerReveal) => {
 			const store = useAppStore.getState();
 			if (tool === "changes") store.revealChanges(workspaceId);
 			else store.requestToolView(workspaceId, tool);
@@ -697,6 +720,9 @@ const ChatTranscript = forwardRef<
 		() => ({
 			cancelAutomaticReveal,
 			focusComposer,
+			focusToolCall: navigation.parkOnToolCall,
+			mayClaimFocus,
+			landingChord,
 			openSubagentTranscript,
 			respondToTool: (toolCallId: string, response: unknown) =>
 				respondToTool(sessionId, toolCallId, response),
@@ -732,6 +758,9 @@ const ChatTranscript = forwardRef<
 			continuationOf,
 			findModel,
 			focusComposer,
+			landingChord,
+			mayClaimFocus,
+			navigation,
 			openMcpSettings,
 			openProviderSettings,
 			openSubagentTranscript,

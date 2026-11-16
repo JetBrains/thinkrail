@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import askUserQuestion from "@thinkrail/ext-ask-user-question/web";
 import hintMode from "@thinkrail/ext-hint-mode/web";
 import visualize, { MermaidView } from "@thinkrail/ext-visualize/web";
-import type { ExtensionShortcutKey, ToolRenderProps } from "@thinkrail/extension-api/web";
+import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import { EN } from "@thinkrail/locales";
 import { currentTranslator } from "@thinkrail/locales/react";
 import {
@@ -14,10 +14,11 @@ import {
 	isInteractiveTool,
 	resolveProminence,
 } from "../chat/toolRegistry";
-import { matchKeybinding, SHORTCUT_CATALOG } from "../keybindings";
+import { matchKeybinding, resolveKeybindings, SHORTCUT_CATALOG } from "../keybindings";
 import {
 	enabledWebExtensions,
 	registerWebExtensions,
+	webExtensionCommands,
 	webExtensions,
 	webOnlyExtensions,
 } from "./index";
@@ -76,26 +77,16 @@ test("the ask_user_question card registers bare, interactive and docked from its
 
 const PLATFORMS = ["MacIntel", "Linux x86_64", "Win32"];
 
-function chordEvent(chord: ExtensionShortcutKey, platform: string) {
-	const apple = platform === "MacIntel";
-	return {
-		code: chord.code,
-		key: chord.key,
-		altKey: chord.alt === true,
-		shiftKey: chord.shift === true,
-		ctrlKey: chord.ctrl === true || (chord.mod === true && !apple),
-		metaKey: chord.mod === true && apple,
-	};
-}
-
 test("hint mode is a web-only extension: no tool renderers, a global overlay, titled copy and shortcuts", () => {
 	expect(hintMode.name).toBe("hint-mode");
 	expect(hintMode).not.toHaveProperty("toolRenderers");
 	expect(typeof hintMode.globalOverlay).toBe("function");
 	expect([hintMode.title, hintMode.description].every((key) => Object.hasOwn(EN, key))).toBe(true);
-	expect(hintMode.shortcuts.every((row) => Object.hasOwn(EN, row.title))).toBe(true);
+	const rows = [...hintMode.commands, ...hintMode.shortcuts];
+	expect(rows.every((row) => Object.hasOwn(EN, row.title))).toBe(true);
 	const catalogIds = new Set(SHORTCUT_CATALOG.map((entry) => entry.id));
-	expect(hintMode.shortcuts.filter((row) => catalogIds.has(row.id))).toEqual([]);
+	expect(rows.filter((row) => catalogIds.has(row.id))).toEqual([]);
+	expect(hintMode.commands.map((command) => command.id)).toEqual(["hint-mode.show"]);
 });
 
 test("the switch decides which global contributions mount; tool renderers stay regardless", () => {
@@ -105,39 +96,96 @@ test("the switch decides which global contributions mount; tool renderers stay r
 	expect(getToolRenderer("visualize")).toBe(visualize.toolRenderers.visualize.renderer);
 });
 
-test("Settings lists only the titled web extensions the server catalog lacks", () => {
+test("Settings lists only the titled web extensions without tools that the server catalog lacks", () => {
 	const server = new Set(["visualize", "ask-user-question", "web-access"]);
+	expect(askUserQuestion.title).toBe("tools.ask.extensionTitle");
 	expect(webOnlyExtensions(server).map((extension) => extension.name)).toEqual(["hint-mode"]);
 	expect(webOnlyExtensions(new Set([...server, "hint-mode"]))).toEqual([]);
 	expect(webOnlyExtensions(new Set()).map((extension) => extension.name)).toEqual(["hint-mode"]);
 });
 
-test("no extension chord collides with the app-wide keybinding table on any platform", () => {
-	const chords = webExtensions.flatMap(({ shortcuts = [] }) =>
-		shortcuts.flatMap((row) => row.keys),
-	);
-	expect(chords.length).toBeGreaterThan(0);
+test("commands are listed for every extension in registry order, the switched-off ones flagged", () => {
+	expect(webExtensionCommands([])).toEqual([
+		{ extension: "ask-user-question", enabled: true, commands: askUserQuestion.commands },
+		{ extension: "hint-mode", enabled: true, commands: hintMode.commands },
+	]);
+	expect(webExtensionCommands(["hint-mode"])).toEqual([
+		{ extension: "ask-user-question", enabled: true, commands: askUserQuestion.commands },
+		{ extension: "hint-mode", enabled: false, commands: hintMode.commands },
+	]);
+});
+
+test("the question card's keys are local to the card, titled, and its locked keys are listed", () => {
+	const rows = [...askUserQuestion.commands, ...askUserQuestion.shortcuts];
+	expect(rows.every((row) => Object.hasOwn(EN, row.title))).toBe(true);
+	expect(askUserQuestion.commands.map(({ id, scope }) => [id, scope])).toEqual([
+		["ask-user-question.discuss", "ask-user-question.card"],
+		["ask-user-question.interact", "ask-user-question.card"],
+		["ask-user-question.compare", "ask-user-question.card"],
+		["ask-user-question.submit", "ask-user-question.card"],
+		["ask-user-question.skip", "ask-user-question.card"],
+	]);
+	const ids = rows.map(({ id }) => id);
+	expect(new Set(ids).size).toBe(ids.length);
+});
+
+test("the bundled extensions' default chords conflict with nothing on any platform", () => {
+	const extensions = webExtensionCommands([]);
+	expect(extensions.flatMap(({ commands }) => commands).length).toBeGreaterThan(0);
 	for (const platform of PLATFORMS) {
-		for (const chord of chords) {
-			expect([chord.code, matchKeybinding(chordEvent(chord, platform), platform)]).toEqual([
-				chord.code,
-				null,
-			]);
+		const resolved = resolveKeybindings({ platform, extensions });
+		expect([platform, resolved.conflicts]).toEqual([platform, []]);
+		for (const { commands } of extensions) {
+			for (const command of commands) {
+				expect(resolved.byId.get(command.id)?.chords.length).toBe(command.chords.length);
+			}
 		}
 	}
 });
 
-test("plain F is bound by neither the keybinding table nor any feature key the catalog lists", () => {
+test("every bundled extension command is namespaced, and a scoped one reaches the resolver as local", () => {
+	const extensions = webExtensionCommands([]);
 	for (const platform of PLATFORMS) {
-		const plainF = {
-			code: "KeyF",
-			key: "f",
-			altKey: false,
-			shiftKey: false,
-			ctrlKey: false,
-			metaKey: false,
-		};
-		expect(matchKeybinding(plainF, platform)).toBeNull();
+		const resolved = resolveKeybindings({ platform, extensions });
+		const placed = extensions.flatMap(({ extension, commands }) =>
+			commands.map((command) => {
+				const scope = command.scope ?? null;
+				const local = scope === null ? [] : (resolved.local.get(scope) ?? []);
+				return [
+					command.id.startsWith(`${extension}.`),
+					resolved.byId.get(command.id)?.scope ?? null,
+					scope === null || local.some(({ id }) => id === command.id),
+				];
+			}),
+		);
+		expect(placed).toEqual(
+			extensions.flatMap(({ commands }) =>
+				commands.map((command) => [true, command.scope ?? null, true]),
+			),
+		);
+	}
+});
+
+test("plain F stays free in the app table and in every feature key the catalog lists", () => {
+	const plainF = {
+		code: "KeyF",
+		key: "f",
+		altKey: false,
+		shiftKey: false,
+		ctrlKey: false,
+		metaKey: false,
+	};
+	for (const platform of PLATFORMS) {
+		expect(matchKeybinding(resolveKeybindings({ platform }), plainF, { textEntry: false })).toBe(
+			null,
+		);
+		expect(
+			matchKeybinding(
+				resolveKeybindings({ platform, extensions: webExtensionCommands([]) }),
+				plainF,
+				{ textEntry: false },
+			),
+		).toBe("hint-mode.show");
 	}
 	const plainLetterF = SHORTCUT_CATALOG.flatMap((entry) => entry.keys ?? []).filter(
 		(chord) =>

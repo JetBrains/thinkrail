@@ -16,7 +16,7 @@ The responsive composition root: top-level app chrome, active-project/workspace 
 
 - **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-project/workspace routing; single Settings, analytics-consent, survey-invitation, survey-window, attention-notification permission-preface, and Toaster mounts plus the keyboard-opened Create workspace dialog, the `Mod+K` / double-Shift search palette host, the `Mod+Shift+F` Find in Files host and the `Mod+?` keyboard-shortcuts dialog (and the once-mounted attention-notification observer from [[submodule-web-notifications]]); the enabled web extensions' global overlays (`ExtensionOverlays`, *Global chords*); theme application and global shortcuts; focus recovery (*Focus recovery*); the command catalog the palette runs ([[submodule-web-commands]], [[submodule-web-search]]); the injected Layout, Keyboard and optional application Update settings sections; and integration of the workbench engine with store, persistence, panels, transport-backed domain state, and error boundaries.
 - **Public surface:** `Shell`.
-- **Allowed deps:** child layout modules; `updates`; `search` + `commands` (the palette and the command contract it composes for it); `keybindings` (the app-wide chord table `useGlobalHotkeys` matches through and the palette's shortcuts read, and the shortcut catalog the cheatsheet renders); `findInFiles` (the window `FindInFilesHost` composes); `extensions` (the enabled extensions whose overlays and shortcut rows it mounts); `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types, wire constants, and the shared `createQuitConfirmation` rule), `@thinkrail/ui/*`, `@thinkrail/locales` (UI strings), `i18n` (`useLocaleSync`, mounted once), `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, `themes`, and `clientPreferences` (`markdownOutlinePreference` persists the store's Markdown outline visibility and side per client, through the same adapter `layoutState` uses).
+- **Allowed deps:** child layout modules; `updates`; `search` + `commands` (the palette and the command contract it composes for it); `keybindings` (the chord table and resolver `useGlobalHotkeys` matches through and the palette's shortcuts read, and the shortcut catalog the cheatsheet renders); `findInFiles` (the window `FindInFilesHost` composes); `extensions` (the enabled extensions whose overlays and shortcut rows it mounts, and every extension's commands it resolves); `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types, wire constants, and the shared `createQuitConfirmation` rule), `@thinkrail/ui/*`, `@thinkrail/locales` (UI strings), `i18n` (`useLocaleSync`, mounted once), `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, `themes`, and `clientPreferences` (`markdownOutlinePreference` persists the store's Markdown outline visibility and side per client, through the same adapter `layoutState` uses).
 - **Forbidden:** server/shared/pi imports; being imported by panels/store/transport; putting arrangement knowledge into a feature panel; or sending current frame/view state through transport.
 
 ## Internal modules
@@ -96,6 +96,12 @@ interprets Central directly.
 
 With an active workspace, `Shell` mounts the workbench directly; only a lazy Pierre resource body mounts a worker-pool provider, so an ordinary workspace neither requests Pierre's chunk nor starts its shared pool. Switching workspace changes resource contents and attention but never frame topology, Projects/Specs/Files/Review placement, side/bottom geometry, folds, visibility, alignment, or which singleton tool a group shows (a selected workspace resource such as a terminal stays per workspace). That is a React invariant too: `WorkspaceWorkbench` stays mounted across a switch and is re-targeted by its `workspaceId` prop, never keyed by workspace. The frame chrome—panel groups, persistent edge rails, side/bottom stacks, center strips, and the Projects tree—keeps its DOM; resource bodies and per-workspace tool contents swap. An auxiliary header may switch between its tool title and terminal-session strip according to workspace-local selection, without replacing the pane shell. Resource bodies are keyed by workspace as well as resource id, because some layout ids are deterministic (every workspace's initial terminal is `terminal:thinkrail-initial`): the same id must never carry one workspace's live xterm or pane into another's commit. A switch therefore paints no fade, skeleton, or empty frame for the chrome, and every hook the workbench calls must tolerate a changing `workspaceId`: state that belongs to one workspace is qualified by that id or lives in a workspace-keyed store slice, and no readiness flag computed for the previous workspace may be read for one effect pass against the next one. A first visit to a workspace whose local view has not been materialized yet does not remount either: once the frame is ready, the workbench renders the empty-view projection of that frame for the single commit before `layoutState` installs the identical view, so the frame keys never change. The "Restoring workspace layout" placeholder exists only before the local frame has hydrated. Entering or leaving Project Home swaps Shell branches and is not a workspace switch. A **chat without a project** (`kind: "chat"`) is a workspace to the frame — the same chrome, placements and rails — with an availability projection on top: the Specs and Review tool bodies, and any `changes` or git `diff` center body, render "Not available in a chat without a project" instead of asking the host (no `spec.graph`, `review.get`, `workspace.turns`, git status or branch-status polling for a chat — the Plan page likewise skips branch status and hides its branch line, commits menu and Open PR), Files, terminals, Plan and a file comparison (two of the chat's files, no git) work on the chat's folder, the empty center reads *Chats · Chat* and its New chat starts a sibling chat, and switching chat ↔ workspace never changes the frame. `Shell` opens the Create dialog for `selectContextRepoProject` — or with no repository (`projectId: null`) when the host supports chats, which forces the dialog's chat target. Shell-owned wrappers around Projects and Specs use `components/QuietScrollArea`, as does the Project Home navigator; Files, Review, and xterm own their internal quiet-scroll surfaces in `panels`. These primitives never receive or infer placement. A frame command that changes the shape (fold/unfold, side or bottom visibility, alignment, group add/remove, preset apply/reset) never remounts the workbench's `ResizablePanelGroup`s or the resource bodies inside them: panels are added and removed in place and the engine enforces the committed sizes imperatively ([[submodule-web-shell-layout]], *Shape changes without remounts*), so a chat transcript, editor, terminal, or tool pane keeps its DOM and state while a neighbouring pane appears or disappears. Only a side stack that moves between the outer column and the aligned row (an alignment change, or hiding/showing a side that owns a bottom corner) remounts, because it changes parent. Without an active workspace, Shell mounts `ProjectHome`: Welcome beside the projects navigator using separate local geometry (the `thinkrail-shell-welcome` autosave plus a remembered expand size), never the workbench frame; its only tie to the frame is the pristine default — the pane opens at the built-in Balanced preset's left width, so a fresh surface shows the same Projects edge on Home and in the workbench. Its chrome is the workbench's: the same persistent 40 px left tool rail with one Projects entry (selected fill and Fill icon while shown, `aria-pressed`, `aria-controls` the pane), the keyboard-shortcuts icon at its foot, and the same plain pane header with a Hide control, composed from the primitives `layout` exports ([[submodule-web-shell-layout]]) around a shell-owned `useCollapsibleRegion`. While onboarding is active (`selectOnboardingActive` — the cold-start wizard shown, or still pending on a cold-start-shaped store) the rail and the Projects pane are not rendered at all, so a first-run user with no project and no model sees only the wizard; the Welcome panel stays mounted in place (panels are removed, not the group), so finishing the wizard keeps its hand-off dialog. No right or bottom rail renders there: Specs, Files, Review, and terminals are workspace resources, so an empty rail would advertise tools that cannot act. The rail entry, Hide, and `Mod+B` are one toggle: hiding returns focus to the rail control when focus was anywhere in the pane (header included) or on its separator, and leaves it alone otherwise; showing focuses the last-focused tree control, else the active row, else the first control — the header's Hide button is never the landing spot. Hiding Projects inside a workspace does not hide it on Project Home: Home is the navigation surface and keeps its own state. The Settings dialog, analytics-consent window, addressed survey invitation, the survey window, attention-notification permission preface, and Toasts each mount once above both branches (while the onboarding wizard is active, it asks for consent through its own privacy step instead and shell holds its window); the attention-notification observer (`useAttentionNotifications`) likewise runs once here. The consent window is a layout-agnostic panel shared by browser and desktop clients, gated by hydrated host configuration and protocol support; shell owns only its placement. Consent takes precedence over the automatic survey invitation so startup never stacks both prompts; the invitation waits and shows once consent closes.
 After `main.tsx`'s synchronous first-paint apply, Shell is the sole mounted theme side-effect owner. While `welcomeGeneration === 0` it retains the versioned preference hint; afterward it projects store's opaque fixed id + fixed/system mode + optional pair through `themes` and writes the reconciled hint. Fixed mode has no media listener. System mode owns exactly one `prefers-color-scheme` listener, reapplies the locally resolved slot on change, and cleans it up on preference/unmount; that local event never mutates store, calls the host, or changes another client. No other component mutates `[data-theme]`.
+
+`AppResourceHost` registers the bundled resource renderers once, at import, with interactive-HTML globs for
+`WORKSPACE_MOCKUP_DIR` — and none when `hasNativeMessageBridge(globalThis)` finds an Electrobun or WebView2
+message bridge on the page, because those answer every frame and a mockup script could reach native code
+([[module-resource-renderers]], [[electrobun-compatibility]]). The check runs after the desktop preload,
+which installs the bridges before any page script.
 
 ## Workbench behavior
 
@@ -200,9 +206,9 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
 
 ## Global chords
 
-`useGlobalHotkeys` remains the one capture-phase owner of app-wide chords. The chords are declared once in the [[submodule-web-keybindings]] table; `useGlobalHotkeys` matches through it (`matchKeybinding`, then an id → handler map whose missing handler means unavailable) and the palette shows each chord with `keybindingShortcut`. It routes commands through the workbench command surface rather than imperative feature-panel refs:
+`useGlobalHotkeys` remains the one capture-phase owner of app-wide chords. The chords are declared once in the [[submodule-web-keybindings]] table and resolved with the user's overrides and the web extensions' commands; `keybindingState.ts` is the one place that resolves — once per change of the store's `keybindingOverrides` (ignored below `supportsKeybindings`, so an older host runs the defaults) or `disabledExtensions` — and hands the result to the binder (`currentKeybindings()` at event time) and to every reader (`useResolvedKeybindings`, `useKeybindingKeys`, `useKeybindingLabel`). It resolves the local key sets too — `LOCAL_SETS`: the app's `APP_LOCAL_SET` and the resource renderers' `REVIEW_SURFACE_COMMANDS` as a ThinkRail set in scope `review.surface`, with the extensions' scoped commands in the same input — and `selectLocalKeymap`, memoized on the resolved table, is the value `Shell` provides through `@thinkrail/ui/local-keys`' `LocalKeymapProvider` around its whole tree (portals included), so every element's `useLocalKeys` sees a rebind at once. **The binder yields to a focused element's local keys:** `routeHotkey` asks `matchLocal(resolved, localScopesOf(target), event, { textEntry })` first and, on a hit, dispatches no app chord, extension command or history — the element's own handler acts. `shortcutSurface.ts`' `localScopesOf` walks from the focused element outward collecting the app's scope selectors (rail entry, transcript, composer, history overlay, Changes review, review surfaces, palette, Find in Files) and any `[data-key-scope]`, innermost first. The workbench tab strip and the app's tree declare theirs (`data-key-scope="tabs"` on `layout`'s tablist, `"trees"` on `panels`' `Tree`) instead of being matched by ARIA role: the question card's tab chips are ARIA tabs that handle no `tabs.*` command, so a role match made a `tabs.close` rebound onto Mod+L swallow Focus composer there (#1416's review); the cheatsheet's surface map reads the same markers. A scope whose handlers read a shifted press of an unshifted arrow twin as the extending arrow declares `extendsWithShift` ([[submodule-web-keybindings]]), and `matchLocal` yields that variant too, so a global chord on the Shift variant (Shift+Mod+J toggling the bottom panel once `arrows.down` is Mod+J) cannot take a review cursor's or the swipe divider's extension. `useGlobalHotkeys` matches through it (`matchKeybinding`, then an id → handler map whose missing handler means unavailable) and the palette shows each chord with `keybindingShortcut` over the same result, so a rebind applies and shows at once. It routes commands through the workbench command surface rather than imperative feature-panel refs:
 
-- `Ctrl+R` opens chat history for the locally selected chat, or the workspace's most-recent chat fallback;
+- `Ctrl+R` opens chat history for the locally selected chat, or the workspace's most-recent chat fallback; the literal `Ctrl+R` acts even during IME composition (it would reload the browser), while a chord the user rebinds history to waits composition out like every other chord;
 - `Mod+B` toggles the left side, restoring local group/tab attention or an eligible singleton tool;
 - `Mod+J` does the same for the right side;
 - `Mod+Shift+J` toggles bottom, restoring local bottom attention, a bottom-targeted singleton, or the terminal creation surface;
@@ -216,11 +222,14 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   only while the store's `shortcutsOpen` is true (`openShortcuts` / `closeShortcuts`); the chord, the
   keyboard icon at the foot of the left tool rail and the palette's *Keyboard shortcuts* row open it. It
   lists the catalog's `shortcutRows` for this client (`desktop` is the native-shortcut bridge read the
-  palette makes), plus the `shortcuts` of every enabled web extension as General rows, as surface
+  palette makes) over the resolved table — local keys at their effective chords, a direction row's arrow
+  beside its twin's current letter — plus every enabled web extension's commands and `shortcuts` as
+  General rows, as surface
   sections under a filter matching a row's title or key label, with a count beside it ("117 shortcuts",
-  "17 of 117" while filtering). The dialog fills the window less a `--space-24` margin
-  and, only there (`ShortcutsReference`'s `columns`), flows the sections into as many ~18rem columns as
-  fit, never splitting one. The scroller and the column flow are separate elements: a height-constrained
+  "17 of 117" while filtering). A chord that loses to another command is shown struck through after the
+  active ones, with "inactive: taken by {winner}" under the title; a switched-off extension's rows stay
+  hidden. The dialog fills the window less a `--space-24` margin and flows the sections into as many
+  ~18rem columns as fit, never splitting one. The scroller and the column flow are separate elements: a height-constrained
   multi-column box overflows sideways, so the list scrolls only down. A row wraps between its chords, never
   inside one, and its title keeps at least half the row. Sections keep the catalog's order (no longer
   current-first, 2026-11-15); the section of the surface focused just before it opened is highlighted
@@ -231,12 +240,66 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   card, a tree, a tab strip, a rail entry); elsewhere nothing is highlighted. Rows are reference only and
   hold nothing focusable, so the filter's ↑ / ↓ / PageUp / PageDown scroll the list. Esc closes it and so
   does `Mod+?` — handled by the dialog, since global chords are suppressed behind a modal — and focus
-  returns to where it was. Settings → Keyboard renders the same `ShortcutsReference` (its own filter, one
-  column) under the double-Shift switch, injected into `search`'s `SearchSettings` the way the section
-  itself is injected.
+  returns to where it was.
+- **Settings → Keyboard is the shortcut editor** (`KeybindingEditor`), injected into `search`'s
+  `SearchSettings` under the double-Shift switch. One column of `keybindingList` rows
+  ([[submodule-web-keybindings]], *Editor rows and edits*): the catalog by surface, then a section per web
+  extension tagged Extension (and Off, its rows muted but editable, while switched off). Table, local
+  and extension commands are editable; locked element keys, desktop rows and display-only chords show a
+  lock. Consecutive rows of one local scope sit under a caption, "local · when focus is in a sidebar
+  tree" (an extension scope: "when focus is in {extension}"); a direction row shows its arrow locked,
+  "always works", then its twin's letter as the editable alias (recording there edits the shared twin,
+  so it applies in every element; the four General `arrows.*` rows edit the same commands).
+  - **Recording.** Enter or a click on a row's chord button records (`chordFromEvent`, the command's
+    `plain` — true for every local command — as `allowPlain`); the row reads "Press a new shortcut… Esc
+    cancels" ("Press a key or a chord…" on a local row, "Press a new key for the alias…" on a direction
+    row) and keeps focus. A
+    modifier alone keeps waiting, AltGraph is ignored, Esc cancels (the button carries
+    `data-settings-draft-input`, so Settings stays open), and Tab is not captured: leaving cancels.
+    While recording — and while the filter has focus in Search by keys — the editor holds the keyboard
+    claim (`claimKeyboard`, below), so no app chord, extension command or double Shift acts on the press
+    being recorded.
+  - **Outcomes,** in order: a plain key on a non-plain command → "A shortcut needs…" (dismiss); a
+    desktop-native chord, or a press either desktop platform's `shortcutCommands` matcher owns on this
+    layout (`isDesktopShortcut`: AZERTY's `KeyZ` Ctrl+W, Russian `Shift+Slash` Ctrl+,) → refused with
+    the same desktop message; a chord active on another command (none for a switched-off extension's
+    command, `chordHolders`) → "{chord} is already used by {command}" with Replace / Cancel (Replace writes `assignChord`'s explicit unbind; a browser-reserved
+    chord adds the browser sentence); a plain key an element owns, on a plain command → "{key} also acts in
+    {places}…" with Assign anyway — also for any global chord a local key holds (`localUses`: "Ctrl+K
+    also acts in sidebar trees…"); a browser-reserved chord in a browser → Assign anyway; else it assigns.
+    A chord equal to the defaults drops the override (kept while a customised twin would win it,
+    `assignChord`). **On a local row** the outcomes are: a navigation
+    primitive → "↓ is a navigation key — locked in every element" (dismiss; the command's own primitive
+    default records); desktop-native as above; a key another command holds inside an element this
+    command acts in (`chordHolders`) → "J is already used by Move down (alias) inside sidebar trees",
+    naming every holder ("X is already used by Search the visible rows inside sidebar trees and Copy the
+    message… inside the chat transcript"), with Replace (clears each) / Cancel; a chord a global command holds (`globalHolder`) → "F runs “{global}” everywhere
+    else; inside sidebar trees it will run “{local}” instead" (no "else" for a modified chord) with Assign
+    anyway; browser-reserved → Assign anyway; else it assigns, and a key other elements also use adds an
+    info note "C also acts in the chat transcript — a different element, so no conflict".
+  - **Rows.** A Custom tag and Reset on overridden rows, Reset all, a lost chord struck through with
+    "{chord} is taken by {winner} — inactive" and Assign another, a mark per element that takes the row's
+    chord over ("Inside sidebar trees, F runs “Search the visible rows”") (`commandTitle` also names a reserved
+    chord's catalog-row winner, such as a desktop row a browser does not list). The filter matches title or
+    key label; Search by keys turns it into a recorder whose next chord — a plain letter or a locked
+    arrow included — filters to rows showing it, local and fixed keys included (Esc leaves).
+    ↑/↓ move between rows' chord buttons, one of which is the Tab stop (roving; a row's Reset and Assign
+    another are tabbable only on that row); rows carry `data-focus-row` in a `data-focus-list`, and after
+    an assignment, Replace, Cancel or Reset focus returns to the row's chord button.
+  - **Writes** go through `transport`'s `updateKeybindings` (one call per edit, Reset all `{}`) and show
+    when the `settings.changed` broadcast lands — no optimistic state; a refusal toasts. Below
+    `supportsKeybindings` the list is read-only (every chord button `aria-disabled`, no Reset or Import)
+    under one notice, "Update ThinkRail to rebind shortcuts".
+  - **Export… / Import…** Export downloads `thinkrail-keybindings.json` (`keybindingsFile`, English titles,
+    a Blob through `<a download>`). Import reads a picked `.json` with `planImport` — anything else toasts
+    "This is not a ThinkRail keybindings file" — and shows a summary dialog (Will change, Conflicts,
+    Skipped with reasons, the unchanged count) whose "Apply n changes" sends the merged map once.
 - **Chords in tooltips.** Every icon button whose action a chord also runs shows the chord's caps after
-  its tooltip label (`IconTooltip`'s `shortcut`, [[module-ui]]), computed here with `keybindingKeys` and
-  injected into the props-driven layout as `chromeShortcuts`: a pane's Hide shows its side's toggle
+  its tooltip label (`IconTooltip`'s `shortcut`, [[module-ui]]), computed here from the resolved table
+  (`keybindingKeys` / `useKeybindingKeys`, never captured once) and injected into the props-driven layout
+  as `chromeShortcuts`, and into `ProjectTree` (`newWorkspaceShortcut`), Keyboard settings
+  (`openShortcut`), and `ChatView` / `PlanPane` (`landingChord`, the `region.next` label a waiting question
+  names in "… to answer") as props: a pane's Hide shows its side's toggle
   (`Mod+B` / `Mod+J` / `Mod+Shift+J`) only while it is the region's sole expanded pane — with two, Hide
   folds one and the chord hides both — the Projects and Files rail entries show `Mod+0` / `Mod+Shift+E`
   and terminal entries `` Ctrl+` ``; on Project Home the Projects entry and its Hide show `Mod+B`, the
@@ -265,7 +328,9 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   shows moves and flashes the destination, so a run of presses walks the ring. Focus on `<body>` or
   outside every region moves at once; with none active, `F6` starts at the top bar and `Shift+F6` at the
   last. The palette's Focus next / previous region rows always move. `Mod+1…9` land in center
-  group N of that order (no group N: nothing, the chord still swallowed). `Mod+L` focuses the attended
+  group N of that order (no group N: nothing, the chord still swallowed). Every landing prefers a focusable
+  `[data-focus-claim]` (`resolveLanding`), so F6 into a chat with a waiting question lands on its current
+  option; `Mod+L` still focuses the composer. `Mod+L` focuses the attended
   chat's composer — `selectHistoryTarget`'s chat (the selected tab of the last-focused center group, else
   the workspace's most recent chat tab), opened through `openChatInTab` first when it is not attended —
   by `requestComposerFocus` once it is. The chat's own history overlay does not count as covering it: the
@@ -287,7 +352,8 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   Focus Projects, Focus terminal, one Focus center group N per existing group, Show Changes, and Show
   Files with `Mod+Shift+E`), after the palette has closed. These chords are app-owned in xterm and
   Monaco too, except that `Ctrl+L` inside a terminal on Windows/Linux stays the shell's clear-screen, like
-  `Ctrl+R` (`⌘L` on a Mac still focuses the composer from a terminal); they are ignored during
+  `Ctrl+R` (`⌘L` on a Mac still focuses the composer from a terminal; *Active-tab chords* has the
+  rule); they are ignored during
   IME composition, and are suppressed behind a modal like the others; `Ctrl+F6` / `Ctrl+Shift+F6` stay
   the workbench's group cycling. A plain browser tab may keep `F6` for its own address bar; the desktop
   app is the primary surface and the palette rows reach the same moves.
@@ -310,22 +376,39 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   close the active tab); it is the one table chord not suppressed behind a modal, because dismissing that
   modal is its first step. Exceptions: `Ctrl+\` inside a terminal on Windows/Linux stays the shell's
   SIGQUIT, like `Ctrl+L` (`⌘\` on a Mac still splits); `⌥⌘W` inside Monaco's find widget stays its
-  whole-word toggle. The group moves accept GNOME's grab of `Ctrl+Alt+←/→` on Linux, as VS Code does —
+  whole-word toggle. **These guards name chords, not commands:** inside xterm the shell keeps literal
+  Control `Ctrl+L`, `Ctrl+\` and `Ctrl+R` (readline's clear-screen, SIGQUIT and reverse search), and the
+  find widget keeps `⌥⌘W` on a Mac, whatever is bound there — an app command or chat history rebound
+  onto one still yields there, and one rebound elsewhere (`Ctrl+Alt+Y`) acts there as anywhere. An
+  extension command is not guarded. The group moves accept GNOME's grab of `Ctrl+Alt+←/→` on Linux, as VS Code does —
   the palette rows reach the same moves. No Alt chord fires while AltGraph is held
   ([[submodule-web-keybindings]]).
-- **Extension overlays and their chords.** `ExtensionOverlays`, mounted once at the tail of `Shell`, renders
-  the `globalOverlay` of every web extension not in the store's `disabledExtensions`
-  ([[submodule-web-extensions]]), so switching one off in Settings unmounts it and its listeners at once. It
-  hands each the host helpers an extension cannot import: `isTextEntry` (`lib`'s `isTextEntryTarget`),
-  `activeLayer` (`shortcutLayers.ts`: the last open modal dialog or open menu in document order — Radix
-  portals append — else the document) and the browser platform. Such an overlay may own its own window
-  capture `keydown` listener for chords outside the keybinding table: hint mode
-  ([[module-ext-hint-mode]]) takes plain `F` outside text entry and `Mod+;` anywhere, and while active
-  swallows every key with `stopImmediatePropagation`, so neither Radix (document) nor the window listeners
-  here act on them. No table chord is a hint chord (`extensions`' tests pin it), so the trigger never
-  competes with `useGlobalHotkeys`; their listener order differs between a mount at startup (the overlay's
-  effect runs first) and a later switch-on, which only decides whether a table chord pressed while labels
-  are showing still runs — accepted.
+- **Extension overlays, their commands and the keyboard claim.** `ExtensionOverlays`, mounted once at the
+  tail of `Shell`, renders the `globalOverlay` of every web extension not in the store's
+  `disabledExtensions` ([[submodule-web-extensions]]), so switching one off unmounts it and its listeners
+  at once. It hands each the host helpers an extension cannot import: `isTextEntry` (`lib`'s
+  `isTextEntryTarget`), `activeLayer` (`shortcutLayers.ts`: the last open modal dialog or open menu in
+  document order — Radix portals append — else the document), the browser platform, and the command
+  channel of `extensionCommands.ts`:
+  - **Delivery.** An extension's commands are matched by `useGlobalHotkeys` in the same capture listener
+    as the app chords, through the resolved table: a plain chord only outside text entry
+    (`composedPath()[0]`), never during IME composition, and **not gated by a modal** — the overlay scopes
+    itself with `activeLayer()` (hint mode labels the open dialog or menu). A match is
+    `preventDefault` + `stopImmediatePropagation`, so neither Radix (document), Monaco nor another window
+    listener sees it, and reaches the extension's `onCommand` listeners once per physical press. Only an
+    enabled extension's commands match, and only a mounted overlay listens. A press a focused element's
+    local key holds (by physical key, the binder's local yield above: `S` in a tree, `K` in the
+    transcript) is left to that element, which is what Settings → Keyboard's warnings promise.
+  - **The claim.** `claimKeyboard(true)` says the overlay owns every key (hint mode while labels show; the
+    Settings → Keyboard recorder claims it the same way);
+    until it releases (or the overlay unmounts, which releases for it), `useGlobalHotkeys` dispatches no
+    app chord, no extension command, no `Ctrl+R` and no double Shift, and `useAppShortcuts` no web
+    close/quit/settings chord. The claimant's own listener handles every key and recognises its own
+    commands with `matchCommand(event)` (its command id the effective bindings give the key, else
+    `null`), so its trigger can still exit. An overlay's own key listener acts only while it holds the
+    claim, and the press that delivers a command is stopped before a claim it starts could see it, so
+    exactly one listener acts on any key and the order the overlay's listener and `useGlobalHotkeys`
+    registered in never decides anything.
 - Double Shift is detected by the pure `createDoubleShiftDetector` from capture-phase `keydown`/`keyup`; `pointerdown`, window blur and a hidden document reset it, and it does not fire through another open modal. It is off per client through the `doubleShiftSearch` preference (the Keyboard settings section `search` exports and shell injects into `SettingsDialog`, like Layout and Updates).
 - Row and header glyphs reuse the `ProjectTree` vocabulary: a leading `RiChat2Line` (wrapped in `RunningIcon` while running) and a trailing `AttentionDot` for a session that needs attention — no bespoke per-outcome glyphs.
 
@@ -348,7 +431,7 @@ line or column past the end of the file. When the host refuses the read (missing
 symlink escaping the worktree, too large), no tab appears and `shell.deepLink.openFailed` says so. The
 workspace has already been entered by then.
 
-**Native shortcuts.** Shell always mounts the `AppShortcuts` leaf. `useAppShortcuts` reads `NativeShortcutsBridge` (`__THINKRAIL_NATIVE_SHORTCUTS__`, [[module-contracts]]; desktop hosts only) once. Without the bridge it adds no listeners and renders nothing. With the bridge, the leaf renders the hint, so hint changes re-render only that leaf. Every app-level close/quit/settings shortcut dispatches through one command table, `shortcutCommands.ts`: a command id (`close-item`, `quit`, `open-settings`) maps to Ctrl chords per shortcut platform, each chord carrying its terminal rule, and the hook supplies the id → handler map. Both native commands from `subscribeCommand` and web keydown chords run the same handler. The shortcut platform is `platformFamily()` (`apple` / `windows` / `linux`) when the bridge exists, else `browser`.
+**Native shortcuts.** Shell always mounts the `AppShortcuts` leaf. `useAppShortcuts` reads `NativeShortcutsBridge` (`__THINKRAIL_NATIVE_SHORTCUTS__`, [[module-contracts]]; desktop hosts only) once. Without the bridge it adds no listeners and renders nothing. With the bridge, the leaf renders the hint, so hint changes re-render only that leaf. Every app-level close/quit/settings shortcut dispatches through one command table, `shortcutCommands.ts`: a command id (`close-item`, `quit`, `open-settings`) maps to Ctrl chords per shortcut platform, each chord carrying its terminal rule, and the hook supplies the id → handler map. Both native commands from `subscribeCommand` and web keydown chords run the same handler. The shortcut platform is `platformFamily()` (`apple` / `windows` / `linux`) when the bridge exists, else `browser`. A keydown the table owns on this platform (`matchShortcut`, terminal rule included) reaches no app or extension command and no chat history in `useGlobalHotkeys` (`routeHotkey`), whatever chord it resolves to: on AZERTY Ctrl+W is the `KeyZ` key, so `view.toggleLeft: ["Mod+KeyZ"]` would otherwise toggle Projects and close the tab from the two window listeners. The resolver's static desktop-native list ([[submodule-web-keybindings]]) still covers hand-edited configs by US position.
 
 | Platform | Quit | Close item | Open Settings |
 | --- | --- | --- | --- |
@@ -404,7 +487,7 @@ after the host's push), else the opener's rows. Resolution, first match wins:
    row, the previous, the list's `data-focus-fallback`, the list's first focusable; then the outermost
    list's enclosing `data-focus-default`.
 4. **Safety net** — the active region's F6 landing target (`regionLandingTarget`, the record's region when
-   the active one is gone); inside a live dialog, its first focusable. A control that sat in no region and
+   the active one is gone; a waiting question's `[data-focus-claim]` wins it, as for F6); inside a live dialog, its first focusable. A control that sat in no region and
    no dialog (a field a page or extension injected into `<body>`) gets no safety net: focus stays where the
    browser put it.
 

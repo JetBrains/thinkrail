@@ -73,6 +73,12 @@ export function matchShortcut(
 	return null;
 }
 
+const DESKTOP_PLATFORMS = ["windows", "linux"] as const satisfies readonly ShortcutPlatform[];
+
+export function isDesktopShortcut(event: ChordEvent): boolean {
+	return DESKTOP_PLATFORMS.some((platform) => matchShortcut(event, platform, () => false) !== null);
+}
+
 type ShortcutKeyEvent = ChordEvent &
 	Pick<KeyboardEvent, "repeat" | "target" | "preventDefault" | "stopPropagation">;
 

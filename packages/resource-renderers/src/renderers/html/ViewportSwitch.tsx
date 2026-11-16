@@ -33,9 +33,11 @@ export function HtmlViewportSwitch({
 export function HtmlPreviewNotice({
 	viewport,
 	onViewport,
+	interactive = false,
 }: {
 	viewport: HtmlViewport;
 	onViewport: (viewport: HtmlViewport) => void;
+	interactive?: boolean;
 }) {
 	const t = useT();
 	const { compact, htmlViewport } = useResourceEnvironment();
@@ -43,7 +45,7 @@ export function HtmlPreviewNotice({
 	return (
 		<div className="flex shrink-0 flex-wrap items-center gap-8 border-border-default border-b bg-feedback-info-subtle px-12 py-4 tr-text-metadata text-feedback-info">
 			<span data-testid="html-disabled-notice" className="mr-auto">
-				{t("viewer.html.disabledNotice")}
+				{t(interactive ? "viewer.html.interactiveNotice" : "viewer.html.disabledNotice")}
 			</span>
 			<HtmlViewportSwitch viewport={viewport} onViewport={onViewport} />
 		</div>

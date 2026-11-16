@@ -471,6 +471,90 @@ test("a malformed disabled-extensions update is rejected; a malformed stored lis
 	expect(getConfig().disabledExtensions).toEqual([]);
 });
 
+test("keybindings replace the whole map, keep unknown command ids and empty unbinds, and dedupe chords", () => {
+	expect(DEFAULT_CONFIG.keybindings).toEqual({});
+	const published: AppConfigUpdate[] = [];
+	setSettingsPublisher((_config, applied) => published.push(applied));
+	updateConfig({ keybindings: { "search.open": ["Mod+Alt+KeyS"] } });
+	const next = updateConfig({
+		keybindings: {
+			"group.splitRight": ["Ctrl+Alt+ArrowLeft", "Ctrl+Alt+ArrowLeft"],
+			"retired-extension.command": ["F6"],
+			"tab.close": [],
+		},
+	});
+	expect(next.keybindings).toEqual({
+		"group.splitRight": ["Ctrl+Alt+ArrowLeft"],
+		"retired-extension.command": ["F6"],
+		"tab.close": [],
+	});
+	expect(published.at(-1)?.keybindings?.["group.splitRight"]).toEqual([
+		"Ctrl+Alt+ArrowLeft",
+		"Ctrl+Alt+ArrowLeft",
+	]);
+	resetConfigCache();
+	expect(getConfig().keybindings).toEqual(next.keybindings);
+	expect(updateConfig({ keybindings: {} }).keybindings).toEqual({});
+});
+
+test("a malformed keybindings update is rejected whole with a code; nothing persists or publishes", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const before = getConfig();
+	for (const value of [
+		null,
+		[],
+		{ "search.open": "Mod+KeyK" },
+		{ "search.open": ["Mod+k"] },
+		{ "search.open": ["Alt+Mod+KeyK"] },
+		{ "search.open": ["Mod+ShiftLeft"] },
+		{ "search.open": ["Mod+KeyK", 3] },
+		{ "": ["Mod+KeyK"] },
+	]) {
+		const invalid = { keybindings: value } as unknown as AppConfigUpdate;
+		let thrown: unknown;
+		try {
+			updateConfig(invalid);
+		} catch (error) {
+			thrown = error;
+		}
+		expect(thrown).toMatchObject({
+			code: "KEYBINDINGS_INVALID",
+			message: "keybindings must map command ids to lists of chords such as Mod+Alt+KeyS",
+		});
+	}
+	expect(getConfig()).toEqual(before);
+	expect(published).toEqual([]);
+	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+});
+
+test("stored keybindings drop malformed chords and entries but keep unknown ids and explicit unbinds", () => {
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({
+			keybindings: {
+				"search.open": ["Mod+KeyK", "mod+k", "Mod+KeyK", 7],
+				"retired.command": ["Mod+Shift+KeyR"],
+				"tab.close": [],
+				"view.files": ["Shift+Mod+KeyE"],
+				"view.changes": "Mod+Shift+KeyG",
+				" ": ["F6"],
+			},
+		}),
+	);
+	resetConfigCache();
+	expect(getConfig().keybindings).toEqual({
+		"search.open": ["Mod+KeyK"],
+		"retired.command": ["Mod+Shift+KeyR"],
+		"tab.close": [],
+	});
+	for (const stored of [null, ["Mod+KeyK"], "Mod+KeyK"]) {
+		writeFileSync(join(dataDir, "config.json"), JSON.stringify({ keybindings: stored }));
+		resetConfigCache();
+		expect(getConfig().keybindings).toEqual({});
+	}
+});
+
 test("extension settings merge per extension and key, persist, and drop non-boolean stored values", () => {
 	expect(DEFAULT_CONFIG.extensionSettings).toEqual({});
 	const published: AppConfigUpdate[] = [];

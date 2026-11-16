@@ -4313,6 +4313,22 @@ test("applyConfig folds and normalizes the server-synced theme preference", () =
 	});
 });
 
+test("applyConfig installs the host's keybinding overrides, an older host's absence as none", () => {
+	const keybindings = { "search.open": ["Mod+Alt+KeyS"], "tab.close": [] };
+	useAppStore.getState().applyConfig({ ...DEFAULT_CONFIG, keybindings });
+	expect(useAppStore.getState().keybindingOverrides).toEqual(keybindings);
+
+	const { keybindings: _absent, ...older } = DEFAULT_CONFIG;
+	useAppStore.getState().applyConfig(older as AppConfig);
+	expect(useAppStore.getState().keybindingOverrides).toEqual({});
+
+	useAppStore.getState().applyConfig({
+		...DEFAULT_CONFIG,
+		keybindings: ["Mod+KeyK"],
+	} as unknown as AppConfig);
+	expect(useAppStore.getState().keybindingOverrides).toEqual({});
+});
+
 test("applyConfig projects and validates the Windows terminal shell", () => {
 	useAppStore.getState().applyConfig({
 		...DEFAULT_CONFIG,

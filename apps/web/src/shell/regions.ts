@@ -37,6 +37,7 @@ const FLASH_MS = 1500;
 const STILL_FLASH_MS = 1000;
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 const FOCUS_DEFAULT_SELECTOR = "[data-focus-default]";
+const FOCUS_CLAIM_SELECTOR = "[data-focus-claim]";
 const SELECTED_TAB_SELECTOR = '[role="tab"][aria-selected="true"]';
 const ROVING_ITEM_SELECTOR = '[role="treeitem"], [role="tab"]';
 const STALE_TRANSCRIPT_ITEM_SELECTOR = "[data-transcript-item]:not([data-transcript-current])";
@@ -105,14 +106,42 @@ function defaultTarget(container: HTMLElement): HTMLElement | null {
 	return null;
 }
 
+export interface LandingLookup<T> {
+	claim(): T | null;
+	remembered(): T | null;
+	preferred(): T | null;
+	selectedTab(): T | null;
+	first(): T | null;
+}
+
+export function resolveLanding<T>(lookup: LandingLookup<T>): T | null {
+	return (
+		lookup.claim() ??
+		lookup.remembered() ??
+		lookup.preferred() ??
+		lookup.selectedTab() ??
+		lookup.first()
+	);
+}
+
+function claimIn(region: HTMLElement): HTMLElement | null {
+	for (const claim of region.querySelectorAll<HTMLElement>(FOCUS_CLAIM_SELECTOR)) {
+		if (canFocus(claim)) return claim;
+	}
+	return null;
+}
+
 function landingTarget(region: HTMLElement): HTMLElement | null {
-	const remembered = rememberedIn(region);
-	if (remembered) return remembered;
-	const preferred = defaultTarget(region);
-	if (preferred) return preferred;
-	const tab = region.querySelector<HTMLElement>(SELECTED_TAB_SELECTOR);
-	if (tab && canFocus(tab)) return tab;
-	return focusTarget(region);
+	return resolveLanding({
+		claim: () => claimIn(region),
+		remembered: () => rememberedIn(region),
+		preferred: () => defaultTarget(region),
+		selectedTab: () => {
+			const tab = region.querySelector<HTMLElement>(SELECTED_TAB_SELECTOR);
+			return tab && canFocus(tab) ? tab : null;
+		},
+		first: () => focusTarget(region),
+	});
 }
 
 const WORKBENCH_REGION_KINDS: ReadonlySet<string> = new Set<RegionKind>([

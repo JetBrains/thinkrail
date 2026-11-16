@@ -31,6 +31,7 @@ import {
 	type CompareView,
 	compareItems,
 	compareJumpIndex,
+	compareKeyShortcuts,
 	compareStart,
 	flipCompare,
 	hasHtmlFile,
@@ -196,7 +197,7 @@ function CompareBody({
 			ref={rootRef}
 			data-testid="ask-compare-body"
 			aria-label={t("tools.ask.compare.title", { question: question.header || question.question })}
-			aria-keyshortcuts="ArrowLeft ArrowRight Enter"
+			aria-keyshortcuts={compareKeyShortcuts(count, !!onChoose)}
 			tabIndex={-1}
 			onKeyDown={onKeyDown}
 			className="flex min-h-0 flex-1 flex-col gap-8 rounded-sm focus-visible:focus-ring-inset"

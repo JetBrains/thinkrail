@@ -4,7 +4,7 @@ import { isApplePlatform } from "@thinkrail/ui/keyboard";
 import { Keycaps } from "@thinkrail/ui/keycaps";
 import { useEffect, useInsertionEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { hintKeyAction, typeLetter } from "./keys";
+import { hintKeyAction, SHOW_HINTS, typeLetter } from "./keys";
 import { hintLabels } from "./labels";
 import { activate } from "./press";
 import {
@@ -111,12 +111,15 @@ export function HintMode(props: GlobalOverlayProps) {
 			clips: clipsOverflow,
 			viewport: { width: window.innerWidth, height: window.innerHeight },
 		});
-		const exit = () => store.set(null);
+		const exit = () => {
+			store.set(null);
+			host.current.claimKeyboard(false);
+		};
 		const start = () => {
 			const { targets, boxes } = collectTargets<HTMLElement>(host.current.activeLayer(), env());
-			if (targets.length > 0) {
-				store.set({ targets, boxes, labels: hintLabels(targets.length), typed: "" });
-			}
+			if (targets.length === 0) return;
+			host.current.claimKeyboard(true);
+			store.set({ targets, boxes, labels: hintLabels(targets.length), typed: "" });
 		};
 		const choose = (current: HintSession, index: number, focusOnly: boolean) => {
 			exit();
@@ -126,19 +129,19 @@ export function HintMode(props: GlobalOverlayProps) {
 				activate(target.element, target.action, focusOnly, box);
 			}
 		};
+		const onCommand = (id: string) => {
+			if (id !== SHOW_HINTS.id) return;
+			if (store.get() === null) start();
+			else exit();
+		};
 		const onKeyDown = (event: KeyboardEvent) => {
 			const current = store.get();
-			const action = hintKeyAction(event, {
-				active: current !== null,
-				platform: host.current.platform,
-				textEntry: host.current.isTextEntry(event.composedPath()[0] ?? event.target),
-			});
-			if (action === null) return;
+			if (current === null) return;
+			const action = hintKeyAction(event, host.current.matchCommand(event));
 			event.preventDefault();
 			event.stopImmediatePropagation();
-			if (action.kind === "start") start();
-			else if (action.kind === "exit") exit();
-			else if (current === null || action.kind === "swallow") return;
+			if (action.kind === "exit") exit();
+			else if (action.kind === "swallow") return;
 			else if (action.kind === "undo") store.set({ ...current, typed: current.typed.slice(0, -1) });
 			else {
 				const next = typeLetter(shownLabels(current), current.typed, action.letter);
@@ -159,12 +162,14 @@ export function HintMode(props: GlobalOverlayProps) {
 				if (current) store.set({ ...current, boxes: measureTargets(current.targets, env()) });
 			});
 		};
+		const unsubscribe = host.current.onCommand(onCommand);
 		window.addEventListener("keydown", onKeyDown, true);
 		window.addEventListener("pointerdown", onPointerDown, true);
 		window.addEventListener("blur", exit);
 		window.addEventListener("resize", remeasure);
 		document.addEventListener("scroll", remeasure, true);
 		return () => {
+			unsubscribe();
 			window.removeEventListener("keydown", onKeyDown, true);
 			window.removeEventListener("pointerdown", onPointerDown, true);
 			window.removeEventListener("blur", exit);

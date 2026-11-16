@@ -89,7 +89,7 @@ import type {
 	WorkspaceArtifactsSnapshot,
 	WorkspacePathMatch,
 } from "./domain";
-import { isDelegationRunDetails } from "./domain";
+import { isControlMessage, isDelegationRunDetails } from "./domain";
 import type {
 	ExtUiResponse,
 	ImageContent,
@@ -143,8 +143,11 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 122;
-export const WORKTREE_DIRECTORY_PROTOCOL_VERSION = 122;
+export const PROTOCOL_VERSION = 125;
+export const WORKTREE_DIRECTORY_PROTOCOL_VERSION = 125;
+export const ARTIFACT_ROLES_PROTOCOL_VERSION = 124;
+export const KEYBINDINGS_PROTOCOL_VERSION = 123;
+export const BROWSER_VIEW_PROTOCOL_VERSION = 122;
 export const ARTIFACTS_PROTOCOL_VERSION = 121;
 export const IMAGE_REFS_PROTOCOL_VERSION = 120;
 export const IMAGES_ROUTE = "/images/";
@@ -763,6 +766,36 @@ export function isBackgroundCommandCompletionMessage(
 		return false;
 	if (d.errorMessage !== undefined && typeof d.errorMessage !== "string") return false;
 	return !!d.output && typeof d.output.text === "string" && typeof d.output.truncated === "boolean";
+}
+
+function plainText(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	return content
+		.map((block: unknown) =>
+			block &&
+			typeof block === "object" &&
+			"type" in block &&
+			block.type === "text" &&
+			"text" in block &&
+			typeof block.text === "string"
+				? block.text
+				: "",
+		)
+		.join("");
+}
+
+export function opensChatRound(message: unknown): boolean {
+	if (!message || typeof message !== "object") return false;
+	const { role, content } = message as { role?: unknown; content?: unknown };
+	if (role === "user") return !isControlMessage(plainText(content));
+	if (isBackgroundCommandCompletionMessage(message) || isSubagentCompletionMessage(message))
+		return completionDelivery(message.details) !== "run";
+	return (
+		isTodoReviewFixMessage(message) ||
+		isContinueInWorkspaceRequestMessage(message) ||
+		isChatHandoffMessage(message)
+	);
 }
 
 export function customMessageText(content: WireCustomMessage["content"]): string {
@@ -1632,6 +1665,7 @@ export type WsErrorCode =
 	| "TEXT_SEARCH_TIMEOUT"
 	| "TEXT_SEARCH_FAILED"
 	| "FRAME_TOO_LARGE"
+	| "KEYBINDINGS_INVALID"
 	| SpeechErrorCode;
 
 export interface WsResponse {

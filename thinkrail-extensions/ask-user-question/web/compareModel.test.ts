@@ -4,6 +4,7 @@ import {
 	compareIndexOf,
 	compareItems,
 	compareJumpIndex,
+	compareKeyShortcuts,
 	compareStart,
 	flipCompare,
 	hasHtmlFile,
@@ -94,4 +95,14 @@ test("digits jump within the items and visual pairing needs two files of one kin
 	expect(pairsVisually(image, sidebar)).toBe(false);
 	const diff = { ...sidebar, source: { kind: "file" as const, path: "a.html", before: "b.html" } };
 	expect(pairsVisually(diff, sidebar)).toBe(false);
+});
+
+test("the overlay announces every key it takes: flip, each jump, choose when it can, and close", () => {
+	expect(compareKeyShortcuts(4, true)).toBe("ArrowLeft ArrowRight 1 2 3 4 Enter Escape");
+	expect(compareKeyShortcuts(3, false)).toBe("ArrowLeft ArrowRight 1 2 3 Escape");
+	expect(
+		compareKeyShortcuts(12, true)
+			.split(" ")
+			.filter((key) => /^\d$/.test(key)),
+	).toHaveLength(9);
 });

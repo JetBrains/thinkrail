@@ -8,13 +8,16 @@ import {
 	SEARCH_KINDS,
 	SETTLE_IDLE_DAYS,
 	SUBAGENT_MAX_CONCURRENT,
+	WORKSPACE_VIEW_ROUTE,
 } from "./domain";
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	ARTIFACT_ROLES_PROTOCOL_VERSION,
 	ARTIFACTS_PROTOCOL_VERSION,
 	ASK_DISCUSS_PROTOCOL_VERSION,
 	BRANCH_STATUS_PROTOCOL_VERSION,
+	BROWSER_VIEW_PROTOCOL_VERSION,
 	CACHE_WARMING_MODES,
 	CACHE_WARMING_SETTINGS_PROTOCOL_VERSION,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
@@ -47,6 +50,7 @@ import {
 	isTodoReviewFixMessage,
 	isToolResponsePending,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
+	KEYBINDINGS_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	MCP_TOOL_GRANTS_PROTOCOL_VERSION,
@@ -103,7 +107,7 @@ test("retired workspace activity keeps only its empty snapshot compatibility met
 });
 
 test("worktree directory settings advance the protocol", () => {
-	expect(WORKTREE_DIRECTORY_PROTOCOL_VERSION).toBe(122);
+	expect(WORKTREE_DIRECTORY_PROTOCOL_VERSION).toBe(125);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(WORKTREE_DIRECTORY_PROTOCOL_VERSION);
 });
 
@@ -308,6 +312,11 @@ test("Files tree copy and delete are pinned to v118", () => {
 	expect(WS_METHODS.fsDelete).toBe("fs.delete");
 });
 
+test("artifact roles and round markers are pinned to v124", () => {
+	expect(ARTIFACT_ROLES_PROTOCOL_VERSION).toBe(124);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ARTIFACT_ROLES_PROTOCOL_VERSION);
+});
+
 test("workspace artifacts, rename and move are pinned to v121", () => {
 	expect(ARTIFACTS_PROTOCOL_VERSION).toBe(121);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ARTIFACTS_PROTOCOL_VERSION);
@@ -317,6 +326,12 @@ test("workspace artifacts, rename and move are pinned to v121", () => {
 	expect(WS_METHODS.fsRename).toBe("fs.rename");
 	expect(WS_METHODS.fsMove).toBe("fs.move");
 	expect(WS_CHANNELS.workspaceArtifactsChanged).toBe("workspace.artifactsChanged");
+});
+
+test("the browser view route is pinned to v122", () => {
+	expect(BROWSER_VIEW_PROTOCOL_VERSION).toBe(122);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(BROWSER_VIEW_PROTOCOL_VERSION);
+	expect(WORKSPACE_VIEW_ROUTE).toBe("/view/");
 });
 
 test("background workspace creation is pinned to v104", () => {
@@ -729,6 +744,12 @@ test("custom endpoints are pinned to v101 and own only custom-* providers", () =
 	expect(WS_METHODS.customEndpointsProbe).toBe("customEndpoints.probe");
 	expect(isCustomEndpointId(`${CUSTOM_ENDPOINT_ID_PREFIX}gateway`)).toBe(true);
 	expect(isCustomEndpointId("ollama")).toBe(false);
+});
+
+test("keybinding overrides are pinned to v123 and default to none", () => {
+	expect(KEYBINDINGS_PROTOCOL_VERSION).toBe(123);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(KEYBINDINGS_PROTOCOL_VERSION);
+	expect(DEFAULT_CONFIG.keybindings).toEqual({});
 });
 
 test("extension settings are pinned to v105", () => {

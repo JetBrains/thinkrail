@@ -100,14 +100,18 @@ function renderSubagentModel({ model, thinkingLevel }: SubagentResourceSummary) 
 	return <RunModelLabel model={model} thinkingLevel={thinkingLevel} />;
 }
 
+const FOCUS_CLAIM = "[data-focus-claim]";
+
 export default function ChatView({
 	sessionId,
 	workspaceId,
 	onOpenFile,
+	landingChord,
 }: {
 	sessionId: string;
 	workspaceId: string;
 	onOpenFile?: ((path: string) => void) | undefined;
+	landingChord: string;
 }) {
 	const t = useT();
 	const sessionExists = useAppStore((s) => s.sessions[sessionId] !== undefined);
@@ -782,6 +786,8 @@ export default function ChatView({
 		useAppStore.getState().consumeComposerEdit(sessionId, composerEdit.id);
 	}, [composerEdit, sessionId]);
 
+	const composerFocusServed = useRef(false);
+	const mayClaimFocus = useCallback(() => !composerFocusServed.current, []);
 	const composerFocusRequested = useAppStore((s) =>
 		selectComposerFocusRequested(s, workspaceId, sessionId),
 	);
@@ -790,6 +796,7 @@ export default function ChatView({
 		const store = useAppStore.getState();
 		const dismissHistory = store.composerFocusRequest?.dismissHistory === true;
 		store.clearComposerFocusRequest();
+		composerFocusServed.current = true;
 		if (dismissHistory) {
 			if (store.historyOpenRequest?.sessionId === sessionId) store.clearHistoryOpen();
 			if (historyOverlayOpen) closeHistory();
@@ -807,6 +814,12 @@ export default function ChatView({
 			.finally(() => setDisablingNotice(false));
 	};
 	const focusComposer = useCallback(() => composerRef.current?.refocus(), []);
+	const focusWaitingQuestion = () => {
+		const claim = dockTarget?.querySelector<HTMLElement>(FOCUS_CLAIM);
+		if (!claim) return false;
+		claim.focus({ preventScroll: true });
+		return document.activeElement === claim;
+	};
 	// Keep a stable `onTryAgain` identity (it is passed to every transcript row) while always calling the
 	// latest `performSend` closure.
 	const performSendRef = useRef(performSend);
@@ -864,6 +877,8 @@ export default function ChatView({
 					onOpenFile={onOpenFile}
 					workspaceRoot={workspaceRoot}
 					focusComposer={focusComposer}
+					mayClaimFocus={mayClaimFocus}
+					landingChord={landingChord}
 					openSubagentTranscript={setTranscriptChildId}
 					resultOpener={resultOpener}
 					onTryAgain={onTryAgain}
@@ -1022,6 +1037,7 @@ export default function ChatView({
 					onSubmit={onSubmit}
 					onAbort={onAbort}
 					onEnterTranscript={() => transcriptRef.current?.focusNewest()}
+					onShiftTabOut={focusWaitingQuestion}
 					onScrollTranscript={(direction) => transcriptRef.current?.scrollPage(direction)}
 					onHistoryOpen={onHistoryOpen}
 					onPickTemplate={onPickTemplate}
