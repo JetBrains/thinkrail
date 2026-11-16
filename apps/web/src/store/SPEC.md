@@ -929,6 +929,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   `selectMcpRead` + `McpRead`, `selectMcpWorkspaceStarting`, `McpWorkspaceProjection`, `selectSupportsMcp`,
   and the resource helper `orderMcpResources`; `selectSupportsProjectTrust` (the
   `PROJECT_TRUST_PROTOCOL_VERSION` gate for the trust summary and the pi-level resource grant);
+  `selectSupportsServerFallbackRepair` (the `SERVER_FALLBACK_PROTOCOL_VERSION` gate for the chat's
+  rejected-fallbacks repair);
   `toast` (the fire-from-anywhere helper),
   `Toast` (type), the prompt-image draft model `newPromptImagesState` + `PromptImagesState` /
   `PromptImage` / `PromptImageError` (`chat`'s `usePromptImages` shares it for dialog-local drafts), web-local frame/workspace-view/attention selectors and atomic actions, resource render-state types
