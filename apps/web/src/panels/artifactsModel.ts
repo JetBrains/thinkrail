@@ -5,6 +5,7 @@ import type {
 	WorkspaceIgnoredOutput,
 } from "@thinkrail/contracts";
 import { localeOf, type Translator } from "@thinkrail/locales/react";
+import { extendFolderChain, startFolderChain } from "./folderChains";
 
 export interface ArtifactRow {
 	artifact: WorkspaceArtifact;
@@ -70,6 +71,91 @@ export function artifactRows(
 		(shownOutputs?.length ?? 0) -
 		(outputs?.length ?? 0);
 	return { artifacts, outputs, otherChats };
+}
+
+export interface ArtifactTreeFile {
+	kind: "file";
+	name: string;
+	path: string;
+	row: ArtifactRow;
+}
+
+export interface ArtifactTreeFolder {
+	kind: "dir";
+	name: string;
+	path: string;
+	paths: readonly string[];
+	children: ArtifactTreeNode[];
+	files: number;
+	fresh: boolean;
+	deleted: boolean;
+}
+
+export type ArtifactTreeNode = ArtifactTreeFolder | ArtifactTreeFile;
+
+interface FolderBuild {
+	dirs: Map<string, FolderBuild>;
+	files: ArtifactTreeFile[];
+}
+
+const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
+
+export function artifactTree(dir: string, rows: readonly ArtifactRow[]): ArtifactTreeNode[] {
+	const root: FolderBuild = { dirs: new Map(), files: [] };
+	for (const row of rows) {
+		let build = root;
+		for (const segment of row.folder ? row.folder.split("/") : []) {
+			let next = build.dirs.get(segment);
+			if (!next) {
+				next = { dirs: new Map(), files: [] };
+				build.dirs.set(segment, next);
+			}
+			build = next;
+		}
+		build.files.push({ kind: "file", name: row.name, path: row.artifact.path, row });
+	}
+
+	const materialize = (build: FolderBuild, prefix: string): ArtifactTreeNode[] => {
+		const folders = [...build.dirs.entries()].map(([name, child]): ArtifactTreeFolder => {
+			let chain = startFolderChain({ kind: "dir", name, path: `${prefix}/${name}` });
+			let paths: readonly string[] = chain.paths;
+			let children = materialize(child, chain.path);
+			for (;;) {
+				const extension = extendFolderChain(chain, children);
+				if (!extension) break;
+				chain = extension.chain;
+				paths = [...paths, ...extension.directory.paths];
+				children = extension.directory.children;
+			}
+			let files = 0;
+			let fresh = false;
+			let live = false;
+			for (const node of children) {
+				if (node.kind === "dir") {
+					files += node.files;
+					fresh ||= node.fresh;
+					live ||= !node.deleted;
+				} else {
+					files += 1;
+					fresh ||= node.row.fresh;
+					live ||= node.row.artifact.state !== "deleted";
+				}
+			}
+			return {
+				kind: "dir",
+				name: chain.label,
+				path: chain.path,
+				paths,
+				children,
+				files,
+				fresh,
+				deleted: !live,
+			};
+		});
+		return [...folders.sort(byName), ...build.files.sort(byName)];
+	};
+
+	return materialize(root, dir);
 }
 
 export function artifactTimeLabel(t: Translator, changedAt: number): string {

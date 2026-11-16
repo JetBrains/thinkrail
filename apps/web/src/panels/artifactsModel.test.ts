@@ -6,7 +6,13 @@ import {
 } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { artifactsWatermark, hostLacksArtifacts, selectArtifactsUnseen } from "../store";
-import { artifactRows, artifactTimeLabel, mentionText } from "./artifactsModel";
+import {
+	type ArtifactTreeNode,
+	artifactRows,
+	artifactTimeLabel,
+	artifactTree,
+	mentionText,
+} from "./artifactsModel";
 
 const snapshot: WorkspaceArtifactsSnapshot = {
 	workspaceId: "w1",
@@ -145,6 +151,111 @@ test("only a host known to be older lacks artifacts, not one still connecting", 
 	expect(hostLacksArtifacts(null)).toBe(false);
 	expect(hostLacksArtifacts(ARTIFACTS_PROTOCOL_VERSION - 1)).toBe(true);
 	expect(hostLacksArtifacts(ARTIFACTS_PROTOCOL_VERSION)).toBe(false);
+});
+
+function treeOf(
+	paths: readonly (readonly [
+		string,
+		{ deleted?: boolean; fresh?: boolean; sessionId?: string }?,
+	])[],
+	sessionId: string | null = null,
+): ArtifactTreeNode[] {
+	const tree: WorkspaceArtifactsSnapshot = {
+		workspaceId: "w1",
+		dir: ".thinkrail/context",
+		artifacts: paths.map(([path, flags = {}]) => ({
+			path: `.thinkrail/context/${path}`,
+			state: flags.deleted ? "deleted" : "live",
+			size: 1,
+			changedAt: 1,
+			firstSeenAt: flags.fresh ? 9 : 1,
+			...(flags.sessionId ? { sessionId: flags.sessionId } : {}),
+		})),
+		outputs: null,
+	};
+	const rows = artifactRows(tree, { sessionId, highlightSince: 5, showIgnored: false, specs: [] });
+	return artifactTree(tree.dir, rows.artifacts);
+}
+
+function outline(nodes: readonly ArtifactTreeNode[]): unknown[] {
+	return nodes.map((node) =>
+		node.kind === "file"
+			? node.name
+			: {
+					[node.name]: outline(node.children),
+					files: node.files,
+					...(node.fresh ? { fresh: true } : {}),
+					...(node.deleted ? { deleted: true } : {}),
+				},
+	);
+}
+
+test("the tree puts folders first, A to Z, and compacts single-folder chains", () => {
+	const nodes = treeOf([
+		["notes.md"],
+		["TASK-a.md"],
+		["mockups/features/_scratch/w1/a.png"],
+		["mockups/features/_scratch/w3/b.png", { fresh: true }],
+		["mockups/features/index.html"],
+		["reports/r.md"],
+		["gallery/analyzers/images/x/1.png", { deleted: true }],
+		["gallery/analyzers/images/x/2.png", { deleted: true }],
+		["gallery/analyzers/images/y.png"],
+	]);
+	expect(outline(nodes)).toEqual([
+		{
+			"gallery/analyzers/images": [{ x: ["1.png", "2.png"], files: 2, deleted: true }, "y.png"],
+			files: 3,
+		},
+		{
+			"mockups/features": [
+				{
+					_scratch: [
+						{ w1: ["a.png"], files: 1 },
+						{ w3: ["b.png"], files: 1, fresh: true },
+					],
+					files: 2,
+					fresh: true,
+				},
+				"index.html",
+			],
+			files: 3,
+			fresh: true,
+		},
+		{ reports: ["r.md"], files: 1 },
+		"notes.md",
+		"TASK-a.md",
+	]);
+});
+
+test("a folder keeps every folder of its chain and the file rows keep worktree paths", () => {
+	const [folder] = treeOf([["a/b/c/d.md"]]);
+	if (folder?.kind !== "dir") throw new Error("expected a folder");
+	expect(folder.name).toBe("a/b/c");
+	expect(folder.path).toBe(".thinkrail/context/a/b/c");
+	expect(folder.paths).toEqual([
+		".thinkrail/context/a",
+		".thinkrail/context/a/b",
+		".thinkrail/context/a/b/c",
+	]);
+	expect(folder.children[0]?.path).toBe(".thinkrail/context/a/b/c/d.md");
+});
+
+test("the chat filter reshapes the tree to that chat's folders", () => {
+	const paths = [
+		["mockups/features/a.png", { sessionId: "s1" }],
+		["mockups/onboarding/b.html", { sessionId: "s2" }],
+	] as const;
+	expect(outline(treeOf(paths))).toEqual([
+		{
+			mockups: [
+				{ features: ["a.png"], files: 1 },
+				{ onboarding: ["b.html"], files: 1 },
+			],
+			files: 2,
+		},
+	]);
+	expect(outline(treeOf(paths, "s1"))).toEqual([{ "mockups/features": ["a.png"], files: 1 }]);
 });
 
 test("a mention is the composer's own @path form", () => {
