@@ -651,7 +651,8 @@ narrow window (`expectDialogContained`), and the older-host notice with no `sear
 wire. Open-in-browser coverage (`open-in-browser.spec.ts`) writes a page and its sibling stylesheet into the
 fixture repository and pins the visualize card's action opening a new page at `/view/<workspace>/<path>` whose
 sibling sheet applies, whose inline script runs and whose `fetch` to the host is blocked, the Files tree menu
-offering it for an HTML file and not for Markdown, and the file tab's toolbar carrying it. Visualize coverage
+offering it for an HTML file and not for Markdown, and the file tab's toolbar carrying it — for an `.xhtml`
+file too, whose single renderer would otherwise hide the toolbar. Visualize coverage
 (`visualize.spec.ts`) independently seeds short historical tool-call/result transcripts through the
 sanctioned session fixture before workspace entry. It pins completed/default-expanded diagrams,
 fullscreen SVG growth, pan/reset/Escape and claimed WebKit pinch gestures, exact comparison pros/cons

@@ -90,6 +90,10 @@ test("the Files tree offers Open in browser for an HTML file only, and its tab c
 	await openFixtureProject(app);
 	const workspace = await createWorkspaceViaDialog(app);
 	writeFileSync(join(workspace.worktreePath, "site.html"), "<!doctype html><p>site</p>");
+	writeFileSync(
+		join(workspace.worktreePath, "page.xhtml"),
+		'<html xmlns="http://www.w3.org/1999/xhtml"><body><p>xhtml</p></body></html>',
+	);
 	await revealWorkbenchTool(app, "files");
 
 	const readme = app.getByTestId("file-node").filter({ hasText: "README.md" });
@@ -113,4 +117,9 @@ test("the Files tree offers Open in browser for an HTML file only, and its tab c
 	await site.click();
 	const pane = app.getByTestId("resource-view-toggle");
 	await expect(pane.getByTestId("open-in-browser")).toBeVisible();
+
+	await app.getByTestId("file-node").filter({ hasText: "page.xhtml" }).click();
+	await expect(
+		app.getByTestId("resource-view-toggle").getByTestId("open-in-browser"),
+	).toBeVisible();
 });

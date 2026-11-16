@@ -15,7 +15,7 @@ import { isPhoneViewport } from "../lib";
 import type { FileTab } from "../store";
 import { selectWorkspaceById, useAppStore } from "../store";
 import { getTransport } from "../transport";
-import { OpenInBrowserButton } from "./OpenInBrowserButton";
+import { OpenInBrowserButton, useOpensInBrowser } from "./OpenInBrowserButton";
 import { resourceBytesUrl, useResetViewStateOnImplementationChange } from "./resourcePane";
 import { reviewFlagFor } from "./reviewModel";
 import { SendReviewButton } from "./SendReviewButton";
@@ -61,7 +61,8 @@ export function FilePane({ tab }: { tab: FileTab }) {
 		resourceBytesUrl(tab.workspaceId, tab.path),
 	);
 	const reviews = reviewable ? [review.worktree] : [];
-	const showToolbar = candidates.length >= 2 || fileHasDraft;
+	const opensInBrowser = useOpensInBrowser(tab.path);
+	const showToolbar = candidates.length >= 2 || fileHasDraft || opensInBrowser;
 	const saveViewState = (state: unknown) => {
 		const current = useAppStore
 			.getState()

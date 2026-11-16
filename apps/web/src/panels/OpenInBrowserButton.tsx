@@ -6,14 +6,14 @@ import { ContextMenuItem } from "@thinkrail/ui/context-menu";
 import { supportsBrowserView, useAppStore } from "../store";
 import { isBrowserPage, openInBrowser } from "./resourcePane";
 
-export function useBrowserViewSupported(): boolean {
-	return useAppStore((s) => supportsBrowserView(s.protocolVersion));
+export function useOpensInBrowser(path: string): boolean {
+	const supported = useAppStore((s) => supportsBrowserView(s.protocolVersion));
+	return supported && isBrowserPage(path);
 }
 
 export function OpenInBrowserButton({ workspaceId, path }: ResourceOpenInBrowserProps) {
 	const t = useT();
-	const supported = useBrowserViewSupported();
-	if (!supported || !isBrowserPage(path)) return null;
+	if (!useOpensInBrowser(path)) return null;
 	return (
 		<IconButton
 			icon={ExternalLink}
@@ -31,8 +31,7 @@ export function OpenInBrowserMenuItem({
 	testId,
 }: ResourceOpenInBrowserProps & { testId: string }) {
 	const t = useT();
-	const supported = useBrowserViewSupported();
-	if (!supported || !isBrowserPage(path)) return null;
+	if (!useOpensInBrowser(path)) return null;
 	return (
 		<ContextMenuItem data-testid={testId} onSelect={() => openInBrowser(workspaceId, path)}>
 			<ExternalLink />

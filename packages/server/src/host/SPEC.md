@@ -65,7 +65,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   form-action 'none'`. The page's scripts run (it is the user's own file, opened on purpose), but in an
   opaque origin that touches nothing of the app, and with no fetch or WebSocket they cannot reach the
   host's unauthenticated wire (Decision 7). Never add CORS headers to it: they would let any website read
-  workspace files, the `fonts` poller's `fonts.changed` nudge reaching
+  workspace files — any site can make an opaque-origin document, so even `Access-Control-Allow-Origin: null`
+  would. Known limitation that follows: what browsers fetch in CORS mode from the page's opaque origin — a
+  module script by `src` and `@font-face` files — does not load (classic scripts, inline modules,
+  stylesheets, images and `data:` fonts do); lifting it needs an isolated preview origin, not CORS, the `fonts` poller's `fonts.changed` nudge reaching
   only sockets whose `?protocol=` is at least `FONTS_PROTOCOL_VERSION`; the **`/speech` socket**
   (`SPEECH_SOCKET_ROUTE`, refused below `SPEECH_PROTOCOL_VERSION`), which shares the one `Bun.serve`
   websocket handler but is tagged at upgrade. Its `open` / `message` / `close` go straight to that
