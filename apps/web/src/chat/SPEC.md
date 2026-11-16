@@ -465,9 +465,17 @@ content and their own controls, which a treeitem's name would flatten and its ro
   and caret intact.
 - **Scrolling stays the controller's.** A mounted target that sticks out is revealed with
   `revealElement` (`nearest`, user-navigation; nested items keep the breadcrumb inset), an unmounted one
-  with `revealRow` and focused on "found"; a target on the latest row returns to the edge instead, so
+  with `revealRow` and focused on "found"; an unmounted latest row itself returns to the edge instead, so
   reaching the newest item re-follows rather than detaching. Focus always uses `preventScroll`, and a
-  target already on screen only moves focus, so walking visible items never detaches a following reader.
+  target already on screen only moves focus, so walking visible items never detaches a following reader
+  — except on the latest row: a keyboard expand there (→/l, Enter, the menu's Expand) and focus entering
+  one of its nested steps leave follow through the scroll hook's `leaveFollow` (`readerLeft` while
+  following). Nothing scrolls and a working agent shows **Follow response**; an in-view `revealElement`
+  was rejected because its reveal releases a working chat's runway, which can move the view. Both are
+  explicit reading actions: following the growing row to its edge would carry the focused header or step
+  off screen, and leaving before the toggle lets the fold anchor hold the header. Detaching only through
+  a reveal made the outcome depend on whether the expand's growth was measured before the next key
+  (PR #1382; flaky on a short, terminal-open chat).
 - **Virtualization.** When the focused item's row unmounts (a wheel scroll), its layout cleanup moves
   focus to the feed (`tabIndex=-1`, no ring) before the browser drops it to `<body>`, so the shell's
   recovery never sends it to the composer. The cursor survives; the next navigation key or Tab on the

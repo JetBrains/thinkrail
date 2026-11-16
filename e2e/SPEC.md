@@ -434,7 +434,9 @@ wire in `afterEach`.
 `keyboard-chat.spec.ts` pins the chat transcript's keyboard model on seeded chats: `Mod+↑` from the
 composer onto the newest message and Esc back with the draft and caret intact (a multi-line draft first
 takes the caret to its start), ↑/↓ with k/j and Home/End, →/← and l/h expanding an Activity and walking
-its nested Thinking and tool steps, C (clipboard), O (a preview tab) and the Shift+F10 item menu, Tab
+its nested Thinking and tool steps, a keyboard expand of the newest Activity in a chat shortened by the
+bottom Terminal and focus entering an on-screen step of it leaving follow without scrolling the focused
+header or step away, C (clipboard), O (a preview tab) and the Shift+F10 item menu, Tab
 walking only the focused item's controls then leaving, PgUp/PgDn from the composer paging the transcript
 with focus kept, Latest from the keyboard and a history jump landing on the message, focus parked on the
 feed when a wheel scroll unmounts the focused row and the next key bringing it back, newest-first order,

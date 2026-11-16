@@ -60,6 +60,7 @@ export interface ChatScroll {
 	armImmediateTurn: () => void;
 	cancelImmediateTurn: (streaming: boolean) => void;
 	cancelAutomaticReveal: () => void;
+	leaveFollow: () => void;
 	revealElement: (target: HTMLElement, options: ChatRevealOptions) => void;
 	revealRow: (
 		rowId: string,
@@ -1083,6 +1084,10 @@ export function useChatScroll(
 
 	const cancelAutomaticReveal = useCallback(() => controller.cancelReveal(), [controller]);
 
+	const leaveFollow = useCallback(() => {
+		if (controller.getSnapshot().following) readerLeft();
+	}, [controller, readerLeft]);
+
 	const revealElement = useCallback(
 		(target: HTMLElement, options: ChatRevealOptions) => {
 			const scroller = scrollerRef.current;
@@ -1405,6 +1410,7 @@ export function useChatScroll(
 		armImmediateTurn,
 		cancelImmediateTurn,
 		cancelAutomaticReveal,
+		leaveFollow,
 		revealElement,
 		revealRow,
 		prepareFoldChange,
