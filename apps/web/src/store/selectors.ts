@@ -90,6 +90,7 @@ interface AnalyticsConsentState {
 	protocolVersion: number | null;
 	welcomeGeneration: number;
 	analyticsConsentConfirmed: boolean;
+	additionalAnalytics: boolean;
 }
 
 export function selectAnalyticsConsentSupported(
@@ -103,6 +104,7 @@ export function selectAnalyticsConsentSupported(
 export function selectAnalyticsConsentPromptOpen(state: AnalyticsConsentState): boolean {
 	return (
 		selectAnalyticsConsentSupported(state) &&
+		state.additionalAnalytics &&
 		state.welcomeGeneration > 0 &&
 		!state.analyticsConsentConfirmed
 	);

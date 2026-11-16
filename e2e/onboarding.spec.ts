@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import type { AppConfig } from "@thinkrail/contracts";
 import { removeTree } from "@thinkrail/shared/removeTree";
-import { seedAnalyticsConsent } from "./fixtures/analyticsConsent";
+import { offerAdditionalAnalytics, seedAnalyticsConsent } from "./fixtures/analyticsConsent";
 import { openAppFresh, resetApp } from "./fixtures/app";
 import { openProviders } from "./fixtures/jbcentral";
 import { E2E_DATA_DIR, E2E_HOME_DIR, E2E_PI_AGENT_DIR } from "./fixtures/paths";
@@ -307,6 +307,7 @@ test("Get started asks about usage data as its own step before the models, or th
 	page,
 	baseURL,
 }) => {
+	await offerAdditionalAnalytics(page.context());
 	await setOnboardingDismissed(baseURL, false);
 	await seedAnalyticsConsent(baseURL, false, false);
 	try {
@@ -345,10 +346,41 @@ test("Get started asks about usage data as its own step before the models, or th
 	}
 });
 
+test("without additional sharing on offer, Get started goes straight to the models and nothing asks about usage data", async ({
+	page,
+	baseURL,
+}) => {
+	await setOnboardingDismissed(baseURL, false);
+	await seedAnalyticsConsent(baseURL, false, false);
+	try {
+		await openColdStart(page, baseURL);
+
+		const wizard = page.getByTestId("onboarding-wizard");
+		const consent = page.getByTestId("analytics-consent-dialog");
+		await wizard.getByTestId("onboarding-start").click();
+		await expect(wizard).toHaveAttribute("data-step", "connect");
+		await expect(consent).toHaveCount(0);
+
+		await openAppFresh(page);
+		await expect(wizard).toHaveAttribute("data-step", "intro");
+		await wizard.getByTestId("onboarding-skip").click();
+		await expect(wizard).toHaveCount(0);
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await expect(consent).toHaveCount(0);
+		expect([readConfig()?.analyticsEnabled, readConfig()?.analyticsConsentConfirmed]).toEqual([
+			false,
+			false,
+		]);
+	} finally {
+		await seedAnalyticsConsent(baseURL, false, true);
+	}
+});
+
 test("a failed usage-data save keeps the privacy step, its off choice and the error until a retry lands", async ({
 	page,
 	baseURL,
 }) => {
+	await offerAdditionalAnalytics(page.context());
 	await setOnboardingDismissed(baseURL, false);
 	await seedAnalyticsConsent(baseURL, false, false);
 	try {
@@ -393,6 +425,7 @@ test("an opt-out confirmed elsewhere while the privacy step is open is adopted, 
 	page,
 	baseURL,
 }) => {
+	await offerAdditionalAnalytics(page.context());
 	await setOnboardingDismissed(baseURL, false);
 	await seedAnalyticsConsent(baseURL, false, false);
 	try {

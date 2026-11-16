@@ -373,6 +373,7 @@ export function initTransport(): WsTransport {
 				welcome.hostUpdate,
 				typeof welcome.appVersion === "string" ? welcome.appVersion : undefined,
 				welcome.speech,
+				typeof welcome.additionalAnalytics === "boolean" ? welcome.additionalAnalytics : undefined,
 			);
 		const connectionGeneration = useAppStore.getState().connectionGeneration;
 		refreshLoadedWorkspaceLists(connectionGeneration);

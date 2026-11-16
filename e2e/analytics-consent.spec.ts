@@ -7,7 +7,11 @@ import {
 	type AppConfigUpdate,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
-import { seedAnalyticsConsent } from "./fixtures/analyticsConsent";
+import {
+	offerAdditionalAnalytics,
+	relayWelcome,
+	seedAnalyticsConsent,
+} from "./fixtures/analyticsConsent";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 import { shot } from "./fixtures/screenshots";
 
@@ -54,6 +58,10 @@ async function waitForPrime(updates: AppConfigUpdate[]): Promise<void> {
 			analyticsConsentConfirmed: false,
 		});
 }
+
+test.beforeEach(async ({ context }) => {
+	await offerAdditionalAnalytics(context);
+});
 
 test.afterEach(async ({ baseURL }) => {
 	await seedAnalyticsConsent(baseURL, false, true);
@@ -289,7 +297,7 @@ test("consent takes precedence over an addressed survey invitation", async ({ pa
 	let browserSocket: WebSocketRoute | undefined;
 	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
 		browserSocket = socket;
-		socket.connectToServer();
+		relayWelcome(socket);
 	});
 	await page.goto("/");
 	await expect(page.getByTestId("analytics-consent-dialog")).toBeVisible();
@@ -307,20 +315,13 @@ test("pre-v65 hosts keep the legacy Privacy switch without a consent dialog or c
 }) => {
 	await seedAnalyticsConsent(baseURL, true, false);
 	const updates = trackSettingsUpdates(page);
-	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
-		const server = socket.connectToServer();
-		server.onMessage((message) => {
-			const frame = JSON.parse(String(message)) as {
-				channel?: string;
-				data: { protocolVersion: number; config: Partial<AppConfig> };
-			};
-			if (frame.channel === WS_CHANNELS.serverWelcome) {
-				frame.data.protocolVersion = ANALYTICS_CONSENT_PROTOCOL_VERSION - 1;
-				delete frame.data.config.analyticsConsentConfirmed;
-				socket.send(JSON.stringify(frame));
-			} else socket.send(message);
-		});
-	});
+	await page.routeWebSocket(/\/ws(\?|$)/, (socket) =>
+		relayWelcome(socket, (welcome) => {
+			welcome.protocolVersion = ANALYTICS_CONSENT_PROTOCOL_VERSION - 1;
+			delete welcome.additionalAnalytics;
+			delete (welcome.config as Partial<AppConfig>).analyticsConsentConfirmed;
+		}),
+	);
 	await page.goto("/");
 	await openPrivacy(page, true);
 	await expect(page.getByTestId("analytics-consent-dialog")).toBeHidden();

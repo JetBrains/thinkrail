@@ -1239,6 +1239,8 @@ interface AppState {
 	installUserFonts: (snapshot: UserFontsSnapshot | null) => void;
 	/** Voice input as the host reports it; `null` before a v107 welcome or from an older host. */
 	speech: SpeechStatus | null;
+	/** Whether the host offers the additional-usage-data preference (`server.welcome`). */
+	additionalAnalytics: boolean;
 	installSpeechStatus: (status: SpeechStatus | null) => void;
 	onboardingDismissed: boolean;
 	onboardingWizard: OnboardingWizardGate;
@@ -1255,6 +1257,7 @@ interface AppState {
 		hostUpdate?: HostUpdateNotice,
 		hostAppVersion?: string,
 		speech?: SpeechStatus,
+		additionalAnalytics?: boolean,
 	) => void;
 	applyHostUpdate: (hostUpdate: HostUpdateNotice) => void;
 	installProjectSnapshot: (projects: Project[], recentProjects: Project[]) => void;
@@ -2640,6 +2643,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	userFonts: null,
 	installUserFonts: (snapshot) => set({ userFonts: snapshot }),
 	speech: null,
+	additionalAnalytics: true,
 	installSpeechStatus: (speech) => set({ speech }),
 	onboardingDismissed: DEFAULT_CONFIG.onboardingDismissed,
 	onboardingWizard: "pending",
@@ -2821,6 +2825,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		hostUpdate,
 		hostAppVersion,
 		speech,
+		additionalAnalytics,
 	) =>
 		set((state) => {
 			const openProjects = sortOpenProjects(projects.filter((project) => project.closed !== true));
@@ -2838,6 +2843,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				hostUpdate: hostUpdate ?? null,
 				hostAppVersion: hostAppVersion ?? null,
 				speech: speech ?? null,
+				additionalAnalytics: additionalAnalytics ?? true,
 				...(config ? configPatch(config) : {}),
 				...reconcileProjectNavigation(state, openProjects),
 				...pruneExpandedProjects(state, openProjects),

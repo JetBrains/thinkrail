@@ -60,7 +60,12 @@ test("an unconfirmed saved true preference remains unconfirmed and opens the pro
 
 test("capability requires the current host's v65 welcome, not connection status", () => {
 	for (const protocolVersion of [null, 0, ANALYTICS_CONSENT_PROTOCOL_VERSION - 1]) {
-		const state = { protocolVersion, welcomeGeneration: 1, analyticsConsentConfirmed: false };
+		const state = {
+			protocolVersion,
+			welcomeGeneration: 1,
+			analyticsConsentConfirmed: false,
+			additionalAnalytics: true,
+		};
 		expect(selectAnalyticsConsentSupported(state)).toBe(false);
 		expect(selectAnalyticsConsentPromptOpen(state)).toBe(false);
 	}
@@ -68,7 +73,12 @@ test("capability requires the current host's v65 welcome, not connection status"
 		ANALYTICS_CONSENT_PROTOCOL_VERSION,
 		ANALYTICS_CONSENT_PROTOCOL_VERSION + 1,
 	]) {
-		const state = { protocolVersion, welcomeGeneration: 0, analyticsConsentConfirmed: false };
+		const state = {
+			protocolVersion,
+			welcomeGeneration: 0,
+			analyticsConsentConfirmed: false,
+			additionalAnalytics: true,
+		};
 		expect(selectAnalyticsConsentSupported(state)).toBe(true);
 		expect(selectAnalyticsConsentPromptOpen(state)).toBe(false);
 		expect(selectAnalyticsConsentPromptOpen({ ...state, welcomeGeneration: 1 })).toBe(true);
@@ -99,4 +109,27 @@ test("confirmed settings converge through broadcasts and subsequent welcomes wit
 		store().installWelcomeSnapshot(ANALYTICS_CONSENT_PROTOCOL_VERSION, [], [], config);
 		expect(selectAnalyticsConsentPromptOpen(store())).toBe(false);
 	}
+});
+
+test("a host that does not offer additional sharing never opens the consent prompt", () => {
+	const install = (additionalAnalytics?: boolean) =>
+		useAppStore
+			.getState()
+			.installWelcomeSnapshot(
+				ANALYTICS_CONSENT_PROTOCOL_VERSION,
+				[],
+				[],
+				DEFAULT_CONFIG,
+				undefined,
+				undefined,
+				undefined,
+				undefined,
+				additionalAnalytics,
+			);
+	install(false);
+	expect(useAppStore.getState().additionalAnalytics).toBe(false);
+	expect(selectAnalyticsConsentPromptOpen(useAppStore.getState())).toBe(false);
+	install(undefined);
+	expect(useAppStore.getState().additionalAnalytics).toBe(true);
+	expect(selectAnalyticsConsentPromptOpen(useAppStore.getState())).toBe(true);
 });
