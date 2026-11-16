@@ -25,12 +25,12 @@ import { type ListProps, Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { useShallow } from "zustand/react/shallow";
 import {
 	EMPTY_RUNTIME,
+	selectArtifactsSmartOffered,
 	selectChatAttended,
 	selectChatsContainer,
 	selectReadyCompletionAck,
 	selectWorkspaceById,
 	specPathMatcher,
-	supportsArtifactRoles,
 	toast,
 	useAppStore,
 } from "@/store";
@@ -303,9 +303,7 @@ const ChatTranscript = forwardRef<
 		[sessionId, workspaceTurns],
 	);
 	const artifactsSnapshot = useAppStore((state) => state.artifactsByWorkspace[workspaceId]);
-	const smartArtifacts = useAppStore(
-		(state) => state.artifactsSmart && supportsArtifactRoles(state.protocolVersion),
-	);
+	const smartArtifacts = useAppStore(selectArtifactsSmartOffered);
 	const roundArtifacts = useMemo(
 		() => sessionRoundArtifacts(artifactsSnapshot, sessionId, smartArtifacts),
 		[artifactsSnapshot, sessionId, smartArtifacts],

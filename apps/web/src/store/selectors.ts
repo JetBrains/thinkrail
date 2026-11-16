@@ -1321,12 +1321,19 @@ export function supportsArtifactRoles(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= ARTIFACT_ROLES_PROTOCOL_VERSION;
 }
 
+export function selectArtifactsSmartOffered(state: {
+	artifactsSmart: boolean;
+	protocolVersion: number | null;
+}): boolean {
+	return state.artifactsSmart && supportsArtifactRoles(state.protocolVersion);
+}
+
 export function selectArtifactsView(state: {
 	artifactsView: ArtifactsView | null;
 	artifactsSmart: boolean;
 	protocolVersion: number | null;
 }): ArtifactsView {
-	const smart = state.artifactsSmart && supportsArtifactRoles(state.protocolVersion);
+	const smart = selectArtifactsSmartOffered(state);
 	if (state.artifactsView === "smart") return smart ? "smart" : "list";
 	return state.artifactsView ?? (smart ? "smart" : "list");
 }

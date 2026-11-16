@@ -11,8 +11,8 @@ import {
 	artifactsWatermark,
 	hostLacksArtifacts,
 	selectActiveFilePath,
+	selectArtifactsSmartOffered,
 	selectArtifactsView,
-	supportsArtifactRoles,
 	supportsArtifacts,
 	useAppStore,
 } from "../store";
@@ -74,9 +74,7 @@ export function ArtifactsPanel({
 		(s) => supportsArtifacts(s.protocolVersion) && s.fileClipboard !== null,
 	);
 	const view = useAppStore(selectArtifactsView);
-	const smartOffered = useAppStore(
-		(s) => s.artifactsSmart && supportsArtifactRoles(s.protocolVersion),
-	);
+	const smartOffered = useAppStore(selectArtifactsSmartOffered);
 	const expandedPaths = useAppStore((s) => s.artifactsTreeExpandedByWorkspace[workspaceId]);
 	const activePath = useAppStore((s) => selectActiveFilePath(s, workspaceId));
 	const [allChats, setAllChats] = useState(false);
