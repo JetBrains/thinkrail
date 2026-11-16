@@ -88,6 +88,13 @@ export {
 	USER_FONTS_ROUTE,
 	WORKSPACE_VIEW_ROUTE,
 } from "./domain";
+export type { KeybindingModifier, KeybindingOverrides } from "./keybindingChord";
+export {
+	isKeybindingChord,
+	isKeybindingOverrides,
+	isModifierKeyCode,
+	KEYBINDING_MODIFIERS,
+} from "./keybindingChord";
 export type {
 	ContentMatch,
 	FieldMatch,

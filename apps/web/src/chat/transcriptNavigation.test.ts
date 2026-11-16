@@ -4,6 +4,7 @@ import { type ActivityStep, type ChatRow, projectRows, type RoutineToolStep } fr
 import {
 	composerTranscriptStep,
 	isEnterTranscriptKey,
+	keyboardLeavesFollow,
 	newestContentRowId,
 	type TranscriptNavItem,
 	transcriptItemCopyText,
@@ -120,6 +121,40 @@ describe("transcriptItems", () => {
 		expect(resolveTreeMove("ArrowRight", model(), 1)).toEqual({ kind: "focus", index: 2 });
 		expect(resolveTreeMove("ArrowLeft", model(), 3)).toEqual({ kind: "focus", index: 1 });
 		expect(resolveTreeMove("ArrowDown", model(), 3)).toEqual({ kind: "focus", index: 4 });
+	});
+});
+
+describe("leaving follow from the keyboard", () => {
+	const latestGroup = activity("activity:t5", [
+		tool("t5"),
+		thinking("a5:thinking:1", [tool("t6"), tool("t7")]),
+	]);
+	const items = transcriptItems([...rows, latestGroup], () => true);
+	const latest = [latestGroup.id, "a5:divider"];
+	const leaves = (id: string, change: "focus" | "expand") => {
+		const found = items.find((candidate) => candidate.id === id);
+		if (!found) throw new Error(`missing ${id}`);
+		return keyboardLeavesFollow(found, latest, change);
+	};
+
+	test("focus entering any step of the latest row leaves follow", () => {
+		expect(leaves("t5", "focus")).toBe(true);
+		expect(leaves("a5:thinking:1", "focus")).toBe(true);
+		expect(leaves("t7", "focus")).toBe(true);
+	});
+
+	test("focus on the latest row itself or on a step elsewhere keeps follow", () => {
+		expect(leaves("activity:t5", "focus")).toBe(false);
+		expect(leaves("t1", "focus")).toBe(false);
+		expect(leaves("t2", "focus")).toBe(false);
+		expect(leaves("a3", "focus")).toBe(false);
+	});
+
+	test("a keyboard expand leaves follow only on the latest row", () => {
+		expect(leaves("activity:t5", "expand")).toBe(true);
+		expect(leaves("a5:thinking:1", "expand")).toBe(true);
+		expect(leaves("activity:t1", "expand")).toBe(false);
+		expect(leaves("a1:thinking:1", "expand")).toBe(false);
 	});
 });
 

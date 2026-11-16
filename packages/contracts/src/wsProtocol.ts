@@ -143,7 +143,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 122;
+export const PROTOCOL_VERSION = 123;
+export const KEYBINDINGS_PROTOCOL_VERSION = 123;
 export const BROWSER_VIEW_PROTOCOL_VERSION = 122;
 export const ARTIFACTS_PROTOCOL_VERSION = 121;
 export const IMAGE_REFS_PROTOCOL_VERSION = 120;
@@ -1632,6 +1633,7 @@ export type WsErrorCode =
 	| "TEXT_SEARCH_TIMEOUT"
 	| "TEXT_SEARCH_FAILED"
 	| "FRAME_TOO_LARGE"
+	| "KEYBINDINGS_INVALID"
 	| SpeechErrorCode;
 
 export interface WsResponse {

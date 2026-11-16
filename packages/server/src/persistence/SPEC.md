@@ -91,7 +91,9 @@ Config validation normalizes the closed theme mode plus complete opaque system p
 composer-growth preference, the closed Windows terminal-shell preference (invalid/absent →
 `DEFAULT_CONFIG.terminalWindowsShell`), the question panel height (whole `40–100` percent), chat/file line
 widths plus their pane-bound switches, and the
-JetBrains quota boolean + whole `1–3600` second cadence over their defaults; it accepts only the current bounded
+JetBrains quota boolean + whole `1–3600` second cadence over their defaults, and the `keybindings` map
+(chords failing `isKeybindingChord` dropped, an entry left with none dropped, unknown ids and stored `[]`
+kept); it accepts only the current bounded
 `customLayoutPresets` catalog as synchronized layout data. Current/default preset ids, group limits, and
 chat message order are not config fields; retired config shapes are stripped rather than upgraded or
 preserved as extensions. Historical `layouts/` files remain untouched and inert.

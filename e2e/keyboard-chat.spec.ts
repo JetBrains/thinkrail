@@ -414,6 +414,88 @@ test("a nested step of the newest group is revealed itself when its row comes ba
 	}
 });
 
+async function openShortTallLatestActivity(page: Page, name: string) {
+	await openFixtureProject(page);
+	const session = seedTallLatestActivity(name);
+	await enterDefaultWorkspace(page);
+	await expect(page.getByTestId("workspace-workbench")).toHaveAttribute(
+		"data-layout-status",
+		"settled",
+	);
+	await page.getByTestId("chat-input").focus();
+	await page.keyboard.press("Control+Backquote");
+	await expect(page.getByTestId("bottom-panel")).toBeVisible();
+	const chatScroll = page.getByTestId("chat-scroll");
+	await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
+	await waitForScrollStability(chatScroll);
+	return { session, chatScroll };
+}
+
+test("a keyboard expand of the newest group in a short chat leaves follow and keeps the focused header and step on screen", async ({
+	page,
+}) => {
+	const { session, chatScroll } = await openShortTallLatestActivity(
+		page,
+		"keyboard short latest group",
+	);
+	try {
+		await enterTranscript(page);
+		const group = activityRow(page);
+		const toggle = group.getByTestId("activity-group-toggle");
+		await expect(group).toBeFocused();
+		await page.keyboard.press("ArrowRight");
+		await expect(toggle).toHaveAttribute("aria-expanded", "true");
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+		await waitForScrollStability(chatScroll);
+		await expect(group).toBeFocused();
+		await expect(toggle).toBeInViewport();
+
+		await page.keyboard.press("ArrowRight");
+		const first = item(page, "read-1");
+		await expect(first).toBeFocused();
+		await waitForScrollStability(chatScroll);
+		await expect(first).toBeInViewport();
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+test("keyboard focus entering an on-screen step of the newest group leaves follow without scrolling", async ({
+	page,
+}) => {
+	const { session, chatScroll } = await openShortTallLatestActivity(
+		page,
+		"keyboard short latest step",
+	);
+	try {
+		const toggle = activityRow(page).getByTestId("activity-group-toggle");
+		await toggle.click();
+		await expect(toggle).toHaveAttribute("aria-expanded", "true");
+		await waitForScrollStability(chatScroll);
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
+		const last = item(page, "read-30");
+		await expect(last).toBeInViewport();
+
+		await enterTranscript(page);
+		await expect(activityRow(page)).toBeFocused();
+		const before = (await readChatScrollGeometry(chatScroll)).scrollTop;
+		await page.keyboard.press("End");
+		await expect(page.locator('[data-chat-row-id$=":divider"]').last()).toBeFocused();
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
+		await page.keyboard.press("ArrowUp");
+		await expect(last).toBeFocused();
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+		await waitForScrollStability(chatScroll);
+		expect(
+			Math.abs((await readChatScrollGeometry(chatScroll)).scrollTop - before),
+		).toBeLessThanOrEqual(1);
+		await expect(last).toBeInViewport();
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
 test("the focused item keeps the keyboard when its row unmounts, and the next key brings it back", async ({
 	page,
 }) => {

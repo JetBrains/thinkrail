@@ -1,13 +1,9 @@
 import type { MessageKey } from "@thinkrail/locales";
 import { type CommandShortcut, shortcutKeys } from "../commands";
 import { platformFamily } from "../lib";
-import {
-	FOCUS_GROUP_BINDINGS,
-	type KeybindingId,
-	keybindingKeys,
-	keybindingShortcut,
-	keysLabel,
-} from "./keybindings";
+import { keyCap } from "./chord";
+import { displayShortcut, FOCUS_GROUP_BINDINGS, type KeybindingId, keysLabel } from "./keybindings";
+import { keybindingShortcut, keybindingShortcuts, type ResolvedKeybindings } from "./resolve";
 
 export const SHORTCUT_SURFACES = [
 	"general",
@@ -112,7 +108,11 @@ interface CatalogEntryBase {
 
 export type ShortcutCatalogEntry = CatalogEntryBase &
 	(
-		| { readonly bindings: readonly [KeybindingId, ...KeybindingId[]]; readonly keys?: never }
+		| {
+				readonly bindings: readonly [KeybindingId, ...KeybindingId[]];
+				readonly bindingTitle?: MessageKey;
+				readonly keys?: never;
+		  }
 		| { readonly keys: readonly [ShortcutKey, ...ShortcutKey[]]; readonly bindings?: never }
 	);
 
@@ -190,6 +190,7 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 		title: "shortcuts.focusGroup",
 		surface: "general",
 		bindings: FOCUS_GROUP_BINDINGS,
+		bindingTitle: "commands.focus.group",
 	},
 	{
 		id: "dictation",
@@ -790,7 +791,7 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 
 export interface ShortcutContext {
 	readonly desktop: boolean;
-	readonly platform?: string;
+	readonly keybindings: ResolvedKeybindings;
 	readonly extra?: readonly ShortcutCatalogEntry[];
 }
 
@@ -799,28 +800,21 @@ export interface ShortcutChordView {
 	readonly label: string;
 }
 
+export interface ShortcutConflictView extends ShortcutChordView {
+	readonly winner: string;
+}
+
 export interface ShortcutRow {
 	readonly id: string;
 	readonly title: MessageKey;
 	readonly surface: ShortcutSurface;
 	readonly chords: readonly ShortcutChordView[];
+	readonly conflicts: readonly ShortcutConflictView[];
 }
-
-const KEY_LABELS: Readonly<Record<string, string>> = {
-	ArrowUp: "↑",
-	ArrowDown: "↓",
-	ArrowLeft: "←",
-	ArrowRight: "→",
-	Enter: "↵",
-	Escape: "Esc",
-	PageUp: "PgUp",
-	PageDown: "PgDn",
-	" ": "Space",
-};
 
 function keyLabel(key: string, apple: boolean): string {
 	if (key === "Shift") return apple ? "⇧" : "Shift";
-	return KEY_LABELS[key] ?? (key.length === 1 ? key.toUpperCase() : key);
+	return keyCap(key);
 }
 
 export function shortcutKeyCaps(chord: ShortcutKey, platform?: string): string[] {
@@ -839,33 +833,116 @@ function onPlatform(scope: ShortcutPlatform | undefined, platform?: string): boo
 	return family !== "apple";
 }
 
-function bindingCaps(
-	bindings: readonly [KeybindingId, ...KeybindingId[]],
-	{ desktop, platform }: ShortcutContext,
-): string[] {
-	const options = { browser: !desktop, ...(platform === undefined ? {} : { platform }) };
-	const [first] = bindings;
-	const last = bindings.at(-1) ?? first;
-	if (last === first) return keybindingKeys(first, options);
-	const from = keybindingShortcut(first, options);
-	const to = keybindingShortcut(last, options);
-	return shortcutKeys({ ...from, key: `${from.key}–${to.key}` }, platform);
-}
-
-function chordView(keys: readonly string[], platform?: string): ShortcutChordView {
+function capsView(keys: readonly string[], platform: string): ShortcutChordView {
 	return { keys, label: keysLabel(keys, platform) };
 }
 
-export function shortcutRows(context: ShortcutContext): ShortcutRow[] {
-	const { platform, extra = [] } = context;
-	return [...SHORTCUT_CATALOG, ...extra].flatMap((entry): ShortcutRow[] => {
-		if (entry.desktop && !context.desktop) return [];
-		const chords = entry.bindings
-			? [chordView(bindingCaps(entry.bindings, context), platform)]
-			: entry.keys
-					.filter((chord) => onPlatform(chord.platform, platform))
-					.map((chord) => chordView(shortcutKeyCaps(chord, platform), platform));
-		if (chords.length === 0) return [];
-		return [{ id: entry.id, title: entry.title, surface: entry.surface, chords }];
+function chordView(shortcut: CommandShortcut, platform: string): ShortcutChordView {
+	return capsView(shortcutKeys(shortcut, platform), platform);
+}
+
+function atDefault(keybindings: ResolvedKeybindings, id: string): boolean {
+	const command = keybindings.byId.get(id);
+	return command !== undefined && !command.custom && command.chords.every((c) => !c.lostTo);
+}
+
+function conflictViews(
+	keybindings: ResolvedKeybindings,
+	ids: readonly string[],
+): ShortcutConflictView[] {
+	return ids.flatMap((id) =>
+		(keybindings.byId.get(id)?.chords ?? []).flatMap(({ chord, lostTo }) =>
+			lostTo === null
+				? []
+				: [{ ...chordView(displayShortcut(chord), keybindings.platform), winner: lostTo }],
+		),
+	);
+}
+
+function bindingChords(
+	bindings: readonly [KeybindingId, ...KeybindingId[]],
+	{ desktop, keybindings }: ShortcutContext,
+): ShortcutChordView[] {
+	const options = { browser: !desktop };
+	const { platform } = keybindings;
+	const [first] = bindings;
+	const last = bindings.at(-1) ?? first;
+	const from = keybindingShortcut(keybindings, first, options);
+	const to = keybindingShortcut(keybindings, last, options);
+	if (last !== first && from && to && bindings.every((id) => atDefault(keybindings, id))) {
+		return [chordView({ ...from, key: `${from.key}–${to.key}` }, platform)];
+	}
+	return bindings.flatMap((id) => {
+		const shortcut = keybindingShortcut(keybindings, id, options);
+		return shortcut ? [chordView(shortcut, platform)] : [];
 	});
+}
+
+function row(
+	entry: Pick<ShortcutRow, "id" | "title" | "surface">,
+	chords: readonly ShortcutChordView[],
+	conflicts: readonly ShortcutConflictView[],
+): ShortcutRow[] {
+	if (chords.length === 0 && conflicts.length === 0) return [];
+	return [{ id: entry.id, title: entry.title, surface: entry.surface, chords, conflicts }];
+}
+
+export function keyChords(keys: readonly ShortcutKey[], platform: string): ShortcutChordView[] {
+	return keys
+		.filter((chord) => onPlatform(chord.platform, platform))
+		.map((chord) => capsView(shortcutKeyCaps(chord, platform), platform));
+}
+
+function entryRows(entry: ShortcutCatalogEntry, context: ShortcutContext): ShortcutRow[] {
+	const { keybindings } = context;
+	if (entry.desktop && !context.desktop) return [];
+	if (entry.keys) return row(entry, keyChords(entry.keys, keybindings.platform), []);
+	return row(
+		entry,
+		bindingChords(entry.bindings, context),
+		conflictViews(keybindings, entry.bindings),
+	);
+}
+
+function extensionCommandRows({ desktop, keybindings }: ShortcutContext): ShortcutRow[] {
+	return keybindings.commands.flatMap(({ id, extension, enabled, title }) =>
+		extension !== null && enabled && title !== null
+			? row(
+					{ id, title, surface: "general" },
+					keybindingShortcuts(keybindings, id, { browser: !desktop }).map((shortcut) =>
+						chordView(shortcut, keybindings.platform),
+					),
+					conflictViews(keybindings, [id]),
+				)
+			: [],
+	);
+}
+
+export function shortcutRows(context: ShortcutContext): ShortcutRow[] {
+	const { extra = [] } = context;
+	return [
+		...SHORTCUT_CATALOG.flatMap((entry) => entryRows(entry, context)),
+		...extensionCommandRows(context),
+		...extra.flatMap((entry) => entryRows(entry, context)),
+	];
+}
+
+export type TypedPress = Pick<KeyboardEvent, "key" | "shiftKey" | "ctrlKey" | "metaKey" | "altKey">;
+
+const typedKey = (key: string) => (key.length === 1 ? key.toLowerCase() : key);
+
+export function elementKeyUses(press: TypedPress, platform: string): ShortcutCatalogEntry[] {
+	if (press.ctrlKey || press.metaKey || press.altKey) return [];
+	const pressed = typedKey(press.key);
+	return SHORTCUT_CATALOG.filter(({ keys = [] }) =>
+		keys.some(
+			(key) =>
+				onPlatform(key.platform, platform) &&
+				!key.mod &&
+				!key.ctrl &&
+				!key.alt &&
+				(key.shift === true) === press.shiftKey &&
+				typedKey(key.key) === pressed,
+		),
+	);
 }

@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { type NativeQuitHint, QUIT_CONFIRMATION } from "@thinkrail/contracts";
-import { matchKeybinding } from "../keybindings";
+import { matchKeybinding, resolveKeybindings } from "../keybindings";
 import {
 	createWebShortcuts,
 	hasWebShortcuts,
+	isDesktopShortcut,
 	matchShortcut,
 	SHORTCUT_COMMANDS,
 	type ShortcutPlatform,
@@ -162,6 +163,18 @@ describe("chord matching", () => {
 	});
 });
 
+test("a press either desktop platform's table owns on this layout is a desktop shortcut", () => {
+	expect(isDesktopShortcut(chord("KeyZ", { key: "w" }))).toBe(true);
+	expect(isDesktopShortcut(chord("Slash", { key: ",", shiftKey: true }))).toBe(true);
+	expect(isDesktopShortcut(chord("KeyA", { key: "q" }))).toBe(true);
+	expect(isDesktopShortcut(chord("F4", { key: "F4" }))).toBe(true);
+	expect(isDesktopShortcut(chord("KeyZ", { key: "z" }))).toBe(false);
+	expect(isDesktopShortcut(chord("KeyW", { key: "z" }))).toBe(false);
+	expect(isDesktopShortcut(chord("Slash", { key: "?", shiftKey: true }))).toBe(false);
+	expect(isDesktopShortcut(chord("KeyZ", { key: "w", altKey: true }))).toBe(false);
+	expect(isDesktopShortcut(chord("KeyZ", { key: "w", ctrlKey: false, metaKey: true }))).toBe(false);
+});
+
 test("only windows and linux bind web chords", () => {
 	expect(hasWebShortcuts("apple")).toBe(false);
 	expect(hasWebShortcuts("browser")).toBe(false);
@@ -173,7 +186,7 @@ test("no table chord is also a keybinding", () => {
 	for (const platform of ["Win32", "Linux x86_64"]) {
 		for (const command of SHORTCUT_COMMANDS) {
 			for (const { code } of Object.values(command.chords).flat()) {
-				expect(matchKeybinding(chord(code), platform)).toBeNull();
+				expect(matchKeybinding(resolveKeybindings({ platform }), chord(code))).toBeNull();
 			}
 		}
 	}

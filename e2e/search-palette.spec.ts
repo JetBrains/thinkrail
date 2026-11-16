@@ -448,7 +448,7 @@ test("double Shift toggles the palette and can be turned off in the Keyboard set
 	await expect(toggle).toHaveAttribute("aria-checked", "true");
 	await toggle.click();
 	await expect(toggle).toHaveAttribute("aria-checked", "false");
-	await settings.getByRole("button", { name: "Close" }).click();
+	await settings.getByRole("button", { name: "Close", exact: true }).click();
 	await expect(settings).toBeHidden();
 
 	await doubleShift(page);

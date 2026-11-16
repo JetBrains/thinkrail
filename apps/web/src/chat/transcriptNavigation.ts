@@ -76,6 +76,14 @@ export function transcriptItems(
 	return items;
 }
 
+export function keyboardLeavesFollow(
+	item: Pick<TranscriptNavItem, "rowId" | "parentId">,
+	latestRowIds: readonly (string | null)[],
+	change: "focus" | "expand",
+): boolean {
+	return latestRowIds.includes(item.rowId) && (change === "expand" || item.parentId !== null);
+}
+
 function subjectOf(item: TranscriptNavItem): ChatRow | ActivityStep {
 	const { source } = item;
 	if (source.kind !== "activity" || flatStepCount(source.steps) !== 1) return source;

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { NativePageZoomAction, Workspace } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
-import { type KeybindingId, keybindingShortcut } from "../keybindings";
+import { type KeybindingId, keybindingShortcut, resolveKeybindings } from "../keybindings";
 import { commandItems } from "../search";
 import {
 	type LayoutCenterTab,
@@ -85,6 +85,7 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 		centerGroupCount: 1,
 		canCreateProject: true,
 		nativeShortcuts: false,
+		keybindings: resolveKeybindings({ platform: "" }),
 		pageZoom: null,
 		readAction: null,
 		canSettle: true,
@@ -215,10 +216,25 @@ describe("palette project and Settings commands", () => {
 			});
 			for (const id of bound) {
 				expect(row(id, catalog)?.shortcut).toEqual(
-					keybindingShortcut(id, { browser: !nativeShortcuts }),
+					keybindingShortcut(catalog.keybindings, id, { browser: !nativeShortcuts }),
 				);
 			}
 		}
+	});
+});
+
+describe("palette shortcuts follow the user's bindings", () => {
+	test("a rebound command shows its new chord and an unbound one shows none", () => {
+		const catalog = deps({
+			keybindings: resolveKeybindings({
+				platform: "",
+				overrides: { "region.next": ["Mod+Alt+KeyR"], "focus.projects": [] },
+			}),
+		});
+		expect(row("region.next", catalog)?.shortcut).toEqual({ key: "R", mod: true, alt: true });
+		const projects = row("focus.projects", catalog);
+		expect(projects).toBeDefined();
+		expect(projects?.shortcut).toBeUndefined();
 	});
 });
 

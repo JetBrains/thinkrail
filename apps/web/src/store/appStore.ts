@@ -69,6 +69,7 @@ import {
 	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
 	isTodoReviewFixMessage,
+	type KeybindingOverrides,
 	normalizeFontSettings,
 	normalizeThemePreference,
 	readToolResponseMessage,
@@ -1221,6 +1222,7 @@ interface AppState {
 	agentReviewEnabled: boolean;
 	disabledExtensions: string[];
 	extensionSettings: ExtensionSettingValues;
+	keybindingOverrides: KeybindingOverrides;
 	otherAgentSkills: boolean;
 	disabledPackages: string[];
 	locale: string;
@@ -1687,6 +1689,12 @@ function configPatch(config: AppConfig) {
 			config.extensionSettings && typeof config.extensionSettings === "object"
 				? config.extensionSettings
 				: DEFAULT_CONFIG.extensionSettings,
+		keybindingOverrides:
+			config.keybindings &&
+			typeof config.keybindings === "object" &&
+			!Array.isArray(config.keybindings)
+				? config.keybindings
+				: DEFAULT_CONFIG.keybindings,
 		otherAgentSkills: typeof config.otherAgentSkills === "boolean" ? config.otherAgentSkills : true,
 		disabledPackages: Array.isArray(config.disabledPackages)
 			? config.disabledPackages
@@ -2616,6 +2624,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
 	disabledExtensions: DEFAULT_CONFIG.disabledExtensions,
 	extensionSettings: DEFAULT_CONFIG.extensionSettings,
+	keybindingOverrides: DEFAULT_CONFIG.keybindings,
 	otherAgentSkills: DEFAULT_CONFIG.otherAgentSkills,
 	disabledPackages: DEFAULT_CONFIG.disabledPackages,
 	locale: DEFAULT_CONFIG.locale,

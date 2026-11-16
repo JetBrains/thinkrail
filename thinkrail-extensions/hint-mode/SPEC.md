@@ -19,27 +19,34 @@ Extensions switches it off, and the host then unmounts it, so no key does anythi
 ## Boundary
 
 `@thinkrail/ext-hint-mode/web` default-exports
-`defineWebExtension({ name: "hint-mode", title, description, globalOverlay: HintMode, shortcuts })` and
-nothing else. It imports `extension-api/web` (types), `@thinkrail/ui/keyboard` (`hasPlatformModifier`,
-`isImeComposing`, `isApplePlatform`), `@thinkrail/ui/keycaps`, `@thinkrail/locales/react` (`hintMode.*`
-keys), React and `react-dom` (`createPortal`). Everything host-shaped arrives through `GlobalOverlayProps`:
+`defineWebExtension({ name: "hint-mode", title, description, globalOverlay: HintMode, commands, shortcuts })`
+and nothing else. It imports `extension-api/web` (types), `@thinkrail/ui/keyboard` (`isImeComposing`,
+`isApplePlatform`), `@thinkrail/ui/keycaps`, `@thinkrail/locales/react` (`hintMode.*` keys), React and
+`react-dom` (`createPortal`). Everything host-shaped arrives through `GlobalOverlayProps`:
 `isTextEntry(target)` (the app's text-entry rule: fields, contenteditable, Monaco, xterm), `activeLayer()`
-(the topmost open modal dialog or menu, else the document) and `platform`.
+(the topmost open modal dialog or menu, else the document), `platform`, and the command channel
+(`onCommand`, `matchCommand`, `claimKeyboard`).
 
 ## Keys
 
-The overlay owns one window **capture** `keydown` listener, so it runs before Radix (document) and the
-app's bubbling handlers; every key it handles is `preventDefault` + `stopImmediatePropagation`.
-
-- **Start:** `KeyF` with no modifier when `composedPath()[0]` is not text entry (F types in a field), or
-  the platform modifier + `Semicolon` anywhere. Both by physical `code`, so a Cyrillic layout works; key
-  repeat and IME composition never start it.
-- **While active** every key is swallowed. Label letters match by `code`; a complete label acts; Shift on
-  the last letter only focuses; Backspace removes a letter; Escape or Mod+; exits (F is a label letter
-  there). A trusted pointerdown or window blur also exits.
-- `HINT_KEYS` is the one list: the handler compares against it and `shortcuts` displays it, so the
-  cheatsheet rows and the matcher cannot drift. An app test asserts no chord collides with the keybinding
-  table and that plain F is bound nowhere else.
+- **Start is the host's.** `SHOW_HINTS` is the extension's one command, `hint-mode.show`, defaulting to
+  plain `F` (outside text entry — F types in a field) and `Mod+;` (anywhere, behind a dialog or an open
+  menu too). The host matches it by physical `code` (a Cyrillic layout works), never on key repeat or
+  during IME composition, swallows the key and delivers the command ([[submodule-web-shell]], *Extension
+  overlays*); the user may rebind it like any command, to another plain key too. Off, the host never
+  matches it, so neither key does anything.
+- **While active the overlay owns the keyboard.** Starting claims it (`claimKeyboard(true)`) and every exit
+  releases it, so the host dispatches nothing meanwhile. The overlay's one window **capture** `keydown`
+  listener acts only while labels show and swallows every key (`preventDefault` +
+  `stopImmediatePropagation`), so neither Radix (document) nor the app's handlers see it. Label letters
+  match by `code` and win over the trigger (F is a label letter there, even though it is the trigger); a
+  complete label acts; Shift on the last letter only focuses; Backspace removes a letter; Escape exits, and
+  so does any other chord `matchCommand` reports as `hint-mode.show` (`Mod+;`, or its rebind). A trusted
+  pointerdown or window blur also exits.
+- `HINT_KEYS` lists the in-mode keys (Shift, Backspace, Escape): the handler compares against it and
+  `shortcuts` displays it as locked rows, so the cheatsheet rows and the matcher cannot drift; the trigger
+  is shown from the command's effective chords. An app test asserts the default chords conflict with
+  nothing and that plain F is bound nowhere else.
 
 ## Labels
 
@@ -82,6 +89,7 @@ Collected once per activation from `activeLayer()`, so an open dialog or menu sc
 
 ## Verification
 
-Unit: label generation, key matching (Cyrillic layout, IME, repeat, platform modifier), letter typing, and
+Unit: label generation, in-mode key handling (Cyrillic layout, IME, repeat, letters over the trigger,
+exit on a non-letter trigger), letter typing, and
 the target filter on a small fake DOM (visibility, inert, clipping, widgets, shadow roots, tree duplicates,
 the review proxy, re-measuring). E2E `hint-mode.spec.ts` ([[module-browser-e2e]]).

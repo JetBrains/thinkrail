@@ -20,9 +20,10 @@ whoever composes the catalog, today `shell`.
   `isCommandEnabled`, `shortcutKeys`.
 - **Allowed deps:** `lib` (platform family), `@thinkrail/locales` (the group-label `MessageKey`s), `@remixicon/react` types.
 - **Forbidden:** importing `store`, `transport`, `panels`, `chat`, `shell` or `search`; binding keys. A
-  command's `shortcut` is display-only. For an app-wide chord it is `keybindingShortcut(id)` from
-  [[submodule-web-keybindings]], the table `shell`'s `useGlobalHotkeys` binds through, so the shown and
-  the bound chord cannot drift; any other chord keeps its single owner (`shortcutCommands`, the native
+  command's `shortcut` is display-only. For an app-wide chord it is `keybindingShortcut(resolved, id, {
+  browser })` from [[submodule-web-keybindings]] over the resolved table `shell`'s `useGlobalHotkeys`
+  matches through (overrides and extension commands folded in), so the shown and the bound chord cannot
+  drift; any other chord keeps its single owner (`shortcutCommands`, the native
   menu or desktop preload, or a feature's own key map). The palette calls the same handler the chord runs.
 
 ## Contract

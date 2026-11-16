@@ -7,6 +7,7 @@ import { foldOverride } from "./foldState";
 import type { ChatRow } from "./rows";
 import type { TranscriptMenu, TranscriptMenuAction, TranscriptNavigation } from "./TranscriptItem";
 import {
+	keyboardLeavesFollow,
 	type TranscriptKeyAction,
 	type TranscriptNavItem,
 	transcriptItemCopyText,
@@ -22,6 +23,7 @@ export interface TranscriptNavigationOptions {
 	latestRowId: string | null;
 	revealRow: ChatScroll["revealRow"];
 	revealElement: ChatScroll["revealElement"];
+	leaveFollow: ChatScroll["leaveFollow"];
 	scrollToLatest: () => void;
 	focusComposer: () => void;
 	fileTarget: (path: string) => string | null;
@@ -130,6 +132,7 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 		);
 	const items = () =>
 		options ? transcriptItems(options.rows, (id) => foldOverride(id) === true) : [];
+	const latestRowIds = () => (options ? [options.newestRowId, options.latestRowId] : []);
 	const park = () => feed()?.focus({ preventScroll: true });
 	const cancel = () => {
 		const pending = cancelPending;
@@ -150,8 +153,22 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 				stability: "none",
 				topInset: inset,
 			});
+		} else {
+			const item = owner && items().find((entry) => entry.id === owner.dataset.transcriptItem);
+			if (item && keyboardLeavesFollow(item, latestRowIds(), "focus")) options.leaveFollow();
 		}
 		target.focus({ preventScroll: true });
+	};
+
+	const toggleItem = (item: TranscriptNavItem, itemElement: HTMLElement) => {
+		const control = toggleOf(itemElement);
+		if (
+			control?.getAttribute("aria-expanded") === "false" &&
+			keyboardLeavesFollow(item, latestRowIds(), "expand")
+		) {
+			options?.leaveFollow();
+		}
+		control?.click();
 	};
 
 	const whenMounted = (id: string) => {
@@ -183,8 +200,7 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 		const current = options;
 		if (!current || !scroller) return;
 		if (!holdsFocus()) park();
-		const latestRow = item.rowId === current.newestRowId || item.rowId === current.latestRowId;
-		if (latestRow && item.id === item.rowId) {
+		if (item.id === item.rowId && latestRowIds().includes(item.rowId)) {
 			current.scrollToLatest();
 			whenMounted(item.id);
 			return;
@@ -310,8 +326,7 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 		setCursor(id, index);
 		switch (action.kind) {
 			case "move": {
-				const toggle = toggleOf(itemElement);
-				const state = toggle?.getAttribute("aria-expanded");
+				const state = toggleOf(itemElement)?.getAttribute("aria-expanded");
 				const move = resolveTreeMove(
 					action.key,
 					list.map((entry, at) => ({
@@ -320,7 +335,7 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 					})),
 					index,
 				);
-				if (move?.kind === "toggle") toggle?.click();
+				if (move?.kind === "toggle") toggleItem(item, itemElement);
 				else if (move?.kind === "focus") {
 					moveTo(list, move.index, move.index < index ? "start" : "end");
 				}
@@ -332,7 +347,7 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 				return;
 			}
 			case "toggle":
-				toggleOf(itemElement)?.click();
+				toggleItem(item, itemElement);
 				return;
 			case "copy":
 				copy(item);
@@ -463,7 +478,7 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 			if (!itemElement || !item) return;
 			if (action === "copy") copy(item);
 			else if (action === "open") open(item);
-			else toggleOf(itemElement)?.click();
+			else toggleItem(item, itemElement);
 		},
 		closeMenu: (itemId) => {
 			if (menu?.itemId !== itemId) return;

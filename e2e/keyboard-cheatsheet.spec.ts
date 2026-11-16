@@ -179,15 +179,15 @@ test("Settings → Keyboard lists every shortcut with its own filter", async ({ 
 	await page.getByTestId("settings-nav-keyboard").click();
 	const section = page.getByTestId("settings-keyboard");
 	await expect(page.getByTestId("settings-double-shift")).toBeVisible();
-	const rows = section.getByTestId("shortcuts-row");
+	const rows = section.getByTestId("keybinding-row");
 	await expect(rows.first()).toBeVisible();
 	expect(await rows.count()).toBeGreaterThan(40);
-	await section.getByTestId("shortcuts-filter").fill("find in files");
-	await expect(section.locator('[data-shortcut="files.findInFiles"]')).toContainText(
+	await section.getByTestId("keybinding-filter").fill("find in files");
+	await expect(section.locator('[data-command="files.findInFiles"]')).toContainText(
 		"Find in files",
 	);
-	await expect(section.getByTestId("shortcuts-section").first()).toHaveAttribute(
-		"data-surface",
+	await expect(section.getByTestId("keybinding-section").first()).toHaveAttribute(
+		"data-section",
 		"general",
 	);
 });
