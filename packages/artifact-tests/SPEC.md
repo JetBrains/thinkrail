@@ -99,8 +99,8 @@ controlled hidden-host probe against a loopback PostHog collector, never the ven
 also answers the host's in-app survey list read (`GET /api/surveys/?token=…`) with an empty list, so a keyed
 human launch neither fails the probe nor offers a survey; muted launches must make no request at all. It removes
 inherited CI/test/optional mutes and proxies for human-mode launches, checks first packaged initialization
-emits `app_installed` before `app_started`, checks restart emits only `app_started`, and pins standard
-desktop/release/platform provenance plus one UUID across both (including additional opt-out). Any
+emits only `app_installed` (the current analytics event policy) and pins its standard desktop/release/platform
+provenance, and checks a same-version restart (with additional opt-out) emits no usage event. Any
 `$exception` error report a launch happens to emit stays outside that launch sequence but must share the
 UUID, stay personless, and carry only allow-listed plain properties. It then proves
 CI and test mutes independently. No UI action or confirmation is simulated; delivery is checked after normal

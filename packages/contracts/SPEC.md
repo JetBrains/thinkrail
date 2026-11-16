@@ -1078,7 +1078,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`hostUpdate: HostUpdateNotice`** and **`hostPlatform`**
   (`darwin | linux | win32`, optional for older hosts) — the OS the *host* runs on, so a client that
   offers host-executed commands (the PR setup dialog) picks the right ones instead of guessing from
-  the browser / **`host.updateAvailable`** — the backward-compatible full CLI-update snapshot: initially
+  the browser, and optional **`additionalAnalytics`** — whether the host offers the additional-usage-data
+  preference; absent (older hosts) means it does / **`host.updateAvailable`** — the backward-compatible full CLI-update snapshot: initially
   published when a launcher finds a newer release, then replaced as a v70 host-run moves through
   running/succeeded/failed; absent on discovery failure/no-update / **`project.updated`** — the
   full persisted `Project` snapshot after open/reopen/close/rename/move, including `closed` membership and `rank`, so every client

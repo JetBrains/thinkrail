@@ -167,13 +167,11 @@ JetBrains signs the Windows CLI, the desktop setup executable, and every executa
 
 ## Analytics & privacy
 
-ThinkRail apps collect basic usage events: launches, chat creation, message sends, and provider connections. The data is tied to a random installation ID. Usage analytics never include prompts, code, files, credentials, or account identity. Error reports are always sent as well, tied to the same installation ID, so we can fix crashes: they include the error type and code, and where in ThinkRail's own code it happened. They never include error messages, file paths, names, URLs, or anything from your projects or extensions.
-
-Additional product usage is shared only while **Share additional usage data** is on; the switch is offered during first-run setup (or right after you skip it) and lives in **Settings → Privacy**. From the command line, `thinkrail --no-analytics` (or `THINKRAIL_NO_ANALYTICS=1`) turns additional sharing off for that launch. With additional sharing on, a packaged build may open the ThinkRail blog in your browser once to link your installation to the website visit that brought you here - only where you accepted marketing cookies on the website or no consent is required, and that link expires after 30 days.
+ThinkRail apps collect only basic usage counts: installs, updates, and, once a day you use it, a note that you sent messages with how many. The data is tied to a random installation ID. Usage analytics never include prompts, code, files, credentials, or account identity. Error reports are always sent as well, tied to the same installation ID, so we can fix crashes: they include the error type and code, and where in ThinkRail's own code it happened. They never include error messages, file paths, names, URLs, or anything from your projects or extensions.
 
 Feedback surveys are separate from usage analytics. ThinkRail may invite you to a short survey, and you can also open it from **Settings → Feedback**. Your answers, including anything you type, are sent to the ThinkRail team only when you press **Send**, and tied to the same random installation ID, not to your name or account. Please don't include secrets, code, or personal data. To have your answers deleted, email [info@thinkrail.ai](mailto:info@thinkrail.ai).
 
-The ThinkRail apps and the ThinkRail website ([thinkrail.ai](https://thinkrail.ai/)) use PostHog Inc. services for analytics. The website also uses PostHog Surveys to collect feedback after a desktop download and, only if you choose to provide it, your email address, which is used to ask for further feedback and to send product updates. PostHog's privacy policy is at [posthog.com/privacy](https://posthog.com/privacy).
+The ThinkRail apps use PostHog Inc. services for analytics. The ThinkRail website ([thinkrail.ai](https://thinkrail.ai/)) currently sends nothing to PostHog. PostHog's privacy policy is at [posthog.com/privacy](https://posthog.com/privacy).
 
 ## Under the hood
 

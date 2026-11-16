@@ -17,8 +17,10 @@ modules remain analytics-free. Sibling dependency edges belong to [[module-serve
 
 - **Public surface:** initialization, basic capture, consent-scoped additional capture, the survey endpoint
   and response capture (`surveyEndpoint`, `SurveyEndpoint`, `captureSurveyResponse`), additional-data
-  enablement, error reports (`reportError`, `reportFatalError`, `reportClientError`, `ErrorReport`, `ErrorSource`),
-  shutdown/test reset, event types, bucket helpers and `BuildKind`.
+  enablement and whether it is offered (`additionalAnalyticsOffered`), error reports (`reportError`,
+  `reportFatalError`, `reportClientError`, `ErrorReport`, `ErrorSource`), shutdown/test reset, event types,
+  the event policy (`AnalyticsEventPolicy`, `FULL_EVENT_POLICY` for tests of dormant events), bucket helpers
+  and `BuildKind`.
 - **Allowed deps:** persistence, log, contracts types, pi-ai's built-in catalog, Node, and `posthog-node`
   inside the sink only (`errors.ts` is SDK-free; the sink adapts it into `before_send`).
 - **Forbidden:** importing host/feature siblings; being imported outside host; exposing the installation
@@ -26,6 +28,36 @@ modules remain analytics-free. Sibling dependency edges belong to [[module-serve
   below; browser autocapture or a native-only sink.
 
 ## Events
+
+**Current policy (2026-11).** To stay within PostHog's free tier, the product keeps only what answers
+installs, updates, daily users (an installation that sent at least one message that UTC day), retention and an
+approximate message count. `EVENT_POLICY` in `events.ts` is the one switch: it admits the basic events
+`app_installed`, `app_updated` and `active_day` and marks the additional tier unavailable. Every other event
+below stays defined, host-captured and tested under `FULL_EVENT_POLICY`, but is dropped before the sink;
+widening the policy (and releasing) restores it. Error reports and `survey sent` bypass the policy unchanged.
+With the additional tier unavailable no additional sink, campaign enrichment or attribution claim starts
+whatever `analyticsEnabled` says, and `server.welcome.additionalAnalytics: false` tells the UI to hide the
+preference ([[submodule-web-panels]]); an older host omits the field and still offers it. Releases before the
+policy keep sending the full set until they update; trimming those is a PostHog ingestion filter, outside the
+repository.
+
+- `app_updated { previous_version }` fires at packaged initialization when the installation's recorded
+  version (`usage.json`) differs from the running one, unless that launch claimed `app_installed`; installs
+  that predate version tracking report `unknown`, and a downgrade counts too. Source builds record nothing.
+- `active_day { messages }` is derived inside this module from the host's `message_sent` capture, so it
+  counts exactly what `message_sent` counts. The first counted send of a new UTC day emits it with the
+  counted sends since the previous `active_day`, this one included; the counter persists in `usage.json`
+  across restarts. UTC keeps the client's day equal to the PostHog project's day. Per-day message counts
+  are approximate by design — a day's later sends ride the next active day's event and a final tail before
+  churn is never sent — while the sum over time is exact. At most one event per installation per day keeps
+  roughly 33K daily users inside the free 1M events. No cross-process lock: concurrent hosts may duplicate
+  a day's event (unique-user counts are unaffected) or lose an increment.
+- DAU is unique users of `active_day`, messages the sum of `messages`, retention a Retention insight on
+  `active_day`. Lifecycle insights and cohorts exclude personless events; whether PostHog's Retention
+  insight counts them is unverified, with a SQL insight as the fallback.
+
+The rest of this section describes every event the module can send; under the current policy only the
+three above leave the host.
 
 Basic events are always on in keyed human runs: `app_installed`, `app_started`,
 `chat_started { provider, model, auth_method }`, `message_sent { mode, provider, auth_method }`, and
@@ -230,6 +262,8 @@ flows or throw into callers; graceful shutdown awaits an idempotent two-second S
 
 The stable installation UUID and optional `appInstalled: true` field remain server-only;
 [[submodule-server-persistence]] owns exclusive ID creation and the at-most-once cross-process install claim.
+The server-only `usage.json` holds the last recorded app version, the current active UTC day and the pending
+message count — nothing else.
 A crash after claiming may lose that event, never duplicate it. Separate `attribution.json` stores either a
 terminal browser-attempt marker or validated first/last campaign context, never a claim ID, verifier,
 challenge, claim URL, journey/bridge IDs, IP, or user agent. Expired or invalid context becomes terminal; stored campaign data
