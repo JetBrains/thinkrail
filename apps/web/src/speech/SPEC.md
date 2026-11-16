@@ -149,7 +149,9 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
     live.
   - **Esc is not a dictation key** (user decision). It keeps whatever meaning the page gives it:
     Escape in a dialog closes the dialog, whose field blur then ends the dictation and drops its draft
-    with it, exactly as for typed text. An earlier version stopped dictation on Esc. A dialog's
+    with it, exactly as for typed text; in a field outside a dialog it leaves the field
+    ([[submodule-web-shell]], *Esc leaves a text field*), and that blur ends the dictation like a click
+    elsewhere, the text kept. An earlier version stopped dictation on Esc. A dialog's
     dismiss runs first, so making Esc stop dictation without closing the dialog would have needed a
     second window capture owner of Escape.
   - When the controller goes idle or changes owner, the field is unlocked and the end is announced.

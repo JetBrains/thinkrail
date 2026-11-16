@@ -638,6 +638,7 @@ function PlanComposer({
 						e.preventDefault();
 						void submit();
 					} else if (e.key === "Escape" && onClose) {
+						e.preventDefault();
 						onClose();
 					}
 				}}

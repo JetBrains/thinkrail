@@ -410,7 +410,7 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 		}
 		const parked = target === feed();
 		if (!parked && ownerOf(target) !== target) return;
-		const action = keys && transcriptKeyAction(event, keys);
+		const action = keys && transcriptKeyAction(event, keys, parked);
 		if (!action) return;
 		event.preventDefault();
 		if (action.kind === "leave") {

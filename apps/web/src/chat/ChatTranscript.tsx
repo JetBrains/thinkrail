@@ -162,6 +162,7 @@ function TranscriptFeed({
 			aria-label={t("chat.transcript.label")}
 			tabIndex={-1}
 			data-transcript-feed
+			data-focus-park
 			className="outline-none"
 		>
 			{children}

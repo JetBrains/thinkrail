@@ -119,6 +119,7 @@ export function transcriptItemFilePath(item: TranscriptNavItem): string | null {
 export function transcriptKeyAction(
 	event: LocalKeyEvent,
 	keys: Pick<LocalKeys, "match">,
+	parked = false,
 ): TranscriptKeyAction | null {
 	if (isContextMenuKey(event)) {
 		return event.altKey || event.ctrlKey || event.metaKey ? null : { kind: "menu" };
@@ -140,7 +141,7 @@ export function transcriptKeyAction(
 		case "Enter":
 			return { kind: "toggle" };
 		case "Escape":
-			return { kind: "leave" };
+			return parked ? null : { kind: "leave" };
 		default:
 			return null;
 	}

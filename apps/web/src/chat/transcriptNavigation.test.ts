@@ -213,6 +213,14 @@ describe("transcriptKeyAction", () => {
 		expect(key({ key: "ContextMenu" })).toEqual({ kind: "menu" });
 	});
 
+	test("Esc on the parked feed does nothing; the other keys still act", () => {
+		const parked = (init: Partial<KeyboardEvent> & { key: string }) =>
+			transcriptKeyAction(press(init), keys, true);
+		expect(parked({ key: "Escape" })).toBeNull();
+		expect(parked({ key: "ArrowDown" })).toEqual({ kind: "move", key: "ArrowDown" });
+		expect(parked({ key: "j" })).toEqual({ kind: "move", key: "ArrowDown" });
+	});
+
 	test("matches letters by physical key: a Russian layout's С copies and О opens", () => {
 		expect(key({ key: "с", code: "KeyC" })).toEqual({ kind: "copy" });
 		expect(key({ key: "щ", code: "KeyO" })).toEqual({ kind: "open" });

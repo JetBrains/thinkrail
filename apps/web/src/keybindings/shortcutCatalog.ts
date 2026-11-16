@@ -183,6 +183,7 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 		surface: "general",
 		keys: [{ key: " ", mod: true, shift: true }],
 	},
+	{ id: "field.leave", title: "shortcuts.leaveField", surface: "general", keys: [ESCAPE] },
 	{ id: "arrows.left", title: "shortcuts.arrows.left", surface: "general", local: "arrows.left" },
 	{ id: "arrows.down", title: "shortcuts.arrows.down", surface: "general", local: "arrows.down" },
 	{ id: "arrows.up", title: "shortcuts.arrows.up", surface: "general", local: "arrows.up" },

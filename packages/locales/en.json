@@ -2767,6 +2767,7 @@
 	"shortcuts.history.select": "Select an entry",
 	"shortcuts.history.send": "Send the prompt",
 	"shortcuts.inactive": "inactive: taken by {{winner}}",
+	"shortcuts.leaveField": "Leave the text field",
 	"shortcuts.moveToNextGroup": "Move tab to next group",
 	"shortcuts.moveToPreviousGroup": "Move tab to previous group",
 	"shortcuts.newWorkspace": "New workspace",
