@@ -49,40 +49,6 @@ const SHOW = { extension: "hint-mode", id: "hint-mode.show" };
 describe("extensionHotkey", () => {
 	const keybindings = resolveKeybindings({ platform: "Linux x86_64", extensions: [hint(true)] });
 
-	test("a plain chord rebound onto an element key leaves that key to the element it acts in", () => {
-		const onS = resolveKeybindings({
-			platform: "Linux x86_64",
-			overrides: { "hint-mode.show": ["KeyS"] },
-			extensions: [hint(true)],
-		});
-		expect(extensionHotkey(press("KeyS"), onS, false, "trees")).toBeNull();
-		expect(extensionHotkey(press("KeyS"), onS, false, "transcript")).toEqual(SHOW);
-		expect(extensionHotkey(press("KeyS"), onS, false, null)).toEqual(SHOW);
-		expect(extensionHotkey(press("KeyS", {}, false, "o"), onS, false, "trees")).toEqual(SHOW);
-		expect(extensionHotkey(press("KeyF"), keybindings, false, "trees")).toEqual(SHOW);
-		expect(
-			extensionHotkey(press("Semicolon", { ctrlKey: true }), keybindings, false, "trees"),
-		).toEqual(SHOW);
-	});
-
-	test("the focused element keeps the key it types, whatever the layout puts under that physical key", () => {
-		const dvorak = (code: string, override: string, key: string, surface: "trees" | "transcript") =>
-			extensionHotkey(
-				press(code, {}, false, key),
-				resolveKeybindings({
-					platform: "Linux x86_64",
-					overrides: { "hint-mode.show": [override] },
-					extensions: [hint(true)],
-				}),
-				false,
-				surface,
-			);
-		expect(dvorak("KeyV", "KeyV", "k", "transcript")).toBeNull();
-		expect(dvorak("Semicolon", "Semicolon", "s", "trees")).toBeNull();
-		expect(dvorak("KeyV", "KeyV", "k", "trees")).toBeNull();
-		expect(dvorak("KeyG", "KeyG", "i", "transcript")).toEqual(SHOW);
-	});
-
 	test("plain F starts outside text entry only; Mod+; anywhere", () => {
 		expect(extensionHotkey(press("KeyF"), keybindings, false)).toEqual(SHOW);
 		expect(extensionHotkey(press("KeyF"), keybindings, true)).toBeNull();

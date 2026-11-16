@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { EN } from "@thinkrail/locales";
 import {
+	APP_LOCAL_COMMANDS,
+	actsIn,
 	elementKeyUses,
 	KEYBINDINGS,
 	type KeybindingId,
@@ -45,16 +47,50 @@ describe("the shortcut catalog", () => {
 
 	test("lists the bottom rail's horizontal keys apart from the side rails' vertical ones", () => {
 		const rows = rowsFor(false, LINUX);
-		expect(labels(rows, "rail.move")).toEqual(["↑", "↓", "K", "J", "Home", "End"]);
-		expect(labels(rows, "rail.moveBottom")).toEqual(["←", "→", "H", "L", "Home", "End"]);
-		expect(labels(rows, "rail.reorder")).toEqual(["Alt+Shift+↑", "Alt+Shift+↓"]);
-		expect(labels(rows, "rail.reorderBottom")).toEqual(["Alt+Shift+←", "Alt+Shift+→"]);
+		expect(labels(rows, "rails.up")).toEqual(["↑", "K"]);
+		expect(labels(rows, "rails.down")).toEqual(["↓", "J"]);
+		expect(labels(rows, "rails.left")).toEqual(["←", "H"]);
+		expect(labels(rows, "rails.right")).toEqual(["→", "L"]);
+		expect(labels(rows, "rails.firstLast")).toEqual(["Home", "End"]);
+		expect(labels(rows, "rails.moveUp")).toEqual(["Alt+Shift+↑"]);
+		expect(labels(rows, "rails.moveLeft")).toEqual(["Alt+Shift+←"]);
+	});
+
+	test("every app local command has a titled row, and every direction row one arrow twin", () => {
+		const local = new Set(SHORTCUT_CATALOG.flatMap((entry) => entry.local ?? []));
+		expect(APP_LOCAL_COMMANDS.filter(({ id }) => !local.has(id)).map(({ id }) => id)).toEqual([]);
+		const resolved = resolveKeybindings({ platform: LINUX });
+		const twins = SHORTCUT_CATALOG.flatMap((entry) => (entry.twin ? [entry] : []));
+		expect(twins.length).toBeGreaterThan(0);
+		for (const entry of twins) {
+			expect([
+				entry.id,
+				entry.keys?.length,
+				resolved.byId.get(entry.twin?.command ?? "")?.scope,
+			]).toEqual([entry.id, 1, "arrows"]);
+			expect(entry.scope && actsIn(resolved, "arrows").includes(entry.scope)).toBe(true);
+		}
+	});
+
+	test("a rebound twin shows on every direction row; inside an element that took it over it shows lost", () => {
+		const rows = rowsFor(false, LINUX, {
+			overrides: { "arrows.down": ["KeyU"], "trees.search": ["KeyU"] },
+		});
+		expect(labels(rows, "transcript.down")).toEqual(["↓", "U"]);
+		expect(labels(rows, "trees.down")).toEqual(["↓"]);
+		expect(rows.find((row) => row.id === "trees.down")?.conflicts).toEqual([
+			{ keys: ["U"], label: "U", winner: "trees.search" },
+		]);
+		expect(labels(rows, "trees.search")).toEqual(["U"]);
+		expect(labels(rows, "arrows.down")).toEqual(["U"]);
 	});
 
 	test("lists the trees' letters: hjkl beside the arrows and S for search", () => {
 		const rows = rowsFor(false, LINUX);
-		expect(labels(rows, "trees.move")).toEqual(["↑", "↓", "K", "J"]);
-		expect(labels(rows, "trees.expand")).toEqual(["→", "←", "L", "H"]);
+		expect(labels(rows, "trees.up")).toEqual(["↑", "K"]);
+		expect(labels(rows, "trees.down")).toEqual(["↓", "J"]);
+		expect(labels(rows, "trees.expand")).toEqual(["→", "L"]);
+		expect(labels(rows, "trees.collapse")).toEqual(["←", "H"]);
 		expect(labels(rows, "trees.search")).toEqual(["S"]);
 		expect(labels(rows, "trees.searchStep")).toEqual(["↓", "↑"]);
 		expect(labels(rows, "trees.searchKeep")).toEqual(["↵"]);
@@ -161,10 +197,11 @@ describe("the shortcut catalog", () => {
 
 	test("lists the transcript's and the strips' letters beside the arrows they repeat", () => {
 		const rows = rowsFor(false, LINUX);
-		expect(labels(rows, "transcript.move")).toEqual(["↑", "↓", "K", "J"]);
+		expect(labels(rows, "transcript.up")).toEqual(["↑", "K"]);
 		expect(labels(rows, "transcript.expand")).toEqual(["→", "L"]);
 		expect(labels(rows, "transcript.page")).toEqual(["PgUp", "PgDn"]);
-		expect(labels(rows, "tabs.select")).toEqual(["←", "→", "H", "L"]);
+		expect(labels(rows, "tabs.previous")).toEqual(["←", "H"]);
+		expect(labels(rows, "tabs.next")).toEqual(["→", "L"]);
 		expect(labels(rows, "composer.enterTranscript")).toEqual(["Ctrl+↑"]);
 		expect(labels(rowsFor(false, MAC), "composer.enterTranscript")).toEqual(["⌘↑"]);
 	});
@@ -210,18 +247,10 @@ describe("the shortcut catalog", () => {
 	test("lists the review surfaces' cursor, comment and composer keys", () => {
 		const mac = rowsFor(false, MAC);
 		const linux = rowsFor(false, LINUX);
-		expect(labels(linux, "review.cursorMove")).toEqual(["↑", "↓", "K", "J"]);
-		expect(labels(linux, "review.cursorSide")).toEqual(["←", "→", "H", "L"]);
-		expect(labels(linux, "review.cursorExtend")).toEqual([
-			"Shift+↑",
-			"Shift+↓",
-			"Shift+K",
-			"Shift+J",
-		]);
-		expect(labels(linux, "review.comment")).toEqual(["↵", "Ctrl+Shift+M"]);
-		expect(labels(mac, "review.comment")).toEqual(["↵", "⇧⌘M"]);
-		expect(labels(linux, "review.saveDraft")).toEqual(["Ctrl+↵"]);
-		expect(labels(mac, "review.sendNow")).toEqual(["⇧⌘↵"]);
+		expect(labels(linux, "review.cursorUp")).toEqual(["↑", "K"]);
+		expect(labels(linux, "review.cursorLeft")).toEqual(["←", "H"]);
+		expect(labels(linux, "review.extendUp")).toEqual(["Shift+↑", "Shift+K"]);
+		expect(labels(mac, "review.extendDown")).toEqual(["⇧↓", "⇧J"]);
 		expect(labels(linux, "review.regionResize")).toEqual([
 			"Shift+←",
 			"Shift+→",
@@ -246,7 +275,7 @@ describe("the shortcut catalog", () => {
 		expect(labels(mac, "review.markViewed")).toEqual(["V"]);
 		expect(labels(mac, "search.doubleShift")).toEqual(["⇧⇧"]);
 		expect(labels(linux, "search.doubleShift")).toEqual(["Shift+Shift"]);
-		expect(labels(mac, "trees.openKept")).toEqual(["⌘↵"]);
+		expect(labels(mac, "trees.openKept")).toEqual(["⌘↵", "⌘Num ↵"]);
 		expect(labels(linux, "group.next")).toEqual(["Ctrl+F6"]);
 		expect(labels(mac, "group.next")).toEqual(["⌃F6"]);
 		expect(labels(mac, "terminal.copy")).toBeUndefined();
@@ -256,7 +285,7 @@ describe("the shortcut catalog", () => {
 	});
 });
 
-test("a typed key names the element rows that already act on it", () => {
+test("a typed key names the locked element rows that already act on it", () => {
 	const ids = (
 		key: string,
 		shift = false,
@@ -266,15 +295,10 @@ test("a typed key names the element rows that already act on it", () => {
 			{ key, shiftKey: shift, ctrlKey: false, metaKey: false, altKey: false, ...modifiers },
 			LINUX,
 		).map(({ id }) => id);
-	expect(ids("s")).toEqual(["trees.search"]);
-	expect(ids("c")).toEqual(["transcript.copy"]);
-	expect(ids("v")).toEqual(["review.markViewed"]);
-	expect(ids("j")).toContain("review.nextUnreviewed");
-	expect(ids("j")).toContain("trees.move");
-	expect(ids("ArrowUp", true)).toContain("review.cursorExtend");
-	expect(ids("g")).toEqual([]);
-	expect(ids("F2")).toEqual(["trees.rename"]);
-	expect(ids("s", true)).toEqual([]);
-	expect(ids("k", false, { ctrlKey: true })).toEqual([]);
-	expect(ids("s", false, { altKey: true })).toEqual([]);
+	expect(ids("s")).toEqual([]);
+	expect(ids("F2")).toEqual([]);
+	expect(ids("ArrowDown")).toContain("trees.down");
+	expect(ids("Enter")).toContain("trees.open");
+	expect(ids("ArrowUp", true)).toContain("review.extendUp");
+	expect(ids("ArrowUp", false, { ctrlKey: true })).toEqual([]);
 });

@@ -61,7 +61,11 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   reviewing (the questionnaire's compare overlay). `htmlViewport` (carried the same way as
   `ResourceEnvironment.htmlViewport`) fixes the preview width of every HTML view and diff beneath it and
   hides their own presets, for a caller that shows one width control for several frames — it renders
-  **`HtmlViewportSwitch`** (typed by `HtmlViewport`), the same segments the notice uses.
+  **`HtmlViewportSwitch`** (typed by `HtmlViewport`), the same segments the notice uses. `frameFocus`
+  (`FrameFocus`, carried the same way as `ResourceEnvironment.frameFocus`; also a `FramedResourcePreview`
+  prop, never applied to its full-screen dialog) set to `"manual"` takes every HTML frame beneath it out of
+  the Tab order (`tabIndex=-1`): a sandboxed frame keeps Tab and every key once entered, so a host that
+  embeds one among its own controls (the questionnaire) enters it explicitly;
   `sideLabels` (`DiffSideLabels`, also `ResourceDiffProps.sideLabels`) names a diff's two sides where "Old" /
   "New" would mislead, as when two alternatives are compared: the visual diffs (HTML, image, SVG) use them
   for the 2-up headings and captions, the rest ignore them;
@@ -104,6 +108,8 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
     shows a layout the diff refuses and a single-file view never shows diff layout);
   - `UnplacedReviewStrip`, `ReviewThreadCard`, `ReviewDraftContext`/`ReviewDraftPersistence`,
     `createAskAgentRequest`, and `focusReviewCard` (a card's keyboard landing, for the app's own reveals);
+- **`REVIEW_SURFACE_COMMANDS`** and **`REVIEW_SURFACE_SCOPE`** (`review.surface`) — the review surfaces'
+  rebindable local keys (*Keyboard review surfaces*), which the app adds to its resolved local key sets;
 - `useScrollViewState` — the one scroll view-state hook (restores a saved offset once the content is tall
   enough, gives way to user input, reports the offset on detach, and adopts a newer saved offset — one a
   sibling instance of the same slot reported on its detach, as the Changes review's Stacked handoff does —
@@ -245,7 +251,7 @@ keeps it.
 ## Boundary
 
 - **Allowed deps:** `@thinkrail/contracts` (types), `@thinkrail/locales` (the `MessageKey` type and
-  `./react` for its UI strings — `useT`, `<T>`, `localeOf`), `@thinkrail/ui` primitives, React, and the renderer
+  `./react` for its UI strings — `useT`, `<T>`, `localeOf`), `@thinkrail/ui` primitives (`./local-keys` for the review surfaces' rebindable keys), React, and the renderer
   engines (`monaco-editor`, `@pierre/diffs`, `@pierre/highlights`, `pdfjs-dist`,
   `react-markdown`, `rehype-raw`, `rehype-sanitize`, `diff`, `jsondiffpatch`, `react-virtuoso`,
   `node-htmldiff`).
@@ -904,9 +910,20 @@ content's own height.
 
 Every comment a pointer can author also has a keyboard path. Each surface is one Tab stop marked `data-review-surface`, which the
 app's cheatsheet maps to its Changes review section. Key interpretation is one module,
-`support/cursorKeys.ts` (`cursorCommand`: arrows and `h`/`j`/`k`/`l`, Shift extends, Home/End, Enter or
-Shift+Mod+M comments, Esc; Alt, other Mod chords and an IME composition pass through). The constants stay
-in the package because it cannot import the app; the app's catalog lists the same keys as display entries.
+`support/cursorKeys.ts` (`cursorCommand(event, keys)`: arrows and the arrow twins, Shift extends, Home/End,
+Enter or `review.surface.comment` comments, Esc; Alt, other Mod chords, another local command's chord
+and an IME composition pass through, and the diff cursor walks its own Tab targets on a plain Tab only; `composerSubmit(event, keys)`; `swipeDividerValue(value, event, keys)` takes the same matcher).
+It declares `REVIEW_SURFACE_COMMANDS` in scope `review.surface` — `review.surface.comment`
+(`Shift+Mod+M`), `review.surface.saveDraft` (`Mod+Enter`, the composer and a draft card's edit) and
+`review.surface.sendNow` (`Shift+Mod+Enter`), each Enter chord paired with the numpad Enter — and every surface matches them plus `@thinkrail/ui`'s
+shared arrow twins (H/J/K/L by physical `code`; an exact match wins, and only a shifted press of an
+unshifted twin falls back through `ignoreShift` and extends — a twin bound with Shift moves without
+extending, and on the swipe divider it steps rather than pages) through
+`useReviewSurfaceKeys()`, i.e. `useLocalKeys` over the keymap the app provides. The package never
+imports the app: the app adds the set to its resolver ([[submodule-web-keybindings]], *Local keys*), so
+a rebind in Settings → Keyboard reaches the surfaces, and with no provider they match these defaults.
+Enter, the arrows, Shift+arrows, Home/End, PgUp/PgDn, Tab and Esc stay locked. Monaco's
+`Shift+Mod+M` caret-line action is Monaco's own keybinding and stays fixed.
 
 - **Cursor proxy** (`support/CursorProxy.tsx`), shared by the diff line cursor and the Markdown block
   cursor. Their stops cannot be honest ARIA children — Pierre's lines live in a shadow root, and a
@@ -977,7 +994,7 @@ in the package because it cannot import the app; the app's catalog lists the sam
   Shift+Mod+M opens the composer and Esc removes the frame (`frameCommand`, pure). The frame lives in the
   same normalized space a drag produces, through the same stamped selection, so `regionDraft` /
   `pdfRegionDraft` anchor it identically.
-- **Swipe divider** is `role="slider"` (0–100, `aria-valuenow`): ←/→ and h/l move 2%, Shift 10%,
+- **Swipe divider** is `role="slider"` (0–100, `aria-valuenow`): ←/→ and the h/l twins move 2%, Shift 10%,
   PageUp/PageDown 10%, Home/End to the edges (`swipeDividerValue`, pure).
 - **Monaco** Shift+Mod+M with an empty selection comments the caret line (`commentLines`): a second,
   keybinding-only action holds `!editorHasSelection`, so the context menu still offers commenting only on

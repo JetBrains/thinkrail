@@ -14,6 +14,9 @@ const interaction: ToolInteraction = {
 	focusScope: {},
 	prepareLayoutChange: () => noop,
 	focusComposer: noop,
+	focusTranscript: noop,
+	mayClaimFocus: () => true,
+	landingChord: "F6",
 };
 
 const question = (n: number, options: number): AskUserQuestionItem => ({
@@ -139,5 +142,45 @@ describe("placements", () => {
 		expect(inline).toContain("rounded-lg");
 		const answered = { details: { answers: [], cancelled: true } };
 		expect(renderAt("dock", "call-answered", answered)).toBe("");
+	});
+});
+
+describe("keyboard seams", () => {
+	const renderDock = (toolCallId: string, accepting = true) =>
+		renderToStaticMarkup(
+			<TooltipProvider>
+				<AskUserQuestionCard
+					toolCallId={toolCallId}
+					toolName="ask_user_question"
+					args={{ questions: [question(1, 2), question(2, 2)] }}
+					result={undefined}
+					status="running"
+					streaming={false}
+					interaction={{
+						...interaction,
+						state: { ...interaction.state, accepting },
+						placement: "dock",
+					}}
+				/>
+			</TooltipProvider>,
+		);
+	const claimed = (html: string) =>
+		[...html.matchAll(/<[a-z]+\b[^>]*\bdata-focus-claim="true"[^>]*>/g)].map(
+			([tag]) => /data-testid="([^"]+)"/.exec(tag)?.[1],
+		);
+
+	it("scopes its local keys to the card and announces them for this platform only", () => {
+		const html = renderDock("call-keys");
+		expect(html).toContain('data-key-scope="ask-user-question.card"');
+		expect(html).not.toMatch(/aria-keyshortcuts="[^"]*Meta\+Enter[^"]*Control\+Enter/);
+		expect(html).not.toMatch(/aria-keyshortcuts="[^"]*Control\+Enter[^"]*Meta\+Enter/);
+	});
+
+	it("claims F6 and Shift+Tab for the current option, or the expand toggle while collapsed", () => {
+		expect(claimed(renderDock("call-claim"))).toEqual(["ask-option"]);
+		setDockCollapsed("call-claim-collapsed", true);
+		expect(claimed(renderDock("call-claim-collapsed"))).toEqual(["ask-collapse"]);
+		forgetDockState("call-claim-collapsed");
+		expect(claimed(renderDock("call-claim-idle", false))).toEqual([]);
 	});
 });

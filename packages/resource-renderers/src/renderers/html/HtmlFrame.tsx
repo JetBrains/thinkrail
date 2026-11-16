@@ -9,6 +9,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import type { FrameFocus } from "../../registry";
 import { useElementSize } from "../../support/useElementSize";
 import { HTML_INTERACTIVE_FRAME_CSP } from "./htmlDocument";
 import {
@@ -51,6 +52,7 @@ function InteractiveIframe({
 	token,
 	className,
 	scrollLink,
+	tabIndex,
 	onLeft,
 }: {
 	title: string;
@@ -58,6 +60,7 @@ function InteractiveIframe({
 	token: string;
 	className: string;
 	scrollLink: ScrollLink | undefined;
+	tabIndex: number | undefined;
 	onLeft: () => void;
 }) {
 	const loads = useRef(0);
@@ -96,6 +99,7 @@ function InteractiveIframe({
 			title={title}
 			{...INTERACTIVE_FRAME}
 			srcDoc={document}
+			tabIndex={tabIndex}
 			onLoad={onLoad}
 			data-interactive=""
 			className={className}
@@ -108,11 +112,13 @@ function StaticIframe({
 	document,
 	className,
 	scrollLink,
+	tabIndex,
 }: {
 	title: string;
 	document: string;
 	className: string;
 	scrollLink: ScrollLink | undefined;
+	tabIndex: number | undefined;
 }) {
 	const attach = useLinkAttachment(scrollLink, false);
 	return (
@@ -120,6 +126,7 @@ function StaticIframe({
 			title={title}
 			sandbox={scrollLink ? "allow-same-origin" : ""}
 			srcDoc={document}
+			tabIndex={tabIndex}
 			onLoad={scrollLink ? (event) => attach(event.currentTarget) : undefined}
 			className={className}
 		/>
@@ -155,6 +162,7 @@ export function HtmlFrame({
 	scrollLink,
 	compact = false,
 	interactiveToken,
+	frameFocus = "auto",
 }: {
 	title: string;
 	document: string;
@@ -162,8 +170,10 @@ export function HtmlFrame({
 	scrollLink?: ScrollLink | undefined;
 	compact?: boolean;
 	interactiveToken?: string | undefined;
+	frameFocus?: FrameFocus | undefined;
 }) {
 	const { ref: boxRef, size } = useElementSize<HTMLDivElement>();
+	const frameTabIndex = frameFocus === "manual" ? -1 : undefined;
 	const [run, setRun] = useState({ document, generation: 0, left: false });
 	if (run.document !== document) setRun({ document, generation: run.generation + 1, left: false });
 	const box = size ?? NO_BOX;
@@ -196,6 +206,7 @@ export function HtmlFrame({
 					document={document}
 					className={frameClass}
 					scrollLink={scrollLink}
+					tabIndex={frameTabIndex}
 				/>
 			) : run.left ? (
 				<LeftPageNotice
@@ -209,6 +220,7 @@ export function HtmlFrame({
 					token={interactiveToken}
 					className={frameClass}
 					scrollLink={scrollLink}
+					tabIndex={frameTabIndex}
 					onLeft={() => setRun((current) => ({ ...current, left: true }))}
 				/>
 			)}

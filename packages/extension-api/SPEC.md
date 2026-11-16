@@ -61,9 +61,14 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
     `ended`, and `accepting` — whether the host is waiting for this call's response right now (a call the
     host is not waiting on, such as a same-name tool from another package, renders but cannot respond);
   - `respond(response)` — the value travels to the tool as is; the tool validates its shape;
-  - the chat's `focusScope`, so the card claims attention focus once per chat mount;
+  - the chat's `focusScope`, so the card claims attention focus once per chat mount, and
+    `mayClaimFocus()`, false once the chat has served a focus chord (Mod+L) in that mount, so a remount
+    never takes focus the user just asked for;
   - `prepareLayoutChange`, which keeps the reader's place when the card changes size;
-  - `focusComposer()`;
+  - `focusComposer()` and `focusTranscript()` — after a keyboard answer the composer, after a click this
+    call's transcript row, focused without scrolling (the plan page focuses its live slot for both);
+  - `landingChord` — the label of the key that lands on a waiting call's `[data-focus-claim]` (the resolved
+    `region.next`, F6 by default), for "… to answer" copy;
   - `placement` (`ToolPlacement`) — `"dock"` for the live copy in the chat's interaction dock, `"stub"`
     for the transcript row while that copy is docked, absent anywhere else (the plan page, a call the
     chat does not dock);
@@ -83,7 +88,7 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   host helpers an extension cannot import — `isTextEntry(target)`, `activeLayer()` (the topmost open modal
   dialog or menu, else the document), `platform`, and the command channel below — so the SDK stays
   type-only.
-- **Commands** are the extension's rebindable keybindings: `ExtensionCommand` is `{ id, title, chords }`,
+- **Commands** are the extension's rebindable keybindings: `ExtensionCommand` is `{ id, title, scope?, chords }`,
   each `ExtensionChord` a physical `code`, a display `key` (a `KeyboardEvent.key`-style value, capped like a
   catalog key) and `mod` / `ctrl` / `alt` / `shift` (`mod` is ⌘ on Apple, Ctrl elsewhere). A chord with no
   modifier (a plain key) is allowed and fires only outside text entry; such a command may be rebound to
@@ -95,6 +100,18 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   asking **`matchCommand(event)`** whether a key is one of its own commands under the effective bindings.
   An overlay's own key listener must act only while it holds the claim; that is what makes the host's and
   the overlay's listeners order-independent.
+- **A command with a `scope` is local**: it acts only while focus is inside the extension's own element,
+  which carries `data-key-scope="<scope>"` and matches through `@thinkrail/ui/local-keys`
+  (`useLocalKeys(scope, commands)` → `match(event)` gives the command id under the user's bindings,
+  `caps` / `aria` show them); the host never delivers it through `onCommand`. Its id and scope must both
+  start with `<extension name>.` (`ask-user-question.discuss` in `ask-user-question.card`) — the host
+  drops any command, global or local, that does not, so an extension cannot shadow ThinkRail's commands
+  or another element's keys. A local key may be a single plain letter, conflicts only with keys of its
+  own scope, wins over a global chord inside its element (the host yields there; Settings → Keyboard
+  warns), and is listed, rebound, exported (with its `scope`) and imported like any command. Navigation
+  primitives (arrows, Enter, Esc, Tab, Space, Home/End, PgUp/PgDn, alone or with Shift) stay the
+  element's own and are listed as `shortcuts`; a command's own primitive default (`Shift+Escape`) is
+  allowed.
 - `shortcuts` are display rows (`id`, `title` `MessageKey`, non-empty `keys` of `ExtensionShortcutKey` —
   the same fields as `ExtensionChord`) for keys the extension handles itself and the user cannot rebind
   (hint mode's in-mode keys); the cheatsheet lists them while the extension is enabled. `defineWebExtension` is a typed identity helper: it preserves the

@@ -1,8 +1,7 @@
-import { mkdirSync, readFileSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import type { ToolCall, ToolResponsePendingDetails } from "@thinkrail/contracts";
 import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
 import {
 	enterDefaultWorkspace,
@@ -10,9 +9,12 @@ import {
 	openFixtureProject,
 	openPersistedChat,
 } from "./fixtures/app";
+import {
+	type QuestionnaireArgs,
+	seedQuestionnaire as seedFixtureQuestionnaire,
+} from "./fixtures/ask";
 import { waitForScrollStability } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
-import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const BASE_TS = 1_700_860_000_000;
 const MOCKUPS = ".thinkrail/context/mockups";
@@ -29,43 +31,8 @@ function writeMockups(files: Record<string, string>): () => void {
 	return () => rmSync(join(E2E_FIXTURE_REPO, ".thinkrail"), { recursive: true, force: true });
 }
 
-function seedQuestionnaire(
-	name: string,
-	toolCallId: string,
-	args: AskUserQuestionArgs & ToolCall["arguments"],
-) {
-	const ack: ToolResponsePendingDetails = { kind: "ack" };
-	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
-		name,
-		messages: [
-			{ role: "user", text: "Ask me about the settings layout.", timestamp: BASE_TS },
-			{
-				role: "assistant",
-				content: [
-					{
-						type: "toolCall",
-						id: toolCallId,
-						name: "ask_user_question",
-						arguments: args,
-					},
-				],
-				stopReason: "toolUse",
-				timestamp: BASE_TS + 1_000,
-			},
-			{
-				role: "toolResult",
-				toolCallId,
-				toolName: "ask_user_question",
-				content: [{ type: "text", text: "Questions shown to the user; awaiting an answer." }],
-				details: ack,
-				isError: false,
-				timestamp: BASE_TS + 2_000,
-			},
-		],
-	});
-	utimesSync(session.path, new Date(BASE_TS), new Date(BASE_TS));
-	return session;
-}
+const seedQuestionnaire = (name: string, toolCallId: string, args: QuestionnaireArgs) =>
+	seedFixtureQuestionnaire(name, toolCallId, args, BASE_TS, "Ask me about the settings layout.");
 
 const LAYOUT_ROUND = {
 	questions: [
@@ -327,7 +294,8 @@ test("the compare overlay flips through the options, scrolls a pair together and
 		const card = await openRound(page, "compare options");
 		const pane = card.getByTestId("ask-preview");
 		await expect(pane.getByTestId("html-frame-box")).toBeVisible();
-		await pane.getByTestId("ask-preview-fullscreen").click();
+		await expect(card.getByTestId("ask-option").first()).toBeFocused();
+		await page.keyboard.press("c");
 		const overlay = page.getByTestId("ask-compare");
 		await expect(overlay).toBeVisible();
 		await expect(overlay.getByTestId("ask-compare-body")).toBeFocused();

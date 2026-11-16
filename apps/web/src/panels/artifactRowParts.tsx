@@ -32,7 +32,7 @@ import type { ArtifactRow } from "./artifactsModel";
 import { pasteInto } from "./fileTreeActions";
 import { OpenInBrowserMenuItem } from "./OpenInBrowserButton";
 import { openChatInTab } from "./openChat";
-import { treeRowControlProps, treeRowKey } from "./treeNavigation";
+import { treeRowControlProps, treeRowKey, useTreeKeys } from "./treeNavigation";
 
 export type RequestRemoval = (path: string, kept: boolean) => void;
 export type RowKeyDown = (event: KeyboardEvent<HTMLElement>) => void;
@@ -96,6 +96,7 @@ export function ArtifactEntryMenu({
 	children: (menuOpen: boolean, onRowKeyDown: RowKeyDown) => ReactElement;
 }) {
 	const t = useT();
+	const treeKeys = useTreeKeys();
 	const [open, setOpen] = useState(false);
 	const mentionOnCloseRef = useRef(false);
 	const canMention = useAppStore((s) => selectArtifactMentionTarget(s, workspaceId) !== null);
@@ -112,7 +113,7 @@ export function ArtifactEntryMenu({
 	const rename = mutations && !deleted ? onRename : undefined;
 	const remove = mutations ? onRemove : undefined;
 	const onRowKeyDown: RowKeyDown = (event) => {
-		const key = treeRowKey(event);
+		const key = treeRowKey(event.nativeEvent, treeKeys);
 		if (key === "delete" && remove) remove(path);
 		else if (key === "rename" && rename) rename();
 		else return;

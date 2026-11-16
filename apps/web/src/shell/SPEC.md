@@ -206,7 +206,7 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
 
 ## Global chords
 
-`useGlobalHotkeys` remains the one capture-phase owner of app-wide chords. The chords are declared once in the [[submodule-web-keybindings]] table and resolved with the user's overrides and the web extensions' commands; `keybindingState.ts` is the one place that resolves — once per change of the store's `keybindingOverrides` (ignored below `supportsKeybindings`, so an older host runs the defaults) or `disabledExtensions` — and hands the result to the binder (`currentKeybindings()` at event time) and to every reader (`useResolvedKeybindings`, `useKeybindingKeys`, `useKeybindingLabel`). `useGlobalHotkeys` matches through it (`matchKeybinding`, then an id → handler map whose missing handler means unavailable) and the palette shows each chord with `keybindingShortcut` over the same result, so a rebind applies and shows at once. It routes commands through the workbench command surface rather than imperative feature-panel refs:
+`useGlobalHotkeys` remains the one capture-phase owner of app-wide chords. The chords are declared once in the [[submodule-web-keybindings]] table and resolved with the user's overrides and the web extensions' commands; `keybindingState.ts` is the one place that resolves — once per change of the store's `keybindingOverrides` (ignored below `supportsKeybindings`, so an older host runs the defaults) or `disabledExtensions` — and hands the result to the binder (`currentKeybindings()` at event time) and to every reader (`useResolvedKeybindings`, `useKeybindingKeys`, `useKeybindingLabel`). It resolves the local key sets too — `LOCAL_SETS`: the app's `APP_LOCAL_SET` and the resource renderers' `REVIEW_SURFACE_COMMANDS` as a ThinkRail set in scope `review.surface`, with the extensions' scoped commands in the same input — and `selectLocalKeymap`, memoized on the resolved table, is the value `Shell` provides through `@thinkrail/ui/local-keys`' `LocalKeymapProvider` around its whole tree (portals included), so every element's `useLocalKeys` sees a rebind at once. **The binder yields to a focused element's local keys:** `routeHotkey` asks `matchLocal(resolved, localScopesOf(target), event, { textEntry })` first and, on a hit, dispatches no app chord, extension command or history — the element's own handler acts. `shortcutSurface.ts`' `localScopesOf` walks from the focused element outward collecting the app's scope selectors (rail entry, transcript, composer, history overlay, Changes review, review surfaces, palette, Find in Files) and any `[data-key-scope]`, innermost first. The workbench tab strip and the app's tree declare theirs (`data-key-scope="tabs"` on `layout`'s tablist, `"trees"` on `panels`' `Tree`) instead of being matched by ARIA role: the question card's tab chips are ARIA tabs that handle no `tabs.*` command, so a role match made a `tabs.close` rebound onto Mod+L swallow Focus composer there (#1416's review); the cheatsheet's surface map reads the same markers. A scope whose handlers read a shifted press of an unshifted arrow twin as the extending arrow declares `extendsWithShift` ([[submodule-web-keybindings]]), and `matchLocal` yields that variant too, so a global chord on the Shift variant (Shift+Mod+J toggling the bottom panel once `arrows.down` is Mod+J) cannot take a review cursor's or the swipe divider's extension. `useGlobalHotkeys` matches through it (`matchKeybinding`, then an id → handler map whose missing handler means unavailable) and the palette shows each chord with `keybindingShortcut` over the same result, so a rebind applies and shows at once. It routes commands through the workbench command surface rather than imperative feature-panel refs:
 
 - `Ctrl+R` opens chat history for the locally selected chat, or the workspace's most-recent chat fallback; the literal `Ctrl+R` acts even during IME composition (it would reload the browser), while a chord the user rebinds history to waits composition out like every other chord;
 - `Mod+B` toggles the left side, restoring local group/tab attention or an eligible singleton tool;
@@ -222,7 +222,8 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   only while the store's `shortcutsOpen` is true (`openShortcuts` / `closeShortcuts`); the chord, the
   keyboard icon at the foot of the left tool rail and the palette's *Keyboard shortcuts* row open it. It
   lists the catalog's `shortcutRows` for this client (`desktop` is the native-shortcut bridge read the
-  palette makes) over the resolved table, plus every enabled web extension's commands and `shortcuts` as
+  palette makes) over the resolved table — local keys at their effective chords, a direction row's arrow
+  beside its twin's current letter — plus every enabled web extension's commands and `shortcuts` as
   General rows, as surface
   sections under a filter matching a row's title or key label, with a count beside it ("117 shortcuts",
   "17 of 117" while filtering). A chord that loses to another command is shown struck through after the
@@ -243,10 +244,16 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
 - **Settings → Keyboard is the shortcut editor** (`KeybindingEditor`), injected into `search`'s
   `SearchSettings` under the double-Shift switch. One column of `keybindingList` rows
   ([[submodule-web-keybindings]], *Editor rows and edits*): the catalog by surface, then a section per web
-  extension tagged Extension (and Off, its rows muted but editable, while switched off). Table and
-  extension commands are editable; element keys, desktop rows and display-only chords show a lock.
+  extension tagged Extension (and Off, its rows muted but editable, while switched off). Table, local
+  and extension commands are editable; locked element keys, desktop rows and display-only chords show a
+  lock. Consecutive rows of one local scope sit under a caption, "local · when focus is in a sidebar
+  tree" (an extension scope: "when focus is in {extension}"); a direction row shows its arrow locked,
+  "always works", then its twin's letter as the editable alias (recording there edits the shared twin,
+  so it applies in every element; the four General `arrows.*` rows edit the same commands).
   - **Recording.** Enter or a click on a row's chord button records (`chordFromEvent`, the command's
-    `plain` as `allowPlain`); the row reads "Press a new shortcut… Esc cancels" and keeps focus. A
+    `plain` — true for every local command — as `allowPlain`); the row reads "Press a new shortcut… Esc
+    cancels" ("Press a key or a chord…" on a local row, "Press a new key for the alias…" on a direction
+    row) and keeps focus. A
     modifier alone keeps waiting, AltGraph is ignored, Esc cancels (the button carries
     `data-settings-draft-input`, so Settings stays open), and Tab is not captured: leaving cancels.
     While recording — and while the filter has focus in Search by keys — the editor holds the keyboard
@@ -256,15 +263,26 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
     desktop-native chord, or a press either desktop platform's `shortcutCommands` matcher owns on this
     layout (`isDesktopShortcut`: AZERTY's `KeyZ` Ctrl+W, Russian `Shift+Slash` Ctrl+,) → refused with
     the same desktop message; a chord active on another command (none for a switched-off extension's
-    command, `chordHolder`) → "{chord} is already used by {command}" with Replace / Cancel (Replace writes `assignChord`'s explicit unbind; a browser-reserved
+    command, `chordHolders`) → "{chord} is already used by {command}" with Replace / Cancel (Replace writes `assignChord`'s explicit unbind; a browser-reserved
     chord adds the browser sentence); a plain key an element owns, on a plain command → "{key} also acts in
-    {places}…" with Assign anyway; a browser-reserved chord in a browser → Assign anyway; else it assigns.
-    A chord equal to the defaults drops the override.
+    {places}…" with Assign anyway — also for any global chord a local key holds (`localUses`: "Ctrl+K
+    also acts in sidebar trees…"); a browser-reserved chord in a browser → Assign anyway; else it assigns.
+    A chord equal to the defaults drops the override (kept while a customised twin would win it,
+    `assignChord`). **On a local row** the outcomes are: a navigation
+    primitive → "↓ is a navigation key — locked in every element" (dismiss; the command's own primitive
+    default records); desktop-native as above; a key another command holds inside an element this
+    command acts in (`chordHolders`) → "J is already used by Move down (alias) inside sidebar trees",
+    naming every holder ("X is already used by Search the visible rows inside sidebar trees and Copy the
+    message… inside the chat transcript"), with Replace (clears each) / Cancel; a chord a global command holds (`globalHolder`) → "F runs “{global}” everywhere
+    else; inside sidebar trees it will run “{local}” instead" (no "else" for a modified chord) with Assign
+    anyway; browser-reserved → Assign anyway; else it assigns, and a key other elements also use adds an
+    info note "C also acts in the chat transcript — a different element, so no conflict".
   - **Rows.** A Custom tag and Reset on overridden rows, Reset all, a lost chord struck through with
-    "{chord} is taken by {winner} — inactive" and Assign another (`commandTitle` also names a reserved
+    "{chord} is taken by {winner} — inactive" and Assign another, a mark per element that takes the row's
+    chord over ("Inside sidebar trees, F runs “Search the visible rows”") (`commandTitle` also names a reserved
     chord's catalog-row winner, such as a desktop row a browser does not list). The filter matches title or
-    key label; Search by keys turns it into a recorder whose next chord filters to rows showing it (Esc
-    leaves).
+    key label; Search by keys turns it into a recorder whose next chord — a plain letter or a locked
+    arrow included — filters to rows showing it, local and fixed keys included (Esc leaves).
     ↑/↓ move between rows' chord buttons, one of which is the Tab stop (roving; a row's Reset and Assign
     another are tabbable only on that row); rows carry `data-focus-row` in a `data-focus-list`, and after
     an assignment, Replace, Cancel or Reset focus returns to the row's chord button.
@@ -279,8 +297,9 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
 - **Chords in tooltips.** Every icon button whose action a chord also runs shows the chord's caps after
   its tooltip label (`IconTooltip`'s `shortcut`, [[module-ui]]), computed here from the resolved table
   (`keybindingKeys` / `useKeybindingKeys`, never captured once) and injected into the props-driven layout
-  as `chromeShortcuts`, and into `ProjectTree` (`newWorkspaceShortcut`) and Keyboard settings
-  (`openShortcut`) as props: a pane's Hide shows its side's toggle
+  as `chromeShortcuts`, and into `ProjectTree` (`newWorkspaceShortcut`), Keyboard settings
+  (`openShortcut`), and `ChatView` / `PlanPane` (`landingChord`, the `region.next` label a waiting question
+  names in "… to answer") as props: a pane's Hide shows its side's toggle
   (`Mod+B` / `Mod+J` / `Mod+Shift+J`) only while it is the region's sole expanded pane — with two, Hide
   folds one and the chord hides both — the Projects and Files rail entries show `Mod+0` / `Mod+Shift+E`
   and terminal entries `` Ctrl+` ``; on Project Home the Projects entry and its Hide show `Mod+B`, the
@@ -309,7 +328,9 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   shows moves and flashes the destination, so a run of presses walks the ring. Focus on `<body>` or
   outside every region moves at once; with none active, `F6` starts at the top bar and `Shift+F6` at the
   last. The palette's Focus next / previous region rows always move. `Mod+1…9` land in center
-  group N of that order (no group N: nothing, the chord still swallowed). `Mod+L` focuses the attended
+  group N of that order (no group N: nothing, the chord still swallowed). Every landing prefers a focusable
+  `[data-focus-claim]` (`resolveLanding`), so F6 into a chat with a waiting question lands on its current
+  option; `Mod+L` still focuses the composer. `Mod+L` focuses the attended
   chat's composer — `selectHistoryTarget`'s chat (the selected tab of the last-focused center group, else
   the workspace's most recent chat tab), opened through `openChatInTab` first when it is not attended —
   by `requestComposerFocus` once it is. The chat's own history overlay does not count as covering it: the
@@ -375,10 +396,9 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
     itself with `activeLayer()` (hint mode labels the open dialog or menu). A match is
     `preventDefault` + `stopImmediatePropagation`, so neither Radix (document), Monaco nor another window
     listener sees it, and reaches the extension's `onCommand` listeners once per physical press. Only an
-    enabled extension's commands match, and only a mounted overlay listens. An unmodified press whose
-    typed key the focused element's surface already binds (`shortcutSurfaceOf` + `elementKeyUses`: `s` in
-    a tree, `k` in the transcript, on any layout) is left to that element, which is what Settings →
-    Keyboard's element-key warning promises.
+    enabled extension's commands match, and only a mounted overlay listens. A press a focused element's
+    local key holds (by physical key, the binder's local yield above: `S` in a tree, `K` in the
+    transcript) is left to that element, which is what Settings → Keyboard's warnings promise.
   - **The claim.** `claimKeyboard(true)` says the overlay owns every key (hint mode while labels show; the
     Settings → Keyboard recorder claims it the same way);
     until it releases (or the overlay unmounts, which releases for it), `useGlobalHotkeys` dispatches no
@@ -467,7 +487,7 @@ after the host's push), else the opener's rows. Resolution, first match wins:
    row, the previous, the list's `data-focus-fallback`, the list's first focusable; then the outermost
    list's enclosing `data-focus-default`.
 4. **Safety net** — the active region's F6 landing target (`regionLandingTarget`, the record's region when
-   the active one is gone); inside a live dialog, its first focusable. A control that sat in no region and
+   the active one is gone; a waiting question's `[data-focus-claim]` wins it, as for F6); inside a live dialog, its first focusable. A control that sat in no region and
    no dialog (a field a page or extension injected into `<body>`) gets no safety net: focus stays where the
    browser put it.
 

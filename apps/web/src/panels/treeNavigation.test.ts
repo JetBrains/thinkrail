@@ -1,4 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import { localKeys } from "@thinkrail/ui/local-keys";
+import { LOCAL_KEY_DEFAULTS } from "../keybindings";
 import {
 	type TreeSearchRow,
 	treeRowKey,
@@ -48,27 +50,69 @@ describe("tree search", () => {
 });
 
 describe("treeRowKey", () => {
-	const key = (init: Partial<Parameters<typeof treeRowKey>[0]> & { key: string }) =>
-		treeRowKey({
-			shiftKey: false,
-			altKey: false,
-			ctrlKey: false,
-			metaKey: false,
-			defaultPrevented: false,
-			...init,
-		});
+	const keys = localKeys(null, "trees", LOCAL_KEY_DEFAULTS.trees);
+	const key = (init: { key: string; code?: string } & Partial<KeyboardEvent>) =>
+		treeRowKey(
+			{
+				code: init.key,
+				shiftKey: false,
+				altKey: false,
+				ctrlKey: false,
+				metaKey: false,
+				isComposing: false,
+				keyCode: 0,
+				target: null,
+				defaultPrevented: false,
+				...init,
+			},
+			keys,
+		);
 
 	it("names the row actions a key asks for", () => {
 		expect(key({ key: "ContextMenu" })).toBe("menu");
 		expect(key({ key: "F10", shiftKey: true })).toBe("menu");
 		expect(key({ key: "Delete" })).toBe("delete");
 		expect(key({ key: "F2" })).toBe("rename");
+		expect(key({ key: "ArrowUp", altKey: true, shiftKey: true })).toBe("reorderUp");
+		expect(key({ key: "ArrowDown", altKey: true, shiftKey: true })).toBe("reorderDown");
 	});
 
 	it("ignores modified or already handled keys", () => {
 		expect(key({ key: "F10" })).toBeNull();
 		expect(key({ key: "Delete", ctrlKey: true })).toBeNull();
 		expect(key({ key: "F2", altKey: true })).toBeNull();
+		expect(key({ key: "ArrowUp", altKey: true })).toBeNull();
 		expect(key({ key: "Delete", defaultPrevented: true })).toBeNull();
+	});
+
+	it("follows a rebound key and drops the default", () => {
+		const rebound = localKeys(
+			{
+				platform: "Linux x86_64",
+				scopes: new Map([["trees", [{ id: "trees.rename", chord: { code: "KeyR", key: "R" } }]]]),
+				isTextEntry: () => false,
+			},
+			"trees",
+			LOCAL_KEY_DEFAULTS.trees,
+		);
+		const press = (code: string) =>
+			treeRowKey(
+				{
+					code,
+					key: code === "KeyR" ? "к" : code,
+					shiftKey: false,
+					altKey: false,
+					ctrlKey: false,
+					metaKey: false,
+					isComposing: false,
+					keyCode: 0,
+					target: null,
+					defaultPrevented: false,
+				},
+				rebound,
+			);
+		expect(press("KeyR")).toBe("rename");
+		expect(press("F2")).toBeNull();
+		expect(press("Delete")).toBeNull();
 	});
 });

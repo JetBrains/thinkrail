@@ -3,11 +3,12 @@ import type { SearchContext, TextSearchFile } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef } from "react";
-import { shortcutKeys } from "../commands";
 import { KeyHint } from "../components/KeyHint";
 import { highlightRanges } from "../components/MatchHighlight";
+import { LOCAL_KEY_DEFAULTS } from "../keybindings";
 import { hasPlatformModifier } from "../lib";
 import { contextKeyOf, requestKeyOf, runTextSearch, wasRequested } from "./runner";
 import {
@@ -88,6 +89,7 @@ function splitPath(path: string): { name: string; dir: string } {
 export function FindInFilesDialog(props: FindInFilesDialogProps) {
 	const t = useT();
 	const open = useFindInFiles((state) => state.open);
+	const keys = useLocalKeys("findInFiles", LOCAL_KEY_DEFAULTS.findInFiles);
 	return (
 		<Dialog open={open} onOpenChange={(next) => (next ? undefined : closeFindInFiles())}>
 			<DialogContent
@@ -95,6 +97,9 @@ export function FindInFilesDialog(props: FindInFilesDialogProps) {
 				data-testid="find-in-files"
 				aria-describedby={undefined}
 				className="top-[10vh] w-auto max-w-none translate-y-0 gap-0 overflow-visible p-0"
+				onEscapeKeyDown={(event) => {
+					if (keys.match(event) !== null) event.preventDefault();
+				}}
 				onOpenAutoFocus={(event) => {
 					event.preventDefault();
 					const input = document.querySelector<HTMLInputElement>(
@@ -120,6 +125,7 @@ function FindInFilesBody({
 	renderPreview,
 }: FindInFilesDialogProps) {
 	const t = useT();
+	const keys = useLocalKeys("findInFiles", LOCAL_KEY_DEFAULTS.findInFiles);
 	const query = useFindInFiles((state) => state.query);
 	const caseSensitive = useFindInFiles((state) => state.caseSensitive);
 	const wholeWord = useFindInFiles((state) => state.wholeWord);
@@ -179,29 +185,36 @@ function FindInFilesBody({
 	};
 	const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
 		if (isImeComposing(event.nativeEvent)) return;
-		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+		const local = keys.match(event.nativeEvent);
+		if (local === "findInFiles.openKept") {
+			event.preventDefault();
+			openRow(selectedRow, true);
+			return;
+		}
+		if (local === "findInFiles.matchCase") {
+			event.preventDefault();
+			toggleFindInFilesCase();
+			return;
+		}
+		if (local === "findInFiles.wholeWord") {
+			event.preventDefault();
+			toggleFindInFilesWord();
+			return;
+		}
+		if (local !== null || event.altKey || event.ctrlKey || event.metaKey) return;
+		if ((event.key === "ArrowDown" || event.key === "ArrowUp") && !event.shiftKey) {
 			event.preventDefault();
 			select(selectedIndex + (event.key === "ArrowDown" ? 1 : -1));
 			return;
 		}
 		if (event.key === "Enter") {
 			event.preventDefault();
-			openRow(selectedRow, hasPlatformModifier(event.nativeEvent));
+			openRow(selectedRow, false);
 			return;
 		}
 		if (event.key === "Escape") {
 			event.preventDefault();
 			closeFindInFiles();
-			return;
-		}
-		if (event.altKey && !event.metaKey && !event.ctrlKey && event.code === "KeyC") {
-			event.preventDefault();
-			toggleFindInFilesCase();
-			return;
-		}
-		if (event.altKey && !event.metaKey && !event.ctrlKey && event.code === "KeyW") {
-			event.preventDefault();
-			toggleFindInFilesWord();
 		}
 	};
 
@@ -344,9 +357,17 @@ function FindInFilesBody({
 										onMouseDown={(event) => event.preventDefault()}
 										onClick={(event) => openRow(row, hasPlatformModifier(event.nativeEvent))}
 										onKeyDown={(event) => {
-											if (event.key === "Enter" || event.key === " ") {
+											const local = keys.match(event.nativeEvent);
+											const kept = local === "findInFiles.openKept";
+											const plain =
+												local === null &&
+												!event.altKey &&
+												!event.ctrlKey &&
+												!event.metaKey &&
+												!event.shiftKey;
+											if (kept || (plain && (event.key === "Enter" || event.key === " "))) {
 												event.preventDefault();
-												openRow(row, hasPlatformModifier(event.nativeEvent));
+												openRow(row, kept);
 											}
 										}}
 										className={cn(
@@ -377,18 +398,12 @@ function FindInFilesBody({
 				<div className="@container flex h-16 min-w-0 flex-1 flex-wrap gap-x-12 overflow-hidden">
 					<KeyHint keys={["↑", "↓"]} label={t("findInFiles.hint.move")} />
 					<KeyHint keys={["↵"]} label={t("findInFiles.hint.open")} />
+					<KeyHint keys={keys.caps("findInFiles.openKept")} label={t("findInFiles.hint.keep")} />
 					<KeyHint
-						keys={shortcutKeys({ key: "↵", mod: true })}
-						label={t("findInFiles.hint.keep")}
-					/>
-					<KeyHint
-						keys={shortcutKeys({ key: "C", alt: true })}
+						keys={keys.caps("findInFiles.matchCase")}
 						label={t("findInFiles.caseSensitive")}
 					/>
-					<KeyHint
-						keys={shortcutKeys({ key: "W", alt: true })}
-						label={t("findInFiles.wholeWord")}
-					/>
+					<KeyHint keys={keys.caps("findInFiles.wholeWord")} label={t("findInFiles.wholeWord")} />
 				</div>
 			</footer>
 		</div>

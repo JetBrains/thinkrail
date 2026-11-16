@@ -12,6 +12,7 @@ export { rendererImplementationKey, rendererTestId, selectResourceRenderer } fro
 export type {
 	AnchorDraft,
 	DiffSideLabels,
+	FrameFocus,
 	HunkActions,
 	HunkTriage,
 	ResourceAnchorCapability,

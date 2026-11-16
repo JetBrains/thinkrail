@@ -464,8 +464,11 @@ content and their own controls, which a treeitem's name would flatten and its ro
   so a move can target a row Virtuoso unmounted. The sidebar trees' rule (`lib`'s `resolveTreeMove`)
   resolves ↑/↓ and k/j, Home/End, → and l (expand, else first child), ← and h (collapse, else parent);
   PgUp/PgDn go to the farthest mounted item within one viewport; Enter toggles. Keys are unmodified,
-  IME-safe, read only on the article itself (inner controls keep theirs) and compared through the
-  catalog's `HJKL_KEYS` / `TRANSCRIPT_KEYS`. Expansion clicks the item's own toggle
+  IME-safe and read only on the article itself (inner controls keep theirs). The arrow twins, C
+  (`transcript.copy`) and O (`transcript.open`) are rebindable local keys of scope `transcript`
+  ([[submodule-web-keybindings]], *Local keys*), matched by physical `code` (a Russian layout's `с`
+  copies) through `useLocalKeys`, which `useTranscriptNavigation` hands the controller on every render;
+  the arrows, Home/End, PgUp/PgDn, Enter and Esc are locked. Expansion clicks the item's own toggle
   (`data-activity-node-toggle`, `data-chat-item-toggle`), so fold-geometry preservation still runs.
 - **Item actions.** C copies the message source, a thought's text or a tool call's result text (nothing
   for an Activity group, a running tool or a skill/review card) with a "Copied" toast; O opens the path of
@@ -499,9 +502,12 @@ content and their own controls, which a treeitem's name would flatten and its ro
   it). Other items' controls stay pointer-focusable and are skipped by intercepting Tab, not by rewriting
   every control's `tabIndex`, which streamed, expanded, remounted and extension-rendered controls would
   each have to keep in sync. The cursor item carries no `data-focus-default`: the composer stays the chat
-  region's landing, and F6 returns to the item through the region's remembered focus
-  ([[submodule-web-shell]]).
-- **Ways in.** In the composer, Mod+↑ (checked before plain ↑ recall) focuses the newest content item (a
+  region's default landing, and F6 returns to the item through the region's remembered focus
+  ([[submodule-web-shell]]) — **unless a docked question waits**: its `[data-focus-claim]` (the current
+  option) wins F6, Mod+1…9 and the recovery safety net, so the keyboard lands where the agent is blocked.
+- **Ways in.** A plain Shift+Tab in the composer (no template slots, no open menu) goes to the docked
+  question's `[data-focus-claim]` when one waits (`Composer.onShiftTabOut`, wired in `ChatView`), never to
+  its Skip button, which the browser's own order would reach first. In the composer, Mod+↑ (`composer.enterTranscript`, rebindable; checked before plain ↑ recall) focuses the newest content item (a
   trailing round divider is skipped) when the draft is empty or one visual line, or the caret is already at
   its start; otherwise it first moves the caret to the start. PgUp/PgDn there page the transcript with
   keyboard provenance and keep focus. `ChatTranscriptHandle.focusNewest()` / `scrollPage()` are the seams.
@@ -556,7 +562,8 @@ two routes:
   **`ToolRenderProps.interaction`**. `ToolRendererBody` fills it through `useToolInteraction`
   (`toolInteraction.ts`), and the plan page does the same for its card. The adapter reads `ChatActions`,
   `interactionState`, the fold-geometry context and the store's `protocolVersion` (passed as
-  `hostProtocol` so a renderer can withhold an affordance an older host cannot serve), and fills `interaction` for every tool whose renderer
+  `hostProtocol` so a renderer can withhold an affordance an older host cannot serve), binds
+  `focusTranscript` to this call's `focusToolCall`, and fills `interaction` for every tool whose renderer
   is registered `interactive` (`isInteractiveTool`) — it knows no tool by name. It hands the docked call's
   transcript row `placement: "stub"` (the context's `dockedToolCallId`) and the dock's copy
   `placement: "dock"`. Its `state.accepting` is
@@ -590,8 +597,7 @@ anchored prompt's first mount reveals itself (`revealChatElement`, `automatic-at
 (`PendingExtUi.claimReveal`). A row virtualized away gets no reveal; the live
 region and the needs-input marker still tell the user. **Bounds:** the docked prompt is capped at 60% of
 the chat height (`max-h-[60cqh]`); its body (question, field, select options) scrolls while Cancel/Submit
-and the hint stay put, and the editor is capped at 40%. On the way out it follows the
-`ask_user_question` hand-off ([tools/SPEC.md](tools/SPEC.md)): answering unmounts the focused control, so
+and the hint stay put, and the editor is capped at 40%. On the way out, answering unmounts the focused control, so
 when the prompt still holds `:focus-visible` focus it hands focus back to the composer
 (`ChatActions.focusComposer`) instead of stranding it on `<body>`; a tap/click answer leaves focus alone. `ChatTranscript` owns the session's
 `pendingExtUi`, its `session.extUiReply`, and `PendingExtUiContext`. The typed input/editor draft lives
@@ -663,8 +669,12 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   it rejects when the host refuses (unknown/responded/superseded call), and the caller owns the failure UX —
   plus `focusComposer()`, for a renderer that resolves *itself*: it unmounts the control the user was
   standing on, and focus would otherwise fall to `<body>` and swallow every following keystroke (the same
-  stranding the history overlay's dismiss refocus avoids). Only the card's own reply path calls it, and
-  only while the card still holds focus. Plus `openSubagentTranscript(childSessionId)` — the subagent
+  stranding the history overlay's dismiss refocus avoids). Only the card's own reply path (and its Esc) calls
+  it. Plus `focusToolCall(toolCallId)` — the click hand-off: the transcript navigation's `parkOnToolCall`
+  moves its cursor to the call's row (`rowIdForToolCall`) and focuses it without scrolling, or the feed
+  when Virtuoso has unmounted it; `mayClaimFocus()` — false once `ChatView` served a
+  `requestComposerFocus` in this mount; and `landingChord`, the resolved `region.next` label the shell
+  passes `ChatView`. Plus `openSubagentTranscript(childSessionId)` — the subagent
   cards' transcript link (no provider → the cards hide the action).
   Plus `openWorkspace({ workspaceId, projectId, sessionId? }, gone?)` (`openWorkspace.ts`), the one way
   a card opens another workspace's chat: the `start_workspace` card, Continue in workspace's Open and
@@ -1285,7 +1295,11 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `Composer` yields every keydown to an active IME before slot, menu, recall, or send handling
   ([[module-web]]'s text-field rule). The guard does not cancel the event, so candidate-confirming
   Enter commits; only a later ordinary Enter invokes send semantics.
-  **Interrupt** (`SubmitBehavior: "interrupt"`, Cmd/Ctrl+Shift+Enter while streaming; plain send when
+  **Composer keys** are the local keys of scope `composer`: `composer.followUp` (`Mod+Enter`) and
+  `composer.interrupt` (`Shift+Mod+Enter`) rebind like any chord — non-typing chords, so they match in the
+  textarea — and the send menu shows their resolved labels; only bare Enter (send, or steer while
+  streaming) and Shift+Enter (newline) are locked, and a `Mod+Enter` left unbound by a rebind does nothing.
+  **Interrupt** (`SubmitBehavior: "interrupt"`, `composer.interrupt` while streaming; plain send when
   idle; Shift+Enter alone stays newline) is the "take my message NOW" gesture pi lacks: `ChatView`
   awaits `session.abort` (the ack means idle) then performs an ordinary idle send — the partial reply
   stays in the transcript marked aborted, and messages still queued keep their lanes (they deliver in
@@ -1356,9 +1370,13 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
     `data-history-trigger` attribute rather than its test id, are not outside: the button toggles the
     overlay itself.
   - **Entry keys on the selection** (the query input keeps them, so Tab stays compact ↔ zoomed):
-    **Delete** does exactly what the entry's Trash does (`onDeleteChat`, no confirmation, same deletable
+    **Delete** (`history.deleteChat`) does exactly what the entry's Trash does (`onDeleteChat`, no confirmation, same deletable
     rule), but only with the caret at the end of the query and nothing selected, where forward-delete has
-    nothing to remove — elsewhere it still edits the query. **Shift+F10 / Menu** opens an entry menu
+    nothing to remove — elsewhere it still edits the query. The overlay's keys are the local keys of scope
+    `history` (`history.send` `Mod+Enter`, `history.saveTemplate` `Mod+S`, `history.deleteChat`); the
+    query field is text entry, so a typing chord matches only when the press cannot edit the query (the
+    overlay passes `useLocalKeys`' `textEntry: false` then: caret at the end, nothing selected, no printed
+    character, not Backspace). **Shift+F10 / Menu** opens an entry menu
     (`history-entry-menu`: Go to chat when jumpable, Save as template for a prompt, Move chat to trash when
     deletable) anchored to the selected row; it is a layer like the scope picker, so the overlay's Escape and
     outside-press listeners stand down while it is open, and closing it returns focus to the query input.
@@ -1624,7 +1642,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
     no dialog to render inline into), leaving the row in place — the same pattern `panels/SPEC.md`
     documents for `ProjectTree`'s own workspace-remove row.
   - **Save-as-template** (`HistoryOverlay`'s selected-prompt-row action, `data-testid="history-save-template"`,
-    keyboard **Cmd/Ctrl+S** while a prompt row is selected — the overlay's `onKeyDown` always
+    keyboard **Cmd/Ctrl+S** (`history.saveTemplate`, whose resolved label the row and tooltip show) while a prompt row is selected — the overlay's `onKeyDown` always
     `preventDefault`s the combo, so the browser's own Save dialog never opens regardless of what's
     selected, but only fires the action when the resolved selection is a prompt hit) opens the dialog with
     the body prefilled from that prompt's text — a "new template" case (no existing name/scope identity),

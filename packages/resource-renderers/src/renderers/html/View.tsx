@@ -24,7 +24,7 @@ export function HtmlPreview({
 		[text, interactive],
 	);
 	const [viewport, selectViewport] = useHtmlViewport(viewState, onViewState);
-	const compact = useResourceEnvironment().compact ?? false;
+	const { compact = false, frameFocus } = useResourceEnvironment();
 	return (
 		<div data-testid="html-view" className="flex h-full min-h-0 flex-col bg-container-workspace-bg">
 			<HtmlPreviewNotice
@@ -39,6 +39,7 @@ export function HtmlPreview({
 					viewport={viewport}
 					compact={compact}
 					interactiveToken={built.token}
+					frameFocus={frameFocus}
 				/>
 			</div>
 		</div>

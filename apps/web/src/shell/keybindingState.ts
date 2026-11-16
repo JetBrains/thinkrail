@@ -1,17 +1,24 @@
 import type { KeybindingOverrides } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
+import { REVIEW_SURFACE_COMMANDS, REVIEW_SURFACE_SCOPE } from "@thinkrail/resource-renderers";
 import { browserPlatform } from "@thinkrail/ui/keyboard";
+import type { LocalKeymap } from "@thinkrail/ui/local-keys";
 import { webExtensionCommands, webExtensions } from "../extensions";
 import {
+	APP_LOCAL_SET,
+	isAppLocalScope,
 	type KeybindingEntry,
 	type KeybindingList,
 	keybindingKeys,
 	keybindingLabel,
 	keybindingList,
+	LOCAL_SCOPES,
+	type LocalCommandSet,
 	type ResolvedKeybindings,
 	resolveKeybindings,
 	SHORTCUT_CATALOG,
 } from "../keybindings";
+import { isTextEntryTarget } from "../lib";
 import { useAppStore } from "../store";
 import { supportsKeybindings } from "../transport";
 
@@ -21,6 +28,20 @@ type KeybindingSource = Pick<
 >;
 
 const NO_OVERRIDES: KeybindingOverrides = {};
+
+export const LOCAL_SETS: readonly LocalCommandSet[] = [
+	APP_LOCAL_SET,
+	{
+		source: APP_LOCAL_SET.source,
+		enabled: true,
+		commands: REVIEW_SURFACE_COMMANDS.map(({ id, chords }) => ({
+			id,
+			scope: REVIEW_SURFACE_SCOPE,
+			title: null,
+			chords,
+		})),
+	},
+];
 
 let resolvedFor: {
 	overrides: KeybindingOverrides;
@@ -40,9 +61,28 @@ export function selectKeybindings(state: KeybindingSource): ResolvedKeybindings 
 		platform: browserPlatform(),
 		overrides,
 		extensions: webExtensionCommands(disabled),
+		local: LOCAL_SETS,
 	});
 	resolvedFor = { overrides, disabled, keybindings };
 	return keybindings;
+}
+
+let keymapFor: { keybindings: ResolvedKeybindings; keymap: LocalKeymap } | null = null;
+
+export function selectLocalKeymap(state: KeybindingSource): LocalKeymap {
+	const keybindings = selectKeybindings(state);
+	if (keymapFor?.keybindings === keybindings) return keymapFor.keymap;
+	const keymap: LocalKeymap = {
+		platform: keybindings.platform,
+		scopes: keybindings.local,
+		isTextEntry: isTextEntryTarget,
+	};
+	keymapFor = { keybindings, keymap };
+	return keymap;
+}
+
+export function useLocalKeymap(): LocalKeymap {
+	return useAppStore(selectLocalKeymap);
 }
 
 export function currentKeybindings(): ResolvedKeybindings {
@@ -83,8 +123,22 @@ export function entryTitle(
 }
 
 export function commandTitle(t: Translator, list: KeybindingList, command: string): string {
-	const entry = list.entries.find((candidate) => candidate.command === command);
+	const entry =
+		list.entries.find((candidate) => candidate.id === command) ??
+		list.entries.find((candidate) => candidate.command === command);
 	if (entry) return entryTitle(t, entry);
 	const row = SHORTCUT_CATALOG.find((candidate) => candidate.id === command);
 	return row ? t(row.title) : command;
+}
+
+export function scopeText(t: Translator, scope: string, kind: "where" | "inside"): string {
+	if (isAppLocalScope(scope)) return t(LOCAL_SCOPES[scope][kind]);
+	const extension = webExtensions.find(({ name }) => scope.startsWith(`${name}.`));
+	const name = extension?.title ? t(extension.title) : (extension?.name ?? scope);
+	return t(
+		kind === "where"
+			? "settings.keyboard.editor.extensionWhere"
+			: "settings.keyboard.editor.extensionInside",
+		{ name },
+	);
 }
