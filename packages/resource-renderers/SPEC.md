@@ -911,12 +911,14 @@ content's own height.
 Every comment a pointer can author also has a keyboard path. Each surface is one Tab stop marked `data-review-surface`, which the
 app's cheatsheet maps to its Changes review section. Key interpretation is one module,
 `support/cursorKeys.ts` (`cursorCommand(event, keys)`: arrows and the arrow twins, Shift extends, Home/End,
-Enter or `review.surface.comment` comments, Esc; Alt, other Mod chords and an IME composition pass
-through; `composerSubmit(event, keys)`; `swipeDividerValue(value, event, keys)` takes the same matcher).
+Enter or `review.surface.comment` comments, Esc; Alt, other Mod chords, another local command's chord
+and an IME composition pass through, and the diff cursor walks its own Tab targets on a plain Tab only; `composerSubmit(event, keys)`; `swipeDividerValue(value, event, keys)` takes the same matcher).
 It declares `REVIEW_SURFACE_COMMANDS` in scope `review.surface` — `review.surface.comment`
 (`Shift+Mod+M`), `review.surface.saveDraft` (`Mod+Enter`, the composer and a draft card's edit) and
 `review.surface.sendNow` (`Shift+Mod+Enter`), each Enter chord paired with the numpad Enter — and every surface matches them plus `@thinkrail/ui`'s
-shared arrow twins (H/J/K/L by physical `code`; `ignoreShift` so Shift still extends) through
+shared arrow twins (H/J/K/L by physical `code`; an exact match wins, and only a shifted press of an
+unshifted twin falls back through `ignoreShift` and extends — a twin bound with Shift moves without
+extending, and on the swipe divider it steps rather than pages) through
 `useReviewSurfaceKeys()`, i.e. `useLocalKeys` over the keymap the app provides. The package never
 imports the app: the app adds the set to its resolver ([[submodule-web-keybindings]], *Local keys*), so
 a rebind in Settings → Keyboard reaches the surfaces, and with no provider they match these defaults.

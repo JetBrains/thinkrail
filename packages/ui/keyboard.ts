@@ -73,7 +73,8 @@ export function chordPressed(
 		!(chord.alt && !apple && event.getModifierState?.("AltGraph")) &&
 		(chord.typed
 			? event.key === chord.key
-			: event.code === chord.code && (ignoreShift || event.shiftKey === (chord.shift === true))) &&
+			: event.code === chord.code &&
+				(event.shiftKey === (chord.shift === true) || (ignoreShift && chord.shift !== true))) &&
 		event.ctrlKey === (chord.ctrl === true || (mod && !apple)) &&
 		event.metaKey === (mod && apple) &&
 		event.altKey === (chord.alt === true)

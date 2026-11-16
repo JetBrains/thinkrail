@@ -123,6 +123,13 @@ describe("keyboard interaction", () => {
 		expect(action(typed("KeyD", "d"))).toEqual({ type: "none" });
 	});
 
+	it("a card command pressed on a row is the card's: Mod+Enter submits rather than picking the row", () => {
+		const ctrl = (code: string, key: string) => ({ ...typed(code, key), ctrlKey: true });
+		expect(keys.match(ctrl("Enter", "Enter"))).toBe(CARD_KEYS.submit);
+		expect(row(ctrl("Enter", "Enter"))).toEqual({ type: "none" });
+		expect(row(typed("Escape", "Escape", true))).toEqual({ type: "none" });
+	});
+
 	it("on Skip and the primary button, ↑/↓ continue the ring and ←/→ move between the two", () => {
 		expect(footKeyAction("ArrowUp", "skip", true)).toBe("other");
 		expect(footKeyAction("ArrowDown", "skip", true)).toBe("primary");

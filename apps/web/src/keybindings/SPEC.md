@@ -196,6 +196,15 @@ binding does.
   and shows its caps and `aria-keyshortcuts` from the same hook, so a rebind acts and shows at once. The
   per-feature typed-key constants (`TAB_KEYS` … `HISTORY_KEYS`) were deleted with that migration;
   `DESKTOP_KEYS` stays (display only).
+- **Local commands are matched before a handler's primitive navigation; fixed navigation keys match only
+  their own modifiers** (plain arrows, Home/End, Enter, Escape, Tab; Shift only where the pattern gives it
+  a meaning, such as Shift+Tab or a cursor's Shift-extend). A locked primitive is bindable only with
+  Mod/Ctrl/Alt (`isLockedPrimitive`), so `tabs.close` on Alt+← or `findInFiles.matchCase` on Alt+↓ is
+  accepted — and a handler that tested the raw key first ran its navigation instead (post-mortem: #1416's
+  review). An overlay's capturing Escape listener, which sees the press before the element (Radix's in the
+  palette and Find in Files, the history overlay's own), yields to a matched local command the same way.
+  Remaining exception: the context-menu key (Menu, Shift+F10) still opens a menu before a local command
+  bound to it.
 
 ## Resolver
 

@@ -593,6 +593,34 @@ test.describe("rebound palette keys", () => {
 		await page.keyboard.press("Alt+KeyP");
 		await expect(preview).toHaveAttribute("aria-pressed", initial ?? "false");
 	});
+
+	test("a preview rebound onto Alt+Tab and Alt+Esc toggles it instead of changing scope or closing", async ({
+		page,
+	}) => {
+		await openFixtureProject(page);
+		await setKeybindings(page, { "palette.preview": ["Alt+Tab", "Alt+Escape"] });
+		await openPalette(page);
+		const input = page.getByTestId("search-input");
+		await input.fill("auth");
+		const preview = page.getByTestId("search-preview-toggle");
+		const initial = (await preview.getAttribute("aria-pressed")) ?? "false";
+		const flipped = initial === "true" ? "false" : "true";
+
+		await page.keyboard.press("Alt+Tab");
+		await expect(preview).toHaveAttribute("aria-pressed", flipped);
+		await expect(chip(page, "all")).toHaveAttribute("aria-pressed", "true");
+		await expect(input).toHaveValue("auth");
+
+		await page.keyboard.press("Alt+Escape");
+		await expect(palette(page)).toBeVisible();
+		await expect(preview).toHaveAttribute("aria-pressed", initial);
+		await expect(input).toHaveValue("auth");
+
+		await page.keyboard.press("Tab");
+		await expect(chip(page, "work")).toHaveAttribute("aria-pressed", "true");
+		await page.keyboard.press("Escape");
+		await expect(input).toHaveValue("");
+	});
 });
 
 test("host search: a file by name opens as a tab, a spec section by its words opens in the Specs tool", async ({

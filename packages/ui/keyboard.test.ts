@@ -72,6 +72,13 @@ describe("chordPressed", () => {
 		const shifted = press("KeyD", { key: "D", shiftKey: true });
 		expect(chordPressed(discuss, shifted, "Linux x86_64")).toBe(false);
 		expect(chordPressed(discuss, shifted, "Linux x86_64", { ignoreShift: true })).toBe(true);
+		const shiftedChord = { ...discuss, shift: true };
+		expect(chordPressed(shiftedChord, shifted, "Linux x86_64")).toBe(true);
+		expect(
+			chordPressed(shiftedChord, press("KeyD", { key: "d" }), "Linux x86_64", {
+				ignoreShift: true,
+			}),
+		).toBe(false);
 	});
 
 	test("a typed chord matches the character, and no Alt chord fires under AltGraph off Apple", () => {

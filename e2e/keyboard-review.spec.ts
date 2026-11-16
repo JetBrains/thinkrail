@@ -456,6 +456,16 @@ test.describe("rebound review keys", () => {
 		await expect(viewed).toHaveText("0/2 viewed");
 		await expect(section).not.toHaveAttribute("data-viewed", "true");
 	});
+
+	test("a comment rebound onto Alt+Tab opens the composer from the diff cursor instead of its Tab walk", async ({
+		page,
+	}) => {
+		const { cursor } = await openCursorDiff(page);
+		await setKeybindings(page, { "review.surface.comment": ["Alt+Tab"] });
+		await expect(cursor).toBeFocused();
+		await page.keyboard.press("Alt+Tab");
+		await expect(page.getByTestId("review-composer-input")).toBeFocused();
+	});
 });
 
 test("the cheatsheet opened from a review surface highlights the review keys and shows them", async ({

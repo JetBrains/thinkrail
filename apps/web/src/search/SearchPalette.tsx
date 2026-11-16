@@ -363,9 +363,26 @@ function PaletteContent({
 		});
 	};
 
+	const runLocal = (local: string | null, repeat: boolean): boolean => {
+		if (local === "palette.startWork") {
+			if (!repeat) startFromText();
+			return true;
+		}
+		if (askInput && local === "palette.ask") {
+			if (!repeat) askFromText();
+			return true;
+		}
+		if (local === "palette.preview") {
+			if (wide) togglePreview();
+			return true;
+		}
+		return false;
+	};
+
 	const onEscapeKeyDown = (event: KeyboardEvent) => {
 		event.preventDefault();
 		if (isImeComposing(event)) return;
+		if (runLocal(keys.match(event), event.repeat)) return;
 		if (!event.isTrusted || !query) {
 			onClose();
 			return;
@@ -386,32 +403,22 @@ function PaletteContent({
 			event.preventDefault();
 			if (fromFrame) inputRef.current?.focus();
 		};
+		const local = keys.match(event.nativeEvent);
+		if (runLocal(local, event.repeat)) {
+			claim();
+			return;
+		}
+		const commandModifier = event.altKey || event.ctrlKey || event.metaKey;
+		if (event.key === "Tab") {
+			claim();
+			if (local === null && !commandModifier) cycleScope(event.shiftKey ? -1 : 1);
+			return;
+		}
 		const mod = hasPlatformModifier(event.nativeEvent);
 		if (mod && event.code === "KeyK" && !event.shiftKey && !event.altKey) {
 			event.preventDefault();
 			event.stopPropagation();
 			onClose();
-			return;
-		}
-		if (event.key === "Tab") {
-			claim();
-			cycleScope(event.shiftKey ? -1 : 1);
-			return;
-		}
-		const local = keys.match(event.nativeEvent);
-		if (local === "palette.startWork") {
-			claim();
-			if (!event.repeat) startFromText();
-			return;
-		}
-		if (askInput && local === "palette.ask") {
-			claim();
-			if (!event.repeat) askFromText();
-			return;
-		}
-		if (local === "palette.preview") {
-			claim();
-			if (wide) togglePreview();
 			return;
 		}
 		const chord = scopeChordIndex(event.nativeEvent);
@@ -423,19 +430,23 @@ function PaletteContent({
 			}
 			return;
 		}
-		switch (event.key) {
-			case "ArrowDown":
-				claim();
-				select(selectedIndexRef.current + 1);
-				return;
-			case "ArrowUp":
-				claim();
-				select(selectedIndexRef.current - 1);
-				return;
-			case "Enter":
-				claim();
-				if (!event.repeat) activate(selected);
-				return;
+		if (local === null && !commandModifier) {
+			switch (event.key) {
+				case "ArrowDown":
+					if (event.shiftKey) break;
+					claim();
+					select(selectedIndexRef.current + 1);
+					return;
+				case "ArrowUp":
+					if (event.shiftKey) break;
+					claim();
+					select(selectedIndexRef.current - 1);
+					return;
+				case "Enter":
+					claim();
+					if (!event.repeat) activate(selected);
+					return;
+			}
 		}
 		if (fromFrame && !event.ctrlKey && !event.metaKey && !MODIFIER_KEYS.has(event.key)) {
 			inputRef.current?.focus();

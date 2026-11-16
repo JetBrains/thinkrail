@@ -134,6 +134,79 @@ test("a rebound twin or comment chord replaces its default; the locked keys stay
 	expect(cursorCommand(key("Enter"), rebound)).toEqual({ kind: "comment" });
 });
 
+test("an exact twin match wins; Shift extends only a shifted press of an unshifted twin", () => {
+	const shifted = localKeys(
+		keymap(
+			LINUX,
+			new Map([
+				[
+					REVIEW_SURFACE_SCOPE,
+					[
+						{ id: "arrows.down", chord: { code: "KeyK", key: "K", shift: true } },
+						{ id: "arrows.up", chord: { code: "KeyK", key: "K" } },
+						{ id: "arrows.left", chord: { code: "KeyH", key: "H" } },
+					],
+				],
+			]),
+		),
+		REVIEW_SURFACE_SCOPE,
+		DEFAULTS,
+	);
+	expect(shifted.match(key("k"))).toBe("arrows.up");
+	expect(cursorCommand(key("k"), shifted)).toEqual({
+		kind: "move",
+		direction: "up",
+		extend: false,
+	});
+	expect(cursorCommand(key("K", { shiftKey: true }), shifted)).toEqual({
+		kind: "move",
+		direction: "down",
+		extend: false,
+	});
+	expect(cursorCommand(key("H", { shiftKey: true }), shifted)).toEqual({
+		kind: "move",
+		direction: "left",
+		extend: true,
+	});
+	expect(cursorCommand(key("ArrowDown", { shiftKey: true }), shifted)).toEqual({
+		kind: "move",
+		direction: "down",
+		extend: true,
+	});
+	const shiftOnly = localKeys(
+		keymap(
+			LINUX,
+			new Map([
+				[
+					REVIEW_SURFACE_SCOPE,
+					[{ id: "arrows.down", chord: { code: "KeyK", key: "K", shift: true } }],
+				],
+			]),
+		),
+		REVIEW_SURFACE_SCOPE,
+		DEFAULTS,
+	);
+	expect(cursorCommand(key("k"), shiftOnly)).toBeNull();
+});
+
+test("a local command the surface does not own passes its chord through", () => {
+	const rebound = localKeys(
+		keymap(
+			LINUX,
+			new Map([
+				[
+					REVIEW_SURFACE_SCOPE,
+					[{ id: "review.surface.saveDraft", chord: { code: "Enter", key: "↵", alt: true } }],
+				],
+			]),
+		),
+		REVIEW_SURFACE_SCOPE,
+		DEFAULTS,
+	);
+	expect(cursorCommand(key("Enter", { altKey: true }), rebound)).toBeNull();
+	expect(composerSubmit(key("Enter", { altKey: true }), rebound)).toBe("save");
+});
+
 test("the composer saves on Mod+Enter and sends on Shift+Mod+Enter", () => {
 	expect(composerSubmit(key("Enter", { ctrlKey: true }), linux)).toBe("save");
 	expect(composerSubmit(key("Enter", { metaKey: true }), mac)).toBe("save");

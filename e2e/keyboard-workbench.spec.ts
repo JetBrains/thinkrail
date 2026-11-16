@@ -180,4 +180,30 @@ test.describe("rebound tab keys", () => {
 		await expect(readme).toBeFocused();
 		await expect(readme).toHaveAttribute("aria-selected", "true");
 	});
+
+	test("a close rebound onto Alt+← closes the tab instead of selecting its neighbour, and Shift+→ walks nowhere", async ({
+		page,
+	}) => {
+		await openWorkbenchWithFiles(page, ["README.md", "notes.txt"]);
+		await setKeybindings(page, { "tabs.close": ["Alt+ArrowLeft"] });
+		const readme = fileTab(page, "README.md");
+		const notes = fileTab(page, "notes.txt");
+		await expect(readme).toHaveAttribute("aria-keyshortcuts", /(^| )Alt\+ArrowLeft( |$)/);
+
+		await notes.focus();
+		await page.keyboard.press("Alt+ArrowLeft");
+		await expect(notes).toHaveCount(0);
+		await expect(page.getByTestId("editor-tab")).toHaveCount(1);
+		await expect(readme).toHaveAttribute("aria-selected", "true");
+
+		await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).dblclick();
+		await readme.click();
+		await expect(readme).toBeFocused();
+		await page.keyboard.press("Shift+ArrowRight");
+		await expect(readme).toBeFocused();
+		await expect(readme).toHaveAttribute("aria-selected", "true");
+		await page.keyboard.press("ArrowRight");
+		await expect(notes).toBeFocused();
+		await expect(notes).toHaveAttribute("aria-selected", "true");
+	});
 });

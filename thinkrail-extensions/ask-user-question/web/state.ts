@@ -187,8 +187,7 @@ export function choiceKeyAction(
 	otherIndex: number,
 ): ChoiceKeyAction {
 	if (count <= 0) return { type: "none" };
-	const bound = command === null ? undefined : COMMAND_ACTIONS[command];
-	if (bound) return bound;
+	if (command !== null) return COMMAND_ACTIONS[command] ?? { type: "none" };
 	if (key === "ArrowDown") return { type: "move", index: (index + 1) % count };
 	if (key === "ArrowUp") return { type: "move", index: (index - 1 + count) % count };
 	if (key === "Home") return { type: "move", index: 0 };

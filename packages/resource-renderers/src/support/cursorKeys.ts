@@ -54,16 +54,25 @@ const DIRECTIONS: Readonly<Record<string, CursorDirection>> = {
 	ArrowRight: "right",
 };
 
-export function cursorTwin(event: CursorKeyEvent, keys: CursorKeys): string | undefined {
-	return twinArrow(keys.match(event, { ignoreShift: true }));
+export interface CursorTwin {
+	readonly arrow: string;
+	readonly extend: boolean;
+}
+
+export function cursorTwin(event: CursorKeyEvent, keys: CursorKeys): CursorTwin | undefined {
+	const exact = keys.match(event);
+	const id = exact ?? (event.shiftKey ? keys.match(event, { ignoreShift: true }) : null);
+	const arrow = twinArrow(id);
+	return arrow === undefined ? undefined : { arrow, extend: exact === null };
 }
 
 export function cursorCommand(event: CursorKeyEvent, keys: CursorKeys): CursorCommand | null {
 	if (isImeComposing(event)) return null;
-	if (keys.match(event) === "review.surface.comment") return { kind: "comment" };
+	const local = keys.match(event);
+	if (local === "review.surface.comment") return { kind: "comment" };
 	const twin = cursorTwin(event, keys);
 	if (twin === undefined) {
-		if (event.altKey || event.ctrlKey || event.metaKey) return null;
+		if (local !== null || event.altKey || event.ctrlKey || event.metaKey) return null;
 		if (event.key === "Enter") return event.shiftKey ? null : { kind: "comment" };
 		if (event.key === "Escape") return { kind: "escape" };
 		if (event.key === "Home" || event.key === "End") {
@@ -74,8 +83,8 @@ export function cursorCommand(event: CursorKeyEvent, keys: CursorKeys): CursorCo
 			};
 		}
 	}
-	const direction = DIRECTIONS[twin ?? event.key];
-	return direction ? { kind: "move", direction, extend: event.shiftKey } : null;
+	const direction = DIRECTIONS[twin?.arrow ?? event.key];
+	return direction ? { kind: "move", direction, extend: twin?.extend ?? event.shiftKey } : null;
 }
 
 export function composerSubmit(event: CursorKeyEvent, keys: CursorKeys): "save" | "send" | null {

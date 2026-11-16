@@ -63,3 +63,31 @@ test("a rebound twin moves the divider and its old letter passes through", () =>
 	expect(swipeDividerValue(50, key("l"), rebound)).toBeNull();
 	expect(swipeDividerValue(50, key("h"), rebound)).toBeNull();
 });
+
+test("an exact twin match wins over a Shift-extended one, and a Shift the binding requires is no page step", () => {
+	const shifted = localKeys(
+		{
+			platform: "Linux x86_64",
+			scopes: new Map([
+				[
+					REVIEW_SURFACE_SCOPE,
+					[
+						{ id: "arrows.left", chord: { code: "KeyL", key: "L", shift: true } },
+						{ id: "arrows.right", chord: { code: "KeyL", key: "L" } },
+						{ id: "arrows.down", chord: { code: "KeyJ", key: "J" } },
+					],
+				],
+			]),
+			isTextEntry: () => false,
+		},
+		REVIEW_SURFACE_SCOPE,
+		ARROW_TWIN_COMMANDS,
+	);
+	expect(swipeDividerValue(50, key("l"), shifted)).toBe(50 + SWIPE_STEP);
+	expect(swipeDividerValue(50, key("L", { shiftKey: true }), shifted)).toBe(50 - SWIPE_STEP);
+	expect(swipeDividerValue(50, key("j"), shifted)).toBeNull();
+	expect(swipeDividerValue(50, key("J", { shiftKey: true }), shifted)).toBeNull();
+	expect(swipeDividerValue(50, key("ArrowLeft", { shiftKey: true }), shifted)).toBe(
+		50 - SWIPE_PAGE,
+	);
+});

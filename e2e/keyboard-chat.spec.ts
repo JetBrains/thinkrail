@@ -789,6 +789,50 @@ test.describe("rebound chat keys", () => {
 		}
 	});
 
+	test("a transcript entry rebound onto Alt+↑ leaves an open @ menu for the transcript", async ({
+		page,
+	}) => {
+		const session = await openToolChat(page);
+		try {
+			await setKeybindings(page, { "composer.enterTranscript": ["Alt+ArrowUp"] });
+			const input = page.getByTestId("chat-input");
+			await input.click();
+			await input.pressSequentially("@READ");
+			await expect(page.getByTestId("mention-menu")).toBeVisible();
+			await page.keyboard.press("Alt+ArrowUp");
+			await expect(row(page, "Summary: nothing else to report.")).toBeFocused();
+		} finally {
+			rmSync(session.path, { force: true });
+		}
+	});
+
+	test("a history delete rebound onto Alt+Esc deletes the chat instead of closing the overlay", async ({
+		page,
+	}) => {
+		await openFixtureProject(page);
+		const doomed = seedWorkspaceSession(repoCwd(), {
+			name: "doomed by chord",
+			messages: [{ role: "user", text: "trash me by chord", timestamp: BASE_TS }],
+		});
+		utimesSync(doomed.path, new Date(BASE_TS), new Date(BASE_TS));
+		try {
+			await setKeybindings(page, { "history.deleteChat": ["Alt+Escape"] });
+			await enterDefaultWorkspace(page);
+			await page.getByTestId("chat-input").press("Control+r");
+			const query = page.getByTestId("history-query");
+			await query.fill("trash me by chord");
+			await expect(
+				page
+					.locator('[data-testid="history-item"][data-kind="prompt"]')
+					.filter({ hasText: "trash me by chord" }),
+			).toHaveAttribute("data-selected", "true");
+			await query.press("Alt+Escape");
+			await expect.poll(() => existsSync(doomed.path)).toBe(false);
+		} finally {
+			rmSync(doomed.path, { force: true });
+		}
+	});
+
 	test("a rebound follow-up chord queues while streaming and Mod+Enter no longer does", async ({
 		page,
 	}) => {

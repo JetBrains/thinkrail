@@ -246,7 +246,9 @@ opened it), `Mod+↵` starts work from the typed text and `Alt+↵` asks the age
 above). `Mod+I`, `Mod+↵` and `Alt+↵` are the rebindable local keys `palette.preview` / `startWork` / `ask`
 ([[submodule-web-keybindings]], *Local keys*), matched through `useLocalKeys` (non-typing chords, so they
 act in the input) and shown in the footer and on the preview toggle with their resolved caps; ↑/↓, ↵,
-Tab and Escape are locked. `Mod+K` here stays literal.
+Tab and Escape are locked. A matched local key acts before any of them, Escape included (the dialog's
+`onEscapeKeyDown` yields to it), and they act only without Alt/Ctrl/⌘ — Tab is still consumed then, but
+changes no scope. `Mod+K` here stays literal.
 Escape clears the query, then closes; an untrusted (synthetic) Escape — the desktop close-item command —
 closes outright. Closing without a pick returns focus to the element that held it when the palette
 opened (the composer an accidental double Shift interrupted, the topbar button); a pick leaves focus to

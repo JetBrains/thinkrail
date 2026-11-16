@@ -68,7 +68,9 @@ preview renders.
   click on a row does the same, hover selects. Escape closes. `⌘↵` (`findInFiles.openKept`) and the
   `Alt+C` / `Alt+W` toggles (`findInFiles.matchCase` / `wholeWord`) are rebindable local keys matched
   through `useLocalKeys` ([[submodule-web-keybindings]], *Local keys*); the footer shows their resolved
-  caps, and a `⌘↵` left unbound by a rebind opens nothing. `↵`, arrows and Escape are locked. Every key yields to an active IME (`isImeComposing` — a composing key or the `229`
+  caps, and a `⌘↵` left unbound by a rebind opens nothing. `↵`, arrows and Escape are locked; a matched
+local key acts before them (the dialog's `onEscapeKeyDown` keeps the window open for one), and they act
+only without Alt/Ctrl/⌘ (the arrows without Shift too), so `Alt+↓` bound to Match case toggles it. Every key yields to an active IME (`isImeComposing` — a composing key or the `229`
   sentinel never moves, opens, toggles or closes; the dialog's own Escape already yields through the
   `@thinkrail/ui` `DialogContent` primitive). Keys are handled on the input; the rows are
   `tabIndex=-1` and `mousedown`-prevented so focus never leaves the field, so the field is the listbox's

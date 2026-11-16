@@ -30,6 +30,7 @@ import {
 	hasCoarsePointer,
 	isCardBackground,
 	isInsidePreview,
+	isKeyboardFocused,
 	isTextEntryTarget,
 	shouldClaimQuestionFocus,
 } from "./focus";
@@ -234,7 +235,7 @@ export function AskUserQuestionCard({
 			const card = cardRef.current;
 			if (!card || !claimQuestionAttention(focusScope, toolCallId)) return;
 			const active = document.activeElement;
-			const kind = focusTargetKind(active, card.contains(active));
+			const kind = focusTargetKind(active, card.contains(active), isKeyboardFocused(active));
 			const coarse = hasCoarsePointer();
 			if (shouldClaimQuestionFocus(kind, coarse, mayClaimFocus())) focusQuestionAttention(card);
 			else if (kind !== "inside" && !coarse) {

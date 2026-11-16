@@ -190,14 +190,15 @@ export function QuestionBody({
 		label: string,
 		index: number,
 	) => {
-		if (event.altKey || event.ctrlKey || event.metaKey) return;
+		const command = keys.match(event.nativeEvent);
+		if (command === null && (event.altKey || event.ctrlKey || event.metaKey)) return;
 		const pane = paneRef.current;
-		const page = event.key === "PageDown" ? 1 : event.key === "PageUp" ? -1 : 0;
+		const page =
+			command !== null ? 0 : event.key === "PageDown" ? 1 : event.key === "PageUp" ? -1 : 0;
 		if (pane && page !== 0 && scrollPreview(pane, page)) {
 			event.preventDefault();
 			return;
 		}
-		const command = keys.match(event.nativeEvent);
 		const action = choiceKeyAction(event.key, command, index, choiceCount, otherIndex);
 		const option = question.options[index];
 		const source = paneShown && option ? previewSource(option) : null;

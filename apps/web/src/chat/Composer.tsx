@@ -475,7 +475,22 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
 		if (isImeComposing(e.nativeEvent)) return;
-		if (slots && !menuOpen) {
+		const local = keys.match(e.nativeEvent);
+		if (onEnterTranscript && local === "composer.enterTranscript") {
+			e.preventDefault();
+			const { selectionStart, selectionEnd } = e.currentTarget;
+			const atStart = selectionStart === 0 && selectionEnd === 0;
+			if (composerTranscriptStep(draftNeedsExpansion, atStart) === "enter") onEnterTranscript();
+			else focusSelection(0);
+			return;
+		}
+		if (local === "composer.interrupt" || local === "composer.followUp") {
+			e.preventDefault();
+			submit(isStreaming ? (local === "composer.interrupt" ? "interrupt" : "followUp") : "send");
+			return;
+		}
+		const fixed = local === null && !e.altKey && !e.ctrlKey && !e.metaKey;
+		if (fixed && slots && !menuOpen) {
 			if (e.key === "Tab") {
 				e.preventDefault();
 				stepSlot(e.shiftKey ? -1 : 1);
@@ -487,14 +502,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				return;
 			}
 		}
-		if (mentionOpen) {
+		if (fixed && mentionOpen) {
 			const menuLen = mentionCandidates.length;
-			if (e.key === "ArrowDown") {
+			if (e.key === "ArrowDown" && !e.shiftKey) {
 				e.preventDefault();
 				setMentionActiveIndex((i) => (i + 1) % menuLen);
 				return;
 			}
-			if (e.key === "ArrowUp") {
+			if (e.key === "ArrowUp" && !e.shiftKey) {
 				e.preventDefault();
 				setMentionActiveIndex((i) => (i - 1 + menuLen) % menuLen);
 				return;
@@ -511,39 +526,30 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				return;
 			}
 		}
-		if (slashCompletion.handleKeyDown(e)) return;
+		if (fixed && slashCompletion.handleKeyDown(e)) return;
 		if (composerShiftTabOut(e, menuOpen || slots !== null) && onShiftTabOut?.()) {
 			e.preventDefault();
 			return;
 		}
-		const local = keys.match(e.nativeEvent);
-		if (onEnterTranscript && local === "composer.enterTranscript") {
-			e.preventDefault();
-			const { selectionStart, selectionEnd } = e.currentTarget;
-			const atStart = selectionStart === 0 && selectionEnd === 0;
-			if (composerTranscriptStep(draftNeedsExpansion, atStart) === "enter") onEnterTranscript();
-			else focusSelection(0);
-			return;
-		}
-		if (local === "composer.interrupt" || local === "composer.followUp") {
-			e.preventDefault();
-			submit(isStreaming ? (local === "composer.interrupt" ? "interrupt" : "followUp") : "send");
-			return;
-		}
 		if (
 			onScrollTranscript &&
+			fixed &&
 			(e.key === "PageUp" || e.key === "PageDown") &&
-			!e.altKey &&
-			!e.ctrlKey &&
-			!e.metaKey &&
 			!e.shiftKey
 		) {
 			e.preventDefault();
 			onScrollTranscript(e.key === "PageUp" ? -1 : 1);
 			return;
 		}
+		if (local !== null) return;
 		const recallAt = recallIdxRef.current;
-		if (e.key === "ArrowUp" && (value === "" || recallAt !== null) && recentPrompts.length > 0) {
+		const recallKey = fixed && !e.shiftKey;
+		if (
+			recallKey &&
+			e.key === "ArrowUp" &&
+			(value === "" || recallAt !== null) &&
+			recentPrompts.length > 0
+		) {
 			e.preventDefault();
 			setSlotSession(null);
 			const next = recallAt === null ? 0 : Math.min(recallAt + 1, recentPrompts.length - 1);
@@ -553,7 +559,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			focusSelection(text.length);
 			return;
 		}
-		if (e.key === "ArrowDown" && recallAt !== null) {
+		if (recallKey && e.key === "ArrowDown" && recallAt !== null) {
 			e.preventDefault();
 			setSlotSession(null);
 			if (recallAt === 0) {

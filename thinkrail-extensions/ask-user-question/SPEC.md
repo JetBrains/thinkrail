@@ -245,10 +245,19 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   the line. The stub never claims.
   Per active-chat mount the form focuses the selected choice (including Other) or first authored choice
   once; a fresh `ChatView` mount claims again (see [[submodule-web-chat]] — any switch back to the chat
-  tab). **It takes focus only from `<body>` or an empty composer**, and only while `mayClaimFocus()` holds
-  (a focus chord such as Mod+L served in this mount settles the remount race for the composer). From
-  anywhere else — the transcript, a tree, a tab, a button, a draft, an editor, a dialog — it stays put and
-  the announcement says "Agent asks a question — {landingChord} to answer"; the docked sheet shows
+  tab). **It takes focus from `<body>`, an empty composer, or a non-text element the mouse focused**, and
+  only while `mayClaimFocus()` holds (a focus chord such as Mod+L served in this mount settles the remount
+  race for the composer). The mouse case exists because WebKit — so the macOS desktop — never focuses a
+  clicked button: a chat opened from History with the mouse leaves focus on the History button, where
+  Radix returns it, and a literal "body or empty composer" rule left the card unfocused there
+  (post-mortem: every WebKit e2e failure on #1416 was this). "The mouse focused it" means it does not
+  match `:focus-visible` **and** no key was pressed since the last pointer press (`isKeyboardFocused`, a
+  document-level keydown/pointerdown watch): both engines leave a row that Mod+↑ focused from a clicked
+  composer without `:focus-visible`, so that heuristic alone gave the first step into the transcript to the
+  card. From anything keyboard navigation reached (the transcript, a tree or tab walk), a draft, other
+  text entry, Monaco or xterm, or a modal surface (dialog, alertdialog, menu, listbox), it stays put and
+  the announcement says "Agent asks a question — {landingChord} to answer". `focusTargetKind` stays pure:
+  the card passes that keyboard verdict in; the docked sheet shows
   "waiting · {landingChord} to answer" whenever focus is outside it. The ways in are the shell's: F6 or
   Mod+1…9 into the chat land on `[data-focus-claim]` — the current option (the cursor row, or Other's
   field when its text is the answer), the expand toggle while collapsed — and Shift+Tab from the composer
@@ -336,7 +345,9 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   **The card's letters and chords are local commands** (`d`, `i`, `c`, the submit and skip chords): the card
   root carries `data-key-scope="ask-user-question.card"`, so the global binder yields to them inside it, the
   user rebinds them in Settings → Keyboard, and they match the physical key, so `d` works on a Russian
-  layout. Legends and `aria-keyshortcuts` show the resolved keys for this platform only (one Mod+Enter). While
+  layout. An option row matches them before its own keys, so a Discuss, Interact or Compare rebound to a
+  Ctrl/Alt/⌘ chord acts there; a matched card chord (submit, skip) is left to the card, and the row's own
+  keys act only without Ctrl/Alt/⌘. Legends and `aria-keyshortcuts` show the resolved keys for this platform only (one Mod+Enter). While
   the sheet is collapsed, submit, skip and Esc still act; submit with nothing answered expands it and shows
   the nudge. Other letters and digits stay free so browser extensions, custom text and explicit decline stay
   safe.

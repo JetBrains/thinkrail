@@ -14,10 +14,14 @@ export function swipeDividerValue(
 ): number | null {
 	if (isImeComposing(event)) return null;
 	const twin = cursorTwin(event, keys);
-	const horizontal = twin === "ArrowLeft" || twin === "ArrowRight" ? twin : undefined;
-	if (horizontal === undefined && (event.altKey || event.ctrlKey || event.metaKey)) return null;
-	const key = horizontal ?? event.key;
-	const step = event.shiftKey ? SWIPE_PAGE : SWIPE_STEP;
+	const horizontal = twin?.arrow === "ArrowLeft" || twin?.arrow === "ArrowRight" ? twin : undefined;
+	if (
+		horizontal === undefined &&
+		(twin !== undefined || event.altKey || event.ctrlKey || event.metaKey)
+	)
+		return null;
+	const key = horizontal?.arrow ?? event.key;
+	const step = (horizontal ? horizontal.extend : event.shiftKey) ? SWIPE_PAGE : SWIPE_STEP;
 	let next: number;
 	if (key === "Home") next = 0;
 	else if (key === "End") next = 100;

@@ -267,6 +267,8 @@ export const TabStrip = memo(function TabStrip({
 							onKeyDown={(event) => {
 								const local = keys.match(event.nativeEvent);
 								const twin = twinArrow(local);
+								const plain = !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+								const key = twin ?? (local === null && plain ? event.key : null);
 								if (local === "tabs.moveBefore") {
 									event.preventDefault();
 									if (index > 0) {
@@ -279,21 +281,21 @@ export const TabStrip = memo(function TabStrip({
 										const moved = moveTabToGroup(document, tab, location, index + 1);
 										if (!isLayoutUnavailable(moved)) applyResult(moved);
 									}
-								} else if (event.key === "ArrowLeft" || twin === "ArrowLeft") {
-									event.preventDefault();
-									selectAt(index === 0 ? tabs.length - 1 : index - 1);
-								} else if (event.key === "ArrowRight" || twin === "ArrowRight") {
-									event.preventDefault();
-									selectAt(index === tabs.length - 1 ? 0 : index + 1);
-								} else if (event.key === "Home") {
-									event.preventDefault();
-									selectAt(0);
-								} else if (event.key === "End") {
-									event.preventDefault();
-									selectAt(tabs.length - 1);
 								} else if (local === "tabs.close") {
 									event.preventDefault();
 									closeTab(tab);
+								} else if (key === "ArrowLeft") {
+									event.preventDefault();
+									selectAt(index === 0 ? tabs.length - 1 : index - 1);
+								} else if (key === "ArrowRight") {
+									event.preventDefault();
+									selectAt(index === tabs.length - 1 ? 0 : index + 1);
+								} else if (key === "Home") {
+									event.preventDefault();
+									selectAt(0);
+								} else if (key === "End") {
+									event.preventDefault();
+									selectAt(tabs.length - 1);
 								}
 							}}
 						/>

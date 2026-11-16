@@ -370,6 +370,59 @@ test("a question arriving while the composer is empty takes focus", async ({ pag
 	}
 });
 
+test("a question arriving while a mouse-focused button holds focus takes it", async ({ page }) => {
+	test.skip(
+		!chromium(),
+		"WebKit never focuses a clicked button; its History-button case is every openRound",
+	);
+	const { held, path, card } = await openHeldRound(page, "arrival after a click");
+	try {
+		const tab = page
+			.locator('[data-testid="editor-tab"][data-kind="chat"]')
+			.filter({ hasText: "arrival after a click" })
+			.getByRole("tab");
+		await tab.click();
+		await expect(tab).toBeFocused();
+		expect(await tab.evaluate((element) => element.matches(":focus-visible"))).toBe(false);
+
+		held.release();
+		await expect(card.getByTestId("ask-option").first()).toBeFocused();
+		await expect(card.getByTestId("ask-waiting")).toHaveCount(0);
+	} finally {
+		rmSync(path, { force: true });
+	}
+});
+
+test("a question arriving while a keyboard-focused button holds focus stays put and says how to answer", async ({
+	page,
+}) => {
+	const { held, path, card } = await openHeldRound(page, "arrival after a tab");
+	try {
+		await composer(page).click();
+		await page.keyboard.press("Tab");
+		const tabbed = await page.evaluate(() => {
+			const active = document.activeElement;
+			if (!active || active === document.body || active.matches('[data-testid="chat-input"]')) {
+				return null;
+			}
+			active.setAttribute("data-e2e-tabbed", "");
+			return { tag: active.tagName, visible: active.matches(":focus-visible") };
+		});
+		expect(tabbed).not.toBeNull();
+		if (chromium()) expect(tabbed).toEqual({ tag: "BUTTON", visible: true });
+
+		held.release();
+		await expect(card).toBeVisible();
+		await expect(
+			card.locator('[role="status"]').filter({ hasText: "Agent asks a question" }),
+		).toHaveText("Agent asks a question — F6 to answer");
+		await expect(page.locator("[data-e2e-tabbed]")).toBeFocused();
+		await expect(card.getByTestId("ask-waiting")).toHaveText("waiting · F6 to answer");
+	} finally {
+		rmSync(path, { force: true });
+	}
+});
+
 test("after Mod+L remounts the chat, the composer keeps focus over the waiting question", async ({
 	page,
 }) => {
@@ -515,6 +568,33 @@ test.describe("the card's letters", () => {
 			await settleFrames(page);
 			await expect(card.getByTestId("ask-discuss-panel")).toHaveCount(0);
 			await page.keyboard.press("x");
+			await expect(card.getByTestId("ask-discuss-text")).toBeFocused();
+		} finally {
+			rmSync(path, { force: true });
+		}
+	});
+
+	test("a Discuss rebound to a Mod chord works on a focused option, and the submit chord still submits", async ({
+		page,
+	}) => {
+		const { card, path } = await openRound(page, "chord discuss", { questions: [ROLLOUT] });
+		try {
+			await setKeybindings(page, { "ask-user-question.discuss": ["Mod+KeyD"] });
+			const mod = (await page.evaluate(() => /Mac|iPhone|iPad|iPod/.test(navigator.platform)))
+				? "⌘"
+				: "Ctrl+";
+			await expect(card.getByTestId("ask-shortcuts")).toContainText(`${mod}D discuss`);
+			const options = card.getByTestId("ask-option");
+			await expect(options.first()).toBeFocused();
+			await pressPlatformShortcut(page, "Enter");
+			await expect(card.getByTestId("ask-needs-choice")).toBeVisible();
+			await expect(options.first()).toHaveAttribute("aria-checked", "false");
+
+			await options.first().focus();
+			await page.keyboard.press("d");
+			await settleFrames(page);
+			await expect(card.getByTestId("ask-discuss-panel")).toHaveCount(0);
+			await pressPlatformShortcut(page, "d");
 			await expect(card.getByTestId("ask-discuss-text")).toBeFocused();
 		} finally {
 			rmSync(path, { force: true });

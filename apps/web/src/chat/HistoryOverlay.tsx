@@ -15,7 +15,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
-import { hasPlatformModifier, isImeComposing } from "@thinkrail/ui/keyboard";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
@@ -499,14 +499,14 @@ function HistoryPicker({
 	useEffect(() => {
 		if (layerOpen) return;
 		const onWindowKeyDown = (e: globalThis.KeyboardEvent) => {
-			if (e.key !== "Escape" || isImeComposing(e)) return;
+			if (e.key !== "Escape" || isImeComposing(e) || keys.match(e) !== null) return;
 			e.preventDefault();
 			e.stopPropagation();
 			onClose();
 		};
 		window.addEventListener("keydown", onWindowKeyDown, true);
 		return () => window.removeEventListener("keydown", onWindowKeyDown, true);
-	}, [layerOpen, onClose]);
+	}, [layerOpen, onClose, keys]);
 
 	useEffect(() => {
 		if (layerOpen) return;
@@ -577,14 +577,10 @@ function HistoryPicker({
 			else if (target) onOpenMessage(target);
 			return;
 		}
-		if (e.key === "ArrowDown") {
+		if (local !== null || e.altKey || e.ctrlKey || e.metaKey) return;
+		if ((e.key === "ArrowDown" || e.key === "ArrowUp") && !e.shiftKey) {
 			e.preventDefault();
-			onMoveSelection(1);
-			return;
-		}
-		if (e.key === "ArrowUp") {
-			e.preventDefault();
-			onMoveSelection(-1);
+			onMoveSelection(e.key === "ArrowDown" ? 1 : -1);
 			return;
 		}
 		if (e.key === "Tab") {
@@ -597,7 +593,7 @@ function HistoryPicker({
 			const item = resolveHistorySelection(stage, result, selected);
 			if (!item) return;
 			if (item.kind === "prompt" && !e.shiftKey) {
-				if (!hasPlatformModifier(e.nativeEvent)) onInsert(item.hit);
+				onInsert(item.hit);
 				return;
 			}
 			const target = jumpTarget(item.hit);

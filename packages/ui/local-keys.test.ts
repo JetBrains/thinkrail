@@ -67,6 +67,28 @@ describe("localKeys", () => {
 		expect(keys.match(press("KeyS"), { textEntry: true })).toBeNull();
 	});
 
+	test("ignoreShift prefers an exact match and relaxes Shift only for a chord that does not require it", () => {
+		const shiftDown = { id: "arrows.down", chord: { code: "KeyK", key: "K", shift: true } };
+		const plainUp = { id: "arrows.up", chord: { code: "KeyK", key: "K" } };
+		for (const order of [
+			[shiftDown, plainUp],
+			[plainUp, shiftDown],
+		]) {
+			const keys = localKeys(keymap(new Map([["trees", order]])), "trees", TREE);
+			expect(keys.match(press("KeyK"), { ignoreShift: true })).toBe("arrows.up");
+			expect(keys.match(press("KeyK", { shiftKey: true }), { ignoreShift: true })).toBe(
+				"arrows.down",
+			);
+		}
+		const shiftOnly = localKeys(keymap(new Map([["trees", [shiftDown]]])), "trees", TREE);
+		expect(shiftOnly.match(press("KeyK"), { ignoreShift: true })).toBeNull();
+		const plainOnly = localKeys(keymap(new Map([["trees", [plainUp]]])), "trees", TREE);
+		expect(plainOnly.match(press("KeyK", { shiftKey: true }))).toBeNull();
+		expect(plainOnly.match(press("KeyK", { shiftKey: true }), { ignoreShift: true })).toBe(
+			"arrows.up",
+		);
+	});
+
 	test("aria lists every chord of the command for this platform only", () => {
 		const mac = localKeys({ ...keymap(new Map()), platform: "MacIntel" }, "trees", TREE);
 		expect(mac.aria("trees.openKept")).toBe("Meta+Enter");

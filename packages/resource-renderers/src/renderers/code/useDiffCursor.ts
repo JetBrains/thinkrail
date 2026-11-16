@@ -207,9 +207,9 @@ export function useDiffCursor({
 	const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
 		const host = rootRef.current;
 		if (!host || !state) return;
-		if (event.key === "Tab") {
-			const plain = !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
-			if (plain && focusNextTarget(host, state.cursor)) event.preventDefault();
+		const plain = !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
+		if (event.key === "Tab" && plain) {
+			if (focusNextTarget(host, state.cursor)) event.preventDefault();
 			return;
 		}
 		const command = cursorCommand(event.nativeEvent, keys);

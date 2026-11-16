@@ -82,11 +82,13 @@ export function localKeys(
 		match(event, { ignoreShift = false, textEntry }: LocalKeyMatchOptions = {}) {
 			if (isImeComposing(event)) return null;
 			const typing = textEntry ?? isTextEntry(event.composedPath?.()[0] ?? event.target);
-			for (const { id, chord } of bindings) {
-				if (typing && isTypingChord(chord)) continue;
-				if (chordPressed(chord, event, platform, { ignoreShift })) return id;
-			}
-			return null;
+			const pressed = (relaxShift: boolean) =>
+				bindings.find(
+					({ chord }) =>
+						!(typing && isTypingChord(chord)) &&
+						chordPressed(chord, event, platform, { ignoreShift: relaxShift }),
+				)?.id ?? null;
+			return pressed(false) ?? (ignoreShift && event.shiftKey ? pressed(true) : null);
 		},
 		caps,
 		label: (id) => caps(id).join(isApplePlatform(platform) ? "" : "+"),

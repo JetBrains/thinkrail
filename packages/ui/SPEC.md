@@ -31,7 +31,10 @@ aria(...ids) }` (`label` joins the caps the platform's way, `""` when unbound; `
 the ids for `aria-keyshortcuts`) over the
 effective chords `LocalKeymapProvider` supplies (the app's resolved table), or over `defaults` when no
 provider is mounted or it lacks the scope — the `./fonts` pattern of a host-published signal with a
-standalone default. `match` ignores an IME composition and a typing chord in text entry (the provider's
+standalone default. `match` returns the first exact match; `ignoreShift` only adds a fallback after it —
+a shifted press may match a chord that does not require Shift — so a binding that requires Shift keeps
+it and never shadows the exact match of its unshifted twin (`chordPressed`'s `ignoreShift` relaxes Shift
+the same one way). `match` ignores an IME composition and a typing chord in text entry (the provider's
 `isTextEntry`, else inputs and contenteditable — `textEntry` overrides that verdict for a caller that
 knows a press edits nothing, as the history search's `Delete` at the end of its query); `defaults` must be a stable module constant. `./focus` exposes
 the one tabbable-control selector (`TABBABLE_SELECTOR`, which includes a `<details>` element's own

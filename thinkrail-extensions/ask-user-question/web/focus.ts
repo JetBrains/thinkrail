@@ -1,11 +1,20 @@
-export type QuestionFocusTarget = "none" | "inside" | "empty-composer" | "occupied";
+export type QuestionFocusTarget =
+	| "none"
+	| "inside"
+	| "empty-composer"
+	| "pointer"
+	| "keyboard"
+	| "editing"
+	| "modal";
+
+const CLAIMABLE: ReadonlySet<QuestionFocusTarget> = new Set(["none", "empty-composer", "pointer"]);
 
 export function shouldClaimQuestionFocus(
 	target: QuestionFocusTarget,
 	coarsePointer: boolean,
 	mayClaim: boolean,
 ): boolean {
-	return mayClaim && !coarsePointer && (target === "none" || target === "empty-composer");
+	return mayClaim && !coarsePointer && CLAIMABLE.has(target);
 }
 
 export function shouldFocusPageTarget(textEntryTarget: boolean, coarsePointer: boolean): boolean {
@@ -30,18 +39,46 @@ export interface FocusedNode {
 	readonly ownerDocument: { readonly body: unknown; readonly documentElement: unknown } | null;
 	readonly tagName: string;
 	readonly value?: unknown;
+	readonly isContentEditable?: boolean;
 	getAttribute(name: string): string | null;
+	closest(selectors: string): unknown;
 }
 
-export function focusTargetKind(active: FocusedNode | null, inside: boolean): QuestionFocusTarget {
+const MODAL_SURFACES = '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]';
+const EDITING_SURFACES = '.monaco-editor, .xterm, [contenteditable="true"]';
+const TEXT_CONTROLS = "input, textarea, select, iframe";
+
+export function focusTargetKind(
+	active: FocusedNode | null,
+	inside: boolean,
+	keyboardFocused: boolean,
+): QuestionFocusTarget {
 	const page = active?.ownerDocument;
 	if (!active || !page || active === page.body || active === page.documentElement) return "none";
 	if (inside) return "inside";
-	const emptyComposer =
-		active.tagName === "TEXTAREA" &&
-		active.getAttribute("data-testid") === "chat-input" &&
-		active.value === "";
-	return emptyComposer ? "empty-composer" : "occupied";
+	if (active.closest(MODAL_SURFACES)) return "modal";
+	if (active.isContentEditable || active.closest(EDITING_SURFACES)) return "editing";
+	if (active.closest(TEXT_CONTROLS)) {
+		const emptyComposer =
+			active.tagName === "TEXTAREA" &&
+			active.getAttribute("data-testid") === "chat-input" &&
+			active.value === "";
+		return emptyComposer ? "empty-composer" : "editing";
+	}
+	return keyboardFocused ? "keyboard" : "pointer";
+}
+
+let keyboardLast = false;
+
+export function watchInputModality(target: Pick<EventTarget, "addEventListener">): void {
+	target.addEventListener("keydown", () => (keyboardLast = true), true);
+	target.addEventListener("pointerdown", () => (keyboardLast = false), true);
+}
+
+if (typeof document !== "undefined") watchInputModality(document);
+
+export function isKeyboardFocused(active: { matches(selectors: string): boolean } | null): boolean {
+	return keyboardLast || (active?.matches(":focus-visible") ?? false);
 }
 
 export function hasCoarsePointer(): boolean {

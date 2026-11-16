@@ -89,6 +89,7 @@ function splitPath(path: string): { name: string; dir: string } {
 export function FindInFilesDialog(props: FindInFilesDialogProps) {
 	const t = useT();
 	const open = useFindInFiles((state) => state.open);
+	const keys = useLocalKeys("findInFiles", LOCAL_KEY_DEFAULTS.findInFiles);
 	return (
 		<Dialog open={open} onOpenChange={(next) => (next ? undefined : closeFindInFiles())}>
 			<DialogContent
@@ -96,6 +97,9 @@ export function FindInFilesDialog(props: FindInFilesDialogProps) {
 				data-testid="find-in-files"
 				aria-describedby={undefined}
 				className="top-[10vh] w-auto max-w-none translate-y-0 gap-0 overflow-visible p-0"
+				onEscapeKeyDown={(event) => {
+					if (keys.match(event) !== null) event.preventDefault();
+				}}
 				onOpenAutoFocus={(event) => {
 					event.preventDefault();
 					const input = document.querySelector<HTMLInputElement>(
@@ -181,11 +185,6 @@ function FindInFilesBody({
 	};
 	const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
 		if (isImeComposing(event.nativeEvent)) return;
-		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-			event.preventDefault();
-			select(selectedIndex + (event.key === "ArrowDown" ? 1 : -1));
-			return;
-		}
 		const local = keys.match(event.nativeEvent);
 		if (local === "findInFiles.openKept") {
 			event.preventDefault();
@@ -202,9 +201,15 @@ function FindInFilesBody({
 			toggleFindInFilesWord();
 			return;
 		}
+		if (local !== null || event.altKey || event.ctrlKey || event.metaKey) return;
+		if ((event.key === "ArrowDown" || event.key === "ArrowUp") && !event.shiftKey) {
+			event.preventDefault();
+			select(selectedIndex + (event.key === "ArrowDown" ? 1 : -1));
+			return;
+		}
 		if (event.key === "Enter") {
 			event.preventDefault();
-			if (!hasPlatformModifier(event.nativeEvent)) openRow(selectedRow, false);
+			openRow(selectedRow, false);
 			return;
 		}
 		if (event.key === "Escape") {
@@ -352,8 +357,15 @@ function FindInFilesBody({
 										onMouseDown={(event) => event.preventDefault()}
 										onClick={(event) => openRow(row, hasPlatformModifier(event.nativeEvent))}
 										onKeyDown={(event) => {
-											const kept = keys.match(event.nativeEvent) === "findInFiles.openKept";
-											if (kept || event.key === "Enter" || event.key === " ") {
+											const local = keys.match(event.nativeEvent);
+											const kept = local === "findInFiles.openKept";
+											const plain =
+												local === null &&
+												!event.altKey &&
+												!event.ctrlKey &&
+												!event.metaKey &&
+												!event.shiftKey;
+											if (kept || (plain && (event.key === "Enter" || event.key === " "))) {
 												event.preventDefault();
 												openRow(row, kept);
 											}
