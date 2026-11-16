@@ -143,7 +143,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 124;
+export const PROTOCOL_VERSION = 125;
+export const SERVER_FALLBACK_PROTOCOL_VERSION = 125;
 export const ARTIFACT_ROLES_PROTOCOL_VERSION = 124;
 export const KEYBINDINGS_PROTOCOL_VERSION = 123;
 export const BROWSER_VIEW_PROTOCOL_VERSION = 122;
@@ -519,6 +520,7 @@ export const WS_METHODS = {
 	sessionDelete: "session.delete",
 	sessionRename: "session.rename",
 	sessionSetModel: "session.setModel",
+	sessionDisableServerFallback: "session.disableServerFallback",
 	sessionSetThinkingLevel: "session.setThinkingLevel",
 	sessionCompact: "session.compact",
 	sessionGetStats: "session.getStats",
@@ -1325,6 +1327,7 @@ export interface WsMethodMap {
 		result: Ack;
 	};
 	"session.setModel": { params: { sessionId: string; model: WireModel }; result: Ack };
+	"session.disableServerFallback": { params: { sessionId: string }; result: WireModel };
 	"session.setThinkingLevel": { params: { sessionId: string; level: ThinkingLevel }; result: Ack };
 	"session.compact": { params: { sessionId: string; instructions?: string }; result: Ack };
 	"session.getStats": { params: { sessionId: string }; result: SessionStats };
@@ -1665,6 +1668,8 @@ export type WsErrorCode =
 	| "TEXT_SEARCH_FAILED"
 	| "FRAME_TOO_LARGE"
 	| "KEYBINDINGS_INVALID"
+	| "SERVER_FALLBACK_NOT_USED"
+	| "SERVER_FALLBACK_STILL_ON"
 	| SpeechErrorCode;
 
 export interface WsResponse {

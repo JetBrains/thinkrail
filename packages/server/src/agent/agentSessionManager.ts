@@ -140,6 +140,7 @@ import {
 } from "./piRuntime";
 import { catalogProviderAuth } from "./providerAuth";
 import { REQUEST_REVIEW_TOOL_NAME } from "./requestReviewTool";
+import { declaresServerFallback, disableProviderFallback } from "./serverFallback";
 import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import { deriveSessionState } from "./sessionState";
@@ -2753,6 +2754,21 @@ export async function setSessionModel(sessionId: string, model: WireModel): Prom
 	const resolved = resolveWireModel(entry.generation.runtime, model);
 	await entry.session.setModel(resolved);
 	entry.unavailableSavedModel = undefined;
+	return sessionWireModel(resolved, entry.generation);
+}
+
+export async function disableSessionServerFallback(sessionId: string): Promise<WireModel> {
+	const entry = mustGetEntry(sessionId);
+	const model = entry.session.model;
+	if (!model || !declaresServerFallback(model))
+		throw new CodedError("SERVER_FALLBACK_NOT_USED", "The chat's model sends no fallbacks");
+	const current = await getPiRuntimeGeneration();
+	await disableProviderFallback(model.provider, [current.runtime, entry.generation.runtime]);
+	if (sessions.get(sessionId) !== entry) throw new Error(`Unknown session: ${sessionId}`);
+	const resolved = resolveWireModel(entry.generation.runtime, model);
+	if (declaresServerFallback(resolved))
+		throw new CodedError("SERVER_FALLBACK_STILL_ON", "A model override still sends fallbacks");
+	await entry.session.setModel(resolved);
 	return sessionWireModel(resolved, entry.generation);
 }
 

@@ -76,6 +76,7 @@ import {
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	readToolResponseMessage,
 	SEARCH_PROTOCOL_VERSION,
+	SERVER_FALLBACK_PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
@@ -401,6 +402,12 @@ test("the question panel height setting is pinned to v114", () => {
 test("extension editor text is pinned to v115", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION);
 	expect(EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION).toBe(115);
+});
+
+test("turning off server-side fallback is pinned to v125", () => {
+	expect(PROTOCOL_VERSION).toBe(125);
+	expect(SERVER_FALLBACK_PROTOCOL_VERSION).toBe(125);
+	expect(WS_METHODS.sessionDisableServerFallback).toBe("session.disableServerFallback");
 });
 
 test("continue in workspace is pinned to v110", () => {
