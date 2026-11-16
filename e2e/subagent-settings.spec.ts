@@ -55,6 +55,69 @@ async function restoreSubagentBaseline(page: Page): Promise<void> {
 	await closeSettings(page);
 }
 
+test("available agent switches wait for authoritative pushes and persist across clients and reload", async ({
+	page,
+	context,
+}) => {
+	const channelHold = await installChannelHold(page);
+	let release = () => {};
+	let peer: Page | undefined;
+	try {
+		await openFixtureProject(page);
+		await enterDefaultWorkspace(page);
+		await openSubagentSettings(page);
+		const catalog = page.getByTestId("settings-agent-catalog");
+		await expect(catalog.getByTestId("agent-row-scout")).toContainText("Built-in");
+		await expect(catalog.getByTestId("agent-row-echo")).toContainText("Personal");
+		await expect(catalog.getByTestId("agent-row-echo")).toContainText("Parent model");
+		const toggle = page.getByTestId("agent-toggle-scout");
+		if ((await toggle.getAttribute("data-active")) !== "true") {
+			await toggle.click();
+			await expect(toggle).toHaveAttribute("data-active", "true");
+		}
+		peer = await context.newPage();
+		await peer.goto(page.url());
+		await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await openSubagentSettings(peer);
+		const observer = peer.getByTestId("agent-toggle-scout");
+
+		const held = channelHold.arm("settings.changed");
+		release = held.release;
+		await toggle.click();
+		await held.held;
+		await expect(toggle).toHaveAttribute("data-active", "true");
+		await expect(toggle).toBeDisabled();
+		await expect(page.getByTestId("agent-toggle-worker")).toBeDisabled();
+		await expect(observer).toHaveAttribute("data-active", "false");
+		release();
+		await expect(toggle).toHaveAttribute("data-active", "false");
+		await expect(toggle).toBeEnabled();
+
+		await page.reload();
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await openSubagentSettings(page);
+		await expect(toggle).toHaveAttribute("data-active", "false");
+		await toggle.click();
+		await expect(toggle).toHaveAttribute("data-active", "true");
+		await expect(observer).toHaveAttribute("data-active", "true");
+		await page.getByTestId("settings-nav-chat").click();
+		await expect(page.getByTestId("settings-chat")).toBeVisible();
+		await expect(page.getByTestId("settings-subagents")).toHaveCount(0);
+	} finally {
+		release();
+		if (!page.isClosed()) {
+			await closeSettings(page);
+			await openSubagentSettings(page);
+			const toggle = page.getByTestId("agent-toggle-scout");
+			if ((await toggle.getAttribute("data-active")) === "false") {
+				await toggle.click();
+				await expect(toggle).toHaveAttribute("data-active", "true");
+			}
+		}
+		await peer?.close();
+	}
+});
+
 test("a maximal unbroken workspace name stays contained on a phone-sized settings pane", async ({
 	page,
 }) => {
