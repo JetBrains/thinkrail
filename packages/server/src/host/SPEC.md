@@ -880,7 +880,8 @@ batch to `noteArtifactPathsChanged` (it reconciles when the batch is truncated o
 the session-event tee maps pi events through `createArtifactEventMapper` (`host/artifactEvents.ts`) into
 `observeArtifactSessionEvent`: `agent_start`, `agent_settled`, `tool_execution_start` (call id, name and
 args), every assistant `message_end` as `assistant_message` (its text, empty for a tool-call-only turn),
-every user `message_end` as `round_start` (its timestamp: a prompt pi delivered, queued ones included),
+every `message_end` that `opensChatRound` (contracts) says opens a chat round as `round_start` (its
+timestamp: queued and steered ones included),
 and `tool_execution_end` with the `presented` / `picked` paths that the enabled extensions'
 `artifactTools` declarations ([[submodule-server-extensions]]) read from the call's args and result
 `details` — only for a successful call, a throwing declaration logged and skipped; a call's args are

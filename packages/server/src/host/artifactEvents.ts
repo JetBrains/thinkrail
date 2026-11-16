@@ -1,4 +1,4 @@
-import type { PiEvent } from "@thinkrail/contracts";
+import { opensChatRound, type PiEvent } from "@thinkrail/contracts";
 import type { ArtifactSessionEvent } from "../artifacts";
 import type { ArtifactTools } from "../extensions";
 import { logger } from "../log";
@@ -7,10 +7,6 @@ const log = logger("host");
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function roleOf(message: unknown): unknown {
-	return isRecord(message) ? message.role : undefined;
 }
 
 function timestampOf(message: unknown): number {
@@ -54,10 +50,10 @@ export function createArtifactEventMapper(tools: () => ArtifactTools) {
 			case "agent_settled":
 				return { type: event.type };
 			case "message_end": {
-				const role = roleOf(event.message);
-				if (role === "user") return { type: "round_start", at: timestampOf(event.message) };
-				return role === "assistant"
-					? { type: "assistant_message", text: textOf(event.message) }
+				const message: unknown = event.message;
+				if (opensChatRound(message)) return { type: "round_start", at: timestampOf(message) };
+				return isRecord(message) && message.role === "assistant"
+					? { type: "assistant_message", text: textOf(message) }
 					: null;
 			}
 			case "tool_execution_start":

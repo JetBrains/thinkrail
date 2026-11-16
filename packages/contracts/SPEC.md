@@ -1216,7 +1216,10 @@ plain-text diagnostic excerpt and truncation flag, and the same optional `delive
 subagent completion (`wake` | `run` | `appended` — how the result reached the agent; absent in
 transcripts written before it, which keep the old round rules). The guards do not validate it; the
 shared `completionDelivery(details)` reader returns the marker or `undefined`, so an unknown value
-reads as absent everywhere. The conversation may render that historical notice,
+reads as absent everywhere. **`opensChatRound(message)`** is the message-level twin of the chat's
+turn-level `opensRound` ([[submodule-web-chat]]): a user prompt other than a control message, a
+`todo-review-fix`, a continuation request, a handoff, or a completion not delivered as `run`. The host
+uses it to cut artifact round markers where the chat cuts rounds; a web test pins the two together. The conversation may render that historical notice,
 but must never infer current resource authority from it; logs and controls still use scoped reads.
 
 Every read/control validates workspace membership and parent lineage, not merely a syntactically

@@ -36,7 +36,8 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
     live answer; any other shape returns `undefined` and the host's generic JSON preface applies;
   - `artifactTools: { ask_user_question: { presented, picked } }` — `presented` lists every
     `previewFile`/`previewBefore` the call showed (`previewFileSources`), `picked` the `previewFile` of
-    each answer in the result's `details.answers`, so the host's artifact index knows which mockups the
+    each answer in the result's `details.answers` — for a multi-select answer, of each selected label's
+    option in the call's args — so the host's artifact index knows which mockups the
     person saw and which they chose ([[submodule-server-artifacts]]). A deferred call's `{ kind: "ack" }`
     names no pick, and a late answer after a restart is not read (deferred).
 

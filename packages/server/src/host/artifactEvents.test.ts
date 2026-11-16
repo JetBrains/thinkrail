@@ -92,7 +92,7 @@ test("a failed call, an undeclared tool or a throwing declaration names no paths
 	).toEqual({ type: "tool_execution_end", toolCallId: "c4", toolName: "broken" });
 });
 
-test("an assistant message hands its text over and a delivered user message opens a round; other events are not artifacts' business", () => {
+test("an assistant message hands its text over and a message that opens a chat round opens one here; other events are not artifacts' business", () => {
 	const map = mapper();
 	expect(
 		map("s1", {
@@ -121,6 +121,25 @@ test("an assistant message hands its text over and a delivered user message open
 	).toEqual({ type: "round_start", at: 1 });
 	expect(
 		map("s1", { type: "message_end", message: { role: "toolResult", content: [] } } as never),
+	).toBeNull();
+	expect(
+		map("s1", {
+			type: "message_end",
+			message: {
+				role: "custom",
+				customType: "todo-review-fix",
+				content: "fix",
+				display: true,
+				details: { itemId: "t_1", itemTitle: "Fix", comments: [] },
+				timestamp: 5,
+			},
+		} as never),
+	).toEqual({ type: "round_start", at: 5 });
+	expect(
+		map("s1", {
+			type: "message_end",
+			message: { role: "user", content: "[thinkrail:todo-nudge] open items", timestamp: 6 },
+		} as never),
 	).toBeNull();
 	expect(map("s1", { type: "agent_start" })).toEqual({ type: "agent_start" });
 	expect(map("s1", { type: "agent_settled", terminal: null })).toEqual({ type: "agent_settled" });

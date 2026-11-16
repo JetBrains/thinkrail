@@ -298,7 +298,9 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   parsed by `reviewPackage.ts` (own `review-package-*` testids); only the todo-fix path is structured.
   Never folded into activity groups.
 - **Round openers.** A round opens at a user prompt *or* at an incoming event that wakes the agent on
-  its own — a background result or a `reviewFix` request (`opensRound` in `rows.ts`). Before this, a
+  its own — a background result or a `reviewFix` request (`opensRound` in `rows.ts`; its message-level
+  twin `opensChatRound` in contracts is what the host cuts artifact round markers by, and a hydration test
+  keeps the two in step). Before this, a
   result arriving after a settled round silently merged into it: that round's divider vanished and
   reappeared below the reaction with the whole background wait in its elapsed time. Now the earlier
   divider stays put, the reaction gets its own divider timed from the event's message timestamp, and an

@@ -51,6 +51,12 @@ describe("artifactTools", () => {
 			}),
 		).toEqual(["m/b.html"]);
 		expect(ask?.picked?.(args, { kind: "ack" })).toEqual([]);
+		const multi = { questions: [{ ...args.questions[0], multiSelect: true }] };
+		expect(
+			ask?.picked?.(multi, {
+				answers: [{ questionIndex: 0, kind: "multi", answer: null, selected: ["A", "B", "gone"] }],
+			}),
+		).toEqual(["m/a.html", "m/b.html"]);
 	});
 
 	it("drops a disabled extension's declarations and keeps the first of a collision", () => {

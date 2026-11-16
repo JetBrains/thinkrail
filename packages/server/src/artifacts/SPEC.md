@@ -111,10 +111,11 @@ restart.
 
 **Round markers.** Each record keeps the chat rounds that created or changed it (`rounds`: `{ sessionId,
 startedAt }`, oldest first, each distinct round once, at most 16 — chats taking turns on one file must not
-push an earlier round out). A round starts at the session's first `agent_start` and again at every user
-prompt pi delivers inside the run (`round_start`, stamped with the prompt's own timestamp — a follow-up
-queued or steered into a running agent is a new round in the chat, though pi runs it in the same
-`agent_start`…`agent_settled` window); it ends at the next one or at `agent_settled` (pi re-emits
+push an earlier round out). A round starts at the session's first `agent_start` and again at every message
+pi delivers inside the run that opens a round in the chat (`round_start` for `opensChatRound` in
+contracts — a prompt, a review fix, a continuation request, a handoff, a waking completion — stamped with
+the message's own timestamp: a follow-up queued or steered into a running agent is a new round in the
+chat, though pi runs it in the same `agent_start`…`agent_settled` window); it ends at the next one or at `agent_settled` (pi re-emits
 `agent_start` on retries; the first one counts). At a round boundary the index reconciles first, so changes
 so far stay with the round that made them, and reads that round's reply (see Roles). A marker is written
 only when the change is attributed to a running session — by a writer hint or as the only one running — and
