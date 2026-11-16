@@ -1,5 +1,6 @@
 import { useT } from "@thinkrail/locales/react";
 import { useMemo } from "react";
+import { useResourceEnvironment } from "../../host";
 import type { ResourceViewProps } from "../../registry";
 import { HtmlFrame } from "./HtmlFrame";
 import { buildHtmlPreviewDocument } from "./htmlDocument";
@@ -11,6 +12,7 @@ export default function HtmlView({ resource, content, viewState, onViewState }: 
 	const text = content.kind === "text" ? content.text : "";
 	const document = useMemo(() => buildHtmlPreviewDocument(text), [text]);
 	const [viewport, selectViewport] = useHtmlViewport(viewState, onViewState);
+	const compact = useResourceEnvironment().compact ?? false;
 	return (
 		<div data-testid="html-view" className="flex h-full min-h-0 flex-col bg-container-workspace-bg">
 			<HtmlPreviewNotice viewport={viewport} onViewport={selectViewport} />
@@ -19,6 +21,7 @@ export default function HtmlView({ resource, content, viewState, onViewState }: 
 					title={t("viewer.html.preview", { path: resource.path })}
 					document={document}
 					viewport={viewport}
+					compact={compact}
 				/>
 			</div>
 		</div>

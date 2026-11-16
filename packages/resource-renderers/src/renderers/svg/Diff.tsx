@@ -1,8 +1,8 @@
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { useMemo } from "react";
-import type { ResourceContent, ResourceDiffProps } from "../../registry";
+import type { DiffSideLabels, ResourceContent, ResourceDiffProps } from "../../registry";
 import { diffContentStamp } from "../reviewComposerState";
-import { VisualDiff, type VisualDiffSide } from "../VisualDiff";
+import { sideCaption, VisualDiff, type VisualDiffSide } from "../VisualDiff";
 import { SvgFrame } from "./SvgFrame";
 import {
 	buildSvgDocument,
@@ -31,12 +31,16 @@ function SvgContent({
 	return <SvgFrame title={t("viewer.svg.diffTitle", { path })} document={document} />;
 }
 
-function caption(t: Translator, side: "old" | "new", text: string | null): string {
-	const key = side === "old" ? "viewer.side.oldCaption" : "viewer.side.newCaption";
-	if (text === null) return t(key, { detail: t("viewer.image.noImage") });
+function caption(
+	t: Translator,
+	side: "old" | "new",
+	text: string | null,
+	labels: DiffSideLabels | undefined,
+): string {
+	if (text === null) return sideCaption(t, side, t("viewer.image.noImage"), labels);
 	const size = svgIntrinsicSize(text);
 	const dimensions = size ? `${size.width} × ${size.height}` : t("viewer.svg.flexibleSize");
-	return t(key, { detail: `${dimensions} · ${svgByteLength(text)} B` });
+	return sideCaption(t, side, `${dimensions} · ${svgByteLength(text)} B`, labels);
 }
 
 export default function SvgDiff({
@@ -48,6 +52,7 @@ export default function SvgDiff({
 	onPlacedThreadIds,
 	viewState,
 	onViewState,
+	sideLabels,
 }: ResourceDiffProps) {
 	const t = useT();
 	const tokens = useSvgTheme(true);
@@ -62,7 +67,7 @@ export default function SvgDiff({
 			originalText === null ? null : (
 				<SvgContent text={originalText} tokens={tokens} path={originalResource.path} />
 			),
-		caption: caption(t, "old", originalText),
+		caption: caption(t, "old", originalText, sideLabels),
 		intrinsicSize: originalSize,
 		review: review?.base,
 	};
@@ -72,7 +77,7 @@ export default function SvgDiff({
 			modifiedText === null ? null : (
 				<SvgContent text={modifiedText} tokens={tokens} path={resource.path} />
 			),
-		caption: caption(t, "new", modifiedText),
+		caption: caption(t, "new", modifiedText, sideLabels),
 		intrinsicSize: modifiedSize,
 		review: review?.worktree,
 	};
@@ -88,6 +93,7 @@ export default function SvgDiff({
 			onPlacedThreadIds={onPlacedThreadIds}
 			initialMode={svgDiffViewState(viewState)}
 			onViewState={onViewState}
+			labels={sideLabels}
 		/>
 	);
 }

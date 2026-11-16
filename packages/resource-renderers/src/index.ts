@@ -20,6 +20,7 @@ export {
 	type AnchorDraft,
 	anchorLabel,
 	canonicalWorkspacePath,
+	type DiffSideLabels,
 	describeResource,
 	diffRendererCapabilities,
 	diffResourceMeta,
@@ -49,6 +50,8 @@ export {
 } from "./registry";
 export { SOURCE_RENDERER_ID } from "./renderers/code";
 export { createAskAgentRequest } from "./renderers/code/changeBlocks";
+export { HtmlViewportSwitch } from "./renderers/html/ViewportSwitch";
+export type { HtmlViewport } from "./renderers/html/viewport";
 export { registerBundledResourceRenderers } from "./renderers/register";
 export { ReviewDraftContext, type ReviewDraftPersistence } from "./renderers/reviewDraftState";
 export {

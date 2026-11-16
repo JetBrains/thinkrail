@@ -120,7 +120,8 @@ test's documented specialized list names it.
 The per-file surface is `button`, `switch`, `dialog`, `dropdown-menu`, `context-menu`, `menu-styles`,
 `popover`, `command` (cmdk combobox body), `textarea`, `tooltip`, `resizable`, `toast`, `toggle-segment`
 (the slim header toggle: active segment on `control-bg-selected` + `text-default`, `data-active` /
-`aria-pressed`), `skeleton` (`SkeletonRows` / `LoadingRegion`, the one loading placeholder; its usage rules
+`aria-pressed`, and an explicit `tabIndex={0}` because the macOS WKWebView skips a `<button>` without one
+on Tab), `skeleton` (`SkeletonRows` / `LoadingRegion`, the one loading placeholder; its usage rules
 live in the web components spec), and `attention-line` (`AttentionLine`, the "Your input is needed · Agent is
 waiting" line; `announced` hides the visible line from assistive tech once the always-mounted polite
 region carries the announcement, `live={false}` drops the region), and `keycaps` (`Keycaps`, a row of

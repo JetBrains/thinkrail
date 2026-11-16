@@ -4,14 +4,16 @@ import type {
 	AskUserQuestionItem,
 } from "@thinkrail/pi-ask-user-question/core";
 import { cn } from "@thinkrail/ui/utils";
-import { type KeyboardEvent, useEffect, useRef } from "react";
+import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { CompareOverlay } from "./CompareOverlay";
+import { compareIndexOf } from "./compareModel";
 import { type LiftKey, NoteSlot, OptionRow, OtherRow } from "./controls";
 import { DiscussPanel, DiscussToggle } from "./discuss";
 import { useTestId } from "./ghost";
 import { OptionPreviewPane, PreviewGlyph, previewSource, QuestionPreview } from "./previews";
 import {
 	choiceKeyAction,
-	hasPreview,
+	hasOptionPreviews,
 	paneOptionIndex,
 	type QState,
 	splitRecommended,
@@ -82,9 +84,19 @@ export function QuestionBody({
 	const customOwnsPageFocus =
 		!discussing && state.customActive && (!question.multiSelect || state.multi.length === 0);
 	const questionPreview = previewSource(question);
-	const paneShown = !question.multiSelect && question.options.some(hasPreview);
+	const paneShown = hasOptionPreviews(question);
 	const paneIndex = paneShown ? paneOptionIndex(question, state, state.cursor) : null;
 	const paneOption = paneIndex == null ? null : (question.options[paneIndex] ?? null);
+	const [compareStartAt, setCompareStartAt] = useState<number | null>(null);
+	const openCompare = (optionIndex: number | null) =>
+		setCompareStartAt(compareIndexOf(question, optionIndex));
+	const focusChosenRow = () => {
+		const chosen = question.options.findIndex((option) => option.label === state.option);
+		const row = chosen >= 0 ? choiceRefs.current[chosen] : null;
+		if (!row) return false;
+		focusOf(row);
+		return true;
+	};
 
 	useEffect(() => {
 		const resolve = pendingFocus.current;
@@ -196,6 +208,7 @@ export function QuestionBody({
 					expanded={state.previewExpanded}
 					onToggleExpanded={onTogglePreview}
 					onOpenFile={onOpenFile}
+					onFullscreen={paneShown ? () => openCompare(null) : undefined}
 				/>
 			) : null}
 			<div
@@ -297,9 +310,24 @@ export function QuestionBody({
 							paneScrollRef.current = node;
 						}}
 						onOpenFile={onOpenFile}
+						onFullscreen={() => openCompare(paneIndex ?? 0)}
 					/>
 				) : null}
 			</div>
+			{paneShown ? (
+				<CompareOverlay
+					open={compareStartAt !== null}
+					onOpenChange={(open) => {
+						if (!open) setCompareStartAt(null);
+					}}
+					question={question}
+					start={compareStartAt ?? 0}
+					chosen={state.option}
+					onChoose={onSelect}
+					onClosed={focusChosenRow}
+					onOpenFile={onOpenFile}
+				/>
+			) : null}
 		</div>
 	);
 }

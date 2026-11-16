@@ -14,6 +14,7 @@ export interface FramedResourcePreviewProps {
 	frameClassName: string;
 	compact?: boolean | undefined;
 	testIdPrefix: string;
+	onFullscreen?: (() => void) | undefined;
 }
 
 export function FramedResourcePreview({
@@ -23,6 +24,7 @@ export function FramedResourcePreview({
 	frameClassName,
 	compact,
 	testIdPrefix,
+	onFullscreen,
 }: FramedResourcePreviewProps) {
 	const t = useT();
 	const host = useOptionalResourceHost();
@@ -67,7 +69,7 @@ export function FramedResourcePreview({
 							label={t("viewer.preview.fullScreen")}
 							data-testid={`${testIdPrefix}-fullscreen`}
 							tabIndex={0}
-							onClick={() => setFullscreen(true)}
+							onClick={onFullscreen ?? (() => setFullscreen(true))}
 						/>
 					</>
 				}

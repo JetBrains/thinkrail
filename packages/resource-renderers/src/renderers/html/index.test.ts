@@ -2,9 +2,13 @@ import { expect, test } from "bun:test";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { ResourceEnvironmentProvider } from "../../host";
+import { sideCaption } from "../VisualDiff";
 import { htmlRenderer } from ".";
 import { HtmlFrame } from "./HtmlFrame";
 import { HTML_PREVIEW_CSP, prepareHtmlPreviewDocument } from "./htmlDocument";
+import { createScrollLink, type ScrollLinkClock } from "./scrollLink";
+import { HtmlPreviewNotice } from "./ViewportSwitch";
 
 interface FakeAttribute {
 	name: string;
@@ -197,16 +201,207 @@ test("HTML preview CSP is exact", () => {
 	);
 });
 
-test("HTML frames carry exactly an empty sandbox capability set", () => {
-	const markup = renderToStaticMarkup(
-		createElement(HtmlFrame, {
-			title: "HTML preview",
-			document: "<!doctype html><html><body>preview</body></html>",
-		}),
-	);
+function frameSandbox(props: Parameters<typeof HtmlFrame>[0]): string[] {
+	const markup = renderToStaticMarkup(createElement(HtmlFrame, props));
 	const iframeAt = markup.indexOf("<iframe");
 	const openingTag = markup.slice(iframeAt, markup.indexOf(">", iframeAt) + 1);
 	expect(markup.match(/<iframe/g)).toHaveLength(1);
-	expect([...openingTag.matchAll(/\ssandbox="([^"]*)"/g)].map((match) => match[1])).toEqual([""]);
-	expect(openingTag).not.toContain("allow-");
+	return [...openingTag.matchAll(/\ssandbox="([^"]*)"/g)].map((match) => match[1] ?? "");
+}
+
+const PREVIEW = "<!doctype html><html><body>preview</body></html>";
+
+test("HTML frames carry exactly an empty sandbox capability set", () => {
+	expect(frameSandbox({ title: "HTML preview", document: PREVIEW })).toEqual([""]);
+});
+
+test("paired HTML frames add only same-origin access, never scripts", () => {
+	expect(
+		frameSandbox({ title: "HTML preview", document: PREVIEW, scrollLink: createScrollLink() }),
+	).toEqual(["allow-same-origin"]);
+});
+
+interface FakeScroller {
+	scrollTop: number;
+	scrollLeft: number;
+	scrollTo(options: ScrollToOptions): void;
+}
+
+class FakeView {
+	readonly scroller = { scrollTop: 0, scrollLeft: 0, maxTop: Number.POSITIVE_INFINITY };
+	readonly behaviors: Array<ScrollBehavior | undefined> = [];
+	readonly document: { scrollingElement: FakeScroller };
+	private listener: (() => void) | null = null;
+
+	constructor(maxTop = Number.POSITIVE_INFINITY) {
+		const scroller = this.scroller;
+		const behaviors = this.behaviors;
+		scroller.maxTop = maxTop;
+		this.document = {
+			scrollingElement: {
+				get scrollTop() {
+					return scroller.scrollTop;
+				},
+				set scrollTop(value: number) {
+					scroller.scrollTop = Math.min(value, scroller.maxTop);
+				},
+				get scrollLeft() {
+					return scroller.scrollLeft;
+				},
+				set scrollLeft(value: number) {
+					scroller.scrollLeft = value;
+				},
+				scrollTo({ top = scroller.scrollTop, left = scroller.scrollLeft, behavior }) {
+					behaviors.push(behavior);
+					scroller.scrollTop = Math.min(top, scroller.maxTop);
+					scroller.scrollLeft = left;
+				},
+			},
+		};
+	}
+	addEventListener(_type: string, listener: () => void) {
+		this.listener = listener;
+	}
+	removeEventListener() {
+		this.listener = null;
+	}
+	silentScroll(top: number) {
+		this.document.scrollingElement.scrollTop = top;
+	}
+	userScroll(top: number) {
+		this.silentScroll(top);
+		this.listener?.();
+	}
+	echo() {
+		this.listener?.();
+	}
+	get attached() {
+		return this.listener !== null;
+	}
+}
+
+class FakeClock implements ScrollLinkClock {
+	private readonly frames = new Map<number, () => void>();
+	private readonly polls = new Set<() => void>();
+	private next = 1;
+	requestFrame(callback: () => void) {
+		const handle = this.next++;
+		this.frames.set(handle, callback);
+		return handle;
+	}
+	cancelFrame(handle: number) {
+		this.frames.delete(handle);
+	}
+	every(_ms: number, callback: () => void) {
+		this.polls.add(callback);
+		return () => this.polls.delete(callback);
+	}
+	poll() {
+		for (const callback of this.polls) callback();
+	}
+	frame() {
+		const pending = [...this.frames.values()];
+		this.frames.clear();
+		for (const callback of pending) callback();
+	}
+	get pendingFrames() {
+		return this.frames.size;
+	}
+	get polling() {
+		return this.polls.size > 0;
+	}
+}
+
+function asWindow(view: FakeView): Window {
+	return view as unknown as Window;
+}
+
+test("a scroll link mirrors the scrolled document onto its pair and ignores the echo", () => {
+	const link = createScrollLink(new FakeClock());
+	const left = new FakeView();
+	const right = new FakeView(300);
+	link.attach(asWindow(left));
+	link.attach(asWindow(right));
+
+	left.userScroll(500);
+	expect(right.scroller.scrollTop).toBe(300);
+	right.echo();
+	expect(left.scroller.scrollTop).toBe(500);
+
+	right.userScroll(120);
+	expect(left.scroller.scrollTop).toBe(120);
+	expect(new Set([...left.behaviors, ...right.behaviors])).toEqual(new Set(["instant"]));
+});
+
+test("without scroll events, as in WebKit's script-less sandbox, polling finds the move and follows it until it settles", () => {
+	const clock = new FakeClock();
+	const link = createScrollLink(clock);
+	const left = new FakeView();
+	const right = new FakeView();
+	link.attach(asWindow(left));
+	link.attach(asWindow(right));
+	expect(clock.polling).toBe(true);
+
+	right.silentScroll(200);
+	clock.poll();
+	expect(left.scroller.scrollTop).toBe(200);
+	expect(clock.pendingFrames).toBe(1);
+
+	right.silentScroll(260);
+	clock.frame();
+	expect(left.scroller.scrollTop).toBe(260);
+	for (let i = 0; i < 30; i++) clock.frame();
+	expect(clock.pendingFrames).toBe(0);
+
+	left.silentScroll(40);
+	clock.poll();
+	expect(right.scroller.scrollTop).toBe(40);
+});
+
+test("a scroll link places a reloaded frame at the last offset and stops polling once empty", () => {
+	const clock = new FakeClock();
+	const link = createScrollLink(clock);
+	const left = new FakeView();
+	const detach = link.attach(asWindow(left));
+	left.userScroll(240);
+	detach();
+	expect(left.attached).toBe(false);
+	expect(clock.polling).toBe(false);
+	expect(clock.pendingFrames).toBe(0);
+
+	const reloaded = new FakeView();
+	link.attach(asWindow(reloaded));
+	expect(reloaded.scroller.scrollTop).toBe(240);
+	left.userScroll(10);
+	expect(reloaded.scroller.scrollTop).toBe(240);
+});
+
+test("a caller-fixed HTML width hides the notice and its presets", () => {
+	const notice = (environment: { mobile: boolean; htmlViewport?: "tablet" }) =>
+		renderToStaticMarkup(
+			createElement(
+				ResourceEnvironmentProvider,
+				{ value: environment },
+				createElement(HtmlPreviewNotice, { viewport: "desktop", onViewport: () => {} }),
+			),
+		);
+	expect(notice({ mobile: false })).toContain('data-testid="html-viewport"');
+	expect(notice({ mobile: false, htmlViewport: "tablet" })).toBe("");
+});
+
+test("labelled sides name both visual captions", () => {
+	const t = currentTranslator();
+	const labels = { original: "Sidebar", modified: "Top tabs" };
+	expect(sideCaption(t, "old", "1280 × 800", labels)).toBe("Sidebar: 1280 × 800");
+	expect(sideCaption(t, "new", "1280 × 800", undefined)).toBe("New: 1280 × 800");
+});
+
+test("a compact HTML frame takes its box's height instead of the full-size floor", () => {
+	const box = (compact: boolean) =>
+		renderToStaticMarkup(
+			createElement(HtmlFrame, { title: "HTML preview", document: PREVIEW, compact }),
+		);
+	expect(box(false)).toContain("min-h-[360px]");
+	expect(box(true)).not.toContain("min-h-[360px]");
+	expect(box(true)).toContain("min-h-0");
 });
