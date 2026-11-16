@@ -227,6 +227,7 @@ describe("website analytics", () => {
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
 			postHogProjectKey: expectedPostHogProjectKey,
+			postHogEnabled: true,
 			marketingConsent: consent.adapter,
 		});
 
@@ -251,6 +252,7 @@ describe("website analytics", () => {
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
 			postHogProjectKey: "",
+			postHogEnabled: true,
 			marketingConsent: consent.adapter,
 		});
 
@@ -269,6 +271,7 @@ describe("website analytics", () => {
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
 			postHogProjectKey: expectedPostHogProjectKey,
+			postHogEnabled: true,
 			marketingConsent: consent.adapter,
 		});
 
@@ -289,6 +292,7 @@ describe("website analytics", () => {
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
 			postHogProjectKey: expectedPostHogProjectKey,
+			postHogEnabled: true,
 			marketingConsent: consent.adapter,
 		});
 
@@ -320,6 +324,7 @@ describe("website analytics", () => {
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
 			postHogProjectKey: expectedPostHogProjectKey,
+			postHogEnabled: true,
 			marketingConsent: consent.adapter,
 		});
 
@@ -351,6 +356,7 @@ describe("website analytics", () => {
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
 			postHogProjectKey: expectedPostHogProjectKey,
+			postHogEnabled: true,
 			marketingConsent: consent.adapter,
 		});
 
@@ -387,6 +393,7 @@ describe("website analytics", () => {
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
 			postHogProjectKey: expectedPostHogProjectKey,
+			postHogEnabled: true,
 			marketingConsent: consent.adapter,
 		});
 		const downloadStarted = {
@@ -443,6 +450,7 @@ describe("website analytics", () => {
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
 			postHogProjectKey: expectedPostHogProjectKey,
+			postHogEnabled: true,
 			marketingConsent: consent.adapter,
 		});
 
@@ -467,6 +475,7 @@ describe("website analytics", () => {
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
 			postHogProjectKey: expectedPostHogProjectKey,
+			postHogEnabled: true,
 			marketingConsent: consent.adapter,
 		});
 
@@ -488,6 +497,7 @@ describe("website analytics", () => {
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
 			postHogProjectKey: expectedPostHogProjectKey,
+			postHogEnabled: true,
 			marketingConsent: consent.adapter,
 		});
 		const observed: Array<string | undefined> = [];
@@ -518,6 +528,7 @@ describe("website analytics", () => {
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
 			postHogProjectKey: expectedPostHogProjectKey,
+			postHogEnabled: true,
 			marketingConsent: consent.adapter,
 		});
 
@@ -543,6 +554,7 @@ describe("website analytics", () => {
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
 			postHogProjectKey: expectedPostHogProjectKey,
+			postHogEnabled: true,
 			marketingConsent: consent.adapter,
 		});
 
@@ -562,6 +574,7 @@ describe("website analytics", () => {
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
 			postHogProjectKey: expectedPostHogProjectKey,
+			postHogEnabled: true,
 			marketingConsent: consent.adapter,
 		});
 		const github = { content_key: "vibecoding", cta_location: "hero", target: "repo" } as const;
@@ -595,6 +608,7 @@ describe("website analytics", () => {
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
 			postHogProjectKey: expectedPostHogProjectKey,
+			postHogEnabled: true,
 			marketingConsent: consent.adapter,
 		});
 
@@ -645,6 +659,7 @@ describe("website analytics", () => {
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
 			postHogProjectKey: expectedPostHogProjectKey,
+			postHogEnabled: true,
 			marketingConsent: consent.adapter,
 		});
 
@@ -675,6 +690,7 @@ describe("website analytics", () => {
 			const analytics = createWebsiteAnalytics({
 				productionHostname: "site.example",
 				postHogProjectKey: expectedPostHogProjectKey,
+				postHogEnabled: true,
 				marketingConsent: consent.adapter,
 			});
 
@@ -695,6 +711,7 @@ describe("website analytics", () => {
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
 			postHogProjectKey: expectedPostHogProjectKey,
+			postHogEnabled: true,
 			marketingConsent: consent.adapter,
 		});
 
@@ -719,6 +736,7 @@ describe("website analytics", () => {
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
 			postHogProjectKey: expectedPostHogProjectKey,
+			postHogEnabled: true,
 			marketingConsent: consent.adapter,
 		});
 
@@ -737,8 +755,9 @@ describe("website analytics", () => {
 			const options = createWebsiteAnalytics({
 				productionHostname: "site.example",
 				postHogProjectKey: expectedPostHogProjectKey,
+				postHogEnabled: true,
 				marketingConsent: createConsent().adapter,
-			}).configurationForHostname("site.example")?.postHog.options;
+			}).configurationForHostname("site.example")?.postHog?.options;
 			if (options === undefined) throw new Error("missing production configuration");
 			return options.before_send(event);
 		};
@@ -796,6 +815,7 @@ describe("website analytics", () => {
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
 			postHogProjectKey: expectedPostHogProjectKey,
+			postHogEnabled: true,
 			marketingConsent: consent.adapter,
 		});
 
@@ -807,5 +827,74 @@ describe("website analytics", () => {
 		expect(dom.vendorCalls.find(({ method }) => method === "capture")?.properties).toEqual(
 			contentViewed,
 		);
+	});
+});
+
+describe("website analytics with PostHog switched off", () => {
+	const switchedOff = (
+		marketingConsent: MarketingConsentAdapter,
+		postHogProjectKey = expectedPostHogProjectKey,
+	) =>
+		createWebsiteAnalytics({
+			productionHostname: "site.example",
+			postHogProjectKey,
+			postHogEnabled: false,
+			marketingConsent,
+		});
+
+	test("configures only GTM, under the same host and key gate", () => {
+		const consent = createConsent(true);
+
+		expect(switchedOff(consent.adapter).configurationForHostname("site.example")).toStrictEqual({
+			gtm: { containerId: "GTM-WDW2DZW4", scriptUrl: expectedGtmScriptUrl },
+		});
+		expect(switchedOff(consent.adapter).configurationForHostname("localhost")).toBeUndefined();
+		expect(
+			switchedOff(consent.adapter, "").configurationForHostname("site.example"),
+		).toBeUndefined();
+	});
+
+	test("loads GTM once and never the PostHog loader, consent, or journey storage", () => {
+		const dom = installDom("site.example", { storedJourney: existingJourneyId });
+		const consent = createConsent(true);
+		const analytics = switchedOff(consent.adapter);
+
+		analytics.init();
+		analytics.init();
+
+		expect(dom.scripts).toHaveLength(1);
+		expect(dom.scripts[0]?.src).toBe(expectedGtmScriptUrl);
+		expect(dom.scripts[0]?.dataset).toEqual({ gtmContainer: "GTM-WDW2DZW4" });
+		expect(dom.analyticsWindow.dataLayer).toHaveLength(1);
+		expect(consent.activity).toEqual([]);
+		expect(dom.storageCalls).toEqual([]);
+	});
+
+	test("drops every capture and exposes no journey, even with Marketing granted", () => {
+		const dom = installDom("site.example", { storedJourney: existingJourneyId });
+		const consent = createConsent(true);
+		const analytics = switchedOff(consent.adapter);
+		const observed: Array<string | undefined> = [];
+		analytics.subscribeJourney((journeyId) => observed.push(journeyId));
+
+		analytics.capture("content_viewed", contentViewed);
+		analytics.init();
+		analytics.capture("download_started", {
+			content_key: "landing",
+			cta_location: "hero",
+			platform: "macos",
+			architecture: "arm64",
+			artifact: "dmg",
+		});
+		dom.loadPostHog();
+		analytics.capture("content_viewed", contentViewed);
+		consent.set(false);
+		consent.set(true);
+
+		expect(analytics.currentJourneyId()).toBeUndefined();
+		expect(observed).toEqual([]);
+		expect(dom.vendorCalls).toEqual([]);
+		expect(dom.storageCalls).toEqual([]);
+		expect(dom.values.get(journeyStorageKey)).toBe(existingJourneyId);
 	});
 });

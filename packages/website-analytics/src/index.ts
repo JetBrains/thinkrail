@@ -25,7 +25,7 @@ export type PostHogOptions = {
 };
 
 export type WebsiteAnalyticsConfiguration = {
-	postHog: {
+	postHog?: {
 		projectKey: string;
 		scriptUrl: string;
 		options: PostHogOptions;
@@ -142,6 +142,7 @@ export type WebsiteAnalytics = {
 export type WebsiteAnalyticsOptions = {
 	productionHostname: string;
 	postHogProjectKey: string;
+	postHogEnabled: boolean;
 	marketingConsent: MarketingConsentAdapter;
 };
 
@@ -193,33 +194,47 @@ const firstPartyExceptionsOnly =
 		return hasFirstPartyScriptFrame(event.properties, hostname) ? event : null;
 	};
 
-const configurationFor = (
+type PostHogConfiguration = NonNullable<WebsiteAnalyticsConfiguration["postHog"]>;
+
+const postHogConfigurationFor = (
 	postHogProjectKey: string,
 	productionHostname: string,
-): WebsiteAnalyticsConfiguration => ({
-	postHog: {
-		projectKey: postHogProjectKey,
-		scriptUrl: `${postHogProxyHost}/static/array.js`,
-		options: {
-			api_host: postHogProxyHost,
-			ui_host: postHogUiHost,
-			defaults: "2026-05-30",
-			person_profiles: "identified_only",
-			cookieless_mode: "always",
-			respect_dnt: true,
-			disable_session_recording: true,
-			disable_surveys: true,
-			before_send: firstPartyExceptionsOnly(productionHostname),
-		},
-	},
-	gtm: {
-		containerId: gtmContainerId,
-		scriptUrl: `https://www.googletagmanager.com/gtm.js?id=${gtmContainerId}`,
+): PostHogConfiguration => ({
+	projectKey: postHogProjectKey,
+	scriptUrl: `${postHogProxyHost}/static/array.js`,
+	options: {
+		api_host: postHogProxyHost,
+		ui_host: postHogUiHost,
+		defaults: "2026-05-30",
+		person_profiles: "identified_only",
+		cookieless_mode: "always",
+		respect_dnt: true,
+		disable_session_recording: true,
+		disable_surveys: true,
+		before_send: firstPartyExceptionsOnly(productionHostname),
 	},
 });
 
+const gtmConfiguration: WebsiteAnalyticsConfiguration["gtm"] = {
+	containerId: gtmContainerId,
+	scriptUrl: `https://www.googletagmanager.com/gtm.js?id=${gtmContainerId}`,
+};
+
+function configurationFor(
+	postHogProjectKey: string,
+	productionHostname: string,
+	postHogEnabled: boolean,
+): WebsiteAnalyticsConfiguration | undefined {
+	if (!postHogProjectKey) return undefined;
+	if (!postHogEnabled) return { gtm: gtmConfiguration };
+	return {
+		postHog: postHogConfigurationFor(postHogProjectKey, productionHostname),
+		gtm: gtmConfiguration,
+	};
+}
+
 function initPostHog(
-	configuration: WebsiteAnalyticsConfiguration["postHog"],
+	configuration: PostHogConfiguration,
 	onLoad: () => void,
 	onError: () => void,
 ): void {
@@ -271,11 +286,14 @@ function removeStoredJourneyId(): void {
 export function createWebsiteAnalytics({
 	productionHostname,
 	postHogProjectKey,
+	postHogEnabled,
 	marketingConsent,
 }: WebsiteAnalyticsOptions): WebsiteAnalytics {
-	const productionConfiguration = postHogProjectKey
-		? configurationFor(postHogProjectKey, productionHostname)
-		: undefined;
+	const productionConfiguration = configurationFor(
+		postHogProjectKey,
+		productionHostname,
+		postHogEnabled,
+	);
 	let initialized = false;
 	let consentGranted: boolean | undefined;
 	let journeyId: string | undefined;
@@ -291,11 +309,14 @@ export function createWebsiteAnalytics({
 		return hostname === productionHostname ? productionConfiguration : undefined;
 	}
 
-	function enabledInCurrentWindow(): boolean {
-		return (
-			typeof window !== "undefined" &&
-			configurationForHostname(window.location.hostname) !== undefined
-		);
+	function currentConfiguration(): WebsiteAnalyticsConfiguration | undefined {
+		return typeof window === "undefined"
+			? undefined
+			: configurationForHostname(window.location.hostname);
+	}
+
+	function postHogInCurrentWindow(): boolean {
+		return currentConfiguration()?.postHog !== undefined;
 	}
 
 	function registerJourney(): void {
@@ -383,7 +404,7 @@ export function createWebsiteAnalytics({
 		captureQueue.length = 0;
 	}
 
-	function onPostHogLoad(configuration: WebsiteAnalyticsConfiguration["postHog"]): void {
+	function onPostHogLoad(configuration: PostHogConfiguration): void {
 		if (postHogFailed) return;
 		const posthog = window.posthog;
 		if (posthog === undefined) {
@@ -402,16 +423,19 @@ export function createWebsiteAnalytics({
 	}
 
 	function init(): void {
-		const configuration = productionConfiguration;
-		if (!enabledInCurrentWindow() || initialized || configuration === undefined) return;
+		const configuration = currentConfiguration();
+		if (initialized || configuration === undefined) return;
 		initialized = true;
-		try {
-			marketingConsent.subscribe(refreshConsent);
-			refreshConsent();
-		} catch {
-			setConsent(false);
+		const postHog = configuration.postHog;
+		if (postHog !== undefined) {
+			try {
+				marketingConsent.subscribe(refreshConsent);
+				refreshConsent();
+			} catch {
+				setConsent(false);
+			}
+			initPostHog(postHog, () => onPostHogLoad(postHog), failPostHog);
 		}
-		initPostHog(configuration.postHog, () => onPostHogLoad(configuration.postHog), failPostHog);
 		initGtm(configuration.gtm);
 	}
 
@@ -419,7 +443,7 @@ export function createWebsiteAnalytics({
 		event: EventName,
 		properties: WebsiteAnalyticsEventProperties[EventName],
 	): void {
-		if (!enabledInCurrentWindow()) return;
+		if (!postHogInCurrentWindow()) return;
 		const enrichedProperties: Record<string, unknown> = { ...properties };
 		if (consentGranted === true && journeyId !== undefined) {
 			enrichedProperties[journeyProperty] = journeyId;
@@ -436,7 +460,7 @@ export function createWebsiteAnalytics({
 	}
 
 	function currentJourneyId(): string | undefined {
-		if (!enabledInCurrentWindow() || consentGranted !== true) return undefined;
+		if (!postHogInCurrentWindow() || consentGranted !== true) return undefined;
 		return journeyId;
 	}
 

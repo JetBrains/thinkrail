@@ -1,4 +1,8 @@
-import { createWebsiteAnalytics, type MarketingConsentAdapter } from "@thinkrail/website-analytics";
+import {
+	createWebsiteAnalytics,
+	type MarketingConsentAdapter,
+	type WebsiteAnalytics,
+} from "@thinkrail/website-analytics";
 
 declare global {
 	interface Window {
@@ -31,11 +35,18 @@ const marketingConsent: MarketingConsentAdapter = {
 	},
 };
 
-const websiteAnalytics = createWebsiteAnalytics({
-	productionHostname: "thinkrail.ai",
-	postHogProjectKey: import.meta.env.PUBLIC_POSTHOG_PROJECT_KEY ?? "",
-	marketingConsent,
-});
+export const websitePostHogEnabled = false;
+
+export function createSiteAnalytics(postHogEnabled: boolean): WebsiteAnalytics {
+	return createWebsiteAnalytics({
+		productionHostname: "thinkrail.ai",
+		postHogProjectKey: import.meta.env.PUBLIC_POSTHOG_PROJECT_KEY ?? "",
+		postHogEnabled,
+		marketingConsent,
+	});
+}
+
+const websiteAnalytics = createSiteAnalytics(websitePostHogEnabled);
 
 export const analyticsConfig = websiteAnalytics.configurationForHostname;
 export const currentMarketingConsent = marketingConsent.current;

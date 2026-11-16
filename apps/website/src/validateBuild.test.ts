@@ -125,8 +125,8 @@ describe("validateAnalyticsPages", () => {
 		expect(
 			validateAnalyticsPages([{ path: "new-product-page/index.html", runtimeContent: "" }]),
 		).toEqual([
-			"new-product-page/index.html: expected 1 PostHog loaders",
-			"new-product-page/index.html: expected 1 GTM loaders",
+			"new-product-page/index.html: expected 1 bundled PostHog loaders",
+			"new-product-page/index.html: expected 1 bundled GTM loaders",
 		]);
 	});
 
@@ -145,8 +145,8 @@ describe("validateAnalyticsPages", () => {
 		]);
 
 		for (const path of ["attribution/claim/index.html", "404.html"]) {
-			expect(failures).toContain(`${path}: expected 0 PostHog loaders`);
-			expect(failures).toContain(`${path}: expected 0 GTM loaders`);
+			expect(failures).toContain(`${path}: expected 0 bundled PostHog loaders`);
+			expect(failures).toContain(`${path}: expected 0 bundled GTM loaders`);
 			expect(failures).toContain(`${path}: browser analytics leaked`);
 		}
 	});

@@ -138,10 +138,10 @@ export function validateAnalyticsPages(
 	for (const { path, runtimeContent } of pages) {
 		const expectedLoaders = analyticsFreePages.has(path) ? 0 : 1;
 		if (occurrences(runtimeContent, "data-posthog-project") !== expectedLoaders) {
-			failures.push(`${path}: expected ${expectedLoaders} PostHog loaders`);
+			failures.push(`${path}: expected ${expectedLoaders} bundled PostHog loaders`);
 		}
 		if (occurrences(runtimeContent, "data-gtm-container") !== expectedLoaders) {
-			failures.push(`${path}: expected ${expectedLoaders} GTM loaders`);
+			failures.push(`${path}: expected ${expectedLoaders} bundled GTM loaders`);
 		}
 		if (
 			expectedLoaders === 0 &&
