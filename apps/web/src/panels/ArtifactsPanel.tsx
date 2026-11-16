@@ -11,10 +11,13 @@ import {
 	artifactsWatermark,
 	hostLacksArtifacts,
 	selectActiveFilePath,
+	selectArtifactsSmartOffered,
+	selectArtifactsView,
 	supportsArtifacts,
 	useAppStore,
 } from "../store";
 import { getTransport } from "../transport";
+import { ArtifactsSmart, SMART_UNATTACHED, smartGroupId } from "./ArtifactsSmart";
 import { ArtifactsToolbar } from "./ArtifactsToolbar";
 import { ArtifactTreeRows } from "./ArtifactsTree";
 import {
@@ -36,6 +39,7 @@ import {
 	artifactTimeLabel,
 	artifactTree,
 	type OutputRow,
+	smartGroups,
 } from "./artifactsModel";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { deleteEntry, pasteInto, renameEntry } from "./fileTreeActions";
@@ -69,7 +73,8 @@ export function ArtifactsPanel({
 	const canPaste = useAppStore(
 		(s) => supportsArtifacts(s.protocolVersion) && s.fileClipboard !== null,
 	);
-	const view = useAppStore((s) => s.artifactsView);
+	const view = useAppStore(selectArtifactsView);
+	const smartOffered = useAppStore(selectArtifactsSmartOffered);
 	const expandedPaths = useAppStore((s) => s.artifactsTreeExpandedByWorkspace[workspaceId]);
 	const activePath = useAppStore((s) => selectActiveFilePath(s, workspaceId));
 	const [allChats, setAllChats] = useState(false);
@@ -99,8 +104,15 @@ export function ArtifactsPanel({
 				: null,
 		[view, snapshot, rows],
 	);
+	const smart = useMemo(
+		() => (view === "smart" && rows ? smartGroups(rows.artifacts) : null),
+		[view, rows],
+	);
 	const expanded = useMemo(() => new Set(expandedPaths), [expandedPaths]);
-	const canCollapse = tree?.some((node) => node.kind === "dir" && expanded.has(node.path)) ?? false;
+	const canCollapse = smart
+		? smart.groups.some((group) => expanded.has(smartGroupId(group.folder))) ||
+			expanded.has(SMART_UNATTACHED)
+		: (tree?.some((node) => node.kind === "dir" && expanded.has(node.path)) ?? false);
 	const requestRemoval: RequestRemoval = (path, kept) => setRemoval({ path, kept, open: true });
 	const openKept = (path: string) => void openFileInTab(workspaceId, path, "keep");
 	const openArtifactKept = (path: string) => {
@@ -125,6 +137,9 @@ export function ArtifactsPanel({
 				views={[
 					{ id: "list", label: t("panels.artifacts.viewList") },
 					{ id: "tree", label: t("panels.artifacts.viewTree") },
+					...(smartOffered
+						? [{ id: "smart" as const, label: t("panels.artifacts.viewSmart") }]
+						: []),
 				]}
 				view={view}
 				onView={(next) => useAppStore.getState().setArtifactsView(next)}
@@ -174,12 +189,27 @@ export function ArtifactsPanel({
 							<Section
 								testid="artifacts-section"
 								focusList="artifacts"
-								title={t("panels.artifacts.sectionArtifacts")}
+								title={
+									smart
+										? t("panels.artifacts.sectionSmart")
+										: t("panels.artifacts.sectionArtifacts")
+								}
 								label={t("panels.artifacts.artifactsTree")}
-								count={rows.artifacts.length}
+								count={smart ? smart.results : rows.artifacts.length}
 								onOpenKept={openArtifactKept}
 							>
-								{tree ? (
+								{smart && snapshot ? (
+									<ArtifactsSmart
+										view={smart}
+										dir={snapshot.dir}
+										artifacts={snapshot.artifacts}
+										workspaceId={workspaceId}
+										expanded={expanded}
+										activePath={activePath}
+										showChat={sessionId === null}
+										onRemove={requestRemoval}
+									/>
+								) : tree ? (
 									<ArtifactTreeRows
 										nodes={tree}
 										workspaceId={workspaceId}

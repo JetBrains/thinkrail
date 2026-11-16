@@ -13,6 +13,7 @@ import {
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	ARTIFACT_ROLES_PROTOCOL_VERSION,
 	ARTIFACTS_PROTOCOL_VERSION,
 	ASK_DISCUSS_PROTOCOL_VERSION,
 	BRANCH_STATUS_PROTOCOL_VERSION,
@@ -303,6 +304,11 @@ test("Files tree copy and delete are pinned to v118", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FS_MUTATIONS_PROTOCOL_VERSION);
 	expect(WS_METHODS.fsCopy).toBe("fs.copy");
 	expect(WS_METHODS.fsDelete).toBe("fs.delete");
+});
+
+test("artifact roles and round markers are pinned to v124", () => {
+	expect(ARTIFACT_ROLES_PROTOCOL_VERSION).toBe(124);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ARTIFACT_ROLES_PROTOCOL_VERSION);
 });
 
 test("workspace artifacts, rename and move are pinned to v121", () => {

@@ -12,6 +12,8 @@ import {
 	artifactTimeLabel,
 	artifactTree,
 	mentionText,
+	type SmartGroup,
+	smartGroups,
 } from "./artifactsModel";
 
 const snapshot: WorkspaceArtifactsSnapshot = {
@@ -278,4 +280,103 @@ test("a row's change time reads as a localized date and time", () => {
 	const label = artifactTimeLabel(currentTranslator(), Date.UTC(2026, 10, 13, 14, 32));
 	expect(label).toStartWith("Changed ");
 	expect(label).toContain("2026");
+});
+
+function smartOf(
+	paths: readonly (readonly [string, "result" | "working", { at?: number; fresh?: boolean }?])[],
+) {
+	const snapshot: WorkspaceArtifactsSnapshot = {
+		workspaceId: "w1",
+		dir: ".thinkrail/context",
+		artifacts: paths.map(([path, role, flags = {}]) => ({
+			path: `.thinkrail/context/${path}`,
+			state: "live",
+			size: 1,
+			changedAt: flags.at ?? 1,
+			firstSeenAt: flags.fresh ? 9 : 1,
+			role,
+		})),
+		outputs: null,
+	};
+	const rows = artifactRows(snapshot, {
+		sessionId: null,
+		highlightSince: 5,
+		showIgnored: false,
+		specs: [],
+	});
+	return smartGroups(rows.artifacts);
+}
+
+function shape(groups: readonly SmartGroup[]): unknown[] {
+	return groups.map((group) => ({
+		[group.name || "(top)"]: [
+			...group.results.map((row) => row.name),
+			...(group.working.length ? [`+${group.working.length} working`] : []),
+			...shape(group.children),
+		],
+		...(group.fresh ? { fresh: true } : {}),
+		results: group.resultCount,
+		groups: group.groupCount,
+	}));
+}
+
+test("smart groups gather results by folder, newest first, with their working files folded under them", () => {
+	const view = smartOf([
+		["TASK-x.md", "result", { at: 2 }],
+		["notes.json", "working"],
+		["gallery/analyzers/index.html", "result", { at: 5 }],
+		["gallery/analyzers/images/a.png", "working"],
+		["gallery/analyzers/tools/_raw/b.json", "working"],
+		["mockups/features/01-trace/a.html", "result", { at: 7 }],
+		["mockups/features/01-trace/b.html", "result", { at: 7, fresh: true }],
+		["mockups/features/01-trace/gen.mjs", "working"],
+		["mockups/features/02-time/a.html", "result", { at: 6 }],
+		["mockups/features/_png/a.png", "working"],
+		["research/topic/notes.md", "result", { at: 3 }],
+		["scratch/loose.png", "working"],
+	]);
+	expect(shape(view.groups)).toEqual([
+		{
+			mockups: [
+				{
+					"features/01-trace": ["a.html", "b.html", "+1 working"],
+					fresh: true,
+					results: 2,
+					groups: 0,
+				},
+				{ "features/02-time": ["a.html"], results: 1, groups: 0 },
+			],
+			fresh: true,
+			results: 3,
+			groups: 2,
+		},
+		{ "gallery/analyzers": ["index.html", "+2 working"], results: 1, groups: 0 },
+		{ "research/topic": ["notes.md"], results: 1, groups: 0 },
+		{ "(top)": ["TASK-x.md", "+1 working"], results: 1, groups: 0 },
+	]);
+	expect(view.results).toBe(6);
+	expect(view.unattached.map((row) => row.artifact.path)).toEqual([
+		".thinkrail/context/mockups/features/_png/a.png",
+		".thinkrail/context/scratch/loose.png",
+	]);
+});
+
+test("a folder that holds results itself becomes the parent of the result folders below it", () => {
+	const view = smartOf([
+		["mockups/features/PLAN.md", "result", { at: 1 }],
+		["mockups/features/_kit/k.js", "working"],
+		["mockups/features/01-trace/a.html", "result", { at: 4 }],
+	]);
+	expect(shape(view.groups)).toEqual([
+		{
+			"mockups/features": [
+				"PLAN.md",
+				"+1 working",
+				{ "01-trace": ["a.html"], results: 1, groups: 0 },
+			],
+			results: 2,
+			groups: 1,
+		},
+	]);
+	expect(view.unattached).toEqual([]);
 });

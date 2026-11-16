@@ -451,7 +451,13 @@ the palette ranks with — kept here so host-side search can rank with the same 
   (**`WorkspaceArtifact`**: worktree-relative `path`, `state: "live" | "deleted"` — deleted means gone from
   disk but restorable from the host's kept copy — `size`, `changedAt` (for a deleted row, when the host saw
   it gone, so a new deletion of the same path carries a new value), `firstSeenAt`, the writing chat's
-  optional `sessionId`) and `outputs` (**`WorkspaceIgnoredOutput`** rows — an ignored file or folder an
+  optional `sessionId`, and from **`ARTIFACT_ROLES_PROTOCOL_VERSION`** (v124) the host's **`role`**
+  (`ArtifactRole`: `"result" | "working"`), its **`reason`** (`ArtifactRoleReason`: `picked`, `shown`,
+  `linked`, `document` for a result; `working-folder`, `script`, `data`, `unshown` for a working file)
+  and **`rounds`** (`ArtifactRound[]`: the chat rounds, `{ sessionId, startedAt }`, that created or
+  changed it, oldest first and bounded; `startedAt` is the round's prompt timestamp, or the run start for a
+  run no prompt opened) — absent from an older host, so a client that needs them checks the
+  version rather than reading absence as "working") and `outputs` (**`WorkspaceIgnoredOutput`** rows — an ignored file or folder an
   agent run produced, with its live `files` count and `filesTruncated` — or `null` where there is no git),
   `artifacts.restore` / `artifacts.discard` (`{ workspaceId, path }` → ack; a deleted row only, otherwise
   `ARTIFACT_UNKNOWN`; restore refuses a path that exists again with `ENTRY_EXISTS`; discard sends the kept
@@ -1210,7 +1216,10 @@ plain-text diagnostic excerpt and truncation flag, and the same optional `delive
 subagent completion (`wake` | `run` | `appended` — how the result reached the agent; absent in
 transcripts written before it, which keep the old round rules). The guards do not validate it; the
 shared `completionDelivery(details)` reader returns the marker or `undefined`, so an unknown value
-reads as absent everywhere. The conversation may render that historical notice,
+reads as absent everywhere. **`opensChatRound(message)`** is the message-level twin of the chat's
+turn-level `opensRound` ([[submodule-web-chat]]): a user prompt other than a control message, a
+`todo-review-fix`, a continuation request, a handoff, or a completion not delivered as `run`. The host
+uses it to cut artifact round markers where the chat cuts rounds; a web test pins the two together. The conversation may render that historical notice,
 but must never infer current resource authority from it; logs and controls still use scoped reads.
 
 Every read/control validates workspace membership and parent lineage, not merely a syntactically

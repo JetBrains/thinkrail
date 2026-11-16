@@ -1,5 +1,6 @@
-import { RiArrowRightSLine as ChevronRight, RiFolderLine } from "@remixicon/react";
-import { useT } from "@thinkrail/locales/react";
+import { RiArrowRightSLine as ChevronRight, RiFolderLine, RiStarFill } from "@remixicon/react";
+import type { ArtifactRoleReason } from "@thinkrail/contracts";
+import { type Translator, useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
 import { fileName, firstClickOnly } from "../lib";
@@ -23,7 +24,33 @@ import { TreeRow } from "./TreeRow";
 import { treeRowControlProps } from "./treeNavigation";
 import { useInlineRename } from "./workspaceActions";
 
-interface TreeRowContext {
+function PickedBadge() {
+	const t = useT();
+	return (
+		<span
+			data-testid="artifact-picked"
+			className="flex shrink-0 items-center gap-2 rounded-sm bg-primary-soft px-4 text-primary"
+		>
+			<RiStarFill className="size-12" />
+			{t("panels.artifacts.picked")}
+		</span>
+	);
+}
+
+function reasonLabel(t: Translator, reason: ArtifactRoleReason): string {
+	switch (reason) {
+		case "picked":
+			return t("panels.artifacts.reason.picked");
+		case "shown":
+			return t("panels.artifacts.reason.shown");
+		case "linked":
+			return t("panels.artifacts.reason.linked");
+		default:
+			return t("panels.artifacts.reason.document");
+	}
+}
+
+export interface TreeRowContext {
 	workspaceId: string;
 	expanded: ReadonlySet<string>;
 	activePath: string | null;
@@ -40,15 +67,20 @@ export function ArtifactTreeRows({
 		node.kind === "dir" ? (
 			<FolderRow key={`${node.path}/`} node={node} level={level} {...context} />
 		) : (
-			<FileRow key={node.path} node={node} level={level} {...context} />
+			<ArtifactFileRow key={node.path} node={node} level={level} {...context} />
 		),
 	);
 }
 
-function rowClass(selected: boolean) {
+export function rowClass(selected: boolean, accent = false) {
 	return cn(
 		"flex min-w-0 items-center rounded-sm",
-		selected ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered",
+		accent && "border-primary border-l-2",
+		selected
+			? "bg-control-bg-selected"
+			: accent
+				? "bg-primary-subtle hover:bg-control-bg-hovered"
+				: "hover:bg-control-bg-hovered",
 	);
 }
 
@@ -171,19 +203,26 @@ function FolderRow({
 	);
 }
 
-function FileRow({
+export function ArtifactFileRow({
 	node,
 	level,
 	workspaceId,
 	activePath,
 	showChat,
 	onRemove,
-}: TreeRowContext & { node: ArtifactTreeFile; level: number }) {
+	smart = false,
+}: TreeRowContext & { node: ArtifactTreeFile; level: number; smart?: boolean }) {
 	const t = useT();
 	const { row } = node;
 	const { artifact, taskSpecStatus, fresh } = row;
 	const deleted = artifact.state === "deleted";
 	const active = activePath === artifact.path;
+	const picked = smart && artifact.reason === "picked";
+	const time = artifactTimeLabel(t, artifact.changedAt);
+	const title =
+		smart && artifact.role === "result" && artifact.reason
+			? t("panels.artifacts.reasonTitle", { reason: reasonLabel(t, artifact.reason), time })
+			: time;
 	const { editing, nameRef, start, inputProps, onMenuCloseAutoFocus } = useInlineRename({
 		target: { id: artifact.path, name: node.name },
 		canRename: !deleted,
@@ -214,8 +253,9 @@ function FileRow({
 				{(menuOpen, onRowKeyDown) => (
 					<div
 						role="none"
-						title={artifactTimeLabel(t, artifact.changedAt)}
-						className={rowClass(active || menuOpen)}
+						title={title}
+						data-picked={picked || undefined}
+						className={rowClass(active || menuOpen, picked)}
 					>
 						{editing ? (
 							<RenameField
@@ -249,8 +289,9 @@ function FileRow({
 								onDoubleClick={() => open("keep")}
 								onKeyDown={onRowKeyDown}
 								trailing={
-									taskSpecStatus || fresh ? (
+									taskSpecStatus || fresh || picked ? (
 										<span className="flex shrink-0 items-center gap-8 pr-4 tr-text-metadata">
+											{picked ? <PickedBadge /> : null}
 											{taskSpecStatus ? (
 												<span data-testid="artifact-task-status" className="text-text-subtle">
 													{taskSpecStatus}

@@ -740,7 +740,8 @@ a project picker, the prompt hero, and the reused
   create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — a
   **store-driven two-pane shell**: one nav list, rendered once, beside a scrollable content pane. At `md`+
   the list is a rail grouped **Agent** (Models, Providers, MCP servers, Prompt templates, Environment) ·
-  **Interface** (Chat, Appearance, Language, Layout, Terminal) · **System** (Workspaces, Integrations, Extensions,
+  **Interface** (Chat, Appearance, Language, Layout, Terminal, Artifacts — the per-client Smart view switch, from
+  host v124) · **System** (Workspaces, Integrations, Extensions,
   Notifications, Privacy, Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
   and it is the home for further integrations. Below `md` the same list is a horizontal scrolling strip without group labels. The
   Feedback card (`settings-nav-feedback`, “Share feedback”) belongs to that list at
@@ -2276,13 +2277,15 @@ own section. The kebab menu (`plan-menu`, a
   tick per agent edit would re-list for nothing). The panel is two sections: **Artifacts**
   (files under `.thinkrail/context/`) and **Other agent files · ignored** (one row per ignored output,
   newest first, a folder lazily expandable through `fs.readDir`, with its file count), hidden by the
-  header's eye toggle. Artifacts shows as a **List** or a **Tree** (`List | Tree` segments on the toolbar's
-  right; `artifactsView`, default List, remembered per client across workspaces). The toolbar
-  (`ArtifactsToolbar`, which takes the views it offers) stays one row at any sidebar width: when its content
-  overflows it folds the secondary actions (Collapse all, the ignored toggle, Paste) into a **More** menu,
-  then the view segments too, and unfolds once the width it needed is back (measured with a
-  `ResizeObserver`, refolded from scratch when the set of actions changes) — a fixed breakpoint cannot,
-  because the actions come and go. List answers *what is
+  header's eye toggle. Artifacts shows as a **List**, a **Tree** or **Smart** (`List | Tree | Smart` segments
+  on the toolbar's right; `selectArtifactsView` resolves the per-client `artifactsView`: the user's explicit
+  choice, else Smart while the Settings switch `artifactsSmart` (on by default) is on and the host serves
+  roles (v124), else List; Smart is never offered otherwise). The toolbar (`ArtifactsToolbar`, which takes
+  the views it offers) stays one row at any sidebar width: when its content overflows it folds the
+  secondary actions (Collapse all, the ignored toggle, Paste) into a **More** menu, then the view segments
+  too, and unfolds once the width it needed is back (measured with a `ResizeObserver`, refolded from
+  scratch when the set of actions changes) — a fixed breakpoint cannot, because the actions come and go.
+  List answers *what is
   new*: newest first, a two-line row — the name, then the folder inside the artifacts folder — or
   `Task spec · <status>` joined from the spec snapshot by path — and a chip naming the writing chat that
   opens it; no relative age, since the order already says what is newest. Tree answers *where is it*: it
@@ -2301,7 +2304,16 @@ own section. The kebab menu (`plan-menu`, a
   that reshapes the chain keeps it open. Collapse all shows while a shown top-level folder is open. The
   exact change time is a file row's hover title in both views, and the file open in the center
   (`selectActiveFilePath`) is highlighted in both. A List row the host marks `deleted` reads "Deleted, not
-  by you" with Restore. Opening it — a click or a double click on its
+  by you" with Restore. **Smart** answers *what did the agent make for me*: `artifactsModel.smartGroups`
+  arranges the host's roles ([[submodule-server-artifacts]]) — results grouped by their folder, nested under
+  the nearest folder that holds results itself (sibling groups with no common result folder share one
+  for their top folder), collapsed and newest first, each group row reading "N results · M groups"; a
+  working file folds under the nearest group as one soft-primary **"N working files"** chip (the chat
+  divider's chip, a tree toggle) that expands a Tree of them relative to the group, and working files of no
+  group sit under one chip at the bottom. A result row is the Tree's file row (`ArtifactFileRow`) whose
+  hover title says why it counts (picked, shown in the chat, linked in the reply, a document) and whose
+  user's pick carries a ★ picked badge and an accent stripe. Grouping lives on the web because it depends
+  on the This-chat filter; the role does not, so the host owns it. Opening it — a click or a double click on its
   name — restores it silently first (`artifactActions.openArtifact`): opening a file asks for its contents, so
   the restore is implied. The click's center navigation is stamped before the restore, as any async open
   stamps it at request time, so a click elsewhere while the restore runs keeps its tab. A row's restore (`restoreDeletedArtifact`, kept per workspace and path for the page's

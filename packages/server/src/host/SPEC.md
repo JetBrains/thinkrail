@@ -877,8 +877,15 @@ channel fan-out, and the process-boot wrapper both launchers share.
 **Artifacts wiring** ([[submodule-server-artifacts]]): the `workspace.fsChanged` publisher hands every
 batch to `noteArtifactPathsChanged` (it reconciles when the batch is truncated or touches
 `.thinkrail/context`, and recounts a recorded ignored output the batch reaches);
-the session-event tee maps `agent_start`, `agent_settled`, `tool_execution_start` (tool call id, name and
-args) and `tool_execution_end` (call id and name) into `observeArtifactSessionEvent`, and an `agent_start` also
+the session-event tee maps pi events through `createArtifactEventMapper` (`host/artifactEvents.ts`) into
+`observeArtifactSessionEvent`: `agent_start`, `agent_settled`, `tool_execution_start` (call id, name and
+args), every assistant `message_end` as `assistant_message` (its text, empty for a tool-call-only turn),
+every `message_end` that `opensChatRound` (contracts) says opens a chat round as `round_start` (its
+timestamp: queued and steered ones included),
+and `tool_execution_end` with the `presented` / `picked` paths that the enabled extensions'
+`artifactTools` declarations ([[submodule-server-extensions]]) read from the call's args and result
+`details` — only for a successful call, a throwing declaration logged and skipped; a call's args are
+held per session and call id, since providers may reuse ids across chats — so the host names no tool; an `agent_start` also
 `ensureWatch`es the workspace in watch's bounded **prewarm** tier, so a working agent nobody looks at is
 watched without promoting its watcher for the host's lifetime (on Linux each watched worktree costs one
 inotify watch per folder; background runs in big repositories would otherwise exhaust

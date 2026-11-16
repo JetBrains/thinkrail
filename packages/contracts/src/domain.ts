@@ -334,6 +334,23 @@ export type FileKind = "file" | "dir";
 
 export type WorkspaceArtifactState = "live" | "deleted";
 
+export type ArtifactRole = "result" | "working";
+
+export type ArtifactRoleReason =
+	| "picked"
+	| "shown"
+	| "linked"
+	| "document"
+	| "working-folder"
+	| "script"
+	| "data"
+	| "unshown";
+
+export interface ArtifactRound {
+	sessionId: string;
+	startedAt: number;
+}
+
 export interface WorkspaceArtifact {
 	path: string;
 	state: WorkspaceArtifactState;
@@ -341,6 +358,9 @@ export interface WorkspaceArtifact {
 	changedAt: number;
 	firstSeenAt: number;
 	sessionId?: string;
+	role?: ArtifactRole;
+	reason?: ArtifactRoleReason;
+	rounds?: ArtifactRound[];
 }
 
 export interface WorkspaceIgnoredOutput {

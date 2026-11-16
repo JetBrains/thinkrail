@@ -33,7 +33,13 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
   - `interactiveTools: { ask_user_question: { describeResponse } }` — `describeResponse(args, response)`
     renders a late answer (one delivered after a host restart) through the package's
     `buildQuestionnaireResponse` when both have our shape, so the model reads the same wording as for a
-    live answer; any other shape returns `undefined` and the host's generic JSON preface applies.
+    live answer; any other shape returns `undefined` and the host's generic JSON preface applies;
+  - `artifactTools: { ask_user_question: { presented, picked } }` — `presented` lists every
+    `previewFile`/`previewBefore` the call showed (`previewFileSources`), `picked` the `previewFile` of
+    each answer in the result's `details.answers` — for a multi-select answer, of each selected label's
+    option in the call's args — so the host's artifact index knows which mockups the
+    person saw and which they chose ([[submodule-server-artifacts]]). A deferred call's `{ kind: "ack" }`
+    names no pick, and a late answer after a restart is not read (deferred).
 
   `announce` forwards each executable call to `session.expectToolResponse(toolCallId)`, so the host's
   question lifecycle starts only for calls this extension runs. The asker awaits `session.awaitToolResponse(toolCallId, signal)`. A `response` must be a questionnaire
