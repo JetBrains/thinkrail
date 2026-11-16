@@ -113,6 +113,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `InstalledFontsResult`, served by `fonts.list` /
   `fonts.installed` from `FONTS_PROTOCOL_VERSION`, v102, with `USER_FONTS_ROUTE`, `USER_FONT_UPLOAD_HEADER` and
   `USER_FONT_EXTENSIONS` naming the host's `/fonts/` route and its upload guard,
+  **`WORKSPACE_VIEW_ROUTE`** (`/view/`) naming the host's browser view of a workspace file, served from
+  **`BROWSER_VIEW_PROTOCOL_VERSION`** (v122; the UI offers "Open in browser" only from it, and the desktop
+  routes same-origin URLs under it to the OS),
   `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
   `parsePiPackageInput` (§ pi packages),
   **`isValidTemplateName(name)`** (the one prompt-template name rule — the host's traversal gate in

@@ -15,6 +15,7 @@ import { type ReactNode, useMemo } from "react";
 import { Markdown } from "../chat/Markdown";
 import { cssColorToHex, usePhoneViewport } from "../lib";
 import { CODE_LANGUAGES, codeLanguageId } from "../lib/codeLanguages";
+import { OpenInBrowserButton } from "../panels/OpenInBrowserButton";
 import { openFileComparisonInTab, openFileInTab } from "../panels/openTabs";
 import { resourceBytesUrl } from "../panels/resourcePane";
 import { SendReviewButton } from "../panels/SendReviewButton";
@@ -66,6 +67,7 @@ const HOST: ResourceHost = {
 		}),
 	FileReview,
 	ReviewSend,
+	OpenInBrowser: OpenInBrowserButton,
 };
 
 function cappedBytesUrl(workspaceId: string, path: string, oid?: string | null): string {

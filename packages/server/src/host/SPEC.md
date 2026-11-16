@@ -55,7 +55,20 @@ channel fan-out, and the process-boot wrapper both launchers share.
   else stores the body through `saveUserFont` and answers that file's entry as JSON: 200, 413 `too-large`
   (checked against `Content-Length` before reading and again while streaming), 409 `too-many`, 422
   `unsupported-collection`/`invalid-font`, or 500 `unreadable`; any other method is 405 with
-  `Allow: GET, PUT`, the `fonts` poller's `fonts.changed` nudge reaching
+  `Allow: GET, PUT`, the **`GET /view/<workspace>/<path>`** route (`WORKSPACE_VIEW_ROUTE`, `serveWorktreeView`,
+  GET/HEAD only, else 405) — a workspace file for a *browser tab* ("Open in browser"): the same worktree
+  resolution as `/files/`, `no-store`, `nosniff`, a web type table for what a page loads (`.css`, `.js`/`.mjs`,
+  `.json`, images, fonts, media; text types with `charset=utf-8`), and for HTML/XHTML/SVG `viewPolicy(base)`:
+  `sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox; default-src 'none'`, script, style, image,
+  font, media, frame and base sources limited to `base` — the request origin plus `/view/<workspace>/`, so a
+  page loads only its own workspace's files — and `connect-src 'none'; worker-src 'none'; object-src 'none';
+  form-action 'none'`. The page's scripts run (it is the user's own file, opened on purpose), but in an
+  opaque origin that touches nothing of the app, and with no fetch or WebSocket they cannot reach the
+  host's unauthenticated wire (Decision 7). Never add CORS headers to it: they would let any website read
+  workspace files — any site can make an opaque-origin document, so even `Access-Control-Allow-Origin: null`
+  would. Known limitation that follows: what browsers fetch in CORS mode from the page's opaque origin — a
+  module script by `src` and `@font-face` files — does not load (classic scripts, inline modules,
+  stylesheets, images and `data:` fonts do); lifting it needs an isolated preview origin, not CORS, the `fonts` poller's `fonts.changed` nudge reaching
   only sockets whose `?protocol=` is at least `FONTS_PROTOCOL_VERSION`; the **`/speech` socket**
   (`SPEECH_SOCKET_ROUTE`, refused below `SPEECH_PROTOCOL_VERSION`), which shares the one `Bun.serve`
   websocket handler but is tagged at upgrade. Its `open` / `message` / `close` go straight to that

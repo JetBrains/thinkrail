@@ -2,6 +2,7 @@ import {
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	ARTIFACTS_PROTOCOL_VERSION,
 	type BackgroundCommandSummary,
+	BROWSER_VIEW_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	CHATS_PROTOCOL_VERSION,
 	canMarkCompletionUnread,
@@ -1308,6 +1309,10 @@ export function selectCompactionTurnIds(
 			.filter((turn) => turn.kind === "compaction")
 			.map((turn) => turn.id),
 	);
+}
+
+export function supportsBrowserView(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= BROWSER_VIEW_PROTOCOL_VERSION;
 }
 
 export function supportsArtifacts(protocolVersion: number | null): boolean {

@@ -232,7 +232,7 @@ function PreviewToolbar({
 	layout?: { value: RendererLayout; onChange: (layout: RendererLayout) => void } | undefined;
 }) {
 	const t = useT();
-	const { ReviewSend } = useResourceHost();
+	const { ReviewSend, OpenInBrowser } = useResourceHost();
 	const { compact } = useResourceEnvironment();
 	if (compact && props.leading === undefined && props.actions === undefined) return null;
 	return (
@@ -254,6 +254,9 @@ function PreviewToolbar({
 					/>
 				</>
 			)}
+			{OpenInBrowser && props.before === undefined ? (
+				<OpenInBrowser workspaceId={props.workspaceId} path={props.path} />
+			) : null}
 			{props.actions}
 		</div>
 	);

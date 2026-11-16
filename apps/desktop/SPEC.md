@@ -341,7 +341,8 @@ The native window permits navigation only within its exact loopback origin. User
 open through the OS exactly once instead of replacing the app surface. Native navigation rules enforce
 confinement: navigation-event responses cannot cancel it. The launcher applies them with
 `webview.setNavigationRules` right after creating the window: block everything, then allow the origin,
-`about:srcdoc`, and same-origin `blob:`. HTML, SVG and notebook previews update `srcDoc` in place and
+`about:srcdoc`, and same-origin `blob:`, then block the origin's `WORKSPACE_VIEW_ROUTE` (`/view/`) again
+(last match wins). HTML, SVG and notebook previews update `srcDoc` in place and
 every srcdoc load is policy-checked, so blocking `about:srcdoc` blanks them; `blob:` keeps downloads
 working. Electrobun 2.0.5 documents a `navigationRules` constructor option but never forwards it to
 native code, so the launcher does not use it.
@@ -355,7 +356,10 @@ WebView2 report nothing for `_blank` or `window.open`, because Electrobun handle
 `NEW_WINDOW_ACTION` nor `NewWindowRequested` (the WebView2 half is
 [electrobun#569](https://github.com/blackboardsh/electrobun/issues/569)). Cmd/Ctrl-click keeps
 Electrobun's own preload path, which emits `new-window-open`. Clicks the page already handled, `download`
-links, same-origin URLs, and schemes outside the allowlist below stay with the page. Both gaps' removal
+links, same-origin URLs, and schemes outside the allowlist below stay with the page — except a same-origin
+`/view/` URL, the host's browser view of a workspace file ("Open in browser"): it is external by intent,
+so the preload routes it like an outside link, the trailing block rule cancels it, and the OS opens it. The
+URL carries this launch's port, so one kept after a restart no longer resolves. Both gaps' removal
 gates live in [[electrobun-compatibility]]. On Windows a cancelled navigation may still send its GET request (WebView2's documented behaviour); the
 window stays on its page and never commits the URL. Post-mortem: before the rules were applied explicitly,
 every navigation was allowed. A non-`_blank`
