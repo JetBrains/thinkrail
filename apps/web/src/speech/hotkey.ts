@@ -53,6 +53,47 @@ export interface ChordHandlers {
 	dictating: () => HTMLElement | null;
 }
 
+export function stopsDictation(
+	event: Pick<
+		KeyboardEvent,
+		| "key"
+		| "altKey"
+		| "ctrlKey"
+		| "metaKey"
+		| "shiftKey"
+		| "isComposing"
+		| "keyCode"
+		| "defaultPrevented"
+	>,
+	dictating: { contains(node: Node | null): boolean } | null,
+	target: Node | null,
+): boolean {
+	return (
+		event.key === "Escape" &&
+		!event.altKey &&
+		!event.ctrlKey &&
+		!event.metaKey &&
+		!event.shiftKey &&
+		!event.defaultPrevented &&
+		!isImeComposing(event) &&
+		dictating?.contains(target) === true
+	);
+}
+
+export function installDictationEscape(
+	dictating: () => HTMLElement | null,
+	stop: () => void,
+): () => void {
+	const onKeyDown = (event: KeyboardEvent) => {
+		const target = event.composedPath()[0];
+		if (!stopsDictation(event, dictating(), target instanceof Node ? target : null)) return;
+		event.preventDefault();
+		stop();
+	};
+	document.addEventListener("keydown", onKeyDown);
+	return () => document.removeEventListener("keydown", onKeyDown);
+}
+
 /** ⌘⇧Space / Ctrl+Shift+Space: a tap toggles, holding past `HOLD_MS` is push-to-talk. */
 export function installDictationChord(handlers: ChordHandlers): () => void {
 	let held: number | null = null;

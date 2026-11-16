@@ -476,7 +476,9 @@ tracker, is one window `keydown` listener in the **bubble** phase. It acts only 
 `DismissableLayer` (dialogs, menus, popovers, the Resources inspector) prevents before it dismisses from its
 document-capture listener; the composer's mention / slash menus and slot session, tree search, the inline
 renames, the palette, Find in Files, the history overlay, the review composer and draft card, the ask
-card's note, Other and Discuss fields, and the plan page's Add task field prevent in their own handlers. A
+card's note, Other and Discuss fields, the plan page's Add task field, and a running dictation (the first Esc
+stops it, from a `document` bubble listener that always precedes this `window` one; [[submodule-web-speech]])
+prevent in their own handlers. A
 new owner of Esc must call `preventDefault` too.
 
 **Landing** is markup, like focus recovery: inside the field's region (`[data-region]`), the first

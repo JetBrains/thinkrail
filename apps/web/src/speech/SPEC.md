@@ -147,13 +147,13 @@ extension had to adopt and wire up. It was replaced so voice is a property of th
     (a `MutationObserver` while dictating), because only Chromium fires a blur when a focused element is
     removed; in WebKit (the macOS app) and Firefox, closing a dialog mid-dictation left the microphone
     live.
-  - **Esc is not a dictation key** (user decision). It keeps whatever meaning the page gives it:
-    Escape in a dialog closes the dialog, whose field blur then ends the dictation and drops its draft
-    with it, exactly as for typed text; in a field outside a dialog it leaves the field
-    ([[submodule-web-shell]], *Esc leaves a text field*), and that blur ends the dictation like a click
-    elsewhere, the text kept. An earlier version stopped dictation on Esc. A dialog's
-    dismiss runs first, so making Esc stop dictation without closing the dialog would have needed a
-    second window capture owner of Escape.
+  - **The first Esc stops a dictation, the next leaves the field** (user decision, 2026-11-16; it
+    replaces "Esc is not a dictation key"). `installDictationEscape` listens on `document` in the bubble
+    phase: after the field's own handlers and Radix's capture-phase dismiss (so Esc in a dialog still
+    closes the dialog, whose blur ends the dictation and drops its draft), and always before the shell's
+    window listener that leaves the field ([[submodule-web-shell]], *Esc leaves a text field*), whatever
+    the registration order. A bare Esc whose target is inside the dictating field stops the dictation,
+    keeps the text and focus, and is `preventDefault`ed; the next Esc leaves the field.
   - When the controller goes idle or changes owner, the field is unlocked and the end is announced.
   - Owners are per element (`WeakMap`), so starting another field ends the first.
 - **Chord.** ⌘⇧Space on Apple, Ctrl+Shift+Space elsewhere, through one pair of window capture listeners.

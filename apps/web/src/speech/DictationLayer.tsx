@@ -19,7 +19,7 @@ import { micAvailability } from "./capture";
 import { dictatingElement, startDictation, stopDictation, useDictatingElement } from "./control";
 import { useDictationSnapshot } from "./dictation";
 import { dictationFieldOf } from "./field";
-import { dictationShortcutLabel, installDictationChord } from "./hotkey";
+import { dictationShortcutLabel, installDictationChord, installDictationEscape } from "./hotkey";
 import { BLOCKED_LABEL, speechErrorKey, UNAVAILABLE_LABEL } from "./labels";
 import { type MicState, micState } from "./micState";
 import type { DictationError } from "./session";
@@ -242,6 +242,8 @@ function ActiveDictationLayer() {
 			}),
 		[],
 	);
+
+	useEffect(() => installDictationEscape(dictatingElement, stopDictation), []);
 
 	const error = snapshot.error;
 	useEffect(() => {
