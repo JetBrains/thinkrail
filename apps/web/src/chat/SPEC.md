@@ -332,7 +332,15 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   for Changes, are no longer in the diff at all). It also keeps the count honest: clicking "5 files changed"
   can never quietly surface just the first one, and the handlers take exactly ONE path, so nothing
   downstream has to guess which of several the user meant.
-- The two chips are a **switch, not two independent folds**: at most one list is open, choosing the other
+- A third chip, **“N artifacts”**, lists what the round left in the artifacts folder — which the git receipt
+  below cannot see, the folder being ignored. `ChatTranscript` hands `deriveRows` this chat's
+  `sessionRoundArtifacts`: the live artifacts whose host **run markers** ([[submodule-server-artifacts]]) include
+  one of this chat's runs, results only while the Smart view is on and the host is v124+, every artifact
+  file otherwise. A round keeps those whose run started in its window — the same opener-to-next-opener
+  rule as the receipts below — so a later round that touches a file again lists it too without taking it
+  from the earlier one. Rows are named by their path inside the artifacts folder; the chip reveals the
+  Artifacts tool and opens a file through the transcript's `onOpenFile`.
+- The chips are a **switch, not independent folds**: at most one list is open, choosing another
   side replaces it, and re-choosing the open one clears the selection. That invariant is *structural* — the
   divider stores the **selected key** (`useSelection`, one entry per divider row), so no state exists in
   which both are expanded. Expanding also **reveals the owning singleton side tool** (`onReveal` → the
