@@ -738,7 +738,9 @@ re-opened transcripts provider-valid.
   - `artifactsGuard` — keeps the agent's output in the workspace for the Artifacts tool
     ([[submodule-server-artifacts]]): a `before_agent_start` system-prompt section (`thinkrail-artifacts`)
     telling the agent to put every non-code output it produces under `.thinkrail/context/` and never to
-    delete or move files out of it, plus a `tool_call` hook that blocks a `write` that would **create a new
+    delete or move files out of it, and asking softly that it link each result in its final message and
+    keep scratch work in a `_`-prefixed folder such as `_work/` (both feed the artifact roles: a linked
+    path is a result, a `_` folder holds working files), plus a `tool_call` hook that blocks a `write` that would **create a new
     file** in a temporary folder (`/tmp`, `/var/tmp`, `os.tmpdir()`, `$TMPDIR`/`$TEMP`/`$TMP`, real paths
     included) outside the session's own folder, with a reason naming the `.thinkrail/context/` path to use.
     `edit`, and a `write` over a file that already exists there, go through: refusing them turned a user's
