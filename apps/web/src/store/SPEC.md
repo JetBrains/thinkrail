@@ -825,7 +825,8 @@ host's `artifacts.list` snapshot), **`artifactsTickByWorkspace`** (`noteArtifact
 **`artifactsTreeExpandedByWorkspace`** (`setArtifactsTreeExpanded(workspaceId, paths, expanded)`,
 `collapseAllArtifacts`; the Tree view's open folders), all dropped in `applyWorkspaceRemoved`, plus the
 app-wide **`artifactsShowIgnored`** toggle and **`artifactsView`** (`setArtifactsView`, `"list" | "tree"`);
-all of them hydrate from per-client preferences (`hydrateArtifactsPreferences`).
+the seen watermarks, the open folders, the toggle and the view hydrate from per-client preferences
+(`hydrateArtifactsPreferences`).
 **`pasteIntoComposer(sessionId, text)`** (Artifacts' Mention in chat) applies the same composer edit an
 extension's `pasteToEditor` request does, so both paste at the caret the same way.
 **`selectActiveFilePath`** is the path of the active file or diff tab, else `null`.

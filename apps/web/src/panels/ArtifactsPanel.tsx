@@ -101,10 +101,14 @@ export function ArtifactsPanel({
 		[snapshot, sessionId, highlightSince, showIgnored, specs],
 	);
 	const tree = useMemo(
-		() => (view === "tree" && snapshot && rows ? artifactTree(snapshot.dir, rows.artifacts) : null),
+		() =>
+			view === "tree" && snapshot && rows
+				? artifactTree(snapshot.dir, rows.artifacts, snapshot.artifacts)
+				: null,
 		[view, snapshot, rows],
 	);
 	const expanded = useMemo(() => new Set(expandedPaths), [expandedPaths]);
+	const canCollapse = tree?.some((node) => node.kind === "dir" && expanded.has(node.path)) ?? false;
 	const requestRemoval: RequestRemoval = (path, kept) => setRemoval({ path, kept, open: true });
 	const openKept = (path: string) => void openFileInTab(workspaceId, path, "keep");
 	const openArtifactKept = (path: string) => {
@@ -153,7 +157,7 @@ export function ArtifactsPanel({
 						active={view === "tree"}
 						onClick={() => useAppStore.getState().setArtifactsView("tree")}
 					/>
-					{view === "tree" && expanded.size > 0 ? (
+					{canCollapse ? (
 						<HeaderIconButton
 							testid="artifacts-collapse-all"
 							label={t("panels.artifacts.collapseAll")}

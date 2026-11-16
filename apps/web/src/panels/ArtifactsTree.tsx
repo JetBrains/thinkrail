@@ -38,7 +38,7 @@ export function ArtifactTreeRows({
 }: TreeRowContext & { nodes: readonly ArtifactTreeNode[]; level?: number }) {
 	return nodes.map((node) =>
 		node.kind === "dir" ? (
-			<FolderRow key={node.path} node={node} level={level} {...context} />
+			<FolderRow key={`${node.path}/`} node={node} level={level} {...context} />
 		) : (
 			<FileRow key={node.path} node={node} level={level} {...context} />
 		),
@@ -96,7 +96,7 @@ function FolderRow({
 			role="none"
 			data-testid="artifact-folder"
 			data-path={node.path}
-			data-focus-row={node.path}
+			data-focus-row={`${node.path}/`}
 			data-deleted={node.deleted || undefined}
 		>
 			<ArtifactEntryMenu
@@ -128,7 +128,7 @@ function FolderRow({
 						) : (
 							<TreeRow
 								testid="artifact-folder-row"
-								treeId={node.path}
+								treeId={`${node.path}/`}
 								level={level}
 								path={node.path}
 								kind="dir"

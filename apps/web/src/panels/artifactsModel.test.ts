@@ -174,7 +174,7 @@ function treeOf(
 		outputs: null,
 	};
 	const rows = artifactRows(tree, { sessionId, highlightSince: 5, showIgnored: false, specs: [] });
-	return artifactTree(tree.dir, rows.artifacts);
+	return artifactTree(tree.dir, rows.artifacts, tree.artifacts);
 }
 
 function outline(nodes: readonly ArtifactTreeNode[]): unknown[] {
@@ -256,6 +256,18 @@ test("the chat filter reshapes the tree to that chat's folders", () => {
 		},
 	]);
 	expect(outline(treeOf(paths, "s1"))).toEqual([{ "mockups/features": ["a.png"], files: 1 }]);
+});
+
+test("a folder reads as deleted only when nothing in it lives, whichever chat wrote it", () => {
+	const paths = [
+		["reports/r1.md", { deleted: true, sessionId: "s1" }],
+		["reports/r2.md", { sessionId: "s2" }],
+		["old/a.md", { deleted: true, sessionId: "s1" }],
+	] as const;
+	expect(outline(treeOf(paths, "s1"))).toEqual([
+		{ old: ["a.md"], files: 1, deleted: true },
+		{ reports: ["r1.md"], files: 1 },
+	]);
 });
 
 test("a mention is the composer's own @path form", () => {

@@ -169,7 +169,7 @@ export function ArtifactEntryMenu({
 					</>
 				)}
 				{sessionId ? <OpenChatItem workspaceId={workspaceId} sessionId={sessionId} /> : null}
-				<ContextMenuSeparator />
+				{!deleted || onRestore || sessionId ? <ContextMenuSeparator /> : null}
 				<ContextMenuItem data-testid="artifact-copy-path" onSelect={() => copyPath(true)}>
 					<Copy />
 					{t("panels.fileTree.copyPath")}

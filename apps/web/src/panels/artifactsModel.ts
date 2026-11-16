@@ -5,6 +5,7 @@ import type {
 	WorkspaceIgnoredOutput,
 } from "@thinkrail/contracts";
 import { localeOf, type Translator } from "@thinkrail/locales/react";
+import { ancestorPaths } from "../lib";
 import { extendFolderChain, startFolderChain } from "./folderChains";
 
 export interface ArtifactRow {
@@ -100,7 +101,21 @@ interface FolderBuild {
 
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
 
-export function artifactTree(dir: string, rows: readonly ArtifactRow[]): ArtifactTreeNode[] {
+function liveFolders(artifacts: readonly WorkspaceArtifact[]): Set<string> {
+	const folders = new Set<string>();
+	for (const artifact of artifacts) {
+		if (artifact.state !== "deleted")
+			for (const folder of ancestorPaths(artifact.path)) folders.add(folder);
+	}
+	return folders;
+}
+
+export function artifactTree(
+	dir: string,
+	rows: readonly ArtifactRow[],
+	artifacts: readonly WorkspaceArtifact[],
+): ArtifactTreeNode[] {
+	const live = liveFolders(artifacts);
 	const root: FolderBuild = { dirs: new Map(), files: [] };
 	for (const row of rows) {
 		let build = root;
@@ -129,16 +144,13 @@ export function artifactTree(dir: string, rows: readonly ArtifactRow[]): Artifac
 			}
 			let files = 0;
 			let fresh = false;
-			let live = false;
 			for (const node of children) {
 				if (node.kind === "dir") {
 					files += node.files;
 					fresh ||= node.fresh;
-					live ||= !node.deleted;
 				} else {
 					files += 1;
 					fresh ||= node.row.fresh;
-					live ||= node.row.artifact.state !== "deleted";
 				}
 			}
 			return {
@@ -149,7 +161,7 @@ export function artifactTree(dir: string, rows: readonly ArtifactRow[]): Artifac
 				children,
 				files,
 				fresh,
-				deleted: !live,
+				deleted: !live.has(chain.path),
 			};
 		});
 		return [...folders.sort(byName), ...build.files.sort(byName)];

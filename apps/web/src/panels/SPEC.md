@@ -2283,16 +2283,20 @@ own section. The kebab menu (`plan-menu`, a
   opens it; no relative age, since the order already says what is newest. Tree answers *where is it*: it
   is built by `artifactsModel.artifactTree` from the same filtered rows, never from `fs.readDir`, so deleted
   rows, attribution, the new-dot and task-spec status survive (a real artifacts folder reached 1 700
-  records in 114 folders, which the flat list renders as 1 700 two-line rows). Folders come first, A→Z like Files; single-folder chains compact
-  (`folderChains`); a folder shows its file count, the new-dot while collapsed and holding a new file, and,
-  when every file inside is deleted, a struck name reading "Deleted" (no per-folder deleted counts — in
-  real folders nearly every one has some). A file row is one line: type icon, name, task-spec status, the
-  new-dot, Restore when deleted, and the chat chip only under All chats (under This chat every chip would
-  name the same chat). The tree starts collapsed; expansion is kept per workspace
-  (`artifactsTreeExpandedByWorkspace`) and toggling a compacted chain sets every folder in it, so a filter
-  that reshapes the chain keeps it open. Collapse all shows while something is expanded. The exact change
-  time is a file row's hover title in both views, and the file open in the center (`selectActiveFilePath`)
-  is highlighted in both. A row the host marks `deleted` reads "Deleted, not by you" with Restore. Opening it — a click or a double click on its
+  records in 114 folders, which the flat list renders as 1 700 two-line rows). Folders come first, A→Z
+  like Files; single-folder chains compact (`folderChains`); a folder shows its file count, the new-dot while collapsed and holding a new file, and,
+  when no live artifact of any chat remains inside, a struck name reading "Deleted" with a menu of only
+  the Copy paths (liveness comes from the whole snapshot, so This chat never strikes a folder another
+  chat still fills; no per-folder deleted counts — in real folders nearly every one has some). A file
+  row is one line: type icon, name (struck when deleted), task-spec status, the new-dot, Restore — whose
+  hover title is the "Deleted, not by you" phrase — and the chat chip only under All chats (under This
+  chat every chip would name the same chat). A folder's row id is its path plus `/`, since the index
+  keeps deleted rows and a deleted file can share a path with a live folder. The tree starts collapsed;
+  expansion is kept per workspace (`artifactsTreeExpandedByWorkspace`) and toggling a compacted chain sets every folder in it, so a filter
+  that reshapes the chain keeps it open. Collapse all shows while a shown top-level folder is open. The
+  exact change time is a file row's hover title in both views, and the file open in the center
+  (`selectActiveFilePath`) is highlighted in both. A List row the host marks `deleted` reads "Deleted, not
+  by you" with Restore. Opening it — a click or a double click on its
   name — restores it silently first (`artifactActions.openArtifact`): opening a file asks for its contents, so
   the restore is implied. The click's center navigation is stamped before the restore, as any async open
   stamps it at request time, so a click elsewhere while the restore runs keeps its tab. A row's restore (`restoreDeletedArtifact`, kept per workspace and path for the page's
