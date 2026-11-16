@@ -26,8 +26,9 @@ import { webExtensions } from "../extensions";
 import {
 	actsIn,
 	assignChord,
+	type ChordHolder,
 	chordFromEvent,
-	chordHolder,
+	chordHolders,
 	elementKeyUses,
 	globalHolder,
 	type ImportPlan,
@@ -38,7 +39,6 @@ import {
 	type KeybindingList,
 	keybindingsFile,
 	keyChordLabel,
-	localChordHolder,
 	localUses,
 	parseChord,
 	planImport,
@@ -83,8 +83,7 @@ type Pending =
 			readonly row: string;
 			readonly kind: "takenInScope";
 			readonly chord: string;
-			readonly other: string;
-			readonly scope: string;
+			readonly holders: readonly ChordHolder[];
 	  }
 	| {
 			readonly row: string;
@@ -381,7 +380,7 @@ function PendingNotice({
 }: {
 	pending: Pending;
 	list: KeybindingList;
-	onAccept: (chord: string, replace: string | null) => void;
+	onAccept: (chord: string, replace: boolean) => void;
 	onCancel: () => void;
 }) {
 	const t = useT();
@@ -401,18 +400,18 @@ function PendingNotice({
 			variant="outline"
 			size="s"
 			data-testid="keybinding-assign-anyway"
-			onClick={() => onAccept(chord, null)}
+			onClick={() => onAccept(chord, false)}
 		>
 			{t("settings.keyboard.editor.assignAnyway")}
 		</Button>
 	);
-	const replace = (chord: string, other: string) => (
+	const replace = (chord: string) => (
 		<>
 			<Button
 				variant="outline"
 				size="s"
 				data-testid="keybinding-replace"
-				onClick={() => onAccept(chord, other)}
+				onClick={() => onAccept(chord, true)}
 			>
 				{t("settings.keyboard.editor.replace")}
 			</Button>
@@ -440,10 +439,20 @@ function PendingNotice({
 	} else if (pending.kind === "takenInScope") {
 		text = t("settings.keyboard.editor.takenInScope", {
 			chord: chordName(pending.chord, platform),
-			command: holderTitle(t, list, pending.other, pending.scope),
-			inside: scopeText(t, pending.scope, "inside"),
+			holders: listOf(
+				t,
+				pending.holders.map(({ command, scope }) =>
+					scope === null
+						? commandTitle(t, list, command)
+						: t("settings.keyboard.editor.holderInside", {
+								command: holderTitle(t, list, command, scope),
+								inside: scopeText(t, scope, "inside"),
+							}),
+				),
+			),
+			count: pending.holders.length,
 		});
-		action = replace(pending.chord, pending.other);
+		action = replace(pending.chord);
 	} else if (pending.kind === "shadow") {
 		const parsed = parseChord(pending.chord);
 		text = t(
@@ -502,7 +511,7 @@ function PendingNotice({
 				command: commandTitle(t, list, pending.other),
 			},
 		);
-		action = replace(pending.chord, pending.other);
+		action = replace(pending.chord);
 	}
 	const variant =
 		pending.kind === "plain" || pending.kind === "desktop" || pending.kind === "primitive"
@@ -737,7 +746,7 @@ export function KeybindingEditor() {
 		setRecording(null);
 		focusRow(row);
 	};
-	const assignLocal = (entry: KeybindingEntry, chord: string, replace: string | null = null) => {
+	const assignLocal = (entry: KeybindingEntry, chord: string, replace = false) => {
 		const scope = list.keybindings.byId.get(entry.command)?.scope ?? null;
 		const own = scope === null ? [] : actsIn(list.keybindings, scope);
 		const elsewhere = localUses(list.keybindings, chord).flatMap((use) =>
@@ -750,16 +759,8 @@ export function KeybindingEditor() {
 
 	const recordLocal = (entry: KeybindingEntry, chord: string, reserved: boolean) => {
 		const row = entry.id;
-		const holder = localChordHolder(list, entry.command, chord);
-		if (holder?.scope) {
-			return settle({
-				row,
-				kind: "takenInScope",
-				chord,
-				other: holder.command,
-				scope: holder.scope,
-			});
-		}
+		const holders = chordHolders(list, entry.command, chord);
+		if (holders.length > 0) return settle({ row, kind: "takenInScope", chord, holders });
 		const global = globalHolder(list.keybindings, chord);
 		const scope = list.keybindings.byId.get(entry.command)?.scope ?? null;
 		if (global !== null && scope !== null) {
@@ -796,8 +797,10 @@ export function KeybindingEditor() {
 			return settle({ row, kind: "desktop", chord });
 		}
 		if (entry.scope !== null) return recordLocal(entry, chord, reserved);
-		const other = chordHolder(list, command, chord);
-		if (other !== null) return settle({ row, kind: "taken", chord, other, reserved });
+		const [holder] = chordHolders(list, command, chord);
+		if (holder !== undefined) {
+			return settle({ row, kind: "taken", chord, other: holder.command, reserved });
+		}
 		const scopes = localUses(list.keybindings, chord).map((use) => use.scope);
 		const surfaces = entry.plain ? elementKeyUses(event, platform).map((use) => use.surface) : [];
 		if (scopes.length > 0 || surfaces.length > 0) {

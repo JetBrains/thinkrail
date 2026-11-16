@@ -3,12 +3,11 @@ import { REVIEW_SURFACE_COMMANDS } from "@thinkrail/resource-renderers";
 import {
 	APP_LOCAL_COMMANDS,
 	assignChord,
-	chordHolder,
+	chordHolders,
 	type ExtensionCommandSet,
 	type ExtensionShortcutSet,
 	keybindingList,
 	keybindingsFile,
-	localChordHolder,
 	matchLocal,
 	planImport,
 	resetChord,
@@ -57,6 +56,9 @@ function list({
 
 const entry = (from: ReturnType<typeof list>, id: string) =>
 	from.entries.find((candidate) => candidate.id === id);
+
+const holders = (from: ReturnType<typeof list>, command: string, chord: string) =>
+	chordHolders(from, command, chord).map((holder) => holder.command);
 
 describe("the keybinding list", () => {
 	test("groups the catalog by surface, then lists each extension's commands and its locked keys", () => {
@@ -143,25 +145,26 @@ describe("the keybinding list", () => {
 
 describe("editing", () => {
 	test("the holder of a chord is the command it is active on, compared by the keys pressed", () => {
-		expect(chordHolder(list(), "focus.composer", "Mod+KeyK")).toBe("search.open");
-		expect(chordHolder(list(), "search.open", "Mod+KeyK")).toBeNull();
-		expect(chordHolder(list(), "focus.composer", "Ctrl+KeyK")).toBe("search.open");
-		expect(chordHolder(list({ platform: MAC }), "focus.composer", "Ctrl+KeyK")).toBeNull();
-		expect(chordHolder(list({ enabled: false }), "search.open", "Mod+Shift+Semicolon")).toBeNull();
-		expect(chordHolder(list(), "search.open", "Mod+Shift+Semicolon")).toBe("notes.open");
+		expect(holders(list(), "focus.composer", "Mod+KeyK")).toEqual(["search.open"]);
+		expect(holders(list(), "search.open", "Mod+KeyK")).toEqual([]);
+		expect(holders(list(), "focus.composer", "Ctrl+KeyK")).toEqual(["search.open"]);
+		expect(holders(list({ platform: MAC }), "focus.composer", "Ctrl+KeyK")).toEqual([]);
+		expect(holders(list({ enabled: false }), "search.open", "Mod+Shift+Semicolon")).toEqual([]);
+		expect(holders(list(), "search.open", "Mod+Shift+Semicolon")).toEqual(["notes.open"]);
 	});
 
 	test("the typed cheatsheet chord holds its US position Mod+Shift+/, on every platform", () => {
 		for (const platform of [LINUX, MAC]) {
-			expect(chordHolder(list({ platform }), "view.toggleLeft", "Mod+Shift+Slash")).toBe(
+			expect(holders(list({ platform }), "view.toggleLeft", "Mod+Shift+Slash")).toEqual([
 				"shortcuts.open",
-			);
+			]);
 		}
-		expect(chordHolder(list(), "view.toggleLeft", "Mod+Slash")).toBeNull();
-		expect(chordHolder(list(), "shortcuts.open", "Mod+Shift+Slash")).toBeNull();
-		expect(assignChord(list(), {}, "view.toggleLeft", "Mod+Shift+Slash", "shortcuts.open")).toEqual(
-			{ "view.toggleLeft": ["Mod+Shift+Slash"], "shortcuts.open": [] },
-		);
+		expect(holders(list(), "view.toggleLeft", "Mod+Slash")).toEqual([]);
+		expect(holders(list(), "shortcuts.open", "Mod+Shift+Slash")).toEqual([]);
+		expect(assignChord(list(), {}, "view.toggleLeft", "Mod+Shift+Slash", true)).toEqual({
+			"view.toggleLeft": ["Mod+Shift+Slash"],
+			"shortcuts.open": [],
+		});
 	});
 
 	test("assigning stores the chord, and a chord equal to the defaults removes the override", () => {
@@ -176,17 +179,17 @@ describe("editing", () => {
 	});
 
 	test("Replace writes an explicit override for the other command: its chords minus this one", () => {
-		expect(assignChord(list(), {}, "focus.composer", "Mod+KeyK", "search.open")).toEqual({
+		expect(assignChord(list(), {}, "focus.composer", "Mod+KeyK", true)).toEqual({
 			"focus.composer": ["Mod+KeyK"],
 			"search.open": [],
 		});
-		expect(assignChord(list(), {}, "search.open", "Mod+Alt+KeyN", "workspace.new")).toEqual({
+		expect(assignChord(list(), {}, "search.open", "Mod+Alt+KeyN", true)).toEqual({
 			"search.open": ["Mod+Alt+KeyN"],
 			"workspace.new": ["Mod+KeyN"],
 		});
 		const custom = { "view.files": ["Mod+KeyU", "Mod+Shift+KeyE"] };
 		expect(
-			assignChord(list({ overrides: custom }), custom, "search.open", "Mod+KeyU", "view.files"),
+			assignChord(list({ overrides: custom }), custom, "search.open", "Mod+KeyU", true),
 		).toEqual({
 			"search.open": ["Mod+KeyU"],
 		});
@@ -194,11 +197,11 @@ describe("editing", () => {
 
 	test("a disabled extension's command takes a chord from no one, so search keeps Mod+K", () => {
 		const off = list({ enabled: false });
-		expect(chordHolder(off, "notes.open", "Mod+KeyK")).toBeNull();
-		expect(assignChord(off, {}, "notes.open", "Mod+KeyK", "search.open")).toEqual({
+		expect(holders(off, "notes.open", "Mod+KeyK")).toEqual([]);
+		expect(assignChord(off, {}, "notes.open", "Mod+KeyK", true)).toEqual({
 			"notes.open": ["Mod+KeyK"],
 		});
-		expect(chordHolder(list(), "notes.open", "Mod+KeyK")).toBe("search.open");
+		expect(holders(list(), "notes.open", "Mod+KeyK")).toEqual(["search.open"]);
 	});
 
 	test("Reset removes the command's override only", () => {
@@ -414,29 +417,39 @@ describe("local rows", () => {
 	});
 
 	test("a local chord conflicts only inside the elements its command acts in", () => {
-		expect(localChordHolder(list(), "trees.search", "KeyJ")).toEqual({
-			command: "arrows.down",
-			scope: "trees",
-		});
-		expect(localChordHolder(list(), "arrows.up", "KeyS")).toEqual({
-			command: "trees.search",
-			scope: "trees",
-		});
-		expect(chordHolder(list(), "trees.search", "KeyC")).toBeNull();
-		expect(chordHolder(list(), "transcript.copy", "KeyS")).toBeNull();
-		expect(chordHolder(list(), "trees.search", "Mod+KeyK")).toBeNull();
-		expect(chordHolder(list(), "view.toggleLeft", "KeyS")).toBeNull();
+		expect(chordHolders(list(), "trees.search", "KeyJ")).toEqual([
+			{ command: "arrows.down", scope: "trees" },
+		]);
+		expect(chordHolders(list(), "arrows.up", "KeyS")).toEqual([
+			{ command: "trees.search", scope: "trees" },
+		]);
+		expect(holders(list(), "trees.search", "KeyC")).toEqual([]);
+		expect(holders(list(), "transcript.copy", "KeyS")).toEqual([]);
+		expect(holders(list(), "trees.search", "Mod+KeyK")).toEqual([]);
+		expect(holders(list(), "view.toggleLeft", "KeyS")).toEqual([]);
+	});
+
+	test("a shared twin's key lists every element's holder, each command once", () => {
+		const apart = list({ overrides: { "trees.search": ["KeyX"], "transcript.copy": ["KeyX"] } });
+		expect(chordHolders(apart, "arrows.down", "KeyX")).toEqual([
+			{ command: "trees.search", scope: "trees" },
+			{ command: "transcript.copy", scope: "transcript" },
+		]);
+		const twin = list({ overrides: { "arrows.up": ["KeyX"] } });
+		expect(chordHolders(twin, "arrows.down", "KeyX")).toEqual([
+			{ command: "arrows.up", scope: "tabs" },
+		]);
 	});
 
 	test("Replace unbinds an own-scope holder, but a shared twin only loses inside that element", () => {
-		expect(assignChord(list(), {}, "trees.search", "F2", "trees.rename")).toEqual({
+		expect(assignChord(list(), {}, "trees.search", "F2", true)).toEqual({
 			"trees.search": ["F2"],
 			"trees.rename": [],
 		});
-		expect(assignChord(list(), {}, "trees.search", "KeyJ", "arrows.down")).toEqual({
+		expect(assignChord(list(), {}, "trees.search", "KeyJ", true)).toEqual({
 			"trees.search": ["KeyJ"],
 		});
-		expect(assignChord(list(), {}, "arrows.up", "KeyS", "trees.search")).toEqual({
+		expect(assignChord(list(), {}, "arrows.up", "KeyS", true)).toEqual({
 			"arrows.up": ["KeyS"],
 			"trees.search": [],
 		});

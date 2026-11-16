@@ -10,7 +10,8 @@ export {
 } from "./chord";
 export {
 	assignChord,
-	chordHolder,
+	type ChordHolder,
+	chordHolders,
 	type ExtensionShortcutSet,
 	type ImportPlan,
 	type ImportSkipReason,
@@ -19,7 +20,6 @@ export {
 	keybindingList,
 	keybindingsFile,
 	keyChordLabel,
-	localChordHolder,
 	planImport,
 	resetChord,
 } from "./keybindingList";

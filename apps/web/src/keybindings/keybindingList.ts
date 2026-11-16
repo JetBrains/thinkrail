@@ -284,43 +284,35 @@ export interface ChordHolder {
 	readonly scope: string | null;
 }
 
-function holderOf(
+function holdersOf(
 	keybindings: ResolvedKeybindings,
 	command: string,
 	chord: KeyChord,
-): ChordHolder | null {
+): ChordHolder[] {
 	const target = keybindings.byId.get(command);
-	if (target?.enabled !== true) return null;
+	if (target?.enabled !== true) return [];
 	const apple = isApple(keybindings);
 	const signature = chordSignature(chord, apple);
-	if (target.scope === null) {
-		const held = keybindings.active.find(
-			(active) => active.id !== command && heldSignatures(active.chord, apple).includes(signature),
-		);
-		return held ? { command: held.id, scope: null } : null;
-	}
-	for (const scope of actsIn(keybindings, target.scope)) {
-		const held = keybindings.local
-			.get(scope)
-			?.find(
-				(active) => active.id !== command && chordSignature(active.chord, apple) === signature,
-			);
-		if (held) return { command: held.id, scope };
-	}
-	return null;
+	const held: ChordHolder[] =
+		target.scope === null
+			? keybindings.active
+					.filter((active) => heldSignatures(active.chord, apple).includes(signature))
+					.map((active) => ({ command: active.id, scope: null }))
+			: actsIn(keybindings, target.scope).flatMap((scope) =>
+					(keybindings.local.get(scope) ?? [])
+						.filter((active) => chordSignature(active.chord, apple) === signature)
+						.map((active) => ({ command: active.id, scope })),
+				);
+	return held.filter(
+		(holder, index) =>
+			holder.command !== command &&
+			held.findIndex((other) => other.command === holder.command) === index,
+	);
 }
 
-export function localChordHolder(
-	list: KeybindingList,
-	command: string,
-	chord: string,
-): ChordHolder | null {
+export function chordHolders(list: KeybindingList, command: string, chord: string): ChordHolder[] {
 	const pressed = parseChord(chord);
-	return pressed === null ? null : holderOf(list.keybindings, command, pressed);
-}
-
-export function chordHolder(list: KeybindingList, command: string, chord: string): string | null {
-	return localChordHolder(list, command, chord)?.command ?? null;
+	return pressed === null ? [] : holdersOf(list.keybindings, command, pressed);
 }
 
 function includedBy(keybindings: ResolvedKeybindings, command: string, other: string): boolean {
@@ -348,9 +340,12 @@ function overrideValue(
 	command: ResolvedCommand,
 	chords: readonly PhysicalChord[],
 	apple: boolean,
+	contested = false,
 ): string[] | null {
 	const defaults = command.defaults.filter((chord) => !chord.displayOnly);
-	return sameChords(chords, defaults, apple) ? null : chords.map((chord) => formatChord(chord));
+	return !contested && sameChords(chords, defaults, apple)
+		? null
+		: chords.map((chord) => formatChord(chord));
 }
 
 function withOverride(
@@ -380,18 +375,24 @@ export function assignChord(
 	overrides: KeybindingOverrides,
 	command: string,
 	chord: string,
-	replace: string | null = null,
+	replace = false,
 ): KeybindingOverrides {
-	const target = list.keybindings.byId.get(command);
+	const { keybindings } = list;
+	const target = keybindings.byId.get(command);
 	const pressed = parseChord(chord);
 	if (target === undefined || pressed === null) return overrides;
-	const apple = isApple(list.keybindings);
-	const assigned = withOverride(overrides, command, overrideValue(target, [pressed], apple));
-	const other =
-		replace === null || !target.enabled || includedBy(list.keybindings, command, replace)
-			? undefined
-			: list.keybindings.byId.get(replace);
-	return other === undefined ? assigned : withoutChords(assigned, other, [pressed], apple);
+	const apple = isApple(keybindings);
+	const holders = holdersOf(keybindings, command, pressed);
+	const replaced = replace
+		? holders.filter((holder) => !includedBy(keybindings, command, holder.command))
+		: [];
+	const contested = holders.length > replaced.length;
+	let next = withOverride(overrides, command, overrideValue(target, [pressed], apple, contested));
+	for (const holder of replaced) {
+		const other = keybindings.byId.get(holder.command);
+		if (other !== undefined) next = withoutChords(next, other, [pressed], apple);
+	}
+	return next;
 }
 
 export function resetChord(overrides: KeybindingOverrides, command: string): KeybindingOverrides {
@@ -625,17 +626,23 @@ export function planImport(
 	const conflicts: ImportConflict[] = [];
 	const removed = new Map<string, KeyChord[]>();
 	for (const [id, chords] of targets) {
-		for (const chord of physical(chords)) {
-			const holder = holderOf(keybindings, id, chord);
-			if (holder === null || targets.has(holder.command)) continue;
-			conflicts.push({
-				chord: keyChordLabel(chord, keybindings.platform),
-				command: id,
-				other: holder.command,
-				scope: holder.scope,
-			});
-			if (includedBy(keybindings, id, holder.command)) continue;
-			removed.set(holder.command, [...(removed.get(holder.command) ?? []), chord]);
+		const assigned = physical(chords);
+		let contested = false;
+		for (const chord of assigned) {
+			for (const holder of holdersOf(keybindings, id, chord)) {
+				if (targets.has(holder.command)) continue;
+				conflicts.push({
+					chord: keyChordLabel(chord, keybindings.platform),
+					command: id,
+					other: holder.command,
+					scope: holder.scope,
+				});
+				if (includedBy(keybindings, id, holder.command)) contested = true;
+				else removed.set(holder.command, [...(removed.get(holder.command) ?? []), chord]);
+			}
+		}
+		if (contested && !Object.hasOwn(next, id)) {
+			next = { ...next, [id]: assigned.map((chord) => formatChord(chord)) };
 		}
 	}
 	for (const [id, chords] of removed) {

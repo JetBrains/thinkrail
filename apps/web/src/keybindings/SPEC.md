@@ -28,7 +28,7 @@ binding does.
 - **Public surface:** `KeybindingId`, `KeyChord`, `KEYBINDINGS`, `FOCUS_GROUP_BINDINGS`, `parseChord`,
   `formatChord`, `chordFromEvent`, `RecordedChord`, `isPlainChord`, `isLockedPrimitive`,
   `isBrowserReservedChord`, `isDesktopNativeChord`, `keybindingList`, `KeybindingList`,
-  `KeybindingEntry`, `ExtensionShortcutSet`, `chordHolder`, `localChordHolder`, `assignChord`,
+  `KeybindingEntry`, `ExtensionShortcutSet`, `ChordHolder`, `chordHolders`, `assignChord`,
   `resetChord`, `keyChordLabel`, `keybindingsFile`, `planImport`, `ImportPlan`, `ImportSkipReason`,
   `elementKeyUses`, `LOCAL_SCOPES`, `AppLocalScope`, `isAppLocalScope`, `APP_LOCAL_COMMANDS`,
   `LOCAL_KEY_DEFAULTS`, `APP_LOCAL_SET`, `LocalCommandSet`, `matchLocal`, `localUses`, `globalHolder`,
@@ -239,7 +239,7 @@ binding does.
   command's own reserved chord (a hand-written `tab.close: ["Mod+KeyW"]`) is shown and never matched, as
   its default is. Only the desktop-native ones are refused up front; dictation's records, then shows lost.
 - **The typed `?` also holds its US position `Mod+Shift+Slash`** wherever conflicts are found (here,
-  `chordHolder`, `planImport`), since that press types it: an override on it wins and leaves
+  `chordHolders`, `planImport`), since that press types it: an override on it wins and leaves
   `shortcuts.open` unbound on every layout, marked lost. Matching is unchanged.
 - The default table resolves with no conflict on any platform, and the bundled extensions add none
   (`extensions`' tests).
@@ -302,22 +302,25 @@ binding does.
   element (a global row's chord that a local holds, a twin's letter an element took). Each chord carries its grammar text (a typed
   default its display form, `Mod+?`), caps, `lostTo` and `shown` — false for a browser-reserved chord
   while another active one remains in a browser, the rule `keybindingShortcut` follows.
-- **`chordHolder(list, command, chord)`** is the command another active chord belongs to (enabled
-  commands only, compared by physical keys; `Mod+Shift+Slash` is the cheatsheet's while its `?` is
-  active) — for a local target only inside the elements it acts in (`localChordHolder` also names that
-  element), so a key used in another element is no conflict — and none for a disabled target, which conflicts with nothing: its override is saved alone and
+- **`chordHolders(list, command, chord)`** lists every other command holding the chord actively, each
+  once (enabled commands only, compared by physical keys; `Mod+Shift+Slash` is the cheatsheet's while its
+  `?` is active): a global target's one global holder; a local target's holders only inside the elements
+  it acts in, each with the first element (`scope`) it holds it in — a shared twin's key may have a
+  different holder in each element — so a key used in another element is no conflict. None for a
+  disabled target, which conflicts with nothing: its override is saved alone and
   ranked by the resolver once the extension is on, where, as an override, it takes the chord and the
   other command shows it lost.
   **`assignChord(list, overrides, command, chord, replace)`** writes the override — none when the chord
-  equals the command's defaults less display-only chords — and, with `replace` (ignored for a disabled
-  target), an explicit
-  override for that command: its chords less display-only and typed ones, minus this chord, `[]` when
-  nothing remains (normalised the same way). The resolver's priority alone would
+  equals the command's defaults less display-only chords — and, with `replace`, an explicit override for
+  every holder: its chords less display-only and typed ones, minus this chord, `[]` when nothing remains
+  (normalised the same way). The resolver's priority alone would
   leave a lower-ranked holder losing the chord, so Replace never relies on it — except against a shared
   twin inside the element that includes it: the element's own override always outranks it there, and an
   unbind would take the letter from every other element too, so Replace leaves the twin `lostIn` that
-  element only. **`resetChord`** drops one
-  override.
+  element only. Only an override outranks a customised twin, so a command given back its own default
+  while such a holder keeps the chord keeps that default as an explicit override. (Post-mortem, #1416's
+  review: dropping it left S moving down in the tree; the first holder alone left `transcript.copy` on
+  the key Replace gave `arrows.down`.) **`resetChord`** drops one override.
 - **`elementKeyUses({key, shift}, platform)`** lists the locked catalog `keys` rows that act on a press's
   **typed** key (`event.key`, Shift allowed; F-keys and named keys included), only for the plain-command
   warning: rebindable element keys are local commands, which `localUses` reports by physical key.
@@ -344,8 +347,9 @@ binding does.
   `unchanged`; chords equal to its defaults — this platform's or the entry's own `defaults`, so a file
   from another OS keeps the defaults, and `"Mod+?"` reads as the cheatsheet's default — mean "defaults"
   (unchanged unless the command was custom). A switched-off extension's commands import too.
-- **Import conflicts:** an imported chord another enabled command holds actively (`chordHolder`'s rule,
-  so local ones only within their elements, each conflict carrying that `scope`) goes to the import, and
-  that command loses it through the same explicit override Replace writes (a shared twin, as with
-  Replace, only loses inside that element); a command the file also changes is not a conflict (its own
-  entry decides). Self-conflicting entries are left to the resolver.
+- **Import conflicts:** an imported chord other enabled commands hold actively (`chordHolders`' rule,
+  so local ones only within their elements, one conflict per holder carrying its `scope`) goes to the
+  import, and each holder loses it through the same explicit override Replace writes (a shared twin, as
+  with Replace, only loses inside that element, and an imported default it would outrank stays an
+  override); a command the file also changes is not a conflict (its own entry decides). Self-conflicting
+  entries are left to the resolver.

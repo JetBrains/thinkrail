@@ -263,15 +263,17 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
     desktop-native chord, or a press either desktop platform's `shortcutCommands` matcher owns on this
     layout (`isDesktopShortcut`: AZERTY's `KeyZ` Ctrl+W, Russian `Shift+Slash` Ctrl+,) → refused with
     the same desktop message; a chord active on another command (none for a switched-off extension's
-    command, `chordHolder`) → "{chord} is already used by {command}" with Replace / Cancel (Replace writes `assignChord`'s explicit unbind; a browser-reserved
+    command, `chordHolders`) → "{chord} is already used by {command}" with Replace / Cancel (Replace writes `assignChord`'s explicit unbind; a browser-reserved
     chord adds the browser sentence); a plain key an element owns, on a plain command → "{key} also acts in
     {places}…" with Assign anyway — also for any global chord a local key holds (`localUses`: "Ctrl+K
     also acts in sidebar trees…"); a browser-reserved chord in a browser → Assign anyway; else it assigns.
-    A chord equal to the defaults drops the override. **On a local row** the outcomes are: a navigation
+    A chord equal to the defaults drops the override (kept while a customised twin would win it,
+    `assignChord`). **On a local row** the outcomes are: a navigation
     primitive → "↓ is a navigation key — locked in every element" (dismiss; the command's own primitive
     default records); desktop-native as above; a key another command holds inside an element this
-    command acts in (`localChordHolder`) → "J is already used by Move down (alias) inside sidebar trees"
-    with Replace / Cancel; a chord a global command holds (`globalHolder`) → "F runs “{global}” everywhere
+    command acts in (`chordHolders`) → "J is already used by Move down (alias) inside sidebar trees",
+    naming every holder ("X is already used by Search the visible rows inside sidebar trees and Copy the
+    message… inside the chat transcript"), with Replace (clears each) / Cancel; a chord a global command holds (`globalHolder`) → "F runs “{global}” everywhere
     else; inside sidebar trees it will run “{local}” instead" (no "else" for a modified chord) with Assign
     anyway; browser-reserved → Assign anyway; else it assigns, and a key other elements also use adds an
     info note "C also acts in the chat transcript — a different element, so no conflict".

@@ -1,3 +1,4 @@
+import { realpathSync, rmSync, utimesSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
@@ -6,6 +7,8 @@ import {
 	pressPlatformShortcut,
 	revealWorkbenchTool,
 } from "./fixtures/app";
+import { E2E_FIXTURE_REPO } from "./fixtures/paths";
+import { seedWorkspaceSession } from "./fixtures/sessions";
 import { E2eWire } from "./fixtures/wire";
 
 test.use({ viewport: { width: 1440, height: 900 } });
@@ -551,4 +554,61 @@ test("inside a scope a local key conflicts with its neighbours only: Replace, a 
 	await expect(item).not.toBeFocused();
 	await page.keyboard.press("k");
 	await expect(item).toBeFocused();
+});
+
+test("Replace on a shared twin's key clears every element holding it, so it moves down in the tree and the transcript", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const at = 1_701_400_000_000;
+	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "twin keys",
+		messages: [
+			{ role: "user", text: "First twin question.", timestamp: at },
+			{ role: "assistant", text: "First twin answer.", stopReason: "stop", timestamp: at + 1_000 },
+		],
+	});
+	utimesSync(session.path, new Date(at + 50_000), new Date(at + 50_000));
+	try {
+		await enterDefaultWorkspace(page);
+		const transcriptRow = (text: string) =>
+			page.locator("[data-chat-row-id]").filter({ hasText: text });
+		await expect(transcriptRow("First twin answer.")).toBeVisible();
+		await withHostWire(page, (wire) =>
+			wire.request("settings.update", {
+				config: { keybindings: { "trees.search": ["KeyX"], "transcript.copy": ["KeyX"] } },
+			}),
+		);
+		await openKeyboardSettings(page);
+		await expect(chord(page, "trees.search").locator("kbd")).toHaveText(["X"]);
+
+		const down = chord(page, "trees.down");
+		await down.click();
+		await expect(down).toContainText("Press a new key for the alias… Esc cancels");
+		await page.keyboard.press("x");
+		await expect(message(page, "trees.down")).toHaveAttribute("data-kind", "takenInScope");
+		await expect(message(page, "trees.down")).toContainText(
+			"X is already used by Search the visible rows inside sidebar trees and Copy the message, thought or tool output inside the chat transcript",
+		);
+		await message(page, "trees.down").getByTestId("keybinding-replace").click();
+		await expect(down.locator("kbd")).toHaveText(["X"]);
+		await expect(chord(page, "trees.search")).toHaveText("Not assigned");
+		await expect(chord(page, "transcript.copy")).toHaveText("Not assigned");
+		await expect(chord(page, "transcript.down").locator("kbd")).toHaveText(["X"]);
+		await closeSettings(page);
+
+		const item = await focusFilesTree(page);
+		await page.keyboard.press("x");
+		await expect(item).not.toBeFocused();
+		await expect(page.getByTestId("tree-search")).toHaveCount(0);
+
+		await page.getByTestId("chat-input").focus();
+		await pressPlatformShortcut(page, "ArrowUp");
+		await page.keyboard.press("Home");
+		await expect(transcriptRow("First twin question.")).toBeFocused();
+		await page.keyboard.press("x");
+		await expect(transcriptRow("First twin answer.")).toBeFocused();
+	} finally {
+		rmSync(session.path, { force: true });
+	}
 });
