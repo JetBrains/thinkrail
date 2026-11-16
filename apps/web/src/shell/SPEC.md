@@ -247,8 +247,10 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
     claim (`claimKeyboard`, below), so no app chord, extension command or double Shift acts on the press
     being recorded.
   - **Outcomes,** in order: a plain key on a non-plain command → "A shortcut needs…" (dismiss); a
-    desktop-native chord → refused; a chord active on another command → "{chord} is already used by
-    {command}" with Replace / Cancel (Replace writes `assignChord`'s explicit unbind; a browser-reserved
+    desktop-native chord, or a press either desktop platform's `shortcutCommands` matcher owns on this
+    layout (`isDesktopShortcut`: AZERTY's `KeyZ` Ctrl+W, Russian `Shift+Slash` Ctrl+,) → refused with
+    the same desktop message; a chord active on another command (none for a switched-off extension's
+    command, `chordHolder`) → "{chord} is already used by {command}" with Replace / Cancel (Replace writes `assignChord`'s explicit unbind; a browser-reserved
     chord adds the browser sentence); a plain key an element owns, on a plain command → "{key} also acts in
     {places}…" with Assign anyway; a browser-reserved chord in a browser → Assign anyway; else it assigns.
     A chord equal to the defaults drops the override.
@@ -323,7 +325,8 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   Focus Projects, Focus terminal, one Focus center group N per existing group, Show Changes, and Show
   Files with `Mod+Shift+E`), after the palette has closed. These chords are app-owned in xterm and
   Monaco too, except that `Ctrl+L` inside a terminal on Windows/Linux stays the shell's clear-screen, like
-  `Ctrl+R` (`⌘L` on a Mac still focuses the composer from a terminal); they are ignored during
+  `Ctrl+R` (`⌘L` on a Mac still focuses the composer from a terminal; *Active-tab chords* has the
+  rule); they are ignored during
   IME composition, and are suppressed behind a modal like the others; `Ctrl+F6` / `Ctrl+Shift+F6` stay
   the workbench's group cycling. A plain browser tab may keep `F6` for its own address bar; the desktop
   app is the primary surface and the palette rows reach the same moves.
@@ -346,7 +349,11 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   close the active tab); it is the one table chord not suppressed behind a modal, because dismissing that
   modal is its first step. Exceptions: `Ctrl+\` inside a terminal on Windows/Linux stays the shell's
   SIGQUIT, like `Ctrl+L` (`⌘\` on a Mac still splits); `⌥⌘W` inside Monaco's find widget stays its
-  whole-word toggle. The group moves accept GNOME's grab of `Ctrl+Alt+←/→` on Linux, as VS Code does —
+  whole-word toggle. **These guards name chords, not commands:** inside xterm the shell keeps literal
+  Control `Ctrl+L`, `Ctrl+\` and `Ctrl+R` (readline's clear-screen, SIGQUIT and reverse search), and the
+  find widget keeps `⌥⌘W` on a Mac, whatever is bound there — an app command or chat history rebound
+  onto one still yields there, and one rebound elsewhere (`Ctrl+Alt+Y`) acts there as anywhere. An
+  extension command is not guarded. The group moves accept GNOME's grab of `Ctrl+Alt+←/→` on Linux, as VS Code does —
   the palette rows reach the same moves. No Alt chord fires while AltGraph is held
   ([[submodule-web-keybindings]]).
 - **Extension overlays, their commands and the keyboard claim.** `ExtensionOverlays`, mounted once at the
@@ -398,7 +405,7 @@ line or column past the end of the file. When the host refuses the read (missing
 symlink escaping the worktree, too large), no tab appears and `shell.deepLink.openFailed` says so. The
 workspace has already been entered by then.
 
-**Native shortcuts.** Shell always mounts the `AppShortcuts` leaf. `useAppShortcuts` reads `NativeShortcutsBridge` (`__THINKRAIL_NATIVE_SHORTCUTS__`, [[module-contracts]]; desktop hosts only) once. Without the bridge it adds no listeners and renders nothing. With the bridge, the leaf renders the hint, so hint changes re-render only that leaf. Every app-level close/quit/settings shortcut dispatches through one command table, `shortcutCommands.ts`: a command id (`close-item`, `quit`, `open-settings`) maps to Ctrl chords per shortcut platform, each chord carrying its terminal rule, and the hook supplies the id → handler map. Both native commands from `subscribeCommand` and web keydown chords run the same handler. The shortcut platform is `platformFamily()` (`apple` / `windows` / `linux`) when the bridge exists, else `browser`.
+**Native shortcuts.** Shell always mounts the `AppShortcuts` leaf. `useAppShortcuts` reads `NativeShortcutsBridge` (`__THINKRAIL_NATIVE_SHORTCUTS__`, [[module-contracts]]; desktop hosts only) once. Without the bridge it adds no listeners and renders nothing. With the bridge, the leaf renders the hint, so hint changes re-render only that leaf. Every app-level close/quit/settings shortcut dispatches through one command table, `shortcutCommands.ts`: a command id (`close-item`, `quit`, `open-settings`) maps to Ctrl chords per shortcut platform, each chord carrying its terminal rule, and the hook supplies the id → handler map. Both native commands from `subscribeCommand` and web keydown chords run the same handler. The shortcut platform is `platformFamily()` (`apple` / `windows` / `linux`) when the bridge exists, else `browser`. A keydown the table owns on this platform (`matchShortcut`, terminal rule included) reaches no app or extension command and no chat history in `useGlobalHotkeys` (`routeHotkey`), whatever chord it resolves to: on AZERTY Ctrl+W is the `KeyZ` key, so `view.toggleLeft: ["Mod+KeyZ"]` would otherwise toggle Projects and close the tab from the two window listeners. The resolver's static desktop-native list ([[submodule-web-keybindings]]) still covers hand-edited configs by US position.
 
 | Platform | Quit | Close item | Open Settings |
 | --- | --- | --- | --- |

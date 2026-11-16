@@ -36,6 +36,7 @@ export {
 	keybindingShortcut,
 	keybindingShortcuts,
 	matchKeybinding,
+	pressesChord,
 	type ResolvedChord,
 	type ResolvedCommand,
 	type ResolvedKeybindings,

@@ -188,6 +188,7 @@ function activeHolder(
 	command: string,
 	chord: KeyChord,
 ): string | null {
+	if (keybindings.byId.get(command)?.enabled !== true) return null;
 	const apple = isApple(keybindings);
 	const signature = chordSignature(chord, apple);
 	return (
@@ -255,7 +256,8 @@ export function assignChord(
 	if (target === undefined || pressed === null) return overrides;
 	const apple = isApple(list.keybindings);
 	const assigned = withOverride(overrides, command, overrideValue(target, [pressed], apple));
-	const other = replace === null ? undefined : list.keybindings.byId.get(replace);
+	const other =
+		replace === null || !target.enabled ? undefined : list.keybindings.byId.get(replace);
 	return other === undefined ? assigned : withoutChords(assigned, other, [pressed], apple);
 }
 
@@ -463,7 +465,6 @@ export function planImport(
 	const conflicts: ImportConflict[] = [];
 	const removed = new Map<string, KeyChord[]>();
 	for (const [id, chords] of targets) {
-		if (keybindings.byId.get(id)?.enabled !== true) continue;
 		for (const chord of physical(chords)) {
 			const holder = activeHolder(keybindings, id, chord);
 			if (holder === null || targets.has(holder)) continue;

@@ -363,6 +363,24 @@ test("Export downloads every row, locked ones included, and Import summarizes a 
 	await expect(chord(page, "group.splitRight").locator("kbd")).toHaveText(["Ctrl", "Alt", "S"]);
 });
 
+test("a switched-off extension's command records Ctrl+K without a warning, and search keeps it", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await setHintMode(page, false);
+	await openKeyboardSettings(page);
+
+	await record(page, "hint-mode.show", "k");
+	await expect(message(page, "hint-mode.show")).toHaveCount(0);
+	await expect(chord(page, "hint-mode.show").locator("kbd")).toHaveText(["Ctrl", "K"]);
+	await expect(row(page, "search.open")).not.toHaveAttribute("data-custom", "true");
+	await expect(chord(page, "search.open").locator("kbd")).toHaveText(["Ctrl", "K"]);
+	await closeSettings(page);
+
+	await pressPlatformShortcut(page, "k");
+	await expect(page.getByTestId("search-palette")).toBeVisible();
+});
+
 test("a ThinkRail chord over an extension's marks the extension's chord inactive while F still starts hint mode", async ({
 	page,
 }) => {

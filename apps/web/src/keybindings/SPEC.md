@@ -29,7 +29,7 @@ binding does.
   `chordHolder`, `assignChord`, `resetChord`, `keyChordLabel`, `keybindingsFile`, `planImport`,
   `ImportPlan`, `ImportSkipReason`, `elementKeyUses`,
   `resolveKeybindings`, `ResolvedKeybindings`, `ResolvedCommand`, `ResolvedChord`, `KeybindingConflict`,
-  `ExtensionCommandSet`, `matchKeybinding`, `keybindingShortcut`, `keybindingShortcuts`,
+  `ExtensionCommandSet`, `matchKeybinding`, `pressesChord`, `keybindingShortcut`, `keybindingShortcuts`,
   `keybindingKeys`, `keybindingLabel`, `keybindingLabels`, `SHORTCUT_CATALOG`, `SHORTCUT_SURFACES`,
   `SHORTCUT_SURFACE_TITLES`, `ShortcutSurface`, `ShortcutRow`, `ShortcutConflictView`, `shortcutRows`,
   `shortcutKeyCaps`, `TAB_KEYS`, `RAIL_KEYS`, `HJKL_KEYS`, `TREE_KEYS`, `REVIEW_KEYS`,
@@ -132,6 +132,12 @@ binding does.
   them (*Resolver*), so a hand-edited config cannot bind one either. Each names the catalog row that shows
   it (`desktop.quit`, `desktop.zoomIn`, `Mod+W` → `tab.close`). No matchable default is native (tested);
   `tab.close`'s display-only `Mod+W` is.
+- **The list compares US positions, but `shortcutCommands` matches typed characters** (AZERTY's Ctrl+W
+  is `KeyZ`, Russian Ctrl+, is `Shift+Slash`), so `shell` closes the gap from the event: the editor also
+  refuses a press that matcher owns on the current layout, and the binder yields such a press to it
+  ([[submodule-web-shell]], *Native shortcuts*). Page zoom matches typed characters too, but the preload
+  yields any key the page claimed, so a chord bound over a zoom character takes the press instead of
+  zooming (one owner, like `Mod+0`) and is not refused.
 
 ## Resolver
 
@@ -226,8 +232,12 @@ binding does.
   while another active one remains in a browser, the rule `keybindingShortcut` follows.
 - **`chordHolder(list, command, chord)`** is the command another active chord belongs to (enabled
   commands only, compared by physical keys; `Mod+Shift+Slash` is the cheatsheet's while its `?` is
-  active). **`assignChord(list, overrides, command, chord, replace)`** writes the override — none when
-  the chord equals the command's defaults less display-only chords — and, with `replace`, an explicit
+  active), and none for a disabled target, which conflicts with nothing: its override is saved alone and
+  ranked by the resolver once the extension is on, where, as an override, it takes the chord and the
+  other command shows it lost.
+  **`assignChord(list, overrides, command, chord, replace)`** writes the override — none when the chord
+  equals the command's defaults less display-only chords — and, with `replace` (ignored for a disabled
+  target), an explicit
   override for that command: its chords less display-only and typed ones, minus this chord, `[]` when
   nothing remains (normalised the same way). The resolver's priority alone would
   leave a lower-ranked holder losing the chord, so Replace never relies on it. **`resetChord`** drops one

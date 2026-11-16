@@ -188,6 +188,15 @@ describe("editing", () => {
 		});
 	});
 
+	test("a disabled extension's command takes a chord from no one, so search keeps Mod+K", () => {
+		const off = list({ enabled: false });
+		expect(chordHolder(off, "notes.open", "Mod+KeyK")).toBeNull();
+		expect(assignChord(off, {}, "notes.open", "Mod+KeyK", "search.open")).toEqual({
+			"notes.open": ["Mod+KeyK"],
+		});
+		expect(chordHolder(list(), "notes.open", "Mod+KeyK")).toBe("search.open");
+	});
+
 	test("Reset removes the command's override only", () => {
 		expect(resetChord({ "search.open": [], "view.files": ["Mod+KeyU"] }, "search.open")).toEqual({
 			"view.files": ["Mod+KeyU"],

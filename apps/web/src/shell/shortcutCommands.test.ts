@@ -4,6 +4,7 @@ import { matchKeybinding, resolveKeybindings } from "../keybindings";
 import {
 	createWebShortcuts,
 	hasWebShortcuts,
+	isDesktopShortcut,
 	matchShortcut,
 	SHORTCUT_COMMANDS,
 	type ShortcutPlatform,
@@ -160,6 +161,18 @@ describe("chord matching", () => {
 		expect(match("Comma", { key: ",", ctrlKey: false, metaKey: true })).toBeNull();
 		expect(match("KeyW", { key: "W", shiftKey: true })).toBeNull();
 	});
+});
+
+test("a press either desktop platform's table owns on this layout is a desktop shortcut", () => {
+	expect(isDesktopShortcut(chord("KeyZ", { key: "w" }))).toBe(true);
+	expect(isDesktopShortcut(chord("Slash", { key: ",", shiftKey: true }))).toBe(true);
+	expect(isDesktopShortcut(chord("KeyA", { key: "q" }))).toBe(true);
+	expect(isDesktopShortcut(chord("F4", { key: "F4" }))).toBe(true);
+	expect(isDesktopShortcut(chord("KeyZ", { key: "z" }))).toBe(false);
+	expect(isDesktopShortcut(chord("KeyW", { key: "z" }))).toBe(false);
+	expect(isDesktopShortcut(chord("Slash", { key: "?", shiftKey: true }))).toBe(false);
+	expect(isDesktopShortcut(chord("KeyZ", { key: "w", altKey: true }))).toBe(false);
+	expect(isDesktopShortcut(chord("KeyZ", { key: "w", ctrlKey: false, metaKey: true }))).toBe(false);
 });
 
 test("only windows and linux bind web chords", () => {

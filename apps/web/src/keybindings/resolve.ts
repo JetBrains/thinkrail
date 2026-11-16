@@ -216,6 +216,15 @@ export function matchKeybinding(
 	return null;
 }
 
+export function pressesChord(
+	event: KeybindingEvent,
+	chords: readonly KeyChord[],
+	platform: string,
+): boolean {
+	const apple = platformFamily(platform) === "apple";
+	return chords.some((chord) => pressed(chord, event, apple));
+}
+
 interface ShownOptions {
 	readonly browser?: boolean;
 }

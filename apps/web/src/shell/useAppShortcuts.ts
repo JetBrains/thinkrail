@@ -4,7 +4,12 @@ import { platformShortcutLabel } from "../lib";
 import { useAppStore } from "../store";
 import { closeActiveItem } from "./chordActions";
 import { keyboardClaimed } from "./extensionCommands";
-import { createWebShortcuts, hasWebShortcuts, shortcutPlatform } from "./shortcutCommands";
+import {
+	createWebShortcuts,
+	hasWebShortcuts,
+	type ShortcutPlatform,
+	shortcutPlatform,
+} from "./shortcutCommands";
 import { hasLayer, isInTerminal, MODAL_LAYER_SELECTOR } from "./shortcutLayers";
 
 const NATIVE_SHORTCUTS_GLOBAL = "__THINKRAIL_NATIVE_SHORTCUTS__";
@@ -26,8 +31,12 @@ function readNativeShortcutsBridge() {
 	return getNativeShortcutsBridge(Reflect.get(globalThis, NATIVE_SHORTCUTS_GLOBAL));
 }
 
+export function nativeShortcutPlatform(): ShortcutPlatform {
+	return shortcutPlatform(readNativeShortcutsBridge() !== null);
+}
+
 export function hasNativeShortcuts(): boolean {
-	return shortcutPlatform(readNativeShortcutsBridge() !== null) !== "browser";
+	return nativeShortcutPlatform() !== "browser";
 }
 
 export function readSettingsShortcutLabel(): string | null {

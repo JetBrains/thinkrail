@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { resolveKeybindings } from "../keybindings";
-import { globalHotkeyCommand } from "./useGlobalHotkeys";
+import { type ResolvedKeybindings, resolveKeybindings } from "../keybindings";
+import type { ShortcutPlatform } from "./shortcutCommands";
+import { globalHotkeyCommand, routeHotkey } from "./useGlobalHotkeys";
 
 const key = (
 	code: string,
@@ -20,6 +21,7 @@ const key = (
 	altKey: false,
 	shiftKey: false,
 	isComposing: false,
+	keyCode: 0,
 	...overrides,
 });
 
@@ -281,5 +283,125 @@ describe("routing through the resolved table", () => {
 			],
 		});
 		expect(globalHotkeyCommand(key("Semicolon"), all, false, keybindings)).toBeNull();
+	});
+});
+
+describe("the terminal and find guards name chords, not commands", () => {
+	const actions = { ...all, onComposer: noop, onSplitRight: noop, onCloseTab: noop };
+	const linux = (overrides: Record<string, string[]>) =>
+		resolveKeybindings({ platform: "Linux", overrides });
+	const mac = (overrides: Record<string, string[]>) =>
+		resolveKeybindings({ platform: "MacIntel", overrides });
+	const cmdAltW = key("KeyW", { ctrlKey: false, metaKey: true, altKey: true });
+
+	test("a command rebound off the terminal's or find's chord acts there, and that chord still yields", () => {
+		const ctrlAltY = key("KeyY", { altKey: true });
+		const cmdAltY = key("KeyY", { ctrlKey: false, metaKey: true, altKey: true });
+		const composer = linux({ "focus.composer": ["Mod+Alt+KeyY"] });
+		expect(globalHotkeyCommand(ctrlAltY, actions, false, composer, true)).toBe("focus.composer");
+		expect(globalHotkeyCommand(key("KeyL"), actions, false, composer, true)).toBeNull();
+		const split = linux({ "group.splitRight": ["Mod+Alt+KeyY"] });
+		expect(globalHotkeyCommand(ctrlAltY, actions, false, split, true)).toBe("group.splitRight");
+		expect(globalHotkeyCommand(key("Backslash"), actions, false, split, true)).toBeNull();
+		const close = mac({ "tab.close": ["Mod+Alt+KeyY"] });
+		expect(globalHotkeyCommand(cmdAltY, actions, false, close, false, true)).toBe("tab.close");
+		expect(globalHotkeyCommand(cmdAltW, actions, false, close, false, true)).toBeNull();
+	});
+
+	test("a command rebound onto the terminal's or find's chord yields there and acts elsewhere", () => {
+		const ontoShell = linux({ "search.open": ["Mod+KeyL", "Ctrl+KeyR"], "focus.composer": [] });
+		for (const pressed of [key("KeyL"), key("KeyR")]) {
+			expect(globalHotkeyCommand(pressed, actions, false, ontoShell, true)).toBeNull();
+			expect(globalHotkeyCommand(pressed, actions, false, ontoShell)).toBe("search.open");
+		}
+		const ontoFind = mac({ "view.toggleLeft": ["Mod+Alt+KeyW"] });
+		expect(globalHotkeyCommand(cmdAltW, actions, false, ontoFind, false, true)).toBeNull();
+		expect(globalHotkeyCommand(cmdAltW, actions, false, ontoFind)).toBe("view.toggleLeft");
+	});
+});
+
+describe("routing a press", () => {
+	const at = (
+		desktop: ShortcutPlatform,
+		keybindings: ResolvedKeybindings,
+		place: { inTerminal?: boolean } = {},
+	): Parameters<typeof routeHotkey>[2] => ({
+		keybindings,
+		desktop,
+		modalOpen: false,
+		textEntry: false,
+		surface: null,
+		inTerminal: false,
+		inEditorFind: false,
+		...place,
+	});
+	const azertyCtrlW = key("KeyZ", { key: "w" });
+	const russianCtrlComma = key("Slash", { key: ",", shiftKey: true });
+
+	test("a press the desktop's shortcutCommands owns runs no app command, whatever it resolves to", () => {
+		const keybindings = resolveKeybindings({
+			platform: "Linux",
+			overrides: { "view.toggleLeft": ["Mod+KeyZ"], "view.toggleRight": ["Mod+Shift+Slash"] },
+		});
+		for (const desktop of ["linux", "windows"] as const) {
+			expect(routeHotkey(azertyCtrlW, all, at(desktop, keybindings))).toBeNull();
+			expect(routeHotkey(russianCtrlComma, all, at(desktop, keybindings))).toBeNull();
+		}
+		expect(routeHotkey(azertyCtrlW, all, at("browser", keybindings))).toEqual({
+			kind: "command",
+			id: "view.toggleLeft",
+		});
+		expect(routeHotkey(russianCtrlComma, all, at("browser", keybindings))).toEqual({
+			kind: "command",
+			id: "view.toggleRight",
+		});
+		expect(routeHotkey(key("KeyZ", { key: "z" }), all, at("linux", keybindings))).toEqual({
+			kind: "command",
+			id: "view.toggleLeft",
+		});
+	});
+
+	test("a press the desktop owns runs no extension command or chat history either", () => {
+		const keybindings = resolveKeybindings({
+			platform: "Linux",
+			overrides: { "hint-mode.show": ["Mod+KeyZ"], "chat.history": ["Mod+Shift+Slash"] },
+			extensions: [
+				{
+					extension: "hint-mode",
+					enabled: true,
+					commands: [
+						{
+							id: "hint-mode.show",
+							title: "hintMode.shortcuts.show",
+							chords: [{ code: "Semicolon", key: ";", mod: true }],
+						},
+					],
+				},
+			],
+		});
+		expect(routeHotkey(azertyCtrlW, all, at("linux", keybindings))).toBeNull();
+		expect(routeHotkey(russianCtrlComma, all, at("windows", keybindings))).toBeNull();
+		expect(routeHotkey(azertyCtrlW, all, at("browser", keybindings))).toEqual({
+			kind: "extension",
+			extension: "hint-mode",
+			id: "hint-mode.show",
+		});
+		expect(routeHotkey(russianCtrlComma, all, at("browser", keybindings))).toEqual({
+			kind: "history",
+		});
+	});
+
+	test("chat history rebound off Ctrl+R opens from a terminal, which keeps Ctrl+R", () => {
+		const moved = resolveKeybindings({
+			platform: "Linux",
+			overrides: { "chat.history": ["Mod+Alt+KeyY"] },
+		});
+		const ctrlAltY = key("KeyY", { altKey: true });
+		expect(routeHotkey(ctrlAltY, all, at("linux", moved, { inTerminal: true }))).toEqual({
+			kind: "history",
+		});
+		const defaults = resolveKeybindings({ platform: "Linux" });
+		expect(routeHotkey(key("KeyR"), all, at("linux", defaults, { inTerminal: true }))).toBeNull();
+		expect(routeHotkey(key("KeyR"), all, at("linux", defaults))).toEqual({ kind: "history" });
 	});
 });

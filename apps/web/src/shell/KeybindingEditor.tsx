@@ -45,6 +45,7 @@ import { toast, useAppStore } from "../store";
 import { errorText, supportsKeybindings, updateKeybindings } from "../transport";
 import { claimKeyboard } from "./extensionCommands";
 import { commandTitle, entryTitle, useKeybindingList } from "./keybindingState";
+import { isDesktopShortcut } from "./shortcutCommands";
 import { hasNativeShortcuts } from "./useAppShortcuts";
 
 const CLAIM = "settings.keyboard";
@@ -599,7 +600,9 @@ export function KeybindingEditor() {
 		}
 		const { chord } = recorded;
 		const reserved = recorded.browserReserved && !desktop;
-		if (isDesktopNativeChord(chord)) return settle({ command, kind: "desktop", chord });
+		if (isDesktopNativeChord(chord) || isDesktopShortcut(event.nativeEvent)) {
+			return settle({ command, kind: "desktop", chord });
+		}
 		const other = chordHolder(list, command, chord);
 		if (other !== null) return settle({ command, kind: "taken", chord, other, reserved });
 		if (entry.plain && elementKeyUses(chord, platform).length > 0) {
