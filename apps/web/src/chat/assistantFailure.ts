@@ -31,6 +31,19 @@ export function isModelUnavailableError(message: string): boolean {
 	return MODEL_UNAVAILABLE.some((pattern) => pattern.test(message));
 }
 
+const FALLBACKS_REJECTED = [
+	/does not support (?:the )?fallbacks? field/i,
+	/\bfallbacks\b["'`]?:?\s*(?:Extra inputs are not permitted|is not permitted|is not allowed|is not supported)/i,
+	/\b(?:unknown|unrecognized|unsupported|unexpected) [^\n]{0,40}?\bfallbacks\b/i,
+];
+
+export function fallbacksRejected(turn: {
+	text: string;
+	failure?: AssistantFailure | undefined;
+}): boolean {
+	return turn.failure === "error" && FALLBACKS_REJECTED.some((pattern) => pattern.test(turn.text));
+}
+
 export const CLAUDE_USAGE_URL = "https://claude.ai/settings/usage";
 const CHATGPT_USAGE_URL = "https://chatgpt.com/settings/usage";
 
@@ -69,6 +82,7 @@ export function errorTurnText(
 	if (turn.failure === "truncated") return t("chat.failure.truncated");
 	if (turn.failure === "error" && isModelUnavailableError(turn.text))
 		return `${t("chat.failure.modelUnavailable")}\n\n${turn.text}`;
+	if (fallbacksRejected(turn)) return `${t("chat.failure.fallbacksRejected")}\n\n${turn.text}`;
 	if (turn.failure === "error") return turn.text || t("chat.failure.error");
 	return turn.text;
 }

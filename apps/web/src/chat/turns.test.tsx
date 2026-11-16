@@ -129,6 +129,32 @@ describe("system and failure notices", () => {
 		}
 	});
 
+	test("a rejected fallbacks field swaps Try again for the one-click repair on the current failure", () => {
+		const text = "400 Anthropic proxy does not support fallback field";
+		const row: ChatRow = { kind: "error", id: "e", text, failure: "error", recovery: "try-again" };
+		const render = (actions: ChatActions | null, onTryAgain?: () => void) =>
+			renderToStaticMarkup(
+				<ChatActionsContext.Provider value={actions}>
+					<TooltipProvider>
+						<ChatTurnView row={row} agentResponded isFinalAnswer={false} onTryAgain={onTryAgain} />
+					</TooltipProvider>
+				</ChatActionsContext.Provider>,
+			);
+		const repair = { disableServerFallback: async () => {} } as unknown as ChatActions;
+		const html = render(repair, () => {});
+		expect(html).toContain(text);
+		expect(html).toContain("server-side fallback");
+		expect(html).toContain('data-testid="agent-disable-fallback"');
+		expect(html).toContain("Turn off fallback and retry");
+		expect(html).not.toContain('data-testid="agent-try-again"');
+		const historical = render(repair);
+		expect(historical).toContain("server-side fallback");
+		expect(historical).not.toContain("agent-disable-fallback");
+		const olderHost = render(null, () => {});
+		expect(olderHost).not.toContain("agent-disable-fallback");
+		expect(olderHost).toContain('data-testid="agent-try-again"');
+	});
+
 	test("a subscription-limit failure swaps Try again for the usage page and provider settings", () => {
 		const text =
 			"The ChatGPT user has reached their Subscription Sharing usage limit. Ask the user to try again after their usage limit resets or use an API key instead.";

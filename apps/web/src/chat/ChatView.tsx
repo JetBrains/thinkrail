@@ -39,6 +39,7 @@ import {
 	selectPickerModels,
 	selectSkillsStale,
 	selectSupportsMcp,
+	selectSupportsServerFallbackRepair,
 	selectWorkspaceById,
 	toast,
 	useAppStore,
@@ -160,6 +161,7 @@ export default function ChatView({
 	const connectionGeneration = useAppStore((s) => s.connectionGeneration);
 	const canRenameChat = useAppStore(selectCanRenameChat);
 	const supportsMcp = useAppStore(selectSupportsMcp);
+	const supportsFallbackRepair = useAppStore(selectSupportsServerFallbackRepair);
 	const composerGrowthLimit = useAppStore((state) => state.composerGrowthLimit);
 	const questionPanelHeight = useAppStore((state) => state.questionPanelHeight);
 	const [dockTarget, setDockTarget] = useState<HTMLDivElement | null>(null);
@@ -827,6 +829,10 @@ export default function ChatView({
 		performSendRef.current = performSend;
 	});
 	const onTryAgain = useCallback(() => performSendRef.current(TRY_AGAIN_PROMPT, [], "send"), []);
+	const disableServerFallback = useCallback(async () => {
+		await getTransport().request("session.disableServerFallback", { sessionId });
+		performSendRef.current(TRY_AGAIN_PROMPT, [], "send");
+	}, [sessionId]);
 
 	return (
 		<div
@@ -888,6 +894,7 @@ export default function ChatView({
 					readMcpOutput={supportsMcp ? readMcpOutput : undefined}
 					openMcpSettings={supportsMcp ? openMcpSettings : undefined}
 					openProviderSettings={openProviderSettings}
+					disableServerFallback={supportsFallbackRepair ? disableServerFallback : undefined}
 					findModel={findModel}
 					dockTarget={dockTarget}
 					onDockedInteractionChange={setDockedToolCallId}

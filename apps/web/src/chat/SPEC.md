@@ -83,7 +83,16 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   provider); a retry fails until the user adds usage, waits for a reset, or connects an API key or another
   provider, after which any send continues the same chat (#1147). The signatures are a data table of pattern →
   usage URL + link label; linkifying URLs inside the error text was rejected because Anthropic's carries no
-  scheme. Neither affordance goes stale, so historical matching turns keep them. Only the current settlement-derived failure carries the
+  scheme. Neither affordance goes stale, so historical matching turns keep them. A **rejected-fallbacks**
+  error (`fallbacksRejected`: a proxy or gateway refusing pi's Anthropic server-side refusal fallback —
+  "does not support fallback field", `fallbacks: Extra inputs are not permitted`, an unknown/unrecognized
+  `fallbacks` argument) leads with a localized explanation above the provider text, since a retry sends the
+  same field again. On the current failure (the `try-again` recovery) with a v125 host, **Try again** becomes
+  **Turn off fallback and retry** (`disableServerFallback`, supplied by `ChatView`): `session.disableServerFallback`
+  turns fallback off for the chat's provider and moves the chat onto the updated model, then the ordinary
+  `Try again.` send follows. The button is pending while it runs; a failure shows a localized alert line and
+  keeps the button. Historical matches keep the explanation only; an older host keeps plain **Try again**.
+  Only the current settlement-derived failure carries the
   web-local `try-again` recovery action; its **Try again** button sends one visible ordinary `Try again.` user
   message through `ChatView`'s existing immediate-send path. Rejected sends, extension notifications, and
   generic app errors stay non-actionable because the missing prompt or repair may not be in Pi's context.
@@ -698,7 +707,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   name, so a renderer can show an up-to-date name without importing the store. The `start_workspace`
   card uses both and hides the open action when there is no provider.
   `openProviderSettings()` (Settings › Providers) is supplied by `ChatView` on every host — the MCP
-  cards' provider-backed sign-in and the subscription-limit `ErrorTurn` use it. The optional MCP actions —
+  cards' provider-backed sign-in and the subscription-limit `ErrorTurn` use it. `disableServerFallback()` is supplied only
+  from `SERVER_FALLBACK_PROTOCOL_VERSION` (v111) and only consumed by the rejected-fallbacks `ErrorTurn`. The optional MCP actions —
   `readMcpOutput(toolCallId)` (`mcp.readOutput` for this chat) and `openMcpSettings()` (Settings › MCP
   servers) — are supplied (through `ChatTranscript`'s provider) only on an MCP-capable host;
   without them (older host, the plan page's provider, or `null`) the MCP cards hide Full output and Sign in
