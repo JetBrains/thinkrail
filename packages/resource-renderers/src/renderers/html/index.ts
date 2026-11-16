@@ -1,5 +1,4 @@
 import type { ResourceRenderer } from "../../registry";
-import { setInteractiveHtmlGlobs } from "./interactive";
 
 export const htmlRenderer: ResourceRenderer = {
 	id: "thinkrail/html",
@@ -19,16 +18,3 @@ export const htmlRenderer: ResourceRenderer = {
 	loadView: () => import("./View"),
 	loadDiff: () => import("./Diff"),
 };
-
-export function interactiveHtmlRenderer(globs: readonly string[]): ResourceRenderer {
-	setInteractiveHtmlGlobs(globs);
-	return {
-		...htmlRenderer,
-		id: "thinkrail/html-interactive",
-		labelKey: "viewer.renderer.interactive",
-		match: { glob: [...globs], text: true },
-		rank: htmlRenderer.rank + 10,
-		loadView: () => import("./InteractiveView"),
-		loadDiff: () => import("./InteractiveDiff"),
-	};
-}

@@ -86,7 +86,6 @@ export {
 	USER_FONT_EXTENSIONS,
 	USER_FONT_UPLOAD_HEADER,
 	USER_FONTS_ROUTE,
-	WORKSPACE_MOCKUP_DIR,
 } from "./domain";
 export type {
 	ContentMatch,

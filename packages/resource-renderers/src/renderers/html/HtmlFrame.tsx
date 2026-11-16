@@ -1,17 +1,25 @@
-import { useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
-import { type CSSProperties, type SyntheticEvent, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type SyntheticEvent, useEffect, useRef } from "react";
 import { useElementSize } from "../../support/useElementSize";
-import { HTML_INTERACTIVE_CSP } from "./htmlDocument";
-import { messageScrollEndpoint, type ScrollLink, windowScrollEndpoint } from "./scrollLink";
+import type { ScrollLink } from "./scrollLink";
 import { type HtmlViewport, htmlFrameGeometry } from "./viewport";
 
 const NO_BOX = { width: 0, height: 0 };
 
-const INTERACTIVE_FRAME = { sandbox: "allow-scripts", csp: HTML_INTERACTIVE_CSP };
-
-function useLinkAttachment(scrollLink: ScrollLink | undefined, interactive: boolean) {
+export function HtmlFrame({
+	title,
+	document,
+	viewport = "responsive",
+	scrollLink,
+	compact = false,
+}: {
+	title: string;
+	document: string;
+	viewport?: HtmlViewport;
+	scrollLink?: ScrollLink | undefined;
+	compact?: boolean;
+}) {
+	const { ref: boxRef, size } = useElementSize<HTMLDivElement>();
 	const detachRef = useRef<(() => void) | null>(null);
 	useEffect(
 		() => () => {
@@ -20,115 +28,6 @@ function useLinkAttachment(scrollLink: ScrollLink | undefined, interactive: bool
 		},
 		[],
 	);
-	return (frame: HTMLIFrameElement) => {
-		detachRef.current?.();
-		detachRef.current = null;
-		const view = frame.contentWindow;
-		if (!scrollLink || !view) return;
-		detachRef.current = scrollLink.attach(
-			interactive ? messageScrollEndpoint(view) : windowScrollEndpoint(view),
-		);
-	};
-}
-
-function InteractiveIframe({
-	title,
-	document,
-	className,
-	scrollLink,
-	onLeft,
-}: {
-	title: string;
-	document: string;
-	className: string;
-	scrollLink: ScrollLink | undefined;
-	onLeft: () => void;
-}) {
-	const loads = useRef(0);
-	const attach = useLinkAttachment(scrollLink, true);
-	const onLoad = (event: SyntheticEvent<HTMLIFrameElement>) => {
-		loads.current += 1;
-		if (loads.current > 1) {
-			onLeft();
-			return;
-		}
-		attach(event.currentTarget);
-	};
-	return (
-		<iframe
-			title={title}
-			{...INTERACTIVE_FRAME}
-			srcDoc={document}
-			onLoad={onLoad}
-			data-interactive=""
-			className={className}
-		/>
-	);
-}
-
-function StaticIframe({
-	title,
-	document,
-	className,
-	scrollLink,
-}: {
-	title: string;
-	document: string;
-	className: string;
-	scrollLink: ScrollLink | undefined;
-}) {
-	const attach = useLinkAttachment(scrollLink, false);
-	return (
-		<iframe
-			title={title}
-			sandbox={scrollLink ? "allow-same-origin" : ""}
-			srcDoc={document}
-			onLoad={scrollLink ? (event) => attach(event.currentTarget) : undefined}
-			className={className}
-		/>
-	);
-}
-
-function LeftPageNotice({ onReload }: { onReload: () => void }) {
-	const t = useT();
-	return (
-		<div
-			data-testid="html-left-page"
-			role="status"
-			className="absolute inset-0 flex flex-col items-center justify-center gap-8 bg-container-workspace-bg px-12 text-center tr-text-ui text-text-muted"
-		>
-			{t("viewer.html.leftPage")}
-			<Button
-				variant="outline"
-				size="s"
-				tabIndex={0}
-				data-testid="html-left-page-reload"
-				onClick={onReload}
-			>
-				{t("viewer.html.reload")}
-			</Button>
-		</div>
-	);
-}
-
-export function HtmlFrame({
-	title,
-	document,
-	viewport = "responsive",
-	scrollLink,
-	compact = false,
-	interactive = false,
-}: {
-	title: string;
-	document: string;
-	viewport?: HtmlViewport;
-	scrollLink?: ScrollLink | undefined;
-	compact?: boolean;
-	interactive?: boolean;
-}) {
-	const { ref: boxRef, size } = useElementSize<HTMLDivElement>();
-	const [run, setRun] = useState({ document, generation: 0, left: false });
-	if (run.document !== document) setRun({ document, generation: run.generation + 1, left: false });
 	const box = size ?? NO_BOX;
 	const geometry = htmlFrameGeometry(viewport, box);
 	const fitted = viewport !== "responsive" && box.width > 0;
@@ -137,9 +36,13 @@ export function HtmlFrame({
 		"--html-frame-height": `${geometry.height}px`,
 		"--html-frame-scale": String(geometry.scale),
 	} as CSSProperties;
-	const frameClass = fitted
-		? "absolute top-0 left-0 h-[var(--html-frame-height)] w-[var(--html-frame-width)] max-w-none origin-top-left scale-[var(--html-frame-scale)] border-0 bg-container-workspace-bg"
-		: "absolute inset-0 h-full w-full border-0 bg-container-workspace-bg";
+	const linkOnLoad = scrollLink
+		? (event: SyntheticEvent<HTMLIFrameElement>) => {
+				detachRef.current?.();
+				const view = event.currentTarget.contentWindow;
+				detachRef.current = view ? scrollLink.attach(view) : null;
+			}
+		: undefined;
 
 	return (
 		<div
@@ -153,27 +56,17 @@ export function HtmlFrame({
 			)}
 			style={fitted ? vars : undefined}
 		>
-			{!interactive ? (
-				<StaticIframe
-					title={title}
-					document={document}
-					className={frameClass}
-					scrollLink={scrollLink}
-				/>
-			) : run.left ? (
-				<LeftPageNotice
-					onReload={() => setRun({ ...run, generation: run.generation + 1, left: false })}
-				/>
-			) : (
-				<InteractiveIframe
-					key={run.generation}
-					title={title}
-					document={document}
-					className={frameClass}
-					scrollLink={scrollLink}
-					onLeft={() => setRun({ ...run, left: true })}
-				/>
-			)}
+			<iframe
+				title={title}
+				sandbox={scrollLink ? "allow-same-origin" : ""}
+				srcDoc={document}
+				onLoad={linkOnLoad}
+				className={
+					fitted
+						? "absolute top-0 left-0 h-[var(--html-frame-height)] w-[var(--html-frame-width)] max-w-none origin-top-left scale-[var(--html-frame-scale)] border-0 bg-container-workspace-bg"
+						: "absolute inset-0 h-full w-full border-0 bg-container-workspace-bg"
+				}
+			/>
 		</div>
 	);
 }

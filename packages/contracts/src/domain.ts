@@ -351,9 +351,6 @@ export interface WorkspaceIgnoredOutput {
 	sessionId?: string;
 }
 
-/** Where agents write HTML mockups; the UI runs their scripts (sandboxed, no network). */
-export const WORKSPACE_MOCKUP_DIR = ".thinkrail/context/mockups";
-
 export interface WorkspaceArtifactsSnapshot {
 	workspaceId: string;
 	dir: string;

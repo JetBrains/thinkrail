@@ -1,4 +1,4 @@
-import { MAX_SEARCH_PREVIEW_BYTES, WORKSPACE_MOCKUP_DIR } from "@thinkrail/contracts";
+import { MAX_SEARCH_PREVIEW_BYTES } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import {
 	type ResourceEnvironment,
@@ -28,9 +28,7 @@ import {
 import { resolveThinkrailEditorTheme, THINKRAIL_PIERRE_THEME } from "../themes";
 import { getTransport, wsErrorCode } from "../transport";
 
-registerBundledResourceRenderers({
-	interactiveHtml: [`${WORKSPACE_MOCKUP_DIR}/*.html`, `${WORKSPACE_MOCKUP_DIR}/*.htm`],
-});
+registerBundledResourceRenderers();
 
 function FileReview({ workspaceId, path, kind, sessionId, children }: ResourceFileReviewProps) {
 	const review = useFileReview(workspaceId, path, kind, undefined, sessionId).worktree;
