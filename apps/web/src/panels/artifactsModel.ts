@@ -114,12 +114,14 @@ export function artifactTree(
 	dir: string,
 	rows: readonly ArtifactRow[],
 	artifacts: readonly WorkspaceArtifact[],
+	base = "",
 ): ArtifactTreeNode[] {
 	const live = liveFolders(artifacts);
 	const root: FolderBuild = { dirs: new Map(), files: [] };
 	for (const row of rows) {
 		let build = root;
-		for (const segment of row.folder ? row.folder.split("/") : []) {
+		const folder = base ? row.folder.slice(base.length + 1) : row.folder;
+		for (const segment of folder ? folder.split("/") : []) {
 			let next = build.dirs.get(segment);
 			if (!next) {
 				next = { dirs: new Map(), files: [] };
@@ -167,7 +169,114 @@ export function artifactTree(
 		return [...folders.sort(byName), ...build.files.sort(byName)];
 	};
 
-	return materialize(root, dir);
+	return materialize(root, base ? `${dir}/${base}` : dir);
+}
+
+export interface SmartGroup {
+	folder: string;
+	name: string;
+	results: ArtifactRow[];
+	working: ArtifactRow[];
+	children: SmartGroup[];
+	newest: number;
+	fresh: boolean;
+	resultCount: number;
+	groupCount: number;
+}
+
+export interface SmartView {
+	groups: SmartGroup[];
+	unattached: ArtifactRow[];
+	results: number;
+}
+
+const isResult = (row: ArtifactRow) => row.artifact.role === "result";
+
+const parentFolder = (folder: string) =>
+	folder.includes("/") ? folder.slice(0, folder.lastIndexOf("/")) : "";
+
+function group(folder: string): SmartGroup {
+	return {
+		folder,
+		name: folder,
+		results: [],
+		working: [],
+		children: [],
+		newest: 0,
+		fresh: false,
+		resultCount: 0,
+		groupCount: 0,
+	};
+}
+
+function homeOf(groups: ReadonlyMap<string, SmartGroup>, folder: string): SmartGroup | undefined {
+	for (let at = folder; ; at = parentFolder(at)) {
+		const home = groups.get(at);
+		if (home && (at !== "" || folder === "")) return home;
+		if (at === "") return undefined;
+	}
+}
+
+export function smartGroups(rows: readonly ArtifactRow[]): SmartView {
+	const groups = new Map<string, SmartGroup>();
+	for (const row of rows.filter(isResult)) {
+		const home = groups.get(row.folder) ?? group(row.folder);
+		groups.set(row.folder, home);
+		home.results.push(row);
+	}
+	const unattached: ArtifactRow[] = [];
+	for (const row of rows) {
+		if (isResult(row)) continue;
+		const home = homeOf(groups, row.folder);
+		if (home) home.working.push(row);
+		else unattached.push(row);
+	}
+
+	const roots: SmartGroup[] = [];
+	for (const node of groups.values()) {
+		const parent = node.folder ? homeOf(groups, parentFolder(node.folder)) : undefined;
+		if (parent && parent.folder !== "") parent.children.push(node);
+		else roots.push(node);
+	}
+	const byTop = new Map<string, SmartGroup[]>();
+	for (const node of roots) {
+		if (!node.folder.includes("/")) continue;
+		const top = node.folder.slice(0, node.folder.indexOf("/"));
+		byTop.set(top, [...(byTop.get(top) ?? []), node]);
+	}
+	for (const [top, nodes] of byTop) {
+		if (nodes.length < 2) continue;
+		const shared = group(top);
+		shared.children = nodes;
+		roots.splice(0, roots.length, ...roots.filter((node) => !nodes.includes(node)), shared);
+	}
+
+	const finish = (node: SmartGroup, parent: string): SmartGroup => {
+		node.name =
+			parent && node.folder.startsWith(`${parent}/`)
+				? node.folder.slice(parent.length + 1)
+				: node.folder;
+		node.results.sort((a, b) => a.name.localeCompare(b.name));
+		node.children = node.children.map((child) => finish(child, node.folder));
+		node.children.sort((a, b) => b.newest - a.newest);
+		node.newest = Math.max(
+			0,
+			...node.results.map((row) => row.artifact.changedAt),
+			...node.children.map((child) => child.newest),
+		);
+		node.fresh =
+			node.results.some((row) => row.fresh) || node.children.some((child) => child.fresh);
+		node.resultCount =
+			node.results.length + node.children.reduce((sum, child) => sum + child.resultCount, 0);
+		node.groupCount = node.children.reduce((sum, child) => sum + 1 + child.groupCount, 0);
+		return node;
+	};
+	const finished = roots.map((node) => finish(node, "")).sort((a, b) => b.newest - a.newest);
+	return {
+		groups: finished,
+		unattached,
+		results: finished.reduce((sum, node) => sum + node.resultCount, 0),
+	};
 }
 
 export function artifactTimeLabel(t: Translator, changedAt: number): string {

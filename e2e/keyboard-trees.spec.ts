@@ -339,6 +339,7 @@ test("Artifacts is its own tree: arrows walk it, F2 renames, Delete asks before 
 	}
 	await revealWorkbenchTool(page, "artifacts");
 	await page.getByTestId("artifacts-filter-all").click();
+	await page.getByTestId("artifacts-view-list").click();
 	const tree = page.getByRole("tree", { name: "Artifacts" });
 	const items = tree.getByRole("treeitem");
 	await expect(items).toHaveText(["newer.md", "older.md"]);

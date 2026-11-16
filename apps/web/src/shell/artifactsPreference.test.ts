@@ -27,7 +27,8 @@ afterEach(() => {
 	useAppStore.setState({
 		artifactsSeenByWorkspace: {},
 		artifactsShowIgnored: true,
-		artifactsView: "list",
+		artifactsView: null,
+		artifactsSmart: true,
 		artifactsTreeExpandedByWorkspace: {},
 	});
 });
@@ -42,7 +43,8 @@ test("an untouched client shows ignored outputs and has seen nothing", () => {
 	);
 	expect(useAppStore.getState().artifactsShowIgnored).toBe(true);
 	expect(useAppStore.getState().artifactsSeenByWorkspace).toEqual({});
-	expect(useAppStore.getState().artifactsView).toBe("list");
+	expect(useAppStore.getState().artifactsView).toBeNull();
+	expect(useAppStore.getState().artifactsSmart).toBe(true);
 	expect(useAppStore.getState().artifactsTreeExpandedByWorkspace).toEqual({});
 });
 
@@ -63,16 +65,20 @@ test("stored choices hydrate the store and later changes are written back", () =
 test("the view and each workspace's open folders are remembered", () => {
 	const adapter = memoryAdapter({
 		"artifacts-view": "tree",
+		"artifacts-smart": "false",
 		"artifacts-tree-expanded": JSON.stringify({ w1: ["a", 1, "a/b"], w2: "bad", w3: [] }),
 	});
 	stop = initArtifactsPersistence(adapter);
 	const store = useAppStore.getState();
 	expect(store.artifactsView).toBe("tree");
+	expect(store.artifactsSmart).toBe(false);
 	expect(store.artifactsTreeExpandedByWorkspace).toEqual({ w1: ["a", "a/b"] });
-	store.setArtifactsView("list");
+	store.setArtifactsView("smart");
+	store.setArtifactsSmart(true);
 	store.setArtifactsTreeExpanded("w2", ["x", "x/y"], true);
 	store.setArtifactsTreeExpanded("w1", ["a/b"], false);
-	expect(adapter.values.get("artifacts-view")).toBe("list");
+	expect(adapter.values.get("artifacts-view")).toBe("smart");
+	expect(adapter.values.get("artifacts-smart")).toBe("true");
 	expect(JSON.parse(adapter.values.get("artifacts-tree-expanded") ?? "{}")).toEqual({
 		w1: ["a"],
 		w2: ["x", "x/y"],

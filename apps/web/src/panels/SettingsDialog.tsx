@@ -13,6 +13,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { SettingsSection, useAppStore } from "@/store";
 import { loadInAppSurvey } from "@/transport";
 import { AppearanceSettings } from "./AppearanceSettings";
+import { ArtifactsSettings } from "./ArtifactsSettings";
 import { ChatSettings } from "./ChatSettings";
 import { EnvironmentSettings } from "./EnvironmentSettings";
 import { ExtensionsSettings } from "./ExtensionsSettings";
@@ -151,6 +152,8 @@ export function SettingsDialog({
 								keyboardSettings
 							) : selectedSection === SettingsSection.Terminal ? (
 								<TerminalSettings />
+							) : selectedSection === SettingsSection.Artifacts ? (
+								<ArtifactsSettings />
 							) : selectedSection === SettingsSection.Voice ? (
 								<VoiceSettings />
 							) : selectedSection === SettingsSection.Workspaces ? (
