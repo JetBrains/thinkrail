@@ -1,10 +1,22 @@
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
-import { type CSSProperties, type SyntheticEvent, useEffect, useRef, useState } from "react";
+import {
+	type CSSProperties,
+	type SyntheticEvent,
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
 import { useElementSize } from "../../support/useElementSize";
 import { HTML_INTERACTIVE_CSP } from "./htmlDocument";
-import { messageScrollEndpoint, type ScrollLink, windowScrollEndpoint } from "./scrollLink";
+import {
+	frameLifecycleMessage,
+	messageScrollEndpoint,
+	type ScrollLink,
+	windowScrollEndpoint,
+} from "./scrollLink";
 import { type HtmlViewport, htmlFrameGeometry } from "./viewport";
 
 const NO_BOX = { width: 0, height: 0 };
@@ -31,21 +43,42 @@ function useLinkAttachment(scrollLink: ScrollLink | undefined, interactive: bool
 	};
 }
 
+const LOADED_GRACE_MS = 1000;
+
 function InteractiveIframe({
 	title,
 	document,
+	token,
 	className,
 	scrollLink,
 	onLeft,
 }: {
 	title: string;
 	document: string;
+	token: string;
 	className: string;
 	scrollLink: ScrollLink | undefined;
 	onLeft: () => void;
 }) {
 	const loads = useRef(0);
+	const loaded = useRef(false);
+	const grace = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const frameRef = useRef<HTMLIFrameElement>(null);
 	const attach = useLinkAttachment(scrollLink, true);
+	useLayoutEffect(() => {
+		const onMessage = (event: MessageEvent) => {
+			const view = frameRef.current?.contentWindow;
+			if (!view || event.source !== view) return;
+			const lifecycle = frameLifecycleMessage(event.data, token);
+			if (lifecycle === "left") onLeft();
+			else if (lifecycle === "loaded") loaded.current = true;
+		};
+		window.addEventListener("message", onMessage);
+		return () => {
+			window.removeEventListener("message", onMessage);
+			if (grace.current) clearTimeout(grace.current);
+		};
+	}, [onLeft, token]);
 	const onLoad = (event: SyntheticEvent<HTMLIFrameElement>) => {
 		loads.current += 1;
 		if (loads.current > 1) {
@@ -53,9 +86,13 @@ function InteractiveIframe({
 			return;
 		}
 		attach(event.currentTarget);
+		grace.current = setTimeout(() => {
+			if (!loaded.current) onLeft();
+		}, LOADED_GRACE_MS);
 	};
 	return (
 		<iframe
+			ref={frameRef}
 			title={title}
 			{...INTERACTIVE_FRAME}
 			srcDoc={document}
@@ -117,14 +154,14 @@ export function HtmlFrame({
 	viewport = "responsive",
 	scrollLink,
 	compact = false,
-	interactive = false,
+	interactiveToken,
 }: {
 	title: string;
 	document: string;
 	viewport?: HtmlViewport;
 	scrollLink?: ScrollLink | undefined;
 	compact?: boolean;
-	interactive?: boolean;
+	interactiveToken?: string | undefined;
 }) {
 	const { ref: boxRef, size } = useElementSize<HTMLDivElement>();
 	const [run, setRun] = useState({ document, generation: 0, left: false });
@@ -153,7 +190,7 @@ export function HtmlFrame({
 			)}
 			style={fitted ? vars : undefined}
 		>
-			{!interactive ? (
+			{interactiveToken === undefined ? (
 				<StaticIframe
 					title={title}
 					document={document}
@@ -169,9 +206,10 @@ export function HtmlFrame({
 					key={run.generation}
 					title={title}
 					document={document}
+					token={interactiveToken}
 					className={frameClass}
 					scrollLink={scrollLink}
-					onLeft={() => setRun({ ...run, left: true })}
+					onLeft={() => setRun((current) => ({ ...current, left: true }))}
 				/>
 			)}
 		</div>

@@ -558,32 +558,50 @@ comments on HTML are not offered yet.
 
 `thinkrail/html-interactive` ("Interactive") is the candidate for HTML matching the host's
 `interactiveHtml` globs — ThinkRail passes its agents' mockup directory (`WORKSPACE_MOCKUP_DIR`,
-`.thinkrail/context/mockups/`) — ranked above `thinkrail/html`, so a mockup opens interactive while tabs keep
-**Preview** (static) and **Source** as toggles. Any other HTML never runs script. The point is clickable
-prototypes (tabs, toggles, form controls) for comparing alternatives. Because the host has no auth
-([[architecture]] Decision 7), a script that could reach it over WebSocket would control the agent, so the
-property that matters is **no network**:
-- **The document** keeps scripts, handlers, forms and controls, drops `<base>` and `<meta http-equiv>`, makes
-  every non-`#` link target inert, and gets a CSP meta first in `<head>`, exactly `default-src 'none';
-  script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data:
-  blob:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; child-src 'none';
-  worker-src 'none'` — no fetch, XHR, WebSocket, external script, style, image or frame. A `data:` or `blob:`
-  document the script navigates to inherits the policy (verified in Chromium, WebKit and Firefox).
+`.thinkrail/context/mockups/`) in a browser and **nothing inside the desktop window** (below) — ranked above
+`thinkrail/html`, so a mockup opens interactive while tabs keep **Preview** (static) and **Source** as
+toggles. Any other HTML never runs script. The point is clickable prototypes (tabs, toggles, form controls)
+for comparing alternatives. Because the host has no auth ([[architecture]] Decision 7), a script that could
+reach it over WebSocket would control the agent, so the property that matters is **no network**:
+- **The document** keeps scripts, handlers, forms and controls, drops `<base>`, every `<link>` and `<meta
+  http-equiv>`, makes every non-`#` link target inert, and gets, first in `<head>`, a CSP meta, exactly
+  `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src
+  data:; media-src data: blob:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none';
+  child-src 'none'; worker-src 'none'` — no fetch, XHR, WebSocket, external script, style, image or frame —
+  then `x-dns-prefetch-control: off`, then the frame bridge. A `data:` or `blob:` document the script
+  navigates to inherits the policy (verified in Chromium, WebKit and Firefox).
+- **WebRTC is neutered, because no policy covers it.** `connect-src` does not govern ICE, CSP `webrtc
+  'block'` is enforced by no engine, and a sandbox has no flag for it: a scripted frame sent STUN to any
+  server (an IP leak and an exfiltration channel; it cannot speak to the host's wire). The bridge, the
+  document's first script, redefines `RTCPeerConnection` and its prefixed aliases as non-configurable
+  `undefined` before any mockup script runs. No pristine copy is reachable: every frame the mockup creates
+  gets its own opaque origin (`SecurityError` in all three engines), and popups and workers are closed.
 - **The frame** is `sandbox="allow-scripts"` and nothing else: an opaque origin with no access to the app,
   no popups, no top navigation, no form submission. It is never also `allow-same-origin`, paired or not. It
   carries the same policy as the `csp` attribute, so Chromium and WebView2 (CSP Embedded Enforcement)
-  refuse any foreign document the frame is navigated to; on the desktop the native navigation rules refuse
-  outside URLs for frames as well ([[module-desktop]]).
-- **Leaving is stopped.** A second `load` of the frame means its document was replaced (script navigation,
-  reload); the frame is unmounted and a notice with **Reload** takes its place — no automatic reload loop.
-  Residual risk, accepted and recorded: in a WebKit or Firefox browser tab the request to an outside page is
-  sent and that page runs until its `load` — with the reach of any page the user visits (Decision 7), no
-  more. Chromium sends the request but refuses the document.
-- **Scroll sync without same-origin.** The document carries a tiny bridge that posts its offset on scroll and
-  applies a posted `scrollTo` instantly, answering with the applied (possibly clamped) offset; the link's
-  message endpoint accepts messages only from that frame's window and only finite numbers, writes
-  optimistically so a pending answer never reads as a user scroll, and takes the answer as the echo. A
-  comparison decides per side: a side runs script only if its own path matches.
+  refuse any foreign document the frame is navigated to.
+- **Never inside the desktop window.** Electrobun's message bridges (`webkit.messageHandlers.bunBridge` /
+  `internalBridge`, WebView2's `chrome.webview`) answer every frame, opaque or not, and its internal RPC
+  runs JavaScript in a view the caller names — a mockup script there would escape to the trusted page. So
+  the app registers no interactive globs when its page has a native message bridge
+  (`hasNativeMessageBridge`); desktop mockups stay static until that gate in [[electrobun-compatibility]]
+  lifts.
+- **Leaving is stopped.** The bridge removes its own `<script>` on start and carries a random per-document
+  token (`buildInteractiveHtmlDocument` returns it), so the mockup can neither read nor forge it. It posts
+  `loaded` on its document's `load` and `left` on `pagehide`; the frame accepts them only from its own window
+  with that token. A frame whose first `load` brings no `loaded` within a second (the document replaced
+  itself while still loading — `pagehide` never fires before a page shows), a second `load`, or a `left`
+  unmounts the frame and shows a notice with **Reload** — no automatic reload loop.
+- **Residual risk, accepted and recorded.** In a WebKit or Firefox browser tab, a script can navigate its
+  frame to an outside page: the request is sent and that page runs until it is stopped — with the reach of
+  any page the user visits (Decision 7), no more (Chromium sends the request but refuses the document).
+  WebKit also opens a bare TCP connection for a `preconnect` hint a script adds (no request); resource hints
+  can leak a hostname through DNS.
+- **Scroll sync without same-origin.** The bridge posts its offset on scroll and applies a posted `scrollTo`
+  instantly, answering with the applied (possibly clamped) offset; the link's message endpoint accepts
+  messages only from that frame's window and only finite numbers, writes optimistically so a pending answer
+  never reads as a user scroll, and takes the answer as the echo. A comparison decides per side: a side runs
+  script only if its own path matches.
 - The notice says scripts run sandboxed without network (`viewer.html.interactiveNotice`).
 
 Pierre parses the two complete text sides (`absent` → `null`) with the current ignore-whitespace value,

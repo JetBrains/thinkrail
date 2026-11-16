@@ -77,6 +77,13 @@ function bridgeMessage(data: unknown): { kind: "scroll" | "applied"; offset: Scr
 	return { kind, offset: { top, left } };
 }
 
+export function frameLifecycleMessage(data: unknown, token: string): "loaded" | "left" | null {
+	if (typeof data !== "object" || data === null) return null;
+	const message = data as Record<string, unknown>;
+	if (message.source !== SCROLL_BRIDGE_SOURCE || message.token !== token) return null;
+	return message.kind === "loaded" || message.kind === "left" ? message.kind : null;
+}
+
 export function messageScrollEndpoint(
 	frame: Pick<Window, "postMessage">,
 	host: Pick<Window, "addEventListener" | "removeEventListener"> = window,

@@ -344,8 +344,9 @@ confinement: navigation-event responses cannot cancel it. The launcher applies t
 `about:srcdoc`, and same-origin `blob:`, then block the origin's `WORKSPACE_VIEW_ROUTE` (`/view/`) again
 (last match wins). HTML, SVG and notebook previews update `srcDoc` in place and
 every srcdoc load is policy-checked, so blocking `about:srcdoc` blanks them; `blob:` keeps downloads
-working. Because frames are checked too, an interactive mockup's script cannot load an outside page into
-its frame on the desktop ([[module-resource-renderers]]). Electrobun 2.0.5 documents a `navigationRules` constructor option but never forwards it to
+working. Agent mockups do not run their scripts in the desktop window at all: Electrobun's message bridges answer
+every frame, so the web app keeps them static there ([[module-resource-renderers]],
+[[electrobun-compatibility]]). Electrobun 2.0.5 documents a `navigationRules` constructor option but never forwards it to
 native code, so the launcher does not use it.
 
 Every external link activation reaches the OS through one path. The desktop preload turns unmodified

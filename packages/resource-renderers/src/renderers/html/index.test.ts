@@ -14,10 +14,12 @@ import {
 	prepareHtmlPreviewDocument,
 	prepareInteractiveHtmlDocument,
 	SCROLL_BRIDGE_SOURCE,
+	WEBRTC_GLOBALS,
 } from "./htmlDocument";
 import { isInteractiveHtmlPath } from "./interactive";
 import {
 	createScrollLink,
+	frameLifecycleMessage,
 	messageScrollEndpoint,
 	type ScrollLinkClock,
 	windowScrollEndpoint,
@@ -428,6 +430,7 @@ function interactiveDocument(): FakeDocument {
 	const head = new FakeElement("head", {}, "", [
 		new FakeElement("meta", { "http-equiv": "refresh", content: "0;url=https://attacker.invalid" }),
 		new FakeElement("base", { href: "https://attacker.invalid/" }),
+		new FakeElement("link", { rel: "preconnect", href: "https://attacker.invalid" }),
 		new FakeElement("style", {}, "button { color: red }"),
 	]);
 	const body = new FakeElement("body", {}, "", [
@@ -441,11 +444,21 @@ function interactiveDocument(): FakeDocument {
 }
 
 test("an interactive mockup keeps its scripts and controls under a no-network policy", () => {
-	const document = prepareInteractiveHtmlDocument(interactiveDocument() as unknown as Document);
+	const document = prepareInteractiveHtmlDocument(
+		interactiveDocument() as unknown as Document,
+		"frame-token-1",
+	);
 	expect(document.match(/Content-Security-Policy/g)).toHaveLength(1);
 	expect(document).toContain(`content="${HTML_INTERACTIVE_CSP}"`);
 	expect(document.indexOf("Content-Security-Policy")).toBeLessThan(document.indexOf("<script>"));
 	expect(document).toContain(SCROLL_BRIDGE_SOURCE);
+	expect(document).toContain('http-equiv="x-dns-prefetch-control" content="off"');
+	const bridge = document.slice(document.indexOf("<script>"), document.indexOf("</script>"));
+	for (const name of WEBRTC_GLOBALS) expect(bridge).toContain(name);
+	expect(bridge.indexOf("RTCPeerConnection")).toBeLessThan(bridge.indexOf("postMessage"));
+	expect(bridge).toContain("pagehide");
+	expect(bridge).toContain("frame-token-1");
+	expect(bridge).toContain("document.currentScript?.remove()");
 	expect(document).toContain('<button onclick="toggle()">Toggle</button>');
 	expect(document).toContain('<input type="checkbox">');
 	expect(document).toContain("<script>function toggle() {}</script>");
@@ -453,7 +466,7 @@ test("an interactive mockup keeps its scripts and controls under a no-network po
 	expect(document).toContain(
 		'<a data-href="https://attacker.invalid/path" title="https://attacker.invalid/path">external</a>',
 	);
-	for (const fragment of ['http-equiv="refresh"', "<base"])
+	for (const fragment of ['http-equiv="refresh"', "<base", "<link"])
 		expect(document).not.toContain(fragment);
 });
 
@@ -469,7 +482,7 @@ test("an interactive frame runs scripts only without same-origin, paired or not,
 			createElement(HtmlFrame, {
 				title: "Mockup",
 				document: PREVIEW,
-				interactive: true,
+				interactiveToken: "frame-token-1",
 				...(scrollLink ? { scrollLink } : {}),
 			}),
 		);
@@ -572,4 +585,22 @@ test("a scripted frame syncs through its bridge, and its clamped answer is not t
 
 	detach();
 	expect(host.listening).toBe(0);
+});
+
+test("only the frame bridge's own lifecycle messages, with its document's token, count", () => {
+	const message = (kind: string, token = "t1", source = SCROLL_BRIDGE_SOURCE) => ({
+		source,
+		kind,
+		token,
+		top: 0,
+		left: 0,
+	});
+	expect(frameLifecycleMessage(message("loaded"), "t1")).toBe("loaded");
+	expect(frameLifecycleMessage(message("left"), "t1")).toBe("left");
+	expect(frameLifecycleMessage(message("loaded", "forged"), "t1")).toBeNull();
+	expect(frameLifecycleMessage({ source: SCROLL_BRIDGE_SOURCE, kind: "loaded" }, "t1")).toBeNull();
+	expect(frameLifecycleMessage(message("scroll"), "t1")).toBeNull();
+	expect(frameLifecycleMessage(message("left", "t1", "other"), "t1")).toBeNull();
+	expect(frameLifecycleMessage("left", "t1")).toBeNull();
+	expect(frameLifecycleMessage(null, "t1")).toBeNull();
 });

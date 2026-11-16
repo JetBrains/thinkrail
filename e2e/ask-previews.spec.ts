@@ -415,8 +415,9 @@ const interactiveMockup = (host: string) => `<!doctype html><html><body>
 const report = [];
 const done = (name, value) => {
 	report.push(name + ": " + value);
-	if (report.length === 2) document.getElementById("network").textContent = report.sort().join(", ");
+	if (report.length === 3) document.getElementById("network").textContent = report.sort().join(", ");
 };
+done("rtc", typeof RTCPeerConnection === "undefined" ? "blocked" : "open");
 fetch(${JSON.stringify(`${host}/health`)}).then(() => done("fetch", "open"), () => done("fetch", "blocked"));
 try {
 	const socket = new WebSocket(${JSON.stringify(`${host.replace(/^http/, "ws")}/ws`)});
@@ -459,7 +460,9 @@ test("an agent mockup runs its own scripts without network and is stopped when i
 		const iframe = pane.locator("iframe");
 		await expect(iframe).toHaveAttribute("sandbox", "allow-scripts");
 		const mockup = pane.frameLocator("iframe");
-		await expect(mockup.locator("#network")).toHaveText("fetch: blocked, socket: blocked");
+		await expect(mockup.locator("#network")).toHaveText(
+			"fetch: blocked, rtc: blocked, socket: blocked",
+		);
 		await mockup.locator("#toggle").click();
 		await expect(mockup.locator("#state")).toHaveText("Expanded");
 
@@ -468,6 +471,43 @@ test("an agent mockup runs its own scripts without network and is stopped when i
 		await expect(iframe).toHaveCount(0);
 		await pane.getByTestId("html-left-page-reload").click();
 		await expect(mockup.locator("#state")).toHaveText("Collapsed");
+	} finally {
+		rmSync(session.path, { force: true });
+		cleanup();
+	}
+});
+
+test("a mockup that replaces itself while it is still loading is stopped too", async ({ page }) => {
+	await page.setViewportSize({ width: 1400, height: 1100 });
+	await openFixtureProject(page);
+	const cleanup = writeMockups({
+		"early-leave.html": `<!doctype html><html><body><p>first</p><script>
+parent.postMessage({ source: "thinkrail-html-scroll", kind: "loaded", top: 0, left: 0 }, "*");
+location.replace("data:text/html,left");
+</script><p>never</p></body></html>`,
+	});
+	const session = seedQuestionnaire("early leave", "ask-early-leave", {
+		questions: [
+			{
+				question: "Which banner?",
+				header: "Banner",
+				options: [
+					{
+						label: "Animated (Recommended)",
+						description: "Moves.",
+						previewFile: `${MOCKUPS}/early-leave.html`,
+					},
+					{ label: "Static", description: "Still." },
+				],
+			},
+		],
+	});
+
+	try {
+		const card = await openRound(page, "early leave");
+		const pane = card.getByTestId("ask-preview");
+		await expect(pane.getByTestId("html-left-page")).toBeVisible();
+		await expect(pane.locator("iframe")).toHaveCount(0);
 	} finally {
 		rmSync(session.path, { force: true });
 		cleanup();

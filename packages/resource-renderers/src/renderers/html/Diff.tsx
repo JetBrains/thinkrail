@@ -28,19 +28,22 @@ function HtmlSide({
 	scrollLink: ScrollLink;
 	interactive: boolean;
 }) {
-	const document = useMemo(
-		() => (interactive ? buildInteractiveHtmlDocument(text) : buildHtmlPreviewDocument(text)),
+	const built = useMemo(
+		() =>
+			interactive
+				? buildInteractiveHtmlDocument(text)
+				: { document: buildHtmlPreviewDocument(text), token: undefined },
 		[text, interactive],
 	);
 	const compact = useResourceEnvironment().compact ?? false;
 	return (
 		<HtmlFrame
 			title={title}
-			document={document}
+			document={built.document}
 			viewport={viewport}
 			scrollLink={scrollLink}
 			compact={compact}
-			interactive={interactive}
+			interactiveToken={built.token}
 		/>
 	);
 }

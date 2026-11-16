@@ -87,23 +87,43 @@ export const HTML_INTERACTIVE_CSP =
 
 export const SCROLL_BRIDGE_SOURCE = "thinkrail-html-scroll";
 
-const SCROLL_BRIDGE = `(() => {
+export const WEBRTC_GLOBALS = [
+	"RTCPeerConnection",
+	"webkitRTCPeerConnection",
+	"mozRTCPeerConnection",
+];
+
+function frameBridge(token: string): string {
+	return `(() => {
+document.currentScript?.remove();
+for (const name of ${JSON.stringify(WEBRTC_GLOBALS)}) {
+if (name in window) Object.defineProperty(window, name, { value: undefined, configurable: false, writable: false });
+}
+const host = parent;
 const source = ${JSON.stringify(SCROLL_BRIDGE_SOURCE)};
+const token = ${JSON.stringify(token)};
 const scroller = () => document.scrollingElement || document.documentElement;
-const post = (kind) => parent.postMessage({ source, kind, top: scroller().scrollTop, left: scroller().scrollLeft }, "*");
+const post = (kind) => host.postMessage({ source, kind, token, top: scroller().scrollTop, left: scroller().scrollLeft }, "*");
 addEventListener("scroll", () => post("scroll"), { passive: true });
+addEventListener("load", () => post("loaded"));
+addEventListener("pagehide", () => post("left"));
 addEventListener("message", (event) => {
 const data = event.data;
-if (event.source !== parent || !data || data.source !== source || data.kind !== "scrollTo") return;
+if (event.source !== host || !data || data.source !== source || data.kind !== "scrollTo") return;
 scroller().scrollTo({ top: Number(data.top) || 0, left: Number(data.left) || 0, behavior: "instant" });
 post("applied");
 });
 })();`;
+}
 
 function neutralizeInteractive(element: Element): void {
 	for (const child of Array.from(element.children)) {
 		const name = child.localName.toLowerCase();
-		if (name === "base" || (name === "meta" && child.getAttribute("http-equiv") !== null)) {
+		if (
+			name === "base" ||
+			name === "link" ||
+			(name === "meta" && child.getAttribute("http-equiv") !== null)
+		) {
 			child.remove();
 			continue;
 		}
@@ -117,20 +137,29 @@ function neutralizeInteractive(element: Element): void {
 	element.setAttribute("title", href);
 }
 
-export function prepareInteractiveHtmlDocument(document: Document): string {
+export interface InteractiveHtmlDocument {
+	document: string;
+	token: string;
+}
+
+export function prepareInteractiveHtmlDocument(document: Document, token: string): string {
 	neutralizeInteractive(document.documentElement);
 	const charset = document.createElement("meta");
 	charset.setAttribute("charset", "utf-8");
 	const csp = document.createElement("meta");
 	csp.setAttribute("http-equiv", "Content-Security-Policy");
 	csp.setAttribute("content", HTML_INTERACTIVE_CSP);
+	const noPrefetch = document.createElement("meta");
+	noPrefetch.setAttribute("http-equiv", "x-dns-prefetch-control");
+	noPrefetch.setAttribute("content", "off");
 	const bridge = document.createElement("script");
-	bridge.textContent = SCROLL_BRIDGE;
-	document.head.prepend(charset, csp, bridge);
+	bridge.textContent = frameBridge(token);
+	document.head.prepend(charset, csp, noPrefetch, bridge);
 	return `<!doctype html>${document.documentElement.outerHTML}`;
 }
 
-export function buildInteractiveHtmlDocument(source: string): string {
-	const document = new DOMParser().parseFromString(source, "text/html");
-	return prepareInteractiveHtmlDocument(document);
+export function buildInteractiveHtmlDocument(source: string): InteractiveHtmlDocument {
+	const parsed = new DOMParser().parseFromString(source, "text/html");
+	const token = crypto.randomUUID();
+	return { document: prepareInteractiveHtmlDocument(parsed, token), token };
 }

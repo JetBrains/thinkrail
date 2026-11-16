@@ -714,8 +714,9 @@ under its preview, the picked file's path in the persisted answer, and the compa
 keys, Current never choosable, choose-and-stay, a side-by-side pair whose two frames keep one `scrollTop`
 in 2-up and swipe even though the mockups ask for smooth scrolling, All at 1400×900 clipping no HTML frame below its pane and opening a pane alone, keys still working after a
 pane title or Choose removed the focused control, focus back on the chosen row, the receipt's read-only reopen),
-and an interactive mockup (`sandbox="allow-scripts"`, its button changes its own page, `fetch` and a
-WebSocket to the host both blocked, leaving its page replaced by the notice until Reload; the pair above
+and an interactive mockup (`sandbox="allow-scripts"`, its button changes its own page, `fetch`, a
+WebSocket to the host and `RTCPeerConnection` all blocked, leaving its page replaced by the notice until
+Reload — also when it replaces itself while still loading after forging a tokenless `loaded`; the pair above
 syncs through the message bridge, read through Playwright's frame API since the frames are opaque);
 `plan-ask.spec.ts` adds the same file
 preview on the plan page. These three specs also run in a **`webkit` Playwright project**: the macOS desktop

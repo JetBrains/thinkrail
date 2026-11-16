@@ -372,7 +372,7 @@ export interface WorkspaceIgnoredOutput {
 	sessionId?: string;
 }
 
-/** Where agents write HTML mockups; the UI runs their scripts (sandboxed, no network). */
+/** Where agents write HTML mockups; a browser UI runs their scripts (sandboxed, no network). */
 export const WORKSPACE_MOCKUP_DIR = ".thinkrail/context/mockups";
 
 /** The host route that serves a workspace file for a browser tab (sandboxed, see the host spec). */

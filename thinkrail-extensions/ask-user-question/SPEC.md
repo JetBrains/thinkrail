@@ -48,8 +48,9 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
   turn. `guidance` is ThinkRail's description and prompt guidelines: the card docked above the message box, a composer reply that
   supersedes it, Discuss, question versus option previews, and — only with rich previews on — mockup files
   under `session.workspaceFiles.scratchDir` (`.thinkrail/context/mockups/`) referenced by `previewFile`; it
-  says mockups may use inline scripts and form controls, which run sandboxed without network, because the
-  UI renders that directory's HTML interactive ([[module-resource-renderers]]).
+  says mockups may use inline scripts and form controls, which run sandboxed without network where the UI
+  renders that directory's HTML interactive (a browser, not the desktop window), so a mockup must still read
+  without them ([[module-resource-renderers]]).
   Off, the model is offered neither the fields nor that guidance: the saving is the agent's mockup writing
   (output tokens and a tool call each), not rendering, which is lazy. Markdown previews, mermaid included,
   stay either way (unconfirmed with the user: mermaid is text, so the switch leaves it on). `checkFile` is the host's
@@ -196,8 +197,8 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   offers **Compare**, which opens the same overlay read-only on the chosen option. Rejected: turning the
   options into one generated interactive HTML page with the switcher and the pick inside it — it needs
   scripts in the frame, lets a mockup pick an answer for the user, works only for HTML, and loses the card's
-  keys, theme and locales. Mockups the agent writes under `scratchDir` do run their own scripts — in their own
-  frames, sandboxed without network ([[module-resource-renderers]]) — so a prototype's tabs and toggles work
+  keys, theme and locales. Mockups the agent writes under `scratchDir` do run their own scripts in a browser — in their
+  own frames, sandboxed without network ([[module-resource-renderers]]) — so a prototype's tabs and toggles work
   in every pane while choosing stays the overlay's.
 - **Discuss first.** A ghost **Discuss** toggle beside each question (or `d` on an option) marks it; a
   panel under the question offers optional reason chips (Unclear / Not relevant / Need more context) and
