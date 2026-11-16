@@ -86,8 +86,8 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   Trash as a whole, and continued in a real workspace when it turns into work — the agent's summary
   becomes the new chat's first message ([[submodule-server-workspaces]]).
 - **Artifacts** — what the agent produces for the user (task-specs, mockups, diagrams, screenshots,
-  reports) lives in the workspace's git-ignored artifacts folder and is listed in the Artifacts tool with
-  the chat that wrote it, beside the ignored outputs its runs leave; nothing there disappears unless the
+  reports) lives in the workspace's git-ignored artifacts folder and is shown in the Artifacts tool,
+  newest first or as a folder tree, with the chat that wrote it, beside the ignored outputs its runs leave; nothing there disappears unless the
   user removes it — a file deleted behind their back stays restorable from a kept copy, and the agent is
   steered away from temporary folders ([[submodule-server-artifacts]], [[submodule-web-panels]]).
 - **Workbench** — a splittable layout of files, diffs, documents, chats, and terminals with movable side
