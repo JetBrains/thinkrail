@@ -202,7 +202,7 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
 
 `useGlobalHotkeys` remains the one capture-phase owner of app-wide chords. The chords are declared once in the [[submodule-web-keybindings]] table and resolved with the user's overrides and the web extensions' commands; `keybindingState.ts` is the one place that resolves — once per change of the store's `keybindingOverrides` (ignored below `supportsKeybindings`, so an older host runs the defaults) or `disabledExtensions` — and hands the result to the binder (`currentKeybindings()` at event time) and to every reader (`useResolvedKeybindings`, `useKeybindingKeys`, `useKeybindingLabel`). `useGlobalHotkeys` matches through it (`matchKeybinding`, then an id → handler map whose missing handler means unavailable) and the palette shows each chord with `keybindingShortcut` over the same result, so a rebind applies and shows at once. It routes commands through the workbench command surface rather than imperative feature-panel refs:
 
-- `Ctrl+R` opens chat history for the locally selected chat, or the workspace's most-recent chat fallback;
+- `Ctrl+R` opens chat history for the locally selected chat, or the workspace's most-recent chat fallback; the literal `Ctrl+R` acts even during IME composition (it would reload the browser), while a chord the user rebinds history to waits composition out like every other chord;
 - `Mod+B` toggles the left side, restoring local group/tab attention or an eligible singleton tool;
 - `Mod+J` does the same for the right side;
 - `Mod+Shift+J` toggles bottom, restoring local bottom attention, a bottom-targeted singleton, or the terminal creation surface;

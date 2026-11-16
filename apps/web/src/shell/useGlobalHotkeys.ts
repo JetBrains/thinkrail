@@ -1,3 +1,4 @@
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { useEffect, useInsertionEffect, useRef } from "react";
 import {
 	type KeybindingId,
@@ -79,10 +80,12 @@ type GlobalHotkeyEvent = Pick<
 > &
 	Partial<Pick<KeyboardEvent, "getModifierState">>;
 
+const CTRL_R: KeyChord = { code: "KeyR", key: "R", ctrl: true };
+
 const TERMINAL_KEYS: readonly KeyChord[] = [
 	{ code: "KeyL", key: "L", ctrl: true },
 	{ code: "Backslash", key: "\\", ctrl: true },
-	{ code: "KeyR", key: "R", ctrl: true },
+	CTRL_R,
 ];
 
 const EDITOR_FIND_KEYS: readonly KeyChord[] = [
@@ -155,10 +158,10 @@ export function routeHotkey(
 		inEditorFind,
 	);
 	if (id) return { kind: "command", id };
-	return matchKeybinding(keybindings, event) === "chat.history" &&
-		!elementKeeps(event, keybindings.platform, inTerminal, inEditorFind)
-		? { kind: "history" }
-		: null;
+	if (matchKeybinding(keybindings, event) !== "chat.history") return null;
+	if (elementKeeps(event, keybindings.platform, inTerminal, inEditorFind)) return null;
+	if (isImeComposing(event) && !pressesChord(event, [CTRL_R], keybindings.platform)) return null;
+	return { kind: "history" };
 }
 
 function hasOpenModal(): boolean {

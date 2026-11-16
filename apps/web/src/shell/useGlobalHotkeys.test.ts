@@ -404,4 +404,15 @@ describe("routing a press", () => {
 		expect(routeHotkey(key("KeyR"), all, at("linux", defaults, { inTerminal: true }))).toBeNull();
 		expect(routeHotkey(key("KeyR"), all, at("linux", defaults))).toEqual({ kind: "history" });
 	});
+
+	test("chat history rebound off Ctrl+R waits out IME composition; the literal Ctrl+R still wins it", () => {
+		const onF6 = resolveKeybindings({ platform: "Linux", overrides: { "chat.history": ["F6"] } });
+		const f6 = (isComposing: boolean) => key("F6", { key: "F6", ctrlKey: false, isComposing });
+		expect(routeHotkey(f6(true), all, at("browser", onF6))).toBeNull();
+		expect(routeHotkey(f6(false), all, at("browser", onF6))).toEqual({ kind: "history" });
+		const defaults = resolveKeybindings({ platform: "Linux" });
+		expect(routeHotkey(key("KeyR", { isComposing: true }), all, at("browser", defaults))).toEqual({
+			kind: "history",
+		});
+	});
 });
