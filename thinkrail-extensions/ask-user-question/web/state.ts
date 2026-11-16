@@ -142,6 +142,10 @@ export function hasPreview(target: {
 	return !!target.previewFile || !!target.preview?.trim();
 }
 
+export function hasOptionPreviews(question: AskUserQuestionItem): boolean {
+	return !question.multiSelect && question.options.some(hasPreview);
+}
+
 export interface RecapState {
 	selectedLabels: string[];
 	customAnswer: string | null;

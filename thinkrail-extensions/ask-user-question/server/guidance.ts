@@ -1,7 +1,7 @@
 import type { AskUserQuestionGuidance } from "@thinkrail/pi-ask-user-question";
 
 const FILE_PREVIEWS = (scratchDir: string) =>
-	`- To show how something would look, write a self-contained HTML mockup under \`${scratchDir}\` (inline CSS and data: images only — scripts, form controls and external resources are stripped) and reference it with previewFile instead of pasting HTML or ASCII art; add previewBefore (a mockup of the current state) for a before → after diff. Any workspace file works too (SVG, image, markdown, code). Write the file before asking.`;
+	`- To show how something would look, write a self-contained HTML mockup under \`${scratchDir}\` (inline CSS, inline scripts and data: images only — scripts and form controls work, sandboxed without network; external resources are blocked) and reference it with previewFile instead of pasting HTML or ASCII art; add previewBefore (a mockup of the current state) for a before → after diff. Any workspace file works too (SVG, image, markdown, code). Write the file before asking.`;
 
 export function thinkrailGuidance(
 	filePreviews: boolean,

@@ -45,27 +45,29 @@ const state = (over: Partial<QState>): QState => ({ ...emptyQState(), ...over })
 
 const body = (question: AskUserQuestionItem, qState: QState) =>
 	renderToStaticMarkup(
-		<QuestionBody
-			question={question}
-			state={qState}
-			pageKeys
-			discussAvailable
-			primaryEnabled
-			onFocusPrimary={() => false}
-			onSelect={noop}
-			onToggleMulti={noop}
-			onCursor={noop}
-			onCustomText={noop}
-			onToggleCustom={noop}
-			onReopenCustom={noop}
-			onOpenNote={noop}
-			onCloseNote={noop}
-			onNote={noop}
-			onToggleDiscuss={noop}
-			onDiscussReason={noop}
-			onDiscussText={noop}
-			onTogglePreview={noop}
-		/>,
+		<TooltipProvider>
+			<QuestionBody
+				question={question}
+				state={qState}
+				pageKeys
+				discussAvailable
+				primaryEnabled
+				onFocusPrimary={() => false}
+				onSelect={noop}
+				onToggleMulti={noop}
+				onCursor={noop}
+				onCustomText={noop}
+				onToggleCustom={noop}
+				onReopenCustom={noop}
+				onOpenNote={noop}
+				onCloseNote={noop}
+				onNote={noop}
+				onToggleDiscuss={noop}
+				onDiscussReason={noop}
+				onDiscussText={noop}
+				onTogglePreview={noop}
+			/>
+		</TooltipProvider>,
 	);
 
 const INTERACTIVE =
@@ -152,6 +154,7 @@ describe("every control is an explicit tab stop (WebKit skips buttons without on
 		);
 		expect(html).toContain('data-testid="ask-question-preview-toggle"');
 		expect(html).toContain('data-testid="ask-preview-none"');
+		expect(html).toContain('data-testid="ask-compare-open"');
 		expect(controlsWithoutTabStop(html)).toEqual([]);
 	});
 
@@ -176,6 +179,33 @@ describe("every control is an explicit tab stop (WebKit skips buttons without on
 		);
 		expect(html).toContain('data-testid="ask-receipt-toggle"');
 		expect(html).toContain('data-testid="ask-receipt-options-toggle"');
+		expect(controlsWithoutTabStop(html)).toEqual([]);
+	});
+
+	it("covers the receipt's Compare entry on a question with option previews", () => {
+		const previewed: AskUserQuestionItem = {
+			...single,
+			options: single.options.map((option) => ({ ...option, preview: `# ${option.label}` })),
+		};
+		const html = renderToStaticMarkup(
+			<AskUserQuestionCard
+				toolCallId="call-tab-stops-receipt-compare"
+				toolName="ask_user_question"
+				args={{ questions: [previewed] }}
+				result={{
+					details: {
+						cancelled: false,
+						answers: [
+							{ questionIndex: 0, question: single.question, kind: "option", answer: BOTTOM },
+						],
+					},
+				}}
+				status="done"
+				streaming={false}
+				interaction={interaction}
+			/>,
+		);
+		expect(html).toContain('data-testid="ask-receipt-compare"');
 		expect(controlsWithoutTabStop(html)).toEqual([]);
 	});
 });

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import { checkWorkspaceFile, MOCKUP_DIR, workspaceFiles } from "./workspaceFiles";
 
 describe("workspace file checks shared by extension server halves", () => {
@@ -41,6 +42,7 @@ describe("workspace file checks shared by extension server halves", () => {
 
 	test("names the gitignored scratch directory for mockups", () => {
 		expect(workspaceFiles.scratchDir).toBe(".thinkrail/context/mockups/");
+		expect(MOCKUP_DIR.startsWith(`${WORKSPACE_CONTEXT_DIR}/`)).toBe(true);
 		expect(workspaceFiles.check).toBe(checkWorkspaceFile);
 	});
 });

@@ -139,8 +139,10 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   extra environment variables, chosen in Settings and applied to the whole host at the next start; one setup
   per host, not per project ([[submodule-server-environment]]).
 - **Agent tools** — web research, structured multiple-choice questions the agent asks in chat instead of
-  guessing, and inline diagrams, comparisons and file previews in chat; a proposed UI change is shown as
-  a rendered before/after mockup through the same renderers and review comments as diff review
+  guessing (with alternatives' previews comparable full screen — one at a time, side by side, or all), and
+  inline diagrams, comparisons and file previews in chat; a proposed UI change is shown as
+  a rendered before/after mockup through the same renderers and review comments as diff review, and the
+  agent's mockups are clickable prototypes whose scripts run sandboxed without network
   ([[submodule-web-chat-tools-web]], [[module-ext-ask-user-question]], [[module-ext-visualize]]).
 - **Pi packages** — install a pi package by source (npm, git or a local folder) from Settings, for the
   user or for a repository, and see everything pi loads: each package's extensions, skills and prompts
