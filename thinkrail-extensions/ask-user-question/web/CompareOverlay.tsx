@@ -83,6 +83,9 @@ export function CompareOverlay({ open, onOpenChange, onClosed, ...props }: Compa
 				onCloseAutoFocus={(event) => {
 					if (onClosed?.()) event.preventDefault();
 				}}
+				onFocus={(event) => {
+					if (event.target === event.currentTarget) rootRef.current?.focus({ preventScroll: true });
+				}}
 			>
 				<CompareBody {...props} rootRef={rootRef} />
 			</DialogContent>
@@ -112,8 +115,11 @@ function CompareBody({
 		lastWidth = next;
 		setWidth(next);
 	};
+	const focusBody = () => rootRef.current?.focus({ preventScroll: true });
 	const choose = (item: CompareItem | undefined) => {
-		if (item?.option && onChoose) onChoose(item.option.label, item.option.index);
+		if (!item?.option || !onChoose) return;
+		onChoose(item.option.label, item.option.index);
+		focusBody();
 	};
 
 	const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
@@ -158,7 +164,10 @@ function CompareBody({
 				{items.map((item, index) =>
 					pane(item, {
 						highlighted: index === state.focus,
-						onTitle: () => setState(showCompareItem(state, index)),
+						onTitle: () => {
+							setState(showCompareItem(state, index));
+							focusBody();
+						},
 					}),
 				)}
 			</div>

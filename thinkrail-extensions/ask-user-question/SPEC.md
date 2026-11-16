@@ -178,7 +178,10 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   **Choose and stay** (chosen by the user): Choose on a shown option, or Enter while the overlay body itself
   has focus (so it never fights a focused button), picks it through the card's own `onSelect` — the note
   follows the selection as in the card — and the overlay stays open; notes and Submit stay in the card, and
-  closing returns focus to the chosen row. Keys: ←/→ flip (wrapping), 1–9 jump, Esc closes; keys owned by a
+  closing returns focus to the chosen row. Keys live on the overlay body, so Choose and an All pane title —
+  each removes the control it was pressed on — move focus to the body, and the dialog hands focus it
+  receives itself to the body too: Radix's own recovery parks it on the first tab stop or the dialog, where
+  Enter would press the wrong control or the keys would stop. Keys: ←/→ flip (wrapping), 1–9 jump, Esc closes; keys owned by a
   slider, a field or a menu, and anything typed inside a frame, stay there. The dialog is portaled, so its
   keys never reach the card's handler (`contains` fails), exactly like the one-file dialog. Its open state is
   the page's own: a dock remount closes it. From the **receipt**, a pair whose question had option previews

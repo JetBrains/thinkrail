@@ -374,6 +374,15 @@ test("the compare overlay flips through the options, scrolls a pair together and
 		await page.screenshot({ path: test.info().outputPath("compare-grid.png") });
 		await overlay.getByTestId("ask-compare-pane-title").nth(2).click();
 		await expect(shown).toHaveAttribute("data-item", "option:Top tabs");
+		await page.keyboard.press("ArrowRight");
+		await expect(shown).toHaveAttribute("data-item", "option:Flow first");
+		await page.keyboard.press("ArrowLeft");
+		await shown.getByTestId("ask-compare-choose").click();
+		await expect(shown.getByTestId("ask-compare-chosen")).toBeVisible();
+		await page.keyboard.press("2");
+		await expect(shown).toHaveAttribute("data-item", "option:Sidebar nav (Recommended)");
+		await page.keyboard.press("Enter");
+		await expect(shown.getByTestId("ask-compare-chosen")).toBeVisible();
 
 		await page.keyboard.press("Escape");
 		await expect(overlay).toBeHidden();
