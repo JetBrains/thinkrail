@@ -94,6 +94,7 @@ import {
 	setSessionPublisher,
 	setSessionStatePublisher,
 	setSkillAdmissionResolver,
+	setSubagentEnabledResolver,
 	setSubagentsEnabledResolver,
 	settleCredentialWritesForShutdown,
 	settleSessionsForShutdown,
@@ -4668,4 +4669,40 @@ test("readFinalAssistantTexts reads live and on-disk chats without attaching the
 	expect(
 		(await readFinalAssistantTexts("ws-elsewhere", cwd, [live.sessionId])).get(live.sessionId),
 	).toBeNull();
+});
+
+test("host per-name subagent resolver stays live for existing and future chats", async () => {
+	let disabled = false;
+	setSubagentEnabledResolver((name) => name !== "scout" || !disabled);
+	const ids: string[] = [];
+	try {
+		const create = async () => {
+			const session = await createSession({
+				cwd: tmpCwd("trpi-role-policy-"),
+				workspaceId: "ws-role-policy",
+				model: toWireModel(fauxA.getModel()),
+			});
+			ids.push(session.sessionId);
+			return session.sessionId;
+		};
+		const existing = await create();
+		disabled = true;
+		for (const id of [existing, await create()]) {
+			fauxA.setResponses([
+				(context) => {
+					const description =
+						getCurrentTools(context.messages).find((tool) => tool.name === "Agent")?.description ??
+						"";
+					expect(description).not.toContain('"scout"');
+					expect(description).toContain('"worker"');
+					return fauxAssistantMessage("POLICY_LIVE");
+				},
+			]);
+			await promptSession(id, "Check role availability.");
+			expect(seen(id)).toContain("POLICY_LIVE");
+		}
+	} finally {
+		setSubagentEnabledResolver(null);
+		for (const id of ids) await removeSession(id);
+	}
 });

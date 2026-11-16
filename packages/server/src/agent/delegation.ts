@@ -132,6 +132,7 @@ export function subagentsFor(
 	workspaceId: string,
 	isEnabled: () => boolean,
 	canDeliverCompletion: () => boolean,
+	isAgentEnabled: (name: string) => boolean,
 ): Subagents {
 	return createSubagents({
 		service: delegationServiceFor(workspaceId),
@@ -139,6 +140,7 @@ export function subagentsFor(
 		scope: workspaceId,
 		isEnabled,
 		canDeliverCompletion,
+		isAgentEnabled,
 	});
 }
 

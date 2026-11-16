@@ -78,6 +78,7 @@ interval (`1–3600`, default 30), because those values govern host process cade
   rule ([[submodule-web-keybindings]]). On load, malformed chords are dropped, an entry left with none falls
   back to its defaults, and a stored `[]` stays unbound. Gated on `KEYBINDINGS_PROTOCOL_VERSION` (v123):
   an older host rejects the key, so the client sends it only above the gate (`supportsKeybindings`).
+- `disabledSubagents` is a global list of agent names, default `[]`, with the same validation, disk normalization, dedupe and unknown-name retention as `disabledExtensions`. Host injects the live name resolver into agent; it affects only new launches and advertised rosters, not running work or completion delivery. New clients gate writes on `SUBAGENT_CATALOG_PROTOCOL_VERSION` (124).
 - `disabledPackages` is the same shape for installed pi packages, keyed by the package identity the
   catalog reports (`PiPackageSummary.identity`); it exists because pi has no "whole package off" setting
   and writing pi's per-resource filters would reset a user's own filters on re-enable. Validation,

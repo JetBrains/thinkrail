@@ -474,6 +474,42 @@ test("a malformed disabled-extensions update is rejected; a malformed stored lis
 	expect(getConfig().disabledExtensions).toEqual([]);
 });
 
+test("disabled subagents default empty, round-trip deduped, and keep unknown names", () => {
+	expect(DEFAULT_CONFIG.disabledSubagents).toEqual([]);
+	const published: AppConfigUpdate[] = [];
+	setSettingsPublisher((_config, applied) => published.push(applied));
+	expect(getConfig().disabledSubagents).toEqual([]);
+	const next = updateConfig({ disabledSubagents: ["scout", "retired", "scout"] });
+	expect(next.disabledSubagents).toEqual(["scout", "retired"]);
+	expect(published.at(-1)?.disabledSubagents).toEqual(["scout", "retired", "scout"]);
+	resetConfigCache();
+	expect(getConfig().disabledSubagents).toEqual(["scout", "retired"]);
+	expect(updateConfig({ disabledSubagents: [] }).disabledSubagents).toEqual([]);
+});
+
+test("a malformed disabled-subagents update is rejected; a malformed stored list keeps valid names", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const before = getConfig();
+	for (const value of ["scout", [""], ["  "], [1], null]) {
+		const invalid = { disabledSubagents: value } as unknown as AppConfigUpdate;
+		expect(() => updateConfig(invalid)).toThrow("disabledSubagents must be a list of agent names");
+	}
+	expect(getConfig()).toEqual(before);
+	expect(published).toEqual([]);
+	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ disabledSubagents: ["scout", 3, "", "scout"] }),
+	);
+	resetConfigCache();
+	expect(getConfig().disabledSubagents).toEqual(["scout"]);
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ disabledSubagents: "scout" }));
+	resetConfigCache();
+	expect(getConfig().disabledSubagents).toEqual([]);
+});
+
 test("keybindings replace the whole map, keep unknown command ids and empty unbinds, and dedupe chords", () => {
 	expect(DEFAULT_CONFIG.keybindings).toEqual({});
 	const published: AppConfigUpdate[] = [];

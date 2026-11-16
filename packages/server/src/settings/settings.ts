@@ -66,6 +66,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: true,
 	settleIdleDays: true,
+	disabledSubagents: true,
 	disabledExtensions: true,
 	extensionSettings: true,
 	otherAgentSkills: true,
@@ -265,6 +266,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		systemThemePair,
 		jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds,
+		disabledSubagents,
 		disabledExtensions,
 		extensionSettings,
 		disabledPackages,
@@ -274,6 +276,10 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	const nextKeybindings = keybindings === undefined ? undefined : validateKeybindings(keybindings);
 	const extensionSettingsUpdate =
 		extensionSettings === undefined ? undefined : validateExtensionSettings(extensionSettings);
+	const nextDisabledSubagents =
+		disabledSubagents === undefined
+			? undefined
+			: validateNameList(disabledSubagents, "disabledSubagents", "agent names");
 	const nextDisabledExtensions =
 		disabledExtensions === undefined
 			? undefined
@@ -373,6 +379,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		...(favoriteModels === undefined
 			? {}
 			: { favoriteModels: validateFavoriteModels(favoriteModels) }),
+		...(nextDisabledSubagents === undefined ? {} : { disabledSubagents: nextDisabledSubagents }),
 		...(nextDisabledExtensions === undefined ? {} : { disabledExtensions: nextDisabledExtensions }),
 		...(extensionSettingsUpdate === undefined
 			? {}

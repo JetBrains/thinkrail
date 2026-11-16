@@ -17,6 +17,7 @@ import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
 	AppConfig,
 	Project,
+	SubagentCatalogEntry,
 	Template,
 	TemplateInfo,
 	WireModel,
@@ -1551,4 +1552,81 @@ test("resource handlers scope every read/control to a registered workspace and a
 		if (priorOffline === undefined) delete process.env.PI_OFFLINE;
 		else process.env.PI_OFFLINE = priorOffline;
 	}
+});
+
+test("subagent.list admits only pi-resource-trusted workspace metadata and never arbitrary cwd", async () => {
+	const define = (dir: string, name: string, extra = "") => {
+		mkdirSync(dir, { recursive: true });
+		writeFileSync(
+			join(dir, `${name}.md`),
+			`---\nname: ${name}\ndescription: ${name} description\n${extra}---\nSECRET PROMPT`,
+		);
+	};
+	define(
+		join(dataDir, "pi", "agents"),
+		"personal-role",
+		"model: provider/pinned\nthinking: high\n",
+	);
+	define(join(repo, ".pi", "agents"), "project-role");
+	define(join(repo, ".agents", "agents"), "other-project-role");
+	define(join(repo, ".pi", "agents"), "scout");
+	define(join(repo, ".pi", "agents"), "personal-role");
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([
+			{ id: "w1", projectId: "p1", name: "Default", worktreePath: repo, createdAt: 1 },
+		]),
+	);
+	const ctx = { ...CTX, protocolVersion: 124 };
+	const list = (params: unknown = {}) =>
+		handleRequest("subagent.list", params, ctx) as Promise<SubagentCatalogEntry[]>;
+	const personal: SubagentCatalogEntry = {
+		name: "personal-role",
+		description: "personal-role description",
+		source: "personal",
+		model: "provider/pinned",
+		thinking: "high",
+	};
+	expect(await list()).toContainEqual(personal);
+	expect((await list({ cwd: repo })).some((entry) => entry.source === "project")).toBe(false);
+	expect((await list({ workspaceId: "w1" })).some((entry) => entry.source === "project")).toBe(
+		false,
+	);
+	await handleRequest("project.setTrust", { id: "p1", trusted: true }, CTX);
+	expect((await list({ workspaceId: "w1" })).some((entry) => entry.source === "project")).toBe(
+		false,
+	);
+	await handleRequest("project.setTrust", { id: "p1", trusted: true, resources: true }, CTX);
+	const trusted = await list({ workspaceId: "w1", cwd: "/not-used" });
+	expect((await list()).some((entry) => entry.source === "project")).toBe(false);
+	expect(trusted).toContainEqual(personal);
+	expect(trusted.find((entry) => entry.name === "scout")?.source).toBe("builtin");
+	expect(
+		trusted
+			.filter((entry) => entry.source === "project")
+			.map((entry) => entry.name)
+			.sort(),
+	).toEqual(["other-project-role", "project-role"]);
+	for (const entry of trusted) {
+		expect(
+			Object.keys(entry).every((key) =>
+				["name", "description", "source", "model", "thinking"].includes(key),
+			),
+		).toBe(true);
+	}
+	expect(JSON.stringify(trusted)).not.toContain("SECRET PROMPT");
+	await handleRequest(
+		"settings.update",
+		{ config: { disabledSubagents: ["project-role", "missing", "project-role"] } },
+		CTX,
+	);
+	expect(await list({ workspaceId: "w1" })).toEqual(trusted);
+	await handleRequest("project.setTrust", { id: "p1", trusted: false }, CTX);
+	expect((await list({ workspaceId: "w1" })).some((entry) => entry.source === "project")).toBe(
+		false,
+	);
+	await expect(list({ workspaceId: "unknown" })).rejects.toThrow("Unknown workspace");
+	await expect(
+		handleRequest("subagent.list", {}, { ...CTX, protocolVersion: 123 }),
+	).rejects.toThrow("requires protocol 124");
 });

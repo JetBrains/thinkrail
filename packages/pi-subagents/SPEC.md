@@ -34,7 +34,7 @@ choice was settled: the decision log below.
   Default and legacy factories own their completion lifetime per factory invocation: reload ends that
   lifetime, while parent-turn abort does not. Late tool updates are dropped by Pi after the tool returns.
 - `createSubagentsExtension(options?)` — the compatible runner-scoped extension factory. Options include
-  `service?`, `delegationRoot?`, `scope?`, `isEnabled?`, and `canDeliverCompletion?`.
+  `service?`, `delegationRoot?`, `scope?`, `isEnabled?`, `isAgentEnabled?(name)`, and `canDeliverCompletion?`.
 - `createSubagents(options: SubagentsExtensionOptions & { service: DelegationService })` — an explicitly
   retained, portable parent owner exposing only `extension`, `flushCompletions({ atTurnEnd? })` and
   synchronous `dispose()`. Its injected service remains embedder-owned. One immutable parent identity is established
@@ -51,6 +51,7 @@ choice was settled: the decision log below.
   that unstarted child before rejecting. `canDeliverCompletion` defaults to true and temporarily gates
   both transcript append and automatic wake-up, without closing the owner or losing pending outcomes.
   An embedder flushes after a provisional deletion rolls back or registration becomes addressable.
+- `isAgentEnabled(name)` defaults to true. It filters the per-turn advertised definition snapshot and is checked live before assembly and again after asynchronous child setup, before `runQueued`; a newly disabled unstarted child is disposed. Definition/model pins remain snapshotted; availability is live. Running work and completion delivery are unaffected.
 - `SUBAGENT_COMPLETION_MESSAGE` — the custom-message type the web's background result row keys on;
   `SubagentCompletionDetails` (the run's `DelegationRunDetails` plus `delivery: CompletionDelivery` —
   `wake` | `run` | `appended`, see Result delivery), mirrored into `@thinkrail/contracts`.
