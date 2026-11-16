@@ -29,6 +29,7 @@ import {
 	USER_FONTS_ROUTE,
 	USER_THEMES_PROTOCOL_VERSION,
 	WORKSPACE_CREATION_PROTOCOL_VERSION,
+	WORKSPACE_VIEW_ROUTE,
 	WS_CHANNELS,
 	WS_MAX_FRAME_BYTES,
 } from "@thinkrail/contracts";
@@ -195,7 +196,13 @@ import {
 } from "../workspaces";
 import { seesChats } from "./chats";
 import { continueToolHost, observeContinuation, setContinuationPublisher } from "./continuations";
-import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
+import {
+	BLOB_PREFIX,
+	FILES_PREFIX,
+	serveBlob,
+	serveWorktreeFile,
+	serveWorktreeView,
+} from "./fileRoutes";
 import { serveUserFonts } from "./fontRoutes";
 import { setFsNudgePublisher } from "./fsNudge";
 import { applyGitCeiling } from "./gitCeiling";
@@ -493,6 +500,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			}
 			if (url.pathname.startsWith(USER_FONTS_ROUTE)) {
 				return serveUserFonts(req, url.pathname);
+			}
+			if (url.pathname.startsWith(WORKSPACE_VIEW_ROUTE)) {
+				return serveWorktreeView(req.method, url);
 			}
 			if (staticDir) {
 				return serveStatic(url.pathname, staticDir);

@@ -351,6 +351,9 @@ export interface WorkspaceIgnoredOutput {
 	sessionId?: string;
 }
 
+/** The host route that serves a workspace file for a browser tab (sandboxed, see the host spec). */
+export const WORKSPACE_VIEW_ROUTE = "/view/";
+
 export interface WorkspaceArtifactsSnapshot {
 	workspaceId: string;
 	dir: string;
