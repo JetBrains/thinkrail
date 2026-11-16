@@ -5,10 +5,12 @@ import {
 	chordSignature,
 	chordText,
 	formatChord,
+	heldSignatures,
 	isBrowserReservedChord,
 	isPlainChord,
 	keyCap,
 	parseChord,
+	reservedChordOwner,
 } from "./chord";
 import {
 	displayShortcut,
@@ -153,6 +155,12 @@ export function resolveKeybindings({
 	}
 
 	const owners = new Map<string, string>();
+	for (const [id, chords] of Object.entries(table)) {
+		for (const chord of chords) {
+			if (chord.displayOnly && onPlatform(chord, apple))
+				owners.set(chordSignature(chord, apple), id);
+		}
+	}
 	const active: ActiveChord[] = [];
 	const conflicts: KeybindingConflict[] = [];
 	const ranked = drafts
@@ -161,10 +169,13 @@ export function resolveKeybindings({
 		.sort((a, b) => rank(a.draft) - rank(b.draft) || a.order - b.order);
 	for (const { draft } of ranked) {
 		draft.chords.forEach((chord, index) => {
-			const signature = chordSignature(chord, apple);
-			const owner = owners.get(signature);
-			if (owner === undefined) {
-				owners.set(signature, draft.id);
+			const held = heldSignatures(chord, apple);
+			const owner =
+				held.map((signature) => owners.get(signature)).find((id) => id !== undefined) ??
+				reservedChordOwner(chord, draft.custom ? undefined : apple);
+			if (owner === draft.id) return;
+			if (owner === null) {
+				for (const signature of held) owners.set(signature, draft.id);
 				if (!chord.displayOnly) active.push({ id: draft.id, chord });
 				return;
 			}

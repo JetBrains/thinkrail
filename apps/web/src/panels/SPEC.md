@@ -82,8 +82,9 @@ treatment.
   project `+`** — both are `IconButton` ghost `s`, so they render identically and their glyphs
   line up on one vertical axis (both sit at the row's `pr-xs` right edge). The Create workspace `+`'s tooltip
   shows the one `workspace.new` chord that reaches this client as keycaps — `Mod+N` on the desktop, the
-  `Mod+Alt+N` alias in a browser — from `ProjectTree`'s `nativeShortcuts` prop, which the shell sets (see
-  `submodule-web-shell` global chords); the context-menu item stays plain.
+  `Mod+Alt+N` alias in a browser — from `ProjectTree`'s `newWorkspaceShortcut` caps, which the shell
+  injects from the resolved table (see `submodule-web-shell` global chords, *Chords in tooltips*); the
+  context-menu item stays plain.
   Long names truncate before the count/action; there is deliberately **no visible Close or overflow icon**.
   Hover highlights the full row and the highlight remains while its **project context menu** is open.
   Right-click opens that PR-#167-styled menu at the pointer without selecting/navigating; a scroll-cancelled

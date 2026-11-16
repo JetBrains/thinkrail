@@ -10,6 +10,7 @@ import {
 	keybindingList,
 	type ResolvedKeybindings,
 	resolveKeybindings,
+	SHORTCUT_CATALOG,
 } from "../keybindings";
 import { useAppStore } from "../store";
 import { supportsKeybindings } from "../transport";
@@ -83,5 +84,7 @@ export function entryTitle(
 
 export function commandTitle(t: Translator, list: KeybindingList, command: string): string {
 	const entry = list.entries.find((candidate) => candidate.command === command);
-	return entry ? entryTitle(t, entry) : command;
+	if (entry) return entryTitle(t, entry);
+	const row = SHORTCUT_CATALOG.find((candidate) => candidate.id === command);
+	return row ? t(row.title) : command;
 }

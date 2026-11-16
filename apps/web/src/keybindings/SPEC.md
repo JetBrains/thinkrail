@@ -128,8 +128,10 @@ binding does.
   the macOS menu's hide / hide others / minimize, and page zoom (`Mod+=`, `Mod+Shift+=`, `Mod+-`,
   `Mod+Numpad+`/`-`/`0`). One override set serves every OS, so a chord native on either family is
   refused, compared by the physical keys each holds (`Ctrl+KeyW` is Linux's close). `chordFromEvent` stays
-  platform-neutral and does not refuse them; the editor and `planImport` do. No matchable default is
-  native (tested); `tab.close`'s display-only `Mod+W` is.
+  platform-neutral and does not refuse them; the editor and `planImport` do, and the resolver reserves
+  them (*Resolver*), so a hand-edited config cannot bind one either. Each names the catalog row that shows
+  it (`desktop.quit`, `desktop.zoomIn`, `Mod+W` → `tab.close`). No matchable default is native (tested);
+  `tab.close`'s display-only `Mod+W` is.
 
 ## Resolver
 
@@ -146,11 +148,22 @@ binding does.
   missing). An extension default outside the grammar is dropped and a duplicate command id ignored.
 - **Priority** for a shared chord: a user override beats ThinkRail defaults, which beat extension
   defaults; within a rank, ThinkRail commands in table order, then extensions in registry order (the
-  Settings → Extensions order). A display-only chord occupies its chord without matching. **The losing
-  chord is inactive for its loser only** — its other chords still work — and is reported as a conflict.
+  Settings → Extensions order). **The losing chord is inactive for its loser only** — its other chords
+  still work — and is reported as a conflict.
   An override onto another command's default leaves that command losing the chord; an editor that wants
   it gone writes an explicit unbind. **A disabled extension's commands are listed but neither match nor
   conflict**, its overrides included.
+- **Reserved chords are owned before ranking**: a display-only table chord by its command, and a chord
+  bound outside the table — the desktop-native list above and dictation's fixed `Mod+Shift+Space`
+  (`speech/hotkey.ts`, a second window listener) — by its catalog row. Any other command's chord there
+  never matches and is a conflict with that owner as winner, so the editor and the cheatsheet mark it
+  "taken by …": an override on either OS (the editor's rule), a default on this one. Ranked as an
+  override, `search.open: ["Mod+KeyW"]` took `Mod+W` and fired beside `shortcutCommands`' close. A
+  command's own reserved chord (a hand-written `tab.close: ["Mod+KeyW"]`) is shown and never matched, as
+  its default is. Only the desktop-native ones are refused up front; dictation's records, then shows lost.
+- **The typed `?` also holds its US position `Mod+Shift+Slash`** wherever conflicts are found (here,
+  `chordHolder`, `planImport`), since that press types it: an override on it wins and leaves
+  `shortcuts.open` unbound on every layout, marked lost. Matching is unchanged.
 - The default table resolves with no conflict on any platform, and the bundled extensions add none
   (`extensions`' tests).
 - **Each command reports its defaults on this platform** (`ResolvedCommand.defaults`), which the editor
@@ -212,10 +225,11 @@ binding does.
   default its display form, `Mod+?`), caps, `lostTo` and `shown` — false for a browser-reserved chord
   while another active one remains in a browser, the rule `keybindingShortcut` follows.
 - **`chordHolder(list, command, chord)`** is the command another active chord belongs to (enabled
-  commands only, compared by physical keys). **`assignChord(list, overrides, command, chord, replace)`**
-  writes the override — none when the chord equals the command's defaults less display-only chords — and,
-  with `replace`, an explicit override for that command: its chords less display-only and typed ones, minus
-  this chord, `[]` when nothing remains (normalised the same way). The resolver's priority alone would
+  commands only, compared by physical keys; `Mod+Shift+Slash` is the cheatsheet's while its `?` is
+  active). **`assignChord(list, overrides, command, chord, replace)`** writes the override — none when
+  the chord equals the command's defaults less display-only chords — and, with `replace`, an explicit
+  override for that command: its chords less display-only and typed ones, minus this chord, `[]` when
+  nothing remains (normalised the same way). The resolver's priority alone would
   leave a lower-ranked holder losing the chord, so Replace never relies on it. **`resetChord`** drops one
   override.
 - **`elementKeyUses(chord, platform)`** lists the catalog `keys` rows a plain chord (Shift allowed) already
@@ -240,6 +254,6 @@ binding does.
   `unchanged`; chords equal to its defaults — this platform's or the entry's own `defaults`, so a file
   from another OS keeps the defaults, and `"Mod+?"` reads as the cheatsheet's default — mean "defaults"
   (unchanged unless the command was custom). A switched-off extension's commands import too.
-- **Import conflicts:** an imported chord another enabled command holds actively goes to the import, and
-  that command loses it through the same explicit override Replace writes; a command the file also
-  changes is not a conflict (its own entry decides). Self-conflicting entries are left to the resolver.
+- **Import conflicts:** an imported chord another enabled command holds actively (`chordHolder`'s rule)
+  goes to the import, and that command loses it through the same explicit override Replace writes; a
+  command the file also changes is not a conflict (its own entry decides). Self-conflicting entries are left to the resolver.

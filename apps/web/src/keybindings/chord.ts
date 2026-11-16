@@ -51,27 +51,35 @@ const BROWSER_RESERVED = [
 	"Mod+Shift+KeyW",
 ] as const;
 
-const DESKTOP_ZOOM = [
-	"Mod+Equal",
-	"Mod+Shift+Equal",
-	"Mod+Minus",
-	"Mod+NumpadAdd",
-	"Mod+NumpadSubtract",
-	"Mod+Numpad0",
-] as const;
+type ChordOwners = Readonly<Record<string, string>>;
+
+const DESKTOP_SHARED = {
+	"Mod+KeyW": "tab.close",
+	"Mod+KeyQ": "desktop.quit",
+	"Mod+Comma": "desktop.settings",
+	"Mod+Equal": "desktop.zoomIn",
+	"Mod+Shift+Equal": "desktop.zoomIn",
+	"Mod+NumpadAdd": "desktop.zoomIn",
+	"Mod+Minus": "desktop.zoomOut",
+	"Mod+NumpadSubtract": "desktop.zoomOut",
+	"Mod+Numpad0": "desktop.zoomReset",
+} as const satisfies ChordOwners;
 
 const DESKTOP_NATIVE = {
-	apple: [
-		"Mod+KeyW",
-		"Mod+KeyQ",
-		"Mod+Comma",
-		"Mod+KeyH",
-		"Mod+Alt+KeyH",
-		"Mod+KeyM",
-		...DESKTOP_ZOOM,
-	],
-	other: ["Mod+KeyW", "Mod+F4", "Mod+KeyQ", "Mod+Comma", ...DESKTOP_ZOOM],
-} as const;
+	apple: {
+		...DESKTOP_SHARED,
+		"Mod+KeyH": "desktop.hide",
+		"Mod+Alt+KeyH": "desktop.hideOthers",
+		"Mod+KeyM": "desktop.minimize",
+	},
+	other: { ...DESKTOP_SHARED, "Mod+F4": "desktop.closeItem" },
+} as const satisfies Record<"apple" | "other", ChordOwners>;
+
+const APP_FIXED = { "Mod+Shift+Space": "dictation" } as const satisfies ChordOwners;
+
+const TYPED_POSITIONS: Readonly<Record<string, Pick<PhysicalChord, "code" | "shift">>> = {
+	"?": { code: "Slash", shift: true },
+};
 
 const FUNCTION_KEY = /^F(?:[1-9]|1[0-2])$/;
 
@@ -127,31 +135,56 @@ export function chordSignature(chord: KeyChord, apple: boolean): string {
 	return chord.typed ? `${held}:typed:${chord.key}` : `${held}:${chord.code}`;
 }
 
+export function heldSignatures(chord: KeyChord, apple: boolean): string[] {
+	const signature = chordSignature(chord, apple);
+	const position = chord.typed ? TYPED_POSITIONS[chord.key] : undefined;
+	const physical = position ? parseChord(formatChord({ ...chord, ...position })) : null;
+	return physical ? [signature, chordSignature(physical, apple)] : [signature];
+}
+
 export function isPlainChord(chord: KeyChord): boolean {
 	return !chord.mod && !chord.ctrl && !chord.alt && !(chord.code && FUNCTION_KEY.test(chord.code));
 }
 
-function signatureIn(chord: KeyChord, list: readonly string[], apple: boolean): boolean {
+function chordIn(chord: KeyChord, list: readonly string[], apple: boolean): string | undefined {
 	const signature = chordSignature(chord, apple);
-	return list.some((text) => {
+	return list.find((text) => {
 		const candidate = parseChord(text);
 		return candidate !== null && chordSignature(candidate, apple) === signature;
 	});
 }
 
+function ownerIn(chord: KeyChord, owners: ChordOwners, apple: boolean): string | null {
+	const text = chordIn(chord, Object.keys(owners), apple);
+	return text === undefined ? null : (owners[text] ?? null);
+}
+
+function nativeOwner(chord: KeyChord, apple: boolean): string | null {
+	return ownerIn(chord, apple ? DESKTOP_NATIVE.apple : DESKTOP_NATIVE.other, apple);
+}
+
 export function isBrowserReservedChord(chord: KeyChord | string, platform: string): boolean {
 	const parsed = typeof chord === "string" ? parseChord(chord) : chord;
 	if (parsed === null || parsed.typed) return false;
-	return signatureIn(parsed, BROWSER_RESERVED, platformFamily(platform) === "apple");
+	return chordIn(parsed, BROWSER_RESERVED, platformFamily(platform) === "apple") !== undefined;
 }
 
 export function isDesktopNativeChord(chord: KeyChord | string): boolean {
 	const parsed = typeof chord === "string" ? parseChord(chord) : chord;
-	if (parsed === null || parsed.typed) return false;
 	return (
-		signatureIn(parsed, DESKTOP_NATIVE.apple, true) ||
-		signatureIn(parsed, DESKTOP_NATIVE.other, false)
+		parsed !== null &&
+		!parsed.typed &&
+		(nativeOwner(parsed, true) ?? nativeOwner(parsed, false)) !== null
 	);
+}
+
+export function reservedChordOwner(chord: KeyChord, apple?: boolean): string | null {
+	if (chord.typed) return null;
+	for (const family of apple === undefined ? [true, false] : [apple]) {
+		const owner = nativeOwner(chord, family) ?? ownerIn(chord, APP_FIXED, family);
+		if (owner !== null) return owner;
+	}
+	return null;
 }
 
 type ChordEvent = Pick<KeyboardEvent, "code" | "altKey" | "ctrlKey" | "metaKey" | "shiftKey"> &

@@ -6,11 +6,13 @@ import {
 	keybindingShortcut,
 	matchKeybinding,
 	resolveKeybindings,
+	SHORTCUT_CATALOG,
 } from ".";
 
 const MAC = "MacIntel";
 const LINUX = "Linux x86_64";
-const PLATFORMS = [MAC, LINUX, "Win32", ""];
+const WINDOWS = "Win32";
+const PLATFORMS = [MAC, LINUX, WINDOWS, ""];
 
 type Modifiers = Partial<Record<"ctrlKey" | "metaKey" | "altKey" | "shiftKey", boolean>>;
 
@@ -27,9 +29,12 @@ const press = (code: string, modifiers: Modifiers = {}, key = "") => ({
 const ctrl = (code: string, modifiers: Modifiers = {}) =>
 	press(code, { ctrlKey: true, ...modifiers });
 
+const mod = (platform: string, code: string, modifiers: Modifiers = {}) =>
+	press(code, { ...(platform === MAC ? { metaKey: true } : { ctrlKey: true }), ...modifiers });
+
 function extension(
 	name: string,
-	chords: Record<string, { code: string; key: string; mod?: true; alt?: true }[]>,
+	chords: Record<string, { code: string; key: string; mod?: true; alt?: true; shift?: true }[]>,
 	enabled = true,
 ): ExtensionCommandSet {
 	return {
@@ -152,20 +157,120 @@ describe("user overrides", () => {
 		expect(keybindingShortcut(resolved, "search.open")).toBeUndefined();
 	});
 
-	test("an override outranks a typed default that the same press also types", () => {
+	test("an override on the typed ?'s US position Mod+Shift+/ takes the chord from the cheatsheet", () => {
+		for (const platform of [MAC, LINUX]) {
+			const resolved = resolveKeybindings({
+				platform,
+				overrides: { "view.toggleLeft": ["Mod+Shift+Slash"] },
+			});
+			const slash = { ...mod(platform, "Slash", { shiftKey: true }), key: "?" };
+			expect(matchKeybinding(resolved, slash)).toBe("view.toggleLeft");
+			expect(matchKeybinding(resolved, { ...slash, code: "Digit7" })).toBeNull();
+			expect(resolved.conflicts).toEqual([
+				{ loser: "shortcuts.open", chord: "Mod+?", winner: "view.toggleLeft" },
+			]);
+			expect(resolved.byId.get("shortcuts.open")?.chords).toEqual([
+				expect.objectContaining({ text: "Mod+?", lostTo: "view.toggleLeft" }),
+			]);
+			expect(keybindingShortcut(resolved, "shortcuts.open")).toBeUndefined();
+		}
+	});
+
+	test("the typed ? holds Mod+Shift+/ against a lower-ranked extension default", () => {
 		const resolved = resolveKeybindings({
 			platform: LINUX,
-			overrides: { "view.toggleLeft": ["Mod+Shift+Slash"] },
+			extensions: [
+				extension("notes", { "notes.open": [{ code: "Slash", key: "/", mod: true, shift: true }] }),
+			],
 		});
-		expect(matchKeybinding(resolved, ctrl("Slash", { shiftKey: true }), {})).toBe(
-			"view.toggleLeft",
-		);
-		expect(matchKeybinding(resolved, { ...ctrl("Slash", { shiftKey: true }), key: "?" }, {})).toBe(
-			"view.toggleLeft",
-		);
+		expect(resolved.conflicts).toEqual([
+			{ loser: "notes.open", chord: "Mod+Shift+Slash", winner: "shortcuts.open" },
+		]);
 		expect(matchKeybinding(resolved, { ...ctrl("Digit7", { shiftKey: true }), key: "?" })).toBe(
 			"shortcuts.open",
 		);
+	});
+});
+
+describe("reserved chords", () => {
+	test("an override onto Close tab's display-only Mod+W never matches; Close tab keeps showing it", () => {
+		for (const [platform, label] of [
+			[MAC, "⌘W"],
+			[LINUX, "Ctrl+W"],
+			[WINDOWS, "Ctrl+W"],
+		] as const) {
+			const resolved = resolveKeybindings({
+				platform,
+				overrides: { "search.open": ["Mod+KeyW"] },
+			});
+			expect(matchKeybinding(resolved, mod(platform, "KeyW"))).toBeNull();
+			expect(resolved.conflicts).toEqual([
+				{ loser: "search.open", chord: "Mod+KeyW", winner: "tab.close" },
+			]);
+			expect(keybindingShortcut(resolved, "search.open")).toBeUndefined();
+			expect(keybindingLabel(resolved, "tab.close")).toBe(label);
+			expect(resolved.byId.get("tab.close")?.chords.map(({ lostTo }) => lostTo)).toEqual([
+				null,
+				null,
+			]);
+		}
+	});
+
+	test("Close tab's own hand-written Mod+W is shown and never matched, like its default", () => {
+		const resolved = resolveKeybindings({
+			platform: LINUX,
+			overrides: { "tab.close": ["Mod+KeyW"] },
+		});
+		expect(matchKeybinding(resolved, ctrl("KeyW"))).toBeNull();
+		expect(keybindingLabel(resolved, "tab.close")).toBe("Ctrl+W");
+		expect(resolved.conflicts).toEqual([]);
+	});
+
+	const owned = [
+		["Mod+KeyQ", "KeyQ", {}, "desktop.quit"],
+		["Mod+Comma", "Comma", {}, "desktop.settings"],
+		["Mod+F4", "F4", {}, "desktop.closeItem"],
+		["Mod+KeyH", "KeyH", {}, "desktop.hide"],
+		["Mod+Alt+KeyH", "KeyH", { altKey: true }, "desktop.hideOthers"],
+		["Mod+KeyM", "KeyM", {}, "desktop.minimize"],
+		["Mod+Equal", "Equal", {}, "desktop.zoomIn"],
+		["Mod+Shift+Equal", "Equal", { shiftKey: true }, "desktop.zoomIn"],
+		["Mod+NumpadAdd", "NumpadAdd", {}, "desktop.zoomIn"],
+		["Mod+Minus", "Minus", {}, "desktop.zoomOut"],
+		["Mod+NumpadSubtract", "NumpadSubtract", {}, "desktop.zoomOut"],
+		["Mod+Numpad0", "Numpad0", {}, "desktop.zoomReset"],
+		["Mod+Shift+Space", "Space", { shiftKey: true }, "dictation"],
+	] as const;
+
+	test("an override onto a chord the desktop or dictation owns, on either OS, loses to its catalog row", () => {
+		for (const platform of [MAC, LINUX, WINDOWS]) {
+			for (const [chord, code, modifiers, owner] of owned) {
+				const resolved = resolveKeybindings({ platform, overrides: { "search.open": [chord] } });
+				expect([
+					platform,
+					chord,
+					matchKeybinding(resolved, mod(platform, code, modifiers)),
+				]).toEqual([platform, chord, null]);
+				expect(resolved.conflicts).toEqual([{ loser: "search.open", chord, winner: owner }]);
+				expect(SHORTCUT_CATALOG.some(({ id }) => id === owner)).toBe(true);
+			}
+		}
+	});
+
+	test("an extension default loses a reserved chord only on the OS that owns it", () => {
+		const hide = extension("notes", { "notes.hide": [{ code: "KeyH", key: "h", mod: true }] });
+		const quit = extension("notes", { "notes.quit": [{ code: "KeyQ", key: "q", mod: true }] });
+		const mac = resolveKeybindings({ platform: MAC, extensions: [hide] });
+		expect(mac.conflicts).toEqual([
+			{ loser: "notes.hide", chord: "Mod+KeyH", winner: "desktop.hide" },
+		]);
+		expect(matchKeybinding(mac, press("KeyH", { metaKey: true }))).toBeNull();
+		const linux = resolveKeybindings({ platform: LINUX, extensions: [hide, quit] });
+		expect(matchKeybinding(linux, ctrl("KeyH"))).toBe("notes.hide");
+		expect(matchKeybinding(linux, ctrl("KeyQ"))).toBeNull();
+		expect(linux.conflicts).toEqual([
+			{ loser: "notes.quit", chord: "Mod+KeyQ", winner: "desktop.quit" },
+		]);
 	});
 });
 

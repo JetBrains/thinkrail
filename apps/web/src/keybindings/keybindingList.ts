@@ -6,6 +6,7 @@ import {
 	chordSignature,
 	chordText,
 	formatChord,
+	heldSignatures,
 	isBrowserReservedChord,
 	isDesktopNativeChord,
 	isPlainChord,
@@ -182,16 +183,23 @@ function editableEntry(list: KeybindingList, command: string): KeybindingEntry |
 	return list.entries.find((entry) => entry.command === command && !entry.locked);
 }
 
-export function chordHolder(list: KeybindingList, command: string, chord: string): string | null {
-	const pressed = parseChord(chord);
-	if (pressed === null) return null;
-	const apple = isApple(list.keybindings);
-	const signature = chordSignature(pressed, apple);
+function activeHolder(
+	keybindings: ResolvedKeybindings,
+	command: string,
+	chord: KeyChord,
+): string | null {
+	const apple = isApple(keybindings);
+	const signature = chordSignature(chord, apple);
 	return (
-		list.keybindings.active.find(
-			(active) => active.id !== command && chordSignature(active.chord, apple) === signature,
+		keybindings.active.find(
+			(active) => active.id !== command && heldSignatures(active.chord, apple).includes(signature),
 		)?.id ?? null
 	);
+}
+
+export function chordHolder(list: KeybindingList, command: string, chord: string): string | null {
+	const pressed = parseChord(chord);
+	return pressed === null ? null : activeHolder(list.keybindings, command, pressed);
 }
 
 function sameChords(a: readonly KeyChord[], b: readonly KeyChord[], apple: boolean): boolean {
@@ -457,17 +465,14 @@ export function planImport(
 	for (const [id, chords] of targets) {
 		if (keybindings.byId.get(id)?.enabled !== true) continue;
 		for (const chord of physical(chords)) {
-			const signature = chordSignature(chord, apple);
-			const holder = keybindings.active.find(
-				(active) => active.id !== id && chordSignature(active.chord, apple) === signature,
-			);
-			if (holder === undefined || targets.has(holder.id)) continue;
+			const holder = activeHolder(keybindings, id, chord);
+			if (holder === null || targets.has(holder)) continue;
 			conflicts.push({
 				chord: keyChordLabel(chord, keybindings.platform),
 				command: id,
-				other: holder.id,
+				other: holder,
 			});
-			removed.set(holder.id, [...(removed.get(holder.id) ?? []), chord]);
+			removed.set(holder, [...(removed.get(holder) ?? []), chord]);
 		}
 	}
 	for (const [id, chords] of removed) {

@@ -85,10 +85,10 @@ describe("extensionHotkey", () => {
 	test("follows a rebind of the extension command", () => {
 		const rebound = resolveKeybindings({
 			platform: "Linux x86_64",
-			overrides: { "hint-mode.show": ["Mod+Alt+KeyH"] },
+			overrides: { "hint-mode.show": ["Mod+Alt+KeyY"] },
 			extensions: [hint(true)],
 		});
-		expect(extensionHotkey(press("KeyH", { ctrlKey: true, altKey: true }), rebound, true)).toEqual(
+		expect(extensionHotkey(press("KeyY", { ctrlKey: true, altKey: true }), rebound, true)).toEqual(
 			SHOW,
 		);
 		expect(extensionHotkey(press("KeyF"), rebound, false)).toBeNull();

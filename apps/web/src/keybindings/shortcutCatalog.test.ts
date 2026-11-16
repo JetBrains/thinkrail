@@ -149,6 +149,16 @@ describe("the shortcut catalog", () => {
 		expect(rows.find((row) => row.id === "search.open")?.conflicts).toEqual([]);
 	});
 
+	test("marks an override onto a desktop chord inactive, taken by the desktop's row", () => {
+		const rows = rowsFor(true, LINUX, { overrides: { "search.open": ["Mod+KeyQ"] } });
+		const search = rows.find((row) => row.id === "search.open");
+		expect(search?.chords).toEqual([]);
+		expect(search?.conflicts).toEqual([
+			{ keys: ["Ctrl", "Q"], label: "Ctrl+Q", winner: "desktop.quit" },
+		]);
+		expect(labels(rows, "desktop.quit")).toEqual(["Ctrl+Q"]);
+	});
+
 	test("lists the transcript's and the strips' letters beside the arrows they repeat", () => {
 		const rows = rowsFor(false, LINUX);
 		expect(labels(rows, "transcript.move")).toEqual(["↑", "↓", "K", "J"]);

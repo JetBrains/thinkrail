@@ -253,8 +253,10 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
     {places}…" with Assign anyway; a browser-reserved chord in a browser → Assign anyway; else it assigns.
     A chord equal to the defaults drops the override.
   - **Rows.** A Custom tag and Reset on overridden rows, Reset all, a lost chord struck through with
-    "{chord} is taken by {winner} — inactive" and Assign another. The filter matches title or key label;
-    Search by keys turns it into a recorder whose next chord filters to rows showing it (Esc leaves).
+    "{chord} is taken by {winner} — inactive" and Assign another (`commandTitle` also names a reserved
+    chord's catalog-row winner, such as a desktop row a browser does not list). The filter matches title or
+    key label; Search by keys turns it into a recorder whose next chord filters to rows showing it (Esc
+    leaves).
     ↑/↓ move between rows' chord buttons, one of which is the Tab stop (roving; a row's Reset and Assign
     another are tabbable only on that row); rows carry `data-focus-row` in a `data-focus-list`, and after
     an assignment, Replace, Cancel or Reset focus returns to the row's chord button.

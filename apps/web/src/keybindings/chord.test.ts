@@ -202,6 +202,7 @@ test("the desktop app's own chords are native on the OS that owns them, under ei
 	expect(isDesktopNativeChord("Mod+Shift+KeyW")).toBe(false);
 	expect(isDesktopNativeChord("Mod+Alt+KeyW")).toBe(false);
 	expect(isDesktopNativeChord("Mod+Digit0")).toBe(false);
+	expect(isDesktopNativeChord("Mod+Shift+Space")).toBe(false);
 	expect(isDesktopNativeChord("not a chord")).toBe(false);
 	const matchable = Object.values(KEYBINDINGS).flatMap((chords) =>
 		chords.filter((chord) => !chord.displayOnly && isDesktopNativeChord(chord)),

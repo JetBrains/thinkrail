@@ -118,6 +118,17 @@ describe("the keybinding list", () => {
 		]);
 	});
 
+	test("a hand-written override onto the desktop's Mod+W is marked lost to Close tab, which keeps it", () => {
+		const from = list({ desktop: true, overrides: { "search.open": ["Mod+KeyW"] } });
+		expect(entry(from, "search.open")?.chords).toEqual([
+			expect.objectContaining({ text: "Mod+KeyW", label: "Ctrl+W", lostTo: "tab.close" }),
+		]);
+		expect(entry(from, "tab.close")?.chords.map(({ text, lostTo }) => [text, lostTo])).toEqual([
+			["Mod+KeyW", null],
+			["Mod+Alt+KeyW", null],
+		]);
+	});
+
 	test("a disabled extension's rows stay listed, inactive", () => {
 		const off = list({ enabled: false });
 		expect(entry(off, "notes.open")?.active).toBe(false);
@@ -134,6 +145,19 @@ describe("editing", () => {
 		expect(chordHolder(list({ platform: MAC }), "focus.composer", "Ctrl+KeyK")).toBeNull();
 		expect(chordHolder(list({ enabled: false }), "search.open", "Mod+Shift+Semicolon")).toBeNull();
 		expect(chordHolder(list(), "search.open", "Mod+Shift+Semicolon")).toBe("notes.open");
+	});
+
+	test("the typed cheatsheet chord holds its US position Mod+Shift+/, on every platform", () => {
+		for (const platform of [LINUX, MAC]) {
+			expect(chordHolder(list({ platform }), "view.toggleLeft", "Mod+Shift+Slash")).toBe(
+				"shortcuts.open",
+			);
+		}
+		expect(chordHolder(list(), "view.toggleLeft", "Mod+Slash")).toBeNull();
+		expect(chordHolder(list(), "shortcuts.open", "Mod+Shift+Slash")).toBeNull();
+		expect(assignChord(list(), {}, "view.toggleLeft", "Mod+Shift+Slash", "shortcuts.open")).toEqual(
+			{ "view.toggleLeft": ["Mod+Shift+Slash"], "shortcuts.open": [] },
+		);
 	});
 
 	test("assigning stores the chord, and a chord equal to the defaults removes the override", () => {
@@ -307,6 +331,21 @@ describe("planImport", () => {
 		expect(both?.overrides).toEqual({
 			"focus.composer": ["Mod+KeyK"],
 			"search.open": ["Mod+KeyU"],
+		});
+	});
+
+	test("a chord on the typed cheatsheet chord's US position takes it, unbinding the cheatsheet", () => {
+		const plan = planImport(
+			{},
+			list(),
+			file([{ command: "view.toggleLeft", chords: ["Mod+Shift+Slash"] }]),
+		);
+		expect(plan?.conflicts).toEqual([
+			{ chord: "Ctrl+Shift+/", command: "view.toggleLeft", other: "shortcuts.open" },
+		]);
+		expect(plan?.overrides).toEqual({
+			"view.toggleLeft": ["Mod+Shift+Slash"],
+			"shortcuts.open": [],
 		});
 	});
 
