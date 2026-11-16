@@ -224,7 +224,7 @@ test("Smart groups what the agent made by folder with its working files folded u
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
 	const root = workspace.worktreePath;
-	writeArtifact(root, "reports/r.md", "# r\n");
+	writeArtifact(root, "unattached/r.md", "# r\n");
 	writeArtifact(root, "mockups/onboarding/welcome.html", "<h1>w</h1>\n");
 	writeArtifact(root, "mockups/onboarding/gen.mjs", "export {};\n");
 	writeArtifact(root, "mockups/onboarding/_scratch/v1.png", "png\n");
@@ -234,7 +234,9 @@ test("Smart groups what the agent made by folder with its working files folded u
 
 	const smartGroup = (folder: string) =>
 		page.locator(`[data-testid="artifact-smart-group"][data-folder="${folder}"]`);
-	await expect(smartGroup("reports").getByTestId("artifact-smart-summary")).toHaveText("1 result");
+	await expect(smartGroup("unattached").getByTestId("artifact-smart-summary")).toHaveText(
+		"1 result",
+	);
 	await expect(artifact(page, "mockups/onboarding/welcome.html")).toHaveCount(0);
 	await smartGroup("mockups/onboarding").getByTestId("artifact-smart-group-row").click();
 	await expect(artifact(page, "mockups/onboarding/welcome.html")).toBeVisible();
@@ -250,6 +252,9 @@ test("Smart groups what the agent made by folder with its working files folded u
 	await expect(page.getByTestId("artifact-unattached")).toHaveText(
 		"1 working file without a result",
 	);
+	await page.getByTestId("artifact-unattached").click();
+	await expect(folderRow(page, "loose")).toBeVisible();
+	await expect(artifact(page, "unattached/r.md")).toHaveCount(0);
 
 	await page.getByTestId("open-settings").click();
 	await page.getByTestId("settings-nav-artifacts").click();

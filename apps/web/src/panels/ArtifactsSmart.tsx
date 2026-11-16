@@ -18,7 +18,7 @@ interface SmartContext extends TreeRowContext {
 	artifacts: readonly WorkspaceArtifact[];
 }
 
-export const SMART_UNATTACHED = "smart:unattached";
+export const SMART_UNATTACHED = "smart-unattached";
 export const smartGroupId = (folder: string) => `smart:${folder}`;
 const workingId = (folder: string) => `smart-work:${folder}`;
 
