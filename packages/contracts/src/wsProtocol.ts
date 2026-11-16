@@ -143,7 +143,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 123;
+export const PROTOCOL_VERSION = 124;
+export const ARTIFACT_ROLES_PROTOCOL_VERSION = 124;
 export const KEYBINDINGS_PROTOCOL_VERSION = 123;
 export const BROWSER_VIEW_PROTOCOL_VERSION = 122;
 export const ARTIFACTS_PROTOCOL_VERSION = 121;
