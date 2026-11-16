@@ -13,6 +13,7 @@ import { TodoStore } from "pi-todos/core";
 import {
 	type AdditionalAnalyticsCapture,
 	type AdditionalAnalyticsEvent,
+	FULL_EVENT_POLICY,
 	getAdditionalAnalyticsCapture,
 	initializeAnalytics,
 	resetAnalyticsForTests,
@@ -65,6 +66,7 @@ beforeEach(() => {
 	taskObservation.clear();
 	sent = [];
 	initializeAnalytics({
+		eventPolicy: FULL_EVENT_POLICY,
 		posthogApiKey: TEST_KEY,
 		additionalEnabled: true,
 		env: {},
@@ -109,6 +111,7 @@ test("an unrelated update preserves an unconfirmed legacy grant until the mount 
 	const config = { analyticsEnabled: true, analyticsConsentConfirmed: false };
 	resetAnalyticsForTests();
 	initializeAnalytics({
+		eventPolicy: FULL_EVENT_POLICY,
 		posthogApiKey: TEST_KEY,
 		additionalEnabled: initialAdditionalAnalyticsEnabled(config),
 		env: {},

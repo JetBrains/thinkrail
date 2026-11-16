@@ -18,6 +18,7 @@ import {
 } from "../agent";
 import { delegationServiceFor, removeWorkspaceDelegation } from "../agent/delegation";
 import {
+	FULL_EVENT_POLICY,
 	getAdditionalAnalyticsCapture,
 	initializeAnalytics,
 	resetAnalyticsForTests,
@@ -190,6 +191,7 @@ test("confirming consent observes current setup without another client read or p
 	await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
 	const events: { event: string; properties: Record<string, unknown> }[] = [];
 	initializeAnalytics({
+		eventPolicy: FULL_EVENT_POLICY,
 		posthogApiKey: TEST_KEY,
 		additionalEnabled: false,
 		env: {},
@@ -227,6 +229,7 @@ test("the dialog prime enables ordinary additional events but schedules attribut
 		host: "127.0.0.1",
 		portMode: "exact",
 		analytics: {
+			eventPolicy: FULL_EVENT_POLICY,
 			posthogApiKey: TEST_KEY,
 			build: "binary",
 			env: {},
@@ -264,6 +267,7 @@ test("a saved confirmed-on choice waits beyond one second for explicit launcher 
 		host: "127.0.0.1",
 		portMode: "exact",
 		analytics: {
+			eventPolicy: FULL_EVENT_POLICY,
 			posthogApiKey: TEST_KEY,
 			build: "desktop",
 			env: {},
@@ -301,6 +305,7 @@ test("launcher readiness cannot start attribution before an unconfirmed prime is
 		host: "127.0.0.1",
 		portMode: "exact",
 		analytics: {
+			eventPolicy: FULL_EVENT_POLICY,
 			posthogApiKey: TEST_KEY,
 			build: "desktop",
 			env: {},
@@ -324,6 +329,7 @@ test("the host forwards successful login generation metadata into the basic even
 	await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
 	const events: { event: string; properties: Record<string, unknown> }[] = [];
 	initializeAnalytics({
+		eventPolicy: FULL_EVENT_POLICY,
 		posthogApiKey: TEST_KEY,
 		additionalEnabled: false,
 		env: {},
@@ -364,6 +370,7 @@ test("failed wire requests and logged host errors become sanitized exception rep
 	const b = await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
 	const events: { event: string; properties: Record<string, unknown> }[] = [];
 	initializeAnalytics({
+		eventPolicy: FULL_EVENT_POLICY,
 		posthogApiKey: TEST_KEY,
 		additionalEnabled: false,
 		env: {},
@@ -559,6 +566,7 @@ test("welcome omits closed projects whose folders are gone", async () => {
 	]);
 	expect(welcome.projects.filter((project) => project.kind === "chats")).toHaveLength(1);
 	expect(welcome.recentProjects?.map((project) => project.id)).toEqual(["open", "kept"]);
+	expect(welcome.additionalAnalytics).toBe(false);
 });
 
 test.if(process.platform === "linux")(

@@ -5,9 +5,11 @@ import {
 	claimAppInstalled,
 	claimBrowserAttributionAttempt,
 	ensureInstallation,
+	loadUsageCounters,
 	readAcquisition,
 	replaceAcquisitionWithTerminalMarker,
 	saveAcquisition,
+	saveUsageCounters,
 } from "../persistence";
 import { runAttributionClaim } from "./attribution";
 import {
@@ -21,9 +23,12 @@ import {
 import {
 	type AdditionalAnalyticsCapture,
 	type AnalyticsEvent,
+	type AnalyticsEventPolicy,
 	acquisitionCampaignProperties,
+	allowsBasicEvent,
 	type BasicAnalyticsEvent,
 	type BuildKind,
+	EVENT_POLICY,
 } from "./events";
 import { type AnalyticsEnv, environmentMute } from "./mute";
 import { type AnalyticsSink, createPostHogSink, type OutgoingEvent } from "./sink";
@@ -40,6 +45,8 @@ export interface AnalyticsOptions {
 	remapBase?: string;
 	mute?: boolean;
 	additionalEnabled: boolean;
+	eventPolicy?: AnalyticsEventPolicy;
+	now?: () => number;
 	env?: AnalyticsEnv;
 	fetchImpl?: typeof fetch;
 	openExternal?: (url: string) => void | Promise<void>;
@@ -65,6 +72,8 @@ export interface SurveyEndpoint {
 
 interface AnalyticsState {
 	basic: AnalyticsSink;
+	policy: AnalyticsEventPolicy;
+	now: () => number;
 	surveyEndpoint: SurveyEndpoint;
 	additional: AnalyticsGrant | null;
 	createAdditionalSink: (() => AnalyticsSink) | null;
@@ -130,15 +139,19 @@ export function initializeAnalyticsWithSinkFactoryForTests(
 		const record = ensureInstallation();
 		const build = options.build ?? "source";
 		const appInstalled = build !== "source" && claimAppInstalled();
+		const policy = options.eventPolicy ?? EVENT_POLICY;
 		state = {
 			basic,
+			policy,
+			now: options.now ?? Date.now,
 			surveyEndpoint: {
 				apiKey,
 				...(host ? { host } : {}),
 				...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
 			},
 			additional: null,
-			createAdditionalSink: options.mute || env.THINKRAIL_NO_ANALYTICS ? null : createSink,
+			createAdditionalSink:
+				!policy.additional || options.mute || env.THINKRAIL_NO_ANALYTICS ? null : createSink,
 			clientId: record.id,
 			drains: new Set(),
 			acquisition: null,
@@ -173,6 +186,7 @@ export function initializeAnalyticsWithSinkFactoryForTests(
 		};
 		setAdditionalAnalyticsEnabled(options.additionalEnabled);
 		if (appInstalled) track({ name: "app_installed" });
+		if (build !== "source") trackVersionChange(state, appInstalled);
 		track({ name: "app_started" });
 	} catch {
 		log.debug("analytics initialization failed");
@@ -181,7 +195,47 @@ export function initializeAnalyticsWithSinkFactoryForTests(
 
 export function track(event: BasicAnalyticsEvent): void {
 	const s = state;
-	if (s && !s.shutdownPromise) send(s, s.basic, event);
+	if (!s || s.shutdownPromise) return;
+	if (event.name === "message_sent") countActiveDayMessage(s);
+	if (allowsBasicEvent(s.policy, event.name)) send(s, s.basic, event);
+}
+
+export function additionalAnalyticsOffered(): boolean {
+	return EVENT_POLICY.additional;
+}
+
+function trackVersionChange(s: AnalyticsState, appInstalled: boolean): void {
+	try {
+		const counters = loadUsageCounters();
+		const version = s.env.app_version;
+		if (counters.lastVersion === version) return;
+		saveUsageCounters({ ...counters, lastVersion: version });
+		if (!appInstalled) {
+			track({
+				name: "app_updated",
+				params: { previous_version: counters.lastVersion ?? "unknown" },
+			});
+		}
+	} catch {
+		log.debug("analytics version tracking failed");
+	}
+}
+
+function countActiveDayMessage(s: AnalyticsState): void {
+	if (!allowsBasicEvent(s.policy, "active_day")) return;
+	try {
+		const counters = loadUsageCounters();
+		const messages = counters.pendingMessages + 1;
+		const today = new Date(s.now()).toISOString().slice(0, 10);
+		if (counters.activeDay === today) {
+			saveUsageCounters({ ...counters, pendingMessages: messages });
+			return;
+		}
+		saveUsageCounters({ ...counters, activeDay: today, pendingMessages: 0 });
+		send(s, s.basic, { name: "active_day", params: { messages } });
+	} catch {
+		log.debug("analytics activity tracking failed");
+	}
 }
 
 export function surveyEndpoint(): SurveyEndpoint | null {

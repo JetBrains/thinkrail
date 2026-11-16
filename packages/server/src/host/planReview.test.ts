@@ -22,7 +22,12 @@ import {
 	toWireModel,
 } from "../agent";
 import { createRequestReviewTool } from "../agent/requestReviewTool";
-import { initializeAnalytics, resetAnalyticsForTests, shutdownAnalytics } from "../analytics";
+import {
+	FULL_EVENT_POLICY,
+	initializeAnalytics,
+	resetAnalyticsForTests,
+	shutdownAnalytics,
+} from "../analytics";
 import { saveWorkspaces } from "../persistence";
 import * as reviews from "../reviews";
 import { getReviewSnapshot } from "../reviews";
@@ -1051,6 +1056,7 @@ test("itemTitleOf labels a Review-All adopted commit with its subject, not the c
 test("only actual agent verdicts emit review decisions and agent-authored findings, and never leak plan content", async () => {
 	const events: { event: string; properties: Record<string, unknown> }[] = [];
 	initializeAnalytics({
+		eventPolicy: FULL_EVENT_POLICY,
 		posthogApiKey: TEST_KEY,
 		additionalEnabled: true,
 		env: {},
@@ -1091,6 +1097,7 @@ test("only actual agent verdicts emit review decisions and agent-authored findin
 test("agent-delivered findings emit review_comment_sent on the button, tool and Request-fix paths", async () => {
 	const events: { event: string; properties: Record<string, unknown> }[] = [];
 	initializeAnalytics({
+		eventPolicy: FULL_EVENT_POLICY,
 		posthogApiKey: TEST_KEY,
 		additionalEnabled: true,
 		env: {},
@@ -1127,6 +1134,7 @@ test("agent-delivered findings emit review_comment_sent on the button, tool and 
 		expect(sentCount()).toBe(2);
 
 		initializeAnalytics({
+			eventPolicy: FULL_EVENT_POLICY,
 			posthogApiKey: TEST_KEY,
 			additionalEnabled: true,
 			env: {},

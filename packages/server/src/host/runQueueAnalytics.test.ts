@@ -15,6 +15,7 @@ import {
 	toWireModel,
 } from "../agent";
 import {
+	FULL_EVENT_POLICY,
 	initializeAnalytics,
 	resetAnalyticsForTests,
 	setAdditionalAnalyticsEnabled,
@@ -106,6 +107,7 @@ test.each(["clear", "remove", "restore-on-abort"] as const)(
 		]);
 		const events: { event: string; properties: Record<string, unknown> }[] = [];
 		initializeAnalytics({
+			eventPolicy: FULL_EVENT_POLICY,
 			posthogApiKey: TEST_KEY,
 			additionalEnabled: false,
 			env: {},

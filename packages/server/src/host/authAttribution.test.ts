@@ -20,7 +20,12 @@ import {
 	toWireModel,
 	usePiRuntime,
 } from "../agent";
-import { initializeAnalytics, resetAnalyticsForTests, shutdownAnalytics } from "../analytics";
+import {
+	FULL_EVENT_POLICY,
+	initializeAnalytics,
+	resetAnalyticsForTests,
+	shutdownAnalytics,
+} from "../analytics";
 import { saveWorkspaces } from "../persistence";
 import { getConfig, resetConfigCache } from "../settings";
 import { ensureChatsContainer, getWorkspace, resetChatIdCache } from "../workspaces";
@@ -133,6 +138,7 @@ beforeEach(async () => {
 		},
 	]);
 	initializeAnalytics({
+		eventPolicy: FULL_EVENT_POLICY,
 		posthogApiKey: TEST_KEY,
 		additionalEnabled: false,
 		env: {},
@@ -225,10 +231,12 @@ test("preconfigured API-key chats and accepted prompt, steer and follow-up sends
 	expect(events.map(({ event }) => event)).toEqual([
 		"app_started",
 		"chat_started",
+		"active_day",
 		"message_sent",
 		"message_sent",
 		"message_sent",
 	]);
+	expect(properties("active_day")).toEqual([expect.objectContaining({ messages: 1 })]);
 	expect(faux.state.callCount).toBe(3);
 });
 

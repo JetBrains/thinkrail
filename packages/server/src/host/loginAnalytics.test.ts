@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { initializeAnalytics, resetAnalyticsForTests } from "../analytics";
+import { FULL_EVENT_POLICY, initializeAnalytics, resetAnalyticsForTests } from "../analytics";
 import { dropLogin, recordLoginStart, trackLoginOutcome } from "./loginAnalytics";
 
 const TEST_KEY = "phc_test";
@@ -23,6 +23,7 @@ beforeEach(() => {
 	resetAnalyticsForTests();
 	sent = [];
 	initializeAnalytics({
+		eventPolicy: FULL_EVENT_POLICY,
 		posthogApiKey: TEST_KEY,
 		channel: "stable",
 		additionalEnabled: false,

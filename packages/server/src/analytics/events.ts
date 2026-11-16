@@ -29,6 +29,8 @@ export type ReviewResolveOutcome = "resolved" | "dismissed";
 
 export type BasicAnalyticsEvent =
 	| { name: "app_installed" }
+	| { name: "app_updated"; params: { previous_version: string } }
+	| { name: "active_day"; params: { messages: number } }
 	| { name: "app_started" }
 	| { name: "chat_started"; params: ProviderAnalyticsProperties & { model: string } }
 	| { name: "message_sent"; params: ProviderAnalyticsProperties & { mode: SendMode } }
@@ -153,6 +155,25 @@ export type AdditionalAnalyticsEvent =
 	  };
 
 export type AnalyticsEvent = BasicAnalyticsEvent | AdditionalAnalyticsEvent;
+
+export interface AnalyticsEventPolicy {
+	basic: "all" | ReadonlySet<BasicAnalyticsEvent["name"]>;
+	additional: boolean;
+}
+
+export const EVENT_POLICY: AnalyticsEventPolicy = {
+	basic: new Set(["app_installed", "app_updated", "active_day"]),
+	additional: false,
+};
+
+export const FULL_EVENT_POLICY: AnalyticsEventPolicy = { basic: "all", additional: true };
+
+export function allowsBasicEvent(
+	policy: AnalyticsEventPolicy,
+	name: BasicAnalyticsEvent["name"],
+): boolean {
+	return policy.basic === "all" || policy.basic.has(name);
+}
 export type AdditionalAnalyticsCapture = (event: AdditionalAnalyticsEvent) => void;
 
 function touchProperties(prefix: "first_touch" | "last_touch", touch: AttributionTouch) {
