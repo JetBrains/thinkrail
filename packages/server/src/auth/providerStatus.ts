@@ -83,9 +83,13 @@ export function statusProviderIds(
 	allowlist: ReadonlySet<string>,
 	opaque: ReadonlySet<string>,
 	current: readonly string[],
+	extension: ReadonlySet<string> = new Set(),
 ): string[] {
 	const added = current.filter((id) => isCustomEndpointId(id) && !opaque.has(id));
-	return [...new Set([...allowlist, ...added])];
+	// Extension providers are real user-installed sources and must be listed; an id that is
+	// somehow both stays Central, which never lists.
+	const extensionAdded = [...extension].filter((id) => !opaque.has(id));
+	return [...new Set([...allowlist, ...extensionAdded, ...added])];
 }
 
 export async function getProviderStatus(): Promise<ProviderStatusReport> {
@@ -96,6 +100,7 @@ export async function getProviderStatus(): Promise<ProviderStatusReport> {
 			generation.providerStatusIds,
 			generation.opaqueProviderIds,
 			(runtime.getProviders?.() ?? []).map((provider) => provider.id),
+			generation.extensionProviderIds,
 		);
 		try {
 			await runtime.refresh({ providers: providerStatusIds });

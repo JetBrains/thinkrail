@@ -229,6 +229,106 @@ test("candidate generation reloads an opaque extension replaced at the same path
 	}
 });
 
+const STARTUP_EXTENSION = `export default function startupProvider(pi) {
+	pi.registerProvider("startup-ext", {
+		name: "Startup extension",
+		apiKey: "startup-ext-key",
+		api: "openai-completions",
+		baseUrl: "https://startup-ext.example/v1",
+		models: [{
+			id: "startup-ext-model",
+			name: "Startup ext model",
+			reasoning: false,
+			contextWindow: 8192,
+			maxTokens: 1024,
+			input: ["text"],
+			cost: { input: 0, output: 0 },
+		}],
+	});
+}
+`;
+
+test("providers registered by user extensions join the shared catalog at startup", async () => {
+	const root = mkdtempSync(join(tmpdir(), "trpi-user-extension-startup-"));
+	const agentDir = join(root, "agent");
+	const extensionsDir = join(agentDir, "extensions");
+	const priorAgentDir = process.env.PI_CODING_AGENT_DIR;
+	mkdirSync(extensionsDir, { recursive: true });
+	writeFileSync(join(extensionsDir, "startup-provider.ts"), STARTUP_EXTENSION);
+	process.env.PI_CODING_AGENT_DIR = agentDir;
+	try {
+		const prepared = await preparePiRuntimeGeneration([]);
+		expect(prepared.outcome).toBe("prepared");
+		if (prepared.outcome !== "prepared") return;
+		const { generation } = prepared;
+		expect(generation.runtime.getRegisteredProviderIds()).toContain("startup-ext");
+		expect(generation.runtime.getModels("startup-ext").map((model) => model.id)).toEqual([
+			"startup-ext-model",
+		]);
+		expect(generation.extensionProviderIds.has("startup-ext")).toBe(true);
+		expect(generation.opaqueProviderIds.has("startup-ext")).toBe(false);
+		expect(generation.providerStatusIds.has("startup-ext")).toBe(false);
+	} finally {
+		configurePiRuntime(null);
+		if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("a broken user extension never fails the runtime generation", async () => {
+	const root = mkdtempSync(join(tmpdir(), "trpi-user-extension-broken-"));
+	const agentDir = join(root, "agent");
+	const extensionsDir = join(agentDir, "extensions");
+	const priorAgentDir = process.env.PI_CODING_AGENT_DIR;
+	mkdirSync(extensionsDir, { recursive: true });
+	writeFileSync(join(extensionsDir, "broken.ts"), 'throw new Error("startup broken extension");\n');
+	writeFileSync(join(extensionsDir, "startup-provider.ts"), STARTUP_EXTENSION);
+	process.env.PI_CODING_AGENT_DIR = agentDir;
+	try {
+		const prepared = await preparePiRuntimeGeneration([]);
+		expect(prepared.outcome).toBe("prepared");
+		if (prepared.outcome !== "prepared") return;
+		expect(prepared.generation.runtime.getRegisteredProviderIds()).toContain("startup-ext");
+		expect(prepared.generation.extensionProviderIds.has("startup-ext")).toBe(true);
+	} finally {
+		configurePiRuntime(null);
+		if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("additional-path providers stay Central and never count as user extension providers", async () => {
+	const root = mkdtempSync(join(tmpdir(), "trpi-user-extension-ownership-"));
+	const agentDir = join(root, "agent");
+	const extensionsDir = join(agentDir, "extensions");
+	const opaquePath = join(root, "opaque-extension.ts");
+	const priorAgentDir = process.env.PI_CODING_AGENT_DIR;
+	mkdirSync(extensionsDir, { recursive: true });
+	writeFileSync(join(extensionsDir, "startup-provider.ts"), STARTUP_EXTENSION);
+	writeFileSync(
+		opaquePath,
+		'export default function syntheticExtension(pi) { pi.registerProvider("opaque-probe", { name: "Opaque" }); }\n',
+	);
+	process.env.PI_CODING_AGENT_DIR = agentDir;
+	try {
+		const prepared = await preparePiRuntimeGeneration([opaquePath]);
+		expect(prepared.outcome).toBe("prepared");
+		if (prepared.outcome !== "prepared") return;
+		const { generation } = prepared;
+		expect(generation.opaqueProviderIds.has("opaque-probe")).toBe(true);
+		expect(generation.extensionProviderIds.has("opaque-probe")).toBe(false);
+		expect(generation.extensionProviderIds.has("startup-ext")).toBe(true);
+		expect(generation.opaqueProviderIds.has("startup-ext")).toBe(false);
+	} finally {
+		configurePiRuntime(null);
+		if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
 test("opaque registrations that replace existing providers stay visible to provider status and are attributed to Central", async () => {
 	const root = mkdtempSync(join(tmpdir(), "trpi-opaque-provider-ownership-"));
 	const priorAgentDir = process.env.PI_CODING_AGENT_DIR;
