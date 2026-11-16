@@ -175,7 +175,7 @@ export function ChangesReviewGuide({
 											data-active={cursor === index ? true : undefined}
 											disabled={!inScope.has(step.path)}
 											onClick={() => go(index, true)}
-											className={`relative flex w-full items-start gap-8 px-12 py-4 text-left hover:bg-control-bg-hovered focus-visible:focus-ring-inset disabled:opacity-50 disabled:hover:bg-transparent ${
+											className={`relative flex w-full items-start gap-8 px-12 py-4 text-left enabled:hover:bg-control-bg-hovered focus-visible:focus-ring-inset disabled:text-control-disabled-text disabled:before:bg-control-disabled-text disabled:[&_span]:text-inherit disabled:[&_span]:border-control-disabled-border disabled:[&_span]:bg-transparent ${
 												cursor === index
 													? "bg-control-bg-selected before:absolute before:inset-y-0 before:left-2 before:w-2 before:bg-primary before:content-['']"
 													: ""

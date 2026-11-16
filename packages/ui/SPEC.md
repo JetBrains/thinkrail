@@ -63,6 +63,10 @@ ordinary action in the app, the renderer package and extension web halves render
 `<button>` carrying a button skin is rejected by `apps/web/src/styles/buttonUsage.test.ts` unless that
 test's documented specialized list names it.
 
+When disabled (including loading), a string tooltip that differs from the button’s label also becomes
+`aria-description` on the native button. An explicit caller description wins. Rich tooltip content
+needs a caller-supplied accessible description. Native disabled behavior and hover tooltips remain intact.
+
 - **Variants** (exactly five): `primary` (accent fill — the main action of a surface), `soft-primary`
   (accent tint + accent text; also every former transparent "green ghost"), `outline` (neutral bordered),
   `ghost` (no surface, muted text, neutral hover fill — the default for `IconButton`), `destructive` (danger

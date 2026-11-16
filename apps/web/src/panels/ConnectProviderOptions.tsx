@@ -271,7 +271,7 @@ function DetectedChoiceButton({
 			data-provider={provider.id}
 			disabled={busy}
 			onClick={onPick}
-			className="flex min-w-0 items-start gap-8 rounded-sm border border-primary-muted bg-clip-padding bg-container-workspace-bg p-12 text-left transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring disabled:opacity-50"
+			className="flex min-w-0 items-start gap-8 rounded-sm border border-primary-muted bg-clip-padding bg-container-workspace-bg p-12 text-left transition-colors enabled:hover:bg-control-bg-hovered focus-visible:focus-ring disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text disabled:[&_span]:text-inherit disabled:[&_span]:border-control-disabled-border disabled:[&_svg]:text-inherit"
 		>
 			<LogIn className="mt-2 size-16 shrink-0 text-primary" />
 			<span className="flex min-w-0 flex-1 flex-col gap-2">

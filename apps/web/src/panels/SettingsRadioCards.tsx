@@ -38,9 +38,11 @@ export function SettingsRadioCards<T extends string>({
 						className={cn(
 							"flex items-center gap-8 rounded-sm border px-12 py-8 text-left transition-colors has-[:focus-visible]:focus-ring",
 							choiceDisabled ? "cursor-default" : "cursor-pointer",
-							active
-								? "border-primary-muted bg-clip-padding bg-primary-subtle"
-								: "border-border-default hover:bg-control-bg-hovered",
+							choiceDisabled
+								? "border-control-disabled-border bg-control-disabled-bg"
+								: active
+									? "border-primary-muted bg-clip-padding bg-primary-subtle"
+									: "border-border-default hover:bg-control-bg-hovered",
 						)}
 					>
 						<input
@@ -53,15 +55,41 @@ export function SettingsRadioCards<T extends string>({
 							className="sr-only"
 						/>
 						<span className="min-w-0 flex-1">
-							<span className="flex items-center gap-4 tr-title-compact text-text-default">
+							<span
+								className={cn(
+									"flex items-center gap-4 tr-title-compact",
+									choiceDisabled ? "text-text-disabled" : "text-text-default",
+								)}
+							>
 								{choice.label}
 								{choice.hint ? (
-									<span className="text-text-muted tr-text-metadata">{choice.hint}</span>
+									<span
+										className={cn(
+											"tr-text-metadata",
+											choiceDisabled ? "text-text-disabled" : "text-text-muted",
+										)}
+									>
+										{choice.hint}
+									</span>
 								) : null}
 							</span>
-							<span className="block text-text-muted tr-text-metadata">{choice.description}</span>
+							<span
+								className={cn(
+									"block tr-text-metadata",
+									choiceDisabled ? "text-text-disabled" : "text-text-muted",
+								)}
+							>
+								{choice.description}
+							</span>
 						</span>
-						{active ? <Check className="size-16 shrink-0 text-primary" /> : null}
+						{active ? (
+							<Check
+								className={cn(
+									"size-16 shrink-0",
+									choiceDisabled ? "text-control-disabled-text" : "text-primary",
+								)}
+							/>
+						) : null}
 					</label>
 				);
 			})}

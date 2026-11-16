@@ -95,7 +95,7 @@ export function splitFrameClass(tone: SplitTone): string {
 
 export function splitPartClass(tone: SplitTone): string {
 	return cn(
-		"window-no-drag flex items-center gap-4 transition-colors focus-visible:focus-ring-inset disabled:opacity-60 [&_svg]:size-12 [&_svg]:shrink-0",
+		"window-no-drag flex items-center gap-4 transition-colors focus-visible:focus-ring-inset disabled:text-control-disabled-text disabled:bg-control-disabled-bg disabled:pointer-events-none [&_svg]:size-12 [&_svg]:shrink-0",
 		SPLIT_TONE[tone].hover,
 	);
 }
