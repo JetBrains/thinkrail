@@ -821,9 +821,12 @@ session-only, dropped in `applyWorkspaceRemoved` with its workspace.
 The Artifacts tool's slices are per workspace: **`artifactsByWorkspace`** (`setWorkspaceArtifacts`, the
 host's `artifacts.list` snapshot), **`artifactsTickByWorkspace`** (`noteArtifactsChanged`, bumped by the
 `workspace.artifactsChanged` nudge and read through `selectArtifactsTick`) and **`artifactsSeenByWorkspace`**
-(`markArtifactsSeen`, a watermark that only moves forward; the first snapshot of a workspace seeds it), all
-dropped in `applyWorkspaceRemoved`, plus the app-wide **`artifactsShowIgnored`** toggle; the seen watermarks
-and the toggle hydrate from per-client preferences (`hydrateArtifactsPreferences`).
+(`markArtifactsSeen`, a watermark that only moves forward; the first snapshot of a workspace seeds it) and
+**`artifactsTreeExpandedByWorkspace`** (`setArtifactsTreeExpanded(workspaceId, paths, expanded)`,
+`collapseAllArtifacts`; the Tree view's open folders), all dropped in `applyWorkspaceRemoved`, plus the
+app-wide **`artifactsShowIgnored`** toggle and **`artifactsView`** (`setArtifactsView`, `"list" | "tree"`);
+the seen watermarks, the open folders, the toggle and the view hydrate from per-client preferences
+(`hydrateArtifactsPreferences`).
 **`pasteIntoComposer(sessionId, text)`** (Artifacts' Mention in chat) applies the same composer edit an
 extension's `pasteToEditor` request does, so both paste at the caret the same way.
 **`selectActiveFilePath`** is the path of the active file or diff tab, else `null`.

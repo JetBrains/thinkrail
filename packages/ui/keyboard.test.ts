@@ -95,6 +95,8 @@ const UNGUARDED_BY_DESIGN: Record<string, string> = {
 		"its rename inputs spread workspaceActions' guarded inputProps; its own onKeyDown opens a row's context menu",
 	"apps/web/src/panels/ArtifactsPanel.tsx":
 		"its rename input spreads workspaceActions' guarded inputProps; its only onKeyDown opens a row's context menu",
+	"apps/web/src/panels/ArtifactsTree.tsx":
+		"its rename inputs spread workspaceActions' guarded inputProps; its only onKeyDown is a row's menu, Delete and F2 keys",
 	"apps/web/src/panels/FontsSettings.tsx":
 		"its only key handler is on the weight range slider; its text field spreads useSettingsDraft's guarded inputProps",
 	"packages/resource-renderers/src/renderers/VisualDiff.tsx":

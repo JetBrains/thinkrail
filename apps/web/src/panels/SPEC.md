@@ -378,8 +378,9 @@ treatment.
   The `ChangesPanel` secondary toolbar paints **no surface of its own**: like the right-panel tab strip
   it shows the panel's `container-sidebar-bg`, so the two chrome rows read as one continuous surface. The **file-style tree row** (chevron/spacer
   lead, folder/file icon, truncated label, trailing slot; `min-w-0` so a row can shrink when it shares a
-  flex line with a trailing control) is the shared **`TreeRow`**, used by both
-  `FileTree` and `ChangesTree` so the two trees stay identical. `TreeRow`'s optional `onWarm` reports
+  flex line with a trailing control) is the shared **`TreeRow`**, used by `FileTree`, `ChangesTree`
+  and the Artifacts tree so the trees stay identical; its optional `icon` replaces the file glyph (the
+  Artifacts tree's type icons). `TreeRow`'s optional `onWarm` reports
   `hover` (pointer enter) or `focus`. `FileTree` file rows warm at once on focus and through
   `warmOnHover` on hover, which keeps one pending row and fires after the pointer rests 150 ms, so a
   sweep across the tree loads nothing. A warm preloads the code view
@@ -2272,13 +2273,35 @@ own section. The kebab menu (`plan-menu`, a
   workspace (chats included) so the rail can show new arrivals while the tool is hidden; it re-reads on the
   host's `workspace.artifactsChanged` nudge and on reconnect (`selectArtifactsTick`, passed to
   `useWorkspaceRead` instead of the fs tick, because the host already reconciles on file changes and an fs
-  tick per agent edit would re-list for nothing). The panel is two sections, newest first: **Artifacts**
-  (files under `.thinkrail/context/`; a two-line row: the name, then the folder inside the artifacts
-  folder — or `Task spec · <status>` joined from the spec snapshot by path — and a chip naming the writing
-  chat that opens it; no relative age, since the order already says what is newest — the exact change time
-  is the row's hover title) and **Other agent files · ignored** (one row per ignored output, a folder lazily
-  expandable through `fs.readDir`, with its file count), hidden by the header's eye toggle. A row the host
-  marks `deleted` reads "Deleted, not by you" with Restore. Opening it — a click or a double click on its
+  tick per agent edit would re-list for nothing). The panel is two sections: **Artifacts**
+  (files under `.thinkrail/context/`) and **Other agent files · ignored** (one row per ignored output,
+  newest first, a folder lazily expandable through `fs.readDir`, with its file count), hidden by the
+  header's eye toggle. Artifacts shows as a **List** or a **Tree** (`List | Tree` segments on the toolbar's
+  right; `artifactsView`, default List, remembered per client across workspaces). The toolbar
+  (`ArtifactsToolbar`, which takes the views it offers) stays one row at any sidebar width: when its content
+  overflows it folds the secondary actions (Collapse all, the ignored toggle, Paste) into a **More** menu,
+  then the view segments too, and unfolds once the width it needed is back (measured with a
+  `ResizeObserver`, refolded from scratch when the set of actions changes) — a fixed breakpoint cannot,
+  because the actions come and go. List answers *what is
+  new*: newest first, a two-line row — the name, then the folder inside the artifacts folder — or
+  `Task spec · <status>` joined from the spec snapshot by path — and a chip naming the writing chat that
+  opens it; no relative age, since the order already says what is newest. Tree answers *where is it*: it
+  is built by `artifactsModel.artifactTree` from the same filtered rows, never from `fs.readDir`, so deleted
+  rows, attribution, the new-dot and task-spec status survive (a real artifacts folder reached 1 700
+  records in 114 folders, which the flat list renders as 1 700 two-line rows). Folders come first, A→Z
+  like Files; single-folder chains compact (`folderChains`); a folder shows its file count, the new-dot while collapsed and holding a new file, and,
+  when no live artifact of any chat remains inside, a struck name reading "Deleted" with a menu of only
+  the Copy paths (liveness comes from the whole snapshot, so This chat never strikes a folder another
+  chat still fills; no per-folder deleted counts — in real folders nearly every one has some). A file
+  row is one line: type icon, name (struck when deleted), task-spec status, the new-dot, Restore — whose
+  hover title is the "Deleted, not by you" phrase — and the chat chip only under All chats (under This
+  chat every chip would name the same chat). A folder's row id is its path plus `/`, since the index
+  keeps deleted rows and a deleted file can share a path with a live folder. The tree starts collapsed;
+  expansion is kept per workspace (`artifactsTreeExpandedByWorkspace`) and toggling a compacted chain sets every folder in it, so a filter
+  that reshapes the chain keeps it open. Collapse all shows while a shown top-level folder is open. The
+  exact change time is a file row's hover title in both views, and the file open in the center
+  (`selectActiveFilePath`) is highlighted in both. A List row the host marks `deleted` reads "Deleted, not
+  by you" with Restore. Opening it — a click or a double click on its
   name — restores it silently first (`artifactActions.openArtifact`): opening a file asks for its contents, so
   the restore is implied. The click's center navigation is stamped before the restore, as any async open
   stamps it at request time, so a click elsewhere while the restore runs keeps its tab. A row's restore (`restoreDeletedArtifact`, kept per workspace and path for the page's
@@ -2294,23 +2317,30 @@ own section. The kebab menu (`plan-menu`, a
   center switches chats; with no chat attended it shows all, and All chats is a click away but not
   remembered across mounts. Unattributed artifacts belong to no chat. Whenever the filter hides rows, a
   line under the list counts them ("N more from other chats") with **Show all chats**, so the default never
-  makes a workspace look emptier than it is. Paste puts the Files clipboard into the artifacts folder. Every row has one context menu: Mention in chat
+  makes a workspace look emptier than it is; in Tree the filter prunes to the folders holding the chat's
+  files. Paste puts the Files clipboard into the artifacts folder. Every row has one context menu
+  (`artifactRowParts.ArtifactEntryMenu`, shared by both views): Mention in chat
   (pastes `@<path> ` into the attended chat's composer through `pasteIntoComposer` and focuses it, closing the chat's history overlay as `Mod+L` does — run once the row
 menu has closed, because a closing menu returns focus to its row; disabled
   without one), Reveal in Files, Open ‹chat› for an attributed row (the chip's action), the two Copy paths,
   Copy / Cut (the shared Files clipboard; a cut pastes
   through `fs.move`), Rename (inline, `fs.rename`), Restore for a deleted row, and Delete — `fs.delete` for a
-  live file, `artifacts.discard` for a kept copy, both behind a confirmation. Each section is its own sidebar
+  live file, `artifacts.discard` for a kept copy, both behind a confirmation. A Tree folder's menu is
+  Mention in chat (`@<folder>/ `), Reveal in Files, the two Copy paths, Copy / Cut, Paste here (with a
+  clipboard) and Rename — no Delete or Restore: removing or restoring a folder of kept copies one
+  request per file would mean hundreds of reconciles and trash calls, and a host batch was not worth it
+  yet. Each section is its own sidebar
   tree (see *Sidebar trees*; the heading stays outside it) and emits the shell's
-  focus-recovery markup (lists `artifacts` and `artifacts-outputs[:<folder>]`, the path as row id, the name
-  as the row's landing control), so a delete, restore or rename moves focus to the row or its neighbour
-  instead of `<body>`. **New** means newer than this
+  focus-recovery markup (lists `artifacts[:<folder>]` and `artifacts-outputs[:<folder>]`, the path as row
+  id, the name as the row's landing control), so a delete, restore or rename moves focus to the row or
+  its neighbour instead of `<body>`. **New** means newer than this
   client's per-workspace seen watermark (`artifactsSeenByWorkspace`, the newest `firstSeenAt` / output
   `changedAt`, so only host timestamps are compared): the first snapshot of a workspace is taken as seen, a
   showing panel advances the watermark, rows newer than the watermark it opened with stay highlighted while
   it shows, and `selectArtifactsUnseen` drives the rail dot. While the eye toggle hides ignored outputs,
-  their changes neither advance the watermark nor light the dot. The watermarks and the ignored toggle persist
-  per client (`shell/artifactsPreference.ts`). "Update the ThinkRail host" shows only once a welcome reports
+  their changes neither advance the watermark nor light the dot. The watermarks, the ignored toggle, the
+  view and the Tree's expanded folders persist per client (`shell/artifactsPreference.ts`, bounded at
+  5 000 folders per workspace like the Files tree). "Update the ThinkRail host" shows only once a welcome reports
   a host older than v121; between sockets the panel keeps its last snapshot.
 - **Chat deep-links remain arrangement-agnostic.** A shell-owned **`LayoutIntent`** names the singleton tool;
   the shell resolves its current side/group, reveals it in place, and selects it locally. `changesRequest`
@@ -2618,8 +2648,9 @@ menu has closed, because a closing menu returns focus to its row; disabled
   list inside it is `role=none`, so the hierarchy is the explicit `aria-level` (VS Code's flat-tree
   markup) rather than nested `group`s, which Biome's semantic-element rules reject on lists. Chats and
   Projects are two trees (Projects: project → workspaces and creations → the Settled header as an
-  expandable item → settled rows and *Show more*); so are Artifacts (flat; the name is the treeitem) and
-  Other agent files (an output folder is its own toggle), their headings outside the trees. No tree is
+  expandable item → settled rows and *Show more*); so are Artifacts (List: flat, the name is the
+  treeitem; Tree: a folder row is its own toggle) and Other agent files (an output folder is its own
+  toggle), their headings outside the trees. No tree is
   virtualized, so the model is DOM-driven: the visible rows are the tree's treeitems in DOM order, parent and first child come from `aria-level`
   (the pure move rule is `lib`'s `resolveTreeMove`, which the virtualized chat transcript applies to rows it derives from data),
   and →/← click the row's `[data-tree-toggle]` (a Files/Changes folder row is its own toggle; Specs,

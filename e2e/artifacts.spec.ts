@@ -29,6 +29,14 @@ async function showArtifacts(page: Page): Promise<void> {
 	await expect(page.getByTestId("artifacts-filter-all")).toHaveAttribute("data-active", "true");
 }
 
+function folder(page: Page, path: string) {
+	return page.locator(`[data-testid="artifact-folder"][data-path="${CONTEXT}/${path}"]`);
+}
+
+function folderRow(page: Page, path: string) {
+	return folder(page, path).getByTestId("artifact-folder-row").first();
+}
+
 async function rowAction(page: Page, path: string, action: string): Promise<void> {
 	await artifact(page, path).getByTestId("artifact-open").click({ button: "right" });
 	await page.getByTestId(action).click();
@@ -84,6 +92,128 @@ test("the Artifacts tab keeps what the agent left: a deleted file stays restorab
 	await expect(
 		page.locator('[data-testid="editor-tab"][data-kind="file"]').filter({ hasText: "summary.md" }),
 	).toBeVisible();
+});
+
+test("the Tree view groups artifacts into folders, marks new and deleted ones on them, and is remembered across a reload", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const root = workspace.worktreePath;
+	writeArtifact(root, "report.md", "# Report\n");
+	writeArtifact(root, "mockups/features/a.html", "<h1>a</h1>\n");
+	writeArtifact(root, "mockups/features/b.png", "png\n");
+	writeArtifact(root, "mockups/onboarding/c.html", "<h1>c</h1>\n");
+	writeArtifact(root, "gallery/analyzers/shot.png", "png\n");
+	await showArtifacts(page);
+	await expect(artifact(page, "report.md")).toBeVisible();
+	await expect(page.getByTestId("artifacts-view-list")).toHaveAttribute("data-active", "true");
+
+	await page.getByTestId("artifacts-view-tree").click();
+	await expect(page.getByTestId("artifact-folder")).toHaveCount(2);
+	await expect(folderRow(page, "gallery/analyzers")).toContainText("gallery/analyzers");
+	await expect(folderRow(page, "mockups").getByTestId("artifact-folder-files")).toHaveText("3");
+	await expect(artifact(page, "report.md")).toBeVisible();
+	await expect(artifact(page, "mockups/features/a.html")).toHaveCount(0);
+	await expect(page.getByTestId("artifacts-collapse-all")).toHaveCount(0);
+
+	writeArtifact(root, "mockups/features/new.png", "png\n");
+	await expect(folderRow(page, "mockups").getByTestId("artifact-new")).toBeVisible({
+		timeout: 10_000,
+	});
+	await folderRow(page, "mockups").click();
+	await expect(folderRow(page, "mockups").getByTestId("artifact-new")).toHaveCount(0);
+	await folderRow(page, "mockups/features").click();
+	await expect(artifact(page, "mockups/features/new.png")).toHaveAttribute("data-fresh", "true");
+	await artifact(page, "mockups/features/a.html").getByTestId("artifact-open").click();
+	await expect(
+		page.locator('[data-testid="editor-tab"][data-kind="file"]').filter({ hasText: "a.html" }),
+	).toBeVisible();
+	await expect(
+		artifact(page, "mockups/features/a.html").getByTestId("artifact-open"),
+	).toHaveAttribute("data-active", "true");
+
+	rmSync(join(root, CONTEXT, "gallery"), { recursive: true });
+	await expect(folder(page, "gallery/analyzers")).toHaveAttribute("data-deleted", "true", {
+		timeout: 10_000,
+	});
+	await expect(folderRow(page, "gallery/analyzers")).toContainText("Deleted");
+	await folderRow(page, "gallery/analyzers").click({ button: "right" });
+	await expect(page.getByTestId("artifact-copy-relative-path")).toBeVisible();
+	await expect(page.getByTestId("artifact-rename")).toHaveCount(0);
+	await expect(page.getByTestId("artifact-mention")).toHaveCount(0);
+	await page.keyboard.press("Escape");
+
+	await page.reload();
+	await showArtifacts(page);
+	await expect(page.getByTestId("artifacts-view-tree")).toHaveAttribute("data-active", "true");
+	await expect(artifact(page, "mockups/features/a.html")).toBeVisible();
+	await page.getByTestId("artifacts-collapse-all").click();
+	await expect(artifact(page, "mockups/features/a.html")).toHaveCount(0);
+	await expect(page.getByTestId("artifacts-collapse-all")).toHaveCount(0);
+
+	await page.getByTestId("artifacts-view-list").click();
+	await expect(page.getByTestId("artifact-folder")).toHaveCount(0);
+	await expect(artifact(page, "mockups/features/a.html")).toBeVisible();
+});
+
+test("a folder in the Tree offers no Delete and renames from the keyboard, its artifacts with it", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const root = workspace.worktreePath;
+	writeArtifact(root, "mockups/onboarding/c.html", "<h1>c</h1>\n");
+	writeArtifact(root, "mockups/features/a.html", "<h1>a</h1>\n");
+	await showArtifacts(page);
+	await page.getByTestId("artifacts-view-tree").click();
+	await folderRow(page, "mockups").click();
+
+	await folderRow(page, "mockups/onboarding").click({ button: "right" });
+	const menu = page.getByTestId("artifact-actions");
+	await expect(menu.getByTestId("artifact-mention")).toBeVisible();
+	await expect(menu.getByTestId("artifact-rename")).toBeVisible();
+	await expect(menu.getByTestId("artifact-delete")).toHaveCount(0);
+	await expect(menu.getByTestId("artifact-menu-restore")).toHaveCount(0);
+	await page.keyboard.press("Escape");
+
+	await folderRow(page, "mockups/onboarding").focus();
+	await page.keyboard.press("Delete");
+	await expect(page.getByTestId("confirm-dialog")).toHaveCount(0);
+	await page.keyboard.press("F2");
+	const input = page.getByTestId("artifact-name-input");
+	await input.fill("welcome");
+	await input.press("Enter");
+	await expect(folder(page, "mockups/welcome")).toBeVisible();
+	await expect(folder(page, "mockups/onboarding")).toHaveCount(0);
+	expect(readFileSync(join(root, CONTEXT, "mockups/welcome/c.html"), "utf8")).toBe("<h1>c</h1>\n");
+});
+
+test("a narrow Artifacts toolbar folds its actions, then its views, into a More menu", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 900, height: 800 });
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	writeArtifact(workspace.worktreePath, "mockups/a.html", "<h1>a</h1>\n");
+	await showArtifacts(page);
+	const toolbar = page.getByRole("toolbar", { name: "Artifacts" });
+	await expect(toolbar).toHaveAttribute("data-fold", "2");
+	await expect(page.getByTestId("artifacts-view-tree")).toHaveCount(0);
+	await expect(page.getByTestId("artifacts-toggle-ignored")).toHaveCount(0);
+
+	await page.getByTestId("artifacts-more").click();
+	await page.getByTestId("artifacts-more-view-tree").click();
+	await folderRow(page, "mockups").click();
+	await expect(artifact(page, "mockups/a.html")).toBeVisible();
+	await page.getByTestId("artifacts-more").click();
+	await page.getByTestId("artifacts-more-collapse-all").click();
+	await expect(artifact(page, "mockups/a.html")).toHaveCount(0);
+
+	await page.setViewportSize({ width: 1600, height: 800 });
+	await expect(toolbar).toHaveAttribute("data-fold", "0");
+	await expect(page.getByTestId("artifacts-view-tree")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("artifacts-more")).toHaveCount(0);
 });
 
 test("a new artifact lights the rail until the tab is opened, and a cut file pastes into artifacts", async ({
