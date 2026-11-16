@@ -14,6 +14,7 @@
 		"./fonts": "./fonts.ts",
 		"./keyboard": "./keyboard.ts",
 		"./keycaps": "./keycaps.tsx",
+		"./local-keys": "./local-keys.tsx",
 		"./menu-styles": "./menu-styles.ts",
 		"./popover": "./popover.tsx",
 		"./resizable": "./resizable.tsx",

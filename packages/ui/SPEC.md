@@ -17,8 +17,20 @@ feature state, theme selection, and token generation stay with the app.
 
 Primitives expose per-file `@thinkrail/ui/<primitive>` subpaths, not a root component barrel; this keeps
 lazy chunks independent and preserves the shadcn convention. `./utils` exposes `cn`; `./keyboard` exposes
-`isImeComposing`, `yieldEscapeToIme` and the platform modifier (`isApplePlatform`, `hasPlatformModifier`:
-Cmd on Apple, Ctrl elsewhere — shared so the app's shortcuts and an extension's card read one definition); `./focus` exposes
+`isImeComposing`, `yieldEscapeToIme`, the platform modifier (`isApplePlatform`, `hasPlatformModifier`:
+Cmd on Apple, Ctrl elsewhere — shared so the app's shortcuts and an extension's card read one definition)
+and the pure chord primitives: `chordPressed(chord, event, platform, { ignoreShift })` (physical `code`
+or typed key, exact modifiers, `Mod` = ⌘ on Apple and Ctrl elsewhere, no Alt chord under AltGraph off
+Apple — the app's keybinding matcher delegates to it, so the two cannot drift), `chordCaps`, `keyCap`,
+`codeLabel` (a code's US label), `ariaKeyShortcuts(chords, platform)` (one platform's modifier names, never
+Meta and Control both), `isTypingChord` and `ARROW_TWIN_COMMANDS` (`arrows.left/down/up/right`, H/J/K/L
+by `code`, in shared scope `ARROW_TWINS_SCOPE`). `./local-keys` is the seam an element matches its
+rebindable local keys through, whoever renders it (the app, resource renderers, an extension card):
+`useLocalKeys(scope, defaults)` returns `{ match(event, { ignoreShift }), caps(id), aria(id) }` over the
+effective chords `LocalKeymapProvider` supplies (the app's resolved table), or over `defaults` when no
+provider is mounted or it lacks the scope — the `./fonts` pattern of a host-published signal with a
+standalone default. `match` ignores an IME composition and a typing chord in text entry (the provider's
+`isTextEntry`, else inputs and contenteditable); `defaults` must be a stable module constant. `./focus` exposes
 the one tabbable-control selector (`TABBABLE_SELECTOR`, which includes a `<details>` element's own
 `<summary>`, natively tabbable) and `focusFirstControl(container)` (the first
 control, focused with `preventScroll`), shared by the app's focus recovery and reveal moves and the
@@ -125,7 +137,7 @@ on Tab), `skeleton` (`SkeletonRows` / `LoadingRegion`, the one loading placehold
 live in the web components spec), and `attention-line` (`AttentionLine`, the "Your input is needed · Agent is
 waiting" line; `announced` hides the visible line from assistive tech once the always-mounted polite
 region carries the announcement, `live={false}` drops the region), and `keycaps` (`Keycaps`, a row of
-`<kbd>` caps for already-formatted key labels, a repeated key such as double Shift included), alongside `utils`, `keyboard`, `theme` and `fonts`.
+`<kbd>` caps for already-formatted key labels, a repeated key such as double Shift included), alongside `utils`, `keyboard`, `local-keys`, `theme` and `fonts`.
 `menu-styles` is shared by the menu primitives and custom app menu rows. `toggle-segment` and `skeleton`
 moved here from the app when the resource renderers became a package, because both the app and
 [[module-resource-renderers]] use them; `attention-line` moved for the same reason when the
@@ -157,7 +169,7 @@ moved here from the app when the resource renderers became a package, because bo
   an open tooltip is the topmost dismissable layer and would swallow the Escape meant for the dialog. For
   the same reason an open `IconTooltip` closes itself synchronously on Escape in a window capture
   listener, before Radix's document-level layer handling, so one Escape dismisses the tooltip *and* the
-  dialog, popover or menu beneath it. An optional `shortcut` (pre-formatted caps — the package never
+  dialog, popover or menu beneath it. An optional `shortcut` (pre-formatted caps — the tooltip never
   formats a chord, the app passes its own labels) renders as `Keycaps` after the label; `Button` and
   `IconButton` forward it as `tooltipShortcut`. Tooltip content stacks at `z-150`, above dialogs and the toast
   viewport (`z-[100]`), so a toast's own close tooltip is never painted under the toast.

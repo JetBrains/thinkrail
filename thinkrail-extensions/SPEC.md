@@ -50,11 +50,14 @@ extension contributes — its factories, its tools in live sessions, and the ski
   `skillPackages` are **package specifiers** whose `pi.skills` directories the host stages — explicit module
   identity for the build step, never inferred from a function. Server-only; may value-import pi.
 - `./web` — default export `defineWebExtension({ name, title?, description?, toolRenderers?, globalOverlay?,
-  shortcuts? })`: `toolRenderers` keyed by tool name; `title` / `description` locale keys for a web-only
+  commands?, shortcuts? })`: `toolRenderers` keyed by tool name; `title` / `description` locale keys for a web-only
   Settings row; `globalOverlay` a component the host mounts once in `Shell` while the extension is enabled,
-  handed host helpers as props (`isTextEntry`, `activeLayer`, `platform`) because the half cannot import
-  the app; `shortcuts` display rows (with physical `code`s) the cheatsheet's General section lists while
-  enabled. **Plus named exports** for components the host uses directly (visualize exports `MermaidView`
+  handed host helpers as props (`isTextEntry`, `activeLayer`, `platform`, the command channel) because the
+  half cannot import the app; `commands` the rebindable keybindings, global or — with a `scope` — local to
+  the extension's element, which matches them through `@thinkrail/ui/local-keys`; both are listed and
+  rebound in Settings → Keyboard, ids and scopes prefixed `<name>.` ([[module-extension-api]]);
+  `shortcuts` display rows (with physical `code`s) for the keys it keeps locked, which the cheatsheet's
+  General section lists while enabled. **Plus named exports** for components the host uses directly (visualize exports `MermaidView`
   for fenced mermaid in chat markdown). Browser-only; never value-imports pi; heavy renderers stay lazy.
 
 The `define*` objects and the named `./web` exports are the whole contract: named `./web` exports are
@@ -79,13 +82,15 @@ What a `./web` half may import:
 
 - `@thinkrail/extension-api` ([[module-extension-api]]) — types and `define*` helpers only, no React
   components. `./web`: `ToolRenderProps`, `ToolRenderer`, `ToolRegistrationOptions`, `ToolStatus`,
-  `WebExtension`, `GlobalOverlayProps`, `ExtensionShortcut`, `ExtensionShortcutKey`, `defineWebExtension`,
+  `WebExtension`, `GlobalOverlayProps`, `ExtensionCommand`, `ExtensionChord`, `ExtensionShortcut`,
+  `ExtensionShortcutKey`, `defineWebExtension`,
   and the pure renderer helpers (`toolHelpers`, `toolResultContent`).
   `./server`: `ServerExtension`, `defineServerExtension`. Its own package because server pi types would
   contaminate the wire boundary in `contracts`, and the server contract in `ui` would give the host a
   presentation dependency.
-- `@thinkrail/ui` ([[module-ui]]) — the owned shadcn/Radix primitives moved whole, `cn`, and the
-  `onThemeSwap` function only (not the theme catalog/preferences runtime). Per-file imports
+- `@thinkrail/ui` ([[module-ui]]) — the owned shadcn/Radix primitives moved whole, `cn`, the
+  `onThemeSwap` function only (not the theme catalog/preferences runtime), `./keyboard`'s chord helpers
+  and `./local-keys` (`useLocalKeys`, how a card matches its local commands). Per-file imports
   (`@thinkrail/ui/dialog`) are retained for code-splitting. Design tokens stay in `apps/web/src/styles`;
   the SDK and extension web halves use token utility classes only, and the app's CSS `@source` and
   color/spacing/typography checks cover `packages/ui` and `thinkrail-extensions/*/web`.

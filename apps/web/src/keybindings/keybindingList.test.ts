@@ -6,6 +6,7 @@ import {
 	type ExtensionShortcutSet,
 	keybindingList,
 	keybindingsFile,
+	localChordHolder,
 	planImport,
 	resetChord,
 	resolveKeybindings,
@@ -51,8 +52,8 @@ function list({
 	});
 }
 
-const entry = (from: ReturnType<typeof list>, command: string) =>
-	from.entries.find((candidate) => candidate.command === command);
+const entry = (from: ReturnType<typeof list>, id: string) =>
+	from.entries.find((candidate) => candidate.id === id);
 
 describe("the keybinding list", () => {
 	test("groups the catalog by surface, then lists each extension's commands and its locked keys", () => {
@@ -68,7 +69,7 @@ describe("the keybinding list", () => {
 			["notes.open", "notes", false],
 			["notes.close", "notes", true],
 		]);
-		expect(new Set(entries.map(({ command }) => command)).size).toBe(entries.length);
+		expect(new Set(entries.map(({ id }) => id)).size).toBe(entries.length);
 	});
 
 	test("splits the focus-group row into one row per group, titled by its position", () => {
@@ -83,9 +84,9 @@ describe("the keybinding list", () => {
 	});
 
 	test("element keys are locked rows with their display labels; desktop rows only on the desktop", () => {
-		const search = entry(list(), "trees.search");
-		expect(search?.locked).toBe(true);
-		expect(search?.chords.map(({ label }) => label)).toEqual(["S"]);
+		const firstLast = entry(list(), "trees.firstLast");
+		expect([firstLast?.locked, firstLast?.scope]).toEqual([true, "trees"]);
+		expect(firstLast?.chords.map(({ label }) => label)).toEqual(["Home", "End"]);
 		expect(entry(list(), "desktop.settings")).toBeUndefined();
 		expect(entry(list({ desktop: true }), "desktop.settings")?.locked).toBe(true);
 	});
@@ -229,8 +230,29 @@ describe("the keybindings file", () => {
 			command: "trees.search",
 			title: "shortcuts.trees.search",
 			source: "thinkrail",
+			scope: "trees",
+			chords: ["KeyS"],
+			defaults: ["KeyS"],
+			changed: false,
+		});
+		expect(binding("trees.down")).toEqual({
+			command: "trees.down",
+			title: "shortcuts.trees.down",
+			source: "thinkrail",
+			scope: "trees",
+			alias: "arrows.down",
+			fixed: { keys: ["↓"], locked: true },
+			chords: ["KeyJ"],
+			defaults: ["KeyJ"],
+			changed: false,
+		});
+		expect(binding("trees.firstLast")).toEqual({
+			command: "trees.firstLast",
+			title: "shortcuts.trees.firstLast",
+			source: "thinkrail",
+			scope: "trees",
 			locked: true,
-			keys: ["S"],
+			keys: ["Home", "End"],
 		});
 		expect(binding("shortcuts.open")).toMatchObject({ chords: ["Mod+?"], defaults: ["Mod+?"] });
 		expect(binding("focus.group3")?.title).toBe("commands.focus.group 3");
@@ -266,7 +288,7 @@ describe("planImport", () => {
 			list(),
 			file([
 				{ command: "group.splitRight", chords: ["Mod+Alt+KeyS"] },
-				{ command: "trees.search", chords: ["Mod+KeyF"], locked: true },
+				{ command: "trees.firstLast", chords: ["Mod+KeyF"], locked: true },
 				{ command: "old-extension.run", chords: ["Mod+Shift+KeyR"] },
 				{ command: "view.files", chords: ["Mod+?"] },
 				{ command: "view.changes", chords: ["KeyG"] },
@@ -279,7 +301,7 @@ describe("planImport", () => {
 			{ command: "group.splitRight", from: ["Ctrl+\\"], to: ["Ctrl+Alt+S"] },
 		]);
 		expect(plan?.skipped).toEqual([
-			{ command: "trees.search", reason: "locked" },
+			{ command: "trees.firstLast", reason: "locked" },
 			{ command: "old-extension.run", reason: "unknown" },
 			{ command: "view.files", reason: "invalid" },
 			{ command: "view.changes", reason: "plain" },
@@ -325,7 +347,7 @@ describe("planImport", () => {
 			file([{ command: "focus.composer", chords: ["Mod+KeyK"] }]),
 		);
 		expect(plan?.conflicts).toEqual([
-			{ chord: "Ctrl+K", command: "focus.composer", other: "search.open" },
+			{ chord: "Ctrl+K", command: "focus.composer", other: "search.open", scope: null },
 		]);
 		expect(plan?.overrides).toEqual({ "focus.composer": ["Mod+KeyK"], "search.open": [] });
 		const both = planImport(
@@ -350,7 +372,7 @@ describe("planImport", () => {
 			file([{ command: "view.toggleLeft", chords: ["Mod+Shift+Slash"] }]),
 		);
 		expect(plan?.conflicts).toEqual([
-			{ chord: "Ctrl+Shift+/", command: "view.toggleLeft", other: "shortcuts.open" },
+			{ chord: "Ctrl+Shift+/", command: "view.toggleLeft", other: "shortcuts.open", scope: null },
 		]);
 		expect(plan?.overrides).toEqual({
 			"view.toggleLeft": ["Mod+Shift+Slash"],
@@ -367,5 +389,128 @@ describe("planImport", () => {
 		expect(plan?.changes.map(({ command }) => command)).toEqual(["notes.open"]);
 		expect(plan?.conflicts).toEqual([]);
 		expect(plan?.overrides).toEqual({ "notes.open": ["Mod+KeyK"] });
+	});
+});
+
+describe("local rows", () => {
+	test("a local command is an editable row in its element's scope; a direction row edits the shared twin", () => {
+		const search = entry(list(), "trees.search");
+		expect([search?.command, search?.scope, search?.locked, search?.plain]).toEqual([
+			"trees.search",
+			"trees",
+			false,
+			true,
+		]);
+		const down = entry(list(), "trees.down");
+		expect([down?.command, down?.scope, down?.locked]).toEqual(["arrows.down", "trees", false]);
+		expect(down?.fixed.map(({ label }) => label)).toEqual(["↓"]);
+		expect(down?.chords.map(({ label }) => label)).toEqual(["J"]);
+		const extend = entry(list(), "review.extendUp");
+		expect([extend?.locked, extend?.chords.map(({ label }) => label)]).toEqual([true, ["Shift+K"]]);
+		expect(entry(list(), "arrows.down")?.scope).toBe("arrows");
+	});
+
+	test("a local chord conflicts only inside the elements its command acts in", () => {
+		expect(localChordHolder(list(), "trees.search", "KeyJ")).toEqual({
+			command: "arrows.down",
+			scope: "trees",
+		});
+		expect(localChordHolder(list(), "arrows.up", "KeyS")).toEqual({
+			command: "trees.search",
+			scope: "trees",
+		});
+		expect(chordHolder(list(), "trees.search", "KeyC")).toBeNull();
+		expect(chordHolder(list(), "transcript.copy", "KeyS")).toBeNull();
+		expect(chordHolder(list(), "trees.search", "Mod+KeyK")).toBeNull();
+		expect(chordHolder(list(), "view.toggleLeft", "KeyS")).toBeNull();
+	});
+
+	test("Replace unbinds an own-scope holder, but a shared twin only loses inside that element", () => {
+		expect(assignChord(list(), {}, "trees.search", "F2", "trees.rename")).toEqual({
+			"trees.search": ["F2"],
+			"trees.rename": [],
+		});
+		expect(assignChord(list(), {}, "trees.search", "KeyJ", "arrows.down")).toEqual({
+			"trees.search": ["KeyJ"],
+		});
+		expect(assignChord(list(), {}, "arrows.up", "KeyS", "trees.search")).toEqual({
+			"arrows.up": ["KeyS"],
+			"trees.search": [],
+		});
+	});
+
+	test("a global row notes where a local key takes its chord; a twin where an element took it", () => {
+		const shadowed = list({
+			overrides: {
+				"trees.search": ["Mod+KeyK"],
+				"arrows.down": ["KeyU"],
+				"transcript.copy": ["KeyU"],
+			},
+		});
+		expect(entry(shadowed, "search.open")?.yields).toEqual([
+			{ scope: "trees", label: "Ctrl+K", winner: "trees.search" },
+		]);
+		expect(entry(shadowed, "arrows.down")?.yields).toEqual([
+			{ scope: "transcript", label: "U", winner: "transcript.copy" },
+		]);
+		expect(entry(shadowed, "transcript.down")?.chords.map(({ lostTo }) => lostTo)).toEqual([
+			"transcript.copy",
+		]);
+		expect(entry(shadowed, "trees.down")?.chords.map(({ lostTo }) => lostTo)).toEqual([null]);
+	});
+
+	test("import takes plain local keys, refuses navigation keys and keeps conflicts inside a scope", () => {
+		const file = (bindings: unknown[]) => ({
+			format: "thinkrail-keybindings",
+			version: 1,
+			bindings,
+		});
+		const plan = planImport(
+			{},
+			list(),
+			file([
+				{ command: "trees.search", scope: "trees", chords: ["KeyG"] },
+				{ command: "transcript.copy", chords: ["ArrowDown"] },
+				{ command: "trees.rename", chords: ["KeyC"] },
+				{ command: "trees.down", alias: "arrows.down", chords: ["KeyU"] },
+				{ command: "transcript.down", alias: "arrows.down", chords: ["KeyU"] },
+				{ command: "tabs.next", alias: "arrows.right", chords: ["KeyY"] },
+				{ command: "rails.right", alias: "arrows.right", chords: ["KeyZ"] },
+			]),
+		);
+		expect(plan?.changes.map(({ command, to }) => [command, to])).toEqual([
+			["trees.search", ["G"]],
+			["trees.rename", ["C"]],
+			["trees.down", ["U"]],
+			["tabs.next", ["Y"]],
+		]);
+		expect(plan?.skipped).toEqual([
+			{ command: "transcript.copy", reason: "primitive" },
+			{ command: "rails.right", reason: "unknown" },
+		]);
+		expect(plan?.conflicts).toEqual([]);
+		expect(plan?.overrides).toEqual({
+			"trees.search": ["KeyG"],
+			"trees.rename": ["KeyC"],
+			"arrows.down": ["KeyU"],
+			"arrows.right": ["KeyY"],
+		});
+		const conflicting = planImport(
+			{},
+			list(),
+			file([
+				{ command: "trees.search", chords: ["F2"] },
+				{ command: "trees.delete", chords: ["KeyJ"] },
+			]),
+		);
+		expect(conflicting?.conflicts).toEqual([
+			{ chord: "F2", command: "trees.search", other: "trees.rename", scope: "trees" },
+			{ chord: "J", command: "trees.delete", other: "arrows.down", scope: "trees" },
+		]);
+		expect(conflicting?.overrides).toEqual({
+			"trees.search": ["F2"],
+			"trees.delete": ["KeyJ"],
+			"trees.rename": [],
+		});
 	});
 });

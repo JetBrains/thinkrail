@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { shortcutSurfaceOf } from "./shortcutSurface";
+import { localScopesOf, shortcutSurfaceOf } from "./shortcutSurface";
 
 const inside = (...ancestors: string[]) => ({
 	closest: (selector: string) =>
@@ -29,4 +29,47 @@ test("a feature surface outranks a generic tree or tab role around it", () => {
 	);
 	expect(shortcutSurfaceOf(inside(".xterm", '[role="tabpanel"]'))).toBe("terminal");
 	expect(shortcutSurfaceOf(inside('[role="tab"]', "[data-review-surface]"))).toBe("review");
+});
+
+type FakeNode = {
+	matches: (selector: string) => boolean;
+	getAttribute: (name: string) => string | null;
+	parentElement: FakeNode | null;
+};
+
+const chain = (...nodes: { selector?: string; keyScope?: string }[]): FakeNode | null =>
+	nodes.reduceRight<FakeNode | null>(
+		(parentElement, { selector = "", keyScope }) => ({
+			matches: (candidate) => selector !== "" && candidate.split(", ").includes(selector),
+			getAttribute: (name) => (name === "data-key-scope" ? (keyScope ?? null) : null),
+			parentElement,
+		}),
+		null,
+	);
+
+test("local scopes run from the focused element outward, declared scopes included", () => {
+	expect(
+		localScopesOf(chain({ selector: '[role="treeitem"]' }, { selector: '[role="tree"]' })),
+	).toEqual(["trees"]);
+	expect(
+		localScopesOf(
+			chain(
+				{ selector: "[data-review-surface]" },
+				{},
+				{ selector: '[data-testid="changes-review"]' },
+			),
+		),
+	).toEqual(["review.surface", "review"]);
+	expect(
+		localScopesOf(
+			chain(
+				{ keyScope: "ask-user-question.card" },
+				{ selector: "[data-transcript-feed]" },
+				{ keyScope: "ask-user-question.card" },
+			),
+		),
+	).toEqual(["ask-user-question.card", "transcript"]);
+	expect(localScopesOf(chain({ selector: '[data-testid="search-palette"]' }))).toEqual(["palette"]);
+	expect(localScopesOf(chain({}))).toEqual([]);
+	expect(localScopesOf(null)).toEqual([]);
 });

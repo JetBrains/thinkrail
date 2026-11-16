@@ -11,9 +11,11 @@ tags: [ui, keyboard, public-surface-checked]
 ## Responsibility
 
 The one declaration of the web app's app-wide chords: which physical keys and modifiers each named
-binding answers to, and which chord the UI shows for it. Beside the default table live the **chord
-grammar** (`chord.ts`) and the **resolver** (`resolve.ts`), which folds the user's overrides and the web
-extensions' commands over the table into the *effective* chords every reader uses: the binder (`shell`'s
+binding answers to, and which chord the UI shows for it — and of the **local keys** (`localKeys.ts`), the
+rebindable keys that act only while focus is inside one element. Beside the default table live the
+**chord grammar** (`chord.ts`) and the **resolver** (`resolve.ts`), which folds the user's overrides and
+the web extensions' commands over the table and the local declarations into the *effective* chords every
+reader uses: the binder (`shell`'s
 `useGlobalHotkeys`), the palette's command shortcuts, tooltips and the **shortcut catalog**
 (`shortcutCatalog.ts`), the one list of every shortcut the user can press — the effective bindings plus
 the keys other owners bind — that the cheatsheet and Settings → Keyboard render. `keybindingList.ts` turns
@@ -24,18 +26,22 @@ binding does.
 ## Boundary
 
 - **Public surface:** `KeybindingId`, `KeyChord`, `KEYBINDINGS`, `FOCUS_GROUP_BINDINGS`, `parseChord`,
-  `formatChord`, `chordFromEvent`, `RecordedChord`, `isPlainChord`, `isBrowserReservedChord`,
-  `isDesktopNativeChord`, `keybindingList`, `KeybindingList`, `KeybindingEntry`, `ExtensionShortcutSet`,
-  `chordHolder`, `assignChord`, `resetChord`, `keyChordLabel`, `keybindingsFile`, `planImport`,
-  `ImportPlan`, `ImportSkipReason`, `elementKeyUses`,
-  `resolveKeybindings`, `ResolvedKeybindings`, `ResolvedCommand`, `ResolvedChord`, `KeybindingConflict`,
-  `ExtensionCommandSet`, `matchKeybinding`, `pressesChord`, `keybindingShortcut`, `keybindingShortcuts`,
-  `keybindingKeys`, `keybindingLabel`, `keybindingLabels`, `SHORTCUT_CATALOG`, `SHORTCUT_SURFACES`,
-  `SHORTCUT_SURFACE_TITLES`, `ShortcutSurface`, `ShortcutRow`, `ShortcutConflictView`, `shortcutRows`,
-  `shortcutKeyCaps`, `TAB_KEYS`, `RAIL_KEYS`, `HJKL_KEYS`, `TREE_KEYS`, `REVIEW_KEYS`,
-  `TRANSCRIPT_KEYS`, `HISTORY_KEYS`, `DESKTOP_KEYS`.
+  `formatChord`, `chordFromEvent`, `RecordedChord`, `isPlainChord`, `isLockedPrimitive`,
+  `isBrowserReservedChord`, `isDesktopNativeChord`, `keybindingList`, `KeybindingList`,
+  `KeybindingEntry`, `ExtensionShortcutSet`, `chordHolder`, `localChordHolder`, `assignChord`,
+  `resetChord`, `keyChordLabel`, `keybindingsFile`, `planImport`, `ImportPlan`, `ImportSkipReason`,
+  `elementKeyUses`, `LOCAL_SCOPES`, `AppLocalScope`, `isAppLocalScope`, `APP_LOCAL_COMMANDS`,
+  `LOCAL_KEY_DEFAULTS`, `APP_LOCAL_SET`, `LocalCommandSet`, `matchLocal`, `localUses`, `globalHolder`,
+  `actsIn`, `resolveKeybindings`, `ResolvedKeybindings`, `ResolvedCommand`, `ResolvedChord`,
+  `KeybindingConflict`, `ExtensionCommandSet`, `matchKeybinding`, `pressesChord`, `keybindingShortcut`,
+  `keybindingShortcuts`, `keybindingKeys`, `keybindingLabel`, `keybindingLabels`, `SHORTCUT_CATALOG`,
+  `SHORTCUT_SURFACES`, `SHORTCUT_SURFACE_TITLES`, `ShortcutSurface`, `ShortcutRow`,
+  `ShortcutConflictView`, `shortcutRows`, `shortcutKeyCaps`, `TAB_KEYS`, `RAIL_KEYS`, `HJKL_KEYS`,
+  `TREE_KEYS`, `REVIEW_KEYS`, `TRANSCRIPT_KEYS`, `HISTORY_KEYS`, `DESKTOP_KEYS`.
 - **Allowed deps:** `contracts` (the shared chord shape check `isKeybindingChord`, `isModifierKeyCode`,
   `KEYBINDING_MODIFIERS`), `commands` (`CommandShortcut` and `shortcutKeys`), `lib` (`platformFamily`),
+  `@thinkrail/ui/keyboard` (the pure chord primitives `chordPressed`, `keyCap`, `codeLabel`,
+  `isTypingChord` and the arrow twins, shared with the local-keys seam so matching cannot drift),
   `@thinkrail/locales` (the catalog's `MessageKey` titles, type-only).
 - **Forbidden:** importing `store`, `transport`, `shell`, `panels`, `chat`, `search` or React; reading
   globals to decide what to show (the caller passes `browser`); binding a key — the handlers, gating
@@ -99,9 +105,10 @@ binding does.
   keeps its keys; only `Ctrl+R`'s reload guard still swallows the key.
 - **Not bound here:** `shell/shortcutCommands.ts` (close/quit/settings — native-owned and typed-key matched on
   purpose; `tab.close` only shows its `Mod+W`), the desktop page-zoom chords `Mod+=` / `Mod+-` / `Mod+Numpad0` (the preload binds them,
-  [[module-desktop]]; the palette's zoom rows only show them), the double-Shift gesture, and
-  feature-local keys (the palette's own `Mod+K` / `Mod+I`, Monaco, xterm), and an extension's in-mode
-  keys (`shortcuts`, display only). The catalog lists them; it binds none, and none is rebindable.
+  [[module-desktop]]; the palette's zoom rows only show them), the double-Shift gesture, the locked
+  navigation keys elements handle themselves (Monaco, xterm, arrows, Enter, Esc, Tab), and an extension's
+  in-mode keys (`shortcuts`, display only). The catalog lists them; it binds none, and none is
+  rebindable. Local keys are declared here but matched by their element (*Local keys*).
 
 ## Chord grammar
 
@@ -115,12 +122,19 @@ binding does.
 - **`Mod` is ⌘ on Apple and Ctrl elsewhere; a literal `Ctrl` is ⌃ on Apple and the same key as `Mod`
   elsewhere**, so one override set serves every OS. Equality is by the physical modifiers a platform
   holds (`chordSignature`): `Ctrl+KeyU` and `Mod+KeyU` are one chord off Apple, two on a Mac.
-- **A plain chord** has no `Mod`/`Ctrl`/`Alt` and is not `F1`–`F12` (Shift alone is plain). It matches only
-  outside text entry, and only a command whose default has one may hold one (hint mode's `F`); the
-  resolver drops a plain override on any other command.
-- **`chordFromEvent(event, platform, { allowPlain })`** records a press by `code`: ⌘ → `Mod`, ⌃ → `Ctrl`
-  on Apple, Control → `Mod` elsewhere. It rejects a modifier on its own (`modifierOnly`) and a plain chord
-  unless `allowPlain` (`plain`), ignores an AltGraph press and the Windows/Super key off Apple (no chord
+- **A plain chord** has no `Mod`/`Ctrl`/`Alt` and is not `F1`–`F12` (Shift alone is plain). A global
+  plain chord matches only outside text entry, and only a global command whose default has one may hold
+  one (hint mode's `F`); the resolver drops a plain override on any other global command. Every local
+  command may hold one.
+- **A locked primitive** (`isLockedPrimitive`) is an arrow, Enter, Escape, Tab, Space, Home/End or
+  PgUp/PgDn with no modifier or Shift alone — the keys browsers, screen readers and ARIA patterns expect.
+  The resolver drops one from any override unless it is that command's own default (the card's
+  `Shift+Escape` skip may be re-recorded); the Enter-based chords (`Mod+Enter`, `Alt+Enter`,
+  `Mod+Shift+Enter`) are not primitives and rebind like any chord.
+- **`chordFromEvent(event, platform, { allowPlain, allowLocked })`** records a press by `code`: ⌘ → `Mod`, ⌃ → `Ctrl`
+  on Apple, Control → `Mod` elsewhere. It rejects a modifier on its own (`modifierOnly`), a plain chord
+  unless `allowPlain` (`plain`), a locked primitive unless `allowLocked` (`locked`, carrying the chord so
+  the editor can accept a command's own default), ignores an AltGraph press and the Windows/Super key off Apple (no chord
   names them) and any code outside the grammar, and flags a browser-reserved chord as a warning
   (`browserReserved: true`), never a rejection — it works in the desktop app.
 - **Desktop-native chords are never recordable** (`isDesktopNativeChord`): the desktop's own close, quit
@@ -139,10 +153,46 @@ binding does.
   yields any key the page claimed, so a chord bound over a zoom character takes the press instead of
   zooming (one owner, like `Mod+0`) and is not refused.
 
+## Local keys
+
+- **A local command** is `{ id, scope, chords }` acting only while focus is inside its element. The app
+  declares them in `localKeys.ts` (`APP_LOCAL_COMMANDS`, ids `<scope>.<action>`, one direction per
+  command) under `LOCAL_SCOPES` — `tabs`, `rails`, `trees`, `review`, `review.surface`, `transcript`,
+  `composer`, `history`, `palette`, `findInFiles`, each titled for the editor (`where`, `inside`). An
+  extension command with a `scope` is local too ([[module-extension-api]]); its id and scope must start
+  with `<extension name>.`, and the resolver drops any extension command, global or local, that does not
+  (so none can shadow `trees.search` or `search.open`). Resource renderers will add their own set.
+- **Shared scope `arrows`.** The letter twins of the arrows (`arrows.left/down/up/right`, H/J/K/L by
+  `code`) are `@thinkrail/ui/keyboard`'s `ARROW_TWIN_COMMANDS`, declared once in scope `arrows`; `tabs`,
+  `rails`, `trees`, `review.surface` and `transcript` include it, so one rebind applies in every element.
+  A scope another includes is not an element of its own: it never appears in the `local` map.
+- **Physical keys everywhere:** local letters match `code` (caps show US positions; Dvorak and Colemak
+  users rebind). A typing local chord (no Mod/Ctrl/Alt, not Escape, not an F-key — `isTypingChord`)
+  never matches in text entry; `Shift+Escape` or `Mod+Enter` still do.
+- **Ranking per effective scope** (own commands plus included ones): override > ThinkRail > extension,
+  then own before included, then declaration order. An own command losing in its scope is `lostTo` the
+  winner; an included command losing there is listed in `lostIn` (`{ scope, winner }`) and keeps acting
+  in every other element. Desktop-native and dictation reservations take a local chord first, as they
+  take a global one. Local chords never conflict with global ones: inside its element the local key wins
+  (the binder yields, [[submodule-web-shell]]), so a global default never equals a local default — a
+  tested invariant beside "no default conflict in any effective scope".
+- **Outputs:** `ResolvedCommand.scope` (null for global), `conflicts[].scope`, and `local` — effective
+  scope → active chords in rank order, one entry per element even when empty, so a scope whose every key
+  was unbound matches nothing instead of its defaults. `matchLocal(resolved, scopes, event, { textEntry })`
+  tries the focused element's scopes innermost first. `localUses(resolved, chord)` (every element holding
+  a chord), `globalHolder(resolved, chord)` and `actsIn(resolved, scope)` (the elements a scope's
+  commands act in) feed the editor's warnings.
+- **`LOCAL_KEY_DEFAULTS[scope]`** is a scope's declared commands plus its included ones, the defaults a
+  handler hands `useLocalKeys`; with no provider those match.
+- **The handlers' old constants** (`TAB_KEYS`, `RAIL_KEYS`, `TREE_KEYS`, `REVIEW_KEYS`, `HJKL_KEYS`,
+  `TRANSCRIPT_KEYS`, `HISTORY_KEYS`) are derived from these declarations (US typed key of the default)
+  until each handler matches through `useLocalKeys`; then they go. `DESKTOP_KEYS` stays (display only).
+
 ## Resolver
 
-- **`resolveKeybindings({ platform, overrides, extensions })`** takes the table, the commands of every
-  registered web extension in registry order with an `enabled` flag (`ExtensionCommandSet`), and the
+- **`resolveKeybindings({ platform, overrides, extensions, local })`** takes the table, the commands of every
+  registered web extension in registry order with an `enabled` flag (`ExtensionCommandSet`), the local
+  command sets (`LocalCommandSet`, default `[APP_LOCAL_SET]`), and the
   user's override map (`AppConfig.keybindings`: command id → chords, `[]` unbound, absent = defaults). It
   returns every command — app ones in table order, then extension ones, each with `extension`, `enabled`,
   `custom` (overridden), `plain` and its chords on this platform, each `lostTo` the winner or `null` —
@@ -181,10 +231,15 @@ binding does.
 
 ## Shortcut catalog
 
-- **One entry per shortcut**, `{ id, title, surface }` plus either `bindings` (table ids — the chord is
+- **One entry per shortcut**, `{ id, title, surface, scope? }` plus either `bindings` (table ids — the chord is
   the resolved `keybindingShortcut`'s, never restated, and a browser therefore lists no chord it never
-  receives: `Mod+Alt+N` / `Mod+Alt+W`, not `Mod+N` / `Mod+W`) or `keys` (display chords for everything
-  bound elsewhere). A `keys` chord's `key` is the `KeyboardEvent.key` value (`ArrowDown`, `v`, `F2`), rendered
+  receives: `Mod+Alt+N` / `Mod+Alt+W`, not `Mod+N` / `Mod+W`), `local` (a local command id, optionally
+  after a locked `keys` prefix such as a comment's ↵) or `keys` (display chords for everything bound
+  elsewhere). A direction row is `keys` with one arrow plus `twin` (its `arrows.*` command, `shift` for a
+  selection-extending row): it shows the arrow locked and the twin's resolved letters, struck through
+  where the element took the letter over. Rows that bundled two directions are split into one row per
+  direction. `scope` groups element rows under their caption; every app local command has a titled row
+  (tested). A `keys` chord's `key` is the `KeyboardEvent.key` value (`ArrowDown`, `v`, `F2`), rendered
   as a cap (`↓`, `V`); it may name a `platform` (`apple`, `other` = not Apple, `linux`), and an entry
   marked `desktop` (native menu, `shortcutCommands`, page zoom) is listed only where the native shortcut
   bridge exists. The focus-group bindings are one row shown as a range (`⌘1–9`) while all nine are at
@@ -195,16 +250,11 @@ binding does.
   for one client into rows of caps and a text label (what the filter matches), plus each row's
   `conflicts` (a losing chord and its winner, for the editor's marks; a row with neither chords nor
   conflicts — an unbound command — is left out).
-- **Feature handlers keep their matching** (the table never dispatches feature keys) but read the key
-  they compare from the catalog's constants — the tab strip and rails (`TAB_KEYS`, `RAIL_KEYS`), the
-  sidebar trees (`TREE_KEYS`: `S` search, `F2`, `Delete`, `Mod+Enter`, project reorder), Changes review
-  (`REVIEW_KEYS`: `V` `J` `N` `P`, `Alt+↑/↓`), the chat transcript and the composer's way into it
-  (`TRANSCRIPT_KEYS`: `Mod+↑`, `C`, `O`), the history overlay's entry delete (`HISTORY_KEYS`), and the
-  letter twins of the arrows (`HJKL_KEYS`: h/j/k/l, shared by the transcript, tab strips, rails and
-  sidebar trees) — so
-  the listed and the handled key cannot drift; the palette's zoom and Settings shortcuts read
-  `DESKTOP_KEYS`. Keys that stay literal in their handler (composer, palette, Find in Files, xterm,
-  dictation, the transcript's arrows and the history overlay's other keys) are display entries only.
+- **Feature handlers keep their matching** (the table never dispatches feature keys): a migrated
+  handler matches its local keys through `useLocalKeys` (the sidebar trees' search and arrow twins);
+  the rest still compare the derived constants of *Local keys* until they migrate, so the listed and the
+  handled key cannot drift at the defaults; the palette's zoom and Settings shortcuts read
+  `DESKTOP_KEYS`. Locked keys stay literal in their handler and are display entries only.
 - **Review surface keys are display entries too.** The diff line cursor, the Markdown block cursor, the
   region frame, the swipe divider, the review composer and draft cards live in
   `@thinkrail/resource-renderers`, which cannot import the app, so their handler reads its own
@@ -212,8 +262,8 @@ binding does.
   review section lists the same chords (`review.cursorMove` … `review.swipeFar`). Moving them into
   `@thinkrail/ui` would make the primitives package own one feature's key map, so they stay where they
   are handled.
-- **Extension rows.** After the catalog, `shortcutRows` lists every enabled extension command from the
-  resolved table as a General row with all its active chords (hint mode's `F` and `Mod+;`), then the
+- **Extension rows.** After the catalog, `shortcutRows` lists every enabled extension command, global or
+  local, from the resolved table as a General row with all its active chords (hint mode's `F` and `Mod+;`), then the
   `extra` entries: `shell` passes the `shortcuts` (in-mode, display-only keys) of every enabled web
   extension ([[submodule-web-extensions]]). The catalog never imports an extension, and a switched-off
   one's rows disappear. `extensions`' tests pin that plain `F` is bound nowhere in the table or the
@@ -226,13 +276,17 @@ binding does.
   the JSON file share, so the file has exactly the editor's rows: the catalog grouped by surface
   (`desktop` rows only where the native bridge exists), one row per binding of a multi-binding entry
   (the focus groups, titled `bindingTitle` with their `position`), then per web extension in registry order
-  its commands and its `shortcuts` (switched-off ones included, `active: false`). A `bindings` row is
-  editable; a `keys` row is `locked` with its display chords. Each chord carries its grammar text (a typed
+  its commands and its `shortcuts` (switched-off ones included, `active: false`). A `bindings` or `local`
+  row is editable; a `keys` row is `locked` with its display chords. A row has an `id` (unique) and the
+  `command` an edit writes — different only on a direction row, which edits its shared twin — plus its
+  `scope`, the locked `fixed` prefix, and `yields`: where a local key takes the row's chord over inside an
+  element (a global row's chord that a local holds, a twin's letter an element took). Each chord carries its grammar text (a typed
   default its display form, `Mod+?`), caps, `lostTo` and `shown` — false for a browser-reserved chord
   while another active one remains in a browser, the rule `keybindingShortcut` follows.
 - **`chordHolder(list, command, chord)`** is the command another active chord belongs to (enabled
   commands only, compared by physical keys; `Mod+Shift+Slash` is the cheatsheet's while its `?` is
-  active), and none for a disabled target, which conflicts with nothing: its override is saved alone and
+  active) — for a local target only inside the elements it acts in (`localChordHolder` also names that
+  element), so a key used in another element is no conflict — and none for a disabled target, which conflicts with nothing: its override is saved alone and
   ranked by the resolver once the extension is on, where, as an override, it takes the chord and the
   other command shows it lost.
   **`assignChord(list, overrides, command, chord, replace)`** writes the override — none when the chord
@@ -240,12 +294,14 @@ binding does.
   target), an explicit
   override for that command: its chords less display-only and typed ones, minus this chord, `[]` when
   nothing remains (normalised the same way). The resolver's priority alone would
-  leave a lower-ranked holder losing the chord, so Replace never relies on it. **`resetChord`** drops one
+  leave a lower-ranked holder losing the chord, so Replace never relies on it — except against a shared
+  twin inside the element that includes it: the element's own override always outranks it there, and an
+  unbind would take the letter from every other element too, so Replace leaves the twin `lostIn` that
+  element only. **`resetChord`** drops one
   override.
-- **`elementKeyUses({key, shift}, platform)`** lists the catalog `keys` rows that act on a press's
-  **typed** key (`event.key`, Shift allowed; F-keys and named keys included), for the plain-command
-  warning and the focused-element rule. It takes the typed key, not the physical chord, because element
-  handlers match `event.key`: on Dvorak the physical `KeyV` types `k`, which the transcript owns.
+- **`elementKeyUses({key, shift}, platform)`** lists the locked catalog `keys` rows that act on a press's
+  **typed** key (`event.key`, Shift allowed; F-keys and named keys included), only for the plain-command
+  warning: rebindable element keys are local commands, which `localUses` reports by physical key.
 
 ## Keybindings file
 
@@ -253,7 +309,9 @@ binding does.
   "bindings": [...] }`, one entry per list row in its order. A command: `{ command, title (English),
   source: "thinkrail" | <extension>, chords, defaults, changed }` with grammar strings (all of its
   chords on this platform, lost and display-only ones included; a typed default as its display form). A
-  locked row: `{ command, title, source, locked: true, keys }` with display labels. A switched-off
+  local row adds `scope`, a direction row `alias` (the twin it edits) and `fixed: { keys, locked: true }`
+  (still version 1: additive). A locked row: `{ command, title, source, scope?, locked: true, keys }` with
+  display labels. A switched-off
   extension's entries add `active: false`; a command whose chord loses adds `conflict: { chord, winner }`
   (its first lost chord).
 - **Import** (`planImport(overrides, list, file)`) returns `null` for anything but a version-1 file of that
@@ -261,10 +319,14 @@ binding does.
   editor sends as one `settings.update`. Per entry, by `command`: a locked row (or any catalog `keys` id)
   is skipped as `locked`; an id the list lacks (an extension not installed), or a repeat, as `unknown`;
   `chords` not a string list, or a chord outside the grammar, as `invalid`; a plain chord on a non-plain
-  command as `plain`; a desktop-native chord as `desktop`. Chords equal to the row's current chords are
+  global command as `plain`; a locked primitive that is not the command's own default as `primitive`; a
+  desktop-native chord as `desktop`. A direction row imports into its twin; a later row for the same
+  twin with the same chords counts as unchanged, with others as a repeat. Chords equal to the row's current chords are
   `unchanged`; chords equal to its defaults — this platform's or the entry's own `defaults`, so a file
   from another OS keeps the defaults, and `"Mod+?"` reads as the cheatsheet's default — mean "defaults"
   (unchanged unless the command was custom). A switched-off extension's commands import too.
-- **Import conflicts:** an imported chord another enabled command holds actively (`chordHolder`'s rule)
-  goes to the import, and that command loses it through the same explicit override Replace writes; a
-  command the file also changes is not a conflict (its own entry decides). Self-conflicting entries are left to the resolver.
+- **Import conflicts:** an imported chord another enabled command holds actively (`chordHolder`'s rule,
+  so local ones only within their elements, each conflict carrying that `scope`) goes to the import, and
+  that command loses it through the same explicit override Replace writes (a shared twin, as with
+  Replace, only loses inside that element); a command the file also changes is not a conflict (its own
+  entry decides). Self-conflicting entries are left to the resolver.

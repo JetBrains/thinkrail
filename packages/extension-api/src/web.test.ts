@@ -85,6 +85,12 @@ describe("web-only contribution points", () => {
 						{ code: "Semicolon", key: ";", mod: true },
 					],
 				},
+				{
+					id: "keyboard-aid.pin",
+					title: "hintMode.shortcuts.show",
+					scope: "keyboard-aid.panel",
+					chords: [{ code: "KeyP", key: "p" }],
+				},
 			],
 			shortcuts: [
 				{
@@ -100,6 +106,7 @@ describe("web-only contribution points", () => {
 		expect(extension).not.toHaveProperty("toolRenderers");
 		expect(extension.globalOverlay).toBe(overlay);
 		expect(extension.commands[0]?.chords[1]).toEqual({ code: "Semicolon", key: ";", mod: true });
+		expect(extension.commands[1]?.scope).toBe("keyboard-aid.panel");
 		expect(extension.shortcuts[0]?.keys[0]).toEqual({ code: "Escape", key: "Escape" });
 		expect(overlay).not.toHaveBeenCalled();
 	});

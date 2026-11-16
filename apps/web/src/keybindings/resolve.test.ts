@@ -1,10 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import {
+	actsIn,
 	type ExtensionCommandSet,
+	formatChord,
+	globalHolder,
 	KEYBINDINGS,
 	keybindingLabel,
 	keybindingShortcut,
+	localUses,
 	matchKeybinding,
+	matchLocal,
 	resolveKeybindings,
 	SHORTCUT_CATALOG,
 } from ".";
@@ -56,7 +61,8 @@ describe("the resolver with no overrides", () => {
 		for (const platform of PLATFORMS) {
 			const resolved = resolveKeybindings({ platform });
 			expect(resolved.conflicts).toEqual([]);
-			expect(resolved.commands.map((command) => command.id)).toEqual(Object.keys(KEYBINDINGS));
+			const global = resolved.commands.filter((command) => command.scope === null);
+			expect(global.map((command) => command.id)).toEqual(Object.keys(KEYBINDINGS));
 			expect(resolved.commands.every((c) => c.enabled && !c.custom && c.extension === null)).toBe(
 				true,
 			);
@@ -149,7 +155,7 @@ describe("user overrides", () => {
 		expect(matchKeybinding(resolved, ctrl("KeyK"))).toBe("view.toggleLeft");
 		expect(matchKeybinding(resolved, ctrl("KeyB"))).toBeNull();
 		expect(resolved.conflicts).toEqual([
-			{ loser: "search.open", chord: "Mod+KeyK", winner: "view.toggleLeft" },
+			{ loser: "search.open", chord: "Mod+KeyK", winner: "view.toggleLeft", scope: null },
 		]);
 		expect(resolved.byId.get("search.open")?.chords).toEqual([
 			expect.objectContaining({ text: "Mod+KeyK", lostTo: "view.toggleLeft" }),
@@ -167,7 +173,7 @@ describe("user overrides", () => {
 			expect(matchKeybinding(resolved, slash)).toBe("view.toggleLeft");
 			expect(matchKeybinding(resolved, { ...slash, code: "Digit7" })).toBeNull();
 			expect(resolved.conflicts).toEqual([
-				{ loser: "shortcuts.open", chord: "Mod+?", winner: "view.toggleLeft" },
+				{ loser: "shortcuts.open", chord: "Mod+?", winner: "view.toggleLeft", scope: null },
 			]);
 			expect(resolved.byId.get("shortcuts.open")?.chords).toEqual([
 				expect.objectContaining({ text: "Mod+?", lostTo: "view.toggleLeft" }),
@@ -184,7 +190,7 @@ describe("user overrides", () => {
 			],
 		});
 		expect(resolved.conflicts).toEqual([
-			{ loser: "notes.open", chord: "Mod+Shift+Slash", winner: "shortcuts.open" },
+			{ loser: "notes.open", chord: "Mod+Shift+Slash", winner: "shortcuts.open", scope: null },
 		]);
 		expect(matchKeybinding(resolved, { ...ctrl("Digit7", { shiftKey: true }), key: "?" })).toBe(
 			"shortcuts.open",
@@ -205,7 +211,7 @@ describe("reserved chords", () => {
 			});
 			expect(matchKeybinding(resolved, mod(platform, "KeyW"))).toBeNull();
 			expect(resolved.conflicts).toEqual([
-				{ loser: "search.open", chord: "Mod+KeyW", winner: "tab.close" },
+				{ loser: "search.open", chord: "Mod+KeyW", winner: "tab.close", scope: null },
 			]);
 			expect(keybindingShortcut(resolved, "search.open")).toBeUndefined();
 			expect(keybindingLabel(resolved, "tab.close")).toBe(label);
@@ -251,7 +257,9 @@ describe("reserved chords", () => {
 					chord,
 					matchKeybinding(resolved, mod(platform, code, modifiers)),
 				]).toEqual([platform, chord, null]);
-				expect(resolved.conflicts).toEqual([{ loser: "search.open", chord, winner: owner }]);
+				expect(resolved.conflicts).toEqual([
+					{ loser: "search.open", chord, winner: owner, scope: null },
+				]);
 				expect(SHORTCUT_CATALOG.some(({ id }) => id === owner)).toBe(true);
 			}
 		}
@@ -262,14 +270,14 @@ describe("reserved chords", () => {
 		const quit = extension("notes", { "notes.quit": [{ code: "KeyQ", key: "q", mod: true }] });
 		const mac = resolveKeybindings({ platform: MAC, extensions: [hide] });
 		expect(mac.conflicts).toEqual([
-			{ loser: "notes.hide", chord: "Mod+KeyH", winner: "desktop.hide" },
+			{ loser: "notes.hide", chord: "Mod+KeyH", winner: "desktop.hide", scope: null },
 		]);
 		expect(matchKeybinding(mac, press("KeyH", { metaKey: true }))).toBeNull();
 		const linux = resolveKeybindings({ platform: LINUX, extensions: [hide, quit] });
 		expect(matchKeybinding(linux, ctrl("KeyH"))).toBe("notes.hide");
 		expect(matchKeybinding(linux, ctrl("KeyQ"))).toBeNull();
 		expect(linux.conflicts).toEqual([
-			{ loser: "notes.quit", chord: "Mod+KeyQ", winner: "desktop.quit" },
+			{ loser: "notes.quit", chord: "Mod+KeyQ", winner: "desktop.quit", scope: null },
 		]);
 	});
 });
@@ -287,7 +295,7 @@ describe("extension commands", () => {
 		expect(matchKeybinding(resolved, ctrl("KeyK"))).toBe("search.open");
 		expect(matchKeybinding(resolved, ctrl("KeyH", { altKey: true }))).toBe("notes.open");
 		expect(resolved.conflicts).toEqual([
-			{ loser: "notes.open", chord: "Mod+KeyK", winner: "search.open" },
+			{ loser: "notes.open", chord: "Mod+KeyK", winner: "search.open", scope: null },
 		]);
 		expect(keybindingLabel(resolved, "notes.open")).toBe("Ctrl+Alt+H");
 	});
@@ -303,7 +311,7 @@ describe("extension commands", () => {
 		});
 		expect(matchKeybinding(resolved, press("Semicolon", { metaKey: true }))).toBe("hint-mode.show");
 		expect(resolved.conflicts).toEqual([
-			{ loser: "timer.start", chord: "Mod+Semicolon", winner: "hint-mode.show" },
+			{ loser: "timer.start", chord: "Mod+Semicolon", winner: "hint-mode.show", scope: null },
 		]);
 	});
 
@@ -316,7 +324,7 @@ describe("extension commands", () => {
 		expect(matchKeybinding(resolved, ctrl("KeyB"))).toBe("notes.open");
 		expect(matchKeybinding(resolved, ctrl("KeyK"))).toBe("search.open");
 		expect(resolved.conflicts).toEqual([
-			{ loser: "view.toggleLeft", chord: "Mod+KeyB", winner: "notes.open" },
+			{ loser: "view.toggleLeft", chord: "Mod+KeyB", winner: "notes.open", scope: null },
 		]);
 	});
 
@@ -328,7 +336,7 @@ describe("extension commands", () => {
 		});
 		expect(matchKeybinding(resolved, ctrl("KeyU"))).toBe("search.open");
 		expect(resolved.conflicts).toEqual([
-			{ loser: "notes.open", chord: "Mod+KeyU", winner: "search.open" },
+			{ loser: "notes.open", chord: "Mod+KeyU", winner: "search.open", scope: null },
 		]);
 	});
 
@@ -372,7 +380,7 @@ describe("extension commands", () => {
 			extensions: [extension("notes", { "notes.close": [{ code: "KeyW", key: "w", mod: true }] })],
 		});
 		expect(resolved.conflicts).toEqual([
-			{ loser: "notes.close", chord: "Mod+KeyW", winner: "tab.close" },
+			{ loser: "notes.close", chord: "Mod+KeyW", winner: "tab.close", scope: null },
 		]);
 		expect(matchKeybinding(resolved, ctrl("KeyW"))).toBeNull();
 	});
@@ -396,5 +404,216 @@ describe("extension commands", () => {
 		expect(keybindingLabel(resolved, "notes.open")).toBe("Alt+O");
 		expect(resolved.commands.filter((command) => command.id === "search.open")).toHaveLength(1);
 		expect(resolved.conflicts).toEqual([]);
+	});
+});
+
+describe("local commands", () => {
+	const card = (
+		enabled = true,
+		commands: ExtensionCommandSet["commands"] = CARD_COMMANDS,
+	): ExtensionCommandSet => ({
+		extension: "ask-user-question",
+		enabled,
+		commands,
+	});
+	const CARD_COMMANDS = [
+		{
+			id: "ask-user-question.discuss",
+			title: "hintMode.shortcuts.show",
+			scope: "ask-user-question.card",
+			chords: [{ code: "KeyD", key: "d" }],
+		},
+		{
+			id: "ask-user-question.skip",
+			title: "hintMode.shortcuts.show",
+			scope: "ask-user-question.card",
+			chords: [{ code: "Escape", key: "Escape", shift: true }],
+		},
+	] as const;
+	const local = (resolved: ReturnType<typeof resolveKeybindings>, scope: string) =>
+		(resolved.local.get(scope) ?? []).map(({ id, chord }) => `${id}=${formatChord(chord)}`);
+
+	test("no default conflicts in any element, and no global default equals a local one", () => {
+		for (const platform of PLATFORMS) {
+			const resolved = resolveKeybindings({ platform, extensions: [card()] });
+			expect([platform, resolved.conflicts]).toEqual([platform, []]);
+			const globals = new Set(
+				resolved.active.map(({ chord }) => (chord.typed ? "" : formatChord(chord))),
+			);
+			for (const [scope, active] of resolved.local) {
+				for (const { id, chord } of active) {
+					expect([platform, scope, id, globals.has(formatChord(chord))]).toEqual([
+						platform,
+						scope,
+						id,
+						false,
+					]);
+				}
+			}
+		}
+	});
+
+	test("an element includes the shared arrow twins after its own commands; the shared scope is no element", () => {
+		const resolved = resolveKeybindings({ platform: LINUX });
+		expect(local(resolved, "trees")).toEqual([
+			"trees.search=KeyS",
+			"trees.openKept=Mod+Enter",
+			"trees.rename=F2",
+			"trees.delete=Delete",
+			"trees.reorderUp=Alt+Shift+ArrowUp",
+			"trees.reorderDown=Alt+Shift+ArrowDown",
+			"arrows.left=KeyH",
+			"arrows.down=KeyJ",
+			"arrows.up=KeyK",
+			"arrows.right=KeyL",
+		]);
+		expect(local(resolved, "review")).not.toContain("arrows.down=KeyJ");
+		expect(resolved.local.has("arrows")).toBe(false);
+		expect(actsIn(resolved, "arrows")).toEqual([
+			"tabs",
+			"rails",
+			"trees",
+			"review.surface",
+			"transcript",
+		]);
+		expect(resolved.byId.get("trees.search")?.scope).toBe("trees");
+		expect(resolved.byId.get("trees.search")?.plain).toBe(true);
+	});
+
+	test("a local key taken over by an override loses only inside that element", () => {
+		const resolved = resolveKeybindings({
+			platform: LINUX,
+			overrides: { "trees.search": ["KeyJ"] },
+		});
+		const twin = resolved.byId.get("arrows.down")?.chords[0];
+		expect([twin?.lostTo, twin?.lostIn]).toEqual([
+			null,
+			[{ scope: "trees", winner: "trees.search" }],
+		]);
+		expect(local(resolved, "trees")).toContain("trees.search=KeyJ");
+		expect(local(resolved, "trees")).not.toContain("arrows.down=KeyJ");
+		expect(local(resolved, "transcript")).toContain("arrows.down=KeyJ");
+		expect(resolved.conflicts).toEqual([
+			{ loser: "arrows.down", chord: "KeyJ", winner: "trees.search", scope: "trees" },
+		]);
+		const both = resolveKeybindings({
+			platform: LINUX,
+			overrides: { "trees.search": ["KeyU"], "arrows.down": ["KeyU"] },
+		});
+		expect(both.byId.get("arrows.down")?.chords[0]?.lostIn).toEqual([
+			{ scope: "trees", winner: "trees.search" },
+		]);
+	});
+
+	test("a twin rebound onto an element's own key wins there as an override, and the own command loses", () => {
+		const resolved = resolveKeybindings({
+			platform: LINUX,
+			overrides: { "arrows.up": ["KeyS"] },
+		});
+		expect(resolved.byId.get("trees.search")?.chords[0]?.lostTo).toBe("arrows.up");
+		expect(local(resolved, "trees")).toContain("arrows.up=KeyS");
+	});
+
+	test("a navigation primitive is refused as an override unless it is the command's own default", () => {
+		const resolved = resolveKeybindings({
+			platform: LINUX,
+			overrides: {
+				"trees.search": ["ArrowDown", "Shift+Tab", "KeyG"],
+				"ask-user-question.skip": ["Shift+Escape", "Alt+KeyS"],
+				"ask-user-question.discuss": ["Shift+Escape"],
+			},
+			extensions: [card()],
+		});
+		expect(resolved.byId.get("trees.search")?.chords.map(({ text }) => text)).toEqual(["KeyG"]);
+		expect(resolved.byId.get("ask-user-question.skip")?.chords.map(({ text }) => text)).toEqual([
+			"Shift+Escape",
+			"Alt+KeyS",
+		]);
+		expect(resolved.byId.get("ask-user-question.discuss")?.chords).toEqual([]);
+	});
+
+	test("desktop and dictation reservations take a local chord too", () => {
+		const resolved = resolveKeybindings({
+			platform: LINUX,
+			overrides: { "trees.search": ["Mod+Shift+Space"] },
+		});
+		expect(resolved.byId.get("trees.search")?.chords[0]?.lostTo).toBe("dictation");
+		expect(local(resolved, "trees")).not.toContain("trees.search=Mod+Shift+Space");
+	});
+
+	test("matches by physical key in the focused scopes, innermost first, and not typing in text entry", () => {
+		const resolved = resolveKeybindings({ platform: LINUX, extensions: [card()] });
+		const russianS = press("KeyS", {}, "ы");
+		expect(matchLocal(resolved, ["trees"], russianS)).toBe("trees.search");
+		expect(matchLocal(resolved, ["transcript"], russianS)).toBeNull();
+		expect(matchLocal(resolved, ["trees"], press("KeyO", {}, "s"))).toBeNull();
+		expect(matchLocal(resolved, ["trees"], russianS, { textEntry: true })).toBeNull();
+		expect(
+			matchLocal(resolved, ["ask-user-question.card"], press("Escape", { shiftKey: true }), {
+				textEntry: true,
+			}),
+		).toBe("ask-user-question.skip");
+		expect(matchLocal(resolved, ["review", "trees"], press("KeyJ"))).toBe("review.nextUnreviewed");
+		expect(matchLocal(resolved, ["trees", "review"], press("KeyJ"))).toBe("arrows.down");
+	});
+
+	test("an extension's local commands need its name as a prefix of both id and scope", () => {
+		const resolved = resolveKeybindings({
+			platform: LINUX,
+			extensions: [
+				card(true, [
+					...CARD_COMMANDS,
+					{
+						id: "trees.hijack",
+						title: "hintMode.shortcuts.show",
+						scope: "ask-user-question.card",
+						chords: [{ code: "KeyX", key: "x" }],
+					},
+					{
+						id: "ask-user-question.intrude",
+						title: "hintMode.shortcuts.show",
+						scope: "trees",
+						chords: [{ code: "KeyX", key: "x" }],
+					},
+				]),
+				extension("notes", { "search.open": [{ code: "KeyU", key: "u", mod: true }] }),
+			],
+		});
+		expect(resolved.byId.has("trees.hijack")).toBe(false);
+		expect(resolved.byId.has("ask-user-question.intrude")).toBe(false);
+		expect(resolved.byId.get("search.open")?.extension).toBeNull();
+		expect(local(resolved, "ask-user-question.card")).toEqual([
+			"ask-user-question.discuss=KeyD",
+			"ask-user-question.skip=Shift+Escape",
+		]);
+	});
+
+	test("a switched-off extension's local commands are listed but neither match nor conflict", () => {
+		const resolved = resolveKeybindings({
+			platform: LINUX,
+			overrides: { "ask-user-question.discuss": ["KeyS"] },
+			extensions: [card(false)],
+		});
+		expect(resolved.byId.get("ask-user-question.discuss")?.enabled).toBe(false);
+		expect(local(resolved, "ask-user-question.card")).toEqual([]);
+		expect(resolved.conflicts).toEqual([]);
+	});
+
+	test("local uses and the global holder of a chord drive the editor's warnings", () => {
+		const resolved = resolveKeybindings({
+			platform: LINUX,
+			extensions: [card(), extension("hint-mode", { "hint-mode.show": [PLAIN_F] })],
+		});
+		expect(localUses(resolved, "KeyJ")).toEqual([
+			{ scope: "tabs", command: "arrows.down" },
+			{ scope: "rails", command: "arrows.down" },
+			{ scope: "trees", command: "arrows.down" },
+			{ scope: "review", command: "review.nextUnreviewed" },
+			{ scope: "review.surface", command: "arrows.down" },
+			{ scope: "transcript", command: "arrows.down" },
+		]);
+		expect(globalHolder(resolved, "KeyF")).toBe("hint-mode.show");
+		expect(globalHolder(resolved, "Ctrl+KeyK")).toBe("search.open");
+		expect(globalHolder(resolved, "KeyS")).toBeNull();
 	});
 });

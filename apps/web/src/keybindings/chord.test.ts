@@ -4,6 +4,7 @@ import {
 	formatChord,
 	isBrowserReservedChord,
 	isDesktopNativeChord,
+	isLockedPrimitive,
 	isPlainChord,
 	KEYBINDINGS,
 	parseChord,
@@ -208,4 +209,57 @@ test("the desktop app's own chords are native on the OS that owns them, under ei
 		chords.filter((chord) => !chord.displayOnly && isDesktopNativeChord(chord)),
 	);
 	expect(matchable).toEqual([]);
+});
+
+test("navigation primitives with no modifier or Shift alone are locked; a recorder refuses them", () => {
+	for (const chord of [
+		"ArrowDown",
+		"Shift+ArrowLeft",
+		"Enter",
+		"Shift+Enter",
+		"Escape",
+		"Shift+Escape",
+		"Tab",
+		"Shift+Tab",
+		"Space",
+		"Home",
+		"End",
+		"PageUp",
+		"PageDown",
+	]) {
+		expect([chord, isLockedPrimitive(chord)]).toEqual([chord, true]);
+	}
+	for (const chord of [
+		"Mod+Enter",
+		"Alt+Enter",
+		"Mod+Shift+Enter",
+		"Alt+Shift+ArrowUp",
+		"Mod+ArrowUp",
+		"KeyJ",
+		"Delete",
+		"F2",
+	]) {
+		expect([chord, isLockedPrimitive(chord)]).toEqual([chord, false]);
+	}
+	expect(chordFromEvent(press("ArrowDown"), LINUX, { allowPlain: true })).toEqual({
+		kind: "rejected",
+		reason: "locked",
+		chord: "ArrowDown",
+	});
+	expect(chordFromEvent(press("Escape", { shiftKey: true }), LINUX, { allowPlain: true })).toEqual({
+		kind: "rejected",
+		reason: "locked",
+		chord: "Shift+Escape",
+	});
+	expect(
+		chordFromEvent(press("ArrowDown"), LINUX, { allowPlain: true, allowLocked: true }),
+	).toMatchObject({ kind: "chord", chord: "ArrowDown" });
+	expect(chordFromEvent(press("Enter", { ctrlKey: true }), LINUX)).toMatchObject({
+		kind: "chord",
+		chord: "Mod+Enter",
+	});
+	expect(chordFromEvent(press("KeyJ"), LINUX, { allowPlain: true })).toMatchObject({
+		kind: "chord",
+		chord: "KeyJ",
+	});
 });

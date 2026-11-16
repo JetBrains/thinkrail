@@ -9,20 +9,27 @@ import {
 	heldSignatures,
 	isBrowserReservedChord,
 	isDesktopNativeChord,
+	isLockedPrimitive,
 	isPlainChord,
 	parseChord,
 } from "./chord";
 import { displayShortcut, type KeyChord, keysLabel, type PhysicalChord } from "./keybindings";
-import type { ResolvedCommand, ResolvedKeybindings } from "./resolve";
+import {
+	actsIn,
+	localUses,
+	lostHere,
+	type ResolvedCommand,
+	type ResolvedKeybindings,
+	THINKRAIL_SOURCE,
+} from "./resolve";
 import {
 	keyChords,
 	SHORTCUT_CATALOG,
 	SHORTCUT_SURFACES,
+	type ShortcutCatalogEntry,
 	type ShortcutKey,
 	type ShortcutSurface,
 } from "./shortcutCatalog";
-
-const THINKRAIL_SOURCE = "thinkrail";
 
 export interface KeybindingEntryChord {
 	readonly text: string;
@@ -33,18 +40,28 @@ export interface KeybindingEntryChord {
 	readonly shown: boolean;
 }
 
+export interface KeybindingYield {
+	readonly scope: string;
+	readonly label: string;
+	readonly winner: string;
+}
+
 export interface KeybindingEntry {
+	readonly id: string;
 	readonly command: string;
 	readonly title: MessageKey;
 	readonly position: number | null;
 	readonly source: string;
 	readonly surface: ShortcutSurface | null;
+	readonly scope: string | null;
 	readonly locked: boolean;
 	readonly active: boolean;
 	readonly custom: boolean;
 	readonly plain: boolean;
+	readonly fixed: readonly KeybindingEntryChord[];
 	readonly chords: readonly KeybindingEntryChord[];
 	readonly defaults: readonly string[];
+	readonly yields: readonly KeybindingYield[];
 }
 
 export interface ExtensionShortcutSet {
@@ -76,9 +93,48 @@ export function keyChordLabel(chord: KeyChord, platform: string): string {
 	return keysLabel(shortcutKeys(displayShortcut(chord), platform), platform);
 }
 
+type EntryPlace = Pick<KeybindingEntry, "id" | "title" | "position" | "source" | "surface"> & {
+	readonly scope?: string | null;
+	readonly fixed?: readonly ShortcutKey[];
+	readonly shift?: boolean;
+};
+
+function fixedChords(keys: readonly ShortcutKey[], platform: string): KeybindingEntryChord[] {
+	return keyChords(keys, platform).map(({ keys: caps, label }) => ({
+		text: label,
+		keys: caps,
+		label,
+		lostTo: null,
+		displayOnly: false,
+		shown: true,
+	}));
+}
+
+function commandYields(
+	command: ResolvedCommand,
+	scope: string | null,
+	keybindings: ResolvedKeybindings,
+): KeybindingYield[] {
+	const { platform } = keybindings;
+	return command.chords.flatMap(({ chord, text, lostTo, lostIn }) => {
+		if (lostTo !== null) return [];
+		const label = keyChordLabel(chord, platform);
+		if (command.scope === null) {
+			return localUses(keybindings, text).map((use) => ({
+				scope: use.scope,
+				label,
+				winner: use.command,
+			}));
+		}
+		return lostIn.flatMap((lost) =>
+			lost.scope === scope ? [] : [{ scope: lost.scope, label, winner: lost.winner }],
+		);
+	});
+}
+
 function commandEntry(
 	command: ResolvedCommand,
-	place: Pick<KeybindingEntry, "title" | "position" | "source" | "surface">,
+	{ fixed = [], shift = false, scope = command.scope, ...place }: EntryPlace,
 	{ desktop, keybindings }: ListContext,
 ): KeybindingEntry {
 	const { platform } = keybindings;
@@ -89,22 +145,28 @@ function commandEntry(
 	return {
 		command: command.id,
 		...place,
-		locked: false,
+		scope,
+		locked: shift,
 		active: command.enabled,
 		custom: command.custom,
 		plain: command.plain,
+		fixed: fixedChords(fixed, platform),
 		chords: command.chords.map((resolved) => {
-			const keys = shortcutKeys(displayShortcut(resolved.chord), platform);
+			const keys = shortcutKeys(
+				{ ...displayShortcut(resolved.chord), ...(shift ? { shift: true } : {}) },
+				platform,
+			);
 			return {
 				text: resolved.text,
 				keys,
 				label: keysLabel(keys, platform),
-				lostTo: resolved.lostTo,
+				lostTo: lostHere(resolved, scope),
 				displayOnly: resolved.chord.displayOnly === true,
 				shown: !(hideReserved && reserved(resolved)),
 			};
 		}),
 		defaults: command.defaults.map(chordText),
+		yields: shift ? [] : commandYields(command, scope, keybindings),
 	};
 }
 
@@ -112,13 +174,14 @@ function lockedEntry(
 	id: string,
 	title: MessageKey,
 	keys: readonly ShortcutKey[],
-	place: Pick<KeybindingEntry, "source" | "surface" | "active">,
+	place: Pick<KeybindingEntry, "source" | "surface" | "active" | "scope">,
 	platform: string,
 ): KeybindingEntry[] {
-	const chords = keyChords(keys, platform);
+	const chords = fixedChords(keys, platform);
 	if (chords.length === 0) return [];
 	return [
 		{
+			id,
 			command: id,
 			title,
 			position: null,
@@ -126,39 +189,60 @@ function lockedEntry(
 			locked: true,
 			custom: false,
 			plain: false,
-			chords: chords.map(({ keys: caps, label }) => ({
-				text: label,
-				keys: caps,
-				label,
-				lostTo: null,
-				displayOnly: false,
-				shown: true,
-			})),
+			fixed: [],
+			chords,
 			defaults: [],
+			yields: [],
 		},
 	];
+}
+
+function catalogEntries(
+	entry: ShortcutCatalogEntry,
+	surface: ShortcutSurface,
+	context: ListContext,
+): KeybindingEntry[] {
+	const { keybindings } = context;
+	const { platform } = keybindings;
+	const source = THINKRAIL_SOURCE;
+	const place = { id: entry.id, title: entry.title, position: null, source, surface };
+	if (entry.local !== undefined) {
+		const command = keybindings.byId.get(entry.local);
+		return command ? [commandEntry(command, { ...place, fixed: entry.keys ?? [] }, context)] : [];
+	}
+	if (entry.keys) {
+		const scope = entry.scope ?? null;
+		const twin = entry.twin && keybindings.byId.get(entry.twin.command);
+		if (entry.twin === undefined || twin === undefined) {
+			return lockedEntry(
+				entry.id,
+				entry.title,
+				entry.keys,
+				{ ...place, active: true, scope },
+				platform,
+			);
+		}
+		const shift = entry.twin.shift === true;
+		return [commandEntry(twin, { ...place, scope, fixed: entry.keys, shift }, context)];
+	}
+	const many = entry.bindings.length > 1;
+	return entry.bindings.flatMap((id, index) => {
+		const command = keybindings.byId.get(id);
+		if (command === undefined) return [];
+		const title = many ? (entry.bindingTitle ?? entry.title) : entry.title;
+		return [
+			commandEntry(command, { ...place, id, title, position: many ? index + 1 : null }, context),
+		];
+	});
 }
 
 export function keybindingList(context: ListContext): KeybindingList {
 	const { desktop, keybindings, extensions } = context;
 	const { platform } = keybindings;
 	const thinkrail = SHORTCUT_SURFACES.flatMap((surface) =>
-		SHORTCUT_CATALOG.filter((entry) => entry.surface === surface).flatMap((entry) => {
-			if (entry.desktop && !desktop) return [];
-			const place = { source: THINKRAIL_SOURCE, surface };
-			if (entry.keys) {
-				return lockedEntry(entry.id, entry.title, entry.keys, { ...place, active: true }, platform);
-			}
-			const many = entry.bindings.length > 1;
-			return entry.bindings.flatMap((id, index) => {
-				const command = keybindings.byId.get(id);
-				if (command === undefined) return [];
-				const title = many ? (entry.bindingTitle ?? entry.title) : entry.title;
-				return [
-					commandEntry(command, { ...place, title, position: many ? index + 1 : null }, context),
-				];
-			});
-		}),
+		SHORTCUT_CATALOG.filter((entry) => entry.surface === surface).flatMap((entry) =>
+			entry.desktop && !desktop ? [] : catalogEntries(entry, surface, context),
+		),
 	);
 	const fromExtensions = extensions.flatMap(({ extension, enabled, shortcuts }) => [
 		...keybindings.commands.flatMap((command) =>
@@ -166,41 +250,88 @@ export function keybindingList(context: ListContext): KeybindingList {
 				? [
 						commandEntry(
 							command,
-							{ title: command.title, position: null, source: extension, surface: null },
+							{
+								id: command.id,
+								title: command.title,
+								position: null,
+								source: extension,
+								surface: null,
+							},
 							context,
 						),
 					]
 				: [],
 		),
 		...shortcuts.flatMap(({ id, title, keys }) =>
-			lockedEntry(id, title, keys, { source: extension, surface: null, active: enabled }, platform),
+			lockedEntry(
+				id,
+				title,
+				keys,
+				{ source: extension, surface: null, active: enabled, scope: null },
+				platform,
+			),
 		),
 	]);
 	return { keybindings, entries: [...thinkrail, ...fromExtensions] };
 }
 
-function editableEntry(list: KeybindingList, command: string): KeybindingEntry | undefined {
-	return list.entries.find((entry) => entry.command === command && !entry.locked);
+function editableEntry(list: KeybindingList, id: string): KeybindingEntry | undefined {
+	return list.entries.find((entry) => entry.id === id && !entry.locked);
 }
 
-function activeHolder(
+export interface ChordHolder {
+	readonly command: string;
+	readonly scope: string | null;
+}
+
+function holderOf(
 	keybindings: ResolvedKeybindings,
 	command: string,
 	chord: KeyChord,
-): string | null {
-	if (keybindings.byId.get(command)?.enabled !== true) return null;
+): ChordHolder | null {
+	const target = keybindings.byId.get(command);
+	if (target?.enabled !== true) return null;
 	const apple = isApple(keybindings);
 	const signature = chordSignature(chord, apple);
-	return (
-		keybindings.active.find(
+	if (target.scope === null) {
+		const held = keybindings.active.find(
 			(active) => active.id !== command && heldSignatures(active.chord, apple).includes(signature),
-		)?.id ?? null
-	);
+		);
+		return held ? { command: held.id, scope: null } : null;
+	}
+	for (const scope of actsIn(keybindings, target.scope)) {
+		const held = keybindings.local
+			.get(scope)
+			?.find(
+				(active) => active.id !== command && chordSignature(active.chord, apple) === signature,
+			);
+		if (held) return { command: held.id, scope };
+	}
+	return null;
+}
+
+export function localChordHolder(
+	list: KeybindingList,
+	command: string,
+	chord: string,
+): ChordHolder | null {
+	const pressed = parseChord(chord);
+	return pressed === null ? null : holderOf(list.keybindings, command, pressed);
 }
 
 export function chordHolder(list: KeybindingList, command: string, chord: string): string | null {
-	const pressed = parseChord(chord);
-	return pressed === null ? null : activeHolder(list.keybindings, command, pressed);
+	return localChordHolder(list, command, chord)?.command ?? null;
+}
+
+function includedBy(keybindings: ResolvedKeybindings, command: string, other: string): boolean {
+	const scope = keybindings.byId.get(command)?.scope ?? null;
+	const otherScope = keybindings.byId.get(other)?.scope ?? null;
+	return (
+		scope !== null &&
+		otherScope !== null &&
+		otherScope !== scope &&
+		(keybindings.includes.get(scope) ?? []).includes(otherScope)
+	);
 }
 
 function sameChords(a: readonly KeyChord[], b: readonly KeyChord[], apple: boolean): boolean {
@@ -257,7 +388,9 @@ export function assignChord(
 	const apple = isApple(list.keybindings);
 	const assigned = withOverride(overrides, command, overrideValue(target, [pressed], apple));
 	const other =
-		replace === null || !target.enabled ? undefined : list.keybindings.byId.get(replace);
+		replace === null || !target.enabled || includedBy(list.keybindings, command, replace)
+			? undefined
+			: list.keybindings.byId.get(replace);
 	return other === undefined ? assigned : withoutChords(assigned, other, [pressed], apple);
 }
 
@@ -272,6 +405,9 @@ export interface KeybindingFileBinding {
 	readonly command: string;
 	readonly title: string;
 	readonly source: string;
+	readonly scope?: string;
+	readonly alias?: string;
+	readonly fixed?: { readonly keys: readonly string[]; readonly locked: true };
 	readonly chords?: readonly string[];
 	readonly defaults?: readonly string[];
 	readonly changed?: boolean;
@@ -295,14 +431,24 @@ export function keybindingsFile(
 		format: KEYBINDINGS_FILE_FORMAT,
 		version: KEYBINDINGS_FILE_VERSION,
 		bindings: list.entries.map((entry): KeybindingFileBinding => {
-			const base = { command: entry.command, title: title(entry), source: entry.source };
+			const base = {
+				command: entry.id,
+				title: title(entry),
+				source: entry.source,
+				...(entry.scope === null ? {} : { scope: entry.scope }),
+			};
 			const inactive = entry.active ? {} : { active: false as const };
 			if (entry.locked) {
-				return { ...base, locked: true, keys: entry.chords.map(({ label }) => label), ...inactive };
+				const keys = [...entry.fixed, ...entry.chords].map(({ label }) => label);
+				return { ...base, locked: true, keys, ...inactive };
 			}
 			const lost = entry.chords.find(({ lostTo }) => lostTo !== null);
 			return {
 				...base,
+				...(entry.id === entry.command ? {} : { alias: entry.command }),
+				...(entry.fixed.length === 0
+					? {}
+					: { fixed: { keys: entry.fixed.map(({ label }) => label), locked: true as const } }),
 				chords: entry.chords.map(({ text }) => text),
 				defaults: entry.defaults,
 				changed: entry.custom,
@@ -313,7 +459,7 @@ export function keybindingsFile(
 	};
 }
 
-export type ImportSkipReason = "locked" | "unknown" | "invalid" | "plain" | "desktop";
+export type ImportSkipReason = "locked" | "unknown" | "invalid" | "plain" | "primitive" | "desktop";
 
 export interface ImportChange {
 	readonly command: string;
@@ -325,6 +471,7 @@ export interface ImportConflict {
 	readonly chord: string;
 	readonly command: string;
 	readonly other: string;
+	readonly scope: string | null;
 }
 
 export interface ImportSkip {
@@ -388,6 +535,11 @@ function importTarget(
 		const chord = parseChord(text);
 		if (chord === null) return { kind: "skip", reason: "invalid" };
 		if (!entry.plain && isPlainChord(chord)) return { kind: "skip", reason: "plain" };
+		if (
+			isLockedPrimitive(chord) &&
+			!command.defaults.some((own) => sameChords([own], [chord], apple))
+		)
+			return { kind: "skip", reason: "primitive" };
 		if (isDesktopNativeChord(chord)) return { kind: "skip", reason: "desktop" };
 		if (!parsed.some((other) => chordSignature(other, apple) === chordSignature(chord, apple))) {
 			parsed.push(chord);
@@ -425,12 +577,15 @@ export function planImport(
 	const { keybindings } = list;
 	const apple = isApple(keybindings);
 	const locked = new Set([
-		...SHORTCUT_CATALOG.flatMap(({ id, keys }) => (keys ? [id] : [])),
-		...list.entries.flatMap(({ command, locked: isLocked }) => (isLocked ? [command] : [])),
+		...SHORTCUT_CATALOG.flatMap(({ id, keys, twin }) =>
+			keys && (twin === undefined || twin.shift) ? [id] : [],
+		),
+		...list.entries.flatMap(({ id, locked: isLocked }) => (isLocked ? [id] : [])),
 	]);
 	const changes: ImportChange[] = [];
 	const skipped: ImportSkip[] = [];
 	const targets = new Map<string, readonly KeyChord[]>();
+	const seen = new Set<string>();
 	let unchanged = 0;
 	let next = overrides;
 	for (const binding of file.bindings) {
@@ -444,17 +599,22 @@ export function planImport(
 			continue;
 		}
 		const entry = editableEntry(list, id);
-		const command = keybindings.byId.get(id);
-		if (entry === undefined || command === undefined || targets.has(id)) {
+		const command = entry && keybindings.byId.get(entry.command);
+		if (entry === undefined || command === undefined || seen.has(id)) {
 			skipped.push({ command: id, reason: "unknown" });
 			continue;
 		}
+		seen.add(id);
 		const target = importTarget(entry, command, binding, apple);
+		const repeat = targets.get(command.id);
 		if (target.kind === "unchanged") unchanged += 1;
 		else if (target.kind === "skip") skipped.push({ command: id, reason: target.reason });
-		else {
-			targets.set(id, target.chords);
-			next = withOverride(next, id, target.value);
+		else if (repeat !== undefined) {
+			if (sameChords(repeat, target.chords, apple)) unchanged += 1;
+			else skipped.push({ command: id, reason: "unknown" });
+		} else {
+			targets.set(command.id, target.chords);
+			next = withOverride(next, command.id, target.value);
 			changes.push({
 				command: id,
 				from: entry.chords.map(({ label }) => label),
@@ -466,14 +626,16 @@ export function planImport(
 	const removed = new Map<string, KeyChord[]>();
 	for (const [id, chords] of targets) {
 		for (const chord of physical(chords)) {
-			const holder = activeHolder(keybindings, id, chord);
-			if (holder === null || targets.has(holder)) continue;
+			const holder = holderOf(keybindings, id, chord);
+			if (holder === null || targets.has(holder.command)) continue;
 			conflicts.push({
 				chord: keyChordLabel(chord, keybindings.platform),
 				command: id,
-				other: holder,
+				other: holder.command,
+				scope: holder.scope,
 			});
-			removed.set(holder, [...(removed.get(holder) ?? []), chord]);
+			if (includedBy(keybindings, id, holder.command)) continue;
+			removed.set(holder.command, [...(removed.get(holder.command) ?? []), chord]);
 		}
 	}
 	for (const [id, chords] of removed) {

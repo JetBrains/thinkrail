@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { KEYBINDINGS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { keybindingLabel, keybindingList, resolveKeybindings } from "../keybindings";
-import { commandTitle, selectKeybindings } from "./keybindingState";
+import { commandTitle, selectKeybindings, selectLocalKeymap } from "./keybindingState";
 
 const overrides = { "search.open": ["Mod+Alt+KeyS"] };
 
@@ -47,4 +47,25 @@ test("resolves once per change of overrides or switched-off extensions", () => {
 	expect(off).not.toBe(first);
 	expect(off.byId.get("hint-mode.show")?.enabled).toBe(false);
 	expect(selectKeybindings({ ...state, keybindingOverrides: {} })).not.toBe(off);
+});
+
+test("the local keymap follows the resolved table: the same object until a rebind", () => {
+	const state = {
+		protocolVersion: KEYBINDINGS_PROTOCOL_VERSION,
+		keybindingOverrides: {},
+		disabledExtensions: [],
+	};
+	const keymap = selectLocalKeymap(state);
+	expect(selectLocalKeymap({ ...state })).toBe(keymap);
+	expect(keymap.scopes.get("trees")?.find(({ id }) => id === "trees.search")?.chord.code).toBe(
+		"KeyS",
+	);
+	const rebound = selectLocalKeymap({
+		...state,
+		keybindingOverrides: { "trees.search": ["KeyF"] },
+	});
+	expect(rebound).not.toBe(keymap);
+	expect(rebound.scopes.get("trees")?.find(({ id }) => id === "trees.search")?.chord.code).toBe(
+		"KeyF",
+	);
 });

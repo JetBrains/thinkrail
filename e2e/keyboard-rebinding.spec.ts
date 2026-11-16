@@ -234,8 +234,8 @@ test("a plain key asks for a modifier, a desktop or browser chord is refused or 
 	await page.keyboard.press("ArrowUp");
 	await expect(button).toBeFocused();
 
-	const locked = chord(page, "trees.search");
-	await expect(row(page, "trees.search")).toHaveAttribute("data-locked", "true");
+	const locked = chord(page, "trees.firstLast");
+	await expect(row(page, "trees.firstLast")).toHaveAttribute("data-locked", "true");
 	await expect(locked).toHaveAttribute("aria-disabled", "true");
 	await expect(locked).toContainText("Locked");
 	await locked.focus();
@@ -301,8 +301,21 @@ test("Export downloads every row, locked ones included, and Import summarizes a 
 		command: "trees.search",
 		title: "Search the visible rows",
 		source: "thinkrail",
+		scope: "trees",
+		chords: ["KeyS"],
+		defaults: ["KeyS"],
+		changed: false,
+	});
+	expect(binding("trees.down")).toMatchObject({
+		scope: "trees",
+		alias: "arrows.down",
+		fixed: { keys: ["↓"], locked: true },
+		chords: ["KeyJ"],
+	});
+	expect(binding("trees.firstLast")).toMatchObject({
+		scope: "trees",
 		locked: true,
-		keys: ["S"],
+		keys: ["Home", "End"],
 	});
 	expect(binding("group.splitRight")).toEqual({
 		command: "group.splitRight",
@@ -335,9 +348,11 @@ test("Export downloads every row, locked ones included, and Import summarizes a 
 				version: 1,
 				bindings: [
 					{ command: "group.splitRight", chords: ["Mod+Alt+KeyS"] },
-					{ command: "trees.search", chords: ["Mod+KeyF"], locked: true },
+					{ command: "trees.firstLast", chords: ["Mod+KeyF"], locked: true },
 					{ command: "old-extension.run", chords: ["Mod+Shift+KeyR"] },
 					{ command: "search.open", chords: ["Mod+KeyK"] },
+					{ command: "trees.search", scope: "trees", chords: ["KeyG"] },
+					{ command: "transcript.copy", scope: "transcript", chords: ["ArrowDown"] },
 				],
 			}),
 		),
@@ -345,22 +360,25 @@ test("Export downloads every row, locked ones included, and Import summarizes a 
 	const summary = page.getByTestId("keybinding-import-dialog");
 	await expect(summary).toBeVisible();
 	await expect(summary.getByRole("heading", { name: "Import crafted.json" })).toBeVisible();
-	await expect(summary.getByTestId("keybinding-import-changes")).toContainText("Will change (1)");
+	await expect(summary.getByTestId("keybinding-import-changes")).toContainText("Will change (2)");
 	await expect(summary.getByTestId("keybinding-import-changes").locator("li")).toHaveText([
 		"Split right: Ctrl+\\ → Ctrl+Alt+S",
+		"Search the visible rows: S → G",
 	]);
 	await expect(summary.getByTestId("keybinding-import-conflicts")).toContainText("Conflicts (0)");
 	await expect(summary.getByTestId("keybinding-import-skipped").locator("li")).toHaveText([
-		"Search the visible rows — an element key, locked",
+		"Go to the first or last row — an element key, locked",
 		"old-extension.run — unknown command (is its extension installed?)",
+		"Copy the message, thought or tool output — a navigation key, locked",
 	]);
 	await expect(summary.getByTestId("keybinding-import-unchanged")).toHaveText(
 		"Unchanged: 1. Other shortcuts are not touched.",
 	);
-	await summary.getByRole("button", { name: "Apply 1 change" }).click();
+	await summary.getByRole("button", { name: "Apply 2 changes" }).click();
 	await expect(summary).toHaveCount(0);
 	await expect(row(page, "group.splitRight")).toHaveAttribute("data-custom", "true");
 	await expect(chord(page, "group.splitRight").locator("kbd")).toHaveText(["Ctrl", "Alt", "S"]);
+	await expect(chord(page, "trees.search").locator("kbd")).toHaveText(["G"]);
 });
 
 test("a switched-off extension's command records Ctrl+K without a warning, and search keeps it", async ({
@@ -425,4 +443,112 @@ test("a ThinkRail chord over an extension's marks the extension's chord inactive
 	await expect(page.getByTestId("hint-mode")).toBeVisible();
 	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("hint-mode")).toHaveCount(0);
+});
+
+async function recordLocal(page: Page, command: string, key: string): Promise<void> {
+	const button = chord(page, command);
+	await button.click();
+	await expect(button).toContainText("Press a key or a chord… Esc cancels");
+	await page.keyboard.press(key);
+}
+
+async function focusFilesTree(page: Page): Promise<Locator> {
+	await revealWorkbenchTool(page, "files");
+	const item = page.getByRole("tree", { name: "Files" }).getByRole("treeitem").first();
+	await item.focus();
+	return item;
+}
+
+test("a tree's search rebound to F warns about hint mode; inside the tree F searches and hint mode yields", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await openKeyboardSettings(page);
+	const trees = editor(page).locator('[data-testid="keybinding-section"][data-section="trees"]');
+	await expect(trees.getByTestId("keybinding-scope").first()).toContainText(
+		"when focus is in a sidebar tree",
+	);
+	await expect(row(page, "trees.down").getByTestId("keybinding-fixed")).toContainText(
+		"always works",
+	);
+
+	await recordLocal(page, "trees.search", "f");
+	await expect(message(page, "trees.search")).toHaveAttribute("data-kind", "shadow");
+	await expect(message(page, "trees.search")).toContainText(
+		"F runs “Label everything you can click (hint mode)” everywhere else; inside sidebar trees it will run “Search the visible rows” instead",
+	);
+	await message(page, "trees.search").getByTestId("keybinding-assign-anyway").click();
+	await expect(chord(page, "trees.search").locator("kbd")).toHaveText(["F"]);
+	await expect(row(page, "trees.search")).toHaveAttribute("data-custom", "true");
+	await expect(row(page, "hint-mode.show").getByTestId("keybinding-yields")).toHaveText(
+		"Inside sidebar trees, F runs “Search the visible rows”",
+	);
+	await closeSettings(page);
+
+	const item = await focusFilesTree(page);
+	await page.keyboard.press("f");
+	await expect(page.getByTestId("tree-search")).toBeFocused();
+	await expect(page.getByTestId("hint-mode")).toHaveCount(0);
+	await page.keyboard.press("Escape");
+	await expect(item).toBeFocused();
+	await page.keyboard.press("s");
+	await expect(page.getByTestId("tree-search")).toHaveCount(0);
+
+	await page.getByTestId("open-search").focus();
+	await page.keyboard.press("f");
+	await expect(page.getByTestId("hint-mode")).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("hint-mode")).toHaveCount(0);
+});
+
+test("inside a scope a local key conflicts with its neighbours only: Replace, a plain letter, a refused arrow", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await openKeyboardSettings(page);
+
+	await recordLocal(page, "trees.search", "ArrowDown");
+	await expect(message(page, "trees.search")).toHaveAttribute("data-kind", "primitive");
+	await expect(message(page, "trees.search")).toContainText(
+		"↓ is a navigation key — locked in every element",
+	);
+	await message(page, "trees.search").getByTestId("keybinding-dismiss").click();
+	await expect(chord(page, "trees.search").locator("kbd")).toHaveText(["S"]);
+
+	await recordLocal(page, "trees.search", "c");
+	await expect(message(page, "trees.search")).toHaveAttribute("data-kind", "note");
+	await expect(message(page, "trees.search")).toContainText(
+		"C also acts in the chat transcript — a different element, so no conflict",
+	);
+	await expect(chord(page, "trees.search").locator("kbd")).toHaveText(["C"]);
+
+	await recordLocal(page, "trees.search", "j");
+	await expect(message(page, "trees.search")).toHaveAttribute("data-kind", "takenInScope");
+	await expect(message(page, "trees.search")).toContainText(
+		"J is already used by Move down (alias) inside sidebar trees",
+	);
+	await message(page, "trees.search").getByTestId("keybinding-replace").click();
+	await expect(chord(page, "trees.search").locator("kbd")).toHaveText(["J"]);
+	await expect(row(page, "trees.down").getByTestId("keybinding-conflict")).toHaveText(
+		"J is taken by Search the visible rows — inactive",
+	);
+	await expect(row(page, "transcript.down").getByTestId("keybinding-conflict")).toHaveCount(0);
+	await expect(chord(page, "transcript.down").locator("kbd")).toHaveText(["J"]);
+
+	await recordLocal(page, "trees.search", "g");
+	await expect(message(page, "trees.search")).toHaveCount(0);
+	await expect(chord(page, "trees.search").locator("kbd")).toHaveText(["G"]);
+	await closeSettings(page);
+
+	const item = await focusFilesTree(page);
+	await page.keyboard.press("g");
+	await expect(page.getByTestId("tree-search")).toBeFocused();
+	await page.keyboard.press("Escape");
+	await expect(item).toBeFocused();
+	await page.keyboard.press("j");
+	await expect(item).not.toBeFocused();
+	await page.keyboard.press("k");
+	await expect(item).toBeFocused();
 });

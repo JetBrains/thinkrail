@@ -88,6 +88,7 @@ export type ExtensionShortcutKey = ExtensionChord;
 export interface ExtensionCommand {
 	readonly id: string;
 	readonly title: MessageKey;
+	readonly scope?: string;
 	readonly chords: readonly ExtensionChord[];
 }
 

@@ -3,6 +3,7 @@ export {
 	formatChord,
 	isBrowserReservedChord,
 	isDesktopNativeChord,
+	isLockedPrimitive,
 	isPlainChord,
 	parseChord,
 	type RecordedChord,
@@ -18,6 +19,7 @@ export {
 	keybindingList,
 	keybindingsFile,
 	keyChordLabel,
+	localChordHolder,
 	planImport,
 	resetChord,
 } from "./keybindingList";
@@ -28,14 +30,27 @@ export {
 	type KeyChord,
 } from "./keybindings";
 export {
+	APP_LOCAL_COMMANDS,
+	type AppLocalScope,
+	isAppLocalScope,
+	LOCAL_KEY_DEFAULTS,
+	LOCAL_SCOPES,
+} from "./localKeys";
+export {
+	APP_LOCAL_SET,
+	actsIn,
 	type ExtensionCommandSet,
+	globalHolder,
 	type KeybindingConflict,
 	keybindingKeys,
 	keybindingLabel,
 	keybindingLabels,
 	keybindingShortcut,
 	keybindingShortcuts,
+	type LocalCommandSet,
+	localUses,
 	matchKeybinding,
+	matchLocal,
 	pressesChord,
 	type ResolvedChord,
 	type ResolvedCommand,

@@ -1,8 +1,10 @@
 import {
 	RiAlertLine,
+	RiCornerDownRightLine,
 	RiDownloadLine,
 	RiKeyboardLine,
 	RiLockLine,
+	RiPencilLine,
 	RiSearchLine,
 	RiUploadLine,
 } from "@remixicon/react";
@@ -22,17 +24,22 @@ import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { webExtensions } from "../extensions";
 import {
+	actsIn,
 	assignChord,
 	chordFromEvent,
 	chordHolder,
 	elementKeyUses,
+	globalHolder,
 	type ImportPlan,
 	type ImportSkipReason,
 	isDesktopNativeChord,
+	isPlainChord,
 	type KeybindingEntry,
 	type KeybindingList,
 	keybindingsFile,
 	keyChordLabel,
+	localChordHolder,
+	localUses,
 	parseChord,
 	planImport,
 	resetChord,
@@ -45,7 +52,7 @@ import { SettingsNotice } from "../panels/SettingsNotice";
 import { toast, useAppStore } from "../store";
 import { errorText, supportsKeybindings, updateKeybindings } from "../transport";
 import { claimKeyboard } from "./extensionCommands";
-import { commandTitle, entryTitle, useKeybindingList } from "./keybindingState";
+import { commandTitle, entryTitle, scopeText, useKeybindingList } from "./keybindingState";
 import { isDesktopShortcut } from "./shortcutCommands";
 import { hasNativeShortcuts } from "./useAppShortcuts";
 
@@ -54,21 +61,43 @@ const FILE_NAME = "thinkrail-keybindings.json";
 const PRIMARY = "[data-focus-row-primary]";
 
 type Pending =
-	| { readonly command: string; readonly kind: "plain" }
-	| { readonly command: string; readonly kind: "desktop"; readonly chord: string }
+	| { readonly row: string; readonly kind: "plain" }
+	| { readonly row: string; readonly kind: "primitive"; readonly chord: string }
+	| { readonly row: string; readonly kind: "desktop"; readonly chord: string }
 	| {
-			readonly command: string;
+			readonly row: string;
 			readonly kind: "element";
 			readonly chord: string;
-			readonly places: readonly ShortcutSurface[];
+			readonly surfaces: readonly ShortcutSurface[];
+			readonly scopes: readonly string[];
 	  }
-	| { readonly command: string; readonly kind: "reserved"; readonly chord: string }
+	| { readonly row: string; readonly kind: "reserved"; readonly chord: string }
 	| {
-			readonly command: string;
+			readonly row: string;
 			readonly kind: "taken";
 			readonly chord: string;
 			readonly other: string;
 			readonly reserved: boolean;
+	  }
+	| {
+			readonly row: string;
+			readonly kind: "takenInScope";
+			readonly chord: string;
+			readonly other: string;
+			readonly scope: string;
+	  }
+	| {
+			readonly row: string;
+			readonly kind: "shadow";
+			readonly chord: string;
+			readonly global: string;
+			readonly scope: string;
+	  }
+	| {
+			readonly row: string;
+			readonly kind: "note";
+			readonly chord: string;
+			readonly scopes: readonly string[];
 	  };
 
 interface Importing {
@@ -81,6 +110,7 @@ const SKIP_REASONS = {
 	unknown: "settings.keyboard.import.skip.unknown",
 	invalid: "settings.keyboard.import.skip.invalid",
 	plain: "settings.keyboard.import.skip.plain",
+	primitive: "settings.keyboard.import.skip.primitive",
 	desktop: "settings.keyboard.import.skip.desktop",
 } as const satisfies Record<ImportSkipReason, string>;
 
@@ -122,23 +152,54 @@ function useKeyboardClaim(active: boolean): void {
 	}, [active]);
 }
 
+function entryLabels(entry: KeybindingEntry): string[] {
+	return [...entry.fixed, ...entry.chords].flatMap(({ label, shown }) => (shown ? [label] : []));
+}
+
 function matchesQuery(t: Translator, entry: KeybindingEntry, needle: string): boolean {
 	return (
 		entryTitle(t, entry).toLocaleLowerCase().includes(needle) ||
-		entry.chords.some(({ label, shown }) => shown && label.toLocaleLowerCase().includes(needle))
+		entryLabels(entry).some((label) => label.toLocaleLowerCase().includes(needle))
+	);
+}
+
+function listOf(t: Translator, items: readonly string[]): string {
+	return new Intl.ListFormat(localeOf(t), { type: "conjunction" }).format([...new Set(items)]);
+}
+
+function recordingPrompt(entry: KeybindingEntry) {
+	if (entry.fixed.length > 0) return "settings.keyboard.editor.recordingAlias" as const;
+	return entry.scope === null
+		? ("settings.keyboard.editor.recording" as const)
+		: ("settings.keyboard.editor.recordingLocal" as const);
+}
+
+function FixedChords({ entry }: { entry: KeybindingEntry }) {
+	const t = useT();
+	if (entry.fixed.length === 0 || entry.locked) return null;
+	return (
+		<span
+			data-testid="keybinding-fixed"
+			className="flex shrink-0 items-center gap-4 tr-text-metadata text-text-subtle"
+		>
+			{entry.fixed.map((chord) => (
+				<Keycaps key={chord.text} keys={chord.keys} className="whitespace-nowrap" />
+			))}
+			<RiLockLine aria-hidden className="size-12" />
+			{t("settings.keyboard.editor.alwaysWorks")}
+			<span aria-hidden>·</span>
+		</span>
 	);
 }
 
 function EntryChords({ entry, recording }: { entry: KeybindingEntry; recording: boolean }) {
 	const t = useT();
 	if (recording) {
-		return (
-			<span className="tr-text-metadata text-primary">
-				{t("settings.keyboard.editor.recording")}
-			</span>
-		);
+		return <span className="tr-text-metadata text-primary">{t(recordingPrompt(entry))}</span>;
 	}
-	const shown = entry.chords.filter((chord) => chord.shown);
+	const shown = [...(entry.locked ? entry.fixed : []), ...entry.chords].filter(
+		(chord) => chord.shown,
+	);
 	if (shown.length === 0) {
 		return (
 			<span className="tr-text-metadata text-text-subtle">
@@ -167,6 +228,9 @@ function EntryChords({ entry, recording }: { entry: KeybindingEntry; recording: 
 					<RiLockLine aria-hidden className="size-14 text-text-subtle" />
 					<span className="sr-only">{t("settings.keyboard.editor.locked")}</span>
 				</>
+			) : null}
+			{entry.fixed.length > 0 && !entry.locked ? (
+				<RiPencilLine aria-hidden className="size-12 text-text-subtle" />
 			) : null}
 		</>
 	);
@@ -207,10 +271,12 @@ function KeybindingRow({
 	return (
 		<li
 			data-testid="keybinding-row"
-			data-command={entry.command}
+			data-command={entry.id}
+			data-alias={entry.id === entry.command ? undefined : entry.command}
+			data-scope={entry.scope ?? undefined}
 			data-custom={entry.custom ? "true" : undefined}
 			data-locked={entry.locked ? "true" : undefined}
-			data-focus-row={entry.command}
+			data-focus-row={entry.id}
 			className={cn("flex flex-col gap-4 rounded-sm px-8 py-4", recording && "bg-primary-subtle")}
 		>
 			<div className="flex items-center gap-12">
@@ -241,6 +307,20 @@ function KeybindingRow({
 							})}
 						</span>
 					))}
+					{entry.yields.map((use) => (
+						<span
+							key={`${use.scope}:${use.label}`}
+							data-testid="keybinding-yields"
+							className="flex items-center gap-4 tr-text-metadata text-text-muted"
+						>
+							<RiCornerDownRightLine aria-hidden className="size-14 shrink-0" />
+							{t("settings.keyboard.editor.yields", {
+								inside: scopeText(t, use.scope, "inside"),
+								chord: use.label,
+								command: winner(use.winner),
+							})}
+						</span>
+					))}
 					{lost.length > 0 && changeable ? (
 						<Button
 							variant="outline"
@@ -253,6 +333,7 @@ function KeybindingRow({
 						</Button>
 					) : null}
 				</div>
+				<FixedChords entry={entry} />
 				<button
 					id={chordId}
 					type="button"
@@ -325,23 +406,75 @@ function PendingNotice({
 			{t("settings.keyboard.editor.assignAnyway")}
 		</Button>
 	);
+	const replace = (chord: string, other: string) => (
+		<>
+			<Button
+				variant="outline"
+				size="s"
+				data-testid="keybinding-replace"
+				onClick={() => onAccept(chord, other)}
+			>
+				{t("settings.keyboard.editor.replace")}
+			</Button>
+			{cancel}
+		</>
+	);
 	let text: string;
 	let action: ReactNode;
 	if (pending.kind === "plain") {
 		text = t("settings.keyboard.editor.plain");
 		action = dismiss;
+	} else if (pending.kind === "primitive") {
+		text = t("settings.keyboard.editor.primitive", { chord: chordName(pending.chord, platform) });
+		action = dismiss;
+	} else if (pending.kind === "note") {
+		text = t("settings.keyboard.editor.otherScopes", {
+			chord: chordName(pending.chord, platform),
+			places: listOf(
+				t,
+				pending.scopes.map((scope) => scopeText(t, scope, "inside")),
+			),
+			count: pending.scopes.length,
+		});
+		action = dismiss;
+	} else if (pending.kind === "takenInScope") {
+		text = t("settings.keyboard.editor.takenInScope", {
+			chord: chordName(pending.chord, platform),
+			command: holderTitle(t, list, pending.other, pending.scope),
+			inside: scopeText(t, pending.scope, "inside"),
+		});
+		action = replace(pending.chord, pending.other);
+	} else if (pending.kind === "shadow") {
+		const parsed = parseChord(pending.chord);
+		text = t(
+			parsed && isPlainChord(parsed)
+				? "settings.keyboard.editor.shadowPlain"
+				: "settings.keyboard.editor.shadow",
+			{
+				chord: chordName(pending.chord, platform),
+				global: commandTitle(t, list, pending.global),
+				inside: scopeText(t, pending.scope, "inside"),
+				local: commandTitle(t, list, pending.row),
+			},
+		);
+		action = (
+			<>
+				{assign(pending.chord)}
+				{cancel}
+			</>
+		);
 	} else if (pending.kind === "desktop") {
 		text = t("settings.keyboard.editor.desktopNative", {
 			chord: chordName(pending.chord, platform),
 		});
 		action = dismiss;
 	} else if (pending.kind === "element") {
-		const places = [
-			...new Set(pending.places.map((surface) => t(SHORTCUT_SURFACE_TITLES[surface]))),
-		];
 		text = t("settings.keyboard.editor.elementKey", {
 			key: chordName(pending.chord, platform),
-			places: new Intl.ListFormat(localeOf(t), { type: "conjunction" }).format(places),
+			places: listOf(t, [
+				...pending.scopes.map((scope) => scopeText(t, scope, "inside")),
+				...pending.surfaces.map((surface) => t(SHORTCUT_SURFACE_TITLES[surface])),
+			]),
 		});
 		action = (
 			<>
@@ -369,22 +502,14 @@ function PendingNotice({
 				command: commandTitle(t, list, pending.other),
 			},
 		);
-		const { chord, other } = pending;
-		action = (
-			<>
-				<Button
-					variant="outline"
-					size="s"
-					data-testid="keybinding-replace"
-					onClick={() => onAccept(chord, other)}
-				>
-					{t("settings.keyboard.editor.replace")}
-				</Button>
-				{cancel}
-			</>
-		);
+		action = replace(pending.chord, pending.other);
 	}
-	const variant = pending.kind === "plain" || pending.kind === "desktop" ? "error" : "warning";
+	const variant =
+		pending.kind === "plain" || pending.kind === "desktop" || pending.kind === "primitive"
+			? "error"
+			: pending.kind === "note"
+				? "info"
+				: "warning";
 	return (
 		<div role="alert" data-testid="keybinding-message" data-kind={pending.kind}>
 			<SettingsNotice variant={variant} action={action}>
@@ -392,6 +517,15 @@ function PendingNotice({
 			</SettingsNotice>
 		</div>
 	);
+}
+
+function holderTitle(t: Translator, list: KeybindingList, holder: string, scope: string): string {
+	const alias = list.entries.find(
+		(entry) => entry.command === holder && entry.scope === scope && entry.id !== entry.command,
+	);
+	return alias
+		? t("settings.keyboard.editor.alias", { command: entryTitle(t, alias) })
+		: commandTitle(t, list, holder);
 }
 
 function ImportGroup({
@@ -468,11 +602,19 @@ function ImportSummary({
 						title={t("settings.keyboard.import.conflicts", { count: plan.conflicts.length })}
 						items={plan.conflicts.map((conflict) => ({
 							key: `${conflict.chord}:${conflict.command}:${conflict.other}`,
-							text: t("settings.keyboard.import.conflictLine", {
-								chord: conflict.chord,
-								command: commandTitle(t, list, conflict.command),
-								other: commandTitle(t, list, conflict.other),
-							}),
+							text:
+								conflict.scope === null
+									? t("settings.keyboard.import.conflictLine", {
+											chord: conflict.chord,
+											command: commandTitle(t, list, conflict.command),
+											other: commandTitle(t, list, conflict.other),
+										})
+									: t("settings.keyboard.import.conflictLineScoped", {
+											chord: conflict.chord,
+											inside: scopeText(t, conflict.scope, "inside"),
+											command: commandTitle(t, list, conflict.command),
+											other: holderTitle(t, list, conflict.other, conflict.scope),
+										}),
 						}))}
 					/>
 					<ImportGroup
@@ -513,6 +655,18 @@ function ImportSummary({
 	);
 }
 
+function scopeGroups(
+	rows: readonly KeybindingEntry[],
+): { scope: string | null; rows: KeybindingEntry[] }[] {
+	const groups: { scope: string | null; rows: KeybindingEntry[] }[] = [];
+	for (const entry of rows) {
+		const last = groups.at(-1);
+		if (last && last.scope === entry.scope) last.rows.push(entry);
+		else groups.push({ scope: entry.scope, rows: [entry] });
+	}
+	return groups;
+}
+
 export function KeybindingEditor() {
 	const t = useT();
 	const [desktop] = useState(hasNativeShortcuts);
@@ -539,13 +693,11 @@ export function KeybindingEditor() {
 	const keyLabel = keyFilter === null ? null : chordName(keyFilter, platform);
 	const shown = list.entries.filter((entry) =>
 		keyLabel !== null
-			? entry.chords.some(({ label, shown: visible }) => visible && label === keyLabel)
+			? entryLabels(entry).includes(keyLabel)
 			: needle === "" || matchesQuery(t, entry, needle),
 	);
 	const filtering = keyLabel !== null || needle !== "";
-	const tabStop = shown.some((entry) => entry.command === current)
-		? current
-		: (shown[0]?.command ?? null);
+	const tabStop = shown.some((entry) => entry.id === current) ? current : (shown[0]?.id ?? null);
 	const sections = [
 		...SHORTCUT_SURFACES.map((surface) => ({
 			key: surface,
@@ -561,67 +713,102 @@ export function KeybindingEditor() {
 			enabled: !disabled.includes(name),
 			rows: shown.filter((entry) => entry.surface === null && entry.source === name),
 		})),
-	].filter((section) => section.rows.length > 0);
+	]
+		.filter((section) => section.rows.length > 0)
+		.map((section) => ({ ...section, groups: scopeGroups(section.rows) }));
 
-	const focusRow = (command: string) => {
+	const focusRow = (row: string) => {
 		root.current
-			?.querySelector<HTMLElement>(`[data-focus-row="${CSS.escape(command)}"] ${PRIMARY}`)
+			?.querySelector<HTMLElement>(`[data-focus-row="${CSS.escape(row)}"] ${PRIMARY}`)
 			?.focus();
 	};
 	const settle = (next: Pending) => {
 		setRecording(null);
 		setPending(next);
 	};
-	const startRecording = (command: string) => {
+	const startRecording = (row: string) => {
 		setPending(null);
-		setRecording(command);
-		focusRow(command);
+		setRecording(row);
+		focusRow(row);
 	};
-	const finish = (command: string, next: KeybindingOverrides | null) => {
+	const finish = (row: string, next: KeybindingOverrides | null, after: Pending | null = null) => {
 		if (next !== null) saveKeybindings(next, failure);
-		setPending(null);
+		setPending(after);
 		setRecording(null);
-		focusRow(command);
+		focusRow(row);
+	};
+	const assignLocal = (entry: KeybindingEntry, chord: string, replace: string | null = null) => {
+		const scope = list.keybindings.byId.get(entry.command)?.scope ?? null;
+		const own = scope === null ? [] : actsIn(list.keybindings, scope);
+		const elsewhere = localUses(list.keybindings, chord).flatMap((use) =>
+			own.includes(use.scope) ? [] : [use.scope],
+		);
+		const note: Pending | null =
+			elsewhere.length === 0 ? null : { row: entry.id, kind: "note", chord, scopes: elsewhere };
+		finish(entry.id, assignChord(list, overrides, entry.command, chord, replace), note);
+	};
+
+	const recordLocal = (entry: KeybindingEntry, chord: string, reserved: boolean) => {
+		const row = entry.id;
+		const holder = localChordHolder(list, entry.command, chord);
+		if (holder?.scope) {
+			return settle({
+				row,
+				kind: "takenInScope",
+				chord,
+				other: holder.command,
+				scope: holder.scope,
+			});
+		}
+		const global = globalHolder(list.keybindings, chord);
+		const scope = list.keybindings.byId.get(entry.command)?.scope ?? null;
+		if (global !== null && scope !== null) {
+			return settle({ row, kind: "shadow", chord, global, scope });
+		}
+		if (reserved) return settle({ row, kind: "reserved", chord });
+		assignLocal(entry, chord);
 	};
 
 	const record = (entry: KeybindingEntry, event: KeyboardEvent<HTMLButtonElement>) => {
 		if (isImeComposing(event.nativeEvent) || event.key === "Tab") return;
 		event.preventDefault();
 		event.stopPropagation();
-		if (event.key === "Escape") {
+		if (event.key === "Escape" && !event.shiftKey) {
 			setRecording(null);
 			return;
 		}
 		if (event.repeat) return;
 		const recorded = chordFromEvent(event.nativeEvent, platform, { allowPlain: entry.plain });
 		if (recorded.kind === "ignored") return;
-		const { command } = entry;
+		const { id: row, command } = entry;
 		if (recorded.kind === "rejected") {
-			if (recorded.reason === "plain") settle({ command, kind: "plain" });
+			if (recorded.reason === "plain") settle({ row, kind: "plain" });
+			else if (recorded.reason === "locked" && entry.defaults.includes(recorded.chord)) {
+				finish(row, assignChord(list, overrides, command, recorded.chord));
+			} else if (recorded.reason === "locked") {
+				settle({ row, kind: "primitive", chord: recorded.chord });
+			}
 			return;
 		}
 		const { chord } = recorded;
 		const reserved = recorded.browserReserved && !desktop;
 		if (isDesktopNativeChord(chord) || isDesktopShortcut(event.nativeEvent)) {
-			return settle({ command, kind: "desktop", chord });
+			return settle({ row, kind: "desktop", chord });
 		}
+		if (entry.scope !== null) return recordLocal(entry, chord, reserved);
 		const other = chordHolder(list, command, chord);
-		if (other !== null) return settle({ command, kind: "taken", chord, other, reserved });
-		const uses = entry.plain ? elementKeyUses(event, platform) : [];
-		if (uses.length > 0) {
-			return settle({
-				command,
-				kind: "element",
-				chord,
-				places: uses.map(({ surface }) => surface),
-			});
+		if (other !== null) return settle({ row, kind: "taken", chord, other, reserved });
+		const scopes = localUses(list.keybindings, chord).map((use) => use.scope);
+		const surfaces = entry.plain ? elementKeyUses(event, platform).map((use) => use.surface) : [];
+		if (scopes.length > 0 || surfaces.length > 0) {
+			return settle({ row, kind: "element", chord, surfaces, scopes });
 		}
-		if (reserved) return settle({ command, kind: "reserved", chord });
-		finish(command, assignChord(list, overrides, command, chord));
+		if (reserved) return settle({ row, kind: "reserved", chord });
+		finish(row, assignChord(list, overrides, command, chord));
 	};
 
 	const onRowKeyDown = (entry: KeybindingEntry, event: KeyboardEvent<HTMLButtonElement>) => {
-		if (recording === entry.command) {
+		if (recording === entry.id) {
 			record(entry, event);
 			return;
 		}
@@ -642,7 +829,10 @@ export function KeybindingEditor() {
 			setKeyFilter(null);
 			return;
 		}
-		const recorded = chordFromEvent(event.nativeEvent, platform, { allowPlain: true });
+		const recorded = chordFromEvent(event.nativeEvent, platform, {
+			allowPlain: true,
+			allowLocked: true,
+		});
 		if (recorded.kind === "chord") setKeyFilter(recorded.chord);
 	};
 
@@ -779,41 +969,59 @@ export function KeybindingEditor() {
 									<span className={cn(SETTINGS_TAG, "text-text-muted")}>{t("common.off")}</span>
 								)}
 							</h5>
-							<ul className="flex flex-col">
-								{section.rows.map((entry) => (
-									<KeybindingRow
-										key={entry.command}
-										entry={entry}
-										winner={winner}
-										editable={editable}
-										recording={recording === entry.command}
-										current={tabStop === entry.command}
-										dimmed={!section.enabled}
-										onFocus={() => setCurrent(entry.command)}
-										onRecord={() => startRecording(entry.command)}
-										onKeyDown={(event) => onRowKeyDown(entry, event)}
-										onBlur={() => {
-											if (recording === entry.command) setRecording(null);
-										}}
-										onReset={() => finish(entry.command, resetChord(overrides, entry.command))}
-										message={
-											pending?.command === entry.command ? (
-												<PendingNotice
-													pending={pending}
-													list={list}
-													onAccept={(chord, replace) =>
-														finish(
-															entry.command,
-															assignChord(list, overrides, entry.command, chord, replace),
-														)
-													}
-													onCancel={() => finish(entry.command, null)}
-												/>
-											) : null
-										}
-									/>
-								))}
-							</ul>
+							{section.groups.map((group) => (
+								<div key={`${group.scope}:${group.rows[0]?.id}`} className="flex flex-col">
+									{group.scope === null ? null : (
+										<p
+											data-testid="keybinding-scope"
+											data-scope={group.scope}
+											className="flex items-center gap-8 px-8 pt-4 tr-text-metadata text-text-muted"
+										>
+											<span className={cn(SETTINGS_TAG, "text-text-muted")}>
+												{t("settings.keyboard.editor.local")}
+											</span>
+											{scopeText(t, group.scope, "where")}
+										</p>
+									)}
+									<ul className="flex flex-col">
+										{group.rows.map((entry) => (
+											<KeybindingRow
+												key={entry.id}
+												entry={entry}
+												winner={winner}
+												editable={editable}
+												recording={recording === entry.id}
+												current={tabStop === entry.id}
+												dimmed={!section.enabled}
+												onFocus={() => setCurrent(entry.id)}
+												onRecord={() => startRecording(entry.id)}
+												onKeyDown={(event) => onRowKeyDown(entry, event)}
+												onBlur={() => {
+													if (recording === entry.id) setRecording(null);
+												}}
+												onReset={() => finish(entry.id, resetChord(overrides, entry.command))}
+												message={
+													pending?.row === entry.id ? (
+														<PendingNotice
+															pending={pending}
+															list={list}
+															onAccept={(chord, replace) =>
+																entry.scope === null
+																	? finish(
+																			entry.id,
+																			assignChord(list, overrides, entry.command, chord, replace),
+																		)
+																	: assignLocal(entry, chord, replace)
+															}
+															onCancel={() => finish(entry.id, null)}
+														/>
+													) : null
+												}
+											/>
+										))}
+									</ul>
+								</div>
+							))}
 						</section>
 					))}
 				</div>

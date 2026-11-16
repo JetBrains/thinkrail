@@ -26,7 +26,9 @@ switch only decides what the host gives the agent next — and which **global co
 `webExtensionCommands(disabled)` lists the `commands` of **every** registered extension in registry order
 with an `enabled` flag — the input `shell` resolves keybindings from ([[submodule-web-keybindings]]): a
 switched-off extension's commands stay listed (Settings → Keyboard shows and rebinds them) but neither
-match nor conflict, and registry order decides between two extensions' defaults.
+match nor conflict, and registry order decides between two extensions' defaults. A command with a
+`scope` is local and reaches the resolver's per-scope table as it is; the resolver drops one whose id or
+scope lacks the extension's `name.` prefix, and the tests pin that every bundled command has it.
 `webOnlyExtensions(serverNames)` is the titled entries the server catalog lacks; Settings → Extensions
 lists them under the same switch ([[module-thinkrail-extensions]]).
 

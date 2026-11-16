@@ -126,6 +126,29 @@ test("the bundled extensions' default chords conflict with nothing on any platfo
 	}
 });
 
+test("every bundled extension command is namespaced, and a scoped one reaches the resolver as local", () => {
+	const extensions = webExtensionCommands([]);
+	for (const platform of PLATFORMS) {
+		const resolved = resolveKeybindings({ platform, extensions });
+		const placed = extensions.flatMap(({ extension, commands }) =>
+			commands.map((command) => {
+				const scope = command.scope ?? null;
+				const local = scope === null ? [] : (resolved.local.get(scope) ?? []);
+				return [
+					command.id.startsWith(`${extension}.`),
+					resolved.byId.get(command.id)?.scope ?? null,
+					scope === null || local.some(({ id }) => id === command.id),
+				];
+			}),
+		);
+		expect(placed).toEqual(
+			extensions.flatMap(({ commands }) =>
+				commands.map((command) => [true, command.scope ?? null, true]),
+			),
+		);
+	}
+});
+
 test("plain F stays free in the app table and in every feature key the catalog lists", () => {
 	const plainF = {
 		code: "KeyF",

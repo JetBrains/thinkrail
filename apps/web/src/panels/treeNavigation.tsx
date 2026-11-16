@@ -1,6 +1,7 @@
 import { useT } from "@thinkrail/locales/react";
 import { isContextMenuKey } from "@thinkrail/ui/context-menu";
-import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { ARROW_TWIN_COMMANDS, isImeComposing } from "@thinkrail/ui/keyboard";
+import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	createContext,
@@ -14,18 +15,15 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
-import { HJKL_KEYS, TREE_KEYS } from "../keybindings";
+import { LOCAL_KEY_DEFAULTS, TREE_KEYS } from "../keybindings";
 import { hasPlatformModifier, resolveTreeMove, type TreeMoveRow } from "../lib";
 
 const TREE = '[role="tree"]';
 const TREE_ITEM = '[role="treeitem"]';
 const HINT_MODE_CODE = "KeyF";
-const HJKL_MOVES: Readonly<Record<string, string>> = {
-	[HJKL_KEYS.left.key]: "ArrowLeft",
-	[HJKL_KEYS.down.key]: "ArrowDown",
-	[HJKL_KEYS.up.key]: "ArrowUp",
-	[HJKL_KEYS.right.key]: "ArrowRight",
-};
+const TWIN_ARROWS: ReadonlyMap<string, string> = new Map(
+	ARROW_TWIN_COMMANDS.map(({ id, arrow }) => [id, arrow]),
+);
 const MATCH_STYLES =
 	"[&_[data-tree-match=match]]:bg-primary-subtle [&_[data-tree-match=current]]:bg-primary-soft";
 
@@ -321,6 +319,7 @@ export function Tree({
 	const searching = useRef(false);
 	const tree = useRef<HTMLElement | null>(null);
 	const field = useRef<HTMLDivElement | null>(null);
+	const keys = useLocalKeys("trees", LOCAL_KEY_DEFAULTS.trees);
 	const scope = useMemo(() => ({ cursor, marks, focusDefault }), [cursor, marks, focusDefault]);
 
 	const ref = useCallback(
@@ -387,6 +386,13 @@ export function Tree({
 		const container = event.currentTarget;
 		const item = ownItem(container, event.target);
 		if (!item) return;
+		const local = keys.match(event.nativeEvent);
+		if (local === "trees.search") {
+			event.preventDefault();
+			searching.current = true;
+			setSearch({ origin: item.dataset.treeItem ?? null, current: null, query: "", matches: [] });
+			return;
+		}
 		if (
 			event.key === TREE_KEYS.openKept.key &&
 			hasPlatformModifier(event) &&
@@ -399,23 +405,19 @@ export function Tree({
 			else item.click();
 			return;
 		}
-		if (event.altKey || event.ctrlKey || event.metaKey) return;
+		const twin = local === null ? undefined : TWIN_ARROWS.get(local);
+		if (twin === undefined && (event.altKey || event.ctrlKey || event.metaKey)) return;
 		const items = treeItems(container);
 		const index = items.indexOf(item);
-		const key = HJKL_MOVES[event.key] ?? event.key;
-		const move = event.shiftKey ? null : resolveTreeMove(key, items.map(rowModel), index);
+		const key = twin ?? (event.shiftKey ? null : event.key);
+		const move = key === null ? null : resolveTreeMove(key, items.map(rowModel), index);
 		if (move) {
 			event.preventDefault();
 			if (move.kind === "focus") items[move.index]?.focus();
 			else if (move.kind === "toggle") toggleOf(container, item)?.click();
 			return;
 		}
-		if (event.key === TREE_KEYS.search.key && !event.shiftKey) {
-			event.preventDefault();
-			searching.current = true;
-			setSearch({ origin: item.dataset.treeItem ?? null, current: null, query: "", matches: [] });
-			return;
-		}
+		if (event.altKey || event.ctrlKey || event.metaKey) return;
 		if (event.key.length !== 1 || event.key === " ") return;
 		if (event.code === HINT_MODE_CODE && !event.shiftKey) return;
 		event.preventDefault();
