@@ -35,6 +35,7 @@ export function webOnlyExtensions(
 ): (WebExtension & { title: NonNullable<WebExtension["title"]> })[] {
 	return webExtensions.flatMap((extension) => {
 		const { title } = extension;
-		return title !== undefined && !serverNames.has(extension.name) ? [{ ...extension, title }] : [];
+		const webOnly = title !== undefined && extension.toolRenderers === undefined;
+		return webOnly && !serverNames.has(extension.name) ? [{ ...extension, title }] : [];
 	});
 }

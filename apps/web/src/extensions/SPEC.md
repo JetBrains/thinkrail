@@ -29,7 +29,7 @@ switched-off extension's commands stay listed (Settings → Keyboard shows and r
 match nor conflict, and registry order decides between two extensions' defaults. A command with a
 `scope` is local and reaches the resolver's per-scope table as it is; the resolver drops one whose id or
 scope lacks the extension's `name.` prefix, and the tests pin that every bundled command has it.
-`webOnlyExtensions(serverNames)` is the titled entries the server catalog lacks; Settings → Extensions
+`webOnlyExtensions(serverNames)` is the titled entries without tool renderers that the server catalog lacks; Settings → Extensions
 lists them under the same switch ([[module-thinkrail-extensions]]).
 
 ## Boundary

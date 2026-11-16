@@ -89,12 +89,12 @@ test("the review surfaces' set resolves in its scope beside the arrow twins, eac
 			?.chords.map(({ label }) => label);
 	expect(labels("Linux x86_64", "review.comment")).toEqual(["↵", "Ctrl+Shift+M"]);
 	expect(labels("MacIntel", "review.comment")).toEqual(["↵", "⇧⌘M"]);
-	expect(labels("Linux x86_64", "review.saveDraft")).toEqual(["Ctrl+↵"]);
-	expect(labels("MacIntel", "review.sendNow")).toEqual(["⇧⌘↵"]);
+	expect(labels("Linux x86_64", "review.saveDraft")).toEqual(["Ctrl+↵", "Ctrl+Num ↵"]);
+	expect(labels("MacIntel", "review.sendNow")).toEqual(["⇧⌘↵", "⇧⌘Num ↵"]);
 	const keybindings = resolveKeybindings({ platform: "Linux x86_64", local: LOCAL_SETS });
 	expect(keybindings.conflicts).toEqual([]);
 	expect(keybindings.local.get("review.surface")?.map(({ id }) => id)).toEqual([
-		...REVIEW_SURFACE_COMMANDS.map(({ id }) => id),
+		...REVIEW_SURFACE_COMMANDS.flatMap(({ id, chords }) => chords.map(() => id)),
 		"arrows.left",
 		"arrows.down",
 		"arrows.up",

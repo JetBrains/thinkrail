@@ -2,8 +2,15 @@ import { describe, expect, test } from "bun:test";
 import { type LocalKeyEvent, localKeys } from "@thinkrail/ui/local-keys";
 import { LOCAL_KEY_DEFAULTS } from "@/keybindings";
 import { resolveTreeMove } from "@/lib";
-import { type ActivityStep, type ChatRow, projectRows, type RoutineToolStep } from "./rows";
 import {
+	type ActivityStep,
+	type ChatRow,
+	projectRows,
+	type RoutineToolStep,
+	rowIdForToolCall,
+} from "./rows";
+import {
+	composerShiftTabOut,
 	composerTranscriptStep,
 	keyboardLeavesFollow,
 	newestContentRowId,
@@ -87,6 +94,14 @@ describe("transcriptItems", () => {
 		expect(levels(deeper).slice(1, 6)).toEqual([1, 2, 2, 3, 3]);
 		expect(deeper.find((item) => item.id === "t2")?.parentId).toBe("a1:thinking:1");
 		expect(deeper.find((item) => item.id === "t2")?.rowId).toBe("activity:t1");
+	});
+
+	test("names the row that holds a tool call, a step nested in a thought included", () => {
+		const ask: ChatRow = { ...tool("ask-1", "ask_user_question"), kind: "tool", id: "tool:ask-1" };
+		const withAsk = [...rows, ask];
+		expect(rowIdForToolCall(withAsk, "ask-1")).toBe("tool:ask-1");
+		expect(rowIdForToolCall(withAsk, "t3")).toBe("activity:t1");
+		expect(rowIdForToolCall(withAsk, "missing")).toBeNull();
 	});
 
 	test("never nests the single step a bare activity row already shows", () => {
@@ -260,6 +275,24 @@ describe("the composer's way into the transcript", () => {
 		expect(composerTranscriptStep(false, true)).toBe("enter");
 		expect(composerTranscriptStep(true, false)).toBe("caretToStart");
 		expect(composerTranscriptStep(true, true)).toBe("enter");
+	});
+
+	test("a plain Shift+Tab leaves the composer backward unless a menu or template slots hold it", () => {
+		const press = (
+			modifiers: Partial<Record<"shiftKey" | "altKey" | "ctrlKey" | "metaKey", boolean>>,
+		) => ({
+			key: "Tab",
+			shiftKey: false,
+			altKey: false,
+			ctrlKey: false,
+			metaKey: false,
+			...modifiers,
+		});
+		expect(composerShiftTabOut(press({ shiftKey: true }), false)).toBe(true);
+		expect(composerShiftTabOut(press({ shiftKey: true }), true)).toBe(false);
+		expect(composerShiftTabOut(press({}), false)).toBe(false);
+		expect(composerShiftTabOut(press({ shiftKey: true, ctrlKey: true }), false)).toBe(false);
+		expect(composerShiftTabOut({ ...press({ shiftKey: true }), key: "Enter" }, false)).toBe(false);
 	});
 });
 

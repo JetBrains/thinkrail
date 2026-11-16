@@ -29,6 +29,9 @@ export interface ToolInteraction<R = unknown> {
 		provenance?: "user" | "automatic",
 	) => () => void;
 	focusComposer: () => void;
+	focusTranscript: () => void;
+	mayClaimFocus: () => boolean;
+	landingChord: string;
 	hostProtocol?: number | undefined;
 	placement?: ToolPlacement | undefined;
 }

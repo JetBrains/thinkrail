@@ -75,12 +75,17 @@ const local = (
 ): LocalCommandDefaults => ({ id: `${scope}.${action}`, scope, title: null, chords });
 
 const ENTER = { code: "Enter", key: "↵" } as const;
+const NUMPAD_ENTER = { code: "NumpadEnter", key: "Num ↵" } as const;
 const DELETE = { code: "Delete", key: "Delete" } as const;
 const MOVE = { alt: true, shift: true } as const;
 const UP = { code: "ArrowUp", key: "↑" } as const;
 const DOWN = { code: "ArrowDown", key: "↓" } as const;
 const LEFT = { code: "ArrowLeft", key: "←" } as const;
 const RIGHT = { code: "ArrowRight", key: "→" } as const;
+const enter = (modifiers: Omit<PhysicalChord, "code" | "key">): PhysicalChord[] => [
+	{ ...ENTER, ...modifiers },
+	{ ...NUMPAD_ENTER, ...modifiers },
+];
 const letter = (key: string, modifiers: Omit<PhysicalChord, "code" | "key"> = {}) => ({
 	code: `Key${key}`,
 	key,
@@ -103,7 +108,7 @@ export const APP_LOCAL_COMMANDS: readonly LocalCommandDefaults[] = [
 	local("rails", "moveLeft", { ...LEFT, ...MOVE }),
 	local("rails", "moveRight", { ...RIGHT, ...MOVE }),
 	local("trees", "search", letter("S")),
-	local("trees", "openKept", { ...ENTER, mod: true }),
+	local("trees", "openKept", ...enter({ mod: true })),
 	local("trees", "rename", { code: "F2", key: "F2" }),
 	local("trees", "delete", DELETE),
 	local("trees", "reorderUp", { ...UP, ...MOVE }),
@@ -114,18 +119,18 @@ export const APP_LOCAL_COMMANDS: readonly LocalCommandDefaults[] = [
 	local("review", "previousFile", { ...UP, alt: true }),
 	local("review", "nextStep", letter("N")),
 	local("review", "previousStep", letter("P")),
-	local("composer", "followUp", { ...ENTER, mod: true }),
-	local("composer", "interrupt", { ...ENTER, mod: true, shift: true }),
+	local("composer", "followUp", ...enter({ mod: true })),
+	local("composer", "interrupt", ...enter({ mod: true, shift: true })),
 	local("composer", "enterTranscript", { ...UP, mod: true }),
 	local("transcript", "copy", letter("C")),
 	local("transcript", "open", letter("O")),
-	local("history", "send", { ...ENTER, mod: true }),
+	local("history", "send", ...enter({ mod: true })),
 	local("history", "saveTemplate", letter("S", { mod: true })),
 	local("history", "deleteChat", DELETE),
-	local("palette", "startWork", { ...ENTER, mod: true }),
-	local("palette", "ask", { ...ENTER, alt: true }),
+	local("palette", "startWork", ...enter({ mod: true })),
+	local("palette", "ask", ...enter({ alt: true })),
 	local("palette", "preview", letter("I", { mod: true })),
-	local("findInFiles", "openKept", { ...ENTER, mod: true }),
+	local("findInFiles", "openKept", ...enter({ mod: true })),
 	local("findInFiles", "matchCase", letter("C", { alt: true })),
 	local("findInFiles", "wholeWord", letter("W", { alt: true })),
 ];

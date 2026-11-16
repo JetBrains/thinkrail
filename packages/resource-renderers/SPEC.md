@@ -61,7 +61,11 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   reviewing (the questionnaire's compare overlay). `htmlViewport` (carried the same way as
   `ResourceEnvironment.htmlViewport`) fixes the preview width of every HTML view and diff beneath it and
   hides their own presets, for a caller that shows one width control for several frames — it renders
-  **`HtmlViewportSwitch`** (typed by `HtmlViewport`), the same segments the notice uses.
+  **`HtmlViewportSwitch`** (typed by `HtmlViewport`), the same segments the notice uses. `frameFocus`
+  (`FrameFocus`, carried the same way as `ResourceEnvironment.frameFocus`; also a `FramedResourcePreview`
+  prop, never applied to its full-screen dialog) set to `"manual"` takes every HTML frame beneath it out of
+  the Tab order (`tabIndex=-1`): a sandboxed frame keeps Tab and every key once entered, so a host that
+  embeds one among its own controls (the questionnaire) enters it explicitly;
   `sideLabels` (`DiffSideLabels`, also `ResourceDiffProps.sideLabels`) names a diff's two sides where "Old" /
   "New" would mislead, as when two alternatives are compared: the visual diffs (HTML, image, SVG) use them
   for the 2-up headings and captions, the rest ignore them;
@@ -911,7 +915,7 @@ Enter or `review.surface.comment` comments, Esc; Alt, other Mod chords and an IM
 through; `composerSubmit(event, keys)`; `swipeDividerValue(value, event, keys)` takes the same matcher).
 It declares `REVIEW_SURFACE_COMMANDS` in scope `review.surface` — `review.surface.comment`
 (`Shift+Mod+M`), `review.surface.saveDraft` (`Mod+Enter`, the composer and a draft card's edit) and
-`review.surface.sendNow` (`Shift+Mod+Enter`) — and every surface matches them plus `@thinkrail/ui`'s
+`review.surface.sendNow` (`Shift+Mod+Enter`), each Enter chord paired with the numpad Enter — and every surface matches them plus `@thinkrail/ui`'s
 shared arrow twins (H/J/K/L by physical `code`; `ignoreShift` so Shift still extends) through
 `useReviewSurfaceKeys()`, i.e. `useLocalKeys` over the keymap the app provides. The package never
 imports the app: the app adds the set to its resolver ([[submodule-web-keybindings]], *Local keys*), so

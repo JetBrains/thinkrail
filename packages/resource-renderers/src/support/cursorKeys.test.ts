@@ -139,6 +139,10 @@ test("the composer saves on Mod+Enter and sends on Shift+Mod+Enter", () => {
 	expect(composerSubmit(key("Enter", { metaKey: true }), mac)).toBe("save");
 	expect(composerSubmit(key("Enter", { metaKey: true, shiftKey: true }), mac)).toBe("send");
 	expect(composerSubmit(key("Enter", { ctrlKey: true, shiftKey: true }), linux)).toBe("send");
+	expect(composerSubmit(key("Enter", { ctrlKey: true }, "NumpadEnter"), linux)).toBe("save");
+	expect(composerSubmit(key("Enter", { metaKey: true, shiftKey: true }, "NumpadEnter"), mac)).toBe(
+		"send",
+	);
 	expect(composerSubmit(key("Enter"), linux)).toBeNull();
 	expect(composerSubmit(key("Enter", { shiftKey: true }), linux)).toBeNull();
 });

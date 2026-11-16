@@ -35,7 +35,7 @@ function HtmlSide({
 				: { document: buildHtmlPreviewDocument(text), token: undefined },
 		[text, interactive],
 	);
-	const compact = useResourceEnvironment().compact ?? false;
+	const { compact = false, frameFocus } = useResourceEnvironment();
 	return (
 		<HtmlFrame
 			title={title}
@@ -44,6 +44,7 @@ function HtmlSide({
 			scrollLink={scrollLink}
 			compact={compact}
 			interactiveToken={built.token}
+			frameFocus={frameFocus}
 		/>
 	);
 }

@@ -130,6 +130,12 @@ binding does.
   The resolver drops one from any override unless it is that command's own default (the card's
   `Shift+Escape` skip may be re-recorded); the Enter-based chords (`Mod+Enter`, `Alt+Enter`,
   `Mod+Shift+Enter`) are not primitives and rebind like any chord.
+- **The numpad Enter pair.** Matching by `code` split Enter from `NumpadEnter`, which the old `key` match
+  treated alike, so every Enter-based default (the composer's follow-up and interrupt, tree and Find in
+  Files open-kept, history send, palette start and ask, the review surfaces' save and send-now, the card's
+  submit) declares the same modifiers on `NumpadEnter` as a second default chord. The pair is the default:
+  the editor lists both, Reset restores both, and a recorded chord replaces both (re-recording `Mod+Enter`
+  alone stores an override without the numpad twin).
 - **`chordFromEvent(event, platform, { allowPlain, allowLocked })`** records a press by `code`: ⌘ → `Mod`, ⌃ → `Ctrl`
   on Apple, Control → `Mod` elsewhere. It rejects a modifier on its own (`modifierOnly`), a plain chord
   unless `allowPlain` (`plain`), a locked primitive unless `allowLocked` (`locked`, carrying the chord so

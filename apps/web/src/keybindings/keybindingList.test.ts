@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { REVIEW_SURFACE_COMMANDS } from "@thinkrail/resource-renderers";
 import {
+	APP_LOCAL_COMMANDS,
 	assignChord,
 	chordHolder,
 	type ExtensionCommandSet,
@@ -7,6 +9,7 @@ import {
 	keybindingList,
 	keybindingsFile,
 	localChordHolder,
+	matchLocal,
 	planImport,
 	resetChord,
 	resolveKeybindings,
@@ -512,5 +515,43 @@ describe("local rows", () => {
 			"trees.delete": ["KeyJ"],
 			"trees.rename": [],
 		});
+	});
+
+	test("every Enter chord also takes the numpad Enter by default, and a rebind replaces both", () => {
+		const paired = [...APP_LOCAL_COMMANDS, ...REVIEW_SURFACE_COMMANDS].flatMap(({ id, chords }) => {
+			const of = (code: string) =>
+				chords.flatMap(({ code: own, key: _key, ...modifiers }) =>
+					own === code ? [JSON.stringify(modifiers)] : [],
+				);
+			const enter = of("Enter");
+			return enter.length === 0 ? [] : [[id, enter, of("NumpadEnter")]];
+		});
+		expect(paired.map(([id]) => id)).toEqual([
+			"trees.openKept",
+			"composer.followUp",
+			"composer.interrupt",
+			"history.send",
+			"palette.startWork",
+			"palette.ask",
+			"findInFiles.openKept",
+			"review.surface.saveDraft",
+			"review.surface.sendNow",
+		]);
+		for (const [id, enter, numpad] of paired) expect([id, numpad]).toEqual([id, enter]);
+
+		const numpadSend = { code: "NumpadEnter", key: "Enter", ctrlKey: true, metaKey: false };
+		const send = { ...numpadSend, altKey: false, shiftKey: false };
+		const followUp = entry(list(), "composer.followUp");
+		expect(followUp?.defaults).toEqual(["Mod+Enter", "Mod+NumpadEnter"]);
+		expect(followUp?.chords.map(({ label }) => label)).toEqual(["Ctrl+↵", "Ctrl+Num ↵"]);
+		expect(matchLocal(list().keybindings, ["composer"], send)).toBe("composer.followUp");
+
+		const rebound = assignChord(list(), {}, "composer.followUp", "Alt+KeyQ");
+		expect(rebound).toEqual({ "composer.followUp": ["Alt+KeyQ"] });
+		expect(matchLocal(list({ overrides: rebound }).keybindings, ["composer"], send)).toBeNull();
+		expect(assignChord(list(), rebound, "composer.followUp", "Mod+Enter")).toEqual({
+			"composer.followUp": ["Mod+Enter"],
+		});
+		expect(resetChord(rebound, "composer.followUp")).toEqual({});
 	});
 });

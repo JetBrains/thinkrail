@@ -502,9 +502,12 @@ content and their own controls, which a treeitem's name would flatten and its ro
   it). Other items' controls stay pointer-focusable and are skipped by intercepting Tab, not by rewriting
   every control's `tabIndex`, which streamed, expanded, remounted and extension-rendered controls would
   each have to keep in sync. The cursor item carries no `data-focus-default`: the composer stays the chat
-  region's landing, and F6 returns to the item through the region's remembered focus
-  ([[submodule-web-shell]]).
-- **Ways in.** In the composer, Mod+↑ (`composer.enterTranscript`, rebindable; checked before plain ↑ recall) focuses the newest content item (a
+  region's default landing, and F6 returns to the item through the region's remembered focus
+  ([[submodule-web-shell]]) — **unless a docked question waits**: its `[data-focus-claim]` (the current
+  option) wins F6, Mod+1…9 and the recovery safety net, so the keyboard lands where the agent is blocked.
+- **Ways in.** A plain Shift+Tab in the composer (no template slots, no open menu) goes to the docked
+  question's `[data-focus-claim]` when one waits (`Composer.onShiftTabOut`, wired in `ChatView`), never to
+  its Skip button, which the browser's own order would reach first. In the composer, Mod+↑ (`composer.enterTranscript`, rebindable; checked before plain ↑ recall) focuses the newest content item (a
   trailing round divider is skipped) when the draft is empty or one visual line, or the caret is already at
   its start; otherwise it first moves the caret to the start. PgUp/PgDn there page the transcript with
   keyboard provenance and keep focus. `ChatTranscriptHandle.focusNewest()` / `scrollPage()` are the seams.
@@ -559,7 +562,8 @@ two routes:
   **`ToolRenderProps.interaction`**. `ToolRendererBody` fills it through `useToolInteraction`
   (`toolInteraction.ts`), and the plan page does the same for its card. The adapter reads `ChatActions`,
   `interactionState`, the fold-geometry context and the store's `protocolVersion` (passed as
-  `hostProtocol` so a renderer can withhold an affordance an older host cannot serve), and fills `interaction` for every tool whose renderer
+  `hostProtocol` so a renderer can withhold an affordance an older host cannot serve), binds
+  `focusTranscript` to this call's `focusToolCall`, and fills `interaction` for every tool whose renderer
   is registered `interactive` (`isInteractiveTool`) — it knows no tool by name. It hands the docked call's
   transcript row `placement: "stub"` (the context's `dockedToolCallId`) and the dock's copy
   `placement: "dock"`. Its `state.accepting` is
@@ -593,8 +597,7 @@ anchored prompt's first mount reveals itself (`revealChatElement`, `automatic-at
 (`PendingExtUi.claimReveal`). A row virtualized away gets no reveal; the live
 region and the needs-input marker still tell the user. **Bounds:** the docked prompt is capped at 60% of
 the chat height (`max-h-[60cqh]`); its body (question, field, select options) scrolls while Cancel/Submit
-and the hint stay put, and the editor is capped at 40%. On the way out it follows the
-`ask_user_question` hand-off ([tools/SPEC.md](tools/SPEC.md)): answering unmounts the focused control, so
+and the hint stay put, and the editor is capped at 40%. On the way out, answering unmounts the focused control, so
 when the prompt still holds `:focus-visible` focus it hands focus back to the composer
 (`ChatActions.focusComposer`) instead of stranding it on `<body>`; a tap/click answer leaves focus alone. `ChatTranscript` owns the session's
 `pendingExtUi`, its `session.extUiReply`, and `PendingExtUiContext`. The typed input/editor draft lives
@@ -666,8 +669,12 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   it rejects when the host refuses (unknown/responded/superseded call), and the caller owns the failure UX —
   plus `focusComposer()`, for a renderer that resolves *itself*: it unmounts the control the user was
   standing on, and focus would otherwise fall to `<body>` and swallow every following keystroke (the same
-  stranding the history overlay's dismiss refocus avoids). Only the card's own reply path calls it, and
-  only while the card still holds focus. Plus `openSubagentTranscript(childSessionId)` — the subagent
+  stranding the history overlay's dismiss refocus avoids). Only the card's own reply path (and its Esc) calls
+  it. Plus `focusToolCall(toolCallId)` — the click hand-off: the transcript navigation's `parkOnToolCall`
+  moves its cursor to the call's row (`rowIdForToolCall`) and focuses it without scrolling, or the feed
+  when Virtuoso has unmounted it; `mayClaimFocus()` — false once `ChatView` served a
+  `requestComposerFocus` in this mount; and `landingChord`, the resolved `region.next` label the shell
+  passes `ChatView`. Plus `openSubagentTranscript(childSessionId)` — the subagent
   cards' transcript link (no provider → the cards hide the action).
   Plus `openWorkspace({ workspaceId, projectId, sessionId? }, gone?)` (`openWorkspace.ts`), the one way
   a card opens another workspace's chat: the `start_workspace` card, Continue in workspace's Open and

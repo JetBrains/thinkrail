@@ -224,7 +224,9 @@ and Project Home projects pane (`home`). The shell's tracker marks the one holdi
 `data-region-active` (its accent line) and flashes a frame on a region a keyboard move enters
 ([[submodule-web-shell]], *Global chords*; [COLOR.md](../../styles/COLOR.md), *Active region*); a region
 root is positioned and isolates its stacking, so both stay inside it, under portals and resize handles. Folded groups and hidden sides render no section and are no region. `F6` and the focus chords land in a
-region by one rule: the element last focused inside it, if still rendered and focusable there (the root
+region by one rule: a focusable `[data-focus-claim]` first — a surface waiting on the user, today the
+docked question's current option ([[module-ext-ask-user-question]]); else the element last focused inside
+it, if still rendered and focusable there (the root
 itself is never remembered, nor a treeitem or tab that has since stopped being its roving container's tab
 stop, nor a chat transcript item that is no longer the cursor (`data-transcript-item` without
 `data-transcript-current`) — a row selected while focus was elsewhere, another

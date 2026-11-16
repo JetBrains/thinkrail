@@ -458,6 +458,7 @@ describe("local commands", () => {
 		expect(local(resolved, "trees")).toEqual([
 			"trees.search=KeyS",
 			"trees.openKept=Mod+Enter",
+			"trees.openKept=Mod+NumpadEnter",
 			"trees.rename=F2",
 			"trees.delete=Delete",
 			"trees.reorderUp=Alt+Shift+ArrowUp",

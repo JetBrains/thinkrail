@@ -58,12 +58,17 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
   `session.workspaceFiles.check`. The server half has no named exports; it imports only
   `extension-api/server` and its pi package. The package's deferral ack `{ kind: "ack" }` is the host's pending marker — a test pins it.
 - `@thinkrail/ext-ask-user-question/web` default-exports a `defineWebExtension` descriptor that registers
-  `AskUserQuestionCard` for `ask_user_question` with `{ chrome: "bare", interactive: true, dock: true }`. Nothing is
-  exported by name: the plan page reaches the card through the tool registry, as the chat does.
+  `AskUserQuestionCard` for `ask_user_question` with `{ chrome: "bare", interactive: true, dock: true }`, titles
+  itself (the Settings → Keyboard section) and declares its keys (`keys.ts`): `commands` local to the scope
+  `ask-user-question.card` — discuss `D`, interact `I`, compare `C`, submit `Mod+Enter` (plus the numpad Enter),
+  skip `Shift+Escape`, rebindable and matched by physical key through `useLocalKeys` — and `shortcuts` for the
+  locked keys (arrows, Enter, Space, Home/End, PgUp/PgDn, Esc, the field and compare keys). Nothing is exported by
+  name: the plan page reaches the card through the tool registry, as the chat does.
 - The card imports `extension-api/web`, the package's argument/result **types** (type-only, from
   `@thinkrail/pi-ask-user-question/core`; a value import of the pi package stays forbidden in browser code,
   so the result guard `readAskUserQuestionResult` and the answer model in `web/state.ts` are the card's own),
-  `@thinkrail/ui` (`attention-line`, `button`, `dialog`, `dropdown-menu`, `keyboard`, `textarea`, `utils`),
+  `@thinkrail/ui` (`attention-line`, `button`, `dialog`, `dropdown-menu`, `keyboard`, `keycaps`, `local-keys`,
+  `textarea`, `utils`),
   `@thinkrail/resource-renderers` (`useOptionalResourceHost` for the host's Markdown — mermaid included —,
   `FramedResourcePreview` + `useResourceScope` for file previews, and `ResourcePreview` + `HtmlViewportSwitch`
   for the compare overlay), `@thinkrail/locales` (types) and `/react`, React and Remix Icon. It never imports
@@ -74,9 +79,10 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
     Skip are enabled, and the attention line, active styling and focus claim appear, only while it holds,
     so a call the host is not waiting on never asks for attention);
   - `respond`;
-  - the focus scope;
+  - the focus scope and `mayClaimFocus()` (false once the chat served a focus chord in this mount);
   - the layout callback and its `placement` (docked, transcript stub, or neither);
-  - composer hand-off.
+  - composer and transcript hand-off (`focusComposer`, `focusTranscript`), and `landingChord`, the label of the
+    key that lands on the question (F6 by default).
 
   Without `interaction` the card is read-only.
 - Its strings keep their historical `tools.ask.*` keys instead of an extension prefix. Users' local
@@ -164,8 +170,16 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   Without option previews the question preview keeps the one-file dialog, with width presets and
   Split/Inline. An option without a preview says "No preview for this
   option", never another option's preview; rows that have one carry a type glyph. PgUp/PgDn on an option
-  row scroll the pane's markdown: WebKit does not make a scroll container a tab stop, and the lint rules
-  reject a `tabindex` on a non-interactive region. Each file gets its own frame (keyed by its path), so one
+  row scroll the pane's first scrollable element (markdown, an image, a markdown file): WebKit does not make a
+  scroll container a tab stop, and the lint rules reject a `tabindex` on a non-interactive region. An HTML pane
+  takes neither the keys nor their hint: an opaque-origin frame cannot be scrolled from the card. **HTML frames
+  are out of the Tab order** (`frameFocus: "manual"`, [[module-resource-renderers]]): a sandboxed frame traps Tab
+  and swallows every key, so `i` on the row (or the pane's **Interact** button) focuses it, the pane draws the
+  focus ring and says "Tab out to return", and a return stop after the frame sends the Tab that leaves it back to
+  the row. Esc cannot be caught inside the frame, hence Tab. The ring follows the pane's own focus tracking:
+  Chromium never matches `iframe:focus` for a focused frame. Unverified on the macOS WKWebView: the WebKit lane
+  covers `i`; should the desktop refuse to focus a sandboxed frame, `i` is hidden there. `c` on a row with a preview opens the compare
+  overlay on it. Each file gets its own frame (keyed by its path), so one
   option's scroll offset or renderer never carries over to the next. Keys from inside a preview region or
   its portaled dialog never page or skip the questionnaire. Without a resource host a
   file preview degrades to its path and an Open file link; the plan page provides the session's resource
@@ -188,7 +202,8 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   **Choose and stay** (chosen by the user): Choose on a shown option, or Enter while the overlay body itself
   has focus (so it never fights a focused button), picks it through the card's own `onSelect` — the note
   follows the selection as in the card — and the overlay stays open; notes and Submit stay in the card, and
-  closing returns focus to the chosen row. Keys live on the overlay body, so Choose and an All pane title —
+  closing returns focus to the chosen row, else to the row it was opened from (Radix's trigger-less dialog
+  would leave it on `<body>`). The body's `aria-keyshortcuts` lists every key it takes, each jump digit included. Keys live on the overlay body, so Choose and an All pane title —
   each removes the control it was pressed on — move focus to the body, and the dialog hands focus it
   receives itself to the body too: Radix's own recovery parks it on the first tab stop or the dialog, where
   Enter would press the wrong control or the keys would stop. Keys: ←/→ flip (wrapping), 1–9 jump, Esc closes; keys owned by a
@@ -230,10 +245,14 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   the line. The stub never claims.
   Per active-chat mount the form focuses the selected choice (including Other) or first authored choice
   once; a fresh `ChatView` mount claims again (see [[submodule-web-chat]] — any switch back to the chat
-  tab). It does **not** move focus away from Monaco, xterm, content-editable/form fields, a non-empty
-  composer draft, or a surface that **owns focus while it is open** — a dialog, a menu, another choice
-  list: out-waiting a modal focus scope either loses the fight or yanks an untrapped popover out from
-  under the user. A **coarse pointer never gives up focus** at all: focusing a row (the Other input
+  tab). **It takes focus only from `<body>` or an empty composer**, and only while `mayClaimFocus()` holds
+  (a focus chord such as Mod+L served in this mount settles the remount race for the composer). From
+  anywhere else — the transcript, a tree, a tab, a button, a draft, an editor, a dialog — it stays put and
+  the announcement says "Agent asks a question — {landingChord} to answer"; the docked sheet shows
+  "waiting · {landingChord} to answer" whenever focus is outside it. The ways in are the shell's: F6 or
+  Mod+1…9 into the chat land on `[data-focus-claim]` — the current option (the cursor row, or Other's
+  field when its text is the answer), the expand toggle while collapsed — and Shift+Tab from the composer
+  focuses the same target, never Skip ([[submodule-web-chat]], [[submodule-web-shell]]). A **coarse pointer never gives up focus** at all: focusing a row (the Other input
   especially) raises the soft keyboard over someone who was reading. A **page change** follows a tap, so
   it may focus — except into a text field on a coarse pointer (`shouldFocusPageTarget`). The transcript is
   never scrolled for attention: the dock is always visible. The card used to reveal itself in the
@@ -241,10 +260,12 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   removed the reveal, the settling window and the `revealElement` / `cancelAutomaticReveal` members of the
   tool contract. The empty composer left focused after Send is safe to hand off.
   The mirror image holds on the way out: replying or declining unmounts the focused control, so the card
-  hands focus **back to the composer**
-  (`interaction.focusComposer`) instead of stranding it on `<body>` — but only when it still holds focus
-  *and* that focus is `:focus-visible`, the platform's own "arrived by keyboard" signal (the one every
-  ring in this card is drawn from). A tap/click answer leaves focus alone, so touch keeps its keyboard down.
+  hands focus on instead of stranding it on `<body>`. A **keyboard** answer (a chord, or Enter/Space on
+  Skip/Submit — a click with `detail === 0`) goes to the composer (`interaction.focusComposer`), ready to
+  type; a **click or tap** parks it on this call's transcript row, the receipt-to-be
+  (`interaction.focusTranscript`, before the form unmounts), with no ring and no soft keyboard. `:focus-visible`
+  no longer decides: WebKit and Chromium disagree about it after a click. **Esc** outside a field also goes
+  to the composer and leaves the sheet expanded. On the plan page both land on the page's live slot.
   A **failed send undoes the hand-off with the latch**: the form comes back interactive, and since the
   one-shot claim is long spent and could neither re-focus nor re-announce, the card takes focus back itself
   rather than reappearing with the keyboard parked in the composer and nothing to say it had returned.
@@ -263,13 +284,15 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   decorative active halo, not a focus indicator.
 - **Explicit-selection keyboard model** (chosen by the user over the earlier Claude-style "Enter confirms
   and moves on"). One authored choice is in the Tab order. **↑/↓ only move**, wrapping through the
-  options, **Other** and the **primary button** (Next on earlier pages, Submit on the last — skipped while
-  Submit is disabled); Home/End jump to the first option / Other. On an option **Enter picks it**
+  options, **Other**, **Skip** and the **primary button** (Next on earlier pages, Submit on the last — skipped
+  while Submit is disabled); Home/End jump to the first option / Other. On an option **Enter picks it**
   (single-select) or **checks / unchecks it** (multi-select) and stays — no row key moves on or submits;
   **Space opens that option's note** (picking / checking it first); **`d` marks the question for
   discussion** and focuses its text. Enter on the primary button goes on or sends; **the platform
   modifier + Enter** (`hasPlatformModifier`: Cmd on Apple, Ctrl elsewhere) **submits from anywhere in the
-  card**, fields included; **←/→ switch questions** without wrapping outside text fields; Tab keeps moving
+  card**, fields included; **←/→ switch questions** without wrapping outside text fields, except on Skip and
+  the primary button, where they move between the two; Home/End on the question tabs jump to the first or
+  last question; Tab keeps moving
   focus (taking it for paging would trap keyboard users in the card — the terminal, which has no focus
   order, pages with Tab too). A legend states all of it. Inside the Other field ←/→/Home/End stay caret
   keys and ↑/↓ lift out only where the browser could not move the caret, so a wrapped long answer is
@@ -310,9 +333,13 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   departure from APG's radio keys, safe because Enter now checks the focused row instead of submitting it,
   so the announced state never contradicts the answer. Deselecting a choice whose note editor is open
   clears `noteFor` in the same update (`toggleMultiPatch` / `selectOptionPatch`) while keeping the text.
-  The only letter is `d` on an option row and the only chord the platform modifier + Enter, both
-  card-local; other letters and digits stay free so browser extensions, custom text and explicit decline
-  stay safe.
+  **The card's letters and chords are local commands** (`d`, `i`, `c`, the submit and skip chords): the card
+  root carries `data-key-scope="ask-user-question.card"`, so the global binder yields to them inside it, the
+  user rebinds them in Settings → Keyboard, and they match the physical key, so `d` works on a Russian
+  layout. Legends and `aria-keyshortcuts` show the resolved keys for this platform only (one Mod+Enter). While
+  the sheet is collapsed, submit, skip and Esc still act; submit with nothing answered expands it and shows
+  the nudge. Other letters and digits stay free so browser extensions, custom text and explicit decline stay
+  safe.
 - **Recommended-reason affordance** — a recommended option (label suffix `(Recommended)` **or** a
   non-empty `recommendedReason` — a reason *implies* recommended, defensively) renders its rationale
   **inline** as a `Why: …` block inside the option card (below the description; `Why:` in the accent

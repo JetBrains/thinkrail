@@ -6,7 +6,7 @@ import { LOCAL_KEY_DEFAULTS } from "@/keybindings";
 import { copyText, resolveTreeMove } from "@/lib";
 import { ACTIVITY_BREADCRUMB_HEIGHT } from "./activityBreadcrumbs";
 import { foldOverride } from "./foldState";
-import type { ChatRow } from "./rows";
+import { type ChatRow, rowIdForToolCall } from "./rows";
 import type { TranscriptMenu, TranscriptMenuAction, TranscriptNavigation } from "./TranscriptItem";
 import {
 	keyboardLeavesFollow,
@@ -40,6 +40,7 @@ export interface TranscriptNavigationController extends TranscriptNavigation {
 	attach: (scroller: HTMLElement) => () => void;
 	focusNewest: (returned?: boolean) => void;
 	focusRow: (rowId: string) => void;
+	parkOnToolCall: (toolCallId: string) => void;
 }
 
 const ITEM = "[data-transcript-item]";
@@ -526,6 +527,19 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 			cancel();
 			setCursor(rowId);
 			target.focus({ preventScroll: true });
+		},
+		parkOnToolCall: (toolCallId) => {
+			const rowId = options ? rowIdForToolCall(options.rows, toolCallId) : null;
+			cancel();
+			if (rowId !== null) {
+				setCursor(
+					rowId,
+					items().findIndex((item) => item.id === rowId),
+				);
+			}
+			const target = rowId === null ? null : element(rowId);
+			if (target) target.focus({ preventScroll: true });
+			else park();
 		},
 	};
 }

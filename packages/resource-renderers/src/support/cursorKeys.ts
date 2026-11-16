@@ -22,8 +22,20 @@ export const REVIEW_SURFACE_SCOPE = "review.surface";
 
 export const REVIEW_SURFACE_COMMANDS = [
 	{ id: "review.surface.comment", chords: [{ code: "KeyM", key: "M", mod: true, shift: true }] },
-	{ id: "review.surface.saveDraft", chords: [{ code: "Enter", key: "↵", mod: true }] },
-	{ id: "review.surface.sendNow", chords: [{ code: "Enter", key: "↵", mod: true, shift: true }] },
+	{
+		id: "review.surface.saveDraft",
+		chords: [
+			{ code: "Enter", key: "↵", mod: true },
+			{ code: "NumpadEnter", key: "Num ↵", mod: true },
+		],
+	},
+	{
+		id: "review.surface.sendNow",
+		chords: [
+			{ code: "Enter", key: "↵", mod: true, shift: true },
+			{ code: "NumpadEnter", key: "Num ↵", mod: true, shift: true },
+		],
+	},
 ] as const satisfies readonly LocalKeyCommand[];
 
 const REVIEW_SURFACE_KEYS: readonly LocalKeyCommand[] = [

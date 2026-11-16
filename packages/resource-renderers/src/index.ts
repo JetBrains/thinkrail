@@ -25,6 +25,7 @@ export {
 	describeResource,
 	diffRendererCapabilities,
 	diffResourceMeta,
+	type FrameFocus,
 	type HunkActions,
 	type HunkTriage,
 	isPlaceable,

@@ -20,7 +20,8 @@ nothing for it); how a user would install or discover a new extension is deliber
 
 A **web-only extension** has no pi capability and no `./server` (hint mode, [[module-ext-hint-mode]]). The
 server catalog cannot list it, so Settings → Extensions also lists every web registry entry that declares a
-`title` and that the catalog lacks, with the same `disabledExtensions` switch (the host carries unknown
+`title`, renders no tool and that the catalog lacks (a tool renderer implies a server half, so ask-user-question's
+title only names its Settings → Keyboard section), with the same `disabledExtensions` switch (the host carries unknown
 names through and reloads no session for them); it applies at once. A stub server extension just to get a
 row was rejected: an older host would not list it either, and an extension here composes a pi capability.
 **Global contributions are mounted only while enabled; tool renderers stay regardless** — a switched-off
@@ -89,8 +90,8 @@ What a `./web` half may import:
   contaminate the wire boundary in `contracts`, and the server contract in `ui` would give the host a
   presentation dependency.
 - `@thinkrail/ui` ([[module-ui]]) — the owned shadcn/Radix primitives moved whole, `cn`, the
-  `onThemeSwap` function only (not the theme catalog/preferences runtime), `./keyboard`'s chord helpers
-  and `./local-keys` (`useLocalKeys`, how a card matches its local commands). Per-file imports
+  `onThemeSwap` function only (not the theme catalog/preferences runtime), `./keyboard`'s chord helpers,
+  `./keycaps` and `./local-keys` (`useLocalKeys`, how a card matches its local commands). Per-file imports
   (`@thinkrail/ui/dialog`) are retained for code-splitting. Design tokens stay in `apps/web/src/styles`;
   the SDK and extension web halves use token utility classes only, and the app's CSS `@source` and
   color/spacing/typography checks cover `packages/ui` and `thinkrail-extensions/*/web`.
@@ -174,6 +175,6 @@ follow the `.js`, `tsc` stops at the declaration.
 | extension | pi capability | notes |
 | --- | --- | --- |
 | `visualize` | `@thinkrail/pi-visualize` | shipped. `./server` injects the **strict** mermaid validator (`mermaid` at the web renderer's catalog version, initialised through `linkedom` — required: DOMPurify needs a real `document` for flowchart/class/state/gantt/mindmap, verified under Bun). `./web` carries the diagram/comparison cards and exports `MermaidView`. The guarantee is syntax parsing, not SVG/layout success; the browser renderer keeps its fallback. |
-| `ask-user-question` | `@thinkrail/pi-ask-user-question` | shipped; the first interactive tool. `./server` is session-only: `sessionExtensions` composes the portable tool with ThinkRail's wording and an asker over the host's interactive-tool mailbox (`awaitToolResponse`); `interactiveTools` declares `ask_user_question` with a `describeResponse` that renders a late answer in the package's own envelope wording. `./web` registers the questionnaire card `interactive`, fed entirely by the host through `ToolRenderProps.interaction`; the plan page renders it through the tool registry like the chat does. [[module-ext-ask-user-question]]. |
+| `ask-user-question` | `@thinkrail/pi-ask-user-question` | shipped; the first interactive tool. `./server` is session-only: `sessionExtensions` composes the portable tool with ThinkRail's wording and an asker over the host's interactive-tool mailbox (`awaitToolResponse`); `interactiveTools` declares `ask_user_question` with a `describeResponse` that renders a late answer in the package's own envelope wording. `./web` registers the questionnaire card `interactive`, fed entirely by the host through `ToolRenderProps.interaction`; the plan page renders it through the tool registry like the chat does. Its keys are local `commands` in the scope `ask-user-question.card`, rebindable in Settings → Keyboard. [[module-ext-ask-user-question]]. |
 | `hint-mode` | none (web-only) | shipped; on by default. A `globalOverlay` that labels everything clickable on F (outside text entry) or Mod+; and presses a typed label; its `shortcuts` join the cheatsheet while enabled. [[module-ext-hint-mode]]. |
 | `web-access` | third-party `pi-web-access` | shipped (server half). `./server` composes the package unchanged for parents and children (the host keeps its headless-search policy, which must outlive the switch) and ships its own `librarian` skill (upstream dropped it; `skillPackages` names the extension's own package); the first extension with skills. Renderers stay app-local (`apps/web/src/chat/tools/web`) until `Markdown`, `Collapsible` and `ToolFileLink` join the SDK. [[module-ext-web-access]]. |

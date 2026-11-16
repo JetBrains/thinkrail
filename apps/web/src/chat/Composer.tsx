@@ -61,7 +61,7 @@ import {
 	type PromptImagesOwner,
 	usePromptImages,
 } from "./promptImages";
-import { composerTranscriptStep } from "./transcriptNavigation";
+import { composerShiftTabOut, composerTranscriptStep } from "./transcriptNavigation";
 import type { ChatAttachment } from "./types";
 import type { ModelPreferences } from "./useModelPreferences";
 
@@ -199,6 +199,7 @@ interface ComposerProps {
 	) => ComposerSubmitDisposition;
 	onAbort: () => void;
 	onEnterTranscript?: () => void;
+	onShiftTabOut?: () => boolean;
 	onScrollTranscript?: (direction: -1 | 1) => void;
 	onHistoryOpen?: () => void;
 	onPickTemplate?: (name: string) => void;
@@ -242,6 +243,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		onSubmit,
 		onAbort,
 		onEnterTranscript,
+		onShiftTabOut,
 		onScrollTranscript,
 		onHistoryOpen,
 		onPickTemplate,
@@ -510,6 +512,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			}
 		}
 		if (slashCompletion.handleKeyDown(e)) return;
+		if (composerShiftTabOut(e, menuOpen || slots !== null) && onShiftTabOut?.()) {
+			e.preventDefault();
+			return;
+		}
 		const local = keys.match(e.nativeEvent);
 		if (onEnterTranscript && local === "composer.enterTranscript") {
 			e.preventDefault();

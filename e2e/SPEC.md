@@ -720,7 +720,15 @@ Reload — also when it replaces itself while still loading after forging a toke
 `data:` document it replaces itself with running none of its scripts; the pair above
 syncs through the message bridge, read through Playwright's frame API since the frames are opaque);
 `plan-ask.spec.ts` adds the same file
-preview on the plan page. These three specs also run in a **`webkit` Playwright project**: the macOS desktop
+preview on the plan page and its live slot taking Esc and a click answer. `ask-keyboard.spec.ts` pins the
+card's keyboard pass: F6 and Mod+1 landing on the current option while Mod+L keeps the composer, Shift+Tab
+from the composer, Esc back with the question docked, a click answer parking on the receipt without a ring
+and a keyboard one in the composer, a question arriving (its seeded session reported idle, then waiting,
+through a routed wire) that announces "F6 to answer" from the transcript and takes an empty composer, the
+Mod+L remount race, `i` into an HTML frame and Tab back, `c` into compare and Esc back, the collapsed
+chords, Skip in the ↓ ring and ←/→ on the footer, a rebound `d` (over the host wire), a Russian-layout `d`
+and the card's Settings → Keyboard section; `fixtures/ask.ts` seeds the pending questions for the three card specs.
+These four specs also run in a **`webkit` Playwright project**: the macOS desktop
 is the system WKWebView, whose Tab skips buttons without an explicit `tabindex` (the regression this lane
 exists for). CI installs WebKit with the system libraries it links, not its media plugins (`.github/SPEC.md`);
 Linux WebKit may not reproduce the macOS Tab rule,

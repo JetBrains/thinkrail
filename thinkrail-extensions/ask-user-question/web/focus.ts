@@ -1,17 +1,11 @@
-export type QuestionFocusTarget =
-	| "none"
-	| "non-editing"
-	| "empty-composer"
-	| "draft-composer"
-	| "editing"
-	| "modal";
+export type QuestionFocusTarget = "none" | "inside" | "empty-composer" | "occupied";
 
 export function shouldClaimQuestionFocus(
 	target: QuestionFocusTarget,
 	coarsePointer: boolean,
+	mayClaim: boolean,
 ): boolean {
-	if (coarsePointer) return false;
-	return target === "none" || target === "non-editing" || target === "empty-composer";
+	return mayClaim && !coarsePointer && (target === "none" || target === "empty-composer");
 }
 
 export function shouldFocusPageTarget(textEntryTarget: boolean, coarsePointer: boolean): boolean {
@@ -32,21 +26,22 @@ export function createQuestionAttentionClaim(): (scope: object, toolCallId: stri
 	};
 }
 
-const MODAL_SURFACES = '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]';
+export interface FocusedNode {
+	readonly ownerDocument: { readonly body: unknown; readonly documentElement: unknown } | null;
+	readonly tagName: string;
+	readonly value?: unknown;
+	getAttribute(name: string): string | null;
+}
 
-export function focusTargetKind(active: Element | null, card: HTMLElement): QuestionFocusTarget {
-	if (!active || active === document.body) return "none";
-	if (card.contains(active)) return "non-editing";
-	if (!(active instanceof HTMLElement)) return "editing";
-	if (active.closest(MODAL_SURFACES)) return "modal";
-	if (active.closest(".monaco-editor, .xterm")) return "editing";
-	if (active.isContentEditable || active.closest('[contenteditable="true"]')) return "editing";
-	const control = active.closest("input, textarea, select, iframe");
-	if (!control) return "non-editing";
-	if (control instanceof HTMLTextAreaElement && control.dataset.testid === "chat-input") {
-		return control.value.length === 0 ? "empty-composer" : "draft-composer";
-	}
-	return "editing";
+export function focusTargetKind(active: FocusedNode | null, inside: boolean): QuestionFocusTarget {
+	const page = active?.ownerDocument;
+	if (!active || !page || active === page.body || active === page.documentElement) return "none";
+	if (inside) return "inside";
+	const emptyComposer =
+		active.tagName === "TEXTAREA" &&
+		active.getAttribute("data-testid") === "chat-input" &&
+		active.value === "";
+	return emptyComposer ? "empty-composer" : "occupied";
 }
 
 export function hasCoarsePointer(): boolean {
@@ -91,4 +86,6 @@ export function focusQuestionAttention(card: HTMLElement): void {
 	);
 	if (selected) selected.focus({ preventScroll: true });
 	else focusCurrentQuestionPage(card);
+	if (card.contains(document.activeElement)) return;
+	card.querySelector<HTMLElement>("[data-focus-claim]")?.focus({ preventScroll: true });
 }

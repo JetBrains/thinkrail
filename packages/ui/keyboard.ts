@@ -152,6 +152,7 @@ function ariaKey(chord: PressableChord): string {
 	const named = LETTER_CODE.exec(code)?.[1] ?? DIGIT_CODE.exec(code)?.[1];
 	if (named !== undefined) return named;
 	if (code === "Space") return "Space";
+	if (code === "NumpadEnter") return "Enter";
 	const typed = CODE_KEYS[code];
 	return typed !== undefined && typed.length === 1 ? typed : code;
 }

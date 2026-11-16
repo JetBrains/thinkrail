@@ -23,7 +23,7 @@ and the pure chord primitives: `chordPressed(chord, event, platform, { ignoreShi
 or typed key, exact modifiers, `Mod` = ⌘ on Apple and Ctrl elsewhere, no Alt chord under AltGraph off
 Apple — the app's keybinding matcher delegates to it, so the two cannot drift), `chordCaps`, `keyCap`,
 `codeLabel` (a code's US label), `ariaKeyShortcuts(chords, platform)` (one platform's modifier names, never
-Meta and Control both), `isTypingChord`, `ARROW_TWIN_COMMANDS` (`arrows.left/down/up/right`, H/J/K/L
+Meta and Control both; the numpad Enter reads `Enter`, so a pair announces once), `isTypingChord`, `ARROW_TWIN_COMMANDS` (`arrows.left/down/up/right`, H/J/K/L
 by `code`, in shared scope `ARROW_TWINS_SCOPE`) and `twinArrow(id)` (the arrow a matched twin stands for). `./local-keys` is the seam an element matches its
 rebindable local keys through, whoever renders it (the app, resource renderers, an extension card):
 `useLocalKeys(scope, defaults)` returns `{ match(event, { ignoreShift, textEntry }), caps(id), label(id),
@@ -139,7 +139,7 @@ The per-file surface is `button`, `switch`, `dialog`, `dropdown-menu`, `context-
 on Tab), `skeleton` (`SkeletonRows` / `LoadingRegion`, the one loading placeholder; its usage rules
 live in the web components spec), and `attention-line` (`AttentionLine`, the "Your input is needed · Agent is
 waiting" line; `announced` hides the visible line from assistive tech once the always-mounted polite
-region carries the announcement, `live={false}` drops the region), and `keycaps` (`Keycaps`, a row of
+region carries the announcement, `announcement` replaces its default text, `live={false}` drops the region), and `keycaps` (`Keycaps`, a row of
 `<kbd>` caps for already-formatted key labels, a repeated key such as double Shift included), alongside `utils`, `keyboard`, `local-keys`, `theme` and `fonts`.
 `menu-styles` is shared by the menu primitives and custom app menu rows. `toggle-segment` and `skeleton`
 moved here from the app when the resource renderers became a package, because both the app and

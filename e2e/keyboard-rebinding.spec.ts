@@ -520,7 +520,7 @@ test("inside a scope a local key conflicts with its neighbours only: Replace, a 
 	await recordLocal(page, "trees.search", "c");
 	await expect(message(page, "trees.search")).toHaveAttribute("data-kind", "note");
 	await expect(message(page, "trees.search")).toContainText(
-		"C also acts in the chat transcript — a different element, so no conflict",
+		"C also acts in the chat transcript and Ask user question — different elements, so no conflict",
 	);
 	await expect(chord(page, "trees.search").locator("kbd")).toHaveText(["C"]);
 

@@ -112,6 +112,7 @@ describe("caps and aria-keyshortcuts", () => {
 	test("aria-keyshortcuts names one platform's modifiers, never both Meta and Control", () => {
 		const chords = [
 			{ code: "Enter", key: "↵", mod: true },
+			{ code: "NumpadEnter", key: "Num ↵", mod: true },
 			{ code: "Escape", key: "Esc", shift: true },
 			{ code: "KeyD", key: "D" },
 			{ code: "Space", key: "Space" },

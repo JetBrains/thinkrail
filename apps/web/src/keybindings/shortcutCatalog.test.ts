@@ -275,7 +275,7 @@ describe("the shortcut catalog", () => {
 		expect(labels(mac, "review.markViewed")).toEqual(["V"]);
 		expect(labels(mac, "search.doubleShift")).toEqual(["⇧⇧"]);
 		expect(labels(linux, "search.doubleShift")).toEqual(["Shift+Shift"]);
-		expect(labels(mac, "trees.openKept")).toEqual(["⌘↵"]);
+		expect(labels(mac, "trees.openKept")).toEqual(["⌘↵", "⌘Num ↵"]);
 		expect(labels(linux, "group.next")).toEqual(["Ctrl+F6"]);
 		expect(labels(mac, "group.next")).toEqual(["⌃F6"]);
 		expect(labels(mac, "terminal.copy")).toBeUndefined();

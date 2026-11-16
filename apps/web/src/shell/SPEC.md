@@ -295,8 +295,9 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
 - **Chords in tooltips.** Every icon button whose action a chord also runs shows the chord's caps after
   its tooltip label (`IconTooltip`'s `shortcut`, [[module-ui]]), computed here from the resolved table
   (`keybindingKeys` / `useKeybindingKeys`, never captured once) and injected into the props-driven layout
-  as `chromeShortcuts`, and into `ProjectTree` (`newWorkspaceShortcut`) and Keyboard settings
-  (`openShortcut`) as props: a pane's Hide shows its side's toggle
+  as `chromeShortcuts`, and into `ProjectTree` (`newWorkspaceShortcut`), Keyboard settings
+  (`openShortcut`), and `ChatView` / `PlanPane` (`landingChord`, the `region.next` label a waiting question
+  names in "… to answer") as props: a pane's Hide shows its side's toggle
   (`Mod+B` / `Mod+J` / `Mod+Shift+J`) only while it is the region's sole expanded pane — with two, Hide
   folds one and the chord hides both — the Projects and Files rail entries show `Mod+0` / `Mod+Shift+E`
   and terminal entries `` Ctrl+` ``; on Project Home the Projects entry and its Hide show `Mod+B`, the
@@ -325,7 +326,9 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   shows moves and flashes the destination, so a run of presses walks the ring. Focus on `<body>` or
   outside every region moves at once; with none active, `F6` starts at the top bar and `Shift+F6` at the
   last. The palette's Focus next / previous region rows always move. `Mod+1…9` land in center
-  group N of that order (no group N: nothing, the chord still swallowed). `Mod+L` focuses the attended
+  group N of that order (no group N: nothing, the chord still swallowed). Every landing prefers a focusable
+  `[data-focus-claim]` (`resolveLanding`), so F6 into a chat with a waiting question lands on its current
+  option; `Mod+L` still focuses the composer. `Mod+L` focuses the attended
   chat's composer — `selectHistoryTarget`'s chat (the selected tab of the last-focused center group, else
   the workspace's most recent chat tab), opened through `openChatInTab` first when it is not attended —
   by `requestComposerFocus` once it is. The chat's own history overlay does not count as covering it: the
@@ -482,7 +485,7 @@ after the host's push), else the opener's rows. Resolution, first match wins:
    row, the previous, the list's `data-focus-fallback`, the list's first focusable; then the outermost
    list's enclosing `data-focus-default`.
 4. **Safety net** — the active region's F6 landing target (`regionLandingTarget`, the record's region when
-   the active one is gone); inside a live dialog, its first focusable. A control that sat in no region and
+   the active one is gone; a waiting question's `[data-focus-claim]` wins it, as for F6); inside a live dialog, its first focusable. A control that sat in no region and
    no dialog (a field a page or extension injected into `<body>`) gets no safety net: focus stays where the
    browser put it.
 
