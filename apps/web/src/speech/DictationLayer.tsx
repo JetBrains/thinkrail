@@ -17,7 +17,7 @@ import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { micAvailability } from "./capture";
 import { dictatingElement, startDictation, stopDictation, useDictatingElement } from "./control";
-import { useDictationSnapshot } from "./dictation";
+import { dictation, useDictationSnapshot } from "./dictation";
 import { dictationFieldOf } from "./field";
 import { dictationShortcutLabel, installDictationChord, installDictationEscape } from "./hotkey";
 import { BLOCKED_LABEL, speechErrorKey, UNAVAILABLE_LABEL } from "./labels";
@@ -243,7 +243,10 @@ function ActiveDictationLayer() {
 		[],
 	);
 
-	useEffect(() => installDictationEscape(dictatingElement, stopDictation), []);
+	useEffect(
+		() => installDictationEscape(dictatingElement, () => dictation.snapshot().phase, stopDictation),
+		[],
+	);
 
 	const error = snapshot.error;
 	useEffect(() => {

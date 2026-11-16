@@ -7,6 +7,7 @@ import {
 	platformFamily,
 } from "@/lib";
 import { dictationFieldOf } from "./field";
+import type { DictationPhase } from "./session";
 
 export const HOLD_MS = 300;
 
@@ -67,6 +68,7 @@ export function stopsDictation(
 	>,
 	dictating: { contains(node: Node | null): boolean } | null,
 	target: Node | null,
+	phase: DictationPhase,
 ): boolean {
 	return (
 		event.key === "Escape" &&
@@ -76,17 +78,20 @@ export function stopsDictation(
 		!event.shiftKey &&
 		!event.defaultPrevented &&
 		!isImeComposing(event) &&
+		(phase === "connecting" || phase === "listening") &&
 		dictating?.contains(target) === true
 	);
 }
 
 export function installDictationEscape(
 	dictating: () => HTMLElement | null,
+	phase: () => DictationPhase,
 	stop: () => void,
 ): () => void {
 	const onKeyDown = (event: KeyboardEvent) => {
 		const target = event.composedPath()[0];
-		if (!stopsDictation(event, dictating(), target instanceof Node ? target : null)) return;
+		const node = target instanceof Node ? target : null;
+		if (!stopsDictation(event, dictating(), node, phase())) return;
 		event.preventDefault();
 		stop();
 	};

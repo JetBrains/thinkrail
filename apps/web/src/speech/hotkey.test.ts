@@ -28,7 +28,7 @@ test("Shift and Space are required and Alt is excluded", () => {
 	expect(isDictationChord(chord({ ctrlKey: true, code: "KeyS" }), "Win32")).toBe(false);
 });
 
-test("a bare Esc stops a dictation in the field it runs in, and only there", () => {
+test("a bare Esc stops a connecting or listening dictation in its field, and only there", () => {
 	const field = { contains: (node: Node | null) => node === inside };
 	const inside = {} as Node;
 	const outside = {} as Node;
@@ -42,11 +42,33 @@ test("a bare Esc stops a dictation in the field it runs in, and only there", () 
 		keyCode: 27,
 		defaultPrevented: false,
 	};
-	expect(stopsDictation(esc, field, inside)).toBe(true);
-	expect(stopsDictation(esc, null, inside)).toBe(false);
-	expect(stopsDictation(esc, field, outside)).toBe(false);
-	expect(stopsDictation({ ...esc, defaultPrevented: true }, field, inside)).toBe(false);
-	expect(stopsDictation({ ...esc, shiftKey: true }, field, inside)).toBe(false);
-	expect(stopsDictation({ ...esc, isComposing: true, keyCode: 229 }, field, inside)).toBe(false);
-	expect(stopsDictation({ ...esc, key: "Enter" }, field, inside)).toBe(false);
+	expect(stopsDictation(esc, field, inside, "listening")).toBe(true);
+	expect(stopsDictation(esc, field, inside, "connecting")).toBe(true);
+	expect(stopsDictation(esc, null, inside, "listening")).toBe(false);
+	expect(stopsDictation(esc, field, outside, "listening")).toBe(false);
+	expect(stopsDictation({ ...esc, defaultPrevented: true }, field, inside, "listening")).toBe(
+		false,
+	);
+	expect(stopsDictation({ ...esc, shiftKey: true }, field, inside, "listening")).toBe(false);
+	expect(
+		stopsDictation({ ...esc, isComposing: true, keyCode: 229 }, field, inside, "listening"),
+	).toBe(false);
+	expect(stopsDictation({ ...esc, key: "Enter" }, field, inside, "listening")).toBe(false);
+});
+
+test("an Esc while a dictation is already stopping is left to the shell, so it leaves the field", () => {
+	const inside = {} as Node;
+	const field = { contains: (node: Node | null) => node === inside };
+	const esc = {
+		key: "Escape",
+		altKey: false,
+		ctrlKey: false,
+		metaKey: false,
+		shiftKey: false,
+		isComposing: false,
+		keyCode: 27,
+		defaultPrevented: false,
+	};
+	expect(stopsDictation(esc, field, inside, "stopping")).toBe(false);
+	expect(stopsDictation(esc, field, inside, "idle")).toBe(false);
 });
