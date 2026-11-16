@@ -10,7 +10,7 @@ import {
 	useState,
 } from "react";
 import { useElementSize } from "../../support/useElementSize";
-import { HTML_INTERACTIVE_CSP } from "./htmlDocument";
+import { HTML_INTERACTIVE_FRAME_CSP } from "./htmlDocument";
 import {
 	frameLifecycleMessage,
 	messageScrollEndpoint,
@@ -21,7 +21,7 @@ import { type HtmlViewport, htmlFrameGeometry } from "./viewport";
 
 const NO_BOX = { width: 0, height: 0 };
 
-const INTERACTIVE_FRAME = { sandbox: "allow-scripts", csp: HTML_INTERACTIVE_CSP };
+const INTERACTIVE_FRAME = { sandbox: "allow-scripts", csp: HTML_INTERACTIVE_FRAME_CSP };
 
 function useLinkAttachment(scrollLink: ScrollLink | undefined, interactive: boolean) {
 	const detachRef = useRef<(() => void) | null>(null);

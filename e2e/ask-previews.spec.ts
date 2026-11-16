@@ -410,6 +410,7 @@ const interactiveMockup = (host: string) => `<!doctype html><html><body>
 <p id="state">Collapsed</p>
 <p id="network">checking</p>
 <button id="leave" onclick="location.href = 'data:text/html,left'">Leave</button>
+<button id="replace" onclick="location.replace('data:text/html,' + encodeURIComponent('<script>parent.postMessage({ probe: typeof RTCPeerConnection }, '*')<' + '/script>'))">Replace</button>
 </main>
 <script>
 const report = [];
@@ -471,6 +472,20 @@ test("an agent mockup runs its own scripts without network and is stopped when i
 		await expect(iframe).toHaveCount(0);
 		await pane.getByTestId("html-left-page-reload").click();
 		await expect(mockup.locator("#state")).toHaveText("Collapsed");
+
+		await page.evaluate(() => {
+			const probes: unknown[] = [];
+			Reflect.set(window, "__replacementProbes", probes);
+			window.addEventListener("message", (event) => {
+				if (event.data && typeof event.data === "object" && "probe" in event.data) {
+					probes.push(event.data.probe);
+				}
+			});
+		});
+		await mockup.locator("#replace").press("Enter");
+		await expect(pane.getByTestId("html-left-page")).toBeVisible();
+		await page.waitForTimeout(1500);
+		expect(await page.evaluate(() => Reflect.get(window, "__replacementProbes"))).toEqual([]);
 	} finally {
 		rmSync(session.path, { force: true });
 		cleanup();

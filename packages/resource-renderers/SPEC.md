@@ -564,22 +564,35 @@ toggles. Any other HTML never runs script. The point is clickable prototypes (ta
 for comparing alternatives. Because the host has no auth ([[architecture]] Decision 7), a script that could
 reach it over WebSocket would control the agent, so the property that matters is **no network**:
 - **The document** keeps scripts, handlers, forms and controls, drops `<base>`, every `<link>` and `<meta
-  http-equiv>`, makes every non-`#` link target inert, and gets, first in `<head>`, a CSP meta, exactly
-  `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src
-  data:; media-src data: blob:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none';
-  child-src 'none'; worker-src 'none'` — no fetch, XHR, WebSocket, external script, style, image or frame —
-  then `x-dns-prefetch-control: off`, then the frame bridge. A `data:` or `blob:` document the script
-  navigates to inherits the policy (verified in Chromium, WebKit and Firefox).
+  http-equiv>`, makes every non-`#` link target inert, and gets, first in `<head>`, a CSP meta
+  (`interactiveDocumentPolicy`): `default-src 'none'`, `script-src` listing only the SHA-256 of each inline
+  script and event handler (plus `'unsafe-hashes'`) — **never `'unsafe-inline'`** — and `style-src
+  'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; base-uri 'none'; form-action
+  'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'` — no fetch, XHR,
+  WebSocket, external script, style, image or frame — then `x-dns-prefetch-control: off`, then the frame
+  bridge. Before hashing, every script that runs as JavaScript (no `src`; no type, `module`, or a JavaScript
+  MIME essence) and every `on*` attribute gets the WebRTC-neutering prefix (`WEBRTC_NEUTER`); other script
+  types keep their text. A script or handler that code inserts at runtime has no hash and does not run — the
+  agent guidance says to attach behaviour with `addEventListener`. Hashes are computed synchronously by the
+  package's own `sha256` (`crypto.subtle` is async and exists only in secure contexts, and plain-HTTP remote
+  clients are supported); the frame token comes from `crypto.getRandomValues` for the same reason, never
+  `randomUUID`.
 - **WebRTC is neutered, because no policy covers it.** `connect-src` does not govern ICE, CSP `webrtc
   'block'` is enforced by no engine, and a sandbox has no flag for it: a scripted frame sent STUN to any
   server (an IP leak and an exfiltration channel; it cannot speak to the host's wire). The bridge, the
   document's first script, redefines `RTCPeerConnection` and its prefixed aliases as non-configurable
-  `undefined` before any mockup script runs. No pristine copy is reachable: every frame the mockup creates
-  gets its own opaque origin (`SecurityError` in all three engines), and popups and workers are closed.
+  `undefined` before any mockup script runs, and every allowed script and handler starts with the same
+  neutering. No pristine copy is reachable: every frame the mockup creates gets its own opaque origin
+  (`SecurityError` in all three engines), and popups and workers are closed. A document the mockup replaces
+  itself with (`data:`, `blob:`) inherits the hash-only policy, so its own inline scripts and handlers do not
+  run — in Chromium, WebKit and Firefox not even a byte-identical copy of an allowed script does — and were an
+  engine to run such a copy, its prefix would neuter WebRTC first. Post-mortem: with `'unsafe-inline'`, a
+  replacement document's script got a fresh `RTCPeerConnection` and sent STUN before the frame was stopped.
 - **The frame** is `sandbox="allow-scripts"` and nothing else: an opaque origin with no access to the app,
-  no popups, no top navigation, no form submission. It is never also `allow-same-origin`, paired or not. It
-  carries the same policy as the `csp` attribute, so Chromium and WebView2 (CSP Embedded Enforcement)
-  refuse any foreign document the frame is navigated to.
+  no popups, no top navigation, no form submission. It is never also `allow-same-origin`, paired or not. Its
+  `csp` attribute carries `HTML_INTERACTIVE_FRAME_CSP` — the same no-network policy with `'unsafe-inline'`
+  in place of the per-document hashes, enforced together with the document's own — so Chromium and WebView2
+  (CSP Embedded Enforcement) refuse any foreign document the frame is navigated to.
 - **Never inside the desktop window.** Electrobun's message bridges (`webkit.messageHandlers.bunBridge` /
   `internalBridge`, WebView2's `chrome.webview`) answer every frame, opaque or not, and its internal RPC
   runs JavaScript in a view the caller names — a mockup script there would escape to the trusted page. So

@@ -50,7 +50,8 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
   under `session.workspaceFiles.scratchDir` (`.thinkrail/context/mockups/`) referenced by `previewFile`; it
   says mockups may use inline scripts and form controls, which run sandboxed without network where the UI
   renders that directory's HTML interactive (a browser, not the desktop window), so a mockup must still read
-  without them ([[module-resource-renderers]]).
+  without them, and to attach behaviour with `addEventListener`, since scripts or inline handlers inserted at
+  runtime do not run ([[module-resource-renderers]]).
   Off, the model is offered neither the fields nor that guidance: the saving is the agent's mockup writing
   (output tokens and a tool call each), not rendering, which is lazy. Markdown previews, mermaid included,
   stay either way (unconfirmed with the user: mermaid is text, so the switch leaves it on). `checkFile` is the host's

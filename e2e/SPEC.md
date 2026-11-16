@@ -716,7 +716,8 @@ in 2-up and swipe even though the mockups ask for smooth scrolling, All at 1400�
 pane title or Choose removed the focused control, focus back on the chosen row, the receipt's read-only reopen),
 and an interactive mockup (`sandbox="allow-scripts"`, its button changes its own page, `fetch`, a
 WebSocket to the host and `RTCPeerConnection` all blocked, leaving its page replaced by the notice until
-Reload — also when it replaces itself while still loading after forging a tokenless `loaded`; the pair above
+Reload — also when it replaces itself while still loading after forging a tokenless `loaded`, and a
+`data:` document it replaces itself with running none of its scripts; the pair above
 syncs through the message bridge, read through Playwright's frame API since the frames are opaque);
 `plan-ask.spec.ts` adds the same file
 preview on the plan page. These three specs also run in a **`webkit` Playwright project**: the macOS desktop

@@ -1,3 +1,5 @@
+import { cspHash } from "./sha256";
+
 export const HTML_PREVIEW_CSP =
 	"default-src 'none'; img-src data: blob:; style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; child-src 'none'";
 
@@ -82,8 +84,12 @@ export function buildHtmlPreviewDocument(source: string): string {
 	return prepareHtmlPreviewDocument(document);
 }
 
-export const HTML_INTERACTIVE_CSP =
+export const HTML_INTERACTIVE_FRAME_CSP =
 	"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'";
+
+export function interactiveDocumentPolicy(scriptHashes: readonly string[]): string {
+	return `default-src 'none'; script-src ${[...new Set(scriptHashes)].join(" ")} 'unsafe-hashes'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'`;
+}
 
 export const SCROLL_BRIDGE_SOURCE = "thinkrail-html-scroll";
 
@@ -93,13 +99,12 @@ export const WEBRTC_GLOBALS = [
 	"mozRTCPeerConnection",
 ];
 
+export const WEBRTC_NEUTER = `{for (const name of ${JSON.stringify(WEBRTC_GLOBALS)}) if (name in window) Object.defineProperty(window, name, { value: undefined, configurable: false, writable: false });}\n`;
+
 function frameBridge(token: string): string {
 	return `(() => {
 document.currentScript?.remove();
-for (const name of ${JSON.stringify(WEBRTC_GLOBALS)}) {
-if (name in window) Object.defineProperty(window, name, { value: undefined, configurable: false, writable: false });
-}
-const host = parent;
+${WEBRTC_NEUTER}const host = parent;
 const source = ${JSON.stringify(SCROLL_BRIDGE_SOURCE)};
 const token = ${JSON.stringify(token)};
 const scroller = () => document.scrollingElement || document.documentElement;
@@ -116,7 +121,16 @@ post("applied");
 })();`;
 }
 
-function neutralizeInteractive(element: Element): void {
+const JAVASCRIPT_TYPE = /^(?:|module|(?:text|application)\/(?:x-)?(?:java|ecma|j|live)script)$/;
+
+function runsAsScript(element: Element): boolean {
+	if (element.localName.toLowerCase() !== "script" || element.getAttribute("src") !== null)
+		return false;
+	const essence = (element.getAttribute("type") ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
+	return JAVASCRIPT_TYPE.test(essence);
+}
+
+function neutralizeInteractive(element: Element, hashes: string[]): void {
 	for (const child of Array.from(element.children)) {
 		const name = child.localName.toLowerCase();
 		if (
@@ -127,7 +141,18 @@ function neutralizeInteractive(element: Element): void {
 			child.remove();
 			continue;
 		}
-		neutralizeInteractive(child);
+		neutralizeInteractive(child, hashes);
+	}
+	if (runsAsScript(element)) {
+		const source = `${WEBRTC_NEUTER}${element.textContent ?? ""}`;
+		element.textContent = source;
+		hashes.push(cspHash(source));
+	}
+	for (const attribute of Array.from(element.attributes)) {
+		if (!attribute.name.toLowerCase().startsWith("on")) continue;
+		const source = `${WEBRTC_NEUTER}${attribute.value}`;
+		element.setAttribute(attribute.name, source);
+		hashes.push(cspHash(source));
 	}
 	if (!["a", "area"].includes(element.localName.toLowerCase())) return;
 	const href = element.getAttribute("href");
@@ -143,23 +168,31 @@ export interface InteractiveHtmlDocument {
 }
 
 export function prepareInteractiveHtmlDocument(document: Document, token: string): string {
-	neutralizeInteractive(document.documentElement);
+	const hashes: string[] = [];
+	neutralizeInteractive(document.documentElement, hashes);
+	const bridgeSource = frameBridge(token);
+	hashes.unshift(cspHash(bridgeSource));
 	const charset = document.createElement("meta");
 	charset.setAttribute("charset", "utf-8");
 	const csp = document.createElement("meta");
 	csp.setAttribute("http-equiv", "Content-Security-Policy");
-	csp.setAttribute("content", HTML_INTERACTIVE_CSP);
+	csp.setAttribute("content", interactiveDocumentPolicy(hashes));
 	const noPrefetch = document.createElement("meta");
 	noPrefetch.setAttribute("http-equiv", "x-dns-prefetch-control");
 	noPrefetch.setAttribute("content", "off");
 	const bridge = document.createElement("script");
-	bridge.textContent = frameBridge(token);
+	bridge.textContent = bridgeSource;
 	document.head.prepend(charset, csp, noPrefetch, bridge);
 	return `<!doctype html>${document.documentElement.outerHTML}`;
 }
 
+export function interactiveToken(): string {
+	const bytes = crypto.getRandomValues(new Uint8Array(16));
+	return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export function buildInteractiveHtmlDocument(source: string): InteractiveHtmlDocument {
 	const parsed = new DOMParser().parseFromString(source, "text/html");
-	const token = crypto.randomUUID();
+	const token = interactiveToken();
 	return { document: prepareInteractiveHtmlDocument(parsed, token), token };
 }
