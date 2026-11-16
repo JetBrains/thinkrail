@@ -121,7 +121,7 @@ function handlesTextFieldKeys(source: string): boolean {
 
 describe("text-field key handlers yield to an active IME", () => {
 	const files = SOURCE_ROOTS.flatMap(sourceFiles).map((path) => ({
-		path: relative(ROOT, path),
+		path: relative(ROOT, path).replaceAll("\\", "/"),
 		source: readFileSync(path, "utf8"),
 	}));
 
