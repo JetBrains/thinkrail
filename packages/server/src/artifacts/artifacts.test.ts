@@ -646,8 +646,8 @@ test("a change waiting from before a run gets no marker of that run", async () =
 	write(`${CONTEXT}/by-the-run.md`, "by the run");
 	await observeArtifactSessionEvent("w1", "s1", { type: "agent_settled" });
 	const rows = await byPath();
-	expect(rows.get(`${CONTEXT}/edited-earlier.md`)?.runs).toBeUndefined();
-	expect(rows.get(`${CONTEXT}/by-the-run.md`)?.runs).toHaveLength(1);
+	expect(rows.get(`${CONTEXT}/edited-earlier.md`)?.rounds).toBeUndefined();
+	expect(rows.get(`${CONTEXT}/by-the-run.md`)?.rounds).toHaveLength(1);
 });
 
 test("each run that creates or changes a file leaves a marker, and markers and signals survive a restart and a move", async () => {
@@ -661,7 +661,7 @@ test("each run that creates or changes a file leaves a marker, and markers and s
 	});
 	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
 	await observeArtifactSessionEvent("w1", "s1", { type: "agent_settled" });
-	const first = (await byPath()).get(`${CONTEXT}/plan.md`)?.runs;
+	const first = (await byPath()).get(`${CONTEXT}/plan.md`)?.rounds;
 	expect(first).toHaveLength(1);
 	expect(first?.[0]?.sessionId).toBe("s1");
 
@@ -676,8 +676,54 @@ test("each run that creates or changes a file leaves a marker, and markers and s
 	renameSync(join(root, CONTEXT, "plan.md"), join(root, CONTEXT, "done", "plan.md"));
 	const rows = await byPath();
 	const moved = rows.get(`${CONTEXT}/done/plan.md`);
-	expect(moved?.runs?.map((run) => run.sessionId)).toEqual(["s1", "s2"]);
-	expect(moved?.runs?.[0]?.startedAt).toBeLessThan(moved?.runs?.[1]?.startedAt ?? 0);
+	expect(moved?.rounds?.map((run) => run.sessionId)).toEqual(["s1", "s2"]);
+	expect(moved?.rounds?.[0]?.startedAt).toBeLessThan(moved?.rounds?.[1]?.startedAt ?? 0);
 	expect(moved).toMatchObject({ role: "result", reason: "shown" });
-	expect(rows.get(`${CONTEXT}/by-user.md`)?.runs).toBeUndefined();
+	expect(rows.get(`${CONTEXT}/by-user.md`)?.rounds).toBeUndefined();
+});
+
+test("a prompt delivered inside a run starts its own round: changes and the earlier reply's links go to the right round", async () => {
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
+	await observeArtifactSessionEvent("w1", "s1", { type: "round_start", at: 1_000 });
+	write(`${CONTEXT}/first.csv`, "a");
+	await observeArtifactSessionEvent("w1", "s1", {
+		type: "assistant_message",
+		text: "Made [first](first.csv).",
+	});
+	await observeArtifactSessionEvent("w1", "s1", { type: "round_start", at: 2_000 });
+	write(`${CONTEXT}/second.csv`, "b");
+	await observeArtifactSessionEvent("w1", "s1", { type: "assistant_message", text: "Done." });
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_settled" });
+	const rows = await byPath();
+	expect(rows.get(`${CONTEXT}/first.csv`)?.rounds).toEqual([{ sessionId: "s1", startedAt: 1_000 }]);
+	expect(rows.get(`${CONTEXT}/first.csv`)).toMatchObject({ role: "result", reason: "linked" });
+	expect(rows.get(`${CONTEXT}/second.csv`)?.rounds).toEqual([
+		{ sessionId: "s1", startedAt: 2_000 },
+	]);
+	expect(rows.get(`${CONTEXT}/second.csv`)).toMatchObject({ role: "working", reason: "data" });
+});
+
+test("chats taking turns on a file record each round once, so earlier rounds keep their marker", async () => {
+	await observeArtifactSessionEvent("w1", "s0", { type: "agent_start" });
+	write(`${CONTEXT}/shared.md`, "v0");
+	await observeArtifactSessionEvent("w1", "s0", { type: "agent_settled" });
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
+	await observeArtifactSessionEvent("w1", "s2", { type: "agent_start" });
+	for (let turn = 0; turn < 20; turn++) {
+		const sessionId = turn % 2 ? "s2" : "s1";
+		await observeArtifactSessionEvent("w1", sessionId, {
+			type: "tool_execution_start",
+			toolCallId: `c${turn}`,
+			toolName: "write",
+			args: { path: `${CONTEXT}/shared.md` },
+		});
+		write(`${CONTEXT}/shared.md`, `v${turn + 1}${"!".repeat(turn)}`);
+		await observeArtifactSessionEvent("w1", sessionId, {
+			type: "tool_execution_end",
+			toolCallId: `c${turn}`,
+			toolName: "write",
+		});
+	}
+	const rounds = (await byPath()).get(`${CONTEXT}/shared.md`)?.rounds;
+	expect(rounds?.map((round) => round.sessionId)).toEqual(["s0", "s1", "s2"]);
 });

@@ -346,7 +346,7 @@ export type ArtifactRoleReason =
 	| "data"
 	| "unshown";
 
-export interface ArtifactRun {
+export interface ArtifactRound {
 	sessionId: string;
 	startedAt: number;
 }
@@ -360,7 +360,7 @@ export interface WorkspaceArtifact {
 	sessionId?: string;
 	role?: ArtifactRole;
 	reason?: ArtifactRoleReason;
-	runs?: ArtifactRun[];
+	rounds?: ArtifactRound[];
 }
 
 export interface WorkspaceIgnoredOutput {

@@ -306,7 +306,7 @@ test("Files tree copy and delete are pinned to v118", () => {
 	expect(WS_METHODS.fsDelete).toBe("fs.delete");
 });
 
-test("artifact roles and run markers are pinned to v124", () => {
+test("artifact roles and round markers are pinned to v124", () => {
 	expect(ARTIFACT_ROLES_PROTOCOL_VERSION).toBe(124);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ARTIFACT_ROLES_PROTOCOL_VERSION);
 });

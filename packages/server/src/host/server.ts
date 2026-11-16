@@ -1161,7 +1161,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		runObservation.observe(payload.sessionId, payload.event);
 		observeContinuation(payload.sessionId, payload.event);
 		void turnTracker.observe(payload.sessionId, payload.event);
-		const artifactEvent = artifactSessionEvent(payload.event);
+		const artifactEvent = artifactSessionEvent(payload.sessionId, payload.event);
 		if (artifactEvent) {
 			if (artifactEvent.type === "agent_start") void ensureWatch(workspaceId, { prewarm: true });
 			void observeArtifactSessionEvent(workspaceId, payload.sessionId, artifactEvent).catch(

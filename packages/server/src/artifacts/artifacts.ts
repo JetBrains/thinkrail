@@ -16,7 +16,7 @@ import {
 } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type {
-	ArtifactRun,
+	ArtifactRound,
 	Workspace,
 	WorkspaceArtifact,
 	WorkspaceArtifactsSnapshot,
@@ -60,7 +60,7 @@ const BUILD_DIRS: ReadonlySet<string> = new Set([
 ]);
 const LINK_UNSUPPORTED = new Set<unknown>(["EXDEV", "EPERM", "EMLINK", "ENOTSUP", "EOPNOTSUPP"]);
 const WRITER_TOOLS = new Set(["write", "edit", "spec_create"]);
-const MAX_RUNS = 16;
+const MAX_ROUNDS = 16;
 
 interface ArtifactRecord {
 	path: string;
@@ -76,7 +76,7 @@ interface ArtifactRecord {
 	keptCopy?: true;
 	presented?: Presented;
 	picked?: true;
-	runs?: ArtifactRun[];
+	rounds?: ArtifactRound[];
 }
 
 interface OutputRecord {
@@ -112,6 +112,7 @@ export type ArtifactSessionEvent =
 	| { type: "agent_start" }
 	| { type: "agent_settled" }
 	| { type: "assistant_message"; text: string }
+	| { type: "round_start"; at: number }
 	| { type: "tool_execution_start"; toolCallId: string; toolName: string; args: unknown }
 	| {
 			type: "tool_execution_end";
@@ -125,7 +126,7 @@ const states = new Map<string, WorkspaceArtifacts>();
 const running = new Map<string, Set<string>>();
 const writers = new Map<string, Map<string, { sessionId: string; toolCallId: string }>>();
 const windows = new Map<string, RunWindow>();
-const runStarts = new Map<string, Map<string, number>>();
+const roundStarts = new Map<string, Map<string, number>>();
 const replies = new Map<string, Map<string, string>>();
 const removals = new Map<string, Map<string, number>>();
 const generations = new Map<string, number>();
@@ -197,20 +198,22 @@ function parseArtifact(value: unknown): ArtifactRecord | null {
 			? { presented: value.presented }
 			: {}),
 		...(value.picked === true ? { picked: true as const } : {}),
-		...parseRuns(value.runs),
+		...parseRounds(value.rounds),
 	};
 }
 
-function parseRuns(value: unknown): { runs?: ArtifactRun[] } {
+function parseRounds(value: unknown): { rounds?: ArtifactRound[] } {
 	if (!Array.isArray(value)) return {};
-	const runs = value
+	const rounds = value
 		.filter(
-			(run): run is ArtifactRun =>
-				isObject(run) && typeof run.sessionId === "string" && typeof run.startedAt === "number",
+			(round): round is ArtifactRound =>
+				isObject(round) &&
+				typeof round.sessionId === "string" &&
+				typeof round.startedAt === "number",
 		)
 		.map(({ sessionId, startedAt }) => ({ sessionId, startedAt }))
-		.slice(-MAX_RUNS);
-	return runs.length ? { runs } : {};
+		.slice(-MAX_ROUNDS);
+	return rounds.length ? { rounds } : {};
 }
 
 function parseOutput(value: unknown): OutputRecord | null {
@@ -451,14 +454,18 @@ function applyStat(record: ArtifactRecord, file: ScannedFile): void {
 	record.changedAt = Math.round(file.mtimeMs);
 }
 
-function noteRun(workspaceId: string, record: ArtifactRecord, sessionId: string | undefined): void {
+function noteRound(
+	workspaceId: string,
+	record: ArtifactRecord,
+	sessionId: string | undefined,
+): void {
 	if (!sessionId) return;
-	const startedAt = runStarts.get(workspaceId)?.get(sessionId);
+	const startedAt = roundStarts.get(workspaceId)?.get(sessionId);
 	if (startedAt === undefined) return;
-	const runs = record.runs ?? [];
-	const last = runs.at(-1);
-	if (last?.sessionId === sessionId && last.startedAt === startedAt) return;
-	record.runs = [...runs, { sessionId, startedAt }].slice(-MAX_RUNS);
+	const rounds = record.rounds ?? [];
+	if (rounds.some((round) => round.sessionId === sessionId && round.startedAt === startedAt))
+		return;
+	record.rounds = [...rounds, { sessionId, startedAt }].slice(-MAX_ROUNDS);
 }
 
 function reconcile(workspace: Workspace): boolean {
@@ -483,7 +490,7 @@ function reconcile(workspace: Workspace): boolean {
 		applyStat(record, file);
 		const writer = writerOf(workspaceId, record.path);
 		if (writer) record.sessionId = writer;
-		noteRun(workspaceId, record, writer);
+		noteRound(workspaceId, record, writer);
 		if (relinked || record.keptCopy || !record.kept) keep(workspaceId, root, record);
 		changed = true;
 	}
@@ -534,12 +541,12 @@ function reconcile(workspace: Workspace): boolean {
 			firstSeenAt: prior?.firstSeenAt ?? Date.now(),
 			...(prior?.presented ? { presented: prior.presented } : {}),
 			...(prior?.picked ? { picked: prior.picked } : {}),
-			...(prior?.runs ? { runs: prior.runs } : {}),
+			...(prior?.rounds ? { rounds: prior.rounds } : {}),
 		};
 		const runWriter = writerOf(workspaceId, file.path);
 		const writer = runWriter ?? prior?.sessionId;
 		if (writer) record.sessionId = writer;
-		noteRun(workspaceId, record, runWriter);
+		noteRound(workspaceId, record, runWriter);
 		keep(workspaceId, root, record);
 		state.records.set(file.path, record);
 		changed = true;
@@ -618,7 +625,7 @@ function toWire(record: ArtifactRecord): WorkspaceArtifact {
 		...(record.sessionId ? { sessionId: record.sessionId } : {}),
 		role,
 		reason,
-		...(record.runs ? { runs: record.runs } : {}),
+		...(record.rounds ? { rounds: record.rounds } : {}),
 	};
 }
 
@@ -928,6 +935,15 @@ const markPicked = (record: ArtifactRecord) => {
 	return true;
 };
 
+function markReply(workspace: Workspace, sessionId: string): boolean {
+	const reply = replies.get(workspace.id)?.get(sessionId);
+	forgetSession(replies, workspace.id, sessionId);
+	if (!reply || !markRecords(workspace, replyArtifactPaths(workspace, reply), markLinked))
+		return false;
+	save(workspace.id, load(workspace.id));
+	return true;
+}
+
 function sessionMap<T>(maps: Map<string, Map<string, T>>, workspaceId: string): Map<string, T> {
 	let map = maps.get(workspaceId);
 	if (!map) {
@@ -967,7 +983,7 @@ export async function observeArtifactSessionEvent(
 			active.add(sessionId);
 			openWindow(workspace, sessionId);
 			const changed = reconcile(workspace);
-			if (fresh) sessionMap(runStarts, workspaceId).set(sessionId, startedAt);
+			if (fresh) sessionMap(roundStarts, workspaceId).set(sessionId, startedAt);
 			if (changed) publish(workspaceId);
 			return;
 		}
@@ -975,6 +991,14 @@ export async function observeArtifactSessionEvent(
 			if (event.text.trim()) sessionMap(replies, workspaceId).set(sessionId, event.text);
 			else forgetSession(replies, workspaceId, sessionId);
 			return;
+		case "round_start": {
+			if (!running.get(workspaceId)?.has(sessionId)) return;
+			const changed = reconcile(workspace);
+			const linked = markReply(workspace, sessionId);
+			sessionMap(roundStarts, workspaceId).set(sessionId, event.at);
+			if (changed || linked) publish(workspaceId);
+			return;
+		}
 		case "tool_execution_start":
 			if (WRITER_TOOLS.has(event.toolName))
 				rememberWriter(workspace, sessionId, event.toolCallId, event.args);
@@ -998,13 +1022,8 @@ export async function observeArtifactSessionEvent(
 		case "agent_settled": {
 			let changed = reconcile(workspace);
 			forgetWriters(workspaceId, sessionId);
-			const reply = replies.get(workspaceId)?.get(sessionId);
-			forgetSession(replies, workspaceId, sessionId);
-			forgetSession(runStarts, workspaceId, sessionId);
-			if (reply && markRecords(workspace, replyArtifactPaths(workspace, reply), markLinked)) {
-				save(workspaceId, load(workspaceId));
-				changed = true;
-			}
+			changed = markReply(workspace, sessionId) || changed;
+			forgetSession(roundStarts, workspaceId, sessionId);
 			const active = running.get(workspaceId);
 			active?.delete(sessionId);
 			if (active?.size === 0) {
@@ -1026,7 +1045,7 @@ export function removeWorkspaceArtifacts(workspaceId: string): void {
 	running.delete(workspaceId);
 	writers.delete(workspaceId);
 	windows.delete(workspaceId);
-	runStarts.delete(workspaceId);
+	roundStarts.delete(workspaceId);
 	replies.delete(workspaceId);
 	removals.delete(workspaceId);
 	const dir = storeDir(workspaceId);
@@ -1042,7 +1061,7 @@ export function resetArtifactsForTests(): void {
 	running.clear();
 	writers.clear();
 	windows.clear();
-	runStarts.clear();
+	roundStarts.clear();
 	replies.clear();
 	removals.clear();
 	generations.clear();

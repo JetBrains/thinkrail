@@ -880,10 +880,11 @@ batch to `noteArtifactPathsChanged` (it reconciles when the batch is truncated o
 the session-event tee maps pi events through `createArtifactEventMapper` (`host/artifactEvents.ts`) into
 `observeArtifactSessionEvent`: `agent_start`, `agent_settled`, `tool_execution_start` (call id, name and
 args), every assistant `message_end` as `assistant_message` (its text, empty for a tool-call-only turn),
+every user `message_end` as `round_start` (its timestamp: a prompt pi delivered, queued ones included),
 and `tool_execution_end` with the `presented` / `picked` paths that the enabled extensions'
 `artifactTools` declarations ([[submodule-server-extensions]]) read from the call's args and result
-`details` — only for a successful call, a throwing declaration logged and skipped — so the host names no
-tool; an `agent_start` also
+`details` — only for a successful call, a throwing declaration logged and skipped; a call's args are
+held per session and call id, since providers may reuse ids across chats — so the host names no tool; an `agent_start` also
 `ensureWatch`es the workspace in watch's bounded **prewarm** tier, so a working agent nobody looks at is
 watched without promoting its watcher for the host's lifetime (on Linux each watched worktree costs one
 inotify watch per folder; background runs in big repositories would otherwise exhaust

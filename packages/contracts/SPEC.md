@@ -454,8 +454,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   optional `sessionId`, and from **`ARTIFACT_ROLES_PROTOCOL_VERSION`** (v124) the host's **`role`**
   (`ArtifactRole`: `"result" | "working"`), its **`reason`** (`ArtifactRoleReason`: `picked`, `shown`,
   `linked`, `document` for a result; `working-folder`, `script`, `data`, `unshown` for a working file)
-  and **`runs`** (`ArtifactRun[]`: the agent runs, `{ sessionId, startedAt }`, that created or changed
-  it, oldest first and bounded) — absent from an older host, so a client that needs them checks the
+  and **`rounds`** (`ArtifactRound[]`: the chat rounds, `{ sessionId, startedAt }`, that created or
+  changed it, oldest first and bounded; `startedAt` is the round's prompt timestamp, or the run start for a
+  run no prompt opened) — absent from an older host, so a client that needs them checks the
   version rather than reading absence as "working") and `outputs` (**`WorkspaceIgnoredOutput`** rows — an ignored file or folder an
   agent run produced, with its live `files` count and `filesTruncated` — or `null` where there is no git),
   `artifacts.restore` / `artifacts.discard` (`{ workspaceId, path }` → ack; a deleted row only, otherwise

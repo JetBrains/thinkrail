@@ -714,7 +714,7 @@ test("a round's artifacts are the ones a run of this chat created or changed wit
 				changedAt: 1,
 				firstSeenAt: 1,
 				role: "result",
-				runs: [
+				rounds: [
 					{ sessionId: "s1", startedAt: 1_500 },
 					{ sessionId: "s1", startedAt: 20_500 },
 				],
@@ -726,7 +726,7 @@ test("a round's artifacts are the ones a run of this chat created or changed wit
 				changedAt: 1,
 				firstSeenAt: 1,
 				role: "working",
-				runs: [{ sessionId: "s1", startedAt: 1_600 }],
+				rounds: [{ sessionId: "s1", startedAt: 1_600 }],
 			},
 			{
 				path: ".thinkrail/context/other-chat.md",
@@ -735,7 +735,7 @@ test("a round's artifacts are the ones a run of this chat created or changed wit
 				changedAt: 1,
 				firstSeenAt: 1,
 				role: "result",
-				runs: [{ sessionId: "s2", startedAt: 1_600 }],
+				rounds: [{ sessionId: "s2", startedAt: 1_600 }],
 			},
 			{
 				path: ".thinkrail/context/gone.md",
@@ -744,7 +744,7 @@ test("a round's artifacts are the ones a run of this chat created or changed wit
 				changedAt: 1,
 				firstSeenAt: 1,
 				role: "result",
-				runs: [{ sessionId: "s1", startedAt: 1_600 }],
+				rounds: [{ sessionId: "s1", startedAt: 1_600 }],
 			},
 		],
 	};

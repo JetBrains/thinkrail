@@ -159,7 +159,7 @@ export interface DividerArtifact {
 }
 
 export interface RoundArtifact extends DividerArtifact {
-	runs: readonly number[];
+	rounds: readonly number[];
 }
 
 export function sessionRoundArtifacts(
@@ -171,13 +171,13 @@ export function sessionRoundArtifacts(
 	const prefix = `${snapshot.dir}/`;
 	return snapshot.artifacts.flatMap((artifact) => {
 		if (artifact.state !== "live" || (resultsOnly && artifact.role !== "result")) return [];
-		const runs = (artifact.runs ?? [])
-			.filter((run) => run.sessionId === sessionId)
-			.map((run) => run.startedAt);
+		const rounds = (artifact.rounds ?? [])
+			.filter((round) => round.sessionId === sessionId)
+			.map((round) => round.startedAt);
 		const label = artifact.path.startsWith(prefix)
 			? artifact.path.slice(prefix.length)
 			: artifact.path;
-		return runs.length ? [{ path: artifact.path, label, runs }] : [];
+		return rounds.length ? [{ path: artifact.path, label, rounds }] : [];
 	});
 }
 
@@ -446,7 +446,7 @@ function artifactsInRound(
 	if (startMs === null) return [];
 	const inRound = (at: number) => at >= startMs && (nextStartMs === null || at < nextStartMs);
 	return roundArtifacts
-		.filter((artifact) => artifact.runs.some(inRound))
+		.filter((artifact) => artifact.rounds.some(inRound))
 		.map(({ path, label }) => ({ path, label }))
 		.sort((a, b) => a.label.localeCompare(b.label));
 }

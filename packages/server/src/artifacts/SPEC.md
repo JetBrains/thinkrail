@@ -109,14 +109,19 @@ session of the workspace is running; otherwise the record keeps the chat it had.
 this is not exclusive attribution, and a session that never settles (a host crash) stays "running" until
 restart.
 
-**Run markers.** Each record keeps the agent runs that created or changed it (`runs`: `{ sessionId,
-startedAt }`, oldest first, at most 16). A run starts at the session's first `agent_start` and ends at its
-`agent_settled` (pi re-emits `agent_start` on retries; the first one counts). A marker is written only
-when the change is attributed to a running session — by a writer hint or as the only one running — and
+**Round markers.** Each record keeps the chat rounds that created or changed it (`rounds`: `{ sessionId,
+startedAt }`, oldest first, each distinct round once, at most 16 — chats taking turns on one file must not
+push an earlier round out). A round starts at the session's first `agent_start` and again at every user
+prompt pi delivers inside the run (`round_start`, stamped with the prompt's own timestamp — a follow-up
+queued or steered into a running agent is a new round in the chat, though pi runs it in the same
+`agent_start`…`agent_settled` window); it ends at the next one or at `agent_settled` (pi re-emits
+`agent_start` on retries; the first one counts). At a round boundary the index reconciles first, so changes
+so far stay with the round that made them, and reads that round's reply (see Roles). A marker is written
+only when the change is attributed to a running session — by a writer hint or as the only one running — and
 seen after the run started: the reconcile at `agent_start` runs before the run is registered, so a change
 waiting from before the run (an edit the watcher had not reported yet) gets none, and neither do a restore
 or a move. A user's own edit made *while* exactly one session runs is indistinguishable from the agent's
-and does get that run's marker. The chat divider's "N artifacts" joins these markers with its
+and does get that round's marker. The chat divider's "N artifacts" joins these markers with its
 round, which is why they live here and not in the turn receipts: those come from git, and the
 artifacts folder is ignored.
 
@@ -129,7 +134,8 @@ serves the Smart view, the chat divider and any other consumer.
 1. **Signals first.** `picked` — the person chose it among a tool's previews. `shown` — a successful tool
    call put it in front of them: the host maps the declarations extensions make through
    `artifactTools` ([[submodule-server-extensions]]) into the `presented` / `picked` paths of a
-   `tool_execution_end` event. `linked` — the run's last assistant message names it (a message without
+   `tool_execution_end` event. `linked` — the round's last assistant message names it, read when the next
+round starts or the run settles (a message without
 text, a tool-call-only turn or a stop, clears the earlier one) (a markdown link,
    a code span or a bare path; worktree-relative, artifacts-relative or absolute; only paths that are
    live records count); the host passes each assistant message as `assistant_message` and the index

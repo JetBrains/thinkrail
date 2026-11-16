@@ -9,8 +9,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isAssistant(message: unknown): boolean {
-	return isRecord(message) && message.role === "assistant";
+function roleOf(message: unknown): unknown {
+	return isRecord(message) ? message.role : undefined;
+}
+
+function timestampOf(message: unknown): number {
+	return isRecord(message) && typeof message.timestamp === "number"
+		? message.timestamp
+		: Date.now();
 }
 
 function textOf(message: unknown): string {
@@ -37,20 +43,26 @@ function extract(
 	}
 }
 
+const callKey = (sessionId: string, toolCallId: string) => `${sessionId}\u0000${toolCallId}`;
+
 export function createArtifactEventMapper(tools: () => ArtifactTools) {
 	const argsByCall = new Map<string, unknown>();
-	return (event: PiEvent): ArtifactSessionEvent | null => {
+	return (sessionId: string, event: PiEvent): ArtifactSessionEvent | null => {
 		switch (event.type) {
 			case "agent_start":
 				return { type: event.type };
 			case "agent_settled":
 				return { type: event.type };
-			case "message_end":
-				return isAssistant(event.message)
+			case "message_end": {
+				const role = roleOf(event.message);
+				if (role === "user") return { type: "round_start", at: timestampOf(event.message) };
+				return role === "assistant"
 					? { type: "assistant_message", text: textOf(event.message) }
 					: null;
+			}
 			case "tool_execution_start":
-				if (tools().has(event.toolName)) argsByCall.set(event.toolCallId, event.args);
+				if (tools().has(event.toolName))
+					argsByCall.set(callKey(sessionId, event.toolCallId), event.args);
 				return {
 					type: event.type,
 					toolCallId: event.toolCallId,
@@ -58,8 +70,9 @@ export function createArtifactEventMapper(tools: () => ArtifactTools) {
 					args: event.args,
 				};
 			case "tool_execution_end": {
-				const args = argsByCall.get(event.toolCallId);
-				argsByCall.delete(event.toolCallId);
+				const key = callKey(sessionId, event.toolCallId);
+				const args = argsByCall.get(key);
+				argsByCall.delete(key);
 				const end = { type: event.type, toolCallId: event.toolCallId, toolName: event.toolName };
 				const tool = event.isError ? undefined : tools().get(event.toolName);
 				if (!tool) return end;
