@@ -46,6 +46,10 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
     response is still pending": the host writes it on restart repair, and a tool returns it (with
     `terminate: true`) when `awaitToolResponse` resolves `deferred`. It is the one shape both sides read
     (`contracts`: `isToolResponsePending`); a tool must not use it for a real result.
+- **Artifact tools.** `ServerExtension.artifactTools?: Record<toolName, ArtifactTool>` tells the host which
+  files a successful call put in front of the person (`presented(args, details)`) and which of them the
+  person chose (`picked(args, details)`), as raw path strings the host resolves. The host feeds them to
+  its artifact index and never learns a tool's argument shape itself; a failed call counts for nothing.
 - `ToolRegistrationOptions.width` (`ToolWidth`) is `"column"` by default; `"content"` lets the chat grow
   the renderer's frame past its text column to the content's width, up to the pane, while the user fits
   chat to the pane. It is opt-in because only the extension knows its content reads better wide; the
@@ -98,7 +102,7 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
 - `./server` exposes `ServerExtension` and `defineServerExtension`, with pi `ExtensionFactory` types
   only. Descriptors carry `name` (the identity — the Settings on/off switch and `disabledExtensions` key
   on it), optional display copy `title` / `description` for the Settings catalog, `extensions`, optional
-  `sessionExtensions`, optional `interactiveTools`, optional `settings` (declared per-extension settings —
+  `sessionExtensions`, optional `interactiveTools`, optional `artifactTools`, optional `settings` (declared per-extension settings —
   today only `{ type: "boolean", default }`; the values live in the host's config keyed by extension name
   and the Settings copy is the app's locale keys), optional `childExtensions` and optional
   `skillPackages` specifiers. Its identity

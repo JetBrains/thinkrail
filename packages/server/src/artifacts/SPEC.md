@@ -22,7 +22,8 @@ client the same answer.
 ## Boundary
 
 - **Owns:** `<dataDir>/artifacts/<workspaceId>/` — `index.json` (artifact records + ignored-output records)
-  and `kept/<uuid>` — plus the in-memory per-workspace running set, explicit writers and run window.
+  and `kept/<uuid>` — plus the in-memory per-workspace running set, run starts, last replies, explicit
+  writers and run window.
 - **Public surface (barrel):** `listArtifacts`, `reconcileArtifacts`, `restoreArtifact`, `discardArtifact`,
   `withUserRemoval`, `prepareArtifactsDestination`, `observeArtifactSessionEvent`, `ArtifactSessionEvent`,
   `noteArtifactPathsChanged`, `setArtifactsPublisher`, `removeWorkspaceArtifacts`.
@@ -107,6 +108,39 @@ Any other change (a shell command, a tool writing on its own) is attributed only
 session of the workspace is running; otherwise the record keeps the chat it had. Like [[submodule-server-turns]]
 this is not exclusive attribution, and a session that never settles (a host crash) stays "running" until
 restart.
+
+**Run markers.** Each record keeps the agent runs that created or changed it (`runs`: `{ sessionId,
+startedAt }`, oldest first, at most 16). A run starts at the session's first `agent_start` and ends at its
+`agent_settled` (pi re-emits `agent_start` on retries; the first one counts). A marker is written only
+when the change is attributed to a running session — by a writer hint or as the only one running — so a
+restore, a user edit or a move adds none. The chat divider's "N artifacts" joins these markers with its
+round, which is why they live here and not in the turn receipts: those come from git, and the
+artifacts folder is ignored.
+
+## Roles
+
+Every listed artifact carries a **role**, `result` or `working`, and the **reason** for it, computed when
+the list is served (`roles.ts`, never stored, so a rule change needs no migration). One host answer
+serves the Smart view, the chat divider and any other consumer.
+
+1. **Signals first.** `picked` — the person chose it among a tool's previews. `shown` — a successful tool
+   call put it in front of them: the host maps the declarations extensions make through
+   `artifactTools` ([[submodule-server-extensions]]) into the `presented` / `picked` paths of a
+   `tool_execution_end` event. `linked` — the run's last assistant message names it (a markdown link,
+   a code span or a bare path; worktree-relative, artifacts-relative or absolute; only paths that are
+   live records count); the host passes each assistant message as `assistant_message` and the index
+   reads the last one at settle. Signals are stored on the record, survive a move and a re-created
+   path, and are recorded from now on — older artifacts have none (no backfill).
+2. **Path rules** for the rest, from the agent sessions of 16 real worktrees (2 877 files: these rules
+   marked 2 409 as working with 5 ever shown): a `_*` or dot folder or a helper folder name (`tools`,
+   `scripts`, `bin`, `build`, `data`, `extract`, `check`, `raw`, `src`, `js`, `css`, `fonts`, `images`,
+   `frames`, `previews`, `comments`, `batch_*`, `notes*`) → `working-folder`; a script extension →
+   `script`; a data extension or none → `data`; `.md`/`.html`/`.pdf`/`.svg` → a `document` result (it may
+   be a subagent's brief — the price of not missing notes the agent only named as a folder); anything
+   else never shown (images, mostly check renders) → `unshown`.
+
+No model classifies: on the data above the deterministic answer was good enough, and a model step would
+add cost and latency.
 
 ## Ignored outputs
 

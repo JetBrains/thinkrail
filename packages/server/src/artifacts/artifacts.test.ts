@@ -583,3 +583,82 @@ test("discarding a kept copy while its workspace is removed leaves no store behi
 	await discardArtifact("w1", `${CONTEXT}/a.md`);
 	expect(existsSync(join(artifactsStoreRoot(), "w1"))).toBe(false);
 });
+
+async function byPath(): Promise<
+	Map<string, Awaited<ReturnType<typeof listArtifacts>>["artifacts"][number]>
+> {
+	return new Map((await listArtifacts("w1")).artifacts.map((a) => [a.path, a]));
+}
+
+test("what a tool showed and what the user picked become results; working files stay working", async () => {
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
+	write(`${CONTEXT}/mockups/a.html`, "a");
+	write(`${CONTEXT}/mockups/b.html`, "b");
+	write(`${CONTEXT}/mockups/_scratch/a.png`, "png");
+	await observeArtifactSessionEvent("w1", "s1", {
+		type: "tool_execution_end",
+		toolCallId: "ask-1",
+		toolName: "ask_user_question",
+		presented: [`${CONTEXT}/mockups/a.html`, `${root}/${CONTEXT}/mockups/b.html`, "src/app.ts"],
+		picked: [`@${CONTEXT}/mockups/b.html`],
+	});
+	const rows = await byPath();
+	expect(rows.get(`${CONTEXT}/mockups/a.html`)).toMatchObject({ role: "result", reason: "shown" });
+	expect(rows.get(`${CONTEXT}/mockups/b.html`)).toMatchObject({ role: "result", reason: "picked" });
+	expect(rows.get(`${CONTEXT}/mockups/_scratch/a.png`)).toMatchObject({
+		role: "working",
+		reason: "working-folder",
+	});
+});
+
+test("paths linked in the run's last reply become results, not those of earlier messages", async () => {
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
+	write(`${CONTEXT}/reports/r.json`, "{}");
+	write(`${CONTEXT}/old.json`, "{}");
+	write(`${CONTEXT}/data.csv`, "a,b");
+	await observeArtifactSessionEvent("w1", "s1", {
+		type: "assistant_message",
+		text: "Working on `old.json` now.",
+	});
+	await observeArtifactSessionEvent("w1", "s1", {
+		type: "assistant_message",
+		text: "Done: [the report](reports/r.json) and `.thinkrail/context/data.csv`.",
+	});
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_settled" });
+	const rows = await byPath();
+	expect(rows.get(`${CONTEXT}/reports/r.json`)).toMatchObject({ role: "result", reason: "linked" });
+	expect(rows.get(`${CONTEXT}/data.csv`)).toMatchObject({ role: "result", reason: "linked" });
+	expect(rows.get(`${CONTEXT}/old.json`)).toMatchObject({ role: "working", reason: "data" });
+});
+
+test("each run that creates or changes a file leaves a marker, and markers and signals survive a restart and a move", async () => {
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
+	write(`${CONTEXT}/plan.md`, "v1");
+	await observeArtifactSessionEvent("w1", "s1", {
+		type: "tool_execution_end",
+		toolCallId: "show-1",
+		toolName: "visualize",
+		presented: [`${CONTEXT}/plan.md`],
+	});
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_settled" });
+	const first = (await byPath()).get(`${CONTEXT}/plan.md`)?.runs;
+	expect(first).toHaveLength(1);
+	expect(first?.[0]?.sessionId).toBe("s1");
+
+	await Bun.sleep(5);
+	await observeArtifactSessionEvent("w1", "s2", { type: "agent_start" });
+	write(`${CONTEXT}/plan.md`, "v2 is longer");
+	await observeArtifactSessionEvent("w1", "s2", { type: "agent_settled" });
+	write(`${CONTEXT}/by-user.md`, "no run");
+
+	resetArtifactsForTests();
+	mkdirSync(join(root, CONTEXT, "done"));
+	renameSync(join(root, CONTEXT, "plan.md"), join(root, CONTEXT, "done", "plan.md"));
+	const rows = await byPath();
+	const moved = rows.get(`${CONTEXT}/done/plan.md`);
+	expect(moved?.runs?.map((run) => run.sessionId)).toEqual(["s1", "s2"]);
+	expect(moved?.runs?.[0]?.startedAt).toBeLessThan(moved?.runs?.[1]?.startedAt ?? 0);
+	expect(moved).toMatchObject({ role: "result", reason: "shown" });
+	expect(rows.get(`${CONTEXT}/by-user.md`)?.runs).toBeUndefined();
+});

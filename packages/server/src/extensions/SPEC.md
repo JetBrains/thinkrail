@@ -68,14 +68,16 @@ list for registry extensions.
   `checkWorkspaceFile`, `workspaceFiles`, `MOCKUP_DIR`,
   `listExtensionCatalog`,
   `resolveExtensionSkillRoots`, `STAGED_HOST_SKILLS_ROUTE`, `stagedExtensionSkillRoute`,
-  `extensionSkillRoots`, `interactiveTools`, `InteractiveTools`, `ExtensionSessionServices`,
-  `InteractiveTool`, `ToolResponse`.
+  `extensionSkillRoots`, `interactiveTools`, `InteractiveTools`, `artifactTools`, `ArtifactTools`,
+  `ExtensionSessionServices`, `InteractiveTool`, `ArtifactTool`, `ToolResponse`.
 - **Session-seam types:** `ExtensionSessionServices`, `InteractiveTool` and `ToolResponse` are re-exported
   from `extension-api/server` so that `agent` can type the services it builds through this barrel.
 - **Interactive tools (`interactive.ts`):** `interactiveTools(isDisabled)` folds the enabled registry
   extensions' `interactiveTools` declarations into one name → `InteractiveTool` map (first declaration of a
   name wins). It is the only tool knowledge `agent` holds for restart repair, transcript-derived
-  needs-input and late-response wording; nothing in `packages/server` names an extension's tool or imports an
+  needs-input and late-response wording. **Artifact tools (`artifactTools.ts`)** fold the enabled
+  extensions' `artifactTools` the same way; `host` maps a successful call's declared paths into the
+  artifact index's session events (`host/artifactEvents.ts`), so it too names no tool; nothing in `packages/server` names an extension's tool or imports an
   extension outside `registry.ts`. The one tool name the host knows is `web_search`, in `agent`'s
   headless-search policy: it compensates for the host's UI for any copy of `pi-web-access`, so it is not
   the extension's to own.

@@ -58,7 +58,9 @@ result's markdown to `<artifactsDir>visualize/<YYYYMMDD-HHMMSS>-<slug>.md`
 type) with an exclusive create and a `-2`, `-3`, … suffix on collision, so an earlier visualization is never
 overwritten. The markdown renderer draws its ```` ```mermaid ```` fences, so the Artifacts tool opens it as
 the diagram the chat showed. Without an `artifactsDir` (the Settings catalog's inert session) nothing is
-saved.
+saved. The descriptor also declares `artifactTools: { visualize: { presented: visualizedPaths } }`, so the
+host's artifact index marks the shown file, its `before`, and the saved copy as results the agent
+presented ([[submodule-server-artifacts]]).
 
 The host composes this descriptor from the server registry ([[submodule-server-extensions]]); a strict
 validation call through that composition is pinned in `packages/server` (dev) and in the artifact probes

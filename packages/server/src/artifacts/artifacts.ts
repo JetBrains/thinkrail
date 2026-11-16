@@ -16,6 +16,7 @@ import {
 } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type {
+	ArtifactRun,
 	Workspace,
 	WorkspaceArtifact,
 	WorkspaceArtifactsSnapshot,
@@ -38,6 +39,7 @@ import {
 	type OutputKind,
 	outputChangedSince,
 } from "./outputs";
+import { artifactRole, type Presented, replyPathCandidates } from "./roles";
 
 const log = logger("artifacts");
 
@@ -58,6 +60,7 @@ const BUILD_DIRS: ReadonlySet<string> = new Set([
 ]);
 const LINK_UNSUPPORTED = new Set<unknown>(["EXDEV", "EPERM", "EMLINK", "ENOTSUP", "EOPNOTSUPP"]);
 const WRITER_TOOLS = new Set(["write", "edit", "spec_create"]);
+const MAX_RUNS = 16;
 
 interface ArtifactRecord {
 	path: string;
@@ -71,6 +74,9 @@ interface ArtifactRecord {
 	sessionId?: string;
 	kept?: string;
 	keptCopy?: true;
+	presented?: Presented;
+	picked?: true;
+	runs?: ArtifactRun[];
 }
 
 interface OutputRecord {
@@ -105,13 +111,22 @@ interface RunWindow {
 export type ArtifactSessionEvent =
 	| { type: "agent_start" }
 	| { type: "agent_settled" }
+	| { type: "assistant_message"; text: string }
 	| { type: "tool_execution_start"; toolCallId: string; toolName: string; args: unknown }
-	| { type: "tool_execution_end"; toolCallId: string; toolName: string };
+	| {
+			type: "tool_execution_end";
+			toolCallId: string;
+			toolName: string;
+			presented?: readonly string[];
+			picked?: readonly string[];
+	  };
 
 const states = new Map<string, WorkspaceArtifacts>();
 const running = new Map<string, Set<string>>();
 const writers = new Map<string, Map<string, { sessionId: string; toolCallId: string }>>();
 const windows = new Map<string, RunWindow>();
+const runStarts = new Map<string, Map<string, number>>();
+const replies = new Map<string, Map<string, string>>();
 const removals = new Map<string, Map<string, number>>();
 const generations = new Map<string, number>();
 let publisher: ((workspaceId: string) => void) | null = null;
@@ -178,7 +193,24 @@ function parseArtifact(value: unknown): ArtifactRecord | null {
 		...(sessionId ? { sessionId } : {}),
 		...(kept ? { kept } : {}),
 		...(value.keptCopy === true ? { keptCopy: true as const } : {}),
+		...(value.presented === "shown" || value.presented === "linked"
+			? { presented: value.presented }
+			: {}),
+		...(value.picked === true ? { picked: true as const } : {}),
+		...parseRuns(value.runs),
 	};
+}
+
+function parseRuns(value: unknown): { runs?: ArtifactRun[] } {
+	if (!Array.isArray(value)) return {};
+	const runs = value
+		.filter(
+			(run): run is ArtifactRun =>
+				isObject(run) && typeof run.sessionId === "string" && typeof run.startedAt === "number",
+		)
+		.map(({ sessionId, startedAt }) => ({ sessionId, startedAt }))
+		.slice(-MAX_RUNS);
+	return runs.length ? { runs } : {};
 }
 
 function parseOutput(value: unknown): OutputRecord | null {
@@ -419,6 +451,16 @@ function applyStat(record: ArtifactRecord, file: ScannedFile): void {
 	record.changedAt = Math.round(file.mtimeMs);
 }
 
+function noteRun(workspaceId: string, record: ArtifactRecord, sessionId: string | undefined): void {
+	if (!sessionId) return;
+	const startedAt = runStarts.get(workspaceId)?.get(sessionId);
+	if (startedAt === undefined) return;
+	const runs = record.runs ?? [];
+	const last = runs.at(-1);
+	if (last?.sessionId === sessionId && last.startedAt === startedAt) return;
+	record.runs = [...runs, { sessionId, startedAt }].slice(-MAX_RUNS);
+}
+
 function reconcile(workspace: Workspace): boolean {
 	const workspaceId = workspace.id;
 	const root = workspace.worktreePath;
@@ -441,6 +483,7 @@ function reconcile(workspace: Workspace): boolean {
 		applyStat(record, file);
 		const writer = writerOf(workspaceId, record.path);
 		if (writer) record.sessionId = writer;
+		noteRun(workspaceId, record, writer);
 		if (relinked || record.keptCopy || !record.kept) keep(workspaceId, root, record);
 		changed = true;
 	}
@@ -489,9 +532,14 @@ function reconcile(workspace: Workspace): boolean {
 			mtimeMs: file.mtimeMs,
 			changedAt: Math.round(file.mtimeMs),
 			firstSeenAt: prior?.firstSeenAt ?? Date.now(),
+			...(prior?.presented ? { presented: prior.presented } : {}),
+			...(prior?.picked ? { picked: prior.picked } : {}),
+			...(prior?.runs ? { runs: prior.runs } : {}),
 		};
-		const writer = writerOf(workspaceId, file.path) ?? prior?.sessionId;
+		const runWriter = writerOf(workspaceId, file.path);
+		const writer = runWriter ?? prior?.sessionId;
 		if (writer) record.sessionId = writer;
+		noteRun(workspaceId, record, runWriter);
 		keep(workspaceId, root, record);
 		state.records.set(file.path, record);
 		changed = true;
@@ -560,6 +608,7 @@ export async function withUserRemoval<T>(
 }
 
 function toWire(record: ArtifactRecord): WorkspaceArtifact {
+	const { role, reason } = artifactRole(record.path.slice(CONTEXT_PREFIX.length), record);
 	return {
 		path: record.path,
 		state: record.state,
@@ -567,6 +616,9 @@ function toWire(record: ArtifactRecord): WorkspaceArtifact {
 		changedAt: record.changedAt,
 		firstSeenAt: record.firstSeenAt,
 		...(record.sessionId ? { sessionId: record.sessionId } : {}),
+		role,
+		reason,
+		...(record.runs ? { runs: record.runs } : {}),
 	};
 }
 
@@ -770,20 +822,24 @@ function toolPath(args: unknown): string | null {
 	return typeof path === "string" && path ? path : null;
 }
 
+function artifactPathOf(workspace: Workspace, raw: string | null): string | null {
+	const path = raw?.startsWith("@") ? raw.slice(1) : raw;
+	if (!path) return null;
+	const root = resolve(workspace.worktreePath);
+	const abs = resolve(root, path);
+	if (!isInside(root, abs)) return null;
+	const rel = relative(root, abs).split(sep).join("/");
+	return isArtifactPath(rel) ? rel : null;
+}
+
 function rememberWriter(
 	workspace: Workspace,
 	sessionId: string,
 	toolCallId: string,
 	args: unknown,
 ): void {
-	const raw = toolPath(args);
-	const path = raw?.startsWith("@") ? raw.slice(1) : raw;
-	if (!path) return;
-	const root = resolve(workspace.worktreePath);
-	const abs = resolve(root, path);
-	if (!isInside(root, abs)) return;
-	const rel = relative(root, abs).split(sep).join("/");
-	if (!isArtifactPath(rel)) return;
+	const rel = artifactPathOf(workspace, toolPath(args));
+	if (!rel) return;
 	let map = writers.get(workspace.id);
 	if (!map) {
 		map = new Map();
@@ -825,6 +881,72 @@ function openWindow(workspace: Workspace, sessionId: string): void {
 	});
 }
 
+function markRecords(
+	workspace: Workspace,
+	paths: Iterable<string>,
+	mark: (record: ArtifactRecord) => boolean,
+): boolean {
+	const records = load(workspace.id).records;
+	let changed = false;
+	for (const path of paths) {
+		const record = records.get(path);
+		if (record?.state === "live" && mark(record)) changed = true;
+	}
+	return changed;
+}
+
+function toolArtifactPaths(workspace: Workspace, raw: readonly string[] | undefined): string[] {
+	return (raw ?? []).flatMap((path) => artifactPathOf(workspace, path) ?? []);
+}
+
+function replyArtifactPaths(workspace: Workspace, text: string): string[] {
+	const paths = new Set<string>();
+	for (const candidate of replyPathCandidates(text)) {
+		const direct = artifactPathOf(workspace, candidate);
+		if (direct) paths.add(direct);
+		if (!isAbsolute(candidate) && !candidate.startsWith(CONTEXT_PREFIX))
+			paths.add(`${CONTEXT_PREFIX}${candidate}`);
+	}
+	return [...paths];
+}
+
+const markShown = (record: ArtifactRecord) => {
+	if (record.presented === "shown") return false;
+	record.presented = "shown";
+	return true;
+};
+
+const markLinked = (record: ArtifactRecord) => {
+	if (record.presented) return false;
+	record.presented = "linked";
+	return true;
+};
+
+const markPicked = (record: ArtifactRecord) => {
+	if (record.picked) return false;
+	record.picked = true;
+	return true;
+};
+
+function sessionMap<T>(maps: Map<string, Map<string, T>>, workspaceId: string): Map<string, T> {
+	let map = maps.get(workspaceId);
+	if (!map) {
+		map = new Map();
+		maps.set(workspaceId, map);
+	}
+	return map;
+}
+
+function forgetSession<T>(
+	maps: Map<string, Map<string, T>>,
+	workspaceId: string,
+	sessionId: string,
+): void {
+	const map = maps.get(workspaceId);
+	map?.delete(sessionId);
+	if (map?.size === 0) maps.delete(workspaceId);
+}
+
 export async function observeArtifactSessionEvent(
 	workspaceId: string,
 	sessionId: string,
@@ -839,24 +961,48 @@ export async function observeArtifactSessionEvent(
 				active = new Set();
 				running.set(workspaceId, active);
 			}
+			if (!active.has(sessionId)) {
+				sessionMap(runStarts, workspaceId).set(sessionId, Date.now());
+				forgetSession(replies, workspaceId, sessionId);
+			}
 			active.add(sessionId);
 			openWindow(workspace, sessionId);
 			if (reconcile(workspace)) publish(workspaceId);
 			return;
 		}
+		case "assistant_message":
+			if (event.text.trim()) sessionMap(replies, workspaceId).set(sessionId, event.text);
+			return;
 		case "tool_execution_start":
 			if (WRITER_TOOLS.has(event.toolName))
 				rememberWriter(workspace, sessionId, event.toolCallId, event.args);
 			return;
 		case "tool_execution_end": {
-			const changed = reconcile(workspace);
+			let changed = reconcile(workspace);
 			forgetToolWriter(workspaceId, event.toolCallId);
+			const shown = markRecords(
+				workspace,
+				toolArtifactPaths(workspace, event.presented),
+				markShown,
+			);
+			const picked = markRecords(workspace, toolArtifactPaths(workspace, event.picked), markPicked);
+			if (shown || picked) {
+				save(workspaceId, load(workspaceId));
+				changed = true;
+			}
 			if (changed) publish(workspaceId);
 			return;
 		}
 		case "agent_settled": {
 			let changed = reconcile(workspace);
 			forgetWriters(workspaceId, sessionId);
+			const reply = replies.get(workspaceId)?.get(sessionId);
+			forgetSession(replies, workspaceId, sessionId);
+			forgetSession(runStarts, workspaceId, sessionId);
+			if (reply && markRecords(workspace, replyArtifactPaths(workspace, reply), markLinked)) {
+				save(workspaceId, load(workspaceId));
+				changed = true;
+			}
 			const active = running.get(workspaceId);
 			active?.delete(sessionId);
 			if (active?.size === 0) {
@@ -878,6 +1024,8 @@ export function removeWorkspaceArtifacts(workspaceId: string): void {
 	running.delete(workspaceId);
 	writers.delete(workspaceId);
 	windows.delete(workspaceId);
+	runStarts.delete(workspaceId);
+	replies.delete(workspaceId);
 	removals.delete(workspaceId);
 	const dir = storeDir(workspaceId);
 	if (dir) removeQuietly(dir);
@@ -892,6 +1040,8 @@ export function resetArtifactsForTests(): void {
 	running.clear();
 	writers.clear();
 	windows.clear();
+	runStarts.clear();
+	replies.clear();
 	removals.clear();
 	generations.clear();
 	publisher = null;
