@@ -961,17 +961,19 @@ export async function observeArtifactSessionEvent(
 				active = new Set();
 				running.set(workspaceId, active);
 			}
-			if (!active.has(sessionId)) {
-				sessionMap(runStarts, workspaceId).set(sessionId, Date.now());
-				forgetSession(replies, workspaceId, sessionId);
-			}
+			const fresh = !active.has(sessionId);
+			const startedAt = Date.now();
+			if (fresh) forgetSession(replies, workspaceId, sessionId);
 			active.add(sessionId);
 			openWindow(workspace, sessionId);
-			if (reconcile(workspace)) publish(workspaceId);
+			const changed = reconcile(workspace);
+			if (fresh) sessionMap(runStarts, workspaceId).set(sessionId, startedAt);
+			if (changed) publish(workspaceId);
 			return;
 		}
 		case "assistant_message":
 			if (event.text.trim()) sessionMap(replies, workspaceId).set(sessionId, event.text);
+			else forgetSession(replies, workspaceId, sessionId);
 			return;
 		case "tool_execution_start":
 			if (WRITER_TOOLS.has(event.toolName))

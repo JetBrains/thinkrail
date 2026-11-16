@@ -9,9 +9,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function isAssistant(message: unknown): boolean {
+	return isRecord(message) && message.role === "assistant";
+}
+
 function textOf(message: unknown): string {
-	if (!isRecord(message) || message.role !== "assistant" || !Array.isArray(message.content))
-		return "";
+	if (!isRecord(message) || !Array.isArray(message.content)) return "";
 	return message.content
 		.flatMap((block: unknown) =>
 			isRecord(block) && block.type === "text" && typeof block.text === "string"
@@ -42,10 +45,10 @@ export function createArtifactEventMapper(tools: () => ArtifactTools) {
 				return { type: event.type };
 			case "agent_settled":
 				return { type: event.type };
-			case "message_end": {
-				const text = textOf(event.message);
-				return text ? { type: "assistant_message", text } : null;
-			}
+			case "message_end":
+				return isAssistant(event.message)
+					? { type: "assistant_message", text: textOf(event.message) }
+					: null;
 			case "tool_execution_start":
 				if (tools().has(event.toolName)) argsByCall.set(event.toolCallId, event.args);
 				return {

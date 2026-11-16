@@ -112,8 +112,11 @@ restart.
 **Run markers.** Each record keeps the agent runs that created or changed it (`runs`: `{ sessionId,
 startedAt }`, oldest first, at most 16). A run starts at the session's first `agent_start` and ends at its
 `agent_settled` (pi re-emits `agent_start` on retries; the first one counts). A marker is written only
-when the change is attributed to a running session — by a writer hint or as the only one running — so a
-restore, a user edit or a move adds none. The chat divider's "N artifacts" joins these markers with its
+when the change is attributed to a running session — by a writer hint or as the only one running — and
+seen after the run started: the reconcile at `agent_start` runs before the run is registered, so a change
+waiting from before the run (an edit the watcher had not reported yet) gets none, and neither do a restore
+or a move. A user's own edit made *while* exactly one session runs is indistinguishable from the agent's
+and does get that run's marker. The chat divider's "N artifacts" joins these markers with its
 round, which is why they live here and not in the turn receipts: those come from git, and the
 artifacts folder is ignored.
 
@@ -126,7 +129,8 @@ serves the Smart view, the chat divider and any other consumer.
 1. **Signals first.** `picked` — the person chose it among a tool's previews. `shown` — a successful tool
    call put it in front of them: the host maps the declarations extensions make through
    `artifactTools` ([[submodule-server-extensions]]) into the `presented` / `picked` paths of a
-   `tool_execution_end` event. `linked` — the run's last assistant message names it (a markdown link,
+   `tool_execution_end` event. `linked` — the run's last assistant message names it (a message without
+text, a tool-call-only turn or a stop, clears the earlier one) (a markdown link,
    a code span or a bare path; worktree-relative, artifacts-relative or absolute; only paths that are
    live records count); the host passes each assistant message as `assistant_message` and the index
    reads the last one at settle. Signals are stored on the record, survive a move and a re-created

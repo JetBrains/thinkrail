@@ -108,6 +108,12 @@ test("an assistant message hands its text over; other messages and events are no
 		} as never),
 	).toEqual({ type: "assistant_message", text: "See `a.md`\nand b.md" });
 	expect(
+		map({
+			type: "message_end",
+			message: { role: "assistant", content: [{ type: "toolCall", id: "c", name: "bash" }] },
+		} as never),
+	).toEqual({ type: "assistant_message", text: "" });
+	expect(
 		map({ type: "message_end", message: { role: "user", content: "hi", timestamp: 1 } } as never),
 	).toBeNull();
 	expect(map({ type: "agent_start" })).toEqual({ type: "agent_start" });

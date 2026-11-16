@@ -625,10 +625,29 @@ test("paths linked in the run's last reply become results, not those of earlier 
 		text: "Done: [the report](reports/r.json) and `.thinkrail/context/data.csv`.",
 	});
 	await observeArtifactSessionEvent("w1", "s1", { type: "agent_settled" });
+	await observeArtifactSessionEvent("w1", "s2", { type: "agent_start" });
+	write(`${CONTEXT}/helper.json`, "{}");
+	await observeArtifactSessionEvent("w1", "s2", {
+		type: "assistant_message",
+		text: "Let me write `helper.json` first.",
+	});
+	await observeArtifactSessionEvent("w1", "s2", { type: "assistant_message", text: "" });
+	await observeArtifactSessionEvent("w1", "s2", { type: "agent_settled" });
 	const rows = await byPath();
 	expect(rows.get(`${CONTEXT}/reports/r.json`)).toMatchObject({ role: "result", reason: "linked" });
 	expect(rows.get(`${CONTEXT}/data.csv`)).toMatchObject({ role: "result", reason: "linked" });
 	expect(rows.get(`${CONTEXT}/old.json`)).toMatchObject({ role: "working", reason: "data" });
+	expect(rows.get(`${CONTEXT}/helper.json`)).toMatchObject({ role: "working", reason: "data" });
+});
+
+test("a change waiting from before a run gets no marker of that run", async () => {
+	write(`${CONTEXT}/edited-earlier.md`, "by the user");
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
+	write(`${CONTEXT}/by-the-run.md`, "by the run");
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_settled" });
+	const rows = await byPath();
+	expect(rows.get(`${CONTEXT}/edited-earlier.md`)?.runs).toBeUndefined();
+	expect(rows.get(`${CONTEXT}/by-the-run.md`)?.runs).toHaveLength(1);
 });
 
 test("each run that creates or changes a file leaves a marker, and markers and signals survive a restart and a move", async () => {
