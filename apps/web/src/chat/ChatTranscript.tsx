@@ -30,6 +30,7 @@ import {
 	selectReadyCompletionAck,
 	selectWorkspaceById,
 	specPathMatcher,
+	supportsArtifactRoles,
 	toast,
 	useAppStore,
 } from "@/store";
@@ -59,6 +60,7 @@ import {
 	projectRows,
 	rowIndexForTurn,
 	rowsHaveToolCall,
+	sessionRoundArtifacts,
 	stabilizeRows,
 } from "./rows";
 import { type StreamStatus, StreamStatusSlot, streamStatus } from "./StreamIndicator";
@@ -66,7 +68,7 @@ import { TranscriptItem, TranscriptNavigationContext } from "./TranscriptItem";
 import { useToolInteraction } from "./toolInteraction";
 import { getToolRenderer } from "./toolRegistry";
 import { newestContentRowId } from "./transcriptNavigation";
-import { ChatTurnView } from "./turns";
+import { ChatTurnView, type DividerReveal } from "./turns";
 import { type ChatReadingPosition, useChatScroll } from "./useChatScroll";
 import { useTranscriptNavigation } from "./useTranscriptNavigation";
 import { useTranscriptSync } from "./useTranscriptSync";
@@ -300,9 +302,26 @@ const ChatTranscript = forwardRef<
 		() => workspaceTurns?.filter((turn) => turn.sessionId === sessionId) ?? NO_AGENT_TURNS,
 		[sessionId, workspaceTurns],
 	);
+	const artifactsSnapshot = useAppStore((state) => state.artifactsByWorkspace[workspaceId]);
+	const smartArtifacts = useAppStore(
+		(state) => state.artifactsSmart && supportsArtifactRoles(state.protocolVersion),
+	);
+	const roundArtifacts = useMemo(
+		() => sessionRoundArtifacts(artifactsSnapshot, sessionId, smartArtifacts),
+		[artifactsSnapshot, sessionId, smartArtifacts],
+	);
 	const derivedRows = useMemo(
-		() => deriveRows(turns, toolResults, isStreaming, isSpec, agentTurns, workspaceRoot),
-		[turns, toolResults, isStreaming, isSpec, agentTurns, workspaceRoot],
+		() =>
+			deriveRows(
+				turns,
+				toolResults,
+				isStreaming,
+				isSpec,
+				agentTurns,
+				workspaceRoot,
+				roundArtifacts,
+			),
+		[turns, toolResults, isStreaming, isSpec, agentTurns, workspaceRoot, roundArtifacts],
 	);
 	// Keep the stabilized rows in state (never a ref written during render): a render-written ref both
 	// violates apps/web/SPEC.md and makes the React Compiler skip memoizing this component.
@@ -594,7 +613,7 @@ const ChatTranscript = forwardRef<
 		[workspaceId],
 	);
 	const onReveal = useCallback(
-		(tool: "specs" | "changes") => {
+		(tool: DividerReveal) => {
 			const store = useAppStore.getState();
 			if (tool === "changes") store.revealChanges(workspaceId);
 			else store.requestToolView(workspaceId, tool);

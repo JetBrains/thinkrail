@@ -10,6 +10,7 @@ import {
 	type SubagentCompletionDetails,
 	type TurnChangeSet,
 	type WireUserMessage,
+	type WorkspaceArtifactsSnapshot,
 } from "@thinkrail/contracts";
 import { strArg } from "@thinkrail/extension-api/web";
 import { projectRelativePath } from "../lib";
@@ -152,6 +153,34 @@ function roundStartMs(turn: ChatTurn): number | null {
 	return typeof at === "number" && Number.isFinite(at) ? at : null;
 }
 
+export interface DividerArtifact {
+	path: string;
+	label: string;
+}
+
+export interface RoundArtifact extends DividerArtifact {
+	runs: readonly number[];
+}
+
+export function sessionRoundArtifacts(
+	snapshot: WorkspaceArtifactsSnapshot | undefined,
+	sessionId: string,
+	resultsOnly: boolean,
+): RoundArtifact[] {
+	if (!snapshot) return [];
+	const prefix = `${snapshot.dir}/`;
+	return snapshot.artifacts.flatMap((artifact) => {
+		if (artifact.state !== "live" || (resultsOnly && artifact.role !== "result")) return [];
+		const runs = (artifact.runs ?? [])
+			.filter((run) => run.sessionId === sessionId)
+			.map((run) => run.startedAt);
+		const label = artifact.path.startsWith(prefix)
+			? artifact.path.slice(prefix.length)
+			: artifact.path;
+		return runs.length ? [{ path: artifact.path, label, runs }] : [];
+	});
+}
+
 export function deriveRows(
 	turns: ChatTurn[],
 	toolResults: Record<string, ToolResultState>,
@@ -159,6 +188,7 @@ export function deriveRows(
 	isSpec?: (path: string) => boolean,
 	agentTurns: readonly TurnChangeSet[] = [],
 	workspaceRoot?: string,
+	roundArtifacts: readonly RoundArtifact[] = [],
 ): ChatRow[] {
 	const rows: ChatRow[] = [];
 	let run: ActivityStep[] = [];
@@ -285,7 +315,7 @@ export function deriveRows(
 		const roundEnded = !opensRound(turn) && (next ? opensRound(next) : !isStreaming);
 		if (roundEnded) {
 			flushRun();
-			const data = turnDivider(turns, i, isSpec, agentTurns, workspaceRoot);
+			const data = turnDivider(turns, i, isSpec, agentTurns, workspaceRoot, roundArtifacts);
 			if (data) rows.push({ kind: "divider", id: `${turn.id}:divider`, data });
 		}
 	}
@@ -304,6 +334,7 @@ export interface TurnDividerData {
 	toolCount: number;
 	specs: string[];
 	changedFiles: string[];
+	artifacts: DividerArtifact[];
 	receipt: TurnReceipt | null;
 }
 
@@ -343,6 +374,7 @@ export function turnDivider(
 	isSpec: (path: string) => boolean = () => false,
 	agentTurns: readonly TurnChangeSet[] = [],
 	workspaceRoot?: string,
+	roundArtifacts: readonly RoundArtifact[] = [],
 ): TurnDividerData | null {
 	let openerIdx = -1;
 	for (let i = endIndex; i >= 0; i--) {
@@ -401,8 +433,22 @@ export function turnDivider(
 		toolCount,
 		specs,
 		changedFiles,
+		artifacts: artifactsInRound(roundArtifacts, startMs, nextStartMs),
 		receipt,
 	};
+}
+
+function artifactsInRound(
+	roundArtifacts: readonly RoundArtifact[],
+	startMs: number | null,
+	nextStartMs: number | null,
+): DividerArtifact[] {
+	if (startMs === null) return [];
+	const inRound = (at: number) => at >= startMs && (nextStartMs === null || at < nextStartMs);
+	return roundArtifacts
+		.filter((artifact) => artifact.runs.some(inRound))
+		.map(({ path, label }) => ({ path, label }))
+		.sort((a, b) => a.label.localeCompare(b.label));
 }
 
 function roundOutcome(

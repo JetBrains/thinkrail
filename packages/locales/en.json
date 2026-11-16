@@ -173,6 +173,8 @@
 	"chat.composer.steer": "Steer",
 	"chat.composer.stop": "Stop",
 	"chat.copyMessage": "Copy message",
+	"chat.divider.artifacts_one": "{{count}} artifact",
+	"chat.divider.artifacts_other": "{{count}} artifacts",
 	"chat.divider.done": "Done",
 	"chat.divider.doneIn": "Done in {{elapsed}}",
 	"chat.divider.errorAfter": "Error after {{elapsed}}",

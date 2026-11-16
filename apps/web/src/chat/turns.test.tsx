@@ -50,6 +50,7 @@ function footerHtml(data: Partial<TurnDividerData>): string {
 			toolCount: 0,
 			specs: [],
 			changedFiles: [],
+			artifacts: [],
 			receipt: null,
 			...data,
 		},
@@ -63,6 +64,18 @@ function footerText(data: Partial<TurnDividerData>): string {
 }
 
 describe("round footer", () => {
+	test("lists the round's artifacts by their name inside the artifacts folder", () => {
+		const html = footerHtml({
+			artifacts: [
+				{ path: ".thinkrail/context/mockups/a.html", label: "mockups/a.html" },
+				{ path: ".thinkrail/context/report.md", label: "report.md" },
+			],
+		});
+		expect(html).toContain('data-testid="turn-divider-artifacts"');
+		expect(html).toContain("2 artifacts");
+		expect(footerHtml({ artifacts: [] })).not.toContain("turn-divider-artifacts");
+	});
+
 	test("puts the outcome and elapsed time first on the one footer line", () => {
 		expect(footerText({ outcome: "done", elapsedMs: 42_000, toolCount: 5 })).toBe("Done in 42s");
 		expect(footerHtml({ outcome: "done", elapsedMs: 42_000, toolCount: 5 })).toContain(

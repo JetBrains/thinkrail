@@ -21,6 +21,9 @@ test("an agent's output stays in the workspace: a temp-folder write lands in art
 	await waitForAgentSettled(page, 210_000);
 
 	expect(existsSync(join(OUTSIDE, "summary.md"))).toBe(false);
+	await expect(page.getByTestId("turn-divider-artifacts")).toHaveText("1 artifact", {
+		timeout: 15_000,
+	});
 	await revealWorkbenchTool(page, "artifacts");
 	await page.getByTestId("artifacts-view-list").click();
 	const summary = page.locator(
