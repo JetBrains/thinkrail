@@ -112,6 +112,30 @@ describe("extractSession", () => {
 		expect(extractSession(cleared)?.title).toBeUndefined();
 	});
 
+	test("strips terminal escapes from the latest session name without the write cap", () => {
+		const named = [
+			header(),
+			line({ type: "session_info", id: "i0", parentId: null, name: "\u001b[31mred\u001b[0m name" }),
+		].join("\n");
+		expect(extractSession(named)?.title).toBe("red name");
+
+		const visible = "x".repeat(100);
+		const raw = `\u001b[31m${visible}\u001b[0m`;
+		const long = [
+			header(),
+			line({ type: "session_info", id: "i0", parentId: null, name: raw }),
+		].join("\n");
+		expect(raw.length).toBeGreaterThan(80);
+		expect(extractSession(long)?.title).toBe(visible);
+
+		const onlyEscapes = [
+			header(),
+			line({ type: "session_info", id: "i0", parentId: null, name: "Named" }),
+			line({ type: "session_info", id: "i1", parentId: "i0", name: "\u001b[31m\u001b[0m" }),
+		].join("\n");
+		expect(extractSession(onlyEscapes)?.title).toBeUndefined();
+	});
+
 	test("rejects a file whose first parseable entry is not a session header (pi's own rule)", () => {
 		expect(
 			extractSession(

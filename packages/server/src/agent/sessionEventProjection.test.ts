@@ -82,6 +82,25 @@ test("tool results without structuredContent pass through by identity", () => {
 	expect(projected.type === "tool_execution_end" && projected.result).toBe(result);
 });
 
+test("session_info_changed drops terminal escapes and keeps a visible title past the write cap", () => {
+	const visible = "x".repeat(100);
+	const raw = `\u001b[31m${visible}\u001b[0m`;
+	expect(raw.length).toBeGreaterThan(80);
+	expect(
+		projectSessionEvent({ type: "session_info_changed", name: raw }, null, "session-1"),
+	).toEqual({ type: "session_info_changed", name: visible });
+	expect(
+		projectSessionEvent(
+			{ type: "session_info_changed", name: "\u001b[31mred\u001b[0m name" },
+			null,
+			"session-1",
+		),
+	).toEqual({ type: "session_info_changed", name: "red name" });
+	expect(
+		projectSessionEvent({ type: "session_info_changed", name: undefined }, null, "session-1"),
+	).toEqual({ type: "session_info_changed", name: undefined });
+});
+
 test("entry_appended carries only the appended entry's type", () => {
 	const projected = projectSessionEvent(
 		{

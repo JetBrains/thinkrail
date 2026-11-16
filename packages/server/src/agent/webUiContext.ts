@@ -5,8 +5,8 @@ import type {
 	ExtensionUIDialogOptions,
 } from "@earendil-works/pi-coding-agent";
 import type { ExtUiRequest, ExtUiResponse, ProviderWarning } from "@thinkrail/contracts";
+import { plainText, stripAnsi } from "@thinkrail/shared/stripAnsi";
 import { plainTextTheme } from "./plainTextTheme";
-import { plainText, stripAnsi } from "./stripAnsi";
 
 /** Clients whose protocol version is below `belowProtocol`; absent means every client. */
 export interface ExtUiAudience {
