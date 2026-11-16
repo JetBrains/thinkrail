@@ -2764,7 +2764,7 @@ export async function disableSessionServerFallback(sessionId: string): Promise<W
 		throw new CodedError("SERVER_FALLBACK_NOT_USED", "The chat's model sends no fallbacks");
 	const current = await getPiRuntimeGeneration();
 	await disableProviderFallback(model.provider, [current.runtime, entry.generation.runtime]);
-	if (sessions.get(sessionId) !== entry) throw new Error(`Unknown session: ${sessionId}`);
+	if (mustGetEntry(sessionId) !== entry) throw new Error(`Unknown session: ${sessionId}`);
 	const live = entry.session.model ?? model;
 	if (live.provider !== model.provider) return sessionWireModel(live, entry.generation);
 	const resolved = resolveWireModel(entry.generation.runtime, live);
