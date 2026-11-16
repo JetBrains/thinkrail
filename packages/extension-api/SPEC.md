@@ -18,8 +18,8 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
 
 - `./web` exposes `ToolStatus`, `ToolRenderProps`, `ToolRenderer`, `ToolSummary`, `ToolChrome`,
   `ToolProminence`, `ToolWidth`, `ToolRegistrationOptions`, `ToolInteraction`, `ToolInteractionState`,
-  `ToolPlacement`, `WebExtension`, `defineWebExtension`, and the pure argument/result readers from
-  `toolHelpers` and `toolResultContent`.
+  `ToolPlacement`, `WebExtension`, `GlobalOverlayProps`, `ExtensionShortcut`, `ExtensionShortcutKey`,
+  `defineWebExtension`, and the pure argument/result readers from `toolHelpers` and `toolResultContent`.
 - **Images are references.** `parseToolResultContent(result).images` returns `contracts`' `WireImage`s,
   in block order.
   - A host reference (`ref` plus optional `width`/`height`) is accepted when its `ref` lies under
@@ -71,9 +71,17 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   `respond` are the stable contract; the focus/layout members and `placement` are the chat's own services handed
   through and may change with the chat (a renderer must tolerate their absence). Its DOM-typed members
   are the reason the package's `lib` includes `DOM`; the package still never touches the DOM.
-- `WebExtension` is `{ name, toolRenderers }`, with each tool-name entry carrying a `renderer` and
-  optional `ToolRegistrationOptions` under `options`. `defineWebExtension` is a typed identity helper:
-  it preserves the descriptor and its inferred tool keys without registration or default injection.
+- `WebExtension` is `{ name, title?, description?, toolRenderers?, globalOverlay?, shortcuts? }`. Each
+  tool-name entry carries a `renderer` and optional `ToolRegistrationOptions` under `options`;
+  `toolRenderers` is optional because a web-only extension renders no tool. `title` / `description` are
+  `MessageKey`s for the Settings row of an extension the server catalog lacks. `globalOverlay` is a
+  `ComponentType<GlobalOverlayProps>` the host mounts once while the extension is enabled; its props are the
+  host helpers an extension cannot import — `isTextEntry(target)`, `activeLayer()` (the topmost open modal
+  dialog or menu, else the document) and `platform` — so the SDK stays type-only. `shortcuts` are display
+  rows (`id`, `title` `MessageKey`, non-empty `keys` of `ExtensionShortcutKey`: physical `code`, display
+  `key`, modifiers) the cheatsheet lists while the extension is enabled; the `code`s let the host test them
+  against its keybinding table. `defineWebExtension` is a typed identity helper: it preserves the
+  descriptor and its inferred keys without registration or default injection.
 - `./server` exposes `ServerExtension` and `defineServerExtension`, with pi `ExtensionFactory` types
   only. Descriptors carry `name` (the identity — the Settings on/off switch and `disabledExtensions` key
   on it), optional display copy `title` / `description` for the Settings catalog, `extensions`, optional
@@ -100,7 +108,8 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   - `awaitToolResponse(toolCallId, signal)` resolves a `ToolResponse`: `{kind: "response", value}`,
     `{kind: "deferred"}` or `{kind: "abandoned"}`.
 - The root is browser-safe and exposes only the web contract; it never re-exports the server half.
-- Workspace dependencies are `contracts` and, type-only, `@thinkrail/locales/react`'s `Translator`.
+- Workspace dependencies are `contracts` and, type-only, `@thinkrail/locales`' `MessageKey` and
+  `@thinkrail/locales/react`'s `Translator`.
   React and pi are type-only contract dependencies; there are no React components, registry, DOM access,
   host imports, or pi runtime values.
 - `ToolSummary` is `(props, t) => string`: the host passes the render-time `Translator` from `useT()`

@@ -55,7 +55,8 @@ import { getTransport } from "../transport";
 import {
 	discardArtifact,
 	mentionArtifact,
-	restoreArtifact,
+	openArtifact,
+	restoreDeletedArtifact,
 	revealArtifact,
 	selectArtifactMentionTarget,
 } from "./artifactActions";
@@ -124,6 +125,10 @@ export function ArtifactsPanel({
 	);
 	const requestRemoval: RequestRemoval = (path, kept) => setRemoval({ path, kept, open: true });
 	const openKept = (path: string) => void openFileInTab(workspaceId, path, "keep");
+	const openArtifactKept = (path: string) => {
+		const artifact = snapshot?.artifacts.find((entry) => entry.path === path);
+		if (artifact) void openArtifact(workspaceId, artifact, "keep");
+	};
 
 	if (unsupported) {
 		return (
@@ -218,7 +223,7 @@ export function ArtifactsPanel({
 								title={t("panels.artifacts.sectionArtifacts")}
 								label={t("panels.artifacts.artifactsTree")}
 								count={rows.artifacts.length}
-								onOpenKept={openKept}
+								onOpenKept={openArtifactKept}
 							>
 								{rows.artifacts.map((row) => (
 									<ArtifactRowView
@@ -393,10 +398,9 @@ function ArtifactRowView({
 		onRename: (_target, next) => void renameEntry(workspaceId, artifact.path, next),
 	});
 	const Icon = artifactIcon(row);
-	const open = (intent: "preview" | "keep") => {
-		if (!deleted) void openFileInTab(workspaceId, artifact.path, intent);
-	};
-	const treeItem = useTreeItem(artifact.path, { level: 1, label: name, openKept: !deleted });
+	const restore = () => void restoreDeletedArtifact(workspaceId, artifact);
+	const open = (intent: "preview" | "keep") => void openArtifact(workspaceId, artifact, intent);
+	const treeItem = useTreeItem(artifact.path, { level: 1, label: name, openKept: true });
 	const detail =
 		taskSpecStatus !== null
 			? t("panels.artifacts.taskSpec", { status: taskSpecStatus || "—" })
@@ -413,7 +417,7 @@ function ArtifactRowView({
 			<EntryMenu
 				workspaceId={workspaceId}
 				path={artifact.path}
-				deleted={deleted}
+				onRestore={deleted ? restore : undefined}
 				sessionId={artifact.sessionId}
 				onRename={start}
 				onRemove={(path) => onRemove(path, deleted)}
@@ -448,7 +452,6 @@ function ArtifactRowView({
 										{...treeItem}
 										data-testid="artifact-open"
 										data-focus-row-primary
-										aria-disabled={deleted || undefined}
 										onClick={firstClickOnly(() => open("preview"))}
 										onDoubleClick={() => open("keep")}
 										onKeyDown={onRowKeyDown}
@@ -472,7 +475,7 @@ function ArtifactRowView({
 											type="button"
 											data-testid="artifact-restore"
 											{...treeRowControlProps}
-											onClick={() => void restoreArtifact(workspaceId, artifact.path)}
+											onClick={restore}
 											className="shrink-0 text-primary hover:underline"
 										>
 											{t("panels.artifacts.restore")}
@@ -563,7 +566,6 @@ function OutputNode({
 			<EntryMenu
 				workspaceId={workspaceId}
 				path={node.path}
-				deleted={false}
 				onRemove={(path) => onRemove(path, false)}
 			>
 				{(menuOpen, onRowKeyDown) => (
@@ -619,7 +621,7 @@ function OutputNode({
 function EntryMenu({
 	workspaceId,
 	path,
-	deleted,
+	onRestore,
 	sessionId,
 	onRename,
 	onRemove,
@@ -628,7 +630,7 @@ function EntryMenu({
 }: {
 	workspaceId: string;
 	path: string;
-	deleted: boolean;
+	onRestore?: (() => void) | undefined;
 	sessionId?: string | undefined;
 	onRename?: () => void;
 	onRemove: (path: string) => void;
@@ -637,6 +639,7 @@ function EntryMenu({
 }) {
 	const t = useT();
 	const [open, setOpen] = useState(false);
+	const deleted = onRestore !== undefined;
 	const mentionOnCloseRef = useRef(false);
 	const canMention = useAppStore((s) => selectArtifactMentionTarget(s, workspaceId) !== null);
 	const mutations = useAppStore((s) => supportsArtifacts(s.protocolVersion));
@@ -671,10 +674,7 @@ function EntryMenu({
 				}}
 			>
 				{deleted ? (
-					<ContextMenuItem
-						data-testid="artifact-menu-restore"
-						onSelect={() => void restoreArtifact(workspaceId, path)}
-					>
+					<ContextMenuItem data-testid="artifact-menu-restore" onSelect={onRestore}>
 						<RiArrowGoBackLine />
 						{t("panels.artifacts.restore")}
 					</ContextMenuItem>

@@ -50,6 +50,7 @@ export interface ResourcesInspectorProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 	onCloseAutoFocus?: (event: Event) => void;
+	onEscapeKeyDown?: (event: globalThis.KeyboardEvent) => void;
 	commands: BackgroundCommandSummary[];
 	subagents: SubagentResourceSummary[];
 	finishedCommands: BackgroundCommandSummary[];
@@ -515,6 +516,7 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 					target?.focus();
 				}}
 				{...(props.onCloseAutoFocus ? { onCloseAutoFocus: props.onCloseAutoFocus } : {})}
+				{...(props.onEscapeKeyDown ? { onEscapeKeyDown: props.onEscapeKeyDown } : {})}
 				className="absolute inset-0 z-20 grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,2fr)_minmax(0,3fr)] border-t @[640px]:grid-cols-[272px_minmax(0,1fr)] @[640px]:grid-rows-1"
 			>
 				<div

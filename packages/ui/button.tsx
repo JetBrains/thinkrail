@@ -138,6 +138,7 @@ interface SharedProps {
 
 interface TooltipProps {
 	tooltip?: React.ReactNode;
+	tooltipShortcut?: readonly string[] | undefined;
 	tooltipSide?: React.ComponentProps<typeof IconTooltip>["side"];
 	tooltipAlign?: React.ComponentProps<typeof IconTooltip>["align"];
 	wrapTrigger?: boolean;
@@ -154,6 +155,7 @@ export interface ButtonProps
 function withTooltip(
 	trigger: React.ReactElement,
 	label: React.ReactNode,
+	shortcut: readonly string[] | undefined,
 	side: TooltipProps["tooltipSide"] | undefined,
 	align: TooltipProps["tooltipAlign"] | undefined,
 	wrap: boolean,
@@ -161,6 +163,7 @@ function withTooltip(
 	return (
 		<IconTooltip
 			label={label}
+			shortcut={shortcut}
 			{...(side ? { side } : {})}
 			{...(align ? { align } : {})}
 			{...(wrap ? { wrapTrigger: true } : {})}
@@ -200,6 +203,7 @@ export function Button({
 	loading,
 	spinIcon,
 	tooltip,
+	tooltipShortcut,
 	tooltipSide,
 	tooltipAlign,
 	wrapTrigger,
@@ -256,6 +260,7 @@ export function Button({
 	return withTooltip(
 		button,
 		tooltip,
+		tooltipShortcut,
 		tooltipSide,
 		tooltipAlign,
 		wrapTrigger ?? props.disabled === true,
@@ -278,6 +283,7 @@ export function IconButton({
 	icon: Icon,
 	label,
 	tooltip,
+	tooltipShortcut,
 	tooltipSide,
 	tooltipAlign,
 	wrapTrigger,
@@ -309,6 +315,7 @@ export function IconButton({
 			)}
 		</button>,
 		tooltip ?? label,
+		tooltipShortcut,
 		tooltipSide,
 		tooltipAlign,
 		wrapTrigger ?? props.disabled === true,

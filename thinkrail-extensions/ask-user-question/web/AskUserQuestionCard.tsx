@@ -49,7 +49,7 @@ import {
 	deriveAnswers,
 	discussReasonPatch,
 	emptyQState,
-	hasPreview,
+	hasOptionPreviews,
 	nudgeShowsOnPage,
 	openNotePatch,
 	parseQuestions,
@@ -501,7 +501,7 @@ export function AskUserQuestionCard({
 			<ModeHint
 				multiSelect={!!q.multiSelect}
 				multipleQuestions={multipleQuestions}
-				previewKeys={!q.multiSelect && q.options.some(hasPreview)}
+				previewKeys={hasOptionPreviews(q)}
 				discussKey={discussAvailable}
 			/>
 			<div className="flex items-center justify-end gap-12">

@@ -380,6 +380,7 @@ function PlainUserTurn({
 							ref={toggleRef}
 							type="button"
 							data-testid="user-message-toggle"
+							data-chat-item-toggle
 							aria-expanded={expanded}
 							onClick={toggle}
 							className="mt-4 flex items-center gap-4 tr-text-metadata text-text-subtle hover:text-text-default"
@@ -418,6 +419,7 @@ function SkillInvocationCard({
 				ref={toggleRef}
 				type="button"
 				data-testid="skill-invocation-toggle"
+				data-chat-item-toggle
 				aria-expanded={expanded}
 				aria-label={
 					expanded
@@ -678,6 +680,7 @@ function CompactionTurn({
 			<button
 				ref={toggleRef}
 				type="button"
+				data-chat-item-toggle
 				aria-expanded={open}
 				onClick={toggle}
 				className="flex items-center gap-8 text-text-muted tr-text-metadata hover:text-text-default"

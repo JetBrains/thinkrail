@@ -16,6 +16,7 @@ import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { useShallow } from "zustand/react/shallow";
+import { REVIEW_KEYS, shortcutKeyCaps } from "@/keybindings";
 import { usePhoneViewport } from "@/lib";
 import {
 	type ChangesTab,
@@ -39,9 +40,6 @@ import { createSectionContentCache } from "./sectionContentCache";
 import { useReviewReveal } from "./useReviewReveal";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 import { useWorkspaceTurns } from "./useWorkspaceTurns";
-
-const VIEWED_KEY = "v";
-const NEXT_UNREVIEWED_KEY = "j";
 
 interface ReviewListContext {
 	tailHeight: number;
@@ -236,13 +234,15 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 		[setCollapsed, tab.id, workspaceId],
 	);
 	const focusSectionHeader = (path: string) =>
-		focusWhenRevealed(() =>
-			Array.from(
+		focusWhenRevealed(() => {
+			const section = Array.from(
 				rootRef.current?.querySelectorAll<HTMLElement>('[data-testid="changes-section"]') ?? [],
-			)
-				.find((section) => section.dataset.path === path)
-				?.querySelector('[data-testid="changes-section-header"]'),
-		);
+			).find((candidate) => candidate.dataset.path === path);
+			return (
+				section?.querySelector<HTMLElement>('[data-testid="changes-section-toggle"]') ??
+				section?.querySelector<HTMLElement>('[data-testid="changes-section-header"]')
+			);
+		});
 	const reveal = (path: string, commentId: string | undefined, focus: boolean) => {
 		focusNextCommentReveal(focus && commentId !== undefined);
 		requestReveal(workspaceId, tab.id, path, commentId);
@@ -280,16 +280,16 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 		const onKey = (event: KeyboardEvent) => {
 			if (!ownsReviewShortcut(event, tab)) return;
 			const plain = !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
-			if (event.altKey && event.key === "ArrowDown") {
+			if (event.altKey && event.key === REVIEW_KEYS.nextFile.key) {
 				event.preventDefault();
 				step(1, true);
-			} else if (event.altKey && event.key === "ArrowUp") {
+			} else if (event.altKey && event.key === REVIEW_KEYS.previousFile.key) {
 				event.preventDefault();
 				step(-1, true);
-			} else if (plain && event.key === VIEWED_KEY) {
+			} else if (plain && event.key === REVIEW_KEYS.markViewed.key) {
 				event.preventDefault();
 				markViewedAndAdvance(true);
-			} else if (plain && event.key === NEXT_UNREVIEWED_KEY) {
+			} else if (plain && event.key === REVIEW_KEYS.nextUnreviewed.key) {
 				event.preventDefault();
 				nextUnreviewed(true);
 			}
@@ -458,6 +458,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 								<HeaderIconButton
 									testid="changes-review-prev"
 									label={t("changes.review.previousFile")}
+									shortcut={shortcutKeyCaps(REVIEW_KEYS.previousFile)}
 									disabled={currentIndex === 0}
 									onClick={() => step(-1)}
 									icon={ChevronLeft}
@@ -471,6 +472,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 								<HeaderIconButton
 									testid="changes-review-next"
 									label={t("changes.review.nextFile")}
+									shortcut={shortcutKeyCaps(REVIEW_KEYS.nextFile)}
 									disabled={currentIndex >= files.length - 1}
 									onClick={() => step(1)}
 									icon={ChevronRight}
@@ -489,7 +491,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 										? t("changes.review.viewed")
 										: t("changes.review.markViewed")}
 									<kbd className="rounded-xs border border-control-border-default px-4 tr-code-text text-text-subtle">
-										{VIEWED_KEY.toUpperCase()}
+										{REVIEW_KEYS.markViewed.key.toUpperCase()}
 									</kbd>
 								</Button>
 							</div>
@@ -613,7 +615,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 										>
 											{t("changes.review.nextUnreviewed")}
 											<kbd className="rounded-xs border border-control-border-default px-4 tr-code-text text-text-subtle">
-												{NEXT_UNREVIEWED_KEY.toUpperCase()}
+												{REVIEW_KEYS.nextUnreviewed.key.toUpperCase()}
 											</kbd>
 										</Button>
 										<Button

@@ -11,8 +11,8 @@ references: [submodule-web-panels, submodule-web-chat]
 ## Responsibility
 
 Everything that turns a workspace resource into a viewable, reviewable surface: the engine-neutral resource
-description and renderer registry, the eleven bundled file/diff renderers (code, markdown, binary, LFS,
-image, SVG, CSV, JSON, notebook, PDF, HTML) with their review composers, thread cards and region surfaces,
+description and renderer registry, the twelve bundled file/diff renderers (code, markdown, binary, LFS,
+image, SVG, CSV, JSON, notebook, PDF, HTML, interactive HTML) with their review composers, thread cards and region surfaces,
 and the shared Monaco, Pierre and markdown-document machinery they run on. It is presentation: it owns no
 content loading, review persistence, tabs or navigation — a host supplies those.
 
@@ -29,7 +29,10 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   rules every surface shares: `resourceContent(text, meta, url)` (no metadata yet is provisional text, a
   missing hash is an absent side, a binary side without a byte URL is absent), `diffResourceMeta(original,
   modified)` (a diff is described by its modified side unless that side is absent, and is text only when
-  both present sides are) and `PENDING_TEXT_META` — plus `registerBundledResourceRenderers()` (idempotent).
+  both present sides are) and `PENDING_TEXT_META` — plus `registerBundledResourceRenderers(options?)`
+  (idempotent; the first call's options win). `BundledRendererOptions.interactiveHtml` lists the path globs
+  whose HTML gets the Interactive candidate (below); the host passes them because only it knows where its
+  agents write mockups.
   `diffRendererCapabilities` returns, from a path alone (before content loads), the capabilities of the
   diff renderer it would resolve to — inferring the text/binary split from the path's MIME so known image
   and PDF paths resolve to their layout-less renderers; MIME inference itself stays module-internal. A pane
@@ -51,10 +54,20 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   state and a caller needs no reset, and a `reveal` it forwards to the view renderer). Its `compact` flag (carried to the lazy views as
   `ResourceEnvironment.compact`, and reset by an explicit `compact={false}`) drops the renderer toggles,
   Send review, the HTML notice with its viewport presets and the Markdown outline — the chrome a small
-  embedded frame cannot afford; the views themselves are unchanged;
+  embedded frame cannot afford; the views themselves are unchanged, and a compact preview given neither
+  `leading` nor `actions` draws no toolbar at all rather than an empty row. `reviewable={false}` skips the
+  host's review surfaces — no commenting, no unplaced strip — for a surface whose purpose is looking, not
+  reviewing (the questionnaire's compare overlay). `htmlViewport` (carried the same way as
+  `ResourceEnvironment.htmlViewport`) fixes the preview width of every HTML view and diff beneath it and
+  hides their own presets, for a caller that shows one width control for several frames — it renders
+  **`HtmlViewportSwitch`** (typed by `HtmlViewport`), the same segments the notice uses.
+  `sideLabels` (`DiffSideLabels`, also `ResourceDiffProps.sideLabels`) names a diff's two sides where "Old" /
+  "New" would mislead, as when two alternatives are compared: the visual diffs (HTML, image, SVG) use them
+  for the 2-up headings and captions, the rest ignore them;
 - **`FramedResourcePreview`** — `ResourcePreview` in a caller-sized frame with **Open in tab** (the file, or
   the comparison for a diff) and **Full screen** (a dialog with the full chrome, sharing renderer and view
-  state), every action an explicit tab stop; nothing without a host and a workspace scope. It is the one
+  state; an `onFullscreen` handler replaces that dialog with the caller's own), every action an explicit tab
+  stop; nothing without a host and a workspace scope. It is the one
   framed preview of visualize's file card and the questionnaire's previews ([[module-ext-visualize]],
   [[module-ext-ask-user-question]]) — lifted from visualize when the second consumer arrived;
 - **`ResourceReveal`** and **`SOURCE_RENDERER_ID`** (`thinkrail/code`) — the open-at-a-line contract: a
@@ -88,8 +101,8 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   - **`RendererToggles`** — the renderer candidate segments, plus Split/Inline when the caller passes a diff
     `layout`, the renderer supports layout and the viewport is not phone-class (one rule, so a phone never
     shows a layout the diff refuses and a single-file view never shows diff layout);
-  - `UnplacedReviewStrip`, `ReviewThreadCard`, `ReviewDraftContext`/`ReviewDraftPersistence`, and
-    `createAskAgentRequest`;
+  - `UnplacedReviewStrip`, `ReviewThreadCard`, `ReviewDraftContext`/`ReviewDraftPersistence`,
+    `createAskAgentRequest`, and `focusReviewCard` (a card's keyboard landing, for the app's own reveals);
 - `useScrollViewState` — the one scroll view-state hook (restores a saved offset once the content is tall
   enough, gives way to user input, reports the offset on detach, and adopts a newer saved offset — one a
   sibling instance of the same slot reported on its detach, as the Changes review's Stacked handoff does —
@@ -262,8 +275,12 @@ next one. A review focus always scrolls the revealed thread card (or notebook ce
 keyboard focus to the card's first control only when `SurfaceReview.focus.moveFocus` asks — **Show in file**
 and the review's keyboard jumps do, a guide's Prev / Next button does not, so its next Enter advances the
 guide instead of sending the draft. Every renderer goes through `support/revealFocus.ts`'s
-`revealReviewCard` (`@thinkrail/ui/focus`'s `focusFirstControl`, with `preventScroll`); Monaco, whose cards
-mount in view zones after the line reveal, polls a bounded number of frames for the card.
+`revealReviewCard`, whose `focusReviewCard` lands on the card's `data-focus-row-primary` — a draft's text,
+caret at its end — or on a sent card itself (`tabIndex=-1`), never on Send: the next Enter after
+**Show in file** used to send the draft. A container that holds no card falls back to
+`@thinkrail/ui/focus`'s `focusFirstControl`. Monaco, whose cards mount in view zones after the line
+reveal, polls a bounded number of frames for the card. Each card is a `data-focus-row` (its comment id);
+in a Pierre diff its list is the scroller's `hunks:<path>`, so recovery stays inside the file.
 
 `ResourceContent` keeps text, retrievable bytes, and an absent diff side distinct. In particular, absence
 is never represented by a byte payload without a URL. `SurfaceReview` carries authoritative anchors; a
@@ -391,7 +408,7 @@ and both diff frames; the difference blend keeps a flat canvas so the checker ca
 subtraction), because on a solid dark canvas a dark logo on a transparent PNG is indistinguishable from
 an image that failed to load. A drag over the rendered intrinsic box produces one normalized `region`
 selector; placed threads project that selector back to outlined rectangles and numbered markers, with
-cards below the image. Its diff defaults to 2-up and also offers swipe, onion-skin, and difference-blend
+cards below the image. The same selector has a keyboard path (*Keyboard review surfaces*). Its diff defaults to 2-up and also offers swipe, onion-skin, and difference-blend
 modes. Two-up anchors directly to the side drawn on; overlaid modes expose the active old/new anchor space
 explicitly, so base and worktree coordinates are never translated. An absent side is a labelled empty
 frame. Image zoom, rendered intrinsic aspect bounds, region rectangles, swipe clipping/divider position,
@@ -491,25 +508,77 @@ current page is the first visible page (the navigation target until any page rep
 follows scrolling as well as navigation; that page and the zoom are written to tab view state when the
 view unmounts, like the other scroll-restoring renderers. PDF diffs use one synchronized page sequence: each page pair
 starts in 2-up and can switch among the shared swipe, onion, and difference modes, with an absent side
-represented by an explicit empty page frame.
+represented by an explicit empty page frame. Only the toolbar's current page carries the region surface's
+Tab stop (the others are `tabIndex=-1`), so Tab reaches the page in view rather than one two pages above it.
 
 `thinkrail/html` parses source into a document before previewing it in an empty-capability `sandbox=""`
 iframe. The sanitizer removes active, navigational, embedding, and form elements; strips event handlers and
 non-`data:` resource URLs; and turns anchors into inert text-bearing elements. Styles remain. Notebook HTML
 output uses this same sanitizer. The injected CSP is exactly `default-src 'none'; img-src data: blob:;
 style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src
-'none'; child-src 'none'`. The diff is the shared visual frame constrained to 2-up sandboxed documents only.
-It advertises no anchor geometry, so HTML threads remain in the pane-owned unplaced strip and Source is the
-only authoring candidate. View and diff share a **preview width** switch in the notice bar — Desktop 1280 /
+'none'; child-src 'none'`. The diff is the shared visual frame with all four modes (2-up, swipe, onion,
+difference), and its two documents **scroll together** in every mode: a per-diff `ScrollLink` mirrors the
+absolute scroll offset of whichever document the user scrolls onto the other, ignores the echo of its own
+write (read back after the write, so a shorter document's clamped offset never drags the longer one back;
+the write is an explicitly `instant` `scrollTo`, since a mockup's `scroll-behavior: smooth` would otherwise
+turn it into an animation whose intermediate offsets read as user scrolls and leave the pair apart),
+and re-applies the last offset to a frame that reloads, so a mode switch keeps the position. WebKit
+delivers no events into a document whose sandbox lacks `allow-scripts` — not even to a listener the host
+attached — so the link cannot rely on `scroll`: it also polls both offsets every 100 ms while attached and,
+once one moves, follows it frame by frame until 20 frames pass unchanged. A delivered `scroll` event
+(Chromium, Firefox) only triggers the same check at once. Reading and writing the offsets from the host
+works in every engine. Only these
+paired static frames carry `sandbox="allow-same-origin"`, which lets the host attach the scroll listener and read
+the offset; they still have no `allow-scripts`, so nothing in the document runs (the sanitizer strips
+scripts and handlers too, and the CSP has no script source) — the dangerous pair is `allow-scripts` with
+`allow-same-origin`, never granted. A single HTML view keeps `sandbox=""`. The link talks to each frame
+through a `ScrollEndpoint`: a static frame's window directly, an interactive frame (below) through messages. The layered modes drop the
+"comment on old/new" side picker when neither side carries a review surface: it only chooses whose regions
+a drag authors. The diff advertises no anchor geometry, so HTML threads remain in the pane-owned unplaced
+strip and Source is the only authoring candidate. Known limitation: the comparison still mounts through
+`GuardedRendererDiff`, so two large *unrelated* documents (two alternatives rather than two revisions) can
+wait behind the expensive-diff notice although the rendered comparison computes no text diff. View and diff share a **preview width** switch in the notice bar — Desktop 1280 /
 Tablet 768 / Phone 390 / Fill, default Desktop, persisted as `{ viewport }` view state and adopted whenever the
 caller's view state changes (`useHtmlViewport`, so a chat card follows a width chosen in its full screen): the frame renders at
 the design width and is CSS-scaled down to its box (never up), keeping its own vertical scroll, so a narrow
 pane, a 2-up half or a chat card shows the true layout shrunk rather than an accidental mobile reflow; Fill
-is the old reflow. Scaling is pure geometry on the wrapper — the iframe keeps `sandbox=""` and nothing
-measures the document (no `allow-same-origin`); the wrapper's box is measured in a layout effect (the package's
+is the old reflow. The frame's box fills its host; a full-size view keeps a 360 px floor, but a compact
+one (a chat card, a questionnaire pane, the compare overlay's cells) takes exactly the height it is given,
+because the floor inside a shorter fixed frame clipped the document's end out of reach. Scaling is pure geometry on the wrapper — nothing measures the document's size; the wrapper's box is measured in a layout effect (the package's
 one `useElementSize`, shared with the SVG view and the region surfaces), so the first paint is already fitted
-instead of reflowing the document at the pane width for a frame. The sanitizer also strips form controls, so mockups draw
-buttons and inputs with styled elements; spot (region) comments on HTML are not offered yet.
+instead of reflowing the document at the pane width for a frame. The sanitizer also strips form controls, so a static
+preview shows buttons and inputs only as styled elements (interactive mockups keep them); spot (region)
+comments on HTML are not offered yet.
+
+`thinkrail/html-interactive` ("Interactive") is the candidate for HTML matching the host's
+`interactiveHtml` globs — ThinkRail passes its agents' mockup directory (`WORKSPACE_MOCKUP_DIR`,
+`.thinkrail/context/mockups/`) — ranked above `thinkrail/html`, so a mockup opens interactive while tabs keep
+**Preview** (static) and **Source** as toggles. Any other HTML never runs script. The point is clickable
+prototypes (tabs, toggles, form controls) for comparing alternatives. Because the host has no auth
+([[architecture]] Decision 7), a script that could reach it over WebSocket would control the agent, so the
+property that matters is **no network**:
+- **The document** keeps scripts, handlers, forms and controls, drops `<base>` and `<meta http-equiv>`, makes
+  every non-`#` link target inert, and gets a CSP meta first in `<head>`, exactly `default-src 'none';
+  script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data:
+  blob:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'; child-src 'none';
+  worker-src 'none'` — no fetch, XHR, WebSocket, external script, style, image or frame. A `data:` or `blob:`
+  document the script navigates to inherits the policy (verified in Chromium, WebKit and Firefox).
+- **The frame** is `sandbox="allow-scripts"` and nothing else: an opaque origin with no access to the app,
+  no popups, no top navigation, no form submission. It is never also `allow-same-origin`, paired or not. It
+  carries the same policy as the `csp` attribute, so Chromium and WebView2 (CSP Embedded Enforcement)
+  refuse any foreign document the frame is navigated to; on the desktop the native navigation rules refuse
+  outside URLs for frames as well ([[module-desktop]]).
+- **Leaving is stopped.** A second `load` of the frame means its document was replaced (script navigation,
+  reload); the frame is unmounted and a notice with **Reload** takes its place — no automatic reload loop.
+  Residual risk, accepted and recorded: in a WebKit or Firefox browser tab the request to an outside page is
+  sent and that page runs until its `load` — with the reach of any page the user visits (Decision 7), no
+  more. Chromium sends the request but refuses the document.
+- **Scroll sync without same-origin.** The document carries a tiny bridge that posts its offset on scroll and
+  applies a posted `scrollTo` instantly, answering with the applied (possibly clamped) offset; the link's
+  message endpoint accepts messages only from that frame's window and only finite numbers, writes
+  optimistically so a pending answer never reads as a user scroll, and takes the answer as the echo. A
+  comparison decides per side: a side runs script only if its own path matches.
+- The notice says scripts run sandboxed without network (`viewer.html.interactiveNotice`).
 
 Pierre parses the two complete text sides (`absent` → `null`) with the current ignore-whitespace value,
 uses the host's `pierreTheme` (registered as `thinkrail`, CSS variables only, highlighted by `@pierre/highlights`), word-level inline changes, collapsed unchanged regions with
@@ -545,8 +614,8 @@ has no highlighter-free mode, and Shiki stays out of the build. `PierreProvider`
 or once `preloadHighlighter` for the `thinkrail` theme rejects, which latches for the page. `PierreDiff`,
 `PierreFile` and the notebook source diff then swap Pierre for `PlainCode`: uncolored runs from
 `plainRuns.ts` — the whole file, or each hunk's `@@` header, context and `-`/`+` lines — inside the
-same scroller. Review annotations, line selection and hunk toolbars need Pierre's rows and are absent in
-this mode. Each run of one kind is one text node rather than an element per line, so a 100k-line file
+same scroller. Review annotations, line selection, the line cursor and hunk toolbars need Pierre's rows
+and are absent in this mode. Each run of one kind is one text node rather than an element per line, so a 100k-line file
 stays a handful of nodes without a virtualizer, which the mirrored `PierreScroller` would have to feed.
 
 **Pierre surfaces are virtualized.** Unvirtualized Pierre puts every line in the DOM (≈400k nodes for a
@@ -793,3 +862,86 @@ content's own height.
   70 ms at 4x. Click to highlighted is no later. Cost: create and first render now run in one task, so the
   longest task after the click grows at 4x CPU (cold open 120 to 145 ms, warm large open 0 to 55 ms). The
   `MonacoEditor` chunk shrinks by 12.1 kB (3.10 MB to 3.09 MB; 3.5 kB gzip).
+
+## Keyboard review surfaces
+
+Every comment a pointer can author also has a keyboard path. Each surface is one Tab stop marked `data-review-surface`, which the
+app's cheatsheet maps to its Changes review section. Key interpretation is one module,
+`support/cursorKeys.ts` (`cursorCommand`: arrows and `h`/`j`/`k`/`l`, Shift extends, Home/End, Enter or
+Shift+Mod+M comments, Esc; Alt, other Mod chords and an IME composition pass through). The constants stay
+in the package because it cannot import the app; the app's catalog lists the same keys as display entries.
+
+- **Cursor proxy** (`support/CursorProxy.tsx`), shared by the diff line cursor and the Markdown block
+  cursor. Their stops cannot be honest ARIA children — Pierre's lines live in a shadow root, and a
+  preview's blocks are real headings, paragraphs and links — so the content container keeps no role and
+  no tabindex (links, cards and hunk controls keep their own semantics and Tab order) and a visually
+  hidden `role="listbox"` as its first child is the Tab stop (`data-review-surface`, `review-cursor`). It
+  owns exactly one `role="option"`, `aria-selected`, whose `aria-posinset` / `aria-setsize` place the
+  cursor among the surface's stops and whose name says what the cursor is on (side, line and line text;
+  source lines and block text) with a range's extent appended. The name is an `aria-label`, not text:
+  text there would turn up in find-in-page, in a copied selection and in text locators. The option's id
+  changes with every move, so `aria-activedescendant` changes and a screen reader announces it — no live
+  region. It is not multiselectable: a range is one stop described in the name. The proxy takes the
+  cursor keys and the focus / blur that light the cursor; it is sticky, zero-height and clipped, so Tab
+  never scrolls the content to it, it never shifts layout and its own outline never shows. The container
+  draws the ring (`focus-ring-inset` while its proxy has `:focus-visible`). A surface with no stop (an
+  empty diff or document) has no proxy. Marking the content itself `role="listbox"` satisfied the a11y
+  lint (a tabbable key handler needs an interactive role) but was untrue: a listbox must own options and
+  must not own headings or links.
+- **Pierre diff line cursor** (`renderers/code/diffCursor.ts`, pure, and `useDiffCursor`). The proxy
+  holds a logical `{ cursor: { line, side }, anchor }`; its stops are the rows of the cursor's side. Rows
+  come from the parsed diff, not the DOM, so the cursor walks lines a virtualized diff has not rendered:
+  the same initially-collapsed layout `renderedDiffLineNumbers` places threads on (git-style context,
+  unchanged runs within `COLLAPSED_CONTEXT_THRESHOLD` shown). Context the reader expands with the mouse is
+  not on its path. Split: ↑/↓ skip rows without the cursor's side,
+  ←/→ switch side where the row has the other. Unified: every row is a stop on its own side (context is
+  the new side) and ←/→ do nothing. It starts on the first changed line; a cursor whose line is no longer a stop first keeps its
+  row (an old-side context line in the inline layout is that row's new-side stop), and only a line that left
+  the diff snaps to the nearest line of its side. Enter / Shift+Mod+M sends the range to the mouse selection's
+  own `openSelection` → `selectionComposer`, so anchors are identical and a cross-side range is blocked as
+  before; Esc clears a range (and a blocked notice), then leaves to the enclosing `data-focus-row`'s
+  primary — the section's collapse toggle, or the file header itself in the single-file layout, never a
+  generic first control (there that is Revert file) — or the control before the diff. Tab goes to the nearest card or
+  composer at or below the cursor row (revealing it first in a virtualized diff); with none, the browser's
+  own order continues into the hunk toolbars, so Keep / Revert / Ask agent stay reachable. A mouse
+  selection, the gutter button and Ask agent move the cursor to their line. Only keys the cursor owns are
+  `preventDefault`ed, which is how the review tab's plain `J` stays outside the cursor while `V`, `N`, `P`
+  and Alt+↑/↓ pass through.
+  **Drawing.** The cursor and its range are Pierre's controlled `selectedLines` (its selection skin),
+  shown only while the proxy holds focus that `:focus-visible` (a click into code does not light a
+  line; the first cursor key does). The value is applied one animation frame after the state change:
+  Pierre's `setSelection` moves the gutter utility's `<slot>`, and a slot must never move synchronously from
+  an input handler (the WebKit crash guard). In split view the host carries `review-cursor-<side>` and the
+  static `unsafeCSS` cancels the selection paint on the other column — Pierre otherwise paints both columns
+  of a selected row, and h/l would change nothing visible. A line moves into view with the
+  virtualizer's `revealLine(line, side, "nearest")` when virtualized, else by adjusting the nearest
+  scrolling ancestor directly (a row inside the mirrored scroller's transform would
+  confuse `scrollIntoView`). The gutter `+` is `tabIndex=-1`: Enter does its job.
+- **Focus return.** `ReviewComposer` takes Shift+Mod+Enter as Send now (Mod+Enter Save draft, Esc cancel,
+  unchanged) and, when it closes with focus still inside it or lost, calls `onReturnFocus` — the diff
+  and the preview focus their cursor proxy (the diff on the line it was opened from), a region surface
+  its frame button, Monaco its editor; the preview's cursor block and the frame button are scrolled into view
+  (nearest) as focus returns, so a draft edited far below its anchor never leaves the cursor off screen. A draft card's Mod+Enter (save), Esc (discard), Send and Delete do
+  the same at the card's own line; a surface without a cursor gets the closest control before the card that is not inside
+  another card. A Send that opens its chat keeps the chat's focus: the composer returns focus only when
+  nothing else took it.
+- **Markdown preview block cursor** (`support/blockCursor.ts`). The proxy is the Tab stop and links
+  follow it in Tab order. Blocks are the stamped `p`, `li`, headings, `pre`,
+  `blockquote` and `tr`, leaf-most unless a nested block starts on a later line (a parent bullet stays a
+  stop). ↑/↓ step blocks, Shift extends over whole blocks, Home/End, Enter / Shift+Mod+M opens the composer
+  on the blocks' source lines (the same `lineRange` a stamped text selection resolves to), Esc clears the
+  range. The cursor and range are attributes the surface re-applies after each render (deriving the
+  proxy's option from the same blocks), drawn with
+  `focus-ring` and `bg-primary-subtle` (a table row also takes the background: Chromium draws no outline on a
+  `tr`); keyboard focus without a cursor starts on the first visible block.
+- **Regions** (image, SVG, PDF page, visual-diff sides). A transparent `<button>` over the media (pointer
+  events pass to the drag overlay) is the Tab stop: Enter draws a centred frame (30%), arrows / hjkl move it
+  2% within the media, Shift+arrows resize it from its corner (→/← width, ↓/↑ height, 4% minimum), Enter /
+  Shift+Mod+M opens the composer and Esc removes the frame (`frameCommand`, pure). The frame lives in the
+  same normalized space a drag produces, through the same stamped selection, so `regionDraft` /
+  `pdfRegionDraft` anchor it identically.
+- **Swipe divider** is `role="slider"` (0–100, `aria-valuenow`): ←/→ and h/l move 2%, Shift 10%,
+  PageUp/PageDown 10%, Home/End to the edges (`swipeDividerValue`, pure).
+- **Monaco** Shift+Mod+M with an empty selection comments the caret line (`commentLines`): a second,
+  keybinding-only action holds `!editorHasSelection`, so the context menu still offers commenting only on
+  a selection.

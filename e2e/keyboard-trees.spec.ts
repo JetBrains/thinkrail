@@ -34,9 +34,7 @@ async function openKeyboardFolder(page: Page): Promise<string> {
 	return workspace.worktreePath;
 }
 
-test("the Files tree is one Tab stop that arrows, Home/End and type-ahead walk", async ({
-	page,
-}) => {
+test("the Files tree is one Tab stop that arrows, hjkl and Home/End walk", async ({ page }) => {
 	await openKeyboardFolder(page);
 	const tree = filesTree(page);
 	const items = tree.getByRole("treeitem");
@@ -57,10 +55,11 @@ test("the Files tree is one Tab stop that arrows, Home/End and type-ahead walk",
 	await page.keyboard.press("Home");
 	await expect(items.first()).toBeFocused();
 
-	await page.keyboard.type("kb");
-	await expect(kb).toBeFocused();
+	await kb.focus();
 	await expect(kb).toHaveAttribute("tabindex", "0");
 	await expect(tree.locator('[tabindex="0"]')).toHaveCount(1);
+	await page.keyboard.press("x");
+	await expect(kb).toBeFocused();
 
 	await page.keyboard.press("ArrowRight");
 	await expect(kb).toHaveAttribute("aria-expanded", "true");
@@ -78,6 +77,70 @@ test("the Files tree is one Tab stop that arrows, Home/End and type-ahead walk",
 	await page.keyboard.press("ArrowLeft");
 	await expect(kb).toHaveAttribute("aria-expanded", "false");
 	await expect(alpha).toHaveCount(0);
+
+	await page.keyboard.press("l");
+	await expect(kb).toHaveAttribute("aria-expanded", "true");
+	await page.keyboard.press("l");
+	await expect(alpha).toBeFocused();
+	await page.keyboard.press("j");
+	await expect(fileRow(page, "beta.txt")).toBeFocused();
+	await page.keyboard.press("k");
+	await expect(alpha).toBeFocused();
+	await page.keyboard.press("h");
+	await expect(kb).toBeFocused();
+	await page.keyboard.press("h");
+	await expect(kb).toHaveAttribute("aria-expanded", "false");
+});
+
+test("S searches the visible rows: ↓/↑ walk the matches, Enter keeps the row and Esc goes back", async ({
+	page,
+}) => {
+	const root = await openKeyboardFolder(page);
+	for (const name of ["zeta-one.txt", "zeta-two.txt"]) writeFileSync(join(root, name), `${name}\n`);
+	const tree = filesTree(page);
+	const one = fileRow(page, "zeta-one.txt");
+	const two = fileRow(page, "zeta-two.txt");
+	await expect(two).toBeVisible();
+	const first = tree.getByRole("treeitem").first();
+	const search = page.getByTestId("tree-search");
+	const count = page.getByTestId("tree-search-count");
+
+	await first.focus();
+	await page.keyboard.press("s");
+	await expect(search).toBeFocused();
+	await expect(search).toHaveAccessibleName("Search Files");
+	await page.keyboard.type("ZETA");
+	await expect(one).toHaveAttribute("data-tree-match", "current");
+	await expect(two).toHaveAttribute("data-tree-match", "match");
+	await expect(one).toHaveAttribute("tabindex", "0");
+	await expect(count).toHaveText("1 of 2");
+	await page.keyboard.press("ArrowDown");
+	await expect(two).toHaveAttribute("data-tree-match", "current");
+	await expect(count).toHaveText("2 of 2");
+	await page.keyboard.press("ArrowDown");
+	await expect(one).toHaveAttribute("data-tree-match", "current");
+	await page.keyboard.press("ArrowUp");
+	await expect(two).toHaveAttribute("data-tree-match", "current");
+	await page.keyboard.press("Enter");
+	await expect(search).toHaveCount(0);
+	await expect(two).toBeFocused();
+	await expect(tree.locator("[data-tree-match]")).toHaveCount(0);
+	await expect(page.getByTestId("editor-tab").filter({ hasText: "zeta-two.txt" })).toHaveCount(0);
+
+	await first.focus();
+	await page.keyboard.press("s");
+	await page.keyboard.type("zeta-one");
+	await expect(one).toHaveAttribute("data-tree-match", "current");
+	await page.keyboard.press("Escape");
+	await expect(search).toHaveCount(0);
+	await expect(first).toBeFocused();
+	await expect(first).toHaveAttribute("tabindex", "0");
+
+	await page.keyboard.press("s");
+	await page.keyboard.type("no such row");
+	await expect(count).toHaveText("No match");
+	await page.keyboard.press("Enter");
+	await expect(first).toBeFocused();
 });
 
 test("Enter previews a file, Mod+Enter keeps it, and Delete trashes it after the confirmation", async ({

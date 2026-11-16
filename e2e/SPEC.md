@@ -386,9 +386,12 @@ covers the no-workspace branch: the fresh start screen and Project Home carry th
 plain Projects pane header with no right/bottom rail, the rail entry / Hide / `Mod+B` toggle with their
 focus endpoints, and rail/header geometry that matches the workbench across a workspace round trip.
 `keyboard-regions.spec.ts` walks the Balanced ring with `F6` / `Shift+F6` (from the composer and from
-inside xterm), asserting the one `data-region-active` root and the veil through attributes and the
-`::after` content rather than pixels, then the focus chords: `Mod+L` from a terminal, `Mod+0` in the
-workbench and on Project Home (collapsed pane included), `Mod+1` / `Mod+2` over a split center,
+inside xterm), asserting the one `data-region-active` root, its accent line and the absence of any veil
+through attributes and pseudo-element styles rather than pixels; the `F6` rhythm (a first press flashes
+the frame in place, the next moves and flashes the destination, a click never flashes, the frame clears
+on its timer, without its fade under reduced motion); then the focus chords: `Mod+L` from a terminal
+(flashing the chat's region), `Mod+0` in the workbench and on Project Home (collapsed pane included),
+`Mod+1` / `Mod+2` over a split center,
 `` Ctrl+` `` in and back out and with the bottom hidden, `Mod+Shift+E` / `Mod+Shift+G` landing inside
 Files in the matching mode, and the palette rows with their chords, run after the palette closes.
 `focus-recovery.spec.ts` pins one site per rule of the shell's focus recovery: a deleted Files row hands
@@ -399,13 +402,49 @@ keeps focus across its two renderings and an entry focuses its heading; One file
 last file hands focus to Prev; and the safety net lands a removed unmarked control on its region's landing
 target while a control the user clicked away from never pulls focus back.
 `keyboard-trees.spec.ts` pins the sidebar trees' keyboard model: the Files tree is one Tab stop that
-arrows, Home/End, →/← and type-ahead walk; Enter previews, `Mod+Enter` keeps, Delete confirms and trashes
+arrows, Home/End, →/← and h/j/k/l walk (another letter does nothing); `S` opens the labelled search field,
+which highlights the matches, steps ↓/↑ with wrap, keeps the row on Enter, returns to the start row on Esc
+and says "No match"; Enter previews, `Mod+Enter` keeps, Delete confirms and trashes
 (focus moving to the next file); after a reload `Mod+Shift+E` lands on the selected row rather than the
 first; a workspace row opens its dropdown on Shift+F10 and returns focus on Escape, renames on F2, asks
 before removal on Delete, and ← reaches its project; a chat row, in its own flat Chats tree, opens its
 menu, ignores F2 and deletes after the confirmation; Specs expand/collapse from the keyboard and Changes
 open their menu and kept diff; the Artifacts tree is one Tab stop that ↓ walks, F2 renames, Delete asks
 (Escape returns to the row, confirming removes it and focuses its neighbour) and `Mod+Enter` keeps.
+`hint-mode.spec.ts` pins the hint-mode extension: `F` types in the chat input while `Mod+;` there and `F`
+elsewhere show labels and the bar, and Esc / `Mod+;` leave them; typing a label presses a rail button,
+opens a Radix dropdown (whose open menu then scopes the labels) and focuses the chat input without typing;
+the first letter narrows the labels, Backspace restores them and Shift on the last letter only focuses a
+Files row; an open Settings dialog scopes the labels and survives the Esc that leaves hint mode; and
+Settings → Extensions lists Hint mode without tool chips, switching it off silences both keys and drops
+its cheatsheet rows until it is switched back on. A label is found by its position at the target's
+top-left; a target must be scrolled into view and its panel's entrance animation finished before the
+labels are taken, since they are measured once (and on scroll / resize).
+`keyboard-chat.spec.ts` pins the chat transcript's keyboard model on seeded chats: `Mod+↑` from the
+composer onto the newest message and Esc back with the draft and caret intact (a multi-line draft first
+takes the caret to its start), ↑/↓ with k/j and Home/End, →/← and l/h expanding an Activity and walking
+its nested Thinking and tool steps, C (clipboard), O (a preview tab) and the Shift+F10 item menu, Tab
+walking only the focused item's controls then leaving, PgUp/PgDn from the composer paging the transcript
+with focus kept, Latest from the keyboard and a history jump landing on the message, focus parked on the
+feed when a wheel scroll unmounts the focused row and the next key bringing it back, newest-first order,
+the history overlay's Delete (caret at the end only) and entry menu beside its Tab zoom, the Resources
+inspector's inert transcript and the @ popup taking Escape first, Stop returning focus to the composer
+(a replayed `agent_start` on the intercepted wire keeps the chat streaming without an agent), and h/l on
+a tab strip and j/k on a side rail.
+`keyboard-review.spec.ts` pins commenting from the keyboard: Tab onto a Pierre diff lands on its cursor
+proxy (`review-cursor`: a listbox whose single selected option, its `aria-activedescendant`, names the
+line and its place among the stops, while the diff container has no role or tabindex and takes the ring's
+outline) and draws the line cursor (j/k and arrows, h/l switching side in split view, Home/End, Shift
+extending a range), Enter opens the composer on that range and `Mod+Enter` saves it with focus back on
+the line, Tab reaches the card at or below the cursor and `Mod+Enter` / Esc return from it, Delete and
+Send keep focus on the card's line and `Shift+Mod+Enter` sends at once (the intercepted
+`review.sendComment` never answers, so no chat opens), a virtualized diff scrolls the cursor between far
+hunks and Tab back onto the proxy leaves the scroll where it was, Show in file lands in a draft's text
+and Tab lands on a sent card, the review tab's `J` stays outside the cursor while `V` passes through, the
+cheatsheet highlights the review section and scrolls it into view, a Markdown block range (its proxy
+option naming the block and the range) comments on its source lines, an image keyboard frame stores the
+drag's normalized region, the swipe divider moves as a slider, and Monaco's `Shift+Mod+M` comments on the
+caret line.
 
 ## Isolation contract
 
@@ -619,13 +658,15 @@ source is seeded as a successful historical tool result (`isError: false`) so bo
 the renderer's plain-source fallback, not the tool-error branch. File previews write mockups into the shared
 fixture repository (removed in `finally`) and pin the HTML renderer in the card, the before/after 2-up diff,
 a region comment's Send carrying the card's chat `sessionId` over the wire, HTML design-width scaling and the
-width switch, full screen, Open in tab, and a before/after opened as a comparison diff tab that survives a
-reload. A huge comparison opts in through Show diff anyway while an unrelated file changes every 400 ms (each
+width switch, full screen, Open in tab, and a before/after opened as a comparison diff tab (mockups
+interactive with scripts only, Preview switching to static frames with same-origin access only, swipe
+available) that survives a reload. A huge comparison opts in through Show diff anyway while an unrelated file changes every 400 ms (each
 write its own watcher frame, past the 300 ms quiet flush), so updates keep landing inside the expensive first
 mount. These regressions need no provider,
 prompt submission, route mock, or screenshot. Extension on/off coverage (`extensions-settings.spec.ts`) drives the
-real Settings → Extensions switch of every shipped extension (`visualize`, `ask-user-question`) through
-`settings.update`, proves it survives a reload, and seeds a historical `visualize` call that must still render
+real Settings → Extensions switch of every shipped extension (`visualize`, `ask-user-question`,
+`web-access`, and the web-only `hint-mode` row the host catalog lacks) through `settings.update`, proves it
+survives a reload, and seeds a historical `visualize` call that must still render
 its diagram and an answered `ask_user_question` call that must still render its record while the extension is
 off; each test restores every switch in `afterEach` because the shard shares one host. `environment-settings.spec.ts` drives Settings →
 Environment through rejected and accepted saves and a reload; the host was launched with
@@ -652,12 +693,23 @@ submits or nudges), and an open note closing on a background press or on focus l
 stealing the press aimed at a row or Add note below it (`ask-user-question.spec.ts`). `ask-previews.spec.ts` writes mockups
 into the fixture repository (removed in `finally`) and pins the question preview and the option pane (HTML,
 before/after, mermaid, none) at one card height, full-screen keys that never page or skip, a file removed
-under its preview, and the picked file's path in the persisted answer; `plan-ask.spec.ts` adds the same file
+under its preview, the picked file's path in the persisted answer, and the compare overlay (flip and jump
+keys, Current never choosable, choose-and-stay, a side-by-side pair whose two frames keep one `scrollTop`
+in 2-up and swipe even though the mockups ask for smooth scrolling, All at 1400×900 clipping no HTML frame below its pane and opening a pane alone, keys still working after a
+pane title or Choose removed the focused control, focus back on the chosen row, the receipt's read-only reopen),
+and an interactive mockup (`sandbox="allow-scripts"`, its button changes its own page, `fetch` and a
+WebSocket to the host both blocked, leaving its page replaced by the notice until Reload; the pair above
+syncs through the message bridge, read through Playwright's frame API since the frames are opaque);
+`plan-ask.spec.ts` adds the same file
 preview on the plan page. These three specs also run in a **`webkit` Playwright project**: the macOS desktop
 is the system WKWebView, whose Tab skips buttons without an explicit `tabindex` (the regression this lane
 exists for). CI installs WebKit with the system libraries it links, not its media plugins (`.github/SPEC.md`);
 Linux WebKit may not reproduce the macOS Tab rule,
-so the card's markup guard (every control an explicit tab stop) is the platform-independent net. All of this
+so the card's markup guard (every control an explicit tab stop) is the platform-independent net. A development
+host without WebKit's system libraries runs the lane in the matching
+`mcr.microsoft.com/playwright:v<version>-noble` image with the worktree mounted at its own path, a Linux `bun`
+release binary, `--network host` (the container's `localhost` resolves to `::1` first, which the wire fixture
+cannot reach) and a prebuilt web bundle (`THINKRAIL_E2E_SKIP_BUILD=1`). All of this
 runs without provider variability; desktop package tests separately pin the stable
 backend-profile/window adapter required across dynamic-port restarts. Streaming-band coverage remains
 `@agent` because only Pi's real row growth exercises that lifecycle. Stream-mount coverage injects

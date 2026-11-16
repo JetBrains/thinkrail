@@ -8,10 +8,10 @@ test.describe("new workspace keyboard shortcut", () => {
 		await openFixtureProject(page);
 
 		const dialog = page.getByTestId("new-workspace-dialog");
-		await expect(page.getByTestId("add-workspace").first()).toHaveAttribute(
-			"aria-label",
-			/^Create workspace \(.*N.*\)$/,
-		);
+		const add = page.getByTestId("add-workspace").first();
+		await expect(add).toHaveAttribute("aria-label", "Create workspace");
+		await add.hover();
+		await expect(page.getByRole("tooltip")).toHaveText(/^Create workspace\s*Ctrl\s*Alt\s*N$/);
 
 		await page.getByTestId("welcome-title").click();
 		await page.keyboard.press("ControlOrMeta+n");

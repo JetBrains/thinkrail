@@ -23,6 +23,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment, memo, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { HJKL_KEYS, TAB_KEYS } from "../../keybindings";
 import { chatLabel, DOUBLE_CLICK_SETTLE_MS, type LayoutAttention, tupleKey } from "../../lib";
 import {
 	type AuxiliaryRailControlProps,
@@ -64,6 +65,16 @@ import {
 	tabSearchKeywords,
 	useHorizontalOverflow,
 } from "./workbenchShared";
+
+function plainKey(event: React.KeyboardEvent): boolean {
+	return (
+		!event.altKey &&
+		!event.ctrlKey &&
+		!event.metaKey &&
+		!event.shiftKey &&
+		!isImeComposing(event.nativeEvent)
+	);
+}
 
 export interface TabStripProps {
 	document: WorkspaceLayoutDocument;
@@ -236,22 +247,28 @@ export const TabStrip = memo(function TabStrip({
 							panelId={panelId}
 							{...(splitGeometry ? { splitGeometry } : {})}
 							onKeyDown={(event) => {
-								if (event.altKey && event.shiftKey && event.key === "ArrowLeft") {
+								if (event.altKey && event.shiftKey && event.key === TAB_KEYS.moveBefore.key) {
 									event.preventDefault();
 									if (index > 0) {
 										const moved = moveTabToGroup(document, tab, location, index - 1);
 										if (!isLayoutUnavailable(moved)) applyResult(moved);
 									}
-								} else if (event.altKey && event.shiftKey && event.key === "ArrowRight") {
+								} else if (event.altKey && event.shiftKey && event.key === TAB_KEYS.moveAfter.key) {
 									event.preventDefault();
 									if (index < tabs.length - 1) {
 										const moved = moveTabToGroup(document, tab, location, index + 1);
 										if (!isLayoutUnavailable(moved)) applyResult(moved);
 									}
-								} else if (event.key === "ArrowLeft") {
+								} else if (
+									event.key === "ArrowLeft" ||
+									(plainKey(event) && event.key === HJKL_KEYS.left.key)
+								) {
 									event.preventDefault();
 									selectAt(index === 0 ? tabs.length - 1 : index - 1);
-								} else if (event.key === "ArrowRight") {
+								} else if (
+									event.key === "ArrowRight" ||
+									(plainKey(event) && event.key === HJKL_KEYS.right.key)
+								) {
 									event.preventDefault();
 									selectAt(index === tabs.length - 1 ? 0 : index + 1);
 								} else if (event.key === "Home") {
@@ -260,7 +277,7 @@ export const TabStrip = memo(function TabStrip({
 								} else if (event.key === "End") {
 									event.preventDefault();
 									selectAt(tabs.length - 1);
-								} else if (event.key === "Delete") {
+								} else if (event.key === TAB_KEYS.close.key) {
 									event.preventDefault();
 									closeTab(tab);
 								}
@@ -356,6 +373,7 @@ export interface WorkbenchTabProps {
 	reorderIndexes?: { previous: number | undefined; next: number | undefined };
 	rail?: AuxiliaryRailControlProps & {
 		entryKey: string;
+		shortcut?: readonly string[] | undefined;
 		vertical: boolean;
 		beforeIndex: number;
 		afterIndex: number;
@@ -566,9 +584,9 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 			aria-keyshortcuts={
 				rail
 					? rail.vertical
-						? "Enter Space Delete Home End ArrowUp ArrowDown Alt+Shift+ArrowUp Alt+Shift+ArrowDown Control+F6 Control+Shift+F6 Shift+F10 ContextMenu"
-						: "Enter Space Delete Home End ArrowLeft ArrowRight Alt+Shift+ArrowLeft Alt+Shift+ArrowRight Control+F6 Control+Shift+F6 Shift+F10 ContextMenu"
-					: "Delete Home End ArrowLeft ArrowRight Alt+Shift+ArrowLeft Alt+Shift+ArrowRight Control+F6 Control+Shift+F6 Shift+F10 ContextMenu"
+						? "Enter Space Delete Home End ArrowUp ArrowDown K J Alt+Shift+ArrowUp Alt+Shift+ArrowDown Control+F6 Control+Shift+F6 Shift+F10 ContextMenu"
+						: "Enter Space Delete Home End ArrowLeft ArrowRight H L Alt+Shift+ArrowLeft Alt+Shift+ArrowRight Control+F6 Control+Shift+F6 Shift+F10 ContextMenu"
+					: "Delete Home End ArrowLeft ArrowRight H L Alt+Shift+ArrowLeft Alt+Shift+ArrowRight Control+F6 Control+Shift+F6 Shift+F10 ContextMenu"
 			}
 			aria-controls={panelId}
 			data-testid={rail && tab.kind === "tool" ? `tool-rail-${tab.tool}` : undefined}
@@ -674,7 +692,11 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 							/>
 						</div>
 					) : rail ? (
-						<IconTooltip label={name} side={railTooltipSide(location.area)}>
+						<IconTooltip
+							label={name}
+							shortcut={rail.shortcut}
+							side={railTooltipSide(location.area)}
+						>
 							{tabButton}
 						</IconTooltip>
 					) : (
