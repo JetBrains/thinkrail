@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { delimiter, win32 } from "node:path";
 import type { EditorInfo } from "@thinkrail/contracts";
@@ -147,6 +147,7 @@ export function revealInFileManager(
 	platform: NodeJS.Platform = process.platform,
 ): void {
 	if (!existsSync(worktreePath)) throw new Error(`Folder not found: ${worktreePath}`);
+	if (!statSync(worktreePath).isDirectory()) throw new Error(`Not a folder: ${worktreePath}`);
 	const cmd =
 		platform === "darwin"
 			? ["open", worktreePath]

@@ -91,6 +91,7 @@ import {
 	WORKSPACE_CREATION_PROTOCOL_VERSION,
 	WORKSPACE_PATH_RESOLVE_PROTOCOL_VERSION,
 	WORKSPACE_READ_STATE_PROTOCOL_VERSION,
+	WORKSPACE_REVEAL_PATH_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	WS_CHANNELS,
 	WS_METHODS,
@@ -375,6 +376,12 @@ test("workspace path resolution is pinned to v119", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(WORKSPACE_PATH_RESOLVE_PROTOCOL_VERSION);
 	expect(WORKSPACE_PATH_RESOLVE_PROTOCOL_VERSION).toBe(119);
 	expect(WS_METHODS.workspaceResolvePath).toBe("workspace.resolvePath");
+});
+
+test("opening a path in the file manager is pinned to v122", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(WORKSPACE_REVEAL_PATH_PROTOCOL_VERSION);
+	expect(WORKSPACE_REVEAL_PATH_PROTOCOL_VERSION).toBe(122);
+	expect(WS_METHODS.workspaceRevealPath).toBe("workspace.revealPath");
 });
 
 test("the question panel height setting is pinned to v114", () => {

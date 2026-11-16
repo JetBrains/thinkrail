@@ -2,6 +2,7 @@ import {
 	RiFileCopyLine as Copy,
 	RiFileCopy2Line as CopyEntry,
 	RiScissorsCutLine as Cut,
+	RiFolderOpenLine as FolderOpen,
 	RiClipboardLine as Paste,
 	RiDeleteBinLine as Trash,
 } from "@remixicon/react";
@@ -33,7 +34,14 @@ import { getTransport } from "../transport";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { type ChangeMarks, statusMarkClass } from "./changesModel";
 import { holdEditorWarm, useEditorWarm, warmOnHover } from "./editorWarm";
-import { deleteEntry, pasteDestination, pasteInto, supportsFileMutations } from "./fileTreeActions";
+import {
+	deleteEntry,
+	pasteDestination,
+	pasteInto,
+	revealEntry,
+	supportsFileMutations,
+	supportsRevealPath,
+} from "./fileTreeActions";
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
@@ -349,6 +357,7 @@ function FileTreeMenu({
 	const [open, setOpen] = useState(false);
 	const mutations = useAppStore((s) => supportsFileMutations(s.protocolVersion));
 	const moves = useAppStore((s) => supportsArtifacts(s.protocolVersion));
+	const reveal = useAppStore((s) => supportsRevealPath(s.protocolVersion));
 	const canPaste = useAppStore((s) => s.fileClipboard !== null);
 	const copyPath = (absolute: boolean) => {
 		const worktreePath = selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath;
@@ -370,6 +379,15 @@ function FileTreeMenu({
 				{children(open)}
 			</ContextMenuTrigger>
 			<ContextMenuContent data-testid="file-tree-actions">
+				{reveal ? (
+					<ContextMenuItem
+						data-testid="file-reveal-parent"
+						onSelect={() => void revealEntry(workspaceId, path, kind)}
+					>
+						<FolderOpen />
+						{kind === "dir" ? t("panels.fileTree.openFolder") : t("panels.fileTree.revealParent")}
+					</ContextMenuItem>
+				) : null}
 				<ContextMenuItem data-testid="file-copy-path" onSelect={() => copyPath(true)}>
 					<Copy />
 					{t("panels.fileTree.copyPath")}

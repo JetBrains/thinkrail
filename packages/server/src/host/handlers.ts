@@ -141,6 +141,7 @@ import {
 	readDir,
 	readFile,
 	renameWorktreeEntry,
+	resolveWorktreeFile,
 } from "../fs";
 import {
 	commitsAheadOf,
@@ -877,6 +878,10 @@ const handlers: WsHandlers = {
 	},
 	"workspace.reveal": (params) => {
 		revealInFileManager(getWorkspace(params.id).worktreePath);
+		return { ok: true } as const;
+	},
+	"workspace.revealPath": (params) => {
+		revealInFileManager(resolveWorktreeFile(params.id, params.path));
 		return { ok: true } as const;
 	},
 	"editor.list": () => listAvailableEditors(),

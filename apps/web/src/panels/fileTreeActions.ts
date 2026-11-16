@@ -1,4 +1,7 @@
-import { FS_MUTATIONS_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import {
+	FS_MUTATIONS_PROTOCOL_VERSION,
+	WORKSPACE_REVEAL_PATH_PROTOCOL_VERSION,
+} from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { fileName } from "../lib";
 import { type FileClipboard, toast, useAppStore } from "../store";
@@ -6,6 +9,10 @@ import { errorText, getTransport, wsErrorCode } from "../transport";
 
 export function supportsFileMutations(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= FS_MUTATIONS_PROTOCOL_VERSION;
+}
+
+export function supportsRevealPath(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= WORKSPACE_REVEAL_PATH_PROTOCOL_VERSION;
 }
 
 export function pasteDestination(path: string, kind: "dir" | "file"): string {
@@ -58,6 +65,21 @@ export async function pasteInto(workspaceId: string, destinationDirectory: strin
 							: errorText(error),
 			t("panels.fileTree.pasteFailed"),
 		);
+	}
+}
+
+export async function revealEntry(
+	workspaceId: string,
+	path: string,
+	kind: "dir" | "file",
+): Promise<void> {
+	try {
+		await getTransport().request("workspace.revealPath", {
+			id: workspaceId,
+			path: pasteDestination(path, kind),
+		});
+	} catch (error) {
+		toast.error(errorText(error), t("panels.fileTree.revealFailed"));
 	}
 }
 

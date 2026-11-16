@@ -26,8 +26,9 @@ worktree in the host's file manager — the workspace row's "Open in" menu.
   matching `apps/cli`'s `openBrowser`); throws when the id is unknown or no longer installed. `revealInFileManager
   (worktreePath)` opens the OS's own file manager there: `open` (macOS), `explorer` (Windows), `xdg-open`
   (Linux desktop default) — fire-and-forget, so `explorer`'s well-known nonzero-on-success exit is never
-  inspected. Because that exit can't signal failure, it throws up front when the folder is missing (so the
-  client's failure toast fires instead of Explorer falling back to Documents), hands `explorer` a
+  inspected. Because that exit can't signal failure, it throws up front when the path is missing or is
+  not a folder (so the client's failure toast fires instead of Explorer falling back to Documents, and a
+  reveal never hands a file to the OS's default handler), hands `explorer` a
   backslash-normalized path (it also opens Documents for a forward-slash path), and launches with
   `windowsHide: false` — `explorer` applies the hide flag to the folder window it opens.
 - **Vim is `kind: "terminal"`, not launched here.** It has no GUI window of its own — spawning it detached

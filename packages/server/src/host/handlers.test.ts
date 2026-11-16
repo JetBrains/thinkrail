@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, onTestFinished, test } from "bun:test";
+import { afterEach, beforeEach, expect, onTestFinished, spyOn, test } from "bun:test";
 import {
 	chmodSync,
 	existsSync,
@@ -169,6 +169,41 @@ afterEach(() => {
 test("every contract method has a registered handler", () => {
 	const unregistered = Object.values(WS_METHODS).filter((m) => requestMethodDiagnostic(m) !== m);
 	expect(unregistered).toEqual([]);
+});
+
+test("revealPath opens a contained folder in the host's file manager", async () => {
+	writeFileSync(
+		join(dataDir, "workspaces.json"),
+		JSON.stringify([
+			{
+				id: "w1",
+				projectId: "p1",
+				name: "Default",
+				worktreePath: repo,
+				createdAt: 1,
+			},
+		]),
+	);
+	mkdirSync(join(repo, "src"), { recursive: true });
+	const editors = await import("../editors");
+	const revealed: string[] = [];
+	const reveal = spyOn(editors, "revealInFileManager").mockImplementation((path: string) => {
+		revealed.push(path);
+	});
+	try {
+		await handleRequest("workspace.revealPath", { id: "w1", path: "src" }, CTX);
+		await handleRequest("workspace.revealPath", { id: "w1", path: "" }, CTX);
+		expect(revealed).toEqual([join(repo, "src"), repo]);
+		await expect(
+			handleRequest("workspace.revealPath", { id: "w1", path: "../outside" }, CTX),
+		).rejects.toThrow("Path escapes the worktree");
+		await expect(
+			handleRequest("workspace.revealPath", { id: "w1", path: ".git" }, CTX),
+		).rejects.toThrow("The .git directory is not readable");
+		expect(revealed).toEqual([join(repo, "src"), repo]);
+	} finally {
+		reveal.mockRestore();
+	}
 });
 
 test("file mutation handlers invalidate watcher-ignored paths after success", async () => {

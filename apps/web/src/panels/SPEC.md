@@ -326,6 +326,9 @@ treatment.
   a focused row) opens its menu: **Copy path** (absolute, through `joinWorkspacePath`) and **Copy relative
   path** (worktree-relative). A compacted folder copies its deepest path, matching its label, and copying
   neither opens nor selects the row. The row stays highlighted while its menu is open. From a host at
+  `WORKSPACE_REVEAL_PATH_PROTOCOL_VERSION` (v122) it also offers **Open containing folder** — **Open
+  folder** on a folder row, which opens the folder itself — through `workspace.revealPath` (`fileTreeActions`
+  asks for the folder, never the file), and a refused or failed reveal toasts. From a host at
   `FS_MUTATIONS_PROTOCOL_VERSION` (v118) the menu adds the tree's two mutations, both host-owned and
   watcher-refreshed, never patched into the rows (`fileTreeActions`): **Copy** puts the row's entry — file,
   folder or link, a compacted folder's deepest folder — on the session-only in-app clipboard

@@ -52,6 +52,17 @@ test("Copy path actions on a Files tree row copy that row without opening it", a
 	await expectClipboard(page, join(workspace.worktreePath, "compact", "only", "here"));
 });
 
+test("a Files tree row offers to open its containing folder", async ({ page }) => {
+	await workspaceWithoutChatTab(page);
+	await revealWorkbenchTool(page, "files");
+	const readme = page.getByTestId("file-node").filter({ hasText: "README.md" });
+	await expect(readme).toBeVisible();
+
+	await readme.click({ button: "right" });
+	await expect(page.getByTestId("file-reveal-parent")).toHaveText("Open containing folder");
+	await expect(page.getByTestId("editor-tab")).toHaveCount(0);
+});
+
 test("the Context Menu key opens a focused Files row's copy actions", async ({ page, context }) => {
 	await context.grantPermissions(["clipboard-read", "clipboard-write"]);
 	await workspaceWithoutChatTab(page);

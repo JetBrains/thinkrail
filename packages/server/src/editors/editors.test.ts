@@ -208,6 +208,18 @@ describe("revealInFileManager", () => {
 		expect(revealCalls).toEqual([]);
 	});
 
+	test("rejects a file before launching anything", () => {
+		revealCalls.length = 0;
+		const file = join(dir, "notes.md");
+		writeFileSync(file, "text");
+		try {
+			expect(() => revealInFileManager(file, recordingReveal, "linux")).toThrow(/Not a folder/);
+			expect(revealCalls).toEqual([]);
+		} finally {
+			rmSync(file, { force: true });
+		}
+	});
+
 	test("names the platform when no file manager launcher is available", () => {
 		const throwingSpawn: SpawnFn = () => {
 			throw new Error("ENOENT");

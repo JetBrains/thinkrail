@@ -426,6 +426,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `detached` row the chooser disables),
   **`WorkspacePathMatch`** (a `workspace.resolvePath` answer: `workspaceId`, `projectId`, and a POSIX
   `relativePath` contained in that workspace),
+  **`workspace.revealPath`** from **`WORKSPACE_REVEAL_PATH_PROTOCOL_VERSION`** (v122): `{ id, path }` → ack,
+  opening that worktree-relative folder in the OS file manager (the client passes the folder it wants opened —
+  a file's containing folder, or a folder itself); a path outside the worktree, under `.git`, or one that is
+  not a folder is refused; a client hides the action from older hosts,
   `FileNode` (file-tree node; worktree-relative `/` path, `gitignored` set by the host when git ignores it),
   the Files tree's two mutations from **`FS_MUTATIONS_PROTOCOL_VERSION`** (v118): `fs.copy`
   (`{ sourceWorkspaceId, sourcePath, destinationWorkspaceId, destinationDirectory }` → `{ path }`, a file,

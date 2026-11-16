@@ -143,7 +143,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 121;
+export const PROTOCOL_VERSION = 122;
+export const WORKSPACE_REVEAL_PATH_PROTOCOL_VERSION = 122;
 export const ARTIFACTS_PROTOCOL_VERSION = 121;
 export const IMAGE_REFS_PROTOCOL_VERSION = 120;
 export const IMAGES_ROUTE = "/images/";
@@ -442,6 +443,7 @@ export const WS_METHODS = {
 	workspaceWatchReady: "workspace.watchReady",
 	workspaceOpenIn: "workspace.openIn",
 	workspaceReveal: "workspace.reveal",
+	workspaceRevealPath: "workspace.revealPath",
 	editorList: "editor.list",
 	gitListBranches: "git.listBranches",
 	gitPrefetch: "git.prefetch",
@@ -1046,6 +1048,7 @@ export interface WsMethodMap {
 	};
 	"workspace.openIn": { params: { id: string; editor: string }; result: Ack };
 	"workspace.reveal": { params: { id: string }; result: Ack };
+	"workspace.revealPath": { params: { id: string; path: string }; result: Ack };
 	"editor.list": { params: Record<string, never>; result: EditorInfo[] };
 	"git.listBranches": { params: { projectId: string }; result: BranchList };
 	"git.prefetch": { params: { projectId: string; ref: string }; result: { ok: boolean } };

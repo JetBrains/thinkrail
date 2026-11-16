@@ -1,5 +1,8 @@
 import { afterAll, beforeEach, expect, mock, test } from "bun:test";
-import { FS_MUTATIONS_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import {
+	FS_MUTATIONS_PROTOCOL_VERSION,
+	WORKSPACE_REVEAL_PATH_PROTOCOL_VERSION,
+} from "@thinkrail/contracts";
 
 const requests: { method: string; params: unknown }[] = [];
 let answer: () => Promise<unknown> = () => Promise.resolve({ ok: true });
@@ -22,7 +25,9 @@ const {
 	pasteDestination,
 	pasteInto,
 	renameEntry,
+	revealEntry,
 	supportsFileMutations,
+	supportsRevealPath,
 } = await import("./fileTreeActions");
 
 function reset(): void {
@@ -40,10 +45,36 @@ test("copy, paste and delete stay hidden until the host serves them", () => {
 	expect(supportsFileMutations(FS_MUTATIONS_PROTOCOL_VERSION)).toBe(true);
 });
 
+test("opening a folder stays hidden until the host serves it", () => {
+	expect(supportsRevealPath(null)).toBe(false);
+	expect(supportsRevealPath(WORKSPACE_REVEAL_PATH_PROTOCOL_VERSION - 1)).toBe(false);
+	expect(supportsRevealPath(WORKSPACE_REVEAL_PATH_PROTOCOL_VERSION)).toBe(true);
+});
+
 test("a paste on a file lands beside it, on a folder inside it", () => {
 	expect(pasteDestination("README.md", "file")).toBe(".");
 	expect(pasteDestination("src/app/main.ts", "file")).toBe("src/app");
 	expect(pasteDestination("src/app", "dir")).toBe("src/app");
+});
+
+test("opening a containing folder asks for the folder, never the file", async () => {
+	await revealEntry("w1", "README.md", "file");
+	await revealEntry("w1", "src/app/main.ts", "file");
+	await revealEntry("w1", "src/app", "dir");
+	expect(requests).toEqual([
+		{ method: "workspace.revealPath", params: { id: "w1", path: "." } },
+		{ method: "workspace.revealPath", params: { id: "w1", path: "src/app" } },
+		{ method: "workspace.revealPath", params: { id: "w1", path: "src/app" } },
+	]);
+});
+
+test("a reveal the host refuses explains itself", async () => {
+	answer = () => Promise.reject(new Error("Folder not found: /x"));
+	await revealEntry("w1", "src", "dir");
+	const [toast] = useAppStore.getState().toasts;
+	expect(toast?.variant).toBe("error");
+	expect(toast?.title).toBe("Couldn't open the folder");
+	expect(toast?.message).toBe("Folder not found: /x");
 });
 
 test("deleting the copied entry or one of its folders empties the clipboard", () => {
