@@ -161,15 +161,21 @@ function CompareBody({
 				data-testid="ask-compare-grid"
 				className="grid h-full auto-rows-[minmax(0,1fr)] grid-cols-2 gap-8 xl:grid-cols-3"
 			>
-				{items.map((item, index) =>
-					pane(item, {
-						highlighted: index === state.focus,
-						onTitle: () => {
+				{items.map((item, index) => (
+					<ComparePane
+						key={item.key}
+						item={item}
+						chosen={chosen}
+						width={width}
+						onChoose={onChoose ? () => choose(item) : undefined}
+						onOpenFile={onOpenFile}
+						highlighted={index === state.focus}
+						onTitle={() => {
 							setState(showCompareItem(state, index));
 							focusBody();
-						},
-					}),
-				)}
+						}}
+					/>
+				))}
 			</div>
 		);
 	} else if (state.view === "pair" && focused && left) {
