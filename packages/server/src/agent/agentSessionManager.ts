@@ -2765,7 +2765,9 @@ export async function disableSessionServerFallback(sessionId: string): Promise<W
 	const current = await getPiRuntimeGeneration();
 	await disableProviderFallback(model.provider, [current.runtime, entry.generation.runtime]);
 	if (sessions.get(sessionId) !== entry) throw new Error(`Unknown session: ${sessionId}`);
-	const resolved = resolveWireModel(entry.generation.runtime, model);
+	const live = entry.session.model ?? model;
+	if (live.provider !== model.provider) return sessionWireModel(live, entry.generation);
+	const resolved = resolveWireModel(entry.generation.runtime, live);
 	if (declaresServerFallback(resolved))
 		throw new CodedError("SERVER_FALLBACK_STILL_ON", "A model override still sends fallbacks");
 	await entry.session.setModel(resolved);

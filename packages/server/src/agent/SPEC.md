@@ -186,6 +186,21 @@ re-opened transcripts provider-valid.
     the parent only when the child runs again or is reconciled, so the parent's live total lags that
     spend; and a second client with Settings → Models open learns of another client's change on its next
     mount, since the setting has no push channel (unlike `provider.changed` for `models.json`).
+  - `serverFallback` — the one-click repair for a proxy or gateway that rejects pi's Anthropic
+    server-side refusal fallback (the `fallbacks` request field plus its beta header, which pi sends
+    whenever a model's `compat.allowedFallbackModels` is non-empty). `disableProviderFallback` writes
+    **provider-level** `providers.<p>.compat.allowedFallbackModels: []` through `modelsFile`. pi's
+    `mergeCompat` lets provider compat win over every built-in model's compat, so one key covers today's
+    and future fallback models; a per-model override (rejected: today's models only) is not written. It
+    then refreshes the given runtimes without network and publishes `provider.changed` only when the file
+    changed. `disableSessionServerFallback` (session manager, `session.disableServerFallback`) is the one
+    exception to "live sessions keep their model": it refuses with `SERVER_FALLBACK_NOT_USED` unless the
+    chat's model declares fallback targets, refreshes both the current and the session's generation,
+    re-resolves the session's *current* model when it is still on that provider (a model the user picked
+    on another provider meanwhile is left alone), refuses with `SERVER_FALLBACK_STILL_ON` when a
+    hand-written per-model override still sends fallbacks, and otherwise `setModel`s the refreshed model
+    so the chat's next request drops the field without a restart. There is no undo affordance; reverting
+    is a manual `models.json` edit.
   - `customEndpoints` — the settings adapter for the user's own OpenAI-compatible servers (a company
     gateway or a local llama.cpp / vLLM / sglang / Ollama / LM Studio server), again a `models.json` editor
     and not a registry: each is a `custom-*` provider with `api: "openai-completions"`, served by pi like any
@@ -1299,7 +1314,7 @@ re-opened transcripts provider-valid.
   the runtime-generation facade (`usePiRuntime`, candidate prepare/activate, current generation id, and the
   closed `load-failed` outcome—no manager internals) plus `configurePiRuntime`/factory test seams and the
   pre-bootstrap `configurePiRuntimeGenerationInitializer` composition seam; `listModelContextSettings` /
-  `setModelContextWindow` (the `modelContext` adapter); `readCacheWarmingSetting` / `writeCacheWarmingMode`
+  `setModelContextWindow` (the `modelContext` adapter); `disableSessionServerFallback` (the `serverFallback` repair); `readCacheWarmingSetting` / `writeCacheWarmingMode`
   (the `cacheWarming` adapter); `listCustomEndpoints` / `probeCustomEndpoint` /
   `saveCustomEndpoint` / `removeCustomEndpoint` (the `customEndpoints` adapter); `setModelsFilePublisher`
   (their shared `provider.changed` seam); `piLoginOptions` (pi login options
@@ -1373,7 +1388,7 @@ re-opened transcripts provider-valid.
   skill roots — `agent` never imports an `@thinkrail/ext-*` package or its pi package directly; the barrel
   stays Node-loadable for the workflow harness ([[module-workflow-tests]]): web access's third-party
   package is compiled JavaScript, imported when its factory runs, see [[module-ext-web-access]]); `typebox` (the host tools' parameter schemas); `jsonc-parser` (targeted
-  `models.json` edits in `modelsFile`, `modelContext` and `customEndpoints`); global `fetch` (only
+  `models.json` edits in `modelsFile`, `modelContext`, `serverFallback` and `customEndpoints`); global `fetch` (only
   `customEndpoints`' user-initiated probes of the address the user typed); `trash` (reached only through the
   sibling **`trash` module** — see [[submodule-server-trash]]: one path, globbing disabled, allowed to
   throw, never degraded to `unlink`; the launcher's staged-helper and procfs-parser seams live there too,

@@ -11,6 +11,7 @@ import {
 	disposeAllSessions,
 	promptSession,
 	setSessionManagerFactory,
+	setSessionModel,
 	toWireModel,
 } from "./agentSessionManager";
 import { setModelsFilePublisher } from "./modelsFile";
@@ -69,6 +70,23 @@ async function anthropicRuntime(): Promise<ModelRuntime> {
 		key: "fixture-only-key",
 	}));
 	const runtime = await ModelRuntime.create({ credentials, allowModelNetwork: false });
+	runtime.registerProvider("other", {
+		api: "openai-responses",
+		apiKey: "fixture-only-key",
+		baseUrl: "http://fixture.invalid",
+		models: [
+			{
+				id: "other-model",
+				name: "Other",
+				api: "openai-responses",
+				reasoning: false,
+				input: ["text"],
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 100_000,
+				maxTokens: 4096,
+			},
+		],
+	});
 	await runtime.refresh({ allowNetwork: false });
 	configurePiRuntime(runtime);
 	return runtime;
@@ -182,6 +200,23 @@ describe("disableSessionServerFallback", () => {
 		} finally {
 			proxy.stop(true);
 		}
+	});
+
+	test("keeps a model the user switched to on another provider while the fix ran", async () => {
+		const runtime = await anthropicRuntime();
+		const fable = fallbackModel(runtime);
+		const other = runtime.getModel("other", "other-model");
+		if (!other) throw new Error("Missing fixture model");
+		const { sessionId } = await createSession({
+			cwd,
+			workspaceId: "ws",
+			model: toWireModel(fable),
+		});
+
+		const pending = disableSessionServerFallback(sessionId);
+		await setSessionModel(sessionId, toWireModel(other));
+
+		expect(await pending).toMatchObject({ provider: "other", id: "other-model" });
 	});
 
 	test("refuses a chat whose model sends no fallbacks without touching models.json", async () => {
