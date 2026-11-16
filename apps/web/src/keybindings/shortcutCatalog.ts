@@ -1,7 +1,7 @@
 import type { MessageKey } from "@thinkrail/locales";
 import { type CommandShortcut, shortcutKeys } from "../commands";
 import { platformFamily } from "../lib";
-import { isPlainChord, keyCap, parseChord } from "./chord";
+import { keyCap } from "./chord";
 import { displayShortcut, FOCUS_GROUP_BINDINGS, type KeybindingId, keysLabel } from "./keybindings";
 import { keybindingShortcut, keybindingShortcuts, type ResolvedKeybindings } from "./resolve";
 
@@ -927,9 +927,13 @@ export function shortcutRows(context: ShortcutContext): ShortcutRow[] {
 	];
 }
 
-export function elementKeyUses(chord: string, platform: string): ShortcutCatalogEntry[] {
-	const pressed = parseChord(chord);
-	if (pressed === null || !isPlainChord(pressed)) return [];
+export type TypedPress = Pick<KeyboardEvent, "key" | "shiftKey" | "ctrlKey" | "metaKey" | "altKey">;
+
+const typedKey = (key: string) => (key.length === 1 ? key.toLowerCase() : key);
+
+export function elementKeyUses(press: TypedPress, platform: string): ShortcutCatalogEntry[] {
+	if (press.ctrlKey || press.metaKey || press.altKey) return [];
+	const pressed = typedKey(press.key);
 	return SHORTCUT_CATALOG.filter(({ keys = [] }) =>
 		keys.some(
 			(key) =>
@@ -937,8 +941,8 @@ export function elementKeyUses(chord: string, platform: string): ShortcutCatalog
 				!key.mod &&
 				!key.ctrl &&
 				!key.alt &&
-				(key.shift === true) === (pressed.shift === true) &&
-				keyCap(key.key) === pressed.key,
+				(key.shift === true) === press.shiftKey &&
+				typedKey(key.key) === pressed,
 		),
 	);
 }

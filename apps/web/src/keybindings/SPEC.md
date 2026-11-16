@@ -242,9 +242,10 @@ binding does.
   nothing remains (normalised the same way). The resolver's priority alone would
   leave a lower-ranked holder losing the chord, so Replace never relies on it. **`resetChord`** drops one
   override.
-- **`elementKeyUses(chord, platform)`** lists the catalog `keys` rows a plain chord (Shift allowed) already
-  acts in, for the plain-command warning; the element key keeps working there, since an extension
-  command never matches in text entry and a feature handler sees the key first only where it owns focus.
+- **`elementKeyUses({key, shift}, platform)`** lists the catalog `keys` rows that act on a press's
+  **typed** key (`event.key`, Shift allowed; F-keys and named keys included), for the plain-command
+  warning and the focused-element rule. It takes the typed key, not the physical chord, because element
+  handlers match `event.key`: on Dvorak the physical `KeyV` types `k`, which the transcript owns.
 
 ## Keybindings file
 

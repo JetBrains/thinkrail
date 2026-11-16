@@ -38,6 +38,7 @@ import {
 	resetChord,
 	SHORTCUT_SURFACE_TITLES,
 	SHORTCUT_SURFACES,
+	type ShortcutSurface,
 } from "../keybindings";
 import { SETTINGS_TAG } from "../panels/SettingsGroup";
 import { SettingsNotice } from "../panels/SettingsNotice";
@@ -55,7 +56,12 @@ const PRIMARY = "[data-focus-row-primary]";
 type Pending =
 	| { readonly command: string; readonly kind: "plain" }
 	| { readonly command: string; readonly kind: "desktop"; readonly chord: string }
-	| { readonly command: string; readonly kind: "element"; readonly chord: string }
+	| {
+			readonly command: string;
+			readonly kind: "element";
+			readonly chord: string;
+			readonly places: readonly ShortcutSurface[];
+	  }
 	| { readonly command: string; readonly kind: "reserved"; readonly chord: string }
 	| {
 			readonly command: string;
@@ -331,11 +337,7 @@ function PendingNotice({
 		action = dismiss;
 	} else if (pending.kind === "element") {
 		const places = [
-			...new Set(
-				elementKeyUses(pending.chord, platform).map(({ surface }) =>
-					t(SHORTCUT_SURFACE_TITLES[surface]),
-				),
-			),
+			...new Set(pending.places.map((surface) => t(SHORTCUT_SURFACE_TITLES[surface]))),
 		];
 		text = t("settings.keyboard.editor.elementKey", {
 			key: chordName(pending.chord, platform),
@@ -605,8 +607,14 @@ export function KeybindingEditor() {
 		}
 		const other = chordHolder(list, command, chord);
 		if (other !== null) return settle({ command, kind: "taken", chord, other, reserved });
-		if (entry.plain && elementKeyUses(chord, platform).length > 0) {
-			return settle({ command, kind: "element", chord });
+		const uses = entry.plain ? elementKeyUses(event, platform) : [];
+		if (uses.length > 0) {
+			return settle({
+				command,
+				kind: "element",
+				chord,
+				places: uses.map(({ surface }) => surface),
+			});
 		}
 		if (reserved) return settle({ command, kind: "reserved", chord });
 		finish(command, assignChord(list, overrides, command, chord));

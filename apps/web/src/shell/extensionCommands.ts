@@ -1,6 +1,5 @@
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import {
-	chordFromEvent,
 	elementKeyUses,
 	matchKeybinding,
 	type ResolvedKeybindings,
@@ -48,11 +47,7 @@ function ownedBy(
 	platform: string,
 ): boolean {
 	if (surface === null) return false;
-	const pressed = chordFromEvent(event, platform, { allowPlain: true });
-	return (
-		pressed.kind === "chord" &&
-		elementKeyUses(pressed.chord, platform).some((entry) => entry.surface === surface)
-	);
+	return elementKeyUses(event, platform).some((entry) => entry.surface === surface);
 }
 
 export function extensionHotkey(

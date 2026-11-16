@@ -369,10 +369,10 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
     itself with `activeLayer()` (hint mode labels the open dialog or menu). A match is
     `preventDefault` + `stopImmediatePropagation`, so neither Radix (document), Monaco nor another window
     listener sees it, and reaches the extension's `onCommand` listeners once per physical press. Only an
-    enabled extension's commands match, and only a mounted overlay listens. A plain chord the focused
-    element's surface already binds (`shortcutSurfaceOf` + `elementKeyUses`: a command rebound to `S` in a
-    tree, `C` in the transcript) is left to that element, which is what Settings → Keyboard's element-key
-    warning promises.
+    enabled extension's commands match, and only a mounted overlay listens. An unmodified press whose
+    typed key the focused element's surface already binds (`shortcutSurfaceOf` + `elementKeyUses`: `s` in
+    a tree, `k` in the transcript, on any layout) is left to that element, which is what Settings →
+    Keyboard's element-key warning promises.
   - **The claim.** `claimKeyboard(true)` says the overlay owns every key (hint mode while labels show; the
     Settings → Keyboard recorder claims it the same way);
     until it releases (or the overlay unmounts, which releases for it), `useGlobalHotkeys` dispatches no

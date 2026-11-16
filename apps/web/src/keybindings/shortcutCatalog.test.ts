@@ -256,16 +256,25 @@ describe("the shortcut catalog", () => {
 	});
 });
 
-test("a plain key names the element rows that already act on it, and a chord with a modifier none", () => {
-	const ids = (chord: string, platform = LINUX) =>
-		elementKeyUses(chord, platform).map(({ id }) => id);
-	expect(ids("KeyS")).toEqual(["trees.search"]);
-	expect(ids("KeyC")).toEqual(["transcript.copy"]);
-	expect(ids("KeyV")).toEqual(["review.markViewed"]);
-	expect(ids("KeyJ")).toContain("review.nextUnreviewed");
-	expect(ids("KeyJ")).toContain("trees.move");
-	expect(ids("Shift+ArrowUp")).toContain("review.cursorExtend");
-	expect(ids("KeyG")).toEqual([]);
-	expect(ids("Mod+KeyS")).toEqual([]);
-	expect(ids("F2")).toEqual([]);
+test("a typed key names the element rows that already act on it", () => {
+	const ids = (
+		key: string,
+		shift = false,
+		modifiers: { ctrlKey?: boolean; altKey?: boolean } = {},
+	) =>
+		elementKeyUses(
+			{ key, shiftKey: shift, ctrlKey: false, metaKey: false, altKey: false, ...modifiers },
+			LINUX,
+		).map(({ id }) => id);
+	expect(ids("s")).toEqual(["trees.search"]);
+	expect(ids("c")).toEqual(["transcript.copy"]);
+	expect(ids("v")).toEqual(["review.markViewed"]);
+	expect(ids("j")).toContain("review.nextUnreviewed");
+	expect(ids("j")).toContain("trees.move");
+	expect(ids("ArrowUp", true)).toContain("review.cursorExtend");
+	expect(ids("g")).toEqual([]);
+	expect(ids("F2")).toEqual(["trees.rename"]);
+	expect(ids("s", true)).toEqual([]);
+	expect(ids("k", false, { ctrlKey: true })).toEqual([]);
+	expect(ids("s", false, { altKey: true })).toEqual([]);
 });
