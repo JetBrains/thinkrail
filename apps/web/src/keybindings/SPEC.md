@@ -104,7 +104,8 @@ binding does.
   keeps its keys; only `Ctrl+R`'s reload guard still swallows the key.
 - **Not bound here:** `shell/shortcutCommands.ts` (close/quit/settings — native-owned and typed-key matched on
   purpose; `tab.close` only shows its `Mod+W`), the desktop page-zoom chords `Mod+=` / `Mod+-` / `Mod+Numpad0` (the preload binds them,
-  [[module-desktop]]; the palette's zoom rows only show them), the double-Shift gesture, the locked
+  [[module-desktop]]; the palette's zoom rows only show them), the double-Shift gesture, the shell's Esc
+  that leaves a text field (`field.leave`, a General row; [[submodule-web-shell]]), the locked
   navigation keys elements handle themselves (Monaco, xterm, arrows, Enter, Esc, Tab), and an extension's
   in-mode keys (`shortcuts`, display only). The catalog lists them; it binds none, and none is
   rebindable. Local keys are declared here but matched by their element (*Local keys*).

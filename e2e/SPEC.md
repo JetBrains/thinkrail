@@ -444,6 +444,11 @@ the history overlay's Delete (caret at the end only) and entry menu beside its T
 inspector's inert transcript and the @ popup taking Escape first, Stop returning focus to the composer
 (a replayed `agent_start` on the intercepted wire keeps the chat streaming without an agent), and h/l on
 a tab strip and j/k on a side rail.
+`keyboard-escape.spec.ts` pins the Esc that leaves a text field: from the composer with a draft it parks on
+the feed with no ring (draft, caret and the region's accent line kept), where `F` shows hint labels, a
+second Esc does nothing, ↓ walks to a message and that message's Esc returns to the composer; the @ menu
+takes the first Esc; the TODO rail's input lands on its panel root, from which `F` and `Mod+1` still work;
+a Settings field's Esc still closes Settings; and the terminal's Esc reaches the shell with focus kept.
 `keyboard-review.spec.ts` pins commenting from the keyboard: Tab onto a Pierre diff lands on its cursor
 proxy (`review-cursor`: a listbox whose single selected option, its `aria-activedescendant`, names the
 line and its place among the stops, while the diff container has no role or tabindex and takes the ring's

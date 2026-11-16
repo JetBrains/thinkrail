@@ -14,7 +14,7 @@ The responsive composition root: top-level app chrome, active-project/workspace 
 
 ## Boundary
 
-- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-project/workspace routing; single Settings, analytics-consent, survey-invitation, survey-window, attention-notification permission-preface, and Toaster mounts plus the keyboard-opened Create workspace dialog, the `Mod+K` / double-Shift search palette host, the `Mod+Shift+F` Find in Files host and the `Mod+?` keyboard-shortcuts dialog (and the once-mounted attention-notification observer from [[submodule-web-notifications]]); the enabled web extensions' global overlays (`ExtensionOverlays`, *Global chords*); theme application and global shortcuts; focus recovery (*Focus recovery*); the command catalog the palette runs ([[submodule-web-commands]], [[submodule-web-search]]); the injected Layout, Keyboard and optional application Update settings sections; and integration of the workbench engine with store, persistence, panels, transport-backed domain state, and error boundaries.
+- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-project/workspace routing; single Settings, analytics-consent, survey-invitation, survey-window, attention-notification permission-preface, and Toaster mounts plus the keyboard-opened Create workspace dialog, the `Mod+K` / double-Shift search palette host, the `Mod+Shift+F` Find in Files host and the `Mod+?` keyboard-shortcuts dialog (and the once-mounted attention-notification observer from [[submodule-web-notifications]]); the enabled web extensions' global overlays (`ExtensionOverlays`, *Global chords*); theme application and global shortcuts; focus recovery (*Focus recovery*) and the Esc that leaves a text field (*Esc leaves a text field*); the command catalog the palette runs ([[submodule-web-commands]], [[submodule-web-search]]); the injected Layout, Keyboard and optional application Update settings sections; and integration of the workbench engine with store, persistence, panels, transport-backed domain state, and error boundaries.
 - **Public surface:** `Shell`.
 - **Allowed deps:** child layout modules; `updates`; `search` + `commands` (the palette and the command contract it composes for it); `keybindings` (the chord table and resolver `useGlobalHotkeys` matches through and the palette's shortcuts read, and the shortcut catalog the cheatsheet renders); `findInFiles` (the window `FindInFilesHost` composes); `extensions` (the enabled extensions whose overlays and shortcut rows it mounts, and every extension's commands it resolves); `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types, wire constants, and the shared `createQuitConfirmation` rule), `@thinkrail/ui/*`, `@thinkrail/locales` (UI strings), `i18n` (`useLocaleSync`, mounted once), `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, `themes`, and `clientPreferences` (`markdownOutlinePreference` persists the store's Markdown outline visibility and side per client, through the same adapter `layoutState` uses).
 - **Forbidden:** server/shared/pi imports; being imported by panels/store/transport; putting arrangement knowledge into a feature panel; or sending current frame/view state through transport.
@@ -454,6 +454,42 @@ Quit confirmation runs the shared contracts `createQuitConfirmation` rule in bot
 "reset")`; a browser has no rows. Their shortcuts `Mod+=`, `Mod+-` and `Mod+Numpad0` (key cap `Num 0`, the
 Windows key name) are display-only — the desktop preload owns those chords ([[module-desktop]], *Native page zoom*), so they are in no web table, like
 the native menu's `Mod+,` on the Settings row. The web keeps no zoom state.
+
+## Esc leaves a text field
+
+Hint mode's `F` and every other plain key do nothing in text entry, so a bare Esc in a field moves focus
+out of it (user, 2026-11-16). `escapeLeavesField.ts`, installed once from `Shell` beside the region
+tracker, is one window `keydown` listener in the **bubble** phase. It acts only when all of these hold:
+
+- the key is a bare `Escape` (no Alt, Ctrl, Meta or Shift), no IME composes and no keyboard claim is
+  held (`keyboardClaimed`, so hint mode and the shortcut recorder keep it);
+- the event is not `defaultPrevented`;
+- the target (`composedPath()[0]`) is a text field: a `textarea`, a contenteditable or an `input` of a
+  text-like type (text, search, url, email, number, password, tel) — never a `select`, a checkbox-like
+  input, or anything inside `.monaco-editor` or `.xterm`, which keep their Esc (find widget, suggestions,
+  vim modes, shells and TUI apps);
+- the target is in no dialog, alertdialog or open menu (`shortcutLayers.isInLayer`), where Esc keeps
+  closing the layer.
+
+**Why bubble phase:** every element or layer that already owns Esc runs first and calls
+`preventDefault`, so one press never both closes something and leaves the field. Radix's
+`DismissableLayer` (dialogs, menus, popovers, the Resources inspector) prevents before it dismisses from its
+document-capture listener; the composer's mention / slash menus and slot session, tree search, the inline
+renames, the palette, Find in Files, the history overlay, the review composer and draft card, the ask
+card's note, Other and Discuss fields, the plan page's Add task field, and a running dictation (the first Esc
+stops it, from a `document` bubble listener that always precedes this `window` one; [[submodule-web-speech]])
+prevent in their own handlers. A
+new owner of Esc must call `preventDefault` too.
+
+**Landing** is markup, like focus recovery: inside the field's region (`[data-region]`), the first
+rendered, focusable `[data-focus-park]` — the chat marks its message feed ([[submodule-web-chat]]) — else
+the region root, focused with `preventScroll`. The listener then prevents the default, so a search input
+keeps its text. The workbench group roots are `tabIndex=-1` and draw no ring (`outline-none`): focus
+stays in the same region, whose accent line is the indicator, and nothing inside is selected. The top bar
+and the Project Home pane have neither a park nor a focusable root, so there focus stays in the field
+(their fields all own Esc today: renames and tree search). A root is never remembered by the region tracker, so a later F6,
+`Mod+1…9` or recovery safety net into that region lands by the usual rule (the element last focused
+there, else the default); focus recovery records a parked root like any focus.
 
 ## Focus recovery
 

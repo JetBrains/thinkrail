@@ -69,6 +69,7 @@ import {
 	toggleRightSide,
 } from "./chordActions";
 import { ExtensionOverlays } from "./ExtensionOverlays";
+import { installEscapeLeavesField } from "./escapeLeavesField";
 import { FindInFilesHost } from "./FindInFilesHost";
 import { installFocusRecovery } from "./focusRecovery";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
@@ -220,6 +221,7 @@ function ShellLayout() {
 	]);
 	useEffect(installRegionTracker, []);
 	useEffect(installFocusRecovery, []);
+	useEffect(installEscapeLeavesField, []);
 	useGlobalHotkeys({
 		onProjects: () => toggleLeftSide(homeProjects.toggle),
 		...(hasActiveWorkspace

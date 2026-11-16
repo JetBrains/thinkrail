@@ -110,7 +110,10 @@ export function ReviewComposer({
 				onKeyDown={(event) => {
 					event.stopPropagation();
 					if (isImeComposing(event.nativeEvent)) return;
-					if (event.key === "Escape") close();
+					if (event.key === "Escape") {
+						event.preventDefault();
+						close();
+					}
 					const action = composerSubmit(event.nativeEvent, keys);
 					if (action) {
 						event.preventDefault();

@@ -2873,6 +2873,7 @@
 	"shortcuts.history.select": "Выбрать запись",
 	"shortcuts.history.send": "Отправить запрос",
 	"shortcuts.inactive": "не действует: занято командой «{{winner}}»",
+	"shortcuts.leaveField": "Выйти из текстового поля",
 	"shortcuts.moveToNextGroup": "Переместить вкладку в следующую группу",
 	"shortcuts.moveToPreviousGroup": "Переместить вкладку в предыдущую группу",
 	"shortcuts.newWorkspace": "Новое рабочее пространство",

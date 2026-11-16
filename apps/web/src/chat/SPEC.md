@@ -476,7 +476,9 @@ content and their own controls, which a treeitem's name would flatten and its ro
   `onOpenFile` preview open a click uses; Shift+F10 / Menu opens a keyboard-anchored `DropdownMenu` with
   the applicable Expand/Collapse, Copy, Open file, and focus returns to the item. A context menu was
   rejected: it would take native right-click copy. Esc returns to the composer through `refocus()`, draft
-  and caret intact.
+  and caret intact. **Esc on the parked feed does nothing** (user, 2026-11-16) — not even
+  `preventDefault`, so no other listener reacts — and only an item's Esc returns: an extra Esc after
+  leaving the composer never throws the reader back into the field; `Mod+L` returns.
 - **Scrolling stays the controller's.** A mounted target that sticks out is revealed with
   `revealElement` (`nearest`, user-navigation; nested items keep the breadcrumb inset), an unmounted one
   with `revealRow` and focused on "found"; an unmounted latest row itself returns to the edge instead, so
@@ -505,7 +507,11 @@ content and their own controls, which a treeitem's name would flatten and its ro
   region's default landing, and F6 returns to the item through the region's remembered focus
   ([[submodule-web-shell]]) — **unless a docked question waits**: its `[data-focus-claim]` (the current
   option) wins F6, Mod+1…9 and the recovery safety net, so the keyboard lands where the agent is blocked.
-- **Ways in.** A plain Shift+Tab in the composer (no template slots, no open menu) goes to the docked
+- **Ways in.** A bare Esc in the composer with no mention or slash menu and no slot session open leaves it
+  for the feed: the feed carries `data-focus-park`, the shell's landing for a field's Esc
+  ([[submodule-web-shell]], *Esc leaves a text field*), so the composer has no code for it. Focus rests on
+  the feed with no ring and the draft and caret stay; `F` starts hint mode at once and ↑/↓ or j/k start
+  walking from the cursor (the parked-feed rule above). A plain Shift+Tab in the composer (no template slots, no open menu) goes to the docked
   question's `[data-focus-claim]` when one waits (`Composer.onShiftTabOut`, wired in `ChatView`), never to
   its Skip button, which the browser's own order would reach first. In the composer, Mod+↑ (`composer.enterTranscript`, rebindable; checked before plain ↑ recall) focuses the newest content item (a
   trailing round divider is skipped) when the draft is empty or one visual line, or the caret is already at

@@ -235,7 +235,8 @@ selected tab, or the transcript's moved cursor takes the landing over); else a
 marks its tree or changes list below its mode toolbar, and Artifacts its list below its chat filter) — or,
 when that
 marker is not itself focusable, its first tabbable descendant; else the selected tab; else the root (sections are
-`tabIndex=-1`) or its first tabbable. The defaults are the chat composer's textarea, a terminal's xterm
+`tabIndex=-1`, with no ring: a focused root shows only its accent line) or its first tabbable. The defaults
+are the chat composer's textarea, a terminal's xterm
 host (its helper textarea), the Monaco editor container (its input), the Project Home projects tree
 and the body of a selected auxiliary
 tool, which the panel section marks `data-focus-default` with `data-tool-body=<tool>` — so entering a tool
