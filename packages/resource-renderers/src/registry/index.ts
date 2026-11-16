@@ -3,7 +3,6 @@ export { describeResource } from "./describe";
 export { canonicalWorkspacePath } from "./paths";
 export {
 	diffRendererCapabilities,
-	matchesGlob,
 	registerResourceRenderer,
 	resolveRenderers,
 } from "./registry";

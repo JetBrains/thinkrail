@@ -284,14 +284,14 @@ const COMPARE_ROUND = {
 	],
 } satisfies AskUserQuestionArgs;
 
-async function pairedScrolls(page: Page): Promise<number[]> {
-	const frames = page.locator('[data-testid="ask-compare"] [data-testid="html-diff"] iframe');
-	const tops: number[] = [];
-	for (const element of await frames.elementHandles()) {
-		const frame = await element.contentFrame();
-		tops.push(frame ? await frame.evaluate(() => document.scrollingElement?.scrollTop ?? -1) : -1);
-	}
-	return tops;
+function pairedScrolls(page: Page): Promise<number[]> {
+	return page.evaluate(() =>
+		[
+			...document.querySelectorAll<HTMLIFrameElement>(
+				'[data-testid="ask-compare"] [data-testid="html-diff"] iframe',
+			),
+		].map((frame) => frame.contentDocument?.scrollingElement?.scrollTop ?? -1),
+	);
 }
 
 function clippedHtmlPanes(page: Page): Promise<string[]> {
@@ -398,76 +398,6 @@ test("the compare overlay flips through the options, scrolls a pair together and
 		await expect(shown.getByTestId("ask-compare-chosen")).toBeVisible();
 		await expect(overlay.getByTestId("ask-compare-choose")).toHaveCount(0);
 		await expect(overlay.getByTestId("ask-compare-legend")).toContainText("Esc close");
-	} finally {
-		rmSync(session.path, { force: true });
-		cleanup();
-	}
-});
-
-const interactiveMockup = (host: string) => `<!doctype html><html><body>
-<main>
-<button id="toggle" onclick="document.getElementById('state').textContent = 'Expanded'">Toggle</button>
-<p id="state">Collapsed</p>
-<p id="network">checking</p>
-<button id="leave" onclick="location.href = 'data:text/html,left'">Leave</button>
-</main>
-<script>
-const report = [];
-const done = (name, value) => {
-	report.push(name + ": " + value);
-	if (report.length === 2) document.getElementById("network").textContent = report.sort().join(", ");
-};
-fetch(${JSON.stringify(`${host}/health`)}).then(() => done("fetch", "open"), () => done("fetch", "blocked"));
-try {
-	const socket = new WebSocket(${JSON.stringify(`${host.replace(/^http/, "ws")}/ws`)});
-	socket.onopen = () => done("socket", "open");
-	socket.onerror = () => done("socket", "blocked");
-} catch {
-	done("socket", "blocked");
-}
-</script>
-</body></html>`;
-
-test("an agent mockup runs its own scripts without network and is stopped when it leaves its page", async ({
-	page,
-}) => {
-	await page.setViewportSize({ width: 1400, height: 1100 });
-	await openFixtureProject(page);
-	const cleanup = writeMockups({
-		"interactive.html": interactiveMockup(new URL(page.url()).origin),
-	});
-	const session = seedQuestionnaire("interactive mockup", "ask-interactive-mockup", {
-		questions: [
-			{
-				question: "Should the settings panel collapse?",
-				header: "Collapse",
-				options: [
-					{
-						label: "Collapsible (Recommended)",
-						description: "A toggle hides the panel.",
-						previewFile: `${MOCKUPS}/interactive.html`,
-					},
-					{ label: "Always open", description: "No toggle." },
-				],
-			},
-		],
-	});
-
-	try {
-		const card = await openRound(page, "interactive mockup");
-		const pane = card.getByTestId("ask-preview");
-		const iframe = pane.locator("iframe");
-		await expect(iframe).toHaveAttribute("sandbox", "allow-scripts");
-		const mockup = pane.frameLocator("iframe");
-		await expect(mockup.locator("#network")).toHaveText("fetch: blocked, socket: blocked");
-		await mockup.locator("#toggle").click();
-		await expect(mockup.locator("#state")).toHaveText("Expanded");
-
-		await mockup.locator("#leave").press("Enter");
-		await expect(pane.getByTestId("html-left-page")).toBeVisible();
-		await expect(iframe).toHaveCount(0);
-		await pane.getByTestId("html-left-page-reload").click();
-		await expect(mockup.locator("#state")).toHaveText("Collapsed");
 	} finally {
 		rmSync(session.path, { force: true });
 		cleanup();

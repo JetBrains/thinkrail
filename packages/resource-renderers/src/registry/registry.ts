@@ -27,7 +27,7 @@ function globRegex(pattern: string): RegExp {
 	return new RegExp(`^${source}$`, "i");
 }
 
-export function matchesGlob(path: string, pattern: string): boolean {
+function matchesGlob(path: string, pattern: string): boolean {
 	const target = pattern.includes("/") ? path : (path.split("/").at(-1) ?? path);
 	return globRegex(pattern).test(target);
 }
