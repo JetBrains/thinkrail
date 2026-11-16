@@ -2,10 +2,25 @@ export {
 	chordFromEvent,
 	formatChord,
 	isBrowserReservedChord,
+	isDesktopNativeChord,
 	isPlainChord,
 	parseChord,
 	type RecordedChord,
 } from "./chord";
+export {
+	assignChord,
+	chordHolder,
+	type ExtensionShortcutSet,
+	type ImportPlan,
+	type ImportSkipReason,
+	type KeybindingEntry,
+	type KeybindingList,
+	keybindingList,
+	keybindingsFile,
+	keyChordLabel,
+	planImport,
+	resetChord,
+} from "./keybindingList";
 export {
 	FOCUS_GROUP_BINDINGS,
 	KEYBINDINGS,
@@ -28,6 +43,7 @@ export {
 } from "./resolve";
 export {
 	DESKTOP_KEYS,
+	elementKeyUses,
 	HISTORY_KEYS,
 	HJKL_KEYS,
 	RAIL_KEYS,

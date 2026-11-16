@@ -420,6 +420,17 @@ Settings → Extensions lists Hint mode without tool chips, switching it off sil
 its cheatsheet rows until it is switched back on. A label is found by its position at the target's
 top-left; a target must be scrolled into view and its panel's entrance animation finished before the
 labels are taken, since they are measured once (and on scroll / resize).
+`keyboard-rebinding.spec.ts` pins Settings → Keyboard's editor against the host: a recorded `Mod+Alt+S`
+splits the group (the old chord no longer does) and shows in the palette and the cheatsheet, and Reset
+restores `Mod+\`; Replace moves `Mod+K` to Focus chat input, which it then focuses, leaving the palette
+unbound until Reset all; a plain key, `Mod+T` and `Mod+,` show the modifier message, the browser warning
+and the desktop refusal, Esc and Tab cancel, ↑/↓ walk rows and a locked row ignores Enter; a second page
+sees an override after the broadcast and after a reload; Export writes one entry per row, locked ones
+included, and Import's summary of a crafted file (one change, a locked and an unknown skip, one unchanged)
+applies it; and with hint mode switched off `Mod+;` goes to the palette without a warning, so switching it
+back on marks hint mode's `Mod+;` inactive in Settings and the cheatsheet while `Mod+;` opens the palette
+and `F` still starts hint mode. Each test resets the overrides (and re-enables hint mode) over the host
+wire in `afterEach`.
 `keyboard-chat.spec.ts` pins the chat transcript's keyboard model on seeded chats: `Mod+↑` from the
 composer onto the newest message and Esc back with the draft and caret intact (a multi-line draft first
 takes the caret to its start), ↑/↓ with k/j and Home/End, →/← and l/h expanding an Activity and walking

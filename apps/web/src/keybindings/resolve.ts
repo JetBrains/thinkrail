@@ -54,6 +54,7 @@ export interface ResolvedCommand {
 	readonly custom: boolean;
 	readonly plain: boolean;
 	readonly chords: readonly ResolvedChord[];
+	readonly defaults: readonly KeyChord[];
 }
 
 export interface KeybindingConflict {
@@ -83,6 +84,7 @@ interface Draft {
 	readonly custom: boolean;
 	readonly plain: boolean;
 	readonly chords: readonly KeyChord[];
+	readonly defaults: readonly KeyChord[];
 	readonly lostTo: Map<number, string>;
 }
 
@@ -121,12 +123,13 @@ export function resolveKeybindings({
 		seen.add(id);
 		const plain = defaults.some(isPlainChord);
 		const override = Object.hasOwn(overrides, id) ? overrides[id] : undefined;
+		const platformDefaults = defaults.filter((chord) => onPlatform(chord, apple));
 		const chords = Array.isArray(override)
 			? override.flatMap((text) => {
 					const chord = parseChord(text);
 					return chord && (plain || !isPlainChord(chord)) ? [chord] : [];
 				})
-			: defaults.filter((chord) => onPlatform(chord, apple));
+			: platformDefaults;
 		drafts.push({
 			id,
 			extension,
@@ -135,6 +138,7 @@ export function resolveKeybindings({
 			custom: Array.isArray(override),
 			plain,
 			chords: distinct(chords, apple),
+			defaults: platformDefaults,
 			lostTo: new Map(),
 		});
 	};

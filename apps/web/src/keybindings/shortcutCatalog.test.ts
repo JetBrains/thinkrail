@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { EN } from "@thinkrail/locales";
 import {
+	elementKeyUses,
 	KEYBINDINGS,
 	type KeybindingId,
 	resolveKeybindings,
@@ -243,4 +244,18 @@ describe("the shortcut catalog", () => {
 		expect(labels(mac, "palette.scope")).toEqual(["Tab", "⇧Tab"]);
 		expect(labels(linux, "palette.scope")).toEqual(["Tab", "Shift+Tab", "Alt+1–9"]);
 	});
+});
+
+test("a plain key names the element rows that already act on it, and a chord with a modifier none", () => {
+	const ids = (chord: string, platform = LINUX) =>
+		elementKeyUses(chord, platform).map(({ id }) => id);
+	expect(ids("KeyS")).toEqual(["trees.search"]);
+	expect(ids("KeyC")).toEqual(["transcript.copy"]);
+	expect(ids("KeyV")).toEqual(["review.markViewed"]);
+	expect(ids("KeyJ")).toContain("review.nextUnreviewed");
+	expect(ids("KeyJ")).toContain("trees.move");
+	expect(ids("Shift+ArrowUp")).toContain("review.cursorExtend");
+	expect(ids("KeyG")).toEqual([]);
+	expect(ids("Mod+KeyS")).toEqual([]);
+	expect(ids("F2")).toEqual([]);
 });

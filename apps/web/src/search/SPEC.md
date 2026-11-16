@@ -271,6 +271,6 @@ delivers keys to the parent window, so the gesture does not fire from inside it.
 
 ## Keyboard settings
 
-`SearchSettings` is the Settings → Keyboard section: the `Mod+K` note, the double-Shift switch and,
-below it, whatever `shortcuts` node the shell injects (the full read-only shortcut list with its own
-filter, [[submodule-web-shell]]) — `search` never imports the shell's list.
+`SearchSettings` is the Settings → Keyboard section: the `Mod+K` note (a sentence without a chord when
+the user unbound it), the double-Shift switch and, below it, whatever `shortcuts` node the shell injects
+(the shortcut editor, [[submodule-web-shell]]) — `search` never imports the shell's editor.

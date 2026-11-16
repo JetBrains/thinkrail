@@ -1,5 +1,11 @@
 import { isImeComposing } from "@thinkrail/ui/keyboard";
-import { matchKeybinding, type ResolvedKeybindings } from "../keybindings";
+import {
+	chordFromEvent,
+	elementKeyUses,
+	matchKeybinding,
+	type ResolvedKeybindings,
+	type ShortcutSurface,
+} from "../keybindings";
 import { isTextEntryTarget } from "../lib";
 import { currentKeybindings } from "./keybindingState";
 
@@ -36,15 +42,30 @@ export function keyboardClaimed(): boolean {
 	return claims.size > 0;
 }
 
+function ownedBy(
+	surface: ShortcutSurface | null,
+	event: ExtensionHotkeyEvent,
+	platform: string,
+): boolean {
+	if (surface === null) return false;
+	const pressed = chordFromEvent(event, platform, { allowPlain: true });
+	return (
+		pressed.kind === "chord" &&
+		elementKeyUses(pressed.chord, platform).some((entry) => entry.surface === surface)
+	);
+}
+
 export function extensionHotkey(
 	event: ExtensionHotkeyEvent,
 	keybindings: ResolvedKeybindings,
 	textEntry: boolean,
+	surface: ShortcutSurface | null = null,
 ): { extension: string; id: string } | null {
 	if (isImeComposing(event)) return null;
 	const id = matchKeybinding(keybindings, event, { textEntry });
 	const extension = id === null ? null : keybindings.byId.get(id)?.extension;
-	return id !== null && extension ? { extension, id } : null;
+	if (id === null || !extension || ownedBy(surface, event, keybindings.platform)) return null;
+	return { extension, id };
 }
 
 export function matchExtensionCommand(extension: string, event: KeyboardEvent): string | null {

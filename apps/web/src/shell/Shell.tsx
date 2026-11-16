@@ -71,6 +71,7 @@ import { ExtensionOverlays } from "./ExtensionOverlays";
 import { FindInFilesHost } from "./FindInFilesHost";
 import { installFocusRecovery } from "./focusRecovery";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
+import { KeybindingEditor } from "./KeybindingEditor";
 import { useKeybindingLabel } from "./keybindingState";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
@@ -79,7 +80,7 @@ import { NativeWindowControls } from "./NativeWindowControls";
 import { PROJECT_HOME_PROJECTS_REGION_ID, ProjectHome } from "./ProjectHome";
 import { installRegionTracker, pressRegionKey } from "./regions";
 import { SearchPaletteHost } from "./SearchPaletteHost";
-import { ShortcutsDialogHost, ShortcutsReference } from "./ShortcutsDialog";
+import { ShortcutsDialogHost } from "./ShortcutsDialog";
 import { hasNativeShortcuts, readSettingsShortcutLabel } from "./useAppShortcuts";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
@@ -331,10 +332,7 @@ export function Shell() {
 				<SettingsDialog
 					layoutSettings={<LayoutSettings />}
 					keyboardSettings={
-						<SearchSettings
-							openShortcut={searchShortcut}
-							shortcuts={<ShortcutsReference className="max-h-[32rem]" />}
-						/>
+						<SearchSettings openShortcut={searchShortcut} shortcuts={<KeybindingEditor />} />
 					}
 					updateSettings={updates ? <UpdateSettings updates={updates} /> : undefined}
 				/>

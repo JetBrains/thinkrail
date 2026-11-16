@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { chordFromEvent, formatChord, isBrowserReservedChord, isPlainChord, parseChord } from ".";
+import {
+	chordFromEvent,
+	formatChord,
+	isBrowserReservedChord,
+	isDesktopNativeChord,
+	isPlainChord,
+	KEYBINDINGS,
+	parseChord,
+} from ".";
 
 const MAC = "MacIntel";
 const LINUX = "Linux x86_64";
@@ -183,4 +191,20 @@ describe("chordFromEvent", () => {
 		expect(isBrowserReservedChord("Ctrl+KeyT", LINUX)).toBe(true);
 		expect(isBrowserReservedChord("Ctrl+KeyT", MAC)).toBe(false);
 	});
+});
+
+test("the desktop app's own chords are native on the OS that owns them, under either modifier name", () => {
+	for (const chord of ["Mod+KeyW", "Mod+KeyQ", "Mod+Comma", "Mod+F4", "Mod+Equal", "Mod+Minus"]) {
+		expect(isDesktopNativeChord(chord)).toBe(true);
+	}
+	expect(isDesktopNativeChord("Ctrl+KeyW")).toBe(true);
+	expect(isDesktopNativeChord("Mod+KeyH")).toBe(true);
+	expect(isDesktopNativeChord("Mod+Shift+KeyW")).toBe(false);
+	expect(isDesktopNativeChord("Mod+Alt+KeyW")).toBe(false);
+	expect(isDesktopNativeChord("Mod+Digit0")).toBe(false);
+	expect(isDesktopNativeChord("not a chord")).toBe(false);
+	const matchable = Object.values(KEYBINDINGS).flatMap((chords) =>
+		chords.filter((chord) => !chord.displayOnly && isDesktopNativeChord(chord)),
+	);
+	expect(matchable).toEqual([]);
 });

@@ -1,7 +1,7 @@
 import type { MessageKey } from "@thinkrail/locales";
 import { type CommandShortcut, shortcutKeys } from "../commands";
 import { platformFamily } from "../lib";
-import { keyCap } from "./chord";
+import { isPlainChord, keyCap, parseChord } from "./chord";
 import { displayShortcut, FOCUS_GROUP_BINDINGS, type KeybindingId, keysLabel } from "./keybindings";
 import { keybindingShortcut, keybindingShortcuts, type ResolvedKeybindings } from "./resolve";
 
@@ -108,7 +108,11 @@ interface CatalogEntryBase {
 
 export type ShortcutCatalogEntry = CatalogEntryBase &
 	(
-		| { readonly bindings: readonly [KeybindingId, ...KeybindingId[]]; readonly keys?: never }
+		| {
+				readonly bindings: readonly [KeybindingId, ...KeybindingId[]];
+				readonly bindingTitle?: MessageKey;
+				readonly keys?: never;
+		  }
 		| { readonly keys: readonly [ShortcutKey, ...ShortcutKey[]]; readonly bindings?: never }
 	);
 
@@ -186,6 +190,7 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 		title: "shortcuts.focusGroup",
 		surface: "general",
 		bindings: FOCUS_GROUP_BINDINGS,
+		bindingTitle: "commands.focus.group",
 	},
 	{
 		id: "dictation",
@@ -882,7 +887,7 @@ function row(
 	return [{ id: entry.id, title: entry.title, surface: entry.surface, chords, conflicts }];
 }
 
-function keyChords(keys: readonly ShortcutKey[], platform: string): ShortcutChordView[] {
+export function keyChords(keys: readonly ShortcutKey[], platform: string): ShortcutChordView[] {
 	return keys
 		.filter((chord) => onPlatform(chord.platform, platform))
 		.map((chord) => capsView(shortcutKeyCaps(chord, platform), platform));
@@ -920,4 +925,20 @@ export function shortcutRows(context: ShortcutContext): ShortcutRow[] {
 		...extensionCommandRows(context),
 		...extra.flatMap((entry) => entryRows(entry, context)),
 	];
+}
+
+export function elementKeyUses(chord: string, platform: string): ShortcutCatalogEntry[] {
+	const pressed = parseChord(chord);
+	if (pressed === null || !isPlainChord(pressed)) return [];
+	return SHORTCUT_CATALOG.filter(({ keys = [] }) =>
+		keys.some(
+			(key) =>
+				onPlatform(key.platform, platform) &&
+				!key.mod &&
+				!key.ctrl &&
+				!key.alt &&
+				(key.shift === true) === (pressed.shift === true) &&
+				keyCap(key.key) === pressed.key,
+		),
+	);
 }

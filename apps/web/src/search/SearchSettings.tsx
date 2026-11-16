@@ -17,7 +17,9 @@ export function SearchSettings({
 			<div className="flex flex-col gap-4">
 				<h3 className="tr-title-section text-text-default">{t("settings.keyboard.title")}</h3>
 				<p className="tr-text-metadata text-text-muted">
-					{t("settings.keyboard.intro", { shortcut: openShortcut })}
+					{openShortcut
+						? t("settings.keyboard.intro", { shortcut: openShortcut })
+						: t("settings.keyboard.introUnbound")}
 				</p>
 			</div>
 			<div className="flex items-start justify-between gap-16">

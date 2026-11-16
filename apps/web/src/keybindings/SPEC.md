@@ -16,13 +16,18 @@ grammar** (`chord.ts`) and the **resolver** (`resolve.ts`), which folds the user
 extensions' commands over the table into the *effective* chords every reader uses: the binder (`shell`'s
 `useGlobalHotkeys`), the palette's command shortcuts, tooltips and the **shortcut catalog**
 (`shortcutCatalog.ts`), the one list of every shortcut the user can press — the effective bindings plus
-the keys other owners bind — that the cheatsheet and Settings → Keyboard render. It is pure and
-store-free: it matches and describes, and never handles a key or knows what a binding does.
+the keys other owners bind — that the cheatsheet and Settings → Keyboard render. `keybindingList.ts` turns
+that into the editor's rows, the edits Settings → Keyboard writes and the JSON file it exports and
+imports. It is pure and store-free: it matches and describes, and never handles a key or knows what a
+binding does.
 
 ## Boundary
 
 - **Public surface:** `KeybindingId`, `KeyChord`, `KEYBINDINGS`, `FOCUS_GROUP_BINDINGS`, `parseChord`,
   `formatChord`, `chordFromEvent`, `RecordedChord`, `isPlainChord`, `isBrowserReservedChord`,
+  `isDesktopNativeChord`, `keybindingList`, `KeybindingList`, `KeybindingEntry`, `ExtensionShortcutSet`,
+  `chordHolder`, `assignChord`, `resetChord`, `keyChordLabel`, `keybindingsFile`, `planImport`,
+  `ImportPlan`, `ImportSkipReason`, `elementKeyUses`,
   `resolveKeybindings`, `ResolvedKeybindings`, `ResolvedCommand`, `ResolvedChord`, `KeybindingConflict`,
   `ExtensionCommandSet`, `matchKeybinding`, `keybindingShortcut`, `keybindingShortcuts`,
   `keybindingKeys`, `keybindingLabel`, `keybindingLabels`, `SHORTCUT_CATALOG`, `SHORTCUT_SURFACES`,
@@ -118,6 +123,13 @@ store-free: it matches and describes, and never handles a key or knows what a bi
   unless `allowPlain` (`plain`), ignores an AltGraph press and the Windows/Super key off Apple (no chord
   names them) and any code outside the grammar, and flags a browser-reserved chord as a warning
   (`browserReserved: true`), never a rejection — it works in the desktop app.
+- **Desktop-native chords are never recordable** (`isDesktopNativeChord`): the desktop's own close, quit
+  and Settings (`Mod+W`, `Mod+Q`, `Mod+,`, and `Mod+F4` off Apple, mirroring `shell/shortcutCommands.ts`),
+  the macOS menu's hide / hide others / minimize, and page zoom (`Mod+=`, `Mod+Shift+=`, `Mod+-`,
+  `Mod+Numpad+`/`-`/`0`). One override set serves every OS, so a chord native on either family is
+  refused, compared by the physical keys each holds (`Ctrl+KeyW` is Linux's close). `chordFromEvent` stays
+  platform-neutral and does not refuse them; the editor and `planImport` do. No matchable default is
+  native (tested); `tab.close`'s display-only `Mod+W` is.
 
 ## Resolver
 
@@ -141,6 +153,8 @@ store-free: it matches and describes, and never handles a key or knows what a bi
   conflict**, its overrides included.
 - The default table resolves with no conflict on any platform, and the bundled extensions add none
   (`extensions`' tests).
+- **Each command reports its defaults on this platform** (`ResolvedCommand.defaults`), which the editor
+  compares a recording with and the file exports.
 - **Readers are reactive.** The app never reads `KEYBINDINGS` to show or match a chord: `shell` resolves
   once per change of the overrides or the switched-off extensions (`keybindingState.ts`,
   [[submodule-web-shell]]) and every tooltip, palette row, cheatsheet row and the binder reads that
@@ -186,3 +200,46 @@ store-free: it matches and describes, and never handles a key or knows what a bi
   one's rows disappear. `extensions`' tests pin that plain `F` is bound nowhere in the table or the
   catalog's feature keys.
 - Tested: every `KeybindingId` belongs to a titled entry, ids are unique, every title is an English key.
+
+## Editor rows and edits
+
+- **`keybindingList({ desktop, keybindings, extensions })`** is the one row list Settings → Keyboard and
+  the JSON file share, so the file has exactly the editor's rows: the catalog grouped by surface
+  (`desktop` rows only where the native bridge exists), one row per binding of a multi-binding entry
+  (the focus groups, titled `bindingTitle` with their `position`), then per web extension in registry order
+  its commands and its `shortcuts` (switched-off ones included, `active: false`). A `bindings` row is
+  editable; a `keys` row is `locked` with its display chords. Each chord carries its grammar text (a typed
+  default its display form, `Mod+?`), caps, `lostTo` and `shown` — false for a browser-reserved chord
+  while another active one remains in a browser, the rule `keybindingShortcut` follows.
+- **`chordHolder(list, command, chord)`** is the command another active chord belongs to (enabled
+  commands only, compared by physical keys). **`assignChord(list, overrides, command, chord, replace)`**
+  writes the override — none when the chord equals the command's defaults less display-only chords — and,
+  with `replace`, an explicit override for that command: its chords less display-only and typed ones, minus
+  this chord, `[]` when nothing remains (normalised the same way). The resolver's priority alone would
+  leave a lower-ranked holder losing the chord, so Replace never relies on it. **`resetChord`** drops one
+  override.
+- **`elementKeyUses(chord, platform)`** lists the catalog `keys` rows a plain chord (Shift allowed) already
+  acts in, for the plain-command warning; the element key keeps working there, since an extension
+  command never matches in text entry and a feature handler sees the key first only where it owns focus.
+
+## Keybindings file
+
+- **Export** (`keybindingsFile(list, title)`): `{ "format": "thinkrail-keybindings", "version": 1,
+  "bindings": [...] }`, one entry per list row in its order. A command: `{ command, title (English),
+  source: "thinkrail" | <extension>, chords, defaults, changed }` with grammar strings (all of its
+  chords on this platform, lost and display-only ones included; a typed default as its display form). A
+  locked row: `{ command, title, source, locked: true, keys }` with display labels. A switched-off
+  extension's entries add `active: false`; a command whose chord loses adds `conflict: { chord, winner }`
+  (its first lost chord).
+- **Import** (`planImport(overrides, list, file)`) returns `null` for anything but a version-1 file of that
+  format, else `{ changes, conflicts, skipped, unchanged, overrides }` — `overrides` the merged map the
+  editor sends as one `settings.update`. Per entry, by `command`: a locked row (or any catalog `keys` id)
+  is skipped as `locked`; an id the list lacks (an extension not installed), or a repeat, as `unknown`;
+  `chords` not a string list, or a chord outside the grammar, as `invalid`; a plain chord on a non-plain
+  command as `plain`; a desktop-native chord as `desktop`. Chords equal to the row's current chords are
+  `unchanged`; chords equal to its defaults — this platform's or the entry's own `defaults`, so a file
+  from another OS keeps the defaults, and `"Mod+?"` reads as the cheatsheet's default — mean "defaults"
+  (unchanged unless the command was custom). A switched-off extension's commands import too.
+- **Import conflicts:** an imported chord another enabled command holds actively goes to the import, and
+  that command loses it through the same explicit override Replace writes; a command the file also
+  changes is not a conflict (its own entry decides). Self-conflicting entries are left to the resolver.

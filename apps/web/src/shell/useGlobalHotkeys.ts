@@ -7,6 +7,7 @@ import { openChatHistory } from "./chordActions";
 import { deliverExtensionCommand, extensionHotkey, keyboardClaimed } from "./extensionCommands";
 import { currentKeybindings } from "./keybindingState";
 import { hasLayer, isInEditorFind, isInTerminal, MODAL_LAYER_SELECTOR } from "./shortcutLayers";
+import { shortcutSurfaceOf } from "./shortcutSurface";
 
 type ChordHandler = (binding: KeybindingId) => void;
 
@@ -121,7 +122,12 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 			if (keyboardClaimed()) return;
 			const keybindings = currentKeybindings();
 			const target = event.composedPath()[0] ?? event.target;
-			const extension = extensionHotkey(event, keybindings, isTextEntryTarget(target));
+			const extension = extensionHotkey(
+				event,
+				keybindings,
+				isTextEntryTarget(target),
+				shortcutSurfaceOf(target instanceof Element ? target : null),
+			);
 			if (extension) {
 				event.preventDefault();
 				event.stopImmediatePropagation();

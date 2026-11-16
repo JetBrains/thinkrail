@@ -51,6 +51,28 @@ const BROWSER_RESERVED = [
 	"Mod+Shift+KeyW",
 ] as const;
 
+const DESKTOP_ZOOM = [
+	"Mod+Equal",
+	"Mod+Shift+Equal",
+	"Mod+Minus",
+	"Mod+NumpadAdd",
+	"Mod+NumpadSubtract",
+	"Mod+Numpad0",
+] as const;
+
+const DESKTOP_NATIVE = {
+	apple: [
+		"Mod+KeyW",
+		"Mod+KeyQ",
+		"Mod+Comma",
+		"Mod+KeyH",
+		"Mod+Alt+KeyH",
+		"Mod+KeyM",
+		...DESKTOP_ZOOM,
+	],
+	other: ["Mod+KeyW", "Mod+F4", "Mod+KeyQ", "Mod+Comma", ...DESKTOP_ZOOM],
+} as const;
+
 const FUNCTION_KEY = /^F(?:[1-9]|1[0-2])$/;
 
 export function keyCap(key: string): string {
@@ -109,15 +131,27 @@ export function isPlainChord(chord: KeyChord): boolean {
 	return !chord.mod && !chord.ctrl && !chord.alt && !(chord.code && FUNCTION_KEY.test(chord.code));
 }
 
+function signatureIn(chord: KeyChord, list: readonly string[], apple: boolean): boolean {
+	const signature = chordSignature(chord, apple);
+	return list.some((text) => {
+		const candidate = parseChord(text);
+		return candidate !== null && chordSignature(candidate, apple) === signature;
+	});
+}
+
 export function isBrowserReservedChord(chord: KeyChord | string, platform: string): boolean {
 	const parsed = typeof chord === "string" ? parseChord(chord) : chord;
 	if (parsed === null || parsed.typed) return false;
-	const apple = platformFamily(platform) === "apple";
-	const signature = chordSignature(parsed, apple);
-	return BROWSER_RESERVED.some((reserved) => {
-		const candidate = parseChord(reserved);
-		return candidate !== null && chordSignature(candidate, apple) === signature;
-	});
+	return signatureIn(parsed, BROWSER_RESERVED, platformFamily(platform) === "apple");
+}
+
+export function isDesktopNativeChord(chord: KeyChord | string): boolean {
+	const parsed = typeof chord === "string" ? parseChord(chord) : chord;
+	if (parsed === null || parsed.typed) return false;
+	return (
+		signatureIn(parsed, DESKTOP_NATIVE.apple, true) ||
+		signatureIn(parsed, DESKTOP_NATIVE.other, false)
+	);
 }
 
 type ChordEvent = Pick<KeyboardEvent, "code" | "altKey" | "ctrlKey" | "metaKey" | "shiftKey"> &

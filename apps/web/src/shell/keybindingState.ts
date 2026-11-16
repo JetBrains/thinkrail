@@ -1,9 +1,13 @@
 import type { KeybindingOverrides } from "@thinkrail/contracts";
+import type { Translator } from "@thinkrail/locales/react";
 import { browserPlatform } from "@thinkrail/ui/keyboard";
-import { webExtensionCommands } from "../extensions";
+import { webExtensionCommands, webExtensions } from "../extensions";
 import {
+	type KeybindingEntry,
+	type KeybindingList,
 	keybindingKeys,
 	keybindingLabel,
+	keybindingList,
 	type ResolvedKeybindings,
 	resolveKeybindings,
 } from "../keybindings";
@@ -54,4 +58,30 @@ export function useKeybindingKeys(id: string, options: { browser?: boolean } = {
 
 export function useKeybindingLabel(id: string, options: { browser?: boolean } = {}): string {
 	return keybindingLabel(useResolvedKeybindings(), id, options);
+}
+
+export function useKeybindingList(desktop: boolean): KeybindingList {
+	const keybindings = useResolvedKeybindings();
+	const disabled = useAppStore((state) => state.disabledExtensions);
+	return keybindingList({
+		desktop,
+		keybindings,
+		extensions: webExtensions.map(({ name, shortcuts = [] }) => ({
+			extension: name,
+			enabled: !disabled.includes(name),
+			shortcuts,
+		})),
+	});
+}
+
+export function entryTitle(
+	t: Translator,
+	entry: Pick<KeybindingEntry, "title" | "position">,
+): string {
+	return entry.position === null ? t(entry.title) : t(entry.title, { position: entry.position });
+}
+
+export function commandTitle(t: Translator, list: KeybindingList, command: string): string {
+	const entry = list.entries.find((candidate) => candidate.command === command);
+	return entry ? entryTitle(t, entry) : command;
 }

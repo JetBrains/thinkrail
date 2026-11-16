@@ -219,9 +219,10 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   palette makes) over the resolved table, plus every enabled web extension's commands and `shortcuts` as
   General rows, as surface
   sections under a filter matching a row's title or key label, with a count beside it ("117 shortcuts",
-  "17 of 117" while filtering). The dialog fills the window less a `--space-24` margin
-  and, only there (`ShortcutsReference`'s `columns`), flows the sections into as many ~18rem columns as
-  fit, never splitting one. The scroller and the column flow are separate elements: a height-constrained
+  "17 of 117" while filtering). A chord that loses to another command is shown struck through after the
+  active ones, with "inactive: taken by {winner}" under the title; a switched-off extension's rows stay
+  hidden. The dialog fills the window less a `--space-24` margin and flows the sections into as many
+  ~18rem columns as fit, never splitting one. The scroller and the column flow are separate elements: a height-constrained
   multi-column box overflows sideways, so the list scrolls only down. A row wraps between its chords, never
   inside one, and its title keeps at least half the row. Sections keep the catalog's order (no longer
   current-first, 2026-11-15); the section of the surface focused just before it opened is highlighted
@@ -232,9 +233,39 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   card, a tree, a tab strip, a rail entry); elsewhere nothing is highlighted. Rows are reference only and
   hold nothing focusable, so the filter's ↑ / ↓ / PageUp / PageDown scroll the list. Esc closes it and so
   does `Mod+?` — handled by the dialog, since global chords are suppressed behind a modal — and focus
-  returns to where it was. Settings → Keyboard renders the same `ShortcutsReference` (its own filter, one
-  column) under the double-Shift switch, injected into `search`'s `SearchSettings` the way the section
-  itself is injected.
+  returns to where it was.
+- **Settings → Keyboard is the shortcut editor** (`KeybindingEditor`), injected into `search`'s
+  `SearchSettings` under the double-Shift switch. One column of `keybindingList` rows
+  ([[submodule-web-keybindings]], *Editor rows and edits*): the catalog by surface, then a section per web
+  extension tagged Extension (and Off, its rows muted but editable, while switched off). Table and
+  extension commands are editable; element keys, desktop rows and display-only chords show a lock.
+  - **Recording.** Enter or a click on a row's chord button records (`chordFromEvent`, the command's
+    `plain` as `allowPlain`); the row reads "Press a new shortcut… Esc cancels" and keeps focus. A
+    modifier alone keeps waiting, AltGraph is ignored, Esc cancels (the button carries
+    `data-settings-draft-input`, so Settings stays open), and Tab is not captured: leaving cancels.
+    While recording — and while the filter has focus in Search by keys — the editor holds the keyboard
+    claim (`claimKeyboard`, below), so no app chord, extension command or double Shift acts on the press
+    being recorded.
+  - **Outcomes,** in order: a plain key on a non-plain command → "A shortcut needs…" (dismiss); a
+    desktop-native chord → refused; a chord active on another command → "{chord} is already used by
+    {command}" with Replace / Cancel (Replace writes `assignChord`'s explicit unbind; a browser-reserved
+    chord adds the browser sentence); a plain key an element owns, on a plain command → "{key} also acts in
+    {places}…" with Assign anyway; a browser-reserved chord in a browser → Assign anyway; else it assigns.
+    A chord equal to the defaults drops the override.
+  - **Rows.** A Custom tag and Reset on overridden rows, Reset all, a lost chord struck through with
+    "{chord} is taken by {winner} — inactive" and Assign another. The filter matches title or key label;
+    Search by keys turns it into a recorder whose next chord filters to rows showing it (Esc leaves).
+    ↑/↓ move between rows' chord buttons, one of which is the Tab stop (roving; a row's Reset and Assign
+    another are tabbable only on that row); rows carry `data-focus-row` in a `data-focus-list`, and after
+    an assignment, Replace, Cancel or Reset focus returns to the row's chord button.
+  - **Writes** go through `transport`'s `updateKeybindings` (one call per edit, Reset all `{}`) and show
+    when the `settings.changed` broadcast lands — no optimistic state; a refusal toasts. Below
+    `supportsKeybindings` the list is read-only (every chord button `aria-disabled`, no Reset or Import)
+    under one notice, "Update ThinkRail to rebind shortcuts".
+  - **Export… / Import…** Export downloads `thinkrail-keybindings.json` (`keybindingsFile`, English titles,
+    a Blob through `<a download>`). Import reads a picked `.json` with `planImport` — anything else toasts
+    "This is not a ThinkRail keybindings file" — and shows a summary dialog (Will change, Conflicts,
+    Skipped with reasons, the unchanged count) whose "Apply n changes" sends the merged map once.
 - **Chords in tooltips.** Every icon button whose action a chord also runs shows the chord's caps after
   its tooltip label (`IconTooltip`'s `shortcut`, [[module-ui]]), computed here from the resolved table
   (`keybindingKeys` / `useKeybindingKeys`, never captured once) and injected into the props-driven layout
@@ -329,8 +360,12 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
     itself with `activeLayer()` (hint mode labels the open dialog or menu). A match is
     `preventDefault` + `stopImmediatePropagation`, so neither Radix (document), Monaco nor another window
     listener sees it, and reaches the extension's `onCommand` listeners once per physical press. Only an
-    enabled extension's commands match, and only a mounted overlay listens.
-  - **The claim.** `claimKeyboard(true)` says the overlay owns every key (hint mode while labels show);
+    enabled extension's commands match, and only a mounted overlay listens. A plain chord the focused
+    element's surface already binds (`shortcutSurfaceOf` + `elementKeyUses`: a command rebound to `S` in a
+    tree, `C` in the transcript) is left to that element, which is what Settings → Keyboard's element-key
+    warning promises.
+  - **The claim.** `claimKeyboard(true)` says the overlay owns every key (hint mode while labels show; the
+    Settings → Keyboard recorder claims it the same way);
     until it releases (or the overlay unmounts, which releases for it), `useGlobalHotkeys` dispatches no
     app chord, no extension command, no `Ctrl+R` and no double Shift, and `useAppShortcuts` no web
     close/quit/settings chord. The claimant's own listener handles every key and recognises its own
