@@ -1,5 +1,5 @@
 import type { MessageKey } from "@thinkrail/locales";
-import { isTypingChord, keyCap } from "@thinkrail/ui/keyboard";
+import { isTypingChord, keyCap, twinArrow } from "@thinkrail/ui/keyboard";
 import { type CommandShortcut, shortcutKeys } from "../commands";
 import { platformFamily } from "../lib";
 import {
@@ -116,6 +116,7 @@ export interface ResolvedKeybindings {
 	readonly active: readonly ActiveChord[];
 	readonly local: ReadonlyMap<string, readonly LocalActiveChord[]>;
 	readonly includes: ReadonlyMap<string, readonly string[]>;
+	readonly extendsWithShift: ReadonlySet<string>;
 }
 
 interface Draft {
@@ -356,6 +357,11 @@ export function resolveKeybindings({
 		active,
 		local: localActive,
 		includes,
+		extendsWithShift: new Set(
+			local.flatMap(({ scopes = [] }) =>
+				scopes.flatMap(({ id, extendsWithShift }) => (extendsWithShift ? [id] : [])),
+			),
+		),
 	};
 }
 
@@ -377,11 +383,19 @@ export function matchLocal(
 	event: KeybindingEvent,
 	{ textEntry = false }: { textEntry?: boolean } = {},
 ): string | null {
+	const { platform } = keybindings;
 	for (const scope of scopes) {
-		for (const { id, chord } of keybindings.local.get(scope) ?? []) {
-			if (textEntry && isTypingChord(chord)) continue;
-			if (pressed(chord, event, keybindings.platform)) return id;
-		}
+		const held = (keybindings.local.get(scope) ?? []).filter(
+			({ chord }) => !(textEntry && isTypingChord(chord)),
+		);
+		const exact = held.find(({ chord }) => pressed(chord, event, platform));
+		if (exact) return exact.id;
+		if (!event.shiftKey || !keybindings.extendsWithShift.has(scope)) continue;
+		const extended = held.find(
+			({ id, chord }) =>
+				twinArrow(id) !== undefined && pressed(chord, event, platform, { ignoreShift: true }),
+		);
+		if (extended) return extended.id;
 	}
 	return null;
 }

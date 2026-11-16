@@ -221,6 +221,7 @@ export const TabStrip = memo(function TabStrip({
 				<div
 					ref={scroller}
 					role="tablist"
+					data-key-scope="tabs"
 					aria-label={t(GROUP_TABS_LABELS[location.area])}
 					className="flex h-full w-full min-w-0 items-stretch overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
 					onWheel={(event) => {

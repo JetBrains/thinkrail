@@ -438,6 +438,25 @@ describe("routing a press", () => {
 		});
 	});
 
+	test("a review surface yields the Shift variant of an arrow twin it extends the selection with; other elements do not", () => {
+		const downOnModJ = resolveKeybindings({
+			platform: "Linux",
+			overrides: { "arrows.down": ["Mod+KeyJ"] },
+		});
+		const modJ = key("KeyJ", { key: "j" });
+		const shiftModJ = key("KeyJ", { key: "J", shiftKey: true });
+		const cursor = { localScopes: ["review.surface", "review"] };
+		const bottom = { kind: "command", id: "view.toggleBottom" } as const;
+		expect(routeHotkey(modJ, all, at("browser", downOnModJ, cursor))).toBeNull();
+		expect(routeHotkey(shiftModJ, all, at("browser", downOnModJ, cursor))).toBeNull();
+		expect(
+			routeHotkey(shiftModJ, all, at("browser", downOnModJ, { localScopes: ["trees"] })),
+		).toEqual(bottom);
+		expect(routeHotkey(shiftModJ, all, at("browser", downOnModJ))).toEqual(bottom);
+		const defaults = resolveKeybindings({ platform: "Linux" });
+		expect(routeHotkey(shiftModJ, all, at("browser", defaults, cursor))).toEqual(bottom);
+	});
+
 	test("the element's keys are physical: whatever the layout types, the code decides who acts", () => {
 		const hintOnS = resolveKeybindings({
 			platform: "Linux",

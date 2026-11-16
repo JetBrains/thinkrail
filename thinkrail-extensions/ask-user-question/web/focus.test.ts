@@ -94,21 +94,6 @@ describe("where a question's focus claim may land", () => {
 		expect(shouldClaimQuestionFocus("inside", false, true)).toBe(false);
 	});
 
-	it("reads focus as the keyboard's while it is :focus-visible or a key was pressed after the last pointer press", () => {
-		const page = new EventTarget();
-		watchInputModality(page);
-		const visible = { matches: (selector: string) => selector === ":focus-visible" };
-		const quiet = { matches: () => false };
-		page.dispatchEvent(new Event("pointerdown"));
-		expect(isKeyboardFocused(quiet)).toBe(false);
-		expect(isKeyboardFocused(null)).toBe(false);
-		expect(isKeyboardFocused(visible)).toBe(true);
-		page.dispatchEvent(new Event("keydown"));
-		expect(isKeyboardFocused(quiet)).toBe(true);
-		page.dispatchEvent(new Event("pointerdown"));
-		expect(isKeyboardFocused(quiet)).toBe(false);
-	});
-
 	it("never moves focus on a coarse pointer, whatever holds it (no soft keyboard on reveal)", () => {
 		expect(shouldClaimQuestionFocus("none", true, true)).toBe(false);
 		expect(shouldClaimQuestionFocus("empty-composer", true, true)).toBe(false);
@@ -130,5 +115,77 @@ describe("where a question's focus claim may land", () => {
 		expect(shouldFocusPageTarget(true, true)).toBe(false);
 		expect(shouldFocusPageTarget(true, false)).toBe(true);
 		expect(shouldFocusPageTarget(false, false)).toBe(true);
+	});
+});
+
+describe("whether the keyboard put focus where it is", () => {
+	const page = new EventTarget();
+	watchInputModality(page);
+	const press = (key: string) => page.dispatchEvent(Object.assign(new Event("keydown"), { key }));
+	const pointer = () => page.dispatchEvent(new Event("pointerdown"));
+	const focus = (element: object) =>
+		page.dispatchEvent(Object.defineProperty(new Event("focusin"), "target", { value: element }));
+	const claimsFrom = (element: FocusedNode) => claims(element, isKeyboardFocused(element));
+
+	it("keeps a control the mouse focused the mouse's through bare modifiers, so the card still claims it", () => {
+		const history = node("BUTTON", { attributes: { "data-testid": "chat-history" } });
+		pointer();
+		focus(history);
+		for (const modifier of ["Shift", "Control", "Alt", "Meta", "CapsLock", "AltGraph"]) {
+			press(modifier);
+			expect(isKeyboardFocused(history)).toBe(false);
+		}
+		expect(claimsFrom(history)).toBe(true);
+	});
+
+	it("keeps it the mouse's through a key that moves no focus", () => {
+		const tab = node("BUTTON", { attributes: { role: "tab" } });
+		pointer();
+		focus(tab);
+		press("x");
+		press("Enter");
+		expect(isKeyboardFocused(tab)).toBe(false);
+		expect(claimsFrom(tab)).toBe(true);
+	});
+
+	it("gives focus that a key moved to the keyboard: a Tab or arrow walk, or Mod+↑ from a clicked composer", () => {
+		const clicked = composer("");
+		const tabbed = node("BUTTON");
+		const walked = node("DIV", { attributes: { role: "treeitem" } });
+		const row = node("ARTICLE", { attributes: { "data-transcript-item": "u1" } });
+		pointer();
+		focus(clicked);
+		press("Tab");
+		focus(tabbed);
+		expect(claimsFrom(tabbed)).toBe(false);
+		press("ArrowDown");
+		focus(walked);
+		expect(claimsFrom(walked)).toBe(false);
+		expect(isKeyboardFocused(tabbed)).toBe(false);
+
+		pointer();
+		focus(clicked);
+		press("Control");
+		press("ArrowUp");
+		focus(row);
+		expect(claimsFrom(row)).toBe(false);
+	});
+
+	it("hands focus back to the mouse on a pointer press, before or after the key", () => {
+		const button = node("BUTTON");
+		const other = node("BUTTON");
+		pointer();
+		press("Tab");
+		focus(button);
+		expect(isKeyboardFocused(button)).toBe(true);
+		pointer();
+		expect(isKeyboardFocused(button)).toBe(false);
+		expect(claimsFrom(button)).toBe(true);
+
+		press("Tab");
+		pointer();
+		focus(other);
+		expect(claimsFrom(other)).toBe(true);
+		expect(isKeyboardFocused(null)).toBe(false);
 	});
 });

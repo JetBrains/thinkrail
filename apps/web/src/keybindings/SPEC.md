@@ -187,7 +187,10 @@ binding does.
 - **Outputs:** `ResolvedCommand.scope` (null for global), `conflicts[].scope`, and `local` — effective
   scope → active chords in rank order, one entry per element even when empty, so a scope whose every key
   was unbound matches nothing instead of its defaults. `matchLocal(resolved, scopes, event, { textEntry })`
-  tries the focused element's scopes innermost first. `localUses(resolved, chord)` (every element holding
+  tries the focused element's scopes innermost first, by the handlers' own rules: an exact match first,
+  then, in a scope declared `extendsWithShift` (`review.surface`, whose cursors and swipe divider extend
+  through `cursorTwin`), a shifted press of an unshifted arrow twin (`resolved.extendsWithShift` lists those
+  scopes). `localUses(resolved, chord)` (every element holding
   a chord), `globalHolder(resolved, chord)` and `actsIn(resolved, scope)` (the elements a scope's
   commands act in) feed the editor's warnings.
 - **`LOCAL_KEY_DEFAULTS[scope]`** is a scope's declared commands plus its included ones, the defaults a

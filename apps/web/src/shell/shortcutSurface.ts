@@ -10,8 +10,8 @@ const SURFACE_SELECTORS: readonly (readonly [string, ShortcutSurface])[] = [
 		'[data-review-surface], [data-testid="review-composer"], [data-testid="review-thread-card"]',
 		"review",
 	],
-	['[role="tree"]', "trees"],
-	['[role="tablist"], [role="tab"]', "tabs"],
+	['[data-key-scope="trees"]', "trees"],
+	['[data-key-scope="tabs"]', "tabs"],
 	["[data-rail-entry]", "panels"],
 ];
 
@@ -34,8 +34,6 @@ const LOCAL_SCOPE_SELECTORS: readonly (readonly [string, AppLocalScope])[] = [
 		'[data-review-surface], [data-testid="review-composer"], [data-testid="review-thread-card"]',
 		"review.surface",
 	],
-	['[role="tree"]', "trees"],
-	['[role="tablist"], [role="tab"]', "tabs"],
 	["[data-rail-entry]", "rails"],
 	['[data-testid="search-palette"]', "palette"],
 	['[data-testid="find-in-files"]', "findInFiles"],

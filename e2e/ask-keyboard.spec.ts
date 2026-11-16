@@ -393,6 +393,32 @@ test("a question arriving while a mouse-focused button holds focus takes it", as
 	}
 });
 
+test("a bare Shift on a mouse-focused button leaves it the mouse's, so an arriving question still takes focus", async ({
+	page,
+}) => {
+	test.skip(
+		!chromium(),
+		"WebKit never focuses a clicked button; ask-user-question.spec's early-key test is its History-button shape",
+	);
+	const { held, path, card } = await openHeldRound(page, "arrival after a click and Shift");
+	try {
+		const tab = page
+			.locator('[data-testid="editor-tab"][data-kind="chat"]')
+			.filter({ hasText: "arrival after a click and Shift" })
+			.getByRole("tab");
+		await tab.click();
+		await expect(tab).toBeFocused();
+		await page.keyboard.press("Shift");
+		await expect(tab).toBeFocused();
+
+		held.release();
+		await expect(card.getByTestId("ask-option").first()).toBeFocused();
+		await expect(card.getByTestId("ask-waiting")).toHaveCount(0);
+	} finally {
+		rmSync(path, { force: true });
+	}
+});
+
 test("a question arriving while a keyboard-focused button holds focus stays put and says how to answer", async ({
 	page,
 }) => {
@@ -548,12 +574,40 @@ test("↓ reaches Skip before the primary button, ←/→ move between them with
 		await tabs.first().focus();
 		await page.keyboard.press("End");
 		await expect(question).toHaveText("Which checks should the keys run?");
+		await expect(card.getByTestId("ask-option").first()).toBeFocused();
 		await tabs.nth(1).focus();
 		await page.keyboard.press("Home");
 		await expect(question).toHaveText(ROLLOUT.question);
 	} finally {
 		rmSync(path, { force: true });
 	}
+});
+
+test.describe("a tab-strip key rebound over a global chord", () => {
+	test.afterEach(async ({ page }) => resetKeybindings(page));
+
+	test("Close tab on Mod+L acts on a workbench tab only; a question tab still sends Mod+L to the composer", async ({
+		page,
+	}) => {
+		const { card, path } = await openRound(page, "close tab on focus chord", ROUND);
+		try {
+			await setKeybindings(page, { "tabs.close": ["Mod+KeyL"] });
+			const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+			const chatTab = chatTabs.getByRole("tab");
+			await expect(chatTab).toHaveAttribute("aria-keyshortcuts", /(Control|Meta)\+L\b/);
+
+			await card.getByTestId("ask-tab").nth(1).focus();
+			await pressPlatformShortcut(page, "L");
+			await expect(composer(page)).toBeFocused();
+			await expect(chatTabs).toHaveCount(1);
+
+			await chatTab.focus();
+			await pressPlatformShortcut(page, "L");
+			await expect(chatTabs).toHaveCount(0);
+		} finally {
+			rmSync(path, { force: true });
+		}
+	});
 });
 
 test.describe("the card's letters", () => {

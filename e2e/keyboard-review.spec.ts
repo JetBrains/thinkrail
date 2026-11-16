@@ -3,6 +3,7 @@ import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { crc32, deflateSync } from "node:zlib";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import type { KeybindingOverrides } from "@thinkrail/contracts";
 import {
 	createWorkspaceViaDialog,
 	openFixtureProject,
@@ -130,12 +131,16 @@ async function expectHonestSurface(surface: Locator): Promise<void> {
 	await expect(surface).toHaveCSS("outline-style", "solid");
 }
 
-async function openCursorDiff(page: Page): Promise<{
+async function openCursorDiff(
+	page: Page,
+	keybindings?: KeybindingOverrides,
+): Promise<{
 	diff: Locator;
 	cursor: Locator;
 	workspaceId: string;
 }> {
 	await openFixtureProject(page);
+	if (keybindings) await setKeybindings(page, keybindings);
 	const workspace = await createWorkspaceViaDialog(page);
 	await commitAndModify(page, workspace.id, "cursor.ts", CURSOR_ORIGINAL, CURSOR_MODIFIED);
 	await revealWorkbenchTool(page, "changes");
@@ -465,6 +470,22 @@ test.describe("rebound review keys", () => {
 		await expect(cursor).toBeFocused();
 		await page.keyboard.press("Alt+Tab");
 		await expect(page.getByTestId("review-composer-input")).toBeFocused();
+	});
+
+	test("an arrow twin rebound onto Mod+J extends the cursor's range with Shift+Mod+J instead of toggling the bottom panel", async ({
+		page,
+	}) => {
+		const { diff, cursor } = await openCursorDiff(page, { "arrows.down": ["Mod+KeyJ"] });
+		const bottom = page.getByTestId("bottom-panel");
+		const bottomShown = await bottom.count();
+		await expect(cursorRow(diff, "additions", 5)).toHaveCount(1);
+		await pressPlatformShortcut(page, "J");
+		await expect(cursorRow(diff, "additions", 6)).toHaveCount(1);
+		await pressPlatformShortcut(page, "Shift+J");
+		await expect(diff.locator("[data-additions] [data-line][data-selected-line]")).toHaveCount(2);
+		await expect(cursorRow(diff, "additions", 7)).toHaveCount(1);
+		await expect(cursor).toBeFocused();
+		await expect(bottom).toHaveCount(bottomShown);
 	});
 });
 

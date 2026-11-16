@@ -250,11 +250,17 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   race for the composer). The mouse case exists because WebKit — so the macOS desktop — never focuses a
   clicked button: a chat opened from History with the mouse leaves focus on the History button, where
   Radix returns it, and a literal "body or empty composer" rule left the card unfocused there
-  (post-mortem: every WebKit e2e failure on #1416 was this). "The mouse focused it" means it does not
-  match `:focus-visible` **and** no key was pressed since the last pointer press (`isKeyboardFocused`, a
-  document-level keydown/pointerdown watch): both engines leave a row that Mod+↑ focused from a clicked
-  composer without `:focus-visible`, so that heuristic alone gave the first step into the transcript to the
-  card. From anything keyboard navigation reached (the transcript, a tree or tab walk), a draft, other
+  (post-mortem: every WebKit e2e failure on #1416 was this). "The mouse focused it" is judged by the
+  focus's **provenance**, not by whether a key was pressed: a document-level keydown/pointerdown/focusin
+  watch remembers whether the latest `focusin` followed a key press with no pointer press in between, and
+  `isKeyboardFocused(active)` holds only for the element that focus change reached. Bare modifiers (Shift,
+  Control, Alt, Meta, CapsLock, AltGraph) are no key press, a pointer press hands focus back to the mouse,
+  and a key that moves no focus leaves it the mouse's. Mod+↑ from a clicked composer focuses a transcript
+  row after the key, so the row is the keyboard's. `:focus-visible` no longer takes part: both engines
+  leave that row without it, and WebKit's heuristic after a key on a mouse-focused button is unreliable.
+  The earlier "any key since the last pointer press" rule let a bare Shift before the card's first frame
+  turn the History button into keyboard focus (post-mortem: the last WebKit failure on #1416). From
+  anything keyboard navigation reached (the transcript, a tree or tab walk), a draft, other
   text entry, Monaco or xterm, or a modal surface (dialog, alertdialog, menu, listbox), it stays put and
   the announcement says "Agent asks a question — {landingChord} to answer". `focusTargetKind` stays pure:
   the card passes that keyboard verdict in; the docked sheet shows

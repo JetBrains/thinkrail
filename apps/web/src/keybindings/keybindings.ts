@@ -104,9 +104,16 @@ export function onPlatform(chord: KeyChord, apple: boolean): boolean {
 	return chord.platform === undefined || (chord.platform === "apple") === apple;
 }
 
-export function pressed(chord: KeyChord, event: KeybindingEvent, platform: string): boolean {
+export function pressed(
+	chord: KeyChord,
+	event: KeybindingEvent,
+	platform: string,
+	options?: { ignoreShift?: boolean },
+): boolean {
 	const apple = platformFamily(platform) === "apple";
-	return !chord.displayOnly && onPlatform(chord, apple) && chordPressed(chord, event, platform);
+	return (
+		!chord.displayOnly && onPlatform(chord, apple) && chordPressed(chord, event, platform, options)
+	);
 }
 
 export function displayShortcut({

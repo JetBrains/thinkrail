@@ -68,17 +68,47 @@ export function focusTargetKind(
 	return keyboardFocused ? "keyboard" : "pointer";
 }
 
-let keyboardLast = false;
+const MODIFIER_KEYS: ReadonlySet<string> = new Set([
+	"Shift",
+	"Control",
+	"Alt",
+	"Meta",
+	"CapsLock",
+	"AltGraph",
+]);
 
-export function watchInputModality(target: Pick<EventTarget, "addEventListener">): void {
-	target.addEventListener("keydown", () => (keyboardLast = true), true);
-	target.addEventListener("pointerdown", () => (keyboardLast = false), true);
+let keyboardLast = false;
+let keyboardFocus: EventTarget | null = null;
+
+export function watchInputModality(target: Pick<Document, "addEventListener">): void {
+	target.addEventListener(
+		"keydown",
+		(event) => {
+			if (!MODIFIER_KEYS.has(event.key)) keyboardLast = true;
+		},
+		true,
+	);
+	target.addEventListener(
+		"pointerdown",
+		() => {
+			keyboardLast = false;
+			keyboardFocus = null;
+		},
+		true,
+	);
+	target.addEventListener(
+		"focusin",
+		(event) => {
+			keyboardFocus = keyboardLast ? event.target : null;
+		},
+		true,
+	);
 }
 
 if (typeof document !== "undefined") watchInputModality(document);
 
-export function isKeyboardFocused(active: { matches(selectors: string): boolean } | null): boolean {
-	return keyboardLast || (active?.matches(":focus-visible") ?? false);
+export function isKeyboardFocused(active: object | null): boolean {
+	return active !== null && active === keyboardFocus;
 }
 
 export function hasCoarsePointer(): boolean {

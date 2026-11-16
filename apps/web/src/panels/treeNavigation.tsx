@@ -446,6 +446,7 @@ export function Tree({
 			<div
 				ref={ref}
 				role="tree"
+				data-key-scope="trees"
 				aria-label={label}
 				data-focus-list={focusList}
 				className={cn(className, MATCH_STYLES)}

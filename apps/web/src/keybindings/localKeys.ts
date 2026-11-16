@@ -10,6 +10,7 @@ export interface LocalScopeInfo {
 	readonly where: MessageKey;
 	readonly inside: MessageKey;
 	readonly includes?: readonly string[];
+	readonly extendsWithShift?: boolean;
 }
 
 const ARROWS = [ARROW_TWINS_SCOPE] as const;
@@ -39,6 +40,7 @@ export const LOCAL_SCOPES = {
 		where: "shortcuts.scope.reviewSurface.where",
 		inside: "shortcuts.scope.reviewSurface.inside",
 		includes: ARROWS,
+		extendsWithShift: true,
 	},
 	transcript: {
 		where: "shortcuts.scope.transcript.where",
@@ -66,6 +68,7 @@ export interface LocalCommandDefaults {
 export interface LocalScopeDeclaration {
 	readonly id: string;
 	readonly includes?: readonly string[];
+	readonly extendsWithShift?: boolean;
 }
 
 const local = (
@@ -136,7 +139,11 @@ export const APP_LOCAL_COMMANDS: readonly LocalCommandDefaults[] = [
 ];
 
 export const APP_LOCAL_SCOPES: readonly LocalScopeDeclaration[] = Object.entries(LOCAL_SCOPES).map(
-	([id, info]) => ("includes" in info ? { id, includes: info.includes } : { id }),
+	([id, info]) => ({
+		id,
+		...("includes" in info ? { includes: info.includes } : {}),
+		...("extendsWithShift" in info ? { extendsWithShift: info.extendsWithShift } : {}),
+	}),
 );
 
 function scopeDefaults(scope: AppLocalScope): readonly LocalKeyCommand[] {
