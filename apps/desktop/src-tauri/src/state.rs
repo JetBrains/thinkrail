@@ -5,12 +5,14 @@
 //! formats of `PreferenceStore` (`preferences.json`) and `RouteStore`
 //! (`routes.json`) under the user-data directory (`apps/desktop/src/index.ts`).
 //!
-//! The `preference_write` / `preference_remove` commands keep their bridge
-//! signatures. When `THINKRAIL_DESKTOP_USER_DATA` names a user-data directory
-//! (the same override `desktopUserData()` honors in the Electrobun entry),
-//! each command loads the v1 preference document and persists the mutation
-//! with an atomic tmp-file + rename; without the override the store stays in
-//! memory, as before.
+//! Everything persists under the user-data directory ([`user_data_dir`]):
+//! `THINKRAIL_DESKTOP_USER_DATA` when set (the same override `desktopUserData()`
+//! honors in the Electrobun entry), otherwise the app's own data directory.
+//! The `preference_write` / `preference_remove` commands load the v1
+//! preference document and persist each mutation with an atomic tmp-file +
+//! rename. The in-memory [`PreferenceStore`] is only the fallback for a
+//! platform that cannot resolve a data directory at all. The neutral E2E host
+//! persists nothing, like `index.ts`.
 
 use std::{
     collections::{BTreeMap, HashMap},
@@ -20,73 +22,117 @@ use std::{
     sync::Mutex,
 };
 
+use tauri::{AppHandle, Manager};
+
 const MAX_KEY_LEN: usize = 128;
 const MAX_VALUE_LEN: usize = 256 * 1024;
 
 #[derive(Default)]
 pub struct PreferenceStore(pub Mutex<HashMap<String, String>>);
 
-fn valid_key(key: &str) -> bool {
-    !key.is_empty() && key.len() <= MAX_KEY_LEN && !key.chars().any(|c| c.is_control())
+/// Where routes, preferences and native labels persist.
+/// Ports `desktopUserData()` in `apps/desktop/src/index.ts`.
+pub fn user_data_dir(app: &AppHandle) -> Option<PathBuf> {
+    std::env::var_os("THINKRAIL_DESKTOP_USER_DATA")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| app.path().app_data_dir().ok())
 }
 
-fn valid_value(value: &str) -> bool {
-    value.len() <= MAX_VALUE_LEN
+/// Stored hash for the main window, or `#/v1`.
+pub fn initial_route(app: &AppHandle) -> String {
+    user_data_dir(app)
+        .map(|dir| read_route_file(&dir, DEFAULT_BACKEND_PROFILE_ID, DEFAULT_WINDOW_ID))
+        .unwrap_or_else(|| FALLBACK_ROUTE.to_owned())
+}
+
+/// Remember the main window's route. Invalid hashes are ignored.
+pub fn save_route(app: &AppHandle, route: &str) {
+    if let Some(dir) = user_data_dir(app) {
+        write_route_file(&dir, DEFAULT_BACKEND_PROFILE_ID, DEFAULT_WINDOW_ID, route);
+    }
+}
+
+/// Preferences the bridge seeds into the page before it loads. Also primes
+/// the in-memory store so both views start from the same document.
+pub fn initial_preferences(app: &AppHandle) -> HashMap<String, String> {
+    let preferences = user_data_dir(app)
+        .map(|dir| read_prefs(&dir, DEFAULT_BACKEND_PROFILE_ID, DEFAULT_WINDOW_ID))
+        .unwrap_or_default();
+    if let Some(state) = app.try_state::<PreferenceStore>() {
+        if let Ok(mut store) = state.0.lock() {
+            *store = preferences.clone();
+        }
+    }
+    preferences
+}
+
+/// Apply one preference mutation. With a data directory the document on disk
+/// is the source of truth: a failed write is an error and memory keeps its
+/// previous contents, so the two can never disagree. Memory alone is used
+/// only when no directory resolves.
+fn mutate_preferences(
+    app: &AppHandle,
+    state: &PreferenceStore,
+    persist: impl FnOnce(&Path) -> bool,
+    apply: impl FnOnce(&mut HashMap<String, String>),
+    failure: &str,
+) -> Result<(), String> {
+    let mut store = state.0.lock().map_err(|error| error.to_string())?;
+    match user_data_dir(app) {
+        Some(dir) => {
+            if !persist(&dir) {
+                eprintln!("[desktop] {failure}");
+                return Err(failure.to_owned());
+            }
+            *store = read_prefs(&dir, DEFAULT_BACKEND_PROFILE_ID, DEFAULT_WINDOW_ID);
+        }
+        None => apply(&mut store),
+    }
+    Ok(())
 }
 
 #[tauri::command]
 pub fn preference_write(
+    app: AppHandle,
     state: tauri::State<'_, PreferenceStore>,
     key: String,
     value: String,
 ) -> Result<(), String> {
     // Invalid writes are ignored, matching the Electrobun main process.
-    if !valid_key(&key) || !valid_value(&value) {
+    if crate::lifecycle::is_neutral_e2e_host() || !valid_pref_key(&key) || !valid_pref_value(&value)
+    {
         return Ok(());
     }
-    // Disk persistence underneath: the v1 document is the source of truth
-    // whenever the user-data override resolves, and memory is refreshed from
-    // it so concurrent writers cannot clobber each other.
-    if let Some(dir) = resolve_user_data_dir() {
-        if write_prefs(
-            &dir,
-            DEFAULT_BACKEND_PROFILE_ID,
-            DEFAULT_WINDOW_ID,
-            &key,
-            &value,
-        ) {
-            if let Ok(mut store) = state.0.lock() {
-                *store = read_prefs(&dir, DEFAULT_BACKEND_PROFILE_ID, DEFAULT_WINDOW_ID);
-            }
-            return Ok(());
-        }
-    }
-    if let Ok(mut store) = state.0.lock() {
-        store.insert(key, value);
-    }
-    Ok(())
+    mutate_preferences(
+        &app,
+        &state,
+        |dir| write_prefs(dir, DEFAULT_BACKEND_PROFILE_ID, DEFAULT_WINDOW_ID, &key, &value),
+        |store| {
+            store.insert(key.clone(), value.clone());
+        },
+        "could not save a local preference",
+    )
 }
 
 #[tauri::command]
 pub fn preference_remove(
+    app: AppHandle,
     state: tauri::State<'_, PreferenceStore>,
     key: String,
 ) -> Result<(), String> {
-    if !valid_key(&key) {
+    if crate::lifecycle::is_neutral_e2e_host() || !valid_pref_key(&key) {
         return Ok(());
     }
-    if let Some(dir) = resolve_user_data_dir() {
-        if remove_prefs(&dir, DEFAULT_BACKEND_PROFILE_ID, DEFAULT_WINDOW_ID, &key) {
-            if let Ok(mut store) = state.0.lock() {
-                *store = read_prefs(&dir, DEFAULT_BACKEND_PROFILE_ID, DEFAULT_WINDOW_ID);
-            }
-            return Ok(());
-        }
-    }
-    if let Ok(mut store) = state.0.lock() {
-        store.remove(&key);
-    }
-    Ok(())
+    mutate_preferences(
+        &app,
+        &state,
+        |dir| remove_prefs(dir, DEFAULT_BACKEND_PROFILE_ID, DEFAULT_WINDOW_ID, &key),
+        |store| {
+            store.remove(&key);
+        },
+        "could not remove a local preference",
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -450,14 +496,6 @@ pub fn prefs_file_path(user_data_dir: &Path) -> PathBuf {
     user_data_dir.join(PREFERENCES_FILE)
 }
 
-/// User-data directory override shared with the Electrobun entry
-/// (`desktopUserData()`): `THINKRAIL_DESKTOP_USER_DATA` or unset.
-fn resolve_user_data_dir() -> Option<PathBuf> {
-    std::env::var_os("THINKRAIL_DESKTOP_USER_DATA")
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-}
-
 /// Port of `PreferenceStore.read`: scoped preferences, `{}` for bad scopes.
 pub fn read_prefs(
     user_data_dir: &Path,
@@ -692,6 +730,36 @@ mod tests {
         assert!(write_prefs(&dir, "local", "main", "k", "v"));
         assert!(remove_prefs(&dir, "local", "main", "missing"));
         assert_eq!(read_prefs(&dir, "local", "main").len(), 1);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prefs_measure_length_like_typescript() {
+        let dir = unique_temp_dir("prefs-utf16");
+        // 128 two-byte characters are 128 UTF-16 units: within the key cap
+        // even though they are 256 UTF-8 bytes.
+        let key = "é".repeat(MAX_KEY_LEN);
+        let value = "值".repeat(1000);
+        assert!(valid_pref_key(&key));
+        assert!(!valid_pref_key(&"é".repeat(MAX_KEY_LEN + 1)));
+        assert!(write_prefs(&dir, "local", "main", &key, &value));
+        assert_eq!(
+            read_prefs(&dir, "local", "main").get(&key).map(String::as_str),
+            Some(value.as_str())
+        );
+        // An astral character is two UTF-16 units, so half as many fit.
+        assert!(valid_pref_value(&"😀".repeat(MAX_VALUE_LEN / 2)));
+        assert!(!valid_pref_value(&"😀".repeat(MAX_VALUE_LEN / 2 + 1)));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prefs_report_a_failed_write() {
+        let dir = unique_temp_dir("prefs-unwritable");
+        // A directory where the document should be makes every write fail.
+        fs::create_dir_all(prefs_file_path(&dir)).unwrap();
+        assert!(!write_prefs(&dir, "local", "main", "k", "v"));
+        assert!(read_prefs(&dir, "local", "main").is_empty());
         let _ = fs::remove_dir_all(&dir);
     }
 

@@ -691,37 +691,95 @@ feed publication described above remains release-owned.
 ## Tauri v2 migration (in progress)
 
 The desktop shell is moving from Electrobun to Tauri v2 (`apps/desktop/src-tauri`).
-The web UI (`apps/web`) is unchanged: the bridge (`apps/desktop/src/bridge/`) installs the same frozen
-globals the Electrobun preload did, and Tauri commands/events keep the Electrobun RPC message names
-(`get_window_state`, `updateStateChanged`, …) so the web shape-guards accept the Tauri shell unchanged.
+The web UI (`apps/web`) is unchanged: the bridge installs the same frozen globals the Electrobun
+preload did, and Tauri commands/events keep the Electrobun RPC message names (`get_window_state`,
+`updateStateChanged`, …) so the web shape-guards accept the Tauri shell unchanged.
 
-Sidecar topology: the ThinkRail host runs as an external sidecar binary
-(`binaries/thinkrail-sidecar-<triple>`, built by `apps/desktop/scripts/build-sidecar.ts`) spawned at
-startup with `--port 0`. The Bun sidecar prints `THINKRAIL_SIDECAR_READY {"port": N}` on stdout once
-`bootHost()` is listening; the shell parses that line, confirms with a `GET /health` poll, exposes the
-port through the `get_sidecar_port` command, and navigates the main window to the sidecar origin
-(`http://127.0.0.1:<port>`) plus the stored initial route. A neutral E2E host
-(`THINKRAIL_DESKTOP_E2E_HOST=1`) instead navigates to `about:blank`, installs no menu, persists nothing,
-and writes `THINKRAIL_DESKTOP_READY_FILE` once the sidecar is healthy.
+**Sidecar topology.** The ThinkRail host runs as an external sidecar binary
+(`binaries/thinkrail-sidecar-<triple>`, built by `apps/desktop/scripts/build-sidecar.ts`) that also
+serves the web UI. `tauri dev` and `tauri build` build the web app and then the sidecar through
+`beforeDevCommand` / `beforeBuildCommand`, for the triple Tauri is packaging
+(`TAURI_ENV_TARGET_TRIPLE`), so a clean checkout and a cross-target build both get a matching host.
+The shell's own `frontendDist` (`src-tauri/shell`) is an empty page: nothing loads it.
 
-Bridge table (Electrobun preload global → Tauri `invoke`/`listen` equivalent in `bridge.ts`):
+**Startup** (`startup.rs`, the port of `start()` in `index.ts`). The native menu and the splash go up
+first. The sidecar is spawned on a background thread with `--port 0`; it prints
+`THINKRAIL_SIDECAR_READY {"port": N}` on stdout once `bootHost()` is listening, and the shell
+confirms with a `GET /health` poll. The main window is then created hidden on
+`http://127.0.0.1:<port>/<stored route>` and shown, replacing the splash, when its page has loaded.
+Any failure (missing binary, early exit, failed health check, window error) shows the `startFailed`
+dialog and exits non-zero. A neutral E2E host (`THINKRAIL_DESKTOP_E2E_HOST=1`) instead opens a hidden
+`about:blank` window with no bridge, installs no menu, persists nothing, and writes
+`THINKRAIL_DESKTOP_READY_FILE` once the sidecar is healthy.
+
+**Bridge.** `src/bridge/tauri-bootstrap.js` is the only installer of the bridge globals. `bridge.rs`
+embeds it (`include_str!`), prepends the two seed globals, and registers the result as the main
+window's initialization script, so it runs at document start on the sidecar origin.
+`bridge/injection.ts` mirrors that assembly so `injection.test.ts` can execute the same source and
+check the shapes the web guards require. Tauri treats the sidecar origin as remote and rejects its
+commands and event subscriptions by default; at startup the shell adds a capability for exactly
+`http://127.0.0.1:<port>` that grants `permissions/bridge.toml` (the app commands the bootstrap
+calls) plus event listening, and nothing else. A new bridge command must be added to
+`generate_handler!` and to `bridge.toml`; the test fails if the bootstrap calls one that is missing
+from either.
 
 | Electrobun preload global | Tauri equivalent |
 | --- | --- |
-| `__THINKRAIL_NATIVE_SHORTCUTS__` | same global, backed by Tauri commands |
+| `__THINKRAIL_NATIVE_SHORTCUTS__` | same global; `quit_app` via `invoke`, `nativeCommand` / `quitHintChanged` via `listen` |
 | `__THINKRAIL_NATIVE_UPDATES__` | same global; `get_update_state` / `check_for_updates` / `download_update` / `restart_to_update` / `dismiss_install_result` via `invoke`, `updateStateChanged` via `listen` |
 | `__THINKRAIL_NATIVE_DEEP_LINKS__` | same global; `deep_link_ready` via `invoke`, `openFile` via `listen` |
-| `__THINKRAIL_NATIVE_NOTIFICATIONS__` | same global; `show_notification` via `invoke` |
+| `__THINKRAIL_NATIVE_NOTIFICATIONS__` | same global; `show_notification` via `invoke`, `windowFocusChanged` via `listen` |
 | `__THINKRAIL_NATIVE_PAGE_ZOOM__` | same global; `page_zoom_requested` / `page_zoom_gesture_requested` via `invoke` |
-| `__THINKRAIL_NATIVE_WINDOW_CONTROLS__` | same global; `get_window_state` / `minimize_window` / `toggle_maximize_window` / `close_window` / `title_bar_double_click` via `invoke`, `windowStateChanged` / `windowChromeChanged` / `windowFocusChanged` via `listen` |
-| `__THINKRAIL_NATIVE_MENU__` | same global; `menu_labels_changed` via `invoke`, `nativeCommand` / `quitHintChanged` via `listen` |
+| `__THINKRAIL_NATIVE_WINDOW_CONTROLS__` | same global; `get_window_state` / `minimize_window` / `toggle_maximize_window` / `close_window` via `invoke`, `windowStateChanged` via `listen` |
+| `__THINKRAIL_NATIVE_MENU__` | same global; `menu_labels_changed` via `invoke` |
 | `__THINKRAIL_STABLE_PREFERENCES__` | same global; `preference_write` / `preference_remove` via `invoke` |
-| `__THINKRAIL_INITIAL_WINDOW_CHROME__` / `__THINKRAIL_INITIAL_DESKTOP_PREFERENCES__` seeds | consumed-and-removed seed globals, same as before |
+| `__THINKRAIL_INITIAL_WINDOW_CHROME__` / `__THINKRAIL_INITIAL_DESKTOP_PREFERENCES__` seeds | consumed-and-removed seed globals, same as before; `windowChromeChanged` via `listen` keeps the insets current |
+| title bar (`--electrobun-app-region: drag`) | Tauri has no CSS drag region: the bootstrap reports a primary press there as `start_window_drag` and a double-click as `title_bar_double_click` |
+
+**Navigation.** The main window's navigation policy (`navigation::allow_navigation`, the port of
+`windowNavigationRules` + `installExternalNavigation`) lets the webview load only the sidecar origin
+and its `about:srcdoc` / `blob:` frames. Every other destination is refused; `http(s)`, `mailto` and
+the sidecar's own `/view/` pages open in the system browser instead. The bootstrap routes link
+clicks and `window.open` into that policy the same way the Electrobun preload does.
+
+**Deep links.** `thinkrail://` links are buffered until the page reports `deep_link_ready`, which the
+bootstrap sends once its `openFile` listener is registered with the backend, and they buffer again
+while the document is being replaced. Readiness and the queue share one lock, and a link that fails
+to send is the only one retried.
+
+**Persistence.** Routes (`routes.json`), preferences (`preferences.json`) and the last pushed native
+labels (`native-labels.json`) live under `THINKRAIL_DESKTOP_USER_DATA` when set, otherwise the app's
+data directory, in the same file formats as the Electrobun stores. This is Tauri's data directory
+for `ai.thinkrail.app`, not Electrobun's `userData`: carrying an existing install's files over is a
+cutover task. A preference write that cannot be saved is reported as an error and leaves memory
+unchanged.
+
+**Quit.** Every exit path (the bridge's `quit_app`, the Quit menu item, closing the last window, a
+startup failure) reaches Tauri's exit event, where the shell stops the host: it closes the sidecar's
+stdin, the sidecar (started with `--exit-on-stdin-close`) runs `server.shutdown()` and exits, and
+only a host still running after 10 s is killed. The same pipe closes if the shell crashes, so the
+host never outlives it.
+
+**Updates.** The update commands drive `tauri-plugin-updater` (check, download with progress,
+install and relaunch) and always settle in `idle`, `available`, `ready` or `error`. No update feed
+is configured yet (`plugins.updater.endpoints` / `pubkey` are empty), so the shell reports
+`disabled` and the commands do nothing.
 
 What still uses Electrobun: packaging and release (`electrobun dev` / `electrobun build`, the
-`package:*` scripts) until cutover. The Tauri shell already covers startup, menus, sidecar lifecycle,
-window chrome/zoom, navigation gating, deep links, preferences/routes, notifications, and updates; the
-Electrobun entry (`apps/desktop/src/index.ts`) remains the startup-parity reference.
+`package:*` scripts) until cutover. The Electrobun entry (`apps/desktop/src/index.ts`) remains the
+startup-parity reference.
+
+Not ported yet:
+
+- Press-and-hold Cmd-Q. Electrobun reads the keyboard state (`keyState.ts`) to tell the chord from a
+  menu click; without that reader the Tauri shell quits at once, which is also what
+  `quitShortcut.ts` does when the key state is unavailable.
+- An update feed, the release channel, and the install journal / `lastInstall` result (the journal
+  file helpers in `updates_tauri.rs` are not called).
+- `startAttributionClaim` on first readiness: no sidecar endpoint exposes it.
+- The macOS traffic-light offset, notification `silent`, the Windows AppUserModelID and taskbar
+  shortcut stamping, and the E2E control/probe files other than the ready file.
+- The macOS and Linux builds of the shell have not been compiled or run; only Windows has.
 
 Removal checklist (only after the Tauri cutover ships):
 

@@ -5,6 +5,13 @@
 // target triple, mirroring apps/cli/scripts/build-binary.ts. Output lands in
 // apps/desktop/src-tauri/binaries/ as `thinkrail-sidecar-<rust-triple>[.exe]`,
 // which is the layout `externalBin: ["binaries/thinkrail-sidecar"]` expects.
+//
+// `tauri dev` and `tauri build` run this through `beforeDevCommand` /
+// `beforeBuildCommand` (after the web build), so a clean checkout has a host
+// to bundle. Tauri names the triple it is packaging in
+// TAURI_ENV_TARGET_TRIPLE, and the sidecar is built for that same triple:
+// `tauri build --target aarch64-apple-darwin` needs the arm64 host, not the
+// build machine's.
 
 import { createHash } from "node:crypto";
 import {
@@ -56,8 +63,13 @@ function currentTarget(): SidecarTarget {
 }
 
 function resolveTargets(): SidecarTarget[] {
-	const target = process.argv.find((a) => a.startsWith("--target="))?.slice("--target=".length);
-	if (!target) return [currentTarget()];
+	const target =
+		process.argv.find((a) => a.startsWith("--target="))?.slice("--target=".length) ||
+		process.env.TAURI_ENV_TARGET_TRIPLE;
+	const current = currentTarget();
+	// The build machine's own triple compiles with the running Bun, which also
+	// covers hosts that have no cross target listed (Windows on ARM).
+	if (!target || target === current.rustTriple) return [current];
 	if (target === "all") return SIDECAR_TARGETS;
 	const byBun = SIDECAR_TARGETS.find((t) => t.bunTarget === target);
 	if (byBun) return [byBun];

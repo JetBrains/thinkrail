@@ -71,4 +71,24 @@ const { port, server } = await bootHost({
 process.on("SIGINT", () => void server.shutdown());
 process.on("SIGTERM", () => void server.shutdown());
 
+// The shell holds our stdin open and never writes to it. It closes the pipe to
+// ask for an orderly stop (Windows has no SIGTERM to send), and the pipe also
+// closes if the shell dies, so the host never outlives its window. Opt-in, so
+// a host started by hand with no stdin does not exit at once.
+async function stopWhenStdinCloses(): Promise<void> {
+	try {
+		for await (const _chunk of Bun.stdin.stream()) {
+			// Drain: only the end of the stream means anything.
+		}
+	} catch {
+		// A broken pipe is the same signal as a closed one.
+	}
+	try {
+		await server.shutdown();
+	} finally {
+		process.exit(0);
+	}
+}
+if (process.argv.includes("--exit-on-stdin-close")) void stopWhenStdinCloses();
+
 console.log(`THINKRAIL_SIDECAR_READY ${JSON.stringify({ port })}`);

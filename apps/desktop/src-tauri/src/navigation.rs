@@ -1,32 +1,29 @@
 //! Route reporting, external navigation gating, and deep-link forwarding.
 //!
 //! The frontend reports hash changes through `route_changed` (Electrobun RPC
-//! message parity). The first report also retires the splash window, which is
-//! the Tauri analogue of the Electrobun dom-ready handoff, and flushes any
-//! `thinkrail://` links that arrived before the web UI was ready.
+//! message parity); each report is persisted as the window's last route and
+//! the first one hands the splash over to the main window.
 //!
 //! Navigation policy ports `apps/desktop/src/externalNavigation.ts`
 //! (`windowNavigationRules`) and `apps/desktop/src/deepLink.ts`
-//! (`parseThinkRailDeepLink`). Anything the allowlist rejects must go through
-//! `open_external`, which itself only opens `http(s)`/`mailto` URLs in the
-//! system browser.
+//! (`parseThinkRailDeepLink`). [`allow_navigation`] is attached to the main
+//! window: the webview only ever loads the sidecar origin, and anything else
+//! goes through `open_external`, which itself only opens `http(s)`/`mailto`
+//! URLs in the system browser.
+//!
+//! `thinkrail://` links are buffered until the page says it can receive them
+//! (`deep_link_ready`, sent by the bridge once its `openFile` listener is
+//! registered) and again whenever the document is replaced.
 
-use std::sync::{
-    Mutex, OnceLock,
-    atomic::{AtomicBool, Ordering},
-};
+use std::sync::Mutex;
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
-
-use crate::window::close_splash;
+use tauri::{AppHandle, Emitter, Manager};
 
 /// Mirror of `WORKSPACE_VIEW_ROUTE` in `@thinkrail/contracts` (`domain.ts`):
 /// same-origin navigations under this route are served externally (opened in
 /// the browser via `externalNavigationUrl`), so the in-webview allowlist
 /// re-blocks them.
-/// Re-exported for navigation-rule consumers; no in-crate caller yet.
-#[allow(dead_code)]
 pub const WORKSPACE_VIEW_ROUTE: &str = "/view/";
 
 /// Mirror of `MAX_NAVIGATION_DETAIL_LENGTH` in `externalNavigation.ts`.
@@ -47,17 +44,51 @@ pub struct DeepLinkTarget {
     pub column: Option<u32>,
 }
 
-/// Whether the web UI has reported its first route (the dom-ready handoff).
-/// Links that arrive earlier are buffered in [`PENDING_DEEP_LINKS`].
-static FRONTEND_READY: AtomicBool = AtomicBool::new(false);
-
-/// `thinkrail://` links received before the web UI is ready, drained by
-/// [`drain_pending_deep_links`].
-static PENDING_DEEP_LINKS: OnceLock<Mutex<Vec<DeepLinkTarget>>> = OnceLock::new();
-
-fn pending_deep_links() -> &'static Mutex<Vec<DeepLinkTarget>> {
-    PENDING_DEEP_LINKS.get_or_init(|| Mutex::new(Vec::new()))
+/// Deep links waiting for a page that can receive them.
+///
+/// `ready` and `pending` share one lock on purpose. With a separate flag, a
+/// link could read "not ready", lose the CPU while the page reported ready and
+/// drained the queue, then queue itself with no later signal to deliver it.
+#[derive(Default)]
+struct DeepLinkQueue {
+    /// Whether the current document holds an `openFile` listener.
+    ready: bool,
+    pending: Vec<DeepLinkTarget>,
 }
+
+impl DeepLinkQueue {
+    /// Deliver `target` now if the page is listening and `emit` succeeds;
+    /// otherwise keep it for the next ready signal. Returns whether it was
+    /// delivered.
+    fn offer(&mut self, target: DeepLinkTarget, emit: impl FnOnce(&DeepLinkTarget) -> bool) -> bool {
+        if self.ready && emit(&target) {
+            return true;
+        }
+        self.pending.push(target);
+        false
+    }
+
+    /// Mark the page ready and deliver every buffered link in arrival order.
+    /// A link whose `emit` fails stays buffered, and only that link: the ones
+    /// that were delivered must not be sent twice. Returns how many went out.
+    fn drain(&mut self, mut emit: impl FnMut(&DeepLinkTarget) -> bool) -> usize {
+        self.ready = true;
+        let before = self.pending.len();
+        self.pending.retain(|target| !emit(target));
+        before - self.pending.len()
+    }
+
+    /// The document is being replaced: its listener is gone until the new
+    /// one reports ready.
+    fn reset(&mut self) {
+        self.ready = false;
+    }
+}
+
+static DEEP_LINKS: Mutex<DeepLinkQueue> = Mutex::new(DeepLinkQueue {
+    ready: false,
+    pending: Vec::new(),
+});
 
 /// Port of `windowNavigationRules` in `externalNavigation.ts`: block
 /// everything by default; allow same-origin navigations (`origin` and
@@ -67,7 +98,6 @@ fn pending_deep_links() -> &'static Mutex<Vec<DeepLinkTarget>> {
 /// This is the in-webview allowlist. Cross-origin `http(s)`/`mailto` URLs are
 /// intentionally rejected here: they never navigate the webview and are
 /// opened in the system browser through [`open_external`] instead.
-#[allow(dead_code)]
 pub fn is_external_navigation_allowed(url: &str, origin: &str) -> bool {
     if url.is_empty() || origin.is_empty() {
         return false;
@@ -93,7 +123,7 @@ pub fn is_external_navigation_allowed(url: &str, origin: &str) -> bool {
 /// paths, fragments, overlong input, control characters, relative paths,
 /// `..` segments, and out-of-range positions all reject.
 pub fn parse_thinkrail_deep_link(url: &str) -> Option<DeepLinkTarget> {
-    if url.is_empty() || url.len() > MAX_DEEP_LINK_LENGTH {
+    if url.is_empty() || utf16_len(url) > MAX_DEEP_LINK_LENGTH {
         return None;
     }
     let parsed = url::Url::parse(url).ok()?;
@@ -152,6 +182,12 @@ pub fn parse_thinkrail_deep_link(url: &str) -> Option<DeepLinkTarget> {
     })
 }
 
+/// Length in UTF-16 code units, matching the `string.length` caps in
+/// `deepLink.ts` (a byte count would reject valid non-ASCII paths early).
+fn utf16_len(value: &str) -> usize {
+    value.encode_utf16().count()
+}
+
 /// Mirror of `positiveInteger` in `deepLink.ts`: 1-7 ASCII digits and
 /// `1..=MAX_DEEP_LINK_POSITION`.
 fn positive_integer(value: &str) -> Option<u32> {
@@ -169,7 +205,7 @@ fn positive_integer(value: &str) -> Option<u32> {
 /// within the length cap, with no control characters or `..` segments.
 fn is_acceptable_path(file: &str) -> bool {
     if file.is_empty()
-        || file.len() > MAX_DEEP_LINK_PATH_LENGTH
+        || utf16_len(file) > MAX_DEEP_LINK_PATH_LENGTH
         || file.chars().any(|char| char.is_control())
     {
         return false;
@@ -228,73 +264,72 @@ fn decode_query_value(raw: &str) -> Option<String> {
     String::from_utf8(out).ok()
 }
 
-fn emit_open_file(app: &AppHandle, target: &DeepLinkTarget) -> Result<(), String> {
-    app.emit("openFile", target).map_err(|error| error.to_string())
-}
-
-fn mark_frontend_ready() {
-    FRONTEND_READY.store(true, Ordering::SeqCst);
+/// Send one link to the page, bringing the window forward first like
+/// `revealDeepLink` in `index.ts`.
+fn emit_open_file(app: &AppHandle, target: &DeepLinkTarget) -> bool {
+    if let Some(main) = app.get_webview_window("main") {
+        if main.is_minimized().unwrap_or(false) {
+            let _ = main.unminimize();
+        }
+        let _ = main.show();
+        let _ = main.set_focus();
+    }
+    app.emit("openFile", target).is_ok()
 }
 
 /// Forward a `thinkrail://` URL as an `openFile` event. Links that arrive
-/// before the web UI is ready (single-instance second launches, OS handler at
-/// startup) are buffered until [`drain_pending_deep_links`] runs.
+/// while no page is listening (single-instance second launches, the OS
+/// handler at startup, a reload) are buffered until [`deep_link_ready`].
 pub fn forward_deep_link(app: &AppHandle, url: &str) -> Result<(), String> {
     let target =
         parse_thinkrail_deep_link(url).ok_or_else(|| "invalid thinkrail:// deep link".to_owned())?;
-    if FRONTEND_READY.load(Ordering::SeqCst) {
-        emit_open_file(app, &target)?;
-    } else {
-        pending_deep_links()
-            .lock()
-            .map_err(|error| error.to_string())?
-            .push(target);
-    }
+    DEEP_LINKS
+        .lock()
+        .map_err(|error| error.to_string())?
+        .offer(target, |target| emit_open_file(app, target));
     Ok(())
 }
 
-/// Emit every buffered deep link as an `openFile` event and return how many
-/// were delivered. Links that fail to emit are re-buffered so they are not
-/// lost; the next ready signal retries them.
-pub fn drain_pending_deep_links(app: &AppHandle) -> usize {
-    let targets: Vec<DeepLinkTarget> = pending_deep_links()
-        .lock()
-        .map(|mut guard| std::mem::take(&mut *guard))
-        .unwrap_or_default();
-    let mut delivered = 0;
-    for target in &targets {
-        if emit_open_file(app, target).is_ok() {
-            delivered += 1;
-        }
+/// The main window started loading a document: whatever listened before is
+/// gone, so links buffer again until the new page reports ready.
+pub fn page_load_started() {
+    if let Ok(mut queue) = DEEP_LINKS.lock() {
+        queue.reset();
     }
-    if delivered < targets.len() {
-        if let Ok(mut guard) = pending_deep_links().lock() {
-            guard.extend(targets.into_iter().skip(delivered));
-        }
-    }
-    delivered
 }
 
 #[tauri::command]
 pub fn route_changed(app: AppHandle, hash: String) -> Result<(), String> {
-    // TODO: persist the per-window route like `RouteStore` (backend/profile +
-    // window identity under the user-data directory).
-    let _ = hash;
-    close_splash(&app);
-    // The first route report is the dom-ready handoff: the web UI can now
-    // receive events, so flush any deep links that arrived before it.
-    mark_frontend_ready();
-    drain_pending_deep_links(&app);
+    if !crate::lifecycle::is_neutral_e2e_host() {
+        crate::state::save_route(&app, &hash);
+    }
+    // The first report means the web UI is running: hand the splash over.
+    crate::window::reveal_main_window(&app);
     Ok(())
 }
 
-/// Explicit frontend readiness signal (alternative to the first
-/// `route_changed` report): mark ready and flush buffered deep links,
-/// returning how many were delivered.
+/// The page holds its `openFile` listener: deliver buffered links and send
+/// later ones straight through. Returns how many were delivered.
 #[tauri::command]
 pub fn deep_link_ready(app: AppHandle) -> Result<usize, String> {
-    mark_frontend_ready();
-    Ok(drain_pending_deep_links(&app))
+    let mut queue = DEEP_LINKS.lock().map_err(|error| error.to_string())?;
+    Ok(queue.drain(|target| emit_open_file(&app, target)))
+}
+
+/// Navigation policy for the main window, the Tauri analogue of
+/// `setNavigationRules(windowNavigationRules(origin))` plus
+/// `installExternalNavigation`: the webview may only load the sidecar origin
+/// (and its `srcdoc`/`blob:` frames). Every other destination is refused, and
+/// the ones a person may follow (`http(s)`, `mailto`, the sidecar's own
+/// `/view/` pages) open in the system browser instead.
+pub fn allow_navigation(app: &AppHandle, url: &url::Url, origin: &str) -> bool {
+    if is_external_navigation_allowed(url.as_str(), origin) {
+        return true;
+    }
+    if let Err(error) = open_external(app, url.as_str()) {
+        eprintln!("[desktop] {error}");
+    }
+    false
 }
 
 /// Cross-origin branch of `externalNavigationUrl` in `externalNavigation.ts`:
@@ -314,10 +349,8 @@ fn vetted_external_url(url: &str) -> Option<&str> {
     }
 }
 
-/// Open an already-vetted external URL in the system browser. Unlike the
-/// previous TODO, this enforces the navigation allowlist and returns `Err`
-/// on blocked URLs instead of handing them to the OS.
-#[allow(dead_code)]
+/// Open an external URL in the system browser. Enforces the allowlist itself
+/// and returns `Err` on blocked URLs instead of handing them to the OS.
 pub fn open_external(app: &AppHandle, url: &str) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
 
@@ -405,6 +438,66 @@ mod tests {
             line,
             column,
         }
+    }
+
+    #[test]
+    fn buffers_links_until_the_page_is_ready() {
+        let mut queue = DeepLinkQueue::default();
+        let mut sent = Vec::new();
+        assert!(!queue.offer(deep_link("/a", 1, None), |_| panic!("not ready yet")));
+        assert!(!queue.offer(deep_link("/b", 1, None), |_| panic!("not ready yet")));
+        assert_eq!(
+            queue.drain(|target| {
+                sent.push(target.file.clone());
+                true
+            }),
+            2
+        );
+        assert_eq!(sent, ["/a", "/b"]);
+        // Once ready, links go straight through.
+        assert!(queue.offer(deep_link("/c", 1, None), |_| true));
+        assert!(queue.pending.is_empty());
+    }
+
+    #[test]
+    fn keeps_only_the_links_that_failed_to_send() {
+        let mut queue = DeepLinkQueue::default();
+        for file in ["/a", "/b", "/c"] {
+            queue.offer(deep_link(file, 1, None), |_| true);
+        }
+        // `/a` fails and `/b`, `/c` succeed: only `/a` may be retried.
+        assert_eq!(queue.drain(|target| target.file != "/a"), 2);
+        assert_eq!(queue.pending, [deep_link("/a", 1, None)]);
+        let mut retried = Vec::new();
+        assert_eq!(
+            queue.drain(|target| {
+                retried.push(target.file.clone());
+                true
+            }),
+            1
+        );
+        assert_eq!(retried, ["/a"]);
+        // A ready page whose send fails keeps the link too.
+        assert!(!queue.offer(deep_link("/d", 1, None), |_| false));
+        assert_eq!(queue.pending, [deep_link("/d", 1, None)]);
+    }
+
+    #[test]
+    fn buffers_again_while_the_document_is_replaced() {
+        let mut queue = DeepLinkQueue::default();
+        assert_eq!(queue.drain(|_| true), 0);
+        queue.reset();
+        assert!(!queue.offer(deep_link("/a", 1, None), |_| panic!("page is reloading")));
+        assert_eq!(queue.drain(|_| true), 1);
+    }
+
+    #[test]
+    fn measures_deep_link_paths_in_utf16_units() {
+        // 2000 CJK characters are 6000 UTF-8 bytes but 2000 UTF-16 units:
+        // inside the 4096 path cap, like `file.length` in `deepLink.ts`.
+        let path = format!("/{}", "文".repeat(2000));
+        assert!(is_acceptable_path(&path));
+        assert!(!is_acceptable_path(&format!("/{}", "文".repeat(4096))));
     }
 
     #[test]

@@ -5,15 +5,20 @@
 //! built by `apps/desktop/scripts/build-sidecar.ts`, spawned here with
 //! `--port 0` so the OS picks a free port. The actual port is read from the
 //! `THINKRAIL_SIDECAR_READY {"port": N}` stdout line the sidecar prints (see
-//! `apps/desktop/src/sidecar/desktop-sidecar-entry.ts`), confirmed with a
-//! fallback `GET /health` poll, and exposed to the frontend through the
-//! `get_sidecar_port` command.
+//! `apps/desktop/src/sidecar/desktop-sidecar-entry.ts`) and confirmed with a
+//! fallback `GET /health` poll.
+//!
+//! The shell holds the sidecar's stdin open for its whole life. Closing it is
+//! the stop request: the sidecar drains (`server.shutdown()`) and exits, and
+//! the shell only kills it if that takes longer than
+//! [`SIDECAR_SHUTDOWN_TIMEOUT`]. A crashed shell closes the pipe too, so the
+//! host cannot outlive its window.
 
 use std::{
     io::{BufRead, BufReader, Read},
     net::{SocketAddr, TcpStream},
-    path::PathBuf,
-    process::{Child, Command, Stdio},
+    path::{Path, PathBuf},
+    process::{Child, ChildStdin, Command, Stdio},
     sync::{mpsc, Mutex},
     thread,
     time::{Duration, Instant},
@@ -26,6 +31,12 @@ pub const SIDECAR_READY_TIMEOUT: Duration = Duration::from_secs(30);
 /// Upper bound for the `/health` confirmation after the ready line.
 pub const HEALTH_POLL_TIMEOUT: Duration = Duration::from_secs(15);
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(200);
+/// How long the host gets to settle sessions and credential writes after the
+/// stop request before it is killed.
+pub const SIDECAR_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
+const SHUTDOWN_POLL_INTERVAL: Duration = Duration::from_millis(25);
+/// Flag that makes the sidecar treat a closed stdin as the stop request.
+const EXIT_ON_STDIN_CLOSE_FLAG: &str = "--exit-on-stdin-close";
 
 /// Current Rust target triple, matching `scripts/build-sidecar.ts`.
 fn current_triple() -> String {
@@ -37,25 +48,31 @@ fn current_triple() -> String {
     format!("{}-{os}", std::env::consts::ARCH)
 }
 
-/// Locate the sidecar binary: Tauri bundles `externalBin` output under a
-/// `binaries/` directory next to the resources, while `cargo`/Bun dev runs
-/// resolve it from the crate directory.
+/// Directories that may hold the sidecar, most specific first. Tauri copies
+/// `externalBin` next to the main executable with the target suffix removed
+/// (`Contents/MacOS` on macOS, the install directory elsewhere), and
+/// `tauri dev` does the same under `target/`. The crate's own `binaries/`
+/// directory only exists on the machine that built the shell, so it is the
+/// last resort for a plain `cargo run`.
+fn sidecar_search_roots(exe_dir: Option<&Path>) -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    if let Some(dir) = exe_dir {
+        roots.push(dir.to_path_buf());
+        roots.push(dir.join("binaries"));
+    }
+    roots.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("binaries"));
+    roots
+}
+
+/// Locate the sidecar binary (see [`sidecar_search_roots`]).
 pub fn sidecar_binary_path() -> Option<PathBuf> {
     let exe_suffix = if cfg!(windows) { ".exe" } else { "" };
     let names = [
-        format!("thinkrail-sidecar-{}{exe_suffix}", current_triple()),
         format!("thinkrail-sidecar{exe_suffix}"),
+        format!("thinkrail-sidecar-{}{exe_suffix}", current_triple()),
     ];
-    let mut roots = Vec::new();
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            roots.push(dir.join("binaries"));
-            roots.push(dir.join("../Resources/binaries"));
-            roots.push(dir.join("../resources/binaries"));
-        }
-    }
-    roots.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("binaries"));
-    for root in roots {
+    let exe = std::env::current_exe().ok();
+    for root in sidecar_search_roots(exe.as_deref().and_then(Path::parent)) {
         for name in &names {
             let candidate = root.join(name);
             if candidate.is_file() {
@@ -82,6 +99,7 @@ fn parse_ready_line(line: &str) -> Option<u16> {
 /// still kills the child so the host can never be orphaned.
 pub struct SidecarHandle {
     child: Child,
+    stdin: Option<ChildStdin>,
     port: u16,
 }
 
@@ -90,18 +108,32 @@ impl SidecarHandle {
         self.port
     }
 
-    /// Best-effort shutdown. The sidecar already exits on SIGINT/SIGTERM;
-    /// TODO: ask it to drain over HTTP first so in-flight agent turns can
-    /// checkpoint (mirrors the Electrobun quit coordinator's host shutdown).
-    pub fn shutdown(mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+    /// Ask the host to stop and wait for it. Closing stdin is the request;
+    /// the host then runs `server.shutdown()` (session settlement, credential
+    /// writes, terminal persistence) and exits. It is only killed when it is
+    /// still running after `timeout`.
+    pub fn shutdown(mut self, timeout: Duration) {
+        drop(self.stdin.take());
+        let deadline = Instant::now() + timeout;
+        loop {
+            match self.child.try_wait() {
+                Ok(Some(_)) => return,
+                Ok(None) if Instant::now() < deadline => thread::sleep(SHUTDOWN_POLL_INTERVAL),
+                _ => break,
+            }
+        }
+        eprintln!("[desktop] the host did not stop in time; killing it");
+        // `Drop` kills and reaps the child.
     }
 }
 
 impl Drop for SidecarHandle {
     fn drop(&mut self) {
+        if matches!(self.child.try_wait(), Ok(Some(_))) {
+            return;
+        }
         let _ = self.child.kill();
+        let _ = self.child.wait();
     }
 }
 
@@ -110,19 +142,36 @@ pub fn spawn_sidecar() -> Result<SidecarHandle, String> {
     let binary = sidecar_binary_path().ok_or_else(|| {
         "thinkrail-sidecar binary not found (run `bun run build:sidecar` first)".to_string()
     })?;
-    let mut child = Command::new(&binary)
+    let mut command = Command::new(&binary);
+    command
         .arg("--port")
         .arg("0")
-        .stdin(Stdio::null())
+        .arg(EXIT_ON_STDIN_CLOSE_FLAG)
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
+        .stderr(Stdio::inherit());
+    // A release shell is a GUI process; without this Windows opens a console
+    // window for the host. Debug builds keep the console so host logs show.
+    #[cfg(all(windows, not(debug_assertions)))]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    let mut child = command
         .spawn()
         .map_err(|error| format!("could not spawn {}: {error}", binary.display()))?;
+    let stdin = child.stdin.take();
+    let stdout = child.stdout.take();
+    // From here on the handle owns the child: every early return drops it,
+    // which kills a host that never became ready.
+    let mut handle = SidecarHandle {
+        child,
+        stdin,
+        port: 0,
+    };
 
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| "sidecar stdout was not piped".to_string())?;
+    let stdout = stdout.ok_or_else(|| "sidecar stdout was not piped".to_string())?;
     let (lines_tx, lines_rx) = mpsc::channel();
     thread::spawn(move || {
         for line in BufReader::new(stdout).lines() {
@@ -139,7 +188,7 @@ pub fn spawn_sidecar() -> Result<SidecarHandle, String> {
 
     let deadline = Instant::now() + SIDECAR_READY_TIMEOUT;
     let port = loop {
-        match child.try_wait() {
+        match handle.child.try_wait() {
             Ok(Some(status)) => {
                 return Err(format!("sidecar exited before ready (status {status})"));
             }
@@ -148,7 +197,6 @@ pub fn spawn_sidecar() -> Result<SidecarHandle, String> {
         }
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
-            let _ = child.kill();
             return Err(format!(
                 "timed out after {}s waiting for {SIDECAR_READY_MARKER}",
                 SIDECAR_READY_TIMEOUT.as_secs()
@@ -170,10 +218,10 @@ pub fn spawn_sidecar() -> Result<SidecarHandle, String> {
     // Fallback confirmation: the ready line is authoritative, but a /health
     // poll guards against half-open hosts before the UI connects.
     if !wait_for_health(port, HEALTH_POLL_TIMEOUT) {
-        let _ = child.kill();
         return Err(format!("sidecar on port {port} never answered /health"));
     }
-    Ok(SidecarHandle { child, port })
+    handle.port = port;
+    Ok(handle)
 }
 
 /// Poll `GET /health` until it answers `200` + `ok` or the timeout elapses.
@@ -230,21 +278,50 @@ impl SidecarState {
         }
     }
 
-    pub fn port(&self) -> Option<u16> {
-        self.0.lock().ok()?.as_ref().map(SidecarHandle::port)
-    }
-
+    /// Stop the host if it is running; a second call is a no-op. The handle
+    /// leaves the lock before the wait so nothing else blocks behind it.
     pub fn shutdown_sidecar(&self) {
-        if let Ok(mut guard) = self.0.lock() {
-            if let Some(handle) = guard.take() {
-                handle.shutdown();
-            }
+        let handle = self.0.lock().ok().and_then(|mut guard| guard.take());
+        if let Some(handle) = handle {
+            handle.shutdown(SIDECAR_SHUTDOWN_TIMEOUT);
         }
     }
 }
 
-/// Frontend query for the loopback port the sidecar reported as ready.
-#[tauri::command]
-pub fn get_sidecar_port(state: tauri::State<'_, SidecarState>) -> Option<u16> {
-    state.port()
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_only_well_formed_ready_lines() {
+        assert_eq!(
+            parse_ready_line(r#"THINKRAIL_SIDECAR_READY {"port":4312}"#),
+            Some(4312)
+        );
+        assert_eq!(
+            parse_ready_line(r#"[log] THINKRAIL_SIDECAR_READY {"port": 80} "#),
+            Some(80)
+        );
+        for line in [
+            "",
+            "listening on 4312",
+            "THINKRAIL_SIDECAR_READY",
+            r#"THINKRAIL_SIDECAR_READY {"port":0}"#,
+            r#"THINKRAIL_SIDECAR_READY {"port":70000}"#,
+            r#"THINKRAIL_SIDECAR_READY {"port":"4312"}"#,
+        ] {
+            assert_eq!(parse_ready_line(line), None, "{line:?}");
+        }
+    }
+
+    #[test]
+    fn looks_beside_the_executable_before_the_build_tree() {
+        let exe_dir = Path::new("/Applications/ThinkRail.app/Contents/MacOS");
+        let roots = sidecar_search_roots(Some(exe_dir));
+        assert_eq!(roots.first().map(PathBuf::as_path), Some(exe_dir));
+        assert_eq!(
+            roots.last(),
+            Some(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("binaries"))
+        );
+    }
 }

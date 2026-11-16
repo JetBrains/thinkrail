@@ -1,8 +1,11 @@
 //! Application lifecycle: quit and notifications.
 //!
-//! TODO: port the Electrobun quit coordinator (`quitCoordinator` in
-//! `updates/quitCoordinator.ts`: confirm unsaved work, stop the host
-//! gracefully, then exit) instead of exiting immediately.
+//! Quitting ports the happy path of the Electrobun quit coordinator
+//! (`updates/quitCoordinator.ts`): tell the web client, stop the host
+//! gracefully, then exit. Every way out of the app (the bridge's `quit_app`,
+//! the Quit menu item, closing the last window, a startup failure) ends in
+//! Tauri's exit event, and [`stop_host`] runs there, so no path leaves the
+//! host running or kills it mid-write.
 
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -10,10 +13,27 @@ use crate::sidecar::SidecarState;
 
 #[tauri::command]
 pub fn quit_app(app: AppHandle) {
+    // `quitHintChanged` keeps the Electrobun RPC message name so the web
+    // `subscribeQuitHint` bridge accepts it unchanged.
+    let _ = app.emit(
+        "quitHintChanged",
+        serde_json::json!({ "hint": "quitting" }),
+    );
+    app.exit(0);
+}
+
+/// Stop the host before the process ends. Runs from `RunEvent::Exit`, the one
+/// point every exit path reaches; Tauri ends the process right after without
+/// running destructors, so nothing else would stop the sidecar. The windows
+/// are hidden first because an orderly stop can take a few seconds and a
+/// frozen window would look like a hang.
+pub fn stop_host(app: &AppHandle) {
+    for window in app.webview_windows().values() {
+        let _ = window.hide();
+    }
     if let Some(state) = app.try_state::<SidecarState>() {
         state.shutdown_sidecar();
     }
-    app.exit(0);
 }
 
 #[tauri::command]
@@ -40,37 +60,6 @@ pub fn show_notification(
         .body(body)
         .show()
         .map_err(|error| error.to_string())
-}
-
-/// Request an orderly shutdown: release the web quit hint, stop the host
-/// sidecar, then exit. Ports the Electrobun quit coordinator's happy path
-/// (`quitCoordinator.quit()` in `updates/quitCoordinator.ts`: wait for the
-/// host to stop, then quit); the unsaved-work confirmation stays web-side
-/// behind the `quitHint` handshake.
-///
-/// Suggested `on_window_event` wiring in `main.rs` (kept as a comment: the
-/// shell bootstrap owns that file, so full wiring there would be riskier):
-/// ```ignore
-/// tauri::WindowEvent::CloseRequested { api, .. } => {
-///     // Electrobun `before-quit` parity: only an approved close proceeds to
-///     // shutdown; anything else is deferred to the web `quitHint` handshake.
-///     if approved {
-///         api.prevent_close();
-///         lifecycle::request_graceful_shutdown(window.app_handle());
-///     }
-/// }
-/// ```
-pub fn request_graceful_shutdown(app: &AppHandle) {
-    // `quitHintChanged` keeps the Electrobun RPC message name so the web
-    // `subscribeQuitHint` bridge accepts it unchanged.
-    let _ = app.emit(
-        "quitHintChanged",
-        serde_json::json!({ "hint": "quitting" }),
-    );
-    if let Some(state) = app.try_state::<SidecarState>() {
-        state.shutdown_sidecar();
-    }
-    app.exit(0);
 }
 
 /// Whether the shell runs as the neutral E2E host (`about:blank`, no splash).

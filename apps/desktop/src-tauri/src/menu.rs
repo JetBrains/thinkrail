@@ -11,7 +11,7 @@
 //! the Window menu; Windows gets the Edit menu only; Linux installs no menu
 //! (the TS port returns null there).
 
-use std::{collections::HashMap, sync::Mutex};
+use std::{collections::HashMap, fs, path::Path, sync::Mutex};
 
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -84,14 +84,17 @@ pub fn sanitize_menu_labels(labels: HashMap<String, String>) -> HashMap<String, 
     clean
 }
 
+/// The caps are `value.length` in TypeScript, so count UTF-16 units: a byte
+/// count would reject a 70-character Chinese label as "over 200".
 fn sanitize_label(value: &str, cap: usize, fallback: &str) -> String {
-    if value.trim().is_empty() || value.len() > cap {
+    if value.trim().is_empty() || value.encode_utf16().count() > cap {
         fallback.to_owned()
     } else {
         value.to_owned()
     }
 }
 
+#[cfg(any(target_os = "macos", windows))]
 fn menu_text(labels: &HashMap<String, String>, key: &str, fallback: &str) -> String {
     labels.get(key).cloned().unwrap_or_else(|| fallback.to_owned())
 }
@@ -99,7 +102,60 @@ fn menu_text(labels: &HashMap<String, String>, key: &str, fallback: &str) -> Str
 fn snapshot_labels(app: &AppHandle) -> HashMap<String, String> {
     app.try_state::<MenuLabels>()
         .and_then(|state| state.0.lock().ok().map(|guard| guard.clone()))
+        .filter(|labels| !labels.is_empty())
         .unwrap_or_else(|| sanitize_menu_labels(HashMap::new()))
+}
+
+/// One native label (menu, dialog or splash text) in the user's language,
+/// falling back to English until the web client has pushed its labels.
+pub fn native_label(app: &AppHandle, key: &str) -> String {
+    snapshot_labels(app).remove(key).unwrap_or_default()
+}
+
+/// File the last pushed labels are kept in (`nativeLabelsPath()` in
+/// `index.ts`), so the next launch can caption its menu, splash and startup
+/// dialog before the web client is up.
+const NATIVE_LABELS_FILE: &str = "native-labels.json";
+
+/// Port of `readNativeLabels`: a missing or corrupt file reads as no labels.
+fn read_native_labels(user_data_dir: &Path) -> HashMap<String, String> {
+    fs::read(user_data_dir.join(NATIVE_LABELS_FILE))
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        .and_then(|value| value.as_object().cloned())
+        .map(|entries| {
+            entries
+                .into_iter()
+                .filter_map(|(key, value)| Some((key, value.as_str()?.to_owned())))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Port of `writeNativeLabels`: best-effort, a failure only costs the next
+/// launch its translated captions.
+fn write_native_labels(user_data_dir: &Path, labels: &HashMap<String, String>) {
+    let written = fs::create_dir_all(user_data_dir).and_then(|()| {
+        fs::write(
+            user_data_dir.join(NATIVE_LABELS_FILE),
+            serde_json::to_string(labels).unwrap_or_else(|_| "{}".to_owned()),
+        )
+    });
+    if let Err(error) = written {
+        eprintln!("[desktop] could not save the native labels: {error}");
+    }
+}
+
+/// Load the labels saved by the previous run into [`MenuLabels`].
+pub fn load_saved_labels(app: &AppHandle) {
+    let saved = crate::state::user_data_dir(app)
+        .map(|dir| read_native_labels(&dir))
+        .unwrap_or_default();
+    if let Some(state) = app.try_state::<MenuLabels>() {
+        if let Ok(mut guard) = state.0.lock() {
+            *guard = sanitize_menu_labels(saved);
+        }
+    }
 }
 
 #[tauri::command]
@@ -108,14 +164,24 @@ pub fn menu_labels_changed(
     labels: HashMap<String, String>,
 ) -> Result<(), String> {
     let labels = sanitize_menu_labels(labels);
-    if let Some(state) = app.try_state::<MenuLabels>() {
-        if let Ok(mut guard) = state.0.lock() {
-            *guard = labels;
+    let changed = match app.try_state::<MenuLabels>() {
+        Some(state) => {
+            let mut guard = state.0.lock().map_err(|error| error.to_string())?;
+            let changed = *guard != labels;
+            *guard = labels.clone();
+            changed
         }
+        None => false,
+    };
+    // The web client pushes its labels on every start and language change;
+    // only a real change is worth a file write and a menu rebuild.
+    if !changed || crate::lifecycle::is_neutral_e2e_host() {
+        return Ok(());
     }
-    // TODO: rebuild the native menu so the new labels take effect without a
-    // restart (needs the `AppHandle` menu item handles or a rebuild call).
-    Ok(())
+    if let Some(dir) = crate::state::user_data_dir(&app) {
+        write_native_labels(&dir, &labels);
+    }
+    build_native_menu(&app)
 }
 
 /// Edit submenu shared by macOS and Windows, mirroring `editMenu` in
@@ -230,9 +296,17 @@ fn window_submenu(
 }
 
 /// Route custom menu actions: `open-settings`/`close-item` are forwarded as
-/// `nativeCommand` events for the web shortcuts bridge (`bridge.ts`), and
-/// `quit-shortcut` quits through the same path as the welcome flow.
-fn register_menu_events(app: &AppHandle) {
+/// `nativeCommand` events for the web shortcuts bridge, and `quit-shortcut`
+/// quits. Call once at startup: the handler outlives menu rebuilds, and a
+/// second registration would run every action twice.
+///
+/// Both a click on Quit and the Cmd-Q accelerator arrive here as the same
+/// event. Electrobun tells them apart by reading the keyboard state
+/// (`keyState.ts`) and makes the chord a press-and-hold confirmation; that
+/// reader is not ported, so this takes the path `quitShortcut.ts` takes when
+/// the key state is unavailable and quits at once. The host still gets its
+/// orderly stop on the way out (`lifecycle::stop_host`).
+pub fn register_menu_events(app: &AppHandle) {
     app.on_menu_event(|app, event| {
         let id = event.id().as_ref();
         if id == OPEN_SETTINGS_COMMAND || id == CLOSE_ITEM_COMMAND {
@@ -241,17 +315,15 @@ fn register_menu_events(app: &AppHandle) {
                 serde_json::json!({ "command": id }),
             );
         } else if id == QUIT_SHORTCUT_ACTION {
-            // A native menu pick is already an explicit gesture, so quit
-            // immediately like Electrobun's `menuPick → quitNow` path (the
-            // press-and-hold confirmation only applies to the Cmd-Q chord).
             crate::lifecycle::quit_app(app.clone());
         }
     });
 }
 
-/// Build and install the native menu: macOS app/Edit/Window menus, Windows
-/// Edit menu only, nothing on Linux (mirroring `desktopApplicationMenu`,
-/// which returns null there).
+/// Build and install the native menu with the current labels: macOS
+/// app/Edit/Window menus, Windows Edit menu only, nothing on Linux (mirroring
+/// `desktopApplicationMenu`, which returns null there). Called again whenever
+/// the labels change; installing replaces the previous menu.
 pub fn build_native_menu(app: &AppHandle) -> Result<(), String> {
     // Linux has no global menubar to populate; report success without one.
     if cfg!(target_os = "linux") {
@@ -278,7 +350,6 @@ pub fn build_native_menu(app: &AppHandle) -> Result<(), String> {
         menu.append(&window).map_err(|error| error.to_string())?;
     }
     app.set_menu(menu).map_err(|error| error.to_string())?;
-    register_menu_events(app);
     Ok(())
 }
 
@@ -353,6 +424,41 @@ mod tests {
             labels.get("desktop.dialog.startFailed").map(String::as_str),
             Some("ThinkRail could not start")
         );
+    }
+
+    #[test]
+    fn caps_count_utf16_units_like_typescript() {
+        // 70 Chinese characters are 210 UTF-8 bytes but 70 UTF-16 units:
+        // within the 200 dialog cap, exactly as `value.length` sees them.
+        let dialog = "退".repeat(70);
+        let at_cap = "退".repeat(200);
+        let over_cap = "退".repeat(201);
+        let labels = sanitize_menu_labels(input(&[
+            ("desktop.dialog.quit", dialog.as_str()),
+            ("desktop.dialog.startFailed", at_cap.as_str()),
+            ("desktop.splash.starting", over_cap.as_str()),
+        ]));
+        assert_eq!(labels.get("desktop.dialog.quit"), Some(&dialog));
+        assert_eq!(labels.get("desktop.dialog.startFailed"), Some(&at_cap));
+        assert_eq!(
+            labels.get("desktop.splash.starting").map(String::as_str),
+            Some("Starting ThinkRail…")
+        );
+    }
+
+    #[test]
+    fn saved_labels_round_trip_and_tolerate_bad_files() {
+        let dir = std::env::temp_dir().join(format!("thinkrail-labels-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        assert!(read_native_labels(&dir).is_empty());
+        let labels = sanitize_menu_labels(input(&[("desktop.menu.edit", "Bearbeiten")]));
+        write_native_labels(&dir, &labels);
+        assert_eq!(read_native_labels(&dir), labels);
+        fs::write(dir.join(NATIVE_LABELS_FILE), "not json").unwrap();
+        assert!(read_native_labels(&dir).is_empty());
+        fs::write(dir.join(NATIVE_LABELS_FILE), r#"{"desktop.menu.edit":7,"k":"v"}"#).unwrap();
+        assert_eq!(read_native_labels(&dir), input(&[("k", "v")]));
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

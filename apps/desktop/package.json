@@ -11,13 +11,12 @@
 		"tauri": "tauri",
 		"dev:tauri": "tauri dev",
 		"build:sidecar": "bun run scripts/build-sidecar.ts",
-		"tauri:build": "bun run build:sidecar && tauri build",
+		"tauri:build": "tauri build",
 		"typecheck": "electrobun prepare && tsc --noEmit",
 		"typecheck:tauri": "tsc --noEmit",
 		"test": "bun test"
 	},
 	"dependencies": {
-		"@tauri-apps/api": "^2",
 		"@thinkrail/contracts": "workspace:*",
 		"@thinkrail/locales": "workspace:*",
 		"@thinkrail/server": "workspace:*",
