@@ -329,14 +329,7 @@ test("a file visualization renders the workspace file with the diff-review rende
 		);
 		const preview = file.getByTestId("resource-preview");
 		await expect(preview).toBeVisible();
-		await expect(preview.getByTestId("view-toggle-html-interactive")).toHaveAttribute(
-			"data-active",
-			"true",
-		);
-		await expect(preview.getByTestId("html-disabled-notice")).toContainText(
-			"Scripts run in a sandbox without network access",
-		);
-		await clickTranscriptControl(preview.getByTestId("view-toggle-html"));
+		await expect(preview.getByTestId("view-toggle-html")).toHaveAttribute("data-active", "true");
 		await expect(preview.getByTestId("html-disabled-notice")).toContainText(
 			"Scripts and external resources are disabled",
 		);
@@ -584,11 +577,7 @@ test("a before/after preview opens as a diff tab over the two files that survive
 			`${MOCKUP_DIR}/before.html → ${MOCKUP_DIR}/after.html`,
 		);
 		await expect(pane.locator("iframe")).toHaveCount(2);
-		await expect(pane.locator("iframe").first()).toHaveAttribute("sandbox", "allow-scripts");
-		await pane.getByTestId("view-toggle-html").click();
 		await expect(pane.locator("iframe").first()).toHaveAttribute("sandbox", "allow-same-origin");
-		await pane.getByTestId("view-toggle-html-interactive").click();
-		await expect(pane.locator("iframe").first()).toHaveAttribute("sandbox", "allow-scripts");
 		await pane.getByTestId("html-diff-swipe").click();
 		await expect(pane.getByTestId("html-diff-divider")).toBeVisible();
 		await expect(pane.locator("iframe")).toHaveCount(2);

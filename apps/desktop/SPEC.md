@@ -343,8 +343,7 @@ confinement: navigation-event responses cannot cancel it. The launcher applies t
 `webview.setNavigationRules` right after creating the window: block everything, then allow the origin,
 `about:srcdoc`, and same-origin `blob:`. HTML, SVG and notebook previews update `srcDoc` in place and
 every srcdoc load is policy-checked, so blocking `about:srcdoc` blanks them; `blob:` keeps downloads
-working. Because frames are checked too, an interactive mockup's script cannot load an outside page into
-its frame on the desktop ([[module-resource-renderers]]). Electrobun 2.0.5 documents a `navigationRules` constructor option but never forwards it to
+working. Electrobun 2.0.5 documents a `navigationRules` constructor option but never forwards it to
 native code, so the launcher does not use it.
 
 Every external link activation reaches the OS through one path. The desktop preload turns unmodified
