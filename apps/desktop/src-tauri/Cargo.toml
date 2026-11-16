@@ -1,0 +1,37 @@
+[package]
+name = "thinkrail-desktop"
+version = "0.0.0-dev"
+description = "ThinkRail desktop shell (Tauri v2 migration scaffolding; Electrobun stays until cutover)"
+edition = "2021"
+
+# See https://tauri.app/start/prerequisites/ for system prerequisites.
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+url = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-updater = "2"
+# The deep-link feature forwards thinkrail:// URLs opened in a second
+# instance to the running app instead of launching a duplicate window.
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
+tauri-plugin-deep-link = "2"
+# Native menus ship in the tauri core crate (tauri::menu); there is no
+# separate tauri-plugin-menu crate. Menu IPC is gated by core:menu:*
+# capability permissions in capabilities/default.json.
+tauri-plugin-window-state = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-process = "2"
+tauri-plugin-opener = "2"
+
+[target."cfg(windows)".dependencies]
+windows = {
+	version = "0.58",
+	features = ["Win32_UI_Shell", "Win32_Foundation", "Win32_UI_WindowsAndMessaging"],
+}

@@ -687,3 +687,48 @@ release checks described in [[module-ci-release]].
 Shared/remote backend profiles, profile selection, multi-window routing, Windows/Linux URL-scheme
 registration, and CEF. Removing Electrobun workarounds follows [[electrobun-compatibility]]. The update
 feed publication described above remains release-owned.
+
+## Tauri v2 migration (in progress)
+
+The desktop shell is moving from Electrobun to Tauri v2 (`apps/desktop/src-tauri`).
+The web UI (`apps/web`) is unchanged: the bridge (`apps/desktop/src/bridge/`) installs the same frozen
+globals the Electrobun preload did, and Tauri commands/events keep the Electrobun RPC message names
+(`get_window_state`, `updateStateChanged`, …) so the web shape-guards accept the Tauri shell unchanged.
+
+Sidecar topology: the ThinkRail host runs as an external sidecar binary
+(`binaries/thinkrail-sidecar-<triple>`, built by `apps/desktop/scripts/build-sidecar.ts`) spawned at
+startup with `--port 0`. The Bun sidecar prints `THINKRAIL_SIDECAR_READY {"port": N}` on stdout once
+`bootHost()` is listening; the shell parses that line, confirms with a `GET /health` poll, exposes the
+port through the `get_sidecar_port` command, and navigates the main window to the sidecar origin
+(`http://127.0.0.1:<port>`) plus the stored initial route. A neutral E2E host
+(`THINKRAIL_DESKTOP_E2E_HOST=1`) instead navigates to `about:blank`, installs no menu, persists nothing,
+and writes `THINKRAIL_DESKTOP_READY_FILE` once the sidecar is healthy.
+
+Bridge table (Electrobun preload global → Tauri `invoke`/`listen` equivalent in `bridge.ts`):
+
+| Electrobun preload global | Tauri equivalent |
+| --- | --- |
+| `__THINKRAIL_NATIVE_SHORTCUTS__` | same global, backed by Tauri commands |
+| `__THINKRAIL_NATIVE_UPDATES__` | same global; `get_update_state` / `check_for_updates` / `download_update` / `restart_to_update` / `dismiss_install_result` via `invoke`, `updateStateChanged` via `listen` |
+| `__THINKRAIL_NATIVE_DEEP_LINKS__` | same global; `deep_link_ready` via `invoke`, `openFile` via `listen` |
+| `__THINKRAIL_NATIVE_NOTIFICATIONS__` | same global; `show_notification` via `invoke` |
+| `__THINKRAIL_NATIVE_PAGE_ZOOM__` | same global; `page_zoom_requested` / `page_zoom_gesture_requested` via `invoke` |
+| `__THINKRAIL_NATIVE_WINDOW_CONTROLS__` | same global; `get_window_state` / `minimize_window` / `toggle_maximize_window` / `close_window` / `title_bar_double_click` via `invoke`, `windowStateChanged` / `windowChromeChanged` / `windowFocusChanged` via `listen` |
+| `__THINKRAIL_NATIVE_MENU__` | same global; `menu_labels_changed` via `invoke`, `nativeCommand` / `quitHintChanged` via `listen` |
+| `__THINKRAIL_STABLE_PREFERENCES__` | same global; `preference_write` / `preference_remove` via `invoke` |
+| `__THINKRAIL_INITIAL_WINDOW_CHROME__` / `__THINKRAIL_INITIAL_DESKTOP_PREFERENCES__` seeds | consumed-and-removed seed globals, same as before |
+
+What still uses Electrobun: packaging and release (`electrobun dev` / `electrobun build`, the
+`package:*` scripts) until cutover. The Tauri shell already covers startup, menus, sidecar lifecycle,
+window chrome/zoom, navigation gating, deep links, preferences/routes, notifications, and updates; the
+Electrobun entry (`apps/desktop/src/index.ts`) remains the startup-parity reference.
+
+Removal checklist (only after the Tauri cutover ships):
+
+- [ ] Delete `apps/desktop/electrobun.config.ts`.
+- [ ] Delete `apps/desktop/hutch.config.ts`.
+- [ ] Delete `apps/desktop/preBuild.ts` / `apps/desktop/postBuild.ts` and their `scripts` wiring.
+- [ ] Delete the `serverRuntime` dynamic import path (`apps/desktop/src/serverRuntime.ts` and its
+  `pathToFileURL(runtimeDir)` loader in `index.ts`).
+- [ ] Remove the `electrobun` dependency, `electrobun prepare` hooks, and Electrobun scripts from
+  `apps/desktop/package.json`.

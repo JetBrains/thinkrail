@@ -8,16 +8,23 @@
 		"dev": "electrobun dev",
 		"package:canary": "electrobun build --env=canary",
 		"package:stable": "electrobun build --env=stable",
+		"tauri": "tauri",
+		"dev:tauri": "tauri dev",
+		"build:sidecar": "bun run scripts/build-sidecar.ts",
+		"tauri:build": "bun run build:sidecar && tauri build",
 		"typecheck": "electrobun prepare && tsc --noEmit",
+		"typecheck:tauri": "tsc --noEmit",
 		"test": "bun test"
 	},
 	"dependencies": {
+		"@tauri-apps/api": "^2",
 		"@thinkrail/contracts": "workspace:*",
 		"@thinkrail/locales": "workspace:*",
 		"@thinkrail/server": "workspace:*",
 		"@thinkrail/shared": "workspace:*"
 	},
 	"devDependencies": {
+		"@tauri-apps/cli": "^2",
 		"@types/bun": "catalog:",
 		"electrobun": "2.0.5",
 		"resedit": "catalog:",

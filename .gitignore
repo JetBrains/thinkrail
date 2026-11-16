@@ -25,6 +25,13 @@ design/
 
 # Build-only manifests written transiently by apps/cli/scripts/build-binary.ts
 apps/cli/src/*.generated.ts
+# Build-only manifests written transiently by apps/desktop/scripts/build-sidecar.ts
+apps/desktop/src/sidecar/*.generated.ts
+# Tauri scaffolding: compiled sidecar binaries (rebuilt via build:sidecar), cargo output,
+# and tauri-build generated schemas (regenerated on every cargo build)
+apps/desktop/src-tauri/binaries/
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
 .hutch/
 .cottontail-tmp/
 apps/desktop/.stage/
