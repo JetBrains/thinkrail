@@ -17,6 +17,7 @@ import {
 	DialogFooter,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
+import { focusAndReveal } from "@thinkrail/ui/focus";
 import {
 	useCallback,
 	useEffect,
@@ -37,6 +38,7 @@ import {
 	selectCompactionTurnIds,
 	selectComposerFocusRequested,
 	selectPickerModels,
+	selectQuestionMayClaimFocus,
 	selectSkillsStale,
 	selectSupportsMcp,
 	selectSupportsServerFallbackRepair,
@@ -788,8 +790,11 @@ export default function ChatView({
 		useAppStore.getState().consumeComposerEdit(sessionId, composerEdit.id);
 	}, [composerEdit, sessionId]);
 
-	const composerFocusServed = useRef(false);
-	const mayClaimFocus = useCallback(() => !composerFocusServed.current, []);
+	const mayClaimFocus = useCallback(
+		(toolCallId: string) =>
+			selectQuestionMayClaimFocus(useAppStore.getState(), sessionId, toolCallId),
+		[sessionId],
+	);
 	const composerFocusRequested = useAppStore((s) =>
 		selectComposerFocusRequested(s, workspaceId, sessionId),
 	);
@@ -797,8 +802,8 @@ export default function ChatView({
 		if (!composerFocusRequested) return;
 		const store = useAppStore.getState();
 		const dismissHistory = store.composerFocusRequest?.dismissHistory === true;
-		store.clearComposerFocusRequest();
-		composerFocusServed.current = true;
+		const waiting = awaitingToolCallIdOf(store.sessions[sessionId]?.hostState ?? null) ?? null;
+		store.serveComposerFocusRequest(sessionId, waiting);
 		if (dismissHistory) {
 			if (store.historyOpenRequest?.sessionId === sessionId) store.clearHistoryOpen();
 			if (historyOverlayOpen) closeHistory();
@@ -816,10 +821,14 @@ export default function ChatView({
 			.finally(() => setDisablingNotice(false));
 	};
 	const focusComposer = useCallback(() => composerRef.current?.refocus(), []);
+	const waitingQuestion = useCallback(
+		() => dockTarget?.querySelector<HTMLElement>(FOCUS_CLAIM) ?? null,
+		[dockTarget],
+	);
 	const focusWaitingQuestion = () => {
-		const claim = dockTarget?.querySelector<HTMLElement>(FOCUS_CLAIM);
+		const claim = waitingQuestion();
 		if (!claim) return false;
-		claim.focus({ preventScroll: true });
+		focusAndReveal(claim);
 		return document.activeElement === claim;
 	};
 	// Keep a stable `onTryAgain` identity (it is passed to every transcript row) while always calling the
@@ -887,6 +896,7 @@ export default function ChatView({
 					onOpenFile={onOpenFile}
 					workspaceRoot={workspaceRoot}
 					focusComposer={focusComposer}
+					waitingQuestion={waitingQuestion}
 					mayClaimFocus={mayClaimFocus}
 					landingChord={landingChord}
 					openSubagentTranscript={setTranscriptChildId}

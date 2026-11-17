@@ -156,7 +156,9 @@ export function ProjectHome({
 					defaultSize={100 - PROJECTS_PANE_DEFAULT_PERCENT}
 					minSize={WELCOME_MIN_PERCENT}
 				>
-					<div className="h-full min-h-0 bg-container-content-bg">{main ?? <WelcomePanel />}</div>
+					<div data-main-area className="h-full min-h-0 bg-container-content-bg">
+						{main ?? <WelcomePanel />}
+					</div>
 				</ResizablePanel>
 			</ResizablePanelGroup>
 		</div>

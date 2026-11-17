@@ -28,7 +28,7 @@ export interface ChatActions {
 	cancelAutomaticReveal: () => void;
 	focusComposer: () => void;
 	focusToolCall: (toolCallId: string) => void;
-	mayClaimFocus: () => boolean;
+	mayClaimFocus: (toolCallId: string) => boolean;
 	landingChord: string;
 	openSubagentTranscript: (childSessionId: string) => void;
 	respondToTool: (toolCallId: string, response: unknown) => Promise<void>;

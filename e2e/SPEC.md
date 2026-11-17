@@ -448,7 +448,12 @@ a tab strip and j/k on a side rail.
 the feed with no ring (draft, caret and the region's accent line kept), where `F` shows hint labels, a
 second Esc does nothing, ↓ walks to a message and that message's Esc returns to the composer; the @ menu
 takes the first Esc; the TODO rail's input lands on its panel root, from which `F` and `Mod+1` still work;
-a Settings field's Esc still closes Settings; and the terminal's Esc reaches the shell with focus kept.
+a Settings field's Esc still closes Settings; and the terminal's Esc reaches the shell with focus kept. It
+also pins the Esc ladder: the TODO input → its panel → the chat feed (no ring, the center's accent line),
+and a Files row, the chat's own tab and a top-bar button straight to the feed; with a file in the center,
+a Files row, the file's tab and a terminal tab land in its Monaco editor with the tab unchanged, and
+Monaco keeps its Esc; a dialog's button closes the dialog and climbs no further; on Project Home the
+Projects tree lands in the main pane.
 `keyboard-review.spec.ts` pins commenting from the keyboard: Tab onto a Pierre diff lands on its cursor
 proxy (`review-cursor`: a listbox whose single selected option, its `aria-activedescendant`, names the
 line and its place among the stops, while the diff container has no role or tabindex and takes the ring's
@@ -730,10 +735,13 @@ preview on the plan page and its live slot taking Esc and a click answer. `ask-k
 card's keyboard pass: F6 and Mod+1 landing on the current option while Mod+L keeps the composer, Shift+Tab
 from the composer, Esc back with the question docked, a click answer parking on the receipt without a ring
 and a keyboard one in the composer, a question arriving (its seeded session reported idle, then waiting,
-through a routed wire) that announces "F6 to answer" from the transcript or a Tab-focused button and
-takes an empty composer or a button the mouse focused (Chromium only: WebKit never focuses a clicked
-button, and every WebKit `openRound` covers its History-button case), the
-Mod+L remount race, `i` into an HTML frame and Tab back, `c` into compare and Esc back, the collapsed
+through a routed wire) that takes focus from a walked transcript item, a Tab-focused button, an empty
+composer (also after Mod+L, and after a Mod+L that won over an earlier waiting call the wire names) or a
+button the mouse focused (Chromium only: WebKit never focuses a clicked button, and every WebKit
+`openRound` covers its History-button case), and that announces "F6 to answer" over a typed draft, whose
+Esc then goes to the question and back; Esc on a walked message or the parked feed going to the question;
+the Mod+L remount race, and a Mod+L question that does not claim again after a tab walk away and back;
+the Esc ladder from a Files row to the question; `i` into an HTML frame and Tab back, `c` into compare and Esc back, the collapsed
 chords, Skip in the ↓ ring and ←/→ on the footer, arrows, Home/End, a parked note and the footer keys
 scrolling a tall docked question's body just enough to show the focused control while the transcript and
 the dock stay put, a rebound `d` and a Discuss rebound onto a Mod chord

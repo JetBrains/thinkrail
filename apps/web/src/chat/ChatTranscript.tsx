@@ -223,7 +223,8 @@ const ChatTranscript = forwardRef<
 		onOpenFile?: ((path: string) => void) | undefined;
 		workspaceRoot: string | undefined;
 		focusComposer: () => void;
-		mayClaimFocus: () => boolean;
+		waitingQuestion: () => HTMLElement | null;
+		mayClaimFocus: ChatActions["mayClaimFocus"];
 		landingChord: string;
 		openSubagentTranscript: (childSessionId: string | null) => void;
 		resultOpener: ChatActions["resultOpener"];
@@ -247,6 +248,7 @@ const ChatTranscript = forwardRef<
 		onOpenFile,
 		workspaceRoot,
 		focusComposer,
+		waitingQuestion,
 		mayClaimFocus,
 		landingChord,
 		openSubagentTranscript,
@@ -491,6 +493,7 @@ const ChatTranscript = forwardRef<
 		leaveFollow,
 		scrollToLatest,
 		focusComposer,
+		waitingQuestion,
 		fileTarget: (path) => (onOpenFile ? workspaceFileTarget(path, workspaceRoot) : null),
 		openFile: (target) => onOpenFile?.(target),
 		onCopied: () => toast.success(t("common.copied")),

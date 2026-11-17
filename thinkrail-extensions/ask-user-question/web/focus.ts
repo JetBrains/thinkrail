@@ -2,12 +2,11 @@ export type QuestionFocusTarget =
 	| "none"
 	| "inside"
 	| "empty-composer"
-	| "pointer"
-	| "keyboard"
+	| "element"
 	| "editing"
 	| "modal";
 
-const CLAIMABLE: ReadonlySet<QuestionFocusTarget> = new Set(["none", "empty-composer", "pointer"]);
+const CLAIMABLE: ReadonlySet<QuestionFocusTarget> = new Set(["none", "empty-composer", "element"]);
 
 export function shouldClaimQuestionFocus(
 	target: QuestionFocusTarget,
@@ -48,11 +47,7 @@ const MODAL_SURFACES = '[role="dialog"], [role="alertdialog"], [role="menu"], [r
 const EDITING_SURFACES = '.monaco-editor, .xterm, [contenteditable="true"]';
 const TEXT_CONTROLS = "input, textarea, select, iframe";
 
-export function focusTargetKind(
-	active: FocusedNode | null,
-	inside: boolean,
-	keyboardFocused: boolean,
-): QuestionFocusTarget {
+export function focusTargetKind(active: FocusedNode | null, inside: boolean): QuestionFocusTarget {
 	const page = active?.ownerDocument;
 	if (!active || !page || active === page.body || active === page.documentElement) return "none";
 	if (inside) return "inside";
@@ -65,50 +60,7 @@ export function focusTargetKind(
 			active.value === "";
 		return emptyComposer ? "empty-composer" : "editing";
 	}
-	return keyboardFocused ? "keyboard" : "pointer";
-}
-
-const MODIFIER_KEYS: ReadonlySet<string> = new Set([
-	"Shift",
-	"Control",
-	"Alt",
-	"Meta",
-	"CapsLock",
-	"AltGraph",
-]);
-
-let keyboardLast = false;
-let keyboardFocus: EventTarget | null = null;
-
-export function watchInputModality(target: Pick<Document, "addEventListener">): void {
-	target.addEventListener(
-		"keydown",
-		(event) => {
-			if (!MODIFIER_KEYS.has(event.key)) keyboardLast = true;
-		},
-		true,
-	);
-	target.addEventListener(
-		"pointerdown",
-		() => {
-			keyboardLast = false;
-			keyboardFocus = null;
-		},
-		true,
-	);
-	target.addEventListener(
-		"focusin",
-		(event) => {
-			keyboardFocus = keyboardLast ? event.target : null;
-		},
-		true,
-	);
-}
-
-if (typeof document !== "undefined") watchInputModality(document);
-
-export function isKeyboardFocused(active: object | null): boolean {
-	return active !== null && active === keyboardFocus;
+	return "element";
 }
 
 export function hasCoarsePointer(): boolean {
@@ -134,53 +86,9 @@ export function isInsidePreview(target: EventTarget | null): boolean {
 	return target instanceof Element && !!target.closest("[data-ask-preview]");
 }
 
-interface Span {
-	readonly top: number;
-	readonly bottom: number;
-}
-
-export function revealDelta(view: Span, target: Span): number {
-	if (target.top < view.top) return target.top - view.top;
-	if (target.bottom > view.bottom) {
-		return Math.min(target.bottom - view.bottom, target.top - view.top);
-	}
-	return 0;
-}
-
-export function scrollsVertically(element: Element): boolean {
-	const { overflowY } = getComputedStyle(element);
-	return (
-		(overflowY === "auto" || overflowY === "scroll") &&
-		element.scrollHeight > element.clientHeight + 1
-	);
-}
-
-function outlineExtent(element: Element): number {
-	const { outlineStyle, outlineWidth, outlineOffset } = getComputedStyle(element);
-	if (outlineStyle === "none") return 0;
-	return Math.max(
-		0,
-		(Number.parseFloat(outlineWidth) || 0) + (Number.parseFloat(outlineOffset) || 0),
-	);
-}
-
 type Focuser = (element: HTMLElement) => void;
 
 const focusInPlace: Focuser = (element) => element.focus({ preventScroll: true });
-
-export const focusAndReveal: Focuser = (element) => {
-	element.focus({ preventScroll: true });
-	let scroller = element.parentElement;
-	while (scroller && !scrollsVertically(scroller)) scroller = scroller.parentElement;
-	if (!scroller) return;
-	const top = scroller.getBoundingClientRect().top + scroller.clientTop;
-	const box = element.getBoundingClientRect();
-	const ring = outlineExtent(element);
-	scroller.scrollTop += revealDelta(
-		{ top, bottom: top + scroller.clientHeight },
-		{ top: box.top - ring, bottom: box.bottom + ring },
-	);
-};
 
 export function activeQuestionPage(card: HTMLElement): HTMLElement {
 	return card.querySelector<HTMLElement>('[data-ask-active="true"]') ?? card;

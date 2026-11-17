@@ -14,7 +14,7 @@ The responsive composition root: top-level app chrome, active-project/workspace 
 
 ## Boundary
 
-- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-project/workspace routing; single Settings, analytics-consent, survey-invitation, survey-window, attention-notification permission-preface, and Toaster mounts plus the keyboard-opened Create workspace dialog, the `Mod+K` / double-Shift search palette host, the `Mod+Shift+F` Find in Files host and the `Mod+?` keyboard-shortcuts dialog (and the once-mounted attention-notification observer from [[submodule-web-notifications]]); the enabled web extensions' global overlays (`ExtensionOverlays`, *Global chords*); theme application and global shortcuts; focus recovery (*Focus recovery*) and the Esc that leaves a text field (*Esc leaves a text field*); the command catalog the palette runs ([[submodule-web-commands]], [[submodule-web-search]]); the injected Layout, Keyboard and optional application Update settings sections; and integration of the workbench engine with store, persistence, panels, transport-backed domain state, and error boundaries.
+- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-project/workspace routing; single Settings, analytics-consent, survey-invitation, survey-window, attention-notification permission-preface, and Toaster mounts plus the keyboard-opened Create workspace dialog, the `Mod+K` / double-Shift search palette host, the `Mod+Shift+F` Find in Files host and the `Mod+?` keyboard-shortcuts dialog (and the once-mounted attention-notification observer from [[submodule-web-notifications]]); the enabled web extensions' global overlays (`ExtensionOverlays`, *Global chords*); theme application and global shortcuts; focus recovery (*Focus recovery*) and the Esc that leaves a text field, then climbs to the main area (*Esc leaves a text field*, *Esc climbs to the main area*); the command catalog the palette runs ([[submodule-web-commands]], [[submodule-web-search]]); the injected Layout, Keyboard and optional application Update settings sections; and integration of the workbench engine with store, persistence, panels, transport-backed domain state, and error boundaries.
 - **Public surface:** `Shell`.
 - **Allowed deps:** child layout modules; `updates`; `search` + `commands` (the palette and the command contract it composes for it); `keybindings` (the chord table and resolver `useGlobalHotkeys` matches through and the palette's shortcuts read, and the shortcut catalog the cheatsheet renders); `findInFiles` (the window `FindInFilesHost` composes); `extensions` (the enabled extensions whose overlays and shortcut rows it mounts, and every extension's commands it resolves); `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types, wire constants, and the shared `createQuitConfirmation` rule), `@thinkrail/ui/*`, `@thinkrail/locales` (UI strings), `i18n` (`useLocaleSync`, mounted once), `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, `themes`, and `clientPreferences` (`markdownOutlinePreference` persists the store's Markdown outline visibility and side per client, through the same adapter `layoutState` uses).
 - **Forbidden:** server/shared/pi imports; being imported by panels/store/transport; putting arrangement knowledge into a feature panel; or sending current frame/view state through transport.
@@ -311,7 +311,8 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   `data-region-active` attribute imperatively, with no React state; focus outside every region (a modal,
   the palette, a menu portal, `<body>`, a rail button) changes nothing, and a `ResizeObserver` on the
   active root drops the mark when that root unmounts, hides or collapses. It also remembers the last
-  element focused inside each root (a `WeakMap`; the root itself is never remembered). The regions and
+  element focused inside each root (a `WeakMap`; the root itself is never remembered) and the last center
+  group focus entered (the Esc ladder's main area, *Esc climbs to the main area*). The regions and
   the landing rule are [[submodule-web-shell-layout]]'s (*Arrangement and accessibility*); the accent
   line and the frame are [COLOR.md](../styles/COLOR.md)'s (*Active region*). **The frame marks keyboard
   arrivals only**: when the active region changes and the last input was a key, the tracker sets
@@ -482,14 +483,44 @@ prevent in their own handlers. A
 new owner of Esc must call `preventDefault` too.
 
 **Landing** is markup, like focus recovery: inside the field's region (`[data-region]`), the first
-rendered, focusable `[data-focus-park]` — the chat marks its message feed ([[submodule-web-chat]]) — else
-the region root, focused with `preventScroll`. The listener then prevents the default, so a search input
-keeps its text. The workbench group roots are `tabIndex=-1` and draw no ring (`outline-none`): focus
+rendered, focusable `[data-focus-claim]` — a waiting question's current option, revealed in its scroller
+(`focusAndReveal`) — else the first focusable `[data-focus-park]` — the chat marks its message feed
+([[submodule-web-chat]]) — else the region root, these two focused with `preventScroll` (`fieldExitTarget`,
+the order `resolveEscapeLanding` pins). So Esc in the chat composer goes to a waiting question, draft or
+not, and to the feed without one, with no composer code. The listener then prevents the default, so a
+search input keeps its text. The workbench group roots are `tabIndex=-1` and draw no ring (`outline-none`): focus
 stays in the same region, whose accent line is the indicator, and nothing inside is selected. The top bar
 and the Project Home pane have neither a park nor a focusable root, so there focus stays in the field
 (their fields all own Esc today: renames and tree search). A root is never remembered by the region tracker, so a later F6,
 `Mod+1…9` or recovery safety net into that region lands by the usual rule (the element last focused
 there, else the default); focus recovery records a parked root like any focus.
+
+## Esc climbs to the main area
+
+The first Esc in a field lands on its region; the next one, on a panel, climbs to the **main area**
+(user, 2026-11-17: the focus home is the chat — its waiting question, else its feed). The same
+`escapeLeavesField.ts` listener takes the second step (`climbsToMain`), under the same guards (bare Esc,
+no IME, no keyboard claim, not `defaultPrevented`, nothing inside `.monaco-editor`, `.xterm` or a dialog or
+open menu), when the target is a **non-text element** — not a text field or a `select` — in a region
+that is not the main area: a side or bottom group (its root, a tree or tree row, a tab strip, a rail, a
+button, the Files or Changes list), the top bar or the Project Home projects pane — or inside an
+auxiliary rail, which sits outside every region and carries `data-esc-ladder` instead (the left, right and
+bottom tool rails; their F6 ring is unchanged). The center's own tab
+strip and actions climb too, into the tab's content (unconfirmed with the user, the recommended answer);
+the center root and anything inside its tabpanel never do, so the parked feed's and an editor's Esc stay
+theirs. The terminal and Monaco keep their Esc; from there F6 or Mod+L.
+
+**The main area** is the last center group focus entered (the region tracker records it), else the
+first shown center group in ring order, else Project Home's main pane (`[data-main-area]`, which is no
+region). Focus lands in it without switching a tab (`mainAreaTarget`): the first focusable
+`[data-focus-claim]` (a waiting question in the visible chat, revealed), else `[data-focus-park]` (the
+chat's feed — not the composer that F6 would land on), else the group's tabpanel by the region rule
+(remembered there, else its `[data-focus-default]` — an editor's input —, else its first tabbable), else
+the region's own landing. With nothing focusable the Esc is left alone. Every element that already uses
+Esc keeps calling `preventDefault` and so wins (dialogs, menus and popovers through Radix, tree search,
+renames, the palette, Find in Files, the history overlay, the review cursor, composer and card, the
+keybinding recorder's claim); an open tooltip closes in window capture without preventing, so its
+button's Esc still climbs. A new owner of Esc in a panel must prevent too.
 
 ## Focus recovery
 

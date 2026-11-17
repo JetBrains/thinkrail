@@ -172,3 +172,131 @@ test("Esc in the terminal reaches the shell and keeps focus there", async ({ pag
 	await expect(visibleTerminal(page).locator(".xterm-rows")).toContainText("033");
 	await expect(field).toBeFocused();
 });
+
+test("Esc climbs from a panel's field to the panel, then to the chat feed, from a tree, a tab and the top bar too", async ({
+	page,
+}) => {
+	const session = await openSeededChat(page);
+	try {
+		await revealWorkbenchTool(page, "plan");
+		const input = page.getByTestId("plan-rail-pane").getByTestId("todo-add-input");
+		const panel = regionOf(page, input);
+		await input.fill("half a task");
+		await page.keyboard.press("Escape");
+		await expect(panel).toBeFocused();
+
+		await page.keyboard.press("Escape");
+		await expect(feed(page)).toBeFocused();
+		await expect(feed(page)).toHaveCSS("outline-style", "none");
+		await expect(regionOf(page, feed(page))).toHaveAttribute("data-region-active", "");
+		await expect(input).toHaveValue("half a task");
+		await page.keyboard.press("Escape");
+		await expect(feed(page)).toBeFocused();
+
+		await pressPlatformShortcut(page, "Shift+E");
+		const row = page.locator('[data-testid="file-node"]:focus');
+		await expect(row).toHaveCount(1);
+		await page.keyboard.press("ArrowDown");
+		await expect(row).toHaveCount(1);
+		await page.keyboard.press("Escape");
+		await expect(feed(page)).toBeFocused();
+
+		await page.locator('[data-testid="editor-tab"][data-kind="chat"]').getByRole("tab").focus();
+		await page.keyboard.press("Escape");
+		await expect(feed(page)).toBeFocused();
+
+		await page.getByTestId("open-settings").focus();
+		await page.keyboard.press("Escape");
+		await expect(feed(page)).toBeFocused();
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+test("Esc on a side or bottom rail's tool button climbs to the chat feed", async ({ page }) => {
+	const session = await openSeededChat(page);
+	try {
+		const rails = [
+			page.getByTestId("left-layout-rail"),
+			page.getByTestId("right-layout-rail"),
+			page.getByTestId("bottom-tool-rail"),
+		];
+		for (const rail of rails) {
+			const control = rail.locator("[data-rail-entry], [data-rail-action]").first();
+			await control.focus();
+			await expect(control).toBeFocused();
+			await page.keyboard.press("Escape");
+			await expect(feed(page)).toBeFocused();
+		}
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+test("Esc on a Files row or a tab lands in the editor of the file the center shows, and Monaco keeps its Esc", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await revealWorkbenchTool(page, "files");
+	await page
+		.getByRole("tree", { name: "Files" })
+		.getByTestId("file-node")
+		.filter({ hasText: /^notes\.txt/ })
+		.dblclick();
+	await expect(page.locator('[data-testid="editor-pane"]:visible .monaco-editor')).toBeVisible();
+	const notes = page.getByTestId("editor-tab").filter({ hasText: "notes.txt" });
+	await expect(notes).toHaveAttribute("data-active", "true");
+	const inEditor = () =>
+		page.evaluate(() => document.activeElement?.closest(".monaco-editor") != null);
+
+	await pressPlatformShortcut(page, "Shift+E");
+	const row = page.locator('[data-testid="file-node"]:focus');
+	await expect(row).toHaveCount(1);
+	await page.keyboard.press("ArrowUp");
+	await expect(row).toHaveCount(1);
+	await page.keyboard.press("Escape");
+	await expect.poll(inEditor).toBe(true);
+	await expect(notes).toHaveAttribute("data-active", "true");
+
+	await page.keyboard.press("Escape");
+	await expect.poll(inEditor).toBe(true);
+
+	await notes.getByRole("tab").focus();
+	await page.keyboard.press("Escape");
+	await expect.poll(inEditor).toBe(true);
+
+	await waitTerminalReady(page);
+	await page.getByTestId("terminal-tab").first().getByRole("tab").focus();
+	await page.keyboard.press("Escape");
+	await expect.poll(inEditor).toBe(true);
+	await expect(notes).toHaveAttribute("data-active", "true");
+});
+
+test("Esc on a dialog's button closes the dialog and climbs no further", async ({ page }) => {
+	const session = await openSeededChat(page);
+	try {
+		await page.getByTestId("open-settings").click();
+		const dialog = page.getByTestId("settings-dialog");
+		await expect(dialog).toBeVisible();
+		await page.getByTestId("settings-nav-keyboard").focus();
+		await page.keyboard.press("Escape");
+		await expect(dialog).toBeHidden();
+		await expect(feed(page)).not.toBeFocused();
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+test("on Project Home, Esc on the Projects tree lands in the main pane", async ({ page }) => {
+	await openFixtureProject(page);
+	await pressPlatformShortcut(page, "0");
+	const projects = page.locator('[data-region-kind="home"]');
+	await expect
+		.poll(() => projects.evaluate((region) => region.contains(document.activeElement)))
+		.toBe(true);
+	await page.keyboard.press("Escape");
+	await expect
+		.poll(() => page.evaluate(() => document.activeElement?.closest("[data-main-area]") != null))
+		.toBe(true);
+});

@@ -44,7 +44,7 @@ export function useToolInteraction(
 			prepareLayoutChange,
 			focusComposer: actions.focusComposer,
 			focusTranscript: () => actions.focusToolCall(toolCallId),
-			mayClaimFocus: actions.mayClaimFocus,
+			mayClaimFocus: () => actions.mayClaimFocus(toolCallId),
 			landingChord: actions.landingChord,
 			hostProtocol,
 			placement,

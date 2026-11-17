@@ -18,10 +18,10 @@ import {
 	useResourceScope,
 } from "@thinkrail/resource-renderers";
 import { Button, IconButton } from "@thinkrail/ui/button";
+import { focusAndReveal, scrollsVertically } from "@thinkrail/ui/focus";
 import { Keycaps } from "@thinkrail/ui/keycaps";
 import { cn } from "@thinkrail/ui/utils";
 import { type FocusEvent, useLayoutEffect, useRef, useState } from "react";
-import { focusAndReveal, scrollsVertically } from "./focus";
 import { useGhostPage, useTestId } from "./ghost";
 
 export type PreviewSource =

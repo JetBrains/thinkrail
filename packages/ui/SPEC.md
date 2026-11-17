@@ -38,9 +38,12 @@ the same one way). `match` ignores an IME composition and a typing chord in text
 `isTextEntry`, else inputs and contenteditable — `textEntry` overrides that verdict for a caller that
 knows a press edits nothing, as the history search's `Delete` at the end of its query); `defaults` must be a stable module constant. `./focus` exposes
 the one tabbable-control selector (`TABBABLE_SELECTOR`, which includes a `<details>` element's own
-`<summary>`, natively tabbable) and `focusFirstControl(container)` (the first
+`<summary>`, natively tabbable), `focusFirstControl(container)` (the first
 control, focused with `preventScroll`), shared by the app's focus recovery and reveal moves and the
-resource renderers' reveal of a comment card; `./theme` exposes
+resource renderers' reveal of a comment card, and `focusAndReveal(element)` — focus with `preventScroll`,
+then scroll only the nearest vertically scrolling ancestor just enough (`revealDelta`, the outline
+included) to show it, never `scrollIntoView`'s every ancestor — which the ask card, the chat and the
+shell's Esc landing use for a waiting question's controls (`scrollsVertically` is its scroller test); `./theme` exposes
 only `onThemeSwap`, a DOM MutationObserver subscription to the completed `data-theme` signal, with
 explicit cleanup. It knows nothing about the theme catalog or preferences. `./fonts` is the same seam for
 the font settings: `onFontsChange` / `fontsRevision` over the `data-fonts` signal, `resolveFont(className)`

@@ -67,8 +67,8 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
 - The card imports `extension-api/web`, the package's argument/result **types** (type-only, from
   `@thinkrail/pi-ask-user-question/core`; a value import of the pi package stays forbidden in browser code,
   so the result guard `readAskUserQuestionResult` and the answer model in `web/state.ts` are the card's own),
-  `@thinkrail/ui` (`attention-line`, `button`, `dialog`, `dropdown-menu`, `keyboard`, `keycaps`, `local-keys`,
-  `textarea`, `utils`),
+  `@thinkrail/ui` (`attention-line`, `button`, `dialog`, `dropdown-menu`, `focus`, `keyboard`, `keycaps`,
+  `local-keys`, `textarea`, `utils`),
   `@thinkrail/resource-renderers` (`useOptionalResourceHost` for the host's Markdown — mermaid included —,
   `FramedResourcePreview` + `useResourceScope` for file previews, and `ResourcePreview` + `HtmlViewportSwitch`
   for the compare overlay), `@thinkrail/locales` (types) and `/react`, React and Remix Icon. It never imports
@@ -79,7 +79,8 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
     Skip are enabled, and the attention line, active styling and focus claim appear, only while it holds,
     so a call the host is not waiting on never asks for attention);
   - `respond`;
-  - the focus scope and `mayClaimFocus()` (false once the chat served a focus chord in this mount);
+  - the focus scope and `mayClaimFocus()` (false only for the question a served composer-focus request, such as
+    Mod+L, won over; [[submodule-web-chat]]);
   - the layout callback and its `placement` (docked, transcript stub, or neither);
   - composer and transcript hand-off (`focusComposer`, `focusTranscript`), and `landingChord`, the label of the
     key that lands on the question (F6 by default).
@@ -247,29 +248,24 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   the line. The stub never claims.
   Per active-chat mount the form focuses the selected choice (including Other) or first authored choice
   once; a fresh `ChatView` mount claims again (see [[submodule-web-chat]] — any switch back to the chat
-  tab). **It takes focus from `<body>`, an empty composer, or a non-text element the mouse focused**, and
-  only while `mayClaimFocus()` holds (a focus chord such as Mod+L served in this mount settles the remount
-  race for the composer). The mouse case exists because WebKit — so the macOS desktop — never focuses a
-  clicked button: a chat opened from History with the mouse leaves focus on the History button, where
-  Radix returns it, and a literal "body or empty composer" rule left the card unfocused there
-  (post-mortem: every WebKit e2e failure on #1416 was this). "The mouse focused it" is judged by the
-  focus's **provenance**, not by whether a key was pressed: a document-level keydown/pointerdown/focusin
-  watch remembers whether the latest `focusin` followed a key press with no pointer press in between, and
-  `isKeyboardFocused(active)` holds only for the element that focus change reached. Bare modifiers (Shift,
-  Control, Alt, Meta, CapsLock, AltGraph) are no key press, a pointer press hands focus back to the mouse,
-  and a key that moves no focus leaves it the mouse's. Mod+↑ from a clicked composer focuses a transcript
-  row after the key, so the row is the keyboard's. `:focus-visible` no longer takes part: both engines
-  leave that row without it, and WebKit's heuristic after a key on a mouse-focused button is unreliable.
-  The earlier "any key since the last pointer press" rule let a bare Shift before the card's first frame
-  turn the History button into keyboard focus (post-mortem: the last WebKit failure on #1416). From
-  anything keyboard navigation reached (the transcript, a tree or tab walk), a draft, other
-  text entry, Monaco or xterm, or a modal surface (dialog, alertdialog, menu, listbox), it stays put and
-  the announcement says "Agent asks a question — {landingChord} to answer". `focusTargetKind` stays pure:
-  the card passes that keyboard verdict in; the docked sheet shows
-  "waiting · {landingChord} to answer" whenever focus is outside it. The ways in are the shell's: F6 or
-  Mod+1…9 into the chat land on `[data-focus-claim]` — the current option (the cursor row, or Other's
-  field when its text is the answer), the expand toggle while collapsed — and Shift+Tab from the composer
-  focuses the same target, never Skip ([[submodule-web-chat]], [[submodule-web-shell]]). A **coarse pointer never gives up focus** at all: focusing a row (the Other input
+  tab). **It takes focus from anywhere except while the user types**: from `<body>`, an empty composer and
+  any non-text element (the feed, a transcript item, a tree row, a tab, a rail or panel root, a button),
+  however focus got there, and only while `mayClaimFocus()` holds (false for the one question a served
+  composer-focus request won over, so Mod+L opening a chat whose question already waits keeps the
+  composer, across remounts too, until that question is answered). It never claims from a composer with a
+  draft, other text entry (input, textarea, select, contenteditable, an iframe), Monaco or xterm, or
+  anything inside a modal surface (dialog, alertdialog, menu, listbox): there it stays put and the
+  announcement says "Agent asks a question — {landingChord} to answer". `focusTargetKind` stays pure; the
+  docked sheet shows "waiting · {landingChord} to answer" whenever focus is outside it. **Reversed
+  2026-11-17 (user):** #1416 claimed only from `<body>`, an empty composer or a control the *mouse* focused,
+  judged by a document-level input-modality watch, and never from keyboard navigation; it also let one
+  served Mod+L silence every later question of the mount. A waiting question is where focus belongs (the
+  focus home the Esc ladder climbs to, [[submodule-web-shell]]), so the provenance watch is gone and the
+  Mod+L exemption is per question. The ways in are the shell's and the chat's: F6 or Mod+1…9 into the chat
+  land on `[data-focus-claim]` — the current option (the cursor row, or Other's field when its text is the
+  answer), the expand toggle while collapsed —, and so do Esc in the composer, Esc on the transcript, the
+  Esc ladder from another panel and Shift+Tab from the composer, never Skip ([[submodule-web-chat]],
+  [[submodule-web-shell]]). A **coarse pointer never gives up focus** at all: focusing a row (the Other input
   especially) raises the soft keyboard over someone who was reading. A **page change** follows a tap, so
   it may focus — except into a text field on a coarse pointer (`shouldFocusPageTarget`). The transcript is
   never scrolled for attention: the dock is always visible. The card used to reveal itself in the
@@ -321,7 +317,8 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   empty checkbox instead of putting the caret in the field.
   **The card reveals the focus it moves.** Every focus it moves itself — ↑/↓, Home/End, ←/→ on Skip and
   the primary button, a field parking on its row, `i` into a frame, the compare overlay closing onto a row,
-  the stub's focus request — goes through `focusAndReveal` (`focus.ts`): focus with `preventScroll`, then
+  the stub's focus request — goes through `focusAndReveal` (`@thinkrail/ui/focus`, which the chat and shell
+  use for the same target): focus with `preventScroll`, then
   move only the nearest ancestor that actually scrolls (the dock body; inline, the plan page's scroller) just
   enough (block "nearest", the focus ring included) for the control to be fully visible. Not
   `scrollIntoView`, which scrolls every ancestor, the transcript and overflow-hidden boxes included. The

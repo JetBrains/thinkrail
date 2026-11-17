@@ -488,7 +488,11 @@ content and their own controls, which a treeitem's name would flatten and its ro
   rejected: it would take native right-click copy. Esc returns to the composer through `refocus()`, draft
   and caret intact. **Esc on the parked feed does nothing** (user, 2026-11-16) — not even
   `preventDefault`, so no other listener reacts — and only an item's Esc returns: an extra Esc after
-  leaving the composer never throws the reader back into the field; `Mod+L` returns.
+  leaving the composer never throws the reader back into the field; `Mod+L` returns. **While a docked
+  question waits**, Esc on the feed or an item goes to its `[data-focus-claim]` instead, revealed
+  (`focusAndReveal`; unconfirmed with the user, the recommended answer): the question is the chat's focus
+  home. The controller learns of it through the `waitingQuestion()` option `ChatView` passes down (the
+  dock's claim, else `null`), and `transcriptKeyAction` turns Esc into `question` when one waits.
 - **Scrolling stays the controller's.** A mounted target that sticks out is revealed with
   `revealElement` (`nearest`, user-navigation; nested items keep the breadcrumb inset), an unmounted one
   with `revealRow` and focused on "found"; an unmounted latest row itself returns to the edge instead, so
@@ -521,9 +525,12 @@ content and their own controls, which a treeitem's name would flatten and its ro
   for the feed: the feed carries `data-focus-park`, the shell's landing for a field's Esc
   ([[submodule-web-shell]], *Esc leaves a text field*), so the composer has no code for it. Focus rests on
   the feed with no ring and the draft and caret stay; `F` starts hint mode at once and ↑/↓ or j/k start
-  walking from the cursor (the parked-feed rule above). A plain Shift+Tab in the composer (no template slots, no open menu) goes to the docked
-  question's `[data-focus-claim]` when one waits (`Composer.onShiftTabOut`, wired in `ChatView`), never to
-  its Skip button, which the browser's own order would reach first. In the composer, Mod+↑ (`composer.enterTranscript`, rebindable; checked before plain ↑ recall) focuses the newest content item (a
+  walking from the cursor (the parked-feed rule above). **While a docked question waits** the same Esc,
+  draft or not, lands on its `[data-focus-claim]` (the shell's landing prefers a claim to the park), and
+  the card's own Esc returns to the composer, so Esc toggles question ↔ composer (user, 2026-11-17). A
+  plain Shift+Tab in the composer (no template slots, no open menu) goes to the docked
+  question's `[data-focus-claim]` when one waits (`Composer.onShiftTabOut`, wired in `ChatView`, revealed
+  through `focusAndReveal`), never to its Skip button, which the browser's own order would reach first. In the composer, Mod+↑ (`composer.enterTranscript`, rebindable; checked before plain ↑ recall) focuses the newest content item (a
   trailing round divider is skipped) when the draft is empty or one visual line, or the caret is already at
   its start; otherwise it first moves the caret to the start. PgUp/PgDn there page the transcript with
   keyboard provenance and keep focus. `ChatTranscriptHandle.focusNewest()` / `scrollPage()` are the seams.
@@ -688,8 +695,10 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   stranding the history overlay's dismiss refocus avoids). Only the card's own reply path (and its Esc) calls
   it. Plus `focusToolCall(toolCallId)` — the click hand-off: the transcript navigation's `parkOnToolCall`
   moves its cursor to the call's row (`rowIdForToolCall`) and focuses it without scrolling, or the feed
-  when Virtuoso has unmounted it; `mayClaimFocus()` — false once `ChatView` served a
-  `requestComposerFocus` in this mount; and `landingChord`, the resolved `region.next` label the shell
+  when Virtuoso has unmounted it; `mayClaimFocus(toolCallId)` — false only for the question this
+  session's last served composer-focus request won over (`selectQuestionMayClaimFocus`, below);
+  `toolInteraction.ts` binds it per call, so the SDK's `mayClaimFocus()` stays argument-free; and
+  `landingChord`, the resolved `region.next` label the shell
   passes `ChatView`. Plus `openSubagentTranscript(childSessionId)` — the subagent
   cards' transcript link (no provider → the cards hide the action).
   Plus `openWorkspace({ workspaceId, projectId, sessionId? }, gone?)` (`openWorkspace.ts`), the one way
@@ -790,9 +799,18 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `reviewFix` turn** (same positioning); unknown customTypes are ignored. No
   store/transport/highlighter.
 - **Composer focus on arrival** (`composerFocusRequest`, see `store/SPEC.md`): `ChatView` subscribes to
-  `selectComposerFocusRequested` for its own chat. When it holds, the view clears the request and refocuses
-  its composer, so typing goes straight to the chat a palette pick opened. A request with `dismissHistory`
-  (the shell's `Mod+L`) first closes this chat's history overlay and drops a pending open of it.
+  `selectComposerFocusRequested` for its own chat. When it holds, the view serves the request
+  (`serveComposerFocusRequest`) and refocuses its composer, so typing goes straight to the chat a palette
+  pick opened. A request with `dismissHistory` (the shell's `Mod+L`) first closes this chat's history
+  overlay and drops a pending open of it. **Serving wins only over the question already waiting**: the
+  view reads the session's waiting call at that moment (`awaitingToolCallIdOf` of its host state) and the
+  same store action records it as the runtime's `composerFocusWonOver`; only that question is denied the
+  focus claim — on this mount and
+  every remount (a tab switch away and back) until it is answered; a question that arrives later claims as
+  usual. The record lives on the session runtime, not in `ChatView`, because the losing question must not
+  claim again after a remount. It replaced a per-mount latch (#1416) that, once set by any served request,
+  silenced every later question of the mount (the "arrows don't work on Linux until Tab" report). An
+  unknown host state records nothing.
 - **Extension edits to the draft** (`composerEdit`, see `store/SPEC.md`): pi's `setEditorText` /
   `pasteToEditor` reach the chat as its runtime's pending edit. `ChatView` applies it in a layout effect
   through **`ComposerHandle.applyEdit(kind, text)`** and then consumes it, so an edit for a chat that is
