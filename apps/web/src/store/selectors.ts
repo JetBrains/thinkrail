@@ -814,6 +814,14 @@ export function selectComposerFocusRequested(
 	);
 }
 
+export function selectQuestionMayClaimFocus(
+	state: { sessions: Record<string, { composerFocusWonOver: string | null }> },
+	sessionId: string,
+	toolCallId: string,
+): boolean {
+	return state.sessions[sessionId]?.composerFocusWonOver !== toolCallId;
+}
+
 export function selectComposerFocusRequestStale(
 	state: ChatAttentionState & {
 		composerFocusRequest: ComposerFocusRequest | null;

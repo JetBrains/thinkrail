@@ -3,6 +3,7 @@ import type {
 	AskUserQuestionDiscussReason,
 	AskUserQuestionItem,
 } from "@thinkrail/pi-ask-user-question/core";
+import { focusAndReveal } from "@thinkrail/ui/focus";
 import type { LocalKeys } from "@thinkrail/ui/local-keys";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, useEffect, useRef, useState } from "react";
@@ -10,7 +11,6 @@ import { CompareOverlay } from "./CompareOverlay";
 import { compareIndexOf } from "./compareModel";
 import { type LiftKey, NoteSlot, OptionRow, OtherRow } from "./controls";
 import { DiscussPanel, DiscussToggle } from "./discuss";
-import { focusAndReveal } from "./focus";
 import { useTestId } from "./ghost";
 import { CARD_KEYS } from "./keys";
 import {

@@ -242,6 +242,9 @@ and the body of a selected auxiliary
 tool, which the panel section marks `data-focus-default` with `data-tool-body=<tool>` — so entering a tool
 group lands in the tool rather than on its rail button. The same landing is the focus-recovery safety net
 for a focused control that disappears with no better neighbour ([[submodule-web-shell]], *Focus recovery*).
+A center group's body is its section's direct `role="tabpanel"` child, so the shell's Esc ladder can tell
+the tab strip from the content and land inside the content ([[submodule-web-shell]], *Esc climbs to the
+main area*).
 
 Center resource strips and auxiliary terminal-session strips have bounded readable tab widths and no fixed previous/next controls: wheel, trackpad, touch,
 roving-keyboard navigation, active reveal, and the searchable keyboard overflow list scroll the same list.

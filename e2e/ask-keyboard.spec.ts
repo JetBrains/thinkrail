@@ -150,6 +150,7 @@ async function blur(page: Page): Promise<void> {
 
 interface HeldQuestion {
 	release(): void;
+	waitOn(toolCallId: string): void;
 }
 
 const IDLE: SessionState = {
@@ -217,20 +218,24 @@ async function routeSessionStates(page: Page) {
 			}
 			held.add(sessionId);
 			send(record);
+			const waiting = (id: string): SessionStateRecord => ({
+				...record,
+				state: {
+					...IDLE,
+					needsInput: {
+						interactionId: `tool-response:${id}`,
+						kind: "tool-response",
+						toolCallId: id,
+					},
+				},
+			});
 			return {
 				release() {
 					held.delete(sessionId);
-					send({
-						...record,
-						state: {
-							...IDLE,
-							needsInput: {
-								interactionId: `tool-response:${toolCallId}`,
-								kind: "tool-response",
-								toolCallId,
-							},
-						},
-					});
+					send(waiting(toolCallId));
+				},
+				waitOn(id) {
+					send(waiting(id));
 				},
 			};
 		},
@@ -366,7 +371,7 @@ test("a click on Submit parks focus on the receipt without a ring; a keyboard su
 	}
 });
 
-test("a question arriving while the transcript is walked keeps focus there and says how to answer", async ({
+test("a question arriving while the transcript is walked takes focus; Esc on a message or the feed goes back to it", async ({
 	page,
 }) => {
 	const { held, path, card } = await openHeldRound(page, "arrival while walking");
@@ -375,15 +380,52 @@ test("a question arriving while the transcript is walked keeps focus there and s
 		await pressPlatformShortcut(page, "ArrowUp");
 		const walked = page.locator("[data-transcript-item]:focus");
 		await expect(walked).toHaveCount(1);
-		await walked.evaluate((element) => element.setAttribute("data-e2e-walked", ""));
+
+		held.release();
+		const option = card.getByTestId("ask-option").first();
+		await expect(option).toBeFocused();
+		await expect(card.getByTestId("ask-waiting")).toHaveCount(0);
+
+		await page.keyboard.press("Escape");
+		await expect(composer(page)).toBeFocused();
+		await pressPlatformShortcut(page, "ArrowUp");
+		await expect(walked).toHaveCount(1);
+		await page.keyboard.press("Escape");
+		await expect(option).toBeFocused();
+
+		await page.keyboard.press("Escape");
+		await expect(composer(page)).toBeFocused();
+		await page.locator("[data-transcript-feed]").focus();
+		await page.keyboard.press("Escape");
+		await expect(option).toBeFocused();
+	} finally {
+		rmSync(path, { force: true });
+	}
+});
+
+test("a question arriving while a draft is typed keeps focus in the composer and says how to answer; Esc goes to it and back", async ({
+	page,
+}) => {
+	const { held, path, card } = await openHeldRound(page, "arrival while typing");
+	try {
+		await composer(page).click();
+		await composer(page).fill("half a reply");
+		await expect(composer(page)).toBeFocused();
 
 		held.release();
 		await expect(card).toBeVisible();
 		await expect(
 			card.locator('[role="status"]').filter({ hasText: "Agent asks a question" }),
 		).toHaveText("Agent asks a question — F6 to answer");
-		await expect(page.locator("[data-e2e-walked]")).toBeFocused();
+		await expect(composer(page)).toBeFocused();
 		await expect(card.getByTestId("ask-waiting")).toHaveText("waiting · F6 to answer");
+
+		await page.keyboard.press("Escape");
+		await expect(card.getByTestId("ask-option").first()).toBeFocused();
+		await expect(composer(page)).toHaveValue("half a reply");
+		await page.keyboard.press("Escape");
+		await expect(composer(page)).toBeFocused();
+		await expect(composer(page)).toHaveValue("half a reply");
 	} finally {
 		rmSync(path, { force: true });
 	}
@@ -395,6 +437,40 @@ test("a question arriving while the composer is empty takes focus", async ({ pag
 		await composer(page).click();
 		await expect(composer(page)).toBeFocused();
 		await expect(composer(page)).toHaveValue("");
+		held.release();
+		await expect(card.getByTestId("ask-option").first()).toBeFocused();
+		await expect(card.getByTestId("ask-waiting")).toHaveCount(0);
+	} finally {
+		rmSync(path, { force: true });
+	}
+});
+
+test("a question arriving after Mod+L put focus in the empty composer takes focus", async ({
+	page,
+}) => {
+	const { held, path, card } = await openHeldRound(page, "arrival after the composer chord");
+	try {
+		await page.getByTestId("chat-scroll").click();
+		await pressPlatformShortcut(page, "L");
+		await expect(composer(page)).toBeFocused();
+		await expect(composer(page)).toHaveValue("");
+		held.release();
+		await expect(card.locator("[data-focus-claim]")).toBeFocused();
+		await expect(card.getByTestId("ask-waiting")).toHaveCount(0);
+	} finally {
+		rmSync(path, { force: true });
+	}
+});
+
+test("a question arriving after Mod+L won over an earlier one takes focus", async ({ page }) => {
+	const { held, path, card } = await openHeldRound(page, "arrival after the chord won");
+	try {
+		await expect(composer(page)).not.toHaveAttribute("placeholder", /replaces the question/);
+		held.waitOn("ask-keys-earlier");
+		await expect(composer(page)).toHaveAttribute("placeholder", /replaces the question/);
+		await blur(page);
+		await pressPlatformShortcut(page, "L");
+		await expect(composer(page)).toBeFocused();
 		held.release();
 		await expect(card.getByTestId("ask-option").first()).toBeFocused();
 		await expect(card.getByTestId("ask-waiting")).toHaveCount(0);
@@ -426,33 +502,7 @@ test("a question arriving while a mouse-focused button holds focus takes it", as
 	}
 });
 
-test("a bare Shift on a mouse-focused button leaves it the mouse's, so an arriving question still takes focus", async ({
-	page,
-}) => {
-	test.skip(
-		!chromium(),
-		"WebKit never focuses a clicked button; ask-user-question.spec's early-key test is its History-button shape",
-	);
-	const { held, path, card } = await openHeldRound(page, "arrival after a click and Shift");
-	try {
-		const tab = page
-			.locator('[data-testid="editor-tab"][data-kind="chat"]')
-			.filter({ hasText: "arrival after a click and Shift" })
-			.getByRole("tab");
-		await tab.click();
-		await expect(tab).toBeFocused();
-		await page.keyboard.press("Shift");
-		await expect(tab).toBeFocused();
-
-		held.release();
-		await expect(card.getByTestId("ask-option").first()).toBeFocused();
-		await expect(card.getByTestId("ask-waiting")).toHaveCount(0);
-	} finally {
-		rmSync(path, { force: true });
-	}
-});
-
-test("a question arriving while a keyboard-focused button holds focus stays put and says how to answer", async ({
+test("a question arriving while a keyboard-focused button holds focus takes it", async ({
 	page,
 }) => {
 	const { held, path, card } = await openHeldRound(page, "arrival after a tab");
@@ -464,19 +514,14 @@ test("a question arriving while a keyboard-focused button holds focus stays put 
 			if (!active || active === document.body || active.matches('[data-testid="chat-input"]')) {
 				return null;
 			}
-			active.setAttribute("data-e2e-tabbed", "");
 			return { tag: active.tagName, visible: active.matches(":focus-visible") };
 		});
 		expect(tabbed).not.toBeNull();
 		if (chromium()) expect(tabbed).toEqual({ tag: "BUTTON", visible: true });
 
 		held.release();
-		await expect(card).toBeVisible();
-		await expect(
-			card.locator('[role="status"]').filter({ hasText: "Agent asks a question" }),
-		).toHaveText("Agent asks a question — F6 to answer");
-		await expect(page.locator("[data-e2e-tabbed]")).toBeFocused();
-		await expect(card.getByTestId("ask-waiting")).toHaveText("waiting · F6 to answer");
+		await expect(card.getByTestId("ask-option").first()).toBeFocused();
+		await expect(card.getByTestId("ask-waiting")).toHaveCount(0);
 	} finally {
 		rmSync(path, { force: true });
 	}
@@ -501,6 +546,52 @@ test("after Mod+L remounts the chat, the composer keeps focus over the waiting q
 		await settleFrames(page, 12);
 		await expect(composer(page)).toBeFocused();
 		await expect(card.getByTestId("ask-option").first()).not.toBeFocused();
+	} finally {
+		rmSync(path, { force: true });
+	}
+});
+
+test("Mod+L over a waiting question keeps it from taking focus again after a tab switch", async ({
+	page,
+}) => {
+	const name = "chord across tabs";
+	const { card, path } = await openRound(page, name, { questions: [ROLLOUT] });
+	try {
+		await pressPlatformShortcut(page, "L");
+		await expect(composer(page)).toBeFocused();
+		await revealWorkbenchTool(page, "files");
+		await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
+		const readme = page.getByTestId("editor-tab").filter({ hasText: "README.md" });
+		await expect(readme).toHaveAttribute("data-active", "true");
+		await expect(card).toHaveCount(0);
+
+		const chatTab = page
+			.locator('[data-testid="editor-tab"][data-kind="chat"]')
+			.filter({ hasText: name })
+			.getByRole("tab");
+		await readme.getByRole("tab").focus();
+		await page.keyboard.press("ArrowLeft");
+		await expect(chatTab).toBeFocused();
+		await expect(card).toBeVisible();
+		await settleFrames(page, 12);
+		await expect(chatTab).toBeFocused();
+		await expect(card.getByTestId("ask-option").first()).not.toBeFocused();
+		await expect(card.getByTestId("ask-waiting")).toHaveText("waiting · F6 to answer");
+	} finally {
+		rmSync(path, { force: true });
+	}
+});
+
+test("Esc climbs from a side panel to the waiting question", async ({ page }) => {
+	const { card, path } = await openRound(page, "climb to the question", { questions: [ROLLOUT] });
+	try {
+		await pressPlatformShortcut(page, "Shift+E");
+		const row = page.locator('[data-testid="file-node"]:focus');
+		await expect(row).toHaveCount(1);
+		await page.keyboard.press("ArrowDown");
+		await expect(row).toHaveCount(1);
+		await page.keyboard.press("Escape");
+		await expect(card.getByTestId("ask-option").first()).toBeFocused();
 	} finally {
 		rmSync(path, { force: true });
 	}

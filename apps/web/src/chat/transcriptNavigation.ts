@@ -30,7 +30,8 @@ export type TranscriptKeyAction =
 	| { kind: "copy" }
 	| { kind: "open" }
 	| { kind: "menu" }
-	| { kind: "leave" };
+	| { kind: "leave" }
+	| { kind: "question" };
 
 const MOVE_KEYS: Readonly<Record<string, TranscriptMoveKey>> = {
 	ArrowUp: "ArrowUp",
@@ -120,6 +121,7 @@ export function transcriptKeyAction(
 	event: LocalKeyEvent,
 	keys: Pick<LocalKeys, "match">,
 	parked = false,
+	questionWaiting = false,
 ): TranscriptKeyAction | null {
 	if (isContextMenuKey(event)) {
 		return event.altKey || event.ctrlKey || event.metaKey ? null : { kind: "menu" };
@@ -141,6 +143,7 @@ export function transcriptKeyAction(
 		case "Enter":
 			return { kind: "toggle" };
 		case "Escape":
+			if (questionWaiting) return { kind: "question" };
 			return parked ? null : { kind: "leave" };
 		default:
 			return null;
