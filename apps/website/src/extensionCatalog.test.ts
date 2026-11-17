@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import {
 	type BuildCatalogOptions,
 	buildExtensionCatalog,
 	catalogErrors,
+	catalogKeyword,
 	latestUrl,
 	normalizeAuthor,
 	normalizeRepository,
@@ -345,5 +347,17 @@ describe("catalogErrors", () => {
 		expect(catalogErrors({ schema: 1, generatedAt: now.toISOString(), extensions: [] })).toEqual(
 			[],
 		);
+	});
+});
+
+describe("catalogKeyword", () => {
+	test("is the host's EXTENSION_KEYWORD", () => {
+		const source = readFileSync(
+			new URL("../../../packages/extension-api/src/manifest.ts", import.meta.url),
+			"utf8",
+		);
+		const keyword = /^export const EXTENSION_KEYWORD = "([^"]+)";$/m.exec(source)?.[1];
+		expect(keyword).toBeDefined();
+		expect(catalogKeyword).toBe(keyword as string);
 	});
 });

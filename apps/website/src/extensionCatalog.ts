@@ -5,7 +5,7 @@ import {
 	parseExtensionManifest,
 } from "./extensionManifest";
 
-const catalogKeyword = "thinkrail-extension";
+export const catalogKeyword = "thinkrail-extension";
 const searchPageSize = 250;
 export const searchOffsetLimit = 5000;
 const registryOrigin = "https://registry.npmjs.org";
