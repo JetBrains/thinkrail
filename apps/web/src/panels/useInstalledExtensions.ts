@@ -125,6 +125,7 @@ export function useInstalledExtensions({
 
 	const update = (entries: readonly ExtensionCatalogEntry[]) => {
 		if (entries.length === 0) return Promise.resolve();
+		mark(entries.map(installedExtensionKey), true);
 		return entries
 			.reduce<Promise<unknown>>(
 				(previous, entry) =>
