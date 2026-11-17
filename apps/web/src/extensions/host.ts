@@ -9,8 +9,8 @@ import * as uiTextarea from "@thinkrail/ui/textarea";
 import * as uiTheme from "@thinkrail/ui/theme";
 import * as uiUtils from "@thinkrail/ui/utils";
 import * as React from "react";
-import * as ReactDOM from "react-dom";
 import * as jsxRuntime from "react/jsx-runtime";
+import * as ReactDOM from "react-dom";
 
 export const EXTENSION_HOST_API = "1.0";
 
