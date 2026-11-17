@@ -214,9 +214,7 @@
       },
       "devDependencies": {
         "@earendil-works/pi-coding-agent": "catalog:",
-        "@thinkrail/contracts": "workspace:*",
         "@thinkrail/extension-api": "workspace:*",
-        "@thinkrail/locales": "workspace:*",
         "@thinkrail/resource-renderers": "workspace:*",
         "@thinkrail/ui": "workspace:*",
         "@types/bun": "catalog:",

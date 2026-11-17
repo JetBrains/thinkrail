@@ -1,5 +1,5 @@
 import { parseArgs } from "node:util";
-import { buildExtension, DEFAULT_ENTRIES, ExtensionBuildError } from "./build";
+import { buildExtension, DEFAULT_ENTRIES, ExtensionBuildError } from "./builder";
 import { EXTENSION_API_VERSION } from "./shared";
 
 const USAGE = `Usage: thinkrail-extension build [options]

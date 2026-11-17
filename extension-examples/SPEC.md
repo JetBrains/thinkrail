@@ -26,7 +26,7 @@ deterministic and need no network and no API key.
 - **Forbidden:** every other `@thinkrail/*` package (the host, `contracts`, `ui`, `extension-api`,
   `resource-renderers`, `locales`, other examples) and the SDK's internals. Nothing in `apps/*` or
   `packages/*` imports a sample. Inside a sample, `server/**` and `web/**` never import each other.
-- Planned: enforced by `scripts/check-module-boundaries.ts` ([[module-repo-scripts]]) once the boundary wiring of this delivery lands.
+- Enforced by `scripts/check-module-boundaries.ts` ([[module-repo-scripts]]).
 
 ## Identity and distribution
 

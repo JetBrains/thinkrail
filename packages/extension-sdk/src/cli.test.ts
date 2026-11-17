@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type Fixture, fixture, WEB_PACKAGE } from "./build/testing";
+import { type Fixture, fixture, WEB_PACKAGE } from "./builder/testing";
 
 const CLI = fileURLToPath(new URL("./cli.ts", import.meta.url));
 

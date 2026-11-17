@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: Repository development and conformance scripts
 parent: architecture
-references: [module-contracts, module-server, module-web, module-cli, module-desktop, module-ci-release, module-thinkrail-extensions]
+references: [module-contracts, module-server, module-web, module-cli, module-desktop, module-ci-release, module-thinkrail-extensions, module-extension-sdk, module-extension-examples]
 tags: [tooling, boundaries, build]
 depends-on: [module-spec-graph]
 ---
@@ -35,10 +35,11 @@ depends on providers' live endpoints.
 
 The extension boundary follows [[module-thinkrail-extensions]] and is registered from discovered manifests, not a fixed extension-name list:
 
-- Discover workspace roots under `apps/*`, `packages/*`, `pi-extensions/*`, and `thinkrail-extensions/*`. Every discovered pi extension has no host workspace dependencies. Every ThinkRail extension is scanned, including extensions other than the pilot.
+- Discover workspace roots under `apps/*`, `extension-examples/*`, `packages/*`, `pi-extensions/*`, and `thinkrail-extensions/*`. Every discovered pi extension has no host workspace dependencies. Every ThinkRail extension is scanned, including extensions other than the pilot.
 - Register `packages/ui` and `packages/extension-api` only when present, so the boundary-first delivery does not require future SDK manifests. Both may depend on contracts, never host internals. UI permits per-file public imports; browser consumers of extension-api must use exactly `@thinkrail/extension-api/web`, not its root, server entry, deep paths, or relative bypasses. Server consumers use its public `./server` entry.
 - An extension manifest may declare the union of its halves' dependencies. Its `web/**` sources may use UI, extension-api's public `./web`, and contracts; its `server/**` sources may use extension-api's public `./server` and its corresponding `pi-extensions/<name>` package. Neither half may import the other, even within the same package, with relative paths, or with type-only syntax. Extension code may not import host internals.
 - `apps/web` may consume only the exact public `@thinkrail/ext-*/web` entry of a discovered extension; `packages/server` only `@thinkrail/ext-*/server`. Root, deep, opposite-half, and relative source imports are rejected. Their manifests may depend on the extension package because manifests cannot express subpath edges. Existing server pi-package edges remain until each extension's server-wiring delivery.
+- The published SDK ([[module-extension-sdk]]) may depend on contracts, extension-api, UI and resource-renderers, and only its type façades (`src/types/**`) and repository tools (`tools/**`) may import them; its shipped sources (the rest of `src/**`, `bin/**`) import no workspace package, and no SDK source value-imports pi. A sample under `extension-examples/*` ([[module-extension-examples]]) depends on the SDK only and imports only the SDK's `exports` subpaths (no JSON/CSS assets, no deep or relative paths): its `web/**` every entry except `./server`, its `server/**` only `./server`; its halves never import each other and its web half takes no pi value. No other root — including those without a declared rule, such as the website — may depend on or import the SDK or a sample. Directory names in the excluded set (`build`, `dist`, …) are never scanned, so source must not live under them.
 - Browser sources (web app, UI, extension-api's browser half, and extension web halves) must never import extension-api's server half. All of extension-api remains runtime-browser-safe: pi types may describe the server contract, but neither entry may value-import pi. Browser sources and contracts likewise reject pi value imports, including external pi packages not registered as workspace roots. Explicit type imports/re-exports remain subject to the existing workspace-edge rules; a type-only import cannot bypass a forbidden module or source-half edge.
 
 These are static literal-import checks, not a runtime module resolver. Negative filesystem fixtures cover the same discovery and scan entrypoint as the real workspace gate.

@@ -99,11 +99,13 @@ private and unchanged. It imports no pi value at runtime.
 
 - **Allowed deps:** runtime — `rolldown`, `tailwindcss`, `@tailwindcss/node`, `@tailwindcss/oxide`; peers
   — `@types/react` / `@types/react-dom` 19 and pi, all optional; dev-only, to generate declarations and
-  assets — `extension-api`, `ui`, `resource-renderers`, `contracts`, `locales`, React. Shipped code uses
+  assets — `extension-api`, `ui`, `resource-renderers` (their own `contracts` / `locales` imports resolve
+  from them; `tsconfig.dts.json` includes the contracts sources by path), React. Shipped code uses
   `node:` builtins and standard ESM only.
 - **Forbidden:** importing the host (`server`, `shared`, `apps/*`); a runtime import of any private
-  package; pi values. Nothing in `apps/*` or `packages/server` imports the SDK. Planned: enforced by
-  `scripts/check-module-boundaries.ts` once the boundary wiring of this delivery lands.
+  package; pi values. Nothing in `apps/*` or `packages/server` imports the SDK. Enforced by
+  `scripts/check-module-boundaries.ts`, which also keeps the shipped sources (`src/**` outside
+  `src/types/`, `bin/**`) free of workspace imports.
 
 ## Release and verification
 

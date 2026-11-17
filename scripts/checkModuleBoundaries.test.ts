@@ -594,3 +594,225 @@ test("locales is a leaf every UI surface and the host may import", () => {
 		'packages/locales/src/b.ts: import "@thinkrail/contracts" creates forbidden packages/locales -> packages/contracts edge',
 	]);
 });
+
+function publishedSdkFixture(): string {
+	const root = sdkFixture();
+	for (const [moduleRoot, name, dependencies] of [
+		["packages/resource-renderers", "@thinkrail/resource-renderers", ["@thinkrail/ui"]],
+		[
+			"packages/extension-sdk",
+			"@thinkrail/extension-sdk",
+			["@thinkrail/extension-api", "@thinkrail/ui", "@thinkrail/resource-renderers"],
+		],
+		[
+			"extension-examples/sample",
+			"@thinkrail/example-extension-sample",
+			["@thinkrail/extension-sdk"],
+		],
+		["apps/website", "@thinkrail/website", []],
+	] as const) {
+		write(
+			root,
+			`${moduleRoot}/package.json`,
+			JSON.stringify({
+				name,
+				...(moduleRoot === "packages/extension-sdk"
+					? {
+							exports: Object.fromEntries(
+								[
+									"./server",
+									"./web",
+									"./resources",
+									"./ui/button",
+									"./shared-modules.json",
+									"./theme.css",
+								].map((key) => [key, `./dist/${key}.js`]),
+							),
+						}
+					: {}),
+				devDependencies: Object.fromEntries(dependencies.map((dep) => [dep, "workspace:*"])),
+			}),
+		);
+	}
+	write(
+		root,
+		"packages/extension-sdk/src/types/ui/button.ts",
+		'export * from "@thinkrail/ui/button";',
+	);
+	write(
+		root,
+		"packages/extension-sdk/src/types/resources.ts",
+		'export type { ResourceScope } from "@thinkrail/resource-renderers";',
+	);
+	write(
+		root,
+		"packages/extension-sdk/tools/sources.ts",
+		'import "@thinkrail/extension-api/web"; import "@thinkrail/ui/utils";',
+	);
+	write(
+		root,
+		"packages/extension-sdk/src/server.ts",
+		'import type { ExtensionFactory } from "@earendil-works/pi-coding-agent"; import "./shared";',
+	);
+	write(
+		root,
+		"extension-examples/sample/web/index.tsx",
+		'import "@thinkrail/extension-sdk/web"; import "@thinkrail/extension-sdk/ui/button"; import "@thinkrail/extension-sdk/resources"; import "react"; import "./card";',
+	);
+	write(
+		root,
+		"extension-examples/sample/server/index.ts",
+		'import "@thinkrail/extension-sdk/server"; import { Type } from "typebox"; import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"; import "./math";',
+	);
+	write(
+		root,
+		"extension-examples/sample/test/build.test.ts",
+		'import "@thinkrail/extension-sdk/server"; import "@thinkrail/extension-sdk/web";',
+	);
+	return root;
+}
+
+test("accepts the published SDK's generation edges and a sample using only its public entries", () => {
+	expect(moduleBoundaryViolations(publishedSdkFixture())).toEqual([]);
+});
+
+test.each([
+	["apps/web/src/leak.ts", "@thinkrail/extension-sdk/web", "apps/web -> packages/extension-sdk"],
+	[
+		"packages/server/src/leak.ts",
+		"@thinkrail/extension-sdk/server",
+		"packages/server -> packages/extension-sdk",
+	],
+	[
+		"apps/website/src/leak.ts",
+		"@thinkrail/extension-sdk/web",
+		"apps/website -> packages/extension-sdk",
+	],
+	[
+		"apps/web/src/leak.ts",
+		"@thinkrail/example-extension-sample/web/index",
+		"apps/web -> extension-examples/sample",
+	],
+	[
+		"packages/server/src/leak.ts",
+		"../../../extension-examples/sample/server/index",
+		"packages/server -> extension-examples/sample",
+	],
+	[
+		"thinkrail-extensions/future/web/leak.ts",
+		"@thinkrail/extension-sdk/ui/button",
+		"thinkrail-extensions/future -> packages/extension-sdk",
+	],
+])("%s cannot import %s", (file, specifier, edge) => {
+	const root = publishedSdkFixture();
+	write(root, file, `import ${JSON.stringify(specifier)};`);
+	expect(moduleBoundaryViolations(root)).toEqual([
+		`${file}: import ${JSON.stringify(specifier)} creates forbidden ${edge} edge`,
+	]);
+});
+
+test("rejects manifest edges onto the SDK and the samples", () => {
+	const root = publishedSdkFixture();
+	write(
+		root,
+		"apps/website/package.json",
+		JSON.stringify({
+			name: "@thinkrail/website",
+			dependencies: {
+				"@thinkrail/extension-sdk": "workspace:*",
+				"@thinkrail/example-extension-sample": "workspace:*",
+			},
+		}),
+	);
+	expect(moduleBoundaryViolations(root)).toEqual([
+		"apps/website/package.json: dependencies.@thinkrail/example-extension-sample creates forbidden apps/website -> extension-examples/sample edge",
+		"apps/website/package.json: dependencies.@thinkrail/extension-sdk creates forbidden apps/website -> packages/extension-sdk edge",
+	]);
+});
+
+test.each([
+	[
+		"web/leak.ts",
+		"@thinkrail/ui/button",
+		"creates forbidden extension-examples/sample -> packages/ui edge",
+	],
+	[
+		"web/leak.ts",
+		"@thinkrail/extension-api/web",
+		"creates forbidden extension-examples/sample -> packages/extension-api edge",
+	],
+	[
+		"web/leak.ts",
+		"@thinkrail/server",
+		"creates forbidden extension-examples/sample -> packages/server edge",
+	],
+	["web/leak.ts", "@thinkrail/extension-sdk/src/builder/bundle", "may use only"],
+	["web/leak.ts", "../../../packages/extension-sdk/src/shared", "may use only"],
+	["web/leak.ts", "@thinkrail/extension-sdk/server", "may use only"],
+	["web/leak.ts", "@thinkrail/extension-sdk/shared-modules.json", "may use only"],
+	[
+		"server/leak.ts",
+		"@thinkrail/extension-sdk/web",
+		"may use only @thinkrail/extension-sdk/server",
+	],
+	["web/leak.ts", "../server/index", "crosses extension web/server source halves"],
+	["server/leak.ts", "../web/index", "crosses extension web/server source halves"],
+	[
+		"web/leak.ts",
+		"@earendil-works/pi-ai",
+		"creates forbidden pi value import in browser-safe sources",
+	],
+])("a sample's %s cannot import %s", (file, specifier, reason) => {
+	const root = publishedSdkFixture();
+	write(root, `extension-examples/sample/${file}`, `import ${JSON.stringify(specifier)};`);
+	const violations = moduleBoundaryViolations(root);
+	expect(violations).toHaveLength(1);
+	expect(violations[0]).toStartWith(
+		`extension-examples/sample/${file}: import ${JSON.stringify(specifier)}`,
+	);
+	expect(violations[0]).toContain(reason);
+});
+
+test.each([
+	[
+		"src/builder/bundle.ts",
+		"@thinkrail/ui/button",
+		"creates forbidden packages/extension-sdk -> packages/ui edge",
+	],
+	[
+		"src/cli.ts",
+		"@thinkrail/extension-api/web",
+		"creates forbidden packages/extension-sdk -> packages/extension-api edge",
+	],
+	[
+		"bin/launcher.js",
+		"@thinkrail/resource-renderers",
+		"creates forbidden packages/extension-sdk -> packages/resource-renderers edge",
+	],
+	[
+		"tools/build.ts",
+		"@thinkrail/server",
+		"creates forbidden packages/extension-sdk -> packages/server edge",
+	],
+	[
+		"src/types/web.ts",
+		"@thinkrail/shared",
+		"creates forbidden packages/extension-sdk -> packages/shared edge",
+	],
+	[
+		"src/server.ts",
+		"@earendil-works/pi-coding-agent",
+		"creates forbidden pi value import in browser-safe sources",
+	],
+	[
+		"tools/build.ts",
+		"@earendil-works/pi-ai",
+		"creates forbidden pi value import in browser-safe sources",
+	],
+])("the SDK's %s cannot import %s", (file, specifier, reason) => {
+	const root = publishedSdkFixture();
+	write(root, `packages/extension-sdk/${file}`, `import ${JSON.stringify(specifier)};`);
+	expect(moduleBoundaryViolations(root)).toEqual([
+		`packages/extension-sdk/${file}: import ${JSON.stringify(specifier)} ${reason}`,
+	]);
+});

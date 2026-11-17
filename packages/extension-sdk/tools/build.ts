@@ -2,7 +2,7 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { dirname, join, resolve } from "node:path";
 import { build, rolldown } from "rolldown";
 import { dts } from "rolldown-plugin-dts";
-import { hostModuleSource, hostRuntimeSource, stubFileName } from "../src/build/hostModules";
+import { hostModuleSource, hostRuntimeSource, stubFileName } from "../src/builder/hostModules";
 import { SHARED_SPECIFIERS, type SharedModulesManifest, UI_MODULES } from "../src/shared";
 import { MANIFEST_FILE } from "./generate";
 
