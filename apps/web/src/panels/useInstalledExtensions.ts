@@ -125,24 +125,24 @@ export function useInstalledExtensions({
 
 	const update = (entries: readonly ExtensionCatalogEntry[]) => {
 		if (entries.length === 0) return Promise.resolve();
-		return run(
-			entries,
-			() =>
-				entries
-					.reduce<Promise<unknown>>(
-						(previous, entry) =>
-							previous.then(() =>
+		return entries
+			.reduce<Promise<unknown>>(
+				(previous, entry) =>
+					previous.then(() =>
+						run(
+							[entry],
+							() =>
 								getTransport().request(
 									"extensions.update",
 									{ source: entry.source ?? entry.name },
 									{ timeoutMs: EXTENSION_MUTATION_TIMEOUT_MS },
 								),
-							),
-						Promise.resolve(),
-					)
-					.then(() => checkUpdates(true)),
-			"settings.packages.updateFailed",
-		);
+							"settings.packages.updateFailed",
+						),
+					),
+				Promise.resolve(),
+			)
+			.then(() => checkUpdates(true));
 	};
 
 	const onAction = (action: InstalledExtensionAction) => {
@@ -203,11 +203,19 @@ export function useInstalledExtensions({
 			void run(
 				[target],
 				() =>
-					getTransport().request(
-						"extensions.remove",
-						{ source: target.source ?? target.name },
-						{ timeoutMs: EXTENSION_MUTATION_TIMEOUT_MS },
-					),
+					getTransport()
+						.request(
+							"extensions.remove",
+							{ source: target.source ?? target.name },
+							{ timeoutMs: EXTENSION_MUTATION_TIMEOUT_MS },
+						)
+						.then(() =>
+							setUpdates((current) => {
+								const next = new Set(current);
+								next.delete(installedExtensionKey(target));
+								return next;
+							}),
+						),
 				"settings.packages.removeFailed",
 			);
 		},
