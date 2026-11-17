@@ -1,6 +1,19 @@
 import type { Translator } from "@thinkrail/locales/react";
 import type { ReactNode } from "react";
 
+export {
+	EXTENSION_API_VERSION,
+	EXTENSION_KEYWORD,
+	EXTENSION_MANIFEST_KEY,
+	type ExtensionManifest,
+	type ExtensionManifestOptions,
+	type ExtensionManifestResult,
+	extensionApiMismatch,
+	hasExtensionManifest,
+	isExtensionApiCompatible,
+	normalizeManifestPath,
+	parseExtensionManifest,
+} from "./manifest";
 export { languageFromPath, numArg, resultText, strArg } from "./toolHelpers";
 export {
 	type ParsedToolResultContent,
