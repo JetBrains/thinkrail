@@ -535,25 +535,6 @@ a.tree-row:hover {
 	text-decoration: none;
 }
 
-.tree-row.disabled {
-	color: var(--hint);
-}
-
-.tree-tag {
-	margin-left: auto;
-	flex: none;
-	padding: 1px 6px;
-	border: 1px solid var(--border2);
-	border-radius: 4px;
-	background: var(--elevated);
-	font-family: var(--font-mono);
-	font-weight: 500;
-	font-size: 9.5px;
-	letter-spacing: 0.4px;
-	color: var(--muted);
-	white-space: nowrap;
-}
-
 /* The rows that remain a static mock (the `data-mock-hint` wrapper) keep the tree's row rhythm. */
 .tree-mock {
 	display: flex;
@@ -717,7 +698,7 @@ a.tree-row:hover {
 /* ── Sections: files ────────────────────────────────────────────────────── */
 
 .file-section,
-.blog-main {
+.page-main {
 	max-width: 860px;
 	margin: 0 auto;
 	padding: clamp(40px, 7vh, 84px) clamp(20px, 5vw, 56px);
@@ -2956,4 +2937,13 @@ a.feature-card:hover {
 
 .download-thanks [hidden] {
 	display: none;
+}
+
+/* ══ DOCS — /docs pages reuse the blog's index, card and prose styles (SPEC.md "Docs") ══ */
+
+.doc-page-lead {
+	font-size: var(--text-lg);
+	line-height: 1.6;
+	color: var(--blog-text-muted);
+	margin: 0;
 }

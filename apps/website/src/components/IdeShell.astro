@@ -4,7 +4,7 @@ import DownloadThanks from "./DownloadThanks.astro";
 
 interface Props {
 	workspace: string;
-	nav: "landing" | "blog";
+	nav: "landing" | "blog" | "docs";
 	skipHref: string;
 }
 
@@ -283,11 +283,14 @@ const { workspace, nav, skipHref } = Astro.props;
 						<svg class="i" aria-hidden="true"><use href="#i-file-text" /></svg>
 						<span>Blog</span>
 					</a>
-					<div class="tree-row page disabled">
+					<a
+						class:list={["tree-row", "page", { selected: nav === "docs" }]}
+						href="/docs/"
+						aria-current={nav === "docs" ? "page" : undefined}
+					>
 						<svg class="i" aria-hidden="true"><use href="#i-book" /></svg>
 						<span>Docs</span>
-						<b class="tree-tag">Coming soon</b>
-					</div>
+					</a>
 				</div>
 			</div>
 			<div class="rail-note" id="rail-note">
