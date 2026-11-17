@@ -87,6 +87,18 @@ actions through the panels-owned ship runner; it owns no host state.
 
 ## Behaviour
 
+- **PR babysit** (`BabysitControl`, from `PR_BABYSIT_PROTOCOL_VERSION`, inside the review segment of an
+  open GitHub PR): a split control — **Babysit PR** toggles `prBabysit.start` / `prBabysit.stop` (while
+  active it reads *Babysitting* behind a `data-neon="pulse"` accent dot, so the Helios glow and its motion
+  follow the neon setting and `prefers-reduced-motion`), and **Review PR** runs `prBabysit.review`,
+  starting the session first when it is off. Once a session exists a counts pill (`prBabysitCounts`)
+  opens **`PrBabysitDrawer`**: a right-edge dialog with *Independent Review Findings* and *Babysit Queue
+  & GitHub Threads* tabs and an Open/All filter. Each item shows source, severity and live status badges
+  (`prBabysitItemStatusLabel` — a commit with no error reads *Staged <sha>*), a `path:line` link that
+  opens the file at that line, author or reviewer attribution, and the actions `prBabysitItemActions`
+  derives from its source and status (Fix with Babysit Agent, Post to GitHub, Open Diff — the fix
+  commit's changes — Approve & Push, Retry, Dismiss). Every answer installs the returned state.
+
 - **Project** lists every open project (check on the current one), *Project home* (disabled while there),
   and *Add project…* (the shared `useOpenProject` picker + its dialogs). Choosing a project selects it with
   `reveal` and loads its workspace list, i.e. the same transition as the Projects tree.

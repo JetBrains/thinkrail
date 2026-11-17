@@ -41,6 +41,7 @@ import {
 import { type ShipRunner, useShipRunner } from "../../panels/useShipRunner";
 import { canSettleWorkspace } from "../../panels/workspaceActions";
 import { isDefaultWorkspace, selectWorkspaceChatTab, useAppStore } from "../../store";
+import { BabysitControl } from "./BabysitControl";
 import { ReviewChip, ReviewSegment } from "./BranchSegment";
 import { chipClass, Segment, type SplitTone, splitFrameClass, splitPartClass } from "./Segment";
 
@@ -284,6 +285,9 @@ function ShipSegments({
 					disabled={runner.busy}
 					onRun={runner.run}
 				/>
+				{review?.kind === "pull-request" && (review.state ?? "open") === "open" ? (
+					<BabysitControl workspaceId={workspace.id} prNumber={review.number} />
+				) : null}
 			</Segment>
 		</>
 	);

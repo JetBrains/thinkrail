@@ -108,6 +108,7 @@ import type {
 	WireCustomMessage,
 	WireModel,
 } from "./piProtocol";
+import type { PrBabysitConfig, PrBabysitItemAction, PrBabysitSessionState } from "./prBabysit";
 import type { SpeechErrorCode, SpeechModel, SpeechStatus } from "./speech";
 
 export interface TerminalDataPush {
@@ -143,7 +144,9 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 124;
+export const PROTOCOL_VERSION = 125;
+/** `prBabysit.*` methods and the `prBabysit.changed` channel. */
+export const PR_BABYSIT_PROTOCOL_VERSION = 125;
 export const ARTIFACT_ROLES_PROTOCOL_VERSION = 124;
 export const KEYBINDINGS_PROTOCOL_VERSION = 123;
 export const BROWSER_VIEW_PROTOCOL_VERSION = 122;
@@ -456,6 +459,14 @@ export const WS_METHODS = {
 	prReady: "pr.ready",
 	prMerge: "pr.merge",
 	prReopen: "pr.reopen",
+	prBabysitStart: "prBabysit.start",
+	prBabysitStop: "prBabysit.stop",
+	prBabysitReview: "prBabysit.review",
+	prBabysitGet: "prBabysit.get",
+	prBabysitQueueFinding: "prBabysit.queueFinding",
+	prBabysitPostFinding: "prBabysit.postFinding",
+	prBabysitApprovePush: "prBabysit.approvePush",
+	prBabysitItemAction: "prBabysit.itemAction",
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
 	fsCopy: "fs.copy",
@@ -643,6 +654,7 @@ export const WS_CHANNELS = {
 	packagesChanged: "packages.changed",
 	fontsChanged: "fonts.changed",
 	speechChanged: "speech.changed",
+	prBabysitChanged: "prBabysit.changed",
 } as const;
 
 type SameUnion<A extends B, B extends C, C = A> = A;
@@ -1574,6 +1586,29 @@ export interface WsMethodMap {
 		result: McpReadOutputResult;
 	};
 	"mcp.readLog": { params: { workspaceId: string; name: string }; result: McpServerLog };
+	"prBabysit.start": {
+		params: { workspaceId: string; config?: Partial<PrBabysitConfig> };
+		result: PrBabysitSessionState;
+	};
+	"prBabysit.stop": { params: { workspaceId: string }; result: PrBabysitSessionState | null };
+	"prBabysit.review": { params: { workspaceId: string }; result: PrBabysitSessionState };
+	"prBabysit.get": { params: { workspaceId: string }; result: PrBabysitSessionState | null };
+	"prBabysit.queueFinding": {
+		params: { workspaceId: string; itemId: string };
+		result: PrBabysitSessionState;
+	};
+	"prBabysit.postFinding": {
+		params: { workspaceId: string; itemId: string };
+		result: PrBabysitSessionState;
+	};
+	"prBabysit.approvePush": {
+		params: { workspaceId: string; itemId: string };
+		result: PrBabysitSessionState;
+	};
+	"prBabysit.itemAction": {
+		params: { workspaceId: string; itemId: string; action: PrBabysitItemAction };
+		result: PrBabysitSessionState;
+	};
 }
 
 /** Payload of the `mcp.status` channel: one per-session snapshot per publish. */
@@ -1665,6 +1700,12 @@ export type WsErrorCode =
 	| "TEXT_SEARCH_FAILED"
 	| "FRAME_TOO_LARGE"
 	| "KEYBINDINGS_INVALID"
+	| "PR_BABYSIT_NO_PR"
+	| "PR_BABYSIT_NOT_GITHUB"
+	| "PR_BABYSIT_NOT_ACTIVE"
+	| "PR_BABYSIT_UNKNOWN_ITEM"
+	| "PR_BABYSIT_BAD_TRANSITION"
+	| "PR_BABYSIT_GH_FAILED"
 	| SpeechErrorCode;
 
 export interface WsResponse {

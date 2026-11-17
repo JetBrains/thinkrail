@@ -1490,6 +1490,25 @@ converge other clients through `session.state` pushes. A pre-v86 host offers nei
 The request registry also keeps `session.activityList` returning literal `[]` for one compatibility window,
 so an already-loaded old client clears retired markers after reconnect. No activity push or type returns.
 
+## PR Babysit & Independent Review
+
+`prBabysit.ts` (re-exported by the barrel) owns the wire vocabulary of
+[[submodule-server-pr-babysit]]: `PrBabysitMode` (`auto_push` | `stage_for_approval`),
+`IndependentReviewMode` (`review_and_auto_queue` | `review_for_approval` | `post_to_github` | `off`),
+`PrBabysitItemSource`, `PrBabysitItemStatus`, `ReviewFindingSeverity`, `PrBabysitConfig`,
+`PrBabysitItem`, `PrBabysitSessionState`, `PrBabysitEvent`, and the `[helios-babysit]` /
+`[helios-review]` markers. `AppConfig.prBabysit` holds the defaults (`DEFAULT_PR_BABYSIT_CONFIG`:
+stage for approval, review for approval, fix failing checks, no auto-resolve, 5 push cycles);
+`normalizePrBabysitConfig` defaults each malformed field on load, and `prBabysitConfigPatchProblem`
+strictly validates a `settings.update` / `prBabysit.start` patch, which merges field by field.
+
+From **`PR_BABYSIT_PROTOCOL_VERSION`** (v125): `prBabysit.start` `{ workspaceId, config? }` (the host
+resolves owner/repo/PR/worktree itself), `prBabysit.stop`, `prBabysit.review` (force an independent
+review now), `prBabysit.get`, `prBabysit.queueFinding`, `prBabysit.postFinding`,
+`prBabysit.approvePush`, `prBabysit.itemAction` `{ action: "retry" | "dismiss" }`, each answering the
+session state; and the workspace-scoped `prBabysit.changed` channel carrying `PrBabysitEvent` (the whole
+state after each change, `null` once forgotten). Errors use the `PR_BABYSIT_*` codes.
+
 ## Get right
 
 - **Mirrors are not version-pinned in comments.** A shape re-declared here because its real home is

@@ -71,7 +71,10 @@ import {
 	isTodoReviewFixMessage,
 	type KeybindingOverrides,
 	normalizeFontSettings,
+	normalizePrBabysitConfig,
 	normalizeThemePreference,
+	type PrBabysitConfig,
+	type PrBabysitSessionState,
 	readToolResponseMessage,
 	sameModel,
 } from "@thinkrail/contracts";
@@ -1233,6 +1236,11 @@ interface AppState {
 	disabledExtensions: string[];
 	extensionSettings: ExtensionSettingValues;
 	keybindingOverrides: KeybindingOverrides;
+	/** `AppConfig.prBabysit`: the defaults a PR babysit session starts with. */
+	prBabysitConfig: PrBabysitConfig;
+	/** The host's PR babysit session per workspace id, from `prBabysit.get` and `prBabysit.changed`. */
+	prBabysit: Readonly<Record<string, PrBabysitSessionState>>;
+	installPrBabysitState: (workspaceId: string, state: PrBabysitSessionState | null) => void;
 	otherAgentSkills: boolean;
 	disabledPackages: string[];
 	locale: string;
@@ -1721,6 +1729,7 @@ function configPatch(config: AppConfig) {
 		locale: isLocalePreference(config.locale) ? config.locale : DEFAULT_CONFIG.locale,
 		onboardingDismissed: config.onboardingDismissed === true,
 		...normalizeFontSettings(config),
+		prBabysitConfig: normalizePrBabysitConfig(config.prBabysit),
 	};
 }
 
@@ -2648,6 +2657,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 	disabledExtensions: DEFAULT_CONFIG.disabledExtensions,
 	extensionSettings: DEFAULT_CONFIG.extensionSettings,
 	keybindingOverrides: DEFAULT_CONFIG.keybindings,
+	prBabysitConfig: DEFAULT_CONFIG.prBabysit,
+	prBabysit: {},
+	installPrBabysitState: (workspaceId, state) =>
+		set((current) => {
+			const { [workspaceId]: _previous, ...rest } = current.prBabysit;
+			return { prBabysit: state ? { ...rest, [workspaceId]: state } : rest };
+		}),
 	otherAgentSkills: DEFAULT_CONFIG.otherAgentSkills,
 	disabledPackages: DEFAULT_CONFIG.disabledPackages,
 	locale: DEFAULT_CONFIG.locale,

@@ -7,6 +7,7 @@ import type {
 	KeybindingOverrides,
 	LoginPush,
 	McpStatusPayload,
+	PrBabysitEvent,
 	Project,
 	ReviewChangedPayload,
 	ServerWelcome,
@@ -484,6 +485,11 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.speechChanged, (data) => {
 		useAppStore.getState().installSpeechStatus(data as SpeechStatus);
+	});
+
+	transport.subscribe(WS_CHANNELS.prBabysitChanged, (data) => {
+		const event = data as PrBabysitEvent;
+		useAppStore.getState().installPrBabysitState(event.workspaceId, event.state);
 	});
 
 	transport.subscribe(WS_CHANNELS.feedbackInterview, () => {

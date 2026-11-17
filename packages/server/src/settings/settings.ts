@@ -21,6 +21,8 @@ import {
 	isThemeMode,
 	type KeybindingOverrides,
 	LINE_WIDTH_COLUMNS,
+	normalizePrBabysitConfig,
+	prBabysitConfigPatchProblem,
 	QUESTION_PANEL_HEIGHT_PERCENT,
 	RECENT_MODELS_LIMIT,
 	sameModel,
@@ -78,6 +80,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	codeLigatures: true,
 	fontWeightOffset: true,
 	keybindings: true,
+	prBabysit: true,
 	chatMessageOrder: true,
 	layout: true,
 	recentModels: true,
@@ -269,8 +272,13 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		extensionSettings,
 		disabledPackages,
 		keybindings,
+		prBabysit,
 		...rest
 	} = runtimeUpdate;
+	if (prBabysit !== undefined) {
+		const problem = prBabysitConfigPatchProblem(prBabysit);
+		if (problem) throw new Error(`prBabysit ${problem}`);
+	}
 	const nextKeybindings = keybindings === undefined ? undefined : validateKeybindings(keybindings);
 	const extensionSettingsUpdate =
 		extensionSettings === undefined ? undefined : validateExtensionSettings(extensionSettings);
@@ -384,6 +392,9 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 				}),
 		...(nextDisabledPackages === undefined ? {} : { disabledPackages: nextDisabledPackages }),
 		...(nextKeybindings === undefined ? {} : { keybindings: nextKeybindings }),
+		...(prBabysit === undefined
+			? {}
+			: { prBabysit: normalizePrBabysitConfig({ ...current.prBabysit, ...prBabysit }) }),
 	};
 	if (defaultModel !== undefined) {
 		if (defaultModel === null) delete next.defaultModel;
