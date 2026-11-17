@@ -30,15 +30,15 @@ export const NextStepsSchema = Type.Object({
 export type NextStepsParams = Static<typeof NextStepsSchema>;
 
 export const DEFAULT_DESCRIPTION =
-	"Offer the user one-click next messages once your work on the request is done and you are about to wait for their next message. The user sees them as quick replies (keyboard shortcuts in the terminal, buttons in a GUI host); picking one sends it as the user's next message. Ends your run: nothing you planned to do after it happens.";
+	"Offer the user one-click next messages after you finish a turn. The user sees them as quick replies (keyboard shortcuts in the terminal, buttons in a GUI host); picking one sends it as the user's next message. Ends your turn.";
 
 export const DEFAULT_PROMPT_SNIPPET =
-	"Offer one-click next messages as the last action when nothing else will continue";
+	"Offer one-click next messages as the last action of a finished turn";
 
 export const DEFAULT_PROMPT_GUIDELINES: readonly string[] = [
-	"Call suggest_next_steps only when your work on the request is finished and you would otherwise stop and wait for the user's next message: write your final message first, then call it alone as the very last action. It ends your run, so never call it while plan steps or other work remain for you to do now, before you are done, or alongside other tools.",
-	'Each suggestion is a message the user would plausibly send next, in their voice and language — e.g. "Run the e2e suite", "Also handle the empty state", "Open a PR". When your final message ends with a simple question, offer short answers to it, e.g. "Yes, go ahead" or "Not yet".',
-	"Offer only genuinely useful next steps, best first, usually about three. Skip the call entirely when nothing meaningful applies, when something will continue on its own (you are ending your turn to wait for background work, or a question tool is waiting for the user's answer), or when the turn ended in an error.",
+	"When a turn's work is finished, write your final message first, then call suggest_next_steps alone as the very last action of the turn: it ends the turn, so never call it before you are done (for example while plan steps remain) or alongside other tools.",
+	'Each suggestion is a message the user would plausibly send next, in their voice and language — e.g. "Run the e2e suite", "Also handle the empty state", "Open a PR". When your final message ends with a question, offer short answers to it, e.g. "Yes, go ahead" or "Use option B".',
+	"Offer only genuinely useful next steps, best first, usually about three. Skip the call entirely when nothing meaningful applies, while you are waiting on the user's answer to a question tool or on background work you started, or when the turn ended in an error.",
 ];
 
 export interface NextStepsGuidance {

@@ -42,10 +42,16 @@ They show as chips above the composer. A click (or Alt+N) sends one as the user'
   solitary call. `execute` returns `terminate: true`, so pi skips another model round trip. pi ends early
   only when every result in a batch terminates, so a call made beside other tools doesn't end the turn,
   and the chat shows no chips for it.
-- **Only when nothing continues.** Because the call ends the run, the guidance allows it only when the
-  agent would otherwise stop and wait for an ordinary user message: never while plan steps or other work
-  remain to do now (it would stop them), never when ending a turn to wait for background work or a
-  question tool's answer. The agent judges this; the chat does not second-guess it from background work.
+- **Only when nothing continues.** Because the call ends the run, the guidance keeps the package's
+  "after you finish a turn" framing and adds two clauses: never before the work is done (for example
+  while plan steps remain), and skip it while waiting on background work the agent started (besides a
+  question tool's answer). The agent judges this; the chat does not second-guess it from background work.
+  *Post-mortem:* a first rewording gated the call on "only when nothing else will continue … never while
+  other work remains" in the description, snippet and guidelines; in a live probe (Claude Opus 4.8 via
+  Central, five small unprompted tasks plus a plan, a background command and a decision) it dropped the
+  unprompted call to 0 of 9, against 3 of 5 for the original wording on the same tasks. The clause-only
+  wording measured 2 of 5, ended the three-step plan with one call after its last step, and made no call
+  before the background completion or instead of `ask_user_question`.
   A dev server left running keeps its chips, and a row offered by mistake before a background
   completion disappears when that completion wakes the agent ([[submodule-web-chat]], *Composer
   suggestions*). Hiding chips while any background work runs was rejected: a long-lived command would
