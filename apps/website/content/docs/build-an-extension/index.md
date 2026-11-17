@@ -434,9 +434,10 @@ Install the folder you are working in before publishing anything:
 
 1. Run the build.
 2. In ThinkRail, open **Settings → Extensions → Install package…**, paste the absolute path of the
-   folder, for example `/Users/jane/code/palette`, and confirm. If the dialog asks where to install,
-   choose **Global**: an extension is always installed for you and is on in every project, and an
-   install for one repository is refused.
+   folder, for example `/Users/jane/code/palette`, keep **Global** selected and click
+   **Install palette**. An extension is always installed for you and is on in every project: if
+   **This repository only** is selected, the dialog says the extension installs for you only and
+   offers **Install globally**.
 3. The extension appears in the Installed list with its switch and its **Rate contrast** setting. Ask
    the agent for a triadic palette from `#3b82f6`.
 
@@ -480,7 +481,7 @@ builds `dist/` before the package is packed. Before publishing, check that:
 - pi and typebox are peer dependencies, not dependencies.
 
 Anyone can then install it by pasting `npm:` and the package name into **Install package…**, as
-`npm:@thinkrail/example-extension-palette` for the sample.
+`npm:@thinkrail/example-extension-palette` for the sample, or from Browse once it is listed.
 
 ## Getting listed
 
@@ -490,6 +491,13 @@ package or version appears within about an hour of publishing. There is no submi
 every npm package whose **latest** version has the `thinkrail-extension` keyword and a valid
 `thinkrail` manifest is listed. To be removed, publish a version without the keyword. An extension
 installed from a git URL or a folder works the same once installed, but only npm packages are listed.
+
+Users find a listed extension in two places. On the extensions page, each card's Copy button gives the
+`npm:<name>` source to paste into **Install package…**. In the app, **Settings → Extensions → Browse**
+lists the same catalog with a search and an **Install** button that opens the install dialog for that
+package. A listing built for a newer extension API than the user's ThinkRail is marked **Needs a newer
+ThinkRail** and has no Install button until they update ThinkRail; one built for an older major is
+marked **Built for an older ThinkRail** and has none either ([Versions](#versions)).
 
 What a card on the extensions page shows, and where it comes from:
 
@@ -546,9 +554,11 @@ network services it calls and what it stores.
 ## Ask the agent to write one
 
 ThinkRail bundles a skill for writing extensions. Ask the agent in a chat, for example "make me a
-ThinkRail extension that shows this tool's result as a chart", and it writes the extension to a local
-folder, builds it and installs it from there without asking you to confirm the install. Review what it
-wrote as you would any code you install; to share it, publish the folder as described above.
+ThinkRail extension that shows this tool's result as a chart", and it writes the extension to a folder
+of its own, `~/thinkrail-extensions/<name>/` unless you name another, builds it, and installs it from
+there by adding the folder to `extensions.json`, without asking you to confirm the install. It then
+checks that the extension loaded and tells you what it added. Review what it wrote as you would any
+code you install; to share it, publish the folder as described above.
 
 ## Current limits
 

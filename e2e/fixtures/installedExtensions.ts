@@ -12,7 +12,7 @@ export const PALETTE_DIR = realpathSync(
 	fileURLToPath(new URL("../../extension-examples/palette", import.meta.url)),
 );
 
-/** `#3b82f6` triadic with contrast ratings — the sample tool's own output (SDK slice report). */
+/** `#3b82f6` triadic with contrast ratings — the sample tool's own output. */
 export const PALETTE_DETAILS = {
 	base: "#3b82f6",
 	harmony: "triadic",

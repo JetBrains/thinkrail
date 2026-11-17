@@ -21,7 +21,8 @@ dials it over the network; a phone reaches the selected host over Tailscale.
 - **Engine host** (`packages/server` + `packages/shared`, launched by `apps/cli` or `apps/desktop`
   in local-host mode): owns `pi`, session state, persistence, and serves the wire endpoint. It bundles pi extensions
   (`pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`) and the ThinkRail extensions from its server
-  registry (`visualize`, `ask-user-question`, `web-access`) into every session.
+  registry (`visualize`, `ask-user-question`, `web-access`) into every session, followed by the
+  extensions the user installed (`<data dir>/extensions.json`).
 - **The wire** (`packages/contracts`): the typed, versioned protocol — the only coupling between client
   and host.
 - **UI client** (`apps/web`): a mobile-first React client, transport-driven and endpoint-configurable,
@@ -53,7 +54,7 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
 pi-extensions/*     portable pi packages published to npm as @thinkrail/pi-<name>; work in vanilla pi
                     (decided, Decision 20; the pi-* packages above move here per publish wave)
 thinkrail-extensions/*  ThinkRail extensions: a pi capability + ./server and ./web halves, composed by one
-                    registry file per side (Decision 21; visualize and ask-user-question shipped) ── depends on ─▶ pi-extensions/*,
+                    registry file per side (Decision 21; visualize, ask-user-question and web-access shipped) ── depends on ─▶ pi-extensions/*,
                     packages/extension-api, packages/ui, packages/locales (web half)
 packages/extension-api  types + define* helpers for extension halves; ./installed: the installed-extension manifest
                     reader, API version and host-object constants ── depends on ─▶ packages/contracts, packages/locales (types)
@@ -399,14 +400,16 @@ dependency. This keeps test process drivers outside both launchers and the serve
     descriptor, stored in `AppConfig.extensionSettings`, read by an extension's session factories through
     its own `setting(key)` view, applied by a reload once the turn ends. Host-owned file checks reach
     extensions through the session seam (`workspaceFiles`), so the SDK stays types + `define*`. Other
-    setting types and a per-workspace on/off override remain explicit deferrals. **Runtime-loaded
-    extensions are decided** (delivery in progress: the host and web runtimes, the published SDK
-    [[module-extension-sdk]] with a sample under `extension-examples/`, and the website's catalog are
-    built; the Settings UI, in-app Browse, the agent skill and E2E coverage are still to come; contract in
-    [[module-thinkrail-extensions]] § Installed extensions). They were first rejected until three
-    answers existed, and now have them: the
-    React singleton — the app exposes its own React and a small UI set on one host object, and an
-    extension's pre-built bundle contains neither; a versioned UI API — an `api` version in the
+    setting types and a per-workspace on/off override remain explicit deferrals. **Extensions authored
+    outside this repository are installed and loaded at runtime**: declared in
+    `<data dir>/extensions.json`, installed from Settings → Extensions or its Browse of the website's
+    catalog, built with the published SDK ([[module-extension-sdk]], sample [[module-extension-examples]]),
+    and written and installed by the agent through a bundled host skill. Contract:
+    [[module-thinkrail-extensions]] § Installed extensions; runtimes [[submodule-server-extensions-installed]]
+    and [[submodule-web-extensions]]; Settings and Browse [[submodule-web-panels]]; catalog
+    [[module-website]] and [[submodule-server-extension-catalog]]. Runtime loading was first rejected
+    until three answers existed; they are the React singleton — the app exposes its own React and a
+    small UI set on one host object, and an extension's pre-built bundle contains neither; a versioned UI API — an `api` version in the
     extension's manifest, a published SDK, and all-or-nothing loading; a security story — installing is
     the consent, global scope only, no isolation, an unreviewed npm-keyword catalog, each an accepted
     risk. The server half is imported through pi's public loader so its pi imports stay the host's single

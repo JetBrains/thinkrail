@@ -6,7 +6,7 @@ title: ThinkRail extensions (thinkrail-extensions/)
 parent: architecture
 depends-on: [module-pi-extensions, module-contracts]
 tags: [extensions, ui-sdk]
-references: [module-extension-api, module-extension-sdk, module-extension-examples, submodule-web-extensions]
+references: [module-extension-api, module-extension-sdk, module-extension-examples, submodule-web-extensions, submodule-server-extensions-installed, submodule-server-extension-catalog, submodule-web-panels]
 ---
 
 ## Responsibility
@@ -18,8 +18,7 @@ the web client presents the capability's tools. The host composes extensions fro
 side**. A user sees the server registry in Settings → Extensions and can switch each extension off (a
 host-level setting keyed on the descriptor `name`; the extension declares nothing for it). Extensions
 authored outside this repository are installed and loaded at runtime under the contract in
-§ Installed extensions, which is decided and being delivered; everything else in this spec describes the
-built-in extensions as they ship.
+§ Installed extensions; everything else in this spec describes the built-in extensions.
 
 The first extension (`visualize`, [[module-ext-visualize]]) ships both halves; the host composes them from
 the two registry files below ([[submodule-server-extensions]], [[submodule-web-extensions]]). **Per-extension
@@ -159,6 +158,16 @@ extension contributes exactly what a built-in one can (agent tools, skills, bool
 tools, tool cards). The **ThinkRail extension is the unit**; a pi package is an optional dependency its
 server half composes, because a UI-only extension has none and the agent backend may change.
 
+**Where it is built**
+
+- Host runtime (`extensions.json`, install root, loader, status file, web-half URLs):
+  [[submodule-server-extensions-installed]]; web runtime (shared modules, loader, tool registry):
+  [[submodule-web-extensions]].
+- Settings → Extensions rows, the install dialog and Browse: [[submodule-web-panels]]; the catalog read
+  behind Browse: [[submodule-server-extension-catalog]].
+- The agent's `making-thinkrail-extensions` skill: [[submodule-server-extensions-installed]] § Decisions,
+  "The agent's path in".
+
 **Decisions and their reasons**
 
 - **Installing is the consent.** The UI half loads once the extension is installed, with no extra prompt
@@ -175,8 +184,8 @@ server half composes, because a UI-only extension has none and the agent backend
   them in the manifest (a second contract beside the built-ins').
 - **Text is the author's own, untranslated** (translations: issue #1423). A declared setting therefore
   carries its own `title` and `description`.
-- **The agent may install what it writes**, by editing the declarations file, as it edits `mcp.json`
-  ([[submodule-server-extensions-installed]] § Decisions, "The agent's path in").
+- **The agent may install what it writes**, by editing the declarations file, as it edits `mcp.json`,
+  with no confirmation click: the user asked for it.
 
 **Manifest** — in the package's `package.json`; the npm package `name` is the extension's identity (the
 key for the on/off switch and its settings) and must not equal a built-in's `name`.
@@ -305,9 +314,9 @@ listed. The showcase page and the app's Browse read the same file ([[module-webs
 ```
 
 `title`, `author`, `image` and `repository` are optional. A card shows which halves exist, not tool names:
-those live in code the website cannot run. The app's Browse gets the file through the host
-(`extensions.browse`, [[submodule-server-extension-catalog]]), never from the browser, marks listings already
-installed, and offers Install only for an `api` this app can load ([[submodule-web-panels]]).
+those live in code the website cannot run. The app's Browse gets the file through the host, never from
+the browser, and offers Install only for a listing whose `api` this app can load; an incompatible listing
+is marked and cannot be installed from Browse.
 
 ## Members
 

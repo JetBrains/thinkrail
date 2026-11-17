@@ -6,7 +6,7 @@
 
 ThinkRail is an agentic IDE that gets better every time you use it. With Spec-Driven Development support, it learns your project as you work, becoming more capable and helpful over time.
 
-We built a rich interface around the `pi` coding agent, isolated work into separate workspaces, and gave the agent durable project knowledge through the spec graph and reusable skills. We are now adding full extension support, so ThinkRail can create the tools it needs based on how you work.
+We built a rich interface around the `pi` coding agent, isolated work into separate workspaces, and gave the agent durable project knowledge through the spec graph and reusable skills. With full extension support, ThinkRail can create the tools it needs based on how you work.
 
 **Website:** [thinkrail.ai](https://thinkrail.ai/) · **Blog:** [thinkrail.ai/blog](https://thinkrail.ai/blog/) ·
 **Discord:** [thinkrail.ai/discord](https://thinkrail.ai/discord)
@@ -59,6 +59,7 @@ For latest version, see the [Releases page](https://github.com/JetBrains/thinkra
 - **Agent tools beyond the shell.** Thanks to the ThinkRail GUI, your AI agent can ask you structured multiple-choice questions in the chat instead of guessing, draw Mermaid diagrams, and show comparisons and file previews. When the agent proposes a UI change, it shows a before/after mockup you can comment on like a diff.
 
   - Settings → Extensions lists the ThinkRail extensions the agent may use. It can also install any `pi` package by source (npm, git or a local folder), for you or for a repository, showing what each one adds and letting you switch individual packages, their extensions and skills, and `pi`'s built-ins on or off.
+  - **Install ThinkRail extensions** from the same page: paste an npm name, git URL or folder, or pick one in **Browse**, the community catalog also shown at [thinkrail.ai/extensions](https://thinkrail.ai/extensions/). An extension adds agent tools, skills and settings, and draws its own cards in the chat. To build and publish your own, follow the [guide](https://thinkrail.ai/docs/build-an-extension/), or ask the agent to make one: it writes the extension and installs it for you.
   - The tools behind the questions, diagrams, and previews are also published as plain `pi` packages: `pi install npm:@thinkrail/pi-ask-user-question` for the questions  [`@thinkrail/pi-ask-user-question`](https://www.npmjs.com/package/@thinkrail/pi-ask-user-question)) and `pi install npm:@thinkrail/pi-visualize` for the diagrams and previews [`@thinkrail/pi-visualize`](https://www.npmjs.com/package/@thinkrail/pi-visualize)), so a vanilla `pi` in the terminal gets the same tools.
 
 - **MCP servers.** Connect the MCP servers in your `pi` `mcp.json`, or configure them in Settings. ThinkRail asks in the chat before calls that the server does not mark read-only, or always allows the tools you trust in a project. Servers a repository defines stay off until you approve them. ThinkRail signs you in to OAuth servers from Settings and shows each chat's servers next to its background commands and subagents.
