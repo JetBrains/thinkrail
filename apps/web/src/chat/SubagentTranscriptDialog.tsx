@@ -10,6 +10,7 @@ import { messagesToRuntime } from "./hydrate";
 import { deriveInteractionStates, InteractionStatesContext } from "./interactionState";
 import { deriveMessageActions } from "./messageActions";
 import { deriveRows } from "./rows";
+import { useToolRegistry } from "./toolRegistry";
 import { ChatTurnView } from "./turns";
 
 function isLiveTranscriptStatus(status: DelegationRunStatus | undefined): boolean {
@@ -66,19 +67,28 @@ function useSubagentTranscript({ workspaceId, parentSessionId, childSessionId }:
 				: null,
 		[messages, childSessionId],
 	);
+	const registry = useToolRegistry();
 	const rows = useMemo(
-		() => (runtime ? deriveRows(runtime.turns, runtime.toolResults, live) : []),
-		[runtime, live],
+		() =>
+			runtime
+				? deriveRows(runtime.turns, runtime.toolResults, live, undefined, [], undefined, registry)
+				: [],
+		[runtime, live, registry],
 	);
 	const messageActions = useMemo(() => deriveMessageActions(rows, live), [rows, live]);
 	const interactionContext = useMemo(
 		() => ({
 			states: runtime
-				? deriveInteractionStates(runtime.turns, runtime.toolResponses, runtime.toolResults)
+				? deriveInteractionStates(
+						runtime.turns,
+						runtime.toolResponses,
+						runtime.toolResults,
+						registry,
+					)
 				: {},
 			focusScope: {},
 		}),
-		[runtime],
+		[runtime, registry],
 	);
 	return { messages, live, error, rows, messageActions, interactionContext };
 }

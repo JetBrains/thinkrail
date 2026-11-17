@@ -8,7 +8,7 @@ import {
 	useInteractionFocusScope,
 	useInteractionState,
 } from "./interactionState";
-import { isInteractiveTool } from "./toolRegistry";
+import { isInteractiveTool, useToolRegistry } from "./toolRegistry";
 
 export function useToolInteraction(
 	toolCallId: string,
@@ -23,12 +23,13 @@ export function useToolInteraction(
 	const ended = interaction?.terminal ?? false;
 	const accepting = useInteractionAccepting(toolCallId);
 	const hostProtocol = useAppStore((store) => store.protocolVersion) ?? undefined;
+	const registry = useToolRegistry();
 	const state = useMemo<ToolInteractionState>(
 		() => ({ response, superseded, ended, accepting }),
 		[response, superseded, ended, accepting],
 	);
 	return useMemo(() => {
-		if (!isInteractiveTool(toolName) || !actions || !focusScope) return undefined;
+		if (!isInteractiveTool(toolName, registry) || !actions || !focusScope) return undefined;
 		return {
 			state,
 			respond: (value) => actions.respondToTool(toolCallId, value),
@@ -39,5 +40,14 @@ export function useToolInteraction(
 			focusComposer: actions.focusComposer,
 			hostProtocol,
 		};
-	}, [actions, focusScope, hostProtocol, prepareLayoutChange, state, toolCallId, toolName]);
+	}, [
+		actions,
+		focusScope,
+		hostProtocol,
+		prepareLayoutChange,
+		registry,
+		state,
+		toolCallId,
+		toolName,
+	]);
 }

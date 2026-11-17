@@ -66,7 +66,7 @@ import {
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
 import { useToolInteraction } from "../chat/toolInteraction";
-import { getToolRenderer } from "../chat/toolRegistry";
+import { useToolRegistry, useToolRenderer } from "../chat/toolRegistry";
 import { hydrateSessionRuntime, useChatTodos } from "../chat/useChatTodos";
 import {
 	isChatWorkspace,
@@ -676,7 +676,7 @@ function PlanInteractionCard({
 	pending: PendingInteraction;
 }) {
 	const interaction = useToolInteraction(pending.toolCallId, pending.toolName);
-	const Renderer = getToolRenderer(pending.toolName);
+	const Renderer = useToolRenderer(pending.toolName);
 	const scope = useMemo(() => ({ workspaceId, sessionId }), [workspaceId, sessionId]);
 	return (
 		<ResourceScopeProvider value={scope}>
@@ -710,14 +710,20 @@ function PlanSessionLive({ workspaceId, sessionId }: { workspaceId: string; sess
 		}),
 		[sessionId],
 	);
+	const registry = useToolRegistry();
 	const interactionStates = useMemo(
 		() =>
 			runtime
-				? deriveInteractionStates(runtime.turns, runtime.toolResponses, runtime.toolResults)
+				? deriveInteractionStates(
+						runtime.turns,
+						runtime.toolResponses,
+						runtime.toolResults,
+						registry,
+					)
 				: {},
-		[runtime],
+		[runtime, registry],
 	);
-	const pending = runtime ? pendingInteraction(runtime) : undefined;
+	const pending = runtime ? pendingInteraction(runtime, registry) : undefined;
 	if (pending) {
 		return (
 			<ChatActionsContext.Provider value={actions}>
@@ -904,9 +910,10 @@ export default function PlanPane({
 	const requestToolView = useAppStore((s) => s.requestToolView);
 	const workspace = useAppStore((s) => selectWorkspaceById(s, workspaceId));
 	const chat = workspace !== null && isChatWorkspace(workspace);
+	const toolRegistry = useToolRegistry();
 	const glance = useAppStore((s): PlanGlance => {
 		const rt = s.sessions[sessionId];
-		return rt ? sessionGlance(rt) : "waiting";
+		return rt ? sessionGlance(rt, toolRegistry) : "waiting";
 	});
 	const connection = useAppStore((s) => s.status);
 	const hasRuntime = useAppStore((s) => s.sessions[sessionId] !== undefined);

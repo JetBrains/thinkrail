@@ -21,6 +21,7 @@ import { QuietScrollArea } from "@/components/QuietScrollArea";
 import { PlanStatusIcon, SectionLabel } from "../chat/planKit";
 import { sessionGlance } from "../chat/planView";
 import { glanceIcon } from "../chat/TodoList";
+import { useToolRegistry } from "../chat/toolRegistry";
 import { type ReviewFocusSurface, selectDiffScope, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { ConfirmPopover } from "./ConfirmPopover";
@@ -356,9 +357,10 @@ function CommentRow({
 	const isDraft = comment.status === "draft";
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const ref = lineRef(comment);
+	const toolRegistry = useToolRegistry();
 	const glance = useAppStore((s) => {
 		const runtime = comment.sessionId ? s.sessions[comment.sessionId] : undefined;
-		return runtime ? sessionGlance(runtime) : "waiting";
+		return runtime ? sessionGlance(runtime, toolRegistry) : "waiting";
 	});
 
 	const update = async (patch: { status?: ReviewComment["status"] }) => {
