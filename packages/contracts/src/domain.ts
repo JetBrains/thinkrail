@@ -1290,6 +1290,18 @@ export interface LoginPush {
 	target?: { kind: "mcp"; workspaceId: string; serverName: string };
 }
 
+/** The server an MCP sign-in is for and the workspace it started in; none when no workspace was open. */
+export interface McpLoginTarget {
+	kind: "mcp";
+	workspaceId?: string;
+	serverName: string;
+}
+
+/** A `provider.login` push of an MCP sign-in, from `MCP_USER_SERVERS_PROTOCOL_VERSION`. */
+export interface McpLoginPush extends Omit<LoginPush, "target"> {
+	target: McpLoginTarget;
+}
+
 export interface LoginReply {
 	loginId: string;
 	value: string;

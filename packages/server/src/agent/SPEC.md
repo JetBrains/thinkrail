@@ -169,7 +169,8 @@ re-opened transcripts provider-valid.
     `settings.json`, the only state. Pi 1.5.1 made `idle` its default — every idle chat re-sends its
     prompt with a one-token reply for up to 30 minutes after a run whenever pi's economics predict a
     saving — and ThinkRail must not turn that spend on for existing users silently, so the host default is
-    `streaming` (pi 1.5.0's behavior) whenever the file names no valid mode. `buildSessionSettings` puts a
+    contracts' `DEFAULT_CACHE_WARMING_MODE`, `streaming` (pi 1.5.0's behavior), whenever the file names no
+    valid mode. `buildSessionSettings` puts a
     file-backed getter in front of `getCacheWarmingMode` (`applyCacheWarmingDefault`): pi's only caller is
     the cache warmer, which asks at each decision (`validateRun` before every warm, and when a run
     settles), and the getter answers from pi's file — re-parsed only when the file's mtime/size changed —
@@ -1325,15 +1326,17 @@ re-opened transcripts provider-valid.
   wires `workspaceId` → the admission context, derived once by `admissionContextFor(project, overrides)`);
   the **`setMcpPolicyResolver`** seam (host wires `workspaceId` → the project's MCP approvals, overrides
   and tool grants, derived by `mcpPolicyOf(project)`) and its writer twin **`setMcpToolGrantWriter`**; the MCP management surface — `listMcpServers`,
+  `listUserMcpServers` and `userMcpContext` + `McpReadContext` (the user-level servers with no workspace),
   `mcpOwnershipGuard` (resolves pi settings, then answers synchronously who manages MCP instead of
   ThinkRail — what `listMcpServers` reports as `handledElsewhere` — so the host checks it in the same call
-  stack as every management mutation), `refreshMcpStatus`,
+  stack as every management mutation; without a `workspaceId` it samples no chat), `refreshMcpStatus`,
   `setMcpStatusPublisher`, `mcpSessionView` / `liveSessionIdsOf`, `dispatchSessionMcpCommand` (with an
   optional `notify` that takes the dispatch's notifications instead of the chat), `reconnectMcpServer`,
   `readMcpServerLog` (one server's masked lines from pi's shared `mcp.log`),
   `setSessionMcpServerEnabled` (the chat-local disable, applied through the reload gate), the config
   effective-config read `effectiveMcpServerConfig` and the config
-  writers `writeMcpServerEntry` / `removeMcpServerEntry` / `mcpEntryFingerprint` /
+  writers `writeMcpServerEntry` / `removeMcpServerEntry` / `mcpEntryFingerprint` (each over an
+  `McpConfigFile`: the global file, or a worktree's `.pi/mcp.json`) / `setUserMcpEntryFields` /
   `shareMcpOverrideWithRepo` (pi-rule validation, `MCP_CONFIG_INVALID` / `MCP_PATH_UNSAFE`) and the
   sign-in probe (`startMcpProbe`, `replyMcpProbe`, `cancelMcpProbe`, `cancelMcpProbesOwnedBy`,
   `cancelAllMcpProbes`, `setMcpLoginPublisher`, `isMcpLoginId`);
@@ -1809,7 +1812,11 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   (`DefaultPackageManager` with the built-in's name, its `builtin:mcp` resource's `enabled`; missing
   packages are skipped, never installed) and reports `by: "pi settings (-builtin:mcp)"`. Whether an
   enabled non-built-in extension registers `/mcp` is not knowable without loading it, so a replacement is
-  only seen through a live chat's owner.
+  only seen through a live chat's owner. `listUserMcpServers` is the list with no workspace: it reads
+  through `userMcpContext()` — pi's agent dir as cwd, untrusted, so only the global `mcp.json` and pi's
+  global settings count, and no project policy — and consults no chat, so it carries no statuses and only
+  `-builtin:mcp` in pi's global settings makes it `handledElsewhere`: a project's own settings or a
+  replacing extension seen in one workspace's chat must not lock the servers every project shares.
 - **Calls.** The per-session host extension ([[submodule-server-agent-mcp]]) asks on the call's card
   before any `mcp__*` call without `readOnlyHint` (Deny · Allow once · Allow in this chat · Always allow;
   anything but an affirmative answer blocks, and a user message answers it like any dialog). "Allow in
@@ -1838,8 +1845,9 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   `session_shutdown` (which closes pi's loopback listener), lock released once the session is closed — and
   the host cancels the probes a client owned when it reaps that client (`cancelMcpProbesOwnedBy`), so a
   reloaded page or a discarded tab never holds a server until restart. After a successful sign-in, the
-  workspace's live chats that report the server as *needs sign-in* get `/mcp reconnect <name>` instead of
-  waiting for their next turn. Test connection is HTTP-only (a stdio server is verified when a chat starts
+  workspace's live chats (every workspace's for a probe started without one, which reads the global file
+  through `userMcpContext()` and names no workspace in its pushes) that report the server as *needs
+  sign-in* get `/mcp reconnect <name>` instead of waiting for their next turn. Test connection is HTTP-only (a stdio server is verified when a chat starts
   it) and reports *connected · N tools* or the reason; every `error` frame's message (pi's reason or
   notice) is redacted like a status detail. A live chat's own `/mcp login` keeps pi's rpc path:
   the sign-in address arrives as a transcript notice (never auto-opened; `openUrl` is a no-op on the host)

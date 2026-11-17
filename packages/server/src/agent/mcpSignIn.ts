@@ -6,7 +6,7 @@ import {
 	getAgentDir,
 	SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import type { LoginFrame, LoginPush } from "@thinkrail/contracts";
+import type { LoginFrame, McpLoginPush } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { liveSessionIdsOf, mcpSessionView } from "./agentSessionManager";
 import {
@@ -33,7 +33,7 @@ interface Probe {
 	loginId: string;
 	ownerClientKey: string;
 	serverName: string;
-	workspaceId: string;
+	workspaceId?: string;
 	pendingInput?: (value: string | undefined) => void;
 	session?: AgentSession;
 	settled: boolean;
@@ -44,8 +44,10 @@ interface Probe {
 const probes = new Map<string, Probe>();
 let seq = 0;
 
-let publish: (push: LoginPush, ownerClientKey: string) => void = () => {};
-export function setMcpLoginPublisher(fn: (push: LoginPush, ownerClientKey: string) => void): void {
+let publish: (push: McpLoginPush, ownerClientKey: string) => void = () => {};
+export function setMcpLoginPublisher(
+	fn: (push: McpLoginPush, ownerClientKey: string) => void,
+): void {
 	publish = fn;
 }
 
@@ -73,7 +75,11 @@ function frame(probe: Probe, raw: LoginFrame): void {
 			loginId: probe.loginId,
 			providerId: `mcp:${probe.serverName}`,
 			frame: next,
-			target: { kind: "mcp", workspaceId: probe.workspaceId, serverName: probe.serverName },
+			target: {
+				kind: "mcp",
+				...(probe.workspaceId !== undefined ? { workspaceId: probe.workspaceId } : {}),
+				serverName: probe.serverName,
+			},
 		},
 		probe.ownerClientKey,
 	);
@@ -204,7 +210,10 @@ function outcome(
 	return { kind: "error", message: last?.message ?? "Sign-in did not finish." };
 }
 
-async function reconnectSignedIn(workspaceId: string, serverName: string): Promise<void> {
+async function reconnectSignedIn(
+	workspaceId: string | undefined,
+	serverName: string,
+): Promise<void> {
 	for (const sessionId of liveSessionIdsOf(workspaceId)) {
 		const snapshot = await refreshMcpStatus(sessionId, 0);
 		const state = snapshot?.servers.find((server) => server.name === serverName)?.state;
@@ -217,7 +226,7 @@ async function reconnectSignedIn(workspaceId: string, serverName: string): Promi
 
 export function startMcpProbe(options: {
 	action: McpProbeAction;
-	workspaceId: string;
+	workspaceId?: string;
 	cwd: string;
 	projectTrusted: boolean;
 	policy: McpProjectPolicy;
@@ -239,7 +248,7 @@ export function startMcpProbe(options: {
 		loginId: `mcplogin_${++seq}`,
 		ownerClientKey: options.ownerClientKey,
 		serverName,
-		workspaceId: options.workspaceId,
+		...(options.workspaceId !== undefined ? { workspaceId: options.workspaceId } : {}),
 		settled: false,
 		cancelled: false,
 	};

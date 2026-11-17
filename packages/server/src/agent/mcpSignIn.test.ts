@@ -5,7 +5,12 @@ import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ExtUiRequest, LoginFrame, LoginPush, McpStatusSnapshot } from "@thinkrail/contracts";
+import type {
+	ExtUiRequest,
+	LoginFrame,
+	McpLoginPush,
+	McpStatusSnapshot,
+} from "@thinkrail/contracts";
 import {
 	createSession,
 	dispatchSessionMcpCommand,
@@ -50,7 +55,7 @@ const root = mkdtempSync(join(tmpdir(), "mcp-signin-"));
 const agentDir = join(root, "agent");
 const cwd = join(root, "project");
 const fixture = startOAuthMcpFixture();
-let pushes: { push: LoginPush; owner: string }[] = [];
+let pushes: { push: McpLoginPush; owner: string }[] = [];
 let requests: ExtUiRequest[] = [];
 let statuses: McpStatusSnapshot[] = [];
 

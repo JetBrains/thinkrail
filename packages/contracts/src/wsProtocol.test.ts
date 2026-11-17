@@ -32,6 +32,7 @@ import {
 	CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS,
 	completionDelivery,
 	customMessageText,
+	DEFAULT_CACHE_WARMING_MODE,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
 	EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION,
@@ -54,6 +55,7 @@ import {
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	MCP_TOOL_GRANTS_PROTOCOL_VERSION,
+	MCP_USER_SERVERS_PROTOCOL_VERSION,
 	MODEL_CONTEXT_WINDOW_LIMITS,
 	MODEL_PICKER_PROTOCOL_VERSION,
 	modelContextWindowLimits,
@@ -279,6 +281,7 @@ test("the cache-warming setting names its two methods at v111", () => {
 	expect(CACHE_WARMING_MODES).toEqual(["off", "streaming", "idle"]);
 	expect(isCacheWarmingMode("idle")).toBe(true);
 	expect(isCacheWarmingMode("always")).toBe(false);
+	expect(DEFAULT_CACHE_WARMING_MODE).toBe("streaming");
 });
 
 test("voice input is pinned to v107", () => {
@@ -506,6 +509,12 @@ test("always-allowed MCP tools and their revoke are pinned to v84", () => {
 	expect(MCP_TOOL_GRANTS_PROTOCOL_VERSION).toBe(84);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(MCP_TOOL_GRANTS_PROTOCOL_VERSION);
 	expect(WS_METHODS.mcpRevokeToolGrant).toBe("mcp.revokeToolGrant");
+});
+
+test("user-level MCP servers managed without a workspace are pinned to v125", () => {
+	expect(MCP_USER_SERVERS_PROTOCOL_VERSION).toBe(125);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(MCP_USER_SERVERS_PROTOCOL_VERSION);
+	expect(WS_METHODS.mcpSetUserServer).toBe("mcp.setUserServer");
 });
 
 test("rich review anchors advance the additive selector union to v74", () => {

@@ -143,7 +143,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 124;
+export const PROTOCOL_VERSION = 125;
+export const MCP_USER_SERVERS_PROTOCOL_VERSION = 125;
 export const ARTIFACT_ROLES_PROTOCOL_VERSION = 124;
 export const KEYBINDINGS_PROTOCOL_VERSION = 123;
 export const BROWSER_VIEW_PROTOCOL_VERSION = 122;
@@ -598,6 +599,7 @@ export const WS_METHODS = {
 	mcpApprove: "mcp.approve",
 	mcpRevokeToolGrant: "mcp.revokeToolGrant",
 	mcpShareWithRepo: "mcp.shareWithRepo",
+	mcpSetUserServer: "mcp.setUserServer",
 	mcpLogin: "mcp.login",
 	mcpLogout: "mcp.logout",
 	mcpTestConnection: "mcp.testConnection",
@@ -866,6 +868,9 @@ export interface ModelContextSetting
 export const CACHE_WARMING_MODES = ["off", "streaming", "idle"] as const;
 export type CacheWarmingMode = (typeof CACHE_WARMING_MODES)[number];
 
+/** ThinkRail's mode while pi's `settings.json` names none. */
+export const DEFAULT_CACHE_WARMING_MODE: CacheWarmingMode = "streaming";
+
 export function isCacheWarmingMode(value: unknown): value is CacheWarmingMode {
 	return typeof value === "string" && (CACHE_WARMING_MODES as readonly string[]).includes(value);
 }
@@ -957,6 +962,14 @@ export interface McpRenderedTarget {
 	scope: McpServerScope;
 	expectedFingerprint: string;
 }
+
+/**
+ * Whose configuration a request edits: a workspace's (its `.pi/mcp.json` at project scope, the global
+ * `mcp.json` at user scope), or with no workspace the global file alone.
+ */
+export type McpScopeTarget =
+	| { workspaceId: string; scope: McpServerScope }
+	| { workspaceId?: never; scope: "user" };
 
 export interface WsMethodMap {
 	"project.open": { params: { path: string }; result: Project };
@@ -1519,22 +1532,26 @@ export interface WsMethodMap {
 		params: { workspaceId?: string; scope: TemplateScope; name: string };
 		result: Ack;
 	};
-	"mcp.list": { params: { workspaceId: string }; result: McpListResult };
+	"mcp.list": { params: { workspaceId?: string }; result: McpListResult };
 	"mcp.add": {
-		params: {
-			workspaceId: string;
-			scope: McpServerScope;
-			name: string;
-			entry: McpServerEntryInput;
-		};
+		params: McpScopeTarget & { name: string; entry: McpServerEntryInput };
 		result: McpListResult;
 	};
 	"mcp.update": {
-		params: { workspaceId: string; name: string; entry: McpServerEntryInput } & McpRenderedTarget;
+		params: McpScopeTarget & McpRenderedTarget & { name: string; entry: McpServerEntryInput };
 		result: McpListResult;
 	};
 	"mcp.remove": {
-		params: { workspaceId: string; name: string } & McpRenderedTarget;
+		params: McpScopeTarget & McpRenderedTarget & { name: string };
+		result: McpListResult;
+	};
+	"mcp.setUserServer": {
+		params: {
+			name: string;
+			expectedFingerprint: string;
+			enabled?: boolean;
+			exposure?: Exclude<McpExposure, "codemode">;
+		};
 		result: McpListResult;
 	};
 	"mcp.setProjectOverride": {
@@ -1559,10 +1576,10 @@ export interface WsMethodMap {
 		result: McpListResult;
 	};
 	"mcp.shareWithRepo": { params: { workspaceId: string; name: string }; result: McpListResult };
-	"mcp.login": { params: { workspaceId: string; name: string }; result: { loginId: string } };
-	"mcp.logout": { params: { workspaceId: string; name: string }; result: Ack };
+	"mcp.login": { params: { workspaceId?: string; name: string }; result: { loginId: string } };
+	"mcp.logout": { params: { workspaceId?: string; name: string }; result: Ack };
 	"mcp.testConnection": {
-		params: { workspaceId: string; name: string };
+		params: { workspaceId?: string; name: string };
 		result: { loginId: string };
 	};
 	"mcp.reconnect": {
@@ -1573,7 +1590,7 @@ export interface WsMethodMap {
 		params: { workspaceId: string; sessionId: string; toolCallId: string };
 		result: McpReadOutputResult;
 	};
-	"mcp.readLog": { params: { workspaceId: string; name: string }; result: McpServerLog };
+	"mcp.readLog": { params: { workspaceId?: string; name: string }; result: McpServerLog };
 }
 
 /** Payload of the `mcp.status` channel: one per-session snapshot per publish. */
