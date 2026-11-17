@@ -43,7 +43,7 @@ Shared with the app at runtime — never bundled, never installed separately:
   `useResourceScope`, `useOptionalResourceHost`.
 
 Anything else (an icon set such as `@remixicon/react`, a chart library) is bundled into `dist/web.js`:
-`npm install` it first. Keep it small.
+`npm install --omit=peer <pkg>` it first. Keep it small.
 
 ## Styles
 
@@ -89,5 +89,5 @@ The build prints `thinkrail-extension: <problem> (imported by <file>)` and exits
 | `--prefix is required` / `--prefix "…" is invalid` | pass `--prefix` with lowercase a–z only |
 
 A `warning: [UNRESOLVED_IMPORT] Could not resolve '<pkg>'` does **not** fail the build but leaves a
-bare `import` in `dist/web.js` that fails in the app: `npm install <pkg>` (or remove the import) and
+bare `import` in `dist/web.js` that fails in the app: `npm install --omit=peer <pkg>` (or remove the import) and
 rebuild. A clean `dist/web.js` never starts with `import`.

@@ -3,7 +3,7 @@
 `server/index.ts` is TypeScript source; ThinkRail loads it in place through pi's extension loader (no
 compile step), with **ThinkRail's own** `@earendil-works/pi-coding-agent` and `typebox` — whatever is or
 is not in the folder's `node_modules`. Every other import (the SDK, any npm library you add) resolves
-from the folder's `node_modules`, so `npm install` it. Relative imports of other `.ts` files work.
+from the folder's `node_modules`, so `npm install --omit=peer <pkg>` it. Relative imports of other `.ts` files work.
 
 ## The descriptor
 

@@ -71,6 +71,7 @@ or not for this API:
 ```
 <folder>/
   package.json        the manifest
+  .npmrc              omit=peer
   server/index.ts     server half (TypeScript, loaded as source)
   web/index.tsx       web half entry (bundled by the build)
   dist/web.js         written by the build

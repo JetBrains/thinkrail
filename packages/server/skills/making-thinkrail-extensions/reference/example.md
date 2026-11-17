@@ -37,6 +37,15 @@ rename `word-count` / `wordcount` / `word_count` everywhere and replace the logi
 - `api` and the SDK range follow the host's API from `extensions.mjs where`: `"api": "<api>"`,
   `"@thinkrail/extension-sdk": "~<api>.0"`.
 - `private: true` keeps it off npm by accident; remove it when the user decides to publish.
+- `.npmrc` makes every `npm install` in the folder leave out the peers (ThinkRail provides pi and
+  typebox; a copy in `node_modules` is ~190 MB and is what a plain-JavaScript dependency would bind to).
+  npm never publishes it.
+
+### `.npmrc`
+
+```ini
+omit=peer
+```
 
 ### `server/index.ts`
 
