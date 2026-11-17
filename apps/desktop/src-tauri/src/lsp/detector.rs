@@ -243,6 +243,16 @@ mod tests {
     use super::*;
     use std::fs;
 
+    /// Write a file the resolver will accept as runnable (execute bit on Unix).
+    fn write_executable(path: &Path) {
+        fs::write(path, "").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+
     fn temp_dir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
             "thinkrail-lsp-{name}-{}-{}",
@@ -296,7 +306,7 @@ mod tests {
         let bin_dir = dir.join("node_modules").join(".bin");
         fs::create_dir_all(&bin_dir).unwrap();
         let name = if cfg!(windows) { "vtsls.cmd" } else { "vtsls" };
-        fs::write(bin_dir.join(name), "").unwrap();
+        write_executable(&bin_dir.join(name));
         let resolved = resolve_binary_with(&dir, "vtsls", |_| Some(PathBuf::from("/global/vtsls")));
         assert_eq!(resolved, Some(bin_dir.join(name)));
         fs::remove_dir_all(dir).ok();
@@ -308,7 +318,7 @@ mod tests {
         let venv = dir.join(".venv").join(if cfg!(windows) { "Scripts" } else { "bin" });
         fs::create_dir_all(&venv).unwrap();
         let name = if cfg!(windows) { "gopls.exe" } else { "gopls" };
-        fs::write(venv.join(name), "").unwrap();
+        write_executable(&venv.join(name));
         assert_eq!(
             resolve_binary_with(&dir, "gopls", |_| Some(PathBuf::from("/g/gopls"))),
             Some(venv.join(name))
@@ -318,6 +328,21 @@ mod tests {
             Some(PathBuf::from("/g/other"))
         );
         assert_eq!(resolve_binary_with(&dir, "none", |_| None), None);
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn non_executable_local_and_absolute_files_fall_back_to_path() {
+        let dir = temp_dir("noexec");
+        let bin_dir = dir.join("node_modules").join(".bin");
+        fs::create_dir_all(&bin_dir).unwrap();
+        fs::write(bin_dir.join("vtsls"), "").unwrap(); // mode 0644
+        let resolved = resolve_binary_with(&dir, "vtsls", |_| Some(PathBuf::from("/global/vtsls")));
+        assert_eq!(resolved, Some(PathBuf::from("/global/vtsls")));
+        let plain = dir.join("plain");
+        fs::write(&plain, "").unwrap();
+        assert_eq!(resolve_binary_with(&dir, plain.to_str().unwrap(), |_| None), None);
         fs::remove_dir_all(dir).ok();
     }
 
