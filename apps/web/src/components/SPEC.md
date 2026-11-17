@@ -81,7 +81,7 @@ primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`
   chunk. A failed load reaches the `ErrorBoundary` as with plain `lazy`; renders never retry it, only the
   next `preload()` does. Known limit: on a slow link, or when the revealing data is already in the store
   at mount, the first mount still takes the `lazy` path.
-- **Public surface:** `ErrorBoundary`, `isChunkLoadError` — imported directly via
+- **Public surface:** `ErrorBoundary`, `isChunkLoadError`, `setErrorBoundaryReporter`, `reportBoundaryError` — imported directly via
   `@/components/ErrorBoundary` (no barrel; the placeholders come from `@thinkrail/ui/skeleton`); `AttentionDot` via
   `@/components/AttentionDot`; `RunningIcon` via `@/components/RunningIcon`; `CustomIcon`,
   `CustomIconName` via `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the

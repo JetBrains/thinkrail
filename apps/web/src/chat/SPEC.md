@@ -438,8 +438,18 @@ name, else the longest app-local prefix registration (`registerToolRendererPrefi
 because pi names MCP tools per server), else the default. Exact names always win, an empty prefix never
 matches, and extension descriptors stay exact-name only.
 
-Unregistered tools fall back to `DefaultToolRenderer`. A tool that needs user input mid-run takes one of
-two routes:
+Unregistered tools fall back to `DefaultToolRenderer`. **Every renderer renders inside its own
+`ToolRendererBoundary`** — in `ToolRendererBody` and on the plan page alike, built-in or installed: a
+renderer that throws shows `DefaultToolRenderer` for that one row (chat wraps it in
+`data-testid="tool-renderer-fallback"`) while the card chrome, result images and every other row keep
+working. The boundary resets when the renderer identity (an update) or the `toolCallId` changes and reports
+through `components`' `reportBoundaryError` (reportId `tool-renderer`, classifier only) **once per renderer
+function**, so a broken card in fifty rows is one report. A registration's `summary` runs outside any
+boundary (card headers, activity steps), so a throwing summary reads as no summary and reports once
+(`tool-summary`). Effects and event handlers are not caught by a boundary; they reach the window-level
+error reports. A new render site of a registered renderer must keep the boundary.
+
+A tool that needs user input mid-run takes one of two routes:
 - the extension-UI bridge (`pi.extensionUi` → `ExtUiPrompt`, below);
 - for a rich inline card, rendering from its `toolCall` args and replying through the props-only
   **`ToolRenderProps.interaction`**. `ToolRendererBody` fills it through `useToolInteraction`
