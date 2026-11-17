@@ -173,6 +173,7 @@ export function AuxiliaryRail({
 		<div
 			ref={root}
 			role="toolbar"
+			data-esc-ladder=""
 			aria-label={t(RAIL_TOOLBAR_LABELS[region])}
 			aria-orientation={horizontal ? "horizontal" : "vertical"}
 			data-testid={region === "bottom" ? "bottom-tool-rail" : `${region}-layout-rail`}

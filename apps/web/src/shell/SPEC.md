@@ -503,7 +503,9 @@ The first Esc in a field lands on its region; the next one, on a panel, climbs t
 no IME, no keyboard claim, not `defaultPrevented`, nothing inside `.monaco-editor`, `.xterm` or a dialog or
 open menu), when the target is a **non-text element** — not a text field or a `select` — in a region
 that is not the main area: a side or bottom group (its root, a tree or tree row, a tab strip, a rail, a
-button, the Files or Changes list), the top bar or the Project Home projects pane. The center's own tab
+button, the Files or Changes list), the top bar or the Project Home projects pane — or inside an
+auxiliary rail, which sits outside every region and carries `data-esc-ladder` instead (the left, right and
+bottom tool rails; their F6 ring is unchanged). The center's own tab
 strip and actions climb too, into the tab's content (unconfirmed with the user, the recommended answer);
 the center root and anything inside its tabpanel never do, so the parked feed's and an editor's Esc stay
 theirs. The terminal and Monaco keep their Esc; from there F6 or Mod+L.

@@ -15,6 +15,7 @@ const TEXT_INPUT_TYPES: ReadonlySet<string> = new Set([
 ]);
 const KEEPS_ESCAPE_SELECTOR = ".monaco-editor, .xterm";
 const CENTER_SELECTOR = '[data-region-kind="center"]';
+const LADDER_ORIGIN_SELECTOR = "[data-esc-ladder]";
 const CENTER_CONTENT_SELECTOR = '[data-region-kind="center"] > [role="tabpanel"]';
 
 export interface FieldTarget {
@@ -72,7 +73,7 @@ export function climbsToMain(press: EscapePress, target: EscapeTarget, claimed: 
 		!isTextField(target) &&
 		target.tagName !== "SELECT" &&
 		!keepsEscape(target) &&
-		target.closest(REGION_SELECTOR) !== null &&
+		(target.closest(REGION_SELECTOR) !== null || target.closest(LADDER_ORIGIN_SELECTOR) !== null) &&
 		!target.matches(CENTER_SELECTOR) &&
 		target.closest(CENTER_CONTENT_SELECTOR) === null
 	);

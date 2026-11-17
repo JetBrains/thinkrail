@@ -91,6 +91,7 @@ describe("a bare Esc leaves a text field", () => {
 const REGION = "[data-region]";
 const CENTER = '[data-region-kind="center"]';
 const CENTER_CONTENT = '[data-region-kind="center"] > [role="tabpanel"]';
+const LADDER_ORIGIN = "[data-esc-ladder]";
 const inSide = (tagName: string, init: { type?: string; inside?: string[]; is?: string[] } = {}) =>
 	field(tagName, { ...init, inside: [REGION, ...(init.inside ?? [])] });
 const climbs = (target: EscapeTarget, press: Partial<EscapePress> = {}, claimed = false) =>
@@ -109,6 +110,11 @@ describe("a bare Esc on a panel climbs to the main area", () => {
 	test("from the center's own tab strip, into its content", () => {
 		expect(climbs(field("BUTTON", { inside: [REGION, CENTER, '[role="tablist"]'] }))).toBe(true);
 		expect(climbs(field("BUTTON", { inside: [REGION, CENTER] }))).toBe(true);
+	});
+
+	test("from an auxiliary rail's control, which sits outside every region", () => {
+		expect(climbs(field("BUTTON", { inside: [LADDER_ORIGIN, '[role="toolbar"]'] }))).toBe(true);
+		expect(climbs(field("DIV", { is: [LADDER_ORIGIN] }))).toBe(true);
 	});
 
 	test("never inside the main area: its root, its content, or outside every region", () => {

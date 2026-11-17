@@ -213,6 +213,26 @@ test("Esc climbs from a panel's field to the panel, then to the chat feed, from 
 	}
 });
 
+test("Esc on a side or bottom rail's tool button climbs to the chat feed", async ({ page }) => {
+	const session = await openSeededChat(page);
+	try {
+		const rails = [
+			page.getByTestId("left-layout-rail"),
+			page.getByTestId("right-layout-rail"),
+			page.getByTestId("bottom-tool-rail"),
+		];
+		for (const rail of rails) {
+			const control = rail.locator("[data-rail-entry], [data-rail-action]").first();
+			await control.focus();
+			await expect(control).toBeFocused();
+			await page.keyboard.press("Escape");
+			await expect(feed(page)).toBeFocused();
+		}
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
 test("Esc on a Files row or a tab lands in the editor of the file the center shows, and Monaco keeps its Esc", async ({
 	page,
 }) => {
