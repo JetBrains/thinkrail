@@ -682,7 +682,9 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   terminates. A click, or the chip's key, goes through `performSend(text, [], "send")`, the same
   draft-free path as Try again, so the composer draft survives. Shift+click, or the chip's edit key,
   instead puts the text into the input (`ComposerHandle.insertAtCaret`: the whole text into an empty
-  input, else at the remembered caret with a separating space) and focuses it, sending nothing. The keys
+  input, else at the remembered caret with a separating space) and focuses it, sending nothing. A chip
+  used by click or keyboard vanishes with the row; the shell's focus recovery then lands on the input,
+  the chat region's `data-focus-default`, so the row needs no focus-list markup of its own. The keys
   are the rebindable local commands `suggestions.send1…9` (`Alt+1…9`) and `suggestions.edit1…9`
   (`Shift+Alt+1…9`, [[submodule-web-keybindings]]) of the shared scope both the input and the transcript
   include. One native `keydown` listener on the chat root matches them through

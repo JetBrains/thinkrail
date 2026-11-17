@@ -108,6 +108,7 @@ test("a finished turn's suggestions show above the composer, survive a reload an
 	await expect.poll(() => promptTexts(frames)).toEqual(["Open a PR"]);
 	await expect(input).toHaveValue("half-written draft");
 	await expect(page.getByTestId("composer-suggestions")).toHaveCount(0);
+	await expect(input).toBeFocused();
 });
 
 test("Alt+N sends chip N only while focus is inside the chat", async ({ page }) => {
