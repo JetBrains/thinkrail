@@ -2,6 +2,9 @@ import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI, SessionEntry, Theme } from "@earendil-works/pi-coding-agent";
 import defaultFactory, {
 	createNextStepsExtension,
+	createSuggestNextStepsTool,
+	DEFAULT_DESCRIPTION,
+	DEFAULT_PROMPT_GUIDELINES,
 	MAX_SHORTCUTS,
 	NEXT_STEPS_TOOL_NAME,
 	normalizeSuggestions,
@@ -92,6 +95,19 @@ describe("suggest_next_steps tool", () => {
 		});
 		expect(result.details.suggestions).toEqual(["Run the e2e suite", "Open a PR"]);
 		expect(result.terminate).toBe(true);
+	});
+
+	test("an embedder's guidance replaces only what it names", () => {
+		const fallback = createSuggestNextStepsTool();
+		expect([fallback.description, fallback.promptGuidelines]).toEqual([
+			DEFAULT_DESCRIPTION,
+			[...DEFAULT_PROMPT_GUIDELINES],
+		]);
+		const custom = createSuggestNextStepsTool({ guidance: { promptGuidelines: ["Host rule."] } });
+		expect([custom.description, custom.promptGuidelines]).toEqual([
+			DEFAULT_DESCRIPTION,
+			["Host rule."],
+		]);
 	});
 
 	test("normalizeSuggestions drops non-strings", () => {

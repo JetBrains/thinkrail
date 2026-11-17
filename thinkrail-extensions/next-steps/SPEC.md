@@ -18,8 +18,10 @@ They show as chips above the composer. A click (or Alt+N) sends one as the user'
 ## Boundary
 
 - `./server` default-exports `defineServerExtension({ name: "next-steps", title, description, extensions })`,
-  composing the portable package ([[module-pi-next-steps]]) unchanged as one **parent-only** factory:
-  `extensions: [createNextStepsExtension()]`. It uses no session services, children, skills or settings.
+  composing the portable package ([[module-pi-next-steps]]) as one **parent-only** factory with
+  ThinkRail's question rule appended to the package's guidelines:
+  `extensions: [createNextStepsExtension({ guidance: { promptGuidelines: [...DEFAULT_PROMPT_GUIDELINES,
+  QUESTIONS_GO_TO_ASK] } })]`. It uses no session services, children, skills or settings.
   The package's terminal row never appears here, because ThinkRail binds pi as `"rpc"`. Imports:
   `extension-api/server` and `@thinkrail/pi-next-steps`.
 - `./web` default-exports a descriptor that registers the tool as a **routine** row (summary "Suggested N
@@ -63,7 +65,13 @@ They show as chips above the composer. A click (or Alt+N) sends one as the user'
 - **The tool is a published pi package.** The first cut kept the tool in `./server`, reasoning that a
   terminal has no chips. pi's TUI turned out to offer the same affordance through a widget above the
   editor plus Alt+N shortcuts, so the capability moved to [[module-pi-next-steps]] before its first
-  merge. The tool guidance is the package's host-neutral wording.
+  merge. The tool guidance is the package's host-neutral wording plus one ThinkRail rule (below).
+- **Yes/no gets chips; a decision goes to `ask_user_question`.** The package lets chips answer a simple
+  question ending the final message. In ThinkRail that would compete with the structured question card:
+  an agent could ask a real decision in prose and offer chips instead. `QUESTIONS_GO_TO_ASK` limits chips
+  to a yes/no question about a step the agent proposes ("Shall I open a PR?" → "Yes, open it") and sends
+  any decision or choice between options to `ask_user_question` when that tool is available (it can be
+  switched off, so the rule names it conditionally).
 
 ## Verification
 

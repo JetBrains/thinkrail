@@ -14,6 +14,8 @@ export {
 	DEFAULT_DESCRIPTION,
 	DEFAULT_PROMPT_GUIDELINES,
 	DEFAULT_PROMPT_SNIPPET,
+	type NextStepsExtensionOptions,
+	type NextStepsGuidance,
 	type NextStepsParams,
 	NextStepsSchema,
 } from "./src/extension.ts";

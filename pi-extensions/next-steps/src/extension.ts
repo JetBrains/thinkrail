@@ -37,9 +37,19 @@ export const DEFAULT_PROMPT_SNIPPET =
 
 export const DEFAULT_PROMPT_GUIDELINES: readonly string[] = [
 	"Call suggest_next_steps only when your work on the request is finished and you would otherwise stop and wait for the user's next message: write your final message first, then call it alone as the very last action. It ends your run, so never call it while plan steps or other work remain for you to do now, before you are done, or alongside other tools.",
-	'Each suggestion is a message the user would plausibly send next, in their voice and language — e.g. "Run the e2e suite", "Also handle the empty state", "Open a PR". When your final message ends with a question, offer short answers to it, e.g. "Yes, go ahead" or "Use option B".',
+	'Each suggestion is a message the user would plausibly send next, in their voice and language — e.g. "Run the e2e suite", "Also handle the empty state", "Open a PR". When your final message ends with a simple question, offer short answers to it, e.g. "Yes, go ahead" or "Not yet".',
 	"Offer only genuinely useful next steps, best first, usually about three. Skip the call entirely when nothing meaningful applies, when something will continue on its own (you are ending your turn to wait for background work, or a question tool is waiting for the user's answer), or when the turn ended in an error.",
 ];
+
+export interface NextStepsGuidance {
+	description?: string;
+	promptSnippet?: string;
+	promptGuidelines?: readonly string[];
+}
+
+export interface NextStepsExtensionOptions {
+	guidance?: NextStepsGuidance;
+}
 
 const WIDGET_KEY = "next-steps";
 
@@ -55,16 +65,16 @@ const SHORTCUTS = [
 	"alt+9",
 ] as const satisfies readonly KeyId[];
 
-export function createSuggestNextStepsTool(): ToolDefinition<
-	typeof NextStepsSchema,
-	NextStepsDetails
-> {
+export function createSuggestNextStepsTool(
+	options: NextStepsExtensionOptions = {},
+): ToolDefinition<typeof NextStepsSchema, NextStepsDetails> {
+	const guidance = options.guidance ?? {};
 	return {
 		name: NEXT_STEPS_TOOL_NAME,
 		label: "Suggest Next Steps",
-		description: DEFAULT_DESCRIPTION,
-		promptSnippet: DEFAULT_PROMPT_SNIPPET,
-		promptGuidelines: [...DEFAULT_PROMPT_GUIDELINES],
+		description: guidance.description ?? DEFAULT_DESCRIPTION,
+		promptSnippet: guidance.promptSnippet ?? DEFAULT_PROMPT_SNIPPET,
+		promptGuidelines: [...(guidance.promptGuidelines ?? DEFAULT_PROMPT_GUIDELINES)],
 		parameters: NextStepsSchema,
 		async execute(_toolCallId, params: NextStepsParams) {
 			const suggestions = normalizeSuggestions(params.suggestions);
@@ -79,7 +89,9 @@ export function createSuggestNextStepsTool(): ToolDefinition<
 	};
 }
 
-export function createNextStepsExtension(): ExtensionFactory {
+export function createNextStepsExtension(
+	options: NextStepsExtensionOptions = {},
+): ExtensionFactory {
 	return (pi: ExtensionAPI) => {
 		let offered: readonly string[] = [];
 
@@ -97,7 +109,7 @@ export function createNextStepsExtension(): ExtensionFactory {
 			ctx.ui.setWidget(WIDGET_KEY, (_tui, theme) => new SuggestionRow(suggestions, theme));
 		};
 
-		pi.registerTool(createSuggestNextStepsTool());
+		pi.registerTool(createSuggestNextStepsTool(options));
 		pi.on("agent_start", (_event, ctx) => clear(ctx));
 		pi.on("agent_settled", (event, ctx) => (event.aborted ? clear(ctx) : showFromLeaf(ctx)));
 		pi.on("session_start", (_event, ctx) => showFromLeaf(ctx));

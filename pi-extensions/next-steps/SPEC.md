@@ -18,9 +18,11 @@ draws its own chips.
 
 ## Public surface
 
-- **Default export**: the `ExtensionFactory` that `pi install` loads. `createNextStepsExtension()`
-  returns the same factory and takes no options. `createSuggestNextStepsTool()` is the bare tool for an
-  embedder that wants it without the terminal row.
+- **Default export**: the `ExtensionFactory` that `pi install` loads. `createNextStepsExtension({
+  guidance })` returns the same factory; `guidance` (`NextStepsGuidance`: `description`, `promptSnippet`,
+  `promptGuidelines`, the ask-user-question shape) replaces only the wording it names, so a host can add
+  its own policy. `createSuggestNextStepsTool({ guidance })` is the bare tool for an embedder that wants
+  it without the terminal row.
 - **The tool contract** that renderers key on:
   - the name `"suggest_next_steps"`;
   - the arguments `{ suggestions: string[] }`;
@@ -48,7 +50,8 @@ draws its own chips.
   `agent_start` clears the row. ThinkRail's chips use the same rule over its transcript.
 - **The terminal row is drawn only when `ctx.mode === "tui"`.** RPC hosts (ThinkRail binds pi as `"rpc"`)
   draw their own affordance from the result. Gating on mode, rather than adding an embedder option,
-  keeps the factory option-free and prevents a duplicate row in a host that renders widgets. The
+  keeps the row out of the factory's options and prevents a duplicate row in a host that renders
+  widgets. The
   `alt+1…9` shortcuts are registered everywhere but do nothing without offered suggestions.
 - **Alt+1…9, the same keys as ThinkRail.** pi has no built-in Alt+digit bindings. On macOS, a terminal
   passes Alt+digit only with Option-as-Meta set; the README documents the setting per terminal. The row

@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { ServerExtension } from "@thinkrail/extension-api/server";
-import descriptor from "./index";
+import { DEFAULT_PROMPT_GUIDELINES } from "@thinkrail/pi-next-steps";
+import descriptor, { QUESTIONS_GO_TO_ASK } from "./index";
 
 const extension: ServerExtension = descriptor;
 
@@ -16,13 +17,14 @@ describe("next-steps server half", () => {
 	});
 
 	test("its factory is the published package's, registering suggest_next_steps", () => {
-		const tools: string[] = [];
+		const tools: { name: string; promptGuidelines?: readonly string[] }[] = [];
 		const fakePi = {
-			registerTool: (definition: { name: string }) => tools.push(definition.name),
+			registerTool: (definition: (typeof tools)[number]) => tools.push(definition),
 			on: () => {},
 			registerShortcut: () => {},
 		};
 		extension.extensions[0]?.(fakePi as unknown as ExtensionAPI);
-		expect(tools).toEqual(["suggest_next_steps"]);
+		expect(tools.map(({ name }) => name)).toEqual(["suggest_next_steps"]);
+		expect(tools[0]?.promptGuidelines).toEqual([...DEFAULT_PROMPT_GUIDELINES, QUESTIONS_GO_TO_ASK]);
 	});
 });

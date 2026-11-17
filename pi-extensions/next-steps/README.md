@@ -45,8 +45,11 @@ prompt text in every request.
 
 `@thinkrail/pi-next-steps/core` is import-free at runtime and exports the tool name, the result type,
 `normalizeSuggestions` and `suggestionsOnBranch(entries)`, the rule for "this session currently ends with
-suggestions" (bookkeeping entries such as model or thinking-level changes are skipped). The row is drawn only in pi's interactive terminal mode (`ctx.mode === "tui"`), so a host
-binding pi in RPC mode never shows it twice.
+suggestions" (bookkeeping entries such as model or thinking-level changes are skipped). The row is drawn
+only in pi's interactive terminal mode (`ctx.mode === "tui"`), so a host binding pi in RPC mode never
+shows it twice. To add your own rules, compose `createNextStepsExtension({ guidance: { promptGuidelines:
+[...DEFAULT_PROMPT_GUIDELINES, "…"] } })`; `guidance` replaces only the `description`, `promptSnippet` or
+`promptGuidelines` you pass.
 
 ## Requirements
 
