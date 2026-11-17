@@ -48,7 +48,8 @@ export async function pushSite(options: {
 			PUSH_TIMEOUT_MS,
 		);
 		if (!remote.ok) throw failure("Could not reach the remote", remote.err);
-		if (remote.out !== "") {
+		const checkedSha = remote.out.split(/\s/)[0] ?? "";
+		if (checkedSha !== "") {
 			const fetched = await run(
 				["fetch", "-q", "--depth", "1", remoteUrl, `refs/heads/${branch}`],
 				PUSH_TIMEOUT_MS,
@@ -79,7 +80,12 @@ export async function pushSite(options: {
 		if (!head.ok) throw failure("git rev-parse", head.err);
 
 		const push = await run(
-			["push", "--force", remoteUrl, `HEAD:refs/heads/${branch}`],
+			[
+				"push",
+				`--force-with-lease=refs/heads/${branch}:${checkedSha}`,
+				remoteUrl,
+				`HEAD:refs/heads/${branch}`,
+			],
 			PUSH_TIMEOUT_MS,
 		);
 		if (!push.ok) throw failure("git push", push.err);

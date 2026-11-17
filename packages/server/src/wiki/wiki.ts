@@ -144,8 +144,9 @@ export async function publishWiki(workspaceId: string): Promise<WikiPublishResul
 	const files = buildSite(pages, `${basename(origin.slug)} wiki`);
 	await pushSite({ files, remoteUrl: origin.url, branch: WIKI_PUBLISH_BRANCH });
 
+	let enabled: { err?: string } = {};
 	if (!existing) {
-		await runProviderCommand(
+		enabled = await runProviderCommand(
 			worktree,
 			[
 				"gh",
@@ -161,7 +162,15 @@ export async function publishWiki(workspaceId: string): Promise<WikiPublishResul
 			PAGES_API_TIMEOUT_MS,
 		);
 	}
-	const url = (await pagesState(worktree, origin.slug))?.url ?? defaultPagesUrl(origin.slug);
+	const served = existing ?? (await pagesState(worktree, origin.slug));
+	if (!served) {
+		const detail = (enabled.err ?? "").trim();
+		throw new CodedError(
+			"WIKI_PUBLISH_FAILED",
+			`The ${WIKI_PUBLISH_BRANCH} branch was pushed but GitHub Pages could not be enabled${detail ? `: ${detail}` : ""}`,
+		);
+	}
+	const url = served.url;
 	const publication: WikiPublication = {
 		url,
 		branch: WIKI_PUBLISH_BRANCH,

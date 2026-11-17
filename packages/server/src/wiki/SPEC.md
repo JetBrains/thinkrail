@@ -49,11 +49,10 @@ watches in a chat; publishing is a deterministic git push.
   - A `gh-pages` branch whose tip lacks the marker file was not written by this module and is **never
     overwritten** (`WIKI_BRANCH_FOREIGN`). The same code answers a repo whose Pages already serves a different
     branch, checked before anything is pushed.
-  - The push is a force push, which is safe only because of the marker check above.
+  - The push is `--force-with-lease` against the SHA the ownership check saw (empty when the branch was absent), so a branch created or changed in between rejects the push instead of being overwritten.
   - Git and `gh` run under the same bounded, prompt-disabled runners as the rest of the host; a failed step is
     `WIKI_PUBLISH_FAILED` with the step name and stderr, remote credentials stripped.
-  - Enabling Pages can fail for lack of admin rights; the branch is still published and the URL falls back to
-    `https://<owner>.github.io/<repo>/`.
+  - When Pages cannot be enabled (for example, no admin rights) the publish fails with `WIKI_PUBLISH_FAILED` saying the branch was pushed but Pages is not on, and no publication is recorded; success always reports the URL GitHub returns.
 - **Public surface (barrel):** `prepareWikiBuild`, `publishWiki`, `wikiPage`, `wikiStatus`,
   `WIKI_PUBLISH_BRANCH`, `WIKI_BUILDER_AGENT`, `WIKI_BUILDER_DEFINITION`, `WIKI_BUILDER_MARKER`.
 - **Allowed deps:** `persistence` (workspace lookup), `git` (`gitAsync`: origin URL and the publish push),

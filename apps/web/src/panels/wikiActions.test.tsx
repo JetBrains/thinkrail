@@ -8,7 +8,7 @@ const requests: { method: string; params: unknown }[] = [];
 const chats: { workspaceId: string; prompt: string }[] = [];
 const openChat = (workspaceId: string, prompt: string) => {
 	chats.push({ workspaceId, prompt });
-	return Promise.resolve();
+	return Promise.resolve(true);
 };
 let respond: (method: string) => Promise<unknown> = () => Promise.resolve({});
 

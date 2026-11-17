@@ -11,7 +11,7 @@ export async function startWikiBuild(
 	workspaceId: string,
 	model: { provider: string; id: string },
 	codeOnly: boolean,
-	openChat: (workspaceId: string, prompt: string) => Promise<void> = openChatWithPrompt,
+	openChat: (workspaceId: string, prompt: string) => Promise<boolean> = openChatWithPrompt,
 ): Promise<void> {
 	try {
 		const plan = await getTransport().request("wiki.prepareBuild", {
@@ -20,8 +20,7 @@ export async function startWikiBuild(
 			codeOnly,
 		});
 		useWikiPageState.getState().close();
-		await openChat(workspaceId, plan.prompt);
-		toast.info(t("panels.wiki.build.started"));
+		if (await openChat(workspaceId, plan.prompt)) toast.info(t("panels.wiki.build.started"));
 	} catch (err) {
 		toast.error(errorText(err), t("panels.wiki.build.failed"));
 	}

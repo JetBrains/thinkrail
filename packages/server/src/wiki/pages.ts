@@ -52,6 +52,7 @@ function walk(root: string): string[] {
 			continue;
 		}
 		for (const entry of entries) {
+			if (found.length >= MAX_PAGES) break;
 			if (entry.name.startsWith(".")) continue;
 			const child = rel === "" ? entry.name : `${rel}/${entry.name}`;
 			if (entry.isDirectory()) pending.push(child);

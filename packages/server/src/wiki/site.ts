@@ -41,7 +41,16 @@ export function buildSite(
 		},
 	];
 	for (const page of pages) {
-		const back = page.path === WIKI_ENTRY ? "" : "\n\n---\n\n[Back to the index](index.html)\n";
+		const depth = page.path.split("/").length - 1;
+		const back =
+			page.path === WIKI_ENTRY
+				? ""
+				: `
+
+---
+
+[Back to the index](${"../".repeat(depth)}index.html)
+`;
 		files.push({
 			path: page.path,
 			content: `${frontMatter(page.title)}{% raw %}\n${neutralizeLiquid(rewriteMarkdownLinks(page.content))}\n{% endraw %}${back}`,

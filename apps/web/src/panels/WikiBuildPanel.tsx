@@ -22,16 +22,15 @@ export function WikiBuildPanel({ workspaceId }: { workspaceId: string }) {
 	const [preference, setPreference] = useState<WikiBuildPreference>(readBuildPreference);
 	const [starting, setStarting] = useState(false);
 
+	const selectedRef = selectCatalogModel(models, preference.model)
+		? preference.model
+		: (defaultModel ?? null);
 	const visible = useMemo(
-		() => selectPickerModels(models, hiddenModels, [preference.model]),
-		[models, hiddenModels, preference.model],
+		() => selectPickerModels(models, hiddenModels, [selectedRef]),
+		[models, hiddenModels, selectedRef],
 	);
 	const preferences = useModelPreferences(visible);
-	const model: WireModel | null =
-		selectCatalogModel(models, preference.model) ??
-		selectCatalogModel(models, defaultModel ?? null) ??
-		visible[0] ??
-		null;
+	const model: WireModel | null = selectCatalogModel(models, selectedRef) ?? visible[0] ?? null;
 
 	const update = (next: WikiBuildPreference) => {
 		setPreference(next);

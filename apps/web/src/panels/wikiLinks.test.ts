@@ -26,6 +26,7 @@ test("a link that climbs out of the wiki, or leaves markdown, goes nowhere", () 
 	expect(resolveWikiLink("index.md", "file:///x.md")).toEqual({ kind: "none" });
 	expect(resolveWikiLink("index.md", "%E0%A4%A.md")).toEqual({ kind: "none" });
 	expect(resolveWikiLink("index.md", undefined)).toEqual({ kind: "none" });
+	expect(resolveWikiLink("index.md", "#%FF")).toEqual({ kind: "none" });
 });
 
 test("web links open outside and fragments stay on the page", () => {

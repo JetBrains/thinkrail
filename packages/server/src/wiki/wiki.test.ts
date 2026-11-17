@@ -172,6 +172,11 @@ test("the site wraps every article in front matter and raw Liquid, and carries t
 	expect(page).not.toContain("{% endraw %} {% endraw %}");
 	expect(page).toContain("{ % endraw % }");
 	expect(page).toContain("[Back to the index](index.html)");
+
+	const nested = buildSite([{ path: "a/b/c.md", title: "c", content: "# c" }], "repo wiki").find(
+		(file) => file.path === "a/b/c.md",
+	);
+	expect(nested?.content).toContain("[Back to the index](../../index.html)");
 });
 
 test("project pages and user pages get their GitHub Pages address", () => {

@@ -44,12 +44,12 @@ export async function startChatInTab(
 		prompt,
 		draft,
 	}: { preferredGroupId?: string; prompt?: string; draft?: string } = {},
-): Promise<void> {
+): Promise<boolean> {
 	const navigation = useAppStore.getState().beginCenterNavigation(workspaceId, preferredGroupId);
 	useAppStore.getState().beginChatStart(workspaceId);
 	try {
 		const created = await createSessionOrSiblingChat(workspaceId, prompt);
-		if (!created) return;
+		if (!created) return true;
 		const {
 			result: { sessionId, model, thinkingLevel },
 			syncedTick,
@@ -65,6 +65,7 @@ export async function startChatInTab(
 		);
 		if (prompt) sendPrompt(sessionId, prompt);
 		else if (draft) store.setChatDraft(sessionId, draft);
+		return true;
 	} catch {
 		const state = useAppStore.getState();
 		if (
@@ -73,6 +74,7 @@ export async function startChatInTab(
 		) {
 			toast.error(t("panels.openChat.sessionCreateFailed"), t("panels.openChat.startFailed"));
 		}
+		return false;
 	} finally {
 		useAppStore.getState().endChatStart(workspaceId);
 	}
@@ -173,7 +175,10 @@ export async function promptWorkspaceChat(
 	sessionId: string | null,
 	text: string,
 ): Promise<void> {
-	if (!sessionId) return startChatInTab(workspaceId, { prompt: text });
+	if (!sessionId) {
+		await startChatInTab(workspaceId, { prompt: text });
+		return;
+	}
 	await openChatInTab(workspaceId, sessionId);
 	const runtime = useAppStore.getState().sessions[sessionId];
 	if (!runtime) return;

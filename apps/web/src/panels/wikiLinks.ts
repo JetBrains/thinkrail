@@ -22,7 +22,13 @@ function resolveSegments(directory: readonly string[], relative: string): string
 /** Where a link in the article at `from` (POSIX, wiki-root relative) leads. */
 export function resolveWikiLink(from: string, href: string | undefined): WikiLinkTarget {
 	if (href === undefined || href === "") return { kind: "none" };
-	if (href.startsWith("#")) return { kind: "anchor", id: decodeURIComponent(href.slice(1)) };
+	if (href.startsWith("#")) {
+		try {
+			return { kind: "anchor", id: decodeURIComponent(href.slice(1)) };
+		} catch {
+			return { kind: "none" };
+		}
+	}
 	if (EXTERNAL.test(href)) return { kind: "external", href };
 	if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("/")) return { kind: "none" };
 	const hash = href.indexOf("#");
