@@ -10,8 +10,9 @@ tags: [pi-extension, suggestions]
 ## Responsibility
 
 The published, portable half of next-step suggestions. It has one tool, `suggest_next_steps`, which the
-agent calls last and alone when a turn's work is done, with the messages the user would plausibly send
-next. In pi's interactive terminal the suggestions appear in a row above the editor, and Alt+N sends one.
+agent calls last and alone when its work on the request is done and nothing else will continue (no
+remaining plan steps, no background work or question it waits on), with the messages the user would
+plausibly send next. In pi's interactive terminal the suggestions appear in a row above the editor, and Alt+N sends one.
 The package knows nothing about ThinkRail, which composes it through [[module-ext-next-steps]] and
 draws its own chips.
 

@@ -40,6 +40,14 @@ They show as chips above the composer. A click (or Alt+N) sends one as the user'
   solitary call. `execute` returns `terminate: true`, so pi skips another model round trip. pi ends early
   only when every result in a batch terminates, so a call made beside other tools doesn't end the turn,
   and the chat shows no chips for it.
+- **Only when nothing continues.** Because the call ends the run, the guidance allows it only when the
+  agent would otherwise stop and wait for an ordinary user message: never while plan steps or other work
+  remain to do now (it would stop them), never when ending a turn to wait for background work or a
+  question tool's answer. The agent judges this; the chat does not second-guess it from background work.
+  A dev server left running keeps its chips, and a row offered by mistake before a background
+  completion disappears when that completion wakes the agent ([[submodule-web-chat]], *Composer
+  suggestions*). Hiding chips while any background work runs was rejected: a long-lived command would
+  hide them for good.
 - **Zero is valid; no count cap.** The agent skips the call when nothing meaningful applies (no filler),
   typically offers about three, and `execute` only trims, collapses whitespace and drops empty or
   case-insensitive duplicate items. A forgotten call simply means no chips. That's the accepted cost of
