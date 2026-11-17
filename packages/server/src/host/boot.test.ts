@@ -467,6 +467,18 @@ test('portMode "free" scans upward past a taken port', async () => {
 	}
 });
 
+test('portMode "free" with port 0 lets the OS pick a port outside the well-known range', async () => {
+	// The desktop sidecar boots this way. Regression: on Windows it ended up on
+	// port 1, which WebView2 refuses to load (ERR_UNSAFE_PORT).
+	const b = await boot({ port: 0, host: "127.0.0.1", portMode: "free" });
+
+	expect(b.requested).toBe(0);
+	expect(b.port).toBeGreaterThan(1023);
+	expect(b.server.port).toBe(b.port);
+	const res = await fetch(`http://127.0.0.1:${b.port}/health`);
+	expect(await res.text()).toBe("ok");
+});
+
 test("serves the SPA from staticDir with index.html fallback", async () => {
 	const dir = mkdtempSync(join(tmpdir(), "thinkrail-boot-"));
 	tmpDirs.push(dir);

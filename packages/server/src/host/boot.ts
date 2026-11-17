@@ -71,8 +71,12 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 	await initializeJbcentralRuntime();
 
 	const requested = options.port;
+	// Port 0 is "any port": bind it directly so the OS picks atomically, instead
+	// of probing a port and releasing it before the server can claim it.
 	const port =
-		options.portMode === "free" ? await findFreePort(requested, options.host) : requested;
+		options.portMode === "free" && requested !== 0
+			? await findFreePort(requested, options.host)
+			: requested;
 	const running = await createServer({
 		port,
 		host: options.host,
