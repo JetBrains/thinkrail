@@ -1,6 +1,11 @@
 import { realpathSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
-import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
+import {
+	enterDefaultWorkspace,
+	openFixtureProject,
+	openPersistedChat,
+	pressPlatformShortcut,
+} from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -121,6 +126,23 @@ test("Alt+N sends chip N only while focus is inside the chat", async ({ page }) 
 	await page.keyboard.press("Alt+Digit2");
 	await expect.poll(() => promptTexts(frames)).toEqual(["Open a PR"]);
 	await expect(input).toHaveValue("");
+});
+
+test("Alt+N also sends from the conversation, the input's other local scope", async ({ page }) => {
+	const frames: ClientFrame[] = [];
+	await observeClientFrames(page, frames);
+	await openSeededChat(page, "Transcript next steps", 30_000);
+	await expect(page.getByTestId("composer-suggestion")).toHaveCount(2);
+
+	await page.getByTestId("chat-input").focus();
+	await pressPlatformShortcut(page, "ArrowUp");
+	await expect
+		.poll(() =>
+			page.evaluate(() => document.activeElement?.closest("[data-transcript-feed]") !== null),
+		)
+		.toBe(true);
+	await page.keyboard.press("Alt+Digit1");
+	await expect.poll(() => promptTexts(frames)).toEqual(["Run the e2e suite"]);
 });
 
 test("switching the extension off hides the chips while the transcript row stays", async ({

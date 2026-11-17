@@ -34,15 +34,3 @@ export function deriveComposerSuggestions(
 		readComposerSuggestions(call.name, call.arguments ?? {}, result.raw, disabledExtensions) ?? NONE
 	);
 }
-
-export function composerSuggestionIndex(event: {
-	altKey: boolean;
-	ctrlKey: boolean;
-	metaKey: boolean;
-	shiftKey: boolean;
-	code: string;
-}): number | null {
-	if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return null;
-	const match = /^Digit([1-9])$/.exec(event.code);
-	return match ? Number(match[1]) - 1 : null;
-}

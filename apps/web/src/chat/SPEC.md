@@ -679,12 +679,16 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
 
   Any later turn (an error, a retry, the next user message) clears the row, and a reload restores it.
   A call that wasn't last never qualifies: pi only ends the turn when every result in the batch
-  terminates. A click, or `Alt+Digit1…9` (matched on `event.code`), goes through `performSend(text, [],
-  "send")`, the same draft-free path as Try again, so the composer draft survives. The shortcut is a
-  native `keydown` listener on the chat root. It acts only while DOM focus is inside that chat, so
-  React-portal dialogs and other panes are excluded. It calls `preventDefault` so macOS doesn't type
-  `¡™£`. The copy is host keys (`chat.suggestions.*`): the row is generic, and the extension supplies only
-  the strings.
+  terminates. A click, or the chip's key, goes through `performSend(text, [], "send")`, the same
+  draft-free path as Try again, so the composer draft survives. The keys are the rebindable local
+  commands `suggestions.send1…9` (`Alt+1…9`, [[submodule-web-keybindings]]) of the shared scope both the
+  input and the transcript include. One native `keydown` listener on the chat root matches them through
+  `useLocalKeys` with the focused element's scope — the transcript feed's, else the input's for the input
+  and the chip row (which declares `data-key-scope="composer"`, so the binder yields there too) — and
+  nowhere else in the chat. It consumes the press (`preventDefault`, a repeat does nothing) only when
+  that chip is shown, so with no chip an Option chord still types its character. Each chip's tooltip
+  caps and `aria-keyshortcuts` come from the same keys. The copy is host keys (`chat.suggestions.*`):
+  the row is generic, and the extension supplies only the strings.
 - **Structured tool-file navigation** — `ChatView` accepts an optional `onOpenFile(path)` from the shell and
   passes it through every `ToolRenderProps` path (routine, primary, card, or bare). The shared tool-file
   primitive offers that action only for a non-empty relative path or an absolute path contained by

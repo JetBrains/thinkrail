@@ -378,7 +378,7 @@
 	"chat.subagentTranscript.stale": "obsoleta",
 	"chat.subagentTranscript.title": "Transcripción del subagente",
 	"chat.suggestions.label": "Siguientes mensajes sugeridos",
-	"chat.suggestions.send": "Enviar ahora ({{shortcut}})",
+	"chat.suggestions.send": "Enviar ahora",
 	"chat.templateEditor.argumentHint": "Sugerencia de argumentos",
 	"chat.templateEditor.argumentHintPlaceholder": "[archivo] [ámbito]",
 	"chat.templateEditor.body": "Cuerpo",

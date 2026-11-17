@@ -35,6 +35,7 @@ export {
 	isAppLocalScope,
 	LOCAL_KEY_DEFAULTS,
 	LOCAL_SCOPES,
+	SUGGESTION_KEYS,
 } from "./localKeys";
 export {
 	APP_LOCAL_SET,

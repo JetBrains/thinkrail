@@ -1,10 +1,6 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import type { AssistantMessage, UserMessage } from "@thinkrail/contracts";
-import {
-	type ComposerSuggestionsSource,
-	composerSuggestionIndex,
-	deriveComposerSuggestions,
-} from "./composerSuggestions";
+import { type ComposerSuggestionsSource, deriveComposerSuggestions } from "./composerSuggestions";
 import { registerToolRenderer } from "./toolRegistry";
 import type { ChatTurn, ToolResultState } from "./types";
 
@@ -121,31 +117,5 @@ describe("deriveComposerSuggestions", () => {
 
 	test("offers nothing when the owning extension is switched off", () => {
 		expect(deriveComposerSuggestions(source(), ["suggest-ext"])).toEqual([]);
-	});
-});
-
-describe("composerSuggestionIndex", () => {
-	const key = (
-		code: string,
-		mods: Partial<Record<"alt" | "ctrl" | "meta" | "shift", boolean>>,
-	) => ({
-		code,
-		altKey: mods.alt ?? false,
-		ctrlKey: mods.ctrl ?? false,
-		metaKey: mods.meta ?? false,
-		shiftKey: mods.shift ?? false,
-	});
-
-	test("maps Alt+Digit1…9 to a zero-based chip index", () => {
-		expect(composerSuggestionIndex(key("Digit1", { alt: true }))).toBe(0);
-		expect(composerSuggestionIndex(key("Digit9", { alt: true }))).toBe(8);
-	});
-
-	test("ignores other keys and modifier combinations", () => {
-		expect(composerSuggestionIndex(key("Digit0", { alt: true }))).toBeNull();
-		expect(composerSuggestionIndex(key("Digit1", {}))).toBeNull();
-		expect(composerSuggestionIndex(key("Digit1", { alt: true, shift: true }))).toBeNull();
-		expect(composerSuggestionIndex(key("Digit1", { alt: true, meta: true }))).toBeNull();
-		expect(composerSuggestionIndex(key("KeyA", { alt: true }))).toBeNull();
 	});
 });

@@ -3,6 +3,7 @@ import { keyCap } from "@thinkrail/ui/keyboard";
 import { type CommandShortcut, shortcutKeys } from "../commands";
 import { platformFamily } from "../lib";
 import { displayShortcut, FOCUS_GROUP_BINDINGS, type KeybindingId, keysLabel } from "./keybindings";
+import { SUGGESTION_KEYS } from "./localKeys";
 import {
 	keybindingShortcut,
 	keybindingShortcuts,
@@ -84,7 +85,8 @@ export type ShortcutCatalogEntry = CatalogEntryBase &
 				readonly local?: never;
 		  }
 		| {
-				readonly local: string;
+				readonly local: string | readonly string[];
+				readonly bindingTitle?: MessageKey;
 				readonly keys?: readonly ShortcutKey[];
 				readonly bindings?: never;
 				readonly twin?: never;
@@ -665,6 +667,15 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 			keys: [PAGE_UP, PAGE_DOWN],
 		},
 	]),
+	...inScope("suggestions", [
+		{
+			id: "suggestions.send",
+			title: "shortcuts.suggestions.send",
+			surface: "composer",
+			local: SUGGESTION_KEYS.send,
+			bindingTitle: "shortcuts.suggestions.sendOne",
+		},
+	]),
 	...inScope("transcript", [
 		{
 			id: "transcript.up",
@@ -1000,19 +1011,31 @@ function conflictViews(
 	);
 }
 
+function rangeView(
+	keybindings: ResolvedKeybindings,
+	ids: readonly string[],
+	shortcut: (id: string) => CommandShortcut | undefined,
+): ShortcutChordView | null {
+	const first = ids[0];
+	const last = ids.at(-1);
+	if (first === undefined || last === undefined || last === first) return null;
+	if (!ids.every((id) => atDefault(keybindings, id))) return null;
+	const from = shortcut(first);
+	const to = shortcut(last);
+	if (!from || !to) return null;
+	return chordView({ ...from, key: `${from.key}–${to.key}` }, keybindings.platform);
+}
+
 function bindingChords(
 	bindings: readonly [KeybindingId, ...KeybindingId[]],
 	{ desktop, keybindings }: ShortcutContext,
 ): ShortcutChordView[] {
 	const options = { browser: !desktop };
 	const { platform } = keybindings;
-	const [first] = bindings;
-	const last = bindings.at(-1) ?? first;
-	const from = keybindingShortcut(keybindings, first, options);
-	const to = keybindingShortcut(keybindings, last, options);
-	if (last !== first && from && to && bindings.every((id) => atDefault(keybindings, id))) {
-		return [chordView({ ...from, key: `${from.key}–${to.key}` }, platform)];
-	}
+	const range = rangeView(keybindings, bindings, (id) =>
+		keybindingShortcut(keybindings, id, options),
+	);
+	if (range) return [range];
 	return bindings.flatMap((id) => {
 		const shortcut = keybindingShortcut(keybindings, id, options);
 		return shortcut ? [chordView(shortcut, platform)] : [];
@@ -1054,12 +1077,24 @@ function scopedViews(
 	return { chords, conflicts };
 }
 
+export function localIds(entry: ShortcutCatalogEntry): readonly string[] {
+	if (entry.local === undefined) return [];
+	return typeof entry.local === "string" ? [entry.local] : entry.local;
+}
+
 export function entryScope(
 	entry: ShortcutCatalogEntry,
 	keybindings: ResolvedKeybindings,
 ): string | null {
-	if (entry.local !== undefined) return keybindings.byId.get(entry.local)?.scope ?? null;
+	const [first] = localIds(entry);
+	if (first !== undefined) return keybindings.byId.get(first)?.scope ?? null;
 	return entry.scope ?? null;
+}
+
+function soleChord(keybindings: ResolvedKeybindings, id: string): CommandShortcut | undefined {
+	const chords = keybindings.byId.get(id)?.chords ?? [];
+	const [only] = chords;
+	return chords.length === 1 && only ? displayShortcut(only.chord) : undefined;
 }
 
 function entryRows(entry: ShortcutCatalogEntry, context: ShortcutContext): ShortcutRow[] {
@@ -1067,8 +1102,17 @@ function entryRows(entry: ShortcutCatalogEntry, context: ShortcutContext): Short
 	const { platform } = keybindings;
 	if (entry.desktop && !context.desktop) return [];
 	if (entry.local !== undefined) {
-		const views = scopedViews(keybindings, entry.local, entryScope(entry, keybindings));
-		return row(entry, [...keyChords(entry.keys ?? [], platform), ...views.chords], views.conflicts);
+		const ids = localIds(entry);
+		const fixed = keyChords(entry.keys ?? [], platform);
+		const range = rangeView(keybindings, ids, (id) => soleChord(keybindings, id));
+		if (range) return row(entry, [...fixed, range], []);
+		const scope = entryScope(entry, keybindings);
+		const views = ids.map((id) => scopedViews(keybindings, id, scope));
+		return row(
+			entry,
+			[...fixed, ...views.flatMap(({ chords }) => chords)],
+			views.flatMap(({ conflicts }) => conflicts),
+		);
 	}
 	if (entry.keys) {
 		const fixed = keyChords(entry.keys, platform);

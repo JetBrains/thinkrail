@@ -843,7 +843,10 @@ export default function ChatView({
 		performSendRef.current = performSend;
 	});
 	const onTryAgain = useCallback(() => performSendRef.current(TRY_AGAIN_PROMPT, [], "send"), []);
-	const sendSuggestion = (text: string) => performSendRef.current(text, [], "send");
+	const sendSuggestion = useCallback(
+		(text: string) => performSendRef.current(text, [], "send"),
+		[],
+	);
 
 	return (
 		<div

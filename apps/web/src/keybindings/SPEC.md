@@ -31,7 +31,7 @@ binding does.
   `KeybindingEntry`, `ExtensionShortcutSet`, `ChordHolder`, `chordHolders`, `assignChord`,
   `resetChord`, `keyChordLabel`, `keybindingsFile`, `planImport`, `ImportPlan`, `ImportSkipReason`,
   `elementKeyUses`, `LOCAL_SCOPES`, `AppLocalScope`, `isAppLocalScope`, `APP_LOCAL_COMMANDS`,
-  `LOCAL_KEY_DEFAULTS`, `APP_LOCAL_SET`, `LocalCommandSet`, `matchLocal`, `localUses`, `globalHolder`,
+  `LOCAL_KEY_DEFAULTS`, `SUGGESTION_KEYS`, `APP_LOCAL_SET`, `LocalCommandSet`, `matchLocal`, `localUses`, `globalHolder`,
   `actsIn`, `resolveKeybindings`, `ResolvedKeybindings`, `ResolvedCommand`, `ResolvedChord`,
   `KeybindingConflict`, `ExtensionCommandSet`, `matchKeybinding`, `pressesChord`, `keybindingShortcut`,
   `keybindingShortcuts`, `keybindingKeys`, `keybindingLabel`, `keybindingLabels`, `SHORTCUT_CATALOG`,
@@ -176,6 +176,12 @@ binding does.
   `code`) are `@thinkrail/ui/keyboard`'s `ARROW_TWIN_COMMANDS`, declared once in scope `arrows`; `tabs`,
   `rails`, `trees`, `review.surface` and `transcript` include it, so one rebind applies in every element.
   A scope another includes is not an element of its own: it never appears in the `local` map.
+- **Shared scope `suggestions`.** The chat's composer-suggestion keys (`suggestions.send1…9`, `Alt+1…9`;
+  `SUGGESTION_KEYS.send` lists them in chip order) are declared once in scope `suggestions`, which
+  `composer` and `transcript` include: the chips act anywhere in the chat's input or conversation, and a
+  conflict inside either element is ranked there ([[submodule-web-chat]], *Composer suggestions*). On
+  every platform, Option included: the chat consumes the press only while that chip is shown, and a
+  layout that types a needed character with Option rebinds.
 - **Physical keys everywhere:** local letters match `code` (caps show US positions; Dvorak and Colemak
   users rebind). A typing local chord (no Mod/Ctrl/Alt, not Escape, not an F-key — `isTypingChord`)
   never matches in text entry; `Shift+Escape` or `Mod+Enter` still do.
@@ -257,7 +263,8 @@ binding does.
 - **One entry per shortcut**, `{ id, title, surface, scope? }` plus either `bindings` (table ids — the chord is
   the resolved `keybindingShortcut`'s, never restated, and a browser therefore lists no chord it never
   receives: `Mod+Alt+N` / `Mod+Alt+W`, not `Mod+N` / `Mod+W`), `local` (a local command id, optionally
-  after a locked `keys` prefix such as a comment's ↵) or `keys` (display chords for everything bound
+  after a locked `keys` prefix such as a comment's ↵, or an ordered list of them with a `bindingTitle`) or
+  `keys` (display chords for everything bound
   elsewhere). A direction row is `keys` with one arrow plus `twin` (its `arrows.*` command, `shift` for a
   selection-extending row): it shows the arrow locked and the twin's resolved letters, struck through
   where the element took the letter over. Rows that bundled two directions are split into one row per
@@ -265,8 +272,8 @@ binding does.
   (tested). A `keys` chord's `key` is the `KeyboardEvent.key` value (`ArrowDown`, `v`, `F2`), rendered
   as a cap (`↓`, `V`); it may name a `platform` (`apple`, `other` = not Apple, `linux`), and an entry
   marked `desktop` (native menu, `shortcutCommands`, page zoom) is listed only where the native shortcut
-  bridge exists. The focus-group bindings are one row shown as a range (`⌘1–9`) while all nine are at
-  their defaults, else as each one's chord.
+  bridge exists. A multi-command row — the focus-group bindings, the suggestion keys — is shown as a range
+  (`⌘1–9`, `⌥1–9`) while every command is at its default, else as each one's chords.
 - **Surfaces** are a fixed ordered set — general, tabs and groups, panels and tool rails, sidebar trees,
   Changes review, chat input, chat transcript, chat history, search palette, Find in Files, terminal,
   desktop app — each titled by a locale key; `shortcutRows({ desktop, keybindings })` resolves the catalog
@@ -295,8 +302,8 @@ binding does.
 
 - **`keybindingList({ desktop, keybindings, extensions })`** is the one row list Settings → Keyboard and
   the JSON file share, so the file has exactly the editor's rows: the catalog grouped by surface
-  (`desktop` rows only where the native bridge exists), one row per binding of a multi-binding entry
-  (the focus groups, titled `bindingTitle` with their `position`), then per web extension in registry order
+  (`desktop` rows only where the native bridge exists), one row per command of a multi-command entry
+  (the focus groups and the suggestion keys, titled `bindingTitle` with their `position`), then per web extension in registry order
   its commands and its `shortcuts` (switched-off ones included, `active: false`). A `bindings` or `local`
   row is editable; a `keys` row is `locked` with its display chords. A row has an `id` (unique) and the
   `command` an edit writes — different only on a direction row, which edits its shared twin — plus its
