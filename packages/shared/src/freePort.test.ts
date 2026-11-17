@@ -37,6 +37,12 @@ test("findFreePort skips a taken port and scans upward", async () => {
 	expect(chosen).toBeGreaterThan(taken);
 });
 
+test("findFreePort never scans the well-known range", async () => {
+	for (const preferred of [0, 1, 80]) {
+		expect(await findFreePort(preferred, "127.0.0.1")).toBeGreaterThan(1023);
+	}
+});
+
 test("parsePort accepts plain decimal ports from 0 to 65535", () => {
 	expect(parsePort("0")).toBe(0);
 	expect(parsePort("24242")).toBe(24242);

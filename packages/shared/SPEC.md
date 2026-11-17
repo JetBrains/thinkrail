@@ -356,6 +356,13 @@ paste into the folder, and extensions
   `SO_REUSEPORT`), so a bind-and-catch check is unreliable. A refused connection means free.
 - `findFreePort` scans upward from `preferred` (predictable: `24242 → 24243 → …`) and falls back to an
   OS-assigned ephemeral port if the whole scan range is taken.
+- A `preferred` below 1024 (including `0`, "any port") is never scanned: it goes straight to an
+  OS-assigned port. The connect probe of port 0 is platform- and timing-dependent, and on Windows the
+  scan then reached port 1, which looks free and binds, but WebView2/Chromium refuses to load it
+  (`ERR_UNSAFE_PORT`), so the installed desktop app opened an error page. Other browser-blocked ports
+  above 1023 (e.g. 2049) are not filtered; hosts that need the UI loadable use port 0.
+- A host booted with port 0 (the desktop sidecar) skips `findFreePort` entirely and lets `Bun.serve`
+  bind port 0, so the OS choice is atomic with the bind (`server/src/host/boot.ts`).
 - Its answer is a snapshot: another process may bind the port before the caller does, and a later connect
   probe of an ephemeral-range port can self-connect. Callers bind promptly; tests never re-probe the result
   (that re-probe flaked under parallel package tests).

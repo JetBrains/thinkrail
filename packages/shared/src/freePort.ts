@@ -3,6 +3,8 @@ import { connect, createServer } from "node:net";
 const DEFAULT_HOST = "localhost";
 const PROBE_TIMEOUT_MS = 300;
 const DEFAULT_SCAN_ATTEMPTS = 20;
+/** Below this are well-known ports, many of which browsers refuse to load. */
+const FIRST_SCANNABLE_PORT = 1024;
 
 function isConnectionRefused(err: unknown): boolean {
 	const e = err as NodeJS.ErrnoException & { errors?: NodeJS.ErrnoException[] };
@@ -47,6 +49,8 @@ export async function findFreePort(
 	host: string = DEFAULT_HOST,
 	attempts: number = DEFAULT_SCAN_ATTEMPTS,
 ): Promise<number> {
+	// Hazard: never scan the well-known range; see packages/shared/SPEC.md (freePort).
+	if (preferred < FIRST_SCANNABLE_PORT) return osAssignedPort(host);
 	for (let port = preferred; port < preferred + attempts && port <= 65535; port += 1) {
 		if (await isPortFree(port, host)) return port;
 	}
