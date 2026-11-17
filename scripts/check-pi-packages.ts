@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { packPiPackage, publishablePiPackages, repoRoot } from "./pi-packages.ts";
+import { BUN_ONLY, packPiPackage, publishablePiPackages, repoRoot } from "./pi-packages.ts";
 
 interface ScriptedUi {
 	mode: "tui" | "rpc";
@@ -297,13 +297,6 @@ const EXPECTATIONS: Record<string, Expectation> = {
 		],
 	},
 };
-
-const BUN_ONLY = [
-	/\bBun\./,
-	/from\s+["']bun(?::|["'])/,
-	/import\s*\(\s*["']bun:/,
-	/import\.meta\.(?:dir|require)\b/,
-];
 
 function fail(message: string): never {
 	console.error(`check-pi-packages: FAIL — ${message}`);

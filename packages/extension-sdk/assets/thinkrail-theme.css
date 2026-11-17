@@ -1,0 +1,239 @@
+/* Generated from apps/web/src by @thinkrail/extension-sdk — do not edit. Reference-only: import it with theme(reference). */
+
+@theme inline {
+	--color-*: initial;
+	--color-text-default: var(--text-default);
+	--color-text-muted: var(--text-muted);
+	--color-text-subtle: var(--text-subtle);
+	--color-text-disabled: var(--text-disabled);
+	--color-text-on-primary: var(--text-on-primary);
+	--color-container-workspace-bg: var(--container-workspace-bg);
+	--color-container-sidebar-bg: var(--container-sidebar-bg);
+	--color-container-terminal-bg: var(--container-terminal-bg);
+	--color-container-header-bg: var(--container-header-bg);
+	--color-container-content-bg: var(--container-content-bg);
+	--color-container-elevated-bg: var(--container-elevated-bg);
+	--color-control-bg: var(--control-bg);
+	--color-control-bg-hovered: var(--control-bg-hovered);
+	--color-control-bg-selected: var(--control-bg-selected);
+	--color-control-primary-bg: var(--control-primary-bg);
+	--color-control-primary-bg-hovered: var(--control-primary-bg-hovered);
+	--color-control-primary-text: var(--control-primary-text);
+	--color-control-border-default: var(--control-border-default);
+	--color-control-border-active: var(--control-border-active);
+	--color-control-disabled-bg: var(--control-disabled-bg);
+	--color-control-disabled-text: var(--control-disabled-text);
+	--color-control-disabled-border: var(--control-disabled-border);
+	--color-control-primary-disabled-bg: var(--control-primary-disabled-bg);
+	--color-control-primary-disabled-text: var(--control-primary-disabled-text);
+	--color-control-destructive-bg: var(--control-destructive-bg);
+	--color-control-soft-primary-bg-hovered: var(--control-soft-primary-bg-hovered);
+	--color-control-destructive-bg-hovered: var(--control-destructive-bg-hovered);
+	--color-control-destructive-text: var(--control-destructive-text);
+	--color-control-destructive-disabled-bg: var(--control-destructive-disabled-bg);
+	--color-control-destructive-disabled-text: var(--control-destructive-disabled-text);
+	--color-border-default: var(--border-default);
+	--color-border-muted: var(--border-muted);
+	--color-primary: var(--primary);
+	--color-primary-subtle: var(--primary-subtle);
+	--color-primary-soft: var(--primary-soft);
+	--color-primary-muted: var(--primary-muted);
+	--color-on-primary-soft: var(--on-primary-soft);
+	--color-feedback-info: var(--feedback-info);
+	--color-feedback-info-subtle: var(--feedback-info-subtle);
+	--color-feedback-info-muted: var(--feedback-info-muted);
+	--color-feedback-success: var(--feedback-success);
+	--color-feedback-success-subtle: var(--feedback-success-subtle);
+	--color-feedback-success-muted: var(--feedback-success-muted);
+	--color-feedback-error: var(--feedback-error);
+	--color-feedback-error-subtle: var(--feedback-error-subtle);
+	--color-feedback-error-muted: var(--feedback-error-muted);
+	--color-feedback-warning: var(--feedback-warning);
+	--color-feedback-warning-subtle: var(--feedback-warning-subtle);
+	--color-feedback-warning-muted: var(--feedback-warning-muted);
+	--color-bubble-user-bg: var(--bubble-user-bg);
+	--color-bubble-user-border: var(--bubble-user-border);
+	--color-sunken: var(--sunken);
+	--color-overlay: var(--overlay);
+}
+
+@theme inline {
+	--spacing: 1px;
+}
+
+@theme inline {
+	--radius-*: initial;
+	--radius-xs: 2px;
+	--radius-sm: 4px;
+	--radius-md: 6px;
+	--radius-lg: 8px;
+}
+
+@theme inline {
+	--font-sans: var(--tr-font-family-interface);
+	--font-mono: var(--tr-font-family-code);
+	--spacing-panel-header-row: var(--panel-header-row-height);
+	--spacing-topbar-row: var(--topbar-row-height);
+	--spacing-panel-header-control: var(--panel-header-control-height);
+	--spacing-panel-row: var(--panel-row-height);
+	--spacing-panel-inset: var(--panel-inset);
+	--spacing-tree-indent: var(--tree-indent);
+	--spacing-chat-gutter: var(--chat-gutter);
+	--spacing-window-chrome-inset-left: var(--window-chrome-inset-left, 0px);
+	--spacing-window-chrome-inset-right: var(--window-chrome-inset-right, 0px);
+	--animate-reveal: reveal 150ms ease-out;
+	@keyframes reveal {
+		from {
+			opacity: 0;
+			transform: translateY(4px);
+		}
+		to {
+			opacity: 1;
+			transform: none;
+		}
+	}
+	--animate-loading-in: loading-in 150ms ease-out 300ms both;
+	@keyframes loading-in {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+	--animate-loader-frame: loader-frame 3.263s infinite;
+	@keyframes loader-frame {
+		0% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
+		}
+		37.606%,
+		59.341% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		96.947%,
+		100% {
+			stroke-dashoffset: -1000;
+		}
+	}
+	--animate-loader-t-bar: loader-t-bar 3.263s -2.036s infinite;
+	@keyframes loader-t-bar {
+		0% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
+		}
+		8.693%,
+		44.299% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		52.991%,
+		100% {
+			stroke-dashoffset: -1000;
+		}
+	}
+	--animate-loader-t-stem: loader-t-stem 3.263s -2.036s infinite;
+	@keyframes loader-t-stem {
+		0% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
+		}
+		13.638%,
+		44.299% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		57.936%,
+		100% {
+			stroke-dashoffset: -1000;
+		}
+	}
+	--animate-loader-r-tail: loader-r-tail 3.263s -2.036s infinite;
+	@keyframes loader-r-tail {
+		0% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
+		}
+		16.708%,
+		44.299% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		61.007%,
+		100% {
+			stroke-dashoffset: -1000;
+		}
+	}
+	--animate-loader-r-bowl: loader-r-bowl 3.263s -1.491s infinite;
+	@keyframes loader-r-bowl {
+		0% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
+		}
+		20.35%,
+		44.299% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		64.649%,
+		100% {
+			stroke-dashoffset: -1000;
+		}
+	}
+	--animate-loader-r-stem: loader-r-stem 3.263s -1.491s infinite;
+	@keyframes loader-r-stem {
+		0%,
+		3.19% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
+		}
+		7.648%,
+		47.489% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		51.946%,
+		100% {
+			stroke-dashoffset: -1000;
+		}
+	}
+	--animate-loader-r-leg: loader-r-leg 3.263s -1.491s infinite;
+	@keyframes loader-r-leg {
+		0% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
+		}
+		11.535%,
+		44.299% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		55.834%,
+		100% {
+			stroke-dashoffset: -1000;
+		}
+	}
+	@keyframes toast-in {
+		from {
+			opacity: 0;
+			transform: translateY(12px);
+		}
+		to {
+			opacity: 1;
+			transform: none;
+		}
+	}
+	@keyframes toast-out {
+		from {
+			opacity: 1;
+			transform: none;
+		}
+		to {
+			opacity: 0;
+			transform: translateY(12px);
+		}
+	}
+}
+
+@custom-variant button-disabled (&:is([data-disabled="true"], :disabled:not([data-loading])));

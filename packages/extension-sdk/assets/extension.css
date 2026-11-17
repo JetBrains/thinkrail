@@ -1,0 +1,5 @@
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" theme(reference) prefix(extprefix);
+@import "@thinkrail/extension-sdk/theme.css" theme(reference);
+@import "tailwindcss/utilities.css" layer(utilities);
+@source "./web";

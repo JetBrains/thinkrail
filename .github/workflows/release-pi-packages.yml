@@ -1,6 +1,7 @@
 name: Release pi packages
 
-# Publishes the pi packages under pi-extensions/* (see pi-extensions/SPEC.md → Release).
+# Publishes the pi packages under pi-extensions/*, the extension SDK (packages/extension-sdk) and the sample
+# extensions under extension-examples/* (see pi-extensions/SPEC.md → Release, packages/extension-sdk/SPEC.md).
 # Versioning is a human step: `bun run release:version` in an ordinary PR consumes the pending changesets
 # and bumps versions/changelogs. When that PR reaches main with no changesets left, this workflow packs
 # with bun and publishes with npm through Trusted Publishing (OIDC) — no npm tokens. Each new package
@@ -11,9 +12,12 @@ on:
     paths:
       - ".changeset/**"
       - "pi-extensions/**"
+      - "packages/extension-sdk/**"
+      - "extension-examples/**"
       - ".github/workflows/release-pi-packages.yml"
       - "scripts/pi-packages.ts"
       - "scripts/publish-pi-packages.ts"
+      - "scripts/check-extension-packages.ts"
   workflow_dispatch:
 
 concurrency:
@@ -46,6 +50,9 @@ jobs:
       - run: npm install -g npm@latest
       - run: bun install --frozen-lockfile
       - run: bun run check:pi-packages
+      - run: bun run check:extension-packages
+      # A sample's prepack builds with the SDK's dist/, which exists only once the SDK is built.
+      - run: bun run --cwd packages/extension-sdk build
       - id: publish
         run: bun run release:publish -- --github-output "$GITHUB_OUTPUT"
       # Tag when every current version is on npm (published now or earlier, e.g. the manual bootstrap);
