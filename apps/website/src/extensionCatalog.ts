@@ -1,7 +1,7 @@
 import { type ExtensionHalf, manifestHalves, parseExtensionManifest } from "./extensionManifest";
 
-export const catalogKeyword = "thinkrail-extension";
-export const searchPageSize = 250;
+const catalogKeyword = "thinkrail-extension";
+const searchPageSize = 250;
 export const searchOffsetLimit = 5000;
 const registryOrigin = "https://registry.npmjs.org";
 const maxTitleLength = 100;
@@ -74,11 +74,11 @@ export function latestUrl(name: string): string {
 	return `${registryOrigin}/${name.replace("/", "%2F")}/latest`;
 }
 
-export function npmPageUrl(name: string): string {
+function npmPageUrl(name: string): string {
 	return `https://www.npmjs.com/package/${name}`;
 }
 
-export function httpsUrl(value: unknown): string | undefined {
+function httpsUrl(value: unknown): string | undefined {
 	if (typeof value !== "string") return undefined;
 	try {
 		const url = new URL(value.trim());
@@ -123,7 +123,7 @@ function firstMaintainer(value: unknown): string | undefined {
 	return isRecord(first) ? nonEmptyText(first.name ?? first.username, maxTitleLength) : undefined;
 }
 
-export function catalogEntry(pkg: unknown, hit: SearchHit): EntryResult {
+function catalogEntry(pkg: unknown, hit: SearchHit): EntryResult {
 	if (!isRecord(pkg)) return { rejected: "the latest package.json is not an object" };
 	if (pkg.name !== hit.name) return { rejected: "the latest package.json names another package" };
 	if (!Array.isArray(pkg.keywords) || !pkg.keywords.includes(catalogKeyword)) {
