@@ -22,6 +22,7 @@ import {
 	type PrBabysitItem,
 	type PrBabysitSessionState,
 	type Project,
+	REPO_WIKI_PROTOCOL_VERSION,
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	type ResourceKind,
 	type ResourceRecord,
@@ -1513,6 +1514,10 @@ export function selectPickerModels(
 		(model) =>
 			!hidden.some((h) => sameModel(h, model)) || keep.some((kept) => sameModel(kept, model)),
 	);
+}
+
+export function selectRepoWikiSupported(state: { protocolVersion: number | null }): boolean {
+	return state.protocolVersion !== null && state.protocolVersion >= REPO_WIKI_PROTOCOL_VERSION;
 }
 
 export function selectPrBabysitSupported(state: { protocolVersion: number | null }): boolean {

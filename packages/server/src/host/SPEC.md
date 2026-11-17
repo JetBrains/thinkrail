@@ -792,7 +792,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   Agent-review resolver handed to `agent` answers `false` for a chat (so its sessions get neither
   `request_review` nor its guideline), the specs resolver (`setSpecsEnabledResolver`) answers `false`
   for a chat too (its sessions and their children get no `spec_*` tool and no spec rule), `spec.graph`
-  refuses a chat, and host search keeps a chat's root git-free and spec-free
+  and the `wiki.*` methods ([[submodule-server-wiki]]; `wiki.prepareBuild` also installs the `wiki-builder`
+  personal subagent definition through `agent`) refuse a chat, and host search keeps a chat's root git-free and spec-free
   ([[submodule-server-search]]); the settled lifecycle, turn snapshots, plan artifacts, the plan's
   unattributed-change and adopted-commit reads, head recording and the setup funnel's `project_present`
   skip chats; and

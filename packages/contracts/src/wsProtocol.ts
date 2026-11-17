@@ -85,6 +85,10 @@ import type {
 	TurnChangeSet,
 	UserFontsSnapshot,
 	UserThemesSnapshot,
+	WikiBuildPlan,
+	WikiPage,
+	WikiPublishResult,
+	WikiStatus,
 	Workspace,
 	WorkspaceArtifactsSnapshot,
 	WorkspacePathMatch,
@@ -144,7 +148,9 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 125;
+export const PROTOCOL_VERSION = 126;
+/** `wiki.*` methods: the repo wiki reader, its build prompt and the GitHub Pages publish. */
+export const REPO_WIKI_PROTOCOL_VERSION = 126;
 /** `prBabysit.*` methods and the `prBabysit.changed` channel. */
 export const PR_BABYSIT_PROTOCOL_VERSION = 125;
 export const ARTIFACT_ROLES_PROTOCOL_VERSION = 124;
@@ -477,6 +483,10 @@ export const WS_METHODS = {
 	artifactsRestore: "artifacts.restore",
 	artifactsDiscard: "artifacts.discard",
 	specGraph: "spec.graph",
+	wikiStatus: "wiki.status",
+	wikiPage: "wiki.page",
+	wikiPrepareBuild: "wiki.prepareBuild",
+	wikiPublish: "wiki.publish",
 	todoList: "todo.list",
 	todoAdd: "todo.add",
 	todoUpdate: "todo.update",
@@ -1173,6 +1183,13 @@ export interface WsMethodMap {
 	"artifacts.restore": { params: { workspaceId: string; path: string }; result: Ack };
 	"artifacts.discard": { params: { workspaceId: string; path: string }; result: Ack };
 	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
+	"wiki.status": { params: { workspaceId: string }; result: WikiStatus };
+	"wiki.page": { params: { workspaceId: string; path: string }; result: WikiPage };
+	"wiki.prepareBuild": {
+		params: { workspaceId: string; model: string; codeOnly: boolean };
+		result: WikiBuildPlan;
+	};
+	"wiki.publish": { params: { workspaceId: string }; result: WikiPublishResult };
 	"todo.list": {
 		params: { workspaceId: string; sessionId: string; opened?: "page" | "rail" };
 		result: TodoPlan;
@@ -1706,6 +1723,10 @@ export type WsErrorCode =
 	| "PR_BABYSIT_UNKNOWN_ITEM"
 	| "PR_BABYSIT_BAD_TRANSITION"
 	| "PR_BABYSIT_GH_FAILED"
+	| "WIKI_NOT_BUILT"
+	| "WIKI_NOT_GITHUB"
+	| "WIKI_BRANCH_FOREIGN"
+	| "WIKI_PUBLISH_FAILED"
 	| SpeechErrorCode;
 
 export interface WsResponse {
