@@ -15,6 +15,7 @@ import {
 	selectActiveRepoWorkspaceId,
 	selectBuiltinExtensions,
 	selectInstalledExtensions,
+	selectSupportsExtensionBrowse,
 	selectSupportsInstalledExtensions,
 	toast,
 	useAppStore,
@@ -26,10 +27,12 @@ import {
 	supportsPiPackages,
 } from "@/transport";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { ExtensionBrowse } from "./ExtensionBrowse";
 import { InstalledExtensionRow, installedExtensionKey } from "./InstalledExtensionRow";
-import { InstallPackageDialog } from "./InstallPackageDialog";
+import { InstallPackageDialog, type InstallPreset } from "./InstallPackageDialog";
 import { PiBuiltinsGroup, PiPackagesGroup } from "./PiPackagesSettings";
 import { saveSettings } from "./saveSettings";
+import { useExtensionBrowse } from "./useExtensionBrowse";
 import { useInstalledExtensions } from "./useInstalledExtensions";
 import { UPDATE_CHECK_KEY, usePiPackages } from "./usePiPackages";
 
@@ -198,7 +201,17 @@ export function ExtensionsSettings() {
 	const installed = selectInstalledExtensions(catalogRead);
 	const installedSupported = selectSupportsInstalledExtensions({ protocolVersion });
 	const webLoads = useWebExtensionLoads();
+	const browseSupported = selectSupportsExtensionBrowse({ protocolVersion });
 	const [installOpen, setInstallOpen] = useState(false);
+	const [installPreset, setInstallPreset] = useState<InstallPreset | null>(null);
+	const [installKey, setInstallKey] = useState(0);
+	const [browseQuery, setBrowseQuery] = useState("");
+	const browse = useExtensionBrowse({ enabled: browseSupported, installedCatalog: catalogRead });
+	const openInstall = (preset: InstallPreset | null) => {
+		setInstallPreset(preset);
+		setInstallKey((key) => key + 1);
+		setInstallOpen(true);
+	};
 	const packages = usePiPackages({
 		enabled: packagesSupported,
 		workspaceId,
@@ -252,7 +265,7 @@ export function ExtensionsSettings() {
 						variant="primary"
 						size="m"
 						data-testid="packages-install"
-						onClick={() => setInstallOpen(true)}
+						onClick={() => openInstall(null)}
 					>
 						{t("settings.extensions.install")}
 					</Button>
@@ -319,7 +332,7 @@ export function ExtensionsSettings() {
 							packages.checkUpdates();
 							if (installedSupported) extensions.checkUpdates();
 						}}
-						onInstall={() => setInstallOpen(true)}
+						onInstall={() => openInstall(null)}
 						extensionRows={installed.map((entry) => {
 							const key = installedExtensionKey(entry);
 							return (
@@ -338,6 +351,23 @@ export function ExtensionsSettings() {
 							);
 						})}
 					/>
+					{browseSupported ? (
+						<ExtensionBrowse
+							read={browse.read}
+							query={browseQuery}
+							onQueryChange={setBrowseQuery}
+							onRetry={browse.retry}
+							onInstall={(entry) =>
+								openInstall({
+									source: entry.install,
+									title: entry.title ?? entry.name,
+									version: entry.version,
+									author: entry.author,
+									description: entry.description,
+								})
+							}
+						/>
+					) : null}
 					{loaded ? (
 						<PiBuiltinsGroup
 							builtins={loaded.builtins}
@@ -380,6 +410,8 @@ export function ExtensionsSettings() {
 						onConfirm={extensions.removeNow}
 					/>
 					<InstallPackageDialog
+						key={installKey}
+						preset={installPreset}
 						open={installOpen}
 						onOpenChange={setInstallOpen}
 						catalog={loaded}

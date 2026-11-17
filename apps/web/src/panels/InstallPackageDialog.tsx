@@ -522,7 +522,7 @@ export function InstallPackageDialog({
 
 	const submit = async (requested: PiPackageScope = effectiveScope) => {
 		if (!trimmed) return;
-		const label = step.kind === "confirm" ? step.preset.title : name;
+		const label = preset && source.trim() === preset.source ? preset.title : name;
 		const target = step.kind === "confirm" || step.kind === "scopeUnsupported" ? "user" : requested;
 		setStep({ kind: "installing", name: label });
 		try {
