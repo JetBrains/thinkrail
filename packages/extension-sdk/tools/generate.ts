@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
 	EXTENSION_API_VERSION,
 	SHARED_SPECIFIERS,
@@ -79,21 +80,33 @@ export function manifestJson(manifest: SharedModulesManifest): string {
 }
 
 if (import.meta.main) {
-	const outputs: [URL, string][] = [
-		[MANIFEST_FILE, manifestJson(await sharedModulesManifest())],
-		[THEME_FILE, themeCss()],
-	];
-	const check = process.argv.includes("--check");
-	let stale = false;
-	for (const [file, content] of outputs) {
-		if (check) {
-			if (readFileSync(file, "utf8") !== content) {
-				console.error(
-					`${file.pathname} is stale — run \`bun run generate\` in packages/extension-sdk`,
-				);
-				stale = true;
-			}
-		} else writeFileSync(file, content);
+	const manifest = await sharedModulesManifest();
+	const theme = themeCss();
+	if (process.argv.includes("--check")) {
+		const stale = [
+			JSON.stringify(JSON.parse(readFileSync(MANIFEST_FILE, "utf8"))) !== JSON.stringify(manifest)
+				? MANIFEST_FILE
+				: undefined,
+			readFileSync(THEME_FILE, "utf8") !== theme ? THEME_FILE : undefined,
+		].filter((file) => file !== undefined);
+		for (const file of stale) {
+			console.error(
+				`${file.pathname} is stale — run \`bun run generate\` in packages/extension-sdk`,
+			);
+		}
+		if (stale.length > 0) process.exit(1);
+	} else {
+		writeFileSync(MANIFEST_FILE, manifestJson(manifest));
+		writeFileSync(THEME_FILE, theme);
+		const repo = fileURLToPath(new URL("../../../", import.meta.url));
+		const biome = Bun.spawnSync(
+			[`${repo}node_modules/.bin/biome`, "format", "--write", fileURLToPath(MANIFEST_FILE)],
+			{
+				cwd: repo,
+				stdout: "ignore",
+				stderr: "inherit",
+			},
+		);
+		if (biome.exitCode !== 0) process.exit(biome.exitCode);
 	}
-	if (stale) process.exit(1);
 }
