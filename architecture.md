@@ -106,7 +106,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
    project the same panels differently; desktop docking does not define that projection. Detail:
    [[submodule-web-shell-layout]].
 6. **Workspaces are git worktrees.** project (git repo) → workspace (`git worktree` on its own
-   branch/cwd, under `~/.thinkrail/worktrees`) → {chats, files, terminals}. **Two deliberate
+   branch/cwd, under the configured managed-worktree root, defaulting to `~/.thinkrail/worktrees`) → {chats, files, terminals}. **Two deliberate
    exceptions, both `kind`-marked on the wire and both *user-owned* — never renamed or reclaimed by
    ThinkRail:** every project carries exactly one built-in **Default workspace** (`kind: "default"`)
    whose cwd is the project folder itself (git's *main working tree*) — non-removable, non-renamable,

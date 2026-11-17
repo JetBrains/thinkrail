@@ -10,8 +10,8 @@ tags: [public-surface-checked]
 
 ## Responsibility
 
-A workspace is a `git worktree` on its own branch under the data dir — the anchor for files/git/terminals/
-chats. Its **display `name` is decoupled from its git `branch`**: `name` is a human-readable label
+A workspace is a `git worktree` on its own branch under the configured managed-worktree root — the anchor for files/git/terminals/
+chats. The root defaults to the data dir and can be changed for future creations through the host-owned app setting; existing worktrees never move. Its **display `name` is decoupled from its git `branch`**: `name` is a human-readable label
 (Title Case, spaces) and `branch` is a kebab slug derived from it — they were once held equal, and still
 coincide for the auto `workspace-N` placeholder, but a named workspace carries both distinctly.
 
@@ -83,7 +83,7 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   must ask about the same ref. **That full name is resolved to one commit OID, and the OID is what
   `worktree add` gets** — checking one ref and checking out another would leave Git's disambiguation to choose
   or reject the wrong object, and the OID is also what failure cleanup compares the new branch against.
-  `baseBranch` still records the user-visible `<remote>/<branch>`. **The message splits on the same distinction**: a fetch that *failed* carries
+  `baseBranch` still records the user-visible `<remote>/<branch>`. Managed paths are `<worktree root>/<project-slug>/<branch>`; the root is resolved through the host-injected `setWorktreeDirectoryResolver` seam and falls back to `<dataDir>/worktrees`. **The message splits on the same distinction**: a fetch that *failed* carries
   git's stderr, while a fetch that *succeeded* without landing the ref names the refspec instead — its
   stderr is a progress log (`* branch release -> FETCH_HEAD`), so pasting it after "Could not fetch"
   showed the user a successful fetch as the reason a fetch failed. It is the step that knows *why*
@@ -99,7 +99,7 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   name from the first instant; allocation lists heads once (`for-each-ref`, compared case-insensitively — a
   case-only twin is the same ref file on macOS/Windows) and stays synchronous so a name is reserved atomically
   (issue #1229: one `show-ref` per candidate blocked the event loop ~1 s at 100 `workspace-N` branches); path
-  `dataDir/worktrees/<project-slug>/<branch>`; **seeds the per-workspace artifacts folder**
+  `<managed-worktree-root>/<project-slug>/<branch>`; the resolved path must stay outside the reserved Chats root, checked before any Git or filesystem mutation; **seeds the per-workspace artifacts folder**
   (`WORKSPACE_CONTEXT_DIR`, with a self-ignoring `*` `.gitignore` — zero git footprint) in the
   new worktree, the home for temp docs and agent outputs ([[submodule-server-artifacts]]) that stay out of git yet remain
   scannable by the spec tools (the path convention lives in `@thinkrail/shared/paths`; see
@@ -114,8 +114,7 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   `worktree add` of a large monorepo froze the host's only event loop for the whole checkout and outlived the
   client's 60s request): `startWorkspaceCreation(projectId, { name?, baseRef?, kickoff?, origin? })` plans the
   branch and path synchronously, persists a record in `workspace-creations.json` (`state: running`, `phase:
-  preparing`, the full kickoff incl. images, and a host-only `origin: "agent"` for an agent's `start_workspace`,
-  which never reaches the wire view) and returns its `WorkspaceCreation` view before any git runs. The job then
+  preparing`, the full kickoff incl. images, a creation-time `managedRoot` used to constrain cleanup even if the setting changes during the job, and a host-only `origin: "agent"` for an agent's `start_workspace`, which never reaches the wire view) and returns its `WorkspaceCreation` view before any git runs. The job then
   (1) fetches a missing remote base, resolves the OID, and runs `worktree add --no-checkout` through `gitAsync`
   (no file writes, so it is quick), (2) moves to `phase: checking-out` and runs `git checkout --progress
   --no-recurse-submodules -f <branch> --` in the new worktree — the split exists because git reports checkout
@@ -148,7 +147,7 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   fails the create untouched, and a failed `worktree add` compare-and-deletes only the branch it may have
   made and drops the marker. With the marker, cleanup runs `worktree remove --force --force` (it also clears a
   missing or locked registration), removes a leftover directory (async, only once git no longer lists it and
-  only under `dataDir/worktrees`), then `update-ref -d refs/heads/<branch> <baseOid>`, which refuses a branch
+  only under the resolved managed-worktree root), then `update-ref -d refs/heads/<branch> <baseOid>`, which refuses a branch
   that moved. It reports whether nothing of ours remains (`clean`) and whether it removed anything; the record
   keeps `failed` with `cleanedUp: true` only when both hold, and keeps its marker — so Retry and Dismiss clean
   up again — whenever anything is left.
@@ -190,7 +189,7 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   `branchMoveOwed(workspace, opts.by)` (not `renamed`, or `branchNamePending` equals the caller's
   `opts.by`) and only on the workspace's **own branch**: the branch the worktree was created on,
   derived as `basename(worktreePath)`. That is exact because the worktree dir is
-  `<dataDir>/worktrees/<slug>/<creation branch>` and never moves, ThinkRail branch names never contain `/`,
+  `<managed-worktree-root>/<slug>/<creation branch>` and never moves, ThinkRail branch names never contain `/`,
   and the only branch move gives a branch other than the basename. Otherwise the name is still set,
   `renamed: true` is still set, `branchNamePending = opts.by` (the naming chat's session id) records that
   the move is owed to that chat only, and
@@ -414,7 +413,7 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`, `setWorkspaceDiffBase`, `setWorkspaceSkillOverride`,
   `setWorkspaceSubagentsOverride`, `setWorkspaceSubagentMaxConcurrent`, `recordWorkspaceActivity`, `backfillWorkspaceActivity`,
-  `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`,
+  `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`, `managedWorktreeRoot`, `setWorktreeDirectoryResolver`,
   `chatsRoot`, `isUnderChatsRoot`, `isChatsContainer`, `isChatWorkspace`,
   `isChatsContainerId`, `isChatWorkspaceId`, `resetChatIdCache`, `ensureChatsContainer`,
   `createChatRecord`, `chatWorkspaces`, `getChatWorkspace`, `markChatDeletionPending`,
