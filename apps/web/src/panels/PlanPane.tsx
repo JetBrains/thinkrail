@@ -18,6 +18,7 @@ import {
 	RiAddLine as Plus,
 } from "@remixicon/react";
 import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
+import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
 import { ResourceScopeProvider } from "@thinkrail/resource-renderers";
 import { Button, buttonVariants, IconButton } from "@thinkrail/ui/button";
@@ -65,8 +66,9 @@ import {
 	sessionGlance,
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
+import { ToolRendererBoundary } from "../chat/ToolRendererBoundary";
 import { useToolInteraction } from "../chat/toolInteraction";
-import { useToolRegistry, useToolRenderer } from "../chat/toolRegistry";
+import { DefaultToolRenderer, useToolRegistry, useToolRenderer } from "../chat/toolRegistry";
 import { hydrateSessionRuntime, useChatTodos } from "../chat/useChatTodos";
 import {
 	isChatWorkspace,
@@ -678,18 +680,25 @@ function PlanInteractionCard({
 	const interaction = useToolInteraction(pending.toolCallId, pending.toolName);
 	const Renderer = useToolRenderer(pending.toolName);
 	const scope = useMemo(() => ({ workspaceId, sessionId }), [workspaceId, sessionId]);
+	const props: ToolRenderProps = {
+		toolCallId: pending.toolCallId,
+		toolName: pending.toolName,
+		args: pending.args,
+		result: pending.result,
+		status: pending.status,
+		streaming: pending.streaming,
+		interaction,
+		onOpenFile: (path) => void openFileInTab(workspaceId, path, "preview"),
+	};
 	return (
 		<ResourceScopeProvider value={scope}>
-			<Renderer
+			<ToolRendererBoundary
+				renderer={Renderer}
 				toolCallId={pending.toolCallId}
-				toolName={pending.toolName}
-				args={pending.args}
-				result={pending.result}
-				status={pending.status}
-				streaming={pending.streaming}
-				interaction={interaction}
-				onOpenFile={(path) => void openFileInTab(workspaceId, path, "preview")}
-			/>
+				fallback={<DefaultToolRenderer {...props} />}
+			>
+				<Renderer {...props} />
+			</ToolRendererBoundary>
 		</ResourceScopeProvider>
 	);
 }

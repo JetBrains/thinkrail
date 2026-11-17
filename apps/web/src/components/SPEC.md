@@ -27,7 +27,8 @@ primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`
     it with the boundary's untranslated `reportId` (never the displayed, translated `label`) to the one
     reporter installed via `setErrorBoundaryReporter` (wired by
     `main.tsx` to the transport's error reports; reporter failures are swallowed). The seam keeps this
-    module store/transport-free.
+    module store/transport-free. `reportBoundaryError(error, reportId)` is the same seam for a boundary
+    with its own fallback (chat's per-tool-renderer boundary).
 - **`CustomIcon.tsx`** — renders an SVG from `public/custom-icons/` as a themeable `currentColor` glyph
   via a CSS `mask-image` span (`.custom-icon*` classes in `index.css`), so a custom glyph sizes with
   `size-*` and colours with `text-*` exactly like a Remix icon. Names are a typed union

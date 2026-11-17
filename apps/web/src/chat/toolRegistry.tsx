@@ -10,6 +10,7 @@ import {
 } from "@thinkrail/extension-api/web";
 import type { Translator } from "@thinkrail/locales/react";
 import { type ReactNode, useSyncExternalStore } from "react";
+import { reportToolPresentationError } from "./ToolRendererBoundary";
 
 interface ToolRegistration extends ToolRegistrationOptions {
 	renderer: ToolRenderer;
@@ -147,7 +148,14 @@ export function getToolSummary(
 	props: ToolRenderProps,
 	registry: ToolRegistry = state.current,
 ): string {
-	return resolveRegistration(toolName, registry)?.summary?.(props, t) ?? "";
+	const summary = resolveRegistration(toolName, registry)?.summary;
+	if (!summary) return "";
+	try {
+		return summary(props, t);
+	} catch (error) {
+		reportToolPresentationError(summary, error, "tool-summary");
+		return "";
+	}
 }
 
 export function isInteractiveTool(

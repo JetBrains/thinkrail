@@ -1,13 +1,17 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import type { ToolRenderer } from "@thinkrail/extension-api/web";
+import { currentTranslator } from "@thinkrail/locales/react";
 import { act, type ReactNode, useMemo } from "react";
 import { createRoot } from "react-dom/client";
+import { setErrorBoundaryReporter } from "../components/ErrorBoundary";
 import { deriveInteractionStates } from "./interactionState";
 import { deriveRows } from "./rows";
+import { ToolRendererBoundary } from "./ToolRendererBoundary";
 import {
 	currentToolRegistry,
 	DefaultToolRenderer,
 	getToolRenderer,
+	getToolSummary,
 	isInteractiveTool,
 	registerToolRenderer,
 	removeInstalledToolRenderers,
@@ -169,5 +173,101 @@ describe("registry hooks", () => {
 		expect(shapes.at(-1)).toEqual(["user", "activity"]);
 		expect(interactive.at(-1)).toBe(false);
 		await view.unmount();
+	});
+});
+
+describe("ToolRendererBoundary", () => {
+	test("a throwing renderer falls back for its row only, reports once per renderer, and resets on a new renderer or call", async () => {
+		const reports: Array<string | undefined> = [];
+		setErrorBoundaryReporter((_error, reportId) => reports.push(reportId));
+		const consoleError = spyOn(console, "error").mockImplementation(() => {});
+		const rendered: string[] = [];
+		const Mark = ({ label }: { label: string }) => {
+			rendered.push(label);
+			return null;
+		};
+		const broken: ToolRenderer = () => {
+			throw new Error("card exploded with a secret path");
+		};
+		const healthy: ToolRenderer = () => <Mark label="healthy" />;
+		const row = (renderer: ToolRenderer, toolCallId: string, label: string) => {
+			const Renderer = renderer;
+			return (
+				<ToolRendererBoundary
+					key={label}
+					renderer={renderer}
+					toolCallId={toolCallId}
+					fallback={<Mark label={`fallback:${label}`} />}
+				>
+					<Renderer
+						toolCallId={toolCallId}
+						toolName="t"
+						args={{}}
+						result={null}
+						status="done"
+						streaming={false}
+					/>
+				</ToolRendererBoundary>
+			);
+		};
+		const root = createRoot(headlessContainer(), { onCaughtError: () => {} });
+		try {
+			await act(async () =>
+				root.render([
+					row(broken, "c1", "one"),
+					row(broken, "c2", "two"),
+					row(healthy, "c3", "three"),
+				]),
+			);
+			expect(rendered).toContain("fallback:one");
+			expect(rendered).toContain("fallback:two");
+			expect(rendered).toContain("healthy");
+			expect(reports).toEqual(["tool-renderer"]);
+			rendered.length = 0;
+			await act(async () => root.render([row(healthy, "c1", "one")]));
+			expect(rendered).toEqual(["healthy"]);
+			rendered.length = 0;
+			await act(async () => root.render([row(broken, "c1", "one")]));
+			expect(new Set(rendered)).toEqual(new Set(["fallback:one"]));
+			rendered.length = 0;
+			const brokenOnFirstCall: ToolRenderer = ({ toolCallId }) => {
+				if (toolCallId === "c1") throw new Error("first call only");
+				return <Mark label="second call" />;
+			};
+			await act(async () => root.render([row(brokenOnFirstCall, "c1", "one")]));
+			expect(rendered.at(-1)).toBe("fallback:one");
+			await act(async () => root.render([row(brokenOnFirstCall, "c2", "one")]));
+			expect(rendered.at(-1)).toBe("second call");
+			expect(reports).toEqual(["tool-renderer", "tool-renderer"]);
+		} finally {
+			await act(async () => root.unmount());
+			setErrorBoundaryReporter(null);
+			consoleError.mockRestore();
+		}
+	});
+
+	test("a throwing summary reads as no summary and reports once", () => {
+		const reports: Array<string | undefined> = [];
+		setErrorBoundaryReporter((_error, reportId) => reports.push(reportId));
+		try {
+			registerToolRenderer("throwing_summary", renderer("x"), {
+				summary: () => {
+					throw new Error("summary exploded");
+				},
+			});
+			const props = {
+				toolCallId: "s1",
+				toolName: "throwing_summary",
+				args: {},
+				result: null,
+				status: "done" as const,
+				streaming: false,
+			};
+			expect(getToolSummary(currentTranslator(), "throwing_summary", props)).toBe("");
+			expect(getToolSummary(currentTranslator(), "throwing_summary", props)).toBe("");
+			expect(reports).toEqual(["tool-summary"]);
+		} finally {
+			setErrorBoundaryReporter(null);
+		}
 	});
 });
