@@ -11,11 +11,18 @@ tags: [extensions, public-surface-checked]
 ## Responsibility
 
 The one place the host lists the ThinkRail extensions it composes ([[module-thinkrail-extensions]]
-§ Composition). `registry.ts` statically imports every `@thinkrail/ext-*/server` and exports ordered
-entries `{ specifier, extension }` — the `defineServerExtension` descriptor **and** its public server
-specifier as a string. The static imports carry the factories into the compiled CLI binary and the
-desktop server-runtime bundle through the normal server graph, so the packagers generate no factory
-list for registry extensions.
+§ Composition) — built in and installed. `registry.ts` statically imports every
+`@thinkrail/ext-*/server` into `builtinServerExtensions`, ordered entries `{ specifier, extension }` —
+the `defineServerExtension` descriptor **and** its public server specifier as a string. The static
+imports carry the factories into the compiled CLI binary and the desktop server-runtime bundle through
+the normal server graph, so the packagers generate no factory list for registry extensions, and build
+support stages only these. `serverExtensions()` is the **runtime registry**: the built-ins first, then
+the server halves the [[submodule-server-extensions-installed]] sub-module loaded, each as an entry whose
+`specifier` is its absolute entry file and whose `installed.skillRoots` are the roots its loader
+resolved. It returns the same array until the loaded set changes (entries are memoised per loaded
+server half), which is what the agent's loader compares to decide on a rebuild. Everything that composes
+extensions — inline flattening, the switch filter, tool precedence, interactive tools, owner lookup, skill
+roots — defaults to it, so an installed extension is composed exactly like a built-in.
 
 ## Boundary
 
@@ -26,7 +33,9 @@ list for registry extensions.
   a reload re-decides membership without rebuilding the loader. A parent flatten given the host's
   `HostSessionServices` appends `sessionExtensions(services)` after the static factories under the same
   naming; it calls it once per flatten, so every parent session's factories close over its own services.
-  Each extension gets its **own view** (`extensionSessionServices`): `setting(key)` answers only that
+  A `sessionExtensions` that throws becomes one factory that rethrows when pi loads it, so the failure is
+  that extension's `<inline:name>` load error rather than a loader that cannot be built (the catalog's
+  inert-session call likewise keeps only the static tools). Each extension gets its **own view** (`extensionSessionServices`): `setting(key)` answers only that
   extension's declared settings — the stored value from the injected `ExtensionSettingValue` lookup, else
   the declared default; an undeclared key throws — and is read **inside the factory body**, so every pi
   (re)load sees current values. Without services, and in the child set, session factories are absent),
@@ -46,29 +55,45 @@ list for registry extensions.
   tools' `sourceInfo.path` — back to the registry extension that owns it by name, `undefined` otherwise;
   matching by name rather than by recomputed names keeps it independent of how many per-session factories
   a session got),
-  `listExtensionCatalog(disabled)` (the Settings catalog: per entry `name`, `title` — falling back to
-  `name` — optional `description`, `hasChildExtensions`, `enabled = !disabled.has(name)`, the declared
-  `settings` (`key` + `default`), and the tool names
+  `listExtensionCatalog(disabled, builtins?, installed?)` (the Settings catalog: the built-ins, then
+  one row per installed declaration from the runtime's records, so a failed or incompatible extension is
+  listed with `state` / `error` and no tools; per entry `name`, `title` — an installed one's manifest
+  title, else its descriptor's, else `name` — optional `description` (an installed one's package
+  description first), `hasChildExtensions`, `enabled = !disabled.has(name)`, `kind`, for installed
+  `source` / `version` / `state` / `error` / `web` (`webHalfOf`), the declared
+  `settings` (`key` + `default`, plus an installed setting's own `title` / `description`), and the tool names
   its **parent** factories register against a recording stub `ExtensionAPI` whose every other member is
   inert. Per-session factories are built for this with an inert session whose `awaitToolResponse` and
-  `workspaceFiles.check` reject and whose `setting` answers the declared defaults. The tools are computed once per process, never from a live session, and a factory that throws against the stub
-  keeps the tools it recorded before throwing), and `resolveExtensionSkillRoots(entry)` (the owner-scoped skill resolver: the extension's
-  entry file from `specifier`, then each `skillPackages` manifest via `createRequire(extensionEntry)`,
-  returning its `pi.skills` directories; a named package with no skills fails loudly),
+  `workspaceFiles.check` reject and whose `setting` answers the declared defaults. The tools are computed once per descriptor object (a reloaded installed extension is a new one), never from a live session, and a factory that throws against the stub
+  keeps the tools it recorded before throwing), `skillPackageRoots(extensionEntry, extension)` (the
+  shared owner-scoped resolver: each `skillPackages` manifest via `createRequire(extensionEntry)`,
+  returning its `pi.skills` directories; a named package with no skills fails loudly — the installed
+  loader calls it once per load, so an unresolvable skill package is a failed row, not a broken chat),
+  `resolveExtensionSkillRoots(entry)` (a built-in's entry file from `specifier`, then `skillPackageRoots`;
+  an installed entry's recorded roots),
   `STAGED_HOST_SKILLS_ROUTE` (`host`) and `stagedExtensionSkillRoute(name)` (`extensions/<name>`) — the
   folders of a staged skills root the host's and an extension's roots are staged under, shared by build
   support and the runtime so a disabled extension's folder can be left out of pi's skill inputs and `extensionSkillRoots(entry,
   stagedSkillsDir?)` (the roots that own an extension's skills: the resolved source roots without a
-  staged dir, that owner folder with one, nothing for an extension without `skillPackages`). The specifier is kept
+  staged dir or for an installed extension — never staged — that owner folder with one, nothing for an
+  extension without `skillPackages`), `startInstalledExtensions({ dataDir, onChange, installer? })`
+  (`installedHost.ts`: builds the installed runtime with the built-ins' names reserved and
+  `skillPackageRoots` as its resolver, makes it the host's one, starts the watcher and a background
+  reconcile, and returns its stop). The specifier is kept
   as a string precisely because a descriptor holds functions, which yield no module identity.
-- **Public surface (barrel):** `serverExtensions`, `ServerExtensionEntry`, `registryInlineExtensions`,
+- **Public surface (barrel):** `serverExtensions`, `builtinServerExtensions`, `ServerExtensionEntry`,
+  `registryInlineExtensions`,
   `RegistryExtensionKind`, `ExtensionDisabled`, `omitDisabledRegistryExtensions`, `preferRegistryTools`,
   `registryExtensionName`, `extensionSessionServices`, `HostSessionServices`, `ExtensionSettingValue`,
   `checkWorkspaceFile`, `workspaceFiles`, `MOCKUP_DIR`,
   `listExtensionCatalog`,
-  `resolveExtensionSkillRoots`, `STAGED_HOST_SKILLS_ROUTE`, `stagedExtensionSkillRoute`,
-  `extensionSkillRoots`, `interactiveTools`, `InteractiveTools`, `ExtensionSessionServices`,
-  `InteractiveTool`, `ToolResponse`.
+  `resolveExtensionSkillRoots`, `skillPackageRoots`, `STAGED_HOST_SKILLS_ROUTE`,
+  `stagedExtensionSkillRoute`, `extensionSkillRoots`, `interactiveTools`, `InteractiveTools`,
+  `ExtensionSessionServices`, `InteractiveTool`, `ToolResponse`, `startInstalledExtensions`,
+  `InstalledExtensionsHostOptions`, `InstalledExtensions`, `InstalledExtensionRecord`,
+  `StagedExtension`, `ExtensionSourceKind`, `installedExtensions`, `resolveExtensionAsset`,
+  `withForcedJitiTransform`.
+- **Re-exported from the installed sub-module:** the last seven names of the surface above.
 - **Session-seam types:** `ExtensionSessionServices`, `InteractiveTool` and `ToolResponse` are re-exported
   from `extension-api/server` so that `agent` can type the services it builds through this barrel.
 - **Interactive tools (`interactive.ts`):** `interactiveTools(isDisabled)` folds the enabled registry
@@ -80,14 +105,19 @@ list for registry extensions.
   the extension's to own.
 - **Allowed deps:** `@thinkrail/extension-api/server` (types), every `@thinkrail/ext-*/server`,
   `@earendil-works/pi-coding-agent` (types only), `@thinkrail/contracts` (the `ExtensionCatalogEntry` type),
-  Node `module`/`fs`/`path`.
+  `log`, Node `module`/`fs`/`path`; the `installed` sub-module through its barrel (it holds the pi value
+  imports, the install root and the loader, and never imports back — the reserved names and the skill
+  resolver are handed to it).
 - **Forbidden:** `host`; `settings` (the disabled set arrives as a parameter); sibling features; resolving extension-owned packages from the host's own
   `createRequire` (the host does not depend on the pi packages an extension composes, so that resolution
   breaks in isolated layouts).
 
 ## Consumers
 
-`host` answers `extension.list` with `listExtensionCatalog` over the `disabledExtensions` setting.
+`host` answers `extension.list` with `listExtensionCatalog` over the `disabledExtensions` setting, starts
+the installed runtime at server start, serves `resolveExtensionAsset` on its `/extensions/` route and
+answers `extensions.*`; `agent` runs the install-time kind detection (`stage` / `adopt`) and its pi
+runtime build shares `withForcedJitiTransform`.
 `agent/extensions.ts` composes the flattened parent set into every resource loader and the child set
 into the curated hidden-child extensions in dev and bundled mode alike, and leaves a disabled extension's
 `extensionSkillRoots` out of pi's skill inputs; `buildSupport.ts` hands both packagers each extension's skill roots

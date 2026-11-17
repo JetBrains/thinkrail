@@ -27,6 +27,7 @@ import {
 	omitDisabledRegistryExtensions,
 	preferRegistryTools,
 	registryInlineExtensions,
+	type ServerExtensionEntry,
 	STAGED_HOST_SKILLS_ROUTE,
 	serverExtensions,
 } from "../extensions";
@@ -118,21 +119,20 @@ function relabelAliasProvenance(skill: Skill, sources: CompatibilitySkillSource[
 	};
 }
 
-let devExtensionSkillRoots: ReadonlyMap<string, readonly string[]> | undefined;
-function extensionSkillRootsByName(): ReadonlyMap<string, readonly string[]> {
+const devExtensionSkillRoots = new WeakMap<ServerExtensionEntry, readonly string[]>();
+function skillRootsOf(entry: ServerExtensionEntry): readonly string[] {
 	const skillsDir = bundled?.skillsDir;
-	if (skillsDir !== undefined) {
-		return new Map(
-			serverExtensions.map((entry) => [
-				entry.extension.name,
-				extensionSkillRoots(entry, skillsDir),
-			]),
-		);
+	if (skillsDir !== undefined) return extensionSkillRoots(entry, skillsDir);
+	let roots = devExtensionSkillRoots.get(entry);
+	if (!roots) {
+		roots = extensionSkillRoots(entry);
+		devExtensionSkillRoots.set(entry, roots);
 	}
-	devExtensionSkillRoots ??= new Map(
-		serverExtensions.map((entry) => [entry.extension.name, extensionSkillRoots(entry)]),
-	);
-	return devExtensionSkillRoots;
+	return roots;
+}
+
+function extensionSkillRootsByName(): ReadonlyMap<string, readonly string[]> {
+	return new Map(serverExtensions().map((entry) => [entry.extension.name, skillRootsOf(entry)]));
 }
 
 function extensionSkillPaths(include: (name: string) => boolean): string[] {
@@ -416,6 +416,20 @@ export function childExtensionFactories(workspaceId: string): InlineExtension[] 
 	];
 }
 
+interface LoaderInputs {
+	cwd: string;
+	settingsManager: SettingsManager;
+	getAdmission: () => SkillAdmissionContext;
+	excludedExtensionPaths: readonly string[];
+	extraFactories: InlineExtension[];
+	session: HostSessionServices | undefined;
+}
+
+/**
+ * pi copies a loader's inline factories at construction, so a change of the registry (an installed
+ * extension loaded or removed) is applied by building a fresh loader at the next reload, behind one
+ * stable `ResourceLoader` the session keeps.
+ */
 export async function buildResourceLoader(
 	cwd: string,
 	settingsManager: SettingsManager,
@@ -424,6 +438,56 @@ export async function buildResourceLoader(
 	extraFactories: InlineExtension[] = [],
 	session?: HostSessionServices,
 ): Promise<ResourceLoader> {
+	const inputs: LoaderInputs = {
+		cwd,
+		settingsManager,
+		getAdmission,
+		excludedExtensionPaths,
+		extraFactories,
+		session,
+	};
+	let registry = serverExtensions();
+	let inner: ResourceLoader | undefined;
+	const current = (): ResourceLoader => {
+		if (!inner) throw new Error("the resource loader has not loaded yet");
+		return inner;
+	};
+	const loader: ResourceLoader = {
+		getExtensions: () => current().getExtensions(),
+		getSkills: () => current().getSkills(),
+		getPrompts: () => current().getPrompts(),
+		getThemes: () => current().getThemes(),
+		getAgentsFiles: () => current().getAgentsFiles(),
+		getSystemPrompt: () => current().getSystemPrompt(),
+		getSystemPromptSource: () => current().getSystemPromptSource(),
+		getAppendSystemPrompt: () => current().getAppendSystemPrompt(),
+		getAppendSystemPromptSources: () => current().getAppendSystemPromptSources(),
+		extendResources: (paths) => current().extendResources(paths),
+		reload: async (options) => {
+			const latest = serverExtensions();
+			if (!inner || latest !== registry) {
+				registry = latest;
+				inner = createRegistryLoader(registry, loader, inputs);
+			}
+			await inner.reload(options);
+		},
+	};
+	await loader.reload();
+	return loader;
+}
+
+function createRegistryLoader(
+	registry: readonly ServerExtensionEntry[],
+	owner: ResourceLoader,
+	{
+		cwd,
+		settingsManager,
+		getAdmission,
+		excludedExtensionPaths,
+		extraFactories,
+		session,
+	}: LoaderInputs,
+): ResourceLoader {
 	let disabledAtReload = disabledExtensions();
 	const isDisabledAtReload = (name: string): boolean => disabledAtReload.has(name);
 	let settingsAtReload = extensionSettings();
@@ -433,7 +497,7 @@ export async function buildResourceLoader(
 		...registryInlineExtensions(
 			"extensions",
 			isDisabledAtReload,
-			serverExtensions,
+			registry,
 			session,
 			settingAtReload,
 		),
@@ -463,7 +527,10 @@ export async function buildResourceLoader(
 		extensionsOverride: (result: LoadExtensionsResult) => {
 			recordProviderOwners(result);
 			recordLoadedExtensions(result);
-			return preferRegistryTools(omitDisabledRegistryExtensions(result, isDisabledAtReload));
+			return preferRegistryTools(
+				omitDisabledRegistryExtensions(result, isDisabledAtReload, registry),
+				registry,
+			);
 		},
 	};
 	const devExtensionPaths = bundled ? [] : resolveDevPaths().extensionPaths;
@@ -473,12 +540,12 @@ export async function buildResourceLoader(
 		settingsManager,
 		builtinExtensions: builtinExtensionNames(extensionFactories),
 	});
-	const applyCurrentPolicy = (loader: ResourceLoader): void => {
+	const applyCurrentPolicy = (): void => {
 		settingsManager.setProjectTrusted(getAdmission().piResourceTrusted);
 		disabledAtReload = disabledExtensions();
 		settingsAtReload = extensionSettings();
 		refreshSkillPaths(disabledAtReload);
-		loaderPolicies.set(loader, loaderPolicyKey(settingsAtReload));
+		loaderPolicies.set(owner, loaderPolicyKey(settingsAtReload));
 	};
 	// pi's reload installs a declared package that is missing; the packages layer learns of it here.
 	const noticingInstalls = async (reload: () => Promise<void>): Promise<void> => {
@@ -498,10 +565,9 @@ export async function buildResourceLoader(
 		});
 		const reloadTrusted = loader.reload.bind(loader);
 		loader.reload = async (options) => {
-			applyCurrentPolicy(loader);
+			applyCurrentPolicy();
 			await noticingInstalls(() => reloadTrusted(options));
 		};
-		await loader.reload();
 		return loader;
 	}
 
@@ -539,14 +605,13 @@ export async function buildResourceLoader(
 	});
 	const reloadResolved = loader.reload.bind(loader);
 	loader.reload = async (options) => {
-		applyCurrentPolicy(loader);
+		applyCurrentPolicy();
 		await noticingInstalls(async () => {
 			await resolveExtensionPaths();
 			await reloadResolved(options);
 		});
 		relabelDiscoveredExtensions(loader, discoveredMetadata);
 	};
-	await loader.reload();
 	return loader;
 }
 

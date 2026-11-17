@@ -2,9 +2,9 @@ import { expect, test } from "bun:test";
 import { basename, dirname, join } from "node:path";
 import { resolveBuildRuntimeSources } from "./buildSupport";
 import {
+	builtinServerExtensions,
 	resolveExtensionSkillRoots,
 	STAGED_HOST_SKILLS_ROUTE,
-	serverExtensions,
 	stagedExtensionSkillRoute,
 } from "./extensions";
 
@@ -26,7 +26,7 @@ test("runtime source manifest covers the launcher artifact surface", () => {
 			source,
 			route: STAGED_HOST_SKILLS_ROUTE,
 		})),
-		...serverExtensions.flatMap((entry) =>
+		...builtinServerExtensions.flatMap((entry) =>
 			resolveExtensionSkillRoots(entry).map((source) => ({
 				source,
 				route: stagedExtensionSkillRoute(entry.extension.name),
