@@ -78,6 +78,14 @@ describe("the thinkrail manifest", () => {
 		expect(message).toContain("@earendil-works/pi-coding-agent, typebox must be peerDependencies");
 	});
 
+	it("keeps pi and typebox out of a web-only extension's dependencies", () => {
+		const message = problems(
+			{ api: "1.0", web: "./dist/web.js" },
+			{ dependencies: { "@earendil-works/pi-ai": "1.5.0", typebox: "1.3.27" } },
+		);
+		expect(message).toContain("@earendil-works/pi-ai, typebox must be peerDependencies");
+	});
+
 	it("warns that the catalog shows only an https image", () => {
 		const pkg = read({
 			name: "thinkrail-ext-x",

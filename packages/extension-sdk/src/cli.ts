@@ -18,8 +18,8 @@ Options:
   --no-minify         Keep the bundle and stylesheet readable.
   -h, --help          Show this help.`;
 
-async function main(argv: string[]): Promise<number> {
-	const { values, positionals } = parseArgs({
+function parse(argv: string[]) {
+	return parseArgs({
 		args: argv,
 		allowPositionals: true,
 		allowNegative: true,
@@ -32,15 +32,30 @@ async function main(argv: string[]): Promise<number> {
 			help: { type: "boolean", short: "h" },
 		},
 	});
+}
+
+function usageError(message: string): number {
+	console.error(`thinkrail-extension: ${message}\n\n${USAGE}`);
+	return 2;
+}
+
+async function main(argv: string[]): Promise<number> {
+	let parsed: ReturnType<typeof parse>;
+	try {
+		parsed = parse(argv);
+	} catch (error) {
+		if (error instanceof TypeError && "code" in error) return usageError(error.message);
+		throw error;
+	}
+	const { values, positionals } = parsed;
 	if (values.help) {
 		console.log(USAGE);
 		return 0;
 	}
 	const [command, ...rest] = positionals;
-	if (command !== "build" || rest.length > 0) {
-		console.error(USAGE);
-		return 2;
-	}
+	if (command === undefined) return usageError("no command given.");
+	if (command !== "build") return usageError(`unknown command "${command}".`);
+	if (rest.length > 0) return usageError(`unexpected argument "${rest.join(" ")}".`);
 	const result = await buildExtension({
 		root: values.cwd ?? process.cwd(),
 		prefix: values.prefix,
@@ -64,9 +79,7 @@ main(process.argv.slice(2)).then(
 	(error: unknown) => {
 		if (error instanceof ExtensionBuildError)
 			console.error(`thinkrail-extension: ${error.message}`);
-		else if (error instanceof Error && error.name === "TypeError" && "code" in error) {
-			console.error(`thinkrail-extension: ${error.message}\n\n${USAGE}`);
-		} else console.error(error);
+		else console.error(error);
 		process.exitCode = 1;
 	},
 );

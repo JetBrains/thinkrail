@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { copyFileSync, readFileSync } from "node:fs";
+import { copyFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { HOST_OBJECT, type SharedModulesManifest } from "../shared";
 import { buildExtension, ExtensionBuildError } from ".";
+import { bundledImports } from "./bundle";
 import { ASSETS, type Fixture, fixture, WEB_PACKAGE } from "./testing";
 
 const CARD = `
@@ -37,6 +38,16 @@ const DEPENDENCY = {
 	}),
 	"node_modules/tiny-dep/index.js":
 		'import React, { useEffect } from "react";\nimport * as Namespace from "react";\nexport function useTick() { useEffect(() => {}, []); return React === Namespace.default; }\n',
+};
+
+const NODE_DEPENDENCY = {
+	"node_modules/node-dep/package.json": JSON.stringify({
+		name: "node-dep",
+		type: "module",
+		main: "index.js",
+	}),
+	"node_modules/node-dep/index.js":
+		'import { readFileSync } from "node:fs";\nimport path from "path";\nexport const label = "node-dep";\nexport function read(file) { return readFileSync(path.join("/", file), "utf8"); }\n',
 };
 
 const sharedModules = JSON.parse(
@@ -87,6 +98,7 @@ describe("thinkrail-extension build", () => {
 		expect(output.warnings).toEqual([]);
 		const bundle = readFileSync(join(root, "dist/web.js"), "utf8");
 		expect(bundle).toContain(HOST_OBJECT);
+		expect(bundledImports(bundle)).toEqual([]);
 		for (const forbidden of [
 			"react.production",
 			'Symbol.for("react.',
@@ -190,6 +202,48 @@ describe("thinkrail-extension build", () => {
 				'import { c } from "react/compiler-runtime";\nexport { c };\n',
 		});
 		expect(await buildFails(root)).toContain("node_modules/compiled-dep/index.js");
+	});
+
+	it("fails on an import of a package that is not installed", async () => {
+		const { root } = setup({
+			"web/index.tsx": 'import "./inner";\nexport default {};\n',
+			"web/inner.ts": 'import { chart } from "@acme/charts/line";\nexport const kept = chart;\n',
+		});
+		const message = await buildFails(root);
+		expect(message).toBe(
+			"@acme/charts/line cannot be resolved: install @acme/charts in the extension, or remove the import. (imported by web/inner.ts)",
+		);
+		expect(existsSync(join(root, "dist/web.js"))).toBe(false);
+	});
+
+	it("drops Node built-ins a dependency imports but the web half never uses", async () => {
+		const { root } = setup({
+			"web/index.tsx": 'import { label } from "node-dep";\nexport default { label };\n',
+			...NODE_DEPENDENCY,
+		});
+		const output = await buildExtension({ root, prefix: "fx", assetsDir: ASSETS });
+		expect(output.warnings).toEqual([]);
+		expect(bundledImports(readFileSync(join(root, "dist/web.js"), "utf8"))).toEqual([]);
+	});
+
+	it("fails on a Node built-in the web half uses", async () => {
+		const { root } = setup({
+			"web/index.tsx": 'import { read } from "node-dep";\nexport default { read };\n',
+			...NODE_DEPENDENCY,
+		});
+		expect(await buildFails(root)).toBe(
+			"node:fs is a Node built-in, which a web half cannot use: remove the import or use a browser alternative. (imported by node_modules/node-dep/index.js)",
+		);
+		expect(existsSync(join(root, "dist/web.js"))).toBe(false);
+	});
+
+	it("finds every import a bundle keeps", () => {
+		expect(
+			bundledImports(
+				'import{a}from"x";import"y";export*from"./z";export{b}from"w";const c=import("v"),d=import(e);',
+			),
+		).toEqual(["x", "y", "./z", "w", "v"]);
+		expect(bundledImports("const text=\"import x from 'y'\";export{text as default};")).toEqual([]);
 	});
 
 	it("requires a valid prefix when the manifest declares styles", async () => {

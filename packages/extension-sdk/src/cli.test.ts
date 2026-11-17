@@ -41,12 +41,32 @@ describe("thinkrail-extension", () => {
 		expect(result.stderr).not.toContain("    at ");
 	});
 
-	it("prints usage for an unknown command or option", () => {
+	it.each([
+		[["bundle"], 'unknown command "bundle"'],
+		[[], "no command given"],
+		[["build", "extra"], 'unexpected argument "extra"'],
+		[["build", "--bogus"], "--bogus"],
+		[["build", "--prefix"], "--prefix"],
+		[["build", "--prefix", "--no-minify"], "--prefix"],
+	])("exits 2 with usage for %j", (args, message) => {
 		current = fixture(WEB_PACKAGE);
-		expect(run(["bundle"], current.root).code).toBe(2);
-		const unknown = run(["build", "--bogus"], current.root);
-		expect(unknown.code).toBe(1);
-		expect(unknown.stderr).toContain("Usage: thinkrail-extension build");
-		expect(run(["--help"], current.root).stdout).toContain("--prefix <letters>");
+		const result = run(args, current.root);
+		expect(result.code).toBe(2);
+		expect(result.stdout).toBe("");
+		expect(result.stderr).toStartWith("thinkrail-extension: ");
+		expect(result.stderr).toContain(message);
+		expect(result.stderr).toContain("Usage: thinkrail-extension build");
+		expect(existsSync(join(current.root, "dist/web.js"))).toBe(false);
 	});
+
+	it.each([[["--help"]], [["-h"]], [["build", "--help"]]])(
+		"prints usage for %j and exits 0",
+		(args) => {
+			current = fixture(WEB_PACKAGE);
+			const result = run(args, current.root);
+			expect(result.code).toBe(0);
+			expect(result.stderr).toBe("");
+			expect(result.stdout).toContain("--prefix <letters>");
+		},
+	);
 });

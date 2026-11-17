@@ -44,7 +44,10 @@ private and unchanged. It imports no pi value at runtime.
   typography classes, Tailwind major and layer order, React major).
 - `bin` `thinkrail-extension` — a committed launcher, `bin/thinkrail-extension.js`, importing
   `dist/cli.js`, so a workspace install links it before the SDK is built: `thinkrail-extension build
-  [--prefix <a-z>] [--entry <file>] [--css <file>] [--cwd <dir>] [--no-minify]`. Also `./theme.css`
+  [--prefix <a-z>] [--entry <file>] [--css <file>] [--cwd <dir>] [--no-minify]`. Exit codes: 0 on
+  success and for `--help` / `-h` (usage on stdout), 1 when the build fails (`thinkrail-extension:
+  <message>`, no stack), 2 on a usage error — an unknown command, option or extra argument, or a
+  missing option value — with the message and the usage on stderr. Also `./theme.css`
   (the theme file) and `assets/extension.css` (the stylesheet template).
 - Versioning: the package's `major.minor` is the extension API it builds (`EXTENSION_API_VERSION` in
   `src/shared.ts`); patch releases change no promise. The first changeset is a major bump from `0.0.0`
@@ -57,7 +60,8 @@ private and unchanged. It imports no pi value at runtime.
   shared manifest cases (`tools/manifestCases.test.ts`). It is stricter in one way only: `api` must
   **equal** the SDK's API (a bundle can only promise the names the SDK knew). Beyond the manifest it
   checks the package: the `server` file present and pi packages / `typebox` never in `dependencies`
-  (they must be peers). Warnings: a missing keyword, a missing SDK dependency for a server half, unknown
+  (they must be peers), with or without a server half — a web-only package would install a second pi
+  for nothing. Warnings: a missing keyword, a missing SDK dependency for a server half, unknown
   manifest keys and an `image` that is not an `https://` URL (the catalog does not show it). A
   server-only extension has nothing to build.
 - **Bundler: rolldown** (a dependency of the SDK, the same version Vite 8 brings to the app). It runs
@@ -76,6 +80,12 @@ private and unchanged. It imports no pi value at runtime.
   is not supported in v1), any other `react` / `react-dom` subpath, `./server` and unknown SDK subpaths,
   the private `@thinkrail/ui|extension-api|resource-renderers` names (pointing at the SDK specifier), and
   CSS imported from JavaScript.
+- A bundle imports nothing, since the app loads it as one file and a browser cannot resolve a bare
+  specifier. Every other bare specifier is resolved through rolldown first: one that does not resolve is
+  a build error naming it and its importer (install it or remove the import) instead of rolldown's
+  `UNRESOLVED_IMPORT` warning and a kept import. A Node built-in is external without side effects, so
+  one only unused code imports is dropped. Then the output is parsed and any import left — a used
+  built-in or anything another path leaves — fails the build before it is written.
 - The stylesheet: when the manifest declares `styles`, `--prefix` (lowercase letters, Tailwind's rule) is
   **required** — there is no default, because the author writes it into every class. The template's
   Tailwind and theme imports are rewritten to absolute paths inside the SDK (the extension need not

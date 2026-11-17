@@ -235,8 +235,8 @@ The descriptor can also declare `childExtensions`, `skillPackages` and `interact
 ### pi and typebox are peer dependencies
 
 Declare `@earendil-works/pi-coding-agent` and `typebox` (and any other `@earendil-works/*` package you
-import) in `peerDependencies` with `"*"`, never in `dependencies`; for an extension with a server half
-the build fails if they are dependencies. Your own imports of them always resolve to the one copy inside ThinkRail. A second copy in
+import) in `peerDependencies` with `"*"`, never in `dependencies`; the build fails if they are
+dependencies. Your own imports of them always resolve to the one copy inside ThinkRail. A second copy in
 your package's `node_modules` is what a plain-JavaScript dependency of yours would bind to instead, with
 different classes and registries from the ones the agent uses. When ThinkRail installs an npm or git
 source it removes any copy from the extension's `node_modules`. List them in `devDependencies` as well
@@ -420,8 +420,8 @@ the file named by `styles`, here `dist/web.js` and `dist/web.css`. It runs under
 under Bun, and prints each file it wrote with its size.
 
 Before building, it checks the manifest with the rules ThinkRail applies, plus three of its own: `api`
-must equal the SDK's API version, the `server` file must exist, and with a server half pi packages and
-typebox must not be dependencies. It warns, without failing, about a missing `thinkrail-extension` keyword, a server half
+must equal the SDK's API version, the `server` file must exist, and pi packages and typebox must not be
+dependencies. It warns, without failing, about a missing `thinkrail-extension` keyword, a server half
 without `@thinkrail/extension-sdk` in `dependencies`, an unknown manifest field and an `image` that is
 not an `https:` URL. An extension without a web half has nothing to build.
 

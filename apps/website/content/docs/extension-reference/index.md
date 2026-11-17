@@ -100,8 +100,7 @@ The same rules as cases, in the format of ThinkRail's own test table of manifest
 
 - `api` is not exactly the SDK's own API version (`1.0` for SDK 1.0);
 - the `server` file does not exist;
-- the manifest declares `server` and `typebox` or an `@earendil-works/*` package is in `dependencies`
-  instead of `peerDependencies`.
+- `typebox` or an `@earendil-works/*` package is in `dependencies` instead of `peerDependencies`.
 
 It warns, and builds anyway, when `keywords` lacks `thinkrail-extension`, when a server half is declared
 but `@thinkrail/extension-sdk` is not in `dependencies`, when the manifest has a field it does not
@@ -217,9 +216,9 @@ thinkrail-extension build [--prefix <letters>] [--entry <file>] [--css <file>] [
 The command reads `package.json` in the extension's folder and writes the bundle to the manifest's
 `web` path and the stylesheet to its `styles` path, replacing what was there. The bundle is one minified
 ESM file: JSX uses React's production runtime, `process.env.NODE_ENV` is `"production"`, and your
-`tsconfig.json` is not read. It exits with 0 after a build, with 2 when the command is not `build` or is
-followed by another argument, and with 1 on any other error, an unknown option or a missing option value
-included.
+`tsconfig.json` is not read. It exits with 0 after a build or `--help`, with 1 when the build fails, and
+with 2 on a usage error: a command other than `build`, another argument after it, an unknown option or
+a missing option value.
 
 The build fails on these imports in the web half, also when they come from one of your dependencies:
 
@@ -228,7 +227,9 @@ The build fails on these imports in the web half, also when they come from one o
 - `@thinkrail/extension-sdk/server`, and any SDK path not in [Shared modules](#shared-modules);
 - the app's private packages `@thinkrail/ui/*`, `@thinkrail/extension-api` and
   `@thinkrail/resource-renderers`;
-- CSS files.
+- CSS files;
+- a package that is not installed, and a Node built-in the bundle uses (one that only unused code
+  imports is dropped). The bundle may import nothing: the app loads it as one file.
 
 The bundle starts with a check that throws when it is loaded outside ThinkRail or in a ThinkRail with
 another API major.

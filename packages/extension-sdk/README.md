@@ -52,5 +52,9 @@ npx thinkrail-extension build --prefix weather
 - The bundle fails to load outside ThinkRail or in a ThinkRail with a different API major, with an
   error saying so. `react-dom/client` and `react/compiler-runtime` are rejected: the app owns the React
   root, and the React Compiler is not supported in API 1.0.
+- The bundle imports nothing: an import of a package that is not installed, or of a Node built-in the
+  bundle uses, fails the build.
+- Exit codes: 0 on success (and for `--help`), 1 when the build fails, 2 on a usage error (an unknown
+  command, option or argument, or a missing option value).
 
 Runs under Node ≥ 22.19 and Bun.

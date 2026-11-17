@@ -103,11 +103,11 @@ npm run build                      # = thinkrail-extension build --prefix <prefi
 ```
 
 `--omit=peer` keeps ThinkRail's own pi and typebox out of the folder (it provides them). A server-only
-extension needs only the install. Then check before installing: the build exited 0, `dist/web.js` and
-`dist/web.css` exist, and it printed no `UNRESOLVED_IMPORT` warning (a package you forgot to install —
-the bundle would fail in the app). Build errors name the file and the rule
-(`reference/web-half.md` § Build errors). The build does not type-check, and the host loads the server
-half by stripping types: type errors do not stop it, runtime errors do — step 7 shows them.
+extension needs only the install. Then check before installing: the build exited 0 and `dist/web.js`
+and `dist/web.css` exist. Build errors — an import of a package you forgot to install among them —
+name the file and the rule (`reference/web-half.md` § Build errors). The build does not type-check,
+and the host loads the server half by stripping types: type errors do not stop it, runtime errors do —
+step 7 shows them.
 
 ### 6. Install
 

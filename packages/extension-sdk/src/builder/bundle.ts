@@ -1,5 +1,7 @@
-import { relative } from "node:path";
+import { isBuiltin } from "node:module";
+import { isAbsolute, relative } from "node:path";
 import { build, type Plugin } from "rolldown";
+import { parseSync } from "rolldown/utils";
 import { SDK_PACKAGE, SHARED_SPECIFIERS, type SharedModulesManifest } from "../shared";
 import { ExtensionBuildError } from "./errors";
 import {
@@ -47,19 +49,53 @@ export function rejection(specifier: string, api: string): string | undefined {
 	return undefined;
 }
 
+function packageName(specifier: string): string {
+	const segments = specifier.split("/");
+	return (specifier.startsWith("@") ? segments.slice(0, 2) : segments.slice(0, 1)).join("/");
+}
+
+function isBare(specifier: string): boolean {
+	return !specifier.startsWith(".") && !specifier.startsWith("\0") && !isAbsolute(specifier);
+}
+
+export function bundledImports(code: string): string[] {
+	const { module } = parseSync("bundle.js", code);
+	const sources = [
+		...module.staticImports.map((entry) => entry.moduleRequest.value),
+		...module.staticExports.flatMap((entry) =>
+			entry.entries.flatMap((exported) =>
+				exported.moduleRequest ? [exported.moduleRequest.value] : [],
+			),
+		),
+		...module.dynamicImports.flatMap(({ moduleRequest }) => {
+			const literal = /^(["'`])(.*)\1$/s.exec(code.slice(moduleRequest.start, moduleRequest.end));
+			return literal?.[2] === undefined ? [] : [literal[2]];
+		}),
+	];
+	return [...new Set(sources)];
+}
+
 function hostModulesPlugin(manifest: SharedModulesManifest, root: string): Plugin {
+	const from = (importer: string | undefined) =>
+		importer ? ` (imported by ${relative(root, importer)})` : "";
+	const builtins = new Map<string, string | undefined>();
 	return {
 		name: "thinkrail-host-modules",
-		resolveId(specifier, importer) {
+		async resolveId(specifier, importer) {
 			if (specifier.startsWith(HOST)) return specifier;
 			if (isSharedSpecifier(specifier)) return `${HOST}${specifier}`;
 			if (specifier === "react/jsx-dev-runtime") return JSX_DEV;
 			const reason = rejection(specifier, manifest.api);
-			if (reason) {
-				const from = importer ? ` (imported by ${relative(root, importer)})` : "";
-				throw new ExtensionBuildError(`${reason}${from}`);
+			if (reason) throw new ExtensionBuildError(`${reason}${from(importer)}`);
+			if (!isBare(specifier)) return null;
+			if (await this.resolve(specifier, importer, { skipSelf: true })) return null;
+			if (isBuiltin(specifier)) {
+				builtins.set(specifier, importer);
+				return { id: specifier, external: true, moduleSideEffects: false };
 			}
-			return null;
+			throw new ExtensionBuildError(
+				`${specifier} cannot be resolved: install ${packageName(specifier)} in the extension, or remove the import.${from(importer)}`,
+			);
 		},
 		load(id) {
 			if (id === RUNTIME) return hostRuntimeSource(manifest.api);
@@ -68,6 +104,23 @@ function hostModulesPlugin(manifest: SharedModulesManifest, root: string): Plugi
 			const specifier = id.slice(HOST.length);
 			if (!isSharedSpecifier(specifier)) return null;
 			return hostModuleSource(manifest, specifier, RUNTIME);
+		},
+		generateBundle(_options, bundle) {
+			for (const chunk of Object.values(bundle)) {
+				if (chunk.type !== "chunk") continue;
+				const left = bundledImports(chunk.code);
+				const builtin = left.find((specifier) => builtins.has(specifier));
+				if (builtin !== undefined) {
+					throw new ExtensionBuildError(
+						`${builtin} is a Node built-in, which a web half cannot use: remove the import or use a browser alternative.${from(builtins.get(builtin))}`,
+					);
+				}
+				if (left.length > 0) {
+					throw new ExtensionBuildError(
+						`the bundle still imports ${left.join(", ")}: ThinkRail loads a web half as one file and cannot resolve imports. Install the package so the build bundles it, or remove the import.`,
+					);
+				}
+			}
 		},
 	};
 }

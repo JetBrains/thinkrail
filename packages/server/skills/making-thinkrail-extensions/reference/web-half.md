@@ -75,7 +75,8 @@ Anything else (an icon set such as `@remixicon/react`, a chart library) is bundl
 
 ## Build errors
 
-The build prints `thinkrail-extension: <problem> (imported by <file>)` and exits non-zero:
+The build prints `thinkrail-extension: <problem> (imported by <file>)` and exits 1 (2 with the usage
+printed for a mistyped command or option):
 
 | Message starts with | Fix |
 |---|---|
@@ -87,7 +88,9 @@ The build prints `thinkrail-extension: <problem> (imported by <file>)` and exits
 | `package.json has an invalid "thinkrail" manifest` | fix the listed manifest rule (SKILL.md § 4) |
 | `"api" is "X", but this @thinkrail/extension-sdk builds extension API Y` | set `api` to Y (or install the SDK for X) |
 | `--prefix is required` / `--prefix "…" is invalid` | pass `--prefix` with lowercase a–z only |
+| `<pkg> cannot be resolved: install <name> in the extension, or remove the import.` | `npm install --omit=peer <name>` (or remove the import) and rebuild |
+| `<module> is a Node built-in, which a web half cannot use` | move that code to `server/` or use a browser alternative |
+| `the bundle still imports …` | install the named package or remove the import, and rebuild |
 
-A `warning: [UNRESOLVED_IMPORT] Could not resolve '<pkg>'` does **not** fail the build but leaves a
-bare `import` in `dist/web.js` that fails in the app: `npm install --omit=peer <pkg>` (or remove the import) and
-rebuild. A clean `dist/web.js` never starts with `import`.
+A built `dist/web.js` imports nothing: the build fails on any import it would leave in the bundle,
+since the app could not resolve it.

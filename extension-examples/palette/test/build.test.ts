@@ -115,7 +115,7 @@ describe("the palette extension as built by the SDK", () => {
 		]) {
 			expect(bundle).not.toContain(forbidden);
 		}
-		expect(bundle).not.toMatch(/^import |\simport\s*\(/m);
+		expect(new Bun.Transpiler({ loader: "js" }).scanImports(bundle)).toEqual([]);
 		expect(bundle.length).toBeLessThan(16_000);
 	});
 

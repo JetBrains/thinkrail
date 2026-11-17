@@ -150,19 +150,19 @@ export function readExtensionPackage(root: string): ExtensionPackage {
 		if (!existsSync(join(root, paths.server))) {
 			problems.push(`"server" points at ${manifest.server}, which does not exist.`);
 		}
-		const bundled = Object.keys(pkg.dependencies ?? {})
-			.filter((name) => HOST_SINGLETONS.test(name))
-			.sort();
-		if (bundled.length > 0) {
-			problems.push(
-				`${bundled.join(", ")} must be peerDependencies, not dependencies: ThinkRail provides its own copy, and a second one in the extension's node_modules breaks it.`,
-			);
-		}
 		if (pkg.dependencies?.[SDK_PACKAGE] === undefined) {
 			warnings.push(
 				`the server half imports ${SDK_PACKAGE}/server at runtime: list ${SDK_PACKAGE} under "dependencies", or the installed extension will not find it.`,
 			);
 		}
+	}
+	const bundled = Object.keys(pkg.dependencies ?? {})
+		.filter((name) => HOST_SINGLETONS.test(name))
+		.sort();
+	if (bundled.length > 0) {
+		problems.push(
+			`${bundled.join(", ")} must be peerDependencies, not dependencies: ThinkRail provides its own copy, and a second one in the extension's node_modules breaks a server half and is dead weight for a web half.`,
+		);
 	}
 	if (problems.length > 0) fail(problems);
 	if (typeof manifest.image === "string" && !httpsUrl(manifest.image.trim())) {

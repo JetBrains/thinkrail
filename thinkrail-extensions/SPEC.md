@@ -175,7 +175,8 @@ server half composes, because a UI-only extension has none and the agent backend
   them in the manifest (a second contract beside the built-ins').
 - **Text is the author's own, untranslated** (translations: issue #1423). A declared setting therefore
   carries its own `title` and `description`.
-- **The agent may install what it writes**, by editing the declarations file, as it edits `mcp.json`.
+- **The agent may install what it writes**, by editing the declarations file, as it edits `mcp.json`
+  ([[submodule-server-extensions-installed]] § Decisions, "The agent's path in").
 
 **Manifest** — in the package's `package.json`; the npm package `name` is the extension's identity (the
 key for the on/off switch and its settings) and must not equal a built-in's `name`.
@@ -219,7 +220,9 @@ key for the on/off switch and its settings) and must not equal a built-in's `nam
   own folder**: Bun keeps the first evaluation of an extension's plain-JavaScript dependencies, and its
   folder listings, for the life of the process. A folder source is loaded in place.
 - **pi and typebox are kept out of an extension's `node_modules`.** A copy there is what a
-  plain-JavaScript dependency of the extension binds to instead of the host's.
+  plain-JavaScript dependency of the extension binds to instead of the host's. A folder source's own
+  `node_modules` is never pruned; that matters only when the extension has such a dependency
+  ([[submodule-server-extensions-installed]] § Known limitations).
 - The descriptor is imported through pi's public loader by a host-written shim, so the extension's pi
   imports are the host's single instance in every launcher ([[pi-compatibility]] registers the seam;
   [[submodule-server-extensions-installed]] owns the mechanism); every load also checks that the shim's

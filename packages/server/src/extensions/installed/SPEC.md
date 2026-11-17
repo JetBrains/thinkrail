@@ -148,6 +148,19 @@ A folder source is never copied: it loads from where it is, and nothing under it
   answers only the manifest's `web` or `styles` path of a loaded extension whose current token matches,
   re-checked by realpath to stay inside the package, and names its content type.
 
+## Known limitations
+
+- **A folder source's `node_modules` is never pruned.** It is loaded in place, and the host never writes
+  inside it (the npm/git prune does not apply). An author's dev copies of pi and typebox
+  (`devDependencies`, installed with peers) are therefore present, and a plain-JavaScript dependency of
+  the extension that itself imports pi binds to that copy instead of the host's. TypeScript sources and
+  the extension's own entry are unaffected: they go through pi's loader, and the identity guard checks
+  the entry's pi. So dev copies are harmless for the usual extension, whose own code is the only thing
+  importing pi (the sample keeps them as `devDependencies` for type checking). An author whose
+  extension does have such a dependency installs with peers omitted and no pi or typebox
+  `devDependencies`, as the `making-thinkrail-extensions` skill always does (`omit=peer` in `.npmrc`,
+  peers only).
+
 ## Boundary
 
 - **Public surface (barrel):** `InstalledExtensions`, `InstalledExtensionsOptions`,
