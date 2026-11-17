@@ -152,9 +152,8 @@ test("agent availability controls are inaccessible while disconnected and return
 	} finally {
 		offline = false;
 	}
-	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await openAgentsSettings(page);
+	await expect(page.getByTestId("settings-agents")).toBeVisible();
 	await expect(page.getByTestId("agent-toggle-scout")).toBeEnabled();
 	await expect(page.getByTestId("agents-refresh")).toBeEnabled();
 });
