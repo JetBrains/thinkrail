@@ -294,6 +294,8 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   from) / `stats` / **`statsRefreshTick`** (browser-local invalidation for the mounted chat's authoritative
   stats read) / `commands` / `draft` / **`readingAnchor`** (browser-local detached transcript position
   that survives the chat tab's unmount; written only by `chat` through `setChatReadingAnchor`) /
+  **`composerFocusWonOver`** (browser-local: the tool call the session's host was waiting on when its last
+  composer-focus request was served, else `null`; written only by `serveComposerFocusRequest`) /
   **`promptImages`** (the composer's transient ready images, pending decodes, errors and a fresh generation
   token; the pure model `PromptImagesState` + `newPromptImagesState` is the store's own
   `promptImageState.ts`, so runtime creation runs no `chat` code). `updateChatPromptImages(sessionId, update)` changes
@@ -860,7 +862,11 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   body mounts and consumes the request without publishing a structural snapshot. The third sibling,
   **`composerFocusRequest { workspaceId, sessionId | null, navTick, dismissHistory? }`** — set by
   **`requestComposerFocus(workspaceId, sessionId?, { dismissHistory? })`**, cleared by
-  **`clearComposerFocusRequest()`** —
+  **`clearComposerFocusRequest()`** or, by the chat that takes it,
+  **`serveComposerFocusRequest(sessionId, waitingToolCallId)`**, which in the same write records the call
+  that chat's host was waiting on (the chat derives it; the store imports no `chat` code) as its
+  runtime's `composerFocusWonOver`, so **`selectQuestionMayClaimFocus(sessionId, toolCallId)`** denies the
+  focus claim to that question alone, across the chat's remounts ([[submodule-web-chat]]) —
   carries a palette pick's "type next" intent to the destination chat. It is stamped with the workspace's
   navigation tick instead of queuing a selection, so it never changes which tab shows:
   **`selectComposerFocusRequested`** holds only while that workspace is active, its tick is unchanged (a counted tab

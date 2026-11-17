@@ -62,8 +62,9 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
     host is not waiting on, such as a same-name tool from another package, renders but cannot respond);
   - `respond(response)` — the value travels to the tool as is; the tool validates its shape;
   - the chat's `focusScope`, so the card claims attention focus once per chat mount, and
-    `mayClaimFocus()`, false once the chat has served a focus chord (Mod+L) in that mount, so a remount
-    never takes focus the user just asked for;
+    `mayClaimFocus()`, bound to this call: false while it is the question a served composer-focus request
+    (Mod+L) won over, so a remount never takes focus the user just asked for, while a later call still
+    claims;
   - `prepareLayoutChange`, which keeps the reader's place when the card changes size;
   - `focusComposer()` and `focusTranscript()` — after a keyboard answer the composer, after a click this
     call's transcript row, focused without scrolling (the plan page focuses its live slot for both);

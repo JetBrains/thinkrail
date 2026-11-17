@@ -221,6 +221,16 @@ describe("transcriptKeyAction", () => {
 		expect(parked({ key: "j" })).toEqual({ kind: "move", key: "ArrowDown" });
 	});
 
+	test("while a question waits, Esc on the parked feed or an item goes to the question", () => {
+		const waiting = (init: Partial<KeyboardEvent> & { key: string }, parked: boolean) =>
+			transcriptKeyAction(press(init), keys, parked, true);
+		expect(waiting({ key: "Escape" }, true)).toEqual({ kind: "question" });
+		expect(waiting({ key: "Escape" }, false)).toEqual({ kind: "question" });
+		expect(waiting({ key: "Escape", shiftKey: true }, false)).toBeNull();
+		expect(waiting({ key: "ArrowDown" }, true)).toEqual({ kind: "move", key: "ArrowDown" });
+		expect(waiting({ key: "Enter" }, false)).toEqual({ kind: "toggle" });
+	});
+
 	test("matches letters by physical key: a Russian layout's С copies and О opens", () => {
 		expect(key({ key: "с", code: "KeyC" })).toEqual({ kind: "copy" });
 		expect(key({ key: "щ", code: "KeyO" })).toEqual({ kind: "open" });

@@ -5,6 +5,7 @@ import { useT } from "@thinkrail/locales/react";
 import type { AskUserQuestionResult } from "@thinkrail/pi-ask-user-question/core";
 import { AttentionLine } from "@thinkrail/ui/attention-line";
 import { Button, IconButton } from "@thinkrail/ui/button";
+import { focusAndReveal } from "@thinkrail/ui/focus";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { cn } from "@thinkrail/ui/utils";
@@ -24,14 +25,12 @@ import { forgetDockState, requestDockFocus, setDockCollapsed, useDockState } fro
 import {
 	activeQuestionPage,
 	createQuestionAttentionClaim,
-	focusAndReveal,
 	focusCurrentQuestionPage,
 	focusQuestionAttention,
 	focusTargetKind,
 	hasCoarsePointer,
 	isCardBackground,
 	isInsidePreview,
-	isKeyboardFocused,
 	isTextEntryTarget,
 	shouldClaimQuestionFocus,
 } from "./focus";
@@ -236,7 +235,7 @@ export function AskUserQuestionCard({
 			const card = cardRef.current;
 			if (!card || !claimQuestionAttention(focusScope, toolCallId)) return;
 			const active = document.activeElement;
-			const kind = focusTargetKind(active, card.contains(active), isKeyboardFocused(active));
+			const kind = focusTargetKind(active, card.contains(active));
 			const coarse = hasCoarsePointer();
 			if (shouldClaimQuestionFocus(kind, coarse, mayClaimFocus())) focusQuestionAttention(card);
 			else if (kind !== "inside" && !coarse) {

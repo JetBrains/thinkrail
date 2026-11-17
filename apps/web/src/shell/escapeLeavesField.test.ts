@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { type EscapePress, type FieldTarget, leavesField, parkingSpot } from "./escapeLeavesField";
+import {
+	climbsToMain,
+	type EscapePress,
+	type EscapeTarget,
+	leavesField,
+} from "./escapeLeavesField";
 
 const ESCAPE: EscapePress = {
 	key: "Escape",
@@ -18,16 +23,20 @@ const field = (
 		type,
 		editable = false,
 		inside = [],
-	}: { type?: string; editable?: boolean; inside?: string[] } = {},
-): FieldTarget => ({
+		is = [],
+	}: { type?: string; editable?: boolean; inside?: string[]; is?: string[] } = {},
+): EscapeTarget => ({
 	tagName,
 	isContentEditable: editable,
 	...(type === undefined ? {} : { type }),
 	closest: (selector) =>
-		selector.split(", ").some((part) => inside.includes(part)) ? { selector } : null,
+		selector.split(", ").some((part) => inside.includes(part) || is.includes(part))
+			? { selector }
+			: null,
+	matches: (selector) => selector.split(", ").some((part) => is.includes(part)),
 });
 
-const leaves = (target: FieldTarget, press: Partial<EscapePress> = {}, claimed = false) =>
+const leaves = (target: EscapeTarget, press: Partial<EscapePress> = {}, claimed = false) =>
 	leavesField({ ...ESCAPE, ...press }, target, claimed);
 
 describe("a bare Esc leaves a text field", () => {
@@ -79,19 +88,67 @@ describe("a bare Esc leaves a text field", () => {
 	});
 });
 
-describe("where the leave lands", () => {
-	const focusable = (shown: ReadonlySet<string>) => (candidate: string) => shown.has(candidate);
+const REGION = "[data-region]";
+const CENTER = '[data-region-kind="center"]';
+const CENTER_CONTENT = '[data-region-kind="center"] > [role="tabpanel"]';
+const inSide = (tagName: string, init: { type?: string; inside?: string[]; is?: string[] } = {}) =>
+	field(tagName, { ...init, inside: [REGION, ...(init.inside ?? [])] });
+const climbs = (target: EscapeTarget, press: Partial<EscapePress> = {}, claimed = false) =>
+	climbsToMain({ ...ESCAPE, ...press }, target, claimed);
 
-	test("the region's focusable park first", () => {
-		expect(parkingSpot(["feed"], "region", focusable(new Set(["feed", "region"])))).toBe("feed");
-		expect(parkingSpot(["hidden", "feed"], "region", focusable(new Set(["feed", "region"])))).toBe(
-			"feed",
-		);
+describe("a bare Esc on a panel climbs to the main area", () => {
+	test("from a panel root, a tree row, a tab, a rail or list button and a checkbox outside the center", () => {
+		expect(climbs(field("SECTION", { is: [REGION] }))).toBe(true);
+		expect(climbs(inSide("DIV", { inside: ['[role="tree"]'] }))).toBe(true);
+		expect(climbs(inSide("BUTTON", { inside: ['[role="tablist"]'] }))).toBe(true);
+		expect(climbs(inSide("BUTTON", { inside: ['[role="toolbar"]'] }))).toBe(true);
+		expect(climbs(inSide("BUTTON"))).toBe(true);
+		expect(climbs(inSide("INPUT", { type: "checkbox" }))).toBe(true);
 	});
 
-	test("else the region root, else nowhere", () => {
-		expect(parkingSpot(["feed"], "region", focusable(new Set(["region"])))).toBe("region");
-		expect(parkingSpot([], "region", focusable(new Set(["region"])))).toBe("region");
-		expect(parkingSpot([], "region", focusable(new Set()))).toBeNull();
+	test("from the center's own tab strip, into its content", () => {
+		expect(climbs(field("BUTTON", { inside: [REGION, CENTER, '[role="tablist"]'] }))).toBe(true);
+		expect(climbs(field("BUTTON", { inside: [REGION, CENTER] }))).toBe(true);
+	});
+
+	test("never inside the main area: its root, its content, or outside every region", () => {
+		expect(climbs(field("SECTION", { is: [REGION, CENTER] }))).toBe(false);
+		expect(climbs(field("DIV", { inside: [REGION, CENTER, CENTER_CONTENT] }))).toBe(false);
+		expect(climbs(field("ARTICLE", { inside: [REGION, CENTER, CENTER_CONTENT] }))).toBe(false);
+		expect(climbs(field("BUTTON"))).toBe(false);
+	});
+
+	test("never from a text field, a select, the terminal or Monaco, which keep their Esc", () => {
+		expect(climbs(inSide("TEXTAREA"))).toBe(false);
+		expect(climbs(inSide("INPUT", { type: "search" }))).toBe(false);
+		expect(climbs(inSide("SELECT"))).toBe(false);
+		expect(climbs(field("DIV", { editable: true, inside: [REGION] }))).toBe(false);
+		expect(climbs(inSide("TEXTAREA", { inside: [".xterm"] }))).toBe(false);
+		expect(climbs(inSide("DIV", { inside: [".xterm"] }))).toBe(false);
+		expect(climbs(inSide("DIV", { inside: [".monaco-editor"] }))).toBe(false);
+	});
+
+	test("never inside a dialog or an open menu", () => {
+		for (const layer of [
+			'[aria-modal="true"]',
+			'[role="dialog"][data-state="open"]',
+			'[role="alertdialog"][data-state="open"]',
+			'[role="menu"][data-state="open"]',
+		]) {
+			expect(climbs(inSide("BUTTON", { inside: [layer] })), layer).toBe(false);
+		}
+	});
+
+	test("never when an owner took it, a modifier is held, an IME composes or a claim holds", () => {
+		const row = inSide("DIV", { inside: ['[role="tree"]'] });
+		expect(climbs(row, { defaultPrevented: true })).toBe(false);
+		expect(climbs(row, { shiftKey: true })).toBe(false);
+		expect(climbs(row, { altKey: true })).toBe(false);
+		expect(climbs(row, { ctrlKey: true })).toBe(false);
+		expect(climbs(row, { metaKey: true })).toBe(false);
+		expect(climbs(row, { isComposing: true })).toBe(false);
+		expect(climbs(row, { keyCode: 229 })).toBe(false);
+		expect(climbs(row, {}, true)).toBe(false);
+		expect(climbs(row, { key: "Enter" })).toBe(false);
 	});
 });

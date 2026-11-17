@@ -1,4 +1,4 @@
-import { TABBABLE_SELECTOR } from "@thinkrail/ui/focus";
+import { focusAndReveal, TABBABLE_SELECTOR } from "@thinkrail/ui/focus";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { type LocalKeys, useLocalKeys } from "@thinkrail/ui/local-keys";
 import { useEffect, useInsertionEffect, useState } from "react";
@@ -28,6 +28,7 @@ export interface TranscriptNavigationOptions {
 	leaveFollow: ChatScroll["leaveFollow"];
 	scrollToLatest: () => void;
 	focusComposer: () => void;
+	waitingQuestion: () => HTMLElement | null;
 	fileTarget: (path: string) => string | null;
 	openFile: (target: string) => void;
 	onCopied: () => void;
@@ -410,10 +411,14 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 		}
 		const parked = target === feed();
 		if (!parked && ownerOf(target) !== target) return;
-		const action = keys && transcriptKeyAction(event, keys, parked);
+		const question = options?.waitingQuestion() ?? null;
+		const action = keys && transcriptKeyAction(event, keys, parked, question !== null);
 		if (!action) return;
 		event.preventDefault();
-		if (action.kind === "leave") {
+		if (action.kind === "question") {
+			cancel();
+			if (question) focusAndReveal(question);
+		} else if (action.kind === "leave") {
 			cancel();
 			options?.focusComposer();
 		} else if (parked) revealCursor();

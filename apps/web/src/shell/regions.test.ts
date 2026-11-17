@@ -5,6 +5,7 @@ import {
 	orderRegions,
 	type RegionKind,
 	regionKeyAction,
+	resolveEscapeLanding,
 	resolveLanding,
 } from "./regions";
 
@@ -110,5 +111,22 @@ describe("landing in a region", () => {
 		expect(resolveLanding(lookup({ selectedTab: "tab", first: "button" }))).toBe("tab");
 		expect(resolveLanding(lookup({ first: "button" }))).toBe("button");
 		expect(resolveLanding(lookup({}))).toBeNull();
+	});
+});
+
+describe("where an Esc lands in a region or the main area", () => {
+	const lookup = (found: { claim?: string; park?: string; rest?: string }) => ({
+		claim: () => found.claim ?? null,
+		park: () => found.park ?? null,
+		rest: () => found.rest ?? null,
+	});
+
+	test("a waiting question's claim first, then the park, then the rest", () => {
+		expect(resolveEscapeLanding(lookup({ claim: "option", park: "feed", rest: "root" }))).toBe(
+			"option",
+		);
+		expect(resolveEscapeLanding(lookup({ park: "feed", rest: "root" }))).toBe("feed");
+		expect(resolveEscapeLanding(lookup({ rest: "editor" }))).toBe("editor");
+		expect(resolveEscapeLanding(lookup({}))).toBeNull();
 	});
 });

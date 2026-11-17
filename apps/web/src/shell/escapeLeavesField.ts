@@ -1,6 +1,7 @@
+import { focusAndReveal } from "@thinkrail/ui/focus";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { keyboardClaimed } from "./extensionCommands";
-import { canFocus, REGION_SELECTOR } from "./regions";
+import { FOCUS_CLAIM_SELECTOR, fieldExitTarget, mainAreaTarget, REGION_SELECTOR } from "./regions";
 import { isInLayer } from "./shortcutLayers";
 
 const TEXT_INPUT_TYPES: ReadonlySet<string> = new Set([
@@ -13,13 +14,18 @@ const TEXT_INPUT_TYPES: ReadonlySet<string> = new Set([
 	"tel",
 ]);
 const KEEPS_ESCAPE_SELECTOR = ".monaco-editor, .xterm";
-const PARK_SELECTOR = "[data-focus-park]";
+const CENTER_SELECTOR = '[data-region-kind="center"]';
+const CENTER_CONTENT_SELECTOR = '[data-region-kind="center"] > [role="tabpanel"]';
 
 export interface FieldTarget {
 	readonly tagName: string;
 	readonly isContentEditable: boolean;
 	readonly type?: string;
 	closest(selector: string): unknown;
+}
+
+export interface EscapeTarget extends FieldTarget {
+	matches(selector: string): boolean;
 }
 
 export type EscapePress = Pick<
@@ -39,7 +45,7 @@ function isTextField(target: FieldTarget): boolean {
 	return target.tagName === "INPUT" && TEXT_INPUT_TYPES.has(target.type ?? "");
 }
 
-export function leavesField(press: EscapePress, target: FieldTarget, claimed: boolean): boolean {
+function isBareEscape(press: EscapePress, claimed: boolean): boolean {
 	return (
 		press.key === "Escape" &&
 		!press.altKey &&
@@ -48,32 +54,48 @@ export function leavesField(press: EscapePress, target: FieldTarget, claimed: bo
 		!press.shiftKey &&
 		!isImeComposing(press) &&
 		!press.defaultPrevented &&
-		!claimed &&
-		isTextField(target) &&
-		target.closest(KEEPS_ESCAPE_SELECTOR) === null &&
-		!isInLayer(target)
+		!claimed
 	);
 }
 
-export function parkingSpot<T>(
-	parks: Iterable<T>,
-	root: T,
-	focusable: (candidate: T) => boolean,
-): T | null {
-	for (const park of parks) if (focusable(park)) return park;
-	return focusable(root) ? root : null;
+function keepsEscape(target: FieldTarget): boolean {
+	return target.closest(KEEPS_ESCAPE_SELECTOR) !== null || isInLayer(target);
+}
+
+export function leavesField(press: EscapePress, target: FieldTarget, claimed: boolean): boolean {
+	return isBareEscape(press, claimed) && isTextField(target) && !keepsEscape(target);
+}
+
+export function climbsToMain(press: EscapePress, target: EscapeTarget, claimed: boolean): boolean {
+	return (
+		isBareEscape(press, claimed) &&
+		!isTextField(target) &&
+		target.tagName !== "SELECT" &&
+		!keepsEscape(target) &&
+		target.closest(REGION_SELECTOR) !== null &&
+		!target.matches(CENTER_SELECTOR) &&
+		target.closest(CENTER_CONTENT_SELECTOR) === null
+	);
+}
+
+function escapeLanding(event: KeyboardEvent, target: HTMLElement): HTMLElement | null {
+	const claimed = keyboardClaimed();
+	if (leavesField(event, target, claimed)) {
+		const region = target.closest<HTMLElement>(REGION_SELECTOR);
+		return region && fieldExitTarget(region);
+	}
+	return climbsToMain(event, target, claimed) ? mainAreaTarget() : null;
 }
 
 export function installEscapeLeavesField(): () => void {
 	const onKeyDown = (event: KeyboardEvent) => {
-		const target = event.composedPath()[0];
-		if (!(target instanceof HTMLElement) || !leavesField(event, target, keyboardClaimed())) return;
-		const region = target.closest<HTMLElement>(REGION_SELECTOR);
-		const spot =
-			region && parkingSpot(region.querySelectorAll<HTMLElement>(PARK_SELECTOR), region, canFocus);
-		if (!spot) return;
+		const target = event.key === "Escape" ? event.composedPath()[0] : null;
+		if (!(target instanceof HTMLElement)) return;
+		const landing = escapeLanding(event, target);
+		if (!landing) return;
 		event.preventDefault();
-		spot.focus({ preventScroll: true });
+		if (landing.matches(FOCUS_CLAIM_SELECTOR)) focusAndReveal(landing);
+		else landing.focus({ preventScroll: true });
 	};
 	window.addEventListener("keydown", onKeyDown);
 	return () => window.removeEventListener("keydown", onKeyDown);
