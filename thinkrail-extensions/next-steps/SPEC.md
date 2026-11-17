@@ -48,9 +48,9 @@ They show as chips above the composer. A click (or Alt+N) sends one as the user'
   completion disappears when that completion wakes the agent ([[submodule-web-chat]], *Composer
   suggestions*). Hiding chips while any background work runs was rejected: a long-lived command would
   hide them for good.
-- **Zero is valid; no count cap.** The agent skips the call when nothing meaningful applies (no filler),
-  typically offers about three, and `execute` only trims, collapses whitespace and drops empty or
-  case-insensitive duplicate items. A forgotten call simply means no chips. That's the accepted cost of
+- **Zero is valid; at most nine.** The agent skips the call when nothing meaningful applies (no filler),
+  typically offers about three, and `execute` trims, collapses whitespace, drops empty or
+  case-insensitive duplicate items and keeps the first nine — one per key, the terminal's and the chat's. A forgotten call simply means no chips. That's the accepted cost of
   relying on the model.
 - **Best-effort by decision; no nudging.** Measured with real models: vanilla pi with Claude Sonnet 5.5
   called the tool in 2 of 2 finished turns. ThinkRail, whose system prompt is much busier, with Claude

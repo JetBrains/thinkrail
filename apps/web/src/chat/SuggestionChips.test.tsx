@@ -23,6 +23,13 @@ test("renders one labelled chip per suggestion and nothing for an empty list", (
 	expect(
 		renderToStaticMarkup(<SuggestionChips suggestions={[]} onSend={() => {}} onEdit={() => {}} />),
 	).toBe("");
+	const twelve = Array.from({ length: 12 }, (_, index) => `Step ${index + 1}`);
+	const capped = renderToStaticMarkup(
+		<TooltipProvider>
+			<SuggestionChips suggestions={twelve} onSend={() => {}} onEdit={() => {}} />
+		</TooltipProvider>,
+	);
+	expect(capped.match(/data-testid="composer-suggestion"/g)).toHaveLength(9);
 });
 
 const press = (code: string, modifiers: { alt?: boolean; shift?: boolean } = {}) => ({

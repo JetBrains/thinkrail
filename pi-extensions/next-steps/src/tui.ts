@@ -6,12 +6,7 @@ import {
 	truncateToWidth,
 	visibleWidth,
 } from "@earendil-works/pi-tui";
-import {
-	isNextStepsDetails,
-	MAX_SHORTCUTS,
-	type NextStepsArgs,
-	normalizeSuggestions,
-} from "./core.ts";
+import { isNextStepsDetails, type NextStepsArgs, normalizeSuggestions } from "./core.ts";
 
 function countLabel(count: number): string {
 	return `Suggested ${count} next step${count === 1 ? "" : "s"}`;
@@ -65,7 +60,7 @@ export class SuggestionRow implements Component {
 		const gap = "   ";
 		const lines: string[] = [];
 		let line = "";
-		this.suggestions.slice(0, MAX_SHORTCUTS).forEach((suggestion, index) => {
+		this.suggestions.forEach((suggestion, index) => {
 			const chip = `${this.theme.fg("accent", shortcutLabel(index, this.platform))} ${this.theme.fg("text", suggestion)}`;
 			const candidate = line ? `${line}${gap}${chip}` : ` ${chip}`;
 			if (line && visibleWidth(candidate) > width) {

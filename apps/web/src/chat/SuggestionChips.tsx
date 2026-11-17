@@ -57,7 +57,8 @@ export function SuggestionChips({
 		shortcutScope.addEventListener("keydown", onKeyDown);
 		return () => shortcutScope.removeEventListener("keydown", onKeyDown);
 	}, [shortcutScope, suggestions, onSend, onEdit, composer, transcript]);
-	if (suggestions.length === 0) return null;
+	const shown = suggestions.slice(0, SUGGESTION_KEYS.send.length);
+	if (shown.length === 0) return null;
 	return (
 		<fieldset
 			aria-label={t("chat.suggestions.label")}
@@ -65,9 +66,9 @@ export function SuggestionChips({
 			data-key-scope="composer"
 			className="flex min-w-0 shrink-0 flex-wrap gap-4 px-chat-gutter pt-8"
 		>
-			{suggestions.map((suggestion, index) => {
-				const send = SUGGESTION_KEYS.send[index];
-				const edit = SUGGESTION_KEYS.edit[index];
+			{shown.map((suggestion, index) => {
+				const send = SUGGESTION_KEYS.send[index] ?? "";
+				const edit = SUGGESTION_KEYS.edit[index] ?? "";
 				return (
 					<Button
 						key={suggestion}
@@ -75,9 +76,9 @@ export function SuggestionChips({
 						size="m"
 						data-testid="composer-suggestion"
 						className="min-w-0 max-w-full"
-						aria-keyshortcuts={send && edit ? composer.aria(send, edit) : undefined}
+						aria-keyshortcuts={composer.aria(send, edit)}
 						tooltip={t("chat.suggestions.send")}
-						tooltipShortcut={send ? composer.caps(send) : undefined}
+						tooltipShortcut={composer.caps(send)}
 						onClick={(event) => (event.shiftKey ? onEdit : onSend)(suggestion)}
 					>
 						<span className="truncate">{suggestion}</span>

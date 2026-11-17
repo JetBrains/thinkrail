@@ -22,6 +22,7 @@ export function normalizeSuggestions(raw: readonly unknown[]): string[] {
 		if (!text || seen.has(key)) continue;
 		seen.add(key);
 		suggestions.push(text);
+		if (suggestions.length === MAX_SHORTCUTS) break;
 	}
 	return suggestions;
 }

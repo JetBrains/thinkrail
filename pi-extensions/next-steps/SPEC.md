@@ -25,7 +25,8 @@ draws its own chips.
   - the name `"suggest_next_steps"`;
   - the arguments `{ suggestions: string[] }`;
   - `details` = `{ suggestions }`, normalized (whitespace collapsed; empty and case-insensitive duplicate
-    items dropped; no count cap);
+    items dropped; at most `MAX_SHORTCUTS` = 9, one per Alt+N, extras dropped rather than rejected so an
+    over-long list still ends the turn);
   - `terminate: true`.
 
   Changing this contract breaks every renderer, including ThinkRail's.

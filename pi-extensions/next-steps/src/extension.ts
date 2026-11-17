@@ -20,7 +20,10 @@ export const NextStepsSchema = Type.Object({
 			description:
 				"One message the user could send next, written in their voice and language, short enough for a button (about 2–8 words).",
 		}),
-		{ minItems: 1, description: "The most useful next messages, best first. Usually about 3." },
+		{
+			minItems: 1,
+			description: "The most useful next messages, best first. Usually about 3, at most 9.",
+		},
 	),
 });
 

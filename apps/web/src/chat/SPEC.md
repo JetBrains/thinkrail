@@ -678,6 +678,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   - the owning extension is switched on (registrations carry their extension's name).
 
   Any later turn (an error, a retry, the next user message) clears the row, and a reload restores it.
+  The row shows at most one chip per send key — nine — whatever a reader returns.
   A call that wasn't last never qualifies: pi only ends the turn when every result in the batch
   terminates. A click, or the chip's key, goes through `performSend(text, [], "send")`, the same
   draft-free path as Try again, so the composer draft survives. Shift+click, or the chip's edit key,

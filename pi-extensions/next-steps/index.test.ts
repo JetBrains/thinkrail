@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI, SessionEntry, Theme } from "@earendil-works/pi-coding-agent";
 import defaultFactory, {
 	createNextStepsExtension,
+	MAX_SHORTCUTS,
 	NEXT_STEPS_TOOL_NAME,
 	normalizeSuggestions,
 	suggestionsOnBranch,
@@ -95,6 +96,11 @@ describe("suggest_next_steps tool", () => {
 
 	test("normalizeSuggestions drops non-strings", () => {
 		expect(normalizeSuggestions(["a", 3, null, " b "])).toEqual(["a", "b"]);
+	});
+
+	test("normalizeSuggestions keeps the first nine distinct suggestions, one per shortcut", () => {
+		const twelve = Array.from({ length: 12 }, (_, index) => `Step ${index + 1}`);
+		expect(normalizeSuggestions(["Step 1", ...twelve])).toEqual(twelve.slice(0, MAX_SHORTCUTS));
 	});
 });
 
