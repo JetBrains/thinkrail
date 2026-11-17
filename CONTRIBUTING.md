@@ -144,6 +144,11 @@ language to the built-in list in `README.md` — nothing else needs to change. I
 `bun run test` checks it against `en.json` (keys, placeholders, markup, plural forms). Agent replies,
 tool output, skills, and prompts are not part of the interface and are not translated.
 
+Extension authors may supply optional `translations` on their web descriptor, with `defaultLocale`,
+flat `catalogs`, and Settings display-key references. Read [the extension API](packages/extension-api/SPEC.md)
+and [locale rules](packages/locales/SPEC.md) for scoped `useT(name)`, summary translators and user
+overrides (`extension:<URI-encoded name>:<key>`). This API does not install or load extension code.
+
 ## Submitting changes
 
 1. [Fork the repository](https://docs.github.com/articles/fork-a-repo) and create a

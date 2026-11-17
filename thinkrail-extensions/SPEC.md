@@ -101,8 +101,11 @@ What a `./web` half may import:
   `useOptionalResourceHost` the host's tab actions. The
   extension never loads files or saves comments itself; the host supplies both through the provider.
 - `@thinkrail/locales/react` ([[module-locales]]) — `useT` / `<T>` / `t` over the one shared i18next
-  instance; an extension's UI text is keys in `packages/locales/en.json` under its own prefix
-  (`visualize.*`), held by `check:i18n` like the app.
+  instance. Existing compiled extensions use app keys (`visualize.*`); an extension may instead ship
+  `translations` on its web descriptor and read its isolated namespace with `useT(name)`. Summaries use
+  `extensionTranslator(t, name)` with the supplied translator. Settings key references travel with that
+  descriptor; [[module-locales]] owns validation, fallback and local overrides. Runtime extension
+  installation remains a separate capability.
 - **Voice input needs nothing from an extension.**
   - The host's dictation layer ([[submodule-web-speech]]) serves every text input, textarea and
     contenteditable an extension renders.
@@ -113,6 +116,28 @@ What a `./web` half may import:
   (highlighter → theme barrel). They move together with the generic CSS-variable Pierre token table
   (`THINKRAIL_PIERRE_THEME`) when a second
   extension needs highlighting.
+
+## Extension-owned text
+
+A web descriptor may opt into catalogs without changing its server half:
+
+```ts
+import en from "./locales/en.json";
+import de from "./locales/de.json";
+
+translations: {
+  defaultLocale: "en",
+  catalogs: { en, de },
+  title: "title",
+  settings: { previews: { title: "settings.previews.title" } },
+}
+```
+
+Keep string data in JSON catalogs, with every referenced key in the default catalog; the existing
+hardcoded-UI-text guard remains unchanged. Cards use `useT("my-extension")`; summaries keep
+receiving the app translator and scope it with `extensionTranslator(t, "my-extension")`. The host introduces no separate manifest/file-loading format.
+A local `de.json` key `extension:my-extension:title` overrides this extension's German title. Settings
+references are presentation copy only: the server still declares setting keys and defaults.
 
 ## Composition — the registry files
 

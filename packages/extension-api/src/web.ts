@@ -1,4 +1,4 @@
-import type { MessageKey } from "@thinkrail/locales";
+import type { ExtensionTranslations, MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import type { ComponentType, ReactNode } from "react";
 
@@ -101,10 +101,19 @@ export interface ExtensionShortcut {
 	readonly keys: readonly [ExtensionShortcutKey, ...ExtensionShortcutKey[]];
 }
 
+export interface WebExtensionTranslations extends ExtensionTranslations {
+	readonly title?: string;
+	readonly description?: string;
+	readonly settings?: Readonly<
+		Record<string, { readonly title: string; readonly description?: string }>
+	>;
+}
+
 export interface WebExtension {
 	name: string;
 	title?: MessageKey;
 	description?: MessageKey;
+	translations?: WebExtensionTranslations;
 	toolRenderers?: Record<string, { renderer: ToolRenderer; options?: ToolRegistrationOptions }>;
 	globalOverlay?: ComponentType<GlobalOverlayProps>;
 	commands?: readonly ExtensionCommand[];

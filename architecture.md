@@ -445,7 +445,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
 23. **UI strings are keyed catalogs; local language files are runtime data, not code.** Every
     user-facing string in `apps/web`, `packages/ui`, and extension web halves is a named flat key
     (`settings.language.title`) in [[module-locales]]'s `en.json`, the single English source of truth,
-    rendered through one shared i18next instance (`@thinkrail/locales/react`). **A lint gate fails on
+    rendered through one shared i18next instance (`@thinkrail/locales/react`). Extensions may opt into descriptor-owned catalogs in isolated
+    namespaces, following [[module-locales]]; their default language is the fallback and global local
+    files may override their namespaced keys. This does not introduce runtime code loading (Decision 21). **A lint gate fails on
     hardcoded user-facing text** (JSX text and text-bearing attributes such as `aria-label`, `title`,
     `placeholder`, `alt`, `label`) in those trees, so a new string cannot ship without a key. ThinkRail
     ships bundled catalogs (English plus translations held to `en.json` by a test); a user

@@ -3,6 +3,17 @@ import en from "../en.json";
 export type Catalog = Readonly<Record<string, string>>;
 export type EnglishCatalog = typeof en;
 
+export interface ExtensionTranslations {
+	readonly defaultLocale: string;
+	readonly catalogs: Readonly<Record<string, Catalog>>;
+}
+
+export type ExtensionNamespace = `extension:${string}`;
+
+export function extensionNamespace(name: string): ExtensionNamespace {
+	return `extension:${encodeURIComponent(name)}`;
+}
+
 const PLURAL_SUFFIX = /_(?:zero|one|two|few|many|other)$/;
 const PLURAL_KEY = /^(.+)_(zero|one|two|few|many|other)$/;
 
@@ -142,18 +153,18 @@ function own(catalog: Catalog, key: string): string | undefined {
 	return Object.hasOwn(catalog, key) ? catalog[key] : undefined;
 }
 
-function englishReference(key: string): string | undefined {
-	if (!PLURAL_SUFFIX.test(key)) return own(EN, key);
+function catalogReference(reference: Catalog, key: string): string | undefined {
+	if (!PLURAL_SUFFIX.test(key)) return own(reference, key);
 	const base = key.replace(PLURAL_SUFFIX, "");
-	return own(EN, `${base}_other`) ?? own(EN, key) ?? own(EN, base);
+	return own(reference, `${base}_other`) ?? own(reference, key) ?? own(reference, base);
 }
 
-function acceptable(key: string, value: string): boolean {
+function acceptable(key: string, value: string, catalog: Catalog): boolean {
 	if (value === "" || value.includes("$t(") || /<\s*\/?\s*\{\{/.test(value)) return false;
 	const shape = markup(value);
 	if (shape === null) return false;
-	const reference = englishReference(key);
-	if (reference === undefined) return shape === "";
+	const reference = catalogReference(catalog, key);
+	if (reference === undefined) return shape === "" || /^extension:[^:]+:.+/.test(key);
 	const plural = PLURAL_SUFFIX.test(key);
 	return (
 		placeholders(reference, plural) === placeholders(value, plural) && markup(reference) === shape
@@ -168,11 +179,16 @@ function pluralCategories(tag: string): readonly string[] {
 	}
 }
 
-export function completePlurals(tag: string, strings: Catalog): Catalog {
+export function completePlurals(tag: string, strings: Catalog, reference: Catalog = EN): Catalog {
 	const families = new Map<string, Map<string, string>>();
 	for (const [key, value] of Object.entries(strings)) {
 		const match = PLURAL_KEY.exec(key);
-		if (!match?.[1] || !match[2] || own(EN, `${match[1]}_other`) === undefined) continue;
+		if (
+			!match?.[1] ||
+			!match[2] ||
+			(own(reference, `${match[1]}_other`) === undefined && own(reference, match[1]) === undefined)
+		)
+			continue;
 		const forms = families.get(match[1]) ?? new Map<string, string>();
 		forms.set(match[2], value);
 		families.set(match[1], forms);
@@ -192,13 +208,13 @@ export function completePlurals(tag: string, strings: Catalog): Catalog {
 
 export type CatalogValidation = { ok: true; strings: Catalog } | { ok: false; error: "not-object" };
 
-export function validateCatalog(raw: unknown): CatalogValidation {
+export function validateCatalog(raw: unknown, reference: Catalog = EN): CatalogValidation {
 	if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
 		return { ok: false, error: "not-object" };
 	}
 	const entries = Object.entries(raw).filter(
 		(entry): entry is [string, string] =>
-			typeof entry[1] === "string" && acceptable(entry[0], entry[1]),
+			typeof entry[1] === "string" && acceptable(entry[0], entry[1], reference),
 	);
 	return { ok: true, strings: Object.fromEntries(entries) };
 }

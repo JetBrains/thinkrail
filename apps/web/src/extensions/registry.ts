@@ -2,16 +2,23 @@ import askUserQuestion from "@thinkrail/ext-ask-user-question/web";
 import hintMode from "@thinkrail/ext-hint-mode/web";
 import visualize from "@thinkrail/ext-visualize/web";
 import type { ExtensionCommand, WebExtension } from "@thinkrail/extension-api/web";
+import { registerExtensionTranslations } from "@thinkrail/locales/react";
 import { registerToolRenderer } from "../chat/toolRegistry";
 
 export const webExtensions: readonly WebExtension[] = [visualize, askUserQuestion, hintMode];
 
 export function registerWebExtensions(): void {
 	for (const extension of webExtensions) {
+		if (extension.translations)
+			registerExtensionTranslations(extension.name, extension.translations);
 		for (const [name, { renderer, options }] of Object.entries(extension.toolRenderers ?? {})) {
 			registerToolRenderer(name, renderer, options);
 		}
 	}
+}
+
+export function webExtension(name: string): WebExtension | undefined {
+	return webExtensions.find((extension) => extension.name === name);
 }
 
 export function enabledWebExtensions(disabled: readonly string[]): WebExtension[] {
@@ -30,12 +37,12 @@ export function webExtensionCommands(disabled: readonly string[]): WebExtensionC
 	);
 }
 
-export function webOnlyExtensions(
-	serverNames: ReadonlySet<string>,
-): (WebExtension & { title: NonNullable<WebExtension["title"]> })[] {
+export function webOnlyExtensions(serverNames: ReadonlySet<string>): WebExtension[] {
 	return webExtensions.flatMap((extension) => {
 		const { title } = extension;
-		const webOnly = title !== undefined && extension.toolRenderers === undefined;
-		return webOnly && !serverNames.has(extension.name) ? [{ ...extension, title }] : [];
+		const webOnly =
+			(title !== undefined || extension.translations?.title !== undefined) &&
+			extension.toolRenderers === undefined;
+		return webOnly && !serverNames.has(extension.name) ? [extension] : [];
 	});
 }

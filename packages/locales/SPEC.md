@@ -80,6 +80,30 @@ halves) renders through, so they cannot drift onto separate instances.
   a later apply retries the download. i18next runs with `load: "currentOnly"` and the explicit `fallbackChain`, so it consults exactly
   `tag → base → en` (never an unlisted script fallback).
 
+## Extension catalogs
+
+`ExtensionTranslations` is `{ defaultLocale, catalogs }`, with flat catalogs keyed by canonical BCP-47
+language. `extensionNamespace(name)` returns `extension:<URI-encoded name>`; extension resources never
+share the app namespace. `registerExtensionTranslations(name, definition)` (`./react`) validates and
+installs or replaces one descriptor, returning an identity-checked disposer. The default catalog must
+be non-empty and fully valid; partial translated catalogs drop bad strings. Invalid registration keeps
+the previous resources. Disabled extensions retain catalogs for historical cards; unloading disposes them.
+
+`useT(name)` returns the namespace's `ExtensionTranslator`; `useT()` remains the typed app translator.
+`extensionTranslator(t, name)` gives `ToolSummary` the same render-issued scoped translator. Both are
+replaced when language, local files or registrations change; `localeOf` accepts either. Resolution is
+active exact/base, then extension default exact/base, per string, never another extension or the app.
+App `applyLocale` keeps extension data out of the app namespace and refreshes each namespace
+independently, including removal of deleted local overrides.
+
+Local files override extension strings with flat keys such as `extension:my-extension:card.title`.
+The host retains safe indexed markers for these namespaced keys without knowing their source catalog;
+the browser then validates placeholders and marker structure against the extension's default catalog.
+Deletion restores the shipped string. `validateCatalog(raw, reference = EN)` and
+`completePlurals(tag, strings, reference = EN)` use the supplied reference, preserving existing app rules.
+The descriptor owns catalogs rather than a new manifest-file loader: compiled and future installed web
+descriptors use one registration surface and one i18next instance.
+
 ## Format
 
 Flat i18next JSON v4: one level of `"dotted.named.key": "text"`; `{{name}}` interpolation;
@@ -113,16 +137,18 @@ so the files diff cleanly.
   its command and keyboard strings are deliberately English for now, and a few newer strings lag; a new
   key lands in `en.json` first and is translated in Russian in the same change unless its feature is left
   English on purpose. The loader validates a downloaded body with `validateCatalog`, which
-  rejects a non-object, and `completePlurals` runs only on local files, so a catalog test requires every bundled translation to pass `validateCatalog`
+  rejects a non-object, and `completePlurals` runs on app local files and extension catalogs, so a catalog test requires every bundled app translation to pass `validateCatalog`
   with nothing dropped, to hold only sorted `en.json` keys — plus a plural form for a category English
   lacks when the language needs one — and to carry every plural form its language needs. Changing an
   English string's placeholders or markup, or removing a key, therefore fails in the same change, and
   that change updates or deletes the translation (deleting falls back to English). A rewording that
   changes the meaning deletes the translation too, rather than leaving it stale.
-- **Only English is in the startup bundle.** Each translation is a JSON asset (`new URL(…,
+- **Only the app's English catalog is in the startup bundle.** Each app translation is a JSON asset (`new URL(…,
   import.meta.url)`) fetched on demand, so a user downloads only the one they pick. Never `import()` it:
   Chromium caches a failed module import per URL, so a failed chunk could not retry without a reload. Never
-  value-import a translation catalog statically: one such import pulls every user's startup cost back up.
+  value-import a translation catalog statically: one such import pulls every user's startup cost back up. Extension-owned catalogs
+  arrive as data with their descriptor; this API loads no global app catalog and adds no second asset
+  loader. An extension carrying several languages pays that payload when its descriptor loads.
 - **A literal the user must type stays verbatim.** A protocol answer, JSON key, flag, or command quoted
   inside translated prose keeps its exact spelling: OpenSSH accepts only `yes` for a host key, so
   `panels.prSetup.hostKeyHint` keeps `yes` in every catalog — a translated «sí» makes ssh re-prompt and

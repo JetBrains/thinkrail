@@ -12,7 +12,9 @@ tags: [i18n]
 
 Reads, validates, and watches the user's local language files in `<dataDir>/locales/` (the global data
 dir only, never a workspace — [[architecture]] Decision 23) and reports them to clients. It owns no
-translation logic: validation and file naming come from [[module-locales]].
+translation logic: validation and file naming come from [[module-locales]]. Namespaced extension
+overrides remain flat strings; the host checks safe syntax, while the browser validates their shape
+against the registered extension's default catalog.
 
 ## Boundary
 
