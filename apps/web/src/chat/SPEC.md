@@ -434,9 +434,26 @@ remain app-local. A registration is:
   **`resolveProminence`** seam — where a per-user override map (settings) can plug in later.
 
 Every registry read (renderer, summary, chrome, prominence) goes through one resolver: the exact tool
-name, else the longest app-local prefix registration (`registerToolRendererPrefix` — today only `mcp__`,
-because pi names MCP tools per server), else the default. Exact names always win, an empty prefix never
-matches, and extension descriptors stay exact-name only.
+name — a built-in registration first, else the most recently loaded installed extension's — else the
+longest app-local prefix registration (`registerToolRendererPrefix` — today only `mcp__`, because pi names
+MCP tools per server), else the default. Exact names always win, an empty prefix never matches, and
+extension descriptors stay exact-name only. Built-in precedence mirrors the server's built-in tool-name
+precedence: an installed extension cannot restyle a built-in tool.
+
+**The registry is subscribable.** Installed web halves register after first render
+([[submodule-web-extensions]]): `setInstalledToolRenderers(owner, toolRenderers)` replaces one owner's set
+atomically and `removeInstalledToolRenderers(owner)` drops it, revealing an earlier owner of the same name.
+Every change publishes a new immutable `ToolRegistry` snapshot (with a `revision`). Readers take it through
+`useSyncExternalStore` hooks — `useToolRegistry()` for derivations, `useToolRenderer(name)` for the
+renderer itself, `useToolRegistryRevision()` — and pass the snapshot as the optional trailing `registry`
+argument of every resolver and derivation (`deriveRows`, `deriveInteractionStates`, `pendingInteraction`,
+`sessionGlance`, `estimateChatRowHeights`, summaries, chrome, prominence). A version counter beside an
+unchanged `getToolRenderer(name)` call is not enough: the React Compiler memoizes that call by its
+arguments, so the snapshot has to be an argument. The structure matters too: an unregistered tool is a
+routine step inside a collapsed activity group, so a late primary registration turns it into a card row
+and its removal turns it back. Without the argument the live snapshot is read, which keeps imperative
+callers and tests unchanged. Built-in registration at bootstrap behaves as before. In dev, registry state
+lives in `import.meta.hot.data`, so a hot update of the registry keeps every registration.
 
 Unregistered tools fall back to `DefaultToolRenderer`. **Every renderer renders inside its own
 `ToolRendererBoundary`** — in `ToolRendererBody` and on the plan page alike, built-in or installed: a
@@ -1661,7 +1678,7 @@ Unknown custom messages retain their existing behavior.
 
 ## Boundary
 
-- **Public surface:** the registry API (`toolRegistry`), the shared workspace-file target canonicalizer
+- **Public surface:** the registry API (`toolRegistry`, plus `ToolRendererBoundary` for any other render site of a registered renderer), the shared workspace-file target canonicalizer
   (`fileTargets`), and the renderers (incl. the presentational
   `Markdown` — GFM + code highlighting, no store/transport; the rendering is fixed but the **prose skin** is the
   caller's via an optional `className` — chat uses the compact bubble skin (`tr-prose-chat`),

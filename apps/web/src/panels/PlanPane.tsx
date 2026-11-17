@@ -18,7 +18,6 @@ import {
 	RiAddLine as Plus,
 } from "@remixicon/react";
 import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
-import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
 import { ResourceScopeProvider } from "@thinkrail/resource-renderers";
 import { Button, buttonVariants, IconButton } from "@thinkrail/ui/button";
@@ -680,7 +679,7 @@ function PlanInteractionCard({
 	const interaction = useToolInteraction(pending.toolCallId, pending.toolName);
 	const Renderer = useToolRenderer(pending.toolName);
 	const scope = useMemo(() => ({ workspaceId, sessionId }), [workspaceId, sessionId]);
-	const props: ToolRenderProps = {
+	const props = {
 		toolCallId: pending.toolCallId,
 		toolName: pending.toolName,
 		args: pending.args,
@@ -688,7 +687,7 @@ function PlanInteractionCard({
 		status: pending.status,
 		streaming: pending.streaming,
 		interaction,
-		onOpenFile: (path) => void openFileInTab(workspaceId, path, "preview"),
+		onOpenFile: (path: string) => void openFileInTab(workspaceId, path, "preview"),
 	};
 	return (
 		<ResourceScopeProvider value={scope}>
