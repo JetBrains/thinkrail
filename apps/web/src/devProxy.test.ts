@@ -12,6 +12,7 @@ test("every host route the app composes is proxied by the Vite dev server", () =
 		FILES_ROUTE,
 		BLOB_ROUTE,
 		USER_FONTS_ROUTE.replace(/\/$/, ""),
+		"/extensions",
 	]) {
 		expect(config).toContain(`"${route}"`);
 	}
