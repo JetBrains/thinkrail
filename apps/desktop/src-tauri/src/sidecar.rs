@@ -137,6 +137,16 @@ impl Drop for SidecarHandle {
     }
 }
 
+/// Release Windows builds are GUI-subsystem processes whose stderr handle is
+/// invalid, so inheriting it would hand the sidecar a broken handle.
+fn sidecar_stderr() -> Stdio {
+    if cfg!(all(windows, not(debug_assertions))) {
+        Stdio::null()
+    } else {
+        Stdio::inherit()
+    }
+}
+
 /// Spawn the sidecar with a dynamic port and wait for it to report readiness.
 pub fn spawn_sidecar(extra_env: &[(String, String)]) -> Result<SidecarHandle, String> {
     let binary = sidecar_binary_path().ok_or_else(|| {
@@ -150,7 +160,7 @@ pub fn spawn_sidecar(extra_env: &[(String, String)]) -> Result<SidecarHandle, St
         .envs(extra_env.iter().map(|(key, value)| (key, value)))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::inherit());
+        .stderr(sidecar_stderr());
     if extra_env.is_empty() {
         // Never pass on bridge variables the shell itself inherited.
         command
@@ -184,9 +194,10 @@ pub fn spawn_sidecar(extra_env: &[(String, String)]) -> Result<SidecarHandle, St
         for line in BufReader::new(stdout).lines() {
             match line {
                 Ok(line) => {
-                    if lines_tx.send(line).is_err() {
-                        break;
-                    }
+                    // Keep draining after the ready handshake (the receiver is
+                    // dropped by then); closing the read end would hand the
+                    // sidecar EPIPE/SIGPIPE on its next stdout write.
+                    let _ = lines_tx.send(line);
                 }
                 Err(_) => break,
             }

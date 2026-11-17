@@ -326,6 +326,14 @@ pub fn allow_navigation(app: &AppHandle, url: &url::Url, origin: &str) -> bool {
     if is_external_navigation_allowed(url.as_str(), origin) {
         return true;
     }
+    // In-app thinkrail:// links never load in the webview: route them to the
+    // same `openFile` path as OS-delivered links.
+    if url.scheme() == "thinkrail" {
+        if let Err(error) = forward_deep_link(app, url.as_str()) {
+            eprintln!("[desktop] ignoring invalid deep link: {error}");
+        }
+        return false;
+    }
     if let Err(error) = open_external(app, url.as_str()) {
         eprintln!("[desktop] {error}");
     }
