@@ -434,8 +434,9 @@ Install the folder you are working in before publishing anything:
 
 1. Run the build.
 2. In ThinkRail, open **Settings → Extensions → Install package…**, paste the absolute path of the
-   folder, for example `/Users/jane/code/palette`, and confirm. The dialog says it found a ThinkRail
-   extension and offers no scope: an extension is installed for you and is on in every project.
+   folder, for example `/Users/jane/code/palette`, and confirm. If the dialog asks where to install,
+   choose **Global**: an extension is always installed for you and is on in every project, and an
+   install for one repository is refused.
 3. The extension appears in the Installed list with its switch and its **Rate contrast** setting. Ask
    the agent for a triadic palette from `#3b82f6`.
 
@@ -453,11 +454,12 @@ A folder must be given by its absolute path (or `~/…`); a relative path fails,
 folder it could be relative to. A folder is loaded where it is, never copied, and its `node_modules` is
 used as it is.
 
-ThinkRail does not watch your folder. It reloads a folder extension only when it reconciles its
-extensions (at start, when `extensions.json` changes, or when the extension is updated) and only if
-`package.json` or a file the manifest names changed since the last load. After a rebuild, restart
-ThinkRail to be sure the new code runs. Always restart after changing the extension's dependencies: the
-host keeps the first copy of a JavaScript module it loaded.
+ThinkRail does not watch your folder. When it reconciles its extensions, at start and whenever
+`extensions.json` changes, it reloads a folder extension only if `package.json` or a file the manifest
+names changed since the last load; a change to another file, such as `server/palette.ts`, is not noticed
+that way. Updating a folder extension reloads it in place whatever changed. Restarting ThinkRail always
+loads the new code. Restart after changing the extension's dependencies: the host keeps the first copy
+of a JavaScript module it loaded.
 
 If the server half fails to load (a syntax error, a throw at the top level, a missing dependency, a
 descriptor `name` other than the package name), the row says **Failed to load** with the error, and
@@ -556,5 +558,5 @@ wrote as you would any code you install; to share it, publish the folder as desc
 - **Contributions are agent tools, skills, boolean settings, interactive tools and chat cards.** Panels,
   palette commands and settings other than on/off switches are not available.
 - **The React Compiler is not supported** in a web half.
-- **No reload on save.** A rebuilt folder extension loads on a restart, as described in
-  [Try it from a folder](#try-it-from-a-folder).
+- **No reload on save.** A rebuilt folder extension loads when it is updated or ThinkRail restarts, as
+  described in [Try it from a folder](#try-it-from-a-folder).
