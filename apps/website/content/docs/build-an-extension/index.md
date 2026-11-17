@@ -5,9 +5,18 @@ description: "Write an extension that adds agent tools and chat cards to ThinkRa
 order: 10
 ---
 
-This guide walks through one small extension from an empty folder to a published npm package. The
-running example is `thinkrail-ext-dice`: a tool the agent calls to roll dice, a card that shows the roll
-in chat, and one setting.
+This guide walks through a real extension, **Palette**: the npm package
+`@thinkrail/example-extension-palette`. Its source is in
+[`extension-examples/palette`](https://github.com/JetBrains/thinkrail/tree/main/extension-examples/palette)
+in the ThinkRail repository. It is published to npm and installable like any other extension: paste
+`npm:@thinkrail/example-extension-palette` into **Settings → Extensions → Install package…**.
+
+Palette gives the agent one tool, `color_palette`, which builds five colours from a base hex colour and
+a colour harmony. In chat, each call is shown as a card of swatches with copy buttons. One setting,
+**Rate contrast**, adds WCAG contrast ratings to the tool result and to the card. Everything is computed
+locally; it needs no network and no API key.
+
+Every field, option and rule is listed in the [extension reference](/docs/extension-reference/).
 
 ## What a ThinkRail extension is
 
@@ -16,380 +25,536 @@ A ThinkRail extension is an npm package with a **server half**, a **web half**, 
 - The **server half** runs in the ThinkRail host process, next to the agent. It contributes **agent
   tools**, **skills**, **boolean settings** and **interactive tools** (tools whose call waits for the
   person to answer in chat).
-- The **web half** runs in the app window. It contributes **chat cards**: the way a tool call is shown in
+- The **web half** runs in the app window. It contributes **chat cards**: how a tool call is shown in
   the transcript.
 
-The agent inside ThinkRail is [pi](https://github.com/earendil-works/pi). A pi package (pi's own
-extension format) is an optional dependency of the server half: the server half can compose one, but it
-does not have to, and an extension that only changes how something looks in chat has no server half at
-all.
+The agent inside ThinkRail is [pi](https://github.com/earendil-works/pi). Tools are pi extensions, and a
+pi package is an optional dependency of the server half: it can compose one, but does not have to, and
+an extension that only changes how something looks in chat has no server half at all. In the plain pi
+command line a ThinkRail extension does nothing by itself.
 
-An extension contributes exactly what ThinkRail's built-in extensions contribute today, with the same
-code-level descriptors. Panels, commands and other kinds of settings are not available yet; see
+An extension contributes exactly what ThinkRail's built-in extensions contribute, through the same
+descriptors. Panels, commands and settings other than on/off switches are not available; see
 [Current limits](#current-limits).
 
 ## The package
 
+<!-- guard: tree -->
 ```text
-thinkrail-ext-dice/
+palette/
 ├── package.json
 ├── server/
-│   └── index.ts      server half, published as TypeScript source
+│   ├── index.ts          the server half
+│   └── palette.ts        the colour maths
 ├── web/
-│   ├── index.tsx     web half source
-│   └── styles.css    Tailwind entry for the card's styles
-└── dist/             written by `thinkrail-extension build`
+│   ├── index.tsx         the web half
+│   ├── PaletteCard.tsx   the card
+│   └── details.ts        reads the tool result for the card
+└── dist/                 written by thinkrail-extension build
     ├── web.js
     └── web.css
 ```
 
-The package declares itself in `package.json` with the `thinkrail-extension` keyword and a `thinkrail`
-manifest:
+The server half is published as TypeScript source; ThinkRail loads it with pi's own loader, so it is
+never compiled. The web half is published built: ThinkRail never bundles anything when it installs an
+extension. The sample also has tests and a `tsconfig.json`; they are not part of what ThinkRail loads.
 
+To start your own extension, copy the sample's folder. In the repository its dependency versions are
+`workspace:*` and `catalog:`; replace them by installing the packages yourself:
+
+<!-- guard: shell -->
+```bash
+npm install @thinkrail/extension-sdk
+npm install --save-dev typescript @types/react @types/react-dom @earendil-works/pi-coding-agent typebox @remixicon/react
+```
+
+`@thinkrail/extension-sdk` is an ordinary dependency, because the server half imports it when it runs.
+Everything else is needed only to type-check and build: React's types, pi and typebox for the server
+half's types, and `@remixicon/react`, an icon set the build bundles into the card. React itself does not
+need to be installed: the card runs on the app's React.
+
+## package.json and the manifest
+
+The package declares itself in `package.json`: the `thinkrail-extension` keyword and a `thinkrail`
+manifest. The sample's fields that matter to ThinkRail, copied from its `package.json` (an excerpt):
+
+<!-- guard: package-json palette/package.json -->
 ```json
 {
-  "name": "thinkrail-ext-dice",
-  "version": "1.0.0",
-  "description": "Lets the agent roll dice and shows each roll as a card.",
-  "author": "Jane Doe",
-  "license": "MIT",
-  "repository": "github:jane/thinkrail-ext-dice",
-  "type": "module",
-  "keywords": ["thinkrail-extension"],
-  "files": ["server", "dist"],
-  "scripts": {
-    "build": "thinkrail-extension build",
-    "prepublishOnly": "thinkrail-extension build"
-  },
-  "thinkrail": {
-    "api": "1.0",
-    "server": "./server/index.ts",
-    "web": "./dist/web.js",
-    "styles": "./dist/web.css",
-    "title": "Dice",
-    "image": "https://raw.githubusercontent.com/jane/thinkrail-ext-dice/main/preview.png"
-  },
-  "dependencies": {
-    "@thinkrail/extension-sdk": "^1.0.0"
-  },
-  "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*",
-    "typebox": "*"
-  },
-  "devDependencies": {
-    "@earendil-works/pi-coding-agent": "*",
-    "@types/react": "^19.0.0",
-    "typebox": "*"
-  }
+	"name": "@thinkrail/example-extension-palette",
+	"description": "A sample ThinkRail extension: the agent builds colour palettes from a base colour, and chat shows them as swatches with WCAG contrast ratings.",
+	"type": "module",
+	"keywords": [
+		"thinkrail-extension",
+		"thinkrail",
+		"color",
+		"palette",
+		"wcag"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/JetBrains/thinkrail.git",
+		"directory": "extension-examples/palette"
+	},
+	"author": "ThinkRail",
+	"files": [
+		"server",
+		"!server/**/*.test.ts",
+		"dist",
+		"README.md",
+		"LICENSE"
+	],
+	"thinkrail": {
+		"api": "1.0",
+		"server": "./server/index.ts",
+		"web": "./dist/web.js",
+		"styles": "./dist/web.css",
+		"title": "Palette"
+	},
+	"scripts": {
+		"build": "thinkrail-extension build --prefix palette",
+		"prepack": "npm run build",
+		"test": "bun test",
+		"typecheck": "tsc --noEmit"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*",
+		"typebox": "*"
+	}
 }
 ```
 
-The fields of the `thinkrail` manifest:
+The `thinkrail` manifest:
 
-| Field | Required | Meaning |
-| --- | --- | --- |
-| `api` | Yes | The extension API version the extension was built for, as `major.minor`. See [Versions](#versions). |
-| `server` | One of `server` / `web` | Path to the server half's TypeScript entry. |
-| `web` | One of `server` / `web` | Path to the built web half, one ESM file. |
-| `styles` | No, only with `web` | Path to the built stylesheet of the web half. |
-| `title` | No | The display name. Defaults to the package name. |
-| `image` | No | An `https:` URL of a preview image for the extensions page. |
+- `api` is the extension API version the extension was built for, as `major.minor`. The SDK you build
+  with decides it: `@thinkrail/extension-sdk` 1.0 builds only `"api": "1.0"`. See [Versions](#versions).
+- `server` is the server half's entry, `web` the built web half (a `.js` or `.mjs` file) and `styles` its
+  built stylesheet (a `.css` file). At least one of `server` and `web` is required; `styles` is allowed
+  only with `web`. Each path is relative to the package root and must stay inside the package.
+- `title` is the display name; without it, the package name is shown. `image` is a preview image for
+  the extensions page; Palette has none.
 
-Every path is relative to the package root and must stay inside the package. The description, author
-and version shown for the extension are the package's own `description`, `author` and `version` fields.
+The description, author and version ThinkRail shows are the package's own `description`, `author` and
+`version`.
 
 The package `name` is the extension's identity: ThinkRail keys the extension's on/off switch and its
-settings by it, so renaming the package makes it a different extension. It cannot be the name of one of
-ThinkRail's built-in extensions.
+settings by it, so renaming the package makes it a different extension. It must be a valid npm name
+and cannot be the name of a built-in extension (`visualize`, `ask-user-question`, `web-access`).
+
+`files` publishes the server source and `dist/`, nothing else. `prepack` runs the build, so every
+`npm publish` and `npm pack` ships a fresh `dist/`.
 
 ## The server half
 
-The server half's default export is a descriptor made with `defineServerExtension`. Here is the dice
-extension's `server/index.ts`:
+The server half's default export is a descriptor made with `defineServerExtension`. Palette's whole
+`server/index.ts`:
 
+<!-- guard: file palette/server/index.ts -->
 ```ts
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { defineServerExtension } from "@thinkrail/extension-sdk/server";
+import {
+	defineServerExtension,
+	type ExtensionSessionServices,
+} from "@thinkrail/extension-sdk/server";
 import { Type } from "typebox";
+import { buildPalette, HARMONIES, type Harmony, paletteText } from "./palette";
+
+export const PALETTE_TOOL = "color_palette";
+
+const Parameters = Type.Object({
+	base: Type.String({ description: "The base colour as a hex value, e.g. #3b82f6 or #38f." }),
+	harmony: Type.Optional(
+		Type.Unsafe<Harmony>({
+			type: "string",
+			enum: [...HARMONIES],
+			description: "How the other colours relate to the base. Default: analogous.",
+		}),
+	),
+});
+
+function paletteTool(session: ExtensionSessionServices) {
+	return (pi: ExtensionAPI) => {
+		const checkContrast = session.setting("contrast");
+		pi.registerTool({
+			name: PALETTE_TOOL,
+			label: "Colour palette",
+			description:
+				"Build a five-colour palette from a base colour using a colour harmony (analogous, monochromatic, complementary, split-complementary, triadic or tetradic). Returns the hex values and CSS custom properties" +
+				(checkContrast ? ", each rated for WCAG contrast against white and black text." : "."),
+			promptSnippet:
+				"Build colour palettes from a base hex colour and show them as swatches in chat.",
+			parameters: Parameters,
+			async execute(_toolCallId, params) {
+				const palette = buildPalette(params.base, params.harmony ?? "analogous", checkContrast);
+				return { content: [{ type: "text", text: paletteText(palette) }], details: palette };
+			},
+		});
+	};
+}
 
 export default defineServerExtension({
-  name: "thinkrail-ext-dice",
-  title: "Dice",
-  description: "Lets the agent roll dice and shows each roll as a card.",
-  extensions: [],
-  settings: {
-    sortRolls: {
-      type: "boolean",
-      default: false,
-      title: "Sort rolls",
-      description: "List the dice from lowest to highest.",
-    },
-  },
-  sessionExtensions: (session) => [
-    function dice(pi: ExtensionAPI) {
-      pi.registerTool({
-        name: "roll_dice",
-        label: "Roll dice",
-        description: "Roll dice that all have the same number of sides and report each result.",
-        parameters: Type.Object({
-          count: Type.Integer({ minimum: 1, maximum: 20, description: "How many dice to roll" }),
-          sides: Type.Integer({ minimum: 2, maximum: 100, description: "Sides on each die" }),
-        }),
-        async execute(_toolCallId, { count, sides }) {
-          const rolls = Array.from({ length: count }, () => 1 + Math.floor(Math.random() * sides));
-          if (session.setting("sortRolls")) rolls.sort((a, b) => a - b);
-          const total = rolls.reduce((sum, roll) => sum + roll, 0);
-          return {
-            content: [{ type: "text", text: `Rolled ${count}d${sides}: ${rolls.join(", ")} (total ${total})` }],
-            details: { sides, rolls, total },
-          };
-        },
-      });
-    },
-  ],
+	name: "@thinkrail/example-extension-palette",
+	title: "Palette",
+	description:
+		"Lets the agent build colour palettes from a base colour and shows them as swatches.",
+	extensions: [],
+	sessionExtensions: (session) => [paletteTool(session)],
+	settings: {
+		contrast: {
+			type: "boolean",
+			default: true,
+			title: "Rate contrast",
+			description:
+				"Rate every colour's WCAG contrast against white and black text, for the agent and on the card.",
+		},
+	},
 });
 ```
 
-What the descriptor holds:
+What it does:
 
-- `name` — the package name. `title` and `description` are what Settings → Extensions shows for the
-  extension.
-- `extensions` — pi extension factories (`(pi: ExtensionAPI) => void`) added to every chat. Give each
-  factory a function name, as `dice` above: pi's diagnostics use it.
-- `sessionExtensions(session)` — factories built for one chat from the services ThinkRail gives that
-  chat. `session.setting(key)` reads one of your settings. Use this form whenever a tool needs a setting
-  or another per-chat service.
-- `settings` — boolean switches, shown nested under the extension in Settings → Extensions. Each one
-  carries its own `title` and `description`, because your text is not part of the app's translation
-  files. A changed value reaches open chats when their current turn ends.
-- `childExtensions` — factories added to the curated set of subagents ThinkRail starts.
-- `skillPackages` — package names whose pi `skills` folders become skills of this extension. They are
-  resolved from your server entry, and switching the extension off drops them with its tools.
-- `interactiveTools` — the names of tools whose call waits for the person. The tool waits with
-  `session.awaitToolResponse(toolCallId, signal)`; the web half renders the question and answers through
-  the `interaction` it receives (see below).
+- `name` is the package name. ThinkRail refuses to load a server half whose descriptor has any other
+  name.
+- `title` and `description` are what Settings → Extensions shows when the manifest has no `title` or the
+  package no `description`; the manifest and the package fields win.
+- `settings` declares the boolean `contrast`, with its own `title` and `description`: your text is not
+  part of the app's translation files. Settings → Extensions shows it under the extension's switch.
+- `sessionExtensions(session)` returns pi extension factories built for one chat from the services
+  ThinkRail gives that chat. `session.setting("contrast")` reads the setting by the key you declared.
+  Read a setting inside the factory, as `paletteTool` does: a changed value reaches an open chat when its
+  current turn ends and ThinkRail rebuilds the chat's factories.
+- `extensions` holds factories that need no per-chat services. Palette has none, so it is empty; the
+  field is required.
 
-Any pi extension works inside these factories: everything in pi's
-[extension guide](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md)
-about tools applies. If a pi package you depend on already exports a factory, list it instead of writing
-your own.
-
-ThinkRail loads `server` as TypeScript source with pi's own loader, so nothing needs to be compiled.
+Each factory is an ordinary pi extension, `(pi: ExtensionAPI) => void`: `pi.registerTool` and the rest
+of pi's [extension guide](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/extensions.md)
+apply. The tool's `content` is what the agent reads; its `details` travel with the result to the card.
+The descriptor can also declare `childExtensions`, `skillPackages` and `interactiveTools`; the
+[reference](/docs/extension-reference/#server-descriptor) describes them.
 
 ### pi and typebox are peer dependencies
 
-Declare `@earendil-works/pi-coding-agent` and `typebox` (and any other `@earendil-works/pi-*` package you
-import) in `peerDependencies` with `"*"`, never in `dependencies`. Your own imports of them always
-resolve to the single copy inside ThinkRail. A second copy in your package's `node_modules` is what a
-plain-JavaScript dependency of yours would bind to instead, giving it different classes and registries
-from the ones the agent uses. ThinkRail keeps them out of an installed extension's `node_modules`;
-listing them in `devDependencies` for type checking is fine, because npm does not install an
-installed package's dev dependencies.
-
-`@thinkrail/extension-sdk` itself is an ordinary dependency: the server half imports it at run time, and
-it imports no pi code.
+Declare `@earendil-works/pi-coding-agent` and `typebox` (and any other `@earendil-works/*` package you
+import) in `peerDependencies` with `"*"`, never in `dependencies`; the build fails if they are
+dependencies. Your own imports of them always resolve to the one copy inside ThinkRail. A second copy in
+your package's `node_modules` is what a plain-JavaScript dependency of yours would bind to instead, with
+different classes and registries from the ones the agent uses. When ThinkRail installs an npm or git
+source it removes any copy from the extension's `node_modules`. List them in `devDependencies` as well
+for type checking: npm does not install a published package's dev dependencies.
 
 ## The web half
 
 The web half's default export is a descriptor made with `defineWebExtension`. Its `toolRenderers` are
-keyed by **tool name**: the card for `roll_dice` renders every `roll_dice` call in the transcript. Here is
-`web/index.tsx`:
+keyed by **tool name**: the card registered for `color_palette` renders every `color_palette` call in
+the transcript. Palette's whole `web/index.tsx`:
 
+<!-- guard: file palette/web/index.tsx -->
 ```tsx
-import { defineWebExtension, numArg, type ToolRenderProps } from "@thinkrail/extension-sdk/web";
-import { cn } from "@thinkrail/extension-sdk/ui/utils";
-
-function rollsOf(result: unknown): number[] {
-  if (typeof result !== "object" || result === null || !("details" in result)) return [];
-  const { details } = result;
-  if (typeof details !== "object" || details === null || !("rolls" in details)) return [];
-  return Array.isArray(details.rolls) ? details.rolls.filter((roll) => typeof roll === "number") : [];
-}
-
-function DiceCard({ args, result, status }: ToolRenderProps) {
-  if (status === "running") return <p className="dice:text-text-muted">Rolling…</p>;
-  const sides = numArg(args, "sides");
-  return (
-    <ul className="dice:flex dice:flex-wrap dice:gap-8">
-      {rollsOf(result).map((roll, index) => (
-        <li
-          key={`${index}-${roll}`}
-          className={cn(
-            "dice:rounded-sm dice:border dice:border-border-default dice:px-8 dice:py-4",
-            roll === sides && "dice:text-primary",
-          )}
-        >
-          {roll}
-        </li>
-      ))}
-    </ul>
-  );
-}
+import { defineWebExtension, strArg } from "@thinkrail/extension-sdk/web";
+import { PaletteCard } from "./PaletteCard";
 
 export default defineWebExtension({
-  name: "thinkrail-ext-dice",
-  toolRenderers: {
-    roll_dice: {
-      renderer: DiceCard,
-      options: {
-        prominence: "primary",
-        summary: ({ args }) => `Roll ${numArg(args, "count") ?? 1}d${numArg(args, "sides") ?? 6}`,
-      },
-    },
-  },
+	name: "@thinkrail/example-extension-palette",
+	toolRenderers: {
+		color_palette: {
+			renderer: PaletteCard,
+			options: {
+				prominence: "primary",
+				defaultExpanded: true,
+				summary: ({ args }) => {
+					const base = strArg(args, "base");
+					return base
+						? `${strArg(args, "harmony") || "analogous"} palette from ${base}`
+						: "Colour palette";
+				},
+			},
+		},
+	},
 });
 ```
 
+Set `name` to the package name, as on the server half; ThinkRail registers the cards under the package
+name. The registration `options`:
+
+- `summary` is the text of the call's collapsed row. It receives the render props and the app's own
+  translation function, which knows nothing of your text.
+- `prominence: "primary"` shows the call as its own card in the transcript; the default, `"routine"`,
+  folds it into the turn's activity group with the other routine calls.
+- `defaultExpanded` shows the card open once the call completes. `chrome` and `interactive` are in the
+  [reference](/docs/extension-reference/#web-descriptor).
+
+The card is an ordinary React component. The top of `web/PaletteCard.tsx` (an excerpt):
+
+<!-- guard: excerpt palette/web/PaletteCard.tsx -->
+```tsx
+import { RiCheckLine, RiFileCopyLine } from "@remixicon/react";
+import { Button, IconButton } from "@thinkrail/extension-sdk/ui/button";
+import { cn } from "@thinkrail/extension-sdk/ui/utils";
+import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-sdk/web";
+import { useEffect, useState } from "react";
+import { type CardSwatch, cssVariables, paletteFromResult } from "./details";
+```
+
+and the component the descriptor registers (an excerpt; `SwatchTile`, in the same file, draws each
+swatch):
+
+<!-- guard: excerpt palette/web/PaletteCard.tsx -->
+```tsx
+export function PaletteCard({ args, result, status }: ToolRenderProps) {
+	const palette = paletteFromResult(result);
+	const variables = palette ? cssVariables(palette) : "";
+	const { copied, copy } = useCopy(variables);
+	if (!palette) {
+		return (
+			<p className="tr-text-metadata palette:text-text-muted">
+				{status === "error"
+					? resultText(result)
+					: `Mixing a palette from ${strArg(args, "base") || "a base colour"}…`}
+			</p>
+		);
+	}
+	return (
+		<div data-testid="palette-card" className="palette:flex palette:flex-col palette:gap-8">
+			<div className="palette:grid palette:grid-cols-5 palette:gap-8">
+				{palette.colors.map((swatch, index) => (
+					<SwatchTile key={`${index}-${swatch.hex}`} swatch={swatch} />
+				))}
+			</div>
+			<div className="palette:flex palette:items-center palette:justify-between palette:gap-8">
+				<span className="tr-text-metadata palette:text-text-muted">
+					{`${palette.harmony} · ${palette.base}`}
+				</span>
+				<Button
+					variant="outline"
+					size="s"
+					iconLeft={copied ? RiCheckLine : RiFileCopyLine}
+					onClick={() => void copy()}
+				>
+					{copied ? "Copied" : "Copy CSS variables"}
+				</Button>
+			</div>
+		</div>
+	);
+}
+```
+
 A renderer receives `ToolRenderProps`: the call's `toolName`, `args`, `result` (the object your tool
-returned, `details` included), `status` (`"running"`, `"done"` or `"error"`), `streaming`, and for an
-interactive tool the `interaction` to answer with. The registration `options` set the collapsed row's
-`summary`, its `prominence` (`"primary"` shows the card open in the transcript, `"routine"` groups it with
-other routine calls), `chrome` (`"card"` or `"bare"`), `defaultExpanded`, and `interactive`.
+returned, `details` included) and `status` (`"running"`, `"done"` or `"error"`), among others.
+`details.ts` reads `result.details` defensively: a card also renders failed calls and calls in
+transcripts written by an older version of your tool.
 
 If a renderer throws while rendering, ThinkRail shows its default row for that one call and the rest of
 the chat keeps working. Errors thrown in effects or event handlers are not caught that way; handle them
-in your code.
+in your code, as `useCopy` does for the clipboard.
 
-### What the web half may import from the app
+### What the web half shares with the app
 
-The card runs on the app's own React, and a small set of the app's modules is shared with it:
+The card runs on the app's own React and uses some of the app's own modules. These imports are not
+bundled: the build replaces each with a lookup on the running app, also when one of your dependencies
+makes it.
 
+<!-- guard: shared-modules-summary -->
 - `react`, `react/jsx-runtime`, `react-dom`
-- `@thinkrail/extension-sdk/web` — `defineWebExtension`, the render types, and helpers such as `strArg`,
+- `@thinkrail/extension-sdk/web`: `defineWebExtension`, the render types and helpers such as `strArg`,
   `numArg` and `resultText`
-- `@thinkrail/extension-sdk/resources` — `ResourcePreview`, `useResourceScope` and
-  `useOptionalResourceHost`, to show a workspace file or a before/after of two files with the app's own
-  renderers
-- `@thinkrail/extension-sdk/ui/<module>` for `button`, `dialog`, `textarea`, `keyboard`,
-  `attention-line`, `utils` (`cn`), `theme` and `fonts`
+- `@thinkrail/extension-sdk/resources`: the app's file and diff previews
+- `@thinkrail/extension-sdk/ui/<module>` for `attention-line`, `button`, `dialog`, `fonts`, `keyboard`,
+  `textarea`, `theme` and `utils` (`cn`)
 
-The build replaces each of these imports with a lookup on the running app, also when one of your
-dependencies makes it. Everything else you import, an icon set for example, is bundled into your own
-`dist/web.js`. `react-dom/client` is not available: the app owns the React root.
+Palette uses the app's `Button`, `IconButton` and `cn`. The
+[reference](/docs/extension-reference/#shared-modules) lists every name each module exports. Anything
+else you import is bundled into `dist/web.js`: Palette bundles its two icons from `@remixicon/react`,
+and its whole bundle is about 6 KB.
 
-Do not compile the web half with the React Compiler. Its output imports `react/compiler-runtime`, which
-is not in the shared set.
+The build fails on an import the app cannot provide, and the message names the importing file:
 
-### Styles and the Tailwind prefix
+- `react-dom/client`: the app owns the React root;
+- `react/compiler-runtime`: the React Compiler is not supported, so do not compile the web half with it;
+- any other `react` or `react-dom` subpath, which would load a second React;
+- `@thinkrail/extension-sdk/server`, or an SDK subpath that is not in the list above;
+- `@thinkrail/ui`, `@thinkrail/extension-api` and `@thinkrail/resource-renderers`, the app's private
+  packages; the message names the SDK module to import instead;
+- a CSS file imported from JavaScript; pass it to the build with `--css` instead.
+
+### Styles and the prefix
 
 Cards are styled with the app's own Tailwind utilities, its colour, spacing and typography names, under
-**a prefix of your own**. `web/styles.css` imports the theme file that ships with the SDK and sets the
-prefix:
+**a prefix of your own**. You choose the prefix, lowercase letters only, and pass it to the build:
+Palette's `build` script runs `thinkrail-extension build --prefix palette`. Every utility in your markup
+then carries it as a variant: `palette:flex`, `palette:gap-8`, `palette:text-text-muted`. The app's
+typography classes, such as `tr-text-metadata` and `tr-code-text-small`, are used without a prefix: they
+come from the app's own stylesheet.
 
+You write no Tailwind entry file. The build compiles this template from the SDK, with `extprefix`
+replaced by your `--prefix` and `@source` pointed at the folder of your web entry:
+
+<!-- guard: file sdk/assets/extension.css -->
 ```css
-@import "@thinkrail/extension-sdk/tailwind.css" prefix(dice);
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" theme(reference) prefix(extprefix);
+@import "@thinkrail/extension-sdk/theme.css" theme(reference);
+@import "tailwindcss/utilities.css" layer(utilities);
+@source "./web";
 ```
 
-Every utility in your markup then carries the prefix as a variant: `dice:flex`, `dice:gap-8`,
-`dice:text-text-muted`. A Tailwind prefix is lowercase letters only; derive it from your package name.
-The build emits only the utilities you use, pointing at the app's CSS variables, so the card follows the
-light and dark themes.
+The output holds only the prefixed utilities your code uses, pointing at the app's CSS variables, so
+the card follows the light and dark themes. Palette's `dist/web.css` is under 1 KB. A utility written
+without the prefix gets no CSS from your stylesheet.
 
 The prefix is required. Your stylesheet is loaded after the app's. Without a prefix it would emit
 utilities the app already has, and the copies, coming later in the page, would change which of two
 utilities wins inside the app itself: `px-16 p-8` on an app element would turn from 16px to 8px of
-horizontal padding.
+horizontal padding. Pick a prefix no other extension is likely to use; the package name is a good
+source.
 
 ## Build
 
+<!-- guard: shell -->
 ```bash
-npx thinkrail-extension build
+npm run build
 ```
 
-`thinkrail-extension build` (in the SDK) reads the `thinkrail` manifest, bundles `web/index.tsx` into the
-file named by `web`, and compiles `web/styles.css` into the file named by `styles`. ThinkRail never
-bundles anything when it installs an extension, so the built files are what you publish; the server half
-is published as source. The `prepublishOnly` script above rebuilds before every `npm publish`.
+runs Palette's `build` script, `thinkrail-extension build --prefix palette`. The command reads the
+`thinkrail` manifest, bundles `web/index.tsx` into the file named by `web` and builds the stylesheet into
+the file named by `styles`, here `dist/web.js` and `dist/web.css`. It runs under Node 22.19 or newer and
+under Bun, and prints each file it wrote with its size.
+
+Before building, it checks the manifest with the rules ThinkRail applies, plus three of its own: `api`
+must equal the SDK's API version, the `server` file must exist, and pi packages and typebox must not be
+dependencies. It warns, without failing, about a missing `thinkrail-extension` keyword, a server half
+without `@thinkrail/extension-sdk` in `dependencies`, an unknown manifest field and an `image` that is
+not an `https:` URL. An extension without a web half has nothing to build.
+
+The other options (`--entry`, `--css`, `--cwd`, `--no-minify`) are in the
+[reference](/docs/extension-reference/#the-build-command).
 
 ## Try it from a folder
 
-Install the folder you are working in, before publishing anything:
+Install the folder you are working in before publishing anything:
 
 1. Run the build.
-2. In ThinkRail, open **Settings → Extensions → Install package…**, paste the absolute path of the folder,
-   for example `/Users/jane/code/thinkrail-ext-dice`, and confirm. The dialog says it found a ThinkRail
-   extension.
-3. The extension appears in the Installed list with its switch and its `Sort rolls` setting. Ask the
-   agent to roll some dice.
+2. In ThinkRail, open **Settings → Extensions → Install package…**, paste the absolute path of the
+   folder, for example `/Users/jane/code/palette`, and confirm. The dialog says it found a ThinkRail
+   extension and offers no scope: an extension is installed for you and is on in every project.
+3. The extension appears in the Installed list with its switch and its **Rate contrast** setting. Ask
+   the agent for a triadic palette from `#3b82f6`.
 
-The same install, without the dialog: add the folder to `~/.thinkrail/extensions.json`. ThinkRail
-watches this file and installs and loads what it lists.
+The same install without the dialog: add the folder to `~/.thinkrail/extensions.json`. ThinkRail watches
+this file, installs what it lists and loads it.
 
+<!-- guard: extensions-json -->
 ```json
 {
-  "extensions": ["/Users/jane/code/thinkrail-ext-dice"]
+	"extensions": ["/Users/jane/code/palette"]
 }
 ```
 
-A folder is loaded where it is, not copied. Changes are not reloaded while you type: rebuild and restart
-ThinkRail to load a new version of your code, and always restart after changing its dependencies.
+A folder must be given by its absolute path (or `~/…`); a relative path fails, because the file has no
+folder it could be relative to. A folder is loaded where it is, never copied, and its `node_modules` is
+used as it is.
 
-If the server half fails to load (a syntax error, a top-level throw, a missing dependency), the row says
-**Failed to load** with the error, and nothing of the extension runs. The rest of the app is unaffected.
+ThinkRail does not watch your folder. It reloads a folder extension only when it reconciles its
+extensions (at start, when `extensions.json` changes, or when the extension is updated) and only if
+`package.json` or a file the manifest names changed since the last load. After a rebuild, restart
+ThinkRail to be sure the new code runs. Always restart after changing the extension's dependencies: the
+host keeps the first copy of a JavaScript module it loaded.
+
+If the server half fails to load (a syntax error, a throw at the top level, a missing dependency, a
+descriptor `name` other than the package name), the row says **Failed to load** with the error, and
+nothing of the extension runs. The rest of the app is unaffected.
 
 ## Publish to npm
 
+<!-- guard: shell -->
 ```bash
-npm publish
+npm publish --access public
 ```
 
-A scoped name (`@jane/thinkrail-ext-dice`) needs `npm publish --access public` the first time. Before
-publishing, check that:
+`--access public` is needed the first time you publish a scoped name such as `@jane/palette`. `prepack`
+builds `dist/` before the package is packed. Before publishing, check that:
 
 - `keywords` contains `thinkrail-extension`;
-- the `thinkrail` manifest is valid and every path it names is in the published files (`npm pack
-  --dry-run` lists them);
+- the files the manifest names are in the package (`npm pack --dry-run` lists them);
 - pi and typebox are peer dependencies, not dependencies.
 
-Anyone can then install it by pasting `npm:thinkrail-ext-dice` into **Install package…**.
+Anyone can then install it by pasting `npm:` and the package name into **Install package…**, as
+`npm:@thinkrail/example-extension-palette` for the sample.
 
 ## Getting listed
 
 The [extensions page](/extensions/) and the Browse list in Settings → Extensions read one catalog,
 `https://thinkrail.ai/extensions/catalog.json`. The site rebuilds it from npm every hour, so a new
 package or version appears within about an hour of publishing. There is no submission and no review:
-every npm package whose **latest** version has the `thinkrail-extension` keyword and a valid `thinkrail`
-manifest is listed. To be removed, publish a version without the keyword.
+every npm package whose **latest** version has the `thinkrail-extension` keyword and a valid
+`thinkrail` manifest is listed. To be removed, publish a version without the keyword. An extension
+installed from a git URL or a folder works the same once installed, but only npm packages are listed.
 
-A listing shows the title, the package name and version, the description, the author (the package's
-`author`, or its first npm maintainer), the preview image, whether the extension has agent tools (a
-server half) and chat cards (a web half), and links to npm and to the package's repository. Only an
-`https:` image is shown; the card crops it to a 16:9 box.
+What a card on the extensions page shows, and where it comes from:
 
-An extension installed from a git URL or a folder works the same once installed, but only npm packages
-are listed.
+| On the card | From |
+| --- | --- |
+| Title | the manifest `title`, else the package name |
+| Name and version | the package `name` and its latest `version` |
+| Description | the package `description`, shortened to 400 characters |
+| Author | the name in the package `author`, else its first npm maintainer |
+| Preview image | the manifest `image` |
+| Agent tools, Chat cards | whether the manifest has `server`, `web` |
+| `npm:<name>` and Copy | the package name, to paste into Install package… |
+| npm and repository links | the npm page, and the package `repository` as an `https:` URL |
+
+The preview image is shown only when `image` is an `https:` URL; any other value is dropped and the
+package stays listed. The card shows it in a 16:9 box, cropped to fill it; an image that fails to load is
+hidden. The image is loaded from your host when someone views its card, without a referrer. A card
+names which halves exist, not the tools: those are declared in code the site does not run.
 
 ## Versions
 
 `api` in the manifest is the extension API version you built against, and `@thinkrail/extension-sdk`
-releases follow it. ThinkRail loads an extension when the major part equals its own and the minor part
-is not newer than its own. A ThinkRail that supports `1.2` loads extensions built for `1.0`, `1.1` and
-`1.2`; it does not load `1.3` or `2.0`.
+releases follow it: SDK 1.0.x builds API `1.0`. ThinkRail loads an extension when the major part equals
+its own and the minor part is not newer than its own. A ThinkRail that supports `1.2` loads extensions
+built for `1.0`, `1.1` and `1.2`; it does not load `1.3` or `2.0`.
 
 On a mismatch the extension stays installed and is not loaded: neither half runs, and its row in
-Settings → Extensions says why. An extension built for a newer API loads after the user updates
-ThinkRail; one built for an older major needs a new release built against the current SDK. Target the
-oldest API that has what you use, so the most ThinkRail versions can load it.
+Settings → Extensions says which API it was built for and which one this ThinkRail supports. An
+extension built for a newer minor loads after the user updates ThinkRail; one built for another major
+needs a new release built with the matching SDK. ThinkRail decides this from the manifest before any of
+the extension's code runs, and the built web half checks the API major again when it loads.
 
-Your package's own `version` is independent of the API version. Publish fixes as ordinary semver
-releases; installed copies show **Update available**.
+Your package's own `version` is independent of the API version. Publish fixes as ordinary releases:
+ThinkRail checks npm and git sources for a newer version and shows **Update available**. Updating
+installs the new version beside the old one and switches only once the new one loads; if it fails or is
+incompatible, the old version stays. A folder source has no updates to check.
 
 ## What installing means
 
 An installed extension runs code on the user's machine: its server half runs in the ThinkRail host with
-the user's permissions, like any pi package, and its web half runs in the app window with the same access
-as the app's own interface. There is no sandbox and no permission prompt: **installing is the consent**.
-An extension is installed for the user and is on in every project. A repository cannot install an
-extension for the people who open it.
+the user's permissions, like any pi package, and its web half runs in the app window with the same
+access as the app's own interface. There is no sandbox and no permission prompt: **installing is the
+consent**. An extension is installed for the user and is on in every project; a repository cannot
+install an extension for the people who open it. Switching an extension off withholds its tools and
+skills from chats while past transcripts keep its cards; after it is removed, its past calls show as
+default rows.
+
+A tool name that a built-in extension registers stays the built-in's. Between two installed extensions
+that register the same tool name, the one listed first keeps it.
 
 Listing on the extensions page is not a review. Say in your README what your extension does, which
-network services it calls, and what it stores.
+network services it calls and what it stores.
+
+## Ask the agent to write one
+
+ThinkRail bundles a skill for writing extensions. Ask the agent in a chat, for example "make me a
+ThinkRail extension that shows this tool's result as a chart", and it writes the extension to a local
+folder, builds it and installs it from there without asking you to confirm the install. Review what it
+wrote as you would any code you install; to share it, publish the folder as described above.
 
 ## Current limits
 
-- **Text is not translated.** Titles, descriptions, setting labels, summaries and card text are shown as
-  you wrote them, in every app language. Translations for extensions are tracked in
+- **Text is not translated.** Titles, descriptions, setting labels, summaries and card text are shown
+  as you wrote them, in every app language. Translations for extensions are tracked in
   [issue #1423](https://github.com/JetBrains/thinkrail/issues/1423).
-- **Contributions are the five listed above**: agent tools, skills, boolean settings, interactive tools
-  and chat cards. Panels, commands and settings other than on/off switches are not available yet.
-- **No reload on save.** A changed folder extension loads after a restart.
+- **Contributions are agent tools, skills, boolean settings, interactive tools and chat cards.** Panels,
+  palette commands and settings other than on/off switches are not available.
+- **The React Compiler is not supported** in a web half.
+- **No reload on save.** A rebuilt folder extension loads on a restart, as described in
+  [Try it from a folder](#try-it-from-a-folder).

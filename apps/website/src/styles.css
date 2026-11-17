@@ -2948,6 +2948,23 @@ a.feature-card:hover {
 	margin: 0;
 }
 
+.doc-page .blog-post-content :not(pre) > code {
+	overflow-wrap: anywhere;
+}
+
+.doc-page .blog-post-content table {
+	display: block;
+	overflow-x: auto;
+}
+
+.doc-page .blog-post-content td > code {
+	overflow-wrap: break-word;
+}
+
+.doc-page .blog-post-content pre {
+	tab-size: 2;
+}
+
 /* ══ EXTENSIONS — the /extensions/ showcase (SPEC.md "Extensions page") ══ */
 
 .ext-notice {
