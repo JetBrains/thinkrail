@@ -22,6 +22,7 @@ import { ConnectedLine, type ConnectedSummary } from "./ConnectedLine";
 import { connectedProviderName } from "./ConnectProviderOptions";
 import { canStartProjectlessChat, startProjectlessChat } from "./chatActions";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
+import { HeroComposer } from "./HeroComposer";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { OnboardingWizard } from "./OnboardingWizard";
 import { ProjectTrustNotice } from "./ProjectTrustNotice";
@@ -208,6 +209,12 @@ export function WelcomePanel() {
 						/>
 					)}
 					{project ? <ProjectTrustNotice projectId={project.id} /> : null}
+					{project && hasSpecs !== null ? (
+						<HeroComposer
+							projectName={project.name}
+							onSubmit={(prompt) => setDialog({ projectId: project.id, prompt })}
+						/>
+					) : null}
 
 					<div className="mt-24 flex flex-wrap justify-center gap-12">
 						{noProjects && wizard === "pending" ? (
