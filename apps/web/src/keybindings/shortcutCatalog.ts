@@ -675,6 +675,13 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 			local: SUGGESTION_KEYS.send,
 			bindingTitle: "shortcuts.suggestions.sendOne",
 		},
+		{
+			id: "suggestions.edit",
+			title: "shortcuts.suggestions.edit",
+			surface: "composer",
+			local: SUGGESTION_KEYS.edit,
+			bindingTitle: "shortcuts.suggestions.editOne",
+		},
 	]),
 	...inScope("transcript", [
 		{

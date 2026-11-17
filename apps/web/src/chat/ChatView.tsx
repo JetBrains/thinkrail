@@ -847,6 +847,10 @@ export default function ChatView({
 		(text: string) => performSendRef.current(text, [], "send"),
 		[],
 	);
+	const editSuggestion = useCallback(
+		(text: string) => composerRef.current?.insertAtCaret(text),
+		[],
+	);
 
 	return (
 		<div
@@ -1014,7 +1018,12 @@ export default function ChatView({
 					disabling={disablingNotice}
 				/>
 			) : null}
-			<SuggestionChips suggestions={suggestions} onSend={sendSuggestion} shortcutScope={chatRoot} />
+			<SuggestionChips
+				suggestions={suggestions}
+				onSend={sendSuggestion}
+				onEdit={editSuggestion}
+				shortcutScope={chatRoot}
+			/>
 			<div className="relative shrink-0">
 				<HistoryOverlay
 					state={historyState}

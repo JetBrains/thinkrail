@@ -338,7 +338,7 @@
 	"chat.subagentTranscript.stale": "古い情報",
 	"chat.subagentTranscript.title": "サブエージェントのトランスクリプト",
 	"chat.suggestions.label": "次に送るメッセージの候補",
-	"chat.suggestions.send": "今すぐ送信",
+	"chat.suggestions.send": "今すぐ送信 · Shift+クリックで先に編集",
 	"chat.templateEditor.argumentHint": "引数のヒント",
 	"chat.templateEditor.argumentHintPlaceholder": "[file] [scope]",
 	"chat.templateEditor.body": "本文",

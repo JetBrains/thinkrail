@@ -209,6 +209,7 @@ interface ComposerProps {
 
 export interface ComposerHandle {
 	insertText: (text: string) => void;
+	insertAtCaret: (text: string) => void;
 	applyEdit: (kind: "replace" | "paste", text: string) => void;
 	insertAndSubmit: (text: string, behavior: SubmitBehavior) => void;
 	insertTemplate: (parsed: ParsedTemplate) => void;
@@ -418,6 +419,17 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
 	useImperativeHandle(handleRef, () => ({
 		insertText: (text: string) => replaceDraft(text),
+		insertAtCaret: (text: string) => {
+			const at = Math.min(caret, value.length);
+			const before = value.slice(0, at);
+			const after = value.slice(at);
+			const lead = before === "" || /\s$/.test(before) ? "" : " ";
+			const trail = after === "" || /^\s/.test(after) ? "" : " ";
+			replaceDraft(
+				`${before}${lead}${text}${trail}${after}`,
+				before.length + lead.length + text.length,
+			);
+		},
 		applyEdit: (kind: "replace" | "paste", text: string) => {
 			const textarea = ref.current;
 			const focused = textarea !== null && textarea === document.activeElement;

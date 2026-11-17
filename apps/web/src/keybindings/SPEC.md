@@ -176,8 +176,9 @@ binding does.
   `code`) are `@thinkrail/ui/keyboard`'s `ARROW_TWIN_COMMANDS`, declared once in scope `arrows`; `tabs`,
   `rails`, `trees`, `review.surface` and `transcript` include it, so one rebind applies in every element.
   A scope another includes is not an element of its own: it never appears in the `local` map.
-- **Shared scope `suggestions`.** The chat's composer-suggestion keys (`suggestions.send1…9`, `Alt+1…9`;
-  `SUGGESTION_KEYS.send` lists them in chip order) are declared once in scope `suggestions`, which
+- **Shared scope `suggestions`.** The chat's composer-suggestion keys (`suggestions.send1…9`, `Alt+1…9`,
+  and `suggestions.edit1…9`, `Shift+Alt+1…9`; `SUGGESTION_KEYS` lists both in chip order) are declared
+  once in scope `suggestions`, which
   `composer` and `transcript` include: the chips act anywhere in the chat's input or conversation, and a
   conflict inside either element is ranked there ([[submodule-web-chat]], *Composer suggestions*). On
   every platform, Option included: the chat consumes the press only while that chip is shown, and a

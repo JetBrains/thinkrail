@@ -145,6 +145,31 @@ test("Alt+N also sends from the conversation, the input's other local scope", as
 	await expect.poll(() => promptTexts(frames)).toEqual(["Run the e2e suite"]);
 });
 
+test("Shift+click and Shift+Alt+N put a suggestion in the input instead of sending it", async ({
+	page,
+}) => {
+	const frames: ClientFrame[] = [];
+	await observeClientFrames(page, frames);
+	await openSeededChat(page, "Edited next steps", 40_000);
+	const input = page.getByTestId("chat-input");
+
+	await input.fill("half-written draft");
+	await page
+		.getByTestId("composer-suggestion")
+		.filter({ hasText: "Open a PR" })
+		.click({
+			modifiers: ["Shift"],
+		});
+	await expect(input).toHaveValue("half-written draft Open a PR");
+	await expect(input).toBeFocused();
+
+	await input.fill("");
+	await page.keyboard.press("Alt+Shift+Digit1");
+	await expect(input).toHaveValue("Run the e2e suite");
+	await expect(page.getByTestId("composer-suggestion")).toHaveCount(2);
+	expect(promptTexts(frames)).toEqual([]);
+});
+
 test("switching the extension off hides the chips while the transcript row stays", async ({
 	page,
 }) => {

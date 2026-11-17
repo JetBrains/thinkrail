@@ -363,7 +363,7 @@
 	"chat.subagentTranscript.stale": "已过期",
 	"chat.subagentTranscript.title": "子 agent 对话记录",
 	"chat.suggestions.label": "建议的下一条消息",
-	"chat.suggestions.send": "立即发送",
+	"chat.suggestions.send": "立即发送 · Shift+点击可先编辑",
 	"chat.templateEditor.argumentHint": "参数提示",
 	"chat.templateEditor.argumentHintPlaceholder": "[文件] [范围]",
 	"chat.templateEditor.body": "正文",

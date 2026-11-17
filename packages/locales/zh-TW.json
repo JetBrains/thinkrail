@@ -352,7 +352,7 @@
 	"chat.subagentTranscript.stale": "已過時",
 	"chat.subagentTranscript.title": "子代理程式記錄",
 	"chat.suggestions.label": "建議的下一則訊息",
-	"chat.suggestions.send": "立即傳送",
+	"chat.suggestions.send": "立即傳送 · Shift+點按可先編輯",
 	"chat.templateEditor.argumentHint": "引數提示",
 	"chat.templateEditor.argumentHintPlaceholder": "[file] [scope]",
 	"chat.templateEditor.body": "內容",

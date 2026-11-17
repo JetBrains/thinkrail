@@ -106,8 +106,12 @@ const letter = (key: string, modifiers: Omit<PhysicalChord, "code" | "key"> = {}
 
 const SUGGESTION_DIGITS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
-export const SUGGESTION_KEYS: { readonly send: readonly string[] } = {
+export const SUGGESTION_KEYS: {
+	readonly send: readonly string[];
+	readonly edit: readonly string[];
+} = {
 	send: SUGGESTION_DIGITS.map((n) => `${SUGGESTIONS_SCOPE}.send${n}`),
+	edit: SUGGESTION_DIGITS.map((n) => `${SUGGESTIONS_SCOPE}.edit${n}`),
 };
 
 const digit = (n: number, modifiers: Omit<PhysicalChord, "code" | "key">): PhysicalChord => ({
@@ -144,6 +148,9 @@ export const APP_LOCAL_COMMANDS: readonly LocalCommandDefaults[] = [
 	local("review", "nextStep", letter("N")),
 	local("review", "previousStep", letter("P")),
 	...SUGGESTION_DIGITS.map((n) => local(SUGGESTIONS_SCOPE, `send${n}`, digit(n, { alt: true }))),
+	...SUGGESTION_DIGITS.map((n) =>
+		local(SUGGESTIONS_SCOPE, `edit${n}`, digit(n, { alt: true, shift: true })),
+	),
 	local("composer", "followUp", ...enter({ mod: true })),
 	local("composer", "interrupt", ...enter({ mod: true, shift: true })),
 	local("composer", "enterTranscript", { ...UP, mod: true }),

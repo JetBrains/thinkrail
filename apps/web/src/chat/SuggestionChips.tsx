@@ -7,9 +7,17 @@ import { LOCAL_KEY_DEFAULTS, SUGGESTION_KEYS } from "@/keybindings";
 const TRANSCRIPT = "[data-transcript-feed]";
 const COMPOSER = '[data-testid="chat-composer"], [data-testid="composer-suggestions"]';
 
-export function suggestionKeyIndex(id: string | null): number | null {
-	const index = id === null ? -1 : SUGGESTION_KEYS.send.indexOf(id);
-	return index < 0 ? null : index;
+export interface SuggestionKeyAction {
+	readonly index: number;
+	readonly edit: boolean;
+}
+
+export function suggestionKeyAction(id: string | null): SuggestionKeyAction | null {
+	if (id === null) return null;
+	const send = SUGGESTION_KEYS.send.indexOf(id);
+	if (send >= 0) return { index: send, edit: false };
+	const edit = SUGGESTION_KEYS.edit.indexOf(id);
+	return edit >= 0 ? { index: edit, edit: true } : null;
 }
 
 export function suggestionKeysFor(
@@ -24,10 +32,12 @@ export function suggestionKeysFor(
 export function SuggestionChips({
 	suggestions,
 	onSend,
+	onEdit,
 	shortcutScope,
 }: {
 	suggestions: readonly string[];
 	onSend: (text: string) => void;
+	onEdit: (text: string) => void;
 	shortcutScope?: HTMLElement | null | undefined;
 }) {
 	const t = useT();
@@ -38,15 +48,15 @@ export function SuggestionChips({
 		const onKeyDown = (event: KeyboardEvent) => {
 			if (event.defaultPrevented) return;
 			const keys = suggestionKeysFor(event.target, { composer, transcript });
-			const index = suggestionKeyIndex(keys?.match(event) ?? null);
-			const text = index === null ? undefined : suggestions[index];
-			if (text === undefined) return;
+			const action = suggestionKeyAction(keys?.match(event) ?? null);
+			const text = action === null ? undefined : suggestions[action.index];
+			if (action === null || text === undefined) return;
 			event.preventDefault();
-			if (!event.repeat) onSend(text);
+			if (!event.repeat) (action.edit ? onEdit : onSend)(text);
 		};
 		shortcutScope.addEventListener("keydown", onKeyDown);
 		return () => shortcutScope.removeEventListener("keydown", onKeyDown);
-	}, [shortcutScope, suggestions, onSend, composer, transcript]);
+	}, [shortcutScope, suggestions, onSend, onEdit, composer, transcript]);
 	if (suggestions.length === 0) return null;
 	return (
 		<fieldset
@@ -57,6 +67,7 @@ export function SuggestionChips({
 		>
 			{suggestions.map((suggestion, index) => {
 				const send = SUGGESTION_KEYS.send[index];
+				const edit = SUGGESTION_KEYS.edit[index];
 				return (
 					<Button
 						key={suggestion}
@@ -64,10 +75,10 @@ export function SuggestionChips({
 						size="m"
 						data-testid="composer-suggestion"
 						className="min-w-0 max-w-full"
-						aria-keyshortcuts={send ? composer.aria(send) : undefined}
+						aria-keyshortcuts={send && edit ? composer.aria(send, edit) : undefined}
 						tooltip={t("chat.suggestions.send")}
 						tooltipShortcut={send ? composer.caps(send) : undefined}
-						onClick={() => onSend(suggestion)}
+						onClick={(event) => (event.shiftKey ? onEdit : onSend)(suggestion)}
 					>
 						<span className="truncate">{suggestion}</span>
 					</Button>
