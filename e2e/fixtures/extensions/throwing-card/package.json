@@ -1,0 +1,14 @@
+{
+	"name": "e2e-ext-cards",
+	"version": "1.0.0",
+	"description": "A UI-only extension with one card that throws and one that renders.",
+	"keywords": [
+		"thinkrail-extension"
+	],
+	"type": "module",
+	"thinkrail": {
+		"api": "1.0",
+		"title": "Fixture cards",
+		"web": "./web.js"
+	}
+}

@@ -26,6 +26,11 @@ ones loaded at runtime ([[module-thinkrail-extensions]] § Installed extensions)
   production build).
 - **Loader:** `loader.ts` turns host-provided descriptors `{ name, url, styles? }` into registered tool
   renderers and back.
+- **Following the host:** `follow.ts` keeps the loaded set in step with the host's `extension.list` for the
+  life of the page and gives bootstrap its bounded pre-render wait (§ Following the host).
+- **API fit:** `compatibility.ts` applies the extension API rule of `@thinkrail/extension-api/installed` to
+  an `api` string for Settings (`extensionApiFit`: `compatible`, `needsNewerApp`, `builtForOlderApp`,
+  `unknown`), so panels never import that entry themselves.
 
 Registration ignores the host's extension on/off setting: a web extension's renderers stay registered while
 its server half is disabled, so a transcript that already contains its tool calls keeps rendering them. The
@@ -80,19 +85,47 @@ renderers.
   `import.meta.hot.data`, so a hot update of either module neither drops runtime-loaded renderers nor
   orphans their stylesheets.
 
+## Following the host
+
+- **One set, converged.** `syncWebExtensions(descriptors)` is the only writer bootstrap uses: it unloads
+  every name it loaded that the host no longer lists (removal — past calls fall back to the default row),
+  loads names it has not loaded and names whose `url`/`styles` changed (an update reinstalled under a new
+  token), and leaves the rest untouched. A failed load is retried only when its URL changes or the page
+  reloads; Settings shows the failure meanwhile. New names get precedence slots after the ones already
+  held, so a newly installed extension listed before an older one wins a contested name only after a reload
+  — the same accepted window as above.
+- **The source is injected.** `followInstalledWebExtensions(source, waitMs)` subscribes to an
+  `InstalledWebExtensionSource` (`current()` — the set, or `null` while unknown; `unreachable()`;
+  `subscribe`) and calls `syncWebExtensions` whenever the set may have changed. `main.tsx` wires it to the
+  store's `selectInstalledWebHalves` and fires only when `extensionCatalog`, `protocolVersion` or the
+  connection status change, so a streaming chat never runs the diff. This module still reads no store.
+- **Bootstrap waits once, bounded.** The promise settles when the first known set has loaded, when the
+  source is unreachable (the connection dropped or the list failed), or after `PRE_RENDER_WAIT_MS` counted
+  from bootstrap — connection, list and load together — whichever comes first; `main.tsx` renders after
+  it. The transport is usually not connected yet when bootstrap runs, so the first render now waits for
+  the welcome (milliseconds on the host's own origin). A host older than
+  `INSTALLED_EXTENSIONS_PROTOCOL_VERSION` yields the empty set at once: nothing is requested and the page
+  renders as before; reconnecting to such a host unloads every installed web half, and reconnecting to a
+  different host converges on that host's list.
+- Switched-off extensions are in the set (the host lists their `web` while off), so past transcripts keep
+  their cards; only a removal or a host that no longer lists them unloads them.
+
 ## Boundary
 
 - **Public surface:** `webExtensions`, `registerWebExtensions`, `installExtensionHost`, `ExtensionHost`,
-  `loadWebExtensions`, `loadWebExtensionsBeforeRender`, `unloadWebExtension`, `webExtensionLoads`,
-  `subscribeWebExtensionLoads`, `useWebExtensionLoads`, `PRE_RENDER_WAIT_MS`, `InstalledWebExtension`,
-  `WebExtensionLoadResult`, `WebExtensionLoadFailure`.
+  `loadWebExtensions`, `loadWebExtensionsBeforeRender`, `syncWebExtensions`, `unloadWebExtension`,
+  `webExtensionLoads`, `subscribeWebExtensionLoads`, `useWebExtensionLoads`, `PRE_RENDER_WAIT_MS`,
+  `InstalledWebExtension`, `WebExtensionLoadResult`, `WebExtensionLoadFailure`,
+  `followInstalledWebExtensions`, `InstalledWebExtensionSource`, `extensionApiFit`, `ExtensionApiFit`,
+  `EXTENSION_API_VERSION`.
 - **Imports:** public extension `./web` entries, the web SDK contract, `@thinkrail/extension-api/installed`
   (the host object's constants), chat's registration functions, `transport` (`getTransport().httpBase()`
   and the client error reports — the loader's only reach into app integration), and, for the host object
   only, the shared module set. Never `ChatView`, stores, extension internals or server halves. The
   registry Map remains owned by chat; the loader owns only its per-name load state and stylesheet links.
-- **Bootstrap order** (`main.tsx`): `installExtensionHost()` → `registerWebExtensions()` → (wave 2)
-  `loadWebExtensionsBeforeRender(descriptors from the host)` → first render. Interaction state and the
+- **Bootstrap order** (`main.tsx`): `installExtensionHost()` → `registerWebExtensions()` →
+  `followInstalledWebExtensions(store-backed source)` (bounded) → first render. `loadWebExtensionsBeforeRender`
+  stays for a caller holding a known set; bootstrap's own wait also covers the connection and the list. Interaction state and the
   plan/review glances derive from the registry's `interactive` registrations, so the built-in set must be
   complete before any lazy view reads a transcript; installed ones that land later re-derive through the
   registry's snapshot hooks ([[submodule-web-chat]]).

@@ -1211,11 +1211,13 @@ a project picker, the prompt hero, and the reused
 
   There is **no separate Review navigation section**; all review-related controls live in Models' REVIEW group.
   **`ExtensionsSettings`** (the **Extensions** section, nav `settings-nav-extensions`, listed only at
-  `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) is one page in up to four groups. Its description
+  `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) is one page in up to five groups. Its description
   carries the page's only statement about chats — "Changes apply to open chats when their current turn
   ends." — and a primary **Install package…** button; there is no dynamic notice about which chats are
-  pending. **Built into ThinkRail** is the host-registry catalog as before: `extension.list` each time the
-  section mounts (static per host process, so section-local state), rendered by the props-driven
+  pending. **Built into ThinkRail** is the host-registry catalog as before, now read from the store's
+  `extensionCatalog` (`selectBuiltinExtensions`: every row of an older host, `kind: "builtin"` from v111) —
+  `transport`'s `refreshExtensionCatalog` re-lists on each mount and each welcome while the page is open, so
+  an older host or a page opened while disconnected still lands its rows — rendered by the props-driven
   `ExtensionsCatalog` — title, description, tool-name chips and a `@thinkrail/ui/switch`
   (`extension-toggle-<name>`) whose state is **`store.disabledExtensions`**, not the catalog's snapshot; a
   toggle writes the whole list through `settings.update { disabledExtensions }` and converges on the
@@ -1297,6 +1299,59 @@ a project picker, the prompt hero, and the reused
   offered only with an active workspace whose project is pi-trusted,
   with the reason shown otherwise, and the hints show the real settings paths from the catalog. Disabling
   never unregisters a tool renderer ([[submodule-web-extensions]]), so past transcripts still render.
+
+  **Installed ThinkRail extensions** (from `INSTALLED_EXTENSIONS_PROTOCOL_VERSION`, v111) are rows of the same
+  **Installed** list, before the pi packages (`PiPackagesGroup`'s `extensionRows`, which also keep showing when
+  `packages.list` fails), from `selectInstalledExtensions` in host order; every pi package row carries a
+  **pi package** type tag and every extension row a **ThinkRail extension** tag, so each row is marked with
+  its kind. **`InstalledExtensionRow`** (`InstalledExtensionRow.tsx`, props-driven) is title · kind tag ·
+  source tag (`npm` / `git` / `local`, read from the declaration) · **Update available** (from
+  `extensions.checkUpdates`) · one provenance line (package name · source · "<version> installed" ·
+  description) · what it brings (tool-name chips and a **Chat cards** mark when the host lists a `web` half) ·
+  the switch (`extension-toggle-<name>`, the same `disabledExtensions` key as a built-in, by package name) · its
+  declared boolean settings nested underneath with the descriptor's own `title` / `description` (shown as is,
+  never locale keys; disabled while the extension is off; `extension-setting-<name>-<key>`) · a ⋯ menu with
+  **Update** (always: a folder source reloads in place) and **Remove…** (`ConfirmDialog`: removing drops it
+  for every project, and past calls show as plain rows — the follower unloads its web half). States, each
+  with no switch where it cannot work: **failed** — a "Failed to load" tag and the host's error verbatim with
+  a fix-or-remove hint, nothing listed as running; **incompatible** — a tag and a notice saying "Needs a newer
+  ThinkRail" or "Built for an older ThinkRail" (`extensionApiFit` over the entry's `api`; an unreadable `api`
+  reads as needing a newer app), the host's reason and an update hint; and a **web half that failed in this
+  window** (`useWebExtensionLoads`) — a warning that its cards could not load here while its tools still
+  work, with the switch kept. **`useInstalledExtensions`** (`useInstalledExtensions.ts`) owns every
+  `extensions.*` and switch/setting request of these rows, keyed `extension\0<source>` for busy and inline
+  errors (never a toast), runs the update check on mount and with the page's **Check for updates**, joins
+  **Update all** (sequential `extensions.update`), and re-lists the store catalog after each mutation; the
+  `extensions.changed` push does the same for changes made elsewhere (the agent skill editing
+  `extensions.json`). The page's one statement that changes reach open chats when their current turn ends
+  covers extensions too.
+
+  **The install dialog installs extensions too.** Its result step reads `PackageInstallResult`: the kind line
+  (`install-package-kind`) says whether a ThinkRail extension or a pi package landed — decided by
+  `installed`, the attached `extension` entry feeding only the chips — and an extension shows its title ·
+  version, tool chips, **Chat cards** and its declared settings, with "open chats pick it up when their
+  current turn ends". An extension is always global: when **This repository only** was chosen and the host
+  answers `EXTENSION_SCOPE_UNSUPPORTED`, the dialog moves to a `scopeUnsupported` step explaining that and
+  offering **Install globally** (one click, re-submitted at user scope) or Back. A `preset` (`InstallPreset`:
+  source, title, version, author, description) opens the dialog at a **confirm** step — the source, the
+  catalog metadata, the trust statement and Install, with no scope choice — read on mount, so the page
+  remounts the dialog (`key`) per opening.
+
+  **Browse** (`ExtensionBrowse.tsx`, props-driven; `useExtensionBrowse.ts` owns the request) is shown from
+  `EXTENSION_BROWSE_PROTOCOL_VERSION` (v112), after Installed. The host fetches the catalog
+  (`extensions.browse`, [[submodule-server-extension-catalog]]); the browser never contacts thinkrail.ai. The
+  hook reads on mount and again, from the host's cache, whenever the store catalog changes (so the
+  **Installed** marks follow installs and removals); **Retry** forces a refetch; the latest read wins. The
+  group states plainly that listings are automatic and unreviewed and that an extension runs code on this
+  machine and in the app. A card shows title, version, package name · author, description, **Agent tools** /
+  **Chat cards** from `halves`, npm and repository links, and a preview image in a fixed 16:9 box
+  (`loading="lazy"`, `referrerPolicy="no-referrer"`; a broken image hides itself and the box keeps its size),
+  then **Install** (opens the dialog's confirm step with the listing's `npm:<name>`), an **Installed** mark,
+  or an incompatible mark (`extensionApiFit`) with no Install. A text search narrows by title, name,
+  description and author ("No extensions match …"). An empty catalog links to the authoring guide
+  (`https://thinkrail.ai/docs/build-an-extension/`); an unreachable, offline or invalid catalog — or a host
+  that does not answer — says it cannot reach the catalog, that installed extensions keep working, and offers
+  Retry, while the rest of the page is unaffected.
   **`EnvironmentSettings`** (the **Environment** section, nav `settings-nav-environment`, listed only at
   `protocolVersion >= HOST_ENVIRONMENT_PROTOCOL_VERSION`) edits the stored host environment
   ([[submodule-server-environment]]): the pi config folder, the folder in use (`effectiveAgentDir`), and

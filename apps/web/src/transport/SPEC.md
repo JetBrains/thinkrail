@@ -186,7 +186,12 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   is the one binary upload — a `PUT` of the raw file to the host's `/fonts/` route with the upload guard
   header, answered by that file's `UserFontFile` entry — while `hostUrl` resolves a host-relative path
   (custom face URLs) against the endpoint; `supportsExtensionSettings` (v105) lets `ExtensionsSettings`
-  offer per-extension setting switches only to a host that stores `extensionSettings`. `openSpeechSocket()`
+  offer per-extension setting switches only to a host that stores `extensionSettings`.
+  `refreshExtensionCatalog(connectionGeneration?)` is the one `extension.list` path: every welcome from a
+  host at `INSTALLED_EXTENSIONS_PROTOCOL_VERSION` (v111) or newer, every `extensions.changed` push, and each
+  mount of the Extensions page (any host from v82, as before) call it; the latest request wins and only a
+  response for the current connection generation installs the store's `extensionCatalog` (a failure
+  installs `failed`). An older host is never asked at welcome, so its traffic is unchanged. `openSpeechSocket()`
   opens the dictation side socket (`/speech?protocol=`) on the same endpoint for [[submodule-web-speech]].
   It carries binary audio and never a request. `server.welcome`'s `speech` seed and every `speech.changed`
   push install the store's `speech` status whole; `supportsSpeech` (v107) gates the same way.

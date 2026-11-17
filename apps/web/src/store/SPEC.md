@@ -619,6 +619,16 @@ selector to hide its Projects rail and pane, so onboarding has the whole window.
   complementing `appendErrorTurn` (which handles the in-chat case).
   **`packagesVersion`** + **`bumpPackagesVersion()`** is the same shape for installed pi packages: the
   transport bumps it on `packages.changed`, and `panels/ExtensionsSettings.tsx` re-lists off it.
+  **`extensionCatalog`** (`ExtensionCatalogRead`: the host's `extension.list`, `loading` or `failed`) is the
+  one copy of the extension catalog — built-in and installed rows — written whole by
+  **`installExtensionCatalog`** from `transport`'s `refreshExtensionCatalog`. `installWelcomeSnapshot` resets it
+  to `loading` only when the welcoming host's protocol differs from the previous welcome's, so a reconnect
+  to the same host keeps the rows on screen until the new list lands. Its selectors:
+  `selectBuiltinExtensions` (the Built into ThinkRail group — every row of an older host, `kind: "builtin"`
+  from v111), `selectInstalledExtensions` (installed rows in host order), `selectInstalledWebHalves` (the
+  `{ name, url, styles? }` set the page must have loaded — switched-off ones included — `null` while unknown,
+  empty for a host older than v111), and the gates `selectSupportsInstalledExtensions` (v111) and
+  `selectSupportsExtensionBrowse` (v112).
   **`disabledPackages: string[]`** mirrors `disabledExtensions` from the settings broadcast; the
   Extensions page uses it only to compute the next whole list for `settings.update` — what a package
   row *shows* is the catalog's `enabled` (the host's effective state, which a `packages.changed` push

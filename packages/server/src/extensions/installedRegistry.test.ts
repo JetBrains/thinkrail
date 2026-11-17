@@ -139,6 +139,7 @@ describe("the runtime registry", () => {
 					/^\/extensions\/session-ext\/1\.0\.0-[0-9a-f]{12}\/dist\/web\.js$/,
 				),
 			},
+			api: "1.0",
 		});
 		expect(broken).toMatchObject({
 			name: "broken-ext",

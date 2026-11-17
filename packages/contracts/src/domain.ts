@@ -1538,6 +1538,38 @@ export interface ExtensionCatalogEntry {
 	error?: string;
 	/** Installed only: present when it is loaded, compatible and has a web half. */
 	web?: ExtensionWebHalf;
+	/** Installed only, from `EXTENSION_BROWSE_PROTOCOL_VERSION`: the manifest's `api`, when it was read. */
+	api?: string;
+}
+
+/** Which halves a catalog listing declares. */
+export type ExtensionHalf = "server" | "web";
+
+/** One listing of the community catalog (`catalog.json`, `schema: 1`), as the host validated it. */
+export interface ExtensionListing {
+	name: string;
+	version: string;
+	title?: string;
+	description: string;
+	author?: string;
+	api: string;
+	halves: ExtensionHalf[];
+	image?: string;
+	/** Always `npm:<name>`. */
+	install: string;
+	npm: string;
+	repository?: string;
+	publishedAt: string;
+}
+
+/** `extensions.browse`'s entry: a listing plus whether an installed extension already carries its name. */
+export interface ExtensionBrowseEntry extends ExtensionListing {
+	installed: boolean;
+}
+
+export interface ExtensionBrowseResult {
+	generatedAt: string;
+	extensions: ExtensionBrowseEntry[];
 }
 
 /**

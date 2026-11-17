@@ -108,6 +108,7 @@ async function installedEntry(
 		state: record.state,
 		...(record.error ? { error: record.error } : {}),
 		...(web ? { web } : {}),
+		...(record.manifest?.api ? { api: record.manifest.api } : {}),
 	};
 }
 

@@ -96,6 +96,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `terminal` | workspace-scoped `bun-pty` terminals | [terminal/SPEC.md](src/terminal/SPEC.md) |
 | `agent` | in-process pi sessions + current/retained runtime generations + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
 | `extensions` | the server registry of ThinkRail extensions — built in (`@thinkrail/ext-*/server`) and installed at runtime (`installed/`: `extensions.json`, install root, descriptor loader, web-half assets): the runtime list, inline flattening, owner-scoped skill resolution | [extensions/SPEC.md](src/extensions/SPEC.md) |
+| `extension-catalog` | the community extension catalog (`catalog.json`) fetched, validated and cached for in-app Browse (`extensions.browse`) | [extension-catalog/SPEC.md](src/extension-catalog/SPEC.md) |
 | `auth` | provider status/login plus native JetBrains Central lifecycle and quota orchestration | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (plan summaries, PR descriptions) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
 | `analytics` | always-on basic events + sanitized error reports, and preference-controlled optional insights → PostHog sink (privacy contract in its spec) | [analytics/SPEC.md](src/analytics/SPEC.md) |
@@ -114,7 +115,7 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `fonts`, `speech`, `history`, `search`, `templates`, `analytics`, `feedback`, `trash` (a chat's folder), `log`, `persistence` (`dataDir`, for the crash report)
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `fonts`, `speech`, `history`, `search`, `templates`, `analytics`, `feedback`, `extension-catalog`, `trash` (a chat's folder), `log`, `persistence` (`dataDir`, for the crash report)
 - `search` → `contracts`, `git` (`gitAsyncStream` for `ls-files`), `log`; `history`, `spec` and `todos` for types only — `host/search.ts` injects every reader (projects, workspace records, the history index's `sessions()`, spec snapshots, stored plans, the file check `fs.readableFileSize`), the Default provisioning (`workspaces.listWorkspaces`) and the root watch (`watch.ensureWatch`, prewarm); it opens no file itself (files and specs preview client-side over `fs.readFile`)
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`, `subprocess`
@@ -153,6 +154,8 @@ the host from env via `bootHost` for dev/e2e.
   `installed/` sub-module also → `@thinkrail/extension-api/installed` (the manifest reader), `@earendil-works/pi-coding-agent` values (installer, public loader) and
   `typebox` (external); the data dir arrives as a parameter from `host`, so there is no `persistence`
   edge; `buildSupport.ts` (build-only) reads only the built-ins to stage their skill roots
+- `extension-catalog` → `contracts` (types), `@thinkrail/shared/codedError`; a leaf whose only outbound request is
+  the catalog URL — `host/extensions.ts` passes it the installed names from `extensions`, so it imports neither
 - `resourceHistory` → `persistence` (`dataDir`), `log`
 - `persistence`, `dialog`, `history`, `templates`, `subprocess`, `trash` → (leaves)
 

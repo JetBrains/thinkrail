@@ -25,10 +25,12 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
+	EXTENSION_CATALOG_PROTOCOL_VERSION,
 	EXTENSION_SETTINGS_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
+	INSTALLED_EXTENSIONS_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
@@ -241,6 +243,32 @@ function refreshUserFonts(connectionGeneration: number): void {
 	);
 }
 
+let extensionCatalogRequest = 0;
+
+/** The one `extension.list` path: welcome, `extensions.changed` and the Extensions page; the latest request wins. */
+export function refreshExtensionCatalog(
+	connectionGeneration: number = useAppStore.getState().connectionGeneration,
+): Promise<void> {
+	const store = useAppStore.getState();
+	if (
+		store.protocolVersion === null ||
+		store.protocolVersion < EXTENSION_CATALOG_PROTOCOL_VERSION
+	) {
+		return Promise.resolve();
+	}
+	const request = ++extensionCatalogRequest;
+	const current = () => {
+		const state = useAppStore.getState();
+		return request === extensionCatalogRequest && isConnectedGeneration(state, connectionGeneration)
+			? state
+			: null;
+	};
+	return getTransport()
+		.request("extension.list", {})
+		.then((entries) => current()?.installExtensionCatalog(entries))
+		.catch(() => current()?.installExtensionCatalog("failed"));
+}
+
 function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
 	const snapshot = useAppStore.getState();
 	const openProjectIds = new Set(snapshot.projects.map((project) => project.id));
@@ -360,6 +388,8 @@ export function initTransport(): WsTransport {
 		refreshLocalLocales(connectionGeneration);
 		refreshUserThemes(connectionGeneration);
 		refreshUserFonts(connectionGeneration);
+		if (welcome.protocolVersion >= INSTALLED_EXTENSIONS_PROTOCOL_VERSION)
+			void refreshExtensionCatalog(connectionGeneration);
 		if (welcome.protocolVersion >= WORKSPACE_CREATION_PROTOCOL_VERSION)
 			refreshWorkspaceCreations(connectionGeneration);
 		else useAppStore.getState().setWorkspaceCreations([]);
@@ -457,6 +487,10 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.packagesChanged, () => {
 		useAppStore.getState().bumpPackagesVersion();
+	});
+
+	transport.subscribe(WS_CHANNELS.extensionsChanged, () => {
+		void refreshExtensionCatalog();
 	});
 
 	transport.subscribe(WS_CHANNELS.fontsChanged, () => {

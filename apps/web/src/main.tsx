@@ -6,7 +6,11 @@ import { createRoot } from "react-dom/client";
 import { initChatPreferencesPersistence } from "./chat/chatPreferences";
 import { initModelVisibilityPersistence } from "./chat/modelVisibility";
 import { ErrorBoundary, setErrorBoundaryReporter } from "./components/ErrorBoundary";
-import { installExtensionHost, registerWebExtensions } from "./extensions";
+import {
+	followInstalledWebExtensions,
+	installExtensionHost,
+	registerWebExtensions,
+} from "./extensions";
 import { initializeFonts } from "./fonts";
 import { useLocaleSync } from "./i18n";
 import { initNavigation } from "./navigation";
@@ -16,6 +20,7 @@ import { initSearchPreferences } from "./search";
 import { AppResourceHost } from "./shell/AppResourceHost";
 import { Shell } from "./shell/Shell";
 import { DictationLayer } from "./speech";
+import { selectInstalledWebHalves, useAppStore } from "./store";
 import { applyThemePreference, initializeThemes, readThemeHint } from "./themes";
 import {
 	clientErrorReport,
@@ -40,6 +45,23 @@ initSearchPreferences();
 initNavigation();
 installExtensionHost();
 registerWebExtensions();
+const installedWebHalvesReady = followInstalledWebExtensions({
+	current: () => selectInstalledWebHalves(useAppStore.getState()),
+	unreachable: () => {
+		const state = useAppStore.getState();
+		return state.status === "disconnected" || state.extensionCatalog === "failed";
+	},
+	subscribe: (listener) =>
+		useAppStore.subscribe((state, previous) => {
+			if (
+				state.extensionCatalog !== previous.extensionCatalog ||
+				state.protocolVersion !== previous.protocolVersion ||
+				state.status !== previous.status
+			) {
+				listener();
+			}
+		}),
+});
 
 function App() {
 	useLocaleSync();
@@ -56,11 +78,12 @@ function App() {
 	);
 }
 
-const root = document.getElementById("root");
-if (root) {
+void installedWebHalvesReady.then(() => {
+	const root = document.getElementById("root");
+	if (!root) return;
 	createRoot(root).render(
 		<StrictMode>
 			<App />
 		</StrictMode>,
 	);
-}
+});

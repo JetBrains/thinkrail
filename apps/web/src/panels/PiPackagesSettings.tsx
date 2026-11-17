@@ -350,6 +350,9 @@ export function PackageRow({
 				<span className={cn("min-w-0 truncate tr-title-compact", titleClass)} title={summary.name}>
 					{summary.name}
 				</span>
+				<span data-testid="package-type" className={cn(SETTINGS_TAG, "text-text-muted")}>
+					{t("settings.packages.type")}
+				</span>
 				<span data-testid="package-kind" className={cn(SETTINGS_TAG, "text-text-muted")}>
 					{t(KIND_LABEL[summary.kind])}
 				</span>
@@ -524,7 +527,14 @@ export interface PiPackagesGroupProps {
 	onUpdateAll: () => void;
 	onCheckUpdates: () => void;
 	onInstall?: () => void;
+	/** Installed ThinkRail extension rows, listed first; they keep showing while the packages list fails. */
+	extensionRows?: readonly ReactNode[];
+	/** Flagged updates outside `updates` (installed extensions), counted for Update all. */
+	extraUpdates?: number;
 }
+
+const LIST_CLASS =
+	"flex flex-col divide-y divide-border-default rounded-sm border border-border-default bg-control-bg";
 
 export function PiPackagesGroup({
 	catalog,
@@ -539,8 +549,12 @@ export function PiPackagesGroup({
 	onUpdateAll,
 	onCheckUpdates,
 	onInstall,
+	extensionRows = [],
+	extraUpdates = 0,
 }: PiPackagesGroupProps) {
 	const t = useT();
+	const leading =
+		extensionRows.length > 0 ? <ul className={cn(LIST_CLASS, "mb-8")}>{extensionRows}</ul> : null;
 	const header = (
 		<div className="flex flex-wrap items-baseline justify-between gap-8 pb-8">
 			<span className="flex flex-col gap-2">
@@ -553,7 +567,7 @@ export function PiPackagesGroup({
 			</span>
 			{catalog !== "loading" && catalog !== "failed" ? (
 				<span className="flex flex-wrap items-center gap-8 tr-text-metadata text-text-muted">
-					{updates.size > 0 ? (
+					{updates.size + extraUpdates > 0 ? (
 						<Button
 							variant="ghost"
 							size="s"
@@ -584,6 +598,7 @@ export function PiPackagesGroup({
 		return (
 			<section data-testid="settings-packages">
 				{header}
+				{leading}
 				<LoadingRegion rows={2} className="py-8" />
 			</section>
 		);
@@ -592,6 +607,7 @@ export function PiPackagesGroup({
 		return (
 			<section data-testid="settings-packages">
 				{header}
+				{leading}
 				<p
 					data-testid="packages-failed"
 					className="rounded-sm border border-border-default bg-container-elevated-bg px-12 py-8 text-text-muted tr-text-metadata"
@@ -617,7 +633,7 @@ export function PiPackagesGroup({
 					{checkError}
 				</SettingsNotice>
 			) : null}
-			{ordered.length === 0 && catalog.loose.length === 0 ? (
+			{ordered.length === 0 && catalog.loose.length === 0 && extensionRows.length === 0 ? (
 				<div
 					data-testid="packages-empty"
 					className="flex flex-col items-start gap-8 rounded-sm border border-border-default px-12 py-12"
@@ -641,7 +657,8 @@ export function PiPackagesGroup({
 					</span>
 				</div>
 			) : (
-				<ul className="flex flex-col divide-y divide-border-default rounded-sm border border-border-default bg-control-bg">
+				<ul className={LIST_CLASS}>
+					{extensionRows}
 					{ordered.map((summary) => {
 						const key = piPackageKey(summary);
 						return (

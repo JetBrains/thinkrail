@@ -117,8 +117,21 @@ function resetState(): void {
 
 	rmSync(join(E2E_DATA_DIR, "workspaces.json"), { force: true });
 	resetChats();
+	resetInstalledExtensions();
 
 	writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
+}
+
+function resetInstalledExtensions(): void {
+	const file = join(E2E_DATA_DIR, "extensions.json");
+	let declared: unknown = [];
+	try {
+		declared = JSON.parse(readFileSync(file, "utf8")).extensions ?? [];
+	} catch {
+		return;
+	}
+	if (Array.isArray(declared) && declared.length === 0) return;
+	writeFileSync(file, `${JSON.stringify({ extensions: [] }, null, 2)}\n`);
 }
 
 function resetChats(): void {
