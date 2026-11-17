@@ -1901,7 +1901,9 @@ own section. The kebab menu (`plan-menu`, a
 reader for the repo wiki served by `wiki.*` ([[submodule-server-wiki]]). It is a **page**, not a tool or a
 tab: `Shell` renders it over the active repository workspace's workbench (`absolute inset-0`; the workbench
 stays mounted but `inert`, so its state, terminals and focus survive) when the topbar book button — shown only
-for a repository workspace on a host at `REPO_WIKI_PROTOCOL_VERSION` or newer — has set
+for a repository workspace on a host at `REPO_WIKI_PROTOCOL_VERSION` or newer, and the graph icon in the right
+rail's footer (`WikiRailButton`, an `AuxiliaryRailActionButton` fed through `renderRightRailFooter`, never a layout
+tool) — has set
 `useWikiPageState.openFor` to that workspace. That flag is the one piece of state outside `useAppStore`: it is
 pure view state with no persistence, restoration or cross-window meaning, so it does not enter the layout
 document (a new tab kind would reach persisted layout validation, restoration and chat reconciliation for no

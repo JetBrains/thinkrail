@@ -1,10 +1,10 @@
 import {
-	RiBookOpenLine as BookOpen,
 	RiCircleLine as Circle,
-	RiBookOpenFill,
 	RiCircleFill,
 	RiSearchLine,
+	RiShareCircleFill,
 	RiSettings3Line as Settings,
+	RiShareCircleLine as WikiIcon,
 } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
@@ -296,7 +296,7 @@ function ShellLayout() {
 						<IconButton
 							variant="ghost"
 							size="m"
-							icon={wikiOpen ? RiBookOpenFill : BookOpen}
+							icon={wikiOpen ? RiShareCircleFill : WikiIcon}
 							label={t("shell.topbar.wiki")}
 							tooltip={t("shell.topbar.wiki")}
 							selected={wikiOpen}
