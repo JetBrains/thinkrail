@@ -13,6 +13,7 @@ import type {
 	DiffStats,
 	EditorInfo,
 	ExistingWorktreeCandidate,
+	ExtensionBrowseResult,
 	ExtensionCatalogEntry,
 	FileNode,
 	GitCommit,
@@ -141,7 +142,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 111;
+export const PROTOCOL_VERSION = 112;
+export const EXTENSION_BROWSE_PROTOCOL_VERSION = 112;
 export const INSTALLED_EXTENSIONS_PROTOCOL_VERSION = 111;
 export const CONTINUATION_PROTOCOL_VERSION = 110;
 export const CHATS_PROTOCOL_VERSION = 109;
@@ -476,6 +478,7 @@ export const WS_METHODS = {
 	extensionsRemove: "extensions.remove",
 	extensionsUpdate: "extensions.update",
 	extensionsCheckUpdates: "extensions.checkUpdates",
+	extensionsBrowse: "extensions.browse",
 	localesList: "locales.list",
 	localesReveal: "locales.reveal",
 	themesList: "themes.list",
@@ -1162,6 +1165,7 @@ export interface WsMethodMap {
 	"extensions.remove": { params: { source: string }; result: Ack };
 	"extensions.update": { params: { source: string }; result: Ack };
 	"extensions.checkUpdates": { params: { force?: boolean }; result: { source: string }[] };
+	"extensions.browse": { params: { force?: boolean }; result: ExtensionBrowseResult };
 	"locales.list": { params: Record<string, never>; result: LocalLocalesSnapshot };
 	"locales.reveal": { params: Record<string, never>; result: Ack };
 	"themes.list": { params: Record<string, never>; result: UserThemesSnapshot };
@@ -1508,6 +1512,9 @@ export type WsErrorCode =
 	| "EXTENSION_SCOPE_UNSUPPORTED"
 	| "EXTENSION_UNKNOWN"
 	| "EXTENSIONS_FILE_INVALID"
+	| "EXTENSION_CATALOG_OFFLINE"
+	| "EXTENSION_CATALOG_UNREACHABLE"
+	| "EXTENSION_CATALOG_INVALID"
 	| "REQUEST_REPLAY_OVERFLOW"
 	| "INSTALLED_FONTS_UNAVAILABLE"
 	| "GIT_TIMEOUT"

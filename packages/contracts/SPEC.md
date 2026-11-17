@@ -1326,6 +1326,22 @@ what they always did.
 - **`extensions.changed`** (no payload) follows every reconcile that changed what `extension.list`
   reports; a client re-lists.
 
+### Community catalog (Browse)
+
+`EXTENSION_BROWSE_PROTOCOL_VERSION` (112) adds the in-app Browse read and one field:
+
+- **`extensions.browse { force? }` → `ExtensionBrowseResult`** (`{ generatedAt, extensions:
+  ExtensionBrowseEntry[] }`): the website's `catalog.json` ([[module-thinkrail-extensions]] § Catalog) as the
+  host fetched and validated it ([[submodule-server-extension-catalog]]), each `ExtensionListing` (`name`,
+  `version`, `title?`, `description`, `author?`, `api`, `halves` ⊆ `server`/`web`, `image?`, `install`
+  = `npm:<name>`, `npm`, `repository?`, `publishedAt`) plus **`installed`** — an installed extension already
+  has that name. The host caches the file for minutes; `force` refetches. Codes: **`EXTENSION_CATALOG_OFFLINE`**
+  (`PI_OFFLINE`), **`EXTENSION_CATALOG_UNREACHABLE`** (network, timeout, HTTP status) and
+  **`EXTENSION_CATALOG_INVALID`** (not the expected shape). `api` is passed through uninterpreted; the client
+  decides whether this app can load it.
+- An installed **`ExtensionCatalogEntry`** also carries **`api`** (the manifest's, when it was read), so a
+  client can say whether an `incompatible` extension needs a newer ThinkRail or was built for an older one.
+
 ## Voice input
 
 `speech.ts` (re-exported from `index.ts`) is the wire for local dictation, from **`SPEECH_PROTOCOL_VERSION`**, v107:

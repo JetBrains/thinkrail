@@ -1,4 +1,6 @@
+import type { ExtensionBrowseResult } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { browseExtensions } from "../extension-catalog";
 import { type InstalledExtensions, installedExtensions } from "../extensions";
 
 function runtime(): InstalledExtensions {
@@ -26,4 +28,9 @@ export async function extensionsUpdate(params: { source: string }): Promise<{ ok
 
 export function extensionsCheckUpdates(params: { force?: boolean }): Promise<{ source: string }[]> {
 	return runtime().checkUpdates({ force: params.force === true });
+}
+
+export function extensionsBrowse(params: { force?: boolean }): Promise<ExtensionBrowseResult> {
+	const names = new Set((installedExtensions()?.records() ?? []).map((record) => record.name));
+	return browseExtensions(names, { force: params.force === true });
 }

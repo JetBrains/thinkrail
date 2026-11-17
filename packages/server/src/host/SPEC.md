@@ -477,7 +477,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `INSTALLED_EXTENSIONS_PROTOCOL_VERSION`. `packages.install` returns `PackageInstallResult`: for an
   extension (the agent façade's kind rule) it drops the name from `disabledExtensions` and answers a
   user-scope row shaped for older clients plus the extension's catalog entry; `host/extensions.ts` answers
-  `extensions.remove` / `extensions.update` / `extensions.checkUpdates` against the runtime by `source`.
+  `extensions.remove` / `extensions.update` / `extensions.checkUpdates` against the runtime by `source`,
+  and `extensions.browse { force? }` (from `EXTENSION_BROWSE_PROTOCOL_VERSION`) by handing the runtime's
+  installed names to [[submodule-server-extension-catalog]], which owns the fetch, validation, cache and
+  its coded failures. An installed `extension.list` entry also carries its manifest `api` (from the same
+  version) so the client can say which way an incompatible extension is out of date.
   The
   two authoritative publishers remain the clients' convergence path; the host-to-agent refresh changes
   runtime capability, not frontend state;
