@@ -16,7 +16,7 @@ const STATUS_LABEL: Readonly<Record<LspServerStatus, MessageKey>> = {
  * `starting` moves, and not under reduced motion. */
 const STATUS_DOT: Readonly<Record<LspServerStatus, string>> = {
 	detected: "bg-text-subtle",
-	starting: "bg-primary/60 motion-safe:animate-working",
+	starting: "bg-primary motion-safe:animate-working",
 	ready: "bg-primary",
 	error: "bg-feedback-error",
 	missing: "bg-feedback-warning",
@@ -61,6 +61,7 @@ export function LspServerRow({
 				</span>
 				<span
 					data-testid={`lsp-status-${server.id}`}
+					role="status"
 					className="whitespace-nowrap text-text-muted tr-text-metadata"
 				>
 					{status}
@@ -79,7 +80,7 @@ export function LspServerRow({
 			{server.binaryPath ? (
 				<code
 					data-testid={`lsp-binary-${server.id}`}
-					className="min-w-0 wrap-anywhere pl-14 text-text-muted tr-text-metadata"
+					className="min-w-0 wrap-anywhere pl-16 text-text-muted tr-text-metadata"
 				>
 					{server.binaryPath}
 				</code>
@@ -87,7 +88,7 @@ export function LspServerRow({
 			{server.installHint ? (
 				<span
 					data-testid={`lsp-hint-${server.id}`}
-					className="min-w-0 wrap-anywhere pl-14 text-text-muted tr-text-metadata"
+					className="min-w-0 wrap-anywhere pl-16 text-text-muted tr-text-metadata"
 				>
 					{t("settings.lsp.installHint", { marker: server.marker, hint: server.installHint })}
 				</span>

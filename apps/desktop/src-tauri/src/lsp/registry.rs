@@ -79,19 +79,31 @@ pub const BUILTIN_SPECS: &[LspSpec] = &[
         install_hint: "Install clangd (LLVM): brew install llvm / apt install clangd / winget install LLVM.LLVM",
     },
     LspSpec {
-        id: "web-frameworks",
-        language: "Svelte / Vue / Astro",
-        markers: &[
-            "svelte.config.js",
-            "svelte.config.ts",
-            "vue.config.js",
-            "astro.config.mjs",
-            "astro.config.ts",
-        ],
-        extensions: &["svelte", "vue", "astro"],
-        binaries: &["svelteserver", "vue-language-server", "astro-ls"],
+        id: "svelte",
+        language: "Svelte",
+        markers: &["svelte.config.js", "svelte.config.ts"],
+        extensions: &["svelte"],
+        binaries: &["svelteserver"],
         args: &["--stdio"],
-        install_hint: "npm install -g svelte-language-server  (or @vue/language-server / @astrojs/language-server)",
+        install_hint: "npm install -g svelte-language-server",
+    },
+    LspSpec {
+        id: "vue",
+        language: "Vue",
+        markers: &["vue.config.js", "vue.config.ts", "nuxt.config.js", "nuxt.config.ts"],
+        extensions: &["vue"],
+        binaries: &["vue-language-server"],
+        args: &["--stdio"],
+        install_hint: "npm install -g @vue/language-server",
+    },
+    LspSpec {
+        id: "astro",
+        language: "Astro",
+        markers: &["astro.config.mjs", "astro.config.ts"],
+        extensions: &["astro"],
+        binaries: &["astro-ls"],
+        args: &["--stdio"],
+        install_hint: "npm install -g @astrojs/language-server",
     },
 ];
 
@@ -133,7 +145,7 @@ pub struct LspOverride {
     pub args: Option<Vec<String>>,
     pub env: Option<HashMap<String, String>>,
     pub initialization_options: Option<Value>,
-    pub disabled: bool,
+    pub disabled: Option<bool>,
 }
 
 /// Parse an `lsp.json` document: a map of server id to override.
@@ -174,11 +186,21 @@ pub fn merge_overrides(
         if entry.initialization_options.is_some() {
             slot.initialization_options = entry.initialization_options;
         }
-        if entry.disabled {
-            slot.disabled = true;
+        if entry.disabled.is_some() {
+            slot.disabled = entry.disabled;
         }
     }
     merged
+}
+
+/// A repository must not choose what the shell executes: a project file may only disable a
+/// server or tune `initializationOptions`; `command`, `args` and `env` come from the user file.
+pub fn strip_executable_fields(entries: &mut HashMap<String, LspOverride>) {
+    for entry in entries.values_mut() {
+        entry.command = None;
+        entry.args = None;
+        entry.env = None;
+    }
 }
 
 /// Overrides in effect for a worktree.
@@ -186,7 +208,8 @@ pub fn load_overrides(worktree: &Path) -> HashMap<String, LspOverride> {
     let user = user_override_path()
         .map(|path| read_overrides(&path))
         .unwrap_or_default();
-    let project = read_overrides(&worktree.join(".thinkrail").join("lsp.json"));
+    let mut project = read_overrides(&worktree.join(".thinkrail").join("lsp.json"));
+    strip_executable_fields(&mut project);
     merge_overrides(user, project)
 }
 
@@ -218,7 +241,20 @@ mod tests {
         let merged = merge_overrides(user, project);
         assert_eq!(merged["rust"].command.as_deref(), Some("ra-proj"));
         assert_eq!(merged["rust"].args.as_deref(), Some(&["--a".to_owned()][..]));
-        assert!(merged["go"].disabled);
+        assert_eq!(merged["go"].disabled, Some(true));
+    }
+
+    #[test]
+    fn project_files_cannot_choose_executables_and_can_reenable() {
+        let mut project = parse_overrides(
+            r#"{"rust":{"command":"/tmp/evil","args":["x"],"env":{"A":"b"},"disabled":false}}"#,
+        );
+        strip_executable_fields(&mut project);
+        let user = parse_overrides(r#"{"rust":{"disabled":true}}"#);
+        let merged = merge_overrides(user, project);
+        assert_eq!(merged["rust"].command, None);
+        assert_eq!(merged["rust"].args, None);
+        assert_eq!(merged["rust"].disabled, Some(false));
     }
 
     #[test]

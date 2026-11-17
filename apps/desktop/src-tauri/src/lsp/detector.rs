@@ -129,16 +129,35 @@ pub fn resolve_binary_with(
 ) -> Option<PathBuf> {
     let direct = Path::new(bin);
     if direct.is_absolute() {
-        return direct.is_file().then(|| direct.to_path_buf());
+        return is_executable_file(direct).then(|| direct.to_path_buf());
     }
     local_candidates(worktree, bin)
         .into_iter()
-        .find(|path| path.is_file())
+        .find(|path| is_executable_file(path))
         .or_else(|| fallback(bin))
 }
 
 pub fn resolve_binary(worktree: &Path, bin: &str) -> Option<PathBuf> {
     resolve_binary_with(worktree, bin, |name| which::which(name).ok())
+}
+
+/// A file the OS would let us run (the execute bit on Unix).
+fn is_executable_file(path: &Path) -> bool {
+    let Ok(meta) = std::fs::metadata(path) else {
+        return false;
+    };
+    if !meta.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        meta.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
 }
 
 fn candidate_binaries(spec: &LspSpec, entry: Option<&LspOverride>) -> Vec<String> {
@@ -157,7 +176,7 @@ pub fn detect_with(
     let mut servers = Vec::new();
     for spec in BUILTIN_SPECS {
         let entry = overrides.get(spec.id);
-        if entry.is_some_and(|entry| entry.disabled) {
+        if entry.is_some_and(|entry| entry.disabled == Some(true)) {
             continue;
         }
         let Some(marker) = find_marker(worktree, spec) else {
@@ -195,15 +214,22 @@ pub fn launch_plan(worktree: &Path, id: &str) -> Option<LaunchPlan> {
     let spec = super::registry::spec_by_id(id)?;
     let overrides = load_overrides(worktree);
     let entry = overrides.get(id);
-    if entry.is_some_and(|entry| entry.disabled) || find_marker(worktree, spec).is_none() {
+    if entry.is_some_and(|entry| entry.disabled == Some(true)) || find_marker(worktree, spec).is_none() {
         return None;
     }
     let binary = candidate_binaries(spec, entry)
         .iter()
         .find_map(|bin| resolve_binary(worktree, bin))?;
-    let args = entry
-        .and_then(|entry| entry.args.clone())
-        .unwrap_or_else(|| spec.args.iter().map(|arg| (*arg).to_owned()).collect());
+    let is_jedi = binary
+        .file_stem()
+        .is_some_and(|stem| stem.to_string_lossy() == "jedi-language-server");
+    let args = entry.and_then(|entry| entry.args.clone()).unwrap_or_else(|| {
+        if is_jedi {
+            Vec::new() // jedi speaks stdio by default and rejects `--stdio`
+        } else {
+            spec.args.iter().map(|arg| (*arg).to_owned()).collect()
+        }
+    });
     Some(LaunchPlan {
         binary,
         args,

@@ -19,13 +19,18 @@ const SYMBOL_NAME = Type.Optional(
 	}),
 );
 const LINE = Type.Optional(
-	Type.Number({
+	Type.Integer({
 		minimum: 1,
+		maximum: 4_294_967_295,
 		description: "1-indexed line of the symbol; use when `symbol_name` is ambiguous.",
 	}),
 );
 const COLUMN = Type.Optional(
-	Type.Number({ minimum: 1, description: "1-indexed column, used with `line`." }),
+	Type.Integer({
+		minimum: 1,
+		maximum: 4_294_967_295,
+		description: "1-indexed column, used with `line`.",
+	}),
 );
 
 export const SymbolSearchSchema = Type.Object({
@@ -37,7 +42,7 @@ export const SymbolSearchSchema = Type.Object({
 		}),
 	),
 	limit: Type.Optional(
-		Type.Number({ minimum: 1, maximum: 100, description: "Maximum matches (default 20)." }),
+		Type.Integer({ minimum: 1, maximum: 100, description: "Maximum matches (default 20)." }),
 	),
 });
 

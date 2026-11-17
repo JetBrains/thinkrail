@@ -28,13 +28,17 @@ export function useWorkspaceLsps(worktreePath: string | undefined): WorkspaceLsp
 		bridge ? (worktreePath ? { state: "loading" } : { state: "idle" }) : { state: "unsupported" },
 	);
 	const generation = useRef(0);
+	const pending = useRef(false);
 
 	const load = useCallback(
 		(show: "loading" | "quiet") => {
 			const native = getNativeLspBridge();
 			if (!native) return setLsps({ state: "unsupported" });
 			if (!worktreePath) return setLsps({ state: "idle" });
+			// A quiet poll never supersedes a detection that has not finished.
+			if (show === "quiet" && pending.current) return;
 			const mine = ++generation.current;
+			pending.current = true;
 			if (show === "loading") setLsps({ state: "loading" });
 			native
 				.detect(worktreePath)
@@ -43,6 +47,9 @@ export function useWorkspaceLsps(worktreePath: string | undefined): WorkspaceLsp
 				})
 				.catch(() => {
 					if (mine === generation.current) setLsps({ state: "failed" });
+				})
+				.finally(() => {
+					if (mine === generation.current) pending.current = false;
 				});
 		},
 		[worktreePath],
@@ -53,6 +60,7 @@ export function useWorkspaceLsps(worktreePath: string | undefined): WorkspaceLsp
 		const timer = setInterval(() => load("quiet"), POLL_MS);
 		return () => {
 			generation.current++;
+			pending.current = false;
 			clearInterval(timer);
 		};
 	}, [load]);

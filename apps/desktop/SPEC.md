@@ -770,7 +770,9 @@ Startup calls `fix_path_env::fix()` so a GUI launch sees the login shell's PATH 
 Homebrew). `registry.rs` holds the built-in catalog (TypeScript/JavaScript, Rust, Python, Go, C/C++,
 Svelte/Vue/Astro: root markers, extensions, candidate binaries in priority order, stdio flags) merged with
 `~/.thinkrail/lsp.json` and `<worktree>/.thinkrail/lsp.json` (`command`, `args`, `env`,
-`initializationOptions`, `disabled`; the project file wins). `detector.rs` scans the worktree root, its
+`initializationOptions`, `disabled`; the project file wins, except that a repository's file may only set
+`disabled` and `initializationOptions` — `command`, `args` and `env` are honoured from the user file alone, so
+an opened repository cannot choose what runs). `detector.rs` scans the worktree root, its
 children and workspace packages for markers and resolves binaries worktree-local first
 (`node_modules/.bin`, `.venv`, `venv`) then on PATH; detection never spawns. `client.rs` pools one
 Content-Length-framed JSON-RPC child per `(canonical worktree, server id)`, spawned on the first query,

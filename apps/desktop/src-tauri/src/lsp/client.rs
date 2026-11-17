@@ -311,9 +311,10 @@ impl LspClient {
     /// Make the server's view of `path` match the disk: `didOpen` the first
     /// time, `didChange` (full text) when the content changed since.
     pub async fn sync_file(&self, path: &Path) -> Result<String, LspError> {
+        // Hold the document lock across the read so snapshots publish in read order.
+        let mut opened = self.opened.lock().await;
         let text = tokio::fs::read_to_string(path).await?;
         let uri = path_to_uri(path);
-        let mut opened = self.opened.lock().await;
         match opened.get_mut(path) {
             None => {
                 let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("");
@@ -340,6 +341,16 @@ impl LspClient {
             Some(_) => {}
         }
         Ok(text)
+    }
+
+    /// Kill the child without waiting (best effort).
+    pub fn kill_now(&self) {
+        self.alive.store(false, Ordering::SeqCst);
+        if let Ok(mut guard) = self.child.try_lock() {
+            if let Some(child) = guard.as_mut() {
+                let _ = child.start_kill();
+            }
+        }
     }
 
     pub async fn shutdown(&self) {
@@ -504,14 +515,34 @@ impl LspPool {
         }
     }
 
-    pub async fn stop_all(&self) {
+    /// Stop every client concurrently; whatever has not exited by `deadline` is killed.
+    pub async fn stop_all_within(&self, deadline: Duration) {
         let slots: Vec<Slot> = self.slots.lock().unwrap().values().cloned().collect();
+        let mut clients = Vec::new();
         for slot in slots {
             if let Some(client) = slot.lock().await.take() {
-                client.shutdown().await;
+                clients.push(client);
             }
         }
+        let tasks: Vec<_> = clients
+            .iter()
+            .cloned()
+            .map(|client| tokio::spawn(async move { client.shutdown().await }))
+            .collect();
+        let _ = tokio::time::timeout(deadline, async {
+            for task in tasks {
+                let _ = task.await;
+            }
+        })
+        .await;
+        for client in &clients {
+            client.kill_now();
+        }
         self.statuses.lock().unwrap().clear();
+    }
+
+    pub async fn stop_all(&self) {
+        self.stop_all_within(Duration::from_secs(4)).await;
     }
 
     /// Background idle reaper; runs until the process exits.

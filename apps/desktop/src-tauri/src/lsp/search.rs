@@ -464,6 +464,7 @@ fn read_lines(path: &Path) -> Option<Vec<String>> {
     Some(text.lines().map(str::to_owned).collect())
 }
 
+#[allow(dead_code)]
 fn line_snippet(path: &Path, line: u32) -> String {
     read_lines(path)
         .and_then(|lines| lines.get(line as usize - 1).map(|text| truncate(text.trim())))
@@ -773,11 +774,12 @@ async fn resolve_position(
         })?;
         let row = lines[index];
         let column = match (&target.symbol_name, target.column) {
-            (Some(name), _) if word_column(row, name).is_some() => word_column(row, name),
-            (_, Some(column)) => Some(column.saturating_sub(1)),
-            _ => first_identifier_column(row),
-        }
-        .unwrap_or(0);
+            (Some(name), _) => word_column(row, name).ok_or_else(|| {
+                LspError::Invalid(format!("symbol `{name}` is not on line {line}"))
+            })?,
+            (_, Some(column)) => column.saturating_sub(1),
+            _ => first_identifier_column(row).unwrap_or(0),
+        };
         let label = target
             .symbol_name
             .clone()
@@ -841,7 +843,11 @@ pub async fn find_references(
             }),
         )
         .await?;
-    let mut places = parse_locations(&value);
+    let mut places: Vec<Place> = parse_locations(&value)
+        .into_iter()
+        .filter(|place| canonical(&place.path).starts_with(&root))
+        .map(|place| Place { path: canonical(&place.path), ..place })
+        .collect();
     let mut notes = Vec::new();
     let total = places.len();
     if total > MAX_REFERENCES {
@@ -851,7 +857,16 @@ pub async fn find_references(
     if total == 0 {
         notes.push("no references found; the server may still be indexing".into());
     }
-    let groups = group_references(&root, places, line_snippet);
+    let mut cache: std::collections::HashMap<PathBuf, Vec<String>> = Default::default();
+    let groups = group_references(&root, places, |path, line| {
+        let lines = cache
+            .entry(path.to_path_buf())
+            .or_insert_with(|| read_lines(path).unwrap_or_default());
+        lines
+            .get((line as usize).saturating_sub(1))
+            .map(|text| truncate(text.trim()))
+            .unwrap_or_default()
+    });
     Ok(ReferencesResult {
         symbol: label,
         total,
@@ -878,6 +893,10 @@ pub async fn goto_definition(
         .await?;
     let mut definitions = Vec::new();
     for place in parse_locations(&value).into_iter().take(5) {
+        let place = Place { path: canonical(&place.path), ..place };
+        if !place.path.starts_with(&root) {
+            continue; // never expose files outside the worktree
+        }
         let symbols = if place.path.starts_with(&root) && client.sync_file(&place.path).await.is_ok() {
             client
                 .request(
@@ -896,10 +915,11 @@ pub async fn goto_definition(
             .unwrap_or((place.line, place.line + 9));
         let end = end
             .min(start + MAX_BLOCK_LINES as u32 - 1)
-            .min(lines.len().max(1) as u32);
+            .min(lines.len().max(1) as u32)
+            .max(start);
         let block = lines
             .iter()
-            .skip(start as usize - 1)
+            .skip((start as usize).saturating_sub(1))
             .take((end - start + 1) as usize)
             .cloned()
             .collect::<Vec<_>>()
