@@ -1,5 +1,10 @@
 import { type ChatRow, LARGE_USER_MESSAGE } from "./rows";
-import { isInteractiveTool, resolveProminence } from "./toolRegistry";
+import {
+	currentToolRegistry,
+	isInteractiveTool,
+	resolveProminence,
+	type ToolRegistry,
+} from "./toolRegistry";
 
 const MAX_ESTIMATED_HEIGHT = 20_000;
 const MIN_ESTIMATED_HEIGHT = 20;
@@ -120,15 +125,22 @@ function estimateToolPayload(row: Extract<ChatRow, { kind: "tool" }>, baseHeight
 	return clampHeight(height);
 }
 
-function estimateToolHeight(row: Extract<ChatRow, { kind: "tool" }>): number {
-	if (isInteractiveTool(row.toolName)) return estimateToolPayload(row, 120);
+function estimateToolHeight(
+	row: Extract<ChatRow, { kind: "tool" }>,
+	registry: ToolRegistry,
+): number {
+	if (isInteractiveTool(row.toolName, registry)) return estimateToolPayload(row, 120);
 	const status = row.tool?.status ?? (row.dead ? "error" : "running");
 	const expanded =
-		status === "error" || (status === "done" && resolveProminence(row.toolName).defaultExpanded);
+		status === "error" ||
+		(status === "done" && resolveProminence(row.toolName, registry).defaultExpanded);
 	return expanded ? estimateToolPayload(row, 64) : 48;
 }
 
-export function estimateChatRowHeight(row: ChatRow): number {
+export function estimateChatRowHeight(
+	row: ChatRow,
+	registry: ToolRegistry = currentToolRegistry(),
+): number {
 	switch (row.kind) {
 		case "markdown":
 			return estimateMarkdownHeight(row.text);
@@ -159,7 +171,7 @@ export function estimateChatRowHeight(row: ChatRow): number {
 		case "handoff":
 			return clampHeight(56 + wrappedLines(row.details.summary) * PROSE_LINE_HEIGHT);
 		case "tool":
-			return estimateToolHeight(row);
+			return estimateToolHeight(row, registry);
 		case "activity":
 			return 28;
 		case "compaction":
@@ -174,13 +186,14 @@ export function estimateChatRowHeight(row: ChatRow): number {
 export function estimateChatRowHeights(
 	rows: readonly ChatRow[],
 	cache: RowHeightEstimateCache,
+	registry: ToolRegistry = currentToolRegistry(),
 ): number[] {
 	const activeIds = new Set<string>();
 	const heights = rows.map((row) => {
 		activeIds.add(row.id);
 		const cached = cache.get(row.id);
 		if (cached !== undefined) return cached;
-		const height = estimateChatRowHeight(row);
+		const height = estimateChatRowHeight(row, registry);
 		cache.set(row.id, height);
 		return height;
 	});

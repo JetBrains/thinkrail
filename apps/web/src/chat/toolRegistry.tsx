@@ -6,23 +6,64 @@ import {
 	type ToolRenderer,
 	type ToolRenderProps,
 	toolValueText,
+	type WebExtension,
 } from "@thinkrail/extension-api/web";
 import type { Translator } from "@thinkrail/locales/react";
-import type { ReactNode } from "react";
+import { type ReactNode, useSyncExternalStore } from "react";
+import { reportToolPresentationError } from "./ToolRendererBoundary";
 
 interface ToolRegistration extends ToolRegistrationOptions {
 	renderer: ToolRenderer;
 }
 
-const registry = new Map<string, ToolRegistration>();
-const prefixRegistry = new Map<string, ToolRegistration>();
+export interface ToolRegistry {
+	readonly revision: number;
+	readonly exact: ReadonlyMap<string, ToolRegistration>;
+	readonly prefixes: ReadonlyMap<string, ToolRegistration>;
+}
+
+interface RegistryState {
+	builtIn: Map<string, ToolRegistration>;
+	prefixes: Map<string, ToolRegistration>;
+	installed: Map<string, Map<string, ToolRegistration>>;
+	listeners: Set<() => void>;
+	current: ToolRegistry;
+}
+
+function createState(): RegistryState {
+	return {
+		builtIn: new Map(),
+		prefixes: new Map(),
+		installed: new Map(),
+		listeners: new Set(),
+		current: { revision: 0, exact: new Map(), prefixes: new Map() },
+	};
+}
+
+const state: RegistryState = import.meta.hot?.data.toolRegistry ?? createState();
+if (import.meta.hot) import.meta.hot.data.toolRegistry = state;
+
+function publish(): void {
+	const exact = new Map<string, ToolRegistration>();
+	for (const owned of state.installed.values()) {
+		for (const [name, registration] of owned) if (!exact.has(name)) exact.set(name, registration);
+	}
+	for (const [name, registration] of state.builtIn) exact.set(name, registration);
+	state.current = Object.freeze({
+		revision: state.current.revision + 1,
+		exact,
+		prefixes: new Map(state.prefixes),
+	});
+	for (const listener of state.listeners) listener();
+}
 
 export function registerToolRenderer(
 	toolName: string,
 	renderer: ToolRenderer,
 	options: ToolRegistrationOptions = {},
 ): void {
-	registry.set(toolName, { renderer, ...options });
+	state.builtIn.set(toolName, { renderer, ...options });
+	publish();
 }
 
 export function registerToolRendererPrefix(
@@ -30,15 +71,65 @@ export function registerToolRendererPrefix(
 	renderer: ToolRenderer,
 	options: ToolRegistrationOptions = {},
 ): void {
-	prefixRegistry.set(prefix, { renderer, ...options });
+	state.prefixes.set(prefix, { renderer, ...options });
+	publish();
 }
 
-function resolveRegistration(toolName: string): ToolRegistration | undefined {
-	const exact = registry.get(toolName);
+export function setInstalledToolRenderers(
+	owner: string,
+	toolRenderers: WebExtension["toolRenderers"],
+): void {
+	const owned = new Map<string, ToolRegistration>();
+	for (const [name, { renderer, options }] of Object.entries(toolRenderers)) {
+		owned.set(name, { renderer, ...options });
+	}
+	state.installed.set(owner, owned);
+	publish();
+}
+
+export function reserveInstalledOwner(owner: string): void {
+	if (!state.installed.has(owner)) state.installed.set(owner, new Map());
+}
+
+export function removeInstalledToolRenderers(owner: string): boolean {
+	if (!state.installed.delete(owner)) return false;
+	publish();
+	return true;
+}
+
+export function currentToolRegistry(): ToolRegistry {
+	return state.current;
+}
+
+export function subscribeToolRegistry(listener: () => void): () => void {
+	state.listeners.add(listener);
+	return () => {
+		state.listeners.delete(listener);
+	};
+}
+
+export function useToolRegistry(): ToolRegistry {
+	return useSyncExternalStore(subscribeToolRegistry, currentToolRegistry, currentToolRegistry);
+}
+
+export function useToolRegistryRevision(): number {
+	return useToolRegistry().revision;
+}
+
+export function useToolRenderer(toolName: string): ToolRenderer {
+	const read = () => getToolRenderer(toolName);
+	return useSyncExternalStore(subscribeToolRegistry, read, read);
+}
+
+function resolveRegistration(
+	toolName: string,
+	registry: ToolRegistry,
+): ToolRegistration | undefined {
+	const exact = registry.exact.get(toolName);
 	if (exact) return exact;
 	let match: ToolRegistration | undefined;
 	let matchLength = 0;
-	for (const [prefix, registration] of prefixRegistry) {
+	for (const [prefix, registration] of registry.prefixes) {
 		if (prefix.length > matchLength && toolName.startsWith(prefix)) {
 			match = registration;
 			matchLength = prefix.length;
@@ -47,20 +138,41 @@ function resolveRegistration(toolName: string): ToolRegistration | undefined {
 	return match;
 }
 
-export function getToolRenderer(toolName: string): ToolRenderer {
-	return resolveRegistration(toolName)?.renderer ?? DefaultToolRenderer;
+export function getToolRenderer(
+	toolName: string,
+	registry: ToolRegistry = state.current,
+): ToolRenderer {
+	return resolveRegistration(toolName, registry)?.renderer ?? DefaultToolRenderer;
 }
 
-export function getToolSummary(t: Translator, toolName: string, props: ToolRenderProps): string {
-	return resolveRegistration(toolName)?.summary?.(props, t) ?? "";
+export function getToolSummary(
+	t: Translator,
+	toolName: string,
+	props: ToolRenderProps,
+	registry: ToolRegistry = state.current,
+): string {
+	const summary = resolveRegistration(toolName, registry)?.summary;
+	if (!summary) return "";
+	try {
+		return summary(props, t);
+	} catch (error) {
+		reportToolPresentationError(summary, error, "tool-summary");
+		return "";
+	}
 }
 
-export function isInteractiveTool(toolName: string): boolean {
-	return resolveRegistration(toolName)?.interactive === true;
+export function isInteractiveTool(
+	toolName: string,
+	registry: ToolRegistry = state.current,
+): boolean {
+	return resolveRegistration(toolName, registry)?.interactive === true;
 }
 
-export function getToolChrome(toolName: string): ToolChrome {
-	return resolveRegistration(toolName)?.chrome ?? "card";
+export function getToolChrome(
+	toolName: string,
+	registry: ToolRegistry = state.current,
+): ToolChrome {
+	return resolveRegistration(toolName, registry)?.chrome ?? "card";
 }
 
 export interface ResolvedProminence {
@@ -68,8 +180,11 @@ export interface ResolvedProminence {
 	defaultExpanded: boolean;
 }
 
-export function resolveProminence(toolName: string): ResolvedProminence {
-	const reg = resolveRegistration(toolName);
+export function resolveProminence(
+	toolName: string,
+	registry: ToolRegistry = state.current,
+): ResolvedProminence {
+	const reg = resolveRegistration(toolName, registry);
 	const prominence = reg?.chrome === "bare" ? "primary" : (reg?.prominence ?? "routine");
 	return { prominence, defaultExpanded: reg?.defaultExpanded ?? false };
 }

@@ -53,6 +53,7 @@ import {
 	stabilizeRows,
 } from "./rows";
 import { type StreamStatus, StreamStatusSlot, streamStatus } from "./StreamIndicator";
+import { useToolRegistry } from "./toolRegistry";
 import { ChatTurnView } from "./turns";
 import { useChatScroll } from "./useChatScroll";
 import { useTranscriptSync } from "./useTranscriptSync";
@@ -254,9 +255,11 @@ const ChatTranscript = forwardRef<
 		() => workspaceTurns?.filter((turn) => turn.sessionId === sessionId) ?? NO_AGENT_TURNS,
 		[sessionId, workspaceTurns],
 	);
+	const toolRegistry = useToolRegistry();
 	const derivedRows = useMemo(
-		() => deriveRows(turns, toolResults, isStreaming, isSpec, agentTurns, workspaceRoot),
-		[turns, toolResults, isStreaming, isSpec, agentTurns, workspaceRoot],
+		() =>
+			deriveRows(turns, toolResults, isStreaming, isSpec, agentTurns, workspaceRoot, toolRegistry),
+		[turns, toolResults, isStreaming, isSpec, agentTurns, workspaceRoot, toolRegistry],
 	);
 	// Keep the stabilized rows in state (never a ref written during render): a render-written ref both
 	// violates apps/web/SPEC.md and makes the React Compiler skip memoizing this component.
@@ -280,8 +283,8 @@ const ChatTranscript = forwardRef<
 		setRowHeightEstimateCache({ messageOrder: chatMessageOrder, heights: new Map() });
 	}
 	const rowHeightEstimates = useMemo(
-		() => estimateChatRowHeights(rows, rowHeightEstimateCache.heights),
-		[rows, rowHeightEstimateCache],
+		() => estimateChatRowHeights(rows, rowHeightEstimateCache.heights, toolRegistry),
+		[rows, rowHeightEstimateCache, toolRegistry],
 	);
 	const visibleAnchorRowId = useRef<string | null>(null);
 	const virtualRows = useVirtualRows(rows, chatMessageOrder, visibleAnchorRowId);
@@ -565,8 +568,14 @@ const ChatTranscript = forwardRef<
 		anchorToolCallId !== undefined && rowsHaveToolCall(chronologicalRows, anchorToolCallId);
 
 	const interactionStates = useMemo(
-		() => deriveInteractionStates(runtime.turns, runtime.toolResponses, runtime.toolResults),
-		[runtime.turns, runtime.toolResponses, runtime.toolResults],
+		() =>
+			deriveInteractionStates(
+				runtime.turns,
+				runtime.toolResponses,
+				runtime.toolResults,
+				toolRegistry,
+			),
+		[runtime.turns, runtime.toolResponses, runtime.toolResults, toolRegistry],
 	);
 	const awaitingToolCallId = awaitingToolCallIdOf(runtime.hostState);
 	const interactionContext = useMemo(

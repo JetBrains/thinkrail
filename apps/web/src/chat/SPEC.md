@@ -434,12 +434,41 @@ remain app-local. A registration is:
   **`resolveProminence`** seam — where a per-user override map (settings) can plug in later.
 
 Every registry read (renderer, summary, chrome, prominence) goes through one resolver: the exact tool
-name, else the longest app-local prefix registration (`registerToolRendererPrefix` — today only `mcp__`,
-because pi names MCP tools per server), else the default. Exact names always win, an empty prefix never
-matches, and extension descriptors stay exact-name only.
+name — a built-in registration first, else the installed extension listed first by the host — else the
+longest app-local prefix registration (`registerToolRendererPrefix` — today only `mcp__`, because pi names
+MCP tools per server), else the default. Exact names always win, an empty prefix never matches, and
+extension descriptors stay exact-name only. The order mirrors which tool the server actually runs (built-in
+tool-name precedence, then pi's first registration wins), so a card never draws over another tool's result.
 
-Unregistered tools fall back to `DefaultToolRenderer`. A tool that needs user input mid-run takes one of
-two routes:
+**The registry is subscribable.** Installed web halves register after first render
+([[submodule-web-extensions]]): `reserveInstalledOwner(owner)` fixes an owner's precedence slot when its
+load starts (host-list order, independent of which bundle finishes first),
+`setInstalledToolRenderers(owner, toolRenderers)` replaces that owner's set atomically in its slot, and
+`removeInstalledToolRenderers(owner)` drops it, revealing the next owner of the same name.
+Every change publishes a new immutable `ToolRegistry` snapshot (with a `revision`). Readers take it through
+`useSyncExternalStore` hooks — `useToolRegistry()` for derivations, `useToolRenderer(name)` for the
+renderer itself, `useToolRegistryRevision()` — and pass the snapshot as the optional trailing `registry`
+argument of every resolver and derivation (`deriveRows`, `deriveInteractionStates`, `pendingInteraction`,
+`sessionGlance`, `estimateChatRowHeights`, summaries, chrome, prominence). A version counter beside an
+unchanged `getToolRenderer(name)` call is not enough: the React Compiler memoizes that call by its
+arguments, so the snapshot has to be an argument. The structure matters too: an unregistered tool is a
+routine step inside a collapsed activity group, so a late primary registration turns it into a card row
+and its removal turns it back. Without the argument the live snapshot is read, which keeps imperative
+callers and tests unchanged. Built-in registration at bootstrap behaves as before. In dev, registry state
+lives in `import.meta.hot.data`, so a hot update of the registry keeps every registration.
+
+Unregistered tools fall back to `DefaultToolRenderer`. **Every renderer renders inside its own
+`ToolRendererBoundary`** — in `ToolRendererBody` and on the plan page alike, built-in or installed: a
+renderer that throws shows `DefaultToolRenderer` for that one row (chat wraps it in
+`data-testid="tool-renderer-fallback"`) while the card chrome, result images and every other row keep
+working. The boundary resets when the renderer identity (an update) or the `toolCallId` changes and reports
+through `components`' `reportBoundaryError` (reportId `tool-renderer`, classifier only) **once per renderer
+function**, so a broken card in fifty rows is one report. A registration's `summary` runs outside any
+boundary (card headers, activity steps), so a throwing summary reads as no summary and reports once
+(`tool-summary`). Effects and event handlers are not caught by a boundary; they reach the window-level
+error reports. A new render site of a registered renderer must keep the boundary.
+
+A tool that needs user input mid-run takes one of two routes:
 - the extension-UI bridge (`pi.extensionUi` → `ExtUiPrompt`, below);
 - for a rich inline card, rendering from its `toolCall` args and replying through the props-only
   **`ToolRenderProps.interaction`**. `ToolRendererBody` fills it through `useToolInteraction`
@@ -1651,7 +1680,7 @@ Unknown custom messages retain their existing behavior.
 
 ## Boundary
 
-- **Public surface:** the registry API (`toolRegistry`), the shared workspace-file target canonicalizer
+- **Public surface:** the registry API (`toolRegistry`, plus `ToolRendererBoundary` for any other render site of a registered renderer), the shared workspace-file target canonicalizer
   (`fileTargets`), and the renderers (incl. the presentational
   `Markdown` — GFM + code highlighting, no store/transport; the rendering is fixed but the **prose skin** is the
   caller's via an optional `className` — chat uses the compact bubble skin (`tr-prose-chat`),

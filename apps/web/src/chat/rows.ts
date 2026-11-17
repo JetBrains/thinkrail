@@ -16,7 +16,7 @@ import { projectRelativePath } from "../lib";
 import { type AssistantFailure, assistantFailure } from "./assistantFailure";
 import type { ChatMessageOrder } from "./chatPreferences";
 import { pulledResult, resultKey } from "./pulledResults";
-import { resolveProminence } from "./toolRegistry";
+import { currentToolRegistry, resolveProminence, type ToolRegistry } from "./toolRegistry";
 import type { ChatTurn, CompactionState, FailureRecovery, ToolResultState } from "./types";
 
 // User-message collapse threshold (PlainUserTurn); also read by row height estimation.
@@ -159,6 +159,7 @@ export function deriveRows(
 	isSpec?: (path: string) => boolean,
 	agentTurns: readonly TurnChangeSet[] = [],
 	workspaceRoot?: string,
+	registry: ToolRegistry = currentToolRegistry(),
 ): ChatRow[] {
 	const rows: ChatRow[] = [];
 	let run: ActivityStep[] = [];
@@ -215,7 +216,7 @@ export function deriveRows(
 								? { kind: pulled.kind, id: block.id, details: pulled.details, text: pulled.text }
 								: { kind: pulled.kind, id: block.id, details: pulled.details },
 						);
-					} else if (resolveProminence(block.name).prominence === "primary") {
+					} else if (resolveProminence(block.name, registry).prominence === "primary") {
 						flushRun();
 						rows.push({ kind: "tool", id: block.id, ...data });
 					} else {

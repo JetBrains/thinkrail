@@ -4,7 +4,7 @@ import {
 	type SessionState,
 } from "@thinkrail/contracts";
 import { createContext, useContext } from "react";
-import { isInteractiveTool } from "./toolRegistry";
+import { currentToolRegistry, isInteractiveTool, type ToolRegistry } from "./toolRegistry";
 import type { ChatTurn, ToolResultState } from "./types";
 
 export interface InteractionState {
@@ -21,6 +21,7 @@ export function deriveInteractionStates(
 	turns: ChatTurn[],
 	toolResponses: Record<string, unknown>,
 	toolResults: Record<string, ToolResultState> = {},
+	registry: ToolRegistry = currentToolRegistry(),
 ): Record<string, InteractionState> {
 	const calls: Record<string, { turnIndex: number; dead: boolean }> = {};
 	let lastUserIndex = -1;
@@ -31,7 +32,7 @@ export function deriveInteractionStates(
 			lastUserIndex = i;
 		} else if (turn.kind === "assistant") {
 			for (const block of turn.message.content) {
-				if (block.type === "toolCall" && isInteractiveTool(block.name)) {
+				if (block.type === "toolCall" && isInteractiveTool(block.name, registry)) {
 					calls[block.id] = {
 						turnIndex: i,
 						dead: !assistantToolCallsAreExecutable(turn.message.stopReason),

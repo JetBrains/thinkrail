@@ -9,7 +9,7 @@ import { cn } from "@thinkrail/ui/utils";
 import { ToolPromptSlot } from "./ExtUiPrompt";
 import { useFold } from "./foldState";
 import { ToolRendererBody } from "./ToolRendererBody";
-import { getToolSummary, resolveProminence } from "./toolRegistry";
+import { getToolSummary, resolveProminence, useToolRegistry } from "./toolRegistry";
 import type { ToolResultState } from "./types";
 
 export function ToolCard({
@@ -44,9 +44,11 @@ export function ToolCard({
 		onOpenFile,
 		streaming,
 	};
-	const summary = getToolSummary(t, toolName, renderProps);
+	const registry = useToolRegistry();
+	const summary = getToolSummary(t, toolName, renderProps, registry);
 
-	const autoExpand = isError || (resolveProminence(toolName).defaultExpanded && status === "done");
+	const autoExpand =
+		isError || (resolveProminence(toolName, registry).defaultExpanded && status === "done");
 	const [expanded, toggle, toggleRef] = useFold(toolCallId, autoExpand);
 
 	return (

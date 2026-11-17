@@ -2,6 +2,7 @@ import { useT } from "@thinkrail/locales/react";
 import { useEffect } from "react";
 import { hostSessionGlance, sessionGlance } from "../chat/planView";
 import { TodoAddRow, TodoRows } from "../chat/TodoList";
+import { useToolRegistry } from "../chat/toolRegistry";
 import { useChatTodos } from "../chat/useChatTodos";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
@@ -20,10 +21,11 @@ export default function PlanRailPane({
 			.request("todo.list", { workspaceId, sessionId, opened: "rail" })
 			.catch(() => {});
 	}, [workspaceId, sessionId]);
+	const toolRegistry = useToolRegistry();
 	const glance = useAppStore((s) => {
 		const runtime = s.sessions[sessionId];
 		if (!runtime) return "waiting" as const;
-		return hostSessionGlance(runtime.hostState, sessionGlance(runtime));
+		return hostSessionGlance(runtime.hostState, sessionGlance(runtime, toolRegistry));
 	});
 
 	if (plan.data === null) {

@@ -10,7 +10,7 @@ import {
 } from "@thinkrail/contracts";
 import type { ToolStatus } from "@thinkrail/extension-api/web";
 import { deriveInteractionStates, type InteractionState } from "./interactionState";
-import { isInteractiveTool } from "./toolRegistry";
+import { currentToolRegistry, isInteractiveTool, type ToolRegistry } from "./toolRegistry";
 import type { ChatTurn, ToolResultState } from "./types";
 
 export type ItemChangeSet =
@@ -254,35 +254,37 @@ interface GlanceInputs {
 
 const glanceByTurns = new WeakMap<
 	ChatTurn[],
-	Omit<GlanceInputs, "turns" | "hostState"> & { glance: PlanGlance }
+	Omit<GlanceInputs, "turns" | "hostState"> & { registry: ToolRegistry; glance: PlanGlance }
 >();
 
-function transcriptGlance({
-	isStreaming,
-	turns,
-	toolResponses,
-	toolResults,
-}: GlanceInputs): PlanGlance {
+function transcriptGlance(
+	{ isStreaming, turns, toolResponses, toolResults }: GlanceInputs,
+	registry: ToolRegistry,
+): PlanGlance {
 	const cached = glanceByTurns.get(turns);
 	if (
 		cached?.isStreaming === isStreaming &&
 		cached.toolResponses === toolResponses &&
-		cached.toolResults === toolResults
+		cached.toolResults === toolResults &&
+		cached.registry === registry
 	) {
 		return cached.glance;
 	}
 	const glance = planGlance(
 		isStreaming,
-		deriveInteractionStates(turns, toolResponses, toolResults),
+		deriveInteractionStates(turns, toolResponses, toolResults, registry),
 	);
-	glanceByTurns.set(turns, { isStreaming, toolResponses, toolResults, glance });
+	glanceByTurns.set(turns, { isStreaming, toolResponses, toolResults, registry, glance });
 	return glance;
 }
 
-export function sessionGlance(inputs: GlanceInputs): PlanGlance {
+export function sessionGlance(
+	inputs: GlanceInputs,
+	registry: ToolRegistry = currentToolRegistry(),
+): PlanGlance {
 	return inputs.hostState
 		? hostSessionGlance(inputs.hostState, "waiting")
-		: transcriptGlance(inputs);
+		: transcriptGlance(inputs, registry);
 }
 
 export function shouldNudgeOnAdd(glance: PlanGlance): boolean {
@@ -322,17 +324,20 @@ export interface PendingInteraction {
  * response, not superseded, not terminal) — reconstructed as the tool render props its registered renderer
  * needs, so the plan page can host the SAME card. Undefined when nothing is awaiting. Latest wins.
  */
-export function pendingInteraction(rt: {
-	turns: ChatTurn[];
-	toolResponses: Record<string, unknown>;
-	toolResults: Record<string, ToolResultState>;
-}): PendingInteraction | undefined {
-	const states = deriveInteractionStates(rt.turns, rt.toolResponses, rt.toolResults);
+export function pendingInteraction(
+	rt: {
+		turns: ChatTurn[];
+		toolResponses: Record<string, unknown>;
+		toolResults: Record<string, ToolResultState>;
+	},
+	registry: ToolRegistry = currentToolRegistry(),
+): PendingInteraction | undefined {
+	const states = deriveInteractionStates(rt.turns, rt.toolResponses, rt.toolResults, registry);
 	let found: PendingInteraction | undefined;
 	for (const turn of rt.turns) {
 		if (turn.kind !== "assistant") continue;
 		for (const block of turn.message.content) {
-			if (block.type !== "toolCall" || !isInteractiveTool(block.name)) continue;
+			if (block.type !== "toolCall" || !isInteractiveTool(block.name, registry)) continue;
 			const state = states[block.id];
 			if (!state || state.response !== undefined || state.superseded || state.terminal) continue;
 			const tool = rt.toolResults[block.id];
