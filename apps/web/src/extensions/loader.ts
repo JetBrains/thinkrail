@@ -63,6 +63,7 @@ interface LoaderState {
 	inflight: Map<string, Promise<WebExtensionLoadResult>>;
 	results: ReadonlyMap<string, WebExtensionLoadResult>;
 	listeners: Set<() => void>;
+	synced: Map<string, string>;
 }
 
 const state: LoaderState = import.meta.hot?.data.webExtensionLoader ?? {
@@ -72,6 +73,7 @@ const state: LoaderState = import.meta.hot?.data.webExtensionLoader ?? {
 	inflight: new Map(),
 	results: new Map(),
 	listeners: new Set(),
+	synced: new Map(),
 };
 if (import.meta.hot) import.meta.hot.data.webExtensionLoader = state;
 
@@ -234,4 +236,30 @@ export function unloadWebExtension(name: string): boolean {
 	const removed = removeInstalledToolRenderers(name);
 	setResult(name, undefined);
 	return known || removed;
+}
+
+function descriptorKey(descriptor: InstalledWebExtension): string {
+	return `${descriptor.url}\0${descriptor.styles ?? ""}`;
+}
+
+/**
+ * Converges on the host's current set: unloads names it no longer lists, loads new ones and those whose
+ * URLs changed (an update), and leaves the rest alone — a failed load is retried only when its URL changes.
+ */
+export function syncWebExtensions(
+	descriptors: readonly InstalledWebExtension[],
+): Promise<WebExtensionLoadResult[]> {
+	const wanted = new Map(
+		descriptors.map((descriptor) => [descriptor.name, descriptorKey(descriptor)]),
+	);
+	for (const name of [...state.synced.keys()]) {
+		if (wanted.has(name)) continue;
+		state.synced.delete(name);
+		unloadWebExtension(name);
+	}
+	const changed = descriptors.filter(
+		(descriptor) => state.synced.get(descriptor.name) !== descriptorKey(descriptor),
+	);
+	for (const descriptor of changed) state.synced.set(descriptor.name, descriptorKey(descriptor));
+	return loadWebExtensions(changed);
 }

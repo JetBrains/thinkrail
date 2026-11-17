@@ -10,8 +10,13 @@ import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { useEffect, useState } from "react";
-import { selectActiveRepoWorkspaceId, toast, useAppStore } from "@/store";
-import { getTransport, supportsExtensionSettings, supportsPiPackages } from "@/transport";
+import { selectActiveRepoWorkspaceId, selectBuiltinExtensions, toast, useAppStore } from "@/store";
+import {
+	getTransport,
+	refreshExtensionCatalog,
+	supportsExtensionSettings,
+	supportsPiPackages,
+} from "@/transport";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { InstallPackageDialog } from "./InstallPackageDialog";
 import { PiBuiltinsGroup, PiPackagesGroup } from "./PiPackagesSettings";
@@ -177,7 +182,8 @@ export function ExtensionsSettings() {
 	const workspaceId = useAppStore(selectActiveRepoWorkspaceId);
 	const packagesSupported = supportsPiPackages(protocolVersion);
 	const settingsSupported = supportsExtensionSettings(protocolVersion);
-	const [entries, setEntries] = useState<ExtensionCatalogEntry[] | "loading" | "failed">("loading");
+	const catalogRead = useAppStore((state) => state.extensionCatalog);
+	const entries = selectBuiltinExtensions(catalogRead);
 	const [installOpen, setInstallOpen] = useState(false);
 	const packages = usePiPackages({
 		enabled: packagesSupported,
@@ -187,18 +193,7 @@ export function ExtensionsSettings() {
 	});
 
 	useEffect(() => {
-		let current = true;
-		getTransport()
-			.request("extension.list", {})
-			.then((result) => {
-				if (current) setEntries(result);
-			})
-			.catch(() => {
-				if (current) setEntries("failed");
-			});
-		return () => {
-			current = false;
-		};
+		void refreshExtensionCatalog();
 	}, []);
 
 	const toggle = (name: string, enabled: boolean) => {
