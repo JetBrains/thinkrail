@@ -2,7 +2,9 @@ import {
 	RiCircleLine as Circle,
 	RiCircleFill,
 	RiSearchLine,
+	RiShareCircleFill,
 	RiSettings3Line as Settings,
+	RiShareCircleLine as WikiIcon,
 } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
@@ -26,7 +28,9 @@ import { SurveyInvitationDialog } from "../panels/SurveyInvitationDialog";
 import { SurveyWindow } from "../panels/SurveyWindow";
 import { Toaster } from "../panels/Toaster";
 import { useBranchStatus } from "../panels/useBranchStatus";
+import { WikiPage } from "../panels/WikiPage";
 import { useCreationChatHandoff, WorkspaceCreationView } from "../panels/WorkspaceCreation";
+import { useWikiPageState } from "../panels/wikiPageState";
 import { SearchSettings } from "../search";
 import {
 	isChatWorkspace,
@@ -36,6 +40,7 @@ import {
 	selectContextProject,
 	selectContextRepoProject,
 	selectOnboardingActive,
+	selectRepoWikiSupported,
 	useAppStore,
 } from "../store";
 import {
@@ -124,6 +129,9 @@ function ShellLayout() {
 	const contextProject = useAppStore(selectContextProject);
 	const contextRepoProject = useAppStore(selectContextRepoProject);
 	const activeChat = activeWorkspace !== null && isChatWorkspace(activeWorkspace);
+	const wikiSupported = useAppStore(selectRepoWikiSupported);
+	const wikiOpen = useWikiPageState((state) => state.openFor === activeWorkspaceId);
+	const canOpenWiki = wikiSupported && activeWorkspaceId !== null && !activeChat;
 	const {
 		review: openReview,
 		url: openReviewUrl,
@@ -284,6 +292,18 @@ function ShellLayout() {
 							onOpen={() => useAppStore.getState().openSettings(SettingsSection.Updates)}
 						/>
 					) : null}
+					{canOpenWiki && activeWorkspaceId ? (
+						<IconButton
+							variant="ghost"
+							size="m"
+							icon={wikiOpen ? RiShareCircleFill : WikiIcon}
+							label={t("shell.topbar.wiki")}
+							tooltip={t("shell.topbar.wiki")}
+							selected={wikiOpen}
+							data-testid="open-wiki"
+							onClick={() => useWikiPageState.getState().toggle(activeWorkspaceId)}
+						/>
+					) : null}
 					<IconButton
 						variant="ghost"
 						size="m"
@@ -370,8 +390,11 @@ function ShellLayout() {
 				) : null}
 			</header>
 			{hasActiveWorkspace && activeWorkspaceId ? (
-				<div data-testid="workspace-shell-layout" className="h-full min-h-0 min-w-0">
-					<WorkspaceWorkbench workspaceId={activeWorkspaceId} />
+				<div data-testid="workspace-shell-layout" className="relative h-full min-h-0 min-w-0">
+					<div className="h-full min-h-0 min-w-0" inert={wikiOpen && canOpenWiki}>
+						<WorkspaceWorkbench workspaceId={activeWorkspaceId} />
+					</div>
+					{wikiOpen && canOpenWiki ? <WikiPage workspaceId={activeWorkspaceId} /> : null}
 				</div>
 			) : (
 				<ProjectHome

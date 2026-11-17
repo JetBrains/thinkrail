@@ -57,6 +57,7 @@ import {
 	selectContextProject,
 	selectDiffTabTargetRef,
 	selectRailPlanSessionId,
+	selectRepoWikiSupported,
 	selectReviewDraftCount,
 	selectUnnamedChatFirstPrompts,
 	selectWorkspaceById,
@@ -77,6 +78,7 @@ import {
 } from "./chatReconciliation";
 import { useResolvedKeybindings } from "./keybindingState";
 import {
+	type AuxiliaryRailControlProps,
 	collectAllGroups,
 	findPlacedResource,
 	findTabLocation,
@@ -103,6 +105,7 @@ import { renderShortcutsRailButton } from "./ShortcutsDialog";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { hasNativeShortcuts } from "./useAppShortcuts";
 import { useIdleEditorPreload } from "./useIdleEditorPreload";
+import { WikiRailButton } from "./WikiRailButton";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
 import { registerTabCommands } from "./workbenchCommands";
 
@@ -385,6 +388,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const deletedSessions = useAppStore((state) => state.deletedSessionsByWorkspace[workspaceId]);
 	const terminalClose = useTerminalClose();
 	const isChat = workspace != null && isChatWorkspace(workspace);
+	const wikiSupported = useAppStore(selectRepoWikiSupported);
+	const wikiRailVisible = wikiSupported && !isChat;
+	const renderRightRailFooter = (control: AuxiliaryRailControlProps) => (
+		<WikiRailButton workspaceId={workspaceId} control={control} />
+	);
 	const chatTitle = useAppStore((state) =>
 		isChat
 			? chatDisplayName(
@@ -975,6 +983,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				registerTabCommands={registerTabCommands}
 				chromeShortcuts={chromeShortcuts}
 				renderLeftRailFooter={renderShortcutsRailButton}
+				{...(wikiRailVisible ? { renderRightRailFooter } : {})}
 				renderTabBody={renderTabBody}
 				renderTabAdornment={renderTabAdornment}
 				renderToolBody={renderToolBody}

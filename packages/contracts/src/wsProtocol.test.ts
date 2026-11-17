@@ -70,6 +70,7 @@ import {
 	PROTOCOL_VERSION,
 	PROVIDER_WARNINGS_PROTOCOL_VERSION,
 	QUESTION_PANEL_PROTOCOL_VERSION,
+	REPO_WIKI_PROTOCOL_VERSION,
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
@@ -756,4 +757,13 @@ test("ask_user_question discuss answers are pinned to v105, after background wor
 	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBe(105);
 	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBeGreaterThan(WORKSPACE_CREATION_PROTOCOL_VERSION);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ASK_DISCUSS_PROTOCOL_VERSION);
+});
+
+test("the repo wiki methods are pinned to v126", () => {
+	expect(REPO_WIKI_PROTOCOL_VERSION).toBe(126);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(REPO_WIKI_PROTOCOL_VERSION);
+	expect(WS_METHODS.wikiStatus).toBe("wiki.status");
+	expect(WS_METHODS.wikiPage).toBe("wiki.page");
+	expect(WS_METHODS.wikiPrepareBuild).toBe("wiki.prepareBuild");
+	expect(WS_METHODS.wikiPublish).toBe("wiki.publish");
 });

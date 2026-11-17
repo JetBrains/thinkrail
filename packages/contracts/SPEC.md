@@ -836,7 +836,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   fan-out used nowhere by navigation restoration / `fs.*` (**`fs.readFile`** answers
   `{ content, meta: ResourceMeta }`; with `maxBytes` (v106, the search palette's preview) a larger file is
   refused with `FILE_TOO_LARGE` before it is read) / `git.*` / **`spec.graph`**
-  (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
+  (the Specs-viewer whole-graph read, per workspace) / **`wiki.*`** (v126, `REPO_WIKI_PROTOCOL_VERSION`: **`status`** → `WikiStatus` with the article list, `publishTarget` and last `publication`; **`page`** → one article's text; **`prepareBuild`** `{ model, codeOnly }` → the `WikiBuildPlan` chat prompt that tasks the `wiki-builder` subagent; **`publish`** → `WikiPublishResult` after replacing origin's `gh-pages`; error codes `WIKI_NOT_BUILT`, `WIKI_NOT_GITHUB`, `WIKI_BRANCH_FOREIGN`, `WIKI_PUBLISH_FAILED`) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
   **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
   item `origin:"user"`), plus the review ops **`review`** (approve: record `reviewed` + the sha
   watermark), **`requestFix`** (record `changes_requested` + feedback, then the host fires the fix

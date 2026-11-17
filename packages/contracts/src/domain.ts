@@ -422,6 +422,43 @@ export interface SpecGraphSnapshot {
 	nodes: SpecGraphNode[];
 }
 
+/** One article of the repo wiki; `path` is POSIX and relative to the wiki root. */
+export interface WikiPageEntry {
+	path: string;
+	title: string;
+}
+
+export interface WikiPublication {
+	url: string;
+	branch: string;
+	publishedAt: number;
+}
+
+export interface WikiStatus {
+	built: boolean;
+	builtAt?: number;
+	pages: WikiPageEntry[];
+	/** `owner/repo` of origin when it is a GitHub remote; `null` when nothing can be published. */
+	publishTarget: string | null;
+	publication?: WikiPublication;
+}
+
+export interface WikiPage {
+	path: string;
+	content: string;
+}
+
+export interface WikiBuildPlan {
+	/** The chat prompt that tasks the `wiki-builder` subagent. */
+	prompt: string;
+}
+
+export interface WikiPublishResult {
+	url: string;
+	branch: string;
+	pageCount: number;
+}
+
 export type TodoStatus = "pending" | "in_progress" | "done";
 export type TodoOrigin = "agent" | "user" | "adopted";
 

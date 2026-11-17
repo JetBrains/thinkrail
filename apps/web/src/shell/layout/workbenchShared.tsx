@@ -91,6 +91,7 @@ export interface WorkbenchProps {
 	onGestureCanceled?: () => void;
 	chromeShortcuts?: WorkbenchChromeShortcuts;
 	renderLeftRailFooter?: (control: AuxiliaryRailControlProps) => ReactNode;
+	renderRightRailFooter?: (control: AuxiliaryRailControlProps) => ReactNode;
 }
 
 export interface WorkbenchChromeShortcuts {

@@ -102,6 +102,7 @@ export function AuxiliaryRailActionButton({
 	testId,
 	control,
 	onClick,
+	active = false,
 }: {
 	region: LayoutAuxiliaryRegion;
 	icon: RemixiconComponentType;
@@ -109,6 +110,7 @@ export function AuxiliaryRailActionButton({
 	shortcut?: readonly string[] | undefined;
 	testId: string;
 	control: AuxiliaryRailControlProps;
+	active?: boolean;
 	onClick: () => void;
 }) {
 	return (
@@ -119,7 +121,7 @@ export function AuxiliaryRailActionButton({
 					data-testid={testId}
 					data-rail-action=""
 					aria-label={label}
-					{...railEntryButtonProps(false)}
+					{...railEntryButtonProps(active)}
 					{...control}
 					onClick={onClick}
 					className={RAIL_ENTRY_BUTTON_CLASS}

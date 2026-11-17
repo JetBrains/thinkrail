@@ -1,3 +1,4 @@
+export { ensureManagedAgentDefinition } from "./agentDefinitions";
 export * from "./agentSessionManager";
 export { disableAnthropicExtraUsageWarning, globalProviderWarnings } from "./anthropicExtraUsage";
 export { readCacheWarmingSetting, writeCacheWarmingMode } from "./cacheWarming";

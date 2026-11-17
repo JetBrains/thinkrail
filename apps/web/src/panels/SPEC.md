@@ -1895,6 +1895,32 @@ own section. The kebab menu (`plan-menu`, a
   **Fill template with agent** (`pr.generate`) replaces the field's text with the host's one-shot draft;
   nothing is pushed until submit, and a `null` draft toasts instead of clearing the field.
 
+## Repository wiki page
+
+`WikiPage` (with `WikiBuildPanel`, `WikiPublishControl`, `useRepoWiki`, `wikiLinks`, `wikiPageState`) is the
+reader for the repo wiki served by `wiki.*` ([[submodule-server-wiki]]). It is a **page**, not a tool or a
+tab: `Shell` renders it over the active repository workspace's workbench (`absolute inset-0`; the workbench
+stays mounted but `inert`, so its state, terminals and focus survive) when the topbar book button — shown only
+for a repository workspace on a host at `REPO_WIKI_PROTOCOL_VERSION` or newer, and the graph icon in the right
+rail's footer (`WikiRailButton`, an `AuxiliaryRailActionButton` fed through `renderRightRailFooter`, never a layout
+tool) — has set
+`useWikiPageState.openFor` to that workspace. That flag is the one piece of state outside `useAppStore`: it is
+pure view state with no persistence, restoration or cross-window meaning, so it does not enter the layout
+document (a new tab kind would reach persisted layout validation, restoration and chat reconciliation for no
+gain).
+
+- The page lists the articles (filterable) beside the rendered article. Article links resolve through
+  `resolveWikiLink`: a relative `.md` link navigates within the page, a web link opens outside, anything that
+  climbs out of the wiki or leaves Markdown goes nowhere. Nothing is fetched on a timer; Refresh and reopening
+  the page re-read.
+- **Build** picks the subagent's model with the shared `ModelSelector`; a custom server is a provider group in
+  that picker and the chosen provider is shown as the endpoint, with a shortcut to Settings → Providers.
+  The choice and the code-only switch persist in `localStorage` as per-viewer conveniences. Starting a build
+  calls `wiki.prepareBuild`, closes the page and opens a chat with the returned prompt, so the run is visible,
+  cancellable and billed like any chat.
+- **Publish** always goes through `ConfirmDialog` naming the repository; the page never publishes as a side
+  effect. `WIKI_BRANCH_FOREIGN` and `WIKI_NOT_GITHUB` get their own messages.
+
 ## Get right
 
 - **Workbench tab chrome is not a feature panel.** The shell layout module supplies one selected-tab

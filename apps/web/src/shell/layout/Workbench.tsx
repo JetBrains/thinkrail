@@ -123,6 +123,7 @@ export function Workbench({
 	onGestureCanceled,
 	chromeShortcuts,
 	renderLeftRailFooter,
+	renderRightRailFooter,
 }: WorkbenchProps) {
 	const t = useT();
 	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -1133,7 +1134,12 @@ export function Workbench({
 				<div ref={columnsRef} className="min-h-0 min-w-0 flex-1">
 					{workbenchColumns}
 				</div>
-				<AuxiliaryRegionRail region="right" shared={shared} attention={attention} />
+				<AuxiliaryRegionRail
+					region="right"
+					shared={shared}
+					attention={attention}
+					footer={renderRightRailFooter}
+				/>
 			</div>
 			<DragOverlay dropAnimation={null}>
 				{draggingTab ? (

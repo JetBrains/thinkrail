@@ -31,6 +31,7 @@ import {
 	compactSession,
 	deleteSession,
 	disableAnthropicExtraUsageWarning,
+	ensureManagedAgentDefinition,
 	ensureSessionAttached,
 	followUpSession,
 	getResourceHistoryPage,
@@ -241,6 +242,15 @@ import {
 } from "../todos";
 import { forgetWorkspaceTurns, listTurns } from "../turns";
 import { ensureWatch, notifyWorkspacePathsChanged, stopWatch } from "../watch";
+import {
+	prepareWikiBuild,
+	publishWiki,
+	WIKI_BUILDER_AGENT,
+	WIKI_BUILDER_DEFINITION,
+	WIKI_BUILDER_MARKER,
+	wikiPage,
+	wikiStatus,
+} from "../wiki";
 import {
 	assertNotChatsContainer,
 	assertNotChatWorkspace,
@@ -1039,6 +1049,14 @@ const handlers: WsHandlers = {
 		void ensureWatch(p.workspaceId);
 		return specGraph(p.workspaceId);
 	},
+	"wiki.status": (p) => wikiStatus(p.workspaceId),
+	"wiki.page": (p) => wikiPage(p.workspaceId, p.path),
+	"wiki.prepareBuild": (p) => {
+		const plan = prepareWikiBuild(p.workspaceId, p.model, p.codeOnly);
+		ensureManagedAgentDefinition(WIKI_BUILDER_AGENT, WIKI_BUILDER_DEFINITION, WIKI_BUILDER_MARKER);
+		return plan;
+	},
+	"wiki.publish": (p) => publishWiki(p.workspaceId),
 	"todo.list": (p) => {
 		if (p.opened)
 			captureAdditional(additionalCapture(), {
@@ -1838,6 +1856,10 @@ const REPOSITORY_ONLY_METHODS: ReadonlySet<WsMethodName> = new Set<WsMethodName>
 	"todo.reviewAll",
 	"todo.requestFix",
 	"spec.graph",
+	"wiki.status",
+	"wiki.page",
+	"wiki.prepareBuild",
+	"wiki.publish",
 ]);
 
 /** Doors that start or attach a session or a terminal: a chat being deleted, or whose deletion is pending, refuses them. */
