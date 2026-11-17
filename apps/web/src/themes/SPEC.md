@@ -18,10 +18,14 @@ this client, including operating-system color-scheme observation and same-appear
 theme = adding one `*.theme.json` file** — to `bundled/` (a PR + rebuild) or, for a user, to
 `~/.thinkrail/themes` (live, [[submodule-server-themes]]) — no code, contract, CSS, or test changes.
 
-Seven manifests ship: **Helios Cobalt** — the configured default, a midnight/cobalt dark palette with a neon
-cyan accent (`#00d4ff`), cobalt primary fills and cyan diff additions, at the lowest `order` so it is also the
-dark fallback and the dark slot of a derived system pair — then the standard **Dark** and **Light** (the
-previous default and its pair, unchanged),
+Nine manifests ship: **Codex Dark** and **Codex Light** — the configured default, followed as a system
+pair (`themeMode: "system"`, `{ light: "codex-light", dark: "codex-dark" }`): a neutral grayscale surface
+hierarchy (near-black / near-white canvases, a quieter sidebar, one raised `elevated` step), a near-white
+(dark) or near-black (light) accent with the opposite `onAccent` so the primary control reads as a solid
+monochrome pill, neutral `bubbleAccent`, and soft green/red diff colours. They carry the lowest `order`
+values, so they are also the same-appearance fallbacks and the slots of a derived system pair. Then
+**Helios Cobalt** — the previous default, a midnight/cobalt dark palette with a neon cyan accent
+(`#00d4ff`), cobalt primary fills and cyan diff additions — then the standard **Dark** and **Light**,
 **Minimal Dark** and **Minimal Light** (the quiet neutral surface hierarchy, restrained green accent and
 neutral `bubbleAccent` of the Minimal interface study, sharing the standard pair's syntax and terminal
 palettes), and the two High Contrast palettes with their stricter accessibility contract. Minimal is a
@@ -197,7 +201,7 @@ listener reapplies locally on `change`; it never writes config or affects anothe
 clean it up when preference or component lifetime changes.
 
 The first-paint hint is a versioned snapshot of fixed id, mode, and optional pair—not the last effective
-id. A legacy string parses as fixed mode; malformed data becomes the fixed configured default (Helios Cobalt). Startup resolves
+id. A legacy string parses as fixed mode; malformed data becomes the configured default (the Codex system pair). Startup resolves
 the snapshot synchronously against the current media query, so a schedule change while the app was closed
 is reflected on first paint. The host-synced config always reconciles it after the first welcome; until
 then the shell retains and observes the hint instead of overwriting it with store defaults. Storage uses

@@ -316,8 +316,9 @@ themselves.
 - The theme preference is **server-synced**: `AppConfig.theme` remains the host-owned opaque fixed choice,
   while closed `themeMode` and optional opaque `systemThemePair` opt into per-client system matching. Each
   client resolves the pair against its own `prefers-color-scheme`; operating-system changes are local DOM
-  effects and never config writes, so two clients may simultaneously render different appearances. Fixed
-  **Helios Cobalt** (`helios-cobalt`) is the default for new config. A pre-rebrand config's fixed `dark`
+  effects and never config writes, so two clients may simultaneously render different appearances. The **Codex** system pair
+  (`themeMode: "system"`, light `codex-light`, dark `codex-dark`; fixed fallback `codex-dark`) is the default for
+  new config; a stored config that names a theme but no mode keeps fixed mode. A pre-rebrand config's fixed `dark`
   preference (the old default) is migrated once at load; from then on Dark remains selectable and an
   explicit choice is preserved. `settings.update` converges through
   `settings.changed`; a theme-only legacy mutation exits system mode. An unavailable system slot falls back
