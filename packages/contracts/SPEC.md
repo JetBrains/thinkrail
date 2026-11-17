@@ -575,7 +575,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   store, fonts runtime); the line-width fields join the wire at protocol v61, `terminalWindowsShell` at v62, and
   `voiceInputEnabled` (default `true`) with voice input at v107, and `questionPanelHeight`
   (**`QUESTION_PANEL_PROTOCOL_VERSION`** = v114; whole percents `QUESTION_PANEL_HEIGHT_PERCENT` 40–100,
-  default 60, `isQuestionPanelHeight`) caps the chat's interaction dock; a client of an older host hides
+  default 70 since 2026-11-17, `isQuestionPanelHeight`) caps the chat's interaction dock; a client of an older host hides
   the setting and uses the default. `onboardingDismissed` (v94, default `false`)
   records that the user finished or skipped the cold-start onboarding wizard, so it never returns.
   `otherAgentSkills` (**`OTHER_AGENT_SKILLS_PROTOCOL_VERSION`** = v108, default `false`) is the host-wide

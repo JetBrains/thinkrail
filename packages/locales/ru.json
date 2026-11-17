@@ -3075,7 +3075,7 @@
 	"tools.ask.compare.itemsLabel": "Варианты для сравнения",
 	"tools.ask.compare.left": "Слева",
 	"tools.ask.compare.leftLabel": "Слева: {{item}}",
-	"tools.ask.compare.legend": "←→ листать · 1–{{last}} перейти · Enter выбрать · Esc назад к вопросу",
+	"tools.ask.compare.legend": "←→ листать · 1–{{last}} перейти · Enter выбрать и вернуться · Esc вернуться без выбора",
 	"tools.ask.compare.legendReadOnly": "←→ листать · 1–{{last}} перейти · Esc закрыть",
 	"tools.ask.compare.open": "Сравнить варианты на весь экран",
 	"tools.ask.compare.pair": "Два рядом",

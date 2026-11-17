@@ -88,7 +88,7 @@ export function CompareOverlay({ open, onOpenChange, onClosed, ...props }: Compa
 					if (event.target === event.currentTarget) rootRef.current?.focus({ preventScroll: true });
 				}}
 			>
-				<CompareBody {...props} rootRef={rootRef} />
+				<CompareBody {...props} rootRef={rootRef} onClose={() => onOpenChange(false)} />
 			</DialogContent>
 		</Dialog>
 	);
@@ -101,8 +101,10 @@ function CompareBody({
 	onChoose,
 	onOpenFile,
 	rootRef,
+	onClose,
 }: Omit<CompareOverlayProps, "open" | "onOpenChange" | "onClosed"> & {
 	rootRef: RefObject<HTMLElement | null>;
+	onClose: () => void;
 }) {
 	const t = useT();
 	const [items] = useState(() => compareItems(question, t("tools.ask.compare.current")));
@@ -120,7 +122,7 @@ function CompareBody({
 	const choose = (item: CompareItem | undefined) => {
 		if (!item?.option || !onChoose) return;
 		onChoose(item.option.label, item.option.index);
-		focusBody();
+		onClose();
 	};
 
 	const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
