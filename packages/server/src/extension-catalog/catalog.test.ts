@@ -170,6 +170,23 @@ describe("ExtensionCatalogSource", () => {
 		expect(await codeOf(shape.read())).toBe("EXTENSION_CATALOG_INVALID");
 	});
 
+	test("stops reading a body that grows past the size cap without a length header", async () => {
+		let pulled = 0;
+		const body = new ReadableStream<Uint8Array>({
+			pull(controller) {
+				pulled += 1;
+				controller.enqueue(new Uint8Array(1024 * 1024));
+			},
+		});
+		const source = new ExtensionCatalogSource({
+			url: "https://example.test/catalog.json",
+			fetch: (async () => new Response(body)) as unknown as typeof fetch,
+			offline: () => false,
+		});
+		expect(await codeOf(source.read())).toBe("EXTENSION_CATALOG_INVALID");
+		expect(pulled).toBeLessThan(10);
+	});
+
 	test("reads a file: catalog even offline, and a missing file is unreachable", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "catalog-"));
 		dirs.push(dir);

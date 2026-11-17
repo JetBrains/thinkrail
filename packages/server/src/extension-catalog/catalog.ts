@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import type {
 	ExtensionBrowseResult,
@@ -103,6 +103,10 @@ function fail(code: WsErrorCode, message: string): CodedError {
 	return new CodedError(code, message);
 }
 
+function tooLarge(): CodedError {
+	return fail("EXTENSION_CATALOG_INVALID", "The extension catalog is too large.");
+}
+
 async function readRemote(url: string, fetcher: typeof fetch): Promise<string> {
 	let response: Response;
 	try {
@@ -121,17 +125,37 @@ async function readRemote(url: string, fetcher: typeof fetch): Promise<string> {
 		);
 	}
 	const declared = Number(response.headers.get("content-length"));
-	if (declared > MAX_CATALOG_BYTES) {
-		throw fail("EXTENSION_CATALOG_INVALID", "The extension catalog is too large.");
+	if (declared > MAX_CATALOG_BYTES) throw tooLarge();
+	const reader = response.body?.getReader();
+	if (!reader) return "";
+	const chunks: Uint8Array[] = [];
+	let bytes = 0;
+	for (;;) {
+		let chunk: Awaited<ReturnType<typeof reader.read>>;
+		try {
+			chunk = await reader.read();
+		} catch {
+			throw fail("EXTENSION_CATALOG_UNREACHABLE", "The extension catalog could not be read.");
+		}
+		if (chunk.done) break;
+		bytes += chunk.value.byteLength;
+		if (bytes > MAX_CATALOG_BYTES) {
+			await reader.cancel().catch(() => {});
+			throw tooLarge();
+		}
+		chunks.push(chunk.value);
 	}
-	try {
-		return await response.text();
-	} catch {
-		throw fail("EXTENSION_CATALOG_UNREACHABLE", "The extension catalog could not be read.");
-	}
+	return new TextDecoder().decode(Buffer.concat(chunks));
 }
 
 async function readLocal(url: URL): Promise<string> {
+	let size: number;
+	try {
+		size = (await stat(fileURLToPath(url))).size;
+	} catch {
+		throw fail("EXTENSION_CATALOG_UNREACHABLE", "The extension catalog file could not be read.");
+	}
+	if (size > MAX_CATALOG_BYTES) throw tooLarge();
 	try {
 		return await readFile(fileURLToPath(url), "utf8");
 	} catch {
@@ -192,9 +216,6 @@ export class ExtensionCatalogSource {
 				"EXTENSION_CATALOG_UNREACHABLE",
 				"The extension catalog address is not supported.",
 			);
-		}
-		if (text.length > MAX_CATALOG_BYTES) {
-			throw fail("EXTENSION_CATALOG_INVALID", "The extension catalog is too large.");
 		}
 		let parsed: unknown;
 		try {
