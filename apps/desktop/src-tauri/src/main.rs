@@ -35,7 +35,18 @@ fn main() {
     let app = tauri::Builder::default()
         // The single-instance plugin is registered first so that URLs opened
         // in a second instance are forwarded to the running app.
-        .plugin(tauri_plugin_single_instance::init(|_app, _argv, _cwd| {}))
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // A second launch brings the running window forward. thinkrail://
+            // URLs in argv reach the deep-link plugin on their own.
+            use tauri::Manager;
+            if let Some(main) = app.get_webview_window(window::MAIN_WINDOW) {
+                if main.is_minimized().unwrap_or(false) {
+                    let _ = main.unminimize();
+                }
+                let _ = main.show();
+                let _ = main.set_focus();
+            }
+        }))
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
