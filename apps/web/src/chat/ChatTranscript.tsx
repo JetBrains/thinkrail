@@ -162,6 +162,7 @@ function TranscriptFeed({
 			aria-label={t("chat.transcript.label")}
 			tabIndex={-1}
 			data-transcript-feed
+			data-focus-park
 			className="outline-none"
 		>
 			{children}
@@ -222,6 +223,8 @@ const ChatTranscript = forwardRef<
 		onOpenFile?: ((path: string) => void) | undefined;
 		workspaceRoot: string | undefined;
 		focusComposer: () => void;
+		mayClaimFocus: () => boolean;
+		landingChord: string;
 		openSubagentTranscript: (childSessionId: string | null) => void;
 		resultOpener: ChatActions["resultOpener"];
 		onTryAgain: () => void;
@@ -243,6 +246,8 @@ const ChatTranscript = forwardRef<
 		onOpenFile,
 		workspaceRoot,
 		focusComposer,
+		mayClaimFocus,
+		landingChord,
 		openSubagentTranscript,
 		resultOpener,
 		onTryAgain,
@@ -716,6 +721,9 @@ const ChatTranscript = forwardRef<
 		() => ({
 			cancelAutomaticReveal,
 			focusComposer,
+			focusToolCall: navigation.parkOnToolCall,
+			mayClaimFocus,
+			landingChord,
 			openSubagentTranscript,
 			respondToTool: (toolCallId: string, response: unknown) =>
 				respondToTool(sessionId, toolCallId, response),
@@ -751,6 +759,9 @@ const ChatTranscript = forwardRef<
 			continuationOf,
 			findModel,
 			focusComposer,
+			landingChord,
+			mayClaimFocus,
+			navigation,
 			openMcpSettings,
 			openProviderSettings,
 			openSubagentTranscript,

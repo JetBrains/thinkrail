@@ -28,7 +28,7 @@ import {
 	firstVisibleBlock,
 } from "./blockCursor";
 import { CURSOR_PROXY_HOST, type CursorOption, CursorProxy } from "./CursorProxy";
-import { cursorCommand } from "./cursorKeys";
+import { cursorCommand, useReviewSurfaceKeys } from "./cursorKeys";
 import { mapPreviewSelection } from "./previewAnchor";
 import { ReviewComposer } from "./ReviewComposer";
 import { revealReviewCard } from "./revealFocus";
@@ -85,6 +85,7 @@ export function PreviewCommenting({
 	children: (composer: ComposerInsert | null, returnFocus: PreviewReturnFocus) => ReactNode;
 }) {
 	const t = useT();
+	const keys = useReviewSurfaceKeys();
 	const iconRef = useRef<HTMLButtonElement>(null);
 	const draggingRef = useRef(false);
 	const [selection, setSelection] = useState<SourceLineRange | null>(null);
@@ -264,7 +265,7 @@ export function PreviewCommenting({
 
 	const onCursorKey = (event: KeyboardEvent<HTMLDivElement>) => {
 		const scroller = scrollerRef.current;
-		const command = cursorCommand(event.nativeEvent);
+		const command = cursorCommand(event.nativeEvent, keys);
 		if (!scroller || !command) return;
 		const elements = cursorBlockElements(scroller);
 		const blocks = cursorBlocksOf(elements);

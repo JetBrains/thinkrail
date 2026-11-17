@@ -30,7 +30,8 @@ and nothing else. It imports `extension-api/web` (types), `@thinkrail/ui/keyboar
 ## Keys
 
 - **Start is the host's.** `SHOW_HINTS` is the extension's one command, `hint-mode.show`, defaulting to
-  plain `F` (outside text entry — F types in a field) and `Mod+;` (anywhere, behind a dialog or an open
+  plain `F` (outside text entry — F types in a field; the host's bare Esc leaves a field outside dialogs,
+  [[submodule-web-shell]] *Esc leaves a text field*) and `Mod+;` (anywhere, behind a dialog or an open
   menu too). The host matches it by physical `code` (a Cyrillic layout works), never on key repeat or
   during IME composition, swallows the key and delivers the command ([[submodule-web-shell]], *Extension
   overlays*); the user may rebind it like any command, to another plain key too. Off, the host never

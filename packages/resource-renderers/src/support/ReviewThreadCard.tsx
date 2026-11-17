@@ -11,6 +11,7 @@ import {
 	selectedReviewText,
 	useReviewDraftState,
 } from "../renderers/reviewDraftState";
+import { composerSubmit, useReviewSurfaceKeys } from "./cursorKeys";
 import { focusBefore } from "./revealFocus";
 
 function grow(el: HTMLTextAreaElement): void {
@@ -30,6 +31,7 @@ export function ReviewThreadCard({
 	onReturnFocus?: ((from: HTMLElement) => void) | undefined;
 }) {
 	const t = useT();
+	const keys = useReviewSurfaceKeys();
 	const [edit, changeEdit] = useReviewDraftState<ReviewTextState | undefined>(
 		`thread:${thread.id}`,
 		undefined,
@@ -179,10 +181,11 @@ export function ReviewThreadCard({
 						e.stopPropagation();
 						if (isImeComposing(e.nativeEvent)) return;
 						if (e.key === "Escape") {
+							e.preventDefault();
 							changeEdit(() => undefined);
 							returnFocus();
 						}
-						if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+						if (composerSubmit(e.nativeEvent, keys) === "save") {
 							e.preventDefault();
 							saveEdit();
 							returnFocus();

@@ -96,8 +96,9 @@ test("the switch decides which global contributions mount; tool renderers stay r
 	expect(getToolRenderer("visualize")).toBe(visualize.toolRenderers.visualize.renderer);
 });
 
-test("Settings lists only the titled web extensions the server catalog lacks", () => {
+test("Settings lists only the titled web extensions without tools that the server catalog lacks", () => {
 	const server = new Set(["visualize", "ask-user-question", "web-access"]);
+	expect(askUserQuestion.title).toBe("tools.ask.extensionTitle");
 	expect(webOnlyExtensions(server).map((extension) => extension.name)).toEqual(["hint-mode"]);
 	expect(webOnlyExtensions(new Set([...server, "hint-mode"]))).toEqual([]);
 	expect(webOnlyExtensions(new Set()).map((extension) => extension.name)).toEqual(["hint-mode"]);
@@ -105,11 +106,27 @@ test("Settings lists only the titled web extensions the server catalog lacks", (
 
 test("commands are listed for every extension in registry order, the switched-off ones flagged", () => {
 	expect(webExtensionCommands([])).toEqual([
+		{ extension: "ask-user-question", enabled: true, commands: askUserQuestion.commands },
 		{ extension: "hint-mode", enabled: true, commands: hintMode.commands },
 	]);
 	expect(webExtensionCommands(["hint-mode"])).toEqual([
+		{ extension: "ask-user-question", enabled: true, commands: askUserQuestion.commands },
 		{ extension: "hint-mode", enabled: false, commands: hintMode.commands },
 	]);
+});
+
+test("the question card's keys are local to the card, titled, and its locked keys are listed", () => {
+	const rows = [...askUserQuestion.commands, ...askUserQuestion.shortcuts];
+	expect(rows.every((row) => Object.hasOwn(EN, row.title))).toBe(true);
+	expect(askUserQuestion.commands.map(({ id, scope }) => [id, scope])).toEqual([
+		["ask-user-question.discuss", "ask-user-question.card"],
+		["ask-user-question.interact", "ask-user-question.card"],
+		["ask-user-question.compare", "ask-user-question.card"],
+		["ask-user-question.submit", "ask-user-question.card"],
+		["ask-user-question.skip", "ask-user-question.card"],
+	]);
+	const ids = rows.map(({ id }) => id);
+	expect(new Set(ids).size).toBe(ids.length);
 });
 
 test("the bundled extensions' default chords conflict with nothing on any platform", () => {
@@ -123,6 +140,29 @@ test("the bundled extensions' default chords conflict with nothing on any platfo
 				expect(resolved.byId.get(command.id)?.chords.length).toBe(command.chords.length);
 			}
 		}
+	}
+});
+
+test("every bundled extension command is namespaced, and a scoped one reaches the resolver as local", () => {
+	const extensions = webExtensionCommands([]);
+	for (const platform of PLATFORMS) {
+		const resolved = resolveKeybindings({ platform, extensions });
+		const placed = extensions.flatMap(({ extension, commands }) =>
+			commands.map((command) => {
+				const scope = command.scope ?? null;
+				const local = scope === null ? [] : (resolved.local.get(scope) ?? []);
+				return [
+					command.id.startsWith(`${extension}.`),
+					resolved.byId.get(command.id)?.scope ?? null,
+					scope === null || local.some(({ id }) => id === command.id),
+				];
+			}),
+		);
+		expect(placed).toEqual(
+			extensions.flatMap(({ commands }) =>
+				commands.map((command) => [true, command.scope ?? null, true]),
+			),
+		);
 	}
 });
 

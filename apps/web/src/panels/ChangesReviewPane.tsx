@@ -11,12 +11,13 @@ import type { GitFileChange, GitStatus } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { diffRendererCapabilities } from "@thinkrail/resource-renderers";
 import { Button } from "@thinkrail/ui/button";
+import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { useShallow } from "zustand/react/shallow";
-import { REVIEW_KEYS, shortcutKeyCaps } from "@/keybindings";
+import { LOCAL_KEY_DEFAULTS } from "@/keybindings";
 import { usePhoneViewport } from "@/lib";
 import {
 	type ChangesTab,
@@ -62,8 +63,17 @@ function ReviewListFooter({ context }: { context?: ReviewListContext }) {
 const REVIEW_LIST_COMPONENTS = { Footer: ReviewListFooter };
 const NOOP_TOGGLE = () => {};
 
+function ReviewKey({ label }: { label: string }) {
+	return label === "" ? null : (
+		<kbd className="rounded-xs border border-control-border-default px-4 tr-code-text text-text-subtle">
+			{label}
+		</kbd>
+	);
+}
+
 export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const t = useT();
+	const keys = useLocalKeys("review", LOCAL_KEY_DEFAULTS.review);
 	const { workspaceId, scope } = tab;
 	const mobile = usePhoneViewport();
 	const [error, setError] = useState<string | null>(null);
@@ -279,17 +289,17 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 		if (!status) return;
 		const onKey = (event: KeyboardEvent) => {
 			if (!ownsReviewShortcut(event, tab)) return;
-			const plain = !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
-			if (event.altKey && event.key === REVIEW_KEYS.nextFile.key) {
+			const local = keys.match(event);
+			if (local === "review.nextFile") {
 				event.preventDefault();
 				step(1, true);
-			} else if (event.altKey && event.key === REVIEW_KEYS.previousFile.key) {
+			} else if (local === "review.previousFile") {
 				event.preventDefault();
 				step(-1, true);
-			} else if (plain && event.key === REVIEW_KEYS.markViewed.key) {
+			} else if (local === "review.markViewed") {
 				event.preventDefault();
 				markViewedAndAdvance(true);
-			} else if (plain && event.key === REVIEW_KEYS.nextUnreviewed.key) {
+			} else if (local === "review.nextUnreviewed") {
 				event.preventDefault();
 				nextUnreviewed(true);
 			}
@@ -458,7 +468,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 								<HeaderIconButton
 									testid="changes-review-prev"
 									label={t("changes.review.previousFile")}
-									shortcut={shortcutKeyCaps(REVIEW_KEYS.previousFile)}
+									shortcut={keys.caps("review.previousFile")}
 									disabled={currentIndex === 0}
 									onClick={() => step(-1)}
 									icon={ChevronLeft}
@@ -472,7 +482,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 								<HeaderIconButton
 									testid="changes-review-next"
 									label={t("changes.review.nextFile")}
-									shortcut={shortcutKeyCaps(REVIEW_KEYS.nextFile)}
+									shortcut={keys.caps("review.nextFile")}
 									disabled={currentIndex >= files.length - 1}
 									onClick={() => step(1)}
 									icon={ChevronRight}
@@ -490,9 +500,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 									{viewedSet.has(current.path)
 										? t("changes.review.viewed")
 										: t("changes.review.markViewed")}
-									<kbd className="rounded-xs border border-control-border-default px-4 tr-code-text text-text-subtle">
-										{REVIEW_KEYS.markViewed.key.toUpperCase()}
-									</kbd>
+									<ReviewKey label={keys.label("review.markViewed")} />
 								</Button>
 							</div>
 							<div data-focus-list={`changes-review:${tab.id}`} className="min-h-0 flex-1">
@@ -614,9 +622,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 											onClick={() => nextUnreviewed()}
 										>
 											{t("changes.review.nextUnreviewed")}
-											<kbd className="rounded-xs border border-control-border-default px-4 tr-code-text text-text-subtle">
-												{REVIEW_KEYS.nextUnreviewed.key.toUpperCase()}
-											</kbd>
+											<ReviewKey label={keys.label("review.nextUnreviewed")} />
 										</Button>
 										<Button
 											variant="outline"

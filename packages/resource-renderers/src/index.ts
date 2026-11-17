@@ -25,6 +25,7 @@ export {
 	describeResource,
 	diffRendererCapabilities,
 	diffResourceMeta,
+	type FrameFocus,
 	type HunkActions,
 	type HunkTriage,
 	isPlaceable,
@@ -53,8 +54,12 @@ export { SOURCE_RENDERER_ID } from "./renderers/code";
 export { createAskAgentRequest } from "./renderers/code/changeBlocks";
 export { HtmlViewportSwitch } from "./renderers/html/ViewportSwitch";
 export type { HtmlViewport } from "./renderers/html/viewport";
-export { registerBundledResourceRenderers } from "./renderers/register";
+export {
+	type BundledRendererOptions,
+	registerBundledResourceRenderers,
+} from "./renderers/register";
 export { ReviewDraftContext, type ReviewDraftPersistence } from "./renderers/reviewDraftState";
+export { REVIEW_SURFACE_COMMANDS, REVIEW_SURFACE_SCOPE } from "./support/cursorKeys";
 export {
 	FramedResourcePreview,
 	type FramedResourcePreviewProps,

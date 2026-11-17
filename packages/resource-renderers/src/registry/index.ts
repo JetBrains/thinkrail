@@ -3,6 +3,7 @@ export { describeResource } from "./describe";
 export { canonicalWorkspacePath } from "./paths";
 export {
 	diffRendererCapabilities,
+	matchesGlob,
 	registerResourceRenderer,
 	resolveRenderers,
 } from "./registry";
@@ -11,6 +12,7 @@ export { rendererImplementationKey, rendererTestId, selectResourceRenderer } fro
 export type {
 	AnchorDraft,
 	DiffSideLabels,
+	FrameFocus,
 	HunkActions,
 	HunkTriage,
 	ResourceAnchorCapability,

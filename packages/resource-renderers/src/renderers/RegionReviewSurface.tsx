@@ -13,7 +13,7 @@ import {
 	useState,
 } from "react";
 import type { AnchorDraft, SurfaceReview } from "../registry";
-import { cursorCommand } from "../support/cursorKeys";
+import { cursorCommand, useReviewSurfaceKeys } from "../support/cursorKeys";
 import { ReviewComposer } from "../support/ReviewComposer";
 import { ReviewThreadCard } from "../support/ReviewThreadCard";
 import { revealReviewCard } from "../support/revealFocus";
@@ -81,6 +81,7 @@ export function RegionReviewSurface({
 	tabStop?: boolean | undefined;
 }) {
 	const t = useT();
+	const keys = useReviewSurfaceKeys();
 	const commentText = commentLabel ?? t("viewer.region.commentOnImage");
 	const [drag, setDrag] = useState<DragState | null>(null);
 	const composer = useStampedComposer<Region>(contentStamp, selectionKey);
@@ -184,7 +185,7 @@ export function RegionReviewSurface({
 		keysRef.current?.scrollIntoView({ block: "nearest" });
 	};
 	const onFrameKey = (event: KeyboardEvent<HTMLButtonElement>) => {
-		const command = cursorCommand(event.nativeEvent);
+		const command = cursorCommand(event.nativeEvent, keys);
 		const outcome = command ? frameCommand(composer.selection, command) : null;
 		if (!outcome) return;
 		event.preventDefault();

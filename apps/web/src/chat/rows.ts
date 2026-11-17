@@ -78,16 +78,22 @@ export type ChatRow =
 	  }
 	| { kind: "divider"; id: string; data: TurnDividerData };
 
+function rowHasToolCall(row: ChatRow, toolCallId: string): boolean {
+	if (row.kind === "tool") return row.toolCallId === toolCallId;
+	if (row.kind !== "activity") return false;
+	return row.steps.some((step) =>
+		step.kind === "tool"
+			? step.toolCallId === toolCallId
+			: step.tools.some((tool) => tool.toolCallId === toolCallId),
+	);
+}
+
 export function rowsHaveToolCall(rows: readonly ChatRow[], toolCallId: string): boolean {
-	return rows.some((row) => {
-		if (row.kind === "tool") return row.toolCallId === toolCallId;
-		if (row.kind !== "activity") return false;
-		return row.steps.some((step) =>
-			step.kind === "tool"
-				? step.toolCallId === toolCallId
-				: step.tools.some((tool) => tool.toolCallId === toolCallId),
-		);
-	});
+	return rows.some((row) => rowHasToolCall(row, toolCallId));
+}
+
+export function rowIdForToolCall(rows: readonly ChatRow[], toolCallId: string): string | null {
+	return rows.find((row) => rowHasToolCall(row, toolCallId))?.id ?? null;
 }
 
 export function projectRows(rows: ChatRow[], messageOrder: ChatMessageOrder): ChatRow[] {

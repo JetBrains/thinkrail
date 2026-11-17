@@ -9,6 +9,7 @@ import {
 	revealWorkbenchTool,
 	worktreeRows,
 } from "./fixtures/app";
+import { resetKeybindings, setKeybindings } from "./fixtures/keybindings";
 
 const filesTree = (page: Page) => page.getByRole("tree", { name: "Files" });
 const fileRow = (page: Page, name: string) =>
@@ -374,4 +375,35 @@ test("Artifacts is its own tree: arrows walk it, F2 renames, Delete asks before 
 
 	await pressPlatformShortcut(page, "Enter");
 	await expect(editorTab(page, "newer.md")).toHaveAttribute("data-preview", "false");
+});
+
+test.describe("rebound tree keys", () => {
+	test.afterEach(async ({ page }) => resetKeybindings(page));
+
+	test("a rebound rename key renames a workspace row and F2 no longer does", async ({ page }) => {
+		await openFixtureProject(page);
+		await createWorkspaceViaDialog(page);
+		await setKeybindings(page, { "trees.rename": ["KeyR"] });
+		const row = worktreeRows(page).first();
+		const item = row.getByRole("treeitem");
+		const input = row.getByRole("textbox", { name: "Workspace name" });
+
+		await expect(async () => {
+			await item.focus();
+			await page.keyboard.press("r");
+			await expect(input).toBeFocused({ timeout: 1_000 });
+		}).toPass();
+		await input.fill("Renamed by R");
+		await input.press("Enter");
+		await expect(row.getByTestId("workspace-name")).toHaveText("Renamed by R");
+
+		await item.focus();
+		await page.keyboard.press("F2");
+		await expect(input).toHaveCount(0);
+		await expect(item).toBeFocused();
+		await page.keyboard.press("r");
+		await expect(input).toBeFocused();
+		await page.keyboard.press("Escape");
+		await expect(row.getByTestId("workspace-name")).toHaveText("Renamed by R");
+	});
 });

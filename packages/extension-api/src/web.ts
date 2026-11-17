@@ -29,6 +29,9 @@ export interface ToolInteraction<R = unknown> {
 		provenance?: "user" | "automatic",
 	) => () => void;
 	focusComposer: () => void;
+	focusTranscript: () => void;
+	mayClaimFocus: () => boolean;
+	landingChord: string;
 	hostProtocol?: number | undefined;
 	placement?: ToolPlacement | undefined;
 }
@@ -88,6 +91,7 @@ export type ExtensionShortcutKey = ExtensionChord;
 export interface ExtensionCommand {
 	readonly id: string;
 	readonly title: MessageKey;
+	readonly scope?: string;
 	readonly chords: readonly ExtensionChord[];
 }
 
