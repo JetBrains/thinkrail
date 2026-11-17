@@ -66,7 +66,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   (below) — the composer hands that prompt back to its draft instead of losing it.
   Everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
-- **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
+- **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `lsp` + `nativeClient`
   (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,
   `NativeQuitHint` / `NativeCommand` / `NativeShortcutsBridge`, and
   `NativeNotificationInput` / `NativeNotificationBridge`, `NativePageZoomAction` / `NativePageZoomBridge`,
@@ -763,13 +763,26 @@ the palette ranks with — kept here so host-side search can rank with the same 
   attention, or current/default-selection identity. Every current-layout type—including the projected
   `WorkspaceLayoutDocument`, `WorkbenchFrame`, and `WorkspaceViewState`—is web-local and deliberately absent
   from contracts. There is no current-layout method or push channel.
+- **lsp.ts** — the language-server (LSP) wire shared by the desktop shell's LSP manager, the built-in
+  `lsp-search` pi extension ([[module-ext-lsp-search]]) and the web UI. `LspServerStatus`
+  (`detected | starting | ready | error | missing`, `LSP_SERVER_STATUSES`), `DetectedLspServer` (catalog id,
+  language, selecting `marker`, resolved `binaryPath`, `available`, `installHint` only while missing, `status`),
+  and the agent-shaped results `LspSymbolHit`, `LspReferenceGroup`, `LspDefinitionHit` and `LspOutlineNode`.
+  Every line and column is **1-indexed** and every path **worktree-relative with `/`** — the manager converts
+  LSP's 0-indexed positions once, so an agent never does. Each result names its `source`: `lsp`, or `text`
+  when no server answered and the gitignore-aware fallback did. Request/response pairs
+  `CodeSymbolSearch*`, `CodeFindReferences*`, `CodeGotoDefinition*` and `CodeFileOutline*` mirror the four
+  tools (`code_symbol_search`, `code_find_references`, `code_goto_definition`, `code_file_outline`); a symbol
+  is located by `symbol_name` or by `line` (+ optional `column`). `LSP_BRIDGE_OPERATIONS`,
+  `LSP_BRIDGE_URL_ENV` and `LSP_BRIDGE_TOKEN_ENV` name the shell's loopback bridge (`POST /lsp/<operation>`
+  with a bearer token), an optional capability: a host outside the Tauri shell has none and the tools say so.
 - **nativeClient.ts** — type-only optional native-client capabilities outside the host wire. The desktop
   update bridge exposes a monotonic state snapshot, prompt check/download/install actions, failed-operation
   identity, and state subscription without exposing feed selection. Available, byte-transfer, preparation,
   ready, and installing are distinct states. While installing, the snapshot carries a coarse install step
   and a bounded log of structured events (`diagnostic` alone carries raw SDK text). After a relaunch it carries the durable last-install result as data, never as display
   text: outcome, from/to version, native failed step, raw cause, and saved log. Only
-  `dismissInstallResult()` clears it. The window-controls bridge exposes the same
+  `dismissInstallResult()` clears it. `NativeLspBridge` exposes `detect`, `restart` and `openUserConfig` for the LSP manager, nothing that spawns on detect. The window-controls bridge exposes the same
   snapshot/action/subscription shape for window state. The shortcuts bridge pushes quit-hint changes
   (`hidden` / `armed` / `release` / `quitting`) and `NativeCommand` ids (today `close-item`, close the
   focused in-app item, and `open-settings`, open Settings unless a modal is open), and its one action `quit()` asks the host for an ordinary coordinated quit. The

@@ -38,6 +38,19 @@ describe("listExtensionCatalog", () => {
 				tools: ["web_search", "source_check", "fetch_content", "get_search_content", "web_enable"],
 				hasChildExtensions: true,
 			},
+			{
+				name: "lsp-search",
+				title: "Code navigation (LSP)",
+				description: expect.any(String),
+				enabled: true,
+				tools: [
+					"code_symbol_search",
+					"code_find_references",
+					"code_goto_definition",
+					"code_file_outline",
+				],
+				hasChildExtensions: true,
+			},
 		]);
 		const [visualize, ask] = await listExtensionCatalog(new Set(["visualize", "retired"]));
 		expect(visualize?.enabled).toBe(false);

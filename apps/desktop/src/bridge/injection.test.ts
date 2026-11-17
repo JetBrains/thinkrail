@@ -33,6 +33,7 @@ const BRIDGE_SHAPES: Readonly<Record<string, readonly string[]>> = {
 		"dismissInstallResult",
 		"subscribe",
 	],
+	__THINKRAIL_NATIVE_LSP__: ["detect", "restart", "openUserConfig"],
 	__THINKRAIL_NATIVE_PAGE_ZOOM__: ["request"],
 	__THINKRAIL_NATIVE_DEEP_LINKS__: ["subscribe"],
 	__THINKRAIL_NATIVE_NOTIFICATIONS__: ["show", "isWindowFocused"],

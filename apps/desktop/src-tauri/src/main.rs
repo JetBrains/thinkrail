@@ -16,6 +16,7 @@
 
 mod bridge;
 mod lifecycle;
+mod lsp;
 mod menu;
 mod navigation;
 mod sidecar;
@@ -28,6 +29,9 @@ use tauri::Emitter;
 use tauri_plugin_window_state::StateFlags;
 
 fn main() {
+    // GUI launches inherit a minimal PATH; adopt the login shell's so language
+    // servers and toolchains (nvm, rustup, go, pipx, Homebrew) resolve.
+    let _ = fix_path_env::fix();
     let app = tauri::Builder::default()
         // The single-instance plugin is registered first so that URLs opened
         // in a second instance are forwarded to the running app.
@@ -53,6 +57,7 @@ fn main() {
         .manage(menu::MenuLabels::default())
         .manage(updates_tauri::UpdateState::default())
         .manage(sidecar::SidecarState::default())
+        .manage(lsp::LspState::default())
         .invoke_handler(tauri::generate_handler![
             window::get_window_state,
             window::minimize_window,
@@ -74,6 +79,13 @@ fn main() {
             updates_tauri::download_update,
             updates_tauri::restart_to_update,
             updates_tauri::dismiss_install_result,
+            lsp::detect_workspace_lsps,
+            lsp::lsp_symbol_search,
+            lsp::lsp_find_references,
+            lsp::lsp_goto_definition,
+            lsp::lsp_file_outline,
+            lsp::restart_workspace_lsp,
+            lsp::open_lsp_user_config,
         ])
         .setup(|app| {
             app.handle()

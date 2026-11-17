@@ -34,6 +34,7 @@ pub fn stop_host(app: &AppHandle) {
     if let Some(state) = app.try_state::<SidecarState>() {
         state.shutdown_sidecar();
     }
+    crate::lsp::shutdown(app);
 }
 
 #[tauri::command]

@@ -145,3 +145,8 @@ html[data-helios-neon="true"] [data-streaming="true"] [data-neon~="cta"][data-ar
 		transform: translateX(100%);
 	}
 }
+
+/* A language server that is ready shows the accent dot with its halo (`lsp/LspServerList`). */
+html[data-helios-neon="true"] [data-lsp-ready] {
+	box-shadow: var(--neon-glow);
+}

@@ -765,6 +765,28 @@ stdin, the sidecar (started with `--exit-on-stdin-close`) runs `server.shutdown(
 only a host still running after 10 s is killed. The same pipe closes if the shell crashes, so the
 host never outlives it.
 
+**Language servers (Tauri shell only).** `src-tauri/src/lsp` is a shared, lazily spawned LSP manager.
+Startup calls `fix_path_env::fix()` so a GUI launch sees the login shell's PATH (nvm/fnm/bun, rustup, go, pipx,
+Homebrew). `registry.rs` holds the built-in catalog (TypeScript/JavaScript, Rust, Python, Go, C/C++,
+Svelte/Vue/Astro: root markers, extensions, candidate binaries in priority order, stdio flags) merged with
+`~/.thinkrail/lsp.json` and `<worktree>/.thinkrail/lsp.json` (`command`, `args`, `env`,
+`initializationOptions`, `disabled`; the project file wins, except that a repository's file may only set
+`disabled` and `initializationOptions` — `command`, `args` and `env` are honoured from the user file alone, so
+an opened repository cannot choose what runs). `detector.rs` scans the worktree root, its
+children and workspace packages for markers and resolves binaries worktree-local first
+(`node_modules/.bin`, `.venv`, `venv`) then on PATH; detection never spawns. `client.rs` pools one
+Content-Length-framed JSON-RPC child per `(canonical worktree, server id)`, spawned on the first query,
+synced from disk with `didOpen`/`didChange` before file-scoped requests, with per-request timeouts and an
+idle reaper; `lsp::shutdown` stops them at exit. `search.rs` converts every position to 1-indexed
+`path:line`, ranks symbols exact > prefix > substring, and falls back to a gitignore-aware walk when no server
+answers. The same operations are Tauri commands (`detect_workspace_lsps`, `lsp_symbol_search`,
+`lsp_find_references`, `lsp_goto_definition`, `lsp_file_outline`, `restart_workspace_lsp`,
+`open_lsp_user_config`, all listed in `permissions/bridge.toml`) and a loopback HTTP bridge
+(`POST /lsp/<operation>`, bearer token) whose URL and token reach the sidecar as
+`THINKRAIL_LSP_BRIDGE_URL` / `THINKRAIL_LSP_BRIDGE_TOKEN` for the `lsp-search` pi extension
+([[module-ext-lsp-search]]). The bootstrap freezes `__THINKRAIL_NATIVE_LSP__` (`NativeLspBridge`). The
+Electrobun shell has none of this.
+
 **Updates.** The update commands drive `tauri-plugin-updater` (check, download with progress,
 install and relaunch) and always settle in `idle`, `available`, `ready` or `error`. No update feed
 is configured yet (`plugins.updater.endpoints` / `pubkey` are empty), so the shell reports

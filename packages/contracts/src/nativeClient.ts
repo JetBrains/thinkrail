@@ -1,3 +1,5 @@
+import type { DetectedLspServer } from "./lsp";
+
 export type NativeUpdateFailedPhase = "check" | "download" | "install" | null;
 
 export type NativeUpdateInstallStep = "stopping" | "handoff" | "restarting";
@@ -115,4 +117,14 @@ export interface NativePageZoomBridge {
 /** Translated labels for the desktop's custom native menu items, keyed by catalog key. */
 export interface NativeMenuBridge {
 	setLabels(labels: Readonly<Record<string, string>>): void;
+}
+
+/** Language-server detection and control, available when the shell hosts the LSP manager. */
+export interface NativeLspBridge {
+	/** Detected servers for a worktree with live status; nothing is spawned. */
+	detect(worktreePath: string): Promise<DetectedLspServer[]>;
+	/** Stop one server (or all when `serverId` is omitted); the next query starts it again. */
+	restart(worktreePath: string, serverId?: string): Promise<DetectedLspServer[]>;
+	/** Create `~/.thinkrail/lsp.json` if missing and open it in the system editor. */
+	openUserConfig(): Promise<void>;
 }

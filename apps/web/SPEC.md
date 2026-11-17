@@ -29,13 +29,14 @@ event stream as a chat-centric, multi-session IDE shell.
 
 ## Internal modules
 
-Each is a bounded sub-module; `navigation`/`transport`/`store`/`updates`/`prompt`/`lib`/`extensions`/`search`/`findInFiles`/`commands`/`keybindings` expose an `index.ts` **barrel** (their only public
+Each is a bounded sub-module; `navigation`/`transport`/`store`/`updates`/`prompt`/`lib`/`extensions`/`lsp`/`search`/`findInFiles`/`commands`/`keybindings` expose an `index.ts` **barrel** (their only public
 surface). `panels`/`chat` are imported **per-file by design** — barreling them would pull
 the lazily-loaded Monaco/xterm chunks into the eager bundle and break the shadcn per-primitive
 convention; their boundary is held by convention + spec. Sibling edges live here, not in the leaves.
 
 | module | owns | barrel | spec |
 | --- | --- | --- | --- |
+| `lsp` | detected language servers: Settings → Languages & LSP and the workspace status drawer section, via the optional `__THINKRAIL_NATIVE_LSP__` bridge | yes | [lsp/SPEC.md](src/lsp/SPEC.md) |
 | `navigation` | backend-relative location model + fragment driver/validated restore | yes | [navigation/SPEC.md](src/navigation/SPEC.md) |
 | `transport` | the WS client + its singleton/store wiring | yes | [transport/SPEC.md](src/transport/SPEC.md) |
 | `store` | Zustand: domain projections, one local workbench frame, per-workspace views/attention, chat runtimes | yes | [store/SPEC.md](src/store/SPEC.md) |
