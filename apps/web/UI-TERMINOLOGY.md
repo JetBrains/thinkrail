@@ -65,6 +65,14 @@ Children (left → right):
 | Connection Status | inline `<span>` | `connection-status` (`data-status`) | Connected / Connecting… / Disconnected pill with a color dot |
 | Settings Button | inline `<button>` (gear, `@remixicon/react` `Settings`) | `open-settings` | Opens the Settings Dialog via `store.openSettings()` |
 
+Codex-style shell additions (see `shell/SPEC.md`, *Codex-style frame*):
+
+| Canonical name | Implementation | `data-testid` | Responsibility |
+|---|---|---|---|
+| Sidebar Toggle | `shell/TopbarControls.tsx` → `SidebarToggle` (leading, own `window-no-drag` root) | `toggle-sidebar` | Shows/hides the Thread Sidebar (`view.toggleLeft`) |
+| Review Changes | `shell/TopbarControls.tsx` → `ReviewChangesButton` (in `topbar-actions`) | `open-review` | `+N −M` git line totals; toggles the right side on Files › Changed |
+| Terminal Toggle | `shell/TopbarControls.tsx` → `TerminalToggle` (in `topbar-actions`) | `toggle-terminal` | Shows/hides the bottom panel (`view.toggleBottom`) |
+
 **⚠ Naming note (Scope Context):** the `data-testid` is `scope-context` and the spec text calls it the
 "location context". This reference adopts **Scope Context** as canonical; "location context" is an
 alternative used in prose.
@@ -87,6 +95,11 @@ The singleton Projects tool, initially in the left side. Its Projects Rail view 
 **⚠ Naming note (Projects Tool):** legacy names still coexist — the component is `ProjectTree`, its
 navigation view is the **Projects Rail**, and the compatibility test id is `left-nav`. Neither “Left Nav”
 nor “Left Sidebar” describes durable placement because the tool can move.
+
+**Thread Sidebar** is the Codex-style name for the Projects Tool on the left side of the default Codex
+preset. Its leading **Sidebar Quick Actions** (`panels/SidebarQuickActions.tsx`, `sidebar-quick-actions`)
+are **New thread** (`sidebar-new-thread`: a sibling chat in the active workspace, else the New Workspace
+Dialog for the selected project, else a chat without a project) and **Search** (`sidebar-search`).
 
 Children:
 
@@ -130,6 +143,7 @@ Children:
 | Canonical name | Implementation | `data-testid` | Responsibility |
 |---|---|---|---|
 | Welcome Heading | inline hero heading | `welcome-title` | Project name, or `PRODUCT_NAME` when no project |
+| Hero Composer | `panels/HeroComposer.tsx` → `HeroComposer` | `hero-composer` / `hero-composer-input` / `hero-composer-submit` | "What should we build in {project}?"; submitting opens the New Workspace Dialog with the prompt |
 | Provider Warning Banner | `panels/ProviderWarningBanner.tsx` → `ProviderWarningBanner` | — | Gold banner shown only when no provider is connected |
 | Project Trust Notice | `panels/ProjectTrustNotice.tsx` → `ProjectTrustNotice` | `project-trust-notice` | Pre-workspace trust surface that names what a grant loads, with Stop trusting |
 | Primary Card (CTA) | `Card` in `WelcomePanel` | `welcome-cta` | Filled-primary action |
