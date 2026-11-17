@@ -33,6 +33,10 @@ pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 pub const INITIALIZE_TIMEOUT: Duration = Duration::from_secs(45);
 pub const IDLE_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 const REAP_INTERVAL: Duration = Duration::from_secs(30);
+/// Largest framed message accepted from a server.
+const MAX_MESSAGE_BYTES: usize = 64 * 1024 * 1024;
+/// Documents kept open per server before the oldest are closed.
+const MAX_OPEN_DOCUMENTS: usize = 256;
 
 #[derive(Debug, Error)]
 pub enum LspError {
@@ -88,6 +92,9 @@ pub async fn read_message<R: AsyncBufRead + Unpin>(
         }
     }
     let length = length.ok_or_else(|| LspError::Invalid("missing Content-Length".into()))?;
+    if length > MAX_MESSAGE_BYTES {
+        return Err(LspError::Invalid(format!("message of {length} bytes exceeds the limit")));
+    }
     let mut body = vec![0u8; length];
     reader.read_exact(&mut body).await?;
     serde_json::from_slice(&body)
@@ -101,14 +108,18 @@ pub async fn read_message<R: AsyncBufRead + Unpin>(
 pub fn strip_verbatim(path: PathBuf) -> PathBuf {
     let text = path.to_string_lossy();
     match text.strip_prefix(r"\\?\") {
-        Some(rest) if !rest.starts_with("UNC") => PathBuf::from(rest),
-        _ => path,
+        Some(rest) => match rest.strip_prefix(r"UNC\") {
+            Some(share) => PathBuf::from(format!(r"\\{share}")),
+            None => PathBuf::from(rest),
+        },
+        None => path,
     }
 }
 
 pub fn path_to_uri(path: &Path) -> String {
     let text = path.to_string_lossy().replace('\\', "/");
-    let mut uri = String::from("file://");
+    // `//server/share/x` is a UNC path: `file://server/share/x`.
+    let mut uri = String::from(if text.starts_with("//") { "file:" } else { "file://" });
     if !text.starts_with('/') {
         uri.push('/');
     }
@@ -312,7 +323,16 @@ impl LspClient {
     /// time, `didChange` (full text) when the content changed since.
     pub async fn sync_file(&self, path: &Path) -> Result<String, LspError> {
         // Hold the document lock across the read so snapshots publish in read order.
+        *self.last_used.lock().unwrap() = Instant::now();
         let mut opened = self.opened.lock().await;
+        if opened.len() >= MAX_OPEN_DOCUMENTS && !opened.contains_key(path) {
+            for (old, _) in opened.drain() {
+                let _ = self.notify(
+                    "textDocument/didClose",
+                    json!({ "textDocument": { "uri": path_to_uri(&old) } }),
+                );
+            }
+        }
         let text = tokio::fs::read_to_string(path).await?;
         let uri = path_to_uri(path);
         match opened.get_mut(path) {
@@ -644,6 +664,11 @@ mod tests {
     fn verbatim_prefix_is_stripped() {
         assert_eq!(strip_verbatim(PathBuf::from(r"\\?\C:\a")), PathBuf::from(r"C:\a"));
         assert_eq!(strip_verbatim(PathBuf::from("/a")), PathBuf::from("/a"));
+        assert_eq!(
+            strip_verbatim(PathBuf::from(r"\\?\UNC\srv\share\x")),
+            PathBuf::from(r"\\srv\share\x")
+        );
+        assert_eq!(path_to_uri(Path::new(r"\\srv\share\a b")), "file://srv/share/a%20b");
     }
 
     #[tokio::test]

@@ -151,6 +151,12 @@ pub fn spawn_sidecar(extra_env: &[(String, String)]) -> Result<SidecarHandle, St
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit());
+    if extra_env.is_empty() {
+        // Never pass on bridge variables the shell itself inherited.
+        command
+            .env_remove(crate::lsp::BRIDGE_URL_ENV)
+            .env_remove(crate::lsp::BRIDGE_TOKEN_ENV);
+    }
     // A release shell is a GUI process; without this Windows opens a console
     // window for the host. Debug builds keep the console so host logs show.
     #[cfg(all(windows, not(debug_assertions)))]
