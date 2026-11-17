@@ -6,7 +6,7 @@ import { createRoot } from "react-dom/client";
 import { initChatPreferencesPersistence } from "./chat/chatPreferences";
 import { initModelVisibilityPersistence } from "./chat/modelVisibility";
 import { ErrorBoundary, setErrorBoundaryReporter } from "./components/ErrorBoundary";
-import { registerWebExtensions } from "./extensions";
+import { installExtensionHost, registerWebExtensions } from "./extensions";
 import { initializeFonts } from "./fonts";
 import { useLocaleSync } from "./i18n";
 import { initNavigation } from "./navigation";
@@ -38,6 +38,7 @@ initProjectExpansionPersistence();
 initFilesTreePersistence();
 initSearchPreferences();
 initNavigation();
+installExtensionHost();
 registerWebExtensions();
 
 function App() {
