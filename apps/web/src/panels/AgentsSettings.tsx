@@ -110,6 +110,7 @@ function AvailableAgents({
 }) {
 	const t = useT();
 	const disabledNames = useAppStore((state) => state.disabledSubagents);
+	const connected = useAppStore((state) => state.status === "connected");
 	const saving = useSyncExternalStore(
 		subagentAvailability.subscribe,
 		subagentAvailability.getSnapshot,
@@ -136,7 +137,7 @@ function AvailableAgents({
 					variant="outline"
 					size="s"
 					iconLeft={RiRefreshLine}
-					disabled={catalog === "loading" || saving.pending}
+					disabled={!connected || catalog === "loading" || saving.pending}
 					onClick={refresh}
 					data-testid="agents-refresh"
 				>
@@ -157,7 +158,7 @@ function AvailableAgents({
 						<Button
 							variant="outline"
 							size="s"
-							disabled={catalog === "loading"}
+							disabled={!connected || catalog === "loading"}
 							onClick={() => {
 								if (saving.failed) save(saving.failed.name, saving.failed.enabled);
 							}}
@@ -172,7 +173,7 @@ function AvailableAgents({
 			<AgentCatalogRows
 				catalog={catalog}
 				disabledNames={disabledNames}
-				disabled={saving.pending}
+				disabled={!connected || saving.pending}
 				onChange={save}
 				onRefresh={refresh}
 			/>

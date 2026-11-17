@@ -114,7 +114,10 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   parallel, or in the background ([[module-pi-subagents]]), and commands the agent runs without holding its
   turn ([[module-pi-background-commands]]); each chat's Resources view watches, inspects and stops them, and
   keeps their finished history — outcomes and command log tails — for the workspace's lifetime, across host
-  restarts ([[submodule-web-chat-resources]], [[submodule-server-resource-history]]).
+  restarts ([[submodule-web-chat-resources]], [[submodule-server-resource-history]]). Settings → Agents
+  lists the built-in, personal and trusted current-workspace roles with their model policies; global
+  per-role switches block new launches without interrupting work already running, beside delegation
+  defaults and workspace concurrency controls ([[submodule-web-panels]]).
 - **Workspaces from chat** — on request ("in a side workspace"), the agent starts ordinary workspaces
   with their own chats in any open project and checks their chats', PRs', and diffs' status; the agent,
   not the host, decides what to do with them ([[submodule-server-agent]], [[submodule-server-host]]).

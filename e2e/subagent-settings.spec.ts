@@ -118,6 +118,47 @@ test("available agent switches wait for authoritative pushes and persist across 
 	}
 });
 
+test("agent availability controls are inaccessible while disconnected and return after reconnect", async ({
+	page,
+}) => {
+	let offline = false;
+	let disconnect = async () => {};
+	await page.routeWebSocket(/\/ws(\?|$)/, (browser) => {
+		if (offline) {
+			void browser.close({ code: 1012, reason: "Offline availability probe" });
+			return;
+		}
+		const server = browser.connectToServer();
+		disconnect = () => browser.close({ code: 1012, reason: "Offline availability probe" });
+		browser.onMessage((message) => server.send(message));
+		server.onMessage((message) => browser.send(message));
+	});
+	try {
+		await openFixtureProject(page);
+		await openAgentsSettings(page);
+		const toggle = page.getByTestId("agent-toggle-scout");
+		const refresh = page.getByTestId("agents-refresh");
+		await expect(toggle).toBeEnabled();
+		await expect(refresh).toBeEnabled();
+		offline = true;
+		await disconnect();
+		await expect(page.getByTestId("connection-status")).not.toHaveAttribute(
+			"data-status",
+			"connected",
+		);
+		await expect(toggle).toHaveCount(0);
+		await expect(refresh).toHaveCount(0);
+		await expect(page.getByTestId("settings-nav-agents")).toHaveCount(0);
+	} finally {
+		offline = false;
+	}
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await openAgentsSettings(page);
+	await expect(page.getByTestId("agent-toggle-scout")).toBeEnabled();
+	await expect(page.getByTestId("agents-refresh")).toBeEnabled();
+});
+
 test("a maximal unbroken workspace name stays contained on a phone-sized settings pane", async ({
 	page,
 }) => {
