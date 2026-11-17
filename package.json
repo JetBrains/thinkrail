@@ -22,6 +22,8 @@
 			"@posthog/cli": "0.18.12",
 			"@remixicon/react": "4.9.0",
 			"@pierre/highlights": "0.4.0",
+			"@tailwindcss/node": "4.3.3",
+			"@tailwindcss/oxide": "4.3.3",
 			"@tailwindcss/vite": "4.3.3",
 			"@types/bun": "1.4.4",
 			"@types/react": "19.3.0",
