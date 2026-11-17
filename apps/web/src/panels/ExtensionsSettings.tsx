@@ -5,12 +5,12 @@ import {
 	OTHER_AGENT_SKILLS_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
-import { type Translator, useT } from "@thinkrail/locales/react";
+import { extensionTranslator, type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { useEffect, useState } from "react";
-import { webOnlyExtensions } from "@/extensions";
+import { webExtension, webOnlyExtensions } from "@/extensions";
 import { selectActiveRepoWorkspaceId, toast, useAppStore } from "@/store";
 import { getTransport, supportsExtensionSettings, supportsPiPackages } from "@/transport";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -25,8 +25,19 @@ const BUNDLED_DESCRIPTIONS: Readonly<Record<string, MessageKey>> = {
 };
 
 function bundledDescription(t: Translator, entry: ExtensionCatalogEntry): string {
-	const key = BUNDLED_DESCRIPTIONS[entry.name];
-	return key ? t(key) : (entry.description ?? "");
+	const key = Object.hasOwn(BUNDLED_DESCRIPTIONS, entry.name)
+		? BUNDLED_DESCRIPTIONS[entry.name]
+		: undefined;
+	const fallback = entry.description ? (key ? t(key) : entry.description) : "";
+	const translatedKey = webExtension(entry.name)?.translations?.description;
+	return translatedKey
+		? extensionTranslator(t, entry.name)(translatedKey, { defaultValue: fallback })
+		: fallback;
+}
+
+function extensionTitle(t: Translator, entry: ExtensionCatalogEntry): string {
+	const key = webExtension(entry.name)?.translations?.title;
+	return key ? extensionTranslator(t, entry.name)(key, { defaultValue: entry.title }) : entry.title;
 }
 
 export function withWebOnlyEntries(
@@ -38,7 +49,7 @@ export function withWebOnlyEntries(
 		...entries,
 		...webOnly.map(({ name, title, description }) => ({
 			name,
-			title: t(title),
+			title: title ? t(title) : name,
 			...(description ? { description: t(description) } : {}),
 			enabled: true,
 			tools: [],
@@ -73,8 +84,25 @@ function ExtensionSettingRow({
 	onChange: (value: boolean) => void;
 }) {
 	const t = useT();
-	const copy = SETTING_COPY[entry.name]?.[setting.key];
-	if (!copy) return null;
+	const copies = Object.hasOwn(SETTING_COPY, entry.name) ? SETTING_COPY[entry.name] : undefined;
+	const copy = copies && Object.hasOwn(copies, setting.key) ? copies[setting.key] : undefined;
+	const settings = webExtension(entry.name)?.translations?.settings;
+	const keys = settings && Object.hasOwn(settings, setting.key) ? settings[setting.key] : undefined;
+	if (!copy && !keys) return null;
+	const title = keys
+		? extensionTranslator(t, entry.name)(keys.title, {
+				defaultValue: copy ? t(copy.title) : setting.key,
+			})
+		: copy
+			? t(copy.title)
+			: setting.key;
+	const description = keys?.description
+		? extensionTranslator(t, entry.name)(keys.description, {
+				defaultValue: copy ? t(copy.description) : "",
+			})
+		: copy
+			? t(copy.description)
+			: "";
 	return (
 		<div
 			data-testid={`extension-setting-${entry.name}-${setting.key}`}
@@ -86,14 +114,16 @@ function ExtensionSettingRow({
 						entry.enabled ? "tr-text-ui text-text-default" : "tr-text-ui text-text-disabled"
 					}
 				>
-					{t(copy.title)}
+					{title}
 				</span>
-				<span className="text-text-muted tr-text-metadata">{t(copy.description)}</span>
+				{description ? (
+					<span className="text-text-muted tr-text-metadata">{description}</span>
+				) : null}
 			</div>
 			<Switch
 				checked={value}
 				disabled={!entry.enabled}
-				label={t(copy.title)}
+				label={title}
 				testId={`extension-setting-toggle-${entry.name}-${setting.key}`}
 				onCheckedChange={onChange}
 			/>
@@ -132,6 +162,8 @@ export function ExtensionsCatalog({
 		<ul className="flex flex-col divide-y divide-border-default rounded-sm border border-border-default bg-control-bg">
 			{entries.map((entry) => {
 				const enabled = !disabled.includes(entry.name);
+				const title = extensionTitle(t, entry);
+				const description = bundledDescription(t, entry);
 				return (
 					<li
 						key={entry.name}
@@ -140,11 +172,9 @@ export function ExtensionsCatalog({
 					>
 						<div className="flex items-start justify-between gap-12">
 							<div className="flex min-w-0 flex-col gap-4">
-								<span className="tr-title-compact text-text-default">{entry.title}</span>
-								{entry.description ? (
-									<span className="text-text-muted tr-text-metadata">
-										{bundledDescription(t, entry)}
-									</span>
+								<span className="tr-title-compact text-text-default">{title}</span>
+								{description ? (
+									<span className="text-text-muted tr-text-metadata">{description}</span>
 								) : null}
 								{entry.tools.length > 0 ? (
 									<span className="flex flex-wrap gap-4">
@@ -162,7 +192,7 @@ export function ExtensionsCatalog({
 							</div>
 							<Switch
 								checked={enabled}
-								label={t("settings.extensions.enable", { title: entry.title })}
+								label={t("settings.extensions.enable", { title })}
 								testId={`extension-toggle-${entry.name}`}
 								onCheckedChange={(next) => onToggle(entry.name, next)}
 							/>

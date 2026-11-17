@@ -34,8 +34,10 @@ instance ([[module-locales]] `./react`). Components never do this themselves: th
 ## Get right
 
 - **Apply only on a real change.** The effect applies when `localeSignature` — the effective tag plus the
-  strings of exactly its fallback chain — changes; an unrelated file's edit or a repeated `locales.list`
-  does nothing. Applying publishes a new translator, so every component rendering through `useT()`
+  strings of its app fallback chain plus namespaced extension overrides in all local files — changes;
+  an unrelated app-string edit or a repeated `locales.list` does nothing. Extension defaults can be
+  outside the app chain, so their override edits must still apply. Applying publishes a new translator,
+  so every component rendering through `useT()`
   re-renders and recomputes ([[module-locales]] § Render reads the translator as a value).
 
 - English is installed synchronously before first paint, so nothing renders keys while the host

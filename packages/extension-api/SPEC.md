@@ -17,7 +17,7 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
 ## Boundary
 
 - `./web` exposes `ToolStatus`, `ToolRenderProps`, `ToolRenderer`, `ToolSummary`, `ToolChrome`,
-  `ToolProminence`, `ToolWidth`, `ToolRegistrationOptions`, `ToolInteraction`, `ToolInteractionState`,
+  `ToolProminence`, `ToolWidth`, `ToolRegistrationOptions`, `WebExtensionTranslations`, `ToolInteraction`, `ToolInteractionState`,
   `ToolPlacement`, `WebExtension`, `GlobalOverlayProps`, `ExtensionCommand`, `ExtensionChord`,
   `ExtensionShortcut`, `ExtensionShortcutKey`, `defineWebExtension`, and the pure argument/result readers from `toolHelpers` and `toolResultContent`.
 - **Images are references.** `parseToolResultContent(result).images` returns `contracts`' `WireImage`s,
@@ -80,7 +80,14 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   `respond` are the stable contract; the focus/layout members and `placement` are the chat's own services handed
   through and may change with the chat (a renderer must tolerate their absence). Its DOM-typed members
   are the reason the package's `lib` includes `DOM`; the package still never touches the DOM.
-- `WebExtension` is `{ name, title?, description?, toolRenderers?, globalOverlay?, commands?, shortcuts? }`.
+- `WebExtension` additionally accepts optional `translations`: `WebExtensionTranslations` extends
+  locales' `ExtensionTranslations` with optional `title` / `description` key references and
+  `settings: Record<settingKey, { title, description? }>` key references. These keys belong to its
+  namespace, not `MessageKey`; old descriptors retain their app-key display copy. The host registers
+  resources before renderers and resolves Settings copy at render. See [[module-locales]] for language,
+  fallback and local override rules. Catalogs and key references travel in the web descriptor; the SDK
+  stays type-only and introduces no file loader or i18next instance.
+- `WebExtension` is `{ name, title?, description?, translations?, toolRenderers?, globalOverlay?, commands?, shortcuts? }`.
   Each tool-name entry carries a `renderer` and optional `ToolRegistrationOptions` under `options`;
   `toolRenderers` is optional because a web-only extension renders no tool. `title` / `description` are
   `MessageKey`s for the Settings row of an extension the server catalog lacks. `globalOverlay` is a
@@ -148,7 +155,7 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   host imports, or pi runtime values.
 - `ToolSummary` is `(props, t) => string`: the host passes the render-time `Translator` from `useT()`
   (`getToolSummary(t, name, props)`), so a collapsed card or routine row recomputes its summary on a
-  language change; a summary translates only through that `t`, never the global translator
+  language change; an extension summary uses `extensionTranslator(t, name)(key, values)` for its own keys; a summary translates only through that `t`, never the global translator
   (`check:i18n` flags a `summary` that reads it — [[module-locales]]).
 
 Canonical tool-result parsing remains shared by renderer text extraction and the host's common image

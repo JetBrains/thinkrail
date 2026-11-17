@@ -1314,6 +1314,9 @@ a project picker, the prompt hero, and the reused
   **PROMPT CACHE** (`cache-warming-group`) — the `CacheWarmingSettings` block described above.
 
   There is **no separate Review navigation section**; all review-related controls live in Models' REVIEW group.
+  Extension descriptor-owned titles, descriptions and setting labels render through
+  `extensionTranslator(t, name)`, falling back to legacy app-key copy or host display values when
+  translation metadata is absent. The owning contract and fallback rules are [[module-locales]].
   **`ExtensionsSettings`** (the **Extensions** section, nav `settings-nav-extensions`, listed only at
   `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) is one page in up to four groups. Its description
   carries the page's only statement about chats — "Changes apply to open chats when their current turn
@@ -1330,7 +1333,7 @@ a project picker, the prompt hero, and the reused
   unmounts the extension), which the row's own description says, since the page's "when their current
   turn ends" is about the agent's extensions. A catalog entry's declared `settings`
   render as nested switches under its row (`extension-setting-<name>-<key>`, copy from a static
-  `MessageKey` map — a setting without copy is not shown), valued from **`store.extensionSettings`** else the
+  `MessageKey` map or the web descriptor's translation key references — a setting without either is not shown), valued from **`store.extensionSettings`** else the
   declared default, disabled while the extension is off, and written one key at a time through
   `settings.update { extensionSettings: { name: { key: value } } }` (the host merges); they appear only
   while `supportsExtensionSettings(protocolVersion)` holds. **Skills** (only at

@@ -4,7 +4,7 @@ type: submodule-design
 status: draft
 title: Web extension composition registry
 parent: module-web
-depends-on: [module-extension-api, module-ext-visualize, module-ext-ask-user-question, module-ext-hint-mode]
+depends-on: [module-locales, module-extension-api, module-ext-visualize, module-ext-ask-user-question, module-ext-hint-mode]
 references: [submodule-web-chat, submodule-web-shell, module-thinkrail-extensions]
 ---
 
@@ -14,8 +14,8 @@ The static composition point for web extensions. `registry.ts` owns their ordere
 `registerWebExtensions()` runs once at app bootstrap (`main.tsx`), not from `ChatView`: interaction state
 and the plan/review glances are derived from the registry's `interactive` registrations, so it must be
 complete before any lazy view reads a transcript. The app-local registrations (`chat/tools/register`) arrive
-later with `ChatView`'s lazy chunk and name other tools. Each descriptor's tool entries feed the existing
-chat registry in order, preserving its last-registration-wins behavior and fallback renderer.
+later with `ChatView`'s lazy chunk and name other tools. Each descriptor's optional translations
+register with the shared locale runtime before its tool entries feed the existing chat registry in order, preserving its last-registration-wins behavior and fallback renderer.
 Re-registering the same list replaces entries rather than accumulating them.
 
 Registration ignores the host's extension on/off setting: a web extension's renderers stay registered while
@@ -35,8 +35,8 @@ lists them under the same switch ([[module-thinkrail-extensions]]).
 ## Boundary
 
 `index.ts` exports `webExtensions`, `registerWebExtensions`, `enabledWebExtensions`,
-`webExtensionCommands` (with its `WebExtensionCommands` type) and `webOnlyExtensions` only. Imports reach public extension `./web` entries, the web SDK contract, and chat's
-registration function; never `ChatView`, stores, transport, extension internals or server halves. The
+`webExtensionCommands` (with its `WebExtensionCommands` type) and `webOnlyExtensions` and `webExtension(name)` only. Imports reach public extension `./web` entries, the web SDK contract, chat's
+registration function and locales; never `ChatView`, stores, transport, extension internals or server halves. The
 registry Map remains owned by chat, so this module creates no parallel state owner or runtime extension
 loader. Direct component consumers use an extension's named public exports independently of tool
 registration: Markdown renders `MermaidView`. The plan page reaches the questionnaire card through the

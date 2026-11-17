@@ -21,7 +21,15 @@ export function useSystemLanguages(): string {
 
 export function localeSignature(tag: string, snapshot: LocalLocalesSnapshot | null): string {
 	const overlays = localOverlays(snapshot);
-	return JSON.stringify([tag, fallbackChain(tag).map((language) => overlays[language] ?? null)]);
+	const extensionOverlays = Object.entries(overlays).flatMap(([language, strings]) => {
+		const entries = Object.entries(strings).filter(([key]) => key.startsWith("extension:"));
+		return entries.length > 0 ? [[language, entries]] : [];
+	});
+	return JSON.stringify([
+		tag,
+		fallbackChain(tag).map((language) => overlays[language] ?? null),
+		extensionOverlays,
+	]);
 }
 
 const INITIAL_SIGNATURE = localeSignature("en", null);
