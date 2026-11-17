@@ -13,9 +13,11 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	CONTINUATION_PROTOCOL_VERSION,
+	EXTENSION_ASSETS_ROUTE,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
 	GITHUB_STAR_PROTOCOL_VERSION,
+	INSTALLED_EXTENSIONS_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
@@ -49,6 +51,7 @@ import {
 	reconcileMcpSessions,
 	refreshAgentReviewTool,
 	refreshExtensionTools,
+	refreshInstalledExtensions,
 	refreshSkillAdmission,
 	refreshSubagentConcurrency,
 	refreshSubagentTools,
@@ -100,6 +103,7 @@ import {
 	stopJbcentralRuntime,
 } from "../auth";
 import { forgetOpenBranchReview } from "../branch-review";
+import { startInstalledExtensions } from "../extensions";
 import {
 	configureSurveySource,
 	redeliverInvitation,
@@ -111,7 +115,7 @@ import {
 import { watchUserFonts } from "../fonts";
 import { watchLocalLocales } from "../locales";
 import { logger, observeLoggedErrors } from "../log";
-import { loadWorkspaces } from "../persistence";
+import { dataDir, loadWorkspaces } from "../persistence";
 import {
 	getProjects,
 	grantProjectMcpTool,
@@ -175,6 +179,7 @@ import {
 } from "../workspaces";
 import { seesChats } from "./chats";
 import { continueToolHost, observeContinuation, setContinuationPublisher } from "./continuations";
+import { serveExtensionAsset } from "./extensionRoutes";
 import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
 import { serveUserFonts } from "./fontRoutes";
 import { setFsNudgePublisher } from "./fsNudge";
@@ -432,6 +437,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			if (url.pathname.startsWith(USER_FONTS_ROUTE)) {
 				return serveUserFonts(req, url.pathname);
 			}
+			if (url.pathname.startsWith(EXTENSION_ASSETS_ROUTE)) {
+				return serveExtensionAsset(req, url.pathname);
+			}
 			if (staticDir) {
 				return serveStatic(url.pathname, staticDir);
 			}
@@ -484,6 +492,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					ws.subscribe(WS_CHANNELS.themesChanged);
 				if (ws.data.protocolVersion >= PI_PACKAGES_PROTOCOL_VERSION)
 					ws.subscribe(WS_CHANNELS.packagesChanged);
+				if (ws.data.protocolVersion >= INSTALLED_EXTENSIONS_PROTOCOL_VERSION)
+					ws.subscribe(WS_CHANNELS.extensionsChanged);
 				if (ws.data.protocolVersion >= FONTS_PROTOCOL_VERSION)
 					ws.subscribe(WS_CHANNELS.fontsChanged);
 				const speech = ws.data.protocolVersion >= SPEECH_PROTOCOL_VERSION;
@@ -919,6 +929,16 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		),
 	);
 	const stopUserMcpWatch = watchUserMcpConfig({ onSettingsChanged: handlePiSettingsFileChanged });
+	const stopInstalledExtensions = startInstalledExtensions({
+		dataDir: dataDir(),
+		onChange: () => {
+			refreshInstalledExtensions();
+			server.publish(
+				WS_CHANNELS.extensionsChanged,
+				JSON.stringify({ channel: WS_CHANNELS.extensionsChanged, data: {} }),
+			);
+		},
+	});
 	const nudge = (channel: WsChannel) => () =>
 		server.publish(channel, JSON.stringify({ channel, data: {} }));
 	const stopLocalesWatch = watchLocalLocales({ onChange: nudge(WS_CHANNELS.localesChanged) });
@@ -1154,6 +1174,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		stopJbcentralRuntime();
 		stopAllWatches();
 		stopUserMcpWatch();
+		stopInstalledExtensions();
 		stopLocalesWatch();
 		stopThemesWatch();
 		stopFontsWatch();

@@ -8,6 +8,7 @@ import type {
 	PiPackagesCatalog,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { type InstalledExtensionRecord, installedExtensions } from "../extensions";
 import { refreshExtensionTools } from "./agentSessionManager";
 import { bumpPackagesRevision, setInstalledPackagesListener } from "./extensions";
 import { HOST_BUILTIN_EXTENSION_NAMES } from "./mcp";
@@ -21,6 +22,7 @@ import {
 	type PiPackageHostContext,
 	probeExtensionInfo,
 	removePiPackage,
+	resolvePiInstallSource,
 	setExtensionInfoListener,
 	setPiResourceEnabled,
 	updatePiPackages,
@@ -55,6 +57,12 @@ setExtensionInfoListener(() => {
 /** Open pages re-list; nothing about what chats load changed (a switch flip, a package pi installed itself). */
 export function publishPiPackagesChanged(): void {
 	publish?.();
+}
+
+/** The loaded installed ThinkRail extensions changed: every chat rebuilds its loader when its turn ends. */
+export function refreshInstalledExtensions(): void {
+	bumpPackagesRevision();
+	refreshExtensionTools();
 }
 
 /** The declared or installed set changed: every registered chat re-decides through the gated reload, pages re-list. */
@@ -96,8 +104,41 @@ export async function piPackagesCatalog(
 	});
 }
 
-// `disabledPackages` is read after the install (minutes, possibly) so another client's switch flips are honoured.
+export type PiPackagesInstallOutcome =
+	| { installed: "package"; identity: string; summary: PiPackageSummary }
+	| { installed: "extension"; record: InstalledExtensionRecord };
+
+/**
+ * The kind rule: the fetched package.json decides. A `thinkrail` manifest installs a ThinkRail extension
+ * (declared in ThinkRail's file, user scope only, never in pi's settings); anything else is a pi package.
+ */
 export async function piPackagesInstall(
+	target: PiPackagesTarget,
+	request: { source: string; scope: PiPackageScope },
+	disabledPackages: () => ReadonlySet<string>,
+): Promise<PiPackagesInstallOutcome> {
+	const ctx = hostContext(target);
+	const source = resolvePiInstallSource(ctx, request);
+	const extensions = installedExtensions();
+	const staged = extensions ? await extensions.stage(source) : undefined;
+	if (extensions && staged) {
+		if (request.scope !== "user") {
+			extensions.discard(staged);
+			throw new CodedError(
+				"EXTENSION_SCOPE_UNSUPPORTED",
+				`${staged.name} is a ThinkRail extension; extensions install for you only, not for a repository.`,
+			);
+		}
+		return { installed: "extension", record: await extensions.adopt(staged) };
+	}
+	return {
+		installed: "package",
+		...(await installPiPackageDeclared(target, { source, scope: request.scope }, disabledPackages)),
+	};
+}
+
+// `disabledPackages` is read after the install (minutes, possibly) so another client's switch flips are honoured.
+async function installPiPackageDeclared(
 	target: PiPackagesTarget,
 	request: { source: string; scope: PiPackageScope },
 	disabledPackages: () => ReadonlySet<string>,

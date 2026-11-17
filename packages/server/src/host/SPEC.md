@@ -52,7 +52,13 @@ channel fan-out, and the process-boot wrapper both launchers share.
   (checked against `Content-Length` before reading and again while streaming), 409 `too-many`, 422
   `unsupported-collection`/`invalid-font`, or 500 `unreadable`; any other method is 405 with
   `Allow: GET, PUT`, the `fonts` poller's `fonts.changed` nudge reaching
-  only sockets whose `?protocol=` is at least `FONTS_PROTOCOL_VERSION`; the **`/speech` socket**
+  only sockets whose `?protocol=` is at least `FONTS_PROTOCOL_VERSION`; the **`/extensions/<name>/<token>/<file>`**
+  route (`extensionRoutes.ts`, `EXTENSION_ASSETS_ROUTE`, ahead of the static fallback), which serves only
+  a loaded installed extension's manifest `web` or `styles` file through the `extensions` barrel's
+  `resolveExtensionAsset` — `text/javascript` / `text/css` with `charset=utf-8`, `X-Content-Type-Options:
+  nosniff`, `Cache-Control: public, max-age=31536000, immutable` (the token changes with the files) — 404s
+  every other name, an unknown extension or a stale token, and answers 405 with `Allow: GET, HEAD` to any
+  other method; no CORS, like every route (a cross-origin UI would need it); the **`/speech` socket**
   (`SPEECH_SOCKET_ROUTE`, refused below `SPEECH_PROTOCOL_VERSION`), which shares the one `Bun.serve`
   websocket handler but is tagged at upgrade. Its `open` / `message` / `close` go straight to that
   socket's [[submodule-server-speech]] relay, so it never joins the `clientKey → socket` registry, the
@@ -463,7 +469,16 @@ channel fan-out, and the process-boot wrapper both launchers share.
   whose pi-level trust is granted — an untrusted repository's file never affects resolution, so it must
   not fan out a reload; a `disabledPackages` change also publishes `packages.changed` so a re-enabled
   row regains its chips. The channel is subscribed from `PI_PACKAGES_PROTOCOL_VERSION` and published
-  through `setPiPackagesPublisher`. The
+  through `setPiPackagesPublisher`. **Installed ThinkRail extensions:** `createServer` starts the
+  `extensions` runtime (`startInstalledExtensions` over the data dir — a background reconcile that never
+  delays the server) and stops it on shutdown; its `onChange` calls the agent's
+  `refreshInstalledExtensions()` (package revision bump + `refreshExtensionTools()`, so open chats rebuild
+  their loader when the turn ends) and publishes `extensions.changed`, subscribed from
+  `INSTALLED_EXTENSIONS_PROTOCOL_VERSION`. `packages.install` returns `PackageInstallResult`: for an
+  extension (the agent façade's kind rule) it drops the name from `disabledExtensions` and answers a
+  user-scope row shaped for older clients plus the extension's catalog entry; `host/extensions.ts` answers
+  `extensions.remove` / `extensions.update` / `extensions.checkUpdates` against the runtime by `source`.
+  The
   two authoritative publishers remain the clients' convergence path; the host-to-agent refresh changes
   runtime capability, not frontend state;
   **Review marks are memory-plus-disk, and only the disk half survives a restart.** The serial chain and
@@ -785,7 +800,8 @@ enabled/confirmed choice before entering analytics attribution.
   `boot.ts`; `codedError`; `paths` — the scratch-dir convention `chat.inspect` leaves uncounted); `persistence` (`dataDir` — where `crashLog.ts` writes); `pi-todos/core` (reduced synchronous
   task snapshots, with group status still core-owned); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
   `resolveWorktreeFile`/`resourceMeta` and `git`'s `readBlobStreamAtAsync` for the `/files` + `/blob`
-  routes, `fonts`' `fontFileKind`/`saveUserFont` for `/fonts/`); Bun/Node.
+  routes, `fonts`' `fontFileKind`/`saveUserFont` for `/fonts/`, `extensions`' `resolveExtensionAsset`
+  for `/extensions/`); Bun/Node.
 - **Forbidden:** being imported by any feature module; importing `web`/`cli`/`desktop`.
 
 - **Settled-lifecycle wiring (`settledLifecycle.ts`).** The host is where the three activity sources meet the

@@ -5,7 +5,7 @@ status: active
 title: "agent/packages — pi packages: read-only catalog, identity, mutations"
 parent: submodule-server-agent
 depends-on: [module-contracts]
-references: [pi-compatibility]
+references: [pi-compatibility, submodule-server-extensions-installed]
 tags: [pi, extensions]
 ---
 
@@ -92,10 +92,12 @@ this module never spawns npm or git itself.
   scope's load error blocks, drained so another scope's is not reported as this write's), and ends in
   `flush()` + `drainErrors()` → `PACKAGE_SETTINGS_WRITE_FAILED`, then `onPersisted(settingsPath)` so the
   packages layer primes its watcher before any disk work.
-  - `installPiPackage`: `parsePiPackageInput` ([[module-contracts]], the same function the dialog echoes
+  - `resolvePiInstallSource` is the first half, shared with the façade's kind rule:
+    `parsePiPackageInput` ([[module-contracts]], the same function the dialog echoes
     with) → a bare name that is also a folder or file next to the workspace installs that path, as
-    `pi install name` would → a relative local source resolves against the workspace (else the agent dir)
-    and must exist → npm/git refused offline → `install()` → fresh trust re-check → `settings.reload()`
+    `pi install name` would → an unwritable scope is refused → a relative local source resolves against
+    the workspace (else the agent dir) and must exist.
+  - `installPiPackage`: `resolvePiInstallSource` → npm/git refused offline → `install()` → fresh trust re-check → `settings.reload()`
     (an npm install can take minutes; an outside edit must survive) → `addSourceToSettings()` → persist.
     Not `installAndPersist`, which persists before anything can be re-checked. The façade then requires
     the new row to carry `installedPath` (a Not installed row is not a success) before it probes it.
@@ -135,6 +137,20 @@ row lists each resource read-only with pi's `enabled` state and the package swit
   instead.
 - A separate "installing" row or any per-workspace state: installing is the dialog's request; a
   declaration is on wherever it loads.
+
+## Kind detection
+
+`packages.install` holds pi packages and ThinkRail extensions in one flow; the fetched `package.json`
+decides ([[module-thinkrail-extensions]] § Installed extensions). `agent/piPackages.ts`'s
+`piPackagesInstall` resolves the source with `resolvePiInstallSource`, then asks the installed-extension
+runtime ([[submodule-server-extensions-installed]]) to `stage` it — a folder is read in place, an npm/git
+source is fetched into a fresh folder of ThinkRail's own install root. A `thinkrail` key (even beside a
+`pi` manifest) makes it an extension: a repository-scope request is refused with
+`EXTENSION_SCOPE_UNSUPPORTED` (the staged folder is dropped, nothing is declared), a user-scope one is
+`adopt`ed into `extensions.json` and the outcome is `{ installed: "extension", record }`. It is never
+added to pi's settings, so its pi resources reach sessions only through its server half. Anything else
+continues as the pi package install above (`{ installed: "package", identity, summary }`); this costs a
+plain npm/git package a second fetch, served from npm's cache. Nothing in this module changes for it.
 
 ## Consumers
 

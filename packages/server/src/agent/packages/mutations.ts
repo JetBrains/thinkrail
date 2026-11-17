@@ -148,26 +148,37 @@ function declaredAsInput(ctx: PiPackageHostContext, target: PiPackageTarget): st
 	return resolveLocalSource(source, settingsBaseDir(ctx.cwd, ctx.agentDir, target.scope));
 }
 
+/**
+ * The Install field read the way `pi install` reads it from the workspace: pasted input parsed, a bare
+ * name that is also a folder or file next to the workspace taken as that path, a relative path resolved
+ * and required to exist. Refuses an unwritable scope before anything is fetched.
+ */
+export function resolvePiInstallSource(ctx: PiPackageHostContext, target: PiPackageTarget): string {
+	assertScope(target.scope);
+	const base = ctx.cwd ?? ctx.agentDir;
+	const input = parsePiPackageInput(target.source);
+	const raw =
+		input.bareName !== undefined && existsSync(resolveLocalSource(input.bareName, base))
+			? input.bareName
+			: input.source;
+	if (!raw) throw new CodedError("PACKAGE_SOURCE_INVALID", "A package source is required.");
+	assertScopeWritable(ctx, target.scope);
+	const kind = piPackageSourceKind(raw);
+	const source = kind === "local" ? resolveLocalSource(raw, base) : raw;
+	if (kind === "local" && !existsSync(source)) {
+		throw new CodedError("PACKAGE_SOURCE_INVALID", `No such folder or file: ${source}`);
+	}
+	return source;
+}
+
 /** Installs, then persists the declaration; a relative local source reads like `pi install ./x` from the workspace. */
 export function installPiPackage(
 	ctx: PiPackageHostContext,
 	target: PiPackageTarget,
 ): Promise<string> {
 	return enqueue(async () => {
-		assertScope(target.scope);
-		const base = ctx.cwd ?? ctx.agentDir;
-		const input = parsePiPackageInput(target.source);
-		const raw =
-			input.bareName !== undefined && existsSync(resolveLocalSource(input.bareName, base))
-				? input.bareName
-				: input.source;
-		if (!raw) throw new CodedError("PACKAGE_SOURCE_INVALID", "A package source is required.");
-		assertScopeWritable(ctx, target.scope);
-		const kind = piPackageSourceKind(raw);
-		const source = kind === "local" ? resolveLocalSource(raw, base) : raw;
-		if (kind === "local" && !existsSync(source)) {
-			throw new CodedError("PACKAGE_SOURCE_INVALID", `No such folder or file: ${source}`);
-		}
+		const source = resolvePiInstallSource(ctx, target);
+		const kind = piPackageSourceKind(source);
 		if (kind !== "local" && isOfflineMode()) {
 			throw new CodedError(
 				"PACKAGE_OFFLINE",
