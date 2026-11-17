@@ -1,0 +1,64 @@
+{
+	"name": "@thinkrail/example-extension-palette",
+	"version": "0.0.0",
+	"description": "A sample ThinkRail extension: the agent builds colour palettes from a base colour, and chat shows them as swatches with WCAG contrast ratings.",
+	"license": "Apache-2.0",
+	"type": "module",
+	"keywords": [
+		"thinkrail-extension",
+		"thinkrail",
+		"color",
+		"palette",
+		"wcag"
+	],
+	"homepage": "https://thinkrail.ai/",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/JetBrains/thinkrail.git",
+		"directory": "extension-examples/palette"
+	},
+	"bugs": "https://github.com/JetBrains/thinkrail/issues",
+	"author": "ThinkRail",
+	"files": [
+		"server",
+		"!server/**/*.test.ts",
+		"dist",
+		"README.md",
+		"LICENSE"
+	],
+	"thinkrail": {
+		"api": "1.0",
+		"server": "./server/index.ts",
+		"web": "./dist/web.js",
+		"styles": "./dist/web.css",
+		"title": "Palette"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"scripts": {
+		"build": "thinkrail-extension build --prefix palette",
+		"prepack": "thinkrail-extension build --prefix palette",
+		"test": "bun test",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@thinkrail/extension-sdk": "workspace:*"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*",
+		"typebox": "*"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "catalog:",
+		"@remixicon/react": "catalog:",
+		"@types/bun": "catalog:",
+		"@types/react": "catalog:",
+		"@types/react-dom": "catalog:",
+		"react": "catalog:",
+		"react-dom": "catalog:",
+		"typebox": "catalog:",
+		"typescript": "catalog:"
+	}
+}

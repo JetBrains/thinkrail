@@ -5,6 +5,7 @@
 	"workspaces": {
 		"packages": [
 			"apps/*",
+			"extension-examples/*",
 			"packages/*",
 			"pi-extensions/*",
 			"thinkrail-extensions/*"

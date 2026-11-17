@@ -132,6 +132,28 @@
         "typescript": "catalog:",
       },
     },
+    "extension-examples/palette": {
+      "name": "@thinkrail/example-extension-palette",
+      "version": "0.0.0",
+      "dependencies": {
+        "@thinkrail/extension-sdk": "workspace:*",
+      },
+      "devDependencies": {
+        "@earendil-works/pi-coding-agent": "catalog:",
+        "@remixicon/react": "catalog:",
+        "@types/bun": "catalog:",
+        "@types/react": "catalog:",
+        "@types/react-dom": "catalog:",
+        "react": "catalog:",
+        "react-dom": "catalog:",
+        "typebox": "catalog:",
+        "typescript": "catalog:",
+      },
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "*",
+        "typebox": "*",
+      },
+    },
     "packages/artifact-tests": {
       "name": "@thinkrail/artifact-tests",
       "version": "0.0.0",
@@ -1265,6 +1287,8 @@
     "@thinkrail/contracts": ["@thinkrail/contracts@workspace:packages/contracts"],
 
     "@thinkrail/desktop": ["@thinkrail/desktop@workspace:apps/desktop"],
+
+    "@thinkrail/example-extension-palette": ["@thinkrail/example-extension-palette@workspace:extension-examples/palette"],
 
     "@thinkrail/ext-ask-user-question": ["@thinkrail/ext-ask-user-question@workspace:thinkrail-extensions/ask-user-question"],
 
