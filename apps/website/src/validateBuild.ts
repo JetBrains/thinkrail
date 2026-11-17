@@ -14,6 +14,7 @@ const requiredSitemapUrls = [
 	"https://thinkrail.ai/vibecoding/",
 	"https://thinkrail.ai/docs/",
 	"https://thinkrail.ai/docs/build-an-extension/",
+	"https://thinkrail.ai/docs/extension-reference/",
 	"https://thinkrail.ai/extensions/",
 ] as const;
 
@@ -164,6 +165,7 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		claim: requiredPage("attribution/claim/index.html"),
 		docs: requiredPage("docs/index.html"),
 		buildAnExtension: requiredPage("docs/build-an-extension/index.html"),
+		extensionReference: requiredPage("docs/extension-reference/index.html"),
 		extensions: requiredPage("extensions/index.html"),
 	};
 	const islandPages = ["vibecoding", "agenticDevelopment", "agenticIde"] as const;
@@ -174,6 +176,7 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		"claim",
 		"docs",
 		"buildAnExtension",
+		"extensionReference",
 		"extensions",
 	] as const;
 	const installPages = [

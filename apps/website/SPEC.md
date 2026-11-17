@@ -6,7 +6,7 @@ title: Project website (thinkrail.ai)
 parent: architecture
 tags: [website, marketing]
 depends-on: [module-website-analytics]
-references: [module-ci-release, module-thinkrail-extensions]
+references: [module-ci-release, module-thinkrail-extensions, module-extension-sdk, module-extension-examples, submodule-server-extensions-installed]
 ---
 
 ## Responsibility
@@ -49,7 +49,7 @@ binary.
   and D1; only `/vibecoding/`, `/agentic-development/`, and `/agentic-ide/` may use the shared React
   island and Tailwind v4. Astro's React integration and Tailwind Vite plugin are build-wide tooling; build validation
   requires one island in each allowed route output and rejects islands in the fixed landing, blog,
-  article, claim, docs index, guide, and extensions outputs. The browser analytics
+  article, claim, docs index, guide, reference, and extensions outputs. The browser analytics
   workspace module is compiled into the static output. The `@fontsource-variable/*` packages are
   build-time asset sources whose woff2 files are emitted into `dist/`. Shared with `apps/web`, they
   come from the root `workspaces.catalog` — one pin for both apps that keeps the site's faces
@@ -447,9 +447,39 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
   `.blog-post`, so an install link in a doc never reports the `blog_post` location; they carry no install
   picker. Relative links on a doc page must resolve to a built file (`validateBuild`). Doc images are
   not supported yet: there is no `images/` route for docs.
-- **The first page is the extension authoring guide** (`/docs/build-an-extension/`), written against
-  the contract in [[module-thinkrail-extensions]] § Installed extensions; a change to that contract
-  updates the guide in the same change.
+- **The extension docs are two pages**: the authoring guide (`/docs/build-an-extension/`, the entry URL
+  the app and the showcase link to) walks through the published sample, and the reference
+  (`/docs/extension-reference/`) lists the manifest, both descriptors, the shared modules, the build
+  command and the install states. *Why two:* the walkthrough stays readable while every rule has one
+  findable place; the guide links into the reference's sections rather than repeating its tables.
+- **Their source of truth is the sample and the SDK as built, not the contract's prose.** The guide
+  walks through `extension-examples/palette` (`@thinkrail/example-extension-palette`,
+  [[module-extension-examples]]) and states what [[module-extension-sdk]] and the host
+  ([[module-thinkrail-extensions]] § Installed extensions, [[submodule-server-extensions-installed]]) do.
+  Code is shown, never paraphrased: every fenced block carries a `<!-- guard: … -->` comment (emitted as
+  an HTML comment, invisible), and `src/docsGuide.test.ts` reads the sources by relative path at test
+  time — the `fonts.test.ts` pattern, never an import — and fails on drift:
+  - `file` blocks equal a whole sample or SDK file; `excerpt` blocks are a contiguous, dedented slice of
+    one; the `package-json` block is a subset of the sample's top-level fields, in file order and
+    formatting, accepted by `extensionManifest.ts`;
+  - the `tree` lists every non-test source under the sample's `server/` and `web/` and the manifest's
+    built files; `shell` commands use the sample's scripts and packages, and every
+    `thinkrail-extension build` option either page names exists in the SDK's `src/cli.ts`;
+  - the reference's tables and lists match the SDK's `MANIFEST_KEYS`, `ServerExtension`,
+    `ExtensionSessionServices`, the re-exported `ToolRenderProps` / `ToolRegistrationOptions`, the CLI's
+    options and default entries, and `assets/shared-modules.json` (order and every export name); its
+    `manifest-cases` block uses `manifestCases.json`'s shape and holds under the site's validator;
+  - the built-in names the guide calls reserved, the tool, setting and utility classes it quotes, the
+    SDK's Node floor and the API version are read from their sources, and every `#fragment` link
+    resolves to a heading.
+
+  The author guide `content/docs/DOCS.md` lists the guard kinds. A change to the sample, the SDK or the
+  contract updates these pages in the same change; the failing test names the block.
+- `catalogKeyword` (`src/extensionCatalog.ts`) is a copy of `EXTENSION_KEYWORD`; `extensionCatalog.test.ts`
+  reads `packages/extension-api/src/manifest.ts` at test time and fails when they differ.
+- **Doc styles beyond the blog's:** inline code on doc pages may break anywhere (long package names and
+  specifiers would widen a phone layout), tables scroll horizontally inside their own box, and code
+  blocks use a tab size of 2, because the sample's files are indented with tabs.
 
 ## Extensions page and catalog
 

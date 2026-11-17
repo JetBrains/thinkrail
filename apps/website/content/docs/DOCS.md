@@ -8,7 +8,9 @@ Each page lives in its own folder under `content/docs/`:
 
 ```
 content/docs/
-└── build-an-extension/
+├── build-an-extension/
+│   └── index.md
+└── extension-reference/
     └── index.md
 ```
 
@@ -36,6 +38,28 @@ pages sharing a slug fail the build.
 - Link other pages by absolute path (`/docs/…`, `/extensions/`). Relative links must resolve to a built
   file or the build fails.
 - Write plain technical prose for an outside developer. State limits as limits; no marketing tone.
+
+## Guarded code in the extension docs
+
+The extension guide and reference show real code, never paraphrased code. `src/docsGuide.test.ts` reads
+the sources at test time and fails when a page no longer matches them, so every fenced code block in
+those pages starts right after a guard comment naming what it shows:
+
+| Guard | The block must be |
+| --- | --- |
+| `<!-- guard: file palette/<path> -->` | the whole file of `extension-examples/palette/<path>` (`sdk/<path>` for `packages/extension-sdk`) |
+| `<!-- guard: excerpt palette/<path> -->` | a contiguous run of that file's lines (common indentation removed); say "an excerpt" in the prose |
+| `<!-- guard: package-json palette/package.json -->` | some of the sample's top-level fields, in file order, printed as the file prints them |
+| `<!-- guard: tree -->` | the sample's layout: every source under `server/` and `web/`, and the manifest's built files |
+| `<!-- guard: shell -->` | commands using the sample's scripts, its packages and real `thinkrail-extension build` options |
+| `<!-- guard: extensions-json -->` | an `extensions.json` with absolute folders or `npm:` sources |
+| `<!-- guard: manifest-cases -->` | manifest cases in the format of `packages/extension-api/src/manifestCases.json` that hold under the site's validator |
+
+Tables and lists with a guard comment (`manifest-fields`, `server-descriptor`, `session-services`,
+`render-props`, `registration-options`, `build-options`, `shared-modules`, `shared-modules-summary`)
+are compared with the SDK's types, CLI and shared-module list. To change a sample file shown in a doc,
+change the sample and paste the new text into the block; `bun test src/docsGuide.test.ts` says where
+they differ.
 
 ## Preview
 
