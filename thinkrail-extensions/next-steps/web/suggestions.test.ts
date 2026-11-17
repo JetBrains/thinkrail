@@ -11,10 +11,10 @@ describe("readSuggestions", () => {
 		).toEqual(["Run the tests"]);
 	});
 
-	test("falls back to the call's arguments while there is no result", () => {
-		expect(readSuggestions({ suggestions: ["Open a PR", 3, " "] }, undefined)).toEqual([
-			"Open a PR",
-		]);
+	test("falls back to the call's arguments while there is no result, each string once", () => {
+		expect(readSuggestions({ suggestions: ["Open a PR", 3, " ", "Open a PR"] }, undefined)).toEqual(
+			["Open a PR"],
+		);
 	});
 
 	test("reads nothing from malformed input", () => {

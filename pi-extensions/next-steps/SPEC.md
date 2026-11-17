@@ -47,7 +47,9 @@ draws its own chips.
   The skip list exists because pi appends a `thinking_level_change` entry on resume, after the result.
   Matching only the leaf hid the row on every resume, which the manual terminal check caught. The rule
   is evaluated on `agent_settled` (cleared instead when aborted), `session_start` and `session_tree`.
-  `agent_start` clears the row. ThinkRail's chips use the same rule over its transcript.
+  `agent_start` clears the row. ThinkRail's chips apply their own rule over its transcript — the last
+  turn ends with the call, plus chat-only conditions (idle, nothing queued, no interactive call, the
+  extension switched on; [[submodule-web-chat]], *Composer suggestions*).
 - **The terminal row is drawn only when `ctx.mode === "tui"`.** RPC hosts (ThinkRail binds pi as `"rpc"`)
   draw their own affordance from the result. Gating on mode, rather than adding an embedder option,
   keeps the row out of the factory's options and prevents a duplicate row in a host that renders
@@ -75,4 +77,5 @@ with `-e`, Claude Sonnet 5.5):
 - Alt+2 sent that suggestion and a new turn produced a fresh row;
 - resuming the session with `-c` restored the row.
 
-Not checked directly in Ghostty or iTerm2, only through tmux.
+Not checked directly in Ghostty or iTerm2, only through tmux. GNOME Terminal's default Alt+1…9 tab
+switching takes the keys first (its documented defaults); the README says how to free them.

@@ -2,7 +2,10 @@ import type { NextStepsDetails } from "@thinkrail/pi-next-steps/core";
 
 function stringList(value: unknown): string[] | null {
 	if (!Array.isArray(value)) return null;
-	return value.filter((item): item is string => typeof item === "string" && item.trim() !== "");
+	const strings = value.filter(
+		(item): item is string => typeof item === "string" && item.trim() !== "",
+	);
+	return [...new Set(strings)];
 }
 
 export function readSuggestions(args: Record<string, unknown>, result: unknown): readonly string[] {

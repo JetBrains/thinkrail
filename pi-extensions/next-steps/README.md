@@ -36,6 +36,11 @@ Alt+digit reaches pi only when the terminal sends Option as Meta (otherwise Opti
 - **iTerm2:** Settings → Profiles → Keys → *Left Option key: Esc+*.
 - **Ghostty:** `macos-option-as-alt = true`.
 
+### Linux terminals
+
+GNOME Terminal switches tabs with Alt+1…9 by default, so pi never sees them; rebind or clear *Switch
+to Tab 1…9* in Preferences → Shortcuts.
+
 ## Cost
 
 Each turn that offers suggestions spends roughly 50–100 extra output tokens, plus the tool's short
