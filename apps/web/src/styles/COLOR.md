@@ -105,6 +105,37 @@ and `themes/schema.test.ts` holds `focus-ring` to APCA Lc 45 on every resting su
 A full-accent ring is too loud on dark surfaces, so dark appearances take accent at the `firm` (80%)
 step through the role's `darkAlpha`; that still clears Lc 45 there, while light accents need full strength.
 
+## Neon glow
+
+`styles/neon.css` adds an accent halo on top of the system above, controlled by Settings → Appearance →
+**Neon glow & animations** (on by default; a per-client preference, `shell/neonPreference.ts`, stamped as
+`<html data-helios-neon="true|false">` before React mounts). Every rule is scoped to
+`[data-helios-neon="true"]`, so the setting off is exactly the look described above. The halo is
+`--neon-glow` — `0 0 12px` of `primary` @ 38% plus a `0 0 2px` core @ 80% — derived from the role, never a
+literal, so it takes each theme's accent (neon cyan in Helios Cobalt). Where it appears:
+
+- **Focus** — the `focus-ring*` utilities themselves carry it (outward for the outset ring, inward for the
+  inset ones), so focus is still drawn only through the shared utilities.
+- **Active region** — the line turns full `primary` with the halo; the keyboard flash frame glows and runs a
+  450ms `helios-region-pulse` before its usual hold-and-fade.
+- **Running agents** — elements tagged `data-neon="pulse"` (the `RunningIcon` badge: stream footer, running
+  rows) carry a breathing drop-shadow; while the composer streams, its stop control (`data-neon="stream"`)
+  and the armed send pill (`data-neon="cta"`) breathe (`helios-neon-pulse`) and the pill shows a shimmer sweep.
+- **Calls to action** — a hovered `primary` Button (`data-variant="primary"`) or armed send pill glows; the
+  `⌘K` palette (`data-neon="panel"`), whose field shows focus by its caret alone, is framed while open.
+
+Motion runs only under `prefers-reduced-motion: no-preference`: with reduced motion the static halo stays
+and nothing pulses or sweeps. Only `box-shadow`, `opacity`, `filter` and pseudo-element `transform`
+animate — never a container transform, which would break sticky/fixed descendants.
+
+## Diff additions
+
+`diff-addition` (from the manifest's optional `diffAdded`, which defaults to `success`) colours added
+lines in Pierre diffs and their gutter numbers; `diff-addition-bg` (@ `wash`) is Monaco's inserted
+text/line wash, and `editor-line-highlight-bg` (from `editorLineHighlight`, default `hover`) is Monaco's
+current line. They are separate from `feedback-success` so a theme can move additions off green — Helios
+Cobalt draws them in icy cyan — while git-status "added", checks and success toasts keep the semantic green.
+
 There is no `text-strong` and no `text-link` utility: they duplicate other tokens, and `--text-link`
 exists as a variable for `global.css`'s bare-anchor fallback alone. That fallback lives in the CSS base
 layer so an explicit semantic text utility on a link-shaped control always wins the cascade.

@@ -122,7 +122,15 @@
 					"$ref": "#/$defs/hexColor",
 					"description": "Label on the destructive fills. Optional: defaults to the palette's text or background colour, whichever reads better on danger and dangerHover."
 				},
-				"warning": { "$ref": "#/$defs/hexColor" }
+				"warning": { "$ref": "#/$defs/hexColor" },
+				"editorLineHighlight": {
+					"$ref": "#/$defs/hexColor",
+					"description": "The code editor's current-line highlight. Optional: defaults to hover."
+				},
+				"diffAdded": {
+					"$ref": "#/$defs/hexColor",
+					"description": "The hue of added lines in diffs (washed by the engine). Optional: defaults to success."
+				}
 			}
 		},
 		"ansi": {

@@ -16,7 +16,7 @@ test("pushes the active language's desktop menu and dialog labels when the nativ
 	pushNativeMenuLabels();
 	expect(sent[0]?.["desktop.menu.edit"]).toBe("Bearbeiten");
 	expect(sent[0]?.["desktop.menu.window"]).toBe("Window");
-	expect(sent[0]?.["desktop.dialog.startFailed"]).toBe("ThinkRail could not start");
+	expect(sent[0]?.["desktop.dialog.startFailed"]).toBe("Helios could not start");
 });
 
 test("is a no-op without the bridge", () => {

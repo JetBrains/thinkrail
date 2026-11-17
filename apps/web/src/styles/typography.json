@@ -8,6 +8,20 @@
 	"fontFamilies": {
 		"interface": {
 			"stack": [
+				"Inter Variable",
+				"Inter",
+				"-apple-system",
+				"BlinkMacSystemFont",
+				"Segoe UI",
+				"sans-serif"
+			],
+			"kind": "proportional",
+			"selfHosted": ["@fontsource-variable/inter", "@fontsource-variable/inter/wght-italic.css"],
+			"userSelectable": true
+		},
+		"interfaceAlternate": {
+			"note": "A bundled interface face offered in Settings → Appearance beside the default — the previous default, kept so a user can return to it offline. No style names it; `fonts/runtime.ts` reads its first family to list it.",
+			"stack": [
 				"Geist Variable",
 				"Geist",
 				"-apple-system",
@@ -16,8 +30,7 @@
 				"sans-serif"
 			],
 			"kind": "proportional",
-			"selfHosted": ["@fontsource-variable/geist", "@fontsource-variable/geist/wght-italic.css"],
-			"userSelectable": true
+			"selfHosted": ["@fontsource-variable/geist", "@fontsource-variable/geist/wght-italic.css"]
 		},
 		"code": {
 			"stack": [
@@ -70,12 +83,12 @@
 			"ligatures": "none"
 		},
 		"brand": {
-			"note": "Orbitron ships LATIN ONLY, and `brand.hero` renders a project's own name — so the next fallback is the interface face (Geist covers cyrillic/cyrillic-ext/latin-ext/vietnamese and is already bundled), not a system font. A non-Latin project name then falls back within our own type system instead of to whatever the OS supplies.",
+			"note": "Orbitron ships LATIN ONLY, and `brand.hero` renders a project's own name — so the next fallback is the interface face (Inter covers cyrillic/cyrillic-ext/greek/latin-ext/vietnamese and is already bundled), not a system font. A non-Latin project name then falls back within our own type system instead of to whatever the OS supplies.",
 			"stack": [
 				"Orbitron Variable",
 				"Orbitron",
-				"Geist Variable",
-				"Geist",
+				"Inter Variable",
+				"Inter",
 				"-apple-system",
 				"BlinkMacSystemFont",
 				"Segoe UI",

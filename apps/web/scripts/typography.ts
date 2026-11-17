@@ -134,7 +134,7 @@ const FONTS_HEADER = (version: string) => `/*
  * GENERATED — do not edit. Source: \`src/styles/typography.json\` (v${version}), the \`selfHosted\`
  * entries of each font family. Regenerate with \`bun run typography:generate\`.
  *
- * The app's faces are self-hosted — no runtime call to a font CDN. ThinkRail runs locally (often
+ * The app's faces are self-hosted — no runtime call to a font CDN. The app runs locally (often
  * offline) and ships as a single-file binary, so the fonts have to be part of the artifact: Vite
  * fingerprints these woff2 files into \`dist/assets\` and the CLI embeds that output. A \`<link>\` to a
  * font CDN satisfied none of it — it left an air-gapped host in system faces, put first paint behind a

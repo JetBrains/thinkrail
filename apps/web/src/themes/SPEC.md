@@ -18,7 +18,10 @@ this client, including operating-system color-scheme observation and same-appear
 theme = adding one `*.theme.json` file** — to `bundled/` (a PR + rebuild) or, for a user, to
 `~/.thinkrail/themes` (live, [[submodule-server-themes]]) — no code, contract, CSS, or test changes.
 
-Six manifests ship: the standard **Dark** and **Light** (the configured default and its pair, unchanged),
+Seven manifests ship: **Helios Cobalt** — the configured default, a midnight/cobalt dark palette with a neon
+cyan accent (`#00d4ff`), cobalt primary fills and cyan diff additions, at the lowest `order` so it is also the
+dark fallback and the dark slot of a derived system pair — then the standard **Dark** and **Light** (the
+previous default and its pair, unchanged),
 **Minimal Dark** and **Minimal Light** (the quiet neutral surface hierarchy, restrained green accent and
 neutral `bubbleAccent` of the Minimal interface study, sharing the standard pair's syntax and terminal
 palettes), and the two High Contrast palettes with their stricter accessibility contract. Minimal is a
@@ -96,6 +99,13 @@ files shipped, so by the compatibility rule above both are optional and derived 
 has: `dangerHover` defaults to `danger` darkened 12% toward black (the step every bundled theme uses)
 and `onDanger` to the palette's own `text` or `background`, whichever reads better on both fills.
 Bundled manifests still set both explicitly.
+
+Two more keys joined v2 the same way, so both are optional and derived: `editorLineHighlight` (Monaco's
+current-line wash; defaults to `hover`) and `diffAdded` (the hue of added lines in Pierre diffs and the
+Monaco diff editor's inserted wash; defaults to `success`). They exist so a palette can move additions off
+green — Helios Cobalt shows them in cyan — without changing `success`, which stays the semantic "it worked"
+colour of git status, checks and toasts. Only Helios Cobalt sets them; the other bundled themes render as
+before.
 
 **The manifest→variable name is derived, not mapped.** A key writes to its kebab-cased name —
 `borderStrong` → `--border-strong`, `editorSelection` → `--editor-selection`. `runtime.ts` applies that
@@ -187,7 +197,7 @@ listener reapplies locally on `change`; it never writes config or affects anothe
 clean it up when preference or component lifetime changes.
 
 The first-paint hint is a versioned snapshot of fixed id, mode, and optional pair—not the last effective
-id. A legacy string parses as fixed mode; malformed data becomes the fixed Dark default. Startup resolves
+id. A legacy string parses as fixed mode; malformed data becomes the fixed configured default (Helios Cobalt). Startup resolves
 the snapshot synchronously against the current media query, so a schedule change while the app was closed
 is reflected on first paint. The host-synced config always reconciles it after the first welcome; until
 then the shell retains and observes the hint instead of overwriting it with store defaults. Storage uses

@@ -32,7 +32,7 @@ test("opens a clean ThinkRail with no projects imported", async ({ page }) => {
 	await expect(page.getByTestId("right-panel")).toHaveCount(0);
 	await expect(page.getByTestId("terminal-panel")).toHaveCount(0);
 
-	await expect(page.getByTestId("welcome-title")).toHaveText("ThinkRail");
+	await expect(page.getByTestId("welcome-title")).toHaveText("Helios Agent IDE");
 	await expect(page.getByTestId("onboarding-wizard")).toHaveCount(0);
 	await expect(page.getByTestId("welcome-cta")).toContainText("Start a new project");
 	await expect(page.getByTestId("welcome-action")).toHaveCount(2);

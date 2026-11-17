@@ -46,10 +46,10 @@ describe("formatNotification", () => {
 		expect(formatNotification([])).toBeNull();
 	});
 
-	test("single → ThinkRail title, worktree subtitle, reason body, targeting the chat", () => {
+	test("single → Helios title, worktree subtitle, reason body, targeting the chat", () => {
 		const spec = formatNotification([event()]);
 		expect(spec).toEqual({
-			title: "ThinkRail",
+			title: "Helios",
 			subtitle: "feature-branch",
 			body: "Waiting for your input",
 			tag: "attention:s1",
@@ -59,7 +59,7 @@ describe("formatNotification", () => {
 
 	test("single with a blank name drops the subtitle and keeps the reason", () => {
 		const spec = formatNotification([event({ worktreeName: "   " })]);
-		expect(spec?.title).toBe("ThinkRail");
+		expect(spec?.title).toBe("Helios");
 		expect(spec?.subtitle).toBeUndefined();
 		expect(spec?.body).toBe("Waiting for your input");
 	});
@@ -71,7 +71,7 @@ describe("formatNotification", () => {
 			event({ sessionId: "s3" }),
 		]);
 		expect(spec).toEqual({
-			title: "ThinkRail",
+			title: "Helios",
 			body: "3 worktrees need your attention",
 			tag: "thinkrail-attention",
 			target: { kind: "search" },

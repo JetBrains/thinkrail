@@ -1916,7 +1916,7 @@ export function isJbcentralQuotaRefreshSeconds(value: unknown): value is number 
 }
 
 export const DEFAULT_CONFIG: AppConfig = {
-	theme: "dark",
+	theme: "helios-cobalt",
 	themeMode: "fixed",
 	analyticsEnabled: false,
 	analyticsConsentConfirmed: false,

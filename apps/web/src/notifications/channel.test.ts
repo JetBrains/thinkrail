@@ -5,7 +5,7 @@ import type { NotificationSpec } from "./formatNotification";
 
 function singleSpec(overrides: Partial<NotificationSpec> = {}): NotificationSpec {
 	return {
-		title: "ThinkRail",
+		title: "Helios",
 		subtitle: "feature-branch",
 		body: "Waiting for your input",
 		tag: "attention:s1",
@@ -33,7 +33,7 @@ describe("desktop notification channel", () => {
 		channel.show(singleSpec(), () => {});
 		expect(shown).toEqual([
 			{
-				title: "ThinkRail",
+				title: "Helios",
 				subtitle: "feature-branch",
 				body: "Waiting for your input",
 				silent: false,
@@ -45,7 +45,7 @@ describe("desktop notification channel", () => {
 		const { shown, channel } = harness();
 		channel.show(
 			{
-				title: "ThinkRail",
+				title: "Helios",
 				body: "2 worktrees need your attention",
 				tag: "thinkrail-attention",
 				target: { kind: "search" },
@@ -53,7 +53,7 @@ describe("desktop notification channel", () => {
 			() => {},
 		);
 		expect(shown[0]).toEqual({
-			title: "ThinkRail",
+			title: "Helios",
 			body: "2 worktrees need your attention",
 			silent: false,
 		});

@@ -91,7 +91,7 @@ test("system resolution enforces appearance and preserves unavailable ids", () =
 	});
 	expect(resolveThemePreference(preference, "dark")).toMatchObject({
 		requestedId: "unavailable-dark",
-		theme: { id: "dark", appearance: "dark" },
+		theme: { id: "helios-cobalt", appearance: "dark" },
 		fallback: true,
 		systemAppearance: "dark",
 	});
@@ -142,7 +142,7 @@ test("theme hints migrate legacy ids and use the native stable adapter", () => {
 		writeThemeHint(preference);
 		expect(readThemeHint()).toEqual(preference);
 		stored.set(HINT_KEY, JSON.stringify({ version: 1, theme: "dark", themeMode: "system" }));
-		expect(readThemeHint()).toEqual({ theme: "dark", themeMode: "fixed" });
+		expect(readThemeHint()).toEqual({ theme: DEFAULT_CONFIG.theme, themeMode: "fixed" });
 	} finally {
 		Reflect.deleteProperty(globalThis, "__THINKRAIL_STABLE_PREFERENCES__");
 	}
@@ -285,12 +285,12 @@ test("fallbacks and a derived system pair pick bundled themes, never a user them
 			manifest: userTheme("arctic", { label: "Arctic", order: 0 }),
 		},
 	]);
-	expect(deriveSystemThemePair("light")).toEqual({ light: "light", dark: "dark" });
+	expect(deriveSystemThemePair("light")).toEqual({ light: "light", dark: "helios-cobalt" });
 	expect(
 		resolveThemePreference(
 			{ theme: "light", themeMode: "system", systemThemePair: { light: "light", dark: "missing" } },
 			"dark",
 		).theme.id,
-	).toBe("dark");
+	).toBe("helios-cobalt");
 	expect(deriveSystemThemePair("user.arctic")).toEqual({ light: "light", dark: "user.arctic" });
 });

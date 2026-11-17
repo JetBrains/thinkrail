@@ -7,7 +7,7 @@ import {
 	type WsErrorCode,
 } from "@thinkrail/contracts";
 
-const NOTICE_START = "Your answers, including anything you type, are sent to the ThinkRail team";
+const NOTICE_START = "Your answers, including anything you type, are sent to the Helios team";
 
 function survey(iteration: number): AppSurvey {
 	return {

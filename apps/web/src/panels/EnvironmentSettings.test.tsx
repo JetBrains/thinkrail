@@ -77,7 +77,7 @@ test("issues render under their field and row", () => {
 		vars: { [draft.vars[1]?.id ?? ""]: "reserved" },
 	});
 	expect(markup).toContain("This folder doesn&#x27;t exist.");
-	expect(markup).toContain("ThinkRail manages this variable, so it can&#x27;t be set here.");
+	expect(markup).toContain("Helios manages this variable, so it can&#x27;t be set here.");
 });
 
 test("the whole form is locked while a save is in flight, so no edit can be overwritten by its response", () => {

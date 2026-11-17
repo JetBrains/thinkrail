@@ -283,7 +283,7 @@ describe("reserved chords", () => {
 });
 
 describe("extension commands", () => {
-	test("ThinkRail defaults beat extension defaults; the loser keeps its other chords", () => {
+	test("Helios defaults beat extension defaults; the loser keeps its other chords", () => {
 		const resolved = resolveKeybindings({
 			platform: LINUX,
 			extensions: [
@@ -315,7 +315,7 @@ describe("extension commands", () => {
 		]);
 	});
 
-	test("a user override on an extension command beats a ThinkRail default", () => {
+	test("a user override on an extension command beats a Helios default", () => {
 		const resolved = resolveKeybindings({
 			platform: LINUX,
 			overrides: { "notes.open": ["Mod+KeyB"] },
@@ -328,7 +328,7 @@ describe("extension commands", () => {
 		]);
 	});
 
-	test("between two overrides a ThinkRail command wins, then table and registry order", () => {
+	test("between two overrides a Helios command wins, then table and registry order", () => {
 		const resolved = resolveKeybindings({
 			platform: LINUX,
 			overrides: { "notes.open": ["Mod+KeyU"], "search.open": ["Mod+KeyU"] },

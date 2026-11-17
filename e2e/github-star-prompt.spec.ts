@@ -31,7 +31,7 @@ test("the host's star ask raises one toast with its star count, and the action o
 	const socket = await openWithHostSocket(page);
 	const ask = page
 		.getByTestId("toast")
-		.filter({ hasText: "Find ThinkRail useful or have feedback?" });
+		.filter({ hasText: "Find Helios Agent IDE useful or have feedback?" });
 	await expect(ask).toHaveCount(0);
 
 	askForStar(socket(), 1234);
@@ -54,7 +54,7 @@ test("without a star count the button is plain, and the ask stays up for 60 seco
 	const socket = await openWithHostSocket(page);
 	const ask = page
 		.getByTestId("toast")
-		.filter({ hasText: "Find ThinkRail useful or have feedback?" });
+		.filter({ hasText: "Find Helios Agent IDE useful or have feedback?" });
 
 	askForStar(socket(), null);
 	await expect(ask).toBeVisible();

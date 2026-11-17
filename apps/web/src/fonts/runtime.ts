@@ -38,6 +38,15 @@ export function bundledFaces(): BundledFaces {
 	return faces;
 }
 
+export type BundledAlternates = Readonly<Record<FontRole, readonly string[]>>;
+
+export function bundledAlternates(): BundledAlternates {
+	const style = getComputedStyle(document.documentElement);
+	const first = (role: FontRole) =>
+		familiesOf(style.getPropertyValue(`${FAMILY_TOKEN[role]}-alternate`)).slice(0, 1);
+	return { interface: first("interface"), code: first("code") };
+}
+
 let applied: FontPreference = DEFAULT_FONT_PREFERENCE;
 let faceRevision = 0;
 

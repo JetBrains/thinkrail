@@ -458,7 +458,7 @@ async function start(): Promise<void> {
 					windowChromePreloadSeed(windowChrome),
 				);
 	mainWindow = new BrowserWindow({
-		title: "ThinkRail",
+		title: "Helios Agent IDE",
 		url: neutral ? "about:blank" : `${origin}/${initialRoute}`,
 		preload,
 		...(neutral ? {} : { rpc }),

@@ -13,7 +13,7 @@ const SURVEY: AppSurvey = {
 		{
 			id: "rate",
 			type: "rating",
-			question: "How likely are you to recommend ThinkRail?",
+			question: "How likely are you to recommend Helios?",
 			display: "number",
 			scale: 5,
 			lowerBoundLabel: "Unlikely",
@@ -38,7 +38,7 @@ test("the Feedback pane always offers Discord and email, and the survey only whe
 	expect(withSurvey).toContain('data-testid="feedback-take-survey"');
 	expect(withSurvey).toContain(String(EN["settings.feedback.takeSurvey"]));
 	expect(withSurvey).toContain('data-testid="feedback-join-discord"');
-	expect(withSurvey).not.toContain("How likely are you to recommend ThinkRail?");
+	expect(withSurvey).not.toContain("How likely are you to recommend Helios?");
 });
 
 test("the survey's first page carries the notice above the first question", () => {
@@ -48,7 +48,7 @@ test("the survey's first page carries the notice above the first question", () =
 	expect(markup).toContain('data-testid="survey-notice"');
 	expect(markup).toContain(escaped("panels.survey.notice"));
 	expect(markup).not.toContain("<a ");
-	expect(markup).toContain("How likely are you to recommend ThinkRail?");
+	expect(markup).toContain("How likely are you to recommend Helios?");
 	expect(markup).toContain(
 		String(EN["panels.survey.progress"]).replace("{{current}}", "1").replace("{{total}}", "2"),
 	);

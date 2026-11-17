@@ -58,8 +58,12 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `lib` | shared path/array primitives + highlighting | yes | [lib/SPEC.md](src/lib/SPEC.md) |
 | `speech` | local voice dictation for every text field: one page-level layer, mic capture → `/speech` socket → the focused field | yes | [speech/SPEC.md](src/speech/SPEC.md) |
 
-Leaf utilities without their own spec: `constants/` (branding — the product name, storage/event prefixes, and the one
-`BRAND_MARK_SEGMENTS` monogram regions, joined into the `BRAND_MARK_PATH` the shell logo fills and clipped to by the components' working badge), `clientPreferences.ts` (feature-neutral
+Leaf utilities without their own spec: `constants/` (branding — the user-facing product name "Helios Agent IDE"
+(`PRODUCT_NAME`) and its compact form "Helios" (`PRODUCT_SHORT_NAME`, for the topbar mark's label, notifications and
+tight slots), the storage/event prefixes — which keep the internal `thinkrail` slug, as do package scopes, `~/.thinkrail`
+and the `thinkrail://` scheme, so a rebrand never orphans saved state — and the one `BRAND_MARK_SEGMENTS` Helios mark
+(a sun inside a tilted orbit with one satellite), joined into the `BRAND_MARK_PATH` the shell logo fills, plus the
+`BRAND_ORBIT` centreline the components' working badge draws), `clientPreferences.ts` (feature-neutral
 access to the optional native stable string adapter, and `firstPaintPreferenceStorage` — that adapter, else
 `localStorage` — which the theme and font first-paint hints share), and `styles/` — which holds the three
 design-system SOURCES (`typography.json`, `colors.json`, `spacing.json`), their generated CSS, and the
@@ -69,14 +73,14 @@ the in-app notice and toast look built on them is [NOTIFICATIONS.md](src/styles/
 Outside `src/`, **[`scripts/`](scripts/SPEC.md)** is the build-time generator module — it runs under Bun,
 never ships, and turns those three JSON sources into `styles/generated/` (plus the vendored provider
 marks into `chat/generated/`).
-`index.html` names the product and links the local, symbol-only SVG favicon derived from the same
-ThinkRail artwork as the shell logo (compact enough for browser-tab sizes and light/dark browser chrome).
+`index.html` names the product ("Helios Agent IDE") and links the local, symbol-only SVG favicon derived from the same
+Helios artwork as the shell logo (compact enough for browser-tab sizes and light/dark browser chrome).
 It also links two generated raster fallbacks for clients that skip SVG icons, such as Safari 18 and earlier
 and tools that only fetch `/favicon.ico`:
 - `favicon.ico` (48/32/16);
 - a 180 px `apple-touch-icon.png`, opaque because iOS masks its own corners.
 
-Both use the native app tile (the same mark, green on black, as the desktop icon), since a raster cannot
+Both use the native app tile (the same mark, neon cyan on midnight blue, as the desktop icon), since a raster cannot
 follow the light/dark scheme. Being real files under `dist`, they also stop those requests from falling
 through to the host's SPA `index.html` fallback.
 `main.tsx` is the entry/composition root — it synchronously builds the bundled theme catalog, resolves and
@@ -186,7 +190,7 @@ change. `dist/` therefore has no profiler timers (`actualStartTime` is absent fr
 - `store` → `transport` (**type-only** — `ConnectionStatus`), `chat` (**type-only** — `ChatTurn`/`ToolResultState`/`AttachedImage`), `auth` (**type-only** — `LoginState`; the `foldLoginFrame` reducer lives in `store`, like `reduceExtUi`), `contracts` (domain + custom-preset types, never current-layout DTOs), `lib` (shared path/array primitives — a leaf, so no cycle), and `shell/layout` (**type-only** for web-local frame/view state)
 - `transport` → `contracts`, `store` (welcome routing; the `store → transport` back-edge is type-only, so
   the runtime graph is acyclic), `lib` (plain-HTTP-safe random page identity), `constants` (`REPO_URL` for the GitHub star toast)
-- `components` → `lib` (`ErrorBoundary`'s `shallowEqualArrays` for its reset keys) and `constants` (`RunningIcon` draws the shared brand monogram) — both leaves, so any region can still wrap in it; presentational controls consume `ui`
+- `components` → `lib` (`ErrorBoundary`'s `shallowEqualArrays` for its reset keys) and `constants` (`RunningIcon` draws the shared brand mark) — both leaves, so any region can still wrap in it; presentational controls consume `ui`
 - `lib` → `themes` (the lazy chat highlighter uses the CSS-variable Pierre theme), React (the phone-viewport hook only), and `contracts` (types only, e.g. the MCP state vocabulary's `McpServerState`)
 - `themes` → `constants` (the branding storage prefix scopes the first-paint hint and the user-theme cache), `clientPreferences` (native-stable hint storage); `transport` hydrates the store's user-theme snapshot and `shell`'s theme effect installs it
 - `fonts` → `contracts`, `constants` (the first-paint hint key), `clientPreferences` (native-stable hint storage and the desktop signal); `transport` hydrates the store's custom-font snapshot, `shell`'s fonts effect applies the settings and installs the faces, `main.tsx` applies the hint before React, and `panels` (the Appearance font groups) reads its bundled faces, probes and weight preview
@@ -312,7 +316,8 @@ themselves.
   while closed `themeMode` and optional opaque `systemThemePair` opt into per-client system matching. Each
   client resolves the pair against its own `prefers-color-scheme`; operating-system changes are local DOM
   effects and never config writes, so two clients may simultaneously render different appearances. Fixed
-  Dark remains the default for both new and legacy config. `settings.update` converges through
+  **Helios Cobalt** (`helios-cobalt`) is the default for new config; a legacy config that stored `dark`
+  keeps Dark, which stays selectable. `settings.update` converges through
   `settings.changed`; a theme-only legacy mutation exits system mode. An unavailable system slot falls back
   deterministically within the required appearance without destructively rewriting the requested value.
   The versioned pre-React hint caches the preference, not the last effective id, using the injected stable
@@ -366,7 +371,8 @@ themselves.
   silently does nothing; the working form is `font-(family-name:--font-mono)`
   (`styles/fontClasses.test.ts` fails on the bare form).
 - **Fonts ship inside the artifact.** `styles/generated/fonts.css` imports self-hosted variable faces
-  (fontsource; Geist Variable + JetBrains Mono Variable, both with real italics — shared with
+  (fontsource; Inter Variable — the interface default — Geist Variable, kept as a bundled alternate the
+  user can pick in Settings → Appearance, and JetBrains Mono Variable, all with real italics — shared with
   `apps/website`, so their versions live in the root `workspaces.catalog`). Which packages those are is
   declared per family as `selfHosted` in `styles/typography.json`, so the stack and the bundled faces
   cannot drift; the imports are generated from it. Vite emits the woff2 files

@@ -304,7 +304,7 @@ test("a row lists its always-allowed tools, each with its own way to ask again",
 
 test("the banner states the in-chat confirm and the empty state offers import and the host notice", () => {
 	expect(renderToStaticMarkup(<McpConfirmBanner />)).toContain(
-		"ThinkRail asks in the chat before MCP calls that may change data. Always allow trusts a tool in every chat of this project; those tools are listed on their server below.",
+		"Helios asks in the chat before MCP calls that may change data. Always allow trusts a tool in every chat of this project; those tools are listed on their server below.",
 	);
 	const empty = renderToStaticMarkup(
 		<McpEmptyState disabled={false} onAdd={() => {}} onImport={() => {}} onPreset={() => {}} />,

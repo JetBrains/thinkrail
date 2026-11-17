@@ -1,5 +1,6 @@
 import type { SessionCompletion } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
+import { PRODUCT_SHORT_NAME } from "../constants/branding";
 
 /** Why a worktree's attention dot lit up, captured when the event is enqueued. */
 export type AttentionReason =
@@ -30,7 +31,7 @@ export interface NotificationSpec {
 }
 
 const BODY_MAX = 100;
-const APP_NAME = "ThinkRail";
+const APP_NAME = PRODUCT_SHORT_NAME;
 const AGGREGATE_TAG = "thinkrail-attention";
 
 export function reasonLabel(reason: AttentionReason): string {
@@ -63,7 +64,7 @@ export function formatNotification(events: readonly AttentionEvent[]): Notificat
 	if (!event) return null;
 	if (events.length === 1) {
 		const name = event.worktreeName.trim();
-		// Title is always the bold ThinkRail mark; the worktree is the subtitle, the reason the body.
+		// Title is always the bold product mark; the worktree is the subtitle, the reason the body.
 		return {
 			title: APP_NAME,
 			...(name ? { subtitle: name } : {}),

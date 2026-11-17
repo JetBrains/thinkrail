@@ -10,7 +10,8 @@ import {
 	mainFontOptions,
 } from "./fontCatalog";
 
-const faces = { interface: "Geist Variable", code: "JetBrains Mono Variable" };
+const faces = { interface: "Inter Variable", code: "JetBrains Mono Variable" };
+const alternates = { interface: ["Geist Variable"], code: [] };
 
 const userFonts: UserFontsSnapshot = {
 	dir: "/data/fonts",
@@ -50,6 +51,7 @@ const probes: Record<string, { renders: boolean; monospace: boolean }> = {
 
 const options = fontOptions({
 	faces,
+	alternates,
 	custom: customFamilies(userFonts),
 	installed: {
 		status: "ready",
@@ -66,8 +68,9 @@ const options = fontOptions({
 
 test("bundled, custom and installed fonts merge, a custom family shadowing an installed one", () => {
 	expect(options.map((option) => [option.source, option.label])).toEqual([
-		["builtin", "Geist"],
+		["builtin", "Inter"],
 		["builtin", "JetBrains Mono"],
+		["builtin", "Geist"],
 		["custom", "Fira Code"],
 		["installed", "DejaVu Sans Mono"],
 		["installed", "DejaVu Sans"],
@@ -88,7 +91,7 @@ test("measurement beats the OS hint for monospace, and the code list is monospac
 		"Noto Color Emoji",
 		"Symbols Nerd Font",
 	]);
-	expect(mainFontOptions(options, "interface", true)).toHaveLength(5);
+	expect(mainFontOptions(options, "interface", true)).toHaveLength(6);
 });
 
 test("fallback lists offer every font but the ones already in the stack", () => {
@@ -97,6 +100,7 @@ test("fallback lists offer every font but the ones already in the stack", () => 
 		{ name: "Symbols Nerd Font" },
 	]);
 	expect(fallbacks.map((option) => option.label)).toEqual([
+		"Inter",
 		"Geist",
 		"Fira Code",
 		"DejaVu Sans Mono",
@@ -117,4 +121,15 @@ test("refs resolve to display names, keys and role defaults", () => {
 	expect(choiceKey(null, "code")).toBe("builtin:code");
 	expect(isRoleDefault({ builtin: "code" }, "code")).toBe(true);
 	expect(isRoleDefault({ builtin: "code" }, "interface")).toBe(false);
+});
+
+test("a bundled alternate face is offered as a built-in, by name, never as a role default", () => {
+	const geist = options.find((option) => option.label === "Geist");
+	expect(geist).toMatchObject({
+		source: "builtin",
+		ref: { name: "Geist Variable" },
+		defaultFor: null,
+		monospace: false,
+	});
+	expect(isRoleDefault({ name: "Geist Variable" }, "interface")).toBe(false);
 });

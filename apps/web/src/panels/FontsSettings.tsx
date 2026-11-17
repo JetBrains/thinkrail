@@ -16,6 +16,7 @@ import { Button, IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
+	bundledAlternates,
 	bundledFaces,
 	DEFAULT_FONT_PREFERENCE,
 	fontFacesRevision,
@@ -354,12 +355,13 @@ export function FontsGroup() {
 	const [pending, setPending] = useState<ReadonlySet<FontRole>>(new Set());
 	const [advanced, setAdvanced] = useState(false);
 	const [faces] = useState(bundledFaces);
+	const [alternates] = useState(bundledAlternates);
 	const [shares] = useState(sharesHostFonts);
 	const facesRevision = useSyncExternalStore(subscribeFontFaces, fontFacesRevision);
 	const failure = t("settings.appearance.fonts.changeFailed");
 	const probe = (family: string) => probeFont(family, facesRevision);
 	const custom = customFamilies(userFonts);
-	const options = fontOptions({ faces, custom, installed, probe });
+	const options = fontOptions({ faces, alternates, custom, installed, probe });
 	const choices: Record<FontRole, FontChoice> = { interface: interfaceFont, code: codeFont };
 	const renders = (family: string) => custom.has(family) || probe(family).renders;
 	const namedFamily = (role: FontRole) => {

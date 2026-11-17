@@ -21,11 +21,12 @@
 
 :root {
 	/* Font families — a user-selectable family defaults to its `-default` stack */
-	--tr-font-family-interface-default: "Geist Variable", Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	--tr-font-family-interface-default: "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	--tr-font-family-interface: var(--tr-font-family-interface-default);
+	--tr-font-family-interface-alternate: "Geist Variable", Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	--tr-font-family-code-default: "JetBrains Mono Variable", "JetBrains Mono", "JetBrainsMono Nerd Font Mono", "JetBrainsMono Nerd Font", "JetBrainsMonoNL Nerd Font Mono", "Symbols Nerd Font Mono", "Symbols Nerd Font", "MesloLGS NF", "Hack Nerd Font Mono", "FiraCode Nerd Font Mono", "CaskaydiaCove Nerd Font Mono", "Sarasa Mono SC", "Sarasa Mono TC", "Sarasa Mono J", "Noto Sans Mono CJK SC", "Noto Sans Mono CJK TC", "Noto Sans Mono CJK JP", "Source Han Mono SC", "Noto Sans Mono", "Fira Code", "SF Mono", Menlo, Consolas, "Cascadia Mono", "Cascadia Code", "DejaVu Sans Mono", "PingFang SC", "Hiragino Sans GB", "Hiragino Sans", "Microsoft YaHei", "Microsoft JhengHei", "Noto Sans CJK SC", "Apple Symbols", "Segoe UI Symbol", "Noto Sans Symbols 2", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", monospace;
 	--tr-font-family-code: var(--tr-font-family-code-default);
-	--tr-font-family-brand: "Orbitron Variable", Orbitron, "Geist Variable", Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	--tr-font-family-brand: "Orbitron Variable", Orbitron, "Inter Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
 	/* Font ligatures — set on every style of that family */
 	--tr-font-ligatures-code: none;

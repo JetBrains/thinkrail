@@ -68,7 +68,7 @@ bridge.
 desktop host. `Shell` mounts the optional update hook, injects the version-gated empty host action, and passes
 normalized state into props-driven controls. Its compact status affordance opens the injected Update section;
 without a capability, neither renders. Panels receive optional React content, never launcher or native-runtime
-checks. The topbar identity is the icon-only ThinkRail mark—the same
+checks. The topbar identity is the icon-only Helios mark (labelled "Helios")—the same
 vector served as `public/favicon.svg`, inlined at 32×32 and rendered
 through semantic `text-primary`—with no divider before location. With a context project the mark is followed
 by the `locationBar` strip: captioned segments **Project · Workspace · Branch · from base · Remote · Pull

@@ -48,13 +48,14 @@ surfaces it governs.
 
 | Group | Ids |
 |---|---|
-| `fontFamilies` | `interface` (Geist Variable, all proportional UI + reading text) · `code` (JetBrains Mono Variable, code only, followed by the system fallback chain described under [Fonts](#fonts); both `userSelectable`, `code` with `ligatures: none`) · `brand` → **Orbitron Variable** (self-hosted `@fontsource-variable/orbitron`, a distinct display face for the brand role — `wordmark` + `hero`; it was formerly a `$ref` to `interface`). Orbitron is **latin-only** and `brand.hero` renders a project's own name, so the stack falls back to the *interface* face before any system font — a non-Latin name lands on Geist (cyrillic/latin-ext/vietnamese, already bundled) rather than on whatever the OS supplies |
+| `fontFamilies` | `interface` (Inter Variable, all proportional UI + reading text) · `interfaceAlternate` (Geist Variable, bundled and offered in Settings, named by no style) · `code` (JetBrains Mono Variable, code only, followed by the system fallback chain described under [Fonts](#fonts); both `userSelectable`, `code` with `ligatures: none`) · `brand` → **Orbitron Variable** (self-hosted `@fontsource-variable/orbitron`, a distinct display face for the brand role — `wordmark` + `hero`; it was formerly a `$ref` to `interface`). Orbitron is **latin-only** and `brand.hero` renders a project's own name, so the stack falls back to the *interface* face before any system font — a non-Latin name lands on Geist (cyrillic/latin-ext/vietnamese, already bundled) rather than on whatever the OS supplies |
 | `fontWeights` | `light` 370 · `regular` 400 · `medium` 500 · `semibold` 600 · `brand` 400 · `button` 470 — the bases the weight offset shifts (`fontWeightOffset.exclude`: `brand`) |
 | `fontSizes` | `s10` `s11` `s12` `s13` `s14` `s16` `s18` `s20` `s24` `s44` (px); `codeSize` names the code size (`s13`) |
 | `lineHeights` | `compact` 1.25 · `metadata` 1.25 (12px→15px) · `ui` 1.3 (14px→18.2px) · `code` 1.4 · `relaxed` 1.4 (13px→18.2px) · `default` 1.3 (14px→18.2px) · `reading` 1.45 (14px→20.3px) |
 | `letterSpacings` | `normal` · `loose` 0.02em · `wide` 0.05em · `widest` 0.1em · `brand` 0.5px |
 
-The leading scale is deliberately **dense** (1.25–1.4): Geist’s x-height at 14px is 7.4px (cap height 9.9px), so
+The leading scale is deliberately **dense** (1.25–1.4): Inter’s x-height at 14px is 7.6px (cap height 10.2px —
+within a few tenths of a pixel of Geist’s 7.4/9.9px, which the scale was first tuned to, so the switch kept it), so
 the former 1.5–1.6 left an empty band between lines taller than the letters themselves — it read as
 near double spacing. Reading prose — `body.reading`: chat, user messages, documents — is the deliberate exception at
 `reading` 1.45: at the dense value long replies read as a compressed wall, so reading text keeps more leading
@@ -218,8 +219,8 @@ JSON entry — the generator, the naming and the guards all follow.
 ## Fonts
 
 Self-hosted variable faces. The packages are declared per family as `selfHosted` in the JSON and
-`styles/generated/fonts.css` is emitted from them (`@fontsource-variable/geist`,
-`@fontsource-variable/jetbrains-mono`), fingerprinted into `dist/assets` and embedded in the binary —
+`styles/generated/fonts.css` is emitted from them (`@fontsource-variable/inter`,
+`@fontsource-variable/geist`, `@fontsource-variable/jetbrains-mono`), fingerprinted into `dist/assets` and embedded in the binary —
 **no font CDN**, so an offline host renders the real system. Both faces are variable, so 800 and
 italics are real, not synthetic. Pinned by `e2e/fonts.spec.ts`.
 
@@ -229,6 +230,12 @@ the generated output (`e2e/fixtures/typography.ts`), and `validate` rejects both
 that is not a dependency and a font dependency no family claims. The one other copy of the stacks lives
 in `apps/website` (a standalone leaf that cannot import ours); `apps/website/src/fonts.test.ts` fails
 when it drifts from this file.
+
+**Inter is the interface default; Geist stays bundled as an alternate.** `interfaceAlternate` is a family
+no style names: it exists so its `selfHosted` faces ship and its first family is offered in Settings →
+Appearance beside the default (`fonts/runtime.ts` `bundledAlternates`, `panels/fontCatalog.ts`). Choosing it
+stores an ordinary named choice (`{ name: "Geist Variable" }`), so it needs no contract change and survives
+a later change of default.
 
 ### The code stack's system fallbacks
 

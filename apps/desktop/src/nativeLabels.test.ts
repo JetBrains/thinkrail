@@ -18,7 +18,7 @@ test("dialog labels take the pushed translation and fall back to English per lab
 	expect(labels["desktop.dialog.startFailed"]).toBe("ThinkRail konnte nicht starten");
 	expect(labels["desktop.dialog.quit"]).toBe("Quit");
 	expect(labels["desktop.dialog.updateRestartFailed"]).toBe(
-		"ThinkRail could not restart to install the update",
+		"Helios could not restart to install the update",
 	);
 	expect(readDialogLabels(null)).toEqual(DEFAULT_DIALOG_LABELS);
 });

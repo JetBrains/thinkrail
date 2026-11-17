@@ -47,6 +47,7 @@ import { useFolderActions } from "./SettingsFolder";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
 import { SettingsNotice } from "./SettingsNotice";
 import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
+import { SettingsSwitch } from "./SettingsSwitch";
 
 type Appearance = ThemeDescriptor["appearance"];
 type Contrast = ThemeDescriptor["contrast"];
@@ -59,6 +60,7 @@ const BUNDLED_THEME_LABELS: Readonly<Record<string, MessageKey>> = {
 	"high-contrast-light": "settings.appearance.themeName.highContrastLight",
 	"minimal-dark": "settings.appearance.themeName.minimalDark",
 	"minimal-light": "settings.appearance.themeName.minimalLight",
+	"helios-cobalt": "settings.appearance.themeName.heliosCobalt",
 };
 
 function themeLabel(t: Translator, theme: Pick<ThemeDescriptor, "id" | "label">): string {
@@ -463,6 +465,7 @@ export function AppearanceSettings() {
 						/>
 					}
 				/>
+				<NeonGlowRow />
 			</SettingsGroup>
 			{fontsSupported ? <FontsGroup /> : null}
 			{fontsSupported ? <CustomFontsGroup /> : null}
@@ -477,6 +480,27 @@ export function AppearanceSettings() {
 				<MarkdownOutlineSideRow />
 			</SettingsGroup>
 		</SettingsPageContainer>
+	);
+}
+
+function NeonGlowRow() {
+	const t = useT();
+	const enabled = useAppStore((state) => state.neonGlow);
+	const setEnabled = useAppStore((state) => state.setNeonGlow);
+	return (
+		<SettingsRow
+			label={t("settings.appearance.neonGlow")}
+			description={t("settings.appearance.neonGlow.description")}
+			testId="neon-glow-row"
+			control={
+				<SettingsSwitch
+					checked={enabled}
+					label={t("settings.appearance.neonGlow")}
+					testId="neon-glow"
+					onChange={setEnabled}
+				/>
+			}
+		/>
 	);
 }
 

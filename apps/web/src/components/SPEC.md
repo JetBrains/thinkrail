@@ -59,18 +59,16 @@ vocabulary of the two search surfaces, and the shared loading-skeleton primitive
   `shortcutKeys`, so a platform rule lives in one place.
 - **`MatchHighlight.tsx`** — `highlightRanges(text, ranges)`: the text with its ascending, disjoint
   `[start, end)` match ranges wrapped in `<mark>`, the one rendering of a matcher's or `git grep`'s ranges.
-- **`RunningIcon.tsx`** — the store-free **“ThinkRail is working” badge**: the brand monogram inside a
-  rounded-square frame, drawn in `currentColor` so it sizes with `size-*` and colours with `text-*` like a
-  Remix icon, with the accessible label “Agent working”. While motion is allowed, the frame (two halves
-  leaving a gap on the left and meeting on the right) and the six letter strokes of the monogram draw and
-  erase on one 3.263s cycle (`loader-*` keyframes in `index.css`); a beat with only the frame showing is
-  part of the design. Each letter stroke is a wide line clipped to its region of `BRAND_MARK_SEGMENTS`, the
-  same segments `BRAND_MARK_PATH` is joined from, so the fully drawn badge is the shell's mark rather than a
-  second copy that could drift. Only the stroke centre-lines, the frame, and the small gap between the R's
-  stem and top bar (the stem stroke stops short) are local animation geometry. Reduced motion leaves every
-  stroke at its fully drawn dash: the static, complete badge. This loader replaced a ring with a lapping
-  train and a pulsing monogram; before that the row's own identity glyph breathed, dropped because a
-  dimming folder reads as “disabled” at 14px. Callers pass only size/colour classes and decide from
+- **`RunningIcon.tsx`** — the store-free **“Helios is working” badge**: the Helios sun inside its orbit,
+  drawn in `currentColor` so it sizes with `size-*` and colours with `text-*` like a Remix icon, with the
+  accessible label “Agent working”. A faint full orbit sits under a bright arc (`running-icon-frame`) that
+  travels it on a 1.6s cycle (`helios-orbit`) while the sun breathes (`helios-sun`, both in `index.css`).
+  The sun is `BRAND_MARK_SEGMENTS.sun` and the orbit is `BRAND_ORBIT`, the centreline of the mark's ring, so
+  the badge is the shell's mark rather than a second copy that could drift. Reduced motion stops both: a
+  static arc on the orbit around a full sun. The badge carries `data-neon="pulse"`, so with the neon setting
+  on it also glows and breathes ([`styles/neon.css`](../styles/neon.css)). This replaced the ThinkRail
+  stroke-drawn monogram loader; before that, a ring with a lapping train, and earlier the row's own
+  identity glyph breathed, dropped because a dimming folder reads as “disabled” at 14px. Callers pass only size/colour classes and decide from
   normalized host state whether a top-level session is running; the icon renders no dot, spinner, count,
   tooltip, or idle state.
 - **Also governs (implementation in `@thinkrail/ui/skeleton`, [[module-ui]], so the app and
@@ -96,7 +94,7 @@ vocabulary of the two search surfaces, and the shared loading-skeleton primitive
   itself).
 - **Allowed deps:** React, `@remixicon/react`, `@thinkrail/ui/utils` (`cn`), `@thinkrail/ui/button` (the
   error fallback's Reload / Try again are shared buttons), `@thinkrail/locales` (UI strings), `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
-  rather than re-stated), `constants` (`BRAND_MARK_SEGMENTS` — the monogram regions `RunningIcon` clips to,
+  rather than re-stated), `constants` (`BRAND_MARK_SEGMENTS` / `BRAND_ORBIT` — the mark geometry `RunningIcon` draws,
   shared with the shell logo rather than copied). Kept dependency-light on purpose, and both are leaves, so *any* region
   (shell, panels, `main.tsx`) can still wrap in it without creating a cycle.
 - **Forbidden:** `store`/`transport`/`panels`/`shell`/`chat`/`contracts`; `server`/`shared`/`pi`; inline

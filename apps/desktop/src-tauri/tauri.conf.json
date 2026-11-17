@@ -1,8 +1,8 @@
 {
 	"$schema": "https://schema.tauri.app/config/2",
-	"productName": "ThinkRail",
+	"productName": "Helios Agent IDE",
 	"version": "0.0.0-dev",
-	"identifier": "ai.thinkrail.app",
+	"identifier": "com.helios.agent-ide",
 	"build": {
 		"frontendDist": "./shell",
 		"beforeDevCommand": {
@@ -21,6 +21,9 @@
 	"bundle": {
 		"active": true,
 		"targets": ["dmg", "nsis", "appimage", "deb"],
+		"shortDescription": "Helios Agent IDE",
+		"longDescription": "Helios Agent IDE is an agentic IDE built on ThinkRail: isolated git workspaces, a spec graph the agent keeps current, and a rich interface around the pi coding agent.",
+		"category": "DeveloperTool",
 		"icon": ["icons/icon.ico", "icons/icon.png"],
 		"resources": [],
 		"externalBin": ["binaries/thinkrail-sidecar"],

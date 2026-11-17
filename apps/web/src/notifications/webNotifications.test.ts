@@ -152,7 +152,7 @@ describe("showBrowserNotification", () => {
 describe("web notification channel", () => {
 	function spec(overrides: Partial<NotificationSpec> = {}): NotificationSpec {
 		return {
-			title: "ThinkRail",
+			title: "Helios",
 			subtitle: "feature-branch",
 			body: "Waiting for your input",
 			tag: "attention:s1",
@@ -164,7 +164,7 @@ describe("web notification channel", () => {
 	test("folds the subtitle into the body (web has no subtitle field)", () => {
 		const channel = createWebNotificationChannel();
 		channel.show(spec(), () => {});
-		expect(MockNotification.instances[0]?.title).toBe("ThinkRail");
+		expect(MockNotification.instances[0]?.title).toBe("Helios");
 		expect(MockNotification.instances[0]?.options.body).toBe(
 			"feature-branch \u00b7 Waiting for your input",
 		);
@@ -174,7 +174,7 @@ describe("web notification channel", () => {
 		const channel = createWebNotificationChannel();
 		channel.show(
 			{
-				title: "ThinkRail",
+				title: "Helios",
 				body: "2 worktrees need your attention",
 				tag: "attention:s1",
 				target: { kind: "chat", workspaceId: "w1", sessionId: "s1" },

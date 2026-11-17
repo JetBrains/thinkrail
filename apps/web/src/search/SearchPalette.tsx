@@ -481,6 +481,7 @@ function PaletteContent({
 			<DialogTitle className="sr-only">{t("search.palette.title")}</DialogTitle>
 			<div
 				data-testid="search-palette-body"
+				data-neon="panel"
 				data-preview={showPreview}
 				className={cn(
 					"relative flex flex-col rounded-lg",

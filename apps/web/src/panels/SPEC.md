@@ -1027,7 +1027,11 @@ a project picker, the prompt hero, and the reused
   disclosed by a warning notice under the mode control — outside the disclosure, so it is always visible —
   naming the effective same-appearance fallback, and is never silently written back. The panel never owns
   a theme list, media-query logic, pair derivation, or fallback — all come from `themes`; it derives only
-  the family/contrast counterpart the two controls move to. A **Custom themes** group
+  the family/contrast counterpart the two controls move to. The theme group ends with a **Neon glow &
+  animations** switch (`neon-glow-row`, on by default): a per-client preference held in the store and
+  persisted by `shell/neonPreference.ts`, never a host setting, which toggles the accent glow and its motion
+  ([`styles/COLOR.md`](../styles/COLOR.md), *Neon glow*); reduced motion still stops the motion when it is on.
+  The bundled Helios Cobalt theme is labelled through `settings.appearance.themeName.heliosCobalt`. A **Custom themes** group
   (`CustomThemesSettings.tsx`, props-driven like `LanguagePage`, hidden below
   `USER_THEMES_PROTOCOL_VERSION`) gives the copy-a-bundled-file steps with a version-pinned link to
   `dark.theme.json`, the `<dataDir>/themes` folder with **Copy path** / **Open folder** (`themes.reveal`),
@@ -1045,7 +1049,9 @@ a project picker, the prompt hero, and the reused
   (Font picker listing monospaced fonts only; **Size**, 10–24 on the auto-save input pattern with − / +;
   **Ligatures**), and an **Advanced** disclosure with Interface and Code **fallback fonts** as chips added
   through the same picker. A row whose value differs from its default carries a reset button named for its
-  setting. The props-driven picker (`FontPicker.tsx`) groups Built-in / Custom / Installed, draws each name
+  setting. The props-driven picker (`FontPicker.tsx`) groups Built-in / Custom / Installed —
+  Built-in is each role's default (Inter for the interface, JetBrains Mono for code) followed by the bundled
+  alternates (Geist), which save as an ordinary named choice — draws each name
   in its own face through `FamilyName` (typography's one token exception: picker rows, the trigger label,
   fallback chips and the Custom fonts family list), badges Default / Mono / Not on this device, asks the
   host for `fonts.installed` on every open — keeping the last list while it re-reads, and through a failed

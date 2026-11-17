@@ -68,7 +68,7 @@ test("cache warming starts on ThinkRail's streaming default, saves the user's ch
 		"default",
 	);
 	await expect(page.getByTestId("cache-warming-streaming").getByRole("radio")).toBeChecked();
-	await expect(group).toContainText("ThinkRail default");
+	await expect(group).toContainText("Helios default");
 	expect(await wire.request("cacheWarming.get", {})).toEqual({
 		mode: "streaming",
 		source: "default",
@@ -81,7 +81,7 @@ test("cache warming starts on ThinkRail's streaming default, saves the user's ch
 		"data-cache-warming-source",
 		"user",
 	);
-	await expect(group).not.toContainText("ThinkRail default");
+	await expect(group).not.toContainText("Helios default");
 	expect(await wire.request("cacheWarming.get", {})).toEqual({ mode: "idle", source: "user" });
 
 	await page.reload();

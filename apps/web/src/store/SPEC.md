@@ -587,7 +587,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   runtime mode/pair) is normalized on this read side to fixed mode, retaining its valid opaque `theme` and
   only a complete string pair. These are pure host values only: effective local
   appearance/id and the media listener never enter Zustand; the shell drives those through `themes`.
-  Defaults remain fixed `DEFAULT_CONFIG.theme` with no pair, but while existing `welcomeGeneration === 0`
+  Defaults remain fixed `DEFAULT_CONFIG.theme` (`helios-cobalt`) with no pair, but while existing `welcomeGeneration === 0`
   shell retains the pre-React preference hint instead of applying those placeholders over it. Reusing that
   readiness edge avoids a second derived config-hydration flag; after the first welcome, disconnect/reconnect
   keeps the last authoritative config while a later welcome can replace it. **`terminalReplayKb: number`**,

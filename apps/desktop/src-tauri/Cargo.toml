@@ -1,7 +1,7 @@
 [package]
 name = "thinkrail-desktop"
 version = "0.0.0-dev"
-description = "ThinkRail desktop shell (Tauri v2 migration scaffolding; Electrobun stays until cutover)"
+description = "Helios Agent IDE desktop shell (Tauri v2 migration scaffolding; Electrobun stays until cutover)"
 edition = "2021"
 
 # See https://tauri.app/start/prerequisites/ for system prerequisites.

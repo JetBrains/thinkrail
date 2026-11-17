@@ -1,0 +1,147 @@
+/*
+ * Neon glow (Settings → Appearance → "Neon glow & animations"). Everything here is scoped to
+ * `html[data-helios-neon="true"]` (`shell/neonPreference.ts`), so turning the setting off removes every
+ * rule below. The glow is derived from the primary role, never a literal, so it takes the active
+ * theme's accent: neon cyan under Helios Cobalt, the theme's own hue elsewhere.
+ *
+ * Only `box-shadow`, `opacity`, `filter` and pseudo-element `transform` animate — never a transform
+ * on a container, which would break sticky/fixed descendants (components/SPEC.md). Motion lives under
+ * `prefers-reduced-motion: no-preference`; with reduced motion the static glow stays and nothing moves.
+ *
+ * Hooks are `data-neon` tokens on the element: `panel` (a steadily framed overlay), `cta` (a primary
+ * call to action), `stream` (breathes while the composer is streaming), `pulse` (the running mark).
+ */
+:root {
+	--neon-glow:
+		0 0 12px color-mix(in srgb, var(--primary) 38%, transparent),
+		0 0 2px color-mix(in srgb, var(--primary) 80%, transparent);
+	--neon-glow-strong:
+		0 0 20px color-mix(in srgb, var(--primary) 55%, transparent),
+		0 0 4px color-mix(in srgb, var(--primary) 90%, transparent);
+	--neon-glow-inset: inset 0 0 12px color-mix(in srgb, var(--primary) 30%, transparent);
+}
+
+/* Active region: a crisp full-accent line with a soft halo; the keyboard flash frame glows and
+   pulses once (450ms) before the existing hold-and-fade. */
+html[data-helios-neon="true"] [data-region][data-region-active]::after {
+	border-top-color: var(--primary);
+	box-shadow: var(--neon-glow);
+}
+html[data-helios-neon="true"] [data-region][data-region-flash]::before {
+	border-color: var(--primary);
+	box-shadow: var(--neon-glow-inset);
+}
+
+/* Keyboard focus glows through the shared `focus-ring` utilities themselves (index.css), so no rule
+   here targets `:focus` (styles/focusUsage.test.ts). The command palette, whose field shows focus by
+   its caret alone, is framed by a steady halo for as long as it is open. */
+html[data-helios-neon="true"] [data-neon~="panel"] {
+	box-shadow: var(--neon-glow), var(--shadow-lg);
+}
+
+/* Primary calls to action glow on hover. */
+html[data-helios-neon="true"] [data-variant="primary"]:not(:disabled, [data-disabled="true"]):hover,
+html[data-helios-neon="true"] [data-neon~="cta"][data-armed="true"]:hover {
+	box-shadow: var(--neon-glow);
+}
+
+/* The running mark (stream indicator, running workspaces/chats) carries a steady glow. */
+html[data-helios-neon="true"] [data-neon~="pulse"] {
+	filter: drop-shadow(0 0 3px color-mix(in srgb, currentColor 70%, transparent));
+}
+
+/* While the composer streams, the send pill and stop control share the agent's glow. */
+html[data-helios-neon="true"] [data-streaming="true"] [data-neon~="stream"],
+html[data-helios-neon="true"] [data-streaming="true"] [data-neon~="cta"][data-armed="true"] {
+	box-shadow: var(--neon-glow);
+}
+html[data-helios-neon="true"] [data-streaming="true"] [data-neon~="cta"][data-armed="true"] {
+	position: relative;
+	overflow: hidden;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	html[data-helios-neon="true"] [data-region][data-region-flash]::before {
+		animation:
+			helios-region-pulse 450ms ease-out,
+			region-flash 0.5s ease-out 1s forwards;
+	}
+	html[data-helios-neon="true"] [data-neon~="pulse"] {
+		animation: helios-neon-pulse-mark 1.8s ease-in-out infinite;
+	}
+	html[data-helios-neon="true"] [data-streaming="true"] [data-neon~="stream"],
+	html[data-helios-neon="true"] [data-streaming="true"] [data-neon~="cta"][data-armed="true"] {
+		animation: helios-neon-pulse 1.8s ease-in-out infinite;
+	}
+	html[data-helios-neon="true"]
+		[data-streaming="true"]
+		[data-neon~="cta"][data-armed="true"]::after {
+		content: "";
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		background: linear-gradient(
+			100deg,
+			transparent 30%,
+			color-mix(in srgb, var(--text-on-primary) 28%, transparent) 50%,
+			transparent 70%
+		);
+		transform: translateX(-100%);
+		animation: helios-shimmer 2.4s ease-in-out infinite;
+	}
+	html[data-helios-neon="true"] [data-variant="primary"],
+	html[data-helios-neon="true"] [data-neon~="cta"] {
+		transition:
+			box-shadow 160ms ease-out,
+			background-color 120ms ease,
+			border-color 120ms ease,
+			color 120ms ease;
+	}
+}
+
+@keyframes helios-region-pulse {
+	0% {
+		opacity: 0;
+		box-shadow: var(--neon-glow-inset);
+	}
+	35% {
+		opacity: 1;
+		box-shadow:
+			var(--neon-glow-inset),
+			inset 0 0 24px color-mix(in srgb, var(--primary) 45%, transparent);
+	}
+	100% {
+		opacity: 1;
+		box-shadow: var(--neon-glow-inset);
+	}
+}
+
+@keyframes helios-neon-pulse {
+	0%,
+	100% {
+		box-shadow: var(--neon-glow);
+	}
+	50% {
+		box-shadow: var(--neon-glow-strong);
+	}
+}
+
+@keyframes helios-neon-pulse-mark {
+	0%,
+	100% {
+		filter: drop-shadow(0 0 2px color-mix(in srgb, currentColor 55%, transparent));
+	}
+	50% {
+		filter: drop-shadow(0 0 6px color-mix(in srgb, currentColor 90%, transparent));
+	}
+}
+
+@keyframes helios-shimmer {
+	0% {
+		transform: translateX(-100%);
+	}
+	60%,
+	100% {
+		transform: translateX(100%);
+	}
+}

@@ -271,7 +271,7 @@ test("the handled-elsewhere notice names the owning extension, or the pi setting
 	expect(
 		mcpHandledElsewhereText(currentTranslator(), "/home/me/.pi/agent/extensions/my-mcp.ts"),
 	).toBe(
-		"MCP is handled by /home/me/.pi/agent/extensions/my-mcp.ts in this workspace; ThinkRail's MCP management is read-only.",
+		"MCP is handled by /home/me/.pi/agent/extensions/my-mcp.ts in this workspace; Helios's MCP management is read-only.",
 	);
 	expect(mcpHandledElsewhereText(currentTranslator(), "pi settings (-builtin:mcp)")).toBe(
 		"MCP is turned off in pi settings (-builtin:mcp); remove that entry to manage servers here.",

@@ -1,7 +1,7 @@
 /* ThinkRail website — "the site IS the IDE". Hand-written CSS; palettes copied from the app themes (SPEC.md). */
 
-@import "@fontsource-variable/geist";
-@import "@fontsource-variable/geist/wght-italic.css";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/inter/wght-italic.css";
 @import "@fontsource-variable/jetbrains-mono";
 @import "@fontsource-variable/jetbrains-mono/wght-italic.css";
 @import "@fontsource-variable/orbitron";
@@ -9,7 +9,7 @@
 /* ── Theme palettes ─────────────────────────────────────────────────────── */
 
 :root {
-	--font-sans: "Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	--font-sans: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	--font-mono:
 		"JetBrains Mono Variable", "JetBrains Mono", "JetBrainsMono Nerd Font Mono",
 		"JetBrainsMono Nerd Font", "JetBrainsMonoNL Nerd Font Mono", "Symbols Nerd Font Mono",
@@ -21,7 +21,7 @@
 		"Microsoft JhengHei", "Noto Sans CJK SC", "Apple Symbols", "Segoe UI Symbol",
 		"Noto Sans Symbols 2", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", monospace;
 	--font-display:
-		"Orbitron Variable", "Orbitron", "Geist Variable", "Geist", -apple-system, BlinkMacSystemFont,
+		"Orbitron Variable", "Orbitron", "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont,
 		"Segoe UI", sans-serif;
 
 	/* dark (the app's default) */
