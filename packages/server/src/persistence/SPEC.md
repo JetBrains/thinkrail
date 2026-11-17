@@ -82,11 +82,13 @@ Analytics config preserves a saved boolean preference and a valid `analyticsCons
 independently; absent/malformed values default false. A preference-only write never implies completion.
 Settings owns initial preference priming and preference-plus-confirmation writes.
 
-Every config save stamps `configVersion` (currently `1`); load strips it, so it never reaches `AppConfig`
-or the wire. A config without it was written before version 1, and version 1's one step loads its stored
+Every config save stamps `configVersion` (currently `2`); load strips it, so it never reaches `AppConfig`
+or the wire. A config without it was written before version 1, and version 1's step loads its stored
 question panel height 60 (the old default) as 70 ([[submodule-server-settings]]); the next save stamps the
-version, so a 60 chosen later stays. A later value migration bumps the version and adds its own step. A
-newer host's higher version is not kept: this host stamps its own.
+version, so a 60 chosen later stays. Version 2's step loads a pre-v2 fixed `dark` preference (the old
+default, now the green Dark theme) as `DEFAULT_CONFIG.theme` (Helios Cobalt); a Dark chosen after the
+migration is saved with version 2 and survives. A later value migration bumps the version and adds its
+own step. A newer host's higher version is not kept: this host stamps its own.
 
 An absent `otherAgentSkills` defaults by install age: `true` in a stored config that lacks it, since only a host
 from before the switch writes one (it loaded other agents' skills, #1210), and `false` with no readable config.

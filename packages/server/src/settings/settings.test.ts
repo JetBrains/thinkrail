@@ -327,7 +327,7 @@ test("empty and multi-key valid updates persist and publish", () => {
 	});
 	expect(JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"))).toEqual({
 		...next,
-		configVersion: 1,
+		configVersion: 2,
 	});
 	expect(published).toEqual([DEFAULT_CONFIG, next]);
 });
@@ -830,17 +830,43 @@ test("the old default question panel height 60 becomes 70 once; any other stored
 
 	stored({ ...DEFAULT_CONFIG, questionPanelHeight: 60 });
 	updateConfig({ theme: "acme.dark" });
-	expect(onDisk()).toMatchObject({ questionPanelHeight: 70, configVersion: 1 });
+	expect(onDisk()).toMatchObject({ questionPanelHeight: 70, configVersion: 2 });
 	expect(getConfig()).not.toHaveProperty("configVersion");
 
 	updateConfig({ questionPanelHeight: 60 });
-	expect(onDisk()).toMatchObject({ questionPanelHeight: 60, configVersion: 1 });
+	expect(onDisk()).toMatchObject({ questionPanelHeight: 60, configVersion: 2 });
 	resetConfigCache();
 	expect(getConfig().questionPanelHeight).toBe(60);
 	expect(getConfig()).not.toHaveProperty("configVersion");
 	updateConfig({ theme: "acme.light" });
 	resetConfigCache();
 	expect(getConfig().questionPanelHeight).toBe(60);
+});
+
+test("a pre-v2 fixed dark theme migrates once to Helios Cobalt", () => {
+	const stored = (config: Record<string, unknown>) => {
+		writeFileSync(join(dataDir, "config.json"), JSON.stringify(config));
+		resetConfigCache();
+		return getConfig();
+	};
+	const onDisk = () => JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
+
+	expect(stored({ theme: "dark", themeMode: "fixed" })).toMatchObject({
+		theme: "helios-cobalt",
+		themeMode: "fixed",
+	});
+	expect(stored({ theme: "dark", themeMode: "fixed", configVersion: 1 }).theme).toBe(
+		"helios-cobalt",
+	);
+	expect(stored({ theme: "dark", themeMode: "fixed", configVersion: 2 }).theme).toBe("dark");
+
+	stored({ theme: "dark", themeMode: "fixed" });
+	updateConfig({});
+	expect(onDisk()).toMatchObject({ theme: "helios-cobalt", configVersion: 2 });
+
+	updateConfig({ theme: "dark" });
+	resetConfigCache();
+	expect(getConfig().theme).toBe("dark");
 });
 
 test("a non-boolean subagents update is rejected before persistence or broadcast", () => {

@@ -34,6 +34,7 @@ import {
 	normalizeThemePreference,
 	type Project,
 	type SessionCompletion,
+	type ThemePreference,
 	type TurnChangeSet,
 	type WireModel,
 	type Workspace,
@@ -664,8 +665,16 @@ function storedKeybindings(value: unknown): KeybindingOverrides {
 	return result;
 }
 
-const CONFIG_VERSION = 1;
+const CONFIG_VERSION = 2;
 const OLD_QUESTION_PANEL_HEIGHT_DEFAULT = 60;
+
+function storedThemePreference(value: Record<string, unknown>): ThemePreference {
+	const preference = normalizeThemePreference(value);
+	const version = typeof value.configVersion === "number" ? value.configVersion : 0;
+	return version < 2 && preference.theme === "dark" && preference.themeMode === "fixed"
+		? { ...preference, theme: DEFAULT_CONFIG.theme }
+		: preference;
+}
 
 function storedQuestionPanelHeight(value: Record<string, unknown>): number {
 	const height = value.questionPanelHeight;
@@ -687,7 +696,7 @@ export function loadConfig(): AppConfig {
 	delete extensions.systemThemePair;
 	return {
 		...extensions,
-		...normalizeThemePreference(value),
+		...storedThemePreference(value),
 		analyticsEnabled:
 			typeof value.analyticsEnabled === "boolean"
 				? value.analyticsEnabled

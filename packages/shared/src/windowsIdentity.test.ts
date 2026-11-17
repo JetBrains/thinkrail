@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { windowsFileIdentity } from "./windowsIdentity";
+import { HELIOS_WINDOWS_BRAND, windowsFileIdentity } from "./windowsIdentity";
 
 test("names each channel and maps its version to four numeric parts", () => {
 	expect(windowsFileIdentity({ version: "0.2.0", channel: "stable" })).toEqual({
@@ -17,6 +17,22 @@ test("names each channel and maps its version to four numeric parts", () => {
 	expect(windowsFileIdentity({ version: "0.0.0-dev", channel: "dev" })).toMatchObject({
 		productName: "ThinkRail Dev",
 		fileVersion: "0.0.0.0",
+	});
+});
+
+test("a launcher can stamp the Helios brand on the same release", () => {
+	expect(
+		windowsFileIdentity({
+			version: "0.5.0-nightly.7",
+			channel: "nightly",
+			brand: HELIOS_WINDOWS_BRAND,
+		}),
+	).toEqual({
+		productName: "Helios Agent IDE Nightly",
+		companyName: "Helios",
+		copyright: "Copyright © 2026 Helios",
+		fileVersion: "0.5.0.7",
+		fileVersionParts: [0, 5, 0, 7],
 	});
 });
 
