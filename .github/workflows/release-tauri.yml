@@ -1,0 +1,168 @@
+name: Release Tauri desktop (Windows NSIS)
+
+# Manual Tauri release for the helios-ide fork. Builds the Tauri shell +
+# sidecar on windows-latest and publishes the NSIS installer to a GitHub
+# Release. The private JetBrains signing pipeline is NOT involved: the
+# installer is UNSIGNED, so Windows SmartScreen will warn on first install.
+#
+# Tags use the `tauri-v` prefix so they never collide with the `v*` tags of
+# the private CLI/Electrobun release controller.
+#
+# Usage:
+#   gh workflow run release-tauri.yml -R KB01111/helios-ide \
+#     -f version=0.5.0-nightly.6 -f channel=nightly
+# Next version helper (repo policy in .github/scripts/next-version.sh):
+#   bash .github/scripts/next-version.sh nightly
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to bake in (e.g. 0.5.0-nightly.6)"
+        required: true
+      channel:
+        description: "Release channel"
+        required: true
+        default: nightly
+        type: choice
+        options: [nightly, stable]
+      draft:
+        description: "Create as draft release"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-installer:
+    name: Build + publish Windows NSIS installer
+    timeout-minutes: 60
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ inputs.version }}
+      CHANNEL: ${{ inputs.channel }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Ensure NSIS is installed
+        shell: pwsh
+        run: |
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+            choco install nsis -y --no-progress
+          }
+          makensis -VERSION
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+
+      - name: Stamp release identity
+        shell: bash
+        run: |
+          set -eu
+          case "$CHANNEL" in nightly|stable) ;; *) echo "::error::unsupported channel $CHANNEL"; exit 1 ;; esac
+          if [ "$CHANNEL" = nightly ]; then
+            [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]+$ ]] || { echo "::error::nightly version must be X.Y.Z-nightly.N (got $VERSION)"; exit 1; }
+          else
+            [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::stable version must be X.Y.Z (got $VERSION)"; exit 1; }
+          fi
+          bun -e '
+            import { readFileSync, writeFileSync } from "node:fs";
+            import { execSync } from "node:child_process";
+            const version = process.env.VERSION;
+            const channel = process.env.CHANNEL;
+            const commit = execSync("git rev-parse --short HEAD").toString().trim();
+            // 1. Shared identity: baked into the web UI and the sidecar host.
+            writeFileSync(
+              "packages/shared/src/version.ts",
+              `export const version = ${JSON.stringify(version)};\n` +
+              `export const channel = ${JSON.stringify(channel)};\n` +
+              `export const commit = ${JSON.stringify(commit)};\n` +
+              `export const posthogProjectKey = "";\n`,
+            );
+            // 2. Tauri config version (bundle + updater identity).
+            const confPath = "apps/desktop/src-tauri/tauri.conf.json";
+            const conf = JSON.parse(readFileSync(confPath, "utf8"));
+            conf.version = version;
+            writeFileSync(confPath, JSON.stringify(conf, null, 2) + "\n");
+            // 3. Cargo package version (must match the Tauri config).
+            const cargoPath = "apps/desktop/src-tauri/Cargo.toml";
+            const lines = readFileSync(cargoPath, "utf8").split("\n");
+            let inPackage = false, done = false;
+            for (let i = 0; i < lines.length; i++) {
+              const t = lines[i].trim();
+              if (t === "[package]") { inPackage = true; continue; }
+              if (inPackage && /^\[.*\]/.test(t)) break;
+              if (inPackage && /^version = "/.test(lines[i])) {
+                lines[i] = `version = ${JSON.stringify(version)}`;
+                done = true;
+                break;
+              }
+            }
+            if (!done) throw new Error("package version line not found in Cargo.toml");
+            writeFileSync(cargoPath, lines.join("\n"));
+            console.log(`stamped version=${version} channel=${channel} commit=${commit}`);
+          '
+
+      - name: Build web UI
+        shell: bash
+        run: bun run build:web
+
+      - name: Build desktop sidecar
+        shell: bash
+        run: bun run --cwd apps/desktop build:sidecar
+
+      - name: Build Tauri NSIS bundle
+        shell: bash
+        working-directory: apps/desktop
+        # beforeBuildCommand is nulled: web + sidecar were just built above
+        # (json_patch merge treats null as key removal).
+        run: bun run tauri:build -- --bundles nsis --config '{"build":{"beforeBuildCommand":null}}'
+
+      - name: Collect installer
+        shell: bash
+        id: collect
+        run: |
+          set -eu
+          mkdir -p dist
+          src=$(ls apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe | head -n 1)
+          name="helios-ide-windows-x64-setup.exe"
+          cp "$src" "dist/$name"
+          (cd dist && sha256sum "$name" > SHA256SUMS)
+          echo "asset=dist/$name" >> "$GITHUB_OUTPUT"
+          echo "tag=tauri-v$VERSION" >> "$GITHUB_OUTPUT"
+          ls -la dist
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          args=()
+          if [ "$CHANNEL" = nightly ]; then args+=(--prerelease); fi
+          if [ "${{ inputs.draft }}" = "true" ]; then args+=(--draft); fi
+          notes=$(mktemp)
+          cat > "$notes" <<EOF
+          Helios Agent IDE $VERSION ($CHANNEL) — Tauri desktop shell for Windows.
+
+          Install: download \`helios-ide-windows-x64-setup.exe\` and run it (per-user install, no admin needed).
+
+          > The installer is UNSIGNED: Windows SmartScreen will warn on first
+          > install. Verify the checksum in \`SHA256SUMS\` before running.
+          > Built from commit \`$GITHUB_SHA\`.
+          EOF
+          gh release create "${{ steps.collect.outputs.tag }}" \
+            "${{ steps.collect.outputs.asset }}" dist/SHA256SUMS \
+            --title "Helios Agent IDE $VERSION" \
+            --notes-file "$notes" \
+            --target "$GITHUB_SHA" \
+            "${args[@]}"

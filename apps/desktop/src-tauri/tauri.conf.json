@@ -21,12 +21,22 @@
 	"bundle": {
 		"active": true,
 		"targets": ["dmg", "nsis", "appimage", "deb"],
+		"publisher": "Helios",
+		"copyright": "Copyright © 2026 Helios",
 		"shortDescription": "Helios Agent IDE",
 		"longDescription": "Helios Agent IDE is an agentic IDE built on ThinkRail: isolated git workspaces, a spec graph the agent keeps current, and a rich interface around the pi coding agent.",
 		"category": "DeveloperTool",
 		"icon": ["icons/icon.ico", "icons/icon.png"],
 		"resources": [],
 		"externalBin": ["binaries/thinkrail-sidecar"],
+		"windows": {
+			"nsis": {
+				"installerIcon": "icons/icon.ico",
+				"installMode": "currentUser",
+				"languages": ["English"],
+				"compression": "lzma"
+			}
+		},
 		"macOS": {
 			"entitlements": "./entitlements.plist"
 		}
