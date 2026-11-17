@@ -18,7 +18,7 @@ import {
 } from "./fixtures/ask";
 import { waitForScrollStability } from "./fixtures/chatScroll";
 import { resetKeybindings, setKeybindings } from "./fixtures/keybindings";
-import { E2E_FIXTURE_REPO, E2E_PORT } from "./fixtures/paths";
+import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { shot } from "./fixtures/screenshots";
 import { E2eWire } from "./fixtures/wire";
 
@@ -204,7 +204,7 @@ async function routeSessionStates(page: Page) {
 	};
 	return {
 		async hold(sessionId: string, toolCallId: string): Promise<HeldQuestion> {
-			const wire = await E2eWire.connect(E2E_PORT);
+			const wire = await E2eWire.connect(Number(new URL(page.url()).port));
 			let record: SessionStateRecord;
 			try {
 				const [project] = await wire.request("project.list", {});
