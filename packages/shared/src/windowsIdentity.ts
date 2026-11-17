@@ -10,6 +10,24 @@ export interface WindowsFileIdentity {
 	fileVersionParts: readonly [number, number, number, number];
 }
 
+export interface WindowsBrandIdentity {
+	productName: string;
+	companyName: string;
+	copyright: string;
+}
+
+export const THINKRAIL_WINDOWS_BRAND: WindowsBrandIdentity = {
+	productName: "ThinkRail",
+	companyName: "JetBrains s.r.o.",
+	copyright: "Copyright © 2026 JetBrains s.r.o.",
+};
+
+export const HELIOS_WINDOWS_BRAND: WindowsBrandIdentity = {
+	productName: "Helios Agent IDE",
+	companyName: "Helios",
+	copyright: "Copyright © 2026 Helios",
+};
+
 const CHANNEL_SUFFIXES: Readonly<Record<string, string>> = {
 	stable: "",
 	nightly: " Nightly",
@@ -18,22 +36,27 @@ const CHANNEL_SUFFIXES: Readonly<Record<string, string>> = {
 
 const MAX_VERSION_PART = 0xffff;
 
-export function windowsProductName(channel: string): string {
+export function windowsProductName(
+	channel: string,
+	brand: WindowsBrandIdentity = THINKRAIL_WINDOWS_BRAND,
+): string {
 	const suffix = CHANNEL_SUFFIXES[channel];
 	if (suffix === undefined) throw new Error(`unknown release channel "${channel}"`);
-	return `ThinkRail${suffix}`;
+	return `${brand.productName}${suffix}`;
 }
 
 export function windowsFileIdentity(release: {
 	version: string;
 	channel: string;
+	brand?: WindowsBrandIdentity;
 }): WindowsFileIdentity {
-	const productName = windowsProductName(release.channel);
+	const brand = release.brand ?? THINKRAIL_WINDOWS_BRAND;
+	const productName = windowsProductName(release.channel, brand);
 	const fileVersionParts = windowsVersionParts(release.version);
 	return {
 		productName,
-		companyName: "JetBrains s.r.o.",
-		copyright: "Copyright © 2026 JetBrains s.r.o.",
+		companyName: brand.companyName,
+		copyright: brand.copyright,
 		fileVersion: fileVersionParts.join("."),
 		fileVersionParts,
 	};

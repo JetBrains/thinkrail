@@ -703,6 +703,9 @@ serves the web UI. `tauri dev` and `tauri build` build the web app and then the 
 `beforeDevCommand` / `beforeBuildCommand`, for the triple Tauri is packaging
 (`TAURI_ENV_TARGET_TRIPLE`), so a clean checkout and a cross-target build both get a matching host.
 The shell's own `frontendDist` (`src-tauri/shell`) is an empty page: nothing loads it.
+The sidecar's Windows file properties are stamped as `Helios Agent IDE …` with publisher Helios
+(`HELIOS_WINDOWS_BRAND`); the CLI and Electrobun builds keep the shared ThinkRail identity until their
+cutover.
 
 **Startup** (`startup.rs`, the port of `start()` in `index.ts`). The native menu and the splash go up
 first. The sidecar is spawned on a background thread with `--port 0`; it prints

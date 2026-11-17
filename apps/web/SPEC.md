@@ -317,8 +317,9 @@ themselves.
   while closed `themeMode` and optional opaque `systemThemePair` opt into per-client system matching. Each
   client resolves the pair against its own `prefers-color-scheme`; operating-system changes are local DOM
   effects and never config writes, so two clients may simultaneously render different appearances. Fixed
-  **Helios Cobalt** (`helios-cobalt`) is the default for new config; a legacy config that stored `dark`
-  keeps Dark, which stays selectable. `settings.update` converges through
+  **Helios Cobalt** (`helios-cobalt`) is the default for new config. A pre-rebrand config's fixed `dark`
+  preference (the old default) is migrated once at load; from then on Dark remains selectable and an
+  explicit choice is preserved. `settings.update` converges through
   `settings.changed`; a theme-only legacy mutation exits system mode. An unavailable system slot falls back
   deterministically within the required appearance without destructively rewriting the requested value.
   The versioned pre-React hint caches the preference, not the last effective id, using the injected stable

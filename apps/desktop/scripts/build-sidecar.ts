@@ -26,7 +26,11 @@ import {
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { resolveBuildRuntimeSources } from "@thinkrail/server/build-support";
 import { channel, version } from "@thinkrail/shared/version";
-import { windowsFileIdentity, windowsIconPath } from "@thinkrail/shared/windowsIdentity";
+import {
+	HELIOS_WINDOWS_BRAND,
+	windowsFileIdentity,
+	windowsIconPath,
+} from "@thinkrail/shared/windowsIdentity";
 
 const desktopDir = resolve(import.meta.dir, "..");
 const repoRoot = resolve(desktopDir, "..", "..");
@@ -159,7 +163,7 @@ function windowsMetadataFlags(target: SidecarTarget): string[] {
 		);
 		return [];
 	}
-	const identity = windowsFileIdentity({ version, channel });
+	const identity = windowsFileIdentity({ version, channel, brand: HELIOS_WINDOWS_BRAND });
 	return [
 		`--windows-icon=${windowsIconPath}`,
 		`--windows-title=${identity.productName}`,
