@@ -151,9 +151,9 @@ describe("config defaults", () => {
 		});
 	});
 
-	test("the question panel caps at 60% of the chat by default, in whole percents from 40 to 100", () => {
+	test("the question panel caps at 70% of the chat by default, in whole percents from 40 to 100", () => {
 		expect(DEFAULT_CONFIG.questionPanelHeight).toBe(QUESTION_PANEL_HEIGHT_PERCENT.default);
-		expect(QUESTION_PANEL_HEIGHT_PERCENT).toEqual({ min: 40, max: 100, default: 60 });
+		expect(QUESTION_PANEL_HEIGHT_PERCENT).toEqual({ min: 40, max: 100, default: 70 });
 		for (const valid of [40, 60, 100]) expect(isQuestionPanelHeight(valid)).toBe(true);
 		for (const invalid of [39, 101, 60.5, "60", null]) {
 			expect(isQuestionPanelHeight(invalid)).toBe(false);

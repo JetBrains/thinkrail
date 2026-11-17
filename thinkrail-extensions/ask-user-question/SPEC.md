@@ -99,7 +99,7 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   **sheet**: full column width, accent top rule, no radius; one header row holds the attention line, the
   question tabs (a single question shows its short header) and a collapse toggle; the page stack sits in
   a body that scrolls; the footer (legend, nudge, Skip, Next/Submit) is pinned. The chat caps the dock at
-  its *Question panel height* setting (40–100% of the chat, default 60), so only the content between
+  its *Question panel height* setting (40–100% of the chat, default 70), so only the content between
   header and footer scrolls. This overturns the earlier "no nested vertical scroller" rule for the dock:
   with a fixed bottom edge the alternative is a form that swallows the transcript. **Collapse** is manual
   and keeps only the header row; a tab click expands on that page, the stub expands and focuses the form,
@@ -199,12 +199,14 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   the header drives every HTML pane (`ResourcePreview.htmlViewport`) and is remembered for the session; the
   panes drop review surfaces (`reviewable={false}`), since commenting belongs to the file's own tab. The
   view switch is hidden on narrow screens, so a phone gets one at a time only.
-  **Choose and stay** (chosen by the user): Choose on a shown option, or Enter while the overlay body itself
-  has focus (so it never fights a focused button), picks it through the card's own `onSelect` — the note
-  follows the selection as in the card — and the overlay stays open; notes and Submit stay in the card, and
-  closing returns focus to the chosen row, else to the row it was opened from (Radix's trigger-less dialog
-  would leave it on `<body>`). The body's `aria-keyshortcuts` lists every key it takes, each jump digit included. Keys live on the overlay body, so Choose and an All pane title —
-  each removes the control it was pressed on — move focus to the body, and the dialog hands focus it
+  **Choose closes** (the user, 2026-11-17, overturning #1393's "Choose and stay"): in every view, Choose on a
+  shown option, or Enter while the overlay body itself has focus (so it never fights a focused button), picks
+  it through the card's own `onSelect` — the note follows the selection as in the card — and closes the
+  overlay; notes and Submit stay in the card. Closing, by Choose or Esc, returns focus to the chosen row,
+  else to the row it was opened from (Radix's trigger-less dialog would leave it on `<body>`), revealed in
+  the dock like any focus the card moves. An All pane title only opens that item alone. The body's
+  `aria-keyshortcuts` lists every key it takes, each jump digit included. Keys live on the overlay body, so
+  an All pane title — which removes the control it was pressed on — moves focus to the body, and the dialog hands focus it
   receives itself to the body too: Radix's own recovery parks it on the first tab stop or the dialog, where
   Enter would press the wrong control or the keys would stop. Keys: ←/→ flip (wrapping), 1–9 jump, Esc closes; keys owned by a
   slider, a field or a menu, and anything typed inside a frame, stay there. The dialog is portaled, so its
@@ -317,6 +319,14 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   a `<label>` **explicitly bound to its field via `htmlFor`** — `<button>` is labelable too, so on
   multi-select the implicit control would be the include toggle and clicking the row's chrome would flip an
   empty checkbox instead of putting the caret in the field.
+  **The card reveals the focus it moves.** Every focus it moves itself — ↑/↓, Home/End, ←/→ on Skip and
+  the primary button, a field parking on its row, `i` into a frame, the compare overlay closing onto a row,
+  the stub's focus request — goes through `focusAndReveal` (`focus.ts`): focus with `preventScroll`, then
+  move only the nearest ancestor that actually scrolls (the dock body; inline, the plan page's scroller) just
+  enough (block "nearest", the focus ring included) for the control to be fully visible. Not
+  `scrollIntoView`, which scrolls every ancestor, the transcript and overflow-hidden boxes included. The
+  first focus claim and a page change focus in place: the body is at its top then. Until 2026-11-17 every
+  such focus used `preventScroll` alone, so ↓ walked below the edge of a capped dock.
   **Fields park focus on their own row.** Enter (no modifier) or plain Escape closes the note, Other or
   discuss text and moves focus to that field's row — the saved-note button, the Other row, the discuss
   panel (`tabIndex=-1` targets). From a parked row Enter reopens the field (on the Other row it also

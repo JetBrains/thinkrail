@@ -325,7 +325,10 @@ test("empty and multi-key valid updates persist and publish", () => {
 		defaultEffort: "high",
 		subagentsEnabled: false,
 	});
-	expect(JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"))).toEqual(next);
+	expect(JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"))).toEqual({
+		...next,
+		configVersion: 1,
+	});
 	expect(published).toEqual([DEFAULT_CONFIG, next]);
 });
 
@@ -803,10 +806,39 @@ test("an older or malformed config loads the default question panel height", () 
 		JSON.stringify({ ...DEFAULT_CONFIG, questionPanelHeight: 150 }),
 	);
 	resetConfigCache();
-	expect(getConfig().questionPanelHeight).toBe(60);
+	expect(getConfig().questionPanelHeight).toBe(70);
 
 	const { questionPanelHeight: _omitted, ...older } = DEFAULT_CONFIG;
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify(older));
+	resetConfigCache();
+	expect(getConfig().questionPanelHeight).toBe(70);
+	expect(getConfig()).toEqual(DEFAULT_CONFIG);
+});
+
+test("the old default question panel height 60 becomes 70 once; any other stored height is kept", () => {
+	const stored = (config: Record<string, unknown>) => {
+		writeFileSync(join(dataDir, "config.json"), JSON.stringify(config));
+		resetConfigCache();
+		return getConfig();
+	};
+	const onDisk = () => JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"));
+
+	expect(stored({ ...DEFAULT_CONFIG, questionPanelHeight: 60 }).questionPanelHeight).toBe(70);
+	expect(stored({ ...DEFAULT_CONFIG, questionPanelHeight: 55 }).questionPanelHeight).toBe(55);
+	expect(stored({ ...DEFAULT_CONFIG, questionPanelHeight: 100 }).questionPanelHeight).toBe(100);
+	expect(stored({ theme: "dark" }).questionPanelHeight).toBe(70);
+
+	stored({ ...DEFAULT_CONFIG, questionPanelHeight: 60 });
+	updateConfig({ theme: "acme.dark" });
+	expect(onDisk()).toMatchObject({ questionPanelHeight: 70, configVersion: 1 });
+	expect(getConfig()).not.toHaveProperty("configVersion");
+
+	updateConfig({ questionPanelHeight: 60 });
+	expect(onDisk()).toMatchObject({ questionPanelHeight: 60, configVersion: 1 });
+	resetConfigCache();
+	expect(getConfig().questionPanelHeight).toBe(60);
+	expect(getConfig()).not.toHaveProperty("configVersion");
+	updateConfig({ theme: "acme.light" });
 	resetConfigCache();
 	expect(getConfig().questionPanelHeight).toBe(60);
 });

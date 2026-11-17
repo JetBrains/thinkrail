@@ -10,6 +10,7 @@ import { CompareOverlay } from "./CompareOverlay";
 import { compareIndexOf } from "./compareModel";
 import { type LiftKey, NoteSlot, OptionRow, OtherRow } from "./controls";
 import { DiscussPanel, DiscussToggle } from "./discuss";
+import { focusAndReveal } from "./focus";
 import { useTestId } from "./ghost";
 import { CARD_KEYS } from "./keys";
 import {
@@ -60,8 +61,9 @@ export interface QuestionBodyProps {
 	onTogglePreview: () => void;
 }
 
-const focusOf = (element: HTMLElement | null | undefined) =>
-	element?.focus({ preventScroll: true });
+const focusOf = (element: HTMLElement | null | undefined) => {
+	if (element) focusAndReveal(element);
+};
 
 export function QuestionBody({
 	question,

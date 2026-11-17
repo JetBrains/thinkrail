@@ -704,7 +704,7 @@ the single shared image strip, the collapsed JSON tree, Full output through the 
 to pi's reported authentication kind (provider identity remains visible), and the raw-text fallback for a truncated listing; its element shots under `e2e/screenshots/mcp-tool-cards/` are review evidence
 only. Questionnaire coverage uses canonical persisted tool-call/ack fixtures (submitting one exercises the
 restart-repaired response path) to pin six-question rounds beyond four, the docked sheet (stub in the
-transcript, pinned controls around a scrolling body under the 60% cap, restored page, collapse kept across
+transcript, pinned controls around a scrolling body under the 70% cap, restored page, collapse kept across
 a chat switch, stub expand-and-focus, the sheet above the composer under an open Resources inspector, the
 receipt left in the transcript after answering, the cap following *Question panel height*), coarse-pointer
 focus, tabs/question/footer at one y across paging and choosing, notes and Other growing in
@@ -716,9 +716,10 @@ stealing the press aimed at a row or Add note below it (`ask-user-question.spec.
 into the fixture repository (removed in `finally`) and pins the question preview and the option pane (HTML,
 before/after, mermaid, none) at one card height, full-screen keys that never page or skip, a file removed
 under its preview, the picked file's path in the persisted answer, and the compare overlay (flip and jump
-keys, Current never choosable, choose-and-stay, a side-by-side pair whose two frames keep one `scrollTop`
+keys, Current never choosable, Choose and Enter picking and closing it onto the chosen row in One at a time,
+Side by side and All, a side-by-side pair whose two frames keep one `scrollTop`
 in 2-up and swipe even though the mockups ask for smooth scrolling, All at 1400×900 clipping no HTML frame below its pane and opening a pane alone, keys still working after a
-pane title or Choose removed the focused control, focus back on the chosen row, the receipt's read-only reopen),
+pane title removed the focused control, the receipt's read-only reopen),
 and an interactive mockup (`sandbox="allow-scripts"`, its button changes its own page, `fetch`, a
 WebSocket to the host and `RTCPeerConnection` all blocked, leaving its page replaced by the notice until
 Reload — also when it replaces itself while still loading after forging a tokenless `loaded`, and a
@@ -733,7 +734,9 @@ through a routed wire) that announces "F6 to answer" from the transcript or a Ta
 takes an empty composer or a button the mouse focused (Chromium only: WebKit never focuses a clicked
 button, and every WebKit `openRound` covers its History-button case), the
 Mod+L remount race, `i` into an HTML frame and Tab back, `c` into compare and Esc back, the collapsed
-chords, Skip in the ↓ ring and ←/→ on the footer, a rebound `d` and a Discuss rebound onto a Mod chord
+chords, Skip in the ↓ ring and ←/→ on the footer, arrows, Home/End, a parked note and the footer keys
+scrolling a tall docked question's body just enough to show the focused control while the transcript and
+the dock stay put, a rebound `d` and a Discuss rebound onto a Mod chord
 (over the host wire), a Russian-layout `d` and the card's Settings → Keyboard section; `fixtures/ask.ts` seeds the pending questions for the three card specs.
 These four specs also run in a **`webkit` Playwright project**: the macOS desktop
 is the system WKWebView, whose Tab skips buttons without an explicit `tabindex` (the regression this lane

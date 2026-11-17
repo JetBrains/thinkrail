@@ -16,6 +16,7 @@ import {
 	type QuestionnaireArgs,
 	seedQuestionnaire,
 } from "./fixtures/ask";
+import { waitForScrollStability } from "./fixtures/chatScroll";
 import { resetKeybindings, setKeybindings } from "./fixtures/keybindings";
 import { E2E_FIXTURE_REPO, E2E_PORT } from "./fixtures/paths";
 import { shot } from "./fixtures/screenshots";
@@ -71,6 +72,26 @@ const PREVIEWED = {
 	],
 } satisfies AskUserQuestionArgs;
 
+const TALL_COUNT = 9;
+
+const TALL = {
+	questions: [
+		{
+			question: "Which rollout should the long list use?",
+			header: "Long list",
+			options: Array.from({ length: TALL_COUNT }, (_, i) => ({
+				label: `Long choice ${i + 1}`,
+				description: `A longer description for choice ${i + 1} so the row takes two lines of text in the dock.`,
+			})),
+		},
+	],
+} satisfies AskUserQuestionArgs;
+
+const LONG_PROMPT = Array.from(
+	{ length: 30 },
+	(_, i) => `Line ${i + 1} of a long request, so the transcript above the dock scrolls.`,
+).join("\n\n");
+
 const RECORDER = `<!doctype html><html><body><main><h1>Rebind “Focus composer”</h1><input aria-label="Shortcut" placeholder="Press a shortcut…"><button>Save</button></main></body></html>`;
 
 const activeAsk = (page: Page) =>
@@ -103,6 +124,18 @@ async function settleFrames(page: Page, frames = 6): Promise<void> {
 			}),
 		frames,
 	);
+}
+
+const scrollTopOf = (locator: Locator) => locator.evaluate((element) => element.scrollTop);
+
+function focusShownIn(scroller: Locator): Promise<boolean> {
+	return scroller.evaluate((element) => {
+		const active = element.ownerDocument.activeElement;
+		if (!active || !element.contains(active)) return false;
+		const top = element.getBoundingClientRect().top + element.clientTop;
+		const box = active.getBoundingClientRect();
+		return box.top >= top - 0.5 && box.bottom <= top + element.clientHeight + 0.5;
+	});
 }
 
 function isFocused(locator: Locator): Promise<boolean> {
@@ -580,6 +613,88 @@ test("↓ reaches Skip before the primary button, ←/→ move between them with
 		await expect(question).toHaveText(ROLLOUT.question);
 	} finally {
 		rmSync(path, { force: true });
+	}
+});
+
+test("keys that move focus scroll the docked sheet just enough to show it, never the transcript", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1280, height: 760 });
+	await openFixtureProject(page);
+	const session = seedQuestionnaire("tall keys", "ask-keys-tall", TALL, BASE_TS, LONG_PROMPT);
+	try {
+		await enterDefaultWorkspace(page);
+		await hideAuxiliaryWorkbench(page);
+		await openPersistedChatAfterInput(page, "tall keys");
+		const card = activeAsk(page);
+		const options = card.getByTestId("ask-option");
+		const other = card.getByTestId("ask-custom");
+		const body = card.getByTestId("ask-dock-body");
+		const dock = page.getByTestId("chat-dock");
+		const transcript = page.getByTestId("chat-scroll").locator("[data-virtuoso-scroller]");
+		await expect(options.first()).toBeFocused();
+		await waitForScrollStability(page.getByTestId("chat-scroll"));
+		const transcriptTop = await scrollTopOf(transcript);
+		expect(transcriptTop).toBeGreaterThan(0);
+		const dockBox = await dock.boundingBox();
+		expect(await scrollTopOf(body)).toBe(0);
+
+		let top = 0;
+		for (let index = 1; index < TALL_COUNT; index += 1) {
+			await page.keyboard.press("ArrowDown");
+			await expect(options.nth(index)).toBeFocused();
+			expect(await focusShownIn(body), `option ${index + 1} is fully visible`).toBe(true);
+			const next = await scrollTopOf(body);
+			expect(next).toBeGreaterThanOrEqual(top);
+			top = next;
+		}
+		expect(top).toBeGreaterThan(0);
+		if (chromium()) await shot(page.getByTestId("chat-view"), "ask-keyboard", "dock-scrolled");
+
+		await page.keyboard.press("Space");
+		await expect(card.getByTestId("ask-note")).toBeFocused();
+		await expect.poll(() => focusShownIn(body)).toBe(true);
+		await page.keyboard.type("Keep it short.");
+		await page.keyboard.press("Enter");
+		await expect(card.getByTestId("ask-note-toggle")).toBeFocused();
+		await expect.poll(() => focusShownIn(body)).toBe(true);
+		await page.keyboard.press("ArrowDown");
+		await expect(other).toBeFocused();
+		await expect.poll(() => focusShownIn(body)).toBe(true);
+		const bottom = await scrollTopOf(body);
+
+		for (const [key, control] of [
+			["ArrowDown", "ask-skip"],
+			["ArrowRight", "ask-submit"],
+			["ArrowLeft", "ask-skip"],
+			["ArrowDown", "ask-submit"],
+		] as const) {
+			await page.keyboard.press(key);
+			await expect(card.getByTestId(control)).toBeFocused();
+			await expect(card.getByTestId(control)).toBeInViewport({ ratio: 1 });
+		}
+		expect(await scrollTopOf(body)).toBe(bottom);
+
+		await page.keyboard.press("ArrowDown");
+		await expect(options.first()).toBeFocused();
+		await expect.poll(() => focusShownIn(body)).toBe(true);
+		expect(await scrollTopOf(body)).toBeLessThan(bottom);
+		await page.keyboard.press("End");
+		await expect(other).toBeFocused();
+		await expect.poll(() => focusShownIn(body)).toBe(true);
+		await page.keyboard.press("ArrowUp");
+		await expect(options.last()).toBeFocused();
+		await expect.poll(() => focusShownIn(body)).toBe(true);
+		const beforeHome = await scrollTopOf(body);
+		await page.keyboard.press("Home");
+		await expect(options.first()).toBeFocused();
+		await expect.poll(() => focusShownIn(body)).toBe(true);
+		expect(await scrollTopOf(body)).toBeLessThan(beforeHome);
+
+		expect(await scrollTopOf(transcript)).toBe(transcriptTop);
+		expect(await dock.boundingBox()).toEqual(dockBox);
+	} finally {
+		rmSync(session.path, { force: true });
 	}
 });
 

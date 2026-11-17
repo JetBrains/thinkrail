@@ -2967,7 +2967,7 @@
 	"tools.ask.compare.itemsLabel": "Options to compare",
 	"tools.ask.compare.left": "Left",
 	"tools.ask.compare.leftLabel": "Left side: {{item}}",
-	"tools.ask.compare.legend": "←→ flip · 1–{{last}} jump · Enter choose · Esc back to the question",
+	"tools.ask.compare.legend": "←→ flip · 1–{{last}} jump · Enter choose and go back · Esc back without choosing",
 	"tools.ask.compare.legendReadOnly": "←→ flip · 1–{{last}} jump · Esc close",
 	"tools.ask.compare.open": "Compare options full screen",
 	"tools.ask.compare.pair": "Side by side",

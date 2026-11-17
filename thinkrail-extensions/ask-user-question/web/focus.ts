@@ -134,25 +134,74 @@ export function isInsidePreview(target: EventTarget | null): boolean {
 	return target instanceof Element && !!target.closest("[data-ask-preview]");
 }
 
+interface Span {
+	readonly top: number;
+	readonly bottom: number;
+}
+
+export function revealDelta(view: Span, target: Span): number {
+	if (target.top < view.top) return target.top - view.top;
+	if (target.bottom > view.bottom) {
+		return Math.min(target.bottom - view.bottom, target.top - view.top);
+	}
+	return 0;
+}
+
+export function scrollsVertically(element: Element): boolean {
+	const { overflowY } = getComputedStyle(element);
+	return (
+		(overflowY === "auto" || overflowY === "scroll") &&
+		element.scrollHeight > element.clientHeight + 1
+	);
+}
+
+function outlineExtent(element: Element): number {
+	const { outlineStyle, outlineWidth, outlineOffset } = getComputedStyle(element);
+	if (outlineStyle === "none") return 0;
+	return Math.max(
+		0,
+		(Number.parseFloat(outlineWidth) || 0) + (Number.parseFloat(outlineOffset) || 0),
+	);
+}
+
+type Focuser = (element: HTMLElement) => void;
+
+const focusInPlace: Focuser = (element) => element.focus({ preventScroll: true });
+
+export const focusAndReveal: Focuser = (element) => {
+	element.focus({ preventScroll: true });
+	let scroller = element.parentElement;
+	while (scroller && !scrollsVertically(scroller)) scroller = scroller.parentElement;
+	if (!scroller) return;
+	const top = scroller.getBoundingClientRect().top + scroller.clientTop;
+	const box = element.getBoundingClientRect();
+	const ring = outlineExtent(element);
+	scroller.scrollTop += revealDelta(
+		{ top, bottom: top + scroller.clientHeight },
+		{ top: box.top - ring, bottom: box.bottom + ring },
+	);
+};
+
 export function activeQuestionPage(card: HTMLElement): HTMLElement {
 	return card.querySelector<HTMLElement>('[data-ask-active="true"]') ?? card;
 }
 
-export function focusCurrentQuestionPage(card: HTMLElement): void {
+export function focusCurrentQuestionPage(card: HTMLElement, focus: Focuser = focusInPlace): void {
 	const target = activeQuestionPage(card).querySelector<HTMLElement>(
 		'[data-ask-page-focus="true"]:not([disabled])',
 	);
 	if (!target) return;
 	if (!shouldFocusPageTarget(isTextEntryTarget(target), hasCoarsePointer())) return;
-	target.focus({ preventScroll: true });
+	focus(target);
 }
 
-export function focusQuestionAttention(card: HTMLElement): void {
+export function focusQuestionAttention(card: HTMLElement, focus: Focuser = focusInPlace): void {
 	const selected = activeQuestionPage(card).querySelector<HTMLElement>(
 		'[data-ask-discuss-text], [data-ask-option][data-selected="true"], [data-ask-custom-row][data-selected="true"] textarea',
 	);
-	if (selected) selected.focus({ preventScroll: true });
-	else focusCurrentQuestionPage(card);
+	if (selected) focus(selected);
+	else focusCurrentQuestionPage(card, focus);
 	if (card.contains(document.activeElement)) return;
-	card.querySelector<HTMLElement>("[data-focus-claim]")?.focus({ preventScroll: true });
+	const claim = card.querySelector<HTMLElement>("[data-focus-claim]");
+	if (claim) focus(claim);
 }

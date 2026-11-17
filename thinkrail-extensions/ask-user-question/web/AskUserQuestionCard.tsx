@@ -24,6 +24,7 @@ import { forgetDockState, requestDockFocus, setDockCollapsed, useDockState } fro
 import {
 	activeQuestionPage,
 	createQuestionAttentionClaim,
+	focusAndReveal,
 	focusCurrentQuestionPage,
 	focusQuestionAttention,
 	focusTargetKind,
@@ -213,7 +214,7 @@ export function AskUserQuestionCard({
 		if (!reclaimFocusAfterFailedSend.current || submitted) return;
 		reclaimFocusAfterFailedSend.current = false;
 		const card = cardRef.current;
-		if (card) focusQuestionAttention(card);
+		if (card) focusQuestionAttention(card, focusAndReveal);
 	});
 
 	useEffect(() => {
@@ -263,8 +264,8 @@ export function AskUserQuestionCard({
 		const frame = requestAnimationFrame(() => {
 			const card = cardRef.current;
 			if (!card) return;
-			if (hasCoarsePointer()) focusCurrentQuestionPage(card);
-			else focusQuestionAttention(card);
+			if (hasCoarsePointer()) focusCurrentQuestionPage(card, focusAndReveal);
+			else focusQuestionAttention(card, focusAndReveal);
 		});
 		return () => cancelAnimationFrame(frame);
 	}, [docked, dock.focusRequest]);
@@ -347,7 +348,7 @@ export function AskUserQuestionCard({
 	const focusFoot = (control: FootControl) => {
 		const button = control === "skip" ? skipRef.current : primaryRef.current;
 		if (!button || button.disabled) return false;
-		button.focus({ preventScroll: true });
+		focusAndReveal(button);
 		return true;
 	};
 
@@ -368,7 +369,7 @@ export function AskUserQuestionCard({
 				? page.querySelector<HTMLElement>("[data-ask-custom-row] textarea")
 				: (page.querySelector<HTMLElement>("[data-ask-option]") ??
 					page.querySelector<HTMLElement>("[data-ask-custom-row] textarea"));
-		choice?.focus({ preventScroll: true });
+		if (choice) focusAndReveal(choice);
 	};
 
 	const onCardKeyDown = (event: KeyboardEvent<HTMLElement>) => {
@@ -404,7 +405,7 @@ export function AskUserQuestionCard({
 			!event.metaKey
 		) {
 			event.preventDefault();
-			focusCurrentQuestionPage(event.currentTarget);
+			focusCurrentQuestionPage(event.currentTarget, focusAndReveal);
 			return;
 		}
 		if (
