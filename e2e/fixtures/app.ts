@@ -376,6 +376,27 @@ export async function expandActivityStep(page: Page, tool: string): Promise<Loca
 	return step;
 }
 
+export function settingsDialog(page: Page): Locator {
+	return page.getByTestId("settings-dialog");
+}
+
+export async function openSettingsSection(page: Page, section: string): Promise<Locator> {
+	const dialog = settingsDialog(page);
+	if (!(await dialog.isVisible())) await page.getByTestId("open-settings").click();
+	const tab = page.getByTestId(`settings-nav-${section}`);
+	await tab.click();
+	await expect(tab).toHaveAttribute("data-active", "true");
+	return dialog;
+}
+
+/** Closes Settings with its Close button: Esc steps back through the field and section list first. */
+export async function closeSettings(page: Page): Promise<void> {
+	const dialog = settingsDialog(page);
+	if (!(await dialog.isVisible())) return;
+	await dialog.getByRole("button", { name: "Close", exact: true }).click();
+	await expect(dialog).toBeHidden();
+}
+
 /** Opens an `aria-expanded` disclosure (a Settings theme list, layout Advanced, …) unless it is already open. */
 export async function expandDisclosure(toggle: Locator): Promise<void> {
 	await expect(toggle).toBeVisible();
