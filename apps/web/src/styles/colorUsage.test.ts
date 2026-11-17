@@ -203,6 +203,13 @@ describe("colour at a call site", () => {
 		expect(bad).toEqual([]);
 	});
 
+	it("uses disabled colour roles instead of component opacity", () => {
+		const bad = TS_FILES.filter((f) => rel(f) !== "panels/SettingsSwitch.tsx").flatMap((f) =>
+			[...code(f).matchAll(/\bdisabled:opacity-[\w[.-]+/g)].map((m) => `${rel(f)}: ${m[0]}`),
+		);
+		expect(bad).toEqual([]);
+	});
+
 	it("never tints with an opacity modifier", () => {
 		const bad = USES.filter((u) => u.modifier && PUBLISHED.has(u.name)).map(
 			(u) => `${u.file}: ${u.text}`,

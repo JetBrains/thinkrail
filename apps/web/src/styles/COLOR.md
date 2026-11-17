@@ -245,3 +245,6 @@ fonts, and shares nothing with this system. That is deliberate: it is a static m
 Pages with no theme switching, no runtime, and no reason to carry a token layer. Do not "fix" it by
 importing from here; if it ever needs to match the app, the move is to extract a small shared token
 package, not to reach across apps.
+
+The disabled-opacity adoption guard temporarily excludes `SettingsSwitch.tsx`: its duplicate primitive
+is tracked separately from #1329. All other components must use disabled colour roles.

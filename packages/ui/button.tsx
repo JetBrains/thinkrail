@@ -178,9 +178,12 @@ function stateProps(
 		disabled?: boolean | undefined;
 		"data-state"?: unknown;
 		"aria-busy"?: React.AriaAttributes["aria-busy"];
+		"aria-description"?: React.AriaAttributes["aria-description"];
 	},
 	selected: boolean | undefined,
 	loading: boolean | undefined,
+	tooltip: React.ReactNode,
+	label: React.ReactNode,
 ) {
 	const open = props["data-state"] === "open";
 	return {
@@ -189,6 +192,11 @@ function stateProps(
 		"data-loading": loading ? true : undefined,
 		"data-selected": selected || open ? true : undefined,
 		"aria-busy": loading ? true : props["aria-busy"],
+		"aria-description":
+			props["aria-description"] ??
+			((props.disabled || loading) && typeof tooltip === "string" && tooltip !== label
+				? tooltip
+				: undefined),
 	};
 }
 
@@ -220,7 +228,7 @@ export function Button({
 			{...buttonDataAttributes({ variant, size })}
 			className={cn(variantClasses({ variant, size, shape: "text", tone }), className)}
 			{...props}
-			{...stateProps(props, selected, loading)}
+			{...stateProps(props, selected, loading, tooltip, props["aria-label"] ?? children)}
 		>
 			{IconLeft ? (
 				loading ? (
@@ -302,7 +310,7 @@ export function IconButton({
 			{...buttonDataAttributes({ variant, size, iconOnly: true })}
 			className={cn(variantClasses({ variant, size, shape: "icon", tone }), className)}
 			{...props}
-			{...stateProps(props, selected, loading)}
+			{...stateProps(props, selected, loading, tooltip, label)}
 		>
 			{loading ? (
 				spinIcon ? (

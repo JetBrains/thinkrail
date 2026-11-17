@@ -64,7 +64,7 @@ export function ExtraUsageNotice({
 							data-testid="extra-usage-disable"
 							disabled={disabling}
 							onClick={onDisable}
-							className={cn(LINK, "disabled:opacity-50")}
+							className={cn(LINK, "disabled:text-control-disabled-text disabled:hover:opacity-100")}
 						>
 							{t("chat.extraUsage.disable")}
 						</button>

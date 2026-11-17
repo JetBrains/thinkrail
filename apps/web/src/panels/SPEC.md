@@ -2911,3 +2911,6 @@ menu has closed, because a closing menu returns focus to its row; disabled
   app; panels themselves don't own the boundary.
 - Streaming invariant (when chat lands): `text_delta`/`thinking_delta` **APPEND**;
   `tool_execution_update.partialResult` **REPLACE**.
+
+Disabled `SettingsRadioCards` use disabled border, background and text roles for the whole card,
+including its hint, description and selected check, and never paint a hover fill.
