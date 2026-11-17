@@ -15,6 +15,7 @@ import {
 	isInteractiveTool,
 	registerToolRenderer,
 	removeInstalledToolRenderers,
+	reserveInstalledOwner,
 	resolveProminence,
 	setInstalledToolRenderers,
 	useToolRegistry,
@@ -100,20 +101,25 @@ describe("installed tool registrations", () => {
 		expect(getToolRenderer("only_a")).toBe(DefaultToolRenderer);
 	});
 
-	test("the latest owner wins a name, a replace drops dropped tools, and removal reveals the earlier owner", () => {
+	test("the first owner keeps a name across its updates, a replace drops dropped tools, and removal reveals the next owner", () => {
 		const first = renderer("first");
+		const firstUpdated = renderer("first, updated");
 		const second = renderer("second");
-		setInstalledToolRenderers("ext-first", { contested: { renderer: first } });
+		reserveInstalledOwner("ext-first");
 		setInstalledToolRenderers("ext-second", {
 			contested: { renderer: second },
 			stale: { renderer: second },
 		});
 		expect(getToolRenderer("contested")).toBe(second);
+		setInstalledToolRenderers("ext-first", { contested: { renderer: first } });
+		expect(getToolRenderer("contested")).toBe(first);
+		setInstalledToolRenderers("ext-first", { contested: { renderer: firstUpdated } });
+		expect(getToolRenderer("contested")).toBe(firstUpdated);
 		setInstalledToolRenderers("ext-second", { contested: { renderer: second } });
 		expect(getToolRenderer("stale")).toBe(DefaultToolRenderer);
-		removeInstalledToolRenderers("ext-second");
-		expect(getToolRenderer("contested")).toBe(first);
 		removeInstalledToolRenderers("ext-first");
+		expect(getToolRenderer("contested")).toBe(second);
+		removeInstalledToolRenderers("ext-second");
 	});
 });
 

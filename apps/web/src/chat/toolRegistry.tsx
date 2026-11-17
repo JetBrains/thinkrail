@@ -46,7 +46,7 @@ if (import.meta.hot) import.meta.hot.data.toolRegistry = state;
 function publish(): void {
 	const exact = new Map<string, ToolRegistration>();
 	for (const owned of state.installed.values()) {
-		for (const [name, registration] of owned) exact.set(name, registration);
+		for (const [name, registration] of owned) if (!exact.has(name)) exact.set(name, registration);
 	}
 	for (const [name, registration] of state.builtIn) exact.set(name, registration);
 	state.current = Object.freeze({
@@ -83,9 +83,12 @@ export function setInstalledToolRenderers(
 	for (const [name, { renderer, options }] of Object.entries(toolRenderers)) {
 		owned.set(name, { renderer, ...options });
 	}
-	state.installed.delete(owner);
 	state.installed.set(owner, owned);
 	publish();
+}
+
+export function reserveInstalledOwner(owner: string): void {
+	if (!state.installed.has(owner)) state.installed.set(owner, new Map());
 }
 
 export function removeInstalledToolRenderers(owner: string): boolean {

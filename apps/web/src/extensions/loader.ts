@@ -1,6 +1,10 @@
 import type { WebExtension } from "@thinkrail/extension-api/web";
 import { useSyncExternalStore } from "react";
-import { removeInstalledToolRenderers, setInstalledToolRenderers } from "../chat/toolRegistry";
+import {
+	removeInstalledToolRenderers,
+	reserveInstalledOwner,
+	setInstalledToolRenderers,
+} from "../chat/toolRegistry";
 import { clientErrorReport, getTransport, reportClientError } from "../transport";
 
 export interface InstalledWebExtension {
@@ -192,6 +196,7 @@ function loadOne(descriptor: InstalledWebExtension): Promise<WebExtensionLoadRes
 	const { name } = descriptor;
 	const generation = (state.generations.get(name) ?? 0) + 1;
 	state.generations.set(name, generation);
+	reserveInstalledOwner(name);
 	setResult(name, { name, status: "loading" });
 	const load = runLoad(descriptor, generation);
 	state.inflight.set(name, load);

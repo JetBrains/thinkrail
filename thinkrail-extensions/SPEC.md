@@ -239,8 +239,9 @@ key for the on/off switch and its settings) and must not equal a built-in's `nam
   wait; later ones register through the subscribable tool registry ([[submodule-web-extensions]]).
 - Every tool renderer, built-in or installed, sits in its own error boundary that falls back to the
   default renderer for that row. Removing an extension unregisters its renderers; switching it off does
-  not, so past transcripts keep their cards. A built-in renderer keeps its tool name over an installed
-  one, as the server keeps a built-in tool; between installed extensions the latest loaded wins.
+  not, so past transcripts keep their cards. A contested tool name renders as the server runs it: a
+  built-in keeps it over an installed extension, and between installed ones the extension listed first
+  keeps it (pi gives a tool name to its first registration), whichever bundle finishes loading first.
 - **What v1 promises beyond the module list:** the components' props and variants, the `TooltipProvider`
   at the app root, the locale store behind `useT`, portals to `<body>`, `html[data-theme]`, the semantic
   colour variables and utility names, the spacing and radius scales, the typography classes, Tailwind's

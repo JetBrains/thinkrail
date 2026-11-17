@@ -434,15 +434,17 @@ remain app-local. A registration is:
   **`resolveProminence`** seam — where a per-user override map (settings) can plug in later.
 
 Every registry read (renderer, summary, chrome, prominence) goes through one resolver: the exact tool
-name — a built-in registration first, else the most recently loaded installed extension's — else the
+name — a built-in registration first, else the installed extension listed first by the host — else the
 longest app-local prefix registration (`registerToolRendererPrefix` — today only `mcp__`, because pi names
 MCP tools per server), else the default. Exact names always win, an empty prefix never matches, and
-extension descriptors stay exact-name only. Built-in precedence mirrors the server's built-in tool-name
-precedence: an installed extension cannot restyle a built-in tool.
+extension descriptors stay exact-name only. The order mirrors which tool the server actually runs (built-in
+tool-name precedence, then pi's first registration wins), so a card never draws over another tool's result.
 
 **The registry is subscribable.** Installed web halves register after first render
-([[submodule-web-extensions]]): `setInstalledToolRenderers(owner, toolRenderers)` replaces one owner's set
-atomically and `removeInstalledToolRenderers(owner)` drops it, revealing an earlier owner of the same name.
+([[submodule-web-extensions]]): `reserveInstalledOwner(owner)` fixes an owner's precedence slot when its
+load starts (host-list order, independent of which bundle finishes first),
+`setInstalledToolRenderers(owner, toolRenderers)` replaces that owner's set atomically in its slot, and
+`removeInstalledToolRenderers(owner)` drops it, revealing the next owner of the same name.
 Every change publishes a new immutable `ToolRegistry` snapshot (with a `revision`). Readers take it through
 `useSyncExternalStore` hooks — `useToolRegistry()` for derivations, `useToolRenderer(name)` for the
 renderer itself, `useToolRegistryRevision()` — and pass the snapshot as the optional trailing `registry`

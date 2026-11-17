@@ -149,6 +149,29 @@ describe("web extension loader", () => {
 		expect(unloadWebExtension("weather")).toBe(false);
 	});
 
+	test("a contested tool name goes to the extension listed first, whichever bundle loads first", async () => {
+		const gate = deferred<void>();
+		fakeEnvironment({
+			importModule: async (url) => {
+				if (url.endsWith("weather-v2.js")) await gate.promise;
+				return import(url);
+			},
+		});
+		const loads = loadWebExtensions([
+			{ name: "listed-first", url: "weather-v2.js" },
+			{ name: "listed-second", url: "weather-v1.js" },
+		]);
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		const v1 = getToolRenderer("weather");
+		expect(v1).not.toBe(DefaultToolRenderer);
+		gate.resolve();
+		await loads;
+		expect(getToolRenderer("weather")).not.toBe(v1);
+		expect(resolveProminence("weather").prominence).toBe("routine");
+		unloadWebExtension("listed-first");
+		expect(getToolRenderer("weather")).toBe(v1);
+	});
+
 	test("the pre-render wait is bounded; a hung bundle registers late", async () => {
 		const gate = deferred<void>();
 		fakeEnvironment({

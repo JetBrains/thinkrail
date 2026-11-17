@@ -39,7 +39,9 @@ renderers.
   so a card never paints unstyled); the default export must have the `WebExtension` shape — a string
   `name` and `toolRenderers` whose entries carry a function `renderer` and optional object `options` with
   an optional function `summary`. Only then are the renderers registered, under the descriptor's `name`
-  (the npm identity, not the author's `defineWebExtension` name). Any failure removes the stylesheet,
+  (the npm identity, not the author's `defineWebExtension` name), in the precedence slot reserved when its
+  load started — the descriptor order of the host's list — so a contested tool name goes to the
+  extension the server runs, not to the bundle that loaded first. Any failure removes the stylesheet,
   registers nothing and yields `{ status: "failed", reason, message }` with `reason` one of `import`
   (network, syntax or a throwing top level — the browser does not tell them apart), `export` or
   `styles`. One extension's failure never touches another's or the app.
