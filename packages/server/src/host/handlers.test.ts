@@ -32,6 +32,7 @@ import type {
 import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	INITIAL_TERMINAL_TAB_KEY,
+	SUBAGENT_CATALOG_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	WS_METHODS,
 } from "@thinkrail/contracts";
@@ -1577,7 +1578,7 @@ test("subagent.list admits only pi-resource-trusted workspace metadata and never
 			{ id: "w1", projectId: "p1", name: "Default", worktreePath: repo, createdAt: 1 },
 		]),
 	);
-	const ctx = { ...CTX, protocolVersion: 124 };
+	const ctx = { ...CTX, protocolVersion: SUBAGENT_CATALOG_PROTOCOL_VERSION };
 	const list = (params: unknown = {}) =>
 		handleRequest("subagent.list", params, ctx) as Promise<SubagentCatalogEntry[]>;
 	const personal: SubagentCatalogEntry = {
@@ -1627,6 +1628,13 @@ test("subagent.list admits only pi-resource-trusted workspace metadata and never
 	);
 	await expect(list({ workspaceId: "unknown" })).rejects.toThrow("Unknown workspace");
 	await expect(
-		handleRequest("subagent.list", {}, { ...CTX, protocolVersion: 123 }),
-	).rejects.toThrow("requires protocol 124");
+		handleRequest(
+			"subagent.list",
+			{},
+			{
+				...CTX,
+				protocolVersion: SUBAGENT_CATALOG_PROTOCOL_VERSION - 1,
+			},
+		),
+	).rejects.toThrow(`requires protocol ${SUBAGENT_CATALOG_PROTOCOL_VERSION}`);
 });

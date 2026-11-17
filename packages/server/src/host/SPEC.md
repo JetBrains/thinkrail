@@ -10,7 +10,7 @@ tags: [host, public-surface-checked]
 
 ## Subagent catalog and availability
 
-`subagent.list` (from `SUBAGENT_CATALOG_PROTOCOL_VERSION`, 124) accepts optional `workspaceId`, never a caller cwd. Host resolves the registered workspace and `admissionContextFor(...).piResourceTrusted` before calling agent's metadata-only catalog. No workspace means builtins/personal only; untrusted project files are never loaded. Older protocol callers are refused. Host injects `getConfig().disabledSubagents` as a live per-name resolver and resets it on stop; settings persists before the resolver sees a change. No catalog push channel or extra catalog state is needed: each read rediscovers files.
+`subagent.list` (from `SUBAGENT_CATALOG_PROTOCOL_VERSION`, 125) accepts optional `workspaceId`, never a caller cwd. Host resolves the registered workspace and `admissionContextFor(...).piResourceTrusted` before calling agent's metadata-only catalog. No workspace means builtins/personal only; untrusted project files are never loaded. Older protocol callers are refused. Host injects `getConfig().disabledSubagents` as a live per-name resolver and resets it on stop; settings persists before the resolver sees a change. No catalog push channel or extra catalog state is needed: each read rediscovers files.
 
 ## Responsibility
 

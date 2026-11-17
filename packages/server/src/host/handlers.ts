@@ -1222,7 +1222,9 @@ const handlers: WsHandlers = {
 			ctx.protocolVersion !== undefined &&
 			ctx.protocolVersion < SUBAGENT_CATALOG_PROTOCOL_VERSION
 		) {
-			throw new Error("Subagent catalog requires protocol 124 or newer");
+			throw new Error(
+				`Subagent catalog requires protocol ${SUBAGENT_CATALOG_PROTOCOL_VERSION} or newer`,
+			);
 		}
 		if (p.workspaceId === undefined) return listSubagentCatalog();
 		const ws = getWorkspace(p.workspaceId);

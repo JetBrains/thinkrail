@@ -181,9 +181,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   (`/providers/*`, `/api/*`, `/bedrock-provider`, … — they statically load the Node provider SDKs); and
   importing `server` / `shared` / `web`.
 
-## Subagent catalog (v124)
+## Subagent catalog (v125)
 
-`SUBAGENT_CATALOG_PROTOCOL_VERSION = 124` gates `subagent.list` and `AppConfig.disabledSubagents` writes. `subagent.list({ workspaceId? })` returns `SubagentCatalogEntry[]`: name, description, source (`builtin`/`personal`/`project`), optional model and thinking. It never exposes prompt bodies or file paths. Host derives project discovery from the registered workspace and pi-resource trust admission; without workspace only builtins/personal are listed. Disabled entries stay in the catalog. `disabledSubagents` defaults to `[]`, is global by name, and follows disabledExtensions validation/normalization with unknown names retained. Running work/completions are not cancelled or suppressed. There is no new broadcast channel; `settings.changed` remains authoritative for switches.
+`SUBAGENT_CATALOG_PROTOCOL_VERSION = 125` gates `subagent.list` and `AppConfig.disabledSubagents` writes. `subagent.list({ workspaceId? })` returns `SubagentCatalogEntry[]`: name, description, source (`builtin`/`personal`/`project`), optional model and thinking. It never exposes prompt bodies or file paths. Host derives project discovery from the registered workspace and pi-resource trust admission; without workspace only builtins/personal are listed. Disabled entries stay in the catalog. `disabledSubagents` defaults to `[]`, is global by name, and follows disabledExtensions validation/normalization with unknown names retained. Running work/completions are not cancelled or suppressed. There is no new broadcast channel; `settings.changed` remains authoritative for switches.
 
 ## Contents
 

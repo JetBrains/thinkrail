@@ -775,9 +775,9 @@ test("ask_user_question discuss answers are pinned to v105, after background wor
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ASK_DISCUSS_PROTOCOL_VERSION);
 });
 
-test("subagent catalog and per-name preference start at protocol 124", () => {
+test("subagent catalog and per-name preference start at protocol 125", () => {
 	expect(WS_METHODS.subagentList).toBe("subagent.list");
-	expect(SUBAGENT_CATALOG_PROTOCOL_VERSION).toBe(124);
+	expect(SUBAGENT_CATALOG_PROTOCOL_VERSION).toBe(125);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SUBAGENT_CATALOG_PROTOCOL_VERSION);
 	expect(DEFAULT_CONFIG.disabledSubagents).toEqual([]);
 });
