@@ -49,15 +49,19 @@ function fences(page: (typeof pages)[number]): Fence[] {
 	const lines = page.text.split("\n");
 	const found: Fence[] = [];
 	for (let index = 0; index < lines.length; index++) {
-		const open = /^```(\w*)$/.exec(lines[index] as string);
+		const open = /^\s*(`{3,}|~{3,})(.*)$/.exec(lines[index] as string);
 		if (!open) continue;
-		const end = lines.indexOf("```", index + 1);
+		const [, marker, info] = open as unknown as [string, string, string];
+		if (!/^\w*$/.test(info.trim())) {
+			throw new Error(`${page.name}: unexpected info string "${info}" at line ${index + 1}`);
+		}
+		const end = lines.findIndex((line, at) => at > index && line.trim() === marker);
 		if (end < 0) throw new Error(`${page.name}: unclosed code block at line ${index + 1}`);
 		found.push({
 			page: page.name,
-			lang: open[1] as string,
+			lang: info.trim(),
 			body: lines.slice(index + 1, end).join("\n"),
-			guard: guardLine.exec(lines[index - 1] ?? "")?.[1],
+			guard: guardLine.exec((lines[index - 1] ?? "").trim())?.[1],
 		});
 		index = end;
 	}
@@ -126,10 +130,15 @@ function isContiguousSlice(excerpt: string, file: string): boolean {
 }
 
 const cliOptions = (() => {
-	const block = /options: \{\n([\s\S]*?)\n\t\t\},/.exec(read(`${roots.sdk}src/cli.ts`))?.[1] ?? "";
+	const block = /options: \{\n([\s\S]*?)\n\t\t\},/.exec(read(`${roots.sdk}src/cli.ts`))?.[1];
+	if (block === undefined) throw new Error("src/cli.ts has no parseArgs options block");
+	const entries = [...block.matchAll(/^\t{3}(\w+): \{([\s\S]*?)\},?$/gm)];
+	const declared = block.match(/^\t{3}\w+:/gm)?.length ?? 0;
+	if (entries.length === 0 || entries.length !== declared) {
+		throw new Error(`read ${entries.length} of the ${declared} CLI options in src/cli.ts`);
+	}
 	const flags = new Set<string>();
-	for (const match of block.matchAll(/^\t+(\w+): \{ ([^}]*)\}/gm)) {
-		const [, name, spec] = match as unknown as [string, string, string];
+	for (const [, name, spec] of entries as unknown as [string, string, string][]) {
 		flags.add(/default: true/.test(spec) ? `--no-${name}` : `--${name}`);
 		const short = /short: "(\w)"/.exec(spec)?.[1];
 		if (short) flags.add(`-${short}`);
@@ -377,10 +386,10 @@ describe("the docs' reference tables", () => {
 		const defaults = /export const DEFAULT_ENTRIES = \[([^\]]+)\]/.exec(
 			read(`${roots.sdk}src/builder/index.ts`),
 		)?.[1];
+		const entries = [...(defaults ?? "").matchAll(/"([^"]+)"/g)].map((entry) => entry[1] as string);
+		expect(entries.length).toBeGreaterThan(0);
 		const entryRow = rows.find((row) => (row[0] as string).includes("--entry"));
-		for (const entry of (defaults ?? "").matchAll(/"([^"]+)"/g)) {
-			expect(codeSpans(entryRow?.[1] as string)).toContain(entry[1] as string);
-		}
+		for (const entry of entries) expect(codeSpans(entryRow?.[1] as string)).toContain(entry);
 	});
 });
 
