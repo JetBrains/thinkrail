@@ -892,6 +892,7 @@ pub async fn goto_definition(
         )
         .await?;
     let mut definitions = Vec::new();
+    let mut skipped: Vec<String> = Vec::new();
     for place in parse_locations(&value).into_iter().take(5) {
         let place = Place { path: canonical(&place.path), ..place };
         if !place.path.starts_with(&root) {
@@ -910,6 +911,14 @@ pub async fn goto_definition(
             Vec::new()
         };
         let lines = read_lines(&place.path).unwrap_or_default();
+        if place.line as usize > lines.len() {
+            skipped.push(format!(
+                "{}:{} could not be read",
+                relative_path(&root, &place.path),
+                place.line
+            ));
+            continue;
+        }
         let (start, end) = enclosing(&symbols, place.line)
             .map(|s| (s.start_line, s.end_line))
             .unwrap_or((place.line, place.line + 9));
@@ -938,11 +947,10 @@ pub async fn goto_definition(
             block,
         });
     }
-    let notes = if definitions.is_empty() {
-        vec!["no definition found".to_owned()]
-    } else {
-        Vec::new()
-    };
+    let mut notes = skipped;
+    if definitions.is_empty() && notes.is_empty() {
+        notes.push("no definition found".to_owned());
+    }
     Ok(DefinitionResult {
         symbol: label,
         definitions,
