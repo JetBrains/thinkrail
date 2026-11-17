@@ -80,6 +80,8 @@ export interface ResourcesInspectorProps {
 	onMcpSetEnabled?: (name: string, enabled: boolean) => void;
 	onMcpReconnect?: (name: string) => void;
 	onOpenMcpSettings?: () => void;
+	/** Language-server section, supplied by the owner of detection (props-only boundary). */
+	lspSection?: ReactNode;
 }
 
 const ESCAPE_KEY = "Esc";
@@ -628,6 +630,7 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 							onOpenSettings={() => props.onOpenMcpSettings?.()}
 						/>
 					) : null}
+					{props.lspSection}
 					<p className="mt-auto flex items-center gap-8 px-8 pt-8 text-text-subtle tr-text-metadata">
 						<RiInformationLine className="size-14 shrink-0" />
 						{props.retained

@@ -131,6 +131,13 @@
 	});
 	onEvent("updateStateChanged", (state) => notifyAll(updateListeners, state));
 
+	freezeGlobal("__THINKRAIL_NATIVE_LSP__", {
+		detect: (worktreePath) => invoke("detect_workspace_lsps", { worktreePath }),
+		restart: (worktreePath, serverId) =>
+			invoke("restart_workspace_lsp", { worktreePath, serverId: serverId ?? null }),
+		openUserConfig: () => invoke("open_lsp_user_config").then(() => {}),
+	});
+
 	freezeGlobal("__THINKRAIL_NATIVE_PAGE_ZOOM__", {
 		request: (action) => fire("page_zoom_requested", { action }),
 	});

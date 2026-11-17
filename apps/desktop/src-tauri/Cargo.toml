@@ -29,6 +29,14 @@ tauri-plugin-window-state = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-process = "2"
 tauri-plugin-opener = "2"
+# LSP manager (src/lsp): async stdio language servers, binary lookup on PATH,
+# gitignore-aware fallback search, and GUI-launch PATH repair so nvm/fnm/bun,
+# rustup, go, pipx and Homebrew binaries resolve.
+tokio = { version = "1", features = ["process", "io-util", "sync", "time", "net", "rt", "macros", "fs"] }
+which = "7"
+ignore = "0.4"
+thiserror = "2"
+fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs" }
 
 [target."cfg(windows)".dependencies.windows]
 version = "0.58"

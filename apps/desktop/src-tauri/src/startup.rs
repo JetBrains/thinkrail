@@ -12,7 +12,7 @@
 
 use tauri::{AppHandle, Manager};
 
-use crate::{bridge, lifecycle, menu, sidecar, state, window};
+use crate::{bridge, lifecycle, lsp, menu, sidecar, state, window};
 
 /// How the shell was asked to start.
 #[derive(Debug, Clone, Copy)]
@@ -64,7 +64,17 @@ pub fn begin(app: &AppHandle) {
 
 /// Start the host and open the main window on it.
 fn boot(app: &AppHandle, mode: Mode) -> Result<(), String> {
-    let host = sidecar::spawn_sidecar()
+    // The LSP bridge address reaches the host (and its `lsp-search` pi
+    // extension) through the sidecar environment. A bridge failure only
+    // costs semantic search, so it never blocks startup.
+    let lsp_env = match lsp::start_bridge(app) {
+        Ok(bridge) => bridge.env(),
+        Err(error) => {
+            eprintln!("[desktop] LSP bridge unavailable: {error}");
+            Vec::new()
+        }
+    };
+    let host = sidecar::spawn_sidecar(&lsp_env)
         .map_err(|error| format!("could not start the host sidecar: {error}"))?;
     let origin = format!("http://127.0.0.1:{}", host.port());
     eprintln!("[desktop] sidecar ready on port {}", host.port());

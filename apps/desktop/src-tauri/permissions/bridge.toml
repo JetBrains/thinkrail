@@ -28,4 +28,11 @@ commands.allow = [
 	"download_update",
 	"restart_to_update",
 	"dismiss_install_result",
+	"detect_workspace_lsps",
+	"lsp_symbol_search",
+	"lsp_find_references",
+	"lsp_goto_definition",
+	"lsp_file_outline",
+	"restart_workspace_lsp",
+	"open_lsp_user_config",
 ]

@@ -28,6 +28,7 @@ import {
 } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useNow } from "@/components/useNow";
+import { LspResourcesSection, useWorkspaceLsps } from "@/lsp";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
 import {
 	EMPTY_RUNTIME,
@@ -357,6 +358,11 @@ export default function ChatView({
 		() => useAppStore.getState().openSettings(SettingsSection.Mcp),
 		[],
 	);
+	const openExtensionsSettings = useCallback(
+		() => useAppStore.getState().openSettings(SettingsSection.Extensions),
+		[],
+	);
+	const { lsps } = useWorkspaceLsps(workspaceRoot);
 	const openProviderSettings = useCallback(
 		() => useAppStore.getState().openSettings(SettingsSection.Providers),
 		[],
@@ -920,6 +926,9 @@ export default function ChatView({
 								onMcpSetEnabled={resources.setMcpEnabled}
 								onMcpReconnect={resources.reconnectMcp}
 								onOpenMcpSettings={openMcpSettings}
+								lspSection={
+									<LspResourcesSection lsps={lsps} onOpenSettings={openExtensionsSettings} />
+								}
 								renderSubagentModel={renderSubagentModel}
 								detail={
 									selectedCommandId ? (

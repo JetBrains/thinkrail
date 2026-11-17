@@ -19,6 +19,7 @@ describe("server extension registry", () => {
 			"@thinkrail/ext-visualize/server",
 			"@thinkrail/ext-ask-user-question/server",
 			"@thinkrail/ext-web-access/server",
+			"@thinkrail/ext-lsp-search/server",
 		]);
 		expect(new Set(specifiers).size).toBe(specifiers.length);
 		for (const entry of serverExtensions) {
@@ -30,6 +31,7 @@ describe("server extension registry", () => {
 			"visualize",
 			"ask-user-question",
 			"web-access",
+			"lsp-search",
 		]);
 	});
 
@@ -38,7 +40,7 @@ describe("server extension registry", () => {
 			registryInlineExtensions("extensions", undefined, serverExtensions, session).map((inline) =>
 				typeof inline === "function" ? "fn" : inline.name,
 			);
-		expect(names()).toEqual(["web-access"]);
+		expect(names()).toEqual(["web-access", "lsp-search"]);
 		expect(
 			names({
 				expectToolResponse: () => {},
@@ -50,12 +52,12 @@ describe("server extension registry", () => {
 					artifactsDir: "",
 				},
 			}),
-		).toEqual(["visualize", "ask-user-question", "web-access"]);
+		).toEqual(["visualize", "ask-user-question", "web-access", "lsp-search"]);
 		expect(
 			registryInlineExtensions("childExtensions").map((inline) =>
 				typeof inline === "function" ? "fn" : inline.name,
 			),
-		).toEqual(["web-access"]);
+		).toEqual(["web-access", "lsp-search"]);
 	});
 });
 

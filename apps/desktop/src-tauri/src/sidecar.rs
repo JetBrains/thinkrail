@@ -138,7 +138,7 @@ impl Drop for SidecarHandle {
 }
 
 /// Spawn the sidecar with a dynamic port and wait for it to report readiness.
-pub fn spawn_sidecar() -> Result<SidecarHandle, String> {
+pub fn spawn_sidecar(extra_env: &[(String, String)]) -> Result<SidecarHandle, String> {
     let binary = sidecar_binary_path().ok_or_else(|| {
         "thinkrail-sidecar binary not found (run `bun run build:sidecar` first)".to_string()
     })?;
@@ -147,6 +147,7 @@ pub fn spawn_sidecar() -> Result<SidecarHandle, String> {
         .arg("--port")
         .arg("0")
         .arg(EXIT_ON_STDIN_CLOSE_FLAG)
+        .envs(extra_env.iter().map(|(key, value)| (key, value)))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit());

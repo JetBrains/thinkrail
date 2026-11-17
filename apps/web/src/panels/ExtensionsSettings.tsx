@@ -11,7 +11,8 @@ import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { useEffect, useState } from "react";
 import { webOnlyExtensions } from "@/extensions";
-import { selectActiveRepoWorkspaceId, toast, useAppStore } from "@/store";
+import { LspSettings } from "@/lsp";
+import { selectActiveRepoWorkspaceId, selectWorkspaceById, toast, useAppStore } from "@/store";
 import { getTransport, supportsExtensionSettings, supportsPiPackages } from "@/transport";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { InstallPackageDialog } from "./InstallPackageDialog";
@@ -20,6 +21,7 @@ import { saveSettings } from "./saveSettings";
 import { UPDATE_CHECK_KEY, usePiPackages } from "./usePiPackages";
 
 const BUNDLED_DESCRIPTIONS: Readonly<Record<string, MessageKey>> = {
+	"lsp-search": "settings.extensions.lsp-search.description",
 	visualize: "settings.extensions.visualize.description",
 	"web-access": "settings.extensions.web-access.description",
 };
@@ -194,6 +196,11 @@ export function ExtensionsSettings() {
 	const packagesVersion = useAppStore((state) => state.packagesVersion);
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
 	const workspaceId = useAppStore(selectActiveRepoWorkspaceId);
+	const worktreePath = useAppStore(
+		(state) =>
+			(workspaceId ? selectWorkspaceById(state, workspaceId)?.worktreePath : undefined) ??
+			undefined,
+	);
 	const packagesSupported = supportsPiPackages(protocolVersion);
 	const settingsSupported = supportsExtensionSettings(protocolVersion);
 	const [entries, setEntries] = useState<ExtensionCatalogEntry[] | "loading" | "failed">("loading");
@@ -276,6 +283,10 @@ export function ExtensionsSettings() {
 					onSetting={settingsSupported ? changeSetting : undefined}
 				/>
 			</section>
+			<LspSettings
+				worktreePath={worktreePath}
+				onEditFailed={() => toast.error(t("settings.lsp.editConfigFailed"))}
+			/>
 			{protocolVersion !== null && protocolVersion >= OTHER_AGENT_SKILLS_PROTOCOL_VERSION ? (
 				<section data-testid="settings-other-agent-skills" className="flex flex-col">
 					<h4 className="pb-8 tr-text-label-pill text-text-subtle">
