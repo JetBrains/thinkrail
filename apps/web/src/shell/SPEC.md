@@ -494,8 +494,10 @@ there, else the default); focus recovery records a parked root like any focus.
 ## Focus recovery
 
 An action that removes, replaces or disables the focused control must not drop focus to `<body>`.
-`focusRecovery.ts`, installed once from `Shell` beside the region tracker, owns that for every surface;
-surfaces only emit the markup vocabulary ([[module-web]], *Get right*), never recovery code. On `focusin`
+Shared dialogs return to their opener in their close-autofocus lifecycle ([[module-ui]]); a removed or
+unavailable opener still needs recovery. `focusRecovery.ts`, installed once from `Shell` beside the
+region tracker, owns that fallback for every surface; surfaces only emit the markup vocabulary
+([[module-web]], *Get right*), never recovery code. On `focusin`
 it records the element with its context: for each enclosing `data-focus-list` (innermost first, bounded)
 the list key, the enclosing `data-focus-row` id and the ids of the next and previous rows of that logical
 list at that moment (refreshed while the element stays mounted and the page mutates), its slot
