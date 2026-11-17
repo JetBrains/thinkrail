@@ -208,7 +208,7 @@ import {
 	sendableComments,
 	updateComment,
 } from "../reviews";
-import { getConfig, noteRecentModel, updateConfig } from "../settings";
+import { getConfig, noteRecentModel, setSubagentEnabled, updateConfig } from "../settings";
 import { evictSpecIndex, evictSpecRoot, projectHasSpecs, specGraph } from "../spec";
 import { cancelSpeechInstall, installSpeech, removeSpeech } from "../speech";
 import {
@@ -1216,6 +1216,18 @@ const handlers: WsHandlers = {
 			ws.worktreePath,
 			admissionContextFor(project, ws.skillOverrides ?? {}, getConfig().otherAgentSkills),
 		);
+	},
+	"subagent.setEnabled": (p, ctx) => {
+		if (
+			ctx.protocolVersion !== undefined &&
+			ctx.protocolVersion < SUBAGENT_CATALOG_PROTOCOL_VERSION
+		) {
+			throw new Error(
+				`Subagent availability requires protocol ${SUBAGENT_CATALOG_PROTOCOL_VERSION} or newer`,
+			);
+		}
+		setSubagentEnabled(p?.name, p?.enabled);
+		return { ok: true };
 	},
 	"subagent.list": (p, ctx) => {
 		if (

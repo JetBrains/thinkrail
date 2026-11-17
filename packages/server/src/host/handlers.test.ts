@@ -54,7 +54,7 @@ import {
 } from "../feedback";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
 import { addComment, getReviewSnapshot } from "../reviews";
-import { resetConfigCache } from "../settings";
+import { getConfig, resetConfigCache, setSettingsPublisher, updateConfig } from "../settings";
 import { listTerminals } from "../terminal";
 import { todoReviewRecord } from "../todos";
 import { setTrashImplementationForTests } from "../trash";
@@ -1637,4 +1637,100 @@ test("subagent.list admits only pi-resource-trusted workspace metadata and never
 			},
 		),
 	).rejects.toThrow(`requires protocol ${SUBAGENT_CATALOG_PROTOCOL_VERSION}`);
+});
+
+test("concurrent v125 subagent intents from different clients preserve both roles and unknown names", async () => {
+	updateConfig({ disabledSubagents: ["temporarily-missing"] });
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	try {
+		const results = await Promise.all([
+			handleRequest(
+				"subagent.setEnabled",
+				{ name: "scout", enabled: false },
+				{
+					clientKey: "window-one",
+					protocolVersion: SUBAGENT_CATALOG_PROTOCOL_VERSION,
+				},
+			),
+			handleRequest(
+				"subagent.setEnabled",
+				{ name: "worker", enabled: false },
+				{
+					clientKey: "window-two",
+					protocolVersion: SUBAGENT_CATALOG_PROTOCOL_VERSION,
+				},
+			),
+		]);
+		expect(results).toEqual([{ ok: true }, { ok: true }]);
+		expect(published.map((config) => config.disabledSubagents)).toEqual([
+			["temporarily-missing", "scout"],
+			["temporarily-missing", "scout", "worker"],
+		]);
+		resetConfigCache();
+		expect(getConfig().disabledSubagents).toEqual(["temporarily-missing", "scout", "worker"]);
+		await handleRequest("subagent.setEnabled", { name: "unlisted-role", enabled: false }, CTX);
+		await handleRequest("subagent.setEnabled", { name: "scout", enabled: true }, CTX);
+		expect(getConfig().disabledSubagents).toEqual([
+			"temporarily-missing",
+			"worker",
+			"unlisted-role",
+		]);
+	} finally {
+		setSettingsPublisher(null);
+	}
+});
+
+test("subagent intent rejects malformed raw payloads and old clients without mutation or publication", async () => {
+	updateConfig({ disabledSubagents: ["temporarily-missing"] });
+	const before = getConfig();
+	const stored = readFileSync(join(dataDir, "config.json"), "utf8");
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	try {
+		for (const params of [
+			undefined,
+			null,
+			[],
+			"scout",
+			false,
+			1,
+			{},
+			{ enabled: false },
+			{ name: "scout" },
+			{ name: "", enabled: false },
+			{ name: " \t", enabled: true },
+			{ name: 1, enabled: false },
+			{ name: ["scout"], enabled: false },
+			{ name: {}, enabled: false },
+			{ name: "scout", enabled: "false" },
+			{ name: "scout", enabled: 0 },
+			{ name: "scout", enabled: null },
+			{ name: "scout", enabled: [] },
+			{ name: "scout", enabled: {} },
+			{ cwd: repo, disabledSubagents: ["scout"] },
+		]) {
+			await expect(
+				handleRequest("subagent.setEnabled", params, {
+					...CTX,
+					protocolVersion: SUBAGENT_CATALOG_PROTOCOL_VERSION,
+				}),
+			).rejects.toThrow();
+		}
+		await expect(
+			handleRequest(
+				"subagent.setEnabled",
+				{ name: "scout", enabled: false },
+				{
+					...CTX,
+					protocolVersion: SUBAGENT_CATALOG_PROTOCOL_VERSION - 1,
+				},
+			),
+		).rejects.toThrow(`requires protocol ${SUBAGENT_CATALOG_PROTOCOL_VERSION}`);
+		expect(getConfig()).toBe(before);
+		expect(readFileSync(join(dataDir, "config.json"), "utf8")).toBe(stored);
+		expect(published).toEqual([]);
+	} finally {
+		setSettingsPublisher(null);
+	}
 });

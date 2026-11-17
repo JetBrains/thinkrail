@@ -539,6 +539,7 @@ export const WS_METHODS = {
 	sessionActivityList: "session.activityList",
 	sessionGetMessages: "session.getMessages",
 	subagentList: "subagent.list",
+	subagentSetEnabled: "subagent.setEnabled",
 	subagentGetTranscript: "subagent.getTranscript",
 	sessionResources: "session.resources",
 	sessionResourceHistory: "session.resourceHistory",
@@ -1402,6 +1403,10 @@ export interface WsMethodMap {
 	"subagent.stopAll": {
 		params: { workspaceId: string; parentSessionId: string };
 		result: Ack & { targeted: number };
+	};
+	"subagent.setEnabled": {
+		params: { name: string; enabled: boolean };
+		result: Ack;
 	};
 	"subagent.list": {
 		params: { workspaceId?: string };

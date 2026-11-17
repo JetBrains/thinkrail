@@ -10,7 +10,7 @@ const IDLE: AvailabilityState = { pending: false, failed: null };
 const SAVE_TIMEOUT_MS = 15_000;
 
 export function createSubagentAvailabilitySaver(
-	request: (disabledSubagents: string[]) => Promise<unknown>,
+	request: (intent: { name: string; enabled: boolean }) => Promise<unknown>,
 	timeoutMs = SAVE_TIMEOUT_MS,
 ) {
 	let state = IDLE;
@@ -40,8 +40,6 @@ export function createSubagentAvailabilitySaver(
 				publish(IDLE);
 				return true;
 			}
-			const without = initial.disabledSubagents.filter((candidate) => candidate !== name);
-			const next = enabled ? without : [...without, name];
 			publish({ pending: true, failed: null });
 			let finishConfirmation = (_confirmed: boolean) => {};
 			const confirmation = new Promise<boolean>((resolve) => {
@@ -55,8 +53,7 @@ export function createSubagentAvailabilitySaver(
 					finishConfirmation(false);
 				} else if (
 					current.disabledSubagents !== initial.disabledSubagents &&
-					next.length === current.disabledSubagents.length &&
-					next.every((entry) => current.disabledSubagents.includes(entry))
+					current.disabledSubagents.includes(name) === !enabled
 				) {
 					finishConfirmation(true);
 				}
@@ -65,13 +62,14 @@ export function createSubagentAvailabilitySaver(
 			let ok = false;
 			try {
 				// Even after disconnect, hold the lock until the replayable RPC has settled.
-				await request(next);
+				await request({ name, enabled });
 				ok = await confirmation;
 				const current = useAppStore.getState();
 				ok =
 					ok &&
 					current.status === "connected" &&
-					current.connectionGeneration === initial.connectionGeneration;
+					current.connectionGeneration === initial.connectionGeneration &&
+					current.disabledSubagents.includes(name) === !enabled;
 			} catch {
 				ok = false;
 			}
@@ -83,10 +81,6 @@ export function createSubagentAvailabilitySaver(
 	};
 }
 
-export const subagentAvailability = createSubagentAvailabilitySaver((disabledSubagents) =>
-	getTransport().request(
-		"settings.update",
-		{ config: { disabledSubagents } },
-		{ timeoutMs: SAVE_TIMEOUT_MS },
-	),
+export const subagentAvailability = createSubagentAvailabilitySaver((intent) =>
+	getTransport().request("subagent.setEnabled", intent, { timeoutMs: SAVE_TIMEOUT_MS }),
 );

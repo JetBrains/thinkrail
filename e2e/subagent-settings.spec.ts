@@ -118,6 +118,98 @@ test("available agent switches wait for authoritative pushes and persist across 
 	}
 });
 
+test("concurrent clients disabling different roles preserve both intents before either receives pushes", async ({
+	page,
+	context,
+}) => {
+	const channelHold = await installChannelHold(page);
+	const releases: (() => void)[] = [];
+	const baseline = new Map<string, string | null>();
+	let peer: Page | undefined;
+	try {
+		await openFixtureProject(page);
+		await openAgentsSettings(page);
+		for (const name of ["scout", "worker"]) {
+			const toggle = page.getByTestId(`agent-toggle-${name}`);
+			await expect(toggle).toBeEnabled();
+			baseline.set(name, await toggle.getAttribute("data-active"));
+			if (baseline.get(name) !== "true") {
+				await toggle.click();
+				await expect(toggle).toHaveAttribute("data-active", "true");
+				await expect(toggle).toBeEnabled();
+			}
+		}
+		peer = await context.newPage();
+		const peerChannelHold = await installChannelHold(peer);
+		await peer.goto(page.url());
+		await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await openAgentsSettings(peer);
+		for (const name of ["scout", "worker"]) {
+			await expect(peer.getByTestId(`agent-toggle-${name}`)).toHaveAttribute("data-active", "true");
+		}
+
+		const firstPushes = [
+			channelHold.arm("settings.changed"),
+			peerChannelHold.arm("settings.changed"),
+		];
+		releases.push(...firstPushes.map((hold) => hold.release));
+		await page.getByTestId("agent-toggle-scout").click();
+		await Promise.all(firstPushes.map((hold) => hold.held));
+		// channelHold holds one frame at a time: re-arm both before the second intent.
+		const secondPushes = [
+			channelHold.arm("settings.changed"),
+			peerChannelHold.arm("settings.changed"),
+		];
+		releases.push(...secondPushes.map((hold) => hold.release));
+		await peer.getByTestId("agent-toggle-worker").click();
+		await Promise.all(secondPushes.map((hold) => hold.held));
+		for (const client of [page, peer]) {
+			for (const name of ["scout", "worker"]) {
+				await expect(client.getByTestId(`agent-toggle-${name}`)).toHaveAttribute(
+					"data-active",
+					"true",
+				);
+				await expect(client.getByTestId(`agent-toggle-${name}`)).toBeDisabled();
+			}
+		}
+		// Release in host order, preventing an older held snapshot from overtaking the latest.
+		for (const hold of firstPushes) hold.release();
+		for (const client of [page, peer]) {
+			await expect(client.getByTestId("agent-toggle-scout")).toHaveAttribute(
+				"data-active",
+				"false",
+			);
+		}
+		for (const hold of secondPushes) hold.release();
+		for (const client of [page, peer]) {
+			for (const name of ["scout", "worker"]) {
+				await expect(client.getByTestId(`agent-toggle-${name}`)).toHaveAttribute(
+					"data-active",
+					"false",
+				);
+				await expect(client.getByTestId(`agent-toggle-${name}`)).toBeEnabled();
+			}
+		}
+	} finally {
+		for (const release of releases) release();
+		try {
+			if (!page.isClosed()) {
+				for (const [name, active] of baseline) {
+					const toggle = page.getByTestId(`agent-toggle-${name}`);
+					await expect(toggle).toBeEnabled();
+					if ((await toggle.getAttribute("data-active")) !== active) {
+						await toggle.click();
+						await expect(toggle).toHaveAttribute("data-active", active ?? "true");
+						await expect(toggle).toBeEnabled();
+					}
+				}
+			}
+		} finally {
+			await peer?.close();
+		}
+	}
+});
+
 test("agent availability controls are inaccessible while disconnected and return after reconnect", async ({
 	page,
 }) => {

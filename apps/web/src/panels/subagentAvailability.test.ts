@@ -25,8 +25,8 @@ function deferred() {
 	return { promise, resolve, reject };
 }
 
-test("ACK alone does not update or unlock; rapid writes are blocked and subsequent saves rebase", async () => {
-	const writes: string[][] = [];
+test("ACK alone does not update or unlock; rapid writes are blocked and subsequent saves send intent", async () => {
+	const writes: { name: string; enabled: boolean }[] = [];
 	const saver = createSubagentAvailabilitySaver(async (next) => {
 		writes.push(next);
 	});
@@ -40,10 +40,10 @@ test("ACK alone does not update or unlock; rapid writes are blocked and subseque
 	expect(await first).toBe(true);
 	const second = saver.save("scout", false);
 	expect(writes).toEqual([
-		["temporarily-missing", "worker"],
-		["temporarily-missing", "worker", "scout"],
+		{ name: "worker", enabled: false },
+		{ name: "scout", enabled: false },
 	]);
-	push(writes[1] ?? []);
+	push(["temporarily-missing", "worker", "scout", "peer-disabled"]);
 	expect(await second).toBe(true);
 });
 
@@ -58,8 +58,8 @@ test("a push before ACK changes authoritative display but keeps the write lock u
 	expect(saver.getSnapshot().pending).toBe(false);
 });
 
-test("rejection preserves settings and a retry uses the latest list, including missing names", async () => {
-	const writes: string[][] = [];
+test("rejection preserves settings and a retry sends only intent despite peer-list changes", async () => {
+	const writes: { name: string; enabled: boolean }[] = [];
 	let reject = true;
 	const saver = createSubagentAvailabilitySaver(async (next) => {
 		writes.push(next);
@@ -71,9 +71,9 @@ test("rejection preserves settings and a retry uses the latest list, including m
 	push(["peer-disabled", "temporarily-missing"]);
 	reject = false;
 	const retry = saver.save("worker", false);
-	push(writes[1] ?? []);
+	push(["peer-disabled", "temporarily-missing", "worker"]);
 	expect(await retry).toBe(true);
-	expect(writes[1]).toEqual(["peer-disabled", "temporarily-missing", "worker"]);
+	expect(writes[1]).toEqual({ name: "worker", enabled: false });
 });
 
 test("disconnect holds the lock until the replayable request settles and fails confirmation", async () => {
@@ -104,13 +104,13 @@ test("an unrelated settings push does not confirm a role save; missing confirmat
 
 test("enabling removes only the chosen role and unsupported hosts cannot write", async () => {
 	push(["worker", "temporarily-missing"]);
-	const writes: string[][] = [];
+	const writes: { name: string; enabled: boolean }[] = [];
 	const saver = createSubagentAvailabilitySaver(async (next) => {
 		writes.push(next);
-		push(next);
+		push(["temporarily-missing", "peer-disabled"]);
 	});
 	expect(await saver.save("worker", true)).toBe(true);
-	expect(writes).toEqual([["temporarily-missing"]]);
+	expect(writes).toEqual([{ name: "worker", enabled: true }]);
 	useAppStore.setState({ protocolVersion: SUBAGENT_CATALOG_PROTOCOL_VERSION - 1 });
 	expect(await saver.save("scout", false)).toBeNull();
 	expect(writes).toHaveLength(1);
@@ -127,4 +127,26 @@ test("a late authoritative change makes Retry a no-op rather than waiting for a 
 	expect(await saver.save("worker", false)).toBe(true);
 	expect(requests).toBe(1);
 	expect(saver.getSnapshot().failed).toBeNull();
+});
+
+test("peer changes to other roles before ACK do not prevent target confirmation", async () => {
+	const request = deferred();
+	const saver = createSubagentAvailabilitySaver(() => request.promise);
+	const save = saver.save("worker", false);
+	push(["temporarily-missing", "peer-disabled", "worker"]);
+	push(["other-peer-disabled", "worker"]);
+	expect(saver.getSnapshot().pending).toBe(true);
+	request.resolve();
+	expect(await save).toBe(true);
+	expect(useAppStore.getState().disabledSubagents).toEqual(["other-peer-disabled", "worker"]);
+});
+
+test("a peer reversal of the target before ACK is not confirmed", async () => {
+	const request = deferred();
+	const saver = createSubagentAvailabilitySaver(() => request.promise);
+	const save = saver.save("worker", false);
+	push(["temporarily-missing", "worker"]);
+	push(["temporarily-missing"]);
+	request.resolve();
+	expect(await save).toBe(false);
 });

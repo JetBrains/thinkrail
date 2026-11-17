@@ -414,6 +414,17 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	return next;
 }
 
+export function setSubagentEnabled(name: string, enabled: boolean): AppConfig {
+	if (typeof name !== "string" || !name.trim()) {
+		throw new Error("subagent name must be a non-blank string");
+	}
+	if (typeof enabled !== "boolean") {
+		throw new Error("subagent enabled must be a boolean");
+	}
+	const without = getConfig().disabledSubagents.filter((candidate) => candidate !== name);
+	return updateConfig({ disabledSubagents: enabled ? without : [...without, name] });
+}
+
 /** Records an explicit model choice at the head of `recentModels` (deduped, capped), then publishes. */
 export function noteRecentModel(model: WireModel): AppConfig {
 	const current = getConfig();
