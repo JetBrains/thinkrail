@@ -15,6 +15,10 @@ One visual language for every transient or inline message the app shows inside i
 `ErrorTurn` / `CompactionNotice`. OS-level notifications are a different thing, owned by the `notifications`
 module.
 
+`@thinkrail/ui/inline-notice` owns the shared inline surface for Settings and stale review composers.
+Its neutral variant uses the default border and muted information icon; severity variants use the table
+below. All variants are polite status regions. Consumers supply content/actions and visibility.
+
 ## Raising a toast
 
 Use the store helpers: `toast.info|success|warning|error(message, title?)` from `@/store`. Use `pushToast`

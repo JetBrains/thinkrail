@@ -23,6 +23,7 @@ import {
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import { formatContext } from "@/chat/modelPicker";
@@ -52,7 +53,6 @@ import {
 	useModelContextSettings,
 } from "./ModelContextSettings";
 import { SettingsGroup } from "./SettingsGroup";
-import { SettingsSwitch } from "./SettingsSwitch";
 import { keepSettingsDraftOnEscape, useSettingsDraft } from "./settingsDraft";
 
 const INPUT_CLASS =
@@ -197,12 +197,12 @@ export function EndpointModelItem({
 						/>
 					</span>
 				) : null}
-				<SettingsSwitch
+				<Switch
 					checked={model.selected}
 					disabled={busy}
 					label={t("settings.customEndpoints.use", { name: model.id })}
 					testId="custom-endpoints-use"
-					onChange={onSelect}
+					onCheckedChange={onSelect}
 				/>
 			</div>
 			{context && invalid ? (

@@ -1,6 +1,6 @@
 import { RiShieldCheckLine as ShieldCheck } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { SettingsSwitch } from "./SettingsSwitch";
+import { Switch } from "@thinkrail/ui/switch";
 
 export function AnalyticsDescription() {
 	const t = useT();
@@ -28,12 +28,12 @@ function AnalyticsSharingSwitch({
 				</span>
 				{description && <span>{description}</span>}
 			</div>
-			<SettingsSwitch
+			<Switch
 				checked={enabled}
 				disabled={disabled}
 				label={t("panels.analytics.shareLabel")}
 				testId="analytics-toggle"
-				onChange={onChange}
+				onCheckedChange={onChange}
 			/>
 		</div>
 	);
@@ -62,12 +62,12 @@ export function AnalyticsConsentChoice({ enabled, disabled, onChange }: Analytic
 						{t("panels.analytics.shareDescription")}
 					</span>
 				</div>
-				<SettingsSwitch
+				<Switch
 					checked={enabled}
 					disabled={disabled}
 					label={t("panels.analytics.shareLabel")}
 					testId="analytics-toggle"
-					onChange={onChange}
+					onCheckedChange={onChange}
 				/>
 			</div>
 			<p className="flex items-start gap-8 border-border-muted border-t px-16 py-12 text-text-muted tr-text-metadata">

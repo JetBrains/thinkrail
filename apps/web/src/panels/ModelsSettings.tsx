@@ -6,6 +6,7 @@ import {
 } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { Switch } from "@thinkrail/ui/switch";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
@@ -18,7 +19,6 @@ import { useCustomEndpoints } from "./CustomEndpointsSettings";
 import { ModelContextSettings } from "./ModelContextSettings";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
 import { SettingsRow } from "./SettingsRow";
-import { SettingsSwitch } from "./SettingsSwitch";
 import { useSettingsDialogContainer } from "./settingsDialogContainer";
 import { VisibleModelsSettings } from "./VisibleModelsSettings";
 
@@ -195,11 +195,11 @@ export function ModelsSettings() {
 						label={t("settings.models.agentReview")}
 						description={t("settings.models.agentReviewDescription")}
 						control={
-							<SettingsSwitch
+							<Switch
 								checked={agentReviewEnabled}
 								label={t("settings.models.agentReview")}
 								testId="agent-review-toggle"
-								onChange={setAgentReviewEnabled}
+								onCheckedChange={setAgentReviewEnabled}
 							/>
 						}
 					/>
@@ -209,11 +209,11 @@ export function ModelsSettings() {
 					label={t("settings.models.autoFix")}
 					description={t("settings.models.autoFixDescription")}
 					control={
-						<SettingsSwitch
+						<Switch
 							checked={autoFix}
 							label={t("settings.models.autoFix")}
 							testId="review-autofix-toggle"
-							onChange={setAutoFix}
+							onCheckedChange={setAutoFix}
 						/>
 					}
 				/>

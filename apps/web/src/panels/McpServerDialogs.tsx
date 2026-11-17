@@ -21,9 +21,8 @@ import {
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
 import { Textarea } from "@thinkrail/ui/textarea";
-import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useId, useMemo, useState } from "react";
 import { randomId } from "@/lib";
 import type { McpServerRow } from "@/store";
 import {
@@ -51,6 +50,7 @@ import {
 } from "./mcpEntries";
 import { GITHUB_MCP_RECIPE_JSON, MCP_PRESETS, type McpPreset } from "./mcpPresets";
 import { type McpRowView, mcpConfiguredExposureText, mcpExposureLabel } from "./mcpServerView";
+import { SegmentedControl } from "./SegmentedControl";
 
 const MCP_INPUT_CLASS =
 	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default placeholder:text-text-muted focus-visible:border-control-border-active focus-visible:focus-ring disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text";
@@ -152,35 +152,6 @@ function Field({
 			) : hint ? (
 				<span className="text-text-muted tr-text-metadata">{hint}</span>
 			) : null}
-		</div>
-	);
-}
-
-function Segments<T extends string>({
-	value,
-	options,
-	testId,
-	disabled,
-	onChange,
-}: {
-	value: T;
-	options: readonly { id: T; label: string; disabled?: boolean }[];
-	testId: string;
-	disabled?: boolean;
-	onChange: (value: T) => void;
-}) {
-	return (
-		<div className="flex flex-wrap items-center gap-2" data-testid={testId}>
-			{options.map((option) => (
-				<ToggleSegment
-					key={option.id}
-					testid={`${testId}-${option.id}`}
-					label={option.label}
-					active={value === option.id}
-					disabled={disabled || option.disabled === true}
-					onClick={() => onChange(option.id)}
-				/>
-			))}
 		</div>
 	);
 }
@@ -301,6 +272,7 @@ function McpForm({
 	onChange: (draft: McpFormDraft) => void;
 }) {
 	const t = useT();
+	const formId = useId();
 	return (
 		<div className="flex flex-col gap-12" data-testid="mcp-add-form">
 			<Field label={t("mcp.form.name")} error={issues?.name} hint={t("mcp.form.nameHint")}>
@@ -313,14 +285,20 @@ function McpForm({
 				/>
 			</Field>
 			<Field label={t("mcp.form.transport")}>
-				<Segments
+				<SegmentedControl
 					testId="mcp-form-transport"
+					name={`${formId}-transport`}
+					label={t("mcp.form.transport")}
 					value={draft.transport}
 					options={[
-						{ id: "stdio", label: t("mcp.form.transportStdio") },
-						{ id: "http", label: t("mcp.form.transportHttp") },
+						{
+							id: "stdio",
+							label: t("mcp.form.transportStdio"),
+							testId: "mcp-form-transport-stdio",
+						},
+						{ id: "http", label: t("mcp.form.transportHttp"), testId: "mcp-form-transport-http" },
 					]}
-					onChange={(transport) => onChange({ ...draft, transport })}
+					onSelect={(transport) => onChange({ ...draft, transport })}
 				/>
 			</Field>
 			{draft.transport === "http" ? (
@@ -377,11 +355,17 @@ function McpForm({
 				<ValueRows draft={draft} onChange={onChange} />
 			</Field>
 			<Field label={t("mcp.form.exposure")} hint={t(MCP_EXPOSURE_HINT[draft.exposure])}>
-				<Segments
+				<SegmentedControl
 					testId="mcp-form-exposure"
+					name={`${formId}-exposure`}
+					label={t("mcp.form.exposure")}
 					value={draft.exposure}
-					options={MCP_EXPOSURES.map((id) => ({ id, label: mcpExposureLabel(t, id) }))}
-					onChange={(exposure) => onChange({ ...draft, exposure })}
+					options={MCP_EXPOSURES.map((id) => ({
+						id,
+						label: mcpExposureLabel(t, id),
+						testId: `mcp-form-exposure-${id}`,
+					}))}
+					onSelect={(exposure) => onChange({ ...draft, exposure })}
 				/>
 			</Field>
 			<Field label={t("mcp.form.description")} hint={t("mcp.form.descriptionHint")}>
@@ -604,6 +588,7 @@ export function McpAddDialog({
 	onEnableInProject: (name: string) => Promise<void>;
 }) {
 	const t = useT();
+	const dialogId = useId();
 	const [tier, setTier] = useState(initialTier);
 	const [selectedScope, setSelectedScope] = useState<McpServerScope>("user");
 	const scope: McpServerScope = projectScopeAvailable ? selectedScope : "user";
@@ -729,28 +714,49 @@ export function McpAddDialog({
 								}}
 							/>
 							<div className="flex flex-wrap items-center justify-between gap-8">
-								<Segments
-									testId="mcp-add-tier"
-									value={tier}
-									options={[
-										{ id: "form", label: t("mcp.addDialog.tierForm") },
-										{ id: "json", label: t("mcp.addDialog.tierJson") },
-									]}
-									onChange={setTier}
-								/>
-								<Segments
-									testId="mcp-add-scope"
-									value={scope}
-									options={[
-										{ id: "user", label: t("mcp.addDialog.scopeUser") },
-										{
-											id: "project",
-											label: t("mcp.addDialog.scopeProject"),
-											disabled: !projectScopeAvailable,
-										},
-									]}
-									onChange={setSelectedScope}
-								/>
+								<Field label={t("mcp.addDialog.method")}>
+									<SegmentedControl
+										testId="mcp-add-tier"
+										name={`${dialogId}-tier`}
+										label={t("mcp.addDialog.method")}
+										value={tier}
+										options={[
+											{
+												id: "form",
+												label: t("mcp.addDialog.tierForm"),
+												testId: "mcp-add-tier-form",
+											},
+											{
+												id: "json",
+												label: t("mcp.addDialog.tierJson"),
+												testId: "mcp-add-tier-json",
+											},
+										]}
+										onSelect={setTier}
+									/>
+								</Field>
+								<Field label={t("mcp.addDialog.scope")}>
+									<SegmentedControl
+										testId="mcp-add-scope"
+										name={`${dialogId}-scope`}
+										label={t("mcp.addDialog.scope")}
+										value={scope}
+										options={[
+											{
+												id: "user",
+												label: t("mcp.addDialog.scopeUser"),
+												testId: "mcp-add-scope-user",
+											},
+											{
+												id: "project",
+												label: t("mcp.addDialog.scopeProject"),
+												testId: "mcp-add-scope-project",
+												disabled: !projectScopeAvailable,
+											},
+										]}
+										onSelect={setSelectedScope}
+									/>
+								</Field>
 							</div>
 							{!projectScopeAvailable ? (
 								<p className="text-text-muted tr-text-metadata">{t("mcp.addDialog.untrusted")}</p>

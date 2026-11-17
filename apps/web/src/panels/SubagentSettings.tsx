@@ -9,11 +9,11 @@ import {
 } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import { workspaceName } from "../store";
 import { SettingsGroup, SettingsSubheading } from "./SettingsGroup";
 import { SettingsRow } from "./SettingsRow";
-import { SettingsSwitch } from "./SettingsSwitch";
 import { SETTINGS_INPUT, useSettingsDraft } from "./settingsDraft";
 
 function parseLimit(draft: string): number | null {
@@ -161,11 +161,11 @@ export function SubagentSettings({
 						: t("settings.subagents.allowOffDescription")
 				}
 				control={
-					<SettingsSwitch
+					<Switch
 						checked={globalEnabled}
 						label={t("settings.subagents.allowGlobally")}
 						testId="subagents-global-toggle"
-						onChange={onGlobalEnabledChange}
+						onCheckedChange={onGlobalEnabledChange}
 					/>
 				}
 			/>
@@ -205,11 +205,11 @@ export function SubagentSettings({
 								testId="subagents-workspace-source"
 								onReset={() => onWorkspaceEnabledChange(null)}
 							/>
-							<SettingsSwitch
+							<Switch
 								checked={workspaceEnabled}
 								label={t("settings.subagents.allowInWorkspace", { name: workspaceLabel })}
 								testId="subagents-workspace-toggle"
-								onChange={(enabled) => onWorkspaceEnabledChange(enabled ? "on" : "off")}
+								onCheckedChange={(enabled) => onWorkspaceEnabledChange(enabled ? "on" : "off")}
 							/>
 						</span>
 					}

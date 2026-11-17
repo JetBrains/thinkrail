@@ -17,13 +17,13 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
+import { InlineNotice } from "@thinkrail/ui/inline-notice";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment, useId, useState } from "react";
 import { errorText, RequestTimeoutError, wsErrorCode } from "@/transport";
 import { CHIP_CLASS, GalleryLink, packageChips } from "./PiPackagesSettings";
 import { SegmentedControl } from "./SegmentedControl";
-import { SettingsNotice } from "./SettingsNotice";
 
 const INPUT_CLASS =
 	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default placeholder:text-text-muted focus-visible:border-control-border-active focus-visible:focus-ring disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text";
@@ -328,9 +328,9 @@ export function InstallPackageBody({
 			{step.kind === "failed" ? (
 				<>
 					<div className="flex flex-col gap-8">
-						<SettingsNotice variant="error" testId="install-package-error">
+						<InlineNotice variant="error" testId="install-package-error">
 							<span className="break-words">{step.message}</span>
-						</SettingsNotice>
+						</InlineNotice>
 						{step.outcome === "timedOut" ? null : (
 							<span className="tr-text-metadata text-text-muted">
 								{step.outcome === "nothingAdded"

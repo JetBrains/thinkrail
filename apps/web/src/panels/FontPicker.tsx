@@ -21,6 +21,7 @@ import {
 	CommandItem,
 	CommandList,
 } from "@thinkrail/ui/command";
+import { InlineNotice } from "@thinkrail/ui/inline-notice";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { SkeletonRows } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
@@ -35,7 +36,6 @@ import {
 	isRoleDefault,
 } from "./fontCatalog";
 import { SETTINGS_TAG } from "./SettingsGroup";
-import { SettingsNotice } from "./SettingsNotice";
 import { useSettingsDialogContainer } from "./settingsDialogContainer";
 
 const WarningIcon = withIconClass(Alert, "text-feedback-warning");
@@ -79,7 +79,7 @@ function InstalledStatus({ state, onRetry }: { state: InstalledFonts; onRetry: (
 				{t("settings.appearance.fonts.picker.installed")}
 			</span>
 			{state.status === "failed" ? (
-				<SettingsNotice
+				<InlineNotice
 					variant="warning"
 					testId="font-installed-failed"
 					action={
@@ -89,7 +89,7 @@ function InstalledStatus({ state, onRetry }: { state: InstalledFonts; onRetry: (
 					}
 				>
 					{t("settings.appearance.fonts.picker.readFailed")}
-				</SettingsNotice>
+				</InlineNotice>
 			) : (
 				<SkeletonRows rows={4} label={t("settings.appearance.fonts.picker.reading")} />
 			)}

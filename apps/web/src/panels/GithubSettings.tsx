@@ -2,11 +2,11 @@ import { RiCheckLine as Check, RiRefreshLine as RefreshCw } from "@remixicon/rea
 import type { GithubAuthStatus } from "@thinkrail/contracts";
 import { T, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { InlineNotice } from "@thinkrail/ui/inline-notice";
 import { SkeletonRows } from "@thinkrail/ui/skeleton";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { getTransport } from "@/transport";
 import { SettingsGroup } from "./SettingsGroup";
-import { SettingsNotice } from "./SettingsNotice";
 
 let lastStatus: GithubAuthStatus | null = null;
 
@@ -111,18 +111,18 @@ export function GithubStatusView({
 							<div className="ml-auto shrink-0">{refreshButton}</div>
 						</div>
 					) : status ? (
-						<SettingsNotice variant="warning" action={refreshButton}>
+						<InlineNotice variant="warning" action={refreshButton}>
 							<p>
 								<T
 									i18nKey="settings.github.notConnected"
 									components={[<code key="command" className="tr-code-text" />]}
 								/>
 							</p>
-						</SettingsNotice>
+						</InlineNotice>
 					) : failed ? (
-						<SettingsNotice variant="error" action={refreshButton}>
+						<InlineNotice variant="error" action={refreshButton}>
 							<p>{t("settings.github.checkFailed")}</p>
-						</SettingsNotice>
+						</InlineNotice>
 					) : (
 						<SkeletonRows rows={1} label={t("settings.github.checking")} />
 					)}

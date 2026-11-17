@@ -13,6 +13,8 @@ import {
 } from "@thinkrail/contracts";
 import { T, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
+import { InlineNotice } from "@thinkrail/ui/inline-notice";
+import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
@@ -42,10 +44,8 @@ import {
 } from "./fontCatalog";
 import { SettingsDisclosure } from "./SettingsDisclosure";
 import { SettingsGroup, SettingsSubheading } from "./SettingsGroup";
-import { SettingsNotice } from "./SettingsNotice";
 import { SETTINGS_RANGE_INPUT, SettingsRangeTrack } from "./SettingsRange";
 import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
-import { SettingsSwitch } from "./SettingsSwitch";
 import { saveSettings } from "./saveSettings";
 import { SETTINGS_INPUT, useSettingsDraft } from "./settingsDraft";
 
@@ -414,7 +414,7 @@ export function FontsGroup() {
 		const response = weightResponses[family];
 		if (response === undefined || response === "smooth") return [];
 		return [
-			<SettingsNotice key={family} variant="info" testId="font-weight-hint" className="mt-4">
+			<InlineNotice key={family} variant="info" testId="font-weight-hint" className="mt-4">
 				{response === "fixed"
 					? t("settings.appearance.fonts.weightFixed", {
 							family,
@@ -422,7 +422,7 @@ export function FontsGroup() {
 							code: displayFamily(faces.code),
 						})
 					: t("settings.appearance.fonts.weightSteps", { family })}
-			</SettingsNotice>,
+			</InlineNotice>,
 		];
 	});
 	const picker = (role: FontRole) => ({
@@ -476,12 +476,12 @@ export function FontsGroup() {
 				/>
 				{unavailable ? (
 					<div className="border-border-muted border-b py-12">
-						<SettingsNotice variant="warning" testId={`font-${role}-unavailable`}>
+						<InlineNotice variant="warning" testId={`font-${role}-unavailable`}>
 							{t("settings.appearance.fonts.unavailable", {
 								family: shown,
 								fallback: displayFamily(faces[role]),
 							})}
-						</SettingsNotice>
+						</InlineNotice>
 					</div>
 				) : null}
 			</>
@@ -565,11 +565,11 @@ export function FontsGroup() {
 							void saveSettings({ codeLigatures: DEFAULT_FONT_PREFERENCE.codeLigatures }, failure)
 						}
 					>
-						<SettingsSwitch
+						<Switch
 							checked={codeLigatures}
 							label={t("settings.appearance.fonts.ligatures")}
 							testId="font-ligatures"
-							onChange={(next) => void saveSettings({ codeLigatures: next }, failure)}
+							onCheckedChange={(next) => void saveSettings({ codeLigatures: next }, failure)}
 						/>
 					</WithReset>
 				}
