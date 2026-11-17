@@ -381,14 +381,17 @@ try {
 			assertBundle(sample.name, join(dir, web));
 			assertLoads(fixture, join(dir, web), manifest, sample.name);
 		}
-		const prefix = /--prefix (\w+)/.exec(
-			(
-				JSON.parse(readFileSync(join(sample.dir, "package.json"), "utf8")) as {
-					scripts: { build: string };
-				}
-			).scripts.build,
-		)?.[1];
-		if (styles && prefix) assertStylesheet(sample.name, join(dir, styles), prefix);
+		if (styles) {
+			const build =
+				(
+					JSON.parse(readFileSync(join(sample.dir, "package.json"), "utf8")) as {
+						scripts?: { build?: string };
+					}
+				).scripts?.build ?? "";
+			const prefix = /--prefix[= ]([a-z]+)/.exec(build)?.[1];
+			if (!prefix) fail(`${sample.name} declares styles but its build script names no --prefix`);
+			assertStylesheet(sample.name, join(dir, styles), prefix);
+		}
 		if (server) servers.push(join(dir, server));
 	}
 

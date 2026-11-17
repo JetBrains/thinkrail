@@ -28,17 +28,21 @@ private and unchanged. It imports no pi value at runtime.
 - `./web`, `./resources`, `./ui/<m>` for `attention-line`, `button`, `dialog`, `fonts`, `keyboard`,
   `textarea`, `theme`, `utils` — **type declarations** of the shared set. At runtime these specifiers are
   the app's own modules on `globalThis.__thinkrailExtensionHost = { api, modules }`, keyed by exactly these
-  specifiers plus `react`, `react/jsx-runtime` and `react-dom`. Each subpath's `default` condition is a
-  generated stub that reads the host object (so a non-SDK bundler gets the same runtime error as an SDK
-  build), never code of its own.
+  specifiers plus `react`, `react/jsx-runtime` and `react-dom` — the canonical list is `SHARED_SPECIFIERS`
+  in `src/shared.ts`, beside `EXTENSION_API_VERSION` and `HOST_OBJECT`. `./resources` promises
+  `FramedResourcePreview`, `ResourcePreview`, `useResourceScope` and `useOptionalResourceHost`, whose
+  `ResourceHost` is narrowed to `markdown` (`{ text, className? }`), `openFile` and `openComparison`.
+  Each subpath's `default` condition is a generated stub that reads the host object (so a non-SDK bundler
+  gets the same runtime error as an SDK build), never code of its own.
 - The exact export names per specifier are `assets/shared-modules.json` (also exported as
   `./shared-modules.json`); the props, variants and names in the declarations are the rest of the v1
   promise, together with the implicit contract the installed-extensions section lists (TooltipProvider,
   locale store, portals, `html[data-theme]`, semantic variables and utility names, spacing/radius scales,
   typography classes, Tailwind major and layer order, React major).
-- `bin` `thinkrail-extension` (`bin/thinkrail-extension.js`, a committed launcher importing
-  `dist/cli.js`, so a workspace install links it before the SDK is built): `thinkrail-extension build [--prefix <a-z>] [--entry <file>] [--css <file>] [--cwd <dir>]
-  [--no-minify]`; `./theme.css` (the theme file) and `assets/extension.css` (the stylesheet template).
+- `bin` `thinkrail-extension` — a committed launcher, `bin/thinkrail-extension.js`, importing
+  `dist/cli.js`, so a workspace install links it before the SDK is built: `thinkrail-extension build
+  [--prefix <a-z>] [--entry <file>] [--css <file>] [--cwd <dir>] [--no-minify]`. Also `./theme.css`
+  (the theme file) and `assets/extension.css` (the stylesheet template).
 - Versioning: the package's `major.minor` is the extension API it builds (`EXTENSION_API_VERSION` in
   `src/shared.ts`); patch releases change no promise. The first changeset is a major bump from `0.0.0`
   to `1.0.0`.
@@ -62,7 +66,8 @@ private and unchanged. It imports no pi value at runtime.
 - Every shared specifier — also when imported from inside `node_modules` — resolves to a generated
   module that imports one runtime check (host object present, `api` major equal, else a thrown error
   naming both versions) and re-exports the manifest's names (`default` too for the three React
-  specifiers). `react/jsx-dev-runtime` maps onto the production `jsx`. Rejected with a hint, naming the
+  specifiers). Re-exporting every listed name costs about 1 KB per bundle, because rolldown keeps
+  property reads; narrowing to the names an extension imports is a deferred optimisation. `react/jsx-dev-runtime` maps onto the production `jsx`. Rejected with a hint, naming the
   importer: `react-dom/client`, `react/compiler-runtime` / `react-compiler-runtime` (the React Compiler
   is not supported in v1), any other `react` / `react-dom` subpath, `./server` and unknown SDK subpaths,
   the private `@thinkrail/ui|extension-api|resource-renderers` names (pointing at the SDK specifier), and
@@ -101,7 +106,8 @@ private and unchanged. It imports no pi value at runtime.
   — `@types/react` / `@types/react-dom` 19 and pi, all optional; dev-only, to generate declarations and
   assets — `extension-api`, `ui`, `resource-renderers` (their own `contracts` / `locales` imports resolve
   from them; `tsconfig.dts.json` includes the contracts sources by path), React. Shipped code uses
-  `node:` builtins and standard ESM only.
+  `node:` builtins and standard ESM only. The packed manifest still lists the dev dependencies (the
+  private ones as `0.0.0`); npm never installs them for a consumer.
 - **Forbidden:** importing the host (`server`, `shared`, `apps/*`); a runtime import of any private
   package; pi values. Nothing in `apps/*` or `packages/server` imports the SDK. Enforced by
   `scripts/check-module-boundaries.ts`, which also keeps the shipped sources (`src/**` outside

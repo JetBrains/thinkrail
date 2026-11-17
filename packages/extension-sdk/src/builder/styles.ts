@@ -63,5 +63,4 @@ export async function buildStylesheet(options: StylesOptions) {
 	const { code } = optimize(built, { minify: options.minify });
 	await mkdir(dirname(options.outFile), { recursive: true });
 	await writeFile(options.outFile, code);
-	return { scannedFiles: scanner.files.length };
 }
