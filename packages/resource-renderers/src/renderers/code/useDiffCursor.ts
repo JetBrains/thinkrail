@@ -16,7 +16,7 @@ import {
 	useState,
 } from "react";
 import type { CursorOption, CursorProxyProps } from "../../support/CursorProxy";
-import { cursorCommand } from "../../support/cursorKeys";
+import { cursorCommand, useReviewSurfaceKeys } from "../../support/cursorKeys";
 import { commentCard, focusBefore, focusReviewCard } from "../../support/revealFocus";
 import {
 	type DiffCursor,
@@ -145,6 +145,7 @@ export function useDiffCursor({
 	onEscape: () => boolean;
 }) {
 	const t = useT();
+	const keys = useReviewSurfaceKeys();
 	const proxyRef = useRef<HTMLDivElement>(null);
 	const [stored, setStored] = useState<DiffCursorState | null>(null);
 	const [shown, setShown] = useState(false);
@@ -206,12 +207,12 @@ export function useDiffCursor({
 	const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
 		const host = rootRef.current;
 		if (!host || !state) return;
-		if (event.key === "Tab") {
-			const plain = !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
-			if (plain && focusNextTarget(host, state.cursor)) event.preventDefault();
+		const plain = !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey;
+		if (event.key === "Tab" && plain) {
+			if (focusNextTarget(host, state.cursor)) event.preventDefault();
 			return;
 		}
-		const command = cursorCommand(event.nativeEvent);
+		const command = cursorCommand(event.nativeEvent, keys);
 		if (!command) return;
 		event.preventDefault();
 		if (command.kind === "escape" && onEscape()) return;

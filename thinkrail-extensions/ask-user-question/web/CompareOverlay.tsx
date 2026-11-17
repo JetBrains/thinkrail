@@ -31,6 +31,7 @@ import {
 	type CompareView,
 	compareItems,
 	compareJumpIndex,
+	compareKeyShortcuts,
 	compareStart,
 	flipCompare,
 	hasHtmlFile,
@@ -87,7 +88,7 @@ export function CompareOverlay({ open, onOpenChange, onClosed, ...props }: Compa
 					if (event.target === event.currentTarget) rootRef.current?.focus({ preventScroll: true });
 				}}
 			>
-				<CompareBody {...props} rootRef={rootRef} />
+				<CompareBody {...props} rootRef={rootRef} onClose={() => onOpenChange(false)} />
 			</DialogContent>
 		</Dialog>
 	);
@@ -100,8 +101,10 @@ function CompareBody({
 	onChoose,
 	onOpenFile,
 	rootRef,
+	onClose,
 }: Omit<CompareOverlayProps, "open" | "onOpenChange" | "onClosed"> & {
 	rootRef: RefObject<HTMLElement | null>;
+	onClose: () => void;
 }) {
 	const t = useT();
 	const [items] = useState(() => compareItems(question, t("tools.ask.compare.current")));
@@ -119,7 +122,7 @@ function CompareBody({
 	const choose = (item: CompareItem | undefined) => {
 		if (!item?.option || !onChoose) return;
 		onChoose(item.option.label, item.option.index);
-		focusBody();
+		onClose();
 	};
 
 	const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
@@ -196,7 +199,7 @@ function CompareBody({
 			ref={rootRef}
 			data-testid="ask-compare-body"
 			aria-label={t("tools.ask.compare.title", { question: question.header || question.question })}
-			aria-keyshortcuts="ArrowLeft ArrowRight Enter"
+			aria-keyshortcuts={compareKeyShortcuts(count, !!onChoose)}
 			tabIndex={-1}
 			onKeyDown={onKeyDown}
 			className="flex min-h-0 flex-1 flex-col gap-8 rounded-sm focus-visible:focus-ring-inset"

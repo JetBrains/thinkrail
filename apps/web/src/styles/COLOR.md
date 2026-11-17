@@ -147,6 +147,8 @@ a `[data-region]` root (the top bar, the Project Home projects pane, each workbe
 marks the one holding focus `data-region-active` ([shell/layout/SPEC.md](../shell/layout/SPEC.md),
 *Arrangement and accessibility*). It wears a 2px **accent line** along its top edge (its tab strip or
 pane header) for as long as it is active; nothing else about it changes, and no other region is touched.
+A region root that holds focus itself (Esc leaving a field, F6 into an empty group) draws no focus ring:
+the line already says the pane has the keyboard and nothing inside is selected.
 When the keyboard brings focus into a region, or a first `F6` points out the current one, the shell sets
 `data-region-flash` there, which draws a 1px **frame** inside its edges: held ≈1 s, then a 0.5 s fade,
 with no fade under `prefers-reduced-motion` (when it flashes is the shell's, *Global chords*). Both are

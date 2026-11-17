@@ -663,10 +663,23 @@ function storedKeybindings(value: unknown): KeybindingOverrides {
 	return result;
 }
 
+const CONFIG_VERSION = 1;
+const OLD_QUESTION_PANEL_HEIGHT_DEFAULT = 60;
+
+function storedQuestionPanelHeight(value: Record<string, unknown>): number {
+	const height = value.questionPanelHeight;
+	if (!isQuestionPanelHeight(height)) return DEFAULT_CONFIG.questionPanelHeight;
+	const version = typeof value.configVersion === "number" ? value.configVersion : 0;
+	return version < 1 && height === OLD_QUESTION_PANEL_HEIGHT_DEFAULT
+		? DEFAULT_CONFIG.questionPanelHeight
+		: height;
+}
+
 export function loadConfig(): AppConfig {
 	const value = readJson<Record<string, unknown> | null>("config.json", null, isRecord);
 	if (!value) return structuredClone(DEFAULT_CONFIG);
 	const extensions = { ...value };
+	delete extensions.configVersion;
 	delete extensions.chatMessageOrder;
 	delete extensions.layout;
 	delete extensions.themeMode;
@@ -690,9 +703,7 @@ export function loadConfig(): AppConfig {
 		composerGrowthLimit: isComposerGrowthLimit(value.composerGrowthLimit)
 			? value.composerGrowthLimit
 			: DEFAULT_CONFIG.composerGrowthLimit,
-		questionPanelHeight: isQuestionPanelHeight(value.questionPanelHeight)
-			? value.questionPanelHeight
-			: DEFAULT_CONFIG.questionPanelHeight,
+		questionPanelHeight: storedQuestionPanelHeight(value),
 		chatLineWidth: isLineWidth(value.chatLineWidth)
 			? value.chatLineWidth
 			: DEFAULT_CONFIG.chatLineWidth,
@@ -754,7 +765,7 @@ export function loadConfig(): AppConfig {
 }
 
 export function saveConfig(config: AppConfig): void {
-	writeJsonAtomic("config.json", config);
+	writeJsonAtomic("config.json", { ...config, configVersion: CONFIG_VERSION });
 }
 
 export function loadHostEnvironment(): HostEnvironment {

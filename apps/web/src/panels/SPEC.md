@@ -2546,10 +2546,12 @@ menu has closed, because a closing menu returns focus to its row; disabled
   its line on save, send or cancel, and so do a draft card's `Mod+Enter`, Esc, Send and Delete — never to
   `<body>`, another card or another file; Esc on a cursor without a range lands on the section header.
   **Show in file** and the guide's keyboard steps land in a draft's text (caret at the end), not on its
-  Send button, and on a sent card itself. These keys, and the trees' `F2` / `Delete` / `Mod+Enter` / project reorder, are compared
-  against the [[submodule-web-keybindings]] catalog's constants (`REVIEW_KEYS`, `TREE_KEYS`), which the
-  keyboard cheatsheet lists; the Prev / Next file buttons show `Alt+↓` / `Alt+↑` (`⌥↓` / `⌥↑` on a Mac)
-  as tooltip caps rather than in their label. **Scale rules**:
+  Send button, and on a sent card itself. These keys are the rebindable local keys of scope `review`
+  ([[submodule-web-keybindings]], *Local keys*): the pane and the guide match them through
+  `useLocalKeys("review", LOCAL_KEY_DEFAULTS.review)` by physical `code`, and every cap they show (the
+  `V` / `J` / `N` keycaps, the guide's previous-step label, the Prev / Next file tooltip caps — `Alt+↓` /
+  `Alt+↑`, `⌥↓` / `⌥↑` on a Mac — rather than in their label) is that hook's `caps` / `label`, so a rebind
+  shows everywhere it acts and an unbound key shows no cap. **Scale rules**:
   a section whose file changed more than 400 lines, or whose path is a lock/generated file, mounts
   collapsed behind *Expand* / *Open as tab*; a scope with more than 50 files shows a dismissable notice
   offering *One file*; nothing switches mode on its own, because a review surface that re-arranges
@@ -2683,14 +2685,20 @@ menu has closed, because a closing menu returns focus to its row; disabled
     landing took the first row). Of Chats and Projects only the tree holding the active workspace marks
     its default (Projects when none is active); of the Artifacts tool's, Artifacts when it has rows, else
     Other agent files.
-  - **Keys** are feature-local (`event.key` in the tree, not the global keybinding table): ↑/↓ and `j`/`k`,
-    Home/End; → / `l` expands, else enters the first child; ← / `h` collapses, else goes to the parent (the
-    letters map onto the arrows before `resolveTreeMove`, unmodified only, never during IME composition).
+  - **Keys** are the tree's own, not global chords: ↑/↓ and the arrow twins (`j`/`k` by default),
+    Home/End; → / `l` expands, else enters the first child; ← / `h` collapses, else goes to the parent. The
+    twins and `trees.search` are rebindable local keys of scope `trees` ([[submodule-web-keybindings]],
+    *Local keys*): `Tree` asks `useLocalKeys("trees", LOCAL_KEY_DEFAULTS.trees)` at event time, matched by
+    physical `code` (a Russian layout's `ы` is `S`), and a matched twin maps onto its arrow before
+    `resolveTreeMove`; the arrows themselves are locked and always work, never during IME composition.
+    `trees.openKept` (`Mod+Enter`), `trees.rename` (`F2`), `trees.delete` (`Delete`) and
+    `trees.reorderUp` / `trees.reorderDown` (`Alt+Shift+↑/↓`) are local keys of the same scope; rows read
+    them through `useTreeKeys()`, and the project row's `aria-keyshortcuts` is that hook's `aria`.
     Letters belong to a focused tree, so the Changes review's `V`/`J`/`N` do not fire from a focused Changes
     row: every other printable key is swallowed, except Space (the button's activation) and `F` (by
     `code`, unmodified), which belongs to hint mode ([[module-ext-hint-mode]]). Letter type-ahead was
     removed when F became hint mode's (2026-11-15); search moved to `S`.
-  - **`S` searches the visible rows** (isearch). `Tree` renders a labelled field ("Search Files") as a
+  - **`S` (`trees.search`, rebindable) searches the visible rows** (isearch). `Tree` renders a labelled field ("Search Files") as a
     sticky sibling *before* its `role="tree"` element — outside it, so the tree's `MutationObserver` and
     roving model never see it — and focuses it. Typing matches the query as a case-insensitive substring of
     each rendered row's `data-tree-label` (collapsed children are not rendered, so not searched); the
@@ -2705,7 +2713,8 @@ menu has closed, because a closing menu returns focus to its row; disabled
     to contain an s. The pure model is `treeSearchMatches` / `treeSearchTarget` / `treeSearchStep`.
     Enter is the button's own click; `Mod+Enter` is the row's double-click — Files, Specs and Artifacts open
     kept (a deleted artifact restores first), Changes opens its kept diff with `claimPreview`; rows without a double-click treat it as Enter.
-  - **Row keys live in each row**, through `treeRowKey`: Shift+F10 / the Menu key open the row's menu
+  - **Row keys live in each row**, through `treeRowKey(event, keys)` (names the matched `trees.*`
+    command: `menu`, `delete`, `rename`, `reorderUp`, `reorderDown`): Shift+F10 / the Menu key open the row's menu
     (context-menu rows through `openContextMenuFromKeyboard`, dropdown rows through `isContextMenuKey`,
     after which the menu returns focus to the row); **Delete** opens the menu's own confirmation (file,
     Remove workspace except on Default, Delete chat — a pending deletion retries directly —, Close project,

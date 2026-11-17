@@ -1,3 +1,4 @@
+import { type ChordPressEvent, chordPressed } from "@thinkrail/ui/keyboard";
 import type { CommandShortcut } from "../commands";
 import { platformFamily } from "../lib";
 
@@ -54,11 +55,7 @@ interface TypedChord extends ChordScope {
 
 export type KeyChord = PhysicalChord | TypedChord;
 
-export type KeybindingEvent = Pick<
-	KeyboardEvent,
-	"code" | "key" | "altKey" | "ctrlKey" | "metaKey" | "shiftKey"
-> &
-	Partial<Pick<KeyboardEvent, "getModifierState">>;
+export type KeybindingEvent = ChordPressEvent;
 
 export const KEYBINDINGS: Readonly<Record<KeybindingId, readonly [KeyChord, ...KeyChord[]]>> = {
 	"view.toggleLeft": [{ code: "KeyB", key: "B", mod: true }],
@@ -107,18 +104,15 @@ export function onPlatform(chord: KeyChord, apple: boolean): boolean {
 	return chord.platform === undefined || (chord.platform === "apple") === apple;
 }
 
-export function pressed(chord: KeyChord, event: KeybindingEvent, apple: boolean): boolean {
-	const mod = chord.mod === true;
+export function pressed(
+	chord: KeyChord,
+	event: KeybindingEvent,
+	platform: string,
+	options?: { ignoreShift?: boolean },
+): boolean {
+	const apple = platformFamily(platform) === "apple";
 	return (
-		!chord.displayOnly &&
-		onPlatform(chord, apple) &&
-		!(chord.alt && !apple && event.getModifierState?.("AltGraph")) &&
-		(chord.typed
-			? event.key === chord.key
-			: event.code === chord.code && event.shiftKey === (chord.shift === true)) &&
-		event.ctrlKey === (chord.ctrl === true || (mod && !apple)) &&
-		event.metaKey === (mod && apple) &&
-		event.altKey === (chord.alt === true)
+		!chord.displayOnly && onPlatform(chord, apple) && chordPressed(chord, event, platform, options)
 	);
 }
 

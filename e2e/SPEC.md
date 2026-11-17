@@ -444,6 +444,11 @@ the history overlay's Delete (caret at the end only) and entry menu beside its T
 inspector's inert transcript and the @ popup taking Escape first, Stop returning focus to the composer
 (a replayed `agent_start` on the intercepted wire keeps the chat streaming without an agent), and h/l on
 a tab strip and j/k on a side rail.
+`keyboard-escape.spec.ts` pins the Esc that leaves a text field: from the composer with a draft it parks on
+the feed with no ring (draft, caret and the region's accent line kept), where `F` shows hint labels, a
+second Esc does nothing, ↓ walks to a message and that message's Esc returns to the composer; the @ menu
+takes the first Esc; the TODO rail's input lands on its panel root, from which `F` and `Mod+1` still work;
+a Settings field's Esc still closes Settings; and the terminal's Esc reaches the shell with focus kept.
 `keyboard-review.spec.ts` pins commenting from the keyboard: Tab onto a Pierre diff lands on its cursor
 proxy (`review-cursor`: a listbox whose single selected option, its `aria-activedescendant`, names the
 line and its place among the stops, while the diff container has no role or tabindex and takes the ring's
@@ -675,8 +680,9 @@ source is seeded as a successful historical tool result (`isError: false`) so bo
 the renderer's plain-source fallback, not the tool-error branch. File previews write mockups into the shared
 fixture repository (removed in `finally`) and pin the HTML renderer in the card, the before/after 2-up diff,
 a region comment's Send carrying the card's chat `sessionId` over the wire, HTML design-width scaling and the
-width switch, full screen, Open in tab, and a before/after opened as a comparison diff tab (paired frames
-with same-origin access only, swipe available) that survives a reload. A huge comparison opts in through Show diff anyway while an unrelated file changes every 400 ms (each
+width switch, full screen, Open in tab, and a before/after opened as a comparison diff tab (mockups
+interactive with scripts only, Preview switching to static frames with same-origin access only, swipe
+available) that survives a reload. A huge comparison opts in through Show diff anyway while an unrelated file changes every 400 ms (each
 write its own watcher frame, past the 300 ms quiet flush), so updates keep landing inside the expensive first
 mount. These regressions need no provider,
 prompt submission, route mock, or screenshot. Extension on/off coverage (`extensions-settings.spec.ts`) drives the
@@ -698,7 +704,7 @@ the single shared image strip, the collapsed JSON tree, Full output through the 
 to pi's reported authentication kind (provider identity remains visible), and the raw-text fallback for a truncated listing; its element shots under `e2e/screenshots/mcp-tool-cards/` are review evidence
 only. Questionnaire coverage uses canonical persisted tool-call/ack fixtures (submitting one exercises the
 restart-repaired response path) to pin six-question rounds beyond four, the docked sheet (stub in the
-transcript, pinned controls around a scrolling body under the 60% cap, restored page, collapse kept across
+transcript, pinned controls around a scrolling body under the 70% cap, restored page, collapse kept across
 a chat switch, stub expand-and-focus, the sheet above the composer under an open Resources inspector, the
 receipt left in the transcript after answering, the cap following *Question panel height*), coarse-pointer
 focus, tabs/question/footer at one y across paging and choosing, notes and Other growing in
@@ -710,10 +716,29 @@ stealing the press aimed at a row or Add note below it (`ask-user-question.spec.
 into the fixture repository (removed in `finally`) and pins the question preview and the option pane (HTML,
 before/after, mermaid, none) at one card height, full-screen keys that never page or skip, a file removed
 under its preview, the picked file's path in the persisted answer, and the compare overlay (flip and jump
-keys, Current never choosable, choose-and-stay, a side-by-side pair whose two frames keep one `scrollTop`
+keys, Current never choosable, Choose and Enter picking and closing it onto the chosen row in One at a time,
+Side by side and All, a side-by-side pair whose two frames keep one `scrollTop`
 in 2-up and swipe even though the mockups ask for smooth scrolling, All at 1400×900 clipping no HTML frame below its pane and opening a pane alone, keys still working after a
-pane title or Choose removed the focused control, focus back on the chosen row, the receipt's read-only reopen); `plan-ask.spec.ts` adds the same file
-preview on the plan page. These three specs also run in a **`webkit` Playwright project**: the macOS desktop
+pane title removed the focused control, the receipt's read-only reopen),
+and an interactive mockup (`sandbox="allow-scripts"`, its button changes its own page, `fetch`, a
+WebSocket to the host and `RTCPeerConnection` all blocked, leaving its page replaced by the notice until
+Reload — also when it replaces itself while still loading after forging a tokenless `loaded`, and a
+`data:` document it replaces itself with running none of its scripts; the pair above
+syncs through the message bridge, read through Playwright's frame API since the frames are opaque);
+`plan-ask.spec.ts` adds the same file
+preview on the plan page and its live slot taking Esc and a click answer. `ask-keyboard.spec.ts` pins the
+card's keyboard pass: F6 and Mod+1 landing on the current option while Mod+L keeps the composer, Shift+Tab
+from the composer, Esc back with the question docked, a click answer parking on the receipt without a ring
+and a keyboard one in the composer, a question arriving (its seeded session reported idle, then waiting,
+through a routed wire) that announces "F6 to answer" from the transcript or a Tab-focused button and
+takes an empty composer or a button the mouse focused (Chromium only: WebKit never focuses a clicked
+button, and every WebKit `openRound` covers its History-button case), the
+Mod+L remount race, `i` into an HTML frame and Tab back, `c` into compare and Esc back, the collapsed
+chords, Skip in the ↓ ring and ←/→ on the footer, arrows, Home/End, a parked note and the footer keys
+scrolling a tall docked question's body just enough to show the focused control while the transcript and
+the dock stay put, a rebound `d` and a Discuss rebound onto a Mod chord
+(over the host wire), a Russian-layout `d` and the card's Settings → Keyboard section; `fixtures/ask.ts` seeds the pending questions for the three card specs.
+These four specs also run in a **`webkit` Playwright project**: the macOS desktop
 is the system WKWebView, whose Tab skips buttons without an explicit `tabindex` (the regression this lane
 exists for). CI installs WebKit with the system libraries it links, not its media plugins (`.github/SPEC.md`);
 Linux WebKit may not reproduce the macOS Tab rule,

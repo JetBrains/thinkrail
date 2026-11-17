@@ -372,6 +372,9 @@ export interface WorkspaceIgnoredOutput {
 	sessionId?: string;
 }
 
+/** Where agents write HTML mockups; a browser UI runs their scripts (sandboxed, no network). */
+export const WORKSPACE_MOCKUP_DIR = ".thinkrail/context/mockups";
+
 /** The host route that serves a workspace file for a browser tab (sandboxed, see the host spec). */
 export const WORKSPACE_VIEW_ROUTE = "/view/";
 
@@ -1498,7 +1501,7 @@ export function isComposerGrowthLimit(value: unknown): value is ComposerGrowthLi
 	return COMPOSER_GROWTH_LIMITS.some((limit) => limit === value);
 }
 
-export const QUESTION_PANEL_HEIGHT_PERCENT = { min: 40, max: 100, default: 60 } as const;
+export const QUESTION_PANEL_HEIGHT_PERCENT = { min: 40, max: 100, default: 70 } as const;
 
 export function isQuestionPanelHeight(value: unknown): value is number {
 	return (

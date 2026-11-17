@@ -2517,7 +2517,7 @@
 	"tools.ask.editNoteLabel": "Edytuj notatkę do {{option}}",
 	"tools.ask.excludeCustom": "Wyklucz własną odpowiedź",
 	"tools.ask.hintQuestions": "· ←→ pytania",
-	"tools.ask.hintSkip": "· Shift+Esc pomiń",
+	"tools.ask.hintSkip": "· {{key}} pomiń",
 	"tools.ask.includeCustom": "Uwzględnij własną odpowiedź",
 	"tools.ask.needsChoice": "Najpierw wybierz opcję",
 	"tools.ask.needsChoiceAnnouncement": "Najpierw wybierz opcję.",

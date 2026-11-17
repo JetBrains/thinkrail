@@ -1,43 +1,11 @@
 import { isKeybindingChord, isModifierKeyCode, KEYBINDING_MODIFIERS } from "@thinkrail/contracts";
+import { codeLabel } from "@thinkrail/ui/keyboard";
 import { platformFamily } from "../lib";
 import type { KeyChord, PhysicalChord } from "./keybindings";
 
 type ChordFields = Pick<PhysicalChord, "code" | "mod" | "ctrl" | "alt" | "shift">;
 
 type ModifierFields = Pick<KeyChord, "mod" | "ctrl" | "alt" | "shift">;
-
-const KEY_CAPS: Readonly<Record<string, string>> = {
-	ArrowUp: "↑",
-	ArrowDown: "↓",
-	ArrowLeft: "←",
-	ArrowRight: "→",
-	Enter: "↵",
-	Escape: "Esc",
-	PageUp: "PgUp",
-	PageDown: "PgDn",
-	" ": "Space",
-};
-
-const CODE_KEYS: Readonly<Record<string, string>> = {
-	Backquote: "`",
-	Minus: "-",
-	Equal: "=",
-	BracketLeft: "[",
-	BracketRight: "]",
-	Backslash: "\\",
-	Semicolon: ";",
-	Quote: "'",
-	Comma: ",",
-	Period: ".",
-	Slash: "/",
-	Space: " ",
-	NumpadAdd: "Num +",
-	NumpadSubtract: "Num -",
-	NumpadMultiply: "Num *",
-	NumpadDivide: "Num /",
-	NumpadDecimal: "Num .",
-	NumpadEnter: "Num ↵",
-};
 
 const BROWSER_RESERVED = [
 	"Mod+KeyT",
@@ -83,20 +51,6 @@ const TYPED_POSITIONS: Readonly<Record<string, Pick<PhysicalChord, "code" | "shi
 
 const FUNCTION_KEY = /^F(?:[1-9]|1[0-2])$/;
 
-export function keyCap(key: string): string {
-	return KEY_CAPS[key] ?? (key.length === 1 ? key.toUpperCase() : key);
-}
-
-export function codeLabel(code: string): string {
-	const letter = /^Key([A-Z])$/.exec(code)?.[1];
-	if (letter !== undefined) return letter;
-	const digit = /^Digit(\d)$/.exec(code)?.[1];
-	if (digit !== undefined) return digit;
-	const numpad = /^Numpad(\d)$/.exec(code)?.[1];
-	if (numpad !== undefined) return `Num ${numpad}`;
-	return keyCap(CODE_KEYS[code] ?? code);
-}
-
 export function parseChord(text: string): PhysicalChord | null {
 	if (!isKeybindingChord(text)) return null;
 	const modifiers = text.split("+");
@@ -140,6 +94,34 @@ export function heldSignatures(chord: KeyChord, apple: boolean): string[] {
 	const position = chord.typed ? TYPED_POSITIONS[chord.key] : undefined;
 	const physical = position ? parseChord(formatChord({ ...chord, ...position })) : null;
 	return physical ? [signature, chordSignature(physical, apple)] : [signature];
+}
+
+const PRIMITIVE_CODES = new Set([
+	"ArrowUp",
+	"ArrowDown",
+	"ArrowLeft",
+	"ArrowRight",
+	"Enter",
+	"NumpadEnter",
+	"Escape",
+	"Tab",
+	"Space",
+	"Home",
+	"End",
+	"PageUp",
+	"PageDown",
+]);
+
+export function isLockedPrimitive(chord: KeyChord | string): boolean {
+	const parsed = typeof chord === "string" ? parseChord(chord) : chord;
+	return (
+		parsed !== null &&
+		!parsed.typed &&
+		!parsed.mod &&
+		!parsed.ctrl &&
+		!parsed.alt &&
+		PRIMITIVE_CODES.has(parsed.code)
+	);
 }
 
 export function isPlainChord(chord: KeyChord): boolean {
@@ -193,6 +175,7 @@ type ChordEvent = Pick<KeyboardEvent, "code" | "altKey" | "ctrlKey" | "metaKey" 
 export type RecordedChord =
 	| { readonly kind: "chord"; readonly chord: string; readonly browserReserved: boolean }
 	| { readonly kind: "rejected"; readonly reason: "modifierOnly" | "plain" }
+	| { readonly kind: "rejected"; readonly reason: "locked"; readonly chord: string }
 	| { readonly kind: "ignored" };
 
 const IGNORED: RecordedChord = { kind: "ignored" };
@@ -200,7 +183,7 @@ const IGNORED: RecordedChord = { kind: "ignored" };
 export function chordFromEvent(
 	event: ChordEvent,
 	platform: string,
-	{ allowPlain = false }: { allowPlain?: boolean } = {},
+	{ allowPlain = false, allowLocked = false }: { allowPlain?: boolean; allowLocked?: boolean } = {},
 ): RecordedChord {
 	if (isModifierKeyCode(event.code)) return { kind: "rejected", reason: "modifierOnly" };
 	const apple = platformFamily(platform) === "apple";
@@ -216,5 +199,7 @@ export function chordFromEvent(
 	const chord = formatChord(fields);
 	if (!isKeybindingChord(chord)) return IGNORED;
 	if (!allowPlain && isPlainChord(fields)) return { kind: "rejected", reason: "plain" };
+	if (!allowLocked && isLockedPrimitive(fields))
+		return { kind: "rejected", reason: "locked", chord };
 	return { kind: "chord", chord, browserReserved: isBrowserReservedChord(chord, platform) };
 }

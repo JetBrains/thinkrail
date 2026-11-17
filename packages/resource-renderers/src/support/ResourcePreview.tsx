@@ -13,6 +13,7 @@ import {
 	type DiffSideLabels,
 	describeResource,
 	diffResourceMeta,
+	type FrameFocus,
 	type ResourceRenderer,
 	type ResourceReveal,
 	type SurfaceReview,
@@ -49,6 +50,7 @@ export interface ResourcePreviewProps {
 	className?: string | undefined;
 	compact?: boolean | undefined;
 	htmlViewport?: HtmlViewport | undefined;
+	frameFocus?: FrameFocus | undefined;
 	sideLabels?: DiffSideLabels | undefined;
 	reviewable?: boolean | undefined;
 }
@@ -114,12 +116,22 @@ export function ResourcePreview(props: ResourcePreviewProps) {
 	);
 	const compact = props.compact ?? environment.compact ?? false;
 	const htmlViewport = props.htmlViewport ?? environment.htmlViewport;
-	if (compact === (environment.compact ?? false) && htmlViewport === environment.htmlViewport) {
+	const frameFocus = props.frameFocus ?? environment.frameFocus;
+	if (
+		compact === (environment.compact ?? false) &&
+		htmlViewport === environment.htmlViewport &&
+		frameFocus === environment.frameFocus
+	) {
 		return preview;
 	}
 	return (
 		<ResourceEnvironmentProvider
-			value={{ ...environment, compact, ...(htmlViewport ? { htmlViewport } : {}) }}
+			value={{
+				...environment,
+				compact,
+				...(htmlViewport ? { htmlViewport } : {}),
+				...(frameFocus ? { frameFocus } : {}),
+			}}
 		>
 			{preview}
 		</ResourceEnvironmentProvider>

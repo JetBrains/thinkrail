@@ -3,6 +3,7 @@ import { type Translator, useT } from "@thinkrail/locales/react";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { AnchorDraft, DiffSideLabels, SurfaceReview } from "../registry";
+import { useReviewSurfaceKeys } from "../support/cursorKeys";
 import { RegionReviewSurface } from "./RegionReviewSurface";
 import { placedRegionThreadIds, type Region, type Size } from "./regionReview";
 import { swipeDividerValue } from "./swipeDivider";
@@ -151,6 +152,7 @@ export function VisualDiff({
 	labels?: DiffSideLabels | undefined;
 }) {
 	const t = useT();
+	const keys = useReviewSurfaceKeys();
 	const emptyText = emptyLabel ?? t("viewer.image.noImage");
 	const [mode, setMode] = useState<VisualDiffMode>(initialMode);
 	const [activeSide, setActiveSide] = useState<"base" | "worktree">("worktree");
@@ -303,7 +305,7 @@ export function VisualDiff({
 										className="absolute inset-y-0 z-20 w-4 -translate-x-1/2 cursor-col-resize bg-primary focus-visible:focus-ring"
 										style={{ left: `${divider}%` }}
 										onKeyDown={(event) => {
-											const next = swipeDividerValue(divider, event.nativeEvent);
+											const next = swipeDividerValue(divider, event.nativeEvent, keys);
 											if (next === null) return;
 											event.preventDefault();
 											setDivider(next);
