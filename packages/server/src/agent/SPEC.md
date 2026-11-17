@@ -199,7 +199,11 @@ re-opened transcripts provider-valid.
     re-resolves the session's *current* model when it is still on that provider (a model the user picked
     on another provider meanwhile is left alone), refuses with `SERVER_FALLBACK_STILL_ON` when a
     hand-written per-model override still sends fallbacks, and otherwise `setModel`s the refreshed model
-    so the chat's next request drops the field without a restart. There is no undo affordance; reverting
+    so the chat's next request drops the field without a restart. That rebind and `setSessionModel` share
+    one per-session model-write queue, and the re-check runs inside it: pi's `setModel` awaits an auth
+    check before switching, so an unserialized rebind could overwrite a model the user picked meanwhile.
+    The rebind restores the chat's thinking level afterwards, because `setModel` re-applies the saved
+    default even for the same model. There is no undo affordance; reverting
     is a manual `models.json` edit.
   - `customEndpoints` — the settings adapter for the user's own OpenAI-compatible servers (a company
     gateway or a local llama.cpp / vLLM / sglang / Ollama / LM Studio server), again a `models.json` editor

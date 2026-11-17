@@ -2749,12 +2749,22 @@ async function abortEntry(
 	return restoredQueue;
 }
 
+const modelWrites = new WeakMap<Entry, Promise<unknown>>();
+
+function serializeModelWrite<T>(entry: Entry, run: () => Promise<T>): Promise<T> {
+	const next = (modelWrites.get(entry) ?? Promise.resolve()).catch(() => undefined).then(run);
+	modelWrites.set(entry, next);
+	return next;
+}
+
 export async function setSessionModel(sessionId: string, model: WireModel): Promise<WireModel> {
 	const entry = mustGetEntry(sessionId);
-	const resolved = resolveWireModel(entry.generation.runtime, model);
-	await entry.session.setModel(resolved);
-	entry.unavailableSavedModel = undefined;
-	return sessionWireModel(resolved, entry.generation);
+	return serializeModelWrite(entry, async () => {
+		const resolved = resolveWireModel(entry.generation.runtime, model);
+		await entry.session.setModel(resolved);
+		entry.unavailableSavedModel = undefined;
+		return sessionWireModel(resolved, entry.generation);
+	});
 }
 
 export async function disableSessionServerFallback(sessionId: string): Promise<WireModel> {
@@ -2764,14 +2774,19 @@ export async function disableSessionServerFallback(sessionId: string): Promise<W
 		throw new CodedError("SERVER_FALLBACK_NOT_USED", "The chat's model sends no fallbacks");
 	const current = await getPiRuntimeGeneration();
 	await disableProviderFallback(model.provider, [current.runtime, entry.generation.runtime]);
-	if (mustGetEntry(sessionId) !== entry) throw new Error(`Unknown session: ${sessionId}`);
-	const live = entry.session.model ?? model;
-	if (live.provider !== model.provider) return sessionWireModel(live, entry.generation);
-	const resolved = resolveWireModel(entry.generation.runtime, live);
-	if (declaresServerFallback(resolved))
-		throw new CodedError("SERVER_FALLBACK_STILL_ON", "A model override still sends fallbacks");
-	await entry.session.setModel(resolved);
-	return sessionWireModel(resolved, entry.generation);
+	return serializeModelWrite(entry, async () => {
+		if (mustGetEntry(sessionId) !== entry) throw new Error(`Unknown session: ${sessionId}`);
+		const live = entry.session.model ?? model;
+		if (live.provider !== model.provider) return sessionWireModel(live, entry.generation);
+		const resolved = resolveWireModel(entry.generation.runtime, live);
+		if (declaresServerFallback(resolved))
+			throw new CodedError("SERVER_FALLBACK_STILL_ON", "A model override still sends fallbacks");
+		const thinkingLevel = entry.session.thinkingLevel;
+		await entry.session.setModel(resolved);
+		if (entry.session.thinkingLevel !== thinkingLevel)
+			entry.session.setThinkingLevel(thinkingLevel);
+		return sessionWireModel(resolved, entry.generation);
+	});
 }
 
 function extraUsageModelSelectExtension(sessionId: string): ExtensionFactory {

@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore, type Model } from "@earendil-works/pi-ai";
-import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import { buildSessionContext, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import { parse } from "jsonc-parser";
 import {
 	createSession,
@@ -12,6 +12,7 @@ import {
 	promptSession,
 	setSessionManagerFactory,
 	setSessionModel,
+	setSessionThinkingLevel,
 	toWireModel,
 } from "./agentSessionManager";
 import { setModelsFilePublisher } from "./modelsFile";
@@ -31,6 +32,7 @@ let dataDir: string;
 let cwd: string;
 let path: string;
 let published: number;
+let sessionManager: SessionManager | undefined;
 const prior = new Map<string, string | undefined>();
 
 beforeEach(() => {
@@ -48,7 +50,11 @@ beforeEach(() => {
 	setModelsFilePublisher(() => {
 		published++;
 	});
-	setSessionManagerFactory(() => SessionManager.inMemory(cwd));
+	sessionManager = undefined;
+	setSessionManagerFactory(() => {
+		sessionManager = SessionManager.inMemory(cwd);
+		return sessionManager;
+	});
 });
 
 afterEach(() => {
@@ -96,6 +102,11 @@ function fallbackModel(runtime: ModelRuntime): Model<string> {
 	const model = runtime.getModels("anthropic").find(declaresServerFallback);
 	if (!model) throw new Error("pi ships no Anthropic model with server-side fallback");
 	return model;
+}
+
+function sessionContext() {
+	if (!sessionManager) throw new Error("No session created");
+	return buildSessionContext(sessionManager.getEntries());
 }
 
 function config(): unknown {
@@ -217,6 +228,63 @@ describe("disableSessionServerFallback", () => {
 		await setSessionModel(sessionId, toWireModel(other));
 
 		expect(await pending).toMatchObject({ provider: "other", id: "other-model" });
+	});
+
+	test("a model picked while the repair's model switch awaits auth wins", async () => {
+		const runtime = await anthropicRuntime();
+		const fable = fallbackModel(runtime);
+		const other = runtime.getModel("other", "other-model");
+		if (!other) throw new Error("Missing fixture model");
+		const { sessionId } = await createSession({
+			cwd,
+			workspaceId: "ws",
+			model: toWireModel(fable),
+		});
+		const checkAuth = runtime.checkAuth.bind(runtime);
+		let release = () => {};
+		const held = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		let reached = () => {};
+		const authAsked = new Promise<void>((resolve) => {
+			reached = resolve;
+		});
+		runtime.checkAuth = async (provider: string) => {
+			if (provider === "anthropic") {
+				reached();
+				await held;
+			}
+			return checkAuth(provider);
+		};
+
+		const repair = disableSessionServerFallback(sessionId);
+		await authAsked;
+		const pick = setSessionModel(sessionId, toWireModel(other));
+		release();
+		await repair;
+		await pick;
+
+		expect(sessionContext().model).toEqual({ provider: "other", modelId: "other-model" });
+	});
+
+	test("the repair keeps the chat's effort instead of re-applying the default", async () => {
+		writeFileSync(
+			join(agentDir, "settings.json"),
+			JSON.stringify({ defaultThinkingLevel: "high" }),
+		);
+		const runtime = await anthropicRuntime();
+		const fable = fallbackModel(runtime);
+		const { sessionId } = await createSession({
+			cwd,
+			workspaceId: "ws",
+			model: toWireModel(fable),
+		});
+		setSessionThinkingLevel(sessionId, "low");
+		expect(sessionContext().thinkingLevel).toBe("low");
+
+		await disableSessionServerFallback(sessionId);
+
+		expect(sessionContext().thinkingLevel).toBe("low");
 	});
 
 	test("refuses a chat whose model sends no fallbacks without touching models.json", async () => {
