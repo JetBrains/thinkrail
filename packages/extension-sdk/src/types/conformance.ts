@@ -4,7 +4,8 @@ import type * as Server from "../server";
 import type * as Resources from "./resources";
 
 type Assignable<From, To> = [From] extends [To] ? true : false;
-type SameKeys<A, B> = [Exclude<keyof A, keyof B> | Exclude<keyof B, keyof A>] extends [never]
+type Keys<T> = T extends unknown ? keyof T : never;
+type SameKeys<A, B> = [Exclude<Keys<A>, Keys<B>> | Exclude<Keys<B>, Keys<A>>] extends [never]
 	? true
 	: false;
 type Conforms<A, B> = [Assignable<A, B>, Assignable<B, A>, SameKeys<A, B>] extends [
