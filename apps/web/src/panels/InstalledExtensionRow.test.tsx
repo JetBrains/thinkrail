@@ -79,7 +79,8 @@ test("a failed extension shows the host's error verbatim and no switch, tools or
 		entry: { ...WITHOUT_WEB, state: "failed", error: "SyntaxError: Unexpected token ')'" },
 	});
 	expect(markup).toContain('data-testid="installed-extension-failed-tag"');
-	expect(markup).toContain("Failed to load: SyntaxError: Unexpected token &#x27;)&#x27;");
+	expect(markup).toContain("SyntaxError: Unexpected token &#x27;)&#x27;");
+	expect(markup).not.toContain("Failed to load: SyntaxError");
 	expect(markup).not.toContain('role="switch"');
 	expect(markup).not.toContain("installed-extension-tool-");
 });

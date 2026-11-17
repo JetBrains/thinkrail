@@ -188,7 +188,7 @@ export function InstalledExtensionRow({
 				{state === "failed" ? (
 					<SettingsNotice variant="error" testId="installed-extension-error" className="mt-4">
 						<span className="flex flex-col gap-2 break-words">
-							<span>{t("settings.packages.failedToLoad", { error: entry.error ?? "" })}</span>
+							<span>{entry.error}</span>
 							<span className="text-text-muted">
 								{t("settings.installedExtensions.failedHint")}
 							</span>
