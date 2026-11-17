@@ -10,7 +10,15 @@ import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { useEffect, useState } from "react";
-import { selectActiveRepoWorkspaceId, selectBuiltinExtensions, toast, useAppStore } from "@/store";
+import { useWebExtensionLoads } from "@/extensions";
+import {
+	selectActiveRepoWorkspaceId,
+	selectBuiltinExtensions,
+	selectInstalledExtensions,
+	selectSupportsInstalledExtensions,
+	toast,
+	useAppStore,
+} from "@/store";
 import {
 	getTransport,
 	refreshExtensionCatalog,
@@ -18,9 +26,11 @@ import {
 	supportsPiPackages,
 } from "@/transport";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { InstalledExtensionRow, installedExtensionKey } from "./InstalledExtensionRow";
 import { InstallPackageDialog } from "./InstallPackageDialog";
 import { PiBuiltinsGroup, PiPackagesGroup } from "./PiPackagesSettings";
 import { saveSettings } from "./saveSettings";
+import { useInstalledExtensions } from "./useInstalledExtensions";
 import { UPDATE_CHECK_KEY, usePiPackages } from "./usePiPackages";
 
 const BUNDLED_DESCRIPTIONS: Readonly<Record<string, MessageKey>> = {
@@ -183,7 +193,11 @@ export function ExtensionsSettings() {
 	const packagesSupported = supportsPiPackages(protocolVersion);
 	const settingsSupported = supportsExtensionSettings(protocolVersion);
 	const catalogRead = useAppStore((state) => state.extensionCatalog);
+	const welcomeGeneration = useAppStore((state) => state.welcomeGeneration);
 	const entries = selectBuiltinExtensions(catalogRead);
+	const installed = selectInstalledExtensions(catalogRead);
+	const installedSupported = selectSupportsInstalledExtensions({ protocolVersion });
+	const webLoads = useWebExtensionLoads();
 	const [installOpen, setInstallOpen] = useState(false);
 	const packages = usePiPackages({
 		enabled: packagesSupported,
@@ -191,10 +205,14 @@ export function ExtensionsSettings() {
 		packagesVersion,
 		disabledPackages,
 	});
+	const extensions = useInstalledExtensions({
+		enabled: installedSupported,
+		disabledExtensions: disabled,
+	});
 
 	useEffect(() => {
-		void refreshExtensionCatalog();
-	}, []);
+		if (welcomeGeneration > 0) void refreshExtensionCatalog();
+	}, [welcomeGeneration]);
 
 	const toggle = (name: string, enabled: boolean) => {
 		const next = enabled
@@ -285,16 +303,40 @@ export function ExtensionsSettings() {
 					<PiPackagesGroup
 						catalog={catalog}
 						updates={packages.updates}
-						checkingUpdates={packages.checkingUpdates}
-						checkError={packages.errors.get(UPDATE_CHECK_KEY)}
+						extraUpdates={extensions.updates.size}
+						checkingUpdates={packages.checkingUpdates || extensions.checkingUpdates}
+						checkError={packages.errors.get(UPDATE_CHECK_KEY) ?? extensions.checkError}
 						busy={packages.busy}
 						errors={packages.errors}
 						expanded={packages.expanded}
 						onToggleExpanded={packages.toggleExpanded}
 						onAction={packages.onAction}
-						onUpdateAll={packages.updateAll}
-						onCheckUpdates={packages.checkUpdates}
+						onUpdateAll={() => {
+							packages.updateAll();
+							extensions.updateFlagged(installed);
+						}}
+						onCheckUpdates={() => {
+							packages.checkUpdates();
+							if (installedSupported) extensions.checkUpdates();
+						}}
 						onInstall={() => setInstallOpen(true)}
+						extensionRows={installed.map((entry) => {
+							const key = installedExtensionKey(entry);
+							return (
+								<InstalledExtensionRow
+									key={key}
+									entry={entry}
+									enabled={!disabled.includes(entry.name)}
+									settings={extensionSettings[entry.name]}
+									settingsSupported={settingsSupported}
+									webLoad={webLoads.get(entry.name)}
+									updateAvailable={extensions.updates.has(key)}
+									busy={extensions.busy.has(key)}
+									error={extensions.errors.get(key)}
+									onAction={extensions.onAction}
+								/>
+							);
+						})}
 					/>
 					{loaded ? (
 						<PiBuiltinsGroup
@@ -322,6 +364,20 @@ export function ExtensionsSettings() {
 						destructive
 						confirmTestId="package-remove-confirm"
 						onConfirm={packages.removeNow}
+					/>
+					<ConfirmDialog
+						open={extensions.removeTarget !== null}
+						onOpenChange={(open) => {
+							if (!open) extensions.cancelRemove();
+						}}
+						title={t("settings.packages.removeTitle", {
+							name: extensions.removeTarget?.title ?? "",
+						})}
+						description={t("settings.installedExtensions.removeDescription")}
+						confirmLabel={t("settings.installedExtensions.removeConfirm")}
+						destructive
+						confirmTestId="installed-extension-remove-confirm"
+						onConfirm={extensions.removeNow}
 					/>
 					<InstallPackageDialog
 						open={installOpen}

@@ -274,3 +274,19 @@ test("a declared package missing on disk is a Not installed row with Remove only
 	expect(markup).not.toContain('data-testid="package-expand"');
 	expect(markup).toContain('data-testid="package-menu"');
 });
+
+test("installed extension rows sit first in the Installed list and outlast a failed package list", () => {
+	const row = <li key="ext" data-testid="installed-extension-row" />;
+	const empty = renderGroup({ ...CATALOG, packages: [], loose: [] }, { extensionRows: [row] });
+	expect(empty).toContain('data-testid="installed-extension-row"');
+	expect(empty).not.toContain('data-testid="packages-empty"');
+	const mixed = renderGroup(CATALOG, { extensionRows: [row], extraUpdates: 1 });
+	expect(mixed.indexOf("installed-extension-row")).toBeLessThan(
+		mixed.indexOf('data-testid="package-row"'),
+	);
+	expect(mixed).toContain('data-testid="packages-update-all"');
+	expect(mixed).toContain('data-testid="package-type"');
+	const failed = renderGroup("failed", { extensionRows: [row] });
+	expect(failed).toContain('data-testid="installed-extension-row"');
+	expect(failed).toContain('data-testid="packages-failed"');
+});
