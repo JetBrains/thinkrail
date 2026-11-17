@@ -1,9 +1,18 @@
 import { describe, expect, test } from "bun:test";
+import { type LocalKeyEvent, localKeys } from "@thinkrail/ui/local-keys";
+import { LOCAL_KEY_DEFAULTS } from "@/keybindings";
 import { resolveTreeMove } from "@/lib";
-import { type ActivityStep, type ChatRow, projectRows, type RoutineToolStep } from "./rows";
 import {
+	type ActivityStep,
+	type ChatRow,
+	projectRows,
+	type RoutineToolStep,
+	rowIdForToolCall,
+} from "./rows";
+import {
+	composerShiftTabOut,
 	composerTranscriptStep,
-	isEnterTranscriptKey,
+	keyboardLeavesFollow,
 	newestContentRowId,
 	type TranscriptNavItem,
 	transcriptItemCopyText,
@@ -87,6 +96,14 @@ describe("transcriptItems", () => {
 		expect(deeper.find((item) => item.id === "t2")?.rowId).toBe("activity:t1");
 	});
 
+	test("names the row that holds a tool call, a step nested in a thought included", () => {
+		const ask: ChatRow = { ...tool("ask-1", "ask_user_question"), kind: "tool", id: "tool:ask-1" };
+		const withAsk = [...rows, ask];
+		expect(rowIdForToolCall(withAsk, "ask-1")).toBe("tool:ask-1");
+		expect(rowIdForToolCall(withAsk, "t3")).toBe("activity:t1");
+		expect(rowIdForToolCall(withAsk, "missing")).toBeNull();
+	});
+
 	test("never nests the single step a bare activity row already shows", () => {
 		expect(ids(transcriptItems(rows, () => true)).filter((id) => id === "t4")).toEqual([]);
 	});
@@ -123,15 +140,58 @@ describe("transcriptItems", () => {
 	});
 });
 
+describe("leaving follow from the keyboard", () => {
+	const latestGroup = activity("activity:t5", [
+		tool("t5"),
+		thinking("a5:thinking:1", [tool("t6"), tool("t7")]),
+	]);
+	const items = transcriptItems([...rows, latestGroup], () => true);
+	const latest = [latestGroup.id, "a5:divider"];
+	const leaves = (id: string, change: "focus" | "expand") => {
+		const found = items.find((candidate) => candidate.id === id);
+		if (!found) throw new Error(`missing ${id}`);
+		return keyboardLeavesFollow(found, latest, change);
+	};
+
+	test("focus entering any step of the latest row leaves follow", () => {
+		expect(leaves("t5", "focus")).toBe(true);
+		expect(leaves("a5:thinking:1", "focus")).toBe(true);
+		expect(leaves("t7", "focus")).toBe(true);
+	});
+
+	test("focus on the latest row itself or on a step elsewhere keeps follow", () => {
+		expect(leaves("activity:t5", "focus")).toBe(false);
+		expect(leaves("t1", "focus")).toBe(false);
+		expect(leaves("t2", "focus")).toBe(false);
+		expect(leaves("a3", "focus")).toBe(false);
+	});
+
+	test("a keyboard expand leaves follow only on the latest row", () => {
+		expect(leaves("activity:t5", "expand")).toBe(true);
+		expect(leaves("a5:thinking:1", "expand")).toBe(true);
+		expect(leaves("activity:t1", "expand")).toBe(false);
+		expect(leaves("a1:thinking:1", "expand")).toBe(false);
+	});
+});
+
+const LETTER_CODE = /^[a-z]$/i;
+
+const press = (init: Partial<KeyboardEvent> & { key: string }): LocalKeyEvent => ({
+	code: LETTER_CODE.test(init.key) ? `Key${init.key.toUpperCase()}` : init.key,
+	shiftKey: false,
+	altKey: false,
+	ctrlKey: false,
+	metaKey: false,
+	isComposing: false,
+	keyCode: 0,
+	target: null,
+	...init,
+});
+
 describe("transcriptKeyAction", () => {
+	const keys = localKeys(null, "transcript", LOCAL_KEY_DEFAULTS.transcript);
 	const key = (init: Partial<KeyboardEvent> & { key: string }) =>
-		transcriptKeyAction({
-			shiftKey: false,
-			altKey: false,
-			ctrlKey: false,
-			metaKey: false,
-			...init,
-		});
+		transcriptKeyAction(press(init), keys);
 
 	test("reads arrows and their h/j/k/l twins as tree moves", () => {
 		expect(key({ key: "ArrowDown" })).toEqual({ kind: "move", key: "ArrowDown" });
@@ -153,6 +213,31 @@ describe("transcriptKeyAction", () => {
 		expect(key({ key: "ContextMenu" })).toEqual({ kind: "menu" });
 	});
 
+	test("Esc on the parked feed does nothing; the other keys still act", () => {
+		const parked = (init: Partial<KeyboardEvent> & { key: string }) =>
+			transcriptKeyAction(press(init), keys, true);
+		expect(parked({ key: "Escape" })).toBeNull();
+		expect(parked({ key: "ArrowDown" })).toEqual({ kind: "move", key: "ArrowDown" });
+		expect(parked({ key: "j" })).toEqual({ kind: "move", key: "ArrowDown" });
+	});
+
+	test("while a question waits, Esc on the parked feed or an item goes to the question", () => {
+		const waiting = (init: Partial<KeyboardEvent> & { key: string }, parked: boolean) =>
+			transcriptKeyAction(press(init), keys, parked, true);
+		expect(waiting({ key: "Escape" }, true)).toEqual({ kind: "question" });
+		expect(waiting({ key: "Escape" }, false)).toEqual({ kind: "question" });
+		expect(waiting({ key: "Escape", shiftKey: true }, false)).toBeNull();
+		expect(waiting({ key: "ArrowDown" }, true)).toEqual({ kind: "move", key: "ArrowDown" });
+		expect(waiting({ key: "Enter" }, false)).toEqual({ kind: "toggle" });
+	});
+
+	test("matches letters by physical key: a Russian layout's С copies and О opens", () => {
+		expect(key({ key: "с", code: "KeyC" })).toEqual({ kind: "copy" });
+		expect(key({ key: "щ", code: "KeyO" })).toEqual({ kind: "open" });
+		expect(key({ key: "о", code: "KeyJ" })).toEqual({ kind: "move", key: "ArrowDown" });
+		expect(key({ key: "c", code: "KeyX" })).toBeNull();
+	});
+
 	test("leaves modified keys and other letters alone", () => {
 		expect(key({ key: "j", ctrlKey: true })).toBeNull();
 		expect(key({ key: "J", shiftKey: true })).toBeNull();
@@ -161,26 +246,46 @@ describe("transcriptKeyAction", () => {
 		expect(key({ key: "F10" })).toBeNull();
 		expect(key({ key: "F10", shiftKey: true, ctrlKey: true })).toBeNull();
 		expect(key({ key: "x" })).toBeNull();
+		expect(key({ key: "c", isComposing: true })).toBeNull();
+	});
+
+	test("a rebound copy key acts and its default no longer does", () => {
+		const rebound = localKeys(
+			{
+				platform: "Linux x86_64",
+				scopes: new Map([
+					["transcript", [{ id: "transcript.copy", chord: { code: "KeyY", key: "Y" } }]],
+				]),
+				isTextEntry: () => false,
+			},
+			"transcript",
+			LOCAL_KEY_DEFAULTS.transcript,
+		);
+		expect(transcriptKeyAction(press({ key: "y" }), rebound)).toEqual({ kind: "copy" });
+		expect(transcriptKeyAction(press({ key: "c" }), rebound)).toBeNull();
+		expect(transcriptKeyAction(press({ key: "j" }), rebound)).toBeNull();
+		expect(transcriptKeyAction(press({ key: "ArrowDown" }), rebound)).toEqual({
+			kind: "move",
+			key: "ArrowDown",
+		});
 	});
 });
 
 describe("the composer's way into the transcript", () => {
-	const event = (init: Partial<KeyboardEvent>) => ({
-		key: "ArrowUp",
-		shiftKey: false,
-		altKey: false,
-		ctrlKey: false,
-		metaKey: false,
-		...init,
-	});
+	const enters = (platform: string, init: Partial<KeyboardEvent>) =>
+		localKeys(
+			{ platform, scopes: new Map(), isTextEntry: () => true },
+			"composer",
+			LOCAL_KEY_DEFAULTS.composer,
+		).match(press({ key: "ArrowUp", ...init })) === "composer.enterTranscript";
 
-	test("answers Ctrl+↑ off Apple and ⌘↑ on Apple only", () => {
-		expect(isEnterTranscriptKey(event({ ctrlKey: true }), "Linux x86_64")).toBe(true);
-		expect(isEnterTranscriptKey(event({ metaKey: true }), "MacIntel")).toBe(true);
-		expect(isEnterTranscriptKey(event({ ctrlKey: true }), "MacIntel")).toBe(false);
-		expect(isEnterTranscriptKey(event({}), "Linux x86_64")).toBe(false);
-		expect(isEnterTranscriptKey(event({ ctrlKey: true, shiftKey: true }), "Win32")).toBe(false);
-		expect(isEnterTranscriptKey(event({ key: "ArrowDown", ctrlKey: true }), "Win32")).toBe(false);
+	test("answers Ctrl+↑ off Apple and ⌘↑ on Apple only, inside the composer's text field", () => {
+		expect(enters("Linux x86_64", { ctrlKey: true })).toBe(true);
+		expect(enters("MacIntel", { metaKey: true })).toBe(true);
+		expect(enters("MacIntel", { ctrlKey: true })).toBe(false);
+		expect(enters("Linux x86_64", {})).toBe(false);
+		expect(enters("Win32", { ctrlKey: true, shiftKey: true })).toBe(false);
+		expect(enters("Win32", { key: "ArrowDown", ctrlKey: true })).toBe(false);
 	});
 
 	test("enters from one line, else first brings the caret to the start", () => {
@@ -188,6 +293,24 @@ describe("the composer's way into the transcript", () => {
 		expect(composerTranscriptStep(false, true)).toBe("enter");
 		expect(composerTranscriptStep(true, false)).toBe("caretToStart");
 		expect(composerTranscriptStep(true, true)).toBe("enter");
+	});
+
+	test("a plain Shift+Tab leaves the composer backward unless a menu or template slots hold it", () => {
+		const press = (
+			modifiers: Partial<Record<"shiftKey" | "altKey" | "ctrlKey" | "metaKey", boolean>>,
+		) => ({
+			key: "Tab",
+			shiftKey: false,
+			altKey: false,
+			ctrlKey: false,
+			metaKey: false,
+			...modifiers,
+		});
+		expect(composerShiftTabOut(press({ shiftKey: true }), false)).toBe(true);
+		expect(composerShiftTabOut(press({ shiftKey: true }), true)).toBe(false);
+		expect(composerShiftTabOut(press({}), false)).toBe(false);
+		expect(composerShiftTabOut(press({ shiftKey: true, ctrlKey: true }), false)).toBe(false);
+		expect(composerShiftTabOut({ ...press({ shiftKey: true }), key: "Enter" }, false)).toBe(false);
 	});
 });
 

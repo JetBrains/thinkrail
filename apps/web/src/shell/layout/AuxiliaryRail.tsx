@@ -2,11 +2,12 @@ import type { RemixiconComponentType } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { buttonDataAttributes, buttonVariants } from "@thinkrail/ui/button";
-import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { isImeComposing, twinArrow } from "@thinkrail/ui/keyboard";
+import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment, forwardRef, type ReactNode, useRef, useState } from "react";
-import { HJKL_KEYS } from "../../keybindings";
+import { LOCAL_KEY_DEFAULTS } from "../../keybindings";
 import {
 	type AuxiliaryRailEntry,
 	type AuxiliaryRailToolEntry,
@@ -146,6 +147,7 @@ export function AuxiliaryRail({
 	footer?: ((control: AuxiliaryRailControlProps) => ReactNode) | undefined;
 }) {
 	const t = useT();
+	const keys = useLocalKeys("rails", LOCAL_KEY_DEFAULTS.rails);
 	const root = useRef<HTMLDivElement>(null);
 	const [focused, setFocused] = useState<string | null>(null);
 	const footerFocused = footer !== undefined && focused === FOOTER_KEY;
@@ -171,6 +173,7 @@ export function AuxiliaryRail({
 		<div
 			ref={root}
 			role="toolbar"
+			data-esc-ladder=""
 			aria-label={t(RAIL_TOOLBAR_LABELS[region])}
 			aria-orientation={horizontal ? "horizontal" : "vertical"}
 			data-testid={region === "bottom" ? "bottom-tool-rail" : `${region}-layout-rail`}
@@ -183,8 +186,10 @@ export function AuxiliaryRail({
 				region === "right" && "border-border-muted border-l",
 			)}
 			onKeyDown={(event) => {
-				if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
 				if (isImeComposing(event.nativeEvent)) return;
+				const twin = twinArrow(keys.match(event.nativeEvent));
+				const modified = event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;
+				if (twin === undefined && modified) return;
 				if (!(event.target instanceof HTMLElement) || !root.current?.contains(event.target)) return;
 				const current = event.target.closest<HTMLButtonElement>(RAIL_CONTROLS);
 				if (!current) return;
@@ -192,23 +197,18 @@ export function AuxiliaryRail({
 					root.current.querySelectorAll<HTMLButtonElement>(RAIL_CONTROLS),
 				);
 				const index = controls.indexOf(current);
-				const [previousKeys, nextKeys] = horizontal
-					? [
-							["ArrowLeft", HJKL_KEYS.left.key],
-							["ArrowRight", HJKL_KEYS.right.key],
-						]
-					: [
-							["ArrowUp", HJKL_KEYS.up.key],
-							["ArrowDown", HJKL_KEYS.down.key],
-						];
+				const key = twin ?? event.key;
+				const [previousKey, nextKey] = horizontal
+					? ["ArrowLeft", "ArrowRight"]
+					: ["ArrowUp", "ArrowDown"];
 				const next =
-					event.key === "Home"
+					key === "Home"
 						? 0
-						: event.key === "End"
+						: key === "End"
 							? controls.length - 1
-							: nextKeys.includes(event.key)
+							: key === nextKey
 								? (index + 1) % controls.length
-								: previousKeys.includes(event.key)
+								: key === previousKey
 									? (index - 1 + controls.length) % controls.length
 									: null;
 				if (next === null) return;

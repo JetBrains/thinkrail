@@ -25,6 +25,15 @@ export function hasDismissibleLayer(doc: LayerDocument) {
 	return hasLayer(doc, DISMISSIBLE_LAYER_SELECTOR) || hasGroupLayer(doc);
 }
 
+export function isInLayer(target: { closest(selector: string): unknown }): boolean {
+	return target.closest(DISMISSIBLE_LAYER_SELECTOR) !== null;
+}
+
+export function activeLayer(doc: ParentNode = document): ParentNode {
+	const layers = doc.querySelectorAll(DISMISSIBLE_LAYER_SELECTOR);
+	return layers[layers.length - 1] ?? doc;
+}
+
 const TERMINAL_ROOT_SELECTOR = ".xterm";
 
 export function isInTerminal(target: EventTarget | null) {

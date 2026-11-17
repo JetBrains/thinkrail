@@ -69,6 +69,7 @@ import {
 	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
 	isTodoReviewFixMessage,
+	type KeybindingOverrides,
 	normalizeFontSettings,
 	normalizeThemePreference,
 	readToolResponseMessage,
@@ -181,9 +182,14 @@ export interface FileClipboard {
 	cut?: true;
 }
 
+export type ArtifactsView = "list" | "tree" | "smart";
+
 export interface ArtifactsPreferences {
 	seen: Record<string, number>;
 	showIgnored: boolean;
+	view: ArtifactsView | null;
+	smart: boolean;
+	treeExpanded: Record<string, readonly string[]>;
 }
 export interface ChatTab {
 	kind: "chat";
@@ -404,7 +410,7 @@ export type LayoutIntent =
 			navigation?: CenterNavigationStamp | null;
 			countNavigation?: boolean;
 	  }
-	| { id: string; kind: "reveal-tool"; workspaceId: string; tool: LayoutToolId }
+	| { id: string; kind: "reveal-tool"; workspaceId: string; tool: LayoutToolId; focus?: false }
 	| { id: string; kind: "remove-session"; workspaceId: string; sessionId: string }
 	| {
 			id: string;
@@ -451,6 +457,7 @@ export const SettingsSection = {
 	Extensions: "extensions",
 	Environment: "environment",
 	Voice: "voice",
+	Artifacts: "artifacts",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
 
@@ -545,6 +552,7 @@ export interface SessionRuntime {
 	composerEdit: ComposerEdit | null;
 	promptImages: PromptImagesState;
 	readingAnchor: ChatReadingAnchor | null;
+	composerFocusWonOver: string | null;
 	pendingExtUi: ExtUiDialogRequest | null;
 	extUiQueue: ExtUiDialogRequest[];
 	extUiStatus: Record<string, string>;
@@ -580,6 +588,7 @@ function newRuntime(
 		composerEdit: null,
 		promptImages: newPromptImagesState(),
 		readingAnchor: null,
+		composerFocusWonOver: null,
 		pendingExtUi: null,
 		extUiQueue: [],
 		extUiStatus: {},
@@ -1165,6 +1174,9 @@ interface AppState {
 	artifactsTickByWorkspace: Record<string, number>;
 	artifactsSeenByWorkspace: Record<string, number>;
 	artifactsShowIgnored: boolean;
+	artifactsView: ArtifactsView | null;
+	artifactsSmart: boolean;
+	artifactsTreeExpandedByWorkspace: Record<string, readonly string[]>;
 	reviewsByWorkspace: Record<string, ReviewSnapshot>;
 	reviewFocusRequest: {
 		workspaceId: string;
@@ -1221,6 +1233,7 @@ interface AppState {
 	agentReviewEnabled: boolean;
 	disabledExtensions: string[];
 	extensionSettings: ExtensionSettingValues;
+	keybindingOverrides: KeybindingOverrides;
 	otherAgentSkills: boolean;
 	disabledPackages: string[];
 	locale: string;
@@ -1285,6 +1298,7 @@ interface AppState {
 		options?: { dismissHistory?: boolean },
 	) => void;
 	clearComposerFocusRequest: () => void;
+	serveComposerFocusRequest: (sessionId: string, waitingToolCallId: string | null) => void;
 	hydrateLocalLayoutState: (payload: LocalLayoutStatePayload) => void;
 	applyLocalLayoutState: (payload: LocalLayoutStatePayload, invalidateProjection?: boolean) => void;
 	setLocalLayoutPreferences: (preferences: LocalLayoutPreferences) => void;
@@ -1595,6 +1609,14 @@ interface AppState {
 	noteArtifactsChanged: (workspaceId: string) => void;
 	markArtifactsSeen: (workspaceId: string, watermark: number) => void;
 	setArtifactsShowIgnored: (show: boolean) => void;
+	setArtifactsView: (view: ArtifactsView) => void;
+	setArtifactsSmart: (enabled: boolean) => void;
+	setArtifactsTreeExpanded: (
+		workspaceId: string,
+		paths: readonly string[],
+		expanded: boolean,
+	) => void;
+	collapseAllArtifacts: (workspaceId: string) => void;
 	hydrateArtifactsPreferences: (preferences: ArtifactsPreferences) => void;
 	setWorkspaceReview: (workspaceId: string, snapshot: ReviewSnapshot) => void;
 	requestReviewFocus: (workspaceId: string, commentId: string, surface: ReviewFocusSurface) => void;
@@ -1687,6 +1709,12 @@ function configPatch(config: AppConfig) {
 			config.extensionSettings && typeof config.extensionSettings === "object"
 				? config.extensionSettings
 				: DEFAULT_CONFIG.extensionSettings,
+		keybindingOverrides:
+			config.keybindings &&
+			typeof config.keybindings === "object" &&
+			!Array.isArray(config.keybindings)
+				? config.keybindings
+				: DEFAULT_CONFIG.keybindings,
 		otherAgentSkills: typeof config.otherAgentSkills === "boolean" ? config.otherAgentSkills : true,
 		disabledPackages: Array.isArray(config.disabledPackages)
 			? config.disabledPackages
@@ -2555,6 +2583,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 	artifactsTickByWorkspace: {},
 	artifactsSeenByWorkspace: {},
 	artifactsShowIgnored: true,
+	artifactsView: null,
+	artifactsSmart: true,
+	artifactsTreeExpandedByWorkspace: {},
 	reviewsByWorkspace: {},
 	reviewFocusRequest: null,
 	changesView: "tree",
@@ -2616,6 +2647,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
 	disabledExtensions: DEFAULT_CONFIG.disabledExtensions,
 	extensionSettings: DEFAULT_CONFIG.extensionSettings,
+	keybindingOverrides: DEFAULT_CONFIG.keybindings,
 	otherAgentSkills: DEFAULT_CONFIG.otherAgentSkills,
 	disabledPackages: DEFAULT_CONFIG.disabledPackages,
 	locale: DEFAULT_CONFIG.locale,
@@ -2943,6 +2975,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 				artifactsByWorkspace: omitKey(state.artifactsByWorkspace, workspaceId),
 				artifactsTickByWorkspace: omitKey(state.artifactsTickByWorkspace, workspaceId),
 				artifactsSeenByWorkspace: omitKey(state.artifactsSeenByWorkspace, workspaceId),
+				artifactsTreeExpandedByWorkspace: omitKey(
+					state.artifactsTreeExpandedByWorkspace,
+					workspaceId,
+				),
 				diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
 				filesTreeByWorkspace: omitKey(state.filesTreeByWorkspace, workspaceId),
 				fileClipboard:
@@ -3066,6 +3102,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 		})),
 	clearComposerFocusRequest: () =>
 		set((state) => (state.composerFocusRequest ? { composerFocusRequest: null } : state)),
+	serveComposerFocusRequest: (sessionId, waitingToolCallId) =>
+		set((state) => ({
+			composerFocusRequest: null,
+			...withRuntime(state, sessionId, (rt) =>
+				rt.composerFocusWonOver === waitingToolCallId
+					? rt
+					: { ...rt, composerFocusWonOver: waitingToolCallId },
+			),
+		})),
 	hydrateLocalLayoutState: (payload) => {
 		set((state) =>
 			state.layoutStateReady
@@ -5011,10 +5056,43 @@ export const useAppStore = create<AppState>((set, get) => ({
 					},
 		),
 	setArtifactsShowIgnored: (artifactsShowIgnored) => set({ artifactsShowIgnored }),
-	hydrateArtifactsPreferences: ({ seen, showIgnored }) =>
+	setArtifactsView: (artifactsView) => set({ artifactsView }),
+	setArtifactsSmart: (artifactsSmart) => set({ artifactsSmart }),
+	setArtifactsTreeExpanded: (workspaceId, paths, expanded) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
+			const current = s.artifactsTreeExpandedByWorkspace[workspaceId] ?? [];
+			const next = withPathMembership(current, paths, expanded);
+			return next === current
+				? {}
+				: {
+						artifactsTreeExpandedByWorkspace: {
+							...s.artifactsTreeExpandedByWorkspace,
+							[workspaceId]: next,
+						},
+					};
+		}),
+	collapseAllArtifacts: (workspaceId) =>
+		set((s) =>
+			s.artifactsTreeExpandedByWorkspace[workspaceId]?.length
+				? {
+						artifactsTreeExpandedByWorkspace: omitKey(
+							s.artifactsTreeExpandedByWorkspace,
+							workspaceId,
+						),
+					}
+				: {},
+		),
+	hydrateArtifactsPreferences: ({ seen, showIgnored, view, smart, treeExpanded }) =>
 		set((s) => ({
 			artifactsSeenByWorkspace: { ...seen, ...s.artifactsSeenByWorkspace },
 			artifactsShowIgnored: showIgnored,
+			artifactsView: view,
+			artifactsSmart: smart,
+			artifactsTreeExpandedByWorkspace: {
+				...treeExpanded,
+				...s.artifactsTreeExpandedByWorkspace,
+			},
 		})),
 	requestReviewFocus: (workspaceId, commentId, surface) =>
 		set((state) =>

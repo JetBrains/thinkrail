@@ -1,8 +1,10 @@
 export type {
+	ArtifactTool,
 	ExtensionSessionServices,
 	InteractiveTool,
 	ToolResponse,
 } from "@thinkrail/extension-api/server";
+export { type ArtifactTools, artifactTools } from "./artifactTools";
 export { listExtensionCatalog } from "./catalog";
 export {
 	type ExtensionDisabled,

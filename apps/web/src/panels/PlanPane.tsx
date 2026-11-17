@@ -31,7 +31,7 @@ import {
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { type ChatActions, ChatActionsContext } from "../chat/ChatActions";
 import {
 	awaitingToolCallIdOf,
@@ -638,6 +638,7 @@ function PlanComposer({
 						e.preventDefault();
 						void submit();
 					} else if (e.key === "Escape" && onClose) {
+						e.preventDefault();
 						onClose();
 					}
 				}}
@@ -701,21 +702,61 @@ function PlanInteractionCard({
 }
 
 // Keep the session's live slot isolated from the heavy PlanPane.
-function PlanSessionLive({ workspaceId, sessionId }: { workspaceId: string; sessionId: string }) {
+function PlanSessionLive({
+	workspaceId,
+	sessionId,
+	landingChord,
+}: {
+	workspaceId: string;
+	sessionId: string;
+	landingChord: string;
+}) {
+	const slotRef = useRef<HTMLDivElement>(null);
+	return (
+		<div
+			ref={slotRef}
+			tabIndex={-1}
+			data-testid="plan-session-live"
+			className="rounded-sm focus-visible:focus-ring"
+		>
+			<PlanSessionLiveBody
+				workspaceId={workspaceId}
+				sessionId={sessionId}
+				landingChord={landingChord}
+				slotRef={slotRef}
+			/>
+		</div>
+	);
+}
+
+function PlanSessionLiveBody({
+	workspaceId,
+	sessionId,
+	landingChord,
+	slotRef,
+}: {
+	workspaceId: string;
+	sessionId: string;
+	landingChord: string;
+	slotRef: RefObject<HTMLDivElement | null>;
+}) {
 	const t = useT();
 	const runtime = useAppStore((s) => s.sessions[sessionId]);
 	const [focusScope] = useState<object>(() => ({}));
-	const actions = useMemo<ChatActions>(
-		() => ({
+	const actions = useMemo<ChatActions>(() => {
+		const focusSlot = () => slotRef.current?.focus({ preventScroll: true });
+		return {
 			cancelAutomaticReveal: () => {},
-			focusComposer: () => {},
+			focusComposer: focusSlot,
+			focusToolCall: focusSlot,
+			mayClaimFocus: () => true,
+			landingChord,
 			openSubagentTranscript: () => {},
 			respondToTool: (toolCallId, response) => respondToTool(sessionId, toolCallId, response),
 			resultOpener: () => undefined,
 			revealChatElement: () => {},
-		}),
-		[sessionId],
-	);
+		};
+	}, [landingChord, sessionId, slotRef]);
 	const interactionStates = useMemo(
 		() =>
 			runtime
@@ -900,9 +941,11 @@ function SessionBlock({
 export default function PlanPane({
 	workspaceId,
 	sessionId,
+	landingChord,
 }: {
 	workspaceId: string;
 	sessionId: string;
+	landingChord: string;
 }) {
 	const t = useT();
 	const plan = useChatTodos(workspaceId, sessionId);
@@ -1400,7 +1443,13 @@ export default function PlanPane({
 					pendingLoose={sections.pendingLoose}
 					allDone={buildDone}
 					glance={glance}
-					renderLive={() => <PlanSessionLive workspaceId={workspaceId} sessionId={sessionId} />}
+					renderLive={() => (
+						<PlanSessionLive
+							workspaceId={workspaceId}
+							sessionId={sessionId}
+							landingChord={landingChord}
+						/>
+					)}
 					onAdd={(title) => plan.add(title, "page")}
 					onOpenChat={() => {
 						void openChatInTab(workspaceId, sessionId);

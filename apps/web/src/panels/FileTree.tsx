@@ -35,9 +35,10 @@ import { type ChangeMarks, statusMarkClass } from "./changesModel";
 import { holdEditorWarm, useEditorWarm, warmOnHover } from "./editorWarm";
 import { deleteEntry, pasteDestination, pasteInto, supportsFileMutations } from "./fileTreeActions";
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
+import { OpenInBrowserMenuItem } from "./OpenInBrowserButton";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
-import { Tree, treeRowKey } from "./treeNavigation";
+import { Tree, treeRowKey, useTreeKeys } from "./treeNavigation";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
 type SetPathsExpanded = (paths: readonly string[], expanded: boolean) => void;
@@ -346,6 +347,7 @@ function FileTreeMenu({
 	children: (menuOpen: boolean) => ReactElement;
 }) {
 	const t = useT();
+	const treeKeys = useTreeKeys();
 	const [open, setOpen] = useState(false);
 	const mutations = useAppStore((s) => supportsFileMutations(s.protocolVersion));
 	const moves = useAppStore((s) => supportsArtifacts(s.protocolVersion));
@@ -359,7 +361,7 @@ function FileTreeMenu({
 			<ContextMenuTrigger
 				asChild
 				onKeyDown={(event) => {
-					if (mutations && treeRowKey(event) === "delete") {
+					if (mutations && treeRowKey(event.nativeEvent, treeKeys) === "delete") {
 						event.preventDefault();
 						onDelete(path);
 						return;
@@ -370,6 +372,13 @@ function FileTreeMenu({
 				{children(open)}
 			</ContextMenuTrigger>
 			<ContextMenuContent data-testid="file-tree-actions">
+				{kind === "file" ? (
+					<OpenInBrowserMenuItem
+						workspaceId={workspaceId}
+						path={path}
+						testId="file-tree-open-in-browser"
+					/>
+				) : null}
 				<ContextMenuItem data-testid="file-copy-path" onSelect={() => copyPath(true)}>
 					<Copy />
 					{t("panels.fileTree.copyPath")}

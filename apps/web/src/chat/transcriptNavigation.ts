@@ -1,7 +1,7 @@
 import { resultText, strArg } from "@thinkrail/extension-api/web";
 import { isContextMenuKey } from "@thinkrail/ui/context-menu";
-import { hasPlatformModifier } from "@thinkrail/ui/keyboard";
-import { HJKL_KEYS, TRANSCRIPT_KEYS } from "@/keybindings";
+import { twinArrow } from "@thinkrail/ui/keyboard";
+import type { LocalKeyEvent, LocalKeys } from "@thinkrail/ui/local-keys";
 import { parseSkillInvocation, userText } from "@/lib";
 import { parseReviewPackage } from "./reviewPackage";
 import type { ActivityStep, ChatRow } from "./rows";
@@ -30,9 +30,8 @@ export type TranscriptKeyAction =
 	| { kind: "copy" }
 	| { kind: "open" }
 	| { kind: "menu" }
-	| { kind: "leave" };
-
-type KeyEventLike = Pick<KeyboardEvent, "key" | "shiftKey" | "altKey" | "ctrlKey" | "metaKey">;
+	| { kind: "leave" }
+	| { kind: "question" };
 
 const MOVE_KEYS: Readonly<Record<string, TranscriptMoveKey>> = {
 	ArrowUp: "ArrowUp",
@@ -41,10 +40,11 @@ const MOVE_KEYS: Readonly<Record<string, TranscriptMoveKey>> = {
 	ArrowRight: "ArrowRight",
 	Home: "Home",
 	End: "End",
-	[HJKL_KEYS.up.key]: "ArrowUp",
-	[HJKL_KEYS.down.key]: "ArrowDown",
-	[HJKL_KEYS.left.key]: "ArrowLeft",
-	[HJKL_KEYS.right.key]: "ArrowRight",
+};
+
+const LOCAL_ACTIONS: Readonly<Record<string, TranscriptKeyAction>> = {
+	"transcript.copy": { kind: "copy" },
+	"transcript.open": { kind: "open" },
 };
 
 const OPENABLE_SPEC_TOOLS = new Set(["spec_create", "spec_get", "spec_update"]);
@@ -74,6 +74,14 @@ export function transcriptItems(
 		}
 	}
 	return items;
+}
+
+export function keyboardLeavesFollow(
+	item: Pick<TranscriptNavItem, "rowId" | "parentId">,
+	latestRowIds: readonly (string | null)[],
+	change: "focus" | "expand",
+): boolean {
+	return latestRowIds.includes(item.rowId) && (change === "expand" || item.parentId !== null);
 }
 
 function subjectOf(item: TranscriptNavItem): ChatRow | ActivityStep {
@@ -109,12 +117,23 @@ export function transcriptItemFilePath(item: TranscriptNavItem): string | null {
 	return specToolPaths(subject.toolName, subject.args, subject.tool?.raw)[0] ?? null;
 }
 
-export function transcriptKeyAction(event: KeyEventLike): TranscriptKeyAction | null {
+export function transcriptKeyAction(
+	event: LocalKeyEvent,
+	keys: Pick<LocalKeys, "match">,
+	parked = false,
+	questionWaiting = false,
+): TranscriptKeyAction | null {
 	if (isContextMenuKey(event)) {
 		return event.altKey || event.ctrlKey || event.metaKey ? null : { kind: "menu" };
 	}
-	if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return null;
-	const move = MOVE_KEYS[event.key];
+	const local = keys.match(event);
+	const action = LOCAL_ACTIONS[local ?? ""];
+	if (action) return action;
+	const twin = twinArrow(local);
+	if (twin === undefined && (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey)) {
+		return null;
+	}
+	const move = MOVE_KEYS[twin ?? event.key];
 	if (move) return { kind: "move", key: move };
 	switch (event.key) {
 		case "PageUp":
@@ -124,23 +143,11 @@ export function transcriptKeyAction(event: KeyEventLike): TranscriptKeyAction | 
 		case "Enter":
 			return { kind: "toggle" };
 		case "Escape":
-			return { kind: "leave" };
-		case TRANSCRIPT_KEYS.copy.key:
-			return { kind: "copy" };
-		case TRANSCRIPT_KEYS.open.key:
-			return { kind: "open" };
+			if (questionWaiting) return { kind: "question" };
+			return parked ? null : { kind: "leave" };
 		default:
 			return null;
 	}
-}
-
-export function isEnterTranscriptKey(event: KeyEventLike, platform?: string): boolean {
-	return (
-		event.key === TRANSCRIPT_KEYS.enter.key &&
-		hasPlatformModifier(event, platform) &&
-		!event.altKey &&
-		!event.shiftKey
-	);
 }
 
 export function composerTranscriptStep(
@@ -148,6 +155,20 @@ export function composerTranscriptStep(
 	caretAtStart: boolean,
 ): "enter" | "caretToStart" {
 	return multiline && !caretAtStart ? "caretToStart" : "enter";
+}
+
+export function composerShiftTabOut(
+	event: Pick<KeyboardEvent, "key" | "shiftKey" | "altKey" | "ctrlKey" | "metaKey">,
+	busy: boolean,
+): boolean {
+	return (
+		event.key === "Tab" &&
+		event.shiftKey &&
+		!event.altKey &&
+		!event.ctrlKey &&
+		!event.metaKey &&
+		!busy
+	);
 }
 
 export function newestContentRowId(chronologicalRows: readonly ChatRow[]): string | null {

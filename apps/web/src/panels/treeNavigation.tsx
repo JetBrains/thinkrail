@@ -1,5 +1,8 @@
+import { useT } from "@thinkrail/locales/react";
 import { isContextMenuKey } from "@thinkrail/ui/context-menu";
-import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { isImeComposing, twinArrow } from "@thinkrail/ui/keyboard";
+import { type LocalKeyEvent, type LocalKeys, useLocalKeys } from "@thinkrail/ui/local-keys";
+import { cn } from "@thinkrail/ui/utils";
 import {
 	createContext,
 	type FocusEvent,
@@ -12,57 +15,85 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
-import { TREE_KEYS } from "../keybindings";
-import { hasPlatformModifier, resolveTreeMove, type TreeMoveRow } from "../lib";
+import { LOCAL_KEY_DEFAULTS } from "../keybindings";
+import { resolveTreeMove, type TreeMoveRow } from "../lib";
 
 const TREE = '[role="tree"]';
 const TREE_ITEM = '[role="treeitem"]';
-const TYPE_AHEAD_MS = 500;
+const HINT_MODE_CODE = "KeyF";
+const MATCH_STYLES =
+	"[&_[data-tree-match=match]]:bg-primary-subtle [&_[data-tree-match=current]]:bg-primary-soft";
 
 export interface TreeRowModel extends TreeMoveRow {
 	label: string;
 }
 
-export interface TypeAhead {
-	text: string;
-	at: number;
+export interface TreeSearchRow {
+	id: string;
+	label: string;
 }
 
-export type TreeRowKey = "menu" | "delete" | "rename";
+export type TreeRowKey = "menu" | "delete" | "rename" | "reorderUp" | "reorderDown";
 
-export function extendTypeAhead(previous: TypeAhead, key: string, now: number): TypeAhead | null {
-	const live = previous.text !== "" && now - previous.at <= TYPE_AHEAD_MS;
-	if (key === " " && !live) return null;
-	return { text: live ? previous.text + key : key, at: now };
+const ROW_COMMANDS: Readonly<Record<string, TreeRowKey>> = {
+	"trees.delete": "delete",
+	"trees.rename": "rename",
+	"trees.reorderUp": "reorderUp",
+	"trees.reorderDown": "reorderDown",
+};
+
+function matchIndexes(rows: readonly TreeSearchRow[], query: string): number[] {
+	const needle = query.toLocaleLowerCase();
+	if (needle === "") return [];
+	return rows.flatMap((row, index) =>
+		row.label.toLocaleLowerCase().includes(needle) ? [index] : [],
+	);
 }
 
-export function typeAheadTarget(
-	labels: readonly string[],
-	index: number,
-	text: string,
-): number | null {
-	const query = text.toLocaleLowerCase();
-	const needle = [...query].every((char) => char === query[0]) ? query.slice(0, 1) : query;
-	const start = needle.length === 1 ? index + 1 : index;
-	for (let offset = 0; offset < labels.length; offset++) {
-		const at = (start + offset) % labels.length;
-		if (labels[at]?.toLocaleLowerCase().startsWith(needle)) return at;
-	}
-	return null;
+export function treeSearchMatches(rows: readonly TreeSearchRow[], query: string): string[] {
+	return matchIndexes(rows, query).flatMap((index) => rows[index]?.id ?? []);
+}
+
+export function treeSearchTarget(
+	rows: readonly TreeSearchRow[],
+	query: string,
+	anchor: string | null,
+): string | null {
+	const matches = matchIndexes(rows, query);
+	const start = Math.max(
+		0,
+		rows.findIndex((row) => row.id === anchor),
+	);
+	const at = matches.find((index) => index >= start) ?? matches[0];
+	return at === undefined ? null : (rows[at]?.id ?? null);
+}
+
+export function treeSearchStep(
+	rows: readonly TreeSearchRow[],
+	query: string,
+	current: string | null,
+	delta: 1 | -1,
+): string | null {
+	const matches = matchIndexes(rows, query);
+	const index = rows.findIndex((row) => row.id === current);
+	const at =
+		delta === 1
+			? (matches.find((each) => each > index) ?? matches[0])
+			: (matches.findLast((each) => each < (index === -1 ? rows.length : index)) ?? matches.at(-1));
+	return at === undefined ? null : (rows[at]?.id ?? null);
+}
+
+export function useTreeKeys(): LocalKeys {
+	return useLocalKeys("trees", LOCAL_KEY_DEFAULTS.trees);
 }
 
 export function treeRowKey(
-	event: Pick<
-		KeyboardEvent,
-		"key" | "shiftKey" | "altKey" | "ctrlKey" | "metaKey" | "defaultPrevented"
-	>,
+	event: LocalKeyEvent & { readonly defaultPrevented: boolean },
+	keys: Pick<LocalKeys, "match">,
 ): TreeRowKey | null {
 	if (event.defaultPrevented) return null;
 	if (isContextMenuKey(event)) return "menu";
-	if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return null;
-	if (event.key === TREE_KEYS.delete.key) return "delete";
-	if (event.key === TREE_KEYS.rename.key) return "rename";
-	return null;
+	return ROW_COMMANDS[keys.match(event) ?? ""] ?? null;
 }
 
 function createTreeCursor() {
@@ -89,9 +120,42 @@ function createTreeCursor() {
 
 type TreeCursor = ReturnType<typeof createTreeCursor>;
 
+type TreeMatch = "match" | "current";
+
+function createTreeMarks() {
+	let matches: ReadonlySet<string> = new Set();
+	let current: string | null = null;
+	const listeners = new Set<() => void>();
+	return {
+		of: (id: string): TreeMatch | undefined =>
+			id === current ? "current" : matches.has(id) ? "match" : undefined,
+		set(nextMatches: readonly string[], nextCurrent: string | null) {
+			matches = new Set(nextMatches);
+			current = nextCurrent;
+			for (const listener of listeners) listener();
+		},
+		subscribe(listener: () => void) {
+			listeners.add(listener);
+			return () => {
+				listeners.delete(listener);
+			};
+		},
+	};
+}
+
+type TreeMarks = ReturnType<typeof createTreeMarks>;
+
 interface TreeScope {
 	cursor: TreeCursor;
+	marks: TreeMarks;
 	focusDefault: boolean;
+}
+
+interface TreeSearch {
+	origin: string | null;
+	current: string | null;
+	query: string;
+	matches: readonly string[];
 }
 
 const TreeContext = createContext<TreeScope | null>(null);
@@ -155,6 +219,88 @@ function reconcile(container: Element, cursor: TreeCursor, records: readonly Mut
 
 const subscribeNothing = () => () => {};
 
+function searchRows(container: Element): TreeSearchRow[] {
+	return treeItems(container).map((item) => ({
+		id: item.dataset.treeItem ?? "",
+		label: rowModel(item).label,
+	}));
+}
+
+function itemById(container: Element, id: string | null): HTMLElement | undefined {
+	return id === null
+		? undefined
+		: treeItems(container).find((item) => item.dataset.treeItem === id);
+}
+
+function reveal(row: HTMLElement, field: HTMLElement | null): void {
+	row.scrollIntoView({ block: "nearest" });
+	if (field && field.getBoundingClientRect().bottom > row.getBoundingClientRect().top) {
+		row.scrollIntoView({ block: "center" });
+	}
+}
+
+const focusOnMount = (node: HTMLInputElement | null) => node?.focus();
+
+function TreeSearchField({
+	tree,
+	search,
+	fieldRef,
+	onQuery,
+	onStep,
+	onClose,
+}: {
+	tree: string;
+	search: TreeSearch;
+	fieldRef: (node: HTMLDivElement | null) => void;
+	onQuery: (query: string) => void;
+	onStep: (delta: 1 | -1) => void;
+	onClose: (keep: boolean, moveFocus: boolean) => void;
+}) {
+	const t = useT();
+	const { matches } = search;
+	return (
+		<div
+			ref={fieldRef}
+			className="sticky top-0 z-10 flex items-center gap-8 bg-container-sidebar-bg px-8 py-4"
+		>
+			<input
+				ref={focusOnMount}
+				type="text"
+				value={search.query}
+				aria-label={t("panels.treeSearch.label", { tree })}
+				placeholder={t("panels.treeSearch.placeholder")}
+				data-testid="tree-search"
+				aria-keyshortcuts="ArrowDown ArrowUp Enter Escape"
+				className="h-24 min-w-0 flex-1 rounded-sm border border-control-border-default bg-control-bg px-8 tr-text-ui text-text-default transition-colors placeholder:text-text-muted focus:border-control-border-active focus-visible:focus-ring"
+				onChange={(event) => onQuery(event.target.value)}
+				onBlur={() => onClose(true, false)}
+				onKeyDown={(event) => {
+					if (isImeComposing(event.nativeEvent)) return;
+					if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+					if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+						event.preventDefault();
+						onStep(event.key === "ArrowDown" ? 1 : -1);
+					} else if (event.key === "Enter" || event.key === "Escape") {
+						event.preventDefault();
+						event.stopPropagation();
+						onClose(event.key === "Enter", true);
+					}
+				}}
+			/>
+			{search.query === "" ? null : (
+				<span data-testid="tree-search-count" className="shrink-0 tr-text-metadata text-text-muted">
+					{matches.length === 0
+						? t("panels.treeSearch.none")
+						: t("panels.treeSearch.count", {
+								current: matches.indexOf(search.current ?? "") + 1,
+								total: matches.length,
+							})}
+				</span>
+			)}
+		</div>
+	);
+}
+
 export function Tree({
 	label,
 	focusList,
@@ -171,11 +317,17 @@ export function Tree({
 	children: ReactNode;
 }) {
 	const [cursor] = useState(createTreeCursor);
-	const typeAhead = useRef<TypeAhead>({ text: "", at: 0 });
-	const scope = useMemo(() => ({ cursor, focusDefault }), [cursor, focusDefault]);
+	const [marks] = useState(createTreeMarks);
+	const [search, setSearch] = useState<TreeSearch | null>(null);
+	const searching = useRef(false);
+	const tree = useRef<HTMLElement | null>(null);
+	const field = useRef<HTMLDivElement | null>(null);
+	const keys = useTreeKeys();
+	const scope = useMemo(() => ({ cursor, marks, focusDefault }), [cursor, marks, focusDefault]);
 
 	const ref = useCallback(
 		(container: HTMLElement | null) => {
+			tree.current = container;
 			if (!container) return;
 			const observer = new MutationObserver((records) => reconcile(container, cursor, records));
 			observer.observe(container, {
@@ -185,10 +337,47 @@ export function Tree({
 				attributeFilter: ["aria-current"],
 			});
 			reconcile(container, cursor, []);
-			return () => observer.disconnect();
+			return () => {
+				observer.disconnect();
+				tree.current = null;
+			};
 		},
 		[cursor],
 	);
+
+	const showMatch = (
+		origin: string | null,
+		query: string,
+		pick: (rows: TreeSearchRow[]) => string | null,
+	) => {
+		const container = tree.current;
+		if (!container) return;
+		const rows = searchRows(container);
+		const current = pick(rows);
+		const matches = treeSearchMatches(rows, query);
+		setSearch({ origin, query, current, matches });
+		marks.set(matches, current);
+		const row = itemById(container, current ?? origin);
+		if (!row) return;
+		cursor.set(row.dataset.treeItem ?? null, true);
+		reveal(row, field.current);
+	};
+
+	const closeSearch = (keep: boolean, moveFocus: boolean) => {
+		if (search === null || !searching.current) return;
+		searching.current = false;
+		const container = tree.current;
+		const row = container
+			? (itemById(container, keep ? (search.current ?? search.origin) : search.origin) ??
+				itemById(container, cursor.current()))
+			: undefined;
+		if (row) {
+			cursor.set(row.dataset.treeItem ?? null, true);
+			if (moveFocus) row.focus();
+		}
+		marks.set([], null);
+		setSearch(null);
+	};
 
 	const onFocus = (event: FocusEvent<HTMLElement>) => {
 		const item = ownItem(event.currentTarget, event.target);
@@ -200,46 +389,67 @@ export function Tree({
 		const container = event.currentTarget;
 		const item = ownItem(container, event.target);
 		if (!item) return;
-		if (
-			event.key === TREE_KEYS.openKept.key &&
-			hasPlatformModifier(event) &&
-			!event.altKey &&
-			!event.shiftKey
-		) {
+		const local = keys.match(event.nativeEvent);
+		if (local === "trees.search") {
+			event.preventDefault();
+			searching.current = true;
+			setSearch({ origin: item.dataset.treeItem ?? null, current: null, query: "", matches: [] });
+			return;
+		}
+		if (local === "trees.openKept") {
 			event.preventDefault();
 			const id = item.dataset.treeItem;
 			if (onOpenKept && id !== undefined && item.dataset.treeKeep !== undefined) onOpenKept(id);
 			else item.click();
 			return;
 		}
-		if (event.altKey || event.ctrlKey || event.metaKey) return;
+		const twin = twinArrow(local);
+		if (twin === undefined && (event.altKey || event.ctrlKey || event.metaKey)) return;
 		const items = treeItems(container);
 		const index = items.indexOf(item);
-		const move = event.shiftKey ? null : resolveTreeMove(event.key, items.map(rowModel), index);
+		const key = twin ?? (event.shiftKey ? null : event.key);
+		const move = key === null ? null : resolveTreeMove(key, items.map(rowModel), index);
 		if (move) {
 			event.preventDefault();
 			if (move.kind === "focus") items[move.index]?.focus();
 			else if (move.kind === "toggle") toggleOf(container, item)?.click();
 			return;
 		}
-		if (event.key.length !== 1) return;
-		const next = extendTypeAhead(typeAhead.current, event.key, event.timeStamp);
-		if (!next) return;
-		typeAhead.current = next;
+		if (event.altKey || event.ctrlKey || event.metaKey) return;
+		if (event.key.length !== 1 || event.key === " ") return;
+		if (event.code === HINT_MODE_CODE && !event.shiftKey) return;
 		event.preventDefault();
-		const labels = items.map((each) => rowModel(each).label);
-		const target = typeAheadTarget(labels, index, next.text);
-		if (target !== null) items[target]?.focus();
 	};
 
 	return (
 		<TreeContext value={scope}>
+			{search ? (
+				<TreeSearchField
+					tree={label}
+					search={search}
+					fieldRef={(node) => {
+						field.current = node;
+					}}
+					onQuery={(query) =>
+						showMatch(search.origin, query, (rows) =>
+							treeSearchTarget(rows, query, search.current ?? search.origin),
+						)
+					}
+					onStep={(delta) =>
+						showMatch(search.origin, search.query, (rows) =>
+							treeSearchStep(rows, search.query, search.current ?? search.origin, delta),
+						)
+					}
+					onClose={closeSearch}
+				/>
+			) : null}
 			<div
 				ref={ref}
 				role="tree"
+				data-key-scope="trees"
 				aria-label={label}
 				data-focus-list={focusList}
-				className={className}
+				className={cn(className, MATCH_STYLES)}
 				onFocus={onFocus}
 				onKeyDown={onKeyDown}
 			>
@@ -275,6 +485,11 @@ export function useTreeItem(
 		() => scope?.cursor.current() === id,
 		() => false,
 	);
+	const match = useSyncExternalStore(
+		scope?.marks.subscribe ?? subscribeNothing,
+		() => scope?.marks.of(id),
+		() => undefined,
+	);
 	return {
 		role: "treeitem" as const,
 		tabIndex: scope ? (current ? 0 : -1) : undefined,
@@ -286,6 +501,7 @@ export function useTreeItem(
 		"data-tree-toggle": toggles ? id : undefined,
 		"data-tree-keep": openKept || undefined,
 		"data-focus-default": (current && scope?.focusDefault) || undefined,
+		"data-tree-match": match,
 	};
 }
 

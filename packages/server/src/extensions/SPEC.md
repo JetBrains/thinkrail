@@ -31,7 +31,8 @@ list for registry extensions.
   the declared default; an undeclared key throws — and is read **inside the factory body**, so every pi
   (re)load sees current values. Without services, and in the child set, session factories are absent),
   `workspaceFiles` (the host's file check shared by extension server halves through the session seam —
-  `checkWorkspaceFile` + `MOCKUP_DIR`: a path must be relative, stay inside the session cwd lexically and
+  `checkWorkspaceFile` + `MOCKUP_DIR` (`contracts`' `WORKSPACE_MOCKUP_DIR` with a trailing slash, the one
+  name the UI also uses to run mockup scripts): a path must be relative, stay inside the session cwd lexically and
   after resolving links, name a regular file and stay out of `.git`, the paths the host's `fs.readFile`
   then serves; `extension-api` stays contract-only, so the check lives here, not in the SDK; plus
   `ensureArtifactsDir`, which is `shared`'s `seedArtifactsDir` on the session cwd), `omitDisabledRegistryExtensions(result, isDisabled)` (drops a disabled
@@ -68,14 +69,16 @@ list for registry extensions.
   `checkWorkspaceFile`, `workspaceFiles`, `MOCKUP_DIR`,
   `listExtensionCatalog`,
   `resolveExtensionSkillRoots`, `STAGED_HOST_SKILLS_ROUTE`, `stagedExtensionSkillRoute`,
-  `extensionSkillRoots`, `interactiveTools`, `InteractiveTools`, `ExtensionSessionServices`,
-  `InteractiveTool`, `ToolResponse`.
+  `extensionSkillRoots`, `interactiveTools`, `InteractiveTools`, `artifactTools`, `ArtifactTools`,
+  `ExtensionSessionServices`, `InteractiveTool`, `ArtifactTool`, `ToolResponse`.
 - **Session-seam types:** `ExtensionSessionServices`, `InteractiveTool` and `ToolResponse` are re-exported
   from `extension-api/server` so that `agent` can type the services it builds through this barrel.
 - **Interactive tools (`interactive.ts`):** `interactiveTools(isDisabled)` folds the enabled registry
   extensions' `interactiveTools` declarations into one name → `InteractiveTool` map (first declaration of a
   name wins). It is the only tool knowledge `agent` holds for restart repair, transcript-derived
-  needs-input and late-response wording; nothing in `packages/server` names an extension's tool or imports an
+  needs-input and late-response wording. **Artifact tools (`artifactTools.ts`)** fold the enabled
+  extensions' `artifactTools` the same way; `host` maps a successful call's declared paths into the
+  artifact index's session events (`host/artifactEvents.ts`), so it too names no tool; nothing in `packages/server` names an extension's tool or imports an
   extension outside `registry.ts`. The one tool name the host knows is `web_search`, in `agent`'s
   headless-search policy: it compensates for the host's UI for any copy of `pi-web-access`, so it is not
   the extension's to own.

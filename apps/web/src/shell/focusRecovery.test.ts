@@ -9,6 +9,7 @@ import {
 	resolveFocus,
 	WAIT,
 } from "./focusRecovery";
+import { resolveLanding } from "./regions";
 
 interface Page {
 	rows?: Record<string, readonly string[]>;
@@ -127,6 +128,21 @@ describe("focus recovery resolution", () => {
 			resolveFocus(context({ inLayer: true }), lookup({ landing: true, layerStart: true }), false),
 		).toBe("layer start");
 		expect(resolveFocus(context({ inLayer: true }), lookup({ landing: true }), false)).toBeNull();
+	});
+
+	test("the safety net lands on a waiting question's claim before the region's remembered control", () => {
+		const landing = (claim: string | null) => () =>
+			resolveLanding({
+				claim: () => claim,
+				remembered: () => "composer",
+				preferred: () => "composer",
+				selectedTab: () => null,
+				first: () => null,
+			});
+		const lost = context({ levels: [level("files", "gone")] });
+		const page = { ...lookup({ rows: { files: [] } }), regionLanding: landing("question") };
+		expect(resolveFocus(lost, page, true)).toBe("question");
+		expect(resolveFocus(lost, { ...page, regionLanding: landing(null) }, true)).toBe("composer");
 	});
 });
 

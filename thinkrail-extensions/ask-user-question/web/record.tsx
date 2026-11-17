@@ -5,6 +5,7 @@ import {
 	RiCheckboxCircleLine as CheckCircle,
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
+	RiFullscreenLine as CompareGlyph,
 	RiEditLine as EditLine,
 	RiErrorWarningLine as ErrorGlyph,
 	RiQuestionnaireLine as MessageCircleQuestion,
@@ -20,8 +21,10 @@ import type {
 } from "@thinkrail/pi-ask-user-question/core";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
+import { CompareOverlay } from "./CompareOverlay";
+import { compareIndexOf } from "./compareModel";
 import { discussReasonKey } from "./discuss";
-import { deriveRecapState, splitRecommended } from "./state";
+import { deriveRecapState, hasOptionPreviews, splitRecommended } from "./state";
 
 type PrepareLayoutChange = ToolInteraction["prepareLayoutChange"] | undefined;
 
@@ -347,6 +350,10 @@ function ReceiptPair({
 	);
 	const { selectedLabels, customAnswer } = deriveRecapState(answer);
 	const selected = new Set(selectedLabels);
+	const [comparing, setComparing] = useState(false);
+	const comparable = hasOptionPreviews(question);
+	const chosen = question.multiSelect ? null : (selectedLabels[0] ?? null);
+	const chosenIndex = question.options.findIndex((option) => option.label === chosen);
 	return (
 		<div
 			data-testid="ask-receipt-pair"
@@ -358,6 +365,19 @@ function ReceiptPair({
 		>
 			<div className="flex items-start gap-8">
 				<p className="min-w-0 flex-1 text-text-muted tr-text-metadata">{question.question}</p>
+				{comparable ? (
+					<button
+						type="button"
+						tabIndex={0}
+						data-testid="ask-receipt-compare"
+						aria-label={t("tools.ask.receiptCompareLabel", { question: question.question })}
+						onClick={() => setComparing(true)}
+						className="inline-flex shrink-0 items-center gap-2 rounded-sm px-4 text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default focus-visible:focus-ring"
+					>
+						<CompareGlyph aria-hidden="true" className="size-14" />
+						{t("tools.ask.receiptCompare")}
+					</button>
+				) : null}
 				<button
 					type="button"
 					tabIndex={0}
@@ -432,6 +452,15 @@ function ReceiptPair({
 						</li>
 					) : null}
 				</ul>
+			) : null}
+			{comparable ? (
+				<CompareOverlay
+					open={comparing}
+					onOpenChange={setComparing}
+					question={question}
+					start={compareIndexOf(question, chosenIndex >= 0 ? chosenIndex : null)}
+					chosen={chosen}
+				/>
 			) : null}
 		</div>
 	);

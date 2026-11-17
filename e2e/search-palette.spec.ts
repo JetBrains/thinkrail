@@ -18,6 +18,7 @@ import {
 	openFixtureProject,
 	pressPlatformShortcut,
 } from "./fixtures/app";
+import { resetKeybindings, setKeybindings } from "./fixtures/keybindings";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 import { E2eWire } from "./fixtures/wire";
@@ -448,7 +449,7 @@ test("double Shift toggles the palette and can be turned off in the Keyboard set
 	await expect(toggle).toHaveAttribute("aria-checked", "true");
 	await toggle.click();
 	await expect(toggle).toHaveAttribute("aria-checked", "false");
-	await settings.getByRole("button", { name: "Close" }).click();
+	await settings.getByRole("button", { name: "Close", exact: true }).click();
 	await expect(settings).toBeHidden();
 
 	await doubleShift(page);
@@ -570,6 +571,56 @@ test("Tab, Alt+digit and the chips switch the scope and write its prefix", async
 	await page.keyboard.press("ControlOrMeta+Alt+KeyI");
 	await pressPlatformShortcut(page, "i");
 	await expect(preview).toHaveAttribute("aria-pressed", "false");
+});
+
+test.describe("rebound palette keys", () => {
+	test.afterEach(async ({ page }) => resetKeybindings(page));
+
+	test("a rebound preview chord toggles the preview, shows on its button, and Mod+I no longer does", async ({
+		page,
+	}) => {
+		await openFixtureProject(page);
+		await setKeybindings(page, { "palette.preview": ["Alt+KeyP"] });
+		await openPalette(page);
+		const preview = page.getByTestId("search-preview-toggle");
+		await expect(preview.locator("kbd")).toHaveText(["Alt", "P"]);
+		const initial = await preview.getAttribute("aria-pressed");
+		const flipped = initial === "true" ? "false" : "true";
+
+		await page.keyboard.press("Alt+KeyP");
+		await expect(preview).toHaveAttribute("aria-pressed", flipped);
+		await pressPlatformShortcut(page, "i");
+		await page.keyboard.press("Alt+KeyP");
+		await expect(preview).toHaveAttribute("aria-pressed", initial ?? "false");
+	});
+
+	test("a preview rebound onto Alt+Tab and Alt+Esc toggles it instead of changing scope or closing", async ({
+		page,
+	}) => {
+		await openFixtureProject(page);
+		await setKeybindings(page, { "palette.preview": ["Alt+Tab", "Alt+Escape"] });
+		await openPalette(page);
+		const input = page.getByTestId("search-input");
+		await input.fill("auth");
+		const preview = page.getByTestId("search-preview-toggle");
+		const initial = (await preview.getAttribute("aria-pressed")) ?? "false";
+		const flipped = initial === "true" ? "false" : "true";
+
+		await page.keyboard.press("Alt+Tab");
+		await expect(preview).toHaveAttribute("aria-pressed", flipped);
+		await expect(chip(page, "all")).toHaveAttribute("aria-pressed", "true");
+		await expect(input).toHaveValue("auth");
+
+		await page.keyboard.press("Alt+Escape");
+		await expect(palette(page)).toBeVisible();
+		await expect(preview).toHaveAttribute("aria-pressed", initial);
+		await expect(input).toHaveValue("auth");
+
+		await page.keyboard.press("Tab");
+		await expect(chip(page, "work")).toHaveAttribute("aria-pressed", "true");
+		await page.keyboard.press("Escape");
+		await expect(input).toHaveValue("");
+	});
 });
 
 test("host search: a file by name opens as a tab, a spec section by its words opens in the Specs tool", async ({

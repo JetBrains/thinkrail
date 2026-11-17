@@ -6,8 +6,9 @@ import {
 import type { GitFileChange, ReviewComment, ReviewGuide } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
+import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { REVIEW_KEYS } from "../keybindings";
+import { LOCAL_KEY_DEFAULTS } from "../keybindings";
 import type { ChangesTab } from "../store";
 import { splitPath } from "./changesModel";
 import { sendReviewBatch, sendReviewComment } from "./reviewSend";
@@ -80,6 +81,8 @@ export function ChangesReviewGuide({
 	onReveal: (path: string, commentId: string | undefined, focus: boolean) => void;
 }) {
 	const t = useT();
+	const keys = useLocalKeys("review", LOCAL_KEY_DEFAULTS.review);
+	const nextKey = keys.label("review.nextStep");
 	const { workspaceId } = tab;
 	const steps = useMemo(() => guideSteps(guide, comments), [guide, comments]);
 	const [cursorAt, setCursorAt] = useState<{ key: string; index: number } | null>(null);
@@ -118,11 +121,11 @@ export function ChangesReviewGuide({
 		if (steps.length === 0) return;
 		const onKey = (event: KeyboardEvent) => {
 			if (!ownsReviewShortcut(event, tab)) return;
-			if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-			if (event.key === REVIEW_KEYS.nextStep.key) {
+			const local = keys.match(event);
+			if (local === "review.nextStep") {
 				event.preventDefault();
 				next(true);
-			} else if (event.key === REVIEW_KEYS.previousStep.key) {
+			} else if (local === "review.previousStep") {
 				event.preventDefault();
 				previous(true);
 			}
@@ -263,9 +266,7 @@ export function ChangesReviewGuide({
 				<IconButton
 					variant="outline"
 					icon={ChevronLeft}
-					label={t("changes.guide.previous", {
-						key: REVIEW_KEYS.previousStep.key.toUpperCase(),
-					})}
+					label={t("changes.guide.previous", { key: keys.label("review.previousStep") })}
 					data-testid="changes-review-guide-prev"
 					disabled={steps.length === 0}
 					onClick={() => previous(false)}
@@ -286,9 +287,9 @@ export function ChangesReviewGuide({
 					<span className="tabular-nums">
 						{cursor < 0 ? "" : `${cursor + 1} / ${steps.length}`}
 					</span>
-					<kbd className="rounded-xs border border-current px-4 tr-code-text">
-						{REVIEW_KEYS.nextStep.key.toUpperCase()}
-					</kbd>
+					{nextKey === "" ? null : (
+						<kbd className="rounded-xs border border-current px-4 tr-code-text">{nextKey}</kbd>
+					)}
 				</Button>
 				<Button
 					variant="outline"

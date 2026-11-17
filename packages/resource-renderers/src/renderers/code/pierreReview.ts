@@ -244,7 +244,7 @@ export function usePierreFocus(
 		const mutationObserver = new MutationObserver(reveal);
 		const root = rootRef.current;
 		if (root) mutationObserver.observe(root, { childList: true, subtree: true });
-		if (root?.firstElementChild) sizeObserver.observe(root.firstElementChild);
+		for (const child of root?.children ?? []) sizeObserver.observe(child);
 		reveal();
 		return () => {
 			sizeObserver.disconnect();

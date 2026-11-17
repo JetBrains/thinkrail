@@ -294,6 +294,8 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   from) / `stats` / **`statsRefreshTick`** (browser-local invalidation for the mounted chat's authoritative
   stats read) / `commands` / `draft` / **`readingAnchor`** (browser-local detached transcript position
   that survives the chat tab's unmount; written only by `chat` through `setChatReadingAnchor`) /
+  **`composerFocusWonOver`** (browser-local: the tool call the session's host was waiting on when its last
+  composer-focus request was served, else `null`; written only by `serveComposerFocusRequest`) /
   **`promptImages`** (the composer's transient ready images, pending decodes, errors and a fresh generation
   token; the pure model `PromptImagesState` + `newPromptImagesState` is the store's own
   `promptImageState.ts`, so runtime creation runs no `chat` code). `updateChatPromptImages(sessionId, update)` changes
@@ -602,7 +604,10 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   **`notificationsEnabled: boolean`** (the attention-notification master toggle),
   **`subagentsEnabled: boolean`**, **`subagentMaxConcurrent: number`**, **`disabledExtensions: string[]`**
   (defaulting to `[]` so a pre-v82 host reads as "all on"), **`extensionSettings: ExtensionSettingValues`**
-  (defaulting to `{}` so a pre-v105 host reads as "every declared default"), **`jbcentralQuotaEnabled: boolean`**,
+  (defaulting to `{}` so a pre-v105 host reads as "every declared default"), **`keybindingOverrides:
+  KeybindingOverrides`** (the host's `keybindings` map as sent, any non-object `{}`; the resolver in
+  [[submodule-web-keybindings]] drops what it cannot use and `shell` ignores it below v123),
+  **`jbcentralQuotaEnabled: boolean`**,
   **`jbcentralQuotaRefreshSeconds: number`**, and **`onboardingDismissed: boolean`** (absent ⇒ `false`) ride the same `applyConfig` fold (host-owned, fieldwise
   defaulted/validated from the contracts helpers so an older or malformed host snapshot cannot poison
   the store). `terminalWindowsShell` narrows through `isTerminalWindowsShell` and otherwise uses
@@ -818,9 +823,15 @@ session-only, dropped in `applyWorkspaceRemoved` with its workspace.
 The Artifacts tool's slices are per workspace: **`artifactsByWorkspace`** (`setWorkspaceArtifacts`, the
 host's `artifacts.list` snapshot), **`artifactsTickByWorkspace`** (`noteArtifactsChanged`, bumped by the
 `workspace.artifactsChanged` nudge and read through `selectArtifactsTick`) and **`artifactsSeenByWorkspace`**
-(`markArtifactsSeen`, a watermark that only moves forward; the first snapshot of a workspace seeds it), all
-dropped in `applyWorkspaceRemoved`, plus the app-wide **`artifactsShowIgnored`** toggle; the seen watermarks
-and the toggle hydrate from per-client preferences (`hydrateArtifactsPreferences`).
+(`markArtifactsSeen`, a watermark that only moves forward; the first snapshot of a workspace seeds it) and
+**`artifactsTreeExpandedByWorkspace`** (`setArtifactsTreeExpanded(workspaceId, paths, expanded)`,
+`collapseAllArtifacts`; the Tree view's open folders), all dropped in `applyWorkspaceRemoved`, plus the
+app-wide **`artifactsShowIgnored`** toggle, **`artifactsView`** (`setArtifactsView`, `"list" | "tree" |
+"smart"`, `null` until the user picks one) and **`artifactsSmart`** (`setArtifactsSmart`, the Settings switch
+for the Smart view, on by default); the seen watermarks, the open folders (Smart's group and chip ids
+included), the toggle, the view and the switch hydrate from per-client preferences
+(`hydrateArtifactsPreferences`). **`selectArtifactsView`** resolves the view the panel shows (an explicit
+choice, else Smart when it is switched on and **`supportsArtifactRoles`** holds, else List).
 **`pasteIntoComposer(sessionId, text)`** (Artifacts' Mention in chat) applies the same composer edit an
 extension's `pasteToEditor` request does, so both paste at the caret the same way.
 **`selectActiveFilePath`** is the path of the active file or diff tab, else `null`.
@@ -851,7 +862,11 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   body mounts and consumes the request without publishing a structural snapshot. The third sibling,
   **`composerFocusRequest { workspaceId, sessionId | null, navTick, dismissHistory? }`** — set by
   **`requestComposerFocus(workspaceId, sessionId?, { dismissHistory? })`**, cleared by
-  **`clearComposerFocusRequest()`** —
+  **`clearComposerFocusRequest()`** or, by the chat that takes it,
+  **`serveComposerFocusRequest(sessionId, waitingToolCallId)`**, which in the same write records the call
+  that chat's host was waiting on (the chat derives it; the store imports no `chat` code) as its
+  runtime's `composerFocusWonOver`, so **`selectQuestionMayClaimFocus(sessionId, toolCallId)`** denies the
+  focus claim to that question alone, across the chat's remounts ([[submodule-web-chat]]) —
   carries a palette pick's "type next" intent to the destination chat. It is stamped with the workspace's
   navigation tick instead of queuing a selection, so it never changes which tab shows:
   **`selectComposerFocusRequested`** holds only while that workspace is active, its tick is unchanged (a counted tab

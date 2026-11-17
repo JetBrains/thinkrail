@@ -62,7 +62,6 @@ import { type MouseEvent, type ReactNode, useCallback, useEffect, useRef, useSta
 import { useShallow } from "zustand/react/shallow";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
-import { keybindingKeys, TREE_KEYS } from "@/keybindings";
 import { copyText } from "@/lib";
 import { useNow } from "../components/useNow";
 import {
@@ -111,6 +110,7 @@ import {
 	treeRowKey,
 	treeToggleProps,
 	useTreeItem,
+	useTreeKeys,
 } from "./treeNavigation";
 import { useOpenProject } from "./useOpenProject";
 import { WorkspaceCreationRow } from "./WorkspaceCreation";
@@ -161,7 +161,7 @@ function groupCreationsByProject(
 	return grouped;
 }
 
-export function ProjectTree({ nativeShortcuts = false }: { nativeShortcuts?: boolean }) {
+export function ProjectTree({ newWorkspaceShortcut }: { newWorkspaceShortcut: readonly string[] }) {
 	const t = useT();
 	const projects = useAppStore(useShallow(selectRepoProjects));
 	const recentProjects = useAppStore((s) => s.recentProjects);
@@ -438,9 +438,7 @@ export function ProjectTree({ nativeShortcuts = false }: { nativeShortcuts?: boo
 									onRegisterNameButton={(element) => registerProjectNameButton(project.id, element)}
 									onRestoreFocus={() => focusProjectNameOrAdd(project.id)}
 									canMove={canMove}
-									newWorkspaceShortcut={keybindingKeys("workspace.new", {
-										browser: !nativeShortcuts,
-									})}
+									newWorkspaceShortcut={newWorkspaceShortcut}
 									onMoveUp={
 										previous ? () => void move(project, previous.id, "before", true) : undefined
 									}
@@ -727,6 +725,7 @@ function ProjectRow({
 	newWorkspaceShortcut: readonly string[];
 }) {
 	const t = useT();
+	const treeKeys = useTreeKeys();
 	const draggable = canMove && (onMoveUp !== undefined || onMoveDown !== undefined);
 	const {
 		attributes: dragAttributes,
@@ -820,10 +819,12 @@ function ProjectRow({
 					data-testid="project-name"
 					data-focus-row-primary
 					aria-describedby={draggable ? dragAttributes["aria-describedby"] : undefined}
-					aria-keyshortcuts={canMove ? "Alt+Shift+ArrowUp Alt+Shift+ArrowDown" : undefined}
+					aria-keyshortcuts={
+						canMove ? treeKeys.aria("trees.reorderUp", "trees.reorderDown") : undefined
+					}
 					{...(draggable ? dragListeners : {})}
 					onKeyDown={(event) => {
-						const key = treeRowKey(event);
+						const key = treeRowKey(event.nativeEvent, treeKeys);
 						if (key === "rename" && canRename) {
 							event.preventDefault();
 							startRename();
@@ -834,11 +835,9 @@ function ProjectRow({
 							setConfirmOpen(true);
 							return;
 						}
-						if (!canMove) return;
-						if (event.key !== TREE_KEYS.moveUp.key && event.key !== TREE_KEYS.moveDown.key) return;
-						if (!event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey) return;
+						if (!canMove || (key !== "reorderUp" && key !== "reorderDown")) return;
 						event.preventDefault();
-						(event.key === TREE_KEYS.moveUp.key ? onMoveUp : onMoveDown)?.();
+						(key === "reorderUp" ? onMoveUp : onMoveDown)?.();
 					}}
 					onClick={onSelect}
 					className="-mx-4 -my-2 flex min-w-0 flex-1 items-center gap-4 rounded-sm px-4 py-2 text-left focus-visible:focus-ring-inset"
@@ -1014,6 +1013,7 @@ function WorkspaceRow({
 	onMarkUnread: () => void;
 }) {
 	const t = useT();
+	const treeKeys = useTreeKeys();
 	const isDefault = isDefaultWorkspace(workspace);
 	const isExternal = isExternalWorkspace(workspace);
 	const isSettled = settled !== null;
@@ -1161,7 +1161,7 @@ function WorkspaceRow({
 						data-focus-row-primary
 						onClick={onSelect}
 						onKeyDown={(event) => {
-							const key = treeRowKey(event);
+							const key = treeRowKey(event.nativeEvent, treeKeys);
 							if (key === "menu") setMenuOpen(true);
 							else if (key === "rename" && canRename) startRename();
 							else if (key === "delete" && !isDefault) setConfirmOpen(true);

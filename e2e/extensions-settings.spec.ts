@@ -29,6 +29,7 @@ const EXTENSIONS = [
 	{ name: "visualize", title: "Visualize", tool: "visualize" },
 	{ name: "ask-user-question", title: "Ask user question", tool: "ask_user_question" },
 	{ name: "web-access", title: "Web access", tool: "web_search" },
+	{ name: "next-steps", title: "Next-step suggestions", tool: "suggest_next_steps" },
 ] as const;
 
 async function setExtension(page: Page, name: string, enabled: boolean): Promise<void> {
@@ -42,9 +43,13 @@ async function setExtension(page: Page, name: string, enabled: boolean): Promise
 
 const RICH_PREVIEWS = "extension-setting-toggle-ask-user-question-richPreviews";
 
+const WEB_ONLY = "hint-mode";
+
 test.afterEach(async ({ page }) => {
 	if (page.isClosed()) return;
-	for (const { name } of EXTENSIONS) await setExtension(page, name, true);
+	for (const name of [...EXTENSIONS.map((extension) => extension.name), WEB_ONLY]) {
+		await setExtension(page, name, true);
+	}
 	await openExtensionsSettings(page);
 	const richPreviews = page.getByTestId(RICH_PREVIEWS);
 	if ((await richPreviews.getAttribute("data-active")) !== "true") await richPreviews.click();
@@ -99,6 +104,37 @@ for (const { name, title, tool } of EXTENSIONS) {
 		);
 	});
 }
+
+test("Settings → Extensions lists the web-only Hint mode after the host's extensions, without tool chips, and its switch survives a reload", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const section = await openExtensionsSettings(page);
+	const rows = section.locator('[data-testid^="extension-row-"]');
+	await expect(rows.last()).toHaveAttribute("data-testid", `extension-row-${WEB_ONLY}`);
+	const row = section.getByTestId(`extension-row-${WEB_ONLY}`);
+	await expect(row).toContainText("Hint mode");
+	await expect(row).toContainText("Applies right away.");
+	await expect(row.locator('[data-testid^="extension-tool-"]')).toHaveCount(0);
+	const toggle = row.getByTestId(`extension-toggle-${WEB_ONLY}`);
+	await expect(toggle).toHaveAttribute("aria-checked", "true");
+
+	await toggle.click();
+	await expect(toggle).toHaveAttribute("aria-checked", "false");
+	await closeSettings(page);
+	await page.reload();
+	await openExtensionsSettings(page);
+	await expect(page.getByTestId(`extension-toggle-${WEB_ONLY}`)).toHaveAttribute(
+		"aria-checked",
+		"false",
+	);
+	for (const { name } of EXTENSIONS) {
+		await expect(page.getByTestId(`extension-toggle-${name}`)).toHaveAttribute(
+			"aria-checked",
+			"true",
+		);
+	}
+});
 
 test("a historical questionnaire still renders its answers while the extension is off", async ({
 	page,

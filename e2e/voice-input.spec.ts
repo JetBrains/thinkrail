@@ -121,7 +121,7 @@ test("dictation streams into the draft, locks it while listening, and never send
 	await expect(page.locator('[data-testid="chat-message"][data-role="user"]')).toHaveCount(0);
 });
 
-test("the keyboard chord toggles dictation, keeping the text, and Esc is not a dictation key", async ({
+test("the keyboard chord toggles dictation, keeping the text; the first Esc stops it in the field, the next leaves", async ({
 	page,
 }) => {
 	await openChat(page);
@@ -138,10 +138,12 @@ test("the keyboard chord toggles dictation, keeping the text, and Esc is not a d
 	await page.keyboard.press("ControlOrMeta+Shift+Space");
 	await expect(mic(page)).toHaveAttribute("data-mic-state", "listening");
 	await page.keyboard.press("Escape");
-	await page.waitForTimeout(300);
-	await expect(mic(page)).toHaveAttribute("data-mic-state", "listening");
-	await page.keyboard.press("ControlOrMeta+Shift+Space");
 	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready", { timeout: 15_000 });
+	await expect(input).toBeFocused();
+	await expect(input).not.toHaveAttribute("readonly", "");
+	await expect(input).toHaveValue(/^Hello/);
+	await page.keyboard.press("Escape");
+	await expect(input).not.toBeFocused();
 	await expect(input).toHaveValue(/^Hello/);
 
 	// Switching apps blurs the field but leaves it as document.activeElement.

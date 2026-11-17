@@ -22,7 +22,8 @@ client the same answer.
 ## Boundary
 
 - **Owns:** `<dataDir>/artifacts/<workspaceId>/` — `index.json` (artifact records + ignored-output records)
-  and `kept/<uuid>` — plus the in-memory per-workspace running set, explicit writers and run window.
+  and `kept/<uuid>` — plus the in-memory per-workspace running set, run starts, last replies, explicit
+  writers and run window.
 - **Public surface (barrel):** `listArtifacts`, `reconcileArtifacts`, `restoreArtifact`, `discardArtifact`,
   `withUserRemoval`, `prepareArtifactsDestination`, `observeArtifactSessionEvent`, `ArtifactSessionEvent`,
   `noteArtifactPathsChanged`, `setArtifactsPublisher`, `removeWorkspaceArtifacts`.
@@ -107,6 +108,50 @@ Any other change (a shell command, a tool writing on its own) is attributed only
 session of the workspace is running; otherwise the record keeps the chat it had. Like [[submodule-server-turns]]
 this is not exclusive attribution, and a session that never settles (a host crash) stays "running" until
 restart.
+
+**Round markers.** Each record keeps the chat rounds that created or changed it (`rounds`: `{ sessionId,
+startedAt }`, oldest first, each distinct round once, at most 16 — chats taking turns on one file must not
+push an earlier round out). A round starts at the session's first `agent_start` and again at every message
+pi delivers inside the run that opens a round in the chat (`round_start` for `opensChatRound` in
+contracts — a prompt, a review fix, a continuation request, a handoff, a waking completion — stamped with
+the message's own timestamp: a follow-up queued or steered into a running agent is a new round in the
+chat, though pi runs it in the same `agent_start`…`agent_settled` window); it ends at the next one or at `agent_settled` (pi re-emits
+`agent_start` on retries; the first one counts). At a round boundary the index reconciles first, so changes
+so far stay with the round that made them, and reads that round's reply (see Roles). A marker is written
+only when the change is attributed to a running session — by a writer hint or as the only one running — and
+seen after the run started: the reconcile at `agent_start` runs before the run is registered, so a change
+waiting from before the run (an edit the watcher had not reported yet) gets none, and neither do a restore
+or a move. A user's own edit made *while* exactly one session runs is indistinguishable from the agent's
+and does get that round's marker. The chat divider's "N artifacts" joins these markers with its
+round, which is why they live here and not in the turn receipts: those come from git, and the
+artifacts folder is ignored.
+
+## Roles
+
+Every listed artifact carries a **role**, `result` or `working`, and the **reason** for it, computed when
+the list is served (`roles.ts`, never stored, so a rule change needs no migration). One host answer
+serves the Smart view, the chat divider and any other consumer.
+
+1. **Signals first.** `picked` — the person chose it among a tool's previews. `shown` — a successful tool
+   call put it in front of them: the host maps the declarations extensions make through
+   `artifactTools` ([[submodule-server-extensions]]) into the `presented` / `picked` paths of a
+   `tool_execution_end` event. `linked` — the round's last assistant message names it, read when the next
+round starts or the run settles (a message without
+text, a tool-call-only turn or a stop, clears the earlier one) (a markdown link,
+   a code span or a bare path; worktree-relative, artifacts-relative or absolute; only paths that are
+   live records count); the host passes each assistant message as `assistant_message` and the index
+   reads the last one at settle. Signals are stored on the record, survive a move and a re-created
+   path, and are recorded from now on — older artifacts have none (no backfill).
+2. **Path rules** for the rest, from the agent sessions of 16 real worktrees (2 877 files: these rules
+   marked 2 409 as working with 5 ever shown): a `_*` or dot folder or a helper folder name (`tools`,
+   `scripts`, `bin`, `build`, `data`, `extract`, `check`, `raw`, `src`, `js`, `css`, `fonts`, `images`,
+   `frames`, `previews`, `comments`, `batch_*`, `notes*`) → `working-folder`; a script extension →
+   `script`; a data extension or none → `data`; `.md`/`.html`/`.pdf`/`.svg` → a `document` result (it may
+   be a subagent's brief — the price of not missing notes the agent only named as a folder); anything
+   else never shown (images, mostly check renders) → `unshown`.
+
+No model classifies: on the data above the deterministic answer was good enough, and a model step would
+add cost and latency.
 
 ## Ignored outputs
 
