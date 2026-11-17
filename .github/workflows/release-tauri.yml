@@ -58,7 +58,11 @@ jobs:
           if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
             choco install nsis -y --no-progress
           }
-          makensis -VERSION
+          # choco only adds NSIS to PATH for new shells; fall back to its
+          # default install path in this step.
+          $makensis = (Get-Command makensis -ErrorAction SilentlyContinue)?.Source
+          if (-not $makensis) { $makensis = 'C:\Program Files (x86)\NSIS\makensis.exe' }
+          & $makensis -VERSION
 
       - name: Install dependencies
         shell: bash
