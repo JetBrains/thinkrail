@@ -1,12 +1,12 @@
 import { RiArrowDownSLine, RiArrowRightSLine, RiSearchLine } from "@remixicon/react";
 import { sameModel, type WireModel } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import { useId, useMemo, useState } from "react";
 import { formatContext } from "@/chat/modelPicker";
 import { ProviderGlyph } from "@/chat/ProviderGlyph";
 import { useAppStore } from "@/store";
-import { SettingsSwitch } from "./SettingsSwitch";
 
 interface Props {
 	models: WireModel[];
@@ -118,11 +118,11 @@ export function VisibleModelsSettings({ models }: Props) {
 														})}
 											</span>
 										</span>
-										<SettingsSwitch
+										<Switch
 											checked={isVisible}
 											label={t("settings.visibleModels.show", { name: model.name })}
 											testId={`model-visibility-${model.provider}-${model.id}`}
-											onChange={() => toggleModelVisibility(model)}
+											onCheckedChange={() => toggleModelVisibility(model)}
 										/>
 									</div>
 								);

@@ -8,6 +8,7 @@ import type { HostEnvironmentStatus } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
+import { InlineNotice } from "@thinkrail/ui/inline-notice";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useState } from "react";
 import { randomId } from "@/lib";
@@ -23,7 +24,6 @@ import {
 	NO_ISSUES,
 } from "./environmentDraft";
 import { SettingsGroup } from "./SettingsGroup";
-import { SettingsNotice } from "./SettingsNotice";
 
 const INPUT_CLASS =
 	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default placeholder:text-text-muted focus-visible:border-control-border-active focus-visible:focus-ring";
@@ -68,9 +68,9 @@ export function EnvironmentForm({
 	if (status === "loading") return null;
 	if (status === "failed") {
 		return (
-			<SettingsNotice variant="error" testId="settings-environment-failed">
+			<InlineNotice variant="error" testId="settings-environment-failed">
 				<p>{t("settings.environment.loadFailed")}</p>
-			</SettingsNotice>
+			</InlineNotice>
 		);
 	}
 	const changed = draftChanged(draft, status);
@@ -99,9 +99,9 @@ export function EnvironmentForm({
 					className="flex min-w-0 flex-col gap-16 px-12 py-12"
 				>
 					{status.restartRequired ? (
-						<SettingsNotice variant="warning" testId="settings-environment-restart">
+						<InlineNotice variant="warning" testId="settings-environment-restart">
 							<p>{t("settings.environment.restartRequired")}</p>
-						</SettingsNotice>
+						</InlineNotice>
 					) : null}
 
 					<div className="flex flex-col gap-4">
@@ -247,9 +247,9 @@ export function EnvironmentForm({
 					</div>
 
 					{saveFailed ? (
-						<SettingsNotice variant="error" testId="settings-environment-save-failed">
+						<InlineNotice variant="error" testId="settings-environment-save-failed">
 							<p>{t("settings.environment.saveFailed")}</p>
-						</SettingsNotice>
+						</InlineNotice>
 					) : null}
 
 					<div className="flex justify-end gap-8">

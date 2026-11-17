@@ -8,6 +8,7 @@ import {
 import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
 import { T, t as translate, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
+import { InlineNotice } from "@thinkrail/ui/inline-notice";
 import { PopoverTrigger } from "@thinkrail/ui/popover";
 import { SkeletonRows } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
@@ -19,7 +20,6 @@ import { errorText, getTransport } from "@/transport";
 import { ConfirmPopover } from "./ConfirmPopover";
 import { openFileInTab } from "./openTabs";
 import { SettingsPageContainer } from "./SettingsGroup";
-import { SettingsNotice } from "./SettingsNotice";
 
 interface StarterTemplate {
 	name: string;
@@ -225,7 +225,7 @@ function ProjectTemplatesSection({
 			</div>
 
 			{!hasProject ? (
-				<SettingsNotice variant="info" testId="project-templates-unavailable">
+				<InlineNotice variant="info" testId="project-templates-unavailable">
 					<p className="tr-text-ui text-text-default">{t("settings.templates.openProject")}</p>
 					<p className="tr-text-metadata text-text-muted">
 						<T
@@ -233,9 +233,9 @@ function ProjectTemplatesSection({
 							components={[<code key="path" className="tr-code-text" />]}
 						/>
 					</p>
-				</SettingsNotice>
+				</InlineNotice>
 			) : templates && templates.length === 0 ? (
-				<SettingsNotice variant="neutral" hideIcon testId="project-templates-empty">
+				<InlineNotice variant="neutral" hideIcon testId="project-templates-empty">
 					<p className="tr-text-ui text-text-default">{t("settings.templates.projectEmpty")}</p>
 					<p className="tr-text-metadata text-text-muted">
 						<T
@@ -243,7 +243,7 @@ function ProjectTemplatesSection({
 							components={[<code key="path" className="tr-code-text" />]}
 						/>
 					</p>
-				</SettingsNotice>
+				</InlineNotice>
 			) : templates ? (
 				<div className="flex flex-col gap-8">
 					{templates.map((template) => (
@@ -314,7 +314,7 @@ function GlobalTemplatesSection({
 			</div>
 
 			{templates.length === 0 ? (
-				<SettingsNotice
+				<InlineNotice
 					variant="info"
 					icon={<MagicWand className="size-14" />}
 					testId="global-templates-empty"
@@ -335,7 +335,7 @@ function GlobalTemplatesSection({
 					<p className="tr-text-metadata text-text-muted">
 						{t("settings.templates.globalEmptyDescription")}
 					</p>
-				</SettingsNotice>
+				</InlineNotice>
 			) : (
 				<div className="flex flex-col gap-8">
 					{templates.map((template) => (

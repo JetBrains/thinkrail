@@ -6,10 +6,10 @@ import {
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
+import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import { useAppStore } from "@/store";
 import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
-import { SettingsSwitch } from "./SettingsSwitch";
 import { saveSettings } from "./saveSettings";
 import { SETTINGS_INPUT, useSettingsDraft } from "./settingsDraft";
 
@@ -108,11 +108,11 @@ export function LineWidthControl({ kind }: { kind: LineWidthKind }) {
 				label={t("settings.lineWidth.fitToPane")}
 				description={t("settings.lineWidth.fitToPaneDescription")}
 				control={
-					<SettingsSwitch
+					<Switch
 						checked={bounded}
 						label={t(copy.boundedLabel)}
 						testId={`${kind}-line-width-bounded`}
-						onChange={(next) => {
+						onCheckedChange={(next) => {
 							void saveSettings(boundedConfig(kind, next), t(copy.failure));
 						}}
 					/>

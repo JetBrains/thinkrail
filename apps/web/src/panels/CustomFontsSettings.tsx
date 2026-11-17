@@ -7,6 +7,7 @@ import {
 } from "@thinkrail/contracts";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { InlineNotice } from "@thinkrail/ui/inline-notice";
 import { cn } from "@thinkrail/ui/utils";
 import { useRef, useState } from "react";
 import { namedFamilies } from "@/fonts";
@@ -23,7 +24,6 @@ import {
 	useFolderActions,
 } from "./SettingsFolder";
 import { SettingsGroup } from "./SettingsGroup";
-import { SettingsNotice } from "./SettingsNotice";
 
 type UploadOutcome = UserFontFile | { fileName: string; ok: false; error: "upload-failed" };
 
@@ -141,9 +141,9 @@ export function CustomFontsView({
 				className={cn("flex flex-col gap-4", (added.length > 0 || failed.length > 0) && "pb-12")}
 			>
 				{added.length > 0 ? (
-					<SettingsNotice variant="success" testId="custom-fonts-added">
+					<InlineNotice variant="success" testId="custom-fonts-added">
 						{t("settings.appearance.customFonts.added", { families: added.join(", ") })}
-					</SettingsNotice>
+					</InlineNotice>
 				) : null}
 				{failed.map((issue) => (
 					<SettingsFileIssue key={issue.fileName} issue={issue} testIdPrefix="custom-font-issue" />

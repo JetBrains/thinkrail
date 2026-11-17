@@ -1,14 +1,14 @@
 import type { SpeechModel, SpeechStatus } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { InlineNotice } from "@thinkrail/ui/inline-notice";
+import { Switch } from "@thinkrail/ui/switch";
 import { useState } from "react";
 import { dictationShortcutLabel, speechErrorKey } from "@/speech";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { SegmentedControl } from "./SegmentedControl";
-import { SettingsNotice } from "./SettingsNotice";
 import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
-import { SettingsSwitch } from "./SettingsSwitch";
 
 function megabytes(bytes: number): string {
 	return String(Math.max(1, Math.round(bytes / 1_000_000)));
@@ -69,9 +69,9 @@ export function VoiceSettings() {
 	if (!status.supported) {
 		return (
 			<div data-testid="settings-voice" className={SETTINGS_ROWS_CONTAINER}>
-				<SettingsNotice variant="warning" testId="settings-voice-unsupported">
+				<InlineNotice variant="warning" testId="settings-voice-unsupported">
 					{t("speech.mic.unavailable.unsupportedPlatform")}
-				</SettingsNotice>
+				</InlineNotice>
 			</div>
 		);
 	}
@@ -88,11 +88,11 @@ export function VoiceSettings() {
 					enabled ? t("settings.voice.enableDescription") : t("settings.voice.disabledDescription")
 				}
 				control={
-					<SettingsSwitch
+					<Switch
 						checked={enabled}
 						label={t("settings.voice.enable")}
 						testId="settings-voice-toggle"
-						onChange={(next) => void setEnabled(next)}
+						onCheckedChange={(next) => void setEnabled(next)}
 					/>
 				}
 			/>

@@ -21,6 +21,7 @@ import {
 	DropdownMenuRadioItem,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import { InlineNotice } from "@thinkrail/ui/inline-notice";
 import { cn } from "@thinkrail/ui/utils";
 import { useState, useSyncExternalStore } from "react";
 import { type MarkdownOutlineSide, toast, useAppStore } from "@/store";
@@ -45,7 +46,6 @@ import { SegmentedControl, type SegmentedControlOption } from "./SegmentedContro
 import { SettingsDisclosure } from "./SettingsDisclosure";
 import { useFolderActions } from "./SettingsFolder";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
-import { SettingsNotice } from "./SettingsNotice";
 import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
 
 type Appearance = ThemeDescriptor["appearance"];
@@ -359,7 +359,7 @@ export function AppearanceSettings() {
 				{fallbacks.length > 0 ? (
 					<div className="flex flex-col gap-4 border-border-muted border-b py-12">
 						{fallbacks.map(({ appearance, resolution }) => (
-							<SettingsNotice
+							<InlineNotice
 								key={appearance ?? "fixed"}
 								variant="warning"
 								testId="theme-fallback-warning"
@@ -375,7 +375,7 @@ export function AppearanceSettings() {
 										: t("settings.appearance.fallback.fixed", {
 												theme: themeLabel(t, resolution.theme),
 											})}
-							</SettingsNotice>
+							</InlineNotice>
 						))}
 					</div>
 				) : null}

@@ -21,11 +21,11 @@ import {
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton, withIconClass } from "@thinkrail/ui/button";
+import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { copyText } from "@/lib";
 import { getTransport } from "@/transport";
-import { SettingsSwitch } from "./SettingsSwitch";
 import { SETTINGS_INPUT, useSettingsDraft } from "./settingsDraft";
 
 const LOGIN_CMD = "central login";
@@ -83,11 +83,11 @@ function JbcentralQuotaSettings({
 		>
 			<div className="flex items-center justify-between gap-12 border-border-muted border-b py-12">
 				<span className="text-text-default tr-text-ui">{t("settings.jbcentral.quota.show")}</span>
-				<SettingsSwitch
+				<Switch
 					checked={enabled}
 					label={t("settings.jbcentral.quota.showLabel")}
 					testId="jbcentral-quota-toggle"
-					onChange={(next) => {
+					onCheckedChange={(next) => {
 						setSaveError(null);
 						void onEnabledChange(next).catch(() =>
 							setSaveError(t("settings.jbcentral.quota.displaySaveFailed")),

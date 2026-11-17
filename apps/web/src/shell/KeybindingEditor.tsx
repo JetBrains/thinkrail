@@ -18,6 +18,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
+import { InlineNotice } from "@thinkrail/ui/inline-notice";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Keycaps } from "@thinkrail/ui/keycaps";
 import { cn } from "@thinkrail/ui/utils";
@@ -48,7 +49,6 @@ import {
 	type ShortcutSurface,
 } from "../keybindings";
 import { SETTINGS_TAG } from "../panels/SettingsGroup";
-import { SettingsNotice } from "../panels/SettingsNotice";
 import { toast, useAppStore } from "../store";
 import { errorText, supportsKeybindings, updateKeybindings } from "../transport";
 import { claimKeyboard } from "./extensionCommands";
@@ -386,19 +386,19 @@ function PendingNotice({
 	const t = useT();
 	const { platform } = list.keybindings;
 	const cancel = (
-		<Button variant="outline" size="s" data-testid="keybinding-cancel" onClick={onCancel}>
+		<Button variant="ghost" size="m" data-testid="keybinding-cancel" onClick={onCancel}>
 			{t("common.cancel")}
 		</Button>
 	);
 	const dismiss = (
-		<Button variant="outline" size="s" data-testid="keybinding-dismiss" onClick={onCancel}>
+		<Button variant="outline" size="m" data-testid="keybinding-dismiss" onClick={onCancel}>
 			{t("common.dismiss")}
 		</Button>
 	);
 	const assign = (chord: string) => (
 		<Button
 			variant="outline"
-			size="s"
+			size="m"
 			data-testid="keybinding-assign-anyway"
 			onClick={() => onAccept(chord, false)}
 		>
@@ -409,7 +409,7 @@ function PendingNotice({
 		<>
 			<Button
 				variant="outline"
-				size="s"
+				size="m"
 				data-testid="keybinding-replace"
 				onClick={() => onAccept(chord, true)}
 			>
@@ -521,9 +521,9 @@ function PendingNotice({
 				: "warning";
 	return (
 		<div role="alert" data-testid="keybinding-message" data-kind={pending.kind}>
-			<SettingsNotice variant={variant} action={action}>
+			<InlineNotice variant={variant} action={action}>
 				{text}
-			</SettingsNotice>
+			</InlineNotice>
 		</div>
 	);
 }
@@ -852,9 +852,9 @@ export function KeybindingEditor() {
 		<div ref={root} data-testid="keybinding-editor" className="flex flex-col gap-12">
 			<p className="tr-text-metadata text-text-muted">{t("settings.keyboard.editor.intro")}</p>
 			{editable ? null : (
-				<SettingsNotice variant="info" testId="keybinding-read-only">
+				<InlineNotice variant="info" testId="keybinding-read-only">
 					{t("settings.keyboard.editor.olderHost")}
-				</SettingsNotice>
+				</InlineNotice>
 			)}
 			<div className="flex flex-wrap items-center gap-8">
 				<div className="relative min-w-[14rem] flex-1">

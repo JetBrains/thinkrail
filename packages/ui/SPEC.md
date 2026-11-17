@@ -5,7 +5,7 @@ status: draft
 title: Shared host UI primitives
 parent: architecture
 depends-on: [module-contracts, module-locales]
-references: [web-color, web-spacing, web-typography]
+references: [web-color, web-spacing, web-typography, web-notices]
 ---
 
 ## Responsibility
@@ -57,6 +57,15 @@ react-resizable-panels, Remix Icon, class-variance-authority, clsx and tailwind-
 pi, app stores, transport and theme runtime are forbidden. Tokens remain global CSS variables generated
 under `apps/web/src/styles`; utilities follow [[web-color]], [[web-spacing]] and [[web-typography]].
 The app's Tailwind sources and adoption guards include this package and extension web halves.
+
+## Inline notices
+
+`./inline-notice` exposes `InlineNotice`, the one Settings/review notice surface, following [[web-notices]].
+Neutral elevated fill and a muted severity border carry every variant; its prescribed Line icon is hidden
+from assistive technology and the message is a polite status region. Neutral notices use the default
+border and muted information icon. Message and secondary content stay in a wrap-safe content row;
+actions live in an end-aligned footer, with compact padding available for dense review surfaces.
+Consumers own translated content, visibility and actions; the primitive owns no notice state.
 
 ## Button system
 
@@ -136,7 +145,7 @@ test's documented specialized list names it.
 ## Primitive invariants
 
 The per-file surface is `button`, `switch`, `dialog`, `dropdown-menu`, `context-menu`, `menu-styles`,
-`popover`, `command` (cmdk combobox body), `textarea`, `tooltip`, `resizable`, `toast`, `toggle-segment`
+`inline-notice`, `popover`, `command` (cmdk combobox body), `textarea`, `tooltip`, `resizable`, `toast`, `toggle-segment`
 (the slim header toggle: active segment on `control-bg-selected` + `text-default`, `data-active` /
 `aria-pressed`, and an explicit `tabIndex={0}` because the macOS WKWebView skips a `<button>` without one
 on Tab), `skeleton` (`SkeletonRows` / `LoadingRegion`, the one loading placeholder; its usage rules
@@ -149,7 +158,8 @@ moved here from the app when the resource renderers became a package, because bo
 [[module-resource-renderers]] use them; `attention-line` moved for the same reason when the
 `ask_user_question` card became an extension web half, because the app's extension prompts use it too.
 
-- Switch exposes native disabled behavior and `role="switch"`/`aria-checked`, not visible On/Off
+- Switch defaults to explicit `tabindex=0` (caller-overridable), because WebKit skips a button without
+  it on Tab. It exposes native disabled behavior and `role="switch"`/`aria-checked`, not visible On/Off
   text. Every modal dialog's overlay carries `data-modal-layer`, and `useModalLayerOpen()` reports whether one is open: it lets callers tell "covered by a modal" from their own visibility without a dialog registry, independent of how `aria-hidden` treats live regions. Dialog accepts `hideClose` for chromeless surfaces. `DialogContent` contains what it holds: width and max height keep a window gutter, the body scrolls by default, long text wraps, and `DialogFooter` wraps its actions and then their labels (a footer `Button` grows past its fixed height only then). A caller adding a pinned footer scrolls an inner `min-h-0 flex-1` body; one portalling popovers into the content element sets `overflow-visible` and scrolls an inner body. An inner scroll body is `relative`: otherwise an absolutely positioned descendant (an `sr-only` label) takes the dialog as its containing block and stretches the dialog's own scroll area, giving it a second scrollbar. Flex rows of data still need `min-w-0`. `DialogPanel` renders Radix content in place
   without a portal or overlay for caller-positioned, non-modal dialogs; title/role semantics, Escape
   dismissal, and focus return remain Radix-owned while surrounding UI stays interactive.

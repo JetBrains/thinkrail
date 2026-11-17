@@ -26,6 +26,9 @@ export function SegmentedControl<T extends string>({
 	disabled = false,
 	testId,
 }: SegmentedControlProps<T>) {
+	const tabStop =
+		options.find((option) => option.id === value && !option.disabled) ??
+		options.find((option) => !option.disabled);
 	return (
 		<div
 			role="radiogroup"
@@ -51,6 +54,7 @@ export function SegmentedControl<T extends string>({
 							name={name}
 							value={option.id}
 							checked={selected}
+							tabIndex={!optionDisabled && option.id === tabStop?.id ? 0 : -1}
 							disabled={optionDisabled}
 							onChange={() => onSelect(option.id)}
 							className="peer sr-only inset-0"

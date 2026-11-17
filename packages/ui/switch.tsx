@@ -21,6 +21,7 @@ export function Switch({
 	className,
 	disabled = false,
 	onClick,
+	tabIndex = 0,
 	ref,
 	...props
 }: SwitchProps) {
@@ -34,6 +35,7 @@ export function Switch({
 			aria-label={label}
 			data-testid={testId}
 			data-active={checked}
+			tabIndex={tabIndex}
 			disabled={disabled}
 			onClick={(event) => {
 				onClick?.(event);

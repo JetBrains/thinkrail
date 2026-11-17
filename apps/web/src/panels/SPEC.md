@@ -757,7 +757,11 @@ a project picker, the prompt hero, and the reused
   siblings); `SettingsGroup` is a titled block of `SettingsRow`s — label, optional description, one
   control, wrapping the control below the label at narrow widths; `SegmentedControl` is a native-radio
   group with `value: T | null` (`null` selects nothing, for a host value no option names) and per-option
-  disabled; `SettingsNotice` is the one inline neutral/info/success/warning/error notice;
+  disabled; exactly one enabled radio has explicit `tabindex=0` (the selected option, else the first
+  enabled one), so Tab enters on WebKit too. Native radio keys own selection. MCP form values use the
+  same named native-radio groups (unique names per form instance).
+  All Settings toggles use `@thinkrail/ui/switch`, including its 24px hit area. Inline notices use
+  `@thinkrail/ui/inline-notice` ([[web-notices]]) for their shared surface and polite status semantics;
   `SettingsSubheading` titles a run of rows inside a group; `SETTINGS_TAG` is the bordered row tag;
   `SettingsRange` is the range-slider skin and segmented track; `SettingsFolder` is a data folder's
   Copy path / Open folder row (`useFolderActions` binds a `*.reveal` method) and its per-file issue notices,

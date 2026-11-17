@@ -21,12 +21,12 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import { InlineNotice } from "@thinkrail/ui/inline-notice";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
 import { SETTINGS_TAG } from "./SettingsGroup";
-import { SettingsNotice } from "./SettingsNotice";
 
 /** `rowKey` is the row the action came from — what the page marks busy or shows an error on. */
 export type PiPackageAction =
@@ -120,12 +120,17 @@ function LoadError({
 }) {
 	const t = useT();
 	return (
-		<SettingsNotice
+		<InlineNotice
 			variant="error"
 			testId="package-load-error"
 			className="mt-8"
 			action={
-				<Button variant="ghost" size="s" data-testid="package-load-error-reveal" onClick={onReveal}>
+				<Button
+					variant="outline"
+					size="m"
+					data-testid="package-load-error-reveal"
+					onClick={onReveal}
+				>
 					{t("settings.packages.openFolder")}
 				</Button>
 			}
@@ -133,7 +138,7 @@ function LoadError({
 			<span className="break-words" title={path}>
 				{t("settings.packages.failedToLoad", { error })}
 			</span>
-		</SettingsNotice>
+		</InlineNotice>
 	);
 }
 
@@ -399,9 +404,9 @@ export function PackageRow({
 				/>
 			) : null}
 			{error ? (
-				<SettingsNotice variant="error" testId="package-action-error" className="mt-8">
+				<InlineNotice variant="error" testId="package-action-error" className="mt-8">
 					{error}
-				</SettingsNotice>
+				</InlineNotice>
 			) : null}
 			{expanded && installedPath !== undefined ? (
 				<ResourceList
@@ -501,9 +506,9 @@ export function LooseRow({
 				/>
 			) : null}
 			{error ? (
-				<SettingsNotice variant="error" testId="package-action-error" className="mt-8">
+				<InlineNotice variant="error" testId="package-action-error" className="mt-8">
 					{error}
-				</SettingsNotice>
+				</InlineNotice>
 			) : null}
 		</RowShell>
 	);
@@ -608,14 +613,14 @@ export function PiPackagesGroup({
 		<section data-testid="settings-packages" className="flex flex-col">
 			{header}
 			{catalog.projectSettingsPath && !catalog.projectTrusted ? (
-				<SettingsNotice variant="info" testId="packages-project-untrusted" className="mb-8">
+				<InlineNotice variant="info" testId="packages-project-untrusted" className="mb-8">
 					{t("settings.packages.projectUntrusted")}
-				</SettingsNotice>
+				</InlineNotice>
 			) : null}
 			{checkError ? (
-				<SettingsNotice variant="error" testId="packages-check-error" className="mb-8">
+				<InlineNotice variant="error" testId="packages-check-error" className="mb-8">
 					{checkError}
-				</SettingsNotice>
+				</InlineNotice>
 			) : null}
 			{ordered.length === 0 && catalog.loose.length === 0 ? (
 				<div
@@ -748,9 +753,9 @@ export function PiBuiltinsGroup({
 									<span className="tr-text-metadata text-text-muted">{t(copy.description)}</span>
 								) : null}
 								{error ? (
-									<SettingsNotice variant="error" testId="package-action-error" className="mt-4">
+									<InlineNotice variant="error" testId="package-action-error" className="mt-4">
 										{error}
-									</SettingsNotice>
+									</InlineNotice>
 								) : null}
 							</div>
 							<Switch

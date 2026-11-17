@@ -1,11 +1,11 @@
 import { RiFileCopyLine as Copy, RiFolderOpenLine as FolderOpen } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { InlineNotice } from "@thinkrail/ui/inline-notice";
 import type { ReactNode } from "react";
 import { copyText } from "@/lib";
 import { toast } from "@/store";
 import { errorText, getTransport } from "@/transport";
-import { SettingsNotice } from "./SettingsNotice";
 import { SettingsRow } from "./SettingsRow";
 
 export type RevealFolderMethod = "locales.reveal" | "themes.reveal" | "fonts.reveal";
@@ -94,13 +94,13 @@ export function SettingsFileIssue({
 	testIdPrefix: string;
 }) {
 	return (
-		<SettingsNotice variant="warning" testId={`${testIdPrefix}-${issue.fileName}`}>
+		<InlineNotice variant="warning" testId={`${testIdPrefix}-${issue.fileName}`}>
 			<span className="flex flex-col gap-4">
 				<span className="tr-code-text">{issue.fileName}</span>
 				<span>{issue.label}</span>
 				{issue.detail ? <span className="break-words text-text-muted">{issue.detail}</span> : null}
 			</span>
-		</SettingsNotice>
+		</InlineNotice>
 	);
 }
 

@@ -12,6 +12,7 @@
 		"./dropdown-menu": "./dropdown-menu.tsx",
 		"./focus": "./focus.ts",
 		"./fonts": "./fonts.ts",
+		"./inline-notice": "./inline-notice.tsx",
 		"./keyboard": "./keyboard.ts",
 		"./keycaps": "./keycaps.tsx",
 		"./local-keys": "./local-keys.tsx",

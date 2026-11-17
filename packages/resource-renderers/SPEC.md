@@ -908,6 +908,9 @@ content's own height.
 
 ## Keyboard review surfaces
 
+A stale composer notice is the visibility/translation adapter over `@thinkrail/ui/inline-notice`, using
+its compact warning surface and polite status semantics. The renderer owns when it appears, not its skin.
+
 Every comment a pointer can author also has a keyboard path. Each surface is one Tab stop marked `data-review-surface`, which the
 app's cheatsheet maps to its Changes review section. Key interpretation is one module,
 `support/cursorKeys.ts` (`cursorCommand(event, keys)`: arrows and the arrow twins, Shift extends, Home/End,

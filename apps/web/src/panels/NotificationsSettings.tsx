@@ -1,6 +1,8 @@
 import { RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { InlineNotice } from "@thinkrail/ui/inline-notice";
+import { Switch } from "@thinkrail/ui/switch";
 import { useId, useState } from "react";
 import {
 	type NotificationChannel,
@@ -9,9 +11,7 @@ import {
 } from "@/notifications";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
-import { SettingsNotice } from "./SettingsNotice";
 import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
-import { SettingsSwitch } from "./SettingsSwitch";
 
 function HowToEnableInstructions() {
 	const t = useT();
@@ -94,18 +94,18 @@ export function NotificationsSettings() {
 						: t("settings.notifications.browserDescription")
 				}
 				control={
-					<SettingsSwitch
+					<Switch
 						checked={enabled}
 						label={t("settings.notifications.enable")}
 						testId="notifications-toggle"
-						onChange={setEnabled}
+						onCheckedChange={setEnabled}
 					/>
 				}
 			/>
 
 			{browserPermission === "default" ? (
 				<div className="border-border-muted border-b py-12">
-					<SettingsNotice
+					<InlineNotice
 						variant="info"
 						testId="notifications-permission-prompt"
 						action={
@@ -120,11 +120,11 @@ export function NotificationsSettings() {
 						}
 					>
 						{t("settings.notifications.notGranted")}
-					</SettingsNotice>
+					</InlineNotice>
 				</div>
 			) : browserPermission === "denied" || browserPermission === "unsupported" ? (
 				<div className="border-border-muted border-b py-12">
-					<SettingsNotice
+					<InlineNotice
 						variant="warning"
 						testId="notifications-permission-warning"
 						action={browserPermission === "denied" ? <HowToEnableInstructions /> : null}
@@ -132,7 +132,7 @@ export function NotificationsSettings() {
 						{browserPermission === "unsupported"
 							? t("settings.notifications.unsupported")
 							: t("settings.notifications.blocked")}
-					</SettingsNotice>
+					</InlineNotice>
 				</div>
 			) : null}
 		</div>
