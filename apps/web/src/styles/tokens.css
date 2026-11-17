@@ -6,7 +6,10 @@
  * nests `sm` (4px) children and needs the extra step to read correctly — chosen by design, not a
  * runtime `child + 2px`. `lg` (8px) is reserved for large, visually independent elevated surfaces
  * (dialogs, user-message bubbles, the AskUserQuestion outer card); it is the exception, never the
- * default for a card. Nothing above 8px. `rounded-full` (a pill/circle) is not on this scale.
+ * default for a card. `xl` (12px) is the floating-surface tier of the Codex-style shell: menus,
+ * popovers, dialogs, toasts and the floating composer card — surfaces that hover above the canvas
+ * with a shadow. Nothing above 12px. `rounded-full` (a pill/circle: the primary and destructive
+ * buttons) is not on this scale.
  */
 @theme static {
 	--radius-*: initial;
@@ -14,6 +17,7 @@
 	--radius-sm: 4px;
 	--radius-md: 6px;
 	--radius-lg: 8px;
+	--radius-xl: 12px;
 }
 
 :root {

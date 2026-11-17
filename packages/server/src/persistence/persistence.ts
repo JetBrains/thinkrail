@@ -667,12 +667,14 @@ function storedKeybindings(value: unknown): KeybindingOverrides {
 
 const CONFIG_VERSION = 2;
 const OLD_QUESTION_PANEL_HEIGHT_DEFAULT = 60;
+/** Version 2's migration target, pinned: the step keeps its shipped meaning when the default changes. */
+const V2_THEME_MIGRATION_TARGET = "helios-cobalt";
 
 function storedThemePreference(value: Record<string, unknown>): ThemePreference {
 	const preference = normalizeThemePreference(value);
 	const version = typeof value.configVersion === "number" ? value.configVersion : 0;
 	return version < 2 && preference.theme === "dark" && preference.themeMode === "fixed"
-		? { ...preference, theme: DEFAULT_CONFIG.theme }
+		? { ...preference, theme: V2_THEME_MIGRATION_TARGET }
 		: preference;
 }
 

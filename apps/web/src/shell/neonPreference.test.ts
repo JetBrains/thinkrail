@@ -31,22 +31,22 @@ afterEach(() => {
 	Reflect.deleteProperty(globalThis, "document");
 	stop?.();
 	stop = null;
-	useAppStore.setState({ neonGlow: true });
+	useAppStore.setState({ neonGlow: false });
 });
 
-test("the glow is on for an untouched client and stamped on the root before first paint", () => {
+test("the glow is off for an untouched client and stamped on the root before first paint", () => {
 	stop = initNeonGlowPersistence(memoryAdapter());
-	expect(useAppStore.getState().neonGlow).toBe(true);
-	expect(root.dataset.heliosNeon).toBe("true");
-});
-
-test("a stored opt-out hydrates the store, and later changes reach the root and storage", () => {
-	const adapter = memoryAdapter({ "neon-glow": "false" });
-	stop = initNeonGlowPersistence(adapter);
 	expect(useAppStore.getState().neonGlow).toBe(false);
 	expect(root.dataset.heliosNeon).toBe("false");
+});
 
-	useAppStore.getState().setNeonGlow(true);
+test("a stored opt-in hydrates the store, and later changes reach the root and storage", () => {
+	const adapter = memoryAdapter({ "neon-glow": "true" });
+	stop = initNeonGlowPersistence(adapter);
+	expect(useAppStore.getState().neonGlow).toBe(true);
 	expect(root.dataset.heliosNeon).toBe("true");
-	expect(adapter.values.get("neon-glow")).toBe("true");
+
+	useAppStore.getState().setNeonGlow(false);
+	expect(root.dataset.heliosNeon).toBe("false");
+	expect(adapter.values.get("neon-glow")).toBe("false");
 });

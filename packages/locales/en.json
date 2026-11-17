@@ -2080,6 +2080,8 @@
 	"settings.appearance.theme": "Theme",
 	"settings.appearance.themeGroup": "Theme",
 	"settings.appearance.themeMode": "Theme mode",
+	"settings.appearance.themeName.codexDark": "Codex Dark",
+	"settings.appearance.themeName.codexLight": "Codex Light",
 	"settings.appearance.themeName.dark": "Dark",
 	"settings.appearance.themeName.heliosCobalt": "Helios Cobalt",
 	"settings.appearance.themeName.highContrastDark": "High Contrast Dark",

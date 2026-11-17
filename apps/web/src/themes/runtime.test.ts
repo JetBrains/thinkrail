@@ -69,7 +69,7 @@ test("a duplicate id, an invalid manifest, or a missing appearance fails the bui
 
 test("system pair derivation follows the fixed theme contrast", () => {
 	installThemeCatalog(buildThemeCatalog(bundledCandidates()));
-	expect(deriveSystemThemePair("dark")).toEqual({ light: "light", dark: "dark" });
+	expect(deriveSystemThemePair("dark")).toEqual({ light: "codex-light", dark: "dark" });
 	expect(deriveSystemThemePair("high-contrast-light")).toEqual({
 		light: "high-contrast-light",
 		dark: "high-contrast-dark",
@@ -85,13 +85,13 @@ test("system resolution enforces appearance and preserves unavailable ids", () =
 	};
 	expect(resolveThemePreference(preference, "light")).toMatchObject({
 		requestedId: "high-contrast-dark",
-		theme: { id: "light", appearance: "light" },
+		theme: { id: "codex-light", appearance: "light" },
 		fallback: true,
 		systemAppearance: "light",
 	});
 	expect(resolveThemePreference(preference, "dark")).toMatchObject({
 		requestedId: "unavailable-dark",
-		theme: { id: "helios-cobalt", appearance: "dark" },
+		theme: { id: "codex-dark", appearance: "dark" },
 		fallback: true,
 		systemAppearance: "dark",
 	});
@@ -142,7 +142,11 @@ test("theme hints migrate legacy ids and use the native stable adapter", () => {
 		writeThemeHint(preference);
 		expect(readThemeHint()).toEqual(preference);
 		stored.set(HINT_KEY, JSON.stringify({ version: 1, theme: "dark", themeMode: "system" }));
-		expect(readThemeHint()).toEqual({ theme: DEFAULT_CONFIG.theme, themeMode: "fixed" });
+		expect(readThemeHint()).toEqual({
+			theme: "codex-dark",
+			themeMode: "system",
+			systemThemePair: { light: "codex-light", dark: "codex-dark" },
+		});
 	} finally {
 		Reflect.deleteProperty(globalThis, "__THINKRAIL_STABLE_PREFERENCES__");
 	}
@@ -285,12 +289,15 @@ test("fallbacks and a derived system pair pick bundled themes, never a user them
 			manifest: userTheme("arctic", { label: "Arctic", order: 0 }),
 		},
 	]);
-	expect(deriveSystemThemePair("light")).toEqual({ light: "light", dark: "helios-cobalt" });
+	expect(deriveSystemThemePair("light")).toEqual({ light: "light", dark: "codex-dark" });
 	expect(
 		resolveThemePreference(
 			{ theme: "light", themeMode: "system", systemThemePair: { light: "light", dark: "missing" } },
 			"dark",
 		).theme.id,
-	).toBe("helios-cobalt");
-	expect(deriveSystemThemePair("user.arctic")).toEqual({ light: "light", dark: "user.arctic" });
+	).toBe("codex-dark");
+	expect(deriveSystemThemePair("user.arctic")).toEqual({
+		light: "codex-light",
+		dark: "user.arctic",
+	});
 });

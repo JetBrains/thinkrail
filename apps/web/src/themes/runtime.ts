@@ -314,7 +314,7 @@ function fallbackTheme(
 }
 
 function defaultThemePreference(): ThemePreference {
-	return { theme: DEFAULT_CONFIG.theme, themeMode: DEFAULT_CONFIG.themeMode };
+	return normalizeConfigThemePreference({});
 }
 
 function normalizeThemeHint(value: unknown): ThemePreference {

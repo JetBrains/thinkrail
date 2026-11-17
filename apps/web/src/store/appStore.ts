@@ -2644,7 +2644,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	chatMessageOrder: "oldest-first",
 	markdownOutlineVisible: null,
 	markdownOutlineSide: "right",
-	neonGlow: true,
+	neonGlow: false,
 	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,
 	defaultModel: DEFAULT_CONFIG.defaultModel,
 	defaultEffort: DEFAULT_CONFIG.defaultEffort,

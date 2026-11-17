@@ -41,7 +41,7 @@ function ToastViewport({
 }
 
 const toastVariants = cva(
-	"group pointer-events-auto relative flex w-full flex-col overflow-hidden rounded-sm border bg-container-elevated-bg p-12 text-text-default shadow-[var(--shadow-md)] data-[state=closed]:animate-[toast-out_120ms_ease-in] data-[state=open]:animate-[toast-in_150ms_ease-out] data-[swipe=cancel]:translate-x-0 data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[swipe=end]:animate-[toast-out_120ms_ease-in]",
+	"group pointer-events-auto relative flex w-full flex-col overflow-hidden rounded-xl border bg-container-elevated-bg p-12 text-text-default shadow-[var(--shadow-md)] data-[state=closed]:animate-[toast-out_120ms_ease-in] data-[state=open]:animate-[toast-in_150ms_ease-out] data-[swipe=cancel]:translate-x-0 data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[swipe=end]:animate-[toast-out_120ms_ease-in]",
 	{
 		variants: {
 			variant: {
