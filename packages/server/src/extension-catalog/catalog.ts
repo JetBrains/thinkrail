@@ -167,7 +167,7 @@ export function catalogUrl(override: string | undefined = process.env[EXTENSION_
 	return override?.trim() || EXTENSION_CATALOG_URL;
 }
 
-/** One fetched copy, kept for `CATALOG_CACHE_MS`; concurrent reads share one request, a failure is not cached. */
+/** One fetched copy, kept for `CATALOG_CACHE_MS`; concurrent reads share one request; a failed read drops the copy. */
 export class ExtensionCatalogSource {
 	readonly #options: CatalogSourceOptions;
 	#cached: { catalog: ExtensionCatalog; at: number } | null = null;
@@ -183,10 +183,16 @@ export class ExtensionCatalogSource {
 			return Promise.resolve(this.#cached.catalog);
 		}
 		if (this.#inflight) return this.#inflight;
-		const pending = this.#fetch().then((catalog) => {
-			this.#cached = { catalog, at: this.#options.now?.() ?? Date.now() };
-			return catalog;
-		});
+		const pending = this.#fetch().then(
+			(catalog) => {
+				this.#cached = { catalog, at: this.#options.now?.() ?? Date.now() };
+				return catalog;
+			},
+			(error: unknown) => {
+				this.#cached = null;
+				throw error;
+			},
+		);
 		this.#inflight = pending;
 		const clear = () => {
 			if (this.#inflight === pending) this.#inflight = null;

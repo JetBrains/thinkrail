@@ -57,6 +57,8 @@
 		"dev:server": "turbo run dev --filter=@thinkrail/server",
 		"dev:web": "turbo run dev --filter=@thinkrail/web",
 		"build:web": "turbo run build --filter=@thinkrail/web",
+		"build:e2e": "turbo run build --filter=@thinkrail/web --filter=@thinkrail/example-extension-palette",
+		"build:extension-fixtures": "turbo run build --filter=@thinkrail/example-extension-palette",
 		"posthog-cli": "bun apps/web/posthogCli.ts",
 		"build:binary": "bun run build:web && bun apps/cli/scripts/build-binary.ts",
 		"smoke:binary": "bun packages/artifact-tests/smoke-binary.ts",

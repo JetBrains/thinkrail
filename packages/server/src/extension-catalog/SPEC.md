@@ -45,8 +45,9 @@ host's.
   an HTTP error status, an unreadable or missing file, an unsupported address) and
   `EXTENSION_CATALOG_INVALID` (not JSON, over 5 MB, or the wrong shape). Messages are short and fixed; the
   response body is never logged or echoed.
-- **Cache:** one validated copy for five minutes; `force` refetches. Concurrent reads share one request and
-  a failure is never cached, so Retry always asks again. The `installed` flag is computed per call from the
+- **Cache:** one validated copy for five minutes; `force` refetches. Concurrent reads share one request; a
+  failure is never cached and drops the copy it was refreshing, so the next read asks again and Browse never
+  shows a list the host just failed to confirm. The `installed` flag is computed per call from the
   names the host passes, so it is fresh even from a cached file.
 - **A `file:` override is read even under `PI_OFFLINE`**, because it is not a network request; that is how
   the browser suite serves a fixture catalog and simulates an unreachable one (a missing file) on a host

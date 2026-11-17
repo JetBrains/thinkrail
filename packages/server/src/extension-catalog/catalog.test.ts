@@ -199,6 +199,7 @@ describe("ExtensionCatalogSource", () => {
 		expect((await source.read()).extensions).toHaveLength(2);
 		rmSync(file);
 		expect(await codeOf(source.read({ force: true }))).toBe("EXTENSION_CATALOG_UNREACHABLE");
+		expect(await codeOf(source.read())).toBe("EXTENSION_CATALOG_UNREACHABLE");
 	});
 });
 

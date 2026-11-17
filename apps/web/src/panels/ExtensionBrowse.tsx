@@ -56,7 +56,11 @@ function ExternalLink({ href, label, testId }: { href: string; label: string; te
 function PreviewImage({ src }: { src: string }) {
 	const [broken, setBroken] = useState(false);
 	return (
-		<div className="aspect-video w-full overflow-hidden bg-container-elevated-bg">
+		<div
+			data-testid="extension-browse-image-box"
+			data-broken={broken ? "true" : "false"}
+			className="aspect-video w-full overflow-hidden bg-container-elevated-bg"
+		>
 			{broken ? null : (
 				<img
 					data-testid="extension-browse-image"
