@@ -156,8 +156,9 @@ export function installStepHeader(
 function InstalledResult({ summary }: { summary: PackageInstallResult }) {
 	const t = useT();
 	const extension = installedExtension(summary);
-	const chips = extension
-		? extension.tools
+	const isExtension = summary.installed === "extension";
+	const chips = isExtension
+		? (extension?.tools ?? [])
 		: [
 				...packageChips(summary.resources),
 				...summary.resources
@@ -171,11 +172,11 @@ function InstalledResult({ summary }: { summary: PackageInstallResult }) {
 		<div className="flex flex-col gap-12">
 			<span
 				data-testid="install-package-kind"
-				data-kind={extension ? "extension" : "package"}
+				data-kind={isExtension ? "extension" : "package"}
 				className="tr-text-ui text-text-default"
 			>
 				{t(
-					extension
+					isExtension
 						? "settings.packages.installDialog.kind.extension"
 						: "settings.packages.installDialog.kind.package",
 				)}
@@ -209,7 +210,7 @@ function InstalledResult({ summary }: { summary: PackageInstallResult }) {
 			) : null}
 			<span className="tr-text-metadata text-text-muted" data-testid="install-package-applies">
 				{t(
-					extension
+					isExtension
 						? "settings.packages.installDialog.installedExtension"
 						: summary.scope === "project"
 							? "settings.packages.installDialog.installedOnProject"

@@ -293,6 +293,12 @@ test("an installed extension says its kind and shows its tools, chat cards and o
 	});
 	expect(plain).toContain('data-kind="package"');
 	expect(plain).toContain("A pi package.");
+	const bare = render("w1", CATALOG, {
+		kind: "installed",
+		summary: { ...SUMMARY, resources: [], installed: "extension" },
+	});
+	expect(bare).toContain('data-kind="extension"');
+	expect(bare).toContain("open chats pick it up when their current turn ends");
 });
 
 test("a repository-scope extension offers to install globally instead of a dead end", () => {
