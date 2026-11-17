@@ -30,8 +30,11 @@ const BASE_TS = 1_700_940_000_000;
 
 test.afterEach(async ({ page }) => {
 	if (page.isClosed() || !page.url().startsWith("http")) return;
-	await closeSettings(page);
-	await clearInstalledExtensions(page);
+	try {
+		await clearInstalledExtensions(page);
+	} finally {
+		await closeSettings(page);
+	}
 });
 
 type SeededMessages = Parameters<typeof seedWorkspaceSession>[1]["messages"];

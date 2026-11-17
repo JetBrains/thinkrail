@@ -155,7 +155,9 @@ export async function closeSettings(page: Page): Promise<void> {
 	const dialog = page.getByTestId("settings-dialog");
 	for (let attempt = 0; attempt < 3 && (await dialog.isVisible()); attempt += 1) {
 		await page.keyboard.press("Escape");
-		await expect(dialog).toBeHidden({ timeout: 2_000 }).catch(() => {});
+		await expect(dialog)
+			.toBeHidden({ timeout: 2_000 })
+			.catch(() => {});
 	}
 	await expect(dialog).toBeHidden();
 }

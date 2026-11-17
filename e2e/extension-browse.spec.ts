@@ -52,9 +52,12 @@ const PREVIEW_PNG = Buffer.from(
 
 test.afterEach(async ({ page }) => {
 	if (page.isClosed() || !page.url().startsWith("http")) return;
-	await closeSettings(page);
-	await serveExtensionCatalog(page, null);
-	await clearInstalledExtensions(page);
+	try {
+		await serveExtensionCatalog(page, null);
+		await clearInstalledExtensions(page);
+	} finally {
+		await closeSettings(page);
+	}
 });
 
 function card(page: import("@playwright/test").Page, name: string) {
