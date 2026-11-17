@@ -302,7 +302,9 @@ listed. The showcase page and the app's Browse read the same file ([[module-webs
 ```
 
 `title`, `author`, `image` and `repository` are optional. A card shows which halves exist, not tool names:
-those live in code the website cannot run.
+those live in code the website cannot run. The app's Browse gets the file through the host
+(`extensions.browse`, [[submodule-server-extension-catalog]]), never from the browser, marks listings already
+installed, and offers Install only for an `api` this app can load ([[submodule-web-panels]]).
 
 ## Members
 

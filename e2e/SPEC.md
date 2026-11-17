@@ -455,6 +455,8 @@ sample, `extension-examples/palette`, never npm or thinkrail.ai.
   writes the file (or deletes it — the unreachable state) and forces one `extensions.browse` read, so the
   host's cached copy matches before the page asks. Install from Browse confirms `npm:<name>` and, offline,
   ends at the dialog's failure step; the install itself is proven by the folder specs.
+- **Live.** `extension-palette.live.spec.ts` (`@agent`) declares the sample before the chat exists (a reset
+  empties `extensions.json`), asks the agent for a `color_palette` call and asserts the rendered swatches.
 
 **Voice input** (`voice-input.spec.ts`) never reaches NVIDIA's servers or a microphone.
 - Every host gets `THINKRAIL_SPEECH_MANIFEST` pointing at the lane's `speech-fixture/manifest.json`, which
