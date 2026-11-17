@@ -95,7 +95,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `watch` | per-worktree fs watcher → debounced `workspace.fsChanged` invalidation push | [watch/SPEC.md](src/watch/SPEC.md) |
 | `terminal` | workspace-scoped `bun-pty` terminals | [terminal/SPEC.md](src/terminal/SPEC.md) |
 | `agent` | in-process pi sessions + current/retained runtime generations + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
-| `extensions` | the server registry of ThinkRail extensions (`@thinkrail/ext-*/server`): ordered descriptors + public specifiers, inline flattening, owner-scoped skill resolution | [extensions/SPEC.md](src/extensions/SPEC.md) |
+| `extensions` | the server registry of ThinkRail extensions — built in (`@thinkrail/ext-*/server`) and installed at runtime (`installed/`: `extensions.json`, install root, descriptor loader, web-half assets): the runtime list, inline flattening, owner-scoped skill resolution | [extensions/SPEC.md](src/extensions/SPEC.md) |
 | `auth` | provider status/login plus native JetBrains Central lifecycle and quota orchestration | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (plan summaries, PR descriptions) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
 | `analytics` | always-on basic events + sanitized error reports, and preference-controlled optional insights → PostHog sink (privacy contract in its spec) | [analytics/SPEC.md](src/analytics/SPEC.md) |
@@ -146,10 +146,13 @@ the host from env via `bootHost` for dev/e2e.
 - `agent` → `log`, `persistence` (`dataDir` for delegation plus session lifecycle/receipt load-save operations),
   `trash` (a chat delete's recoverable transcript move), `resourceHistory` (records its owners' lifecycle and reads
   what they no longer hold), `extensions` (the registry's flattened parent and
-  child inline extensions plus, in unbundled dev, its skill roots) — otherwise the pi runtime alone; auth
+  child inline extensions plus, in unbundled dev, its skill roots; the install-time kind rule and the
+  shared jiti env lock) — otherwise the pi runtime alone; auth
   passes desired opaque Central paths through its public generation seam
-- `extensions` → `@thinkrail/ext-*/server` + `@thinkrail/extension-api/server` (external); `buildSupport.ts`
-  (build-only) also reads it to stage the extensions' skill roots
+- `extensions` → `@thinkrail/ext-*/server` + `@thinkrail/extension-api/server` (external), `log`; its
+  `installed/` sub-module also → `@earendil-works/pi-coding-agent` values (installer, public loader) and
+  `typebox` (external); the data dir arrives as a parameter from `host`, so there is no `persistence`
+  edge; `buildSupport.ts` (build-only) reads only the built-ins to stage their skill roots
 - `resourceHistory` → `persistence` (`dataDir`), `log`
 - `persistence`, `dialog`, `history`, `templates`, `subprocess`, `trash` → (leaves)
 

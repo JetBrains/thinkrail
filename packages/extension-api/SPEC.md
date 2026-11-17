@@ -62,8 +62,9 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   only. Descriptors carry `name` (the identity — the Settings on/off switch and `disabledExtensions` key
   on it), optional display copy `title` / `description` for the Settings catalog, `extensions`, optional
   `sessionExtensions`, optional `interactiveTools`, optional `settings` (declared per-extension settings —
-  today only `{ type: "boolean", default }`; the values live in the host's config keyed by extension name
-  and the Settings copy is the app's locale keys), optional `childExtensions` and optional
+  today only `{ type: "boolean", default, title?, description? }`; the values live in the host's config
+  keyed by extension name; a built-in's Settings copy is the app's locale keys, an installed extension's
+  is its own untranslated `title` / `description`, carried through the catalog), optional `childExtensions` and optional
   `skillPackages` specifiers. Its identity
   helper preserves factories, order and optional-field absence; loading and skill resolution remain host
   responsibilities.
@@ -78,6 +79,20 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
     extension or a same-name tool from another package never becomes a host-tracked interaction.
   - `awaitToolResponse(toolCallId, signal)` resolves a `ToolResponse`: `{kind: "response", value}`,
     `{kind: "deferred"}` or `{kind: "abandoned"}`.
+- `src/manifest.ts`, re-exported from both `./web` and `./server` (the boundary check lets each ring
+  import only its own half), is the pure reading of an installed extension's `package.json`
+  ([[module-thinkrail-extensions]] § Installed extensions), shared by the host and any later consumer
+  that may not import the server: `EXTENSION_API_VERSION` (`"1.0"`, the one host constant),
+  `EXTENSION_KEYWORD`, `EXTENSION_MANIFEST_KEY` (`thinkrail`), `hasExtensionManifest` (the kind rule: the
+  key is present at all), `parseExtensionManifest(packageJson, { reservedNames? })` → `{ ok, manifest }` or
+  `{ ok: false, error }` (a valid npm `name` not among `reservedNames`; `api` is `major.minor`; at least
+  one of `server` / `web`; `styles` only with `web`; `web` names a `.js`/`.mjs` file and `styles` a `.css`
+  one so the host can serve them with a fixed content type; every path relative, `\`-free and without a
+  `..` segment, returned normalised without `./`; `title` / `image` non-empty strings; `version`,
+  `description` and `author` — a string or `{ name }` — are the package's own fields),
+  `normalizeManifestPath`, `extensionApiMismatch(api, host?)` (the reason an extension does not load, or
+  `undefined`) and `isExtensionApiCompatible` — the same major and a minor that is not newer. It has no
+  dependencies; the website keeps its own copy because it may not import app packages.
 - The root is browser-safe and exposes only the web contract; it never re-exports the server half.
 - Workspace dependencies are `contracts` and, type-only, `@thinkrail/locales/react`'s `Translator`.
   React and pi are type-only contract dependencies; there are no React components, registry, DOM access,

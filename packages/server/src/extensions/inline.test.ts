@@ -134,6 +134,49 @@ describe("registryInlineExtensions with per-session factories", () => {
 		expect(seen).toEqual([]);
 	});
 
+	it("turns a throwing sessionExtensions into that extension's load error, not a failed flatten", async () => {
+		const entries: ServerExtensionEntry[] = [
+			{
+				specifier: "/installed/server/index.ts",
+				extension: {
+					name: "throws",
+					extensions: [],
+					sessionExtensions: (services) => (services.setting("typo") ? [] : []),
+				},
+			},
+			sessionEntry("asker", 0, []),
+		];
+		const inline = registryInlineExtensions("extensions", undefined, entries, session("a"));
+		expect(inline.map(nameOf)).toEqual(["throws", "asker"]);
+		const [throws] = inline;
+		if (!throws || typeof throws === "function") throw new Error("missing throws");
+		await expect(Promise.resolve(throws.factory({} as ExtensionAPI))).rejects.toThrow(
+			'extension throws has no setting "typo"',
+		);
+	});
+
+	it("turns a sessionExtensions that returns no list into that extension's load error", async () => {
+		const entries: ServerExtensionEntry[] = [
+			{
+				specifier: "/installed/server/index.ts",
+				extension: {
+					name: "single",
+					extensions: [],
+					sessionExtensions: (() => () => {}) as unknown as () => [],
+				},
+			},
+		];
+		const [single] = registryInlineExtensions("extensions", () => true, entries, session("a"));
+		if (!single || typeof single === "function") throw new Error("missing single");
+		expect(single.name).toBe("single");
+		await expect(Promise.resolve(single.factory({} as ExtensionAPI))).resolves.toBeUndefined();
+		const [enabled] = registryInlineExtensions("extensions", undefined, entries, session("a"));
+		if (!enabled || typeof enabled === "function") throw new Error("missing single");
+		await expect(Promise.resolve(enabled.factory({} as ExtensionAPI))).rejects.toThrow(
+			"sessionExtensions must return a list of factories",
+		);
+	});
+
 	it("gates session factories on the extension switch at load time", async () => {
 		const disabled = new Set(["asker"]);
 		const [asker] = registryInlineExtensions(

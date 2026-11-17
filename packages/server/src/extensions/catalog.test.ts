@@ -20,6 +20,7 @@ describe("listExtensionCatalog", () => {
 				enabled: true,
 				tools: ["visualize"],
 				hasChildExtensions: false,
+				kind: "builtin",
 			},
 			{
 				name: "ask-user-question",
@@ -29,6 +30,7 @@ describe("listExtensionCatalog", () => {
 				tools: ["ask_user_question"],
 				hasChildExtensions: false,
 				settings: [{ key: "richPreviews", default: true }],
+				kind: "builtin",
 			},
 			{
 				name: "web-access",
@@ -37,6 +39,7 @@ describe("listExtensionCatalog", () => {
 				enabled: true,
 				tools: ["web_search", "fetch_content", "get_search_content"],
 				hasChildExtensions: true,
+				kind: "builtin",
 			},
 		]);
 		const [visualize, ask] = await listExtensionCatalog(new Set(["visualize", "retired"]));
@@ -96,10 +99,33 @@ describe("listExtensionCatalog", () => {
 				enabled: true,
 				tools: ["alpha", "beta"],
 				hasChildExtensions: true,
+				kind: "builtin",
 			},
-			{ name: "bare", title: "bare", enabled: false, tools: [], hasChildExtensions: false },
+			{
+				name: "bare",
+				title: "bare",
+				enabled: false,
+				tools: [],
+				hasChildExtensions: false,
+				kind: "builtin",
+			},
 		]);
 		expect(child).not.toHaveBeenCalled();
+	});
+
+	it("lists the static tools of an extension whose per-session factories throw", async () => {
+		const entries: ServerExtensionEntry[] = [
+			{
+				specifier: "/x/server/index.ts",
+				extension: {
+					name: "throws",
+					extensions: [tool("static")],
+					sessionExtensions: (session) => [tool(String(session.setting("typo")))],
+				},
+			},
+		];
+		const [entry] = await listExtensionCatalog(new Set(), entries, []);
+		expect(entry?.tools).toEqual(["static"]);
 	});
 
 	it("lists per-session tools through an inert session that never answers", async () => {
@@ -125,6 +151,7 @@ describe("listExtensionCatalog", () => {
 				enabled: true,
 				tools: ["static", "asked"],
 				hasChildExtensions: false,
+				kind: "builtin",
 			},
 		]);
 		await expect(response).rejects.toThrow("no session");

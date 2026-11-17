@@ -3,10 +3,16 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { DefaultPackageManager } from "@earendil-works/pi-coding-agent";
-import type { PiPackageSummary, PiPackagesCatalog } from "@thinkrail/contracts";
+import type {
+	ExtensionCatalogEntry,
+	PackageInstallResult,
+	PiPackageSummary,
+	PiPackagesCatalog,
+} from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import { setPiPackagesPublisher } from "../agent";
 import { writeFixturePiPackage } from "../agent/packages/testFixtures";
+import { startInstalledExtensions } from "../extensions";
 import { getConfig, resetConfigCache, updateConfig } from "../settings";
 import { handleRequest } from "./handlers";
 
@@ -292,4 +298,111 @@ test("built-in toggles write pi's format, in-package ones are refused, and revea
 		CTX,
 	).catch((e) => e);
 	expect(errorCodeOf(error)).toBe("PACKAGE_UNKNOWN");
+});
+
+function writeExtensionPackage(dir: string, extra: Record<string, unknown> = {}): string {
+	mkdirSync(join(dir, "server"), { recursive: true });
+	writeFileSync(
+		join(dir, "package.json"),
+		JSON.stringify({
+			name: "host-ext",
+			version: "2.0.0",
+			description: "Host fixture",
+			thinkrail: { api: "1.0", server: "server/index.ts" },
+			...extra,
+		}),
+	);
+	writeFileSync(
+		join(dir, "server", "index.ts"),
+		'export default { name: "host-ext", extensions: [(pi) => pi.registerTool({ name: "host_ext_tool", label: "x", description: "x", parameters: { type: "object", properties: {} }, execute: async () => ({ content: [], details: {} }) })] };\n',
+	);
+	return dir;
+}
+
+test("installs a package with a thinkrail manifest as an extension, never into pi's settings", async () => {
+	const stop = startInstalledExtensions({ dataDir: join(root, "data"), onChange: () => {} });
+	try {
+		const folder = writeExtensionPackage(join(root, "pkgs", "ext"), {
+			pi: { extensions: ["./server"] },
+		});
+		updateConfig({ disabledExtensions: ["host-ext"] });
+		const result = (await handleRequest(
+			"packages.install",
+			{ source: folder, scope: "user" },
+			CTX,
+		)) as PackageInstallResult;
+		expect(result).toMatchObject({
+			installed: "extension",
+			name: "host-ext",
+			version: "2.0.0",
+			scope: "user",
+			kind: "local",
+			enabled: true,
+			resources: [],
+			extension: {
+				name: "host-ext",
+				kind: "installed",
+				state: "loaded",
+				source: folder,
+				enabled: true,
+				tools: ["host_ext_tool"],
+			},
+		});
+		expect(getConfig().disabledExtensions).toEqual([]);
+		expect(JSON.parse(readFileSync(join(root, "data", "extensions.json"), "utf8"))).toEqual({
+			extensions: [folder],
+		});
+		expect(() => readFileSync(join(agentDir, "settings.json"), "utf8")).toThrow();
+		const catalog = (await handleRequest("extension.list", {}, CTX)) as ExtensionCatalogEntry[];
+		expect(catalog.at(-1)).toMatchObject({ name: "host-ext", kind: "installed" });
+		await handleRequest("extensions.remove", { source: folder }, CTX);
+		expect(JSON.parse(readFileSync(join(root, "data", "extensions.json"), "utf8"))).toEqual({
+			extensions: [],
+		});
+		await expect(handleRequest("extensions.remove", { source: folder }, CTX)).rejects.toMatchObject(
+			{
+				code: "EXTENSION_UNKNOWN",
+			},
+		);
+	} finally {
+		stop();
+	}
+});
+
+test("refuses an extension at repository scope before anything is written", async () => {
+	const stop = startInstalledExtensions({ dataDir: join(root, "data"), onChange: () => {} });
+	try {
+		const folder = writeExtensionPackage(join(root, "pkgs", "ext"));
+		const failure = await handleRequest(
+			"packages.install",
+			{ source: folder, scope: "project", workspaceId: "w1" },
+			CTX,
+		).catch((error: unknown) => error);
+		expect(errorCodeOf(failure)).toBe("EXTENSION_SCOPE_UNSUPPORTED");
+		expect(() => readFileSync(join(root, "data", "extensions.json"), "utf8")).toThrow();
+		expect(() => readFileSync(join(repo, ".pi", "settings.json"), "utf8")).toThrow();
+	} finally {
+		stop();
+	}
+});
+
+test("still installs a plain pi package as a package while extensions run", async () => {
+	const stop = startInstalledExtensions({ dataDir: join(root, "data"), onChange: () => {} });
+	try {
+		const result = (await handleRequest(
+			"packages.install",
+			{ source: pkg, scope: "user" },
+			CTX,
+		)) as PackageInstallResult;
+		expect(result).toMatchObject({
+			installed: "package",
+			name: "@fixture/pi-tools",
+			enabled: true,
+		});
+		expect(JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf8")).packages).toHaveLength(
+			1,
+		);
+	} finally {
+		stop();
+	}
 });

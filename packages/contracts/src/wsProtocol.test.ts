@@ -31,6 +31,7 @@ import {
 	GITHUB_STAR_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
+	INSTALLED_EXTENSIONS_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
 	isCustomEndpointId,
 	isTodoReviewFixMessage,
@@ -306,8 +307,17 @@ test("host search and its previews are pinned to v106", () => {
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
 });
 
+test("installed extensions are pinned to v111", () => {
+	expect(PROTOCOL_VERSION).toBe(111);
+	expect(INSTALLED_EXTENSIONS_PROTOCOL_VERSION).toBe(111);
+	expect(WS_METHODS.extensionsRemove).toBe("extensions.remove");
+	expect(WS_METHODS.extensionsUpdate).toBe("extensions.update");
+	expect(WS_METHODS.extensionsCheckUpdates).toBe("extensions.checkUpdates");
+	expect(WS_CHANNELS.extensionsChanged).toBe("extensions.changed");
+});
+
 test("continue in workspace is pinned to v110", () => {
-	expect(PROTOCOL_VERSION).toBe(110);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CONTINUATION_PROTOCOL_VERSION);
 	expect(CONTINUATION_PROTOCOL_VERSION).toBe(110);
 	expect(WS_METHODS.chatContinue).toBe("chat.continue");
 	expect(WS_METHODS.chatContinuationStatus).toBe("chat.continuationStatus");

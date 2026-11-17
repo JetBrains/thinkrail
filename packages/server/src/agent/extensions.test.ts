@@ -5,7 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DefaultPackageManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { SPEC_SECTION } from "pi-spec-graph";
-import { type HostSessionServices, registryInlineExtensions, workspaceFiles } from "../extensions";
+import {
+	type HostSessionServices,
+	installedExtensions,
+	registryInlineExtensions,
+	startInstalledExtensions,
+	workspaceFiles,
+} from "../extensions";
 import {
 	buildResourceLoader,
 	bumpPackagesRevision,
@@ -623,6 +629,60 @@ describe("registry extensions", () => {
 			expect(paths()).not.toContain("<inline:visualize>");
 		} finally {
 			setDisabledExtensionsResolver(() => new Set());
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("rebuilds behind the same loader when an installed extension loads or goes away", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-installed-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		const dataDir = join(root, "data");
+		for (const dir of [project, home, agentDir, dataDir]) mkdirSync(dir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		const stop = startInstalledExtensions({ dataDir, onChange: () => {} });
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(
+				project,
+				settingsManager,
+				() => ctx(true),
+				[],
+				[],
+				hostServices,
+			);
+			const paths = () => loader.getExtensions().extensions.map((extension) => extension.path);
+			expect(paths()).not.toContain("<inline:loader-installed>");
+			const folder = join(root, "ext");
+			mkdirSync(join(folder, "server"), { recursive: true });
+			writeFileSync(
+				join(folder, "package.json"),
+				JSON.stringify({
+					name: "loader-installed",
+					thinkrail: { api: "1.0", server: "server/index.ts" },
+				}),
+			);
+			writeFileSync(
+				join(folder, "server", "index.ts"),
+				'export default { name: "loader-installed", extensions: [() => {}] };\n',
+			);
+			const declarations = join(dataDir, "extensions.json");
+			writeFileSync(declarations, JSON.stringify({ extensions: [folder] }));
+			await installedExtensions()?.reconcile();
+			bumpPackagesRevision();
+			expect(isLoaderPolicyStale(loader)).toBe(true);
+			await loader.reload();
+			expect(isLoaderPolicyStale(loader)).toBe(false);
+			expect(paths()).toContain("<inline:loader-installed>");
+			expect(paths()).toContain("<inline:visualize>");
+			writeFileSync(declarations, JSON.stringify({ extensions: [] }));
+			await installedExtensions()?.reconcile();
+			await loader.reload();
+			expect(paths()).not.toContain("<inline:loader-installed>");
+		} finally {
+			stop();
 			restore();
 			rmSync(root, { recursive: true, force: true });
 		}

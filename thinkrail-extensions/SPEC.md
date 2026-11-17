@@ -195,8 +195,10 @@ key for the on/off switch and its settings) and must not equal a built-in's `nam
   newer. At least one of `server` / `web`; `styles` only with `web`; every path is relative and stays
   inside the package. `title` falls back to the package name; description, author and version are the
   package's own fields.
-- `server` is TypeScript source whose default export is a `defineServerExtension` descriptor. `web` is a
-  pre-built ESM file whose default export is a `defineWebExtension` descriptor: the host never bundles.
+- `server` is TypeScript source whose default export is a `defineServerExtension` descriptor whose `name`
+  is the package name. `web` is a pre-built ESM file (`.js` / `.mjs`) whose default export is a
+  `defineWebExtension` descriptor: the host never bundles. `styles` is a `.css` file. The one reader of
+  this manifest and the `EXTENSION_API_VERSION` constant live in [[module-extension-api]].
 
 **Server half**
 
@@ -211,7 +213,8 @@ key for the on/off switch and its settings) and must not equal a built-in's `nam
   plain-JavaScript dependency of the extension binds to instead of the host's.
 - The descriptor is imported through pi's public loader by a host-written shim, so the extension's pi
   imports are the host's single instance in every launcher ([[pi-compatibility]] registers the seam;
-  [[submodule-server-extensions]] owns the mechanism). The version check runs before any extension code.
+  [[submodule-server-extensions-installed]] owns the mechanism); every load also checks that the shim's
+  `createAgentSession` and `Type` are the host's own. The version check runs before any extension code.
 - The server registry is a runtime list — built-ins first, then installed — and the existing composition
   is reused: named inline factories, per-session services, interactive tools, owner-scoped skill roots
   resolved from the installed entry, the on/off switch, boolean settings, built-in tool-name precedence.
@@ -234,7 +237,8 @@ key for the on/off switch and its settings) and must not equal a built-in's `nam
 - **An extension's stylesheet uses its own Tailwind prefix** and is built against a theme file the SDK
   ships, so it emits only its own utilities and they point at the app's runtime variables. Unprefixed, a
   sheet loaded after the app's reorders the app's own utilities.
-- The host serves each web half at a versioned URL on its own origin; the app imports it by absolute URL
+- The host serves each web half at a versioned URL on its own origin
+  (`/extensions/<name>/<version>-<hash of the files' stats>/<file>`, listed in `extension.list`); the app imports it by absolute URL
   and links its stylesheet. Web halves installed at start load before the first render, with a bounded
   wait; later ones register through the subscribable tool registry ([[submodule-web-extensions]]).
 - Every tool renderer, built-in or installed, sits in its own error boundary that falls back to the

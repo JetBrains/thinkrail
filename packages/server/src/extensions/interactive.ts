@@ -6,7 +6,7 @@ export type InteractiveTools = ReadonlyMap<string, InteractiveTool>;
 
 export function interactiveTools(
 	isDisabled: ExtensionDisabled,
-	entries: readonly ServerExtensionEntry[] = serverExtensions,
+	entries: readonly ServerExtensionEntry[] = serverExtensions(),
 ): InteractiveTools {
 	const tools = new Map<string, InteractiveTool>();
 	for (const { extension } of entries) {

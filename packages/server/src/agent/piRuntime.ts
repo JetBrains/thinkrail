@@ -3,6 +3,7 @@ import {
 	getAgentDir,
 	ModelRuntime,
 } from "@earendil-works/pi-coding-agent";
+import { withForcedJitiTransform } from "../extensions";
 import { logger } from "../log";
 import { accountAvailableModels, type ModelAvailabilityRuntime } from "./modelAvailability";
 import { advancePiExtensionCache, createPiSettings } from "./packages";
@@ -131,13 +132,8 @@ async function createRuntimeWithExtensions(
 			},
 		]),
 	);
-	const priorJitiRebuild = process.env.JITI_REBUILD_FS_CACHE;
-	const priorJitiTryNative = process.env.JITI_TRY_NATIVE;
-	process.env.JITI_REBUILD_FS_CACHE = "1";
-	process.env.JITI_TRY_NATIVE = "false";
-	let services: Awaited<ReturnType<typeof createAgentSessionServices>>;
-	try {
-		services = await createAgentSessionServices({
+	const services = await withForcedJitiTransform(() =>
+		createAgentSessionServices({
 			cwd: getAgentDir(),
 			settingsManager: createPiSettings(getAgentDir(), getAgentDir(), { packages: "none" }),
 			modelRuntime: runtime,
@@ -149,13 +145,8 @@ async function createRuntimeWithExtensions(
 				noThemes: true,
 				noContextFiles: true,
 			},
-		});
-	} finally {
-		if (priorJitiRebuild === undefined) delete process.env.JITI_REBUILD_FS_CACHE;
-		else process.env.JITI_REBUILD_FS_CACHE = priorJitiRebuild;
-		if (priorJitiTryNative === undefined) delete process.env.JITI_TRY_NATIVE;
-		else process.env.JITI_TRY_NATIVE = priorJitiTryNative;
-	}
+		}),
+	);
 	const extensionErrors = services.resourceLoader.getExtensions().errors;
 	if (
 		extensionErrors.length > 0 ||

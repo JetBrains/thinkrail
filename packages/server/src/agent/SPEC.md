@@ -850,6 +850,19 @@ re-opened transcripts provider-valid.
     prompt section after pi-spec-graph wrote it (inline extensions load after path and bundled ones), and
     `childExtensionFactories(workspaceId)` leaves pi-spec-graph out of their delegated children. Only
     the tool is gated — the `startPlanReview` button path is a separate host seam. See `submodule-server-host-plan-review`.
+    **The registry is a runtime list** (`serverExtensions()` of [[submodule-server-extensions]]: the
+    built-ins, then installed ThinkRail extensions as they load). pi copies a loader's inline factories at
+    construction, so `buildResourceLoader` returns **one stable `ResourceLoader`** that delegates to an
+    inner pi loader and, at a reload that finds a different registry array than it was built with,
+    builds a fresh inner loader with the current factories (same inputs, same `cwd`) before reloading
+    it; the policy key is recorded on the stable outer loader. The host's `onChange` for installed
+    extensions calls `refreshInstalledExtensions()` (`bumpPackagesRevision` + `refreshExtensionTools`),
+    so every chat's loader is stale and rebuilds when its turn ends, exactly as a pi package change.
+    `enabledExtensionMissing`, owner lookup and skill roots read the same getter; skill roots are memoised
+    per registry entry. `piPackagesInstall` applies the kind rule ([[submodule-server-agent-packages]]
+    § Kind detection) and returns `{ installed: "package" | "extension", … }`. The pi runtime build forces
+    jiti's transform through the shared `withForcedJitiTransform`, serialized with installed-extension
+    loads because the env is process-wide.
     **Registry extensions** follow the same shape, keyed by extension name instead of workspace. A
     host-injected `setDisabledExtensionsResolver(() => ReadonlySet<string>)` (global — no `agent` →
     settings edge; a throwing resolver means nothing disabled) is read by `buildResourceLoader` at **every
@@ -1074,7 +1087,7 @@ re-opened transcripts provider-valid.
     `on` beats a group disable). `skillsGate` filters + relabels in one `skillsOverride`; only `load` skills
     reach the system prompt / `/skill:` list. A **disabled registry extension's** skill roots
     (`extensionSkillRoots`: source roots in dev, the `extensions/<name>` folder of the staged root when
-    bundled) are left out of `additionalSkillPaths` itself — rebuilt in place from the disabled set
+    bundled, an installed extension's roots resolved from its own entry in every mode) are left out of `additionalSkillPaths` itself — rebuilt in place from the disabled set
     snapshotted at each reload — never filtered from pi's result: pi resolves same-name skills first-wins
     before any override runs, so dropping a winner afterwards would also lose the personal or project skill
     it shadowed. `listSkillCommands` (whose cache key includes the disabled set) and `listSkillCatalog`

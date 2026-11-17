@@ -4,7 +4,7 @@ type: architecture-design
 status: draft
 title: Pi compatibility — host adaptations and upgrade removal gates
 parent: architecture
-references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat, module-pi-subagents, module-pi-background-commands, module-pi-delegation]
+references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-extensions-installed, module-artifact-tests, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat, module-pi-subagents, module-pi-background-commands, module-pi-delegation]
 tags: [pi, compatibility]
 ---
 
@@ -238,6 +238,48 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   and the image-resize override bridge resources a single-file artifact cannot discover or load.
   Replace each only when pi supplies an equivalent artifact seam; run `check:seams` and the relevant
   binary/desktop artifact probes, including extension value imports and images.
+- **Runtime extension descriptor shim** — [[submodule-server-extensions-installed]], `installed/loader.ts`.
+  An installed ThinkRail extension's server entry must import the host's single pi and typebox in every
+  launcher, but pi exports no "load a module with extension resolution" API. The host writes a shim that
+  default-imports the entry (and `createAgentSession` / `Type` for its identity guard) and loads it with
+  the public `discoverAndLoadExtensions([shim], empty, empty)`, the descriptor coming back through a
+  per-load key on a `Symbol.for` global map. It relies on four pi facts:
+  - pi's extension loader applies its module resolution — the alias map in a source run (pi's own
+    `loader.js` is `.js`, so dev takes the alias branch), the virtual-module map in the compiled binary
+    and the desktop bundle — to every module the entry imports (stock jiti `virtualModules`/`alias`,
+    reached through `loadExtensionModule`);
+  - `discoverAndLoadExtensions` → `loadExtensions` stays uncached (never pi's process-wide factory cache)
+    and loads an explicit file path, so an edited entry reloads on the same path; building a
+    `DefaultResourceLoader` for it instead would be cached and would clear pi's cache for every session
+    loader of another cwd;
+  - pi still calls the default-export factory during load;
+  - with `JITI_TRY_NATIVE=false` and `JITI_REBUILD_FS_CACHE=1` around the load (the pair `piRuntime.ts`
+    forces, now one serialized `withForcedJitiTransform`) a `.ts` dependency of the extension is
+    transformed and mapped; without it a `.ts` dependency reaching pi could bind to a copy in the
+    extension's `node_modules`. Plain-JavaScript dependencies are native-imported by Bun either way,
+    which is why the installer prunes `@earendil-works/*` and `typebox` from an install.
+  Every load checks member identity (`===` on `createAgentSession` and `Type`; jiti hands a namespace
+  over as a Proxy, so namespaces are never compared) and fails the extension otherwise.
+  **Removal gate:** pi exports a public module loader with its extension resolution (a
+  `createExtensionModuleLoader()` / `importExtensionModule(path)` on the package root, or its
+  `VIRTUAL_MODULES`); then drop the shim and the global map. **Re-check on every bump:** the artifact
+  probe that loads a fixture extension in the compiled binary and the desktop runtime
+  ([[module-artifact-tests]]), and `extensions/installed/loader.test.ts`.
+- **Installed extensions on pi's installer and loader** — [[submodule-server-extensions-installed]],
+  [[submodule-server-agent]]. Three more pi facts the installed-extension runtime builds on:
+  - `DefaultPackageManager.install(source)` at user scope writes only under its `agentDir`
+    (`npm/node_modules/<name>`, `git/<host>/<path>`), needs no persisted declaration
+    (`SettingsManager.inMemory({ npmCommand })`, the user's pi `npmCommand` carried over), and `getInstalledPath(source, "user")` names the package root; its
+    npm arguments omit peers (`--legacy-peer-deps`, bun/pnpm equivalents). `checkForAvailableUpdates()`
+    reads the declarations from the in-memory settings it is given. **Gate:** none needed while these
+    stay public; re-verify the layout on a bump.
+  - `DefaultResourceLoader` copies `extensionFactories` at construction and offers no way to change
+    them, so a change of the runtime registry is applied by building a fresh inner loader at the next
+    reload behind the one `ResourceLoader` a session keeps (`buildResourceLoader`). **Gate:** a loader
+    option read on every reload, or a setter. Run `agent/extensions.test.ts` ("rebuilds behind the same
+    loader…").
+  - pi's `parseGitUrl` reads only `git:` and `https?|ssh|git://` as git; everything else, `file://`
+    included, is a path. `extensions.json` follows the same rule (`extensionSourceKind`).
 - **Account-scoped model availability** — [[submodule-server-agent]], `modelAvailability.ts`. Pi's
   `openai` provider lists its whole API catalog under Sign in with ChatGPT (its `filterAllModels` drops
   only classifiers), so the host keeps the ids in pi's `openai-codex` catalog; Central proxies advertise

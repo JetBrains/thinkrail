@@ -212,7 +212,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
     host-registry ThinkRail extension as `extension.list` reports it; `name` is the identity the
     `AppConfig.disabledExtensions` list keys on, `tools` the names its parent factories register, and
     `settings` (`ExtensionSettingDescriptor[]`, `{ key, default: boolean }`, absent below
-    `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v105) the boolean settings the extension declares.
+    `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v105) the boolean settings the extension declares. From
+    `INSTALLED_EXTENSIONS_PROTOCOL_VERSION` (v111) an entry also says its `kind` and, for an installed
+    one, its install state (§ Installed extensions).
     `ASK_DISCUSS_PROTOCOL_VERSION` (v105) is the host version that renders `ask_user_question`
     `kind: "discuss"` answers; the card withholds Discuss below it.
   - **`SessionSummary`** — a chat session as the host reports it for hydration (read side); `live`
@@ -854,7 +856,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   frames to the workspaces whose diff base that ref is, so their git-derived reads re-converge) / **`skills.state`** (`SkillCatalogEntry[]` — full catalog +
   per-skill `decision` + `group` — for a `workspaceId`) / **`extension.list`** (`ExtensionCatalogEntry[]`,
   no params — the host registry joined with `disabledExtensions`; v82, **`EXTENSION_CATALOG_PROTOCOL_VERSION`**;
-  there is no write method — the Settings switch writes `settings.update { disabledExtensions }`) / **`packages.*`**
+  the Settings switch writes `settings.update { disabledExtensions }`; installed extensions add
+  `extensions.*`, § Installed extensions) / **`packages.*`**
   (installed pi packages; v99, § pi packages below) / **`project.skills`** (the same, project-scoped, for
   the pre-session manager) / **`session.reloadResources`** (re-scan skills + rebuild the system prompt for one
   running session; rejected while streaming) /
@@ -1282,6 +1285,46 @@ and what it loaded, never pi's own types.
   the host could not produce the row; of the install codes only `PACKAGE_SOURCE_INVALID`,
   `PACKAGE_OFFLINE`, `PACKAGE_UNTRUSTED`, `PACKAGE_INSTALL_FAILED` and `PACKAGE_SETTINGS_WRITE_FAILED`
   are raised before anything is written, and a client may claim "nothing was added" only for those.
+
+## Installed extensions
+
+`INSTALLED_EXTENSIONS_PROTOCOL_VERSION` (111) gates what the host adds for extensions authored outside
+the repository ([[module-thinkrail-extensions]] § Installed extensions): the extra `extension.list`
+fields, the `extensions.*` methods, the `extensions.changed` channel and `packages.install`'s `installed`
+kind. Below it a client sees installed extensions as ordinary `extension.list` rows; built-in rows mean
+what they always did.
+
+- **`ExtensionCatalogEntry`** gains `kind` (`builtin` | `installed`; absent from an older host, read as
+  built in). An installed entry adds `source` (the declaration in `extensions.json`, exactly as written —
+  the target of the methods below), `version`, `state` (`InstalledExtensionState`: `loaded` — also a
+  web-only extension; `failed` — install or load error, a duplicate name; `incompatible` — the manifest's
+  `api` is not this host's major or is a newer minor), `error` (the reason, the host's or pi's text) and
+  `web` (`ExtensionWebHalf`, `{ url, styles? }`: host-relative URLs, only when the extension is loaded,
+  compatible and has a web half, whether switched on or off). `name` is the npm package name — the key of
+  `disabledExtensions` and `extensionSettings` as for a built-in; `title` is the manifest's, else the
+  name; `description` the package's. An installed entry's `settings` carry the extension's own `title` /
+  `description` (`ExtensionSettingDescriptor`), which a client shows instead of locale keys.
+- **Web half route:** `GET /extensions/<encodeURIComponent(name)>/<token>/<manifest path>`
+  (`EXTENSION_ASSETS_ROUTE`, a value export, is the `/extensions/` prefix) — the token
+  changes with the files, so the response is immutable; a client uses the URLs as given.
+- **`packages.install`** returns `PackageInstallResult`: the pi package row with `installed: "package"`,
+  or for a package whose `package.json` carries a `thinkrail` manifest `installed: "extension"`, the
+  `extension` entry, and the same fields shaped as a user-scope row with no resources (so an older
+  client's dialog still names what landed). Like a package, a confirmed extension install turns it on:
+  its `name` leaves `disabledExtensions` (its `extensionSettings` values are kept). The host fetches and
+  inspects first and declares last, so for an extension `PACKAGE_SOURCE_INVALID`, `PACKAGE_OFFLINE`,
+  `PACKAGE_INSTALL_FAILED`, **`EXTENSION_SCOPE_UNSUPPORTED`** (an extension asked for at repository
+  scope) and **`EXTENSIONS_FILE_INVALID`** are all raised before `extensions.json` is written.
+- **`extensions.remove { source }`** (drops the declaration; the host-owned install folder goes at the
+  next host start; a folder source's own folder is never touched) / **`extensions.update { source }`** (a fresh install of the
+  source in a new folder, or a re-load in place for a folder source; the old install stays when the new
+  one fails) / **`extensions.checkUpdates { force? }`** (the npm and git `{ source }`s with a newer
+  version, cached briefly unless `force`) — each resolves `Ack` / the list once the host reconciled.
+  Codes: **`EXTENSION_UNKNOWN`** (no such declaration), **`EXTENSIONS_FILE_INVALID`** (`extensions.json`
+  does not parse, so the host will not rewrite it), and the package codes `PACKAGE_SOURCE_INVALID`,
+  `PACKAGE_OFFLINE`, `PACKAGE_INSTALL_FAILED`, `PACKAGE_UPDATE_FAILED` for the install pipeline both share.
+- **`extensions.changed`** (no payload) follows every reconcile that changed what `extension.list`
+  reports; a client re-lists.
 
 ## Voice input
 

@@ -82,7 +82,9 @@ export * from "./oneshot";
 export {
 	handlePiSettingsFileChanged,
 	handleProjectPiSettingsChanged,
+	type PiPackagesInstallOutcome,
 	type PiPackagesTarget,
+	piNpmCommand,
 	piPackagesCatalog,
 	piPackagesCheckUpdates,
 	piPackagesInstall,
@@ -93,6 +95,7 @@ export {
 	primeProjectPiSettings,
 	primeUserPiSettings,
 	publishPiPackagesChanged,
+	refreshInstalledExtensions,
 	refreshPiPackages,
 	setPiPackagesPublisher,
 } from "./piPackages";

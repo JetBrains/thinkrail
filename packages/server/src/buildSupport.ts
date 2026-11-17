@@ -3,9 +3,9 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+	builtinServerExtensions,
 	resolveExtensionSkillRoots,
 	STAGED_HOST_SKILLS_ROUTE,
-	serverExtensions,
 	stagedExtensionSkillRoute,
 } from "./extensions";
 
@@ -53,7 +53,7 @@ export function resolveBuildRuntimeSources(): BuildRuntimeSources {
 		...extensions.map((pkg) => requiredPath(join(dirname(pkg.entry), "skills"))),
 		requiredPath(fileURLToPath(new URL("../skills", import.meta.url))),
 	].map((source) => ({ source, route: STAGED_HOST_SKILLS_ROUTE }));
-	for (const entry of serverExtensions) {
+	for (const entry of builtinServerExtensions) {
 		const route = stagedExtensionSkillRoute(entry.extension.name);
 		for (const source of resolveExtensionSkillRoots(entry)) {
 			skillRoots.push({ source: requiredPath(source), route });

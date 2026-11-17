@@ -15,12 +15,23 @@ export {
 	registryExtensionName,
 	registryInlineExtensions,
 } from "./inline";
+export {
+	type ExtensionSourceKind,
+	type InstalledExtensionRecord,
+	InstalledExtensions,
+	installedExtensions,
+	resolveExtensionAsset,
+	type StagedExtension,
+	withForcedJitiTransform,
+} from "./installed";
+export { type InstalledExtensionsHostOptions, startInstalledExtensions } from "./installedHost";
 export { type InteractiveTools, interactiveTools } from "./interactive";
-export { type ServerExtensionEntry, serverExtensions } from "./registry";
+export { builtinServerExtensions, type ServerExtensionEntry, serverExtensions } from "./registry";
 export {
 	extensionSkillRoots,
 	resolveExtensionSkillRoots,
 	STAGED_HOST_SKILLS_ROUTE,
+	skillPackageRoots,
 	stagedExtensionSkillRoute,
 } from "./skills";
 export { checkWorkspaceFile, MOCKUP_DIR, workspaceFiles } from "./workspaceFiles";

@@ -29,6 +29,16 @@ export function extensionSessionServices(
 	};
 }
 
+export function isFactoryList(value: unknown): value is ExtensionFactory[] {
+	return Array.isArray(value) && value.every((entry) => typeof entry === "function");
+}
+
+function failing(error: unknown): ExtensionFactory {
+	return () => {
+		throw error;
+	};
+}
+
 function factoriesOf(
 	entry: ServerExtensionEntry,
 	kind: RegistryExtensionKind,
@@ -37,17 +47,28 @@ function factoriesOf(
 ): ExtensionFactory[] {
 	const { extension } = entry;
 	if (kind === "childExtensions") return extension.childExtensions ?? [];
-	const perSession =
-		session && extension.sessionExtensions
-			? extension.sessionExtensions(extensionSessionServices(extension, session, settingValue))
-			: [];
+	if (!session || !extension.sessionExtensions) return [...extension.extensions];
+	let perSession: unknown;
+	try {
+		perSession = extension.sessionExtensions(
+			extensionSessionServices(extension, session, settingValue),
+		);
+	} catch (error) {
+		return [...extension.extensions, failing(error)];
+	}
+	if (!isFactoryList(perSession)) {
+		return [
+			...extension.extensions,
+			failing(new Error(`${extension.name}: sessionExtensions must return a list of factories`)),
+		];
+	}
 	return [...extension.extensions, ...perSession];
 }
 
 export function registryInlineExtensions(
 	kind: RegistryExtensionKind,
 	isDisabled: ExtensionDisabled = never,
-	entries: readonly ServerExtensionEntry[] = serverExtensions,
+	entries: readonly ServerExtensionEntry[] = serverExtensions(),
 	session?: HostSessionServices,
 	settingValue: ExtensionSettingValue = noValues,
 ): InlineExtension[] {
@@ -66,7 +87,7 @@ export function registryInlineExtensions(
 
 export function registryExtensionName(
 	path: string,
-	entries: readonly ServerExtensionEntry[] = serverExtensions,
+	entries: readonly ServerExtensionEntry[] = serverExtensions(),
 ): string | undefined {
 	const match = /^<inline:([^#>]+)(?:#\d+)?>$/.exec(path);
 	if (!match) return undefined;
@@ -76,7 +97,7 @@ export function registryExtensionName(
 export function omitDisabledRegistryExtensions(
 	result: LoadExtensionsResult,
 	isDisabled: ExtensionDisabled,
-	entries: readonly ServerExtensionEntry[] = serverExtensions,
+	entries: readonly ServerExtensionEntry[] = serverExtensions(),
 ): LoadExtensionsResult {
 	const kept = result.extensions.filter((extension) => {
 		const name = registryExtensionName(extension.path, entries);
@@ -87,7 +108,7 @@ export function omitDisabledRegistryExtensions(
 
 export function preferRegistryTools(
 	result: LoadExtensionsResult,
-	entries: readonly ServerExtensionEntry[] = serverExtensions,
+	entries: readonly ServerExtensionEntry[] = serverExtensions(),
 ): LoadExtensionsResult {
 	const isRegistry = (path: string) => registryExtensionName(path, entries) !== undefined;
 	const ordered = [...result.extensions];
