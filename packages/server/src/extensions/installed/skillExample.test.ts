@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { EXTENSION_API_VERSION, parseExtensionManifest } from "@thinkrail/extension-api/installed";
@@ -10,6 +10,7 @@ import { tempDir } from "./testFixtures";
 const SKILL_DIR = join(import.meta.dir, "../../../skills/making-thinkrail-extensions");
 const SCRIPT = join(SKILL_DIR, "scripts/extensions.mjs");
 const NODE = Bun.which("node") ?? process.execPath;
+const PINNED = new Date("2026-01-01T00:00:00Z");
 
 function exampleFiles(): Record<string, string> {
 	const markdown = readFileSync(join(SKILL_DIR, "reference/example.md"), "utf8");
@@ -74,6 +75,21 @@ async function script(dataDir: string, ...args: string[]) {
 	return { code, stdout, stderr };
 }
 
+interface RecordedTool {
+	name: string;
+	execute: (id: string, params: unknown) => Promise<unknown>;
+}
+
+async function registeredTools(runtime: InstalledExtensions): Promise<RecordedTool[]> {
+	const tools: RecordedTool[] = [];
+	const extension = runtime.records()[0]?.server?.extension;
+	const session = { setting: () => true } as unknown as ExtensionSessionServices;
+	for (const factory of extension?.sessionExtensions?.(session) ?? []) {
+		await factory({ registerTool: (tool: never) => tools.push(tool) } as unknown as ExtensionAPI);
+	}
+	return tools;
+}
+
 describe("the making-thinkrail-extensions skill", () => {
 	it("names itself after its folder with a description pi accepts", () => {
 		const skill = readFileSync(join(SKILL_DIR, "SKILL.md"), "utf8");
@@ -112,12 +128,7 @@ describe("the making-thinkrail-extensions skill", () => {
 		const extension = record?.server?.extension;
 		expect(extension?.name).toBe("thinkrail-ext-word-count");
 		expect(extension?.settings?.readingTime).toMatchObject({ type: "boolean", default: true });
-		const tools: { name: string; execute: (id: string, params: unknown) => Promise<unknown> }[] =
-			[];
-		const session = { setting: () => true } as unknown as ExtensionSessionServices;
-		for (const factory of extension?.sessionExtensions?.(session) ?? []) {
-			await factory({ registerTool: (tool: never) => tools.push(tool) } as unknown as ExtensionAPI);
-		}
+		const tools = await registeredTools(runtime);
 		expect(tools.map((tool) => tool.name)).toEqual(["word_count"]);
 		expect(await tools[0]?.execute("call", { text: "one two three\nfour" })).toEqual({
 			content: [{ type: "text", text: "4 words, 2 lines, 18 characters, about 1 min to read." }],
@@ -139,6 +150,8 @@ describe("the making-thinkrail-extensions skill", () => {
 				join(dataDir, "extensions.json"),
 				JSON.stringify({ extensions: [], note: "kept" }),
 			);
+			const entry = join(folder, "server", "index.ts");
+			utimesSync(entry, PINNED, PINNED);
 			const added = await script(dataDir, "add", folder);
 			expect(added.code).toBe(0);
 			expect(JSON.parse(added.stdout)).toMatchObject({ state: "loaded" });
@@ -146,7 +159,13 @@ describe("the making-thinkrail-extensions skill", () => {
 				extensions: [folder],
 				note: "kept",
 			});
+			writeFileSync(
+				entry,
+				readFileSync(entry, "utf8").replace('name: "word_count"', 'name: "word_cnt_2"'),
+			);
+			utimesSync(entry, PINNED, PINNED);
 			expect((await script(dataDir, "reload", folder)).code).toBe(0);
+			expect((await registeredTools(runtime)).map((tool) => tool.name)).toEqual(["word_cnt_2"]);
 			expect((await script(dataDir, "remove", folder)).code).toBe(0);
 			expect(runtime.records()).toEqual([]);
 			writeFileSync(join(dataDir, "extensions.json"), '{ "extensions": [');
