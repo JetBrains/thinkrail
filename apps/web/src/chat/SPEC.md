@@ -199,6 +199,8 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   between tool steps: `deriveMessageActions` marks a markdown row final when no later
   `markdown`/`tool`/`activity` row precedes the next round opener (see `divider`) (`finalAnswerRowIds`, supplied by every
   transcript integration as `isFinalAnswer`); a non-final markdown row renders plain, without the action.
+  A later `tool`/`activity` row holding only suggestions calls (`carriesComposerSuggestions`) does not
+  count: by contract that call comes after the final answer (*Composer suggestions*).
   Both go through **one shared layout**, `MessageWithCopy` (in `turns.tsx`): a `relative` wrapper that
   overlays the action **inside the role's bottom corner on the same line as content** — bottom-left for
   an assistant answer (`left-0 bottom-0`), bottom-right for a user bubble (`right-0 bottom-8`, aligned

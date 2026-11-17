@@ -102,6 +102,10 @@ test("a finished turn's suggestions show above the composer, survive a reload an
 	await openPersistedChat(page, "Suggested next steps");
 	await expect(chips).toHaveText(SUGGESTIONS);
 	await expect(page.getByTestId("turn-divider-status")).toHaveAttribute("data-outcome", "done");
+	const answer = page
+		.locator('[data-testid="chat-message"][data-role="assistant"]')
+		.filter({ hasText: "Fixed: the debounce window" });
+	await expect(answer.getByTestId("chat-copy")).toHaveCount(1);
 
 	const input = page.getByTestId("chat-input");
 	await input.fill("half-written draft");
