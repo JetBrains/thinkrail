@@ -215,7 +215,7 @@ describe("frontend-local layout state", () => {
 		});
 	});
 
-	test("a pristine surface initializes a Balanced workspace locally without transport", async () => {
+	test("a pristine surface initializes a default (Codex) workspace locally without transport", async () => {
 		const local = new MemoryStorage();
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
@@ -226,14 +226,15 @@ describe("frontend-local layout state", () => {
 
 		expect(first.center).toMatchObject({ kind: "group", tabs: [] });
 		expect(first.left.groups[0]?.tabs).toEqual([toolTab("projects")]);
+		expect(first.right.visible).toBe(false);
 		expect(first.right.groups.flatMap((group) => group.tabs)).toEqual([
-			toolTab("specs"),
 			toolTab("files"),
+			toolTab("specs"),
 			toolTab("artifacts"),
-			toolTab("plan"),
 			toolTab("review"),
+			toolTab("plan"),
 		]);
-		expect(first.bottom).toMatchObject({ visible: true, groups: [{ tabs: [] }] });
+		expect(first.bottom).toMatchObject({ visible: false, groups: [{ tabs: [] }] });
 		expect(second).toBe(first);
 		expect(local.getItem(localLayoutStorageKey(endpoint, "surface-a"))).not.toBeNull();
 	});
@@ -420,7 +421,7 @@ describe("frontend-local layout state", () => {
 		expect(useAppStore.getState().layoutAttentionByWorkspace.C).toEqual(pending.attention);
 	});
 
-	test("an invalid local frame falls back directly to Balanced", async () => {
+	test("an invalid local frame falls back directly to the default (Codex) frame", async () => {
 		const local = new MemoryStorage();
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
@@ -450,7 +451,7 @@ describe("frontend-local layout state", () => {
 		const restored = await ensureWorkspaceLayoutState("workspace");
 		expect(restored.center).toMatchObject({ kind: "group", tabs: [] });
 		expect(restored.left.groups[0]?.tabs).toEqual([toolTab("projects")]);
-		expect(restored.bottom.visible).toBe(true);
+		expect(restored.bottom.visible).toBe(false);
 	});
 
 	test("a persisted changes review tab survives reload as a preview-eligible center tab", async () => {
@@ -690,7 +691,7 @@ describe("frontend-local layout state", () => {
 		setLayoutStateStorageForTests({ local, session: secondSession }, endpoint);
 
 		const second = await ensureWorkspaceLayoutState("workspace");
-		expect(second.left.width).toBe(0.18);
+		expect(second.left.width).toBe(0.2);
 		expect(local.getItem(localLayoutStorageKey(endpoint, "surface-a"))).not.toBeNull();
 		expect(local.getItem(localLayoutStorageKey(endpoint, "surface-b"))).not.toBeNull();
 	});

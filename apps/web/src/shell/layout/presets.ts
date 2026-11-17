@@ -70,9 +70,23 @@ const bottom = (
 	groups: weightedGroups(groups),
 });
 
-export const DEFAULT_LAYOUT_PRESET_ID = "balanced";
+export const DEFAULT_LAYOUT_PRESET_ID = "codex";
 
 export const BUILTIN_LAYOUT_PRESETS: readonly LayoutPreset[] = [
+	{
+		// The chat-first default: the Thread Sidebar on the left, the conversation centred, and a hidden
+		// right side that opens on demand — Files first (the top bar's Review Changes control lands on
+		// its Changed mode), then Review comments and the TODO List.
+		id: "codex",
+		name: "Codex",
+		center: group("codex-primary"),
+		left: side(true, 0.2, [{ id: "codex-left", tools: ["projects"] }]),
+		right: side(false, 0.36, [
+			{ id: "codex-right-changes", tools: ["files", "specs", "artifacts"], weight: 1.4 },
+			{ id: "codex-right-review", tools: ["review", "plan"] },
+		]),
+		bottom: bottom(false, [{ id: "codex-bottom", tools: [] }]),
+	},
 	{
 		id: "balanced",
 		name: "Balanced",
@@ -108,6 +122,7 @@ export const BUILTIN_LAYOUT_PRESETS: readonly LayoutPreset[] = [
 ] as const;
 
 const BUILTIN_PRESET_NAME_KEYS: Readonly<Record<string, MessageKey>> = {
+	codex: "workbench.preset.codex",
 	balanced: "workbench.preset.balanced",
 	focus: "workbench.preset.focus",
 	review: "workbench.preset.review",

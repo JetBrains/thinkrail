@@ -346,7 +346,7 @@ export interface LocalLayoutPreferences {
 }
 
 export const DEFAULT_LOCAL_LAYOUT_PREFERENCES: LocalLayoutPreferences = {
-	defaultPresetId: "balanced",
+	defaultPresetId: "codex",
 	maxSideGroups: 6,
 	maxBottomGroups: 3,
 };

@@ -97,6 +97,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { RemoveWorkspaceDialog } from "./RemoveWorkspaceDialog";
+import { SidebarQuickActions } from "./SidebarQuickActions";
 import {
 	announceSettledShelf,
 	SETTLED_NOTICE_QUIET_MS,
@@ -346,6 +347,7 @@ export function ProjectTree({ newWorkspaceShortcut }: { newWorkspaceShortcut: re
 
 	return (
 		<nav data-testid="project-tree" className="flex flex-col gap-4">
+			<SidebarQuickActions onNewWorkspace={(projectId) => openWorkspaceDialog(projectId, false)} />
 			<ChatsSection />
 			<header className="flex h-panel-row items-center justify-between pr-4 pl-8">
 				<span className="tr-text-eyebrow text-text-muted">{t("panels.projectTree.title")}</span>

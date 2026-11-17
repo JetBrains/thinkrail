@@ -43,8 +43,8 @@ workbench engine (every tab, split, tool, terminal and preset keeps working):
 - **Top bar** — a quiet header that shares the canvas background (no hard divider). Leading: a
   **Sidebar toggle** (`toggle-sidebar`, the `view.toggleLeft` chord action) and then the location strip
   as a quiet thread title. Trailing (`topbar-actions`): the **Review Changes** control (`open-review`,
-  only with an active workspace; it shows the branch's `+N −M` diff stat when known and toggles the right
-  side, landing on the Review tool), the **Terminal toggle** (`toggle-terminal`, the bottom panel), wiki,
+  only with an active workspace; it shows the workspace's `+N −M` git line totals when known and toggles
+  the right side, landing on the Files tool's Changed mode — All files in a chat without a project), the **Terminal toggle** (`toggle-terminal`, the bottom panel), wiki,
   search, the JetBrains quota, connection status and Settings.
 - **Thread Sidebar** — the Projects tool on the left side of the default Codex preset
   ([[submodule-web-shell-layout]], *Presets*). Its header carries a **New thread** action and a **Search**

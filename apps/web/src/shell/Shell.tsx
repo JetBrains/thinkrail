@@ -71,6 +71,7 @@ import {
 	showFiles,
 	toggleBottomPanel,
 	toggleLeftSide,
+	toggleReviewPanel,
 	toggleRightSide,
 } from "./chordActions";
 import { ExtensionOverlays } from "./ExtensionOverlays";
@@ -88,6 +89,7 @@ import { PROJECT_HOME_PROJECTS_REGION_ID, ProjectHome } from "./ProjectHome";
 import { installRegionTracker, pressRegionKey } from "./regions";
 import { SearchPaletteHost } from "./SearchPaletteHost";
 import { ShortcutsDialogHost } from "./ShortcutsDialog";
+import { ReviewChangesButton, SidebarToggle, TerminalToggle } from "./TopbarControls";
 import { hasNativeShortcuts, readSettingsShortcutLabel } from "./useAppShortcuts";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
@@ -166,6 +168,8 @@ function ShellLayout() {
 	};
 
 	const homeProjects = useCollapsibleRegion<HTMLDivElement>(PROJECT_HOME_PROJECTS_REGION_ID);
+	const leftSideVisible = useAppStore((s) => s.workbenchFrame?.left.visible ?? false);
+	const rightSideVisible = useAppStore((s) => s.workbenchFrame?.right.visible ?? false);
 	const searchShortcut = useKeybindingLabel("search.open");
 	const [nativeShortcuts] = useState(hasNativeShortcuts);
 	const newWorkspaceShortcut = useKeybindingLabel("workspace.new", { browser: !nativeShortcuts });
@@ -260,14 +264,20 @@ function ShellLayout() {
 				data-testid="topbar"
 				data-region="topbar"
 				data-region-kind="topbar"
-				className="relative window-drag flex h-topbar-row min-w-0 select-none items-center border-b border-border-default bg-container-header-bg px-16"
+				className="relative window-drag flex h-topbar-row min-w-0 select-none items-center border-b border-border-muted bg-container-header-bg px-12"
 			>
 				<div
 					aria-hidden="true"
 					data-testid="window-chrome-inset-left"
 					className="w-window-chrome-inset-left shrink-0"
 				/>
-				<div className="flex min-w-0 flex-1 items-center gap-12 self-stretch pr-12">
+				<div className="flex min-w-0 flex-1 items-center gap-8 self-stretch pr-12">
+					{onboardingActive ? null : (
+						<SidebarToggle
+							open={hasActiveWorkspace ? leftSideVisible : !homeProjects.collapsed}
+							onToggle={() => toggleLeftSide(homeProjects.toggle)}
+						/>
+					)}
 					<BrandLogo />
 					{contextProject ? (
 						<LocationBar
@@ -292,6 +302,14 @@ function ShellLayout() {
 							onOpen={() => useAppStore.getState().openSettings(SettingsSection.Updates)}
 						/>
 					) : null}
+					{activeWorkspaceId ? (
+						<ReviewChangesButton
+							workspaceId={activeWorkspaceId}
+							gitWorkspaceId={activeChat ? null : activeWorkspaceId}
+							onToggle={() => toggleReviewPanel(rightSideVisible, activeChat ? "all" : "changed")}
+						/>
+					) : null}
+					{activeWorkspaceId ? <TerminalToggle onToggle={toggleBottomPanel} /> : null}
 					{canOpenWiki && activeWorkspaceId ? (
 						<IconButton
 							variant="ghost"
