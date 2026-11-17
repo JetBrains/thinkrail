@@ -94,7 +94,7 @@ function ItemRow({
 	const location = item.path ? `${item.path}${item.line ? `:${item.line}` : ""}` : null;
 	return (
 		<li
-			data-testid="pr-babysit-item"
+			data-testid="babysit-item"
 			data-item-status={item.status}
 			data-item-source={item.source}
 			className="flex flex-col gap-8 border-border-muted border-b py-12 last:border-b-0"
@@ -108,7 +108,7 @@ function ItemRow({
 						{t(PR_BABYSIT_SEVERITY_LABEL[item.severity])}
 					</span>
 				) : null}
-				<span data-testid="pr-babysit-item-status" className={cn(badge, statusTone(item))}>
+				<span data-testid="babysit-item-status" className={cn(badge, statusTone(item))}>
 					{prBabysitItemStatusLabel(t, item)}
 				</span>
 				{item.postedToGithub ? (
@@ -121,7 +121,7 @@ function ItemRow({
 			{location ? (
 				<button
 					type="button"
-					data-testid="pr-babysit-item-location"
+					data-testid="babysit-item-location"
 					className="self-start truncate rounded-sm tr-code-text text-primary hover:underline focus-visible:focus-ring"
 					onClick={() =>
 						item.path
@@ -162,7 +162,7 @@ function ItemRow({
 				{prBabysitItemActions(item).map((action) => (
 					<Button
 						key={action}
-						data-testid={`pr-babysit-action-${action}`}
+						data-testid={`babysit-action-${action}`}
 						size="s"
 						variant={
 							action === "approvePush" || action === "fix"
@@ -247,7 +247,7 @@ export function PrBabysitDrawer({
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent
-				data-testid="pr-babysit-drawer"
+				data-testid="babysit-drawer"
 				className="top-0 right-0 left-auto h-dvh max-h-dvh w-full max-w-[36rem] translate-x-0 translate-y-0 gap-12 rounded-none border-0 border-l"
 			>
 				<DialogHeader>
@@ -260,7 +260,7 @@ export function PrBabysitDrawer({
 				</DialogHeader>
 				{session ? (
 					<div className="flex flex-wrap items-center gap-8 tr-text-metadata text-text-muted">
-						<span data-testid="pr-babysit-session-status" data-status={session.status}>
+						<span data-testid="babysit-session-status" data-status={session.status}>
 							{t(PR_BABYSIT_SESSION_LABEL[session.status])}
 						</span>
 						<span>
@@ -278,26 +278,26 @@ export function PrBabysitDrawer({
 				)}
 				<div className="flex flex-wrap items-center justify-between gap-8">
 					<SegmentedControl<DrawerTab>
-						name="pr-babysit-tab"
+						name="babysit-tab"
 						label={t("prBabysit.drawer.tabs")}
-						testId="pr-babysit-tabs"
+						testId="babysit-tabs"
 						value={tab}
 						onSelect={setTab}
 						options={[
 							{
 								id: "findings",
 								label: t("prBabysit.drawer.tab.findings"),
-								testId: "pr-babysit-tab-findings",
+								testId: "babysit-tab-findings",
 							},
 							{
 								id: "queue",
 								label: t("prBabysit.drawer.tab.queue"),
-								testId: "pr-babysit-tab-queue",
+								testId: "babysit-tab-queue",
 							},
 						]}
 					/>
 					<SegmentedControl<DrawerFilter>
-						name="pr-babysit-filter"
+						name="babysit-filter"
 						label={t("prBabysit.drawer.filter.label")}
 						value={filter}
 						onSelect={setFilter}
@@ -308,7 +308,7 @@ export function PrBabysitDrawer({
 					/>
 				</div>
 				{items.length === 0 ? (
-					<p data-testid="pr-babysit-empty" className="tr-text-ui text-text-muted">
+					<p data-testid="babysit-empty" className="tr-text-ui text-text-muted">
 						{tab === "findings"
 							? t("prBabysit.drawer.emptyFindings")
 							: t("prBabysit.drawer.emptyQueue")}

@@ -52,7 +52,7 @@ export function PrBabysitSettings() {
 				description={t("settings.prBabysit.description")}
 			>
 				<SettingsRow
-					testId="pr-babysit-model-row"
+					testId="babysit-model-row"
 					label={t("settings.prBabysit.babysitModel")}
 					description={t("settings.prBabysit.babysitModelDescription")}
 					control={
@@ -71,7 +71,7 @@ export function PrBabysitSettings() {
 					}
 				/>
 				<SettingsRow
-					testId="pr-reviewer-model-row"
+					testId="reviewer-model-row"
 					label={t("settings.prBabysit.reviewerModel")}
 					description={t("settings.prBabysit.reviewerModelDescription")}
 					control={
@@ -93,7 +93,7 @@ export function PrBabysitSettings() {
 
 			<SettingsGroup title={t("settings.prBabysit.reviewTitle")}>
 				<SettingsRadioCards<IndependentReviewMode>
-					name="pr-babysit-review-mode"
+					name="babysit-review-mode"
 					label={t("settings.prBabysit.reviewTitle")}
 					value={config.independentReviewMode}
 					onSelect={(independentReviewMode) => save({ independentReviewMode })}
@@ -102,25 +102,25 @@ export function PrBabysitSettings() {
 							id: "review_and_auto_queue",
 							label: t("settings.prBabysit.review.autoQueue"),
 							description: t("settings.prBabysit.review.autoQueueDescription"),
-							testId: "pr-review-mode-auto-queue",
+							testId: "review-mode-auto-queue",
 						},
 						{
 							id: "review_for_approval",
 							label: t("settings.prBabysit.review.approval"),
 							description: t("settings.prBabysit.review.approvalDescription"),
-							testId: "pr-review-mode-approval",
+							testId: "review-mode-approval",
 						},
 						{
 							id: "post_to_github",
 							label: t("settings.prBabysit.review.post"),
 							description: t("settings.prBabysit.review.postDescription"),
-							testId: "pr-review-mode-post",
+							testId: "review-mode-post",
 						},
 						{
 							id: "off",
 							label: t("settings.prBabysit.review.off"),
 							description: t("settings.prBabysit.review.offDescription"),
-							testId: "pr-review-mode-off",
+							testId: "review-mode-off",
 						},
 					]}
 				/>
@@ -128,7 +128,7 @@ export function PrBabysitSettings() {
 
 			<SettingsGroup title={t("settings.prBabysit.modeTitle")}>
 				<SettingsRadioCards<PrBabysitMode>
-					name="pr-babysit-mode"
+					name="babysit-mode"
 					label={t("settings.prBabysit.modeTitle")}
 					value={config.mode}
 					onSelect={(mode) => save({ mode })}
@@ -137,13 +137,13 @@ export function PrBabysitSettings() {
 							id: "auto_push",
 							label: t("settings.prBabysit.mode.auto"),
 							description: t("settings.prBabysit.mode.autoDescription"),
-							testId: "pr-babysit-mode-auto",
+							testId: "babysit-mode-auto",
 						},
 						{
 							id: "stage_for_approval",
 							label: t("settings.prBabysit.mode.stage"),
 							description: t("settings.prBabysit.mode.stageDescription"),
-							testId: "pr-babysit-mode-stage",
+							testId: "babysit-mode-stage",
 						},
 					]}
 				/>
@@ -151,40 +151,40 @@ export function PrBabysitSettings() {
 
 			<SettingsGroup title={t("settings.prBabysit.threadsTitle")}>
 				<SettingsRow
-					testId="pr-babysit-auto-resolve-row"
+					testId="babysit-auto-resolve-row"
 					label={t("settings.prBabysit.autoResolve")}
 					description={t("settings.prBabysit.autoResolveDescription")}
 					control={
 						<SettingsSwitch
 							checked={config.autoResolveThreads}
 							label={t("settings.prBabysit.autoResolve")}
-							testId="pr-babysit-auto-resolve"
+							testId="babysit-auto-resolve"
 							onChange={(autoResolveThreads) => save({ autoResolveThreads })}
 						/>
 					}
 				/>
 				<SettingsRow
-					testId="pr-babysit-fix-ci-row"
+					testId="babysit-fix-ci-row"
 					label={t("settings.prBabysit.fixCi")}
 					description={t("settings.prBabysit.fixCiDescription")}
 					control={
 						<SettingsSwitch
 							checked={config.fixFailingChecks}
 							label={t("settings.prBabysit.fixCi")}
-							testId="pr-babysit-fix-ci"
+							testId="babysit-fix-ci"
 							onChange={(fixFailingChecks) => save({ fixFailingChecks })}
 						/>
 					}
 				/>
 				<SettingsRow
-					testId="pr-babysit-max-cycles-row"
+					testId="babysit-max-cycles-row"
 					label={t("settings.prBabysit.maxCycles")}
 					description={t("settings.prBabysit.maxCyclesDescription")}
 					control={
 						<SegmentedControl<CycleChoice>
-							name="pr-babysit-max-cycles"
+							name="babysit-max-cycles"
 							label={t("settings.prBabysit.maxCycles")}
-							testId="pr-babysit-max-cycles"
+							testId="babysit-max-cycles"
 							value={cycleChoice(config.maxPushCycles)}
 							onSelect={(choice) => save({ maxPushCycles: Number(choice) })}
 							options={CYCLE_CHOICES.map((choice) => ({ id: choice, label: choice }))}

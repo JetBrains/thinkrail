@@ -23,7 +23,7 @@
 		"@thinkrail/shared": "workspace:*"
 	},
 	"devDependencies": {
-		"@tauri-apps/cli": "^2",
+		"@tauri-apps/cli": "2.12.5",
 		"@types/bun": "catalog:",
 		"electrobun": "2.0.5",
 		"resedit": "catalog:",

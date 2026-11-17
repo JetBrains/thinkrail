@@ -84,10 +84,10 @@ export function BabysitControl({
 	const tone = active ? "primary" : "neutral";
 	return (
 		<>
-			<span data-testid="pr-babysit-control" data-active={active} className={splitFrameClass(tone)}>
+			<span data-testid="babysit-control" data-active={active} className={splitFrameClass(tone)}>
 				<button
 					type="button"
-					data-testid="pr-babysit-toggle"
+					data-testid="babysit-toggle"
 					aria-pressed={active}
 					aria-label={active ? t("prBabysit.topbar.stop") : t("prBabysit.topbar.start")}
 					title={active ? t("prBabysit.topbar.stop") : t("prBabysit.topbar.start")}
@@ -101,7 +101,7 @@ export function BabysitControl({
 						<span
 							aria-hidden
 							data-neon="pulse"
-							data-testid="pr-babysit-indicator"
+							data-testid="babysit-indicator"
 							className="size-8 shrink-0 rounded-full bg-primary"
 						/>
 					) : (
@@ -113,7 +113,7 @@ export function BabysitControl({
 				</button>
 				<button
 					type="button"
-					data-testid="pr-babysit-review"
+					data-testid="babysit-review"
 					aria-label={t("prBabysit.topbar.reviewHint")}
 					title={t("prBabysit.topbar.reviewHint")}
 					disabled={pending !== null || session?.reviewing === true}
@@ -131,7 +131,7 @@ export function BabysitControl({
 			{session ? (
 				<button
 					type="button"
-					data-testid="pr-babysit-pill"
+					data-testid="babysit-pill"
 					aria-label={t("prBabysit.topbar.openDrawer", counts)}
 					onClick={() => setDrawerOpen(true)}
 					className={chipClass(
