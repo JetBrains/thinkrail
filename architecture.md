@@ -390,10 +390,16 @@ dependency. This keeps test process drivers outside both launchers and the serve
     transcripts render. Per-extension boolean settings have shipped the same way: declared on the
     descriptor, stored in `AppConfig.extensionSettings`, read by an extension's session factories through
     its own `setting(key)` view, applied by a reload once the turn ends. Host-owned file checks reach
-    extensions through the session seam (`workspaceFiles`), so the SDK stays types + `define*`. Install UX,
-    marketplace, other setting types, a per-workspace on/off override and runtime-loaded third-party
-    extensions remain explicit deferrals. Rejected: runtime-loaded
-    bundles now (React singleton, versioned UI API, security story first), a logical extension inside
+    extensions through the session seam (`workspaceFiles`), so the SDK stays types + `define*`. Other
+    setting types and a per-workspace on/off override remain explicit deferrals. **Runtime-loaded
+    extensions are decided** (delivery in progress; contract in [[module-thinkrail-extensions]]
+    § Installed extensions). They were first rejected until three answers existed, and now have them: the
+    React singleton — the app exposes its own React and a small UI set on one host object, and an
+    extension's pre-built bundle contains neither; a versioned UI API — an `api` version in the
+    extension's manifest, a published SDK, and all-or-nothing loading; a security story — installing is
+    the consent, global scope only, no isolation, an unreviewed npm-keyword catalog, each an accepted
+    risk. The server half is imported through pi's public loader so its pi imports stay the host's single
+    instance in every launcher. Rejected: a logical extension inside
     the apps (three physical homes, no boundary), generated factory lists derived from descriptors
     (functions yield no import specifiers); keeping path-based dev loading beside the inline composition
     (one composition mode; `{ name, factory }` keeps diagnostics); resolving `skillPackages` from the
