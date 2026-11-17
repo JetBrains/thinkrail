@@ -3,6 +3,8 @@ import { connect, createServer } from "node:net";
 const DEFAULT_HOST = "localhost";
 const PROBE_TIMEOUT_MS = 300;
 const DEFAULT_SCAN_ATTEMPTS = 20;
+/** Below this are well-known ports, many of which browsers refuse to load. */
+const FIRST_SCANNABLE_PORT = 1024;
 
 function isConnectionRefused(err: unknown): boolean {
 	const e = err as NodeJS.ErrnoException & { errors?: NodeJS.ErrnoException[] };
@@ -47,6 +49,13 @@ export async function findFreePort(
 	host: string = DEFAULT_HOST,
 	attempts: number = DEFAULT_SCAN_ATTEMPTS,
 ): Promise<number> {
+	// Port 0 means "any port", not "start scanning at 0". A connect probe of port
+	// 0 is platform- and timing-dependent (on Windows it can time out or fail
+	// with something other than ECONNREFUSED), and when it reads as "taken" the
+	// scan advances to port 1, which looks free, binds fine on Windows, and is a
+	// browser-blocked "unsafe" port (ERR_UNSAFE_PORT in WebView2/Chromium). The
+	// well-known range is never a sensible scan start, so let the OS choose.
+	if (preferred < FIRST_SCANNABLE_PORT) return osAssignedPort(host);
 	for (let port = preferred; port < preferred + attempts && port <= 65535; port += 1) {
 		if (await isPortFree(port, host)) return port;
 	}
