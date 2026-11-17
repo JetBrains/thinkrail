@@ -81,6 +81,11 @@ function describeOnce(extension: ServerExtension): Promise<ExtensionDescription>
 	return description;
 }
 
+/** The tool names a server half registers, as the Settings catalog lists them. */
+export async function extensionToolNames(extension: ServerExtension): Promise<string[]> {
+	return (await describeOnce(extension)).tools;
+}
+
 async function installedEntry(
 	record: InstalledExtensionRecord,
 	disabled: ReadonlySet<string>,

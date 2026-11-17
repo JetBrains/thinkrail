@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
-import { InstalledExtensions, type InstalledExtensionsOptions } from "./runtime";
+import {
+	type ExtensionsStatus,
+	InstalledExtensions,
+	type InstalledExtensionsOptions,
+} from "./runtime";
 import { stubInstaller, tempDir, toolDescriptor, writeExtension } from "./testFixtures";
 
 const roots: string[] = [];
@@ -463,5 +467,113 @@ describe("watch", () => {
 		} finally {
 			stop();
 		}
+	});
+});
+
+describe("status file", () => {
+	const statusOf = (dataDir: string): ExtensionsStatus =>
+		JSON.parse(readFileSync(join(dataDir, "extensions", "status.json"), "utf8"));
+
+	it("lists every declared source with its state, error and tools after a reconcile", async () => {
+		const { root, dataDir, declare } = setup();
+		const runtime = new InstalledExtensions({
+			...baseOptions(dataDir),
+			toolNames: async (extension) => [`${extension.name}_tool`],
+		});
+		const fine = writeExtension(join(root, "fine"), { name: "fine-ext", version: "0.2.0" });
+		const broken = writeExtension(join(root, "broken"), {
+			name: "broken-ext",
+			files: { "server/index.ts": 'throw new Error("top-level boom");\n' },
+		});
+		const newer = writeExtension(join(root, "newer"), { name: "newer-ext", api: "1.9" });
+		const cards = writeExtension(join(root, "cards"), { server: false, web: "web.js" });
+		declare(fine, broken, newer, cards);
+		const before = Date.now();
+		await runtime.reconcile();
+		const status = statusOf(dataDir);
+		expect(status.api).toBe("1.0");
+		expect(status.declarations).toBe(join(dataDir, "extensions.json"));
+		expect(Date.parse(status.updatedAt)).toBeGreaterThanOrEqual(before - 1_000);
+		expect(status.fileError).toBeUndefined();
+		expect(status.extensions).toEqual([
+			{
+				source: fine,
+				name: "fine-ext",
+				version: "0.2.0",
+				state: "loaded",
+				tools: ["fine-ext_tool"],
+			},
+			expect.objectContaining({ source: broken, name: "broken-ext", state: "failed" }),
+			expect.objectContaining({ source: newer, name: "newer-ext", state: "incompatible" }),
+			expect.objectContaining({ source: cards, state: "loaded" }),
+		]);
+		expect(status.extensions[1]?.error).toContain("top-level boom");
+		expect(status.extensions[2]?.error).toContain("update ThinkRail");
+		expect(status.extensions[3]?.tools).toBeUndefined();
+	});
+
+	it("is written with no declarations, and omits tools it cannot determine", async () => {
+		const { root, dataDir, declare } = setup();
+		const runtime = new InstalledExtensions({
+			...baseOptions(dataDir),
+			toolNames: () => Promise.reject(new Error("no")),
+		});
+		await runtime.reconcile();
+		expect(statusOf(dataDir).extensions).toEqual([]);
+		const folder = writeExtension(join(root, "a"));
+		declare(folder);
+		await runtime.reconcile();
+		expect(statusOf(dataDir).extensions[0]).not.toHaveProperty("tools");
+	});
+
+	it("marks a declared npm source as installing until its install finishes", async () => {
+		const { root, dataDir, declare } = setup();
+		const template = writeExtension(join(root, "template"), { name: "slow-ext" });
+		const stub = stubInstaller({ "npm:slow-ext": template });
+		let release = () => {};
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		let started = () => {};
+		const installing = new Promise<void>((resolve) => {
+			started = resolve;
+		});
+		const runtime = new InstalledExtensions({
+			...baseOptions(dataDir),
+			installer: {
+				...stub,
+				async install(source, dir) {
+					started();
+					await gate;
+					return stub.install(source, dir);
+				},
+			},
+		});
+		declare("npm:slow-ext");
+		const done = runtime.reconcile();
+		await installing;
+		expect(statusOf(dataDir).extensions).toEqual([{ source: "npm:slow-ext", state: "installing" }]);
+		release();
+		await done;
+		expect(statusOf(dataDir).extensions).toEqual([
+			{ source: "npm:slow-ext", name: "slow-ext", version: "1.0.0", state: "loaded" },
+		]);
+	});
+
+	it("reports a refused extensions.json beside the last good rows, and clears it when fixed", async () => {
+		const { root, runtime, dataDir, declare } = setup();
+		const folder = writeExtension(join(root, "a"), { name: "kept-ext" });
+		declare(folder);
+		await runtime.reconcile();
+		writeFileSync(join(dataDir, "extensions.json"), '{ "extensions": [');
+		await runtime.reconcile();
+		const refused = statusOf(dataDir);
+		expect(refused.fileError).toContain("not valid JSON");
+		expect(refused.extensions).toEqual([
+			expect.objectContaining({ source: folder, name: "kept-ext", state: "loaded" }),
+		]);
+		declare(folder);
+		await runtime.reconcile();
+		expect(statusOf(dataDir).fileError).toBeUndefined();
 	});
 });

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
@@ -99,6 +99,18 @@ describe("the runtime registry", () => {
 		stop?.();
 		stop = undefined;
 		expect(serverExtensions()).toBe(builtinServerExtensions);
+	});
+
+	it("writes the status file with the tool names the catalog lists", async () => {
+		const { folder, failed, dataDir } = await installed();
+		const status = JSON.parse(readFileSync(join(dataDir, "extensions", "status.json"), "utf8"));
+		expect(status.extensions.map((entry: { source: string }) => entry.source)).toEqual([
+			folder,
+			failed,
+			expect.stringContaining("reserved"),
+		]);
+		expect(status.extensions[0]).toMatchObject({ state: "loaded", tools: ["quiet_tool"] });
+		expect(status.extensions[1]).toMatchObject({ state: "failed" });
 	});
 
 	it("reports installed rows with their kind, state, source, copy and web half", async () => {
