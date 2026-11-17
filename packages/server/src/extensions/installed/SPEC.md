@@ -5,7 +5,7 @@ status: active
 title: extensions/installed — installing and loading ThinkRail extensions at runtime
 parent: submodule-server-extensions
 depends-on: [module-extension-api, module-contracts]
-references: [module-thinkrail-extensions, pi-compatibility, submodule-server-agent-packages]
+references: [module-thinkrail-extensions, pi-compatibility, submodule-server-agent-packages, submodule-server-agent]
 tags: [extensions, public-surface-checked]
 ---
 
@@ -122,6 +122,24 @@ A folder source is never copied: it loads from where it is, and nothing under it
   `dataDir()` in the host's environment, which pi's bash tool and every child inherit (user terminals
   drop `THINKRAIL_*`), so an agent finds `extensions.json` in dev, the CLI and the desktop app alike —
   including a relative override, which would otherwise resolve against the agent's cwd.
+- **The agent's path in** is the `making-thinkrail-extensions` host skill ([[submodule-server-agent]]
+  stages it), the counterpart of `managing-mcp-servers` editing `mcp.json`: the agent writes a folder
+  extension, builds it with the SDK and declares it itself, with no confirmation click. Its decisions:
+  - the default folder is `~/thinkrail-extensions/<slug>/` — the user's source code, so never inside a
+    workspace (worktrees are deleted), a chat folder or the data dir (`<data dir>/extensions/` is the
+    host's, and uninstalling ThinkRail may remove the data dir); package name `thinkrail-ext-<slug>`;
+  - `scripts/extensions.mjs` (plain Node, no dependencies) is the one writer it uses: `add` / `reload` /
+    `remove` rewrite `extensions.json` atomically with the host's rules (other keys kept, a source
+    compared after `~` / `file://` expansion, a file that does not parse refused with exit 2), then wait
+    for a newer `status.json` and print the entry (exit 0 only for `loaded`). `reload` touches the
+    folder's `package.json`, because a folder reloads only when its fingerprint changes and an edited
+    non-entry server file is not in it;
+  - installs use `npm install --omit=peer` and an `.npmrc` with `omit=peer`: a plain install pulls pi
+    (~190 MB) into a folder the host never prunes;
+  - before `@thinkrail/extension-sdk` is on npm the skill detects it (`npm view` → `E404`) and stops
+    before writing anything, telling the user; only when the user names a ThinkRail checkout does it
+    pack the SDK there. No private registry, nothing vendored into the app;
+  - `skillExample.test.ts` keeps the skill's worked example and script honest against this runtime.
 - **Web half URLs** (`assets.ts`): `/extensions/<encodeURIComponent(name)>/<version>-<hash>/<file>`,
   `<hash>` the first 12 hex of a sha-256 over the served files' paths, mtimes and sizes, so a changed file
   — a folder source's edit, an update — is a new URL and the route may answer immutable. `webHalfOf`
