@@ -322,6 +322,7 @@ function sameHostUpdateRelease(
 
 export async function createServer(options: CreateServerOptions = {}): Promise<RunningServer> {
 	applyGitCeiling();
+	process.env.THINKRAIL_DATA_DIR = dataDir();
 	try {
 		ensureChatsContainer();
 	} catch (error) {

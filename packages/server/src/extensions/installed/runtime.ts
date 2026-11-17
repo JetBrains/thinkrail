@@ -14,6 +14,7 @@ import {
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { InstalledExtensionState } from "@thinkrail/contracts";
 import {
+	EXTENSION_API_VERSION,
 	type ExtensionManifest,
 	extensionApiMismatch,
 	hasExtensionManifest,
@@ -69,6 +70,28 @@ export interface InstalledExtensionsOptions {
 	installer?: ExtensionInstaller;
 	offline?: () => boolean;
 	onChange?: () => void;
+	/** The tool names a loaded server half registers, for the status file. */
+	toolNames?: (extension: ServerExtension) => Promise<readonly string[]>;
+}
+
+export type ExtensionStatusState = InstalledExtensionState | "installing";
+
+export interface ExtensionStatusEntry {
+	source: string;
+	name?: string;
+	version?: string;
+	state: ExtensionStatusState;
+	error?: string;
+	tools?: string[];
+}
+
+/** `<data dir>/extensions/status.json`, rewritten after every reconcile for agents to read. */
+export interface ExtensionsStatus {
+	api: string;
+	updatedAt: string;
+	declarations: string;
+	fileError?: string;
+	extensions: ExtensionStatusEntry[];
 }
 
 export interface StagedExtension {
@@ -87,6 +110,7 @@ type InstallsFile = Record<string, InstallRef>;
 
 const UPDATE_CHECK_TTL_MS = 5 * 60_000;
 const POLL_INTERVAL_MS = 1_000;
+const STATUS_TOOLS_TIMEOUT_MS = 2_000;
 
 function isOffline(): boolean {
 	const value = process.env.PI_OFFLINE?.toLowerCase();
@@ -126,6 +150,7 @@ export class InstalledExtensions {
 	readonly #installsDir: string;
 	readonly #installsPath: string;
 	readonly #hostDir: string;
+	readonly #statusPath: string;
 	readonly #options: InstalledExtensionsOptions;
 	readonly #installer: ExtensionInstaller;
 	#records: readonly InstalledExtensionRecord[] = [];
@@ -146,6 +171,7 @@ export class InstalledExtensions {
 		this.#installsDir = join(this.root, "installs");
 		this.#installsPath = join(this.root, "installs.json");
 		this.#hostDir = join(this.root, "host");
+		this.#statusPath = join(this.root, "status.json");
 	}
 
 	records(): readonly InstalledExtensionRecord[] {
@@ -379,6 +405,7 @@ export class InstalledExtensions {
 		if (!read.ok) {
 			if (this.#fileError !== read.error) log.warn(`extensions.json ignored: ${read.error}`);
 			this.#fileError = read.error;
+			await this.#writeStatus(this.#records.map((record) => record.source));
 			return;
 		}
 		this.#fileError = undefined;
@@ -401,6 +428,7 @@ export class InstalledExtensions {
 		}
 		const settled = () => records.filter((record) => record !== undefined);
 		this.#publish(settled());
+		await this.#writeStatus(read.sources);
 		for (const [index, source] of read.sources.entries()) {
 			if (records[index] !== undefined) continue;
 			const record = await this.#installMissing(source, installs, taken);
@@ -408,6 +436,56 @@ export class InstalledExtensions {
 			claim(record, source);
 			records[index] = record;
 			this.#publish(settled());
+			await this.#writeStatus(read.sources);
+		}
+	}
+
+	async #toolsOf(extension: ServerExtension): Promise<string[] | undefined> {
+		const names = this.#options.toolNames;
+		if (!names) return undefined;
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const timeout = new Promise<undefined>((resolve) => {
+			timer = setTimeout(() => resolve(undefined), STATUS_TOOLS_TIMEOUT_MS);
+		});
+		try {
+			const tools = await Promise.race([names(extension).catch(() => undefined), timeout]);
+			return tools ? [...tools] : undefined;
+		} finally {
+			clearTimeout(timer);
+		}
+	}
+
+	/** Declared sources without a record yet are still installing; a refused file keeps the last good rows. */
+	async #writeStatus(sources: readonly string[]): Promise<void> {
+		const bySource = new Map(this.#records.map((record) => [record.source, record]));
+		const extensions: ExtensionStatusEntry[] = [];
+		for (const source of sources) {
+			const record = bySource.get(source);
+			if (!record) {
+				extensions.push({ source, state: "installing" });
+				continue;
+			}
+			const tools = record.server ? await this.#toolsOf(record.server.extension) : undefined;
+			extensions.push({
+				source,
+				name: record.name,
+				...(record.version ? { version: record.version } : {}),
+				state: record.state,
+				...(record.error ? { error: record.error } : {}),
+				...(tools ? { tools } : {}),
+			});
+		}
+		const status: ExtensionsStatus = {
+			api: EXTENSION_API_VERSION,
+			updatedAt: new Date().toISOString(),
+			declarations: this.declarationsPath,
+			...(this.#fileError ? { fileError: this.#fileError } : {}),
+			extensions,
+		};
+		try {
+			writeJsonAtomic(this.#statusPath, status);
+		} catch (error) {
+			log.info(`could not write ${this.#statusPath}: ${messageOf(error)}`);
 		}
 	}
 

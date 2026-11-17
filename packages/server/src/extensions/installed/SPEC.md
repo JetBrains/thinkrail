@@ -24,6 +24,7 @@ itself; it knows nothing of sessions, the catalog or the wire.
   npm/node_modules/<name>/…                    where pi's installer puts an npm source
   git/<host>/<path>/…                          and a git source
 <data dir>/extensions/installs.json        host-owned: source → { dir: <id>, path: <package root in it> }
+<data dir>/extensions/status.json          host-written, read by agents: the outcome of the last reconcile
 <data dir>/extensions/host/                shims (removed after each load) and an empty discovery folder
 ```
 
@@ -96,6 +97,31 @@ A folder source is never copied: it loads from where it is, and nothing under it
   pi package the usual way — a plain npm/git pi package is therefore fetched twice through the dialog, the
   second time from npm's cache. `adopt` records the install, appends the source to `extensions.json` if
   absent and reconciles; `discard` drops a staged folder.
+- **The status file is how an agent learns the outcome** (the `making-thinkrail-extensions` host skill
+  reads it): a load failure, an incompatible `api` or a refused `extensions.json` is otherwise visible
+  only in Settings and the host log, and an agent has files, not the wire. After every reconcile pass —
+  and after each npm/git install inside one — the runtime atomically rewrites `status.json`:
+
+  ```json
+  { "api": "1.0", "updatedAt": "<ISO time>", "declarations": "<data dir>/extensions.json",
+    "fileError": "<why extensions.json was refused — only then>",
+    "extensions": [{ "source": "<as declared>", "name": "…", "version": "…",
+                     "state": "loaded | failed | incompatible | installing", "error": "…", "tools": ["…"] }] }
+  ```
+
+  One entry per declared source, in declaration order; `installing` is a declared source with no row yet
+  (only npm/git), so a failed install keeps its `failed` row. When the file is refused the entries are
+  the last good rows. `api` is the host's `EXTENSION_API_VERSION`, so an agent can pick a matching SDK
+  before anything is declared — the file is written even with no declarations. `tools` is present for a
+  loaded server half: the names its factories register, from the injected `toolNames` (the catalog's
+  description, bounded by a 2 s wait and omitted when it fails or times out) — a loaded half whose
+  factory throws lists none. `updatedAt` changes on every pass, so an agent that touched
+  `extensions.json` knows when its edit was read. The file is a report, never an input; a failed write is
+  logged and skipped.
+- **The data dir reaches agent sessions** as `THINKRAIL_DATA_DIR`: `createServer` sets it to the resolved
+  `dataDir()` in the host's environment, which pi's bash tool and every child inherit (user terminals
+  drop `THINKRAIL_*`), so an agent finds `extensions.json` in dev, the CLI and the desktop app alike —
+  including a relative override, which would otherwise resolve against the agent's cwd.
 - **Web half URLs** (`assets.ts`): `/extensions/<encodeURIComponent(name)>/<version>-<hash>/<file>`,
   `<hash>` the first 12 hex of a sha-256 over the served files' paths, mtimes and sizes, so a changed file
   — a folder source's edit, an update — is a new URL and the route may answer immutable. `webHalfOf`
@@ -112,7 +138,8 @@ A folder source is never copied: it loads from where it is, and nothing under it
   `resolveExtensionAsset`, `ExtensionAsset`.
 - `InstalledExtensions` is the runtime (`records`, `servers`, `fileError`, `reconcile`, `watch`, `stage`,
   `adopt`, `discard`, `remove`, `update`, `checkUpdates`, `declarationsPath`, `root`);
-  `installedExtensions()` is the host's one runtime, absent until the host starts it.
+  `installedExtensions()` is the host's one runtime, absent until the host starts it. The status file's
+  schema is `ExtensionsStatus` in `runtime.ts`; the file, not the type, is the contract.
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (`DefaultPackageManager`, `SettingsManager`,
   `discoverAndLoadExtensions`, `createAgentSession` for the guard), `typebox` (`Type`, the guard),
   `@thinkrail/extension-api/installed` (the manifest reader), `@thinkrail/extension-api/server` (the
@@ -127,4 +154,7 @@ A folder source is never copied: it loads from where it is, and nothing under it
 Unit tests over disposable temp folders: the declarations reader, the peer prune, the loader (identity
 guard, shim cleanup, env serialization), reconcile (idempotence, malformed file, removal, folder source,
 incompatible, every failure mode, duplicates, offline, stub npm installs, update, staging and adoption)
-and the asset resolver (traversal, unknown extension, wrong file, stale token, links).
+the asset resolver (traversal, unknown extension, wrong file, stale token, links) and the status file
+(every state, tools, `installing` during an install, a refused file, no declarations).
+`skillExample.test.ts` keeps the host skill's worked example honest: its `package.json` passes the
+manifest reader and its server half loads through this loader with the tool it promises.

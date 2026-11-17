@@ -77,8 +77,9 @@ roots — defaults to it, so an installed extension is composed exactly like a b
   stagedSkillsDir?)` (the roots that own an extension's skills: the resolved source roots without a
   staged dir or for an installed extension — never staged — that owner folder with one, nothing for an
   extension without `skillPackages`), `startInstalledExtensions({ dataDir, onChange, npmCommand?, installer? })`
-  (`installedHost.ts`: builds the installed runtime with the built-ins' names reserved and
-  `skillPackageRoots` as its resolver, makes it the host's one, starts the watcher and a background
+  (`installedHost.ts`: builds the installed runtime with the built-ins' names reserved,
+  `skillPackageRoots` as its resolver and the catalog's tool names (`extensionToolNames`, the same
+  memoised description Settings lists) for its status file, makes it the host's one, starts the watcher and a background
   reconcile, and returns its stop). The specifier is kept
   as a string precisely because a descriptor holds functions, which yield no module identity.
 - **Public surface (barrel):** `serverExtensions`, `builtinServerExtensions`, `ServerExtensionEntry`,

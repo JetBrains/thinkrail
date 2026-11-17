@@ -721,7 +721,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   skip chats; and
   `applyGitCeiling()` merges `<dataDir>/chats` into `GIT_CEILING_DIRECTORIES` before the server exists
   (the root created first), so git, `gh`, PTYs and pi's bash inherit a ceiling that stops any walk up
-  out of a chat folder into a repository that happens to enclose the data dir. The container is ensured
+  out of a chat folder into a repository that happens to enclose the data dir; `THINKRAIL_DATA_DIR` is set
+  to the resolved data dir at the same point, so agent shells find it ([[submodule-server-extensions-installed]]). The container is ensured
   at boot. **Older clients:** one visibility policy, `seesChats(protocolVersion)` (`chats.ts`), decides
   what a socket below `CHATS_PROTOCOL_VERSION` may learn — nothing of the container, its chats or their
   sessions. Its welcome, `project.list` and `session.stateList` omit them; `workspace.list` of the

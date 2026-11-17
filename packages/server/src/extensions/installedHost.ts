@@ -1,4 +1,5 @@
 import { logger } from "../log";
+import { extensionToolNames } from "./catalog";
 import {
 	type ExtensionInstaller,
 	InstalledExtensions,
@@ -27,6 +28,7 @@ export function startInstalledExtensions(options: InstalledExtensionsHostOptions
 		reservedNames: () => builtinServerExtensions.map((entry) => entry.extension.name),
 		skillRoots: skillPackageRoots,
 		onChange: options.onChange,
+		toolNames: extensionToolNames,
 		installer: options.installer ?? piExtensionInstaller(options.npmCommand),
 	});
 	setInstalledExtensions(runtime);
