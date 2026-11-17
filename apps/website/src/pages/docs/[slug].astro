@@ -1,0 +1,38 @@
+---
+import { render } from "astro:content";
+import { type Doc, publishedDocs } from "../../docsCollection";
+import DocsLayout from "../../layouts/DocsLayout.astro";
+
+export async function getStaticPaths() {
+	return (await publishedDocs()).map((doc) => ({
+		params: { slug: doc.data.slug },
+		props: { doc },
+	}));
+}
+
+interface Props {
+	doc: Doc;
+}
+
+const { doc } = Astro.props;
+const { Content } = await render(doc);
+---
+
+<DocsLayout title={`${doc.data.title} — ThinkRail Docs`} description={doc.data.description}>
+	<article class="doc-page">
+		<header class="blog-post-header">
+			<h1 class="blog-post-title">{doc.data.title}</h1>
+			<p class="doc-page-lead">{doc.data.description}</p>
+		</header>
+
+		<div class="blog-post-content">
+			<Content />
+		</div>
+
+		<nav class="blog-post-nav">
+			<span></span>
+			<a href="/docs/" class="blog-nav-home">All docs</a>
+			<span></span>
+		</nav>
+	</article>
+</DocsLayout>

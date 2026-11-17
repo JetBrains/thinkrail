@@ -1,5 +1,6 @@
 import { initDownloadThanks } from "./downloadThanks";
 import { deriveEditorTabs } from "./editorTabs";
+import { initExtensionsPage } from "./extensionsPage";
 import { heroDownloadTarget } from "./heroDownload";
 import { initImageZoom } from "./imageZoom";
 import { installShareUrl, isMobileDevice, shareInstallLink } from "./installLinkShare";
@@ -703,3 +704,4 @@ if (mockElements.length > 0) {
 
 initDownloadThanks();
 initImageZoom();
+initExtensionsPage();
