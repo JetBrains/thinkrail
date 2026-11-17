@@ -244,6 +244,8 @@ export interface ServerWelcome {
 	config: AppConfig;
 	/** Voice input state, from `SPEECH_PROTOCOL_VERSION`; later changes arrive on `speech.changed`. */
 	speech?: SpeechStatus;
+	/** Whether the host offers the additional-usage-data preference; absent (older hosts) means it does. */
+	additionalAnalytics?: boolean;
 }
 
 /** A projectless chat: its `kind: "chat"` workspace in the Chats container plus the one session it owns. */

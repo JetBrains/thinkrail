@@ -187,7 +187,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   reconstruct pre-consent work; campaign-only enrichment is inactive while off and restored from its strict
   server record when on without retrying a consumed claim.
   `shutdownAnalytics()` remains a best-effort drain in `stop()` and awaited by graceful shutdown;
-  every capture site lives here, including the existing basic events: `chat_started` in `chatSession.ts#startChatSession`, every chat start's one path (the host's new-chat
+  `server.welcome` carries `additionalAnalytics` from `additionalAnalyticsOffered()`. Capture sites stay
+  wired even for events the analytics event policy currently drops (the module decides what leaves; the
+  host keeps observing), so widening the policy needs no host change.
+  Every capture site lives here, including the existing basic events: `chat_started` in `chatSession.ts#startChatSession`, every chat start's one path (the host's new-chat
   resolution decides `none` for a chat created with no usable model instead of pi's placeholder; otherwise
   the created session's actual model is reported), `message_sent` (via the
   local `trackSend(mode, text)`) after an **accepted** `session.prompt`/`session.steer`/`session.followUp`

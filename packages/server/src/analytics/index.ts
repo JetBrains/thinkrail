@@ -8,6 +8,7 @@ export type {
 	AnalyticsCountBucket,
 	AnalyticsDurationBucket,
 	AnalyticsEvent,
+	AnalyticsEventPolicy,
 	AnalyticsFailureReason,
 	AnalyticsRunOutcome,
 	AnalyticsRunProperties,
@@ -30,10 +31,12 @@ export {
 	bucketDuration,
 	bucketProvider,
 	bucketProviderModel,
+	FULL_EVENT_POLICY,
 	NONE_BUCKET,
 } from "./events";
 export {
 	type AnalyticsOptions,
+	additionalAnalyticsOffered,
 	captureSurveyResponse,
 	type ErrorReport,
 	getAdditionalAnalyticsCapture,

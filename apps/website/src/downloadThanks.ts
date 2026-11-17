@@ -1,5 +1,5 @@
 import type { WebsiteCtaLocation } from "@thinkrail/website-analytics";
-import { captureAnalytics } from "./analytics";
+import { captureAnalytics, websitePostHogEnabled } from "./analytics";
 import {
 	contentKeyForPathname,
 	ctaLocationForElement,
@@ -37,7 +37,9 @@ export function initDownloadThanks(
 	random: () => number = Math.random,
 	responseId: () => string = () => crypto.randomUUID(),
 	storage: () => SurveyCompletionStorage | undefined = browserStorage,
+	postHogEnabled: boolean = websitePostHogEnabled,
 ): void {
+	if (!postHogEnabled) return;
 	const dialog = doc.querySelector<HTMLDialogElement>("[data-download-thanks]");
 	const body = dialog?.querySelector<HTMLElement>("[data-survey-body]");
 	const action = dialog?.querySelector<HTMLButtonElement>("[data-survey-action]");

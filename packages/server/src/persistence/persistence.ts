@@ -796,6 +796,32 @@ export function claimAppInstalled(): boolean {
 	return claimAppInstalledIn(dataDir());
 }
 
+export interface UsageCounters {
+	lastVersion?: string;
+	activeDay?: string;
+	pendingMessages: number;
+}
+
+const USAGE_FILE = "usage.json";
+
+function isUsageCounters(raw: unknown): boolean {
+	if (!isRecord(raw)) return false;
+	return (
+		(raw.lastVersion === undefined || typeof raw.lastVersion === "string") &&
+		(raw.activeDay === undefined || typeof raw.activeDay === "string") &&
+		Number.isInteger(raw.pendingMessages) &&
+		(raw.pendingMessages as number) >= 0
+	);
+}
+
+export function loadUsageCounters(): UsageCounters {
+	return readJson<UsageCounters>(USAGE_FILE, { pendingMessages: 0 }, isUsageCounters);
+}
+
+export function saveUsageCounters(counters: UsageCounters): void {
+	writeJsonAtomic(USAGE_FILE, counters);
+}
+
 export function readAcquisition(now = Date.now()): AcquisitionRecord | undefined {
 	return readAcquisitionIn(dataDir(), now);
 }

@@ -7,14 +7,18 @@ import { ATTRIBUTION_LIFETIME_MS, ensureInstallation } from "../persistence";
 import {
 	type AdditionalAnalyticsEvent,
 	type AnalyticsEvent,
+	type AnalyticsEventPolicy,
 	type BasicAnalyticsEvent,
 	bucketCount,
 	bucketDuration,
 	bucketProvider,
 	bucketProviderModel,
 	CUSTOM_BUCKET,
+	EVENT_POLICY,
+	FULL_EVENT_POLICY,
 } from "./events";
 import {
+	additionalAnalyticsOffered,
 	captureSurveyResponse,
 	getAdditionalAnalyticsCapture,
 	initializeAnalytics,
@@ -22,6 +26,7 @@ import {
 	resetAnalyticsForTests,
 	setAdditionalAnalyticsEnabled,
 	shutdownAnalytics,
+	startAttributionClaim,
 	surveyEndpoint,
 	track,
 } from "./service";
@@ -78,6 +83,7 @@ function boot(
 			channel: "stable",
 			build: "binary",
 			additionalEnabled: false,
+			eventPolicy: DORMANT_POLICY,
 			env: {},
 			fetchImpl: makeFetch(sent),
 			...overrides,
@@ -85,6 +91,23 @@ function boot(
 		(options) => createPostHogSink({ ...options, retryDelayMs: 10 }),
 	);
 }
+
+type LegacyBasicName =
+	| "app_installed"
+	| "app_started"
+	| "chat_started"
+	| "message_sent"
+	| "provider_login";
+const DORMANT_POLICY: AnalyticsEventPolicy = {
+	basic: new Set<LegacyBasicName>([
+		"app_installed",
+		"app_started",
+		"chat_started",
+		"message_sent",
+		"provider_login",
+	]),
+	additional: true,
+};
 
 const BASIC_EVENTS = {
 	app_installed: { name: "app_installed" },
@@ -102,7 +125,16 @@ const BASIC_EVENTS = {
 		params: { provider: "openai-codex", method: "oauth", auth_method: "subscription" },
 	},
 } as const satisfies {
-	[K in BasicAnalyticsEvent["name"]]: Extract<BasicAnalyticsEvent, { name: K }>;
+	[K in LegacyBasicName]: Extract<BasicAnalyticsEvent, { name: K }>;
+};
+const CURRENT_BASIC_EVENTS = {
+	app_updated: { name: "app_updated", params: { previous_version: "1.2.2" } },
+	active_day: { name: "active_day", params: { messages: 3 } },
+} as const satisfies {
+	[K in Exclude<BasicAnalyticsEvent["name"], LegacyBasicName>]: Extract<
+		BasicAnalyticsEvent,
+		{ name: K }
+	>;
 };
 
 const RUN = {
@@ -187,6 +219,8 @@ const RUN_KEYS = ["origin", "workspace_kind", "provider", "model"];
 const CAMPAIGN_KEYS = Object.keys(CAMPAIGN);
 const EXPECTED_KEYS: Record<AnalyticsEvent["name"], string[]> = {
 	app_installed: ENV_KEYS,
+	app_updated: [...ENV_KEYS, "previous_version"],
+	active_day: [...ENV_KEYS, "messages"],
 	app_started: ENV_KEYS,
 	chat_started: [...ENV_KEYS, "provider", "model", "auth_method"],
 	message_sent: [...ENV_KEYS, "mode", "provider", "auth_method"],
@@ -215,14 +249,15 @@ const EXPECTED_KEYS: Record<AnalyticsEvent["name"], string[]> = {
 
 test("every event has exactly its closed properties plus personless transport framing", async () => {
 	const sent: SentPayload[] = [];
-	boot(sent, { additionalEnabled: true });
+	boot(sent, { additionalEnabled: true, eventPolicy: FULL_EVENT_POLICY });
 	for (const event of Object.values(BASIC_EVENTS)) track(event);
+	for (const event of Object.values(CURRENT_BASIC_EVENTS)) track(event);
 	const capture = getAdditionalAnalyticsCapture();
 	expect(capture).not.toBeNull();
 	for (const event of Object.values(ADDITIONAL_EVENTS)) capture?.(event);
 	await shutdownAnalytics();
 	const entries = allEntries(sent);
-	expect(entries).toHaveLength(2 + Object.keys(EXPECTED_KEYS).length);
+	expect(entries).toHaveLength(3 + Object.keys(EXPECTED_KEYS).length);
 	for (const entry of entries) {
 		const expected = EXPECTED_KEYS[entry.event as AnalyticsEvent["name"]];
 		expect(expected).toBeDefined();
@@ -535,7 +570,13 @@ test("campaign-enriched basics stay on the current grant sink while plain basics
 	);
 	const sinks: Array<{ deliveries: OutgoingEvent[]; sending: boolean }> = [];
 	initializeAnalyticsWithSinkFactoryForTests(
-		{ posthogApiKey: TEST_KEY, build: "binary", additionalEnabled: true, env: {} },
+		{
+			posthogApiKey: TEST_KEY,
+			build: "binary",
+			additionalEnabled: true,
+			eventPolicy: DORMANT_POLICY,
+			env: {},
+		},
 		() => {
 			const sink = { deliveries: [] as OutgoingEvent[], sending: true };
 			sinks.push(sink);
@@ -723,6 +764,7 @@ test.each([{}, { posthogApiKey: "" }])(
 	async (key) => {
 		const sent: SentPayload[] = [];
 		initializeAnalytics({
+			eventPolicy: FULL_EVENT_POLICY,
 			appVersion: "0.0.0-dev",
 			channel: "dev",
 			build: "binary",
@@ -849,5 +891,96 @@ test("duration and recovery buckets have fixed boundaries and reject invalid mea
 		"unknown",
 		"unknown",
 		"unknown",
+	]);
+});
+
+const DAY_MS = 86_400_000;
+
+function bootCurrent(
+	sent: SentPayload[],
+	overrides: Partial<Parameters<typeof initializeAnalytics>[0]> = {},
+): void {
+	boot(sent, { eventPolicy: EVENT_POLICY, ...overrides });
+}
+
+test("the current policy sends only installs, updates, activity days, surveys and errors", async () => {
+	const sent: SentPayload[] = [];
+	const opened: string[] = [];
+	bootCurrent(sent, {
+		additionalEnabled: true,
+		openExternal: (url) => {
+			opened.push(url);
+		},
+		attributionSchedule: (run) => run(),
+	});
+	expect(getAdditionalAnalyticsCapture()).toBeNull();
+	setAdditionalAnalyticsEnabled(true);
+	expect(getAdditionalAnalyticsCapture()).toBeNull();
+	startAttributionClaim();
+	track(BASIC_EVENTS.chat_started);
+	track(BASIC_EVENTS.provider_login);
+	track(BASIC_EVENTS.message_sent);
+	expect(captureSurveyResponse({ $survey_id: "survey-1" })).toBe(true);
+	await shutdownAnalytics();
+	expect(allEntries(sent).map((entry) => entry.event)).toEqual([
+		"app_installed",
+		"active_day",
+		"survey sent",
+	]);
+	expect(opened).toEqual([]);
+	expect(existsSync(join(dataDir, "attribution.json"))).toBe(false);
+	expect(additionalAnalyticsOffered()).toBe(false);
+});
+
+test("active_day fires on the first message of each UTC day and carries the messages since the last one", async () => {
+	const sent: SentPayload[] = [];
+	let now = Date.UTC(2026, 10, 16, 23, 0);
+	bootCurrent(sent, { now: () => now });
+	track(BASIC_EVENTS.message_sent);
+	track(BASIC_EVENTS.message_sent);
+	track(BASIC_EVENTS.message_sent);
+	await shutdownAnalytics();
+
+	now += 2 * 60 * 60 * 1000;
+	bootCurrent(sent, { now: () => now });
+	track(BASIC_EVENTS.message_sent);
+	track(BASIC_EVENTS.message_sent);
+	now += 3 * DAY_MS;
+	track(BASIC_EVENTS.message_sent);
+	await shutdownAnalytics();
+
+	const days = allEntries(sent).filter((entry) => entry.event === "active_day");
+	expect(days.map((entry) => entry.properties.messages)).toEqual([1, 3, 2]);
+	expect(allEntries(sent).some((entry) => entry.event === "message_sent")).toBe(false);
+});
+
+test("app_updated fires once per version change, never on a fresh install or a source build", async () => {
+	const sent: SentPayload[] = [];
+	bootCurrent(sent, { appVersion: "1.0.0" });
+	await shutdownAnalytics();
+	bootCurrent(sent, { appVersion: "1.0.0" });
+	await shutdownAnalytics();
+	bootCurrent(sent, { appVersion: "1.1.0" });
+	await shutdownAnalytics();
+	bootCurrent(sent, { appVersion: "1.2.0", build: "source" });
+	await shutdownAnalytics();
+	expect(allEntries(sent).map((entry) => [entry.event, entry.properties.previous_version])).toEqual(
+		[
+			["app_installed", undefined],
+			["app_updated", "1.0.0"],
+		],
+	);
+});
+
+test("an existing install that predates version tracking reports an unknown previous version", async () => {
+	writeFileSync(
+		join(dataDir, "installation.json"),
+		JSON.stringify({ id: "existing", appInstalled: true }),
+	);
+	const sent: SentPayload[] = [];
+	bootCurrent(sent, { appVersion: "2.0.0" });
+	await shutdownAnalytics();
+	expect(allEntries(sent).map((entry) => [entry.event, entry.properties])).toEqual([
+		["app_updated", expect.objectContaining({ previous_version: "unknown", app_version: "2.0.0" })],
 	]);
 });

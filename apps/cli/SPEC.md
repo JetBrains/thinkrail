@@ -42,7 +42,8 @@ entry needs it too: a subcommand never boots the host, so it must not pay for (o
 re-create) the staged asset cache. Otherwise the launch args: `--port` (stable default 24242,
 scans upward to the next free port on collision), `--host` (default `localhost`), `--no-open`,
 `--no-analytics` (**per-run suppression of additional analytics only** — basic events remain on;
-the durable additional-data choice is Settings → Privacy, see [[submodule-server-analytics]]),
+the durable additional-data choice is Settings → Privacy, see [[submodule-server-analytics]]; it changes
+nothing while the current event policy offers no additional tier),
 `--verbose` (debug-level logging — threaded to `bootHost` as `verbose: true`; the log files under
 `<dataDir>/logs` and their env switch `THINKRAIL_LOG_LEVEL` belong to `submodule-server-log`, whose
 module is that variable's single reader — same pattern as `THINKRAIL_NO_ANALYTICS`, so `dev.ts` honors

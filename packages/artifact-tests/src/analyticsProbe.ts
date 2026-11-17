@@ -124,23 +124,22 @@ const EXCEPTION_KEYS = new Set([
 export function assertDesktopLaunch(
 	collected: CollectedEvent[],
 	expected: { app_version: string; channel: string; os: string; arch: string },
-	expectAppInstalled: boolean,
+	installationId?: string,
 ): string {
 	const events = collected.filter((event) => event.event !== "$exception");
 	const exceptions = collected.filter((event) => event.event === "$exception");
-	const expectedNames = expectAppInstalled ? ["app_installed", "app_started"] : ["app_started"];
+	const expectedNames = installationId === undefined ? ["app_installed"] : [];
 	assert(
 		events.map((event) => event.event).join(",") === expectedNames.join(","),
-		`expected ${expectedNames.join(" then ")}, got ${events.map((entry) => entry.event).join(", ")}`,
+		`expected ${expectedNames.join(" then ") || "no usage events"}, got ${events.map((entry) => entry.event).join(", ")}`,
 	);
-	const first = events[0];
-	assert(first !== undefined, "missing analytics event");
+	const id = installationId ?? events[0]?.distinct_id;
+	assert(id !== undefined, "missing analytics event");
 	for (const event of events) {
 		assert(
 			/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(event.distinct_id),
 			"invalid installation UUID",
 		);
-		assert(event.distinct_id === first.distinct_id, "installation UUID changed within launch");
 		for (const [key, value] of Object.entries({ ...expected, build: "desktop" })) {
 			assert(event.properties[key] === value, `unexpected ${key}: ${event.properties[key]}`);
 		}
@@ -158,10 +157,7 @@ export function assertDesktopLaunch(
 		assert(event.properties.$geoip_disable === true, "GeoIP enrichment must be off");
 	}
 	for (const exception of exceptions) {
-		assert(
-			exception.distinct_id === first.distinct_id,
-			"error report used another installation id",
-		);
+		assert(exception.distinct_id === id, "error report used another installation id");
 		assert(
 			exception.properties.$process_person_profile === false,
 			"error report person profile processing must be off",
@@ -171,7 +167,7 @@ export function assertDesktopLaunch(
 		);
 		assert(extra.length === 0, `unexpected $exception properties: ${extra.join(",")}`);
 	}
-	return first.distinct_id;
+	return id;
 }
 
 export async function runDesktopAnalyticsProbe(adapter: ArtifactHostAdapter): Promise<void> {
@@ -225,14 +221,11 @@ export async function runDesktopAnalyticsProbe(adapter: ArtifactHostAdapter): Pr
 					`${scenario.label} made analytics requests`,
 				);
 			} else {
-				const id = assertDesktopLaunch(
+				installationId = assertDesktopLaunch(
 					collector.events.slice(previousEvents),
 					expected,
-					installationId === undefined,
+					installationId,
 				);
-				if (installationId)
-					assert(id === installationId, "installation UUID changed across restarts");
-				installationId = id;
 			}
 			console.log(`analytics OK: ${scenario.label}`);
 		}

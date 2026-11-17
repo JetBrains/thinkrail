@@ -1,4 +1,5 @@
-import type { AppConfig } from "@thinkrail/contracts";
+import type { BrowserContext, Page, WebSocketRoute } from "@playwright/test";
+import { type AppConfig, type ServerWelcome, WS_CHANNELS } from "@thinkrail/contracts";
 import { E2eWire } from "./wire";
 
 export const CONFIRMED_ANALYTICS_CONFIG = {
@@ -26,4 +27,26 @@ export async function seedAnalyticsConsent(
 	} finally {
 		wire.close();
 	}
+}
+
+export function relayWelcome(
+	socket: WebSocketRoute,
+	edit: (welcome: ServerWelcome) => void = (welcome) => {
+		welcome.additionalAnalytics = true;
+	},
+): void {
+	const server = socket.connectToServer();
+	server.onMessage((message) => {
+		const frame = JSON.parse(String(message)) as { channel?: string; data: ServerWelcome };
+		if (frame.channel !== WS_CHANNELS.serverWelcome) {
+			socket.send(message);
+			return;
+		}
+		edit(frame.data);
+		socket.send(JSON.stringify(frame));
+	});
+}
+
+export async function offerAdditionalAnalytics(target: Page | BrowserContext): Promise<void> {
+	await target.routeWebSocket(/\/ws(\?|$)/, (socket) => relayWelcome(socket));
 }

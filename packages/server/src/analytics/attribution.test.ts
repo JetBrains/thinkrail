@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ATTRIBUTION_MAX_POLLS, ATTRIBUTION_POLL_INTERVAL_MS } from "../persistence";
 import { ATTRIBUTION_DEADLINE_MS, runAttributionClaim } from "./attribution";
+import { FULL_EVENT_POLICY } from "./events";
 import {
 	getAdditionalAnalyticsCapture,
 	initializeAnalytics,
@@ -122,6 +123,7 @@ test("a packaged confirmed grant claims once, links once, and persists only norm
 	}) as typeof fetch;
 
 	initializeAnalytics({
+		eventPolicy: FULL_EVENT_POLICY,
 		posthogApiKey: TEST_KEY,
 		build: "binary",
 		additionalEnabled: true,
@@ -209,6 +211,7 @@ test("a packaged confirmed grant claims once, links once, and persists only norm
 	resetAnalyticsForTests();
 	const restartEvents: CapturedEvent[] = [];
 	initializeAnalytics({
+		eventPolicy: FULL_EVENT_POLICY,
 		posthogApiKey: TEST_KEY,
 		build: "binary",
 		additionalEnabled: true,
@@ -274,6 +277,7 @@ test("revocation aborts a never-settling generation and the consumed attempt nev
 	let requests = 0;
 	let opens = 0;
 	initializeAnalytics({
+		eventPolicy: FULL_EVENT_POLICY,
 		posthogApiKey: TEST_KEY,
 		build: "binary",
 		additionalEnabled: true,
@@ -325,6 +329,7 @@ test("redeem activates memory and emits linked when terminal persistence replace
 		throw new Error("unexpected attribution request");
 	}) as typeof fetch;
 	initializeAnalytics({
+		eventPolicy: FULL_EVENT_POLICY,
 		posthogApiKey: TEST_KEY,
 		build: "binary",
 		additionalEnabled: true,
@@ -493,6 +498,7 @@ test("default polling allows a human-scale confirmation window within the claim 
 		throw new Error("redeem must not run");
 	}) as typeof fetch;
 	initializeAnalytics({
+		eventPolicy: FULL_EVENT_POLICY,
 		posthogApiKey: TEST_KEY,
 		build: "desktop",
 		additionalEnabled: true,
@@ -535,6 +541,7 @@ test.each([
 ])("$label skips without consuming the attempt", ({ build, additionalEnabled, opener, env }) => {
 	const scheduled: Array<() => void> = [];
 	initializeAnalytics({
+		eventPolicy: FULL_EVENT_POLICY,
 		posthogApiKey: TEST_KEY,
 		build,
 		additionalEnabled,

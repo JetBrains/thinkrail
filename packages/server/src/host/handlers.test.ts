@@ -41,7 +41,12 @@ import {
 	disposeAllSessions,
 	setSessionManagerFactory,
 } from "../agent";
-import { initializeAnalytics, resetAnalyticsForTests, shutdownAnalytics } from "../analytics";
+import {
+	FULL_EVENT_POLICY,
+	initializeAnalytics,
+	resetAnalyticsForTests,
+	shutdownAnalytics,
+} from "../analytics";
 import { reconcileArtifacts } from "../artifacts";
 import {
 	configureSurveySource,
@@ -951,6 +956,7 @@ function launchSurvey(iteration = 0): void {
 
 function bootSurveyAnalytics(sent: string[], overrides: { mute?: boolean } = {}): void {
 	initializeAnalytics({
+		eventPolicy: FULL_EVENT_POLICY,
 		posthogApiKey: "phc_test",
 		appVersion: "0.0.0-dev",
 		channel: "dev",

@@ -8,8 +8,8 @@ import {
 } from "./analyticsProbe";
 
 const expected = { app_version: "1.2.3", channel: "canary", os: "macos", arch: "arm64" };
-const launch: CollectedEvent = {
-	event: "app_started",
+const installed: CollectedEvent = {
+	event: "app_installed",
 	distinct_id: "fe115e45-f8ed-48d7-b6e8-0f73a7fb54df",
 	properties: {
 		...expected,
@@ -77,20 +77,17 @@ test("analytics probe refuses non-loopback collection", () => {
 	}
 });
 
-test("desktop launch assertion pins first-install and restart personless provenance", () => {
-	const installed = { ...launch, event: "app_installed" };
-	expect(assertDesktopLaunch([installed, launch], expected, true)).toBe(launch.distinct_id);
-	expect(assertDesktopLaunch([launch], expected, false)).toBe(launch.distinct_id);
-	expect(() => assertDesktopLaunch([launch], expected, true)).toThrow(
-		"app_installed then app_started",
-	);
+test("desktop launch assertion pins a first-install event and a silent restart", () => {
+	const id = installed.distinct_id;
+	expect(assertDesktopLaunch([installed], expected)).toBe(id);
+	expect(assertDesktopLaunch([], expected, id)).toBe(id);
+	expect(() => assertDesktopLaunch([], expected)).toThrow("app_installed");
 	expect(() =>
-		assertDesktopLaunch(
-			[installed, launch, { ...launch, event: "setup_state_observed" }],
-			expected,
-			true,
-		),
-	).toThrow("app_installed then app_started");
+		assertDesktopLaunch([installed, { ...installed, event: "app_started" }], expected),
+	).toThrow("expected app_installed");
+	expect(() => assertDesktopLaunch([{ ...installed, event: "app_started" }], expected, id)).toThrow(
+		"no usage events",
+	);
 	for (const key of [
 		"app_version",
 		"channel",
@@ -102,37 +99,35 @@ test("desktop launch assertion pins first-install and restart personless provena
 	]) {
 		expect(() =>
 			assertDesktopLaunch(
-				[{ ...launch, properties: { ...launch.properties, [key]: "wrong" } }],
+				[{ ...installed, properties: { ...installed.properties, [key]: "wrong" } }],
 				expected,
-				false,
 			),
 		).toThrow();
 	}
 	const report: CollectedEvent = {
 		event: "$exception",
-		distinct_id: launch.distinct_id,
-		properties: { ...launch.properties, source: "host_logged", handled: true, scope: "agent" },
+		distinct_id: id,
+		properties: { ...installed.properties, source: "host_logged", handled: true, scope: "agent" },
 	};
-	expect(assertDesktopLaunch([launch, report], expected, false)).toBe(launch.distinct_id);
+	expect(assertDesktopLaunch([installed, report], expected)).toBe(id);
+	expect(assertDesktopLaunch([report], expected, id)).toBe(id);
 	expect(() =>
 		assertDesktopLaunch(
-			[launch, { ...report, properties: { ...report.properties, path: "/Users/x" } }],
+			[report, { ...report, properties: { ...report.properties, path: "/Users/x" } }],
 			expected,
-			false,
+			id,
 		),
 	).toThrow("unexpected $exception properties: path");
+	expect(() => assertDesktopLaunch([{ ...report, distinct_id: "other" }], expected, id)).toThrow(
+		"installation id",
+	);
 	expect(() =>
-		assertDesktopLaunch([launch, { ...report, distinct_id: "other" }], expected, false),
-	).toThrow("installation id");
-	expect(() => assertDesktopLaunch([], expected, false)).toThrow("app_started");
-	expect(() =>
-		assertDesktopLaunch([{ ...launch, distinct_id: "not-a-uuid" }], expected, false),
+		assertDesktopLaunch([{ ...installed, distinct_id: "not-a-uuid" }], expected),
 	).toThrow("UUID");
 	expect(() =>
 		assertDesktopLaunch(
-			[{ ...launch, properties: { ...launch.properties, path: "private" } }],
+			[{ ...installed, properties: { ...installed.properties, path: "private" } }],
 			expected,
-			false,
 		),
 	).toThrow("properties");
 });
@@ -142,11 +137,11 @@ test("loopback collector observes actual HTTP PostHog batches and records invali
 	try {
 		const response = await fetch(`${collector.origin}/batch/`, {
 			method: "POST",
-			body: JSON.stringify({ api_key: "test-key", batch: [launch] }),
+			body: JSON.stringify({ api_key: "test-key", batch: [installed] }),
 		});
 		expect(response.ok).toBe(true);
 		expect(collector.requests).toBe(1);
-		expect(collector.events).toEqual([launch]);
+		expect(collector.events).toEqual([installed]);
 		expect(collector.errors).toEqual([]);
 		const surveys = await fetch(`${collector.origin}/api/surveys/?token=test-key`);
 		expect(await surveys.json()).toEqual({ surveys: [] });

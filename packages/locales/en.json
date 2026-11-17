@@ -2442,6 +2442,7 @@
 	"settings.packages.updateAll": "Update all",
 	"settings.packages.updateAvailable": "Update available",
 	"settings.packages.updateFailed": "Couldn't update {{name}}",
+	"settings.privacy.basicOnly": "ThinkRail sends only counts tied to a random installation ID: installs, updates, and one daily note that you sent messages, with how many. Error reports are sent too: the error type and code and where in ThinkRail's own code it happened. Never prompts, code, files, credentials, error messages, or account identity.",
 	"settings.privacy.changeFailed": "Couldn't change the analytics setting",
 	"settings.privacy.connectToManage": "Connect to the host to manage",
 	"settings.privacy.share": "Share anonymous usage analytics",

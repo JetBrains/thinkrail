@@ -1220,6 +1220,10 @@ a project picker, the prompt hero, and the reused
   decisions survive restarts and change later through Settings. The dialog keeps only the short
   product-usage copy and shared switch; Settings adds the optional outcomes, report dimensions, and
   excluded content. Older hosts retain their legacy privacy control without the new consent dialog.
+  A host that does not offer the preference (`server.welcome.additionalAnalytics: false`, the current
+  analytics policy of [[submodule-server-analytics]]) gets neither the dialog nor the wizard's privacy step —
+  `selectAnalyticsConsentPromptOpen` folds that in, so Get started goes straight to the model list — and
+  Privacy shows only what is sent, without a switch; saved preferences stay untouched for when it returns.
   **`FeedbackSettings`** is the always-present Feedback pane: **Take the survey** (only while a survey is
   launched and unfinished) opens the survey window, beside the Discord link and `info@thinkrail.ai`. Settings
   never draws the questions itself and never calls `feedback.respond`.

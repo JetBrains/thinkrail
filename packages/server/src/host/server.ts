@@ -93,6 +93,7 @@ import {
 } from "../agent";
 import {
 	type AnalyticsOptions,
+	additionalAnalyticsOffered,
 	initializeAnalytics,
 	reportError,
 	shutdownAnalytics,
@@ -279,6 +280,7 @@ export interface CreateServerOptions {
 		| "attributionSchedule"
 		| "attributionRequestTimeoutMs"
 		| "attributionDeadlineMs"
+		| "eventPolicy"
 	>;
 	hostUpdate?: {
 		intervalMs: number;
@@ -570,6 +572,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					...(speech ? { speech: speechStatus() } : {}),
 					...(appVersion ? { appVersion } : {}),
 					...(hostUpdateNotice ? { hostUpdate: hostUpdateNotice } : {}),
+					additionalAnalytics: additionalAnalyticsOffered(),
 				};
 				setupObservation.observe(setupCapture, {
 					project_present: welcome.projects.some((project) => !isChatsContainer(project))

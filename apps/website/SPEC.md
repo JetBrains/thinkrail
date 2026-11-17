@@ -209,6 +209,17 @@ IDE shell.
 
 ## Analytics and consent
 
+**Website PostHog is switched off** (product decision, 2026-11: keep PostHog within its free tier, so
+the website sends nothing for now). The one switch is `websitePostHogEnabled = false` in
+`src/analytics.ts`, passed to [[module-website-analytics]] as `postHogEnabled`. No PostHog loader runs
+and no event of any kind is sent: no pageviews, autocapture, exceptions, `content_viewed`,
+install/download/GitHub/share, or survey events. No journey ID or download bridge ID exists. GTM
+still loads under its unchanged gate (exact production host and a non-empty build key). The event
+delegation and attribution recording still run with nothing to send or record, so downloads, install
+popovers, copy buttons, share links, and navigation behave as before, with or without JS. The
+download thank-you dialog never opens. The rest of this section describes the dormant behaviour that
+setting the constant back to `true` restores.
+
 `src/analytics.ts` is the site-local facade over [[module-website-analytics]]. It supplies the exact
 production hostname `thinkrail.ai`, the build-time `PUBLIC_POSTHOG_PROJECT_KEY` (never committed;
 production `site.yml` passes it from the `website` environment's secret and fails before building
@@ -229,9 +240,11 @@ slug; invalid paths emit no content or action events. Query and fragment strings
 change. Only pages composed with Analytics load it: the authored `src/pages/404.astro` is a standalone,
 analytics-free page served for unknown URLs, and the standalone `/attribution/claim/` page remains
 analytics-free. Each valid document emits one explicit `content_viewed` with its derived key. Build
-validation recursively checks every emitted `.html` document for exactly one PostHog and GTM loader,
-except the explicit analytics-free `404.html` and `/attribution/claim/` outputs, which must contain
-neither loader nor browser analytics. Route-specific layout, artifact, and SEO checks remain focused
+validation recursively checks that the runtime of every emitted `.html` document bundles exactly one
+PostHog and one GTM loader, except the explicit analytics-free `404.html` and `/attribution/claim/`
+outputs, which must bundle neither loader nor browser analytics. This proves composition, not
+activation: the PostHog loader stays bundled while the switch is off, so the site and package tests,
+not the build, prove that it never runs. Route-specific layout, artifact, and SEO checks remain focused
 on their owning routes.
 
 At initialization, the current page touch is recorded only when a consented journey already exists;
@@ -252,7 +265,8 @@ site `header` (the title bar and its install popover); one recognized activation
 creates and stores a canonical per-download bridge ID before `download_started`, and that event carries
 the same ID. A later desktop download replaces only the stored latest bridge ID; a download without
 consent remains bridge-less. A primary click on one of those four downloads also opens the
-thank-you dialog and does not cancel the file. The dialog records the PostHog survey
+thank-you dialog and does not cancel the file; while PostHog is switched off the dialog never opens
+and the download proceeds alone. The dialog records the PostHog survey
 `Thanks for downloading ThinkRail`: `survey shown` when it opens, `survey dismissed` if it
 closes before an answer, and `survey sent` on each Continue or Finish. One
 `$survey_submission_id` ties those sends together, each send repeats the answers collected so
@@ -292,14 +306,18 @@ Each of these events attempts the live navigation touch first, like the existing
 child module carries analytics imports, vendor configuration, or another loader; controls expose only
 the `data-copy` / `data-share-install-link` markers the delegation reads. The one exception is
 `src/downloadThanks.ts`: it owns the survey's step state, so it captures the three survey events itself
-through the site facade `src/analytics.ts`, and adds no vendor configuration or loader.
+through the site facade `src/analytics.ts`, reads the PostHog switch from it, and adds no vendor
+configuration or loader.
 
 The existing GTM container remains Cookiebot's control plane; route-specific downstream tags use a
 `thinkrail.ai` hostname condition plus Page Path, never another GTM container. Sharing the exact apex
 origin means Cookiebot scans and browser consent state apply to all three route families.
 
 Site tests pin production-host identity, disabled hosts, the Cookiebot adapter, every route key and
-stable desktop alias, event derivation, and initializer idempotence. The shared package tests the
+stable desktop alias, event derivation, and initializer idempotence; PostHog behaviour is tested with
+the switch on. The current switched-off state is pinned too: an initializer that loads GTM only,
+with no consent subscription or journey storage, an uncancelled download that sends nothing and
+stores no bridge, and a closed thank-you dialog. The shared package tests the
 PostHog/GTM, journey and capture contracts. The shared contract deliberately has no `posthog-js`
 dependency, pasted bootstrap, or static GTM `noscript` iframe.
 

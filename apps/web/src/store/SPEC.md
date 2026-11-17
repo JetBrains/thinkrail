@@ -87,9 +87,10 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   palette keeps its host scopes and rows) beside **`selectHostReachable`** (connected and this
   connection's welcome — when a host search request may go out).
   **`installWelcomeSnapshot(protocolVersion, projects, recentProjects,
-  config?, hostPlatform?, hostUpdate?, hostAppVersion?, speech?)`** installs protocol + both sorted project views + optional config,
+  config?, hostPlatform?, hostUpdate?, hostAppVersion?, speech?, additionalAnalytics?)`** installs protocol + both sorted project views + optional config,
   host platform, optional host-update lifecycle snapshot, the voice-input **`speech`** status (`null` from a
-  pre-v107 host) + navigation repair and then advances that readiness
+  pre-v107 host), whether the host offers the additional-data preference (**`additionalAnalytics`**,
+  absent ⇒ `true`) + navigation repair and then advances that readiness
   edge in one Zustand write; route validation and capability reads never observe a partial welcome.
   `installSpeechStatus` replaces `speech` whole on each `speech.changed` push.
   `installProjectSnapshot` remains the project-only primitive for focused

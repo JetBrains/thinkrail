@@ -9,6 +9,7 @@ import { useAnalyticsConsent } from "./useAnalyticsConsent";
 export function PrivacySettings() {
 	const t = useT();
 	const supported = useAppStore(selectAnalyticsConsentSupported);
+	const offered = useAppStore((s) => s.additionalAnalytics);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	if (protocolVersion === null) {
 		return (
@@ -22,7 +23,20 @@ export function PrivacySettings() {
 			</div>
 		);
 	}
+	if (!offered) return <BasicAnalyticsSettings />;
 	return supported ? <AdditionalAnalyticsSettings /> : <LegacyPrivacySettings />;
+}
+
+function BasicAnalyticsSettings() {
+	const t = useT();
+	return (
+		<div data-testid="settings-privacy" className={SETTINGS_ROWS_CONTAINER}>
+			<div className="flex flex-col gap-2 pb-8">
+				<h3 className="tr-title-section text-text-default">{t("settings.privacy.title")}</h3>
+				<p className="tr-text-metadata text-text-muted">{t("settings.privacy.basicOnly")}</p>
+			</div>
+		</div>
+	);
 }
 
 function AdditionalAnalyticsSettings() {

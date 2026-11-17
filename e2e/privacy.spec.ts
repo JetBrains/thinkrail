@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { seedAnalyticsConsent } from "./fixtures/analyticsConsent";
+import { offerAdditionalAnalytics, seedAnalyticsConsent } from "./fixtures/analyticsConsent";
 
 test("privacy controls additional data without disabling basics and persists across reload", async ({
 	page,
 	baseURL,
 }) => {
+	await offerAdditionalAnalytics(page);
 	await seedAnalyticsConsent(baseURL, true, true);
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
@@ -39,4 +40,27 @@ test("privacy controls additional data without disabling basics and persists acr
 
 	await page.keyboard.press("Escape");
 	await expect(dialog).toBeHidden();
+});
+
+test("without additional sharing on offer, Privacy only says what is sent", async ({
+	page,
+	baseURL,
+}) => {
+	await seedAnalyticsConsent(baseURL, false, false);
+	try {
+		await page.goto("/");
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await expect(page.getByTestId("analytics-consent-dialog")).toBeHidden();
+
+		await page.getByTestId("open-settings").click();
+		await page.getByTestId("settings-nav-privacy").click();
+		const privacy = page.getByTestId("settings-privacy");
+		await expect(privacy).toContainText("Usage analytics");
+		await expect(privacy).toContainText(
+			"installs, updates, and one daily note that you sent messages, with how many",
+		);
+		await expect(privacy.getByTestId("analytics-toggle")).toHaveCount(0);
+	} finally {
+		await seedAnalyticsConsent(baseURL, false, true);
+	}
 });
