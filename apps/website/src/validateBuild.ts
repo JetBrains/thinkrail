@@ -298,8 +298,9 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		["docs", "/docs/"],
 		["extensions", "/extensions/"],
 	] as const) {
-		if (!pages.landing.includes(`href="${href}"`))
+		if (!pages.landing.includes(`<a class="tree-row page" href="${href}"`)) {
 			failures.push(`landing: rail row missing: ${href}`);
+		}
 		if (!pages[name].includes(`<a class="tree-row page selected" href="${href}"`)) {
 			failures.push(`${name}: its rail row is not selected`);
 		}
@@ -406,10 +407,15 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		"X-Robots-Tag: noindex, nofollow, noarchive",
 		"Content-Security-Policy: frame-ancestors 'none'",
 		"X-Frame-Options: DENY",
-		"/extensions/catalog.json",
-		"Access-Control-Allow-Origin: *",
 	]) {
 		if (!headers.includes(required)) failures.push(`headers: missing ${required}`);
+	}
+	if (
+		!/^\/extensions\/catalog\.json\n(?:[ \t]+.*\n)*?[ \t]+Access-Control-Allow-Origin: \*$/m.test(
+			headers,
+		)
+	) {
+		failures.push("headers: catalog.json is not CORS-open");
 	}
 
 	const redirects = await Bun.file(`${distDirectory}/_redirects`).text();
