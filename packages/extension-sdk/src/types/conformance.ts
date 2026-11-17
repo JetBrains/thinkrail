@@ -4,22 +4,53 @@ import type * as Server from "../server";
 import type * as Resources from "./resources";
 
 type Assignable<From, To> = [From] extends [To] ? true : false;
-type Mutual<A, B> = [Assignable<A, B>, Assignable<B, A>] extends [true, true] ? true : false;
+type SameKeys<A, B> = [Exclude<keyof A, keyof B> | Exclude<keyof B, keyof A>] extends [never]
+	? true
+	: false;
+type Conforms<A, B> = [Assignable<A, B>, Assignable<B, A>, SameKeys<A, B>] extends [
+	true,
+	true,
+	true,
+]
+	? true
+	: false;
 type Expect<T extends true> = T;
 
+type InstalledSettingCopy = "title" | "description";
+
 export type ConformingServer = [
-	Expect<Mutual<Server.ServerExtension, AppServer.ServerExtension>>,
-	Expect<Mutual<Server.ExtensionSessionServices, AppServer.ExtensionSessionServices>>,
-	Expect<Mutual<Server.ExtensionSetting, AppServer.ExtensionSetting>>,
-	Expect<Mutual<Server.InteractiveTool, AppServer.InteractiveTool>>,
-	Expect<Mutual<Server.ToolResponse, AppServer.ToolResponse>>,
+	Expect<Conforms<Server.ServerExtension, AppServer.ServerExtension>>,
+	Expect<Conforms<Server.ExtensionSessionServices, AppServer.ExtensionSessionServices>>,
+	Expect<Conforms<Server.WorkspaceFiles, AppServer.WorkspaceFiles>>,
+	Expect<
+		Conforms<
+			Omit<Server.ExtensionBooleanSetting, InstalledSettingCopy>,
+			Omit<AppServer.ExtensionBooleanSetting, InstalledSettingCopy>
+		>
+	>,
+	Expect<
+		Conforms<
+			Pick<Server.ExtensionBooleanSetting, InstalledSettingCopy>,
+			{ title?: string; description?: string }
+		>
+	>,
+	Expect<Conforms<Server.InteractiveTool, AppServer.InteractiveTool>>,
+	Expect<Conforms<Server.ToolResponse, AppServer.ToolResponse>>,
 ];
 
 export type ConformingResources = [
-	Expect<Mutual<Resources.ResourcePreviewProps, AppResources.ResourcePreviewProps>>,
-	Expect<Mutual<Resources.FramedResourcePreviewProps, AppResources.FramedResourcePreviewProps>>,
-	Expect<Mutual<Resources.ResourcePreviewLayout, AppResources.ResourcePreviewLayout>>,
-	Expect<Mutual<Resources.ResourceScope, AppResources.ResourceScope>>,
+	Expect<Conforms<Resources.ResourcePreviewProps, AppResources.ResourcePreviewProps>>,
+	Expect<Conforms<Resources.FramedResourcePreviewProps, AppResources.FramedResourcePreviewProps>>,
+	Expect<Conforms<Resources.ResourcePreviewLayout, AppResources.ResourcePreviewLayout>>,
+	Expect<Conforms<Resources.ResourceScope, AppResources.ResourceScope>>,
+	Expect<
+		Conforms<
+			Resources.ResourceHost,
+			Pick<AppResources.ResourceHost, "openFile" | "openComparison"> & {
+				markdown: Resources.ResourceHost["markdown"];
+			}
+		>
+	>,
 	Expect<Assignable<AppResources.ResourceHost, Resources.ResourceHost>>,
 	Expect<Assignable<typeof AppResources.ResourcePreview, typeof Resources.ResourcePreview>>,
 	Expect<
