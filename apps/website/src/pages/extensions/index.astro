@@ -1,0 +1,167 @@
+---
+import { loadExtensionCatalog } from "../../extensionCatalogSource";
+import type { ExtensionHalf } from "../../extensionManifest";
+import ShellLayout from "../../layouts/ShellLayout.astro";
+
+const { source, catalog } = await loadExtensionCatalog();
+const extensions = catalog.extensions;
+const halfLabels: Record<ExtensionHalf, string> = { server: "Agent tools", web: "Chat cards" };
+const generatedAt = new Date(catalog.generatedAt);
+const generatedLabel = generatedAt.toLocaleString("en-US", {
+	dateStyle: "medium",
+	timeStyle: "short",
+	timeZone: "UTC",
+});
+const files = [
+	{ href: "/extensions/", label: "README.md" },
+	{ href: "/extensions/catalog.json", label: "catalog.json" },
+];
+const countLabel = `${extensions.length} ${extensions.length === 1 ? "extension" : "extensions"}`;
+---
+
+<ShellLayout
+	title="Extensions — ThinkRail"
+	description="Community extensions for ThinkRail: agent tools and chat cards, listed automatically from npm."
+	workspace="extensions"
+	nav="extensions"
+	files={files}
+>
+	<section class="ext-page" data-extensions data-catalog-source={source}>
+		<header class="blog-index-header">
+			<h1 class="blog-index-title">Extensions</h1>
+			<p class="blog-index-subtitle">Agent tools and chat cards from the community, listed from npm.</p>
+		</header>
+
+		{
+			source === "sample" && (
+				<p class="ext-notice ext-notice-sample" role="note">
+					<strong>Sample data.</strong> This build did not query npm: the cards below come from recorded
+					test responses, not real packages. The live list is at{" "}
+					<a href="https://thinkrail.ai/extensions/">thinkrail.ai/extensions</a>.
+				</p>
+			)
+		}
+
+		<p class="ext-notice">
+			Listings are automatic and unreviewed: every npm package with the <code>thinkrail-extension</code> keyword
+			and a valid manifest appears here within about an hour of publishing. An extension runs code on your
+			machine and in the app, so install the ones you trust. <a href="/docs/build-an-extension/">Build your own</a>.
+		</p>
+
+		{
+			extensions.length === 0 ? (
+				<div class="ext-empty">
+					<svg class="i ext-empty-icon" aria-hidden="true">
+						<use href="#i-blocks" />
+					</svg>
+					<h2 class="ext-empty-title">No extensions yet</h2>
+					<p class="ext-empty-text">Build the first one. The guide goes from an empty folder to a published package that is listed here.</p>
+					<a class="btn btn-primary" href="/docs/build-an-extension/">
+						Build an extension
+					</a>
+				</div>
+			) : (
+				<>
+					<div class="ext-toolbar">
+						<label class="ext-search" data-extension-search-box hidden>
+							<svg class="i" aria-hidden="true">
+								<use href="#i-search" />
+							</svg>
+							<span class="visually-hidden">Search extensions</span>
+							<input
+								type="search"
+								placeholder="Search extensions"
+								autocomplete="off"
+								spellcheck="false"
+								data-extension-search-input
+							/>
+						</label>
+						<p class="ext-count" data-extension-count aria-live="polite">
+							{countLabel}
+						</p>
+					</div>
+					<p class="ext-hint">
+						Copy an install source and paste it into <strong>Settings → Extensions → Install package…</strong> in
+						ThinkRail.
+					</p>
+					<div class="ext-grid">
+						{extensions.map((entry) => (
+							<article
+								class="ext-card"
+								data-extension-search={[entry.title, entry.name, entry.description, entry.author]
+									.filter(Boolean)
+									.join(" ")
+									.toLowerCase()}
+							>
+								{entry.image && (
+									<div class="ext-card-media">
+										<svg class="i ext-card-placeholder" aria-hidden="true">
+											<use href="#i-blocks" />
+										</svg>
+										<img
+											class="ext-card-image"
+											src={entry.image}
+											alt=""
+											width="640"
+											height="360"
+											loading="lazy"
+											decoding="async"
+											fetchpriority="low"
+											referrerpolicy="no-referrer"
+										/>
+									</div>
+								)}
+								<div class="ext-card-body">
+									<h2 class="ext-card-title">{entry.title ?? entry.name}</h2>
+									<p class="ext-card-meta">
+										{entry.title && <code class="ext-card-name">{entry.name}</code>}
+										<span>v{entry.version}</span>
+									</p>
+									{entry.description && <p class="ext-card-description">{entry.description}</p>}
+									{entry.author && <p class="ext-card-author">by {entry.author}</p>}
+									<ul class="ext-card-halves" aria-label="Contributes">
+										{entry.halves.map((half) => (
+											<li class="blog-tag">{halfLabels[half]}</li>
+										))}
+									</ul>
+									<div class="install-line ext-card-install">
+										<code class="ext-card-source">{entry.install}</code>
+										<button
+											type="button"
+											class="copy-btn"
+											data-copy={entry.install}
+											aria-label={`Copy install source ${entry.install}`}
+										>
+											<svg class="i" aria-hidden="true">
+												<use href="#i-copy" />
+											</svg>
+											<svg class="i i-done" aria-hidden="true">
+												<use href="#i-check" />
+											</svg>
+										</button>
+									</div>
+									<p class="ext-card-links">
+										<a href={entry.npm}>npm</a>
+										{entry.repository && (
+											<a href={entry.repository} rel="ugc nofollow">
+												Repository
+											</a>
+										)}
+									</p>
+								</div>
+							</article>
+						))}
+					</div>
+					<p class="ext-no-match" data-extension-no-match hidden>
+						No extension matches your search.
+					</p>
+				</>
+			)
+		}
+
+		<p class="ext-footnote">
+			Catalog generated <time datetime={catalog.generatedAt}>{generatedLabel} UTC</time> ·
+			<a href="/extensions/catalog.json">catalog.json</a>
+		</p>
+	</section>
+</ShellLayout>
