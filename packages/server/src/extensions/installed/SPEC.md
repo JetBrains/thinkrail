@@ -131,7 +131,8 @@ A folder source is never copied: it loads from where it is, and nothing under it
   - `scripts/extensions.mjs` (plain Node, no dependencies) is the one writer it uses: `add` / `reload` /
     `remove` rewrite `extensions.json` atomically with the host's rules (other keys kept, a source
     compared after `~` / `file://` expansion, a file that does not parse refused with exit 2), then wait
-    for a newer `status.json` and print the entry (exit 0 only for `loaded`). `reload` touches the
+    for a newer `status.json`; `add` / `reload` print the entry (exit 0 only for `loaded`), `remove`
+    returns once the entry is gone. `reload` touches the
     folder's `package.json`, because a folder reloads only when its fingerprint changes and an edited
     non-entry server file is not in it;
   - installs use `npm install --omit=peer` and an `.npmrc` with `omit=peer`: a plain install pulls pi
