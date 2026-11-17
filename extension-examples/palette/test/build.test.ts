@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import * as React from "react";
 import * as jsxRuntime from "react/jsx-runtime";
@@ -8,13 +9,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import packageJson from "../package.json" with { type: "json" };
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
-const BIN = join(ROOT, "node_modules/.bin/thinkrail-extension");
-const SHARED = JSON.parse(
-	readFileSync(
-		join(ROOT, "node_modules/@thinkrail/extension-sdk/assets/shared-modules.json"),
-		"utf8",
-	),
-) as { api: string; modules: Record<string, string[]> };
+const SDK = dirname(
+	createRequire(import.meta.url).resolve("@thinkrail/extension-sdk/package.json"),
+);
+const SHARED = JSON.parse(readFileSync(join(SDK, "assets/shared-modules.json"), "utf8")) as {
+	api: string;
+	modules: Record<string, string[]>;
+};
 
 interface WebHalf {
 	name: string;
@@ -31,11 +32,16 @@ let bundle = "";
 let stylesheet = "";
 
 beforeAll(() => {
-	const result = Bun.spawnSync([BIN, "build", "--prefix", "palette"], {
-		cwd: ROOT,
-		stdout: "pipe",
-		stderr: "pipe",
-	});
+	const command = packageJson.scripts.build.split(" ");
+	expect(command.slice(0, 2)).toEqual(["thinkrail-extension", "build"]);
+	const result = Bun.spawnSync(
+		[process.execPath, join(SDK, "bin/thinkrail-extension.js"), ...command.slice(1)],
+		{
+			cwd: ROOT,
+			stdout: "pipe",
+			stderr: "pipe",
+		},
+	);
 	expect(result.stderr.toString()).toBe("");
 	expect(result.exitCode).toBe(0);
 	bundle = readFileSync(join(ROOT, packageJson.thinkrail.web), "utf8");

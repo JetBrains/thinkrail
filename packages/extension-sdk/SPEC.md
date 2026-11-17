@@ -36,7 +36,8 @@ private and unchanged. It imports no pi value at runtime.
   promise, together with the implicit contract the installed-extensions section lists (TooltipProvider,
   locale store, portals, `html[data-theme]`, semantic variables and utility names, spacing/radius scales,
   typography classes, Tailwind major and layer order, React major).
-- `bin` `thinkrail-extension build [--prefix <a-z>] [--entry <file>] [--css <file>] [--cwd <dir>]
+- `bin` `thinkrail-extension` (`bin/thinkrail-extension.js`, a committed launcher importing
+  `dist/cli.js`, so a workspace install links it before the SDK is built): `thinkrail-extension build [--prefix <a-z>] [--entry <file>] [--css <file>] [--cwd <dir>]
   [--no-minify]`; `./theme.css` (the theme file) and `assets/extension.css` (the stylesheet template).
 - Versioning: the package's `major.minor` is the extension API it builds (`EXTENSION_API_VERSION` in
   `src/shared.ts`); patch releases change no promise. The first changeset is a major bump from `0.0.0`
@@ -101,15 +102,15 @@ private and unchanged. It imports no pi value at runtime.
   assets — `extension-api`, `ui`, `resource-renderers`, `contracts`, `locales`, React. Shipped code uses
   `node:` builtins and standard ESM only.
 - **Forbidden:** importing the host (`server`, `shared`, `apps/*`); a runtime import of any private
-  package; pi values. Nothing in `apps/*` or `packages/server` imports the SDK. Enforced by
-  `scripts/check-module-boundaries.ts`.
+  package; pi values. Nothing in `apps/*` or `packages/server` imports the SDK. Planned: enforced by
+  `scripts/check-module-boundaries.ts` once the boundary wiring of this delivery lands.
 
 ## Release and verification
 
 Published through the repository's Changesets / npm Trusted Publishing flow with the portable pi packages
 ([[module-pi-extensions]] § Release; the first version needs the manual bootstrap publish). Gates:
 package tests (`bun test`: manifest validation, the build's bundle/stylesheet/runtime check and
-rejections, the CLI, asset drift); `typecheck` (including conformance); and
-`bun run check:extension-packages`, which packs the SDK and the samples, installs the tarballs into a temp
+rejections, the CLI, asset drift); `typecheck` (including conformance); and, planned with the
+publishing wiring of this delivery, `bun run check:extension-packages`, which packs the SDK and the samples, installs the tarballs into a temp
 fixture outside the repository with npm, type-checks and builds a tiny extension there under Node and
 under Bun, and asserts the bundle has no React or UI-kit code and the stylesheet only prefixed utilities.

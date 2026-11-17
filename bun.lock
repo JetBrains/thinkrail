@@ -204,7 +204,7 @@
       "name": "@thinkrail/extension-sdk",
       "version": "0.0.0",
       "bin": {
-        "thinkrail-extension": "./dist/cli.js",
+        "thinkrail-extension": "./bin/thinkrail-extension.js",
       },
       "dependencies": {
         "@tailwindcss/node": "catalog:",

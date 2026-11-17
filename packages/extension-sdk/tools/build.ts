@@ -51,7 +51,6 @@ async function javascript(): Promise<void> {
 		output: {
 			dir: dist,
 			format: "esm",
-			banner: (chunk) => (chunk.name === "cli" ? "#!/usr/bin/env node" : ""),
 			chunkFileNames: "chunks/[name]-[hash].js",
 		},
 		write: true,

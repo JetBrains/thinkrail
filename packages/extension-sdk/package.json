@@ -23,9 +23,10 @@
 		"node": ">=22.19"
 	},
 	"bin": {
-		"thinkrail-extension": "./dist/cli.js"
+		"thinkrail-extension": "./bin/thinkrail-extension.js"
 	},
 	"files": [
+		"bin",
 		"dist",
 		"assets",
 		"README.md",
