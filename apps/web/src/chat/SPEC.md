@@ -709,7 +709,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   card uses both and hides the open action when there is no provider.
   `openProviderSettings()` (Settings › Providers) is supplied by `ChatView` on every host — the MCP
   cards' provider-backed sign-in and the subscription-limit `ErrorTurn` use it. `disableServerFallback()` is supplied only
-  from `SERVER_FALLBACK_PROTOCOL_VERSION` (v111) and only consumed by the rejected-fallbacks `ErrorTurn`. The optional MCP actions —
+  from `SERVER_FALLBACK_PROTOCOL_VERSION` (v125) and only consumed by the rejected-fallbacks `ErrorTurn`. The optional MCP actions —
   `readMcpOutput(toolCallId)` (`mcp.readOutput` for this chat) and `openMcpSettings()` (Settings › MCP
   servers) — are supplied (through `ChatTranscript`'s provider) only on an MCP-capable host;
   without them (older host, the plan page's provider, or `null`) the MCP cards hide Full output and Sign in
