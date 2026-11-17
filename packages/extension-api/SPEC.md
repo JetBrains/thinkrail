@@ -53,7 +53,8 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   its artifact index and never learns a tool's argument shape itself; a failed call counts for nothing.
 - `ToolRegistrationOptions.composerSuggestions` (`ComposerSuggestionsReader`, `(args, result) =>
   readonly string[]`) marks a tool whose call carries **next messages for the user**. The reader is pure:
-  it pulls the strings out of a call's arguments and result. When such a call ends a finished turn, the
+  it pulls the strings out of a call's arguments and result, distinct and best first (the chat keys chips
+  by text and shows at most nine, one per key). When such a call ends a finished turn, the
   chat shows the strings as one-click chips above the composer. The decision of *when* is the chat's
   ([[submodule-web-chat]]). Like `interactive`, the host learns which tools qualify only from this
   declaration. First consumer: [[module-ext-next-steps]].

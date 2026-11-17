@@ -62,7 +62,8 @@ draws its own chips.
 ## Verification
 
 Package tests cover:
-- normalization and `terminate`;
+- normalization (including the nine-item cap) and `terminate`;
+- an embedder's `guidance` replacing only what it names;
 - the branch rule, including skipped bookkeeping entries;
 - the row's lifecycle through a fake pi: settle shows it, Alt+N sends and clears it, abort and the next
   run clear it, resume restores it, and RPC mode never shows it;

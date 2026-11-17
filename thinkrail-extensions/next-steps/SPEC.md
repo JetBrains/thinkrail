@@ -75,9 +75,11 @@ They show as chips above the composer. A click (or Alt+N) sends one as the user'
 
 ## Verification
 
-Package tests cover the descriptor shape and that it composes the published factory, plus the web
-reader. The tool's own behavior is tested in [[module-pi-next-steps]].
-Chat tests cover the derivation and chips. `e2e/next-steps.spec.ts` covers seeded transcripts: chips,
-reload, click keeps the draft, Alt+N focus scope, and the off switch. `e2e/next-steps.live.spec.ts`
+Package tests cover the descriptor shape and that it composes the published factory with ThinkRail's
+appended guideline, plus the web reader. The tool's own behavior is tested in [[module-pi-next-steps]].
+Chat tests cover the derivation, the chips, their local keys and the done outcome of a reloaded round.
+`e2e/next-steps.spec.ts` covers seeded transcripts: chips, reload (chips and the round's done status),
+click keeps the draft and leaves focus in the input, Alt+N from the input and from the conversation
+but not outside the chat, Shift+click and Shift+Alt+N into the input, and the off switch. `e2e/next-steps.live.spec.ts`
 (`@agent`) asks a real agent, explicitly, to suggest next steps after an edit, then checks that the
 chips appear and a click sends one. Unprompted reliability is deliberately not asserted (see above).

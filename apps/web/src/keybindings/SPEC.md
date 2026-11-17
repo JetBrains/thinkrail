@@ -182,7 +182,8 @@ binding does.
   `composer` and `transcript` include: the chips act anywhere in the chat's input or conversation, and a
   conflict inside either element is ranked there ([[submodule-web-chat]], *Composer suggestions*). On
   every platform, Option included: the chat consumes the press only while that chip is shown, and a
-  layout that types a needed character with Option rebinds.
+  layout that types a needed character with Option rebinds. Unconfirmed: Windows' Alt+Shift input-language
+  hotkey is assumed not to fire while a digit is pressed with it.
 - **Physical keys everywhere:** local letters match `code` (caps show US positions; Dvorak and Colemak
   users rebind). A typing local chord (no Mod/Ctrl/Alt, not Escape, not an F-key — `isTypingChord`)
   never matches in text entry; `Shift+Escape` or `Mod+Enter` still do.
