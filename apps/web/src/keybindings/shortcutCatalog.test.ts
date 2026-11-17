@@ -152,6 +152,17 @@ describe("the shortcut catalog", () => {
 		expect(labels(group, "focus.group")?.slice(0, 3)).toEqual(["Ctrl+1", "Ctrl+Alt+2", "Ctrl+3"]);
 	});
 
+	test("shows the suggestion keys as one range row until one of them is rebound", () => {
+		expect(labels(rowsFor(false, LINUX), "suggestions.send")).toEqual(["Alt+1–9"]);
+		expect(labels(rowsFor(false, MAC), "suggestions.send")).toEqual(["⌥1–9"]);
+		const rebound = rowsFor(false, LINUX, { overrides: { "suggestions.send2": ["Alt+KeyQ"] } });
+		expect(labels(rebound, "suggestions.send")?.slice(0, 3)).toEqual(["Alt+1", "Alt+Q", "Alt+3"]);
+		expect(actsIn(resolveKeybindings({ platform: LINUX }), "suggestions")).toEqual([
+			"transcript",
+			"composer",
+		]);
+	});
+
 	test("carries a losing chord as a conflict with its winner, not as an active chord", () => {
 		const rows = rowsFor(false, LINUX, {
 			extensions: [

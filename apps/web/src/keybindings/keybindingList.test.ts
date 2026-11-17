@@ -88,6 +88,20 @@ describe("the keybinding list", () => {
 		);
 	});
 
+	test("splits the suggestion keys into one rebindable row per chip, in the chat's shared scope", () => {
+		const sends = list().entries.filter(({ command }) => command.startsWith("suggestions.send"));
+		expect(
+			sends.map(({ command, title, position, scope }) => [command, title, position, scope]),
+		).toEqual(
+			Array.from({ length: 9 }, (_, index) => [
+				`suggestions.send${index + 1}`,
+				"shortcuts.suggestions.sendOne",
+				index + 1,
+				"suggestions",
+			]),
+		);
+	});
+
 	test("element keys are locked rows with their display labels; desktop rows only on the desktop", () => {
 		const firstLast = entry(list(), "trees.firstLast");
 		expect([firstLast?.locked, firstLast?.scope]).toEqual([true, "trees"]);

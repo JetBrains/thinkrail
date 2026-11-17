@@ -31,6 +31,9 @@ match nor conflict, and registry order decides between two extensions' defaults.
 scope lacks the extension's `name.` prefix, and the tests pin that every bundled command has it.
 `webOnlyExtensions(serverNames)` is the titled entries without tool renderers that the server catalog lacks; Settings → Extensions
 lists them under the same switch ([[module-thinkrail-extensions]]).
+Composer suggestions are the one *tool-registered* affordance the switch hides: each registration carries
+its extension's `name`, so the chat hides a switched-off extension's chips while its past rows keep
+rendering ([[submodule-web-chat]]).
 
 ## Boundary
 
