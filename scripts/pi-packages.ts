@@ -12,14 +12,20 @@ export interface PiPackage {
 
 export const repoRoot = resolve(import.meta.dir, "..");
 
-export function publishablePiPackages(): PiPackage[] {
-	const base = join(repoRoot, "pi-extensions");
-	if (!existsSync(base)) return [];
+export const BUN_ONLY = [
+	/\bBun\./,
+	/from\s+["']bun(?::|["'])/,
+	/import\s*\(\s*["']bun:/,
+	/import\.meta\.(?:dir|require)\b/,
+];
+
+export const EXTENSION_SDK_DIR = join(repoRoot, "packages", "extension-sdk");
+
+function publishableIn(dirs: string[]): PiPackage[] {
 	const packages: PiPackage[] = [];
-	for (const entry of readdirSync(base, { withFileTypes: true })) {
-		const dir = join(base, entry.name);
+	for (const dir of dirs) {
 		const manifestPath = join(dir, "package.json");
-		if (!entry.isDirectory() || !existsSync(manifestPath)) continue;
+		if (!existsSync(manifestPath)) continue;
 		const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
 			name: string;
 			version: string;
@@ -37,6 +43,25 @@ export function publishablePiPackages(): PiPackage[] {
 		});
 	}
 	return packages;
+}
+
+function childDirs(base: string): string[] {
+	if (!existsSync(join(repoRoot, base))) return [];
+	return readdirSync(join(repoRoot, base), { withFileTypes: true })
+		.filter((entry) => entry.isDirectory())
+		.map((entry) => join(repoRoot, base, entry.name));
+}
+
+export function publishablePiPackages(): PiPackage[] {
+	return publishableIn(childDirs("pi-extensions"));
+}
+
+export function publishableExtensionPackages(): PiPackage[] {
+	return publishableIn([EXTENSION_SDK_DIR, ...childDirs("extension-examples")]);
+}
+
+export function publishablePackages(): PiPackage[] {
+	return [...publishablePiPackages(), ...publishableExtensionPackages()];
 }
 
 export function dependenciesFirst(packages: PiPackage[]): PiPackage[] {

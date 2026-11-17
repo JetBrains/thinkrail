@@ -109,10 +109,25 @@ private and unchanged. It imports no pi value at runtime.
 
 ## Release and verification
 
-Published through the repository's Changesets / npm Trusted Publishing flow with the portable pi packages
-([[module-pi-extensions]] § Release; the first version needs the manual bootstrap publish). Gates:
-package tests (`bun test`: manifest validation, the build's bundle/stylesheet/runtime check and
-rejections, the CLI, asset drift); `typecheck` (including conformance); and, planned with the
-publishing wiring of this delivery, `bun run check:extension-packages`, which packs the SDK and the samples, installs the tarballs into a temp
-fixture outside the repository with npm, type-checks and builds a tiny extension there under Node and
-under Bun, and asserts the bundle has no React or UI-kit code and the stylesheet only prefixed utilities.
+Released with the portable pi packages ([[module-pi-extensions]] § Release): `scripts/pi-packages.ts`
+lists this package and every public `extension-examples/*` package as publishable (dependencies first, so
+the SDK precedes a sample), and `.github/workflows/release-pi-packages.yml` runs the gate below and builds
+the SDK before `release:publish`, since a sample's `prepack` builds with the SDK's `dist/`. Each package
+needs the manual bootstrap publish (`bun run release:pack extension-sdk`, `… palette`) before Trusted
+Publishing can take over. `bun pm pack` runs `prepack` without `node_modules/.bin` on `PATH`, so a sample's
+`prepack` is `npm run build`.
+
+Gates:
+
+- `bun test` in the package — manifest validation, the build's bundle, stylesheet, runtime check and
+  rejections, the CLI, asset drift; `typecheck`, including the conformance types.
+- `bun run check:extension-packages` (`scripts/check-extension-packages.ts`, CI job `pi-packages`) — packs
+  the SDK and the samples with `bun pm pack`, checks each tarball (no tests or repository sources, no
+  `workspace:` / `catalog:` versions, no Bun-only API in shipped JavaScript, every `bin` / `exports` /
+  manifest path present, a sample pinned to this SDK version without pi or typebox as dependencies), then
+  writes a tiny extension into a temp folder **outside the repository** that uses every shared module,
+  installs the tarballs and the catalog's React, types, pi and typebox there with npm, type-checks it
+  with the catalog TypeScript and TypeScript 5.9, builds it under Node and under Bun (identical output),
+  asserts each bundle — the sample's packed one too — has no React or UI-kit code, loads inside a fake
+  1.0 host and refuses a missing host and another major, that each stylesheet holds only its prefix's
+  utilities, and that each server half imports to a descriptor under Bun.

@@ -39,7 +39,7 @@
 	},
 	"scripts": {
 		"build": "thinkrail-extension build --prefix palette",
-		"prepack": "thinkrail-extension build --prefix palette",
+		"prepack": "npm run build",
 		"test": "bun test",
 		"typecheck": "tsc --noEmit"
 	},

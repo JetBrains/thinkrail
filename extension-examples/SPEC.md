@@ -34,8 +34,8 @@ npm name `@thinkrail/example-extension-<name>` under our scope — deliberately 
 built-ins' `@thinkrail/ext-*` pattern — directory `extension-examples/<name>/`. The descriptor `name` on
 both halves equals the package name, the extension's identity. A sample is published like the portable pi
 packages ([[module-pi-extensions]] § Release): `version: 0.0.0` until its first changeset, `files`
-whitelisting the server source and the built `dist/`. Its web output is built in `prepack` and in its
-tests, never committed. `turbo.json` in the package makes `typecheck` and `test` wait for the SDK's build,
+whitelisting the server source and the built `dist/`. Its web output is built in `prepack` (`npm run build`, because `bun pm pack` runs lifecycle scripts
+without `node_modules/.bin` on `PATH`) and in its tests, never committed. `turbo.json` in the package makes `typecheck` and `test` wait for the SDK's build,
 because the SDK's declarations and bin are build outputs.
 
 ## Members
