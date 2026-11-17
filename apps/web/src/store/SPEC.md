@@ -92,6 +92,12 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   pre-v107 host) + navigation repair and then advances that readiness
   edge in one Zustand write; route validation and capability reads never observe a partial welcome.
   `installSpeechStatus` replaces `speech` whole on each `speech.changed` push.
+  **`prBabysit`** maps a workspace id to the host's PR babysit session; `installPrBabysitState` replaces
+  (or, on `null`, drops) one entry from a `prBabysit.get` answer, an action's answer, or a
+  `prBabysit.changed` push — the host's state is authoritative, never patched locally.
+  `prBabysitConfig` mirrors `AppConfig.prBabysit` through `normalizePrBabysitConfig`. Selectors:
+  `selectPrBabysit`, `selectPrBabysitSupported`, `prBabysitCounts` (queued/working fixes, open
+  independent findings) and `isOpenPrBabysitItem`.
   `installProjectSnapshot` remains the project-only primitive for focused
   callers. **`projects`** is the open rail in the host's order (`compareProjectRank` over `Project.rank`, so
   every repository listing and fallback follows the user's arrangement), while **`recentProjects`** is the

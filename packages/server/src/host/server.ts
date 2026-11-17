@@ -21,6 +21,7 @@ import {
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
+	PR_BABYSIT_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
 	SPEECH_SOCKET_ROUTE,
@@ -215,6 +216,12 @@ import {
 import { HeldSnapshots, terminalsMayResume } from "./heldSnapshots";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
+import {
+	disposePrBabysit,
+	observePrBabysitSessionEvent,
+	prBabysitEngine,
+	setPrBabysitPublisher,
+} from "./prBabysit";
 import {
 	additionalCapture,
 	applyAdditionalAnalyticsSettings,
@@ -555,6 +562,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					ws.subscribe(WS_CHANNELS.fontsChanged);
 				const speech = ws.data.protocolVersion >= SPEECH_PROTOCOL_VERSION;
 				if (speech) ws.subscribe(WS_CHANNELS.speechChanged);
+				if (ws.data.protocolVersion >= PR_BABYSIT_PROTOCOL_VERSION)
+					ws.subscribe(WS_CHANNELS.prBabysitChanged);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform
@@ -1021,6 +1030,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const stopThemesWatch = watchUserThemes({ onChange: nudge(WS_CHANNELS.themesChanged) });
 	const stopFontsWatch = watchUserFonts({ onChange: nudge(WS_CHANNELS.fontsChanged) });
 	setSpeechPublisher((status) => publishScoped(WS_CHANNELS.speechChanged, status));
+	setPrBabysitPublisher((event) =>
+		publishScoped(WS_CHANNELS.prBabysitChanged, event, { workspaceId: event.workspaceId }),
+	);
+	prBabysitEngine().resume();
 	void initSpeech().catch((err) => log.warn("voice input state could not be read", err));
 	setWatchPublisher(publishFsChanged);
 	setSkillPathClassifier(isProjectSkillPath);
@@ -1159,6 +1172,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	});
 	setSessionPublisher((payload, workspaceId) => {
 		runObservation.observe(payload.sessionId, payload.event);
+		observePrBabysitSessionEvent(payload.sessionId, payload.event);
 		observeContinuation(payload.sessionId, payload.event);
 		void turnTracker.observe(payload.sessionId, payload.event);
 		const artifactEvent = artifactSessionEvent(payload.sessionId, payload.event);
@@ -1265,6 +1279,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		stopThemesWatch();
 		stopFontsWatch();
 		stopSpeechInstall();
+		disposePrBabysit();
+		setPrBabysitPublisher(null);
 		void stopEngine();
 		disposeAllSessions();
 		for (const timer of reapTimers.values()) clearTimeout(timer);

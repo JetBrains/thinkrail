@@ -1,6 +1,7 @@
 import type { KeybindingOverrides } from "./keybindingChord";
 import type { MatchTier } from "./match";
 import type { SessionState, ThinkingLevel, WireModel } from "./piProtocol";
+import { DEFAULT_PR_BABYSIT_CONFIG, type PrBabysitConfig } from "./prBabysit";
 
 export interface SessionStateRecord {
 	sessionId: string;
@@ -1593,6 +1594,8 @@ export interface AppConfig extends ThemePreference {
 	fontWeightOffset: number;
 	/** The user's chords by command id, replacing its defaults; `[]` unbinds it, an absent id keeps them. */
 	keybindings: KeybindingOverrides;
+	/** PR Babysit & Independent Review defaults a babysit session snapshots when it starts. */
+	prBabysit: PrBabysitConfig;
 }
 
 export type ExtensionSettingValues = Record<string, Record<string, boolean>>;
@@ -1636,9 +1639,11 @@ export function isSkillGroupEnabled(
 export type AppConfigUpdate = Partial<
 	Omit<
 		AppConfig,
-		"defaultModel" | "defaultEffort" | "reviewModel" | "reviewEffort" | "recentModels"
+		"defaultModel" | "defaultEffort" | "reviewModel" | "reviewEffort" | "recentModels" | "prBabysit"
 	>
 > & {
+	/** Merged over the stored value field by field. */
+	prBabysit?: Partial<PrBabysitConfig>;
 	defaultModel?: WireModel | null;
 	defaultEffort?: ThinkingLevel | null;
 	reviewModel?: WireModel | null;
@@ -1952,6 +1957,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	codeLigatures: false,
 	fontWeightOffset: FONT_WEIGHT_OFFSET.default,
 	keybindings: {},
+	prBabysit: DEFAULT_PR_BABYSIT_CONFIG,
 };
 
 export type FontSettings = Pick<

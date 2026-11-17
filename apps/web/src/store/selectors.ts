@@ -16,8 +16,11 @@ import {
 	type McpServerResourceSummary,
 	MODEL_PICKER_PROTOCOL_VERSION,
 	ONBOARDING_PROTOCOL_VERSION,
+	PR_BABYSIT_PROTOCOL_VERSION,
 	PROJECT_CLONE_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
+	type PrBabysitItem,
+	type PrBabysitSessionState,
 	type Project,
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	type ResourceKind,
@@ -1510,4 +1513,44 @@ export function selectPickerModels(
 		(model) =>
 			!hidden.some((h) => sameModel(h, model)) || keep.some((kept) => sameModel(kept, model)),
 	);
+}
+
+export function selectPrBabysitSupported(state: { protocolVersion: number | null }): boolean {
+	return state.protocolVersion !== null && state.protocolVersion >= PR_BABYSIT_PROTOCOL_VERSION;
+}
+
+export function selectPrBabysit(
+	state: { prBabysit: Readonly<Record<string, PrBabysitSessionState>> },
+	workspaceId: string,
+): PrBabysitSessionState | null {
+	return Object.hasOwn(state.prBabysit, workspaceId)
+		? (state.prBabysit[workspaceId] ?? null)
+		: null;
+}
+
+const OPEN_FINDING_STATUSES: ReadonlySet<PrBabysitItem["status"]> = new Set([
+	"pending_review_approval",
+	"queued",
+	"working",
+	"needs_human",
+]);
+
+/** The topbar pill's counts: fixes queued or running, and independent findings still open. */
+export function prBabysitCounts(session: PrBabysitSessionState | null): {
+	fixes: number;
+	findings: number;
+} {
+	if (!session) return { fixes: 0, findings: 0 };
+	let fixes = 0;
+	let findings = 0;
+	for (const item of session.items) {
+		if (item.status === "queued" || item.status === "working") fixes++;
+		if (item.source === "independent_review" && OPEN_FINDING_STATUSES.has(item.status)) findings++;
+	}
+	return { fixes, findings };
+}
+
+/** Items still asking for something: not resolved, dismissed, or pushed. */
+export function isOpenPrBabysitItem(item: PrBabysitItem): boolean {
+	return item.status !== "resolved" && item.status !== "dismissed" && item.status !== "pushed";
 }

@@ -321,6 +321,7 @@ import {
 	packagesUpdate,
 } from "./packages";
 import { planReviewRunning } from "./planReviewQueue";
+import { prBabysitEngine, startPrBabysit } from "./prBabysit";
 import {
 	additionalCapture,
 	captureAdditional,
@@ -855,6 +856,7 @@ const handlers: WsHandlers = {
 			removeWorkspaceReviews(ws.id);
 			forgetWorkspaceChanges(ws.id);
 			forgetWorkspaceTurns(ws.id);
+			prBabysitEngine().forget(ws.id);
 			removeWorkspaceArtifacts(ws.id);
 			stopWatch(ws.id);
 			closeWorkspaceTerminals(ws.id);
@@ -909,6 +911,17 @@ const handlers: WsHandlers = {
 	"pr.merge": (p) => {
 		recordWorkspaceActivity(p.workspaceId);
 		return mergePr(p);
+	},
+	"prBabysit.start": (p) => startPrBabysit(p.workspaceId, p.config),
+	"prBabysit.stop": (p) => prBabysitEngine().stop(p.workspaceId),
+	"prBabysit.review": (p) => prBabysitEngine().triggerReview(p.workspaceId),
+	"prBabysit.get": (p) => prBabysitEngine().get(p.workspaceId),
+	"prBabysit.queueFinding": (p) => prBabysitEngine().queueFinding(p.workspaceId, p.itemId),
+	"prBabysit.postFinding": (p) => prBabysitEngine().postFinding(p.workspaceId, p.itemId),
+	"prBabysit.approvePush": (p) => prBabysitEngine().approvePush(p.workspaceId, p.itemId),
+	"prBabysit.itemAction": (p) => {
+		if (p.action !== "retry" && p.action !== "dismiss") throw new Error("Unknown item action");
+		return prBabysitEngine().itemAction(p.workspaceId, p.itemId, p.action);
 	},
 	"pr.reopen": async (p) => {
 		recordWorkspaceActivity(p.workspaceId);
@@ -1806,6 +1819,12 @@ const REPOSITORY_ONLY_METHODS: ReadonlySet<WsMethodName> = new Set<WsMethodName>
 	"pr.merge",
 	"pr.reopen",
 	"pr.open",
+	"prBabysit.start",
+	"prBabysit.review",
+	"prBabysit.queueFinding",
+	"prBabysit.postFinding",
+	"prBabysit.approvePush",
+	"prBabysit.itemAction",
 	"review.get",
 	"review.commentAdd",
 	"review.commentUpdate",

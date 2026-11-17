@@ -986,7 +986,11 @@ a project picker, the prompt hero, and the reused
   lifecycle state. The flag defaults on; the interval defaults to 30 and accepts whole `1–3600` values.
   Off disables (but retains) the interval. The field edits locally, commits on blur/Enter, reports invalid
   range inline, and waits for `settings.changed` rather than installing optimistic authority. Older hosts get
-  neither control. **`GithubSettings`** (the Integrations section's "Local GitHub" group —
+  neither control. **`PrBabysitSettings`** (below Local GitHub in Integrations, from
+  `PR_BABYSIT_PROTOCOL_VERSION`) edits `AppConfig.prBabysit` through `settings.update { prBabysit }`
+  patches: babysit and reviewer models (`ModelSelector`, with a default option that clears to `null`),
+  independent review behavior and push mode (`SettingsRadioCards`), auto-resolve and auto-fix-CI
+  switches, and the max autonomous push cycles (1/3/5/10/20). **`GithubSettings`** (the Integrations section's "Local GitHub" group —
   `github.authStatus()` shown as `settings-gh-status[data-connected]`: Connected + login, or a Not connected
   notice naming `gh auth login`; Refresh (`github.refresh`) is offered in both states. Only an answered
   probe is a status, and only the latest request's: reopening the section shows the last answer while it

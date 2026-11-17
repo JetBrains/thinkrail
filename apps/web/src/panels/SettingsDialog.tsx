@@ -23,8 +23,10 @@ import { LanguageSettings } from "./LanguageSettings";
 import { McpSettings } from "./McpSettings";
 import { ModelsSettings } from "./ModelsSettings";
 import { NotificationsSettings } from "./NotificationsSettings";
+import { PrBabysitSettings } from "./PrBabysitSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
+import { SettingsPageContainer } from "./SettingsGroup";
 import { SettingsDialogContainer } from "./settingsDialogContainer";
 import { keepSettingsDraftOnEscape } from "./settingsDraft";
 import { resolveSettingsSection, settingsNavGroups } from "./settingsNav";
@@ -159,7 +161,10 @@ export function SettingsDialog({
 							) : selectedSection === SettingsSection.Workspaces ? (
 								<WorkspacesSettings />
 							) : selectedSection === SettingsSection.Github ? (
-								<GithubSettings />
+								<SettingsPageContainer>
+									<GithubSettings />
+									<PrBabysitSettings />
+								</SettingsPageContainer>
 							) : selectedSection === SettingsSection.Notifications ? (
 								<NotificationsSettings />
 							) : selectedSection === SettingsSection.Privacy ? (

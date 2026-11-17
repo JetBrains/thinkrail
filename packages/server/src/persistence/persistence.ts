@@ -30,6 +30,7 @@ import {
 	isTerminalWindowsShell,
 	type KeybindingOverrides,
 	normalizeFontSettings,
+	normalizePrBabysitConfig,
 	normalizeThemePreference,
 	type Project,
 	type SessionCompletion,
@@ -761,7 +762,17 @@ export function loadConfig(): AppConfig {
 		onboardingDismissed: value.onboardingDismissed === true,
 		...normalizeFontSettings(value),
 		keybindings: storedKeybindings(value.keybindings),
+		prBabysit: normalizePrBabysitConfig(value.prBabysit),
 	};
+}
+
+/** `pr-babysit.json`: babysit sessions and their items, owned and validated by `pr-babysit`. */
+export function loadPrBabysitStore(): unknown {
+	return readJson<unknown>("pr-babysit.json", null, isRecord);
+}
+
+export function savePrBabysitStore(store: unknown): void {
+	writeJsonAtomic("pr-babysit.json", store);
 }
 
 export function saveConfig(config: AppConfig): void {

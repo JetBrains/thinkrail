@@ -403,6 +403,10 @@ themselves.
 - Streaming invariant: `text_delta` / `thinking_delta` **APPEND**; `tool_execution_update.partialResult`
   **REPLACE**. Attempt-level `agent_end` never means idle; automatic work ends only at `agent_settled`.
 - Panels stay arrangement-agnostic so the mobile shell is an additive layer, not a rewrite.
+- **PR babysit state is the host's.** The topbar control, drawer and Settings never derive or patch a
+  babysit session locally: every `prBabysit.*` answer and `prBabysit.changed` push replaces it whole
+  (see `shell/locationBar/SPEC.md`, `store/SPEC.md`). The client never names a repository, PR or path —
+  the host resolves them from the workspace.
 - **An active IME owns every key in a text field.** While a composition is open, Enter, Escape, arrows,
   Tab and shortcuts belong to the IME. The key that commits or cancels a candidate never submits,
   renames, cancels a rename, or closes the field or its dialog/popover; only a later ordinary key does.
