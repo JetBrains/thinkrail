@@ -215,7 +215,7 @@ export const TabStrip = memo(function TabStrip({
 			data-group-id={location.groupId}
 			data-drop-active={groupDropOver || undefined}
 			data-drop-hint={(acceptsAppend && !groupDropOver) || undefined}
-			className="relative flex h-panel-header-row shrink-0 items-stretch border-border-default border-b bg-container-workspace-bg data-[drop-hint]:ring-1 data-[drop-hint]:ring-inset data-[drop-hint]:ring-primary-soft data-[drop-active]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
+			className="relative flex h-panel-header-row shrink-0 items-stretch border-border-muted border-b bg-container-workspace-bg px-4 data-[drop-hint]:ring-1 data-[drop-hint]:ring-inset data-[drop-hint]:ring-primary-soft data-[drop-active]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary"
 		>
 			<div className="relative min-w-0 flex-1 overflow-hidden">
 				<div
@@ -223,7 +223,7 @@ export const TabStrip = memo(function TabStrip({
 					role="tablist"
 					data-key-scope="tabs"
 					aria-label={t(GROUP_TABS_LABELS[location.area])}
-					className="flex h-full w-full min-w-0 items-stretch overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+					className="flex h-full w-full min-w-0 items-stretch gap-2 py-2 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
 					onWheel={(event) => {
 						if (!scroller.current || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
 						scroller.current.scrollLeft += event.deltaY;
@@ -664,7 +664,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 						"group data-[dragging]:opacity-40",
 						rail
 							? railEntryFrameClass(location.area)
-							: "relative flex min-w-96 max-w-192 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-[2px] after:rounded-full after:content-[''] has-[[role=tab]:focus-visible]:focus-ring-inset-deep data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary",
+							: "relative flex min-w-96 max-w-192 shrink-0 items-center rounded-md text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default has-[[role=tab]:focus-visible]:focus-ring-inset-deep data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default",
 					)}
 				>
 					<div

@@ -595,7 +595,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					ref.current?.focus();
 				}
 			}}
-			className="relative m-0 flex min-w-0 shrink-0 flex-col border-0 border-border-muted border-t bg-container-workspace-bg p-0"
+			className="relative m-0 flex min-w-0 shrink-0 flex-col border-0 bg-container-workspace-bg p-0"
 		>
 			{mentionOpen ? (
 				<div
@@ -668,12 +668,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				}
 			/>
 
-			<div className="p-chat-gutter">
+			<div className="mx-auto box-border w-full max-w-[var(--chat-transcript-width)] px-chat-gutter pt-4 pb-12">
 				<div
 					ref={shellRef}
 					data-testid="chat-composer-shell"
 					className={cn(
-						"relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto] items-end gap-x-4 gap-y-4 overflow-hidden rounded-md border border-control-border-default bg-control-bg bg-clip-padding p-4 transition-colors focus-within:border-control-border-active has-[textarea:focus-visible]:focus-ring",
+						"relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto] items-end gap-x-4 gap-y-4 overflow-hidden rounded-2xl border border-control-border-default bg-control-bg bg-clip-padding p-6 shadow-[var(--shadow-md)] transition-colors focus-within:border-control-border-active has-[textarea:focus-visible]:focus-ring",
 						expanded && growthLimit === "half-chat" && "max-h-[50cqh]",
 					)}
 				>
