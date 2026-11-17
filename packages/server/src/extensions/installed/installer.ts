@@ -9,16 +9,24 @@ export interface ExtensionInstaller {
 	hasUpdate(source: string, installDir: string): Promise<boolean>;
 }
 
+/** The npm command the user configured for pi (`npmCommand`), or `undefined` for pi's default. */
+export type NpmCommand = () => string[] | undefined;
+
 const HOST_OWNED_DEPENDENCIES = ["@earendil-works", "typebox"];
 
 function packageManager(
 	installDir: string,
+	npmCommand: NpmCommand,
 	sources: readonly string[] = [],
 ): DefaultPackageManager {
+	const command = npmCommand();
 	return new DefaultPackageManager({
 		cwd: installDir,
 		agentDir: installDir,
-		settingsManager: SettingsManager.inMemory({ packages: [...sources] }),
+		settingsManager: SettingsManager.inMemory({
+			packages: [...sources],
+			...(command && command.length > 0 ? { npmCommand: command } : {}),
+		}),
 	});
 }
 
@@ -41,18 +49,21 @@ export function pruneHostOwnedDependencies(dir: string): void {
 	}
 }
 
-export const piExtensionInstaller: ExtensionInstaller = {
-	async install(source, installDir) {
-		mkdirSync(installDir, { recursive: true });
-		const manager = packageManager(installDir);
-		await manager.install(source);
-		const root = manager.getInstalledPath(source, "user");
-		if (root === undefined) throw new Error(`pi installed ${source} but reports no install folder`);
-		pruneHostOwnedDependencies(installDir);
-		return relative(installDir, root);
-	},
-	async hasUpdate(source, installDir) {
-		const updates = await packageManager(installDir, [source]).checkForAvailableUpdates();
-		return updates.length > 0;
-	},
-};
+export function piExtensionInstaller(npmCommand: NpmCommand = () => undefined): ExtensionInstaller {
+	return {
+		async install(source, installDir) {
+			mkdirSync(installDir, { recursive: true });
+			const manager = packageManager(installDir, npmCommand);
+			await manager.install(source);
+			const root = manager.getInstalledPath(source, "user");
+			if (root === undefined)
+				throw new Error(`pi installed ${source} but reports no install folder`);
+			pruneHostOwnedDependencies(installDir);
+			return relative(installDir, root);
+		},
+		async hasUpdate(source, installDir) {
+			const manager = packageManager(installDir, npmCommand, [source]);
+			return (await manager.checkForAvailableUpdates()).length > 0;
+		},
+	};
+}

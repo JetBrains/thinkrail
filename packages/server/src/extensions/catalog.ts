@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import type { ExtensionCatalogEntry, ExtensionSettingDescriptor } from "@thinkrail/contracts";
 import type { ServerExtension } from "@thinkrail/extension-api/server";
-import { extensionSessionServices, type HostSessionServices } from "./inline";
+import { extensionSessionServices, type HostSessionServices, isFactoryList } from "./inline";
 import { type InstalledExtensionRecord, installedExtensions, webHalfOf } from "./installed";
 import { builtinServerExtensions, type ServerExtensionEntry } from "./registry";
 
@@ -40,7 +40,10 @@ type ExtensionDescription = Omit<ExtensionCatalogEntry, "enabled">;
 
 function inertSessionFactories(extension: ServerExtension): ExtensionFactory[] {
 	try {
-		return extension.sessionExtensions?.(extensionSessionServices(extension, inertSession)) ?? [];
+		const factories = extension.sessionExtensions?.(
+			extensionSessionServices(extension, inertSession),
+		);
+		return isFactoryList(factories) ? factories : [];
 	} catch {
 		return [];
 	}

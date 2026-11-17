@@ -33,7 +33,7 @@ roots — defaults to it, so an installed extension is composed exactly like a b
   a reload re-decides membership without rebuilding the loader. A parent flatten given the host's
   `HostSessionServices` appends `sessionExtensions(services)` after the static factories under the same
   naming; it calls it once per flatten, so every parent session's factories close over its own services.
-  A `sessionExtensions` that throws becomes one factory that rethrows when pi loads it, so the failure is
+  A `sessionExtensions` that throws, or returns anything but a list of factories, becomes one factory that rethrows when pi loads it, so the failure is
   that extension's `<inline:name>` load error rather than a loader that cannot be built (the catalog's
   inert-session call likewise keeps only the static tools). Each extension gets its **own view** (`extensionSessionServices`): `setting(key)` answers only that
   extension's declared settings — the stored value from the injected `ExtensionSettingValue` lookup, else
@@ -76,7 +76,7 @@ roots — defaults to it, so an installed extension is composed exactly like a b
   support and the runtime so a disabled extension's folder can be left out of pi's skill inputs and `extensionSkillRoots(entry,
   stagedSkillsDir?)` (the roots that own an extension's skills: the resolved source roots without a
   staged dir or for an installed extension — never staged — that owner folder with one, nothing for an
-  extension without `skillPackages`), `startInstalledExtensions({ dataDir, onChange, installer? })`
+  extension without `skillPackages`), `startInstalledExtensions({ dataDir, onChange, npmCommand?, installer? })`
   (`installedHost.ts`: builds the installed runtime with the built-ins' names reserved and
   `skillPackageRoots` as its resolver, makes it the host's one, starts the watcher and a background
   reconcile, and returns its stop). The specifier is kept

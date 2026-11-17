@@ -38,17 +38,20 @@ A folder source is never copied: it loads from where it is, and nothing under it
   file that does not parse is reported (`fileError()`, logged) while the last good state stays in force.
   The host refuses to rewrite such a file (`EXTENSIONS_FILE_INVALID`) rather than lose the user's text.
 - **Install is pi's `DefaultPackageManager.install()`** with `agentDir` and `cwd` set to a fresh
-  `installs/<id>` folder and `SettingsManager.inMemory({})` — never the pi agent dir, never pi's settings,
+  `installs/<id>` folder and `SettingsManager.inMemory({ npmCommand })` — never the pi agent dir, never
+  pi's settings (only the user's pi `npmCommand`, read per install through an injected `NpmCommand`, so a
+  user whose npm is a wrapper, a full path or pnpm fetches the same way pi does — kind detection stages
+  plain pi packages too, and must not regress them),
   so pi's own loader never sees an extension. Each install (first install, update, re-stage) gets a new
   folder because Bun keeps a module's first evaluation and cached folder listings for the process
   lifetime. After install every `node_modules/@earendil-works` and `node_modules/typebox` under the folder
   is pruned: pi's args already omit peers, and a copy that slips in is what a plain-JavaScript dependency
   would bind to. The installer is an injected `ExtensionInstaller` (tests stub it; nothing in the tests
   touches the network). `PI_OFFLINE` refuses npm/git installs like pi packages; a folder source works
-  offline. It uses pi's default npm command, not the user's pi `npmCommand` setting.
+  offline.
 - **Reconcile is idempotent and serialized.** One queue runs reconcile, adopt, remove and update; a
   reconcile requested while one is waiting shares it. A pass: drop `installs.json` entries of undeclared
-  sources, sweep install folders no entry names (except ones a staging install is filling), settle every
+  sources, settle every
   declared source in order — reuse the previous record when its package root and file fingerprint
   (`package.json` plus the manifest's files, mtime and size) are unchanged, so nothing reloads — publish,
   then install the missing npm/git sources one at a time, publishing after each. `onChange` fires only
@@ -57,8 +60,14 @@ A folder source is never copied: it loads from where it is, and nothing under it
   when its fingerprint changed at a reconcile, or on `update`. A failed npm/git install is not retried by
   a later reconcile (its failed row is kept): it is retried when the source is declared anew, on
   `update`, or at the next host start. A new declaration has no row until its first install finishes.
+- **Install folders are swept once per process**, at its first reconcile: a folder no `installs.json`
+  entry names (a removed source, a superseded version, a crash's leftover) is deleted then, never while
+  the process may still hold a loader built from it — a chat mid-turn keeps the old factories, their lazy
+  imports and skill files until its end-of-turn rebuild. A staged folder of a plain pi package, an
+  install that lost its declaration and a failed update's new folder were never loaded and are removed at
+  once.
 - **Update never loses a working install.** `update` installs into a new folder and evaluates it first;
-  only a `loaded` result replaces the old install (whose folder the next sweep removes). An install error,
+  only a `loaded` result replaces the old install. An install error,
   an incompatible or failing new version is `PACKAGE_UPDATE_FAILED` with the reason, and the new folder
   is dropped.
 - **States.** `loaded`; `incompatible` — `extensionApiMismatch` says why, and it is decided **before any
@@ -98,7 +107,7 @@ A folder source is never copied: it loads from where it is, and nothing under it
 
 - **Public surface (barrel):** `InstalledExtensions`, `InstalledExtensionsOptions`,
   `InstalledExtensionRecord`, `InstalledServerExtension`, `StagedExtension`, `installedExtensions`,
-  `setInstalledExtensions`, `ExtensionInstaller`, `piExtensionInstaller`, `extensionSourceKind`,
+  `setInstalledExtensions`, `ExtensionInstaller`, `NpmCommand`, `piExtensionInstaller`, `extensionSourceKind`,
   `ExtensionSourceKind`, `loadServerDescriptor`, `withForcedJitiTransform`, `webHalfOf`, `webToken`,
   `resolveExtensionAsset`, `ExtensionAsset`.
 - `InstalledExtensions` is the runtime (`records`, `servers`, `fileError`, `reconcile`, `watch`, `stage`,
@@ -106,7 +115,7 @@ A folder source is never copied: it loads from where it is, and nothing under it
   `installedExtensions()` is the host's one runtime, absent until the host starts it.
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (`DefaultPackageManager`, `SettingsManager`,
   `discoverAndLoadExtensions`, `createAgentSession` for the guard), `typebox` (`Type`, the guard),
-  `@thinkrail/extension-api/manifest` and `/server` (types), `@thinkrail/contracts`,
+  `@thinkrail/extension-api/server` (the manifest reader and the descriptor types), `@thinkrail/contracts`,
   `@thinkrail/shared/codedError`, `log`, Node `fs` / `path` / `os` / `crypto`.
 - **Forbidden:** the parent registry and its siblings (the skill resolver and the reserved names arrive
   as options), `agent`, `host`, `settings`, `persistence` (the data dir arrives as an option), spawning

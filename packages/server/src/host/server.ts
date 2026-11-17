@@ -44,6 +44,7 @@ import {
 	isProjectSkillPath,
 	liveSessionIdsOf,
 	mcpPolicyOf,
+	piNpmCommand,
 	piTrustsProjectPath,
 	primeProjectPiSettings,
 	primeUserPiSettings,
@@ -931,6 +932,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const stopUserMcpWatch = watchUserMcpConfig({ onSettingsChanged: handlePiSettingsFileChanged });
 	const stopInstalledExtensions = startInstalledExtensions({
 		dataDir: dataDir(),
+		npmCommand: piNpmCommand,
 		onChange: () => {
 			refreshInstalledExtensions();
 			server.publish(

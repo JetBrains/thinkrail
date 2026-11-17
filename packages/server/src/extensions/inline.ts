@@ -29,6 +29,16 @@ export function extensionSessionServices(
 	};
 }
 
+export function isFactoryList(value: unknown): value is ExtensionFactory[] {
+	return Array.isArray(value) && value.every((entry) => typeof entry === "function");
+}
+
+function failing(error: unknown): ExtensionFactory {
+	return () => {
+		throw error;
+	};
+}
+
 function factoriesOf(
 	entry: ServerExtensionEntry,
 	kind: RegistryExtensionKind,
@@ -38,16 +48,18 @@ function factoriesOf(
 	const { extension } = entry;
 	if (kind === "childExtensions") return extension.childExtensions ?? [];
 	if (!session || !extension.sessionExtensions) return [...extension.extensions];
-	let perSession: ExtensionFactory[];
+	let perSession: unknown;
 	try {
 		perSession = extension.sessionExtensions(
 			extensionSessionServices(extension, session, settingValue),
 		);
 	} catch (error) {
-		perSession = [
-			() => {
-				throw error;
-			},
+		return [...extension.extensions, failing(error)];
+	}
+	if (!isFactoryList(perSession)) {
+		return [
+			...extension.extensions,
+			failing(new Error(`${extension.name}: sessionExtensions must return a list of factories`)),
 		];
 	}
 	return [...extension.extensions, ...perSession];

@@ -84,6 +84,7 @@ export {
 	handleProjectPiSettingsChanged,
 	type PiPackagesInstallOutcome,
 	type PiPackagesTarget,
+	piNpmCommand,
 	piPackagesCatalog,
 	piPackagesCheckUpdates,
 	piPackagesInstall,

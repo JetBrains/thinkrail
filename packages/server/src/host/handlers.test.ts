@@ -674,6 +674,7 @@ test("extension.list reflects disabledExtensions written through settings.update
 			enabled: true,
 			tools: ["visualize"],
 			hasChildExtensions: false,
+			kind: "builtin",
 		},
 		{
 			name: "ask-user-question",
@@ -683,6 +684,7 @@ test("extension.list reflects disabledExtensions written through settings.update
 			tools: ["ask_user_question"],
 			hasChildExtensions: false,
 			settings: [{ key: "richPreviews", default: true }],
+			kind: "builtin",
 		},
 		{
 			name: "web-access",
@@ -691,6 +693,7 @@ test("extension.list reflects disabledExtensions written through settings.update
 			enabled: true,
 			tools: ["web_search", "fetch_content", "get_search_content"],
 			hasChildExtensions: true,
+			kind: "builtin",
 		},
 	]);
 	await handleRequest(

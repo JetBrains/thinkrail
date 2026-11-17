@@ -1315,8 +1315,8 @@ what they always did.
   inspects first and declares last, so for an extension `PACKAGE_SOURCE_INVALID`, `PACKAGE_OFFLINE`,
   `PACKAGE_INSTALL_FAILED`, **`EXTENSION_SCOPE_UNSUPPORTED`** (an extension asked for at repository
   scope) and **`EXTENSIONS_FILE_INVALID`** are all raised before `extensions.json` is written.
-- **`extensions.remove { source }`** (drops the declaration, then the host-owned install folder; a folder
-  source's own folder is never touched) / **`extensions.update { source }`** (a fresh install of the
+- **`extensions.remove { source }`** (drops the declaration; the host-owned install folder goes at the
+  next host start; a folder source's own folder is never touched) / **`extensions.update { source }`** (a fresh install of the
   source in a new folder, or a re-load in place for a folder source; the old install stays when the new
   one fails) / **`extensions.checkUpdates { force? }`** (the npm and git `{ source }`s with a newer
   version, cached briefly unless `force`) — each resolves `Ack` / the list once the host reconciled.

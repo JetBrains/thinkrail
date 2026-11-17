@@ -14,6 +14,7 @@ import { bumpPackagesRevision, setInstalledPackagesListener } from "./extensions
 import { HOST_BUILTIN_EXTENSION_NAMES } from "./mcp";
 import {
 	checkPiPackageUpdates,
+	createPiSettings,
 	installPiPackage,
 	invalidatePiPackageCatalog,
 	invalidatePiPackageUpdates,
@@ -57,6 +58,12 @@ setExtensionInfoListener(() => {
 /** Open pages re-list; nothing about what chats load changed (a switch flip, a package pi installed itself). */
 export function publishPiPackagesChanged(): void {
 	publish?.();
+}
+
+/** The npm command the user configured for pi, so ThinkRail's own installs fetch the same way pi's do. */
+export function piNpmCommand(): string[] | undefined {
+	return createPiSettings(getAgentDir(), getAgentDir(), { packages: "none" }).getGlobalSettings()
+		.npmCommand;
 }
 
 /** The loaded installed ThinkRail extensions changed: every chat rebuilds its loader when its turn ends. */

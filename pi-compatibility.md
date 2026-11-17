@@ -269,7 +269,7 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   [[submodule-server-agent]]. Three more pi facts the installed-extension runtime builds on:
   - `DefaultPackageManager.install(source)` at user scope writes only under its `agentDir`
     (`npm/node_modules/<name>`, `git/<host>/<path>`), needs no persisted declaration
-    (`SettingsManager.inMemory({})`), and `getInstalledPath(source, "user")` names the package root; its
+    (`SettingsManager.inMemory({ npmCommand })`, the user's pi `npmCommand` carried over), and `getInstalledPath(source, "user")` names the package root; its
     npm arguments omit peers (`--legacy-peer-deps`, bun/pnpm equivalents). `checkForAvailableUpdates()`
     reads the declarations from the in-memory settings it is given. **Gate:** none needed while these
     stay public; re-verify the layout on a bump.

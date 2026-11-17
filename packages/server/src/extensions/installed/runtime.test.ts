@@ -213,7 +213,7 @@ describe("reconcile", () => {
 		expect(inner.installs.filter((source) => source === "npm:dropped")).toHaveLength(2);
 	});
 
-	it("removes an npm install folder but never a folder source", async () => {
+	it("removes an npm install folder at the next start, never a folder source", async () => {
 		const { root, dataDir, declare } = setup();
 		const template = writeExtension(join(root, "template"), { name: "gone" });
 		const folder = writeExtension(join(root, "mine"));
@@ -228,6 +228,9 @@ describe("reconcile", () => {
 		await runtime.remove("npm:gone");
 		await runtime.remove(folder);
 		expect(runtime.records()).toEqual([]);
+		expect(existsSync(installed)).toBe(true);
+		expect(existsSync(join(folder, "package.json"))).toBe(true);
+		await new InstalledExtensions(baseOptions(dataDir)).reconcile();
 		expect(existsSync(installed)).toBe(false);
 		expect(existsSync(join(folder, "package.json"))).toBe(true);
 		const missing = await runtime.remove(folder).catch((error: unknown) => error);
@@ -370,7 +373,7 @@ describe("install, update and checkUpdates", () => {
 		});
 	});
 
-	it("updates an npm source into a new folder and drops the old one", async () => {
+	it("updates an npm source into a new folder and drops the old one at the next start", async () => {
 		const { root, dataDir, declare } = setup();
 		const template = writeExtension(join(root, "template"), { name: "npm-ext" });
 		const installer = stubInstaller({ "npm:npm-ext": template }, new Set(["npm:npm-ext"]));
@@ -383,7 +386,10 @@ describe("install, update and checkUpdates", () => {
 		const after = stateOf(runtime, "npm:npm-ext");
 		expect(after?.state).toBe("loaded");
 		expect(after?.root).not.toBe(before?.root);
+		expect(existsSync(before?.root as string)).toBe(true);
+		await new InstalledExtensions(baseOptions(dataDir)).reconcile();
 		expect(existsSync(before?.root as string)).toBe(false);
+		expect(existsSync(after?.root as string)).toBe(true);
 		expect(after?.server).not.toBe(before?.server);
 	});
 

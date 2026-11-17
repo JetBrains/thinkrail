@@ -135,11 +135,12 @@ export class InstalledExtensions {
 	#reconcileQueued: Promise<void> | undefined;
 	readonly #pending = new Set<string>();
 	#watcher: StatWatcher | undefined;
+	#swept = false;
 	#updates: { at: number; value: Promise<{ source: string }[]> } | undefined;
 
 	constructor(options: InstalledExtensionsOptions) {
 		this.#options = options;
-		this.#installer = options.installer ?? piExtensionInstaller;
+		this.#installer = options.installer ?? piExtensionInstaller();
 		this.declarationsPath = join(options.dataDir, "extensions.json");
 		this.root = join(options.dataDir, "extensions");
 		this.#installsDir = join(this.root, "installs");
@@ -227,6 +228,8 @@ export class InstalledExtensions {
 	}
 
 	#sweep(installs: InstallsFile): void {
+		if (this.#swept) return;
+		this.#swept = true;
 		const kept = new Set(Object.values(installs).map((ref) => ref.dir));
 		let entries: string[] = [];
 		try {

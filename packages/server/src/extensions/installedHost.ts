@@ -3,6 +3,8 @@ import {
 	type ExtensionInstaller,
 	InstalledExtensions,
 	installedExtensions,
+	type NpmCommand,
+	piExtensionInstaller,
 	setInstalledExtensions,
 } from "./installed";
 import { builtinServerExtensions } from "./registry";
@@ -13,6 +15,8 @@ const log = logger("extensions");
 export interface InstalledExtensionsHostOptions {
 	dataDir: string;
 	onChange: () => void;
+	/** The user's pi `npmCommand`, read at each install. */
+	npmCommand?: NpmCommand;
 	installer?: ExtensionInstaller;
 }
 
@@ -23,7 +27,7 @@ export function startInstalledExtensions(options: InstalledExtensionsHostOptions
 		reservedNames: () => builtinServerExtensions.map((entry) => entry.extension.name),
 		skillRoots: skillPackageRoots,
 		onChange: options.onChange,
-		...(options.installer ? { installer: options.installer } : {}),
+		installer: options.installer ?? piExtensionInstaller(options.npmCommand),
 	});
 	setInstalledExtensions(runtime);
 	const stopWatching = runtime.watch();

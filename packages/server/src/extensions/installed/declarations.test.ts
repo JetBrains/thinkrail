@@ -19,7 +19,7 @@ describe("extensionSourceKind", () => {
 		["npm:", undefined],
 		["./weather", undefined],
 		["weather", undefined],
-	])("reads %s as %s", (source, kind) => {
+	])("reads %s as %p", (source, kind) => {
 		expect(extensionSourceKind(source)).toBe(kind as ReturnType<typeof extensionSourceKind>);
 	});
 

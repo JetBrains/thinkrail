@@ -155,6 +155,28 @@ describe("registryInlineExtensions with per-session factories", () => {
 		);
 	});
 
+	it("turns a sessionExtensions that returns no list into that extension's load error", async () => {
+		const entries: ServerExtensionEntry[] = [
+			{
+				specifier: "/installed/server/index.ts",
+				extension: {
+					name: "single",
+					extensions: [],
+					sessionExtensions: (() => () => {}) as unknown as () => [],
+				},
+			},
+		];
+		const [single] = registryInlineExtensions("extensions", () => true, entries, session("a"));
+		if (!single || typeof single === "function") throw new Error("missing single");
+		expect(single.name).toBe("single");
+		await expect(Promise.resolve(single.factory({} as ExtensionAPI))).resolves.toBeUndefined();
+		const [enabled] = registryInlineExtensions("extensions", undefined, entries, session("a"));
+		if (!enabled || typeof enabled === "function") throw new Error("missing single");
+		await expect(Promise.resolve(enabled.factory({} as ExtensionAPI))).rejects.toThrow(
+			"sessionExtensions must return a list of factories",
+		);
+	});
+
 	it("gates session factories on the extension switch at load time", async () => {
 		const disabled = new Set(["asker"]);
 		const [asker] = registryInlineExtensions(
