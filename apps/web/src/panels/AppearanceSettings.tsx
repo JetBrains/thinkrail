@@ -36,11 +36,8 @@ import {
 	type ThemeDescriptor,
 	type ThemeResolution,
 } from "@/themes";
-import { errorText, getTransport, supportsFonts } from "@/transport";
-import { CustomFontsGroup } from "./CustomFontsSettings";
+import { errorText, getTransport } from "@/transport";
 import { CustomThemesGroup } from "./CustomThemesSettings";
-import { FontsGroup } from "./FontsSettings";
-import { LineWidthControl } from "./LineWidthSettings";
 import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
 import { SettingsDisclosure } from "./SettingsDisclosure";
 import { useFolderActions } from "./SettingsFolder";
@@ -217,7 +214,6 @@ export function AppearanceSettings() {
 	const appVersion = useAppStore((state) => state.hostAppVersion);
 
 	const systemSupported = (protocolVersion ?? 0) >= THEME_SYSTEM_PROTOCOL_VERSION;
-	const fontsSupported = supportsFonts(protocolVersion);
 	const activeTheme = resolveTheme(theme);
 	const fixedResolution = resolveThemePreference({ theme, themeMode: "fixed" });
 	const pair = systemThemePair ?? deriveSystemThemePair(theme);
@@ -464,8 +460,6 @@ export function AppearanceSettings() {
 					}
 				/>
 			</SettingsGroup>
-			{fontsSupported ? <FontsGroup /> : null}
-			{fontsSupported ? <CustomFontsGroup /> : null}
 			<CustomThemesGroup
 				snapshot={userThemes}
 				issues={userThemeIssues}
@@ -473,7 +467,6 @@ export function AppearanceSettings() {
 				{...themesFolderActions}
 			/>
 			<SettingsGroup title={t("settings.appearance.editorGroup")}>
-				<LineWidthControl kind="file" />
 				<MarkdownOutlineSideRow />
 			</SettingsGroup>
 		</SettingsPageContainer>

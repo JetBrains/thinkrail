@@ -3,19 +3,11 @@ import { QUESTION_PANEL_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ChatSettings, QuestionPanelHeightControl } from "./ChatSettings";
 
-test("Chat settings renders one chat line-width control with its Fit to pane switch", () => {
+test("Chat settings keeps the chat's own rows; line width and subagents have their own sections", () => {
 	const markup = renderToStaticMarkup(<ChatSettings />);
-	expect(markup.match(/data-testid="chat-line-width-input"/g)).toHaveLength(1);
-	expect(markup).toContain('data-testid="chat-line-width-control"');
-	expect(markup).toMatch(/<button[^>]*role="switch"[^>]*data-testid="chat-line-width-bounded"/);
-	const input = markup.match(/<input[^>]*data-testid="chat-line-width-input"[^>]*>/)?.[0];
-	expect(input).toContain("data-settings-draft-input");
-	expect(markup).not.toContain('data-testid="chat-line-width-error"');
-	expect(markup).not.toContain("file-line-width");
-});
-
-test("Chat settings hides subagents against a host without the subagent protocol", () => {
-	const markup = renderToStaticMarkup(<ChatSettings />);
+	expect(markup).toContain('data-testid="chat-message-order-control"');
+	expect(markup).toContain('data-testid="composer-growth-control"');
+	expect(markup).not.toContain("line-width");
 	expect(markup).not.toContain('data-testid="settings-subagents"');
 });
 

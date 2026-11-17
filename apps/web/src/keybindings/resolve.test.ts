@@ -476,6 +476,9 @@ describe("local commands", () => {
 			"trees",
 			"review.surface",
 			"transcript",
+			"settings.nav",
+			"settings",
+			"settings.list",
 		]);
 		expect(resolved.byId.get("trees.search")?.scope).toBe("trees");
 		expect(resolved.byId.get("trees.search")?.plain).toBe(true);
@@ -612,6 +615,9 @@ describe("local commands", () => {
 			{ scope: "review", command: "review.nextUnreviewed" },
 			{ scope: "review.surface", command: "arrows.down" },
 			{ scope: "transcript", command: "arrows.down" },
+			{ scope: "settings.nav", command: "arrows.down" },
+			{ scope: "settings", command: "arrows.down" },
+			{ scope: "settings.list", command: "arrows.down" },
 		]);
 		expect(globalHolder(resolved, "KeyF")).toBe("hint-mode.show");
 		expect(globalHolder(resolved, "Ctrl+KeyK")).toBe("search.open");

@@ -739,15 +739,17 @@ a project picker, the prompt hero, and the reused
   to report the dropped kick-off). (`gh` status lives in `SettingsDialog`, not the
   create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — a
   **store-driven two-pane shell**: one nav list, rendered once, beside a scrollable content pane. At `md`+
-  the list is a rail grouped **Agent** (Models, Providers, MCP servers, Prompt templates, Environment) ·
-  **Interface** (Chat, Appearance, Language, Layout, Terminal, Artifacts — the per-client Smart view switch, from
-  host v124) · **System** (Workspaces, Integrations, Extensions,
-  Notifications, Privacy, Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
+  the list is a rail grouped **Agent** (Models, Providers, Subagents — the global settings and this
+  workspace's override —, Extensions & skills, MCP servers, Prompt templates, Environment) · **Interface**
+  (Appearance, Text & fonts — fonts, custom fonts and both line widths —, Chat, Layout, Keyboard, Language,
+  Voice input, Terminal) · **System** (Workspaces, Integrations, Notifications, Privacy, Updates).
+  Integrations keeps section id `github`: today it is the GitHub CLI page
   and it is the home for further integrations. Below `md` the same list is a horizontal scrolling strip without group labels. The
   Feedback card (`settings-nav-feedback`, “Share feedback”) belongs to that list at
   every width, pinned to the rail's bottom at `md`+. The pure nav data — groups, protocol and
-  injected-content gating, and resolving a requested section to an available one (a gated or retired id,
-  e.g. an old `review` / `line-width` deep link, falls back to Appearance) — lives in `panels/settingsNav.ts`,
+  injected-content gating, and resolving a requested section to an available one (a retired id opens where
+  its settings moved — the store's `RETIRED_SETTINGS_SECTIONS`: `artifacts` → Layout, `line-width` → Text &
+  fonts, `review` → Models; a gated one falls back to Appearance) — lives in `panels/settingsNav.ts`,
   so the dialog only renders it. `settingsOpen`/`settingsSection` live in the store so the gear AND the
   Welcome banner can open it deep-linked to a section. Escape closes the dialog except while focus is in an
   input carrying `data-settings-draft-input`, where Escape reverts that draft instead.

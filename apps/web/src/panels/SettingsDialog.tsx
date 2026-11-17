@@ -13,7 +13,6 @@ import { type ReactNode, useEffect, useState } from "react";
 import { SettingsSection, useAppStore } from "@/store";
 import { loadInAppSurvey } from "@/transport";
 import { AppearanceSettings } from "./AppearanceSettings";
-import { ArtifactsSettings } from "./ArtifactsSettings";
 import { ChatSettings } from "./ChatSettings";
 import { EnvironmentSettings } from "./EnvironmentSettings";
 import { ExtensionsSettings } from "./ExtensionsSettings";
@@ -25,11 +24,13 @@ import { ModelsSettings } from "./ModelsSettings";
 import { NotificationsSettings } from "./NotificationsSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
+import { SubagentsSettings } from "./SubagentsSettings";
 import { SettingsDialogContainer } from "./settingsDialogContainer";
 import { keepSettingsDraftOnEscape } from "./settingsDraft";
 import { resolveSettingsSection, settingsNavGroups } from "./settingsNav";
 import { TemplatesSettings } from "./TemplatesSettings";
 import { TerminalSettings } from "./TerminalSettings";
+import { TextFontsSettings } from "./TextFontsSettings";
 import { VoiceSettings } from "./VoiceSettings";
 import { WorkspacesSettings } from "./WorkspacesSettings";
 
@@ -132,6 +133,8 @@ export function SettingsDialog({
 								<ModelsSettings />
 							) : selectedSection === SettingsSection.Providers ? (
 								<ProvidersSettings />
+							) : selectedSection === SettingsSection.Subagents ? (
+								<SubagentsSettings />
 							) : selectedSection === SettingsSection.Mcp ? (
 								<McpSettings />
 							) : selectedSection === SettingsSection.Templates ? (
@@ -144,6 +147,8 @@ export function SettingsDialog({
 								<ChatSettings />
 							) : selectedSection === SettingsSection.Appearance ? (
 								<AppearanceSettings />
+							) : selectedSection === SettingsSection.Text ? (
+								<TextFontsSettings />
 							) : selectedSection === SettingsSection.Language ? (
 								<LanguageSettings />
 							) : selectedSection === SettingsSection.Layout ? (
@@ -152,8 +157,6 @@ export function SettingsDialog({
 								keyboardSettings
 							) : selectedSection === SettingsSection.Terminal ? (
 								<TerminalSettings />
-							) : selectedSection === SettingsSection.Artifacts ? (
-								<ArtifactsSettings />
 							) : selectedSection === SettingsSection.Voice ? (
 								<VoiceSettings />
 							) : selectedSection === SettingsSection.Workspaces ? (

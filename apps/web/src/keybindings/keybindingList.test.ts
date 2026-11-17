@@ -436,6 +436,7 @@ describe("local rows", () => {
 		]);
 		expect(chordHolders(list(), "arrows.up", "KeyS")).toEqual([
 			{ command: "trees.search", scope: "trees" },
+			{ command: "settings.nav.search", scope: "settings.nav" },
 		]);
 		expect(holders(list(), "trees.search", "KeyC")).toEqual([]);
 		expect(holders(list(), "transcript.copy", "KeyS")).toEqual([]);
@@ -466,6 +467,7 @@ describe("local rows", () => {
 		expect(assignChord(list(), {}, "arrows.up", "KeyS", true)).toEqual({
 			"arrows.up": ["KeyS"],
 			"trees.search": [],
+			"settings.nav.search": ["Slash"],
 		});
 	});
 

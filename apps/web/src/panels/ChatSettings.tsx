@@ -3,19 +3,15 @@ import {
 	isQuestionPanelHeight,
 	QUESTION_PANEL_HEIGHT_PERCENT,
 	QUESTION_PANEL_PROTOCOL_VERSION,
-	type SubagentOverride,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import type { ChatMessageOrder } from "@/chat/chatPreferences";
-import { selectActiveWorkspace, toast, useAppStore } from "@/store";
-import { errorText, getTransport } from "@/transport";
-import { LineWidthControl } from "./LineWidthSettings";
+import { useAppStore } from "@/store";
 import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
 import { SettingsRow } from "./SettingsRow";
-import { SubagentSettings } from "./SubagentSettings";
 import { saveSettings } from "./saveSettings";
 import { SETTINGS_INPUT, useSettingsDraft } from "./settingsDraft";
 
@@ -116,9 +112,6 @@ export function ChatSettings() {
 	const growthLimit = useAppStore((state) => state.composerGrowthLimit);
 	const panelHeight = useAppStore((state) => state.questionPanelHeight);
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
-	const subagentsEnabled = useAppStore((state) => state.subagentsEnabled);
-	const subagentMaxConcurrent = useAppStore((state) => state.subagentMaxConcurrent);
-	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const setChatMessageOrder = useAppStore((state) => state.setChatMessageOrder);
 
 	const selectMessageOrder = (chatMessageOrder: ChatMessageOrder) => {
@@ -129,24 +122,6 @@ export function ChatSettings() {
 	const selectGrowthLimit = (composerGrowthLimit: ComposerGrowthLimit) => {
 		if (composerGrowthLimit === growthLimit) return;
 		void saveSettings({ composerGrowthLimit }, t("settings.chat.growthFailed"));
-	};
-
-	const setWorkspaceSubagents = (override: SubagentOverride | null) => {
-		if (!activeWorkspace) return;
-		getTransport()
-			.request("workspace.setSubagentsOverride", { id: activeWorkspace.id, override })
-			.catch((err: unknown) =>
-				toast.error(errorText(err), t("settings.chat.workspaceSubagentsFailed")),
-			);
-	};
-
-	const setWorkspaceSubagentLimit = (value: number | null) => {
-		if (!activeWorkspace) return;
-		getTransport()
-			.request("workspace.setSubagentMaxConcurrent", { id: activeWorkspace.id, value })
-			.catch((err: unknown) =>
-				toast.error(errorText(err), t("settings.chat.workspaceSubagentLimitFailed")),
-			);
 	};
 
 	return (
@@ -184,26 +159,7 @@ export function ChatSettings() {
 					}
 				/>
 				<QuestionPanelHeightControl protocolVersion={protocolVersion} value={panelHeight} />
-				<LineWidthControl kind="chat" />
 			</SettingsGroup>
-
-			<SubagentSettings
-				protocolVersion={protocolVersion}
-				globalEnabled={subagentsEnabled}
-				globalLimit={subagentMaxConcurrent}
-				workspace={activeWorkspace}
-				onGlobalEnabledChange={(enabled) =>
-					void saveSettings({ subagentsEnabled: enabled }, t("settings.chat.globalSubagentsFailed"))
-				}
-				onWorkspaceEnabledChange={setWorkspaceSubagents}
-				onGlobalLimitChange={(value) =>
-					void saveSettings(
-						{ subagentMaxConcurrent: value },
-						t("settings.chat.subagentLimitFailed"),
-					)
-				}
-				onWorkspaceLimitChange={setWorkspaceSubagentLimit}
-			/>
 		</SettingsPageContainer>
 	);
 }
