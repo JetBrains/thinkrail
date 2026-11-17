@@ -92,10 +92,10 @@ test("opens and safely forgets an existing user-owned worktree", async ({ page }
 
 		await openWorkspaceMenu(row);
 		await expect(page.getByTestId("workspace-rename")).toHaveCount(0);
-		await expect(page.getByTestId("workspace-remove")).toHaveText("Remove from ThinkRail");
+		await expect(page.getByTestId("workspace-remove")).toHaveText("Remove from Helios");
 		await page.getByTestId("workspace-remove").click();
 		const confirm = page.getByRole("alertdialog", {
-			name: "Remove existing-worktree-fixture from ThinkRail?",
+			name: "Remove existing-worktree-fixture from Helios?",
 		});
 		await expect(confirm).toContainText("existing checkout, files, and branch");
 		await expect(confirm).toContainText("stay untouched");

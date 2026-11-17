@@ -65,7 +65,7 @@ another.
    startup continues. An update-metadata failure here precedes host acquisition and quits directly.
    Unless the neutral or hidden artifact modes are set, startup then opens a small, centered, frameless
    splash.
-   - It reads "Starting ThinkRail…", or "Finishing update to X…" when the update journal is pending,
+   - It reads "Starting Helios…" (under a "Helios" wordmark in the Helios Cobalt accent), or "Finishing update to X…" when the update journal is pending,
      from the saved native labels (`desktop.splash.*`, the desktop fills in `{{version}}`).
    - Its content is a `data:` URL given at creation. The SDK delays `html:` content behind a 100 ms timer,
      which the synchronous server import would block. Startup awaits the splash's own `dom-ready`,
@@ -750,8 +750,11 @@ to send is the only one retried.
 **Persistence.** Routes (`routes.json`), preferences (`preferences.json`) and the last pushed native
 labels (`native-labels.json`) live under `THINKRAIL_DESKTOP_USER_DATA` when set, otherwise the app's
 data directory, in the same file formats as the Electrobun stores. This is Tauri's data directory
-for `ai.thinkrail.app`, not Electrobun's `userData`: carrying an existing install's files over is a
-cutover task. A preference write that cannot be saved is reported as an error and leaves memory
+for `com.helios.agent-ide` (the Tauri bundle is branded "Helios Agent IDE"; the identifier changed from
+`ai.thinkrail.app` before any Tauri build shipped, so there is nothing to migrate), not Electrobun's
+`userData`: carrying an existing install's files over is a cutover task. The Electrobun shell's window
+and splash are branded the same way, but its bundle identity, Windows taskbar ID, installer names and
+update feed stay ThinkRail until the cutover decides them. A preference write that cannot be saved is reported as an error and leaves memory
 unchanged.
 
 **Quit.** Every exit path (the bridge's `quit_app`, the Quit menu item, closing the last window, a

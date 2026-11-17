@@ -4,6 +4,6 @@
 <dict>
 	<!-- Tauri merges this file with its generated Info.plist. -->
 	<key>NSMicrophoneUsageDescription</key>
-	<string>ThinkRail uses the microphone only while you dictate with voice input.</string>
+	<string>Helios uses the microphone only while you dictate with voice input.</string>
 </dict>
 </plist>

@@ -46,9 +46,9 @@ export function splashMessage(
 }
 
 export function splashDocument(message: string): string {
-	return `<!doctype html><html><head><meta charset="utf-8"><meta name="color-scheme" content="dark light"><title>ThinkRail</title><style>
-:root{--bg:#09090b;--fg:#f4f4f5;--muted:#babac1;--accent:#8dff4f;--track:#27272a}
-@media (prefers-color-scheme: light){:root{--bg:#ffffff;--fg:#27272a;--muted:#52525b;--accent:#2a7314;--track:#e4e4e7}}
+	return `<!doctype html><html><head><meta charset="utf-8"><meta name="color-scheme" content="dark light"><title>Helios Agent IDE</title><style>
+:root{--bg:#060a12;--fg:#e6f0ff;--muted:#94a8cc;--accent:#00d4ff;--track:#1b2a4a}
+@media (prefers-color-scheme: light){:root{--bg:#ffffff;--fg:#27272a;--muted:#52525b;--accent:#2563eb;--track:#e4e4e7}}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);cursor:default;user-select:none;-webkit-user-select:none}
 body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font:13px/1.4 system-ui,"Segoe UI",sans-serif}
 .mark{font-size:28px;font-weight:700;color:var(--accent)}
@@ -57,7 +57,7 @@ body{display:flex;flex-direction:column;align-items:center;justify-content:cente
 .bar i{display:block;width:35%;height:100%;border-radius:2px;background:var(--accent);animation:slide 1.2s ease-in-out infinite}
 @keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(290%)}}
 @media (prefers-reduced-motion: reduce){.bar i{animation:none;width:100%;opacity:.5}}
-</style></head><body><div class="mark">ThinkRail</div><div class="message" role="status">${escapeHtml(message)}</div><div class="bar"><i></i></div></body></html>`;
+</style></head><body><div class="mark">Helios</div><div class="message" role="status">${escapeHtml(message)}</div><div class="bar"><i></i></div></body></html>`;
 }
 
 export async function openStartupSplash(
@@ -66,7 +66,7 @@ export async function openStartupSplash(
 	readyTimeoutMs = SPLASH_READY_TIMEOUT_MS,
 ): Promise<StartupSplash> {
 	const window = createWindow({
-		title: "ThinkRail",
+		title: "Helios Agent IDE",
 		url: `data:text/html;charset=utf-8,${encodeURIComponent(splashDocument(message))}`,
 		frame: { x: 0, y: 0, ...SPLASH_SIZE },
 		titleBarStyle: "hidden",

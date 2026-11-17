@@ -64,7 +64,7 @@ test("a theme file dropped into the themes folder is listed, applied, live-reloa
 	await expect.poll(() => background(page)).toBe("#002244");
 
 	removeThemes();
-	await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+	await expect(page.locator("html")).toHaveAttribute("data-theme", "helios-cobalt");
 	const restored = await openThemeList(page);
 	await expect(restored.getByTestId("theme-option-user.ocean")).toHaveCount(0);
 	await expect(restored.getByTestId("theme-fallback-warning")).toBeVisible();

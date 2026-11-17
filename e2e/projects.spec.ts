@@ -289,7 +289,7 @@ test("opens a project from an explicit host path", async ({ page }) => {
 
 	const dialog = page.getByTestId("open-project-path-dialog");
 	await expect(dialog).toBeVisible();
-	await expect(dialog).toContainText("computer running ThinkRail");
+	await expect(dialog).toContainText("computer running Helios");
 	await expect(dialog.getByTestId("open-project-picker-error")).toHaveCount(0);
 	const input = dialog.getByTestId("open-project-path-input");
 	await expect(input).toBeFocused();
@@ -666,8 +666,8 @@ test("project context actions stay compact and close/reopen is lossless across c
 	await page.getByTestId("confirm-close-project").click();
 	await expect(page.getByTestId("project-item")).toHaveCount(0);
 	await expect(observer.getByTestId("project-item")).toHaveCount(0);
-	await expect(page.getByTestId("welcome-title")).toHaveText("ThinkRail");
-	await expect(observer.getByTestId("welcome-title")).toHaveText("ThinkRail");
+	await expect(page.getByTestId("welcome-title")).toHaveText("Helios Agent IDE");
+	await expect(observer.getByTestId("welcome-title")).toHaveText("Helios Agent IDE");
 	await expect(page.getByTestId("add-project-menu")).toBeFocused();
 
 	await page.getByTestId("add-project-menu").click();

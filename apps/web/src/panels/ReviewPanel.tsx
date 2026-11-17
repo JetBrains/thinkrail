@@ -18,6 +18,7 @@ import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
 import { QuietScrollArea } from "@/components/QuietScrollArea";
+import { PRODUCT_SHORT_NAME } from "@/constants/branding";
 import { PlanStatusIcon, SectionLabel } from "../chat/planKit";
 import { sessionGlance } from "../chat/planView";
 import { glanceIcon } from "../chat/TodoList";
@@ -418,7 +419,7 @@ function CommentRow({
 								title={t("review.panel.agentFiled")}
 								className="flex items-center gap-2 tr-text-eyebrow text-text-subtle"
 							>
-								<Bot className="size-12" /> ThinkRail
+								<Bot className="size-12" /> {PRODUCT_SHORT_NAME}
 							</span>
 						)}
 						{ref && <span className="tr-code-text text-text-subtle">{ref}</span>}

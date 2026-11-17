@@ -45,7 +45,7 @@ test("the splash message names a pending update target or a plain start", () => 
 	expect(splashMessage(DEFAULT_DIALOG_LABELS, "0.3.0-nightly.4")).toBe(
 		"Finishing update to 0.3.0-nightly.4…",
 	);
-	expect(splashMessage(DEFAULT_DIALOG_LABELS, null)).toBe("Starting ThinkRail…");
+	expect(splashMessage(DEFAULT_DIALOG_LABELS, null)).toBe("Starting Helios…");
 	const translated = readDialogLabels({
 		"desktop.splash.finishingUpdate": "Update auf {{version}} wird abgeschlossen…",
 		"desktop.splash.starting": "ThinkRail startet…",

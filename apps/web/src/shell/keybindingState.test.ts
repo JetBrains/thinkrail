@@ -28,7 +28,7 @@ test("a winner the browser's list lacks, a desktop row, is still named by its ca
 	});
 	const list = keybindingList({ desktop: false, keybindings, extensions: [] });
 	const winner = keybindings.byId.get("search.open")?.chords[0]?.lostTo ?? "";
-	expect(commandTitle(currentTranslator(), list, winner)).toBe("Quit ThinkRail");
+	expect(commandTitle(currentTranslator(), list, winner)).toBe("Quit Helios");
 	expect(commandTitle(currentTranslator(), list, "tab.close")).toBe("Close tab");
 	expect(commandTitle(currentTranslator(), list, "retired.command")).toBe("retired.command");
 });

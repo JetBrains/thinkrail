@@ -28,6 +28,8 @@ export const THEME_COLOR_KEYS = [
 	"dangerHover",
 	"onDanger",
 	"warning",
+	"editorLineHighlight",
+	"diffAdded",
 ] as const;
 
 export const ANSI_COLOR_KEYS = [
@@ -78,7 +80,12 @@ export const NULLABLE_THEME_COLOR_KEYS = [
 	"editorSelectionForeground",
 ] as const;
 
-export const DERIVED_THEME_COLOR_KEYS = ["dangerHover", "onDanger"] as const;
+export const DERIVED_THEME_COLOR_KEYS = [
+	"dangerHover",
+	"onDanger",
+	"editorLineHighlight",
+	"diffAdded",
+] as const;
 
 export type ThemeColorKey = (typeof THEME_COLOR_KEYS)[number];
 export type NullableThemeColorKey = (typeof NULLABLE_THEME_COLOR_KEYS)[number];
@@ -212,6 +219,8 @@ function parseThemeColors(value: unknown, issues: string[]): ThemeColors | null 
 		);
 		if (label) palette.onDanger ??= label;
 	}
+	if (palette.hover) palette.editorLineHighlight ??= palette.hover;
+	if (palette.success) palette.diffAdded ??= palette.success;
 	return Object.freeze(palette) as ThemeColors;
 }
 

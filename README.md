@@ -1,17 +1,17 @@
-# ThinkRail
+# Helios Agent IDE
 
 [![JetBrains incubator project](https://jb.gg/badges/incubator-plastic.svg)](https://confluence.jetbrains.com/display/ALL/JetBrains+on+GitHub)
 [![GitHub stars](https://img.shields.io/github/stars/JetBrains/thinkrail?style=social)](https://star-history.com/#JetBrains/thinkrail&Date)
 [![Discord](https://img.shields.io/badge/Discord-Join%20the%20chat-5865F2?logo=discord&logoColor=white)](https://thinkrail.ai/discord)
 
-ThinkRail is an agentic IDE that gets better every time you use it. With Spec-Driven Development support, it learns your project as you work, becoming more capable and helpful over time.
+Helios Agent IDE is an agentic IDE that gets better every time you use it, built on [ThinkRail](https://github.com/JetBrains/thinkrail). With Spec-Driven Development support, it learns your project as you work, becoming more capable and helpful over time. It ships with the deep-blue **Helios Cobalt** theme, the Inter interface font, and neon-blue focus and activity cues you can switch off.
 
-We built a rich interface around the `pi` coding agent, isolated work into separate workspaces, and gave the agent durable project knowledge through the spec graph and reusable skills. We are now adding full extension support, so ThinkRail can create the tools it needs based on how you work.
+We built a rich interface around the `pi` coding agent, isolated work into separate workspaces, and gave the agent durable project knowledge through the spec graph and reusable skills. We are now adding full extension support, so Helios can create the tools it needs based on how you work.
 
 **Website:** [thinkrail.ai](https://thinkrail.ai/) · **Blog:** [thinkrail.ai/blog](https://thinkrail.ai/blog/) ·
 **Discord:** [thinkrail.ai/discord](https://thinkrail.ai/discord)
 
-⭐ If you find ThinkRail useful, give it a star. It helps others discover it.
+⭐ If you find Helios useful, give it a star. It helps others discover it.
 
 <p align="center">
  <a href="https://www.star-history.com/jetbrains/thinkrail">
@@ -21,7 +21,7 @@ We built a rich interface around the `pi` coding agent, isolated work into separ
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/readme-assets/workbench-dark.png">
-  <img src=".github/readme-assets/workbench-light.png" alt="ThinkRail workbench: the Projects pane beside the left tool rail listing worktree workspaces and their Settled shelf, a finished pi conversation with its tool steps in the center, the resulting diff beside it, and the Specs tree above the Changes list on the right with their tools on the edge rail" width="900">
+  <img src=".github/readme-assets/workbench-light.png" alt="Helios Agent IDE workbench: the Projects pane beside the left tool rail listing worktree workspaces and their Settled shelf, a finished pi conversation with its tool steps in the center, the resulting diff beside it, and the Specs tree above the Changes list on the right with their tools on the edge rail" width="900">
 </picture>
 *From the left: An isolated workspace, a work session with an AI agent in that workspace, the code change made by the agent, and the spec tree.*
 
@@ -29,7 +29,7 @@ We built a rich interface around the `pi` coding agent, isolated work into separ
 
 ## Installation
 
-ThinkRail ships in two forms: a native desktop installer and the self-contained `thinkrail` CLI. You can install them from out [Landing page](https://thinkrail.ai/#install).
+Helios Agent IDE ships in two forms: a native desktop installer and the self-contained `thinkrail` CLI. You can install them from out [Landing page](https://thinkrail.ai/#install).
 
 For latest version, see the [Releases page](https://github.com/JetBrains/thinkrail/releases).
 
@@ -42,9 +42,9 @@ For latest version, see the [Releases page](https://github.com/JetBrains/thinkra
 
   * The topbar shows where the active branch stands against `origin`, and the state of its pull request. From there you can publish, push, or open a new PR described from the plan, the commits, your PR template, or an agent-written draft.
 
-  * Once a GitHub PR is open, ThinkRail shows its CI checks and review decision, and lets you mark it ready, merge it, reopen it, or delete the remote branch.
+  * Once a GitHub PR is open, Helios shows its CI checks and review decision, and lets you mark it ready, merge it, reopen it, or delete the remote branch.
 
-- **An IDE around the agent.** ThinkRail comes with Monaco editor tabs, a file tree integrated with git to show code changes as they happen, terminals, and document support. Rendered Markdown previews have a heading outline that follows the section you're reading; hide it or move it to either side. The pane you're typing in carries an accent line, a frame briefly lights the pane the keyboard takes you to, and VS Code-style keys move you around: `F6` steps between panes, `⌘L` jumps to the chat input, `⌘0` to Projects, `⌘1`–`⌘9` to an editor group, and `` ⌃` `` to the terminal; `⌘\` splits the editor and `⌃⌘←` / `⌃⌘→` move a tab between groups. In a chat, `⌘↑` steps from the input into the conversation, where arrows or `j`/`k` walk messages, tool calls and thinking blocks, `→`/`←` unfold them, `C` copies and `O` opens the file a tool touched. Review comments need no mouse either: Tab onto a diff and a line cursor moves with arrows or `j`/`k` (`h`/`l` switch sides, Shift extends), Enter comments, and rendered Markdown blocks, image regions and the swipe divider take the same keys. Press `F` outside a text field (or `⌘;` anywhere) for hint mode: every button, tab, row and field gets a short label, and typing it presses that element (Shift on the last letter only focuses it); switch it off in Settings → Extensions. In the sidebar trees `S` searches the visible rows and `h`/`j`/`k`/`l` move like the arrows. `⌘?` opens a filterable, near-fullscreen cheatsheet of every shortcut in columns, with the pane you're in highlighted (a Mac browser keeps `⌘?` for its Help menu, so use the keyboard icon at the bottom of the left tool rail or the palette there); tooltips show a button's shortcut. Rebind any global shortcut in Settings → Keyboard (saved on the host, so every window and browser follows), and export or import them as a JSON file; extensions bring their own shortcuts, which you can rebind too.
+- **An IDE around the agent.** Helios comes with Monaco editor tabs, a file tree integrated with git to show code changes as they happen, terminals, and document support. Rendered Markdown previews have a heading outline that follows the section you're reading; hide it or move it to either side. The pane you're typing in carries an accent line, a frame briefly lights the pane the keyboard takes you to, and VS Code-style keys move you around: `F6` steps between panes, `⌘L` jumps to the chat input, `⌘0` to Projects, `⌘1`–`⌘9` to an editor group, and `` ⌃` `` to the terminal; `⌘\` splits the editor and `⌃⌘←` / `⌃⌘→` move a tab between groups. In a chat, `⌘↑` steps from the input into the conversation, where arrows or `j`/`k` walk messages, tool calls and thinking blocks, `→`/`←` unfold them, `C` copies and `O` opens the file a tool touched. Review comments need no mouse either: Tab onto a diff and a line cursor moves with arrows or `j`/`k` (`h`/`l` switch sides, Shift extends), Enter comments, and rendered Markdown blocks, image regions and the swipe divider take the same keys. Press `F` outside a text field (or `⌘;` anywhere) for hint mode: every button, tab, row and field gets a short label, and typing it presses that element (Shift on the last letter only focuses it); switch it off in Settings → Extensions. In the sidebar trees `S` searches the visible rows and `h`/`j`/`k`/`l` move like the arrows. `⌘?` opens a filterable, near-fullscreen cheatsheet of every shortcut in columns, with the pane you're in highlighted (a Mac browser keeps `⌘?` for its Help menu, so use the keyboard icon at the bottom of the left tool rail or the palette there); tooltips show a button's shortcut. Rebind any global shortcut in Settings → Keyboard (saved on the host, so every window and browser follows), and export or import them as a JSON file; extensions bring their own shortcuts, which you can rebind too.
 
 - **Powerful chat features.** You can open several concurrent work sessions per workspace, each with its own model. Send a prompt, or queue it as a follow-up, delegate to subagents, and work together on a shared plan: the agent updates it, and you review and edit.
 
@@ -56,18 +56,18 @@ For latest version, see the [Releases page](https://github.com/JetBrains/thinkra
 
 - **Always up-to-date specifications.** A connected graph of `SPEC.md` files lives beside the code; the agent reads, searches, and maintains it through dedicated `spec_*` tools, so project intent persists across sessions. The read-only Specs tool renders the graph as a tree in its own view. Type `#` and a question in the palette to find the spec sections that answer it, in any word order and word form, ranked the way the agent's own `spec_search` ranks them. Press `↵` to open the spec at that heading, or `⌥↵` to ask the agent in a new chat when the specs phrase it differently.
 
-- **Skills.** ThinkRail loads your `pi` skills and any already in your project. It can also import skills from Claude, Codex, and other coding agents: switch them on in Settings → Extensions, or per project in the Skills dialog, which also shows the size of your skill catalog. A large library is listed within a small prompt budget, and the agent finds the rest with a skill search.
+- **Skills.** Helios loads your `pi` skills and any already in your project. It can also import skills from Claude, Codex, and other coding agents: switch them on in Settings → Extensions, or per project in the Skills dialog, which also shows the size of your skill catalog. A large library is listed within a small prompt budget, and the agent finds the rest with a skill search.
 
-- **Agent tools beyond the shell.** Thanks to the ThinkRail GUI, your AI agent can ask you structured multiple-choice questions in the chat instead of guessing, draw Mermaid diagrams, and show comparisons and file previews. When the agent proposes a UI change, it shows a before/after mockup you can comment on like a diff. Any HTML file, from a mockup to a generated report, opens in your browser from its tab, its preview or the Files menu. When a question's options come with mockups, open them full screen to flip through them, put two side by side (two HTML mockups scroll together and also compare with a swipe or an overlay), or see them all at once, and pick one right there.
+- **Agent tools beyond the shell.** Thanks to the Helios GUI, your AI agent can ask you structured multiple-choice questions in the chat instead of guessing, draw Mermaid diagrams, and show comparisons and file previews. When the agent proposes a UI change, it shows a before/after mockup you can comment on like a diff. Any HTML file, from a mockup to a generated report, opens in your browser from its tab, its preview or the Files menu. When a question's options come with mockups, open them full screen to flip through them, put two side by side (two HTML mockups scroll together and also compare with a swipe or an overlay), or see them all at once, and pick one right there.
 
-  - Settings → Extensions lists the ThinkRail extensions the agent may use. It can also install any `pi` package by source (npm, git or a local folder), for you or for a repository, showing what each one adds and letting you switch individual packages, their extensions and skills, and `pi`'s built-ins on or off.
+  - Settings → Extensions lists the Helios extensions the agent may use. It can also install any `pi` package by source (npm, git or a local folder), for you or for a repository, showing what each one adds and letting you switch individual packages, their extensions and skills, and `pi`'s built-ins on or off.
   - The tools behind the questions, diagrams, and previews are also published as plain `pi` packages: `pi install npm:@thinkrail/pi-ask-user-question` for the questions  [`@thinkrail/pi-ask-user-question`](https://www.npmjs.com/package/@thinkrail/pi-ask-user-question)) and `pi install npm:@thinkrail/pi-visualize` for the diagrams and previews [`@thinkrail/pi-visualize`](https://www.npmjs.com/package/@thinkrail/pi-visualize)), so a vanilla `pi` in the terminal gets the same tools.
 
-- **MCP servers.** Connect the MCP servers in your `pi` `mcp.json`, or configure them in Settings. ThinkRail asks in the chat before calls that the server does not mark read-only, or always allows the tools you trust in a project. Servers a repository defines stay off until you approve them. ThinkRail signs you in to OAuth servers from Settings and shows each chat's servers next to its background commands and subagents, with each server's state and the chat's calls to it.
+- **MCP servers.** Connect the MCP servers in your `pi` `mcp.json`, or configure them in Settings. Helios asks in the chat before calls that the server does not mark read-only, or always allows the tools you trust in a project. Servers a repository defines stay off until you approve them. Helios signs you in to OAuth servers from Settings and shows each chat's servers next to its background commands and subagents, with each server's state and the chat's calls to it.
 
-- **Your providers, your credentials.** Sign in with [JetBrains AI](https://www.jetbrains.com/ai/) or connect any provider through `pi`'s own auth. ThinkRail has no accounts of its own.
+- **Your providers, your credentials.** Sign in with [JetBrains AI](https://www.jetbrains.com/ai/) or connect any provider through `pi`'s own auth. Helios has no accounts of its own.
 
-- **Your `pi` setup.** ThinkRail reads your existing `pi` configuration (`~/.pi/agent`). To use another one (for example, a personal `~/.pi/agent-personal`), or to pass extra environment variables to the agent, terminals and MCP servers, set them in Settings → Environment. The configuration becomes active on the next start. Settings → Models also holds `pi`'s prompt-cache warming (off, only while a run is active, or also between runs); ThinkRail keeps it to active runs unless you choose otherwise, so idle chats don't spend in the background.
+- **Your `pi` setup.** Helios reads your existing `pi` configuration (`~/.pi/agent`). To use another one (for example, a personal `~/.pi/agent-personal`), or to pass extra environment variables to the agent, terminals and MCP servers, set them in Settings → Environment. The configuration becomes active on the next start. Settings → Models also holds `pi`'s prompt-cache warming (off, only while a run is active, or also between runs); Helios keeps it to active runs unless you choose otherwise, so idle chats don't spend in the background.
 
 - **Your own model servers.** Go to Settings → Providers → Custom servers and connect a company LLM gateway or a model running on your own machine. Any OpenAI-compatible server fits: LiteLLM, sglang, vLLM, Ollama, LM Studio, or llama.cpp.
 
@@ -75,11 +75,11 @@ For latest version, see the [Releases page](https://github.com/JetBrains/thinkra
 
 - **Desktop app or browser.** A native desktop app, or the `thinkrail` CLI that opens the same app in your browser. Both embed the same engine host. App state lives under `~/.thinkrail`.
 
-- **Your language.** ThinkRail uses your system language or a language you pick in Settings → Language: English, Japanese, Polish, Russian, Simplified Chinese, Spanish, or Traditional Chinese (Taiwan). You can add a language ThinkRail doesn't ship yet by putting a translated locale file, for example `de.json`, in `~/.thinkrail/locales`. (Tell your AI agent to do it for you!)
+- **Your language.** Helios uses your system language or a language you pick in Settings → Language: English, Japanese, Polish, Russian, Simplified Chinese, Spanish, or Traditional Chinese (Taiwan). You can add a language Helios doesn't ship yet by putting a translated locale file, for example `de.json`, in `~/.thinkrail/locales`. (Tell your AI agent to do it for you!)
 
-- **Your themes.** In Settings → Appearance, you can choose from dark, light, minimal, and high-contrast themes. You can also make your own theme by copying a bundled `*.theme.json`, changing its id and colors, and saving it to `~/.thinkrail/themes`. (Again, tell your AI agent to do it for you!)
+- **Your themes.** In Settings → Appearance, you can choose from Helios Cobalt (the default), dark, light, minimal, and high-contrast themes, and switch the neon glow and its animations on or off (motion also stops when your system asks for reduced motion). You can also make your own theme by copying a bundled `*.theme.json`, changing its id and colors, and saving it to `~/.thinkrail/themes`. (Again, tell your AI agent to do it for you!)
 
-- **Your fonts.** In Settings → Appearance, you can pick the interface and code fonts. You can choose from the bundled Geist and JetBrains Mono, any font installed on your computer, and font files kept in `~/.thinkrail/fonts`, with fallback fonts for icon glyphs, a code size, ligatures, and a text-weight slider.
+- **Your fonts.** In Settings → Appearance, you can pick the interface and code fonts. You can choose from the bundled Inter (the default), Geist and JetBrains Mono, any font installed on your computer, and font files kept in `~/.thinkrail/fonts`, with fallback fonts for icon glyphs, a code size, ligatures, and a text-weight slider.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/readme-assets/specs-dark.png">
@@ -101,7 +101,7 @@ Download the `thinkrail-desktop-*` asset for your platform:
   sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2 libnotify-bin
   ```
 
-There are two update channels: stable and nightly. If the ThinkRail desktop app, you can check them in **Settings → Updates**: **Download** → **Preparing update** → **Install & Restart**.
+There are two update channels: stable and nightly. If the Helios desktop app, you can check them in **Settings → Updates**: **Download** → **Preparing update** → **Install & Restart**.
 ### Command line
 
 The installer downloads the right binary, verifies its SHA-256 checksum, and puts `thinkrail` on your PATH.
@@ -125,7 +125,7 @@ thinkrail ~/code/my-repo
 ```
 
 * `thinkrail` needs `git` on your PATH and a model provider. You can sign in with JetBrains AI from the app or use your own provider credentials. The first launch walks you through connecting a provider and picking a project; **Start a new project** creates an empty git repository (under `~/thinkrail` by default), so you don't need one ready.
-* **Add project → Clone repository…** clones a Git URL into a new folder on the computer running ThinkRail and opens it as a project. Choose the parent folder and folder name, optionally limit the history depth, or cancel an in-progress clone.
+* **Add project → Clone repository…** clones a Git URL into a new folder on the computer running Helios and opens it as a project. Choose the parent folder and folder name, optionally limit the history depth, or cancel an in-progress clone.
 * GitHub and other Git hosts work with the Git credentials and SSH keys already on your machine.
 * `thinkrail --help` lists the flags, and `thinkrail --version` prints the build.
 
@@ -147,7 +147,7 @@ $env:THINKRAIL_CHANNEL='nightly'; irm https://raw.githubusercontent.com/JetBrain
 set "THINKRAIL_CHANNEL=stable" && set "THINKRAIL_VERSION=0.3.1" && powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"   # cmd
 ```
 
-If you keep ThinkRail running, it periodically checks for updates and, when it finds one, shows an "Update available" button in the GUI.
+If you keep Helios running, it periodically checks for updates and, when it finds one, shows an "Update available" button in the GUI.
 
 `thinkrail uninstall` removes the executable, the PATH entry the installer added, and the install metadata; it then asks whether to delete your `~/.thinkrail` app state (kept by default; `--remove-data` deletes it, and `-y` skips the questions).
 

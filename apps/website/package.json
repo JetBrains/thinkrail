@@ -29,6 +29,7 @@
 		"@astrojs/sitemap": "3.7.4",
 		"@astrojs/ts-content-mapper": "0.2.0",
 		"@fontsource-variable/geist": "catalog:",
+		"@fontsource-variable/inter": "catalog:",
 		"@fontsource-variable/jetbrains-mono": "catalog:",
 		"@fontsource-variable/orbitron": "catalog:",
 		"@resvg/resvg-js": "catalog:",

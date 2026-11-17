@@ -26,7 +26,7 @@ export function isWindowFocused(): boolean {
 	return typeof document !== "undefined" && document.hasFocus();
 }
 
-/** The symbol-only ThinkRail mark, the same artwork as the browser-tab favicon and shell logo. */
+/** The symbol-only Helios mark, the same artwork as the browser-tab favicon and shell logo. */
 const NOTIFICATION_ICON = "/favicon.svg";
 
 export interface ShowNotificationInput {

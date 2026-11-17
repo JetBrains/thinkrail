@@ -375,9 +375,9 @@ fn escape_html(text: &str) -> String {
 pub fn splash_html(message: &str) -> String {
     format!(
         "<!doctype html><html><head><meta charset=\"utf-8\">\
-        <meta name=\"color-scheme\" content=\"dark light\"><title>ThinkRail</title>\
-        <style>:root{{--bg:#09090b;--fg:#f4f4f5;--muted:#babac1;--accent:#8dff4f;--track:#27272a}}\
-        @media (prefers-color-scheme: light){{:root{{--bg:#ffffff;--fg:#27272a;--muted:#52525b;--accent:#2a7314;--track:#e4e4e7}}}}\
+        <meta name=\"color-scheme\" content=\"dark light\"><title>Helios Agent IDE</title>\
+        <style>:root{{--bg:#060a12;--fg:#e6f0ff;--muted:#94a8cc;--accent:#00d4ff;--track:#1b2a4a}}\
+        @media (prefers-color-scheme: light){{:root{{--bg:#ffffff;--fg:#27272a;--muted:#52525b;--accent:#2563eb;--track:#e4e4e7}}}}\
         html,body{{margin:0;height:100%;background:var(--bg);color:var(--fg);cursor:default;user-select:none;-webkit-user-select:none}}\
         body{{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font:13px/1.4 system-ui,\"Segoe UI\",sans-serif}}\
         .mark{{font-size:28px;font-weight:700;color:var(--accent)}}\
@@ -386,7 +386,7 @@ pub fn splash_html(message: &str) -> String {
         .bar i{{display:block;width:35%;height:100%;border-radius:2px;background:var(--accent);animation:slide 1.2s ease-in-out infinite}}\
         @keyframes slide{{from{{transform:translateX(-100%)}}to{{transform:translateX(290%)}}}}\
         @media (prefers-reduced-motion: reduce){{.bar i{{animation:none;width:100%;opacity:.5}}}}\
-        </style></head><body><div class=\"mark\">ThinkRail</div>\
+        </style></head><body><div class=\"mark\">Helios</div>\
         <div class=\"message\" role=\"status\">{}</div><div class=\"bar\"><i></i></div></body></html>",
         escape_html(message)
     )
@@ -411,7 +411,7 @@ pub fn open_splash_window(app: &AppHandle, message: &str) -> Result<WebviewWindo
     let url = url::Url::parse(&format!("data:text/html;charset=utf-8,{encoded}"))
         .map_err(|error| format!("could not build the splash URL: {error}"))?;
     WebviewWindowBuilder::new(app, SPLASH_WINDOW, WebviewUrl::External(url))
-        .title("ThinkRail")
+        .title("Helios Agent IDE")
         .inner_size(SPLASH_WIDTH, SPLASH_HEIGHT)
         .center()
         .decorations(false)
@@ -462,7 +462,7 @@ pub fn open_main_window(
     bridge: Option<(String, String)>,
 ) -> Result<WebviewWindow, String> {
     let mut builder = WebviewWindowBuilder::new(app, MAIN_WINDOW, WebviewUrl::External(url))
-        .title("ThinkRail")
+        .title("Helios Agent IDE")
         .inner_size(MAIN_WIDTH, MAIN_HEIGHT)
         .visible(false);
     if let Some((script, origin)) = bridge {
@@ -493,7 +493,7 @@ mod tests {
 
     #[test]
     fn splash_styles_apply_in_both_color_schemes() {
-        let html = splash_html("Starting ThinkRail…");
+        let html = splash_html("Starting Helios…");
         // The light-scheme block closes before the shared layout rules, so
         // dark mode keeps the centering and the progress bar.
         let (light_block, shared) = html
@@ -511,7 +511,7 @@ mod tests {
             .expect("style element")
             .0;
         assert_eq!(style.matches('{').count(), style.matches('}').count());
-        assert!(html.contains("Starting ThinkRail…"));
+        assert!(html.contains("Starting Helios…"));
     }
 
     #[test]

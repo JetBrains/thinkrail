@@ -31,7 +31,7 @@ const MAX_DIALOG_LABEL_LENGTH: usize = 200;
 const MENU_LABEL_DEFAULTS: [(&str, &str); 5] = [
     ("desktop.menu.edit", "Edit"),
     ("desktop.menu.settings", "Settings…"),
-    ("desktop.menu.quit", "Quit ThinkRail"),
+    ("desktop.menu.quit", "Quit Helios"),
     ("desktop.menu.window", "Window"),
     ("desktop.menu.close", "Close"),
 ];
@@ -42,20 +42,20 @@ const MENU_LABEL_DEFAULTS: [(&str, &str); 5] = [
 /// together.
 const DIALOG_LABEL_DEFAULTS: [(&str, &str); 6] = [
     ("desktop.dialog.quit", "Quit"),
-    ("desktop.dialog.startFailed", "ThinkRail could not start"),
+    ("desktop.dialog.startFailed", "Helios could not start"),
     (
         "desktop.dialog.updateRestartFailed",
-        "ThinkRail could not restart to install the update",
+        "Helios could not restart to install the update",
     ),
     (
         "desktop.dialog.updateRestartFailedTitle",
-        "ThinkRail could not restart",
+        "Helios Agent IDE could not restart",
     ),
     (
         "desktop.splash.finishingUpdate",
         "Finishing update to {{version}}…",
     ),
-    ("desktop.splash.starting", "Starting ThinkRail…"),
+    ("desktop.splash.starting", "Starting Helios…"),
 ];
 
 #[derive(Default)]
@@ -225,10 +225,10 @@ fn application_submenu(
     use tauri::menu::{MenuItem, PredefinedMenuItem, Submenu};
 
     let settings = menu_text(labels, "desktop.menu.settings", "Settings…");
-    let quit = menu_text(labels, "desktop.menu.quit", "Quit ThinkRail");
+    let quit = menu_text(labels, "desktop.menu.quit", "Quit Helios");
     Submenu::with_items(
         app,
-        "ThinkRail",
+        "Helios",
         true,
         &[
             &PredefinedMenuItem::about(app, None, None).map_err(|error| error.to_string())?,
@@ -376,7 +376,7 @@ mod tests {
         assert_eq!(labels.get("desktop.menu.window").map(String::as_str), Some("Window"));
         assert_eq!(
             labels.get("desktop.splash.starting").map(String::as_str),
-            Some("Starting ThinkRail…")
+            Some("Starting Helios…")
         );
         // Full coverage: every allowlisted key is present.
         assert_eq!(
@@ -390,7 +390,7 @@ mod tests {
         let labels = sanitize_menu_labels(input(&[
             ("desktop.menu.edit", "Edit"),
             ("attacker.key", "evil"),
-            ("desktop.menu.quit ", "Quit ThinkRail"),
+            ("desktop.menu.quit ", "Quit Helios"),
         ]));
         assert!(!labels.contains_key("attacker.key"));
         assert!(!labels.contains_key("desktop.menu.quit "));
@@ -422,7 +422,7 @@ mod tests {
         );
         assert_eq!(
             labels.get("desktop.dialog.startFailed").map(String::as_str),
-            Some("ThinkRail could not start")
+            Some("Helios could not start")
         );
     }
 
@@ -442,7 +442,7 @@ mod tests {
         assert_eq!(labels.get("desktop.dialog.startFailed"), Some(&at_cap));
         assert_eq!(
             labels.get("desktop.splash.starting").map(String::as_str),
-            Some("Starting ThinkRail…")
+            Some("Starting Helios…")
         );
     }
 

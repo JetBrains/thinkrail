@@ -81,7 +81,7 @@ test's documented specialized list names it.
   size to content unless the layout asks for `w-full`.
 - **States** live in the component, not at the call site: hover uses the variant's hover role
   (soft-primary: `control-soft-primary-bg-hovered` plus a `primary-muted` border, so its accent label
-  stays AA); pressed (`:active`, pointer down or Space held) looks exactly like hover — the same `active:` classes mirror the `hover:` ones, so a keyboard press without a pointer shows it too — and never moves geometry; focus-visible is the shared `focus-ring` (1px `focus-ring` outline, 1px outside) in every variant, so
+  stays AA); pressed (`:active`, pointer down or Space held) looks exactly like hover — the same `active:` classes mirror the `hover:` ones, so a keyboard press without a pointer shows it too — and never moves geometry; focus-visible is the shared `focus-ring` (1px `focus-ring` outline, 1px outside, plus the accent halo when the app's neon setting is on — `apps/web/src/styles/COLOR.md`, *Neon glow*; with it on, a hovered `primary` button also glows, keyed off the `data-variant` the button already renders) in every variant, so
   it stays visible over a primary or destructive fill and on every surface (`ghost`, which has no surface
   of its own, also takes its hover fill and default text while focused, so the focused button reads as a
   control and not only as a ring around empty space) — except a `ghost` icon-only button, which takes

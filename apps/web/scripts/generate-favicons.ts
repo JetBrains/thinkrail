@@ -11,9 +11,9 @@ const mark = /<path[^>]*\sd="([^"]+)"/.exec(
 )?.[1];
 if (!mark) throw new Error("public/favicon.svg has no mark path");
 
-const TILE = "#000000";
-const GLYPH = "#8dff4f";
-const tile = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><rect width="1024" height="1024" rx="224" fill="${TILE}"/><g transform="translate(136 209) scale(1.35)" fill="${GLYPH}"><path d="${mark}"/></g></svg>`;
+const TILE = "#060a12";
+const GLYPH = "#00d4ff";
+const tile = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><rect width="1024" height="1024" rx="224" fill="${TILE}"/><g transform="translate(152 152) scale(7.2)" fill="${GLYPH}"><path d="${mark}"/></g></svg>`;
 
 function png(size: number, background?: string): Buffer {
 	return new Resvg(tile, {

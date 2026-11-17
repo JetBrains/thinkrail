@@ -126,7 +126,7 @@ test("Ctrl+R opens history recall, cycles scope to all, zooms to messages, inser
 	await expect(overlay).toHaveAttribute("data-stage", "zoomed");
 	const debounceHit = messageItems.filter({ hasText: "debounce window overlaps" });
 	await expect(debounceHit).toBeVisible();
-	await expect(debounceHit).toContainText("not a ThinkRail workspace");
+	await expect(debounceHit).toContainText("not a Helios workspace");
 	await expect(page.getByTestId("history-counts").last()).toHaveText("1/1");
 
 	await query.press("ArrowDown");

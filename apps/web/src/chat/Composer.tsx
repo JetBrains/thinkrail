@@ -771,6 +771,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								size="m"
 								iconLeft={StopFill}
 								data-testid="chat-abort"
+								data-neon="stream"
 								aria-label={t("chat.composer.stop")}
 								tooltip={t("chat.composer.stop")}
 								onClick={onAbort}
@@ -781,6 +782,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						) : null}
 						<div
 							data-testid="chat-send-pill"
+							data-neon="cta"
 							data-armed={canSend}
 							className={cn(SEND_PILL, canSend ? SEND_PILL_ARMED : SEND_PILL_INERT)}
 						>

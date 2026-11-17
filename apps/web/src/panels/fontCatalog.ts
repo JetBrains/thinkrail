@@ -6,7 +6,7 @@ import {
 	type InstalledFontFamily,
 	type UserFontsSnapshot,
 } from "@thinkrail/contracts";
-import type { BundledFaces, FontProbe } from "@/fonts";
+import type { BundledAlternates, BundledFaces, FontProbe } from "@/fonts";
 
 export type FontSource = "builtin" | "custom" | "installed";
 
@@ -60,16 +60,18 @@ export function customFamilies(snapshot: UserFontsSnapshot | null): Map<string, 
 
 export function fontOptions({
 	faces,
+	alternates,
 	custom,
 	installed,
 	probe,
 }: {
 	faces: BundledFaces;
+	alternates?: BundledAlternates;
 	custom: ReadonlyMap<string, CustomFamily>;
 	installed: InstalledFonts;
 	probe: (family: string) => FontProbe;
 }): FontOption[] {
-	const builtin: FontOption[] = FONT_ROLES.map((role) => ({
+	const roleDefaults: FontOption[] = FONT_ROLES.map((role) => ({
 		key: fontFamilyRefKey({ builtin: role }),
 		ref: { builtin: role },
 		family: faces[role],
@@ -79,16 +81,33 @@ export function fontOptions({
 		defaultFor: role,
 		renders: true,
 	}));
-	const customOptions: FontOption[] = [...custom].map(([family, { monospace }]) => ({
-		key: fontFamilyRefKey({ name: family }),
-		ref: { name: family },
-		family,
-		label: family,
-		source: "custom",
-		monospace,
-		defaultFor: null,
-		renders: true,
-	}));
+	const alternateOptions: FontOption[] = FONT_ROLES.flatMap((role) =>
+		(alternates?.[role] ?? [])
+			.filter((family) => family !== faces[role])
+			.map((family) => ({
+				key: fontFamilyRefKey({ name: family }),
+				ref: { name: family },
+				family,
+				label: displayFamily(family),
+				source: "builtin" as const,
+				monospace: role === "code",
+				defaultFor: null,
+				renders: true,
+			})),
+	);
+	const builtin = [...roleDefaults, ...alternateOptions];
+	const customOptions: FontOption[] = [...custom]
+		.filter(([family]) => !alternateOptions.some((option) => option.family === family))
+		.map(([family, { monospace }]) => ({
+			key: fontFamilyRefKey({ name: family }),
+			ref: { name: family },
+			family,
+			label: family,
+			source: "custom",
+			monospace,
+			defaultFor: null,
+			renders: true,
+		}));
 	const taken = new Set([...builtin.map((option) => option.family), ...custom.keys()]);
 	const system: FontOption[] =
 		installed.status === "ready"

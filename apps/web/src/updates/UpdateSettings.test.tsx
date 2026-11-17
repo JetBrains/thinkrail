@@ -67,7 +67,7 @@ function renderAffordance(updates: UpdatesController): string {
 
 test("idle native updates describe checks without claiming automatic downloads", () => {
 	const markup = render(nativeUpdates(nativeState("idle")));
-	expect(markup).toContain("ThinkRail is up to date");
+	expect(markup).toContain("Helios Agent IDE is up to date");
 	expect(markup).toContain("checks for new releases in the background");
 	expect(markup).toContain("Downloads and installation begin only when you choose them");
 	expect(markup).toContain("Check for Updates");
@@ -78,7 +78,7 @@ test("available native update exposes Download with nightly public identity", ()
 	const markup = render(
 		nativeUpdates(nativeState("available", { availableVersion: "0.1.0-nightly.46" })),
 	);
-	expect(markup).toContain("ThinkRail 0.1.0-nightly.46 is available");
+	expect(markup).toContain("Helios Agent IDE 0.1.0-nightly.46 is available");
 	expect(markup).toContain('data-testid="update-download"');
 	expect(markup).toContain("Download");
 	expect(markup).toContain("Version 0.1.0-nightly.45 · nightly channel");
@@ -97,7 +97,7 @@ test("stable native updates keep their public channel identity", () => {
 			}),
 		),
 	);
-	expect(markup).toContain("ThinkRail 0.1.2 is available");
+	expect(markup).toContain("Helios Agent IDE 0.1.2 is available");
 	expect(markup).toContain("Version 0.1.1 · stable channel");
 	expect(markup).not.toContain("nightly channel");
 });
@@ -139,7 +139,7 @@ test("ready native update exposes Install & Restart and closing Settings as defe
 	);
 	expect(markup).toContain("Install &amp; Restart");
 	expect(markup).toContain("Close Settings to install later");
-	expect(markup).toContain("Quitting ThinkRail normally does not install the update");
+	expect(markup).toContain("Quitting Helios normally does not install the update");
 	expect(markup).not.toContain(">Later<");
 	expect(markup).not.toContain("Are you sure");
 });
@@ -231,11 +231,11 @@ test("a native request error remains discoverable from the topbar", () => {
 
 test("a legacy host notice keeps immutable release details and fixed machine guidance only", () => {
 	const markup = render(hostUpdates(hostNotice()));
-	expect(markup).toContain("ThinkRail 0.2.0 is available");
+	expect(markup).toContain("Helios Agent IDE 0.2.0 is available");
 	expect(markup).toContain("Current: 0.1.0 · stable channel");
 	expect(markup).toContain("Available: 0.2.0");
 	expect(markup).toContain("thinkrail update");
-	expect(markup).toContain("on the machine running the host, then restart ThinkRail");
+	expect(markup).toContain("on the machine running the host, then restart Helios");
 	expect(markup).toContain('data-source="host"');
 	expect(markup).not.toContain("Check for Updates");
 	expect(markup).not.toContain("Retry");
@@ -250,7 +250,7 @@ test("a legacy host notice still exposes guidance and the shared available affor
 	expect(markup).toContain('data-source="host"');
 	expect(markup).toContain('data-status="legacy"');
 	expect(markup).toContain("Update available");
-	expect(markup).toContain("ThinkRail 0.2.0 is available");
+	expect(markup).toContain("Helios 0.2.0 is available");
 });
 
 test("a current host offers Run Update only for available state", () => {
@@ -266,7 +266,7 @@ test("a running host update shows indeterminate progress without another action"
 	const updates = hostUpdates(hostNotice("running"), true);
 	const markup = render(updates);
 	expect(markup).toContain('data-status="running"');
-	expect(markup).toContain("Updating ThinkRail to 0.2.0");
+	expect(markup).toContain("Updating Helios Agent IDE to 0.2.0");
 	expect(markup).toContain('aria-label="Running update…"');
 	expect(markup).toContain("<progress");
 	expect(markup).not.toContain('value="');
@@ -278,9 +278,9 @@ test("a succeeded host update latches manual restart guidance", () => {
 	const updates = hostUpdates(hostNotice("succeeded"), true);
 	const markup = render(updates);
 	expect(markup).toContain('data-status="succeeded"');
-	expect(markup).toContain("ThinkRail 0.2.0 was installed");
+	expect(markup).toContain("Helios Agent IDE 0.2.0 was installed");
 	expect(markup).toContain('data-testid="update-host-restart-guidance"');
-	expect(markup).toContain("Restart the ThinkRail host manually");
+	expect(markup).toContain("Restart the Helios host manually");
 	expect(markup).not.toContain("thinkrail update");
 	expect(markup).not.toContain("Run Update");
 	expect(renderAffordance(updates)).toContain("Restart host");
@@ -316,7 +316,7 @@ test("a failed last install explains its cause in Settings and keeps the topbar 
 	});
 	const markup = render(nativeUpdates(state));
 	expect(markup).toContain("update-last-install");
-	expect(markup).toContain("Another program is using ThinkRail&#x27;s install folder");
+	expect(markup).toContain("Another program is using Helios Agent IDE&#x27;s install folder");
 	expect(markup).toContain("Install &amp; Restart");
 	const chip = renderAffordance(nativeUpdates(state));
 	expect(chip).toContain("Update didn&#x27;t install");

@@ -6,7 +6,7 @@
 
 [[permission]]
 identifier = "bridge"
-description = "Commands the ThinkRail web client reaches through the desktop bridge."
+description = "Commands the Helios Agent IDE web client reaches through the desktop bridge."
 commands.allow = [
 	"get_window_state",
 	"minimize_window",

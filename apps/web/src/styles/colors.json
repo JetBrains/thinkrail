@@ -300,6 +300,22 @@
 			"publish": false,
 			"note": "Monaco's secondary matches of the active selection"
 		},
+		"editor-line-highlight-bg": {
+			"from": "editorLineHighlight",
+			"publish": false,
+			"note": "Monaco's current-line highlight; defaults to the hover fill when a manifest leaves it out"
+		},
+		"diff-addition": {
+			"from": "diffAdded",
+			"publish": false,
+			"note": "the added-line hue in Pierre diffs and the gutter numbers beside them; defaults to success, so only a theme that opts in moves additions off green"
+		},
+		"diff-addition-bg": {
+			"from": "diffAdded",
+			"alpha": "wash",
+			"publish": false,
+			"note": "Monaco's inserted text/line wash in the diff editor"
+		},
 		"editor-find-match-bg": {
 			"from": "warning",
 			"alpha": "muted",

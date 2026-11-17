@@ -25,10 +25,12 @@ those tokens; the defaults themselves stay in `typography.json` ([[web-typograph
   weight preview used while the Settings slider drags.
 - **Public surface:** `index.ts` only — `initializeFonts`, `applyFontPreference`,
   `previewFontWeightOffset`, `installUserFonts`, `subscribeFontFaces` / `fontFacesRevision`,
-  `bundledFaces`, `probeFont`, `weightResponse`, `textWeightRange`, `sharesHostFonts`, `writeFontsHint`,
+  `bundledFaces`, `bundledAlternates` (the first family of each role's `--tr-font-family-<role>-alternate`
+  token — Geist for the interface — so a bundled face that is not the default can still be offered),
+  `probeFont`, `weightResponse`, `textWeightRange`, `sharesHostFonts`, `writeFontsHint`,
   `DEFAULT_FONT_PREFERENCE`, `previewStack`, `refFamily` / `roleFamily` (a ref, or no choice, to its
   family name), `namedFamilies` (every named family a set of choices uses), and the `FontProbe` / `WeightResponse` /
-  `BundledFaces` types. The preference is the contracts' `FontSettings`, normalized by
+  `BundledFaces` / `BundledAlternates` types. The preference is the contracts' `FontSettings`, normalized by
   `normalizeFontSettings` like the host and the store.
 - **Allowed deps:** `@thinkrail/contracts`; `clientPreferences` (native-stable hint storage);
   `constants` (the branding storage prefix); browser DOM, CSSOM, canvas and `FontFace` APIs.

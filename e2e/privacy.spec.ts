@@ -21,7 +21,7 @@ test("privacy controls additional data without disabling basics and persists acr
 	await toggle.click();
 	await expect(toggle).toHaveAttribute("data-active", "false");
 	await expect(dialog).toContainText(
-		"Share anonymous product usage and how you found ThinkRail. We never collect prompts, code, files, credentials, or account identity.",
+		"Share anonymous product usage and how you found Helios. We never collect prompts, code, files, credentials, or account identity.",
 	);
 	await expect(dialog).toContainText(
 		"Setup, agent runs, task completions, reviews, and pull-request outcomes.",

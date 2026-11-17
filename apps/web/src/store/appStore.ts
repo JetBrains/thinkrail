@@ -1221,6 +1221,7 @@ interface AppState {
 	chatMessageOrder: ChatMessageOrder;
 	markdownOutlineVisible: boolean | null;
 	markdownOutlineSide: MarkdownOutlineSide;
+	neonGlow: boolean;
 	defaultModel: WireModel | undefined;
 	defaultEffort: ThinkingLevel | undefined;
 	reviewModel: WireModel | undefined;
@@ -1590,6 +1591,7 @@ interface AppState {
 	setChatMessageOrder: (order: ChatMessageOrder) => void;
 	setMarkdownOutlineVisible: (visible: boolean) => void;
 	setMarkdownOutlineSide: (side: MarkdownOutlineSide) => void;
+	setNeonGlow: (enabled: boolean) => void;
 	applyConfig: (config: AppConfig) => void;
 	requestToolView: (workspaceId: string, tool: LayoutToolId) => void;
 	requestChangesView: (workspaceId: string, path: string | null, scope?: GitDiffScope) => void;
@@ -2633,6 +2635,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	chatMessageOrder: "oldest-first",
 	markdownOutlineVisible: null,
 	markdownOutlineSide: "right",
+	neonGlow: true,
 	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,
 	defaultModel: DEFAULT_CONFIG.defaultModel,
 	defaultEffort: DEFAULT_CONFIG.defaultEffort,
@@ -4881,6 +4884,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	setChatMessageOrder: (chatMessageOrder) => set({ chatMessageOrder }),
 	setMarkdownOutlineVisible: (markdownOutlineVisible) => set({ markdownOutlineVisible }),
 	setMarkdownOutlineSide: (markdownOutlineSide) => set({ markdownOutlineSide }),
+	setNeonGlow: (neonGlow) => set({ neonGlow }),
 	applyConfig: (config) => set(configPatch(config)),
 	requestToolView: (workspaceId, tool) =>
 		set((state) =>

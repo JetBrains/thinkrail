@@ -3,7 +3,7 @@ import { PIERRE_BASE_SYNTAX } from "./pierre";
 export const THINKRAIL_MONACO_COLOR_VARIABLES = {
 	"editor.background": "--container-workspace-bg",
 	"editor.foreground": "--code-foreground",
-	"editor.lineHighlightBackground": "--control-bg-hovered",
+	"editor.lineHighlightBackground": "--editor-line-highlight-bg",
 	"editor.lineHighlightBorder": "--border-muted",
 	"editorCursor.foreground": "--primary",
 	"editorLineNumber.foreground": "--text-muted",
@@ -17,6 +17,8 @@ export const THINKRAIL_MONACO_COLOR_VARIABLES = {
 	"editor.selectionForeground": "--editor-selection-text",
 	"editor.selectionHighlightBackground": "--editor-selection-highlight-bg",
 	"editor.findMatchBackground": "--editor-find-match-bg",
+	"diffEditor.insertedTextBackground": "--diff-addition-bg",
+	"diffEditor.insertedLineBackground": "--diff-addition-bg",
 	"editor.findMatchHighlightBackground": "--feedback-warning-subtle",
 	"editorStickyScroll.background": "--container-workspace-bg",
 	"editorStickyScroll.shadow": "--widget-shadow",

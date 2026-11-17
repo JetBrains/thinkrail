@@ -3,8 +3,10 @@ export { writeFontsHint } from "./hint";
 export { sharesHostFonts } from "./local";
 export type { FontProbe, WeightResponse } from "./probe";
 export { probeFont, weightResponse } from "./probe";
+export type { BundledAlternates } from "./runtime";
 export {
 	applyFontPreference,
+	bundledAlternates,
 	bundledFaces,
 	DEFAULT_FONT_PREFERENCE,
 	fontFacesRevision,

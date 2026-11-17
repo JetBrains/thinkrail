@@ -212,7 +212,7 @@ test("a plain key asks for a modifier, a desktop or browser chord is refused or 
 	await pressPlatformShortcut(page, "Comma");
 	await expect(message(page, "view.toggleLeft")).toHaveAttribute("data-kind", "desktop");
 	await expect(message(page, "view.toggleLeft")).toContainText(
-		"Ctrl+, is used by the ThinkRail desktop app",
+		"Ctrl+, is used by the Helios desktop app",
 	);
 
 	await page.keyboard.press("Enter");
@@ -324,7 +324,7 @@ test("Export downloads every row, locked ones included, and Import summarizes a 
 		mimeType: "application/json",
 		buffer: Buffer.from(JSON.stringify({ format: "something-else" })),
 	});
-	await expect(page.getByTestId("toast")).toContainText("This is not a ThinkRail keybindings file");
+	await expect(page.getByTestId("toast")).toContainText("This is not a Helios keybindings file");
 
 	await input.setInputFiles({
 		name: "crafted.json",

@@ -179,7 +179,7 @@ console.log(JSON.stringify({ calls, cwd, splashText }));
 			};
 			if (failure !== "updates") {
 				expect(run.splashText).toContain(
-					pendingInstall ? "Finishing update to 0.0.2…" : "Starting ThinkRail…",
+					pendingInstall ? "Finishing update to 0.0.2…" : "Starting Helios…",
 				);
 			}
 			expect(run.calls).toEqual([

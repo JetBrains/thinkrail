@@ -66,6 +66,9 @@
 	--editor-selection-bg: var(--editor-selection);
 	--editor-selection-text: var(--editor-selection-foreground); /* read by Monaco and xterm through getComputedStyle; a utility would be dead weight */
 	--editor-selection-highlight-bg: color-mix(in srgb, var(--editor-selection) 20%, transparent); /* Monaco's secondary matches of the active selection */
+	--editor-line-highlight-bg: var(--editor-line-highlight); /* Monaco's current-line highlight; defaults to the hover fill when a manifest leaves it out */
+	--diff-addition: var(--diff-added); /* the added-line hue in Pierre diffs and the gutter numbers beside them; defaults to success, so only a theme that opts in moves additions off green */
+	--diff-addition-bg: color-mix(in srgb, var(--diff-added) 12%, transparent); /* Monaco's inserted text/line wash in the diff editor */
 	--editor-find-match-bg: color-mix(in srgb, var(--warning) 40%, transparent); /* Monaco's active find match */
 	--widget-shadow: color-mix(in srgb, var(--text) 20%, transparent); /* Monaco widget, sticky-scroll, and scrollbar shadows */
 	--media-checker-tile: color-mix(in srgb, var(--text) 20%, transparent); /* the transparency checkerboard tile behind images and vector previews: the text colour at the soft (20%) step — the contrast of the conventional #ccc-on-white checkerboard — over the content canvas, so a dark logo on a transparent PNG stays visible on a dark theme and a light one on a light theme; index.css's `.media-backdrop` is the only consumer */

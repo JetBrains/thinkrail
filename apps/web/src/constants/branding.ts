@@ -1,20 +1,24 @@
-export const PRODUCT_NAME = "ThinkRail";
+export const PRODUCT_NAME = "Helios Agent IDE";
+export const PRODUCT_SHORT_NAME = "Helios";
 export const APP_SLUG = "thinkrail";
 export const REPO_URL = "https://github.com/JetBrains/thinkrail";
 export const STORAGE_PREFIX = `${APP_SLUG}-`;
 export const DND_FILE_MIME = `application/x-${APP_SLUG}-file`;
 export const EVENT_PREFIX = `${APP_SLUG}:`;
 
-/** The "TR" monogram in its own 556.36 × 449.2 unit box (same artwork as the favicon), one closed region per stroke of the letters. */
+/**
+ * The Helios mark in a 100 × 100 unit box (same artwork as the favicon): a sun inside a tilted orbit
+ * with one satellite. Each segment is a closed region; the orbit's inner ellipse winds the opposite way,
+ * so the joined path fills correctly under the default nonzero rule (favicon and icon generators).
+ */
 export const BRAND_MARK_SEGMENTS = {
-	rBowl:
-		"M430 111.3C430 88.49 411.51 70 388.7 70H189.68C184.33 70 180 74.33 180 79.68V449.2H220V321.24C220 277.27 244.37 250 299.74 250H374.14C405.09 250 430.16 224.89 430.12 193.95L430 111.3ZM390 189C390 198.54 382.19 206.35 372.65 206.35H311.86C254.74 206.35 230.59 222.1 223.64 227.89C222.74 228.65 221.36 228.01 221.35 226.82L220.05 114.19C220.02 111.89 221.89 110 224.19 110H374.87C383.22 110 390 116.78 390 125.13L390 189Z",
-	rUpperTail:
-		"M500.38 358.64L460.1 294.06L458.06 290.8C465.46 284.43 471.77 277.49 477.05 270.08C492.54 248.38 499.3 222.65 499.18 195.36L499.11 179.98C499.75 173.77 500 170 500 170L499.98 98.35C499.96 44.03 455.91 9.53674e-06 401.59 9.53674e-06H340V31.11C340 36.02 343.98 40 348.89 40L398.91 40.78C433.09 41.17 460.72 68.76 461.13 102.95L462.2 191.14C462.63 219.89 462.04 258.15 399.31 277.63L503.44 449.2H556.36L500.38 358.64Z",
-	rLowerLeg:
-		"M371.84 291.19C367.59 284.24 360.04 280 351.9 280H288.66C266.79 280 249.05 297.74 249.05 319.61V449.2H289.11L289.73 340.61C289.79 329.21 299.05 320 310.45 320H333.84C337.68 320 341.26 321.95 343.34 325.18L423.06 449.2H468.4L371.84 291.19Z",
-	tVertical: "M140.57 70H0V110H110V449.2H150V79.43C150 74.22 145.78 70 140.57 70Z",
-	tHorizontal: "M0 0V40H301.88C306.37 40 310 36.36 310 31.88V0H0Z",
+	sun: "M62 50A12 12 0 1 0 38 50A12 12 0 1 0 62 50Z",
+	orbit:
+		"M89.84 27A46 24 -30 1 0 10.16 73A46 24 -30 1 0 89.84 27ZM83.77 30.5A39 17 -30 1 1 16.23 69.5A39 17 -30 1 1 83.77 30.5Z",
+	satellite: "M72.31 22.74A6.5 6.5 0 1 0 59.31 22.74A6.5 6.5 0 1 0 72.31 22.74Z",
 } as const;
+
+/** The orbit's centreline (between the ring's two ellipses), for drawing it as a stroke. */
+export const BRAND_ORBIT = { cx: 50, cy: 50, rx: 42.5, ry: 20.5, rotate: -30, width: 7 } as const;
 
 export const BRAND_MARK_PATH = Object.values(BRAND_MARK_SEGMENTS).join("");

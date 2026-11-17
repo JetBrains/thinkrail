@@ -99,6 +99,18 @@ test("a manifest written before the destructive keys existed still parses, with 
 	}
 });
 
+test("a manifest without the editor line and diff keys derives them from hover and success", () => {
+	for (const { file, value } of bundledCandidates()) {
+		const legacy = structuredClone(value) as { colors: Record<string, string> };
+		delete legacy.colors.editorLineHighlight;
+		delete legacy.colors.diffAdded;
+		const parsed = parseThemeManifest(legacy);
+		if (!parsed.ok) throw new Error(`${file}: ${parsed.issues.join("; ")}`);
+		expect(parsed.value.colors.editorLineHighlight).toBe(parsed.value.colors.hover);
+		expect(parsed.value.colors.diffAdded).toBe(parsed.value.colors.success);
+	}
+});
+
 test("high-contrast manifests provide legible selected-text foregrounds", () => {
 	const themes = bundledThemes().filter((theme) => theme.contrast === "high");
 	expect(themes.length).toBeGreaterThan(0);

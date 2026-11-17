@@ -37,7 +37,7 @@ test("builds the native macOS application, edit, and window menus", () => {
 				{ role: "showAll" },
 				{ type: "separator" },
 				{
-					label: "Quit ThinkRail",
+					label: "Quit Helios",
 					action: QUIT_SHORTCUT_ACTION,
 					accelerator: "CommandOrControl+Q",
 				},
@@ -107,7 +107,7 @@ test("translated labels rename the custom items and fall back to English per lab
 	expect(labels).toEqual({
 		"desktop.menu.edit": "Bearbeiten",
 		"desktop.menu.settings": "Einstellungen…",
-		"desktop.menu.quit": "Quit ThinkRail",
+		"desktop.menu.quit": "Quit Helios",
 		"desktop.menu.window": "Window",
 		"desktop.menu.close": "Close",
 	});

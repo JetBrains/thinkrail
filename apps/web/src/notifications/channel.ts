@@ -16,7 +16,7 @@ export interface NotificationChannel {
 	requestPermission: () => Promise<NotificationPermissionState>;
 	show: (spec: NotificationSpec, onClick: () => void) => void;
 	/**
-	 * Whether the user is looking at ThinkRail right now. Desktop uses OS-level window focus (true
+	 * Whether the user is looking at the app right now. Desktop uses OS-level window focus (true
 	 * even when DevTools has renderer focus); browser falls back to `document.hasFocus()`.
 	 */
 	isWindowFocused: () => boolean;
