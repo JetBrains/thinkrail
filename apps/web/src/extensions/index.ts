@@ -1,10 +1,4 @@
-export {
-	EXTENSION_HOST_API,
-	type ExtensionHost,
-	installExtensionHost,
-	SHARED_SPECIFIERS,
-	type SharedSpecifier,
-} from "./host";
+export { type ExtensionHost, installExtensionHost } from "./host";
 export {
 	type InstalledWebExtension,
 	loadWebExtensions,

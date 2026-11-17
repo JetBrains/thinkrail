@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { join, relative } from "node:path";
 import { EXTENSION_API_VERSION, SDK_PACKAGE } from "../shared";
 import { ExtensionBuildError } from "./errors";
 
@@ -7,6 +7,7 @@ export const EXTENSION_KEYWORD = "thinkrail-extension";
 
 const MANIFEST_KEYS = ["api", "server", "web", "styles", "title", "image"] as const;
 const HOST_SINGLETONS = /^(?:@earendil-works\/.+|typebox)$/;
+const PACKAGE_NAME = /^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
 
 export interface ThinkrailManifest {
 	api: string;
@@ -37,10 +38,23 @@ function fail(problems: string[]): never {
 	);
 }
 
-function insidePackage(root: string, path: string): boolean {
-	if (isAbsolute(path)) return false;
-	const target = resolve(root, path);
-	return target !== root && target.startsWith(`${root}${sep}`);
+function packagePath(path: string): string | undefined {
+	if (path.includes("\\") || path.includes("\0") || /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(path)) {
+		return undefined;
+	}
+	if (path.startsWith("/")) return undefined;
+	const segments = path.split("/").filter((segment) => segment !== "" && segment !== ".");
+	return segments.length > 0 && !segments.includes("..") ? segments.join("/") : undefined;
+}
+
+function httpsUrl(text: string): boolean {
+	if (/\s/.test(text)) return false;
+	try {
+		const url = new URL(text);
+		return url.protocol === "https:" && url.hostname !== "";
+	} catch {
+		return false;
+	}
 }
 
 export function readExtensionPackage(root: string): ExtensionPackage {
@@ -50,17 +64,26 @@ export function readExtensionPackage(root: string): ExtensionPackage {
 			`no package.json in ${root}: run the build from the extension's folder.`,
 		);
 	}
-	let pkg: PackageJson;
+	let parsed: unknown;
 	try {
-		pkg = JSON.parse(readFileSync(path, "utf8")) as PackageJson;
+		parsed = JSON.parse(readFileSync(path, "utf8"));
 	} catch (error) {
 		throw new ExtensionBuildError(
 			`package.json is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
 		);
 	}
+	if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+		throw new ExtensionBuildError("package.json must hold a JSON object.");
+	}
+	const pkg = parsed as PackageJson;
 	if (typeof pkg.name !== "string" || pkg.name.length === 0) {
 		throw new ExtensionBuildError(
 			'package.json needs a "name": it is the extension\'s identity in ThinkRail.',
+		);
+	}
+	if (!PACKAGE_NAME.test(pkg.name)) {
+		throw new ExtensionBuildError(
+			`package.json "name" must be a valid npm package name (got "${pkg.name}").`,
 		);
 	}
 	const raw = pkg.thinkrail;
@@ -82,6 +105,11 @@ export function readExtensionPackage(root: string): ExtensionPackage {
 			problems.push(`"${key}" must be a string.`);
 		}
 	}
+	for (const key of ["title", "image"] as const) {
+		if (typeof fields[key] === "string" && !fields[key].trim()) {
+			problems.push(`"${key}" must not be empty.`);
+		}
+	}
 	const manifest = fields as Partial<Record<(typeof MANIFEST_KEYS)[number], string>>;
 	if (manifest.api === undefined) {
 		problems.push(`"api" is required: set it to "${EXTENSION_API_VERSION}".`);
@@ -98,28 +126,28 @@ export function readExtensionPackage(root: string): ExtensionPackage {
 	if (manifest.styles !== undefined && manifest.web === undefined) {
 		problems.push('"styles" is only allowed together with "web".');
 	}
+	const paths: Partial<Record<"server" | "web" | "styles", string>> = {};
 	for (const key of ["server", "web", "styles"] as const) {
 		const value = manifest[key];
-		if (typeof value === "string" && !insidePackage(root, value)) {
+		if (typeof value !== "string") continue;
+		const path = packagePath(value);
+		if (path === undefined) {
 			problems.push(`"${key}" must be a relative path inside the package (got "${value}").`);
-		}
+		} else paths[key] = path;
 	}
-	if (typeof manifest.server === "string" && !/\.[cm]?[jt]s$/.test(manifest.server)) {
+	if (paths.server !== undefined && !/\.[cm]?[jt]s$/.test(paths.server)) {
 		problems.push(
 			`"server" must point at a TypeScript or JavaScript file (got "${manifest.server}").`,
 		);
 	}
-	if (typeof manifest.web === "string" && !/\.m?js$/.test(manifest.web)) {
+	if (paths.web !== undefined && !/\.m?js$/.test(paths.web)) {
 		problems.push(`"web" is the built bundle and must end in .js (got "${manifest.web}").`);
 	}
-	if (typeof manifest.styles === "string" && !manifest.styles.endsWith(".css")) {
+	if (paths.styles !== undefined && !paths.styles.endsWith(".css")) {
 		problems.push(`"styles" must end in .css (got "${manifest.styles}").`);
 	}
-	if (typeof manifest.image === "string" && !/^https:\/\/\S+$/.test(manifest.image)) {
-		problems.push(`"image" must be an https:// URL (got "${manifest.image}").`);
-	}
-	if (typeof manifest.server === "string" && insidePackage(root, manifest.server)) {
-		if (!existsSync(resolve(root, manifest.server))) {
+	if (paths.server !== undefined) {
+		if (!existsSync(join(root, paths.server))) {
 			problems.push(`"server" points at ${manifest.server}, which does not exist.`);
 		}
 		const bundled = Object.keys(pkg.dependencies ?? {})
@@ -137,6 +165,11 @@ export function readExtensionPackage(root: string): ExtensionPackage {
 		}
 	}
 	if (problems.length > 0) fail(problems);
+	if (typeof manifest.image === "string" && !httpsUrl(manifest.image.trim())) {
+		warnings.push(
+			`"image" is not an https:// URL, so the ThinkRail extension catalog will not show it (got "${manifest.image}").`,
+		);
+	}
 	const keywords = Array.isArray(pkg.keywords) ? pkg.keywords : [];
 	if (!keywords.includes(EXTENSION_KEYWORD)) {
 		warnings.push(

@@ -408,6 +408,34 @@ for (const [file, relativeSpecifier] of [
 }
 
 test.each([
+	["apps/web/src/chat/leak.ts", "only public @thinkrail/extension-api/web"],
+	["packages/server/src/agent/leak.ts", "only public @thinkrail/extension-api/server"],
+	["packages/server/src/extensions/leak.ts", "only public @thinkrail/extension-api/server"],
+	["thinkrail-extensions/future/web/leak.ts", "only public @thinkrail/extension-api/web"],
+	["thinkrail-extensions/future/server/leak.ts", "only public @thinkrail/extension-api/server"],
+])("%s cannot import the installed-extension contract", (file, message) => {
+	const root = sdkFixture();
+	write(root, file, 'import { EXTENSION_API_VERSION } from "@thinkrail/extension-api/installed";');
+	const violations = moduleBoundaryViolations(root);
+	expect(violations).toHaveLength(1);
+	expect(violations[0]).toContain(message);
+});
+
+test("only the extension runtimes import the installed-extension contract", () => {
+	const root = sdkFixture();
+	const source = 'import { EXTENSION_API_VERSION } from "@thinkrail/extension-api/installed";';
+	write(root, "apps/web/src/extensions/host.ts", source);
+	write(root, "packages/server/src/extensions/installed/runtime.ts", source);
+	expect(moduleBoundaryViolations(root)).toEqual([]);
+	write(root, "apps/web/src/extensions/host.ts", 'import "@thinkrail/extension-api/server";');
+	const violations = moduleBoundaryViolations(root);
+	expect(violations).toHaveLength(1);
+	expect(violations[0]).toContain(
+		"only public @thinkrail/extension-api/web, @thinkrail/extension-api/installed",
+	);
+});
+
+test.each([
 	["src/web.ts", "./server"],
 	["src/web/helpers.ts", "../server/index"],
 	["web/index.ts", "../server/index"],

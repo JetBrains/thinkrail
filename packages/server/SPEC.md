@@ -49,7 +49,7 @@ e2e).
   deliberate second entry that avoids evaluating `host` (Bun-only: `Bun.serve`, `bun-pty`) under the
   node-run e2e worker. Not for `apps/*` use — the web/CLI boundary rules are unchanged.
 - **Allowed deps:** `contracts` (types + WS constants), `shared` (`shellEnv` and the Central adapter), `bun-pty`,
-  `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), `extension-api` (`./server` types)
+  `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), `extension-api` (`./server` types; `./installed`, the manifest reader, from `extensions/installed` only)
   + every `thinkrail-extensions/*` **server subpath only** (the registry's composition edge; the host no
   longer depends directly on a pi package an extension owns), `pino` + its pretty/rolling
   destinations (host diagnostics), `jsonc-parser` (targeted shared Pi configuration edits), Bun/Node.
@@ -150,7 +150,7 @@ the host from env via `bootHost` for dev/e2e.
   shared jiti env lock) — otherwise the pi runtime alone; auth
   passes desired opaque Central paths through its public generation seam
 - `extensions` → `@thinkrail/ext-*/server` + `@thinkrail/extension-api/server` (external), `log`; its
-  `installed/` sub-module also → `@earendil-works/pi-coding-agent` values (installer, public loader) and
+  `installed/` sub-module also → `@thinkrail/extension-api/installed` (the manifest reader), `@earendil-works/pi-coding-agent` values (installer, public loader) and
   `typebox` (external); the data dir arrives as a parameter from `host`, so there is no `persistence`
   edge; `buildSupport.ts` (build-only) reads only the built-ins to stage their skill roots
 - `resourceHistory` → `persistence` (`dataDir`), `log`

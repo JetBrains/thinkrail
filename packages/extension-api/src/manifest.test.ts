@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
 import {
 	EXTENSION_API_VERSION,
 	extensionApiMismatch,
@@ -6,7 +7,7 @@ import {
 	isExtensionApiCompatible,
 	normalizeManifestPath,
 	parseExtensionManifest,
-} from "@thinkrail/extension-api/server";
+} from "@thinkrail/extension-api/installed";
 import * as web from "@thinkrail/extension-api/web";
 
 const valid = {
@@ -24,6 +25,16 @@ const valid = {
 		image: "https://example.com/preview.png",
 	},
 };
+
+const CASES = JSON.parse(
+	readFileSync(new URL("./manifestCases.json", import.meta.url), "utf8"),
+) as { label: string; packageJson: unknown; valid: boolean }[];
+
+describe("the shared manifest cases", () => {
+	it.each(CASES.map((entry) => [entry.label, entry] as const))("%s", (_label, entry) => {
+		expect(parseExtensionManifest(entry.packageJson).ok).toBe(entry.valid);
+	});
+});
 
 describe("parseExtensionManifest", () => {
 	it("reads the manifest and the package's own fields", () => {
@@ -109,10 +120,10 @@ describe("normalizeManifestPath", () => {
 });
 
 describe("the extension API version rule", () => {
-	it("is one host constant, the same from both halves", () => {
+	it("is one constant, kept out of the web contract extensions receive", () => {
 		expect(EXTENSION_API_VERSION).toBe("1.0");
-		expect(web.EXTENSION_API_VERSION).toBe(EXTENSION_API_VERSION);
-		expect(web.parseExtensionManifest).toBe(parseExtensionManifest);
+		expect(web).not.toHaveProperty("EXTENSION_API_VERSION");
+		expect(web).not.toHaveProperty("parseExtensionManifest");
 	});
 
 	it("loads the same major with a minor that is not newer", () => {

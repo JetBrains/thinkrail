@@ -29,11 +29,11 @@ dials it over the network; a phone reaches the selected host over Tailscale.
 
 ```
 apps/cli        browser host launcher: boot server + open browser ── depends on ─▶ packages/server
-apps/web        UI client (mobile-first)                           ── depends on ─▶ packages/contracts, packages/locales, packages/ui, packages/extension-api/web, packages/resource-renderers, thinkrail-extensions/*/web
+apps/web        UI client (mobile-first)                           ── depends on ─▶ packages/contracts, packages/locales, packages/ui, packages/extension-api/web, packages/extension-api/installed (src/extensions only), packages/resource-renderers, thinkrail-extensions/*/web
 apps/desktop    Electrobun local-host launcher                     ── depends on ─▶ packages/server, packages/contracts, packages/shared, packages/locales
-apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
+apps/website    public landing + blog + docs + /extensions/ catalog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
 packages/website-analytics  dependency-free browser analytics policy for the public website
-packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/locales, packages/shared, packages/pi-background-commands, packages/pi-delegation, packages/pi-subagents, packages/extension-api/server, thinkrail-extensions/*/server
+packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/locales, packages/shared, packages/pi-background-commands, packages/pi-delegation, packages/pi-subagents, packages/extension-api/server, packages/extension-api/installed (src/extensions/installed only), thinkrail-extensions/*/server
 packages/contracts  the wire (types plus tiny pure runtime)
 packages/locales    UI string catalogs (bundled en.json) + pure catalog rules; ./react holds the one i18next
                     instance ── depends on ─▶ nothing in the workspace (i18next, react-i18next)
@@ -55,7 +55,13 @@ pi-extensions/*     portable pi packages published to npm as @thinkrail/pi-<name
 thinkrail-extensions/*  ThinkRail extensions: a pi capability + ./server and ./web halves, composed by one
                     registry file per side (Decision 21; visualize and ask-user-question shipped) ── depends on ─▶ pi-extensions/*,
                     packages/extension-api, packages/ui, packages/locales (web half)
-packages/extension-api  types + define* helpers for extension halves ── depends on ─▶ packages/contracts, packages/locales (types)
+packages/extension-api  types + define* helpers for extension halves; ./installed: the installed-extension manifest
+                    reader, API version and host-object constants ── depends on ─▶ packages/contracts, packages/locales (types)
+packages/extension-sdk  the published extension SDK (@thinkrail/extension-sdk): contracts, shared-module type
+                    declarations, `thinkrail-extension build` ── depends on ─▶ no workspace package at runtime;
+                    packages/contracts, packages/extension-api, packages/ui, packages/resource-renderers to
+                    generate its declarations and assets; nothing in the workspace imports it
+extension-examples/*  published sample extensions built with the SDK ── depends on ─▶ packages/extension-sdk only
 packages/ui         owned shadcn/Radix primitives + cn + onThemeSwap ── may depend on ─▶ packages/contracts, packages/locales
 packages/resource-renderers  file/diff renderers, registry + review surfaces behind a host seam ── may depend on ─▶
                     packages/contracts, packages/locales, packages/ui
@@ -69,8 +75,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
 ## Decisions
 
 1. **Client/host split.** Engine host owns `pi` and state; the UI is a portable client; the wire is the
-   only coupling. **Rule: `apps/web` depends on `contracts`, `locales`, `ui`, `extension-api/web`,
-   `resource-renderers`, and `thinkrail-extensions/*/web` only** — never on `server` or `shared`. All added edges are browser-safe
+   only coupling. **Rule: `apps/web` depends on `contracts`, `locales`, `ui`, `extension-api/web`
+   (and `extension-api/installed` from `src/extensions`), `resource-renderers`, and
+   `thinkrail-extensions/*/web` only** — never on `server` or `shared`. All added edges are browser-safe
    presentation packages; the UI remains shippable without the host.
 2. **Launchers are thin; the host is a library.** `apps/cli` and `apps/desktop` both embed the shared
    boot path in-process. CLI opens a browser; desktop opens a native system webview on a fresh one-origin
@@ -377,7 +384,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
     the pi packages not yet wrapped as extensions), and a web registry
     (`apps/web/src/extensions/registry.ts`). Skill packages are resolved from the extension's own
     dependency graph, never the host's. The SDK is `packages/extension-api` (types + `define*`) and
-    `packages/ui` (owned primitives, `cn`, `onThemeSwap`); the highlighted `CodeBlock` stays app-local
+    `packages/ui` (owned primitives, `cn`, `onThemeSwap`), published for outside authors as one package,
+    [[module-extension-sdk]]; the highlighted `CodeBlock` stays app-local
     until a second consumer exists. Decision 1's browser-only dependency rule is enforced with
     source-half and public-subpath checks, including the SDK's separate `./web` and `./server` contracts. **Delivery rule:** every extension arrives as three independently shippable
     PRs — new pi package beside the old, web half moved, server half + wiring with the old package
@@ -392,8 +400,11 @@ dependency. This keeps test process drivers outside both launchers and the serve
     its own `setting(key)` view, applied by a reload once the turn ends. Host-owned file checks reach
     extensions through the session seam (`workspaceFiles`), so the SDK stays types + `define*`. Other
     setting types and a per-workspace on/off override remain explicit deferrals. **Runtime-loaded
-    extensions are decided** (delivery in progress; contract in [[module-thinkrail-extensions]]
-    § Installed extensions). They were first rejected until three answers existed, and now have them: the
+    extensions are decided** (delivery in progress: the host and web runtimes, the published SDK
+    [[module-extension-sdk]] with a sample under `extension-examples/`, and the website's catalog are
+    built; the Settings UI, in-app Browse, the agent skill and E2E coverage are still to come; contract in
+    [[module-thinkrail-extensions]] § Installed extensions). They were first rejected until three
+    answers existed, and now have them: the
     React singleton — the app exposes its own React and a small UI set on one host object, and an
     extension's pre-built bundle contains neither; a versioned UI API — an `api` version in the
     extension's manifest, a published SDK, and all-or-nothing loading; a security story — installing is

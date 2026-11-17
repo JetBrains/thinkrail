@@ -65,7 +65,6 @@ describe("the thinkrail manifest", () => {
 		[{ api: "1.0", web: "./dist/web.ts" }, "must end in .js"],
 		[{ api: "1.0", web: "./dist/web.js", styles: "./dist/web.scss" }, "must end in .css"],
 		[{ api: "1.0", server: "./server/missing.ts" }, "does not exist"],
-		[{ api: "1.0", web: "./dist/web.js", image: "http://x/y.png" }, "https:// URL"],
 		[{ api: 1, web: "./dist/web.js" }, '"api" must be a string'],
 	])("rejects %j", (thinkrail, message) => {
 		expect(problems(thinkrail)).toContain(message);
@@ -77,6 +76,17 @@ describe("the thinkrail manifest", () => {
 			{ dependencies: { typebox: "1.3.27", "@earendil-works/pi-coding-agent": "1.5.0" } },
 		);
 		expect(message).toContain("@earendil-works/pi-coding-agent, typebox must be peerDependencies");
+	});
+
+	it("warns that the catalog shows only an https image", () => {
+		const pkg = read({
+			name: "thinkrail-ext-x",
+			keywords: ["thinkrail-extension"],
+			thinkrail: { api: "1.0", web: "./dist/web.js", image: "http://x/y.png" },
+		});
+		expect(pkg.warnings).toEqual([
+			'"image" is not an https:// URL, so the ThinkRail extension catalog will not show it (got "http://x/y.png").',
+		]);
 	});
 
 	it("warns about a missing keyword, a missing SDK dependency and unknown fields", () => {

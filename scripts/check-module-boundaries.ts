@@ -68,6 +68,10 @@ const SDK_SOURCES = [
 	"packages/resource-renderers",
 ];
 const EXAMPLES = "extension-examples/";
+const INSTALLED_CONTRACT_SOURCES: Readonly<Record<string, RegExp>> = {
+	"apps/web": /^src\/extensions\//,
+	"packages/server": /^src\/extensions\/installed\//,
+};
 
 const DEPENDENCY_SECTIONS = [
 	"dependencies",
@@ -376,8 +380,15 @@ function sourceViolation(
 			if (rule.root === "packages/server" || (extension && half === "server"))
 				publicEntry = "server";
 		}
-		if (publicEntry && specifier !== `${target.name}/${publicEntry}`) {
-			return `may use only public ${target.name}/${publicEntry}`;
+		if (publicEntry) {
+			const entries = [`${target.name}/${publicEntry}`];
+			if (
+				target.root === "packages/extension-api" &&
+				INSTALLED_CONTRACT_SOURCES[rule.root]?.test(subpath)
+			) {
+				entries.push(`${target.name}/installed`);
+			}
+			if (!entries.includes(specifier)) return `may use only public ${entries.join(", ")}`;
 		}
 	}
 	const browserSafe =

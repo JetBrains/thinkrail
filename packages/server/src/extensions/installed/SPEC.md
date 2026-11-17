@@ -115,7 +115,8 @@ A folder source is never copied: it loads from where it is, and nothing under it
   `installedExtensions()` is the host's one runtime, absent until the host starts it.
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (`DefaultPackageManager`, `SettingsManager`,
   `discoverAndLoadExtensions`, `createAgentSession` for the guard), `typebox` (`Type`, the guard),
-  `@thinkrail/extension-api/server` (the manifest reader and the descriptor types), `@thinkrail/contracts`,
+  `@thinkrail/extension-api/installed` (the manifest reader), `@thinkrail/extension-api/server` (the
+  descriptor types), `@thinkrail/contracts`,
   `@thinkrail/shared/codedError`, `log`, Node `fs` / `path` / `os` / `crypto`.
 - **Forbidden:** the parent registry and its siblings (the skill resolver and the reserved names arrive
   as options), `agent`, `host`, `settings`, `persistence` (the data dir arrives as an option), spawning

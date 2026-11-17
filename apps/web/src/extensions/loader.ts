@@ -185,7 +185,7 @@ async function runLoad(
 		environment.report(failure.cause, failure.reason);
 		state.stylesheets.get(name)?.remove();
 		state.stylesheets.delete(name);
-		removeInstalledToolRenderers(name);
+		setInstalledToolRenderers(name, {});
 		result = { name, status: "failed", reason: failure.reason, message: failure.message };
 	}
 	setResult(name, result);

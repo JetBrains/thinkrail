@@ -28,8 +28,11 @@ private and unchanged. It imports no pi value at runtime.
 - `./web`, `./resources`, `./ui/<m>` for `attention-line`, `button`, `dialog`, `fonts`, `keyboard`,
   `textarea`, `theme`, `utils` — **type declarations** of the shared set. At runtime these specifiers are
   the app's own modules on `globalThis.__thinkrailExtensionHost = { api, modules }`, keyed by exactly these
-  specifiers plus `react`, `react/jsx-runtime` and `react-dom` — the canonical list is `SHARED_SPECIFIERS`
-  in `src/shared.ts`, beside `EXTENSION_API_VERSION` and `HOST_OBJECT`. `./resources` promises
+  specifiers plus `react`, `react/jsx-runtime` and `react-dom`. The canonical list, API version and object
+  name are `@thinkrail/extension-api/installed`'s ([[module-extension-api]]); shipped code may not import
+  that private package, so `src/shared.ts` keeps a runtime copy (`SHARED_SPECIFIERS`,
+  `EXTENSION_API_VERSION`, `HOST_OBJECT`) and `tools/shared.test.ts` fails when it differs in a value or
+  in order. `./resources` promises
   `FramedResourcePreview`, `ResourcePreview`, `useResourceScope` and `useOptionalResourceHost`, whose
   `ResourceHost` is narrowed to `markdown` (`{ text, className? }`), `openFile` and `openComparison`.
   Each subpath's `default` condition is a generated stub that reads the host object (so a non-SDK bundler
@@ -50,12 +53,13 @@ private and unchanged. It imports no pi value at runtime.
 ## The build command
 
 - Reads `package.json` from `--cwd` (default: the current folder) and validates the `thinkrail`
-  manifest: `api` must **equal** the SDK's API (a bundle can only promise the names the SDK knew), at
-  least one of `server` / `web`, `styles` only with `web`, every path relative and inside the package,
-  `web` ending in `.js`, `styles` in `.css`, `image` an `https://` URL, the `server` file present, and
-  pi packages / `typebox` never in `dependencies` (they must be peers). A missing keyword, a missing SDK
-  dependency for a server half and unknown manifest keys are warnings. A server-only extension has
-  nothing to build.
+  manifest with a copy of the host's rules ([[module-extension-api]] `./installed`), held to them by the
+  shared manifest cases (`tools/manifestCases.test.ts`). It is stricter in one way only: `api` must
+  **equal** the SDK's API (a bundle can only promise the names the SDK knew). Beyond the manifest it
+  checks the package: the `server` file present and pi packages / `typebox` never in `dependencies`
+  (they must be peers). Warnings: a missing keyword, a missing SDK dependency for a server half, unknown
+  manifest keys and an `image` that is not an `https://` URL (the catalog does not show it). A
+  server-only extension has nothing to build.
 - **Bundler: rolldown** (a dependency of the SDK, the same version Vite 8 brings to the app). It runs
   under Node and Bun, so the command does too; the spike's `Bun.build` was rejected because an outside
   author may not have Bun, and the Bun 1.4.2 bare-`react` CJS-wrapping bug is Bun-only (the virtual ids
@@ -125,8 +129,9 @@ Publishing can take over. `bun pm pack` runs `prepack` without `node_modules/.bi
 
 Gates:
 
-- `bun test` in the package — manifest validation, the build's bundle, stylesheet, runtime check and
-  rejections, the CLI, asset drift; `typecheck`, including the conformance types.
+- `bun test` in the package — manifest validation and the shared manifest cases, the build's bundle,
+  stylesheet, runtime check and rejections, the CLI, asset drift, the runtime constants' drift from
+  `extension-api/installed`; `typecheck`, including the conformance types.
 - `bun run check:extension-packages` (`scripts/check-extension-packages.ts`, CI job `pi-packages`) — packs
   the SDK and the samples with `bun pm pack`, checks each tarball (no tests or repository sources, no
   `workspace:` / `catalog:` versions, no Bun-only API in shipped JavaScript, every `bin` / `exports` /

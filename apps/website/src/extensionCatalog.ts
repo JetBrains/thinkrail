@@ -1,4 +1,9 @@
-import { type ExtensionHalf, manifestHalves, parseExtensionManifest } from "./extensionManifest";
+import {
+	type ExtensionHalf,
+	isPackageName,
+	manifestHalves,
+	parseExtensionManifest,
+} from "./extensionManifest";
 
 const catalogKeyword = "thinkrail-extension";
 const searchPageSize = 250;
@@ -46,8 +51,6 @@ interface SearchHit {
 }
 
 type EntryResult = { entry: CatalogEntry } | { rejected: string };
-
-const packageName = /^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -130,7 +133,7 @@ function catalogEntry(pkg: unknown, hit: SearchHit): EntryResult {
 		return { rejected: `the latest version lacks the ${catalogKeyword} keyword` };
 	}
 	if (!("thinkrail" in pkg)) return { rejected: "no thinkrail manifest" };
-	const parsed = parseExtensionManifest(pkg.thinkrail);
+	const parsed = parseExtensionManifest(pkg);
 	if (!parsed.ok) return { rejected: `invalid thinkrail manifest: ${parsed.reason}` };
 	if (typeof pkg.version !== "string" || pkg.version.length === 0) {
 		return { rejected: "no version" };
@@ -199,7 +202,7 @@ async function searchHits(options: BuildCatalogOptions): Promise<SearchHit[]> {
 		total = page.total;
 		for (const object of page.objects) {
 			const pkg = isRecord(object) ? object.package : undefined;
-			if (!isRecord(pkg) || typeof pkg.name !== "string" || !packageName.test(pkg.name)) continue;
+			if (!isRecord(pkg) || !isPackageName(pkg.name)) continue;
 			if (hits.has(pkg.name)) continue;
 			hits.set(pkg.name, {
 				name: pkg.name,
@@ -284,7 +287,7 @@ export function catalogErrors(value: unknown): string[] {
 			if (!entryKeys.has(key)) errors.push(`${at} has unknown field ${key}`);
 		}
 		const { name } = entry;
-		if (typeof name !== "string" || !packageName.test(name)) {
+		if (!isPackageName(name)) {
 			errors.push(`${at}.name is not a package name`);
 			return;
 		}

@@ -13,13 +13,13 @@ import {
 } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { InstalledExtensionState } from "@thinkrail/contracts";
-import type { ServerExtension } from "@thinkrail/extension-api/server";
 import {
 	type ExtensionManifest,
 	extensionApiMismatch,
 	hasExtensionManifest,
 	parseExtensionManifest,
-} from "@thinkrail/extension-api/server";
+} from "@thinkrail/extension-api/installed";
+import type { ServerExtension } from "@thinkrail/extension-api/server";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { logger } from "../../log";
 import {

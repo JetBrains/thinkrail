@@ -6,6 +6,7 @@ title: ThinkRail extensions (thinkrail-extensions/)
 parent: architecture
 depends-on: [module-pi-extensions, module-contracts]
 tags: [extensions, ui-sdk]
+references: [module-extension-api, module-extension-sdk, module-extension-examples, submodule-web-extensions]
 ---
 
 ## Responsibility
@@ -123,7 +124,9 @@ What a `./web` half may import:
 - **Source halves:** inside every extension, `web/**` and `server/**` never import each other, including
   by relative path.
 - **Public subpaths:** `apps/web` may import only `@thinkrail/ext-*/web`; `packages/server` only
-  `@thinkrail/ext-*/server`.
+  `@thinkrail/ext-*/server`. `@thinkrail/extension-api/installed` is imported only by the two
+  installed-extension runtimes (`apps/web/src/extensions`, `packages/server/src/extensions/installed`),
+  never by an extension half.
 - Edges: `extension-api → contracts`; `ui → contracts`; `resource-renderers → contracts, ui`;
   `ext-*/web → ui, extension-api, resource-renderers, contracts` plus **type-only** imports of its own pi
   package (the argument/result shapes belong to the package; the existing browser rule still rejects a
@@ -193,12 +196,18 @@ key for the on/off switch and its settings) and must not equal a built-in's `nam
 
 - `api` is `major.minor`. The host loads an extension whose major equals its own and whose minor is not
   newer. At least one of `server` / `web`; `styles` only with `web`; every path is relative and stays
-  inside the package. `title` falls back to the package name; description, author and version are the
-  package's own fields.
-- `server` is TypeScript source whose default export is a `defineServerExtension` descriptor whose `name`
-  is the package name. `web` is a pre-built ESM file (`.js` / `.mjs`) whose default export is a
-  `defineWebExtension` descriptor: the host never bundles. `styles` is a `.css` file. The one reader of
-  this manifest and the `EXTENSION_API_VERSION` constant live in [[module-extension-api]].
+  inside the package, with no `..` segment. `title` falls back to the package name; description, author
+  and version are the package's own fields.
+- `server` is a TypeScript (or JavaScript) module whose default export is a `defineServerExtension`
+  descriptor whose `name` is the package name, else the row fails. `web` is a pre-built ESM file (`.js` /
+  `.mjs`) whose default export is a `defineWebExtension` descriptor, registered under the package name:
+  the host never bundles. `styles` is a `.css` file; the fixed suffixes let the host serve both with a
+  fixed content type.
+- **One reader, guarded copies.** The reader, `EXTENSION_API_VERSION`, the host object's name and the
+  shared-specifier list live in `@thinkrail/extension-api/installed` ([[module-extension-api]] owns the
+  exact rules), never in `./web`, which an installed web half receives as extension API. The SDK's build
+  and the website, which may not import it at runtime, keep copies that run its table of manifest cases
+  in their tests; only the SDK is stricter, in one rule (below).
 
 **Server half**
 
@@ -227,8 +236,8 @@ key for the on/off switch and its settings) and must not equal a built-in's `nam
 - At bootstrap the app exposes its own modules on one frozen object,
   `globalThis.__thinkrailExtensionHost = { api, modules }`, keyed by the specifier an author imports:
   `react`, `react/jsx-runtime`, `react-dom`, `@thinkrail/extension-sdk/web`,
-  `@thinkrail/extension-sdk/resources`, and `@thinkrail/extension-sdk/ui/<m>` for `button`, `dialog`,
-  `textarea`, `keyboard`, `attention-line`, `utils`, `theme`, `fonts`. That list — what the built-in cards
+  `@thinkrail/extension-sdk/resources`, and `@thinkrail/extension-sdk/ui/<m>` for `attention-line`,
+  `button`, `dialog`, `fonts`, `keyboard`, `textarea`, `theme`, `utils`. That list — what the built-in cards
   import today — is extension API v1. Rejected: the whole UI kit (every primitive becomes a promise) and
   self-contained cards (no app components, a second contract).
 - An extension's bundle contains none of those modules: the SDK's build resolves each shared specifier,
@@ -246,16 +255,23 @@ key for the on/off switch and its settings) and must not equal a built-in's `nam
   not, so past transcripts keep their cards. A contested tool name renders as the server runs it: a
   built-in keeps it over an installed extension, and between installed ones the extension listed first
   keeps it (pi gives a tool name to its first registration), whichever bundle finishes loading first.
+  The web client applies that order among the bundles currently registered: while the first-listed one
+  is loading or has failed, the next one's card is drawn — an accepted window
+  ([[submodule-web-extensions]]).
 - **What v1 promises beyond the module list:** the components' props and variants, the `TooltipProvider`
   at the app root, the locale store behind `useT`, portals to `<body>`, `html[data-theme]`, the semantic
   colour variables and utility names, the spacing and radius scales, the typography classes, Tailwind's
   major and layer order, and the React major. Breaking any of them is API v2.
 
-**SDK** — one published package, `@thinkrail/extension-sdk`, versioned with the extension API and
-released like the portable pi packages (Decision 20): `./server` and `./web` (the `define*` helpers and
-types of [[module-extension-api]]), `./ui/*` and `./resources` (type declarations for the shared set), the
-build command, the manifest of shared export names and the theme file. It imports no pi value at
-runtime. The in-repo `extension-api`, `ui` and `resource-renderers` packages stay private.
+**SDK** — one published package, `@thinkrail/extension-sdk` ([[module-extension-sdk]]), versioned with the
+extension API and released like the portable pi packages (Decision 20): `./server` and `./web` (the
+`define*` helpers and types of [[module-extension-api]]), `./ui/*` and `./resources` (type declarations
+for the shared set), the build command `thinkrail-extension build --prefix <x>` (the prefix every
+utility in the extension's stylesheet carries), the manifest of shared export names and the theme file.
+Its build accepts only an `api` equal to its own version, since a bundle can only rely on the export
+names its SDK knew. It imports no pi value at runtime. The in-repo `extension-api`, `ui` and
+`resource-renderers` packages stay private; samples built with it live in `extension-examples/`
+([[module-extension-examples]]).
 
 **Catalog** — the website publishes one file, `thinkrail.ai/extensions/catalog.json`, built from npm: every
 package carrying the `thinkrail-extension` keyword whose latest `package.json` has a valid manifest.

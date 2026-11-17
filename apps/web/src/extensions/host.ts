@@ -1,3 +1,8 @@
+import {
+	EXTENSION_API_VERSION,
+	EXTENSION_HOST_OBJECT,
+	type SharedSpecifier,
+} from "@thinkrail/extension-api/installed";
 import * as extensionApiWeb from "@thinkrail/extension-api/web";
 import * as resourceRenderers from "@thinkrail/resource-renderers";
 import * as uiAttentionLine from "@thinkrail/ui/attention-line";
@@ -11,26 +16,6 @@ import * as uiUtils from "@thinkrail/ui/utils";
 import * as React from "react";
 import * as jsxRuntime from "react/jsx-runtime";
 import * as ReactDOM from "react-dom";
-
-export const EXTENSION_HOST_API = "1.0";
-
-export const SHARED_SPECIFIERS = [
-	"react",
-	"react/jsx-runtime",
-	"react-dom",
-	"@thinkrail/extension-sdk/web",
-	"@thinkrail/extension-sdk/resources",
-	"@thinkrail/extension-sdk/ui/button",
-	"@thinkrail/extension-sdk/ui/dialog",
-	"@thinkrail/extension-sdk/ui/textarea",
-	"@thinkrail/extension-sdk/ui/keyboard",
-	"@thinkrail/extension-sdk/ui/attention-line",
-	"@thinkrail/extension-sdk/ui/utils",
-	"@thinkrail/extension-sdk/ui/theme",
-	"@thinkrail/extension-sdk/ui/fonts",
-] as const;
-
-export type SharedSpecifier = (typeof SHARED_SPECIFIERS)[number];
 
 export interface ExtensionHost {
 	readonly api: string;
@@ -48,19 +33,19 @@ export function installExtensionHost(): ExtensionHost {
 		"react-dom": ReactDOM,
 		"@thinkrail/extension-sdk/web": extensionApiWeb,
 		"@thinkrail/extension-sdk/resources": resourceRenderers,
+		"@thinkrail/extension-sdk/ui/attention-line": uiAttentionLine,
 		"@thinkrail/extension-sdk/ui/button": uiButton,
 		"@thinkrail/extension-sdk/ui/dialog": uiDialog,
-		"@thinkrail/extension-sdk/ui/textarea": uiTextarea,
-		"@thinkrail/extension-sdk/ui/keyboard": uiKeyboard,
-		"@thinkrail/extension-sdk/ui/attention-line": uiAttentionLine,
-		"@thinkrail/extension-sdk/ui/utils": uiUtils,
-		"@thinkrail/extension-sdk/ui/theme": uiTheme,
 		"@thinkrail/extension-sdk/ui/fonts": uiFonts,
+		"@thinkrail/extension-sdk/ui/keyboard": uiKeyboard,
+		"@thinkrail/extension-sdk/ui/textarea": uiTextarea,
+		"@thinkrail/extension-sdk/ui/theme": uiTheme,
+		"@thinkrail/extension-sdk/ui/utils": uiUtils,
 	};
 	const host: ExtensionHost = Object.freeze({
-		api: EXTENSION_HOST_API,
+		api: EXTENSION_API_VERSION,
 		modules: Object.freeze(modules),
 	});
-	globalThis.__thinkrailExtensionHost = host;
+	globalThis[EXTENSION_HOST_OBJECT] = host;
 	return host;
 }

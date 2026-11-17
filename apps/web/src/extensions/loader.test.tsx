@@ -172,6 +172,36 @@ describe("web extension loader", () => {
 		expect(getToolRenderer("weather")).toBe(v1);
 	});
 
+	test("a contested tool name renders with the later extension while the first-listed one has no renderers", async () => {
+		const gate = deferred<void>();
+		let fail = true;
+		fakeEnvironment({
+			importModule: async (url) => {
+				if (url.endsWith("weather-v2.js")) {
+					await gate.promise;
+					if (fail) throw new Error("offline");
+				}
+				return import(url);
+			},
+		});
+		const loads = loadWebExtensions([
+			{ name: "listed-first", url: "weather-v2.js" },
+			{ name: "listed-second", url: "weather-v1.js" },
+		]);
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		const second = getToolRenderer("weather");
+		expect(second).not.toBe(DefaultToolRenderer);
+		gate.resolve();
+		const [first] = await loads;
+		expect(first?.status).toBe("failed");
+		expect(getToolRenderer("weather")).toBe(second);
+		fail = false;
+		const [retried] = await loadWebExtensions([{ name: "listed-first", url: "weather-v2.js" }]);
+		expect(retried?.status).toBe("loaded");
+		expect(getToolRenderer("weather")).not.toBe(second);
+		expect(getToolRenderer("weather")).not.toBe(DefaultToolRenderer);
+	});
+
 	test("the pre-render wait is bounded; a hung bundle registers late", async () => {
 		const gate = deferred<void>();
 		fakeEnvironment({

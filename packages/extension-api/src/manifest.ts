@@ -38,7 +38,9 @@ export function hasExtensionManifest(packageJson: unknown): boolean {
 }
 
 export function normalizeManifestPath(path: string): string | undefined {
-	if (path.includes("\\") || path.includes("\0") || /^[a-zA-Z]:/.test(path)) return undefined;
+	if (path.includes("\\") || path.includes("\0") || /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(path)) {
+		return undefined;
+	}
 	if (path.startsWith("/")) return undefined;
 	const segments = path.split("/").filter((segment) => segment !== "" && segment !== ".");
 	if (segments.length === 0 || segments.includes("..")) return undefined;
@@ -73,7 +75,7 @@ function entryPath(
 	if (normalized === undefined) {
 		return new Error(`"${key}" must be a relative path that stays inside the package`);
 	}
-	if (suffixes.length > 0 && !suffixes.some((suffix) => normalized.endsWith(suffix))) {
+	if (!suffixes.some((suffix) => normalized.endsWith(suffix))) {
 		return new Error(`"${key}" must name a ${suffixes.join(" or ")} file`);
 	}
 	return normalized;
@@ -98,7 +100,7 @@ export function parseExtensionManifest(
 	if (typeof api !== "string" || !API_VERSION.test(api)) {
 		return fail(`"api" must be a "major.minor" version such as "${EXTENSION_API_VERSION}"`);
 	}
-	const server = entryPath(fields, "server", []);
+	const server = entryPath(fields, "server", [".ts", ".mts", ".cts", ".js", ".mjs", ".cjs"]);
 	const web = entryPath(fields, "web", [".js", ".mjs"]);
 	const styles = entryPath(fields, "styles", [".css"]);
 	const title = optionalText(fields, "title");

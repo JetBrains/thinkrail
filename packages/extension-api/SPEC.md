@@ -79,20 +79,30 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
     extension or a same-name tool from another package never becomes a host-tracked interaction.
   - `awaitToolResponse(toolCallId, signal)` resolves a `ToolResponse`: `{kind: "response", value}`,
     `{kind: "deferred"}` or `{kind: "abandoned"}`.
-- `src/manifest.ts`, re-exported from both `./web` and `./server` (the boundary check lets each ring
-  import only its own half), is the pure reading of an installed extension's `package.json`
-  ([[module-thinkrail-extensions]] § Installed extensions), shared by the host and any later consumer
-  that may not import the server: `EXTENSION_API_VERSION` (`"1.0"`, the one host constant),
-  `EXTENSION_KEYWORD`, `EXTENSION_MANIFEST_KEY` (`thinkrail`), `hasExtensionManifest` (the kind rule: the
-  key is present at all), `parseExtensionManifest(packageJson, { reservedNames? })` → `{ ok, manifest }` or
-  `{ ok: false, error }` (a valid npm `name` not among `reservedNames`; `api` is `major.minor`; at least
-  one of `server` / `web`; `styles` only with `web`; `web` names a `.js`/`.mjs` file and `styles` a `.css`
-  one so the host can serve them with a fixed content type; every path relative, `\`-free and without a
-  `..` segment, returned normalised without `./`; `title` / `image` non-empty strings; `version`,
-  `description` and `author` — a string or `{ name }` — are the package's own fields),
-  `normalizeManifestPath`, `extensionApiMismatch(api, host?)` (the reason an extension does not load, or
-  `undefined`) and `isExtensionApiCompatible` — the same major and a minor that is not newer. It has no
-  dependencies; the website keeps its own copy because it may not import app packages.
+- `./installed` is the installed-extension contract the two runtimes read — kept off `./web` because an
+  installed web half receives `./web` as `@thinkrail/extension-sdk/web`, so every name exported there is
+  extension API. It has no dependencies, is browser-safe, and only `apps/web/src/extensions` and
+  `packages/server/src/extensions/installed` may import it (boundary-checked). It holds the canonical:
+  - `EXTENSION_API_VERSION` (`"1.0"`), `EXTENSION_HOST_OBJECT` (`"__thinkrailExtensionHost"`) and
+    `SHARED_SPECIFIERS` / `SharedSpecifier` (extension API v1's shared modules, in order). The published
+    SDK keeps a runtime copy of the three, which its `tools/shared.test.ts` compares with these.
+  - The manifest reader (`src/manifest.ts`; the manifest is [[module-thinkrail-extensions]] § Installed
+    extensions): `EXTENSION_KEYWORD`, `EXTENSION_MANIFEST_KEY` (`thinkrail`), `hasExtensionManifest` (the
+    kind rule: the key is present at all), `parseExtensionManifest(packageJson, { reservedNames? })` →
+    `{ ok, manifest }` or `{ ok: false, error }`, `normalizeManifestPath`, `extensionApiMismatch(api,
+    host?)` (the reason an extension does not load, or `undefined`) and `isExtensionApiCompatible` (the
+    same major and a minor that is not newer, compared numerically). The rules: a valid npm `name` not
+    among `reservedNames`; `api` is digits `.` digits; at least one of `server` / `web`; `styles` only
+    with `web`; every path relative and inside the package — no leading `/`, no `\`, NUL, URL scheme or
+    drive letter, no `..` segment at all — returned normalised without `./`; `server` names a
+    `.ts`/`.mts`/`.cts`/`.js`/`.mjs`/`.cjs` file, `web` a `.js`/`.mjs` and `styles` a `.css` one;
+    `title` / `image` non-empty strings, trimmed (`image` is not checked further: only a catalog shows it,
+    and showing only an `https:` image is the catalog's rule); `version`, `description` and `author` (a
+    string or `{ name }`) are the package's own fields.
+  - `src/manifestCases.json`, the one table of manifest cases with their verdicts. This package's tests,
+    the SDK's `tools/` tests (expecting each valid case whose `api` is not its own to fail, its one
+    stricter rule) and the website's tests (reading the file by relative path, since it may not import
+    app packages) all run it, so the SDK's and the website's copies of the rules cannot drift.
 - The root is browser-safe and exposes only the web contract; it never re-exports the server half.
 - Workspace dependencies are `contracts` and, type-only, `@thinkrail/locales/react`'s `Translator`.
   React and pi are type-only contract dependencies; there are no React components, registry, DOM access,
@@ -110,7 +120,9 @@ the host, never acquire it from a store or transport. Extension composition rule
 
 ## Verification
 
-Package tests exercise descriptors through their public entries, pure argument/result helpers and
-browser bundling of both the root and `./web`. Browser bundles permit only contracts at runtime and
-reject React, pi, host and server imports; `./server` separately verifies its pi dependency is erased.
+Package tests exercise descriptors through their public entries, pure argument/result helpers, the
+shared manifest cases and browser bundling of the root, `./web` and `./installed`. Browser bundles
+permit only contracts at runtime (`./installed` nothing at all) and reject React, pi, host and server
+imports; `./server` separately verifies its pi dependency is erased and that it exports only
+`defineServerExtension`.
 The app's registry and common-image-layer tests retain coverage of the host-owned rendering behavior.

@@ -472,10 +472,10 @@ and a valid manifest; nothing reviewed, hidden or marked) are owned by [[module-
   description 400 characters) so one package cannot bloat a file every app downloads. Entries are sorted
   by name; optional fields are omitted, never null.
 - **Manifest rules are copied, not imported** (`src/extensionManifest.ts`): the site must not depend on the
-  app, so it keeps its own copy of the contract's rules — `api` is `major.minor` (no leading zeros),
-  at least one of `server`/`web`, `styles` only with `web`, every path relative and inside the package
-  (no absolute, scheme, backslash or escaping `..` path), `title`/`image` strings. Its tests pin those
-  rules; the host's validator is the authority and a divergence is fixed here.
+  app, so it keeps its own copy of the host's rules ([[module-extension-api]] `./installed`), reading a
+  whole `package.json` as the host does. Its tests run the host's table of manifest cases, read at test
+  time from `packages/extension-api/src/manifestCases.json` by relative path (the way `fonts.test.ts`
+  reads the app's typography), so a divergence fails here; the host's validator is the authority.
 - **Failure policy — the first build-time external fetch.** `EXTENSION_CATALOG_SOURCE` selects the
   source (`src/extensionCatalogSource.ts`, memoised so the page and the JSON endpoint share one fetch):
   - `npm` (production `site.yml` only): any registry failure — a network error, a non-404 error status
