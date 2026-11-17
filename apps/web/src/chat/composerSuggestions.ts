@@ -1,4 +1,9 @@
-import { isInteractiveTool, readComposerSuggestions } from "./toolRegistry";
+import type { AssistantMessage } from "@thinkrail/contracts";
+import {
+	carriesComposerSuggestions,
+	isInteractiveTool,
+	readComposerSuggestions,
+} from "./toolRegistry";
 import type { ChatTurn, ToolResultState } from "./types";
 
 export interface ComposerSuggestionsSource {
@@ -9,6 +14,19 @@ export interface ComposerSuggestionsSource {
 }
 
 const NONE: readonly string[] = [];
+
+export function endingSuggestionsCall(
+	message: AssistantMessage,
+	toolResults: Readonly<Record<string, ToolResultState>>,
+): { name: string; args: Record<string, unknown>; raw: unknown } | null {
+	const calls = message.content.filter((block) => block.type === "toolCall");
+	const call = calls.at(-1);
+	if (!call || calls.some((block) => isInteractiveTool(block.name))) return null;
+	if (!carriesComposerSuggestions(call.name)) return null;
+	const result = toolResults[call.id];
+	if (result?.status !== "done") return null;
+	return { name: call.name, args: call.arguments ?? {}, raw: result.raw };
+}
 
 export function deriveComposerSuggestions(
 	source: ComposerSuggestionsSource | undefined,
@@ -25,12 +43,7 @@ export function deriveComposerSuggestions(
 		}
 	}
 	if (last?.kind !== "assistant" || last.streaming) return NONE;
-	const calls = last.message.content.filter((block) => block.type === "toolCall");
-	const call = calls.at(-1);
-	if (!call || calls.some((block) => isInteractiveTool(block.name))) return NONE;
-	const result = source.toolResults[call.id];
-	if (result?.status !== "done") return NONE;
-	return (
-		readComposerSuggestions(call.name, call.arguments ?? {}, result.raw, disabledExtensions) ?? NONE
-	);
+	const ending = endingSuggestionsCall(last.message, source.toolResults);
+	if (!ending) return NONE;
+	return readComposerSuggestions(ending.name, ending.args, ending.raw, disabledExtensions) ?? NONE;
 }

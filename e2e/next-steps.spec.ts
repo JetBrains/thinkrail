@@ -101,6 +101,7 @@ test("a finished turn's suggestions show above the composer, survive a reload an
 	await page.reload();
 	await openPersistedChat(page, "Suggested next steps");
 	await expect(chips).toHaveText(SUGGESTIONS);
+	await expect(page.getByTestId("turn-divider-status")).toHaveAttribute("data-outcome", "done");
 
 	const input = page.getByTestId("chat-input");
 	await input.fill("half-written draft");

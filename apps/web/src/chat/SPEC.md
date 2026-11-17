@@ -319,7 +319,11 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   outcome comes from the round's last reply first (a failed or `aborted` reply), then the closer, so a
   reloaded chat, which has no success markers, reads the same as a live one. Only a closer error (one with a
   `failure`) counts; a failed rename or an extension notice never relabels a round. A round cut short
-  by a steer (last reply `toolUse`) has no outcome and keeps the plain time. Times under 1s are dropped;
+  by a steer (last reply `toolUse`) has no outcome and keeps the plain time — except a reply ending in a
+  qualifying suggestions call (`endingSuggestionsCall`, the predicate the chips use, *Composer
+  suggestions*): that call ended the run by contract, so a reloaded round reads done like the live one. A
+  generic "`toolUse` with every result in" rule was rejected: pi persists no `terminate`, and a crash
+  after an ordinary tool batch looks the same. Times under 1s are dropped;
   an instant error with nothing else to report is the bare rule. The written files show as **two chips
   split by owning tool** — “N specs” and “N files changed”. The split is a **partition** (a path lands on
   exactly one side, never counted twice) computed in the deriver from the injected `isSpec` predicate — the store's

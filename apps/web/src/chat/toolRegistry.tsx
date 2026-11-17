@@ -67,6 +67,10 @@ export function isDockedTool(toolName: string): boolean {
 	return registration?.interactive === true && registration.dock === true;
 }
 
+export function carriesComposerSuggestions(toolName: string): boolean {
+	return resolveRegistration(toolName)?.composerSuggestions !== undefined;
+}
+
 export function readComposerSuggestions(
 	toolName: string,
 	args: Record<string, unknown>,
