@@ -52,10 +52,15 @@ renderers.
 - **Later loads and updates.** `loadWebExtensions` loads a set and resolves with every result. Loading a
   name again is an update: the new bundle replaces the previous registration and stylesheet atomically
   once it has loaded; a failed update keeps nothing of either version. A stale load that finishes after a
-  newer load or an unload of the same name is discarded.
+  newer load or an unload of the same name is discarded and resolves with the newer outcome
+  (`{ status: "unloaded" }` after an unload).
 - **Unload.** `unloadWebExtension(name)` unregisters the extension's renderers and removes its stylesheet.
 - **State.** `webExtensionLoads()` / `subscribeWebExtensionLoads` / `useWebExtensionLoads()` give the
-  latest result per name (`loading`, `loaded` with its tool names, `failed`) for a Settings row.
+  latest result per name (`loading`, `loaded` with its tool names, `failed` with reason and message) for
+  a Settings row; an unloaded name has no entry.
+- **Tests** inject a `LoaderEnvironment` (base URL, stylesheet linking, reporting) through the
+  module-internal `setLoaderEnvironment`; imports stay real, against hand-written ESM fixtures in
+  `fixtures/` that read the host object the way an SDK-built bundle does.
 - **Version.** The host's version rule (manifest `api`) runs server-side before a descriptor is listed;
   the bundle's generated shim re-checks the API major against `__thinkrailExtensionHost.api` at
   evaluation, which surfaces as an `import` failure. The loader adds no third check.
@@ -66,7 +71,10 @@ renderers.
 ## Boundary
 
 - **Public surface:** `webExtensions`, `registerWebExtensions`, `installExtensionHost`,
-  `EXTENSION_HOST_API`, `SHARED_SPECIFIERS`, `SharedSpecifier`, `ExtensionHost`.
+  `EXTENSION_HOST_API`, `SHARED_SPECIFIERS`, `SharedSpecifier`, `ExtensionHost`, `loadWebExtensions`,
+  `loadWebExtensionsBeforeRender`, `unloadWebExtension`, `webExtensionLoads`, `subscribeWebExtensionLoads`,
+  `useWebExtensionLoads`, `PRE_RENDER_WAIT_MS`, `InstalledWebExtension`, `WebExtensionLoadResult`,
+  `WebExtensionLoadFailure`.
 - **Imports:** public extension `./web` entries, the web SDK contract, chat's registration functions,
   `transport` (`getTransport().httpBase()` and the client error reports — the loader's only reach into
   app integration), and, for the host object only, the shared module set. Never `ChatView`, stores,
