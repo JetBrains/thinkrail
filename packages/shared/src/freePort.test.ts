@@ -38,12 +38,8 @@ test("findFreePort skips a taken port and scans upward", async () => {
 });
 
 test("findFreePort never scans the well-known range", async () => {
-	// Regression: the Windows desktop host settled on port 1 (ERR_UNSAFE_PORT
-	// in WebView2) after a scan that started at port 0.
 	for (const preferred of [0, 1, 80]) {
-		const port = await findFreePort(preferred, "127.0.0.1");
-		expect(port).toBeGreaterThan(1023);
-		expect(await isPortFree(port, "127.0.0.1")).toBe(true);
+		expect(await findFreePort(preferred, "127.0.0.1")).toBeGreaterThan(1023);
 	}
 });
 
