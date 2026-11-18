@@ -93,5 +93,8 @@ Collected once per activation from `activeLayer()`, so an open dialog or menu sc
 
 Unit: label generation, in-mode key handling (Cyrillic layout, IME, repeat, letters over the trigger,
 exit on a non-letter trigger), letter typing, and
-the target filter on a small fake DOM (visibility, inert, clipping, widgets, shadow roots, tree duplicates,
-the review proxy, re-measuring). E2E `hint-mode.spec.ts` ([[module-browser-e2e]]).
+the target filter on a small fake DOM (visibility, inert, clipping, widgets — a listbox or slider without a
+`tabindex` gets no label —, shadow roots, tree duplicates, the review proxy, re-measuring). E2E
+`hint-mode.spec.ts` ([[module-browser-e2e]]), Settings included: plain `F` from a section tab, a content
+row and a search result labels only the dialog's controls, and a typed label presses through; and
+`settings-search.spec.ts` checks that `F` in the section list starts hint mode rather than a search.

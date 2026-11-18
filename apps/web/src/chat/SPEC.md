@@ -1263,7 +1263,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   latter reused by `panels` pre-session). Group state reads through the contracts' `isSkillGroupEnabled`
   with `store.otherAgentSkills`, so the switches match the host gate; while that host default is off and a
   Personal or plugin group stays off, a `skills-other-agents-off` note points to the per-project switch and
-  Settings → Extensions. A `skills-size` line shows the loaded skills' count and an estimated listing
+  Settings → Extensions & skills. A `skills-size` line shows the loaded skills' count and an estimated listing
   size (`skillCatalogSize`: name + description + path + per-entry markup at ~4 chars/token, an estimate
   rather than pi's figure; a `manualOnly` skill counts as on but costs nothing, since pi never lists it).
   Up to the host listing budget's floor (`SKILL_LISTING_MIN_TOKENS`) it is the per-request cost; past it,
@@ -1524,7 +1524,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   surface without duplicating. Existing live/hydrated compaction rendering is unchanged. When a
   `template.list` response comes back **empty**,
   `SlashCommandMenu` renders a `footer` nudge (`data-testid="slash-templates-empty"`) that
-  deep-links to Settings → Templates via `ChatView`'s `onManageTemplates` — the discoverability half of
+  deep-links to Settings → Prompt templates via `ChatView`'s `onManageTemplates` — the discoverability half of
   the starter-templates offer (`panels/SPEC.md`), since a fresh install has an empty global prompts dir
   and the manager is otherwise two clicks deep in a dialog. Gated on "no templates exist", never on "the
   current query matched none", so a query that simply misses doesn't raise it; `footer` is optional, so
@@ -1629,7 +1629,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   has no ChatView spinner or transcript row.
 - **Save-as-template + template management** (`TemplateEditorDialog.tsx`; `HistoryOverlay`'s save action;
   `panels/TemplatesSettings.tsx`) — one shared create/edit surface for prompt-template files, reused by two
-  entry points that never talk to each other: the Settings → Templates panel (list + New/Edit/Delete, see
+  entry points that never talk to each other: the Settings → Prompt templates panel (list + New/Edit/Delete, see
   `panels/SPEC.md`) and the history overlay's save-as-template action below. **Why this lives in `chat/`,
   not `panels/`** (a deliberate boundary exception, alongside `ChatView.tsx`/`useHistorySearch.ts` above):
   `panels/` is allowed to import from `chat/` (already does, for `ModelEffortPicker`/`Markdown`) but
@@ -1704,8 +1704,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   - **Save** calls `template.save` then the store's `bumpTemplatesVersion()`; a rejected save renders its
     message inline via `data-testid="template-error"` (never a toast — the dialog stays open so the error
     is fixable in place). **Delete has no dialog involvement at all** — `panels/TemplatesSettings.tsx`'s
-    row calls `template.delete` + `bumpTemplatesVersion()` directly, behind a `ConfirmPopover` anchored to
-    the row's own Delete button. A **rejected
+    row calls `template.delete` + `bumpTemplatesVersion()` directly, behind a `ConfirmDialog` (the row's
+    Delete side or the Delete key). A **rejected
     delete** is the one deliberate asymmetry with Save: it surfaces as an error toast, not inline (there's
     no dialog to render inline into), leaving the row in place — the same pattern `panels/SPEC.md`
     documents for `ProjectTree`'s own workspace-remove row.

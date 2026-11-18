@@ -243,7 +243,7 @@ binding does.
   missing). An extension default outside the grammar is dropped and a duplicate command id ignored.
 - **Priority** for a shared chord: a user override beats ThinkRail defaults, which beat extension
   defaults; within a rank, ThinkRail commands in table order, then extensions in registry order (the
-  Settings → Extensions order). **The losing chord is inactive for its loser only** — its other chords
+  Settings → Extensions & skills order). **The losing chord is inactive for its loser only** — its other chords
   still work — and is reported as a conflict.
   An override onto another command's default leaves that command losing the chord; an editor that wants
   it gone writes an explicit unbind. **A disabled extension's commands are listed but neither match nor

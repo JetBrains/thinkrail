@@ -82,7 +82,8 @@ fake DOM (`settingsFakeDom.test.ts`).
   steps on it. From a side or a control inside a tree item (a Reset, a model's choice) they step to the
   previous/next visible item of the same tree, and only past its first or last item to the neighbouring
   row; on the item itself the tree moves and leaves only its edges. **Home/End** go to the first/last row
-  outside text entry.
+  outside text entry, and from a side or a control inside a tree item to that tree's first/last visible
+  item.
 - **→/l** go to the row's first side, then the next; **←/h** go back along the sides to the stop, and
   elsewhere call `toNav`. In a text field ←/→ move the caret.
 - **Delete** (`settings.reset`) clicks the row's (or tree item's) Reset, moving focus to the stop first
@@ -109,8 +110,9 @@ fake DOM (`settingsFakeDom.test.ts`).
 
 - **`SettingsPage`** titles a section; its header keeps the documented close-button reserve
   (`pr-[2rem]`), because the dialog's Close floats over the content's top-right corner.
-- **`SettingsRow`** takes `settingId` (or a `rowId`), `label`, `description`, `control`, `sides` and
-  `reset={{ changed, onReset }}`. While changed it shows a visible "Changed" tag after the label and a
+- **`SettingsRow`** takes `settingId` (or a `rowId`), `label`, `description`, `control`, `sides`,
+  `reset={{ changed, onReset }}` and `layout`: `inline` (default), `stacked` (the control under the label,
+  Reset beside it) or `card` (stacked inside a bordered card). While changed it shows a visible "Changed" tag after the label and a
   "Reset" side button (`settings-reset-<id>`, aria "Reset <label> to default"); unchanged, neither.
   Activating Reset moves focus to the row's stop before `onReset`, so focus survives the button
   unmounting.
@@ -131,9 +133,12 @@ fake DOM (`settingsFakeDom.test.ts`).
   stepping; an out-of-range draft shows "Use min–max" and is never sent. For an inheriting value it takes
   `value={null}`, a `placeholder` (the inherited value) and `onClear`: an empty draft is then valid and
   commits through `onClear`; without `onClear` an empty draft is out of range.
-- **`useSettingsDraft`** saves on Enter or blur. Esc reverts and prevents only when the draft differs from
-  the value the host holds (or a newer in-flight save); a clean field lets Esc through to the walk. There is
-  no `data-settings-draft-input` swallowing.
+- **`useSettingsDraft`** is the one auto-save pattern (no Save/Apply button): Enter or blur saves a valid,
+  changed value once. An invalid draft stays visible with `aria-invalid` (the number field links its range
+  message through `aria-describedby`) and is never sent. A host echo never overwrites an edit in progress
+  or rolls back to a value a newer in-flight save replaces, and a rejected save returns the field to the
+  authoritative value. Esc reverts and prevents only when the draft differs from the value the host holds
+  (or a newer in-flight save); a clean field lets Esc through to the walk, so a second Esc steps on.
 - **`SettingsList` / `useSettingsListRow(id)`** take the row ids; the focused row (else the first) is the
   only tab stop, its primary and sides. Enter runs the primary, Space on the primary toggles the row's
   switch, Delete (`settings.list.remove`) calls `onRemove` (the caller confirms through `ConfirmDialog`),
@@ -150,7 +155,9 @@ fake DOM (`settingsFakeDom.test.ts`).
 then `revealSetting` focuses its stop (a list's first row, a tree item itself), scrolls that focused
 element to the center (so a tall list or tree shows its landing, not its middle) and sets
 `data-setting-flash` on the target for `SETTING_FLASH_MS` (1.6 s). When nothing took focus (an empty list,
-a disabled or hidden control) it reports nothing, without scrolling or flashing, so the wait goes on. It
+a disabled or hidden control) it reports nothing, without scrolling or flashing, so the wait goes on; the
+first time the target is rendered and visible, `jumpToSetting` still scrolls it to the center and flashes
+it once (`showSetting`), so the user sees where the setting is while a control is not yet focusable. It
 resolves `false` when no landing took focus in time or the optional `AbortSignal` fires first (a newer
 jump, a section change), and the caller focuses the section tab. Collapsed owners reveal themselves: the
 caller provides `{ id, seq }` through `SettingsJumpContext` before jumping, with a fresh `seq` per jump,
