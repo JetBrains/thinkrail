@@ -5,6 +5,7 @@ import {
 	createWorkspaceViaDialog,
 	openAppFresh,
 	openFixtureProject,
+	showAllPanels,
 	stagePlainFolder,
 	worktreeRows,
 } from "./fixtures/app";
@@ -244,6 +245,10 @@ test("a project without specs suggests setting it up", async ({ page }) => {
 		await expect(dialog).toBeHidden();
 		await expect(page.getByTestId("welcome")).toHaveCount(0);
 		await expect(page.getByTestId("center-tabs")).toBeVisible();
+		// Codex frame: the right side and terminal stay hidden until asked for.
+		await expect(page.getByTestId("right-panel")).toHaveCount(0);
+		await expect(page.getByTestId("terminal-panel")).toHaveCount(0);
+		await showAllPanels(page);
 		await expect(page.getByTestId("right-panel")).toBeVisible();
 		await expect(page.getByTestId("terminal-panel")).toBeVisible();
 		await expect(

@@ -218,10 +218,24 @@ export async function openFixtureProject(page: Page): Promise<void> {
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 }
 
-export async function enterDefaultWorkspace(page: Page): Promise<void> {
+export async function enterDefaultWorkspace(
+	page: Page,
+	{ panels = true }: { panels?: boolean } = {},
+): Promise<void> {
 	await page.getByTestId("welcome-action").filter({ hasText: "Work in project folder" }).click();
 	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
+	// The Codex frame starts with the right side and bottom panel hidden; most specs exercise the
+	// workbench with them open, so open them as a user does. `panels: false` keeps the default frame.
+	if (panels) await showAllPanels(page);
+}
+
+/**
+ * Releases keyboard focus. A control that regains focus when a dialog closes (Settings) reopens its
+ * tooltip, which can sit over a neighbouring button; blur it before clicking something nearby.
+ */
+export async function releaseFocus(page: Page): Promise<void> {
+	await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
 }
 
 /** The Codex preset keeps the bottom panel (terminals) hidden until asked for: show it via the top bar. */
@@ -234,15 +248,11 @@ export async function showTerminalPanel(page: Page): Promise<void> {
 }
 
 /**
- * Reveals the right side and the bottom panel the way a user does in the Codex shell: the top bar's
- * Review changes control (Files › Changed) and terminal toggle. Layout-engine specs that exercise the
- * side and bottom regions call this after entering a workspace; the default frame starts with both
- * hidden.
+ * Reveals the right side (on Specs, the tool Balanced opened on) and the bottom panel the way a user
+ * does in the Codex shell: a rail entry and the top bar's terminal toggle. Idempotent.
  */
 export async function showAllPanels(page: Page): Promise<void> {
-	const review = page.getByTestId("open-review");
-	await expect(review).toBeVisible();
-	if ((await review.getAttribute("aria-pressed")) !== "true") await review.click();
+	await revealWorkbenchTool(page, "specs");
 	await expect(page.getByTestId("right-stack")).toBeVisible();
 	await showTerminalPanel(page);
 }
@@ -256,10 +266,9 @@ export async function revealWorkbenchTool(
 	const control = page.getByTestId(`tool-rail-${railTool}`);
 	await expect(control).toBeVisible();
 	if ((await control.getAttribute("aria-pressed")) !== "true") {
-		// The Codex preset starts with the right side hidden, so this opens it from the rail. A focus
-		// tooltip left on a top-bar control (e.g. Settings after its dialog closes) can sit over the
-		// rail's first entry; release that focus before clicking.
-		await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+		// A focus tooltip left on a top-bar control (e.g. Settings after its dialog closes) can sit over
+		// the rail's first entry; release that focus before clicking.
+		await releaseFocus(page);
 		await control.click();
 	}
 	await expect(control).toHaveAttribute("aria-pressed", "true");
