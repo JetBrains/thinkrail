@@ -1,0 +1,143 @@
+<!doctype html>
+<!--
+  Page template for a review brief (see brief.md). Fill every [bracketed] slot, delete the HTML
+  comments, and keep the order of the sections. No scripts: the page must read as a static file.
+  Images are embedded as data URIs, two at most.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Review brief: PR #[n]</title>
+<style>
+  :root { --bg:#ffffff; --fg:#1c1e21; --muted:#5f6670; --line:#d9dde3; --card:#f6f7f9; --accent:#0b6bcb;
+          --red:#b42318; --redbg:#fde8e6; --amber:#8a5a00; --amberbg:#fdf0d0; --grey:#4b5563; --greybg:#e8eaee; --green:#1a6b3c; --greenbg:#dff3e6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#17191c; --fg:#e6e8eb; --muted:#9aa2ad; --line:#33383f; --card:#1f2226; --accent:#6cb2ff;
+            --red:#ff9b8f; --redbg:#45201c; --amber:#f1c56b; --amberbg:#40320f; --grey:#c3c9d1; --greybg:#2c3138; --green:#86d9a6; --greenbg:#173323; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:28px 20px 60px; background:var(--bg); color:var(--fg);
+         font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  main { max-width: 860px; margin: 0 auto; }
+  h1 { font-size: 22px; line-height:1.3; margin: 0 0 6px; }
+  h2 { font-size: 17px; margin: 34px 0 10px; padding-top: 14px; border-top:1px solid var(--line); }
+  h3 { font-size: 15px; margin: 0 0 6px; }
+  p { margin: 0 0 10px; }
+  ul { margin: 0 0 10px; padding-left: 20px; }
+  li { margin: 3px 0; }
+  code { font: 12.5px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; background:var(--card); padding:1px 4px; border-radius:4px; }
+  .meta { color:var(--muted); font-size:13px; margin-bottom:18px; }
+  .verdict { border:1px solid var(--line); border-left:5px solid var(--red); background:var(--card); border-radius:8px; padding:14px 16px; }
+  .verdict h2 { border:0; margin:0 0 6px; padding:0; font-size:18px; }
+  .card { border:1px solid var(--line); background:var(--card); border-radius:8px; padding:14px 16px; margin:0 0 12px; }
+  .rec { margin-top:8px; padding-top:8px; border-top:1px dashed var(--line); }
+  .rec b { color:var(--accent); }
+  table { width:100%; border-collapse:collapse; margin:0 0 12px; font-size:14px; }
+  th, td { text-align:left; vertical-align:top; padding:7px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; font-size:12.5px; }
+  td.n { white-space:nowrap; color:var(--muted); width:1%; }
+  .pill { display:inline-block; font-size:11.5px; font-weight:600; padding:1px 7px; border-radius:10px; white-space:nowrap; }
+  .seen { color:var(--green); background:var(--greenbg); }
+  .test { color:var(--amber); background:var(--amberbg); }
+  .read { color:var(--grey); background:var(--greybg); }
+  .shots { display:flex; gap:10px; margin:10px 0 4px; }
+  .shots figure { margin:0; flex:1; }
+  .shots img { width:100%; border:1px solid var(--line); border-radius:6px; display:block; }
+  figcaption { font-size:12.5px; color:var(--muted); margin-top:4px; }
+  details { margin:0 0 10px; }
+  summary { cursor:pointer; color:var(--accent); font-size:14px; }
+  .small { font-size:13px; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Review brief: PR #[n], [short title]</h1>
+<div class="meta">Author [login] · head <code>[sha9]</code> · [files] files, +[added] / −[removed] · [checks state] · [existing reviews]</div>
+
+<!-- 1. Recommendation: one of "request changes", "approve with follow-ups", "nothing found that blocks". -->
+<div class="verdict">
+  <h2>Recommendation: [recommendation]</h2>
+  <p>[Two or three sentences: does the design hold, is it oversized, what is needed.]</p>
+  <ul>
+    <li><b>What this rests on:</b> [what was run: defects seen in the product, breaks tried and caught, the real next change].</li>
+    <li><b>What it does not cover:</b> [what was not run].</li>
+  </ul>
+</div>
+
+<!-- 2. Orientation: four bullets at most. -->
+<h2>What the PR is</h2>
+<ul>
+  <li>[capability or module, with its size]</li>
+</ul>
+
+<!-- 3. Decisions: three to six cards, judgment calls only. -->
+<h2>Your decisions</h2>
+<div class="card">
+  <h3>[k]. [The decision in a few words]</h3>
+  <p>[What is known, two or three sentences, with the number or the observation that matters.]</p>
+  <!-- Optional: a before/after pair.
+  <div class="shots">
+    <figure><img alt="[text]" src="data:image/jpeg;base64,[...]"><figcaption>[caption]</figcaption></figure>
+    <figure><img alt="[text]" src="data:image/jpeg;base64,[...]"><figcaption>[caption]</figcaption></figure>
+  </div> -->
+  <div class="rec"><b>Recommended:</b> [answer]. <span class="small">Alternative: [answer].</span></div>
+</div>
+
+<!-- 4. Defects: grouped by what to do; each row says how it was seen. -->
+<h2>Defects</h2>
+<p class="small">
+  <span class="pill seen">browser</span> driven in the real product, with a rerunnable test and a screenshot ·
+  <span class="pill test">test</span> shown by a scratch test against the real code ·
+  <span class="pill read">read</span> from the code only
+</p>
+<h3>Fix before merge ([count])</h3>
+<table>
+  <tr><th></th><th>Defect</th><th>Seen</th></tr>
+  <tr><td class="n">A1</td><td>[What a user sees, one or two sentences.]</td><td><span class="pill seen">browser</span></td></tr>
+</table>
+<h3>Should fix ([count])</h3>
+<table>
+  <tr><th></th><th>Defect</th><th>Seen</th></tr>
+  <tr><td class="n">A[k]</td><td>[...]</td><td><span class="pill test">test</span></td></tr>
+</table>
+<details>
+  <summary>Minor ([count])</summary>
+  <table>
+    <tr><th></th><th>Defect</th><th>Seen</th></tr>
+    <tr><td class="n">A[k]</td><td>[...]</td><td><span class="pill read">read</span></td></tr>
+  </table>
+</details>
+
+<!-- 5. Tests and trust. -->
+<h2>Tests and how far to trust this</h2>
+<table>
+  <tr><th>Area</th><th>Deliberate breaks caught</th><th>Note</th></tr>
+  <tr><td>[area]</td><td>[k of n]</td><td>[note]</td></tr>
+</table>
+<ul>
+  <li><b>Changed tests:</b> [weakened and removed assertions, helpers that hide failures].</li>
+  <li><b>Found clean:</b> [slices where the hunt found nothing, and what was checked].</li>
+  <li><b>Thrown out by the challenge step:</b> [count and the two most telling].</li>
+</ul>
+
+<!-- 6. Cost of ownership: measured numbers, then one short paragraph. -->
+<h2>Cost of ownership</h2>
+<table>
+  <tr><th>Measure</th><th>Value</th></tr>
+  <tr><td>Net source lines</td><td>[n], of which about [x] ([p]%) are removable</td></tr>
+  <tr><td>Files touched by the real next change</td><td>[n]</td></tr>
+  <tr><td>Single omissions caught by nothing</td><td>[k of n]</td></tr>
+  <tr><td>[other measured facts]</td><td>[value]</td></tr>
+</table>
+<p>[Two sentences: what got simpler, what got harder.]</p>
+
+<!-- 7. Not examined. -->
+<h2>Not examined</h2>
+<p>[Platforms, states and stages that were not run, with the reason where it is not obvious.]</p>
+
+<p class="small">Detail: <code>findings.md</code>, <code>map.md</code>, <code>evidence.md</code>, <code>assessment.md</code>, <code>repro/</code>.</p>
+
+</main>
+</body>
+</html>

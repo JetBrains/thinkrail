@@ -103,6 +103,41 @@ describe("pi-thinkrail-workflow extension", () => {
 		expect(buildSystemPrompt(systemPromptOptions)).toEndWith(block);
 	});
 
+	test("sends reviewing a pull request to the router like PR lifecycle work", () => {
+		const [entry = ""] = WORKFLOW_RULE.split("\n");
+		expect(entry).toContain("read the choosing-a-workflow skill");
+		expect(entry).toContain("reviewing a pull request you are not shipping");
+		const router = readFileSync(
+			new URL("./skills/choosing-a-workflow/SKILL.md", import.meta.url),
+			"utf8",
+		);
+		expect(router).toContain(
+			"| Reviewing a PR the user is not shipping | Read and follow **reviewing-a-pr** |",
+		);
+	});
+
+	test("ships every reviewing-a-pr stage doc the spine names, each with its successor", () => {
+		const dir = new URL("./skills/reviewing-a-pr/", import.meta.url);
+		const spine = readFileSync(new URL("SKILL.md", dir), "utf8");
+		const stages = [
+			"intake",
+			"measuring",
+			"mapping",
+			"hunting",
+			"challenging",
+			"assessing",
+			"brief",
+		];
+		for (const stage of [...stages, "posting"]) {
+			expect(spine).toContain(`\`${stage}.md\``);
+		}
+		for (const stage of stages) {
+			expect(readFileSync(new URL(`${stage}.md`, dir), "utf8")).toContain("\n## Next\n");
+		}
+		expect(readFileSync(new URL("posting.md", dir), "utf8")).toContain("## Terminal states");
+		expect(readFileSync(new URL("brief-template.html", dir), "utf8")).not.toContain("<script");
+	});
+
 	test("classifies every GitHub merge state before declaring a PR ready", () => {
 		const checks = readFileSync(
 			new URL("./skills/shipping-a-pr/checks.md", import.meta.url),
