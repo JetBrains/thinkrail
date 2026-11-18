@@ -172,6 +172,15 @@ function commandsCalledByBootstrap(): string[] {
 	return [...names].sort();
 }
 
+/** A DOM-like element carrying `classes`, nested under `parent`. */
+function node(classes: string[], parent: Record<string, unknown> | null = null) {
+	return {
+		nodeType: 1,
+		classList: { contains: (name: string): boolean => classes.includes(name) },
+		parentElement: parent,
+	};
+}
+
 function element(href?: string): Record<string, unknown> {
 	const node: Record<string, unknown> = { nodeType: 1 };
 	node.closest = () => (href === undefined ? null : { href, hasAttribute: () => false });
@@ -339,6 +348,47 @@ describe("tauri bridge bootstrap", () => {
 		expect(titleBar.calls.filter((call) => call.cmd === "start_window_drag")).toHaveLength(1);
 		titleBar.dispatch("dblclick", press);
 		expect(titleBar.calls.filter((call) => call.cmd === "title_bar_double_click")).toHaveLength(1);
+	});
+
+	// Electrobun's preload turns `-webkit-app-region` into `--electrobun-app-region`; nothing does
+	// that under Tauri (and WebKit drops `app-region`), so the web's utility classes decide.
+	test("finds the drag region from the web's window-drag classes alone", () => {
+		const header = node(["window-drag"]);
+		const title = node([], header);
+		const actions = node(["window-no-drag"], header);
+		const button = node([], actions);
+		const page = node([], null);
+		const press = (target: Record<string, unknown>) => ({
+			button: 0,
+			detail: 1,
+			defaultPrevented: false,
+			target,
+		});
+		const dragStarts = (sandbox: Sandbox): number =>
+			sandbox.calls.filter((call) => call.cmd === "start_window_drag").length;
+
+		const sandbox = runSeed(WINDOWS_SEED);
+		sandbox.dispatch("mousedown", press(header));
+		// A child of the drag area is part of it, like Chromium's region hit-test.
+		sandbox.dispatch("mousedown", press(title));
+		expect(dragStarts(sandbox)).toBe(2);
+		sandbox.dispatch("mousedown", press(actions));
+		sandbox.dispatch("mousedown", press(button));
+		sandbox.dispatch("mousedown", press(page));
+		expect(dragStarts(sandbox)).toBe(2);
+		sandbox.dispatch("dblclick", press(title));
+		sandbox.dispatch("dblclick", press(button));
+		expect(sandbox.calls.filter((call) => call.cmd === "title_bar_double_click")).toHaveLength(1);
+
+		// A decorated window (Linux) publishes no drag region, so the header never drags.
+		const decorated = runSeed({
+			windowChrome: { insetLeft: 0, insetRight: 0, dragRegion: false, windowControls: false },
+			preferences: {},
+		});
+		decorated.dispatch("mousedown", press(header));
+		decorated.dispatch("dblclick", press(header));
+		expect(dragStarts(decorated)).toBe(0);
+		expect(decorated.calls.some((call) => call.cmd === "title_bar_double_click")).toBe(false);
 	});
 
 	test("hands external links to the shell's navigation policy", () => {

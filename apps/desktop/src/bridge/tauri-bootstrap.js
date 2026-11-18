@@ -90,14 +90,37 @@
 	function isElement(target) {
 		return target !== null && typeof target === "object" && target.nodeType === 1;
 	}
-	function inDragRegion(target) {
-		if (!isElement(target)) return false;
+	/**
+	 * The drag/no-drag verdict one element states, or null when it states none. Electrobun's preload
+	 * mirrors `-webkit-app-region` into `--electrobun-app-region`; Tauri has no such rewrite, so the
+	 * web's own `window-drag` / `window-no-drag` utility classes are the portable marker (WebKit
+	 * drops `app-region` entirely), with the computed properties as a second source.
+	 */
+	function regionOf(element) {
 		try {
-			const region = getComputedStyle(target).getPropertyValue(TITLE_BAR_REGION_PROPERTY);
-			return String(region).trim().toLowerCase() === "drag";
-		} catch {
-			return false;
+			const classes = element.classList;
+			if (classes && typeof classes.contains === "function") {
+				if (classes.contains("window-no-drag")) return "no-drag";
+				if (classes.contains("window-drag")) return "drag";
+			}
+		} catch {}
+		try {
+			const style = getComputedStyle(element);
+			for (const property of [TITLE_BAR_REGION_PROPERTY, "app-region", "-webkit-app-region"]) {
+				const region = String(style.getPropertyValue(property)).trim().toLowerCase();
+				if (region === "drag" || region === "no-drag") return region;
+			}
+		} catch {}
+		return null;
+	}
+	/** `app-region` is not inherited, but a drag area's children are still part of it: walk up. */
+	function inDragRegion(target) {
+		if (chromeSeed?.dragRegion !== true) return false;
+		for (let node = target; isElement(node); node = node.parentElement) {
+			const region = regionOf(node);
+			if (region) return region === "drag";
 		}
+		return false;
 	}
 
 	let hasFocus = false;
@@ -233,8 +256,8 @@
 	} catch {}
 
 	if (typeof addEventListener === "function") {
-		// The web marks its title bar with the Electrobun drag-region property. Tauri has no such
-		// CSS hook, so a primary press there asks the shell to start a native window move.
+		// The web marks its title bar with `window-drag` / `window-no-drag`. Tauri has no CSS
+		// drag-region hook, so a primary press there asks the shell to start a native window move.
 		addEventListener("mousedown", (event) => {
 			if (event?.button !== 0 || event.detail !== 1 || event.defaultPrevented) return;
 			if (inDragRegion(event.target)) fire("start_window_drag");

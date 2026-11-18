@@ -11,7 +11,7 @@ import { chmodSync, existsSync, mkdirSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { bootHost, registerBundledRuntime } from "@thinkrail/server";
-import { version as appVersion } from "@thinkrail/shared/version";
+import { version as appVersion, channel, posthogProjectKey } from "@thinkrail/shared/version";
 import {
 	bundledExtensionFactories,
 	bundledSkillsVersion,
@@ -64,6 +64,10 @@ const { port, server } = await bootHost({
 	resolveShellEnv: true,
 	staticDir,
 	appVersion,
+	// Same provenance the Electrobun host reports (`startDesktopHost` in `preBuild.ts`): without it
+	// the Tauri build's analytics and error reports would carry no channel, key or `desktop` build.
+	// `openExternal` stays unset: the attribution claim is not started under Tauri (see SPEC).
+	analytics: { posthogApiKey: posthogProjectKey, channel, build: "desktop" },
 });
 
 // bootHost() already shuts the server down on SIGINT/SIGTERM; these handlers

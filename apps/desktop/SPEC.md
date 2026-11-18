@@ -739,13 +739,16 @@ from either.
 | `__THINKRAIL_NATIVE_MENU__` | same global; `menu_labels_changed` via `invoke` |
 | `__THINKRAIL_STABLE_PREFERENCES__` | same global; `preference_write` / `preference_remove` via `invoke` |
 | `__THINKRAIL_INITIAL_WINDOW_CHROME__` / `__THINKRAIL_INITIAL_DESKTOP_PREFERENCES__` seeds | consumed-and-removed seed globals, same as before; `windowChromeChanged` via `listen` keeps the insets current |
-| title bar (`--electrobun-app-region: drag`) | Tauri has no CSS drag region: the bootstrap reports a primary press there as `start_window_drag` and a double-click as `title_bar_double_click` |
+| title bar (`--electrobun-app-region: drag`) | Tauri has no CSS drag region and nothing mirrors `app-region` into `--electrobun-app-region`, so the bootstrap walks up from the pressed element to the nearest `window-drag` / `window-no-drag` class (the web's utilities; computed `app-region` is a fallback) when the seed's `dragRegion` is set, and reports a primary press in a drag area as `start_window_drag` and a double-click as `title_bar_double_click` |
 
 **Navigation.** The main window's navigation policy (`navigation::allow_navigation`, the port of
 `windowNavigationRules` + `installExternalNavigation`) lets the webview load only the sidecar origin
 and its `about:srcdoc` / `blob:` frames. Every other destination is refused; `http(s)`, `mailto` and
 the sidecar's own `/view/` pages open in the system browser instead. The bootstrap routes link
-clicks and `window.open` into that policy the same way the Electrobun preload does.
+clicks and `window.open` into that policy the same way the Electrobun preload does. The main window
+never opens a second webview: `on_new_window` denies every request (Ctrl/Cmd-click, `window.open` from a
+frame, `_blank` forms) and, like Electrobun's `new-window-open` handler, opens the allowlisted ones (outside
+`http(s)` / `mailto`, the sidecar's `/view/` pages) in the system browser.
 
 **Deep links.** `thinkrail://` links are buffered until the page reports `deep_link_ready`, which the
 bootstrap sends once its `openFile` listener is registered with the backend, and they buffer again
@@ -806,7 +809,12 @@ Not ported yet:
   `quitShortcut.ts` does when the key state is unavailable.
 - An update feed, the release channel, and the install journal / `lastInstall` result (the journal
   file helpers in `updates_tauri.rs` are not called).
-- `startAttributionClaim` on first readiness: no sidecar endpoint exposes it.
+- `startAttributionClaim` on first readiness and the `openExternal` callback it needs: no sidecar
+  endpoint exposes the claim. The sidecar does pass the analytics channel, PostHog key and `desktop`
+  build kind, so events and error reports carry the same provenance as under Electrobun.
+- Microphone auto-grant on Windows (`autoGrantPermissions`): WebView2 shows its own prompt under Tauri.
+- Notification `silent`: `tauri-plugin-notification` only honours it on iOS.
+- The release channel in the update snapshot is a fixed `stable`.
 - The macOS traffic-light offset, notification `silent`, the Windows AppUserModelID and taskbar
   shortcut stamping, and the E2E control/probe files other than the ready file.
 - The macOS and Linux builds of the shell have not been compiled or run; only Windows has.
