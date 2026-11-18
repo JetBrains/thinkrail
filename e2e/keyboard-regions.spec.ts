@@ -200,8 +200,11 @@ test("with no active region F6 starts at the top bar and Shift+F6 at the last re
 }) => {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page, { panels: false });
-	// Reveal the bottom panel with its chord: clicking a toggle would make its region active.
+	// Reveal the bottom panel with its chord, then reload: the visible frame persists, and a panel that
+	// mounts with the page takes no focus, whereas one revealed at runtime focuses its terminal.
 	await pressPlatformShortcut(page, "Shift+J");
+	await expect(page.getByTestId("bottom-panel")).toBeVisible();
+	await page.reload();
 	await waitTerminalReady(page);
 	await expect(activeRegion(page)).toHaveCount(0);
 	await page.keyboard.press("F6");
