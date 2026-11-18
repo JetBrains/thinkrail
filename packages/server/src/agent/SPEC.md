@@ -628,8 +628,7 @@ re-opened transcripts provider-valid.
     embedder of pi-as-a-library hits this; an upstream fix would not reach us until a deliberate pi bump.
     **Every extension string the bridge publishes for display is plain text** (#890): stripping, not
     rendering colours, keeps one look with `plainTextTheme`. Each member strips its own fields, not
-    `publish`, so the stored dialog snapshot stays plain. A complete sequence goes; a broken one (no
-    final byte or terminator) loses only its control byte. **A non-string is absent text** (#1356): pi
+    `publish`, so the stored dialog snapshot stays plain. **A non-string is absent text** (#1356): pi
     loads extensions untyped, a throw outside pi's handlers kills the host, and the page trusts the wire
     contract's `string` (a non-string title once took the whole page down). So the bridge never throws
     on one and never forwards one: a title or message becomes `""`, a status clears, a widget line is
@@ -637,10 +636,8 @@ re-opened transcripts provider-valid.
     skipped. A `select` left with no string option resolves `undefined` without a dialog, `[]` included:
     a dialog with nothing to pick could only be cancelled by sending a chat message. A `select` answer
     maps back by index to a copy of the options as passed; options that differ only in colour look alike
-    and the first wins. Built-ins fail: `util.stripVTControlCharacters` leaves OSC tails, `Bun.stripANSI`
-    is missing in the Node workflow harness, and pi-tui's `stripTerminalSequences` keeps DCS strings.
-    The helper is `@thinkrail/shared/stripAnsi` (`plainText` for a non-string), the same one session-title
-    reads use.
+    and the first wins. The strip is `@thinkrail/shared/stripAnsi` (`plainText` for a non-string) — what it
+    removes and why no built-in fits are recorded there — the same one session-title reads use.
   - `toolResponses` — the host half of **interactive tools** (tools whose `execute` waits for the person):
     the per-session response mailbox (`ToolResponseWaiters`), respondability, restart repair support and
     late responses. The mailbox is **tool-agnostic**: every entry is keyed by `toolCallId`, the response is
@@ -1514,7 +1511,7 @@ disk list row's `SessionInfo.name`, and the title `history` extracts) strips ter
 more. The 80-character write cap stays on `renameSession`, so a name pi already stored — one an older
 build saved with colour codes, or one longer than that cap — shows its visible text. The session file is
 left as pi wrote it. `renameSession` still compares the stored string, so a later plain rename is a real
-write. The helper is `@thinkrail/shared/stripAnsi` because `history` cannot import `agent`.
+write. The strip is `@thinkrail/shared/stripAnsi`.
 
 The guarded write remains authoritative across the async race. `onlyIfUnnamed` performs the check immediately
 beside the append and is the compare-and-set the `set_title` handler uses (its `false` return is how the

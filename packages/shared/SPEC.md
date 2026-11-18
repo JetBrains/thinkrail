@@ -38,9 +38,7 @@ paste into the folder, and extensions
   through `WorkspaceFiles.ensureArtifactsDir` before saving — so recreating a folder someone cleaned never
   leaves files git would stage;
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
-  `@thinkrail/shared/stripAnsi` → `stripAnsi()`, `plainText()`. `stripAnsi` removes a complete ECMA-48
-  sequence and, for a broken one, only the control byte. `plainText` maps a non-string to `""`. The ext-UI
-  bridge and session-title reads share it: `history` cannot import `agent`;
+  `@thinkrail/shared/stripAnsi` → `stripAnsi()`, `plainText()`;
   `@thinkrail/shared/toolHomes` → `toolHomeEnv(home)`, the environment that points every agent tool's
   config home (Claude Code, Codex, Gemini, Copilot, Kimi, Grok) under one sandbox home and clears the
   overrides that would reach outside it — the single list every hermetic host spawner (e2e, workflow
@@ -160,7 +158,7 @@ paste into the folder, and extensions
 - **/stripAnsi** — `stripAnsi(text)` + `plainText(value)`: the host's plain-text strip for extension
   display strings and session titles. A complete CSI, OSC, DCS, SOS, PM, APC, or two-byte escape (7-bit or
   8-bit C1) is removed; a sequence with no final byte loses only its control byte, so the rest stays
-  readable. Text that merely looks like a code is unchanged. Built-ins do not fit: `util.stripVTControlCharacters`
+  readable. Text that merely looks like a code is unchanged; `plainText` maps a non-string to `""`. Built-ins do not fit: `util.stripVTControlCharacters`
   leaves OSC tails, `Bun.stripANSI` is missing under Node, and pi-tui's `stripTerminalSequences` keeps DCS
   strings. It lives here because `agent` and `history` both read session titles and neither may import the
   other.
