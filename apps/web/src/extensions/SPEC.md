@@ -4,8 +4,8 @@ type: submodule-design
 status: draft
 title: Web extension composition registry and installed-extension runtime
 parent: module-web
-depends-on: [module-extension-api, module-ext-visualize, module-ext-ask-user-question]
-references: [submodule-web-chat, module-thinkrail-extensions, module-resource-renderers, module-ui]
+depends-on: [module-extension-api, module-ext-visualize, module-ext-ask-user-question, module-ext-hint-mode]
+references: [submodule-web-chat, submodule-web-shell, module-thinkrail-extensions, module-resource-renderers, module-ui]
 tags: [public-surface-checked]
 ---
 
@@ -16,7 +16,8 @@ ones loaded at runtime ([[module-thinkrail-extensions]] § Installed extensions)
 
 - **Built-in:** `registry.ts` owns their ordered list; `registerWebExtensions()` feeds each descriptor's
   tool entries into chat's registry in order, preserving its last-registration-wins behavior and fallback
-  renderer. Re-registering the same list replaces entries rather than accumulating them.
+  renderer. Re-registering the same list replaces entries rather than accumulating them. The app-local
+  registrations (`chat/tools/register`) arrive later with `ChatView`'s lazy chunk and name other tools.
 - **Host object:** `host.ts` exposes the app's own modules to installed web halves on one frozen
   `globalThis.__thinkrailExtensionHost = { api, modules }`, keyed by the specifier an author imports.
   The object's name, `api` and keys are `EXTENSION_HOST_OBJECT`, `EXTENSION_API_VERSION` and
@@ -34,8 +35,26 @@ ones loaded at runtime ([[module-thinkrail-extensions]] § Installed extensions)
 
 Registration ignores the host's extension on/off setting: a web extension's renderers stay registered while
 its server half is disabled, so a transcript that already contains its tool calls keeps rendering them. The
-switch only decides what the host gives the agent next. Removing an installed extension unregisters its
-renderers.
+switch only decides what the host gives the agent next — and which **global contributions** run:
+`enabledWebExtensions(disabled)` is the list `Shell` mounts `globalOverlay`s from and the cheatsheet takes
+`shortcuts` from ([[submodule-web-shell]]), so switching one off unmounts it at once.
+`webExtensionCommands(disabled)` lists the `commands` of **every** registered extension in registry order
+with an `enabled` flag — the input `shell` resolves keybindings from ([[submodule-web-keybindings]]): a
+switched-off extension's commands stay listed (Settings → Keyboard shows and rebinds them) but neither
+match nor conflict, and registry order decides between two extensions' defaults. A command with a
+`scope` is local and reaches the resolver's per-scope table as it is; the resolver drops one whose id or
+scope lacks the extension's `name.` prefix, and the tests pin that every bundled command has it.
+`webOnlyExtensions(serverNames)` is the titled entries without tool renderers that the server catalog lacks; Settings → Extensions
+lists them under the same switch ([[module-thinkrail-extensions]]).
+Composer suggestions are the one *tool-registered* affordance the switch hides: each registration carries
+its extension's `name` (an installed one's is its descriptor `name`), so the chat hides a switched-off
+extension's chips while its past rows keep rendering ([[submodule-web-chat]]). Removing an installed
+extension unregisters its renderers.
+
+These global contributions — `globalOverlay`, `commands`, `shortcuts`, and a web-only `title` — are read
+from the built-in list only. An installed web half contributes its tool renderers (with their registration
+options, `composerSuggestions` included) and nothing else: the loader requires `toolRenderers` and ignores
+the other fields, so an installed extension cannot bind keys or mount an overlay yet.
 
 ## Loader
 
@@ -45,7 +64,7 @@ renderers.
 - **All or nothing per extension.** The bundle and its stylesheet load in parallel (the `<link>` is awaited
   so a card never paints unstyled); the default export must have the `WebExtension` shape — a string
   `name` and `toolRenderers` whose entries carry a function `renderer` and optional object `options` with
-  an optional function `summary`. Only then are the renderers registered, under the descriptor's `name`
+  optional functions `summary` and `composerSuggestions`. Only then are the renderers registered, under the descriptor's `name`
   (the npm identity, not the author's `defineWebExtension` name), in the precedence slot reserved when its
   load started — the descriptor order of the host's list — so a contested tool name goes to the
   extension the server runs, not to the bundle that loaded first. Any failure removes the stylesheet,
@@ -112,7 +131,9 @@ renderers.
 
 ## Boundary
 
-- **Public surface:** `webExtensions`, `registerWebExtensions`, `installExtensionHost`, `ExtensionHost`,
+- **Public surface:** `webExtensions`, `registerWebExtensions`, `enabledWebExtensions`,
+  `webExtensionCommands`, `WebExtensionCommands`, `webOnlyExtensions`, `installExtensionHost`,
+  `ExtensionHost`,
   `loadWebExtensions`, `loadWebExtensionsBeforeRender`, `syncWebExtensions`, `unloadWebExtension`,
   `webExtensionLoads`, `subscribeWebExtensionLoads`, `useWebExtensionLoads`, `PRE_RENDER_WAIT_MS`,
   `InstalledWebExtension`, `WebExtensionLoadResult`, `WebExtensionLoadFailure`,
@@ -132,3 +153,6 @@ renderers.
 - Direct component consumers use an extension's named public exports independently of tool registration:
   Markdown renders `MermaidView`. The plan page reaches the questionnaire card through the registry, not by
   name.
+- Tests also pin that the bundled extensions' default chords conflict with nothing (the resolver with no
+  overrides reports no conflict on any platform) and that plain F is free in the app table and in the
+  catalog's feature keys.

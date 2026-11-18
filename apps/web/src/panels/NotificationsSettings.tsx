@@ -25,7 +25,7 @@ function HowToEnableInstructions() {
 				aria-expanded={expanded}
 				aria-controls={stepsId}
 				onClick={() => setExpanded((v) => !v)}
-				className="flex items-center gap-4 tr-text-metadata text-text-muted transition-colors hover:text-text-default"
+				className="flex items-center gap-4 tr-text-metadata text-text-muted transition-colors hover:text-text-default focus-visible:focus-ring"
 			>
 				{expanded ? (
 					<RiArrowDownSLine className="size-14" />

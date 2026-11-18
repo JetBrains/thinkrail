@@ -14,8 +14,8 @@ pair, additional-analytics preference and first-run dialog completion marker, ho
 effort defaults, terminal replay budget and Windows shell preference, chat composer growth preset, chat/file
 visual line widths plus independent pane bounds, bounded custom layout-preset catalog, JetBrains quota
 display/cadence, the host-wide subagent default, plan-review policy, the host-registry extensions the
-user turned off, and the UI language preference (`locale`). `defaultModel` / `defaultEffort`
-select the defaults every new chat receives (unset model means pi's `settings.json` default when available, else the preferred available model — pi's provider default, else the first; unset effort means medium);
+user turned off, the UI language preference (`locale`), and the user's keyboard bindings (`keybindings`). `defaultModel` / `defaultEffort`
+select the defaults every new chat receives (unset model means pi's `settings.json` default when available, else the preferred available model — pi's provider default, else the first — among non-environment connections, then among all available connections; unset effort means medium);
 `reviewModel` / `reviewEffort`
 select the reviewer runtime (unset means that same new-chat default); `reviewAutoFix: false` records a `request_changes`
 verdict and waits instead of auto-sending a fix. **`favoriteModels`** is the picker's starred list in display
@@ -43,7 +43,7 @@ interval (`1–3600`, default 30), because those values govern host process cade
 - **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (reject a non-object or unknown key → merge → validate known fields → persist → publish the merged `AppConfig` and successful applied `AppConfigUpdate`); the font settings' shape (`interfaceFont` / `codeFont` through `isFontChoice`, `codeFontSize`, `codeLigatures`, `fontWeightOffset`), each normalized back to its own default on load — which family a choice names, and whether it renders, is the client's; line-width and resource-free custom-preset validation/normalization; custom-preset safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
 - **Public surface (barrel):** `getConfig`, `updateConfig`, `noteRecentModel`, `setSettingsPublisher`, `SettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
 - **Allowed deps:** `persistence` (`loadConfig`/`saveConfig`); `contracts` (`AppConfig`, `LayoutPreset`,
-  `isTerminalWindowsShell`).
+  `isTerminalWindowsShell`, `isKeybindingOverrides`); `shared` (`CodedError`).
 - **Forbidden:** host or another feature sibling; current-layout document/snapshot types; workspace ids/resources; current frame validation; owning WS channels; or importing web preset definitions.
 
 ## Get right
@@ -53,7 +53,8 @@ interval (`1–3600`, default 30), because those values govern host process cade
   `isTerminalWindowsShell` guard, while a wire mutation outside the closed shell union rejects the complete
   update before cache, persistence, or broadcast changes. Settings owns validation and synchronization;
   `terminal` owns executable resolution and spawning.
-- `chatLineWidth` / `fileLineWidth` independently default to 120 and accept only finite integers from 40 through 240; their `Bounded` switches independently default to `true`. A malformed stored field falls back without discarding valid siblings; any invalid supplied field rejects the complete mutation before cache, persistence, or broadcast changes.
+- `questionPanelHeight` defaults to 70 and accepts only whole percents from 40 through 100 (`isQuestionPanelHeight`); a malformed stored value falls back to the default and an invalid update rejects the complete mutation. The default was 60 until 2026-11-17, and since every save writes the whole config most users had 60 stored, so a stored 60 in a config saved before then (no `configVersion`, see [[submodule-server-persistence]]) loads as 70 once; any other stored value is kept, and a 60 chosen afterwards stays 60. A 60 deliberately chosen before the change is indistinguishable and also becomes 70 (accepted by the user).
+- `chatLineWidth` defaults to 80 and `fileLineWidth` to 120 (`LINE_WIDTH_COLUMNS.default`); both accept only finite integers from 40 through 240. Every settings write persists the whole config, so a stored width keeps its value across a default change — there is no migration; their `Bounded` switches independently default to `true`. A malformed stored field falls back without discarding valid siblings; any invalid supplied field rejects the complete mutation before cache, persistence, or broadcast changes.
 - `subagentsEnabled` defaults to `true` when absent so old config preserves current behavior; a present non-boolean update is rejected before cache, persistence, or broadcast changes. Settings owns only that global default; workspace override and effective-value resolution stay outside this module.
 - `onboardingDismissed` defaults to `false` when absent or malformed on disk; a present non-boolean update is rejected like the other boolean fields. Only the web onboarding wizard reads it.
 - `subagentMaxConcurrent` (per-chat concurrent subagents) defaults to 4 when absent or malformed on disk; a wire update outside `isSubagentMaxConcurrent` (whole 1–16) rejects the complete mutation — never clamped. Like `subagentsEnabled`, settings owns only the global value.
@@ -68,6 +69,15 @@ interval (`1–3600`, default 30), because those values govern host process cade
   boolean values, or the whole mutation is rejected; it is **merged per key** into the stored map, so a
   Settings switch never resets an extension's other settings. Like `disabledExtensions`, undeclared names
   and keys are kept and inert — the registry's descriptors decide what a key means.
+- `keybindings` maps a command id to the user's chords (`[]` = unbound; absent = the command's defaults);
+  absent means `{}`. Settings checks **shape and grammar only** (`contracts`' `isKeybindingOverrides`):
+  non-blank ids, lists of `isKeybindingChord` strings; a malformed value rejects the whole mutation with
+  the `CodedError` `KEYBINDINGS_INVALID`. An update **replaces the whole map** (an editor writes every
+  binding it keeps) and dedupes each list; **unknown ids are kept** — an extension may be switched off or
+  not installed, and which chord a command may take (no plain keys, conflicts) is the client's resolver's
+  rule ([[submodule-web-keybindings]]). On load, malformed chords are dropped, an entry left with none falls
+  back to its defaults, and a stored `[]` stays unbound. Gated on `KEYBINDINGS_PROTOCOL_VERSION` (v123):
+  an older host rejects the key, so the client sends it only above the gate (`supportsKeybindings`).
 - `disabledPackages` is the same shape for installed pi packages, keyed by the package identity the
   catalog reports (`PiPackageSummary.identity`); it exists because pi has no "whole package off" setting
   and writing pi's per-resource filters would reset a user's own filters on re-enable. Validation,

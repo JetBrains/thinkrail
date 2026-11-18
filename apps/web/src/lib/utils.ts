@@ -1,4 +1,4 @@
-import type { UserMessage } from "@thinkrail/contracts";
+import type { WireUserMessage } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
 import { browserPlatform, isApplePlatform } from "@thinkrail/ui/keyboard";
 
@@ -125,7 +125,7 @@ export function randomUuid(): string {
 	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-export function userText(content: UserMessage["content"]): string {
+export function userText(content: WireUserMessage["content"]): string {
 	if (typeof content === "string") return content;
 	return content
 		.filter((c) => c.type === "text")
@@ -206,23 +206,40 @@ function canonicalPosixPath(path: string): string {
 	return `${prefix}${segments.join("/")}`;
 }
 
-export function projectRelativePath(path: string, workspaceRoot?: string | undefined): string {
-	const canonical = canonicalPosixPath(path);
-	if (!canonical || !isAbsolutePath(canonical)) return canonical;
-
-	const root = workspaceRoot ? trimTrailingSlashes(canonicalPosixPath(workspaceRoot)) : "";
+function rootRelative(canonical: string, workspaceRoot: string): string | null {
+	const root = trimTrailingSlashes(canonicalPosixPath(workspaceRoot));
 	const ignoreCase = hasWindowsDriveRoot(canonical) && hasWindowsDriveRoot(root);
 	const comparableCanonical = ignoreCase ? canonical.toLowerCase() : canonical;
 	const comparableRoot = ignoreCase ? root.toLowerCase() : root;
 	const rootPrefix = comparableRoot.endsWith("/") ? comparableRoot : `${comparableRoot}/`;
 	if (
-		comparableRoot &&
-		(comparableCanonical === comparableRoot || comparableCanonical.startsWith(rootPrefix))
+		!comparableRoot ||
+		(comparableCanonical !== comparableRoot && !comparableCanonical.startsWith(rootPrefix))
 	) {
-		return canonical.slice(root.length).replace(/^\/+/, "") || fileName(canonical);
+		return null;
 	}
+	return canonical.slice(root.length).replace(/^\/+/, "");
+}
 
-	return canonical;
+export function projectRelativePath(path: string, workspaceRoot?: string | undefined): string {
+	const canonical = canonicalPosixPath(path);
+	if (!canonical || !isAbsolutePath(canonical)) return canonical;
+	const relative = workspaceRoot ? rootRelative(canonical, workspaceRoot) : null;
+	if (relative === null) return canonical;
+	return relative || fileName(canonical);
+}
+
+export function pathWithinRoot(path: string, root: string): string | null {
+	const canonical = canonicalPosixPath(path);
+	return isAbsolutePath(canonical) && isAbsolutePath(root) ? rootRelative(canonical, root) : null;
+}
+
+export function joinWorkspacePath(worktreePath: string, path: string): string {
+	if (!worktreePath || path.startsWith("/") || hasWindowsDriveRoot(path)) return path;
+	const windows = /^(?:[A-Za-z]:\\|\\\\)/.test(worktreePath);
+	const separator = windows ? "\\" : "/";
+	const root = worktreePath.endsWith(separator) ? worktreePath : `${worktreePath}${separator}`;
+	return `${root}${windows ? path.replaceAll("/", "\\") : path}`;
 }
 
 let colorCanvas: CanvasRenderingContext2D | null | undefined;

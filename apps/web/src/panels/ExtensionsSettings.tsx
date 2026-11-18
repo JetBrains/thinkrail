@@ -10,7 +10,7 @@ import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { useEffect, useState } from "react";
-import { useWebExtensionLoads } from "@/extensions";
+import { useWebExtensionLoads, webOnlyExtensions } from "@/extensions";
 import {
 	selectActiveRepoWorkspaceId,
 	selectBuiltinExtensions,
@@ -37,6 +37,7 @@ import { useInstalledExtensions } from "./useInstalledExtensions";
 import { UPDATE_CHECK_KEY, usePiPackages } from "./usePiPackages";
 
 const BUNDLED_DESCRIPTIONS: Readonly<Record<string, MessageKey>> = {
+	"next-steps": "settings.extensions.next-steps.description",
 	visualize: "settings.extensions.visualize.description",
 	"web-access": "settings.extensions.web-access.description",
 };
@@ -44,6 +45,24 @@ const BUNDLED_DESCRIPTIONS: Readonly<Record<string, MessageKey>> = {
 function bundledDescription(t: Translator, entry: ExtensionCatalogEntry): string {
 	const key = BUNDLED_DESCRIPTIONS[entry.name];
 	return key ? t(key) : (entry.description ?? "");
+}
+
+export function withWebOnlyEntries(
+	t: Translator,
+	entries: readonly ExtensionCatalogEntry[],
+): ExtensionCatalogEntry[] {
+	const webOnly = webOnlyExtensions(new Set(entries.map((entry) => entry.name)));
+	return [
+		...entries,
+		...webOnly.map(({ name, title, description }) => ({
+			name,
+			title: t(title),
+			...(description ? { description: t(description) } : {}),
+			enabled: true,
+			tools: [],
+			hasChildExtensions: false,
+		})),
+	];
 }
 
 interface SettingCopy {
@@ -276,7 +295,7 @@ export function ExtensionsSettings() {
 					{t("settings.extensions.group.bundled")}
 				</h4>
 				<ExtensionsCatalog
-					entries={entries}
+					entries={Array.isArray(entries) ? withWebOnlyEntries(t, entries) : entries}
 					disabled={disabled}
 					onToggle={toggle}
 					settings={extensionSettings}

@@ -1,21 +1,54 @@
+import {
+	RiFileCopyLine as Copy,
+	RiFileCopy2Line as CopyEntry,
+	RiScissorsCutLine as Cut,
+	RiClipboardLine as Paste,
+	RiDeleteBinLine as Trash,
+} from "@remixicon/react";
 import type { FileNode } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { describeResource, PENDING_TEXT_META } from "@thinkrail/resource-renderers";
+import { Button } from "@thinkrail/ui/button";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuSeparator,
+	ContextMenuTrigger,
+	openContextMenuFromKeyboard,
+} from "@thinkrail/ui/context-menu";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactElement, useEffect, useMemo, useRef, useState } from "react";
 import { statusLetter } from "../chat/planView";
-import { firstClickOnly } from "../lib";
-import { selectFilesTreeView, type TabIntent, useAppStore } from "../store";
+import { copyText, fileName, firstClickOnly, joinWorkspacePath } from "../lib";
+import {
+	selectFilesTreeView,
+	selectWorkspaceById,
+	selectWorkspaceIsRunning,
+	supportsArtifacts,
+	type TabIntent,
+	useAppStore,
+} from "../store";
 import { getTransport } from "../transport";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { type ChangeMarks, statusMarkClass } from "./changesModel";
 import { holdEditorWarm, useEditorWarm, warmOnHover } from "./editorWarm";
+import { deleteEntry, pasteDestination, pasteInto, supportsFileMutations } from "./fileTreeActions";
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
+import { OpenInBrowserMenuItem } from "./OpenInBrowserButton";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
+import { Tree, treeRowKey, useTreeKeys } from "./treeNavigation";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
 type SetPathsExpanded = (paths: readonly string[], expanded: boolean) => void;
 type WarmFile = ((path: string) => void) | undefined;
+type RequestDelete = (path: string) => void;
+
+interface DeleteRequest {
+	path: string;
+	open: boolean;
+}
 
 interface TreeFocus {
 	activePath: string | null;
@@ -30,6 +63,7 @@ export function FileTree({
 }: TreeFocus & { workspaceId: string; marks: ChangeMarks }) {
 	const t = useT();
 	const [nodes, setNodes] = useState<FileNode[] | null>(null);
+	const [deleteRequest, setDeleteRequest] = useState<DeleteRequest | null>(null);
 	const expanded = useAppStore((s) => selectFilesTreeView(s, workspaceId).expanded);
 	const expandedPaths = useMemo(() => new Set(expanded), [expanded]);
 	const warm = useEditorWarm();
@@ -54,44 +88,120 @@ export function FileTree({
 	useEffect(() => (loading ? holdEditorWarm() : undefined), [loading]);
 
 	if (nodes === null) return <LoadingRegion rows={8} className="px-4 py-4" />;
-	if (nodes.length === 0)
-		return (
-			<p className="px-4 py-4 tr-text-metadata text-text-muted">{t("panels.fileTree.empty")}</p>
-		);
+	if (nodes.length === 0) return <EmptyTree workspaceId={workspaceId} />;
 	return (
-		<ul className="flex flex-col motion-safe:animate-reveal">
-			{nodes.map((node) => (
-				<FileNodeRow
-					key={node.path}
-					node={node}
+		<>
+			<Tree
+				label={t("panels.fileTree.label")}
+				focusList="files"
+				className="flex flex-col motion-safe:animate-reveal"
+				onOpenKept={(path) => void openFileInTab(workspaceId, path, "keep")}
+			>
+				{nodes.map((node) => (
+					<FileNodeRow
+						key={node.path}
+						node={node}
+						level={1}
+						workspaceId={workspaceId}
+						marks={marks}
+						focus={focus}
+						expandedPaths={expandedPaths}
+						setPathsExpanded={setPathsExpanded}
+						warmFile={warmFile}
+						onDelete={(path) => setDeleteRequest({ path, open: true })}
+					/>
+				))}
+			</Tree>
+			{deleteRequest ? (
+				<DeleteEntryDialog
 					workspaceId={workspaceId}
-					marks={marks}
-					focus={focus}
-					expandedPaths={expandedPaths}
-					setPathsExpanded={setPathsExpanded}
-					warmFile={warmFile}
+					request={deleteRequest}
+					onClose={() => setDeleteRequest({ ...deleteRequest, open: false })}
 				/>
-			))}
-		</ul>
+			) : null}
+		</>
+	);
+}
+
+function EmptyTree({ workspaceId }: { workspaceId: string }) {
+	const t = useT();
+	const canPaste = useAppStore(
+		(s) => supportsFileMutations(s.protocolVersion) && s.fileClipboard !== null,
+	);
+	return (
+		<div className="flex items-center gap-8 px-4 py-4">
+			<p className="tr-text-metadata text-text-muted">{t("panels.fileTree.empty")}</p>
+			{canPaste ? (
+				<Button
+					variant="ghost"
+					size="s"
+					iconLeft={Paste}
+					data-testid="file-tree-paste-root"
+					onClick={() => void pasteInto(workspaceId, ".")}
+				>
+					{t("panels.fileTree.paste")}
+				</Button>
+			) : null}
+		</div>
+	);
+}
+
+function DeleteEntryDialog({
+	workspaceId,
+	request,
+	onClose,
+}: {
+	workspaceId: string;
+	request: DeleteRequest;
+	onClose: () => void;
+}) {
+	const t = useT();
+	const agentWorking = useAppStore((s) => selectWorkspaceIsRunning(s, workspaceId));
+	return (
+		<ConfirmDialog
+			open={request.open}
+			onOpenChange={(open) => {
+				if (!open) onClose();
+			}}
+			title={t("panels.fileTree.deleteTitle", { name: fileName(request.path) })}
+			description={
+				<>
+					{t("panels.fileTree.deleteDescription", { path: request.path })}
+					{agentWorking ? (
+						<span data-testid="file-tree-delete-agent-working" className="mt-4 block">
+							{t("panels.fileTree.deleteAgentWorking")}
+						</span>
+					) : null}
+				</>
+			}
+			confirmLabel={t("common.delete")}
+			destructive
+			confirmTestId="file-tree-delete-confirm"
+			onConfirm={() => void deleteEntry(workspaceId, request.path)}
+		/>
 	);
 }
 
 function FileNodeRow({
 	node,
+	level,
 	workspaceId,
 	marks,
 	focus,
 	expandedPaths,
 	setPathsExpanded,
 	warmFile,
+	onDelete,
 }: {
 	node: FileNode;
+	level: number;
 	workspaceId: string;
 	marks: ChangeMarks;
 	focus: TreeFocus;
 	expandedPaths: ReadonlySet<string>;
 	setPathsExpanded: SetPathsExpanded;
 	warmFile: WarmFile;
+	onDelete: RequestDelete;
 }) {
 	const isDir = node.kind === "dir";
 	const [directory, setDirectory] = useState<ResolvedFolderChain<FileNode> | null>(null);
@@ -141,59 +251,188 @@ function FileNodeRow({
 			: undefined;
 
 	return (
-		<li>
-			<TreeRow
-				ref={revealRow}
-				testid="file-node"
-				kind={isDir ? "dir" : "file"}
-				active={!isDir && focus.activePath === node.path}
-				subtle={ignored}
-				dataStatus={ignored ? "ignored" : undefined}
-				expanded={expanded}
-				label={label}
-				labelClassName={
-					fileStatus ? statusMarkClass(fileStatus) : dirChanged ? statusMarkClass("modified") : ""
-				}
-				trailing={
-					fileStatus ? (
-						<span
-							data-testid="file-status"
-							className={`shrink-0 tr-text-metadata ${statusMarkClass(fileStatus)}`}
-						>
-							{statusLetter(fileStatus)}
-						</span>
-					) : dirChanged ? (
-						<span
-							data-testid="file-folder-dot"
-							className="mr-4 size-6 shrink-0 rounded-full bg-feedback-warning"
-						/>
-					) : undefined
-				}
-				onClick={isDir ? toggleDirectory : firstClickOnly(() => open("preview"))}
-				onDoubleClick={isDir ? undefined : () => open("keep")}
-				onWarm={
-					isDir || !warmFile
-						? undefined
-						: (trigger) =>
-								trigger === "focus" ? warmFile(node.path) : warmOnHover(() => warmFile(node.path))
-				}
-			/>
+		<li role="none" data-focus-row={node.path}>
+			<FileTreeMenu
+				workspaceId={workspaceId}
+				path={directory?.path ?? node.path}
+				kind={node.kind}
+				onDelete={onDelete}
+			>
+				{(menuOpen) => (
+					<TreeRow
+						ref={revealRow}
+						testid="file-node"
+						treeId={node.path}
+						level={level}
+						path={directory?.path ?? node.path}
+						kind={isDir ? "dir" : "file"}
+						active={!isDir && focus.activePath === node.path}
+						highlighted={menuOpen}
+						subtle={ignored}
+						dataStatus={ignored ? "ignored" : undefined}
+						expanded={expanded}
+						label={label}
+						labelClassName={
+							fileStatus
+								? statusMarkClass(fileStatus)
+								: dirChanged
+									? statusMarkClass("modified")
+									: ""
+						}
+						trailing={
+							fileStatus ? (
+								<span
+									data-testid="file-status"
+									className={`shrink-0 tr-text-metadata ${statusMarkClass(fileStatus)}`}
+								>
+									{statusLetter(fileStatus)}
+								</span>
+							) : dirChanged ? (
+								<span
+									data-testid="file-folder-dot"
+									className="mr-4 size-6 shrink-0 rounded-full bg-feedback-warning"
+								/>
+							) : undefined
+						}
+						onClick={isDir ? toggleDirectory : firstClickOnly(() => open("preview"))}
+						onDoubleClick={isDir ? undefined : () => open("keep")}
+						onWarm={
+							isDir || !warmFile
+								? undefined
+								: (trigger) =>
+										trigger === "focus"
+											? warmFile(node.path)
+											: warmOnHover(() => warmFile(node.path))
+						}
+					/>
+				)}
+			</FileTreeMenu>
 			{isDir && expanded && children && (
-				<ul className="flex flex-col pl-tree-indent">
+				<ul
+					role="none"
+					data-focus-list={`files:${directory?.path ?? node.path}`}
+					className="flex flex-col pl-tree-indent"
+				>
 					{children.map((child) => (
 						<FileNodeRow
 							key={child.path}
 							node={child}
+							level={level + 1}
 							workspaceId={workspaceId}
 							marks={marks}
 							focus={focus}
 							expandedPaths={expandedPaths}
 							setPathsExpanded={setPathsExpanded}
 							warmFile={warmFile}
+							onDelete={onDelete}
 						/>
 					))}
 				</ul>
 			)}
 		</li>
+	);
+}
+
+function FileTreeMenu({
+	workspaceId,
+	path,
+	kind,
+	onDelete,
+	children,
+}: {
+	workspaceId: string;
+	path: string;
+	kind: FileNode["kind"];
+	onDelete: RequestDelete;
+	children: (menuOpen: boolean) => ReactElement;
+}) {
+	const t = useT();
+	const treeKeys = useTreeKeys();
+	const [open, setOpen] = useState(false);
+	const mutations = useAppStore((s) => supportsFileMutations(s.protocolVersion));
+	const moves = useAppStore((s) => supportsArtifacts(s.protocolVersion));
+	const canPaste = useAppStore((s) => s.fileClipboard !== null);
+	const copyPath = (absolute: boolean) => {
+		const worktreePath = selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath;
+		void copyText(absolute ? joinWorkspacePath(worktreePath ?? "", path) : path);
+	};
+	return (
+		<ContextMenu open={open} onOpenChange={setOpen}>
+			<ContextMenuTrigger
+				asChild
+				onKeyDown={(event) => {
+					if (mutations && treeRowKey(event.nativeEvent, treeKeys) === "delete") {
+						event.preventDefault();
+						onDelete(path);
+						return;
+					}
+					openContextMenuFromKeyboard(event);
+				}}
+			>
+				{children(open)}
+			</ContextMenuTrigger>
+			<ContextMenuContent data-testid="file-tree-actions">
+				{kind === "file" ? (
+					<OpenInBrowserMenuItem
+						workspaceId={workspaceId}
+						path={path}
+						testId="file-tree-open-in-browser"
+					/>
+				) : null}
+				<ContextMenuItem data-testid="file-copy-path" onSelect={() => copyPath(true)}>
+					<Copy />
+					{t("panels.fileTree.copyPath")}
+				</ContextMenuItem>
+				<ContextMenuItem data-testid="file-copy-relative-path" onSelect={() => copyPath(false)}>
+					<Copy />
+					{t("panels.fileTree.copyRelativePath")}
+				</ContextMenuItem>
+				{mutations ? (
+					<>
+						<ContextMenuSeparator />
+						<ContextMenuItem
+							data-testid="file-tree-copy"
+							onSelect={() => useAppStore.getState().setFileClipboard({ workspaceId, path })}
+						>
+							<CopyEntry />
+							{t("common.copy")}
+						</ContextMenuItem>
+						{moves ? (
+							<ContextMenuItem
+								data-testid="file-tree-cut"
+								onSelect={() =>
+									useAppStore.getState().setFileClipboard({ workspaceId, path, cut: true })
+								}
+							>
+								<Cut />
+								{t("panels.fileTree.cut")}
+							</ContextMenuItem>
+						) : null}
+						{canPaste ? (
+							<ContextMenuItem
+								data-testid="file-tree-paste"
+								onSelect={() => void pasteInto(workspaceId, pasteDestination(path, kind))}
+							>
+								<Paste />
+								{t("panels.fileTree.paste")}
+							</ContextMenuItem>
+						) : null}
+						<ContextMenuSeparator />
+						<ContextMenuItem
+							data-testid="file-tree-delete"
+							className="text-feedback-error focus:bg-feedback-error-subtle [&_svg]:text-feedback-error"
+							onSelect={(event) => {
+								event.preventDefault();
+								setOpen(false);
+								requestAnimationFrame(() => onDelete(path));
+							}}
+						>
+							<Trash />
+							{t("common.delete")}
+						</ContextMenuItem>
+					</>
+				) : null}
+			</ContextMenuContent>
+		</ContextMenu>
 	);
 }

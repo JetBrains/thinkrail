@@ -1,5 +1,6 @@
 export * from "./agentSessionManager";
 export { disableAnthropicExtraUsageWarning, globalProviderWarnings } from "./anthropicExtraUsage";
+export { readCacheWarmingSetting, writeCacheWarmingMode } from "./cacheWarming";
 export {
 	getResourceHistoryPage,
 	getSessionResources,
@@ -135,7 +136,7 @@ export {
 	type SkillDecision,
 	type SkillFacts,
 } from "./skillAdmission";
-export { isProjectSkillPath } from "./skillSources";
+export { isProjectSkillPath, mayHoldProjectSkills } from "./skillSources";
 export {
 	SET_TITLE_TOOL_NAME,
 	type SetTitleParams,
@@ -144,3 +145,12 @@ export {
 } from "./titleTool";
 export * from "./toolResponses";
 export * from "./webUiContext";
+export {
+	START_WORKSPACE_TOOL_NAME,
+	type StartedWorkspace,
+	type StartWorkspaceParams,
+	setWorkspaceToolsHost,
+	WORKSPACE_STATUS_TOOL_NAME,
+	type WorkspaceStatusParams,
+	type WorkspaceToolsHost,
+} from "./workspaceTools";

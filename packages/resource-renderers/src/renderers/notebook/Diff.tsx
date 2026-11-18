@@ -7,6 +7,7 @@ import { useResourceHost } from "../../host";
 import type { ResourceDiffProps, ReviewThread, SurfaceReview } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
 import { ReviewThreadCard } from "../../support/ReviewThreadCard";
+import { commentCard, revealReviewCard } from "../../support/revealFocus";
 import { useScrollViewState } from "../../support/useScrollViewState";
 import PierreProvider from "../code/PierreProvider";
 import { diffContentStamp, useStampedComposer } from "../reviewComposerState";
@@ -193,7 +194,11 @@ function NotebookDiffSurface({
 		const element = key ? cellRefs.current.get(key) : null;
 		if (!element) return;
 		handledFocusRef.current = focusId;
-		element.scrollIntoView({ block: "center" });
+		revealReviewCard(
+			element,
+			focusSurface.surface.focus?.moveFocus === true,
+			commentCard(element, focusId) ?? element,
+		);
 		focusSurface.surface.onFocusHandled();
 	}, [focusId, focusSurface, layout.baseKey, layout.worktreeKey, placement]);
 

@@ -17,7 +17,16 @@ import {
 	DialogFooter,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
-import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from "react";
+import { focusAndReveal } from "@thinkrail/ui/focus";
+import {
+	useCallback,
+	useEffect,
+	useInsertionEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useNow } from "@/components/useNow";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
@@ -29,6 +38,7 @@ import {
 	selectCompactionTurnIds,
 	selectComposerFocusRequested,
 	selectPickerModels,
+	selectQuestionMayClaimFocus,
 	selectSkillsStale,
 	selectSupportsMcp,
 	selectWorkspaceById,
@@ -36,9 +46,10 @@ import {
 	useAppStore,
 	workspaceName,
 } from "@/store";
-import { errorText, getTransport, watchMcpWorkspace } from "@/transport";
+import { errorText, getTransport, hostUrl, watchMcpWorkspace, wsErrorCode } from "@/transport";
 import type { ResultTarget } from "./ChatActions";
 import { ChatHeader } from "./ChatHeader";
+import { ChatMediaContext } from "./ChatImage";
 import ChatTranscript, { type ChatTranscriptHandle } from "./ChatTranscript";
 import {
 	Composer,
@@ -47,9 +58,13 @@ import {
 	type MentionCandidate,
 	type SubmitBehavior,
 } from "./Composer";
+import { deriveComposerSuggestions } from "./composerSuggestions";
+import { DEFAULT_DOCK_FOLD, type DockFold, dockCollapsed, withDockCollapsed } from "./dockFold";
 import { ExtraUsageNotice } from "./ExtraUsageNotice";
 import { mentionLookup } from "./fileTargets";
 import { HistoryOverlay } from "./HistoryOverlay";
+import { awaitingToolCallIdOf } from "./interactionState";
+import { McpServerDetail } from "./McpServerDetail";
 import { parseModelRef, RunModelLabel } from "./ModelEffortLabel";
 import type { ModelSelection } from "./ModelEffortPicker";
 import {
@@ -58,10 +73,12 @@ import {
 	parseNativeChatCommand,
 	prepareNameChatCommand,
 } from "./nativeCommands";
+import type { PromptImagesOwner } from "./promptImages";
 import { QueueStrip } from "./QueueStrip";
 import { deriveRecentPrompts } from "./recentPrompts";
 import {
 	CommandLogView,
+	mcpResourceId,
 	newestResourceId,
 	ResourcesAttention,
 	ResourcesButton,
@@ -70,9 +87,10 @@ import {
 } from "./resources";
 import { SkillsDialog } from "./SkillsDialog";
 import { SubagentTranscriptDialog, SubagentTranscriptPane } from "./SubagentTranscriptDialog";
+import { SuggestionChips } from "./SuggestionChips";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
+import { useToolRegistry } from "./toolRegistry";
 import { useChatResources, useCommandLog } from "./useChatResources";
-import { inspectedResult, resultTargetKey, useFreshResults } from "./useFreshResults";
 import { useModelCatalog } from "./useModelCatalog";
 import { useModelPreferences } from "./useModelPreferences";
 import { useSessionStats } from "./useSessionStats";
@@ -87,20 +105,46 @@ function renderSubagentModel({ model, thinkingLevel }: SubagentResourceSummary) 
 	return <RunModelLabel model={model} thinkingLevel={thinkingLevel} />;
 }
 
+const FOCUS_CLAIM = "[data-focus-claim]";
+
 export default function ChatView({
 	sessionId,
 	workspaceId,
 	onOpenFile,
+	landingChord,
 }: {
 	sessionId: string;
 	workspaceId: string;
 	onOpenFile?: ((path: string) => void) | undefined;
+	landingChord: string;
 }) {
 	const t = useT();
 	const sessionExists = useAppStore((s) => s.sessions[sessionId] !== undefined);
 	const isStreaming = useAppStore((s) => s.sessions[sessionId]?.isStreaming ?? false);
+	const awaitingResponse = useAppStore(
+		(s) => awaitingToolCallIdOf(s.sessions[sessionId]?.hostState ?? null) != null,
+	);
 	const draft = useAppStore((s) => s.sessions[sessionId]?.draft ?? "");
+	const composerEdit = useAppStore((s) => s.sessions[sessionId]?.composerEdit ?? null);
+	const imageDraft = useAppStore(
+		(s) => s.sessions[sessionId]?.promptImages ?? EMPTY_RUNTIME.promptImages,
+	);
+	const imageOwner = useMemo<PromptImagesOwner>(
+		() => ({
+			state: imageDraft,
+			read: () =>
+				useAppStore.getState().sessions[sessionId]?.promptImages ?? EMPTY_RUNTIME.promptImages,
+			update: (change) => useAppStore.getState().updateChatPromptImages(sessionId, change),
+		}),
+		[imageDraft, sessionId],
+	);
 	const queue = useAppStore((s) => s.sessions[sessionId]?.queue ?? EMPTY_RUNTIME.queue);
+	const toolRegistry = useToolRegistry();
+	const suggestions = useAppStore(
+		useShallow((s) =>
+			deriveComposerSuggestions(s.sessions[sessionId], s.disabledExtensions, toolRegistry),
+		),
+	);
 	const sessionModel = useAppStore((s) => s.sessions[sessionId]?.model ?? null);
 	const thinkingLevel = useAppStore(
 		(s) => s.sessions[sessionId]?.thinkingLevel ?? EMPTY_RUNTIME.thinkingLevel,
@@ -128,6 +172,8 @@ export default function ChatView({
 	const canRenameChat = useAppStore(selectCanRenameChat);
 	const supportsMcp = useAppStore(selectSupportsMcp);
 	const composerGrowthLimit = useAppStore((state) => state.composerGrowthLimit);
+	const questionPanelHeight = useAppStore((state) => state.questionPanelHeight);
+	const [dockTarget, setDockTarget] = useState<HTMLDivElement | null>(null);
 	const chatLineWidth = useAppStore((state) => state.chatLineWidth);
 	const chatLineWidthBounded = useAppStore((state) => state.chatLineWidthBounded);
 	const chatMessageOrder = useAppStore((state) => state.chatMessageOrder);
@@ -199,17 +245,23 @@ export default function ChatView({
 	const composerRef = useRef<ComposerHandle>(null);
 	const transcriptRef = useRef<ChatTranscriptHandle>(null);
 	const resources = useChatResources(workspaceId, sessionId);
-	const freshResults = useFreshResults(
-		workspaceId,
-		sessionId,
-		resources.groups.recentFinished,
-		resources.visible && resources.authoritative,
-	);
-	const freshIds = new Set([
-		...freshResults.commands.map((command) => command.id),
-		...freshResults.subagents.map((child) => child.childSessionId),
-	]);
 	const resourcesTrigger = useRef<HTMLButtonElement>(null);
+	const [dockedToolCallId, setDockedToolCallId] = useState<string | null>(null);
+	const [dockFoldState, setDockFoldState] = useState<{
+		workspaceId: string;
+		sessionId: string;
+		fold: DockFold;
+	} | null>(null);
+	const dockFold =
+		dockFoldState?.workspaceId === workspaceId && dockFoldState.sessionId === sessionId
+			? dockFoldState.fold
+			: DEFAULT_DOCK_FOLD;
+	const setDockCollapsed = (collapsed: boolean) =>
+		setDockFoldState({
+			workspaceId,
+			sessionId,
+			fold: withDockCollapsed(dockFold, dockedToolCallId, collapsed),
+		});
 	const [stopAllOpen, setStopAllOpen] = useState(false);
 	const [inspector, setInspector] = useState<{
 		workspaceId: string;
@@ -254,8 +306,7 @@ export default function ChatView({
 	);
 	const openFinished = () =>
 		openInspector(
-			newestResourceId(freshResults.commands, freshResults.subagents) ??
-				newestResourceId(resources.groups.finishedCommands, resources.groups.finishedSubagents) ??
+			newestResourceId(resources.groups.finishedCommands, resources.groups.finishedSubagents) ??
 				undefined,
 		);
 	const setInspectorOpen = useCallback(
@@ -290,13 +341,13 @@ export default function ChatView({
 		)
 			? inspectorSelectedId
 			: null;
+	const selectedMcpServer =
+		inspectorOpen && inspectorSelectedId
+			? (resources.groups.mcpServers?.find(
+					(server) => mcpResourceId(server.name) === inspectorSelectedId,
+				)?.name ?? null)
+			: null;
 	const commandLog = useCommandLog(workspaceId, sessionId, selectedCommandId);
-	const markResultSeen = freshResults.markSeen;
-	const inspected = inspectedResult(resources.groups, selectedCommandId, selectedSubagentId);
-	const inspectedKey = inspected ? resultTargetKey(inspected) : null;
-	useEffect(() => {
-		if (inspected) markResultSeen(inspected);
-	}, [inspectedKey, markResultSeen]);
 	const now = useNow();
 	const returnToResources = (event: Event) => {
 		event.preventDefault();
@@ -359,16 +410,19 @@ export default function ChatView({
 		[resources.visible, resources.authoritative, resources.groups.activeCount, openInspector],
 	);
 
+	const [chatRoot, setChatRoot] = useState<HTMLDivElement | null>(null);
 	const chatViewRef = useCallback(
 		(element: HTMLDivElement | null) => {
+			setChatRoot(element);
 			if (element) {
 				element.style.setProperty(
 					"--chat-transcript-width",
 					`calc(${chatLineWidth}ch + 2 * var(--chat-gutter))`,
 				);
+				element.style.setProperty("--question-panel-height", String(questionPanelHeight));
 			}
 		},
-		[chatLineWidth],
+		[chatLineWidth, questionPanelHeight],
 	);
 
 	const {
@@ -584,7 +638,6 @@ export default function ChatView({
 		behavior: Exclude<SubmitBehavior, "interrupt">,
 	) => {
 		const queued = behavior !== "send";
-		freshResults.markAllSeen();
 		if (!queued && (text || attachments.length > 0)) {
 			transcriptRef.current?.armImmediateTurn();
 			useAppStore.getState().appendUserMessage(sessionId, text, attachments);
@@ -601,8 +654,10 @@ export default function ChatView({
 			.request(method, params)
 			.catch((err) => {
 				useAppStore.getState().appendErrorTurn(sessionId, errorText(err));
-				if (queued) restoreTextToDraft(text);
-				else {
+				const tooLarge = wsErrorCode(err) === "FRAME_TOO_LARGE";
+				if (queued || tooLarge) restoreTextToDraft(text);
+				if (tooLarge) composerRef.current?.restoreAttachments(attachments);
+				if (!queued) {
 					const streaming = useAppStore.getState().sessions[sessionId]?.isStreaming ?? false;
 					transcriptRef.current?.cancelImmediateTurn(streaming);
 				}
@@ -659,6 +714,7 @@ export default function ChatView({
 		void removeQueued(kind, index).catch(() => {});
 
 	const onAbort = () => {
+		composerRef.current?.refocus();
 		void getTransport()
 			.request("session.abort", { sessionId, restoreQueue: true })
 			.then(({ restoredQueue }) => {
@@ -736,14 +792,33 @@ export default function ChatView({
 		else composerRef.current?.openHistory();
 	}, [historyOpenRequest, sessionId, historyOverlayOpen, cycleScope]);
 
+	useLayoutEffect(() => {
+		const composer = composerRef.current;
+		if (!composerEdit || !composer) return;
+		composer.applyEdit(composerEdit.kind, composerEdit.text);
+		useAppStore.getState().consumeComposerEdit(sessionId, composerEdit.id);
+	}, [composerEdit, sessionId]);
+
+	const mayClaimFocus = useCallback(
+		(toolCallId: string) =>
+			selectQuestionMayClaimFocus(useAppStore.getState(), sessionId, toolCallId),
+		[sessionId],
+	);
 	const composerFocusRequested = useAppStore((s) =>
 		selectComposerFocusRequested(s, workspaceId, sessionId),
 	);
 	useEffect(() => {
 		if (!composerFocusRequested) return;
-		useAppStore.getState().clearComposerFocusRequest();
+		const store = useAppStore.getState();
+		const dismissHistory = store.composerFocusRequest?.dismissHistory === true;
+		const waiting = awaitingToolCallIdOf(store.sessions[sessionId]?.hostState ?? null) ?? null;
+		store.serveComposerFocusRequest(sessionId, waiting);
+		if (dismissHistory) {
+			if (store.historyOpenRequest?.sessionId === sessionId) store.clearHistoryOpen();
+			if (historyOverlayOpen) closeHistory();
+		}
 		composerRef.current?.refocus();
-	}, [composerFocusRequested]);
+	}, [composerFocusRequested, sessionId, historyOverlayOpen, closeHistory]);
 
 	const widgetEntries = Object.entries(extUiWidget);
 	const disableNotice = () => {
@@ -755,6 +830,16 @@ export default function ChatView({
 			.finally(() => setDisablingNotice(false));
 	};
 	const focusComposer = useCallback(() => composerRef.current?.refocus(), []);
+	const waitingQuestion = useCallback(
+		() => dockTarget?.querySelector<HTMLElement>(FOCUS_CLAIM) ?? null,
+		[dockTarget],
+	);
+	const focusWaitingQuestion = () => {
+		const claim = waitingQuestion();
+		if (!claim) return false;
+		focusAndReveal(claim);
+		return document.activeElement === claim;
+	};
 	// Keep a stable `onTryAgain` identity (it is passed to every transcript row) while always calling the
 	// latest `performSend` closure.
 	const performSendRef = useRef(performSend);
@@ -762,6 +847,14 @@ export default function ChatView({
 		performSendRef.current = performSend;
 	});
 	const onTryAgain = useCallback(() => performSendRef.current(TRY_AGAIN_PROMPT, [], "send"), []);
+	const sendSuggestion = useCallback(
+		(text: string) => performSendRef.current(text, [], "send"),
+		[],
+	);
+	const editSuggestion = useCallback(
+		(text: string) => composerRef.current?.insertAtCaret(text),
+		[],
+	);
 
 	return (
 		<div
@@ -784,7 +877,6 @@ export default function ChatView({
 											: null
 									}
 									working={resources.authoritative && resources.groups.activeCount > 0}
-									freshCount={freshResults.count}
 									open={inspectorOpen}
 									onClick={() => setInspectorOpen(!inspectorOpen)}
 								/>
@@ -803,76 +895,98 @@ export default function ChatView({
 					{...(projectId ? { onOpenSkills: () => setSkillsOpen(true) } : {})}
 				/>
 			</div>
-			<ChatTranscript
-				ref={transcriptRef}
-				sessionId={sessionId}
-				workspaceId={workspaceId}
-				onOpenFile={onOpenFile}
-				workspaceRoot={workspaceRoot}
-				focusComposer={focusComposer}
-				openSubagentTranscript={setTranscriptChildId}
-				resultOpener={resultOpener}
-				markResultSeen={markResultSeen}
-				onTryAgain={onTryAgain}
-				historyOpen={historyState.open}
-				inspectorOpen={inspectorOpen}
-				stillRunning={stillRunning}
-				readMcpOutput={supportsMcp ? readMcpOutput : undefined}
-				openMcpSettings={supportsMcp ? openMcpSettings : undefined}
-				openProviderSettings={openProviderSettings}
-				findModel={findModel}
-				resourcesOverlay={
-					resources.visible ? (
-						<ResourcesInspector
-							open={inspectorOpen}
-							onOpenChange={setInspectorOpen}
-							onCloseAutoFocus={returnToResources}
-							{...resources.groups}
-							now={now}
-							authoritative={resources.authoritative}
-							loading={resources.loading}
-							staleness={resources.staleness}
-							error={resources.projection?.error ?? null}
-							actions={resources.actions}
-							newIds={freshIds}
-							expanded={inspectorExpanded}
-							onExpandedChange={setFinishedExpanded}
-							{...(resources.loadOlder ? { onLoadMore: resources.loadOlder } : {})}
-							retained={resources.retained}
-							selectedId={inspectorSelectedId}
-							onSelect={selectResource}
-							onRetry={resources.retry}
-							onStopCommand={resources.stopCommand}
-							onStopSubagent={resources.stopSubagent}
-							onStopAll={() => setStopAllOpen(true)}
-							onMcpSetEnabled={resources.setMcpEnabled}
-							onMcpReconnect={resources.reconnectMcp}
-							onOpenMcpSettings={openMcpSettings}
-							renderSubagentModel={renderSubagentModel}
-							detail={
-								selectedCommandId ? (
-									<CommandLogView
-										{...commandLog}
-										onRetry={commandLog.retry}
-										interrupted={
-											resources.groups.finishedCommands.find(
-												(command) => command.id === selectedCommandId,
-											)?.interrupted === true
-										}
-										retained={resources.retained}
-									/>
-								) : selectedSubagentId ? (
-									<SubagentTranscriptPane
-										key={selectedSubagentId}
-										workspaceId={workspaceId}
-										parentSessionId={sessionId}
-										childSessionId={selectedSubagentId}
-									/>
-								) : null
-							}
-						/>
-					) : null
-				}
+			<ChatMediaContext.Provider
+				value={{ resolveUrl: hostUrl, retryEpoch: syncedConnectionGeneration }}
+			>
+				<ChatTranscript
+					ref={transcriptRef}
+					sessionId={sessionId}
+					workspaceId={workspaceId}
+					onOpenFile={onOpenFile}
+					workspaceRoot={workspaceRoot}
+					focusComposer={focusComposer}
+					waitingQuestion={waitingQuestion}
+					mayClaimFocus={mayClaimFocus}
+					landingChord={landingChord}
+					openSubagentTranscript={setTranscriptChildId}
+					resultOpener={resultOpener}
+					onTryAgain={onTryAgain}
+					historyOpen={historyState.open}
+					inspectorOpen={inspectorOpen}
+					stillRunning={stillRunning}
+					readMcpOutput={supportsMcp ? readMcpOutput : undefined}
+					openMcpSettings={supportsMcp ? openMcpSettings : undefined}
+					openProviderSettings={openProviderSettings}
+					findModel={findModel}
+					dockTarget={dockTarget}
+					onDockedInteractionChange={setDockedToolCallId}
+					resourcesOverlay={
+						resources.visible ? (
+							<ResourcesInspector
+								open={inspectorOpen}
+								onOpenChange={setInspectorOpen}
+								onEscapeKeyDown={(event) => {
+									if (composerRef.current?.ownsEscape()) event.preventDefault();
+								}}
+								onCloseAutoFocus={returnToResources}
+								{...resources.groups}
+								now={now}
+								authoritative={resources.authoritative}
+								loading={resources.loading}
+								staleness={resources.staleness}
+								error={resources.projection?.error ?? null}
+								actions={resources.actions}
+								expanded={inspectorExpanded}
+								onExpandedChange={setFinishedExpanded}
+								{...(resources.loadOlder ? { onLoadMore: resources.loadOlder } : {})}
+								retained={resources.retained}
+								selectedId={inspectorSelectedId}
+								onSelect={selectResource}
+								onRetry={resources.retry}
+								onStopCommand={resources.stopCommand}
+								onStopSubagent={resources.stopSubagent}
+								onStopAll={() => setStopAllOpen(true)}
+								onMcpSetEnabled={resources.setMcpEnabled}
+								onMcpReconnect={resources.reconnectMcp}
+								onOpenMcpSettings={openMcpSettings}
+								renderSubagentModel={renderSubagentModel}
+								detail={
+									selectedCommandId ? (
+										<CommandLogView
+											{...commandLog}
+											onRetry={commandLog.retry}
+											interrupted={
+												resources.groups.finishedCommands.find(
+													(command) => command.id === selectedCommandId,
+												)?.interrupted === true
+											}
+											retained={resources.retained}
+										/>
+									) : selectedSubagentId ? (
+										<SubagentTranscriptPane
+											key={selectedSubagentId}
+											workspaceId={workspaceId}
+											parentSessionId={sessionId}
+											childSessionId={selectedSubagentId}
+										/>
+									) : selectedMcpServer ? (
+										<McpServerDetail
+											workspaceId={workspaceId}
+											sessionId={sessionId}
+											server={selectedMcpServer}
+											servers={resources.groups.mcpServers?.map((server) => server.name) ?? []}
+										/>
+									) : null
+								}
+							/>
+						) : null
+					}
+				/>
+			</ChatMediaContext.Provider>
+			<div
+				ref={setDockTarget}
+				data-testid="chat-dock"
+				className="flex max-h-[calc(var(--question-panel-height)*1cqh)] min-h-0 flex-col"
 			/>
 			{widgetEntries.length > 0 ? (
 				<div className="shrink-0 border-border-default border-t bg-container-elevated-bg px-12 py-4 text-text-muted tr-text-metadata">
@@ -887,7 +1001,8 @@ export default function ChatView({
 					commands={resources.groups.commands}
 					subagents={resources.groups.subagents}
 					finishedCount={resources.groups.finishedCount}
-					freshCount={freshResults.count}
+					collapsed={dockCollapsed(dockFold, dockedToolCallId)}
+					onCollapsedChange={setDockCollapsed}
 					now={now}
 					authoritative={resources.authoritative}
 					staleness={resources.staleness}
@@ -907,6 +1022,12 @@ export default function ChatView({
 					disabling={disablingNotice}
 				/>
 			) : null}
+			<SuggestionChips
+				suggestions={suggestions}
+				onSend={sendSuggestion}
+				onEdit={editSuggestion}
+				shortcutScope={chatRoot}
+			/>
 			<div className="relative shrink-0">
 				<HistoryOverlay
 					state={historyState}
@@ -930,7 +1051,9 @@ export default function ChatView({
 					ref={composerRef}
 					value={draft}
 					onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
+					imageOwner={imageOwner}
 					isStreaming={isStreaming}
+					awaitingResponse={awaitingResponse}
 					growthLimit={composerGrowthLimit}
 					commands={mergedCommands}
 					templatePending={templatePending}
@@ -948,6 +1071,9 @@ export default function ChatView({
 					onSelectThinking={onSelectThinking}
 					onSubmit={onSubmit}
 					onAbort={onAbort}
+					onEnterTranscript={() => transcriptRef.current?.focusNewest()}
+					onShiftTabOut={focusWaitingQuestion}
+					onScrollTranscript={(direction) => transcriptRef.current?.scrollPage(direction)}
 					onHistoryOpen={onHistoryOpen}
 					onPickTemplate={onPickTemplate}
 					onManageTemplates={onManageTemplates}

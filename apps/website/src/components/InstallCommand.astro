@@ -1,0 +1,14 @@
+---
+import { installCommandFor } from "../installCommands";
+
+const command = installCommandFor(undefined);
+---
+
+<span class="install-cmd" data-install-cmd data-install-desktop>
+	<span class="install-cmd-prompt" aria-hidden="true">$</span>
+	<code class="install-cmd-text" data-install-cmd-text title={command}>{command}</code>
+	<button type="button" class="copy-btn install-cmd-copy" data-copy={command} aria-label="Copy install command">
+		<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
+		<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
+	</button>
+</span>

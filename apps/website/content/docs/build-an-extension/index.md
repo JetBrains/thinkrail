@@ -139,7 +139,7 @@ The description, author and version ThinkRail shows are the package's own `descr
 
 The package `name` is the extension's identity: ThinkRail keys the extension's on/off switch and its
 settings by it, so renaming the package makes it a different extension. It must be a valid npm name
-and cannot be the name of a built-in extension (`visualize`, `ask-user-question`, `web-access`).
+and cannot be the name of a built-in extension (`visualize`, `ask-user-question`, `next-steps`, `web-access`).
 
 `files` publishes the server source and `dist/`, nothing else. `prepack` runs the build, so every
 `npm publish` and `npm pack` ships a fresh `dist/`.

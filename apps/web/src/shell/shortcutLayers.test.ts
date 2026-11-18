@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { hasDismissibleLayer, type LayerDocument } from "./shortcutLayers";
+import { activeLayer, hasDismissibleLayer, type LayerDocument } from "./shortcutLayers";
 
 const OVERLAY = '[data-testid="history-overlay"]';
 
@@ -71,4 +71,21 @@ test("checks the whole document when no group has focus", () => {
 	const root = node({}, [body, node({ groupId: "g2" }, [node({ overlay: true })])]);
 	expect(hasDismissibleLayer(fakeDoc(root, body))).toBe(true);
 	expect(hasDismissibleLayer(fakeDoc(root, null))).toBe(true);
+});
+
+test("the active layer is the last open dialog or menu, else the whole document", () => {
+	const dialog = { name: "settings" };
+	const menu = { name: "kebab" };
+	const layers = (open: object[]) =>
+		({
+			querySelectorAll: (selector: string) => {
+				expect(selector).toContain('[role="dialog"][data-state="open"]');
+				expect(selector).toContain('[role="menu"][data-state="open"]');
+				return open;
+			},
+		}) as unknown as ParentNode;
+	const none = layers([]);
+	expect(activeLayer(none)).toBe(none);
+	expect(activeLayer(layers([dialog]))).toBe(dialog as unknown as ParentNode);
+	expect(activeLayer(layers([dialog, menu]))).toBe(menu as unknown as ParentNode);
 });

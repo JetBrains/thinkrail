@@ -9,7 +9,7 @@ import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 
 const BUTTON_CLASS =
-	"flex h-topbar-row w-46 items-center justify-center text-text-muted outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary";
+	"flex h-topbar-row w-46 items-center justify-center text-text-muted transition-colors focus-visible:focus-ring-inset";
 const BUTTON_HOVER_CLASS = "hover:bg-control-bg-hovered hover:text-text-default";
 const CLOSE_HOVER_CLASS = "hover:bg-feedback-error-subtle hover:text-feedback-error";
 

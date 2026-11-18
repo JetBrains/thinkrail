@@ -1,3 +1,4 @@
+import type { KeybindingOverrides } from "./keybindingChord";
 import type { MatchTier } from "./match";
 import type { SessionState, ThinkingLevel, WireModel } from "./piProtocol";
 
@@ -64,6 +65,8 @@ export interface Project {
 	path: string;
 	slug: string;
 	lastOpened: number;
+	/** Open projects list highest rank first; absent reads as `lastOpened`. */
+	rank?: number;
 	/** The one built-in container of chats without a project: not a repository, never git, never closed. */
 	kind?: "chats";
 	closed?: true;
@@ -84,6 +87,17 @@ export interface Project {
 	mcpOverrides?: Record<string, McpProjectOverride>;
 	/** "Always allow" MCP tools per server name (never written to `.pi/mcp.json`). */
 	mcpToolGrants?: Record<string, McpToolGrant>;
+}
+
+export function projectRank(project: Pick<Project, "rank" | "lastOpened">): number {
+	return project.rank ?? project.lastOpened;
+}
+
+export function compareProjectRank(
+	a: Pick<Project, "id" | "rank" | "lastOpened">,
+	b: Pick<Project, "id" | "rank" | "lastOpened">,
+): number {
+	return projectRank(b) - projectRank(a) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 }
 
 /** Tools (pi tool names) granted while the server keeps the command + args or URL hashed as `target`. */
@@ -294,6 +308,13 @@ export type ExistingWorktreeCandidate =
 	| { path: string; branch: string; status: "available" }
 	| { path: string; status: "detached" };
 
+/** The open workspace holding an absolute path, matched on real paths; `relativePath` is POSIX and contained. */
+export interface WorkspacePathMatch {
+	workspaceId: string;
+	projectId: string;
+	relativePath: string;
+}
+
 export interface EditorInfo {
 	id: string;
 	label: string;
@@ -310,6 +331,63 @@ export interface WorkspaceFsChangedPayload {
 }
 
 export type FileKind = "file" | "dir";
+
+export type WorkspaceArtifactState = "live" | "deleted";
+
+export type ArtifactRole = "result" | "working";
+
+export type ArtifactRoleReason =
+	| "picked"
+	| "shown"
+	| "linked"
+	| "document"
+	| "working-folder"
+	| "script"
+	| "data"
+	| "unshown";
+
+export interface ArtifactRound {
+	sessionId: string;
+	startedAt: number;
+}
+
+export interface WorkspaceArtifact {
+	path: string;
+	state: WorkspaceArtifactState;
+	size: number;
+	changedAt: number;
+	firstSeenAt: number;
+	sessionId?: string;
+	role?: ArtifactRole;
+	reason?: ArtifactRoleReason;
+	rounds?: ArtifactRound[];
+}
+
+export interface WorkspaceIgnoredOutput {
+	path: string;
+	kind: FileKind;
+	files: number;
+	filesTruncated: boolean;
+	changedAt: number;
+	sessionId?: string;
+}
+
+/** Where agents write HTML mockups; a browser UI runs their scripts (sandboxed, no network). */
+export const WORKSPACE_MOCKUP_DIR = ".thinkrail/context/mockups";
+
+/** The host route that serves a workspace file for a browser tab (sandboxed, see the host spec). */
+export const WORKSPACE_VIEW_ROUTE = "/view/";
+
+export interface WorkspaceArtifactsSnapshot {
+	workspaceId: string;
+	dir: string;
+	artifacts: WorkspaceArtifact[];
+	outputs: WorkspaceIgnoredOutput[] | null;
+}
+
+export interface WorkspaceArtifactsChangedPayload {
+	workspaceId: string;
+}
 
 export interface FileNode {
 	path: string;
@@ -1364,7 +1442,7 @@ export function isFontWeightOffset(value: unknown): value is number {
 	);
 }
 
-export type LayoutToolId = "projects" | "specs" | "files" | "review" | "plan";
+export type LayoutToolId = "projects" | "specs" | "files" | "review" | "plan" | "artifacts";
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
 
@@ -1423,7 +1501,24 @@ export function isComposerGrowthLimit(value: unknown): value is ComposerGrowthLi
 	return COMPOSER_GROWTH_LIMITS.some((limit) => limit === value);
 }
 
-export const LINE_WIDTH_COLUMNS = { min: 40, max: 240, default: 120 } as const;
+export const QUESTION_PANEL_HEIGHT_PERCENT = { min: 40, max: 100, default: 70 } as const;
+
+export function isQuestionPanelHeight(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isInteger(value) &&
+		value >= QUESTION_PANEL_HEIGHT_PERCENT.min &&
+		value <= QUESTION_PANEL_HEIGHT_PERCENT.max
+	);
+}
+
+export type LineWidthKind = "chat" | "file";
+
+export const LINE_WIDTH_COLUMNS = {
+	min: 40,
+	max: 240,
+	default: { chat: 80, file: 120 } satisfies Record<LineWidthKind, number>,
+} as const;
 
 export function isLineWidth(value: unknown): value is number {
 	return (
@@ -1441,6 +1536,8 @@ export interface AppConfig extends ThemePreference {
 	notificationsEnabled: boolean;
 	terminalReplayKb: number;
 	composerGrowthLimit: ComposerGrowthLimit;
+	/** The chat's docked question panel caps at this percent of the chat height. */
+	questionPanelHeight: number;
 	chatLineWidth: number;
 	fileLineWidth: number;
 	chatLineWidthBounded: boolean;
@@ -1494,6 +1591,8 @@ export interface AppConfig extends ThemePreference {
 	codeLigatures: boolean;
 	/** Shifts every text weight but the brand face's together. */
 	fontWeightOffset: number;
+	/** The user's chords by command id, replacing its defaults; `[]` unbinds it, an absent id keeps them. */
+	keybindings: KeybindingOverrides;
 }
 
 export type ExtensionSettingValues = Record<string, Record<string, boolean>>;
@@ -1896,8 +1995,9 @@ export const DEFAULT_CONFIG: AppConfig = {
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	terminalWindowsShell: "auto",
 	composerGrowthLimit: "half-chat",
-	chatLineWidth: LINE_WIDTH_COLUMNS.default,
-	fileLineWidth: LINE_WIDTH_COLUMNS.default,
+	questionPanelHeight: QUESTION_PANEL_HEIGHT_PERCENT.default,
+	chatLineWidth: LINE_WIDTH_COLUMNS.default.chat,
+	fileLineWidth: LINE_WIDTH_COLUMNS.default.file,
 	chatLineWidthBounded: true,
 	fileLineWidthBounded: true,
 	voiceInputEnabled: true,
@@ -1922,6 +2022,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	codeFontSize: CODE_FONT_SIZE.default,
 	codeLigatures: false,
 	fontWeightOffset: FONT_WEIGHT_OFFSET.default,
+	keybindings: {},
 };
 
 export type FontSettings = Pick<
@@ -1987,7 +2088,7 @@ export const ACCEPTED_IMAGE_TYPES: readonly string[] = [
 	"image/webp",
 ];
 
-export const REQUEST_IMAGE_BASE64_BUDGET = 24 * 1024 * 1024;
+export const REQUEST_IMAGE_BASE64_BUDGET = 12 * 1024 * 1024;
 
 export function isRetriedAttempt(
 	messages: readonly { role: string; stopReason?: string }[],
@@ -2035,7 +2136,7 @@ export interface HistorySearchResult {
 	indexing: boolean;
 }
 
-export const SEARCH_KINDS = ["transcript", "file", "spec", "plan"] as const;
+export const SEARCH_KINDS = ["transcript", "file", "spec", "section", "plan"] as const;
 
 export type SearchKind = (typeof SEARCH_KINDS)[number];
 
@@ -2064,11 +2165,28 @@ export interface SearchHitBase {
 	workspaceId: string;
 }
 
+/** Where a `section` hit sits in its spec, and how many of the query's words it holds. */
+export interface SearchHitSection {
+	/** The heading trail joined by ` › `; empty for the text before the first heading. */
+	heading: string;
+	/** 1-based line of the heading in the file. */
+	line: number;
+	matched: number;
+	terms: number;
+}
+
 export type SearchHit =
 	/** A root-relative POSIX `path`; `size` is the bytes on disk when the host could read them. */
 	| (SearchHitBase & { kind: "file"; path: string; size?: number })
-	/** `snippet` is the body line a `content`-tier hit matched. */
-	| (SearchHitBase & { kind: "spec"; path: string; specId: string; size: number; snippet?: string })
+	| (SearchHitBase & { kind: "spec"; path: string; specId: string; size: number })
+	/** A spec section ranked by the query's words; `snippet` is its best-matching text. */
+	| (SearchHitBase & {
+			kind: "section";
+			path: string;
+			specId: string;
+			snippet: string;
+			section: SearchHitSection;
+	  })
 	| (SearchHitBase & { kind: "plan"; sessionId: string })
 	/** `anchorText` re-finds the message when compaction moved `messageIndex`. */
 	| (SearchHitBase & {
@@ -2097,6 +2215,41 @@ export interface SearchGroup {
 
 export interface SearchQueryResult {
 	groups: SearchGroup[];
+}
+
+export const TEXT_SEARCH_LIMITS = {
+	lines: 2000,
+	fileBytes: 1_000_000,
+	lineChars: 400,
+	minQuery: 2,
+	maxQuery: 200,
+} as const;
+
+export interface TextSearchMatch {
+	/** 1-based line number in the file. */
+	line: number;
+	/** 1-based UTF-16 column and length of the first match in the full line, for opening at it. */
+	column: number;
+	length: number;
+	/** The matched line, cut to `TEXT_SEARCH_LIMITS.lineChars` around its first match. */
+	text: string;
+	/** `[start, end)` UTF-16 offsets of every match inside `text`. */
+	ranges: [number, number][];
+}
+
+export interface TextSearchFile {
+	path: string;
+	matches: TextSearchMatch[];
+}
+
+export type TextSearchEnd = "complete" | "limit" | "failed";
+
+export interface TextSearchBatch {
+	seq: number;
+	/** The workspace whose files these are; absent when the context resolves to no root. */
+	root?: { projectId: string; workspaceId: string };
+	files: TextSearchFile[];
+	done?: { reason: TextSearchEnd; files: number; lines: number };
 }
 
 /** The transcript window around a chat hit; files and specs render client-side through `fs.readFile`. */
@@ -2131,6 +2284,24 @@ export interface TemplateInfo {
 
 export interface Template extends TemplateInfo {
 	content: string;
+}
+
+const WINDOWS_DEVICE_NAME = /^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³]) *(?:\.|$)/i;
+
+export function isWindowsDeviceName(name: string): boolean {
+	return WINDOWS_DEVICE_NAME.test(name);
+}
+
+export function isValidTemplateName(name: string): boolean {
+	if (name.length === 0) return false;
+	if (name.startsWith(".")) return false;
+	return (
+		!name.includes("/") &&
+		!name.includes("\\") &&
+		!name.includes("\0") &&
+		!name.includes(":") &&
+		!isWindowsDeviceName(name)
+	);
 }
 
 export type ReviewCommentKind = "inline" | "diff" | "file" | "review";

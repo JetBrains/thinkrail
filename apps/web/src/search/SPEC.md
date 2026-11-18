@@ -22,11 +22,13 @@ the injected `PaletteStart`).
 
 ## Boundary
 
-- **Public surface:** `SearchPalette`, `SearchPaletteProps`, `PaletteHost`, `PaletteStart`,
+- **Public surface:** `SearchPalette`, `SearchPaletteProps`, `PaletteHost`, `PaletteStart`, `PaletteAsk`,
   `SearchSettings`, `initSearchPreferences`, `createDoubleShiftDetector`, `buildWorkItems`,
   `waitingItems`, `commandItems`, `SearchScope`, `PaletteItem`, `PaletteFile`.
-- **Allowed deps:** `contracts` (the shared matcher and the search DTOs), `commands`, `store`
-  (`selectHostSearchAvailable` / `selectHostReachable`, the welcome generation), `transport`
+- **Allowed deps:** `contracts` (the shared matcher and the search DTOs), `commands`, `keybindings`
+  (`LOCAL_KEY_DEFAULTS` for scope `palette`), `store`
+  (`selectHostSearchAvailable` / `selectHostReachable`, the welcome generation, the location Recent
+  stamps), `transport`
   (`search.query` / `search.preview`, and the backend endpoint for browser preference keys), `clientPreferences`, `constants`, `components`, `lib`,
   `@thinkrail/locales` (UI strings), `@thinkrail/ui/*`, `@remixicon/react`.
 - **Forbidden:** importing `panels`, `chat`, `shell` or `@thinkrail/resource-renderers` (shell injects
@@ -67,9 +69,33 @@ group's scope, in a scope it expands the group in place. `N` counts the host's o
 `total` beyond the page it returned), a scoped query asks the host for its maximum page, and a scoped group
 the host still capped says so in its meta instead of pretending the page is everything. The empty query
 lists **Waiting for you** (every chat that needs the user across the open projects, most urgent first —
-needs input, then failed, then finished unread, project order breaking ties, running chats left out — so
-the cap of eight rows before an in-place "Show N more" never hides a blocked chat behind unread ones),
-**Recent** (by frecency), and **Actions**.
+needs input, then failed, then finished unread, running chats left out — so the cap of eight rows before
+an in-place "Show N more" never hides a blocked chat behind unread ones), **Recent** and **Actions**.
+
+**Freshness.** `buildWorkItems` emits chats and workspaces newest activity first, so Waiting's urgency sort
+(stable), the `@` listing and equal-score ties all read newest first. Activity is the workspace's
+host-stamped `lastActiveAt` (agent runs, terminal writes, HEAD moves; at most a minute coarse) — the
+signal the topbar switcher and the Chats section sort by. Equal stamps follow the rail: the Chats
+container first (the rail shows it above Projects), then projects in the user's order, then a project's
+Default, then its newest created workspace, so a chat without a project competes on freshness rather than
+trailing every repository. A per-chat event time from the host was rejected: exact, but a contract change
+for the rare tie of two waiting chats in one workspace, which keeps the snapshot's order.
+
+**Recent** is where the user has been, newest first, by any route — the rail, the topbar, a link, the
+palette — plus anything run from the palette: up to five rows by `lastUsed`, never the place the user is in
+now (`currentPlaceIds`, read when the palette opens) nor a row Waiting or Actions already shows.
+`initSearchPreferences` watches the store's location (the active workspace's attention center chat tab;
+in a chat without a project, its one chat whatever tab shows and before its layout resolves, since the
+palette has no other row for it; else the workspace; else Project Home) and stamps a visit when the place changes; a chat's visit retires
+its workspace's stamp, and a pick of a row the current place already covers (its workspace, picked from
+its chat — a navigation that changes nothing, so no visit follows) stamps the place instead, so one place
+is one row while the pick still feeds frecency and adaptive learning. Visits order Recent only — typed-query ranking keeps
+counting palette picks, so habitual places never outrank what a query has learned.
+
+A chat or workspace row's second line names where it lives: its project and workspace
+(`PaletteItem.subtitleEmphasis`) are drawn one colour step above the rest of the line, the separators
+stay dim, and a chat without a project reads **No project** — never the container's stored name; the host
+rows' `projectName` uses the same label.
 
 A chat row is worded by `lib`'s `chatLabel` over the known title (`selectKnownChatTitle`: the title on the
 host's state record, which every rename republishes, so no palette request is needed to name a chat in a
@@ -103,11 +129,12 @@ welcome from a host that does not search removes the host scopes and rows.
 **Result lifecycle** — the invariants: a reply for the input on screen keeps every hit the previous page
 showed (`mergeHostGroups`), so rows go only when the query changes; while a new input is pending the
 previous host rows stay, re-matched against the current terms on the host's own fields
-(`searchHitFields`) — a body or message row only while every term is in its snippet (`matchContent`), so a
-multi-term row whose later term lies outside the snippet leaves while stale and returns with the reply —
-so Enter only ever opens a row the typed text matches; a fresh row carries the host's matcher result
+(`searchHitFields`) — a message row only while every term is in its snippet (`matchContent`), so a
+multi-term row whose later term lies outside the snippet leaves while stale and returns with the reply, and
+a section row only while every term is somewhere in its spec title, heading and snippet (the engine ranks
+by words, so this keeps only rows it would surely return) — so Enter only ever opens a row the typed text matches; a fresh row carries the host's matcher result
 (`PaletteItem.match`) and ranks with the local rows by the same tiers; the host is asked only for what the
-palette cannot list itself — files, specs, plans and message text — while chats and workspaces are the
+palette cannot list itself — files, specs, spec sections, plans and message text — while chats and workspaces are the
 store's rows (a chat row previews its transcript, the Default workspace is found by its branch), so no
 section mixes local and host rows and one row per id holds by construction. Rows that land while the user
 holds a selection are marked late in the very state that shows them (the controller notes arrivals from
@@ -132,6 +159,31 @@ active IME's Escape leaves it open. A host row opens through the injected `Palet
 scopes are offered only when the host searches files and specs and a context project gives them a root,
 and the placeholder names files and specs exactly then.
 
+## Spec sections
+
+`#` asks the host for spec titles **and** sections; All never asks for sections (`scopeKinds`), so they
+stay out of the mixed list. A section row is the host's `section` hit — ranked by words by the engine the
+agent's `spec_search` uses, so both answer a question with the same sections — titled `Spec › Heading`
+with the spec's name muted (`PaletteItem.titleLead`), the section's best line beneath with the matched
+words highlighted, and an `n/m words` badge. Its group, **Sections**, follows the title matches by tier.
+`↵` opens the spec in the Specs tool scrolled to the heading (`requestSpecView` with the heading line);
+`Mod+I` previews the rendered spec at the section (`PaletteFile.line`).
+
+## Ask the agent
+
+Word search cannot meet a question that shares no words with the spec (a paraphrase, another language),
+so whenever `#` has text its **last** row is «Ask the agent: “<text>”», naming the workspace it opens
+in — last before rows that landed while a selection was held, which go after it as they go after Start
+work, so a late Sections reply never moves a selected Ask row. `↵` on it, or `Alt+↵` from any row (`askEligible`, the one rule the row, the shortcut and its footer
+hint share), closes the palette and calls the injected `PaletteAsk.ask(text)`: shell starts a **new**
+chat in the context workspace — the active one, on Project Home the project's Default — with the text
+as typed and the visible note «Find the answer in this project's specs and cite the sections.», so the
+agent searches with its own model's words and the current chat is not interrupted. The row is always
+there rather than only when results look weak: a fixed place keeps muscle memory, where a "weak results"
+heuristic misfires both ways. While the host is unreachable the row is disabled with the host rows'
+offline reason and `Alt+↵` does nothing (the chat start could only wait out the reconnect and drop the
+question), and like Start work it is never remembered by the learning store.
+
 ## Preview pane
 
 `Mod+I` opens a pane — on a viewport at least `md` wide; below it the pane, its toggle and its chord are
@@ -143,7 +195,7 @@ search still focuses the right message, or none — and a chat without a transcr
 **file or spec**
 rendered by the shell-injected `renderFilePreview` over `PaletteItem.file` (`{ workspaceId, path, size }`)
 — the shared resource renderers, so code highlights, images and sandboxed HTML display, and a `SPEC.md`
-renders as markdown, the same path as a preview tab; or the local **metadata card** (`PaletteItem.preview`)
+renders as markdown (scrolled to `line` for a section), the same path as a preview tab; or the local **metadata card** (`PaletteItem.preview`)
 for a project, workspace or chat without a transcript hit. A host preview is read only once the
 selection rests on its row for 150 ms, so sweeping the mouse or arrows across rows reads only the row it
 stops on, and a file or spec whose hit is over `MAX_SEARCH_PREVIEW_BYTES` (2 MiB) is not read at all — the
@@ -190,7 +242,13 @@ and so does `Alt+1…n` on Windows and Linux when Alt types no character there �
 with AltGr or Option on a digit key (`#`, `@`, `|`) stays the input's, and macOS has no digit chord at all,
 since Option always types one (a chip writes its prefix into the query, so the prefix is the one source
 of scope). `Mod+I` toggles the preview pane where it is shown, `Mod+K` closes the palette (the chord that
-opened it), and `Mod+↵` starts work from the typed text (above).
+opened it), `Mod+↵` starts work from the typed text and `Alt+↵` asks the agent from a `#` query (both
+above). `Mod+I`, `Mod+↵` and `Alt+↵` are the rebindable local keys `palette.preview` / `startWork` / `ask`
+([[submodule-web-keybindings]], *Local keys*), matched through `useLocalKeys` (non-typing chords, so they
+act in the input) and shown in the footer and on the preview toggle with their resolved caps; ↑/↓, ↵,
+Tab and Escape are locked. A matched local key acts before any of them, Escape included (the dialog's
+`onEscapeKeyDown` yields to it), and they act only without Alt/Ctrl/⌘ — Tab is still consumed then, but
+changes no scope. `Mod+K` here stays literal.
 Escape clears the query, then closes; an untrusted (synthetic) Escape — the desktop close-item command —
 closes outright. Closing without a pick returns focus to the element that held it when the palette
 opened (the composer an accidental double Shift interrupted, the topbar button); a pick leaves focus to
@@ -202,7 +260,8 @@ panel — a row is a destination or a command.
 
 ## Preferences
 
-The learning snapshot (≤ 500 items, ≤ 500 queries of ≤ 32 picks, < 200 KB), the preview choice and the
+The learning snapshot (≤ 500 frecency items, ≤ 500 `lastUsed` stamps, ≤ 500 queries of ≤ 32 picks,
+< 200 KB; a snapshot without `lastUsed` reads as none), the preview choice and the
 double-Shift choice are client-local: the stable native preference adapter when present (per backend
 profile and window), otherwise browser storage qualified by the backend endpoint, where concurrent
 windows keep their own snapshot and the last writer wins. Only ids and query prefixes are stored, never
@@ -215,3 +274,9 @@ each step within 300 ms, ignored when another key went down less than 100 ms bef
 reset by any other key, key repeat, IME composition (`isComposing`/229), another held modifier, pointer
 down, blur or a hidden document, and firing on the second release. The sandboxed HTML preview iframe never
 delivers keys to the parent window, so the gesture does not fire from inside it.
+
+## Keyboard settings
+
+`SearchSettings` is the Settings → Keyboard section: the `Mod+K` note (a sentence without a chord when
+the user unbound it), the double-Shift switch and, below it, whatever `shortcuts` node the shell injects
+(the shortcut editor, [[submodule-web-shell]]) — `search` never imports the shell's editor.

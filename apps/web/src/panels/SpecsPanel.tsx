@@ -29,6 +29,7 @@ import {
 	specRoleLabel,
 	specRoleTag,
 } from "./specTree";
+import { Tree, treeToggleProps, useTreeItem } from "./treeNavigation";
 
 export function SpecsPanel({
 	workspaceId,
@@ -50,7 +51,10 @@ export function SpecsPanel({
 	useEffect(() => {
 		if (specRequest?.workspaceId !== workspaceId) return;
 		if (useAppStore.getState().specRequest !== specRequest) return;
-		void openFileInTab(workspaceId, specRequest.path, "preview", specRequest.navigation);
+		const { path, line, navigation } = specRequest;
+		void openFileInTab(workspaceId, path, "preview", navigation).then(() => {
+			if (line !== undefined) useAppStore.getState().revealFileTab(workspaceId, path, { line });
+		});
 		useAppStore.getState().clearSpecRequest();
 	}, [specRequest, workspaceId]);
 
@@ -66,7 +70,15 @@ export function SpecsPanel({
 				<p className="px-4 py-4 tr-text-metadata text-text-muted">{t("panels.specs.empty")}</p>
 			)
 		) : (
-			<ul className="flex flex-col motion-safe:animate-reveal">
+			<Tree
+				label={t("panels.specs.label")}
+				focusList="specs"
+				className="flex flex-col motion-safe:animate-reveal"
+				onOpenKept={(id) => {
+					const node = nodes.find((each) => each.id === id);
+					if (node) void openFileInTab(workspaceId, node.path, "keep");
+				}}
+			>
 				{roots.map((root) => (
 					<SpecNodeRow
 						key={root.node.id}
@@ -76,7 +88,7 @@ export function SpecsPanel({
 						depth={0}
 					/>
 				))}
-			</ul>
+			</Tree>
 		);
 	return (
 		<div className="flex min-h-0 flex-col">
@@ -142,9 +154,16 @@ function SpecNodeRow({
 	const trailingRole = isMainSpec ? t("panels.specs.mainSpec") : specRoleTag(t, node.type);
 	const DocumentIcon = specRoleIcon(node.type, isActive || isMainSpec);
 	const Chevron = expanded ? ChevronDown : ChevronRight;
+	const treeItem = useTreeItem(node.id, {
+		level: depth + 1,
+		label: specDisplayTitle(node.title),
+		expanded: children.length > 0 ? expanded : undefined,
+		selected: isActive,
+		openKept: true,
+	});
 
 	return (
-		<li>
+		<li role="none" data-focus-row={node.id}>
 			<div
 				className={cn(
 					"group flex h-panel-row min-w-0 items-stretch rounded-sm px-4 transition-colors",
@@ -156,6 +175,7 @@ function SpecNodeRow({
 				{children.length > 0 ? (
 					<button
 						type="button"
+						{...treeToggleProps(node.id)}
 						data-testid="spec-toggle"
 						aria-label={
 							expanded
@@ -164,7 +184,7 @@ function SpecNodeRow({
 						}
 						aria-expanded={expanded}
 						onClick={() => setExpanded((value) => !value)}
-						className="flex w-20 shrink-0 items-center justify-center self-stretch rounded-sm text-text-muted outline-none transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+						className="flex w-20 shrink-0 items-center justify-center self-stretch rounded-sm text-text-muted transition-colors hover:text-text-default focus-visible:focus-ring-inset"
 					>
 						<Chevron className="size-16" />
 					</button>
@@ -173,14 +193,15 @@ function SpecNodeRow({
 				)}
 				<button
 					type="button"
+					{...treeItem}
 					data-testid="spec-node"
+					data-focus-row-primary
 					data-spec-id={node.id}
 					data-spec-type={node.type}
 					data-spec-role={trailingRole}
 					data-main-spec={isMainSpec ? "true" : undefined}
 					data-active={isActive}
 					data-depth={depth}
-					aria-current={isActive ? "page" : undefined}
 					aria-label={t("panels.specs.open", {
 						title: node.title,
 						role: isMainSpec ? t("panels.specs.mainSpec") : role,
@@ -188,7 +209,7 @@ function SpecNodeRow({
 					title={`${node.title}\n${node.id} · ${node.type}`}
 					onClick={firstClickOnly(() => void openFileInTab(workspaceId, node.path, "preview"))}
 					onDoubleClick={() => void openFileInTab(workspaceId, node.path, "keep")}
-					className="flex min-w-0 flex-1 items-center gap-4 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+					className="flex min-w-0 flex-1 items-center gap-4 rounded-sm text-left focus-visible:focus-ring-inset"
 				>
 					<DocumentIcon
 						className={cn(
@@ -218,7 +239,11 @@ function SpecNodeRow({
 				</button>
 			</div>
 			{children.length > 0 && expanded && (
-				<ul className="flex flex-col pl-tree-indent">
+				<ul
+					role="none"
+					data-focus-list={`specs:${node.id}`}
+					className="flex flex-col pl-tree-indent"
+				>
 					{children.map((child) => (
 						<SpecNodeRow
 							key={child.node.id}

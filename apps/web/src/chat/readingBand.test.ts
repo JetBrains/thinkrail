@@ -776,6 +776,24 @@ describe("reading-band reader intent", () => {
 		expect(harness.controller.getSnapshot().runway).toBe(true);
 	});
 
+	it("reports a mount as pending until placement or a reader takeover claims it", () => {
+		const placed = createHarness({ streaming: false, mountPending: true });
+		expect(placed.controller.isMountPending()).toBe(true);
+		placed.controller.contentChanged();
+		expect(placed.controller.isMountPending()).toBe(true);
+		placed.setReferenceRow({ id: "r1", top: 0 });
+		placed.controller.contentChanged();
+		expect(placed.controller.isMountPending()).toBe(false);
+
+		const restored = createHarness({ streaming: false, mountPending: true });
+		restored.controller.readerLeft();
+		expect(restored.controller.isMountPending()).toBe(false);
+		restored.setReferenceRow({ id: "r1", top: 0 });
+		restored.controller.contentChanged();
+		expect(restored.writes).toEqual([]);
+		expect(restored.controller.getSnapshot().following).toBe(false);
+	});
+
 	it("holds a streaming mount at the pin line through measurement without animation", () => {
 		const harness = createHarness({ mountPending: true });
 		harness.setReferenceRow({ id: "r1", top: 0 });

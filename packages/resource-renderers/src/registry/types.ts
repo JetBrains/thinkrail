@@ -9,6 +9,7 @@ import type {
 import type { MessageKey } from "@thinkrail/locales";
 import type { ComponentType } from "react";
 import type { ResourceHost } from "../host";
+import type { HtmlViewport } from "../renderers/html/viewport";
 
 export interface ResourceDescriptor {
 	workspaceId: string;
@@ -52,8 +53,16 @@ export interface SurfaceReview {
 		onSend(draft: AnchorDraft, text: string): Promise<void>;
 	};
 	actions: ReviewThreadActions;
-	focus: { id: string; anchor: ReviewAnchor } | null;
+	focus: { id: string; anchor: ReviewAnchor; moveFocus: boolean } | null;
 	onFocusHandled(): void;
+}
+
+/** Scroll a text view to a line and mark a range on it; a new `tick` repeats the reveal. */
+export interface ResourceReveal {
+	line: number;
+	column?: number;
+	length?: number;
+	tick: number;
 }
 
 export interface ResourceViewProps {
@@ -63,6 +72,8 @@ export interface ResourceViewProps {
 	onPlacedThreadIds?(ids: ReadonlySet<string>): void;
 	viewState?: unknown;
 	onViewState?(state: unknown): void;
+	reveal?: ResourceReveal;
+	onRevealHandled?(tick: number): void;
 }
 
 export interface HunkActions {
@@ -96,6 +107,12 @@ export interface ResourceDiffProps {
 	viewState?: unknown;
 	onViewState?(state: unknown): void;
 	virtualize?: boolean;
+	sideLabels?: DiffSideLabels;
+}
+
+export interface DiffSideLabels {
+	original: string;
+	modified: string;
 }
 
 export type ResourceAnchorCapability = "line" | `structural:${string}` | "region";
@@ -135,7 +152,11 @@ export interface ResourceViewModule {
 
 export type ResourceIntent = "view" | "diff";
 
+export type FrameFocus = "auto" | "manual";
+
 export interface ResourceEnvironment {
 	mobile: boolean;
 	compact?: boolean;
+	htmlViewport?: HtmlViewport;
+	frameFocus?: FrameFocus;
 }

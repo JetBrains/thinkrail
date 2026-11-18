@@ -10,7 +10,7 @@ import {
 	isTodoReviewFixMessage,
 	readToolResponseMessage,
 } from "@thinkrail/contracts";
-import { userText } from "../lib";
+import { randomUuid, userText } from "../lib";
 import { assistantFailure } from "./assistantFailure";
 import { insertRoundCloser } from "./roundCloser";
 import type { ChatTurn, ToolResultState } from "./types";
@@ -33,7 +33,7 @@ function transcriptTurnId(
 ): string {
 	return options.idScope
 		? `${options.idScope}:${message.role}:${message.timestamp}:${index}`
-		: crypto.randomUUID();
+		: randomUuid();
 }
 
 export function messagesToRuntime(
@@ -133,7 +133,7 @@ export function messagesToRuntime(
 				kind: "error",
 				id: options.idScope
 					? `${options.idScope}:error:${persistedTerminal?.timestamp ?? "settlement"}`
-					: crypto.randomUUID(),
+					: randomUuid(),
 				text: failure.message,
 				failure: failure.failure,
 				recovery: "try-again",

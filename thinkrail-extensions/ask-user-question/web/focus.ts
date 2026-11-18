@@ -1,17 +1,19 @@
 export type QuestionFocusTarget =
 	| "none"
-	| "non-editing"
+	| "inside"
 	| "empty-composer"
-	| "draft-composer"
+	| "element"
 	| "editing"
 	| "modal";
+
+const CLAIMABLE: ReadonlySet<QuestionFocusTarget> = new Set(["none", "empty-composer", "element"]);
 
 export function shouldClaimQuestionFocus(
 	target: QuestionFocusTarget,
 	coarsePointer: boolean,
+	mayClaim: boolean,
 ): boolean {
-	if (coarsePointer) return false;
-	return target === "none" || target === "non-editing" || target === "empty-composer";
+	return mayClaim && !coarsePointer && CLAIMABLE.has(target);
 }
 
 export function shouldFocusPageTarget(textEntryTarget: boolean, coarsePointer: boolean): boolean {
@@ -32,21 +34,33 @@ export function createQuestionAttentionClaim(): (scope: object, toolCallId: stri
 	};
 }
 
-const MODAL_SURFACES = '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]';
+export interface FocusedNode {
+	readonly ownerDocument: { readonly body: unknown; readonly documentElement: unknown } | null;
+	readonly tagName: string;
+	readonly value?: unknown;
+	readonly isContentEditable?: boolean;
+	getAttribute(name: string): string | null;
+	closest(selectors: string): unknown;
+}
 
-export function focusTargetKind(active: Element | null, card: HTMLElement): QuestionFocusTarget {
-	if (!active || active === document.body) return "none";
-	if (card.contains(active)) return "non-editing";
-	if (!(active instanceof HTMLElement)) return "editing";
+const MODAL_SURFACES = '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]';
+const EDITING_SURFACES = '.monaco-editor, .xterm, [contenteditable="true"]';
+const TEXT_CONTROLS = "input, textarea, select, iframe";
+
+export function focusTargetKind(active: FocusedNode | null, inside: boolean): QuestionFocusTarget {
+	const page = active?.ownerDocument;
+	if (!active || !page || active === page.body || active === page.documentElement) return "none";
+	if (inside) return "inside";
 	if (active.closest(MODAL_SURFACES)) return "modal";
-	if (active.closest(".monaco-editor, .xterm")) return "editing";
-	if (active.isContentEditable || active.closest('[contenteditable="true"]')) return "editing";
-	const control = active.closest("input, textarea, select, iframe");
-	if (!control) return "non-editing";
-	if (control instanceof HTMLTextAreaElement && control.dataset.testid === "chat-input") {
-		return control.value.length === 0 ? "empty-composer" : "draft-composer";
+	if (active.isContentEditable || active.closest(EDITING_SURFACES)) return "editing";
+	if (active.closest(TEXT_CONTROLS)) {
+		const emptyComposer =
+			active.tagName === "TEXTAREA" &&
+			active.getAttribute("data-testid") === "chat-input" &&
+			active.value === "";
+		return emptyComposer ? "empty-composer" : "editing";
 	}
-	return "editing";
+	return "element";
 }
 
 export function hasCoarsePointer(): boolean {
@@ -62,33 +76,40 @@ export function isTextEntryTarget(target: EventTarget | null): boolean {
 	);
 }
 
+const FOCUSABLE = "a[href], button, input, label, select, textarea, [tabindex]";
+
+export function isCardBackground(target: EventTarget | null, card: HTMLElement): boolean {
+	return target instanceof Element && target.closest(FOCUSABLE) === card;
+}
+
 export function isInsidePreview(target: EventTarget | null): boolean {
 	return target instanceof Element && !!target.closest("[data-ask-preview]");
 }
+
+type Focuser = (element: HTMLElement) => void;
+
+const focusInPlace: Focuser = (element) => element.focus({ preventScroll: true });
 
 export function activeQuestionPage(card: HTMLElement): HTMLElement {
 	return card.querySelector<HTMLElement>('[data-ask-active="true"]') ?? card;
 }
 
-export function focusCurrentQuestionPage(card: HTMLElement): void {
+export function focusCurrentQuestionPage(card: HTMLElement, focus: Focuser = focusInPlace): void {
 	const target = activeQuestionPage(card).querySelector<HTMLElement>(
 		'[data-ask-page-focus="true"]:not([disabled])',
 	);
 	if (!target) return;
 	if (!shouldFocusPageTarget(isTextEntryTarget(target), hasCoarsePointer())) return;
-	target.focus({ preventScroll: true });
+	focus(target);
 }
 
-export function focusQuestionAttention(card: HTMLElement): void {
+export function focusQuestionAttention(card: HTMLElement, focus: Focuser = focusInPlace): void {
 	const selected = activeQuestionPage(card).querySelector<HTMLElement>(
 		'[data-ask-discuss-text], [data-ask-option][data-selected="true"], [data-ask-custom-row][data-selected="true"] textarea',
 	);
-	if (selected) selected.focus({ preventScroll: true });
-	else focusCurrentQuestionPage(card);
-}
-
-export function currentQuestionPageStart(card: HTMLElement): HTMLElement {
-	return (
-		activeQuestionPage(card).querySelector<HTMLElement>('[data-ask-page-start="true"]') ?? card
-	);
+	if (selected) focus(selected);
+	else focusCurrentQuestionPage(card, focus);
+	if (card.contains(document.activeElement)) return;
+	const claim = card.querySelector<HTMLElement>("[data-focus-claim]");
+	if (claim) focus(claim);
 }

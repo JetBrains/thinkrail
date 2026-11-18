@@ -1,5 +1,18 @@
 import {
+	DndContext,
+	type DragEndEvent,
+	DragOverlay,
+	MouseSensor,
+	pointerWithin,
+	useDraggable,
+	useDroppable,
+	useSensor,
+	useSensors,
+} from "@dnd-kit/core";
+import {
+	RiArrowDownLine as ArrowDown,
 	RiArrowGoBackLine as ArrowGoBack,
+	RiArrowUpLine as ArrowUp,
 	RiCheckLine as Check,
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
@@ -31,6 +44,7 @@ import {
 	ContextMenuItem,
 	ContextMenuSeparator,
 	ContextMenuTrigger,
+	openContextMenuFromKeyboard,
 } from "@thinkrail/ui/context-menu";
 import {
 	DropdownMenu,
@@ -48,14 +62,16 @@ import { type MouseEvent, type ReactNode, useCallback, useEffect, useRef, useSta
 import { useShallow } from "zustand/react/shallow";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
-import { copyText, platformShortcutLabel } from "@/lib";
+import { copyText } from "@/lib";
 import { useNow } from "../components/useNow";
 import {
+	isChatWorkspace,
 	isDefaultWorkspace,
 	isExternalWorkspace,
 	SETTLED_SHELF_MORE,
 	SETTLED_SHELF_PAGE,
 	type SettledReason,
+	selectActiveWorkspace,
 	selectActiveWorkspaceProjectId,
 	selectAutoSettledCounts,
 	selectProjectIsRunning,
@@ -87,15 +103,26 @@ import {
 	settledShelfNoticed,
 } from "./settledShelfNotice";
 import { startProjectSetupChat } from "./setupPrompt";
+import {
+	focusTreeItemOnMenuClose,
+	Tree,
+	treeRowControlProps,
+	treeRowKey,
+	treeToggleProps,
+	useTreeItem,
+	useTreeKeys,
+} from "./treeNavigation";
 import { useOpenProject } from "./useOpenProject";
 import { WorkspaceCreationRow } from "./WorkspaceCreation";
 import {
+	canMoveProject,
 	canRenameProject,
 	canRenameWorkspace,
 	canSettleWorkspace,
 	loadProjectWorkspaces,
 	markWorkspaceRead,
 	markWorkspaceUnread,
+	moveProject,
 	openWorkspaceIn,
 	renameProject,
 	renameWorkspace,
@@ -109,6 +136,20 @@ import {
 const HOVER_CONTROL_CLASS =
 	"shrink-0 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100";
 
+type ProjectPlacement = "before" | "after";
+
+interface ProjectDrop {
+	projectId: string;
+	placement: ProjectPlacement;
+}
+
+const QUIET_DRAG_ANNOUNCEMENTS = {
+	onDragStart: () => undefined,
+	onDragOver: () => undefined,
+	onDragEnd: () => undefined,
+	onDragCancel: () => undefined,
+};
+
 function groupCreationsByProject(
 	creations: Record<string, WorkspaceCreation>,
 ): Record<string, WorkspaceCreation[]> {
@@ -120,7 +161,7 @@ function groupCreationsByProject(
 	return grouped;
 }
 
-export function ProjectTree() {
+export function ProjectTree({ newWorkspaceShortcut }: { newWorkspaceShortcut: readonly string[] }) {
 	const t = useT();
 	const projects = useAppStore(useShallow(selectRepoProjects));
 	const recentProjects = useAppStore((s) => s.recentProjects);
@@ -139,6 +180,12 @@ export function ProjectTree() {
 	const settledShelfExpanded = useAppStore((s) => s.settledShelfExpanded);
 	const settledShelfShown = useAppStore((s) => s.settledShelfShown);
 	const now = useNow();
+	const canMove = canMoveProject(protocolVersion);
+	const dragSensors = useSensors(useSensor(MouseSensor, { activationConstraint: { distance: 5 } }));
+	const [draggingProjectId, setDraggingProjectId] = useState<string | null>(null);
+	const [moveAnnouncement, setMoveAnnouncement] = useState("");
+	const draggingIndex = projects.findIndex((project) => project.id === draggingProjectId);
+	const draggingProject = projects[draggingIndex];
 
 	const editors = useEditors();
 
@@ -147,7 +194,6 @@ export function ProjectTree() {
 	const [existingDialogProjectId, setExistingDialogProjectId] = useState<string | null>(null);
 	const addProjectButtonRef = useRef<HTMLButtonElement>(null);
 	const projectNameButtonsRef = useRef(new Map<string, HTMLButtonElement>());
-	const pendingCloseFocusProjectIdRef = useRef<string | null>(null);
 	const workspaceDialogReturnFocusIdRef = useRef<string | null>(null);
 	const existingDialogReturnFocusIdRef = useRef<string | null>(null);
 
@@ -165,18 +211,11 @@ export function ProjectTree() {
 		});
 	}, []);
 
-	useEffect(() => {
-		const closedProjectId = pendingCloseFocusProjectIdRef.current;
-		if (!closedProjectId || projects.some((project) => project.id === closedProjectId)) return;
-		pendingCloseFocusProjectIdRef.current = null;
-		let fallbackProjectId = projects[0]?.id;
-		if (selectedProjectId && projects.some((project) => project.id === selectedProjectId)) {
-			fallbackProjectId = selectedProjectId;
-		}
-		focusProjectNameOrAdd(fallbackProjectId);
-	}, [focusProjectNameOrAdd, projects, selectedProjectId]);
-
 	const activeProjectId = useAppStore(selectActiveWorkspaceProjectId);
+	const activeIsChat = useAppStore((s) => {
+		const active = selectActiveWorkspace(s);
+		return active !== null && isChatWorkspace(active);
+	});
 	useEffect(() => {
 		if (activeProjectId) useAppStore.getState().expandProject(activeProjectId);
 	}, [activeProjectId]);
@@ -262,14 +301,9 @@ export function ProjectTree() {
 	};
 
 	const closeProject = (project: Project) => {
-		pendingCloseFocusProjectIdRef.current = project.id;
 		void getTransport()
 			.request("project.close", { id: project.id })
 			.catch((err) => {
-				if (pendingCloseFocusProjectIdRef.current === project.id) {
-					pendingCloseFocusProjectIdRef.current = null;
-				}
-				focusProjectNameOrAdd(project.id);
 				toast.error(errorText(err, t("panels.projectTree.closeFailed", { name: project.name })));
 			});
 	};
@@ -282,6 +316,32 @@ export function ProjectTree() {
 	const openExistingWorktreeDialog = (projectId: string) => {
 		existingDialogReturnFocusIdRef.current = projectId;
 		setExistingDialogProjectId(projectId);
+	};
+
+	const move = async (
+		project: Project,
+		targetId: string,
+		placement: ProjectPlacement,
+		restoreFocus: boolean,
+	) => {
+		if (!(await moveProject(project.id, targetId, placement))) return;
+		const order = selectRepoProjects(useAppStore.getState());
+		const position = order.findIndex((candidate) => candidate.id === project.id) + 1;
+		if (position > 0) {
+			setMoveAnnouncement(
+				t("panels.projectTree.moved", { name: project.name, position, total: order.length }),
+			);
+		}
+		if (restoreFocus) focusProjectNameOrAdd(project.id);
+	};
+
+	const dropProject = ({ active, over }: DragEndEvent) => {
+		setDraggingProjectId(null);
+		const drop = over?.data.current as ProjectDrop | undefined;
+		const current = selectRepoProjects(useAppStore.getState());
+		const project = current.find((candidate) => candidate.id === active.id);
+		if (!drop || !project || !current.some((candidate) => candidate.id === drop.projectId)) return;
+		void move(project, drop.projectId, drop.placement, false);
 	};
 
 	return (
@@ -304,95 +364,154 @@ export function ProjectTree() {
 						variant="ghost"
 						size="s"
 						data-testid="add-project-menu"
+						data-focus-fallback="projects"
 					/>
 				</AddProjectMenu>
 			</header>
 
-			<ul className="flex flex-col">
-				{projects.map((project) => {
-					const isExpanded = expandedProjectIds[project.id] === true;
-					const list = workspaces[project.id];
-					const stateProjection = { sessionStateByWorkspace };
-					return (
-						<li key={project.id}>
-							<ProjectRow
-								project={project}
-								isSelected={selectedProjectId === project.id}
-								isExpanded={isExpanded}
-								needsAttention={
-									!isExpanded && selectProjectNeedsAttention(stateProjection, project.id)
-								}
-								isRunning={!isExpanded && selectProjectIsRunning(stateProjection, project.id)}
-								workspaceCount={(list ?? []).filter((w) => !isDefaultWorkspace(w)).length}
-								onToggle={() => toggleExpand(project.id)}
-								onSelect={() => void selectProject(project.id)}
-								canRename={canRenameProject(protocolVersion)}
-								onRename={(name) => renameProject(project, name)}
-								onClose={() => closeProject(project)}
-								onAddWorkspace={() => openWorkspaceDialog(project.id, false)}
-								onAddWorkspaceFromMenu={() => openWorkspaceDialog(project.id, true)}
-								onOpenExistingWorktree={() => openExistingWorktreeDialog(project.id)}
-								onRegisterNameButton={(element) => registerProjectNameButton(project.id, element)}
-								onRestoreFocus={() => focusProjectNameOrAdd(project.id)}
-							/>
-							{isExpanded && list === undefined && (
-								<LoadingRegion rows={2} className="py-4 pr-8 pl-16" />
-							)}
-							{isExpanded && list !== undefined && (
-								<SettledPartition
-									enabled={supportsSettling}
+			<p role="status" aria-live="polite" data-testid="project-move-status" className="sr-only">
+				{moveAnnouncement}
+			</p>
+			<DndContext
+				sensors={dragSensors}
+				collisionDetection={pointerWithin}
+				accessibility={{
+					announcements: QUIET_DRAG_ANNOUNCEMENTS,
+					screenReaderInstructions: { draggable: t("panels.projectTree.reorderInstructions") },
+				}}
+				onDragStart={({ active }) => setDraggingProjectId(String(active.id))}
+				onDragCancel={() => setDraggingProjectId(null)}
+				onDragEnd={dropProject}
+			>
+				<Tree
+					label={t("panels.projectTree.title")}
+					focusList="projects"
+					className="flex flex-col"
+					focusDefault={!activeIsChat}
+				>
+					{projects.map((project, index) => {
+						const isExpanded = expandedProjectIds[project.id] === true;
+						const list = workspaces[project.id];
+						const stateProjection = { sessionStateByWorkspace };
+						const previous = projects[index - 1];
+						const next = projects[index + 1];
+						return (
+							<li
+								key={project.id}
+								role="none"
+								data-testid="project-group"
+								data-focus-row={project.id}
+								data-dragging={draggingProjectId === project.id || undefined}
+								className="relative data-[dragging]:opacity-40"
+							>
+								<ProjectDropZone
 									projectId={project.id}
-									partition={selectWorkspacePartition(partitionState, project.id, now)}
-									shelfExpanded={settledShelfExpanded[project.id] === true}
-									shelfShown={settledShelfShown[project.id] ?? SETTLED_SHELF_PAGE}
-									renderRow={(ws, settled) =>
-										workspaceCreations[ws.id] ? null : (
-											<WorkspaceRow
-												key={ws.id}
-												workspace={ws}
-												settled={settled}
-												now={now}
-												isActive={activeWorkspaceId === ws.id}
-												needsAttention={selectWorkspaceNeedsAttention(stateProjection, ws.id)}
-												isRunning={selectWorkspaceIsRunning(stateProjection, ws.id)}
-												canRename={canRenameWorkspace(protocolVersion, ws)}
-												canSettle={canSettleWorkspace(protocolVersion, ws)}
-												readAction={
-													supportsWorkspaceReadState(protocolVersion)
-														? selectWorkspaceReadAction(stateProjection, ws.id)
-														: null
-												}
-												editors={editors}
-												onSelect={() => selectWorkspace(ws)}
-												onOpenIn={(editor) => openWorkspaceIn(ws, editor)}
-												onCopyPath={() => void copyText(ws.worktreePath)}
-												onReveal={() => revealWorkspace(ws)}
-												onRename={(name) => renameWorkspace(ws, name)}
-												onSettle={() => settleWorkspace(ws.id)}
-												onKeepActive={() => unsettleWorkspace(ws.id)}
-												onMarkRead={() => markWorkspaceRead(ws.id)}
-												onMarkUnread={() => markWorkspaceUnread(ws.id)}
-											/>
-										)
+									placement="before"
+									enabled={
+										draggingIndex >= 0 && index !== draggingIndex && index !== draggingIndex + 1
 									}
 								/>
-							)}
-							{isExpanded && (creationsByProject[project.id]?.length ?? 0) > 0 && (
-								<ul aria-label={t("panels.workspaceCreation.listLabel")}>
-									{creationsByProject[project.id]?.map((creation) => (
-										<WorkspaceCreationRow
-											key={creation.id}
-											creation={creation}
-											isActive={activeCreationId === creation.id}
-											onSelect={() => useAppStore.getState().selectCreation(creation.id)}
-										/>
-									))}
-								</ul>
-							)}
-						</li>
-					);
-				})}
-			</ul>
+								<ProjectDropZone
+									projectId={project.id}
+									placement="after"
+									enabled={
+										draggingIndex >= 0 && index !== draggingIndex && index !== draggingIndex - 1
+									}
+								/>
+								<ProjectRow
+									project={project}
+									isSelected={selectedProjectId === project.id}
+									isExpanded={isExpanded}
+									needsAttention={
+										!isExpanded && selectProjectNeedsAttention(stateProjection, project.id)
+									}
+									isRunning={!isExpanded && selectProjectIsRunning(stateProjection, project.id)}
+									workspaceCount={(list ?? []).filter((w) => !isDefaultWorkspace(w)).length}
+									onToggle={() => toggleExpand(project.id)}
+									onSelect={() => void selectProject(project.id)}
+									canRename={canRenameProject(protocolVersion)}
+									onRename={(name) => renameProject(project, name)}
+									onClose={() => closeProject(project)}
+									onAddWorkspace={() => openWorkspaceDialog(project.id, false)}
+									onAddWorkspaceFromMenu={() => openWorkspaceDialog(project.id, true)}
+									onOpenExistingWorktree={() => openExistingWorktreeDialog(project.id)}
+									onRegisterNameButton={(element) => registerProjectNameButton(project.id, element)}
+									onRestoreFocus={() => focusProjectNameOrAdd(project.id)}
+									canMove={canMove}
+									newWorkspaceShortcut={newWorkspaceShortcut}
+									onMoveUp={
+										previous ? () => void move(project, previous.id, "before", true) : undefined
+									}
+									onMoveDown={next ? () => void move(project, next.id, "after", true) : undefined}
+								/>
+								{isExpanded && list === undefined && (
+									<LoadingRegion rows={2} className="py-4 pr-8 pl-16" />
+								)}
+								{isExpanded && list !== undefined && (
+									<SettledPartition
+										enabled={supportsSettling}
+										projectId={project.id}
+										partition={selectWorkspacePartition(partitionState, project.id, now)}
+										shelfExpanded={settledShelfExpanded[project.id] === true}
+										shelfShown={settledShelfShown[project.id] ?? SETTLED_SHELF_PAGE}
+										renderRow={(ws, settled) =>
+											workspaceCreations[ws.id] ? null : (
+												<WorkspaceRow
+													key={ws.id}
+													workspace={ws}
+													level={settled ? 3 : 2}
+													settled={settled}
+													now={now}
+													isActive={activeWorkspaceId === ws.id}
+													needsAttention={selectWorkspaceNeedsAttention(stateProjection, ws.id)}
+													isRunning={selectWorkspaceIsRunning(stateProjection, ws.id)}
+													canRename={canRenameWorkspace(protocolVersion, ws)}
+													canSettle={canSettleWorkspace(protocolVersion, ws)}
+													readAction={
+														supportsWorkspaceReadState(protocolVersion)
+															? selectWorkspaceReadAction(stateProjection, ws.id)
+															: null
+													}
+													editors={editors}
+													onSelect={() => selectWorkspace(ws)}
+													onOpenIn={(editor) => openWorkspaceIn(ws, editor)}
+													onCopyPath={() => void copyText(ws.worktreePath)}
+													onReveal={() => revealWorkspace(ws)}
+													onRename={(name) => renameWorkspace(ws, name)}
+													onSettle={() => settleWorkspace(ws.id)}
+													onKeepActive={() => unsettleWorkspace(ws.id)}
+													onMarkRead={() => markWorkspaceRead(ws.id)}
+													onMarkUnread={() => markWorkspaceUnread(ws.id)}
+												/>
+											)
+										}
+									/>
+								)}
+								{isExpanded && (creationsByProject[project.id]?.length ?? 0) > 0 && (
+									<ul role="none" data-focus-list={`workspaces:${project.id}`}>
+										{creationsByProject[project.id]?.map((creation) => (
+											<WorkspaceCreationRow
+												key={creation.id}
+												creation={creation}
+												isActive={activeCreationId === creation.id}
+												onSelect={() => useAppStore.getState().selectCreation(creation.id)}
+											/>
+										))}
+									</ul>
+								)}
+							</li>
+						);
+					})}
+				</Tree>
+				<DragOverlay dropAnimation={null}>
+					{draggingProject ? (
+						<div className="flex max-w-224 items-center gap-4 rounded-sm border border-primary bg-container-elevated-bg px-8 py-4 tr-text-ui text-text-default shadow-lg">
+							<RiFolderLine className="size-14 shrink-0 text-text-muted" />
+							<span className="truncate">{draggingProject.name}</span>
+						</div>
+					) : null}
+				</DragOverlay>
+			</DndContext>
 
 			{dialogProjectId !== null ? (
 				<NewWorkspaceDialog
@@ -428,6 +547,36 @@ export function ProjectTree() {
 	);
 }
 
+function ProjectDropZone({
+	projectId,
+	placement,
+	enabled,
+}: {
+	projectId: string;
+	placement: ProjectPlacement;
+	enabled: boolean;
+}) {
+	const { setNodeRef, isOver } = useDroppable({
+		id: `${placement}:${projectId}`,
+		data: { projectId, placement } satisfies ProjectDrop,
+		disabled: !enabled,
+	});
+	return (
+		<div
+			ref={setNodeRef}
+			aria-hidden="true"
+			data-placement={placement}
+			data-drop-active={isOver || undefined}
+			className={cn(
+				"pointer-events-none absolute inset-x-0 z-10 h-1/2 border-primary",
+				placement === "before"
+					? "top-0 data-[drop-active]:border-t-2"
+					: "bottom-0 data-[drop-active]:border-b-2",
+			)}
+		/>
+	);
+}
+
 function SettledPartition({
 	enabled,
 	projectId,
@@ -444,19 +593,36 @@ function SettledPartition({
 	renderRow: (workspace: Workspace, settled: SettledReason | null) => ReactNode;
 }) {
 	const t = useT();
+	const settledCount = partition.settled.length;
+	const shown = partition.settled.slice(0, shelfShown);
+	const remaining = settledCount - shown.length;
+	const shelfLabel = t("panels.projectTree.settledShelf", { total: settledCount });
+	const moreLabel = t("panels.projectTree.showMore", {
+		count: Math.min(SETTLED_SHELF_MORE, remaining),
+	});
+	const shelfItem = useTreeItem(`settled:${projectId}`, {
+		level: 2,
+		label: shelfLabel,
+		expanded: shelfExpanded,
+		toggles: true,
+	});
+	const moreItem = useTreeItem(`settled-more:${projectId}`, { level: 3, label: moreLabel });
 	if (!enabled) {
 		return (
-			<ul className="mt-2 flex flex-col gap-2 motion-safe:animate-reveal">
+			<ul
+				role="none"
+				data-focus-list={`workspaces:${projectId}`}
+				className="mt-2 flex flex-col gap-2 motion-safe:animate-reveal"
+			>
 				{partition.live.map((workspace) => renderRow(workspace, null))}
 			</ul>
 		);
 	}
-	const settledCount = partition.settled.length;
-	const shown = partition.settled.slice(0, shelfShown);
-	const remaining = settledCount - shown.length;
 	return (
 		<div className="mt-2 flex flex-col gap-2 motion-safe:animate-reveal">
-			<ul className="flex flex-col gap-2">{partition.live.map((ws) => renderRow(ws, null))}</ul>
+			<ul role="none" data-focus-list={`workspaces:${projectId}`} className="flex flex-col gap-2">
+				{partition.live.map((ws) => renderRow(ws, null))}
+			</ul>
 			<div
 				data-testid="settled-shelf"
 				data-count={settledCount}
@@ -465,10 +631,11 @@ function SettledPartition({
 			>
 				<button
 					type="button"
+					{...shelfItem}
 					data-testid="settled-shelf-toggle"
-					aria-expanded={shelfExpanded}
+					data-focus-fallback={`settled:${projectId}`}
 					onClick={() => useAppStore.getState().toggleSettledShelf(projectId)}
-					className="flex min-w-0 flex-1 items-center gap-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
+					className="-mx-4 -my-2 flex min-w-0 flex-1 items-center gap-4 rounded-sm px-4 py-2 text-left focus-visible:focus-ring-inset"
 				>
 					{shelfExpanded ? (
 						<ChevronDown className="size-14 shrink-0" />
@@ -476,33 +643,35 @@ function SettledPartition({
 						<ChevronRight className="size-14 shrink-0" />
 					)}
 					<RiCheckboxCircleLine className="size-14 shrink-0" />
-					<span className="truncate">
-						{t("panels.projectTree.settledShelf", { total: settledCount })}
-					</span>
+					<span className="truncate">{shelfLabel}</span>
 				</button>
 			</div>
 			{shelfExpanded ? (
-				<ul className="flex flex-col gap-2" data-testid="settled-shelf-rows">
+				<ul
+					role="none"
+					className="flex flex-col gap-2"
+					data-testid="settled-shelf-rows"
+					data-focus-list={`settled:${projectId}`}
+				>
 					{settledCount === 0 ? (
-						<li className="py-4 pr-4 pl-24 text-text-subtle tr-text-metadata">
+						<li role="none" className="py-4 pr-4 pl-24 text-text-subtle tr-text-metadata">
 							{t("panels.projectTree.nothingSettled")}
 						</li>
 					) : (
 						shown.map((row) => renderRow(row.workspace, row.reason))
 					)}
 					{remaining > 0 ? (
-						<li>
+						<li role="none">
 							<button
 								type="button"
+								{...moreItem}
 								data-testid="settled-shelf-more"
 								onClick={() =>
 									useAppStore.getState().showMoreSettled(projectId, shelfShown + SETTLED_SHELF_MORE)
 								}
-								className="flex h-panel-row w-full items-center rounded-sm pl-24 text-left text-text-subtle tr-text-metadata hover:bg-control-bg-hovered hover:text-text-muted"
+								className="flex h-panel-row w-full items-center rounded-sm pl-24 text-left text-text-subtle tr-text-metadata hover:bg-control-bg-hovered hover:text-text-muted focus-visible:focus-ring-inset"
 							>
-								{t("panels.projectTree.showMore", {
-									count: Math.min(SETTLED_SHELF_MORE, remaining),
-								})}
+								{moreLabel}
 							</button>
 						</li>
 					) : null}
@@ -529,6 +698,10 @@ function ProjectRow({
 	onOpenExistingWorktree,
 	onRegisterNameButton,
 	onRestoreFocus,
+	canMove,
+	onMoveUp,
+	onMoveDown,
+	newWorkspaceShortcut,
 }: {
 	project: Project;
 	isSelected: boolean;
@@ -546,12 +719,19 @@ function ProjectRow({
 	onOpenExistingWorktree: () => void;
 	onRegisterNameButton: (element: HTMLButtonElement | null) => void;
 	onRestoreFocus: () => void;
+	canMove: boolean;
+	onMoveUp: (() => void) | undefined;
+	onMoveDown: (() => void) | undefined;
+	newWorkspaceShortcut: readonly string[];
 }) {
 	const t = useT();
-	const createWorkspaceLabel = t("panels.projectTree.createWorkspaceShortcut", {
-		shortcut: platformShortcutLabel("N"),
-		altShortcut: platformShortcutLabel("N", { alt: true }),
-	});
+	const treeKeys = useTreeKeys();
+	const draggable = canMove && (onMoveUp !== undefined || onMoveDown !== undefined);
+	const {
+		attributes: dragAttributes,
+		listeners: dragListeners,
+		setNodeRef: setDragNode,
+	} = useDraggable({ id: project.id, disabled: !draggable });
 	const Chevron = isExpanded ? ChevronDown : ChevronRight;
 	const Folder = isSelected ? RiFolderFill : RiFolderLine;
 	const [menuOpen, setMenuOpen] = useState(false);
@@ -567,6 +747,12 @@ function ProjectRow({
 		target: project,
 		canRename,
 		onRename: (_target, name) => onRename(name),
+	});
+	const treeItem = useTreeItem(project.id, {
+		level: 1,
+		label: project.name,
+		expanded: isExpanded,
+		selected: isSelected,
 	});
 	const folderIcon = isRunning ? (
 		<RunningIcon className={`size-14 ${isSelected ? "text-primary" : "text-text-muted"}`} />
@@ -592,6 +778,7 @@ function ProjectRow({
 		>
 			<button
 				type="button"
+				{...treeToggleProps(project.id)}
 				data-testid="project-expand"
 				aria-label={
 					isExpanded
@@ -599,7 +786,7 @@ function ProjectRow({
 						: t("panels.projectTree.expandProject")
 				}
 				onClick={onToggle}
-				className="flex size-16 shrink-0 items-center justify-center rounded-sm text-text-muted transition-colors hover:text-text-default focus-visible:text-text-default"
+				className="flex size-16 shrink-0 items-center justify-center rounded-sm text-text-muted transition-colors hover:text-text-default focus-visible:text-text-default focus-visible:focus-ring"
 				data-expanded={isExpanded}
 			>
 				<Chevron className="size-16" />
@@ -615,16 +802,45 @@ function ProjectRow({
 						aria-label={t("panels.projectTree.projectName")}
 						defaultValue={project.name}
 						{...renameInputProps}
-						className={cn("w-full min-w-0 border-0 bg-transparent p-0 outline-none", nameClass)}
+						className={cn(
+							"w-full min-w-0 border-0 bg-transparent p-0 focus-visible:focus-ring",
+							nameClass,
+						)}
 					/>
 				</div>
 			) : (
 				<button
-					ref={onRegisterNameButton}
+					ref={(element) => {
+						setDragNode(element);
+						onRegisterNameButton(element);
+					}}
 					type="button"
+					{...treeItem}
 					data-testid="project-name"
+					data-focus-row-primary
+					aria-describedby={draggable ? dragAttributes["aria-describedby"] : undefined}
+					aria-keyshortcuts={
+						canMove ? treeKeys.aria("trees.reorderUp", "trees.reorderDown") : undefined
+					}
+					{...(draggable ? dragListeners : {})}
+					onKeyDown={(event) => {
+						const key = treeRowKey(event.nativeEvent, treeKeys);
+						if (key === "rename" && canRename) {
+							event.preventDefault();
+							startRename();
+							return;
+						}
+						if (key === "delete") {
+							event.preventDefault();
+							setConfirmOpen(true);
+							return;
+						}
+						if (!canMove || (key !== "reorderUp" && key !== "reorderDown")) return;
+						event.preventDefault();
+						(key === "reorderUp" ? onMoveUp : onMoveDown)?.();
+					}}
 					onClick={onSelect}
-					className="flex min-w-0 flex-1 items-center gap-4 text-left"
+					className="-mx-4 -my-2 flex min-w-0 flex-1 items-center gap-4 rounded-sm px-4 py-2 text-left focus-visible:focus-ring-inset"
 				>
 					{folderIcon}
 					<span className={nameClass}>{project.name}</span>
@@ -641,11 +857,14 @@ function ProjectRow({
 			)}
 			<IconButton
 				icon={Plus}
-				label={createWorkspaceLabel}
+				label={t("panels.projectTree.createWorkspace")}
+				tooltipShortcut={newWorkspaceShortcut}
 				variant="ghost"
 				size="s"
 				className="shrink-0"
+				{...treeRowControlProps}
 				data-testid="add-workspace"
+				data-focus-fallback={`workspaces:${project.id}`}
 				onClick={onAddWorkspace}
 			/>
 		</div>
@@ -653,21 +872,7 @@ function ProjectRow({
 	return (
 		<>
 			<ContextMenu open={menuOpen} onOpenChange={setMenuOpen}>
-				<ContextMenuTrigger
-					asChild
-					onKeyDown={(event) => {
-						if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
-						event.preventDefault();
-						const rect = event.currentTarget.getBoundingClientRect();
-						event.currentTarget.dispatchEvent(
-							new MouseEvent("contextmenu", {
-								bubbles: true,
-								clientX: rect.left,
-								clientY: rect.bottom,
-							}),
-						);
-					}}
-				>
+				<ContextMenuTrigger asChild onKeyDown={openContextMenuFromKeyboard}>
 					{row}
 				</ContextMenuTrigger>
 				<ContextMenuContent
@@ -699,6 +904,27 @@ function ProjectRow({
 						{t("panels.projectTree.openExistingWorktree")}
 					</ContextMenuItem>
 					<ContextMenuSeparator />
+					{canMove ? (
+						<>
+							<ContextMenuItem
+								data-testid="project-menu-move-up"
+								disabled={!onMoveUp}
+								onSelect={() => onMoveUp?.()}
+							>
+								<ArrowUp />
+								{t("panels.projectTree.moveUp")}
+							</ContextMenuItem>
+							<ContextMenuItem
+								data-testid="project-menu-move-down"
+								disabled={!onMoveDown}
+								onSelect={() => onMoveDown?.()}
+							>
+								<ArrowDown />
+								{t("panels.projectTree.moveDown")}
+							</ContextMenuItem>
+							<ContextMenuSeparator />
+						</>
+					) : null}
 					{canRename ? (
 						<ContextMenuItem
 							data-testid="project-menu-rename"
@@ -745,6 +971,7 @@ function ProjectRow({
 
 function WorkspaceRow({
 	workspace,
+	level,
 	settled,
 	now,
 	isActive,
@@ -765,6 +992,7 @@ function WorkspaceRow({
 	onMarkUnread,
 }: {
 	workspace: Workspace;
+	level: number;
 	settled: SettledReason | null;
 	now: number;
 	isActive: boolean;
@@ -785,6 +1013,7 @@ function WorkspaceRow({
 	onMarkUnread: () => void;
 }) {
 	const t = useT();
+	const treeKeys = useTreeKeys();
 	const isDefault = isDefaultWorkspace(workspace);
 	const isExternal = isExternalWorkspace(workspace);
 	const isSettled = settled !== null;
@@ -819,8 +1048,10 @@ function WorkspaceRow({
 		canRename,
 		onRename: (_target, name) => onRename(name),
 	});
+	const rowRef = useRef<HTMLDivElement>(null);
+	const treeItem = useTreeItem(workspace.id, { level, label: displayName, selected: isActive });
 
-	const identityClass = `flex min-w-0 flex-1 gap-4 text-left ${isTwoLine ? "items-start" : "items-center"}`;
+	const identityClass = `-mx-4 -my-2 flex min-w-0 flex-1 gap-4 rounded-sm px-4 py-2 text-left focus-visible:focus-ring-inset ${isTwoLine ? "items-start" : "items-center"}`;
 	const identityIcon = isRunning ? (
 		<RunningIcon
 			className={cn("size-14", isTwoLine && "mt-2", isActive ? "text-primary" : "text-text-muted")}
@@ -864,6 +1095,7 @@ function WorkspaceRow({
 			variant="ghost"
 			size="s"
 			data-testid="workspace-keep-active"
+			{...treeRowControlProps}
 			onClick={onKeepActive}
 			className={HOVER_CONTROL_CLASS}
 		/>
@@ -878,6 +1110,7 @@ function WorkspaceRow({
 			variant="ghost"
 			size="s"
 			data-testid="workspace-settle"
+			{...treeRowControlProps}
 			disabled={settleBlocked}
 			onClick={onSettle}
 			className={HOVER_CONTROL_CLASS}
@@ -885,11 +1118,13 @@ function WorkspaceRow({
 	) : null;
 
 	return (
-		<li>
-			<fieldset
-				aria-label={displayName}
+		<li role="none">
+			<div
+				ref={rowRef}
+				role="none"
 				data-testid="workspace-item"
 				data-row
+				data-focus-row={workspace.id}
 				data-active={isActive}
 				data-kind={workspace.kind ?? "worktree"}
 				data-settled={settled?.kind}
@@ -897,7 +1132,7 @@ function WorkspaceRow({
 				data-running={isRunning || undefined}
 				onContextMenu={openMenuFromContext}
 				className={cn(
-					"group relative flex min-h-panel-row min-w-0 items-center gap-8 rounded-sm border-0 py-2 pr-4 pl-24 transition-colors",
+					"group relative flex min-h-panel-row min-w-0 items-center gap-8 rounded-sm py-2 pr-4 pl-24 transition-colors",
 					isActive || menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered",
 				)}
 			>
@@ -914,13 +1149,27 @@ function WorkspaceRow({
 								aria-label={t("panels.projectTree.workspaceName")}
 								defaultValue={workspace.name}
 								{...renameInputProps}
-								className={`w-full min-w-0 truncate border-0 bg-transparent p-0 tr-text-ui leading-tight outline-none ${isActive ? "text-primary" : "text-text-muted"}`}
+								className={`w-full min-w-0 truncate border-0 bg-transparent p-0 tr-text-ui leading-tight focus-visible:focus-ring ${isActive ? "text-primary" : "text-text-muted"}`}
 							/>
 							{branchLabel}
 						</span>
 					</div>
 				) : (
-					<button type="button" onClick={onSelect} className={identityClass}>
+					<button
+						type="button"
+						{...treeItem}
+						data-focus-row-primary
+						onClick={onSelect}
+						onKeyDown={(event) => {
+							const key = treeRowKey(event.nativeEvent, treeKeys);
+							if (key === "menu") setMenuOpen(true);
+							else if (key === "rename" && canRename) startRename();
+							else if (key === "delete" && !isDefault) setConfirmOpen(true);
+							else return;
+							event.preventDefault();
+						}}
+						className={identityClass}
+					>
 						{identityIcon}
 						<span className="flex min-w-0 flex-1 flex-col">
 							<span
@@ -955,13 +1204,17 @@ function WorkspaceRow({
 								variant="ghost"
 								size="s"
 								data-testid="workspace-menu"
+								{...treeRowControlProps}
 								className={HOVER_CONTROL_CLASS}
 							/>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent
 							align="end"
 							data-testid="workspace-actions"
-							onCloseAutoFocus={onMenuCloseAutoFocus}
+							onCloseAutoFocus={(event) => {
+								onMenuCloseAutoFocus(event);
+								if (!event.defaultPrevented) focusTreeItemOnMenuClose(event, rowRef.current);
+							}}
 						>
 							{editors.length > 0 && (
 								<DropdownMenuSub>
@@ -996,7 +1249,7 @@ function WorkspaceRow({
 								<FolderOpen />
 								{t("panels.projectTree.reveal")}
 							</DropdownMenuItem>
-							{readAction !== null || canSettle ? <DropdownMenuSeparator /> : null}
+							{readAction !== null || isSettled || canSettle ? <DropdownMenuSeparator /> : null}
 							{readAction === "markRead" ? (
 								<DropdownMenuItem data-testid="workspace-mark-read" onSelect={onMarkRead}>
 									<MailOpen />
@@ -1008,25 +1261,20 @@ function WorkspaceRow({
 									{t("panels.projectTree.markUnread")}
 								</DropdownMenuItem>
 							) : null}
-							{canSettle ? (
-								isSettled ? (
-									<DropdownMenuItem
-										data-testid="workspace-menu-keep-active"
-										onSelect={onKeepActive}
-									>
-										<ArrowGoBack />
-										{t("panels.projectTree.keepActive")}
-									</DropdownMenuItem>
-								) : (
-									<DropdownMenuItem
-										data-testid="workspace-menu-settle"
-										disabled={settleBlocked}
-										onSelect={onSettle}
-									>
-										<Check />
-										{t("panels.projectTree.settle")}
-									</DropdownMenuItem>
-								)
+							{isSettled ? (
+								<DropdownMenuItem data-testid="workspace-menu-keep-active" onSelect={onKeepActive}>
+									<ArrowGoBack />
+									{t("panels.projectTree.keepActive")}
+								</DropdownMenuItem>
+							) : canSettle ? (
+								<DropdownMenuItem
+									data-testid="workspace-menu-settle"
+									disabled={settleBlocked}
+									onSelect={onSettle}
+								>
+									<Check />
+									{t("panels.projectTree.settle")}
+								</DropdownMenuItem>
 							) : null}
 							{!isDefault && (
 								<>
@@ -1049,7 +1297,7 @@ function WorkspaceRow({
 						</DropdownMenuContent>
 					</DropdownMenu>
 				</span>
-			</fieldset>
+			</div>
 
 			{!isDefault && (
 				<RemoveWorkspaceDialog

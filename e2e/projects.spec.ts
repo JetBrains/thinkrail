@@ -1,6 +1,7 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import { PROJECT_ORDER_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import {
 	createWorkspaceViaDialog,
 	defaultWorkspaceRow,
@@ -96,8 +97,8 @@ async function openProjectActions(page: Page, row: Locator): Promise<Locator> {
 	return menu;
 }
 
-function seedSecondRepo(): string {
-	const repo = join(E2E_DATA_DIR, "second-project");
+function seedSecondRepo(name = "second-project"): string {
+	const repo = join(E2E_DATA_DIR, name);
 	rmSync(repo, { recursive: true, force: true });
 	mkdirSync(repo, { recursive: true });
 	git(repo, "init", "-b", "main");
@@ -110,6 +111,162 @@ function seedSecondRepo(): string {
 	writeFileSync(E2E_PICK_DIR_POINTER, repo);
 	return repo;
 }
+
+async function openSecondProject(page: Page, name?: string): Promise<string> {
+	const repo = seedSecondRepo(name);
+	await page.getByTestId("add-project-menu").click();
+	await page.getByTestId("menu-open-project").click();
+	return repo;
+}
+
+async function startProjectDrag(page: Page, name: Locator, over: Locator, yFraction: number) {
+	const from = await name.boundingBox();
+	const to = await over.boundingBox();
+	if (!from || !to) throw new Error("Project drag endpoints have no bounding box");
+	await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2 + 8, { steps: 4 });
+	await page.mouse.move(to.x + to.width / 2, to.y + to.height * yFraction, { steps: 8 });
+}
+
+test("dragging a project name reorders whole groups in every window, never past the pinned Chats section", async ({
+	page,
+	context,
+}) => {
+	await openFixtureProject(page);
+	await openSecondProject(page);
+	const names = page.getByTestId("project-name");
+	await expect(names).toHaveText(["second-project", "sample-project"]);
+	const tree = page.getByTestId("project-tree");
+	const sample = page
+		.getByTestId("project-group")
+		.filter({ has: names.filter({ hasText: "sample-project" }) });
+	const second = page
+		.getByTestId("project-group")
+		.filter({ has: names.filter({ hasText: "second-project" }) });
+	const activeWorkspace = sample.getByTestId("workspace-item").first();
+	await activeWorkspace.click();
+	await expect(activeWorkspace).toHaveAttribute("data-active", "true");
+	await expect(second.getByTestId("workspace-item").first()).toBeVisible();
+	const location = page.url();
+	const children = await sample.getByTestId("workspace-item").allTextContents();
+	const observer = await context.newPage();
+	await observer.goto(location);
+	const observerNames = observer.getByTestId("project-name");
+	await expect(observerNames).toHaveText(["second-project", "sample-project"]);
+
+	await startProjectDrag(page, sample.getByTestId("project-name"), second, 0.25);
+	await expect(second.locator('[data-placement="before"]')).toHaveAttribute(
+		"data-drop-active",
+		"true",
+	);
+	await expect(tree.locator("[data-drop-active]")).toHaveCount(1);
+	await page.keyboard.press("Escape");
+	await expect(tree.locator("[data-drop-active]")).toHaveCount(0);
+	await page.mouse.up();
+	await expect(names).toHaveText(["second-project", "sample-project"]);
+
+	await startProjectDrag(page, sample.getByTestId("project-name"), second, 0.25);
+	await expect(second.locator('[data-placement="before"]')).toHaveAttribute(
+		"data-drop-active",
+		"true",
+	);
+	await page.mouse.up();
+	await expect(names).toHaveText(["sample-project", "second-project"]);
+	await expect(observerNames).toHaveText(["sample-project", "second-project"]);
+	await expect(activeWorkspace).toHaveAttribute("data-active", "true");
+	expect(page.url()).toBe(location);
+	await expect(sample.getByTestId("workspace-item")).toHaveText(children);
+
+	const chats = page.getByTestId("chats-section");
+	await startProjectDrag(page, second.getByTestId("project-name"), chats, 0.5);
+	await expect(second).toHaveAttribute("data-dragging", "true");
+	await expect(tree.locator("[data-drop-active]")).toHaveCount(0);
+	await page.mouse.up();
+	await expect(second).not.toHaveAttribute("data-dragging");
+	await expect(tree.locator(":scope > *").first()).toHaveAttribute("data-testid", "chats-section");
+	await expect(names).toHaveText(["sample-project", "second-project"]);
+
+	await page.reload();
+	await expect(names).toHaveText(["sample-project", "second-project"]);
+});
+
+test("keyboard and menu moves keep focus and announce, and an opened project lands on top", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const secondRepo = await openSecondProject(page);
+	const names = page.getByTestId("project-name");
+	await expect(names).toHaveText(["second-project", "sample-project"]);
+	const secondName = names.filter({ hasText: "second-project" });
+	const status = page.getByTestId("project-move-status");
+
+	await secondName.focus();
+	await page.keyboard.press("Alt+Shift+ArrowDown");
+	await expect(names).toHaveText(["sample-project", "second-project"]);
+	await expect(secondName).toBeFocused();
+	await expect(status).toHaveText("second-project moved to position 2 of 2");
+
+	await page.keyboard.press("Shift+F10");
+	await expect(page.getByTestId("project-menu-move-down")).toHaveAttribute("aria-disabled", "true");
+	await page.getByTestId("project-menu-move-up").click();
+	await expect(names).toHaveText(["second-project", "sample-project"]);
+	await expect(secondName).toBeFocused();
+	await expect(status).toHaveText("second-project moved to position 1 of 2");
+
+	await openSecondProject(page, "third-project");
+	await expect(names).toHaveText(["third-project", "second-project", "sample-project"]);
+	await secondName.click({ button: "right" });
+	await page.getByTestId("project-menu-close").click();
+	await page.getByTestId("confirm-close-project").click();
+	await expect(names).toHaveText(["third-project", "sample-project"]);
+	await page.getByTestId("add-project-menu").click();
+	await page.getByRole("menuitem").filter({ hasText: secondRepo }).click();
+	await expect(names).toHaveText(["second-project", "third-project", "sample-project"]);
+});
+
+test("a host before the project order protocol ignores Alt+Shift+arrows on a project name", async ({
+	page,
+}) => {
+	const methods: unknown[] = [];
+	await page.routeWebSocket(/\/ws(?:\?|$)/, (browserSocket) => {
+		const serverSocket = browserSocket.connectToServer();
+		browserSocket.onMessage((message) => {
+			methods.push(parseWsFrame(message)?.method);
+			serverSocket.send(message);
+		});
+		serverSocket.onMessage((message) => {
+			const frame = parseWsFrame(message);
+			if (frame?.channel !== "server.welcome") {
+				browserSocket.send(message);
+				return;
+			}
+			browserSocket.send(
+				JSON.stringify({
+					...frame,
+					data: {
+						...(frame.data as Record<string, unknown>),
+						protocolVersion: PROJECT_ORDER_PROTOCOL_VERSION - 1,
+					},
+				}),
+			);
+		});
+	});
+	await openFixtureProject(page);
+	await openSecondProject(page);
+	const names = page.getByTestId("project-name");
+	await expect(names).toHaveText(["second-project", "sample-project"]);
+	const secondName = names.filter({ hasText: "second-project" });
+	await expect(secondName).not.toHaveAttribute("aria-keyshortcuts");
+
+	await secondName.focus();
+	methods.length = 0;
+	await page.keyboard.press("Alt+Shift+ArrowDown");
+	await page.keyboard.press("Enter");
+	await expect.poll(() => methods).toContain("workspace.list");
+	expect(methods).not.toContain("project.move");
+	await expect(names).toHaveText(["second-project", "sample-project"]);
+});
 
 test("opens a git repo as a project via the directory picker", async ({ page }) => {
 	await page.goto("/");
@@ -362,12 +519,17 @@ test("project context actions stay compact and close/reopen is lossless across c
 	const renameFromMenu = page.getByTestId("project-menu-rename");
 	const closeFromMenu = page.getByTestId("project-menu-close");
 	const menuParts = projectActions.locator('[role="menuitem"], [role="separator"]');
-	await expect(menuParts).toHaveCount(5);
+	await expect(menuParts).toHaveCount(8);
 	await expect(menuParts.nth(0)).toHaveText("Create workspace");
 	await expect(menuParts.nth(1)).toHaveText("Open existing worktree…");
 	await expect(menuParts.nth(2)).toHaveAttribute("role", "separator");
-	await expect(menuParts.nth(3)).toHaveText("Rename");
-	await expect(menuParts.nth(4)).toHaveText("Close project");
+	await expect(menuParts.nth(3)).toHaveText("Move up");
+	await expect(menuParts.nth(3)).toHaveAttribute("aria-disabled", "true");
+	await expect(menuParts.nth(4)).toHaveText("Move down");
+	await expect(menuParts.nth(4)).toHaveAttribute("aria-disabled", "true");
+	await expect(menuParts.nth(5)).toHaveAttribute("role", "separator");
+	await expect(menuParts.nth(6)).toHaveText("Rename");
+	await expect(menuParts.nth(7)).toHaveText("Close project");
 	await expect(createFromMenu.locator("svg.remixicon")).toHaveCount(1);
 	await expect(openExistingFromMenu.locator("svg.remixicon")).toHaveCount(1);
 	await expect(renameFromMenu.locator("svg.remixicon")).toHaveCount(1);

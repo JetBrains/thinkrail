@@ -13,7 +13,12 @@ function renderFilePreview(file: PaletteFile) {
 			key={`${file.workspaceId}\u0000${file.path}`}
 			value={PALETTE_PREVIEW_HOST}
 		>
-			<ResourcePreview workspaceId={file.workspaceId} path={file.path} className="h-full min-h-0" />
+			<ResourcePreview
+				workspaceId={file.workspaceId}
+				path={file.path}
+				{...(file.line === undefined ? {} : { reveal: { line: file.line, tick: file.line } })}
+				className="h-full min-h-0"
+			/>
 		</ResourceHostProvider>
 	);
 }

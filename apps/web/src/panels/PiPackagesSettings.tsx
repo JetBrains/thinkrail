@@ -697,7 +697,7 @@ export function GalleryLink() {
 			href="https://pi.dev/packages"
 			target="_blank"
 			rel="noopener noreferrer"
-			className="tr-text-metadata text-primary underline underline-offset-2"
+			className="tr-text-metadata text-primary underline underline-offset-2 focus-visible:focus-ring"
 		>
 			{t("settings.packages.gallery")} ↗
 		</a>

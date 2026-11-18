@@ -5,14 +5,21 @@ import {
 	isSubagentMaxConcurrent,
 	RECENT_MODELS_LIMIT,
 	type ReviewFixDetails,
+	SEARCH_KINDS,
 	SETTLE_IDLE_DAYS,
 	SUBAGENT_MAX_CONCURRENT,
+	WORKSPACE_VIEW_ROUTE,
 } from "./domain";
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	ARTIFACT_ROLES_PROTOCOL_VERSION,
+	ARTIFACTS_PROTOCOL_VERSION,
 	ASK_DISCUSS_PROTOCOL_VERSION,
 	BRANCH_STATUS_PROTOCOL_VERSION,
+	BROWSER_VIEW_PROTOCOL_VERSION,
+	CACHE_WARMING_MODES,
+	CACHE_WARMING_SETTINGS_PROTOCOL_VERSION,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	CHATS_PROTOCOL_VERSION,
@@ -21,38 +28,50 @@ import {
 	CONTINUATION_PROTOCOL_VERSION,
 	CUSTOM_ENDPOINT_ID_PREFIX,
 	CUSTOM_ENDPOINTS_PROTOCOL_VERSION,
+	CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION,
+	CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS,
 	completionDelivery,
 	customMessageText,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_BROWSE_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
+	EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION,
 	EXTENSION_SETTINGS_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
+	FS_MUTATIONS_PROTOCOL_VERSION,
 	GITHUB_STAR_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	INSTALLED_EXTENSIONS_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
+	isCacheWarmingMode,
 	isCustomEndpointId,
+	isModelContextWindow,
+	isSharedModelContextTarget,
 	isTodoReviewFixMessage,
 	isToolResponsePending,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
+	KEYBINDINGS_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	MCP_TOOL_GRANTS_PROTOCOL_VERSION,
+	MODEL_CONTEXT_WINDOW_LIMITS,
 	MODEL_PICKER_PROTOCOL_VERSION,
+	modelContextWindowLimits,
 	normalizeSessionTitle,
 	ONBOARDING_PROTOCOL_VERSION,
 	OTHER_AGENT_SKILLS_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
+	PROJECT_ORDER_PROTOCOL_VERSION,
 	PROJECT_RENAME_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	PROVIDER_WARNINGS_PROTOCOL_VERSION,
+	QUESTION_PANEL_PROTOCOL_VERSION,
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
@@ -62,10 +81,12 @@ import {
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
+	SPEC_SECTIONS_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
+	TEXT_SEARCH_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 	TOOL_RESPONSE_CUSTOM_TYPE,
@@ -74,6 +95,7 @@ import {
 	USER_THEMES_PROTOCOL_VERSION,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
 	WORKSPACE_CREATION_PROTOCOL_VERSION,
+	WORKSPACE_PATH_RESOLVE_PROTOCOL_VERSION,
 	WORKSPACE_READ_STATE_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	WS_CHANNELS,
@@ -251,6 +273,16 @@ test("tool responses replace the ask-only answer method at v93", () => {
 	expect(WS_METHODS.sessionAnswerQuestion).toBe("session.answerQuestion");
 });
 
+test("the cache-warming setting names its two methods at v111", () => {
+	expect(CACHE_WARMING_SETTINGS_PROTOCOL_VERSION).toBe(111);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CACHE_WARMING_SETTINGS_PROTOCOL_VERSION);
+	expect(WS_METHODS.cacheWarmingGet).toBe("cacheWarming.get");
+	expect(WS_METHODS.cacheWarmingSet).toBe("cacheWarming.set");
+	expect(CACHE_WARMING_MODES).toEqual(["off", "streaming", "idle"]);
+	expect(isCacheWarmingMode("idle")).toBe(true);
+	expect(isCacheWarmingMode("always")).toBe(false);
+});
+
 test("voice input is pinned to v107", () => {
 	expect(SPEECH_PROTOCOL_VERSION).toBe(107);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SPEECH_PROTOCOL_VERSION);
@@ -267,6 +299,35 @@ test("user-selectable fonts are pinned to v102", () => {
 	expect(WS_METHODS.fontsInstalled).toBe("fonts.installed");
 	expect(WS_METHODS.fontsReveal).toBe("fonts.reveal");
 	expect(WS_CHANNELS.fontsChanged).toBe("fonts.changed");
+});
+
+test("Files tree copy and delete are pinned to v118", () => {
+	expect(FS_MUTATIONS_PROTOCOL_VERSION).toBe(118);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FS_MUTATIONS_PROTOCOL_VERSION);
+	expect(WS_METHODS.fsCopy).toBe("fs.copy");
+	expect(WS_METHODS.fsDelete).toBe("fs.delete");
+});
+
+test("artifact roles and round markers are pinned to v124", () => {
+	expect(ARTIFACT_ROLES_PROTOCOL_VERSION).toBe(124);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ARTIFACT_ROLES_PROTOCOL_VERSION);
+});
+
+test("workspace artifacts, rename and move are pinned to v121", () => {
+	expect(ARTIFACTS_PROTOCOL_VERSION).toBe(121);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ARTIFACTS_PROTOCOL_VERSION);
+	expect(WS_METHODS.artifactsList).toBe("artifacts.list");
+	expect(WS_METHODS.artifactsRestore).toBe("artifacts.restore");
+	expect(WS_METHODS.artifactsDiscard).toBe("artifacts.discard");
+	expect(WS_METHODS.fsRename).toBe("fs.rename");
+	expect(WS_METHODS.fsMove).toBe("fs.move");
+	expect(WS_CHANNELS.workspaceArtifactsChanged).toBe("workspace.artifactsChanged");
+});
+
+test("the browser view route is pinned to v122", () => {
+	expect(BROWSER_VIEW_PROTOCOL_VERSION).toBe(122);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(BROWSER_VIEW_PROTOCOL_VERSION);
+	expect(WORKSPACE_VIEW_ROUTE).toBe("/view/");
 });
 
 test("background workspace creation is pinned to v104", () => {
@@ -308,19 +369,55 @@ test("host search and its previews are pinned to v106", () => {
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
 });
 
-test("the community catalog is pinned to v112", () => {
-	expect(PROTOCOL_VERSION).toBe(112);
-	expect(EXTENSION_BROWSE_PROTOCOL_VERSION).toBe(112);
+test("the community catalog is pinned to v126", () => {
+	expect(PROTOCOL_VERSION).toBe(126);
+	expect(EXTENSION_BROWSE_PROTOCOL_VERSION).toBe(126);
 	expect(WS_METHODS.extensionsBrowse).toBe("extensions.browse");
 });
 
-test("installed extensions are pinned to v111", () => {
+test("installed extensions are pinned to v125", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(INSTALLED_EXTENSIONS_PROTOCOL_VERSION);
-	expect(INSTALLED_EXTENSIONS_PROTOCOL_VERSION).toBe(111);
+	expect(INSTALLED_EXTENSIONS_PROTOCOL_VERSION).toBe(125);
 	expect(WS_METHODS.extensionsRemove).toBe("extensions.remove");
 	expect(WS_METHODS.extensionsUpdate).toBe("extensions.update");
 	expect(WS_METHODS.extensionsCheckUpdates).toBe("extensions.checkUpdates");
 	expect(WS_CHANNELS.extensionsChanged).toBe("extensions.changed");
+});
+
+test("spec sections in search are pinned to v113", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SPEC_SECTIONS_PROTOCOL_VERSION);
+	expect(SPEC_SECTIONS_PROTOCOL_VERSION).toBe(113);
+	expect(SEARCH_KINDS).toContain("section");
+});
+
+test("find in files is pinned to v112", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(TEXT_SEARCH_PROTOCOL_VERSION);
+	expect(TEXT_SEARCH_PROTOCOL_VERSION).toBe(112);
+	expect(WS_METHODS.searchText).toBe("search.text");
+	expect(WS_CHANNELS.searchTextResults).toBe("search.textResults");
+});
+
+test("project order is pinned to v117", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_ORDER_PROTOCOL_VERSION);
+	expect(PROJECT_ORDER_PROTOCOL_VERSION).toBe(117);
+	expect(WS_METHODS.projectMove).toBe("project.move");
+});
+
+test("workspace path resolution is pinned to v119", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(WORKSPACE_PATH_RESOLVE_PROTOCOL_VERSION);
+	expect(WORKSPACE_PATH_RESOLVE_PROTOCOL_VERSION).toBe(119);
+	expect(WS_METHODS.workspaceResolvePath).toBe("workspace.resolvePath");
+});
+
+test("the question panel height setting is pinned to v114", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(QUESTION_PANEL_PROTOCOL_VERSION);
+	expect(QUESTION_PANEL_PROTOCOL_VERSION).toBe(114);
+	expect(DEFAULT_CONFIG.questionPanelHeight).toBe(70);
+});
+
+test("extension editor text is pinned to v115", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION);
+	expect(EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION).toBe(115);
 });
 
 test("continue in workspace is pinned to v110", () => {
@@ -447,6 +544,22 @@ test("model context settings name their two methods at v76", () => {
 	expect(WS_METHODS.modelSetContextWindow).toBe("model.setContextWindow");
 	expect(CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION).toBe(76);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION);
+});
+
+test("custom server models take a targeted context window from v116, outside the GPT preset", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION);
+	expect(CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION).toBe(116);
+	const custom = `${CUSTOM_ENDPOINT_ID_PREFIX}gateway`;
+	expect(modelContextWindowLimits(custom)).toBe(CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS);
+	expect(modelContextWindowLimits("openai")).toBe(MODEL_CONTEXT_WINDOW_LIMITS);
+	expect(isModelContextWindow(8_192, modelContextWindowLimits(custom))).toBe(true);
+	expect(isModelContextWindow(8_192)).toBe(false);
+	for (const value of [1_023, 10_000_001, 4_096.5])
+		expect(isModelContextWindow(value, CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS)).toBe(false);
+	expect(isSharedModelContextTarget({ provider: "openai", override: null })).toBe(true);
+	expect(isSharedModelContextTarget({ provider: "openai", override: 1_050_000 })).toBe(false);
+	expect(isSharedModelContextTarget({ provider: custom, override: null })).toBe(false);
+	expect(isSharedModelContextTarget({ provider: custom, override: 300_000 })).toBe(false);
 });
 
 test("resource metadata rides the two content reads from v75", () => {
@@ -642,6 +755,12 @@ test("custom endpoints are pinned to v101 and own only custom-* providers", () =
 	expect(WS_METHODS.customEndpointsProbe).toBe("customEndpoints.probe");
 	expect(isCustomEndpointId(`${CUSTOM_ENDPOINT_ID_PREFIX}gateway`)).toBe(true);
 	expect(isCustomEndpointId("ollama")).toBe(false);
+});
+
+test("keybinding overrides are pinned to v123 and default to none", () => {
+	expect(KEYBINDINGS_PROTOCOL_VERSION).toBe(123);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(KEYBINDINGS_PROTOCOL_VERSION);
+	expect(DEFAULT_CONFIG.keybindings).toEqual({});
 });
 
 test("extension settings are pinned to v105", () => {

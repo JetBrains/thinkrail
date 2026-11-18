@@ -1,4 +1,4 @@
-import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
+import { isValidTemplateName, type TemplateInfo, type TemplateScope } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
@@ -17,13 +17,7 @@ import { useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 
 const INPUT_CLASS =
-	"w-full rounded-sm border border-control-border-default bg-control-bg px-12 py-8 tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active disabled:bg-control-disabled-bg disabled:text-control-disabled-text";
-
-function isValidTemplateName(name: string): boolean {
-	if (name.length === 0) return false;
-	if (name.startsWith(".")) return false;
-	return !name.includes("/") && !name.includes("\\") && !name.includes("\0") && !name.includes(":");
-}
+	"w-full rounded-sm border border-control-border-default bg-control-bg px-12 py-8 tr-text-ui text-text-default transition-colors placeholder:text-text-muted focus-visible:focus-ring focus-visible:border-control-border-active disabled:bg-control-disabled-bg disabled:text-control-disabled-text";
 
 export function TemplateEditorDialog({
 	open,
@@ -277,7 +271,7 @@ function ScopeOption({
 			disabled={disabled}
 			onClick={onSelect}
 			className={cn(
-				"flex-1 rounded-sm border px-12 py-8 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
+				"flex-1 rounded-sm border px-12 py-8 text-left tr-text-ui transition-colors focus-visible:focus-ring disabled:cursor-not-allowed disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
 				active
 					? "border-primary-muted bg-clip-padding bg-primary-subtle text-text-default"
 					: "border-border-default text-text-muted hover:bg-control-bg-hovered hover:text-text-default",

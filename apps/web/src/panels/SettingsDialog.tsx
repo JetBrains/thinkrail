@@ -13,6 +13,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { SettingsSection, useAppStore } from "@/store";
 import { loadInAppSurvey } from "@/transport";
 import { AppearanceSettings } from "./AppearanceSettings";
+import { ArtifactsSettings } from "./ArtifactsSettings";
 import { ChatSettings } from "./ChatSettings";
 import { EnvironmentSettings } from "./EnvironmentSettings";
 import { ExtensionsSettings } from "./ExtensionsSettings";
@@ -25,6 +26,7 @@ import { NotificationsSettings } from "./NotificationsSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
 import { SettingsDialogContainer } from "./settingsDialogContainer";
+import { keepSettingsDraftOnEscape } from "./settingsDraft";
 import { resolveSettingsSection, settingsNavGroups } from "./settingsNav";
 import { TemplatesSettings } from "./TemplatesSettings";
 import { TerminalSettings } from "./TerminalSettings";
@@ -64,14 +66,7 @@ export function SettingsDialog({
 				ref={setContentEl}
 				data-testid="settings-dialog"
 				hideClose
-				onEscapeKeyDown={(event) => {
-					if (
-						document.activeElement instanceof HTMLElement &&
-						document.activeElement.hasAttribute("data-settings-draft-input")
-					) {
-						event.preventDefault();
-					}
-				}}
+				onEscapeKeyDown={keepSettingsDraftOnEscape}
 				className="h-[80vh] max-w-[52rem] gap-0 overflow-hidden p-0"
 			>
 				<DialogHeader className="flex-row items-center justify-between border-border-default border-b px-16 py-8">
@@ -102,7 +97,7 @@ export function SettingsDialog({
 												data-active={active}
 												onClick={() => useAppStore.getState().setSettingsSection(id)}
 												className={cn(
-													"flex shrink-0 items-center gap-4 rounded-sm px-4 py-4 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary md:min-h-28 md:w-full md:px-8 md:py-0",
+													"flex shrink-0 items-center gap-4 rounded-sm px-4 py-4 text-left tr-text-ui transition-colors focus-visible:focus-ring-inset md:min-h-28 md:w-full md:px-8 md:py-0",
 													active
 														? "bg-primary-subtle text-primary"
 														: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
@@ -123,7 +118,7 @@ export function SettingsDialog({
 							data-active={feedbackActive}
 							onClick={() => useAppStore.getState().setSettingsSection(SettingsSection.Feedback)}
 							className={cn(
-								"shrink-0 rounded-sm border border-primary-soft px-8 py-4 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary md:mt-auto md:px-12 md:py-8",
+								"shrink-0 rounded-sm border border-primary-soft px-8 py-4 text-left transition-colors focus-visible:focus-ring md:mt-auto md:px-12 md:py-8",
 								feedbackActive ? "bg-primary-subtle" : "bg-control-bg hover:bg-control-bg-hovered",
 							)}
 						>
@@ -157,6 +152,8 @@ export function SettingsDialog({
 								keyboardSettings
 							) : selectedSection === SettingsSection.Terminal ? (
 								<TerminalSettings />
+							) : selectedSection === SettingsSection.Artifacts ? (
+								<ArtifactsSettings />
 							) : selectedSection === SettingsSection.Voice ? (
 								<VoiceSettings />
 							) : selectedSection === SettingsSection.Workspaces ? (

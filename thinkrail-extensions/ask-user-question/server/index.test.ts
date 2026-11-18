@@ -52,7 +52,12 @@ function compose(
 			if (key !== "richPreviews") throw new Error(`unexpected setting ${key}`);
 			return richPreviews();
 		},
-		workspaceFiles: { check, scratchDir: ".thinkrail/context/mockups/" },
+		workspaceFiles: {
+			check,
+			scratchDir: ".thinkrail/context/mockups/",
+			artifactsDir: ".thinkrail/context/",
+			ensureArtifactsDir: async () => {},
+		},
 	};
 	const factories = askUserQuestion.sessionExtensions?.(session) ?? [];
 	let tool: CapturedTool | undefined;
@@ -80,7 +85,9 @@ describe("the ask-user-question server half", () => {
 		const { tool, factories } = compose(async () => ({ kind: "deferred" }));
 		expect(factories).toHaveLength(1);
 		expect(tool.name).toBe(ASK_USER_QUESTION_TOOL_NAME);
-		expect(tool.description).toContain("render inline in the chat as an interactive card");
+		expect(tool.description).toContain(
+			"render as an interactive card docked above the chat's message box",
+		);
 		expect(tool.description).toContain("then the card is superseded");
 		expect(tool.promptGuidelines?.length).toBe(4);
 	});

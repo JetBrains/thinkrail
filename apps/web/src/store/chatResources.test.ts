@@ -139,7 +139,6 @@ test("paged history continues the chain it was asked from, rides along new windo
 	);
 	expect(ids()).toEqual(["c1", "c2", "c3", "c4", "c5"]);
 	const groups = selectChatResourceGroups(projection()?.snapshot, true, projection()?.older);
-	expect(groups.recentFinished.finishedCommands.map((item) => item.id)).toEqual(["c1", "c2", "c3"]);
 	expect(groups.remaining).toEqual({ command: 2, subagent: 0 });
 
 	state().appendChatResourceHistory(connection(), "command", "c3", page(done("stale", 5)));

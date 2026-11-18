@@ -1,6 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import { LINE_WIDTH_COLUMNS, type LineWidthKind } from "@thinkrail/contracts";
 import {
 	createWorkspaceViaDialog,
 	hideAuxiliaryWorkbench,
@@ -12,8 +13,6 @@ import {
 import { installChannelHold } from "./fixtures/channelHold";
 import { pierreDeletionsSide } from "./fixtures/pierre";
 import { LONG_LINE } from "./fixtures/repo";
-
-type LineWidthKind = "chat" | "file";
 
 // Chat line width lives on the Chat page, the file line width in Appearance → Editor.
 const LINE_WIDTH_NAV: Record<LineWidthKind, string> = {
@@ -62,7 +61,9 @@ async function restoreLineWidthDefaults(page: Page): Promise<void> {
 	if (await page.getByTestId("settings-dialog").isVisible()) await closeSettings(page);
 	for (const kind of ["chat", "file"] as const) {
 		const controls = await openLineWidthSettings(page, kind);
-		if ((await controls.input.inputValue()) !== "120") await saveWidth(controls.input, 120);
+		const width = LINE_WIDTH_COLUMNS.default[kind];
+		if ((await controls.input.inputValue()) !== String(width))
+			await saveWidth(controls.input, width);
 		if ((await controls.bounded.getAttribute("data-active")) !== "true") {
 			await controls.bounded.click();
 			await expect(controls.bounded).toHaveAttribute("data-active", "true");
@@ -85,7 +86,7 @@ test("line-width controls validate drafts, converge on broadcasts, and persist",
 		await page.goto("/");
 		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 		const chat = await openLineWidthSettings(page, "chat");
-		await expect(chat.input).toHaveValue("120");
+		await expect(chat.input).toHaveValue("80");
 		await expect(chat.bounded).toHaveAttribute("data-active", "true");
 		const file = await openLineWidthSettings(page, "file");
 		await expect(file.input).toHaveValue("120");
@@ -94,7 +95,7 @@ test("line-width controls validate drafts, converge on broadcasts, and persist",
 		await openLineWidthSettings(page, "chat");
 		await chat.input.fill("90");
 		await chat.input.press("Escape");
-		await expect(chat.input).toHaveValue("120");
+		await expect(chat.input).toHaveValue("80");
 
 		await chat.input.fill("39");
 		await expect(chat.input).toHaveAttribute("aria-invalid", "true");
@@ -104,7 +105,7 @@ test("line-width controls validate drafts, converge on broadcasts, and persist",
 		await expect(chat.input).toHaveValue("39");
 		await expect(chat.input).toHaveAttribute("aria-invalid", "true");
 
-		await saveWidth(chat.input, 80);
+		await saveWidth(chat.input, 100);
 		await expect(chat.input).not.toHaveAttribute("aria-invalid", "true");
 		await openLineWidthSettings(page, "file");
 		await saveWidth(file.input, 160);
@@ -124,7 +125,7 @@ test("line-width controls validate drafts, converge on broadcasts, and persist",
 		await page.reload();
 		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 		await openLineWidthSettings(page, "chat");
-		await expect(chat.input).toHaveValue("80");
+		await expect(chat.input).toHaveValue("100");
 		await expect(chat.bounded).toHaveAttribute("data-active", "false");
 		await openLineWidthSettings(page, "file");
 		await expect(file.input).toHaveValue("160");

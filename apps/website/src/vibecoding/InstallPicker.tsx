@@ -3,7 +3,7 @@ import { type KeyboardEvent, type ReactNode, useEffect, useId, useState } from "
 import { installShareUrl, isMobileDevice, shareInstallLink } from "../installLinkShare";
 import { detectInstallPlatform, type InstallPlatform, installPlatforms } from "./desktopDownloads";
 
-const shareAnchor = "quick-start";
+export const shareAnchor = "quick-start";
 
 export function useDetectedInstallPlatform(): InstallPlatform | null | undefined {
 	const [platform, setPlatform] = useState<InstallPlatform | null>();
@@ -11,7 +11,7 @@ export function useDetectedInstallPlatform(): InstallPlatform | null | undefined
 	return platform;
 }
 
-function useIsMobileDevice(): boolean {
+export function useIsMobileDevice(): boolean {
 	const [mobile, setMobile] = useState(false);
 	useEffect(() => {
 		const nav: Navigator & { userAgentData?: { platform?: string } } = navigator;
@@ -27,7 +27,7 @@ function useIsMobileDevice(): boolean {
 	return mobile;
 }
 
-function SendLinkAction() {
+export function useInstallLinkShare(): { copied: boolean; send: () => Promise<void> } {
 	const [copied, setCopied] = useState(false);
 
 	async function send() {
@@ -36,6 +36,12 @@ function SendLinkAction() {
 		setCopied(true);
 		setTimeout(() => setCopied(false), 1400);
 	}
+
+	return { copied, send };
+}
+
+function SendLinkAction() {
+	const { copied, send } = useInstallLinkShare();
 
 	return (
 		<div className="mb-3">

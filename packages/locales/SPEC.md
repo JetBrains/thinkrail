@@ -13,8 +13,8 @@ tags: [i18n]
 The single owner of ThinkRail's UI strings and of the rules every locale source obeys
 ([[architecture]] Decision 23). It ships the bundled catalogs — `en.json` is the English source of truth
 and the file translators start from, and each `<tag>.json` beside it is a translation (currently
-Spanish, Japanese, Russian, and Simplified Chinese) — and the pure functions that validate a catalog,
-name a file's language, and pick the language to render. Its `./react`
+Spanish, Japanese, Polish, Russian, Simplified Chinese, and Traditional Chinese (Taiwan)) — and the pure
+functions that validate a catalog, name a file's language, and pick the language to render. Its `./react`
 entry holds the **one** i18next instance every browser surface (`apps/web`, `packages/ui`, extension web
 halves) renders through, so they cannot drift onto separate instances.
 
@@ -58,8 +58,10 @@ halves) renders through, so they cannot drift onto separate instances.
     an explicit tag is used only when available; otherwise `"en"`. The script level exists because a
     system locale usually carries a region the catalog does not name: `zh-Hans-CN` reaches `zh-CN`
     (both maximize to `zh-Hans`) where a base-language comparison alone stops at `zh` and misses it.
-    Scripts never cross: `zh-TW` and `zh-HK` maximize to `zh-Hant` and fall through to `en` rather than
-    borrowing the Simplified catalog.
+    Scripts never cross: `zh-HK` and `zh-Hant` maximize to `zh-Hant` and reach the Taiwan catalog
+    `zh-TW`, never the Simplified one; without a Traditional catalog they fall through to `en`. The
+    fallback chain keeps that line too: a string `zh-TW` lacks falls back through `zh`, which names no
+    bundled catalog, to English, not to Simplified Chinese.
   - `baseLanguage(tag)` and `fallbackChain(tag)` (`[tag, base, "en"]`, deduped).
 - **`@thinkrail/locales/react`** (browser): the initialized i18next instance (`i18n`), `useT()` — the
   `Translator` for render, a value that is **replaced whenever the language or its strings change** (a
@@ -145,6 +147,24 @@ so the files diff cleanly.
 - Placeholders never use an i18next option name (`count` aside): `t()` consumes `ordinal`, `context`,
   `lng`, … as options — `{{ordinal}}` switched a terminal-group label to ordinal plural rules and rendered
   its raw key. A catalog test rejects such names.
+
+## Russian terminology
+
+`ru.json` follows one glossary: git operations and GitHub entities stay Latin as in git, established
+loanwords decline as Russian words, ThinkRail concepts stay Russian.
+
+| English | Russian |
+|---|---|
+| push, pull, fetch, merge, rebase, squash, cherry-pick, stash, pull request, worktree, diff | Latin, indeclinable: «Push: {{count}} коммит», «Squash и merge», «Создать merge-коммит»; a merged PR is «принят» |
+| commit (noun / verb), uncommitted | «коммит» (declined), «сделать коммит», «незакоммиченные изменения» / «Не закоммичено» |
+| branch; workspace; workbench; checkout (working copy) | «ветка» (never «ветвь»); «рабочая область»; «рабочая зона»; «рабочая копия» |
+| prompt / request | «промпт» / «запрос» |
+| clone, remote, revert, hunk | «клонировать», «удалённый репозиторий» / «Удалённые», «отменить изменения в файле», «фрагмент» |
+
+A Latin verb does not conjugate: buttons and menu items use the bare term («Push», «Merge в {{base}}»),
+sentences wrap it («выполнить push», «после merge», «выполняется push»). Never write a Russian-row
+term in Latin or give a Latin term an English plural («В этой branch нет commits», «Выполнить clone»,
+«worktrees»).
 
 ## Deferred
 

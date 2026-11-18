@@ -4,7 +4,12 @@ import { currentTranslator } from "@thinkrail/locales/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { registerWebExtensions } from "@/extensions";
-import { DefaultToolRenderer, getToolRenderer, getToolSummary } from "../toolRegistry";
+import {
+	DefaultToolRenderer,
+	getToolRenderer,
+	getToolSummary,
+	getToolWidth,
+} from "../toolRegistry";
 import "./register";
 import { specToolPaths, splitKnownPathReferences } from "./SpecToolCard";
 
@@ -19,6 +24,7 @@ const INTENTIONAL_TOOLS = [
 	"fetch_content",
 	"get_search_content",
 	"visualize",
+	"spec_search",
 	"spec_grep",
 	"spec_get",
 	"spec_graph",
@@ -29,6 +35,7 @@ const INTENTIONAL_TOOLS = [
 	"ask_user_question",
 	"resolve_comment",
 	"request_review",
+	"start_workspace",
 	"tool_search",
 	"list_mcp_resources",
 	"list_mcp_resource_templates",
@@ -62,6 +69,12 @@ function renderTool(toolName: string, args: Record<string, unknown>, result: unk
 describe("intentional bundled tool renderers", () => {
 	it("extracts paths only from each spec tool's known structured result fields", () => {
 		const cases: Array<[string, Record<string, unknown>, unknown, string[]]> = [
+			[
+				"spec_search",
+				{ query: "titles" },
+				{ details: { hits: [{ path: "search/SPEC.md" }, { path: "search/SPEC.md" }, {}] } },
+				["search/SPEC.md"],
+			],
 			[
 				"spec_grep",
 				{},
@@ -124,6 +137,16 @@ describe("intentional bundled tool renderers", () => {
 
 		expect(segments.map((segment) => segment.path).filter(Boolean)).toEqual(["SPEC.md"]);
 		expect(segments.map((segment) => segment.text).join("")).toBe(text);
+	});
+
+	it("lets only visualize and the code/output tools grow past the chat column", () => {
+		const contentWidth = new Set(["read", "write", "edit", "bash", "visualize"]);
+		for (const toolName of INTENTIONAL_TOOLS) {
+			expect([toolName, getToolWidth(toolName)]).toEqual([
+				toolName,
+				contentWidth.has(toolName) ? "content" : "column",
+			]);
+		}
 	});
 
 	it("registers every non-TODO tool exposed by a normal session", () => {
@@ -200,6 +223,13 @@ describe("intentional bundled tool renderers", () => {
 
 		expect(html).toContain("removed/SPEC.md");
 		expect(html).not.toContain('data-testid="tool-file-link"');
+	});
+
+	it("summarizes a spec search by its first phrasing", () => {
+		const summary = (query: unknown) =>
+			getToolSummary(currentTranslator(), "spec_search", props("spec_search", { query }, null));
+		expect(summary("rename chat title")).toBe("rename chat title");
+		expect(summary(["crash isolation", "fatal fault"])).toBe("crash isolation");
 	});
 
 	it("summarizes the first query, URL, or selected stored-content target", () => {

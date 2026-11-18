@@ -15,3 +15,9 @@ test("stripFrontmatter leaves content without frontmatter untouched", () => {
 	expect(stripFrontmatter("# Heading\n\nbody")).toBe("# Heading\n\nbody");
 	expect(stripFrontmatter("intro\n---\nid: x\n---\n")).toBe("intro\n---\nid: x\n---\n");
 });
+
+test("stripFrontmatter stops at the closing fence of an empty block", () => {
+	expect(stripFrontmatter("---\n---\n# Title\n\ntext\n\n---\n\nmore")).toBe(
+		"# Title\n\ntext\n\n---\n\nmore",
+	);
+});

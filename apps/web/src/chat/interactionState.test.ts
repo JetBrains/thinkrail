@@ -1,6 +1,12 @@
 import { beforeAll, expect, test } from "bun:test";
 import type { AssistantMessage, SessionState, UserMessage } from "@thinkrail/contracts";
-import { awaitingToolCallIdOf, deriveInteractionStates } from "./interactionState";
+import {
+	awaitingToolCallIdOf,
+	deriveInteractionStates,
+	dockedInteraction,
+	latestPendingInteraction,
+	type PendingInteraction,
+} from "./interactionState";
 import { registerToolRenderer } from "./toolRegistry";
 import type { ChatTurn } from "./types";
 
@@ -10,6 +16,7 @@ import type { ChatTurn } from "./types";
 beforeAll(() => {
 	registerToolRenderer("ask_user_question", () => null, { interactive: true });
 	registerToolRenderer("plain_registered_tool", () => null);
+	registerToolRenderer("docked_question", () => null, { interactive: true, dock: true });
 });
 
 const callTurn = (
@@ -135,6 +142,39 @@ test("the host's needs-input names the one tool call it accepts a response for",
 			}),
 		),
 	).toBeNull();
+});
+
+test("the latest pending interactive call is the one still awaiting, as render props", () => {
+	const turns = [askTurn("a1", "tc1"), userTurn("u2"), askTurn("a2", "tc2")];
+	const states = deriveInteractionStates(turns, {});
+	expect(latestPendingInteraction(turns, {}, states)).toEqual({
+		toolCallId: "tc2",
+		toolName: "ask_user_question",
+		args: {},
+		result: undefined,
+		status: "running",
+		streaming: false,
+	});
+	const answered = deriveInteractionStates(turns, { tc2: reply });
+	expect(latestPendingInteraction(turns, {}, answered)).toBeUndefined();
+});
+
+test("only a complete call of a docked tool the host awaits is docked", () => {
+	const pending: PendingInteraction = {
+		toolCallId: "tc1",
+		toolName: "docked_question",
+		args: {},
+		result: undefined,
+		status: "running",
+		streaming: false,
+	};
+	expect(dockedInteraction(pending, undefined)).toBe(pending);
+	expect(dockedInteraction(pending, "tc1")).toBe(pending);
+	expect(dockedInteraction(pending, null)).toBeUndefined();
+	expect(dockedInteraction(pending, "other-call")).toBeUndefined();
+	expect(dockedInteraction({ ...pending, streaming: true }, "tc1")).toBeUndefined();
+	expect(dockedInteraction({ ...pending, toolName: "ask_user_question" }, "tc1")).toBeUndefined();
+	expect(dockedInteraction(undefined, "tc1")).toBeUndefined();
 });
 
 test("a pre-v93 host's question state still names the awaiting call", () => {

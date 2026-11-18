@@ -93,42 +93,40 @@ export function stripAnsi(text: string): string {
 	let result = "";
 	for (let index = 0; index < text.length; index += 1) {
 		const code = text.charCodeAt(index);
-		if (code === 0x1b) {
-			const next = text.charCodeAt(index + 1);
-			if (next === 0x5b) {
-				index += 2;
-				while (index < text.length) {
-					const final = text.charCodeAt(index);
-					if (final >= 0x40 && final <= 0x7e) break;
-					index += 1;
-				}
-				continue;
-			}
-			if (next === 0x5d) {
-				index += 2;
-				while (index < text.length) {
-					const current = text.charCodeAt(index);
-					if (current === 0x07) break;
-					if (current === 0x1b && text.charCodeAt(index + 1) === 0x5c) {
-						index += 1;
-						break;
-					}
-					index += 1;
-				}
-				continue;
-			}
-			if (index + 1 < text.length) index += 1;
-			continue;
-		}
-		if (code === 0x9b) {
-			index += 1;
-			while (index < text.length) {
-				const final = text.charCodeAt(index);
-				if (final >= 0x40 && final <= 0x7e) break;
-				index += 1;
+		// Treat 7-bit ESC-prefixed and 8-bit C1 controls equivalently.
+		const escaped = code === 0x1b;
+		const next = escaped ? text.charCodeAt(++index) : code;
+		const control = escaped && next >= 0x40 && next <= 0x5f ? next + 0x40 : next;
+		if (control === 0x9b) {
+			while (++index < text.length) {
+				const last = text.charCodeAt(index);
+				if (last >= 0x40 && last <= 0x7e) break;
 			}
 			continue;
 		}
+		if ([0x90, 0x98, 0x9d, 0x9e, 0x9f].includes(control)) {
+			while (++index < text.length) {
+				const current = text.charCodeAt(index);
+				if (current === 0x9c || (control === 0x9d && current === 0x07)) break;
+				if (current === 0x18 || current === 0x1a) break; // CAN or SUB cancels the string.
+				if (current === 0x1b) {
+					// Let the outer scanner handle ST or the start of a replacement escape.
+					index--;
+					break;
+				}
+			}
+			continue;
+		}
+		if (escaped) {
+			while (
+				index < text.length &&
+				text.charCodeAt(index) >= 0x20 &&
+				text.charCodeAt(index) <= 0x2f
+			)
+				index++;
+			continue;
+		}
+		if (code >= 0x80 && code <= 0x9f) continue;
 		result += text[index] ?? "";
 	}
 	return result;

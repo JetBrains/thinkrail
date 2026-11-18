@@ -92,6 +92,7 @@ describe("the runtime registry", () => {
 			"visualize",
 			"ask-user-question",
 			"web-access",
+			"next-steps",
 			"session-ext",
 		]);
 		expect(serverExtensions()).toBe(entries);
@@ -116,12 +117,11 @@ describe("the runtime registry", () => {
 	it("reports installed rows with their kind, state, source, copy and web half", async () => {
 		const { folder, failed } = await installed();
 		const catalog = await listExtensionCatalog(new Set(["session-ext"]));
-		expect(catalog.slice(0, 3).map((entry) => entry.kind)).toEqual([
-			"builtin",
-			"builtin",
-			"builtin",
-		]);
-		const [loaded, broken, reserved] = catalog.slice(3);
+		const builtins = builtinServerExtensions.length;
+		expect(catalog.slice(0, builtins).map((entry) => entry.kind)).toEqual(
+			builtinServerExtensions.map(() => "builtin"),
+		);
+		const [loaded, broken, reserved] = catalog.slice(builtins);
 		expect(loaded).toEqual({
 			name: "session-ext",
 			title: "Session extension",
@@ -159,7 +159,12 @@ describe("the runtime registry", () => {
 		const host = {
 			expectToolResponse: () => {},
 			awaitToolResponse: () => Promise.resolve({ kind: "deferred" as const }),
-			workspaceFiles: { check: async () => {}, scratchDir: "" },
+			workspaceFiles: {
+				check: async () => {},
+				ensureArtifactsDir: async () => {},
+				scratchDir: "",
+				artifactsDir: "",
+			},
 		};
 		const tools: string[] = [];
 		const pi = {

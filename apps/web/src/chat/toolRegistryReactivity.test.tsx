@@ -151,7 +151,7 @@ describe("registry hooks", () => {
 		function Transcript() {
 			const registry = useToolRegistry();
 			const rows = useMemo(
-				() => deriveRows(turns, {}, false, undefined, [], undefined, registry),
+				() => deriveRows(turns, {}, false, undefined, [], undefined, [], registry),
 				[registry],
 			);
 			const states = useMemo(() => deriveInteractionStates(turns, {}, {}, registry), [registry]);

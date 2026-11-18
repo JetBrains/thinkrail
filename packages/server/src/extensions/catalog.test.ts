@@ -37,8 +37,17 @@ describe("listExtensionCatalog", () => {
 				title: "Web access",
 				description: expect.any(String),
 				enabled: true,
-				tools: ["web_search", "fetch_content", "get_search_content"],
+				tools: ["web_search", "source_check", "fetch_content", "get_search_content", "web_enable"],
 				hasChildExtensions: true,
+				kind: "builtin",
+			},
+			{
+				name: "next-steps",
+				title: "Next-step suggestions",
+				description: expect.any(String),
+				enabled: true,
+				tools: ["suggest_next_steps"],
+				hasChildExtensions: false,
 				kind: "builtin",
 			},
 		]);

@@ -1,10 +1,10 @@
 import {
-	buildSessionProjection,
 	migrateSessionEntries,
 	parseSessionEntries,
 	type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import { isControlMessage, isRetriedAttempt, isTranscriptMessageRole } from "@thinkrail/contracts";
+import { displaySessionProjection } from "./displayTranscript";
 
 export interface HistoryEntry {
 	text: string;
@@ -44,7 +44,7 @@ export function extractSession(jsonl: string): ExtractedSession | null {
 	for (const entry of entries) {
 		if (entry.type === "session_info") title = entry.name?.trim() || undefined;
 	}
-	const sourced = buildSessionProjection(entries).entries.flatMap(({ sourceEntry, messages }) =>
+	const sourced = displaySessionProjection(entries).entries.flatMap(({ sourceEntry, messages }) =>
 		messages.map((message, part) => ({
 			message,
 			entryId: messages.length === 1 ? sourceEntry.id : `${sourceEntry.id}:${part}`,

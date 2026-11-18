@@ -50,11 +50,12 @@ export type WebsiteCtaLocation =
 	| "install_section"
 	| "quick_start"
 	| "final_cta"
-	| "blog_post";
+	| "blog_post"
+	| "header"
+	| "post_header";
 
 export type WebsiteGithubLocation =
 	| WebsiteCtaLocation
-	| "header"
 	| "footer"
 	| "terminal"
 	| "mock_hint"
@@ -68,7 +69,7 @@ export type WebsiteInstallCtaClickedProperties = {
 
 export type WebsiteInstallCommandCopiedProperties = {
 	content_key: string;
-	cta_location: "hero" | "install_section" | "blog_post";
+	cta_location: "hero" | "install_section" | "blog_post" | "header" | "post_header";
 	shell: "sh" | "powershell" | "cmd";
 };
 
@@ -80,7 +81,7 @@ export type WebsiteGithubClickedProperties = {
 
 export type WebsiteInstallLinkShareClickedProperties = {
 	content_key: string;
-	cta_location: "hero" | "quick_start";
+	cta_location: "hero" | "quick_start" | "header" | "post_header";
 };
 
 export type WebsiteSurveyQuestionRef = {

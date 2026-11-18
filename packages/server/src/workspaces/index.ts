@@ -26,7 +26,9 @@ export {
 	awaitWorkspaceCreation,
 	type CreationHandoff,
 	createWorkspace,
+	createWorkspaceWithChat,
 	dismissWorkspaceCreation,
+	type HandedOff,
 	interruptWorkspaceCreations,
 	listWorkspaceCreations,
 	replayPendingHandoffs,
@@ -34,7 +36,9 @@ export {
 	setWorkspaceCreationHandoff,
 	startWorkspaceCreation,
 	stopWorkspaceCreations,
+	WorkspaceCreationStopped,
 } from "./creations";
+export { resolveWorkspacePath } from "./resolvePath";
 export {
 	backfillWorkspaceActivity,
 	branchMoveOwed,

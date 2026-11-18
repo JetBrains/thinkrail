@@ -10,6 +10,7 @@ export default defineWebExtension({
 			renderer: VisualizationCard,
 			options: {
 				prominence: "primary",
+				width: "content",
 				defaultExpanded: true,
 				summary: ({ args }, translate) => {
 					const title = strArg(args, "title");

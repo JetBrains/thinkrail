@@ -4,6 +4,7 @@ import type {
 	ChatContinuation,
 	ExtUiRequest,
 	HostUpdateNotice,
+	KeybindingOverrides,
 	LoginPush,
 	McpStatusPayload,
 	Project,
@@ -16,6 +17,7 @@ import type {
 	SpeechStatus,
 	TurnChangeSet,
 	Workspace,
+	WorkspaceArtifactsChangedPayload,
 	WorkspaceCreation,
 	WorkspaceCreationRemoved,
 	WorkspaceFsChangedPayload,
@@ -31,6 +33,7 @@ import {
 	FONTS_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	INSTALLED_EXTENSIONS_PROTOCOL_VERSION,
+	KEYBINDINGS_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
@@ -38,6 +41,7 @@ import {
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
+	TEXT_SEARCH_PROTOCOL_VERSION,
 	TOOL_RESPONSE_PROTOCOL_VERSION,
 	TURN_CHANGES_PROTOCOL_VERSION,
 	USER_THEMES_PROTOCOL_VERSION,
@@ -62,6 +66,17 @@ export function supportsUserThemes(protocolVersion: number | null): boolean {
 
 export function supportsExtensionSettings(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= EXTENSION_SETTINGS_PROTOCOL_VERSION;
+}
+
+export function supportsKeybindings(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= KEYBINDINGS_PROTOCOL_VERSION;
+}
+
+export function updateKeybindings(keybindings: KeybindingOverrides): Promise<boolean> {
+	if (!supportsKeybindings(useAppStore.getState().protocolVersion)) return Promise.resolve(false);
+	return getTransport()
+		.request("settings.update", { config: { keybindings } })
+		.then(() => true);
 }
 
 export function supportsPiPackages(protocolVersion: number | null): boolean {
@@ -102,6 +117,10 @@ export function supportsRichAnchors(protocolVersion: number | null): boolean {
 
 export function supportsTurnChanges(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= TURN_CHANGES_PROTOCOL_VERSION;
+}
+
+export function supportsTextSearch(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= TEXT_SEARCH_PROTOCOL_VERSION;
 }
 
 export function runHostUpdate(): Promise<Ack> {
@@ -550,6 +569,12 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.workspaceFsChanged, (data) => {
 		useAppStore.getState().noteFsChanged(data as WorkspaceFsChangedPayload);
+	});
+
+	transport.subscribe(WS_CHANNELS.workspaceArtifactsChanged, (data) => {
+		useAppStore
+			.getState()
+			.noteArtifactsChanged((data as WorkspaceArtifactsChangedPayload).workspaceId);
 	});
 
 	transport.subscribe(WS_CHANNELS.turnChanged, (data) => {

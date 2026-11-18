@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: commands — the app command contract
 parent: module-web
-references: [submodule-web-search, submodule-web-shell]
+references: [submodule-web-search, submodule-web-shell, submodule-web-keybindings]
 tags: [ui, commands, public-surface-checked]
 ---
 
@@ -18,11 +18,13 @@ whoever composes the catalog, today `shell`.
 
 - **Public surface:** `Command`, `CommandGroup`, `CommandShortcut`, `COMMAND_GROUP_LABELS`,
   `isCommandEnabled`, `shortcutKeys`.
-- **Allowed deps:** `lib` (platform family), `@thinkrail/locales` (the group-label `MessageKey`s), `@remixicon/react` types.
+- **Allowed deps:** `@thinkrail/ui/keyboard` (`chordCaps`, the one cap formatter `shortcutKeys` delegates to, shared with the local-keys seam), `@thinkrail/locales` (the group-label `MessageKey`s), `@remixicon/react` types.
 - **Forbidden:** importing `store`, `transport`, `panels`, `chat`, `shell` or `search`; binding keys. A
-  command's `shortcut` is display-only — the chord keeps its single owner (`useGlobalHotkeys`,
-  `shortcutCommands`, the native menu, or a feature's own key map) and the palette calls the same
-  handler.
+  command's `shortcut` is display-only. For an app-wide chord it is `keybindingShortcut(resolved, id, {
+  browser })` from [[submodule-web-keybindings]] over the resolved table `shell`'s `useGlobalHotkeys`
+  matches through (overrides and extension commands folded in), so the shown and the bound chord cannot
+  drift; any other chord keeps its single owner (`shortcutCommands`, the native
+  menu or desktop preload, or a feature's own key map). The palette calls the same handler the chord runs.
 
 ## Contract
 
@@ -34,7 +36,8 @@ whoever composes the catalog, today `shell`.
   reason wins over it.
 - `title` is already in the user's language: the composer builds the catalog with `useT()`'s translator
   (so the palette matches what the user reads), and `COMMAND_GROUP_LABELS` carries the group keys it
-  translates the same way.
+  translates the same way. The `tab` group (*Active tab*) holds the commands applied to the active tab,
+  so a row such as *Copy path* reads apart from the workspace's.
 - `shortcutKeys` renders macOS glyphs in the system order (`⌃⌥⇧⌘`) and `Ctrl`/`Alt`/`Shift` elsewhere.
 
 ## Coverage
@@ -55,17 +58,21 @@ not reproduce.
 | `project.create` Start a new project… | `panels/useOpenProject.startNewProject` (`CreateProjectDialog`; a setup intent starts the setup chat) | a host serving `project.create` (v94), online | yes |
 | Reopen a recent project | `AddProjectMenu` recents | a recent path | Row UI |
 | `chat.history` Search chat history (`Ctrl+R`) | `shell/chordActions.openChatHistory` | a chat tab | yes |
-| `view.show.{specs,files,review,plan}` (every `LayoutToolId` but `projects`) | `store.requestToolView` | active workspace | yes |
+| `view.show.{specs,files,artifacts,review,plan}` (every `LayoutToolId` but `projects`) | `store.requestToolView` | active workspace | yes |
 | `view.toggleLeft/Right/Bottom` (`Mod+B`/`Mod+J`/`Mod+Shift+J`) | `shell/chordActions` (the functions the chords run) | right/bottom need a workspace | yes |
+| `view.zoomIn` / `zoomOut` / `zoomReset` Zoom in / out / Reset zoom (`Mod+=` / `Mod+-` / `Mod+Numpad0`, the desktop preload's chords) | `NativePageZoomBridge.request` | the desktop page-zoom bridge | yes |
 | `settings.open` and every Settings section (incl. Keyboard's double-Shift row, Extensions, MCP servers) | `store.openSettings(section)`; the native menu's `Mod+,` is shown where it exists | protocol-gated sections only | yes |
+| `shortcuts.open` Keyboard shortcuts (`Mod+?`) | `store.openShortcuts` — the shell's cheatsheet dialog, the chord's handler | always | yes |
 | Theme, extension and MCP server switches | their Settings sections — the palette opens them, never flips them in place | — | Settings |
 | `workspace.markRead` / `markUnread` | `panels/workspaceActions` | `supportsWorkspaceReadState` + `selectWorkspaceReadAction` | yes |
 | `workspace.settle` / `unsettle` | `panels/workspaceActions` | `canSettleWorkspace`; Settle disabled while an agent works or a chat needs you (`selectWorkspaceSettleBlocked`), as in the tree | yes |
 | `workspace.reveal`, `workspace.copyPath`, `workspace.openIn.<editor>` | `panels/workspaceActions`, `lib.copyText` | active workspace | yes |
 | `terminal.new` New terminal | `store.addTerminal` | active workspace, online (placement reserves on the host) | yes |
+| `files.findInFiles` Find in files… (`Mod+Shift+F`) | `findInFiles.openFindInFiles` (the shell binds the chord, `FindInFilesHost` composes the window) | `supportsTextSearch` + an active workspace, or a context project that is not the Chats container | yes |
 | Remove workspace, close project, stop trusting, layout apply/reset, clear review, MCP approve/remove, stop all subagents, delete template | their confirm dialogs | confirmation | Row UI |
 | Publish / push / open, mark ready, merge, reopen a pull request, delete the remote branch, hand checks or a diverged branch to the agent | `shell/locationBar` topbar review card | branch status + GitHub facts | Row UI |
 | Rename workspace/project/chat | inline editors | an inline editor | Row UI |
-| Split/move/fold tabs and groups, focus adjacent group | Workbench internals | a tab or group | Row UI |
+| Active tab: `tab.close` Close tab (`Mod+W` desktop / `Mod+Alt+W`), keep preview, `group.splitLeft/Right/Up/Down` (`Mod+\` splits right), `tab.moveToPreviousGroup` / `tab.moveToNextGroup` (`Ctrl+Alt+←/→`, `⌃⌘←/→` on a Mac), move to each legal pane, new groups, remove group, hide the region, copy path / relative path, rename chat, focus previous / next group | the mounted Workbench's `tabActions` through `shell/workbenchCommands` (the tab context menu renders the same list) | the active tab (the region tracker's group, else the last-focused center group); only what can run now | yes |
+| Reorder within a strip, Focus tab, Show <tool>, Remove tool from group, fold a pane, bottom alignment | the tab / rail / pane-header menus, `Alt+Shift+←/→`, Delete | a tab or group | Row UI |
 | `/compact`, `/model`, effort, Stop, resources inspector, PR flows, plan review, review fixes | lazy `ChatView`, `PlanPane`, `ChangesReviewPane` | a mounted surface | Row UI |
 | Open/revert a file or hunk, review comment actions | selection surfaces | a selection | Row UI |

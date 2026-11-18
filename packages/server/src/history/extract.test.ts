@@ -260,7 +260,7 @@ describe("extractSession", () => {
 		]);
 	});
 
-	test("respects compaction — summarized-away messages are dropped and the summary isn't a hit", () => {
+	test("keeps summarized turns for review; the compaction summary still isn't a hit", () => {
 		const jsonl = [
 			header(),
 			line({
@@ -306,8 +306,10 @@ describe("extractSession", () => {
 			}),
 		].join("\n");
 		expect(entriesOf(jsonl)).toEqual([
-			{ text: "kept question", role: "user", timestamp: 300, messageIndex: 1 },
-			{ text: "post-compaction answer", role: "assistant", timestamp: 400, messageIndex: 2 },
+			{ text: "dropped question", role: "user", timestamp: 100, messageIndex: 0 },
+			{ text: "dropped answer", role: "assistant", timestamp: 200, messageIndex: 1 },
+			{ text: "kept question", role: "user", timestamp: 300, messageIndex: 3 },
+			{ text: "post-compaction answer", role: "assistant", timestamp: 400, messageIndex: 4 },
 		]);
 	});
 

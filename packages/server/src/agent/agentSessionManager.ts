@@ -24,7 +24,6 @@ import type {
 	AgentSettlement,
 	ImageContent,
 	Model,
-	PiEvent,
 	QueuedMessageContent,
 	QueueLane,
 	RefreshedModels,
@@ -68,6 +67,8 @@ import {
 	serverExtensions,
 	workspaceFiles,
 } from "../extensions";
+import { displayTranscriptMessages } from "../history";
+import { findImageBlock, type ImageBlock, type ImageSource, projectImages } from "../images";
 import { logger } from "../log";
 import {
 	dataDir,
@@ -87,6 +88,7 @@ import {
 	type ExtraUsageSubject,
 	shouldWarnAnthropicExtraUsage,
 } from "./anthropicExtraUsage";
+import { applyCacheWarmingDefault } from "./cacheWarming";
 import { archiveCommandHistory, publishSessionResourcesChanged } from "./chatResources";
 import {
 	disposeSessionChildren,
@@ -128,13 +130,13 @@ import {
 	watchMcpStatus,
 } from "./mcpSessions";
 import { refreshModelListings } from "./modelAvailability";
-import { preferredDefaultModel } from "./modelDefaults";
 import { createPiSettings } from "./packages";
 import {
 	getPiRuntimeGeneration,
 	type PiRuntimeGeneration,
 	refreshCatalogs,
 	settledAvailableModels,
+	settlePiCredentialWrites,
 } from "./piRuntime";
 import { catalogProviderAuth } from "./providerAuth";
 import { REQUEST_REVIEW_TOOL_NAME } from "./requestReviewTool";
@@ -194,7 +196,6 @@ interface Entry {
 	workspaceId: string;
 	lastSettlement: AgentSettlement | null | undefined;
 	queuedMessages: Record<QueueLane, TrackedQueuedMessage[]>;
-	stuckEmptyDeliveries: Record<QueueLane, number>;
 	nextQueuedMessageId: number;
 	hostMessages: PendingHostMessage[];
 	manualCompactionInProgress: boolean;
@@ -217,7 +218,10 @@ interface Entry {
 	toolResponseWaiters: ToolResponseWaiters;
 	mcpHost: McpSessionHost;
 	extraUsageWarned: boolean;
+	unavailableSavedModel: SavedModelRef | undefined;
 }
+
+type SavedModelRef = Pick<WireModel, "provider" | "id">;
 
 const sessions = new Map<string, Entry>();
 let sessionLifecycleGeneration = 0;
@@ -402,11 +406,6 @@ export function setSessionProjectResolver(fn: (workspaceId: string) => string | 
 	resolveProjectId = fn;
 }
 
-function effectivePendingCount(entry: Entry): number {
-	const stuck = entry.stuckEmptyDeliveries.steering + entry.stuckEmptyDeliveries.followUp;
-	return Math.max(0, entry.session.pendingMessageCount - stuck);
-}
-
 function persistedCompletion(sessionId: string) {
 	const stateReceipts = receipts();
 	return stateReceipts?.baselineComplete
@@ -428,7 +427,7 @@ function stateFromEntry(entry: Entry): SessionState {
 	return deriveSessionState({
 		entries: entry.session.sessionManager.getBranch(),
 		isStreaming: entry.session.isStreaming,
-		pendingMessageCount: effectivePendingCount(entry),
+		pendingMessageCount: entry.session.pendingMessageCount,
 		backgroundWorkActive: backgroundWorkActive(entry),
 		lastSettlement: entry.lastSettlement,
 		lifecycleCompletion:
@@ -633,7 +632,7 @@ function recordSettlement(entry: Entry, terminal: AgentSettlement | null): void 
 	const observed = deriveSessionState({
 		entries: entry.session.sessionManager.getBranch(),
 		isStreaming: false,
-		pendingMessageCount: effectivePendingCount(entry),
+		pendingMessageCount: entry.session.pendingMessageCount,
 		backgroundWorkActive: false,
 		lastSettlement: terminal,
 		lifecycleCompletion: undefined,
@@ -960,9 +959,16 @@ export function getSessionRuntimeGeneration(sessionId: string): PiRuntimeGenerat
 }
 
 function transcriptMessages(session: AgentSession): TranscriptMessage[] {
-	return session.messages.filter((message) =>
+	const manager = session.sessionManager;
+	const display = displayTranscriptMessages(manager.getEntries(), manager.getLeafId());
+	const live = session.messages.filter((message) =>
 		isTranscriptMessageRole(message.role),
 	) as TranscriptMessage[];
+	const cut = display.findLastIndex((message) => message.role === "compactionSummary");
+	if (cut < 0) return live;
+	const liveCut = live.findLastIndex((message) => message.role === "compactionSummary");
+	if (liveCut < 0) return display;
+	return [...display.slice(0, cut), ...live.slice(liveCut)];
 }
 
 export async function reloadSessionResources(sessionId: string): Promise<void> {
@@ -1063,6 +1069,7 @@ function runGatedReload(entry: Entry): Promise<void> {
 				applySubagentTools(entry);
 				applyReviewTool(entry);
 				applySpecTools(entry);
+				if (reloaded) activateRegistryTools(entry);
 				applyExtensionTools(entry, {
 					allowReload: entry.reloadPolicyGeneration !== extensionPolicy.generation,
 				});
@@ -1082,6 +1089,12 @@ function runGatedReload(entry: Entry): Promise<void> {
 function admitRun(entry: Entry): void {
 	if (entry.reloadRunning) {
 		throw new Error("The chat is reloading its resources — try again in a moment.");
+	}
+	const saved = entry.unavailableSavedModel;
+	if (saved) {
+		throw new Error(
+			`The chat's saved model ${saved.provider}/${saved.id} is unavailable. Choose a model to continue.`,
+		);
 	}
 }
 
@@ -1103,21 +1116,10 @@ function releasePreflights(entry: Entry): void {
 	for (const release of [...entry.preflightReleases]) release();
 }
 
-const SESSION_SETTINGS_OVERRIDES = { images: { autoResize: false } };
-
 export function buildSessionSettings(cwd: string, projectTrusted: boolean): SettingsManager {
 	const settings = createPiSettings(cwd, undefined, { projectTrusted, packages: "enabled" });
-	const reload = settings.reload.bind(settings);
-	settings.reload = async () => {
-		await reload();
-		settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
-	};
-	const setProjectTrusted = settings.setProjectTrusted.bind(settings);
-	settings.setProjectTrusted = (trusted) => {
-		setProjectTrusted(trusted);
-		settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
-	};
-	settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
+	settings.getImageAutoResize = () => false;
+	applyCacheWarmingDefault(settings);
 	return settings;
 }
 
@@ -1242,7 +1244,6 @@ async function prepareSessionEntry(
 		workspaceId,
 		lastSettlement,
 		queuedMessages: { steering: [], followUp: [] },
-		stuckEmptyDeliveries: { steering: 0, followUp: 0 },
 		nextQueuedMessageId: 1,
 		hostMessages: [],
 		manualCompactionInProgress: false,
@@ -1265,6 +1266,7 @@ async function prepareSessionEntry(
 		toolResponseWaiters,
 		mcpHost,
 		extraUsageWarned: false,
+		unavailableSavedModel: undefined,
 	};
 	entry.commandHistory = archiveCommandHistory(
 		workspaceId,
@@ -1288,20 +1290,9 @@ async function prepareSessionEntry(
 			const { details } = event.message;
 			entry.hostMessages = entry.hostMessages.filter((message) => message.details !== details);
 		}
-		if (event.type === "message_start" && event.message.role === "user") {
-			const lane = deliveredStuckEmptyLane(entry, event.message.content);
-			if (lane) {
-				entry.stuckEmptyDeliveries[lane]++;
-				synchronizeQueueFromSession(entry);
-				if (sessions.get(sessionId) === entry) {
-					publish({ sessionId, event: queueUpdateEventOf(entry) }, workspaceId);
-					publishEntryState(entry);
-				}
-			}
-		}
 		if (event.type === "queue_update") {
-			synchronizeQueuedLane(entry, "steering", displayedLane(entry, "steering", event.steering));
-			synchronizeQueuedLane(entry, "followUp", displayedLane(entry, "followUp", event.followUp));
+			synchronizeQueuedLane(entry, "steering", event.steering);
+			synchronizeQueuedLane(entry, "followUp", event.followUp);
 		}
 		if (event.type === "compaction_start") entry.piCompactionInProgress = true;
 		if (event.type === "compaction_end") {
@@ -1327,15 +1318,10 @@ async function prepareSessionEntry(
 					}
 				: null;
 		}
-		const baseEvent = projectSessionEvent(event, terminal);
+		const baseEvent = projectSessionEvent(event, terminal, sessionId);
 		const projected =
-			baseEvent.type === "queue_update"
-				? {
-						type: "queue_update" as const,
-						steering: displayedLane(entry, "steering", baseEvent.steering),
-						followUp: displayedLane(entry, "followUp", baseEvent.followUp),
-						...(hasQueuedImages(entry) ? { hasImages: true as const } : {}),
-					}
+			baseEvent.type === "queue_update" && hasQueuedImages(entry)
+				? { ...baseEvent, hasImages: true as const }
 				: baseEvent;
 		if (event.type === "agent_settled") {
 			entry.lastSettlement = terminal;
@@ -1429,6 +1415,7 @@ async function registerSession(
 	mcpHost: McpSessionHost,
 	lifecycleToken: WorkspaceLifecycleToken,
 	announceCreation = false,
+	unavailableSavedModel?: SavedModelRef,
 ): Promise<CreateSessionResult> {
 	const prepared = await prepareSessionEntry(
 		session,
@@ -1446,6 +1433,7 @@ async function registerSession(
 		abandonPreparedEntry(prepared.entry);
 		throw new Error(`Workspace is unavailable: ${workspaceId}`);
 	}
+	prepared.entry.unavailableSavedModel = unavailableSavedModel;
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
 	if (preparingEntries.get(session.sessionId) === prepared.entry)
@@ -1504,6 +1492,7 @@ type ParentSessionOptions = CreateAgentSessionOptions & {
 	cwd: string;
 	sessionManager: SessionManager;
 	settingsManager: SettingsManager;
+	unavailableSavedModel?: SavedModelRef;
 };
 
 function createParentSession(
@@ -1528,7 +1517,8 @@ async function createParentSessionInternal(
 	lifecycleToken: WorkspaceLifecycleToken,
 	announceCreation = false,
 ): Promise<CreateSessionResult> {
-	const { sessionManager, settingsManager, cwd } = options;
+	const { unavailableSavedModel, ...agentOptions } = options;
+	const { sessionManager, settingsManager, cwd } = agentOptions;
 	const sessionId = sessionManager.getSessionId();
 	const toolResponseWaiters = createToolResponseWaiters();
 	const mcpHost = createMcpSessionHost({
@@ -1537,7 +1527,7 @@ async function createParentSessionInternal(
 		askForToolCall: (toolCallId, input, title, choices, signal) =>
 			selectForToolCall(
 				sessionId,
-				{ toolCallId, toolInput: input },
+				{ toolCallId, toolInput: projectImages(input, sessionId) as Record<string, unknown> },
 				title,
 				choices,
 				signal ? { signal } : undefined,
@@ -1579,7 +1569,7 @@ async function createParentSessionInternal(
 	});
 	try {
 		const result = await createAgentSession({
-			...options,
+			...agentOptions,
 			modelRuntime: generation.runtime,
 			resourceLoader: await buildResourceLoader(
 				cwd,
@@ -1607,6 +1597,7 @@ async function createParentSessionInternal(
 			mcpHost,
 			lifecycleToken,
 			announceCreation,
+			unavailableSavedModel,
 		);
 	} catch (error) {
 		if (sessions.get(sessionId)?.commands === commands) {
@@ -1667,7 +1658,10 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		workspaceId: entry.workspaceId,
 		title: session.sessionName ?? "",
 		...entryFirstPrompt(entry),
-		model: session.model ? sessionWireModel(session.model, entry.generation) : null,
+		model:
+			session.model && !entry.unavailableSavedModel
+				? sessionWireModel(session.model, entry.generation)
+				: null,
 		thinkingLevel: session.thinkingLevel,
 		isStreaming: session.isStreaming,
 		messageCount: session.messages.length,
@@ -1675,7 +1669,7 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		live: true,
 		state: stateFromEntry(entry),
 		...(entry.lastSettlement !== undefined ? { lastSettlement: entry.lastSettlement } : {}),
-		...(effectivePendingCount(entry) > 0 ? { queue: queueStateOf(entry) } : {}),
+		...(entry.session.pendingMessageCount > 0 ? { queue: queueStateOf(entry) } : {}),
 	};
 }
 
@@ -2092,6 +2086,30 @@ function attachDiskSession(
 	return pending;
 }
 
+const PI_VIRTUAL_MODEL_API = "pi-virtual";
+
+export function piBranchSelection(
+	branch: readonly SessionEntry[],
+	getModel: (provider: string, modelId: string) => Pick<Model<string>, "api"> | undefined,
+): { provider: string; modelId: string } | undefined {
+	let response: { provider: string; modelId: string } | undefined;
+	for (const entry of [...branch].reverse()) {
+		if (entry.type === "model_change") {
+			const change = { provider: entry.provider, modelId: entry.modelId };
+			const virtual = getModel(change.provider, change.modelId)?.api === PI_VIRTUAL_MODEL_API;
+			return !response || virtual ? change : response;
+		}
+		if (
+			!response &&
+			entry.type === "message" &&
+			entry.message.role === "assistant" &&
+			entry.message.api !== PI_VIRTUAL_MODEL_API
+		)
+			response = { provider: entry.message.provider, modelId: entry.message.model };
+	}
+	return response;
+}
+
 function persistedSessionModelRef(model: unknown): { provider: string; id: string } | undefined {
 	if (typeof model !== "object" || model === null) return undefined;
 	const provider = Reflect.get(model, "provider");
@@ -2125,15 +2143,21 @@ async function openDiskSession(
 		skillAdmissionResolver(workspaceId).piResourceTrusted,
 	);
 	const sessionManager = SessionManager.open(info.path);
-	const persistedModel = persistedSessionModelRef(sessionManager.buildSessionContext().model);
+	const persistedModel = persistedSessionModelRef(
+		piBranchSelection(sessionManager.getBranch(), (provider, id) =>
+			generation.runtime.getModel(provider, id),
+		),
+	);
 	let exactModel: Model<string> | undefined;
+	let unavailableSavedModel: SavedModelRef | undefined;
 	if (persistedModel) {
 		try {
 			exactModel = resolvePersistedModel(generation.runtime, persistedModel);
 		} catch {
-			const pi = generation.runtime.getAvailableSnapshot();
-			if (pi.some((model) => sameModel(model, persistedModel)))
-				exactModel = preferredDefaultModel(settledAvailableModels(generation.runtime));
+			unavailableSavedModel = persistedModel;
+			log.warn(
+				`session ${sessionId}: saved model ${persistedModel.provider}/${persistedModel.id} is unavailable; waiting for an explicit model choice`,
+			);
 		}
 	}
 	repairDanglingToolCalls(sessionManager, enabledInteractiveTools());
@@ -2143,6 +2167,7 @@ async function openDiskSession(
 			sessionManager,
 			settingsManager,
 			...(exactModel ? { model: exactModel } : {}),
+			...(unavailableSavedModel ? { unavailableSavedModel } : {}),
 		},
 		workspaceId,
 		generation,
@@ -2203,8 +2228,32 @@ async function getSessionMessagesInternal(
 		entry = sessions.get(sessionId);
 		if (!entry) throw new Error(`Unknown session: ${sessionId}`);
 	}
-	return { summary: summaryOf(sessionId, entry), messages: transcriptMessages(entry.session) };
+	return {
+		summary: summaryOf(sessionId, entry),
+		messages: projectImages(transcriptMessages(entry.session), sessionId) as TranscriptMessage[],
+	};
 }
+
+function findMessageImage(messages: Iterable<unknown>, hash: string): ImageBlock | null {
+	for (const message of messages) {
+		if (typeof message !== "object" || message === null || !("content" in message)) continue;
+		const found = findImageBlock(message.content, hash);
+		if (found) return found;
+	}
+	return null;
+}
+
+export const sessionImageSource: ImageSource = {
+	isServable: (sessionId) => sessions.has(sessionId) && !hasDeletionTombstone(sessionId),
+	find: (sessionId, hash) => {
+		const entry = sessions.get(sessionId);
+		if (!entry || hasDeletionTombstone(sessionId)) return null;
+		const persisted = entry.session.sessionManager
+			.getEntries()
+			.flatMap((candidate) => (candidate.type === "message" ? [candidate.message] : []));
+		return findMessageImage(entry.session.messages, hash) ?? findMessageImage(persisted, hash);
+	},
+};
 
 export function getSessionMessages(
 	sessionId: string,
@@ -2212,6 +2261,50 @@ export function getSessionMessages(
 	cwd: string,
 ): Promise<{ summary: SessionSummary; messages: TranscriptMessage[] }> {
 	return getSessionMessagesInternal(sessionId, workspaceId, cwd);
+}
+
+export async function readFinalAssistantTexts(
+	workspaceId: string,
+	cwd: string,
+	sessionIds: readonly string[],
+): Promise<Map<string, string | null>> {
+	const texts = new Map<string, string | null>();
+	const onDisk: string[] = [];
+	for (const sessionId of sessionIds) {
+		const entry = sessions.get(sessionId);
+		if (isSessionDeleted(sessionId, workspaceId)) texts.set(sessionId, null);
+		else if (!entry) onDisk.push(sessionId);
+		else {
+			texts.set(
+				sessionId,
+				entry.workspaceId === workspaceId ? finalAssistantText(entry.session.messages) : null,
+			);
+		}
+	}
+	if (onDisk.length === 0) return texts;
+	const wanted = new Set(onDisk);
+	for (const info of await SessionManager.list(cwd)) {
+		if (info.cwd !== cwd || !wanted.has(info.id) || texts.has(info.id)) continue;
+		texts.set(
+			info.id,
+			finalAssistantText(SessionManager.open(info.path).buildSessionContext().messages),
+		);
+	}
+	for (const sessionId of onDisk) if (!texts.has(sessionId)) texts.set(sessionId, null);
+	return texts;
+}
+
+function finalAssistantText(messages: readonly AgentSession["messages"][number][]): string | null {
+	for (let index = messages.length - 1; index >= 0; index--) {
+		const message = messages[index];
+		if (message?.role !== "assistant") continue;
+		const text = message.content
+			.flatMap((part) => (part.type === "text" ? [part.text] : []))
+			.join("\n")
+			.trim();
+		if (text) return text;
+	}
+	return null;
 }
 
 export async function respondToTool(
@@ -2267,62 +2360,14 @@ function synchronizeQueuedLane(entry: Entry, kind: QueueLane, texts: readonly st
 }
 
 function synchronizeQueueFromSession(entry: Entry): void {
-	synchronizeQueuedLane(entry, "steering", displayedLane(entry, "steering"));
-	synchronizeQueuedLane(entry, "followUp", displayedLane(entry, "followUp"));
+	synchronizeQueuedLane(entry, "steering", laneMessages(entry, "steering"));
+	synchronizeQueuedLane(entry, "followUp", laneMessages(entry, "followUp"));
 }
 
 function laneMessages(entry: Entry, kind: QueueLane): readonly string[] {
 	return kind === "steering"
 		? entry.session.getSteeringMessages()
 		: entry.session.getFollowUpMessages();
-}
-
-function displayedLane(entry: Entry, kind: QueueLane, texts?: readonly string[]): string[] {
-	let toDrop = entry.stuckEmptyDeliveries[kind];
-	const result: string[] = [];
-	for (const text of texts ?? laneMessages(entry, kind)) {
-		if (text === "" && toDrop > 0) {
-			toDrop--;
-			continue;
-		}
-		result.push(text);
-	}
-	return result;
-}
-
-function queueUpdateEventOf(entry: Entry): PiEvent {
-	return {
-		type: "queue_update",
-		steering: displayedLane(entry, "steering"),
-		followUp: displayedLane(entry, "followUp"),
-		...(hasQueuedImages(entry) ? { hasImages: true as const } : {}),
-	};
-}
-
-function deliveredStuckEmptyLane(entry: Entry, content: unknown): QueueLane | null {
-	if (userContentText(content).trim() !== "") return null;
-	if (!userContentHasImage(content)) return null;
-	for (const kind of ["steering", "followUp"] as const) {
-		const pendingEmpties = laneMessages(entry, kind).filter((text) => text === "").length;
-		if (pendingEmpties > entry.stuckEmptyDeliveries[kind]) return kind;
-	}
-	return null;
-}
-
-function userContentBlocks(content: unknown): { type: string; text?: string }[] {
-	return Array.isArray(content) ? (content as { type: string; text?: string }[]) : [];
-}
-
-function userContentText(content: unknown): string {
-	if (typeof content === "string") return content;
-	return userContentBlocks(content)
-		.filter((block) => block.type === "text")
-		.map((block) => block.text ?? "")
-		.join("");
-}
-
-function userContentHasImage(content: unknown): boolean {
-	return userContentBlocks(content).some((block) => block.type === "image");
 }
 
 function hasQueuedImages(entry: Entry): boolean {
@@ -2552,8 +2597,8 @@ export async function compactSession(sessionId: string, instructions?: string): 
 function queueStateOf(entry: Entry): SessionQueueState {
 	synchronizeQueueFromSession(entry);
 	return {
-		steering: displayedLane(entry, "steering"),
-		followUp: displayedLane(entry, "followUp"),
+		steering: [...laneMessages(entry, "steering")],
+		followUp: [...laneMessages(entry, "followUp")],
 		...(hasQueuedImages(entry) ? { hasImages: true as const } : {}),
 	};
 }
@@ -2584,7 +2629,6 @@ function drainEntryQueue(entry: Entry, requireTextOnly: boolean): DrainedQueue {
 		throw new Error("Cannot restore queued image messages as text");
 	}
 	entry.session.clearQueue();
-	entry.stuckEmptyDeliveries = { steering: 0, followUp: 0 };
 	const hostMessages = entry.hostMessages
 		.filter((message) => message.queued)
 		.sort((a, b) => a.id - b.id);
@@ -2708,6 +2752,7 @@ export async function setSessionModel(sessionId: string, model: WireModel): Prom
 	const entry = mustGetEntry(sessionId);
 	const resolved = resolveWireModel(entry.generation.runtime, model);
 	await entry.session.setModel(resolved);
+	entry.unavailableSavedModel = undefined;
 	return sessionWireModel(resolved, entry.generation);
 }
 
@@ -3156,6 +3201,11 @@ export function disposeAllSessions(): void {
 	sessions.clear();
 	tearingDownEntries.clear();
 	deletedSessions.clear();
+}
+
+/** Settle pending credential writes on every runtime a live chat still uses, plus the active one. */
+export async function settleCredentialWritesForShutdown(): Promise<void> {
+	await settlePiCredentialWrites([...sessions.values()].map((entry) => entry.generation.runtime));
 }
 
 export async function settleSessionsForShutdown(

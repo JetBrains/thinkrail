@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+	createPageZoomBridge,
 	createPageZoomGestureHandler,
 	handlePageZoomShortcut,
 	installPageZoomGestures,
@@ -74,6 +75,16 @@ test("yields zoom chords a page handler already claimed", () => {
 		actions: [],
 		calls: [],
 	});
+});
+
+test("the page zoom bridge is frozen and forwards each action as the chords do", () => {
+	const actions: PageZoomAction[] = [];
+	const bridge = createPageZoomBridge((action) => actions.push(action));
+	expect(Object.isFrozen(bridge)).toBe(true);
+	bridge.request("in");
+	bridge.request("out");
+	bridge.request("reset");
+	expect(actions).toEqual(["in", "out", "reset"]);
 });
 
 test("turns a WebKit pinch lifecycle into page zoom requests", () => {

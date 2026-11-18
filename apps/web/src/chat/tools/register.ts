@@ -7,23 +7,31 @@ import { ReadCard } from "./ReadCard";
 import { RequestReviewCard, requestReviewSummary } from "./RequestReviewCard";
 import { ResolveCommentCard } from "./ResolveCommentCard";
 import { SpecToolCard, specToolSummary } from "./SpecToolCard";
+import { StartWorkspaceCard, startWorkspaceSummary } from "./StartWorkspaceCard";
 import "./mcp/register";
 import "./subagent/register";
 import "./web/register";
 import { WriteCard } from "./WriteCard";
 
-registerToolRenderer("bash", BashCard, { summary: ({ args }) => strArg(args, "command") });
+registerToolRenderer("bash", BashCard, {
+	summary: ({ args }) => strArg(args, "command"),
+	width: "content",
+});
 registerToolRenderer("read", ReadCard, {
 	summary: ({ args, workspaceRoot }) => projectRelativePath(strArg(args, "path"), workspaceRoot),
+	width: "content",
 });
 registerToolRenderer("edit", EditCard, {
 	summary: ({ args, workspaceRoot }) => projectRelativePath(strArg(args, "path"), workspaceRoot),
+	width: "content",
 });
 registerToolRenderer("write", WriteCard, {
 	summary: ({ args, workspaceRoot }) => projectRelativePath(strArg(args, "path"), workspaceRoot),
+	width: "content",
 });
 
 for (const toolName of [
+	"spec_search",
 	"spec_grep",
 	"spec_get",
 	"spec_graph",
@@ -41,6 +49,12 @@ registerToolRenderer("resolve_comment", ResolveCommentCard, {
 
 registerToolRenderer("request_review", RequestReviewCard, {
 	summary: requestReviewSummary,
+	prominence: "primary",
+	defaultExpanded: true,
+});
+
+registerToolRenderer("start_workspace", StartWorkspaceCard, {
+	summary: startWorkspaceSummary,
 	prominence: "primary",
 	defaultExpanded: true,
 });

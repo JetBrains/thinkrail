@@ -120,6 +120,7 @@ The default export of the `server` file, made with `defineServerExtension` from
 | `extensions` | Required. pi extension factories, `(pi: ExtensionAPI) => void`, added to every chat. May be empty. |
 | `sessionExtensions` | `(session) => factories`: factories built for one chat from its services, below. |
 | `interactiveTools` | An object keyed by the names of tools whose call waits for the person. |
+| `artifactTools` | An object keyed by tool name: `presented(args, details)` and `picked(args, details)` return the paths of the files a successful call showed the person and the ones they chose, for the app's artifacts view. |
 | `settings` | Boolean settings, one `{ type: "boolean", default, title?, description? }` per key. |
 | `childExtensions` | Factories added to the subagents ThinkRail starts. |
 | `skillPackages` | Package names whose pi `skills` become this extension's skills. |
@@ -135,7 +136,7 @@ The services a chat passes to `sessionExtensions`:
 | Service | Meaning |
 | --- | --- |
 | `setting(key)` | The current value of one of your declared settings; throws for a key you did not declare. Read it inside a factory. |
-| `workspaceFiles` | `check(path, cwd)`, which rejects a file the app may not show, and `scratchDir`, a git-ignored folder for generated files. |
+| `workspaceFiles` | `check(path, cwd)`, which rejects a file the app may not show; `scratchDir`, a git-ignored folder for generated files; `artifactsDir`, the folder for files the person keeps; and `ensureArtifactsDir(cwd)`, to call before writing there. |
 | `expectToolResponse(toolCallId)` | Announces a call of an interactive tool that this extension will run and wait on. |
 | `awaitToolResponse(toolCallId, signal)` | Waits for the person's answer: `{ kind: "response", value }`, `{ kind: "deferred" }` or `{ kind: "abandoned" }`. |
 
@@ -170,8 +171,11 @@ package name. `toolRenderers` is keyed by tool name; each entry is `{ renderer, 
 | `summary` | `(props, t) => string`, the collapsed row's text. `t` is the app's translator. |
 | `chrome` | `"card"` (the default) draws the app's card frame around the renderer; `"bare"` leaves the frame to the renderer and makes the call primary. |
 | `prominence` | `"routine"` (the default) folds the call into the turn's activity group; `"primary"` shows it as its own card. |
+| `width` | `"column"` (the default) keeps the card in the chat's text column; `"content"` lets it grow to its content's width, up to the pane. |
 | `defaultExpanded` | Shows a primary card open once the call completes. |
 | `interactive` | Fills `interaction`, for an interactive tool. |
+| `dock` | With `interactive`: a call the app is waiting on is shown above the message box, the transcript row as its stub. |
+| `composerSuggestions` | `(args, result) => string[]`: when the call ends a finished turn, the strings become one-click next messages above the message box. |
 
 A renderer that throws while rendering is replaced by the default row for that call.
 
@@ -191,7 +195,7 @@ each module exports are extension API 1.0.
 - `@thinkrail/extension-sdk/ui/button`: `Button`, `IconButton`, `buttonDataAttributes`, `buttonVariants`, `withIconClass`
 - `@thinkrail/extension-sdk/ui/dialog`: `Dialog`, `DialogClose`, `DialogContent`, `DialogDescription`, `DialogFooter`, `DialogHeader`, `DialogPanel`, `DialogTitle`, `DialogTrigger`, `useModalLayerOpen`
 - `@thinkrail/extension-sdk/ui/fonts`: `fontsLoaded`, `fontsRevision`, `onFontsChange`, `resolveFont`, `watchFont`
-- `@thinkrail/extension-sdk/ui/keyboard`: `browserPlatform`, `hasPlatformModifier`, `isApplePlatform`, `isImeComposing`, `yieldEscapeToIme`
+- `@thinkrail/extension-sdk/ui/keyboard`: `ARROW_TWINS_SCOPE`, `ARROW_TWIN_COMMANDS`, `ariaKeyShortcuts`, `browserPlatform`, `chordCaps`, `chordPressed`, `codeLabel`, `hasPlatformModifier`, `isApplePlatform`, `isImeComposing`, `isTypingChord`, `keyCap`, `twinArrow`, `yieldEscapeToIme`
 - `@thinkrail/extension-sdk/ui/textarea`: `Textarea`
 - `@thinkrail/extension-sdk/ui/theme`: `onThemeSwap`
 - `@thinkrail/extension-sdk/ui/utils`: `cn`

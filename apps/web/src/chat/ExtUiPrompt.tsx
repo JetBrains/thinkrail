@@ -121,7 +121,7 @@ export function ExtUiPrompt({
 							aria-label={t("chat.extUi.arguments")}
 							tabIndex={0}
 							entries={toolArgs}
-							className="max-h-[40vh] shrink-0 overflow-y-auto rounded-sm bg-container-header-bg px-8 py-4 outline-none focus-visible:ring-2 focus-visible:ring-primary"
+							className="max-h-[40vh] shrink-0 overflow-y-auto rounded-sm bg-container-header-bg px-8 py-4 focus-visible:focus-ring"
 						/>
 					) : null}
 
@@ -139,7 +139,7 @@ export function ExtUiPrompt({
 									answer(text);
 								}
 							}}
-							className="rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active"
+							className="rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default placeholder:text-text-muted focus-visible:focus-ring focus-visible:border-control-border-active"
 						/>
 					) : null}
 
@@ -150,7 +150,7 @@ export function ExtUiPrompt({
 							value={text}
 							rows={6}
 							onChange={(e) => setText(e.target.value)}
-							className="max-h-[40cqh] min-h-[6lh] resize-y rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default outline-none focus-visible:border-control-border-active"
+							className="max-h-[40cqh] min-h-[6lh] resize-y rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default focus-visible:focus-ring focus-visible:border-control-border-active"
 						/>
 					) : null}
 

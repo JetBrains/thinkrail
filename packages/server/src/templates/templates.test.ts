@@ -13,7 +13,6 @@ import { join } from "node:path";
 import {
 	deleteTemplate,
 	getTemplate,
-	isValidTemplateName,
 	listTemplates,
 	MAX_TEMPLATE_BYTES,
 	saveTemplate,
@@ -21,7 +20,19 @@ import {
 	templateDirs,
 } from "./templates";
 
-const INVALID_NAMES = ["../x", "a/b", "a\\b", ".hidden", "", "a:b", ":b", "a:"];
+const INVALID_NAMES = [
+	"../x",
+	"a/b",
+	"a\\b",
+	".hidden",
+	"",
+	"a:b",
+	":b",
+	"a:",
+	"NUL",
+	"con .notes",
+	"COM¹",
+];
 
 let root: string;
 let globalDir: string;
@@ -50,20 +61,6 @@ describe("templateDirs", () => {
 		const result = templateDirs(undefined, "/some/agent-dir");
 		expect(result.projectDir).toBeUndefined();
 	});
-});
-
-describe("isValidTemplateName", () => {
-	for (const name of INVALID_NAMES) {
-		test(`rejects ${JSON.stringify(name)}`, () => {
-			expect(isValidTemplateName(name)).toBe(false);
-		});
-	}
-
-	for (const name of ["greet", "My_Template-2", "a", "foo.bar", "my template"]) {
-		test(`accepts ${JSON.stringify(name)}`, () => {
-			expect(isValidTemplateName(name)).toBe(true);
-		});
-	}
 });
 
 describe("saveTemplate -> listTemplates -> getTemplate", () => {
@@ -202,6 +199,15 @@ describe("listTemplates precedence + freshness", () => {
 	test("skips dot-leading filenames entirely (list/get parity: the gate would reject the name too)", () => {
 		mkdirSync(globalDir, { recursive: true });
 		writeFileSync(join(globalDir, ".hidden.md"), "sneaky");
+		saveTemplate(dirs, "global", "visible", "shown");
+
+		expect(listTemplates(dirs).map((t) => t.name)).toEqual(["visible"]);
+	});
+
+	test("skips Windows device-named files (list/get parity: the gate would reject the name too)", () => {
+		mkdirSync(globalDir, { recursive: true });
+		for (const file of ["NUL.md", "con.notes.md", "com1 .md"])
+			writeFileSync(join(globalDir, file), "x");
 		saveTemplate(dirs, "global", "visible", "shown");
 
 		expect(listTemplates(dirs).map((t) => t.name)).toEqual(["visible"]);

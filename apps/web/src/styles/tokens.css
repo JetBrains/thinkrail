@@ -36,6 +36,12 @@
 	--chat-gutter: var(--space-8);
 }
 
+@property --chat-transcript-width {
+	syntax: "<length-percentage>";
+	inherits: true;
+	initial-value: 100%;
+}
+
 /*
  * NO typography here — not a family, size, weight, line-height or tracking, and not an alias onto one.
  * `styles/typography.json` is the single source; `generated/typography.css` publishes it as the

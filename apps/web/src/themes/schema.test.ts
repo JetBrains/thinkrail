@@ -222,3 +222,66 @@ test("hovered text never drops below the visibility floor", () => {
 		}
 	}
 });
+
+function blend(top: string, bottom: string, alpha: number): string {
+	const channel = (hex: string, start: number) => Number.parseInt(hex.slice(start, start + 2), 16);
+	return `#${[1, 3, 5]
+		.map((start) =>
+			Math.round(channel(top, start) * alpha + channel(bottom, start) * (1 - alpha))
+				.toString(16)
+				.padStart(2, "0"),
+		)
+		.join("")}`;
+}
+
+/**
+ * APCA lightness contrast (SAPC 0.0.98G-4g, the WCAG 3 candidate): the absolute Lc of `text` drawn on
+ * `background`. Unlike the WCAG 2 ratio it is polarity-aware, so a light mark on a dark surface and a
+ * dark mark on a light one are scored separately.
+ */
+function apcaLc(text: string, background: string): number {
+	const y = (hex: string) => {
+		const [red = 0, green = 0, blue = 0] = [1, 3, 5].map(
+			(start) => (Number.parseInt(hex.slice(start, start + 2), 16) / 255) ** 2.4,
+		);
+		const value = 0.2126729 * red + 0.7151522 * green + 0.072175 * blue;
+		return value > 0.022 ? value : value + (0.022 - value) ** Math.SQRT2; // APCA's black clamp, 1.414
+	};
+	const yText = y(text);
+	const yBackground = y(background);
+	if (Math.abs(yBackground - yText) < 0.0005) return 0;
+	const raw =
+		yBackground > yText
+			? (yBackground ** 0.56 - yText ** 0.57) * 1.14
+			: (yBackground ** 0.65 - yText ** 0.62) * 1.14;
+	if (Math.abs(raw) < 0.1) return 0;
+	return Math.abs(raw > 0 ? raw - 0.027 : raw + 0.027) * 100;
+}
+
+/** The APCA floor for a non-text indicator such as a focus ring. */
+const FOCUS_RING_LC = 45;
+
+test("the focus ring, blended at its appearance's alpha, clears APCA Lc 45 on every surface", () => {
+	const colors = JSON.parse(
+		readFileSync(join(import.meta.dir, "../styles/colors.json"), "utf8"),
+	) as {
+		scale: Record<string, number>;
+		roles: Record<string, { from: string; alpha?: string; darkAlpha?: string }>;
+	};
+	const role = colors.roles["focus-ring"];
+	if (!role) throw new Error("colors.json has no focus-ring role");
+	const source = role.from as keyof ThemeManifest["colors"];
+	for (const theme of bundledThemes()) {
+		const ring = theme.colors[source];
+		if (!ring) throw new Error(`${theme.id}: focus-ring source ${source} is unset`);
+		const step = theme.appearance === "dark" ? (role.darkAlpha ?? role.alpha) : role.alpha;
+		const alpha = step ? (colors.scale[step] ?? 100) / 100 : 1;
+		for (const surface of [...RESTING, "hover"] as const) {
+			const behind = theme.colors[surface];
+			expect(
+				apcaLc(blend(ring, behind, alpha), behind),
+				`${theme.id}: focus-ring on ${surface}`,
+			).toBeGreaterThanOrEqual(FOCUS_RING_LC);
+		}
+	}
+});

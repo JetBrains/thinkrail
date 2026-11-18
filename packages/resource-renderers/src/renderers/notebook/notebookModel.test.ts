@@ -267,3 +267,35 @@ test("200 disjoint notebook cells align within the bounded similarity budget", (
 		lineDiffs.mockRestore();
 	}
 });
+
+test("terminal control strings and character set changes leave notebook text intact", () => {
+	for (const sequence of [
+		"\x1bPprivate\x1b\\",
+		"\x1bXprivate\x9c",
+		"\x1b^private\x1b\\",
+		"\x1b_private\x9c",
+		"\x9dtitle\x07",
+		"\x1b(B",
+	]) {
+		expect(stripAnsi(`before${sequence}after`)).toBe("beforeafter");
+	}
+});
+
+test("cancelled or replaced terminal strings preserve following notebook text", () => {
+	for (const intro of [
+		"\x1bP",
+		"\x90",
+		"\x1bX",
+		"\x98",
+		"\x1b]",
+		"\x9d",
+		"\x1b^",
+		"\x9e",
+		"\x1b_",
+		"\x9f",
+	]) {
+		for (const end of ["\x18", "\x1a", "\x1b[31m"]) {
+			expect(stripAnsi(`before${intro}qhidden${end}after`)).toBe("beforeafter");
+		}
+	}
+});

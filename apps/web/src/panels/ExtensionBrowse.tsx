@@ -28,7 +28,7 @@ const FAILURE_COPY: Partial<Record<WsErrorCode, MessageKey>> = {
 };
 
 const INPUT_CLASS =
-	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg py-4 pr-8 pl-24 tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active";
+	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg py-4 pr-8 pl-24 tr-text-ui text-text-default placeholder:text-text-muted focus-visible:border-control-border-active focus-visible:focus-ring";
 
 /** Case-insensitive match on what a card shows: title, name, description and author. */
 export function matchesBrowseQuery(entry: ExtensionBrowseEntry, query: string): boolean {

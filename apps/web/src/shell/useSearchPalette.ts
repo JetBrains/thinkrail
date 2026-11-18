@@ -1,6 +1,7 @@
 import { t as globalT, useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { openFindInFiles } from "../findInFiles";
 import { chatDisplayName, copyText } from "../lib";
 import { canStartProjectlessChat, startProjectlessChat } from "../panels/chatActions";
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
@@ -21,6 +22,7 @@ import {
 import {
 	buildWorkItems,
 	commandItems,
+	type PaletteAsk,
 	type PaletteHost,
 	type PaletteItem,
 	type PaletteStart,
@@ -31,12 +33,14 @@ import {
 import {
 	isChatsContainer,
 	isChatWorkspace,
+	isDefaultWorkspace,
 	type SettingsSection,
 	selectActiveWorkspace,
 	selectChatWorkspaceFirstPrompt,
 	selectChatWorkspaceTitle,
 	selectContextProject,
 	selectContextRepoProject,
+	selectHasTextSearchScope,
 	selectHistoryTarget,
 	selectHostReachable,
 	selectHostSearchAvailable,
@@ -51,23 +55,33 @@ import {
 	useAppStore,
 	workspaceName,
 } from "../store";
-import { errorText, getTransport } from "../transport";
+import { errorText, getTransport, supportsTextSearch } from "../transport";
 import {
+	focusCenterGroup,
+	focusChatComposer,
+	focusProjects,
+	focusTerminal,
 	openChatHistory,
+	showFiles,
 	toggleBottomPanel,
 	toggleLeftSide,
 	toggleRightSide,
 } from "./chordActions";
+import { useResolvedKeybindings } from "./keybindingState";
+import { collectCenterGroups } from "./layout";
+import { readNativePageZoomBridge } from "./nativePageZoom";
 import { type HostHitTargets, openHostHit } from "./openHostHit";
-import { createPaletteBackfill, mergeProjectWorkspaces } from "./paletteBackfill";
+import { createPaletteBackfill } from "./paletteBackfill";
 import {
 	buildCommands,
 	buildSettingsItems,
 	emptyStateActionIds,
 	type PaletteCatalogDeps,
 } from "./paletteCatalog";
-import { createPaletteNavigator } from "./paletteNavigation";
-import { readSettingsShortcutLabel } from "./useAppShortcuts";
+import { paletteNavigator } from "./paletteNavigation";
+import { focusAdjacentRegion } from "./regions";
+import { hasNativeShortcuts } from "./useAppShortcuts";
+import { activeTabActions, runActiveTabAction } from "./workbenchCommands";
 
 const LOCAL_SCOPES: readonly SearchScope[] = ["all", "work", "commands"];
 const HOST_SCOPES: readonly SearchScope[] = ["all", "work", "files", "specs", "commands"];
@@ -80,13 +94,6 @@ const paletteBackfill = createPaletteBackfill({
 	concurrency: BACKFILL_CONCURRENCY,
 });
 
-const paletteNavigator = createPaletteNavigator(async (projectId) =>
-	mergeProjectWorkspaces(
-		projectId,
-		await getTransport().request("workspace.list", { projectId, includeDiffStats: false }),
-	),
-);
-
 function useWorkspaceBackfill(): void {
 	useEffect(() => paletteBackfill.watch(), []);
 }
@@ -95,10 +102,23 @@ const hostHitTargets: HostHitTargets = {
 	navigateToWorkspace: paletteNavigator.navigateToWorkspace,
 	loadWorkspaceRow: paletteNavigator.loadWorkspaceRow,
 	openFile: (workspaceId, path) => openFileInTab(workspaceId, path, "keep"),
-	openSpec: (workspaceId, path) => useAppStore.getState().requestSpecView(workspaceId, path),
+	openSpec: (workspaceId, path, line) =>
+		useAppStore.getState().requestSpecView(workspaceId, path, line),
 	openChatLocation: (location) => useAppStore.getState().requestChatLocation(location),
 	openPlan: (workspaceId) => useAppStore.getState().requestToolView(workspaceId, "plan"),
 };
+
+export async function askTheAgent(
+	workspaceId: string | null,
+	projectId: string | null,
+	text: string,
+	stillWanted: () => boolean = paletteNavigator.beginPick(),
+): Promise<void> {
+	const target =
+		workspaceId ??
+		(projectId ? ((await enterDefaultWorkspace(projectId, stillWanted))?.id ?? null) : null);
+	if (target) await startChatInTab(target, { prompt: `${text}\n\n${globalT("search.ask.note")}` });
+}
 
 export interface SearchPaletteOptions {
 	readonly openNewWorkspace: (projectId: string | null, initialPrompt?: string) => boolean;
@@ -123,6 +143,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const contextProject = useAppStore(selectContextProject);
 	const contextRepoProject = useAppStore(selectContextRepoProject);
+	const textSearchScoped = useAppStore(selectHasTextSearchScope);
 	const canStartChat = useAppStore(canStartProjectlessChat);
 	const historySessionId = useAppStore((s) => selectHistoryTarget(s)?.sessionId ?? null);
 	const readAction = useAppStore((s) =>
@@ -145,7 +166,10 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		[protocolVersion, options.hasUpdateSettings],
 	);
 	const editors = useEditors();
-	const [nativeShortcuts] = useState(() => readSettingsShortcutLabel() !== null);
+	const [nativeShortcuts] = useState(hasNativeShortcuts);
+	const keybindings = useResolvedKeybindings();
+	const [pageZoom] = useState(readNativePageZoomBridge);
+	const [tabActions] = useState(activeTabActions);
 
 	const online = useAppStore(selectHostReachable);
 	const hostSearch = useAppStore(selectHostSearchAvailable);
@@ -154,7 +178,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		const names = new Map(
 			projects.map((project) => [
 				project.id,
-				isChatsContainer(project) ? t("panels.chats.title") : project.name,
+				isChatsContainer(project) ? t("search.item.noProject") : project.name,
 			]),
 		);
 		const workspaceNames = new Map<string, string>();
@@ -207,8 +231,22 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		[contextRepoProject, canStartChat, openNewWorkspace],
 	);
 
+	const ask = useMemo<PaletteAsk | undefined>(() => {
+		const projectId = contextRepoProject?.id ?? null;
+		if (!hostSearch || (!activeWorkspaceId && !projectId)) return undefined;
+		const target =
+			activeWorkspace ??
+			(projectId ? workspaces[projectId]?.find(isDefaultWorkspace) : undefined) ??
+			null;
+		return {
+			ask: (text) => void askTheAgent(activeWorkspaceId, projectId, text),
+			...(target ? { target: workspaceName(t, target) } : {}),
+		};
+	}, [hostSearch, activeWorkspaceId, activeWorkspace, contextRepoProject, workspaces, t]);
+
 	const binding = useMemo(() => {
 		const store = () => useAppStore.getState();
+		const activeLayout = activeWorkspaceId ? layoutDocumentsByWorkspace[activeWorkspaceId] : null;
 		const deps: PaletteCatalogDeps = {
 			t,
 			contextProjectId: contextRepoProject?.id ?? null,
@@ -218,11 +256,17 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			historyAvailable: historySessionId !== null,
 			canCreateProject: selectSupportsOnboarding({ protocolVersion }),
 			nativeShortcuts,
+			keybindings,
+			pageZoom,
+			findInFilesAvailable: supportsTextSearch(protocolVersion) && textSearchScoped,
+			changesAvailable: activeWorkspace !== null && !isChatWorkspace(activeWorkspace),
+			centerGroupCount: activeLayout ? collectCenterGroups(activeLayout.center).length : 0,
 			readAction,
 			canSettle: activeWorkspace !== null && canSettleWorkspace(protocolVersion, activeWorkspace),
 			settled,
 			settleBlocked,
 			settingsGroups,
+			tabActions,
 			actions: {
 				newWorkspace: options.openNewWorkspace,
 				newProjectlessChat: () => void startProjectlessChat(),
@@ -237,7 +281,14 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				toggleRight: toggleRightSide,
 				toggleBottom: toggleBottomPanel,
 				showTool: (workspaceId, tool) => store().requestToolView(workspaceId, tool),
+				showFiles,
+				focusRegion: focusAdjacentRegion,
+				focusComposer: focusChatComposer,
+				focusProjects: () => focusProjects(options.toggleProjectsHome),
+				focusTerminal,
+				focusGroup: focusCenterGroup,
 				openHistory: openChatHistory,
+				findInFiles: openFindInFiles,
 				markRead: markWorkspaceRead,
 				markUnread: markWorkspaceUnread,
 				settle: settleWorkspace,
@@ -246,6 +297,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				copyPath: (workspace) => void copyText(workspace.worktreePath),
 				openIn: openWorkspaceIn,
 				openSettings: (section?: SettingsSection) => store().openSettings(section),
+				openShortcuts: () => store().openShortcuts(),
+				runTabAction: runActiveTabAction,
 			},
 		};
 		const workItems = buildWorkItems({
@@ -292,10 +345,14 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		settled,
 		settleBlocked,
 		nativeShortcuts,
+		keybindings,
+		pageZoom,
+		tabActions,
 		options,
 		contextProject,
 		contextRepoProject,
 		canStartChat,
+		textSearchScoped,
 		editors,
 		projects,
 		workspaces,
@@ -317,6 +374,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				: LOCAL_SCOPES,
 		...(host ? { host } : {}),
 		...(start ? { start } : {}),
+		...(ask ? { ask } : {}),
 		...(online
 			? hostSearch
 				? {}

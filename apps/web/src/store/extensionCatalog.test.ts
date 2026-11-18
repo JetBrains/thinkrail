@@ -71,14 +71,14 @@ describe("extension catalog selectors", () => {
 		]);
 		expect(selectInstalledWebHalves({ ...state, extensionCatalog: "loading" })).toBeNull();
 		expect(selectInstalledWebHalves({ ...state, protocolVersion: null })).toBeNull();
-		expect(selectInstalledWebHalves({ ...state, protocolVersion: 110 })).toEqual([]);
+		expect(selectInstalledWebHalves({ ...state, protocolVersion: 124 })).toEqual([]);
 	});
 
 	test("the installed and Browse features are gated by their protocol versions", () => {
-		expect(selectSupportsInstalledExtensions({ protocolVersion: 110 })).toBe(false);
-		expect(selectSupportsInstalledExtensions({ protocolVersion: 111 })).toBe(true);
-		expect(selectSupportsExtensionBrowse({ protocolVersion: 111 })).toBe(false);
-		expect(selectSupportsExtensionBrowse({ protocolVersion: 112 })).toBe(true);
+		expect(selectSupportsInstalledExtensions({ protocolVersion: 124 })).toBe(false);
+		expect(selectSupportsInstalledExtensions({ protocolVersion: 125 })).toBe(true);
+		expect(selectSupportsExtensionBrowse({ protocolVersion: 125 })).toBe(false);
+		expect(selectSupportsExtensionBrowse({ protocolVersion: 126 })).toBe(true);
 		expect(selectSupportsExtensionBrowse({ protocolVersion: null })).toBe(false);
 	});
 });
@@ -94,7 +94,7 @@ describe("extension catalog state", () => {
 		useAppStore.getState().installExtensionCatalog([BUILTIN, PALETTE]);
 		useAppStore.getState().installWelcomeSnapshot(PROTOCOL_VERSION, [], []);
 		expect(useAppStore.getState().extensionCatalog).toEqual([BUILTIN, PALETTE]);
-		useAppStore.getState().installWelcomeSnapshot(110, [], []);
+		useAppStore.getState().installWelcomeSnapshot(124, [], []);
 		expect(useAppStore.getState().extensionCatalog).toBe("loading");
 	});
 });

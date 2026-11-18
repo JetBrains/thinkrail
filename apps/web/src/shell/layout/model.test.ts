@@ -27,6 +27,7 @@ import {
 	resizeBottomRegion,
 	resizeSideGroups,
 	resizeSideRegion,
+	revealPlacedTab,
 	revealTool,
 	selectTab,
 	separatePanesReason,
@@ -430,6 +431,39 @@ describe("workspace layout model", () => {
 		);
 		expect(revealed.document.bottom.visible).toBe(true);
 		expect(validateLayoutDocument(revealed.document, 6, 2)).toEqual([]);
+	});
+
+	test("revealing a placed tab shows its hidden side, unfolds its group and focuses it", () => {
+		const terminal: LayoutTerminalTab = {
+			kind: "terminal",
+			id: "terminal:left",
+			tabKey: "left",
+			name: "Shell",
+		};
+		const base = baseDocument([file("a")]);
+		const document: WorkspaceLayoutDocument = {
+			...base,
+			left: {
+				...base.left,
+				visible: false,
+				groups: [
+					...base.left.groups.map((group) => ({ ...group, weight: 0.5 })),
+					{ id: "left-terminal", weight: 0.5, folded: true, tabs: [terminal] },
+				],
+			},
+		};
+		expect(validateLayoutDocument(document, 6, 3)).toEqual([]);
+		const revealed = revealPlacedTab(document, terminal.id);
+		expect(revealed?.document.left.visible).toBe(true);
+		expect(revealed?.document.left.groups.map((group) => group.folded)).toEqual([false, false]);
+		expect(revealed?.focusGroupId).toBe("left-terminal");
+		expect(revealed?.focusTabId).toBe(terminal.id);
+
+		const shown = revealPlacedTab(revealed?.document ?? document, terminal.id);
+		expect(shown?.document).toBe(revealed?.document);
+		expect(revealPlacedTab(document, "missing")).toBeNull();
+		const center = revealPlacedTab(baseDocument([file("a")]), "a");
+		expect(center).toMatchObject({ focusGroupId: "center-a", focusTabId: "a" });
 	});
 
 	test("bottom removal preserves every frame group after its final tab closes", () => {

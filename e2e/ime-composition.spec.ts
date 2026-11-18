@@ -1,5 +1,11 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { openFixtureProject, openWorkspaceChat, revealWorkbenchTool } from "./fixtures/app";
+import {
+	enterDefaultWorkspace,
+	openFixtureProject,
+	openWorkspaceChat,
+	pressPlatformShortcut,
+	revealWorkbenchTool,
+} from "./fixtures/app";
 
 const KEYCODES = { Enter: 13, Escape: 27 } as const;
 const IME_SENTINEL_KEYCODE = 229;
@@ -147,5 +153,30 @@ test("the Create workspace dialog stays open on an IME Escape and closes on an o
 	}
 
 	await dispatchKey(prompt, "Escape", ordinary("Escape"));
+	await expect(dialog).toBeHidden();
+});
+
+test("Find in Files neither opens a match on an IME Enter nor closes on an IME Escape", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await pressPlatformShortcut(page, "Shift+F");
+	const dialog = page.getByTestId("find-in-files");
+	const input = page.getByTestId("find-in-files-input");
+	await expect(input).toBeFocused();
+	await input.fill("sample-project");
+	await expect(page.getByTestId("find-in-files-match").first()).toBeVisible({ timeout: 15_000 });
+
+	for (const key of ["Enter", "Escape"] as const) {
+		for (const state of imeOwned(key)) {
+			await dispatchKey(input, key, state);
+			await expect(dialog).toBeVisible();
+			await expect(input).toHaveValue("sample-project");
+		}
+	}
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="file"]')).toHaveCount(0);
+
+	await dispatchKey(input, "Escape", ordinary("Escape"));
 	await expect(dialog).toBeHidden();
 });

@@ -10,11 +10,15 @@ import {
 } from "../host";
 import {
 	canonicalWorkspacePath,
+	type DiffSideLabels,
 	describeResource,
 	diffResourceMeta,
+	type FrameFocus,
 	type ResourceRenderer,
+	type ResourceReveal,
 	type SurfaceReview,
 } from "../registry";
+import type { HtmlViewport } from "../renderers/html/viewport";
 import { GuardedRendererDiff } from "./GuardedRendererDiff";
 import { surfaceLineCount } from "./largeDiff";
 import { type RendererLayout, RendererToggles } from "./RendererToggles";
@@ -40,10 +44,15 @@ export interface ResourcePreviewProps {
 	onLayout?: ((layout: ResourcePreviewLayout) => void) | undefined;
 	viewState?: unknown;
 	onViewState?: ((viewState: unknown) => void) | undefined;
+	reveal?: ResourceReveal | undefined;
 	leading?: ReactNode;
 	actions?: ReactNode;
 	className?: string | undefined;
 	compact?: boolean | undefined;
+	htmlViewport?: HtmlViewport | undefined;
+	frameFocus?: FrameFocus | undefined;
+	sideLabels?: DiffSideLabels | undefined;
+	reviewable?: boolean | undefined;
 }
 
 interface ResolvedProps extends ResourcePreviewProps {
@@ -106,9 +115,24 @@ export function ResourcePreview(props: ResourcePreviewProps) {
 		<ScopedResourcePreview {...props} workspaceId={workspaceId} sessionId={sessionId} />
 	);
 	const compact = props.compact ?? environment.compact ?? false;
-	if (compact === (environment.compact ?? false)) return preview;
+	const htmlViewport = props.htmlViewport ?? environment.htmlViewport;
+	const frameFocus = props.frameFocus ?? environment.frameFocus;
+	if (
+		compact === (environment.compact ?? false) &&
+		htmlViewport === environment.htmlViewport &&
+		frameFocus === environment.frameFocus
+	) {
+		return preview;
+	}
 	return (
-		<ResourceEnvironmentProvider value={{ ...environment, compact }}>
+		<ResourceEnvironmentProvider
+			value={{
+				...environment,
+				compact,
+				...(htmlViewport ? { htmlViewport } : {}),
+				...(frameFocus ? { frameFocus } : {}),
+			}}
+		>
 			{preview}
 		</ResourceEnvironmentProvider>
 	);
@@ -220,8 +244,9 @@ function PreviewToolbar({
 	layout?: { value: RendererLayout; onChange: (layout: RendererLayout) => void } | undefined;
 }) {
 	const t = useT();
-	const { ReviewSend } = useResourceHost();
+	const { ReviewSend, OpenInBrowser } = useResourceHost();
 	const { compact } = useResourceEnvironment();
+	if (compact && props.leading === undefined && props.actions === undefined) return null;
 	return (
 		<div
 			data-testid="resource-view-toggle"
@@ -241,6 +266,9 @@ function PreviewToolbar({
 					/>
 				</>
 			)}
+			{OpenInBrowser && props.before === undefined ? (
+				<OpenInBrowser workspaceId={props.workspaceId} path={props.path} />
+			) : null}
 			{props.actions}
 		</div>
 	);
@@ -248,6 +276,7 @@ function PreviewToolbar({
 
 function PreviewView(props: ResolvedProps & { file: ReadyFile }) {
 	const { FileReview } = useResourceHost();
+	if (props.reviewable === false) return <ReviewedPreviewView {...props} review={undefined} />;
 	return (
 		<FileReview
 			workspaceId={props.workspaceId}
@@ -301,6 +330,7 @@ function ReviewedPreviewView(
 				{...(review ? { review } : {})}
 				onPlacedThreadIds={onPlacedThreadIds}
 				{...implementationViewState(props, implementationKey)}
+				{...(props.reveal ? { reveal: props.reveal } : {})}
 			/>
 		</PreviewFrame>
 	);
@@ -311,6 +341,9 @@ type DiffSides = { before: string; original: ReadyFile; modified: ReadyFile };
 function PreviewDiff(props: ResolvedProps & DiffSides) {
 	const { FileReview } = useResourceHost();
 	const { workspaceId, sessionId, path, before } = props;
+	if (props.reviewable === false) {
+		return <ReviewedPreviewDiff {...props} after={undefined} prior={undefined} />;
+	}
 	return (
 		<FileReview workspaceId={workspaceId} path={path} kind="diff" sessionId={sessionId}>
 			{(after) => (
@@ -403,6 +436,7 @@ function ReviewedPreviewDiff(
 				{...(review ? { review } : {})}
 				onPlacedThreadIds={onPlacedThreadIds}
 				lineCount={lineCount}
+				{...(props.sideLabels ? { sideLabels: props.sideLabels } : {})}
 				{...implementationViewState(props, implementationKey)}
 			/>
 		</PreviewFrame>

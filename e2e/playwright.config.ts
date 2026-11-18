@@ -1,5 +1,3 @@
-import { existsSync } from "node:fs";
-import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 import { toolHomeEnv } from "@thinkrail/shared/toolHomes";
@@ -9,7 +7,12 @@ import {
 	isRealCentralE2e,
 	REAL_CENTRAL_E2E_ENV,
 } from "./fixtures/centralAgent";
-import { hermeticE2ePath, hermeticE2eShell, resolveBunExecutable } from "./fixtures/executables";
+import {
+	executableOnPath,
+	hermeticE2ePath,
+	hermeticE2eShell,
+	resolveBunExecutable,
+} from "./fixtures/executables";
 import {
 	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
 	E2E_CENTRAL_EXTENSION_SOURCE,
@@ -40,8 +43,7 @@ const centralMode = isRealCentralE2e();
 assertCentralPlaywrightRunner(process.env, process.argv);
 const bunExecutable = resolveBunExecutable();
 const hostPath = hermeticE2ePath(E2E_FAKE_BIN_DIR);
-if (hostPath.split(delimiter).some((directory) => existsSync(join(directory, "pi"))))
-	throw new Error("e2e host PATH must not contain pi");
+if (executableOnPath(hostPath, "pi")) throw new Error("e2e host PATH must not contain pi");
 const hostCommand =
 	process.env.THINKRAIL_E2E_SKIP_BUILD === "1"
 		? `${JSON.stringify(bunExecutable)} packages/server/src/dev.ts`
@@ -72,7 +74,7 @@ export default defineConfig({
 		{
 			name: "webkit",
 			use: { ...devices["Desktop Safari"] },
-			testMatch: /(?:^|[\\/])(?:ask-user-question|ask-previews|plan-ask)\.spec\.ts$/,
+			testMatch: /(?:^|[\\/])(?:ask-user-question|ask-previews|ask-keyboard|plan-ask)\.spec\.ts$/,
 		},
 	],
 	// Self-contained: build the web app, boot the host on an isolated port + state dir, and tear it all

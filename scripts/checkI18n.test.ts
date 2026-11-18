@@ -41,6 +41,19 @@ test("ignores symbols, the bare brand, and translated calls", async () => {
 	);
 });
 
+test("flags hardcoded text through transparent type wrappers", async () => {
+	for (const expression of ['"Close panel" satisfies string', '"Close panel"!']) {
+		expect(await texts(`const A = () => <button title={${expression}} />;`)).toEqual([
+			"Close panel",
+		]);
+		expect(await texts(`const A = () => <span>{${expression}}</span>;`)).toEqual(["Close panel"]);
+		expect(await texts(`toast.error(${expression});`, "a.ts")).toEqual(["Close panel"]);
+	}
+	expect(await texts('toast.error(<string>"Close panel");', "a.ts")).toEqual(["Close panel"]);
+	expect(await texts('const A = () => <span>{t("a.b") satisfies string}</span>;')).toEqual([]);
+	expect(await texts("const A = () => <span>{count!}</span>;")).toEqual([]);
+});
+
 test("the catalog must be sorted, non-empty, and referenced", () => {
 	const catalog = JSON.stringify({ "a.b": "A", "c.d_one": "one", "c.d_other": "many", "z.y": "" });
 	expect(catalogProblems(catalog, ['t("a.b"); t("c.d", { count })'])).toEqual([

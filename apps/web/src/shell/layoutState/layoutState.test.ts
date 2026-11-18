@@ -229,6 +229,7 @@ describe("frontend-local layout state", () => {
 		expect(first.right.groups.flatMap((group) => group.tabs)).toEqual([
 			toolTab("specs"),
 			toolTab("files"),
+			toolTab("artifacts"),
 			toolTab("plan"),
 			toolTab("review"),
 		]);

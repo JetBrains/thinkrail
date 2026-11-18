@@ -153,9 +153,11 @@ export const SideGroupView = memo(function SideGroupView({
 			}
 			data-side={side}
 			data-group-id={group.id}
+			data-region={group.id}
+			data-region-kind={side}
 			data-tools={group.tabs.flatMap((tab) => (tab.kind === "tool" ? [tab.tool] : [])).join(" ")}
 			data-folded="false"
-			className="relative flex h-full min-h-0 flex-col overflow-hidden bg-container-sidebar-bg"
+			className="relative flex h-full min-h-0 flex-col overflow-hidden bg-container-sidebar-bg outline-none"
 			onFocusCapture={() => {
 				if (selected) shared.onFocusGroup(location, selected.id);
 			}}
@@ -171,6 +173,8 @@ export const SideGroupView = memo(function SideGroupView({
 				id={groupPanelId(location)}
 				role={selected?.kind === "terminal" ? "tabpanel" : undefined}
 				aria-labelledby={selected ? tabDomId(location, selected.id) : undefined}
+				data-focus-default={selected?.kind === "tool" || undefined}
+				data-tool-body={selected?.kind === "tool" ? selected.tool : undefined}
 				className="relative min-h-0 flex-1 overflow-auto"
 			>
 				{selected ? (
@@ -317,6 +321,11 @@ export function AuxiliaryGroupHeader({
 			<AuxiliaryPaneHideButton
 				testId={region === "bottom" ? "bottom-group-fold" : "side-group-fold"}
 				controls={groupPanelId(location)}
+				shortcut={
+					shared.document[region].groups.filter((each) => !each.folded).length === 1
+						? shared.chromeShortcuts?.hide[region]
+						: undefined
+				}
 				onClick={onFold}
 			/>
 		</>
@@ -346,6 +355,7 @@ export function AuxiliaryGroupHeader({
 				{...(shared.chatFirstPrompts ? { chatFirstPrompts: shared.chatFirstPrompts } : {})}
 				canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 				renderTabAdornment={shared.renderTabAdornment}
+				worktreePath={shared.worktreePath}
 				trailing={actions}
 			/>
 		);

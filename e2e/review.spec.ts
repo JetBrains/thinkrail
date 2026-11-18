@@ -1100,3 +1100,29 @@ test("opening a far-off base-side comment scrolls its card into view in the virt
 	await expect(card).toBeInViewport();
 	await expect(card).toContainText("Far-off base remark.");
 });
+
+test("Changed Markdown preview offers Source before the first review comment", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	writeFileSync(
+		join(worktree(), "README.md"),
+		"# sample-project\n\nReview this updated paragraph.\n",
+	);
+	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("files-mode-changed").click();
+	await page.getByTestId("change-item").filter({ hasText: "README.md" }).dblclick();
+	await expect(page.getByTestId("rendered-diff")).toContainText("Review this updated paragraph.");
+	const hint = page.getByTestId("review-commenting-fallback");
+	await expect(hint).toContainText("To add a comment, switch to Source.");
+	await hint.getByRole("button", { name: "Comment in Source", exact: true }).click();
+	await expect(page.getByTestId("view-toggle-code")).toHaveAttribute("data-active", "true");
+	await expect(hint).toHaveCount(0);
+	await selectLine(page, "Review this updated paragraph.");
+	await expect(page.getByTestId("review-composer")).toBeVisible();
+	await page.getByTestId("review-composer-input").fill("Clarify this paragraph.");
+	await page.getByTestId("review-composer-save").click();
+	await expect(page.getByTestId("review-pending-badge")).toHaveText("1");
+	await page.getByTestId("view-toggle-markdown").click();
+	await expect(hint).toBeVisible();
+	await expect(page.getByTestId("review-unplaced-strip")).toContainText("Clarify this paragraph.");
+});

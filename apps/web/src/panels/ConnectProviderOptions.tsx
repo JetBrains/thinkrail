@@ -190,7 +190,7 @@ export function ConnectProviderOptions({
 						}
 						aria-label={t("panels.connectProvider.searchLabel")}
 						data-testid="connect-provider-search"
-						className="h-32 w-full rounded-sm border border-control-border-default bg-control-bg pl-24 pr-8 tr-text-ui text-text-default placeholder:text-text-muted outline-none transition-colors focus:border-control-border-active"
+						className="h-32 w-full rounded-sm border border-control-border-default bg-control-bg pl-24 pr-8 tr-text-ui text-text-default placeholder:text-text-muted transition-colors focus:border-control-border-active focus-visible:focus-ring"
 					/>
 				</div>
 				<div
@@ -271,7 +271,7 @@ function DetectedChoiceButton({
 			data-provider={provider.id}
 			disabled={busy}
 			onClick={onPick}
-			className="flex min-w-0 items-start gap-8 rounded-sm border border-primary-muted bg-clip-padding bg-container-workspace-bg p-12 text-left transition-colors hover:bg-control-bg-hovered focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+			className="flex min-w-0 items-start gap-8 rounded-sm border border-primary-muted bg-clip-padding bg-container-workspace-bg p-12 text-left transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring disabled:opacity-50"
 		>
 			<LogIn className="mt-2 size-16 shrink-0 text-primary" />
 			<span className="flex min-w-0 flex-1 flex-col gap-2">

@@ -106,6 +106,12 @@ function isUserNavigationEdge(
 	);
 }
 
+const supersedeHooks = new Set<() => void>();
+
+export function supersedePendingRoute(): void {
+	for (const supersede of supersedeHooks) supersede();
+}
+
 export function startNavigation({ driver, listWorkspaces }: NavigationDeps): () => void {
 	let generation = 0;
 	let pending: { generation: number; location: NavigationLocation } | null = null;
@@ -212,6 +218,13 @@ export function startNavigation({ driver, listWorkspaces }: NavigationDeps): () 
 		void attempt(generation);
 	};
 
+	const supersede = () => {
+		if (!pending) return;
+		pending = null;
+		syncNow();
+	};
+	supersedeHooks.add(supersede);
+
 	const unsubscribeDriver = driver.onIncoming(acceptFragment);
 	const unsubscribeStore = useAppStore.subscribe((state, previous) => {
 		if (
@@ -238,6 +251,7 @@ export function startNavigation({ driver, listWorkspaces }: NavigationDeps): () 
 	return () => {
 		unsubscribeDriver();
 		unsubscribeStore();
+		supersedeHooks.delete(supersede);
 		pending = null;
 	};
 }

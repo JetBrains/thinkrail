@@ -1,8 +1,11 @@
 import { realpath, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
+import { WORKSPACE_MOCKUP_DIR } from "@thinkrail/contracts";
 import type { WorkspaceFiles } from "@thinkrail/extension-api/server";
+import { seedArtifactsDir } from "@thinkrail/shared/artifactsDir";
+import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 
-export const MOCKUP_DIR = ".thinkrail/context/mockups/";
+export const MOCKUP_DIR = `${WORKSPACE_MOCKUP_DIR}/`;
 
 function inside(root: string, candidate: string): string | null {
 	const rel = relative(root, candidate);
@@ -24,4 +27,11 @@ export async function checkWorkspaceFile(path: string, cwd: string): Promise<voi
 	}
 }
 
-export const workspaceFiles: WorkspaceFiles = { check: checkWorkspaceFile, scratchDir: MOCKUP_DIR };
+export const workspaceFiles: WorkspaceFiles = {
+	check: checkWorkspaceFile,
+	ensureArtifactsDir: async (cwd) => {
+		seedArtifactsDir(resolve(cwd));
+	},
+	scratchDir: MOCKUP_DIR,
+	artifactsDir: `${WORKSPACE_CONTEXT_DIR}/`,
+};

@@ -80,17 +80,39 @@ treatment.
   **always-visible chevron** + folder/name + a collapsed-only plain workspace count + an **always-visible Create
   workspace `+` in a fixed right-edge column**. That `+` is the **same control as the Projects-header Add
   project `+`** — both are `IconButton` ghost `s`, so they render identically and their glyphs
-  line up on one vertical axis (both sit at the row's `pr-xs` right edge). The Create workspace `+` carries a
-  tooltip and accessible name naming the shell's `Mod+N` chord and its `Mod+Alt+N` browser alias through `lib`'s
-  `platformShortcutLabel` (see `submodule-web-shell` global chords); the context-menu item stays plain.
+  line up on one vertical axis (both sit at the row's `pr-xs` right edge). The Create workspace `+`'s tooltip
+  shows the one `workspace.new` chord that reaches this client as keycaps — `Mod+N` on the desktop, the
+  `Mod+Alt+N` alias in a browser — from `ProjectTree`'s `newWorkspaceShortcut` caps, which the shell
+  injects from the resolved table (see `submodule-web-shell` global chords, *Chords in tooltips*); the
+  context-menu item stays plain.
   Long names truncate before the count/action; there is deliberately **no visible Close or overflow icon**.
   Hover highlights the full row and the highlight remains while its **project context menu** is open.
   Right-click opens that PR-#167-styled menu at the pointer without selecting/navigating; a scroll-cancelled
   ~700ms long press is its touch equivalent. With a project-name button focused, the standard Context Menu
   key or Shift+F10 opens the same menu for keyboard-only use; arrow/activate/Escape keys work normally.
   The menu is neutral: **Plus Create workspace**, **FolderOpen Open existing worktree…**, separator,
-  **Pencil Rename** (only when the host's protocol is at least `PROJECT_RENAME_PROTOCOL_VERSION`), **X Close
-  project**. Rename swaps the project name for the same inline input as workspace rename (Enter/blur
+  **ArrowUp Move up** / **ArrowDown Move down** + separator (only when the host's protocol is at least
+  `PROJECT_ORDER_PROTOCOL_VERSION`; disabled at either end), **Pencil Rename** (only when the host's protocol is at least `PROJECT_RENAME_PROTOCOL_VERSION`), **X Close
+  project**. **Project order is host-owned** (`Project.rank`, architecture Decision 9: projects are domain
+  state), so every window and client shows one arrangement and converges on the `project.updated` push;
+  `workspaceActions.moveProject` sends `project.move` and toasts a refusal; its reply is never applied as
+  state, because a reconnect can replay a cached reply over a newer welcome snapshot, and the host has
+  already pushed the moved ranks. Three equivalent gestures place a project before/after a neighbour:
+  dragging its name button (not the chevron, `+`, or rename input), the menu's Move up/down, and
+  **Alt+Shift+↑/↓** on the focused name (`aria-keyshortcuts`, the workbench's reorder chord); below
+  `PROJECT_ORDER_PROTOCOL_VERSION` none of them is offered and the chord passes through untouched. The
+  drag is `@dnd-kit/core`'s, like the workbench's tab drag, with a `MouseSensor` (5 px activation, so a
+  click still selects and a drag never navigates; touch keeps scrolling and reorders through the
+  long-press menu) and `pointerWithin`: each
+  project group carries before/after half drop zones that light the workbench's `border-primary`
+  insertion line, zones whose move would be a no-op stay disabled, the source dims, and a `DragOverlay`
+  chip names the project. Escape or a drop outside a zone changes nothing. The Chats section sits outside
+  that drag context, so it is never draggable or a drop target and no project can land above it; the
+  host refuses the container at either end anyway. After a keyboard or menu move focus returns to the
+  moved name; every completed move fills the rail's polite `role="status"` region ("… moved to position
+  2 of 3"), while dnd-kit's own announcements stay silent and its screen-reader instructions are the
+  localized keyboard hint the name button is described by. A project opened or reopened lands on top;
+  the rest keep their order. Rename swaps the project name for the same inline input as workspace rename (Enter/blur
   commits a changed trimmed name via `project.rename`, Escape cancels) and waits for the `project.updated`
   push — no optimistic label; rejection raises an error toast. Create is exactly the direct `+` flow. Open existing worktree opens the
   `ExistingWorktreeDialog` chooser fed by `workspace.listExisting` (branch + absolute path per row;
@@ -102,11 +124,12 @@ treatment.
   Escape dismiss. Confirm fires `project.close` and waits for the full `project.updated` push—no optimistic
   removal; success is the
   row disappearing with no toast, while rejection keeps it and raises an error toast. Menu/dialog dismissal
-  restores the source project-name focus; successful close focuses the fallback project name or the Projects
-  view's Add project control. `ProjectTree` also owns the `NewWorkspaceDialog` the per-project `+` opens **and** each
+  restores the source project-name focus; a successful close leaves focus to the shell's recovery engine
+  (the project rows are a `projects` focus list with Add project as its fallback): the next project's name,
+  else the previous, else Add project. `ProjectTree` also owns the `NewWorkspaceDialog` the per-project `+` opens **and** each
   workspace row's hover-revealed **kebab menu** (`MoreVertical`, controlled `DropdownMenu`) — right-clicking
   anywhere on the row opens that exact menu at the kebab without selecting/activating the workspace, while
-  the kebab remains the touch and keyboard-focus path. Its actions are a `DropdownMenuSub` **"Open in"**
+  the kebab remains the touch path (keyboard users open the menu from the row, see *Sidebar trees*). Its actions are a `DropdownMenuSub` **"Open in"**
   (rendered only when at least one editor was detected), **Copy path**, and **Reveal in file manager**. A
   ThinkRail-managed worktree additionally gets **Rename** when the connected host's protocol is at least
   `WORKSPACE_RENAME_PROTOCOL_VERSION`, plus **Remove workspace**; an external row gets only **Remove from
@@ -114,7 +137,8 @@ treatment.
   The Default gets neither mutation. "Open in" comes from the host-wide `editor.list`; GUI entries call
   `workspace.openIn`, while terminal-kind Vim activates the workspace and runs through `addTerminal`'s
   one-shot `initialCommand`. Copy writes `worktreePath`; Reveal calls `workspace.reveal`. These requests,
-  `editor.list`, the project workspace-list load, the remove confirm (`RemoveWorkspaceDialog`), and the
+  `editor.list`, the project workspace-list load, the remove confirm (`RemoveWorkspaceDialog`, which for a
+  workspace ThinkRail made also says how many artifacts go with it, from the loaded artifacts snapshot), and the
   inline-rename controller below (`createRenameController` / `useInlineRename`, shared with project rename) live once in
   `workspaceActions.ts` so the shell's topbar workspace menu ([[submodule-web-shell-location-bar]]) offers
   the same actions — including the capability-aware pending rename — without a second implementation. The
@@ -128,7 +152,7 @@ treatment.
   capable host, an expanded project renders its **live** rows from `selectWorkspacePartition` newest
   created first (never re-sorted by activity, so rows stay put while agents work), then a **`Settled · N`** disclosure header (collapsed by default, store-held
   per browser) whose body lists the settled rows **slim** — single line, name only, a small **reason chip**
-  (`merged` / `closed` / `idle 2w` / `by you`, long form in its tooltip), a hover **↩ Keep active** beside the kebab — ten at
+  (`merged` / `closed` / `idle 2w` / `by you`, long form in its tooltip), a hover **↩ Keep active** beside the kebab (also in the menu) — ten at
   a time with a *Show 25 more* row. Live rows gain a hover **✓ Settle** beside the kebab (also in the menu
   and on right-click); it is disabled while the row's agent works or a result is unread, absent on Default.
   On a v86+ host the same menu section carries one read toggle from `selectWorkspaceReadAction`: **Mark as
@@ -235,7 +259,10 @@ treatment.
   rather than run the same hung probe again) `project.inspect` → either offers to
   bootstrap the folder into a repo — a modal **`ConfirmDialog`**
   (confirm → `project.init`) — when it's `initable`, or surfaces the error in a **`NoticeDialog`** — so a
-  non-git folder is never a silent no-op. The native picker remains the local fast path and keeps its raised
+  non-git folder is never a silent no-op. `project.init` waits 13 minutes, the host's longest bootstrap on
+  macOS/Linux (two 5-minute index writes plus short probes, [[submodule-server-projects]]) with a minute to
+  spare; a Windows bootstrap has no host deadline, so one that outlasts the wait reports a timeout while the
+  host finishes and publishes the project. The native picker remains the local fast path and keeps its raised
   timeout because it waits on a human; if the host cannot present it, the rejection instead opens an
   **Open project from host path** dialog carrying the reason and an autofocused path field. The dialog says
   the path belongs to the computer running ThinkRail, accepts a host-absolute path or `~` / `~/…`, and
@@ -296,8 +323,34 @@ treatment.
   is showing its folders expand (and stay expanded) and it scrolls `nearest` into view; on return All
   reveals only if the active file differs from the persisted `seenActivePath`, and then skips the scroll
   restore so the two cannot fight. Auto-reveal never switches the side tab or the mode. Clicks still open
-  the editor. A failed first status read shows no marks; a failed refresh keeps the last ones, like the
-  Changed list. The tree's look is remembered per workspace across reloads (`store.filesTreeByWorkspace`:
+  the editor. Right-clicking a file or folder row (a touch long-press, or the Context Menu key / Shift+F10 on
+  a focused row) opens its menu: **Open in browser** first for an HTML file from a host at
+  `BROWSER_VIEW_PROTOCOL_VERSION` (v122; `OpenInBrowserMenuItem`, also in the Artifacts row menu after
+  Reveal, and `OpenInBrowserButton` in the file tab's toolbar and, through `ResourceHost.OpenInBrowser`, in
+  every framed preview), then **Copy path** (absolute, through `joinWorkspacePath`) and **Copy relative
+  path** (worktree-relative). "Open in browser" opens the host's `/view/` URL with `window.open(…,
+  "noopener,noreferrer")`: a new tab on the web, the system browser on the desktop
+  ([[submodule-server-host]] serves it sandboxed, [[module-desktop]] routes it to the OS). A compacted folder copies its deepest path, matching its label, and copying
+  neither opens nor selects the row. The row stays highlighted while its menu is open. From a host at
+  `FS_MUTATIONS_PROTOCOL_VERSION` (v118) the menu adds the tree's two mutations, both host-owned and
+  watcher-refreshed, never patched into the rows (`fileTreeActions`): **Copy** puts the row's entry — file,
+  folder or link, a compacted folder's deepest folder — on the session-only in-app clipboard
+  (`store.fileClipboard`, not the OS clipboard, cleared with its workspace or when its entry is deleted);
+  **Paste** (only while the clipboard holds an entry) asks `fs.copy` for a copy beside a file or inside a
+  folder — across workspaces too, a copy unless the entry was cut (below) — under the host's ` copy` /
+  ` copy N` name, then expands
+  that folder, and an empty tree offers the same Paste as a button next to *Empty*; **Delete** (also the Delete key on a row) asks for
+  confirmation and `fs.delete` moves the entry to the OS trash. From `ARTIFACTS_PROTOCOL_VERSION` (v121)
+  the menu also has **Cut**: the same clipboard entry marked `cut`, which the next Paste (here or in the
+  Artifacts tool) turns into `fs.move` — refused with "already exists" rather than renamed, and with "on
+  another disk" across file systems, where the entry stays on the clipboard so the user can copy it — and
+  clears once it succeeds.
+  The confirmation says when an agent is
+  working in the workspace but does not block — the user's explicit action wins, as with a hunk revert —
+  and an open tab of a deleted file keeps its stale-content contract. Failures toast; a folder past the
+  host's copy bound and an entry that changed under the paste or delete (`ENTRY_CHANGED`) get their own
+  messages. A failed first status read shows no marks; a failed refresh keeps the
+  last ones, like the Changed list. The tree's look is remembered per workspace across reloads (`store.filesTreeByWorkspace`:
   All expanded folders, Changed-tree collapsed folders shared by every scope, scroll per view through
   `RememberedScrollArea` — a Changed view's scroll belongs to its scope and compare target, so changing
   either starts at the top), persisted by the `filesTreeState` module (native stable preferences, else
@@ -325,8 +378,9 @@ treatment.
   The `ChangesPanel` secondary toolbar paints **no surface of its own**: like the right-panel tab strip
   it shows the panel's `container-sidebar-bg`, so the two chrome rows read as one continuous surface. The **file-style tree row** (chevron/spacer
   lead, folder/file icon, truncated label, trailing slot; `min-w-0` so a row can shrink when it shares a
-  flex line with a trailing control) is the shared **`TreeRow`**, used by both
-  `FileTree` and `ChangesTree` so the two trees stay identical. `TreeRow`'s optional `onWarm` reports
+  flex line with a trailing control) is the shared **`TreeRow`**, used by `FileTree`, `ChangesTree`
+  and the Artifacts tree so the trees stay identical; its optional `icon` replaces the file glyph (the
+  Artifacts tree's type icons). `TreeRow`'s optional `onWarm` reports
   `hover` (pointer enter) or `focus`. `FileTree` file rows warm at once on focus and through
   `warmOnHover` on hover, which keeps one pending row and fires after the pointer rests 150 ms, so a
   sweep across the tree loads nothing. A warm preloads the code view
@@ -535,7 +589,9 @@ while it is invisible; under reduced motion the swap is instant. Reaching done p
 `onboardingDismissed`; the wizard (and with it the hidden rail and held prompts) stays until a project opens. A still-empty
 refresh warns and offers **Check again**
 (re-runs both reads, e.g. after fixing the account elsewhere) and Back to the choices — Back alone could not
-return, since the provider is configured and so no longer listed. The wizard owns no project step of its own and shows no progress strip.
+return, since the provider is configured and so no longer listed. Each step that replaces another moves
+focus to its title (`tabIndex=-1`), so the keyboard never rests on a vanished button; Back focuses the
+picked provider's option when it is still listed, else the options' first control. The wizard owns no project step of its own and shows no progress strip.
 **Skip setup** is on every screen before done except privacy, whose Continue is the only way on; skipping also cancels any
 target-less login still pending in the dialog (`cancelUnownedLogin`, shared with `ConnectProviderDialog`).
 A login is owned by the start that requested it (`startReservedLogin`): when the surface closes before
@@ -684,7 +740,8 @@ a project picker, the prompt hero, and the reused
   create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — a
   **store-driven two-pane shell**: one nav list, rendered once, beside a scrollable content pane. At `md`+
   the list is a rail grouped **Agent** (Models, Providers, MCP servers, Prompt templates, Environment) ·
-  **Interface** (Chat, Appearance, Language, Layout, Terminal) · **System** (Workspaces, Integrations, Extensions,
+  **Interface** (Chat, Appearance, Language, Layout, Terminal, Artifacts — the per-client Smart view switch, from
+  host v124) · **System** (Workspaces, Integrations, Extensions,
   Notifications, Privacy, Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
   and it is the home for further integrations. Below `md` the same list is a horizontal scrolling strip without group labels. The
   Feedback card (`settings-nav-feedback`, “Share feedback”) belongs to that list at
@@ -707,7 +764,15 @@ a project picker, the prompt hero, and the reused
   shared by Language, Custom themes and Custom fonts; `saveSettings` is the one `settings.update` call that
   toasts its failure. Popovers inside the dialog render into the dialog element
   (`settingsDialogContainer`), because Radix's scroll lock cancels wheel and touch scrolling anywhere
-  outside it. Free-text settings and the font weight slider share one **auto-save input pattern**
+  outside it (the Models pickers missed this, so their lists ignored the wheel: #607). The dialog clips
+  overflow, so these popovers also take it as their collision boundary and cap their height at Radix's
+  available height; the model popover caps its width too (without that cap, arrow keys scrolled a
+  narrow dialog sideways). Under the dialog's focus scope, a popover whose trigger can't take focus back
+  on close leaves focus on the dialog element, so the Models pickers use `aria-disabled`, not
+  `disabled`, while busy; `FontPicker` doesn't yet. A modal `DropdownMenu` holds its own scroll lock and
+  may stay on `body`; the Layout "Add new layout" and Templates delete popovers still render there (only
+  a long layout name can't be swiped sideways in its field).
+  Free-text settings and the font weight slider share one **auto-save input pattern**
   (`settingsDraft.useSettingsDraft`): Enter, blur or a slider release saves a valid, changed value once
   (no Save/Apply button); an invalid draft stays visible with `aria-invalid` and a range message linked by
   `aria-describedby`, and is never sent; Escape reverts to the authoritative value; the input carries
@@ -859,15 +924,30 @@ a project picker, the prompt hero, and the reused
   empty or preset name; there is no server-kind choice), a password key field (blank keeps a saved key on
   edit; an edit that changes the address's origin shows a warning and disables Save, since a different
   server is added as a new one; **Remove key** sends `apiKey: ""` and keeps Detect from reusing it), **Find models**
-  (`customEndpoints.probe`, run automatically when an edit opens), a per-model use switch, and a manual
-  model-id field for gateways that list nothing. **A model row has no editable parameters** (decision: they
-  describe the server rather than configure it — its real limits are set by whoever runs it). It shows only
-  the facts the server reported (context, thinking, images, tools; "No tools" in warning tone), and an
-  unreported fact is simply absent and left to pi's default. Re-detecting keeps selections and saved
-  facts the server doesn't report, takes reported ones, drops a saved max output once a new context is
-  reported, and keeps models the server no longer lists; an unchanged saved address stays as written. The
-  pure draft rules live in `customEndpointDraft`; probe failures render as localized inline status and
-  host save errors render inline; and
+  (`customEndpoints.probe`, only on click — never on open, since gateways can list thousands), a manual
+  model-id field above the list, a filter field and 50-row paging once the list exceeds a page, and a per-model use switch. **A model row's only editable parameter is its context
+  window** (decision: the other facts describe the server rather than configure it, but a gateway's
+  listing rarely reports the window whoever runs the server set, and pi's 128K default then sizes
+  compaction and budgets for the wrong model). The row shows only the facts the server reported
+  (context, thinking, images, tools; "No tools" in warning tone), and an unreported fact is simply absent
+  and left to pi's default. From `CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION` (v116) it also carries a
+  compact **context window** field (`custom-endpoints-context`) that is not part of the draft: it reads
+  and writes the model's `modelOverrides` value through the same `useModelContextSettings` hook as
+  `ModelContextSettings` (`model.contextSettings` / a targeted `model.setContextWindow`), so a re-Detect
+  or Save never touches it. Empty means the detected window (placeholder "Detected", or "Unknown" when
+  the server reported none); a whole number in the contracts' custom range saves on Enter or blur through
+  the shared auto-save input pattern, an emptied field or the reset icon returns to the detected window,
+  and Escape reverts the draft without closing the dialog. The field is disabled while the dialog is
+  busy, for an unused row, and for a model pi doesn't serve yet (an unsaved server or newly found model —
+  its title asks to save the server first). A failed context read or write is not an unsaved model: every
+  field locks with the load-failure title, and the list is headed by the same `ModelContextLoadFailed`
+  line and Retry that `ModelContextControls` shows. Re-detecting keeps selections and saved facts the
+  server doesn't report, takes reported ones, keeps models the server no longer lists, and keeps
+  existing rows first with newly found ones appended; an unchanged saved address stays as written.
+  Re-detecting drops a saved max output only when a context was saved and the server now reports a
+  different one: that value may be derived from the old context, and the draft can't tell a derived
+  value from a hand-set one. The pure draft rules live in `customEndpointDraft`; probe failures render
+  as localized inline status and host save errors render inline; and
   the **`JetBrainsAiCard`** — route Central-supported models through the user's JetBrains subscription while
   keeping ThinkRail's embedded PI — a state machine over the typed `JbcentralStatus` +
   `provider.jbcentral*`: absent (official host-OS install guidance + Recheck), outdated — below the host's
@@ -908,7 +988,11 @@ a project picker, the prompt hero, and the reused
   range inline, and waits for `settings.changed` rather than installing optimistic authority. Older hosts get
   neither control. **`GithubSettings`** (the Integrations section's "Local GitHub" group —
   `github.authStatus()` shown as `settings-gh-status[data-connected]`: Connected + login, or a Not connected
-  notice naming `gh auth login`; Refresh (`github.refresh`) is offered in both states);
+  notice naming `gh auth login`; Refresh (`github.refresh`) is offered in both states. Only an answered
+  probe is a status, and only the latest request's: reopening the section shows the last answer while it
+  re-probes, and a failed request never reads as signed out — it keeps the answer, or with none shows a
+  could-not-check notice. Before any answer the block is a skeleton; `data-connected` exists only once
+  gh has answered);
   **`LanguageSettings`** (gated by `LOCALES_PROTOCOL_VERSION`; a store-integrating container over the
   props-driven `LanguagePage`, whose derivations come from [[submodule-web-i18n]]): one radio list — **System**
   (default; names the language System resolves to) then every available language by its own-language name
@@ -982,15 +1066,18 @@ a project picker, the prompt hero, and the reused
   the same list, never typed, after a free-text CSS stack proved unclear in review. Whether an OS file drop
   reaches the page in WKWebView, WebKitGTK and WebView2 is unconfirmed; **Choose files…** is the path that
   never depends on it. An **Editor** group hosts the file
-  `LineWidthControl`); **`LineWidthControl({kind})`** (`LineWidthSettings.tsx`, no page of its own — the
+  `LineWidthControl` and a **Markdown outline position** segmented control (Left / Right) over the store's
+  client-local `markdownOutlineSide`, applied at once with no host round trip); **`LineWidthControl({kind})`** (`LineWidthSettings.tsx`, no page of its own — the
   `chat` control sits in Chat, the `file` one in Appearance → Editor — a 40–240 integer **Line width** field
   on the auto-save input pattern plus an independent host-synchronized **Fit to pane** switch
-  (`${kind}-line-width-bounded`); defaults are 120/on. A changed authoritative width from
+  (`${kind}-line-width-bounded`); defaults are 80 (chat) / 120 (file), Fit to pane on. A changed authoritative width from
   `settings.changed` replaces a stale draft; mutations converge only on that broadcast and rejected calls
   toast without changing geometry); **`ChatSettings`** (one **Appearance and behavior** group of rows —
   **Message order** segmented over `store.chatMessageOrder` (Oldest first, the compatibility default /
   Newest first, the opt-in), **Composer size** segmented over the composer-growth limit (Compact / Roomy /
-  Half chat), and the chat `LineWidthControl`. It exposes no scroll-follow controls: streaming follow is
+  Half chat), **Question panel height** (`QuestionPanelHeightControl`, props-driven: the same auto-save
+  integer field as Line width over `questionPanelHeight`, 40–100 with an inline range error, hidden below
+  `QUESTION_PANEL_PROTOCOL_VERSION`), and the chat `LineWidthControl`. It exposes no scroll-follow controls: streaming follow is
   fixed (see `apps/web/src/chat/SPEC.md`). Message order applies immediately and persists only in this
   client through the chat preference seam: browsers use current-host-qualified keys, while a native shell
   may inject its stable backend-profile/window adapter. Another browser, native window, or host is unaffected. Composer growth
@@ -1160,22 +1247,37 @@ a project picker, the prompt hero, and the reused
   come from that same resolved, Pi-clamped model. Both triggers are disabled, and choices in an already-open
   picker are ignored, while a save or re-read is in flight. At v76, **`ModelContextSettings`** adds
   one Default / 1M / Custom selector over every eligible GPT model the host returns as
-  `ModelContextSetting[]`; a collapsed **By each model** disclosure reveals one selector per provider/model
-  pair, so the same model on
+  `ModelContextSetting[]`. Rows of a server the **Custom servers** group lists are left to that server's
+  dialog: `ModelsSettings` passes the same `useCustomEndpoints` state, and the block stays on its loading
+  line until that list answers, so rows never flash in and out (a failed list, or a host without the
+  group, hides none). Any other `custom-*` provider — say a hand-written `openai-responses` one the dialog
+  can't represent — keeps its row under By each model, bounded by `modelContextWindowLimits` (the GPT range on a host older
+  than `CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION`, which still enforces it), and never joins the shared control. A collapsed **By each model** disclosure reveals one selector per
+  provider/model pair, so the same model on
   different providers stays independently editable. Selection is keyed on the explicit `override`
   (Default = `null`, the catalog value pi reports). The shared control summarizes only the rows the
   contracts' `isSharedModelContextTarget` admits — it shows "Customized by model" when their overrides
-  differ, counts the external rows it leaves alone, and is omitted when it would govern none — and
-  choosing a shared preset replaces those rows' overrides in one `model.setContextWindow` call. Custom reveals a whole-number field bounded by the contracts' 272K–1M
-  range that saves on Enter or blur — except a blur onto a sibling preset of the same control, so picking
+  differ, counts the non-`custom-*` external rows it leaves alone, and is omitted when it would govern none — and
+  choosing a shared preset replaces those rows' overrides in one `model.setContextWindow` call. Custom reveals a whole-number field bounded by the row's
+  `modelContextWindowLimits` (the contracts' 272K–1M range but for a `custom-*` row) that saves on Enter or blur — except a blur onto a sibling preset of the same control, so picking
   Default/1M never first commits a half-typed value; the copy labels it an app policy, not a verified provider limit, and
   external values outside it stay visible but cannot be re-applied. Drafts are UI-local and are dropped
-  when their authoritative override changes; inputs are not remounted, and after a disabled save focus
-  returns only to the control that initiated it. Pi's shared configuration is authoritative — there is
+  when their authoritative override changes; inputs are not remounted, and after a disabled save the
+  shell's focus recovery returns focus to the control that held it ([[submodule-web-shell]], *Focus
+  recovery*) — the block keeps no focus logic of its own. Pi's shared configuration is authoritative — there is
   no optimistic value or AppConfig field; reads follow catalog/provider invalidation, fence stale
   replies, disable controls while pending, and replace controls with Retry on failure. The props-driven
-  `ModelContextControls` owns presentation; older hosts get neither the block nor its requests.
-  `ModelsSettings` organizes its controls into three visual groups:
+  `ModelContextControls` owns presentation and `useModelContextSettings` the reads and writes, shared
+  with the custom server dialog; older hosts get neither the block nor its requests.
+  At v111, **`CacheWarmingSettings`** adds a **Prompt cache** group: three `SettingsRadioCards` (Off /
+  While a run is active / Also between runs) over pi's `cacheWarming` setting, read through
+  `cacheWarming.get` and written through `cacheWarming.set` — pi's `settings.json` is the only state, there
+  is no AppConfig field. The reply's `source` drives the **ThinkRail default** hint on the streaming card
+  (shown only while pi's file names no mode, since ThinkRail's default differs from pi's `idle`), and the
+  `data-cache-warming-source` attribute on `cache-warming`. Reads fence stale replies, disable the cards
+  while pending, and replace them with Retry on failure; a failed write toasts. The props-driven
+  `CacheWarmingControls` owns presentation; older hosts get neither the group nor its requests.
+  `ModelsSettings` organizes its controls into four visual groups:
 
   **DEFAULT MODEL** — a **Chat model** row (`defaultModel`, `defaultEffort`) and the **Visible models**
   disclosure. **REVIEW** (`models-review-group`) — everything that configures review in one place, because
@@ -1209,19 +1311,26 @@ a project picker, the prompt hero, and the reused
 
   **GPT CONTEXT WINDOW** — the `ModelContextSettings` block described above.
 
+  **PROMPT CACHE** (`cache-warming-group`) — the `CacheWarmingSettings` block described above.
+
   There is **no separate Review navigation section**; all review-related controls live in Models' REVIEW group.
   **`ExtensionsSettings`** (the **Extensions** section, nav `settings-nav-extensions`, listed only at
   `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) is one page in up to five groups. Its description
   carries the page's only statement about chats — "Changes apply to open chats when their current turn
   ends." — and a primary **Install package…** button; there is no dynamic notice about which chats are
   pending. **Built into ThinkRail** is the host-registry catalog as before, now read from the store's
-  `extensionCatalog` (`selectBuiltinExtensions`: every row of an older host, `kind: "builtin"` from v111) —
+  `extensionCatalog` (`selectBuiltinExtensions`: every row of an older host, `kind: "builtin"` from v125) —
   `transport`'s `refreshExtensionCatalog` re-lists on each mount and each welcome while the page is open, so
   an older host or a page opened while disconnected still lands its rows — rendered by the props-driven
   `ExtensionsCatalog` — title, description, tool-name chips and a `@thinkrail/ui/switch`
   (`extension-toggle-<name>`) whose state is **`store.disabledExtensions`**, not the catalog's snapshot; a
   toggle writes the whole list through `settings.update { disabledExtensions }` and converges on the
-  broadcast. Unknown names already in the list are carried through. A catalog entry's declared `settings`
+  broadcast. Unknown names already in the list are carried through. Once the catalog has loaded, the group
+  also lists the **web-only extensions** it lacks (`withWebOnlyEntries` over `extensions`'
+  `webOnlyExtensions`: titled registry entries, today Hint mode) after the host's rows, with their locale
+  title and description, no tool chips and the same switch; the switch applies at once (the shell
+  unmounts the extension), which the row's own description says, since the page's "when their current
+  turn ends" is about the agent's extensions. A catalog entry's declared `settings`
   render as nested switches under its row (`extension-setting-<name>-<key>`, copy from a static
   `MessageKey` map — a setting without copy is not shown), valued from **`store.extensionSettings`** else the
   declared default, disabled while the extension is off, and written one key at a time through
@@ -1300,7 +1409,7 @@ a project picker, the prompt hero, and the reused
   with the reason shown otherwise, and the hints show the real settings paths from the catalog. Disabling
   never unregisters a tool renderer ([[submodule-web-extensions]]), so past transcripts still render.
 
-  **Installed ThinkRail extensions** (from `INSTALLED_EXTENSIONS_PROTOCOL_VERSION`, v111) are rows of the same
+  **Installed ThinkRail extensions** (from `INSTALLED_EXTENSIONS_PROTOCOL_VERSION`, v125) are rows of the same
   **Installed** list, before the pi packages (`PiPackagesGroup`'s `extensionRows`, which also keep showing when
   `packages.list` fails), from `selectInstalledExtensions` in host order; every pi package row carries a
   **pi package** type tag and every extension row a **ThinkRail extension** tag, so each row is marked with
@@ -1338,7 +1447,7 @@ a project picker, the prompt hero, and the reused
   remounts the dialog (`key`) per opening.
 
   **Browse** (`ExtensionBrowse.tsx`, props-driven; `useExtensionBrowse.ts` owns the request) is shown from
-  `EXTENSION_BROWSE_PROTOCOL_VERSION` (v112), after Installed. The host fetches the catalog
+  `EXTENSION_BROWSE_PROTOCOL_VERSION` (v126), after Installed. The host fetches the catalog
   (`extensions.browse`, [[submodule-server-extension-catalog]]); the browser never contacts thinkrail.ai. The
   hook reads on mount and again, from the host's cache, whenever the store catalog changes (so the
   **Installed** marks follow installs and removals); **Retry** forces a refetch; the latest read wins. The
@@ -1578,8 +1687,8 @@ a project picker, the prompt hero, and the reused
   branch has no commits. The total diff comes from the workspace record's `diffStats`; each piece
   hides when unknown. Between header and summary lives the **NEXT-ACTION banner** (`plan-next-action`,
   `data-kind`) — the report's one "what now", rendering the FIRST matching state by urgency:
-  `fix` (N steps carry changes_requested → **Show step** scrolls to the first flagged item and
-  auto-expands it via the `focusRequest` token — `{ id, tick }`, tick bumped per click and consumed
+  `fix` (N steps carry changes_requested → **Show step** scrolls to the first flagged item, focuses its
+  toggle (`preventScroll`, the scroll is already smooth) and auto-expands it via the `focusRequest` token — `{ id, tick }`, tick bumped per click and consumed
   once per tick by the target `ItemBlock`, so a re-click re-expands a manually collapsed row and a
   stale request can't reopen it later) → `review`
   (N unsettled reviewables → an inline **Review All** button, same `todo.reviewAll` flow as the
@@ -1897,7 +2006,9 @@ own section. The kebab menu (`plan-menu`, a
   fold the section the user was reading); **Drafts rows are numbered** (1., 2., …) instead of wearing
   the pending glyph — and the workbench tool router **reveals the Review tool** when such a tab is
   ACTIVATED (keyed on the local selected-resource change, so a draft saved in an already selected resource
-  never yanks attention; `selectActiveReviewedPath` is the shared derivation). Each
+  never yanks attention; `selectActiveReviewedPath` is the shared derivation). The reveal never takes
+  keyboard focus (`focus: false`): a file's first draft also makes its tab "reviewed", and a reveal that
+  focused the Review rail pulled a just-saved keyboard comment away from its line. Each
   comment row is a **navigation gesture**, one rule for every author: a row with a linked chat
   (`comment.sessionId`) opens **the discussion** (its chat tab); one without — every draft, since a
   draft is never sent — opens the file **focused on the comment**. The file stays one hover-action
@@ -1978,7 +2089,8 @@ own section. The kebab menu (`plan-menu`, a
   into the hovered line's number cell whenever the hovered line changes and removes it on
   `pointerleave`. Only a custom `renderGutterUtility`, which we use, puts a `<slot>` in that node; the
   default gutter button does not crash, and the crash does not depend on diff size. Invariant: a Pierre
-  surface never inserts, removes, or moves a `<slot>` synchronously from a pointer or mouse handler.
+  surface never inserts, removes, or moves a `<slot>` synchronously from a pointer or mouse handler; the
+  keyboard line cursor, whose `selectedLines` move the gutter utility too, applies them a frame later.
   `patches/@pierre%2Fdiffs@1.6.4.patch` (root `patchedDependencies`) makes placement a no-op while a
   mouse button is held outside Pierre's own selection session — armed by `pointermove` and by
   `pointerleave`, so a drag whose first move already exits the diff cannot remove the slot — and the
@@ -2007,7 +2119,9 @@ own section. The kebab menu (`plan-menu`, a
   zone nodes keyed by comment id; `MonacoReviewZones` portals the shared React `ReviewThreadCard` and
   `ReviewComposer` into them, while `ResizeObserver` feeds their measured heights back to Monaco. An
   unrelated push therefore keeps the same keyed draft textarea, including the shared card's Escape-cancel
-  and shortcut-save behavior. Threads without a `lineRange` stay in the same unplaced
+  and shortcut-save behavior. `Mod+Shift+M` comments on the selection, or on the caret's line when nothing
+  is selected; the context-menu entry still needs a selection. A closed composer or a card's save,
+  discard, Send or Delete returns focus to the editor (at the card's line). Threads without a `lineRange` stay in the same unplaced
   strip. `monacoMenuIcons.ts` decorates Monaco's standalone file-editor menu; no diff editor or diff-side
   branch remains. **Rendered preview**:
   `MarkdownPreview` splits the stripped document at each insert's
@@ -2184,7 +2298,9 @@ own section. The kebab menu (`plan-menu`, a
   no/dangling parent; default-expanded). There is **no persistent Refresh control or panel toolbar row**:
   routine synchronization is automatic. A fetch **failure renders a distinct inline error hint with Retry**,
   never the "No specs" empty state — offline and empty are different answers. With a previous snapshot, the
-  hint sits above the retained tree; without one, it replaces the loading state. The tree build (`specTree.ts`)
+  hint sits above the retained tree; without one, it replaces the loading state. A **finished task-spec**
+  (`type: task-spec`, `status: done`) is left out of the tree, as the spec tools leave it out of search
+  ([[submodule-spec-graph-core]]); the host still reports it, and the Artifacts tool lists its file. The tree build (`specTree.ts`)
   assumes a well-formed graph — **parent cycles are `spec_validate`'s problem, not the viewer's** (cycle
   members are unreachable from any root and simply don't render) — but the walk is **visited-guarded**,
   so a malformed graph can never hang or loop the UI. Tree only in this slice — no cross-edge display,
@@ -2192,7 +2308,7 @@ own section. The kebab menu (`plan-menu`, a
 - `SpecsPanel` is a compact **document-first tree**: spec nodes are container **and** document, so the
   controls make both roles explicit. Hierarchy uses fixed per-depth indentation + chevrons, deliberately
   **without connector rails or branch elbows** (persistent lines overloaded the narrow rail). The padded
-  **chevron alone** expands/collapses, while the rest of the row is a native document button whose
+  **chevron alone** expands/collapses (→ / ← from the keyboard), while the rest of the row is a native document button whose
   **single click previews** the rendered spec — and whose **double click keeps** it — through the same
   `fs.readFile` → `openTab` flow as `FileTree` (see the Preview tabs bullet; reading down a spec graph is
   the case the reusable slot exists for). Every row stays on one line: indentation → chevron →
@@ -2205,7 +2321,94 @@ own section. The kebab menu (`plan-menu`, a
   feature, not speculative dots or reused status chrome. This remains a restrained hierarchy — no hero,
   duplicate root, preview pane, or graph canvas. `FileTree` shares the same file gesture model
   (preview/keep) but keeps its own directory behaviour — a whole-row click toggles dirs, no collision
-  there.
+  there. File and folder rows also carry the copy-path, Copy / Paste and Delete context menu described with
+  `FilesPanel`.
+- **`ArtifactsPanel` is the Artifacts tool's body** — a reader of the host's artifact index
+  ([[submodule-server-artifacts]]). Like specs, the `artifacts.list` snapshot lands in the store
+  (`artifactsByWorkspace`) through **`useWorkspaceArtifacts`**, which the workbench calls for every
+  workspace (chats included) so the rail can show new arrivals while the tool is hidden; it re-reads on the
+  host's `workspace.artifactsChanged` nudge and on reconnect (`selectArtifactsTick`, passed to
+  `useWorkspaceRead` instead of the fs tick, because the host already reconciles on file changes and an fs
+  tick per agent edit would re-list for nothing). The panel is two sections: **Artifacts**
+  (files under `.thinkrail/context/`) and **Other agent files · ignored** (one row per ignored output,
+  newest first, a folder lazily expandable through `fs.readDir`, with its file count), hidden by the
+  header's eye toggle. Artifacts shows as a **List**, a **Tree** or **Smart** (`List | Tree | Smart` segments
+  on the toolbar's right; `selectArtifactsView` resolves the per-client `artifactsView`: the user's explicit
+  choice, else Smart while the Settings switch `artifactsSmart` (on by default) is on and the host serves
+  roles (v124), else List; Smart is never offered otherwise). The toolbar (`ArtifactsToolbar`, which takes
+  the views it offers) stays one row at any sidebar width: when its content overflows it folds the
+  secondary actions (Collapse all, the ignored toggle, Paste) into a **More** menu, then the view segments
+  too, and unfolds once the width it needed is back (measured with a `ResizeObserver`, refolded from
+  scratch when the set of actions changes) — a fixed breakpoint cannot, because the actions come and go.
+  List answers *what is
+  new*: newest first, a two-line row — the name, then the folder inside the artifacts folder — or
+  `Task spec · <status>` joined from the spec snapshot by path — and a chip naming the writing chat that
+  opens it; no relative age, since the order already says what is newest. Tree answers *where is it*: it
+  is built by `artifactsModel.artifactTree` from the same filtered rows, never from `fs.readDir`, so deleted
+  rows, attribution, the new-dot and task-spec status survive (a real artifacts folder reached 1 700
+  records in 114 folders, which the flat list renders as 1 700 two-line rows). Folders come first, A→Z
+  like Files; single-folder chains compact (`folderChains`); a folder shows its file count, the new-dot while collapsed and holding a new file, and,
+  when no live artifact of any chat remains inside, a struck name reading "Deleted" with a menu of only
+  the Copy paths (liveness comes from the whole snapshot, so This chat never strikes a folder another
+  chat still fills; no per-folder deleted counts — in real folders nearly every one has some). A file
+  row is one line: type icon, name (struck when deleted), task-spec status, the new-dot, Restore — whose
+  hover title is the "Deleted, not by you" phrase — and the chat chip only under All chats (under This
+  chat every chip would name the same chat). A folder's row id is its path plus `/`, since the index
+  keeps deleted rows and a deleted file can share a path with a live folder. The tree starts collapsed;
+  expansion is kept per workspace (`artifactsTreeExpandedByWorkspace`) and toggling a compacted chain sets every folder in it, so a filter
+  that reshapes the chain keeps it open. Collapse all shows while a shown top-level folder is open. The
+  exact change time is a file row's hover title in both views, and the file open in the center
+  (`selectActiveFilePath`) is highlighted in both. A List row the host marks `deleted` reads "Deleted, not
+  by you" with Restore. **Smart** answers *what did the agent make for me*: `artifactsModel.smartGroups`
+  arranges the host's roles ([[submodule-server-artifacts]]) — results grouped by their folder, nested under
+  the nearest folder that holds results itself (sibling groups with no common result folder share one
+  for their top folder), collapsed and newest first, each group row reading "N results · M groups"; a
+  working file folds under the nearest group as one soft-primary **"N working files"** chip (the chat
+  divider's chip, a tree toggle) that expands a Tree of them relative to the group, and working files of no
+  group sit under one chip at the bottom. A result row is the Tree's file row (`ArtifactFileRow`) whose
+  hover title says why it counts (picked, shown in the chat, linked in the reply, a document) and whose
+  user's pick carries a ★ picked badge and an accent stripe. Grouping lives on the web because it depends
+  on the This-chat filter; the role does not, so the host owns it. Opening it — a click or a double click on its
+  name — restores it silently first (`artifactActions.openArtifact`): opening a file asks for its contents, so
+  the restore is implied. The click's center navigation is stamped before the restore, as any async open
+  stamps it at request time, so a click elsewhere while the restore runs keeps its tab. A row's restore (`restoreDeletedArtifact`, kept per workspace and path for the page's
+  life and shared by a click, `Mod+Enter` and both Restore controls) is reused, in flight or done, for as long
+  as the row shows the same deletion — a deleted row's `changedAt` is
+  when the host saw it gone, while a list refresh only replaces the object: a double click, a click in the
+  gap before the live snapshot, or a refresh in between never asks again (the host would refuse a row that
+  is already live), while a row deleted again right after its restore shows a newer deletion and gets a
+  fresh one. A failed restore is dropped at
+  once and opens nothing — not even a new file that has since taken the path — and Restore's error toast
+  says why. The panel
+  **opens on This chat**: the attended chat's artifacts (`selectArtifactMentionTarget`), following it as the
+  center switches chats; with no chat attended it shows all, and All chats is a click away but not
+  remembered across mounts. Unattributed artifacts belong to no chat. Whenever the filter hides rows, a
+  line under the list counts them ("N more from other chats") with **Show all chats**, so the default never
+  makes a workspace look emptier than it is; in Tree the filter prunes to the folders holding the chat's
+  files. Paste puts the Files clipboard into the artifacts folder. Every row has one context menu
+  (`artifactRowParts.ArtifactEntryMenu`, shared by both views): Mention in chat
+  (pastes `@<path> ` into the attended chat's composer through `pasteIntoComposer` and focuses it, closing the chat's history overlay as `Mod+L` does — run once the row
+menu has closed, because a closing menu returns focus to its row; disabled
+  without one), Reveal in Files, Open ‹chat› for an attributed row (the chip's action), the two Copy paths,
+  Copy / Cut (the shared Files clipboard; a cut pastes
+  through `fs.move`), Rename (inline, `fs.rename`), Restore for a deleted row, and Delete — `fs.delete` for a
+  live file, `artifacts.discard` for a kept copy, both behind a confirmation. A Tree folder's menu is
+  Mention in chat (`@<folder>/ `), Reveal in Files, the two Copy paths, Copy / Cut, Paste here (with a
+  clipboard) and Rename — no Delete or Restore: removing or restoring a folder of kept copies one
+  request per file would mean hundreds of reconciles and trash calls, and a host batch was not worth it
+  yet. Each section is its own sidebar
+  tree (see *Sidebar trees*; the heading stays outside it) and emits the shell's
+  focus-recovery markup (lists `artifacts[:<folder>]` and `artifacts-outputs[:<folder>]`, the path as row
+  id, the name as the row's landing control), so a delete, restore or rename moves focus to the row or
+  its neighbour instead of `<body>`. **New** means newer than this
+  client's per-workspace seen watermark (`artifactsSeenByWorkspace`, the newest `firstSeenAt` / output
+  `changedAt`, so only host timestamps are compared): the first snapshot of a workspace is taken as seen, a
+  showing panel advances the watermark, rows newer than the watermark it opened with stay highlighted while
+  it shows, and `selectArtifactsUnseen` drives the rail dot. While the eye toggle hides ignored outputs,
+  their changes neither advance the watermark nor light the dot. The watermarks, the ignored toggle, the
+  view and the Tree's expanded folders persist per client (`shell/artifactsPreference.ts`, bounded at
+  5 000 folders per workspace like the Files tree). "Update the ThinkRail host" shows only once a welcome reports
+  a host older than v121; between sockets the panel keeps its last snapshot.
 - **Chat deep-links remain arrangement-agnostic.** A shell-owned **`LayoutIntent`** names the singleton tool;
   the shell resolves its current side/group, reveals it in place, and selects it locally. `changesRequest`
   and `specRequest` add the one path to focus/open without naming a layout destination. A divider chip that
@@ -2232,7 +2435,9 @@ own section. The kebab menu (`plan-menu`, a
   the worktree-relative **tab identity**, so a deep link can never open a second tab for a file already open
   under its relative path; that lives in the choke point, not in each caller, and it means a spec created
   seconds ago and not yet in the graph opens just the same) — a spec has nothing to preview short of its
-  content, and the tree row lights up from the local selected-resource identity. That intent is
+  content, and the tree row lights up from the local selected-resource identity. A request that carries
+  a `line` (a palette section hit) then reveals it with `revealFileTab` and no renderer override, so the
+  rendered spec scrolls to that heading instead of switching to source. That intent is
   **consumed** (`clearSpecRequest`) once handled: like the Changes link, it opens a center tab, so
   replaying it on a remount or a graph refetch would yank the user's tab back mid-edit. Two intents, two
   effects: a spec chip must never land in the git-derived Changes view, which structurally cannot show a
@@ -2371,10 +2576,31 @@ own section. The kebab menu (`plan-menu`, a
   one busy flag, not new mutations. The cursor is the step's identity (a reading step's position in the order — the contract allows one file twice — or a finding id), so a
   finding resolved from under it yields to its successor instead of skipping one. The rail never renders
   on phone-class viewports — 280px of a 390px
-  screen would leave no diff to guide through. Plain-letter shortcuts (`V`, `J`, `N`, `P`) belong to the
+  screen would leave no diff to guide through. A keyboard step (`Alt+↑` / `Alt+↓`, `V` advancing, `J`, `N`,
+  `P`) and a click on a reading step or finding move focus to what it revealed — the section's collapse
+  toggle (stacked layout) or its header itself (single-file layout, `tabIndex=-1` and the section's
+  `data-focus-row-primary`, so a diff cursor's Esc and focus recovery land there too; never the header's
+  first control, which there is Revert file, so a following Enter or Space cannot revert), or the finding card
+  once `useReviewReveal` scrolls it into view (a draft's text, a sent card itself); the
+  `Prev / Next`, guide and bottom-bar buttons keep focus, so they can be pressed again (the reveal reaches
+  the renderer as a review focus with `moveFocus: false`: it scrolls to a finding without focusing it), and
+  one that disables at the end hands focus to its nearest enabled sibling through the shell's recovery
+  engine.
+  Plain-letter shortcuts (`V`, `J`, `N`, `P`) belong to the
   review tab the center is looking at (`ownsReviewShortcut`: the attention group's selected tab, no
   modal or menu layer open, no text-entry target, and no earlier handler consumed the event), so two review scopes split side by side cannot both answer
-  one keystroke. **Scale rules**:
+  one keystroke. Inside a diff's **line cursor** ([[module-resource-renderers]], *Keyboard review
+  surfaces*) `j`/`k` move lines and are consumed there, so `J` means next unreviewed only outside it;
+  `V`, `N`, `P` and `Alt+↑/↓` pass through the cursor. A comment authored from the cursor returns focus to
+  its line on save, send or cancel, and so do a draft card's `Mod+Enter`, Esc, Send and Delete — never to
+  `<body>`, another card or another file; Esc on a cursor without a range lands on the section header.
+  **Show in file** and the guide's keyboard steps land in a draft's text (caret at the end), not on its
+  Send button, and on a sent card itself. These keys are the rebindable local keys of scope `review`
+  ([[submodule-web-keybindings]], *Local keys*): the pane and the guide match them through
+  `useLocalKeys("review", LOCAL_KEY_DEFAULTS.review)` by physical `code`, and every cap they show (the
+  `V` / `J` / `N` keycaps, the guide's previous-step label, the Prev / Next file tooltip caps — `Alt+↓` /
+  `Alt+↑`, `⌥↓` / `⌥↑` on a Mac — rather than in their label) is that hook's `caps` / `label`, so a rebind
+  shows everywhere it acts and an unbound key shows no cap. **Scale rules**:
   a section whose file changed more than 400 lines, or whose path is a lock/generated file, mounts
   collapsed behind *Expand* / *Open as tab*; a scope with more than 50 files shows a dismissable notice
   offering *One file*; nothing switches mode on its own, because a review surface that re-arranges
@@ -2484,13 +2710,82 @@ own section. The kebab menu (`plan-menu`, a
   selects that placement instead of duplicating it. Preview placement and attention commit locally. Unit
   and E2E tests pin double-click coalescing, stale-read rejection, per-group isolation, local identity
   convergence, and promote-by-keyboard/touch.
+- **Sidebar trees share one keyboard model (`treeNavigation.tsx`).** Files, Changes (both views), Specs,
+  Chats, Projects and the Artifacts tool's two sections are each a `Tree` — a `div role=tree` with **one Tab stop** (roving tabindex) — whose
+  rows' focusable controls are `useTreeItem` treeitems (`aria-level`, `aria-expanded` on expandables,
+  `aria-current` for the selected row) under `li role=none`; the tree is a `div role=tree` and every
+  list inside it is `role=none`, so the hierarchy is the explicit `aria-level` (VS Code's flat-tree
+  markup) rather than nested `group`s, which Biome's semantic-element rules reject on lists. Chats and
+  Projects are two trees (Projects: project → workspaces and creations → the Settled header as an
+  expandable item → settled rows and *Show more*); so are Artifacts (List: flat, the name is the
+  treeitem; Tree: a folder row is its own toggle) and Other agent files (an output folder is its own
+  toggle), their headings outside the trees. No tree is
+  virtualized, so the model is DOM-driven: the visible rows are the tree's treeitems in DOM order, parent and first child come from `aria-level`
+  (the pure move rule is `lib`'s `resolveTreeMove`, which the virtualized chat transcript applies to rows it derives from data),
+  and →/← click the row's `[data-tree-toggle]` (a Files/Changes folder row is its own toggle; Specs,
+  projects and the Settled header use their chevron), so every tree keeps its own expansion state and
+  markup.
+  - **The tab stop is the current row:** the last focused row (focus-in, so clicks and focus recovery move
+    it); a row that becomes selected while focus is elsewhere (a file opened from the palette) takes it
+    over; else the last selected row, else the first. A `MutationObserver` re-elects when the current row
+    leaves the DOM, because rows load per directory and per project asynchronously. Only the current row
+    carries `data-focus-default`, so F6, `Mod+0` and `Mod+Shift+E/G` land on it ([[submodule-web-shell]]
+    prefers the innermost default; its focusable test counts `tabIndex=-1` buttons, so without the marker
+    landing took the first row). Of Chats and Projects only the tree holding the active workspace marks
+    its default (Projects when none is active); of the Artifacts tool's, Artifacts when it has rows, else
+    Other agent files.
+  - **Keys** are the tree's own, not global chords: ↑/↓ and the arrow twins (`j`/`k` by default),
+    Home/End; → / `l` expands, else enters the first child; ← / `h` collapses, else goes to the parent. The
+    twins and `trees.search` are rebindable local keys of scope `trees` ([[submodule-web-keybindings]],
+    *Local keys*): `Tree` asks `useLocalKeys("trees", LOCAL_KEY_DEFAULTS.trees)` at event time, matched by
+    physical `code` (a Russian layout's `ы` is `S`), and a matched twin maps onto its arrow before
+    `resolveTreeMove`; the arrows themselves are locked and always work, never during IME composition.
+    `trees.openKept` (`Mod+Enter`), `trees.rename` (`F2`), `trees.delete` (`Delete`) and
+    `trees.reorderUp` / `trees.reorderDown` (`Alt+Shift+↑/↓`) are local keys of the same scope; rows read
+    them through `useTreeKeys()`, and the project row's `aria-keyshortcuts` is that hook's `aria`.
+    Letters belong to a focused tree, so the Changes review's `V`/`J`/`N` do not fire from a focused Changes
+    row: every other printable key is swallowed, except Space (the button's activation) and `F` (by
+    `code`, unmodified), which belongs to hint mode ([[module-ext-hint-mode]]). Letter type-ahead was
+    removed when F became hint mode's (2026-11-15); search moved to `S`.
+  - **`S` (`trees.search`, rebindable) searches the visible rows** (isearch). `Tree` renders a labelled field ("Search Files") as a
+    sticky sibling *before* its `role="tree"` element — outside it, so the tree's `MutationObserver` and
+    roving model never see it — and focuses it. Typing matches the query as a case-insensitive substring of
+    each rendered row's `data-tree-label` (collapsed children are not rendered, so not searched); the
+    cursor (tab stop, `data-focus-default`) moves to the first match at or after the current match, else
+    the row the search started from, wrapping, and is scrolled into view (re-centred if the sticky field
+    covers it). Matches carry `data-tree-match="match"`, the current one `"current"` (`primary-subtle` /
+    `primary-soft` fills through the tree's arbitrary variants); the field shows "n of m" or "No match".
+    ↓ / ↑ step to the next / previous match, wrapping; Enter keeps the current match (or the start row)
+    and Esc returns to the start row — both focus that row **before** the field unmounts, so focus never
+    drops to `<body>`; blur (Tab lands on the current match, the tree's tab stop) keeps the match. Plain
+    `S` types into the field, so `S`-again-as-next (the product brief) is not bound: a query must be able
+    to contain an s. The pure model is `treeSearchMatches` / `treeSearchTarget` / `treeSearchStep`.
+    Enter is the button's own click; `Mod+Enter` is the row's double-click — Files, Specs and Artifacts open
+    kept (a deleted artifact restores first), Changes opens its kept diff with `claimPreview`; rows without a double-click treat it as Enter.
+  - **Row keys live in each row**, through `treeRowKey(event, keys)` (names the matched `trees.*`
+    command: `menu`, `delete`, `rename`, `reorderUp`, `reorderDown`): Shift+F10 / the Menu key open the row's menu
+    (context-menu rows through `openContextMenuFromKeyboard`, dropdown rows through `isContextMenuKey`,
+    after which the menu returns focus to the row); **Delete** opens the menu's own confirmation (file,
+    Remove workspace except on Default, Delete chat — a pending deletion retries directly —, Close project,
+    an artifact's or ignored output's Delete — a deleted artifact discards its kept copy; nothing on Changes
+    and Specs rows); **F2** renames a project, managed workspace or artifact where the
+    menu offers Rename (chats and ignored outputs have no rename). A pending chat stays
+    focusable (`aria-disabled`) so its Retry is reachable; a deleted artifact's name is enabled, since opening
+    it restores it.
+  - **Inner row buttons leave the Tab order and the accessibility tree** (`treeRowControlProps`:
+    `tabIndex=-1` and `aria-hidden` — a `tree` may own only treeitems, and these are pointer duplicates:
+    chevrons, kebabs, Settle / Keep active, the project's Create workspace `+`, a creation's retry /
+    dismiss, an artifact's chat chip and Restore); each action stays reachable — arrows expand, the row's
+    menu carries the rest (Create workspace, Settle, Keep active, Open ‹chat›, Restore), a creation's
+    actions are in the creation view its row opens; hint mode labels none of them, by the same markup. dnd-kit's draggable `attributes` stay unspread on the project name
+    (they would add a second tab stop); dragging needs only its listeners.
 - **Row actions: one menu, two triggers.** Every **file** row (both views) is wrapped in
-  **`ChangeRowActions`**: a hover/focus-revealed `⌄` button *and* right-click on the row open the same
+  **`ChangeRowActions`**: a hover-revealed `⌄` button *and* right-click on the row (Shift+F10 / Menu key on it) open the same
   dropdown. The `⌄` is not garnish — it is the **touch path**, where right-click does not exist (mobile-first).
-  Items: **View** (the same action as a plain click) and **Copy path** (worktree-relative). Deliberately
+  Items: **View** (the same action as a plain click) and **Copy relative path**. Deliberately
   nothing else: the panel is **read-only** — no discard-file/-folder/-all — and no “Open in ‹external app›”,
-  which a host-side `open` would make silently wrong for every remote/phone client (Copy path is the portable
-  escape hatch). **Folder rows get no menu** — nothing in that list applies to a folder. Built on the existing
+  which a host-side `open` would make silently wrong for every remote/phone client (Copy relative path is the
+  portable escape hatch). **Folder rows get no menu** — nothing in that list applies to a folder. Built on the existing
   `@thinkrail/ui/dropdown-menu` (no new `context-menu` primitive); the right-click handler is handed back
   through a render prop so it lands on the row's real interactive element rather than a bare div, and the `⌄`
   trigger is a *sibling* of the row's button (a button inside a button is invalid).
@@ -2537,7 +2832,30 @@ own section. The kebab menu (`plan-menu`, a
   `MarkdownPreview`; `thinkrail/code` is the text fallback and uses Monaco on desktop plus Pierre `File`
   on phone-class viewports; `thinkrail/binary` shows identity and a host-backed
   download. The candidate list alone determines whether the resource toggle exists. No format predicate or
-  preview/source field remains in the pane or tab.
+  preview/source field remains in the pane or tab. A tab's `reveal` (the store's `FileReveal`) is passed
+  through to the mounted view as the renderer contract's `reveal`, so the code renderer scrolls to and marks
+  that line, and the view's `onRevealHandled` clears it (`clearFileTabReveal`) so a later remount keeps the
+  reading position; `openTabs.ts`' **`openFileAtLine(workspaceId, path, at, intent)`** is Find in Files'
+  open-at-a-line entry (`↵` / `⌘↵`): the ordinary `openFileInTab` at the caller's intent, then
+  `revealFileTab` naming `SOURCE_RENDERER_ID`, so a Markdown or HTML file opens as source at the line
+  rather than as its rendered document (a spec section opened through `specRequest`, below, names no
+  renderer, so the rendered spec scrolls to its heading). An open that finds a read of the same file in flight joins it —
+  `openReadTab` hands every caller that read's completion — so each caller reveals after the tab is
+  installed, in call order, and the latest hit wins.
+  **`workspaceForPath.resolveWorkspaceFile(path)`** is the client's one entry to "which open workspace holds
+  this absolute path" for any caller that holds a path from outside the app's own trees (desktop deep links
+  now; terminal path links reuse it rather than match roots themselves). From
+  `WORKSPACE_PATH_RESOLVE_PROTOCOL_VERSION` (v119) it asks the host's `workspace.resolvePath`, which matches
+  real paths ([[submodule-server-workspaces]]): the browser cannot see a symlink, so `/tmp/x` against
+  `/private/tmp/x`, or a project opened through a symlinked folder, only matches there. Against an older host
+  it falls back to the loaded roots' spelling: it lists the workspaces of unlisted open projects whose folder
+  encloses the path first, so a nested project is never shadowed by an already loaded parent, then the
+  remaining unlisted open projects (a worktree usually lives outside its project folder), and picks by
+  `pathWithinRoot` the most specific root, the active workspace between equal roots, never a deleting or
+  removed workspace, a closed project's cached rows or a root itself; it never overwrites a list that loaded
+  meanwhile. Either way it answers a `WorkspacePathMatch` (`workspaceId`, `projectId`, POSIX `relativePath`)
+  or `null`; entering the workspace, which loads its project's list when this client lacks the row, is the
+  caller's.
 
   `MarkdownPreview` retains the document typography, frontmatter stripping, alerts, Mermaid rendering,
   source-line stamps, review commenting, and bounded reading measure described above. These are renderer
@@ -2610,6 +2928,38 @@ own section. The kebab menu (`plan-menu`, a
   key handler intercepts keydown at `keyCode === 229` and derives the control bytes from `event.code`
   (which stays accurate under an IME) via `imeControlBytes`, writing them to the PTY itself; anything
   that isn't a rescued chord is left to normal text input.
+- **Terminal copy chord.** xterm allows one custom key handler, so `TerminalInstance` asks the pure
+  `terminalKeys.terminalKeyDecision(event, platform, hasSelection)`: nothing while an IME is composing, then
+  the copy chord, and only then the keyCode-229 rescue above (`imeControlBytes` lives beside it). The chord
+  comes first because an IME that reports 229 without composing would otherwise turn Ctrl+Shift+C into the
+  rescue's `^C`. Off Apple platforms (where Cmd+C already copies) **Ctrl+Shift+C** copies
+  `term.getSelection()` through `copyText`, as GNOME Terminal, Konsole and Windows Terminal do; without a
+  selection it does nothing. Either way the keydown is swallowed and `preventDefault`ed (Chromium would
+  otherwise open inspect-element), so it never writes `^C`; xterm itself encodes Ctrl+letter only without
+  Shift. Plain Ctrl+C stays xterm's SIGINT, and macOS keeps xterm's defaults. Ctrl+Shift+V needs no handler:
+  xterm leaves it unencoded, so Chromium's paste-as-plain-text reaches xterm's own paste listener.
+- **Korean IME replacement bridge (WebKit).** WebKit — Safari and the desktop app's WKWebView — drives
+  the macOS Korean input method without `composition*` events: a syllable's first jamo lands as an
+  `insertText` input, every re-composition of it (`ㄱ`→`가`→`간`) as `insertReplacementText`, the next
+  syllable as a fresh `insertText`, and the `keyCode` 229 keydown *follows* the input it produced.
+  xterm 6.0.0 writes the bare `insertText` to the PTY at once and ignores `insertReplacementText`
+  (upstream #5704, #6144), so `가` reached the shell as `ㄱ`, finals never arrived (`간` → `ㄱ`), and a
+  syllable whose input landed before the previous key's keyup was dropped outright. `TerminalInstance`
+  captures `input`/`keydown` on the mount host — ahead of xterm's own textarea listeners — and routes
+  them through `terminalImeBridge`: a single Hangul `insertText` is held instead of forwarded, each
+  `insertReplacementText` replaces the held syllable, and the held syllable reaches the PTY through
+  `term.input` when the next syllable starts, on any non-IME keydown (Enter, Space, chords, arrows,
+  digits), on a 229 chord or Escape — ahead of the bytes the rescue above writes, so Ctrl+U/Ctrl+C
+  discard the syllable with the line instead of leaving it for the next command — on `compositionstart`
+  (a real composition taking over), on `paste` (xterm hands the clipboard straight to `onData`, with no
+  input or keydown to commit on) or on focus-out; modifier-only keydowns never commit. An unmodified
+  Backspace the input method passes through while a syllable is held drops the held syllable instead of
+  emitting DEL, since nothing reached the PTY; a modified one (Option/Alt+Backspace word-delete) commits
+  it and stays xterm's. Once the replacement model has been seen, bare 229 keydowns are kept from
+  xterm so its deferred textarea diff cannot echo a syllable twice under load; the rescued chords above
+  still pass. Chrome and Firefox never emit `insertReplacementText` for an IME, so the bridge is inert
+  there. Known gap: the held syllable has no on-screen preview until it commits (xterm draws one only
+  for `composition*` input); upstream's #5704 adds that inside xterm — revisit when it ships.
 - Heavy deps (Monaco / xterm) load via `React.lazy(() => import())` to stay out of the eager bundle.
   A lazy chunk that fails to load (or a render throw) is contained by the `components/ErrorBoundary` the
   **shell** wraps each region in (see `shell/SPEC.md`), so a single panel degrades instead of blanking the

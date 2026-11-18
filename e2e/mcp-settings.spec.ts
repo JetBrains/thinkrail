@@ -6,6 +6,7 @@ import type { WsRequest } from "@thinkrail/contracts";
 import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
 import { resolveBunExecutable } from "./fixtures/executables";
 import { E2E_FIXTURE_REPO, E2E_PI_AGENT_DIR } from "./fixtures/paths";
+import { shot } from "./fixtures/screenshots";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const BUN = resolveBunExecutable();
@@ -194,9 +195,34 @@ test("a stdio server added through the form connects in a chat, is disabled ther
 	rmSync(USER_CONFIG, { force: true });
 	try {
 		await openFixtureProject(page);
+		const at = Date.now();
 		seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 			name: "MCP chat",
-			messages: [{ role: "user", text: "Use the fixture server.", timestamp: Date.now() }],
+			messages: [
+				{ role: "user", text: "Use the fixture server.", timestamp: at },
+				{
+					role: "assistant",
+					content: [
+						{
+							type: "toolCall",
+							id: "call-fixture-echo",
+							name: "mcp__fixture__echo",
+							arguments: { text: "ping" },
+						},
+					],
+					stopReason: "toolUse",
+					timestamp: at + 1,
+				},
+				{
+					role: "toolResult",
+					toolCallId: "call-fixture-echo",
+					toolName: "mcp__fixture__echo",
+					content: [{ type: "text", text: "ECHO_PING" }],
+					details: { server: "fixture", tool: "echo" },
+					isError: false,
+					timestamp: at + 2,
+				},
+			],
 		});
 		await enterDefaultWorkspace(page);
 		await openPersistedChat(page, "MCP chat");
@@ -240,10 +266,23 @@ test("a stdio server added through the form connects in a chat, is disabled ther
 		await expect(chatRow.getByTestId("resource-mcp-state")).toHaveText("Connected · 4 tools", {
 			timeout: 30_000,
 		});
-		await chatRow.getByTestId("resource-mcp-disable").click();
+		await expect(chatRow.getByTestId("resource-mcp-disable")).toHaveCount(0);
+		await chatRow.getByRole("option").click();
+		await expect(chatRow).toHaveAttribute("data-selected", "true");
+		const detail = inspector.getByTestId("resource-mcp-detail");
+		await expect(detail).toHaveAttribute("data-name", "fixture");
+		await expect(detail).toContainText("stdio · runs on host");
+		const call = inspector.locator('[data-testid="resource-mcp-call"]');
+		await expect(call).toHaveCount(1);
+		await expect(call).toHaveAttribute("data-status", "done");
+		await expect(call).toContainText("echo");
+		await call.getByTestId("resource-mcp-call-toggle").click();
+		await expect(call).toContainText("ECHO_PING");
+		await shot(inspector, "chat-resources", "mcp-detail");
+		await detail.getByTestId("resource-mcp-disable").click();
 		await expect(chatRow).toHaveAttribute("data-state", "disabled-in-chat", { timeout: 30_000 });
 		await expect(chatRow.getByTestId("resource-mcp-state")).toHaveText("Disabled in this chat");
-		await expect(chatRow.getByTestId("resource-mcp-enable")).toBeVisible();
+		await expect(detail.getByTestId("resource-mcp-enable")).toBeVisible();
 		await inspector.getByTestId("resources-inspector-close").click();
 
 		await openMcpSettings(page);

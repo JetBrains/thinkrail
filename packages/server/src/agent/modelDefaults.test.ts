@@ -24,11 +24,11 @@ test("the preferred default follows pi's provider order before falling back to t
 	const available = [
 		{ provider: "openai", id: "gpt-4" },
 		{ provider: "openai", id: "gpt-6.1-sol" },
-		{ provider: "anthropic", id: "claude-opus-4-8" },
+		{ provider: "anthropic", id: "claude-opus-5-5" },
 	];
 	expect(preferredDefaultModel(available)).toEqual({
 		provider: "anthropic",
-		id: "claude-opus-4-8",
+		id: "claude-opus-5-5",
 	});
 	expect(preferredDefaultModel(available.slice(0, 2))).toEqual({
 		provider: "openai",

@@ -65,20 +65,6 @@ export function snippetAround(text: string, [from, to]: MatchRange): string {
 	);
 }
 
-export function lineAround(content: string, [from]: MatchRange): string {
-	const lineStart = content.lastIndexOf("\n", from) + 1;
-	const lineEnd = content.indexOf("\n", from);
-	const raw = content.slice(lineStart, lineEnd === -1 ? content.length : lineEnd);
-	const line = raw.trim();
-	if (line.length <= SNIPPET_RADIUS * 2) return line;
-	const local = from - lineStart - (raw.length - raw.trimStart().length);
-	return ellipsized(
-		line,
-		Math.max(0, local - SNIPPET_RADIUS),
-		Math.min(line.length, local + SNIPPET_RADIUS),
-	);
-}
-
 export function compactWhitespace(text: string): string {
 	return text.replace(/\s+/g, " ").trim();
 }

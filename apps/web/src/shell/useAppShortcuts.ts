@@ -2,14 +2,15 @@ import type { NativeCommand, NativeQuitHint, NativeShortcutsBridge } from "@thin
 import { useEffect, useState } from "react";
 import { platformShortcutLabel } from "../lib";
 import { useAppStore } from "../store";
-import { requestClose } from "./closeRequestChannel";
-import { createWebShortcuts, hasWebShortcuts, shortcutPlatform } from "./shortcutCommands";
+import { closeActiveItem } from "./chordActions";
+import { keyboardClaimed } from "./extensionCommands";
 import {
-	hasDismissibleLayer,
-	hasLayer,
-	isInTerminal,
-	MODAL_LAYER_SELECTOR,
-} from "./shortcutLayers";
+	createWebShortcuts,
+	hasWebShortcuts,
+	type ShortcutPlatform,
+	shortcutPlatform,
+} from "./shortcutCommands";
+import { hasLayer, isInTerminal, MODAL_LAYER_SELECTOR } from "./shortcutLayers";
 
 const NATIVE_SHORTCUTS_GLOBAL = "__THINKRAIL_NATIVE_SHORTCUTS__";
 
@@ -30,24 +31,16 @@ function readNativeShortcutsBridge() {
 	return getNativeShortcutsBridge(Reflect.get(globalThis, NATIVE_SHORTCUTS_GLOBAL));
 }
 
-export function readSettingsShortcutLabel(): string | null {
-	return shortcutPlatform(readNativeShortcutsBridge() !== null) === "browser"
-		? null
-		: platformShortcutLabel(",");
+export function nativeShortcutPlatform(): ShortcutPlatform {
+	return shortcutPlatform(readNativeShortcutsBridge() !== null);
 }
 
-function dismissTopLayer() {
-	const doc = globalThis.document;
-	if (!hasDismissibleLayer(doc)) return false;
-	(doc.activeElement ?? doc.body ?? doc).dispatchEvent(
-		new KeyboardEvent("keydown", {
-			key: "Escape",
-			code: "Escape",
-			bubbles: true,
-			cancelable: true,
-		}),
-	);
-	return true;
+export function hasNativeShortcuts(): boolean {
+	return nativeShortcutPlatform() !== "browser";
+}
+
+export function readSettingsShortcutLabel(): string | null {
+	return hasNativeShortcuts() ? platformShortcutLabel(",") : null;
 }
 
 function openSettingsUnlessModal() {
@@ -101,9 +94,7 @@ export function useAppShortcuts() {
 		const listensForKeys = hasWebShortcuts(platform);
 		const shortcuts = createWebShortcuts({
 			platform,
-			closeItem: () => {
-				if (!dismissTopLayer()) requestClose();
-			},
+			closeItem: closeActiveItem,
 			openSettings: openSettingsUnlessModal,
 			quit: () => {
 				bridge.quit().catch((error: unknown) => {
@@ -121,8 +112,11 @@ export function useAppShortcuts() {
 		function onVisibilityChange() {
 			if (doc.visibilityState === "hidden") shortcuts.cancel();
 		}
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (!keyboardClaimed()) shortcuts.keydown(event);
+		};
 		if (listensForKeys) {
-			window.addEventListener("keydown", shortcuts.keydown, true);
+			window.addEventListener("keydown", onKeyDown, true);
 			window.addEventListener("keyup", shortcuts.keyup, true);
 		}
 		window.addEventListener("blur", shortcuts.cancel);
@@ -130,7 +124,7 @@ export function useAppShortcuts() {
 		return () => {
 			unsubscribe();
 			if (listensForKeys) {
-				window.removeEventListener("keydown", shortcuts.keydown, true);
+				window.removeEventListener("keydown", onKeyDown, true);
 				window.removeEventListener("keyup", shortcuts.keyup, true);
 			}
 			window.removeEventListener("blur", shortcuts.cancel);

@@ -16,6 +16,7 @@ export function LocationBar({
 	branchStatus,
 	noteOpenReview,
 	refreshBranchStatus,
+	newWorkspaceShortcut,
 	onNewWorkspace,
 }: {
 	project: Project;
@@ -24,6 +25,7 @@ export function LocationBar({
 	branchStatus: BranchFacts | null;
 	noteOpenReview: (review: OpenBranchReview, url?: string) => void;
 	refreshBranchStatus: () => void;
+	newWorkspaceShortcut: string;
 	onNewWorkspace: () => void;
 }) {
 	const workspaceSettlingSupported = useAppStore((state) => state.workspaceSettlingSupported);
@@ -55,6 +57,7 @@ export function LocationBar({
 				workspace={workspace}
 				activeSettled={settled}
 				now={now}
+				newWorkspaceShortcut={newWorkspaceShortcut}
 				onNewWorkspace={onNewWorkspace}
 			/>
 			{workspace ? (

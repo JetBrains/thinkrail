@@ -75,6 +75,16 @@ describe("resolveLocale", () => {
 		expect(resolveLocale("system", chinese, ["zh-HK"])).toBe("en");
 	});
 
+	test("a Traditional Chinese system locale reaches the Traditional catalog", () => {
+		const chinese = ["en", "zh-CN", "zh-TW"];
+		for (const system of ["zh-TW", "zh-Hant-TW", "zh-Hant", "zh-HK", "zh-MO"])
+			expect(resolveLocale("system", chinese, [system])).toBe("zh-TW");
+		for (const system of ["zh-CN", "zh-Hans", "zh-SG", "zh"])
+			expect(resolveLocale("system", chinese, [system])).toBe("zh-CN");
+		expect(fallbackChain("zh-TW")).toEqual(["zh-TW", "zh", "en"]);
+		expect(BUNDLED_LOCALES).not.toContain("zh");
+	});
+
 	test("a region-only difference still matches", () => {
 		expect(resolveLocale("system", ["en", "pt-BR"], ["pt"])).toBe("pt-BR");
 		expect(resolveLocale("system", ["en", "pt-BR"], ["pt-PT"])).toBe("pt-BR");

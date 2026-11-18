@@ -8,5 +8,5 @@ export default defineServerExtension({
 		"Lets the agent search the web, fetch pages, GitHub repositories, PDFs and videos, and research open-source libraries with its librarian skill.",
 	extensions: [piWebAccess],
 	childExtensions: [piWebAccess],
-	skillPackages: ["pi-web-access"],
+	skillPackages: ["@thinkrail/ext-web-access"],
 });

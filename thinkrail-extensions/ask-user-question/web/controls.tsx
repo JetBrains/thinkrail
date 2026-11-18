@@ -8,12 +8,14 @@ import {
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
-import { isApplePlatform, isImeComposing } from "@thinkrail/ui/keyboard";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
+import type { LocalKeys } from "@thinkrail/ui/local-keys";
 import { cn } from "@thinkrail/ui/utils";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useId } from "react";
 import { AutosizeField } from "./AutosizeField";
 import { useTestId } from "./ghost";
+import { CARD_KEYS } from "./keys";
 import { fieldKeyAction, readRecommendation } from "./state";
 
 export type LiftKey = "ArrowUp" | "ArrowDown";
@@ -113,7 +115,7 @@ export function TabChip({
 			data-discuss={discuss}
 			onClick={onClick}
 			className={cn(
-				"flex shrink-0 items-center gap-4 whitespace-nowrap rounded-full px-8 py-2 tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary",
+				"flex shrink-0 items-center gap-4 whitespace-nowrap rounded-full px-8 py-2 tr-text-metadata focus-visible:focus-ring-inset",
 				active ? "bg-primary-subtle text-primary" : "text-text-muted hover:bg-control-bg-hovered",
 			)}
 		>
@@ -140,17 +142,31 @@ export function TabChip({
 }
 
 export function ModeHint({
+	keys,
 	multiSelect,
 	multipleQuestions,
 	previewKeys,
 	discussKey,
+	interactKey,
+	compareKey,
+	escapeKey,
 }: {
+	keys: LocalKeys;
 	multiSelect: boolean;
 	multipleQuestions: boolean;
 	previewKeys: boolean;
 	discussKey: boolean;
+	interactKey: boolean;
+	compareKey: boolean;
+	escapeKey: boolean;
 }) {
 	const t = useT();
+	const bound = (shown: boolean, id: string) => (shown ? keys.label(id) : "");
+	const discuss = bound(discussKey, CARD_KEYS.discuss);
+	const interact = bound(interactKey, CARD_KEYS.interact);
+	const compare = bound(compareKey, CARD_KEYS.compare);
+	const submit = keys.label(CARD_KEYS.submit);
+	const skip = keys.label(CARD_KEYS.skip);
 	return (
 		<span
 			data-testid="ask-shortcuts"
@@ -164,13 +180,14 @@ export function ModeHint({
 			<span>{t("tools.ask.hintMove")}</span>
 			<span>{multiSelect ? t("tools.ask.hintEnterToggle") : t("tools.ask.hintEnterSelect")}</span>
 			<span>{t("tools.ask.hintSpaceNote")}</span>
-			{discussKey ? <span>{t("tools.ask.hintDiscussKey")}</span> : null}
-			<span>
-				{isApplePlatform() ? t("tools.ask.hintSubmitApple") : t("tools.ask.hintSubmitOther")}
-			</span>
+			{discuss ? <span>{t("tools.ask.hintDiscuss", { key: discuss })}</span> : null}
+			{submit ? <span>{t("tools.ask.hintSubmit", { key: submit })}</span> : null}
 			{multipleQuestions ? <span>{t("tools.ask.hintQuestions")}</span> : null}
 			{previewKeys ? <span>{t("tools.ask.hintPreviewScroll")}</span> : null}
-			<span>{t("tools.ask.hintSkip")}</span>
+			{interact ? <span>{t("tools.ask.hintInteract", { key: interact })}</span> : null}
+			{compare ? <span>{t("tools.ask.hintCompare", { key: compare })}</span> : null}
+			{escapeKey ? <span>{t("tools.ask.hintEscape")}</span> : null}
+			{skip ? <span>{t("tools.ask.hintSkip", { key: skip })}</span> : null}
 		</span>
 	);
 }
@@ -183,10 +200,9 @@ export function OptionRow({
 	selected,
 	cursor,
 	pageFocus,
+	focusClaim,
 	multi,
-	pageKeys,
-	previewKeys,
-	discussKey,
+	keyshortcuts,
 	glyph,
 	onFocus,
 	onKeyDown,
@@ -199,10 +215,9 @@ export function OptionRow({
 	selected: boolean;
 	cursor: boolean;
 	pageFocus: boolean;
+	focusClaim: boolean;
 	multi: boolean;
-	pageKeys: boolean;
-	previewKeys: boolean;
-	discussKey: boolean;
+	keyshortcuts: string;
 	glyph?: ReactNode;
 	onFocus: () => void;
 	onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
@@ -218,13 +233,14 @@ export function OptionRow({
 			{...(multi
 				? { role: "checkbox", "aria-checked": selected }
 				: { role: "radio", "aria-checked": selected })}
-			aria-keyshortcuts={`ArrowUp ArrowDown Home End Enter Space${discussKey ? " D" : ""}${pageKeys ? " ArrowLeft ArrowRight" : ""}${previewKeys ? " PageUp PageDown" : ""} Meta+Enter Control+Enter Shift+Escape`}
+			aria-keyshortcuts={keyshortcuts}
 			tabIndex={cursor ? 0 : -1}
 			data-testid={tid("ask-option")}
 			data-ask-option=""
 			data-selected={selected}
 			data-cursor={cursor}
 			data-ask-page-focus={pageFocus || undefined}
+			data-focus-claim={focusClaim || undefined}
 			onFocus={onFocus}
 			onKeyDown={onKeyDown}
 			onClick={(event) => {
@@ -232,7 +248,7 @@ export function OptionRow({
 				onClick();
 			}}
 			className={cn(
-				"flex items-start gap-8 rounded-sm border px-12 py-8 text-left outline-none transition-colors focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary",
+				"flex items-start gap-8 rounded-sm border px-12 py-8 text-left transition-colors focus-visible:focus-ring",
 				selected
 					? "border-primary bg-primary-subtle"
 					: "border-border-default hover:bg-control-bg-hovered",
@@ -336,7 +352,7 @@ export function NoteSlot({
 						aria-describedby={noteId}
 						onClick={onOpen}
 						onKeyDown={onButtonKeyDown}
-						className="flex min-w-0 flex-1 items-start gap-4 rounded-sm px-4 py-2 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+						className="flex min-w-0 flex-1 items-start gap-4 rounded-sm px-4 py-2 text-left transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring"
 					>
 						<Pencil aria-hidden="true" className="mt-2 size-14 shrink-0 text-text-muted" />
 						<span
@@ -374,6 +390,8 @@ export function OtherRow({
 	active,
 	text,
 	pageFocus,
+	focusClaim,
+	keyshortcuts,
 	onFocusField,
 	onToggle,
 	onText,
@@ -387,6 +405,8 @@ export function OtherRow({
 	active: boolean;
 	text: string;
 	pageFocus: boolean;
+	focusClaim: boolean;
+	keyshortcuts: string;
 	onFocusField: () => void;
 	onToggle: () => void;
 	onText: (text: string) => void;
@@ -417,7 +437,7 @@ export function OtherRow({
 				}
 			}}
 			className={cn(
-				"flex cursor-text items-start gap-8 rounded-sm border px-12 py-8 outline-none transition-colors focus-within:border-control-border-active focus-within:ring-2 focus-within:ring-primary",
+				"flex cursor-text items-start gap-8 rounded-sm border px-12 py-8 transition-colors focus-within:border-control-border-active focus-visible:focus-ring has-[textarea:focus-visible]:focus-ring",
 				active
 					? "border-primary bg-primary-subtle"
 					: "border-border-default hover:bg-control-bg-hovered",
@@ -433,7 +453,7 @@ export function OtherRow({
 						event.preventDefault();
 						onToggle();
 					}}
-					className="flex items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+					className="flex items-center rounded-sm focus-visible:focus-ring"
 				>
 					<Indicator selected={active} multi />
 				</button>
@@ -449,10 +469,12 @@ export function OtherRow({
 					id={inputId}
 					fieldRef={fieldRef}
 					tabIndex={0}
+					className="focus-visible:outline-none"
 					data-testid={tid("ask-custom")}
 					data-ask-page-focus={pageFocus || undefined}
+					data-focus-claim={focusClaim || undefined}
 					aria-label={t("tools.ask.otherLabel")}
-					aria-keyshortcuts="ArrowUp ArrowDown Enter Escape Shift+Enter Meta+Enter Control+Enter Shift+Escape"
+					aria-keyshortcuts={keyshortcuts}
 					value={text}
 					placeholder={t("tools.ask.otherPlaceholder")}
 					onFocus={onFocusField}

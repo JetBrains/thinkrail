@@ -1,0 +1,286 @@
+---
+id: submodule-server-workspaces
+type: submodule-design
+status: active
+title: workspaces — git worktrees
+parent: module-server
+depends-on: [module-contracts]
+tags: [public-surface-checked]
+---
+
+## Responsibility
+
+A workspace is a `git worktree` on its own branch under the data dir — the anchor for files/git/terminals/
+chats. Its **display `name` is decoupled from its git `branch`**: `name` is a human-readable label
+(Title Case, spaces) and `branch` is a kebab slug derived from it — they were once held equal, and still
+coincide for the auto `workspace-N` placeholder, but a named workspace carries both distinctly.
+
+Two kinds are **user-owned** — ThinkRail uses their cwd but never renames or reclaims them. Every project
+carries **exactly one built-in Default workspace** (`kind: "default"`) whose `worktreePath` is the project
+folder itself (git's *main working tree*) — the "just work in my project folder" anchor, ensured lazily,
+**non-removable and non-renamable**. Any **existing worktree** the user explicitly attaches is recorded in
+place as `kind: "external"` — outside the data dir, never created or mutated here.
+
+A third kind is **ThinkRail-owned and never git**: a **chat without a project** (`kind: "chat"`) is its own
+folder `<dataDir>/chats/<yyyy-mm-dd>-<short id>` (local date; the id extends on collision — no words from
+the prompt, architecture Decision 8 stands) in the one built-in **Chats container** project
+(`Project.kind: "chats"`, root `<dataDir>/chats`, slug `chats`, permanently untrusted, found or created by
+kind with an opaque id, never closed). The record keeps the required wire fields with inert values
+(`branch: ""`, `baseBranch: ""`, `name: "Chat"`, `renamed: true` so `set_title` names only the
+conversation); `kind` is the only marker and every git consumer gates on it. `chats.ts` owns the container
+and chat records: `ensureChatsContainer`, `createChatRecord`, `chatWorkspaces`, `getChatWorkspace`,
+`markChatDeletionPending` (persisted before any destructive step so a crash leaves a visible
+"deletion incomplete" chat, never a half-gone one), `recordChatContinuation` (the durable
+`continuedTo: { projectId, workspaceId, sessionId }[]` link to the workspace a chat's summary went to —
+it survives compaction of the transcript card), `dropChatRecord`, an in-memory chat-id cache for the
+host's per-event push scoping (`isChatWorkspaceId` / `isChatsContainerId` — only this process writes the
+store), and the refusal helpers (`assertNotChatsContainer`, `assertNotChatWorkspace`) the doors below use.
+The session, the terminal and the teardown are composed in `host` (`host/chats.ts`): a chat owns exactly
+one top-level session, a second one is a new chat, and deleting trashes the transcripts file by file and
+then the folder (`trash` is not this module's dependency). Refused here: `renameWorkspace`, settle /
+unsettle, `setWorkspaceDiffBase`, `forgetWorkspace` / `removeWorkspace` (delete the chat instead),
+`workspaceDiffStats`; `reclaimWorktree`, `recordWorkspaceHead` and `setWorkspaceReview` are no-ops;
+`listWorkspaces(container)` returns the chat rows without Default ensure, external refresh or diff stats;
+`openProjectById` never hands the container to `createWorkspace` / `openExistingWorktree`.
+
+## Boundary
+
+- **Owns:** `listExistingWorktrees(projectId)` (**async** — parses `git worktree list --porcelain -z` read
+  through `gitAsync`, the same request-path-read rule `git/SPEC.md` states for `gitStatus`/`listCommits`:
+  this is the Existing-Worktree dialog's populate call, so a slow/large registry must not freeze the host's
+  event loop; each listed path is resolved, since git prints `C:/…` on Windows and the row's path becomes the
+  stored `worktreePath` (architecture Decision 22); drop the project folder, prunable registrations, and every
+  path already represented in ThinkRail; branch-backed rows are `available`, detached-HEAD ones `detached`),
+  `openExistingWorktree(projectId, path)`
+  (**async** for the same worktree-list read; revalidate against
+  the Git registry at the mutation door, comparing canonicalized paths; same-project retries are
+  idempotent, cross-project cwd reuse is rejected; persist + emit `created` with `kind: "external"`, a
+  directory-basename display name, `renamed: true`, and the repo default as its initial review target —
+  **no Git or checkout mutation**), `createWorkspace` (**async**; off `baseRef` when given — branched with `worktree add -b`, never a detached
+  remote checkout, and **`--no-track`**: a remote-tracking base would otherwise become the new branch's
+  upstream (git's `autoSetupMerge` default), aiming the workspace terminal's `git push`/`git pull` at the
+  *base* branch — the workspace branch's upstream is the user's to set on first push, never ours;
+  off the repo `HEAD` otherwise; **remote-ref freshness is prefetched off this critical
+  path** — the New-Workspace dialog `git.prefetch`es the base in the background, so create only `git
+  fetch`es as a fallback when the local remote-tracking ref is missing entirely — that fallback runs
+  via `gitAsync` (network must not block the event loop; bounding the wait and truncating the stderr are
+  the runner's job, not this call site's) with the branch passed after `--`, and **a fallback fetch that does not land the ref
+  fails the create**, naming the ref and carrying git's own stderr — including, when the remote simply
+  never answered, the runner's own `timed out after <n>s …` in place of it. The configured remote is the
+  longest matching prefix of the selected ref, because Git permits names such as `team/upstream`. The guard
+  is the **ref**, not the exit code: a narrowed refspec (`remote add -t`, `--single-branch`, or an edited
+  `remote.<name>.fetch`) can make `git fetch <name> -- <branch>` exit 0 without creating the expected
+  `refs/remotes/<base>`, and keying off `!fetched.ok` let exactly that case fall through to the derived
+  `fatal: invalid reference` this bullet claims to have removed. **The probe names
+  `refs/remotes/<base>` in full**, exactly as `git`'s `prefetchBranch` does — a shorthand such as
+  `origin/<b>` can also resolve a local branch literally named `origin/main`; the two sides of this race
+  must ask about the same ref. **`worktree add` is handed that same full name**, not the shorthand: checking
+  one ref and checking out another leaves Git's disambiguation to choose or reject the wrong object.
+  `baseBranch` still records the user-visible `<remote>/<branch>`; only the revision handed to Git is
+  qualified. **The message splits on the same distinction**: a fetch that *failed* carries
+  git's stderr, while a fetch that *succeeded* without landing the ref names the refspec instead — its
+  stderr is a progress log (`* branch release -> FETCH_HEAD`), so pasting it after "Could not fetch"
+  showed the user a successful fetch as the reason a fetch failed. It is the step that knows *why*
+  the base is missing, and discarding its result left `worktree add` to report the derived `fatal: invalid
+  reference: <remote>/<branch>` — or, when the fetch never returned at all, nothing until the client's
+  request timeout (issue #209). The ref is **re-checked with `rev-parse` before throwing**: a concurrent `git.prefetch` may
+  have landed it while the fetch was in flight, and a create that would have succeeded must not lose that race;
+  `Workspace.baseBranch` records **creation provenance** — the ref the worktree was cut from, which never
+  moves afterwards (what the diff is measured *against* is the separate, re-pointable `diffBase`; see
+  `setWorkspaceDiffBase`); **branch name made unique
+  against refs *and* worktree dirs** — archiving leaves the branch behind and renaming frees a branch
+  name whose worktree directory stays occupied, so candidate names skip both; path
+  `dataDir/worktrees/<project-slug>/<branch>`; **seeds the ephemeral per-workspace scratch dir**
+  (`WORKSPACE_CONTEXT_DIR`, with a self-ignoring `*` `.gitignore` — zero git footprint) in the
+  new worktree, the home for temp docs (task-specs / working files) that stay out of git yet remain
+  scannable by the spec tools (the path convention lives in `@thinkrail/shared/paths`; see
+  [[submodule-workflow-skills]]'s artifacts rules); a **user-supplied name is the display name** (casing +
+  punctuation preserved via `toDisplayName`; the branch is derived from it) and **sets `renamed: true`** at
+  create — the user already chose, so automatic naming never touches it; auto-`workspace-N` leaves it unset,
+  where `name === branch`; **re-reads the registry after the awaited fallback fetch** before appending —
+  the pre-await snapshot is stale by then, and saving it would clobber a concurrent list's Default-ensure
+  (same discipline as `renameWorkspace`'s re-load after its git subprocess)),
+  `renameWorkspace` (**sync**; sets the sanitized, casing- and script-preserving display `name` and always
+  sets `renamed: true`, so automatic naming never touches it again. **`opts.branch`** is the agent's English
+  slug from `set_title`: when present, the branch becomes the slug's ASCII kebab form, clamped to 60 (the display name
+  may be any script, so the branch is never derived from it), uniqued against refs + worktree dirs, and moved with
+  `git branch -m`, while the **worktree dir never moves** (pi keys sessions and terminals/tabs by that exact
+  cwd); a slug that sanitizes to nothing keeps the current branch. The branch-moving path re-points sibling
+  records whose `baseBranch` or `diffBase` named the old branch, re-loads the registry after the Git
+  subprocess so a concurrent removal is not resurrected, saves once, and emits `updated` for every changed
+  record. Without `opts.branch` — the manual wire method — only the display label changes: `branch`,
+  `worktreePath`, `baseBranch`, and `diffBase` stay untouched, no Git mutation runs, and one full-snapshot
+  `updated` is emitted.
+  **`name` and `branch` deliberately differ** after such a rename — the name is display-only and may repeat;
+  the branch shown beneath it disambiguates (see [[submodule-web-panels]]). Unknown/default/external ids and
+  invalid names still throw; callers decide presentation),
+  `listWorkspaces(projectId, { includeDiffStats? })` (**async**; complete authoritative membership/order
+  after Default ensure + user-owned folder-truth reconciliation — that sync prologue's load→mutate→save
+  completes before the first await; the diff-stat badges then resolve **in parallel through `gitAsync`**,
+  off the event loop, and **membership is re-read after the awaits** (the same stale-snapshot discipline
+  as the writers): a workspace created while the badges resolved must appear in this response, because its
+  `created` push may reach a client before this reply seeds that client's list, where a push into an
+  unlisted project is deliberately not folded — a mid-flight row ships without stats until the next list.
+  Cached stats attach to a fresh row **only when its diff-defining fields (`worktreePath`, `baseBranch`,
+  `diffBase`) still match the snapshot they were computed from** — a `setDiffBase` landing while the
+  badges resolved drops that row's badge the same way, never pairing the new ref with the old ref's
+  totals. `workspaceDiffKey` is this identity's single public definition, shared with `reviews` so a
+  review created across the same race retries against the new target instead of pinning the old one.
+  Diff stats default **on** for compatibility, while `includeDiffStats: false` skips the per-workspace
+  fan-out for cold navigation — an automatic reload on a shared host must not diff every worktree),
+  `listWorkspaceRecords`
+  (raw registry records without Default ensure, folder-truth reconciliation, or per-workspace git diffStats —
+  for internal read-only paths like history scope mapping that must not block on git spawns) and its
+  project-free sibling `listAllWorkspaceRecords` (every record, for host reads that must span workspaces
+  without knowing which projects are open — the all-workspace `session.stateList` read),
+  `workspaceDiffStats`, **`setWorkspaceSubagentsOverride(id, override)`** — persist `"on"` / `"off"`,
+  or delete `Workspace.subagentsOverride` for `null` (inherit), then emit the authoritative full
+  `workspace.updated` snapshot. It validates the closed value but never reads the global default or
+  resolves effective agent policy; the host composes that across sibling boundaries;
+  **`setWorkspaceSubagentMaxConcurrent(id, value | null)`** — the same contract for the numeric
+  `Workspace.subagentMaxConcurrentOverride` (a `SUBAGENT_MAX_CONCURRENT` whole number, `null` deletes);
+  **`setWorkspaceDiffBase(id, ref | null)`** — re-point the ref this workspace's diff is
+  measured against (`Workspace.diffBase`), `null` (or the creation base itself, which would be a redundant
+  override) clearing it; persists + **broadcasts the updated record** so every client converges on the push,
+  never optimistically (modelled exactly on `setWorkspaceSkillOverride`). Both **ref doors** — this one and
+  `createWorkspace`'s `baseRef` — validate the ref's *shape* through the `git` module's `assertSafeRef`
+  before it can reach a git argument (an option-shaped branch is reachable from any untrusted repo; see
+  [[submodule-server-git]]). `createWorkspace` validates the **resolved** base *unconditionally*, not just a
+  client-supplied one: with no base picked it comes from `rev-parse --abbrev-ref HEAD`, i.e. from the
+  repository, and an untrusted checkout can have an option-shaped branch checked out (`git branch` refuses such
+  a name, `symbolic-ref` does not) — both halves of the same door, closed by one check. **The two base meanings are two
+  fields on purpose:** `baseBranch` = where the branch came from (for a user-owned workspace, whose
+  provenance isn't ours to claim: the repo default as its *initial* review target, never labelled `from`),
+  `diffBase` = what its review is measured
+  against; collapsing them would make a re-pointed target lie about provenance (the `branch · from
+  baseBranch` receipt). Every read of "the base" resolves through the `git` module, never inline —
+  `diffStats` composes the git module's **branch-scope range** (`resolveDiffRange` +
+  `changedFileArgs(…, "--shortstat")`), so the workspace aggregate measures exactly what the Changes panel
+  shows (merge-base semantics included — upstream commits on the base never inflate it) and reaches git
+  bracketed by `--end-of-options` … `--` like every other rev this app passes. `diffStats` yields **no stats at all** (logged) when git couldn't
+  answer, rather than a fabricated `+0 −0` — a failed read must not paint a dirty worktree as clean; the
+  `Workspace.diffStats` field is simply absent, and `workspaceDiffStats` rejects,
+  `getWorkspace` (by-id lookup, throws on unknown — anchors a chat session's cwd),
+  and the **archive** primitives, split so the fast record-drop
+  and the slow git reclaim are separable (the host archives off the request's critical path):
+  `forgetWorkspace(id)` (drop the persistence record, return the removed record or `null` — gone from
+  `listWorkspaces` immediately), `reclaimWorktree(ws)` (the slow half — `git worktree remove --force`,
+  keeps the branch; hardened: rm + `prune` if git fails; **refuses both user-owned kinds and,
+  defense-in-depth, any record whose `worktreePath` resolves to the project folder** — the rm-fallback must
+  never see the user's repo or an attached checkout, however a corrupt/hand-edited record got there), and
+  `removeWorkspace(id)` (the synchronous composition of the two, kept for callers/tests that want the whole
+  archive in one call).
+- **Default workspace (`kind: "default"`):** exactly one per project. `listWorkspaces` **ensures** it
+  — find-or-create by `projectId`+`kind` (id a plain `randomUUID`; the `kind` field is the marker,
+  never an id convention), **collapsing duplicates** defensively if out-of-band state churn ever
+  produced two — and returns it **pinned first**. The in-list ensure is a **deliberate CQS exception**:
+  the query performs a registry write + lifecycle emit so that *any* caller self-heals out-of-band state
+  churn (backfills projects opened before the feature; the e2e reset rewrites `workspaces.json` mid-run)
+  — the write is to the app's registry under the data dir, never into the user's repo. No `git worktree
+  add` (the folder already is the
+  main working tree) and **no scratch-dir seeding at ensure** — merely listing a project must never
+  write into the user's repo (see `ensureWorkspaceScratchDir`). Fields are folder-truth, refreshed at
+  list time when drifted — **emitting `updated`** so every client's rail converges instead of one tab
+  staying stale after a terminal `git checkout` (`renameWorkspace` uses the same channel for the same
+  fields; the store's merge triggers no re-list, so there's no feedback loop): `branch` = the
+  folder's current HEAD (`symbolic-ref --short`, unborn-safe; detached → literal `HEAD`), `baseBranch`
+  = the repo's default branch via `git`'s `resolveDefaultBranch` (unborn-safe — its last fallback is
+  `currentBranch`, so the literal `"HEAD"` never persists) — so Default's Changes measure like
+  any workspace, degenerating to uncommitted work when the folder sits on the default branch itself.
+  Drift is **not** only a list-time discovery: `refreshUserOwnedWorkspace(workspaceId)` is the same
+  re-sync **without** the diff-stat listing (an external workspace re-syncs only its `branch`, and an
+  unreadable checkout is never persisted as a fake detached `HEAD`; unknown id / a managed workspace /
+  no drift → no save, no emit), which the host wires to `watch`'s **repo-metadata nudge** (host-mediated,
+  `watch` has no `workspaces` edge — see [[submodule-server-watch]]). So a `git switch` in the Default
+  workspace's terminal converges the rail, the top bar and the empty receipt live, instead of leaving
+  them on the old branch until a manual project reload — including a switch that leaves the working tree
+  byte-identical (`git switch -c`), which writes nothing outside `.git` (`gitStatus` reads its header branch live for
+  the same reason — see [[submodule-server-git]]).
+  First materialization emits `created` (idempotent for stores); a drift-free list emits nothing. Every
+  ensure emit — `created`, `updated`, the collapse's `removed`s — happens **after** the save, matching
+  the module's persist-then-publish order everywhere else. **Non-removable + non-renamable,
+  enforced here, not just hidden in the UI:** `forgetWorkspace` and `renameWorkspace` **throw** on
+  `kind: "default"` — forget would hand the archive teardown's `rm -rf` fallback the project folder,
+  rename would `git branch -m` the user's real branch; the record carries `renamed: true` so
+  `set_title` stays away as belt-and-suspenders.
+- **Settled lifecycle facts (host-owned, never the partition itself).** The record carries `lastActiveAt`,
+  `settledOverride` / `settledAt`, and the `review` snapshot described in [[module-contracts]]; which rows
+  are live and which sit on the shelf is a *client* derivation over these facts plus session state, so
+  this module never stores a "settled" boolean that could disagree with the rules. Writers:
+  `recordWorkspaceActivity(id, at = now)` — stamps `lastActiveAt`, **clears any `settledOverride`** (an
+  explicit park or pin is a statement about a quiet workspace; real work in it supersedes both), and
+  **coalesces** writes to at most one per minute per workspace so a streaming agent does not rewrite
+  `workspaces.json` per token — coalescing is only ever allowed when the skipped stamp could not change
+  the partition: the clearing of an override is never coalesced away, and neither is a stamp on a row
+  whose merged/closed review currently settles it (its previous stamp is not newer than the review's
+  `changedAt`). Every observation also advances an in-memory high-water mark: if work lands while the
+  stored review is still open and a later refresh first reveals that it had already merged, the review
+  writer flushes that coalesced stamp in the same save, so learning the merge cannot put newer work on the
+  shelf; `backfillWorkspaceActivity(id, at)` — sets the stamp only when the record has none and touches
+  no override (the upgrade path for records that predate the field); `recordWorkspaceHead(id)` — reads the
+  worktree's `HEAD` sha and calls `recordWorkspaceActivity` when it differs from the last sha observed in
+  this host lifetime (a HEAD move is the commit/pull/checkout proxy; the raw git-dir watcher fires on
+  index refreshes too, which is why the sha, not the event, is the signal), with `seedWorkspaceHead(id)`
+  observing HEAD **whenever a worktree watcher starts**: the first observation in a host lifetime seeds,
+  while watcher recreation compares against the retained baseline and counts work performed while the
+  watcher was absent. `settleWorkspace(id)` / `unsettleWorkspace(id)` — set `"settled"` / `"active"` with `settledAt`,
+  **throw on `kind: "default"`** (the project folder is never shelved); `setWorkspaceReview(id, review |
+  null, branch)` — persists the snapshot and emits `updated` only when it actually changed, so the periodic
+  provider refresh is silent while nothing moves, and **only while the record is still on the branch the
+  lookup was made for** — a provider answer is a fact about a branch, and an external worktree can be
+  switched during the seconds a lookup takes; for the same reason every persisted branch transition drops
+  the `review` snapshot — both user-owned folder-truth refresh and the managed workspace's one-time branch
+  rename — since a merged snapshot that outlived its branch would shelve the new branch and, being merged,
+  never be refreshed passively. Every writer emits
+  the full-snapshot `updated`.
+  `createWorkspace` and `openExistingWorktree` stamp `lastActiveAt` at creation so a brand-new row is
+  live by construction. **Migration:** the host backfills records without a stamp from the newest chat's
+  file time, else the worktree's `.git` gitfile mtime (≈ `worktree add` time), else now — so after the
+  upgrade a dormant backlog settles itself while anything with recent chats or an open PR stays live.
+- **Initial-terminal provisioning is a durable host handshake.** Every workspace record first persisted by
+  `createWorkspace`, `openExistingWorktree`, or Default ensure carries optional literal
+  `initialTerminalPending: true`. `host` idempotently reserves the deterministic process-free terminal tab,
+  then calls `completeInitialTerminalReservation(id)`, which clears the marker, persists, and publishes the
+  updated workspace. Reservation failure leaves it pending for the host's boot/create recovery pass; success
+  clears before any frontend placement. Only records created by the current code receive the marker; records
+  without it are treated as complete and never backfilled, so an upgrade cannot resurrect a default terminal
+  the user previously closed. No layout revision participates.
+- **`ensureWorkspaceScratchDir(ws)`** — idempotent seed of the gitignored `WORKSPACE_CONTEXT_DIR`
+  scratch dir (mkdir + self-ignoring `*` `.gitignore`); the host calls it on **session create** for
+  every workspace, so the Default workspace writes into the user's repo only when a chat actually
+  starts there (worktree creation still seeds eagerly at create; this also self-heals a worktree
+  whose scratch dir was deleted). Hardened, because in the Default workspace it runs against
+  **repository-controlled content**: it **throws when the workspace root is missing** (an externally
+  deleted worktree must fail the session loudly, not be resurrected as an empty non-git dir); it
+  **refuses symlinked path components** (`lstat`, never followed — a malicious checkout can't redirect
+  the seed outside the workspace); and the `.gitignore` write is **exclusive-create (`wx`) — only when
+  the file is absent**: in the Default workspace that path is inside the user's own repo, where an
+  existing (possibly tracked, possibly customized) file is theirs to keep. The leaf is `lstat`-checked
+  first, so any entry already there, a (possibly dangling) symlink included, counts as present: POSIX
+  `O_EXCL` refuses to follow a symlink, but Windows' exclusive create (`CREATE_NEW`) follows the reparse
+  point and would write outside the checkout. Seeding fills the gap, never overwrites (pinned by
+  regression tests, the symlink one wherever the host may create symlinks).
+- **Lifecycle events:** every membership mutation — `createWorkspace` (`created`), `renameWorkspace`
+  (`updated`, the agent's `set_title` included since it goes through it), `forgetWorkspace`
+  (`removed`) — emits a `WorkspaceLifecycleEvent` through an **injected publisher** (`setWorkspacePublisher`,
+  the same inversion `terminal`/`agent`/`auth` use; `null` in unit tests / the e2e reset → silent no-op).
+  The module stays ignorant of WS channels: it emits a domain event (`created`/`updated` carry the record,
+  `removed` carries `{ projectId, id }`) and the host maps `kind` → `workspace.*` channel. This makes the
+  module the **single source of workspace lifecycle pushes** (the naming handler never pushes — rename
+  self-publishes), so registry membership stays shared domain state across every client (architecture #9).
+- **Public surface (barrel):** `createWorkspace`, `listExistingWorktrees`, `openExistingWorktree`,
+  `listWorkspaces`, `listWorkspaceRecords`, `listAllWorkspaceRecords`, `forgetWorkspace`,
+  `reclaimWorktree`, `removeWorkspace`,
+  `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
+  `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
+  `WorkspaceLifecycleEvent`, `setWorkspaceDiffBase`, `setWorkspaceSkillOverride`,
+  `setWorkspaceSubagentsOverride`, `setWorkspaceSubagentMaxConcurrent`, `recordWorkspaceActivity`, `backfillWorkspaceActivity`,
+  `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`,
+  `CHATS_CONTAINER_NAME`, `CHAT_WORKSPACE_NAME`, `chatsRoot`, `isChatsContainer`, `isChatWorkspace`,
+  `isChatsContainerId`, `isChatWorkspaceId`, `resetChatIdCache`, `ensureChatsContainer`, `findChatsContainer`,
+  `createChatRecord`, `chatWorkspaces`, `getChatWorkspace`, `markChatDeletionPending`,
+  `recordChatContinuation`, `dropChatRecord`, `setChatPublishers`, `assertNotChatsContainer`,
+  `assertNotChatWorkspace`.
+- **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;
+  `@thinkrail/shared/paths` (the scratch-dir path convention); Node.
+- **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

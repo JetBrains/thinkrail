@@ -384,6 +384,19 @@ test("prefetch fetches from the remote the ref names, and refuses a remote-shape
 	expect(await prefetchBranch("p1", "upstairs/trunk")).toEqual({ ok: false, moved: false });
 });
 
+test("an aborted prefetch fetches nothing", async () => {
+	addSecondRemote();
+	git(repo, "update-ref", "-d", "refs/remotes/upstream/trunk");
+	const stopped = new AbortController();
+	stopped.abort();
+
+	expect(await prefetchBranch("p1", "upstream/trunk", stopped.signal)).toEqual({
+		ok: false,
+		moved: false,
+	});
+	expect(await prefetchBranch("p1", "upstream/trunk")).toEqual({ ok: true, moved: true });
+});
+
 test("prefetch honors a legal remote name containing a slash", async () => {
 	const nestedRepo = join(dataDir, "team-upstream.git");
 	git(repo, "init", "--bare", nestedRepo);
@@ -633,6 +646,26 @@ test("resolveDiffRange degrades a root commit to an add-style diff (no parent to
 	expect((await gitDiffFile("w1", "README.md", { kind: "commit", sha: root })).originalOid).toBe(
 		null,
 	);
+});
+
+test("an unborn HEAD lists staged and untracked files as added instead of failing", async () => {
+	const fresh = join(dataDir, "fresh");
+	mkdirSync(fresh);
+	git(fresh, "init", "-b", "feature");
+	writeFileSync(join(fresh, "staged.txt"), "a\nb\n");
+	writeFileSync(join(fresh, "loose.txt"), "c\n");
+	git(fresh, "add", "staged.txt");
+	seedWorkspace({ worktreePath: fresh, branch: "feature", baseBranch: "feature" });
+
+	for (const scope of [{ kind: "branch" }, { kind: "uncommitted" }] as const) {
+		const { changes } = await gitStatus("w1", scope);
+		expect(changes).toEqual([
+			{ path: "loose.txt", status: "untracked", added: 1, removed: 0 },
+			{ path: "staged.txt", status: "added", added: 2, removed: 0 },
+		]);
+		const diff = await gitDiffFile("w1", "staged.txt", scope);
+		expect(diff).toMatchObject({ original: "", modified: "a\nb\n", originalOid: null });
+	}
 });
 
 test("resolveDiffRange rejects a non-oid sha before it reaches git, and an unknown commit", async () => {

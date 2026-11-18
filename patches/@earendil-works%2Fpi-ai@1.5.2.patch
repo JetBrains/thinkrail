@@ -1,0 +1,80 @@
+diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
+--- a/dist/api/anthropic-messages.js
++++ b/dist/api/anthropic-messages.js
+@@ -454,11 +454,14 @@
+     }
+     return Math.min(carriageReturnIndex, newlineIndex);
+ }
+-function consumeLine(text) {
++function consumeLine(text, final) {
+     const lineBreakIndex = nextLineBreakIndex(text);
+     if (lineBreakIndex === -1) {
+         return null;
+     }
++    if (!final && text[lineBreakIndex] === "\r" && lineBreakIndex === text.length - 1) {
++        return null;
++    }
+     let nextIndex = lineBreakIndex + 1;
+     if (text[lineBreakIndex] === "\r" && text[nextIndex] === "\n") {
+         nextIndex += 1;
+@@ -483,25 +486,25 @@
+                 break;
+             }
+             buffer += decoder.decode(value, { stream: true });
+-            let consumed = consumeLine(buffer);
++            let consumed = consumeLine(buffer, false);
+             while (consumed) {
+                 buffer = consumed.rest;
+                 const event = decodeSseLine(consumed.line, state);
+                 if (event) {
+                     yield event;
+                 }
+-                consumed = consumeLine(buffer);
++                consumed = consumeLine(buffer, false);
+             }
+         }
+         buffer += decoder.decode();
+-        let consumed = consumeLine(buffer);
++        let consumed = consumeLine(buffer, true);
+         while (consumed) {
+             buffer = consumed.rest;
+             const event = decodeSseLine(consumed.line, state);
+             if (event) {
+                 yield event;
+             }
+-            consumed = consumeLine(buffer);
++            consumed = consumeLine(buffer, true);
+         }
+         if (buffer.length > 0) {
+             const event = decodeSseLine(buffer, state);
+@@ -511,7 +514,7 @@
+         }
+         const trailingEvent = flushSseEvent(state);
+         if (trailingEvent) {
+-            yield trailingEvent;
++            yield { ...trailingEvent, incomplete: true };
+         }
+     }
+     finally {
+@@ -531,8 +534,20 @@
+         if (!ANTHROPIC_MESSAGE_EVENTS.has(sse.event ?? "")) {
+             continue;
+         }
++        let trailingEvent;
++        if (sse.incomplete) {
++            try {
++                trailingEvent = JSON.parse(sse.data);
++            }
++            catch {
++                continue;
++            }
++            if (typeof trailingEvent !== "object" || trailingEvent === null) {
++                continue;
++            }
++        }
+         try {
+-            const event = parseJsonWithRepair(sse.data);
++            const event = trailingEvent ?? parseJsonWithRepair(sse.data);
+             if (event.type === "message_start") {
+                 sawMessageStart = true;
+             }

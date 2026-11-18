@@ -12,6 +12,7 @@ import { OpenProjectPathDialog } from "./OpenProjectPathDialog";
 import { explainOpenFailure } from "./openProjectFailure";
 
 const PICK_TIMEOUT_MS = 30 * 60_000;
+const INIT_TIMEOUT_MS = 13 * 60_000;
 const projectOpenIntents = createLatestOperation();
 
 export type OpenedProjectIntent = { setup: boolean };
@@ -68,7 +69,11 @@ export function useOpenProject(
 	const initProject = async (path: string) => {
 		const isCurrent = projectOpenIntents.begin();
 		try {
-			const project = await getTransport().request("project.init", { path });
+			const project = await getTransport().request(
+				"project.init",
+				{ path },
+				{ timeoutMs: INIT_TIMEOUT_MS },
+			);
 			if (!isCurrent()) return;
 			await adopt(project, isCurrent);
 			if (!isCurrent()) return;

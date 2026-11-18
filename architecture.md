@@ -40,7 +40,8 @@ packages/locales    UI string catalogs (bundled en.json) + pure catalog rules; .
                     instance ── depends on ─▶ nothing in the workspace (i18next, react-i18next)
 packages/shared     shellEnv (server-side only)
 packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server;
-                    its pi-free core/ read model also backs the host's spec.graph read method)
+                    its pi-free core/ read model also backs the host's spec.graph read method and the
+                    palette's ranked section search — the engine the agent's spec_search uses)
 packages/pi-delegation         portable pure-pi package: the delegation core — controlled child sessions
                     for live session parents or independent resource owners
 packages/pi-dag               portable durable backend DAGs over pi-delegation; host-owned resources;
@@ -427,8 +428,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
     mailbox** (`awaitToolResponse`) — the first per-session host service an extension receives. The
     mailbox, restart repair, late responses, composer supersede, Stop/Submit, needs-input and the web
     `interaction` props are **tool-agnostic**: keyed by `toolCallId`, told which tool names wait for a
-    person by the descriptor's `interactiveTools` and the renderer's `interactive` flag, and never
-    naming a tool in `contracts`, `agent` or `apps/web`. `ask_user_question` is the first client of that
+    person by the descriptor's `interactiveTools` and the renderer's `interactive` flag (plus `dock`, which
+    moves an awaited call's live form from the transcript into the chat's interaction dock above the
+    composer), and never naming a tool in `contracts`, `agent` or `apps/web`. `ask_user_question` is the first client of that
     contract, not a special case; the extension is deletable without touching the core (the vanilla
     package then falls back to pi's `ctx.ui` dialogs, which the host already renders). Product rule: a
     built-in (registry) extension wins a same-name tool collision with a user package while it is
@@ -436,7 +438,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
     Third: web-access — the first wrap of a **third-party** pi package (`pi-web-access`), so there is no
     package of ours to publish and delivery collapses to the server half; its renderers stay app-local
     until the components they use join the SDK. It loads everything the package declares, as `pi install`
-    would — tools and its `librarian` skill — and is the first extension with skills, so the switch now
+    would, plus the `librarian` skill upstream later dropped, which the extension now owns — and is the
+    first extension with skills, so the switch now
     drops an extension's skills with its tools (launchers stage them under an owner folder so ownership
     survives flattening). Detail: [[module-thinkrail-extensions]].
 
@@ -539,5 +542,6 @@ dependency. This keeps test process drivers outside both launchers and the serve
   This includes PR revalidation on window focus; terminal-busy checks are close actions and Central quota
   resumes on visibility changes, not ordinary focus. Sync and fire-and-forget cases use
   `@thinkrail/shared/spawn`; bespoke bounded runners set the option directly. Exempt: spawns that inherit
-  an existing terminal's stdio (the `update`/`uninstall` CLI subcommands, the build script) and shell
-  probes that are no-ops on win32 (`shellEnv`).
+  an existing terminal's stdio (the `update`/`uninstall` CLI subcommands, the build script), shell
+  probes that are no-ops on win32 (`shellEnv`), and the file-manager reveal (`explorer.exe` honors the
+  hide flag by opening its folder window invisibly).

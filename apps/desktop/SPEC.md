@@ -103,7 +103,8 @@ another.
    `Utils.openExternal` callback used by the host's one-shot browser attribution claim. The callback passes through
    `DesktopHostOptions` and the generated runtime. The first native-window `dom-ready` explicitly calls the
    proxied `host.server.startAttributionClaim()` readiness method; host boot and elapsed time do not start a
-   saved-choice claim. No deep-link or RPC surface is added. The runtime also passes `appRoot`
+   saved-choice claim. The launcher registers `thinkrail` as a macOS URL scheme (`app.urlSchemes`);
+   the only deep-link surface is the `open-url` path below. The runtime also passes `appRoot`
    (`runtimeDir/..`, i.e. `Resources/app`) so error-report frames are rooted at the packaged app, and returns
    `reportDesktopError` as `DesktopHost.reportError`.
 5. Restore the valid route fragment and bounded client-preference map for
@@ -243,6 +244,14 @@ yields gestures claimed by page content and forwards validated scales; the main 
 at gesture start and applies each absolute scale against that baseline, bounded to 50%–200%, so updates never
 compound or introduce a second zoom owner. The web app owns no duplicate shortcut, gesture, or zoom state.
 
+The web app claims the main-row `Mod+0` (focus Projects, [[submodule-web-keybindings]]) in its capture
+phase, so the preload yields it and reset stays on `Mod+Numpad0`: the numpad key types `0` for the preload's
+`key` match and is not the web's `Digit0`. The preload also exposes the frozen non-enumerable
+`__THINKRAIL_NATIVE_PAGE_ZOOM__` `NativePageZoomBridge` ([[module-contracts]]) on every desktop platform:
+`request("in" | "out" | "reset")` sends the same `pageZoomRequested` message as the chords. The web palette's
+Zoom in / Zoom out / Reset zoom rows ([[submodule-web-shell]]) call it, so a keyboard without a numpad can
+still reset zoom; they display `Mod+=`, `Mod+-` and `Mod+Numpad0` and bind nothing.
+
 ## Native window chrome
 
 The web topbar ([[submodule-web-shell]]) is the window's title bar wherever the framework lets native
@@ -332,9 +341,12 @@ The native window permits navigation only within its exact loopback origin. User
 open through the OS exactly once instead of replacing the app surface. Native navigation rules enforce
 confinement: navigation-event responses cannot cancel it. The launcher applies them with
 `webview.setNavigationRules` right after creating the window: block everything, then allow the origin,
-`about:srcdoc`, and same-origin `blob:`. HTML, SVG and notebook previews update `srcDoc` in place and
+`about:srcdoc`, and same-origin `blob:`, then block the origin's `WORKSPACE_VIEW_ROUTE` (`/view/`) again
+(last match wins). HTML, SVG and notebook previews update `srcDoc` in place and
 every srcdoc load is policy-checked, so blocking `about:srcdoc` blanks them; `blob:` keeps downloads
-working. Electrobun 2.0.5 documents a `navigationRules` constructor option but never forwards it to
+working. Agent mockups do not run their scripts in the desktop window at all: Electrobun's message bridges answer
+every frame, so the web app keeps them static there ([[module-resource-renderers]],
+[[electrobun-compatibility]]). Electrobun 2.0.5 documents a `navigationRules` constructor option but never forwards it to
 native code, so the launcher does not use it.
 
 Every external link activation reaches the OS through one path. The desktop preload turns unmodified
@@ -346,7 +358,10 @@ WebView2 report nothing for `_blank` or `window.open`, because Electrobun handle
 `NEW_WINDOW_ACTION` nor `NewWindowRequested` (the WebView2 half is
 [electrobun#569](https://github.com/blackboardsh/electrobun/issues/569)). Cmd/Ctrl-click keeps
 Electrobun's own preload path, which emits `new-window-open`. Clicks the page already handled, `download`
-links, same-origin URLs, and schemes outside the allowlist below stay with the page. Both gaps' removal
+links, same-origin URLs, and schemes outside the allowlist below stay with the page — except a same-origin
+`/view/` URL, the host's browser view of a workspace file ("Open in browser"): it is external by intent,
+so the preload routes it like an outside link, the trailing block rule cancels it, and the OS opens it. The
+URL carries this launch's port, so one kept after a restart no longer resolves. Both gaps' removal
 gates live in [[electrobun-compatibility]]. On Windows a cancelled navigation may still send its GET request (WebView2's documented behaviour); the
 window stays on its page and never commits the URL. Post-mortem: before the rules were applied explicitly,
 every navigation was allowed. A non-`_blank`
@@ -358,6 +373,23 @@ channels; the unscoped payload has no webview id, and the instance listener's ty
 popups. Payload types are derived from SDK event factories, not copied into local declarations. Detail
 can be a raw URL, a popup object, or serialized navigation JSON; bounded decoding retains only a string
 URL and the HTTP/HTTPS/mailto allowlist, which the preload routing reuses.
+
+**Deep links.** The packaged macOS app registers `thinkrail://` through `app.urlSchemes`; LaunchServices
+registers it only for a copy in `/Applications`. Electrobun 2.0.5 has no Windows or Linux scheme
+registration, so there the scheme is not registered and such a link does nothing. `deepLink.ts` accepts
+exactly `thinkrail://open?file=<absolute path>&line=<1-based>&column=<optional>` (`line` defaults to 1,
+positions are whole numbers up to 2,000,000, unknown parameters are ignored). Values decode like
+`decodeURIComponent`, not form encoding, so an unencoded LocatorJS template keeps `+page.svelte`'s `+`. Any
+other scheme, host, port, user info, path or fragment, a duplicated parameter, a relative path, a `..`
+segment, a control character, or an over-long URL/path rejects the whole link — the link names a file and
+nothing else; it never navigates the webview or runs anything. `entry.ts` evaluates `deepLinkBootstrap.ts`
+before `index.ts`, so its `open-url` listener exists before `electrobun/main` installs the native URL handler
+that delivers a cold-launch URL ([[electrobun-compatibility]]); the bootstrap holds requests until the first
+`dom-ready`, after which each one unminimizes, shows and activates the window and is sent as a
+`NativeOpenFileRequest` over the `openFile` webview message. The preload queues any that arrive before the web
+client subscribes. The web client opens only files inside already-open projects' workspaces, which the host
+matches on real paths, see [[submodule-web-shell]]; containment, `.git` and symlink escapes stay the host's
+`fs.readFile` checks.
 
 A desktop preload sends typed, one-way route, local-preference, page-zoom, and title-bar double-click
 messages, and is the only writer of the window-chrome CSS properties described above. It wraps
@@ -501,6 +533,16 @@ three gaps, closed by the project:
   ICO) through `user32` and sends it to the splash and the main window, sized for the window's DPI. A
   failure is reported and non-fatal.
 
+  `WM_SETICON` stores the handle rather than copying the icon, so each icon must outlive its window.
+  They are set once per window and never destroyed: four handles for the life of the process, which
+  the OS reclaims at exit; nothing grows, so a `DestroyIcon` pass would only matter if icons were
+  re-applied. They are not re-applied on `WM_DPICHANGED` either: after a move to a monitor with another
+  scale, Windows rescales the loaded frames, so the Alt+Tab and Task Manager icon can read slightly soft
+  until a restart. The native caption icon is never shown (`hiddenInset` with the app's own controls),
+  and a pinned taskbar button takes its icon from the launcher. Re-applying would mean subclassing the
+  window procedure from Bun FFI with a callback on the native message thread, which is out of proportion
+  to that effect; the decision is deliberate.
+
 Removal gates for both live in [[electrobun-compatibility]].
 
 **Taskbar identity.** A pinned shortcut targets the launcher while the window belongs to `bun.exe`, and
@@ -592,8 +634,10 @@ only the private pipeline's verified final DMG is a signed release. The handoff 
 belong to [[module-ci-release]].
 
 Linux uses native WebKitGTK without CEF and declares Ubuntu 24.04+/glibc 2.38 plus `libgtk-3-0`,
-`libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, and `librsvg2-2`. Xvfb software-rendering flags are
-CI-only and are never shipped as user configuration.
+`libwebkit2gtk-4.1-0`, `libayatana-appindicator3-1`, and `librsvg2-2`. Desktop notifications also need
+`libnotify-bin`: Electrobun shows them by running the `notify-send` it provides, and without it they are
+dropped.
+Xvfb software-rendering flags are CI-only and are never shipped as user configuration.
 
 ## Auto-update policy
 
@@ -642,6 +686,6 @@ release checks described in [[module-ci-release]].
 
 ## Deferred
 
-Shared/remote backend profiles, profile selection, multi-window/deep-link routing, and CEF. Removing
-Electrobun workarounds follows [[electrobun-compatibility]]. The update feed publication described above
-remains release-owned.
+Shared/remote backend profiles, profile selection, multi-window routing, Windows/Linux URL-scheme
+registration, and CEF. Removing Electrobun workarounds follows [[electrobun-compatibility]]. The update
+feed publication described above remains release-owned.

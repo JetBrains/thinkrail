@@ -10,7 +10,12 @@ function registeredTool(contrastSetting: boolean): ToolDefinition {
 		expectToolResponse: () => {},
 		awaitToolResponse: async () => ({ kind: "abandoned" }),
 		setting: (key) => (key === "contrast" ? contrastSetting : false),
-		workspaceFiles: { check: async () => {}, scratchDir: "/tmp" },
+		workspaceFiles: {
+			check: async () => {},
+			ensureArtifactsDir: async () => {},
+			scratchDir: "/tmp",
+			artifactsDir: "/tmp",
+		},
 	};
 	const tools: ToolDefinition[] = [];
 	const pi = {

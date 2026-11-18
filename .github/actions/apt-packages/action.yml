@@ -21,7 +21,7 @@ runs:
         sudo apt-get update
         plan=$(apt-get -s install --no-install-recommends "${packages[@]}" | { grep '^Inst ' || true; } | sort)
         echo "key=$SET-apt-$(sha256sum <<< "$plan" | cut -c1-16)" >> "$GITHUB_OUTPUT"
-    - uses: actions/cache@v5
+    - uses: actions/cache@v6
       with:
         path: ~/.cache/${{ inputs.set }}-apt
         key: ${{ steps.plan.outputs.key }}

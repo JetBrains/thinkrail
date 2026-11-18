@@ -199,7 +199,7 @@ function HiddenRun({
 			type="button"
 			data-testid="rendered-diff-collapsed"
 			onClick={() => setExpanded(true)}
-			className="my-12 flex w-full items-center gap-8 rounded-sm bg-container-header-bg px-12 py-4 tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+			className="my-12 flex w-full items-center gap-8 rounded-sm bg-container-header-bg px-12 py-4 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:focus-ring-inset"
 		>
 			<Expand className="size-14 shrink-0" />
 			<span className="shrink-0">

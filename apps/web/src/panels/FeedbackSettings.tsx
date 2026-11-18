@@ -62,7 +62,7 @@ function EmailLink({ children }: { children?: ReactNode }) {
 	return (
 		<a
 			href={`mailto:${FEEDBACK_EMAIL}`}
-			className="text-primary underline underline-offset-2 hover:opacity-80"
+			className="text-primary underline underline-offset-2 hover:opacity-80 focus-visible:focus-ring"
 		>
 			{children}
 		</a>

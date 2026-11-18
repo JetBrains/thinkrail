@@ -1,4 +1,9 @@
-import { type AppConfigUpdate, isLineWidth, LINE_WIDTH_COLUMNS } from "@thinkrail/contracts";
+import {
+	type AppConfigUpdate,
+	isLineWidth,
+	LINE_WIDTH_COLUMNS,
+	type LineWidthKind,
+} from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
@@ -7,8 +12,6 @@ import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
 import { SettingsSwitch } from "./SettingsSwitch";
 import { saveSettings } from "./saveSettings";
 import { SETTINGS_INPUT, useSettingsDraft } from "./settingsDraft";
-
-type LineWidthKind = "chat" | "file";
 
 const COPY = {
 	chat: {

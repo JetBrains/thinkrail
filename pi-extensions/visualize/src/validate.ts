@@ -17,6 +17,23 @@ export function fileSources(params: VisualizeParams): FileSource[] {
 	return sources;
 }
 
+export function visualizedPaths(args: unknown, details: unknown): string[] {
+	const paths: string[] = [];
+	if (typeof args === "object" && args !== null && "type" in args && args.type === "file") {
+		if ("path" in args && typeof args.path === "string" && args.path) paths.push(args.path);
+		if ("before" in args && typeof args.before === "string" && args.before) paths.push(args.before);
+	}
+	if (
+		typeof details === "object" &&
+		details !== null &&
+		"savedPath" in details &&
+		typeof details.savedPath === "string" &&
+		details.savedPath
+	)
+		paths.push(details.savedPath);
+	return paths;
+}
+
 export function mermaidSources(params: VisualizeParams): MermaidSource[] {
 	if (params.type === "file") return [];
 	if (params.type === "diagram") {

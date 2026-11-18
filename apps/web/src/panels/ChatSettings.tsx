@@ -1,6 +1,13 @@
-import type { ComposerGrowthLimit, SubagentOverride } from "@thinkrail/contracts";
+import {
+	type ComposerGrowthLimit,
+	isQuestionPanelHeight,
+	QUESTION_PANEL_HEIGHT_PERCENT,
+	QUESTION_PANEL_PROTOCOL_VERSION,
+	type SubagentOverride,
+} from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
+import { cn } from "@thinkrail/ui/utils";
 import type { ChatMessageOrder } from "@/chat/chatPreferences";
 import { selectActiveWorkspace, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
@@ -10,6 +17,7 @@ import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
 import { SettingsRow } from "./SettingsRow";
 import { SubagentSettings } from "./SubagentSettings";
 import { saveSettings } from "./saveSettings";
+import { SETTINGS_INPUT, useSettingsDraft } from "./settingsDraft";
 
 type OptionSpec<T extends string> = SegmentedControlOption<T> & { label: MessageKey };
 
@@ -32,10 +40,81 @@ const GROWTH_OPTIONS: OptionSpec<ComposerGrowthLimit>[] = [
 	{ id: "half-chat", label: "settings.chat.growth.halfChat", testId: "composer-growth-half-chat" },
 ];
 
+function parsedPanelHeight(draft: string): number | null {
+	if (!/^\d+$/.test(draft)) return null;
+	const value = Number(draft);
+	return isQuestionPanelHeight(value) ? value : null;
+}
+
+export function QuestionPanelHeightControl({
+	protocolVersion,
+	value,
+}: {
+	protocolVersion: number | null;
+	value: number;
+}) {
+	const t = useT();
+	const { invalid, inputProps } = useSettingsDraft({
+		saved: String(value),
+		isValid: (draft) => parsedPanelHeight(draft) !== null,
+		commit: (draft) => {
+			const parsed = parsedPanelHeight(draft);
+			if (parsed === null || parsed === value) return undefined;
+			return saveSettings(
+				{ questionPanelHeight: parsed },
+				t("settings.chat.questionPanelHeightFailed"),
+			);
+		},
+	});
+	const errorId = "question-panel-height-error";
+	if (protocolVersion === null || protocolVersion < QUESTION_PANEL_PROTOCOL_VERSION) return null;
+
+	return (
+		<SettingsRow
+			label={t("settings.chat.questionPanelHeight")}
+			description={
+				<>
+					{t("settings.chat.questionPanelHeightDescription")}
+					{invalid ? (
+						<span
+							id={errorId}
+							data-testid={errorId}
+							className="block text-feedback-error tr-text-metadata"
+						>
+							{t("settings.chat.questionPanelHeightInvalid", {
+								min: QUESTION_PANEL_HEIGHT_PERCENT.min,
+								max: QUESTION_PANEL_HEIGHT_PERCENT.max,
+							})}
+						</span>
+					) : null}
+				</>
+			}
+			control={
+				<span className="flex items-center gap-4 text-text-muted tr-text-ui">
+					<input
+						type="number"
+						min={QUESTION_PANEL_HEIGHT_PERCENT.min}
+						max={QUESTION_PANEL_HEIGHT_PERCENT.max}
+						step={1}
+						inputMode="numeric"
+						{...inputProps}
+						aria-label={t("settings.chat.questionPanelHeightInput")}
+						aria-describedby={invalid ? errorId : undefined}
+						data-testid="question-panel-height-input"
+						className={cn(SETTINGS_INPUT, "w-64")}
+					/>
+					{t("settings.chat.questionPanelHeightUnit")}
+				</span>
+			}
+		/>
+	);
+}
+
 export function ChatSettings() {
 	const t = useT();
 	const messageOrder = useAppStore((state) => state.chatMessageOrder);
 	const growthLimit = useAppStore((state) => state.composerGrowthLimit);
+	const panelHeight = useAppStore((state) => state.questionPanelHeight);
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
 	const subagentsEnabled = useAppStore((state) => state.subagentsEnabled);
 	const subagentMaxConcurrent = useAppStore((state) => state.subagentMaxConcurrent);
@@ -104,6 +183,7 @@ export function ChatSettings() {
 						/>
 					}
 				/>
+				<QuestionPanelHeightControl protocolVersion={protocolVersion} value={panelHeight} />
 				<LineWidthControl kind="chat" />
 			</SettingsGroup>
 

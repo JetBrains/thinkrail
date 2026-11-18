@@ -44,6 +44,22 @@ describe("parseToolResultContent", () => {
 		expect(resultText(result)).toBe(parsed.text);
 	});
 
+	it("accepts host image references under the images route, sized only by positive integers", () => {
+		const ref = `/images/session-1/${"a".repeat(64)}`;
+		const parsed = parseToolResultContent({
+			content: [
+				{ type: "image", ref, mimeType: "image/png", width: 800, height: 600 },
+				{ type: "image", ref, mimeType: "image/png", width: 0, height: 600 },
+				{ type: "image", ref: "https://elsewhere.test/x.png", mimeType: "image/png" },
+				{ type: "image", ref, mimeType: "image/svg+xml" },
+			],
+		});
+		expect(parsed.images).toEqual([
+			{ type: "image", ref, mimeType: "image/png", width: 800, height: 600 },
+			{ type: "image", ref, mimeType: "image/png" },
+		]);
+	});
+
 	it("keeps image-only and empty canonical results free of fallback JSON", () => {
 		const image = { type: "image", data: "cG5n", mimeType: "image/png" } as const;
 		expect(parseToolResultContent({ content: [image] })).toEqual({ text: "", images: [image] });

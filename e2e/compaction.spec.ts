@@ -39,7 +39,8 @@ test("a compacted transcript marks where the summarized messages were", async ({
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	await expect(page.getByText("kept question")).toBeVisible();
-	await expect(page.getByText("summarized question")).toHaveCount(0);
+	await expect(page.getByText("summarized question")).toBeVisible();
+	await expect(page.getByText("summarized answer")).toBeVisible();
 
 	const marker = page.getByTestId("chat-compaction");
 	await expect(marker).toContainText("Context compacted");
@@ -47,4 +48,5 @@ test("a compacted transcript marks where the summarized messages were", async ({
 	await expect(page.getByText("Renamed the widget factory.")).toHaveCount(0);
 	await marker.getByRole("button").click();
 	await expect(page.getByText("Renamed the widget factory.")).toBeVisible();
+	await expect(page.getByText("summarized question")).toBeVisible();
 });

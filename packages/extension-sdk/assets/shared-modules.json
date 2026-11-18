@@ -108,10 +108,19 @@
 			"watchFont"
 		],
 		"@thinkrail/extension-sdk/ui/keyboard": [
+			"ARROW_TWINS_SCOPE",
+			"ARROW_TWIN_COMMANDS",
+			"ariaKeyShortcuts",
 			"browserPlatform",
+			"chordCaps",
+			"chordPressed",
+			"codeLabel",
 			"hasPlatformModifier",
 			"isApplePlatform",
 			"isImeComposing",
+			"isTypingChord",
+			"keyCap",
+			"twinArrow",
 			"yieldEscapeToIme"
 		],
 		"@thinkrail/extension-sdk/ui/textarea": ["Textarea"],

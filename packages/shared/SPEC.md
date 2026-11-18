@@ -29,7 +29,14 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   launchers stamp on their executables, `windowsProductName()`, the per-channel product name alone, and
   `windowsIconPath`, the ICO they embed;
   `@thinkrail/shared/paths` → the worktree-relative path conventions (`WORKSPACE_INTERNAL_DIR`,
-  `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`);
+  `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`, `DELETE_CLAIM_PREFIX`);
+  `@thinkrail/shared/artifactsDir` → `seedArtifactsDir(root)`, the one way anything in the host creates the
+  artifacts folder: each path part is created non-recursively and must be a real directory (a link is
+  refused, never followed), and the self-ignoring `*` `.gitignore` is written only when absent
+  (exclusive create). `workspaces` seeds at session start, `artifacts` before a restore and before a
+paste into the folder, and extensions
+  through `WorkspaceFiles.ensureArtifactsDir` before saving — so recreating a folder someone cleaned never
+  leaves files git would stage;
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
   `@thinkrail/shared/toolHomes` → `toolHomeEnv(home)`, the environment that points every agent tool's
   config home (Claude Code, Codex, Gemini, Copilot, Kimi, Grok) under one sandbox home and clears the
@@ -58,8 +65,9 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   caller reading binary child output the UTF-8 decoder would replace — stderr stays decoded text, since a
   diagnostic is only ever read as text) and
   `spawnDetached()` (fire-and-forget `unref`) over `Bun.spawnSync` / `Bun.spawn`, always
-  `windowsHide: true`. Bun 1.4.0 maps that option to libuv `UV_PROCESS_WINDOWS_HIDE`; the seam prevents
-  background console spawns from omitting it. The two bespoke bounded runners (`server/subprocess`
+  `windowsHide: true` except where a `spawnDetached` caller passes `windowsHide: false` to launch a GUI
+  app whose own window is the point (the file-manager reveal). Bun 1.4.0 maps that option to libuv
+  `UV_PROCESS_WINDOWS_HIDE`; the seam prevents background console spawns from omitting it. The two bespoke bounded runners (`server/subprocess`
   `runBounded`, `jbcentral`'s version/quota runner) set it directly.
 - **Allowed deps:** Bun/Node runtime (`@types/bun`); `contracts` **types** (`JbcentralInstall`, the wire shape `jbcentralInstall`
   returns — kept in the wire so the server can carry it to the card verbatim); the icon generator's
@@ -125,7 +133,13 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   takes the four numeric parts Windows requires: `X.Y.Z` plus the prerelease's trailing number
   (`0.3.0-nightly.6` → `0.3.0.6`), else `.0`. An unknown channel or a part above 65535 throws, so a
   release build fails rather than ship wrong properties. The CLI compile, the desktop `postBuild` and
-  both Windows smokes (CLI and desktop) derive from it, so they cannot disagree.
+  both Windows smokes (CLI and desktop) derive from it, so they cannot disagree. The mapping is lossy
+  by design: a stable `0.3.0.0` sorts below the nightlies `0.3.0.N` that preceded it, since four numbers
+  cannot say "pre-release". That order is never compared: stable and nightly are separate installs that
+  never replace each other's files, no MSI versioning is involved, each channel's own sequence is
+  monotonic, and the product name already tells the channels apart. Encodings that force the order
+  (`.65535` for stable, nightlies under the previous patch) only misreport the version, so they are
+  rejected.
 - **/assets** — the native icon set: the hand-authored `icon.svg` and the rasters generated from it.
   Never hand-edit a raster; regenerate them with `bun run --cwd packages/shared generate-icons`
   (`@resvg/resvg-js` rasterizes straight from the vector, `resedit` packs the ICO). The outputs are the
@@ -161,9 +175,12 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   consumers agree (today: `workspaces` *creates* the scratch dir and git *ignores* it):
   `WORKSPACE_INTERNAL_DIR` (`.thinkrail` — the repo-local host-managed dir, today holding the ephemeral
   scratch, the intended home for future host files like a cached spec index; **not** hidden from the file
-  tree), `WORKSPACE_CONTEXT_DIR` (its `context/` scratch dir for temp docs), and `WORKSPACE_TODOS_DIR`
-  (`context/todos/` — the chat TODO plans, one JSON per session, so they're ephemeral with the rest of
-  the scratch). The pi-free `pi-todos/core` can't import this package (it stays vanilla-`pi`-installable),
+  tree), `WORKSPACE_CONTEXT_DIR` (its `context/` folder — the workspace's artifacts: temp docs and
+  everything the agent produces for the user, kept until the user removes them, see
+  [[submodule-server-artifacts]]), and `WORKSPACE_TODOS_DIR` (`context/todos/` — the chat TODO plans, one
+  JSON per session; host state, not artifacts), and `DELETE_CLAIM_PREFIX` (`.thinkrail-delete-` — the name
+  `fs` gives an entry it has claimed for the trash, which the artifacts scan must not mistake for a
+  rename). The pi-free `pi-todos/core` can't import this package (it stays vanilla-`pi`-installable),
   so it keeps a local mirror of the todos path; this module is the host-side source of truth. Distinct
   from the *home* state dir `~/.thinkrail` (server `persistence`). (The `.gitignore` *body* the host seeds
   into the scratch dir — a lone `*` — is a one-off inlined at that call site, not a path, so it lives

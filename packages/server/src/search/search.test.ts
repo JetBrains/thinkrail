@@ -4,8 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Project, SearchHit, Workspace } from "@thinkrail/contracts";
 import { MATCH_TIER } from "@thinkrail/contracts";
+import { indexSections, searchSpecs } from "pi-spec-graph/core";
 import type { HistorySession } from "../history";
-import type { SpecSnapshotEntry } from "../spec";
+import type { SpecSectionHit, SpecSections, SpecSnapshotEntry } from "../spec";
 import type { StoredPlanFile } from "../todos";
 import {
 	FILE_LIST_LIMITS,
@@ -228,6 +229,7 @@ describe("chat providers", () => {
 		})),
 	});
 	const input = (query: string, checks: number) => ({
+		text: query,
 		terms: [{ text: query, literal: false }],
 		limit: 20,
 		deadline: budget(checks),
@@ -370,6 +372,7 @@ describe("FileListCache", () => {
 			{ root: "/r", projectId: "p1", workspaceId: "w1", git: true },
 			files,
 			{
+				text: "ts",
 				terms: [{ text: "ts", literal: false }],
 				limit: 2,
 				deadline: { expired: () => false },
@@ -394,6 +397,7 @@ describe("FileListCache", () => {
 			{ root: "/r", projectId: "p1", workspaceId: "w1", git: true },
 			files,
 			{
+				text: "gone",
 				terms: [{ text: "gone", literal: false }],
 				limit: 20,
 				deadline: { expired: () => checks >= 5 },
@@ -416,7 +420,12 @@ describe("FileListCache", () => {
 		const group = searchFiles(
 			{ root: "/r", projectId: "p1", workspaceId: "w1", git: true },
 			files,
-			{ terms: [{ text: "keep", literal: false }], limit: 20, deadline: { expired: () => true } },
+			{
+				text: "keep",
+				terms: [{ text: "keep", literal: false }],
+				limit: 20,
+				deadline: { expired: () => true },
+			},
 			() => 1,
 		);
 		expect(group).toMatchObject({ state: "ready", cut: { time: true } });
@@ -433,7 +442,12 @@ describe("FileListCache", () => {
 		const group = searchFiles(
 			{ root: "/r", projectId: "p1", workspaceId: "w1", git: true },
 			files,
-			{ terms: [{ text: "log", literal: false }], limit: 20, deadline: { expired: () => false } },
+			{
+				text: "log",
+				terms: [{ text: "log", literal: false }],
+				limit: 20,
+				deadline: { expired: () => false },
+			},
 			(root, path) => {
 				asked.push(`${root}|${path}`);
 				return path === "big.log" ? 4096 : "missing";
@@ -455,6 +469,7 @@ describe("FileListCache", () => {
 			() => now,
 		);
 		const input = {
+			text: "notes",
 			terms: [{ text: "notes", literal: false }],
 			limit: 20,
 			deadline: { expired: () => false },
@@ -484,6 +499,7 @@ describe("FileListCache", () => {
 		);
 		const root = { root: "/r", projectId: "p1", workspaceId: "w1", git: true };
 		const input = (query: string) => ({
+			text: query,
 			terms: [{ text: query, literal: false }],
 			limit: 20,
 			deadline: { expired: () => false },
@@ -672,6 +688,37 @@ const specs: Record<string, SpecSnapshotEntry[]> = {
 	],
 };
 
+const sectionHit: SpecSectionHit = {
+	path: "SPEC.md",
+	id: "root",
+	title: "Root",
+	type: "goal-and-requirements",
+	heading: "Tokens › Refresh",
+	occurrence: 1,
+	line: 3,
+	endLine: 4,
+	snippet: "The auth refresh lives in the token module.",
+	snippetLine: 4,
+	ranges: { title: [], heading: [[9, 16]], snippet: [[9, 16]] },
+	score: 2.5,
+	matched: 1,
+	terms: 1,
+};
+
+const sectionQueries: { root: string; query: string; limit: number }[] = [];
+
+function sections(root: string): SpecSections {
+	return {
+		built: true,
+		rebuilding: null,
+		search: (query, limit) => {
+			sectionQueries.push({ root, query, limit });
+			const hits = root === "/repos/one-auth" && query.includes("refresh") ? [sectionHit] : [];
+			return { hits, total: hits.length };
+		},
+	};
+}
+
 const plans: Record<string, StoredPlanFile[]> = {
 	"/repos/one-auth": [
 		{
@@ -723,11 +770,13 @@ function readers(overrides: Partial<SearchReaders> = {}): SearchReaders {
 		workspaces: () => [defaultOne, feature, closedProjectWorkspace],
 		sessions: async () => ({ sessions, state: "ready" }),
 		specs: (root) => ({ entries: specs[root] ?? [], built: true, rebuilding: null }),
+		sections,
 		plans: (root) => plans[root] ?? [],
 		invalidateSpecs: () => {},
 		ensureDefault: async () => [],
 		watchRoot: () => {},
 		stat: () => 1,
+		isText: () => true,
 		...overrides,
 	};
 }
@@ -744,7 +793,7 @@ const lists: Record<string, FileList> = {
 const context = { projectId: "p1", workspaceId: "w-feature" };
 
 describe("search.query", () => {
-	test("answers every kind for a typed query: files and specs from the one root, transcripts and plans from the open projects", async () => {
+	test("answers every kind for a typed query: files, specs and sections from the one root, transcripts and plans from the open projects", async () => {
 		const files = new FileListCache(async (root) => lists[root] ?? { paths: [], truncated: false });
 		await Promise.all(Object.keys(lists).map((root) => files.load(root, true)));
 		const watched: string[] = [];
@@ -758,13 +807,30 @@ describe("search.query", () => {
 
 		expect(byKind.file?.hits.map((hit) => hit.id)).toEqual(["file:w-feature:src/auth/refresh.ts"]);
 		expect(byKind.file?.hits[0]).toMatchObject({ projectId: "p1", workspaceId: "w-feature" });
-		expect(byKind.spec?.hits).toEqual([
-			expect.objectContaining({
-				id: "spec:w-feature:SPEC.md",
-				tier: MATCH_TIER.content,
-				snippet: "The auth refresh lives in the token module.",
-			}),
-		]);
+		expect(byKind.spec?.hits).toEqual([]);
+		expect(byKind.section).toEqual({
+			kind: "section",
+			hits: [
+				{
+					id: "section:w-feature:SPEC.md:Tokens › Refresh#1",
+					kind: "section",
+					title: "Root",
+					subtitle: "SPEC.md",
+					snippet: "The auth refresh lives in the token module.",
+					tier: MATCH_TIER.content,
+					score: 2.5,
+					ranges: { title: [], heading: [[9, 16]], snippet: [[9, 16]] },
+					projectId: "p1",
+					workspaceId: "w-feature",
+					path: "SPEC.md",
+					specId: "root",
+					section: { heading: "Tokens › Refresh", line: 3, matched: 1, terms: 1 },
+				},
+			],
+			total: 1,
+			state: "ready",
+		});
+		expect(sectionQueries.at(-1)).toEqual({ root: "/repos/one-auth", query: "refresh", limit: 20 });
 		expect(byKind.transcript?.hits.map((hit) => hit.id)).toEqual([
 			"transcript:s1:m1",
 			"transcript:s1:m0",
@@ -796,22 +862,20 @@ describe("search.query", () => {
 		expect(await paths('"fb"')).toEqual([]);
 	});
 
-	test("a quoted phrase is one term for transcripts and spec bodies", async () => {
+	test("a quoted phrase is one term for transcripts", async () => {
 		const service = createSearchService(
 			readers({ files: new FileListCache(async () => ({ paths: [], truncated: false })) }),
 		);
 		const ids = async (query: string) =>
-			(await service.query({ query, kinds: ["transcript", "spec"], context })).groups.flatMap(
-				(group) => group.hits.map((hit) => hit.id),
+			(await service.query({ query, kinds: ["transcript"], context })).groups.flatMap((group) =>
+				group.hits.map((hit) => hit.id),
 			);
 		expect(await ids("flow token")).toContain("transcript:s1:m0");
 		expect(await ids('"token flow"')).toContain("transcript:s1:m0");
 		expect(await ids('"flow token"')).toEqual([]);
-		expect(await ids('"the token module"')).toEqual(["spec:w-feature:SPEC.md"]);
-		expect(await ids('"module token"')).toEqual([]);
 	});
 
-	test("message text and spec bodies fold accents like titles do, in either spelling", async () => {
+	test("message text and spec sections fold accents like titles do, in either spelling", async () => {
 		const accented: HistorySession = {
 			sessionId: "s-acc",
 			cwd: "/repos/one-auth",
@@ -830,27 +894,29 @@ describe("search.query", () => {
 			readers({
 				files: new FileListCache(async () => ({ paths: [], truncated: false })),
 				sessions: async () => ({ sessions: [accented], state: "ready" }),
-				specs: () => ({
-					entries: [
+				sections: () => {
+					const index = indexSections([
 						{
 							path: "SPEC.md",
-							id: "root",
-							title: "Root",
-							type: "x",
-							content: "# Root\n\nЕщё одна ёлка.\n",
+							content: "---\nid: root\ntitle: Root\ntype: x\n---\n# Root\n\nЕщё одна ёлка.\n",
+							frontmatter: { id: "root", title: "Root", type: "x" },
 						},
-					],
-					built: true,
-					rebuilding: null,
-				}),
+					]);
+					return {
+						built: true,
+						rebuilding: null,
+						search: (query, limit) => searchSpecs(index, query, { limit }),
+					};
+				},
 			}),
 		);
 		const ids = async (query: string) =>
-			(await service.query({ query, kinds: ["transcript", "spec"], context })).groups.flatMap(
+			(await service.query({ query, kinds: ["transcript", "section"], context })).groups.flatMap(
 				(group) => group.hits.map((hit) => hit.id),
 			);
 		expect(await ids("configuracion cafe")).toEqual(["transcript:s-acc:x0"]);
-		expect(await ids("еще елка")).toEqual(["spec:w-feature:SPEC.md"]);
+		expect(await ids("еще елка")).toEqual(["section:w-feature:SPEC.md:#1"]);
+		expect(await ids("ЕЩЁ")).toEqual(["section:w-feature:SPEC.md:#1"]);
 		const hit = (await service.query({ query: "configuración", kinds: ["transcript"], context }))
 			.groups[0]?.hits[0];
 		expect(hit?.ranges?.title).toEqual([[3, 17]]);
@@ -922,7 +988,7 @@ describe("search.query", () => {
 		expect(slow.peek("/repos/one", true)).toBeNull();
 	});
 
-	test("a cold corpus slower than the wait answers indexing; a spec snapshot being rebuilt answers refreshing", async () => {
+	test("a cold corpus slower than the wait answers indexing; a spec snapshot or section index being rebuilt answers refreshing", async () => {
 		const files = new FileListCache(() => new Promise<FileList>(() => {}));
 		const service = createSearchService(
 			readers({
@@ -932,14 +998,25 @@ describe("search.query", () => {
 					built: true,
 					rebuilding: new Promise<void>(() => {}),
 				}),
+				sections: () => ({
+					built: true,
+					rebuilding: new Promise<void>(() => {}),
+					search: () => ({ hits: [sectionHit], total: 1 }),
+				}),
 			}),
 		);
-		const result = await service.query({ query: "refresh", kinds: ["file", "spec"], context });
+		const result = await service.query({
+			query: "auth",
+			kinds: ["file", "spec", "section"],
+			context,
+		});
 		expect(result.groups.map((group) => [group.kind, group.state])).toEqual([
 			["file", "indexing"],
 			["spec", "refreshing"],
+			["section", "refreshing"],
 		]);
-		expect(result.groups[1]?.hits).toHaveLength(1);
+		expect(result.groups[1]?.hits.map((hit) => hit.id)).toEqual(["spec:w-feature:auth/SPEC.md"]);
+		expect(result.groups[2]?.hits).toHaveLength(1);
 	});
 
 	test("a failed reload answers failed with the last good hits, and a failed history read fails plans and messages", async () => {
@@ -1025,12 +1102,13 @@ describe("search.query", () => {
 		const service = createSearchService(readers({ files }));
 		const homeless = await service.query({
 			query: "refresh",
-			kinds: ["file", "spec"],
+			kinds: ["file", "spec", "section"],
 			context: {},
 		});
 		expect(homeless.groups).toEqual([
 			{ kind: "file", hits: [], total: 0, state: "ready" },
 			{ kind: "spec", hits: [], total: 0, state: "ready" },
+			{ kind: "section", hits: [], total: 0, state: "ready" },
 		]);
 	});
 
@@ -1102,6 +1180,9 @@ describe("search.query", () => {
 				specs: () => {
 					throw new Error("boom");
 				},
+				sections: () => {
+					throw new Error("boom");
+				},
 			}),
 		);
 		const result = await service.query({ query: "refresh", limit: 500, context });
@@ -1109,6 +1190,39 @@ describe("search.query", () => {
 		expect(file?.hits).toHaveLength(50);
 		expect(file?.total).toBe(80);
 		expect(result.groups.find((group) => group.kind === "spec")).toMatchObject({ state: "failed" });
+		expect(result.groups.find((group) => group.kind === "section")).toMatchObject({
+			state: "failed",
+		});
+	});
+
+	test("sections take the query as typed, answer indexing until built, and stay out of a query that does not ask for them", async () => {
+		const service = createSearchService(
+			readers({
+				sections: (root) => ({
+					built: false,
+					rebuilding: null,
+					search: (query, limit) => {
+						sectionQueries.push({ root, query, limit });
+						return { hits: [], total: 0 };
+					},
+				}),
+			}),
+		);
+		const asked = await service.query({
+			query: '  "token refresh" Flow',
+			kinds: ["section"],
+			limit: 7,
+			context,
+		});
+		expect(asked.groups).toEqual([{ kind: "section", hits: [], total: 0, state: "indexing" }]);
+		expect(sectionQueries.at(-1)).toEqual({
+			root: "/repos/one-auth",
+			query: '  "token refresh" Flow',
+			limit: 7,
+		});
+		const before = sectionQueries.length;
+		await service.query({ query: "refresh", kinds: ["spec", "file"], context });
+		expect(sectionQueries.length).toBe(before);
 	});
 });
 

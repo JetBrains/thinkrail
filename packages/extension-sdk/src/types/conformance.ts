@@ -36,6 +36,7 @@ export type ConformingServer = [
 		>
 	>,
 	Expect<Conforms<Server.InteractiveTool, AppServer.InteractiveTool>>,
+	Expect<Conforms<Server.ArtifactTool, AppServer.ArtifactTool>>,
 	Expect<Conforms<Server.ToolResponse, AppServer.ToolResponse>>,
 ];
 

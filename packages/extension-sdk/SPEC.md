@@ -23,7 +23,7 @@ private and unchanged. It imports no pi value at runtime.
 - `./server` — `defineServerExtension` (identity) and `ServerExtension`, `ExtensionSessionServices`,
   `WorkspaceFiles`, `ExtensionSetting` / `ExtensionBooleanSetting` (`{ type: "boolean", default, title?,
   description? }` — an installed extension's setting carries its own, untranslated copy), `InteractiveTool`,
-  `ToolResponse`. Runtime is `dist/server.js`; pi types come from the optional peer
+  `ArtifactTool`, `ToolResponse`. Runtime is `dist/server.js`; pi types come from the optional peer
   `@earendil-works/pi-coding-agent`.
 - `./web`, `./resources`, `./ui/<m>` for `attention-line`, `button`, `dialog`, `fonts`, `keyboard`,
   `textarea`, `theme`, `utils` — **type declarations** of the shared set. At runtime these specifiers are
@@ -34,7 +34,9 @@ private and unchanged. It imports no pi value at runtime.
   `EXTENSION_API_VERSION`, `HOST_OBJECT`) and `tools/shared.test.ts` fails when it differs in a value or
   in order. `./resources` promises
   `FramedResourcePreview`, `ResourcePreview`, `useResourceScope` and `useOptionalResourceHost`, whose
-  `ResourceHost` is narrowed to `markdown` (`{ text, className? }`), `openFile` and `openComparison`.
+  `ResourceHost` is narrowed to `markdown` (`{ text, className? }`), `openFile` and `openComparison`;
+  the two previews' props are the in-repo ones in full (`reveal`, `htmlViewport`, `frameFocus`,
+  `sideLabels`, `reviewable`, `onFullscreen` included, their small value types inlined in the façade).
   Each subpath's `default` condition is a generated stub that reads the host object (so a non-SDK bundler
   gets the same runtime error as an SDK build), never code of its own.
 - The exact export names per specifier are `assets/shared-modules.json` (also exported as

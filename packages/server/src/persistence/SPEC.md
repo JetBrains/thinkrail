@@ -49,9 +49,23 @@ Durable host state—projects, workspaces, cross-frontend app config, terminal c
 
 Project and workspace loads return `Project.path` / `Workspace.worktreePath` in the host's resolved spelling
 (architecture Decision 22). A record stored in another spelling — git's `C:/…`, an unresolved segment, a
-file an older host wrote — heals on read and is persisted by the next save of that file; loads never write,
-and a value that is not absolute on this host stays as stored. Saves do not normalize: the producers resolve
+file an older host wrote — heals on read and is persisted by the next save of that file; loads never write
+a record, and a value that is not absolute on this host stays as stored. Saves do not normalize: the producers resolve
 at their own doors, so an object a create call returns never differs from what it stored.
+
+Every JSON save is a complete-copy replacement: write a sibling temp file, fsync it, rename it over the
+target. A crash, power loss, or full disk mid-save therefore leaves the previous file whole, never an
+empty or torn one. A rename replaces the file's inode, so the replacement carries the permissions
+explicitly instead of inheriting the process umask: an existing file keeps its exact mode, a new file is
+owner-only (`0600`), and `environment.json` is always `0600`. Otherwise one launch under a looser umask
+could turn a private `terminals.json`, which holds recorded shell output, world-readable. The registry and
+config loads (`projects`, `workspaces`, `workspace-creations`, `terminals`, `config`, `environment`) tell a
+missing file (its empty default) apart from an unreadable one: an I/O error, a parse failure, or the wrong
+top-level shape (array vs object) renames the file to `<file>.corrupt-<epoch-ms>` (best effort) and loads
+the empty default (`DEFAULT_CONFIG` for config). The next save then cannot overwrite the only copy of the
+user's projects and workspaces; the set-aside file is the diagnosis, since `persistence` sits below `log`.
+Shape checks stop at the top level, and record-level validation stays with each loader. `chats.json` keeps
+the stricter store rules above.
 
 Session metadata writes are complete-copy temp-file replacements. Lifecycle persists only facts a transcript
 cannot prove—`agent_settled` outcome and explicit Stop—keyed to the active run/completion ids; stale records
@@ -68,6 +82,12 @@ Analytics config preserves a saved boolean preference and a valid `analyticsCons
 independently; absent/malformed values default false. A preference-only write never implies completion.
 Settings owns initial preference priming and preference-plus-confirmation writes.
 
+Every config save stamps `configVersion` (currently `1`); load strips it, so it never reaches `AppConfig`
+or the wire. A config without it was written before version 1, and version 1's one step loads its stored
+question panel height 60 (the old default) as 70 ([[submodule-server-settings]]); the next save stamps the
+version, so a 60 chosen later stays. A later value migration bumps the version and adds its own step. A
+newer host's higher version is not kept: this host stamps its own.
+
 An absent `otherAgentSkills` defaults by install age: `true` in a stored config that lacks it, since only a host
 from before the switch writes one (it loaded other agents' skills, #1210), and `false` with no readable config.
 Every config this host saves carries the field, so the default never flips later; an old install that never
@@ -75,8 +95,11 @@ saved a config gets the new default.
 
 Config validation normalizes the closed theme mode plus complete opaque system pair, the closed
 composer-growth preference, the closed Windows terminal-shell preference (invalid/absent →
-`DEFAULT_CONFIG.terminalWindowsShell`), chat/file line widths plus their pane-bound switches, and the
-JetBrains quota boolean + whole `1–3600` second cadence over their defaults; it accepts only the current bounded
+`DEFAULT_CONFIG.terminalWindowsShell`), the question panel height (whole `40–100` percent), chat/file line
+widths plus their pane-bound switches, and the
+JetBrains quota boolean + whole `1–3600` second cadence over their defaults, and the `keybindings` map
+(chords failing `isKeybindingChord` dropped, an entry left with none dropped, unknown ids and stored `[]`
+kept); it accepts only the current bounded
 `customLayoutPresets` catalog as synchronized layout data. Current/default preset ids, group limits, and
 chat message order are not config fields; retired config shapes are stripped rather than upgraded or
 preserved as extensions. Historical `layouts/` files remain untouched and inert.

@@ -21,6 +21,7 @@ function model(id: string, patch: Partial<CustomEndpointModel> = {}): CustomEndp
 		reasoning: null,
 		vision: null,
 		tools: null,
+		chatTemplateThinking: null,
 		...patch,
 	};
 }
@@ -81,6 +82,37 @@ test("re-detecting keeps saved facts the server doesn't report and refreshes the
 		models: [model("a", { contextWindow: 4_096 })],
 	});
 	expect(smaller.models[0]).toMatchObject({ contextWindow: 4_096, maxTokens: null });
+});
+
+test("re-detecting keeps a saved max output unless a different context replaces the saved one", () => {
+	const redetect = (before: CustomEndpointModel, reported: CustomEndpointModel) =>
+		mergeProbe(editEndpointDraft({ ...saved, models: [before] }), {
+			ok: true,
+			baseUrl: saved.baseUrl,
+			models: [reported],
+		}).models[0];
+	const handSet = model("a", { contextWindow: 131_072, maxTokens: 32_000 });
+	expect(redetect(handSet, model("a", { contextWindow: 131_072 }))?.maxTokens).toBe(32_000);
+	expect(redetect(handSet, model("a", { contextWindow: 262_144 }))?.maxTokens).toBeNull();
+	expect(
+		redetect(handSet, model("a", { contextWindow: 131_072, maxTokens: 8_000 }))?.maxTokens,
+	).toBe(8_000);
+	expect(
+		redetect(model("a", { maxTokens: 32_000 }), model("a", { contextWindow: 131_072 })),
+	).toMatchObject({ contextWindow: 131_072, maxTokens: 32_000 });
+});
+
+test("re-detecting keeps existing rows in place and appends newly found models", () => {
+	const merged = mergeProbe(editEndpointDraft(saved), {
+		ok: true,
+		baseUrl: "https://gw.example/v1",
+		models: [model("new"), model("manual"), model("a")],
+	});
+	expect(merged.models.map((row) => [row.id, row.selected])).toEqual([
+		["a", true],
+		["manual", true],
+		["new", false],
+	]);
 });
 
 test("an unchanged saved address stays as written while a typed one takes the probed form", () => {
@@ -159,4 +191,19 @@ test("an edit can change the path but not the origin of a saved server", () => {
 	expect(addressMoved({ ...draft, baseUrl: "https://other.example/v1" })).toBe(true);
 	expect(canSave({ ...draft, baseUrl: "https://other.example/v1" })).toBe(false);
 	expect(addressMoved({ ...newEndpointDraft(), baseUrl: "https://other.example/v1" })).toBe(false);
+});
+
+test("a re-detect keeps a chat-template thinking fact the server stopped reporting", () => {
+	const draft = editEndpointDraft({
+		...saved,
+		models: [model("hybrid", { reasoning: true, chatTemplateThinking: true })],
+	});
+	const merged = mergeProbe(draft, {
+		ok: true,
+		baseUrl: saved.baseUrl,
+		models: [model("hybrid", { contextWindow: 16_384 })],
+	});
+	expect(merged.models[0]).toMatchObject({ chatTemplateThinking: true, contextWindow: 16_384 });
+	expect(draftParams(merged).models[0]?.chatTemplateThinking).toBe(true);
+	expect(addManualModel(merged, "new").models.at(-1)?.chatTemplateThinking).toBeNull();
 });

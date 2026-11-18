@@ -117,6 +117,31 @@ export interface ProviderGroup {
 	auth: string | null;
 }
 
+const VERSION = /(?<![\d.])\d{1,3}(?:\.\d{1,3})*(?![\d.])(?![bB]\b|x\d)/;
+
+function nameVersion(name: string): number[] | null {
+	const match = name.replace(/\([^)]*\)/g, "").match(VERSION);
+	return match ? match[0].split(".").map(Number) : null;
+}
+
+function compareVersions(a: readonly number[], b: readonly number[]): number {
+	for (let index = 0; index < Math.max(a.length, b.length); index++) {
+		const delta = (b[index] ?? 0) - (a[index] ?? 0);
+		if (delta !== 0) return delta;
+	}
+	return 0;
+}
+
+export function newestFirst(models: readonly WireModel[]): WireModel[] {
+	return models
+		.map((model) => ({ model, version: nameVersion(model.name) }))
+		.sort((a, b) => {
+			if (a.version && b.version) return compareVersions(a.version, b.version);
+			return a.version ? -1 : b.version ? 1 : 0;
+		})
+		.map(({ model }) => model);
+}
+
 export function groupByProvider(t: Translator, models: readonly WireModel[]): ProviderGroup[] {
 	const groups = new Map<string, WireModel[]>();
 	for (const model of models) {
@@ -126,7 +151,7 @@ export function groupByProvider(t: Translator, models: readonly WireModel[]): Pr
 	}
 	return [...groups].map(([provider, list]) => ({
 		provider,
-		models: list,
+		models: newestFirst(list),
 		auth: list.map((model) => describeAuth(t, model)).find((auth) => auth !== null) ?? null,
 	}));
 }

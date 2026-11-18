@@ -4,6 +4,8 @@ import { rm } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type {
 	Project,
+	ThinkingLevel,
+	WireModel,
 	Workspace,
 	WorkspaceCreation,
 	WorkspaceKickoff,
@@ -23,7 +25,12 @@ import {
 	SLOW_GIT_TIMEOUT_MS,
 } from "../git";
 import { logger } from "../log";
-import { dataDir, loadWorkspaces, type WorkspaceCreationRecord } from "../persistence";
+import {
+	type CreationOrigin,
+	dataDir,
+	loadWorkspaces,
+	type WorkspaceCreationRecord,
+} from "../persistence";
 import { getProjects } from "../projects";
 import {
 	addCreation,
@@ -48,10 +55,22 @@ export const CHECKOUT_STALL_MS = 10 * 60_000;
 const PROGRESS_PUSH_MS = 250;
 const PROGRESS_LINE = /(?:Updating files|Filtering content):\s+(\d+)%\s+\((\d+)\/(\d+)\)/;
 
+export interface HandoffOutcome {
+	sessionId?: string;
+	kickoffError?: string;
+	model?: WireModel | null;
+	thinkingLevel?: ThinkingLevel;
+}
+
 export type CreationHandoff = (
 	workspace: Workspace,
 	kickoff: WorkspaceKickoff | undefined,
-) => Promise<{ sessionId?: string; kickoffError?: string }>;
+	origin: CreationOrigin | undefined,
+) => Promise<HandoffOutcome>;
+
+export interface HandedOff extends HandoffOutcome {
+	workspace: Workspace;
+}
 
 let handoff: CreationHandoff | null = null;
 let stallMs = CHECKOUT_STALL_MS;
@@ -64,7 +83,7 @@ export function setCheckoutStallForTests(ms: number | undefined): void {
 	stallMs = ms ?? CHECKOUT_STALL_MS;
 }
 
-const running = new Map<string, { abort: AbortController; done: Promise<Workspace> }>();
+const running = new Map<string, { abort: AbortController; done: Promise<HandedOff> }>();
 const discarding = new Set<string>();
 
 class CreationAborted extends Error {}
@@ -387,7 +406,7 @@ async function checkOut(id: string, projectPath: string, signal: AbortSignal): P
 		);
 }
 
-async function execute(id: string, signal: AbortSignal): Promise<Workspace> {
+async function execute(id: string, signal: AbortSignal): Promise<HandedOff> {
 	const initial = findCreation(id);
 	if (!initial) throw new Error(`Unknown workspace creation: ${id}`);
 	let project: Project | undefined;
@@ -397,7 +416,7 @@ async function execute(id: string, signal: AbortSignal): Promise<Workspace> {
 		await checkOut(id, project.path, signal);
 		const done = findCreation(id);
 		if (!done) throw new CreationAborted();
-		return await handOff(registerManagedWorkspace(done), done.kickoff);
+		return await handOff(registerManagedWorkspace(done), done);
 	} catch (err) {
 		if (err instanceof CreationAborted || signal.aborted) throw err;
 		const message = err instanceof Error ? err.message : String(err);
@@ -446,22 +465,32 @@ async function discard(record: WorkspaceCreationRecord): Promise<void> {
 	}
 }
 
-async function handOff(workspace: Workspace, kickoff: WorkspaceKickoff | undefined) {
-	let outcome: { sessionId?: string; kickoffError?: string } = {};
+async function handOff(
+	workspace: Workspace,
+	record: Pick<WorkspaceCreationRecord, "kickoff" | "origin">,
+): Promise<HandedOff> {
+	let outcome: HandoffOutcome = {};
 	if (handoff) {
 		try {
-			outcome = await handoff(workspace, kickoff);
+			outcome = await handoff(workspace, record.kickoff, record.origin);
 		} catch (err) {
 			outcome = { kickoffError: err instanceof Error ? err.message : String(err) };
 		}
 	}
 	const latest = loadWorkspaces().find((candidate) => candidate.id === workspace.id) ?? workspace;
 	deleteCreation(workspace.id);
+	const { sessionId, kickoffError } = outcome;
 	emitCreation({
 		kind: "removed",
-		removed: { id: workspace.id, projectId: latest.projectId, workspace: latest, ...outcome },
+		removed: {
+			id: workspace.id,
+			projectId: latest.projectId,
+			workspace: latest,
+			...(sessionId ? { sessionId } : {}),
+			...(kickoffError ? { kickoffError } : {}),
+		},
 	});
-	return latest;
+	return { ...outcome, workspace: latest };
 }
 
 function run(id: string): void {
@@ -473,7 +502,12 @@ function run(id: string): void {
 
 export function startWorkspaceCreation(
 	projectId: string,
-	opts: { name?: string; baseRef?: string; kickoff?: WorkspaceKickoff } = {},
+	opts: {
+		name?: string;
+		baseRef?: string;
+		kickoff?: WorkspaceKickoff;
+		origin?: CreationOrigin;
+	} = {},
 ): WorkspaceCreation {
 	const plan = planManagedWorkspace(projectId, opts.name, opts.baseRef);
 	const record: WorkspaceCreationRecord = {
@@ -488,6 +522,7 @@ export function startWorkspaceCreation(
 		startedAt: Date.now(),
 		...(plan.renamed ? { renamed: true as const } : {}),
 		...(opts.kickoff ? { kickoff: opts.kickoff } : {}),
+		...(opts.origin ? { origin: opts.origin } : {}),
 	};
 	addCreation(record);
 	run(record.id);
@@ -497,7 +532,7 @@ export function startWorkspaceCreation(
 export function awaitWorkspaceCreation(id: string): Promise<Workspace> {
 	const job = running.get(id);
 	if (!job) throw new Error(`Workspace creation ${id} is not running`);
-	return job.done;
+	return job.done.then((handed) => handed.workspace);
 }
 
 export async function createWorkspace(
@@ -505,16 +540,51 @@ export async function createWorkspace(
 	name?: string,
 	baseRef?: string,
 ): Promise<Workspace> {
-	const creation = startWorkspaceCreation(projectId, {
-		...(name ? { name } : {}),
-		...(baseRef ? { baseRef } : {}),
-	});
+	return (
+		await createWorkspaceWithChat(projectId, {
+			...(name ? { name } : {}),
+			...(baseRef ? { baseRef } : {}),
+		})
+	).workspace;
+}
+
+export class WorkspaceCreationStopped extends Error {}
+
+export async function createWorkspaceWithChat(
+	projectId: string,
+	opts: { name?: string; baseRef?: string; kickoff?: WorkspaceKickoff; origin?: CreationOrigin },
+	signal?: AbortSignal,
+): Promise<HandedOff> {
+	const creation = startWorkspaceCreation(projectId, opts);
+	const job = running.get(creation.id);
+	if (!job) throw new Error(`Workspace creation ${creation.id} is not running`);
+	const stop = () => job.abort.abort();
+	if (signal?.aborted) stop();
+	signal?.addEventListener("abort", stop, { once: true });
 	try {
-		return await awaitWorkspaceCreation(creation.id);
+		return await job.done;
 	} catch (err) {
 		const record = findCreation(creation.id);
-		if (record?.state === "failed") await discard(record).catch(() => {});
-		throw err;
+		if (signal?.aborted !== true) {
+			if (record?.state === "failed") await discard(record).catch(() => {});
+			throw err;
+		}
+		if (!record) throw new WorkspaceCreationStopped("The workspace creation was stopped");
+		try {
+			await discard(record);
+		} catch (cleanupErr) {
+			updateCreation(record.id, (r) => {
+				r.state = "interrupted";
+				delete r.progress;
+			});
+			const reason = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr);
+			throw new Error(
+				`Stopped, but the partial workspace could not be removed (${reason}); it is listed as interrupted, to retry or dismiss.`,
+			);
+		}
+		throw new WorkspaceCreationStopped("The workspace creation was stopped");
+	} finally {
+		signal?.removeEventListener("abort", stop);
 	}
 }
 
@@ -571,7 +641,7 @@ export async function replayPendingHandoffs(): Promise<void> {
 	for (const record of creationRecords()) {
 		const workspace = workspaces.get(record.id);
 		if (!workspace || running.has(record.id)) continue;
-		await handOff(workspace, record.kickoff);
+		await handOff(workspace, record);
 	}
 }
 

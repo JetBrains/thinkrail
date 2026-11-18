@@ -22,8 +22,9 @@ import {
 } from "../agent";
 import { initializeAnalytics, resetAnalyticsForTests, shutdownAnalytics } from "../analytics";
 import { saveWorkspaces } from "../persistence";
-import { resetConfigCache } from "../settings";
-import { handleRequest } from "./handlers";
+import { getConfig, resetConfigCache } from "../settings";
+import { ensureChatsContainer, getWorkspace, resetChatIdCache } from "../workspaces";
+import { handleRequest, workspaceCreationHandoff } from "./handlers";
 import { runObservation } from "./runAnalytics";
 
 const TEST_KEY = "phc_test";
@@ -231,6 +232,34 @@ test("preconfigured API-key chats and accepted prompt, steer and follow-up sends
 	expect(faux.state.callCount).toBe(3);
 });
 
+test("an agent's workspace spawn starts its chat on the kickoff but sends no counted message and picks no recent model", async () => {
+	faux.setResponses([fauxAssistantMessage("Spawned"), fauxAssistantMessage("Asked")]);
+	const model = toWireModel(faux.getModel());
+	const workspace = getWorkspace(workspaceId);
+	const spawned = await workspaceCreationHandoff(
+		workspace,
+		{ text: `${PRIVATE}-spawn`, model, thinkingLevel: "high" },
+		"agent",
+	);
+	expect(getConfig().recentModels).toEqual([]);
+	const asked = await workspaceCreationHandoff(
+		workspace,
+		{ text: `${PRIVATE}-user`, model },
+		undefined,
+	);
+	const ids = [spawned.sessionId, asked.sessionId].filter((id) => id !== undefined);
+	sessionIds.push(...ids);
+	expect(ids).toHaveLength(2);
+	expect([spawned.kickoffError, asked.kickoffError]).toEqual([undefined, undefined]);
+	expect([spawned.model?.id, spawned.thinkingLevel]).toEqual([model.id, "off"]);
+	expect(getConfig().recentModels.map((recent) => recent.id)).toEqual([model.id]);
+	for (const id of ids) while (isSessionStreaming(id)) await Bun.sleep(10);
+	await Bun.sleep(20);
+	await shutdownAnalytics();
+	expect(properties("chat_started")).toHaveLength(2);
+	expect(properties("message_sent")).toMatchObject([{ mode: "prompt" }]);
+});
+
 test("unmodified builtin providers report preconfigured stored keys without an in-app login", async () => {
 	const builtinCredentials = new InMemoryCredentialStore();
 	await builtinCredentials.modify("anthropic", async () => ({
@@ -276,6 +305,28 @@ test("a chat created without any usable model still counts, bucketed as none", a
 	expect(properties("chat_started")).toMatchObject([
 		{ provider: "none", model: "none", auth_method: "unknown" },
 	]);
+});
+
+test("a chat without a project created without any usable model is bucketed as none too", async () => {
+	const bare = await ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+		refreshOnCreate: false,
+	});
+	configurePiRuntime(bare);
+	resetChatIdCache();
+	try {
+		ensureChatsContainer();
+		const created = (await handleRequest("chat.create", {}, context)) as WsResult<"chat.create">;
+		sessionIds.push(created.sessionId, created.workspace.id);
+		await shutdownAnalytics();
+		expect(properties("chat_started")).toMatchObject([
+			{ provider: "none", model: "none", auth_method: "unknown" },
+		]);
+	} finally {
+		resetChatIdCache();
+	}
 });
 
 test("a startup extension that switches the model is reported as the model the chat actually got", async () => {

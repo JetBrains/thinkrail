@@ -2,6 +2,22 @@ import type { ComponentType, ReactNode } from "react";
 
 export type ResourcePreviewLayout = "split" | "unified";
 
+export type HtmlViewport = "desktop" | "tablet" | "phone" | "responsive";
+
+export type FrameFocus = "auto" | "manual";
+
+export interface ResourceReveal {
+	line: number;
+	column?: number;
+	length?: number;
+	tick: number;
+}
+
+export interface DiffSideLabels {
+	original: string;
+	modified: string;
+}
+
 export interface ResourcePreviewProps {
 	path: string;
 	before?: string | undefined;
@@ -12,10 +28,15 @@ export interface ResourcePreviewProps {
 	onLayout?: ((layout: ResourcePreviewLayout) => void) | undefined;
 	viewState?: unknown;
 	onViewState?: ((viewState: unknown) => void) | undefined;
+	reveal?: ResourceReveal | undefined;
 	leading?: ReactNode;
 	actions?: ReactNode;
 	className?: string | undefined;
 	compact?: boolean | undefined;
+	htmlViewport?: HtmlViewport | undefined;
+	frameFocus?: FrameFocus | undefined;
+	sideLabels?: DiffSideLabels | undefined;
+	reviewable?: boolean | undefined;
 }
 
 export interface FramedResourcePreviewProps {
@@ -24,7 +45,9 @@ export interface FramedResourcePreviewProps {
 	title: string;
 	frameClassName: string;
 	compact?: boolean | undefined;
+	frameFocus?: FrameFocus | undefined;
 	testIdPrefix: string;
+	onFullscreen?: (() => void) | undefined;
 }
 
 export interface ResourceScope {

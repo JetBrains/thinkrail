@@ -271,6 +271,9 @@ const resourceHost: ResourceHost = {
 const actions: ChatActions = {
 	cancelAutomaticReveal: () => {},
 	focusComposer: () => {},
+	focusToolCall: () => {},
+	mayClaimFocus: () => true,
+	landingChord: "F6",
 	openSubagentTranscript: () => {},
 	respondToTool: async () => {},
 	resultOpener: () => undefined,
@@ -284,7 +287,15 @@ describe("a runtime-loaded card inside a chat row", () => {
 		const markup = renderToStaticMarkup(
 			<TooltipProvider>
 				<ResourceHostProvider value={resourceHost}>
-					<ResourcePreferencesProvider value={{ fileLineWidth: 100, fileLineWidthBounded: false }}>
+					<ResourcePreferencesProvider
+						value={{
+							fileLineWidth: 100,
+							fileLineWidthBounded: false,
+							markdownOutlineVisible: null,
+							setMarkdownOutlineVisible: () => {},
+							markdownOutlineSide: "right",
+						}}
+					>
 						<ResourceEnvironmentProvider value={{ mobile: false }}>
 							<ResourceScopeProvider value={{ workspaceId: "ws-1", sessionId: "s-1" }}>
 								<ChatActionsContext.Provider value={actions}>

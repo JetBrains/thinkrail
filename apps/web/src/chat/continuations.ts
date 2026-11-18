@@ -1,8 +1,9 @@
-import type { ChatContinuation, ChatContinuationPhase, Workspace } from "@thinkrail/contracts";
+import type { ChatContinuation, ChatContinuationPhase } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { useEffect } from "react";
-import { isNavigationChange, toast, useAppStore } from "@/store";
-import { errorText, getTransport, wsErrorCode } from "@/transport";
+import { toast, useAppStore } from "@/store";
+import { getTransport, wsErrorCode } from "@/transport";
+import { openWorkspace } from "./openWorkspace";
 
 interface ContinuationSource {
 	workspaceId: string;
@@ -17,7 +18,6 @@ const UNSETTLED: ReadonlySet<ChatContinuationPhase> = new Set([
 
 /** The welcome generation each operation's status was last asked in: one read per connection. */
 const askedIn = new Map<string, number>();
-let latestOpen = 0;
 
 /**
  * Asks the host for an operation's phase once per connection. A push that lands while the read is in
@@ -76,50 +76,6 @@ export async function requestContinuation(workspaceId: string, projectId: string
 }
 
 /**
- * Opens a workspace a continuation names — the new one, or the chat it came from — only once a fresh
- * list read on this connection shows its project is open and still holds it; otherwise says it is gone.
- * A newer open or any navigation while the list loads drops it silently. `null`: a reconnect overtook the
- * read, so nothing was decided.
- */
-export async function openContinuationTarget(
-	target: { projectId: string; workspaceId: string; sessionId?: string },
-	gone: string,
-): Promise<boolean | null> {
-	const open = ++latestOpen;
-	const generation = useAppStore.getState().welcomeGeneration;
-	let navigated = false;
-	const stopWatching = useAppStore.subscribe((state, previous) => {
-		if (isNavigationChange(state, previous)) navigated = true;
-	});
-	let rows: Workspace[];
-	try {
-		rows = await getTransport().request("workspace.list", { projectId: target.projectId });
-	} catch (err) {
-		if (open === latestOpen && !navigated) {
-			toast.error(errorText(err), t("chat.turn.continuation.openFailed"));
-		}
-		return false;
-	} finally {
-		stopWatching();
-	}
-	if (open !== latestOpen || navigated) return false;
-	const store = useAppStore.getState();
-	if (store.welcomeGeneration !== generation) return null;
-	if (!store.projects.some((project) => project.id === target.projectId)) {
-		toast.error(gone);
-		return false;
-	}
-	store.setWorkspaces(target.projectId, rows);
-	const row = rows.find((workspace) => workspace.id === target.workspaceId);
-	if (!row || row.deletionPending) {
-		toast.error(gone);
-		return false;
-	}
-	useAppStore.getState().activateWorkspaceFromRoute(row, target.sessionId);
-	return true;
-}
-
-/**
  * Only the initiating client navigates, once, when the new chat exists; a failure is told once. A follow a
  * reconnect overtook is armed again, so the connection that overtook it follows it.
  */
@@ -137,14 +93,11 @@ export function followContinuation(continuation: ChatContinuation): void {
 	if (continuation.phase !== "started" || !continuation.workspaceId) return;
 	const { operationId } = continuation;
 	store.forgetInitiatedContinuation(operationId);
-	void openContinuationTarget(
-		{
-			projectId: continuation.projectId,
-			workspaceId: continuation.workspaceId,
-			...(continuation.sessionId ? { sessionId: continuation.sessionId } : {}),
-		},
-		t("chat.turn.continuation.gone"),
-	).then((opened) => {
+	void openWorkspace({
+		projectId: continuation.projectId,
+		workspaceId: continuation.workspaceId,
+		sessionId: continuation.sessionId,
+	}).then((opened) => {
 		if (opened === null) useAppStore.getState().noteInitiatedContinuation(operationId);
 	});
 }

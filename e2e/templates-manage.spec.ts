@@ -177,7 +177,7 @@ test.describe("templates management", () => {
 		await expect(editor).toBeVisible();
 
 		await page.getByTestId("template-body-input").fill("anything");
-		for (const name of [".hidden", "a:b"]) {
+		for (const name of [".hidden", "a:b", "NUL", "con.notes", "COM¹"]) {
 			await page.getByTestId("template-name-input").fill(name);
 			await page.getByTestId("template-save").click();
 

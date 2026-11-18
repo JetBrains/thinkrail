@@ -330,30 +330,54 @@ test("a valid empty answer is cached while a fresh read bypasses it", async () =
 	expect(calls).toBe(3);
 });
 
-test("concurrent and repeated lookups share one provider call", async () => {
+test("normal concurrent lookups share one provider call, but fresh lookups start a new one", async () => {
 	const cwd = repo("git@github.com:acme/app.git");
+	const releases: Array<(result: { ok: boolean; out: string }) => void> = [];
 	let calls = 0;
-	let release: (() => void) | undefined;
-	const run = async () => {
+
+	const run = () => {
 		calls += 1;
-		await new Promise<void>((resolve) => {
-			release = resolve;
+		return new Promise<{ ok: boolean; out: string }>((resolve) => {
+			releases.push(resolve);
 		});
-		return { ok: true, out: '[{"number":7}]' };
 	};
 
 	const first = findOpenBranchReviewWithRunner(cwd, "feature", run);
-	const concurrent = findOpenBranchReviewWithRunner(cwd, "feature", run, { fresh: true });
-	await until(() => release !== undefined);
+	await until(() => releases.length === 1);
+
+	// Normal concurrent lookups should share the existing request.
+	const concurrent = findOpenBranchReviewWithRunner(cwd, "feature", run);
 	expect(calls).toBe(1);
-	release?.();
-	expect(await first).toEqual({ kind: "pull-request", number: 7 });
-	expect(await concurrent).toEqual({ kind: "pull-request", number: 7 });
+
+	// A fresh lookup must start a separate request.
+	const fresh = findOpenBranchReviewWithRunner(cwd, "feature", run, {
+		fresh: true,
+	});
+	await until(() => releases.length === 2);
+	expect(calls).toBe(2);
+
+	releases[1]?.({
+		ok: true,
+		out: '[{"number":42}]',
+	});
+
+	expect(await fresh).toEqual({ kind: "pull-request", number: 42 });
+
+	// Release the older request so its callers can settle too.
+	releases[0]?.({
+		ok: true,
+		out: '[{"number":7}]',
+	});
+
+	expect(await first).toEqual({ kind: "pull-request", number: 42 });
+	expect(await concurrent).toEqual({ kind: "pull-request", number: 42 });
+
+	// The successful fresh result should be cached.
 	expect(await findOpenBranchReviewWithRunner(cwd, "feature", run)).toEqual({
 		kind: "pull-request",
-		number: 7,
+		number: 42,
 	});
-	expect(calls).toBe(1);
+	expect(calls).toBe(2);
 });
 
 test("cache keys isolate branches and worktrees while invalidation clears one worktree", async () => {

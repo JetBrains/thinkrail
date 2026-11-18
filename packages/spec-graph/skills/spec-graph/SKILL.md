@@ -11,7 +11,7 @@ description: "Use when locating, reading, creating, updating, or validating proj
   that the code alone does not reveal. Treat them as authoritative.
 - **Consult the owning spec when it governs the work.** When work depends on, checks, explains, or
   may alter a documented boundary, contract, invariant, behavior, or architecture decision, use
-  `spec_grep` / `spec_get` / `spec_graph` to find the applicable record and align with it. If a change contradicts a recorded
+  `spec_search` / `spec_grep` / `spec_get` / `spec_graph` to find the applicable record and align with it. If a change contradicts a recorded
   decision, surface and reconcile the contradiction rather than silently diverging.
 - **Keep lookup proportional.** Specs are the map for decisions and boundaries; code confirms the
   implementation. A localized fix, explanation, or check that changes no documented decision may
@@ -62,12 +62,17 @@ description: "Use when locating, reading, creating, updating, or validating proj
   - `architecture-design` — system-wide topology, cross-cutting decisions, and invariants.
   - `module-design` — a package or module's responsibility and boundary.
   - `submodule-design` — the same, for a directory-level module inside a package.
-  - `task-spec` — a temporary working document for a piece of work; not durable, and removed once the
-    work lands.
+  - `task-spec` — a working document for one piece of work; not durable. Once the work lands it is
+    retired with `status: done`, never deleted: spec search skips it, and the user keeps it as an
+    artifact.
 
 ## Tools
 
 Read:
+- `spec_search` — the sections that answer a question, ranked by words: any order, word forms
+  (`renaming` ↔ `rename`), identifiers split (`renameSession` ↔ `rename session`). Several phrasings
+  fuse into one ranking. It matches words, not meaning — when nothing fits, rephrase with the words a
+  spec would use.
 - `spec_grep` — search within specs (content, narrowed by metadata filters).
 - `spec_get` — a spec's frontmatter, its resolved links, and its path. Read the body with the normal
   `read` tool using that path.
@@ -86,7 +91,8 @@ structure.
 
 1. **Orient when specs govern the work.** From a known root or the module you are touching, use
    `spec_graph` for the neighborhood, `spec_get` for a node's metadata, and `read` for its body. Use
-   `spec_grep` to find specs by content.
+   `spec_search` to find the governing section by words, and `spec_grep` for an exact pattern or
+   metadata narrowing.
 2. **Align.** Reconcile the change with the decisions and contracts the specs record; surface
    contradictions before diverging.
 3. **Update.** When the change alters a boundary, contract, or decision, update the spec — frontmatter

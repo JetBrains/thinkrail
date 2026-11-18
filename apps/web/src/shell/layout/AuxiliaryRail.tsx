@@ -1,9 +1,13 @@
+import type { RemixiconComponentType } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { buttonDataAttributes, buttonVariants } from "@thinkrail/ui/button";
+import { isImeComposing, twinArrow } from "@thinkrail/ui/keyboard";
+import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment, forwardRef, type ReactNode, useRef, useState } from "react";
+import { LOCAL_KEY_DEFAULTS } from "../../keybindings";
 import {
 	type AuxiliaryRailEntry,
 	type AuxiliaryRailToolEntry,
@@ -17,6 +21,9 @@ export interface AuxiliaryRailControlProps {
 	tabIndex: number;
 	onFocus: () => void;
 }
+
+const RAIL_CONTROLS = "[data-rail-entry], [data-rail-action]";
+const FOOTER_KEY = "rail-footer";
 
 const RAIL_TOOLBAR_LABELS = {
 	left: "workbench.rail.leftTools",
@@ -55,9 +62,10 @@ export const AuxiliaryRailToolButton = forwardRef<
 		entry: AuxiliaryRailToolEntry;
 		controls: string;
 		control: AuxiliaryRailControlProps;
+		shortcut?: readonly string[] | undefined;
 		onActivate: () => void;
 	}
->(function AuxiliaryRailToolButton({ entry, controls, control, onActivate }, ref) {
+>(function AuxiliaryRailToolButton({ entry, controls, control, shortcut, onActivate }, ref) {
 	const t = useT();
 	const { region } = entry;
 	const active = entry.selected && entry.expanded;
@@ -65,7 +73,7 @@ export const AuxiliaryRailToolButton = forwardRef<
 	const name = layoutTabName(t, tab);
 	return (
 		<div data-active={active} className={railEntryFrameClass(region)}>
-			<IconTooltip label={name} side={railTooltipSide(region)}>
+			<IconTooltip label={name} shortcut={shortcut} side={railTooltipSide(region)}>
 				<button
 					ref={ref}
 					type="button"
@@ -86,25 +94,68 @@ export const AuxiliaryRailToolButton = forwardRef<
 	);
 });
 
+export function AuxiliaryRailActionButton({
+	region,
+	icon: Icon,
+	label,
+	shortcut,
+	testId,
+	control,
+	onClick,
+}: {
+	region: LayoutAuxiliaryRegion;
+	icon: RemixiconComponentType;
+	label: string;
+	shortcut?: readonly string[] | undefined;
+	testId: string;
+	control: AuxiliaryRailControlProps;
+	onClick: () => void;
+}) {
+	return (
+		<div className={railEntryFrameClass(region)}>
+			<IconTooltip label={label} shortcut={shortcut} side={railTooltipSide(region)}>
+				<button
+					type="button"
+					data-testid={testId}
+					data-rail-action=""
+					aria-label={label}
+					{...railEntryButtonProps(false)}
+					{...control}
+					onClick={onClick}
+					className={RAIL_ENTRY_BUTTON_CLASS}
+				>
+					<Icon aria-hidden className={RAIL_ICON} />
+				</button>
+			</IconTooltip>
+		</div>
+	);
+}
+
 export function AuxiliaryRail({
 	region,
 	entries,
 	renderEntry,
 	renderBoundary,
 	trailing,
+	footer,
 }: {
 	region: LayoutAuxiliaryRegion;
 	entries: readonly AuxiliaryRailEntry[];
 	renderEntry: (entry: AuxiliaryRailEntry, control: AuxiliaryRailControlProps) => ReactNode;
 	renderBoundary?: (paneIndex: number) => ReactNode;
 	trailing?: ReactNode;
+	footer?: ((control: AuxiliaryRailControlProps) => ReactNode) | undefined;
 }) {
 	const t = useT();
+	const keys = useLocalKeys("rails", LOCAL_KEY_DEFAULTS.rails);
 	const root = useRef<HTMLDivElement>(null);
 	const [focused, setFocused] = useState<string | null>(null);
-	const activeKey = entries.some((entry) => entry.key === focused)
-		? focused
-		: (entries.find((entry) => entry.selected && entry.expanded) ?? entries[0])?.key;
+	const footerFocused = footer !== undefined && focused === FOOTER_KEY;
+	const activeKey =
+		footerFocused || entries.some((entry) => entry.key === focused)
+			? focused
+			: ((entries.find((entry) => entry.selected && entry.expanded) ?? entries[0])?.key ??
+				(footer ? FOOTER_KEY : undefined));
 	const horizontal = region === "bottom";
 	const clusters = clusterAuxiliaryRail(entries);
 	const paneCount = clusters.filter((cluster) => cluster.groupId !== null).length;
@@ -122,6 +173,7 @@ export function AuxiliaryRail({
 		<div
 			ref={root}
 			role="toolbar"
+			data-esc-ladder=""
 			aria-label={t(RAIL_TOOLBAR_LABELS[region])}
 			aria-orientation={horizontal ? "horizontal" : "vertical"}
 			data-testid={region === "bottom" ? "bottom-tool-rail" : `${region}-layout-rail`}
@@ -134,24 +186,29 @@ export function AuxiliaryRail({
 				region === "right" && "border-border-muted border-l",
 			)}
 			onKeyDown={(event) => {
-				if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+				if (isImeComposing(event.nativeEvent)) return;
+				const twin = twinArrow(keys.match(event.nativeEvent));
+				const modified = event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;
+				if (twin === undefined && modified) return;
 				if (!(event.target instanceof HTMLElement) || !root.current?.contains(event.target)) return;
-				const current = event.target.closest<HTMLButtonElement>("[data-rail-entry]");
+				const current = event.target.closest<HTMLButtonElement>(RAIL_CONTROLS);
 				if (!current) return;
 				const controls = Array.from(
-					root.current.querySelectorAll<HTMLButtonElement>("[data-rail-entry]"),
+					root.current.querySelectorAll<HTMLButtonElement>(RAIL_CONTROLS),
 				);
 				const index = controls.indexOf(current);
-				const nextKey = horizontal ? "ArrowRight" : "ArrowDown";
-				const previousKey = horizontal ? "ArrowLeft" : "ArrowUp";
+				const key = twin ?? event.key;
+				const [previousKey, nextKey] = horizontal
+					? ["ArrowLeft", "ArrowRight"]
+					: ["ArrowUp", "ArrowDown"];
 				const next =
-					event.key === "Home"
+					key === "Home"
 						? 0
-						: event.key === "End"
+						: key === "End"
 							? controls.length - 1
-							: event.key === nextKey
+							: key === nextKey
 								? (index + 1) % controls.length
-								: event.key === previousKey
+								: key === previousKey
 									? (index - 1 + controls.length) % controls.length
 									: null;
 				if (next === null) return;
@@ -186,6 +243,16 @@ export function AuxiliaryRail({
 			))}
 			{paneCount === 0 ? boundary(0) : null}
 			{trailing}
+			{footer ? (
+				<div
+					className={cn("flex shrink-0 items-center", horizontal ? "ml-auto" : "mt-auto flex-col")}
+				>
+					{footer({
+						tabIndex: activeKey === FOOTER_KEY ? 0 : -1,
+						onFocus: () => setFocused(FOOTER_KEY),
+					})}
+				</div>
+			) : null}
 		</div>
 	);
 }

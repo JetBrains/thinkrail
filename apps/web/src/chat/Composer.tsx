@@ -12,7 +12,8 @@ import type { ComposerGrowthLimit, ThinkingLevel, WireModel } from "@thinkrail/c
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
-import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { hasPlatformModifier, isImeComposing, keyCap } from "@thinkrail/ui/keyboard";
+import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
@@ -27,6 +28,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { LOCAL_KEY_DEFAULTS } from "@/keybindings";
 import {
 	applyTemplateSlotEdit,
 	beginTemplateSlotSession,
@@ -53,7 +55,13 @@ import {
 	type ModelSelection,
 } from "./ModelEffortPicker";
 import { isModelCommand, parseModelCommand } from "./nativeCommands";
-import { imagePasteDropHandlers, PromptImageChips, usePromptImages } from "./promptImages";
+import {
+	imagePasteDropHandlers,
+	PromptImageChips,
+	type PromptImagesOwner,
+	usePromptImages,
+} from "./promptImages";
+import { composerShiftTabOut, composerTranscriptStep } from "./transcriptNavigation";
 import type { ChatAttachment } from "./types";
 import type { ModelPreferences } from "./useModelPreferences";
 
@@ -72,7 +80,7 @@ const WIDE_ONLY = "@max-md:hidden";
 const COMPACT_ONLY = "@md:hidden";
 
 const SEGMENT =
-	"flex items-center gap-4 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none";
+	"flex items-center gap-4 transition-colors focus-visible:focus-ring disabled:pointer-events-none";
 
 const SEND_PILL = "flex h-28 shrink-0 items-stretch rounded-full transition-colors";
 const SEND_PILL_ARMED = "bg-control-primary-bg text-control-primary-text";
@@ -104,28 +112,28 @@ const STREAMING_SEND_MODES = [
 		behavior: "steer" as const,
 		name: "chat.composer.mode.steer",
 		meaning: "chat.composer.mode.steerMeaning",
-		keys: "Enter",
+		command: null,
 		testid: "send-mode-steer",
 	},
 	{
 		behavior: "followUp" as const,
 		name: "chat.composer.mode.queue",
 		meaning: "chat.composer.mode.queueMeaning",
-		keys: "Cmd/Ctrl+Enter",
+		command: "composer.followUp",
 		testid: "send-mode-queue",
 	},
 	{
 		behavior: "interrupt" as const,
 		name: "chat.composer.mode.interrupt",
 		meaning: "chat.composer.mode.interruptMeaning",
-		keys: "Cmd/Ctrl+Shift+Enter",
+		command: "composer.interrupt",
 		testid: "send-mode-interrupt",
 	},
 ] satisfies {
 	behavior: SubmitBehavior;
 	name: MessageKey;
 	meaning: MessageKey;
-	keys: string;
+	command: string | null;
 	testid: string;
 }[];
 
@@ -166,7 +174,9 @@ function highlightTint(state: SlotHighlightState): string {
 interface ComposerProps {
 	value: string;
 	onChange: (value: string) => void;
+	imageOwner?: PromptImagesOwner;
 	isStreaming: boolean;
+	awaitingResponse: boolean;
 	growthLimit: ComposerGrowthLimit;
 	commands: SlashCommandItem[];
 	templatePending: boolean;
@@ -188,6 +198,9 @@ interface ComposerProps {
 		behavior: SubmitBehavior,
 	) => ComposerSubmitDisposition;
 	onAbort: () => void;
+	onEnterTranscript?: () => void;
+	onShiftTabOut?: () => boolean;
+	onScrollTranscript?: (direction: -1 | 1) => void;
 	onHistoryOpen?: () => void;
 	onPickTemplate?: (name: string) => void;
 	onManageTemplates?: () => void;
@@ -196,18 +209,23 @@ interface ComposerProps {
 
 export interface ComposerHandle {
 	insertText: (text: string) => void;
+	insertAtCaret: (text: string) => void;
+	applyEdit: (kind: "replace" | "paste", text: string) => void;
 	insertAndSubmit: (text: string, behavior: SubmitBehavior) => void;
 	insertTemplate: (parsed: ParsedTemplate) => void;
 	restoreAttachments: (attachments: ChatAttachment[]) => void;
 	openHistory: () => void;
 	refocus: () => void;
+	ownsEscape: () => boolean;
 }
 
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
 	{
 		value,
 		onChange,
+		imageOwner,
 		isStreaming,
+		awaitingResponse,
 		growthLimit,
 		commands,
 		templatePending,
@@ -225,6 +243,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		onSelectThinking,
 		onSubmit,
 		onAbort,
+		onEnterTranscript,
+		onShiftTabOut,
+		onScrollTranscript,
 		onHistoryOpen,
 		onPickTemplate,
 		onManageTemplates,
@@ -233,10 +254,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	handleRef,
 ) {
 	const t = useT();
+	const keys = useLocalKeys("composer", LOCAL_KEY_DEFAULTS.composer);
 	const ref = useRef<HTMLTextAreaElement>(null);
 	const pickerRef = useRef<ModelEffortPickerHandle>(null);
 	const [caret, setCaret] = useState(0);
-	const attachedImages = usePromptImages();
+	const attachedImages = usePromptImages(imageOwner);
 	const { images } = attachedImages;
 	const [submitError, setSubmitError] = useState<string | null>(null);
 	const pendingImages = attachedImages.pending;
@@ -309,12 +331,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const focusSelection = usePendingSelection(ref, setCaret);
 
 	const replaceDraft = useCallback(
-		(text: string, caret?: number) => {
+		(text: string, caret?: number, focus = true) => {
+			const selection = caret ?? text.length;
 			recallIdxRef.current = null;
 			setSlotSession(null);
 			setSubmitError(null);
 			onChange(text);
-			focusSelection(caret ?? text.length);
+			if (focus) focusSelection(selection);
+			else setCaret(selection);
 		},
 		[onChange, focusSelection],
 	);
@@ -395,6 +419,32 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
 	useImperativeHandle(handleRef, () => ({
 		insertText: (text: string) => replaceDraft(text),
+		insertAtCaret: (text: string) => {
+			const at = Math.min(caret, value.length);
+			const before = value.slice(0, at);
+			const after = value.slice(at);
+			const lead = before === "" || /\s$/.test(before) ? "" : " ";
+			const trail = after === "" || /^\s/.test(after) ? "" : " ";
+			replaceDraft(
+				`${before}${lead}${text}${trail}${after}`,
+				before.length + lead.length + text.length,
+			);
+		},
+		applyEdit: (kind: "replace" | "paste", text: string) => {
+			const textarea = ref.current;
+			const focused = textarea !== null && textarea === document.activeElement;
+			if (kind === "replace") {
+				replaceDraft(text, text.length, focused);
+				return;
+			}
+			const start = focused ? textarea.selectionStart : value.length;
+			const end = focused ? textarea.selectionEnd : value.length;
+			replaceDraft(
+				`${value.slice(0, start)}${text}${value.slice(end)}`,
+				start + text.length,
+				focused,
+			);
+		},
 		insertAndSubmit: (text: string, behavior: SubmitBehavior) =>
 			canSubmit(text) ? submitText(text, behavior) : replaceDraft(text),
 		insertTemplate: (parsed: ParsedTemplate) => {
@@ -417,6 +467,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			if (slot) focusSelection(slot.start, slot.end);
 			else focusSelection(caret);
 		},
+		ownsEscape: () =>
+			ref.current !== null &&
+			ref.current === document.activeElement &&
+			(menuOpen || slots !== null),
 	}));
 
 	const submit = (behavior: SubmitBehavior) => {
@@ -433,7 +487,22 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
 		if (isImeComposing(e.nativeEvent)) return;
-		if (slots && !menuOpen) {
+		const local = keys.match(e.nativeEvent);
+		if (onEnterTranscript && local === "composer.enterTranscript") {
+			e.preventDefault();
+			const { selectionStart, selectionEnd } = e.currentTarget;
+			const atStart = selectionStart === 0 && selectionEnd === 0;
+			if (composerTranscriptStep(draftNeedsExpansion, atStart) === "enter") onEnterTranscript();
+			else focusSelection(0);
+			return;
+		}
+		if (local === "composer.interrupt" || local === "composer.followUp") {
+			e.preventDefault();
+			submit(isStreaming ? (local === "composer.interrupt" ? "interrupt" : "followUp") : "send");
+			return;
+		}
+		const fixed = local === null && !e.altKey && !e.ctrlKey && !e.metaKey;
+		if (fixed && slots && !menuOpen) {
 			if (e.key === "Tab") {
 				e.preventDefault();
 				stepSlot(e.shiftKey ? -1 : 1);
@@ -445,14 +514,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				return;
 			}
 		}
-		if (mentionOpen) {
+		if (fixed && mentionOpen) {
 			const menuLen = mentionCandidates.length;
-			if (e.key === "ArrowDown") {
+			if (e.key === "ArrowDown" && !e.shiftKey) {
 				e.preventDefault();
 				setMentionActiveIndex((i) => (i + 1) % menuLen);
 				return;
 			}
-			if (e.key === "ArrowUp") {
+			if (e.key === "ArrowUp" && !e.shiftKey) {
 				e.preventDefault();
 				setMentionActiveIndex((i) => (i - 1 + menuLen) % menuLen);
 				return;
@@ -469,9 +538,30 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				return;
 			}
 		}
-		if (slashCompletion.handleKeyDown(e)) return;
+		if (fixed && slashCompletion.handleKeyDown(e)) return;
+		if (composerShiftTabOut(e, menuOpen || slots !== null) && onShiftTabOut?.()) {
+			e.preventDefault();
+			return;
+		}
+		if (
+			onScrollTranscript &&
+			fixed &&
+			(e.key === "PageUp" || e.key === "PageDown") &&
+			!e.shiftKey
+		) {
+			e.preventDefault();
+			onScrollTranscript(e.key === "PageUp" ? -1 : 1);
+			return;
+		}
+		if (local !== null) return;
 		const recallAt = recallIdxRef.current;
-		if (e.key === "ArrowUp" && (value === "" || recallAt !== null) && recentPrompts.length > 0) {
+		const recallKey = fixed && !e.shiftKey;
+		if (
+			recallKey &&
+			e.key === "ArrowUp" &&
+			(value === "" || recallAt !== null) &&
+			recentPrompts.length > 0
+		) {
 			e.preventDefault();
 			setSlotSession(null);
 			const next = recallAt === null ? 0 : Math.min(recallAt + 1, recentPrompts.length - 1);
@@ -481,7 +571,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			focusSelection(text.length);
 			return;
 		}
-		if (e.key === "ArrowDown" && recallAt !== null) {
+		if (recallKey && e.key === "ArrowDown" && recallAt !== null) {
 			e.preventDefault();
 			setSlotSession(null);
 			if (recallAt === 0) {
@@ -497,19 +587,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			}
 			return;
 		}
-		if (e.key === "Enter" && e.shiftKey && (e.metaKey || e.ctrlKey)) {
+		if (e.key === "Enter" && !e.shiftKey && !hasPlatformModifier(e.nativeEvent)) {
 			e.preventDefault();
-			submit(isStreaming ? "interrupt" : "send");
-			return;
-		}
-		if (e.key === "Enter" && !e.shiftKey) {
-			e.preventDefault();
-			const behavior: SubmitBehavior = isStreaming
-				? e.metaKey || e.ctrlKey
-					? "followUp"
-					: "steer"
-				: "send";
-			submit(behavior);
+			submit(isStreaming ? "steer" : "send");
 		}
 	};
 
@@ -540,7 +620,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							type="button"
 							data-testid="mention-item"
 							onClick={() => pickMention(candidate)}
-							className={`flex w-full items-center gap-8 rounded-sm px-8 py-4 text-left tr-text-ui ${index === mentionActiveIndex ? "bg-control-bg-selected text-text-default" : "text-text-muted"}`}
+							className={`flex w-full items-center gap-8 rounded-sm px-8 py-4 text-left tr-text-ui focus-visible:focus-ring-inset ${index === mentionActiveIndex ? "bg-control-bg-selected text-text-default" : "text-text-muted"}`}
 						>
 							{candidate.kind === "dir" ? (
 								<FolderIcon className="size-14 shrink-0" />
@@ -566,7 +646,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 									replaceDraft("");
 									onManageTemplates();
 								}}
-								className="flex w-full items-center gap-8 rounded-sm border-border-default border-t px-8 py-4 text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default"
+								className="flex w-full items-center gap-8 rounded-sm border-border-default border-t px-8 py-4 text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default focus-visible:focus-ring"
 							>
 								<Sparkles className="size-12 shrink-0" />
 								<span className="truncate">{t("chat.composer.noTemplates")}</span>
@@ -605,7 +685,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					ref={shellRef}
 					data-testid="chat-composer-shell"
 					className={cn(
-						"relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto] items-end gap-x-4 gap-y-4 overflow-hidden rounded-md border border-control-border-default bg-control-bg bg-clip-padding p-4 transition-colors focus-within:border-control-border-active",
+						"relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto] items-end gap-x-4 gap-y-4 overflow-hidden rounded-md border border-control-border-default bg-control-bg bg-clip-padding p-4 transition-colors focus-within:border-control-border-active has-[textarea:focus-visible]:focus-ring",
 						expanded && growthLimit === "half-chat" && "max-h-[50cqh]",
 					)}
 				>
@@ -662,6 +742,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							ref={ref}
 							data-testid="chat-input"
 							data-dictation-fallback
+							data-focus-default
 							value={value}
 							onScroll={syncBackdropScroll}
 							onChange={(e) => {
@@ -685,11 +766,13 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							onDrop={onDrop}
 							rows={1}
 							placeholder={
-								isStreaming
-									? t("chat.composer.placeholderStreaming")
-									: expanded
-										? t("chat.composer.placeholderExpanded")
-										: t("chat.composer.placeholder")
+								awaitingResponse
+									? t("chat.composer.placeholderQuestion")
+									: isStreaming
+										? t("chat.composer.placeholderStreaming")
+										: expanded
+											? t("chat.composer.placeholderExpanded")
+											: t("chat.composer.placeholder")
 							}
 							className={cn(
 								"absolute inset-0 size-full resize-none overflow-x-hidden overflow-y-auto rounded-sm bg-transparent px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted",
@@ -775,14 +858,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 														setSendMenuOpen(false);
 														submit(mode.behavior);
 													}}
-													className="group flex w-full flex-col gap-2 rounded-sm px-8 py-4 text-left hover:bg-control-bg-hovered disabled:pointer-events-none"
+													className="group flex w-full flex-col gap-2 rounded-sm px-8 py-4 text-left hover:bg-control-bg-hovered focus-visible:focus-ring-inset disabled:pointer-events-none"
 												>
 													<span className="flex w-full items-baseline justify-between gap-8">
 														<span className="text-text-default tr-text-ui group-disabled:text-control-disabled-text">
 															{t(mode.name)}
 														</span>
 														<span className="shrink-0 text-text-muted tr-text-metadata group-disabled:text-control-disabled-text">
-															{mode.keys}
+															{mode.command === null ? keyCap("Enter") : keys.label(mode.command)}
 														</span>
 													</span>
 													<span className="text-text-muted tr-text-metadata group-disabled:text-control-disabled-text">

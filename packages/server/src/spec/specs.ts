@@ -1,5 +1,15 @@
 import type { SpecGraphNode, SpecGraphSnapshot } from "@thinkrail/contracts";
-import { FIELDS, list, SpecIndex, scalar } from "pi-spec-graph/core";
+import {
+	FIELDS,
+	indexSections,
+	list,
+	type SectionIndex,
+	type SpecContentEntry,
+	SpecIndex,
+	type SpecSectionHit,
+	scalar,
+	searchSpecs,
+} from "pi-spec-graph/core";
 import { loadWorkspaces } from "../persistence";
 
 const indexes = new Map<string, SpecIndex>();
@@ -41,22 +51,38 @@ const SNAPSHOT_ROOTS = 8;
 const snapshots = new Map<string, { at: number; entries: readonly SpecSnapshotEntry[] }>();
 const rebuilding = new Map<string, Promise<void>>();
 
-function buildSnapshot(root: string): SpecSnapshotEntry[] {
+const MAX_SECTION_INDEX_ROOTS = 4;
+const sectionIndexes = new Map<string, SectionIndex>();
+const sectionsWanted = new Set<string>();
+
+function readEntries(root: string): SpecContentEntry[] {
 	try {
-		return rootIndexFor(root)
-			.contentEntries()
-			.map((entry) => {
-				const id = scalar(entry.frontmatter, FIELDS.id) ?? "";
-				return {
-					path: entry.path,
-					id,
-					title: scalar(entry.frontmatter, FIELDS.title) ?? id,
-					type: scalar(entry.frontmatter, FIELDS.type) ?? "",
-					content: entry.content,
-				};
-			});
+		return rootIndexFor(root).contentEntries();
 	} catch {
 		return [];
+	}
+}
+
+function snapshotOf(entries: readonly SpecContentEntry[]): SpecSnapshotEntry[] {
+	return entries.map((entry) => {
+		const id = scalar(entry.frontmatter, FIELDS.id) ?? "";
+		return {
+			path: entry.path,
+			id,
+			title: scalar(entry.frontmatter, FIELDS.title) ?? id,
+			type: scalar(entry.frontmatter, FIELDS.type) ?? "",
+			content: entry.content,
+		};
+	});
+}
+
+function storeSections(root: string, entries: readonly SpecContentEntry[]): void {
+	const next = indexSections(entries, sectionIndexes.get(root));
+	sectionIndexes.delete(root);
+	sectionIndexes.set(root, next);
+	for (const oldest of sectionIndexes.keys()) {
+		if (sectionIndexes.size <= MAX_SECTION_INDEX_ROOTS) break;
+		sectionIndexes.delete(oldest);
 	}
 }
 
@@ -86,8 +112,10 @@ function scheduleSnapshotRebuild(root: string): Promise<void> {
 	setImmediate(() => {
 		if (rebuilding.get(root) === promise) {
 			rebuilding.delete(root);
+			const entries = readEntries(root);
 			snapshots.delete(root);
-			snapshots.set(root, { at: Date.now(), entries: buildSnapshot(root) });
+			snapshots.set(root, { at: Date.now(), entries: snapshotOf(entries) });
+			if (sectionsWanted.delete(root) || sectionIndexes.has(root)) storeSections(root, entries);
 			for (const oldest of snapshots.keys()) {
 				if (snapshots.size <= SNAPSHOT_ROOTS) break;
 				evictSpecRoot(oldest);
@@ -96,6 +124,29 @@ function scheduleSnapshotRebuild(root: string): Promise<void> {
 		resolve();
 	});
 	return promise;
+}
+
+export interface SpecSections {
+	readonly built: boolean;
+	readonly rebuilding: Promise<void> | null;
+	search(query: string, limit: number): { hits: readonly SpecSectionHit[]; total: number };
+}
+
+const NO_SECTIONS = { hits: [], total: 0 };
+
+export function specSections(root: string, now = Date.now()): SpecSections {
+	const index = sectionIndexes.get(root);
+	if (!index) {
+		sectionsWanted.add(root);
+		return { built: false, rebuilding: scheduleSnapshotRebuild(root), search: () => NO_SECTIONS };
+	}
+	sectionIndexes.delete(root);
+	sectionIndexes.set(root, index);
+	return {
+		built: true,
+		rebuilding: specSnapshot(root, now).rebuilding,
+		search: (query, limit) => searchSpecs(index, query, { limit }),
+	};
 }
 
 export function invalidateSpecSnapshot(root: string): void {
@@ -107,6 +158,8 @@ export function evictSpecRoot(root: string): void {
 	snapshots.delete(root);
 	rebuilding.delete(root);
 	projectIndexes.delete(root);
+	sectionIndexes.delete(root);
+	sectionsWanted.delete(root);
 }
 
 export function projectHasSpecs(root: string): boolean {

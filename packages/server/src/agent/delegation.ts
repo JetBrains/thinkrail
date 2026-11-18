@@ -21,6 +21,7 @@ import {
 	type RunStatus,
 } from "pi-delegation";
 import { createSubagents, type Subagents } from "pi-subagents";
+import { projectImages } from "../images";
 import { dataDir } from "../persistence";
 import { trashFile } from "../trash";
 import {
@@ -229,7 +230,10 @@ export function readChildTranscript(
 		isTranscriptMessageRole(message.role),
 	) as TranscriptMessage[];
 	const status = ownedChild?.snapshot?.status;
-	return { messages, ...(status !== undefined ? { status } : {}) };
+	return {
+		messages: projectImages(messages, parentSessionId) as TranscriptMessage[],
+		...(status !== undefined ? { status } : {}),
+	};
 }
 
 export interface ReviewSubagentRun {

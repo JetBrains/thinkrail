@@ -17,7 +17,7 @@ is the props-driven presentation. The tool name joins the two without a wire cha
 ## Boundary
 
 Two entrypoints and no root barrel. `@thinkrail/ext-visualize/server` default-exports
-`defineServerExtension({ name: "visualize", title, description, extensions: [createVisualizeExtension({ validateMermaid, checkFile, scratchDir })] })`
+`defineServerExtension({ name: "visualize", title, description, sessionExtensions: (session) => [createVisualizeExtension({ validateMermaid, checkFile, scratchDir, saveVisualization })] })`
 — no children, no skill packages — and may import `extension-api/server`, `@thinkrail/pi-visualize`,
 `mermaid`, `linkedom`, and `node:fs`/`node:path`. `@thinkrail/ext-visualize/web` default-exports a `defineWebExtension` descriptor plus
 named `MermaidView` for fenced mermaid in chat markdown, and consumes `extension-api/web`, per-file UI
@@ -50,7 +50,17 @@ read guard's containment rule, so `..draft.html` is a name and not a parent), na
 out of `.git`, else the tool result asks the model to write it first — the same paths the host's
 `fs.readFile` then serves, so the card never reports what the tool accepted as unreadable. `scratchDir` is
 `.thinkrail/context/mockups/`, inside the host's gitignored scratch dir, so mockups never become project
-changes.
+changes. **Every diagram and comparison is kept as an artifact**: `server/save.ts` is the injected
+`saveVisualization`. It first asks the host to `ensureArtifactsDir` (so a folder that `git clean -fdx`
+removed comes back with its self-ignoring `.gitignore`, never as files git would stage), then writes the
+result's markdown to `<artifactsDir>visualize/<YYYYMMDD-HHMMSS>-<slug>.md`
+(`artifactsDir` is `.thinkrail/context/`; the slug comes from the title, Unicode letters kept, else the
+type) with an exclusive create and a `-2`, `-3`, … suffix on collision, so an earlier visualization is never
+overwritten. The markdown renderer draws its ```` ```mermaid ```` fences, so the Artifacts tool opens it as
+the diagram the chat showed. Without an `artifactsDir` (the Settings catalog's inert session) nothing is
+saved. The descriptor also declares `artifactTools: { visualize: { presented: visualizedPaths } }`, so the
+host's artifact index marks the shown file, its `before`, and the saved copy as results the agent
+presented ([[submodule-server-artifacts]]).
 
 The host composes this descriptor from the server registry ([[submodule-server-extensions]]); a strict
 validation call through that composition is pinned in `packages/server` (dev) and in the artifact probes
@@ -73,11 +83,15 @@ of anchoring review to real files; the tool guideline asks the agent to keep an 
 passed as `before` when it should stay visible. The workspace and chat come from `useResourceScope`, which the chat transcript provides to
 its rows, so review sends land in the chat that shows the card; with no host or scope (a subagent transcript)
 the card shows only the links. The
-registration is primary and expanded by default; its title or diagram/comparison/file summary is available
-without rendering. Invalid or streaming arguments remain defensive and tool errors preserve readable
-result text.
+registration is primary, expanded by default and `width: "content"`; its title or diagram/comparison/file
+summary is available without rendering. A diagram or comparison grows with its content; a file preview fills
+its fixed frame, has no intrinsic width and so keeps the chat column's width. Invalid or streaming arguments
+remain defensive and tool errors preserve readable result text.
 
-`MermaidView` derives mermaid's strict-mode theme from the host's CSS variables and re-renders after a
+`MermaidView` renders a diagram at its natural size — `useMaxWidth: false` for every diagram kind in
+mermaid's default config, scaled down to the available width by CSS — so a content-width parent can size to
+it; with mermaid's default (`width="100%"`) a diagram has no intrinsic width and never grows. It derives
+mermaid's strict-mode theme from the host's CSS variables and re-renders after a
 completed `data-theme` swap, or after a font settings change that moves the code family (resolved from
 `.tr-code-block` through `@thinkrail/ui/fonts`' `watchFont`, re-rendered once that face has loaded) or a
 change to the custom face set, which can change a family's metrics without its name; weight-only changes do

@@ -85,8 +85,22 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   started from the Welcome screen, the Create dialog, the palette or the Chats section, deleted to the
   Trash as a whole, and continued in a real workspace when it turns into work — the agent's summary
   becomes the new chat's first message ([[submodule-server-workspaces]]).
+- **Artifacts** — what the agent produces for the user (task-specs, mockups, diagrams, screenshots,
+  reports) lives in the workspace's git-ignored artifacts folder and is shown in the Artifacts tool,
+  newest first, as a folder tree, or as what the agent made for the user (Smart: the results it showed,
+  linked or the user picked, their working files folded under them), with the chat that wrote it, beside
+  the ignored outputs its runs leave; each chat round lists the artifacts it made; nothing there
+  disappears unless the user removes it — a file deleted behind their back stays
+  restorable from a kept copy, and the agent is steered away from temporary folders ([[submodule-server-artifacts]], [[submodule-web-panels]]).
 - **Workbench** — a splittable layout of files, diffs, documents, chats, and terminals with movable side
-  and bottom tool panels, kept local to each window ([[submodule-web-shell-layout]]).
+  and bottom tool panels, kept local to each window ([[submodule-web-shell-layout]]). The region that holds
+  the keyboard carries an accent line, a keyboard move briefly frames the region it lands in, and
+  VS Code-style chords move between regions, into the chat input, Projects, Files and the terminal, from
+  one keybinding table that the palette also shows ([[submodule-web-keybindings]]). The user rebinds those
+  chords and extensions' commands in Settings → Keyboard, stored on the host for every window, and exports
+  or imports them as a JSON file. Hint mode, a
+  switchable extension, labels everything clickable so a typed label presses it
+  ([[module-ext-hint-mode]]); sidebar trees search their rows on `S`.
 - **Chats** — concurrent `pi` sessions per workspace, each with its own model, pi-reported token/cost,
   steering and follow-ups mid-run, skill and prompt-template autocomplete, and history search
   ([[submodule-web-chat]], [[submodule-server-agent]]).
@@ -101,6 +115,9 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   turn ([[module-pi-background-commands]]); each chat's Resources view watches, inspects and stops them, and
   keeps their finished history — outcomes and command log tails — for the workspace's lifetime, across host
   restarts ([[submodule-web-chat-resources]], [[submodule-server-resource-history]]).
+- **Workspaces from chat** — on request ("in a side workspace"), the agent starts ordinary workspaces
+  with their own chats in any open project and checks their chats', PRs', and diffs' status; the agent,
+  not the host, decides what to do with them ([[submodule-server-agent]], [[submodule-server-host]]).
 - **Review** — anchored comments on files and diffs, collected without starting the agent and sent as
   structured context to chats that can resolve them; local review, not a forge integration
   ([[submodule-server-reviews]]).
@@ -112,7 +129,10 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   diverged branch with the agent, reopen, and delete the remote branch
   ([[submodule-server-pr]], [[submodule-web-shell-location-bar]]).
 - **Specs** — the agent searches, navigates, and maintains the spec graph through `spec_*` tools; the
-  read-only Specs tool renders it as a tree ([[module-spec-graph]], [[submodule-server-spec]]).
+  read-only Specs tool renders it as a tree. The agent and the search palette's `#` scope find the
+  sections that answer a question by words with one engine, and the palette hands a question that shares
+  no words with the specs to the agent ([[module-spec-graph]], [[submodule-server-spec]],
+  [[submodule-web-search]]).
 - **Workflows** — bundled workflow skills for project setup, design brainstorming, and shipping a PR
   ([[module-thinkrail-workflow]]).
 - **Providers** — in-app sign-in and API keys through pi's auth, JetBrains AI through the user's
@@ -123,9 +143,13 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   extra environment variables, chosen in Settings and applied to the whole host at the next start; one setup
   per host, not per project ([[submodule-server-environment]]).
 - **Agent tools** — web research, structured multiple-choice questions the agent asks in chat instead of
-  guessing, and inline diagrams, comparisons and file previews in chat; a proposed UI change is shown as
-  a rendered before/after mockup through the same renderers and review comments as diff review
-  ([[submodule-web-chat-tools-web]], [[module-ext-ask-user-question]], [[module-ext-visualize]]).
+  guessing (with alternatives' previews comparable full screen — one at a time, side by side, or all), and
+  inline diagrams, comparisons and file previews in chat; a proposed UI change is shown as
+  a rendered before/after mockup through the same renderers and review comments as diff review, and the
+  agent's mockups are clickable prototypes in a browser, their scripts sandboxed without network; a
+  finished turn can end with one-click next messages offered above the composer
+  ([[submodule-web-chat-tools-web]], [[module-ext-ask-user-question]], [[module-ext-visualize]],
+  [[module-ext-next-steps]]).
 - **Pi packages** — install a pi package by source (npm, git or a local folder) from Settings, for the
   user or for a repository, and see everything pi loads: each package's extensions, skills and prompts
   with their tools, hand-dropped extension files, and pi's built-ins — switching any of them off in pi's
@@ -138,8 +162,9 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   listed on thinkrail.ai/extensions automatically; asked to, the agent writes one and installs it itself
   ([[module-thinkrail-extensions]], [[submodule-server-extensions-installed]],
   [[submodule-web-extensions]], [[submodule-web-panels]], [[module-extension-sdk]], [[module-website]]).
-- **MCP servers** — pi's built-in MCP, read from the user's `mcp.json`, managed from Settings and visible
-  per chat next to background commands and subagents; a confirm in the chat, on the call, before calls
+- **MCP servers** — pi's built-in MCP, read from the user's `mcp.json`, managed from Settings and
+  inspectable per chat next to background commands and subagents (each server's state, last status and
+  that chat's calls to it); a confirm in the chat, on the call, before calls
   that may change data, with a per-project "Always allow" for tools the user trusts
   ([[submodule-server-agent]], [[submodule-web-panels]]).
 - **Around the workspace** — open a worktree in an installed editor or IDE, and keep the app itself up

@@ -43,7 +43,7 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
     `powershell.exe`. No further fallback to `cmd.exe` — `powershell.exe` ships on every supported
     Windows release, so it is already the guaranteed floor. `defaultWhich` passes an explicit
     `{ PATH: process.env.PATH }` rather than calling `Bun.which` bare, the same trap `editors`'
-    `defaultWhich` guards against: `Bun.which` alone reads the PATH snapshotted at process start, not
+    `pathWhich` guards against: `Bun.which` alone reads the PATH snapshotted at process start, not
     `resolveShellEnv()`'s later-repaired live `process.env.PATH`.
   - `"pwsh"` / `"powershell"` / `"cmd"`: literal pins to `pwsh.exe` / `powershell.exe` / `cmd.exe` — no
     existence check, no silent substitution. A pin that turns out to be missing fails to spawn the same

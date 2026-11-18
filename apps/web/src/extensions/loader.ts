@@ -117,7 +117,11 @@ function isObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
 }
 
-function webExtensionOf(module: unknown): WebExtension | null {
+type InstalledWebHalf = WebExtension & {
+	toolRenderers: NonNullable<WebExtension["toolRenderers"]>;
+};
+
+function webExtensionOf(module: unknown): InstalledWebHalf | null {
 	const candidate = isObject(module) ? module.default : undefined;
 	if (!isObject(candidate) || typeof candidate.name !== "string") return null;
 	const toolRenderers = candidate.toolRenderers;
@@ -128,14 +132,20 @@ function webExtensionOf(module: unknown): WebExtension | null {
 		if (options === undefined) continue;
 		if (!isObject(options)) return null;
 		if (options.summary !== undefined && typeof options.summary !== "function") return null;
+		if (
+			options.composerSuggestions !== undefined &&
+			typeof options.composerSuggestions !== "function"
+		) {
+			return null;
+		}
 	}
-	return candidate as unknown as WebExtension;
+	return candidate as unknown as InstalledWebHalf;
 }
 
 async function fetchExtension(
 	descriptor: InstalledWebExtension,
 	environment: LoaderEnvironment,
-): Promise<{ extension: WebExtension; stylesheet: Stylesheet | undefined }> {
+): Promise<{ extension: InstalledWebHalf; stylesheet: Stylesheet | undefined }> {
 	const base = environment.baseUrl();
 	const stylesheet = descriptor.styles
 		? environment.linkStylesheet(new URL(descriptor.styles, base).href)

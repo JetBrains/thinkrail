@@ -1,6 +1,7 @@
 import type {
 	NativeCommand,
 	NativeNotificationInput,
+	NativeOpenFileRequest,
 	NativeQuitHint,
 	NativeUpdateState,
 	NativeWindowState,
@@ -36,6 +37,7 @@ export type DesktopRpc = {
 	webview: {
 		requests: Record<string, never>;
 		messages: {
+			openFile: NativeOpenFileRequest;
 			updateStateChanged: NativeUpdateState;
 			windowChromeChanged: WindowChromeGeometry;
 			windowStateChanged: NativeWindowState;

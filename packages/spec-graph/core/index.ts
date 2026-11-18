@@ -49,6 +49,16 @@ export {
 	type SpecFilters,
 } from "./query.ts";
 export {
+	DEFAULT_SPEC_SEARCH_LIMIT,
+	indexSections,
+	type SectionIndex,
+	type SpecSearchOptions,
+	type SpecSearchResult,
+	type SpecSectionHit,
+	searchSpecs,
+	type TextRange,
+} from "./search.ts";
+export {
 	resolveSpecPath,
 	SPEC_FILE_EXTENSION,
 	type SpecFileRecord,

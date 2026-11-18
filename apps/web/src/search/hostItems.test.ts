@@ -72,8 +72,69 @@ function items(late: Record<string, number> = {}, staleQuery: string | null = nu
 
 const rank = (result: ReturnType<typeof items>["result"], query: string) =>
 	rankItems(result, parseMatchTerms(query), EMPTY_LEARNING, query, 0);
+const section: SearchHit = {
+	...base,
+	id: "section:w1:agent/SPEC.md:Session titles#1",
+	kind: "section",
+	title: "agent",
+	subtitle: "agent/SPEC.md",
+	snippet: "renameSession validates one title",
+	tier: MATCH_TIER.content,
+	score: 3.2,
+	path: "agent/SPEC.md",
+	specId: "module-agent",
+	ranges: { title: [], heading: [[8, 14]], snippet: [[0, 13]] },
+	section: { heading: "Session titles", line: 876, matched: 2, terms: 3 },
+};
+
+const sectionGroup: SearchGroup = { kind: "section", state: "ready", total: 1, hits: [section] };
+
+function sectionItems(staleQuery: string | null = null) {
+	const opened: SearchHit[] = [];
+	const result = hostItems(
+		{
+			t: currentTranslator(),
+			openHit: (target) => opened.push(target),
+			projectName: () => "One",
+			workspaceName: () => "Auth refresh",
+			late: new Map(),
+			staleTerms: staleQuery === null ? null : parseMatchTerms(staleQuery),
+		},
+		[sectionGroup],
+	);
+	return { result, opened };
+}
 
 describe("hostItems", () => {
+	test("maps a section hit to a Sections row titled by its spec and heading, with the snippet beneath", () => {
+		const { result, opened } = sectionItems();
+		const [row] = result;
+		expect(result).toHaveLength(1);
+		expect(row).toMatchObject({
+			kind: "section",
+			title: "agent › Session titles",
+			subtitle: "renameSession validates one title",
+			titleLead: "agent › ".length,
+			badge: "2/3 words",
+			group: "sections",
+			scope: "specs",
+			file: { workspaceId: "w1", path: "agent/SPEC.md", line: 876 },
+		});
+		const titleRanges = row?.match?.ranges.title ?? [];
+		expect(titleRanges.map(([start, end]) => row?.title.slice(start, end))).toEqual(["titles"]);
+		expect(row?.match?.ranges.subtitle).toEqual([[0, 13]]);
+		row?.run?.();
+		expect(opened).toEqual([section]);
+	});
+
+	test("a section row an earlier query answered stays only while its spec, heading and snippet show every term, folded", () => {
+		const [kept] = sectionItems("session rename").result;
+		expect(kept?.match).toMatchObject({ tier: MATCH_TIER.content, score: 0 });
+		expect(kept?.match?.ranges.subtitle).toEqual([[0, 13]]);
+		expect(sectionItems("SESSIÓN renamé").result).toHaveLength(1);
+		expect(sectionItems("session banana").result).toEqual([]);
+	});
+
 	test("maps a file hit with its path highlight split between name and folder, and names the file to render", () => {
 		const { result, opened } = items();
 		const file = result.find((item) => item.kind === "file");

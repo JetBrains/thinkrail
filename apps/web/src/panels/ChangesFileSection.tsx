@@ -223,6 +223,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 		<section
 			data-testid="changes-section"
 			data-path={path}
+			data-focus-row={path}
 			data-status={change.status}
 			data-collapsed={collapsed && mode === "stacked" ? true : undefined}
 			data-viewed={viewed ? true : undefined}
@@ -234,7 +235,9 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 		>
 			<div
 				data-testid="changes-section-header"
-				className={`${mode === "stacked" ? "sticky top-0 z-10" : ""} flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-8`}
+				data-focus-row-primary={mode === "single" || undefined}
+				tabIndex={-1}
+				className={`${mode === "stacked" ? "sticky top-0 z-10" : ""} flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-8 focus-visible:focus-ring-inset`}
 			>
 				{mode === "stacked" ? (
 					<IconButton
@@ -246,6 +249,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 								: t("changes.section.collapseFile", { name: base })
 						}
 						data-testid="changes-section-toggle"
+						data-focus-row-primary
 						aria-expanded={!collapsed}
 						onClick={toggleCollapsed}
 						className="shrink-0"
@@ -319,7 +323,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 								}}
 							>
 								<Copy />
-								{t("changes.section.copyPath")}
+								{t("changes.section.copyRelativePath")}
 							</DropdownMenuItem>
 							{hunkActions ? (
 								<DropdownMenuItem onSelect={() => void hunkActions.revertFile()}>
@@ -361,14 +365,14 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 							type="button"
 							data-testid="changes-section-expand"
 							onClick={toggleCollapsed}
-							className="text-text-muted underline-offset-2 hover:text-text-default hover:underline"
+							className="text-text-muted underline-offset-2 hover:text-text-default hover:underline focus-visible:focus-ring"
 						>
 							{t("changes.section.expand")}
 						</button>
 						<button
 							type="button"
 							onClick={openAsTab}
-							className="text-text-muted underline-offset-2 hover:text-text-default hover:underline"
+							className="text-text-muted underline-offset-2 hover:text-text-default hover:underline focus-visible:focus-ring"
 						>
 							{t("changes.section.openAsTab")}
 						</button>
@@ -384,7 +388,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 						type="button"
 						data-testid="changes-section-retry"
 						onClick={() => setError(null)}
-						className="text-text-muted underline-offset-2 hover:text-text-default hover:underline"
+						className="text-text-muted underline-offset-2 hover:text-text-default hover:underline focus-visible:focus-ring"
 					>
 						{t("common.retry")}
 					</button>

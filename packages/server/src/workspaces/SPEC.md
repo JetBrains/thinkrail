@@ -96,10 +96,12 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   `setWorkspaceDiffBase`); **branch name made unique
   against refs, worktree dirs *and* the project's in-flight creations** — archiving leaves the branch behind and renaming frees a
   branch name whose worktree directory stays occupied, so candidate names skip both, and a creation holds its
-  name from the first instant; path
-  `dataDir/worktrees/<project-slug>/<branch>`; **seeds the ephemeral per-workspace scratch dir**
+  name from the first instant; allocation lists heads once (`for-each-ref`, compared case-insensitively — a
+  case-only twin is the same ref file on macOS/Windows) and stays synchronous so a name is reserved atomically
+  (issue #1229: one `show-ref` per candidate blocked the event loop ~1 s at 100 `workspace-N` branches); path
+  `dataDir/worktrees/<project-slug>/<branch>`; **seeds the per-workspace artifacts folder**
   (`WORKSPACE_CONTEXT_DIR`, with a self-ignoring `*` `.gitignore` — zero git footprint) in the
-  new worktree, the home for temp docs (task-specs / working files) that stay out of git yet remain
+  new worktree, the home for temp docs and agent outputs ([[submodule-server-artifacts]]) that stay out of git yet remain
   scannable by the spec tools (the path convention lives in `@thinkrail/shared/paths`; see
   [[submodule-workflow-skills]]'s artifacts rules); a **user-supplied name is the display name** (casing +
   punctuation preserved via `toDisplayName`; the branch is derived from it) and **sets `renamed: true`** at
@@ -110,9 +112,10 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   after its git subprocess)),
   **background creation** (`creations.ts` over the `creationRecords.ts` store; issue #874 — a sync
   `worktree add` of a large monorepo froze the host's only event loop for the whole checkout and outlived the
-  client's 60s request): `startWorkspaceCreation(projectId, { name?, baseRef?, kickoff? })` plans the branch and
-  path synchronously, persists a record in `workspace-creations.json` (`state: running`, `phase: preparing`, the
-  full kickoff incl. images) and returns its `WorkspaceCreation` view before any git runs. The job then
+  client's 60s request): `startWorkspaceCreation(projectId, { name?, baseRef?, kickoff?, origin? })` plans the
+  branch and path synchronously, persists a record in `workspace-creations.json` (`state: running`, `phase:
+  preparing`, the full kickoff incl. images, and a host-only `origin: "agent"` for an agent's `start_workspace`,
+  which never reaches the wire view) and returns its `WorkspaceCreation` view before any git runs. The job then
   (1) fetches a missing remote base, resolves the OID, and runs `worktree add --no-checkout` through `gitAsync`
   (no file writes, so it is quick), (2) moves to `phase: checking-out` and runs `git checkout --progress
   --no-recurse-submodules -f <branch> --` in the new worktree — the split exists because git reports checkout
@@ -135,8 +138,9 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   hook that stays silent for longer (a huge LFS object) hits the same window on every retry; a configurable
   window is a follow-up. On success the
   record becomes the `Workspace` (same id) through `registerManagedWorkspace`, the injected **handoff**
-  (`setWorkspaceCreationHandoff`) runs, and the record is deleted with a `removed` event carrying the workspace
-  plus the handoff's `sessionId` / `kickoffError`. **On failure** (`WORKTREE_ADD_FAILED`,
+  (`setWorkspaceCreationHandoff`, given the kickoff and the origin) runs, and the record is deleted with a
+  `removed` event carrying the workspace plus the handoff's `sessionId` / `kickoffError`; the chat's model and
+  effort the handoff also reports go only to the job's in-process caller. **On failure** (`WORKTREE_ADD_FAILED`,
   `WORKTREE_CHECKOUT_FAILED`, `WORKTREE_CHECKOUT_STALLED`, `WORKSPACE_PATH_TAKEN`; the message is git's
   stderr minus progress lines, for display only) the job cleans up **only what it provably created**. The
   ownership marker is the persisted `baseOid`, written only after the folder was confirmed absent, right
@@ -168,6 +172,13 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   full kickoff (Edit & retry prefills from it); an in-memory latch refuses a second dismiss or a retry while one
   runs. Projects resolve through `getProjects()`, so closing a
   project (a soft flag) never strands a creation.
+  `createWorkspace` and **`createWorkspaceWithChat(projectId, opts, signal?)`** start a job and await it in
+  process: a job that fails is discarded (the caller has the error), and the second returns the handoff's
+  outcome. Its `signal` (Stop on `start_workspace`) aborts the job's git work and discards the record and
+  anything the job cut, failing with `WorkspaceCreationStopped`; a cleanup that cannot finish (a folder
+  git cannot remove) keeps the record, marked `interrupted` with its marker, so Retry and Dismiss clean up
+  again, and the call fails saying what was left. Once the handoff runs the workspace is registered and
+  the call completes regardless.
   `renameWorkspace` (**sync**; throws for Default/external before any Git read, then adopts the live managed
   branch like `syncWorkspaceBranch`, so it never acts on a stale stored branch;
   sets the sanitized, casing- and script-preserving display `name` and always
@@ -344,7 +355,8 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   without it are treated as complete and never backfilled, so an upgrade cannot resurrect a default terminal
   the user previously closed. No layout revision participates.
 - **`ensureWorkspaceScratchDir(ws)`** — idempotent seed of the gitignored `WORKSPACE_CONTEXT_DIR`
-  scratch dir (mkdir + self-ignoring `*` `.gitignore`); the host calls it on **session create** for
+  scratch dir (mkdir + self-ignoring `*` `.gitignore`, through `shared`'s `seedArtifactsDir`, which owns the
+  hardening below; this function adds the missing-root check); the host calls it on **session create** for
   every workspace, so the Default workspace writes into the user's repo only when a chat actually
   starts there (worktree creation still seeds eagerly at create; this also self-heals a worktree
   whose scratch dir was deleted). Hardened, because in the Default workspace it runs against
@@ -358,6 +370,26 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   `O_EXCL` refuses to follow a symlink, but Windows' exclusive create (`CREATE_NEW`) follows the reparse
   point and would write outside the checkout. Seeding fills the gap, never overwrites (pinned by
   regression tests, the symlink one wherever the host may create symlinks).
+- **`resolveWorkspacePath(path)`** (**async**; the wire's `workspace.resolvePath`, v119) — the one answer to
+  "which open workspace holds this absolute path" for any client holding a path from outside the app's own
+  trees: desktop `thinkrail://` deep links now, terminal path links next, and they reuse it rather than
+  match roots themselves. Stored roots keep their `path.resolve` spelling (architecture Decision 22), so a
+  link spelled `/private/tmp/…` for a root stored as `/tmp/…`, or a real path a tool reports for a project
+  opened through a symlinked folder, never matches as a string; the match is made on real paths instead.
+  The target is `realpath`ed — when it does not exist, its nearest existing ancestor is and the rest is
+  re-appended, so a missing file still names its workspace and the client reports the failed read — and so
+  is each candidate root, once per call, all through `fs/promises`, so many workspaces never block the event
+  loop; a root that fails `realpath` is skipped. Candidates are the records of every open project
+  (`listProjects`: user-owned kinds and the Chats container's chats included, `deletionPending` excluded),
+  plus the folder of an open repository project whose Default was never ensured, which `listWorkspaces`
+  ensures only when it wins. Containment is a path prefix on the real root (never a same-prefix sibling);
+  spellings that differ only in case match only when the root's file system folds case — realpath need not
+  canonicalize case — probed by `stat`ing a case-swapped spelling of the root's deepest lettered component
+  and comparing device and inode. The longest real root wins (a nested project or a worktree inside another
+  folder over its parent); an exact tie keeps the first in open-project order. The answer is
+  `{ workspaceId, projectId, relativePath }` with a POSIX `relativePath` under the real root, or `null` for a
+  non-absolute path, any `..` segment (never followed), a path into `.git`, a root itself, or no containing
+  open workspace. It reads no file and grants nothing: opening stays `fs.readFile`'s containment check.
 - **Lifecycle events:** every membership mutation — `createWorkspace` (`created`), `renameWorkspace`
   (`updated`, the agent's `set_title` included since it goes through it), `forgetWorkspace`
   (`removed`) — emits a `WorkspaceLifecycleEvent` through an **injected publisher** (`setWorkspacePublisher`,
@@ -369,13 +401,14 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   Creations publish the same way through `setWorkspaceCreationPublisher` (`WorkspaceCreationEvent`:
   `changed` with the `WorkspaceCreation` view, `removed` with `WorkspaceCreationRemoved`); the host owns the
   handoff that turns a finished creation into a terminal and a chat, so this module never reaches `agent`.
-- **Public surface (barrel):** `createWorkspace`, `startWorkspaceCreation`, `awaitWorkspaceCreation`,
+- **Public surface (barrel):** `createWorkspace`, `createWorkspaceWithChat`, `HandedOff`,
+  `WorkspaceCreationStopped`, `startWorkspaceCreation`, `awaitWorkspaceCreation`,
   `listWorkspaceCreations`, `retryWorkspaceCreation`, `dismissWorkspaceCreation`,
   `interruptWorkspaceCreations`, `replayPendingHandoffs`, `stopWorkspaceCreations`,
   `setWorkspaceCreationHandoff`, `CreationHandoff`,
   `setWorkspaceCreationPublisher`, `WorkspaceCreationEvent`, `creationOwnsPath`, `listExistingWorktrees`,
   `openExistingWorktree`,
-  `listWorkspaces`, `listWorkspaceRecords`, `listAllWorkspaceRecords`, `forgetWorkspace`,
+  `listWorkspaces`, `listWorkspaceRecords`, `listAllWorkspaceRecords`, `resolveWorkspacePath`, `forgetWorkspace`,
   `reclaimWorktree`, `removeWorkspace`,
   `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `syncWorkspaceBranch`, `branchMoveOwed`,
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
@@ -388,5 +421,5 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   `recordChatContinuation`, `dropChatRecord`, `setChatPublishers`, `assertNotChatsContainer`,
   `assertNotChatWorkspace`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;
-  `@thinkrail/shared/paths` (the scratch-dir path convention), `@thinkrail/shared/codedError`; Node.
+  `@thinkrail/shared/artifactsDir` (the scratch-dir seeding), `@thinkrail/shared/codedError`; Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

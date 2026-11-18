@@ -14,4 +14,11 @@ export {
 	type WebExtensionLoadResult,
 	webExtensionLoads,
 } from "./loader";
-export { registerWebExtensions, webExtensions } from "./registry";
+export {
+	enabledWebExtensions,
+	registerWebExtensions,
+	type WebExtensionCommands,
+	webExtensionCommands,
+	webExtensions,
+	webOnlyExtensions,
+} from "./registry";

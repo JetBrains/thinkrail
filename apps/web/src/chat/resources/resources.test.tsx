@@ -10,7 +10,7 @@ import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import type { ComponentProps, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as resources from "./index";
-import { mcpRowActions } from "./mcpRow";
+import { mcpResourceId, mcpRowActions } from "./mcpRow";
 import { elapsedLabel, formatElapsed, resourceState, sortLive } from "./resourceRow";
 
 const NOW = 10 * 60_000;
@@ -61,6 +61,8 @@ const dockProps: ComponentProps<typeof resources.ResourcesDock> = {
 	commands: [],
 	subagents: [],
 	finishedCount: 0,
+	collapsed: null,
+	onCollapsedChange: () => {},
 	now: NOW,
 	authoritative: true,
 	actions: {},
@@ -170,7 +172,7 @@ test("ChatView mounts the trigger, dock and inspector and retires resource-only 
 	expect(source).toContain("resources.visible && !inspectorOpen ? (");
 });
 
-test("the dock lists live rows oldest-first with escaped text, one inspect control and stop, and collapses past four behind an active toggle", () => {
+test("the dock lists live rows oldest-first with escaped text, one inspect control and stop, and always offers an active toggle that folds past four by default", () => {
 	const empty = renderToStaticMarkup(<resources.ResourcesDock {...dockProps} />);
 	expect(empty).toBe("");
 
@@ -200,7 +202,9 @@ test("the dock lists live rows oldest-first with escaped text, one inspect contr
 	expect(html).toContain("4 min");
 	expect(html).toContain('data-testid="resource-inspect"');
 	expect(html).toMatch(/data-testid="resource-stop"[^>]*disabled/);
-	expect(html).not.toContain('data-testid="resources-dock-toggle"');
+	expect(html).toMatch(
+		/data-testid="resources-dock-toggle"[^>]*aria-expanded="true"[\s\S]*3 active/,
+	);
 	expect(html).not.toContain("<img");
 	expect(html).not.toContain("<b>");
 	expect(html).toContain("&lt;script&gt;");
@@ -215,6 +219,26 @@ test("the dock lists live rows oldest-first with escaped text, one inspect contr
 	expect(many).not.toContain('data-resource-id="c1"');
 	expect(many).toContain("5 active");
 	expect(many).toContain('aria-expanded="false"');
+
+	const four = [1, 2, 3, 4].map((n) => ({ ...command, id: `w${n}` }));
+	const fourOpen = renderToStaticMarkup(<resources.ResourcesDock {...dockProps} commands={four} />);
+	expect(fourOpen).not.toContain("data-collapsed");
+	expect(fourOpen).toMatch(/data-testid="resources-dock-toggle"[^>]*aria-expanded="true"/);
+	const fourFolded = renderToStaticMarkup(
+		<resources.ResourcesDock {...dockProps} commands={four} collapsed />,
+	);
+	expect(fourFolded).toContain('data-collapsed="true"');
+	expect(fourFolded).not.toContain('data-resource-id="w1"');
+	expect(fourFolded).toMatch(/aria-expanded="false"[\s\S]*4 active/);
+	const manyOpen = renderToStaticMarkup(
+		<resources.ResourcesDock
+			{...dockProps}
+			commands={[1, 2, 3, 4, 5].map((n) => ({ ...command, id: `c${n}` }))}
+			collapsed={false}
+		/>,
+	);
+	expect(manyOpen).not.toContain("data-collapsed");
+	expect(manyOpen).toContain('data-resource-id="c5"');
 
 	const dockFor = (staleness: "disconnected" | "refreshFailed" | "unavailable" | "refreshing") =>
 		renderToStaticMarkup(
@@ -341,7 +365,7 @@ test("the inspector keeps the selected finished row, disables controls when stal
 	expect(html).toContain("Done");
 });
 
-test("the inspector groups work by kind and folds finished rows past the newest five, never hiding a new result", () => {
+test("the inspector groups work by kind and folds finished rows past the newest five, never hiding the selected row", () => {
 	const finished = Array.from({ length: 8 }, (_, index) => ({
 		...command,
 		id: `done-${index}`,
@@ -360,7 +384,7 @@ test("the inspector groups work by kind and folds finished rows past the newest 
 				subagents: noTally,
 			}}
 			remaining={{ command: 22 }}
-			newIds={new Set(["done-7"])}
+			selectedId="done-7"
 			onLoadMore={() => {}}
 			retained
 		/>,
@@ -370,9 +394,9 @@ test("the inspector groups work by kind and folds finished rows past the newest 
 	expect(html).toContain("1 active · 30 finished");
 	const shown = [...html.matchAll(/data-resource-id="([^"]+)"/g)].map((match) => match[1]);
 	expect(shown).toEqual(["build", "done-0", "done-1", "done-2", "done-3", "done-4", "done-7"]);
-	expect(html).toMatch(/data-resource-id="done-7"[^>]*data-fresh="true"/);
-	expect(html).toContain('aria-label="done 7: echo');
-	expect(html).toMatch(/aria-label="done 7: [^"]*, Done, new"/);
+	expect(html).toMatch(/data-resource-id="done-7"[^>]*data-selected="true"/);
+	expect(html).toMatch(/aria-label="done 7: [^"]*, Done"/);
+	expect(html).not.toContain("data-fresh");
 	expect(html).toMatch(
 		/data-testid="resources-fold"[^>]*aria-expanded="false"[^>]*aria-label="24 more finished: 19 done, 3 failed, 2 stopped or interrupted"/,
 	);
@@ -393,7 +417,6 @@ test("expanded, the fold reveals the rest in order, offers the next page with wh
 		finishedSubagents: finished,
 		history: { commands: noTally, subagents: { ...noTally, done: 30 } },
 		remaining: { subagent: 22 },
-		newIds: new Set(["child-7"]),
 		expanded: { subagent: true },
 		selectedId: "child-6",
 	};
@@ -676,7 +699,7 @@ test("MCP rows offer per-chat actions by state: disable, enable, reconnect, and 
 	expect(registered("needs-sign-in")).toEqual(["settings"]);
 });
 
-test("the inspector lists the chat's MCP servers as a third section and hides it for older hosts", () => {
+test("the inspector lists the chat's MCP servers as selectable options and hides them for older hosts", () => {
 	const mcpServers: McpServerResourceSummary[] = [
 		{ name: "linear", state: "needs-sign-in", transport: "http" },
 		{ name: "fixture", state: "connected", toolCount: 2, transport: "stdio" },
@@ -685,6 +708,7 @@ test("the inspector lists the chat's MCP servers as a third section and hides it
 	const html = renderInspector(
 		<resources.ResourcesInspector
 			{...inspectorProps}
+			commands={[command]}
 			mcpServers={mcpServers}
 			actions={{ "mcp:fixture": { pending: false, error: "Disable failed" } }}
 		/>,
@@ -692,17 +716,61 @@ test("the inspector lists the chat's MCP servers as a third section and hides it
 	expect(html).toContain('data-testid="resources-mcp"');
 	expect(html.match(/data-testid="resource-mcp"/g)).toHaveLength(3);
 	expect(html).toMatch(/data-testid="resource-mcp-state"[^>]*>Connected · 2 tools</);
-	expect(html).toMatch(/data-name="quiet" data-state="disabled-in-chat"/);
-	expect(html).toContain('data-testid="resource-mcp-enable"');
-	expect(html).toContain("Disable in this chat");
-	expect(html).toContain("Disabling applies when the chat is idle — restarts this chat");
-	expect(html).toContain("Disable failed");
+	expect(html).toMatch(
+		/data-name="quiet" data-state="disabled-in-chat" data-resource-id="mcp:quiet"/,
+	);
+	expect(html).toMatch(
+		/data-resource-id="mcp:fixture"[\s\S]*?role="option" aria-selected="false" aria-label="fixture: stdio · runs on host, Connected · 2 tools"/,
+	);
+	expect(html).not.toContain('data-testid="resource-mcp-detail"');
+	expect(html).not.toContain('data-testid="resource-mcp-enable"');
+	expect(html).not.toContain('data-testid="resource-mcp-disable"');
 	expect(html).toContain('data-testid="resources-mcp-settings"');
-	expect(html).toContain("stdio · runs on host");
+	expect(mcpResourceId("fixture")).toBe("mcp:fixture");
+
+	const selected = renderInspector(
+		<resources.ResourcesInspector
+			{...inspectorProps}
+			commands={[command]}
+			mcpServers={mcpServers}
+			selectedId="mcp:fixture"
+			actions={{ "mcp:fixture": { pending: false, error: "Disable failed" } }}
+		/>,
+	);
+	expect(selected).toMatch(/data-resource-id="mcp:fixture" data-selected="true"/);
+	expect(selected).toMatch(/data-resource-id="build"[^>]*>[\s\S]*?aria-selected="false"/);
+	const detail = selected.slice(selected.indexOf('data-testid="resources-inspector-detail"'));
+	expect(detail).toMatch(/data-testid="resource-mcp-detail" data-name="fixture"/);
+	expect(detail).toContain("Connected · 2 tools");
+	expect(detail).toContain("Transport");
+	expect(detail).toContain("stdio · runs on host");
+	expect(detail).toMatch(/data-testid="resource-mcp-disable"[^>]*>Disable in this chat/);
+	expect(detail).toContain("Disabling applies when the chat is idle — restarts this chat");
+	expect(detail).toContain("Disable failed");
+	expect(detail).toContain('data-testid="detail-slot"');
+	expect(detail).toContain("Calls are read from this chat&#x27;s transcript.");
+
+	const onlyServers = renderInspector(
+		<resources.ResourcesInspector {...inspectorProps} mcpServers={mcpServers} />,
+	);
+	expect(onlyServers).toMatch(/data-resource-id="mcp:linear" data-selected="true"/);
+	expect(onlyServers).toMatch(/data-testid="resource-mcp-settings"[^>]*>Sign in/);
+
+	const registered = renderInspector(
+		<resources.ResourcesInspector
+			{...inspectorProps}
+			mcpServers={[{ name: "ext", state: "connected", transport: "http", registered: true }]}
+		/>,
+	);
+	expect(registered).toContain("Added by an extension");
+	expect(registered).toContain("HTTP");
+	expect(registered).not.toContain("Disabling applies when the chat is idle");
+
 	const stale = renderInspector(
 		<resources.ResourcesInspector
 			{...inspectorProps}
 			mcpServers={mcpServers}
+			selectedId="mcp:fixture"
 			authoritative={false}
 		/>,
 	);
@@ -717,34 +785,26 @@ test("the inspector lists the chat's MCP servers as a third section and hides it
 });
 
 test("the dock lists only live work and sums finished work into one line that opens Resources", () => {
-	const idle = renderToStaticMarkup(
-		<resources.ResourcesDock {...dockProps} finishedCount={90} freshCount={2} />,
-	);
+	const idle = renderToStaticMarkup(<resources.ResourcesDock {...dockProps} finishedCount={90} />);
 	expect(idle).toContain('data-testid="resources-dock"');
 	expect(idle).not.toContain('data-testid="resource-command"');
 	expect(idle).not.toContain('data-testid="resource-dismiss"');
 	expect(idle).toMatch(
-		/data-testid="resources-dock-finished"[\s\S]*90 finished[\s\S]*2 new[\s\S]*Open Resources/,
+		/data-testid="resources-dock-finished"[\s\S]*90 finished[\s\S]*Open Resources/,
 	);
 	expect(idle).not.toContain("active");
+	expect(idle).not.toContain(" new");
 	expect(idle).not.toContain("animate-working");
 
-	const seen = renderToStaticMarkup(<resources.ResourcesDock {...dockProps} finishedCount={3} />);
-	expect(seen).toContain("3 finished");
-	expect(seen).not.toContain('data-testid="resources-dock-fresh"');
-
 	const working = renderToStaticMarkup(
-		<resources.ResourcesDock
-			{...dockProps}
-			commands={[command]}
-			finishedCount={4}
-			freshCount={1}
-		/>,
+		<resources.ResourcesDock {...dockProps} commands={[command]} finishedCount={4} />,
 	);
 	expect(working.indexOf('data-resource-id="build"')).toBeLessThan(
 		working.indexOf('data-testid="resources-dock-finished"'),
 	);
-	expect(working).not.toContain('data-testid="resources-dock-toggle"');
+	expect(working.indexOf('data-testid="resources-dock-toggle"')).toBeLessThan(
+		working.indexOf('data-testid="resources-dock-finished"'),
+	);
 
 	const crowded = renderToStaticMarkup(
 		<resources.ResourcesDock
@@ -779,20 +839,13 @@ test("a jump to what finished lands on the newest finish across kinds", () => {
 	expect(resources.newestResourceId([done("new", NOW - 10_000)], [reviewed])).toBe("new");
 });
 
-test("the trigger shows how many finished results are new", () => {
-	const render = (freshCount?: number) =>
-		renderToStaticMarkup(
-			<TooltipProvider>
-				<resources.ResourcesButton
-					activeCount={1}
-					open={false}
-					{...(freshCount ? { freshCount } : {})}
-				/>
-			</TooltipProvider>,
-		);
-	const fresh = render(2);
-	expect(fresh).toContain('data-testid="resources-trigger-fresh"');
-	expect(fresh).toContain("2 new");
-	expect(fresh).toContain('aria-label="Resources, 1 active, 2 new"');
-	expect(render()).not.toContain("resources-trigger-fresh");
+test("the trigger reads Resources and the active count, with no new-results pill", () => {
+	const html = renderToStaticMarkup(
+		<TooltipProvider>
+			<resources.ResourcesButton activeCount={1} open={false} />
+		</TooltipProvider>,
+	);
+	expect(html).toContain('aria-label="Resources, 1 active"');
+	expect(html).toMatch(/>1<\/span>/);
+	expect(html).not.toContain(" new");
 });

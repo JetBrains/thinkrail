@@ -1,7 +1,9 @@
 import type {
+	NativeDeepLinkBridge,
 	NativeMenuBridge,
 	NativeNotificationBridge,
 	NativeNotificationInput,
+	NativeOpenFileRequest,
 	NativeUpdateBridge,
 	NativeUpdateState,
 	NativeWindowControlsBridge,
@@ -9,7 +11,12 @@ import type {
 } from "@thinkrail/contracts";
 import Electrobun, { Electroview } from "electrobun/view";
 import { installExternalLinkRouting } from "./externalNavigation";
-import { handlePageZoomShortcut, installPageZoomGestures } from "./pageZoom";
+import {
+	createPageZoomBridge,
+	handlePageZoomShortcut,
+	installPageZoomGestures,
+	type PageZoomAction,
+} from "./pageZoom";
 import {
 	INITIAL_DESKTOP_PREFERENCES_GLOBAL,
 	isDesktopPreferenceKey,
@@ -40,6 +47,8 @@ windowChromeStyle.update(initialWindowChrome);
 
 const updateListeners = new Set<(state: NativeUpdateState) => void>();
 const windowStateListeners = new Set<(state: NativeWindowState) => void>();
+const deepLinkListeners = new Set<(request: NativeOpenFileRequest) => void>();
+const pendingDeepLinks: NativeOpenFileRequest[] = [];
 let nativeWindowFocused = document.hasFocus();
 window.addEventListener("focus", () => {
 	nativeWindowFocused = true;
@@ -50,6 +59,13 @@ const rpc = Electroview.defineRPC<DesktopRpc>({
 	handlers: {
 		requests: {},
 		messages: {
+			openFile: (request) => {
+				if (deepLinkListeners.size === 0) {
+					pendingDeepLinks.push(request);
+					return;
+				}
+				for (const listener of deepLinkListeners) listener(request);
+			},
 			updateStateChanged: (state) => {
 				for (const listener of updateListeners) listener(state);
 			},
@@ -68,10 +84,11 @@ const rpc = Electroview.defineRPC<DesktopRpc>({
 const electroview = new Electrobun.Electroview({ rpc });
 installTitleBarDoubleClick(window, () => electroview.rpc?.send.titleBarDoubleClick());
 installExternalLinkRouting(window);
+const requestPageZoom = (action: PageZoomAction) => {
+	electroview.rpc?.send.pageZoomRequested({ action });
+};
 window.addEventListener("keydown", (event) =>
-	handlePageZoomShortcut(event, navigator.platform, (action) => {
-		electroview.rpc?.send.pageZoomRequested({ action });
-	}),
+	handlePageZoomShortcut(event, navigator.platform, requestPageZoom),
 );
 installPageZoomGestures(window, navigator.platform, (gesture) => {
 	electroview.rpc?.send.pageZoomGestureRequested(gesture);
@@ -106,8 +123,28 @@ const notificationBridge: NativeNotificationBridge = Object.freeze({
 	},
 	isWindowFocused: () => nativeWindowFocused,
 });
+const deepLinkBridge: NativeDeepLinkBridge = Object.freeze({
+	subscribe: (listener: (request: NativeOpenFileRequest) => void) => {
+		deepLinkListeners.add(listener);
+		const queued = pendingDeepLinks.splice(0);
+		for (const request of queued) listener(request);
+		return () => deepLinkListeners.delete(listener);
+	},
+});
+Object.defineProperty(globals, "__THINKRAIL_NATIVE_DEEP_LINKS__", {
+	value: deepLinkBridge,
+	writable: false,
+	configurable: false,
+	enumerable: false,
+});
 Object.defineProperty(globals, "__THINKRAIL_NATIVE_NOTIFICATIONS__", {
 	value: notificationBridge,
+	writable: false,
+	configurable: false,
+	enumerable: false,
+});
+Object.defineProperty(globals, "__THINKRAIL_NATIVE_PAGE_ZOOM__", {
+	value: createPageZoomBridge(requestPageZoom),
 	writable: false,
 	configurable: false,
 	enumerable: false,

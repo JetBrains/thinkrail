@@ -12,7 +12,10 @@ const parameters = Type.Object({
 		Type.Boolean({ description: "Case-insensitive match (default: true)." }),
 	),
 	type: Type.Optional(
-		Type.String({ description: "Only search specs with this frontmatter type." }),
+		Type.String({
+			description:
+				'Only search specs with this frontmatter type. Finished task-specs (status: done) are skipped unless this is "task-spec".',
+		}),
 	),
 	tag: Type.Optional(Type.String({ description: "Only search specs carrying this tag." })),
 	parent: Type.Optional(Type.String({ description: "Only search specs whose parent is this id." })),

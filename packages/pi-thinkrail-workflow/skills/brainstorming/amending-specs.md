@@ -24,7 +24,9 @@ of approvals: do it yourself, and let the user see the result in the Changes rev
    make no edits — never invent content to show activity.
 5. **Report in a line or two:** which specs changed, by name, and any unconfirmed assumption left in
    them. No per-file narration.
-6. **Retire the task-spec** — delete it once its durable content is in the tree.
+6. **Retire the task-spec** — once its durable content is in the tree, set its `status: done` with
+   `spec_update`. Never delete it: it stays in the user's Artifacts tab, and spec search skips a
+   finished task-spec.
 
 ## Ending
 

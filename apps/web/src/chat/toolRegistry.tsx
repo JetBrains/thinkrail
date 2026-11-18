@@ -5,6 +5,7 @@ import {
 	type ToolRegistrationOptions,
 	type ToolRenderer,
 	type ToolRenderProps,
+	type ToolWidth,
 	toolValueText,
 	type WebExtension,
 } from "@thinkrail/extension-api/web";
@@ -14,6 +15,7 @@ import { reportToolPresentationError } from "./ToolRendererBoundary";
 
 interface ToolRegistration extends ToolRegistrationOptions {
 	renderer: ToolRenderer;
+	extension?: string | undefined;
 }
 
 export interface ToolRegistry {
@@ -61,8 +63,9 @@ export function registerToolRenderer(
 	toolName: string,
 	renderer: ToolRenderer,
 	options: ToolRegistrationOptions = {},
+	extension?: string,
 ): void {
-	state.builtIn.set(toolName, { renderer, ...options });
+	state.builtIn.set(toolName, { renderer, ...options, extension });
 	publish();
 }
 
@@ -77,11 +80,11 @@ export function registerToolRendererPrefix(
 
 export function setInstalledToolRenderers(
 	owner: string,
-	toolRenderers: WebExtension["toolRenderers"],
+	toolRenderers: NonNullable<WebExtension["toolRenderers"]>,
 ): void {
 	const owned = new Map<string, ToolRegistration>();
 	for (const [name, { renderer, options }] of Object.entries(toolRenderers)) {
-		owned.set(name, { renderer, ...options });
+		owned.set(name, { renderer, ...options, extension: owner });
 	}
 	state.installed.set(owner, owned);
 	publish();
@@ -168,11 +171,46 @@ export function isInteractiveTool(
 	return resolveRegistration(toolName, registry)?.interactive === true;
 }
 
+export function isDockedTool(toolName: string, registry: ToolRegistry = state.current): boolean {
+	const registration = resolveRegistration(toolName, registry);
+	return registration?.interactive === true && registration.dock === true;
+}
+
+export function carriesComposerSuggestions(
+	toolName: string,
+	registry: ToolRegistry = state.current,
+): boolean {
+	return resolveRegistration(toolName, registry)?.composerSuggestions !== undefined;
+}
+
+export function readComposerSuggestions(
+	toolName: string,
+	args: Record<string, unknown>,
+	result: unknown,
+	disabledExtensions: readonly string[] = [],
+	registry: ToolRegistry = state.current,
+): readonly string[] | null {
+	const registration = resolveRegistration(toolName, registry);
+	const reader = registration?.composerSuggestions;
+	if (!reader) return null;
+	if (registration.extension && disabledExtensions.includes(registration.extension)) return null;
+	try {
+		return reader(args, result);
+	} catch (error) {
+		reportToolPresentationError(reader, error, "tool-composer-suggestions");
+		return null;
+	}
+}
+
 export function getToolChrome(
 	toolName: string,
 	registry: ToolRegistry = state.current,
 ): ToolChrome {
 	return resolveRegistration(toolName, registry)?.chrome ?? "card";
+}
+
+export function getToolWidth(toolName: string, registry: ToolRegistry = state.current): ToolWidth {
+	return resolveRegistration(toolName, registry)?.width ?? "column";
 }
 
 export interface ResolvedProminence {

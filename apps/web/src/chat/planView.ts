@@ -8,9 +8,13 @@ import {
 	type TodoItem,
 	type TodoPlan,
 } from "@thinkrail/contracts";
-import type { ToolStatus } from "@thinkrail/extension-api/web";
-import { deriveInteractionStates, type InteractionState } from "./interactionState";
-import { currentToolRegistry, isInteractiveTool, type ToolRegistry } from "./toolRegistry";
+import {
+	deriveInteractionStates,
+	type InteractionState,
+	latestPendingInteraction,
+	type PendingInteraction,
+} from "./interactionState";
+import { currentToolRegistry, type ToolRegistry } from "./toolRegistry";
 import type { ChatTurn, ToolResultState } from "./types";
 
 export type ItemChangeSet =
@@ -310,20 +314,6 @@ export function lastAgentText(rt: { turns: ChatTurn[] }): string | undefined {
 	return undefined;
 }
 
-export interface PendingInteraction {
-	toolCallId: string;
-	toolName: string;
-	args: Record<string, unknown>;
-	result: unknown;
-	status: ToolStatus;
-	streaming: boolean;
-}
-
-/**
- * The session's currently-awaiting interactive tool call — the one the user still has to respond to (no
- * response, not superseded, not terminal) — reconstructed as the tool render props its registered renderer
- * needs, so the plan page can host the SAME card. Undefined when nothing is awaiting. Latest wins.
- */
 export function pendingInteraction(
 	rt: {
 		turns: ChatTurn[];
@@ -333,23 +323,5 @@ export function pendingInteraction(
 	registry: ToolRegistry = currentToolRegistry(),
 ): PendingInteraction | undefined {
 	const states = deriveInteractionStates(rt.turns, rt.toolResponses, rt.toolResults, registry);
-	let found: PendingInteraction | undefined;
-	for (const turn of rt.turns) {
-		if (turn.kind !== "assistant") continue;
-		for (const block of turn.message.content) {
-			if (block.type !== "toolCall" || !isInteractiveTool(block.name, registry)) continue;
-			const state = states[block.id];
-			if (!state || state.response !== undefined || state.superseded || state.terminal) continue;
-			const tool = rt.toolResults[block.id];
-			found = {
-				toolCallId: block.id,
-				toolName: block.name,
-				args: block.arguments ?? {},
-				result: tool?.raw,
-				status: tool?.status ?? "running",
-				streaming: turn.streaming,
-			};
-		}
-	}
-	return found;
+	return latestPendingInteraction(rt.turns, rt.toolResults, states, registry);
 }

@@ -1,0 +1,156 @@
+{
+	"questions": [
+		{
+			"query": "rename chat title",
+			"path": "packages/server/src/agent/SPEC.md",
+			"heading": "Session titles",
+			"why": "How renaming a chat is persisted on the host and whether an agent title can overwrite a manual one."
+		},
+		{
+			"query": "why is pi not isolated in a subprocess, what happens when it crashes",
+			"path": "architecture.md",
+			"heading": "Invariants",
+			"why": "Why the agent runs in the host process with no crash isolation and what a fatal fault costs."
+		},
+		{
+			"query": "xterm webgl renderer",
+			"path": "architecture.md",
+			"heading": "Decisions",
+			"why": "Why the browser terminal stays on xterm's default DOM renderer instead of the WebGL addon."
+		},
+		{
+			"query": "will thinkrail ever have user accounts or a login screen",
+			"path": "goal-and-requirements.md",
+			"heading": "Non-goals",
+			"why": "Whether accounts and a login UI are excluded from the product by decision."
+		},
+		{
+			"query": "is the MCP approval policy just a temporary pi workaround",
+			"path": "pi-compatibility.md",
+			"heading": "Not temporary SDK workarounds",
+			"why": "Whether MCP approvals/confirmation policy are deliberate behavior or an SDK workaround a pi upgrade may drop."
+		},
+		{
+			"query": "continue_in_workspace summary max length",
+			"path": "packages/server/src/agent/SPEC.md",
+			"heading": "Continue in workspace",
+			"why": "How the continue_in_workspace tool bounds the handoff summary the agent writes."
+		},
+		{
+			"query": "when does stopping a subagent return RESOURCE_UNAVAILABLE",
+			"path": "packages/server/src/agent/SPEC.md",
+			"heading": "Chat Resources integration",
+			"why": "Which validation failures make a chat-resource control such as subagent stop answer RESOURCE_UNAVAILABLE."
+		},
+		{
+			"query": "do crash reports include the error message text",
+			"path": "packages/server/src/analytics/SPEC.md",
+			"heading": "Error reports",
+			"why": "Whether exception messages or other prose reach PostHog in error reports."
+		},
+		{
+			"query": "how are pi session directories named per cwd",
+			"path": "packages/server/src/history/SPEC.md",
+			"heading": "pi file format (`@earendil-works/pi-coding-agent`, the catalog-pinned version)",
+			"why": "How pi lays out and names the per-cwd session directories and files on disk."
+		},
+		{
+			"query": "git grep flags for text search",
+			"path": "packages/server/src/search/SPEC.md",
+			"heading": "Text (Find in Files)",
+			"why": "Which git grep invocation and options back the Find in Files content search."
+		},
+		{
+			"query": "can I add an await inside attachTerminal",
+			"path": "packages/server/src/terminal/SPEC.md",
+			"heading": "Restrictions",
+			"why": "Whether attachTerminal may become async, and why it must stay synchronous."
+		},
+		{
+			"query": "how is a commit in a linked worktree detected",
+			"path": "packages/server/src/watch/SPEC.md",
+			"heading": "Boundary",
+			"why": "How a commit made in a linked worktree, whose git dir lies outside the watched root, still nudges clients."
+		},
+		{
+			"query": "why does createWorkspace pass --no-track",
+			"path": "packages/server/src/workspaces/SPEC.md",
+			"heading": "Boundary",
+			"why": "Why a new workspace branch must not get its remote base branch as upstream."
+		},
+		{
+			"query": "embedding search",
+			"path": "packages/spec-graph/SPEC.md",
+			"heading": "Non-goals",
+			"why": "Whether semantic or embedding-based spec search is in scope."
+		},
+		{
+			"query": "why does zh-TW fall back to English",
+			"path": "packages/locales/SPEC.md",
+			"heading": "Public surface",
+			"why": "Why a Traditional Chinese system locale resolves to English instead of the Simplified catalog."
+		},
+		{
+			"query": "shortcut to toggle the bottom panel",
+			"path": "apps/web/src/shell/SPEC.md",
+			"heading": "Global chords",
+			"why": "Which keyboard chord shows or hides the bottom region and what it restores."
+		},
+		{
+			"query": "chat spinner",
+			"path": "apps/web/src/shell/SPEC.md",
+			"heading": "Long-operation feedback",
+			"why": "Where a pending spinner shows while a chat is starting or a closed chat reopens."
+		},
+		{
+			"query": "how quickly do I have to press shift twice",
+			"path": "apps/web/src/search/SPEC.md",
+			"heading": "Double Shift",
+			"why": "The timing and reset rules of the double-Shift gesture that opens the palette."
+		},
+		{
+			"query": "frecency half-life",
+			"path": "apps/web/src/search/SPEC.md",
+			"heading": "Ranking",
+			"why": "What decay the palette's frecency ranking applies to past picks."
+		},
+		{
+			"query": "does uninstalling delete my worktrees",
+			"path": "apps/cli/SPEC.md",
+			"heading": "Uninstall (`thinkrail uninstall`)",
+			"why": "Whether thinkrail uninstall removes the data dir holding workspace worktrees."
+		}
+	],
+	"misses": [
+		{
+			"query": "how do I opt out of telemetry",
+			"path": "packages/server/src/analytics/SPEC.md",
+			"heading": "Preference and delivery",
+			"why": "How to turn off sharing of product analytics data."
+		},
+		{
+			"query": "can the finder look across all my repos at once",
+			"path": "packages/server/src/search/SPEC.md",
+			"heading": "Root and eligibility",
+			"why": "Whether search covers every open project or only the current one."
+		},
+		{
+			"query": "find docs by meaning instead of keywords",
+			"path": "packages/spec-graph/SPEC.md",
+			"heading": "Non-goals",
+			"why": "Whether specs can be searched semantically rather than by exact words."
+		},
+		{
+			"query": "do we support right-to-left scripts such as Arabic or Hebrew",
+			"path": "packages/locales/SPEC.md",
+			"heading": "Deferred",
+			"why": "Whether the UI supports right-to-left layout."
+		},
+		{
+			"query": "move a scratch conversation into a real repo branch",
+			"path": "packages/server/src/agent/SPEC.md",
+			"heading": "Continue in workspace",
+			"why": "How a chat without a project is carried over into a real workspace."
+		}
+	]
+}

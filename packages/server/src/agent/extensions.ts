@@ -32,6 +32,7 @@ import {
 	serverExtensions,
 } from "../extensions";
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
+import { artifactsGuard } from "./artifactsGuard";
 import { continueInWorkspaceExtension } from "./continueTool";
 import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
@@ -55,6 +56,7 @@ import {
 	discoverCompatibilitySkillSources,
 } from "./skillSources";
 import { setTitleExtension } from "./titleTool";
+import { workspaceToolsExtension } from "./workspaceTools";
 
 export type BundledExtensionFactory = ExtensionFactory;
 
@@ -404,7 +406,7 @@ export function withoutSpecRule(workspaceId: string): InlineExtension {
 }
 
 export function childBaseExtensionFactories(): InlineExtension[] {
-	return [oversizedImageGuard, skillCarryover];
+	return [oversizedImageGuard, artifactsGuard, skillCarryover];
 }
 
 export function childExtensionFactories(workspaceId: string): InlineExtension[] {
@@ -506,7 +508,9 @@ function createRegistryLoader(
 		requestReviewExtension,
 		setTitleExtension,
 		continueInWorkspaceExtension,
+		workspaceToolsExtension,
 		oversizedImageGuard,
+		artifactsGuard,
 		skillCatalog,
 		skillCarryover,
 		...extraFactories,

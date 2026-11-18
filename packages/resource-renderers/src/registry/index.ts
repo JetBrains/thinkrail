@@ -3,6 +3,7 @@ export { describeResource } from "./describe";
 export { canonicalWorkspacePath } from "./paths";
 export {
 	diffRendererCapabilities,
+	matchesGlob,
 	registerResourceRenderer,
 	resolveRenderers,
 } from "./registry";
@@ -10,6 +11,8 @@ export { anchorLabel, isPlaceable, outdatedReason, threadLabel } from "./review"
 export { rendererImplementationKey, rendererTestId, selectResourceRenderer } from "./selection";
 export type {
 	AnchorDraft,
+	DiffSideLabels,
+	FrameFocus,
 	HunkActions,
 	HunkTriage,
 	ResourceAnchorCapability,
@@ -19,6 +22,7 @@ export type {
 	ResourceEnvironment,
 	ResourceIntent,
 	ResourceRenderer,
+	ResourceReveal,
 	ResourceViewModule,
 	ResourceViewProps,
 	ReviewThread,
