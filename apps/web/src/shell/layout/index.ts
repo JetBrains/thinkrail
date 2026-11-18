@@ -24,5 +24,6 @@ export {
 	type LayoutTabFocusRequest,
 	Workbench,
 	type WorkbenchChromeShortcuts,
+	type WorkbenchPeek,
 	type WorkbenchProps,
 } from "./Workbench";

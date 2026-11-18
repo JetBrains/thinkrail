@@ -497,8 +497,9 @@ content and their own controls, which a treeitem's name would flatten and its ro
   rejected: it would take native right-click copy. Esc returns to the composer through `refocus()`, draft
   and caret intact. **Esc on the parked feed does nothing** (user, 2026-11-16) — not even
   `preventDefault`, so no other listener reacts — and only an item's Esc returns: an extra Esc after
-  leaving the composer never throws the reader back into the field; `Mod+L` returns. **While a docked
-  question waits**, Esc on the feed or an item goes to its `[data-focus-claim]` instead, revealed
+  leaving the composer never throws the reader back into the field; `Mod+L` returns. The one listener
+  that does react is Peek's: with Peek open (and unpinned) that Esc closes it ([[submodule-web-shell]],
+  *Peek*). **While a docked question waits**, Esc on the feed or an item goes to its `[data-focus-claim]` instead, revealed
   (`focusAndReveal`; unconfirmed with the user, the recommended answer): the question is the chat's focus
   home. The controller learns of it through the `waitingQuestion()` option `ChatView` passes down (the
   dock's claim, else `null`), and `transcriptKeyAction` turns Esc into `question` when one waits.

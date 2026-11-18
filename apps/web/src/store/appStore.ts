@@ -99,6 +99,7 @@ import {
 	matchesSkillInvocationCommand,
 	nullProto,
 	parseSkillInvocation,
+	projectRelativePath,
 	randomId,
 	randomUuid,
 	readLayoutNavigationClock,
@@ -130,6 +131,16 @@ import {
 	type McpWorkspaceProjection,
 	withoutMcpSession,
 } from "./mcp";
+import {
+	hidePeek,
+	type PeekEntry,
+	type PeekState,
+	peeksAfterTurns,
+	peeksWithoutExtensions,
+	pushPeekEntry,
+	removePeekEntry,
+	showPeekIndex,
+} from "./peek";
 import { newPromptImagesState, type PromptImagesState } from "./promptImageState";
 import {
 	artifactsWatermark,
@@ -350,6 +361,7 @@ export interface LocalLayoutPreferences {
 	defaultPresetId: string;
 	maxSideGroups: number;
 	maxBottomGroups: number;
+	peekWidth?: number;
 }
 
 export const DEFAULT_LOCAL_LAYOUT_PREFERENCES: LocalLayoutPreferences = {
@@ -1156,6 +1168,7 @@ interface AppState {
 	layoutAttentionByWorkspace: Record<string, LayoutAttention>;
 	layoutProjectionEpoch: number;
 	layoutIntents: LayoutIntent[];
+	peekByWorkspace: Record<string, PeekState>;
 	tabsByWorkspace: Record<string, EditorTab[]>;
 	activeTabByWorkspace: Record<string, string | null>;
 	previewTabByWorkspace: Record<string, string>;
@@ -1632,6 +1645,13 @@ interface AppState {
 	setMarkdownOutlineSide: (side: MarkdownOutlineSide) => void;
 	applyConfig: (config: AppConfig) => void;
 	requestToolView: (workspaceId: string, tool: LayoutToolId) => void;
+	requestPeek: (workspaceId: string, entry: PeekEntry) => void;
+	peekBack: (workspaceId: string) => void;
+	peekForward: (workspaceId: string) => void;
+	showPeekEntry: (workspaceId: string, index: number) => void;
+	closePeek: (workspaceId: string) => void;
+	closePeekEntry: (workspaceId: string, index: number) => void;
+	pinPeek: (workspaceId: string, pinned: boolean) => void;
 	requestChangesView: (workspaceId: string, path: string | null, scope?: GitDiffScope) => void;
 	revealChanges: (workspaceId: string) => void;
 	clearChangesRequest: () => void;
@@ -1928,6 +1948,45 @@ function patchFilesTreeView(
 function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
 	const { [key]: _dropped, ...rest } = record;
 	return rest;
+}
+
+function configStatePatch(state: Pick<AppState, "peekByWorkspace">, config: AppConfig) {
+	const patch = configPatch(config);
+	return {
+		...patch,
+		peekByWorkspace: peeksWithoutExtensions(state.peekByWorkspace, patch.disabledExtensions),
+	};
+}
+
+function patchPeek(
+	state: Pick<AppState, "peekByWorkspace" | "removedWorkspaceIds">,
+	workspaceId: string,
+	update: (peek: PeekState | undefined) => PeekState | undefined,
+): Pick<AppState, "peekByWorkspace"> | Record<string, never> {
+	if (state.removedWorkspaceIds[workspaceId]) return {};
+	const current = state.peekByWorkspace[workspaceId];
+	const next = update(current);
+	if (next === current) return {};
+	return {
+		peekByWorkspace: next
+			? { ...state.peekByWorkspace, [workspaceId]: next }
+			: omitKey(state.peekByWorkspace, workspaceId),
+	};
+}
+
+function canonicalPeekEntry(
+	state: Pick<AppState, "activeWorkspaceId" | "workspaces">,
+	workspaceId: string,
+	entry: PeekEntry,
+): PeekEntry {
+	if (entry.kind === "extension") return entry;
+	const root = selectWorkspaceById(state, workspaceId)?.worktreePath;
+	if (entry.kind === "file") return { ...entry, path: projectRelativePath(entry.path, root) };
+	return {
+		...entry,
+		before: projectRelativePath(entry.before, root),
+		after: projectRelativePath(entry.after, root),
+	};
 }
 
 function appendLayoutIntent(intents: LayoutIntent[], input: LayoutIntentInput): LayoutIntent[] {
@@ -2591,6 +2650,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	layoutAttentionByWorkspace: {},
 	layoutProjectionEpoch: 0,
 	layoutIntents: [],
+	peekByWorkspace: {},
 	tabsByWorkspace: {},
 	activeTabByWorkspace: {},
 	previewTabByWorkspace: {},
@@ -2910,7 +2970,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				hostUpdate: hostUpdate ?? null,
 				hostAppVersion: hostAppVersion ?? null,
 				speech: speech ?? null,
-				...(config ? configPatch(config) : {}),
+				...(config ? configStatePatch(state, config) : {}),
 				...reconcileProjectNavigation(state, openProjects),
 				...pruneExpandedProjects(state, openProjects),
 				welcomeGeneration: state.welcomeGeneration + 1,
@@ -3794,6 +3854,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				layoutDocumentsByWorkspace: omitKey(s.layoutDocumentsByWorkspace, workspaceId),
 				layoutAttentionByWorkspace: omitKey(s.layoutAttentionByWorkspace, workspaceId),
 				layoutIntents: s.layoutIntents.filter((intent) => intent.workspaceId !== workspaceId),
+				peekByWorkspace: omitKey(s.peekByWorkspace, workspaceId),
 				tabsByWorkspace: omitKey(s.tabsByWorkspace, workspaceId),
 				activeTabByWorkspace: omitKey(s.activeTabByWorkspace, workspaceId),
 				previewTabByWorkspace: omitKey(s.previewTabByWorkspace, workspaceId),
@@ -4245,6 +4306,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 				sessionStateByWorkspace,
 				sessions,
 				extUiOrphans,
+				peekByWorkspace: peeksAfterTurns(
+					s.peekByWorkspace,
+					(workspaceId, sessionId) => s.sessionStateByWorkspace[workspaceId]?.[sessionId]?.state,
+					(workspaceId, sessionId) => sessionStateByWorkspace[workspaceId]?.[sessionId]?.state,
+				),
 				sessionStateClock: s.sessionStateClock + 1,
 				sessionStateSnapshotInstalled: true,
 			};
@@ -4281,12 +4347,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 				};
 			}
 			const sessionStateClock = s.sessionStateClock + 1;
+			const peekByWorkspace = peeksAfterTurns(
+				s.peekByWorkspace,
+				(workspaceId, sessionId) => s.sessionStateByWorkspace[workspaceId]?.[sessionId]?.state,
+				(workspaceId, sessionId) =>
+					workspaceId === record.workspaceId && sessionId === record.sessionId
+						? record.state
+						: s.sessionStateByWorkspace[workspaceId]?.[sessionId]?.state,
+			);
 			return {
 				sessionStateClock,
 				sessionStateByWorkspace: {
 					...s.sessionStateByWorkspace,
 					[record.workspaceId]: { ...workspaceStates, [record.sessionId]: record },
 				},
+				...(peekByWorkspace !== s.peekByWorkspace ? { peekByWorkspace } : {}),
 				...(orphansChanged ? { extUiOrphans } : {}),
 				...(runtime
 					? {
@@ -4951,7 +5026,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	setChatMessageOrder: (chatMessageOrder) => set({ chatMessageOrder }),
 	setMarkdownOutlineVisible: (markdownOutlineVisible) => set({ markdownOutlineVisible }),
 	setMarkdownOutlineSide: (markdownOutlineSide) => set({ markdownOutlineSide }),
-	applyConfig: (config) => set(configPatch(config)),
+	applyConfig: (config) => set((state) => configStatePatch(state, config)),
 	requestToolView: (workspaceId, tool) =>
 		set((state) =>
 			state.removedWorkspaceIds[workspaceId]
@@ -4963,6 +5038,31 @@ export const useAppStore = create<AppState>((set, get) => ({
 							tool,
 						}),
 					},
+		),
+	requestPeek: (workspaceId, entry) =>
+		set((state) =>
+			patchPeek(state, workspaceId, (peek) =>
+				pushPeekEntry(peek, canonicalPeekEntry(state, workspaceId, entry)),
+			),
+		),
+	peekBack: (workspaceId) =>
+		set((state) =>
+			patchPeek(state, workspaceId, (peek) => showPeekIndex(peek, (peek?.index ?? 0) - 1)),
+		),
+	peekForward: (workspaceId) =>
+		set((state) =>
+			patchPeek(state, workspaceId, (peek) => showPeekIndex(peek, (peek?.index ?? 0) + 1)),
+		),
+	showPeekEntry: (workspaceId, index) =>
+		set((state) => patchPeek(state, workspaceId, (peek) => showPeekIndex(peek, index))),
+	closePeek: (workspaceId) => set((state) => patchPeek(state, workspaceId, hidePeek)),
+	closePeekEntry: (workspaceId, index) =>
+		set((state) => patchPeek(state, workspaceId, (peek) => removePeekEntry(peek, index))),
+	pinPeek: (workspaceId, pinned) =>
+		set((state) =>
+			patchPeek(state, workspaceId, (peek) =>
+				peek?.open && peek.pinned !== pinned ? { ...peek, pinned } : peek,
+			),
 		),
 	requestChangesView: (workspaceId, path, scope) =>
 		set((s) => {

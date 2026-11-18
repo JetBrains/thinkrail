@@ -47,6 +47,7 @@ export interface ResourcePreviewProps {
 	reveal?: ResourceReveal | undefined;
 	leading?: ReactNode;
 	actions?: ReactNode;
+	failureAction?: ReactNode;
 	className?: string | undefined;
 	compact?: boolean | undefined;
 	htmlViewport?: HtmlViewport | undefined;
@@ -170,6 +171,7 @@ function ScopedResourcePreview(
 				className="rounded-sm border border-border-default px-8 py-4 text-feedback-error tr-text-metadata"
 			>
 				{t("viewer.preview.loadFailed", { path: failure.path, message: failure.message })}
+				{props.failureAction ? <div className="mt-8">{props.failureAction}</div> : null}
 			</div>
 		);
 	}

@@ -61,6 +61,7 @@ import {
 	selectChatWorkspaceTitle,
 	selectContextProject,
 	selectDiffTabTargetRef,
+	selectPeekOpen,
 	selectRailPlanSessionId,
 	selectReviewDraftCount,
 	selectUnnamedChatFirstPrompts,
@@ -88,6 +89,7 @@ import {
 	findPlacedResource,
 	findTabLocation,
 	isToolShowing,
+	LAYOUT_LIMITS,
 	type LayoutCenterTab,
 	type LayoutTab,
 	type LayoutTabFocusRequest,
@@ -95,6 +97,7 @@ import {
 	showingAuxiliaryKey,
 	Workbench,
 	type WorkbenchChromeShortcuts,
+	type WorkbenchPeek,
 	type WorkspaceLayoutDocument,
 } from "./layout";
 import { toLayoutTab, useLayoutIntentProcessing } from "./layoutIntents";
@@ -106,6 +109,7 @@ import {
 	workspaceProjectionReference,
 } from "./layoutState";
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
+import { PeekPane } from "./PeekPane";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { hasNativeShortcuts } from "./useAppShortcuts";
 import { useIdleEditorPreload } from "./useIdleEditorPreload";
@@ -367,6 +371,12 @@ function workbenchChromeShortcuts(keybindings: ResolvedKeybindings): WorkbenchCh
 		tools: { projects: keys("focus.projects"), files: keys("view.files") },
 		terminal: keys("focus.terminal"),
 	};
+}
+
+function resizePeek(peekWidth: number): void {
+	const state = useAppStore.getState();
+	if (state.localLayoutPreferences.peekWidth === peekWidth) return;
+	state.setLocalLayoutPreferences({ ...state.localLayoutPreferences, peekWidth });
 }
 
 export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
@@ -656,6 +666,16 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	);
 	const chatFirstPrompts = useAppStore(
 		useShallow((state) => selectUnnamedChatFirstPrompts(state, workspaceId)),
+	);
+	const peekOpen = useAppStore((state) => selectPeekOpen(state, workspaceId));
+	const peekWidth = layoutPreferences.peekWidth ?? LAYOUT_LIMITS.defaultPeekWidth;
+	const renderPeek = useCallback(
+		() => <PeekPane key={workspaceId} workspaceId={workspaceId} />,
+		[workspaceId],
+	);
+	const peek = useMemo<WorkbenchPeek>(
+		() => ({ open: peekOpen, width: peekWidth, onResize: resizePeek, render: renderPeek }),
+		[peekOpen, peekWidth, renderPeek],
 	);
 	const rendered = document && attention ? { document, attention } : pendingProjection;
 
@@ -1100,6 +1120,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						)
 				}
 				onGestureCanceled={() => toast.info(t("shell.workbench.gestureCanceled"))}
+				peek={peek}
 			/>
 			{terminalClose.confirmation}
 		</div>

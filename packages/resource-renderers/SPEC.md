@@ -50,7 +50,8 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   host's fs events, the review store and an opened tab use;
 - **`ResourcePreview`** — a self-loading file view, or with `before` (another file) a before/after diff of two
   workspace files, with the registry's toggle, the unplaced strip, review commenting and Send review, and
-  caller slots (`leading`, `actions`, controlled `rendererId` / `layout`, an opaque `viewState` it tags
+  caller slots (`leading`, `actions`, a `failureAction` shown under its load-failure message — Peek's
+  Remove — controlled `rendererId` / `layout`, an opaque `viewState` it tags
   with the renderer implementation that wrote it, so a renderer switch never restores another renderer's
   state and a caller needs no reset, and a `reveal` it forwards to the view renderer). Its `compact` flag (carried to the lazy views as
   `ResourceEnvironment.compact`, and reset by an explicit `compact={false}`) drops the renderer toggles,

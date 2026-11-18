@@ -92,6 +92,7 @@ const REGION = "[data-region]";
 const CENTER = '[data-region-kind="center"]';
 const CENTER_CONTENT = '[data-region-kind="center"] > [role="tabpanel"]';
 const LADDER_ORIGIN = "[data-esc-ladder]";
+const PEEK = '[data-region-kind="peek"]';
 const inSide = (tagName: string, init: { type?: string; inside?: string[]; is?: string[] } = {}) =>
 	field(tagName, { ...init, inside: [REGION, ...(init.inside ?? [])] });
 const climbs = (target: EscapeTarget, press: Partial<EscapePress> = {}, claimed = false) =>
@@ -122,6 +123,11 @@ describe("a bare Esc on a panel climbs to the main area", () => {
 		expect(climbs(field("DIV", { inside: [REGION, CENTER, CENTER_CONTENT] }))).toBe(false);
 		expect(climbs(field("ARTICLE", { inside: [REGION, CENTER, CENTER_CONTENT] }))).toBe(false);
 		expect(climbs(field("BUTTON"))).toBe(false);
+	});
+
+	test("never inside Peek, whose Esc is Peek's own", () => {
+		expect(climbs(field("SECTION", { is: [REGION, PEEK] }))).toBe(false);
+		expect(climbs(field("BUTTON", { inside: [REGION, PEEK, '[role="toolbar"]'] }))).toBe(false);
 	});
 
 	test("never from a text field, a select, the terminal or Monaco, which keep their Esc", () => {

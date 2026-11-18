@@ -17,6 +17,7 @@ const KEEPS_ESCAPE_SELECTOR = ".monaco-editor, .xterm";
 const CENTER_SELECTOR = '[data-region-kind="center"]';
 const LADDER_ORIGIN_SELECTOR = "[data-esc-ladder]";
 const CENTER_CONTENT_SELECTOR = '[data-region-kind="center"] > [role="tabpanel"]';
+const PEEK_SELECTOR = '[data-region-kind="peek"]';
 
 export interface FieldTarget {
 	readonly tagName: string;
@@ -75,7 +76,8 @@ export function climbsToMain(press: EscapePress, target: EscapeTarget, claimed: 
 		!keepsEscape(target) &&
 		(target.closest(REGION_SELECTOR) !== null || target.closest(LADDER_ORIGIN_SELECTOR) !== null) &&
 		!target.matches(CENTER_SELECTOR) &&
-		target.closest(CENTER_CONTENT_SELECTOR) === null
+		target.closest(CENTER_CONTENT_SELECTOR) === null &&
+		target.closest(PEEK_SELECTOR) === null
 	);
 }
 

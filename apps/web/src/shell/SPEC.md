@@ -14,7 +14,7 @@ The responsive composition root: top-level app chrome, active-project/workspace 
 
 ## Boundary
 
-- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-project/workspace routing; single Settings, analytics-consent, survey-invitation, survey-window, attention-notification permission-preface, and Toaster mounts plus the keyboard-opened Create workspace dialog, the `Mod+K` / double-Shift search palette host, the `Mod+Shift+F` Find in Files host and the `Mod+?` keyboard-shortcuts dialog (and the once-mounted attention-notification observer from [[submodule-web-notifications]]); the enabled web extensions' global overlays (`ExtensionOverlays`, *Global chords*); theme application and global shortcuts; focus recovery (*Focus recovery*) and the Esc that leaves a text field, then climbs to the main area (*Esc leaves a text field*, *Esc climbs to the main area*); the command catalog the palette runs ([[submodule-web-commands]], [[submodule-web-search]]); the injected Layout, Keyboard and optional application Update settings sections; and integration of the workbench engine with store, persistence, panels, transport-backed domain state, and error boundaries.
+- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-project/workspace routing; single Settings, analytics-consent, survey-invitation, survey-window, attention-notification permission-preface, and Toaster mounts plus the keyboard-opened Create workspace dialog, the `Mod+K` / double-Shift search palette host, the `Mod+Shift+F` Find in Files host and the `Mod+?` keyboard-shortcuts dialog (and the once-mounted attention-notification observer from [[submodule-web-notifications]]); the enabled web extensions' global overlays (`ExtensionOverlays`, *Global chords*); theme application and global shortcuts; focus recovery (*Focus recovery*) and the Esc that leaves a text field, then climbs to the main area (*Esc leaves a text field*, *Esc climbs to the main area*); the Peek pane (*Peek*); the command catalog the palette runs ([[submodule-web-commands]], [[submodule-web-search]]); the injected Layout, Keyboard and optional application Update settings sections; and integration of the workbench engine with store, persistence, panels, transport-backed domain state, and error boundaries.
 - **Public surface:** `Shell`.
 - **Allowed deps:** child layout modules; `updates`; `settingsKit` (the Layout and Keyboard sections' blocks, and `SETTING_ATTR`, by which `chordActions` and `useAppShortcuts` find the Settings layer); `search` + `commands` (the palette and the command contract it composes for it); `keybindings` (the chord table and resolver `useGlobalHotkeys` matches through and the palette's shortcuts read, and the shortcut catalog the cheatsheet renders); `findInFiles` (the window `FindInFilesHost` composes); `extensions` (the enabled extensions whose overlays and shortcut rows it mounts, every extension's commands it resolves, and the panel list) and `@thinkrail/extension-api/web` (panel types); `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types, wire constants, and the shared `createQuitConfirmation` rule), `@thinkrail/ui/*`, `@thinkrail/locales` (UI strings), `i18n` (`useLocaleSync`, mounted once), `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, `themes`, and `clientPreferences` (`markdownOutlinePreference` persists the store's Markdown outline visibility and side per client, through the same adapter `layoutState` uses).
 - **Forbidden:** server/shared/pi imports; being imported by panels/store/transport; putting arrangement knowledge into a feature panel; or sending current frame/view state through transport.
@@ -201,6 +201,45 @@ and `rail`, and nothing here names an extension):
   (`railCommandPanel`) to that panel instead of the overlay — only while the panel is openable and no
   modal is open, else the press is left alone — so the command lists, rebinds and shows under the
   extension's own area like any other ([[submodule-web-keybindings]]).
+
+## Peek
+
+Peek is one contextual pane at the workbench's right edge, outside the tool groups: it shows whatever was
+peeked and is absent otherwise. Its state is the store's runtime `peekByWorkspace` slice
+([[submodule-web-store]]), never the frame — a frame field would reset every surface on a rollback through
+the strict local-layout decoders, and the layout keeps resources out of the frame. `WorkspaceWorkbench` hands
+the Workbench its `peek` prop (open, the `peekWidth` preference, its pointer-up commit, and a render of
+`PeekPane`); the column, its width and the right-side fold are [[submodule-web-shell-layout]]'s.
+
+- **Openers** call `requestPeek(workspaceId, entry)`: it pushes the entry, or selects the one with the same
+  resource identity, emits no layout intent and moves no focus — opening Peek never takes the composer's
+  keyboard. An entry names its opener chat (`sessionId`), which routes review sends and drives auto-hide.
+- **`PeekPane`** (keyed by workspace) is a toolbar — Back / Forward, a crumb per stack entry (click shows
+  it, × removes it), Pin, Open in tab, Full screen, Close — over the current entry. A file or comparison
+  renders `ResourcePreview` (full chrome, renderer/layout/view state kept per entry while the pane lives)
+  under `ResourceScopeProvider { workspaceId, sessionId }` and `AppResourceHost`'s **`PEEK_HOST`**: `HOST`
+  with an `openFile` that pushes onto the stack under the same opener, so a document's own links stay in
+  Peek while an explicit keep still opens a tab. A read failure (a deleted file) shows the renderer's
+  failure state with a Remove action. An extension entry renders `ExtensionPanelBody` with an extension
+  tab built from the entry, so it gets the same placeholder state machine and `createPanelHost`. Full
+  screen is a dialog over the same entry body and view state, as `FramedResourcePreview`'s is.
+- **Open in tab** (`peekControl.openPeekInTab`) promotes the current entry: it leaves the stack and opens
+  as a kept tab — `openFileInTab` / `openFileAtLine`, `openFileComparisonInTab`, or
+  `extensionPanelHost.openExtensionTab` (the path `PanelHost.openPanel` takes). It is a shell function
+  because the store may not reach `panels` or transport.
+- **Hiding.** Close, Esc, Open in tab on the last entry and removing the last entry hide Peek; Close and
+  Esc keep the stack (the next request reopens onto it) and unpin. When focus was inside Peek it returns
+  to the region active before it (`focusPreviousRegion`), else the first center group. Auto-hide —
+  ignored while pinned — is Esc, the opener chat starting a new turn (its host `runId` changes to a new
+  non-null value, or its `needsInput` clears: the continuation after a previewed question is answered),
+  and an extension being switched off (its entries leave the stack); the last two are store folds. Peek
+  never hides on a pointer press in the chat.
+- **Esc** is `peekControl.installPeekEscape`, a window bubble `keydown` listener installed from `Shell`
+  right after `escapeLeavesField` (so it runs after it): a bare Esc nobody prevented, outside a dialog or
+  open menu, Monaco and xterm, with no IME composition or keyboard claim, closes the active workspace's
+  open, unpinned Peek and prevents the default. An Esc in the composer therefore first leaves the field;
+  the next one, on the parked feed, closes Peek. An Esc on Peek's own controls closes it too: the climb to
+  the main area (*Esc climbs to the main area*) leaves Peek's region to this listener.
 
 ## Layout settings
 
@@ -418,7 +457,7 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   synchronously already counts as a key. The frame shows 1.5 s (≈1 s held, a 0.5 s fade) or 1 s under
   `prefers-reduced-motion`, a newer flash replaces it, and the region losing the active mark drops it.
   `F6` / `Shift+F6` walk the ring of shown regions — top bar, Project Home pane, left groups top to
-  bottom, center groups in `Ctrl+F6` order, right groups top to bottom, bottom groups left to right —
+  bottom, center groups in `Ctrl+F6` order, right groups top to bottom, Peek, bottom groups left to right —
   from the active region, in two beats (`regionKeyAction`): with no frame showing and focus inside the
   active region, a press only flashes that region, showing where the keyboard is; a press while the frame
   shows moves and flashes the destination, so a run of presses walks the ring. Focus on `<body>` or
@@ -576,7 +615,7 @@ renames, the palette, Find in Files, the history overlay, the review composer an
 card's note, Other and Discuss fields, the plan page's Add task field, and a running dictation (the first Esc
 stops it, from a `document` bubble listener that always precedes this `window` one; [[submodule-web-speech]])
 prevent in their own handlers. A
-new owner of Esc must call `preventDefault` too.
+new owner of Esc must call `preventDefault` too. Peek's Esc (*Peek*) is the one listener after this one.
 
 **Landing** is markup, like focus recovery: inside the field's region (`[data-region]`), the first
 rendered, focusable `[data-focus-claim]` — a waiting question's current option, revealed in its scroller
@@ -604,7 +643,8 @@ auxiliary rail, which sits outside every region and carries `data-esc-ladder` in
 bottom tool rails; their F6 ring is unchanged). The center's own tab
 strip and actions climb too, into the tab's content (unconfirmed with the user, the recommended answer);
 the center root and anything inside its tabpanel never do, so the parked feed's and an editor's Esc stay
-theirs. The terminal and Monaco keep their Esc; from there F6 or Mod+L.
+theirs. Peek's region never climbs either: Esc there is Peek's own (*Peek*). The terminal and Monaco keep
+their Esc; from there F6 or Mod+L.
 
 **The main area** is the last center group focus entered (the region tracker records it), else the
 first shown center group in ring order, else Project Home's main pane (`[data-main-area]`, which is no

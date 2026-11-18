@@ -45,7 +45,16 @@ export const LAYOUT_LIMITS = {
 	auxiliaryHeaderHeight: 32,
 	initialBottomHeight: 0.3,
 	maxBottomHeight: 0.7,
+	minPeekWidth: 240,
+	defaultPeekWidth: 0.4,
+	minPeekRatio: 0.1,
+	maxPeekRatio: 0.9,
 } as const;
+
+export function normalizePeekWidth(value: unknown): number | undefined {
+	if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+	return Math.min(LAYOUT_LIMITS.maxPeekRatio, Math.max(LAYOUT_LIMITS.minPeekRatio, value));
+}
 
 export type LayoutSide = "left" | "right";
 export type LayoutAuxiliary = LayoutAuxiliaryRegion;

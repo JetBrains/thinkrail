@@ -24,6 +24,7 @@ import {
 	LAYOUT_TOOLS,
 	minimumBottomGroupLimit,
 	minimumSideGroupLimit,
+	normalizePeekWidth,
 	normalizeWorkspaceView,
 	projectWorkspaceLayout,
 	reconcileAttention,
@@ -432,10 +433,12 @@ function parsePreferences(value: unknown): LocalLayoutPreferences | undefined {
 	) {
 		return undefined;
 	}
+	const peekWidth = normalizePeekWidth(value.peekWidth);
 	return {
 		defaultPresetId: value.defaultPresetId,
 		maxSideGroups: Number(value.maxSideGroups),
 		maxBottomGroups: Number(value.maxBottomGroups),
+		...(peekWidth === undefined ? {} : { peekWidth }),
 	};
 }
 

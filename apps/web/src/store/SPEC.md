@@ -206,7 +206,8 @@ roster's catalog reads ([[submodule-web-panels]]).
   **frontend-local workbench state** — one `workbenchFrame` carries the resource-free topology, geometry,
   singleton tools, and restore targets for this frontend surface; `workspaceViewsByWorkspace` carries each
   workspace's resource placements, order, and preview identities; `layoutAttentionByWorkspace` carries its
-  selection, last focus, and navigation clocks; and local preset/limit preferences sit beside the frame.
+  selection, last focus, and navigation clocks; and local preset/limit/Peek-width preferences
+  (`LocalLayoutPreferences`, `peekWidth` optional) sit beside the frame.
   These are web-local types from `shell/layout`, not wire snapshots. `layoutDocumentsByWorkspace` is an
   identity-stable **derived projection cache** rebuilt only from frame + view for existing selectors/effects;
   it is neither persisted nor writable as authority. There is no accepted/projected pair, revision, mutation
@@ -218,6 +219,23 @@ roster's catalog reads ([[submodule-web-panels]]).
   never leave a hidden workspace referencing a dead group. Components never splice group/tab arrays. Empty
   groups are valid frame state and closing a final resource does not delete them. `layoutProjectionEpoch`
   advances only when a local transition invalidates an uncontrolled pointer/resize draft.
+
+  **Peek** (`peek.ts`, the slice's private implementation) is runtime-only and never persisted:
+  `peekByWorkspace[workspaceId] = { stack, index, pinned, open }`, where a `PeekEntry` is a `file`
+  (`path`, `line?`), a `compare` (`before`, `after`) or an `extension` panel (`extension`, `panel`,
+  `params`, `titleKey`), each with the opener chat's `sessionId?`. Entries are identified by
+  `peekEntryIdentity` — `layoutResourceIdentity` of the matching tab, over worktree-relative paths the
+  action canonicalizes. **`requestPeek`** appends an entry (the oldest beyond `PEEK_STACK_LIMIT`, 20,
+  drop) or selects the one with its identity, refreshing its line and opener, and opens Peek; it emits no
+  layout intent and touches no attention or focus. `peekBack` / `peekForward` / `showPeekEntry` move the
+  index; `closePeekEntry` removes one (showing its predecessor; the last one drops the workspace's entry,
+  which hides Peek); `closePeek` hides and unpins but keeps the stack for the next request; `pinPeek`
+  applies only while open. Auto-hide folds into the writes that cause it: `applySessionState` and
+  `installSessionStateSnapshot` hide an open, unpinned Peek whose current entry's opener starts a new turn
+  (`startsNewTurn`: a new non-null `runId`, or `needsInput` set → clear), and `applyConfig` / the welcome's
+  config drop the entries of extensions in `disabledExtensions`. `clearWorkspaceTabs` drops the slice
+  entry; a tombstoned workspace accepts none. `selectPeekEntry` / `selectPeekOpen` are the derived reads.
+  Opening a peeked resource as a tab is the shell's (`openPeekInTab`), since it needs `panels`.
 
   The store owns values and actions, never persistence. `shell/layoutState` validates and hydrates one
   browser-endpoint/surface- or native-profile/window-qualified local document, subscribes to relevant state
@@ -963,7 +981,7 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   rejected-fallbacks repair);
   `toast` (the fire-from-anywhere helper),
   `Toast` (type), the prompt-image draft model `newPromptImagesState` + `PromptImagesState` /
-  `PromptImage` / `PromptImageError` (`chat`'s `usePromptImages` shares it for dialog-local drafts), web-local frame/workspace-view/attention selectors and atomic actions, resource render-state types
+  `PromptImage` / `PromptImageError` (`chat`'s `usePromptImages` shares it for dialog-local drafts), web-local frame/workspace-view/attention selectors and atomic actions, the Peek slice's `PeekEntry` / `PeekState` types, `peekEntryIdentity` and selectors, resource render-state types
   (file/diff/virtual-document/plan/chat), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
   `EMPTY_RUNTIME` (ChatView's pre-creation fallback), `ChatLocationRequest` (type), `reduceSessionEvent`.
 - **Allowed deps:** `contracts` (`Project`/`Workspace`/`Model`/`ThinkingLevel`/`SessionStats`/

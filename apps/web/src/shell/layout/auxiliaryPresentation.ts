@@ -5,6 +5,7 @@ import {
 	findPlacedResource,
 	findTabLocation,
 	isLayoutUnavailable,
+	LAYOUT_LIMITS,
 	type LayoutOperationResult,
 	resizeAuxiliaryGroups,
 	revealTool,
@@ -103,6 +104,70 @@ export function projectWorkbenchRatio(ratio: number, whole: number, available: n
 }
 export function restoreWorkbenchRatio(ratio: number, whole: number, available: number): number {
 	return whole > 0 && available > 0 ? (ratio * available) / whole : ratio;
+}
+
+const OUTER_PANEL_MINIMUM = 8;
+
+export interface WorkbenchColumns {
+	leftVisible: boolean;
+	rightVisible: boolean;
+	peekOpen: boolean;
+	left: number;
+	right: number;
+	peek: number;
+	peekMinimum: number;
+	peekMaximum: number;
+	centerMinimum: number;
+}
+
+export function projectWorkbenchColumns({
+	document,
+	peek,
+	workbenchWidth,
+	columnsWidth,
+}: {
+	document: Pick<WorkspaceLayoutDocument, "left" | "right">;
+	peek: { open: boolean; width: number } | undefined;
+	workbenchWidth: number;
+	columnsWidth: number;
+}): WorkbenchColumns {
+	const peekOpen = peek?.open === true;
+	const leftVisible = document.left.visible && document.left.groups.some((group) => !group.folded);
+	const rightVisible =
+		!peekOpen && document.right.visible && document.right.groups.some((group) => !group.folded);
+	const panelMinimums =
+		(leftVisible ? OUTER_PANEL_MINIMUM : 0) +
+		(rightVisible ? OUTER_PANEL_MINIMUM : 0) +
+		(peekOpen ? OUTER_PANEL_MINIMUM : 0);
+	const pixels = (width: number) => (columnsWidth > 0 ? (width / columnsWidth) * 100 : 10);
+	const centerMinimum = Math.min(
+		Math.max(10, 100 - panelMinimums),
+		pixels(LAYOUT_LIMITS.minCenterWidth),
+	);
+	const project = (ratio: number) =>
+		projectWorkbenchRatio(ratio, workbenchWidth, columnsWidth) * 100;
+	const desiredLeft = leftVisible ? project(document.left.width) : 0;
+	const desiredRight = rightVisible ? project(document.right.width) : 0;
+	const desiredPeek = peek && peekOpen ? project(peek.width) : 0;
+	const compression = Math.min(
+		1,
+		90 / Math.max(Number.EPSILON, desiredLeft + desiredRight + desiredPeek),
+	);
+	const left = desiredLeft * compression;
+	const right = desiredRight * compression;
+	const peekMaximum = peekOpen ? Math.max(OUTER_PANEL_MINIMUM, 100 - left - centerMinimum) : 0;
+	const peekMinimum = peekOpen ? Math.min(peekMaximum, pixels(LAYOUT_LIMITS.minPeekWidth)) : 0;
+	return {
+		leftVisible,
+		rightVisible,
+		peekOpen,
+		left,
+		right,
+		peek: peekOpen ? Math.min(peekMaximum, Math.max(peekMinimum, desiredPeek * compression)) : 0,
+		peekMinimum,
+		peekMaximum,
+		centerMinimum,
+	};
 }
 
 function selectedTab(group: LayoutSideGroup, attention: LayoutAttention): LayoutTab | undefined {

@@ -229,9 +229,15 @@ export async function openExtensionPanelInProject(
 	if (workspace) openExtensionPanel(workspace.id, panel);
 }
 
-export function openExtensionPanel(
+export interface ExtensionPanelTarget {
+	readonly extension: string;
+	readonly panel: string;
+	readonly titleKey: string;
+}
+
+export function openExtensionTab(
 	workspaceId: string,
-	panel: RegisteredPanel,
+	target: ExtensionPanelTarget,
 	params: Readonly<Record<string, string>> = {},
 	title = "",
 ): void {
@@ -240,15 +246,29 @@ export function openExtensionPanel(
 		id: tupleKey(
 			"extension",
 			workspaceId,
-			panel.extension,
-			panel.panel,
+			target.extension,
+			target.panel,
 			extensionParamsKey(params),
 		),
 		workspaceId,
 		name: title,
-		extension: panel.extension,
-		panel: panel.panel,
-		titleKey: panel.declaration.title,
+		extension: target.extension,
+		panel: target.panel,
+		titleKey: target.titleKey,
 		params: { ...params },
 	});
+}
+
+export function openExtensionPanel(
+	workspaceId: string,
+	panel: RegisteredPanel,
+	params: Readonly<Record<string, string>> = {},
+	title = "",
+): void {
+	openExtensionTab(
+		workspaceId,
+		{ extension: panel.extension, panel: panel.panel, titleKey: panel.declaration.title },
+		params,
+		title,
+	);
 }

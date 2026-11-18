@@ -79,6 +79,7 @@ import { useLocalLayoutState } from "./layoutState";
 import { LocationBar } from "./locationBar";
 import { NativeWindowControls } from "./NativeWindowControls";
 import { PROJECT_HOME_PROJECTS_REGION_ID, ProjectHome } from "./ProjectHome";
+import { installPeekEscape } from "./peekControl";
 import { installRegionTracker, pressRegionKey } from "./regions";
 import { SearchPaletteHost } from "./SearchPaletteHost";
 import { ShortcutsDialogHost } from "./ShortcutsDialog";
@@ -222,6 +223,7 @@ function ShellLayout() {
 	useEffect(installRegionTracker, []);
 	useEffect(installFocusRecovery, []);
 	useEffect(installEscapeLeavesField, []);
+	useEffect(installPeekEscape, []);
 	useGlobalHotkeys({
 		onProjects: () => toggleLeftSide(homeProjects.toggle),
 		...(hasActiveWorkspace

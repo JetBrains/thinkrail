@@ -174,7 +174,7 @@ layer so an explicit semantic text utility on a link-shaped control always wins 
 ## Active region
 
 The focus ring says which control has the keyboard; the active region says which pane does. A region is
-a `[data-region]` root (the top bar, the Project Home projects pane, each workbench group) and the shell
+a `[data-region]` root (the top bar, the Project Home projects pane, each workbench group, Peek) and the shell
 marks the one holding focus `data-region-active` ([shell/layout/SPEC.md](../shell/layout/SPEC.md),
 *Arrangement and accessibility*). It wears a 2px **accent line** along its top edge (its tab strip or
 pane header) for as long as it is active; nothing else about it changes, and no other region is touched.

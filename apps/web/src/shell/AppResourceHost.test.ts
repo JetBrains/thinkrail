@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { SEARCH_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { useAppStore } from "../store";
-import { PALETTE_PREVIEW_HOST } from "./AppResourceHost";
+import { PALETTE_PREVIEW_HOST, PEEK_HOST } from "./AppResourceHost";
 
 const initial = useAppStore.getInitialState();
 
@@ -34,4 +34,17 @@ test("the palette's preview host reads and refreshes only once the current host 
 	} finally {
 		stop();
 	}
+});
+
+test("the Peek host keeps a document's own links in Peek, under the same opener chat", () => {
+	useAppStore.getState().requestPeek("w1", { kind: "file", path: "guide.md", sessionId: "s1" });
+	PEEK_HOST.openFile("w1", "docs/next.md");
+	expect(useAppStore.getState().peekByWorkspace.w1).toMatchObject({
+		stack: [
+			{ kind: "file", path: "guide.md", sessionId: "s1" },
+			{ kind: "file", path: "docs/next.md", sessionId: "s1" },
+		],
+		index: 1,
+		open: true,
+	});
 });

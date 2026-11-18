@@ -81,6 +81,21 @@ import {
 	type ChatResourceState,
 	finishedChain,
 } from "./chatResources";
+import type { PeekEntry, PeekState } from "./peek";
+
+interface PeekSlice {
+	peekByWorkspace: Record<string, PeekState>;
+}
+
+export function selectPeekEntry(state: PeekSlice, workspaceId: string): PeekEntry | undefined {
+	const peek = state.peekByWorkspace[workspaceId];
+	return peek?.stack[peek.index];
+}
+
+export function selectPeekOpen(state: PeekSlice, workspaceId: string): boolean {
+	const peek = state.peekByWorkspace[workspaceId];
+	return peek?.open === true && peek.stack.length > 0;
+}
 
 export function selectLoginBusy(state: {
 	activeLogin: LoginState | null;

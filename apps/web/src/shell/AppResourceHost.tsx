@@ -23,6 +23,7 @@ import { useFileReview } from "../panels/useReviewCommenting";
 import {
 	selectFileChangeSince,
 	selectHostSearchReady,
+	selectPeekEntry,
 	selectWorkspaceById,
 	useAppStore,
 } from "../store";
@@ -108,6 +109,19 @@ export const PALETTE_PREVIEW_HOST: ResourceHost = {
 			const paths = selectFileChangeSince(state, previous, workspaceId);
 			if (paths !== undefined) onChange(paths);
 		}),
+};
+
+export const PEEK_HOST: ResourceHost = {
+	...HOST,
+	openFile: (workspaceId, path, options) => {
+		if (options?.keep) {
+			HOST.openFile(workspaceId, path, options);
+			return;
+		}
+		const state = useAppStore.getState();
+		const sessionId = selectPeekEntry(state, workspaceId)?.sessionId;
+		state.requestPeek(workspaceId, { kind: "file", path, ...(sessionId ? { sessionId } : {}) });
+	},
 };
 
 export function AppResourceHost({ children }: { children: ReactNode }) {

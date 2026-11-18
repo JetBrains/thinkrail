@@ -1,5 +1,5 @@
 import { type CollisionDetection, pointerWithin, useDroppable } from "@dnd-kit/core";
-import type { Translator } from "@thinkrail/locales/react";
+import { type Translator, useT } from "@thinkrail/locales/react";
 import {
 	type ImperativePanelGroupHandle,
 	ResizableHandle,
@@ -92,6 +92,14 @@ export interface WorkbenchProps {
 	onGestureCanceled?: () => void;
 	chromeShortcuts?: WorkbenchChromeShortcuts;
 	leftRailFooter?: readonly AuxiliaryRailFooterItem[];
+	peek?: WorkbenchPeek;
+}
+
+export interface WorkbenchPeek {
+	open: boolean;
+	width: number;
+	onResize: (width: number) => void;
+	render: () => ReactNode;
 }
 
 export interface WorkbenchChromeShortcuts {
@@ -288,8 +296,8 @@ export function useCommittedSizes(
 }
 
 export function useSideResizeBinder() {
-	const activeSide = useRef<LayoutSide | null>(null);
-	const bind = (side: LayoutSide, resize: ReturnType<typeof useCommittedSizes>) => ({
+	const activeSide = useRef<LayoutSide | "peek" | null>(null);
+	const bind = (side: LayoutSide | "peek", resize: ReturnType<typeof useCommittedSizes>) => ({
 		onDragging: (active: boolean) => {
 			if (active) activeSide.current = side;
 			resize.onDragging(active);
@@ -484,7 +492,10 @@ export function navigationClockSnapshot(attention: LayoutAttention): string {
 	);
 }
 
-export function visibleFocusableGroups(document: WorkspaceLayoutDocument): Array<{
+export function visibleFocusableGroups(
+	document: WorkspaceLayoutDocument,
+	peekOpen = false,
+): Array<{
 	location: LayoutGroupLocation;
 	tabs: LayoutTab[];
 	tabControlsRendered: boolean;
@@ -502,7 +513,7 @@ export function visibleFocusableGroups(document: WorkspaceLayoutDocument): Array
 			tabs: group.tabs,
 			tabControlsRendered: true,
 		})),
-		...(document.right.visible
+		...(document.right.visible && !peekOpen
 			? document.right.groups.map((group) => ({
 					location: { area: "right" as const, groupId: group.id },
 					tabs: group.tabs,
@@ -643,6 +654,30 @@ export interface SharedGroupProps {
 	canFocusAdjacentGroup: boolean;
 	chromeShortcuts: WorkbenchChromeShortcuts | undefined;
 }
+
+export const PeekRegion = memo(function PeekRegion({
+	open,
+	render,
+}: {
+	open: boolean;
+	render: WorkbenchPeek["render"];
+}) {
+	const t = useT();
+	return (
+		<section
+			data-testid="peek"
+			data-region="peek"
+			data-region-kind="peek"
+			data-open={open || undefined}
+			tabIndex={-1}
+			aria-label={t("peek.region")}
+			className={`h-full min-h-0 min-w-0 flex-col overflow-hidden bg-container-content-bg outline-none ${open ? "flex" : "hidden"}`}
+		>
+			{render()}
+		</section>
+	);
+});
+PeekRegion.displayName = "PeekRegion";
 
 export const GroupTabBody = memo(function GroupTabBody({
 	tab,

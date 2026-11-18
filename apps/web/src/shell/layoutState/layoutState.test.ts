@@ -215,6 +215,43 @@ describe("frontend-local layout state", () => {
 		});
 	});
 
+	test("Peek's width survives reload, and a bad or absent one resets nothing", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		const reload = async () => {
+			resetLayoutStateForTests();
+			resetStore();
+			setLayoutStateStorageForTests({ local, session }, endpoint);
+			await initializeLocalLayoutState();
+		};
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		await initializeLocalLayoutState();
+		const frame = useAppStore.getState().workbenchFrame;
+		if (!frame) throw new Error("expected a frame");
+		useAppStore.setState({ workbenchFrame: { ...frame, left: { ...frame.left, width: 0.31 } } });
+		useAppStore.getState().setLocalLayoutPreferences({
+			...useAppStore.getState().localLayoutPreferences,
+			peekWidth: 0.35,
+		});
+		await reload();
+		expect(useAppStore.getState().localLayoutPreferences.peekWidth).toBe(0.35);
+
+		const key = localLayoutStorageKey(endpoint, "surface-a");
+		const stored = JSON.parse(local.getItem(key) ?? "{}");
+		local.setItem(
+			key,
+			JSON.stringify({ ...stored, preferences: { ...stored.preferences, peekWidth: "wide" } }),
+		);
+		await reload();
+		expect(useAppStore.getState().localLayoutPreferences).toEqual({
+			defaultPresetId: "balanced",
+			maxSideGroups: 6,
+			maxBottomGroups: 3,
+		});
+		expect(useAppStore.getState().workbenchFrame?.left.width).toBe(0.31);
+	});
+
 	test("a pristine surface initializes a Balanced workspace locally without transport", async () => {
 		const local = new MemoryStorage();
 		const session = new MemoryStorage();
