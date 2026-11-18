@@ -4,7 +4,6 @@ import {
 	goProjectHome,
 	openFixtureProject,
 	pressPlatformShortcut,
-	releaseFocus,
 	revealWorkbenchTool,
 	visibleTerminal,
 	waitTerminalReady,
@@ -200,10 +199,10 @@ test("with no active region F6 starts at the top bar and Shift+F6 at the last re
 	page,
 }) => {
 	await openFixtureProject(page);
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
+	// Reveal the bottom panel with its chord: clicking a toggle would make its region active.
+	await pressPlatformShortcut(page, "Shift+J");
 	await waitTerminalReady(page);
-	// Revealing the panels used top-bar controls; drop the focus they left so no region is active.
-	await releaseFocus(page);
 	await expect(activeRegion(page)).toHaveCount(0);
 	await page.keyboard.press("F6");
 	await expect(activeRegion(page)).toHaveAttribute("data-region-kind", "topbar");

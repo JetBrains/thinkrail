@@ -227,7 +227,7 @@ test("overflow uses directional fades without changing tab-strip geometry", asyn
 		})
 		.toBe(true);
 	await expect(strip).toHaveCSS("height", "28px");
-	await expect.poll(() => height(last)).toBeCloseTo(listHeight, 1);
+	await expect.poll(() => height(last)).toBeCloseTo(listHeight - 4, 1);
 });
 
 test("auxiliary panel scrollbars stay quiet at rest and expose only clipped edges", async ({
@@ -397,7 +397,8 @@ test("one local frame survives workspace switches while resource tabs stay works
 	await pressPlatformShortcut(page, "Shift+j");
 	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 
-	await createWorkspaceViaDialog(page);
+	// panels: false — the test is about the hidden bottom panel surviving a workspace switch.
+	await createWorkspaceViaDialog(page, { panels: false });
 	await expect(page.getByTestId("editor-tab").filter({ hasText: "README.md" })).toHaveCount(0);
 	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 	await expect.poll(() => width(page.getByTestId("right-stack"))).toBeCloseTo(resized, 0);

@@ -1,6 +1,11 @@
 import { appendFileSync, realpathSync, utimesSync } from "node:fs";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
+import {
+	defaultWorkspaceRow,
+	enterDefaultWorkspace,
+	openFixtureProject,
+	showAllPanels,
+} from "./fixtures/app";
 import {
 	moveMouseToChatViewport,
 	readChatScrollGeometry,
@@ -260,6 +265,10 @@ for (const order of ["oldest-first", "newest-first"] as const) {
 		seedNestedActivityChat(`${order} disclosure geometry`);
 		await selectMessageOrder(page, order);
 		await enterDefaultWorkspace(page, { panels: false });
+		// The geometry below is calibrated for the Balanced centre width (about 691px at 1280px wide):
+		// open the side panels, but only once the chat tab is up (revealing earlier races its opening).
+		await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+		await showAllPanels(page);
 		const chatScroll = page.getByTestId("chat-scroll");
 		const button = page.getByTestId(
 			order === "newest-first" ? "scroll-to-top" : "scroll-to-bottom",
