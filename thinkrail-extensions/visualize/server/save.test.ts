@@ -69,6 +69,7 @@ test("the server half saves diagrams into the workspace's artifacts folder", asy
 				ctx?: { cwd: string },
 		  ) => Promise<{
 				content: Array<{ text: string }>;
+				details: unknown;
 		  }>)
 		| undefined;
 	const factory = extension.sessionExtensions?.(session)[0];
@@ -87,6 +88,9 @@ test("the server half saves diagrams into the workspace's artifacts folder", asy
 	const [saved] = readdirSync(join(cwd, ".thinkrail", "context", "visualize"));
 	expect(saved).toEndWith("-flow.md");
 	expect(result?.content[0]?.text).toContain(`Saved to \`.thinkrail/context/visualize/${saved}\`.`);
+	expect(extension.artifactTools?.visualize?.presented?.({}, result?.details)).toEqual([
+		`.thinkrail/context/visualize/${saved}`,
+	]);
 	expect(
 		readFileSync(join(cwd, ".thinkrail", "context", "visualize", saved as string), "utf8"),
 	).toContain("```mermaid");

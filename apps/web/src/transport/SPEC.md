@@ -156,6 +156,13 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   connection and deletion fences. A new connection starts independently of an older generation's tail,
   workspaces do not block one another, and failed requests reject their callers without poisoning the queue
   or preventing a retry. This queue is transient transport coordination, not a second state owner.
+  A request without a workspace never takes this path (it rejects unsent): the user-level servers a host at
+  `MCP_USER_SERVERS_PROTOCOL_VERSION` manages with no workspace open (**`supportsUserMcp`**) go through
+  **`requestUserMcpList(method, params)`** — `mcp.list`, user-scope `add` / `update` / `remove` and
+  `mcp.setUserServer`, typed to carry no `workspaceId` — serialized on its own tail by the same rules and
+  connection fence, but returning the result to its caller only: it never installs into
+  `mcpByWorkspace`, whose projections are per-workspace chat status a user list must not leak into, and
+  never waits on or blocks a workspace's tail.
   **`watchMcpWorkspace(workspaceId, onRead?)`** reads once and then re-reads with bounded backoff
   (1 → 13 s, six attempts per streak) only while a live chat of that workspace still reports a server
   `starting`. The host's `mcpSessions.capture` continues after its caller times out and eventually publishes
@@ -178,10 +185,11 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
 
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `RequestTimeoutError`, `wsErrorCode`, `requestMcpList`,
-  `watchMcpWorkspace`, `ConnectionStatus`,
+  `requestUserMcpList` + `UserMcpListMethod`, `supportsUserMcp` (v125), `watchMcpWorkspace`, `ConnectionStatus`,
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
-  `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `supportsSpeech`, `openSpeechSocket`,
+  `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `supportsKeybindings`,
+  `updateKeybindings`, `supportsSpeech`, `openSpeechSocket`,
   `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`,
   `supportsTextSearch` (v112 — Find in Files asks `search.text` and listens on `search.textResults` only of a
   host that serves them; against an older host the palette hides the command and the window opened by the
@@ -197,7 +205,12 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   is the one binary upload — a `PUT` of the raw file to the host's `/fonts/` route with the upload guard
   header, answered by that file's `UserFontFile` entry — while `hostUrl` resolves a host-relative path
   (custom face URLs, and chat image references through `chat`'s `ChatMediaContext`) against the endpoint; `supportsExtensionSettings` (v105) lets `ExtensionsSettings`
-  offer per-extension setting switches only to a host that stores `extensionSettings`. `openSpeechSocket()`
+  offer per-extension setting switches only to a host that stores `extensionSettings`;
+  `supportsKeybindings` (`KEYBINDINGS_PROTOCOL_VERSION`, v123) gates the user's keybindings both ways —
+  `shell` ignores stored overrides below it — and `updateKeybindings(map)` is the one write: it resolves
+  `false` without sending to an older host (which would reject the unknown key), else sends the whole map as
+  one `settings.update { keybindings }` and resolves `true` once accepted, the store converging on the
+  `settings.changed` broadcast (no optimistic write); a host refusal rejects (`KEYBINDINGS_INVALID`). `openSpeechSocket()`
   opens the dictation side socket (`/speech?protocol=`) on the same endpoint for [[submodule-web-speech]].
   It carries binary audio and never a request. `server.welcome`'s `speech` seed and every `speech.changed`
   push install the store's `speech` status whole; `supportsSpeech` (v107) gates the same way.

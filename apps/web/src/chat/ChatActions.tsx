@@ -27,6 +27,9 @@ export interface WorkspaceChatTarget {
 export interface ChatActions {
 	cancelAutomaticReveal: () => void;
 	focusComposer: () => void;
+	focusToolCall: (toolCallId: string) => void;
+	mayClaimFocus: (toolCallId: string) => boolean;
+	landingChord: string;
 	openSubagentTranscript: (childSessionId: string) => void;
 	respondToTool: (toolCallId: string, response: unknown) => Promise<void>;
 	resultOpener: (target: ResultTarget) => (() => void) | undefined;

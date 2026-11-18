@@ -2,9 +2,21 @@ import type { NativeCommand, NativeQuitHint, NativeShortcutsBridge } from "@thin
 import { useEffect, useState } from "react";
 import { platformShortcutLabel } from "../lib";
 import { useAppStore } from "../store";
-import { closeActiveItem } from "./chordActions";
-import { createWebShortcuts, hasWebShortcuts, shortcutPlatform } from "./shortcutCommands";
-import { hasLayer, isInTerminal, MODAL_LAYER_SELECTOR } from "./shortcutLayers";
+import { closeActiveItem, settingsLayer } from "./chordActions";
+import { keyboardClaimed } from "./extensionCommands";
+import {
+	createWebShortcuts,
+	hasWebShortcuts,
+	type ShortcutPlatform,
+	shortcutPlatform,
+} from "./shortcutCommands";
+import {
+	activeLayer,
+	hasLayer,
+	isInTerminal,
+	type LayerDocument,
+	MODAL_LAYER_SELECTOR,
+} from "./shortcutLayers";
 
 const NATIVE_SHORTCUTS_GLOBAL = "__THINKRAIL_NATIVE_SHORTCUTS__";
 
@@ -25,16 +37,28 @@ function readNativeShortcutsBridge() {
 	return getNativeShortcutsBridge(Reflect.get(globalThis, NATIVE_SHORTCUTS_GLOBAL));
 }
 
+export function nativeShortcutPlatform(): ShortcutPlatform {
+	return shortcutPlatform(readNativeShortcutsBridge() !== null);
+}
+
 export function hasNativeShortcuts(): boolean {
-	return shortcutPlatform(readNativeShortcutsBridge() !== null) !== "browser";
+	return nativeShortcutPlatform() !== "browser";
 }
 
 export function readSettingsShortcutLabel(): string | null {
 	return hasNativeShortcuts() ? platformShortcutLabel(",") : null;
 }
 
-function openSettingsUnlessModal() {
-	if (!hasLayer(globalThis.document, MODAL_LAYER_SELECTOR)) useAppStore.getState().openSettings();
+export function settingsToggle(doc: LayerDocument & ParentNode): "open" | "close" | null {
+	const settings = settingsLayer(doc);
+	if (settings !== null && activeLayer(doc) === settings) return "close";
+	return hasLayer(doc, MODAL_LAYER_SELECTOR) ? null : "open";
+}
+
+function toggleSettings() {
+	const toggle = settingsToggle(globalThis.document);
+	if (toggle === "close") useAppStore.getState().closeSettings();
+	else if (toggle === "open") useAppStore.getState().openSettings();
 }
 
 function subscribeToNativeShortcuts(
@@ -85,7 +109,7 @@ export function useAppShortcuts() {
 		const shortcuts = createWebShortcuts({
 			platform,
 			closeItem: closeActiveItem,
-			openSettings: openSettingsUnlessModal,
+			openSettings: toggleSettings,
 			quit: () => {
 				bridge.quit().catch((error: unknown) => {
 					console.error("[shortcuts] quit failed", error);
@@ -102,8 +126,11 @@ export function useAppShortcuts() {
 		function onVisibilityChange() {
 			if (doc.visibilityState === "hidden") shortcuts.cancel();
 		}
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (!keyboardClaimed()) shortcuts.keydown(event);
+		};
 		if (listensForKeys) {
-			window.addEventListener("keydown", shortcuts.keydown, true);
+			window.addEventListener("keydown", onKeyDown, true);
 			window.addEventListener("keyup", shortcuts.keyup, true);
 		}
 		window.addEventListener("blur", shortcuts.cancel);
@@ -111,7 +138,7 @@ export function useAppShortcuts() {
 		return () => {
 			unsubscribe();
 			if (listensForKeys) {
-				window.removeEventListener("keydown", shortcuts.keydown, true);
+				window.removeEventListener("keydown", onKeyDown, true);
 				window.removeEventListener("keyup", shortcuts.keyup, true);
 			}
 			window.removeEventListener("blur", shortcuts.cancel);

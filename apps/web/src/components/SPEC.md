@@ -127,7 +127,7 @@ third thing, never bare text, never nothing:
    pending row. On a shared button this tier is `loading` (icon-sized spinner in the icon's place). A
    narrower named sub-idiom of this tier: **`RefreshCw` spinning in place** (icon unchanged, just rotating;
    a shared button spells it `loading spinIcon`) for a manual "Refresh" action on a control whose surrounding content stays visible and
-   valid while the refresh runs (`chat/ModelEffortPicker.tsx`, `chat/ModelSelector.tsx`, `panels/GithubSettings.tsx`,
+   valid while the refresh runs (`chat/ModelEffortPicker.tsx`, `panels/GithubSettings.tsx`,
    `panels/ProvidersSettings.tsx`, `panels/BranchPicker.tsx`) — swapping to a generic spinner there would
    discard the "this still works, just refreshing" signal the in-place spin gives for free. Under reduced
    motion a rotation cannot carry the signal, so `spinIcon` shows the static spinner glyph instead.

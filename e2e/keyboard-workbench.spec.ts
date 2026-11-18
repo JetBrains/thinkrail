@@ -6,6 +6,7 @@ import {
 	revealWorkbenchTool,
 	waitTerminalReady,
 } from "./fixtures/app";
+import { resetKeybindings, setKeybindings } from "./fixtures/keybindings";
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
@@ -156,4 +157,53 @@ test("Ctrl+\\ inside a terminal stays with the shell", async ({ page }) => {
 	await centerTerminal.focus();
 	await pressPlatformShortcut(page, "Backslash");
 	await expect(groups).toHaveCount(2);
+});
+
+test.describe("rebound tab keys", () => {
+	test.afterEach(async ({ page }) => resetKeybindings(page));
+
+	test("a rebound arrow twin walks a tab strip, the tab announces it, and its old letter no longer does", async ({
+		page,
+	}) => {
+		await openWorkbenchWithFiles(page, ["README.md", "notes.txt"]);
+		await setKeybindings(page, { "arrows.right": ["KeyN"] });
+		const readme = fileTab(page, "README.md");
+		const notes = fileTab(page, "notes.txt");
+		await expect(readme).toHaveAttribute("aria-keyshortcuts", /(^| )H N( |$)/);
+
+		await readme.focus();
+		await page.keyboard.press("n");
+		await expect(notes).toBeFocused();
+		await expect(notes).toHaveAttribute("aria-selected", "true");
+		await page.keyboard.press("l");
+		await page.keyboard.press("h");
+		await expect(readme).toBeFocused();
+		await expect(readme).toHaveAttribute("aria-selected", "true");
+	});
+
+	test("a close rebound onto Alt+← closes the tab instead of selecting its neighbour, and Shift+→ walks nowhere", async ({
+		page,
+	}) => {
+		await openWorkbenchWithFiles(page, ["README.md", "notes.txt"]);
+		await setKeybindings(page, { "tabs.close": ["Alt+ArrowLeft"] });
+		const readme = fileTab(page, "README.md");
+		const notes = fileTab(page, "notes.txt");
+		await expect(readme).toHaveAttribute("aria-keyshortcuts", /(^| )Alt\+ArrowLeft( |$)/);
+
+		await notes.focus();
+		await page.keyboard.press("Alt+ArrowLeft");
+		await expect(notes).toHaveCount(0);
+		await expect(page.getByTestId("editor-tab")).toHaveCount(1);
+		await expect(readme).toHaveAttribute("aria-selected", "true");
+
+		await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).dblclick();
+		await readme.click();
+		await expect(readme).toBeFocused();
+		await page.keyboard.press("Shift+ArrowRight");
+		await expect(readme).toBeFocused();
+		await expect(readme).toHaveAttribute("aria-selected", "true");
+		await page.keyboard.press("ArrowRight");
+		await expect(notes).toBeFocused();
+		await expect(notes).toHaveAttribute("aria-selected", "true");
+	});
 });

@@ -1,31 +1,32 @@
 import { WORKSPACE_SETTLE_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import { toast, useAppStore } from "../store";
-import { getTransport } from "../transport";
-import { SettingsRadioCards, type SettingsRadioChoice } from "./SettingsRadioCards";
+import { useState } from "react";
+import {
+	SETTINGS_ROWS,
+	SettingsChoice,
+	SettingsPage,
+	type SettingsReset,
+	SettingsRow,
+} from "@/settingsKit";
+import { useAppStore } from "@/store";
+import { saveSettings } from "./saveSettings";
+import { useConfigReset } from "./settingDefaults";
+import { SETTING, settingProps } from "./settingsCatalog";
 
 type IdleChoice = `${number}` | "never";
 
-type IdleChoiceSpec = Omit<SettingsRadioChoice<IdleChoice>, "label" | "hint" | "description"> & {
+interface IdleChoiceSpec {
+	id: IdleChoice;
 	days: number | null;
 	hint?: MessageKey;
 	description: MessageKey;
-};
+	testId: string;
+}
 
 const IDLE_CHOICES: readonly IdleChoiceSpec[] = [
-	{
-		id: "1",
-		days: 1,
-		description: "settings.workspaces.idle.oneDay",
-		testId: "settle-idle-1",
-	},
-	{
-		id: "3",
-		days: 3,
-		description: "settings.workspaces.idle.threeDays",
-		testId: "settle-idle-3",
-	},
+	{ id: "1", days: 1, description: "settings.workspaces.idle.oneDay", testId: "settle-idle-1" },
+	{ id: "3", days: 3, description: "settings.workspaces.idle.threeDays", testId: "settle-idle-3" },
 	{
 		id: "7",
 		days: 7,
@@ -51,45 +52,82 @@ export function toChoice(days: number | null): IdleChoice {
 	return days === null ? "never" : (String(days) as IdleChoice);
 }
 
+export function idleDescription(pending: IdleChoice | null, value: IdleChoice): MessageKey | null {
+	const shown = pending ?? value;
+	return IDLE_CHOICES.find((choice) => choice.id === shown)?.description ?? null;
+}
+
 export function WorkspacesSettings() {
 	const t = useT();
 	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
-	const supported =
-		protocolVersion !== null && protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION;
+	const reset = useConfigReset("settleIdleDays", "settings.workspaces.changeFailed");
 
 	const select = (choice: IdleChoice) => {
 		const next = choice === "never" ? null : Number(choice);
 		if (next === settleIdleDays) return;
-		getTransport()
-			.request("settings.update", { config: { settleIdleDays: next } })
-			.catch(() => toast.error(t("settings.workspaces.changeFailed")));
+		void saveSettings({ settleIdleDays: next }, t("settings.workspaces.changeFailed"));
 	};
 
 	return (
-		<section data-testid="settings-workspaces" className="flex flex-col gap-16">
-			<div className="flex flex-col gap-8">
-				<div className="flex flex-col gap-4">
-					<h3 className="tr-title-section text-text-default">{t("settings.workspaces.title")}</h3>
-					<p className="text-text-muted tr-text-metadata">{t("settings.workspaces.description")}</p>
-				</div>
-				<SettingsRadioCards
-					name="settle-idle-days"
-					label={t("settings.workspaces.title")}
-					choices={IDLE_CHOICES.map(({ days, hint, description, ...choice }) => ({
-						...choice,
-						label:
-							days === null
-								? t("settings.workspaces.idle.neverLabel")
-								: t("settings.workspaces.idle.days", { count: days }),
-						...(hint ? { hint: t(hint) } : {}),
-						description: t(description),
-					}))}
-					value={toChoice(settleIdleDays)}
-					disabled={!supported}
-					onSelect={select}
+		<WorkspacesSettingsView
+			settleIdleDays={settleIdleDays}
+			supported={protocolVersion !== null && protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION}
+			reset={reset}
+			onSelect={select}
+		/>
+	);
+}
+
+export function WorkspacesSettingsView({
+	settleIdleDays,
+	supported,
+	reset,
+	onSelect,
+}: {
+	settleIdleDays: number | null;
+	supported: boolean;
+	reset: SettingsReset;
+	onSelect: (choice: IdleChoice) => void;
+}) {
+	const t = useT();
+	const [pending, setPending] = useState<IdleChoice | null>(null);
+	const value = toChoice(settleIdleDays);
+	const description = idleDescription(pending, value);
+	const label = (days: number | null) =>
+		days === null
+			? t("settings.workspaces.idle.neverLabel")
+			: t("settings.workspaces.idle.days", { count: days });
+
+	return (
+		<SettingsPage
+			title={t("settings.nav.workspaces")}
+			description={t("settings.workspaces.description")}
+			testId="settings-workspaces"
+		>
+			<div className={SETTINGS_ROWS}>
+				<SettingsRow
+					{...settingProps(t, SETTING.settleIdle)}
+					description={description ? t(description) : label(settleIdleDays)}
+					reset={reset}
+					control={
+						<SettingsChoice
+							label={t(SETTING.settleIdle.label)}
+							cost="expensive"
+							options={IDLE_CHOICES.map(({ id, days, hint, testId }) => ({
+								id,
+								label: label(days),
+								...(hint ? { hint: t(hint) } : {}),
+								testId,
+							}))}
+							value={value}
+							disabled={!supported}
+							onSelect={onSelect}
+							onPendingChange={setPending}
+						/>
+					}
 				/>
 			</div>
-		</section>
+		</SettingsPage>
 	);
 }

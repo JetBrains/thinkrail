@@ -305,8 +305,7 @@ Children / associated surfaces:
 
 | Canonical name | Implementation | `data-testid` | Responsibility |
 |---|---|---|---|
-| Model Selector | `chat/ModelSelector.tsx` → `ModelSelector` | — | Model picker (+ Refresh catalog) |
-| Thinking Selector | `chat/ThinkingSelector.tsx` → `ThinkingSelector` | — | Thinking/effort level picker |
+| Model-Effort Picker | `chat/ModelEffortPicker.tsx` → `ModelEffortPicker` | `model-selector` (trigger), `model-option`, `thinking-option` | The one model · effort pill (+ Refresh catalog); also mounted by New Workspace and Settings › Models |
 | Slash-Command Menu | `chat/SlashCommandCompletion.tsx` → `SlashCommandMenu` | `slash-templates-empty` (footer) | `/` command + template completion |
 | Send Button | inline (`ArrowUp` / `Square` abort) | — | Send / steer / follow-up / abort |
 | History-Open Button | inline (`History` icon) | `history-open` | Opens the History Overlay |
@@ -475,21 +474,50 @@ are the Top Bar's Connection Status and the Chat Header's Session Stats Bar.
 - **Implementation:** `panels/SettingsDialog.tsx` → `SettingsDialog` (store-driven; open state in the
   store so multiple surfaces can open it deep-linked).
 - **Parent:** App Shell (mounted once inside the Top Bar's `<header>`).
-- **Position:** Modal overlay; a two-pane shell (left section rail + scrollable content pane; mobile
-  collapses the rail to a horizontal strip).
+- **Position:** Modal overlay, near full height; a two-pane frame (the nav column — title, Settings
+  Search, Section List — beside a scrollable content pane; mobile turns the Section List into a
+  horizontal strip).
+- **Frame and section vocabulary** (the blocks live in `settingsKit/`):
+
+| Canonical name | Implementation | `data-testid` | Responsibility |
+|---|---|---|---|
+| Section List | `panels/SettingsTabs.tsx` → `SettingsTabs` | `settings-nav-<section>` (`data-active`) | The tablist of sections in three groups (Agent, Interface, System) plus Share feedback; one Tab stop |
+| Settings Search | `panels/SettingsSearchView.tsx` → `SettingsSearchField` | `settings-search` | Searches individual settings; `S` or `/` from the Section List |
+| Search Results | `panels/SettingsSearchView.tsx` → `SettingsSearchResults` | `settings-search-results`, `settings-search-result` | Matching settings, each labelled with its section; Enter jumps to one |
+| Section Page | `settingsKit/SettingsPage.tsx` → `SettingsPage` | `settings-<section>` | A section's title, one-line description and groups |
+| Group | `settingsKit/SettingsGroup.tsx` → `SettingsGroup` | — | A titled run of rows |
+| Scope Tag | `SettingsGroup`'s `scope` | — | **This workspace**, **This project**, **All projects** or **This computer** beside a group title, for settings that are not global |
+| Setting Row | `settingsKit/SettingsRow.tsx` → `SettingsRow` | `data-setting-id` = the catalog id | Label, description, control and row actions (sides) |
+| Changed Tag / Reset | `SettingsRow`'s `reset` | `settings-reset-<id>` | **Changed** shows while a setting differs from its default; **Reset** restores it (Delete does the same) |
+| Choice | `settingsKit/SettingsChoice.tsx` → `SettingsChoice` | per option | Segmented or list choice; an expensive one shows **Press Enter to apply** on its pending option |
+| Settings List | `settingsKit/SettingsList.tsx` → `SettingsList` | — | A list of rows (servers, templates, presets…): Enter opens, → reaches row actions, Delete removes after a confirm |
+| Jump Flash | `settingsKit/jumpToSetting.ts` | `data-setting-flash` | The brief highlight on the row a search or palette jump lands on |
+
 - **Sections (each its own component):**
 
 | Canonical name | Implementation | Responsibility |
 |---|---|---|
-| Providers | `panels/ProvidersSettings.tsx` → `ProvidersSettings` | In-app provider auth (+ `panels/JetBrainsAiCard.tsx` → `JetBrainsAiCard`) |
-| MCP servers | `panels/McpSettings.tsx` → `McpSettings` (+ `panels/McpServerDialogs.tsx`) | The active workspace's MCP servers (`mcp-server-row`, `mcp-add-dialog`, `mcp-approve-dialog`) |
-| GitHub | `panels/GithubSettings.tsx` → `GithubSettings` | Local GitHub connection status |
-| Appearance | `panels/AppearanceSettings.tsx` → `AppearanceSettings` | Theme picker |
-| Layout | `shell/LayoutSettings.tsx` → `LayoutSettings` (injected into the dialog) | Default/apply/capture workbench presets and side-group limit |
-| Terminal | `panels/TerminalSettings.tsx` → `TerminalSettings` | Terminal replay budget |
-| Templates | `panels/TemplatesSettings.tsx` → `TemplatesSettings` | Global / project prompt templates (`template-row`, `template-starters`) |
-| Privacy | `panels/PrivacySettings.tsx` → `PrivacySettings` | Anonymous-usage-analytics toggle |
-| General | dimmed nav item | "Soon" placeholder |
+| Models | `panels/ModelsSettings.tsx` → `ModelsSettings` | Chat and review models, the GPT context window, prompt cache, visible models |
+| Providers | `panels/ProvidersSettings.tsx` → `ProvidersSettings` | In-app provider auth, JetBrains AI (`panels/JetBrainsAiCard.tsx` → `JetBrainsAiSettings`), custom servers |
+| Subagents | `panels/SubagentsSettings.tsx` → `SubagentsSettings` | Global subagent settings and this workspace's override |
+| Extensions & skills | `panels/ExtensionsSettings.tsx` → `ExtensionsSettings` | Built-in extensions, skills from other agents, pi packages and built-ins |
+| MCP servers | `panels/McpSettings.tsx` → `McpSettings` (+ `panels/McpServerDialogs.tsx`) | User and project MCP servers (`mcp-server-row`, `mcp-add-dialog`, `mcp-approve-dialog`); user servers also without a workspace |
+| Prompt templates | `panels/TemplatesSettings.tsx` → `TemplatesSettings` | Project / global prompt templates (`template-row`, `template-starters`) |
+| Environment | `panels/EnvironmentSettings.tsx` → `EnvironmentSettings` | The pi config folder and host environment variables (Save / Discard) |
+| Appearance | `panels/AppearanceSettings.tsx` → `AppearanceSettings` | Theme mode, theme lists, contrast, custom themes |
+| Text & fonts | `panels/TextFontsSettings.tsx` → `TextFontsSettings` | Interface and code fonts, both line widths, custom fonts |
+| Chat | `panels/ChatSettings.tsx` → `ChatSettings` | Message order, composer size, question panel height |
+| Layout | `shell/LayoutSettings.tsx` → `LayoutSettings` (injected into the dialog) | Presets list, Smart view, Markdown outline position |
+| Keyboard | `shell/KeyboardSettings.tsx` → `KeyboardSettings` (injected) | Double Shift and the shortcut editor, a tree by area |
+| Language | `panels/LanguageSettings.tsx` → `LanguageSettings` | Interface language and the language files folder |
+| Voice input | `panels/VoiceSettings.tsx` → `VoiceSettings` | Dictation switch, model download, language, shortcut |
+| Terminal | `panels/TerminalSettings.tsx` → `TerminalSettings` | Scrollback and, on Windows, the shell |
+| Workspaces | `panels/WorkspacesSettings.tsx` → `WorkspacesSettings` | The settle period for idle workspaces |
+| Integrations | `panels/GithubSettings.tsx` → `GithubSettings` | Local GitHub CLI status (section id `github`) |
+| Notifications | `panels/NotificationsSettings.tsx` → `NotificationsSettings` | Attention notifications and browser permission |
+| Privacy | `panels/PrivacySettings.tsx` → `PrivacySettings` | Additional usage-data sharing |
+| Updates | `updates/UpdateSettings.tsx` → `UpdateSettings` (injected, desktop only) | Software updates |
+| Share feedback | `panels/FeedbackSettings.tsx` → `FeedbackSettings` | Survey, Discord and email |
 
 ---
 
@@ -598,7 +626,7 @@ its alternatives in parentheses.
 - **Tool Card** (frame) / **Tool Renderer** (body): **Bash Card**, **Read Card**, **Write Card**,
   **Edit Card**, **Ask-User-Question Card**, **Visualization Card**, **Web Card**, **Default Tool
   Renderer**.
-- **Composer** — the prompt input. **Model Selector**, **Thinking Selector**, **Slash-Command Menu**,
+- **Composer** — the prompt input. **Model-Effort Picker**, **Slash-Command Menu**,
   **Send Button**, **History-Open Button**, **Slot Hint Chip**.
 - **History Overlay** — **Results List**, **Preview Pane**, **Scope Picker**, **Jump Action**,
   **Save-as-Template Action**.
@@ -631,8 +659,12 @@ its alternatives in parentheses.
 
 **Settings**
 
-- **Settings Dialog** with sections: **Providers**, **GitHub**, **Appearance**, **Layout**,
-  **Terminal**, **Templates**, **Privacy**.
+- **Settings Dialog** — **Section List**, **Settings Search** and **Search Results**, a **Section Page** of
+  **Groups** (with a **Scope Tag**) and **Setting Rows** (with **Changed** and **Reset**), **Choice**,
+  **Settings List**, **Jump Flash**. Sections: Agent (**Models**, **Providers**, **Subagents**, **Extensions
+  & skills**, **MCP servers**, **Prompt templates**, **Environment**), Interface (**Appearance**, **Text &
+  fonts**, **Chat**, **Layout**, **Keyboard**, **Language**, **Voice input**, **Terminal**), System
+  (**Workspaces**, **Integrations**, **Notifications**, **Privacy**, **Updates**), and **Share feedback**.
 
 **Shared primitives**
 

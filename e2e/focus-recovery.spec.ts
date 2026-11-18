@@ -7,6 +7,7 @@ import {
 	enterDefaultWorkspace,
 	hideAuxiliaryWorkbench,
 	openFixtureProject,
+	openSettingsSection,
 	openWorkspaceMenu,
 	revealWorkbenchTool,
 	waitTerminalReady,
@@ -86,9 +87,7 @@ test("removing an MCP server in Settings focuses the next server's row inside th
 	try {
 		await openFixtureProject(page);
 		await enterDefaultWorkspace(page);
-		await page.getByTestId("open-settings").click();
-		const dialog = page.getByTestId("settings-dialog");
-		await page.getByTestId("settings-nav-mcp").click();
+		const dialog = await openSettingsSection(page, "mcp");
 		const rows = page.getByTestId("mcp-server-row");
 		await expect(rows).toHaveCount(2);
 		const [first, second] = [rows.nth(0), rows.nth(1)];
@@ -100,10 +99,10 @@ test("removing an MCP server in Settings focuses the next server's row inside th
 		await page.getByTestId("mcp-remove-confirm").click();
 		await expect(rows).toHaveCount(1);
 		const remaining = page.locator(`[data-testid="mcp-server-row"][data-name="${secondName}"]`);
-		await expect(remaining.getByTestId("mcp-server-menu")).toBeFocused();
+		await expect(remaining.getByTestId("mcp-server-details")).toBeFocused();
 		await expect(dialog).toBeVisible();
 
-		await page.keyboard.press("Enter");
+		await page.keyboard.press("Shift+F10");
 		await page.getByTestId("mcp-menu-remove").click();
 		await page.getByTestId("mcp-remove-confirm").click();
 		await expect(page.getByTestId("mcp-empty-add")).toBeFocused();

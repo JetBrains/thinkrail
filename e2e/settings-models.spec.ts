@@ -2,7 +2,12 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import type { AppConfig, ModelDefault } from "@thinkrail/contracts";
-import { expandModelGroup, openWorkspaceChat } from "./fixtures/app";
+import {
+	closeSettings,
+	expandModelGroup,
+	openWorkspaceChat,
+	revealModelGroups,
+} from "./fixtures/app";
 import { connectCentral, openProviders, waitForCentralState } from "./fixtures/jbcentral";
 import { E2E_PI_AGENT_DIR, E2E_SCREENSHOT_DIR } from "./fixtures/paths";
 import { E2eWire } from "./fixtures/wire";
@@ -65,6 +70,7 @@ async function disconnectFixtureProvider(page: Page): Promise<void> {
 	await openProviders(page);
 	await page.getByTestId("jetbrains-disconnect").click();
 	await waitForCentralState(page, "supported");
+	await closeSettings(page);
 }
 
 async function popoverInsideDialog(page: Page): Promise<boolean> {
@@ -125,7 +131,9 @@ async function holdReplies(page: Page) {
 	};
 }
 
-test("Models settings save host defaults and apply them to a fresh chat", async ({ page }) => {
+test("Models settings save host defaults through the chat's model and effort picker and apply them to a fresh chat", async ({
+	page,
+}) => {
 	const replies = await holdReplies(page);
 	await openWorkspaceChat(page);
 	const defaults = await readDefaults(page);
@@ -142,11 +150,15 @@ test("Models settings save host defaults and apply them to a fresh chat", async 
 
 		const modelSelector = row.getByTestId("model-selector");
 		await expect(modelSelector).toBeVisible();
-		await modelSelector.click();
+		await modelSelector.focus();
+		await page.keyboard.press("Enter");
+		await expect(modelSelector).toHaveAttribute("data-open", "true");
+		await expect(page.getByTestId("model-set-default")).toHaveCount(0);
+		await revealModelGroups(page);
 		await expandModelGroup(page, "e2e-central");
-		const modelOption = page.locator(
-			'[data-testid="model-option"][data-model-id="e2e-central-model"]',
-		);
+		const modelOption = page
+			.locator('[data-testid="model-option"][data-model-id="e2e-central-model"]')
+			.last();
 		await expect(modelOption).toBeVisible();
 		const modelId = await modelOption.getAttribute("data-model-id");
 		const modelName = (
@@ -158,28 +170,23 @@ test("Models settings save host defaults and apply them to a fresh chat", async 
 		const modelSave = replies.arm("settings.update");
 		await modelOption.click();
 		await modelSave.held;
-		await expect(modelSelector).toBeFocused();
-		await expect(modelSelector).toBeDisabled();
-		await expect(effortSelector).toBeDisabled();
-		await page.keyboard.press("Enter");
-		modelSave.release();
 		await expect(modelSelector).toContainText(modelName);
-		await expect(effortSelector).toBeEnabled();
-		await expect(modelSelector).toHaveAttribute("data-open", "false");
+		await expect(modelSelector).toHaveAttribute("data-open", "true");
+		await expect(page.getByTestId("thinking-section")).toContainText(modelName);
+		modelSave.release();
+		await expect(row.getByTestId("settings-reset-chat-model")).toBeVisible();
 
-		await expect(effortSelector).toBeEnabled();
-		await effortSelector.click();
 		const effortOption = page.locator('[data-testid="thinking-option"][data-level="high"]');
 		await expect(effortOption).toBeVisible();
 		const effortSave = replies.arm("settings.update");
 		await effortOption.click();
 		await effortSave.held;
-		await expect(effortSelector).toBeFocused();
-		await expect(effortSelector).toBeDisabled();
-		await page.keyboard.press("Enter");
+		await expect(effortSelector).toContainText("high");
 		effortSave.release();
-		await expect(effortSelector).toBeEnabled();
-		await expect(effortSelector).toHaveAttribute("data-open", "false");
+		await page.keyboard.press("Escape");
+		await expect(modelSelector).toHaveAttribute("data-open", "false");
+		await expect(modelSelector).toBeFocused();
+		await expect(dialog).toBeVisible();
 		await expect(effortSelector).toContainText("high");
 
 		await expect
@@ -196,12 +203,19 @@ test("Models settings save host defaults and apply them to a fresh chat", async 
 		mkdirSync(dirname(SCREENSHOT_PATH), { recursive: true });
 		await section.screenshot({ path: SCREENSHOT_PATH, animations: "disabled" });
 
-		await page.keyboard.press("Escape");
+		await closeSettings(page);
 		await openFreshChat(page);
 		const freshChatModel = page.getByTestId("model-selector").last();
 		await expect(freshChatModel).toBeVisible();
 		await expect(freshChatModel).toContainText(modelName);
 		await expect(page.getByTestId("thinking-selector").last()).toContainText("high");
+
+		await openProviders(page);
+		await page.getByTestId("settings-nav-models").click();
+		await row.getByTestId("settings-reset-chat-model").click();
+		await expect.poll(() => readDefaults(page)).toEqual({});
+		await expect(row.getByTestId("settings-reset-chat-model")).toHaveCount(0);
+		await closeSettings(page);
 
 		await disconnectFixtureProvider(page);
 	} finally {
@@ -217,7 +231,7 @@ test("without saved defaults, Settings and a fresh chat use the first available 
 
 	try {
 		await connectFixtureProvider(page);
-		await page.keyboard.press("Escape");
+		await closeSettings(page);
 		const resolved = await withHostWire(page, async (wire): Promise<ModelDefault> => {
 			const config = await wire.request("settings.update", {
 				config: { defaultModel: null, defaultEffort: null },
@@ -235,8 +249,9 @@ test("without saved defaults, Settings and a fresh chat use the first available 
 		const row = page.getByTestId("settings-models").getByTestId("default-model-row");
 		await expect(row.getByTestId("model-selector")).toContainText(modelName);
 		await expect(row.getByTestId("thinking-selector")).toContainText(effortLevel);
+		await expect(row.getByTestId("settings-reset-chat-model")).toHaveCount(0);
 
-		await page.keyboard.press("Escape");
+		await closeSettings(page);
 		await openFreshChat(page);
 		await expect(page.getByTestId("model-selector").last()).toContainText(modelName);
 		await expect(page.getByTestId("thinking-selector").last()).toContainText(effortLevel);
@@ -247,7 +262,7 @@ test("without saved defaults, Settings and a fresh chat use the first available 
 	}
 });
 
-test("the Settings model and effort pickers open inside the dialog, and the model list scrolls with the wheel", async ({
+test("the Settings model pickers open inside the dialog, and the model list scrolls with the wheel", async ({
 	page,
 }) => {
 	await openWorkspaceChat(page);
@@ -258,7 +273,6 @@ test("the Settings model and effort pickers open inside the dialog, and the mode
 		await page.getByTestId("settings-nav-models").click();
 		const section = page.getByTestId("settings-models");
 		const list = page.locator("[cmdk-list]");
-		const effortOptions = page.getByTestId("thinking-option");
 		for (const viewport of [
 			{ width: 1280, height: 720 },
 			{ width: 1280, height: 400 },
@@ -266,8 +280,9 @@ test("the Settings model and effort pickers open inside the dialog, and the mode
 		]) {
 			await page.setViewportSize(viewport);
 			for (const row of ["default-model-row", "review-model-row"]) {
-				const target = section.getByTestId(row);
-				await target.getByTestId("model-selector").click();
+				const trigger = section.getByTestId(row).getByTestId("model-selector");
+				await trigger.click();
+				await revealModelGroups(page);
 				await expandModelGroup(page, "e2e-long");
 				await expect(list.locator('[data-model-id="long-model-39"]')).toBeAttached();
 				await list.evaluate((element) => element.scrollTo({ top: 0 }));
@@ -276,17 +291,10 @@ test("the Settings model and effort pickers open inside the dialog, and the mode
 				await expect.poll(() => list.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
 				await expect.poll(() => popoverInsideDialog(page)).toBe(true);
 				await expect(page.getByTestId("model-refresh")).toBeInViewport({ ratio: 1 });
+				await expect(page.getByTestId("model-set-default")).toHaveCount(0);
 				await page.keyboard.press("Escape");
 				await expect(list).toHaveCount(0);
-
-				await target.getByTestId("thinking-selector").click();
-				await expect(effortOptions.first()).toBeVisible();
-				await expect.poll(() => popoverInsideDialog(page)).toBe(true);
-				await effortOptions.first().hover();
-				await page.mouse.wheel(0, 300);
-				await expect(effortOptions.last()).toBeInViewport({ ratio: 1 });
-				await page.keyboard.press("Escape");
-				await expect(effortOptions).toHaveCount(0);
+				await expect(trigger).toBeFocused();
 			}
 		}
 	} finally {

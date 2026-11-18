@@ -58,6 +58,16 @@ product contract (it then guards upstream's behavior instead).
   `quitShortcut.ts`, `keyState.ts`. **Removal gate:** menu actions carry a key-repeat flag and their
   trigger (key or pointer). Verify `repeatGate.test.ts`, `quitShortcut.test.ts`, `keyState.test.ts`.
 
+- **Static agent mockups inside the desktop window.** Owner [[module-resource-renderers]] (the
+  interactive-HTML rule), `apps/web/src/shell/nativeBridges.ts` + `AppResourceHost.tsx`. Electrobun 2.0.5
+  registers its WebKit message handlers (`bunBridge`, `internalBridge`) for every frame, and the internal RPC
+  dispatcher runs `webviewTagExecuteJavascript` in a view id the caller supplies, so any script in a subframe
+  — even an opaque `sandbox="allow-scripts"` one — reaches native code and the trusted page; the web app
+  therefore registers no interactive-HTML globs when its page has a native message bridge. **Removal gate:**
+  native message handlers answer only the main frame and the internal dispatcher rejects target views its
+  caller does not own, on WebKit (macOS, Linux) and WebView2. Verify `nativeBridges.test.ts` and a scripted
+  subframe probe against the packaged app.
+
 ## Windows identity
 
 - **Executable icon groups and VERSIONINFO.** Owner [[module-desktop]], `postBuild.ts`,

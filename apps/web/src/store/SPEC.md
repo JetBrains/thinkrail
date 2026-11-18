@@ -294,6 +294,8 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   from) / `stats` / **`statsRefreshTick`** (browser-local invalidation for the mounted chat's authoritative
   stats read) / `commands` / `draft` / **`readingAnchor`** (browser-local detached transcript position
   that survives the chat tab's unmount; written only by `chat` through `setChatReadingAnchor`) /
+  **`composerFocusWonOver`** (browser-local: the tool call the session's host was waiting on when its last
+  composer-focus request was served, else `null`; written only by `serveComposerFocusRequest`) /
   **`promptImages`** (the composer's transient ready images, pending decodes, errors and a fresh generation
   token; the pure model `PromptImagesState` + `newPromptImagesState` is the store's own
   `promptImageState.ts`, so runtime creation runs no `chat` code). `updateChatPromptImages(sessionId, update)` changes
@@ -539,7 +541,8 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   `beginLogin` response. **`beginLogin(loginId, providerId, target?)`** opens the login, preserving a
   matching frame-created dialog (the frame can beat the response) and refusing to overwrite a different
   active login. Workspace removal retires its targeted MCP dialog; late start responses and frames for
-  tombstoned workspaces cannot recreate it or strand the global login slot.
+  tombstoned workspaces cannot recreate it or strand the global login slot. A target without a
+  `workspaceId` (an MCP sign-in started with no workspace open) is never tombstoned.
   **`applyLoginFrame(push)`** folds an inbound `provider.login` frame (creating `activeLogin`
   if the frame arrived first; ignoring frames for a different live login); both keep an MCP
   push's `target`, which is how Providers and MCP settings each open only their own logins,
@@ -549,12 +552,18 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   provider's finished (success/error) target-less login. A terminal frame for a login this client does not
   hold opens nothing (a superseded login's error reaches every client); it is kept as **`unheldLoginFrame`**
   so `beginLogin` can replay it when it was this client's own fast failure beating the start response. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Models`/`Mcp`/`Github`/`Appearance`/`Chat`/`Layout`/`Keyboard`/`Updates`/`Terminal`/`Workspaces`/`Templates`/`Notifications`/`Privacy`/`Feedback`/`Extensions`;
-  the `LineWidth` and `Review` keys are retained so old deep links still type-check but are not navigation
-  sections — `panels/settingsNav` resolves them to an available section, and their controls now live in
-  Chat/Appearance and Models) with **`openSettings(section?)`** (deep-links to a section, defaults to Providers) /
-  **`closeSettings()`** / **`setSettingsSection()`** — lives here so the top-bar gear, Welcome provider
-  warning, and update-ready shell affordance can deep-link without prop-drilling. The optional Update key is navigation only. Native
+  **`settingsSection`** (a const-object enum: `Providers`/`Models`/`Subagents`/`Mcp`/`Github`/`Appearance`/`Text`/`Chat`/`Layout`/`Keyboard`/`Updates`/`Terminal`/`Workspaces`/`Templates`/`Notifications`/`Privacy`/`Feedback`/`Extensions`/`Environment`/`Voice`/`Language`;
+  the retired `Artifacts`, `LineWidth` and `Review` keys stay so old deep links still type-check, and
+  **`RETIRED_SETTINGS_SECTIONS`** names where each moved — Layout, Text and Models — for `panels/settingsNav`
+  to resolve) with **`openSettings(section?, settingId?)`** / **`closeSettings()`** / **`setSettingsSection()`**
+  — lives here so the top-bar gear, Welcome provider warning, and update-ready shell affordance can deep-link
+  without prop-drilling. Without a section, `openSettings` reopens the remembered one: `closeSettings` keeps
+  `settingsSection`, in memory only, so the first open of a page load is Providers. A `settingId` (a
+  `panels/settingsCatalog` id, or `shortcut:<command>`) is stored as **`settingsTarget`** in the same update;
+  the dialog takes it once with **`consumeSettingsTarget()`**, which returns and clears it, and a close or an
+  open without one clears it too. The client-local preference defaults the store starts from
+  (`artifactsSmart`, `doubleShiftSearch`, `markdownOutlineSide`) are one constant,
+  **`CLIENT_PREFERENCE_DEFAULTS`**, which Settings' Reset reads too. The optional Update key is navigation only. Native
   updater snapshots/actions remain in `updates`' shell-local hook state; the optional **`hostUpdate`** lifecycle
   snapshot is host domain state, installed atomically from `server.welcome` or replaced by the one
   `host.updateAvailable` push. It remains visible through a temporary disconnect; a later welcome replaces or
@@ -602,7 +611,10 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   **`notificationsEnabled: boolean`** (the attention-notification master toggle),
   **`subagentsEnabled: boolean`**, **`subagentMaxConcurrent: number`**, **`disabledExtensions: string[]`**
   (defaulting to `[]` so a pre-v82 host reads as "all on"), **`extensionSettings: ExtensionSettingValues`**
-  (defaulting to `{}` so a pre-v105 host reads as "every declared default"), **`jbcentralQuotaEnabled: boolean`**,
+  (defaulting to `{}` so a pre-v105 host reads as "every declared default"), **`keybindingOverrides:
+  KeybindingOverrides`** (the host's `keybindings` map as sent, any non-object `{}`; the resolver in
+  [[submodule-web-keybindings]] drops what it cannot use and `shell` ignores it below v123),
+  **`jbcentralQuotaEnabled: boolean`**,
   **`jbcentralQuotaRefreshSeconds: number`**, and **`onboardingDismissed: boolean`** (absent ⇒ `false`) ride the same `applyConfig` fold (host-owned, fieldwise
   defaulted/validated from the contracts helpers so an older or malformed host snapshot cannot poison
   the store). `terminalWindowsShell` narrows through `isTerminalWindowsShell` and otherwise uses
@@ -818,9 +830,15 @@ session-only, dropped in `applyWorkspaceRemoved` with its workspace.
 The Artifacts tool's slices are per workspace: **`artifactsByWorkspace`** (`setWorkspaceArtifacts`, the
 host's `artifacts.list` snapshot), **`artifactsTickByWorkspace`** (`noteArtifactsChanged`, bumped by the
 `workspace.artifactsChanged` nudge and read through `selectArtifactsTick`) and **`artifactsSeenByWorkspace`**
-(`markArtifactsSeen`, a watermark that only moves forward; the first snapshot of a workspace seeds it), all
-dropped in `applyWorkspaceRemoved`, plus the app-wide **`artifactsShowIgnored`** toggle; the seen watermarks
-and the toggle hydrate from per-client preferences (`hydrateArtifactsPreferences`).
+(`markArtifactsSeen`, a watermark that only moves forward; the first snapshot of a workspace seeds it) and
+**`artifactsTreeExpandedByWorkspace`** (`setArtifactsTreeExpanded(workspaceId, paths, expanded)`,
+`collapseAllArtifacts`; the Tree view's open folders), all dropped in `applyWorkspaceRemoved`, plus the
+app-wide **`artifactsShowIgnored`** toggle, **`artifactsView`** (`setArtifactsView`, `"list" | "tree" |
+"smart"`, `null` until the user picks one) and **`artifactsSmart`** (`setArtifactsSmart`, the Settings switch
+for the Smart view, on by default); the seen watermarks, the open folders (Smart's group and chip ids
+included), the toggle, the view and the switch hydrate from per-client preferences
+(`hydrateArtifactsPreferences`). **`selectArtifactsView`** resolves the view the panel shows (an explicit
+choice, else Smart when it is switched on and **`supportsArtifactRoles`** holds, else List).
 **`pasteIntoComposer(sessionId, text)`** (Artifacts' Mention in chat) applies the same composer edit an
 extension's `pasteToEditor` request does, so both paste at the caret the same way.
 **`selectActiveFilePath`** is the path of the active file or diff tab, else `null`.
@@ -851,7 +869,11 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   body mounts and consumes the request without publishing a structural snapshot. The third sibling,
   **`composerFocusRequest { workspaceId, sessionId | null, navTick, dismissHistory? }`** — set by
   **`requestComposerFocus(workspaceId, sessionId?, { dismissHistory? })`**, cleared by
-  **`clearComposerFocusRequest()`** —
+  **`clearComposerFocusRequest()`** or, by the chat that takes it,
+  **`serveComposerFocusRequest(sessionId, waitingToolCallId)`**, which in the same write records the call
+  that chat's host was waiting on (the chat derives it; the store imports no `chat` code) as its
+  runtime's `composerFocusWonOver`, so **`selectQuestionMayClaimFocus(sessionId, toolCallId)`** denies the
+  focus claim to that question alone, across the chat's remounts ([[submodule-web-chat]]) —
   carries a palette pick's "type next" intent to the destination chat. It is stamped with the workspace's
   navigation tick instead of queuing a selection, so it never changes which tab shows:
   **`selectComposerFocusRequested`** holds only while that workspace is active, its tick is unchanged (a counted tab

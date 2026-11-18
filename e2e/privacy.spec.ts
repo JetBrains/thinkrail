@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { seedAnalyticsConsent } from "./fixtures/analyticsConsent";
+import { closeSettings, openSettingsSection } from "./fixtures/app";
 
 test("privacy controls additional data without disabling basics and persists across reload", async ({
 	page,
@@ -9,10 +10,7 @@ test("privacy controls additional data without disabling basics and persists acr
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 
-	await page.getByTestId("open-settings").click();
-	const dialog = page.getByTestId("settings-dialog");
-	await expect(dialog).toBeVisible();
-	await page.getByTestId("settings-nav-privacy").click();
+	const dialog = await openSettingsSection(page, "privacy");
 	await expect(dialog).toContainText("Usage analytics");
 
 	const toggle = page.getByTestId("analytics-toggle");
@@ -29,14 +27,17 @@ test("privacy controls additional data without disabling basics and persists acr
 
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-privacy").click();
+	await openSettingsSection(page, "privacy");
 	await expect(toggle).toHaveAttribute("data-active", "false");
+	await expect(page.getByTestId("settings-reset-usage-analytics")).toHaveCount(0);
 
 	await toggle.click();
 	await expect(toggle).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("analytics-consent-dialog")).toBeHidden();
 
-	await page.keyboard.press("Escape");
-	await expect(dialog).toBeHidden();
+	// Sharing is off by default, so Reset turns it back off.
+	await page.getByTestId("settings-reset-usage-analytics").click();
+	await expect(toggle).toHaveAttribute("data-active", "false");
+
+	await closeSettings(page);
 });

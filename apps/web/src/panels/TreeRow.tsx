@@ -1,6 +1,7 @@
 import {
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
+	type RemixiconComponentType,
 	RiFileFill,
 	RiFileLine,
 	RiFolderFill,
@@ -29,6 +30,7 @@ export function TreeRow({
 	dataViewed,
 	label,
 	labelClassName,
+	icon,
 	trailing,
 	highlight = "self",
 	onClick,
@@ -54,7 +56,8 @@ export function TreeRow({
 	dataStatus?: string | undefined;
 	dataViewed?: boolean;
 	label: string;
-	labelClassName?: string;
+	labelClassName?: string | undefined;
+	icon?: RemixiconComponentType | undefined;
 	trailing?: ReactNode;
 	highlight?: "self" | "wrapper";
 	onClick?: ((event: MouseEvent) => void) | undefined;
@@ -64,7 +67,7 @@ export function TreeRow({
 }) {
 	const Chevron = expanded ? ChevronDown : ChevronRight;
 	const Folder = active ? RiFolderFill : RiFolderLine;
-	const FileIcon = active ? RiFileFill : RiFileLine;
+	const FileIcon = icon ?? (active ? RiFileFill : RiFileLine);
 	const tone = subtle ? "text-text-subtle" : "text-text-muted";
 	const treeItem = useTreeItem(treeId, {
 		level,
