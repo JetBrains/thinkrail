@@ -361,6 +361,18 @@ test("the notice states the host and, in a project, the in-chat confirm; the emp
 	expect(empty).toContain('data-setting-id="mcp-add"');
 	expect(MCP_PRESETS.length).toBeGreaterThan(0);
 	expect(empty).toContain('data-testid="mcp-empty-presets"');
+	expect(empty).toContain("Enabled for this project only.");
+	const userEmpty = renderToStaticMarkup(
+		<McpEmptyState
+			disabled={false}
+			userOnly
+			onAdd={() => {}}
+			onImport={() => {}}
+			onPreset={() => {}}
+		/>,
+	);
+	expect(userEmpty).not.toContain("this project");
+	expect(userEmpty).toContain("Added switched off");
 });
 
 test("an older host without a workspace keeps the open-a-workspace text", () => {

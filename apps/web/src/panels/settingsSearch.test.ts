@@ -49,6 +49,15 @@ describe("Settings search", () => {
 		expect(ids("   ", entries)).toEqual([]);
 	});
 
+	test("scattered letters count only when nothing matches as a word or substring", () => {
+		const entries = [
+			entry("chat-line-width", SettingsSection.Text, "Chat line width"),
+			entry("shortcut:left", SettingsSection.Keyboard, "Show or hide the left side"),
+		];
+		expect(ids("width", entries)).toEqual(["chat-line-width"]);
+		expect(ids("shls", entries)).toEqual(["shortcut:left"]);
+	});
+
 	test("equal matches keep the nav order, then the catalog order", () => {
 		const entries = [
 			entry("text-width", SettingsSection.Text, "Width"),

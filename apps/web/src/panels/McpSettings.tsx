@@ -691,6 +691,7 @@ export function McpEmptyState({
 	disabled,
 	focusList = USER_LIST,
 	settingId,
+	userOnly = false,
 	onAdd,
 	onImport,
 	onPreset,
@@ -698,6 +699,7 @@ export function McpEmptyState({
 	disabled: boolean;
 	focusList?: string;
 	settingId?: string | undefined;
+	userOnly?: boolean;
 	onAdd: () => void;
 	onImport: () => void;
 	onPreset: (preset: McpPreset) => void;
@@ -718,7 +720,11 @@ export function McpEmptyState({
 							<span className="flex min-w-0 flex-1 flex-col">
 								<span className="tr-title-compact text-text-default">{t(preset.title)}</span>
 								<span className="break-words text-text-muted tr-text-metadata">
-									{t(preset.description)}
+									{t(
+										userOnly && preset.userDescription
+											? preset.userDescription
+											: preset.description,
+									)}
 								</span>
 							</span>
 							<Button
@@ -1240,6 +1246,7 @@ export function McpServersPanel({
 									disabled={readOnly}
 									focusList={USER_LIST}
 									settingId={servers.length === 0 ? SETTING.mcpAdd.id : undefined}
+									userOnly={!inProject}
 									onAdd={() => openAdd("form")}
 									onImport={() => openAdd("json")}
 									onPreset={(preset) => openAdd("form", preset)}

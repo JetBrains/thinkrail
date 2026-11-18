@@ -1,4 +1,5 @@
 import {
+	MATCH_TIER,
 	type MatchField,
 	type MatchRange,
 	type MatchResult,
@@ -98,14 +99,16 @@ export function searchSettings(
 		const match = matchFields(terms, fieldsOf(entry, label));
 		if (match) hits.push({ entry, label, match, index });
 	}
-	hits.sort(
+	const real = hits.some((hit) => hit.match.tier < MATCH_TIER.fuzzy);
+	const kept = real ? hits.filter((hit) => hit.match.tier < MATCH_TIER.fuzzy) : hits;
+	kept.sort(
 		(a, b) =>
 			a.match.tier - b.match.tier ||
 			b.match.score - a.match.score ||
 			rank(a.entry.section) - rank(b.entry.section) ||
 			a.index - b.index,
 	);
-	return hits.map(({ entry, label, match }) => ({
+	return kept.map(({ entry, label, match }) => ({
 		entry,
 		sectionLabel: label,
 		ranges: Object.fromEntries(

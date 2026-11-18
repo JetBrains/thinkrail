@@ -32,6 +32,17 @@ const ids = (context: SettingsCatalogContext, hasUpdates = true) =>
 	);
 
 describe("the settings catalog", () => {
+	test("labels and descriptions take no interpolation values, since search renders them bare", () => {
+		for (const setting of Object.values(SETTING)) {
+			for (const key of [
+				setting.label,
+				"description" in setting ? setting.description : undefined,
+			]) {
+				if (key !== undefined) expect(EN[key]).not.toContain("{{");
+			}
+		}
+	});
+
 	test("ids are unique and never a section id, so palette rows stay apart", () => {
 		const all = SETTINGS_CATALOG.map((entry) => entry.id);
 		expect(new Set(all).size).toBe(all.length);

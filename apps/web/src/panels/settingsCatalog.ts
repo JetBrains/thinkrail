@@ -246,7 +246,7 @@ export const SETTING = {
 		id: "pi-builtins",
 		section: SettingsSection.Extensions,
 		label: "settings.extensions.group.builtin",
-		description: "settings.extensions.group.builtinDescription",
+		description: "settings.catalog.piBuiltins.description",
 		keywords: ["mcp client", "tool search"],
 	},
 	mcpAdd: {
