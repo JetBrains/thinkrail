@@ -3,7 +3,7 @@ import type { WireModel } from "@thinkrail/contracts";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ModelEffortPicker } from "./ModelEffortPicker";
-import type { ModelPreferences } from "./useModelPreferences";
+import type { ModelPreferences } from "./modelPreferences";
 
 const sonnet: WireModel = {
 	provider: "anthropic",

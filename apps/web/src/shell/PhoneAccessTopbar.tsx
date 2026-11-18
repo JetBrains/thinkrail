@@ -9,10 +9,10 @@ import { REMOTE_ACCESS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { Switch } from "@thinkrail/ui/switch";
 import { useId, useState } from "react";
 import { PhonePairingCode } from "../panels/PhonePairingCode";
 import { type PhoneRoute, phoneHasNoRoute, phoneReach } from "../panels/phoneAccessState";
-import { SettingsSwitch } from "../panels/SettingsSwitch";
 import { type PhoneAccess, usePhoneAccess, useRemoteAccessStatus } from "../panels/usePhoneAccess";
 import { SettingsSection, useAppStore } from "../store";
 
@@ -49,12 +49,12 @@ export function PhoneAccessPanel({ headingId, access, onOpenSettings }: PhoneAcc
 				>
 					{t("settings.phone.title")}
 				</h2>
-				<SettingsSwitch
+				<Switch
 					checked={enabled}
 					disabled={pending || status === null}
 					label={t("settings.phone.enable")}
 					testId="phone-quick-toggle"
-					onChange={access.toggle}
+					onCheckedChange={access.toggle}
 				/>
 			</div>
 

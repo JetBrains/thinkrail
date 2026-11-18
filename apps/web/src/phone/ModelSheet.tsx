@@ -91,8 +91,8 @@ export const ModelSheet = forwardRef<ModelEffortPickerHandle, ModelSheetProps>(f
 							type="search"
 							value={query}
 							onChange={(event) => setQuery(event.target.value)}
-							placeholder={t("chat.modelPicker.search")}
-							aria-label={t("chat.modelPicker.search")}
+							placeholder={t("mobile.model.search")}
+							aria-label={t("mobile.model.search")}
 							autoCapitalize="off"
 							autoCorrect="off"
 							spellCheck={false}

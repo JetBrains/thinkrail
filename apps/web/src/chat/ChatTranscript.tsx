@@ -1,13 +1,38 @@
 import { RiArrowDownLine as ArrowDown, RiArrowUpLine as ArrowUp } from "@remixicon/react";
-import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "@thinkrail/chat-ui/activityBreadcrumbs";
+import {
+	ACTIVITY_BREADCRUMB_HEIGHT,
+	ActivityBreadcrumbTrail,
+} from "@thinkrail/chat-ui/activityBreadcrumbs";
 import { type ChatActions, ChatActionsContext } from "@thinkrail/chat-ui/ChatActions";
 import type { ChatMessageOrder } from "@thinkrail/chat-ui/chatMessageOrder";
-import { type PendingExtUi, PendingExtUiContext, PendingExtUiPrompt } from "@thinkrail/chat-ui/ExtUiPrompt";
+import { PendingExtUiContext, PendingExtUiPrompt } from "@thinkrail/chat-ui/ExtUiPrompt";
+import { workspaceFileTarget } from "@thinkrail/chat-ui/fileTargets";
 import { FoldGeometryProvider } from "@thinkrail/chat-ui/foldState";
-import { awaitingToolCallIdOf, deriveInteractionStates, dockedInteraction, InteractionStatesContext, latestPendingInteraction, type PendingInteraction } from "@thinkrail/chat-ui/interactionState";
+import {
+	awaitingToolCallIdOf,
+	deriveInteractionStates,
+	dockedInteraction,
+	InteractionStatesContext,
+	latestPendingInteraction,
+	type PendingInteraction,
+} from "@thinkrail/chat-ui/interactionState";
 import { deriveMessageActions } from "@thinkrail/chat-ui/messageActions";
-import { type ChatRow, deriveRows, projectRows, rowIndexForTurn, rowsHaveToolCall, stabilizeRows, sessionRoundArtifacts } from "@thinkrail/chat-ui/rows";
-import { type StreamStatus, StreamStatusSlot, streamStatus } from "@thinkrail/chat-ui/StreamIndicator";
+import { usePendingExtUi } from "@thinkrail/chat-ui/pendingExtUi";
+import {
+	type ChatRow,
+	deriveRows,
+	projectRows,
+	rowIndexForTurn,
+	rowsHaveToolCall,
+	sessionRoundArtifacts,
+	stabilizeRows,
+} from "@thinkrail/chat-ui/rows";
+import {
+	type StreamStatus,
+	StreamStatusSlot,
+	streamStatus,
+} from "@thinkrail/chat-ui/StreamIndicator";
+import { TranscriptItem, TranscriptNavigationContext } from "@thinkrail/chat-ui/TranscriptItem";
 import { useToolInteraction } from "@thinkrail/chat-ui/toolInteraction";
 import { getToolRenderer } from "@thinkrail/chat-ui/toolRegistry";
 import { ChatTurnView, type DividerReveal } from "@thinkrail/chat-ui/turns";
@@ -19,7 +44,19 @@ import { ResourceScopeProvider } from "@thinkrail/resource-renderers";
 import { Button } from "@thinkrail/ui/button";
 import { useModalLayerOpen } from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
-import { forwardRef, type ReactNode, type RefCallback, useCallback, useEffect, useImperativeHandle, useInsertionEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+	forwardRef,
+	type ReactNode,
+	type RefCallback,
+	useCallback,
+	useEffect,
+	useImperativeHandle,
+	useInsertionEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { type ListProps, Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { useShallow } from "zustand/react/shallow";
@@ -36,12 +73,9 @@ import {
 } from "@/store";
 import { errorText, getTransport, respondToTool } from "@/transport";
 import { refreshContinuation, requestContinuation } from "./continuations";
-import { workspaceFileTarget } from "@thinkrail/chat-ui/fileTargets";
 import { openWorkspace } from "./openWorkspace";
-import { usePendingExtUi } from "./pendingExtUi";
 import { turnAnchorText } from "./recentPrompts";
 import { estimateChatRowHeights } from "./rowHeightEstimates";
-import { TranscriptItem, TranscriptNavigationContext } from "./TranscriptItem";
 import { newestContentRowId } from "./transcriptNavigation";
 import { type ChatReadingPosition, useChatScroll } from "./useChatScroll";
 import { useTranscriptNavigation } from "./useTranscriptNavigation";

@@ -94,7 +94,8 @@ test("a pending confirm dialog renders its question and both answers", () => {
 				reply: () => {},
 				draft: () => undefined,
 				rememberDraft: () => {},
-				claimReveal: () => false,
+				revealOpen: () => false,
+				closeReveal: () => {},
 			}}
 		/>,
 	);

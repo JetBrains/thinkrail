@@ -7,11 +7,7 @@ import {
 	type SubmitBehavior,
 } from "@thinkrail/chat-ui/Composer";
 import { ExtraUsageNotice } from "@thinkrail/chat-ui/ExtraUsageNotice";
-import {
-	type PendingExtUi,
-	PendingExtUiContext,
-	PendingExtUiPrompt,
-} from "@thinkrail/chat-ui/ExtUiPrompt";
+import { PendingExtUiContext, PendingExtUiPrompt } from "@thinkrail/chat-ui/ExtUiPrompt";
 import {
 	awaitingToolCallIdOf,
 	deriveInteractionStates,
@@ -20,6 +16,7 @@ import {
 import type { ModelEffortPickerHandle, ModelSelection } from "@thinkrail/chat-ui/ModelEffortPicker";
 import { deriveMessageActions } from "@thinkrail/chat-ui/messageActions";
 import type { ModelPreferences } from "@thinkrail/chat-ui/modelPreferences";
+import { usePendingExtUi } from "@thinkrail/chat-ui/pendingExtUi";
 import { QueueStrip } from "@thinkrail/chat-ui/QueueStrip";
 import { deriveRows, rowsHaveToolCall } from "@thinkrail/chat-ui/rows";
 import { StreamIndicator, streamStatus } from "@thinkrail/chat-ui/StreamIndicator";
@@ -234,30 +231,12 @@ export function SessionScreen({
 		[runtime, focusScope, awaitingToolCallId],
 	);
 	const pendingRequest = runtime?.pendingExtUi ?? null;
-	const pendingExtUi = useMemo<PendingExtUi | null>(() => {
-		if (!pendingRequest) return null;
-		let dialogDraft: string | undefined;
-		let revealed = false;
-		return {
-			request: pendingRequest,
-			reply: (value) => {
-				const { id } = pendingRequest;
-				useAppStore.getState().clearPendingExtUi(sessionId, id);
-				getTransport()
-					.request("session.extUiReply", { response: { id, value } })
-					.catch((error: unknown) => failed(t("mobile.session.answerFailed"), error));
-			},
-			draft: () => dialogDraft,
-			rememberDraft: (text) => {
-				dialogDraft = text;
-			},
-			claimReveal: () => {
-				if (revealed) return false;
-				revealed = true;
-				return true;
-			},
-		};
-	}, [pendingRequest, sessionId, failed, t]);
+	const pendingExtUi = usePendingExtUi(pendingRequest, ({ id }, value) => {
+		useAppStore.getState().clearPendingExtUi(sessionId, id);
+		getTransport()
+			.request("session.extUiReply", { response: { id, value } })
+			.catch((error: unknown) => failed(t("mobile.session.answerFailed"), error));
+	});
 	const dialogOnToolCard =
 		pendingExtUi?.request.toolCallId !== undefined &&
 		rowsHaveToolCall(rows, pendingExtUi.request.toolCallId);
@@ -267,6 +246,9 @@ export function SessionScreen({
 				? {
 						cancelAutomaticReveal: () => {},
 						focusComposer: () => composerRef.current?.refocus(),
+						focusToolCall: () => {},
+						mayClaimFocus: () => false,
+						landingChord: "",
 						openSubagentTranscript: onOpenSubagent,
 						respondToTool: (toolCallId, response) => respondToTool(sessionId, toolCallId, response),
 						resultOpener: () => undefined,

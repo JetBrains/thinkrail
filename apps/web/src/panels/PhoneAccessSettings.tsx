@@ -1,13 +1,19 @@
 import { RiQrCodeLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
-import { SettingsGroup, SettingsPageContainer, SettingsRow } from "@thinkrail/ui/settings";
+import { Switch } from "@thinkrail/ui/switch";
+import {
+	SETTINGS_ROWS,
+	SettingsGroup,
+	SettingsNotice,
+	SettingsPage,
+	SettingsRow,
+} from "@/settingsKit";
 import { PhoneAccessNetwork } from "./PhoneAccessNetwork";
 import { PhoneDeviceRow } from "./PhoneDeviceRow";
 import { PhonePairingCode } from "./PhonePairingCode";
 import { phoneHasNoRoute, phoneReach } from "./phoneAccessState";
-import { SettingsNotice } from "./SettingsNotice";
-import { SettingsSwitch } from "./SettingsSwitch";
+import { SETTING, settingProps } from "./settingsCatalog";
 import { type PhoneAccess, usePhoneAccess } from "./usePhoneAccess";
 
 export type { ShownPairing } from "./usePhoneAccess";
@@ -24,21 +30,22 @@ export function PhoneAccessView({ access }: PhoneAccessViewProps) {
 	const reach = phoneReach(status);
 
 	return (
-		<SettingsPageContainer testId="settings-phone">
-			<SettingsGroup
-				title={t("settings.phone.title")}
-				description={t("settings.phone.description")}
-			>
+		<SettingsPage
+			title={t("settings.phone.title")}
+			description={t("settings.phone.description")}
+			testId="settings-phone"
+		>
+			<div className={SETTINGS_ROWS}>
 				<SettingsRow
-					label={t("settings.phone.enable")}
-					description={t("settings.phone.enableDescription")}
+					{...settingProps(t, SETTING.phoneAccess)}
 					control={
-						<SettingsSwitch
+						<Switch
 							checked={enabled}
 							disabled={pending || status === null}
 							label={t("settings.phone.enable")}
 							testId="phone-access-toggle"
-							onChange={access.toggle}
+							tabIndex={0}
+							onCheckedChange={access.toggle}
 						/>
 					}
 				/>
@@ -95,7 +102,7 @@ export function PhoneAccessView({ access }: PhoneAccessViewProps) {
 						onCopyLink={access.copyLink}
 					/>
 				) : null}
-			</SettingsGroup>
+			</div>
 			{reach ? <PhoneAccessNetwork reach={reach} /> : null}
 			<SettingsGroup title={t("settings.phone.devices")} testId="phone-access-devices">
 				{status === null ? (
@@ -122,7 +129,7 @@ export function PhoneAccessView({ access }: PhoneAccessViewProps) {
 					))
 				)}
 			</SettingsGroup>
-		</SettingsPageContainer>
+		</SettingsPage>
 	);
 }
 

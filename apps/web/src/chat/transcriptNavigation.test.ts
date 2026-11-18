@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { type LocalKeyEvent, localKeys } from "@thinkrail/ui/local-keys";
-import { LOCAL_KEY_DEFAULTS } from "@/keybindings";
-import { resolveTreeMove } from "@/lib";
 import {
 	type ActivityStep,
 	type ChatRow,
 	projectRows,
 	type RoutineToolStep,
 	rowIdForToolCall,
-} from "./rows";
+} from "@thinkrail/chat-ui/rows";
+import { type LocalKeyEvent, localKeys } from "@thinkrail/ui/local-keys";
+import { LOCAL_KEY_DEFAULTS } from "@/keybindings";
+import { resolveTreeMove } from "@/lib";
 import {
 	keyboardLeavesFollow,
 	newestContentRowId,
@@ -328,7 +328,6 @@ describe("the composer's way into the transcript", () => {
 		expect(enters("Win32", { ctrlKey: true, shiftKey: true })).toBe(false);
 		expect(enters("Win32", { key: "ArrowDown", ctrlKey: true })).toBe(false);
 	});
-
 });
 
 describe("item actions", () => {

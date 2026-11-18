@@ -588,6 +588,13 @@ export const SETTING = {
 		description: "settings.notifications.browserDescription",
 		keywords: ["alert"],
 	},
+	phoneAccess: {
+		id: "phone-access",
+		section: SettingsSection.Phone,
+		label: "settings.phone.enable",
+		description: "settings.phone.enableDescription",
+		keywords: ["mobile", "remote", "pair", "qr"],
+	},
 	usageAnalytics: {
 		id: "usage-analytics",
 		section: SettingsSection.Privacy,
