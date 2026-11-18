@@ -6,7 +6,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { ExtUiRequest, ExtUiResponse, ProviderWarning } from "@thinkrail/contracts";
 import { plainTextTheme } from "./plainTextTheme";
-import { stripAnsi } from "./stripAnsi";
+import { plainText, stripAnsi } from "./stripAnsi";
 
 /** Clients whose protocol version is below `belowProtocol`; absent means every client. */
 export interface ExtUiAudience {
@@ -175,15 +175,18 @@ export function createWebUiContext(
 	return {
 		async select(title, options, opts) {
 			const passed = Array.isArray(options)
-				? Array.from({ length: options.length }, (_, i) => options[i] as string)
-				: undefined;
-			const shown = passed ? passed.map(stripAnsi) : options;
+				? Array.from({ length: options.length }, (_, i): unknown => options[i]).filter(
+						(option): option is string => typeof option === "string",
+					)
+				: [];
+			if (passed.length === 0) return undefined;
+			const shown = passed.map(stripAnsi);
 			const v = await dialog(
-				{ id: nextId(), sessionId, kind: "select", title: stripAnsi(title), options: shown },
+				{ id: nextId(), sessionId, kind: "select", title: plainText(title), options: shown },
 				opts,
 			);
 			if (typeof v !== "string") return undefined;
-			return passed ? (passed[shown.indexOf(v)] ?? v) : v;
+			return passed[shown.indexOf(v)] ?? v;
 		},
 		async confirm(title, message, opts) {
 			return (
@@ -192,37 +195,40 @@ export function createWebUiContext(
 						id: nextId(),
 						sessionId,
 						kind: "confirm",
-						title: stripAnsi(title),
-						message: stripAnsi(message),
+						title: plainText(title),
+						message: plainText(message),
 					},
 					opts,
 				)) === true
 			);
 		},
 		async input(title, placeholder, opts) {
+			const hint = plainText(placeholder);
 			const v = await dialog(
 				{
 					id: nextId(),
 					sessionId,
 					kind: "input",
-					title: stripAnsi(title),
-					...(placeholder ? { placeholder: stripAnsi(placeholder) } : {}),
+					title: plainText(title),
+					...(hint ? { placeholder: hint } : {}),
 				},
 				opts,
 			);
 			return typeof v === "string" ? v : undefined;
 		},
 		async editor(title, prefill) {
+			const draft = plainText(prefill);
 			const v = await dialog({
 				id: nextId(),
 				sessionId,
 				kind: "editor",
-				title: stripAnsi(title),
-				...(prefill ? { prefill: stripAnsi(prefill) } : {}),
+				title: plainText(title),
+				...(draft ? { prefill: draft } : {}),
 			});
 			return typeof v === "string" ? v : undefined;
 		},
 		notify(message, type) {
+			if (typeof message !== "string") return;
 			const level = type ?? "info";
 			const text = stripAnsi(message);
 			if (intercepted(sessionId, text, level)) return;
@@ -234,7 +240,7 @@ export function createWebUiContext(
 				sessionId,
 				kind: "setStatus",
 				key,
-				text: text == null ? null : stripAnsi(text),
+				text: typeof text === "string" ? stripAnsi(text) : null,
 			});
 		},
 		setWidget(key, content) {
@@ -243,16 +249,20 @@ export function createWebUiContext(
 				sessionId,
 				kind: "setWidget",
 				key,
-				content: Array.isArray(content) ? content.map(stripAnsi) : null,
+				content: Array.isArray(content)
+					? Array.from({ length: content.length }, (_, i) => plainText(content[i]))
+					: null,
 			});
 		},
 		setTitle(title) {
-			publish({ id: nextId(), sessionId, kind: "setTitle", title: stripAnsi(title) });
+			publish({ id: nextId(), sessionId, kind: "setTitle", title: plainText(title) });
 		},
 		pasteToEditor(text) {
+			if (typeof text !== "string") return;
 			publish({ id: nextId(), sessionId, kind: "pasteToEditor", text: stripAnsi(text) });
 		},
 		setEditorText(text) {
+			if (typeof text !== "string") return;
 			publish({ id: nextId(), sessionId, kind: "setEditorText", text: stripAnsi(text) });
 		},
 

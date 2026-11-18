@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { orderRegions, type RegionKind } from "./regions";
+import {
+	flashesOnArrival,
+	type LandingLookup,
+	orderRegions,
+	type RegionKind,
+	regionKeyAction,
+	resolveEscapeLanding,
+	resolveLanding,
+} from "./regions";
 
 const region = (name: string, kind: RegionKind, top: number, left: number) => ({
 	name,
@@ -46,5 +54,79 @@ describe("region ring order", () => {
 		expect(
 			names(orderRegions([region("projects", "home", 40, 40), region("topbar", "topbar", 0, 0)])),
 		).toEqual(["topbar", "projects"]);
+	});
+});
+
+describe("F6 rhythm", () => {
+	test("a first press with focus in the active region only lights its frame", () => {
+		expect(regionKeyAction({ flashVisible: false, focusInActiveRegion: true })).toBe("flash");
+	});
+
+	test("a press while the frame is still visible moves to the next region", () => {
+		expect(regionKeyAction({ flashVisible: true, focusInActiveRegion: true })).toBe("move");
+	});
+
+	test("focus outside the active region, on <body> or with none active, moves at once", () => {
+		expect(regionKeyAction({ flashVisible: false, focusInActiveRegion: false })).toBe("move");
+		expect(regionKeyAction({ flashVisible: true, focusInActiveRegion: false })).toBe("move");
+	});
+});
+
+describe("arrival frame", () => {
+	test("flashes when a key press brought focus into a different region", () => {
+		expect(flashesOnArrival("chat", "terminal", true)).toBe(true);
+		expect(flashesOnArrival(null, "topbar", true)).toBe(true);
+	});
+
+	test("never flashes after a pointer press", () => {
+		expect(flashesOnArrival("chat", "terminal", false)).toBe(false);
+		expect(flashesOnArrival(null, "topbar", false)).toBe(false);
+	});
+
+	test("never flashes for a move inside the same region", () => {
+		expect(flashesOnArrival("chat", "chat", true)).toBe(false);
+	});
+});
+
+describe("landing in a region", () => {
+	const lookup = (found: Partial<Record<keyof LandingLookup<string>, string>>) => ({
+		claim: () => found.claim ?? null,
+		remembered: () => found.remembered ?? null,
+		preferred: () => found.preferred ?? null,
+		selectedTab: () => found.selectedTab ?? null,
+		first: () => found.first ?? null,
+	});
+
+	test("a waiting question's focus claim wins over the remembered element and the default", () => {
+		expect(
+			resolveLanding(
+				lookup({ claim: "option", remembered: "composer", preferred: "composer", first: "tab" }),
+			),
+		).toBe("option");
+	});
+
+	test("without a claim, the remembered element, then the default, the selected tab and the first stop", () => {
+		expect(resolveLanding(lookup({ remembered: "row", preferred: "composer" }))).toBe("row");
+		expect(resolveLanding(lookup({ preferred: "composer", selectedTab: "tab" }))).toBe("composer");
+		expect(resolveLanding(lookup({ selectedTab: "tab", first: "button" }))).toBe("tab");
+		expect(resolveLanding(lookup({ first: "button" }))).toBe("button");
+		expect(resolveLanding(lookup({}))).toBeNull();
+	});
+});
+
+describe("where an Esc lands in a region or the main area", () => {
+	const lookup = (found: { claim?: string; park?: string; rest?: string }) => ({
+		claim: () => found.claim ?? null,
+		park: () => found.park ?? null,
+		rest: () => found.rest ?? null,
+	});
+
+	test("a waiting question's claim first, then the park, then the rest", () => {
+		expect(resolveEscapeLanding(lookup({ claim: "option", park: "feed", rest: "root" }))).toBe(
+			"option",
+		);
+		expect(resolveEscapeLanding(lookup({ park: "feed", rest: "root" }))).toBe("feed");
+		expect(resolveEscapeLanding(lookup({ rest: "editor" }))).toBe("editor");
+		expect(resolveEscapeLanding(lookup({}))).toBeNull();
 	});
 });

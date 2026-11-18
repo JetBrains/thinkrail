@@ -61,10 +61,12 @@ export const AuxiliaryPaneHeader = forwardRef<
 export function AuxiliaryPaneHideButton({
 	controls,
 	testId,
+	shortcut,
 	onClick,
 }: {
 	controls: string;
 	testId: string;
+	shortcut?: readonly string[] | undefined;
 	onClick: () => void;
 }) {
 	const t = useT();
@@ -74,6 +76,7 @@ export function AuxiliaryPaneHideButton({
 			size="m"
 			icon={X}
 			label={t("workbench.pane.hide")}
+			tooltipShortcut={shortcut}
 			data-testid={testId}
 			aria-controls={controls}
 			aria-expanded="true"

@@ -159,6 +159,7 @@ export default function PdfView({
 								review={review}
 								stamp={loaded.identity}
 								active={renderWindow.has(pageNumber)}
+								current={pageNumber === currentPage}
 								onVisibility={markVisible}
 								onRendered={markRendered}
 								registerElement={registerElement}

@@ -23,10 +23,12 @@ the injected `PaletteStart`).
 ## Boundary
 
 - **Public surface:** `SearchPalette`, `SearchPaletteProps`, `PaletteHost`, `PaletteStart`, `PaletteAsk`,
-  `SearchSettings`, `initSearchPreferences`, `createDoubleShiftDetector`, `buildWorkItems`,
-  `waitingItems`, `commandItems`, `SearchScope`, `PaletteItem`, `PaletteFile`.
-- **Allowed deps:** `contracts` (the shared matcher and the search DTOs), `commands`, `store`
-  (`selectHostSearchAvailable` / `selectHostReachable`, the welcome generation), `transport`
+  `initSearchPreferences`, `createDoubleShiftDetector`, `buildWorkItems`, `waitingItems`,
+  `commandItems`, `SearchScope`, `PaletteItem`, `PaletteFile`.
+- **Allowed deps:** `contracts` (the shared matcher and the search DTOs), `commands`, `keybindings`
+  (`LOCAL_KEY_DEFAULTS` for scope `palette`), `store`
+  (`selectHostSearchAvailable` / `selectHostReachable`, the welcome generation, the location Recent
+  stamps), `transport`
   (`search.query` / `search.preview`, and the backend endpoint for browser preference keys), `clientPreferences`, `constants`, `components`, `lib`,
   `@thinkrail/locales` (UI strings), `@thinkrail/ui/*`, `@remixicon/react`.
 - **Forbidden:** importing `panels`, `chat`, `shell` or `@thinkrail/resource-renderers` (shell injects
@@ -67,9 +69,33 @@ group's scope, in a scope it expands the group in place. `N` counts the host's o
 `total` beyond the page it returned), a scoped query asks the host for its maximum page, and a scoped group
 the host still capped says so in its meta instead of pretending the page is everything. The empty query
 lists **Waiting for you** (every chat that needs the user across the open projects, most urgent first —
-needs input, then failed, then finished unread, project order breaking ties, running chats left out — so
-the cap of eight rows before an in-place "Show N more" never hides a blocked chat behind unread ones),
-**Recent** (by frecency), and **Actions**.
+needs input, then failed, then finished unread, running chats left out — so the cap of eight rows before
+an in-place "Show N more" never hides a blocked chat behind unread ones), **Recent** and **Actions**.
+
+**Freshness.** `buildWorkItems` emits chats and workspaces newest activity first, so Waiting's urgency sort
+(stable), the `@` listing and equal-score ties all read newest first. Activity is the workspace's
+host-stamped `lastActiveAt` (agent runs, terminal writes, HEAD moves; at most a minute coarse) — the
+signal the topbar switcher and the Chats section sort by. Equal stamps follow the rail: the Chats
+container first (the rail shows it above Projects), then projects in the user's order, then a project's
+Default, then its newest created workspace, so a chat without a project competes on freshness rather than
+trailing every repository. A per-chat event time from the host was rejected: exact, but a contract change
+for the rare tie of two waiting chats in one workspace, which keeps the snapshot's order.
+
+**Recent** is where the user has been, newest first, by any route — the rail, the topbar, a link, the
+palette — plus anything run from the palette: up to five rows by `lastUsed`, never the place the user is in
+now (`currentPlaceIds`, read when the palette opens) nor a row Waiting or Actions already shows.
+`initSearchPreferences` watches the store's location (the active workspace's attention center chat tab;
+in a chat without a project, its one chat whatever tab shows and before its layout resolves, since the
+palette has no other row for it; else the workspace; else Project Home) and stamps a visit when the place changes; a chat's visit retires
+its workspace's stamp, and a pick of a row the current place already covers (its workspace, picked from
+its chat — a navigation that changes nothing, so no visit follows) stamps the place instead, so one place
+is one row while the pick still feeds frecency and adaptive learning. Visits order Recent only — typed-query ranking keeps
+counting palette picks, so habitual places never outrank what a query has learned.
+
+A chat or workspace row's second line names where it lives: its project and workspace
+(`PaletteItem.subtitleEmphasis`) are drawn one colour step above the rest of the line, the separators
+stay dim, and a chat without a project reads **No project** — never the container's stored name; the host
+rows' `projectName` uses the same label.
 
 A chat row is worded by `lib`'s `chatLabel` over the known title (`selectKnownChatTitle`: the title on the
 host's state record, which every rename republishes, so no palette request is needed to name a chat in a
@@ -217,7 +243,12 @@ with AltGr or Option on a digit key (`#`, `@`, `|`) stays the input's, and macOS
 since Option always types one (a chip writes its prefix into the query, so the prefix is the one source
 of scope). `Mod+I` toggles the preview pane where it is shown, `Mod+K` closes the palette (the chord that
 opened it), `Mod+↵` starts work from the typed text and `Alt+↵` asks the agent from a `#` query (both
-above).
+above). `Mod+I`, `Mod+↵` and `Alt+↵` are the rebindable local keys `palette.preview` / `startWork` / `ask`
+([[submodule-web-keybindings]], *Local keys*), matched through `useLocalKeys` (non-typing chords, so they
+act in the input) and shown in the footer and on the preview toggle with their resolved caps; ↑/↓, ↵,
+Tab and Escape are locked. A matched local key acts before any of them, Escape included (the dialog's
+`onEscapeKeyDown` yields to it), and they act only without Alt/Ctrl/⌘ — Tab is still consumed then, but
+changes no scope. `Mod+K` here stays literal.
 Escape clears the query, then closes; an untrusted (synthetic) Escape — the desktop close-item command —
 closes outright. Closing without a pick returns focus to the element that held it when the palette
 opened (the composer an accidental double Shift interrupted, the topbar button); a pick leaves focus to
@@ -229,7 +260,8 @@ panel — a row is a destination or a command.
 
 ## Preferences
 
-The learning snapshot (≤ 500 items, ≤ 500 queries of ≤ 32 picks, < 200 KB), the preview choice and the
+The learning snapshot (≤ 500 frecency items, ≤ 500 `lastUsed` stamps, ≤ 500 queries of ≤ 32 picks,
+< 200 KB; a snapshot without `lastUsed` reads as none), the preview choice and the
 double-Shift choice are client-local: the stable native preference adapter when present (per backend
 profile and window), otherwise browser storage qualified by the backend endpoint, where concurrent
 windows keep their own snapshot and the last writer wins. Only ids and query prefixes are stored, never
@@ -242,3 +274,10 @@ each step within 300 ms, ignored when another key went down less than 100 ms bef
 reset by any other key, key repeat, IME composition (`isComposing`/229), another held modifier, pointer
 down, blur or a hidden document, and firing on the second release. The sandboxed HTML preview iframe never
 delivers keys to the parent window, so the gesture does not fire from inside it.
+
+## Keyboard settings
+
+`search` renders no Settings section. The Settings → Keyboard section — the `Mod+K` note, the
+double-Shift switch (`store.doubleShiftSearch`, read by the gesture above) and the shortcut editor — is the
+shell's `KeyboardSettings` ([[submodule-web-shell]]), built on the Settings kit; `search` keeps only the
+preference's persistence (`initSearchPreferences`) and the detector.

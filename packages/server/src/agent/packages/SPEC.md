@@ -11,7 +11,7 @@ tags: [pi, extensions]
 
 ## Responsibility
 
-What ThinkRail owns around pi's package manager so Settings → Extensions can list and manage the pi
+What ThinkRail owns around pi's package manager so Settings → Extensions & skills can list and manage the pi
 packages, loose extension files and built-ins a chat loads: a **read-only catalog** that never installs
 and never runs extension code, the **settings views** every pi loader in the host goes through, pi's
 **package identity rule** for the host-wide package switch, and the install / remove / update / toggle

@@ -1,12 +1,14 @@
 import {
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
+	type RemixiconComponentType,
 	RiFileFill,
 	RiFileLine,
 	RiFolderFill,
 	RiFolderLine,
 } from "@remixicon/react";
 import type { ComponentPropsWithoutRef, MouseEvent, ReactNode, Ref } from "react";
+import { useTreeItem } from "./treeNavigation";
 
 type MenuTriggerHandlers = Pick<
 	ComponentPropsWithoutRef<"button">,
@@ -16,6 +18,8 @@ type MenuTriggerHandlers = Pick<
 export function TreeRow({
 	ref,
 	testid,
+	treeId,
+	level,
 	path,
 	kind,
 	expanded,
@@ -26,6 +30,7 @@ export function TreeRow({
 	dataViewed,
 	label,
 	labelClassName,
+	icon,
 	trailing,
 	highlight = "self",
 	onClick,
@@ -40,6 +45,8 @@ export function TreeRow({
 }: MenuTriggerHandlers & {
 	ref?: Ref<HTMLButtonElement> | undefined;
 	testid: string;
+	treeId: string;
+	level: number;
 	path?: string | undefined;
 	kind: "dir" | "file";
 	expanded?: boolean;
@@ -49,7 +56,8 @@ export function TreeRow({
 	dataStatus?: string | undefined;
 	dataViewed?: boolean;
 	label: string;
-	labelClassName?: string;
+	labelClassName?: string | undefined;
+	icon?: RemixiconComponentType | undefined;
 	trailing?: ReactNode;
 	highlight?: "self" | "wrapper";
 	onClick?: ((event: MouseEvent) => void) | undefined;
@@ -59,12 +67,21 @@ export function TreeRow({
 }) {
 	const Chevron = expanded ? ChevronDown : ChevronRight;
 	const Folder = active ? RiFolderFill : RiFolderLine;
-	const FileIcon = active ? RiFileFill : RiFileLine;
+	const FileIcon = icon ?? (active ? RiFileFill : RiFileLine);
 	const tone = subtle ? "text-text-subtle" : "text-text-muted";
+	const treeItem = useTreeItem(treeId, {
+		level,
+		label,
+		expanded: kind === "dir" ? Boolean(expanded) : undefined,
+		selected: active === true,
+		toggles: kind === "dir",
+		openKept: kind === "file",
+	});
 	return (
 		<button
 			ref={ref}
 			type="button"
+			{...treeItem}
 			data-testid={testid}
 			data-path={path}
 			data-focus-row-primary
@@ -72,8 +89,6 @@ export function TreeRow({
 			data-active={active ? true : undefined}
 			data-status={dataStatus}
 			data-viewed={dataViewed ? true : undefined}
-			aria-expanded={kind === "dir" ? Boolean(expanded) : undefined}
-			aria-current={active ? "true" : undefined}
 			onClick={onClick}
 			onDoubleClick={onDoubleClick}
 			onContextMenu={onContextMenu}

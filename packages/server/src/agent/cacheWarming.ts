@@ -4,13 +4,11 @@ import { getAgentDir, type SettingsManager } from "@earendil-works/pi-coding-age
 import {
 	type CacheWarmingMode,
 	type CacheWarmingSetting,
+	DEFAULT_CACHE_WARMING_MODE,
 	isCacheWarmingMode,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { createPiSettings } from "./packages";
-
-/** Pi defaults to `idle` since 1.5.1; idle warming spends in the background, so it stays opt-in here. */
-const THINKRAIL_DEFAULT_CACHE_WARMING: CacheWarmingMode = "streaming";
 
 function userCacheWarmingMode(settings: SettingsManager): CacheWarmingMode | undefined {
 	const mode: unknown = settings.getGlobalSettings().cacheWarming;
@@ -57,14 +55,13 @@ function persistedCacheWarmingMode(): CacheWarmingMode | undefined {
  * a delegated child or a session still being created follows a change at its next decision.
  */
 export function applyCacheWarmingDefault(settings: SettingsManager): void {
-	settings.getCacheWarmingMode = () =>
-		persistedCacheWarmingMode() ?? THINKRAIL_DEFAULT_CACHE_WARMING;
+	settings.getCacheWarmingMode = () => persistedCacheWarmingMode() ?? DEFAULT_CACHE_WARMING_MODE;
 }
 
 export function readCacheWarmingSetting(): CacheWarmingSetting {
 	const mode = persistedCacheWarmingMode();
 	return mode === undefined
-		? { mode: THINKRAIL_DEFAULT_CACHE_WARMING, source: "default" }
+		? { mode: DEFAULT_CACHE_WARMING_MODE, source: "default" }
 		: { mode, source: "user" };
 }
 

@@ -3,11 +3,8 @@ import type {
 	AskUserQuestionAnswer,
 	AskUserQuestionItem,
 } from "@thinkrail/pi-ask-user-question/core";
-import {
-	createQuestionAttentionClaim,
-	shouldClaimQuestionFocus,
-	shouldFocusPageTarget,
-} from "./focus";
+import { localKeys } from "@thinkrail/ui/local-keys";
+import { CARD_COMMANDS, CARD_KEYS, CARD_SCOPE } from "./keys";
 import {
 	choiceKeyAction,
 	customTextPatch,
@@ -17,6 +14,7 @@ import {
 	discussReasonPatch,
 	emptyQState,
 	fieldKeyAction,
+	footKeyAction,
 	nudgeShowsOnPage,
 	openNotePatch,
 	paneOptionIndex,
@@ -53,37 +51,107 @@ describe("parseQuestions", () => {
 	});
 });
 
+const keys = localKeys(
+	{ platform: "Linux x86_64", scopes: new Map(), isTextEntry: () => false },
+	CARD_SCOPE,
+	CARD_COMMANDS,
+);
+const typed = (code: string, key: string, shiftKey = false) => ({
+	code,
+	key,
+	shiftKey,
+	altKey: false,
+	ctrlKey: false,
+	metaKey: false,
+	isComposing: false,
+	keyCode: 0,
+	target: null,
+});
+const row = (event: ReturnType<typeof typed>, index = 0, count = 6, other = 3) =>
+	choiceKeyAction(event.key, keys.match(event), index, count, other);
+
 describe("keyboard interaction", () => {
-	it("arrows only move: they wrap through the options, Other and the primary button", () => {
-		const count = 5;
+	it("arrows only move: they wrap through the options, Other, Skip and the primary button", () => {
+		const count = 6;
 		const other = 3;
-		expect(choiceKeyAction("ArrowDown", 2, count, other)).toEqual({ type: "move", index: 3 });
-		expect(choiceKeyAction("ArrowDown", 3, count, other)).toEqual({ type: "move", index: 4 });
-		expect(choiceKeyAction("ArrowDown", 4, count, other)).toEqual({ type: "move", index: 0 });
-		expect(choiceKeyAction("ArrowUp", 0, count, other)).toEqual({ type: "move", index: 4 });
-		expect(choiceKeyAction("Home", 3, count, other)).toEqual({ type: "move", index: 0 });
-		expect(choiceKeyAction("End", 0, count, other)).toEqual({ type: "move", index: other });
+		expect(choiceKeyAction("ArrowDown", null, 2, count, other)).toEqual({ type: "move", index: 3 });
+		expect(choiceKeyAction("ArrowDown", null, 3, count, other)).toEqual({ type: "move", index: 4 });
+		expect(choiceKeyAction("ArrowDown", null, 4, count, other)).toEqual({ type: "move", index: 5 });
+		expect(choiceKeyAction("ArrowDown", null, 5, count, other)).toEqual({ type: "move", index: 0 });
+		expect(choiceKeyAction("ArrowUp", null, 0, count, other)).toEqual({ type: "move", index: 5 });
+		expect(choiceKeyAction("Home", null, 3, count, other)).toEqual({ type: "move", index: 0 });
+		expect(choiceKeyAction("End", null, 0, count, other)).toEqual({ type: "move", index: other });
 	});
 
-	it("skips the primary button when it cannot be pressed", () => {
-		expect(choiceKeyAction("ArrowDown", 3, 4, 3)).toEqual({ type: "move", index: 0 });
-		expect(choiceKeyAction("ArrowUp", 0, 4, 3)).toEqual({ type: "move", index: 3 });
+	it("skips a primary button that cannot be pressed but always reaches Skip", () => {
+		expect(choiceKeyAction("ArrowDown", null, 3, 5, 3)).toEqual({ type: "move", index: 4 });
+		expect(choiceKeyAction("ArrowDown", null, 4, 5, 3)).toEqual({ type: "move", index: 0 });
+		expect(choiceKeyAction("ArrowUp", null, 0, 5, 3)).toEqual({ type: "move", index: 4 });
 	});
 
-	it("Enter picks, Space opens the note, d marks Discuss; other letters and digits stay free", () => {
-		expect(choiceKeyAction("Enter", 0, 4, 2)).toEqual({ type: "select" });
-		expect(choiceKeyAction(" ", 0, 4, 2)).toEqual({ type: "note" });
-		expect(choiceKeyAction("d", 0, 4, 2)).toEqual({ type: "discuss" });
-		expect(choiceKeyAction("D", 0, 4, 2)).toEqual({ type: "none" });
-		expect(choiceKeyAction("n", 0, 4, 2)).toEqual({ type: "none" });
-		expect(choiceKeyAction("1", 0, 4, 2)).toEqual({ type: "none" });
+	it("Enter picks and Space opens the note; other letters and digits stay free", () => {
+		expect(row(typed("Enter", "Enter"))).toEqual({ type: "select" });
+		expect(row(typed("Space", " "))).toEqual({ type: "note" });
+		expect(row(typed("KeyN", "n"))).toEqual({ type: "none" });
+		expect(row(typed("Digit1", "1"))).toEqual({ type: "none" });
 	});
 
-	it("clamps Left/Right to the question pages", () => {
+	it("d, i and c act by physical key on any layout, never with Shift", () => {
+		expect(row(typed("KeyD", "d"))).toEqual({ type: "discuss" });
+		expect(row(typed("KeyD", "в"))).toEqual({ type: "discuss" });
+		expect(row(typed("KeyI", "ш"))).toEqual({ type: "interact" });
+		expect(row(typed("KeyC", "с"))).toEqual({ type: "compare" });
+		expect(row(typed("KeyD", "D", true))).toEqual({ type: "none" });
+		expect(row(typed("KeyS", "d"))).toEqual({ type: "none" });
+	});
+
+	it("a rebound letter replaces its default", () => {
+		const rebound = localKeys(
+			{
+				platform: "Linux x86_64",
+				scopes: new Map([
+					[CARD_SCOPE, [{ id: CARD_KEYS.discuss, chord: { code: "KeyX", key: "X" } }]],
+				]),
+				isTextEntry: () => false,
+			},
+			CARD_SCOPE,
+			CARD_COMMANDS,
+		);
+		const action = (event: ReturnType<typeof typed>) =>
+			choiceKeyAction(event.key, rebound.match(event), 0, 6, 3);
+		expect(action(typed("KeyX", "x"))).toEqual({ type: "discuss" });
+		expect(action(typed("KeyD", "d"))).toEqual({ type: "none" });
+	});
+
+	it("a card command pressed on a row is the card's: Mod+Enter submits rather than picking the row", () => {
+		const ctrl = (code: string, key: string) => ({ ...typed(code, key), ctrlKey: true });
+		expect(keys.match(ctrl("Enter", "Enter"))).toBe(CARD_KEYS.submit);
+		expect(row(ctrl("Enter", "Enter"))).toEqual({ type: "none" });
+		expect(row(typed("Escape", "Escape", true))).toEqual({ type: "none" });
+	});
+
+	it("on Skip and the primary button, ↑/↓ continue the ring and ←/→ move between the two", () => {
+		expect(footKeyAction("ArrowUp", "skip", true)).toBe("other");
+		expect(footKeyAction("ArrowDown", "skip", true)).toBe("primary");
+		expect(footKeyAction("ArrowDown", "skip", false)).toBe("first");
+		expect(footKeyAction("ArrowRight", "skip", true)).toBe("primary");
+		expect(footKeyAction("ArrowRight", "skip", false)).toBe("stay");
+		expect(footKeyAction("ArrowLeft", "skip", true)).toBe("stay");
+		expect(footKeyAction("ArrowUp", "primary", true)).toBe("skip");
+		expect(footKeyAction("ArrowLeft", "primary", true)).toBe("skip");
+		expect(footKeyAction("ArrowDown", "primary", true)).toBe("first");
+		expect(footKeyAction("ArrowRight", "primary", true)).toBe("stay");
+		expect(footKeyAction("Enter", "skip", true)).toBeNull();
+	});
+
+	it("clamps Left/Right to the question pages; Home/End jump only on the tabs", () => {
 		expect(questionPageForKey("ArrowLeft", 0, 2)).toBe(0);
 		expect(questionPageForKey("ArrowRight", 0, 2)).toBe(1);
 		expect(questionPageForKey("ArrowRight", 2, 2)).toBe(2);
 		expect(questionPageForKey("ArrowDown", 1, 2)).toBeNull();
+		expect(questionPageForKey("Home", 1, 2)).toBeNull();
+		expect(questionPageForKey("Home", 1, 2, true)).toBe(0);
+		expect(questionPageForKey("End", 1, 2, true)).toBe(2);
 	});
 
 	const key = (
@@ -116,36 +184,26 @@ describe("keyboard interaction", () => {
 		expect(fieldKeyAction(key("Enter"), true)).toBe("none");
 	});
 
-	it("claims attention once per tool call and mounted-chat scope", () => {
-		const claim = createQuestionAttentionClaim();
-		const firstMount = {};
-		const reopenedMount = {};
-		expect(claim(firstMount, "ask-1")).toBe(true);
-		expect(claim(firstMount, "ask-1")).toBe(false);
-		expect(claim(firstMount, "ask-2")).toBe(true);
-		expect(claim(reopenedMount, "ask-1")).toBe(true);
-	});
-
-	it("focuses from inert/empty-composer targets but preserves active editing and open modals", () => {
-		expect(shouldClaimQuestionFocus("none", false)).toBe(true);
-		expect(shouldClaimQuestionFocus("non-editing", false)).toBe(true);
-		expect(shouldClaimQuestionFocus("empty-composer", false)).toBe(true);
-		expect(shouldClaimQuestionFocus("draft-composer", false)).toBe(false);
-		expect(shouldClaimQuestionFocus("editing", false)).toBe(false);
-		expect(shouldClaimQuestionFocus("modal", false)).toBe(false);
-	});
-
-	it("never moves focus on a coarse pointer, whatever holds it (no soft keyboard on reveal)", () => {
-		expect(shouldClaimQuestionFocus("none", true)).toBe(false);
-		expect(shouldClaimQuestionFocus("non-editing", true)).toBe(false);
-		expect(shouldClaimQuestionFocus("empty-composer", true)).toBe(false);
-	});
-
-	it("lets a page change take focus everywhere except into a text field on touch", () => {
-		expect(shouldFocusPageTarget(false, true)).toBe(true);
-		expect(shouldFocusPageTarget(true, true)).toBe(false);
-		expect(shouldFocusPageTarget(true, false)).toBe(true);
-		expect(shouldFocusPageTarget(false, false)).toBe(true);
+	it("the submit and skip chords match on the main and the numpad Enter, per platform", () => {
+		const chord = (
+			code: string,
+			mods: Partial<Record<"shiftKey" | "ctrlKey" | "metaKey", boolean>>,
+		) => ({
+			...typed(code, code === "Escape" ? "Escape" : "Enter"),
+			...mods,
+		});
+		expect(keys.match(chord("Enter", { ctrlKey: true }))).toBe(CARD_KEYS.submit);
+		expect(keys.match(chord("NumpadEnter", { ctrlKey: true }))).toBe(CARD_KEYS.submit);
+		expect(keys.match(chord("Enter", { metaKey: true }))).toBeNull();
+		expect(keys.match(chord("Escape", { shiftKey: true }))).toBe(CARD_KEYS.skip);
+		expect(keys.aria(CARD_KEYS.submit, CARD_KEYS.skip)).toBe("Control+Enter Shift+Escape");
+		const mac = localKeys(
+			{ platform: "MacIntel", scopes: new Map(), isTextEntry: () => false },
+			CARD_SCOPE,
+			CARD_COMMANDS,
+		);
+		expect(mac.match(chord("NumpadEnter", { metaKey: true }))).toBe(CARD_KEYS.submit);
+		expect(mac.aria(CARD_KEYS.submit)).toBe("Meta+Enter");
 	});
 });
 

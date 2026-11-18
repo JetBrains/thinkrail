@@ -9,6 +9,7 @@ import type {
 import type { MessageKey } from "@thinkrail/locales";
 import type { ComponentType } from "react";
 import type { ResourceHost } from "../host";
+import type { HtmlViewport } from "../renderers/html/viewport";
 
 export interface ResourceDescriptor {
 	workspaceId: string;
@@ -106,6 +107,12 @@ export interface ResourceDiffProps {
 	viewState?: unknown;
 	onViewState?(state: unknown): void;
 	virtualize?: boolean;
+	sideLabels?: DiffSideLabels;
+}
+
+export interface DiffSideLabels {
+	original: string;
+	modified: string;
 }
 
 export type ResourceAnchorCapability = "line" | `structural:${string}` | "region";
@@ -145,7 +152,11 @@ export interface ResourceViewModule {
 
 export type ResourceIntent = "view" | "diff";
 
+export type FrameFocus = "auto" | "manual";
+
 export interface ResourceEnvironment {
 	mobile: boolean;
 	compact?: boolean;
+	htmlViewport?: HtmlViewport;
+	frameFocus?: FrameFocus;
 }

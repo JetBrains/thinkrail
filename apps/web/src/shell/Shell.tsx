@@ -7,6 +7,7 @@ import {
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
+import { LocalKeymapProvider } from "@thinkrail/ui/local-keys";
 import { useEffect, useState } from "react";
 import { useContinuations } from "../chat/continuations";
 import { openFindInFiles } from "../findInFiles";
@@ -16,7 +17,6 @@ import {
 	installUserFonts,
 	writeFontsHint,
 } from "../fonts";
-import { keybindingLabel } from "../keybindings";
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
 import { canStartProjectlessChat } from "../panels/chatActions";
@@ -27,7 +27,6 @@ import { SurveyWindow } from "../panels/SurveyWindow";
 import { Toaster } from "../panels/Toaster";
 import { useBranchStatus } from "../panels/useBranchStatus";
 import { useCreationChatHandoff, WorkspaceCreationView } from "../panels/WorkspaceCreation";
-import { SearchSettings } from "../search";
 import {
 	isChatWorkspace,
 	SettingsSection,
@@ -58,6 +57,7 @@ import { UpdateInstallSurfaces, UpdateReadyButton, UpdateSettings, useUpdates } 
 import { AppShortcuts } from "./AppShortcuts";
 import { BrandLogo } from "./BrandLogo";
 import {
+	closeActiveItem,
 	focusCenterGroup,
 	focusChatComposer,
 	focusProjects,
@@ -67,21 +67,27 @@ import {
 	toggleLeftSide,
 	toggleRightSide,
 } from "./chordActions";
+import { ExtensionOverlays } from "./ExtensionOverlays";
+import { installEscapeLeavesField } from "./escapeLeavesField";
 import { FindInFilesHost } from "./FindInFilesHost";
 import { installFocusRecovery } from "./focusRecovery";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
+import { KeyboardSettings, useShortcutSearchEntries } from "./KeyboardSettings";
+import { useKeybindingLabel, useLocalKeymap } from "./keybindingState";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
 import { LocationBar } from "./locationBar";
 import { NativeWindowControls } from "./NativeWindowControls";
 import { PROJECT_HOME_PROJECTS_REGION_ID, ProjectHome } from "./ProjectHome";
-import { focusAdjacentRegion, installRegionTracker } from "./regions";
+import { installRegionTracker, pressRegionKey } from "./regions";
 import { SearchPaletteHost } from "./SearchPaletteHost";
-import { readSettingsShortcutLabel } from "./useAppShortcuts";
+import { ShortcutsDialogHost } from "./ShortcutsDialog";
+import { hasNativeShortcuts, readSettingsShortcutLabel } from "./useAppShortcuts";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { useNativeWindowControls } from "./useNativeWindowControls";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
+import { runActiveTabAction } from "./workbenchCommands";
 
 const STATUS_LABEL = {
 	connected: "shell.connection.connected",
@@ -96,6 +102,14 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 };
 
 export function Shell() {
+	return (
+		<LocalKeymapProvider value={useLocalKeymap()}>
+			<ShellLayout />
+		</LocalKeymapProvider>
+	);
+}
+
+function ShellLayout() {
 	const t = useT();
 	useLocalLayoutState();
 	useAttentionNotifications();
@@ -143,7 +157,10 @@ export function Shell() {
 	};
 
 	const homeProjects = useCollapsibleRegion<HTMLDivElement>(PROJECT_HOME_PROJECTS_REGION_ID);
-	const [searchShortcut] = useState(() => keybindingLabel("search.open"));
+	const searchShortcut = useKeybindingLabel("search.open");
+	const [nativeShortcuts] = useState(hasNativeShortcuts);
+	const newWorkspaceShortcut = useKeybindingLabel("workspace.new", { browser: !nativeShortcuts });
+	const shortcutEntries = useShortcutSearchEntries(nativeShortcuts);
 
 	const [themeHint] = useState(readThemeHint);
 	const [settingsShortcut] = useState(readSettingsShortcutLabel);
@@ -204,6 +221,7 @@ export function Shell() {
 	]);
 	useEffect(installRegionTracker, []);
 	useEffect(installFocusRecovery, []);
+	useEffect(installEscapeLeavesField, []);
 	useGlobalHotkeys({
 		onProjects: () => toggleLeftSide(homeProjects.toggle),
 		...(hasActiveWorkspace
@@ -214,13 +232,17 @@ export function Shell() {
 					onTerminal: focusTerminal,
 					onFiles: () => showFiles("all"),
 					...(activeChat ? {} : { onChanges: () => showFiles("changed") }),
+					onSplitRight: runActiveTabAction,
+					onMoveTab: runActiveTabAction,
 				}
 			: {}),
+		onCloseTab: closeActiveItem,
 		...(contextRepoProject || canStartChat ? { onNewWorkspace: () => void openNewWork() } : {}),
 		onSearch: () => useAppStore.getState().openSearch(),
+		onShortcuts: () => useAppStore.getState().openShortcuts(),
 		onFindInFiles: openFindInFiles,
-		onNextRegion: () => focusAdjacentRegion(1),
-		onPreviousRegion: () => focusAdjacentRegion(-1),
+		onNextRegion: () => pressRegionKey(1),
+		onPreviousRegion: () => pressRegionKey(-1),
 		onComposer: focusChatComposer,
 		onFocusProjects: () => focusProjects(homeProjects.toggle),
 	});
@@ -247,6 +269,7 @@ export function Shell() {
 							branchStatus={branchStatus}
 							noteOpenReview={noteOpenReview}
 							refreshBranchStatus={refreshBranchStatus}
+							newWorkspaceShortcut={newWorkspaceShortcut}
 							onNewWorkspace={() => openNewWork()}
 						/>
 					) : null}
@@ -266,7 +289,11 @@ export function Shell() {
 						size="m"
 						icon={RiSearchLine}
 						label={t("shell.search.open")}
-						tooltip={t("shell.search.openWithShortcut", { shortcut: searchShortcut })}
+						tooltip={
+							searchShortcut
+								? t("shell.search.openWithShortcut", { shortcut: searchShortcut })
+								: t("shell.search.open")
+						}
 						data-testid="open-search"
 						onClick={() => useAppStore.getState().openSearch()}
 					/>
@@ -315,7 +342,8 @@ export function Shell() {
 				) : null}
 				<SettingsDialog
 					layoutSettings={<LayoutSettings />}
-					keyboardSettings={<SearchSettings />}
+					keyboardSettings={<KeyboardSettings />}
+					searchEntries={shortcutEntries}
 					updateSettings={updates ? <UpdateSettings updates={updates} /> : undefined}
 				/>
 				{newWorkspace !== null ? (
@@ -362,10 +390,12 @@ export function Shell() {
 				hasUpdateSettings={updates !== null}
 			/>
 			<FindInFilesHost />
+			<ShortcutsDialogHost />
 			<NotificationPermissionPrompt />
 			<Toaster />
 			<UpdateInstallSurfaces updates={updates} />
 			<AppShortcuts />
+			<ExtensionOverlays />
 		</div>
 	);
 }

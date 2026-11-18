@@ -2,9 +2,11 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
+	closeSettings,
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
 	openFixtureProject,
+	openSettingsSection,
 	pressPlatformShortcut,
 	revealFirstProjectWorkspaces,
 	revealWorkbenchTool,
@@ -277,18 +279,17 @@ test("a hidden local frame keeps the host terminal reserved without attaching un
 	context,
 }) => {
 	await openDefaultWorkbench(page);
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-layout").click();
+	await openSettingsSection(page, "layout");
 	const focusPreset = page.getByTestId("layout-preset").filter({ hasText: "Focus" });
-	await focusPreset.getByRole("button", { name: "Apply now…" }).click();
+	await focusPreset.getByTestId("layout-preset-apply").click();
 	await page.getByTestId("layout-apply-confirm").click();
-	await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+	await closeSettings(page);
 	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 
 	const workspace = await createWorkspaceWithoutOpening(page);
 	await pressPlatformShortcut(page, "b");
 	const workspaceRow = page.getByTestId("workspace-item").filter({ hasText: workspace.name });
-	await workspaceRow.getByRole("button").first().click();
+	await workspaceRow.getByRole("treeitem").click();
 	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 	await expect(page.getByTestId("terminal-instance")).toHaveCount(0);
 	const catalog = await requestOverWire<{ tabs: Array<{ tabKey: string }> }>(
@@ -333,7 +334,7 @@ test("a completed initial-terminal handshake never recreates a terminal after ex
 	await revealFirstProjectWorkspaces(page);
 	const workspaceRow = page.getByTestId("workspace-item").filter({ hasText: workspace.name });
 	await expect(workspaceRow).toBeVisible();
-	await workspaceRow.getByRole("button").first().click();
+	await workspaceRow.getByRole("treeitem").click();
 	await expect(page.getByTestId("workspace-workbench")).toHaveAttribute(
 		"data-layout-status",
 		"settled",
@@ -761,7 +762,7 @@ test("bottom visibility and alignment stay local to each window and survive its 
 	await peer.goto("/");
 	await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await revealFirstProjectWorkspaces(peer);
-	await defaultWorkspaceRow(peer).getByRole("button").first().click();
+	await defaultWorkspaceRow(peer).getByRole("treeitem").click();
 	await expect(peer.getByTestId("bottom-panel")).toBeVisible();
 
 	await setBottomAlignment(page, "Full width");

@@ -1,4 +1,4 @@
-import type { GitStatus } from "@thinkrail/contracts";
+import type { GitFileChange, GitStatus } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
@@ -32,6 +32,7 @@ import { changesTabId, scopeKey, splitPath, statusNameClass } from "./changesMod
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openChangesTab, openDiffInTab } from "./openTabs";
 import { RememberedScrollArea } from "./RememberedScrollArea";
+import { Tree, useTreeItem } from "./treeNavigation";
 import { ViewedMark } from "./ViewedMark";
 
 function selectReviewTab(
@@ -231,61 +232,111 @@ export function ChangesPanel({
 						}
 					/>
 				) : (
-					<ul data-focus-list="changes" className="motion-safe:animate-reveal">
-						{status.changes.map((change) => {
-							const { dir, base } = splitPath(change.path);
-							return (
-								<li key={change.path} data-focus-row={change.path}>
-									<ChangeRowActions
-										path={change.path}
-										active={isActive(change.path)}
-										onView={() => openDiff(change.path, "preview")}
-										onOpenTab={() => openDiff(change.path, "keep")}
-									>
-										{({ onContextMenu }) => (
-											<button
-												type="button"
-												onContextMenu={onContextMenu}
-												data-testid="change-item"
-												data-path={change.path}
-												data-focus-row-primary
-												data-status={change.status}
-												data-active={isActive(change.path) ? true : undefined}
-												data-viewed={isViewed(change.path) ? true : undefined}
-												onClick={firstClickOnly(() => openDiff(change.path, "preview"))}
-												onDoubleClick={() => openDiff(change.path, "keep", undefined, true)}
-												title={change.path}
-												className="flex h-panel-row min-w-0 flex-1 items-center gap-8 px-4 text-left tr-text-ui focus-visible:focus-ring-inset"
-											>
-												<span
-													className={`flex min-w-0 flex-1 items-baseline ${isViewed(change.path) ? "opacity-60" : ""}`}
-												>
-													{dir ? (
-														<span
-															data-testid="change-path-dir"
-															className="min-w-0 shrink truncate text-text-muted"
-														>
-															{dir}
-														</span>
-													) : null}
-													<span
-														data-testid="change-path-base"
-														className={`max-w-full shrink-0 truncate ${statusNameClass(change.status) || "text-text-muted"}`}
-													>
-														{base}
-													</span>
-												</span>
-												{isViewed(change.path) ? <ViewedMark /> : null}
-												<DiffStatBadge added={change.added ?? 0} removed={change.removed ?? 0} />
-											</button>
-										)}
-									</ChangeRowActions>
-								</li>
-							);
-						})}
-					</ul>
+					<ChangesList
+						changes={status.changes}
+						openDiff={openDiff}
+						isActive={isActive}
+						isViewed={isViewed}
+					/>
 				)}
 			</RememberedScrollArea>
 		</div>
+	);
+}
+
+type OpenDiff = (
+	path: string,
+	intent: TabIntent,
+	navigation?: CenterNavigationStamp | null,
+	claimPreview?: boolean,
+) => void;
+
+interface ChangeListProps {
+	openDiff: OpenDiff;
+	isActive: (path: string) => boolean;
+	isViewed: (path: string) => boolean;
+}
+
+function ChangesList({
+	changes,
+	...rowProps
+}: ChangeListProps & { changes: readonly GitFileChange[] }) {
+	const t = useT();
+	return (
+		<Tree
+			label={t("changes.panel.label")}
+			focusList="changes"
+			className="motion-safe:animate-reveal"
+			onOpenKept={(path) => rowProps.openDiff(path, "keep", undefined, true)}
+		>
+			{changes.map((change) => (
+				<ChangeListRow key={change.path} change={change} {...rowProps} />
+			))}
+		</Tree>
+	);
+}
+
+function ChangeListRow({
+	change,
+	openDiff,
+	isActive,
+	isViewed,
+}: ChangeListProps & { change: GitFileChange }) {
+	const { dir, base } = splitPath(change.path);
+	const treeItem = useTreeItem(change.path, {
+		level: 1,
+		label: base,
+		selected: isActive(change.path),
+		openKept: true,
+	});
+	return (
+		<li role="none" data-focus-row={change.path}>
+			<ChangeRowActions
+				path={change.path}
+				active={isActive(change.path)}
+				onView={() => openDiff(change.path, "preview")}
+				onOpenTab={() => openDiff(change.path, "keep")}
+			>
+				{({ onContextMenu, onKeyDown }) => (
+					<button
+						type="button"
+						{...treeItem}
+						onContextMenu={onContextMenu}
+						onKeyDown={onKeyDown}
+						data-testid="change-item"
+						data-path={change.path}
+						data-focus-row-primary
+						data-status={change.status}
+						data-active={isActive(change.path) ? true : undefined}
+						data-viewed={isViewed(change.path) ? true : undefined}
+						onClick={firstClickOnly(() => openDiff(change.path, "preview"))}
+						onDoubleClick={() => openDiff(change.path, "keep", undefined, true)}
+						title={change.path}
+						className="flex h-panel-row min-w-0 flex-1 items-center gap-8 px-4 text-left tr-text-ui focus-visible:focus-ring-inset"
+					>
+						<span
+							className={`flex min-w-0 flex-1 items-baseline ${isViewed(change.path) ? "opacity-60" : ""}`}
+						>
+							{dir ? (
+								<span
+									data-testid="change-path-dir"
+									className="min-w-0 shrink truncate text-text-muted"
+								>
+									{dir}
+								</span>
+							) : null}
+							<span
+								data-testid="change-path-base"
+								className={`max-w-full shrink-0 truncate ${statusNameClass(change.status) || "text-text-muted"}`}
+							>
+								{base}
+							</span>
+						</span>
+						{isViewed(change.path) ? <ViewedMark /> : null}
+						<DiffStatBadge added={change.added ?? 0} removed={change.removed ?? 0} />
+					</button>
+				)}
+			</ChangeRowActions>
+		</li>
 	);
 }

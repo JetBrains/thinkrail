@@ -240,12 +240,12 @@ test("an Open PR draft belongs to its workspace and closes when the scope moves"
 	const second = await createWorkspaceViaDialog(page);
 	const currentHash = () => page.evaluate(() => window.location.hash);
 	await worktreeRow(page, "workspace-1")
-		.getByRole("button", { name: "workspace-1", exact: true })
+		.getByRole("treeitem", { name: "workspace-1", exact: true })
 		.click();
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
 	const firstHash = await currentHash();
 	await worktreeRow(page, "workspace-2")
-		.getByRole("button", { name: "workspace-2", exact: true })
+		.getByRole("treeitem", { name: "workspace-2", exact: true })
 		.click();
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-2");
 	await expect.poll(currentHash).not.toBe(firstHash);

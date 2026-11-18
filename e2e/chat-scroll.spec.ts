@@ -1,6 +1,11 @@
 import { realpathSync, rmSync, utimesSync } from "node:fs";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { enterDefaultWorkspace, hideAuxiliaryWorkbench, openFixtureProject } from "./fixtures/app";
+import {
+	closeSettings,
+	enterDefaultWorkspace,
+	hideAuxiliaryWorkbench,
+	openFixtureProject,
+} from "./fixtures/app";
 import {
 	moveMouseToChatViewport,
 	readChatScrollGeometry,
@@ -49,7 +54,7 @@ async function selectMessageOrder(page: Page, order: MessageOrder): Promise<void
 	const option = page.getByTestId(`chat-order-${order}`);
 	await option.click();
 	await expect(option).toHaveAttribute("data-active", "true");
-	await page.keyboard.press("Escape");
+	await closeSettings(page);
 }
 
 function seededRandom(seed: number): () => number {
@@ -525,7 +530,22 @@ for (const testCase of orderCases) {
 	test(`${testCase.order} recognizes keyboard and focus-induced transcript scrolling`, async ({
 		page,
 	}) => {
-		const { session, chatScroll } = await openTallChat(page, testCase.order);
+		const { session, chatScroll } = await openTallChat(
+			page,
+			testCase.order,
+			Array.from({ length: 40 }, (_, index) => [
+				{
+					role: "user" as const,
+					text: `request ${index + 1}: inspect the deterministic scrolling fixture`,
+					timestamp: BASE_TS + index * 2_000,
+				},
+				{
+					role: "assistant" as const,
+					text: `answer ${index + 1}: the deterministic [scrolling fixture](https://example.com/fixture) is complete`,
+					timestamp: BASE_TS + index * 2_000 + 1_000,
+				},
+			]).flat(),
+		);
 		const scroller = chatScroll.locator("[data-virtuoso-scroller]");
 		try {
 			await scroller.dispatchEvent("keydown", {
@@ -549,7 +569,7 @@ for (const testCase of orderCases) {
 				.toBeLessThanOrEqual(1);
 			await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
 
-			const interactive = chatScroll.getByTestId("chat-copy").last();
+			const interactive = chatScroll.getByRole("link", { name: "scrolling fixture" }).last();
 			await expect(interactive).toBeAttached();
 			await interactive.dispatchEvent("keydown", { key: "Tab" });
 			await chatScroll.evaluate((root, order) => {

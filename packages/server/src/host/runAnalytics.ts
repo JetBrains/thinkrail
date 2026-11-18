@@ -36,6 +36,7 @@ export function runOutcome(event: Extract<PiEvent, { type: "agent_settled" }>): 
 		case undefined:
 			return "no_terminal";
 		case "stop":
+		case "toolUse":
 			return "normal_stop";
 		case "error":
 			return "error";

@@ -69,6 +69,7 @@ import {
 	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
 	isTodoReviewFixMessage,
+	type KeybindingOverrides,
 	normalizeFontSettings,
 	normalizeThemePreference,
 	readToolResponseMessage,
@@ -181,9 +182,14 @@ export interface FileClipboard {
 	cut?: true;
 }
 
+export type ArtifactsView = "list" | "tree" | "smart";
+
 export interface ArtifactsPreferences {
 	seen: Record<string, number>;
 	showIgnored: boolean;
+	view: ArtifactsView | null;
+	smart: boolean;
+	treeExpanded: Record<string, readonly string[]>;
 }
 export interface ChatTab {
 	kind: "chat";
@@ -404,7 +410,7 @@ export type LayoutIntent =
 			navigation?: CenterNavigationStamp | null;
 			countNavigation?: boolean;
 	  }
-	| { id: string; kind: "reveal-tool"; workspaceId: string; tool: LayoutToolId }
+	| { id: string; kind: "reveal-tool"; workspaceId: string; tool: LayoutToolId; focus?: false }
 	| { id: string; kind: "remove-session"; workspaceId: string; sessionId: string }
 	| {
 			id: string;
@@ -451,8 +457,29 @@ export const SettingsSection = {
 	Extensions: "extensions",
 	Environment: "environment",
 	Voice: "voice",
+	Artifacts: "artifacts",
+	Subagents: "subagents",
+	Text: "text",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
+
+export const RETIRED_SETTINGS_SECTIONS: Readonly<
+	Partial<Record<SettingsSection, SettingsSection>>
+> = {
+	[SettingsSection.Artifacts]: SettingsSection.Layout,
+	[SettingsSection.LineWidth]: SettingsSection.Text,
+	[SettingsSection.Review]: SettingsSection.Models,
+};
+
+export const CLIENT_PREFERENCE_DEFAULTS = {
+	artifactsSmart: true,
+	doubleShiftSearch: true,
+	markdownOutlineSide: "right",
+} as const satisfies {
+	artifactsSmart: boolean;
+	doubleShiftSearch: boolean;
+	markdownOutlineSide: MarkdownOutlineSide;
+};
 
 export interface CreationChatHandoff {
 	workspaceId: string;
@@ -545,6 +572,7 @@ export interface SessionRuntime {
 	composerEdit: ComposerEdit | null;
 	promptImages: PromptImagesState;
 	readingAnchor: ChatReadingAnchor | null;
+	composerFocusWonOver: string | null;
 	pendingExtUi: ExtUiDialogRequest | null;
 	extUiQueue: ExtUiDialogRequest[];
 	extUiStatus: Record<string, string>;
@@ -580,6 +608,7 @@ function newRuntime(
 		composerEdit: null,
 		promptImages: newPromptImagesState(),
 		readingAnchor: null,
+		composerFocusWonOver: null,
 		pendingExtUi: null,
 		extUiQueue: [],
 		extUiStatus: {},
@@ -1165,6 +1194,9 @@ interface AppState {
 	artifactsTickByWorkspace: Record<string, number>;
 	artifactsSeenByWorkspace: Record<string, number>;
 	artifactsShowIgnored: boolean;
+	artifactsView: ArtifactsView | null;
+	artifactsSmart: boolean;
+	artifactsTreeExpandedByWorkspace: Record<string, readonly string[]>;
 	reviewsByWorkspace: Record<string, ReviewSnapshot>;
 	reviewFocusRequest: {
 		workspaceId: string;
@@ -1180,12 +1212,14 @@ interface AppState {
 	unheldLoginFrame: LoginPush | null;
 	settingsOpen: boolean;
 	settingsSection: SettingsSection;
+	settingsTarget: string | null;
 	surveyInvitationOpen: boolean;
 	surveyWindowOpen: boolean;
 	inAppSurvey: AppSurvey | null;
 	notificationPromptOpen: boolean;
 	searchOpen: boolean;
 	searchSession: number;
+	shortcutsOpen: boolean;
 	doubleShiftSearch: boolean;
 	theme: ThemeId;
 	themeMode: ThemeMode;
@@ -1220,6 +1254,7 @@ interface AppState {
 	agentReviewEnabled: boolean;
 	disabledExtensions: string[];
 	extensionSettings: ExtensionSettingValues;
+	keybindingOverrides: KeybindingOverrides;
 	otherAgentSkills: boolean;
 	disabledPackages: string[];
 	locale: string;
@@ -1284,6 +1319,7 @@ interface AppState {
 		options?: { dismissHistory?: boolean },
 	) => void;
 	clearComposerFocusRequest: () => void;
+	serveComposerFocusRequest: (sessionId: string, waitingToolCallId: string | null) => void;
 	hydrateLocalLayoutState: (payload: LocalLayoutStatePayload) => void;
 	applyLocalLayoutState: (payload: LocalLayoutStatePayload, invalidateProjection?: boolean) => void;
 	setLocalLayoutPreferences: (preferences: LocalLayoutPreferences) => void;
@@ -1560,9 +1596,10 @@ interface AppState {
 	clearLoginInput: () => void;
 	clearLogin: (loginId?: string) => void;
 	clearSettledLogin: (providerId: string) => void;
-	openSettings: (section?: SettingsSection) => void;
+	openSettings: (section?: SettingsSection, settingId?: string) => void;
 	closeSettings: () => void;
 	setSettingsSection: (section: SettingsSection) => void;
+	consumeSettingsTarget: () => string | null;
 	showSurveyInvitation: () => void;
 	hideSurveyInvitation: () => void;
 	openSurveyWindow: () => void;
@@ -1572,6 +1609,8 @@ interface AppState {
 	closeNotificationPrompt: () => void;
 	openSearch: () => void;
 	closeSearch: () => void;
+	openShortcuts: () => void;
+	closeShortcuts: () => void;
 	setDoubleShiftSearch: (enabled: boolean) => void;
 	setChatMessageOrder: (order: ChatMessageOrder) => void;
 	setMarkdownOutlineVisible: (visible: boolean) => void;
@@ -1592,6 +1631,14 @@ interface AppState {
 	noteArtifactsChanged: (workspaceId: string) => void;
 	markArtifactsSeen: (workspaceId: string, watermark: number) => void;
 	setArtifactsShowIgnored: (show: boolean) => void;
+	setArtifactsView: (view: ArtifactsView) => void;
+	setArtifactsSmart: (enabled: boolean) => void;
+	setArtifactsTreeExpanded: (
+		workspaceId: string,
+		paths: readonly string[],
+		expanded: boolean,
+	) => void;
+	collapseAllArtifacts: (workspaceId: string) => void;
 	hydrateArtifactsPreferences: (preferences: ArtifactsPreferences) => void;
 	setWorkspaceReview: (workspaceId: string, snapshot: ReviewSnapshot) => void;
 	requestReviewFocus: (workspaceId: string, commentId: string, surface: ReviewFocusSurface) => void;
@@ -1684,6 +1731,12 @@ function configPatch(config: AppConfig) {
 			config.extensionSettings && typeof config.extensionSettings === "object"
 				? config.extensionSettings
 				: DEFAULT_CONFIG.extensionSettings,
+		keybindingOverrides:
+			config.keybindings &&
+			typeof config.keybindings === "object" &&
+			!Array.isArray(config.keybindings)
+				? config.keybindings
+				: DEFAULT_CONFIG.keybindings,
 		otherAgentSkills: typeof config.otherAgentSkills === "boolean" ? config.otherAgentSkills : true,
 		disabledPackages: Array.isArray(config.disabledPackages)
 			? config.disabledPackages
@@ -2419,6 +2472,15 @@ function withRuntime(
 	return next === rt ? {} : { sessions: { ...s.sessions, [sessionId]: next } };
 }
 
+function loginWorkspaceRemoved(
+	state: Pick<AppState, "removedWorkspaceIds">,
+	target: LoginPush["target"] | undefined,
+): boolean {
+	return (
+		target?.workspaceId !== undefined && state.removedWorkspaceIds[target.workspaceId] === true
+	);
+}
+
 function newLoginState(
 	loginId: string,
 	providerId: string,
@@ -2552,6 +2614,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 	artifactsTickByWorkspace: {},
 	artifactsSeenByWorkspace: {},
 	artifactsShowIgnored: true,
+	artifactsView: null,
+	artifactsSmart: CLIENT_PREFERENCE_DEFAULTS.artifactsSmart,
+	artifactsTreeExpandedByWorkspace: {},
 	reviewsByWorkspace: {},
 	reviewFocusRequest: null,
 	changesView: "tree",
@@ -2571,13 +2636,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 	unheldLoginFrame: null,
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
+	settingsTarget: null,
 	surveyInvitationOpen: false,
 	surveyWindowOpen: false,
 	inAppSurvey: null,
 	notificationPromptOpen: false,
 	searchOpen: false,
 	searchSession: 0,
-	doubleShiftSearch: true,
+	shortcutsOpen: false,
+	doubleShiftSearch: CLIENT_PREFERENCE_DEFAULTS.doubleShiftSearch,
 	theme: DEFAULT_CONFIG.theme,
 	themeMode: DEFAULT_CONFIG.themeMode,
 	systemThemePair: DEFAULT_CONFIG.systemThemePair,
@@ -2600,7 +2667,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	voiceInputEnabled: DEFAULT_CONFIG.voiceInputEnabled,
 	chatMessageOrder: "oldest-first",
 	markdownOutlineVisible: null,
-	markdownOutlineSide: "right",
+	markdownOutlineSide: CLIENT_PREFERENCE_DEFAULTS.markdownOutlineSide,
 	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,
 	defaultModel: DEFAULT_CONFIG.defaultModel,
 	defaultEffort: DEFAULT_CONFIG.defaultEffort,
@@ -2612,6 +2679,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
 	disabledExtensions: DEFAULT_CONFIG.disabledExtensions,
 	extensionSettings: DEFAULT_CONFIG.extensionSettings,
+	keybindingOverrides: DEFAULT_CONFIG.keybindings,
 	otherAgentSkills: DEFAULT_CONFIG.otherAgentSkills,
 	disabledPackages: DEFAULT_CONFIG.disabledPackages,
 	locale: DEFAULT_CONFIG.locale,
@@ -2939,6 +3007,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 				artifactsByWorkspace: omitKey(state.artifactsByWorkspace, workspaceId),
 				artifactsTickByWorkspace: omitKey(state.artifactsTickByWorkspace, workspaceId),
 				artifactsSeenByWorkspace: omitKey(state.artifactsSeenByWorkspace, workspaceId),
+				artifactsTreeExpandedByWorkspace: omitKey(
+					state.artifactsTreeExpandedByWorkspace,
+					workspaceId,
+				),
 				diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
 				filesTreeByWorkspace: omitKey(state.filesTreeByWorkspace, workspaceId),
 				fileClipboard:
@@ -3062,6 +3134,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 		})),
 	clearComposerFocusRequest: () =>
 		set((state) => (state.composerFocusRequest ? { composerFocusRequest: null } : state)),
+	serveComposerFocusRequest: (sessionId, waitingToolCallId) =>
+		set((state) => ({
+			composerFocusRequest: null,
+			...withRuntime(state, sessionId, (rt) =>
+				rt.composerFocusWonOver === waitingToolCallId
+					? rt
+					: { ...rt, composerFocusWonOver: waitingToolCallId },
+			),
+		})),
 	hydrateLocalLayoutState: (payload) => {
 		set((state) =>
 			state.layoutStateReady
@@ -4757,8 +4838,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 		),
 	applyExtUi: (request) =>
 		set((s): Partial<AppState> => {
-			if (request.kind === "setTitle")
-				return renameChat(s, request.sessionId, request.title) ?? bufferExtUiOrphan(s, request);
+			if (request.kind === "setTitle") {
+				const title = typeof request.title === "string" ? request.title : "";
+				return renameChat(s, request.sessionId, title) ?? bufferExtUiOrphan(s, request);
+			}
 			if (!s.sessions[request.sessionId]) return bufferExtUiOrphan(s, request);
 			return withRuntime(s, request.sessionId, (rt) => reduceExtUi(rt, request));
 		}),
@@ -4771,7 +4854,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	finishLoginStart: () => set({ loginStarting: false }),
 	beginLogin: (loginId, providerId, target, method) =>
 		set((s) => {
-			if (target && s.removedWorkspaceIds[target.workspaceId]) return {};
+			if (loginWorkspaceRemoved(s, target)) return {};
 			if (s.activeLogin?.loginId === loginId)
 				return method && !s.activeLogin.method ? { activeLogin: { ...s.activeLogin, method } } : {};
 			if (s.activeLogin?.status === "active") return {};
@@ -4787,7 +4870,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	applyLoginFrame: (push) =>
 		set((s) => {
-			if (push.target && s.removedWorkspaceIds[push.target.workspaceId]) return {};
+			if (loginWorkspaceRemoved(s, push.target)) return {};
 			const statusChanged =
 				push.frame.kind === "success" && !push.target
 					? { providerStatusVersion: s.providerStatusVersion + 1 }
@@ -4819,15 +4902,26 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (!login || login.target || login.providerId !== providerId) return {};
 			return login.status === "active" ? {} : { activeLogin: null };
 		}),
-	openSettings: (section = SettingsSection.Providers) =>
-		set({ settingsOpen: true, settingsSection: section }),
-	closeSettings: () => set({ settingsOpen: false }),
+	openSettings: (section, settingId) =>
+		set((state) => ({
+			settingsOpen: true,
+			settingsSection: section ?? state.settingsSection,
+			settingsTarget: settingId ?? null,
+		})),
+	closeSettings: () => set({ settingsOpen: false, settingsTarget: null }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
+	consumeSettingsTarget: () => {
+		const target = get().settingsTarget;
+		if (target !== null) set({ settingsTarget: null });
+		return target;
+	},
 	openNotificationPrompt: () =>
 		set((state) => (state.notificationPromptOpen ? state : { notificationPromptOpen: true })),
 	closeNotificationPrompt: () => set({ notificationPromptOpen: false }),
 	openSearch: () => set((state) => ({ searchOpen: true, searchSession: state.searchSession + 1 })),
 	closeSearch: () => set((state) => (state.searchOpen ? { searchOpen: false } : state)),
+	openShortcuts: () => set((state) => (state.shortcutsOpen ? state : { shortcutsOpen: true })),
+	closeShortcuts: () => set((state) => (state.shortcutsOpen ? { shortcutsOpen: false } : state)),
 	setDoubleShiftSearch: (doubleShiftSearch) =>
 		set((state) => (state.doubleShiftSearch === doubleShiftSearch ? state : { doubleShiftSearch })),
 	showSurveyInvitation: () =>
@@ -5003,10 +5097,43 @@ export const useAppStore = create<AppState>((set, get) => ({
 					},
 		),
 	setArtifactsShowIgnored: (artifactsShowIgnored) => set({ artifactsShowIgnored }),
-	hydrateArtifactsPreferences: ({ seen, showIgnored }) =>
+	setArtifactsView: (artifactsView) => set({ artifactsView }),
+	setArtifactsSmart: (artifactsSmart) => set({ artifactsSmart }),
+	setArtifactsTreeExpanded: (workspaceId, paths, expanded) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
+			const current = s.artifactsTreeExpandedByWorkspace[workspaceId] ?? [];
+			const next = withPathMembership(current, paths, expanded);
+			return next === current
+				? {}
+				: {
+						artifactsTreeExpandedByWorkspace: {
+							...s.artifactsTreeExpandedByWorkspace,
+							[workspaceId]: next,
+						},
+					};
+		}),
+	collapseAllArtifacts: (workspaceId) =>
+		set((s) =>
+			s.artifactsTreeExpandedByWorkspace[workspaceId]?.length
+				? {
+						artifactsTreeExpandedByWorkspace: omitKey(
+							s.artifactsTreeExpandedByWorkspace,
+							workspaceId,
+						),
+					}
+				: {},
+		),
+	hydrateArtifactsPreferences: ({ seen, showIgnored, view, smart, treeExpanded }) =>
 		set((s) => ({
 			artifactsSeenByWorkspace: { ...seen, ...s.artifactsSeenByWorkspace },
 			artifactsShowIgnored: showIgnored,
+			artifactsView: view,
+			artifactsSmart: smart,
+			artifactsTreeExpandedByWorkspace: {
+				...treeExpanded,
+				...s.artifactsTreeExpandedByWorkspace,
+			},
 		})),
 	requestReviewFocus: (workspaceId, commentId, surface) =>
 		set((state) =>

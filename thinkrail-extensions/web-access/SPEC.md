@@ -16,7 +16,7 @@ package is composed unchanged and everything it declares loads, as `pi install` 
 `librarian` in 0.14.0, so the extension ships its own copy: adapted from `pi-web-access` 0.13.0 (MIT,
 Nico Bailon; the license sits beside it) to the current package — clones are read at the path
 `fetch_content` returns rather than a fixed `/tmp/pi-github-repos/<owner>/<repo>`, and recovery advice
-follows the opt-in hosted fallbacks below. Being a registry extension is what lets Settings → Extensions
+follows the opt-in hosted fallbacks below. Being a registry extension is what lets Settings → Extensions & skills
 switch it off as a unit: tools for parents and subagent children, and the skill.
 
 ## Boundary

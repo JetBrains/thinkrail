@@ -14,6 +14,7 @@ export function ToggleSegment({
 	return (
 		<button
 			type="button"
+			tabIndex={0}
 			data-testid={testid}
 			data-active={active}
 			aria-pressed={active}

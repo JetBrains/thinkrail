@@ -295,6 +295,6 @@ test("clicking a project returns to its Welcome, deselecting the active workspac
 	await expect(page.getByTestId("center-tabs")).toHaveCount(0);
 	await expect(page.locator('[data-testid="workspace-item"][data-active="true"]')).toHaveCount(0);
 
-	await worktreeRows(page).first().getByRole("button").first().click();
+	await worktreeRows(page).first().getByRole("treeitem").click();
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 });

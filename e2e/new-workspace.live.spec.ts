@@ -115,6 +115,6 @@ test("two dialog kick-offs in separate workspaces stream concurrently", {
 
 	await expect(doneNotice).toBeVisible({ timeout: 90_000 });
 
-	await worktreeRow(page, "workspace-1").getByRole("button").first().click();
+	await worktreeRow(page, "workspace-1").getByRole("treeitem").click();
 	await expect(doneNotice).toBeVisible({ timeout: 90_000 });
 });

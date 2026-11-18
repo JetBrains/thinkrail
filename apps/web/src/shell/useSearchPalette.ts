@@ -7,6 +7,7 @@ import { canStartProjectlessChat, startProjectlessChat } from "../panels/chatAct
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
 import { startChatInTab } from "../panels/openChat";
 import { openFileInTab } from "../panels/openTabs";
+import { availableSettings, useSettingsCatalogContext } from "../panels/settingsCatalog";
 import { settingsNavGroups } from "../panels/settingsNav";
 import {
 	canSettleWorkspace,
@@ -67,6 +68,7 @@ import {
 	toggleLeftSide,
 	toggleRightSide,
 } from "./chordActions";
+import { useResolvedKeybindings } from "./keybindingState";
 import { collectCenterGroups } from "./layout";
 import { readNativePageZoomBridge } from "./nativePageZoom";
 import { type HostHitTargets, openHostHit } from "./openHostHit";
@@ -79,7 +81,8 @@ import {
 } from "./paletteCatalog";
 import { paletteNavigator } from "./paletteNavigation";
 import { focusAdjacentRegion } from "./regions";
-import { readSettingsShortcutLabel } from "./useAppShortcuts";
+import { hasNativeShortcuts } from "./useAppShortcuts";
+import { activeTabActions, runActiveTabAction } from "./workbenchCommands";
 
 const LOCAL_SCOPES: readonly SearchScope[] = ["all", "work", "commands"];
 const HOST_SCOPES: readonly SearchScope[] = ["all", "work", "files", "specs", "commands"];
@@ -163,9 +166,16 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		() => settingsNavGroups(protocolVersion, options.hasUpdateSettings),
 		[protocolVersion, options.hasUpdateSettings],
 	);
+	const catalogContext = useSettingsCatalogContext();
+	const settingEntries = useMemo(
+		() => availableSettings(settingsGroups, catalogContext),
+		[settingsGroups, catalogContext],
+	);
 	const editors = useEditors();
-	const [nativeShortcuts] = useState(() => readSettingsShortcutLabel() !== null);
+	const [nativeShortcuts] = useState(hasNativeShortcuts);
+	const keybindings = useResolvedKeybindings();
 	const [pageZoom] = useState(readNativePageZoomBridge);
+	const [tabActions] = useState(activeTabActions);
 
 	const online = useAppStore(selectHostReachable);
 	const hostSearch = useAppStore(selectHostSearchAvailable);
@@ -174,7 +184,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		const names = new Map(
 			projects.map((project) => [
 				project.id,
-				isChatsContainer(project) ? t("panels.chats.title") : project.name,
+				isChatsContainer(project) ? t("search.item.noProject") : project.name,
 			]),
 		);
 		const workspaceNames = new Map<string, string>();
@@ -252,6 +262,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			historyAvailable: historySessionId !== null,
 			canCreateProject: selectSupportsOnboarding({ protocolVersion }),
 			nativeShortcuts,
+			keybindings,
 			pageZoom,
 			findInFilesAvailable: supportsTextSearch(protocolVersion) && textSearchScoped,
 			changesAvailable: activeWorkspace !== null && !isChatWorkspace(activeWorkspace),
@@ -261,6 +272,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			settled,
 			settleBlocked,
 			settingsGroups,
+			settingEntries,
+			tabActions,
 			actions: {
 				newWorkspace: options.openNewWorkspace,
 				newProjectlessChat: () => void startProjectlessChat(),
@@ -290,7 +303,10 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				reveal: revealWorkspace,
 				copyPath: (workspace) => void copyText(workspace.worktreePath),
 				openIn: openWorkspaceIn,
-				openSettings: (section?: SettingsSection) => store().openSettings(section),
+				openSettings: (section?: SettingsSection, settingId?: string) =>
+					store().openSettings(section, settingId),
+				openShortcuts: () => store().openShortcuts(),
+				runTabAction: runActiveTabAction,
 			},
 		};
 		const workItems = buildWorkItems({
@@ -330,6 +346,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		t,
 		online,
 		settingsGroups,
+		settingEntries,
 		activeWorkspace,
 		historySessionId,
 		readAction,
@@ -337,7 +354,9 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		settled,
 		settleBlocked,
 		nativeShortcuts,
+		keybindings,
 		pageZoom,
+		tabActions,
 		options,
 		contextProject,
 		contextRepoProject,

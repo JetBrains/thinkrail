@@ -1,7 +1,9 @@
 import {
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	ARTIFACT_ROLES_PROTOCOL_VERSION,
 	ARTIFACTS_PROTOCOL_VERSION,
 	type BackgroundCommandSummary,
+	BROWSER_VIEW_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	CHATS_PROTOCOL_VERSION,
 	canMarkCompletionUnread,
@@ -60,6 +62,7 @@ import type {
 	WorkspaceLayoutDocument,
 } from "../shell/layout";
 import type {
+	ArtifactsView,
 	ChangesTabSection,
 	ClosedChat,
 	ComposerFocusRequest,
@@ -811,6 +814,14 @@ export function selectComposerFocusRequested(
 	);
 }
 
+export function selectQuestionMayClaimFocus(
+	state: { sessions: Record<string, { composerFocusWonOver: string | null }> },
+	sessionId: string,
+	toolCallId: string,
+): boolean {
+	return state.sessions[sessionId]?.composerFocusWonOver !== toolCallId;
+}
+
 export function selectComposerFocusRequestStale(
 	state: ChatAttentionState & {
 		composerFocusRequest: ComposerFocusRequest | null;
@@ -1308,6 +1319,31 @@ export function selectCompactionTurnIds(
 			.filter((turn) => turn.kind === "compaction")
 			.map((turn) => turn.id),
 	);
+}
+
+export function supportsBrowserView(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= BROWSER_VIEW_PROTOCOL_VERSION;
+}
+
+export function supportsArtifactRoles(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= ARTIFACT_ROLES_PROTOCOL_VERSION;
+}
+
+export function selectArtifactsSmartOffered(state: {
+	artifactsSmart: boolean;
+	protocolVersion: number | null;
+}): boolean {
+	return state.artifactsSmart && supportsArtifactRoles(state.protocolVersion);
+}
+
+export function selectArtifactsView(state: {
+	artifactsView: ArtifactsView | null;
+	artifactsSmart: boolean;
+	protocolVersion: number | null;
+}): ArtifactsView {
+	const smart = selectArtifactsSmartOffered(state);
+	if (state.artifactsView === "smart") return smart ? "smart" : "list";
+	return state.artifactsView ?? (smart ? "smart" : "list");
 }
 
 export function supportsArtifacts(protocolVersion: number | null): boolean {

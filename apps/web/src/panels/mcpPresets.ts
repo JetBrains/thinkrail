@@ -6,6 +6,7 @@ export interface McpPreset {
 	name: string;
 	title: MessageKey;
 	description: MessageKey;
+	userDescription?: MessageKey;
 	entry: McpServerEntryInput;
 	scope: McpServerScope;
 	modifiesData?: MessageKey;
@@ -51,6 +52,7 @@ export const MCP_PRESETS: readonly McpPreset[] = [
 		name: "playwright",
 		title: "mcp.preset.playwright.title",
 		description: "mcp.preset.playwright.description",
+		userDescription: "mcp.preset.playwright.userDescription",
 		entry: { command: "npx", args: ["-y", "@playwright/mcp@0.0.83"], enabled: false },
 		scope: "user",
 		modifiesData: "mcp.preset.playwright.modifiesData",

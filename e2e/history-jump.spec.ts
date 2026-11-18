@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import {
 	activeWorktreeRow,
+	closeSettings,
 	createWorkspaceViaDialog,
 	openFixtureProject,
 	worktreeRow,
@@ -16,7 +17,7 @@ async function selectMessageOrder(page: Page, order: MessageOrder) {
 	const option = page.getByTestId(`chat-order-${order}`);
 	await option.click();
 	await expect(option).toHaveAttribute("data-active", "true");
-	await page.keyboard.press("Escape");
+	await closeSettings(page);
 }
 
 test("selecting a same-workspace message hit opens the chat and flashes the matched row", async ({

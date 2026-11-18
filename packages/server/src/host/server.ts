@@ -3,7 +3,6 @@ import { join, normalize } from "node:path";
 import type {
 	HostPlatform,
 	HostUpdateNotice,
-	PiEvent,
 	ServerWelcome,
 	SessionCreatedPayload,
 	SessionDeletedPayload,
@@ -29,6 +28,7 @@ import {
 	USER_FONTS_ROUTE,
 	USER_THEMES_PROTOCOL_VERSION,
 	WORKSPACE_CREATION_PROTOCOL_VERSION,
+	WORKSPACE_VIEW_ROUTE,
 	WS_CHANNELS,
 	WS_MAX_FRAME_BYTES,
 } from "@thinkrail/contracts";
@@ -101,7 +101,6 @@ import {
 	track,
 } from "../analytics";
 import {
-	type ArtifactSessionEvent,
 	noteArtifactPathsChanged,
 	observeArtifactSessionEvent,
 	setArtifactsPublisher,
@@ -116,6 +115,7 @@ import {
 	stopJbcentralRuntime,
 } from "../auth";
 import { forgetOpenBranchReview } from "../branch-review";
+import { artifactTools } from "../extensions";
 import {
 	configureSurveySource,
 	redeliverInvitation,
@@ -193,9 +193,16 @@ import {
 	syncWorkspaceBranch,
 	type WorkspaceLifecycleEvent,
 } from "../workspaces";
+import { createArtifactEventMapper } from "./artifactEvents";
 import { seesChats } from "./chats";
 import { continueToolHost, observeContinuation, setContinuationPublisher } from "./continuations";
-import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
+import {
+	BLOB_PREFIX,
+	FILES_PREFIX,
+	serveBlob,
+	serveWorktreeFile,
+	serveWorktreeView,
+} from "./fileRoutes";
 import { serveUserFonts } from "./fontRoutes";
 import { setFsNudgePublisher } from "./fsNudge";
 import { applyGitCeiling } from "./gitCeiling";
@@ -306,24 +313,10 @@ const log = logger("host");
 
 const isRequestId = (id: unknown): id is string => typeof id === "string";
 
-function artifactSessionEvent(event: PiEvent): ArtifactSessionEvent | null {
-	switch (event.type) {
-		case "agent_start":
-		case "agent_settled":
-			return { type: event.type };
-		case "tool_execution_start":
-			return {
-				type: event.type,
-				toolCallId: event.toolCallId,
-				toolName: event.toolName,
-				args: event.args,
-			};
-		case "tool_execution_end":
-			return { type: event.type, toolCallId: event.toolCallId, toolName: event.toolName };
-		default:
-			return null;
-	}
-}
+const artifactSessionEvent = createArtifactEventMapper(() => {
+	const disabled = new Set(getConfig().disabledExtensions);
+	return artifactTools((name) => disabled.has(name));
+});
 
 const onScratchDirPath = (path: string) =>
 	path === WORKSPACE_CONTEXT_DIR ||
@@ -493,6 +486,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			}
 			if (url.pathname.startsWith(USER_FONTS_ROUTE)) {
 				return serveUserFonts(req, url.pathname);
+			}
+			if (url.pathname.startsWith(WORKSPACE_VIEW_ROUTE)) {
+				return serveWorktreeView(req.method, url);
 			}
 			if (staticDir) {
 				return serveStatic(url.pathname, staticDir);
@@ -1165,7 +1161,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		runObservation.observe(payload.sessionId, payload.event);
 		observeContinuation(payload.sessionId, payload.event);
 		void turnTracker.observe(payload.sessionId, payload.event);
-		const artifactEvent = artifactSessionEvent(payload.event);
+		const artifactEvent = artifactSessionEvent(payload.sessionId, payload.event);
 		if (artifactEvent) {
 			if (artifactEvent.type === "agent_start") void ensureWatch(workspaceId, { prewarm: true });
 			void observeArtifactSessionEvent(workspaceId, payload.sessionId, artifactEvent).catch(

@@ -35,8 +35,10 @@ import { type ChangeMarks, statusMarkClass } from "./changesModel";
 import { holdEditorWarm, useEditorWarm, warmOnHover } from "./editorWarm";
 import { deleteEntry, pasteDestination, pasteInto, supportsFileMutations } from "./fileTreeActions";
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
+import { OpenInBrowserMenuItem } from "./OpenInBrowserButton";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
+import { Tree, treeRowKey, useTreeKeys } from "./treeNavigation";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
 type SetPathsExpanded = (paths: readonly string[], expanded: boolean) => void;
@@ -59,6 +61,7 @@ export function FileTree({
 	marks,
 	...focus
 }: TreeFocus & { workspaceId: string; marks: ChangeMarks }) {
+	const t = useT();
 	const [nodes, setNodes] = useState<FileNode[] | null>(null);
 	const [deleteRequest, setDeleteRequest] = useState<DeleteRequest | null>(null);
 	const expanded = useAppStore((s) => selectFilesTreeView(s, workspaceId).expanded);
@@ -88,11 +91,17 @@ export function FileTree({
 	if (nodes.length === 0) return <EmptyTree workspaceId={workspaceId} />;
 	return (
 		<>
-			<ul data-focus-list="files" className="flex flex-col motion-safe:animate-reveal">
+			<Tree
+				label={t("panels.fileTree.label")}
+				focusList="files"
+				className="flex flex-col motion-safe:animate-reveal"
+				onOpenKept={(path) => void openFileInTab(workspaceId, path, "keep")}
+			>
 				{nodes.map((node) => (
 					<FileNodeRow
 						key={node.path}
 						node={node}
+						level={1}
 						workspaceId={workspaceId}
 						marks={marks}
 						focus={focus}
@@ -102,7 +111,7 @@ export function FileTree({
 						onDelete={(path) => setDeleteRequest({ path, open: true })}
 					/>
 				))}
-			</ul>
+			</Tree>
 			{deleteRequest ? (
 				<DeleteEntryDialog
 					workspaceId={workspaceId}
@@ -175,6 +184,7 @@ function DeleteEntryDialog({
 
 function FileNodeRow({
 	node,
+	level,
 	workspaceId,
 	marks,
 	focus,
@@ -184,6 +194,7 @@ function FileNodeRow({
 	onDelete,
 }: {
 	node: FileNode;
+	level: number;
 	workspaceId: string;
 	marks: ChangeMarks;
 	focus: TreeFocus;
@@ -240,7 +251,7 @@ function FileNodeRow({
 			: undefined;
 
 	return (
-		<li data-focus-row={node.path}>
+		<li role="none" data-focus-row={node.path}>
 			<FileTreeMenu
 				workspaceId={workspaceId}
 				path={directory?.path ?? node.path}
@@ -251,6 +262,8 @@ function FileNodeRow({
 					<TreeRow
 						ref={revealRow}
 						testid="file-node"
+						treeId={node.path}
+						level={level}
 						path={directory?.path ?? node.path}
 						kind={isDir ? "dir" : "file"}
 						active={!isDir && focus.activePath === node.path}
@@ -296,6 +309,7 @@ function FileNodeRow({
 			</FileTreeMenu>
 			{isDir && expanded && children && (
 				<ul
+					role="none"
 					data-focus-list={`files:${directory?.path ?? node.path}`}
 					className="flex flex-col pl-tree-indent"
 				>
@@ -303,6 +317,7 @@ function FileNodeRow({
 						<FileNodeRow
 							key={child.path}
 							node={child}
+							level={level + 1}
 							workspaceId={workspaceId}
 							marks={marks}
 							focus={focus}
@@ -332,6 +347,7 @@ function FileTreeMenu({
 	children: (menuOpen: boolean) => ReactElement;
 }) {
 	const t = useT();
+	const treeKeys = useTreeKeys();
 	const [open, setOpen] = useState(false);
 	const mutations = useAppStore((s) => supportsFileMutations(s.protocolVersion));
 	const moves = useAppStore((s) => supportsArtifacts(s.protocolVersion));
@@ -342,10 +358,27 @@ function FileTreeMenu({
 	};
 	return (
 		<ContextMenu open={open} onOpenChange={setOpen}>
-			<ContextMenuTrigger asChild onKeyDown={openContextMenuFromKeyboard}>
+			<ContextMenuTrigger
+				asChild
+				onKeyDown={(event) => {
+					if (mutations && treeRowKey(event.nativeEvent, treeKeys) === "delete") {
+						event.preventDefault();
+						onDelete(path);
+						return;
+					}
+					openContextMenuFromKeyboard(event);
+				}}
+			>
 				{children(open)}
 			</ContextMenuTrigger>
 			<ContextMenuContent data-testid="file-tree-actions">
+				{kind === "file" ? (
+					<OpenInBrowserMenuItem
+						workspaceId={workspaceId}
+						path={path}
+						testId="file-tree-open-in-browser"
+					/>
+				) : null}
 				<ContextMenuItem data-testid="file-copy-path" onSelect={() => copyPath(true)}>
 					<Copy />
 					{t("panels.fileTree.copyPath")}

@@ -36,6 +36,7 @@ import {
 	deriveMcpServerStatuses,
 	isMcpResultTool,
 	loadHostMcpConfig,
+	type McpProjectPolicy,
 	mcpPolicyOf,
 	type ParsedMcpStatus,
 	parseMcpAttentionNotice,
@@ -450,16 +451,27 @@ function mcpOwnerElsewhere(
 	return owners.includes(null) ? "pi settings" : undefined;
 }
 
+export interface McpReadContext {
+	cwd: string;
+	projectTrusted: boolean;
+	policy: McpProjectPolicy;
+}
+
+export function userMcpContext(): McpReadContext {
+	return { cwd: getAgentDir(), projectTrusted: false, policy: mcpPolicyOf(undefined) };
+}
+
 /**
  * Resolves pi settings, then returns a synchronous answer to "who manages MCP for this workspace instead
- * of ThinkRail?" (`undefined` when ThinkRail does) that samples the live `/mcp` owners when called, so a
- * caller can check and mutate in one call stack.
+ * of ThinkRail?" (`undefined` when ThinkRail does) that samples the workspace's live `/mcp` owners when
+ * called, so a caller can check and mutate in one call stack. Without a workspace no chat is sampled.
  */
 export async function mcpOwnershipGuard(options: {
-	workspaceId: string;
+	workspaceId?: string;
 	cwd: string;
 	projectTrusted: boolean;
 }): Promise<() => string | undefined> {
+	const { workspaceId } = options;
 	const enabledInSettings = await isBuiltinExtensionEnabled(
 		options.cwd,
 		options.projectTrusted,
@@ -467,11 +479,32 @@ export async function mcpOwnershipGuard(options: {
 	);
 	return () =>
 		mcpOwnerElsewhere(
-			liveSessionIdsOf(options.workspaceId).map(
-				(sessionId) => mcpSessionView(sessionId)?.commandOwner ?? null,
-			),
+			workspaceId === undefined
+				? []
+				: liveSessionIdsOf(workspaceId).map(
+						(sessionId) => mcpSessionView(sessionId)?.commandOwner ?? null,
+					),
 			enabledInSettings,
 		);
+}
+
+function listResult(
+	context: McpReadContext,
+	statuses: McpStatusSnapshot[],
+	elsewhere: string | undefined,
+): McpListResult {
+	const files = {
+		agentDir: getAgentDir(),
+		cwd: context.cwd,
+		projectTrusted: context.projectTrusted,
+	};
+	const configErrors = summarizeMcpConfigErrors(files);
+	return {
+		servers: summarizeMcpServers({ ...files, policy: context.policy }),
+		statuses,
+		...(configErrors.length > 0 ? { configErrors } : {}),
+		...(elsewhere !== undefined ? { handledElsewhere: { by: elsewhere } } : {}),
+	};
 }
 
 export async function listMcpServers(options: {
@@ -486,15 +519,17 @@ export async function listMcpServers(options: {
 		Promise.all(sessionIds.map((sessionId) => refreshMcpStatus(sessionId, options.waitMs))),
 		mcpOwnershipGuard({ workspaceId: options.workspaceId, cwd: options.cwd, projectTrusted }),
 	]);
-	const elsewhere = ownership();
-	const files = { agentDir: getAgentDir(), cwd: options.cwd, projectTrusted };
-	const configErrors = summarizeMcpConfigErrors(files);
-	return {
-		servers: summarizeMcpServers({ ...files, policy: mcpPolicyOf(options.project) }),
-		statuses: snapshots.filter((snapshot): snapshot is McpStatusSnapshot => snapshot !== null),
-		...(configErrors.length > 0 ? { configErrors } : {}),
-		...(elsewhere !== undefined ? { handledElsewhere: { by: elsewhere } } : {}),
-	};
+	return listResult(
+		{ cwd: options.cwd, projectTrusted, policy: mcpPolicyOf(options.project) },
+		snapshots.filter((snapshot): snapshot is McpStatusSnapshot => snapshot !== null),
+		ownership(),
+	);
+}
+
+export async function listUserMcpServers(): Promise<McpListResult> {
+	const context = userMcpContext();
+	const ownership = await mcpOwnershipGuard(context);
+	return listResult(context, [], ownership());
 }
 
 function readBounded(path: string): { text: string; truncated: boolean } {
