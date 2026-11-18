@@ -276,9 +276,15 @@ export function NewWorkspaceDialog({
 		setSelectedProjectId(
 			projectId ?? selectRepoProjects(opened)[0]?.id ?? selectChatsContainer(opened)?.id ?? "",
 		);
-		updatePromptDraft(retryPr ? "" : (retryDraft?.kickoff?.text ?? initialPrompt ?? ""), null);
+		const retryingReview = initialTarget === "review" && retryPr !== null;
+		updatePromptDraft(
+			retryingReview ? "" : (retryDraft?.kickoff?.text ?? initialPrompt ?? ""),
+			null,
+		);
 		setTarget(initialTarget);
-		setPickedPr(retryPr && retryDraft ? { ...retryPr, baseRef: retryDraft.baseRef } : null);
+		setPickedPr(
+			retryingReview && retryPr && retryDraft ? { ...retryPr, baseRef: retryDraft.baseRef } : null,
+		);
 		setPrPickerOpen(false);
 		setCreating(false);
 		attachedImages.reset();
@@ -311,7 +317,7 @@ export function NewWorkspaceDialog({
 	}, [open, chat, projects, selectedProjectId, onOpenChange]);
 
 	useEffect(() => {
-		if (!open || !retryPr || !retryDraft) return;
+		if (!open || initialTarget !== "review" || !retryPr || !retryDraft) return;
 		let cancelled = false;
 		void getPullRequest(retryDraft.projectId, retryPr.number).then((found) => {
 			if (cancelled || !found) return;
@@ -320,7 +326,7 @@ export function NewWorkspaceDialog({
 		return () => {
 			cancelled = true;
 		};
-	}, [open, retryPr, retryDraft]);
+	}, [open, initialTarget, retryPr, retryDraft]);
 
 	const selectProject = (id: string) => {
 		if (id !== selectedProjectId) setPickedPr(null);

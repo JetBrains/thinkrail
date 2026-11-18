@@ -19,7 +19,7 @@ export type PullRequestLookup =
 	| { kind: "found"; pullRequest: PullRequestSummary }
 	| { kind: "missing"; number: number };
 
-const PULL_URL = /^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/(\d+)(?:[/?#]\S*)?$/i;
+const PULL_URL = /^https:\/\/github\.com\/([^/\s]+\/[^/\s]+)\/pull\/(\d+)(?:[/?#]\S*)?$/i;
 const LOOKUP_DELAY_MS = 250;
 
 export function reviewKickoffText(url: string): string {
@@ -30,17 +30,39 @@ export function reviewKickoffText(url: string): string {
 export function reviewKickoffPullRequest(text: string): { number: number; url: string } | null {
 	if (!text.startsWith(REVIEW_PR_COMMAND)) return null;
 	const url = text.slice(REVIEW_PR_COMMAND.length).trim();
-	const number = pullRequestNumberOf(url);
-	return number !== null && PULL_URL.test(url) ? { number, url } : null;
+	const reference = pullRequestReferenceOf(url);
+	return reference?.repository ? { number: reference.number, url } : null;
+}
+
+export interface PullRequestReference {
+	number: number;
+	/** `owner/repo`, lower-cased, when the reference was a link. */
+	repository: string | null;
 }
 
 /** A pasted number (`1431`, `#1431`) or pull-request link, or `null` for ordinary search text. */
-export function pullRequestNumberOf(query: string): number | null {
+export function pullRequestReferenceOf(query: string): PullRequestReference | null {
 	const text = query.trim();
-	const digits = /^#?(\d+)$/.exec(text)?.[1] ?? PULL_URL.exec(text)?.[1];
+	const link = PULL_URL.exec(text);
+	const digits = /^#?(\d+)$/.exec(text)?.[1] ?? link?.[2];
 	if (!digits) return null;
 	const number = Number(digits);
-	return Number.isSafeInteger(number) && number > 0 ? number : null;
+	if (!Number.isSafeInteger(number) || number <= 0) return null;
+	return { number, repository: link?.[1]?.toLowerCase() ?? null };
+}
+
+export function pullRequestNumberOf(query: string): number | null {
+	return pullRequestReferenceOf(query)?.number ?? null;
+}
+
+/** Whether a pull request is the one a reference names — a link from another repository never is. */
+export function isReferencedPullRequest(
+	pr: Pick<PullRequestSummary, "number" | "url">,
+	reference: PullRequestReference,
+): boolean {
+	if (pr.number !== reference.number) return false;
+	if (reference.repository === null) return true;
+	return PULL_URL.exec(pr.url)?.[1]?.toLowerCase() === reference.repository;
 }
 
 export function matchesPullRequest(pr: PullRequestSummary, query: string): boolean {
@@ -55,23 +77,23 @@ export function matchesPullRequest(pr: PullRequestSummary, query: string): boole
 export interface PullRequestRows {
 	waiting: PullRequestSummary[];
 	open: PullRequestSummary[];
-	/** Asked by number and not among the open ones: looked up with `pr.get`. */
-	lookupNumber: number | null;
+	/** Asked by number or link and not among the open ones: looked up with `pr.get`. */
+	lookup: PullRequestReference | null;
 }
 
 export function pullRequestRows(
 	pullRequests: readonly PullRequestSummary[],
 	query: string,
 ): PullRequestRows {
-	const number = pullRequestNumberOf(query);
+	const reference = pullRequestReferenceOf(query);
 	const shown =
-		number !== null
-			? pullRequests.filter((pr) => pr.number === number)
+		reference !== null
+			? pullRequests.filter((pr) => isReferencedPullRequest(pr, reference))
 			: pullRequests.filter((pr) => matchesPullRequest(pr, query));
 	return {
 		waiting: shown.filter((pr) => pr.reviewRequested),
 		open: shown.filter((pr) => !pr.reviewRequested),
-		lookupNumber: number !== null && shown.length === 0 ? number : null,
+		lookup: reference !== null && shown.length === 0 ? reference : null,
 	};
 }
 
@@ -122,8 +144,13 @@ export function getPullRequest(
 		.catch(() => null);
 }
 
-export function usePullRequestLookup(projectId: string | null, number: number | null) {
+export function usePullRequestLookup(
+	projectId: string | null,
+	reference: PullRequestReference | null,
+) {
 	const [lookup, setLookup] = useState<PullRequestLookup>({ kind: "idle" });
+	const number = reference?.number ?? null;
+	const repository = reference?.repository ?? null;
 
 	useEffect(() => {
 		if (!projectId || number === null) {
@@ -135,14 +162,18 @@ export function usePullRequestLookup(projectId: string | null, number: number | 
 		const timer = setTimeout(() => {
 			void getPullRequest(projectId, number).then((pullRequest) => {
 				if (cancelled) return;
-				setLookup(pullRequest ? { kind: "found", pullRequest } : { kind: "missing", number });
+				setLookup(
+					pullRequest && isReferencedPullRequest(pullRequest, { number, repository })
+						? { kind: "found", pullRequest }
+						: { kind: "missing", number },
+				);
 			});
 		}, LOOKUP_DELAY_MS);
 		return () => {
 			cancelled = true;
 			clearTimeout(timer);
 		};
-	}, [projectId, number]);
+	}, [projectId, number, repository]);
 
 	return lookup;
 }

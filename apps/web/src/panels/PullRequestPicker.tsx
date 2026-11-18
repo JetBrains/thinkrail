@@ -216,7 +216,7 @@ export function PullRequestPickerBody({
 						))}
 					</CommandGroup>
 				) : null}
-				{rows.lookupNumber !== null ? (
+				{rows.lookup !== null ? (
 					<LookupRows lookup={lookup} selected={selected} onSelect={onSelect} />
 				) : null}
 				{nothing ? (
@@ -261,9 +261,9 @@ export function PullRequestPicker({
 }) {
 	const t = useT();
 	const [query, setQuery] = useState("");
-	const lookupNumber =
-		open && list.kind === "ready" ? pullRequestRows(list.pullRequests, query).lookupNumber : null;
-	const lookup = usePullRequestLookup(projectId, lookupNumber);
+	const reference =
+		open && list.kind === "ready" ? pullRequestRows(list.pullRequests, query).lookup : null;
+	const lookup = usePullRequestLookup(projectId, reference);
 
 	return (
 		<Popover

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import type { PullRequestSummary } from "@thinkrail/contracts";
 import {
+	isReferencedPullRequest,
 	pullRequestNumberOf,
 	pullRequestRows,
 	reviewKickoffPullRequest,
@@ -54,11 +55,29 @@ test("rows put the requested reviews first and filter by words or by number", ()
 	expect(pullRequestRows(list, "")).toEqual({
 		waiting: [login],
 		open: [search, first],
-		lookupNumber: null,
+		lookup: null,
 	});
 	expect(pullRequestRows(list, "ADA search").open).toEqual([search]);
 	expect(pullRequestRows(list, "#2").open).toEqual([search]);
 	expect(pullRequestRows(list, "https://github.com/acme/app/pull/3").waiting).toEqual([login]);
-	expect(pullRequestRows(list, "1500")).toEqual({ waiting: [], open: [], lookupNumber: 1500 });
-	expect(pullRequestRows(list, "nothing like it").lookupNumber).toBeNull();
+	expect(pullRequestRows(list, "1500")).toEqual({
+		waiting: [],
+		open: [],
+		lookup: { number: 1500, repository: null },
+	});
+	expect(pullRequestRows(list, "nothing like it").lookup).toBeNull();
+});
+
+test("a link from another repository never names this repository's pull request", () => {
+	const ours = pr(5);
+	const fork = "https://github.com/me/app/pull/5";
+	expect(pullRequestRows([ours], fork)).toEqual({
+		waiting: [],
+		open: [],
+		lookup: { number: 5, repository: "me/app" },
+	});
+	expect(isReferencedPullRequest(ours, { number: 5, repository: "me/app" })).toBe(false);
+	expect(isReferencedPullRequest(ours, { number: 5, repository: "acme/app" })).toBe(true);
+	expect(isReferencedPullRequest(ours, { number: 5, repository: null })).toBe(true);
+	expect(pullRequestRows([ours], "https://github.com/ACME/app/pull/5").open).toEqual([ours]);
 });
