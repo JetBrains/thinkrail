@@ -12,6 +12,7 @@ const analyticsRuntime = "data-posthog-project data-gtm-container content_viewed
 
 const downloads = [
 	"thinkrail-desktop-darwin-arm64.dmg",
+	"thinkrail-desktop-darwin-x64.dmg",
 	"thinkrail-desktop-windows-x64.zip",
 	"thinkrail-desktop-linux-x64.tar.gz",
 	"thinkrail-desktop-linux-arm64.tar.gz",
@@ -46,7 +47,16 @@ describe("validateHeaderInstall", () => {
 		]);
 		expect(
 			validateHeaderInstall(path, `<header>${panel.replace(downloads, "")}</header>`),
-		).toHaveLength(4);
+		).toHaveLength(5);
+	});
+
+	test("rejects a header install panel missing the Intel Mac build", () => {
+		const intelDownload = `<a href="https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-darwin-x64.dmg">`;
+		expect(
+			validateHeaderInstall(path, `<header>${panel.replace(intelDownload, "")}</header>`),
+		).toEqual([
+			`${path}: header install panel must offer https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-darwin-x64.dmg once`,
+		]);
 	});
 
 	test("ignores the marker's selector in scripts", () => {

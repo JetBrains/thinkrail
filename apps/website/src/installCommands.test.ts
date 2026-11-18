@@ -19,7 +19,7 @@ describe("desktop installers", () => {
 			"Linux",
 		]);
 		expect(desktopInstallerPlatforms.map((platform) => platform.detail)).toEqual([
-			"Apple Silicon",
+			"Apple Silicon / Intel",
 			"Windows x64",
 			"Ubuntu 24.04+",
 		]);
@@ -27,8 +27,12 @@ describe("desktop installers", () => {
 			desktopInstallerPlatforms.flatMap<DesktopDownload>((platform) => platform.downloads),
 		).toEqual([
 			{
-				label: "Download .dmg",
+				label: "Apple Silicon .dmg",
 				href: `${RELEASE_DOWNLOAD_URL}/thinkrail-desktop-darwin-arm64.dmg`,
+			},
+			{
+				label: "Intel .dmg",
+				href: `${RELEASE_DOWNLOAD_URL}/thinkrail-desktop-darwin-x64.dmg`,
 			},
 			{
 				label: "Download .zip",
