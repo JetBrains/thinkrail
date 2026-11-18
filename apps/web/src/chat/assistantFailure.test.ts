@@ -98,6 +98,8 @@ test("a proxy or gateway rejecting the fallbacks field is recognized and explain
 		"429 rate limited",
 		"Server-side fallback to claude-opus-5 was used",
 		"400 tools.0.fallback: invalid",
+		"500 unexpected error while computing fallbacks",
+		"Unsupported region; fallbacks are configured elsewhere",
 	])
 		expect(fallbacksRejected({ text, failure: "error" })).toBe(false);
 });

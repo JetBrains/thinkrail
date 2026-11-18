@@ -207,7 +207,7 @@
 	"chat.failure.disableFallback": "Turn off fallback and retry",
 	"chat.failure.disableFallbackFailed": "Couldn't turn off fallback. Check pi's models.json, then try again.",
 	"chat.failure.error": "The agent run ended in an error.",
-	"chat.failure.fallbacksRejected": "Your provider or proxy doesn't accept Anthropic's server-side fallback, so retrying won't help. Turn fallback off for this model to continue. The setting is saved in pi's models.json.",
+	"chat.failure.fallbacksRejected": "Your provider or proxy doesn't accept Anthropic's server-side fallback, so retrying won't help. Turning it off for this model means its refusals no longer fall back to another model. It applies wherever pi uses this model, including the terminal, until you remove the override from pi's models.json.",
 	"chat.failure.modelUnavailable": "This model isn't available for this connection. Pick another model in the model picker and try again.",
 	"chat.failure.openProviderSettings": "Open provider settings",
 	"chat.failure.truncated": "The response was truncated before completion. Ask the agent to continue.",
