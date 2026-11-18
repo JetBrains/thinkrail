@@ -169,7 +169,7 @@ restart and toggle-reload regressions on upgrades.
   `DefaultPackageManager` (`resolve(onMissing)`, `install`, `remove`, `update`,
   `checkForAvailableUpdates`, `listConfiguredPackages`, `addSourceToSettings` /
   `removeSourceFromSettings`) and `SettingsManager`
-  (`setPackages` / `set*Paths`, `flush`, `drainErrors`, `inMemory`). Eight pi facts the host compensates
+  (`setPackages` / `set*Paths`, `flush`, `drainErrors`, `inMemory`). Nine pi facts the host compensates
   for, each with its gate:
   - `resolve()` without `onMissing` installs a declared-but-missing package, and
     `DefaultResourceLoader.reload()` always calls it that way; the catalog therefore reads with
@@ -185,6 +185,10 @@ restart and toggle-reload regressions on upgrades.
     `setResourceEnabled`-style API.
   - `getPackageIdentity` is private; `identity.ts` ports it for the host-wide `disabledPackages` key.
     **Gate:** pi exporting its identity rule.
+  - `getResourcePathKey` (synthetic paths as-is, else realpath with a raw-path fallback, case-folded on
+    Windows) is private; `identity.ts` ports it as `piResourcePathKey`, the path identity of
+    [[submodule-server-agent]]'s Central exclusion, so it matches the paths pi's resolve and loader dedupe.
+    Re-diff it against `core/source-info.js` / `utils/paths.js` on every bump. **Gate:** pi exporting it.
   - `installAndPersist` persists before the caller can re-check project trust, and settings writes are
     queued with swallowed errors; the host sequences `install → trust → addSourceToSettings → flush →
     drainErrors`. **Gate:** a persist step that reports failure and accepts a trust predicate.

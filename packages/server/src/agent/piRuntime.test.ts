@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, expect, jest, spyOn, test } from "bun:test";
-import fs, { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import fs, {
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ModelsRefreshOptions, ModelsRefreshResult } from "@earendil-works/pi-ai";
@@ -384,6 +391,58 @@ test("an excluded Central artifact never loads through the user pass, in a plain
 		expect(central.opaqueProviderIds.has("leftover-central")).toBe(true);
 		expect(central.extensionProviderIds.has("leftover-central")).toBe(false);
 	});
+});
+
+test("the Central exclusion follows pi's path identity through a symlinked agent dir, at startup and in a chat", async () => {
+	const root = mkdtempSync(join(tmpdir(), "trpi-linked-agent-dir-"));
+	const piDir = join(root, "data", "pi");
+	const agentDir = join(piDir, "agent");
+	const extensionsDir = join(agentDir, "extensions");
+	const priorAgentDir = process.env.PI_CODING_AGENT_DIR;
+	mkdirSync(extensionsDir, { recursive: true });
+	mkdirSync(join(root, "home"));
+	symlinkSync(piDir, join(root, "home", ".pi"), "junction");
+	const artifact = join(root, "home", ".pi", "agent", "extensions", "jetbrains-central.ts");
+	writeFileSync(artifact, fixtureProviderExtensionSource("linked-central"));
+	writeFileSync(
+		join(extensionsDir, "linked-sibling.ts"),
+		fixtureProviderExtensionSource("linked-sibling"),
+	);
+	process.env.PI_CODING_AGENT_DIR = agentDir;
+	configurePiRuntime(null);
+	try {
+		configurePiRuntimeSessionExtensionExclusions([artifact]);
+		const centralRuns = fixtureProviderExtensionRuns("linked-central");
+		const siblingRuns = fixtureProviderExtensionRuns("linked-sibling");
+
+		const generation = await preparedGeneration();
+		expect(generation.extensionProviderIds.has("linked-sibling")).toBe(true);
+		expect(generation.extensionProviderIds.has("linked-central")).toBe(false);
+		expect(generation.runtime.getRegisteredProviderIds()).not.toContain("linked-central");
+
+		await buildResourceLoader(
+			root,
+			SettingsManager.create(root, agentDir, { projectTrusted: true }),
+			() => ({
+				trusted: true,
+				piResourceTrusted: true,
+				acknowledged: [],
+				disabled: [],
+				disabledGroups: [],
+				enabledGroups: [],
+				otherAgentSkills: true,
+				overrides: {},
+			}),
+			generation.excludedSessionExtensionPaths,
+		);
+		expect(fixtureProviderExtensionRuns("linked-sibling")).toBe(siblingRuns + 2);
+		expect(fixtureProviderExtensionRuns("linked-central")).toBe(centralRuns);
+	} finally {
+		configurePiRuntime(null);
+		if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
+		rmSync(root, { recursive: true, force: true });
+	}
 });
 
 test("a package switched off in Settings never runs or registers its providers at startup", async () => {

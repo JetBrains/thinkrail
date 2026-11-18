@@ -1,4 +1,3 @@
-import { resolve } from "node:path";
 import {
 	createAgentSessionServices,
 	DefaultPackageManager,
@@ -9,7 +8,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { logger } from "../log";
 import { accountAvailableModels, type ModelAvailabilityRuntime } from "./modelAvailability";
-import { advancePiExtensionCache, createPiSettings } from "./packages";
+import { advancePiExtensionCache, createPiSettings, piResourcePathKey } from "./packages";
 
 const log = logger("agent");
 
@@ -190,12 +189,10 @@ async function createRuntimeWithExtensions(
 				]
 			: [],
 	);
-	const extensionProviderIds = await registerUserExtensionProviders(
-		runtime,
-		new Set(
-			[...additionalExtensionPaths, ...excludedSessionExtensionPaths].map((path) => resolve(path)),
-		),
-	);
+	const extensionProviderIds = await registerUserExtensionProviders(runtime, [
+		...additionalExtensionPaths,
+		...excludedSessionExtensionPaths,
+	]);
 	return {
 		runtime,
 		providerStatusIds: providerStatus.ids,
@@ -223,7 +220,7 @@ function settleWithin<T>(task: Promise<T>, ms: number): Promise<T | undefined> {
 	});
 }
 
-async function loadUserExtensions(excluded: ReadonlySet<string>): Promise<LoadExtensionsResult> {
+async function loadUserExtensions(excludedPaths: readonly string[]): Promise<LoadExtensionsResult> {
 	const agentDir = getAgentDir();
 	const { extensions } = await new DefaultPackageManager({
 		cwd: agentDir,
@@ -233,6 +230,7 @@ async function loadUserExtensions(excluded: ReadonlySet<string>): Promise<LoadEx
 			packages: "enabled",
 		}),
 	}).resolve(async () => "skip");
+	const excluded = new Set(excludedPaths.map(piResourcePathKey));
 	const loader = new DefaultResourceLoader({
 		cwd: agentDir,
 		agentDir,
@@ -242,7 +240,7 @@ async function loadUserExtensions(excluded: ReadonlySet<string>): Promise<LoadEx
 		}),
 		noExtensions: true,
 		additionalExtensionPaths: extensions
-			.filter((resource) => resource.enabled && !excluded.has(resolve(resource.path)))
+			.filter((resource) => resource.enabled && !excluded.has(piResourcePathKey(resource.path)))
 			.map((resource) => resource.path),
 		noSkills: true,
 		noPromptTemplates: true,
@@ -255,11 +253,11 @@ async function loadUserExtensions(excluded: ReadonlySet<string>): Promise<LoadEx
 
 async function registerUserExtensionProviders(
 	runtime: ModelRuntime,
-	excluded: ReadonlySet<string>,
+	excludedPaths: readonly string[],
 ): Promise<ReadonlySet<string>> {
 	let loaded: LoadExtensionsResult | undefined;
 	try {
-		loaded = await settleWithin(loadUserExtensions(excluded), USER_EXTENSION_LOAD_TIMEOUT_MS);
+		loaded = await settleWithin(loadUserExtensions(excludedPaths), USER_EXTENSION_LOAD_TIMEOUT_MS);
 	} catch (error) {
 		log.warn("user extensions could not be loaded for the model catalog", error);
 		return new Set();
