@@ -123,6 +123,8 @@ test("edge tools hide only their pane while terminal sessions stay grouped", asy
 		expect(box.y).toBeGreaterThanOrEqual(bounds.y);
 		expect(box.y + box.height).toBeLessThanOrEqual(bounds.y + bounds.height);
 	}
+	// Files is the selected tool of the Codex right group; select Specs explicitly.
+	await revealWorkbenchTool(page, "specs");
 	const specs = page.getByTestId("tool-rail-specs");
 	await expect(specs).toHaveAttribute("aria-pressed", "true");
 	await specs.click();

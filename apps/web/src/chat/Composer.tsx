@@ -92,6 +92,13 @@ const SEND_MAIN = cn(
 const SEND_MORE = cn(SEGMENT, "rounded-r-full pr-8 pl-2");
 const KEYCAP = "flex h-16 min-w-16 items-center justify-center rounded-xs bg-on-primary-soft px-2";
 
+/**
+ * Completion menus sit over the composer's left edge. The composer is a centred column of the
+ * transcript width, so in a wide pane the menu follows the column instead of the pane's edge.
+ */
+const MENU_LEFT =
+	"left-[max(var(--space-12),calc((100%-var(--chat-transcript-width))/2+var(--chat-gutter)))]";
+
 const COMPOSER_CONTROLS =
 	"a,button,input,label,select,textarea,[role='button'],[role='menuitem'],[role='option']";
 
@@ -600,7 +607,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			{mentionOpen ? (
 				<div
 					data-testid="mention-menu"
-					className="absolute bottom-full left-12 mb-4 max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-md border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]"
+					className={cn(
+						"absolute bottom-full mb-4 max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-md border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]",
+						MENU_LEFT,
+					)}
 				>
 					{mentionCandidates.map((candidate, index) => (
 						<button
@@ -624,7 +634,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					commands={slashCompletion.matches}
 					activeIndex={slashCompletion.activeIndex}
 					onSelect={slashCompletion.pick}
-					className="absolute bottom-full left-12 mb-4"
+					className={cn("absolute bottom-full mb-4", MENU_LEFT)}
 					footer={
 						templatesEmpty && onManageTemplates ? (
 							<button
@@ -649,7 +659,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					activeIndex={slotIdx}
 					count={slots.length}
 					onNext={() => stepSlot(1)}
-					className="absolute bottom-full left-12 mb-4"
+					className={cn("absolute bottom-full mb-4", MENU_LEFT)}
 				/>
 			) : null}
 

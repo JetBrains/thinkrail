@@ -168,7 +168,11 @@ function ShellLayout() {
 	};
 
 	const homeProjects = useCollapsibleRegion<HTMLDivElement>(PROJECT_HOME_PROJECTS_REGION_ID);
-	const leftSideVisible = useAppStore((s) => s.workbenchFrame?.left.visible ?? false);
+	// The toggle hides the left side only when it is visible with an unfolded group; otherwise it shows it.
+	const leftSideVisible = useAppStore((s) => {
+		const left = s.workbenchFrame?.left;
+		return (left?.visible && left.groups.some((group) => !group.folded)) ?? false;
+	});
 	const rightSideVisible = useAppStore((s) => s.workbenchFrame?.right.visible ?? false);
 	const searchShortcut = useKeybindingLabel("search.open");
 	const [nativeShortcuts] = useState(hasNativeShortcuts);
