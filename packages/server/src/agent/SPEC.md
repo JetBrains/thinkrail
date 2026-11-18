@@ -188,23 +188,24 @@ re-opened transcripts provider-valid.
     mount, since the setting has no push channel (unlike `provider.changed` for `models.json`).
   - `serverFallback` — the one-click repair for a proxy or gateway that rejects pi's Anthropic
     server-side refusal fallback (the `fallbacks` request field plus its beta header, which pi sends
-    whenever a model's `compat.allowedFallbackModels` is non-empty). `disableProviderFallback` writes
-    **provider-level** `providers.<p>.compat.allowedFallbackModels: []` through `modelsFile`. pi's
-    `mergeCompat` lets provider compat win over every built-in model's compat, so one key covers today's
-    and future fallback models; a per-model override (rejected: today's models only) is not written. It
-    then refreshes the given runtimes without network and publishes `provider.changed` only when the file
-    changed. `disableSessionServerFallback` (session manager, `session.disableServerFallback`) is the one
+    whenever a model's `compat.allowedFallbackModels` is non-empty). `disableModelFallback` writes a
+    **per-model** `providers.<p>.modelOverrides.<id>.compat.allowedFallbackModels: []` through
+    `modelsFile`; pi applies `modelOverrides` last, so it also replaces a hand-written override that
+    re-enables fallbacks. *Decision:* per model, not provider-level `compat`. Only the model that actually
+    failed through the proxy loses fallback, so models never seen failing keep refusal fallback and the
+    file names exactly what was turned off; the cost is one more failure and click for each further
+    fallback model behind the same proxy, which the repair makes cheap. It then refreshes the given
+    runtimes without network and publishes `provider.changed` only when the file changed.
+    `disableSessionServerFallback` (session manager, `session.disableServerFallback`) is the one
     exception to "live sessions keep their model": it refuses with `SERVER_FALLBACK_NOT_USED` unless the
     chat's model declares fallback targets, refreshes both the current and the session's generation,
-    re-resolves the session's *current* model when it is still on that provider (a model the user picked
-    on another provider meanwhile is left alone), refuses with `SERVER_FALLBACK_STILL_ON` when a
-    hand-written per-model override still sends fallbacks, and otherwise `setModel`s the refreshed model
-    so the chat's next request drops the field without a restart. That rebind and `setSessionModel` share
-    one per-session model-write queue, and the re-check runs inside it: pi's `setModel` awaits an auth
-    check before switching, so an unserialized rebind could overwrite a model the user picked meanwhile.
-    The rebind restores the chat's thinking level afterwards, because `setModel` re-applies the saved
-    default even for the same model. There is no undo affordance; reverting
-    is a manual `models.json` edit.
+    and `setModel`s the refreshed model only while the chat is still on that model (one the user picked
+    meanwhile is left alone), so the chat's next request drops the field without a restart. That rebind
+    and `setSessionModel` share one per-session model-write queue, and the re-check runs inside it: pi's
+    `setModel` awaits an auth check before switching, so an unserialized rebind could overwrite a model
+    the user picked meanwhile. The rebind restores the chat's thinking level afterwards, because
+    `setModel` re-applies the saved default even for the same model. There is no undo affordance;
+    reverting is a manual `models.json` edit.
   - `customEndpoints` — the settings adapter for the user's own OpenAI-compatible servers (a company
     gateway or a local llama.cpp / vLLM / sglang / Ollama / LM Studio server), again a `models.json` editor
     and not a registry: each is a `custom-*` provider with `api: "openai-completions"`, served by pi like any

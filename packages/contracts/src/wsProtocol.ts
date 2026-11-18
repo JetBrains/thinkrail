@@ -1669,7 +1669,6 @@ export type WsErrorCode =
 	| "FRAME_TOO_LARGE"
 	| "KEYBINDINGS_INVALID"
 	| "SERVER_FALLBACK_NOT_USED"
-	| "SERVER_FALLBACK_STILL_ON"
 	| SpeechErrorCode;
 
 export interface WsResponse {

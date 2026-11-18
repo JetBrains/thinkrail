@@ -20,8 +20,8 @@ export function declaresServerFallback(model: Model<string>): boolean {
 	return ((model as Model<"anthropic-messages">).compat?.allowedFallbackModels?.length ?? 0) > 0;
 }
 
-export function disableProviderFallback(
-	provider: string,
+export function disableModelFallback(
+	model: { provider: string; id: string },
 	runtimes: readonly RefreshableRuntime[],
 ): Promise<void> {
 	return serializeModelsWrite(async () => {
@@ -35,7 +35,14 @@ export function disableProviderFallback(
 				body,
 				modify(
 					body,
-					["providers", provider, "compat", "allowedFallbackModels"],
+					[
+						"providers",
+						model.provider,
+						"modelOverrides",
+						model.id,
+						"compat",
+						"allowedFallbackModels",
+					],
 					[],
 					MODELS_JSON_FORMATTING,
 				),

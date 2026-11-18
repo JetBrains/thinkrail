@@ -140,7 +140,7 @@ import {
 } from "./piRuntime";
 import { catalogProviderAuth } from "./providerAuth";
 import { REQUEST_REVIEW_TOOL_NAME } from "./requestReviewTool";
-import { declaresServerFallback, disableProviderFallback } from "./serverFallback";
+import { declaresServerFallback, disableModelFallback } from "./serverFallback";
 import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import { deriveSessionState } from "./sessionState";
@@ -2773,14 +2773,12 @@ export async function disableSessionServerFallback(sessionId: string): Promise<W
 	if (!model || !declaresServerFallback(model))
 		throw new CodedError("SERVER_FALLBACK_NOT_USED", "The chat's model sends no fallbacks");
 	const current = await getPiRuntimeGeneration();
-	await disableProviderFallback(model.provider, [current.runtime, entry.generation.runtime]);
+	await disableModelFallback(model, [current.runtime, entry.generation.runtime]);
 	return serializeModelWrite(entry, async () => {
 		if (mustGetEntry(sessionId) !== entry) throw new Error(`Unknown session: ${sessionId}`);
 		const live = entry.session.model ?? model;
-		if (live.provider !== model.provider) return sessionWireModel(live, entry.generation);
+		if (!sameModel(live, model)) return sessionWireModel(live, entry.generation);
 		const resolved = resolveWireModel(entry.generation.runtime, live);
-		if (declaresServerFallback(resolved))
-			throw new CodedError("SERVER_FALLBACK_STILL_ON", "A model override still sends fallbacks");
 		const thinkingLevel = entry.session.thinkingLevel;
 		await entry.session.setModel(resolved);
 		if (entry.session.thinkingLevel !== thinkingLevel)

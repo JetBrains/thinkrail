@@ -17,7 +17,7 @@ import {
 } from "./agentSessionManager";
 import { setModelsFilePublisher } from "./modelsFile";
 import { configurePiRuntime } from "./piRuntime";
-import { declaresServerFallback, disableProviderFallback } from "./serverFallback";
+import { declaresServerFallback, disableModelFallback } from "./serverFallback";
 
 const ENV_KEYS = [
 	"PI_CODING_AGENT_DIR",
@@ -113,8 +113,10 @@ function config(): unknown {
 	return parse(readFileSync(path, "utf8"), [], { allowTrailingComma: true });
 }
 
-describe("disableProviderFallback", () => {
-	test("writes provider compat once, keeps comments, refreshes each runtime and notifies on change", async () => {
+const FABLE = { provider: "anthropic", id: "claude-fable-5-2" };
+
+describe("disableModelFallback", () => {
+	test("writes the model's compat override once, keeps comments, refreshes each runtime and notifies on change", async () => {
 		writeFileSync(
 			path,
 			'{ // keep this note\n  "providers": {\n    "anthropic": { "baseUrl": "http://proxy.invalid" },\n  },\n}\n',
@@ -125,29 +127,32 @@ describe("disableProviderFallback", () => {
 				refreshes++;
 			},
 		};
-		await disableProviderFallback("anthropic", [runtime, runtime]);
+		await disableModelFallback(FABLE, [runtime, runtime]);
 		expect(readFileSync(path, "utf8")).toContain("// keep this note");
 		expect(config()).toEqual({
 			providers: {
-				anthropic: { baseUrl: "http://proxy.invalid", compat: { allowedFallbackModels: [] } },
+				anthropic: {
+					baseUrl: "http://proxy.invalid",
+					modelOverrides: { [FABLE.id]: { compat: { allowedFallbackModels: [] } } },
+				},
 			},
 		});
 		expect(refreshes).toBe(1);
 		expect(published).toBe(1);
-		await disableProviderFallback("anthropic", [runtime]);
+		await disableModelFallback(FABLE, [runtime]);
 		expect(refreshes).toBe(2);
 		expect(published).toBe(1);
 	});
 
 	test("refuses a models.json that isn't valid JSON and leaves it untouched", async () => {
 		writeFileSync(path, "{ not json");
-		await expect(disableProviderFallback("anthropic", [])).rejects.toThrow("isn't valid JSON");
+		await expect(disableModelFallback(FABLE, [])).rejects.toThrow("isn't valid JSON");
 		expect(readFileSync(path, "utf8")).toBe("{ not json");
 	});
 });
 
 describe("disableSessionServerFallback", () => {
-	test("turns fallback off for every provider model and updates the open chat's model", async () => {
+	test("turns fallback off for the failed model only and updates the open chat's model", async () => {
 		const runtime = await anthropicRuntime();
 		const fable = fallbackModel(runtime);
 		const { sessionId } = await createSession({
@@ -160,9 +165,13 @@ describe("disableSessionServerFallback", () => {
 
 		expect(model).toMatchObject({ provider: "anthropic", id: fable.id });
 		expect(config()).toEqual({
-			providers: { anthropic: { compat: { allowedFallbackModels: [] } } },
+			providers: {
+				anthropic: { modelOverrides: { [fable.id]: { compat: { allowedFallbackModels: [] } } } },
+			},
 		});
-		expect(runtime.getModels("anthropic").filter(declaresServerFallback)).toEqual([]);
+		const stillDeclaring = runtime.getModels("anthropic").filter(declaresServerFallback);
+		expect(stillDeclaring.map((model) => model.id)).not.toContain(fable.id);
+		expect(stillDeclaring.length).toBeGreaterThan(0);
 		expect(published).toBe(1);
 	});
 
@@ -213,7 +222,7 @@ describe("disableSessionServerFallback", () => {
 		}
 	});
 
-	test("keeps a model the user switched to on another provider while the fix ran", async () => {
+	test("keeps a model the user switched to while the fix ran", async () => {
 		const runtime = await anthropicRuntime();
 		const fable = fallbackModel(runtime);
 		const other = runtime.getModel("other", "other-model");
@@ -303,7 +312,7 @@ describe("disableSessionServerFallback", () => {
 		expect(() => readFileSync(path, "utf8")).toThrow();
 	});
 
-	test("reports a per-model override that still sends fallbacks", async () => {
+	test("replaces a hand-written override that re-enables fallbacks for the failed model", async () => {
 		const id = fallbackModel(await anthropicRuntime()).id;
 		writeFileSync(
 			path,
@@ -329,8 +338,15 @@ describe("disableSessionServerFallback", () => {
 			model: toWireModel(fable),
 		});
 
-		await expect(disableSessionServerFallback(sessionId)).rejects.toMatchObject({
-			code: "SERVER_FALLBACK_STILL_ON",
+		await disableSessionServerFallback(sessionId);
+
+		expect(config()).toEqual({
+			providers: {
+				anthropic: { modelOverrides: { [id]: { compat: { allowedFallbackModels: [] } } } },
+			},
 		});
+		expect(runtime.getModels("anthropic").find((model) => model.id === id)).toSatisfy(
+			(model) => model !== undefined && !declaresServerFallback(model),
+		);
 	});
 });
