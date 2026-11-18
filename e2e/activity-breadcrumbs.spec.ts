@@ -720,7 +720,7 @@ test("sticky activity breadcrumb segments do not overlap when tool metadata is l
 		];
 		return segments.map((segment) => {
 			const segRect = segment.getBoundingClientRect();
-			const label = segment.querySelector<HTMLElement>("span.text-text-default");
+			const label = segment.querySelector<HTMLElement>('[data-testid="activity-breadcrumb-label"]');
 			const labelRect = label?.getBoundingClientRect();
 			return {
 				kind: segment.dataset.kind,
@@ -739,6 +739,7 @@ test("sticky activity breadcrumb segments do not overlap when tool metadata is l
 		expect(current).toBeDefined();
 		if (!current) continue;
 		expect(current.segHeight).toBeLessThanOrEqual(36);
+		expect(current.labelRight).toBeGreaterThan(current.segLeft);
 		expect(current.labelClientWidth).toBeGreaterThanOrEqual(current.labelScrollWidth - 1);
 		expect(current.labelRight).toBeLessThanOrEqual(current.segRight + 0.5);
 		const next = geometry[index + 1];

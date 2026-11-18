@@ -140,7 +140,10 @@ export function ActivityBreadcrumbBar({
 									className="flex min-w-0 items-center gap-4 rounded-sm py-2 pr-4 text-left focus-visible:focus-ring"
 								>
 									<SegmentIcon kind={segment.kind} />
-									<span className="shrink-0 whitespace-nowrap text-text-default">
+									<span
+										data-testid="activity-breadcrumb-label"
+										className="shrink-0 whitespace-nowrap text-text-default"
+									>
 										{segment.label}
 									</span>
 									{segment.meta ? (
