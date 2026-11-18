@@ -747,7 +747,7 @@ describe("registry extensions", () => {
 		const names = (inlines: typeof children) =>
 			inlines.map((inline) => (typeof inline === "function" ? "fn" : inline.name));
 		expect(names(children.slice(3))).toEqual(names(registryInlineExtensions("childExtensions")));
-		expect(names(children.slice(3))).toEqual(["web-access"]);
+		expect(names(children.slice(3))).toEqual(["web-access", "lsp-search"]);
 	});
 
 	it("loads web access with its skill and drops both while the extension is off", async () => {
