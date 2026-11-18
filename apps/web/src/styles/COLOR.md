@@ -116,6 +116,8 @@ a `[data-region]` root (the top bar, the Project Home projects pane, each workbe
 marks the one holding focus `data-region-active` ([shell/layout/SPEC.md](../shell/layout/SPEC.md),
 *Arrangement and accessibility*). It wears a 2px **accent line** along its top edge (its tab strip or
 pane header) for as long as it is active; nothing else about it changes, and no other region is touched.
+A region root that holds focus itself (Esc leaving a field, F6 into an empty group) draws no focus ring:
+the line already says the pane has the keyboard and nothing inside is selected.
 When the keyboard brings focus into a region, or a first `F6` points out the current one, the shell sets
 `data-region-flash` there, which draws a 1px **frame** inside its edges: held ≈1 s, then a 0.5 s fade,
 with no fade under `prefers-reduced-motion` (when it flashes is the shell's, *Global chords*). Both are
@@ -127,6 +129,11 @@ the region's own content but never over another region, a portal, a toast or a r
 No region is dimmed. A veil that muted every region but the active one (`region-inactive-scrim`, 40% /
 60% of the workspace canvas) shipped first and was removed at the user's request (2026-11-14): the fade
 was too strong. Mark the active region; do not dim the others.
+
+A Settings search jump flashes the row it lands on (`data-setting-flash`,
+[settingsKit/SPEC.md](../settingsKit/SPEC.md)) with a `primary-subtle` **background**, held about 0.8 s
+and faded over the rest of 1.6 s, static under `prefers-reduced-motion`. It is a highlight, not a focus
+signal: the row's control already shows the ring, so the flash never draws one.
 
 ## Transparency: one form only
 

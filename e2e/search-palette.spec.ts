@@ -12,12 +12,14 @@ import {
 } from "@thinkrail/contracts";
 import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
 import {
+	closeSettings,
 	createWorkspaceViaDialog,
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
 	openFixtureProject,
 	pressPlatformShortcut,
 } from "./fixtures/app";
+import { resetKeybindings, setKeybindings } from "./fixtures/keybindings";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 import { E2eWire } from "./fixtures/wire";
@@ -485,7 +487,31 @@ test("the double-Shift row opens the Keyboard settings, and Ctrl+R stays inert u
 	await expect(palette(page)).toBeHidden();
 	await expect(page.getByTestId("settings-dialog")).toBeVisible();
 	await expect(page.getByTestId("settings-nav-keyboard")).toHaveAttribute("data-active", "true");
-	await expect(page.getByTestId("settings-double-shift")).toBeVisible();
+	await expect(page.getByTestId("settings-double-shift")).toBeFocused();
+	await expect(page.locator('[data-setting-id="double-shift"]')).toHaveAttribute(
+		"data-setting-flash",
+		"",
+	);
+});
+
+test("a setting's own palette row opens Settings on that setting, focused and flashed", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await openPalette(page);
+	await page.getByTestId("search-input").fill(">chat line width");
+	const row = page.locator('[data-testid="search-row"][data-item-id="setting:chat-line-width"]');
+	await expect(row).toBeVisible();
+	await expect(row).toContainText("Settings › Text & fonts");
+	await row.click();
+	await expect(palette(page)).toBeHidden();
+	await expect(page.getByTestId("settings-nav-text")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("chat-line-width-input")).toBeFocused();
+	await expect(page.locator('[data-setting-id="chat-line-width"]')).toHaveAttribute(
+		"data-setting-flash",
+		"",
+	);
+	await closeSettings(page);
 });
 
 test("an active IME owns Escape, arrows, Tab and Enter in the palette input", async ({ page }) => {
@@ -570,6 +596,56 @@ test("Tab, Alt+digit and the chips switch the scope and write its prefix", async
 	await page.keyboard.press("ControlOrMeta+Alt+KeyI");
 	await pressPlatformShortcut(page, "i");
 	await expect(preview).toHaveAttribute("aria-pressed", "false");
+});
+
+test.describe("rebound palette keys", () => {
+	test.afterEach(async ({ page }) => resetKeybindings(page));
+
+	test("a rebound preview chord toggles the preview, shows on its button, and Mod+I no longer does", async ({
+		page,
+	}) => {
+		await openFixtureProject(page);
+		await setKeybindings(page, { "palette.preview": ["Alt+KeyP"] });
+		await openPalette(page);
+		const preview = page.getByTestId("search-preview-toggle");
+		await expect(preview.locator("kbd")).toHaveText(["Alt", "P"]);
+		const initial = await preview.getAttribute("aria-pressed");
+		const flipped = initial === "true" ? "false" : "true";
+
+		await page.keyboard.press("Alt+KeyP");
+		await expect(preview).toHaveAttribute("aria-pressed", flipped);
+		await pressPlatformShortcut(page, "i");
+		await page.keyboard.press("Alt+KeyP");
+		await expect(preview).toHaveAttribute("aria-pressed", initial ?? "false");
+	});
+
+	test("a preview rebound onto Alt+Tab and Alt+Esc toggles it instead of changing scope or closing", async ({
+		page,
+	}) => {
+		await openFixtureProject(page);
+		await setKeybindings(page, { "palette.preview": ["Alt+Tab", "Alt+Escape"] });
+		await openPalette(page);
+		const input = page.getByTestId("search-input");
+		await input.fill("auth");
+		const preview = page.getByTestId("search-preview-toggle");
+		const initial = (await preview.getAttribute("aria-pressed")) ?? "false";
+		const flipped = initial === "true" ? "false" : "true";
+
+		await page.keyboard.press("Alt+Tab");
+		await expect(preview).toHaveAttribute("aria-pressed", flipped);
+		await expect(chip(page, "all")).toHaveAttribute("aria-pressed", "true");
+		await expect(input).toHaveValue("auth");
+
+		await page.keyboard.press("Alt+Escape");
+		await expect(palette(page)).toBeVisible();
+		await expect(preview).toHaveAttribute("aria-pressed", initial);
+		await expect(input).toHaveValue("auth");
+
+		await page.keyboard.press("Tab");
+		await expect(chip(page, "work")).toHaveAttribute("aria-pressed", "true");
+		await page.keyboard.press("Escape");
+		await expect(input).toHaveValue("");
+	});
 });
 
 test("host search: a file by name opens as a tab, a spec section by its words opens in the Specs tool", async ({

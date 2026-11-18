@@ -152,8 +152,11 @@ export interface ResourceViewModule {
 
 export type ResourceIntent = "view" | "diff";
 
+export type FrameFocus = "auto" | "manual";
+
 export interface ResourceEnvironment {
 	mobile: boolean;
 	compact?: boolean;
 	htmlViewport?: HtmlViewport;
+	frameFocus?: FrameFocus;
 }

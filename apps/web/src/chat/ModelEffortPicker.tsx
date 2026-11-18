@@ -98,7 +98,12 @@ export interface ModelEffortPickerProps {
 	defaultOption?: DefaultPairOption;
 	container?: HTMLElement | null;
 	className?: string;
+	canSetDefault?: boolean;
+	tabIndex?: number;
+	fitContainer?: boolean;
 }
+
+const FIT_PADDING = 8;
 
 function rowKeywords(model: WireModel): string[] {
 	return [model.name, model.id, model.provider, ...model.thinkingLevels];
@@ -317,6 +322,9 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 			defaultOption,
 			container,
 			className,
+			canSetDefault = true,
+			tabIndex,
+			fitContainer = false,
 		},
 		handleRef,
 	) {
@@ -467,6 +475,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 				<PopoverTrigger
 					data-testid="model-selector"
 					data-open={open}
+					tabIndex={tabIndex}
 					className={cn(
 						"flex h-32 min-w-0 items-center gap-8 rounded-sm px-8 tr-text-ui text-text-default transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring data-[open=true]:bg-control-bg-selected",
 						className,
@@ -500,7 +509,13 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 				<PopoverContent
 					align="start"
 					container={container}
-					className="flex max-h-[var(--radix-popover-content-available-height)] w-[min(360px,calc(100vw-16px))] flex-col p-0"
+					{...(fitContainer && container
+						? { collisionBoundary: container, collisionPadding: FIT_PADDING }
+						: {})}
+					className={cn(
+						"flex max-h-[var(--radix-popover-content-available-height)] w-[min(360px,calc(100vw-16px))] flex-col p-0",
+						fitContainer && "max-w-[var(--radix-popover-content-available-width)]",
+					)}
 				>
 					<Command
 						className="min-h-0 flex-1 bg-transparent"
@@ -600,7 +615,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 						/>
 					) : null}
 					<div className="flex shrink-0 flex-wrap items-center gap-x-8 gap-y-4 border-border-default border-t px-8 py-4">
-						{preferences.supported && current ? (
+						{canSetDefault && preferences.supported && current ? (
 							<Button
 								variant="ghost"
 								size="s"

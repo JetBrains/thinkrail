@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { flashesOnArrival, orderRegions, type RegionKind, regionKeyAction } from "./regions";
+import {
+	flashesOnArrival,
+	type LandingLookup,
+	orderRegions,
+	type RegionKind,
+	regionKeyAction,
+	resolveEscapeLanding,
+	resolveLanding,
+} from "./regions";
 
 const region = (name: string, kind: RegionKind, top: number, left: number) => ({
 	name,
@@ -77,5 +85,48 @@ describe("arrival frame", () => {
 
 	test("never flashes for a move inside the same region", () => {
 		expect(flashesOnArrival("chat", "chat", true)).toBe(false);
+	});
+});
+
+describe("landing in a region", () => {
+	const lookup = (found: Partial<Record<keyof LandingLookup<string>, string>>) => ({
+		claim: () => found.claim ?? null,
+		remembered: () => found.remembered ?? null,
+		preferred: () => found.preferred ?? null,
+		selectedTab: () => found.selectedTab ?? null,
+		first: () => found.first ?? null,
+	});
+
+	test("a waiting question's focus claim wins over the remembered element and the default", () => {
+		expect(
+			resolveLanding(
+				lookup({ claim: "option", remembered: "composer", preferred: "composer", first: "tab" }),
+			),
+		).toBe("option");
+	});
+
+	test("without a claim, the remembered element, then the default, the selected tab and the first stop", () => {
+		expect(resolveLanding(lookup({ remembered: "row", preferred: "composer" }))).toBe("row");
+		expect(resolveLanding(lookup({ preferred: "composer", selectedTab: "tab" }))).toBe("composer");
+		expect(resolveLanding(lookup({ selectedTab: "tab", first: "button" }))).toBe("tab");
+		expect(resolveLanding(lookup({ first: "button" }))).toBe("button");
+		expect(resolveLanding(lookup({}))).toBeNull();
+	});
+});
+
+describe("where an Esc lands in a region or the main area", () => {
+	const lookup = (found: { claim?: string; park?: string; rest?: string }) => ({
+		claim: () => found.claim ?? null,
+		park: () => found.park ?? null,
+		rest: () => found.rest ?? null,
+	});
+
+	test("a waiting question's claim first, then the park, then the rest", () => {
+		expect(resolveEscapeLanding(lookup({ claim: "option", park: "feed", rest: "root" }))).toBe(
+			"option",
+		);
+		expect(resolveEscapeLanding(lookup({ park: "feed", rest: "root" }))).toBe("feed");
+		expect(resolveEscapeLanding(lookup({ rest: "editor" }))).toBe("editor");
+		expect(resolveEscapeLanding(lookup({}))).toBeNull();
 	});
 });

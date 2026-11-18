@@ -5,7 +5,7 @@ import type { ResourceContent, ResourceDiffProps } from "../../registry";
 import { diffContentStamp } from "../reviewComposerState";
 import { sideCaption, VisualDiff, type VisualDiffSide } from "../VisualDiff";
 import { HtmlFrame } from "./HtmlFrame";
-import { buildHtmlPreviewDocument } from "./htmlDocument";
+import { buildHtmlPreviewDocument, buildInteractiveHtmlDocument } from "./htmlDocument";
 import { createScrollLink, type ScrollLink } from "./scrollLink";
 import { useHtmlViewport } from "./useHtmlViewport";
 import { HtmlPreviewNotice } from "./ViewportSwitch";
@@ -20,26 +20,36 @@ function HtmlSide({
 	title,
 	viewport,
 	scrollLink,
+	interactive,
 }: {
 	text: string;
 	title: string;
 	viewport: HtmlViewport;
 	scrollLink: ScrollLink;
+	interactive: boolean;
 }) {
-	const document = useMemo(() => buildHtmlPreviewDocument(text), [text]);
-	const compact = useResourceEnvironment().compact ?? false;
+	const built = useMemo(
+		() =>
+			interactive
+				? buildInteractiveHtmlDocument(text)
+				: { document: buildHtmlPreviewDocument(text), token: undefined },
+		[text, interactive],
+	);
+	const { compact = false, frameFocus } = useResourceEnvironment();
 	return (
 		<HtmlFrame
 			title={title}
-			document={document}
+			document={built.document}
 			viewport={viewport}
 			scrollLink={scrollLink}
 			compact={compact}
+			interactiveToken={built.token}
+			frameFocus={frameFocus}
 		/>
 	);
 }
 
-export default function HtmlDiff({
+export function HtmlComparison({
 	resource,
 	originalResource = resource,
 	original,
@@ -47,7 +57,8 @@ export default function HtmlDiff({
 	viewState,
 	onViewState,
 	sideLabels,
-}: ResourceDiffProps) {
+	interactive,
+}: ResourceDiffProps & { interactive: (path: string) => boolean }) {
 	const t = useT();
 	const noDocument = t("viewer.html.noDocument");
 	const [viewport, selectViewport] = useHtmlViewport(viewState, onViewState);
@@ -63,6 +74,7 @@ export default function HtmlDiff({
 					title={t("viewer.html.originalPreview", { path: originalResource.path })}
 					viewport={viewport}
 					scrollLink={scrollLink}
+					interactive={interactive(originalResource.path)}
 				/>
 			),
 		caption:
@@ -80,6 +92,7 @@ export default function HtmlDiff({
 					title={t("viewer.html.modifiedPreview", { path: resource.path })}
 					viewport={viewport}
 					scrollLink={scrollLink}
+					interactive={interactive(resource.path)}
 				/>
 			),
 		caption:
@@ -90,7 +103,11 @@ export default function HtmlDiff({
 	};
 	return (
 		<div className="flex h-full min-h-0 flex-col">
-			<HtmlPreviewNotice viewport={viewport} onViewport={selectViewport} />
+			<HtmlPreviewNotice
+				viewport={viewport}
+				onViewport={selectViewport}
+				interactive={interactive(resource.path) || interactive(originalResource.path)}
+			/>
 			<div className="min-h-0 flex-1">
 				<VisualDiff
 					prefix="html"
@@ -107,4 +124,10 @@ export default function HtmlDiff({
 			</div>
 		</div>
 	);
+}
+
+const STATIC = () => false;
+
+export default function HtmlDiff(props: ResourceDiffProps) {
+	return <HtmlComparison {...props} interactive={STATIC} />;
 }

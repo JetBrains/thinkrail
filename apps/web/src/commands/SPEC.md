@@ -18,7 +18,7 @@ whoever composes the catalog, today `shell`.
 
 - **Public surface:** `Command`, `CommandGroup`, `CommandShortcut`, `COMMAND_GROUP_LABELS`,
   `isCommandEnabled`, `shortcutKeys`.
-- **Allowed deps:** `lib` (platform family), `@thinkrail/locales` (the group-label `MessageKey`s), `@remixicon/react` types.
+- **Allowed deps:** `@thinkrail/ui/keyboard` (`chordCaps`, the one cap formatter `shortcutKeys` delegates to, shared with the local-keys seam), `@thinkrail/locales` (the group-label `MessageKey`s), `@remixicon/react` types.
 - **Forbidden:** importing `store`, `transport`, `panels`, `chat`, `shell` or `search`; binding keys. A
   command's `shortcut` is display-only. For an app-wide chord it is `keybindingShortcut(resolved, id, {
   browser })` from [[submodule-web-keybindings]] over the resolved table `shell`'s `useGlobalHotkeys`

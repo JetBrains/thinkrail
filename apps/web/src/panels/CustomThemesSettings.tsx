@@ -1,10 +1,10 @@
 import type { UserThemesSnapshot } from "@thinkrail/contracts";
 import { T, type Translator, useT } from "@thinkrail/locales/react";
-import type { ReactNode } from "react";
+import { SettingsGroup } from "@/settingsKit";
 import type { UserThemeIssue } from "@/themes";
-import { repoSourceUrl } from "./LanguageSettings";
+import { repoSourceUrl, SettingsLink } from "./LanguageSettings";
 import { type FolderActions, SettingsFileIssues, SettingsFolderRow } from "./SettingsFolder";
-import { SettingsGroup } from "./SettingsGroup";
+import { SETTING, settingProps } from "./settingsCatalog";
 
 const EXAMPLE_THEME_PATH = "apps/web/src/themes/bundled/dark.theme.json";
 
@@ -27,20 +27,6 @@ function issueLabel(t: Translator, issue: UserThemeIssue): string {
 	}
 }
 
-function ExampleLink({ href, children }: { href: string; children?: ReactNode }) {
-	return (
-		<a
-			data-testid="custom-themes-example"
-			href={href}
-			target="_blank"
-			rel="noopener noreferrer"
-			className="text-primary underline underline-offset-2 hover:opacity-80 focus-visible:focus-ring"
-		>
-			{children}
-		</a>
-	);
-}
-
 export interface CustomThemesGroupProps extends FolderActions {
 	snapshot: UserThemesSnapshot | null;
 	issues: readonly UserThemeIssue[];
@@ -56,22 +42,24 @@ export function CustomThemesGroup({
 }: CustomThemesGroupProps) {
 	const t = useT();
 	if (!snapshot) return null;
-	const folder = snapshot.dir;
 	return (
 		<SettingsGroup title={t("settings.appearance.custom.title")} testId="custom-themes">
-			<p className="py-12 tr-text-metadata text-text-muted">
-				<T
-					i18nKey="settings.appearance.custom.steps"
-					components={[
-						<ExampleLink key="example" href={repoSourceUrl(appVersion, EXAMPLE_THEME_PATH)} />,
-					]}
-				/>
-			</p>
 			<SettingsFolderRow
-				label={t("settings.appearance.custom.folder")}
-				folder={folder}
+				{...settingProps(t, SETTING.themeFolder)}
+				description={
+					<T
+						i18nKey="settings.appearance.custom.steps"
+						components={[
+							<SettingsLink
+								key="example"
+								href={repoSourceUrl(appVersion, EXAMPLE_THEME_PATH)}
+								testId="custom-themes-example"
+							/>,
+						]}
+					/>
+				}
+				folder={snapshot.dir}
 				testIdPrefix="custom-themes"
-				noBorder={issues.length === 0}
 				onCopyFolder={onCopyFolder}
 				onRevealFolder={onRevealFolder}
 			/>

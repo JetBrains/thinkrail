@@ -6,6 +6,7 @@ import {
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
+import { isContextMenuKey } from "@thinkrail/ui/context-menu";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -15,7 +16,7 @@ import {
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { useRef, useState } from "react";
 import { copyText } from "@/lib";
-import { focusTreeItemOnMenuClose, treeRowControlProps, treeRowKey } from "./treeNavigation";
+import { focusTreeItemOnMenuClose, treeRowControlProps } from "./treeNavigation";
 
 export const ROW_MENU_SLOT = "mr-4 size-20 shrink-0";
 
@@ -43,7 +44,7 @@ export function ChangeRowActions({
 		setOpen(true);
 	};
 	const onKeyDown = (event: KeyboardEvent) => {
-		if (treeRowKey(event) !== "menu") return;
+		if (event.defaultPrevented || !isContextMenuKey(event)) return;
 		event.preventDefault();
 		setOpen(true);
 	};

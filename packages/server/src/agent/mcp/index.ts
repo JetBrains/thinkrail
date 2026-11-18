@@ -19,8 +19,10 @@ export { createMcpEngine, HOST_BUILTIN_EXTENSION_NAMES } from "./engine";
 export { readMcpServerLog } from "./log";
 export {
 	effectiveMcpServerConfig,
+	type McpConfigFile,
 	mcpEntryFingerprint,
 	removeMcpServerEntry,
+	setUserMcpEntryFields,
 	shareMcpOverrideWithRepo,
 	writeMcpServerEntry,
 } from "./management";

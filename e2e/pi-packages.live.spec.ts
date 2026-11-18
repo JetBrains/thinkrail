@@ -1,7 +1,13 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
+import {
+	closeSettings,
+	createWorkspaceViaDialog,
+	openFixtureProject,
+	openSettingsSection,
+	worktreeRows,
+} from "./fixtures/app";
 import { E2E_DATA_DIR, E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import { writePiPackageFixture } from "./fixtures/piPackage";
 
@@ -48,8 +54,7 @@ test("the agent calls a tool from a pi package installed in Settings", { tag: "@
 	writeFixturePackage();
 	await openFixtureProject(page);
 
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-extensions").click();
+	await openSettingsSection(page, "extensions");
 	await page.getByTestId("packages-install").click();
 	const dialog = page.getByTestId("install-package-dialog");
 	await dialog.getByTestId("install-package-source").fill(FIXTURE_PACKAGE);
@@ -57,8 +62,7 @@ test("the agent calls a tool from a pi package installed in Settings", { tag: "@
 	await expect(dialog.getByTestId("install-package-done")).toBeVisible({ timeout: 60_000 });
 	await expect(dialog.getByTestId("install-package-chips")).toContainText("fixture_secret_word");
 	await dialog.getByTestId("install-package-done").click();
-	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("settings-dialog")).toBeHidden();
+	await closeSettings(page);
 
 	await createWorkspaceViaDialog(page);
 	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");

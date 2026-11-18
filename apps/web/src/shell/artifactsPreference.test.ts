@@ -24,13 +24,28 @@ let stop: (() => void) | null = null;
 afterEach(() => {
 	stop?.();
 	stop = null;
-	useAppStore.setState({ artifactsSeenByWorkspace: {}, artifactsShowIgnored: true });
+	useAppStore.setState({
+		artifactsSeenByWorkspace: {},
+		artifactsShowIgnored: true,
+		artifactsView: null,
+		artifactsSmart: true,
+		artifactsTreeExpandedByWorkspace: {},
+	});
 });
 
 test("an untouched client shows ignored outputs and has seen nothing", () => {
-	stop = initArtifactsPersistence(memoryAdapter({ "artifacts-seen": "not json" }));
+	stop = initArtifactsPersistence(
+		memoryAdapter({
+			"artifacts-seen": "not json",
+			"artifacts-view": "grid",
+			"artifacts-tree-expanded": "[]",
+		}),
+	);
 	expect(useAppStore.getState().artifactsShowIgnored).toBe(true);
 	expect(useAppStore.getState().artifactsSeenByWorkspace).toEqual({});
+	expect(useAppStore.getState().artifactsView).toBeNull();
+	expect(useAppStore.getState().artifactsSmart).toBe(true);
+	expect(useAppStore.getState().artifactsTreeExpandedByWorkspace).toEqual({});
 });
 
 test("stored choices hydrate the store and later changes are written back", () => {
@@ -45,4 +60,31 @@ test("stored choices hydrate the store and later changes are written back", () =
 	useAppStore.getState().setArtifactsShowIgnored(true);
 	expect(JSON.parse(adapter.values.get("artifacts-seen") ?? "{}")).toEqual({ w1: 20 });
 	expect(adapter.values.get("artifacts-show-ignored")).toBe("true");
+});
+
+test("the view and each workspace's open folders are remembered", () => {
+	const adapter = memoryAdapter({
+		"artifacts-view": "tree",
+		"artifacts-smart": "false",
+		"artifacts-tree-expanded": JSON.stringify({ w1: ["a", 1, "a/b"], w2: "bad", w3: [] }),
+	});
+	stop = initArtifactsPersistence(adapter);
+	const store = useAppStore.getState();
+	expect(store.artifactsView).toBe("tree");
+	expect(store.artifactsSmart).toBe(false);
+	expect(store.artifactsTreeExpandedByWorkspace).toEqual({ w1: ["a", "a/b"] });
+	store.setArtifactsView("smart");
+	store.setArtifactsSmart(true);
+	store.setArtifactsTreeExpanded("w2", ["x", "x/y"], true);
+	store.setArtifactsTreeExpanded("w1", ["a/b"], false);
+	expect(adapter.values.get("artifacts-view")).toBe("smart");
+	expect(adapter.values.get("artifacts-smart")).toBe("true");
+	expect(JSON.parse(adapter.values.get("artifacts-tree-expanded") ?? "{}")).toEqual({
+		w1: ["a"],
+		w2: ["x", "x/y"],
+	});
+	useAppStore.getState().collapseAllArtifacts("w2");
+	expect(JSON.parse(adapter.values.get("artifacts-tree-expanded") ?? "{}")).toEqual({
+		w1: ["a"],
+	});
 });

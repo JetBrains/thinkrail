@@ -283,6 +283,25 @@
 	}
 }
 
+[data-setting-flash] {
+	animation: setting-flash 1.6s ease-out forwards;
+}
+@keyframes setting-flash {
+	0%,
+	50% {
+		background-color: var(--color-primary-subtle);
+	}
+	to {
+		background-color: transparent;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	[data-setting-flash] {
+		animation: none;
+		background-color: var(--color-primary-subtle);
+	}
+}
+
 .xterm .xterm-rows {
 	font-variant-ligatures: none;
 }

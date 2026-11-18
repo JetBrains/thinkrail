@@ -23,9 +23,10 @@ the injected `PaletteStart`).
 ## Boundary
 
 - **Public surface:** `SearchPalette`, `SearchPaletteProps`, `PaletteHost`, `PaletteStart`, `PaletteAsk`,
-  `SearchSettings`, `initSearchPreferences`, `createDoubleShiftDetector`, `buildWorkItems`,
-  `waitingItems`, `commandItems`, `SearchScope`, `PaletteItem`, `PaletteFile`.
-- **Allowed deps:** `contracts` (the shared matcher and the search DTOs), `commands`, `store`
+  `initSearchPreferences`, `createDoubleShiftDetector`, `buildWorkItems`, `waitingItems`,
+  `commandItems`, `SearchScope`, `PaletteItem`, `PaletteFile`.
+- **Allowed deps:** `contracts` (the shared matcher and the search DTOs), `commands`, `keybindings`
+  (`LOCAL_KEY_DEFAULTS` for scope `palette`), `store`
   (`selectHostSearchAvailable` / `selectHostReachable`, the welcome generation, the location Recent
   stamps), `transport`
   (`search.query` / `search.preview`, and the backend endpoint for browser preference keys), `clientPreferences`, `constants`, `components`, `lib`,
@@ -242,7 +243,12 @@ with AltGr or Option on a digit key (`#`, `@`, `|`) stays the input's, and macOS
 since Option always types one (a chip writes its prefix into the query, so the prefix is the one source
 of scope). `Mod+I` toggles the preview pane where it is shown, `Mod+K` closes the palette (the chord that
 opened it), `Mod+↵` starts work from the typed text and `Alt+↵` asks the agent from a `#` query (both
-above).
+above). `Mod+I`, `Mod+↵` and `Alt+↵` are the rebindable local keys `palette.preview` / `startWork` / `ask`
+([[submodule-web-keybindings]], *Local keys*), matched through `useLocalKeys` (non-typing chords, so they
+act in the input) and shown in the footer and on the preview toggle with their resolved caps; ↑/↓, ↵,
+Tab and Escape are locked. A matched local key acts before any of them, Escape included (the dialog's
+`onEscapeKeyDown` yields to it), and they act only without Alt/Ctrl/⌘ — Tab is still consumed then, but
+changes no scope. `Mod+K` here stays literal.
 Escape clears the query, then closes; an untrusted (synthetic) Escape — the desktop close-item command —
 closes outright. Closing without a pick returns focus to the element that held it when the palette
 opened (the composer an accidental double Shift interrupted, the topbar button); a pick leaves focus to
@@ -271,6 +277,7 @@ delivers keys to the parent window, so the gesture does not fire from inside it.
 
 ## Keyboard settings
 
-`SearchSettings` is the Settings → Keyboard section: the `Mod+K` note (a sentence without a chord when
-the user unbound it), the double-Shift switch and, below it, whatever `shortcuts` node the shell injects
-(the shortcut editor, [[submodule-web-shell]]) — `search` never imports the shell's editor.
+`search` renders no Settings section. The Settings → Keyboard section — the `Mod+K` note, the
+double-Shift switch (`store.doubleShiftSearch`, read by the gesture above) and the shortcut editor — is the
+shell's `KeyboardSettings` ([[submodule-web-shell]]), built on the Settings kit; `search` keeps only the
+preference's persistence (`initSearchPreferences`) and the detector.

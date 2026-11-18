@@ -106,6 +106,11 @@ export function compareJumpIndex(key: string, count: number): number | null {
 	return index < count ? index : null;
 }
 
+export function compareKeyShortcuts(count: number, choosable: boolean): string {
+	const jumps = Array.from({ length: Math.min(count, 9) }, (_, index) => String(index + 1));
+	return ["ArrowLeft", "ArrowRight", ...jumps, ...(choosable ? ["Enter"] : []), "Escape"].join(" ");
+}
+
 type VisualKind = "html" | "image" | "svg";
 
 function visualKind(source: PreviewSource | null): VisualKind | null {

@@ -9,8 +9,10 @@ import {
 } from "@thinkrail/pi-ask-user-question";
 import {
 	ASK_USER_QUESTION_TOOL_NAME,
+	type AskUserQuestionItem,
 	buildQuestionnaireResponse,
 	isAskUserQuestionArgs,
+	previewFileSources,
 } from "@thinkrail/pi-ask-user-question/core";
 import { thinkrailGuidance } from "./guidance";
 
@@ -29,6 +31,31 @@ function describeResponse(args: unknown, response: unknown): string | undefined 
 	return buildQuestionnaireResponse(response, args)
 		.content.map((block) => block.text)
 		.join("");
+}
+
+function previewedPaths(args: unknown): string[] {
+	return isAskUserQuestionArgs(args) ? previewFileSources(args).map((source) => source.path) : [];
+}
+
+function answerPicks(answer: unknown, questions: readonly AskUserQuestionItem[]): string[] {
+	if (typeof answer !== "object" || answer === null) return [];
+	if ("previewFile" in answer && typeof answer.previewFile === "string" && answer.previewFile)
+		return [answer.previewFile];
+	if (!("kind" in answer) || answer.kind !== "multi") return [];
+	if (!("selected" in answer) || !Array.isArray(answer.selected)) return [];
+	if (!("questionIndex" in answer) || typeof answer.questionIndex !== "number") return [];
+	const options = questions[answer.questionIndex]?.options ?? [];
+	return answer.selected.flatMap((label: unknown) => {
+		const file = options.find((option) => option.label === label)?.previewFile;
+		return file ? [file] : [];
+	});
+}
+
+function pickedPaths(args: unknown, details: unknown): string[] {
+	if (typeof details !== "object" || details === null || !("answers" in details)) return [];
+	if (!Array.isArray(details.answers)) return [];
+	const questions = isAskUserQuestionArgs(args) ? (args.questions ?? []) : [];
+	return details.answers.flatMap((answer: unknown) => answerPicks(answer, questions));
 }
 
 export default defineServerExtension({
@@ -51,4 +78,7 @@ export default defineServerExtension({
 		},
 	],
 	interactiveTools: { [ASK_USER_QUESTION_TOOL_NAME]: { describeResponse } },
+	artifactTools: {
+		[ASK_USER_QUESTION_TOOL_NAME]: { presented: previewedPaths, picked: pickedPaths },
+	},
 });

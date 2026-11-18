@@ -56,6 +56,7 @@ import {
 	treeRowControlProps,
 	treeRowKey,
 	useTreeItem,
+	useTreeKeys,
 } from "./treeNavigation";
 import {
 	loadProjectWorkspaces,
@@ -162,6 +163,7 @@ function ChatRow({
 	editors: EditorInfo[];
 }) {
 	const t = useT();
+	const treeKeys = useTreeKeys();
 	const firstPrompt = useAppStore((s) => selectChatWorkspaceFirstPrompt(s, workspace.id));
 	const label = chatLabel(t, title, firstPrompt);
 	const [menuOpen, setMenuOpen] = useState(false);
@@ -209,7 +211,7 @@ function ChatRow({
 						if (!pending) useAppStore.getState().activateWorkspace(workspace);
 					}}
 					onKeyDown={(event) => {
-						const key = treeRowKey(event);
+						const key = treeRowKey(event.nativeEvent, treeKeys);
 						if (key === "menu") setMenuOpen(true);
 						else if (key === "delete" && pending) void deleteProjectlessChat(workspace.id);
 						else if (key === "delete") setConfirming(true);

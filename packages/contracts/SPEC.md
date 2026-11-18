@@ -447,11 +447,19 @@ the palette ranks with — kept here so host-side search can rank with the same 
   with `ENTRY_EXISTS` instead of renaming, for a folder into itself, and with `MOVE_ACROSS_DEVICES` when
   source and destination are on different file systems),
   the **Artifacts** tool's wire from the same version: `artifacts.list` (`{ workspaceId }` →
-  **`WorkspaceArtifactsSnapshot`**: `dir` (the artifacts folder, `.thinkrail/context`), `artifacts`
+  **`WorkspaceArtifactsSnapshot`**: `dir` (the artifacts folder, `.thinkrail/context`; agents write mockups to
+  its **`WORKSPACE_MOCKUP_DIR`**, `.thinkrail/context/mockups`, the one name the host's mockup check and the
+  browser UI's interactive-HTML glob share), `artifacts`
   (**`WorkspaceArtifact`**: worktree-relative `path`, `state: "live" | "deleted"` — deleted means gone from
   disk but restorable from the host's kept copy — `size`, `changedAt` (for a deleted row, when the host saw
   it gone, so a new deletion of the same path carries a new value), `firstSeenAt`, the writing chat's
-  optional `sessionId`) and `outputs` (**`WorkspaceIgnoredOutput`** rows — an ignored file or folder an
+  optional `sessionId`, and from **`ARTIFACT_ROLES_PROTOCOL_VERSION`** (v124) the host's **`role`**
+  (`ArtifactRole`: `"result" | "working"`), its **`reason`** (`ArtifactRoleReason`: `picked`, `shown`,
+  `linked`, `document` for a result; `working-folder`, `script`, `data`, `unshown` for a working file)
+  and **`rounds`** (`ArtifactRound[]`: the chat rounds, `{ sessionId, startedAt }`, that created or
+  changed it, oldest first and bounded; `startedAt` is the round's prompt timestamp, or the run start for a
+  run no prompt opened) — absent from an older host, so a client that needs them checks the
+  version rather than reading absence as "working") and `outputs` (**`WorkspaceIgnoredOutput`** rows — an ignored file or folder an
   agent run produced, with its live `files` count and `filesTruncated` — or `null` where there is no git),
   `artifacts.restore` / `artifacts.discard` (`{ workspaceId, path }` → ack; a deleted row only, otherwise
   `ARTIFACT_UNKNOWN`; restore refuses a path that exists again with `ENTRY_EXISTS`; discard sends the kept
@@ -567,7 +575,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   store, fonts runtime); the line-width fields join the wire at protocol v61, `terminalWindowsShell` at v62, and
   `voiceInputEnabled` (default `true`) with voice input at v107, and `questionPanelHeight`
   (**`QUESTION_PANEL_PROTOCOL_VERSION`** = v114; whole percents `QUESTION_PANEL_HEIGHT_PERCENT` 40–100,
-  default 60, `isQuestionPanelHeight`) caps the chat's interaction dock; a client of an older host hides
+  default 70 since 2026-11-17, `isQuestionPanelHeight`) caps the chat's interaction dock; a client of an older host hides
   the setting and uses the default. `onboardingDismissed` (v94, default `false`)
   records that the user finished or skipped the cold-start onboarding wizard, so it never returns.
   `otherAgentSkills` (**`OTHER_AGENT_SKILLS_PROTOCOL_VERSION`** = v108, default `false`) is the host-wide
@@ -854,7 +862,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`cacheWarming.get`** / **`cacheWarming.set`** (v111, `CACHE_WARMING_SETTINGS_PROTOCOL_VERSION`; both
   return a **`CacheWarmingSetting`** — pi's `cacheWarming` mode, one of **`CACHE_WARMING_MODES`** `off` /
   `streaming` / `idle` tested by `isCacheWarmingMode`, and `source`: `user` when pi's global `settings.json`
-  names it, `default` when the host's own default applies. The mutation takes `{mode}`; a write pi's
+  names it, `default` when the host's own default, **`DEFAULT_CACHE_WARMING_MODE`** (`streaming`), applies. The mutation takes `{mode}`; a write pi's
   settings loader would silently skip fails with **`CACHE_WARMING_WRITE_FAILED`**. The value lives only in
   pi's file; no AppConfig field mirrors it) /
   **`customEndpoints.list`** / **`customEndpoints.probe`** / **`customEndpoints.save`** /
@@ -1210,7 +1218,10 @@ plain-text diagnostic excerpt and truncation flag, and the same optional `delive
 subagent completion (`wake` | `run` | `appended` — how the result reached the agent; absent in
 transcripts written before it, which keep the old round rules). The guards do not validate it; the
 shared `completionDelivery(details)` reader returns the marker or `undefined`, so an unknown value
-reads as absent everywhere. The conversation may render that historical notice,
+reads as absent everywhere. **`opensChatRound(message)`** is the message-level twin of the chat's
+turn-level `opensRound` ([[submodule-web-chat]]): a user prompt other than a control message, a
+`todo-review-fix`, a continuation request, a handoff, or a completion not delivered as `run`. The host
+uses it to cut artifact round markers where the chat cuts rounds; a web test pins the two together. The conversation may render that historical notice,
 but must never infer current resource authority from it; logs and controls still use scoped reads.
 
 Every read/control validates workspace membership and parent lineage, not merely a syntactically
@@ -1260,6 +1271,20 @@ contracts only.
 - Every request names its target: `workspaceId` for configuration (project scope = that workspace's
   `.pi/mcp.json`; `user` = the global file), plus `sessionId` for per-session actions (`reconnect`,
   `setSessionOverride`, `readOutput`). The host has no notion of an "active workspace".
+- **User-level servers without a workspace** (`MCP_USER_SERVERS_PROTOCOL_VERSION`, 125). `mcp.list`,
+  `mcp.login`, `mcp.logout`, `mcp.testConnection` and `mcp.readLog` take `workspaceId` optionally;
+  `add` / `update` / `remove` take it optionally only at `scope: "user"` (`McpScopeTarget`), and the host
+  refuses project scope without one (`MCP_CONFIG_INVALID`). Without a workspace the list holds the user
+  servers alone with `statuses: []`, the global file's `configErrors`, and `handledElsewhere` from pi's
+  global settings only (no chat is consulted); mutations reconcile every workspace's live chats; probes
+  run against the global file with no project policy, and their `provider.login` pushes carry a
+  `LoginPush.target` (`McpLoginTarget`, whose `workspaceId` is optional) that names no workspace.
+  **`mcp.setUserServer { name, expectedFingerprint, enabled?, exposure? }`** is the no-workspace switch: it merges only those keys into the user entry of
+  the global `mcp.json` (pi's writer semantics — `enabled: true` is removed as the default; exposure is
+  `deferred` / `direct` / `hidden`), so it applies to every project without its own override and to the
+  pi CLI, refused like `update` when the entry no longer has the rendered fingerprint. Inside a workspace
+  the switch stays `setProjectOverride`, a record write; the global file is never written by a toggle
+  there.
 - `mcp.list` returns the configured `McpServerSummary` set (scope, defining file, the `fingerprint` of the
   defining file's entry as rendered, masked endpoint, configured and effective exposure, enablement,
   project override, repo-approval state, pi-equivalent config error — one per named entry, an entry that
@@ -1284,7 +1309,7 @@ contracts only.
   (`{ tool, label }`: grants still valid for the effective entry, listed on that row only) and
   `mcp.revokeToolGrant { workspaceId, name, tool }`, a record-only mutation like `setProjectOverride`.
   An older host never lists grants, so a client needs no gate to hide the revoke.
-- Mutations (`add`, `update`, `remove`, `setProjectOverride`, `approve`, `shareWithRepo`, `revokeToolGrant`) re-check that
+- Mutations (`add`, `update`, `remove`, `setUserServer`, `setProjectOverride`, `approve`, `shareWithRepo`, `revokeToolGrant`) re-check that
   ownership and the current project policy in the same synchronous step as the write and fail with `MCP_HANDLED_ELSEWHERE` where
   `mcp.list` would set `handledElsewhere`, so a stale client cannot write while another manager owns MCP; they return the fresh
   list without waiting for the open chats to reload; `mcp.status` pushes report each reload, so the returned
@@ -1330,7 +1355,7 @@ contracts only.
   `details.thinkrail` that lets cards render identically live, after reload and on another client.
   `mcp.readOutput` serves a result's recorded `fullOutputPath` only and reports `expired` when the temp
   file is gone.
-- `mcp.readLog { workspaceId, name }` returns `McpServerLog`: the server's latest lines (at most 200, oldest
+- `mcp.readLog { workspaceId?, name }` returns `McpServerLog`: the server's latest lines (at most 200, oldest
   first) from pi's shared `mcp.log` and its rotated copy — the `notifications/message` log messages servers
   send pi, attributed by each entry's `[<server>]` head — masked like `detail`; `text` is empty when the
   server logged nothing there. It needs no session: pi keeps one log per agent directory.

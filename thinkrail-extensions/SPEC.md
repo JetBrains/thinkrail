@@ -14,13 +14,14 @@ A **ThinkRail extension** is a workspace package `thinkrail-extensions/<name>/` 
 private) that composes a pi capability — usually a [[module-pi-extensions]] package, possibly a
 third-party pi package — with its ThinkRail-specific halves: what the host bundles into sessions and how
 the web client presents the capability's tools. The host composes extensions from **one registry file per
-side**. A user sees the server registry in Settings → Extensions — plus the web-only entries below — and can
+side**. A user sees the server registry in Settings → Extensions & skills — plus the web-only entries below — and can
 switch each extension off (a host-level setting keyed on the descriptor `name`; the extension declares
 nothing for it); how a user would install or discover a new extension is deliberately not designed.
 
 A **web-only extension** has no pi capability and no `./server` (hint mode, [[module-ext-hint-mode]]). The
-server catalog cannot list it, so Settings → Extensions also lists every web registry entry that declares a
-`title` and that the catalog lacks, with the same `disabledExtensions` switch (the host carries unknown
+server catalog cannot list it, so Settings → Extensions & skills also lists every web registry entry that declares a
+`title`, renders no tool and that the catalog lacks (a tool renderer implies a server half, so ask-user-question's
+title only names its Settings → Keyboard section), with the same `disabledExtensions` switch (the host carries unknown
 names through and reloads no session for them); it applies at once. A stub server extension just to get a
 row was rejected: an older host would not list it either, and an extension here composes a pi capability.
 **Global contributions are mounted only while enabled; tool renderers stay regardless** — a switched-off
@@ -29,7 +30,7 @@ drawing old transcripts.
 
 The first extension (`visualize`, [[module-ext-visualize]]) ships both halves; the host composes them from
 the two registry files below ([[submodule-server-extensions]], [[submodule-web-extensions]]). **Per-extension
-settings** exist for booleans: a descriptor declares `settings`, Settings → Extensions shows each as a nested
+settings** exist for booleans: a descriptor declares `settings`, Settings → Extensions & skills shows each as a nested
 switch under its extension (copy from locale keys; disabled while the extension is off; hidden for an older
 host), the value lives in `AppConfig.extensionSettings`, and a change reloads open chats when their current
 turn ends — ask-user-question's `richPreviews` was the first consumer. Install UX, marketplace, other setting
@@ -50,11 +51,14 @@ extension contributes — its factories, its tools in live sessions, and the ski
   `skillPackages` are **package specifiers** whose `pi.skills` directories the host stages — explicit module
   identity for the build step, never inferred from a function. Server-only; may value-import pi.
 - `./web` — default export `defineWebExtension({ name, title?, description?, toolRenderers?, globalOverlay?,
-  shortcuts? })`: `toolRenderers` keyed by tool name; `title` / `description` locale keys for a web-only
+  commands?, shortcuts? })`: `toolRenderers` keyed by tool name; `title` / `description` locale keys for a web-only
   Settings row; `globalOverlay` a component the host mounts once in `Shell` while the extension is enabled,
-  handed host helpers as props (`isTextEntry`, `activeLayer`, `platform`) because the half cannot import
-  the app; `shortcuts` display rows (with physical `code`s) the cheatsheet's General section lists while
-  enabled. **Plus named exports** for components the host uses directly (visualize exports `MermaidView`
+  handed host helpers as props (`isTextEntry`, `activeLayer`, `platform`, the command channel) because the
+  half cannot import the app; `commands` the rebindable keybindings, global or — with a `scope` — local to
+  the extension's element, which matches them through `@thinkrail/ui/local-keys`; both are listed and
+  rebound in Settings → Keyboard, ids and scopes prefixed `<name>.` ([[module-extension-api]]);
+  `shortcuts` display rows (with physical `code`s) for the keys it keeps locked, which the cheatsheet's
+  General section lists while enabled. **Plus named exports** for components the host uses directly (visualize exports `MermaidView`
   for fenced mermaid in chat markdown). Browser-only; never value-imports pi; heavy renderers stay lazy.
 
 The `define*` objects and the named `./web` exports are the whole contract: named `./web` exports are
@@ -79,13 +83,15 @@ What a `./web` half may import:
 
 - `@thinkrail/extension-api` ([[module-extension-api]]) — types and `define*` helpers only, no React
   components. `./web`: `ToolRenderProps`, `ToolRenderer`, `ToolRegistrationOptions`, `ToolStatus`,
-  `WebExtension`, `GlobalOverlayProps`, `ExtensionShortcut`, `ExtensionShortcutKey`, `defineWebExtension`,
+  `WebExtension`, `GlobalOverlayProps`, `ExtensionCommand`, `ExtensionChord`, `ExtensionShortcut`,
+  `ExtensionShortcutKey`, `defineWebExtension`,
   and the pure renderer helpers (`toolHelpers`, `toolResultContent`).
   `./server`: `ServerExtension`, `defineServerExtension`. Its own package because server pi types would
   contaminate the wire boundary in `contracts`, and the server contract in `ui` would give the host a
   presentation dependency.
-- `@thinkrail/ui` ([[module-ui]]) — the owned shadcn/Radix primitives moved whole, `cn`, and the
-  `onThemeSwap` function only (not the theme catalog/preferences runtime). Per-file imports
+- `@thinkrail/ui` ([[module-ui]]) — the owned shadcn/Radix primitives moved whole, `cn`, the
+  `onThemeSwap` function only (not the theme catalog/preferences runtime), `./keyboard`'s chord helpers,
+  `./keycaps` and `./local-keys` (`useLocalKeys`, how a card matches its local commands). Per-file imports
   (`@thinkrail/ui/dialog`) are retained for code-splitting. Design tokens stay in `apps/web/src/styles`;
   the SDK and extension web halves use token utility classes only, and the app's CSS `@source` and
   color/spacing/typography checks cover `packages/ui` and `thinkrail-extensions/*/web`.
@@ -126,10 +132,11 @@ What a `./web` half may import:
   infrastructure (desktop's bundled server runtime, `startDesktopHost`, `registerBundledRuntime`'s
   OAuth/Bedrock/trash registration) is unchanged by this.
 - **Web:** `apps/web/src/extensions/registry.ts` exports the ordered web extensions;
-  `registerWebExtensions()` feeds their `toolRenderers` into the chat tool registry, ignoring the switch.
-  `Shell` mounts the `globalOverlay` of each extension not in `disabledExtensions`, and the cheatsheet adds
-  their `shortcuts` ([[submodule-web-extensions]]). App-local tool registrations retain their side-effect
-  imports; extension descriptors need none.
+  `registerWebExtensions()` feeds their `toolRenderers` into the chat tool registry, ignoring the switch,
+  and tags each registration with its extension's `name` (the chat hides a switched-off extension's
+  composer suggestions). `Shell` mounts the `globalOverlay` of each extension not in `disabledExtensions`,
+  and the cheatsheet adds their `shortcuts` ([[submodule-web-extensions]]). App-local tool registrations
+  retain their side-effect imports; extension descriptors need none.
 
 ## Boundary rules (enforced by `scripts/check-module-boundaries.ts`, with negative tests)
 
@@ -169,6 +176,7 @@ follow the `.js`, `tsc` stops at the declaration.
 | extension | pi capability | notes |
 | --- | --- | --- |
 | `visualize` | `@thinkrail/pi-visualize` | shipped. `./server` injects the **strict** mermaid validator (`mermaid` at the web renderer's catalog version, initialised through `linkedom` — required: DOMPurify needs a real `document` for flowchart/class/state/gantt/mindmap, verified under Bun). `./web` carries the diagram/comparison cards and exports `MermaidView`. The guarantee is syntax parsing, not SVG/layout success; the browser renderer keeps its fallback. |
-| `ask-user-question` | `@thinkrail/pi-ask-user-question` | shipped; the first interactive tool. `./server` is session-only: `sessionExtensions` composes the portable tool with ThinkRail's wording and an asker over the host's interactive-tool mailbox (`awaitToolResponse`); `interactiveTools` declares `ask_user_question` with a `describeResponse` that renders a late answer in the package's own envelope wording. `./web` registers the questionnaire card `interactive`, fed entirely by the host through `ToolRenderProps.interaction`; the plan page renders it through the tool registry like the chat does. [[module-ext-ask-user-question]]. |
+| `ask-user-question` | `@thinkrail/pi-ask-user-question` | shipped; the first interactive tool. `./server` is session-only: `sessionExtensions` composes the portable tool with ThinkRail's wording and an asker over the host's interactive-tool mailbox (`awaitToolResponse`); `interactiveTools` declares `ask_user_question` with a `describeResponse` that renders a late answer in the package's own envelope wording. `./web` registers the questionnaire card `interactive`, fed entirely by the host through `ToolRenderProps.interaction`; the plan page renders it through the tool registry like the chat does. Its keys are local `commands` in the scope `ask-user-question.card`, rebindable in Settings → Keyboard. [[module-ext-ask-user-question]]. |
 | `hint-mode` | none (web-only) | shipped; on by default. A `globalOverlay` that labels everything clickable on F (outside text entry) or Mod+; and presses a typed label; its `shortcuts` join the cheatsheet while enabled. [[module-ext-hint-mode]]. |
 | `web-access` | third-party `pi-web-access` | shipped (server half). `./server` composes the package unchanged for parents and children (the host keeps its headless-search policy, which must outlive the switch) and ships its own `librarian` skill (upstream dropped it; `skillPackages` names the extension's own package); the first extension with skills. Renderers stay app-local (`apps/web/src/chat/tools/web`) until `Markdown`, `Collapsible` and `ToolFileLink` join the SDK. [[module-ext-web-access]]. |
+| `next-steps` | `@thinkrail/pi-next-steps` | shipped; the first `composerSuggestions` consumer. `./server` composes the portable package for parents only, appending ThinkRail's yes/no-vs-decision rule to its guidelines (its terminal row stays off because ThinkRail binds pi as `"rpc"`); `./web` registers the routine row plus the reader whose output the chat shows as chips above the composer. [[module-ext-next-steps]]. |

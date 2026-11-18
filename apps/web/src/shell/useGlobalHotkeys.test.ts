@@ -324,13 +324,13 @@ describe("routing a press", () => {
 	const at = (
 		desktop: ShortcutPlatform,
 		keybindings: ResolvedKeybindings,
-		place: { inTerminal?: boolean } = {},
+		place: { inTerminal?: boolean; textEntry?: boolean; localScopes?: readonly string[] } = {},
 	): Parameters<typeof routeHotkey>[2] => ({
 		keybindings,
 		desktop,
 		modalOpen: false,
 		textEntry: false,
-		surface: null,
+		localScopes: [],
 		inTerminal: false,
 		inEditorFind: false,
 		...place,
@@ -389,6 +389,110 @@ describe("routing a press", () => {
 		expect(routeHotkey(russianCtrlComma, all, at("browser", keybindings))).toEqual({
 			kind: "history",
 		});
+	});
+
+	const hint = {
+		extension: "hint-mode",
+		enabled: true,
+		commands: [
+			{
+				id: "hint-mode.show",
+				title: "hintMode.shortcuts.show",
+				chords: [
+					{ code: "KeyF", key: "f" },
+					{ code: "Semicolon", key: ";", mod: true },
+				],
+			},
+		],
+	} as const;
+	const HINT = { kind: "extension", extension: "hint-mode", id: "hint-mode.show" } as const;
+
+	test("a key a focused element's local command holds yields to that element; elsewhere the global acts", () => {
+		const plainF = key("KeyF", { key: "f", ctrlKey: false });
+		const searchOnF = resolveKeybindings({
+			platform: "Linux",
+			overrides: { "trees.search": ["KeyF"] },
+			extensions: [hint],
+		});
+		expect(
+			routeHotkey(plainF, all, at("browser", searchOnF, { localScopes: ["trees"] })),
+		).toBeNull();
+		expect(
+			routeHotkey(plainF, all, at("browser", searchOnF, { localScopes: ["transcript"] })),
+		).toEqual(HINT);
+		expect(routeHotkey(plainF, all, at("browser", searchOnF))).toEqual(HINT);
+		const defaults = resolveKeybindings({ platform: "Linux", extensions: [hint] });
+		expect(routeHotkey(plainF, all, at("browser", defaults, { localScopes: ["trees"] }))).toEqual(
+			HINT,
+		);
+		const searchOnK = resolveKeybindings({
+			platform: "Linux",
+			overrides: { "trees.search": ["Mod+KeyK"] },
+		});
+		expect(
+			routeHotkey(key("KeyK"), all, at("browser", searchOnK, { localScopes: ["trees"] })),
+		).toBeNull();
+		expect(routeHotkey(key("KeyK"), all, at("browser", searchOnK))).toEqual({
+			kind: "command",
+			id: "search.open",
+		});
+	});
+
+	test("a review surface yields the Shift variant of an arrow twin it extends the selection with; other elements do not", () => {
+		const downOnModJ = resolveKeybindings({
+			platform: "Linux",
+			overrides: { "arrows.down": ["Mod+KeyJ"] },
+		});
+		const modJ = key("KeyJ", { key: "j" });
+		const shiftModJ = key("KeyJ", { key: "J", shiftKey: true });
+		const cursor = { localScopes: ["review.surface", "review"] };
+		const bottom = { kind: "command", id: "view.toggleBottom" } as const;
+		expect(routeHotkey(modJ, all, at("browser", downOnModJ, cursor))).toBeNull();
+		expect(routeHotkey(shiftModJ, all, at("browser", downOnModJ, cursor))).toBeNull();
+		expect(
+			routeHotkey(shiftModJ, all, at("browser", downOnModJ, { localScopes: ["trees"] })),
+		).toEqual(bottom);
+		expect(routeHotkey(shiftModJ, all, at("browser", downOnModJ))).toEqual(bottom);
+		const defaults = resolveKeybindings({ platform: "Linux" });
+		expect(routeHotkey(shiftModJ, all, at("browser", defaults, cursor))).toEqual(bottom);
+	});
+
+	test("the element's keys are physical: whatever the layout types, the code decides who acts", () => {
+		const hintOnS = resolveKeybindings({
+			platform: "Linux",
+			overrides: { "hint-mode.show": ["KeyS"] },
+			extensions: [hint],
+		});
+		const russianS = key("KeyS", { key: "ы", ctrlKey: false });
+		expect(
+			routeHotkey(russianS, all, at("browser", hintOnS, { localScopes: ["trees"] })),
+		).toBeNull();
+		expect(
+			routeHotkey(russianS, all, at("browser", hintOnS, { localScopes: ["transcript"] })),
+		).toEqual(HINT);
+		const dvorakK = key("KeyV", { key: "k", ctrlKey: false });
+		const hintOnV = resolveKeybindings({
+			platform: "Linux",
+			overrides: { "hint-mode.show": ["KeyV"] },
+			extensions: [hint],
+		});
+		expect(
+			routeHotkey(dvorakK, all, at("browser", hintOnV, { localScopes: ["transcript"] })),
+		).toEqual(HINT);
+	});
+
+	test("a typing local key does not hold its element's text fields; a chord does", () => {
+		const searchOnF = resolveKeybindings({
+			platform: "Linux",
+			overrides: { "trees.search": ["KeyF"], "trees.openKept": ["Mod+KeyK"] },
+			extensions: [hint],
+		});
+		const inField = { localScopes: ["trees"], textEntry: true };
+		expect(
+			routeHotkey(key("KeyF", { ctrlKey: false }), all, at("browser", searchOnF, inField)),
+		).toBeNull();
+		expect(routeHotkey(key("KeyK"), all, at("browser", searchOnF, inField))).toBeNull();
+		expect(routeHotkey(key("Semicolon"), all, at("browser", searchOnF, inField))).toEqual(HINT);
 	});
 
 	test("chat history rebound off Ctrl+R opens from a terminal, which keeps Ctrl+R", () => {

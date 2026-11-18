@@ -10,7 +10,7 @@ import {
 	selectedReviewText,
 	useReviewText,
 } from "../renderers/reviewDraftState";
-import { composerSubmit } from "./cursorKeys";
+import { composerSubmit, useReviewSurfaceKeys } from "./cursorKeys";
 import { focusLeftIn } from "./revealFocus";
 
 function grow(el: HTMLTextAreaElement): void {
@@ -40,6 +40,7 @@ export function ReviewComposer({
 	className?: string;
 }) {
 	const t = useT();
+	const keys = useReviewSurfaceKeys();
 	const stored = useReviewText(input);
 	const [initial] = useState(() => ({
 		value: stored ?? reviewTextState(initialText),
@@ -109,8 +110,11 @@ export function ReviewComposer({
 				onKeyDown={(event) => {
 					event.stopPropagation();
 					if (isImeComposing(event.nativeEvent)) return;
-					if (event.key === "Escape") close();
-					const action = composerSubmit(event);
+					if (event.key === "Escape") {
+						event.preventDefault();
+						close();
+					}
+					const action = composerSubmit(event.nativeEvent, keys);
 					if (action) {
 						event.preventDefault();
 						submit(action === "send" ? commenting.onSend : commenting.onSave);

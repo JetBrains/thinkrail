@@ -1,79 +1,51 @@
-import {
-	RiFileCopyLine as Copy,
-	RiFileCopy2Line as CopyEntry,
-	RiArrowGoBackLine,
-	RiAtLine,
-	RiChat3Line,
-	RiClipboardLine,
-	RiDeleteBinLine,
-	RiEditLine,
-	RiEyeLine,
-	RiEyeOffLine,
-	RiFileLine,
-	RiFolderOpenLine,
-	RiImageLine,
-	RiListCheck3,
-	RiPagesLine,
-	RiRefreshLine,
-	RiScissorsCutLine,
-	RiShapesLine,
-} from "@remixicon/react";
+import { RiRefreshLine, RiShapesLine } from "@remixicon/react";
 import type { FileNode } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
-import {
-	ContextMenu,
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuSeparator,
-	ContextMenuTrigger,
-	openContextMenuFromKeyboard,
-} from "@thinkrail/ui/context-menu";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { cn } from "@thinkrail/ui/utils";
-import {
-	type KeyboardEvent,
-	type ReactElement,
-	type ReactNode,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { QuietScrollArea } from "@/components/QuietScrollArea";
-import { copyText, fileName, firstClickOnly, joinWorkspacePath } from "../lib";
+import { fileName, firstClickOnly } from "../lib";
 import {
 	artifactsWatermark,
 	hostLacksArtifacts,
-	selectChatTitle,
-	selectWorkspaceById,
+	selectActiveFilePath,
+	selectArtifactsSmartOffered,
+	selectArtifactsView,
 	supportsArtifacts,
 	useAppStore,
 } from "../store";
 import { getTransport } from "../transport";
+import { ArtifactsSmart, SMART_UNATTACHED, smartGroupId } from "./ArtifactsSmart";
+import { ArtifactsToolbar } from "./ArtifactsToolbar";
+import { ArtifactTreeRows } from "./ArtifactsTree";
 import {
 	discardArtifact,
-	mentionArtifact,
 	openArtifact,
 	restoreDeletedArtifact,
-	revealArtifact,
 	selectArtifactMentionTarget,
 } from "./artifactActions";
+import {
+	ArtifactEntryMenu,
+	artifactIcon,
+	ChatChip,
+	NewDot,
+	type RequestRemoval,
+} from "./artifactRowParts";
 import {
 	type ArtifactRow,
 	artifactRows,
 	artifactTimeLabel,
+	artifactTree,
 	type OutputRow,
+	smartGroups,
 } from "./artifactsModel";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { deleteEntry, pasteInto, renameEntry } from "./fileTreeActions";
-import { HeaderIconButton } from "./HeaderIconButton";
-import { OpenInBrowserMenuItem } from "./OpenInBrowserButton";
-import { openChatInTab } from "./openChat";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
-import { Tree, treeRowControlProps, treeRowKey, useTreeItem } from "./treeNavigation";
+import { Tree, treeRowControlProps, useTreeItem } from "./treeNavigation";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 import { useInlineRename } from "./workspaceActions";
 
@@ -82,9 +54,6 @@ interface RemovalRequest {
 	kept: boolean;
 	open: boolean;
 }
-
-type RequestRemoval = (path: string, kept: boolean) => void;
-type RowKeyDown = (event: KeyboardEvent<HTMLElement>) => void;
 
 export function ArtifactsPanel({
 	workspaceId,
@@ -104,6 +73,10 @@ export function ArtifactsPanel({
 	const canPaste = useAppStore(
 		(s) => supportsArtifacts(s.protocolVersion) && s.fileClipboard !== null,
 	);
+	const view = useAppStore(selectArtifactsView);
+	const smartOffered = useAppStore(selectArtifactsSmartOffered);
+	const expandedPaths = useAppStore((s) => s.artifactsTreeExpandedByWorkspace[workspaceId]);
+	const activePath = useAppStore((s) => selectActiveFilePath(s, workspaceId));
 	const [allChats, setAllChats] = useState(false);
 	const [highlightSince, setHighlightSince] = useState<number | null>(null);
 	const [removal, setRemoval] = useState<RemovalRequest | null>(null);
@@ -124,6 +97,22 @@ export function ArtifactsPanel({
 				: null,
 		[snapshot, sessionId, highlightSince, showIgnored, specs],
 	);
+	const tree = useMemo(
+		() =>
+			view === "tree" && snapshot && rows
+				? artifactTree(snapshot.dir, rows.artifacts, snapshot.artifacts)
+				: null,
+		[view, snapshot, rows],
+	);
+	const smart = useMemo(
+		() => (view === "smart" && rows ? smartGroups(rows.artifacts) : null),
+		[view, rows],
+	);
+	const expanded = useMemo(() => new Set(expandedPaths), [expandedPaths]);
+	const canCollapse = smart
+		? smart.groups.some((group) => expanded.has(smartGroupId(group.folder))) ||
+			expanded.has(SMART_UNATTACHED)
+		: (tree?.some((node) => node.kind === "dir" && expanded.has(node.path)) ?? false);
 	const requestRemoval: RequestRemoval = (path, kept) => setRemoval({ path, kept, open: true });
 	const openKept = (path: string) => void openFileInTab(workspaceId, path, "keep");
 	const openArtifactKept = (path: string) => {
@@ -141,46 +130,25 @@ export function ArtifactsPanel({
 
 	return (
 		<div data-testid="artifacts-panel" className="flex h-full min-h-0 flex-col">
-			<div
-				role="toolbar"
-				aria-label={t("panels.artifacts.toolbar")}
-				className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-clip border-border-default border-b px-12"
-			>
-				<ToggleSegment
-					testid="artifacts-filter-all"
-					label={t("panels.artifacts.allChats")}
-					active={sessionId === null}
-					onClick={() => setAllChats(true)}
-				/>
-				<ToggleSegment
-					testid="artifacts-filter-chat"
-					label={t("panels.artifacts.thisChat")}
-					active={sessionId !== null}
-					disabled={mentionTarget === null}
-					onClick={() => setAllChats(false)}
-				/>
-				<div className="ml-auto flex shrink-0">
-					{snapshot?.outputs ? (
-						<HeaderIconButton
-							testid="artifacts-toggle-ignored"
-							label={
-								showIgnored ? t("panels.artifacts.hideIgnored") : t("panels.artifacts.showIgnored")
-							}
-							active={showIgnored}
-							icon={showIgnored ? RiEyeLine : RiEyeOffLine}
-							onClick={() => useAppStore.getState().setArtifactsShowIgnored(!showIgnored)}
-						/>
-					) : null}
-					{canPaste && snapshot ? (
-						<HeaderIconButton
-							testid="artifacts-paste"
-							label={t("panels.artifacts.paste")}
-							icon={RiClipboardLine}
-							onClick={() => void pasteInto(workspaceId, snapshot.dir)}
-						/>
-					) : null}
-				</div>
-			</div>
+			<ArtifactsToolbar
+				allChats={sessionId === null}
+				chatFilterDisabled={mentionTarget === null}
+				onAllChats={setAllChats}
+				views={[
+					{ id: "list", label: t("panels.artifacts.viewList") },
+					{ id: "tree", label: t("panels.artifacts.viewTree") },
+					...(smartOffered
+						? [{ id: "smart" as const, label: t("panels.artifacts.viewSmart") }]
+						: []),
+				]}
+				view={view}
+				onView={(next) => useAppStore.getState().setArtifactsView(next)}
+				canCollapse={canCollapse}
+				onCollapseAll={() => useAppStore.getState().collapseAllArtifacts(workspaceId)}
+				showIgnored={snapshot?.outputs ? showIgnored : null}
+				onToggleIgnored={() => useAppStore.getState().setArtifactsShowIgnored(!showIgnored)}
+				onPaste={canPaste && snapshot ? () => void pasteInto(workspaceId, snapshot.dir) : null}
+			/>
 			<QuietScrollArea
 				data-focus-default
 				className="min-h-0 flex-1"
@@ -221,19 +189,46 @@ export function ArtifactsPanel({
 							<Section
 								testid="artifacts-section"
 								focusList="artifacts"
-								title={t("panels.artifacts.sectionArtifacts")}
+								title={
+									smart
+										? t("panels.artifacts.sectionSmart")
+										: t("panels.artifacts.sectionArtifacts")
+								}
 								label={t("panels.artifacts.artifactsTree")}
-								count={rows.artifacts.length}
+								count={smart ? smart.results : rows.artifacts.length}
 								onOpenKept={openArtifactKept}
 							>
-								{rows.artifacts.map((row) => (
-									<ArtifactRowView
-										key={row.artifact.path}
-										row={row}
+								{smart && snapshot ? (
+									<ArtifactsSmart
+										view={smart}
+										dir={snapshot.dir}
+										artifacts={snapshot.artifacts}
 										workspaceId={workspaceId}
+										expanded={expanded}
+										activePath={activePath}
+										showChat={sessionId === null}
 										onRemove={requestRemoval}
 									/>
-								))}
+								) : tree ? (
+									<ArtifactTreeRows
+										nodes={tree}
+										workspaceId={workspaceId}
+										expanded={expanded}
+										activePath={activePath}
+										showChat={sessionId === null}
+										onRemove={requestRemoval}
+									/>
+								) : (
+									rows.artifacts.map((row) => (
+										<ArtifactRowView
+											key={row.artifact.path}
+											row={row}
+											workspaceId={workspaceId}
+											active={activePath === row.artifact.path}
+											onRemove={requestRemoval}
+										/>
+									))
+								)}
 							</Section>
 						) : null}
 						{rows.outputs?.length ? (
@@ -346,48 +341,15 @@ function Section({
 	);
 }
 
-function NewDot() {
-	return (
-		<span
-			aria-hidden="true"
-			data-testid="artifact-new"
-			className="size-6 shrink-0 rounded-full bg-primary"
-		/>
-	);
-}
-
-function artifactIcon(row: ArtifactRow) {
-	if (row.taskSpecStatus !== null) return RiListCheck3;
-	const name = row.name.toLowerCase();
-	if (/\.(png|jpe?g|gif|webp|avif|svg|bmp)$/.test(name)) return RiImageLine;
-	if (/\.html?$/.test(name)) return RiPagesLine;
-	return RiFileLine;
-}
-
-function ChatChip({ workspaceId, sessionId }: { workspaceId: string; sessionId: string }) {
-	const t = useT();
-	const title = useAppStore((s) => selectChatTitle(t, s, workspaceId, sessionId));
-	return (
-		<button
-			type="button"
-			data-testid="artifact-chat"
-			{...treeRowControlProps}
-			title={t("panels.artifacts.openChat", { chat: title })}
-			onClick={() => void openChatInTab(workspaceId, sessionId)}
-			className="min-w-0 max-w-full shrink truncate rounded-sm bg-control-bg px-4 text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default"
-		>
-			{title}
-		</button>
-	);
-}
-
 function ArtifactRowView({
 	row,
 	workspaceId,
+	active,
 	onRemove,
 }: {
 	row: ArtifactRow;
 	workspaceId: string;
+	active: boolean;
 	onRemove: RequestRemoval;
 }) {
 	const t = useT();
@@ -401,7 +363,12 @@ function ArtifactRowView({
 	const Icon = artifactIcon(row);
 	const restore = () => void restoreDeletedArtifact(workspaceId, artifact);
 	const open = (intent: "preview" | "keep") => void openArtifact(workspaceId, artifact, intent);
-	const treeItem = useTreeItem(artifact.path, { level: 1, label: name, openKept: true });
+	const treeItem = useTreeItem(artifact.path, {
+		level: 1,
+		label: name,
+		selected: active,
+		openKept: true,
+	});
 	const detail =
 		taskSpecStatus !== null
 			? t("panels.artifacts.taskSpec", { status: taskSpecStatus || "—" })
@@ -415,10 +382,11 @@ function ArtifactRowView({
 			data-state={artifact.state}
 			data-fresh={fresh || undefined}
 		>
-			<EntryMenu
+			<ArtifactEntryMenu
 				workspaceId={workspaceId}
 				path={artifact.path}
-				onRestore={deleted ? restore : undefined}
+				deleted={deleted}
+				onRestore={restore}
 				sessionId={artifact.sessionId}
 				onRename={start}
 				onRemove={(path) => onRemove(path, deleted)}
@@ -430,7 +398,7 @@ function ArtifactRowView({
 						title={artifactTimeLabel(t, artifact.changedAt)}
 						className={cn(
 							"flex w-full min-w-0 items-start gap-8 rounded-sm px-4 py-4",
-							menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered",
+							menuOpen || active ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered",
 						)}
 					>
 						<Icon className="mt-2 size-14 shrink-0 text-text-muted" />
@@ -494,7 +462,7 @@ function ArtifactRowView({
 						</div>
 					</div>
 				)}
-			</EntryMenu>
+			</ArtifactEntryMenu>
 		</li>
 	);
 }
@@ -564,7 +532,7 @@ function OutputNode({
 	);
 	return (
 		<>
-			<EntryMenu
+			<ArtifactEntryMenu
 				workspaceId={workspaceId}
 				path={node.path}
 				onRemove={(path) => onRemove(path, false)}
@@ -590,7 +558,7 @@ function OutputNode({
 						onKeyDown={onRowKeyDown}
 					/>
 				)}
-			</EntryMenu>
+			</ArtifactEntryMenu>
 			{isDir && expanded ? (
 				<ul
 					role="none"
@@ -616,158 +584,6 @@ function OutputNode({
 				</ul>
 			) : null}
 		</>
-	);
-}
-
-function EntryMenu({
-	workspaceId,
-	path,
-	onRestore,
-	sessionId,
-	onRename,
-	onRemove,
-	onCloseAutoFocus,
-	children,
-}: {
-	workspaceId: string;
-	path: string;
-	onRestore?: (() => void) | undefined;
-	sessionId?: string | undefined;
-	onRename?: () => void;
-	onRemove: (path: string) => void;
-	onCloseAutoFocus?: (event: Event) => void;
-	children: (menuOpen: boolean, onRowKeyDown: RowKeyDown) => ReactElement;
-}) {
-	const t = useT();
-	const [open, setOpen] = useState(false);
-	const deleted = onRestore !== undefined;
-	const mentionOnCloseRef = useRef(false);
-	const canMention = useAppStore((s) => selectArtifactMentionTarget(s, workspaceId) !== null);
-	const mutations = useAppStore((s) => supportsArtifacts(s.protocolVersion));
-	const copyPath = (absolute: boolean) => {
-		const worktreePath = selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath;
-		void copyText(absolute ? joinWorkspacePath(worktreePath ?? "", path) : path);
-	};
-	const clip = (cut: boolean) =>
-		useAppStore
-			.getState()
-			.setFileClipboard(cut ? { workspaceId, path, cut } : { workspaceId, path });
-	const rename = mutations && !deleted ? onRename : undefined;
-	const onRowKeyDown: RowKeyDown = (event) => {
-		const key = treeRowKey(event);
-		if (key === "delete" && mutations) onRemove(path);
-		else if (key === "rename" && rename) rename();
-		else return;
-		event.preventDefault();
-	};
-	return (
-		<ContextMenu open={open} onOpenChange={setOpen}>
-			<ContextMenuTrigger asChild onKeyDown={openContextMenuFromKeyboard}>
-				{children(open, onRowKeyDown)}
-			</ContextMenuTrigger>
-			<ContextMenuContent
-				data-testid="artifact-actions"
-				onCloseAutoFocus={(event) => {
-					if (!mentionOnCloseRef.current) return onCloseAutoFocus?.(event);
-					mentionOnCloseRef.current = false;
-					event.preventDefault();
-					mentionArtifact(workspaceId, path);
-				}}
-			>
-				{deleted ? (
-					<ContextMenuItem data-testid="artifact-menu-restore" onSelect={onRestore}>
-						<RiArrowGoBackLine />
-						{t("panels.artifacts.restore")}
-					</ContextMenuItem>
-				) : (
-					<>
-						<ContextMenuItem
-							data-testid="artifact-mention"
-							disabled={!canMention}
-							title={canMention ? undefined : t("panels.artifacts.mentionNoChat")}
-							onSelect={() => {
-								mentionOnCloseRef.current = true;
-							}}
-						>
-							<RiAtLine />
-							{t("panels.artifacts.mention")}
-						</ContextMenuItem>
-						<ContextMenuItem
-							data-testid="artifact-reveal"
-							onSelect={() => revealArtifact(workspaceId, path)}
-						>
-							<RiFolderOpenLine />
-							{t("panels.artifacts.reveal")}
-						</ContextMenuItem>
-						<OpenInBrowserMenuItem
-							workspaceId={workspaceId}
-							path={path}
-							testId="artifact-open-in-browser"
-						/>
-					</>
-				)}
-				{sessionId ? <OpenChatItem workspaceId={workspaceId} sessionId={sessionId} /> : null}
-				<ContextMenuSeparator />
-				<ContextMenuItem data-testid="artifact-copy-path" onSelect={() => copyPath(true)}>
-					<Copy />
-					{t("panels.fileTree.copyPath")}
-				</ContextMenuItem>
-				<ContextMenuItem data-testid="artifact-copy-relative-path" onSelect={() => copyPath(false)}>
-					<Copy />
-					{t("panels.fileTree.copyRelativePath")}
-				</ContextMenuItem>
-				{mutations && !deleted ? (
-					<>
-						<ContextMenuSeparator />
-						<ContextMenuItem data-testid="artifact-copy" onSelect={() => clip(false)}>
-							<CopyEntry />
-							{t("common.copy")}
-						</ContextMenuItem>
-						<ContextMenuItem data-testid="artifact-cut" onSelect={() => clip(true)}>
-							<RiScissorsCutLine />
-							{t("panels.fileTree.cut")}
-						</ContextMenuItem>
-						{rename ? (
-							<ContextMenuItem data-testid="artifact-rename" onSelect={rename}>
-								<RiEditLine />
-								{t("panels.artifacts.rename")}
-							</ContextMenuItem>
-						) : null}
-					</>
-				) : null}
-				{mutations ? (
-					<>
-						<ContextMenuSeparator />
-						<ContextMenuItem
-							data-testid="artifact-delete"
-							className="text-feedback-error focus:bg-feedback-error-subtle [&_svg]:text-feedback-error"
-							onSelect={(event) => {
-								event.preventDefault();
-								setOpen(false);
-								requestAnimationFrame(() => onRemove(path));
-							}}
-						>
-							<RiDeleteBinLine />
-							{t("common.delete")}
-						</ContextMenuItem>
-					</>
-				) : null}
-			</ContextMenuContent>
-		</ContextMenu>
-	);
-}
-
-function OpenChatItem({ workspaceId, sessionId }: { workspaceId: string; sessionId: string }) {
-	const t = useT();
-	const title = useAppStore((s) => selectChatTitle(t, s, workspaceId, sessionId));
-	return (
-		<ContextMenuItem
-			data-testid="artifact-open-chat"
-			onSelect={() => void openChatInTab(workspaceId, sessionId)}
-		>
-			<RiChat3Line />
-			{t("panels.artifacts.openChat", { chat: title })}
-		</ContextMenuItem>
 	);
 }
 

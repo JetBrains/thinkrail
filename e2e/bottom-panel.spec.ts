@@ -2,9 +2,11 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
+	closeSettings,
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
 	openFixtureProject,
+	openSettingsSection,
 	pressPlatformShortcut,
 	revealFirstProjectWorkspaces,
 	revealWorkbenchTool,
@@ -277,12 +279,11 @@ test("a hidden local frame keeps the host terminal reserved without attaching un
 	context,
 }) => {
 	await openDefaultWorkbench(page);
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-layout").click();
+	await openSettingsSection(page, "layout");
 	const focusPreset = page.getByTestId("layout-preset").filter({ hasText: "Focus" });
-	await focusPreset.getByRole("button", { name: "Apply now…" }).click();
+	await focusPreset.getByTestId("layout-preset-apply").click();
 	await page.getByTestId("layout-apply-confirm").click();
-	await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+	await closeSettings(page);
 	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 
 	const workspace = await createWorkspaceWithoutOpening(page);
