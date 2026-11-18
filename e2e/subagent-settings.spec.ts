@@ -128,7 +128,7 @@ test("concurrent clients disabling different roles preserve both intents before 
 	let peer: Page | undefined;
 	try {
 		await openFixtureProject(page);
-		await openAgentsSettings(page);
+		await openSubagentSettings(page);
 		for (const name of ["scout", "worker"]) {
 			const toggle = page.getByTestId(`agent-toggle-${name}`);
 			await expect(toggle).toBeEnabled();
@@ -143,7 +143,7 @@ test("concurrent clients disabling different roles preserve both intents before 
 		const peerChannelHold = await installChannelHold(peer);
 		await peer.goto(page.url());
 		await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-		await openAgentsSettings(peer);
+		await openSubagentSettings(peer);
 		for (const name of ["scout", "worker"]) {
 			await expect(peer.getByTestId(`agent-toggle-${name}`)).toHaveAttribute("data-active", "true");
 		}
@@ -227,7 +227,7 @@ test("agent availability controls are inaccessible while disconnected and return
 	});
 	try {
 		await openFixtureProject(page);
-		await openAgentsSettings(page);
+		await openSubagentSettings(page);
 		const toggle = page.getByTestId("agent-toggle-scout");
 		const refresh = page.getByTestId("agents-refresh");
 		await expect(toggle).toBeEnabled();
@@ -240,12 +240,12 @@ test("agent availability controls are inaccessible while disconnected and return
 		);
 		await expect(toggle).toHaveCount(0);
 		await expect(refresh).toHaveCount(0);
-		await expect(page.getByTestId("settings-nav-agents")).toHaveCount(0);
+		await expect(page.getByTestId("settings-nav-subagents")).toHaveCount(0);
 	} finally {
 		offline = false;
 	}
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await expect(page.getByTestId("settings-agents")).toBeVisible();
+	await expect(page.getByTestId("settings-subagents")).toBeVisible();
 	await expect(page.getByTestId("agent-toggle-scout")).toBeEnabled();
 	await expect(page.getByTestId("agents-refresh")).toBeEnabled();
 });

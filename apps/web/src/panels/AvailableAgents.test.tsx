@@ -3,7 +3,8 @@ import { SUBAGENT_CATALOG_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { useAppStore } from "@/store";
-import { AgentCatalogRows, AgentsSettings } from "./AgentsSettings";
+import { AgentCatalogRows, AvailableAgents } from "./AvailableAgents";
+import { SubagentsSettings } from "./SubagentsSettings";
 import type { AgentCatalog } from "./useSubagentCatalog";
 
 const render = (catalog: AgentCatalog, disabledNames: string[] = [], disabled = false) =>
@@ -54,6 +55,9 @@ test("catalog rows show metadata and global accessible switches without hiding d
 	expect(markup).toMatch(
 		/role="switch"[^>]*aria-checked="true"[^>]*aria-label="Enable cheap-scout globally"/,
 	);
+	expect(markup).toMatch(/data-changed="true" data-testid="agent-row-worker"/);
+	expect(markup).not.toMatch(/data-changed="true" data-testid="agent-row-cheap-scout"/);
+	expect(markup).toContain('aria-label="Reset worker to default"');
 	expect(markup).not.toContain("missing-role");
 	expect(markup).not.toContain("textarea");
 });
@@ -75,18 +79,25 @@ test("loading, empty and retryable read failures are explicit", () => {
 	expect(render("failed")).toContain("Retry");
 });
 
-test("unsupported or unnegotiated hosts render no Agents page", () => {
-	expect(renderToStaticMarkup(<AgentsSettings />)).toBe("");
+test("unsupported or unnegotiated hosts render no agent roster", () => {
+	expect(renderToStaticMarkup(<AvailableAgents />)).toBe("");
 });
 
-test("capable hosts show existing delegation rows once, global scope and the catalog loading state", () => {
+test("capable hosts show the roster on the Subagents page after delegation, with global scope and loading", () => {
 	const initial = useAppStore.getInitialState();
 	const previous = initial.protocolVersion;
 	try {
 		initial.protocolVersion = SUBAGENT_CATALOG_PROTOCOL_VERSION;
-		const markup = renderToStaticMarkup(<AgentsSettings />);
+		const markup = renderToStaticMarkup(
+			<TooltipProvider>
+				<SubagentsSettings />
+			</TooltipProvider>,
+		);
 		expect(markup.match(/data-testid="settings-subagents"/g)).toHaveLength(1);
-		expect(markup).toContain("Global availability · all workspaces");
+		expect(markup.indexOf('data-testid="subagents-global"')).toBeLessThan(
+			markup.indexOf('data-testid="settings-agent-catalog"'),
+		);
+		expect(markup).toMatch(/data-testid="settings-agent-catalog"[\s\S]*data-scope="allProjects"/);
 		expect(markup).toContain("ongoing work continues");
 		expect(markup).toContain('data-testid="agents-loading"');
 		expect(markup).not.toContain("scope to be decided");

@@ -742,7 +742,7 @@ a project picker, the prompt hero, and the reused
   content pane. It stands near full height (the window less a `--space-24` margin) but grows no wider than
   the 220px nav plus the content column (`max-w-760`), since a wider page only stretches rows (user,
   2026-11-17). At `md`+ the tabs are a rail grouped **Agent** (Models, Providers, Subagents — the global
-  settings and this workspace's override —, Extensions & skills, MCP servers, Prompt templates, Environment) ·
+  settings, this workspace's override and the available agent roles —, Extensions & skills, MCP servers, Prompt templates, Environment) ·
   **Interface** (Appearance, Text & fonts — fonts, custom fonts and both line widths —, Chat, Layout,
   Keyboard, Language, Voice input, Terminal) · **System** (Workspaces, Integrations, Notifications, Privacy,
   Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
@@ -1224,6 +1224,23 @@ a project picker, the prompt hero, and the reused
   (an invalid draft shows its range and is never sent, no clamping), validated against
   `SUBAGENT_MAX_CONCURRENT`. Global mutations converge through `settings.changed`, workspace ones through
   `workspace.updated`; none is optimistic.
+  From `SUBAGENT_CATALOG_PROTOCOL_VERSION` the page ends with **Available agents** (`AvailableAgents.tsx`,
+  scope *All projects*, catalog id `subagent-roles`, Refresh as the group action): one row per built-in,
+  personal and trusted active repository-workspace definition with name, translated source, description,
+  pinned raw model reference or parent/invocation inheritance, and explicit thinking effort, and a global
+  per-name switch (Changed while off; Reset re-enables). It was briefly a separate Agents section; once
+  main gave delegation its own Subagents page the roster joined it (2026-11-18). Disabled definitions
+  remain visible, new names default enabled, absent names stay in the preference; no prompt, path or
+  editor is exposed. Copy states global scope, new-launch-only enforcement (ongoing work continues),
+  trusted-project scope and manual Refresh after file edits. `useSubagentCatalog` reads `subagent.list` on
+  mount, Refresh, context/trust change and each welcome; a context-keyed lifetime discards superseded
+  responses and hides revoked project entries in render, before effects run. Loading, empty and retryable
+  failure are explicit. A role switch sends one atomic `subagent.setEnabled({ name, enabled })` intent and
+  locks every role switch until both the request succeeds and an authoritative `settings.changed` shows
+  that name in the requested state; an ACK alone never unlocks or flips a switch. Disconnect clears the
+  negotiated protocol, retiring the page until a fresh welcome; rejection, disconnect or the confirmation
+  timeout release the lock with an inline error and Retry, never optimistic state. The lock is module-level, so it
+  survives page remounts and drains the replayable RPC before releasing.
   The **shell-owned injected Layout section** (`shell/LayoutSettings`) has three groups. **Presets** is
   one `SettingsList` (`layout-presets`) of Balanced/Focus/Review and the named custom presets. A row's
   primary applies it on Enter or a click, through one "Apply this layout?" confirm (`layout-apply-confirm`),

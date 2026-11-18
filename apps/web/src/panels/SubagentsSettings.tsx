@@ -2,6 +2,7 @@ import type { SubagentOverride } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { selectActiveWorkspace, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
+import { AvailableAgents } from "./AvailableAgents";
 import { SubagentSettings } from "./SubagentSettings";
 import { saveSettings } from "./saveSettings";
 import { useConfigReset } from "./settingDefaults";
@@ -49,6 +50,8 @@ export function SubagentsSettings() {
 				saveSettings({ subagentMaxConcurrent: value }, t("settings.chat.subagentLimitFailed"))
 			}
 			onWorkspaceLimitChange={setWorkspaceSubagentLimit}
-		/>
+		>
+			<AvailableAgents />
+		</SubagentSettings>
 	);
 }

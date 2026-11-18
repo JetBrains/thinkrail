@@ -125,13 +125,13 @@ credentials or remote repositories are used.
 
 ## Chat resource controls
 
-`subagent-settings.spec.ts` exercises Settings → Agents through the real host: existing global and
+`subagent-settings.spec.ts` exercises Settings → Subagents through the real host: existing global and
 workspace delegation/concurrency controls, phone containment, and global role switches. Holding only
 the initiating client's `settings.changed` push proves a role switch stays authoritative and pending
 while a peer already sees the persisted change; reload and re-enable prove persistence and convergence.
 A deterministic two-client regression holds incoming `settings.changed` pushes to both windows, sends different-role toggles from their identical initial snapshots before releasing either push, then verifies both roles stay disabled in both windows and restores the baseline role values in `finally`.
 A disconnected host retires the catalog controls until protocol negotiation completes again; reconnect
-restores the page. Chat no longer duplicates the controls on a capable host. Portable extension tests separately exercise
+restores the page. Portable extension tests separately exercise
 launch rejection and ongoing completion delivery; these no-agent browser probes make no agent calls.
 
 Resource wire coverage opens persisted chat fixtures through the real UI and checks the authoritative

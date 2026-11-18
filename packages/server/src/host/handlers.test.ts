@@ -1639,7 +1639,7 @@ test("subagent.list admits only pi-resource-trusted workspace metadata and never
 	).rejects.toThrow(`requires protocol ${SUBAGENT_CATALOG_PROTOCOL_VERSION}`);
 });
 
-test("concurrent v125 subagent intents from different clients preserve both roles and unknown names", async () => {
+test("concurrent v127 subagent intents from different clients preserve both roles and unknown names", async () => {
 	updateConfig({ disabledSubagents: ["temporarily-missing"] });
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));

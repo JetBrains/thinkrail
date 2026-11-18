@@ -8,6 +8,7 @@ import {
 } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Switch } from "@thinkrail/ui/switch";
+import type { ReactNode } from "react";
 import {
 	SettingsChoice,
 	SettingsGroup,
@@ -32,6 +33,7 @@ export function SubagentSettings({
 	onWorkspaceEnabledChange,
 	onGlobalLimitChange,
 	onWorkspaceLimitChange,
+	children,
 }: {
 	protocolVersion: number | null;
 	globalEnabled: boolean;
@@ -43,6 +45,7 @@ export function SubagentSettings({
 	onWorkspaceEnabledChange: (override: SubagentOverride | null) => void;
 	onGlobalLimitChange: (value: number) => undefined | Promise<boolean>;
 	onWorkspaceLimitChange: (value: number | null) => void;
+	children?: ReactNode;
 }) {
 	const t = useT();
 	if (protocolVersion === null || protocolVersion < SUBAGENT_SETTINGS_PROTOCOL_VERSION) {
@@ -195,6 +198,7 @@ export function SubagentSettings({
 					) : null}
 				</SettingsGroup>
 			) : null}
+			{children}
 		</SettingsPage>
 	);
 }
