@@ -83,11 +83,9 @@ export function statusProviderIds(
 	allowlist: ReadonlySet<string>,
 	opaque: ReadonlySet<string>,
 	current: readonly string[],
-	extension: ReadonlySet<string> = new Set(),
+	extension: ReadonlySet<string>,
 ): string[] {
 	const added = current.filter((id) => isCustomEndpointId(id) && !opaque.has(id));
-	// Extension providers are real user-installed sources and must be listed; an id that is
-	// somehow both stays Central, which never lists.
 	const extensionAdded = [...extension].filter((id) => !opaque.has(id));
 	return [...new Set([...allowlist, ...extensionAdded, ...added])];
 }

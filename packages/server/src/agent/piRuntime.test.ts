@@ -1,14 +1,22 @@
-import { afterEach, beforeEach, expect, jest, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { afterEach, beforeEach, expect, jest, spyOn, test } from "bun:test";
+import fs, { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ModelsRefreshOptions, ModelsRefreshResult } from "@earendil-works/pi-ai";
 import { SettingsManager } from "@earendil-works/pi-coding-agent";
+import { observeLoggedErrors } from "../log";
 import { buildResourceLoader } from "./extensions";
+import { packageSourceIdentity, setDisabledPackagesResolver } from "./packages";
+import {
+	fixtureProviderExtensionRuns,
+	fixtureProviderExtensionSource,
+	writeFixturePiPackage,
+} from "./packages/testFixtures";
 import {
 	type CatalogRefreshRuntime,
 	configurePiRuntime,
 	configurePiRuntimeGenerationInitializer,
+	configurePiRuntimeSessionExtensionExclusions,
 	getPiRuntime,
 	piLoginOptions,
 	preparePiRuntimeGeneration,
@@ -229,38 +237,40 @@ test("candidate generation reloads an opaque extension replaced at the same path
 	}
 });
 
-const STARTUP_EXTENSION = `export default function startupProvider(pi) {
-	pi.registerProvider("startup-ext", {
-		name: "Startup extension",
-		apiKey: "startup-ext-key",
-		api: "openai-completions",
-		baseUrl: "https://startup-ext.example/v1",
-		models: [{
-			id: "startup-ext-model",
-			name: "Startup ext model",
-			reasoning: false,
-			contextWindow: 8192,
-			maxTokens: 1024,
-			input: ["text"],
-			cost: { input: 0, output: 0 },
-		}],
-	});
-}
-`;
-
-test("providers registered by user extensions join the shared catalog at startup", async () => {
-	const root = mkdtempSync(join(tmpdir(), "trpi-user-extension-startup-"));
+async function inAgentDir(
+	run: (dirs: { root: string; agentDir: string; extensionsDir: string }) => Promise<void>,
+): Promise<void> {
+	const root = mkdtempSync(join(tmpdir(), "trpi-user-extensions-"));
 	const agentDir = join(root, "agent");
 	const extensionsDir = join(agentDir, "extensions");
 	const priorAgentDir = process.env.PI_CODING_AGENT_DIR;
 	mkdirSync(extensionsDir, { recursive: true });
-	writeFileSync(join(extensionsDir, "startup-provider.ts"), STARTUP_EXTENSION);
 	process.env.PI_CODING_AGENT_DIR = agentDir;
+	configurePiRuntime(null);
 	try {
-		const prepared = await preparePiRuntimeGeneration([]);
-		expect(prepared.outcome).toBe("prepared");
-		if (prepared.outcome !== "prepared") return;
-		const { generation } = prepared;
+		await run({ root, agentDir, extensionsDir });
+	} finally {
+		configurePiRuntime(null);
+		setDisabledPackagesResolver(null);
+		if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
+		rmSync(root, { recursive: true, force: true });
+	}
+}
+
+async function preparedGeneration(paths: readonly string[] = []) {
+	const prepared = await preparePiRuntimeGeneration(paths);
+	if (prepared.outcome !== "prepared") throw new Error("generation was not prepared");
+	return prepared.generation;
+}
+
+test("providers registered by user extensions join the shared catalog at startup", async () => {
+	await inAgentDir(async ({ extensionsDir }) => {
+		writeFileSync(
+			join(extensionsDir, "startup-provider.ts"),
+			fixtureProviderExtensionSource("startup-ext"),
+		);
+		const generation = await preparedGeneration();
 		expect(generation.runtime.getRegisteredProviderIds()).toContain("startup-ext");
 		expect(generation.runtime.getModels("startup-ext").map((model) => model.id)).toEqual([
 			"startup-ext-model",
@@ -268,65 +278,140 @@ test("providers registered by user extensions join the shared catalog at startup
 		expect(generation.extensionProviderIds.has("startup-ext")).toBe(true);
 		expect(generation.opaqueProviderIds.has("startup-ext")).toBe(false);
 		expect(generation.providerStatusIds.has("startup-ext")).toBe(false);
-	} finally {
-		configurePiRuntime(null);
-		if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
-		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
-		rmSync(root, { recursive: true, force: true });
-	}
+	});
 });
 
-test("a broken user extension never fails the runtime generation", async () => {
-	const root = mkdtempSync(join(tmpdir(), "trpi-user-extension-broken-"));
-	const agentDir = join(root, "agent");
-	const extensionsDir = join(agentDir, "extensions");
-	const priorAgentDir = process.env.PI_CODING_AGENT_DIR;
-	mkdirSync(extensionsDir, { recursive: true });
-	writeFileSync(join(extensionsDir, "broken.ts"), 'throw new Error("startup broken extension");\n');
-	writeFileSync(join(extensionsDir, "startup-provider.ts"), STARTUP_EXTENSION);
-	process.env.PI_CODING_AGENT_DIR = agentDir;
-	try {
-		const prepared = await preparePiRuntimeGeneration([]);
-		expect(prepared.outcome).toBe("prepared");
-		if (prepared.outcome !== "prepared") return;
-		expect(prepared.generation.runtime.getRegisteredProviderIds()).toContain("startup-ext");
-		expect(prepared.generation.extensionProviderIds.has("startup-ext")).toBe(true);
-	} finally {
-		configurePiRuntime(null);
-		if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
-		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
-		rmSync(root, { recursive: true, force: true });
-	}
+test("a broken user extension never fails the runtime generation nor reaches the logs", async () => {
+	await inAgentDir(async ({ extensionsDir }) => {
+		writeFileSync(
+			join(extensionsDir, "broken.ts"),
+			'throw new Error("private-user-extension-diagnostic");\n',
+		);
+		writeFileSync(
+			join(extensionsDir, "startup-provider.ts"),
+			fixtureProviderExtensionSource("startup-ext"),
+		);
+		const observed: unknown[] = [];
+		const written: unknown[] = [];
+		const stderr = spyOn(process.stderr, "write");
+		const writeSync = spyOn(fs, "writeSync");
+		observeLoggedErrors((_scope, error) => observed.push(error));
+		try {
+			const generation = await preparedGeneration();
+			expect(generation.runtime.getRegisteredProviderIds()).toContain("startup-ext");
+			expect(generation.extensionProviderIds.has("startup-ext")).toBe(true);
+		} finally {
+			written.push(
+				...stderr.mock.calls.map(([chunk]) => chunk),
+				...writeSync.mock.calls.map(([, data]) => data),
+			);
+			observeLoggedErrors(null);
+			stderr.mockRestore();
+			writeSync.mockRestore();
+		}
+		const records = written
+			.map((data) => (typeof data === "string" ? data : Buffer.from(data as Uint8Array).toString()))
+			.filter((line) => line.includes("[agent]") || line.includes('"scope":"agent"'))
+			.join("\n");
+		expect(records).toContain("1 load or registration failure(s)");
+		expect(records).not.toContain("private-user-extension-diagnostic");
+		expect(records).not.toContain("broken.ts");
+		expect(observed).toEqual([]);
+	});
+});
+
+test("a hung user extension cannot hold the generation, and none of the pass registers", async () => {
+	await inAgentDir(async ({ extensionsDir }) => {
+		const hooks = globalThis as typeof globalThis & {
+			__thinkrailHungExtensionStarted?: () => void;
+		};
+		const started = new Promise<void>((resolve) => {
+			hooks.__thinkrailHungExtensionStarted = resolve;
+		});
+		writeFileSync(
+			join(extensionsDir, "a-hung.ts"),
+			"export default async function () { globalThis.__thinkrailHungExtensionStarted(); await new Promise(() => {}); }\n",
+		);
+		writeFileSync(join(extensionsDir, "b-provider.ts"), fixtureProviderExtensionSource("hung-ext"));
+		jest.useFakeTimers();
+		try {
+			const pending = preparedGeneration();
+			await started;
+			jest.advanceTimersByTime(10_000);
+			const generation = await pending;
+			expect(generation.extensionProviderIds.size).toBe(0);
+			expect(generation.runtime.getRegisteredProviderIds()).not.toContain("hung-ext");
+		} finally {
+			jest.useRealTimers();
+			delete hooks.__thinkrailHungExtensionStarted;
+		}
+	});
 });
 
 test("additional-path providers stay Central and never count as user extension providers", async () => {
-	const root = mkdtempSync(join(tmpdir(), "trpi-user-extension-ownership-"));
-	const agentDir = join(root, "agent");
-	const extensionsDir = join(agentDir, "extensions");
-	const opaquePath = join(root, "opaque-extension.ts");
-	const priorAgentDir = process.env.PI_CODING_AGENT_DIR;
-	mkdirSync(extensionsDir, { recursive: true });
-	writeFileSync(join(extensionsDir, "startup-provider.ts"), STARTUP_EXTENSION);
-	writeFileSync(
-		opaquePath,
-		'export default function syntheticExtension(pi) { pi.registerProvider("opaque-probe", { name: "Opaque" }); }\n',
-	);
-	process.env.PI_CODING_AGENT_DIR = agentDir;
-	try {
-		const prepared = await preparePiRuntimeGeneration([opaquePath]);
-		expect(prepared.outcome).toBe("prepared");
-		if (prepared.outcome !== "prepared") return;
-		const { generation } = prepared;
+	await inAgentDir(async ({ root, extensionsDir }) => {
+		const opaquePath = join(root, "opaque-extension.ts");
+		writeFileSync(
+			join(extensionsDir, "startup-provider.ts"),
+			fixtureProviderExtensionSource("startup-ext"),
+		);
+		writeFileSync(
+			opaquePath,
+			'export default function syntheticExtension(pi) { pi.registerProvider("opaque-probe", { name: "Opaque" }); }\n',
+		);
+		const generation = await preparedGeneration([opaquePath]);
 		expect(generation.opaqueProviderIds.has("opaque-probe")).toBe(true);
 		expect(generation.extensionProviderIds.has("opaque-probe")).toBe(false);
 		expect(generation.extensionProviderIds.has("startup-ext")).toBe(true);
 		expect(generation.opaqueProviderIds.has("startup-ext")).toBe(false);
-	} finally {
-		configurePiRuntime(null);
-		if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
-		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
-		rmSync(root, { recursive: true, force: true });
-	}
+	});
+});
+
+test("an excluded Central artifact never loads through the user pass, in a plain or a Central generation", async () => {
+	await inAgentDir(async ({ extensionsDir }) => {
+		const artifact = join(extensionsDir, "jetbrains-central.ts");
+		writeFileSync(artifact, fixtureProviderExtensionSource("leftover-central"));
+		configurePiRuntimeSessionExtensionExclusions([artifact]);
+		const before = fixtureProviderExtensionRuns("leftover-central");
+
+		const plain = await preparedGeneration();
+		expect(fixtureProviderExtensionRuns("leftover-central")).toBe(before);
+		expect(plain.runtime.getRegisteredProviderIds()).not.toContain("leftover-central");
+		expect(plain.extensionProviderIds.has("leftover-central")).toBe(false);
+
+		const central = await preparedGeneration([artifact]);
+		expect(fixtureProviderExtensionRuns("leftover-central")).toBe(before + 1);
+		expect(central.opaqueProviderIds.has("leftover-central")).toBe(true);
+		expect(central.extensionProviderIds.has("leftover-central")).toBe(false);
+	});
+});
+
+test("a package switched off in Settings never runs or registers its providers at startup", async () => {
+	await inAgentDir(async ({ root, agentDir }) => {
+		const pkg = writeFixturePiPackage(join(root, "pkgs", "provider-pkg"), {
+			extensions: [],
+			skills: [],
+			prompts: [],
+		});
+		writeFileSync(
+			join(pkg, "extensions", "provider.ts"),
+			fixtureProviderExtensionSource("pkg-ext"),
+		);
+		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ packages: [pkg] }));
+		const before = fixtureProviderExtensionRuns("pkg-ext");
+
+		const enabled = await preparedGeneration();
+		expect(enabled.extensionProviderIds.has("pkg-ext")).toBe(true);
+		expect(fixtureProviderExtensionRuns("pkg-ext")).toBe(before + 1);
+
+		setDisabledPackagesResolver(
+			() => new Set([packageSourceIdentity(pkg, "user", undefined, agentDir)]),
+		);
+		const disabled = await preparedGeneration();
+		expect(fixtureProviderExtensionRuns("pkg-ext")).toBe(before + 1);
+		expect(disabled.runtime.getRegisteredProviderIds()).not.toContain("pkg-ext");
+		expect(disabled.extensionProviderIds.has("pkg-ext")).toBe(false);
+	});
 });
 
 test("opaque registrations that replace existing providers stay visible to provider status and are attributed to Central", async () => {

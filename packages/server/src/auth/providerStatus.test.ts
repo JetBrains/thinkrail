@@ -33,13 +33,12 @@ function sources(overrides: Partial<ProviderStatusSources> = {}): ProviderStatus
 
 test("custom servers saved after the runtime started join the status allowlist, opaque ids never do", () => {
 	expect(
-		statusProviderIds(new Set(["anthropic", "openai"]), new Set(["anthropic", "custom-central"]), [
-			"anthropic",
-			"openai",
-			"custom-gw-1a2b3c",
-			"custom-central",
-			"central-test",
-		]),
+		statusProviderIds(
+			new Set(["anthropic", "openai"]),
+			new Set(["anthropic", "custom-central"]),
+			["anthropic", "openai", "custom-gw-1a2b3c", "custom-central", "central-test"],
+			new Set(),
+		),
 	).toEqual(["anthropic", "openai", "custom-gw-1a2b3c"]);
 });
 
