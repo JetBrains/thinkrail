@@ -91,20 +91,41 @@ re-opened transcripts provider-valid.
     catalog only when a chat's session bound, after that chat's model had been chosen, so `model.list`,
     new chats, restores and `provider.status` missed them until then and again after every restart. The pass
     resolves the user-scope extension set through pi's package manager on the `enabled` view with
-    `onMissing → skip` (project trust off: a pre-session catalog has no project), drops every path in the
-    generation's additional and session-exclusion sets **before anything loads** — so the Central artifact
-    never runs twice, nor as a user extension when the CLI is absent/unsupported or boot fell back to a plain
-    generation — loads the rest through a `none`-view loader (`noExtensions` + those explicit paths, so it
-    can neither install nor load a switched-off package) and applies their queued provider, native-provider
-    and virtual-model registrations to the candidate runtime. Ids it registered are `extensionProviderIds`.
+    `onMissing → skip` (project trust off: a pre-session catalog has no project), applies the **Central
+    exclusion** below, loads the rest through a `none`-view loader (`noExtensions` + those explicit paths, so
+    it can neither install nor load a switched-off package), applies their queued provider, native-provider
+    and virtual-model registrations to the candidate runtime and, when any applied, awaits pi's offline
+    `refresh({ allowNetwork: false })` as `createAgentSessionServices` does (skipped otherwise: the strict
+    pass's services call has just run it). Ids it registered are `extensionProviderIds`.
     Unlike the strict pass it never fails a candidate: a failed load or a rejected registration skips only
-    that item, and the pass is bounded by 10 s — past it, nothing it queued is applied, so a hung factory
-    cannot hold boot or a Central rebuild (a late completion only fills the abandoned loader's queue). Its
-    diagnostics are closed counts; extension paths, error text and error objects of user extensions are never
-    logged or reported. A chat's own load later re-registers over the same runtime, which pi merges. Accepted
-    gaps: project-local extensions and a package installed after preparation reach the runtime only through a
-    chat's load, as before (`provider.status` lists them from the next generation), and a package switched off
-    after preparation keeps its registrations until then.
+    that item, and the pass, refresh included, is bounded by 10 s: a load still running then is abandoned
+    and nothing it queued is applied, so a factory that hangs asynchronously cannot hold boot or a Central
+    rebuild (a late completion only fills the abandoned loader's queue), and a refresh still running is no
+    longer awaited (it only settles the runtime's snapshot). Its diagnostics are closed counts: no extension
+    path, load error text or per-extension error object is logged or reported. The one error object logged
+    is a throw out of pi's resolve or the loader's reload (pi collects per-extension failures instead): a
+    `warn` through `logger("agent")`, with type/message/stack in the local support log and only a
+    classifier in the analytics report the logged-error observer files. A chat's own load later
+    re-registers over the same runtime, which pi merges. Accepted gaps: a factory that blocks
+    synchronously or crashes the process now blocks or kills boot — the pass runs in-process like a chat's
+    load, under the accepted lack of crash isolation (`AGENTS.md`, "Engine and architecture");
+    project-local extensions are never loaded by the pass, so they reach the runtime only through a chat's
+    load, as before, and never join `extensionProviderIds` (`provider.status` does not list a provider only
+    they register); a user package installed after preparation reaches the runtime only through a chat's
+    load until the next generation's pass registers it; a package switched off after preparation keeps its
+    registrations until then.
+
+    **Central exclusion** (invariant). The generation's session-exclusion paths — the Central artifact
+    path, which auth configures before the first generation — are dropped **before anything loads or
+    lists** by every host resolve of user extensions: this pass (which also drops the generation's
+    additional, opaque paths), the chat session loader (`buildResourceLoader`, under `extensions`) and the
+    Settings catalog ([[submodule-server-agent-packages]]). Paths compare by pi's own resource identity,
+    `piResourcePathKey` (a port of pi's private `getResourcePathKey`: synthetic paths as-is, files by
+    realpath — else as given — case-folded on Windows), computed on both sides at each resolve, so a
+    symlinked `~/.pi` under a `PI_CODING_AGENT_DIR` that names its target, a differently-cased Windows path,
+    or an artifact that appears after the loader was built cannot slip through. Hence the artifact never
+    runs twice, nor as a user extension when the CLI is absent/unsupported or boot fell back to a plain
+    generation, and none of its provider ids or names can reach `extensionProviderIds` or `provider.status`.
 
     `getSessionRuntimeGeneration` exposes a live session's retained generation for synchronous host metadata
     reads. Activation changes the current pointer for pre-session reads and future session creation; it never
@@ -1160,7 +1181,8 @@ re-opened transcripts provider-valid.
     through a headless `DefaultResourceLoader` to apply provider registrations, without inspecting it.
     `buildResourceLoader(cwd, settingsManager, getAdmission, excludedPaths, extraFactories?)` then resolves
     Pi's normal settings/package +
-    `.pi` / `.agents` extension set, removes that exact opaque identity **before loading**, and explicitly loads
+    `.pi` / `.agents` extension set, removes that exact opaque identity **before loading** (the Central
+    exclusion, under `piRuntime`), and explicitly loads
     the remaining paths: sessions use the provider objects already owned by their retained generation, so
     arbitrary Central factory/errors/UI cannot reach `pi.extensionUi`. The Central identity is always excluded
     from session discovery—even if the global artifact changes—so a session cannot mutate its generation.

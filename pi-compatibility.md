@@ -258,10 +258,12 @@ restart and toggle-reload regressions on upgrades.
   `bindCore` (after it). The services call cannot carry the catalog's user pass: it applies a load's
   registrations whenever that load finishes, so a pass abandoned at its deadline would still register late,
   after the generation's attribution was taken. The host therefore resolves the enabled set itself
-  (`resolve(onMissing → skip)`, the Central artifact dropped by path before loading), loads it through its own
-  `noExtensions` loader and mirrors pi's apply loop over those queues on the candidate runtime, only within
-  the deadline. It relies on the queues carrying every registration of a load until bind and on a later
-  session bind's re-registration merging over the boot one.
+  (`resolve(onMissing → skip)`, then the Central exclusion of [[submodule-server-agent]]), loads it through
+  its own `noExtensions` loader and mirrors pi's apply loop over those queues on the candidate runtime, then
+  its awaited `refresh({ allowNetwork: false })` — only when something was applied, since the strict pass's
+  services call has just run it — all within the deadline. It does not clear the queues (the loader is
+  discarded) nor apply extension flags (the pass has none). It relies on the queues carrying every
+  registration of a load until bind and on a later session bind's re-registration merging over the boot one.
   **Removal gate:** a public way to apply a path-filtered extension load's registrations to a given
   `ModelRuntime` with cancellation (e.g. `createAgentSessionServices` taking an extension filter and a
   signal). On upgrades re-diff the apply loop in `agent-session-services.js` against the host's and run the
