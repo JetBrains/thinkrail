@@ -127,18 +127,23 @@
 	}
 }
 
+/* `--tr-app-region` mirrors the app-region for hosts whose webview ignores `app-region` (Tauri's
+   bootstrap reads it on mousedown); it is an inherited custom property, so descendants agree. */
 @utility window-drag {
 	-webkit-app-region: no-drag;
 	app-region: no-drag;
+	--tr-app-region: no-drag;
 
 	:root[data-window-chrome-drag-region="drag"] & {
 		-webkit-app-region: drag;
 		app-region: drag;
+		--tr-app-region: drag;
 	}
 }
 @utility window-no-drag {
 	-webkit-app-region: no-drag;
 	app-region: no-drag;
+	--tr-app-region: no-drag;
 }
 /* With the neon setting on (styles/neon.css), each ring also carries the accent halo: outward for the
    outset ring, inward for the inset ones so a clipping parent never cuts it. */

@@ -52,7 +52,7 @@ test("a large user message with an agent reply collapses, and Show more re-expan
 	});
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	const body = page.getByTestId("user-message-body");
@@ -85,7 +85,7 @@ test("a huge message expands into a bounded, scrollable body instead of a giant 
 	});
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	const body = page.getByTestId("user-message-body");
@@ -119,7 +119,7 @@ test("an unbounded transcript keeps the user message within the visible pane", a
 
 	await page.setViewportSize({ width: 620, height: 900 });
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	try {
@@ -158,7 +158,7 @@ test("a large user message with no agent reply stays expanded", async ({ page })
 	});
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	const body = page.getByTestId("user-message-body");
@@ -178,7 +178,7 @@ test("a short user message has no collapse controls", async ({ page }) => {
 	});
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	const body = page.getByTestId("user-message-body");
@@ -205,7 +205,7 @@ test("only the round's final agent answer carries a copy action, not intermediat
 	});
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	const assistantMessages = page.locator('[data-testid="chat-message"][data-role="assistant"]');
@@ -233,7 +233,7 @@ test("copy actions share the content line at the assistant left and user right w
 	});
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	const userMessage = page.locator('[data-testid="chat-message"][data-role="user"]');
@@ -294,7 +294,7 @@ test("copy actions copy the full source of both user and agent messages", async 
 	});
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	const userMessage = page.locator('[data-testid="chat-message"][data-role="user"]');

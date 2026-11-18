@@ -13,7 +13,7 @@ export function initNeonGlowPersistence(
 	stablePreferences: StablePreferenceAdapter | null = getStablePreferenceAdapter(),
 ): () => void {
 	const storage = preferenceStorage(stablePreferences);
-	useAppStore.getState().setNeonGlow(readPreference(storage, NEON_KEY) !== "false");
+	useAppStore.getState().setNeonGlow(readPreference(storage, NEON_KEY) === "true");
 	applyNeonGlow(useAppStore.getState().neonGlow);
 	return useAppStore.subscribe((state, previous) => {
 		if (state.neonGlow === previous.neonGlow) return;

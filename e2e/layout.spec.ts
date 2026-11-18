@@ -11,6 +11,8 @@ import {
 	pseudoBackgroundColor,
 	revealFirstProjectWorkspaces,
 	revealWorkbenchTool,
+	showAllPanels,
+	showTerminalPanel,
 	waitTerminalReady,
 } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
@@ -21,6 +23,7 @@ test.use({ viewport: { width: 1440, height: 900 } });
 async function openDefaultWorkbench(page: Page): Promise<void> {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
+	await showAllPanels(page);
 	await waitTerminalReady(page);
 }
 
@@ -195,7 +198,8 @@ test("overflow uses directional fades without changing tab-strip geometry", asyn
 		.toBe("none");
 	await expect(strip).toHaveCSS("height", "28px");
 	const listHeight = await height(tablist);
-	await expect.poll(() => height(strip.getByRole("tab").first())).toBeCloseTo(listHeight, 1);
+	// Pill tabs sit inside the strip's 2px vertical padding.
+	await expect.poll(() => height(strip.getByRole("tab").first())).toBeCloseTo(listHeight - 4, 1);
 
 	await tablist.evaluate((element) => {
 		element.scrollLeft = 0;
@@ -223,7 +227,7 @@ test("overflow uses directional fades without changing tab-strip geometry", asyn
 		})
 		.toBe(true);
 	await expect(strip).toHaveCSS("height", "28px");
-	await expect.poll(() => height(last)).toBeCloseTo(listHeight, 1);
+	await expect.poll(() => height(last)).toBeCloseTo(listHeight - 4, 1);
 });
 
 test("auxiliary panel scrollbars stay quiet at rest and expose only clipped edges", async ({
@@ -393,7 +397,8 @@ test("one local frame survives workspace switches while resource tabs stay works
 	await pressPlatformShortcut(page, "Shift+j");
 	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 
-	await createWorkspaceViaDialog(page);
+	// panels: false — the test is about the hidden bottom panel surviving a workspace switch.
+	await createWorkspaceViaDialog(page, { panels: false });
 	await expect(page.getByTestId("editor-tab").filter({ hasText: "README.md" })).toHaveCount(0);
 	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 	await expect.poll(() => width(page.getByTestId("right-stack"))).toBeCloseTo(resized, 0);
@@ -1074,7 +1079,7 @@ test("custom presets synchronize while defaults and group limits remain window-l
 	await expect(custom).toHaveCount(0);
 	await expect(peerCustom).toHaveCount(0);
 	await peer.close();
-	await expect(page.getByTestId("layout-preset").filter({ hasText: "Balanced" })).toHaveAttribute(
+	await expect(page.getByTestId("layout-preset").filter({ hasText: "Codex" })).toHaveAttribute(
 		"data-default",
 		"true",
 	);
@@ -1188,6 +1193,7 @@ test("frontend windows keep chat and file placement independent", async ({ page,
 	await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await revealFirstProjectWorkspaces(peer);
 	await defaultWorkspaceRow(peer).click();
+	await showTerminalPanel(peer);
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
 	await expect(peer.getByTestId("terminal-tab")).toHaveCount(1);
 	const peerChat = peer.locator('[data-testid="editor-tab"][data-kind="chat"]');

@@ -199,6 +199,20 @@ describe("tauri bridge bootstrap", () => {
 		expect(source).not.toContain("</script>");
 	});
 
+	test("reads the web UI's shell-neutral drag-region property before Electrobun's", () => {
+		const source = tauriBootstrapSource();
+		expect(source).toContain('const WEB_APP_REGION_PROPERTY = "--tr-app-region";');
+		expect(source).toContain(
+			"const TITLE_BAR_REGION_PROPERTIES = [WEB_APP_REGION_PROPERTY, TITLE_BAR_REGION_PROPERTY];",
+		);
+		const css = readFileSync(
+			join(import.meta.dir, "..", "..", "..", "web", "src", "index.css"),
+			"utf8",
+		);
+		expect(css).toContain("--tr-app-region: drag;");
+		expect(css).toContain("--tr-app-region: no-drag;");
+	});
+
 	test("the Rust shell embeds this source and writes the same seed globals", () => {
 		const rust = readFileSync(join(SRC_TAURI, "src", "bridge.rs"), "utf8");
 		expect(rust).toContain('include_str!("../../src/bridge/tauri-bootstrap.js")');

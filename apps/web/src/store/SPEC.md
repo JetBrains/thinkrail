@@ -221,7 +221,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   The store owns values and actions, never persistence. `shell/layoutState` validates and hydrates one
   browser-endpoint/surface- or native-profile/window-qualified local document, subscribes to relevant state
   edges, and persists the normalized frame/views/attention/preferences. `hydrateLocalLayoutState` installs
-  that document once; a missing or invalid document is represented by a Balanced frame with no workspace views. `clearWorkspaceTabs` removes the
+  that document once; a missing or invalid document is represented by a default-preset (Codex) frame with no workspace views. `clearWorkspaceTabs` removes the
   workspace view, attention, and associated local state when the workspace disappears. A page-lifetime
   `removedWorkspaceIds` tombstone rejects stale catalog/session/cache/workspace arrivals so an in-flight read
   cannot recreate it. No route enters a tombstoned workspace or a chat whose deletion did not finish
@@ -593,7 +593,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   runtime mode/pair) is normalized on this read side to fixed mode, retaining its valid opaque `theme` and
   only a complete string pair. These are pure host values only: effective local
   appearance/id and the media listener never enter Zustand; the shell drives those through `themes`.
-  Defaults remain fixed `DEFAULT_CONFIG.theme` (`helios-cobalt`) with no pair, but while existing `welcomeGeneration === 0`
+  Defaults are the `DEFAULT_CONFIG` Codex system pair (`codex-dark` fixed id, `system` mode, `codex-light`/`codex-dark` pair), but while existing `welcomeGeneration === 0`
   shell retains the pre-React preference hint instead of applying those placeholders over it. Reusing that
   readiness edge avoids a second derived config-hydration flag; after the first welcome, disconnect/reconnect
   keeps the last authoritative config while a later welcome can replace it. **`terminalReplayKb: number`**,

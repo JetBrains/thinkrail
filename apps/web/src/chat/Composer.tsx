@@ -92,6 +92,14 @@ const SEND_MAIN = cn(
 const SEND_MORE = cn(SEGMENT, "rounded-r-full pr-8 pl-2");
 const KEYCAP = "flex h-16 min-w-16 items-center justify-center rounded-xs bg-on-primary-soft px-2";
 
+/**
+ * Completion menus sit over the composer's left edge. The composer is a centred column of the
+ * transcript width, so in a wide pane the menu follows the column instead of the pane's edge; the
+ * offset is clamped so the menu (at most min(28rem, 90%) wide) never overruns the composer's right edge.
+ */
+const MENU_LEFT =
+	"left-[clamp(var(--space-12),calc((100%-var(--chat-transcript-width))/2+var(--chat-gutter)),max(var(--space-12),calc(100%-min(28rem,90%)-var(--space-12))))]";
+
 const COMPOSER_CONTROLS =
 	"a,button,input,label,select,textarea,[role='button'],[role='menuitem'],[role='option']";
 
@@ -595,12 +603,15 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					ref.current?.focus();
 				}
 			}}
-			className="relative m-0 flex min-w-0 shrink-0 flex-col border-0 border-border-muted border-t bg-container-workspace-bg p-0"
+			className="relative m-0 flex min-w-0 shrink-0 flex-col border-0 bg-container-workspace-bg p-0"
 		>
 			{mentionOpen ? (
 				<div
 					data-testid="mention-menu"
-					className="absolute bottom-full left-12 mb-4 max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-md border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]"
+					className={cn(
+						"absolute bottom-full mb-4 max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-md border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]",
+						MENU_LEFT,
+					)}
 				>
 					{mentionCandidates.map((candidate, index) => (
 						<button
@@ -624,7 +635,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					commands={slashCompletion.matches}
 					activeIndex={slashCompletion.activeIndex}
 					onSelect={slashCompletion.pick}
-					className="absolute bottom-full left-12 mb-4"
+					className={cn("absolute bottom-full mb-4", MENU_LEFT)}
 					footer={
 						templatesEmpty && onManageTemplates ? (
 							<button
@@ -649,7 +660,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					activeIndex={slotIdx}
 					count={slots.length}
 					onNext={() => stepSlot(1)}
-					className="absolute bottom-full left-12 mb-4"
+					className={cn("absolute bottom-full mb-4", MENU_LEFT)}
 				/>
 			) : null}
 
@@ -668,12 +679,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				}
 			/>
 
-			<div className="p-chat-gutter">
+			<div className="mx-auto box-border w-full max-w-[var(--chat-transcript-width)] px-chat-gutter pt-4 pb-12">
 				<div
 					ref={shellRef}
 					data-testid="chat-composer-shell"
 					className={cn(
-						"relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto] items-end gap-x-4 gap-y-4 overflow-hidden rounded-md border border-control-border-default bg-control-bg bg-clip-padding p-4 transition-colors focus-within:border-control-border-active has-[textarea:focus-visible]:focus-ring",
+						"relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto] items-end gap-x-4 gap-y-4 overflow-hidden rounded-2xl border border-control-border-default bg-control-bg bg-clip-padding p-6 shadow-[var(--shadow-md)] transition-colors focus-within:border-control-border-active has-[textarea:focus-visible]:focus-ring",
 						expanded && growthLimit === "half-chat" && "max-h-[50cqh]",
 					)}
 				>

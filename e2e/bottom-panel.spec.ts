@@ -9,6 +9,8 @@ import {
 	revealFirstProjectWorkspaces,
 	revealWorkbenchTool,
 	runInTerminal,
+	showAllPanels,
+	showTerminalPanel,
 	visibleTerminal,
 	visibleTerminalScreen,
 	waitTerminalReady,
@@ -18,6 +20,7 @@ import { E2E_DATA_DIR } from "./fixtures/paths";
 async function openDefaultWorkbench(page: Page): Promise<void> {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
+	await showAllPanels(page);
 	await waitTerminalReady(page);
 	await expect(page.getByTestId("workspace-workbench")).toHaveAttribute(
 		"data-layout-status",
@@ -243,6 +246,20 @@ test("panel-header actions are square IconButton m controls", async ({ page }) =
 	await square(page.getByRole("button", { name: "Search open tabs" }).first());
 });
 
+test("a new workspace opens chat-first: right side and bottom panel hidden until asked for", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page, { panels: false });
+	await expect(page.getByTestId("left-nav")).toBeVisible();
+	await expect(page.getByTestId("right-stack")).toHaveCount(0);
+	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
+	await showAllPanels(page);
+	await expect(page.getByTestId("right-stack")).toBeVisible();
+	await expect(page.getByTestId("bottom-panel")).toBeVisible();
+	await expect(page.getByTestId("toggle-terminal")).toHaveAttribute("aria-pressed", "true");
+});
+
 test("a new workspace starts with one accessible terminal group in a 30% bottom panel", async ({
 	page,
 }) => {
@@ -303,9 +320,10 @@ test("a hidden local frame keeps the host terminal reserved without attaching un
 	await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await revealFirstProjectWorkspaces(peer);
 	await peer.getByTestId("workspace-item").filter({ hasText: workspace.name }).click();
+	// The peer window starts on the Codex frame (bottom panel hidden); waitTerminalReady reveals it.
+	await waitTerminalReady(peer);
 	await expect(peer.getByTestId("bottom-panel")).toBeVisible();
 	await expect(peer.getByTestId("terminal-tab")).toHaveCount(1);
-	await waitTerminalReady(peer);
 
 	await reloadDefaultWorkbench(page);
 	await waitForLayoutSettled(page);
@@ -338,6 +356,7 @@ test("a completed initial-terminal handshake never recreates a terminal after ex
 		"data-layout-status",
 		"settled",
 	);
+	await showTerminalPanel(page);
 	await expect(page.getByTestId("bottom-new-terminal")).toBeVisible();
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(0);
 	const catalog = await requestOverWire<{ tabs: Array<{ tabKey: string }> }>(
@@ -762,6 +781,8 @@ test("bottom visibility and alignment stay local to each window and survive its 
 	await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await revealFirstProjectWorkspaces(peer);
 	await defaultWorkspaceRow(peer).getByRole("treeitem").click();
+	// The peer window starts on the Codex frame (bottom panel hidden).
+	await showTerminalPanel(peer);
 	await expect(peer.getByTestId("bottom-panel")).toBeVisible();
 
 	await setBottomAlignment(page, "Full width");
@@ -780,7 +801,7 @@ test("bottom visibility and alignment stay local to each window and survive its 
 	await peer.close();
 });
 
-test("an old host layout stays inert while a pristine surface starts Balanced", async ({
+test("an old host layout stays inert while a pristine surface starts on the Codex frame", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -817,13 +838,14 @@ test("an old host layout stays inert while a pristine surface starts Balanced", 
 	);
 	await page.getByTestId("workspace-item").filter({ hasText: workspace.name }).click();
 
+	// Codex: Projects on the left; the right side and bottom panel stay hidden behind their rails.
 	await expect(page.getByTestId("left-nav")).toBeVisible();
-	await expect(page.getByTestId("right-stack")).toContainText("Specs");
+	await expect(page.getByTestId("right-stack")).toHaveCount(0);
 	await expect(page.getByTestId("tool-rail-files")).toHaveAccessibleName("Files");
-	await expect(page.getByTestId("right-stack")).toContainText("TODO List");
+	await expect(page.getByTestId("tool-rail-specs")).toHaveAccessibleName("Specs");
+	await expect(page.getByTestId("tool-rail-plan")).toHaveAccessibleName("TODO List");
 	await expect(page.getByTestId("tool-rail-review")).toHaveAccessibleName("Review");
-	await expect(page.getByTestId("bottom-panel")).toBeVisible();
-	await expect(page.getByTestId("bottom-new-terminal")).toBeVisible();
+	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 	await expect(page.getByTestId("center-group")).toHaveCount(1);
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(0);
 	expect(readFileSync(oldPath, "utf8")).toBe(persistedBefore);

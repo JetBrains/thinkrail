@@ -97,6 +97,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { RemoveWorkspaceDialog } from "./RemoveWorkspaceDialog";
+import { SidebarQuickActions } from "./SidebarQuickActions";
 import {
 	announceSettledShelf,
 	SETTLED_NOTICE_QUIET_MS,
@@ -345,205 +346,210 @@ export function ProjectTree({ newWorkspaceShortcut }: { newWorkspaceShortcut: re
 	};
 
 	return (
-		<nav data-testid="project-tree" className="flex flex-col gap-4">
-			<ChatsSection />
-			<header className="flex h-panel-row items-center justify-between pr-4 pl-8">
-				<span className="tr-text-eyebrow text-text-muted">{t("panels.projectTree.title")}</span>
-				<AddProjectMenu
-					recentProjects={recentProjects}
-					onOpen={() => void pickAndOpen()}
-					onEnterHostPath={enterHostPath}
-					onClone={cloneRepository}
-					onOpenRecent={(p) => void openProject(p)}
-					{...(supportsCreate ? { onStartNew: startNewProject } : {})}
-				>
-					<IconButton
-						ref={addProjectButtonRef}
-						icon={Plus}
-						label={t("panels.projectTree.addProject")}
-						variant="ghost"
-						size="s"
-						data-testid="add-project-menu"
-						data-focus-fallback="projects"
-					/>
-				</AddProjectMenu>
-			</header>
+		<>
+			<SidebarQuickActions onNewWorkspace={(projectId) => openWorkspaceDialog(projectId, false)} />
+			<nav data-testid="project-tree" className="flex flex-col gap-4">
+				<ChatsSection />
+				<header className="flex h-panel-row items-center justify-between pr-4 pl-8">
+					<span className="tr-text-eyebrow text-text-muted">{t("panels.projectTree.title")}</span>
+					<AddProjectMenu
+						recentProjects={recentProjects}
+						onOpen={() => void pickAndOpen()}
+						onEnterHostPath={enterHostPath}
+						onClone={cloneRepository}
+						onOpenRecent={(p) => void openProject(p)}
+						{...(supportsCreate ? { onStartNew: startNewProject } : {})}
+					>
+						<IconButton
+							ref={addProjectButtonRef}
+							icon={Plus}
+							label={t("panels.projectTree.addProject")}
+							variant="ghost"
+							size="s"
+							data-testid="add-project-menu"
+							data-focus-fallback="projects"
+						/>
+					</AddProjectMenu>
+				</header>
 
-			<p role="status" aria-live="polite" data-testid="project-move-status" className="sr-only">
-				{moveAnnouncement}
-			</p>
-			<DndContext
-				sensors={dragSensors}
-				collisionDetection={pointerWithin}
-				accessibility={{
-					announcements: QUIET_DRAG_ANNOUNCEMENTS,
-					screenReaderInstructions: { draggable: t("panels.projectTree.reorderInstructions") },
-				}}
-				onDragStart={({ active }) => setDraggingProjectId(String(active.id))}
-				onDragCancel={() => setDraggingProjectId(null)}
-				onDragEnd={dropProject}
-			>
-				<Tree
-					label={t("panels.projectTree.title")}
-					focusList="projects"
-					className="flex flex-col"
-					focusDefault={!activeIsChat}
+				<p role="status" aria-live="polite" data-testid="project-move-status" className="sr-only">
+					{moveAnnouncement}
+				</p>
+				<DndContext
+					sensors={dragSensors}
+					collisionDetection={pointerWithin}
+					accessibility={{
+						announcements: QUIET_DRAG_ANNOUNCEMENTS,
+						screenReaderInstructions: { draggable: t("panels.projectTree.reorderInstructions") },
+					}}
+					onDragStart={({ active }) => setDraggingProjectId(String(active.id))}
+					onDragCancel={() => setDraggingProjectId(null)}
+					onDragEnd={dropProject}
 				>
-					{projects.map((project, index) => {
-						const isExpanded = expandedProjectIds[project.id] === true;
-						const list = workspaces[project.id];
-						const stateProjection = { sessionStateByWorkspace };
-						const previous = projects[index - 1];
-						const next = projects[index + 1];
-						return (
-							<li
-								key={project.id}
-								role="none"
-								data-testid="project-group"
-								data-focus-row={project.id}
-								data-dragging={draggingProjectId === project.id || undefined}
-								className="relative data-[dragging]:opacity-40"
-							>
-								<ProjectDropZone
-									projectId={project.id}
-									placement="before"
-									enabled={
-										draggingIndex >= 0 && index !== draggingIndex && index !== draggingIndex + 1
-									}
-								/>
-								<ProjectDropZone
-									projectId={project.id}
-									placement="after"
-									enabled={
-										draggingIndex >= 0 && index !== draggingIndex && index !== draggingIndex - 1
-									}
-								/>
-								<ProjectRow
-									project={project}
-									isSelected={selectedProjectId === project.id}
-									isExpanded={isExpanded}
-									needsAttention={
-										!isExpanded && selectProjectNeedsAttention(stateProjection, project.id)
-									}
-									isRunning={!isExpanded && selectProjectIsRunning(stateProjection, project.id)}
-									workspaceCount={(list ?? []).filter((w) => !isDefaultWorkspace(w)).length}
-									onToggle={() => toggleExpand(project.id)}
-									onSelect={() => void selectProject(project.id)}
-									canRename={canRenameProject(protocolVersion)}
-									onRename={(name) => renameProject(project, name)}
-									onClose={() => closeProject(project)}
-									onAddWorkspace={() => openWorkspaceDialog(project.id, false)}
-									onAddWorkspaceFromMenu={() => openWorkspaceDialog(project.id, true)}
-									onOpenExistingWorktree={() => openExistingWorktreeDialog(project.id)}
-									onRegisterNameButton={(element) => registerProjectNameButton(project.id, element)}
-									onRestoreFocus={() => focusProjectNameOrAdd(project.id)}
-									canMove={canMove}
-									newWorkspaceShortcut={newWorkspaceShortcut}
-									onMoveUp={
-										previous ? () => void move(project, previous.id, "before", true) : undefined
-									}
-									onMoveDown={next ? () => void move(project, next.id, "after", true) : undefined}
-								/>
-								{isExpanded && list === undefined && (
-									<LoadingRegion rows={2} className="py-4 pr-8 pl-16" />
-								)}
-								{isExpanded && list !== undefined && (
-									<SettledPartition
-										enabled={supportsSettling}
+					<Tree
+						label={t("panels.projectTree.title")}
+						focusList="projects"
+						className="flex flex-col"
+						focusDefault={!activeIsChat}
+					>
+						{projects.map((project, index) => {
+							const isExpanded = expandedProjectIds[project.id] === true;
+							const list = workspaces[project.id];
+							const stateProjection = { sessionStateByWorkspace };
+							const previous = projects[index - 1];
+							const next = projects[index + 1];
+							return (
+								<li
+									key={project.id}
+									role="none"
+									data-testid="project-group"
+									data-focus-row={project.id}
+									data-dragging={draggingProjectId === project.id || undefined}
+									className="relative data-[dragging]:opacity-40"
+								>
+									<ProjectDropZone
 										projectId={project.id}
-										partition={selectWorkspacePartition(partitionState, project.id, now)}
-										shelfExpanded={settledShelfExpanded[project.id] === true}
-										shelfShown={settledShelfShown[project.id] ?? SETTLED_SHELF_PAGE}
-										renderRow={(ws, settled) =>
-											workspaceCreations[ws.id] ? null : (
-												<WorkspaceRow
-													key={ws.id}
-													workspace={ws}
-													level={settled ? 3 : 2}
-													settled={settled}
-													now={now}
-													isActive={activeWorkspaceId === ws.id}
-													needsAttention={selectWorkspaceNeedsAttention(stateProjection, ws.id)}
-													isRunning={selectWorkspaceIsRunning(stateProjection, ws.id)}
-													canRename={canRenameWorkspace(protocolVersion, ws)}
-													canSettle={canSettleWorkspace(protocolVersion, ws)}
-													readAction={
-														supportsWorkspaceReadState(protocolVersion)
-															? selectWorkspaceReadAction(stateProjection, ws.id)
-															: null
-													}
-													editors={editors}
-													onSelect={() => selectWorkspace(ws)}
-													onOpenIn={(editor) => openWorkspaceIn(ws, editor)}
-													onCopyPath={() => void copyText(ws.worktreePath)}
-													onReveal={() => revealWorkspace(ws)}
-													onRename={(name) => renameWorkspace(ws, name)}
-													onSettle={() => settleWorkspace(ws.id)}
-													onKeepActive={() => unsettleWorkspace(ws.id)}
-													onMarkRead={() => markWorkspaceRead(ws.id)}
-													onMarkUnread={() => markWorkspaceUnread(ws.id)}
-												/>
-											)
+										placement="before"
+										enabled={
+											draggingIndex >= 0 && index !== draggingIndex && index !== draggingIndex + 1
 										}
 									/>
-								)}
-								{isExpanded && (creationsByProject[project.id]?.length ?? 0) > 0 && (
-									<ul role="none" data-focus-list={`workspaces:${project.id}`}>
-										{creationsByProject[project.id]?.map((creation) => (
-											<WorkspaceCreationRow
-												key={creation.id}
-												creation={creation}
-												isActive={activeCreationId === creation.id}
-												onSelect={() => useAppStore.getState().selectCreation(creation.id)}
-											/>
-										))}
-									</ul>
-								)}
-							</li>
-						);
-					})}
-				</Tree>
-				<DragOverlay dropAnimation={null}>
-					{draggingProject ? (
-						<div className="flex max-w-224 items-center gap-4 rounded-sm border border-primary bg-container-elevated-bg px-8 py-4 tr-text-ui text-text-default shadow-lg">
-							<RiFolderLine className="size-14 shrink-0 text-text-muted" />
-							<span className="truncate">{draggingProject.name}</span>
-						</div>
-					) : null}
-				</DragOverlay>
-			</DndContext>
+									<ProjectDropZone
+										projectId={project.id}
+										placement="after"
+										enabled={
+											draggingIndex >= 0 && index !== draggingIndex && index !== draggingIndex - 1
+										}
+									/>
+									<ProjectRow
+										project={project}
+										isSelected={selectedProjectId === project.id}
+										isExpanded={isExpanded}
+										needsAttention={
+											!isExpanded && selectProjectNeedsAttention(stateProjection, project.id)
+										}
+										isRunning={!isExpanded && selectProjectIsRunning(stateProjection, project.id)}
+										workspaceCount={(list ?? []).filter((w) => !isDefaultWorkspace(w)).length}
+										onToggle={() => toggleExpand(project.id)}
+										onSelect={() => void selectProject(project.id)}
+										canRename={canRenameProject(protocolVersion)}
+										onRename={(name) => renameProject(project, name)}
+										onClose={() => closeProject(project)}
+										onAddWorkspace={() => openWorkspaceDialog(project.id, false)}
+										onAddWorkspaceFromMenu={() => openWorkspaceDialog(project.id, true)}
+										onOpenExistingWorktree={() => openExistingWorktreeDialog(project.id)}
+										onRegisterNameButton={(element) =>
+											registerProjectNameButton(project.id, element)
+										}
+										onRestoreFocus={() => focusProjectNameOrAdd(project.id)}
+										canMove={canMove}
+										newWorkspaceShortcut={newWorkspaceShortcut}
+										onMoveUp={
+											previous ? () => void move(project, previous.id, "before", true) : undefined
+										}
+										onMoveDown={next ? () => void move(project, next.id, "after", true) : undefined}
+									/>
+									{isExpanded && list === undefined && (
+										<LoadingRegion rows={2} className="py-4 pr-8 pl-16" />
+									)}
+									{isExpanded && list !== undefined && (
+										<SettledPartition
+											enabled={supportsSettling}
+											projectId={project.id}
+											partition={selectWorkspacePartition(partitionState, project.id, now)}
+											shelfExpanded={settledShelfExpanded[project.id] === true}
+											shelfShown={settledShelfShown[project.id] ?? SETTLED_SHELF_PAGE}
+											renderRow={(ws, settled) =>
+												workspaceCreations[ws.id] ? null : (
+													<WorkspaceRow
+														key={ws.id}
+														workspace={ws}
+														level={settled ? 3 : 2}
+														settled={settled}
+														now={now}
+														isActive={activeWorkspaceId === ws.id}
+														needsAttention={selectWorkspaceNeedsAttention(stateProjection, ws.id)}
+														isRunning={selectWorkspaceIsRunning(stateProjection, ws.id)}
+														canRename={canRenameWorkspace(protocolVersion, ws)}
+														canSettle={canSettleWorkspace(protocolVersion, ws)}
+														readAction={
+															supportsWorkspaceReadState(protocolVersion)
+																? selectWorkspaceReadAction(stateProjection, ws.id)
+																: null
+														}
+														editors={editors}
+														onSelect={() => selectWorkspace(ws)}
+														onOpenIn={(editor) => openWorkspaceIn(ws, editor)}
+														onCopyPath={() => void copyText(ws.worktreePath)}
+														onReveal={() => revealWorkspace(ws)}
+														onRename={(name) => renameWorkspace(ws, name)}
+														onSettle={() => settleWorkspace(ws.id)}
+														onKeepActive={() => unsettleWorkspace(ws.id)}
+														onMarkRead={() => markWorkspaceRead(ws.id)}
+														onMarkUnread={() => markWorkspaceUnread(ws.id)}
+													/>
+												)
+											}
+										/>
+									)}
+									{isExpanded && (creationsByProject[project.id]?.length ?? 0) > 0 && (
+										<ul role="none" data-focus-list={`workspaces:${project.id}`}>
+											{creationsByProject[project.id]?.map((creation) => (
+												<WorkspaceCreationRow
+													key={creation.id}
+													creation={creation}
+													isActive={activeCreationId === creation.id}
+													onSelect={() => useAppStore.getState().selectCreation(creation.id)}
+												/>
+											))}
+										</ul>
+									)}
+								</li>
+							);
+						})}
+					</Tree>
+					<DragOverlay dropAnimation={null}>
+						{draggingProject ? (
+							<div className="flex max-w-224 items-center gap-4 rounded-sm border border-primary bg-container-elevated-bg px-8 py-4 tr-text-ui text-text-default shadow-lg">
+								<RiFolderLine className="size-14 shrink-0 text-text-muted" />
+								<span className="truncate">{draggingProject.name}</span>
+							</div>
+						) : null}
+					</DragOverlay>
+				</DndContext>
 
-			{dialogProjectId !== null ? (
-				<NewWorkspaceDialog
-					open
-					projectId={dialogProjectId}
-					onOpenChange={(o) => {
-						if (o) return;
-						setDialogProjectId(null);
-						const returnFocusId = workspaceDialogReturnFocusIdRef.current;
-						workspaceDialogReturnFocusIdRef.current = null;
-						if (returnFocusId) focusProjectNameOrAdd(returnFocusId);
-					}}
-				/>
-			) : null}
+				{dialogProjectId !== null ? (
+					<NewWorkspaceDialog
+						open
+						projectId={dialogProjectId}
+						onOpenChange={(o) => {
+							if (o) return;
+							setDialogProjectId(null);
+							const returnFocusId = workspaceDialogReturnFocusIdRef.current;
+							workspaceDialogReturnFocusIdRef.current = null;
+							if (returnFocusId) focusProjectNameOrAdd(returnFocusId);
+						}}
+					/>
+				) : null}
 
-			{existingDialogProjectId !== null ? (
-				<ExistingWorktreeDialog
-					open
-					projectId={existingDialogProjectId}
-					onOpenChange={(isOpen) => {
-						if (isOpen) return;
-						setExistingDialogProjectId(null);
-						const returnFocusId = existingDialogReturnFocusIdRef.current;
-						existingDialogReturnFocusIdRef.current = null;
-						if (returnFocusId) focusProjectNameOrAdd(returnFocusId);
-					}}
-					onOpened={onExistingWorktreeOpened}
-				/>
-			) : null}
+				{existingDialogProjectId !== null ? (
+					<ExistingWorktreeDialog
+						open
+						projectId={existingDialogProjectId}
+						onOpenChange={(isOpen) => {
+							if (isOpen) return;
+							setExistingDialogProjectId(null);
+							const returnFocusId = existingDialogReturnFocusIdRef.current;
+							existingDialogReturnFocusIdRef.current = null;
+							if (returnFocusId) focusProjectNameOrAdd(returnFocusId);
+						}}
+						onOpened={onExistingWorktreeOpened}
+					/>
+				) : null}
 
-			{dialogs}
-		</nav>
+				{dialogs}
+			</nav>
+		</>
 	);
 }
 

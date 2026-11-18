@@ -7,6 +7,7 @@ import {
 	openWorkspaceChat,
 	pressPlatformShortcut,
 	revealWorkbenchTool,
+	showAllPanels,
 	waitTerminalReady,
 	worktreeRow,
 } from "./fixtures/app";
@@ -14,6 +15,7 @@ import {
 async function openDefaultWorkbench(page: Page): Promise<void> {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
+	await showAllPanels(page);
 	await waitTerminalReady(page);
 }
 
@@ -107,6 +109,7 @@ test("folding, hiding, and showing regions keep the center and the other panes m
 test("edge tools hide only their pane while terminal sessions stay grouped", async ({ page }) => {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
+	await showAllPanels(page);
 	await waitTerminalReady(page);
 	await expect(page.getByTestId("left-layout-rail")).toBeVisible();
 	await expect(page.getByTestId("right-layout-rail")).toBeVisible();
@@ -120,6 +123,8 @@ test("edge tools hide only their pane while terminal sessions stay grouped", asy
 		expect(box.y).toBeGreaterThanOrEqual(bounds.y);
 		expect(box.y + box.height).toBeLessThanOrEqual(bounds.y + bounds.height);
 	}
+	// Files is the selected tool of the Codex right group; select Specs explicitly.
+	await revealWorkbenchTool(page, "specs");
 	const specs = page.getByTestId("tool-rail-specs");
 	await expect(specs).toHaveAttribute("aria-pressed", "true");
 	await specs.click();

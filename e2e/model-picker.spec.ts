@@ -1,6 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
 import type { AppConfig, ThinkingLevel } from "@thinkrail/contracts";
-import { expandModelGroup, openWorkspaceChat, revealModelGroups } from "./fixtures/app";
+import {
+	expandModelGroup,
+	openWorkspaceChat,
+	releaseFocus,
+	revealModelGroups,
+} from "./fixtures/app";
 import { connectCentral, openProviders, waitForCentralState } from "./fixtures/jbcentral";
 import { shot } from "./fixtures/screenshots";
 import { E2eWire } from "./fixtures/wire";
@@ -23,6 +28,7 @@ async function readConfig(page: Page): Promise<AppConfig> {
 async function openFreshChat(page: Page): Promise<void> {
 	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	const previousChatCount = await chatTabs.count();
+	await releaseFocus(page);
 	await page.getByTestId("new-chat").first().click();
 	await expect(chatTabs).toHaveCount(previousChatCount + 1);
 }

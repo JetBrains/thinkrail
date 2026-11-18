@@ -56,7 +56,7 @@ test("unnamed chats read as their first prompt in the tab strip and Recently clo
 	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("search-palette")).toBeHidden();
 
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	await expect(chatTab).toHaveAttribute("data-session-id", latest.id);
 	await expect(chatTab).toHaveAttribute("data-title-source", "prompt");
@@ -92,7 +92,7 @@ test("unnamed chats read as their first prompt in the tab strip and Recently clo
 
 test("a new chat takes its first prompt as its label the moment it is sent", async ({ page }) => {
 	await openFixtureProject(page);
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await page.getByTestId("new-chat").first().click();
 	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	await expect(chatTab).toHaveCount(1);

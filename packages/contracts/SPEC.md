@@ -598,9 +598,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `submodule-server-terminal`'s shell-selection decision for what each value spawns.
   **`PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION`** pins v63's additive project-located `template.list` /
   `template.get` reads, allowing Create Workspace to preview global plus current-checkout project templates
-  without sending host paths; older hosts retain a global-only fallback. `themeMode` defaults to `"fixed"`
-  and no pair, preserving both legacy configs
-  and the explicit Helios Cobalt default (`helios-cobalt`, bundled by the web client); `subagentsEnabled` is the host-wide subagent default (`true` for current
+  without sending host paths; older hosts retain a global-only fallback. `DEFAULT_CONFIG` is the Codex system pair
+  (`theme: "codex-dark"`, `themeMode: "system"`, `systemThemePair: { light: "codex-light", dark: "codex-dark" }`,
+  bundled by the web client); `normalizeThemePreference` returns that whole default only for a record with no
+  theme fields at all, and otherwise falls back to `"fixed"` for a missing or unusable mode, preserving legacy configs; `subagentsEnabled` is the host-wide subagent default (`true` for current
   behavior), overridden only by `Workspace.subagentsOverride`; `subagentMaxConcurrent` (whole number in
   **`SUBAGENT_MAX_CONCURRENT`** = 1–16, default 4, validated by `isSubagentMaxConcurrent`; on the wire from
   **`SUBAGENT_CONCURRENCY_PROTOCOL_VERSION`** = v79) is how many subagents one chat runs at once — more

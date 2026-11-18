@@ -89,7 +89,8 @@ test's documented specialized list names it.
   is the one sanctioned label colour: on `ghost` and `outline` it keeps the feedback colour in every state
   (rest, hover, focus-visible, pressed, selected — disabled still wins), because a colour set at the call
   site loses to ghost's own state text in focus and pressed, exactly when the control is used.
-- **Sizes** (exactly three; border-box, same for every variant and state, radius `rounded-sm`, type
+- **Sizes** (exactly three; border-box, same for every variant and state; radius by variant — `primary` and `destructive` are
+  `rounded-full` pills (a circle when icon-only, as the composer send control), the quieter variants `rounded-md`; type
   `tr-text-button` — the 14px interface face at weight 470, one step above ordinary UI text): `s` 20px
   high, 4px text padding, 14px icon, 4px icon↔text gap, 20px square icon-only; `m` 24 / 8 / 16 / 4 / 24;
   `l` 32 / 12 / 20 / 6 / 32 (the default for `Button`; `IconButton` defaults to `m`). At `s` the gap equals the side padding: a 12px icon read as

@@ -566,7 +566,7 @@ function balancedFrame(): WorkbenchFrame {
 	const preset = BUILTIN_LAYOUT_PRESETS.find(
 		(candidate) => candidate.id === DEFAULT_LAYOUT_PRESET_ID,
 	);
-	if (!preset) throw new Error("The Balanced layout preset is missing");
+	if (!preset) throw new Error("The default layout preset is missing");
 	return instantiateWorkbenchFrame(preset);
 }
 

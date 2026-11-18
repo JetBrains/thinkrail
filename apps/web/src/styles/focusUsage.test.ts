@@ -120,7 +120,7 @@ const SUPPRESSION_DRAWN_ELSEWHERE: Record<string, { match: string; reason: strin
 	],
 	"packages/ui/popover.tsx": [
 		{
-			match: "z-50 overflow-hidden rounded-md",
+			match: "z-50 overflow-hidden rounded-xl",
 			reason: "popover content: programmatic focus target",
 		},
 	],

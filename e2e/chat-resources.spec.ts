@@ -20,7 +20,7 @@ async function openResourceChat(page: Page) {
 		name: "Resource UI",
 		messages: [{ role: "user", text: "Inspect this chat's resources.", timestamp: Date.now() }],
 	});
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await openPersistedChat(page, "Resource UI");
 	await expect(page.getByTestId("chat-toolbar")).toBeVisible();
 }
@@ -326,7 +326,7 @@ test("Resources keeps a chat's archived history: the dock sums it, the inspector
 		name: "Resource history",
 		messages: [{ role: "user", text: "Show the archived resources.", timestamp: Date.now() }],
 	}).id;
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await openPersistedChat(page, "Resource history");
 
 	const dock = page.getByTestId("resources-dock");

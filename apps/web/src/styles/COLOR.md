@@ -108,7 +108,7 @@ step through the role's `darkAlpha`; that still clears Lc 45 there, while light 
 ## Neon glow
 
 `styles/neon.css` adds an accent halo on top of the system above, controlled by Settings → Appearance →
-**Neon glow & animations** (on by default; a per-client preference, `shell/neonPreference.ts`, stamped as
+**Neon glow & animations** (off by default; a per-client preference, `shell/neonPreference.ts`, stamped as
 `<html data-helios-neon="true|false">` before React mounts). Every rule is scoped to
 `[data-helios-neon="true"]`, so the setting off is exactly the look described above. The halo is
 `--neon-glow` — `0 0 12px` of `primary` @ 38% plus a `0 0 2px` core @ 80% — derived from the role, never a

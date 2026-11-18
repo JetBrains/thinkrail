@@ -306,8 +306,12 @@ focus to the tab. The strip's and rail's roving handlers ignore both keys.
 
 ## Presets and local persistence
 
-Balanced, Focus, and Review are web-owned resource-free frame definitions with a below-center bottom slot:
-Balanced and Review show it; Focus hides it. Balanced and Focus start with one center group; Review provides
+Codex, Balanced, Focus, and Review are web-owned resource-free frame definitions with a below-center bottom
+slot: Balanced and Review show it; Codex and Focus hide it. **Codex** is the default (`DEFAULT_LAYOUT_PRESET_ID`):
+the chat-first frame of the Codex-style shell — one center group, the Projects tool on a visible left side
+(the Thread Sidebar), and a hidden right side with Balanced's geometry and tool order (Specs, Files,
+Artifacts above the TODO List and Review) so the centre keeps the 640px a split needs when a side opens at
+1280px; the Review Changes control (Files on its Changed mode) and `Mod+J` open it on demand; the hidden bottom slot is where terminals land. Codex, Balanced and Focus start with one center group; Review provides
 its deliberate vertical pair. Balanced's lower right group opens on the TODO List with Review beside it: on a
 fresh workspace the plan is what there is to look at, while review comments only exist once there is a diff.
 Artifacts sits with the reference tools — after Specs and Files in Balanced's upper right group and
@@ -324,9 +328,9 @@ definition keeps its stable `name`; custom preset names are user data and render
 
 Applying a preset creates one replacement frame, raises this surface's local side/bottom limits if required, and remaps all retained workspace views atomically. Center resources preserve visual order and distribute across destination leaves; terminals map into compatible slots; singleton tool placement ids survive where possible. Omitted tools receive deterministic restore targets, so a sparse preset cannot strand Projects or another tool. The local default preset is the target of the explicit Reset frame command; ordinary workspace switches retain the current frame. Default selection and limits persist locally, not in host settings.
 
-`layoutState` validates and persists the normalized frame/views/attention document under browser endpoint + frontend-surface identity or the native stable adapter's profile/window scope. Reload and supported session restoration reuse it; simultaneous windows never consume each other's storage events. Persistence contains references only. Failure leaves live state intact; unknown schema falls back to the Balanced safe frame.
+`layoutState` validates and persists the normalized frame/views/attention document under browser endpoint + frontend-surface identity or the native stable adapter's profile/window scope. Reload and supported session restoration reuse it; simultaneous windows never consume each other's storage events. Persistence contains references only. Failure leaves live state intact; unknown schema falls back to the default (Codex) safe frame.
 
-The complete current-layout grammar, including the derived `WorkspaceLayoutDocument` projection consumed by existing shell renderers, is web-local. A pristine surface instantiates Balanced; no host snapshot or prior layout schema is imported.
+The complete current-layout grammar, including the derived `WorkspaceLayoutDocument` projection consumed by existing shell renderers, is web-local. A pristine surface instantiates the default preset (Codex); no host snapshot or prior layout schema is imported.
 
 The terminal visibility gate mounts a body only for a terminal locally selected in an unfolded visible group. Distinct terminal identities may mount concurrently; one identity has one body per browser surface. Inactive/folded/hidden tabs never attach. Global New Terminal targets last local bottom focus, creating a frame slot only through an explicit frame command; center Group Header creation captures that group. Host catalog reconciliation may place an unrepresented terminal locally without selecting it, but cannot change frame geometry.
 
