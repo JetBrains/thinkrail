@@ -255,6 +255,7 @@ async function registerUserExtensionProviders(
 	runtime: ModelRuntime,
 	excludedPaths: readonly string[],
 ): Promise<ReadonlySet<string>> {
+	const deadline = Date.now() + USER_EXTENSION_LOAD_TIMEOUT_MS;
 	let loaded: LoadExtensionsResult | undefined;
 	try {
 		loaded = await settleWithin(loadUserExtensions(excludedPaths), USER_EXTENSION_LOAD_TIMEOUT_MS);
@@ -269,10 +270,12 @@ async function registerUserExtensionProviders(
 		return new Set();
 	}
 	let failures = loaded.errors.length;
+	let applied = 0;
 	const registered = new Set<string>();
 	const register = (apply: () => void, providerId?: string): void => {
 		try {
 			apply();
+			applied += 1;
 			if (providerId !== undefined) registered.add(providerId);
 		} catch {
 			failures += 1;
@@ -291,6 +294,17 @@ async function registerUserExtensionProviders(
 		log.warn(
 			`user extensions: ${failures} load or registration failure(s) skipped for the model catalog`,
 		);
+	}
+	if (applied > 0) {
+		try {
+			const refreshed = await settleWithin(
+				runtime.refresh({ allowNetwork: false }).then(() => true),
+				Math.max(0, deadline - Date.now()),
+			);
+			if (!refreshed) log.warn("user extension catalog refresh exceeded the startup deadline");
+		} catch {
+			log.warn("user extension catalog refresh failed");
+		}
 	}
 	return registered;
 }
