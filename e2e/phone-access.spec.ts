@@ -35,6 +35,8 @@ test("phone access is off by default, turns on from Settings with a scannable co
 	await expect(toggle).toHaveAttribute("data-active", "false");
 	await expect(page.getByTestId("phone-access-show-code")).toBeHidden();
 	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-nav-phone")).toBeFocused();
+	await page.keyboard.press("Escape");
 	await expect(dialog).toBeHidden();
 });
 
