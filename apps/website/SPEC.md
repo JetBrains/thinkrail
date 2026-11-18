@@ -81,7 +81,7 @@ The parent owns the route-composition edges; the vibecoding leaf has no sibling 
 src/pages/{vibecoding,agentic-development,agentic-ide}/index.astro ──▶ src/vibecoding (through index.ts)
 src/pages/{vibecoding,agentic-development,agentic-ide}/index.astro ──▶ src/components/Analytics.astro
 landing + blog shells                                              ──▶ src/components/Analytics.astro
-src/main.ts, src/vibecoding                                        ──▶ src/installLinkShare.ts, src/installCommands.ts, src/githubStars.ts
+src/main.ts, src/vibecoding                                        ──▶ src/installLinkShare.ts, src/installCommands.ts, src/installPlatform.ts, src/githubStars.ts
 ```
 
 `src/installLinkShare.ts` is the one framework-free phone "send link" helper both route families use: phone/tablet
@@ -245,7 +245,7 @@ delegation instruments the static install controls without changing their naviga
 Before each post-initialization install CTA, download, or CLI event, the current navigation touch is
 attempted so consent granted on the page can affect only a subsequent action; a page records that touch
 at most once per consented journey, so later actions on it never drop a bridge its download created
-(see [[submodule-website-attribution]]). Only the four exact stable
+(see [[submodule-website-attribution]]). Only the five exact stable
 GitHub desktop aliases are downloads. Their CTA location comes from the containing post-header install
 row (`post_header`, checked before the post), blog post, final CTA, quick start, install section, hero, or
 site `header` (the title bar and its install popover); one recognized activation emits `install_cta_clicked`

@@ -55,19 +55,27 @@ describe("desktop install model", () => {
 			"x64",
 			"ARM64",
 		]);
-		expect(directDesktopDownload("macos")).toBeUndefined();
+		expect(directDesktopDownload("macos")?.architecture).toBe("Apple Silicon");
+		expect(directDesktopDownload("macos", "arm64")?.architecture).toBe("Apple Silicon");
+		expect(directDesktopDownload("macos", "x64")?.architecture).toBe("Intel");
 		expect(directDesktopDownload("windows")?.architecture).toBe("x64");
 		expect(directDesktopDownload("linux")).toBeUndefined();
 	});
 });
 
 describe("desktop CTA", () => {
-	test("downloads direct artifacts and routes unresolved choices to Quick start", () => {
+	test("downloads a direct artifact (an Intel Mac only when the browser reports x86) and routes unresolved choices to Quick start", () => {
 		expect(desktopCtaAction("macos")).toEqual({
 			label: "Download for macOS",
-			href: "#quick-start",
-			detail: undefined,
-			showAllPlatforms: false,
+			href: installPlatforms[0].desktop.downloads[0]?.href,
+			detail: "Apple Silicon",
+			showAllPlatforms: true,
+		});
+		expect(desktopCtaAction("macos", "x64")).toEqual({
+			label: "Download for macOS",
+			href: installPlatforms[0].desktop.downloads[1]?.href,
+			detail: "Intel",
+			showAllPlatforms: true,
 		});
 		expect(desktopCtaAction("windows")).toEqual({
 			label: "Download for Windows",
