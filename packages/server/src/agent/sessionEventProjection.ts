@@ -1,5 +1,6 @@
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { AgentSettlement, PiEvent } from "@thinkrail/contracts";
+import { stripAnsi } from "@thinkrail/shared/stripAnsi";
 import { projectImages } from "../images";
 
 export function projectSessionEvent(
@@ -35,6 +36,12 @@ function allowlistedEvent(event: AgentSessionEvent, terminal: AgentSettlement | 
 		return { ...event, result: withoutStructured(event.result) };
 	if (event.type === "tool_execution_update") {
 		return { ...event, partialResult: withoutStructured(event.partialResult) };
+	}
+	if (event.type === "session_info_changed") {
+		return {
+			type: "session_info_changed",
+			name: typeof event.name === "string" ? stripAnsi(event.name) : event.name,
+		};
 	}
 	return event;
 }

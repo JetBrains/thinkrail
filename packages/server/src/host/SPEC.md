@@ -246,9 +246,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `boot.ts` (`bootHost` → await `initLogging` — debug level when the launcher passed `verbose` — then
   install the crash report, await the login-shell environment when the launcher passed
   `resolveShellEnv: true` (started before `initLogging`), apply the stored host environment
-  (`applyHostEnvironment`, before any `getAgentDir()` reader), pre-warm the same Central watcher/runtime
-  initialization before choosing the serving port, await `createServer` (which idempotently enforces
-  runtime bootstrap for low-level embedders), and write the `listening on` info line (see
+  (`applyHostEnvironment`, before any `getAgentDir()` reader), pre-warm the same runtime initialization
+  `createServer` runs (`hostRuntime.ts`'s `initializeHostRuntime`: install the persisted `disabledPackages`
+  resolver, then the Central watcher/runtime, so the first generation's user-extension pass never runs a
+  switched-off package) before choosing the serving port, await `createServer` (which idempotently enforces
+  that bootstrap for low-level embedders), and write the `listening on` info line (see
   `submodule-server-log`); `reportDesktopError(error, scope)` is the desktop launcher's handled-error door
   into analytics (source `desktop`). Its
   SIGINT/SIGTERM handlers await that same shutdown before process exit. Settling aborts streaming sessions
@@ -495,7 +497,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `AppConfig.extensionSettings` the same way (cleared on shutdown), and `extension.list` answers with the
   `extensions` catalog joined with that same setting — the switch itself writes through `settings.update`,
   so there is no extension write method. **Installed pi packages** follow the same pattern one level up:
-  `setDisabledPackagesResolver` returns `AppConfig.disabledPackages`, a change to either list calls
+  `setDisabledPackagesResolver` returns `AppConfig.disabledPackages` (installed by `initializeHostRuntime`,
+  before any runtime generation), a change to either list calls
   `refreshExtensionTools()`, and `host/packages.ts` answers the `packages.*` methods by mapping an
   optional `workspaceId` onto the checkout plus a fresh project-trust thunk (`host/mcp.ts`'s shape) and
   delegating to the `agent` façade; a confirmed `packages.install` also drops the new identity from

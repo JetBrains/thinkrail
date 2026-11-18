@@ -93,6 +93,16 @@ test("malformed definitions are skipped, never fatal", () => {
 	expect(parsed?.maxTurns).toBeUndefined();
 });
 
+test("max_turns accepts only plain positive decimal integers", () => {
+	const maxTurns = (value: string) =>
+		parseAgentDefinition(`---\nname: x\ndescription: y\nmax_turns: ${value}\n---\nbody`, "project")
+			?.maxTurns;
+	expect(maxTurns("12")).toBe(12);
+	for (const bad of ["3abc", "1.5", "1e3", "0x10", "-2", "0"]) {
+		expect(maxTurns(bad)).toBeUndefined();
+	}
+});
+
 test("discovery precedence: builtins > personal > project, first-name-wins (trust posture)", () => {
 	const root = mkdtempSync(join(tmpdir(), "pi-subagents-defs-"));
 	try {

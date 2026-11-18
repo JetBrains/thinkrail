@@ -33,14 +33,24 @@ function sources(overrides: Partial<ProviderStatusSources> = {}): ProviderStatus
 
 test("custom servers saved after the runtime started join the status allowlist, opaque ids never do", () => {
 	expect(
-		statusProviderIds(new Set(["anthropic", "openai"]), new Set(["anthropic", "custom-central"]), [
-			"anthropic",
-			"openai",
-			"custom-gw-1a2b3c",
-			"custom-central",
-			"central-test",
-		]),
+		statusProviderIds(
+			new Set(["anthropic", "openai"]),
+			new Set(["anthropic", "custom-central"]),
+			["anthropic", "openai", "custom-gw-1a2b3c", "custom-central", "central-test"],
+			new Set(),
+		),
 	).toEqual(["anthropic", "openai", "custom-gw-1a2b3c"]);
+});
+
+test("user extension providers join the status allowlist, Central wins on overlap", () => {
+	expect(
+		statusProviderIds(
+			new Set(["anthropic"]),
+			new Set(["central-x"]),
+			["anthropic", "central-x", "custom-gw-1a2b3c"],
+			new Set(["vertex-ext", "central-x"]),
+		),
+	).toEqual(["anthropic", "vertex-ext", "custom-gw-1a2b3c"]);
 });
 
 describe("buildProviderReport", () => {

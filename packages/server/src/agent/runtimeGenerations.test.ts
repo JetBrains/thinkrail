@@ -20,6 +20,7 @@ import {
 	usePiRuntime,
 } from "./agentSessionManager";
 import { refreshModelListings } from "./modelAvailability";
+import { fixtureProviderExtensionSource } from "./packages/testFixtures";
 import {
 	activatePiRuntimeGeneration,
 	configurePiRuntime,
@@ -504,5 +505,75 @@ describe("PI runtime generations", () => {
 			reason: "candidate-failed",
 		});
 		expect(await usePiRuntime((runtime) => runtime === current)).toBe(true);
+	});
+});
+
+describe("providers registered by user extensions (#1351, #365)", () => {
+	const extensionModel = { provider: "startup-ext", id: "startup-ext-model" };
+
+	async function bootWithUserExtension(): Promise<void> {
+		mkdirSync(join(agentDir, "extensions"), { recursive: true });
+		writeFileSync(
+			join(agentDir, "extensions", "startup-provider.ts"),
+			fixtureProviderExtensionSource("startup-ext"),
+		);
+		configurePiRuntime(null);
+		const prepared = await preparePiRuntimeGeneration([]);
+		if (prepared.outcome !== "prepared") throw new Error("boot generation was not prepared");
+		activatePiRuntimeGeneration(prepared.generation);
+	}
+
+	test("their models are listed right after boot, before any chat", async () => {
+		await bootWithUserExtension();
+		expect(await listAvailableModels()).toContainEqual(expect.objectContaining(extensionModel));
+	});
+
+	test("a new chat on a fresh runtime starts on an extension model", async () => {
+		await bootWithUserExtension();
+		const model = await usePiRuntime((runtime) =>
+			runtime.getModel(extensionModel.provider, extensionModel.id),
+		);
+		if (!model) throw new Error("extension model is not in the boot catalog");
+		const session = await createSession({
+			cwd,
+			workspaceId: "workspace-extension",
+			model: toWireModel(model),
+		});
+		expect(session.model).toMatchObject(extensionModel);
+	});
+
+	test("a restored chat on an extension model opens with that model", async () => {
+		const sessionId = `sess-${crypto.randomUUID()}`;
+		const dir = defaultSessionDirFor(agentDir, cwd);
+		mkdirSync(dir, { recursive: true });
+		const at = new Date(1_700_000_000_000).toISOString();
+		writeFileSync(
+			join(dir, `1700000000000_${sessionId}.jsonl`),
+			`${[
+				{ type: "session", version: 3, id: sessionId, timestamp: at, cwd },
+				{
+					type: "model_change",
+					id: "model",
+					parentId: null,
+					timestamp: at,
+					provider: extensionModel.provider,
+					modelId: extensionModel.id,
+				},
+				{
+					type: "message",
+					id: "user",
+					parentId: "model",
+					timestamp: at,
+					message: { role: "user", content: "extension transcript", timestamp: 1_700_000_000_000 },
+				},
+			]
+				.map((line) => JSON.stringify(line))
+				.join("\n")}\n`,
+		);
+		await bootWithUserExtension();
+
+		const hydrated = await getSessionMessages(sessionId, "workspace-extension", cwd);
+		expect(JSON.stringify(hydrated.messages)).toContain("extension transcript");
+		expect(hydrated.summary.model).toMatchObject(extensionModel);
 	});
 });

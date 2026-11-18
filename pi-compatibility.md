@@ -169,7 +169,7 @@ restart and toggle-reload regressions on upgrades.
   `DefaultPackageManager` (`resolve(onMissing)`, `install`, `remove`, `update`,
   `checkForAvailableUpdates`, `listConfiguredPackages`, `addSourceToSettings` /
   `removeSourceFromSettings`) and `SettingsManager`
-  (`setPackages` / `set*Paths`, `flush`, `drainErrors`, `inMemory`). Eight pi facts the host compensates
+  (`setPackages` / `set*Paths`, `flush`, `drainErrors`, `inMemory`). Nine pi facts the host compensates
   for, each with its gate:
   - `resolve()` without `onMissing` installs a declared-but-missing package, and
     `DefaultResourceLoader.reload()` always calls it that way; the catalog therefore reads with
@@ -185,6 +185,10 @@ restart and toggle-reload regressions on upgrades.
     `setResourceEnabled`-style API.
   - `getPackageIdentity` is private; `identity.ts` ports it for the host-wide `disabledPackages` key.
     **Gate:** pi exporting its identity rule.
+  - `getResourcePathKey` (synthetic paths as-is, else realpath with a raw-path fallback, case-folded on
+    Windows) is private; `identity.ts` ports it as `piResourcePathKey`, the path identity of
+    [[submodule-server-agent]]'s Central exclusion, so it matches the paths pi's resolve and loader dedupe.
+    Re-diff it against `core/source-info.js` / `utils/paths.js` on every bump. **Gate:** pi exporting it.
   - `installAndPersist` persists before the caller can re-check project trust, and settings writes are
     queued with swallowed errors; the host sequences `install → trust → addSourceToSettings → flush →
     drainErrors`. **Gate:** a persist step that reports failure and accepts a trust predicate.
@@ -247,6 +251,23 @@ restart and toggle-reload regressions on upgrades.
   queues still carry `extensionPath` and are filled before `extensionsOverride` runs; run the provider-owner
   regressions in `agent/extensions.test.ts`, `agent/delegation.test.ts` and `pi-delegation`'s
   `service.test.ts` on every upgrade.
+- **Extension providers in the shared catalog** — [[submodule-server-agent]], the user-extension pass in
+  `piRuntime.ts` (`registerUserExtensionProviders`, #1351). Pi applies the queued
+  `pendingProviderRegistrations` / `pendingNativeProviderRegistrations` / `pendingVirtualModelRegistrations`
+  of a load only in `createAgentSessionServices` (the CLI, before model resolution) or at a session's
+  `bindCore` (after it). The services call cannot carry the catalog's user pass: it applies a load's
+  registrations whenever that load finishes, so a pass abandoned at its deadline would still register late,
+  after the generation's attribution was taken. The host therefore resolves the enabled set itself
+  (`resolve(onMissing → skip)`, then the Central exclusion of [[submodule-server-agent]]), loads it through
+  its own `noExtensions` loader and mirrors pi's apply loop over those queues on the candidate runtime, then
+  its awaited `refresh({ allowNetwork: false })` — only when something was applied, since the strict pass's
+  services call has just run it — all within the deadline. It does not clear the queues (the loader is
+  discarded) nor apply extension flags (the pass has none). It relies on the queues carrying every
+  registration of a load until bind and on a later session bind's re-registration merging over the boot one.
+  **Removal gate:** a public way to apply a path-filtered extension load's registrations to a given
+  `ModelRuntime` with cancellation (e.g. `createAgentSessionServices` taking an extension filter and a
+  signal). On upgrades re-diff the apply loop in `agent-session-services.js` against the host's and run the
+  user-extension tests in `piRuntime.test.ts`, `runtimeGenerations.test.ts` and `auth/jbcentral.test.ts`.
 - **Queued-message images** — [[submodule-server-agent]], queue projection. Pi's queue API is text-only:
   `getSteeringMessages()` / `getFollowUpMessages()` / `clearQueue()` return strings and drop image blocks,
   so the host keeps a transient per-lane copy of browser-queued message content (images included) while

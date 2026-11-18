@@ -13,7 +13,7 @@ describe("desktop install model", () => {
 	test("keeps compact desktop options in the approved tab order", () => {
 		expect(installPlatforms.map((platform) => platform.id)).toEqual(["macos", "windows", "linux"]);
 		expect(installPlatforms.map((platform) => platform.desktop.detail)).toEqual([
-			"Apple Silicon",
+			"Apple Silicon / Intel",
 			"Windows x64",
 			"Ubuntu 24.04+ · run ./installer",
 		]);
@@ -21,7 +21,13 @@ describe("desktop install model", () => {
 			installPlatforms.flatMap((platform) =>
 				platform.desktop.downloads.map((download) => download.label),
 			),
-		).toEqual(["Download .dmg", "Download .zip", "x64 .tar.gz", "ARM64 .tar.gz"]);
+		).toEqual([
+			"Apple Silicon .dmg",
+			"Intel .dmg",
+			"Download .zip",
+			"x64 .tar.gz",
+			"ARM64 .tar.gz",
+		]);
 	});
 
 	test("pins every stable download to its versionless public release alias", () => {
@@ -31,30 +37,44 @@ describe("desktop install model", () => {
 			),
 		).toEqual([
 			"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-darwin-arm64.dmg",
+			"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-darwin-x64.dmg",
 			"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-windows-x64.zip",
 			"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-linux-x64.tar.gz",
 			"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-linux-arm64.tar.gz",
 		]);
 	});
 
-	test("offers both Linux architectures without choosing between them", () => {
+	test("offers both Mac and Linux architectures without choosing between them", () => {
+		const macos = installPlatforms.find((platform) => platform.id === "macos");
+		expect(macos?.desktop.downloads.map((download) => download.architecture)).toEqual([
+			"Apple Silicon",
+			"Intel",
+		]);
 		const linux = installPlatforms.find((platform) => platform.id === "linux");
 		expect(linux?.desktop.downloads.map((download) => download.architecture)).toEqual([
 			"x64",
 			"ARM64",
 		]);
 		expect(directDesktopDownload("macos")?.architecture).toBe("Apple Silicon");
+		expect(directDesktopDownload("macos", "arm64")?.architecture).toBe("Apple Silicon");
+		expect(directDesktopDownload("macos", "x64")?.architecture).toBe("Intel");
 		expect(directDesktopDownload("windows")?.architecture).toBe("x64");
 		expect(directDesktopDownload("linux")).toBeUndefined();
 	});
 });
 
 describe("desktop CTA", () => {
-	test("downloads direct artifacts and routes unresolved choices to Quick start", () => {
+	test("downloads a direct artifact (an Intel Mac only when the browser reports x86) and routes unresolved choices to Quick start", () => {
 		expect(desktopCtaAction("macos")).toEqual({
 			label: "Download for macOS",
 			href: installPlatforms[0].desktop.downloads[0]?.href,
 			detail: "Apple Silicon",
+			showAllPlatforms: true,
+		});
+		expect(desktopCtaAction("macos", "x64")).toEqual({
+			label: "Download for macOS",
+			href: installPlatforms[0].desktop.downloads[1]?.href,
+			detail: "Intel",
 			showAllPlatforms: true,
 		});
 		expect(desktopCtaAction("windows")).toEqual({

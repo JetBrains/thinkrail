@@ -23,6 +23,7 @@ import {
 	setSessionManagerFactory,
 	usePiRuntime,
 } from "../agent";
+import { fixtureProviderExtensionSource } from "../agent/packages/testFixtures";
 import { resetConfigCache } from "../settings";
 import {
 	connectJbcentral,
@@ -38,7 +39,7 @@ import {
 } from "./jbcentral";
 import { getProviderStatus } from "./providerStatus";
 
-function syntheticExtension(modelId: string): string {
+function syntheticExtension(modelId: string, { fails = false }: { fails?: boolean } = {}): string {
 	return `
 const model = {
   id: ${JSON.stringify(modelId)},
@@ -50,6 +51,7 @@ const model = {
   maxTokens: 4096,
 };
 export default function syntheticCentralExtension(pi) {
+  globalThis.__thinkrailCentralArtifactRuns = (globalThis.__thinkrailCentralArtifactRuns ?? 0) + 1;
   pi.registerProvider("anthropic", {
     baseUrl: "https://synthetic-central.invalid/anthropic",
     apiKey: "synthetic-proxy-key",
@@ -61,8 +63,15 @@ export default function syntheticCentralExtension(pi) {
     apiKey: "synthetic-test-key",
     models: [{ ...model, api: "openai-completions" }],
   });
+  ${fails ? 'throw new Error("synthetic-private-artifact-diagnostic");' : ""}
 }
 `;
+}
+
+function centralArtifactRuns(): number {
+	return (
+		(globalThis as { __thinkrailCentralArtifactRuns?: number }).__thinkrailCentralArtifactRuns ?? 0
+	);
 }
 
 const fakeCentral = `#!/bin/sh
@@ -717,5 +726,66 @@ describe("watched native Central runtime", () => {
 		const failed = await connectJbcentral();
 		expect(failed).toEqual({ outcome: "failed", reason: "central-action-failed" });
 		expect(JSON.stringify(failed)).not.toContain("synthetic-sensitive-child-output");
+	});
+});
+
+describe("user extensions beside the Central artifact", () => {
+	async function reboot(): Promise<void> {
+		await resetJbcentralStateForTests();
+		configurePiRuntime(null);
+		await initializeJbcentralRuntime();
+	}
+
+	function expectNoCentralLeak(report: Awaited<ReturnType<typeof getProviderStatus>>): void {
+		expect(report.providers.map((provider) => provider.id)).not.toContain("central-test");
+		expect(JSON.stringify(report)).not.toContain("synthetic-sensitive-provider-name");
+		expect(JSON.stringify(report)).not.toContain("synthetic-central.invalid");
+	}
+
+	test("a provider registered by a user extension is a provider.status row from boot", async () => {
+		mkdirSync(join(agentDir, "extensions"), { recursive: true });
+		writeFileSync(
+			join(agentDir, "extensions", "status-provider.ts"),
+			fixtureProviderExtensionSource("status-ext"),
+		);
+		await reboot();
+		expect((await getProviderStatus()).providers).toContainEqual(
+			expect.objectContaining({ id: "status-ext", name: "status-ext name", configured: true }),
+		);
+	});
+
+	test("a leftover artifact in the standard agent dir never loads while the CLI is absent", async () => {
+		process.env.PI_CODING_AGENT_DIR = dirname(dirname(artifactPath));
+		process.env.PATH = "";
+		writeFileSync(artifactPath, syntheticExtension("leftover-model"));
+		const runs = centralArtifactRuns();
+		await reboot();
+		expect(await getJbcentralStatus()).toEqual({ state: "absent" });
+		expect(centralArtifactRuns()).toBe(runs);
+		expect((await listAvailableModels()).map((model) => model.id)).not.toContain("leftover-model");
+		expectNoCentralLeak(await getProviderStatus());
+	});
+
+	test("a configured artifact in the standard agent dir runs once per generation, only as Central", async () => {
+		process.env.PI_CODING_AGENT_DIR = dirname(dirname(artifactPath));
+		writeFileSync(artifactPath, syntheticExtension("central-model"));
+		const runs = centralArtifactRuns();
+		await reboot();
+		expect((await getJbcentralStatus()).state).toBe("configured");
+		expect(centralArtifactRuns()).toBe(runs + 1);
+		const report = await getProviderStatus();
+		expect(report.providers.find((provider) => provider.id === "anthropic")?.kind).toBe("central");
+		expectNoCentralLeak(report);
+	});
+
+	test("the plain boot fallback never re-runs a failed artifact as a user extension", async () => {
+		process.env.PI_CODING_AGENT_DIR = dirname(dirname(artifactPath));
+		writeFileSync(artifactPath, syntheticExtension("failed-model", { fails: true }));
+		const runs = centralArtifactRuns();
+		await reboot();
+		expect(await getJbcentralStatus()).toMatchObject({ state: "load-failed", configured: true });
+		expect(centralArtifactRuns()).toBe(runs + 1);
+		expect((await listAvailableModels()).map((model) => model.id)).not.toContain("failed-model");
+		expectNoCentralLeak(await getProviderStatus());
 	});
 });

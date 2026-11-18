@@ -2,9 +2,11 @@ import { realpathSync } from "node:fs";
 import { expect, type Page, test, type WebSocketRoute } from "@playwright/test";
 import type { ExtUiRequest, SessionStateRecord } from "@thinkrail/contracts";
 import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
+import { moveMouseToChatViewport, waitForScrollStability } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { shot } from "./fixtures/screenshots";
 import { seedWorkspaceSession } from "./fixtures/sessions";
+import { toolCallReplay } from "./fixtures/streamReplay";
 
 const BASE_TS = 1_700_950_000_000;
 const MCP_CALL = "call-linear";
@@ -13,6 +15,7 @@ type DialogRequest = Extract<ExtUiRequest, { kind: "select" | "confirm" | "input
 
 interface Wire {
 	ask(request: DialogRequest): void;
+	askAfter(frames: string[], request: DialogRequest): void;
 	dismiss(request: DialogRequest): void;
 	replies: { id: string; value: unknown }[];
 }
@@ -71,10 +74,16 @@ async function routeWire(page: Page): Promise<Wire> {
 			route.send(message);
 		});
 	});
+	const ask = (request: DialogRequest) => {
+		asking.set(request.sessionId, request);
+		send({ channel: "pi.extensionUi", data: request });
+	};
 	return {
-		ask(request) {
-			asking.set(request.sessionId, request);
-			send({ channel: "pi.extensionUi", data: request });
+		ask,
+		askAfter(frames, request) {
+			if (!browser) throw new Error("the app has not connected yet");
+			for (const frame of frames) browser.send(frame);
+			ask(request);
 		},
 		dismiss(request) {
 			asking.delete(request.sessionId);
@@ -87,11 +96,59 @@ async function routeWire(page: Page): Promise<Wire> {
 	};
 }
 
-async function openSeededChat(page: Page, name: string): Promise<string> {
+type SeedMessages = Parameters<typeof seedWorkspaceSession>[1]["messages"];
+
+const TALL_EARLIER_TURN: SeedMessages = [
+	{ role: "user", text: "Explain the login flow.", timestamp: BASE_TS - 2_000 },
+	{
+		role: "assistant",
+		text: Array.from({ length: 16 }, (_, step) => `Step ${step + 1} of the login flow.`).join(
+			"\n\n",
+		),
+		timestamp: BASE_TS - 1_000,
+	},
+];
+
+const LONG_EARLIER_TURNS: SeedMessages = Array.from({ length: 6 }, (_, turn) => [
+	{
+		role: "user" as const,
+		text: `Question ${turn + 1} about the login flow.`,
+		timestamp: BASE_TS - 100_000 + turn * 2_000,
+	},
+	{
+		role: "assistant" as const,
+		text: Array.from(
+			{ length: 16 },
+			(_, step) => `Turn ${turn + 1} step ${step + 1} of the login flow.`,
+		).join("\n\n"),
+		timestamp: BASE_TS - 100_000 + turn * 2_000 + 1_000,
+	},
+]).flat();
+
+const MCP_CALL_ANSWERED: SeedMessages = [
+	{
+		role: "toolResult",
+		toolCallId: MCP_CALL,
+		toolName: "mcp__linear__create_issue",
+		content: [{ type: "text", text: "Created ENG-1" }],
+		details: {},
+		isError: false,
+		timestamp: BASE_TS + 3_000,
+	},
+	{ role: "assistant", text: "Filed it as ENG-1.", timestamp: BASE_TS + 4_000 },
+];
+
+async function openSeededChat(
+	page: Page,
+	name: string,
+	earlier: SeedMessages = [],
+	later: SeedMessages = [],
+): Promise<string> {
 	await openFixtureProject(page);
 	const { id } = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 		name,
 		messages: [
+			...earlier,
 			{ role: "user", text: "File the issue.", timestamp: BASE_TS },
 			{
 				role: "assistant",
@@ -116,6 +173,7 @@ async function openSeededChat(page: Page, name: string): Promise<string> {
 				isError: false,
 				timestamp: BASE_TS + 2_000,
 			},
+			...later,
 		],
 	});
 	await enterDefaultWorkspace(page);
@@ -256,6 +314,148 @@ test("a draft typed into an anchored prompt survives folding its Activity group 
 	await expect
 		.poll(() => wire.replies)
 		.toEqual([{ id: "extui-edit", value: "user changed draft" }]);
+});
+
+test("each input or editor dialog starts from its own prefill, not from text typed into an earlier one", async ({
+	page,
+}) => {
+	const wire = await routeWire(page);
+	const sessionId = await openSeededChat(page, "Dialog drafts per request");
+	const prompt = page.getByTestId("ext-ui-prompt");
+	const nameRequest: DialogRequest = {
+		id: "extui-name",
+		sessionId,
+		kind: "input",
+		title: "Step 1: type a name",
+	};
+
+	wire.ask(nameRequest);
+	await prompt.getByTestId("ext-ui-input").fill("typed-into-input");
+	await prompt.getByTestId("ext-ui-submit").click();
+	await expect.poll(() => wire.replies).toEqual([{ id: "extui-name", value: "typed-into-input" }]);
+
+	wire.ask({
+		id: "extui-template",
+		sessionId,
+		kind: "editor",
+		title: "Step 2: edit the template",
+		prefill: "PREFILL FROM EXTENSION",
+	});
+	await expect(prompt.getByTestId("ext-ui-editor")).toHaveValue("PREFILL FROM EXTENSION");
+	await prompt.getByTestId("ext-ui-submit").click();
+	await expect
+		.poll(() => wire.replies.at(-1))
+		.toEqual({ id: "extui-template", value: "PREFILL FROM EXTENSION" });
+
+	wire.ask(nameRequest);
+	await expect(prompt.getByTestId("ext-ui-input")).toHaveValue("");
+});
+
+test("every dialog about a tool call scrolls its card into view, not only the first one", async ({
+	page,
+}) => {
+	const wire = await routeWire(page);
+	const sessionId = await openSeededChat(page, "Anchored dialogs reveal", TALL_EARLIER_TURN);
+	const chatScroll = page.getByTestId("chat-scroll");
+	const group = page.getByTestId("activity-group").first();
+	const prompt = page.getByTestId("ext-ui-prompt");
+
+	for (const id of ["extui-first", "extui-second"]) {
+		await moveMouseToChatViewport(page, chatScroll);
+		await page.mouse.wheel(0, -2_000);
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+		await waitForScrollStability(chatScroll);
+		await expect(group).not.toBeInViewport();
+		wire.ask({
+			id,
+			sessionId,
+			kind: "confirm",
+			title: "Allow linear/create_issue? It may change data.",
+			message: "Sure?",
+			toolCallId: MCP_CALL,
+		});
+		await expect(group.getByTestId("ext-ui-prompt"), id).toBeInViewport();
+		await prompt.getByTestId("ext-ui-submit").click();
+		await expect(prompt).toHaveCount(0);
+	}
+	expect(wire.replies).toEqual([
+		{ id: "extui-first", value: true },
+		{ id: "extui-second", value: true },
+	]);
+});
+
+test("a dialog that arrives together with its new tool row scrolls that row's card into view", async ({
+	page,
+}) => {
+	const wire = await routeWire(page);
+	const sessionId = await openSeededChat(
+		page,
+		"Tool row and dialog together",
+		TALL_EARLIER_TURN,
+		MCP_CALL_ANSWERED,
+	);
+	const chatScroll = page.getByTestId("chat-scroll");
+	await waitForScrollStability(chatScroll);
+	await moveMouseToChatViewport(page, chatScroll);
+	await page.mouse.wheel(0, -200);
+	await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+	await waitForScrollStability(chatScroll);
+
+	const toolCall = {
+		type: "toolCall",
+		id: "call-logout",
+		name: "mcp__linear__create_issue",
+		arguments: { title: "Fix logout", team: "ENG" },
+	} as const;
+	wire.askAfter(toolCallReplay(sessionId, toolCall, BASE_TS + 50_000), {
+		id: "extui-with-row",
+		sessionId,
+		kind: "confirm",
+		title: "Allow linear/create_issue? It may change data.",
+		message: "Sure?",
+		toolCallId: toolCall.id,
+	});
+	await expect(
+		page.locator(`[data-testid="ext-ui-prompt"][data-tool-call-id="${toolCall.id}"]`),
+	).toBeInViewport();
+});
+
+test("an anchored dialog whose card is virtualized away when it arrives does not reveal itself later", async ({
+	page,
+}) => {
+	const wire = await routeWire(page);
+	const sessionId = await openSeededChat(
+		page,
+		"Anchored dialog arrives far away",
+		LONG_EARLIER_TURNS,
+	);
+	const chatScroll = page.getByTestId("chat-scroll");
+	const prompt = page.getByTestId("ext-ui-prompt");
+
+	await moveMouseToChatViewport(page, chatScroll);
+	await page.mouse.wheel(0, -20_000);
+	await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+	await waitForScrollStability(chatScroll);
+	await expect(page.getByTestId("activity-group")).toHaveCount(0);
+	wire.ask({
+		id: "extui-far",
+		sessionId,
+		kind: "confirm",
+		title: "Allow linear/create_issue? It may change data.",
+		message: "Sure?",
+		toolCallId: MCP_CALL,
+	});
+	await expect(page.getByTestId("ext-ui-announcement")).toHaveText(
+		"Your input is needed: Allow linear/create_issue? It may change data.",
+	);
+
+	for (let step = 0; step < 40 && (await prompt.count()) === 0; step += 1) {
+		await page.mouse.wheel(0, 300);
+		await waitForScrollStability(chatScroll);
+	}
+	await expect(prompt).toHaveCount(1);
+	await waitForScrollStability(chatScroll);
+	await expect(prompt).not.toBeInViewport();
 });
 
 test("a dialog tied to no tool call docks above the composer, and a host dismissal clears it", async ({

@@ -208,6 +208,35 @@ function installAskToolGate(name: string): {
 	};
 }
 
+function storedSessionName(path: string): string | undefined {
+	for (const line of readFileSync(path, "utf8").split("\n")) {
+		if (!line) continue;
+		const entry = JSON.parse(line) as { type?: string; name?: string };
+		if (entry.type === "session_info") return entry.name;
+	}
+	return undefined;
+}
+
+function installSessionNamer(fileName: string, name: string): { remove: () => void } {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const extensionPath = join(agentDir, "extensions", `${fileName}.ts`);
+	mkdirSync(dirname(extensionPath), { recursive: true });
+	writeFileSync(
+		extensionPath,
+		[
+			'import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";',
+			"export default function (pi: ExtensionAPI) {",
+			'\tpi.on("input", () => {',
+			`\t\tpi.setSessionName(${JSON.stringify(name)});`,
+			"\t});",
+			"}",
+			"",
+		].join("\n"),
+	);
+	return { remove: () => rmSync(extensionPath, { force: true }) };
+}
+
 function installInputSwallower(name: string, marker: string): { remove: () => void } {
 	const agentDir = process.env.PI_CODING_AGENT_DIR;
 	if (!agentDir) throw new Error("agent dir not isolated");
@@ -3417,6 +3446,76 @@ test("renameSession updates a disk-only transcript without attaching an agent", 
 		setSessionStatePublisher(() => {});
 	}
 });
+
+test("an extension session name is shown without terminal escapes while the chat is live", async () => {
+	const namer = installSessionNamer("ansi-session-name", "\u001b[31mred\u001b[0m name");
+	fauxA.setResponses([fauxAssistantMessage("NAMED")]);
+	const cwd = tmpCwd("trpi-ansi-live-");
+	const workspaceId = "ws-ansi-live";
+	const session = await createSession({
+		cwd,
+		workspaceId,
+		model: toWireModel(fauxA.getModel()),
+	});
+	events.set(session.sessionId, []);
+	const published: SessionStateRecord[] = [];
+	setSessionStatePublisher((record) => published.push(record));
+	try {
+		await promptSession(session.sessionId, "name this chat");
+		expect(events.get(session.sessionId)).toContainEqual({
+			type: "session_info_changed",
+			name: "red name",
+		});
+		expect(
+			(await listSessions(workspaceId, cwd)).find((row) => row.sessionId === session.sessionId)
+				?.title,
+		).toBe("red name");
+		expect(published).toContainEqual(
+			expect.objectContaining({ sessionId: session.sessionId, title: "red name" }),
+		);
+		expect((await getSessionMessages(session.sessionId, workspaceId, cwd)).summary.title).toBe(
+			"red name",
+		);
+	} finally {
+		namer.remove();
+		setSessionStatePublisher(() => {});
+		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
+	}
+});
+
+test("a session name already saved with escapes is plain on reload, and the file keeps the codes", () =>
+	withFreshDataDir(async () => {
+		const cwd = tmpCwd("trpi-ansi-disk-");
+		const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+		const colored = "\u001b[31mred\u001b[0m name";
+		const visible = "x".repeat(100);
+		const long = `\u001b[31m${visible}\u001b[0m`;
+		const at = Date.now();
+		const { id, path } = writeFixtureSession(dir, {
+			cwd,
+			name: colored,
+			messages: [{ role: "user", text: "colored", timestamp: at }],
+		});
+		const { id: longId, path: longPath } = writeFixtureSession(dir, {
+			cwd,
+			name: long,
+			messages: [{ role: "user", text: "long", timestamp: at + 1 }],
+		});
+		const workspaceId = "ws-ansi-disk";
+		const listed = await listSessions(workspaceId, cwd);
+		expect(listed.find((row) => row.sessionId === id)?.title).toBe("red name");
+		expect(listed.find((row) => row.sessionId === longId)?.title).toBe(visible);
+		const workspace = { id: workspaceId, projectId: "p-ansi-disk", cwd };
+		await initializeSessionStates([workspace]);
+		const titles = Object.fromEntries(
+			(await listSessionStates([workspace])).map((record) => [record.sessionId, record.title]),
+		);
+		expect(titles[id]).toBe("red name");
+		expect(titles[longId]).toBe(visible);
+		expect(long.length).toBeGreaterThan(80);
+		expect(storedSessionName(path)).toBe(colored);
+		expect(storedSessionName(longPath)).toBe(long);
+	}));
 
 test("state records carry pi's session name as read: long names, explicit clears and attached chats", () =>
 	withFreshDataDir(async () => {

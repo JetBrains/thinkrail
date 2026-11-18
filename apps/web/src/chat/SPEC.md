@@ -625,20 +625,30 @@ labels, and below a 28rem prompt
 (`@container` / `@max-md`) every row stacks into one column so no two choices sit side by side by
 accident (the MCP order keeps Deny furthest from Always allow). It never takes focus from the composer.
 **Arrival:** `ChatTranscript` keeps one always-mounted polite live region outside virtualization and
-fills it a frame after each new request ("Your input is needed: <question>"), once per request; an
-anchored prompt's first mount reveals itself (`revealChatElement`, `automatic-attention`, `block:
-"nearest"` under the breadcrumb inset; the first pointer/key/wheel yields), later remounts do not
-(`PendingExtUi.claimReveal`). A row virtualized away gets no reveal; the live
-region and the needs-input marker still tell the user. **Bounds:** the docked prompt is capped at 60% of
-the chat height (`max-h-[60cqh]`); its body (question, field, select options) scrolls while Cancel/Submit
-and the hint stay put, and the editor is capped at 40%. On the way out, answering unmounts the focused control, so
+fills it a frame after each new request ("Your input is needed: <question>"), once per request. An
+anchored prompt reveals itself once (`revealChatElement`, `automatic-attention`, `block: "nearest"` under
+the breadcrumb inset; the first pointer/key/wheel yields), and only if it mounts within two frames of its
+request arriving in an open chat view; a view opened with the request already pending never reveals it.
+The live region and the needs-input marker still tell the user. A later reveal would take the reader away
+from where they scrolled or jumped, for example a Jump-to-message that lands near the card. The second
+frame is margin: a tool row that arrives with its dialog had its card mounted before the first frame in
+every measured Chromium run (prod and dev, up to 6x CPU throttle). *Trap:* a StrictMode re-run, or a new
+tool row that Virtuoso draws a commit late, queues the prompt's frame after `ChatTranscript`'s, so the
+prompt decides when it mounts (`PendingExtUi.revealOpen`) and `ChatTranscript` only closes the window.
+**Bounds:** the docked prompt is capped at 60% of the chat height (`max-h-[60cqh]`); its body (question,
+field, select options) scrolls while Cancel/Submit and the hint stay put, and the editor is capped at
+40%. On the way out, answering unmounts the focused control, so
 when the prompt still holds `:focus-visible` focus it hands focus back to the composer
 (`ChatActions.focusComposer`) instead of stranding it on `<body>`; a tap/click answer leaves focus alone. `ChatTranscript` owns the session's
-`pendingExtUi`, its `session.extUiReply`, and `PendingExtUiContext`. The typed input/editor draft lives
-in that per-request `PendingExtUi` (`draft()` / `rememberDraft`), not in the prompt: folding a group
-open or shut, virtualization and the dock-to-card move remount the prompt, and the draft must survive
-them; a reply or dismissal ends the request and its draft with it. The draft is not persisted across a
-chat-view remount. A request whose `toolCallId` is in the
+`pendingExtUi`, its `session.extUiReply`, and `PendingExtUiContext`. The typed input/editor draft and
+the reveal state belong to the request, not the prompt: folding a group open or shut, virtualization and
+the dock-to-card move remount the prompt, and both must survive them; a reply or dismissal ends the
+request and its draft with it. `usePendingExtUi` keeps both in a `WeakMap` in `useState`, keyed by the
+store's request object, so a chat-view remount drops the draft. *Trap (#1357):* a `let` inside the memo
+that builds `PendingExtUi` is not per request. The React Compiler creates closures that capture no
+reactive value once per chat view, so every later input or editor dialog showed the last typed text, and
+no anchored dialog after the first revealed itself. *Rejected:* the request id as the key (the host
+numbers dialogs `extui_<n>` from 1 again after a restart). A request whose `toolCallId` is in the
 rows (`rowsHaveToolCall`) asks **on that tool**: the tool shell — `ToolCard`, the routine step row and a
 bare tool's wrapper — renders `ToolPromptSlot` under its header regardless of the tool's own fold, so no
 renderer needs prompt code (the MCP approval included). A request carrying `toolInput` lists it **inside
@@ -1084,7 +1094,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   within the slot on narrow panes while its complete live-region text remains accessible. Starting, changing,
   or ending a phase therefore moves neither transcript alignment nor composer.
 - **Tool attention preserves alignment provenance** — an automatic attention reveal (an anchored extension
-  prompt's first mount) leaves following or detached exactly as it found it and cannot expose the button. A
+  prompt on arrival) leaves following or detached exactly as it found it and cannot expose the button. A
   reader who was already detached keeps the affordance because of that prior action. A docked interactive
   call never reveals: it renders outside the list (the interaction dock below). All attention, history,
   breadcrumb, and row reveals route through the same controller. A history row outside

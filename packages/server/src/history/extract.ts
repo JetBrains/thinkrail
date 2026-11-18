@@ -4,6 +4,7 @@ import {
 	type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import { isControlMessage, isRetriedAttempt, isTranscriptMessageRole } from "@thinkrail/contracts";
+import { stripAnsi } from "@thinkrail/shared/stripAnsi";
 import { displaySessionProjection } from "./displayTranscript";
 
 export interface HistoryEntry {
@@ -42,7 +43,10 @@ export function extractSession(jsonl: string): ExtractedSession | null {
 	const entries = parsed.filter((e): e is SessionEntry => e.type !== "session");
 	let title: string | undefined;
 	for (const entry of entries) {
-		if (entry.type === "session_info") title = entry.name?.trim() || undefined;
+		if (entry.type === "session_info") {
+			const name = typeof entry.name === "string" ? stripAnsi(entry.name) : entry.name;
+			title = name?.trim() || undefined;
+		}
 	}
 	const sourced = displaySessionProjection(entries).entries.flatMap(({ sourceEntry, messages }) =>
 		messages.map((message, part) => ({
