@@ -10,7 +10,7 @@ import {
 	recordLoadedExtensions,
 	setExtensionInfoListener,
 } from "./extensionInfo";
-import { piPackageIdentity, piPackageSourceKind } from "./identity";
+import { piPackageIdentity, piPackageSourceKind, piResourcePathKey } from "./identity";
 import { createPiSettings, setDisabledPackagesResolver } from "./settingsView";
 import { fixtureExtensionSource, writeFixturePiPackage } from "./testFixtures";
 
@@ -59,6 +59,22 @@ describe("piPackageIdentity", () => {
 		expect(piPackageSourceKind("github:a/b")).toBe("local");
 		expect(piPackageSourceKind("~/pi/tools")).toBe("local");
 		expect(piPackageSourceKind("./tools")).toBe("local");
+	});
+});
+
+describe("piResourcePathKey", () => {
+	it("keeps synthetic paths and case-folds file paths on Windows, like pi's getResourcePathKey", () => {
+		expect(piResourcePathKey("builtin:mcp")).toBe("builtin:mcp");
+		expect(piResourcePathKey("<inline:probe>")).toBe("<inline:probe>");
+		const platform = Object.getOwnPropertyDescriptor(process, "platform");
+		Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+		try {
+			expect(piResourcePathKey("C:\\Users\\Dev\\.pi\\agent\\extensions\\Central.ts")).toBe(
+				"c:\\users\\dev\\.pi\\agent\\extensions\\central.ts",
+			);
+		} finally {
+			if (platform) Object.defineProperty(process, "platform", platform);
+		}
 	});
 });
 
