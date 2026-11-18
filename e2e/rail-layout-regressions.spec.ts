@@ -6,6 +6,7 @@ import {
 	openFixtureProject,
 	pressPlatformShortcut,
 	revealWorkbenchTool,
+	showAllPanels,
 	waitTerminalReady,
 	worktreeRow,
 } from "./fixtures/app";
@@ -14,6 +15,7 @@ async function openDefault(page: Page): Promise<void> {
 	await page.setViewportSize({ width: 1440, height: 900 });
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
+	await showAllPanels(page);
 	await waitTerminalReady(page);
 }
 

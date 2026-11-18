@@ -4,7 +4,7 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 import type { ToolCall } from "@thinkrail/contracts";
 import {
 	enterDefaultWorkspace,
-	expandDisclosure,
+	expandThemeList,
 	openFixtureProject,
 	openPersistedChat,
 	pressPlatformShortcut,
@@ -96,7 +96,7 @@ async function openAppearance(page: Page): Promise<Locator> {
 	await page.getByTestId("settings-nav-appearance").click();
 	await expect(dialog).toContainText("Theme");
 	// The fixed-mode theme list sits in a collapsed disclosure.
-	await expandDisclosure(dialog.getByTestId("theme-toggle"));
+	await expandThemeList(page);
 	return dialog;
 }
 

@@ -294,7 +294,7 @@ function ShellLayout() {
 				</div>
 				<div
 					data-testid="topbar-actions"
-					className="window-no-drag ml-auto flex shrink-0 items-center gap-12"
+					className="window-no-drag ml-auto flex shrink-0 items-center gap-8"
 				>
 					{updates ? (
 						<UpdateReadyButton
@@ -319,6 +319,7 @@ function ShellLayout() {
 							tooltip={t("shell.topbar.wiki")}
 							selected={wikiOpen}
 							data-testid="open-wiki"
+							className="max-sm:hidden"
 							onClick={() => useWikiPageState.getState().toggle(activeWorkspaceId)}
 						/>
 					) : null}
@@ -333,6 +334,7 @@ function ShellLayout() {
 								: t("shell.search.open")
 						}
 						data-testid="open-search"
+						className="max-sm:hidden"
 						onClick={() => useAppStore.getState().openSearch()}
 					/>
 					<JbcentralQuotaTopbar />

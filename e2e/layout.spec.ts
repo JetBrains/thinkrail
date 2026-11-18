@@ -11,6 +11,7 @@ import {
 	pseudoBackgroundColor,
 	revealFirstProjectWorkspaces,
 	revealWorkbenchTool,
+	showAllPanels,
 	waitTerminalReady,
 } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
@@ -21,6 +22,7 @@ test.use({ viewport: { width: 1440, height: 900 } });
 async function openDefaultWorkbench(page: Page): Promise<void> {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
+	await showAllPanels(page);
 	await waitTerminalReady(page);
 }
 

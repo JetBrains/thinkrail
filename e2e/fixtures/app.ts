@@ -224,6 +224,29 @@ export async function enterDefaultWorkspace(page: Page): Promise<void> {
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 }
 
+/** The Codex preset keeps the bottom panel (terminals) hidden until asked for: show it via the top bar. */
+export async function showTerminalPanel(page: Page): Promise<void> {
+	const toggle = page.getByTestId("toggle-terminal");
+	await expect(toggle).toBeVisible();
+	if ((await toggle.getAttribute("aria-pressed")) !== "true") await toggle.click();
+	await expect(toggle).toHaveAttribute("aria-pressed", "true");
+	await expect(page.getByTestId("bottom-panel")).toBeVisible();
+}
+
+/**
+ * Reveals the right side and the bottom panel the way a user does in the Codex shell: the top bar's
+ * Review changes control (Files › Changed) and terminal toggle. Layout-engine specs that exercise the
+ * side and bottom regions call this after entering a workspace; the default frame starts with both
+ * hidden.
+ */
+export async function showAllPanels(page: Page): Promise<void> {
+	const review = page.getByTestId("open-review");
+	await expect(review).toBeVisible();
+	if ((await review.getAttribute("aria-pressed")) !== "true") await review.click();
+	await expect(page.getByTestId("right-stack")).toBeVisible();
+	await showTerminalPanel(page);
+}
+
 // Use this helper when a pane must be visible; rail controls toggle on each click. "files" means Files in All mode, "changes" Files in Changed mode.
 export async function revealWorkbenchTool(
 	page: Page,
@@ -232,7 +255,13 @@ export async function revealWorkbenchTool(
 	const railTool = tool === "changes" ? "files" : tool;
 	const control = page.getByTestId(`tool-rail-${railTool}`);
 	await expect(control).toBeVisible();
-	if ((await control.getAttribute("aria-pressed")) !== "true") await control.click();
+	if ((await control.getAttribute("aria-pressed")) !== "true") {
+		// The Codex preset starts with the right side hidden, so this opens it from the rail. A focus
+		// tooltip left on a top-bar control (e.g. Settings after its dialog closes) can sit over the
+		// rail's first entry; release that focus before clicking.
+		await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+		await control.click();
+	}
 	await expect(control).toHaveAttribute("aria-pressed", "true");
 	if (railTool !== "files") return;
 	const mode = page.getByTestId(tool === "changes" ? "files-mode-changed" : "files-mode-all");
@@ -374,6 +403,22 @@ export async function expandActivityStep(page: Page, tool: string): Promise<Loca
 		await expect(step).toHaveAttribute("data-expanded", "true");
 	}
 	return step;
+}
+
+/**
+ * Expands Settings → Appearance's fixed-mode theme list. A fresh host follows the system (the Codex
+ * pair) and hides that list, so a client still in system mode first fixes an appearance: the one it is
+ * showing, unless the caller names another.
+ */
+export async function expandThemeList(page: Page, appearance?: "light" | "dark"): Promise<void> {
+	const dialog = page.getByTestId("settings-dialog");
+	const toggle = dialog.getByTestId("theme-toggle");
+	if (!(await toggle.isVisible())) {
+		const showing =
+			appearance ?? (await page.locator("html").getAttribute("data-theme-appearance"));
+		await dialog.getByTestId(`theme-mode-${showing === "light" ? "light" : "dark"}`).click();
+	}
+	await expandDisclosure(toggle);
 }
 
 /** Opens an `aria-expanded` disclosure (a Settings theme list, layout Advanced, …) unless it is already open. */

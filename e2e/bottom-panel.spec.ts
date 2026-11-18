@@ -9,6 +9,7 @@ import {
 	revealFirstProjectWorkspaces,
 	revealWorkbenchTool,
 	runInTerminal,
+	showAllPanels,
 	visibleTerminal,
 	visibleTerminalScreen,
 	waitTerminalReady,
@@ -18,6 +19,7 @@ import { E2E_DATA_DIR } from "./fixtures/paths";
 async function openDefaultWorkbench(page: Page): Promise<void> {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
+	await showAllPanels(page);
 	await waitTerminalReady(page);
 	await expect(page.getByTestId("workspace-workbench")).toHaveAttribute(
 		"data-layout-status",

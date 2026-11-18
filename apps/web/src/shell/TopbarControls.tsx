@@ -86,6 +86,7 @@ export function ReviewChangesButton({
 			aria-label={label}
 			tooltip={label}
 			tooltipShortcut={shortcut ? [shortcut] : undefined}
+			className="max-sm:hidden"
 			data-testid="open-review"
 			data-workspace-id={workspaceId}
 			onClick={onToggle}
@@ -119,6 +120,7 @@ export function TerminalToggle({ onToggle }: { onToggle: () => void }) {
 			selected={open}
 			aria-pressed={open}
 			data-testid="toggle-terminal"
+			className="max-sm:hidden"
 			onClick={onToggle}
 		/>
 	);

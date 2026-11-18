@@ -5,8 +5,10 @@ import {
 	createWorkspaceViaDialog,
 	enterDefaultWorkspace,
 	expandDisclosure,
+	expandThemeList,
 	openFixtureProject,
 	revealWorkbenchTool,
+	showTerminalPanel,
 } from "./fixtures/app";
 
 interface ThemeOption {
@@ -29,7 +31,8 @@ async function openAppearance(page: Page) {
 /** Opens Appearance with its fixed-mode theme list, which the page keeps in a collapsed disclosure. */
 async function openThemeList(page: Page) {
 	const dialog = await openAppearance(page);
-	await expandDisclosure(dialog.getByTestId("theme-toggle"));
+	// These tests are written against a dark fixed theme, as the pre-Codex default was.
+	await expandThemeList(page, "dark");
 	return dialog;
 }
 
@@ -276,7 +279,7 @@ test("an editor preloaded before a theme swap opens in the current theme", async
 	await pickTheme(page, defaultTheme ?? "");
 });
 
-test("selected workspace tabs keep their surface and edge marker, and rail entries their surface, under every manifest", async ({
+test("selected workspace tabs are filled pills without an edge marker, and rail entries keep their surface, under every manifest", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -292,6 +295,9 @@ test("selected workspace tabs keep their surface and edge marker, and rail entri
 	await files.filter({ hasText: "notes.txt" }).click();
 	await expect(page.getByTestId("editor-tab")).toHaveCount(2);
 
+	// Pill tabs fade their fill (`transition-colors`); read settled colours, not a frame mid-swap.
+	await page.addStyleTag({ content: "*,*::before,*::after{transition:none!important}" });
+	await showTerminalPanel(page);
 	await page.getByTestId("terminal-add").click();
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
 
@@ -322,7 +328,7 @@ test("selected workspace tabs keep their surface and edge marker, and rail entri
 			};
 			return {
 				expectedFill: resolveColor("--control-bg-selected"),
-				expectedMarker: resolveColor("--primary"),
+
 				tabs: tabs.map((element) => ({
 					fill: getComputedStyle(element).backgroundColor,
 					marker: getComputedStyle(element, "::after").backgroundColor,
@@ -333,8 +339,8 @@ test("selected workspace tabs keep their surface and edge marker, and rail entri
 		expect(state.tabs).toHaveLength(2);
 		for (const tab of state.tabs) {
 			expect(tab.fill).toBe(state.expectedFill);
-			expect(tab.marker).toBe(state.expectedMarker);
-			expect(tab.markerHeight).toBe("2px");
+			// Codex pill tabs: the selected fill is the only marker, no accent underline.
+			expect(tab.marker).toBe("rgba(0, 0, 0, 0)");
 		}
 		const tool = page.getByTestId("tab-files");
 		const toolButton = page.getByTestId("tool-rail-files");
