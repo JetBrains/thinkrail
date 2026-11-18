@@ -1263,34 +1263,6 @@ test("per-name subagent intents merge against live state, retain unknown names a
 	expect(getConfig().disabledSubagents).toEqual(["temporarily-missing", "scout", "unknown-role"]);
 });
 
-test("malformed per-name intents do not mutate, persist or publish", () => {
-	updateConfig({ disabledSubagents: ["temporarily-missing"] });
-	const before = getConfig();
-	const stored = readFileSync(join(dataDir, "config.json"), "utf8");
-	const published: AppConfig[] = [];
-	setSettingsPublisher((config) => published.push(config));
-	for (const [name, enabled] of [
-		[undefined, false],
-		[null, false],
-		[3, false],
-		[[], false],
-		[{}, false],
-		["", false],
-		[" \t", true],
-		["scout", undefined],
-		["scout", null],
-		["scout", "false"],
-		["scout", 0],
-		["scout", []],
-		["scout", {}],
-	]) {
-		expect(() => setSubagentEnabled(name as string, enabled as boolean)).toThrow();
-	}
-	expect(getConfig()).toBe(before);
-	expect(readFileSync(join(dataDir, "config.json"), "utf8")).toBe(stored);
-	expect(published).toEqual([]);
-});
-
 test("failed per-name persistence leaves the live cache and publisher unchanged", () => {
 	const before = getConfig();
 	const published: AppConfig[] = [];

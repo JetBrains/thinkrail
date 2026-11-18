@@ -50,8 +50,7 @@ export function SubagentsSettings() {
 				saveSettings({ subagentMaxConcurrent: value }, t("settings.chat.subagentLimitFailed"))
 			}
 			onWorkspaceLimitChange={setWorkspaceSubagentLimit}
-		>
-			<AvailableAgents />
-		</SubagentSettings>
+			roster={<AvailableAgents />}
+		/>
 	);
 }

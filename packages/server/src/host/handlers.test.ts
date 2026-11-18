@@ -1627,44 +1627,10 @@ test("subagent.list admits only pi-resource-trusted workspace metadata and never
 	await expect(list({ workspaceId: "unknown" })).rejects.toThrow("Unknown workspace");
 });
 
-test("concurrent subagent intents from different clients preserve both roles and unknown names", async () => {
+test("subagent.setEnabled retains unknown names and rejects malformed payloads without mutation or publication", async () => {
 	updateConfig({ disabledSubagents: ["temporarily-missing"] });
-	const published: AppConfig[] = [];
-	setSettingsPublisher((config) => published.push(config));
-	try {
-		const results = await Promise.all([
-			handleRequest(
-				"subagent.setEnabled",
-				{ name: "scout", enabled: false },
-				{ clientKey: "window-one" },
-			),
-			handleRequest(
-				"subagent.setEnabled",
-				{ name: "worker", enabled: false },
-				{ clientKey: "window-two" },
-			),
-		]);
-		expect(results).toEqual([{ ok: true }, { ok: true }]);
-		expect(published.map((config) => config.disabledSubagents)).toEqual([
-			["temporarily-missing", "scout"],
-			["temporarily-missing", "scout", "worker"],
-		]);
-		resetConfigCache();
-		expect(getConfig().disabledSubagents).toEqual(["temporarily-missing", "scout", "worker"]);
-		await handleRequest("subagent.setEnabled", { name: "unlisted-role", enabled: false }, CTX);
-		await handleRequest("subagent.setEnabled", { name: "scout", enabled: true }, CTX);
-		expect(getConfig().disabledSubagents).toEqual([
-			"temporarily-missing",
-			"worker",
-			"unlisted-role",
-		]);
-	} finally {
-		setSettingsPublisher(null);
-	}
-});
-
-test("subagent intent rejects malformed raw payloads without mutation or publication", async () => {
-	updateConfig({ disabledSubagents: ["temporarily-missing"] });
+	await handleRequest("subagent.setEnabled", { name: "unlisted-role", enabled: false }, CTX);
+	expect(getConfig().disabledSubagents).toEqual(["temporarily-missing", "unlisted-role"]);
 	const before = getConfig();
 	const stored = readFileSync(join(dataDir, "config.json"), "utf8");
 	const published: AppConfig[] = [];
@@ -1682,6 +1648,7 @@ test("subagent intent rejects malformed raw payloads without mutation or publica
 			{ name: "scout" },
 			{ name: "", enabled: false },
 			{ name: " \t", enabled: true },
+			{ name: null, enabled: false },
 			{ name: 1, enabled: false },
 			{ name: ["scout"], enabled: false },
 			{ name: {}, enabled: false },

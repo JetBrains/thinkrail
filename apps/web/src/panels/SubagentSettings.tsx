@@ -1,5 +1,6 @@
 import {
 	isSubagentMaxConcurrent,
+	SUBAGENT_CATALOG_PROTOCOL_VERSION,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_MAX_CONCURRENT,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
@@ -33,7 +34,7 @@ export function SubagentSettings({
 	onWorkspaceEnabledChange,
 	onGlobalLimitChange,
 	onWorkspaceLimitChange,
-	children,
+	roster,
 }: {
 	protocolVersion: number | null;
 	globalEnabled: boolean;
@@ -45,7 +46,7 @@ export function SubagentSettings({
 	onWorkspaceEnabledChange: (override: SubagentOverride | null) => void;
 	onGlobalLimitChange: (value: number) => undefined | Promise<boolean>;
 	onWorkspaceLimitChange: (value: number | null) => void;
-	children?: ReactNode;
+	roster?: ReactNode;
 }) {
 	const t = useT();
 	if (protocolVersion === null || protocolVersion < SUBAGENT_SETTINGS_PROTOCOL_VERSION) {
@@ -198,7 +199,7 @@ export function SubagentSettings({
 					) : null}
 				</SettingsGroup>
 			) : null}
-			{children}
+			{protocolVersion >= SUBAGENT_CATALOG_PROTOCOL_VERSION ? roster : null}
 		</SettingsPage>
 	);
 }

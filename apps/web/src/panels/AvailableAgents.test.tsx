@@ -2,9 +2,8 @@ import { expect, test } from "bun:test";
 import { SUBAGENT_CATALOG_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
-import { useAppStore } from "@/store";
 import { AgentCatalogRows, AvailableAgents } from "./AvailableAgents";
-import { SubagentsSettings } from "./SubagentsSettings";
+import { SubagentSettings } from "./SubagentSettings";
 import type { AgentCatalog } from "./useSubagentCatalog";
 
 const render = (catalog: AgentCatalog, disabledNames: string[] = []) =>
@@ -77,29 +76,32 @@ test("loading, empty and retryable read failures are explicit", () => {
 	expect(render("failed")).toContain("Retry");
 });
 
-test("unsupported or unnegotiated hosts render no agent roster", () => {
-	expect(renderToStaticMarkup(<AvailableAgents />)).toBe("");
-});
+const page = (protocolVersion: number) =>
+	renderToStaticMarkup(
+		<TooltipProvider>
+			<SubagentSettings
+				protocolVersion={protocolVersion}
+				globalEnabled
+				globalLimit={4}
+				workspace={null}
+				onGlobalEnabledChange={() => {}}
+				onWorkspaceEnabledChange={() => {}}
+				onGlobalLimitChange={() => undefined}
+				onWorkspaceLimitChange={() => {}}
+				roster={<AvailableAgents />}
+			/>
+		</TooltipProvider>,
+	);
 
-test("capable hosts show the roster on the Subagents page after delegation, with global scope and loading", () => {
-	const initial = useAppStore.getInitialState();
-	const previous = initial.protocolVersion;
-	try {
-		initial.protocolVersion = SUBAGENT_CATALOG_PROTOCOL_VERSION;
-		const markup = renderToStaticMarkup(
-			<TooltipProvider>
-				<SubagentsSettings />
-			</TooltipProvider>,
-		);
-		expect(markup.match(/data-testid="settings-subagents"/g)).toHaveLength(1);
-		expect(markup.indexOf('data-testid="subagents-global"')).toBeLessThan(
-			markup.indexOf('data-testid="settings-agent-catalog"'),
-		);
-		expect(markup).toMatch(/data-testid="settings-agent-catalog"[\s\S]*data-scope="allProjects"/);
-		expect(markup).toContain("ongoing work continues");
-		expect(markup).toContain('data-testid="agents-loading"');
-		expect(markup).not.toContain("scope to be decided");
-	} finally {
-		initial.protocolVersion = previous;
-	}
+test("the Subagents page ends with the roster, with global scope and loading, only on capable hosts", () => {
+	const older = page(SUBAGENT_CATALOG_PROTOCOL_VERSION - 1);
+	expect(older).toContain('data-testid="subagents-global"');
+	expect(older).not.toContain("settings-agent-catalog");
+	const markup = page(SUBAGENT_CATALOG_PROTOCOL_VERSION);
+	expect(markup.indexOf('data-testid="subagents-global"')).toBeLessThan(
+		markup.indexOf('data-testid="settings-agent-catalog"'),
+	);
+	expect(markup).toMatch(/data-testid="settings-agent-catalog"[\s\S]*data-scope="allProjects"/);
+	expect(markup).toContain("ongoing work continues");
+	expect(markup).toContain('data-testid="agents-loading"');
 });

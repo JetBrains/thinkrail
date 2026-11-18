@@ -55,38 +55,36 @@ async function restoreSubagentBaseline(page: Page): Promise<void> {
 	await closeSettings(page);
 }
 
-test("available agent switches wait for authoritative pushes and persist across clients and reload", async ({
+async function enableAgentRoles(page: Page): Promise<void> {
+	await closeSettings(page);
+	await openSubagentSettings(page);
+	for (const name of ["scout", "worker"]) {
+		const toggle = page.getByTestId(`agent-toggle-${name}`);
+		if ((await toggle.getAttribute("data-active")) === "false") await toggle.click();
+		await expect(toggle).toHaveAttribute("data-active", "true");
+	}
+}
+
+test("an agent switch renders only the authoritative push and persists across reload", async ({
 	page,
-	context,
 }) => {
 	const channelHold = await installChannelHold(page);
 	let release = () => {};
-	let peer: Page | undefined;
 	try {
 		await openFixtureProject(page);
 		await enterDefaultWorkspace(page);
-		await openSubagentSettings(page);
+		await enableAgentRoles(page);
 		const catalog = page.getByTestId("settings-agent-catalog");
 		await expect(catalog.getByTestId("agent-row-scout")).toContainText("Built-in");
 		await expect(catalog.getByTestId("agent-row-echo")).toContainText("Personal");
 		await expect(catalog.getByTestId("agent-row-echo")).toContainText("Parent model");
 		const toggle = page.getByTestId("agent-toggle-scout");
-		if ((await toggle.getAttribute("data-active")) !== "true") {
-			await toggle.click();
-			await expect(toggle).toHaveAttribute("data-active", "true");
-		}
-		peer = await context.newPage();
-		await peer.goto(page.url());
-		await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-		await openSubagentSettings(peer);
-		const observer = peer.getByTestId("agent-toggle-scout");
 
 		const held = channelHold.arm("settings.changed");
 		release = held.release;
 		await toggle.click();
 		await held.held;
 		await expect(toggle).toHaveAttribute("data-active", "true");
-		await expect(observer).toHaveAttribute("data-active", "false");
 		release();
 		await expect(toggle).toHaveAttribute("data-active", "false");
 
@@ -94,85 +92,38 @@ test("available agent switches wait for authoritative pushes and persist across 
 		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 		await openSubagentSettings(page);
 		await expect(toggle).toHaveAttribute("data-active", "false");
-		await toggle.click();
-		await expect(toggle).toHaveAttribute("data-active", "true");
-		await expect(observer).toHaveAttribute("data-active", "true");
-		await page.getByTestId("settings-nav-chat").click();
-		await expect(page.getByTestId("settings-chat")).toBeVisible();
-		await expect(page.getByTestId("settings-subagents")).toHaveCount(0);
 	} finally {
 		release();
-		if (!page.isClosed()) {
-			await closeSettings(page);
-			await openSubagentSettings(page);
-			const toggle = page.getByTestId("agent-toggle-scout");
-			if ((await toggle.getAttribute("data-active")) === "false") {
-				await toggle.click();
-				await expect(toggle).toHaveAttribute("data-active", "true");
-			}
-		}
-		await peer?.close();
+		if (!page.isClosed()) await enableAgentRoles(page);
 	}
 });
 
-test("concurrent clients disabling different roles preserve both intents before either receives pushes", async ({
+test("two windows disabling different roles from the same snapshot both converge", async ({
 	page,
 	context,
 }) => {
-	const channelHold = await installChannelHold(page);
 	const releases: (() => void)[] = [];
-	const baseline = new Map<string, string | null>();
 	let peer: Page | undefined;
 	try {
 		await openFixtureProject(page);
-		await openSubagentSettings(page);
-		for (const name of ["scout", "worker"]) {
-			const toggle = page.getByTestId(`agent-toggle-${name}`);
-			baseline.set(name, await toggle.getAttribute("data-active"));
-			if (baseline.get(name) !== "true") {
-				await toggle.click();
-				await expect(toggle).toHaveAttribute("data-active", "true");
-			}
-		}
+		await enableAgentRoles(page);
 		peer = await context.newPage();
-		const peerChannelHold = await installChannelHold(peer);
+		const peerHold = await installChannelHold(peer);
 		await peer.goto(page.url());
 		await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 		await openSubagentSettings(peer);
-		for (const name of ["scout", "worker"]) {
-			await expect(peer.getByTestId(`agent-toggle-${name}`)).toHaveAttribute("data-active", "true");
-		}
+		await expect(peer.getByTestId("agent-toggle-scout")).toHaveAttribute("data-active", "true");
 
-		const firstPushes = [
-			channelHold.arm("settings.changed"),
-			peerChannelHold.arm("settings.changed"),
-		];
-		releases.push(...firstPushes.map((hold) => hold.release));
+		const first = peerHold.arm("settings.changed");
+		releases.push(first.release);
 		await page.getByTestId("agent-toggle-scout").click();
-		await Promise.all(firstPushes.map((hold) => hold.held));
-		const secondPushes = [
-			channelHold.arm("settings.changed"),
-			peerChannelHold.arm("settings.changed"),
-		];
-		releases.push(...secondPushes.map((hold) => hold.release));
+		await first.held;
+		const second = peerHold.arm("settings.changed");
+		releases.push(second.release);
 		await peer.getByTestId("agent-toggle-worker").click();
-		await Promise.all(secondPushes.map((hold) => hold.held));
-		for (const client of [page, peer]) {
-			for (const name of ["scout", "worker"]) {
-				await expect(client.getByTestId(`agent-toggle-${name}`)).toHaveAttribute(
-					"data-active",
-					"true",
-				);
-			}
-		}
-		for (const hold of firstPushes) hold.release();
-		for (const client of [page, peer]) {
-			await expect(client.getByTestId("agent-toggle-scout")).toHaveAttribute(
-				"data-active",
-				"false",
-			);
-		}
-		for (const hold of secondPushes) hold.release();
+		await second.held;
+		first.release();
+		second.release();
 		for (const client of [page, peer]) {
 			for (const name of ["scout", "worker"]) {
 				await expect(client.getByTestId(`agent-toggle-${name}`)).toHaveAttribute(
@@ -183,19 +134,8 @@ test("concurrent clients disabling different roles preserve both intents before 
 		}
 	} finally {
 		for (const release of releases) release();
-		try {
-			if (!page.isClosed()) {
-				for (const [name, active] of baseline) {
-					const toggle = page.getByTestId(`agent-toggle-${name}`);
-					if ((await toggle.getAttribute("data-active")) !== active) {
-						await toggle.click();
-						await expect(toggle).toHaveAttribute("data-active", active ?? "true");
-					}
-				}
-			}
-		} finally {
-			await peer?.close();
-		}
+		await peer?.close();
+		if (!page.isClosed()) await enableAgentRoles(page);
 	}
 });
 

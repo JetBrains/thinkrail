@@ -1,5 +1,5 @@
 import { RiRefreshLine } from "@remixicon/react";
-import { SUBAGENT_CATALOG_PROTOCOL_VERSION, type SubagentCatalogEntry } from "@thinkrail/contracts";
+import type { SubagentCatalogEntry } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
@@ -115,12 +115,6 @@ export function AgentCatalogRows({
 }
 
 export function AvailableAgents() {
-	const protocolVersion = useAppStore((state) => state.protocolVersion);
-	if (protocolVersion === null || protocolVersion < SUBAGENT_CATALOG_PROTOCOL_VERSION) return null;
-	return <AvailableAgentsGroup />;
-}
-
-function AvailableAgentsGroup() {
 	const t = useT();
 	const workspaceId = useAppStore(selectActiveRepoWorkspaceId);
 	const trusted = useAppStore(selectActiveSubagentProjectTrust) === "granted";
