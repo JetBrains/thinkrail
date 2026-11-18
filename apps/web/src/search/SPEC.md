@@ -23,8 +23,8 @@ the injected `PaletteStart`).
 ## Boundary
 
 - **Public surface:** `SearchPalette`, `SearchPaletteProps`, `PaletteHost`, `PaletteStart`, `PaletteAsk`,
-  `SearchSettings`, `initSearchPreferences`, `createDoubleShiftDetector`, `buildWorkItems`,
-  `waitingItems`, `commandItems`, `SearchScope`, `PaletteItem`, `PaletteFile`.
+  `initSearchPreferences`, `createDoubleShiftDetector`, `buildWorkItems`, `waitingItems`,
+  `commandItems`, `SearchScope`, `PaletteItem`, `PaletteFile`.
 - **Allowed deps:** `contracts` (the shared matcher and the search DTOs), `commands`, `keybindings`
   (`LOCAL_KEY_DEFAULTS` for scope `palette`), `store`
   (`selectHostSearchAvailable` / `selectHostReachable`, the welcome generation, the location Recent
@@ -277,6 +277,7 @@ delivers keys to the parent window, so the gesture does not fire from inside it.
 
 ## Keyboard settings
 
-`SearchSettings` is the Settings → Keyboard section: the `Mod+K` note (a sentence without a chord when
-the user unbound it), the double-Shift switch and, below it, whatever `shortcuts` node the shell injects
-(the shortcut editor, [[submodule-web-shell]]) — `search` never imports the shell's editor.
+`search` renders no Settings section. The Settings → Keyboard section — the `Mod+K` note, the
+double-Shift switch (`store.doubleShiftSearch`, read by the gesture above) and the shortcut editor — is the
+shell's `KeyboardSettings` ([[submodule-web-shell]]), built on the Settings kit; `search` keeps only the
+preference's persistence (`initSearchPreferences`) and the detector.

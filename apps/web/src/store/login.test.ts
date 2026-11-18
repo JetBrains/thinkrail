@@ -79,6 +79,35 @@ test("removed workspaces retire their login and cannot recreate it with late fra
 	expect(state().activeLogin?.loginId).toBe("provider-2");
 });
 
+test("an MCP sign-in started with no workspace keeps its workspace-less target through early and later frames", () => {
+	const target = { kind: "mcp" as const, serverName: "docs" };
+	state().applyWorkspaceRemoved("p", "some-removed-workspace");
+	state().reserveLogin();
+	state().applyLoginFrame({
+		loginId: "mcp-user",
+		providerId: "mcp:docs",
+		target,
+		frame: { kind: "authUrl", url: "https://example.test/auth" },
+	});
+	state().beginLogin("mcp-user", "mcp:docs", target);
+	state().finishLoginStart();
+	expect(state().activeLogin).toMatchObject({
+		loginId: "mcp-user",
+		target: { kind: "mcp", serverName: "docs" },
+		url: "https://example.test/auth",
+	});
+	expect(state().activeLogin?.target?.workspaceId).toBeUndefined();
+	const version = state().providerStatusVersion;
+	state().applyLoginFrame({
+		loginId: "mcp-user",
+		providerId: "mcp:docs",
+		target,
+		frame: { kind: "success" },
+	});
+	expect(state().activeLogin).toMatchObject({ loginId: "mcp-user", status: "success" });
+	expect(state().providerStatusVersion).toBe(version);
+});
+
 test("a target removed during startup never opens a dialog or releases another startup", () => {
 	const target = {
 		kind: "mcp" as const,

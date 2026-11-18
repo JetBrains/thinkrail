@@ -87,7 +87,7 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   error (`fallbacksRejected`: a proxy or gateway refusing pi's Anthropic server-side refusal fallback —
   "does not support fallback field", `fallbacks: Extra inputs are not permitted`, an unknown/unrecognized
   `fallbacks` argument) leads with a localized explanation above the provider text, since a retry sends the
-  same field again. On the current failure (the `try-again` recovery) with a v125 host, **Try again** becomes
+  same field again. On the current failure (the `try-again` recovery) with a v126 host, **Try again** becomes
   **Turn off fallback and retry** (`disableServerFallback`, supplied by `ChatView`): `session.disableServerFallback`
   turns fallback off for the chat's model (only the one that failed) and moves the chat onto the updated
   model, then the ordinary `Try again.` send follows — also after `SERVER_FALLBACK_NOT_USED` (the chat's
@@ -756,7 +756,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   card uses both and hides the open action when there is no provider.
   `openProviderSettings()` (Settings › Providers) is supplied by `ChatView` on every host — the MCP
   cards' provider-backed sign-in and the subscription-limit `ErrorTurn` use it. `disableServerFallback()` is supplied only
-  from `SERVER_FALLBACK_PROTOCOL_VERSION` (v125) and only consumed by the rejected-fallbacks `ErrorTurn`. The optional MCP actions —
+  from `SERVER_FALLBACK_PROTOCOL_VERSION` (v126) and only consumed by the rejected-fallbacks `ErrorTurn`. The optional MCP actions —
   `readMcpOutput(toolCallId)` (`mcp.readOutput` for this chat) and `openMcpSettings()` (Settings › MCP
   servers) — are supplied (through `ChatTranscript`'s provider) only on an MCP-capable host;
   without them (older host, the plan page's provider, or `null`) the MCP cards hide Full output and Sign in
@@ -1170,8 +1170,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   in every connected client), and a
   **zoomed-stage preview pane** + **scope picker** — see the next bullet),
   **`ModelEffortPicker`** (the one **model · effort pill**, also mounted by `NewWorkspaceDialog` in
-  pre-session mode; `ModelsSettings` still mounts the older `ModelSelector` +
-  `ThinkingSelector` pair — the named survivors until they migrate). Decision: a chat's model and effort
+  pre-session mode and by Settings › Models for its Chat model and Review model pairs — the Settings
+  props are below). Decision: a chat's model and effort
   are **one fact with two parts**, shown by one borderless trigger (`[vendor glyph] name ▂▄▆ level
   [connection glyph] ▾` — the effort bars light the level's rank among the model's reasoning levels,
   `litBars`, in the level's **tone** — cool blue for off/minimal/low, accent for medium/high, warning
@@ -1220,9 +1220,16 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   does and its count equals the rows it reveals. With no query and no models the list reads "No models to
   show. Connect a provider, or show hidden models in Settings → Models → Visible models."; "No models
   found." appears only for a query. Hidden models never reach either picker: callers pass `store`'s
-  `selectPickerModels`, which keeps the current model. Settings' `ModelSelector` shares this grouping,
-  filter, Pinned section, empty states and "Updating…" Refresh, without Recent or the header connection
-  detail. A trailing query word that names a
+  `selectPickerModels`, which keeps the current model. **Settings mounts the same picker** with three
+  additive props the composer never passes: `canSetDefault={false}` drops **Set as default** (the Chat
+  model row *is* the default, and the Review pair must not overwrite it), `tabIndex={0}` gives the
+  trigger the explicit tab stop WebKit's Tab needs, and `fitContainer` bounds the popover's position,
+  height and width by `container` — the dialog's transformed, overflow-clipped root, which would
+  otherwise cut off whatever pokes past it. The popover renders into that root (so the modal's scroll
+  lock lets the wheel reach its list), outside the section pane, so Settings' arrow walk never sees the
+  picker's keys: Enter or Space on the trigger opens it, the picker's own keys apply inside, Escape
+  closes it with focus back on the trigger, and the search field holds focus, so plain F types and hint
+  mode comes with Mod+;. A trailing query word that names a
   level the highlighted model supports (`opus high`) pre-selects it — pi's `model:level` idiom typed
   with a space — and `/model [query]` in the composer opens the picker prefilled instead of sending
   text. The second row line **says what the user actually pays** (`kindLabel` / `costLabel`): the
@@ -1268,7 +1275,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   latter reused by `panels` pre-session). Group state reads through the contracts' `isSkillGroupEnabled`
   with `store.otherAgentSkills`, so the switches match the host gate; while that host default is off and a
   Personal or plugin group stays off, a `skills-other-agents-off` note points to the per-project switch and
-  Settings → Extensions. A `skills-size` line shows the loaded skills' count and an estimated listing
+  Settings → Extensions & skills. A `skills-size` line shows the loaded skills' count and an estimated listing
   size (`skillCatalogSize`: name + description + path + per-entry markup at ~4 chars/token, an estimate
   rather than pi's figure; a `manualOnly` skill counts as on but costs nothing, since pi never lists it).
   Up to the host listing budget's floor (`SKILL_LISTING_MIN_TOKENS`) it is the per-request cost; past it,
@@ -1529,7 +1536,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   surface without duplicating. Existing live/hydrated compaction rendering is unchanged. When a
   `template.list` response comes back **empty**,
   `SlashCommandMenu` renders a `footer` nudge (`data-testid="slash-templates-empty"`) that
-  deep-links to Settings → Templates via `ChatView`'s `onManageTemplates` — the discoverability half of
+  deep-links to Settings → Prompt templates via `ChatView`'s `onManageTemplates` — the discoverability half of
   the starter-templates offer (`panels/SPEC.md`), since a fresh install has an empty global prompts dir
   and the manager is otherwise two clicks deep in a dialog. Gated on "no templates exist", never on "the
   current query matched none", so a query that simply misses doesn't raise it; `footer` is optional, so
@@ -1634,11 +1641,11 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   has no ChatView spinner or transcript row.
 - **Save-as-template + template management** (`TemplateEditorDialog.tsx`; `HistoryOverlay`'s save action;
   `panels/TemplatesSettings.tsx`) — one shared create/edit surface for prompt-template files, reused by two
-  entry points that never talk to each other: the Settings → Templates panel (list + New/Edit/Delete, see
+  entry points that never talk to each other: the Settings → Prompt templates panel (list + New/Edit/Delete, see
   `panels/SPEC.md`) and the history overlay's save-as-template action below. **Why this lives in `chat/`,
   not `panels/`** (a deliberate boundary exception, alongside `ChatView.tsx`/`useHistorySearch.ts` above):
-  `panels/` is allowed to import from `chat/` (already does, for `ModelEffortPicker`/`ModelSelector`/
-  `ThinkingSelector`/`Markdown`) but never the reverse, and `HistoryOverlay` — which needs this same dialog — lives in
+  `panels/` is allowed to import from `chat/` (already does, for `ModelEffortPicker`/`Markdown`) but
+  never the reverse, and `HistoryOverlay` — which needs this same dialog — lives in
   `chat/`, so the one shared implementation has to live where both sides can reach it. `TemplateEditorDialog`
   is therefore promoted to a **third** sanctioned store/transport-touching integration piece (see Boundary
   below), even though it isn't `ChatView` itself.
@@ -1709,8 +1716,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   - **Save** calls `template.save` then the store's `bumpTemplatesVersion()`; a rejected save renders its
     message inline via `data-testid="template-error"` (never a toast — the dialog stays open so the error
     is fixable in place). **Delete has no dialog involvement at all** — `panels/TemplatesSettings.tsx`'s
-    row calls `template.delete` + `bumpTemplatesVersion()` directly, behind a `ConfirmPopover` anchored to
-    the row's own Delete button. A **rejected
+    row calls `template.delete` + `bumpTemplatesVersion()` directly, behind a `ConfirmDialog` (the row's
+    Delete side or the Delete key). A **rejected
     delete** is the one deliberate asymmetry with Save: it surfaces as an error toast, not inline (there's
     no dialog to render inline into), leaving the row in place — the same pattern `panels/SPEC.md`
     documents for `ProjectTree`'s own workspace-remove row.

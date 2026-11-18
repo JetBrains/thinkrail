@@ -27,7 +27,6 @@ import { SurveyWindow } from "../panels/SurveyWindow";
 import { Toaster } from "../panels/Toaster";
 import { useBranchStatus } from "../panels/useBranchStatus";
 import { useCreationChatHandoff, WorkspaceCreationView } from "../panels/WorkspaceCreation";
-import { SearchSettings } from "../search";
 import {
 	isChatWorkspace,
 	SettingsSection,
@@ -73,7 +72,7 @@ import { installEscapeLeavesField } from "./escapeLeavesField";
 import { FindInFilesHost } from "./FindInFilesHost";
 import { installFocusRecovery } from "./focusRecovery";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
-import { KeybindingEditor } from "./KeybindingEditor";
+import { KeyboardSettings, useShortcutSearchEntries } from "./KeyboardSettings";
 import { useKeybindingLabel, useLocalKeymap } from "./keybindingState";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
@@ -161,6 +160,7 @@ function ShellLayout() {
 	const searchShortcut = useKeybindingLabel("search.open");
 	const [nativeShortcuts] = useState(hasNativeShortcuts);
 	const newWorkspaceShortcut = useKeybindingLabel("workspace.new", { browser: !nativeShortcuts });
+	const shortcutEntries = useShortcutSearchEntries(nativeShortcuts);
 
 	const [themeHint] = useState(readThemeHint);
 	const [settingsShortcut] = useState(readSettingsShortcutLabel);
@@ -342,9 +342,8 @@ function ShellLayout() {
 				) : null}
 				<SettingsDialog
 					layoutSettings={<LayoutSettings />}
-					keyboardSettings={
-						<SearchSettings openShortcut={searchShortcut} shortcuts={<KeybindingEditor />} />
-					}
+					keyboardSettings={<KeyboardSettings />}
+					searchEntries={shortcutEntries}
 					updateSettings={updates ? <UpdateSettings updates={updates} /> : undefined}
 				/>
 				{newWorkspace !== null ? (

@@ -54,6 +54,7 @@ import {
 	keybindingShortcut,
 	type ResolvedKeybindings,
 } from "../keybindings";
+import type { SettingEntry } from "../panels/settingsCatalog";
 import type { SettingsNavGroup } from "../panels/settingsNav";
 import type { PaletteItem } from "../search";
 import type { SettingsSection } from "../store";
@@ -96,6 +97,7 @@ export interface PaletteCatalogDeps {
 	readonly settled: boolean;
 	readonly settleBlocked: boolean;
 	readonly settingsGroups: readonly SettingsNavGroup[];
+	readonly settingEntries: readonly SettingEntry[];
 	readonly tabActions: readonly TabAction[];
 	readonly actions: PaletteCatalogActions;
 }
@@ -128,7 +130,7 @@ export interface PaletteCatalogActions {
 	readonly reveal: (workspace: Workspace) => void;
 	readonly copyPath: (workspace: Workspace) => void;
 	readonly openIn: (workspace: Workspace, editor: EditorInfo) => void;
-	readonly openSettings: (section?: SettingsSection) => void;
+	readonly openSettings: (section?: SettingsSection, settingId?: string) => void;
 	readonly openShortcuts: () => void;
 	readonly runTabAction: (actionId: string) => void;
 }
@@ -603,21 +605,33 @@ function settingsSectionItems(group: SettingsNavGroup, deps: PaletteCatalogDeps)
 	);
 }
 
-export function buildSettingsItems(deps: PaletteCatalogDeps): PaletteItem[] {
+function settingEntryItems(deps: PaletteCatalogDeps): PaletteItem[] {
 	const { t } = deps;
-	return [
-		...deps.settingsGroups.flatMap((group) => settingsSectionItems(group, deps)),
-		{
-			id: "setting:double-shift",
+	const sections = new Map(
+		deps.settingsGroups.flatMap((group) => group.sections.map((section) => [section.id, section])),
+	);
+	return deps.settingEntries.map((entry): PaletteItem => {
+		const section = sections.get(entry.section);
+		return {
+			id: `setting:${entry.id}`,
 			kind: "setting",
-			title: t("settings.keyboard.doubleShift"),
-			subtitle: t("search.item.settingsPath", { group: t("settings.nav.keyboard") }),
+			title: t(entry.label),
+			subtitle: t("search.item.settingsPath", {
+				group: section ? t(section.label) : t("settings.dialog.feedbackCta"),
+			}),
 			group: "settings",
 			scope: "commands",
-			icon: RiKeyboardLine,
-			keywords: ["shortcut", "hotkey", "shift"],
-			run: () => deps.actions.openSettings("keyboard"),
-		},
+			icon: section?.icon ?? RiSettings3Line,
+			keywords: ["settings", ...(entry.keywords ?? [])],
+			run: () => deps.actions.openSettings(entry.section, entry.id),
+		};
+	});
+}
+
+export function buildSettingsItems(deps: PaletteCatalogDeps): PaletteItem[] {
+	return [
+		...deps.settingsGroups.flatMap((group) => settingsSectionItems(group, deps)),
+		...settingEntryItems(deps),
 	];
 }
 

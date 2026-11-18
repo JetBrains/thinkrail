@@ -1,6 +1,11 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { openWorkspaceChat, waitForAgentSettled } from "./fixtures/app";
+import {
+	closeSettings,
+	openSettingsSection,
+	openWorkspaceChat,
+	waitForAgentSettled,
+} from "./fixtures/app";
 
 async function openChatAndSend(page: Page, prompt: string): Promise<void> {
 	await openWorkspaceChat(page);
@@ -9,13 +14,11 @@ async function openChatAndSend(page: Page, prompt: string): Promise<void> {
 }
 
 async function setVisualizeEnabled(page: Page, enabled: boolean): Promise<void> {
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-extensions").click();
+	await openSettingsSection(page, "extensions");
 	const toggle = page.getByTestId("extension-toggle-visualize");
 	if ((await toggle.getAttribute("data-active")) !== String(enabled)) await toggle.click();
 	await expect(toggle).toHaveAttribute("data-active", String(enabled));
-	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("settings-dialog")).toBeHidden();
+	await closeSettings(page);
 }
 
 async function awaitExpandedCard(page: Page, tool: string): Promise<Locator> {

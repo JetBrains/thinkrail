@@ -24,6 +24,13 @@ test("the focused element names the surface the cheatsheet lists first", () => {
 	expect(shortcutSurfaceOf(null)).toBeNull();
 });
 
+test("focus anywhere in Settings lists the Settings keys first, a tree inside it included", () => {
+	expect(shortcutSurfaceOf(inside("[data-settings-dialog]"))).toBe("settings");
+	expect(shortcutSurfaceOf(inside('[data-key-scope="trees"]', "[data-settings-dialog]"))).toBe(
+		"settings",
+	);
+});
+
 test("a feature surface outranks a tree or tab strip around it", () => {
 	expect(
 		shortcutSurfaceOf(inside('[data-key-scope="trees"]', '[data-testid="changes-review"]')),

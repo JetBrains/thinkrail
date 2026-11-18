@@ -130,6 +130,11 @@ No region is dimmed. A veil that muted every region but the active one (`region-
 60% of the workspace canvas) shipped first and was removed at the user's request (2026-11-14): the fade
 was too strong. Mark the active region; do not dim the others.
 
+A Settings search jump flashes the row it lands on (`data-setting-flash`,
+[settingsKit/SPEC.md](../settingsKit/SPEC.md)) with a `primary-subtle` **background**, held about 0.8 s
+and faded over the rest of 1.6 s, static under `prefers-reduced-motion`. It is a highlight, not a focus
+signal: the row's control already shows the ring, so the flash never draws one.
+
 ## Transparency: one form only
 
 **A tint is a token, mixed `in srgb`, on the alpha scale.**

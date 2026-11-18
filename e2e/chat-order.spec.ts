@@ -1,6 +1,11 @@
 import { realpathSync, rmSync, utimesSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
-import { enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
+import {
+	closeSettings,
+	enterDefaultWorkspace,
+	openFixtureProject,
+	openSettingsSection,
+} from "./fixtures/app";
 import {
 	moveMouseToChatViewport,
 	readChatScrollGeometry,
@@ -12,12 +17,14 @@ import { seedWorkspaceSession } from "./fixtures/sessions";
 const BASE_TS = 1_700_700_000_000;
 
 async function selectMessageOrder(page: Page, order: "oldest-first" | "newest-first") {
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-chat").click();
-	const option = page.getByTestId(`chat-order-${order}`);
+	await openSettingsSection(page, "chat");
+	const option = page.getByRole("option", {
+		name: order === "oldest-first" ? "Oldest first" : "Newest first",
+	});
 	await option.click();
-	await expect(option).toHaveAttribute("data-active", "true");
-	await page.keyboard.press("Escape");
+	await expect(option).toHaveAttribute("aria-selected", "true");
+	await expect(page.getByTestId(`chat-order-${order}`)).toHaveAttribute("data-active", "true");
+	await closeSettings(page);
 }
 
 test("browser-local chat preferences persist without changing another browser", async ({
@@ -74,8 +81,7 @@ test("browser-local chat preferences persist without changing another browser", 
 				"data-status",
 				"connected",
 			);
-			await isolatedPage.getByTestId("open-settings").click();
-			await isolatedPage.getByTestId("settings-nav-chat").click();
+			await openSettingsSection(isolatedPage, "chat");
 			await expect(isolatedPage.getByTestId("chat-order-oldest-first")).toHaveAttribute(
 				"data-active",
 				"true",

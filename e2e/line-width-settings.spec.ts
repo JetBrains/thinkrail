@@ -3,9 +3,11 @@ import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { LINE_WIDTH_COLUMNS, type LineWidthKind } from "@thinkrail/contracts";
 import {
+	closeSettings,
 	createWorkspaceViaDialog,
 	hideAuxiliaryWorkbench,
 	openFixtureProject,
+	openSettingsSection,
 	openWorkspaceChat,
 	PHONE_VIEWPORT,
 	revealWorkbenchTool,
@@ -14,46 +16,40 @@ import { installChannelHold } from "./fixtures/channelHold";
 import { pierreDeletionsSide } from "./fixtures/pierre";
 import { LONG_LINE } from "./fixtures/repo";
 
-// Chat line width lives on the Chat page, the file line width in Appearance → Editor.
-const LINE_WIDTH_NAV: Record<LineWidthKind, string> = {
-	chat: "settings-nav-chat",
-	file: "settings-nav-appearance",
-};
+interface WidthControls {
+	kind: LineWidthKind;
+	input: Locator;
+	bounded: Locator;
+	reset: Locator;
+}
 
-function widthControls(page: Page, kind: LineWidthKind) {
+// Both widths live side by side in Text & fonts › Line width, each card with its own Reset.
+function widthControls(page: Page, kind: LineWidthKind): WidthControls {
 	return {
+		kind,
 		input: page.getByTestId(`${kind}-line-width-input`),
 		bounded: page.getByTestId(`${kind}-line-width-bounded`),
+		reset: page.getByTestId(`settings-reset-${kind}-line-width`),
 	};
 }
 
 async function openLineWidthSettings(page: Page, kind: LineWidthKind) {
-	if (!(await page.getByTestId("settings-dialog").isVisible())) {
-		await page.getByTestId("open-settings").click();
-	}
-	const nav = page.getByTestId(LINE_WIDTH_NAV[kind]);
-	await expect(nav).toBeVisible();
-	await nav.click();
+	await openSettingsSection(page, "text");
 	await expect(page.getByTestId(`${kind}-line-width-control`)).toBeVisible();
 	return widthControls(page, kind);
 }
 
 /**
- * Widths auto-save on Enter. Escape then drops the draft back to the stored width, so the value
- * reads `value` only once the host's settings broadcast has reached this page's store.
+ * Widths auto-save on Enter. The row's Reset follows the stored width, so it shows (or hides) only
+ * once the host's settings broadcast has reached this page's store.
  */
-async function saveWidth(input: Locator, value: number): Promise<void> {
-	await input.fill(String(value));
-	await input.press("Enter");
-	await input.press("Escape");
-	await expect(input).toHaveValue(String(value));
-}
-
-/** Escape inside a focused width draft only resets that draft, so close the dialog by its button. */
-async function closeSettings(page: Page): Promise<void> {
-	const dialog = page.getByTestId("settings-dialog");
-	await dialog.getByRole("button", { name: "Close" }).click();
-	await expect(dialog).toBeHidden();
+async function saveWidth(controls: WidthControls, value: number): Promise<void> {
+	await controls.input.fill(String(value));
+	await controls.input.press("Enter");
+	await expect(controls.input).toHaveValue(String(value));
+	if (value === LINE_WIDTH_COLUMNS.default[controls.kind])
+		await expect(controls.reset).toHaveCount(0);
+	else await expect(controls.reset).toBeVisible();
 }
 
 async function restoreLineWidthDefaults(page: Page): Promise<void> {
@@ -62,8 +58,7 @@ async function restoreLineWidthDefaults(page: Page): Promise<void> {
 	for (const kind of ["chat", "file"] as const) {
 		const controls = await openLineWidthSettings(page, kind);
 		const width = LINE_WIDTH_COLUMNS.default[kind];
-		if ((await controls.input.inputValue()) !== String(width))
-			await saveWidth(controls.input, width);
+		if ((await controls.input.inputValue()) !== String(width)) await saveWidth(controls, width);
 		if ((await controls.bounded.getAttribute("data-active")) !== "true") {
 			await controls.bounded.click();
 			await expect(controls.bounded).toHaveAttribute("data-active", "true");
@@ -99,16 +94,20 @@ test("line-width controls validate drafts, converge on broadcasts, and persist",
 
 		await chat.input.fill("39");
 		await expect(chat.input).toHaveAttribute("aria-invalid", "true");
-		await expect(page.getByText("Enter a whole number from 40 to 240.")).toBeVisible();
+		await expect(page.getByText("Use 40–240")).toBeVisible();
 		// An invalid draft is never committed: Enter keeps the draft and its error.
 		await chat.input.press("Enter");
 		await expect(chat.input).toHaveValue("39");
 		await expect(chat.input).toHaveAttribute("aria-invalid", "true");
 
-		await saveWidth(chat.input, 100);
+		await saveWidth(chat, 100);
 		await expect(chat.input).not.toHaveAttribute("aria-invalid", "true");
-		await openLineWidthSettings(page, "file");
-		await saveWidth(file.input, 160);
+		await expect(file.reset).toHaveCount(0);
+		await saveWidth(file, 160);
+		await chat.reset.click();
+		await expect(chat.input).toHaveValue("80");
+		await expect(file.input).toHaveValue("160");
+		await saveWidth(chat, 100);
 
 		await openLineWidthSettings(page, "chat");
 		const held = channelHold.arm("settings.changed");
@@ -148,7 +147,7 @@ test("the file width wraps source and updates an already-mounted editor", async 
 		const defaultVisualLines = await viewLines.locator(":scope > .view-line").count();
 
 		const file = await openLineWidthSettings(page, "file");
-		await saveWidth(file.input, 40);
+		await saveWidth(file, 40);
 		await closeSettings(page);
 		await expect
 			.poll(() => viewLines.locator(":scope > .view-line").count())
@@ -181,7 +180,7 @@ test("chat uses the selected measure and optionally exceeds a narrow pane", asyn
 	try {
 		await openWorkspaceChat(page);
 		const chat = await openLineWidthSettings(page, "chat");
-		await saveWidth(chat.input, 40);
+		await saveWidth(chat, 40);
 		await closeSettings(page);
 
 		const input = page.getByTestId("chat-input");
@@ -210,7 +209,7 @@ test("chat uses the selected measure and optionally exceeds a narrow pane", asyn
 			.toBeLessThanOrEqual(2);
 
 		await openLineWidthSettings(page, "chat");
-		await saveWidth(chat.input, 240);
+		await saveWidth(chat, 240);
 		await closeSettings(page);
 		await hideAuxiliaryWorkbench(page);
 		await page.setViewportSize(PHONE_VIEWPORT);

@@ -1,14 +1,24 @@
 import type { SpeechModel, SpeechStatus } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
-import { useState } from "react";
+import { Switch } from "@thinkrail/ui/switch";
+import { type ReactNode, useRef, useState } from "react";
+import {
+	SETTINGS_ROWS,
+	SettingsChoice,
+	SettingsNotice,
+	SettingsPage,
+	SettingsRow,
+} from "@/settingsKit";
 import { dictationShortcutLabel, speechErrorKey } from "@/speech";
-import { toast, useAppStore } from "@/store";
+import { SettingsSection, toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
-import { SegmentedControl } from "./SegmentedControl";
-import { SettingsNotice } from "./SettingsNotice";
-import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
-import { SettingsSwitch } from "./SettingsSwitch";
+import { ConfirmDialog } from "./ConfirmDialog";
+import { saveSettings } from "./saveSettings";
+import { useConfigReset } from "./settingDefaults";
+import { SETTING, settingProps } from "./settingsCatalog";
+
+const DICTATION_SHORTCUT_TARGET = "shortcut:dictation";
 
 function megabytes(bytes: number): string {
 	return String(Math.max(1, Math.round(bytes / 1_000_000)));
@@ -21,6 +31,19 @@ function selectedModel(status: SpeechStatus): SpeechModel | null {
 	if (install.status === "failed") return install.usable ?? install.model;
 	return null;
 }
+
+function SettingOwners({ ids, children }: { ids: readonly string[]; children: ReactNode }) {
+	return ids.reduce<ReactNode>(
+		(inner, id) => (
+			<div key={id} data-setting-id={id}>
+				{inner}
+			</div>
+		),
+		children,
+	);
+}
+
+const SWITCH_OWNS = [SETTING.voiceLanguage.id, SETTING.voiceShortcut.id];
 
 function StatusText({ status }: { status: SpeechStatus }) {
 	const t = useT();
@@ -47,16 +70,44 @@ export function VoiceSettings() {
 	const t = useT();
 	const status = useAppStore((s) => s.speech);
 	const enabled = useAppStore((s) => s.voiceInputEnabled);
+	const enabledReset = useConfigReset("voiceInputEnabled", "settings.voice.actionFailed");
 	const [removing, setRemoving] = useState(false);
-	if (!status) return null;
+	const [confirming, setConfirming] = useState(false);
+	const confirmed = useRef(false);
+	const focusCancel = useRef(false);
+	const toggleRef = useRef<HTMLButtonElement>(null);
+	const deleteRef = useRef<HTMLButtonElement>(null);
+
+	const page = (children: ReactNode) => (
+		<SettingsPage
+			title={t("settings.nav.voice")}
+			description={t("settings.voice.description")}
+			testId="settings-voice"
+		>
+			{children}
+		</SettingsPage>
+	);
+
+	if (status?.supported === false) {
+		return page(
+			<SettingOwners ids={[SETTING.voiceInput.id, ...SWITCH_OWNS]}>
+				<SettingsNotice variant="warning" testId="settings-voice-unsupported">
+					{t("speech.mic.unavailable.unsupportedPlatform")}
+				</SettingsNotice>
+			</SettingOwners>,
+		);
+	}
 
 	const failed = () => {
 		toast.error(t("settings.voice.actionFailed"));
 	};
-	const setEnabled = (voiceInputEnabled: boolean) =>
-		getTransport().request("settings.update", { config: { voiceInputEnabled } }).catch(failed);
 	const installModel = (next: SpeechModel) =>
-		getTransport().request("speech.install", { model: next }).catch(failed);
+		getTransport()
+			.request("speech.install", { model: next })
+			.catch(() => {
+				focusCancel.current = false;
+				failed();
+			});
 	const cancelInstall = () => getTransport().request("speech.cancelInstall", {}).catch(failed);
 	const remove = () => {
 		setRemoving(true);
@@ -66,79 +117,89 @@ export function VoiceSettings() {
 			.finally(() => setRemoving(false));
 	};
 
-	if (!status.supported) {
-		return (
-			<div data-testid="settings-voice" className={SETTINGS_ROWS_CONTAINER}>
-				<SettingsNotice variant="warning" testId="settings-voice-unsupported">
-					{t("speech.mic.unavailable.unsupportedPlatform")}
-				</SettingsNotice>
-			</div>
+	const voiceInputRow = (
+		<SettingsRow
+			{...settingProps(t, SETTING.voiceInput)}
+			description={
+				enabled ? t("settings.voice.enableDescription") : t("settings.voice.disabledDescription")
+			}
+			control={
+				<Switch
+					ref={toggleRef}
+					checked={enabled}
+					label={t("settings.voice.enable")}
+					testId="settings-voice-toggle"
+					tabIndex={0}
+					onCheckedChange={(voiceInputEnabled) =>
+						void saveSettings({ voiceInputEnabled }, t("settings.voice.actionFailed"))
+					}
+				/>
+			}
+			reset={enabledReset}
+		/>
+	);
+	if (!status) {
+		return page(
+			<SettingOwners ids={SWITCH_OWNS}>
+				<div className={SETTINGS_ROWS}>{voiceInputRow}</div>
+			</SettingOwners>,
 		);
 	}
 
 	const install = status.install;
 	const installing = install.status === "installing";
 	const model = selectedModel(status);
+	const statusAction = installing ? (
+		<Button
+			variant="outline"
+			size="m"
+			tabIndex={0}
+			data-testid="settings-voice-cancel"
+			ref={(node) => {
+				if (!node || !focusCancel.current) return;
+				focusCancel.current = false;
+				node.focus();
+			}}
+			onClick={() => void cancelInstall()}
+		>
+			{t("settings.voice.cancel")}
+		</Button>
+	) : install.status === "ready" ? null : (
+		<Button
+			variant="primary"
+			size="m"
+			tabIndex={0}
+			data-testid="settings-voice-install"
+			onClick={() =>
+				void installModel(install.status === "failed" ? install.model : "multilingual")
+			}
+		>
+			{install.status === "failed" ? t("speech.offer.retry") : t("settings.voice.download")}
+		</Button>
+	);
 
-	return (
-		<div data-testid="settings-voice" className={SETTINGS_ROWS_CONTAINER}>
-			<SettingsRow
-				label={t("settings.voice.enable")}
-				description={
-					enabled ? t("settings.voice.enableDescription") : t("settings.voice.disabledDescription")
-				}
-				control={
-					<SettingsSwitch
-						checked={enabled}
-						label={t("settings.voice.enable")}
-						testId="settings-voice-toggle"
-						onChange={(next) => void setEnabled(next)}
-					/>
-				}
-			/>
-			{enabled || installing ? (
-				<SettingsRow
-					label={t("settings.voice.status")}
-					description={<StatusText status={status} />}
-					testId="settings-voice-status"
-					control={
-						installing ? (
-							<Button
-								variant="outline"
-								size="m"
-								data-testid="settings-voice-cancel"
-								onClick={() => void cancelInstall()}
-							>
-								{t("settings.voice.cancel")}
-							</Button>
-						) : install.status === "ready" ? null : (
-							<Button
-								variant="primary"
-								size="m"
-								data-testid="settings-voice-install"
-								onClick={() =>
-									void installModel(install.status === "failed" ? install.model : "multilingual")
-								}
-							>
-								{install.status === "failed"
-									? t("speech.offer.retry")
-									: t("settings.voice.download")}
-							</Button>
-						)
-					}
-				/>
-			) : null}
-			{enabled ? (
-				<>
+	return page(
+		<SettingOwners ids={enabled ? [] : SWITCH_OWNS}>
+			<div className={SETTINGS_ROWS}>
+				{voiceInputRow}
+				{enabled || installing ? (
 					<SettingsRow
-						label={t("settings.voice.language")}
-						description={t("settings.voice.languageDescription")}
+						rowId="voice-status"
+						label={t("settings.voice.status")}
+						description={<StatusText status={status} />}
+						testId="settings-voice-status"
+						control={statusAction}
+					/>
+				) : null}
+				{enabled ? (
+					<SettingsRow
+						{...settingProps(t, SETTING.voiceLanguage)}
 						testId="settings-voice-language"
 						control={
-							<SegmentedControl<SpeechModel>
-								name="speech-model"
+							<SettingsChoice<SpeechModel>
 								label={t("settings.voice.language")}
 								value={model}
+								cost="expensive"
 								disabled={installing}
 								options={[
 									{
@@ -153,43 +214,87 @@ export function VoiceSettings() {
 									},
 								]}
 								onSelect={(next) => {
-									if (next !== model) void installModel(next);
+									if (next === model) return;
+									focusCancel.current = true;
+									void installModel(next);
 								}}
 							/>
 						}
 					/>
+				) : null}
+				{enabled ? (
 					<SettingsRow
-						label={t("settings.voice.shortcut")}
-						description={t("settings.voice.shortcutDescription")}
+						{...settingProps(t, SETTING.voiceShortcut)}
+						testId="settings-voice-shortcut"
 						control={
-							<kbd className="rounded-xs bg-control-bg px-4 py-2 text-text-default tr-text-metadata">
-								{dictationShortcutLabel()}
-							</kbd>
+							<div className="flex items-center gap-8">
+								<kbd
+									data-testid="settings-voice-shortcut-keys"
+									className="rounded-xs bg-control-bg px-4 py-2 text-text-default tr-text-metadata"
+								>
+									{dictationShortcutLabel()}
+								</kbd>
+								<Button
+									variant="outline"
+									size="m"
+									tabIndex={0}
+									data-testid="settings-voice-shortcut-change"
+									onClick={() =>
+										useAppStore
+											.getState()
+											.openSettings(SettingsSection.Keyboard, DICTATION_SHORTCUT_TARGET)
+									}
+								>
+									{t("settings.voice.changeShortcut")}
+								</Button>
+							</div>
 						}
 					/>
-				</>
-			) : null}
-			{status.diskBytes > 0 ? (
-				<SettingsRow
-					label={t("settings.voice.delete")}
+				) : null}
+				{status.diskBytes > 0 ? (
+					<SettingsRow
+						{...settingProps(t, SETTING.voiceFiles)}
+						description={t("settings.voice.deleteDescription", {
+							size: megabytes(status.diskBytes),
+						})}
+						testId="settings-voice-files"
+						control={
+							<Button
+								ref={deleteRef}
+								variant="outline"
+								size="m"
+								tone="danger"
+								tabIndex={0}
+								data-testid="settings-voice-delete"
+								disabled={removing}
+								onClick={() => setConfirming(true)}
+							>
+								{t("settings.voice.deleteAction")}
+							</Button>
+						}
+					/>
+				) : null}
+				<ConfirmDialog
+					open={confirming}
+					onOpenChange={setConfirming}
+					title={t("settings.voice.deleteConfirmTitle")}
 					description={t("settings.voice.deleteDescription", {
 						size: megabytes(status.diskBytes),
 					})}
-					testId="settings-voice-files"
-					control={
-						<Button
-							variant="outline"
-							size="m"
-							tone="danger"
-							data-testid="settings-voice-delete"
-							disabled={removing}
-							onClick={remove}
-						>
-							{t("settings.voice.deleteButton")}
-						</Button>
-					}
+					confirmLabel={t("settings.voice.deleteButton")}
+					destructive
+					confirmTestId="settings-voice-delete-confirm"
+					onConfirm={() => {
+						confirmed.current = true;
+						remove();
+					}}
+					onClosedAutoFocus={() => {
+						const target = confirmed.current ? toggleRef.current : deleteRef.current;
+						confirmed.current = false;
+						(target ?? toggleRef.current)?.focus();
+					}}
 				/>
-			) : null}
-		</div>
+			</div>
+		</SettingOwners>,
 	);
 }
