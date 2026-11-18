@@ -1,5 +1,6 @@
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { useEffect, useInsertionEffect, useRef } from "react";
+import type { RegisteredPanel } from "../extensions";
 import {
 	type KeybindingId,
 	type KeyChord,
@@ -13,6 +14,7 @@ import { createDoubleShiftDetector } from "../search";
 import { useAppStore } from "../store";
 import { openChatHistory } from "./chordActions";
 import { deliverExtensionCommand, extensionHotkey, keyboardClaimed } from "./extensionCommands";
+import { openExtensionPanelHere, railCommandPanel } from "./extensionPanelHost";
 import { currentKeybindings } from "./keybindingState";
 import { matchShortcut, type ShortcutPlatform } from "./shortcutCommands";
 import { hasLayer, isInEditorFind, isInTerminal, MODAL_LAYER_SELECTOR } from "./shortcutLayers";
@@ -133,10 +135,12 @@ interface HotkeyContext {
 	readonly localScopes: readonly string[];
 	readonly inTerminal: boolean;
 	readonly inEditorFind: boolean;
+	readonly railPanel?: (extension: string, id: string) => RegisteredPanel | null | undefined;
 }
 
 type HotkeyRoute =
 	| { readonly kind: "extension"; readonly extension: string; readonly id: string }
+	| { readonly kind: "panel"; readonly panel: RegisteredPanel }
 	| { readonly kind: "command"; readonly id: GlobalHotkeyCommand }
 	| { readonly kind: "history" };
 
@@ -150,7 +154,11 @@ export function routeHotkey(
 	const { textEntry } = context;
 	if (matchLocal(keybindings, context.localScopes, event, { textEntry }) !== null) return null;
 	const extension = extensionHotkey(event, keybindings, textEntry);
-	if (extension) return { kind: "extension", ...extension };
+	if (extension) {
+		const panel = context.railPanel?.(extension.extension, extension.id);
+		if (panel === undefined) return { kind: "extension", ...extension };
+		return panel && !context.modalOpen ? { kind: "panel", panel } : null;
+	}
 	const id = globalHotkeyCommand(
 		event,
 		actions,
@@ -201,6 +209,7 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 				localScopes: localScopesOf(target instanceof Element ? target : null),
 				inTerminal: isInTerminal(event.target),
 				inEditorFind: isInEditorFind(event.target),
+				railPanel: railCommandPanel,
 			});
 			if (route === null) return;
 			event.preventDefault();
@@ -210,7 +219,9 @@ export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {
 				return;
 			}
 			event.stopPropagation();
-			if (route.kind === "command") {
+			if (route.kind === "panel") {
+				if (!event.repeat) openExtensionPanelHere(route.panel);
+			} else if (route.kind === "command") {
 				if (!event.repeat) current[CHORD_ACTIONS[route.id]]?.(route.id);
 			} else if (!useAppStore.getState().searchOpen) openChatHistory();
 		};

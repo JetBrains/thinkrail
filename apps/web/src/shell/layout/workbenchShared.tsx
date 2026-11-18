@@ -16,7 +16,7 @@ import {
 	useState,
 } from "react";
 import { type LayoutAttention, readLayoutNavigationClock, tupleKey } from "../../lib";
-import type { AuxiliaryRailControlProps } from "./AuxiliaryRail";
+import type { AuxiliaryRailFooterItem } from "./AuxiliaryRail";
 import type { AuxiliaryRailEntry } from "./auxiliaryPresentation";
 import {
 	type CenterSplitDirection,
@@ -32,7 +32,7 @@ import {
 	type LayoutSide,
 	layoutTabName,
 } from "./model";
-import type { WorkbenchTabCommands } from "./tabActions";
+import type { ChatTabActions, WorkbenchTabCommands } from "./tabActions";
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutCenterTab,
@@ -82,6 +82,7 @@ export interface WorkbenchProps {
 	) => void;
 	onRenameChat?: (sessionId: string, titleInput: string, currentTitle: string) => void;
 	chatFirstPrompts?: ChatFirstPrompts;
+	chatActions?: ChatTabActions;
 	onNewChat: (groupId: string) => void;
 	onNewTerminal: (
 		groupId: string,
@@ -90,7 +91,7 @@ export interface WorkbenchProps {
 	) => void;
 	onGestureCanceled?: () => void;
 	chromeShortcuts?: WorkbenchChromeShortcuts;
-	renderLeftRailFooter?: (control: AuxiliaryRailControlProps) => ReactNode;
+	leftRailFooter?: readonly AuxiliaryRailFooterItem[];
 }
 
 export interface WorkbenchChromeShortcuts {
@@ -390,6 +391,8 @@ export function tabSearchKeywords(
 			return [name, tab.kind, tab.sessionId];
 		case "document":
 			return [name, tab.kind, tab.sourceId, tab.docPath];
+		case "extension":
+			return [name, tab.kind, tab.extension, tab.panel];
 		case "terminal":
 			return [name, tab.kind, tab.tabKey];
 		case "tool":
@@ -636,6 +639,7 @@ export interface SharedGroupProps {
 	onRenameChat: WorkbenchProps["onRenameChat"];
 	registerChatRename: RegisterChatRename;
 	chatFirstPrompts: WorkbenchProps["chatFirstPrompts"];
+	chatActions: WorkbenchProps["chatActions"];
 	canFocusAdjacentGroup: boolean;
 	chromeShortcuts: WorkbenchChromeShortcuts | undefined;
 }

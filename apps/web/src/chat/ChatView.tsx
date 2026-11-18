@@ -29,12 +29,14 @@ import {
 } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useNow } from "@/components/useNow";
+import type { ChatAction } from "@/lib";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
 import {
 	EMPTY_RUNTIME,
 	SettingsSection,
 	selectCanRenameChat,
 	selectCatalogModel,
+	selectChatPersisted,
 	selectCompactionTurnIds,
 	selectComposerFocusRequested,
 	selectPickerModels,
@@ -107,16 +109,20 @@ function renderSubagentModel({ model, thinkingLevel }: SubagentResourceSummary) 
 
 const FOCUS_CLAIM = "[data-focus-claim]";
 
+const NO_CHAT_ACTIONS: readonly ChatAction[] = [];
+
 export default function ChatView({
 	sessionId,
 	workspaceId,
 	onOpenFile,
 	landingChord,
+	chatActions = NO_CHAT_ACTIONS,
 }: {
 	sessionId: string;
 	workspaceId: string;
 	onOpenFile?: ((path: string) => void) | undefined;
 	landingChord: string;
+	chatActions?: readonly ChatAction[];
 }) {
 	const t = useT();
 	const sessionExists = useAppStore((s) => s.sessions[sessionId] !== undefined);
@@ -198,6 +204,18 @@ export default function ChatView({
 	);
 	const [skillsOpen, setSkillsOpen] = useState(false);
 	const skillsStale = useAppStore((s) => selectSkillsStale(s, workspaceId, sessionId));
+	const persisted = useAppStore((s) => selectChatPersisted(s, workspaceId, sessionId));
+	const headerLinks = useMemo(
+		() =>
+			persisted
+				? chatActions.map(({ id, label, run }) => ({
+						id,
+						label,
+						onOpen: () => run({ workspaceId, sessionId }),
+					}))
+				: [],
+		[chatActions, persisted, sessionId, workspaceId],
+	);
 	const workspaceRoot = useAppStore(
 		(s) => selectWorkspaceById(s, workspaceId)?.worktreePath ?? undefined,
 	);
@@ -897,6 +915,7 @@ export default function ChatView({
 					}
 					stats={stats}
 					statusEntries={Object.entries(extUiStatus)}
+					links={headerLinks}
 					skillsStale={skillsStale}
 					{...(projectId ? { onOpenSkills: () => setSkillsOpen(true) } : {})}
 				/>

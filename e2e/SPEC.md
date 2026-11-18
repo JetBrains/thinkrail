@@ -734,7 +734,27 @@ real Settings → Extensions & skills switch of every shipped extension (`visual
 `web-access`, and the web-only `hint-mode` row the host catalog lacks) through `settings.update`, proves it
 survives a reload, and seeds a historical `visualize` call that must still render
 its diagram and an answered `ask_user_question` call that must still render its record while the extension is
-off; each test restores every switch in `afterEach` because the shard shares one host. `environment-settings.spec.ts` drives Settings →
+off; each test restores every switch in `afterEach` because the shard shares one host. Session insights
+coverage (`session-insights.spec.ts`) seeds transcripts with recorded provider/model/usage, failing tool
+results, a $0 model and subagents whose child transcripts sit in the host's delegation folder, enters the
+Default workspace and waits for its auto-restored chat (a tab activated after the panel opened would hide
+it) before driving the panel. Ten tests cover: the list with pi's figures and their provenance (tooltips,
+outside-subagent spend, the all-projects grouping, whole columns at the default 1920×1080 layout, *Open
+chat*); the disabled placeholder and re-enabling through *Open Settings*; a session's trace, call
+details (with the trace's `z` zoom leaving plain `F` to hint mode) and *Open in chat* landing on the row
+that holds the call; turn cards, the actor timeline and the
+day view; subagent waves, the plan and skill bands and errors as recovery chains (with a retry key rebound
+through `settings.update` acting in the trace and shown in its legend, reset in `afterEach`); context and cache, cost
+and files; statistics (findings, usage by day, hotspots); action sequences, a slice comparison and a
+step-aligned diff of two sessions; faceted search opening a session's analysis at a hit; and labels with
+exports of a masked page, a Chrome trace and a fixture into Artifacts. The fixture writer records
+`durationMs` so the spans are pi's. The app reset leaves the delegation folder and the extension's data
+folder (`<data>/extensions/session-insights/`) alone, so the spec removes the delegation folders it wrote
+and clears the data folder before each test; every test opens the panel through one
+`openInsightsPanel(page, { rows })`, which refreshes (`fresh: true`) until the index is ready and the list
+holds exactly that test's sessions, since the host's index may still list the previous test's. Its shots
+under `e2e/screenshots/session-insights*/` are review evidence only.
+`environment-settings.spec.ts` drives Settings →
 Environment through rejected and accepted saves and a reload; the host was launched with
 `PI_CODING_AGENT_DIR`, so it also proves the launch value stays in use and is reported as set at launch. It
 clears the stored record in `afterEach` so no later restart-based spec boots with it. The provider-backed counterpart in

@@ -3,10 +3,10 @@ import {
 	RiArrowRightSLine as ChevronRight,
 } from "@remixicon/react";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { useTreeItem } from "@thinkrail/ui/tree-item";
 import { cn } from "@thinkrail/ui/utils";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { ProviderGlyph } from "@/chat/ProviderGlyph";
-import { useTreeItem } from "./treeNavigation";
 
 const CONTROL = "button, input";
 

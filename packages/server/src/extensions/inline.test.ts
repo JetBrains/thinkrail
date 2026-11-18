@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { join } from "node:path";
 import type {
 	Extension,
 	ExtensionAPI,
@@ -10,9 +11,13 @@ import {
 	extensionSessionServices,
 	type HostSessionServices,
 	omitDisabledRegistryExtensions,
+	omitSupersededPackages,
+	packageNameOf,
 	preferRegistryTools,
 	registryExtensionName,
 	registryInlineExtensions,
+	supersedablePackagesIn,
+	supersedingExtension,
 } from "./inline";
 import type { ServerExtensionEntry } from "./registry";
 
@@ -181,6 +186,64 @@ describe("omitDisabledRegistryExtensions", () => {
 
 	it("returns the result untouched when nothing is disabled", () => {
 		expect(omitDisabledRegistryExtensions(result, () => false, entries)).toBe(result);
+	});
+});
+
+describe("omitSupersededPackages", () => {
+	const panel: ServerExtensionEntry = {
+		specifier: "@acme/panel/server",
+		extension: { name: "panel", extensions: [], supersedesPackages: ["@acme/pi-panel"] },
+	};
+	const entries = [entry("solo", 1), panel];
+	const loaded = (path: string, resolvedPath = path) => ({ path, resolvedPath }) as Extension;
+	const names: Record<string, string> = {
+		"/agent/npm/node_modules/@acme/pi-panel/extension.ts": "@acme/pi-panel",
+		"/agent/git/github.com/acme/tools/pi-panel/extension.ts": "@acme/pi-panel",
+		"/agent/npm/node_modules/other/index.ts": "other",
+	};
+	const nameOf = (file: string) => names[file] ?? null;
+	const result: LoadExtensionsResult = {
+		extensions: [
+			loaded("npm:@acme/pi-panel", "/agent/npm/node_modules/@acme/pi-panel/extension.ts"),
+			loaded("/agent/git/github.com/acme/tools/pi-panel/extension.ts"),
+			loaded("/agent/npm/node_modules/other/index.ts"),
+			loaded("/loose/file.ts"),
+			loaded("<inline:solo>"),
+		],
+		errors: [],
+		runtime: {} as LoadExtensionsResult["runtime"],
+	};
+
+	it("drops a superseded package's extensions however pi installed it, and keeps the rest", () => {
+		const next = omitSupersededPackages(result, () => false, entries, nameOf);
+		expect(next.extensions.map((extension) => extension.path)).toEqual([
+			"/agent/npm/node_modules/other/index.ts",
+			"/loose/file.ts",
+			"<inline:solo>",
+		]);
+		expect(next.errors).toBe(result.errors);
+	});
+
+	it("keeps the package while the superseding extension is off, and when nothing is superseded", () => {
+		expect(omitSupersededPackages(result, (name) => name === "panel", entries, nameOf)).toBe(
+			result,
+		);
+		expect(omitSupersededPackages(result, () => false, [entry("solo", 1)], nameOf)).toBe(result);
+	});
+
+	it("finds the loaded packages some extension supersedes, on or off, and who supersedes one now", () => {
+		expect([...supersedablePackagesIn(result, entries, nameOf)]).toEqual(["@acme/pi-panel"]);
+		expect(supersedablePackagesIn(result, [entry("solo", 1)], nameOf).size).toBe(0);
+		expect(supersedingExtension("@acme/pi-panel", () => false, entries)?.name).toBe("panel");
+		expect(
+			supersedingExtension("@acme/pi-panel", (name) => name === "panel", entries),
+		).toBeUndefined();
+		expect(supersedingExtension("other", () => false, entries)).toBeUndefined();
+	});
+
+	it("reads the nearest package.json name above a file", () => {
+		expect(packageNameOf(join(import.meta.dir, "inline.ts"))).toBe("@thinkrail/server");
+		expect(packageNameOf("/no/such/folder/file.ts")).toBeNull();
 	});
 });
 

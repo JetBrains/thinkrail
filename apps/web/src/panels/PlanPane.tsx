@@ -21,6 +21,7 @@ import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contract
 import { useT } from "@thinkrail/locales/react";
 import { ResourceScopeProvider } from "@thinkrail/resource-renderers";
 import { Button, buttonVariants, IconButton } from "@thinkrail/ui/button";
+import { DiffStatBadge } from "@thinkrail/ui/diff-stat-badge";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -78,7 +79,6 @@ import {
 	useAppStore,
 } from "../store";
 import { errorText, getTransport, respondToTool, supportsPlanReview } from "../transport";
-import { DiffStatBadge } from "./DiffStatBadge";
 import { openChatInTab } from "./openChat";
 import { openDiffInTab, openFileInTab } from "./openTabs";
 import { PlanCommitsMenu } from "./PlanCommitsMenu";

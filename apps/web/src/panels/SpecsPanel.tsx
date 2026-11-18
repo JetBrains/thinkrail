@@ -17,6 +17,7 @@ import {
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { useTreeItem } from "@thinkrail/ui/tree-item";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useMemo, useState } from "react";
 import { firstClickOnly } from "../lib";
@@ -29,7 +30,7 @@ import {
 	specRoleLabel,
 	specRoleTag,
 } from "./specTree";
-import { Tree, treeToggleProps, useTreeItem } from "./treeNavigation";
+import { Tree, treeToggleProps } from "./treeNavigation";
 
 export function SpecsPanel({
 	workspaceId,

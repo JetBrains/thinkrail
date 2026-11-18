@@ -15,6 +15,7 @@ import { type LayoutAttention, tupleKey } from "../../lib";
 import {
 	AuxiliaryRail,
 	type AuxiliaryRailControlProps,
+	type AuxiliaryRailFooterItem,
 	RAIL_ENTRY_BUTTON_CLASS,
 	RAIL_ICON,
 	railEntryButtonProps,
@@ -213,7 +214,7 @@ export function AuxiliaryRegionRail({
 	shared: SharedGroupProps;
 	attention: LayoutAttention;
 	trailing?: ReactNode;
-	footer?: ((control: AuxiliaryRailControlProps) => ReactNode) | undefined;
+	footer?: readonly AuxiliaryRailFooterItem[] | undefined;
 }) {
 	const t = useT();
 	const keys = useLocalKeys("rails", LOCAL_KEY_DEFAULTS.rails);

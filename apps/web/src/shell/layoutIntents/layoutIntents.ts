@@ -189,6 +189,16 @@ export function toLayoutTab(tab: EditorTab): LayoutCenterTab | null {
 				sourceId: tab.sessionId,
 				docPath: "TODO.md",
 			};
+		case "extension":
+			return {
+				kind: "extension",
+				id: tab.id,
+				name: tab.name,
+				extension: tab.extension,
+				panel: tab.panel,
+				titleKey: tab.titleKey,
+				params: tab.params,
+			};
 	}
 }
 

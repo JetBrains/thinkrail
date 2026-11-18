@@ -25,6 +25,7 @@ import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useState } from "react";
+import { webExtensionTitle } from "@/extensions";
 import {
 	SETTINGS_LIST_PRIMARY,
 	SETTINGS_TAG,
@@ -255,6 +256,14 @@ function menuControl({ menuOpen = false, onMenuOpenChange }: RowMenuControl) {
 	return onMenuOpenChange ? { open: menuOpen, onOpenChange: onMenuOpenChange } : {};
 }
 
+function supersedingTitle(
+	t: Translator,
+	by: NonNullable<PiPackageSummary["supersededBy"]>,
+): string {
+	const key = webExtensionTitle(by.name);
+	return key ? t(key) : by.title;
+}
+
 export function PackageRow({
 	summary,
 	updateAvailable,
@@ -417,6 +426,13 @@ export function PackageRow({
 			{summary.shadowed ? (
 				<span data-testid="package-shadowed" className="px-4 tr-text-metadata text-text-subtle">
 					{t("settings.packages.shadowed")}
+				</span>
+			) : null}
+			{summary.supersededBy ? (
+				<span data-testid="package-superseded" className="px-4 tr-text-metadata text-text-subtle">
+					{t("settings.packages.supersededBy", {
+						extension: supersedingTitle(t, summary.supersededBy),
+					})}
 				</span>
 			) : null}
 			{loadError && installedPath !== undefined ? (

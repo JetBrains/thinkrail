@@ -304,9 +304,13 @@ binding does.
 - **Extension rows.** After the catalog, `shortcutRows` lists every enabled extension command, global or
   local, from the resolved table as a General row with all its active chords (hint mode's `F` and `Mod+;`), then the
   `extra` entries: `shell` passes the `shortcuts` (in-mode, display-only keys) of every enabled web
-  extension ([[submodule-web-extensions]]). The catalog never imports an extension, and a switched-off
-  one's rows disappear. `extensions`' tests pin that plain `F` is bound nowhere in the table or the
-  catalog's feature keys.
+  extension ([[submodule-web-extensions]]). Each such row carries its `extension`, by which the cheatsheet
+  sections it under that extension rather than in General ([[submodule-web-shell]]). The catalog never
+  imports an extension, and a switched-off one's rows disappear. `extensions`' tests pin that plain `F` is bound nowhere in the table or the
+  catalog's feature keys. A command an extension panel's `rail` names (session insights'
+  `session-insights.openSessions`, `Ctrl+Alt+I` / ⌃⌥I) is such a global command: this module resolves,
+  lists and rebinds it like any other, and only the shell's binder decides that its press opens the
+  panel rather than reaching the overlay ([[submodule-web-shell]] § Extension panels).
 - Tested: every `KeybindingId` belongs to a titled entry, ids are unique, every title is an English key.
 
 ## Editor rows and edits
