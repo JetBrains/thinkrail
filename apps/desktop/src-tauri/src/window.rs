@@ -467,10 +467,16 @@ pub fn open_main_window(
         .visible(false);
     if let Some((script, origin)) = bridge {
         let navigation_app = app.clone();
+        let navigation_origin = origin.clone();
+        let new_window_app = app.clone();
         builder = builder
             .initialization_script(script)
             .on_navigation(move |url| {
-                crate::navigation::allow_navigation(&navigation_app, url, &origin)
+                crate::navigation::allow_navigation(&navigation_app, url, &navigation_origin)
+            })
+            .on_new_window(move |url, _features| {
+                crate::navigation::handle_new_window(&new_window_app, &url, &origin);
+                tauri::webview::NewWindowResponse::Deny
             })
             .on_page_load(|window, payload| match payload.event() {
                 tauri::webview::PageLoadEvent::Started => crate::navigation::page_load_started(),

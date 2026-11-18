@@ -875,6 +875,19 @@ test("extension.list reflects disabledExtensions written through settings.update
 			tools: ["web_search", "source_check", "fetch_content", "get_search_content", "web_enable"],
 			hasChildExtensions: true,
 		},
+		{
+			name: "lsp-search",
+			title: "Code navigation (LSP)",
+			description: expect.any(String),
+			enabled: true,
+			tools: [
+				"code_symbol_search",
+				"code_find_references",
+				"code_goto_definition",
+				"code_file_outline",
+			],
+			hasChildExtensions: true,
+		},
 	]);
 	await handleRequest(
 		"settings.update",
@@ -885,12 +898,14 @@ test("extension.list reflects disabledExtensions written through settings.update
 		{ name: "visualize", enabled: false },
 		{ name: "ask-user-question", enabled: true },
 		{ name: "web-access", enabled: false },
+		{ name: "lsp-search", enabled: true },
 	]);
 	await handleRequest("settings.update", { config: { disabledExtensions: [] } }, CTX);
 	expect(await handleRequest("extension.list", {}, CTX)).toMatchObject([
 		{ name: "visualize", enabled: true },
 		{ name: "ask-user-question", enabled: true },
 		{ name: "web-access", enabled: true },
+		{ name: "lsp-search", enabled: true },
 	]);
 });
 

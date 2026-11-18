@@ -340,6 +340,38 @@ pub fn allow_navigation(app: &AppHandle, url: &url::Url, origin: &str) -> bool {
     false
 }
 
+/// Whether a `window.open` / `_blank` / modifier-click request may leave the
+/// app. Port of `externalNavigationUrl` for the `new-window-open` event: a
+/// same-origin request is the app's own business (only its `/view/` pages are
+/// external by intent), anything else is vetted by [`vetted_external_url`].
+fn new_window_leaves_app(url: &str, origin: &str) -> bool {
+    let same_origin = url == origin || url.starts_with(&format!("{origin}/"));
+    if same_origin {
+        return url.starts_with(&format!("{origin}{WORKSPACE_VIEW_ROUTE}"));
+    }
+    vetted_external_url(url).is_some()
+}
+
+/// New-window policy for the main window. The webview never opens a second
+/// window: Tauri would give it no bridge and no navigation policy (WebView2
+/// opens one by default for Ctrl-click, `window.open` from an iframe and
+/// `_blank` forms). Electrobun reports these as `new-window-open` and opens
+/// the allowlisted ones in the system browser; this does the same.
+pub fn handle_new_window(app: &AppHandle, url: &url::Url, origin: &str) {
+    if url.scheme() == "thinkrail" {
+        if let Err(error) = forward_deep_link(app, url.as_str()) {
+            eprintln!("[desktop] ignoring invalid deep link: {error}");
+        }
+        return;
+    }
+    if !new_window_leaves_app(url.as_str(), origin) {
+        return;
+    }
+    if let Err(error) = open_external(app, url.as_str()) {
+        eprintln!("[desktop] {error}");
+    }
+}
+
 /// Cross-origin branch of `externalNavigationUrl` in `externalNavigation.ts`:
 /// only bare `http`/`https`/`mailto` URLs may leave the app for the system
 /// browser. Same-origin navigations stay in the webview (gated by
@@ -374,6 +406,22 @@ mod tests {
     use super::*;
 
     const ORIGIN: &str = "https://app.example";
+
+    #[test]
+    fn new_windows_only_leave_the_app_through_the_allowlist() {
+        // Outside links open in the browser.
+        assert!(new_window_leaves_app("https://example.com/docs", ORIGIN));
+        assert!(new_window_leaves_app("mailto:team@example.com", ORIGIN));
+        // The host's workspace file view is external by intent.
+        assert!(new_window_leaves_app("https://app.example/view/abc", ORIGIN));
+        // The app's own pages never get a second window or a browser tab.
+        assert!(!new_window_leaves_app("https://app.example/#/v1/chat", ORIGIN));
+        assert!(!new_window_leaves_app("https://app.example", ORIGIN));
+        // Other schemes never reach the OS.
+        assert!(!new_window_leaves_app("file:///etc/passwd", ORIGIN));
+        assert!(!new_window_leaves_app("javascript:alert(1)", ORIGIN));
+        assert!(!new_window_leaves_app("about:blank", ORIGIN));
+    }
 
     #[test]
     fn allows_same_origin_navigation() {

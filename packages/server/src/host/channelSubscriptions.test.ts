@@ -34,8 +34,9 @@ test("every channel the host broadcasts is one every socket subscribes to at ope
 
 test("no push bypasses the per-socket sender that closes a client past the buffer limit", async () => {
 	const files = await sourceFiles();
+	// `deps.publish(...)` is an injected callback (PR babysit), not the socket server's native publish.
 	const nativePublishes = files.filter((file) =>
-		/\.publish\(\s*[^)\s]/.test(readFileSync(file, "utf8")),
+		/(?<!\bdeps)\.publish\(\s*[^)\s]/.test(readFileSync(file, "utf8")),
 	);
 	expect(nativePublishes).toEqual([]);
 });
