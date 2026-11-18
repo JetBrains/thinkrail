@@ -132,10 +132,11 @@ What a `./web` half may import:
   infrastructure (desktop's bundled server runtime, `startDesktopHost`, `registerBundledRuntime`'s
   OAuth/Bedrock/trash registration) is unchanged by this.
 - **Web:** `apps/web/src/extensions/registry.ts` exports the ordered web extensions;
-  `registerWebExtensions()` feeds their `toolRenderers` into the chat tool registry, ignoring the switch.
-  `Shell` mounts the `globalOverlay` of each extension not in `disabledExtensions`, and the cheatsheet adds
-  their `shortcuts` ([[submodule-web-extensions]]). App-local tool registrations retain their side-effect
-  imports; extension descriptors need none.
+  `registerWebExtensions()` feeds their `toolRenderers` into the chat tool registry, ignoring the switch,
+  and tags each registration with its extension's `name` (the chat hides a switched-off extension's
+  composer suggestions). `Shell` mounts the `globalOverlay` of each extension not in `disabledExtensions`,
+  and the cheatsheet adds their `shortcuts` ([[submodule-web-extensions]]). App-local tool registrations
+  retain their side-effect imports; extension descriptors need none.
 
 ## Boundary rules (enforced by `scripts/check-module-boundaries.ts`, with negative tests)
 
@@ -178,3 +179,4 @@ follow the `.js`, `tsc` stops at the declaration.
 | `ask-user-question` | `@thinkrail/pi-ask-user-question` | shipped; the first interactive tool. `./server` is session-only: `sessionExtensions` composes the portable tool with ThinkRail's wording and an asker over the host's interactive-tool mailbox (`awaitToolResponse`); `interactiveTools` declares `ask_user_question` with a `describeResponse` that renders a late answer in the package's own envelope wording. `./web` registers the questionnaire card `interactive`, fed entirely by the host through `ToolRenderProps.interaction`; the plan page renders it through the tool registry like the chat does. Its keys are local `commands` in the scope `ask-user-question.card`, rebindable in Settings → Keyboard. [[module-ext-ask-user-question]]. |
 | `hint-mode` | none (web-only) | shipped; on by default. A `globalOverlay` that labels everything clickable on F (outside text entry) or Mod+; and presses a typed label; its `shortcuts` join the cheatsheet while enabled. [[module-ext-hint-mode]]. |
 | `web-access` | third-party `pi-web-access` | shipped (server half). `./server` composes the package unchanged for parents and children (the host keeps its headless-search policy, which must outlive the switch) and ships its own `librarian` skill (upstream dropped it; `skillPackages` names the extension's own package); the first extension with skills. Renderers stay app-local (`apps/web/src/chat/tools/web`) until `Markdown`, `Collapsible` and `ToolFileLink` join the SDK. [[module-ext-web-access]]. |
+| `next-steps` | `@thinkrail/pi-next-steps` | shipped; the first `composerSuggestions` consumer. `./server` composes the portable package for parents only, appending ThinkRail's yes/no-vs-decision rule to its guidelines (its terminal row stays off because ThinkRail binds pi as `"rpc"`); `./web` registers the routine row plus the reader whose output the chat shows as chips above the composer. [[module-ext-next-steps]]. |

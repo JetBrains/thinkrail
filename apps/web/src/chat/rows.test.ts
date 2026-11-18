@@ -18,6 +18,7 @@ import type { ChatTurn, ToolResultState } from "./types";
 
 registerToolRenderer("primary-tool", () => null, { prominence: "primary" });
 registerToolRenderer("bare-tool", () => null, { chrome: "bare" });
+registerToolRenderer("suggest-tool", () => null, { composerSuggestions: () => ["Next"] });
 
 type Block =
 	| { type: "text"; text: string }
@@ -441,6 +442,21 @@ describe("deriveRows dividers", () => {
 			false,
 		);
 		expect(kinds(rows)).toEqual(["user", "system", "markdown", "divider"]);
+	});
+
+	test("a round a suggestions call ended is done after a reload too, with no closer to read", () => {
+		const outcomes = (turns: ChatTurn[], results: Record<string, ToolResultState>) =>
+			deriveRows(turns, results, false).flatMap((row) =>
+				row.kind === "divider" ? [row.data.outcome] : [],
+			);
+		const suggested = assistant("a1", [text("Fixed."), tc("s1", "suggest-tool")], {
+			stopReason: "toolUse",
+		});
+		const ok: ToolResultState = { status: "done", raw: {} };
+		expect(outcomes([user("u1"), suggested], { s1: ok })).toEqual(["done"]);
+		expect(outcomes([user("u1"), suggested], { s1: { status: "error", raw: {} } })).toEqual([null]);
+		const plainTool = assistant("a1", [text("Running."), tc("b1")], { stopReason: "toolUse" });
+		expect(outcomes([user("u1"), plainTool], { b1: ok })).toEqual([null]);
 	});
 
 	test("the divider outcome follows the round's last reply and closer", () => {

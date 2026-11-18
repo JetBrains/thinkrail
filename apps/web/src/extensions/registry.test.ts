@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import askUserQuestion from "@thinkrail/ext-ask-user-question/web";
 import hintMode from "@thinkrail/ext-hint-mode/web";
+import nextSteps from "@thinkrail/ext-next-steps/web";
 import visualize, { MermaidView } from "@thinkrail/ext-visualize/web";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import { EN } from "@thinkrail/locales";
@@ -12,6 +13,7 @@ import {
 	getToolSummary,
 	isDockedTool,
 	isInteractiveTool,
+	readComposerSuggestions,
 	resolveProminence,
 } from "../chat/toolRegistry";
 import { matchKeybinding, resolveKeybindings, SHORTCUT_CATALOG } from "../keybindings";
@@ -33,7 +35,7 @@ const props: ToolRenderProps = {
 };
 
 test("the ordered web registry composes the public visualize descriptor without replacing fallback", () => {
-	expect(webExtensions).toEqual([visualize, askUserQuestion, hintMode]);
+	expect(webExtensions).toEqual([visualize, askUserQuestion, hintMode, nextSteps]);
 	expect(typeof MermaidView).toBe("function");
 	for (let i = 0; i < 2; i++) {
 		registerWebExtensions();
@@ -90,8 +92,8 @@ test("hint mode is a web-only extension: no tool renderers, a global overlay, ti
 });
 
 test("the switch decides which global contributions mount; tool renderers stay regardless", () => {
-	expect(enabledWebExtensions([])).toEqual([visualize, askUserQuestion, hintMode]);
-	expect(enabledWebExtensions(["hint-mode", "visualize"])).toEqual([askUserQuestion]);
+	expect(enabledWebExtensions([])).toEqual([visualize, askUserQuestion, hintMode, nextSteps]);
+	expect(enabledWebExtensions(["hint-mode", "visualize"])).toEqual([askUserQuestion, nextSteps]);
 	registerWebExtensions();
 	expect(getToolRenderer("visualize")).toBe(visualize.toolRenderers.visualize.renderer);
 });
@@ -192,4 +194,24 @@ test("plain F stays free in the app table and in every feature key the catalog l
 			chord.key.toLowerCase() === "f" && !chord.mod && !chord.ctrl && !chord.alt && !chord.shift,
 	);
 	expect(plainLetterF).toEqual([]);
+});
+
+test("suggest_next_steps registers a routine row whose result feeds the composer suggestions", () => {
+	registerWebExtensions();
+	const result = { details: { suggestions: ["Run the tests", "Open a PR"] } };
+	expect(resolveProminence("suggest_next_steps").prominence).toBe("routine");
+	expect(isInteractiveTool("suggest_next_steps")).toBe(false);
+	expect(readComposerSuggestions("suggest_next_steps", {}, result)).toEqual([
+		"Run the tests",
+		"Open a PR",
+	]);
+	expect(
+		getToolSummary(currentTranslator(), "suggest_next_steps", {
+			...props,
+			toolName: "suggest_next_steps",
+			result,
+		}),
+	).toBe("Suggested 2 next steps");
+	expect(readComposerSuggestions("suggest_next_steps", {}, result, ["next-steps"])).toBeNull();
+	expect(readComposerSuggestions("visualize", {}, result)).toBeNull();
 });

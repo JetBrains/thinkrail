@@ -210,6 +210,8 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   between tool steps: `deriveMessageActions` marks a markdown row final when no later
   `markdown`/`tool`/`activity` row precedes the next round opener (see `divider`) (`finalAnswerRowIds`, supplied by every
   transcript integration as `isFinalAnswer`); a non-final markdown row renders plain, without the action.
+  A later `tool`/`activity` row holding only suggestions calls (`carriesComposerSuggestions`) does not
+  count: by contract that call comes after the final answer (*Composer suggestions*).
   Both go through **one shared layout**, `MessageWithCopy` (in `turns.tsx`): a `relative` wrapper that
   overlays the action **inside the role's bottom corner on the same line as content** — bottom-left for
   an assistant answer (`left-0 bottom-0`), bottom-right for a user bubble (`right-0 bottom-8`, aligned
@@ -330,7 +332,11 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   outcome comes from the round's last reply first (a failed or `aborted` reply), then the closer, so a
   reloaded chat, which has no success markers, reads the same as a live one. Only a closer error (one with a
   `failure`) counts; a failed rename or an extension notice never relabels a round. A round cut short
-  by a steer (last reply `toolUse`) has no outcome and keeps the plain time. Times under 1s are dropped;
+  by a steer (last reply `toolUse`) has no outcome and keeps the plain time — except a reply ending in a
+  qualifying suggestions call (`endingSuggestionsCall`, the predicate the chips use, *Composer
+  suggestions*): that call ended the run by contract, so a reloaded round reads done like the live one. A
+  generic "`toolUse` with every result in" rule was rejected: pi persists no `terminate`, and a crash
+  after an ordinary tool batch looks the same. Times under 1s are dropped;
   an instant error with nothing else to report is the bare rule. The written files show as **two chips
   split by owning tool** — “N specs” and “N files changed”. The split is a **partition** (a path lands on
   exactly one side, never counted twice) computed in the deriver from the injected `isSpec` predicate — the store's
@@ -566,6 +572,8 @@ remain app-local. A registration is:
 - **`interactive`** (fill `ToolRenderProps.interaction`, below) and **`dock`** (with `interactive`: a call
   the host awaits renders in the interaction dock, the transcript row as its stub — read through
   `isDockedTool`),
+- **`composerSuggestions`**: a reader whose strings become the composer's suggestion chips when the call
+  ends a finished turn (*Composer suggestions*, below), read through `readComposerSuggestions`,
 - **prominence metadata** — `prominence`: `"routine"` (default, incl. unregistered tools — enters the
   outer Activity run, directly before the first thought or under the current nested Thinking disclosure)
   or `"primary"` (escapes the fold; `"bare"` chrome implies it **unconditionally**, even
@@ -675,6 +683,35 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `PlanInteractionCard` — a second runtime subscription, a second provider stack and a second focus scope
   to reconcile with the transcript's. An unanchored extension prompt keeps its own dock inside the
   transcript region, above this one.
+- **Composer suggestions** — a row of one-click next messages directly above the composer (below the
+  dock, QueueStrip, Resources strip and notices), rendered by `ChatView` for top-level chats only.
+  Subagent transcripts never mount `ChatView`. `deriveComposerSuggestions` (`composerSuggestions.ts`)
+  reads them from the transcript alone, so nothing new is stored. Chips show only when all of these hold:
+  - the session is idle with nothing queued;
+  - skipping the round-closer `system` turns, the last turn is a finished assistant message whose
+    **last** tool call has a `composerSuggestions` reader ([[module-extension-api]]);
+  - that call's result is `done`;
+  - the message holds no interactive call;
+  - the owning extension is switched on (registrations carry their extension's name).
+
+  Any later turn (an error, a retry, the next user message) clears the row, and a reload restores it.
+  The row shows at most one chip per send key — nine — whatever a reader returns.
+  A call that wasn't last never qualifies: pi only ends the turn when every result in the batch
+  terminates. A click, or the chip's key, goes through `performSend(text, [], "send")`, the same
+  draft-free path as Try again, so the composer draft survives. Shift+click, or the chip's edit key,
+  instead puts the text into the input (`ComposerHandle.insertAtCaret`: the whole text into an empty
+  input, else at the remembered caret with a separating space) and focuses it, sending nothing. A chip
+  used by click or keyboard vanishes with the row; the shell's focus recovery then lands on the input,
+  the chat region's `data-focus-default`, so the row needs no focus-list markup of its own. The keys
+  are the rebindable local commands `suggestions.send1…9` (`Alt+1…9`) and `suggestions.edit1…9`
+  (`Shift+Alt+1…9`, [[submodule-web-keybindings]]) of the shared scope both the input and the transcript
+  include. One native `keydown` listener on the chat root matches them through
+  `useLocalKeys` with the focused element's scope — the transcript feed's, else the input's for the input
+  and the chip row (which declares `data-key-scope="composer"`, so the binder yields there too) — and
+  nowhere else in the chat. It consumes the press (`preventDefault`, a repeat does nothing) only when
+  that chip is shown, so with no chip an Option chord still types its character. Each chip's tooltip
+  caps and `aria-keyshortcuts` come from the same keys. The copy is host keys (`chat.suggestions.*`):
+  the row is generic, and the extension supplies only the strings.
 - **Structured tool-file navigation** — `ChatView` accepts an optional `onOpenFile(path)` from the shell and
   passes it through every `ToolRenderProps` path (routine, primary, card, or bare). The shared tool-file
   primitive offers that action only for a non-empty relative path or an absolute path contained by

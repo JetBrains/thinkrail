@@ -16,6 +16,7 @@ import { strArg } from "@thinkrail/extension-api/web";
 import { projectRelativePath } from "../lib";
 import { type AssistantFailure, assistantFailure } from "./assistantFailure";
 import type { ChatMessageOrder } from "./chatPreferences";
+import { endingSuggestionsCall } from "./composerSuggestions";
 import { pulledResult, resultKey } from "./pulledResults";
 import { resolveProminence } from "./toolRegistry";
 import type { ChatTurn, CompactionState, FailureRecovery, ToolResultState } from "./types";
@@ -321,7 +322,15 @@ export function deriveRows(
 		const roundEnded = !opensRound(turn) && (next ? opensRound(next) : !isStreaming);
 		if (roundEnded) {
 			flushRun();
-			const data = turnDivider(turns, i, isSpec, agentTurns, workspaceRoot, roundArtifacts);
+			const data = turnDivider(
+				turns,
+				i,
+				isSpec,
+				agentTurns,
+				workspaceRoot,
+				roundArtifacts,
+				toolResults,
+			);
 			if (data) rows.push({ kind: "divider", id: `${turn.id}:divider`, data });
 		}
 	}
@@ -381,6 +390,7 @@ export function turnDivider(
 	agentTurns: readonly TurnChangeSet[] = [],
 	workspaceRoot?: string,
 	roundArtifacts: readonly RoundArtifact[] = [],
+	toolResults: Readonly<Record<string, ToolResultState>> = {},
 ): TurnDividerData | null {
 	let openerIdx = -1;
 	for (let i = endIndex; i >= 0; i--) {
@@ -434,7 +444,7 @@ export function turnDivider(
 		}
 	}
 	return {
-		outcome: roundOutcome(turns, openerIdx, endIndex),
+		outcome: roundOutcome(turns, openerIdx, endIndex, toolResults),
 		elapsedMs,
 		toolCount,
 		specs,
@@ -461,6 +471,7 @@ function roundOutcome(
 	turns: ChatTurn[],
 	openerIdx: number,
 	endIndex: number,
+	toolResults: Readonly<Record<string, ToolResultState>>,
 ): TurnDividerData["outcome"] {
 	let closer: "done" | "error" | null = null;
 	for (let i = endIndex; i > openerIdx; i--) {
@@ -469,7 +480,9 @@ function roundOutcome(
 			const { message } = turn;
 			if (assistantFailure(message)) return "error";
 			if (message.stopReason === "aborted") return "stopped";
-			return closer ?? (message.stopReason === "stop" ? "done" : null);
+			const finished =
+				message.stopReason === "stop" || endingSuggestionsCall(message, toolResults) !== null;
+			return closer ?? (finished ? "done" : null);
 		}
 		if (closer) continue;
 		if (turn?.kind === "system" && turn.text === undefined) closer = "done";
