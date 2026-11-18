@@ -3,7 +3,7 @@ import {
 	RiArrowRightSLine as ChevronRight,
 } from "@remixicon/react";
 import { type ReactNode, useEffect, useId, useState } from "react";
-import { useSettingsJumpTarget } from "./jumpToSetting";
+import { useSettingsJump } from "./jumpToSetting";
 import { SETTINGS_ROWS } from "./SettingsGroup";
 
 export interface SettingsDisclosureProps {
@@ -27,10 +27,10 @@ export function SettingsDisclosure({
 }: SettingsDisclosureProps) {
 	const panelId = useId();
 	const [expanded, setExpanded] = useState(defaultExpanded);
-	const target = useSettingsJumpTarget();
-	const reveal = target !== null && settingIds.includes(target);
+	const jump = useSettingsJump();
+	const reveal = jump !== null && settingIds.includes(jump.id) ? jump.seq : null;
 	useEffect(() => {
-		if (reveal) setExpanded(true);
+		if (reveal !== null) setExpanded(true);
 	}, [reveal]);
 	const Chevron = expanded ? ChevronDown : ChevronRight;
 	return (

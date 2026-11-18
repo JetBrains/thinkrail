@@ -1,5 +1,6 @@
 import { FOCUS_GROUP_BINDINGS, type KeybindingId } from "../keybindings";
 import { openChatInTab } from "../panels/openChat";
+import { SETTING_ATTR } from "../settingsKit";
 import { selectChatAttended, selectHistoryTarget, useAppStore } from "../store";
 import {
 	focusCenterRegion,
@@ -10,7 +11,12 @@ import {
 	terminalTarget,
 	whenSettled,
 } from "./regions";
-import { hasDismissibleLayer, isInTerminal } from "./shortcutLayers";
+import {
+	activeLayer,
+	hasDismissibleLayer,
+	isInTerminal,
+	type LayerDocument,
+} from "./shortcutLayers";
 import { runActiveTabAction } from "./workbenchCommands";
 
 export function toggleLeftSide(toggleProjectsHome: () => void): void {
@@ -119,6 +125,28 @@ function dismissTopLayer(): boolean {
 	return true;
 }
 
+const SETTINGS_LAYER_SELECTOR = `[${SETTING_ATTR.dialog}][data-state="open"]`;
+
+export function settingsLayer(doc: Pick<ParentNode, "querySelector">): Element | null {
+	return doc.querySelector(SETTINGS_LAYER_SELECTOR);
+}
+
+export function closesSettings(doc: LayerDocument & ParentNode): boolean {
+	const settings = settingsLayer(doc);
+	if (settings === null) return false;
+	return activeLayer(doc) === settings || settings.contains(doc.activeElement);
+}
+
+function closeSettingsAtOnce(): boolean {
+	const doc = globalThis.document;
+	if (!closesSettings(doc)) return false;
+	const active = doc.activeElement;
+	if (active instanceof HTMLElement && settingsLayer(doc)?.contains(active)) active.blur();
+	useAppStore.getState().closeSettings();
+	return true;
+}
+
 export function closeActiveItem(): void {
+	if (closeSettingsAtOnce()) return;
 	if (!dismissTopLayer()) runActiveTabAction("tab.close");
 }

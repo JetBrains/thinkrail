@@ -74,12 +74,16 @@ function pick<E extends WalkElement<E>>(candidates: readonly E[]): E | undefined
 	);
 }
 
-export function stopOf<E extends WalkElement<E>>(
-	row: E,
-	edge: "first" | "last" = "first",
-): E | null {
+export type StopEdge = "first" | "last" | "current";
+
+function treeEntry<E extends WalkElement<E>>(items: readonly E[], edge: StopEdge): E | null {
+	if (edge === "current") return pick(items) ?? null;
+	return (edge === "first" ? items[0] : items.at(-1)) ?? null;
+}
+
+export function stopOf<E extends WalkElement<E>>(row: E, edge: StopEdge = "first"): E | null {
 	const items = treeItems(row);
-	if (items.length > 0) return (edge === "first" ? items[0] : items.at(-1)) ?? null;
+	if (items.length > 0) return treeEntry(items, edge);
 	if (row.matches(SETTING_SELECTOR.stop) && focusable(row)) return row;
 	return (
 		pick(within(row, SETTING_SELECTOR.stop)) ??
@@ -123,6 +127,20 @@ function land<E extends WalkElement<E>>(element: E | null | undefined): boolean 
 	return true;
 }
 
+export function focusUnitStop<E extends WalkElement<E>>(element: E): boolean {
+	const unit = unitOf(element);
+	return land(unit ? unitStop(unit) : null);
+}
+
+function neighbourItem<E extends WalkElement<E>>(target: E, delta: 1 | -1): E | null {
+	const unit = unitOf(target);
+	if (!unit || unit === target || !unit.matches(SETTING_SELECTOR.treeItem)) return null;
+	const tree = unit.closest(SETTING_SELECTOR.tree);
+	const items = tree ? treeItems(tree) : [];
+	const index = items.indexOf(unit);
+	return index < 0 ? null : (items[index + delta] ?? null);
+}
+
 function neighbourRow<E extends WalkElement<E>>(root: E, target: E, delta: 1 | -1): E | null {
 	const rows = rowsOf(root);
 	const current = topRow(target);
@@ -136,7 +154,7 @@ export function focusSettingRow<E extends WalkElement<E>>(root: E, rowId: string
 	const rows = rowsOf(root);
 	const row = rows.find((candidate) => candidate.getAttribute(SETTING_ATTR.row) === rowId);
 	const target = row ?? rows[0];
-	return target ? land(stopOf(target)) : false;
+	return target ? land(stopOf(target, "current")) : false;
 }
 
 export interface WalkExits {
@@ -153,6 +171,7 @@ export function performWalk<E extends WalkElement<E>>(
 	switch (action.kind) {
 		case "row": {
 			if (!root.contains(target) || rowsOf(root).length === 0) return false;
+			if (land(neighbourItem(target, action.delta))) return true;
 			const next = neighbourRow(root, target, action.delta);
 			if (next) land(stopOf(next, action.delta === 1 ? "first" : "last"));
 			return true;
@@ -179,7 +198,7 @@ export function performWalk<E extends WalkElement<E>>(
 			const unit = unitOf(target);
 			const reset = unit ? resetOf(unit) : null;
 			if (!unit || !reset) return false;
-			if (sideOf(target)) land(unitStop(unit));
+			if (sideOf(target)) focusUnitStop(target);
 			reset.click();
 			return true;
 		}

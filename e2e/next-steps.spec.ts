@@ -1,9 +1,11 @@
 import { realpathSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
 import {
+	closeSettings,
 	enterDefaultWorkspace,
 	openFixtureProject,
 	openPersistedChat,
+	openSettingsSection,
 	pressPlatformShortcut,
 } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
@@ -78,13 +80,11 @@ async function openSeededChat(page: Page, title: string, offset: number): Promis
 }
 
 async function setNextSteps(page: Page, enabled: boolean): Promise<void> {
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-extensions").click();
+	await openSettingsSection(page, "extensions");
 	const toggle = page.getByTestId("extension-toggle-next-steps");
 	if ((await toggle.getAttribute("aria-checked")) !== String(enabled)) await toggle.click();
 	await expect(toggle).toHaveAttribute("aria-checked", String(enabled));
-	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("settings-dialog")).toBeHidden();
+	await closeSettings(page);
 }
 
 test("a finished turn's suggestions show above the composer, survive a reload and send on click without touching the draft", async ({

@@ -2,7 +2,9 @@ export {
 	jumpToSetting,
 	revealSetting,
 	SETTING_FLASH_MS,
+	type SettingsJump,
 	SettingsJumpContext,
+	useSettingsJump,
 	useSettingsJumpTarget,
 } from "./jumpToSetting";
 export {
@@ -16,6 +18,7 @@ export {
 	SETTINGS_ROWS,
 	SETTINGS_TAG,
 	SettingsGroup,
+	type SettingsGroupAction,
 	type SettingsScope,
 	SettingsSubheading,
 } from "./SettingsGroup";
@@ -32,6 +35,7 @@ export { type SettingsReset, SettingsRow } from "./SettingsRow";
 export { SettingsRangeTrack, SettingsSlider } from "./SettingsSlider";
 export { SettingsDialogContainer, useSettingsDialogContainer } from "./settingsDialogContainer";
 export { SETTINGS_INPUT, type SettingsDraft, useSettingsDraft } from "./settingsDraft";
+export { holdSettingsEscape } from "./settingsEscape";
 export {
 	type EscapeStep,
 	escapeStep,

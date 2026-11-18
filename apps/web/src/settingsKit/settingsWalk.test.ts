@@ -1,8 +1,23 @@
 import { describe, expect, mock, test } from "bun:test";
 import { revealSetting } from "./jumpToSetting";
+import {
+	button,
+	control,
+	dom,
+	type FakeNode,
+	h,
+	item,
+	named,
+	nameOf,
+	reset,
+	resetDom,
+	row,
+	side,
+} from "./settingsFakeDom.test";
 import type { WalkAction } from "./settingsKeys";
 import {
 	focusSettingRow,
+	focusUnitStop,
 	performWalk,
 	resetOf,
 	rowIdOf,
@@ -11,126 +26,6 @@ import {
 	stopOf,
 	textEntryKind,
 } from "./settingsWalk";
-
-const FORM_TAGS = new Set(["BUTTON", "INPUT", "SELECT", "TEXTAREA"]);
-
-class FakeNode {
-	readonly tagName: string;
-	readonly attributes: Map<string, string>;
-	readonly children: FakeNode[];
-	parentElement: FakeNode | null = null;
-	hidden = false;
-
-	constructor(tag: string, attributes: Record<string, string>, children: FakeNode[]) {
-		this.tagName = tag.toUpperCase();
-		this.attributes = new Map(Object.entries(attributes));
-		this.children = children;
-		for (const child of children) child.parentElement = this;
-	}
-
-	get root(): FakeNode {
-		return this.parentElement ? this.parentElement.root : this;
-	}
-
-	getAttribute(name: string) {
-		return this.attributes.get(name) ?? null;
-	}
-	hasAttribute(name: string) {
-		return this.attributes.has(name);
-	}
-	setAttribute(name: string, value: string) {
-		this.attributes.set(name, value);
-	}
-	removeAttribute(name: string) {
-		this.attributes.delete(name);
-	}
-	matches(selector: string): boolean {
-		return selector.split(",").some((part) => matchesCompound(this, part.trim()));
-	}
-	closest(selector: string): FakeNode | null {
-		if (this.matches(selector)) return this;
-		return this.parentElement ? this.parentElement.closest(selector) : null;
-	}
-	descendants(): FakeNode[] {
-		return this.children.flatMap((child) => [child, ...child.descendants()]);
-	}
-	querySelectorAll(selector: string): FakeNode[] {
-		return this.descendants().filter((node) => node.matches(selector));
-	}
-	querySelector(selector: string): FakeNode | null {
-		return this.querySelectorAll(selector)[0] ?? null;
-	}
-	contains(other: FakeNode | null): boolean {
-		for (let node = other; node; node = node.parentElement) if (node === this) return true;
-		return false;
-	}
-	compareDocumentPosition(other: FakeNode): number {
-		const order = [this.root, ...this.root.descendants()];
-		return order.indexOf(other) > order.indexOf(this) ? 4 : 2;
-	}
-	checkVisibility(): boolean {
-		return !this.hidden && (this.parentElement ? this.parentElement.checkVisibility() : true);
-	}
-	focus() {
-		focused = this;
-	}
-	click() {
-		clicked.push(this);
-	}
-	scrollIntoView() {
-		scrolled.push(this);
-	}
-}
-
-let focused: FakeNode | null = null;
-let clicked: FakeNode[] = [];
-let scrolled: FakeNode[] = [];
-
-function matchesCompound(node: FakeNode, compound: string): boolean {
-	if (/[\s>]/.test(compound)) return false;
-	let rest = compound;
-	const tag = /^[a-z]+/i.exec(rest)?.[0];
-	if (tag) {
-		if (node.tagName !== tag.toUpperCase()) return false;
-		rest = rest.slice(tag.length);
-	}
-	while (rest.length > 0) {
-		const attribute = /^\[([\w-]+)(?:="((?:[^"\\]|\\.)*)")?\]/.exec(rest);
-		const not = /^:not\(([^)]*\)?)\)/.exec(rest);
-		const disabled = /^:disabled/.exec(rest);
-		if (attribute) {
-			const value = node.getAttribute(attribute[1] ?? "");
-			if (value === null) return false;
-			const expected = attribute[2]?.replace(/\\(.)/g, "$1");
-			if (expected !== undefined && value !== expected) return false;
-			rest = rest.slice(attribute[0].length);
-		} else if (not) {
-			if (matchesCompound(node, not[1] ?? "")) return false;
-			rest = rest.slice(not[0].length);
-		} else if (disabled) {
-			if (!(FORM_TAGS.has(node.tagName) && node.hasAttribute("disabled"))) return false;
-			rest = rest.slice(disabled[0].length);
-		} else {
-			throw new Error(`fake DOM: unsupported selector ${compound}`);
-		}
-	}
-	return true;
-}
-
-const h = (tag: string, attributes: Record<string, string> = {}, ...children: FakeNode[]) =>
-	new FakeNode(tag, attributes, children);
-
-const row = (id: string, ...children: FakeNode[]) =>
-	h("div", { "data-setting-row": id }, ...children);
-const control = (...children: FakeNode[]) => h("div", { "data-setting-control": "" }, ...children);
-const button = (name: string, attributes: Record<string, string> = {}) =>
-	h("button", { "data-name": name, tabindex: "0", ...attributes });
-const side = (name: string, attributes: Record<string, string> = {}) =>
-	button(name, { "data-setting-side": "", ...attributes });
-const reset = (name: string) => side(name, { "data-setting-reset": "" });
-const item = (name: string) => h("li", { role: "treeitem", "data-name": name, tabindex: "-1" });
-const named = (root: FakeNode, name: string) => root.querySelector(`[data-name="${name}"]`);
-const nameOf = (node: FakeNode | null | undefined) => node?.getAttribute("data-name") ?? null;
 
 function page() {
 	return h(
@@ -151,7 +46,28 @@ function page() {
 				),
 			),
 		),
-		row("tree", h("div", { role: "tree" }, item("tree.1"), item("tree.2"), item("tree.3"))),
+		row(
+			"tree",
+			h(
+				"div",
+				{ role: "tree" },
+				item("tree.1", reset("tree.1.reset")),
+				item(
+					"tree.2",
+					h(
+						"ul",
+						{ role: "group" },
+						item(
+							"tree.2a",
+							h("div", { role: "listbox" }, button("tree.2a.option")),
+							reset("tree.2a.reset"),
+						),
+						item("tree.2b", reset("tree.2b.reset")),
+					),
+				),
+				item("tree.3", side("tree.3.side")),
+			),
+		),
 		h(
 			"div",
 			{ "data-focus-list": "mcp" },
@@ -171,12 +87,14 @@ function page() {
 }
 
 function fresh() {
-	focused = null;
-	clicked = [];
-	scrolled = [];
+	resetDom();
 	const root = page();
-	const hidden = root.querySelector('[data-setting-row="hidden"]');
-	if (hidden) hidden.hidden = true;
+	for (const hidden of [
+		root.querySelector('[data-setting-row="hidden"]'),
+		named(root, "tree.2b"),
+	]) {
+		if (hidden) hidden.hidden = true;
+	}
 	return root;
 }
 
@@ -184,14 +102,13 @@ const exits = () => ({ toNav: mock(() => {}), toResults: mock(() => {}) });
 
 function walk(root: FakeNode, from: string, action: WalkAction, withResults = false) {
 	const target = named(root, from);
-	if (!target) throw new Error(`no ${from}`);
-	focused = null;
+	dom.focused = null;
 	const handlers = exits();
 	const handled = performWalk(root, target, action, {
 		toNav: handlers.toNav,
 		toResults: withResults ? handlers.toResults : undefined,
 	});
-	return { handled, landed: nameOf(focused), handlers };
+	return { handled, landed: nameOf(dom.focused), handlers };
 }
 
 describe("rows and stops", () => {
@@ -262,6 +179,21 @@ describe("the walk", () => {
 		expect(walk(root, "choice.two", { kind: "row", delta: 1 }).landed).toBe("tree.1");
 		expect(walk(root, "one.primary", { kind: "row", delta: -1 }).landed).toBe("tree.3");
 		expect(walk(root, "tree.3", { kind: "row", delta: 1 }).landed).toBe("one.primary");
+		expect(walk(root, "tree.1", { kind: "row", delta: -1 }).landed).toBe("choice.two");
+	});
+
+	test("from a side or a control inside a tree item, ↑/↓ step to the neighbouring shown item", () => {
+		const root = fresh();
+		expect(walk(root, "tree.2a.reset", { kind: "row", delta: -1 }).landed).toBe("tree.2");
+		expect(walk(root, "tree.2a.reset", { kind: "row", delta: 1 }).landed).toBe("tree.3");
+		expect(walk(root, "tree.2a.option", { kind: "row", delta: 1 }).landed).toBe("tree.3");
+		expect(walk(root, "tree.1.reset", { kind: "row", delta: 1 }).landed).toBe("tree.2");
+	});
+
+	test("past the tree's first or last item, a side steps on to the neighbouring row", () => {
+		const root = fresh();
+		expect(walk(root, "tree.1.reset", { kind: "row", delta: -1 }).landed).toBe("choice.two");
+		expect(walk(root, "tree.3.side", { kind: "row", delta: 1 }).landed).toBe("one.primary");
 	});
 
 	test("the edges do not wrap but still consume the key", () => {
@@ -300,17 +232,21 @@ describe("the walk", () => {
 		expect(walk(root, "a.side1", { kind: "side", delta: -1 }).landed).toBe("a.switch");
 		expect(walk(root, "choice.two", { kind: "side", delta: 1 }).handled).toBe(false);
 		expect(walk(root, "a.switch", { kind: "side", delta: -1 }).handled).toBe(false);
+		expect(walk(root, "tree.2a", { kind: "side", delta: 1 }).landed).toBe("tree.2a.reset");
+		expect(walk(root, "tree.2a.reset", { kind: "side", delta: -1 }).landed).toBe("tree.2a");
 	});
 
 	test("Delete clicks the row's Reset, from a side after moving to the stop", () => {
 		const root = fresh();
 		expect(walk(root, "a.switch", { kind: "reset" }).handled).toBe(true);
-		expect(clicked.map(nameOf)).toEqual(["a.reset"]);
+		expect(dom.log).toEqual(["click a.reset"]);
+		dom.log = [];
 		const fromSide = walk(root, "a.reset", { kind: "reset" });
 		expect([fromSide.handled, fromSide.landed]).toEqual([true, "a.switch"]);
-		clicked = [];
+		expect(dom.log).toEqual(["focus a.switch", "click a.reset"]);
+		dom.log = [];
 		expect(walk(root, "choice.two", { kind: "reset" }).handled).toBe(false);
-		expect(clicked).toEqual([]);
+		expect(dom.log).toEqual([]);
 	});
 
 	test("← leaves for the nav; Esc goes back to the results after a jump, else to the nav", () => {
@@ -327,12 +263,34 @@ describe("the walk", () => {
 	test("entering lands on the remembered row, else on the first", () => {
 		const root = fresh();
 		expect(focusSettingRow(root, "mcp/two")).toBe(true);
-		expect(nameOf(focused)).toBe("two.primary");
+		expect(nameOf(dom.focused)).toBe("two.primary");
 		expect(focusSettingRow(root, "hidden")).toBe(true);
-		expect(nameOf(focused)).toBe("a.switch");
+		expect(nameOf(dom.focused)).toBe("a.switch");
 		expect(focusSettingRow(root, null)).toBe(true);
-		expect(nameOf(focused)).toBe("a.switch");
+		expect(nameOf(dom.focused)).toBe("a.switch");
 		expect(focusSettingRow(h("div"), null)).toBe(false);
+	});
+
+	test("entering a tree lands on its current item; walking into it still takes the edge", () => {
+		const root = fresh();
+		expect(focusSettingRow(root, "tree")).toBe(true);
+		expect(nameOf(dom.focused)).toBe("tree.1");
+		named(root, "tree.3").setAttribute("tabindex", "0");
+		expect(focusSettingRow(root, "tree")).toBe(true);
+		expect(nameOf(dom.focused)).toBe("tree.3");
+		expect(walk(root, "choice.two", { kind: "row", delta: 1 }).landed).toBe("tree.1");
+		const tree = h("div", { role: "tree" }, item("only"));
+		expect(focusSettingRow(h("div", {}, row("t", tree)), "t")).toBe(true);
+		expect(nameOf(dom.focused)).toBe("only");
+	});
+
+	test("a side's stop is its row's stop, or the tree item holding it", () => {
+		const root = fresh();
+		expect(focusUnitStop(named(root, "a.reset"))).toBe(true);
+		expect(nameOf(dom.focused)).toBe("a.switch");
+		expect(focusUnitStop(named(root, "tree.2a.reset"))).toBe(true);
+		expect(nameOf(dom.focused)).toBe("tree.2a");
+		expect(focusUnitStop(named(root, "header"))).toBe(false);
 	});
 });
 
@@ -347,13 +305,12 @@ test("text entry tells single-line fields from multi-line ones and from other in
 });
 
 describe("revealSetting", () => {
-	test("focuses a row's stop, scrolls the row into view and flashes it", () => {
+	test("focuses a row's stop, scrolls the focused stop into view and flashes the row", () => {
 		const root = fresh();
 		const target = root.querySelector('[data-setting-row="choice"]');
 		target?.setAttribute("data-setting-id", "contrast");
 		expect(revealSetting(root, "contrast")).toBe(target);
-		expect(nameOf(focused)).toBe("choice.two");
-		expect(scrolled).toEqual(target ? [target] : []);
+		expect(dom.log).toEqual(["focus choice.two", "scroll choice.two"]);
 		expect(target?.hasAttribute("data-setting-flash")).toBe(true);
 	});
 
@@ -361,10 +318,28 @@ describe("revealSetting", () => {
 		const root = fresh();
 		root.querySelector('[data-focus-list="mcp"]')?.setAttribute("data-setting-id", "mcp-servers");
 		revealSetting(root, "mcp-servers");
-		expect(nameOf(focused)).toBe("one.primary");
-		named(root, "tree.2")?.setAttribute("data-setting-id", 'shortcut:"quoted"');
+		expect(nameOf(dom.focused)).toBe("one.primary");
+		expect(dom.log.at(-1)).toBe("scroll one.primary");
+		named(root, "tree.2").setAttribute("data-setting-id", 'shortcut:"quoted"');
 		revealSetting(root, 'shortcut:"quoted"');
-		expect(nameOf(focused)).toBe("tree.2");
+		expect(nameOf(dom.focused)).toBe("tree.2");
 		expect(revealSetting(root, "nowhere")).toBeNull();
+	});
+
+	test("reports nothing, and neither scrolls nor flashes, when no control took focus", () => {
+		const root = fresh();
+		const empty = h("ul", { "data-focus-list": "empty", "data-setting-id": "empty-list" });
+		const hidden = named(root, "tree.2b");
+		hidden.setAttribute("data-setting-id", "shortcut:hidden");
+		const disabled = root.querySelector('[data-setting-row="disabled"]');
+		disabled?.setAttribute("data-setting-id", "disabled");
+		const page = h("div", {}, root, empty);
+		dom.log = [];
+		for (const id of ["empty-list", "shortcut:hidden", "disabled"]) {
+			expect(revealSetting(page, id)).toBeNull();
+		}
+		expect(dom.log).toEqual([]);
+		expect(hidden.hasAttribute("data-setting-flash")).toBe(false);
+		expect(dom.focused).toBeNull();
 	});
 });

@@ -6,6 +6,7 @@ import {
 	WS_CHANNELS,
 	type WsErrorCode,
 } from "@thinkrail/contracts";
+import { closeSettings } from "./fixtures/app";
 
 const NOTICE_START = "Your answers, including anything you type, are sent to the ThinkRail team";
 
@@ -153,7 +154,10 @@ test("the invitation and Settings open one survey window, and only Send sends", 
 	await page.getByTestId("open-settings").click();
 	const nav = page.getByTestId("settings-nav-feedback");
 	await expect(nav).toHaveText("Share feedback");
-	await expect(nav).toHaveClass(/md:mt-auto/);
+	await expect(page.getByTestId("settings-dialog").getByRole("tab").last()).toHaveAttribute(
+		"data-testid",
+		"settings-nav-feedback",
+	);
 	await nav.click();
 	const pane = page.getByTestId("settings-feedback");
 	await expect(pane.getByTestId("feedback-join-discord")).toHaveAttribute(
@@ -212,7 +216,7 @@ test("the invitation and Settings open one survey window, and only Send sends", 
 	await page.getByTestId("settings-nav-feedback").click();
 	await expect(pane.getByTestId("feedback-take-survey")).toHaveCount(0);
 	await expect(pane.getByTestId("feedback-join-discord")).toBeVisible();
-	await page.keyboard.press("Escape");
+	await closeSettings(page);
 
 	invite(host);
 	await invitation.getByTestId("survey-invitation-never").click();

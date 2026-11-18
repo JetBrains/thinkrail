@@ -5,12 +5,7 @@ import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type {
-	ExtUiRequest,
-	LoginFrame,
-	McpLoginPush,
-	McpStatusSnapshot,
-} from "@thinkrail/contracts";
+import type { ExtUiRequest, LoginFrame, LoginPush, McpStatusSnapshot } from "@thinkrail/contracts";
 import {
 	createSession,
 	dispatchSessionMcpCommand,
@@ -55,7 +50,7 @@ const root = mkdtempSync(join(tmpdir(), "mcp-signin-"));
 const agentDir = join(root, "agent");
 const cwd = join(root, "project");
 const fixture = startOAuthMcpFixture();
-let pushes: { push: McpLoginPush; owner: string }[] = [];
+let pushes: { push: LoginPush; owner: string }[] = [];
 let requests: ExtUiRequest[] = [];
 let statuses: McpStatusSnapshot[] = [];
 
@@ -152,6 +147,24 @@ test("Test connection reports a reachable server that still needs sign-in", asyn
 	const { done } = start("test");
 	expect(await done).toEqual({ kind: "error", message: "Reachable — needs sign-in." });
 	expect(pushes.every((entry) => entry.owner === "owner")).toBe(true);
+});
+
+test("a probe started with no workspace publishes login pushes whose target names no workspace", async () => {
+	const { loginId, done } = startMcpProbe({
+		action: "test",
+		cwd,
+		projectTrusted: false,
+		policy: { approvals: {}, overrides: {}, toolGrants: {} },
+		serverName: "oauthy",
+		ownerClientKey: "owner",
+	});
+	expect(await done).toEqual({ kind: "error", message: "Reachable — needs sign-in." });
+	const own = pushes.filter((entry) => entry.push.loginId === loginId);
+	expect(own.length).toBeGreaterThan(0);
+	for (const { push } of own) {
+		expect(push.target).toEqual({ kind: "mcp", serverName: "oauthy" });
+		expect(push.target && "workspaceId" in push.target).toBe(false);
+	}
 });
 
 test("a failed Test connection reports pi's reason with credentials masked", async () => {

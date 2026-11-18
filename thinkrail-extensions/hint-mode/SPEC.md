@@ -67,7 +67,8 @@ Collected once per activation from `activeLayer()`, so an open dialog or menu sc
 
 - **Candidates:** `a[href]`, `button`, non-hidden `input`, `select`, `textarea`, `summary`, contenteditable,
   `tabindex >= 0`, interactive roles (button, tab, treeitem, option, menuitem*, switch, checkbox, radio,
-  link, combobox, listbox, slider) — roving items whatever their tabindex — ARIA feed articles (the chat
+  link, combobox) — roving items whatever their tabindex — listbox and slider only with a `tabindex` (a
+  choice's listbox that cannot take focus would carry a dead label over its first option) — ARIA feed articles (the chat
   transcript), and `.monaco-editor` / `.xterm` roots. Open shadow roots are searched (Pierre diffs);
   iframes are not entered.
 - **Skipped:** an `inert` element or ancestor (shadow hosts included); `checkVisibility` false (display,

@@ -1,12 +1,17 @@
-import { RiCheckLine as Check, RiRefreshLine as RefreshCw } from "@remixicon/react";
+import {
+	RiCheckLine as Check,
+	RiErrorWarningLine as ErrorIcon,
+	RiRefreshLine as RefreshCw,
+	RiAlertLine as Warning,
+} from "@remixicon/react";
 import type { GithubAuthStatus } from "@thinkrail/contracts";
 import { T, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { SkeletonRows } from "@thinkrail/ui/skeleton";
 import { useCallback, useEffect, useReducer, useRef } from "react";
+import { SettingsGroup, SettingsPage, SettingsRow } from "@/settingsKit";
 import { getTransport } from "@/transport";
-import { SettingsGroup } from "./SettingsGroup";
-import { SettingsNotice } from "./SettingsNotice";
+import { SETTING, settingProps } from "./settingsCatalog";
 
 let lastStatus: GithubAuthStatus | null = null;
 
@@ -76,58 +81,66 @@ export function GithubStatusView({
 	onRefresh: () => void;
 }) {
 	const t = useT();
-	const refreshButton = (
-		<Button
-			variant="outline"
-			size="m"
-			iconLeft={RefreshCw}
-			loading={checking}
-			spinIcon
-			data-testid="settings-gh-refresh"
-			onClick={onRefresh}
-		>
-			{t("settings.github.refresh")}
-		</Button>
-	);
-
 	return (
-		<div data-testid="settings-github" className="flex flex-col">
+		<SettingsPage
+			title={t("settings.nav.github")}
+			description={t("settings.github.pageDescription")}
+			testId="settings-github"
+		>
 			<SettingsGroup
 				title={t("settings.github.title")}
 				description={t("settings.github.description")}
 			>
-				<div data-testid="settings-gh-status" data-connected={status?.connected}>
-					{status?.connected ? (
-						<div className="flex items-center gap-8 rounded-sm bg-control-bg px-12 py-8">
-							<Check className="size-14 text-feedback-success" />
-							<span className="tr-text-ui text-feedback-success">
-								{t("settings.github.connected")}
-							</span>
-							{status.login ? (
-								<span className="min-w-0 truncate text-text-muted tr-text-metadata">
-									{status.login}
-								</span>
-							) : null}
-							<div className="ml-auto shrink-0">{refreshButton}</div>
+				<SettingsRow
+					{...settingProps(t, SETTING.githubCli)}
+					description={
+						<div
+							data-testid="settings-gh-status"
+							data-connected={status?.connected}
+							className="flex min-w-0 items-start gap-4"
+						>
+							{status?.connected ? (
+								<>
+									<Check aria-hidden className="mt-2 size-14 shrink-0 text-feedback-success" />
+									<span className="text-feedback-success">{t("settings.github.connected")}</span>
+									{status.login ? <span className="min-w-0 break-all">{status.login}</span> : null}
+								</>
+							) : status ? (
+								<>
+									<Warning aria-hidden className="mt-2 size-14 shrink-0 text-feedback-warning" />
+									<span>
+										<T
+											i18nKey="settings.github.notConnected"
+											components={[<code key="command" className="tr-code-text" />]}
+										/>
+									</span>
+								</>
+							) : failed ? (
+								<>
+									<ErrorIcon aria-hidden className="mt-2 size-14 shrink-0 text-feedback-error" />
+									<span>{t("settings.github.checkFailed")}</span>
+								</>
+							) : (
+								<SkeletonRows rows={1} label={t("settings.github.checking")} />
+							)}
 						</div>
-					) : status ? (
-						<SettingsNotice variant="warning" action={refreshButton}>
-							<p>
-								<T
-									i18nKey="settings.github.notConnected"
-									components={[<code key="command" className="tr-code-text" />]}
-								/>
-							</p>
-						</SettingsNotice>
-					) : failed ? (
-						<SettingsNotice variant="error" action={refreshButton}>
-							<p>{t("settings.github.checkFailed")}</p>
-						</SettingsNotice>
-					) : (
-						<SkeletonRows rows={1} label={t("settings.github.checking")} />
-					)}
-				</div>
+					}
+					control={
+						<Button
+							variant="outline"
+							size="m"
+							iconLeft={RefreshCw}
+							loading={checking}
+							spinIcon
+							tabIndex={0}
+							data-testid="settings-gh-refresh"
+							onClick={onRefresh}
+						>
+							{t("settings.github.refresh")}
+						</Button>
+					}
+				/>
 			</SettingsGroup>
-		</div>
+		</SettingsPage>
 	);
 }

@@ -9,6 +9,7 @@ import {
 	type HostPlatform,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	KEYBINDINGS_PROTOCOL_VERSION,
+	MCP_USER_SERVERS_PROTOCOL_VERSION,
 	OTHER_AGENT_SKILLS_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	QUESTION_PANEL_PROTOCOL_VERSION,
@@ -38,6 +39,8 @@ export interface SettingEntry {
 }
 
 const inWorkspace = (context: SettingsCatalogContext) => context.hasWorkspace;
+const userMcpReachable = (context: SettingsCatalogContext) =>
+	context.hasWorkspace || (context.protocolVersion ?? 0) >= MCP_USER_SERVERS_PROTOCOL_VERSION;
 
 export const SETTING = {
 	chatModel: {
@@ -71,7 +74,7 @@ export const SETTING = {
 	contextWindow: {
 		id: "context-window",
 		section: SettingsSection.Models,
-		label: "settings.modelContext.title",
+		label: "settings.modelContext.allModels",
 		description: "settings.catalog.contextWindow.description",
 		keywords: ["gpt", "context", "tokens", "1M"],
 		requiresProtocolVersion: CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
@@ -79,7 +82,7 @@ export const SETTING = {
 	promptCache: {
 		id: "prompt-cache",
 		section: SettingsSection.Models,
-		label: "settings.cacheWarming.title",
+		label: "settings.cacheWarming.label",
 		description: "settings.cacheWarming.description",
 		keywords: ["cache warming", "cost"],
 		requiresProtocolVersion: CACHE_WARMING_SETTINGS_PROTOCOL_VERSION,
@@ -164,6 +167,14 @@ export const SETTING = {
 		keywords: ["delegate", "override", "this workspace"],
 		when: inWorkspace,
 	},
+	subagentsWorkspaceLimit: {
+		id: "subagents-workspace-limit",
+		section: SettingsSection.Subagents,
+		label: "settings.catalog.subagentsWorkspaceLimit.label",
+		keywords: ["subagents", "concurrent", "limit", "this workspace"],
+		requiresProtocolVersion: SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
+		when: inWorkspace,
+	},
 	installPackage: {
 		id: "install-package",
 		section: SettingsSection.Extensions,
@@ -221,12 +232,14 @@ export const SETTING = {
 		section: SettingsSection.Mcp,
 		label: "mcp.addDialog.title",
 		keywords: ["mcp", "preset", "json", "context7", "linear", "playwright"],
+		when: userMcpReachable,
 	},
 	mcpUserServers: {
 		id: "mcp-user-servers",
 		section: SettingsSection.Mcp,
 		label: "settings.catalog.mcpUserServers.label",
 		keywords: ["mcp", "server", "tools", "all projects"],
+		when: userMcpReachable,
 	},
 	mcpProjectServers: {
 		id: "mcp-project-servers",
@@ -265,6 +278,7 @@ export const SETTING = {
 		id: "theme-mode",
 		section: SettingsSection.Appearance,
 		label: "settings.appearance.themeMode",
+		description: "settings.appearance.themeModeDescription",
 		keywords: ["dark", "light", "system", "theme"],
 	},
 	lightTheme: {
@@ -316,6 +330,14 @@ export const SETTING = {
 		keywords: ["monospace", "font"],
 		requiresProtocolVersion: FONTS_PROTOCOL_VERSION,
 	},
+	interfaceFallbacks: {
+		id: "interface-fallbacks",
+		section: SettingsSection.Text,
+		label: "settings.appearance.fonts.interfaceFallbacks",
+		description: "settings.appearance.fonts.interfaceFallbacksDescription",
+		keywords: ["font", "fallback", "characters"],
+		requiresProtocolVersion: FONTS_PROTOCOL_VERSION,
+	},
 	codeSize: {
 		id: "code-size",
 		section: SettingsSection.Text,
@@ -329,6 +351,14 @@ export const SETTING = {
 		label: "settings.appearance.fonts.ligatures",
 		description: "settings.appearance.fonts.ligaturesDescription",
 		keywords: ["font"],
+		requiresProtocolVersion: FONTS_PROTOCOL_VERSION,
+	},
+	codeFallbacks: {
+		id: "code-fallbacks",
+		section: SettingsSection.Text,
+		label: "settings.appearance.fonts.codeFallbacks",
+		description: "settings.appearance.fonts.codeFallbacksDescription",
+		keywords: ["font", "fallback", "symbols", "nerd font", "terminal"],
 		requiresProtocolVersion: FONTS_PROTOCOL_VERSION,
 	},
 	chatLineWidth: {
@@ -365,6 +395,13 @@ export const SETTING = {
 		label: "settings.appearance.customFonts.title",
 		description: "settings.appearance.customFonts.description",
 		keywords: ["font", "ttf", "otf", "woff"],
+		requiresProtocolVersion: FONTS_PROTOCOL_VERSION,
+	},
+	fontsFolder: {
+		id: "fonts-folder",
+		section: SettingsSection.Text,
+		label: "settings.appearance.customFonts.folder",
+		keywords: ["custom font", "ttf", "otf", "remove"],
 		requiresProtocolVersion: FONTS_PROTOCOL_VERSION,
 	},
 	messageOrder: {
@@ -448,7 +485,7 @@ export const SETTING = {
 		id: "interface-language",
 		section: SettingsSection.Language,
 		label: "settings.catalog.interfaceLanguage.label",
-		description: "settings.language.description",
+		description: "settings.language.choiceDescription",
 		keywords: ["locale", "translation"],
 	},
 	languageFolder: {
@@ -494,16 +531,16 @@ export const SETTING = {
 	scrollback: {
 		id: "scrollback",
 		section: SettingsSection.Terminal,
-		label: "settings.terminal.scrollback.label",
+		label: "settings.terminal.scrollback.title",
 		description: "settings.terminal.scrollback.description",
 		keywords: ["buffer", "replay"],
 	},
 	windowsShell: {
 		id: "windows-shell",
 		section: SettingsSection.Terminal,
-		label: "settings.terminal.shell.title",
-		description: "settings.terminal.shell.description",
-		keywords: ["powershell", "cmd", "pwsh"],
+		label: "settings.terminal.shell.label",
+		description: "settings.terminal.shell.openTabs",
+		keywords: ["windows shell", "powershell", "cmd", "pwsh"],
 		requiresProtocolVersion: WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
 		when: (context: SettingsCatalogContext) => context.hostPlatform === "win32",
 	},
@@ -517,7 +554,7 @@ export const SETTING = {
 	githubCli: {
 		id: "github-cli",
 		section: SettingsSection.Github,
-		label: "settings.github.title",
+		label: "settings.github.cli",
 		description: "settings.github.description",
 		keywords: ["gh", "auth", "login"],
 	},
@@ -531,8 +568,9 @@ export const SETTING = {
 	usageAnalytics: {
 		id: "usage-analytics",
 		section: SettingsSection.Privacy,
-		label: "settings.privacy.share",
-		keywords: ["analytics", "telemetry"],
+		label: "panels.analytics.shareLabel",
+		description: "panels.analytics.shareDescription",
+		keywords: ["analytics", "telemetry", "usage"],
 	},
 	softwareUpdates: {
 		id: "software-updates",
@@ -553,6 +591,12 @@ export const SETTING = {
 		label: "settings.feedback.joinDiscord",
 		description: "settings.feedback.discordDescription",
 		keywords: ["feedback", "community"],
+	},
+	feedbackEmail: {
+		id: "feedback-email",
+		section: SettingsSection.Feedback,
+		label: "settings.feedback.emailLabel",
+		keywords: ["feedback", "mail", "contact"],
 	},
 } as const satisfies Record<string, SettingEntry>;
 

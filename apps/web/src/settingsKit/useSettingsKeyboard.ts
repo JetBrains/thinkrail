@@ -1,9 +1,16 @@
-import { useLocalKeys } from "@thinkrail/ui/local-keys";
+import { type LocalKeyEvent, type LocalKeys, useLocalKeys } from "@thinkrail/ui/local-keys";
 import type { FocusEvent, KeyboardEvent } from "react";
 import { LOCAL_KEY_DEFAULTS } from "../keybindings";
 import { walkAction, walkKey } from "./settingsKeys";
 import { SETTING_ATTR } from "./settingsMarkup";
-import { performWalk, rowIdOf, sideOf, textEntryKind, type WalkExits } from "./settingsWalk";
+import {
+	performWalk,
+	rowIdOf,
+	sideOf,
+	textEntryKind,
+	type WalkElement,
+	type WalkExits,
+} from "./settingsWalk";
 
 export interface SettingsKeyboardOptions extends WalkExits {
 	readonly onRowFocus?: ((rowId: string) => void) | undefined;
@@ -14,6 +21,34 @@ export interface SettingsKeyboardHandlers {
 	readonly onFocus: (event: FocusEvent<HTMLElement>) => void;
 }
 
+export interface SettingsKeyPress {
+	readonly defaultPrevented: boolean;
+	readonly nativeEvent: LocalKeyEvent;
+}
+
+export function settingsKeyDown<E extends WalkElement<E>>(
+	event: SettingsKeyPress,
+	root: E,
+	target: E,
+	keys: LocalKeys,
+	exits: WalkExits,
+): boolean {
+	if (event.defaultPrevented || !root.contains(target)) return false;
+	const press = event.nativeEvent;
+	const entry = textEntryKind(target);
+	const local = keys.match(press, { textEntry: entry !== null });
+	const resetsWhileClean =
+		entry !== null &&
+		target.hasAttribute(SETTING_ATTR.clean) &&
+		keys.match(press, { textEntry: false }) === "settings.reset";
+	const action = walkAction(walkKey(press, resetsWhileClean ? "settings.reset" : local), {
+		textEntry: entry !== null,
+		multiline: entry === "multi",
+		onSide: sideOf(target) !== null,
+	});
+	return action !== null && performWalk(root, target, action, exits);
+}
+
 export function useSettingsKeyboard({
 	toNav,
 	toResults,
@@ -22,22 +57,9 @@ export function useSettingsKeyboard({
 	const keys = useLocalKeys("settings", LOCAL_KEY_DEFAULTS.settings);
 	return {
 		onKeyDown: (event) => {
-			if (event.defaultPrevented) return;
 			const target = event.target;
 			if (!(target instanceof HTMLElement)) return;
-			const entry = textEntryKind(target);
-			const local = keys.match(event.nativeEvent, { textEntry: entry !== null });
-			const resetsWhileClean =
-				entry !== null &&
-				target.hasAttribute(SETTING_ATTR.clean) &&
-				keys.match(event.nativeEvent, { textEntry: false }) === "settings.reset";
-			const press = event.nativeEvent;
-			const action = walkAction(walkKey(press, resetsWhileClean ? "settings.reset" : local), {
-				textEntry: entry !== null,
-				multiline: entry === "multi",
-				onSide: sideOf(target) !== null,
-			});
-			if (action && performWalk(event.currentTarget, target, action, { toNav, toResults })) {
+			if (settingsKeyDown(event, event.currentTarget, target, keys, { toNav, toResults })) {
 				event.preventDefault();
 			}
 		},

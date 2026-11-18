@@ -2472,6 +2472,15 @@ function withRuntime(
 	return next === rt ? {} : { sessions: { ...s.sessions, [sessionId]: next } };
 }
 
+function loginWorkspaceRemoved(
+	state: Pick<AppState, "removedWorkspaceIds">,
+	target: LoginPush["target"] | undefined,
+): boolean {
+	return (
+		target?.workspaceId !== undefined && state.removedWorkspaceIds[target.workspaceId] === true
+	);
+}
+
 function newLoginState(
 	loginId: string,
 	providerId: string,
@@ -4845,7 +4854,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	finishLoginStart: () => set({ loginStarting: false }),
 	beginLogin: (loginId, providerId, target, method) =>
 		set((s) => {
-			if (target && s.removedWorkspaceIds[target.workspaceId]) return {};
+			if (loginWorkspaceRemoved(s, target)) return {};
 			if (s.activeLogin?.loginId === loginId)
 				return method && !s.activeLogin.method ? { activeLogin: { ...s.activeLogin, method } } : {};
 			if (s.activeLogin?.status === "active") return {};
@@ -4861,7 +4870,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	applyLoginFrame: (push) =>
 		set((s) => {
-			if (push.target && s.removedWorkspaceIds[push.target.workspaceId]) return {};
+			if (loginWorkspaceRemoved(s, push.target)) return {};
 			const statusChanged =
 				push.frame.kind === "success" && !push.target
 					? { providerStatusVersion: s.providerStatusVersion + 1 }

@@ -1,6 +1,18 @@
 import { expect, test } from "bun:test";
+import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { SettingsRow } from "./SettingsRow";
+import {
+	control,
+	dom,
+	type FakeNode,
+	findProps,
+	h,
+	named,
+	reset,
+	resetDom,
+	row,
+} from "./settingsFakeDom.test";
 
 const render = (changed: boolean | null) =>
 	renderToStaticMarkup(
@@ -47,4 +59,32 @@ test("a row id other than the setting id names the walk row", () => {
 	);
 	expect(markup).toContain('data-setting-row="status"');
 	expect(markup).not.toContain("data-setting-id");
+});
+
+interface ResetProps {
+	onClick?: (event: { currentTarget: FakeNode }) => void;
+	"data-setting-reset"?: string;
+}
+
+test("Reset moves focus to the row's stop before it resets, so focus survives the button unmounting", () => {
+	let rendered: ReactNode = null;
+	function Probe() {
+		rendered = SettingsRow({
+			settingId: "chat-line-width",
+			label: "Chat line width",
+			control: null,
+			reset: { changed: true, onReset: () => dom.log.push("reset") },
+		});
+		return null;
+	}
+	renderToStaticMarkup(<Probe />);
+	const page = h(
+		"div",
+		{},
+		row("chat-line-width", control(h("input", { "data-name": "width" })), reset("reset")),
+	);
+	resetDom();
+	const button = findProps<ResetProps>(rendered, (props) => props["data-setting-reset"] === "");
+	button?.onClick?.({ currentTarget: named(page, "reset") });
+	expect(dom.log).toEqual(["focus width", "reset"]);
 });

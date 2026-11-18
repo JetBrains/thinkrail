@@ -4,6 +4,7 @@ import { selectActiveWorkspace, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { SubagentSettings } from "./SubagentSettings";
 import { saveSettings } from "./saveSettings";
+import { useConfigReset } from "./settingDefaults";
 
 export function SubagentsSettings() {
 	const t = useT();
@@ -11,6 +12,8 @@ export function SubagentsSettings() {
 	const subagentsEnabled = useAppStore((state) => state.subagentsEnabled);
 	const subagentMaxConcurrent = useAppStore((state) => state.subagentMaxConcurrent);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
+	const enabledReset = useConfigReset("subagentsEnabled", "settings.chat.globalSubagentsFailed");
+	const limitReset = useConfigReset("subagentMaxConcurrent", "settings.chat.subagentLimitFailed");
 
 	const setWorkspaceSubagents = (override: SubagentOverride | null) => {
 		if (!activeWorkspace) return;
@@ -36,12 +39,14 @@ export function SubagentsSettings() {
 			globalEnabled={subagentsEnabled}
 			globalLimit={subagentMaxConcurrent}
 			workspace={activeWorkspace}
+			globalEnabledReset={enabledReset}
+			globalLimitReset={limitReset}
 			onGlobalEnabledChange={(enabled) =>
 				void saveSettings({ subagentsEnabled: enabled }, t("settings.chat.globalSubagentsFailed"))
 			}
 			onWorkspaceEnabledChange={setWorkspaceSubagents}
 			onGlobalLimitChange={(value) =>
-				void saveSettings({ subagentMaxConcurrent: value }, t("settings.chat.subagentLimitFailed"))
+				saveSettings({ subagentMaxConcurrent: value }, t("settings.chat.subagentLimitFailed"))
 			}
 			onWorkspaceLimitChange={setWorkspaceSubagentLimit}
 		/>

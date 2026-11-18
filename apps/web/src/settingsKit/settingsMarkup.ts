@@ -1,5 +1,7 @@
 export const SETTING_ATTR = {
+	dialog: "data-settings-dialog",
 	content: "data-settings-content",
+	search: "data-settings-search",
 	row: "data-setting-row",
 	id: "data-setting-id",
 	stop: "data-setting-stop",

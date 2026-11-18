@@ -80,7 +80,8 @@ export const HINT_SELECTOR = [
 	"[tabindex]:not([tabindex^='-'])",
 	"[role='feed'] article",
 	"[role='feed'] [role='article']",
-	...[...PRESS_ROLES, ...FOCUS_ROLES].map((role) => `[role='${role}']`),
+	...PRESS_ROLES.map((role) => `[role='${role}']`),
+	...FOCUS_ROLES.map((role) => `[role='${role}'][tabindex]`),
 	...WIDGET_CLASSES.map((name) => `.${name}`),
 ].join(", ");
 

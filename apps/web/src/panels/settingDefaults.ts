@@ -37,7 +37,6 @@ export type ValueConfigKey = Extract<
 	| "jbcentralQuotaEnabled"
 	| "jbcentralQuotaRefreshSeconds"
 	| "settleIdleDays"
-	| "otherAgentSkills"
 	| "locale"
 	| "interfaceFont"
 	| "codeFont"

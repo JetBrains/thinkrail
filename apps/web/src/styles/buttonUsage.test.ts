@@ -139,7 +139,7 @@ const SPECIALIZED: Exception[] = [
 		reason: "question pager tabs (role=tab) of the ask-user-question card",
 	},
 	{
-		file: "panels/SettingsDialog.tsx",
+		file: "panels/SettingsTabs.tsx",
 		contains: "data-testid={`settings-nav-",
 		reason: "Settings section navigation tabs with a persistent selected state",
 	},

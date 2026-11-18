@@ -10,7 +10,7 @@ export interface SettingsPageProps {
 export function SettingsPage({ title, description, testId, children }: SettingsPageProps) {
 	return (
 		<div data-testid={testId} className="flex flex-col gap-24">
-			<header className="flex flex-col gap-4">
+			<header className="flex flex-col gap-4 pr-[2rem]">
 				<h2 className="tr-heading-sm text-text-default">{title}</h2>
 				{description ? <p className="tr-text-metadata text-text-muted">{description}</p> : null}
 			</header>

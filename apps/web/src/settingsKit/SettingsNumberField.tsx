@@ -9,16 +9,20 @@ export function parseSettingsNumber(draft: string, min: number, max: number): nu
 	return value >= min && value <= max ? value : null;
 }
 
+type Commit = undefined | Promise<boolean>;
+
 export interface SettingsNumberFieldProps {
 	label: string;
-	value: number;
+	value: number | null;
 	min: number;
 	max: number;
 	unit?: string | undefined;
+	placeholder?: string | undefined;
 	disabled?: boolean;
 	className?: string;
 	testId?: string;
-	onCommit: (value: number) => undefined | Promise<boolean>;
+	onCommit: (value: number) => Commit;
+	onClear?: (() => Commit) | undefined;
 }
 
 export function SettingsNumberField({
@@ -27,17 +31,21 @@ export function SettingsNumberField({
 	min,
 	max,
 	unit,
+	placeholder,
 	disabled = false,
 	className,
 	testId,
 	onCommit,
+	onClear,
 }: SettingsNumberFieldProps) {
 	const t = useT();
 	const errorId = useId();
+	const empty = (draft: string) => onClear !== undefined && draft.trim() === "";
 	const { invalid, dirty, inputProps } = useSettingsDraft({
-		saved: String(value),
-		isValid: (draft) => parseSettingsNumber(draft, min, max) !== null,
+		saved: value === null ? "" : String(value),
+		isValid: (draft) => empty(draft) || parseSettingsNumber(draft, min, max) !== null,
 		commit: (draft) => {
+			if (empty(draft)) return value === null ? undefined : onClear?.();
 			const parsed = parseSettingsNumber(draft, min, max);
 			return parsed === null || parsed === value ? undefined : onCommit(parsed);
 		},
@@ -50,6 +58,7 @@ export function SettingsNumberField({
 					inputMode="numeric"
 					tabIndex={0}
 					{...inputProps}
+					placeholder={placeholder}
 					disabled={disabled}
 					aria-label={label}
 					aria-describedby={invalid ? errorId : undefined}

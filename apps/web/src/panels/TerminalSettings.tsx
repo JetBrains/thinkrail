@@ -2,15 +2,24 @@ import type { HostPlatform, TerminalWindowsShell } from "@thinkrail/contracts";
 import { WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import { toast, useAppStore } from "@/store";
-import { getTransport } from "@/transport";
-import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
-import { SettingsRadioCards, type SettingsRadioChoice } from "./SettingsRadioCards";
-import { SETTINGS_ROWS_CONTAINER } from "./SettingsRow";
+import {
+	SETTINGS_ROWS,
+	SettingsChoice,
+	type SettingsChoiceOption,
+	SettingsGroup,
+	SettingsPage,
+	type SettingsReset,
+	SettingsRow,
+} from "@/settingsKit";
+import { useAppStore } from "@/store";
+import { SettingsStackedRow } from "./SettingsStackedRow";
+import { saveSettings } from "./saveSettings";
+import { useConfigReset } from "./settingDefaults";
+import { SETTING, settingProps } from "./settingsCatalog";
 
 type ScrollbackOption = "0" | "16" | "64" | "256" | "1024";
 
-const SCROLLBACK_OPTIONS: (SegmentedControlOption<ScrollbackOption> & { label: MessageKey })[] = [
+const SCROLLBACK_OPTIONS: (SettingsChoiceOption<ScrollbackOption> & { label: MessageKey })[] = [
 	{ id: "0", label: "common.off", testId: "terminal-replay-0" },
 	{ id: "16", label: "settings.terminal.scrollback.kb16", testId: "terminal-replay-16" },
 	{ id: "64", label: "settings.terminal.scrollback.kb64", testId: "terminal-replay-64" },
@@ -18,7 +27,7 @@ const SCROLLBACK_OPTIONS: (SegmentedControlOption<ScrollbackOption> & { label: M
 	{ id: "1024", label: "settings.terminal.scrollback.mb1", testId: "terminal-replay-1024" },
 ];
 
-type ShellChoiceSpec = SettingsRadioChoice<TerminalWindowsShell> & {
+type ShellChoiceSpec = SettingsChoiceOption<TerminalWindowsShell> & {
 	label: MessageKey;
 	hint?: MessageKey;
 	description: MessageKey;
@@ -56,11 +65,13 @@ export function WindowsShellSettings({
 	platform,
 	protocolVersion,
 	value,
+	reset,
 	onSelect,
 }: {
 	platform: HostPlatform | null;
 	protocolVersion: number | null;
 	value: TerminalWindowsShell;
+	reset?: SettingsReset | undefined;
 	onSelect: (shell: TerminalWindowsShell) => void;
 }) {
 	const t = useT();
@@ -72,20 +83,13 @@ export function WindowsShellSettings({
 		return null;
 	}
 	return (
-		<div className="pt-24">
-			<div className="flex flex-col">
-				<div className="flex flex-col gap-2 pb-8">
-					<h3 className="tr-title-section text-text-default">
-						{t("settings.terminal.shell.title")}
-					</h3>
-					<p className="tr-text-metadata text-text-muted">
-						{t("settings.terminal.shell.description")}
-					</p>
-				</div>
-				<SettingsRadioCards
-					name="terminal-windows-shell"
+		<SettingsGroup title={t("settings.terminal.shell.title")} scope="device">
+			<SettingsStackedRow {...settingProps(t, SETTING.windowsShell)} reset={reset}>
+				<SettingsChoice
 					label={t("settings.terminal.shell.title")}
-					choices={WINDOWS_SHELL_CHOICES.map((choice) => ({
+					layout="list"
+					cost="expensive"
+					options={WINDOWS_SHELL_CHOICES.map((choice) => ({
 						...choice,
 						label: t(choice.label),
 						...(choice.hint ? { hint: t(choice.hint) } : {}),
@@ -93,9 +97,10 @@ export function WindowsShellSettings({
 					}))}
 					value={value}
 					onSelect={onSelect}
+					testId="terminal-shell-control"
 				/>
-			</div>
-		</div>
+			</SettingsStackedRow>
+		</SettingsGroup>
 	);
 }
 
@@ -105,51 +110,51 @@ export function TerminalSettings() {
 	const windowsShell = useAppStore((s) => s.terminalWindowsShell);
 	const hostPlatform = useAppStore((s) => s.hostPlatform);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
+	const replayReset = useConfigReset("terminalReplayKb", "settings.terminal.replayFailed");
+	const shellReset = useConfigReset("terminalWindowsShell", "settings.terminal.shellFailed");
 
 	const select = (kb: number) => {
 		if (kb === replayKb) return;
-		getTransport()
-			.request("settings.update", { config: { terminalReplayKb: kb } })
-			.catch(() => toast.error(t("settings.terminal.replayFailed")));
+		void saveSettings({ terminalReplayKb: kb }, t("settings.terminal.replayFailed"));
 	};
 
 	const selectWindowsShell = (shell: TerminalWindowsShell) => {
 		if (shell === windowsShell) return;
-		getTransport()
-			.request("settings.update", { config: { terminalWindowsShell: shell } })
-			.catch(() => toast.error(t("settings.terminal.shellFailed")));
+		void saveSettings({ terminalWindowsShell: shell }, t("settings.terminal.shellFailed"));
 	};
 
 	const scrollbackValue =
 		SCROLLBACK_OPTIONS.find((option) => Number(option.id) === replayKb)?.id ?? null;
 
 	return (
-		<div data-testid="settings-terminal" className={SETTINGS_ROWS_CONTAINER}>
-			<div className="flex flex-col gap-12 py-12">
-				<div className="flex flex-col gap-2">
-					<span className="tr-text-ui text-text-default">
-						{t("settings.terminal.scrollback.title")}
-					</span>
-					<span className="tr-text-metadata text-text-muted">
-						{t("settings.terminal.scrollback.description")}
-					</span>
-				</div>
-				<SegmentedControl
-					name="terminal-scrollback"
-					label={t("settings.terminal.scrollback.label")}
-					options={SCROLLBACK_OPTIONS.map((option) => ({ ...option, label: t(option.label) }))}
-					value={scrollbackValue}
-					onSelect={(id) => select(Number(id))}
-					testId="terminal-scrollback-control"
+		<SettingsPage
+			title={t("settings.nav.terminal")}
+			description={t("settings.terminal.description")}
+			testId="settings-terminal"
+		>
+			<div className={SETTINGS_ROWS}>
+				<SettingsRow
+					{...settingProps(t, SETTING.scrollback)}
+					control={
+						<SettingsChoice
+							label={t("settings.terminal.scrollback.label")}
+							options={SCROLLBACK_OPTIONS.map((option) => ({ ...option, label: t(option.label) }))}
+							value={scrollbackValue}
+							cost="cheap"
+							onSelect={(id) => select(Number(id))}
+							testId="terminal-scrollback-control"
+						/>
+					}
+					reset={replayReset}
 				/>
 			</div>
-
 			<WindowsShellSettings
 				platform={hostPlatform}
 				protocolVersion={protocolVersion}
 				value={windowsShell}
+				reset={shellReset}
 				onSelect={selectWindowsShell}
 			/>
-		</div>
+		</SettingsPage>
 	);
 }

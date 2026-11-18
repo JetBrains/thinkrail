@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
 	FONTS_PROTOCOL_VERSION,
+	MCP_USER_SERVERS_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
@@ -100,6 +101,13 @@ describe("availableSettings", () => {
 		expect(outside).not.toContain("project-templates");
 		expect(outside).toContain("mcp-user-servers");
 		expect(outside).toContain("global-templates");
+	});
+
+	test("user MCP servers need a workspace on a host older than the no-workspace protocol", () => {
+		const older = { ...LATEST, protocolVersion: MCP_USER_SERVERS_PROTOCOL_VERSION - 1 };
+		expect(ids({ ...older, hasWorkspace: false })).not.toContain("mcp-user-servers");
+		expect(ids({ ...older, hasWorkspace: false })).not.toContain("mcp-add");
+		expect(ids(older)).toContain("mcp-user-servers");
 	});
 
 	test("Updates entries need the injected section", () => {

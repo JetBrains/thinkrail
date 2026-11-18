@@ -1158,8 +1158,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   in every connected client), and a
   **zoomed-stage preview pane** + **scope picker** — see the next bullet),
   **`ModelEffortPicker`** (the one **model · effort pill**, also mounted by `NewWorkspaceDialog` in
-  pre-session mode; `ModelsSettings` still mounts the older `ModelSelector` +
-  `ThinkingSelector` pair — the named survivors until they migrate). Decision: a chat's model and effort
+  pre-session mode and by Settings › Models for its Chat model and Review model pairs — the Settings
+  props are below). Decision: a chat's model and effort
   are **one fact with two parts**, shown by one borderless trigger (`[vendor glyph] name ▂▄▆ level
   [connection glyph] ▾` — the effort bars light the level's rank among the model's reasoning levels,
   `litBars`, in the level's **tone** — cool blue for off/minimal/low, accent for medium/high, warning
@@ -1208,9 +1208,16 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   does and its count equals the rows it reveals. With no query and no models the list reads "No models to
   show. Connect a provider, or show hidden models in Settings → Models → Visible models."; "No models
   found." appears only for a query. Hidden models never reach either picker: callers pass `store`'s
-  `selectPickerModels`, which keeps the current model. Settings' `ModelSelector` shares this grouping,
-  filter, Pinned section, empty states and "Updating…" Refresh, without Recent or the header connection
-  detail. A trailing query word that names a
+  `selectPickerModels`, which keeps the current model. **Settings mounts the same picker** with three
+  additive props the composer never passes: `canSetDefault={false}` drops **Set as default** (the Chat
+  model row *is* the default, and the Review pair must not overwrite it), `tabIndex={0}` gives the
+  trigger the explicit tab stop WebKit's Tab needs, and `fitContainer` bounds the popover's position,
+  height and width by `container` — the dialog's transformed, overflow-clipped root, which would
+  otherwise cut off whatever pokes past it. The popover renders into that root (so the modal's scroll
+  lock lets the wheel reach its list), outside the section pane, so Settings' arrow walk never sees the
+  picker's keys: Enter or Space on the trigger opens it, the picker's own keys apply inside, Escape
+  closes it with focus back on the trigger, and the search field holds focus, so plain F types and hint
+  mode comes with Mod+;. A trailing query word that names a
   level the highlighted model supports (`opus high`) pre-selects it — pi's `model:level` idiom typed
   with a space — and `/model [query]` in the composer opens the picker prefilled instead of sending
   text. The second row line **says what the user actually pays** (`kindLabel` / `costLabel`): the
@@ -1625,8 +1632,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   entry points that never talk to each other: the Settings → Templates panel (list + New/Edit/Delete, see
   `panels/SPEC.md`) and the history overlay's save-as-template action below. **Why this lives in `chat/`,
   not `panels/`** (a deliberate boundary exception, alongside `ChatView.tsx`/`useHistorySearch.ts` above):
-  `panels/` is allowed to import from `chat/` (already does, for `ModelEffortPicker`/`ModelSelector`/
-  `ThinkingSelector`/`Markdown`) but never the reverse, and `HistoryOverlay` — which needs this same dialog — lives in
+  `panels/` is allowed to import from `chat/` (already does, for `ModelEffortPicker`/`Markdown`) but
+  never the reverse, and `HistoryOverlay` — which needs this same dialog — lives in
   `chat/`, so the one shared implementation has to live where both sides can reach it. `TemplateEditorDialog`
   is therefore promoted to a **third** sanctioned store/transport-touching integration piece (see Boundary
   below), even though it isn't `ChatView` itself.

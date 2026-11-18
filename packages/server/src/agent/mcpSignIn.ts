@@ -6,7 +6,7 @@ import {
 	getAgentDir,
 	SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import type { LoginFrame, McpLoginPush } from "@thinkrail/contracts";
+import type { LoginFrame, LoginPush } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { liveSessionIdsOf, mcpSessionView } from "./agentSessionManager";
 import {
@@ -44,10 +44,8 @@ interface Probe {
 const probes = new Map<string, Probe>();
 let seq = 0;
 
-let publish: (push: McpLoginPush, ownerClientKey: string) => void = () => {};
-export function setMcpLoginPublisher(
-	fn: (push: McpLoginPush, ownerClientKey: string) => void,
-): void {
+let publish: (push: LoginPush, ownerClientKey: string) => void = () => {};
+export function setMcpLoginPublisher(fn: (push: LoginPush, ownerClientKey: string) => void): void {
 	publish = fn;
 }
 

@@ -8,6 +8,7 @@ import {
 	hideAuxiliaryWorkbench,
 	openFixtureProject,
 	openPersistedChat,
+	openSettingsSection,
 	pressPlatformShortcut,
 	revealWorkbenchTool,
 } from "./fixtures/app";
@@ -865,12 +866,15 @@ test.describe("the card's letters", () => {
 		page,
 	}) => {
 		await openFixtureProject(page);
-		await page.getByTestId("open-settings").click();
-		await page.getByTestId("settings-nav-keyboard").click();
+		await openSettingsSection(page, "keyboard");
 		const section = page.locator(
 			'[data-testid="keybinding-section"][data-section="ask-user-question"]',
 		);
-		await expect(section.locator("h5")).toContainText("Ask user question");
+		const area = section.getByTestId("keybinding-group");
+		await expect(area).toContainText("Ask user question");
+		await expect(area).toHaveAttribute("aria-expanded", "false");
+		await area.click();
+		await expect(area).toHaveAttribute("aria-expanded", "true");
 		await expect(section.getByTestId("keybinding-scope").first()).toHaveText(
 			/when focus is in Ask user question/,
 		);

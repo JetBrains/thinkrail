@@ -1277,10 +1277,9 @@ contracts only.
   refuses project scope without one (`MCP_CONFIG_INVALID`). Without a workspace the list holds the user
   servers alone with `statuses: []`, the global file's `configErrors`, and `handledElsewhere` from pi's
   global settings only (no chat is consulted); mutations reconcile every workspace's live chats; probes
-  run against the global file with no project policy, and their pushes are `McpLoginPush` whose
-  `McpLoginTarget` names no workspace (`LoginPush.target` keeps the required `workspaceId` until the web
-  folds the optional one, then the two merge). **`mcp.setUserServer { name, expectedFingerprint,
-  enabled?, exposure? }`** is the no-workspace switch: it merges only those keys into the user entry of
+  run against the global file with no project policy, and their `provider.login` pushes carry a
+  `LoginPush.target` (`McpLoginTarget`, whose `workspaceId` is optional) that names no workspace.
+  **`mcp.setUserServer { name, expectedFingerprint, enabled?, exposure? }`** is the no-workspace switch: it merges only those keys into the user entry of
   the global `mcp.json` (pi's writer semantics — `enabled: true` is removed as the default; exposure is
   `deferred` / `direct` / `hidden`), so it applies to every project without its own override and to the
   pi CLI, refused like `update` when the entry no longer has the rendered fingerprint. Inside a workspace

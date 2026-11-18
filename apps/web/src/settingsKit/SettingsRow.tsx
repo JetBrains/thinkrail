@@ -4,6 +4,7 @@ import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
 import { SETTINGS_TAG } from "./SettingsGroup";
+import { focusUnitStop } from "./settingsWalk";
 
 export interface SettingsReset {
 	changed: boolean;
@@ -78,7 +79,10 @@ export function SettingsRow({
 						data-setting-reset=""
 						data-testid={settingId ? `settings-reset-${settingId}` : undefined}
 						aria-label={t("settings.kit.resetLabel", { label })}
-						onClick={reset.onReset}
+						onClick={(event) => {
+							focusUnitStop<HTMLElement>(event.currentTarget);
+							reset.onReset();
+						}}
 					>
 						{t("settings.kit.reset")}
 					</Button>

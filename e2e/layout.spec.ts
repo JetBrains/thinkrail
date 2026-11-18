@@ -1,12 +1,14 @@
 import { realpathSync, rmSync } from "node:fs";
 import { expect, type Locator, type Page, test, type WebSocketRoute } from "@playwright/test";
 import {
+	closeSettings,
 	createWorkspaceViaDialog,
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
 	expandDisclosure,
 	openFixtureProject,
 	openPersistedChat,
+	openSettingsSection,
 	pressPlatformShortcut,
 	pseudoBackgroundColor,
 	revealFirstProjectWorkspaces,
@@ -24,21 +26,18 @@ async function openDefaultWorkbench(page: Page): Promise<void> {
 	await waitTerminalReady(page);
 }
 
-/** A preset card by its exact name; descriptions may mention other presets' names ("review panels"). */
+/** A preset row by its exact name; descriptions may mention other presets' names ("review panels"). */
 function layoutPreset(page: Page, name: string): Locator {
 	return page.getByTestId("layout-preset").filter({ has: page.getByText(name, { exact: true }) });
 }
 
-/**
- * Group limits sit under the collapsed Advanced disclosure and save on Enter. Escape then drops the
- * draft back to the saved limit, so the value reads `value` only once it was committed.
- */
+/** Group limits sit under the collapsed Advanced disclosure and save on Enter, which marks them Changed. */
 async function saveGroupLimit(page: Page, name: string, value: number): Promise<void> {
 	await expandDisclosure(page.getByTestId("layout-advanced-toggle"));
-	const input = page.getByRole("spinbutton", { name });
+	const input = page.getByRole("textbox", { name });
 	await input.fill(String(value));
 	await input.press("Enter");
-	await input.press("Escape");
+	await expect(input).toHaveAttribute("data-setting-clean", "");
 	await expect(input).toHaveValue(String(value));
 }
 
@@ -976,10 +975,9 @@ test("applying the Review preset preserves resources and installs its vertical c
 	await openDefaultWorkbench(page);
 	await openKeptFiles(page, ["README.md", "notes.txt"]);
 
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-layout").click();
+	await openSettingsSection(page, "layout");
 	const reviewPreset = layoutPreset(page, "Review");
-	await reviewPreset.getByRole("button", { name: "Apply now…" }).click();
+	await reviewPreset.getByTestId("layout-preset-apply").click();
 	await page.getByTestId("layout-apply-confirm").click();
 
 	await expect(page.getByTestId("center-group")).toHaveCount(2);
@@ -989,7 +987,12 @@ test("applying the Review preset preserves resources and installs its vertical c
 	await expect(sideGroups(page, "right")).toHaveCount(2);
 	await expect(page.getByTestId("bottom-group")).toHaveCount(1);
 	await expect(page.getByTestId("bottom-group")).toContainText("Terminal 1");
-	await page.keyboard.press("Escape");
+	await expect(reviewPreset).toHaveAttribute("data-applied", "true");
+	await expect(reviewPreset.getByTestId("layout-preset-apply")).toHaveAttribute(
+		"aria-disabled",
+		"true",
+	);
+	await closeSettings(page);
 	await expect(page.getByRole("heading", { name: "Layout" })).toBeHidden();
 	await expect
 		.poll(async () => {
@@ -1006,14 +1009,13 @@ test("applying the Review preset preserves resources and installs its vertical c
 
 test("the local default preset drives an explicit frame reset", async ({ page }) => {
 	await openDefaultWorkbench(page);
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-layout").click();
+	await openSettingsSection(page, "layout");
 	const reviewPreset = layoutPreset(page, "Review");
 	await reviewPreset.getByRole("button", { name: "Set default" }).click();
 	await expect(reviewPreset).toHaveAttribute("data-default", "true");
 	await page.getByTestId("layout-reset-default").click();
 	await page.getByTestId("layout-apply-confirm").click();
-	await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+	await closeSettings(page);
 	await expect(page.getByTestId("center-group")).toHaveCount(2);
 	await expect(page.getByTestId("center-split-resize")).toHaveAttribute(
 		"aria-orientation",
@@ -1022,8 +1024,7 @@ test("the local default preset drives an explicit frame reset", async ({ page })
 
 	await reloadDefaultWorkbench(page);
 	await expect(page.getByTestId("center-group")).toHaveCount(2);
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-layout").click();
+	await openSettingsSection(page, "layout");
 	await expect(layoutPreset(page, "Review")).toHaveAttribute("data-default", "true");
 });
 
@@ -1032,8 +1033,10 @@ test("custom presets synchronize while defaults and group limits remain window-l
 	context,
 }) => {
 	await openDefaultWorkbench(page);
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-layout").click();
+	await openSettingsSection(page, "layout");
+	await expect(page.getByTestId("layout-custom-limit")).toHaveText(
+		"Up to 32 custom layouts; 0 used.",
+	);
 
 	await page.getByTestId("layout-add-new").click();
 	await page.getByRole("textbox", { name: "Custom preset name" }).fill("My workbench");
@@ -1041,6 +1044,9 @@ test("custom presets synchronize while defaults and group limits remain window-l
 	await expect(page.getByTestId("layout-preset-save-row")).toHaveCount(0);
 	let custom = page.getByTestId("layout-preset").filter({ hasText: "My workbench" });
 	await expect(custom).toBeVisible();
+	await expect(page.getByTestId("layout-custom-limit")).toHaveText(
+		"Up to 32 custom layouts; 1 used.",
+	);
 	await custom.getByRole("button", { name: "Rename My workbench" }).click();
 	await page.getByRole("textbox", { name: "Rename My workbench" }).fill("My renamed workbench");
 	await page.getByRole("button", { name: "Save My workbench name" }).click();
@@ -1056,21 +1062,29 @@ test("custom presets synchronize while defaults and group limits remain window-l
 	await advanced.click();
 	await expect(advanced).toHaveAttribute("aria-expanded", "false");
 	await expandDisclosure(advanced);
-	await expect(page.getByRole("spinbutton", { name: "Maximum side groups" })).toHaveValue("7");
-	await expect(page.getByRole("spinbutton", { name: "Maximum bottom groups" })).toHaveValue("4");
+	await expect(page.getByRole("textbox", { name: "Maximum side groups" })).toHaveValue("7");
+	await expect(page.getByRole("textbox", { name: "Maximum bottom groups" })).toHaveValue("4");
 
 	const peer = await context.newPage();
 	await peer.goto("/");
 	await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await peer.getByTestId("open-settings").click();
-	await peer.getByTestId("settings-nav-layout").click();
+	await openSettingsSection(peer, "layout");
 	const peerCustom = peer.getByTestId("layout-preset").filter({ hasText: "My renamed workbench" });
 	await expect(peerCustom).toBeVisible();
 	await expect(peerCustom).not.toHaveAttribute("data-default", "true");
 	await expandDisclosure(peer.getByTestId("layout-advanced-toggle"));
-	await expect(peer.getByRole("spinbutton", { name: "Maximum side groups" })).toHaveValue("6");
+	await expect(peer.getByRole("textbox", { name: "Maximum side groups" })).toHaveValue("6");
 
+	const confirm = page.getByTestId("confirm-dialog");
+	await custom.getByTestId("layout-preset-apply").focus();
+	await page.keyboard.press("Delete");
+	await expect(confirm).toContainText("Delete My renamed workbench?");
+	await confirm.getByRole("button", { name: "Cancel" }).click();
+	await expect(confirm).toHaveCount(0);
+	await expect(custom).toBeVisible();
+	await expect(peerCustom).toBeVisible();
 	await custom.getByRole("button", { name: "Delete My renamed workbench" }).click();
+	await page.getByTestId("layout-delete-confirm").click();
 	await expect(custom).toHaveCount(0);
 	await expect(peerCustom).toHaveCount(0);
 	await peer.close();
@@ -1080,7 +1094,7 @@ test("custom presets synchronize while defaults and group limits remain window-l
 	);
 });
 
-test("preset-card actions wrap inside their card in a longer language", async ({ page }) => {
+test("preset-row actions wrap inside their row in a longer language", async ({ page }) => {
 	await openFixtureProject(page);
 	await page.getByTestId("open-settings").click();
 	await page.getByTestId("settings-nav-language").click();
@@ -1088,20 +1102,20 @@ test("preset-card actions wrap inside their card in a longer language", async ({
 	await expect(page.locator("html")).toHaveAttribute("lang", "es");
 
 	await page.getByTestId("settings-nav-layout").click();
-	const cards = page.getByTestId("layout-preset");
-	await expect(cards.first()).toBeVisible();
-	for (let index = 0; index < (await cards.count()); index += 1) {
-		const card = cards.nth(index);
-		const cardBox = await card.boundingBox();
-		expect(cardBox).not.toBeNull();
-		if (!cardBox) continue;
-		const buttons = card.getByRole("button");
+	const rows = page.getByTestId("layout-preset");
+	await expect(rows.first()).toBeVisible();
+	for (let index = 0; index < (await rows.count()); index += 1) {
+		const row = rows.nth(index);
+		const rowBox = await row.boundingBox();
+		expect(rowBox).not.toBeNull();
+		if (!rowBox) continue;
+		const buttons = row.getByRole("button");
 		for (let buttonIndex = 0; buttonIndex < (await buttons.count()); buttonIndex += 1) {
 			const buttonBox = await buttons.nth(buttonIndex).boundingBox();
 			expect(buttonBox).not.toBeNull();
 			if (!buttonBox) continue;
-			expect(buttonBox.x).toBeGreaterThanOrEqual(cardBox.x - 1);
-			expect(buttonBox.x + buttonBox.width).toBeLessThanOrEqual(cardBox.x + cardBox.width + 1);
+			expect(buttonBox.x).toBeGreaterThanOrEqual(rowBox.x - 1);
+			expect(buttonBox.x + buttonBox.width).toBeLessThanOrEqual(rowBox.x + rowBox.width + 1);
 		}
 	}
 
@@ -1114,20 +1128,18 @@ test("an accepted side-group overage is grandfathered without allowing further g
 	page,
 }) => {
 	await openDefaultWorkbench(page);
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-layout").click();
+	await openSettingsSection(page, "layout");
 	await saveGroupLimit(page, "Maximum side groups", 3);
-	await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+	await closeSettings(page);
 
 	await page.getByTestId("terminal-tab").click({ button: "right" });
 	await page.getByRole("menuitem", { name: "New right group at bottom", exact: true }).click();
 	await expect(sideGroups(page, "right")).toHaveCount(3);
 
 	await createWorkspaceViaDialog(page);
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-layout").click();
+	await openSettingsSection(page, "layout");
 	await saveGroupLimit(page, "Maximum side groups", 2);
-	await page.getByRole("dialog").getByRole("button", { name: "Close" }).click();
+	await closeSettings(page);
 
 	await defaultWorkspaceRow(page).getByRole("treeitem").click();
 	await expect(page.getByTestId("center-tabs")).toBeVisible();

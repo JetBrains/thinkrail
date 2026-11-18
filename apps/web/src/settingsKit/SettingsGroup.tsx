@@ -17,25 +17,46 @@ const SCOPE_LABELS = {
 	device: "settings.kit.scope.device",
 } as const satisfies Record<SettingsScope, MessageKey>;
 
+export interface SettingsGroupAction {
+	rowId: string;
+	control: ReactNode;
+}
+
 export interface SettingsGroupProps {
 	title: string;
 	description?: ReactNode;
 	scope?: SettingsScope | undefined;
+	action?: SettingsGroupAction | undefined;
 	testId?: string;
 	children: ReactNode;
 }
 
-export function SettingsGroup({ title, description, scope, testId, children }: SettingsGroupProps) {
+export function SettingsGroup({
+	title,
+	description,
+	scope,
+	action,
+	testId,
+	children,
+}: SettingsGroupProps) {
 	const t = useT();
 	return (
 		<section data-testid={testId} className="flex flex-col">
 			<div className="flex flex-col gap-2 pb-4">
 				<div className="flex flex-wrap items-center gap-8">
-					<h3 className="tr-text-label-pill text-text-subtle">{title}</h3>
+					<h3 className="min-w-0 break-words tr-text-label-pill text-text-subtle">{title}</h3>
 					{scope ? (
 						<span data-scope={scope} className={cn(SETTINGS_TAG, "text-text-muted")}>
 							{t(SCOPE_LABELS[scope])}
 						</span>
+					) : null}
+					{action ? (
+						<div
+							data-setting-row={action.rowId}
+							className="ml-auto flex shrink-0 items-center gap-8"
+						>
+							{action.control}
+						</div>
 					) : null}
 				</div>
 				{description ? <p className="tr-text-metadata text-text-muted">{description}</p> : null}

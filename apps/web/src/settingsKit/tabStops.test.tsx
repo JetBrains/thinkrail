@@ -82,3 +82,27 @@ test("a slider steps within its range and reports the edges", () => {
 	expect(sliderStep(2, -2, 2, 1, 1)).toBeNull();
 	expect(sliderStep(-2, -2, 2, 1, -1)).toBeNull();
 });
+
+test("a group's header action is its own walk row, and a long title may wrap", () => {
+	const group = renderToStaticMarkup(
+		<SettingsGroup
+			title="Project templates"
+			scope="project"
+			action={{
+				rowId: "templates-project-new",
+				control: (
+					<button type="button" tabIndex={0}>
+						New
+					</button>
+				),
+			}}
+		>
+			<SettingsRow settingId="project-templates" label="Templates" />
+		</SettingsGroup>,
+	);
+	expect(group).toMatch(/<h3[^>]*break-words[^>]*>Project templates<\/h3>/);
+	expect(group).toMatch(
+		/data-setting-row="templates-project-new"[^>]*><button[^>]*tabindex="0"[^>]*>New<\/button>/,
+	);
+	expect(group.indexOf("templates-project-new")).toBeLessThan(group.indexOf("project-templates"));
+});

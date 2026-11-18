@@ -1,4 +1,4 @@
-import { RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
+import { RiArrowGoBackLine as ArrowGoBack } from "@remixicon/react";
 import {
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION,
@@ -15,13 +15,30 @@ import {
 import type { MessageKey } from "@thinkrail/locales";
 import { localeOf, type Translator, t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
-import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { isImeComposing, twinArrow } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { type KeyboardEvent, useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+	SETTINGS_INPUT,
+	SETTINGS_TAG,
+	SettingsChoice,
+	type SettingsChoiceOption,
+	SettingsGroup,
+	SettingsRow,
+	useSettingsDraft,
+} from "@/settingsKit";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import type { CustomEndpointsState } from "./CustomEndpointsSettings";
-import { SettingsGroup } from "./SettingsGroup";
+import {
+	MODEL_TREE,
+	MODEL_TREE_ROW,
+	ProviderTreeItem,
+	stopRowClick,
+	useTreeItemKeys,
+} from "./ModelProviderTree";
+import { SETTING, settingProps } from "./settingsCatalog";
+import { Tree, useTreeItem, useTreeKeys } from "./treeNavigation";
 
 const PRESETS = [
 	{ id: "default", label: "common.default", override: null },
@@ -36,6 +53,8 @@ const PRESETS = [
 	label: MessageKey;
 	override: number | null | undefined;
 }[];
+
+type PresetId = (typeof PRESETS)[number]["id"];
 
 const tokens = (t: Translator, value: number) => value.toLocaleString(localeOf(t));
 export const tokenRange = (
@@ -57,210 +76,245 @@ export function isContextWindowText(
 	return /^\d+$/.test(text) && isModelContextWindow(Number(text), limits);
 }
 
-function ContextLimitControl({
-	label,
-	controlLabel = label,
-	description,
+export function contextPreset(override: number | null | undefined): PresetId | null {
+	if (override === undefined) return null;
+	return PRESETS.find((preset) => preset.override === override)?.id ?? "custom";
+}
+
+function presetOptions(t: Translator, testId: string): SettingsChoiceOption<PresetId>[] {
+	return PRESETS.map((preset) => ({
+		id: preset.id,
+		label: t(preset.label),
+		testId: `${testId}-${preset.id}`,
+	}));
+}
+
+function useContextLimit(
+	override: number | null | undefined,
+	revision: string,
+	onChange: (override: number | null) => void,
+) {
+	const [custom, setCustom] = useState({ revision, on: false });
+	const value = custom.revision === revision && custom.on ? "custom" : contextPreset(override);
+	const select = (id: PresetId) => {
+		setCustom({ revision, on: id === "custom" });
+		if (id === "custom") return;
+		const next = id === "1m" ? MODEL_CONTEXT_WINDOW_LIMITS.max : null;
+		if (next !== override) onChange(next);
+	};
+	const step = (delta: 1 | -1): boolean => {
+		const index = PRESETS.findIndex((preset) => preset.id === value);
+		const next = index < 0 ? (delta === 1 ? PRESETS[0] : undefined) : PRESETS[index + delta];
+		if (!next) return false;
+		select(next.id);
+		return true;
+	};
+	return { value, select, step };
+}
+
+function ContextTokensField({
+	name,
 	override,
-	limits = MODEL_CONTEXT_WINDOW_LIMITS,
-	disabled,
+	limits,
 	testId,
-	revision,
+	tabIndex,
 	onChange,
 }: {
-	label: string;
-	controlLabel?: string;
-	description: string;
+	name: string;
 	override: number | null | undefined;
-	limits?: ModelContextWindowLimits;
-	disabled: boolean;
+	limits: ModelContextWindowLimits;
 	testId: string;
+	tabIndex: number;
+	onChange: (override: number) => void;
+}) {
+	const t = useT();
+	const errorId = useId();
+	const range = tokenRange(t, limits);
+	const custom = override != null && override !== MODEL_CONTEXT_WINDOW_LIMITS.max;
+	const { invalid, dirty, inputProps } = useSettingsDraft({
+		saved: custom ? String(override) : "",
+		isValid: (draft) => draft.trim() === "" || isContextWindowText(draft.trim(), limits),
+		commit: (draft) => {
+			const text = draft.trim();
+			if (!isContextWindowText(text, limits) || Number(text) === override) return undefined;
+			onChange(Number(text));
+			return undefined;
+		},
+	});
+	return (
+		<span className="flex flex-col items-end gap-2">
+			<input
+				type="text"
+				inputMode="numeric"
+				tabIndex={tabIndex}
+				{...inputProps}
+				placeholder={range}
+				aria-label={t("settings.modelContext.tokensFor", { name })}
+				aria-describedby={invalid ? errorId : undefined}
+				data-testid={`${testId}-input`}
+				data-setting-side=""
+				data-setting-clean={dirty ? undefined : ""}
+				className={cn(SETTINGS_INPUT, "w-100 text-right")}
+			/>
+			{invalid ? (
+				<span id={errorId} className="text-feedback-error tr-text-metadata">
+					{t("settings.modelContext.invalid", { range })}
+				</span>
+			) : null}
+		</span>
+	);
+}
+
+function ContextLimitControl({
+	name,
+	testId,
+	override,
+	limits,
+	revision,
+	tabIndex,
+	onChange,
+}: {
+	name: string;
+	testId: string;
+	override: number | null | undefined;
+	limits: ModelContextWindowLimits;
 	revision: string;
+	tabIndex: number;
 	onChange: (override: number | null) => void;
 }) {
 	const t = useT();
-	const range = tokenRange(t, limits);
-	const id = useId();
-	const inputRef = useRef<HTMLInputElement>(null);
-	const skipBlurCommit = useRef(false);
-	const initialDraft = {
-		revision,
-		custom: false,
-		text: override != null && override !== MODEL_CONTEXT_WINDOW_LIMITS.max ? String(override) : "",
-		submitted: null as string | null,
-	};
-	const [draft, setDraft] = useState(initialDraft);
-	if (draft.revision !== revision) setDraft(initialDraft);
+	const limit = useContextLimit(override, revision, onChange);
+	return (
+		<span className="flex flex-wrap items-start justify-end gap-8">
+			<SettingsChoice
+				label={t("settings.modelContext.controlLabel", { name })}
+				options={presetOptions(t, testId)}
+				value={limit.value}
+				cost="cheap"
+				onSelect={limit.select}
+			/>
+			{limit.value === "custom" ? (
+				<ContextTokensField
+					name={name}
+					override={override}
+					limits={limits}
+					testId={testId}
+					tabIndex={tabIndex}
+					onChange={onChange}
+				/>
+			) : null}
+		</span>
+	);
+}
 
-	const selected = draft.custom
-		? "custom"
-		: override === undefined
-			? null
-			: (PRESETS.find((preset) => preset.override === override)?.id ?? "custom");
-	const isCustomActive = selected === "custom";
-	const text = draft.text.trim();
-	const showError = text !== "" && !isContextWindowText(text, limits);
+function ContextModelItem({
+	model,
+	limits,
+	onChange,
+}: {
+	model: ModelContextSetting;
+	limits: ModelContextWindowLimits;
+	onChange: (override: number | null) => void;
+}) {
+	const t = useT();
+	const revision = String(model.override);
+	const limit = useContextLimit(model.override, revision, onChange);
+	const {
+		role: _treeitem,
+		tabIndex: rovingTabIndex,
+		...item
+	} = useTreeItem(`${model.provider}/${model.id}`, { level: 2, label: model.name });
+	const keys = useTreeKeys();
+	const innerKeys = useTreeItemKeys();
+	const name = `${model.name} (${model.provider})`;
+	const testId = `context-limit-${model.provider}-${model.id}`;
+	const changed = model.override !== null;
+	const tabIndex = rovingTabIndex ?? 0;
 
-	const commitValue = () => {
-		if (disabled || !isContextWindowText(text, limits) || text === draft.submitted) return false;
-		const value = Number(text);
-		if (value === override) return false;
-		setDraft({ ...draft, submitted: text });
-		onChange(value);
-		return true;
+	const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+		if (innerKeys(event) || event.defaultPrevented || event.target !== event.currentTarget) return;
+		if (isImeComposing(event.nativeEvent)) return;
+		const plain = !(event.altKey || event.ctrlKey || event.metaKey || event.shiftKey);
+		const key = twinArrow(keys.match(event.nativeEvent)) ?? (plain ? event.key : null);
+		const delta = key === "ArrowRight" ? 1 : key === "ArrowLeft" ? -1 : null;
+		if (delta !== null && limit.step(delta)) event.preventDefault();
 	};
 
 	return (
-		<div
-			data-testid={testId}
-			data-context-override={override === undefined ? "mixed" : String(override)}
-			className="flex flex-col gap-4"
-		>
-			<div className="flex flex-wrap items-center justify-between gap-12">
-				<div className="flex min-w-0 flex-1 flex-col gap-2">
-					<p className="tr-text-ui text-text-default">{label}</p>
-					<p className="tr-text-metadata text-text-muted">{description}</p>
-				</div>
-
-				<div
-					role="radiogroup"
-					aria-label={t("settings.modelContext.controlLabel", { name: controlLabel })}
-					className={cn(
-						"inline-flex h-32 shrink-0 overflow-hidden rounded-sm bg-control-bg",
-						showError && "ring-1 ring-feedback-error",
-					)}
-				>
-					{PRESETS.filter((p) => p.id !== "custom").map((preset) => (
-						<label
-							key={preset.id}
-							data-testid={`${testId}-${preset.id}`}
-							onPointerDown={() => {
-								if (document.activeElement === inputRef.current) skipBlurCommit.current = true;
-							}}
-							className={cn(
-								"relative cursor-pointer transition-colors",
-								disabled && "cursor-default",
-							)}
-						>
-							<input
-								type="radio"
-								name={id}
-								value={preset.id}
-								checked={selected === preset.id}
-								disabled={disabled}
-								aria-label={t("settings.modelContext.presetFor", {
-									preset: t(preset.label),
-									name: controlLabel,
-								})}
-								className="peer sr-only inset-0"
-								onChange={() => {
-									if (disabled) return;
-									setDraft(initialDraft);
-									onChange(preset.override);
-								}}
-							/>
-							<span
-								className={cn(
-									"flex h-32 items-center px-12 tr-text-ui transition-colors",
-									selected === preset.id
-										? "rounded-sm bg-control-bg-selected text-text-default"
-										: "text-text-muted hover:text-text-default",
-									"peer-focus-visible:focus-ring-inset",
-									"peer-disabled:text-control-disabled-text peer-disabled:hover:text-control-disabled-text",
-								)}
-							>
-								{t(preset.label)}
-							</span>
-						</label>
-					))}
-
-					<div
-						className={cn(
-							"flex items-center",
-							isCustomActive && "gap-8 rounded-sm bg-control-bg-selected",
-						)}
-					>
-						<label
-							data-testid={`${testId}-custom`}
-							className={cn(
-								"relative cursor-pointer transition-colors",
-								disabled && "cursor-default",
-							)}
-						>
-							<input
-								type="radio"
-								name={id}
-								value="custom"
-								checked={isCustomActive}
-								disabled={disabled}
-								aria-label={t("settings.modelContext.customFor", { name: controlLabel })}
-								className="peer sr-only inset-0"
-								onChange={() => {
-									if (disabled) return;
-									setDraft({ ...draft, custom: true });
-									setTimeout(() => inputRef.current?.focus(), 0);
-								}}
-							/>
-							<span
-								className={cn(
-									"flex h-32 items-center tr-text-ui transition-colors",
-									isCustomActive
-										? "pl-12 text-text-default"
-										: "px-12 text-text-muted hover:text-text-default",
-									"peer-focus-visible:focus-ring-inset",
-									"peer-disabled:text-control-disabled-text peer-disabled:hover:text-control-disabled-text",
-								)}
-							>
-								{t("settings.modelContext.preset.custom")}
-							</span>
-						</label>
-
-						{isCustomActive ? (
-							<input
-								ref={inputRef}
-								type="text"
-								inputMode="numeric"
-								value={draft.text}
-								disabled={disabled}
-								placeholder={range}
-								aria-label={t("settings.modelContext.tokensFor", { name: controlLabel })}
-								aria-invalid={showError}
-								aria-describedby={showError ? `${id}-error` : undefined}
-								data-testid={`${testId}-input`}
-								data-settings-draft-input
-								onChange={(event) =>
-									setDraft({ ...draft, text: event.currentTarget.value, submitted: null })
-								}
-								onBlur={(event) => {
-									const next = event.relatedTarget;
-									const toSibling =
-										next instanceof HTMLInputElement && next.type === "radio" && next.name === id;
-									const skip = skipBlurCommit.current || toSibling;
-									skipBlurCommit.current = false;
-									if (!skip) commitValue();
-								}}
-								onKeyDown={(event) => {
-									if (isImeComposing(event.nativeEvent)) return;
-									if (event.key === "Enter") {
-										event.preventDefault();
-										commitValue();
-									} else if (event.key === "Escape") {
-										setDraft(initialDraft);
-									}
-								}}
-								className="h-32 w-100 bg-transparent pr-8 tr-text-ui text-text-default placeholder:text-text-muted focus-visible:focus-ring-inset disabled:text-control-disabled-text"
-							/>
+		<li role="none">
+			<div
+				role="treeitem"
+				tabIndex={tabIndex}
+				{...item}
+				data-testid={testId}
+				data-context-override={String(model.override)}
+				data-changed={changed || undefined}
+				className={cn(MODEL_TREE_ROW, "justify-between pl-24")}
+				onKeyDown={onKeyDown}
+			>
+				<span className="flex min-w-160 flex-1 flex-col gap-2">
+					<span className="flex flex-wrap items-center gap-8">
+						<span className="tr-text-ui text-text-default">{model.name}</span>
+						{changed ? (
+							<span className={cn(SETTINGS_TAG, "text-primary")}>{t("settings.kit.changed")}</span>
 						) : null}
-					</div>
-				</div>
+					</span>
+					<span className="tr-text-metadata text-text-muted">
+						{model.override === null
+							? t("settings.modelContext.modelDescriptionDefault", {
+									tokens: tokens(t, model.contextWindow),
+								})
+							: t("settings.modelContext.modelDescription", {
+									tokens: tokens(t, model.contextWindow),
+								})}
+					</span>
+				</span>
+				<span className="flex flex-wrap items-start justify-end gap-8">
+					<SettingsChoice
+						label={t("settings.modelContext.controlLabel", { name })}
+						options={presetOptions(t, testId)}
+						value={limit.value}
+						cost="cheap"
+						onSelect={limit.select}
+					/>
+					{limit.value === "custom" ? (
+						<ContextTokensField
+							name={name}
+							override={model.override}
+							limits={limits}
+							testId={testId}
+							tabIndex={tabIndex}
+							onChange={onChange}
+						/>
+					) : null}
+					{changed ? (
+						<Button
+							variant="ghost"
+							size="m"
+							iconLeft={ArrowGoBack}
+							tabIndex={tabIndex}
+							data-setting-side=""
+							data-setting-reset=""
+							data-testid={`${testId}-reset`}
+							aria-label={t("settings.kit.resetLabel", { label: name })}
+							onClick={(event) => {
+								stopRowClick(event);
+								onChange(null);
+							}}
+						>
+							{t("settings.kit.reset")}
+						</Button>
+					) : null}
+				</span>
 			</div>
-			{showError ? (
-				<p id={`${id}-error`} className="text-right tr-text-metadata text-feedback-error">
-					{t("settings.modelContext.invalid", { range })}
-				</p>
-			) : null}
-		</div>
+		</li>
 	);
+}
+
+function groupByProvider(rows: readonly ModelContextSetting[]): [string, ModelContextSetting[]][] {
+	const groups = new Map<string, ModelContextSetting[]>();
+	for (const row of rows) groups.set(row.provider, [...(groups.get(row.provider) ?? []), row]);
+	return [...groups];
 }
 
 export function ModelContextLoadFailed({
@@ -278,7 +332,7 @@ export function ModelContextLoadFailed({
 			data-testid="model-context-load-failed"
 		>
 			<p className="tr-text-ui text-text-muted">{t("settings.modelContext.loadFailed")}</p>
-			<Button variant="ghost" size="m" disabled={pending} onClick={onRetry}>
+			<Button variant="ghost" size="m" tabIndex={0} disabled={pending} onClick={onRetry}>
 				{t("common.retry")}
 			</Button>
 		</div>
@@ -315,6 +369,7 @@ export function ModelContextControls({
 	customServers,
 	pending,
 	failed,
+	defaultExpanded = [],
 	onChange,
 	onRetry,
 }: {
@@ -323,12 +378,12 @@ export function ModelContextControls({
 	customServers: ReadonlySet<string> | null;
 	pending: boolean;
 	failed: boolean;
+	defaultExpanded?: readonly string[];
 	onChange: (target: ModelContextTarget, override: number | null) => void;
 	onRetry: () => void;
 }) {
 	const t = useT();
-	const [expanded, setExpanded] = useState(false);
-	const rowsId = useId();
+	const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set(defaultExpanded));
 	if (!supported(protocolVersion)) return null;
 	const rows = modelContextRows(settings, customServers);
 	const gpt = rows?.filter((model) => !isCustomEndpointId(model.provider)) ?? [];
@@ -351,92 +406,101 @@ export function ModelContextControls({
 					}),
 				})
 			: sharedSummary;
+	const row = settingProps(t, SETTING.contextWindow);
+	const toggle = (provider: string) =>
+		setExpanded((current) => {
+			const next = new Set(current);
+			if (!next.delete(provider)) next.add(provider);
+			return next;
+		});
 
 	return (
-		<SettingsGroup title={t("settings.modelContext.title")} testId="settings-model-context">
+		<SettingsGroup
+			title={t("settings.modelContext.title")}
+			description={t("settings.modelContext.note")}
+			testId="settings-model-context"
+		>
 			{failed ? (
-				<ModelContextLoadFailed pending={pending} onRetry={onRetry} />
-			) : rows === null ? (
-				<div className="flex items-center justify-between gap-12 border-border-muted border-b py-12">
-					<span className="tr-text-ui text-text-default">{t("settings.modelContext.global")}</span>
-					<span className="tr-text-metadata text-text-muted">{t("common.loading")}</span>
+				<div data-setting-row={row.settingId}>
+					<ModelContextLoadFailed pending={pending} onRetry={onRetry} />
 				</div>
-			) : rows.length === 0 ? (
-				<div className="flex items-center justify-between gap-12 border-border-muted border-b py-12">
-					<span className="tr-text-ui text-text-default">{t("settings.modelContext.global")}</span>
-					<span className="tr-text-metadata text-text-muted">
-						{t("settings.modelContext.noModels")}
-					</span>
-				</div>
+			) : rows === null || rows.length === 0 ? (
+				<SettingsRow
+					{...row}
+					description={rows === null ? t("common.loading") : t("settings.modelContext.noModels")}
+				/>
 			) : (
 				<>
-					<div className="flex flex-col gap-8 border-border-muted border-b py-12">
-						{shared.length > 0 ? (
-							<ContextLimitControl
-								revision={revision}
-								label={t("settings.modelContext.global")}
-								description={sharedDescription}
-								override={sharedOverride}
-								disabled={pending}
-								testId="context-limit-all"
-								onChange={(override) => onChange("available", override)}
-							/>
-						) : null}
-						<p className="rounded-sm bg-control-bg px-12 py-8 tr-text-metadata text-text-muted">
-							{t("settings.modelContext.note")}
-						</p>
-					</div>
-
-					<div className="flex flex-col border-border-muted border-b">
-						<button
-							type="button"
-							onClick={() => setExpanded((value) => !value)}
-							aria-expanded={expanded}
-							aria-controls={rowsId}
-							data-testid="model-context-customize"
-							className="flex w-full items-start gap-8 py-12 text-left transition-colors focus-visible:focus-ring-inset"
+					{shared.length > 0 ? (
+						<div
+							data-testid="context-limit-all"
+							data-context-override={
+								sharedOverride === undefined ? "mixed" : String(sharedOverride)
+							}
 						>
-							<span className="flex-1 tr-text-ui text-text-default">
-								{t("settings.modelContext.byModel")}
-							</span>
-							<span className="mt-2 shrink-0">
-								{expanded ? (
-									<RiArrowDownSLine className="size-20 text-text-muted" aria-hidden="true" />
-								) : (
-									<RiArrowRightSLine className="size-20 text-text-muted" aria-hidden="true" />
-								)}
-							</span>
-						</button>
-						{expanded && (
-							<div id={rowsId} className="flex flex-col gap-16 pb-12">
-								{rows.map((model) => (
+							<SettingsRow
+								{...row}
+								description={sharedDescription}
+								control={
 									<ContextLimitControl
-										key={`${model.provider}/${model.id}`}
-										revision={String(model.override)}
-										label={model.name}
-										controlLabel={`${model.name} (${model.provider})`}
-										description={
-											model.override === null
-												? t("settings.modelContext.modelDescriptionDefault", {
-														provider: model.provider,
-														tokens: tokens(t, model.contextWindow),
-													})
-												: t("settings.modelContext.modelDescription", {
-														provider: model.provider,
-														tokens: tokens(t, model.contextWindow),
-													})
-										}
-										override={model.override}
-										limits={modelContextLimitsFor(model.provider, protocolVersion)}
-										disabled={pending}
-										testId={`context-limit-${model.provider}-${model.id}`}
-										onChange={(override) =>
-											onChange({ provider: model.provider, id: model.id }, override)
-										}
+										name={row.label}
+										testId="context-limit-all"
+										override={sharedOverride}
+										limits={MODEL_CONTEXT_WINDOW_LIMITS}
+										revision={revision}
+										tabIndex={0}
+										onChange={(override) => onChange("available", override)}
 									/>
-								))}
-							</div>
-						)}
+								}
+								reset={{
+									changed: sharedOverride !== null,
+									onReset: () => onChange("available", null),
+								}}
+							/>
+						</div>
+					) : null}
+					<div data-setting-row="context-window-by-model" className="py-12">
+						<Tree
+							label={t("settings.modelContext.byModel")}
+							focusList="settings:context-window"
+							leaveAtEdges
+							className={MODEL_TREE}
+						>
+							{groupByProvider(rows).map(([provider, models]) => {
+								const customized = models.filter((model) => model.override !== null).length;
+								return (
+									<ProviderTreeItem
+										key={provider}
+										id={`provider:${provider}`}
+										provider={provider}
+										meta={t("settings.modelContext.modelCount", { count: models.length })}
+										summary={
+											customized > 0
+												? t("settings.modelContext.customizedCount", {
+														count: customized,
+														total: models.length,
+													})
+												: t("settings.modelContext.allDefault")
+										}
+										summaryChanged={customized > 0}
+										expanded={expanded.has(provider)}
+										testId="model-context-provider"
+										onToggle={() => toggle(provider)}
+									>
+										{models.map((model) => (
+											<ContextModelItem
+												key={model.id}
+												model={model}
+												limits={modelContextLimitsFor(model.provider, protocolVersion)}
+												onChange={(override) =>
+													onChange({ provider: model.provider, id: model.id }, override)
+												}
+											/>
+										))}
+									</ProviderTreeItem>
+								);
+							})}
+						</Tree>
 					</div>
 				</>
 			)}
@@ -460,6 +524,7 @@ export function useModelContextSettings(minimumProtocol: number): ModelContextSt
 	const [pending, setPending] = useState(true);
 	const [failed, setFailed] = useState(false);
 	const sequence = useRef(0);
+	const queue = useRef<Promise<boolean>>(Promise.resolve(true));
 
 	const synchronize = useCallback(
 		async (change?: WsMethodMap["model.setContextWindow"]["params"]) => {
@@ -500,7 +565,11 @@ export function useModelContextSettings(minimumProtocol: number): ModelContextSt
 		pending,
 		failed,
 		retry: () => void synchronize(),
-		change: (target, contextWindow) => synchronize({ target, contextWindow }),
+		change: (target, contextWindow) => {
+			const run = queue.current.then(() => synchronize({ target, contextWindow }));
+			queue.current = run;
+			return run;
+		},
 	};
 }
 
@@ -520,10 +589,7 @@ export function ModelContextSettings({
 			pending={context.pending}
 			failed={context.failed}
 			onRetry={context.retry}
-			onChange={(target, override) => {
-				if (context.pending) return;
-				void context.change(target, override);
-			}}
+			onChange={(target, override) => void context.change(target, override)}
 		/>
 	);
 }

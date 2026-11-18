@@ -7,6 +7,7 @@ import { canStartProjectlessChat, startProjectlessChat } from "../panels/chatAct
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
 import { startChatInTab } from "../panels/openChat";
 import { openFileInTab } from "../panels/openTabs";
+import { availableSettings } from "../panels/settingsCatalog";
 import { settingsNavGroups } from "../panels/settingsNav";
 import {
 	canSettleWorkspace,
@@ -165,6 +166,12 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		() => settingsNavGroups(protocolVersion, options.hasUpdateSettings),
 		[protocolVersion, options.hasUpdateSettings],
 	);
+	const hostPlatform = useAppStore((s) => s.hostPlatform);
+	const hasWorkspace = activeWorkspace !== null;
+	const settingEntries = useMemo(
+		() => availableSettings(settingsGroups, { protocolVersion, hasWorkspace, hostPlatform }),
+		[settingsGroups, protocolVersion, hasWorkspace, hostPlatform],
+	);
 	const editors = useEditors();
 	const [nativeShortcuts] = useState(hasNativeShortcuts);
 	const keybindings = useResolvedKeybindings();
@@ -266,6 +273,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			settled,
 			settleBlocked,
 			settingsGroups,
+			settingEntries,
 			tabActions,
 			actions: {
 				newWorkspace: options.openNewWorkspace,
@@ -296,7 +304,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				reveal: revealWorkspace,
 				copyPath: (workspace) => void copyText(workspace.worktreePath),
 				openIn: openWorkspaceIn,
-				openSettings: (section?: SettingsSection) => store().openSettings(section),
+				openSettings: (section?: SettingsSection, settingId?: string) =>
+					store().openSettings(section, settingId),
 				openShortcuts: () => store().openShortcuts(),
 				runTabAction: runActiveTabAction,
 			},
@@ -338,6 +347,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		t,
 		online,
 		settingsGroups,
+		settingEntries,
 		activeWorkspace,
 		historySessionId,
 		readAction,

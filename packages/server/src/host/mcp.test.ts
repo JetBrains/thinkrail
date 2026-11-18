@@ -12,8 +12,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
+	LoginPush,
 	McpListResult,
-	McpLoginPush,
 	McpServerLog,
 	McpServerSummary,
 } from "@thinkrail/contracts";
@@ -1288,7 +1288,7 @@ test("without a workspace a user server is signed in, tested and signed out, and
 		join(repo, ".pi", "mcp.json"),
 		JSON.stringify({ mcpServers: { repo: { url: "http://127.0.0.1:1/repo" } } }),
 	);
-	const pushes: McpLoginPush[] = [];
+	const pushes: LoginPush[] = [];
 	setMcpLoginPublisher((push) => pushes.push(push));
 	try {
 		expect(await handleRequest("mcp.logout", { name: "user-docs" }, CTX)).toEqual({ ok: true });

@@ -1,9 +1,9 @@
 import { RiCheckLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { isImeComposing, twinArrow } from "@thinkrail/ui/keyboard";
-import { useLocalKeys } from "@thinkrail/ui/local-keys";
+import { type LocalKeyEvent, useLocalKeys } from "@thinkrail/ui/local-keys";
 import { cn } from "@thinkrail/ui/utils";
-import { type KeyboardEvent, useId, useState } from "react";
+import { useId, useState } from "react";
 import { LOCAL_KEY_DEFAULTS } from "../keybindings";
 
 export interface SettingsChoiceOption<T extends string> {
@@ -23,6 +23,7 @@ export interface SettingsChoiceProps<T extends string> {
 	options: readonly SettingsChoiceOption<T>[];
 	value: T | null;
 	onSelect: (value: T) => void;
+	onPendingChange?: ((pending: T | null) => void) | undefined;
 	layout?: SettingsChoiceLayout;
 	cost?: SettingsChoiceCost;
 	disabled?: boolean;
@@ -96,11 +97,19 @@ function optionClass(layout: SettingsChoiceLayout, selected: boolean): string {
 	);
 }
 
+export interface ChoiceKeyEvent<E> {
+	readonly defaultPrevented: boolean;
+	readonly nativeEvent: LocalKeyEvent;
+	readonly target: unknown;
+	readonly currentTarget: { querySelectorAll(selector: string): Iterable<E> };
+	preventDefault(): void;
+}
+
 export interface SettingsChoiceGroupProps<T extends string>
-	extends Omit<SettingsChoiceProps<T>, "onSelect"> {
+	extends Omit<SettingsChoiceProps<T>, "onSelect" | "onPendingChange"> {
 	waiting: T | null;
 	onApply: (value: T) => void;
-	onKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void;
+	onKeyDown?: (event: ChoiceKeyEvent<HTMLElement>) => void;
 	onLeave?: () => void;
 }
 
@@ -198,58 +207,64 @@ export function SettingsChoiceGroup<T extends string>({
 	);
 }
 
-export function SettingsChoice<T extends string>(props: SettingsChoiceProps<T>) {
-	const {
-		options,
-		value,
-		onSelect,
-		layout = "segmented",
-		cost = "cheap",
-		disabled = false,
-	} = props;
+export interface SettingsChoiceState<T extends string, E> {
+	waiting: T | null;
+	onApply: (value: T) => void;
+	onKeyDown: (event: ChoiceKeyEvent<E>) => void;
+	onLeave: () => void;
+}
+
+export function useSettingsChoice<T extends string, E extends { focus(): void }>({
+	options,
+	value,
+	onSelect,
+	onPendingChange,
+	layout = "segmented",
+	cost = "cheap",
+	disabled = false,
+}: SettingsChoiceProps<T>): SettingsChoiceState<T, E> {
 	const keys = useLocalKeys("settings", LOCAL_KEY_DEFAULTS.settings);
 	const [pending, setPending] = useState<T | null>(null);
 	const waiting = cost === "expensive" && pending !== null && pending !== value ? pending : null;
 
+	const pend = (next: T | null) => {
+		setPending(next);
+		if (next !== waiting) onPendingChange?.(next);
+	};
 	const apply = (id: T) => {
-		setPending(null);
+		pend(null);
 		if (id !== value) onSelect(id);
 	};
 
-	const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-		if (event.defaultPrevented || isImeComposing(event.nativeEvent)) return;
-		const choices = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(OPTION));
-		const twin = twinArrow(keys.match(event.nativeEvent));
-		const plain = !(event.altKey || event.ctrlKey || event.metaKey || event.shiftKey);
-		const key = twin ?? (plain ? event.key : null);
+	const onKeyDown = (event: ChoiceKeyEvent<E>) => {
+		const press = event.nativeEvent;
+		if (event.defaultPrevented || isImeComposing(press)) return;
+		const choices = Array.from(event.currentTarget.querySelectorAll(OPTION));
+		const twin = twinArrow(keys.match(press));
+		const plain = !(press.altKey || press.ctrlKey || press.metaKey || press.shiftKey);
+		const key = twin ?? (plain ? press.key : null);
 		if (key === "Escape" && waiting !== null) {
 			event.preventDefault();
-			setPending(null);
+			pend(null);
 			choices[options.findIndex((option) => option.id === value)]?.focus();
 			return;
 		}
 		const delta = key === null ? undefined : STEPS[layout][key];
 		if (delta === undefined) return;
-		const target = event.target;
-		const focused = choices.findIndex(
-			(choice) => target instanceof Node && choice.contains(target),
-		);
-		const from = options[focused]?.id ?? choiceFocus(options, value, waiting);
+		const focused = options.find((_, index) => choices[index] === event.target);
+		const from = focused?.id ?? choiceFocus(options, value, waiting);
 		const next = choiceStep(options, from, delta, disabled);
 		if (next === null) return;
 		event.preventDefault();
 		if (cost === "cheap") apply(next);
-		else setPending(next === value ? null : next);
+		else pend(next === value ? null : next);
 		choices[options.findIndex((option) => option.id === next)]?.focus();
 	};
 
-	return (
-		<SettingsChoiceGroup
-			{...props}
-			waiting={waiting}
-			onApply={apply}
-			onKeyDown={onKeyDown}
-			onLeave={() => setPending(null)}
-		/>
-	);
+	return { waiting, onApply: apply, onKeyDown, onLeave: () => pend(null) };
+}
+
+export function SettingsChoice<T extends string>(props: SettingsChoiceProps<T>) {
+	const state = useSettingsChoice<T, HTMLElement>(props);
+	return <SettingsChoiceGroup {...props} {...state} />;
 }

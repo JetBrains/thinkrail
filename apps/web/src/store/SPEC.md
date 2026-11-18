@@ -541,7 +541,8 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   `beginLogin` response. **`beginLogin(loginId, providerId, target?)`** opens the login, preserving a
   matching frame-created dialog (the frame can beat the response) and refusing to overwrite a different
   active login. Workspace removal retires its targeted MCP dialog; late start responses and frames for
-  tombstoned workspaces cannot recreate it or strand the global login slot.
+  tombstoned workspaces cannot recreate it or strand the global login slot. A target without a
+  `workspaceId` (an MCP sign-in started with no workspace open) is never tombstoned.
   **`applyLoginFrame(push)`** folds an inbound `provider.login` frame (creating `activeLogin`
   if the frame arrived first; ignoring frames for a different live login); both keep an MCP
   push's `target`, which is how Providers and MCP settings each open only their own logins,

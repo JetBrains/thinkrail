@@ -1,13 +1,4 @@
-import {
-	RiAlertLine,
-	RiCornerDownRightLine,
-	RiDownloadLine,
-	RiKeyboardLine,
-	RiLockLine,
-	RiPencilLine,
-	RiSearchLine,
-	RiUploadLine,
-} from "@remixicon/react";
+import { RiDownloadLine, RiKeyboardLine, RiSearchLine, RiUploadLine } from "@remixicon/react";
 import type { KeybindingOverrides } from "@thinkrail/contracts";
 import { i18n, localeOf, type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
@@ -19,9 +10,7 @@ import {
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
-import { Keycaps } from "@thinkrail/ui/keycaps";
-import { cn } from "@thinkrail/ui/utils";
-import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { Fragment, type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { webExtensions } from "../extensions";
 import {
 	actsIn,
@@ -38,20 +27,29 @@ import {
 	type KeybindingEntry,
 	type KeybindingList,
 	keybindingsFile,
-	keyChordLabel,
 	localUses,
 	parseChord,
 	planImport,
 	resetChord,
 	SHORTCUT_SURFACE_TITLES,
-	SHORTCUT_SURFACES,
 	type ShortcutSurface,
 } from "../keybindings";
-import { SETTINGS_TAG } from "../panels/SettingsGroup";
-import { SettingsNotice } from "../panels/SettingsNotice";
+import { ConfirmDialog } from "../panels/ConfirmDialog";
+import { SETTING } from "../panels/settingsCatalog";
+import { Tree } from "../panels/treeNavigation";
+import { SETTINGS_ROWS, SettingsNotice, SettingsRow, useSettingsJump } from "../settingsKit";
 import { toast, useAppStore } from "../store";
 import { errorText, supportsKeybindings, updateKeybindings } from "../transport";
 import { claimKeyboard } from "./extensionCommands";
+import { KeybindingAreaRow, KeybindingScopeCaption, KeybindingShortcutRow } from "./KeybindingTree";
+import {
+	areaOfSetting,
+	chordName,
+	type KeybindingArea,
+	keybindingAreas,
+	resetArea,
+	scopeRuns,
+} from "./keybindingAreas";
 import { commandTitle, entryTitle, scopeText, useKeybindingList } from "./keybindingState";
 import { isDesktopShortcut } from "./shortcutCommands";
 import { hasNativeShortcuts } from "./useAppShortcuts";
@@ -59,6 +57,15 @@ import { hasNativeShortcuts } from "./useAppShortcuts";
 const CLAIM = "settings.keyboard";
 const FILE_NAME = "thinkrail-keybindings.json";
 const PRIMARY = "[data-focus-row-primary]";
+const NO_AREAS: ReadonlySet<string> = new Set();
+
+export const EXTENSION_AREAS = webExtensions.map(({ name }) => name);
+
+export function areaTitle(t: Translator, area: KeybindingArea): string {
+	if (area.surface !== null) return t(SHORTCUT_SURFACE_TITLES[area.surface]);
+	const extension = webExtensions.find(({ name }) => name === area.id);
+	return extension?.title ? t(extension.title) : area.id;
+}
 
 type Pending =
 	| { readonly row: string; readonly kind: "plain" }
@@ -113,11 +120,6 @@ const SKIP_REASONS = {
 	desktop: "settings.keyboard.import.skip.desktop",
 } as const satisfies Record<ImportSkipReason, string>;
 
-function chordName(chord: string, platform: string): string {
-	const parsed = parseChord(chord);
-	return parsed ? keyChordLabel(parsed, platform) : chord;
-}
-
 function saveKeybindings(next: KeybindingOverrides, failure: string): void {
 	void updateKeybindings(next).catch((error: unknown) => toast.error(errorText(error), failure));
 }
@@ -166,210 +168,12 @@ function listOf(t: Translator, items: readonly string[]): string {
 	return new Intl.ListFormat(localeOf(t), { type: "conjunction" }).format([...new Set(items)]);
 }
 
-function recordingPrompt(entry: KeybindingEntry) {
-	if (entry.fixed.length > 0) return "settings.keyboard.editor.recordingAlias" as const;
-	return entry.scope === null
-		? ("settings.keyboard.editor.recording" as const)
-		: ("settings.keyboard.editor.recordingLocal" as const);
-}
-
-function FixedChords({ entry }: { entry: KeybindingEntry }) {
-	const t = useT();
-	if (entry.fixed.length === 0 || entry.locked) return null;
-	return (
-		<span
-			data-testid="keybinding-fixed"
-			className="flex shrink-0 items-center gap-4 tr-text-metadata text-text-subtle"
-		>
-			{entry.fixed.map((chord) => (
-				<Keycaps key={chord.text} keys={chord.keys} className="whitespace-nowrap" />
-			))}
-			<RiLockLine aria-hidden className="size-12" />
-			{t("settings.keyboard.editor.alwaysWorks")}
-			<span aria-hidden>·</span>
-		</span>
-	);
-}
-
-function EntryChords({ entry, recording }: { entry: KeybindingEntry; recording: boolean }) {
-	const t = useT();
-	if (recording) {
-		return <span className="tr-text-metadata text-primary">{t(recordingPrompt(entry))}</span>;
-	}
-	const shown = [...(entry.locked ? entry.fixed : []), ...entry.chords].filter(
-		(chord) => chord.shown,
-	);
-	if (shown.length === 0) {
-		return (
-			<span className="tr-text-metadata text-text-subtle">
-				{t("settings.keyboard.editor.unbound")}
-			</span>
-		);
-	}
-	return (
-		<>
-			{shown.map((chord) => (
-				<span key={chord.text} className="flex items-center gap-4">
-					<Keycaps
-						keys={chord.keys}
-						className={cn(
-							"whitespace-nowrap",
-							chord.lostTo !== null && "[&_kbd]:text-text-subtle [&_kbd]:line-through",
-						)}
-					/>
-					{chord.displayOnly ? (
-						<RiLockLine aria-hidden className="size-12 text-text-subtle" />
-					) : null}
-				</span>
-			))}
-			{entry.locked ? (
-				<>
-					<RiLockLine aria-hidden className="size-14 text-text-subtle" />
-					<span className="sr-only">{t("settings.keyboard.editor.locked")}</span>
-				</>
-			) : null}
-			{entry.fixed.length > 0 && !entry.locked ? (
-				<RiPencilLine aria-hidden className="size-12 text-text-subtle" />
-			) : null}
-		</>
-	);
-}
-
-function KeybindingRow({
-	entry,
-	winner,
-	editable,
-	recording,
-	current,
-	dimmed,
-	message,
-	onRecord,
-	onKeyDown,
-	onBlur,
-	onFocus,
-	onReset,
-}: {
-	entry: KeybindingEntry;
-	winner: (command: string) => string;
-	editable: boolean;
-	recording: boolean;
-	current: boolean;
-	dimmed: boolean;
-	message: ReactNode;
-	onRecord: () => void;
-	onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
-	onBlur: () => void;
-	onFocus: () => void;
-	onReset: () => void;
-}) {
-	const t = useT();
-	const titleId = useId();
-	const chordId = useId();
-	const lost = entry.chords.filter((chord) => chord.lostTo !== null);
-	const changeable = editable && !entry.locked;
-	return (
-		<li
-			data-testid="keybinding-row"
-			data-command={entry.id}
-			data-alias={entry.id === entry.command ? undefined : entry.command}
-			data-scope={entry.scope ?? undefined}
-			data-custom={entry.custom ? "true" : undefined}
-			data-locked={entry.locked ? "true" : undefined}
-			data-focus-row={entry.id}
-			className={cn("flex flex-col gap-4 rounded-sm px-8 py-4", recording && "bg-primary-subtle")}
-		>
-			<div className="flex items-center gap-12">
-				<div className="flex min-w-0 flex-1 flex-col items-start gap-2">
-					<span className="flex flex-wrap items-center gap-8">
-						<span
-							id={titleId}
-							className={cn("tr-text-ui", dimmed ? "text-text-muted" : "text-text-default")}
-						>
-							{entryTitle(t, entry)}
-						</span>
-						{entry.custom ? (
-							<span data-testid="keybinding-custom" className={cn(SETTINGS_TAG, "text-primary")}>
-								{t("settings.keyboard.editor.custom")}
-							</span>
-						) : null}
-					</span>
-					{lost.map((chord) => (
-						<span
-							key={chord.text}
-							data-testid="keybinding-conflict"
-							className="flex items-center gap-4 tr-text-metadata text-feedback-warning"
-						>
-							<RiAlertLine aria-hidden className="size-14 shrink-0" />
-							{t("settings.keyboard.editor.conflict", {
-								chord: chord.label,
-								winner: winner(chord.lostTo ?? ""),
-							})}
-						</span>
-					))}
-					{entry.yields.map((use) => (
-						<span
-							key={`${use.scope}:${use.label}`}
-							data-testid="keybinding-yields"
-							className="flex items-center gap-4 tr-text-metadata text-text-muted"
-						>
-							<RiCornerDownRightLine aria-hidden className="size-14 shrink-0" />
-							{t("settings.keyboard.editor.yields", {
-								inside: scopeText(t, use.scope, "inside"),
-								chord: use.label,
-								command: winner(use.winner),
-							})}
-						</span>
-					))}
-					{lost.length > 0 && changeable ? (
-						<Button
-							variant="outline"
-							size="s"
-							data-testid="keybinding-assign-another"
-							tabIndex={current ? 0 : -1}
-							onClick={onRecord}
-						>
-							{t("settings.keyboard.editor.assignAnother")}
-						</Button>
-					) : null}
-				</div>
-				<FixedChords entry={entry} />
-				<button
-					id={chordId}
-					type="button"
-					data-testid="keybinding-chord"
-					data-focus-row-primary
-					data-settings-draft-input={recording ? "" : undefined}
-					aria-labelledby={`${titleId} ${chordId}`}
-					aria-disabled={changeable ? undefined : true}
-					tabIndex={current ? 0 : -1}
-					onClick={changeable ? onRecord : undefined}
-					onKeyDown={onKeyDown}
-					onFocus={onFocus}
-					onBlur={onBlur}
-					className={cn(
-						"flex min-h-24 shrink-0 flex-wrap items-center justify-end gap-x-8 gap-y-4 rounded-xs px-4 focus-visible:focus-ring",
-						changeable && "hover:bg-control-bg-hovered",
-					)}
-				>
-					<EntryChords entry={entry} recording={recording} />
-				</button>
-				<span className="flex w-64 shrink-0 justify-end">
-					{entry.custom && changeable ? (
-						<Button
-							variant="ghost"
-							size="s"
-							data-testid="keybinding-reset"
-							tabIndex={current ? 0 : -1}
-							onClick={onReset}
-						>
-							{t("settings.keyboard.editor.reset")}
-						</Button>
-					) : null}
-				</span>
-			</div>
-			{message}
-		</li>
-	);
+function withArea(areas: ReadonlySet<string>, id: string, present: boolean): ReadonlySet<string> {
+	if (areas.has(id) === present) return areas;
+	const next = new Set(areas);
+	if (present) next.add(id);
+	else next.delete(id);
+	return next;
 }
 
 function PendingNotice({
@@ -386,12 +190,24 @@ function PendingNotice({
 	const t = useT();
 	const { platform } = list.keybindings;
 	const cancel = (
-		<Button variant="outline" size="s" data-testid="keybinding-cancel" onClick={onCancel}>
+		<Button
+			variant="outline"
+			size="s"
+			tabIndex={0}
+			data-testid="keybinding-cancel"
+			onClick={onCancel}
+		>
 			{t("common.cancel")}
 		</Button>
 	);
 	const dismiss = (
-		<Button variant="outline" size="s" data-testid="keybinding-dismiss" onClick={onCancel}>
+		<Button
+			variant="outline"
+			size="s"
+			tabIndex={0}
+			data-testid="keybinding-dismiss"
+			onClick={onCancel}
+		>
 			{t("common.dismiss")}
 		</Button>
 	);
@@ -399,6 +215,7 @@ function PendingNotice({
 		<Button
 			variant="outline"
 			size="s"
+			tabIndex={0}
 			data-testid="keybinding-assign-anyway"
 			onClick={() => onAccept(chord, false)}
 		>
@@ -410,6 +227,7 @@ function PendingNotice({
 			<Button
 				variant="outline"
 				size="s"
+				tabIndex={0}
 				data-testid="keybinding-replace"
 				onClick={() => onAccept(chord, true)}
 			>
@@ -645,10 +463,11 @@ function ImportSummary({
 					</p>
 				</div>
 				<DialogFooter>
-					<Button variant="outline" onClick={onClose}>
+					<Button variant="outline" tabIndex={0} onClick={onClose}>
 						{t("common.cancel")}
 					</Button>
 					<Button
+						tabIndex={0}
 						data-testid="keybinding-import-apply"
 						disabled={count === 0}
 						onClick={() => {
@@ -664,18 +483,6 @@ function ImportSummary({
 	);
 }
 
-function scopeGroups(
-	rows: readonly KeybindingEntry[],
-): { scope: string | null; rows: KeybindingEntry[] }[] {
-	const groups: { scope: string | null; rows: KeybindingEntry[] }[] = [];
-	for (const entry of rows) {
-		const last = groups.at(-1);
-		if (last && last.scope === entry.scope) last.rows.push(entry);
-		else groups.push({ scope: entry.scope, rows: [entry] });
-	}
-	return groups;
-}
-
 export function KeybindingEditor() {
 	const t = useT();
 	const [desktop] = useState(hasNativeShortcuts);
@@ -684,48 +491,59 @@ export function KeybindingEditor() {
 	const overrides = useAppStore((state) => state.keybindingOverrides);
 	const disabled = useAppStore((state) => state.disabledExtensions);
 	const editable = supportsKeybindings(useAppStore((state) => state.protocolVersion));
+	const areas = keybindingAreas(list, EXTENSION_AREAS);
+	const jump = useSettingsJump();
+	const jumpArea = areaOfSetting(areas, jump?.id ?? null);
+	const jumpSeq = jumpArea === null ? null : (jump?.seq ?? null);
+	const [expanded, setExpanded] = useState<ReadonlySet<string>>(() =>
+		jumpArea === null ? NO_AREAS : new Set([jumpArea]),
+	);
+	const [closedWhileFiltering, setClosedWhileFiltering] = useState(NO_AREAS);
 	const [query, setQuery] = useState("");
 	const [keysMode, setKeysMode] = useState(false);
 	const [keyFilter, setKeyFilter] = useState<string | null>(null);
 	const [filterFocused, setFilterFocused] = useState(false);
 	const [recording, setRecording] = useState<string | null>(null);
 	const [pending, setPending] = useState<Pending | null>(null);
-	const [current, setCurrent] = useState<string | null>(null);
 	const [importing, setImporting] = useState<Importing | null>(null);
+	const [confirmingReset, setConfirmingReset] = useState(false);
 	const root = useRef<HTMLDivElement>(null);
 	const fileInput = useRef<HTMLInputElement>(null);
 	const filterInput = useRef<HTMLInputElement>(null);
 	useKeyboardClaim(recording !== null || (keysMode && filterFocused));
 
+	useEffect(() => {
+		if (jumpSeq === null || jumpArea === null) return;
+		setQuery("");
+		setKeysMode(false);
+		setKeyFilter(null);
+		setExpanded((open) => withArea(open, jumpArea, true));
+	}, [jumpSeq, jumpArea]);
+
 	const failure = t("settings.keyboard.editor.saveFailed");
 	const needle = query.trim().toLocaleLowerCase();
 	const keyLabel = keyFilter === null ? null : chordName(keyFilter, platform);
-	const shown = list.entries.filter((entry) =>
+	const filtering = keyLabel !== null || needle !== "";
+	const matches = (entry: KeybindingEntry) =>
 		keyLabel !== null
 			? entryLabels(entry).includes(keyLabel)
-			: needle === "" || matchesQuery(t, entry, needle),
-	);
-	const filtering = keyLabel !== null || needle !== "";
-	const tabStop = shown.some((entry) => entry.id === current) ? current : (shown[0]?.id ?? null);
-	const sections = [
-		...SHORTCUT_SURFACES.map((surface) => ({
-			key: surface,
-			title: t(SHORTCUT_SURFACE_TITLES[surface]),
-			extension: false,
-			enabled: true,
-			rows: shown.filter((entry) => entry.surface === surface),
-		})),
-		...webExtensions.map(({ name, title }) => ({
-			key: name,
-			title: title ? t(title) : name,
-			extension: true,
-			enabled: !disabled.includes(name),
-			rows: shown.filter((entry) => entry.surface === null && entry.source === name),
-		})),
-	]
-		.filter((section) => section.rows.length > 0)
-		.map((section) => ({ ...section, groups: scopeGroups(section.rows) }));
+			: needle === "" || matchesQuery(t, entry, needle);
+	const visible = areas
+		.map((area) => ({ area, rows: area.entries.filter(matches) }))
+		.filter(({ rows }) => !filtering || rows.length > 0);
+	const shownCount = visible.reduce((total, { rows }) => total + rows.length, 0);
+	const isOpen = (id: string) => (filtering ? !closedWhileFiltering.has(id) : expanded.has(id));
 
+	const toggleArea = (id: string) => {
+		const open = isOpen(id);
+		if (filtering) setClosedWhileFiltering((closed) => withArea(closed, id, open));
+		else setExpanded((shown) => withArea(shown, id, !open));
+	};
+	const filterBy = (nextQuery: string, nextKey: string | null) => {
+		setQuery(nextQuery);
+		setKeyFilter(nextKey);
+		setClosedWhileFiltering(NO_AREAS);
+	};
 	const focusRow = (row: string) => {
 		root.current
 			?.querySelector<HTMLElement>(`[data-focus-row="${CSS.escape(row)}"] ${PRIMARY}`)
@@ -770,7 +588,7 @@ export function KeybindingEditor() {
 		assignLocal(entry, chord);
 	};
 
-	const record = (entry: KeybindingEntry, event: KeyboardEvent<HTMLButtonElement>) => {
+	const record = (entry: KeybindingEntry, event: KeyboardEvent<HTMLElement>) => {
 		if (isImeComposing(event.nativeEvent) || event.key === "Tab") return;
 		event.preventDefault();
 		event.stopPropagation();
@@ -810,33 +628,43 @@ export function KeybindingEditor() {
 		finish(row, assignChord(list, overrides, command, chord));
 	};
 
-	const onRowKeyDown = (entry: KeybindingEntry, event: KeyboardEvent<HTMLButtonElement>) => {
+	const onRowKeyDown = (
+		entry: KeybindingEntry,
+		changeable: boolean,
+		event: KeyboardEvent<HTMLElement>,
+	) => {
+		if (event.target !== event.currentTarget) return;
 		if (recording === entry.id) {
 			record(entry, event);
 			return;
 		}
-		if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+		if (isImeComposing(event.nativeEvent) || event.key !== "Enter") return;
 		if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
 		event.preventDefault();
-		const buttons = [...(root.current?.querySelectorAll<HTMLElement>(PRIMARY) ?? [])];
-		const index = buttons.indexOf(event.currentTarget);
-		buttons[index + (event.key === "ArrowDown" ? 1 : -1)]?.focus();
+		if (changeable) startRecording(entry.id);
 	};
 
 	const onFilterKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-		if (!keysMode || isImeComposing(event.nativeEvent) || event.key === "Tab") return;
+		if (isImeComposing(event.nativeEvent) || event.key === "Tab") return;
+		if (!keysMode) {
+			const plain = !(event.altKey || event.ctrlKey || event.metaKey || event.shiftKey);
+			if (event.key !== "Escape" || !plain || query === "") return;
+			event.preventDefault();
+			filterBy("", null);
+			return;
+		}
 		event.preventDefault();
 		event.stopPropagation();
 		if (event.key === "Escape") {
 			setKeysMode(false);
-			setKeyFilter(null);
+			filterBy("", null);
 			return;
 		}
 		const recorded = chordFromEvent(event.nativeEvent, platform, {
 			allowPlain: true,
 			allowLocked: true,
 		});
-		if (recorded.kind === "chord") setKeyFilter(recorded.chord);
+		if (recorded.kind === "chord") filterBy("", recorded.chord);
 	};
 
 	const readFile = (file: File) =>
@@ -848,15 +676,54 @@ export function KeybindingEditor() {
 
 	const winner = (command: string) => commandTitle(t, list, command);
 
+	const shortcutRow = (entry: KeybindingEntry, enabled: boolean) => {
+		const changeable = editable && !entry.locked;
+		return (
+			<KeybindingShortcutRow
+				key={entry.id}
+				entry={entry}
+				platform={platform}
+				winner={winner}
+				changeable={changeable}
+				recording={recording === entry.id}
+				dimmed={!enabled}
+				onRecord={() => startRecording(entry.id)}
+				onKeyDown={(event) => onRowKeyDown(entry, changeable, event)}
+				onBlur={(event) => {
+					if (event.target === event.currentTarget && recording === entry.id) setRecording(null);
+				}}
+				onReset={() => finish(entry.id, resetChord(overrides, entry.command))}
+				message={
+					pending?.row === entry.id ? (
+						<PendingNotice
+							pending={pending}
+							list={list}
+							onAccept={(chord, replace) =>
+								entry.scope === null
+									? finish(entry.id, assignChord(list, overrides, entry.command, chord, replace))
+									: assignLocal(entry, chord, replace)
+							}
+							onCancel={() => finish(entry.id, null)}
+						/>
+					) : null
+				}
+			/>
+		);
+	};
+
 	return (
-		<div ref={root} data-testid="keybinding-editor" className="flex flex-col gap-12">
-			<p className="tr-text-metadata text-text-muted">{t("settings.keyboard.editor.intro")}</p>
+		<div ref={root} data-testid="keybinding-editor" className={SETTINGS_ROWS}>
 			{editable ? null : (
-				<SettingsNotice variant="info" testId="keybinding-read-only">
-					{t("settings.keyboard.editor.olderHost")}
-				</SettingsNotice>
+				<div className="py-8">
+					<SettingsNotice variant="info" testId="keybinding-read-only">
+						{t("settings.keyboard.editor.olderHost")}
+					</SettingsNotice>
+				</div>
 			)}
-			<div className="flex flex-wrap items-center gap-8">
+			<div
+				data-setting-row="keyboard-filter"
+				className="flex flex-wrap items-center gap-8 border-border-muted border-b py-12"
+			>
 				<div className="relative min-w-[14rem] flex-1">
 					<RiSearchLine
 						aria-hidden
@@ -865,20 +732,21 @@ export function KeybindingEditor() {
 					<input
 						ref={filterInput}
 						type="text"
+						tabIndex={0}
 						value={keysMode ? (keyLabel ?? "") : query}
 						readOnly={keysMode}
-						onChange={(event) => setQuery(event.target.value)}
+						onChange={(event) => filterBy(event.target.value, null)}
 						onKeyDown={onFilterKeyDown}
 						onFocus={() => setFilterFocused(true)}
 						onBlur={() => setFilterFocused(false)}
 						placeholder={
 							keysMode
 								? t("settings.keyboard.editor.keysPlaceholder")
-								: t("shortcuts.filterPlaceholder")
+								: t("settings.keyboard.editor.filterPlaceholder")
 						}
 						aria-label={t("shortcuts.filter")}
 						data-testid="keybinding-filter"
-						data-settings-draft-input={keysMode ? "" : undefined}
+						data-setting-stop=""
 						className="h-32 w-full rounded-sm border border-control-border-default bg-control-bg pr-8 pl-24 tr-text-ui text-text-default transition-colors placeholder:text-text-muted focus:border-control-border-active focus-visible:focus-ring"
 					/>
 				</div>
@@ -886,152 +754,158 @@ export function KeybindingEditor() {
 					variant={keysMode ? "soft-primary" : "outline"}
 					size="m"
 					iconLeft={RiKeyboardLine}
+					tabIndex={0}
 					aria-pressed={keysMode}
 					data-testid="keybinding-search-keys"
 					onClick={() => {
 						setKeysMode(!keysMode);
-						setKeyFilter(null);
-						setQuery("");
+						filterBy("", null);
 						filterInput.current?.focus();
 					}}
 				>
 					{t("settings.keyboard.editor.searchByKeys")}
 				</Button>
-				{editable ? (
-					<Button
-						variant="outline"
-						size="m"
-						data-testid="keybinding-reset-all"
-						disabled={Object.keys(overrides).length === 0}
-						onClick={() => saveKeybindings({}, failure)}
-					>
-						{t("settings.keyboard.editor.resetAll")}
-					</Button>
-				) : null}
-				<Button
-					variant="outline"
-					size="m"
-					iconLeft={RiDownloadLine}
-					data-testid="keybinding-export"
-					onClick={() => downloadFile(list)}
-				>
-					{t("settings.keyboard.editor.export")}
-				</Button>
-				{editable ? (
-					<>
-						<Button
-							variant="outline"
-							size="m"
-							iconLeft={RiUploadLine}
-							data-testid="keybinding-import"
-							onClick={() => fileInput.current?.click()}
-						>
-							{t("settings.keyboard.editor.import")}
-						</Button>
-						<input
-							ref={fileInput}
-							type="file"
-							accept="application/json,.json"
-							data-testid="keybinding-import-input"
-							className="sr-only"
-							tabIndex={-1}
-							onChange={(event) => {
-								const [file] = event.currentTarget.files ?? [];
-								event.currentTarget.value = "";
-								if (file) void readFile(file);
-							}}
-						/>
-					</>
-				) : null}
 				<span data-testid="keybinding-count" className="tr-text-metadata text-text-muted">
 					{filtering
-						? t("shortcuts.countFiltered", { shown: shown.length, total: list.entries.length })
+						? t("shortcuts.countFiltered", { shown: shownCount, total: list.entries.length })
 						: t("shortcuts.count", { count: list.entries.length })}
 				</span>
 			</div>
-			{sections.length === 0 ? (
-				<p className="tr-text-metadata text-text-muted">{t("shortcuts.noMatch")}</p>
-			) : (
-				<div data-focus-list="keybindings" className="flex flex-col gap-16">
-					{sections.map((section) => (
-						<section
-							key={section.key}
-							data-testid="keybinding-section"
-							data-section={section.key}
-							data-enabled={section.enabled ? "true" : "false"}
-							className="flex flex-col gap-4"
-						>
-							<h5 className="flex items-center gap-8 tr-text-eyebrow text-text-muted">
-								{section.title}
-								{section.extension ? (
-									<span className={cn(SETTINGS_TAG, "text-text-muted")}>
-										{t("settings.keyboard.editor.extension")}
-									</span>
-								) : null}
-								{section.enabled ? null : (
-									<span className={cn(SETTINGS_TAG, "text-text-muted")}>{t("common.off")}</span>
-								)}
-							</h5>
-							{section.groups.map((group) => (
-								<div key={`${group.scope}:${group.rows[0]?.id}`} className="flex flex-col">
-									{group.scope === null ? null : (
-										<p
-											data-testid="keybinding-scope"
-											data-scope={group.scope}
-											className="flex items-center gap-8 px-8 pt-4 tr-text-metadata text-text-muted"
-										>
-											<span className={cn(SETTINGS_TAG, "text-text-muted")}>
-												{t("settings.keyboard.editor.local")}
-											</span>
-											{scopeText(t, group.scope, "where")}
-										</p>
-									)}
-									<ul className="flex flex-col">
-										{group.rows.map((entry) => (
-											<KeybindingRow
-												key={entry.id}
-												entry={entry}
-												winner={winner}
-												editable={editable}
-												recording={recording === entry.id}
-												current={tabStop === entry.id}
-												dimmed={!section.enabled}
-												onFocus={() => setCurrent(entry.id)}
-												onRecord={() => startRecording(entry.id)}
-												onKeyDown={(event) => onRowKeyDown(entry, event)}
-												onBlur={() => {
-													if (recording === entry.id) setRecording(null);
-												}}
-												onReset={() => finish(entry.id, resetChord(overrides, entry.command))}
-												message={
-													pending?.row === entry.id ? (
-														<PendingNotice
-															pending={pending}
-															list={list}
-															onAccept={(chord, replace) =>
-																entry.scope === null
-																	? finish(
-																			entry.id,
-																			assignChord(list, overrides, entry.command, chord, replace),
-																		)
-																	: assignLocal(entry, chord, replace)
-															}
-															onCancel={() => finish(entry.id, null)}
-														/>
-													) : null
-												}
-											/>
-										))}
-									</ul>
-								</div>
-							))}
-						</section>
-					))}
-				</div>
-			)}
+			<div
+				data-setting-row="keyboard-shortcuts"
+				data-setting-id={SETTING.keyboardShortcuts.id}
+				className="border-border-muted border-b py-8"
+			>
+				{visible.length === 0 ? (
+					<p className="px-8 py-8 tr-text-metadata text-text-muted">{t("shortcuts.noMatch")}</p>
+				) : (
+					<Tree
+						label={t("settings.keyboard.shortcuts")}
+						focusList="keybindings"
+						className="flex flex-col"
+						leaveAtEdges
+					>
+						{visible.map(({ area, rows }) => {
+							const open = isOpen(area.id);
+							const enabled = area.surface !== null || !disabled.includes(area.id);
+							const title = areaTitle(t, area);
+							return (
+								<li
+									key={area.id}
+									role="none"
+									data-testid="keybinding-section"
+									data-section={area.id}
+									data-enabled={enabled ? "true" : "false"}
+									className="flex flex-col"
+								>
+									<KeybindingAreaRow
+										area={area}
+										title={title}
+										count={
+											filtering
+												? t("shortcuts.countFiltered", {
+														shown: rows.length,
+														total: area.entries.length,
+													})
+												: t("shortcuts.count", { count: area.entries.length })
+										}
+										expanded={open}
+										enabled={enabled}
+										resettable={editable}
+										onToggle={() => toggleArea(area.id)}
+										onReset={() => saveKeybindings(resetArea(overrides, area), failure)}
+									/>
+									{open ? (
+										<ul role="none" className="flex flex-col pl-24">
+											{scopeRuns(rows).map((run) => (
+												<Fragment key={`${run.scope}:${run.entries[0]?.id}`}>
+													{run.scope !== null && area.scope === null ? (
+														<li role="none" className="px-8 pt-8 pb-4">
+															<KeybindingScopeCaption scope={run.scope} />
+														</li>
+													) : null}
+													{run.entries.map((entry) => shortcutRow(entry, enabled))}
+												</Fragment>
+											))}
+										</ul>
+									) : null}
+								</li>
+							);
+						})}
+					</Tree>
+				)}
+			</div>
+			<SettingsRow
+				rowId="keyboard-import-export"
+				label={t("settings.keyboard.editor.importExport")}
+				description={t("settings.keyboard.editor.importExportDescription")}
+				control={
+					<Button
+						variant="outline"
+						size="m"
+						iconLeft={RiDownloadLine}
+						tabIndex={0}
+						data-testid="keybinding-export"
+						onClick={() => downloadFile(list)}
+					>
+						{t("settings.keyboard.editor.export")}
+					</Button>
+				}
+				sides={
+					editable ? (
+						<>
+							<Button
+								variant="outline"
+								size="m"
+								iconLeft={RiUploadLine}
+								tabIndex={0}
+								data-setting-side=""
+								data-testid="keybinding-import"
+								onClick={() => fileInput.current?.click()}
+							>
+								{t("settings.keyboard.editor.import")}
+							</Button>
+							<input
+								ref={fileInput}
+								type="file"
+								accept="application/json,.json"
+								data-testid="keybinding-import-input"
+								className="sr-only"
+								tabIndex={-1}
+								onChange={(event) => {
+									const [file] = event.currentTarget.files ?? [];
+									event.currentTarget.value = "";
+									if (file) void readFile(file);
+								}}
+							/>
+							<Button
+								variant="outline"
+								size="m"
+								tabIndex={0}
+								data-setting-side=""
+								data-testid="keybinding-reset-all"
+								disabled={Object.keys(overrides).length === 0}
+								onClick={() => setConfirmingReset(true)}
+							>
+								{t("settings.keyboard.editor.resetAll")}
+							</Button>
+						</>
+					) : null
+				}
+			/>
 			{importing ? (
 				<ImportSummary importing={importing} list={list} onClose={() => setImporting(null)} />
 			) : null}
+			<ConfirmDialog
+				open={confirmingReset}
+				onOpenChange={setConfirmingReset}
+				title={t("settings.keyboard.editor.resetAllTitle")}
+				description={t("settings.keyboard.editor.resetAllDescription")}
+				confirmLabel={t("settings.keyboard.editor.resetAllConfirm")}
+				destructive
+				confirmTestId="keybinding-reset-all-confirm"
+				onConfirm={() => saveKeybindings({}, failure)}
+			/>
 		</div>
 	);
 }
