@@ -94,10 +94,11 @@ const KEYCAP = "flex h-16 min-w-16 items-center justify-center rounded-xs bg-on-
 
 /**
  * Completion menus sit over the composer's left edge. The composer is a centred column of the
- * transcript width, so in a wide pane the menu follows the column instead of the pane's edge.
+ * transcript width, so in a wide pane the menu follows the column instead of the pane's edge; the
+ * offset is clamped so the menu (at most min(28rem, 90%) wide) never overruns the composer's right edge.
  */
 const MENU_LEFT =
-	"left-[max(var(--space-12),calc((100%-var(--chat-transcript-width))/2+var(--chat-gutter)))]";
+	"left-[clamp(var(--space-12),calc((100%-var(--chat-transcript-width))/2+var(--chat-gutter)),max(var(--space-12),calc(100%-min(28rem,90%)-var(--space-12))))]";
 
 const COMPOSER_CONTROLS =
 	"a,button,input,label,select,textarea,[role='button'],[role='menuitem'],[role='option']";

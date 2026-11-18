@@ -8,6 +8,7 @@ import {
 	pseudoBackgroundColor,
 	revealFirstProjectWorkspaces,
 	runInTerminal,
+	showTerminalPanel,
 	visibleTerminal,
 	visibleTerminalScreen,
 	waitTerminalReady,
@@ -31,6 +32,7 @@ test("a workspace opens a terminal automatically, rooted in the worktree, with w
 	await createWorkspaceViaDialog(page);
 	await expect(worktreeRows(page)).toHaveCount(1);
 
+	await showTerminalPanel(page);
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
 	await waitTerminalReady(page);
 	const term = visibleTerminalScreen(page);

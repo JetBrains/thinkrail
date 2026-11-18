@@ -38,7 +38,7 @@ test("browser-local chat preferences persist without changing another browser", 
 
 	try {
 		await selectMessageOrder(page, "oldest-first");
-		await enterDefaultWorkspace(page);
+		await enterDefaultWorkspace(page, { panels: false });
 		await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 		const messages = page.getByTestId("chat-message");
@@ -111,7 +111,7 @@ test("newest-first scrolls down into history and returns upward to the latest gr
 
 	try {
 		await selectMessageOrder(page, "newest-first");
-		await enterDefaultWorkspace(page);
+		await enterDefaultWorkspace(page, { panels: false });
 		await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 		const chatScroll = page.getByTestId("chat-scroll");
 		const latestAnswer = page.getByText(
@@ -234,7 +234,7 @@ test("in newest-first order, auto-collapse and the final-answer copy action stil
 
 	try {
 		await selectMessageOrder(page, "newest-first");
-		await enterDefaultWorkspace(page);
+		await enterDefaultWorkspace(page, { panels: false });
 		await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 		const largeBody = page

@@ -183,7 +183,10 @@ async function disposeLiveSessions(page: Page): Promise<void> {
 	}
 }
 
-export async function createWorkspaceViaDialog(page: Page): Promise<Workspace> {
+export async function createWorkspaceViaDialog(
+	page: Page,
+	{ panels = true }: { panels?: boolean } = {},
+): Promise<Workspace> {
 	const before = new Set(loadPersistedWorkspaces().map((w) => w.id));
 	const dialog = page.getByTestId("new-workspace-dialog");
 	await expect(async () => {
@@ -195,6 +198,9 @@ export async function createWorkspaceViaDialog(page: Page): Promise<Workspace> {
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]').first()).toBeVisible();
 	const created = loadPersistedWorkspaces().find((w) => !before.has(w.id) && w.kind !== "default");
 	if (!created) throw new Error("Workspace was not persisted after creation");
+	// The Codex frame starts with the right side and bottom panel hidden; reveal them once the chat tab
+	// is up (revealing earlier races the chat opening).
+	if (panels) await showAllPanels(page);
 	return created;
 }
 
@@ -490,6 +496,7 @@ export async function waitTerminalReady(page: Page): Promise<void> {
 }
 
 export async function openTerminal(page: Page): Promise<void> {
+	await showTerminalPanel(page);
 	const tabs = page.getByTestId("terminal-tab");
 	const previousCount = await tabs.count();
 	await page.getByTestId("terminal-add").click();

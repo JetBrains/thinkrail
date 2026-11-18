@@ -173,7 +173,12 @@ function ShellLayout() {
 		const left = s.workbenchFrame?.left;
 		return (left?.visible && left.groups.some((group) => !group.folded)) ?? false;
 	});
-	const rightSideVisible = useAppStore((s) => s.workbenchFrame?.right.visible ?? false);
+	// Like the sidebar toggle: the right side counts as open only when visible with an unfolded group, so
+	// a fully folded one goes through showFiles() instead of being expanded by the side toggle.
+	const rightSideVisible = useAppStore((s) => {
+		const right = s.workbenchFrame?.right;
+		return (right?.visible && right.groups.some((group) => !group.folded)) ?? false;
+	});
 	const searchShortcut = useKeybindingLabel("search.open");
 	const [nativeShortcuts] = useState(hasNativeShortcuts);
 	const newWorkspaceShortcut = useKeybindingLabel("workspace.new", { browser: !nativeShortcuts });

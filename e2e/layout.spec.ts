@@ -12,6 +12,7 @@ import {
 	revealFirstProjectWorkspaces,
 	revealWorkbenchTool,
 	showAllPanels,
+	showTerminalPanel,
 	waitTerminalReady,
 } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
@@ -197,7 +198,8 @@ test("overflow uses directional fades without changing tab-strip geometry", asyn
 		.toBe("none");
 	await expect(strip).toHaveCSS("height", "28px");
 	const listHeight = await height(tablist);
-	await expect.poll(() => height(strip.getByRole("tab").first())).toBeCloseTo(listHeight, 1);
+	// Pill tabs sit inside the strip's 2px vertical padding.
+	await expect.poll(() => height(strip.getByRole("tab").first())).toBeCloseTo(listHeight - 4, 1);
 
 	await tablist.evaluate((element) => {
 		element.scrollLeft = 0;
@@ -1190,6 +1192,7 @@ test("frontend windows keep chat and file placement independent", async ({ page,
 	await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await revealFirstProjectWorkspaces(peer);
 	await defaultWorkspaceRow(peer).click();
+	await showTerminalPanel(peer);
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
 	await expect(peer.getByTestId("terminal-tab")).toHaveCount(1);
 	const peerChat = peer.locator('[data-testid="editor-tab"][data-kind="chat"]');

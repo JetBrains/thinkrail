@@ -30,7 +30,7 @@ test("resource reads require the current chat's workspace and never recover hand
 				},
 			],
 		});
-		await enterDefaultWorkspace(page);
+		await enterDefaultWorkspace(page, { panels: false });
 		await openPersistedChat(page, "Resource history");
 		await expect(page.getByTestId("chat-toolbar")).toBeVisible();
 		const scope = { workspaceId: workspace.id, sessionId: parent.id };

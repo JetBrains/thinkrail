@@ -230,7 +230,7 @@ async function openTallChat(
 		? seedTallChat(`${order} deterministic scrolling`, messages)
 		: seedTallChat(`${order} deterministic scrolling`);
 	await selectMessageOrder(page, order);
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	const chatScroll = page.getByTestId("chat-scroll");
 	await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
 	await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false", {

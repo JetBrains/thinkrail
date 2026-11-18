@@ -40,7 +40,10 @@ export function SidebarToggle({ open, onToggle }: { open: boolean; onToggle: () 
 }
 
 function useSideVisible(side: "right" | "bottom"): boolean {
-	return useAppStore((s) => s.workbenchFrame?.[side].visible ?? false);
+	return useAppStore((s) => {
+		const frame = s.workbenchFrame?.[side];
+		return (frame?.visible && frame.groups.some((group) => !group.folded)) ?? false;
+	});
 }
 
 /** Sum of the active workspace's changed lines, or `null` while unknown / for a chat. */

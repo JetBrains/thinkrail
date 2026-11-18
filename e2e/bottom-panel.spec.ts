@@ -10,6 +10,7 @@ import {
 	revealWorkbenchTool,
 	runInTerminal,
 	showAllPanels,
+	showTerminalPanel,
 	visibleTerminal,
 	visibleTerminalScreen,
 	waitTerminalReady,
@@ -319,9 +320,10 @@ test("a hidden local frame keeps the host terminal reserved without attaching un
 	await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await revealFirstProjectWorkspaces(peer);
 	await peer.getByTestId("workspace-item").filter({ hasText: workspace.name }).click();
+	// The peer window starts on the Codex frame (bottom panel hidden); waitTerminalReady reveals it.
+	await waitTerminalReady(peer);
 	await expect(peer.getByTestId("bottom-panel")).toBeVisible();
 	await expect(peer.getByTestId("terminal-tab")).toHaveCount(1);
-	await waitTerminalReady(peer);
 
 	await reloadDefaultWorkbench(page);
 	await waitForLayoutSettled(page);
@@ -354,6 +356,7 @@ test("a completed initial-terminal handshake never recreates a terminal after ex
 		"data-layout-status",
 		"settled",
 	);
+	await showTerminalPanel(page);
 	await expect(page.getByTestId("bottom-new-terminal")).toBeVisible();
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(0);
 	const catalog = await requestOverWire<{ tabs: Array<{ tabKey: string }> }>(
@@ -778,6 +781,8 @@ test("bottom visibility and alignment stay local to each window and survive its 
 	await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await revealFirstProjectWorkspaces(peer);
 	await defaultWorkspaceRow(peer).getByRole("treeitem").click();
+	// The peer window starts on the Codex frame (bottom panel hidden).
+	await showTerminalPanel(peer);
 	await expect(peer.getByTestId("bottom-panel")).toBeVisible();
 
 	await setBottomAlignment(page, "Full width");
