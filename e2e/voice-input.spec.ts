@@ -2,7 +2,12 @@ import { existsSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { openWorkspaceChat, revealWorkbenchTool } from "./fixtures/app";
+import {
+	closeSettings,
+	openSettingsSection,
+	openWorkspaceChat,
+	revealWorkbenchTool,
+} from "./fixtures/app";
 import { E2E_DATA_DIR, E2E_SPEECH_PORT } from "./fixtures/paths";
 import {
 	FAKE_SPEECH_TEXT,
@@ -188,8 +193,7 @@ test("switching voice input off mid-download keeps the download's progress and C
 	const stopServer = await serveSlowModel();
 	const wire = await hostWire(baseURL);
 	try {
-		await page.getByTestId("open-settings").click();
-		await page.getByTestId("settings-nav-voice").click();
+		await openSettingsSection(page, "voice");
 		const voice = page.getByTestId("settings-voice");
 		await voice.getByTestId("settings-voice-language-english").click();
 		await expect(voice.getByTestId("settings-voice-status")).toContainText("Downloading");
@@ -207,7 +211,7 @@ test("switching voice input off mid-download keeps the download's progress and C
 		wire.close();
 		await stopServer();
 	}
-	await page.keyboard.press("Escape");
+	await closeSettings(page);
 });
 
 test("a dialog's field gets the mic inside the dialog and Enter cannot create mid-dictation", async ({
@@ -392,35 +396,66 @@ test("Settings turns voice input off and back on, and Delete frees its files and
 }) => {
 	await openChat(page);
 	await expect(mic(page)).toHaveAttribute("data-mic-state", "ready");
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-voice").click();
+	await openSettingsSection(page, "voice");
 	const voice = page.getByTestId("settings-voice");
 	await expect(voice.getByTestId("settings-voice-status")).toContainText("Ready");
 	await expect(voice).not.toContainText("nemo-speech");
-	await expect(voice.getByTestId("settings-voice-language-all")).toHaveAttribute(
-		"data-active",
+	const allLanguages = voice.getByTestId("settings-voice-language-all");
+	await expect(allLanguages).toHaveAttribute("data-active", "true");
+	await expect(voice.getByTestId("settings-voice-shortcut-keys")).toContainText("Space");
+
+	// Changing the language downloads a model, so an arrow only moves a pending pick.
+	await allLanguages.focus();
+	await page.keyboard.press("ArrowRight");
+	await expect(voice.getByTestId("settings-voice-language-english")).toHaveAttribute(
+		"data-pending",
 		"true",
 	);
+	await expect(voice.getByText("Press Enter to apply")).toBeVisible();
+	await expect(voice.getByTestId("settings-voice-status")).toContainText("Ready");
+	await page.keyboard.press("Escape");
+	await expect(voice.getByText("Press Enter to apply")).toHaveCount(0);
+	await expect(allLanguages).toBeFocused();
+	await expect(allLanguages).toHaveAttribute("data-active", "true");
 
 	const toggle = voice.getByTestId("settings-voice-toggle");
 	await toggle.click();
 	await expect(toggle).toHaveAttribute("data-active", "false");
 	await expect(voice.getByTestId("settings-voice-status")).toHaveCount(0);
 	await expect(voice.getByTestId("settings-voice-files")).toBeVisible();
-	await page.keyboard.press("Escape");
+	const search = page.getByTestId("settings-search");
+	const result = (id: string) =>
+		page.locator(`[data-testid="settings-search-result"][data-result-id="${id}"]`);
+	await search.fill("Speech language");
+	await result("voice-language").click();
+	await expect(toggle).toBeFocused();
+	await search.fill("Delete voice files");
+	await result("voice-files").click();
+	await expect(voice.getByTestId("settings-voice-delete")).toBeFocused();
+	await closeSettings(page);
 	await page.getByTestId("chat-input").focus();
 	await expect(mic(page)).toHaveCount(0);
 
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-voice").click();
+	await openSettingsSection(page, "voice");
 	await toggle.click();
 	await expect(toggle).toHaveAttribute("data-active", "true");
 	await voice.getByTestId("settings-voice-delete").click();
+	const confirm = page.getByTestId("settings-voice-delete-confirm");
+	await expect(confirm).toBeVisible();
+	await expect(page.getByTestId("confirm-dialog")).toContainText("Delete voice files?");
+	await confirm.click();
 	await expect(voice.getByTestId("settings-voice-install")).toBeVisible();
 	await expect(voice.getByTestId("settings-voice-status")).toContainText("Not set up");
 	await expect(voice.getByTestId("settings-voice-files")).toHaveCount(0);
 	expect(existsSync(SPEECH_DIR)).toBe(false);
-	await page.keyboard.press("Escape");
+	await search.fill("Delete voice files");
+	await expect(page.getByTestId("settings-search-results")).toContainText("“Delete voice files”");
+	await expect(result("voice-files")).toHaveCount(0);
+	await search.fill("");
+
+	await voice.getByTestId("settings-voice-shortcut-change").click();
+	await expect(page.getByTestId("settings-nav-keyboard")).toHaveAttribute("data-active", "true");
+	await closeSettings(page);
 	await page.getByTestId("chat-input").focus();
 	await expect(mic(page)).toHaveAttribute("data-mic-state", "offer");
 });

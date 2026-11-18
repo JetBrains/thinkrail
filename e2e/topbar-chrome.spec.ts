@@ -7,8 +7,8 @@ import type {
 	NativeWindowState,
 } from "@thinkrail/contracts";
 import {
+	closeSettings,
 	enterDefaultWorkspace,
-	expandDisclosure,
 	openAppFresh,
 	openFixtureProject,
 	PHONE_VIEWPORT,
@@ -99,19 +99,21 @@ async function setQuotaInterval(page: Page, seconds: number): Promise<void> {
 	await expect(interval).toHaveValue(String(seconds));
 }
 
-async function selectOppositeAppearanceTheme(page: Page): Promise<string> {
-	await expandDisclosure(page.getByTestId("theme-toggle"));
-	const selected = page.locator('[data-testid^="theme-option-"][data-active="true"]');
-	const originalTheme = await selected.getAttribute("data-theme-id");
-	const appearance = await selected.getAttribute("data-appearance");
+/** Switches the theme mode to the other appearance; returns how to come back to the current theme. */
+async function selectOppositeAppearanceTheme(page: Page): Promise<() => Promise<void>> {
+	const light =
+		(await page.getByTestId("theme-mode-light").getAttribute("aria-selected")) === "true";
+	const appearance = light ? "light" : "dark";
+	const selected = page
+		.getByTestId(`theme-list-${appearance}`)
+		.locator('[role="option"][aria-selected="true"]');
+	const originalTheme = await selected.getAttribute("data-testid");
 	if (!originalTheme) throw new Error("No selected theme");
-	await page
-		.locator(
-			`[data-testid^="theme-option-"][data-appearance="${appearance === "light" ? "dark" : "light"}"]`,
-		)
-		.first()
-		.click();
-	return originalTheme;
+	await page.getByTestId(`theme-mode-${light ? "dark" : "light"}`).click();
+	return async () => {
+		await page.getByTestId(`theme-mode-${appearance}`).click();
+		await page.getByTestId(originalTheme).click();
+	};
 }
 
 test("ordinary browsers have a fixed themed header with zero native insets", async ({ page }) => {
@@ -133,15 +135,14 @@ test("ordinary browsers have a fixed themed header with zero native insets", asy
 	await expect(page.getByTestId("settings-dialog")).toBeVisible();
 	await expect(page.getByTestId("settings-nav-updates")).toHaveCount(0);
 	await page.getByTestId("settings-nav-appearance").click();
-	const originalTheme = await selectOppositeAppearanceTheme(page);
+	const restoreTheme = await selectOppositeAppearanceTheme(page);
 	await expect(header).not.toHaveCSS("background-color", initialColors.actual);
 	const changedColors = await headerColors(page);
 	expect(changedColors.actual).toBe(changedColors.expected);
 	await expect(header).toHaveCSS("height", "40px");
-	await page.getByTestId(`theme-option-${originalTheme}`).click();
+	await restoreTheme();
 	await expect(header).toHaveCSS("background-color", initialColors.actual);
-	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("settings-dialog")).toBeHidden();
+	await closeSettings(page);
 
 	await page.setViewportSize(PHONE_VIEWPORT);
 	await expectUsableHeader(page);
@@ -254,8 +255,7 @@ test("native updates progress from explicit download through install and restart
 		).__THINKRAIL_TEST_UPDATE__({ status: "ready" });
 	});
 	await expect(page.getByTestId("update-restart")).toHaveText("Install & Restart");
-	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("settings-dialog")).toBeHidden();
+	await closeSettings(page);
 	await expect(page.getByTestId("update-ready")).toBeVisible();
 	await page.getByTestId("update-ready").click();
 	await page.getByTestId("update-restart").click();
@@ -300,8 +300,7 @@ test("the action cluster keeps Update, quota Retry and Settings out of the drag 
 	await waitForCentralState(page, "configured");
 	const quota = page.getByTestId("jbcentral-quota");
 	await expect(quota).toHaveAttribute("data-state", "unavailable");
-	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("settings-dialog")).toBeHidden();
+	await closeSettings(page);
 
 	const buttons = ["update-ready", "jbcentral-quota", "open-settings"];
 	await page.evaluate(() =>

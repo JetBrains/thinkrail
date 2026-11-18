@@ -313,3 +313,35 @@ test("a typed key names the locked element rows that already act on it", () => {
 	expect(ids("ArrowUp", true)).toContain("review.extendUp");
 	expect(ids("ArrowUp", false, { ctrlKey: true })).toEqual([]);
 });
+
+test("the Settings surface lists the section list, setting, list and Esc keys", () => {
+	const rows = rowsFor(false, LINUX);
+	const settings = rows.filter((row) => row.surface === "settings").map((row) => row.id);
+	expect(settings).toEqual([
+		"settings.nav.up",
+		"settings.nav.down",
+		"settings.nav.firstLast",
+		"settings.nav.enter",
+		"settings.nav.open",
+		"settings.nav.search",
+		"settings.up",
+		"settings.down",
+		"settings.firstLast",
+		"settings.actions",
+		"settings.back",
+		"settings.change",
+		"settings.apply",
+		"settings.reset",
+		"settings.escape",
+		"settings.list.open",
+		"settings.list.remove",
+		"settings.list.menu",
+	]);
+	expect(labels(rows, "settings.nav.down")).toEqual(["↓", "J"]);
+	expect(labels(rows, "settings.nav.search")).toEqual(["S", "/"]);
+	expect(labels(rows, "settings.back")).toEqual(["←", "H"]);
+	expect(labels(rows, "settings.reset")).toEqual(["Delete"]);
+	expect(labels(rows, "settings.list.remove")).toEqual(["Delete"]);
+	expect(labels(rows, "settings.list.menu")).toEqual(["Shift+F10"]);
+	expect(labels(rows, "settings.escape")).toEqual(["Esc"]);
+});

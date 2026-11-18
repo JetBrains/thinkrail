@@ -458,8 +458,28 @@ export const SettingsSection = {
 	Environment: "environment",
 	Voice: "voice",
 	Artifacts: "artifacts",
+	Subagents: "subagents",
+	Text: "text",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
+
+export const RETIRED_SETTINGS_SECTIONS: Readonly<
+	Partial<Record<SettingsSection, SettingsSection>>
+> = {
+	[SettingsSection.Artifacts]: SettingsSection.Layout,
+	[SettingsSection.LineWidth]: SettingsSection.Text,
+	[SettingsSection.Review]: SettingsSection.Models,
+};
+
+export const CLIENT_PREFERENCE_DEFAULTS = {
+	artifactsSmart: true,
+	doubleShiftSearch: true,
+	markdownOutlineSide: "right",
+} as const satisfies {
+	artifactsSmart: boolean;
+	doubleShiftSearch: boolean;
+	markdownOutlineSide: MarkdownOutlineSide;
+};
 
 export interface CreationChatHandoff {
 	workspaceId: string;
@@ -1192,6 +1212,7 @@ interface AppState {
 	unheldLoginFrame: LoginPush | null;
 	settingsOpen: boolean;
 	settingsSection: SettingsSection;
+	settingsTarget: string | null;
 	surveyInvitationOpen: boolean;
 	surveyWindowOpen: boolean;
 	inAppSurvey: AppSurvey | null;
@@ -1575,9 +1596,10 @@ interface AppState {
 	clearLoginInput: () => void;
 	clearLogin: (loginId?: string) => void;
 	clearSettledLogin: (providerId: string) => void;
-	openSettings: (section?: SettingsSection) => void;
+	openSettings: (section?: SettingsSection, settingId?: string) => void;
 	closeSettings: () => void;
 	setSettingsSection: (section: SettingsSection) => void;
+	consumeSettingsTarget: () => string | null;
 	showSurveyInvitation: () => void;
 	hideSurveyInvitation: () => void;
 	openSurveyWindow: () => void;
@@ -2450,6 +2472,15 @@ function withRuntime(
 	return next === rt ? {} : { sessions: { ...s.sessions, [sessionId]: next } };
 }
 
+function loginWorkspaceRemoved(
+	state: Pick<AppState, "removedWorkspaceIds">,
+	target: LoginPush["target"] | undefined,
+): boolean {
+	return (
+		target?.workspaceId !== undefined && state.removedWorkspaceIds[target.workspaceId] === true
+	);
+}
+
 function newLoginState(
 	loginId: string,
 	providerId: string,
@@ -2584,7 +2615,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	artifactsSeenByWorkspace: {},
 	artifactsShowIgnored: true,
 	artifactsView: null,
-	artifactsSmart: true,
+	artifactsSmart: CLIENT_PREFERENCE_DEFAULTS.artifactsSmart,
 	artifactsTreeExpandedByWorkspace: {},
 	reviewsByWorkspace: {},
 	reviewFocusRequest: null,
@@ -2605,6 +2636,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	unheldLoginFrame: null,
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
+	settingsTarget: null,
 	surveyInvitationOpen: false,
 	surveyWindowOpen: false,
 	inAppSurvey: null,
@@ -2612,7 +2644,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	searchOpen: false,
 	searchSession: 0,
 	shortcutsOpen: false,
-	doubleShiftSearch: true,
+	doubleShiftSearch: CLIENT_PREFERENCE_DEFAULTS.doubleShiftSearch,
 	theme: DEFAULT_CONFIG.theme,
 	themeMode: DEFAULT_CONFIG.themeMode,
 	systemThemePair: DEFAULT_CONFIG.systemThemePair,
@@ -2635,7 +2667,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	voiceInputEnabled: DEFAULT_CONFIG.voiceInputEnabled,
 	chatMessageOrder: "oldest-first",
 	markdownOutlineVisible: null,
-	markdownOutlineSide: "right",
+	markdownOutlineSide: CLIENT_PREFERENCE_DEFAULTS.markdownOutlineSide,
 	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,
 	defaultModel: DEFAULT_CONFIG.defaultModel,
 	defaultEffort: DEFAULT_CONFIG.defaultEffort,
@@ -4822,7 +4854,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	finishLoginStart: () => set({ loginStarting: false }),
 	beginLogin: (loginId, providerId, target, method) =>
 		set((s) => {
-			if (target && s.removedWorkspaceIds[target.workspaceId]) return {};
+			if (loginWorkspaceRemoved(s, target)) return {};
 			if (s.activeLogin?.loginId === loginId)
 				return method && !s.activeLogin.method ? { activeLogin: { ...s.activeLogin, method } } : {};
 			if (s.activeLogin?.status === "active") return {};
@@ -4838,7 +4870,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	applyLoginFrame: (push) =>
 		set((s) => {
-			if (push.target && s.removedWorkspaceIds[push.target.workspaceId]) return {};
+			if (loginWorkspaceRemoved(s, push.target)) return {};
 			const statusChanged =
 				push.frame.kind === "success" && !push.target
 					? { providerStatusVersion: s.providerStatusVersion + 1 }
@@ -4870,10 +4902,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (!login || login.target || login.providerId !== providerId) return {};
 			return login.status === "active" ? {} : { activeLogin: null };
 		}),
-	openSettings: (section = SettingsSection.Providers) =>
-		set({ settingsOpen: true, settingsSection: section }),
-	closeSettings: () => set({ settingsOpen: false }),
+	openSettings: (section, settingId) =>
+		set((state) => ({
+			settingsOpen: true,
+			settingsSection: section ?? state.settingsSection,
+			settingsTarget: settingId ?? null,
+		})),
+	closeSettings: () => set({ settingsOpen: false, settingsTarget: null }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
+	consumeSettingsTarget: () => {
+		const target = get().settingsTarget;
+		if (target !== null) set({ settingsTarget: null });
+		return target;
+	},
 	openNotificationPrompt: () =>
 		set((state) => (state.notificationPromptOpen ? state : { notificationPromptOpen: true })),
 	closeNotificationPrompt: () => set({ notificationPromptOpen: false }),

@@ -2,9 +2,11 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import {
+	closeSettings,
 	createWorkspaceViaDialog,
 	hideAuxiliaryWorkbench,
 	openFixtureProject,
+	openSettingsSection,
 	revealWorkbenchTool,
 } from "./fixtures/app";
 
@@ -98,15 +100,14 @@ test("the Markdown outline position setting moves the outline to the left of the
 	const { preview, outline } = await openOutlinedPreview(page);
 	await expect(outline).toHaveAttribute("data-side", "right");
 
-	await page.getByTestId("open-settings").click();
-	const dialog = page.getByTestId("settings-dialog");
-	await page.getByTestId("settings-nav-appearance").click();
-	await dialog
-		.getByTestId("markdown-outline-side-control")
-		.getByText("Left", { exact: true })
-		.click();
-	await page.keyboard.press("Escape");
-	await expect(dialog).toBeHidden();
+	const dialog = await openSettingsSection(page, "layout");
+	const side = dialog.getByTestId("markdown-outline-side-control");
+	await side.getByRole("option", { name: "Left", exact: true }).click();
+	await expect(side.getByRole("option", { name: "Left", exact: true })).toHaveAttribute(
+		"aria-selected",
+		"true",
+	);
+	await closeSettings(page);
 
 	await expect(outline).toHaveAttribute("data-side", "left");
 	const outlineBox = await outline.boundingBox();

@@ -162,7 +162,11 @@ once that chat reloads, selects it in the Resources inspector — its detail lis
 card body — and disables it for that chat from the detail header, then removes it; it opens a chat from a not-running
 server's row, reconnects that server per chat once it fails and shows its masked log, and names an
 unreadable user `mcp.json` with an edit hint; and it proves a repository-defined server flags the chat's
-attention marker, waits for Review & approve, and starts once approved. Each test removes the `mcp.json`
+attention marker, waits for Review & approve, and starts once approved. With no workspace open, it lists
+the user servers (On, no per-chat action, the project-servers line instead of that group), adds one
+through an Add dialog that offers User scope only, switches it off for every project (the entry's own
+`enabled: false` in the lane's user `mcp.json`, removed again when switched back on) and removes it
+through the Delete key's confirmation, focus landing on the remaining server. Each test removes the `mcp.json`
 it wrote (the lane's agent dir or the fixture repository's `.pi/`) in `finally`, so no later scenario
 starts servers.
 
@@ -396,7 +400,7 @@ on its timer, without its fade under reduced motion); then the focus chords: `Mo
 Files in the matching mode, and the palette rows with their chords, run after the palette closes.
 `focus-recovery.spec.ts` pins one site per rule of the shell's focus recovery: a deleted Files row hands
 focus to the next file in its folder, then the previous; removing an MCP server focuses the next server's
-menu and the empty state's Add inside Settings; Enter in a workspace's inline rename returns to the row;
+Details (its row's primary) and then the empty state's Add inside Settings; Enter in a workspace's inline rename returns to the row;
 Escape in Plan's add-task returns to its button and Show step focuses the step; the Markdown outline toggle
 keeps focus across its two renderings and an entry focuses its heading; One file's Next disabling at the
 last file hands focus to Prev; and the safety net lands a removed unmarked control on its region's landing
@@ -415,8 +419,10 @@ open their menu and kept diff; the Artifacts tree is one Tab stop that ↓ walks
 elsewhere show labels and the bar, and Esc / `Mod+;` leave them; typing a label presses a rail button,
 opens a Radix dropdown (whose open menu then scopes the labels) and focuses the chat input without typing;
 the first letter narrows the labels, Backspace restores them and Shift on the last letter only focuses a
-Files row; an open Settings dialog scopes the labels and survives the Esc that leaves hint mode; and
-Settings → Extensions lists Hint mode without tool chips, switching it off silences both keys and drops
+Files row; an open Settings dialog scopes the labels and survives the Esc that leaves hint mode; plain `F`
+labels Settings from a section tab, a content row and a search result, and typing a label presses it
+(nothing in Settings binds `F`); and
+Settings → Extensions & skills lists Hint mode without tool chips, switching it off silences both keys and drops
 its cheatsheet rows until it is switched back on. A label is found by its position at the target's
 top-left; a target must be scrolled into view and its panel's entrance animation finished before the
 labels are taken, since they are measured once (and on scroll / resize).
@@ -448,12 +454,36 @@ a tab strip and j/k on a side rail.
 the feed with no ring (draft, caret and the region's accent line kept), where `F` shows hint labels, a
 second Esc does nothing, ↓ walks to a message and that message's Esc returns to the composer; the @ menu
 takes the first Esc; the TODO rail's input lands on its panel root, from which `F` and `Mod+1` still work;
-a Settings field's Esc still closes Settings; and the terminal's Esc reaches the shell with focus kept. It
+in Settings it takes three presses to close: Esc in the shortcut filter clears it, the next goes to the
+section list, the third closes Settings; and the terminal's Esc reaches the shell with focus kept. It
 also pins the Esc ladder: the TODO input → its panel → the chat feed (no ring, the center's accent line),
 and a Files row, the chat's own tab and a top-bar button straight to the feed; with a file in the center,
 a Files row, the file's tab and a terminal tab land in its Monaco editor with the tab unchanged, and
 Monaco keeps its Esc; a dialog's button closes the dialog and climbs no further; on Project Home the
 Projects tree lands in the main pane.
+`settings-keyboard.spec.ts` pins the Settings frame's keys: opening lands on the current section's tab, and
+Tab goes search → the one tab stop of the section list → the content; ↑/↓, j/k and Home/End open a section
+at once with focus kept on its tab, while other letters do nothing; →, `l` and Enter enter the content on
+the setting focused there last, else on its first, and ← comes back; Esc steps back — a dirty field
+reverts, then the section list, then Settings closes onto its opener; inside a section one ↑/↓ walk crosses
+a switch, a field, a tree and a row without wrapping, and Home/End reach its ends; a list walks row by row,
+Delete asks first and focus lands on the neighbour, and Shift+F10 opens the row's menu; a cheap choice
+applies on each arrow and → past its end reaches Reset, while an expensive one waits for Enter and Esc
+cancels its pending pick, and Delete resets either; every section opens scrolled to the
+top; and, with the Windows native bridge injected, `Ctrl+,` toggles Settings from inside it (reopening the
+remembered section) while `Ctrl+W` closes it at once from a field, keeping the edit.
+`settings-search.spec.ts` pins search over individual settings: `S` and `/` start it from the section
+list, other letters do nothing and `F` starts hint mode; results name their section, ↓ walks in, Enter
+jumps and flashes the row with the query kept, and Esc walks back out (to the results, then clearing);
+j/k walk the results, ↑ on the first returns to the field, and Enter in the field jumps to the first; the
+palette's per-setting row opens Settings on that setting; and a **drift check** reads every entry of
+`apps/web/src/panels/settingsCatalog.ts` with its English label from `packages/locales/en.json`, searches
+for each label and jumps to it, failing on an entry the search does not offer or one that renders no
+`[data-setting-id]`. Exempt are the entries this host cannot show (Updates, the Windows shell) and the
+state-gated ones, each pinned where its state exists: signed-in providers (`provider-login`), voice files
+(`voice-input`) and a launched survey (`feedback`), offered only while that state holds. Other specs reach
+Settings through `fixtures/app.ts`' `openSettingsSection(page, id)` and leave it with `closeSettings(page)`,
+which clicks Close: a single Esc no longer closes Settings from a field or a row.
 `keyboard-review.spec.ts` pins commenting from the keyboard: Tab onto a Pierre diff lands on its cursor
 proxy (`review-cursor`: a listbox whose single selected option, its `aria-activedescendant`, names the
 line and its place among the stops, while the diff container has no role or tabindex and takes the ring's
@@ -691,7 +721,7 @@ available) that survives a reload. A huge comparison opts in through Show diff a
 write its own watcher frame, past the 300 ms quiet flush), so updates keep landing inside the expensive first
 mount. These regressions need no provider,
 prompt submission, route mock, or screenshot. Extension on/off coverage (`extensions-settings.spec.ts`) drives the
-real Settings → Extensions switch of every shipped extension (`visualize`, `ask-user-question`,
+real Settings → Extensions & skills switch of every shipped extension (`visualize`, `ask-user-question`,
 `web-access`, and the web-only `hint-mode` row the host catalog lacks) through `settings.update`, proves it
 survives a reload, and seeds a historical `visualize` call that must still render
 its diagram and an answered `ask_user_question` call that must still render its record while the extension is
@@ -746,7 +776,8 @@ chords, Skip in the ↓ ring and ←/→ on the footer, arrows, Home/End, a park
 scrolling a tall docked question's body just enough to show the focused control while the transcript and
 the dock stay put, a rebound `d` and a Discuss rebound onto a Mod chord
 (over the host wire), a Russian-layout `d` and the card's Settings → Keyboard section; `fixtures/ask.ts` seeds the pending questions for the three card specs.
-These four specs also run in a **`webkit` Playwright project**: the macOS desktop
+These four specs, `settings-keyboard.spec.ts` (Settings' tab stops and its Esc hold, which overrides
+`defaultPrevented` for Radix alone) and `settings-search.spec.ts` also run in a **`webkit` Playwright project**: the macOS desktop
 is the system WKWebView, whose Tab skips buttons without an explicit `tabindex` (the regression this lane
 exists for). CI installs WebKit with the system libraries it links, not its media plugins (`.github/SPEC.md`);
 Linux WebKit may not reproduce the macOS Tab rule,

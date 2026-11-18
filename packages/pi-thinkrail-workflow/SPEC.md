@@ -62,7 +62,7 @@ dispatcher to load rather than relying on description-matching (see [[module-web
   tool *name* only: `spec_*` from the portable `pi-spec-graph`, and `ask_user_question` from the portable
   `@thinkrail/pi-ask-user-question` package ([[module-pi-ask-user-question]]) — composed into ThinkRail by
   [[module-ext-ask-user-question]], installable from npm in vanilla `pi`. When the tool is absent
-  (switched off in Settings → Extensions, or never installed), `asking-user-questions` asks the round as a
+  (switched off in Settings → Extensions & skills, or never installed), `asking-user-questions` asks the round as a
   plain chat message and ends the turn, so no workflow blocks on it. The package still does not claim to
   run under vanilla `pi` — it is unpublished and staged only by ThinkRail — and it stays its own package
   rather than folding into `packages/server` for the same reason `packages/shared` isn't folded into

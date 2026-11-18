@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
-import { expandDisclosure } from "./fixtures/app";
+import { openSettingsSection } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 
 const THEMES_DIR = join(E2E_DATA_DIR, "themes");
@@ -25,11 +25,10 @@ function removeThemes(): void {
 	}
 }
 
+/** Opens Appearance, whose Dark mode lists the dark themes (the fixture theme is dark). */
 async function openThemeList(page: Page) {
-	const dialog = page.getByTestId("settings-dialog");
-	if (!(await dialog.isVisible())) await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-appearance").click();
-	await expandDisclosure(dialog.getByTestId("theme-toggle"));
+	const dialog = await openSettingsSection(page, "appearance");
+	await expect(dialog.getByTestId("theme-list-dark")).toBeVisible();
 	return dialog;
 }
 

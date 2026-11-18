@@ -2,8 +2,10 @@ import { realpathSync, rmSync, utimesSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
+	closeSettings,
 	enterDefaultWorkspace,
 	openFixtureProject,
+	openSettingsSection,
 	pressPlatformShortcut,
 	revealWorkbenchTool,
 } from "./fixtures/app";
@@ -18,6 +20,8 @@ const rows = (page: Page) => editor(page).getByTestId("keybinding-row");
 const row = (page: Page, command: string) =>
 	editor(page).locator(`[data-testid="keybinding-row"][data-command="${command}"]`);
 const chord = (page: Page, command: string) => row(page, command).getByTestId("keybinding-chord");
+const area = (page: Page, id: string) =>
+	editor(page).locator(`[data-testid="keybinding-group"][data-area="${id}"]`);
 const message = (page: Page, command: string) =>
 	row(page, command).getByTestId("keybinding-message");
 const settings = (page: Page) => page.getByTestId("settings-dialog");
@@ -44,19 +48,25 @@ test.afterEach(async ({ page }) => {
 	});
 });
 
-async function openSettingsSection(page: Page, section: "keyboard" | "extensions"): Promise<void> {
-	if (!(await settings(page).isVisible())) await page.getByTestId("open-settings").click();
-	await page.getByTestId(`settings-nav-${section}`).click();
-}
-
-async function openKeyboardSettings(page: Page): Promise<void> {
+/** Areas start collapsed: a row renders once its area is open (or a filter matches it). */
+async function openKeyboardSettings(page: Page, ...areas: string[]): Promise<void> {
 	await openSettingsSection(page, "keyboard");
-	await expect(rows(page).first()).toBeVisible();
+	await expect(area(page, "general")).toBeVisible();
+	for (const id of areas) await openArea(page, id);
 }
 
-async function closeSettings(page: Page): Promise<void> {
-	await settings(page).getByRole("button", { name: "Close", exact: true }).click();
-	await expect(settings(page)).toBeHidden();
+async function openArea(page: Page, id: string): Promise<void> {
+	const group = area(page, id);
+	if ((await group.getAttribute("aria-expanded")) !== "true") await group.click();
+	await expect(group).toHaveAttribute("aria-expanded", "true");
+}
+
+async function openEveryArea(page: Page): Promise<void> {
+	const collapsed = editor(page).locator('[data-testid="keybinding-group"][aria-expanded="false"]');
+	for (let left = await collapsed.count(); left > 0; left = await collapsed.count()) {
+		await collapsed.first().click();
+		await expect(collapsed).toHaveCount(left - 1);
+	}
 }
 
 async function record(page: Page, command: string, keys: string): Promise<void> {
@@ -94,17 +104,20 @@ test("a recorded chord runs its command, shows in the cheatsheet and the palette
 	await openKeyboardSettings(page);
 	await editor(page).getByTestId("keybinding-filter").fill("split right");
 	await expect(rows(page)).toHaveCount(1);
+	const item = row(page, "group.splitRight");
 	const button = chord(page, "group.splitRight");
-	await button.focus();
+	await item.focus();
 	await page.keyboard.press("Enter");
 	await expect(button).toContainText("Press a new shortcut… Esc cancels");
 	await page.keyboard.press("Control");
 	await expect(button).toContainText("Press a new shortcut… Esc cancels");
 	await pressPlatformShortcut(page, "Alt+KeyS");
 	await expect(button.locator("kbd")).toHaveText(["Ctrl", "Alt", "S"]);
-	await expect(row(page, "group.splitRight")).toHaveAttribute("data-custom", "true");
-	await expect(row(page, "group.splitRight").getByTestId("keybinding-custom")).toHaveText("Custom");
-	await expect(button).toBeFocused();
+	await expect(item).toHaveAttribute("data-custom", "true");
+	await expect(item.getByTestId("keybinding-custom")).toHaveText("Changed");
+	await expect(item.getByTestId("keybinding-default")).toHaveText("Default: Ctrl+\\");
+	await expect(area(page, "tabs").getByTestId("keybinding-group-changed")).toHaveText("1 changed");
+	await expect(item).toBeFocused();
 	await closeSettings(page);
 
 	await page.getByRole("tab", { name: /notes\.txt/ }).click();
@@ -141,7 +154,66 @@ test("a recorded chord runs its command, shows in the cheatsheet and the palette
 	await row(page, "group.splitRight").getByTestId("keybinding-reset").click();
 	await expect(row(page, "group.splitRight")).not.toHaveAttribute("data-custom", "true");
 	await expect(chord(page, "group.splitRight").locator("kbd")).toHaveText(["Ctrl", "\\"]);
-	await expect(chord(page, "group.splitRight")).toBeFocused();
+	await expect(row(page, "group.splitRight")).toBeFocused();
+});
+
+test("the shortcut tree starts collapsed, opens with the arrows and the filter, and Delete puts back defaults", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await withHostWire(page, (wire) =>
+		wire.request("settings.update", {
+			config: {
+				keybindings: { "group.splitRight": ["Mod+Alt+KeyS"], "tab.close": ["Mod+Alt+KeyQ"] },
+			},
+		}),
+	);
+	await openKeyboardSettings(page);
+	await expect(
+		editor(page).locator('[data-testid="keybinding-group"][aria-expanded="true"]'),
+	).toHaveCount(0);
+	await expect(rows(page)).toHaveCount(0);
+	const tabs = area(page, "tabs");
+	await expect(tabs.getByTestId("keybinding-group-changed")).toHaveText("2 changed");
+	await expect(tabs.getByTestId("keybinding-group-count")).toHaveText(/^\d+ shortcuts$/);
+
+	await tabs.focus();
+	await page.keyboard.press("ArrowRight");
+	await expect(tabs).toHaveAttribute("aria-expanded", "true");
+	await page.keyboard.press("ArrowRight");
+	await expect(rows(page).first()).toBeFocused();
+	await page.keyboard.press("ArrowLeft");
+	await expect(tabs).toBeFocused();
+
+	const split = row(page, "group.splitRight");
+	await split.focus();
+	await page.keyboard.press("ArrowRight");
+	await expect(split.getByTestId("keybinding-change")).toBeFocused();
+	await page.keyboard.press("ArrowLeft");
+	await expect(split).toBeFocused();
+	await page.keyboard.press("Delete");
+	await expect(split).not.toHaveAttribute("data-custom", "true");
+	await expect(chord(page, "group.splitRight").locator("kbd")).toHaveText(["Ctrl", "\\"]);
+	await expect(tabs.getByTestId("keybinding-group-changed")).toHaveText("1 changed");
+
+	await tabs.focus();
+	await page.keyboard.press("Delete");
+	await expect(tabs.getByTestId("keybinding-group-changed")).toHaveCount(0);
+	await expect(row(page, "tab.close")).not.toHaveAttribute("data-custom", "true");
+	await page.keyboard.press("ArrowLeft");
+	await expect(tabs).toHaveAttribute("aria-expanded", "false");
+
+	const filter = editor(page).getByTestId("keybinding-filter");
+	await filter.fill("next file");
+	const sections = editor(page).getByTestId("keybinding-section");
+	await expect(sections).toHaveCount(1);
+	await expect(sections.first()).toHaveAttribute("data-section", "review");
+	await expect(area(page, "review")).toHaveAttribute("aria-expanded", "true");
+	await page.keyboard.press("Escape");
+	await expect(filter).toHaveValue("");
+	await expect(
+		editor(page).locator('[data-testid="keybinding-group"][aria-expanded="true"]'),
+	).toHaveCount(0);
 });
 
 test("Replace takes a chord from another command, which then shows unbound; Reset all restores both", async ({
@@ -152,14 +224,14 @@ test("Replace takes a chord from another command, which then shows unbound; Rese
 	await page.getByTestId("start-chat").first().click();
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 
-	await openKeyboardSettings(page);
+	await openKeyboardSettings(page, "general");
 	await record(page, "focus.composer", "k");
 	await expect(message(page, "focus.composer")).toHaveAttribute("data-kind", "taken");
 	await expect(message(page, "focus.composer")).toContainText(
 		"Ctrl+K is already used by Open the search palette",
 	);
 	await message(page, "focus.composer").getByTestId("keybinding-replace").click();
-	await expect(chord(page, "focus.composer")).toBeFocused();
+	await expect(row(page, "focus.composer")).toBeFocused();
 	await expect(chord(page, "focus.composer").locator("kbd")).toHaveText(["Ctrl", "K"]);
 	await expect(chord(page, "search.open")).toHaveText("Not assigned");
 	await expect(row(page, "search.open")).toHaveAttribute("data-custom", "true");
@@ -172,8 +244,10 @@ test("Replace takes a chord from another command, which then shows unbound; Rese
 	await expect(page.getByTestId("chat-input")).toBeFocused();
 	await expect(page.getByTestId("search-palette")).toHaveCount(0);
 
-	await openKeyboardSettings(page);
+	await openKeyboardSettings(page, "general");
+	await expect(editor(page).locator('[data-custom="true"]')).toHaveCount(2);
 	await editor(page).getByTestId("keybinding-reset-all").click();
+	await page.getByTestId("keybinding-reset-all-confirm").click();
 	await expect(editor(page).locator('[data-custom="true"]')).toHaveCount(0);
 	await expect(chord(page, "focus.composer").locator("kbd")).toHaveText(["Ctrl", "L"]);
 	await expect(chord(page, "search.open").locator("kbd")).toHaveText(["Ctrl", "K"]);
@@ -186,7 +260,8 @@ test("a plain key asks for a modifier, a desktop or browser chord is refused or 
 	page,
 }) => {
 	await openFixtureProject(page);
-	await openKeyboardSettings(page);
+	await openKeyboardSettings(page, "panels", "trees");
+	const item = row(page, "view.toggleLeft");
 	const button = chord(page, "view.toggleLeft");
 
 	await button.click();
@@ -197,10 +272,10 @@ test("a plain key asks for a modifier, a desktop or browser chord is refused or 
 	await expect(message(page, "view.toggleLeft")).toContainText(
 		"A shortcut needs Ctrl, Alt or ⌘, or F1–F12",
 	);
-	await expect(button).toBeFocused();
+	await expect(item).toBeFocused();
 	await message(page, "view.toggleLeft").getByTestId("keybinding-dismiss").click();
 	await expect(message(page, "view.toggleLeft")).toHaveCount(0);
-	await expect(button).toBeFocused();
+	await expect(item).toBeFocused();
 
 	await page.keyboard.press("Enter");
 	await pressPlatformShortcut(page, "t");
@@ -224,24 +299,24 @@ test("a plain key asks for a modifier, a desktop or browser chord is refused or 
 	await page.keyboard.press("Escape");
 	await expect(settings(page)).toBeVisible();
 	await expect(button.locator("kbd")).toHaveText(["Ctrl", "B"]);
-	await expect(button).toBeFocused();
+	await expect(item).toBeFocused();
 
 	await page.keyboard.press("Enter");
 	await page.keyboard.press("Tab");
-	await expect(button).not.toBeFocused();
+	await expect(item).not.toBeFocused();
 	await expect(button.locator("kbd")).toHaveText(["Ctrl", "B"]);
 
-	await button.focus();
+	await item.focus();
 	await page.keyboard.press("ArrowDown");
-	await expect(chord(page, "view.toggleRight")).toBeFocused();
+	await expect(row(page, "view.toggleRight")).toBeFocused();
 	await page.keyboard.press("ArrowUp");
-	await expect(button).toBeFocused();
+	await expect(item).toBeFocused();
 
 	const locked = chord(page, "trees.firstLast");
 	await expect(row(page, "trees.firstLast")).toHaveAttribute("data-locked", "true");
-	await expect(locked).toHaveAttribute("aria-disabled", "true");
+	await expect(row(page, "trees.firstLast")).toHaveAttribute("aria-disabled", "true");
 	await expect(locked).toContainText("Locked");
-	await locked.focus();
+	await row(page, "trees.firstLast").focus();
 	await page.keyboard.press("Enter");
 	await expect(locked).not.toContainText("Press a new shortcut");
 	await expect(editor(page).locator('[data-custom="true"]')).toHaveCount(0);
@@ -259,10 +334,10 @@ test("another page on the same host shows an override after the broadcast, and a
 			"data-status",
 			"connected",
 		);
-		await openKeyboardSettings(other);
+		await openKeyboardSettings(other, "tabs");
 		await expect(chord(other, "group.splitRight").locator("kbd")).toHaveText(["Ctrl", "\\"]);
 
-		await openKeyboardSettings(page);
+		await openKeyboardSettings(page, "tabs");
 		await record(page, "group.splitRight", "Alt+KeyS");
 		await expect(chord(page, "group.splitRight").locator("kbd")).toHaveText(["Ctrl", "Alt", "S"]);
 
@@ -273,7 +348,7 @@ test("another page on the same host shows an override after the broadcast, and a
 			"data-status",
 			"connected",
 		);
-		await openKeyboardSettings(other);
+		await openKeyboardSettings(other, "tabs");
 		await expect(chord(other, "group.splitRight").locator("kbd")).toHaveText(["Ctrl", "Alt", "S"]);
 	} finally {
 		await other.close();
@@ -285,6 +360,8 @@ test("Export downloads every row, locked ones included, and Import summarizes a 
 }) => {
 	await openFixtureProject(page);
 	await openKeyboardSettings(page);
+	await expect(rows(page)).toHaveCount(0);
+	await openEveryArea(page);
 	const total = await rows(page).count();
 	await expect(editor(page).getByTestId("keybinding-count")).toHaveText(`${total} shortcuts`);
 
@@ -389,7 +466,7 @@ test("a switched-off extension's command records Ctrl+K without a warning, and s
 }) => {
 	await openFixtureProject(page);
 	await setHintMode(page, false);
-	await openKeyboardSettings(page);
+	await openKeyboardSettings(page, "general", "hint-mode");
 
 	await record(page, "hint-mode.show", "k");
 	await expect(message(page, "hint-mode.show")).toHaveCount(0);
@@ -407,22 +484,22 @@ test("a ThinkRail chord over an extension's marks the extension's chord inactive
 }) => {
 	await openFixtureProject(page);
 	await setHintMode(page, false);
-	await openKeyboardSettings(page);
+	await openKeyboardSettings(page, "general", "hint-mode");
 	const hintSection = editor(page).locator(
 		'[data-testid="keybinding-section"][data-section="hint-mode"]',
 	);
 	await expect(hintSection).toHaveAttribute("data-enabled", "false");
-	await expect(hintSection.getByRole("heading")).toContainText("Hint mode");
-	await expect(hintSection.getByRole("heading")).toContainText("Extension");
-	await expect(hintSection.getByRole("heading")).toContainText("Off");
-	await expect(chord(page, "hint-mode.show")).not.toHaveAttribute("aria-disabled", "true");
+	await expect(area(page, "hint-mode")).toContainText("Hint mode");
+	await expect(area(page, "hint-mode")).toContainText("Extension");
+	await expect(area(page, "hint-mode")).toContainText("Off");
+	await expect(row(page, "hint-mode.show")).not.toHaveAttribute("aria-disabled", "true");
 
 	await record(page, "search.open", "Semicolon");
 	await expect(message(page, "search.open")).toHaveCount(0);
 	await expect(chord(page, "search.open").locator("kbd")).toHaveText(["Ctrl", ";"]);
 
 	await setHintMode(page, true);
-	await openKeyboardSettings(page);
+	await openKeyboardSettings(page, "hint-mode");
 	const conflict = row(page, "hint-mode.show").getByTestId("keybinding-conflict");
 	await expect(conflict).toHaveText("Ctrl+; is taken by Open the search palette — inactive");
 	await expect(row(page, "hint-mode.show").getByTestId("keybinding-assign-another")).toBeVisible();
@@ -472,6 +549,8 @@ test("a tree's search rebound to F warns about hint mode; inside the tree F sear
 	await expect(trees.getByTestId("keybinding-scope").first()).toContainText(
 		"when focus is in a sidebar tree",
 	);
+	await openArea(page, "trees");
+	await openArea(page, "hint-mode");
 	await expect(row(page, "trees.down").getByTestId("keybinding-fixed")).toContainText(
 		"always works",
 	);
@@ -510,7 +589,7 @@ test("inside a scope a local key conflicts with its neighbours only: Replace, a 
 }) => {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
-	await openKeyboardSettings(page);
+	await openKeyboardSettings(page, "trees", "transcript");
 
 	await recordLocal(page, "trees.search", "ArrowDown");
 	await expect(message(page, "trees.search")).toHaveAttribute("data-kind", "primitive");
@@ -579,7 +658,7 @@ test("Replace on a shared twin's key clears every element holding it, so it move
 				config: { keybindings: { "trees.search": ["KeyX"], "transcript.copy": ["KeyX"] } },
 			}),
 		);
-		await openKeyboardSettings(page);
+		await openKeyboardSettings(page, "trees", "transcript");
 		await expect(chord(page, "trees.search").locator("kbd")).toHaveText(["X"]);
 
 		const down = chord(page, "trees.down");

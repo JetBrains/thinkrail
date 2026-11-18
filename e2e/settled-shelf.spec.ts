@@ -6,7 +6,13 @@ import {
 	type Workspace,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
-import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
+import {
+	closeSettings,
+	createWorkspaceViaDialog,
+	openFixtureProject,
+	openSettingsSection,
+	worktreeRows,
+} from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 
 const DAY_MS = 24 * 60 * 60_000;
@@ -154,16 +160,49 @@ test("a pre-v78 host keeps the legacy workspace list without shelf affordances",
 	await expect(page.getByTestId("settings-nav-workspaces")).toHaveCount(0);
 });
 
-test("the settle window is a host setting that survives a reload", async ({ page }) => {
+test("the settle window is an expensive choice that survives a reload and resets to 7 days", async ({
+	page,
+}) => {
 	await openFixtureProject(page);
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-workspaces").click();
-	await expect(page.getByTestId("settle-idle-7")).toHaveAttribute("data-active", "true");
-	await page.getByTestId("settle-idle-14").click();
-	await expect(page.getByTestId("settle-idle-14")).toHaveAttribute("data-active", "true");
+	const dialog = await openSettingsSection(page, "workspaces");
+	const settle = dialog.getByRole("listbox", { name: "Settle idle workspaces after" });
+	const option = (name: string) => settle.getByRole("option", { name });
+	const row = dialog.locator('[data-setting-row="settle-idle"]');
+	await expect(option("7 days")).toHaveAttribute("aria-selected", "true");
+	await expect(row).toContainText("A week idle before it settles.");
+
+	// A click applies at once.
+	await option("14 days").click();
+	await expect(option("14 days")).toHaveAttribute("aria-selected", "true");
+	await expect(row).toContainText("Only long-dormant workspaces leave the list.");
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-workspaces").click();
-	await expect(page.getByTestId("settle-idle-14")).toHaveAttribute("data-active", "true");
+	await openSettingsSection(page, "workspaces");
+	await expect(option("14 days")).toHaveAttribute("aria-selected", "true");
+
+	// Arrows only move a pending option, described in the row, until Enter applies it.
+	await option("14 days").focus();
+	await page.keyboard.press("ArrowRight");
+	await expect(option("Never")).toBeFocused();
+	await expect(option("Never")).toHaveAttribute("data-pending", "true");
+	await expect(option("14 days")).toHaveAttribute("aria-selected", "true");
+	await expect(row).toContainText("Press Enter to apply");
+	await expect(row).toContainText(
+		"Only a merged or closed pull request, or Settle by hand, moves a workspace.",
+	);
+	await page.keyboard.press("ArrowLeft");
+	await page.keyboard.press("ArrowLeft");
+	await expect(option("7 days")).toHaveAttribute("data-pending", "true");
+	await expect(option("14 days")).toHaveAttribute("aria-selected", "true");
+	await page.keyboard.press("Enter");
+	await expect(option("7 days")).toHaveAttribute("aria-selected", "true");
+	await expect(row).not.toContainText("Press Enter to apply");
+	await expect(row.getByTestId("settings-reset-settle-idle")).toHaveCount(0);
+
+	// Never is a change too, so Reset puts back 7 days instead of clearing the setting.
+	await option("Never").click();
+	await expect(option("Never")).toHaveAttribute("aria-selected", "true");
+	await row.getByTestId("settings-reset-settle-idle").click();
+	await expect(option("7 days")).toHaveAttribute("aria-selected", "true");
+	await closeSettings(page);
 });

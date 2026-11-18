@@ -1,9 +1,12 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
+	closeSettings,
 	createWorkspaceViaDialog,
 	openFixtureProject,
+	openSettingsSection,
 	pressPlatformShortcut,
 	revealWorkbenchTool,
+	settingsDialog,
 	visibleTerminal,
 	waitTerminalReady,
 } from "./fixtures/app";
@@ -80,13 +83,6 @@ async function openExtensionsSettings(page: Page): Promise<Locator> {
 	const section = page.getByTestId("settings-extensions");
 	await expect(section).toBeVisible();
 	return section;
-}
-
-async function closeSettings(page: Page): Promise<void> {
-	const dialog = page.getByTestId("settings-dialog");
-	if (!(await dialog.isVisible())) return;
-	await page.keyboard.press("Escape");
-	await expect(dialog).toBeHidden();
 }
 
 async function setHintMode(page: Page, enabled: boolean): Promise<void> {
@@ -258,6 +254,52 @@ test("with a dialog open only its controls are labelled, and Escape leaves the d
 	await typeLabel(page, await labelFor(page, extensions));
 	await expect(page.getByTestId("settings-extensions")).toBeVisible();
 	await expect(dialog).toBeVisible();
+});
+
+test("plain F labels Settings from a nav tab, a content row and a search result, and a label presses through", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const dialog = await openSettingsSection(page, "privacy");
+	const chat = page.getByTestId("settings-nav-chat");
+	await settle(page);
+	await page.keyboard.press("f");
+	await expectLabelsInside(page, dialog);
+	await typeLabel(page, await labelFor(page, chat));
+	await expect(overlay(page)).toHaveCount(0);
+	await expect(chat).toHaveAttribute("data-active", "true");
+
+	await page.getByTestId("settings-nav-github").click();
+	const refresh = page.getByTestId("settings-gh-refresh");
+	await page.keyboard.press("ArrowRight");
+	await expect
+		.poll(() =>
+			page.evaluate(() => document.activeElement?.closest("[data-settings-content]") != null),
+		)
+		.toBe(true);
+	await settle(page);
+	await page.keyboard.press("f");
+	await expectLabelsInside(page, dialog);
+	await typeLabel(page, await labelFor(page, refresh));
+	await expect(overlay(page)).toHaveCount(0);
+	await expect(refresh).toBeFocused();
+
+	await page.getByTestId("settings-nav-github").focus();
+	await page.keyboard.press("s");
+	await page.keyboard.type("message order");
+	await page.keyboard.press("ArrowDown");
+	const hit = page.locator(
+		'[data-testid="settings-search-result"][data-result-id="message-order"]',
+	);
+	await expect(hit).toBeVisible();
+	await settle(page);
+	await page.keyboard.press("f");
+	await expect(overlay(page)).toBeVisible();
+	await typeLabel(page, await labelFor(page, hit));
+	await expect(overlay(page)).toHaveCount(0);
+	await expect(page.getByTestId("settings-nav-chat")).toHaveAttribute("data-active", "true");
+	await expect(settingsDialog(page)).toBeVisible();
+	await closeSettings(page);
 });
 
 test("a control locked by its fieldset gets no label, and a lock that starts while labels show blocks the press", async ({

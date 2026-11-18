@@ -1,10 +1,12 @@
 import { realpathSync } from "node:fs";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
+	closeSettings,
 	enterDefaultWorkspace,
 	hideAuxiliaryWorkbench,
 	openFixtureProject,
 	openPersistedChat,
+	openSettingsSection,
 } from "./fixtures/app";
 import { clickTranscriptControl } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
@@ -187,17 +189,13 @@ async function expandTranscriptDisclosure(toggle: Locator): Promise<void> {
 }
 
 async function setFitToPane(page: Page, bounded: boolean): Promise<void> {
-	if (!(await page.getByTestId("settings-dialog").isVisible())) {
-		await page.getByTestId("open-settings").click();
-	}
-	await page.getByTestId("settings-nav-chat").click();
+	await openSettingsSection(page, "text");
 	const control = page.getByTestId("chat-line-width-bounded");
 	if ((await control.getAttribute("data-active")) !== String(bounded)) {
 		await control.click();
 		await expect(control).toHaveAttribute("data-active", String(bounded));
 	}
-	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("settings-dialog")).toBeHidden();
+	await closeSettings(page);
 }
 
 test("wide code blocks and tool results grow past the chat column only while it fits the pane", async ({

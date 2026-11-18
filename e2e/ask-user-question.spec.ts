@@ -7,6 +7,7 @@ import type {
 	AskUserQuestionResult,
 } from "@thinkrail/pi-ask-user-question/core";
 import {
+	closeSettings,
 	enterDefaultWorkspace,
 	hideAuxiliaryWorkbench,
 	openFixtureProject,
@@ -47,7 +48,7 @@ async function selectOldestFirst(page: Page): Promise<void> {
 	const option = page.getByTestId("chat-order-oldest-first");
 	await option.click();
 	await expect(option).toHaveAttribute("data-active", "true");
-	await page.keyboard.press("Escape");
+	await closeSettings(page);
 }
 
 const seedQuestionnaire = (name: string, toolCallId: string, args: QuestionnaireArgs) =>
@@ -1100,12 +1101,6 @@ async function openChatSettings(page: Page): Promise<Locator> {
 	return input;
 }
 
-async function closeSettingsDialog(page: Page): Promise<void> {
-	const dialog = page.getByTestId("settings-dialog");
-	await dialog.getByRole("button", { name: "Close" }).click();
-	await expect(dialog).toBeHidden();
-}
-
 async function saveQuestionPanelHeight(input: Locator, value: number): Promise<void> {
 	await input.fill(String(value));
 	await input.press("Enter");
@@ -1123,14 +1118,15 @@ test("the question panel height follows the chat setting", async ({ page }) => {
 		await hideAuxiliaryWorkbench(page);
 		const input = await openChatSettings(page);
 		await expect(input).toHaveValue("70");
+		const rangeError = page.getByTestId("settings-chat").getByText("Use 40–100");
 		await input.fill("30");
-		await expect(page.getByTestId("question-panel-height-error")).toHaveText(
-			"Enter a whole number from 40 to 100.",
-		);
+		await expect(input).toHaveAttribute("aria-invalid", "true");
+		await expect(rangeError).toBeVisible();
 		await saveQuestionPanelHeight(input, 40);
-		await expect(page.getByTestId("question-panel-height-error")).toHaveCount(0);
+		await expect(input).not.toHaveAttribute("aria-invalid", "true");
+		await expect(rangeError).toHaveCount(0);
 		await shot(page.getByTestId("settings-chat"), "ask-dock", "settings-row");
-		await closeSettingsDialog(page);
+		await closeSettings(page);
 
 		await openPersistedChatAfterInput(page, "capped questionnaire");
 		await expect(activeAsk(page)).toBeVisible();
@@ -1143,7 +1139,7 @@ test("the question panel height follows the chat setting", async ({ page }) => {
 		if (!page.isClosed()) {
 			const input = await openChatSettings(page);
 			if ((await input.inputValue()) !== "70") await saveQuestionPanelHeight(input, 70);
-			await closeSettingsDialog(page);
+			await closeSettings(page);
 		}
 		rmSync(session.path, { force: true });
 	}
