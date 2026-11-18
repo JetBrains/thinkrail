@@ -63,8 +63,17 @@ export {
 } from "./attributionProtocol";
 export type { InstallationRecord } from "./installation";
 
+/**
+ * The app state root. `THINKRAIL_DATA_DIR` relocates it (a supported override); blank means unset, and a
+ * leading `~` is the home directory, since launchers that set it outside a shell never expand it.
+ */
 export function dataDir(): string {
-	return resolve(process.env.THINKRAIL_DATA_DIR ?? join(homedir(), ".thinkrail"));
+	const override = process.env.THINKRAIL_DATA_DIR?.trim();
+	if (!override) return join(homedir(), ".thinkrail");
+	if (override === "~") return homedir();
+	if (override.startsWith("~/") || override.startsWith("~\\"))
+		return join(homedir(), override.slice(2));
+	return resolve(override);
 }
 
 /** Where chats without a project keep their folders; never a repository root for `project.open`. */
