@@ -47,6 +47,7 @@ import {
 	selectCurrentRouteChatTarget,
 	selectDiffScope,
 	selectFilesTreeView,
+	selectQuestionMayClaimFocus,
 	selectReadyCompletionAck,
 	selectSkillsStale,
 	selectUnnamedChatFirstPrompts,
@@ -187,6 +188,7 @@ beforeEach(() => {
 		activeLogin: null,
 		settingsOpen: false,
 		settingsSection: "providers",
+		settingsTarget: null,
 		surveyInvitationOpen: false,
 		surveyWindowOpen: false,
 		inAppSurvey: null,
@@ -3334,6 +3336,52 @@ test("a composer focus request goes stale once the destination settles on anythi
 	expect(selectComposerFocusRequestStale(useAppStore.getState(), "w2")).toBe(false);
 });
 
+test("a served composer focus request wins over the question waiting then, never a later one", () => {
+	const mayClaim = (toolCallId: string) =>
+		selectQuestionMayClaimFocus(useAppStore.getState(), "s1", toolCallId);
+	const store = useAppStore.getState();
+	store.openChatSession("w1", "s1", null, "medium");
+	expect(mayClaim("ask-1")).toBe(true);
+
+	store.requestComposerFocus("w1", "s1");
+	store.serveComposerFocusRequest("s1", "ask-1");
+	expect(useAppStore.getState().composerFocusRequest).toBeNull();
+	expect(mayClaim("ask-1")).toBe(false);
+	expect(mayClaim("ask-2")).toBe(true);
+	expect(selectQuestionMayClaimFocus(useAppStore.getState(), "s2", "ask-1")).toBe(true);
+
+	store.serveComposerFocusRequest("s1", "ask-2");
+	expect(mayClaim("ask-1")).toBe(true);
+	expect(mayClaim("ask-2")).toBe(false);
+
+	store.serveComposerFocusRequest("s1", null);
+	expect(mayClaim("ask-2")).toBe(true);
+});
+
+test("the question a composer focus request won over outlives a remount's transcript reconcile", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("w1", "s1", null, "medium");
+	store.serveComposerFocusRequest("s1", "ask-1");
+	const applied = store.reconcileSession(
+		{
+			sessionId: "s1",
+			workspaceId: "w1",
+			title: "Chat",
+			model: null,
+			thinkingLevel: "medium",
+			isStreaming: false,
+			messageCount: 0,
+			updatedAt: 1,
+			live: true,
+		},
+		{ turns: [], toolResults: {}, toolResponses: {}, turnIdByMessageIndex: [] },
+		rt("s1").eventRevision,
+		0,
+	);
+	expect(applied).toBe(true);
+	expect(selectQuestionMayClaimFocus(useAppStore.getState(), "s1", "ask-1")).toBe(false);
+});
+
 test("closeChatToHistory keeps a route target for the closed session", () => {
 	const workspace = pushedWorkspace();
 	useAppStore.setState({ workspaces: { p1: [workspace] } });
@@ -4107,7 +4155,7 @@ test("clearLoginInput drops the live input; success is terminal; clearLogin dism
 	expect(useAppStore.getState().activeLogin).toBeNull();
 });
 
-test("openSettings deep-links to a section (default providers); closeSettings hides it", () => {
+test("openSettings deep-links to a section, else reopens the remembered one (first ever: providers)", () => {
 	const s = useAppStore.getState();
 	s.openSettings();
 	expect(useAppStore.getState().settingsOpen).toBe(true);
@@ -4116,12 +4164,46 @@ test("openSettings deep-links to a section (default providers); closeSettings hi
 	s.openSettings("github");
 	expect(useAppStore.getState().settingsSection).toBe("github");
 
-	s.setSettingsSection("providers");
-	expect(useAppStore.getState().settingsSection).toBe("providers");
-
+	s.setSettingsSection("terminal");
 	s.closeSettings();
 	expect(useAppStore.getState().settingsOpen).toBe(false);
-	expect(useAppStore.getState().settingsSection).toBe("providers");
+	expect(useAppStore.getState().settingsSection).toBe("terminal");
+
+	s.openSettings();
+	expect(useAppStore.getState()).toMatchObject({
+		settingsOpen: true,
+		settingsSection: "terminal",
+		settingsTarget: null,
+	});
+});
+
+test("a setting target is set with its section and consumed once", () => {
+	const s = useAppStore.getState();
+	let updates = 0;
+	const unsubscribe = useAppStore.subscribe(() => {
+		updates += 1;
+	});
+	s.openSettings("keyboard", "double-shift");
+	expect(updates).toBe(1);
+	expect(useAppStore.getState()).toMatchObject({
+		settingsOpen: true,
+		settingsSection: "keyboard",
+		settingsTarget: "double-shift",
+	});
+
+	expect(s.consumeSettingsTarget()).toBe("double-shift");
+	expect(useAppStore.getState().settingsTarget).toBeNull();
+	expect(s.consumeSettingsTarget()).toBeNull();
+	expect(updates).toBe(2);
+
+	s.openSettings("text", "chat-line-width");
+	s.openSettings("chat");
+	expect(useAppStore.getState().settingsTarget).toBeNull();
+
+	s.openSettings("text", "chat-line-width");
+	s.closeSettings();
+	expect(useAppStore.getState().settingsTarget).toBeNull();
+	unsubscribe();
 });
 
 test("the survey invitation show action is idempotent and hide clears it", () => {
@@ -4311,6 +4393,22 @@ test("applyConfig folds and normalizes the server-synced theme preference", () =
 		themeMode: "fixed",
 		systemThemePair: undefined,
 	});
+});
+
+test("applyConfig installs the host's keybinding overrides, an older host's absence as none", () => {
+	const keybindings = { "search.open": ["Mod+Alt+KeyS"], "tab.close": [] };
+	useAppStore.getState().applyConfig({ ...DEFAULT_CONFIG, keybindings });
+	expect(useAppStore.getState().keybindingOverrides).toEqual(keybindings);
+
+	const { keybindings: _absent, ...older } = DEFAULT_CONFIG;
+	useAppStore.getState().applyConfig(older as AppConfig);
+	expect(useAppStore.getState().keybindingOverrides).toEqual({});
+
+	useAppStore.getState().applyConfig({
+		...DEFAULT_CONFIG,
+		keybindings: ["Mod+KeyK"],
+	} as unknown as AppConfig);
+	expect(useAppStore.getState().keybindingOverrides).toEqual({});
 });
 
 test("applyConfig projects and validates the Windows terminal shell", () => {

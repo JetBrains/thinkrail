@@ -3,12 +3,14 @@ import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { crc32, deflateSync } from "node:zlib";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import type { KeybindingOverrides } from "@thinkrail/contracts";
 import {
 	createWorkspaceViaDialog,
 	openFixtureProject,
 	pressPlatformShortcut,
 	revealWorkbenchTool,
 } from "./fixtures/app";
+import { resetKeybindings, setKeybindings } from "./fixtures/keybindings";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 import { E2eWire } from "./fixtures/wire";
 
@@ -129,12 +131,16 @@ async function expectHonestSurface(surface: Locator): Promise<void> {
 	await expect(surface).toHaveCSS("outline-style", "solid");
 }
 
-async function openCursorDiff(page: Page): Promise<{
+async function openCursorDiff(
+	page: Page,
+	keybindings?: KeybindingOverrides,
+): Promise<{
 	diff: Locator;
 	cursor: Locator;
 	workspaceId: string;
 }> {
 	await openFixtureProject(page);
+	if (keybindings) await setKeybindings(page, keybindings);
 	const workspace = await createWorkspaceViaDialog(page);
 	await commitAndModify(page, workspace.id, "cursor.ts", CURSOR_ORIGINAL, CURSOR_MODIFIED);
 	await revealWorkbenchTool(page, "changes");
@@ -428,14 +434,77 @@ test("in Changes review the cursor owns J while V still marks the file viewed", 
 	await expect(section.getByTestId("changes-section-toggle")).toBeFocused();
 });
 
-test("the cheatsheet opened from a review surface leads with the review keys", async ({ page }) => {
+test.describe("rebound review keys", () => {
+	test.afterEach(async ({ page }) => resetKeybindings(page));
+
+	test("a rebound mark-viewed key marks the file viewed and V no longer does", async ({ page }) => {
+		await openFixtureProject(page);
+		await setKeybindings(page, { "review.markViewed": ["KeyU"] });
+		const workspace = await createWorkspaceViaDialog(page);
+		await commitAndModify(page, workspace.id, "cursor.ts", CURSOR_ORIGINAL, CURSOR_MODIFIED);
+		writeFileSync(join(worktree(), "notes.txt"), "a note edited by e2e\n");
+		await revealWorkbenchTool(page, "changes");
+		const row = page.getByTestId("change-item").filter({ hasText: "cursor.ts" });
+		await row.click();
+		const section = page.locator('[data-testid="changes-section"][data-path="cursor.ts"]');
+		await expect(section.getByTestId("diff-view")).toBeVisible();
+		const viewed = page.getByTestId("changes-review-viewed-count");
+		await expect(viewed).toHaveText("0/2 viewed");
+
+		await section.getByTestId("changes-section-toggle").focus();
+		await expect(async () => {
+			await page.keyboard.press("u");
+			await expect(viewed).toHaveText("1/2 viewed", { timeout: 1_000 });
+		}).toPass();
+		await page.keyboard.press("v");
+		await page.keyboard.press("u");
+		await expect(viewed).toHaveText("0/2 viewed");
+		await expect(section).not.toHaveAttribute("data-viewed", "true");
+	});
+
+	test("a comment rebound onto Alt+Tab opens the composer from the diff cursor instead of its Tab walk", async ({
+		page,
+	}) => {
+		const { cursor } = await openCursorDiff(page);
+		await setKeybindings(page, { "review.surface.comment": ["Alt+Tab"] });
+		await expect(cursor).toBeFocused();
+		await page.keyboard.press("Alt+Tab");
+		await expect(page.getByTestId("review-composer-input")).toBeFocused();
+	});
+
+	test("an arrow twin rebound onto Mod+J extends the cursor's range with Shift+Mod+J instead of toggling the bottom panel", async ({
+		page,
+	}) => {
+		const { diff, cursor } = await openCursorDiff(page, { "arrows.down": ["Mod+KeyJ"] });
+		const bottom = page.getByTestId("bottom-panel");
+		const bottomShown = await bottom.count();
+		await expect(cursorRow(diff, "additions", 5)).toHaveCount(1);
+		await pressPlatformShortcut(page, "J");
+		await expect(cursorRow(diff, "additions", 6)).toHaveCount(1);
+		await pressPlatformShortcut(page, "Shift+J");
+		await expect(diff.locator("[data-additions] [data-line][data-selected-line]")).toHaveCount(2);
+		await expect(cursorRow(diff, "additions", 7)).toHaveCount(1);
+		await expect(cursor).toBeFocused();
+		await expect(bottom).toHaveCount(bottomShown);
+	});
+});
+
+test("the cheatsheet opened from a review surface highlights the review keys and shows them", async ({
+	page,
+}) => {
 	const { cursor } = await openCursorDiff(page);
 	await pressPlatformShortcut(page, "Shift+Slash");
 	const shortcuts = page.getByTestId("shortcuts-dialog");
-	const first = shortcuts.getByTestId("shortcuts-section").first();
-	await expect(first).toHaveAttribute("data-surface", "review");
-	await expect(first.locator('[data-shortcut="review.comment"]')).toBeVisible();
-	await expect(first.locator('[data-shortcut="review.sendNow"]')).toBeVisible();
+	await expect(shortcuts.getByTestId("shortcuts-section").first()).toHaveAttribute(
+		"data-surface",
+		"general",
+	);
+	const review = shortcuts.locator('[data-testid="shortcuts-section"][data-surface="review"]');
+	await expect(review).toHaveAttribute("data-current", "true");
+	await expect(shortcuts.locator('[data-current="true"]')).toHaveCount(1);
+	await expect(review).toBeInViewport();
+	await expect(review.locator('[data-shortcut="review.comment"]')).toBeVisible();
+	await expect(review.locator('[data-shortcut="review.sendNow"]')).toBeInViewport();
 	await page.keyboard.press("Escape");
 	await expect(shortcuts).toHaveCount(0);
 	await expect(cursor).toBeFocused();

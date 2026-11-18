@@ -1,11 +1,9 @@
 import {
 	RiCheckLine as Check,
-	RiArrowDownSLine as ChevronDown,
 	RiCloseLine as Close,
 	RiMore2Line as MoreVertical,
 	RiAddLine as Plus,
 	RiShieldCheckLine as ShieldCheck,
-	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
 import type {
 	McpConfigFileError,
@@ -16,7 +14,7 @@ import type {
 	Workspace,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
-import { currentTranslator, t as translate, useT } from "@thinkrail/locales/react";
+import { currentTranslator, type Translator, t as translate, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
@@ -26,20 +24,34 @@ import {
 	DropdownMenuRadioGroup,
 	DropdownMenuRadioItem,
 	DropdownMenuSeparator,
+	DropdownMenuSub,
+	DropdownMenuSubContent,
+	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { SkeletonRows } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useMemo, useState } from "react";
-import { LoginDialog } from "@/auth";
+import { LoginDialog, type LoginState } from "@/auth";
 import { useNow } from "@/components/useNow";
 import type { McpStateTone } from "@/lib";
+import {
+	SETTINGS_LIST_PRIMARY,
+	SETTINGS_ROWS,
+	SETTINGS_TAG,
+	SettingsGroup,
+	SettingsList,
+	SettingsNotice,
+	SettingsPage,
+	SettingsRow,
+	useSettingsListRow,
+} from "@/settingsKit";
 import {
 	deriveMcpServerRows,
 	type McpRowState,
 	type McpServerRow,
+	type McpWorkspaceProjection,
 	selectActiveWorkspace,
 	selectChatTitle,
 	selectLoginBusy,
@@ -51,6 +63,8 @@ import {
 	getTransport,
 	reloadSessionResourcesWithSkillBaseline,
 	requestMcpList,
+	requestUserMcpList,
+	supportsUserMcp,
 	watchMcpWorkspace,
 } from "@/transport";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -70,7 +84,6 @@ import {
 	MCP_EXPOSURES,
 	type McpEditableExposure,
 	projectEntryFrom,
-	SCOPE_LABEL,
 } from "./mcpEntries";
 import { MCP_PRESETS, type McpPreset } from "./mcpPresets";
 import {
@@ -86,9 +99,12 @@ import {
 	mcpRowView,
 	mcpSaveFeedback,
 	mcpSettingWrite,
+	mcpUserRowView,
+	mcpUserServerWrite,
 } from "./mcpServerView";
 import { startChatInTab } from "./openChat";
-import { SETTINGS_TAG } from "./SettingsGroup";
+import { SETTING, settingProps } from "./settingsCatalog";
+import { useUserMcpList } from "./useUserMcpList";
 
 const TONE_TEXT: Record<McpStateTone, string> = {
 	success: "text-feedback-success",
@@ -121,6 +137,9 @@ const ACTION_LABEL = {
 
 const CHIP_CLASS = cn(SETTINGS_TAG, "text-text-muted");
 
+const USER_LIST = "mcp:user";
+const PROJECT_LIST = "mcp:project";
+
 type Settled<T> = { ok: true; value: T } | { ok: false; error: string };
 
 interface RowError {
@@ -152,23 +171,6 @@ async function readProjectEntry(workspaceId: string, name: string): Promise<McpS
 		path: ".pi/mcp.json",
 	});
 	return projectEntryFrom(content, name);
-}
-
-async function addServers(
-	workspaceId: string,
-	servers: { name: string; entry: McpServerEntryInput }[],
-	scope: McpServerScope,
-): Promise<{ results: McpAddResult[]; last: McpListResult | null }> {
-	const results: McpAddResult[] = [];
-	let last: McpListResult | null = null;
-	for (const server of servers) {
-		const outcome = await settle(() =>
-			requestMcpList("mcp.add", { workspaceId, scope, name: server.name, entry: server.entry }),
-		);
-		results.push({ name: server.name, error: outcome.ok ? null : outcome.error });
-		if (outcome.ok) last = outcome.value;
-	}
-	return { results, last };
 }
 
 async function refreshOnFailure(
@@ -217,6 +219,82 @@ function writeSetting(
 	});
 }
 
+/** What a list of MCP servers reads and writes through: a workspace's projection, or the user servers alone. */
+interface McpOps {
+	readonly workspaceId: string | undefined;
+	reread: () => Promise<McpListResult>;
+	add: (scope: McpServerScope, name: string, entry: McpServerEntryInput) => Promise<McpListResult>;
+	remove: (summary: McpServerSummary) => Promise<McpListResult>;
+	setting: (row: McpServerRow, change: McpSettingChange) => Promise<McpListResult>;
+	feedback: (result: McpListResult) => string;
+	view: (t: Translator, row: McpServerRow, now: number) => McpRowView;
+}
+
+function workspaceOps(workspaceId: string): McpOps {
+	return {
+		workspaceId,
+		reread: () => requestMcpList("mcp.list", { workspaceId }),
+		add: (scope, name, entry) => requestMcpList("mcp.add", { workspaceId, scope, name, entry }),
+		remove: (summary) =>
+			refreshOnFailure(workspaceId, () =>
+				requestMcpList("mcp.remove", {
+					workspaceId,
+					name: summary.name,
+					...mcpRenderedTarget(summary),
+				}),
+			),
+		setting: (row, change) => writeSetting(workspaceId, row, change),
+		feedback: mcpSaveFeedback,
+		view: mcpRowView,
+	};
+}
+
+export function userOps(
+	write: (work: () => Promise<McpListResult>) => Promise<McpListResult>,
+): McpOps {
+	return {
+		workspaceId: undefined,
+		reread: () => write(() => requestUserMcpList("mcp.list", {})),
+		add: (_scope, name, entry) =>
+			write(() => requestUserMcpList("mcp.add", { scope: "user", name, entry })),
+		remove: (summary) =>
+			write(() =>
+				requestUserMcpList("mcp.remove", {
+					scope: "user",
+					name: summary.name,
+					expectedFingerprint: summary.fingerprint,
+				}),
+			),
+		setting: (row, change) =>
+			write(() => requestUserMcpList("mcp.setUserServer", mcpUserServerWrite(row.summary, change))),
+		feedback: () => translate("mcp.saveFeedback.allProjects"),
+		view: mcpUserRowView,
+	};
+}
+
+async function addServers(
+	ops: McpOps,
+	servers: { name: string; entry: McpServerEntryInput }[],
+	scope: McpServerScope,
+): Promise<{ results: McpAddResult[]; last: McpListResult | null }> {
+	const results: McpAddResult[] = [];
+	let last: McpListResult | null = null;
+	for (const server of servers) {
+		const outcome = await settle(() => ops.add(scope, server.name, server.entry));
+		results.push({ name: server.name, error: outcome.ok ? null : outcome.error });
+		if (outcome.ok) last = outcome.value;
+	}
+	return { results, last };
+}
+
+/** The sign-in this list shows: an MCP login started from the same workspace, or from none. */
+export function mcpLoginFor(
+	login: LoginState | null,
+	workspaceId: string | undefined,
+): LoginState | null {
+	return login?.target?.kind === "mcp" && login.target.workspaceId === workspaceId ? login : null;
+}
+
 type McpRowCommand =
 	| { kind: "toggle"; enabled: boolean }
 	| { kind: "exposure"; exposure: McpEditableExposure }
@@ -232,87 +310,95 @@ function lockedSettings(row: McpServerRow): boolean {
 	);
 }
 
+function toggleLabel(t: Translator, summary: McpServerSummary, inProject: boolean): string {
+	const key =
+		inProject && summary.scope === "user"
+			? summary.enabled
+				? "mcp.server.disableInProject"
+				: "mcp.server.enableInProject"
+			: summary.enabled
+				? "mcp.server.disable"
+				: "mcp.server.enable";
+	return t(key, { name: summary.name });
+}
+
 export function McpServerRowView({
 	row,
 	view,
+	inProject = true,
 	readOnly,
 	busy,
 	error,
+	menuOpen = false,
+	onMenuOpenChange,
 	onCommand,
 }: {
 	row: McpServerRow;
 	view: McpRowView;
+	inProject?: boolean;
 	readOnly: boolean;
 	busy: boolean;
 	error: string | undefined;
+	menuOpen?: boolean;
+	onMenuOpenChange?: (open: boolean) => void;
 	onCommand: (command: McpRowCommand) => void;
 }) {
 	const t = useT();
+	const { rowProps, primaryProps, sideProps } = useSettingsListRow(row.key);
 	const { summary } = row;
 	const inert = readOnly || busy;
 	const settingsDisabled = inert || lockedSettings(row);
-	const pendingProject = summary.scope === "project" && row.state === "pending-approval";
 	const { action, secondary } = view;
 	return (
 		<li
+			{...rowProps}
 			data-testid="mcp-server-row"
-			data-focus-row={row.key}
 			data-name={summary.name}
 			data-scope={summary.scope}
 			data-state={row.state}
 			data-attention={row.attention || undefined}
-			className="flex flex-col gap-4 rounded-sm border border-border-default bg-control-bg px-12 py-8"
+			className="flex flex-col gap-4 border-border-muted border-b py-6 last:border-b-0"
 		>
 			<div className="flex flex-wrap items-center gap-8">
-				<div className="flex min-w-[12rem] flex-1 flex-col gap-2">
-					<div className="flex min-w-0 flex-wrap items-center gap-x-8 gap-y-4">
+				<button
+					type="button"
+					{...primaryProps}
+					data-testid="mcp-server-details"
+					className={cn(SETTINGS_LIST_PRIMARY, "min-w-[12rem]")}
+					onClick={() => onCommand({ kind: "details" })}
+				>
+					<span className="flex min-w-0 max-w-full flex-wrap items-center gap-x-8 gap-y-4">
+						<span className="wrap-anywhere tr-title-compact text-text-default">{summary.name}</span>
+						<span data-testid="mcp-server-transport" className={CHIP_CLASS}>
+							{summary.transport === "stdio" ? t("mcp.transport.stdio") : t("mcp.transport.http")}
+							{summary.transport === "stdio" ? (
+								<span className="sr-only">{` ${t("mcp.server.stdioSrOnly")}`}</span>
+							) : null}
+						</span>
 						<span
-							className="min-w-0 max-w-full truncate tr-title-compact text-text-default"
-							title={summary.name}
+							data-testid="mcp-server-exposure"
+							data-exposure={summary.effectiveExposure}
+							className={CHIP_CLASS}
 						>
-							{summary.name}
+							{mcpExposureLabel(t, summary.effectiveExposure)}
 						</span>
-						<span data-testid="mcp-server-scope" className={CHIP_CLASS}>
-							{t(SCOPE_LABEL[summary.scope])}
-						</span>
-						{summary.transport === "stdio" ? (
-							<IconTooltip label={t("mcp.server.stdioTooltip")} wrapTrigger>
-								<span data-testid="mcp-server-transport" className={CHIP_CLASS}>
-									{t("mcp.transport.stdio")}
-									<span className="sr-only">{` ${t("mcp.server.stdioSrOnly")}`}</span>
-								</span>
-							</IconTooltip>
-						) : (
-							<span data-testid="mcp-server-transport" className={CHIP_CLASS}>
-								{t("mcp.transport.http")}
-							</span>
-						)}
-						<ExposureMenu
-							summary={summary}
-							disabled={settingsDisabled}
-							onChange={(exposure) => onCommand({ kind: "exposure", exposure })}
-						/>
-					</div>
-					<div className="flex min-w-0 items-center gap-4 tr-text-metadata">
+					</span>
+					<span className="flex min-w-0 max-w-full flex-wrap items-center gap-x-4 tr-text-metadata">
 						<span aria-hidden className={cn("size-6 shrink-0 rounded-full", TONE_DOT[view.tone])} />
-						<span
-							data-testid="mcp-server-status"
-							className={cn("shrink-0 whitespace-nowrap", TONE_TEXT[view.tone])}
-						>
+						<span data-testid="mcp-server-status" className={TONE_TEXT[view.tone]}>
 							{view.label}
 						</span>
 						{view.reason ? (
-							<span className="min-w-0 truncate text-text-muted" title={view.reason}>
-								· {view.reason}
-							</span>
+							<span className="wrap-break-word min-w-0 text-text-muted">· {view.reason}</span>
 						) : null}
-					</div>
-				</div>
-				<div className="ml-auto flex shrink-0 items-center gap-8">
+					</span>
+				</button>
+				<div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-8">
 					{secondary ? (
 						<Button
 							variant="ghost"
 							size="m"
+							{...sideProps}
 							data-testid="mcp-server-secondary"
 							data-action={secondary}
 							disabled={inert}
@@ -325,6 +411,7 @@ export function McpServerRowView({
 						<Button
 							variant={action === "review" || action === "sign-in" ? "primary" : "outline"}
 							size="m"
+							{...sideProps}
 							data-testid="mcp-server-action"
 							data-action={action}
 							disabled={inert}
@@ -333,117 +420,39 @@ export function McpServerRowView({
 							{t(ACTION_LABEL[action])}
 						</Button>
 					) : null}
-					<Switch
-						checked={summary.enabled}
-						label={t(
-							summary.scope === "user"
-								? summary.enabled
-									? "mcp.server.disableInProject"
-									: "mcp.server.enableInProject"
-								: summary.enabled
-									? "mcp.server.disable"
-									: "mcp.server.enable",
-							{ name: summary.name },
-						)}
-						testId="mcp-server-toggle"
-						disabled={settingsDisabled}
-						onCheckedChange={(enabled) => onCommand({ kind: "toggle", enabled })}
-					/>
-					<DropdownMenu>
+					<DropdownMenu
+						{...(onMenuOpenChange ? { open: menuOpen, onOpenChange: onMenuOpenChange } : {})}
+					>
 						<DropdownMenuTrigger asChild>
 							<IconButton
 								icon={MoreVertical}
 								label={t("mcp.server.more", { name: summary.name })}
+								{...sideProps}
 								data-testid="mcp-server-menu"
-								data-focus-row-primary
 							/>
 						</DropdownMenuTrigger>
-						<DropdownMenuContent align="end">
-							{row.effective && summary.oauth ? (
-								<>
-									<DropdownMenuItem
-										data-testid="mcp-menu-sign-in"
-										disabled={inert}
-										onSelect={() => onCommand({ kind: "sign-in" })}
-									>
-										{t("mcp.action.signIn")}
-									</DropdownMenuItem>
-									<DropdownMenuItem
-										data-testid="mcp-menu-sign-out"
-										disabled={inert}
-										onSelect={() => onCommand({ kind: "sign-out" })}
-									>
-										{t("mcp.menu.signOut")}
-									</DropdownMenuItem>
-								</>
-							) : null}
-							{row.effective && summary.transport === "http" ? (
-								<DropdownMenuItem
-									data-testid="mcp-menu-test-connection"
-									disabled={inert}
-									onSelect={() => onCommand({ kind: "test-connection" })}
-								>
-									{t("mcp.action.testConnection")}
-								</DropdownMenuItem>
-							) : null}
-							{pendingProject ? (
-								<DropdownMenuItem
-									data-testid="mcp-menu-review"
-									disabled={inert}
-									onSelect={() => onCommand({ kind: "review" })}
-								>
-									{t("mcp.action.review")}
-								</DropdownMenuItem>
-							) : summary.scope === "user" ? (
-								<DropdownMenuItem data-testid="mcp-menu-edit" disabled className="items-start">
-									<span className="flex min-w-0 flex-col gap-2">
-										<span>{t("common.edit")}</span>
-										<span className="break-all text-text-muted tr-text-metadata">
-											{t("mcp.menu.editDirectly", { source: summary.source })}
-										</span>
-									</span>
-								</DropdownMenuItem>
-							) : (
-								<DropdownMenuItem
-									data-testid="mcp-menu-edit"
-									disabled={inert || row.state === "handled-elsewhere"}
-									onSelect={() => onCommand({ kind: "edit" })}
-								>
-									{t("common.edit")}
-								</DropdownMenuItem>
-							)}
-							{summary.scope === "user" && summary.projectOverride ? (
-								<DropdownMenuItem
-									data-testid="mcp-menu-share"
-									disabled={inert}
-									onSelect={() => onCommand({ kind: "share" })}
-								>
-									{t("mcp.menu.share")}
-								</DropdownMenuItem>
-							) : null}
-							<DropdownMenuItem
-								data-testid="mcp-menu-details"
-								onSelect={() => onCommand({ kind: "details" })}
-							>
-								{t("mcp.menu.details")}
-							</DropdownMenuItem>
-							<DropdownMenuSeparator />
-							<DropdownMenuItem
-								data-testid="mcp-menu-remove"
-								disabled={inert}
-								onSelect={() => onCommand({ kind: "remove" })}
-								className="text-feedback-error"
-							>
-								{t("common.remove")}
-							</DropdownMenuItem>
-						</DropdownMenuContent>
+						<McpRowMenu
+							row={row}
+							inProject={inProject}
+							inert={inert}
+							settingsDisabled={settingsDisabled}
+							onCommand={onCommand}
+						/>
 					</DropdownMenu>
+					<Switch
+						checked={summary.enabled}
+						label={toggleLabel(t, summary, inProject)}
+						testId="mcp-server-toggle"
+						{...sideProps}
+						disabled={settingsDisabled}
+						onCheckedChange={(enabled) => onCommand({ kind: "toggle", enabled })}
+					/>
 				</div>
 			</div>
 			{summary.alwaysAllowed && summary.alwaysAllowed.length > 0 ? (
 				<div
 					data-testid="mcp-always-allowed"
-					className="flex flex-wrap items-center gap-4 text-text-muted tr-text-metadata"
+					className="flex flex-wrap items-center gap-4 px-4 text-text-muted tr-text-metadata"
 				>
 					<span className="shrink-0">{t("mcp.server.alwaysAllowed")}</span>
 					{summary.alwaysAllowed.map(({ tool, label }) => (
@@ -453,13 +462,12 @@ export function McpServerRowView({
 							data-tool={tool}
 							className="flex min-w-0 items-center gap-2 rounded-xs border border-border-default pl-4 text-text-default"
 						>
-							<span className="min-w-0 truncate" title={tool}>
-								{label}
-							</span>
+							<span className="wrap-anywhere min-w-0">{label}</span>
 							<IconButton
 								icon={Close}
 								label={t("mcp.server.revokeTool", { tool: label })}
 								size="s"
+								{...sideProps}
 								data-testid="mcp-always-allowed-revoke"
 								disabled={inert}
 								onClick={() => onCommand({ kind: "revoke-tool", tool })}
@@ -471,7 +479,7 @@ export function McpServerRowView({
 			{error ? (
 				<p
 					role="alert"
-					className="whitespace-pre-line break-words text-feedback-error tr-text-metadata"
+					className="whitespace-pre-line break-words px-4 text-feedback-error tr-text-metadata"
 				>
 					{error}
 				</p>
@@ -480,89 +488,156 @@ export function McpServerRowView({
 	);
 }
 
-function ExposureMenu({
-	summary,
-	disabled,
-	onChange,
+export function McpRowMenu({
+	row,
+	inProject,
+	inert,
+	settingsDisabled,
+	onCommand,
 }: {
-	summary: McpServerRow["summary"];
-	disabled: boolean;
-	onChange: (exposure: McpEditableExposure) => void;
+	row: McpServerRow;
+	inProject: boolean;
+	inert: boolean;
+	settingsDisabled: boolean;
+	onCommand: (command: McpRowCommand) => void;
 }) {
 	const t = useT();
+	const { summary } = row;
+	const pendingProject = summary.scope === "project" && row.state === "pending-approval";
 	return (
-		<DropdownMenu>
-			<DropdownMenuTrigger asChild>
-				<button
-					type="button"
-					data-testid="mcp-server-exposure"
-					data-exposure={summary.effectiveExposure}
-					aria-label={t("mcp.exposure.menuAria", { exposure: summary.effectiveExposure })}
-					disabled={disabled}
-					className={cn(
-						CHIP_CLASS,
-						"inline-flex items-center gap-2 hover:bg-control-bg-hovered hover:text-text-default focus-visible:focus-ring disabled:text-control-disabled-text disabled:hover:bg-transparent",
-					)}
-				>
-					{mcpExposureLabel(t, summary.effectiveExposure)}
-					<ChevronDown className="size-12" />
-				</button>
-			</DropdownMenuTrigger>
-			<DropdownMenuContent align="start" className="max-w-[20rem]">
-				<DropdownMenuLabel>
-					{summary.scope === "user"
-						? t("mcp.exposure.menuTitleInProject")
-						: t("mcp.exposure.menuTitle")}
-				</DropdownMenuLabel>
-				<DropdownMenuRadioGroup
-					value={summary.effectiveExposure}
-					onValueChange={(value) => {
-						const exposure = MCP_EXPOSURES.find((candidate) => candidate === value);
-						if (exposure && exposure !== summary.effectiveExposure) onChange(exposure);
-					}}
-				>
-					{MCP_EXPOSURES.map((exposure) => (
-						<DropdownMenuRadioItem
-							key={exposure}
-							value={exposure}
-							data-testid={`mcp-exposure-${exposure}`}
-							className="items-start"
-						>
-							{exposure === summary.effectiveExposure ? (
-								<Check className="mt-2" />
-							) : (
-								<span aria-hidden className="size-14 shrink-0" />
-							)}
-							<span className="flex flex-col gap-2">
-								<span>{mcpExposureLabel(t, exposure)}</span>
-								<span className="text-text-muted tr-text-metadata">
-									{t(MCP_EXPOSURE_HINT[exposure])}
+		<DropdownMenuContent align="end">
+			<DropdownMenuItem
+				data-testid="mcp-menu-details"
+				onSelect={() => onCommand({ kind: "details" })}
+			>
+				{t("mcp.menu.details")}
+			</DropdownMenuItem>
+			<DropdownMenuSub>
+				<DropdownMenuSubTrigger data-testid="mcp-menu-exposure" disabled={settingsDisabled}>
+					{t("mcp.exposure.menuAria", { exposure: mcpExposureLabel(t, summary.effectiveExposure) })}
+				</DropdownMenuSubTrigger>
+				<DropdownMenuSubContent className="max-w-[20rem]">
+					<DropdownMenuLabel>
+						{inProject && summary.scope === "user"
+							? t("mcp.exposure.menuTitleInProject")
+							: t("mcp.exposure.menuTitle")}
+					</DropdownMenuLabel>
+					<DropdownMenuRadioGroup
+						value={summary.effectiveExposure}
+						onValueChange={(value) => {
+							const exposure = MCP_EXPOSURES.find((candidate) => candidate === value);
+							if (exposure && exposure !== summary.effectiveExposure) {
+								onCommand({ kind: "exposure", exposure });
+							}
+						}}
+					>
+						{MCP_EXPOSURES.map((exposure) => (
+							<DropdownMenuRadioItem
+								key={exposure}
+								value={exposure}
+								data-testid={`mcp-exposure-${exposure}`}
+								className="items-start"
+							>
+								{exposure === summary.effectiveExposure ? (
+									<Check className="mt-2" />
+								) : (
+									<span aria-hidden className="size-14 shrink-0" />
+								)}
+								<span className="flex flex-col gap-2">
+									<span>{mcpExposureLabel(t, exposure)}</span>
+									<span className="text-text-muted tr-text-metadata">
+										{t(MCP_EXPOSURE_HINT[exposure])}
+									</span>
 								</span>
-							</span>
-						</DropdownMenuRadioItem>
-					))}
-				</DropdownMenuRadioGroup>
-				{summary.exposure === "codemode" ? (
-					<p className="px-8 py-4 text-text-muted tr-text-metadata">
-						{t("mcp.exposure.codemodeNote")}
-					</p>
-				) : null}
-			</DropdownMenuContent>
-		</DropdownMenu>
-	);
-}
-
-function McpIntro({ projectName }: { projectName: string | undefined }) {
-	const t = useT();
-	return (
-		<div className="flex flex-col gap-4">
-			<h3 className="tr-title-section text-text-default">{t("mcp.settings.title")}</h3>
-			<p className="text-text-muted tr-text-metadata">
-				{projectName === undefined
-					? t("mcp.settings.introThisProject")
-					: t("mcp.settings.intro", { project: projectName })}
-			</p>
-		</div>
+							</DropdownMenuRadioItem>
+						))}
+					</DropdownMenuRadioGroup>
+					{summary.exposure === "codemode" ? (
+						<p className="px-8 py-4 text-text-muted tr-text-metadata">
+							{t("mcp.exposure.codemodeNote")}
+						</p>
+					) : null}
+				</DropdownMenuSubContent>
+			</DropdownMenuSub>
+			{row.effective && summary.oauth ? (
+				<>
+					<DropdownMenuItem
+						data-testid="mcp-menu-sign-in"
+						disabled={inert}
+						onSelect={() => onCommand({ kind: "sign-in" })}
+					>
+						{t("mcp.action.signIn")}
+					</DropdownMenuItem>
+					<DropdownMenuItem
+						data-testid="mcp-menu-sign-out"
+						disabled={inert}
+						onSelect={() => onCommand({ kind: "sign-out" })}
+					>
+						{t("mcp.menu.signOut")}
+					</DropdownMenuItem>
+				</>
+			) : null}
+			{row.effective && summary.transport === "http" ? (
+				<DropdownMenuItem
+					data-testid="mcp-menu-test-connection"
+					disabled={inert}
+					onSelect={() => onCommand({ kind: "test-connection" })}
+				>
+					{t("mcp.action.testConnection")}
+				</DropdownMenuItem>
+			) : null}
+			<DropdownMenuItem
+				data-testid="mcp-menu-show-log"
+				disabled={inert}
+				onSelect={() => onCommand({ kind: "show-log" })}
+			>
+				{t("mcp.action.showLog")}
+			</DropdownMenuItem>
+			{pendingProject ? (
+				<DropdownMenuItem
+					data-testid="mcp-menu-review"
+					disabled={inert}
+					onSelect={() => onCommand({ kind: "review" })}
+				>
+					{t("mcp.action.review")}
+				</DropdownMenuItem>
+			) : summary.scope === "user" ? (
+				<DropdownMenuItem data-testid="mcp-menu-edit" disabled className="items-start">
+					<span className="flex min-w-0 flex-col gap-2">
+						<span>{t("common.edit")}</span>
+						<span className="break-all text-text-muted tr-text-metadata">
+							{t("mcp.menu.editDirectly", { source: summary.source })}
+						</span>
+					</span>
+				</DropdownMenuItem>
+			) : (
+				<DropdownMenuItem
+					data-testid="mcp-menu-edit"
+					disabled={inert || row.state === "handled-elsewhere"}
+					onSelect={() => onCommand({ kind: "edit" })}
+				>
+					{t("common.edit")}
+				</DropdownMenuItem>
+			)}
+			{inProject && summary.scope === "user" && summary.projectOverride ? (
+				<DropdownMenuItem
+					data-testid="mcp-menu-share"
+					disabled={inert}
+					onSelect={() => onCommand({ kind: "share" })}
+				>
+					{t("mcp.menu.share")}
+				</DropdownMenuItem>
+			) : null}
+			<DropdownMenuSeparator />
+			<DropdownMenuItem
+				data-testid="mcp-menu-remove"
+				disabled={inert}
+				onSelect={() => onCommand({ kind: "remove" })}
+				className="text-feedback-error"
+			>
+				{t("common.remove")}
+			</DropdownMenuItem>
+		</DropdownMenuContent>
 	);
 }
 
@@ -576,49 +651,55 @@ export function McpConfigFileErrors({ errors }: { errors: readonly McpConfigFile
 	return (
 		<ul className="flex flex-col gap-4" data-testid="mcp-config-errors">
 			{[...bySource].map(([source, messages]) => (
-				<li
-					key={source}
-					role="alert"
-					data-testid="mcp-config-error"
-					data-source={source}
-					className="flex items-start gap-8 rounded-sm border border-border-default border-l-[3px] border-l-feedback-error bg-feedback-error-subtle px-12 py-8 text-text-default tr-text-metadata"
-				>
-					<TriangleAlert className="mt-2 size-14 shrink-0 text-feedback-error" />
-					<span className="flex min-w-0 flex-col gap-2">
-						<span className="break-all">{t("mcp.configError.problemIn", { source })}</span>
-						{messages.map((message) => (
-							<span key={message} className="break-words text-text-muted">
-								{message}
-							</span>
-						))}
-						<span className="text-text-muted">{t("mcp.configError.hint")}</span>
-					</span>
+				<li key={source} role="alert" data-testid="mcp-config-error" data-source={source}>
+					<SettingsNotice variant="error">
+						<span className="flex min-w-0 flex-col gap-2 tr-text-metadata">
+							<span className="break-all">{t("mcp.configError.problemIn", { source })}</span>
+							{messages.map((message) => (
+								<span key={message} className="break-words text-text-muted">
+									{message}
+								</span>
+							))}
+							<span className="text-text-muted">{t("mcp.configError.hint")}</span>
+						</span>
+					</SettingsNotice>
 				</li>
 			))}
 		</ul>
 	);
 }
 
-export function McpConfirmBanner() {
+export function McpConfirmBanner({ inProject = true }: { inProject?: boolean }) {
 	const t = useT();
 	return (
-		<p
-			data-testid="mcp-confirm-banner"
-			className="flex items-center gap-8 rounded-sm border border-border-default bg-feedback-info-subtle px-12 py-8 text-text-default tr-text-metadata"
+		<SettingsNotice
+			variant="info"
+			testId="mcp-confirm-banner"
+			icon={inProject ? <ShieldCheck className="size-14" /> : undefined}
 		>
-			<ShieldCheck className="size-14 shrink-0 text-feedback-info" />
-			{t("mcp.settings.confirmBanner")}
-		</p>
+			<span className="flex flex-col gap-2">
+				<span data-testid="mcp-host-notice">{t("mcp.hostNotice")}</span>
+				{inProject ? (
+					<span data-testid="mcp-confirm-text">{t("mcp.settings.confirmBanner")}</span>
+				) : null}
+			</span>
+		</SettingsNotice>
 	);
 }
 
 export function McpEmptyState({
 	disabled,
+	focusList = USER_LIST,
+	settingId,
+	userOnly = false,
 	onAdd,
 	onImport,
 	onPreset,
 }: {
 	disabled: boolean;
+	focusList?: string;
+	settingId?: string | undefined;
+	userOnly?: boolean;
 	onAdd: () => void;
 	onImport: () => void;
 	onPreset: (preset: McpPreset) => void;
@@ -627,7 +708,9 @@ export function McpEmptyState({
 	return (
 		<div
 			data-testid="mcp-empty"
-			className="flex flex-col items-start gap-12 rounded-sm border border-border-default bg-control-bg px-16 py-16"
+			data-setting-row={settingId ?? "mcp-empty"}
+			data-setting-id={settingId}
+			className="flex flex-col items-start gap-12 py-8"
 		>
 			<p className="tr-text-ui text-text-default">{t("mcp.empty.title")}</p>
 			{MCP_PRESETS.length > 0 ? (
@@ -636,14 +719,21 @@ export function McpEmptyState({
 						<li key={preset.id} className="flex items-center gap-8">
 							<span className="flex min-w-0 flex-1 flex-col">
 								<span className="tr-title-compact text-text-default">{t(preset.title)}</span>
-								<span className="truncate text-text-muted tr-text-metadata">
-									{t(preset.description)}
+								<span className="break-words text-text-muted tr-text-metadata">
+									{t(
+										userOnly && preset.userDescription
+											? preset.userDescription
+											: preset.description,
+									)}
 								</span>
 							</span>
 							<Button
 								variant="outline"
 								size="m"
 								iconLeft={Plus}
+								tabIndex={0}
+								data-setting-side=""
+								aria-label={t("mcp.empty.addPreset", { name: t(preset.title) })}
 								disabled={disabled}
 								onClick={() => onPreset(preset)}
 							>
@@ -658,8 +748,10 @@ export function McpEmptyState({
 					variant="primary"
 					size="m"
 					iconLeft={Plus}
+					tabIndex={0}
 					data-testid="mcp-empty-add"
-					data-focus-fallback="mcp-servers"
+					data-setting-stop=""
+					data-focus-fallback={focusList}
 					disabled={disabled}
 					onClick={onAdd}
 				>
@@ -668,47 +760,113 @@ export function McpEmptyState({
 				<Button
 					variant="outline"
 					size="m"
+					tabIndex={0}
 					data-testid="mcp-empty-import"
+					data-setting-side=""
 					disabled={disabled}
 					onClick={onImport}
 				>
 					{t("mcp.empty.import")}
 				</Button>
 			</div>
-			<p className="text-text-muted tr-text-metadata">{t("mcp.hostNotice")}</p>
 		</div>
 	);
 }
 
 export function McpSettings() {
-	const t = useT();
 	const workspace = useAppStore(selectActiveWorkspace);
-	if (!workspace) {
-		return (
-			<section data-testid="settings-mcp" className="flex flex-col gap-16">
-				<McpIntro projectName={undefined} />
-				<p data-testid="mcp-no-workspace" className="text-text-muted tr-text-ui">
-					{t("mcp.settings.noWorkspace")}
-				</p>
-			</section>
-		);
-	}
-	return <McpWorkspaceSettings key={workspace.id} workspace={workspace} />;
+	const protocolVersion = useAppStore((s) => s.protocolVersion);
+	if (workspace) return <McpWorkspaceSettings key={workspace.id} workspace={workspace} />;
+	if (supportsUserMcp(protocolVersion)) return <McpUserSettings />;
+	return <McpNoWorkspace />;
 }
 
-type AddRequest = { tier: "form" | "json"; preset?: McpPreset; key: number };
+export function McpNoWorkspace() {
+	const t = useT();
+	return (
+		<SettingsPage
+			testId="settings-mcp"
+			title={t("settings.nav.mcp")}
+			description={t("mcp.settings.introNoWorkspace")}
+		>
+			<p data-testid="mcp-no-workspace" className="text-text-muted tr-text-ui">
+				{t("mcp.settings.noWorkspace")}
+			</p>
+		</SettingsPage>
+	);
+}
 
 function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
-	const t = useT();
 	const workspaceId = workspace.id;
 	const project = useAppStore((s) => s.projects.find((p) => p.id === workspace.projectId));
 	const projection = useAppStore((s) => s.mcpByWorkspace[workspaceId]);
 	const connected = useAppStore((s) => s.status === "connected");
 	const welcome = useAppStore((s) => s.welcomeGeneration);
+	const trusted = project?.piResourceTrust === "granted";
+	const [readFailure, setReadFailure] = useState<string | null>(null);
+	const [readAttempt, setReadAttempt] = useState(0);
+
+	useEffect(() => {
+		if (!connected) return;
+		return watchMcpWorkspace(workspaceId, (error) =>
+			setReadFailure(error === null ? null : errorText(error)),
+		);
+	}, [workspaceId, connected, welcome, trusted, readAttempt]);
+
+	return (
+		<McpServersPanel
+			ops={workspaceOps(workspaceId)}
+			workspace={workspace}
+			projectName={project?.name}
+			trusted={trusted}
+			projection={projection}
+			readFailure={readFailure}
+			onRetry={() => setReadAttempt((attempt) => attempt + 1)}
+		/>
+	);
+}
+
+function McpUserSettings() {
+	const list = useUserMcpList();
+	return (
+		<McpServersPanel
+			ops={userOps(list.write)}
+			workspace={null}
+			projectName={undefined}
+			trusted={false}
+			projection={list.projection}
+			readFailure={list.readFailure}
+			onRetry={list.retry}
+		/>
+	);
+}
+
+type AddRequest = { tier: "form" | "json"; preset?: McpPreset; key: number };
+
+export function McpServersPanel({
+	ops,
+	workspace,
+	projectName,
+	trusted,
+	projection,
+	readFailure,
+	onRetry,
+}: {
+	ops: McpOps;
+	workspace: Workspace | null;
+	projectName: string | undefined;
+	trusted: boolean;
+	projection: McpWorkspaceProjection | undefined;
+	readFailure: string | null;
+	onRetry: () => void;
+}) {
+	const t = useT();
+	const workspaceId = workspace?.id;
+	const inProject = workspace !== null;
+	const connected = useAppStore((s) => s.status === "connected");
 	const activeLogin = useAppStore((s) => s.activeLogin);
 	const loginBusy = useAppStore(selectLoginBusy);
 	const now = useNow();
-	const trusted = project?.piResourceTrust === "granted";
 	const rows = useMemo(
 		() =>
 			deriveMcpServerRows(projection, now).filter(
@@ -716,8 +874,6 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 			),
 		[projection, now, trusted],
 	);
-	const [readFailure, setReadFailure] = useState<string | null>(null);
-	const [readAttempt, setReadAttempt] = useState(0);
 	const [busy, setBusy] = useState<Record<string, true>>({});
 	const [rowErrors, setRowErrors] = useState<Record<string, RowError>>({});
 	const [feedback, setFeedback] = useState<string | null>(null);
@@ -726,14 +882,8 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 	const [approving, setApproving] = useState<McpApproveTarget | null>(null);
 	const [details, setDetails] = useState<string | null>(null);
 	const [removing, setRemoving] = useState<McpServerRow | null>(null);
+	const [menuFor, setMenuFor] = useState<string | null>(null);
 	const [log, setLog] = useState<{ key: string; read: McpLogRead } | null>(null);
-
-	useEffect(() => {
-		if (!connected) return;
-		return watchMcpWorkspace(workspaceId, (error) =>
-			setReadFailure(error === null ? null : errorText(error)),
-		);
-	}, [workspaceId, connected, welcome, trusted, readAttempt]);
 
 	useEffect(() => {
 		if (trusted) return;
@@ -746,10 +896,9 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 	const readOnly = !connected || handledElsewhere !== null;
 	const servers = projection?.servers ?? null;
 	const configErrors = projection?.configErrors ?? [];
-	const mcpLogin =
-		activeLogin?.target?.kind === "mcp" && activeLogin.target.workspaceId === workspaceId
-			? activeLogin
-			: null;
+	const mcpLogin = mcpLoginFor(activeLogin, workspaceId);
+	const userRows = rows.filter((row) => row.summary.scope === "user");
+	const projectRows = rows.filter((row) => row.summary.scope === "project");
 
 	const run = async (
 		row: McpServerRow,
@@ -764,10 +913,14 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 		if (!outcome.ok) {
 			const error = { text: outcome.error, ...(errorState ? { state: errorState } : {}) };
 			setRowErrors((previous) => ({ ...previous, [row.key]: error }));
-		} else if (outcome.value) setFeedback(mcpSaveFeedback(outcome.value));
+		} else if (outcome.value) setFeedback(ops.feedback(outcome.value));
 	};
 
-	const runInChats = (row: McpServerRow, request: (sessionId: string) => Promise<unknown>) =>
+	const runInChats = (
+		row: McpServerRow,
+		chatWorkspaceId: string,
+		request: (sessionId: string) => Promise<unknown>,
+	) =>
 		run(
 			row,
 			async () => {
@@ -779,7 +932,7 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 						const chat = selectChatTitle(
 							currentTranslator(),
 							useAppStore.getState(),
-							workspaceId,
+							chatWorkspaceId,
 							sessionId,
 						);
 						failures.push({ chat, error: errorText(error) });
@@ -794,8 +947,12 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 
 	const openLog = async (row: McpServerRow) => {
 		setLog({ key: row.key, read: { state: "reading" } });
+		const name = row.summary.name;
 		const outcome = await settle(() =>
-			getTransport().request("mcp.readLog", { workspaceId, name: row.summary.name }),
+			getTransport().request(
+				"mcp.readLog",
+				workspaceId === undefined ? { name } : { workspaceId, name },
+			),
 		);
 		const read: McpLogRead = outcome.ok
 			? { state: "read", log: outcome.value }
@@ -812,23 +969,33 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 		method: "mcp.login" | "mcp.testConnection" | "mcp.logout",
 	) => {
 		if (!useAppStore.getState().reserveLogin()) return;
+		const name = row.summary.name;
+		const params = workspaceId === undefined ? { name } : { workspaceId, name };
 		return run(row, () =>
 			Promise.resolve()
 				.then(async () => {
-					const name = row.summary.name;
 					if (method === "mcp.logout") {
-						await getTransport().request(method, { workspaceId, name });
+						await getTransport().request(method, params);
 						toast.success(t("mcp.toast.signedOut", { name }));
-						return requestMcpList("mcp.list", { workspaceId });
+						return ops.reread();
 					}
-					const { loginId } = await getTransport().request(method, { workspaceId, name });
-					if (useAppStore.getState().removedWorkspaceIds[workspaceId]) {
+					const { loginId } = await getTransport().request(method, params);
+					if (
+						workspaceId !== undefined &&
+						useAppStore.getState().removedWorkspaceIds[workspaceId]
+					) {
 						cancelLoginQuietly(loginId);
 						return null;
 					}
 					useAppStore
 						.getState()
-						.beginLogin(loginId, `mcp:${name}`, { kind: "mcp", workspaceId, serverName: name });
+						.beginLogin(
+							loginId,
+							`mcp:${name}`,
+							workspaceId === undefined
+								? { kind: "mcp", serverName: name }
+								: { kind: "mcp", workspaceId, serverName: name },
+						);
 					return null;
 				})
 				.finally(() => useAppStore.getState().finishLoginStart()),
@@ -836,11 +1003,12 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 	};
 
 	const projectTrustedNow = () =>
+		workspace !== null &&
 		useAppStore.getState().projects.find((p) => p.id === workspace.projectId)?.piResourceTrust ===
-		"granted";
+			"granted";
 
 	const openEdit = async (row: McpServerRow) => {
-		if (row.summary.scope !== "project") return;
+		if (row.summary.scope !== "project" || workspaceId === undefined) return;
 		const read = await settle(() => readProjectEntry(workspaceId, row.summary.name));
 		if (!projectTrustedNow()) return;
 		if (read.ok) setEditing({ summary: row.summary, entry: read.value });
@@ -848,6 +1016,7 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 	};
 
 	const openReview = async (row: McpServerRow) => {
+		if (workspaceId === undefined) return;
 		const read = await settle(() => readProjectEntry(workspaceId, row.summary.name));
 		if (!projectTrustedNow()) return;
 		setApproving({
@@ -857,36 +1026,24 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 		});
 	};
 
-	const onCommand = (row: McpServerRow, command: McpRowCommand) => {
+	const onWorkspaceCommand = (wsId: string, row: McpServerRow, command: McpRowCommand) => {
 		const name = row.summary.name;
 		switch (command.kind) {
-			case "toggle":
-				void run(row, () => writeSetting(workspaceId, row, { enabled: command.enabled }));
-				return;
-			case "exposure":
-				void run(row, () => writeSetting(workspaceId, row, { exposure: command.exposure }));
-				return;
 			case "revoke-tool":
 				void run(row, () =>
-					refreshOnFailure(workspaceId, () =>
-						requestMcpList("mcp.revokeToolGrant", { workspaceId, name, tool: command.tool }),
+					refreshOnFailure(wsId, () =>
+						requestMcpList("mcp.revokeToolGrant", { workspaceId: wsId, name, tool: command.tool }),
 					),
 				);
 				return;
-			case "sign-in":
-				void startProbe(row, "mcp.login");
-				return;
-			case "test-connection":
-				void startProbe(row, "mcp.testConnection");
-				return;
 			case "reconnect":
-				void runInChats(row, (sessionId) =>
-					getTransport().request("mcp.reconnect", { workspaceId, sessionId, name }),
+				void runInChats(row, wsId, (sessionId) =>
+					getTransport().request("mcp.reconnect", { workspaceId: wsId, sessionId, name }),
 				);
 				return;
 			case "reload":
-				void runInChats(row, async (sessionId) => {
-					const { syncedTick } = await reloadSessionResourcesWithSkillBaseline(workspaceId, {
+				void runInChats(row, wsId, async (sessionId) => {
+					const { syncedTick } = await reloadSessionResourcesWithSkillBaseline(wsId, {
 						sessionId,
 					});
 					useAppStore.getState().markSkillsSynced(sessionId, syncedTick);
@@ -894,26 +1051,14 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 				return;
 			case "open-chat":
 				useAppStore.getState().closeSettings();
-				void startChatInTab(workspaceId);
-				return;
-			case "show-log":
-				void openLog(row);
-				return;
-			case "sign-out":
-				void startProbe(row, "mcp.logout");
+				void startChatInTab(wsId);
 				return;
 			case "share":
 				void run(row, () =>
-					refreshOnFailure(workspaceId, () =>
-						requestMcpList("mcp.shareWithRepo", { workspaceId, name }),
+					refreshOnFailure(wsId, () =>
+						requestMcpList("mcp.shareWithRepo", { workspaceId: wsId, name }),
 					),
 				);
-				return;
-			case "remove":
-				setRemoving(row);
-				return;
-			case "details":
-				setDetails(row.key);
 				return;
 			case "edit":
 				void openEdit(row);
@@ -924,91 +1069,235 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 		}
 	};
 
+	const onCommand = (row: McpServerRow, command: McpRowCommand) => {
+		switch (command.kind) {
+			case "toggle":
+				void run(row, () => ops.setting(row, { enabled: command.enabled }));
+				return;
+			case "exposure":
+				void run(row, () => ops.setting(row, { exposure: command.exposure }));
+				return;
+			case "sign-in":
+				void startProbe(row, "mcp.login");
+				return;
+			case "test-connection":
+				void startProbe(row, "mcp.testConnection");
+				return;
+			case "sign-out":
+				void startProbe(row, "mcp.logout");
+				return;
+			case "show-log":
+				void openLog(row);
+				return;
+			case "remove":
+				setRemoving(row);
+				return;
+			case "details":
+				setDetails(row.key);
+				return;
+			default:
+				if (workspaceId !== undefined) onWorkspaceCommand(workspaceId, row, command);
+		}
+	};
+
+	const requestRemove = (key: string) => {
+		const row = rows.find((candidate) => candidate.key === key);
+		if (!row || readOnly || busy[row.key] || loginBusy) return;
+		setRemoving(row);
+	};
+
+	const openAdd = (tier: AddRequest["tier"], preset?: McpPreset) =>
+		setAdding({ tier, ...(preset ? { preset } : {}), key: Date.now() });
+
+	const renderRows = (list: readonly McpServerRow[]) =>
+		list.map((row) => (
+			<McpServerRowView
+				key={row.key}
+				row={row}
+				view={ops.view(t, row, now)}
+				inProject={inProject}
+				readOnly={readOnly}
+				busy={!!busy[row.key] || loginBusy}
+				error={rowErrorText(rowErrors[row.key], row.state)}
+				menuOpen={menuFor === row.key}
+				onMenuOpenChange={(open) => setMenuFor(open ? row.key : null)}
+				onCommand={(command) => onCommand(row, command)}
+			/>
+		));
+
+	const serverList = (
+		focusList: string,
+		label: string,
+		settingId: string,
+		testId: string,
+		list: readonly McpServerRow[],
+	) => (
+		<SettingsList
+			focusList={focusList}
+			label={label}
+			rowIds={list.map((row) => row.key)}
+			settingId={settingId}
+			testId={testId}
+			onRemove={requestRemove}
+			onMenu={setMenuFor}
+		>
+			{renderRows(list)}
+		</SettingsList>
+	);
+
 	const detailRow = rows.find((row) => row.key === details);
 	const logRow = log ? rows.find((row) => row.key === log.key) : undefined;
+	const userLabel = t("settings.catalog.mcpUserServers.label");
+	const projectLabel = t("settings.catalog.mcpProjectServers.label");
 	return (
-		<section data-testid="settings-mcp" className="flex flex-col gap-16">
-			<div className="flex items-start justify-between gap-8">
-				<McpIntro projectName={project?.name} />
-				{servers && servers.length > 0 ? (
-					<Button
-						variant="primary"
-						size="m"
-						iconLeft={Plus}
-						data-testid="mcp-add"
-						disabled={readOnly}
-						onClick={() => setAdding({ tier: "form", key: Date.now() })}
-					>
-						{t("mcp.settings.addServer")}
-					</Button>
-				) : null}
-			</div>
-			<McpConfirmBanner />
-			{handledElsewhere ? (
-				<p
-					data-testid="mcp-handled-elsewhere"
-					className="flex items-start gap-8 rounded-sm border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8 text-text-default tr-text-metadata"
-				>
-					<TriangleAlert className="mt-2 size-14 shrink-0 text-feedback-warning" />
-					{mcpHandledElsewhereText(t, handledElsewhere.by)}
-				</p>
-			) : null}
-			{!trusted ? (
-				<p data-testid="mcp-untrusted" className="text-text-muted tr-text-metadata">
-					{t("mcp.settings.untrusted")}
-				</p>
-			) : null}
-			<McpConfigFileErrors errors={configErrors} />
-			{feedback ? (
-				<p role="status" data-testid="mcp-feedback" className="text-text-muted tr-text-metadata">
-					{feedback}
-				</p>
-			) : null}
-			{servers === null ? (
-				readFailure ? (
-					<div className="flex flex-col items-start gap-8">
-						<p role="alert" data-testid="mcp-error" className="text-text-muted tr-text-ui">
-							{t("mcp.settings.readFailed", { error: readFailure })}
-						</p>
-						<Button
-							variant="outline"
-							size="m"
-							data-testid="mcp-retry"
-							onClick={() => setReadAttempt((attempt) => attempt + 1)}
+		<>
+			<SettingsPage
+				testId="settings-mcp"
+				title={t("settings.nav.mcp")}
+				description={
+					!inProject
+						? t("mcp.settings.introNoWorkspace")
+						: projectName === undefined
+							? t("mcp.settings.introThisProject")
+							: t("mcp.settings.intro", { project: projectName })
+				}
+			>
+				<div className="flex flex-col gap-12">
+					<McpConfirmBanner inProject={inProject} />
+					{handledElsewhere ? (
+						<SettingsNotice variant="warning" testId="mcp-handled-elsewhere">
+							{mcpHandledElsewhereText(t, handledElsewhere.by)}
+						</SettingsNotice>
+					) : null}
+					<McpConfigFileErrors errors={configErrors} />
+					{feedback ? (
+						<p
+							role="status"
+							data-testid="mcp-feedback"
+							className="text-text-muted tr-text-metadata"
 						>
-							{t("common.retry")}
-						</Button>
-					</div>
+							{feedback}
+						</p>
+					) : null}
+					{servers && servers.length > 0 ? (
+						<div className={SETTINGS_ROWS}>
+							<SettingsRow
+								{...settingProps(t, SETTING.mcpAdd)}
+								description={
+									inProject
+										? t("mcp.settings.addDescription")
+										: t("mcp.settings.addDescriptionUser")
+								}
+								control={
+									<Button
+										variant="primary"
+										size="m"
+										iconLeft={Plus}
+										tabIndex={0}
+										data-testid="mcp-add"
+										data-focus-fallback={PROJECT_LIST}
+										disabled={readOnly}
+										onClick={() => openAdd("form")}
+									>
+										{t("mcp.settings.addServer")}
+									</Button>
+								}
+							/>
+						</div>
+					) : null}
+				</div>
+				{servers === null ? (
+					readFailure ? (
+						<div className="flex flex-col items-start gap-8">
+							<p role="alert" data-testid="mcp-error" className="text-text-muted tr-text-ui">
+								{t("mcp.settings.readFailed", { error: readFailure })}
+							</p>
+							<Button
+								variant="outline"
+								size="m"
+								tabIndex={0}
+								data-testid="mcp-retry"
+								onClick={onRetry}
+							>
+								{t("common.retry")}
+							</Button>
+						</div>
+					) : (
+						<SkeletonRows rows={3} label={t("mcp.settings.loading")} />
+					)
 				) : (
-					<SkeletonRows rows={3} label={t("mcp.settings.loading")} />
-				)
-			) : servers.length === 0 ? (
-				<McpEmptyState
-					disabled={readOnly}
-					onAdd={() => setAdding({ tier: "form", key: Date.now() })}
-					onImport={() => setAdding({ tier: "json", key: Date.now() })}
-					onPreset={(preset) => setAdding({ tier: "form", preset, key: Date.now() })}
-				/>
-			) : (
-				<ul
-					className="flex flex-col gap-4"
-					data-testid="mcp-server-list"
-					data-focus-list="mcp-servers"
-				>
-					{rows.map((row) => (
-						<McpServerRowView
-							key={row.key}
-							row={row}
-							view={mcpRowView(t, row, now)}
-							readOnly={readOnly}
-							busy={!!busy[row.key] || loginBusy}
-							error={rowErrorText(rowErrors[row.key], row.state)}
-							onCommand={(command) => onCommand(row, command)}
-						/>
-					))}
-				</ul>
-			)}
-
+					<SettingsGroup
+						testId="mcp-user-servers"
+						title={userLabel}
+						scope="allProjects"
+						description={t("mcp.settings.userGroupDescription")}
+					>
+						{userRows.length > 0 ? (
+							serverList(
+								USER_LIST,
+								userLabel,
+								SETTING.mcpUserServers.id,
+								"mcp-server-list",
+								userRows,
+							)
+						) : (
+							<div data-setting-id={SETTING.mcpUserServers.id}>
+								<McpEmptyState
+									disabled={readOnly}
+									focusList={USER_LIST}
+									settingId={servers.length === 0 ? SETTING.mcpAdd.id : undefined}
+									userOnly={!inProject}
+									onAdd={() => openAdd("form")}
+									onImport={() => openAdd("json")}
+									onPreset={(preset) => openAdd("form", preset)}
+								/>
+							</div>
+						)}
+						{inProject ? null : (
+							<p
+								data-testid="mcp-project-servers-hint"
+								className="pt-8 text-text-muted tr-text-metadata"
+							>
+								{t("mcp.settings.projectServersHint")}
+							</p>
+						)}
+					</SettingsGroup>
+				)}
+				{servers !== null && inProject ? (
+					<SettingsGroup
+						testId="mcp-project-servers"
+						title={projectLabel}
+						scope="project"
+						description={t("mcp.settings.projectGroupDescription")}
+					>
+						{!trusted ? (
+							<p
+								data-testid="mcp-untrusted"
+								data-setting-id={SETTING.mcpProjectServers.id}
+								className="py-8 text-text-muted tr-text-metadata"
+							>
+								{t("mcp.settings.untrusted")}
+							</p>
+						) : projectRows.length > 0 ? (
+							serverList(
+								PROJECT_LIST,
+								projectLabel,
+								SETTING.mcpProjectServers.id,
+								"mcp-project-server-list",
+								projectRows,
+							)
+						) : (
+							<p
+								data-testid="mcp-project-empty"
+								data-setting-id={SETTING.mcpProjectServers.id}
+								className="py-8 text-text-muted tr-text-metadata"
+							>
+								{t("mcp.settings.projectEmpty")}
+							</p>
+						)}
+					</SettingsGroup>
+				) : null}
+			</SettingsPage>
 			{adding ? (
 				<McpAddDialog
 					key={adding.key}
@@ -1017,32 +1306,37 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 					initialPreset={adding.preset}
 					existing={servers ?? []}
 					projectScopeAvailable={trusted}
+					userOnly={!inProject}
 					onOpenChange={(open) => {
 						if (!open) setAdding(null);
 					}}
-					onAdd={async (servers, scope) => {
+					onAdd={async (added, scope) => {
 						setFeedback(null);
-						const { results, last } = await addServers(workspaceId, servers, scope);
-						if (last) setFeedback(mcpSaveFeedback(last));
+						const { results, last } = await addServers(ops, added, scope);
+						if (last) setFeedback(ops.feedback(last));
 						return results;
 					}}
-					onEnableInProject={async (name) => {
-						const outcome = await settle(() =>
-							requestMcpList("mcp.setProjectOverride", { workspaceId, name, enabled: true }),
-						);
-						if (!outcome.ok) {
-							const key = `user:${name}`;
-							setRowErrors((previous) => ({
-								...previous,
-								[key]: {
-									text: t("mcp.settings.enableInProjectFailed", { error: outcome.error }),
-								},
-							}));
-						} else setFeedback(mcpSaveFeedback(outcome.value));
-					}}
+					onEnableInProject={
+						workspaceId === undefined
+							? undefined
+							: async (name) => {
+									const outcome = await settle(() =>
+										requestMcpList("mcp.setProjectOverride", { workspaceId, name, enabled: true }),
+									);
+									if (!outcome.ok) {
+										const key = `user:${name}`;
+										setRowErrors((previous) => ({
+											...previous,
+											[key]: {
+												text: t("mcp.settings.enableInProjectFailed", { error: outcome.error }),
+											},
+										}));
+									} else setFeedback(ops.feedback(outcome.value));
+								}
+					}
 				/>
 			) : null}
-			{editing ? (
+			{editing && workspaceId !== undefined ? (
 				<McpEditDialog
 					key={editing.summary.name}
 					target={editing}
@@ -1054,12 +1348,12 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 							),
 						);
 						if (!outcome.ok) return outcome.error;
-						setFeedback(mcpSaveFeedback(outcome.value));
+						setFeedback(ops.feedback(outcome.value));
 						return null;
 					}}
 				/>
 			) : null}
-			{approving ? (
+			{approving && workspaceId !== undefined ? (
 				<McpApproveDialog
 					key={approving.summary.name}
 					target={approving}
@@ -1067,7 +1361,7 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 					onApprove={async () => {
 						const outcome = await settle(() => approveMcpServer(workspaceId, approving.summary));
 						if (!outcome.ok) return outcome.error;
-						setFeedback(mcpSaveFeedback(outcome.value));
+						setFeedback(ops.feedback(outcome.value));
 						return null;
 					}}
 				/>
@@ -1075,7 +1369,7 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 			{detailRow ? (
 				<McpDetailsDialog
 					row={detailRow}
-					view={mcpRowView(t, detailRow, now)}
+					view={ops.view(t, detailRow, now)}
 					onClose={() => setDetails(null)}
 				/>
 			) : null}
@@ -1097,15 +1391,7 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 				onConfirm={() => {
 					const row = removing;
 					if (!row) return;
-					void run(row, () =>
-						refreshOnFailure(workspaceId, () =>
-							requestMcpList("mcp.remove", {
-								workspaceId,
-								name: row.summary.name,
-								...mcpRenderedTarget(row.summary),
-							}),
-						),
-					);
+					void run(row, () => ops.remove(row.summary));
 				}}
 			/>
 			{mcpLogin?.target ? (
@@ -1127,10 +1413,10 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 					}}
 					onClose={() => {
 						useAppStore.getState().clearLogin();
-						void requestMcpList("mcp.list", { workspaceId }).catch(() => {});
+						void ops.reread().catch(() => {});
 					}}
 				/>
 			) : null}
-		</section>
+		</>
 	);
 }

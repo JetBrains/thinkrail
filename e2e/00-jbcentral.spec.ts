@@ -2,6 +2,7 @@ import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "nod
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import {
+	closeSettings,
 	createWorkspaceViaDialog,
 	expandModelGroup,
 	modelGroupToggle,
@@ -70,6 +71,7 @@ test("connects and follows external add, replacement, and remove without a host 
 		.getByTestId("default-model-row")
 		.getByTestId("model-selector")
 		.click();
+	await revealModelGroups(page);
 	await expandModelGroup(page, "e2e-central");
 	await expect(
 		page.locator('[data-testid="model-option"][data-model-id="e2e-central-model-v2"]'),
@@ -242,8 +244,7 @@ test("disconnect removes Central from new chats while an existing live chat keep
 	await waitForCentralState(page, "supported");
 	await connectCentral(page);
 	await waitForCentralState(page, "configured");
-	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("settings-dialog")).toBeHidden();
+	await closeSettings(page);
 
 	await createWorkspaceViaDialog(page);
 	await page.getByTestId("model-selector").click();
@@ -256,7 +257,7 @@ test("disconnect removes Central from new chats while an existing live chat keep
 	await page.getByTestId("jetbrains-disconnect").click();
 	await waitForCentralState(page, "supported");
 	expect(existsSync(E2E_CENTRAL_ARTIFACT)).toBe(false);
-	await page.keyboard.press("Escape");
+	await closeSettings(page);
 	await expect(page.getByTestId("model-selector")).toContainText("Synthetic JetBrains AI model");
 
 	await page.getByTestId("add-workspace").first().click();

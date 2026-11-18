@@ -1,13 +1,15 @@
 import type { MessageKey } from "@thinkrail/locales";
+import { keyCap } from "@thinkrail/ui/keyboard";
 import { type CommandShortcut, shortcutKeys } from "../commands";
 import { platformFamily } from "../lib";
+import { displayShortcut, FOCUS_GROUP_BINDINGS, type KeybindingId, keysLabel } from "./keybindings";
+import { SUGGESTION_KEYS } from "./localKeys";
 import {
-	FOCUS_GROUP_BINDINGS,
-	type KeybindingId,
-	keybindingKeys,
 	keybindingShortcut,
-	keysLabel,
-} from "./keybindings";
+	keybindingShortcuts,
+	lostHere,
+	type ResolvedKeybindings,
+} from "./resolve";
 
 export const SHORTCUT_SURFACES = [
 	"general",
@@ -20,6 +22,7 @@ export const SHORTCUT_SURFACES = [
 	"history",
 	"palette",
 	"findInFiles",
+	"settings",
 	"terminal",
 	"desktop",
 ] as const;
@@ -37,6 +40,7 @@ export const SHORTCUT_SURFACE_TITLES = {
 	history: "shortcuts.surface.history",
 	palette: "shortcuts.surface.palette",
 	findInFiles: "shortcuts.surface.findInFiles",
+	settings: "shortcuts.surface.settings",
 	terminal: "shortcuts.surface.terminal",
 	desktop: "shortcuts.surface.desktop",
 } as const satisfies Record<ShortcutSurface, MessageKey>;
@@ -47,55 +51,6 @@ export interface ShortcutKey extends CommandShortcut {
 	readonly platform?: ShortcutPlatform;
 }
 
-export const TAB_KEYS = {
-	close: { key: "Delete" },
-	moveBefore: { key: "ArrowLeft", alt: true, shift: true },
-	moveAfter: { key: "ArrowRight", alt: true, shift: true },
-} as const satisfies Record<string, ShortcutKey>;
-
-export const RAIL_KEYS = {
-	remove: { key: "Delete" },
-	moveUp: { key: "ArrowUp", alt: true, shift: true },
-	moveDown: { key: "ArrowDown", alt: true, shift: true },
-	moveLeft: { key: "ArrowLeft", alt: true, shift: true },
-	moveRight: { key: "ArrowRight", alt: true, shift: true },
-} as const satisfies Record<string, ShortcutKey>;
-
-export const TREE_KEYS = {
-	search: { key: "s" },
-	openKept: { key: "Enter", mod: true },
-	rename: { key: "F2" },
-	delete: { key: "Delete" },
-	moveUp: { key: "ArrowUp", alt: true, shift: true },
-	moveDown: { key: "ArrowDown", alt: true, shift: true },
-} as const satisfies Record<string, ShortcutKey>;
-
-export const REVIEW_KEYS = {
-	markViewed: { key: "v" },
-	nextUnreviewed: { key: "j" },
-	nextFile: { key: "ArrowDown", alt: true },
-	previousFile: { key: "ArrowUp", alt: true },
-	nextStep: { key: "n" },
-	previousStep: { key: "p" },
-} as const satisfies Record<string, ShortcutKey>;
-
-export const HJKL_KEYS = {
-	left: { key: "h" },
-	down: { key: "j" },
-	up: { key: "k" },
-	right: { key: "l" },
-} as const satisfies Record<string, ShortcutKey>;
-
-export const TRANSCRIPT_KEYS = {
-	enter: { key: "ArrowUp", mod: true },
-	copy: { key: "c" },
-	open: { key: "o" },
-} as const satisfies Record<string, ShortcutKey>;
-
-export const HISTORY_KEYS = {
-	deleteChat: { key: "Delete" },
-} as const satisfies Record<string, ShortcutKey>;
-
 export const DESKTOP_KEYS = {
 	settings: { key: ",", mod: true },
 	zoomIn: { key: "=", mod: true },
@@ -103,17 +58,41 @@ export const DESKTOP_KEYS = {
 	zoomReset: { key: "Num 0", mod: true },
 } as const satisfies Record<string, ShortcutKey>;
 
+export interface ShortcutTwin {
+	readonly command: string;
+	readonly shift?: true;
+}
+
 interface CatalogEntryBase {
 	readonly id: string;
 	readonly title: MessageKey;
 	readonly surface: ShortcutSurface;
 	readonly desktop?: true;
+	readonly scope?: string;
 }
 
 export type ShortcutCatalogEntry = CatalogEntryBase &
 	(
-		| { readonly bindings: readonly [KeybindingId, ...KeybindingId[]]; readonly keys?: never }
-		| { readonly keys: readonly [ShortcutKey, ...ShortcutKey[]]; readonly bindings?: never }
+		| {
+				readonly bindings: readonly [KeybindingId, ...KeybindingId[]];
+				readonly bindingTitle?: MessageKey;
+				readonly keys?: never;
+				readonly local?: never;
+				readonly twin?: never;
+		  }
+		| {
+				readonly keys: readonly [ShortcutKey, ...ShortcutKey[]];
+				readonly twin?: ShortcutTwin;
+				readonly bindings?: never;
+				readonly local?: never;
+		  }
+		| {
+				readonly local: string | readonly string[];
+				readonly bindingTitle?: MessageKey;
+				readonly keys?: readonly ShortcutKey[];
+				readonly bindings?: never;
+				readonly twin?: never;
+		  }
 	);
 
 const UP = { key: "ArrowUp" } as const;
@@ -128,6 +107,16 @@ const MENU = { key: "F10", shift: true } as const;
 const PAGE_UP = { key: "PageUp" } as const;
 const PAGE_DOWN = { key: "PageDown" } as const;
 const TAB = { key: "Tab" } as const;
+
+const TWIN = {
+	left: { command: "arrows.left" },
+	down: { command: "arrows.down" },
+	up: { command: "arrows.up" },
+	right: { command: "arrows.right" },
+} as const satisfies Record<string, ShortcutTwin>;
+
+const inScope = (scope: string, entries: readonly ShortcutCatalogEntry[]): ShortcutCatalogEntry[] =>
+	entries.map((entry) => ({ ...entry, scope }));
 
 export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 	{
@@ -190,12 +179,23 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 		title: "shortcuts.focusGroup",
 		surface: "general",
 		bindings: FOCUS_GROUP_BINDINGS,
+		bindingTitle: "commands.focus.group",
 	},
 	{
 		id: "dictation",
 		title: "shortcuts.dictation",
 		surface: "general",
 		keys: [{ key: " ", mod: true, shift: true }],
+	},
+	{ id: "field.leave", title: "shortcuts.leaveField", surface: "general", keys: [ESCAPE] },
+	{ id: "arrows.left", title: "shortcuts.arrows.left", surface: "general", local: "arrows.left" },
+	{ id: "arrows.down", title: "shortcuts.arrows.down", surface: "general", local: "arrows.down" },
+	{ id: "arrows.up", title: "shortcuts.arrows.up", surface: "general", local: "arrows.up" },
+	{
+		id: "arrows.right",
+		title: "shortcuts.arrows.right",
+		surface: "general",
+		local: "arrows.right",
 	},
 	{ id: "tab.close", title: "shortcuts.closeTab", surface: "tabs", bindings: ["tab.close"] },
 	{
@@ -228,21 +228,37 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 		surface: "tabs",
 		keys: [{ key: "F6", ctrl: true, shift: true }],
 	},
-	{
-		id: "tabs.select",
-		title: "shortcuts.tabs.select",
-		surface: "tabs",
-		keys: [LEFT, RIGHT, HJKL_KEYS.left, HJKL_KEYS.right],
-	},
-	{ id: "tabs.firstLast", title: "shortcuts.tabs.firstLast", surface: "tabs", keys: [HOME, END] },
-	{ id: "tabs.close", title: "shortcuts.tabs.close", surface: "tabs", keys: [TAB_KEYS.close] },
-	{
-		id: "tabs.reorder",
-		title: "shortcuts.tabs.reorder",
-		surface: "tabs",
-		keys: [TAB_KEYS.moveBefore, TAB_KEYS.moveAfter],
-	},
-	{ id: "tabs.menu", title: "shortcuts.tabs.menu", surface: "tabs", keys: [MENU] },
+	...inScope("tabs", [
+		{
+			id: "tabs.previous",
+			title: "shortcuts.tabs.previous",
+			surface: "tabs",
+			keys: [LEFT],
+			twin: TWIN.left,
+		},
+		{
+			id: "tabs.next",
+			title: "shortcuts.tabs.next",
+			surface: "tabs",
+			keys: [RIGHT],
+			twin: TWIN.right,
+		},
+		{ id: "tabs.firstLast", title: "shortcuts.tabs.firstLast", surface: "tabs", keys: [HOME, END] },
+		{ id: "tabs.close", title: "shortcuts.tabs.close", surface: "tabs", local: "tabs.close" },
+		{
+			id: "tabs.moveBefore",
+			title: "shortcuts.tabs.moveBefore",
+			surface: "tabs",
+			local: "tabs.moveBefore",
+		},
+		{
+			id: "tabs.moveAfter",
+			title: "shortcuts.tabs.moveAfter",
+			surface: "tabs",
+			local: "tabs.moveAfter",
+		},
+		{ id: "tabs.menu", title: "shortcuts.tabs.menu", surface: "tabs", keys: [MENU] },
+	]),
 	{
 		id: "view.toggleLeft",
 		title: "shortcuts.toggleLeft",
@@ -268,446 +284,713 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 		surface: "panels",
 		bindings: ["view.changes"],
 	},
-	{
-		id: "rail.move",
-		title: "shortcuts.rail.move",
-		surface: "panels",
-		keys: [UP, DOWN, HJKL_KEYS.up, HJKL_KEYS.down, HOME, END],
-	},
-	{
-		id: "rail.moveBottom",
-		title: "shortcuts.rail.moveBottom",
-		surface: "panels",
-		keys: [LEFT, RIGHT, HJKL_KEYS.left, HJKL_KEYS.right, HOME, END],
-	},
-	{
-		id: "rail.toggle",
-		title: "shortcuts.rail.toggle",
-		surface: "panels",
-		keys: [ENTER, { key: " " }],
-	},
-	{
-		id: "rail.remove",
-		title: "shortcuts.rail.remove",
-		surface: "panels",
-		keys: [RAIL_KEYS.remove],
-	},
-	{
-		id: "rail.reorder",
-		title: "shortcuts.rail.reorder",
-		surface: "panels",
-		keys: [RAIL_KEYS.moveUp, RAIL_KEYS.moveDown],
-	},
-	{
-		id: "rail.reorderBottom",
-		title: "shortcuts.rail.reorderBottom",
-		surface: "panels",
-		keys: [RAIL_KEYS.moveLeft, RAIL_KEYS.moveRight],
-	},
-	{
-		id: "trees.move",
-		title: "shortcuts.trees.move",
-		surface: "trees",
-		keys: [UP, DOWN, HJKL_KEYS.up, HJKL_KEYS.down],
-	},
-	{
-		id: "trees.expand",
-		title: "shortcuts.trees.expand",
-		surface: "trees",
-		keys: [RIGHT, LEFT, HJKL_KEYS.right, HJKL_KEYS.left],
-	},
-	{
-		id: "trees.firstLast",
-		title: "shortcuts.trees.firstLast",
-		surface: "trees",
-		keys: [HOME, END],
-	},
-	{
-		id: "trees.search",
-		title: "shortcuts.trees.search",
-		surface: "trees",
-		keys: [TREE_KEYS.search],
-	},
-	{
-		id: "trees.searchStep",
-		title: "shortcuts.trees.searchStep",
-		surface: "trees",
-		keys: [DOWN, UP],
-	},
-	{ id: "trees.searchKeep", title: "shortcuts.trees.searchKeep", surface: "trees", keys: [ENTER] },
-	{
-		id: "trees.searchCancel",
-		title: "shortcuts.trees.searchCancel",
-		surface: "trees",
-		keys: [ESCAPE],
-	},
-	{ id: "trees.open", title: "shortcuts.trees.open", surface: "trees", keys: [ENTER] },
-	{
-		id: "trees.openKept",
-		title: "shortcuts.trees.openKept",
-		surface: "trees",
-		keys: [TREE_KEYS.openKept],
-	},
-	{
-		id: "trees.rename",
-		title: "shortcuts.trees.rename",
-		surface: "trees",
-		keys: [TREE_KEYS.rename],
-	},
-	{
-		id: "trees.delete",
-		title: "shortcuts.trees.delete",
-		surface: "trees",
-		keys: [TREE_KEYS.delete],
-	},
-	{ id: "trees.menu", title: "shortcuts.trees.menu", surface: "trees", keys: [MENU] },
-	{
-		id: "trees.reorderProject",
-		title: "shortcuts.trees.reorderProject",
-		surface: "trees",
-		keys: [TREE_KEYS.moveUp, TREE_KEYS.moveDown],
-	},
+	...inScope("rails", [
+		{ id: "rails.up", title: "shortcuts.rail.up", surface: "panels", keys: [UP], twin: TWIN.up },
+		{
+			id: "rails.down",
+			title: "shortcuts.rail.down",
+			surface: "panels",
+			keys: [DOWN],
+			twin: TWIN.down,
+		},
+		{
+			id: "rails.left",
+			title: "shortcuts.rail.left",
+			surface: "panels",
+			keys: [LEFT],
+			twin: TWIN.left,
+		},
+		{
+			id: "rails.right",
+			title: "shortcuts.rail.right",
+			surface: "panels",
+			keys: [RIGHT],
+			twin: TWIN.right,
+		},
+		{
+			id: "rails.firstLast",
+			title: "shortcuts.rail.firstLast",
+			surface: "panels",
+			keys: [HOME, END],
+		},
+		{
+			id: "rail.toggle",
+			title: "shortcuts.rail.toggle",
+			surface: "panels",
+			keys: [ENTER, { key: " " }],
+		},
+		{
+			id: "rails.remove",
+			title: "shortcuts.rail.remove",
+			surface: "panels",
+			local: "rails.remove",
+		},
+		{
+			id: "rails.moveUp",
+			title: "shortcuts.rail.moveUp",
+			surface: "panels",
+			local: "rails.moveUp",
+		},
+		{
+			id: "rails.moveDown",
+			title: "shortcuts.rail.moveDown",
+			surface: "panels",
+			local: "rails.moveDown",
+		},
+		{
+			id: "rails.moveLeft",
+			title: "shortcuts.rail.moveLeft",
+			surface: "panels",
+			local: "rails.moveLeft",
+		},
+		{
+			id: "rails.moveRight",
+			title: "shortcuts.rail.moveRight",
+			surface: "panels",
+			local: "rails.moveRight",
+		},
+	]),
+	...inScope("trees", [
+		{ id: "trees.up", title: "shortcuts.trees.up", surface: "trees", keys: [UP], twin: TWIN.up },
+		{
+			id: "trees.down",
+			title: "shortcuts.trees.down",
+			surface: "trees",
+			keys: [DOWN],
+			twin: TWIN.down,
+		},
+		{
+			id: "trees.expand",
+			title: "shortcuts.trees.expand",
+			surface: "trees",
+			keys: [RIGHT],
+			twin: TWIN.right,
+		},
+		{
+			id: "trees.collapse",
+			title: "shortcuts.trees.collapse",
+			surface: "trees",
+			keys: [LEFT],
+			twin: TWIN.left,
+		},
+		{
+			id: "trees.search",
+			title: "shortcuts.trees.search",
+			surface: "trees",
+			local: "trees.search",
+		},
+		{
+			id: "trees.openKept",
+			title: "shortcuts.trees.openKept",
+			surface: "trees",
+			local: "trees.openKept",
+		},
+		{
+			id: "trees.rename",
+			title: "shortcuts.trees.rename",
+			surface: "trees",
+			local: "trees.rename",
+		},
+		{
+			id: "trees.delete",
+			title: "shortcuts.trees.delete",
+			surface: "trees",
+			local: "trees.delete",
+		},
+		{
+			id: "trees.reorderUp",
+			title: "shortcuts.trees.reorderUp",
+			surface: "trees",
+			local: "trees.reorderUp",
+		},
+		{
+			id: "trees.reorderDown",
+			title: "shortcuts.trees.reorderDown",
+			surface: "trees",
+			local: "trees.reorderDown",
+		},
+		{
+			id: "trees.firstLast",
+			title: "shortcuts.trees.firstLast",
+			surface: "trees",
+			keys: [HOME, END],
+		},
+		{
+			id: "trees.searchStep",
+			title: "shortcuts.trees.searchStep",
+			surface: "trees",
+			keys: [DOWN, UP],
+		},
+		{
+			id: "trees.searchKeep",
+			title: "shortcuts.trees.searchKeep",
+			surface: "trees",
+			keys: [ENTER],
+		},
+		{
+			id: "trees.searchCancel",
+			title: "shortcuts.trees.searchCancel",
+			surface: "trees",
+			keys: [ESCAPE],
+		},
+		{ id: "trees.open", title: "shortcuts.trees.open", surface: "trees", keys: [ENTER] },
+		{ id: "trees.menu", title: "shortcuts.trees.menu", surface: "trees", keys: [MENU] },
+	]),
 	{
 		id: "review.markViewed",
 		title: "shortcuts.review.markViewed",
 		surface: "review",
-		keys: [REVIEW_KEYS.markViewed],
+		local: "review.markViewed",
 	},
 	{
 		id: "review.nextUnreviewed",
 		title: "shortcuts.review.nextUnreviewed",
 		surface: "review",
-		keys: [REVIEW_KEYS.nextUnreviewed],
+		local: "review.nextUnreviewed",
 	},
 	{
 		id: "review.nextFile",
 		title: "shortcuts.review.nextFile",
 		surface: "review",
-		keys: [REVIEW_KEYS.nextFile],
+		local: "review.nextFile",
 	},
 	{
 		id: "review.previousFile",
 		title: "shortcuts.review.previousFile",
 		surface: "review",
-		keys: [REVIEW_KEYS.previousFile],
+		local: "review.previousFile",
 	},
 	{
 		id: "review.nextStep",
 		title: "shortcuts.review.nextStep",
 		surface: "review",
-		keys: [REVIEW_KEYS.nextStep],
+		local: "review.nextStep",
 	},
 	{
 		id: "review.previousStep",
 		title: "shortcuts.review.previousStep",
 		surface: "review",
-		keys: [REVIEW_KEYS.previousStep],
+		local: "review.previousStep",
 	},
-	{
-		id: "review.cursorMove",
-		title: "shortcuts.review.cursorMove",
-		surface: "review",
-		keys: [UP, DOWN, HJKL_KEYS.up, HJKL_KEYS.down],
-	},
-	{
-		id: "review.cursorSide",
-		title: "shortcuts.review.cursorSide",
-		surface: "review",
-		keys: [LEFT, RIGHT, HJKL_KEYS.left, HJKL_KEYS.right],
-	},
-	{
-		id: "review.cursorFirstLast",
-		title: "shortcuts.review.cursorFirstLast",
-		surface: "review",
-		keys: [HOME, END],
-	},
-	{
-		id: "review.cursorExtend",
-		title: "shortcuts.review.cursorExtend",
-		surface: "review",
-		keys: [
-			{ ...UP, shift: true },
-			{ ...DOWN, shift: true },
-			{ ...HJKL_KEYS.up, shift: true },
-			{ ...HJKL_KEYS.down, shift: true },
-		],
-	},
-	{
-		id: "review.comment",
-		title: "shortcuts.review.comment",
-		surface: "review",
-		keys: [ENTER, { key: "m", mod: true, shift: true }],
-	},
-	{
-		id: "review.cursorClear",
-		title: "shortcuts.review.cursorClear",
-		surface: "review",
-		keys: [ESCAPE],
-	},
-	{
-		id: "review.nextComment",
-		title: "shortcuts.review.nextComment",
-		surface: "review",
-		keys: [TAB],
-	},
-	{
-		id: "review.saveDraft",
-		title: "shortcuts.review.saveDraft",
-		surface: "review",
-		keys: [{ key: "Enter", mod: true }],
-	},
-	{
-		id: "review.sendNow",
-		title: "shortcuts.review.sendNow",
-		surface: "review",
-		keys: [{ key: "Enter", mod: true, shift: true }],
-	},
-	{
-		id: "review.cancelComment",
-		title: "shortcuts.review.cancelComment",
-		surface: "review",
-		keys: [ESCAPE],
-	},
-	{
-		id: "review.regionFrame",
-		title: "shortcuts.review.regionFrame",
-		surface: "review",
-		keys: [ENTER],
-	},
-	{
-		id: "review.regionMove",
-		title: "shortcuts.review.regionMove",
-		surface: "review",
-		keys: [LEFT, RIGHT, UP, DOWN, HJKL_KEYS.left, HJKL_KEYS.right, HJKL_KEYS.up, HJKL_KEYS.down],
-	},
-	{
-		id: "review.regionResize",
-		title: "shortcuts.review.regionResize",
-		surface: "review",
-		keys: [
-			{ ...LEFT, shift: true },
-			{ ...RIGHT, shift: true },
-			{ ...UP, shift: true },
-			{ ...DOWN, shift: true },
-		],
-	},
-	{
-		id: "review.swipe",
-		title: "shortcuts.review.swipe",
-		surface: "review",
-		keys: [LEFT, RIGHT, HJKL_KEYS.left, HJKL_KEYS.right],
-	},
-	{
-		id: "review.swipeFar",
-		title: "shortcuts.review.swipeFar",
-		surface: "review",
-		keys: [{ ...LEFT, shift: true }, { ...RIGHT, shift: true }, PAGE_UP, PAGE_DOWN, HOME, END],
-	},
-	{ id: "composer.send", title: "shortcuts.composer.send", surface: "composer", keys: [ENTER] },
-	{
-		id: "composer.newLine",
-		title: "shortcuts.composer.newLine",
-		surface: "composer",
-		keys: [{ key: "Enter", shift: true }],
-	},
-	{
-		id: "composer.followUp",
-		title: "shortcuts.composer.followUp",
-		surface: "composer",
-		keys: [{ key: "Enter", mod: true }],
-	},
-	{
-		id: "composer.interrupt",
-		title: "shortcuts.composer.interrupt",
-		surface: "composer",
-		keys: [{ key: "Enter", mod: true, shift: true }],
-	},
-	{
-		id: "composer.recall",
-		title: "shortcuts.composer.recall",
-		surface: "composer",
-		keys: [UP, DOWN],
-	},
-	{
-		id: "composer.slots",
-		title: "shortcuts.composer.slots",
-		surface: "composer",
-		keys: [TAB, { key: "Tab", shift: true }],
-	},
-	{
-		id: "composer.enterTranscript",
-		title: "shortcuts.composer.enterTranscript",
-		surface: "composer",
-		keys: [TRANSCRIPT_KEYS.enter],
-	},
-	{
-		id: "composer.scrollTranscript",
-		title: "shortcuts.composer.scrollTranscript",
-		surface: "composer",
-		keys: [PAGE_UP, PAGE_DOWN],
-	},
-	{
-		id: "transcript.move",
-		title: "shortcuts.transcript.move",
-		surface: "transcript",
-		keys: [UP, DOWN, HJKL_KEYS.up, HJKL_KEYS.down],
-	},
-	{
-		id: "transcript.firstLast",
-		title: "shortcuts.transcript.firstLast",
-		surface: "transcript",
-		keys: [HOME, END],
-	},
-	{
-		id: "transcript.page",
-		title: "shortcuts.transcript.page",
-		surface: "transcript",
-		keys: [PAGE_UP, PAGE_DOWN],
-	},
-	{
-		id: "transcript.expand",
-		title: "shortcuts.transcript.expand",
-		surface: "transcript",
-		keys: [RIGHT, HJKL_KEYS.right],
-	},
-	{
-		id: "transcript.collapse",
-		title: "shortcuts.transcript.collapse",
-		surface: "transcript",
-		keys: [LEFT, HJKL_KEYS.left],
-	},
-	{
-		id: "transcript.toggle",
-		title: "shortcuts.transcript.toggle",
-		surface: "transcript",
-		keys: [ENTER],
-	},
-	{
-		id: "transcript.copy",
-		title: "shortcuts.transcript.copy",
-		surface: "transcript",
-		keys: [TRANSCRIPT_KEYS.copy],
-	},
-	{
-		id: "transcript.open",
-		title: "shortcuts.transcript.open",
-		surface: "transcript",
-		keys: [TRANSCRIPT_KEYS.open],
-	},
-	{
-		id: "transcript.menu",
-		title: "shortcuts.transcript.menu",
-		surface: "transcript",
-		keys: [MENU],
-	},
-	{
-		id: "transcript.controls",
-		title: "shortcuts.transcript.controls",
-		surface: "transcript",
-		keys: [TAB],
-	},
-	{
-		id: "transcript.back",
-		title: "shortcuts.transcript.back",
-		surface: "transcript",
-		keys: [ESCAPE],
-	},
-	{ id: "history.select", title: "shortcuts.history.select", surface: "history", keys: [UP, DOWN] },
-	{ id: "history.insert", title: "shortcuts.history.insert", surface: "history", keys: [ENTER] },
-	{
-		id: "history.send",
-		title: "shortcuts.history.send",
-		surface: "history",
-		keys: [{ key: "Enter", mod: true }],
-	},
-	{
-		id: "history.jump",
-		title: "shortcuts.history.jump",
-		surface: "history",
-		keys: [{ key: "Enter", shift: true }],
-	},
-	{
-		id: "history.saveTemplate",
-		title: "shortcuts.history.saveTemplate",
-		surface: "history",
-		keys: [{ key: "S", mod: true }],
-	},
-	{ id: "history.preview", title: "shortcuts.history.preview", surface: "history", keys: [TAB] },
-	{
-		id: "history.deleteChat",
-		title: "shortcuts.history.deleteChat",
-		surface: "history",
-		keys: [HISTORY_KEYS.deleteChat],
-	},
-	{ id: "history.menu", title: "shortcuts.history.menu", surface: "history", keys: [MENU] },
-	{ id: "history.close", title: "shortcuts.history.close", surface: "history", keys: [ESCAPE] },
-	{ id: "palette.select", title: "shortcuts.palette.select", surface: "palette", keys: [UP, DOWN] },
-	{ id: "palette.open", title: "shortcuts.palette.open", surface: "palette", keys: [ENTER] },
-	{
-		id: "palette.scope",
-		title: "shortcuts.palette.scope",
-		surface: "palette",
-		keys: [
-			{ key: "Tab" },
-			{ key: "Tab", shift: true },
-			{ key: "1–9", alt: true, platform: "other" },
-		],
-	},
-	{
-		id: "palette.startWork",
-		title: "shortcuts.palette.startWork",
-		surface: "palette",
-		keys: [{ key: "Enter", mod: true }],
-	},
-	{
-		id: "palette.ask",
-		title: "shortcuts.palette.ask",
-		surface: "palette",
-		keys: [{ key: "Enter", alt: true }],
-	},
-	{
-		id: "palette.preview",
-		title: "shortcuts.palette.preview",
-		surface: "palette",
-		keys: [{ key: "I", mod: true }],
-	},
-	{ id: "palette.close", title: "shortcuts.palette.close", surface: "palette", keys: [ESCAPE] },
-	{
-		id: "findInFiles.select",
-		title: "shortcuts.findInFiles.select",
-		surface: "findInFiles",
-		keys: [UP, DOWN],
-	},
-	{
-		id: "findInFiles.open",
-		title: "shortcuts.findInFiles.open",
-		surface: "findInFiles",
-		keys: [ENTER],
-	},
-	{
-		id: "findInFiles.openKept",
-		title: "shortcuts.findInFiles.openKept",
-		surface: "findInFiles",
-		keys: [{ key: "Enter", mod: true }],
-	},
-	{
-		id: "findInFiles.matchCase",
-		title: "shortcuts.findInFiles.matchCase",
-		surface: "findInFiles",
-		keys: [{ key: "C", alt: true }],
-	},
-	{
-		id: "findInFiles.wholeWord",
-		title: "shortcuts.findInFiles.wholeWord",
-		surface: "findInFiles",
-		keys: [{ key: "W", alt: true }],
-	},
-	{
-		id: "findInFiles.close",
-		title: "shortcuts.findInFiles.close",
-		surface: "findInFiles",
-		keys: [ESCAPE],
-	},
+	...inScope("review.surface", [
+		{
+			id: "review.cursorUp",
+			title: "shortcuts.review.cursorUp",
+			surface: "review",
+			keys: [UP],
+			twin: TWIN.up,
+		},
+		{
+			id: "review.cursorDown",
+			title: "shortcuts.review.cursorDown",
+			surface: "review",
+			keys: [DOWN],
+			twin: TWIN.down,
+		},
+		{
+			id: "review.cursorLeft",
+			title: "shortcuts.review.cursorLeft",
+			surface: "review",
+			keys: [LEFT],
+			twin: TWIN.left,
+		},
+		{
+			id: "review.cursorRight",
+			title: "shortcuts.review.cursorRight",
+			surface: "review",
+			keys: [RIGHT],
+			twin: TWIN.right,
+		},
+		{
+			id: "review.cursorFirstLast",
+			title: "shortcuts.review.cursorFirstLast",
+			surface: "review",
+			keys: [HOME, END],
+		},
+		{
+			id: "review.extendUp",
+			title: "shortcuts.review.extendUp",
+			surface: "review",
+			keys: [{ ...UP, shift: true }],
+			twin: { ...TWIN.up, shift: true },
+		},
+		{
+			id: "review.extendDown",
+			title: "shortcuts.review.extendDown",
+			surface: "review",
+			keys: [{ ...DOWN, shift: true }],
+			twin: { ...TWIN.down, shift: true },
+		},
+		{
+			id: "review.comment",
+			title: "shortcuts.review.comment",
+			surface: "review",
+			local: "review.surface.comment",
+			keys: [ENTER],
+		},
+		{
+			id: "review.cursorClear",
+			title: "shortcuts.review.cursorClear",
+			surface: "review",
+			keys: [ESCAPE],
+		},
+		{
+			id: "review.nextComment",
+			title: "shortcuts.review.nextComment",
+			surface: "review",
+			keys: [TAB],
+		},
+		{
+			id: "review.saveDraft",
+			title: "shortcuts.review.saveDraft",
+			surface: "review",
+			local: "review.surface.saveDraft",
+		},
+		{
+			id: "review.sendNow",
+			title: "shortcuts.review.sendNow",
+			surface: "review",
+			local: "review.surface.sendNow",
+		},
+		{
+			id: "review.cancelComment",
+			title: "shortcuts.review.cancelComment",
+			surface: "review",
+			keys: [ESCAPE],
+		},
+		{
+			id: "review.regionFrame",
+			title: "shortcuts.review.regionFrame",
+			surface: "review",
+			keys: [ENTER],
+		},
+		{
+			id: "review.regionLeft",
+			title: "shortcuts.review.regionLeft",
+			surface: "review",
+			keys: [LEFT],
+			twin: TWIN.left,
+		},
+		{
+			id: "review.regionRight",
+			title: "shortcuts.review.regionRight",
+			surface: "review",
+			keys: [RIGHT],
+			twin: TWIN.right,
+		},
+		{
+			id: "review.regionUp",
+			title: "shortcuts.review.regionUp",
+			surface: "review",
+			keys: [UP],
+			twin: TWIN.up,
+		},
+		{
+			id: "review.regionDown",
+			title: "shortcuts.review.regionDown",
+			surface: "review",
+			keys: [DOWN],
+			twin: TWIN.down,
+		},
+		{
+			id: "review.regionResize",
+			title: "shortcuts.review.regionResize",
+			surface: "review",
+			keys: [
+				{ ...LEFT, shift: true },
+				{ ...RIGHT, shift: true },
+				{ ...UP, shift: true },
+				{ ...DOWN, shift: true },
+			],
+		},
+		{
+			id: "review.swipeLeft",
+			title: "shortcuts.review.swipeLeft",
+			surface: "review",
+			keys: [LEFT],
+			twin: TWIN.left,
+		},
+		{
+			id: "review.swipeRight",
+			title: "shortcuts.review.swipeRight",
+			surface: "review",
+			keys: [RIGHT],
+			twin: TWIN.right,
+		},
+		{
+			id: "review.swipeFar",
+			title: "shortcuts.review.swipeFar",
+			surface: "review",
+			keys: [{ ...LEFT, shift: true }, { ...RIGHT, shift: true }, PAGE_UP, PAGE_DOWN, HOME, END],
+		},
+	]),
+	...inScope("composer", [
+		{ id: "composer.send", title: "shortcuts.composer.send", surface: "composer", keys: [ENTER] },
+		{
+			id: "composer.newLine",
+			title: "shortcuts.composer.newLine",
+			surface: "composer",
+			keys: [{ key: "Enter", shift: true }],
+		},
+		{
+			id: "composer.followUp",
+			title: "shortcuts.composer.followUp",
+			surface: "composer",
+			local: "composer.followUp",
+		},
+		{
+			id: "composer.interrupt",
+			title: "shortcuts.composer.interrupt",
+			surface: "composer",
+			local: "composer.interrupt",
+		},
+		{
+			id: "composer.recall",
+			title: "shortcuts.composer.recall",
+			surface: "composer",
+			keys: [UP, DOWN],
+		},
+		{
+			id: "composer.slots",
+			title: "shortcuts.composer.slots",
+			surface: "composer",
+			keys: [TAB, { key: "Tab", shift: true }],
+		},
+		{
+			id: "composer.enterTranscript",
+			title: "shortcuts.composer.enterTranscript",
+			surface: "composer",
+			local: "composer.enterTranscript",
+		},
+		{
+			id: "composer.scrollTranscript",
+			title: "shortcuts.composer.scrollTranscript",
+			surface: "composer",
+			keys: [PAGE_UP, PAGE_DOWN],
+		},
+	]),
+	...inScope("suggestions", [
+		{
+			id: "suggestions.send",
+			title: "shortcuts.suggestions.send",
+			surface: "composer",
+			local: SUGGESTION_KEYS.send,
+			bindingTitle: "shortcuts.suggestions.sendOne",
+		},
+		{
+			id: "suggestions.edit",
+			title: "shortcuts.suggestions.edit",
+			surface: "composer",
+			local: SUGGESTION_KEYS.edit,
+			bindingTitle: "shortcuts.suggestions.editOne",
+		},
+	]),
+	...inScope("transcript", [
+		{
+			id: "transcript.up",
+			title: "shortcuts.transcript.up",
+			surface: "transcript",
+			keys: [UP],
+			twin: TWIN.up,
+		},
+		{
+			id: "transcript.down",
+			title: "shortcuts.transcript.down",
+			surface: "transcript",
+			keys: [DOWN],
+			twin: TWIN.down,
+		},
+		{
+			id: "transcript.expand",
+			title: "shortcuts.transcript.expand",
+			surface: "transcript",
+			keys: [RIGHT],
+			twin: TWIN.right,
+		},
+		{
+			id: "transcript.collapse",
+			title: "shortcuts.transcript.collapse",
+			surface: "transcript",
+			keys: [LEFT],
+			twin: TWIN.left,
+		},
+		{
+			id: "transcript.copy",
+			title: "shortcuts.transcript.copy",
+			surface: "transcript",
+			local: "transcript.copy",
+		},
+		{
+			id: "transcript.open",
+			title: "shortcuts.transcript.open",
+			surface: "transcript",
+			local: "transcript.open",
+		},
+		{
+			id: "transcript.firstLast",
+			title: "shortcuts.transcript.firstLast",
+			surface: "transcript",
+			keys: [HOME, END],
+		},
+		{
+			id: "transcript.page",
+			title: "shortcuts.transcript.page",
+			surface: "transcript",
+			keys: [PAGE_UP, PAGE_DOWN],
+		},
+		{
+			id: "transcript.toggle",
+			title: "shortcuts.transcript.toggle",
+			surface: "transcript",
+			keys: [ENTER],
+		},
+		{
+			id: "transcript.menu",
+			title: "shortcuts.transcript.menu",
+			surface: "transcript",
+			keys: [MENU],
+		},
+		{
+			id: "transcript.controls",
+			title: "shortcuts.transcript.controls",
+			surface: "transcript",
+			keys: [TAB],
+		},
+		{
+			id: "transcript.back",
+			title: "shortcuts.transcript.back",
+			surface: "transcript",
+			keys: [ESCAPE],
+		},
+	]),
+	...inScope("history", [
+		{
+			id: "history.select",
+			title: "shortcuts.history.select",
+			surface: "history",
+			keys: [UP, DOWN],
+		},
+		{ id: "history.insert", title: "shortcuts.history.insert", surface: "history", keys: [ENTER] },
+		{
+			id: "history.send",
+			title: "shortcuts.history.send",
+			surface: "history",
+			local: "history.send",
+		},
+		{
+			id: "history.jump",
+			title: "shortcuts.history.jump",
+			surface: "history",
+			keys: [{ key: "Enter", shift: true }],
+		},
+		{
+			id: "history.saveTemplate",
+			title: "shortcuts.history.saveTemplate",
+			surface: "history",
+			local: "history.saveTemplate",
+		},
+		{ id: "history.preview", title: "shortcuts.history.preview", surface: "history", keys: [TAB] },
+		{
+			id: "history.deleteChat",
+			title: "shortcuts.history.deleteChat",
+			surface: "history",
+			local: "history.deleteChat",
+		},
+		{ id: "history.menu", title: "shortcuts.history.menu", surface: "history", keys: [MENU] },
+		{ id: "history.close", title: "shortcuts.history.close", surface: "history", keys: [ESCAPE] },
+	]),
+	...inScope("palette", [
+		{
+			id: "palette.select",
+			title: "shortcuts.palette.select",
+			surface: "palette",
+			keys: [UP, DOWN],
+		},
+		{ id: "palette.open", title: "shortcuts.palette.open", surface: "palette", keys: [ENTER] },
+		{
+			id: "palette.scope",
+			title: "shortcuts.palette.scope",
+			surface: "palette",
+			keys: [
+				{ key: "Tab" },
+				{ key: "Tab", shift: true },
+				{ key: "1–9", alt: true, platform: "other" },
+			],
+		},
+		{
+			id: "palette.startWork",
+			title: "shortcuts.palette.startWork",
+			surface: "palette",
+			local: "palette.startWork",
+		},
+		{ id: "palette.ask", title: "shortcuts.palette.ask", surface: "palette", local: "palette.ask" },
+		{
+			id: "palette.preview",
+			title: "shortcuts.palette.preview",
+			surface: "palette",
+			local: "palette.preview",
+		},
+		{ id: "palette.close", title: "shortcuts.palette.close", surface: "palette", keys: [ESCAPE] },
+	]),
+	...inScope("findInFiles", [
+		{
+			id: "findInFiles.select",
+			title: "shortcuts.findInFiles.select",
+			surface: "findInFiles",
+			keys: [UP, DOWN],
+		},
+		{
+			id: "findInFiles.open",
+			title: "shortcuts.findInFiles.open",
+			surface: "findInFiles",
+			keys: [ENTER],
+		},
+		{
+			id: "findInFiles.openKept",
+			title: "shortcuts.findInFiles.openKept",
+			surface: "findInFiles",
+			local: "findInFiles.openKept",
+		},
+		{
+			id: "findInFiles.matchCase",
+			title: "shortcuts.findInFiles.matchCase",
+			surface: "findInFiles",
+			local: "findInFiles.matchCase",
+		},
+		{
+			id: "findInFiles.wholeWord",
+			title: "shortcuts.findInFiles.wholeWord",
+			surface: "findInFiles",
+			local: "findInFiles.wholeWord",
+		},
+		{
+			id: "findInFiles.close",
+			title: "shortcuts.findInFiles.close",
+			surface: "findInFiles",
+			keys: [ESCAPE],
+		},
+	]),
+	...inScope("settings.nav", [
+		{
+			id: "settings.nav.up",
+			title: "shortcuts.settings.nav.up",
+			surface: "settings",
+			keys: [UP],
+			twin: TWIN.up,
+		},
+		{
+			id: "settings.nav.down",
+			title: "shortcuts.settings.nav.down",
+			surface: "settings",
+			keys: [DOWN],
+			twin: TWIN.down,
+		},
+		{
+			id: "settings.nav.firstLast",
+			title: "shortcuts.settings.nav.firstLast",
+			surface: "settings",
+			keys: [HOME, END],
+		},
+		{
+			id: "settings.nav.enter",
+			title: "shortcuts.settings.nav.enter",
+			surface: "settings",
+			keys: [RIGHT],
+			twin: TWIN.right,
+		},
+		{
+			id: "settings.nav.open",
+			title: "shortcuts.settings.nav.open",
+			surface: "settings",
+			keys: [ENTER, { key: " " }],
+		},
+		{
+			id: "settings.nav.search",
+			title: "shortcuts.settings.nav.search",
+			surface: "settings",
+			local: "settings.nav.search",
+		},
+	]),
+	...inScope("settings", [
+		{
+			id: "settings.up",
+			title: "shortcuts.settings.up",
+			surface: "settings",
+			keys: [UP],
+			twin: TWIN.up,
+		},
+		{
+			id: "settings.down",
+			title: "shortcuts.settings.down",
+			surface: "settings",
+			keys: [DOWN],
+			twin: TWIN.down,
+		},
+		{
+			id: "settings.firstLast",
+			title: "shortcuts.settings.firstLast",
+			surface: "settings",
+			keys: [HOME, END],
+		},
+		{
+			id: "settings.actions",
+			title: "shortcuts.settings.actions",
+			surface: "settings",
+			keys: [RIGHT],
+			twin: TWIN.right,
+		},
+		{
+			id: "settings.back",
+			title: "shortcuts.settings.back",
+			surface: "settings",
+			keys: [LEFT],
+			twin: TWIN.left,
+		},
+		{
+			id: "settings.change",
+			title: "shortcuts.settings.change",
+			surface: "settings",
+			keys: [LEFT, RIGHT],
+		},
+		{
+			id: "settings.apply",
+			title: "shortcuts.settings.apply",
+			surface: "settings",
+			keys: [ENTER, { key: " " }],
+		},
+		{
+			id: "settings.reset",
+			title: "shortcuts.settings.reset",
+			surface: "settings",
+			local: "settings.reset",
+		},
+		{
+			id: "settings.escape",
+			title: "shortcuts.settings.escape",
+			surface: "settings",
+			keys: [ESCAPE],
+		},
+	]),
+	...inScope("settings.list", [
+		{
+			id: "settings.list.open",
+			title: "shortcuts.settings.list.open",
+			surface: "settings",
+			keys: [ENTER],
+		},
+		{
+			id: "settings.list.remove",
+			title: "shortcuts.settings.list.remove",
+			surface: "settings",
+			local: "settings.list.remove",
+		},
+		{
+			id: "settings.list.menu",
+			title: "shortcuts.settings.list.menu",
+			surface: "settings",
+			keys: [MENU],
+		},
+	]),
 	{
 		id: "focus.terminal",
 		title: "shortcuts.focusTerminal",
@@ -790,7 +1073,7 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 
 export interface ShortcutContext {
 	readonly desktop: boolean;
-	readonly platform?: string;
+	readonly keybindings: ResolvedKeybindings;
 	readonly extra?: readonly ShortcutCatalogEntry[];
 }
 
@@ -799,28 +1082,21 @@ export interface ShortcutChordView {
 	readonly label: string;
 }
 
+export interface ShortcutConflictView extends ShortcutChordView {
+	readonly winner: string;
+}
+
 export interface ShortcutRow {
 	readonly id: string;
 	readonly title: MessageKey;
 	readonly surface: ShortcutSurface;
 	readonly chords: readonly ShortcutChordView[];
+	readonly conflicts: readonly ShortcutConflictView[];
 }
-
-const KEY_LABELS: Readonly<Record<string, string>> = {
-	ArrowUp: "↑",
-	ArrowDown: "↓",
-	ArrowLeft: "←",
-	ArrowRight: "→",
-	Enter: "↵",
-	Escape: "Esc",
-	PageUp: "PgUp",
-	PageDown: "PgDn",
-	" ": "Space",
-};
 
 function keyLabel(key: string, apple: boolean): string {
 	if (key === "Shift") return apple ? "⇧" : "Shift";
-	return KEY_LABELS[key] ?? (key.length === 1 ? key.toUpperCase() : key);
+	return keyCap(key);
 }
 
 export function shortcutKeyCaps(chord: ShortcutKey, platform?: string): string[] {
@@ -839,33 +1115,188 @@ function onPlatform(scope: ShortcutPlatform | undefined, platform?: string): boo
 	return family !== "apple";
 }
 
-function bindingCaps(
-	bindings: readonly [KeybindingId, ...KeybindingId[]],
-	{ desktop, platform }: ShortcutContext,
-): string[] {
-	const options = { browser: !desktop, ...(platform === undefined ? {} : { platform }) };
-	const [first] = bindings;
-	const last = bindings.at(-1) ?? first;
-	if (last === first) return keybindingKeys(first, options);
-	const from = keybindingShortcut(first, options);
-	const to = keybindingShortcut(last, options);
-	return shortcutKeys({ ...from, key: `${from.key}–${to.key}` }, platform);
-}
-
-function chordView(keys: readonly string[], platform?: string): ShortcutChordView {
+function capsView(keys: readonly string[], platform: string): ShortcutChordView {
 	return { keys, label: keysLabel(keys, platform) };
 }
 
-export function shortcutRows(context: ShortcutContext): ShortcutRow[] {
-	const { platform, extra = [] } = context;
-	return [...SHORTCUT_CATALOG, ...extra].flatMap((entry): ShortcutRow[] => {
-		if (entry.desktop && !context.desktop) return [];
-		const chords = entry.bindings
-			? [chordView(bindingCaps(entry.bindings, context), platform)]
-			: entry.keys
-					.filter((chord) => onPlatform(chord.platform, platform))
-					.map((chord) => chordView(shortcutKeyCaps(chord, platform), platform));
-		if (chords.length === 0) return [];
-		return [{ id: entry.id, title: entry.title, surface: entry.surface, chords }];
+function chordView(shortcut: CommandShortcut, platform: string): ShortcutChordView {
+	return capsView(shortcutKeys(shortcut, platform), platform);
+}
+
+function atDefault(keybindings: ResolvedKeybindings, id: string): boolean {
+	const command = keybindings.byId.get(id);
+	return command !== undefined && !command.custom && command.chords.every((c) => !c.lostTo);
+}
+
+function conflictViews(
+	keybindings: ResolvedKeybindings,
+	ids: readonly string[],
+): ShortcutConflictView[] {
+	return ids.flatMap((id) =>
+		(keybindings.byId.get(id)?.chords ?? []).flatMap(({ chord, lostTo }) =>
+			lostTo === null
+				? []
+				: [{ ...chordView(displayShortcut(chord), keybindings.platform), winner: lostTo }],
+		),
+	);
+}
+
+function rangeView(
+	keybindings: ResolvedKeybindings,
+	ids: readonly string[],
+	shortcut: (id: string) => CommandShortcut | undefined,
+): ShortcutChordView | null {
+	const first = ids[0];
+	const last = ids.at(-1);
+	if (first === undefined || last === undefined || last === first) return null;
+	if (!ids.every((id) => atDefault(keybindings, id))) return null;
+	const from = shortcut(first);
+	const to = shortcut(last);
+	if (!from || !to) return null;
+	return chordView({ ...from, key: `${from.key}–${to.key}` }, keybindings.platform);
+}
+
+function bindingChords(
+	bindings: readonly [KeybindingId, ...KeybindingId[]],
+	{ desktop, keybindings }: ShortcutContext,
+): ShortcutChordView[] {
+	const options = { browser: !desktop };
+	const { platform } = keybindings;
+	const range = rangeView(keybindings, bindings, (id) =>
+		keybindingShortcut(keybindings, id, options),
+	);
+	if (range) return [range];
+	return bindings.flatMap((id) => {
+		const shortcut = keybindingShortcut(keybindings, id, options);
+		return shortcut ? [chordView(shortcut, platform)] : [];
 	});
+}
+
+function row(
+	entry: Pick<ShortcutRow, "id" | "title" | "surface">,
+	chords: readonly ShortcutChordView[],
+	conflicts: readonly ShortcutConflictView[],
+): ShortcutRow[] {
+	if (chords.length === 0 && conflicts.length === 0) return [];
+	return [{ id: entry.id, title: entry.title, surface: entry.surface, chords, conflicts }];
+}
+
+export function keyChords(keys: readonly ShortcutKey[], platform: string): ShortcutChordView[] {
+	return keys
+		.filter((chord) => onPlatform(chord.platform, platform))
+		.map((chord) => capsView(shortcutKeyCaps(chord, platform), platform));
+}
+
+function scopedViews(
+	keybindings: ResolvedKeybindings,
+	id: string,
+	scope: string | null,
+	shift = false,
+): { chords: ShortcutChordView[]; conflicts: ShortcutConflictView[] } {
+	const chords: ShortcutChordView[] = [];
+	const conflicts: ShortcutConflictView[] = [];
+	for (const resolved of keybindings.byId.get(id)?.chords ?? []) {
+		const view = chordView(
+			{ ...displayShortcut(resolved.chord), ...(shift ? { shift: true } : {}) },
+			keybindings.platform,
+		);
+		const winner = lostHere(resolved, scope);
+		if (winner === null) chords.push(view);
+		else conflicts.push({ ...view, winner });
+	}
+	return { chords, conflicts };
+}
+
+export function localIds(entry: ShortcutCatalogEntry): readonly string[] {
+	if (entry.local === undefined) return [];
+	return typeof entry.local === "string" ? [entry.local] : entry.local;
+}
+
+export function entryScope(
+	entry: ShortcutCatalogEntry,
+	keybindings: ResolvedKeybindings,
+): string | null {
+	const [first] = localIds(entry);
+	if (first !== undefined) return keybindings.byId.get(first)?.scope ?? null;
+	return entry.scope ?? null;
+}
+
+function soleChord(keybindings: ResolvedKeybindings, id: string): CommandShortcut | undefined {
+	const chords = keybindings.byId.get(id)?.chords ?? [];
+	const [only] = chords;
+	return chords.length === 1 && only ? displayShortcut(only.chord) : undefined;
+}
+
+function entryRows(entry: ShortcutCatalogEntry, context: ShortcutContext): ShortcutRow[] {
+	const { keybindings } = context;
+	const { platform } = keybindings;
+	if (entry.desktop && !context.desktop) return [];
+	if (entry.local !== undefined) {
+		const ids = localIds(entry);
+		const fixed = keyChords(entry.keys ?? [], platform);
+		const range = rangeView(keybindings, ids, (id) => soleChord(keybindings, id));
+		if (range) return row(entry, [...fixed, range], []);
+		const scope = entryScope(entry, keybindings);
+		const views = ids.map((id) => scopedViews(keybindings, id, scope));
+		return row(
+			entry,
+			[...fixed, ...views.flatMap(({ chords }) => chords)],
+			views.flatMap(({ conflicts }) => conflicts),
+		);
+	}
+	if (entry.keys) {
+		const fixed = keyChords(entry.keys, platform);
+		if (entry.twin === undefined) return row(entry, fixed, []);
+		const { command, shift = false } = entry.twin;
+		const views = scopedViews(keybindings, command, entry.scope ?? null, shift);
+		return row(entry, [...fixed, ...views.chords], views.conflicts);
+	}
+	return row(
+		entry,
+		bindingChords(entry.bindings, context),
+		conflictViews(keybindings, entry.bindings),
+	);
+}
+
+function extensionCommandRows({ desktop, keybindings }: ShortcutContext): ShortcutRow[] {
+	return keybindings.commands.flatMap(({ id, extension, enabled, title }) =>
+		extension !== null && enabled && title !== null
+			? row(
+					{ id, title, surface: "general" },
+					keybindingShortcuts(keybindings, id, { browser: !desktop }).map((shortcut) =>
+						chordView(shortcut, keybindings.platform),
+					),
+					conflictViews(keybindings, [id]),
+				)
+			: [],
+	);
+}
+
+export function shortcutRows(context: ShortcutContext): ShortcutRow[] {
+	const { extra = [] } = context;
+	return [
+		...SHORTCUT_CATALOG.flatMap((entry) => entryRows(entry, context)),
+		...extensionCommandRows(context),
+		...extra.flatMap((entry) => entryRows(entry, context)),
+	];
+}
+
+export type TypedPress = Pick<KeyboardEvent, "key" | "shiftKey" | "ctrlKey" | "metaKey" | "altKey">;
+
+const typedKey = (key: string) => (key.length === 1 ? key.toLowerCase() : key);
+
+export function elementKeyUses(press: TypedPress, platform: string): ShortcutCatalogEntry[] {
+	if (press.ctrlKey || press.metaKey || press.altKey) return [];
+	const pressed = typedKey(press.key);
+	return SHORTCUT_CATALOG.filter(({ keys = [] }) =>
+		keys.some(
+			(key) =>
+				onPlatform(key.platform, platform) &&
+				!key.mod &&
+				!key.ctrl &&
+				!key.alt &&
+				(key.shift === true) === press.shiftKey &&
+				typedKey(key.key) === pressed,
+		),
+	);
 }

@@ -68,7 +68,7 @@ export const CenterGroupView = memo(function CenterGroupView({
 			aria-label={
 				group.tabs.length === 0 ? t("workbench.center.emptyGroup") : t("workbench.center.group")
 			}
-			className="relative flex h-full min-h-0 min-w-0 flex-col bg-container-content-bg focus-visible:focus-ring-inset"
+			className="relative flex h-full min-h-0 min-w-0 flex-col bg-container-content-bg outline-none"
 			onFocusCapture={() => {
 				if (selected) shared.onFocusGroup(location, selected.id);
 			}}

@@ -23,16 +23,26 @@ its server half is disabled, so a transcript that already contains its tool call
 switch only decides what the host gives the agent next — and which **global contributions** run:
 `enabledWebExtensions(disabled)` is the list `Shell` mounts `globalOverlay`s from and the cheatsheet takes
 `shortcuts` from ([[submodule-web-shell]]), so switching one off unmounts it at once.
-`webOnlyExtensions(serverNames)` is the titled entries the server catalog lacks; Settings → Extensions
+`webExtensionCommands(disabled)` lists the `commands` of **every** registered extension in registry order
+with an `enabled` flag — the input `shell` resolves keybindings from ([[submodule-web-keybindings]]): a
+switched-off extension's commands stay listed (Settings → Keyboard shows and rebinds them) but neither
+match nor conflict, and registry order decides between two extensions' defaults. A command with a
+`scope` is local and reaches the resolver's per-scope table as it is; the resolver drops one whose id or
+scope lacks the extension's `name.` prefix, and the tests pin that every bundled command has it.
+`webOnlyExtensions(serverNames)` is the titled entries without tool renderers that the server catalog lacks; Settings → Extensions & skills
 lists them under the same switch ([[module-thinkrail-extensions]]).
+Composer suggestions are the one *tool-registered* affordance the switch hides: each registration carries
+its extension's `name`, so the chat hides a switched-off extension's chips while its past rows keep
+rendering ([[submodule-web-chat]]).
 
 ## Boundary
 
-`index.ts` exports `webExtensions`, `registerWebExtensions`, `enabledWebExtensions` and
-`webOnlyExtensions` only. Imports reach public extension `./web` entries, the web SDK contract, and chat's
+`index.ts` exports `webExtensions`, `registerWebExtensions`, `enabledWebExtensions`,
+`webExtensionCommands` (with its `WebExtensionCommands` type) and `webOnlyExtensions` only. Imports reach public extension `./web` entries, the web SDK contract, and chat's
 registration function; never `ChatView`, stores, transport, extension internals or server halves. The
 registry Map remains owned by chat, so this module creates no parallel state owner or runtime extension
 loader. Direct component consumers use an extension's named public exports independently of tool
 registration: Markdown renders `MermaidView`. The plan page reaches the questionnaire card through the
-registry, not by name. Its tests also pin that no extension shortcut collides with the keybinding table
-and that plain F is bound nowhere else.
+registry, not by name. Its tests also pin that the bundled extensions' default chords conflict with
+nothing (the resolver with no overrides reports no conflict on any platform) and that plain F is free in
+the app table and in the catalog's feature keys.

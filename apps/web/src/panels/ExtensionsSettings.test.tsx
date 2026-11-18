@@ -22,14 +22,36 @@ const render = (
 		<ExtensionsCatalog entries={entries} disabled={disabled} onToggle={() => {}} />,
 	);
 
-test("lists an extension with its title, description, tool chip and an enabled switch", () => {
+test("lists an extension as a row with its title, description, its tools as text and an enabled switch", () => {
 	const markup = render([VISUALIZE]);
-	expect(markup).toContain('data-testid="extension-row-visualize"');
+	expect(markup).toMatch(
+		/data-setting-row="extension-visualize"[^>]*data-testid="extension-row-visualize"/,
+	);
+	expect(markup).toContain('data-setting-id="bundled-extensions"');
 	expect(markup).toContain("Visualize");
 	expect(markup).toContain("Lets the agent draw Mermaid diagrams");
-	expect(markup).toContain('data-testid="extension-tool-visualize"');
+	expect(markup).toMatch(
+		/Tools: <code data-testid="extension-tool-visualize"[^>]*>visualize<\/code>/,
+	);
 	expect(markup).toContain('data-testid="extension-toggle-visualize" data-active="true"');
 	expect(markup).toContain('aria-label="Enable Visualize"');
+	expect(markup).not.toContain("bg-control-bg-selected px-8");
+	expect(markup).not.toContain("settings-reset-");
+});
+
+test("a switched-off extension is Changed with a Reset that turns it back on", () => {
+	const seen: [string, boolean][] = [];
+	const markup = renderToStaticMarkup(
+		<ExtensionsCatalog
+			entries={[{ ...VISUALIZE, tools: ["visualize", "visualize_compare"] }]}
+			disabled={["visualize"]}
+			onToggle={(name, enabled) => seen.push([name, enabled])}
+		/>,
+	);
+	expect(markup).toContain('data-changed="true"');
+	expect(markup).toContain("data-setting-reset");
+	expect(markup).toMatch(/visualize<\/code>, <code data-testid="extension-tool-visualize_compare"/);
+	expect(seen).toEqual([]);
 });
 
 test("a bundled extension's description comes from the catalog; any other shows its own", () => {
@@ -64,11 +86,16 @@ test("a web-only extension the host catalog lacks gets its own row and switch, w
 	]);
 });
 
-test("loading and failure render no rows", () => {
+test("loading and failure render no rows, and a failure offers Retry", () => {
 	expect(render("loading")).not.toContain("extension-row-");
 	const failed = render("failed");
 	expect(failed).toContain('data-testid="extensions-failed"');
 	expect(failed).not.toContain('role="switch"');
+	expect(failed).not.toContain("extensions-retry");
+	const retry = renderToStaticMarkup(
+		<ExtensionsCatalog entries="failed" disabled={[]} onToggle={() => {}} onRetry={() => {}} />,
+	);
+	expect(retry).toMatch(/data-testid="extensions-retry"[^>]*>Retry</);
 });
 
 const ASK: ExtensionCatalogEntry = {
@@ -98,6 +125,11 @@ const renderSettings = (
 test("a declared extension setting renders as a nested switch, on by its default", () => {
 	const markup = renderSettings({});
 	expect(markup).toContain('data-testid="extension-setting-ask-user-question-richPreviews"');
+	expect(markup).toContain('data-setting-id="rich-previews"');
+	expect(markup).not.toContain('data-testid="settings-reset-rich-previews"');
+	expect(renderSettings({ "ask-user-question": { richPreviews: false } })).toContain(
+		'data-testid="settings-reset-rich-previews"',
+	);
 	expect(markup).toContain("Rich previews in questions");
 	expect(markup).toContain(
 		'data-testid="extension-setting-toggle-ask-user-question-richPreviews" data-active="true"',

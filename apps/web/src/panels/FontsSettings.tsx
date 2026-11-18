@@ -1,19 +1,12 @@
 import {
-	RiSubtractLine as Minus,
-	RiAddLine as Plus,
-	RiArrowGoBackLine as Reset,
-} from "@remixicon/react";
-import {
 	CODE_FONT_SIZE,
-	FONT_ROLES,
 	FONT_WEIGHT_OFFSET,
 	type FontChoice,
 	type FontRole,
-	isCodeFontSize,
 } from "@thinkrail/contracts";
 import { T, useT } from "@thinkrail/locales/react";
-import { Button, IconButton } from "@thinkrail/ui/button";
-import { cn } from "@thinkrail/ui/utils";
+import { Button } from "@thinkrail/ui/button";
+import { Switch } from "@thinkrail/ui/switch";
 import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
 	bundledFaces,
@@ -29,6 +22,14 @@ import {
 	type WeightResponse,
 	weightResponse,
 } from "@/fonts";
+import {
+	SettingsGroup,
+	SettingsNotice,
+	SettingsNumberField,
+	SettingsRow,
+	SettingsSlider,
+	useSettingsDraft,
+} from "@/settingsKit";
 import { useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { FallbackChips, FontPicker } from "./FontPicker";
@@ -40,19 +41,9 @@ import {
 	type InstalledFonts,
 	mainFontOptions,
 } from "./fontCatalog";
-import { SettingsDisclosure } from "./SettingsDisclosure";
-import { SettingsGroup, SettingsSubheading } from "./SettingsGroup";
-import { SettingsNotice } from "./SettingsNotice";
-import { SETTINGS_RANGE_INPUT, SettingsRangeTrack } from "./SettingsRange";
-import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
-import { SettingsSwitch } from "./SettingsSwitch";
 import { saveSettings } from "./saveSettings";
-import { SETTINGS_INPUT, useSettingsDraft } from "./settingsDraft";
-
-const WEIGHT_STEPS = Array.from(
-	{ length: (FONT_WEIGHT_OFFSET.max - FONT_WEIGHT_OFFSET.min) / FONT_WEIGHT_OFFSET.step },
-	(_, index) => FONT_WEIGHT_OFFSET.min + index * FONT_WEIGHT_OFFSET.step,
-);
+import { useConfigReset } from "./settingDefaults";
+import { SETTING, settingProps } from "./settingsCatalog";
 
 const CODE_BLOCK_SAMPLE =
 	"const stack = fonts.code ?? defaults.code;\nif (size !== 13 && stack.length >= 1) apply(stack); // => -> <=";
@@ -64,37 +55,11 @@ const EDITOR_SAMPLE = [
 ];
 const TERMINAL_SAMPLE = ["~/thinkrail main ❯ bun run test", " ✓ 128 passed (1.42 s)"];
 
-function WithReset({
-	dirty,
-	label,
-	disabled = false,
-	onReset,
-	children,
-}: {
-	dirty: boolean;
-	label: string;
-	disabled?: boolean;
-	onReset: () => void;
-	children: ReactNode;
-}) {
-	return (
-		<div className="flex items-center gap-4">
-			{children}
-			{dirty ? (
-				<IconButton
-					icon={Reset}
-					label={label}
-					size="m"
-					variant="ghost"
-					disabled={disabled}
-					onClick={onReset}
-				/>
-			) : (
-				<span className="size-24 shrink-0" />
-			)}
-		</div>
-	);
-}
+const FONT_ENTRIES = { interface: SETTING.interfaceFont, code: SETTING.codeFont } as const;
+const FALLBACK_ENTRIES = {
+	interface: SETTING.interfaceFallbacks,
+	code: SETTING.codeFallbacks,
+} as const;
 
 export function FontPreview({ codeFontSize }: { codeFontSize: number }) {
 	const t = useT();
@@ -124,10 +89,10 @@ export function FontPreview({ codeFontSize }: { codeFontSize: number }) {
 				</pre>
 			</div>
 			<div className="flex flex-wrap gap-8">
-				<Button variant="soft-primary" size="m">
+				<Button variant="soft-primary" size="m" tabIndex={-1}>
 					{t("settings.appearance.fonts.preview.openPr")}
 				</Button>
-				<Button variant="outline" size="m">
+				<Button variant="outline" size="m" tabIndex={-1}>
 					{t("settings.appearance.fonts.preview.review")}
 				</Button>
 			</div>
@@ -182,190 +147,15 @@ function useWeightResponses(families: readonly string[], facesRevision: number) 
 	return responses;
 }
 
-function WeightRow({
-	value,
-	onCommit,
-	hints,
-}: {
-	value: number;
-	onCommit: (next: number) => Promise<boolean>;
-	hints: ReactNode;
-}) {
-	const t = useT();
-	const { draft, setDraft, submit, commitDraft } = useSettingsDraft({
-		saved: String(value),
-		isValid: () => true,
-		commit: (next) =>
-			onCommit(Number(next)).then((stored) => {
-				if (!stored) previewFontWeightOffset(null);
-				return stored;
-			}),
-	});
-	useEffect(() => () => previewFontWeightOffset(null), []);
-	const offset = Number(draft);
-	const low = Math.min(FONT_WEIGHT_OFFSET.default, offset);
-	const high = Math.max(FONT_WEIGHT_OFFSET.default, offset);
-	const shown = offset === 0 ? t("common.default") : offset > 0 ? `+${offset}` : `−${-offset}`;
-	return (
-		<div
-			data-testid="font-weight"
-			className="flex flex-col gap-8 border-border-muted border-b py-12"
-		>
-			<div className="flex items-start justify-between gap-12">
-				<div className="flex min-w-0 flex-1 flex-col gap-2">
-					<span className="tr-text-ui text-text-default">
-						{t("settings.appearance.fonts.weight")}
-					</span>
-					<span className="text-text-muted tr-text-metadata">
-						{t("settings.appearance.fonts.weightDescription")}
-					</span>
-				</div>
-				<WithReset
-					dirty={value !== DEFAULT_FONT_PREFERENCE.fontWeightOffset}
-					label={t("settings.appearance.fonts.resetWeight")}
-					onReset={() => {
-						previewFontWeightOffset(DEFAULT_FONT_PREFERENCE.fontWeightOffset);
-						submit(String(DEFAULT_FONT_PREFERENCE.fontWeightOffset));
-					}}
-				>
-					<span data-testid="font-weight-value" className="tr-text-ui text-text-default">
-						{shown}
-					</span>
-				</WithReset>
-			</div>
-			<SettingsRangeTrack
-				steps={WEIGHT_STEPS}
-				filled={(start) => start >= low && start < high}
-				marker={FONT_WEIGHT_OFFSET.default}
-			>
-				<input
-					type="range"
-					data-testid="font-weight-input"
-					aria-label={t("settings.appearance.fonts.weight")}
-					aria-valuetext={shown}
-					min={FONT_WEIGHT_OFFSET.min}
-					max={FONT_WEIGHT_OFFSET.max}
-					step={FONT_WEIGHT_OFFSET.step}
-					value={offset}
-					onChange={(event) => {
-						const next = Number(event.currentTarget.value);
-						setDraft(String(next));
-						previewFontWeightOffset(next);
-					}}
-					onPointerUp={commitDraft}
-					onKeyUp={commitDraft}
-					onBlur={commitDraft}
-					className={cn(SETTINGS_RANGE_INPUT, "cursor-pointer")}
-				/>
-			</SettingsRangeTrack>
-			<div className="flex items-center justify-between text-text-muted tr-text-metadata">
-				<span>{t("settings.appearance.fonts.weightLighter")}</span>
-				<span>{t("settings.appearance.fonts.weightHeavier")}</span>
-			</div>
-			{hints}
-		</div>
-	);
-}
-
-function CodeSizeRow({
-	value,
-	onCommit,
-}: {
-	value: number;
-	onCommit: (next: number) => Promise<boolean>;
-}) {
-	const t = useT();
-	const { draft, invalid, submit, inputProps } = useSettingsDraft({
-		saved: String(value),
-		isValid: (next) => /^\d+$/.test(next) && isCodeFontSize(Number(next)),
-		commit: (next) => onCommit(Number(next)),
-	});
-	const current = invalid ? value : Number(draft);
-	const errorId = "font-code-size-error";
-	return (
-		<SettingsRow
-			label={t("settings.appearance.fonts.size")}
-			testId="font-code-size"
-			description={
-				<>
-					{t("settings.appearance.fonts.sizeDescription", { delta: CODE_FONT_SIZE.editorDelta })}
-					{invalid ? (
-						<span id={errorId} className="block text-feedback-error tr-text-metadata">
-							{t("settings.appearance.fonts.sizeInvalid", {
-								min: CODE_FONT_SIZE.min,
-								max: CODE_FONT_SIZE.max,
-							})}
-						</span>
-					) : null}
-				</>
-			}
-			control={
-				<WithReset
-					dirty={value !== DEFAULT_FONT_PREFERENCE.codeFontSize}
-					label={t("settings.appearance.fonts.resetSize")}
-					onReset={() => submit(String(DEFAULT_FONT_PREFERENCE.codeFontSize))}
-				>
-					<div className="flex items-center gap-4">
-						<IconButton
-							icon={Minus}
-							label={t("settings.appearance.fonts.smaller")}
-							variant="outline"
-							size="l"
-							disabled={current <= CODE_FONT_SIZE.min}
-							onClick={() => submit(String(current - 1))}
-						/>
-						<input
-							type="number"
-							min={CODE_FONT_SIZE.min}
-							max={CODE_FONT_SIZE.max}
-							step={1}
-							inputMode="numeric"
-							{...inputProps}
-							aria-label={t("settings.appearance.fonts.sizeInput")}
-							aria-describedby={invalid ? errorId : undefined}
-							data-testid="font-code-size-input"
-							className={cn(SETTINGS_INPUT, "w-64 text-center")}
-						/>
-						<IconButton
-							icon={Plus}
-							label={t("settings.appearance.fonts.larger")}
-							variant="outline"
-							size="l"
-							disabled={current >= CODE_FONT_SIZE.max}
-							onClick={() => submit(String(current + 1))}
-						/>
-					</div>
-				</WithReset>
-			}
-		/>
-	);
-}
-
-export function FontsGroup() {
-	const t = useT();
-	const interfaceFont = useAppStore((state) => state.interfaceFont);
-	const codeFont = useAppStore((state) => state.codeFont);
-	const codeFontSize = useAppStore((state) => state.codeFontSize);
-	const codeLigatures = useAppStore((state) => state.codeLigatures);
-	const fontWeightOffset = useAppStore((state) => state.fontWeightOffset);
+function useFontCatalog() {
 	const userFonts = useAppStore((state) => state.userFonts);
 	const [installed, setInstalled] = useState<InstalledFonts>({ status: "idle" });
 	const installedRequestRef = useRef(0);
-	const [pending, setPending] = useState<ReadonlySet<FontRole>>(new Set());
-	const [advanced, setAdvanced] = useState(false);
 	const [faces] = useState(bundledFaces);
 	const [shares] = useState(sharesHostFonts);
 	const facesRevision = useSyncExternalStore(subscribeFontFaces, fontFacesRevision);
-	const failure = t("settings.appearance.fonts.changeFailed");
 	const probe = (family: string) => probeFont(family, facesRevision);
 	const custom = customFamilies(userFonts);
-	const options = fontOptions({ faces, custom, installed, probe });
-	const choices: Record<FontRole, FontChoice> = { interface: interfaceFont, code: codeFont };
-	const renders = (family: string) => custom.has(family) || probe(family).renders;
-	const namedFamily = (role: FontRole) => {
-		const ref = choices[role].family;
-		return ref !== null && "name" in ref ? ref.name : null;
-	};
 
 	const readInstalled = () => {
 		installedRequestRef.current += 1;
@@ -388,204 +178,306 @@ export function FontsGroup() {
 				},
 			);
 	};
-	const saveChoice = (role: FontRole, next: FontChoice) => {
-		setPending((current) => new Set(current).add(role));
+
+	return {
+		faces,
+		shares,
+		facesRevision,
+		probe,
+		installed,
+		options: fontOptions({ faces, custom, installed, probe }),
+		renders: (family: string) => custom.has(family) || probe(family).renders,
+		readInstalled,
+	};
+}
+
+type FontCatalog = ReturnType<typeof useFontCatalog>;
+
+function useFontChoice(role: FontRole) {
+	const t = useT();
+	const choice = useAppStore((state) =>
+		role === "interface" ? state.interfaceFont : state.codeFont,
+	);
+	const [pending, setPending] = useState(false);
+	const save = (next: FontChoice) => {
+		if (pending) return;
+		setPending(true);
 		void saveSettings(
 			role === "interface" ? { interfaceFont: next } : { codeFont: next },
-			failure,
-		).then(() =>
-			setPending((current) => {
-				const rest = new Set(current);
-				rest.delete(role);
-				return rest;
-			}),
-		);
+			t("settings.appearance.fonts.changeFailed"),
+		).then(() => setPending(false));
 	};
+	return { role, choice, pending, save };
+}
+
+type FontChoiceState = ReturnType<typeof useFontChoice>;
+
+function namedFamily(choice: FontChoice): string | null {
+	const ref = choice.family;
+	return ref !== null && "name" in ref ? ref.name : null;
+}
+
+function pickerProps(catalog: FontCatalog, font: FontChoiceState) {
+	return {
+		role: font.role,
+		installed: catalog.installed,
+		probe: catalog.probe,
+		sharesHostFonts: catalog.shares,
+		disabled: font.pending,
+		onOpen: catalog.readInstalled,
+		onRetry: catalog.readInstalled,
+		testId: `font-${font.role}`,
+	};
+}
+
+function FontRow({ catalog, font }: { catalog: FontCatalog; font: FontChoiceState }) {
+	const t = useT();
+	const { role, choice } = font;
+	const family = roleFamily(choice.family, role, catalog.faces);
+	const named = namedFamily(choice);
+	const unavailable = named !== null && !catalog.renders(named);
+	const shown = displayFamily(family);
+	return (
+		<>
+			<SettingsRow
+				{...settingProps(t, FONT_ENTRIES[role])}
+				testId={`font-${role}-row`}
+				control={
+					<FontPicker
+						{...pickerProps(catalog, font)}
+						label={
+							role === "interface"
+								? t("settings.appearance.fonts.interfaceFontValue", { family: shown })
+								: t("settings.appearance.fonts.codeFontValue", { family: shown })
+						}
+						options={mainFontOptions(catalog.options, role, catalog.shares)}
+						family={family}
+						value={choice.family}
+						unavailable={unavailable}
+						onSelect={(ref) => font.save({ ...choice, family: ref })}
+					/>
+				}
+				reset={{
+					changed: choice.family !== null,
+					onReset: () => font.save({ ...choice, family: null }),
+				}}
+			/>
+			{unavailable ? (
+				<div className="border-border-muted border-b py-12">
+					<SettingsNotice variant="warning" testId={`font-${role}-unavailable`}>
+						{t("settings.appearance.fonts.unavailable", {
+							family: shown,
+							fallback: displayFamily(catalog.faces[role]),
+						})}
+					</SettingsNotice>
+				</div>
+			) : null}
+		</>
+	);
+}
+
+function FallbackRow({ catalog, font }: { catalog: FontCatalog; font: FontChoiceState }) {
+	const t = useT();
+	const { role, choice } = font;
+	return (
+		<SettingsRow
+			{...settingProps(t, FALLBACK_ENTRIES[role])}
+			testId={`font-${role}-fallbacks-row`}
+			control={
+				<FallbackChips
+					{...pickerProps(catalog, font)}
+					testId={`font-${role}-fallbacks`}
+					options={fallbackFontOptions(catalog.options, [
+						...(choice.family ? [choice.family] : [{ builtin: role }]),
+						...choice.fallbacks,
+					])}
+					values={choice.fallbacks}
+					familyOf={(ref) => refFamily(ref, catalog.faces)}
+					addLabel={
+						role === "interface"
+							? t("settings.appearance.fonts.addInterfaceFallback")
+							: t("settings.appearance.fonts.addCodeFallback")
+					}
+					onChange={(fallbacks) => font.save({ ...choice, fallbacks })}
+				/>
+			}
+			reset={{
+				changed: choice.fallbacks.length > 0,
+				onReset: () => font.save({ ...choice, fallbacks: [] }),
+			}}
+		/>
+	);
+}
+
+function WeightRow({
+	value,
+	hints,
+	onCommit,
+}: {
+	value: number;
+	hints: ReactNode[];
+	onCommit: (next: number) => Promise<boolean>;
+}) {
+	const t = useT();
+	const { draft, setDraft, submit, commitDraft } = useSettingsDraft({
+		saved: String(value),
+		isValid: () => true,
+		commit: (next) =>
+			onCommit(Number(next)).then((stored) => {
+				if (!stored) previewFontWeightOffset(null);
+				return stored;
+			}),
+	});
+	useEffect(() => () => previewFontWeightOffset(null), []);
+	const offset = Number(draft);
+	const shown = offset === 0 ? t("common.default") : offset > 0 ? `+${offset}` : `−${-offset}`;
+	return (
+		<>
+			<SettingsRow
+				{...settingProps(t, SETTING.textWeight)}
+				testId="font-weight"
+				control={
+					<div className="flex items-center gap-8 text-text-muted tr-text-metadata">
+						<span>{t("settings.appearance.fonts.weightLighter")}</span>
+						<div className="w-160">
+							<SettingsSlider
+								label={t("settings.appearance.fonts.weight")}
+								valueText={shown}
+								value={offset}
+								min={FONT_WEIGHT_OFFSET.min}
+								max={FONT_WEIGHT_OFFSET.max}
+								step={FONT_WEIGHT_OFFSET.step}
+								marker={FONT_WEIGHT_OFFSET.default}
+								testId="font-weight-input"
+								onChange={(next) => {
+									setDraft(String(next));
+									previewFontWeightOffset(next);
+								}}
+								onCommit={commitDraft}
+							/>
+						</div>
+						<span>{t("settings.appearance.fonts.weightHeavier")}</span>
+						<span
+							data-testid="font-weight-value"
+							className="w-64 text-right text-text-default tr-text-ui"
+						>
+							{shown}
+						</span>
+					</div>
+				}
+				reset={{
+					changed: value !== DEFAULT_FONT_PREFERENCE.fontWeightOffset,
+					onReset: () => {
+						previewFontWeightOffset(DEFAULT_FONT_PREFERENCE.fontWeightOffset);
+						submit(String(DEFAULT_FONT_PREFERENCE.fontWeightOffset));
+					},
+				}}
+			/>
+			{hints.length > 0 ? (
+				<div className="flex flex-col gap-4 border-border-muted border-b py-12">{hints}</div>
+			) : null}
+		</>
+	);
+}
+
+export function InterfaceFontsGroup() {
+	const t = useT();
+	const catalog = useFontCatalog();
+	const font = useFontChoice("interface");
+	const codeFont = useAppStore((state) => state.codeFont);
+	const fontWeightOffset = useAppStore((state) => state.fontWeightOffset);
 	const renderedNamed = [
 		...new Set(
-			FONT_ROLES.flatMap((role) => {
-				const named = namedFamily(role);
-				return named !== null && renders(named) ? [named] : [];
+			[font.choice, codeFont].flatMap((choice) => {
+				const named = namedFamily(choice);
+				return named !== null && catalog.renders(named) ? [named] : [];
 			}),
 		),
 	];
-	const weightResponses = useWeightResponses(renderedNamed, facesRevision);
+	const weightResponses = useWeightResponses(renderedNamed, catalog.facesRevision);
 	const weightHints = renderedNamed.flatMap((family) => {
 		const response = weightResponses[family];
 		if (response === undefined || response === "smooth") return [];
 		return [
-			<SettingsNotice key={family} variant="info" testId="font-weight-hint" className="mt-4">
+			<SettingsNotice key={family} variant="info" testId="font-weight-hint">
 				{response === "fixed"
 					? t("settings.appearance.fonts.weightFixed", {
 							family,
-							interface: displayFamily(faces.interface),
-							code: displayFamily(faces.code),
+							interface: displayFamily(catalog.faces.interface),
+							code: displayFamily(catalog.faces.code),
 						})
 					: t("settings.appearance.fonts.weightSteps", { family })}
 			</SettingsNotice>,
 		];
 	});
-	const picker = (role: FontRole) => ({
-		role,
-		installed,
-		probe,
-		sharesHostFonts: shares,
-		disabled: pending.has(role),
-		onOpen: readInstalled,
-		onRetry: readInstalled,
-		testId: `font-${role}`,
-	});
-
-	const fontRow = (role: FontRole) => {
-		const choice = choices[role];
-		const family = roleFamily(choice.family, role, faces);
-		const named = namedFamily(role);
-		const unavailable = named !== null && !renders(named);
-		const shown = displayFamily(family);
-		return (
-			<>
-				<SettingsRow
-					label={t("settings.appearance.fonts.font")}
-					testId={`font-${role}-row`}
-					control={
-						<WithReset
-							dirty={choice.family !== null}
-							label={
-								role === "interface"
-									? t("settings.appearance.fonts.resetInterfaceFont")
-									: t("settings.appearance.fonts.resetCodeFont")
-							}
-							disabled={pending.has(role)}
-							onReset={() => saveChoice(role, { ...choice, family: null })}
-						>
-							<FontPicker
-								{...picker(role)}
-								label={
-									role === "interface"
-										? t("settings.appearance.fonts.interfaceFontValue", { family: shown })
-										: t("settings.appearance.fonts.codeFontValue", { family: shown })
-								}
-								options={mainFontOptions(options, role, shares)}
-								family={family}
-								value={choice.family}
-								unavailable={unavailable}
-								onSelect={(ref) => saveChoice(role, { ...choice, family: ref })}
-							/>
-						</WithReset>
-					}
-				/>
-				{unavailable ? (
-					<div className="border-border-muted border-b py-12">
-						<SettingsNotice variant="warning" testId={`font-${role}-unavailable`}>
-							{t("settings.appearance.fonts.unavailable", {
-								family: shown,
-								fallback: displayFamily(faces[role]),
-							})}
-						</SettingsNotice>
-					</div>
-				) : null}
-			</>
-		);
-	};
-
-	const fallbackRow = (role: FontRole) => {
-		const choice = choices[role];
-		return (
-			<SettingsRow
-				label={
-					role === "interface"
-						? t("settings.appearance.fonts.interfaceFallbacks")
-						: t("settings.appearance.fonts.codeFallbacks")
-				}
-				description={
-					role === "interface"
-						? t("settings.appearance.fonts.interfaceFallbacksDescription")
-						: t("settings.appearance.fonts.codeFallbacksDescription")
-				}
-				testId={`font-${role}-fallbacks-row`}
-				control={
-					<FallbackChips
-						{...picker(role)}
-						testId={`font-${role}-fallbacks`}
-						options={fallbackFontOptions(options, [
-							...(choice.family ? [choice.family] : [{ builtin: role }]),
-							...choice.fallbacks,
-						])}
-						values={choice.fallbacks}
-						familyOf={(ref) => refFamily(ref, faces)}
-						addLabel={
-							role === "interface"
-								? t("settings.appearance.fonts.addInterfaceFallback")
-								: t("settings.appearance.fonts.addCodeFallback")
-						}
-						onChange={(fallbacks) => saveChoice(role, { ...choice, fallbacks })}
-					/>
-				}
-			/>
-		);
-	};
-
 	return (
 		<SettingsGroup
-			title={t("settings.appearance.fonts.title")}
+			title={t("settings.appearance.fonts.interface.title")}
 			description={t("settings.appearance.fonts.description")}
-			testId="settings-fonts"
+			testId="font-interface-group"
 		>
-			<div className="border-border-muted border-b pb-12">
-				<FontPreview codeFontSize={codeFontSize} />
-			</div>
-			<SettingsSubheading
-				title={t("settings.appearance.fonts.interface.title")}
-				description={t("settings.appearance.fonts.interface.description")}
-			/>
-			{fontRow("interface")}
+			<FontRow catalog={catalog} font={font} />
 			<WeightRow
 				value={fontWeightOffset}
-				onCommit={(next) => saveSettings({ fontWeightOffset: next }, failure)}
 				hints={weightHints}
-			/>
-			<SettingsSubheading
-				title={t("settings.appearance.fonts.code.title")}
-				description={t("settings.appearance.fonts.code.description")}
-			/>
-			{fontRow("code")}
-			<CodeSizeRow
-				value={codeFontSize}
-				onCommit={(next) => saveSettings({ codeFontSize: next }, failure)}
-			/>
-			<SettingsRow
-				label={t("settings.appearance.fonts.ligatures")}
-				description={t("settings.appearance.fonts.ligaturesDescription")}
-				testId="font-ligatures-row"
-				control={
-					<WithReset
-						dirty={codeLigatures !== DEFAULT_FONT_PREFERENCE.codeLigatures}
-						label={t("settings.appearance.fonts.resetLigatures")}
-						onReset={() =>
-							void saveSettings({ codeLigatures: DEFAULT_FONT_PREFERENCE.codeLigatures }, failure)
-						}
-					>
-						<SettingsSwitch
-							checked={codeLigatures}
-							label={t("settings.appearance.fonts.ligatures")}
-							testId="font-ligatures"
-							onChange={(next) => void saveSettings({ codeLigatures: next }, failure)}
-						/>
-					</WithReset>
+				onCommit={(next) =>
+					saveSettings({ fontWeightOffset: next }, t("settings.appearance.fonts.changeFailed"))
 				}
 			/>
-			<SettingsDisclosure
-				label={t("settings.appearance.fonts.advanced")}
-				summary={t("settings.appearance.fonts.advancedSummary")}
-				expanded={advanced}
-				testId="font-advanced-toggle"
-				onToggle={() => setAdvanced((value) => !value)}
-			>
-				<div className={cn(SETTINGS_ROWS_CONTAINER, "pb-12")}>
-					{fallbackRow("interface")}
-					{fallbackRow("code")}
-				</div>
-			</SettingsDisclosure>
+			<FallbackRow catalog={catalog} font={font} />
+		</SettingsGroup>
+	);
+}
+
+export function CodeFontsGroup() {
+	const t = useT();
+	const catalog = useFontCatalog();
+	const font = useFontChoice("code");
+	const codeFontSize = useAppStore((state) => state.codeFontSize);
+	const codeLigatures = useAppStore((state) => state.codeLigatures);
+	const sizeReset = useConfigReset("codeFontSize", "settings.appearance.fonts.changeFailed");
+	const ligaturesReset = useConfigReset("codeLigatures", "settings.appearance.fonts.changeFailed");
+	const failure = t("settings.appearance.fonts.changeFailed");
+	return (
+		<SettingsGroup title={t("settings.appearance.fonts.code.title")} testId="font-code-group">
+			<FontRow catalog={catalog} font={font} />
+			<SettingsRow
+				{...settingProps(t, SETTING.codeSize)}
+				description={t("settings.appearance.fonts.sizeDescription", {
+					delta: CODE_FONT_SIZE.editorDelta,
+				})}
+				testId="font-code-size"
+				control={
+					<SettingsNumberField
+						label={t("settings.appearance.fonts.sizeInput")}
+						value={codeFontSize}
+						min={CODE_FONT_SIZE.min}
+						max={CODE_FONT_SIZE.max}
+						unit={t("settings.appearance.fonts.sizeUnit")}
+						testId="font-code-size-input"
+						onCommit={(size) => saveSettings({ codeFontSize: size }, failure)}
+					/>
+				}
+				reset={sizeReset}
+			/>
+			<SettingsRow
+				{...settingProps(t, SETTING.ligatures)}
+				testId="font-ligatures-row"
+				control={
+					<Switch
+						checked={codeLigatures}
+						label={t("settings.appearance.fonts.ligatures")}
+						testId="font-ligatures"
+						tabIndex={0}
+						onCheckedChange={(next) => void saveSettings({ codeLigatures: next }, failure)}
+					/>
+				}
+				reset={ligaturesReset}
+			/>
+			<FallbackRow catalog={catalog} font={font} />
+			<div className="py-12">
+				<FontPreview codeFontSize={codeFontSize} />
+			</div>
 		</SettingsGroup>
 	);
 }

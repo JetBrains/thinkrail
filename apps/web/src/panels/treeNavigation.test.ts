@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
+import { localKeys } from "@thinkrail/ui/local-keys";
+import { LOCAL_KEY_DEFAULTS } from "../keybindings";
 import {
 	type TreeSearchRow,
+	treeKeyMove,
 	treeRowKey,
 	treeSearchMatches,
 	treeSearchStep,
@@ -48,27 +51,100 @@ describe("tree search", () => {
 });
 
 describe("treeRowKey", () => {
-	const key = (init: Partial<Parameters<typeof treeRowKey>[0]> & { key: string }) =>
-		treeRowKey({
-			shiftKey: false,
-			altKey: false,
-			ctrlKey: false,
-			metaKey: false,
-			defaultPrevented: false,
-			...init,
-		});
+	const keys = localKeys(null, "trees", LOCAL_KEY_DEFAULTS.trees);
+	const key = (init: { key: string; code?: string } & Partial<KeyboardEvent>) =>
+		treeRowKey(
+			{
+				code: init.key,
+				shiftKey: false,
+				altKey: false,
+				ctrlKey: false,
+				metaKey: false,
+				isComposing: false,
+				keyCode: 0,
+				target: null,
+				defaultPrevented: false,
+				...init,
+			},
+			keys,
+		);
 
 	it("names the row actions a key asks for", () => {
 		expect(key({ key: "ContextMenu" })).toBe("menu");
 		expect(key({ key: "F10", shiftKey: true })).toBe("menu");
 		expect(key({ key: "Delete" })).toBe("delete");
 		expect(key({ key: "F2" })).toBe("rename");
+		expect(key({ key: "ArrowUp", altKey: true, shiftKey: true })).toBe("reorderUp");
+		expect(key({ key: "ArrowDown", altKey: true, shiftKey: true })).toBe("reorderDown");
 	});
 
 	it("ignores modified or already handled keys", () => {
 		expect(key({ key: "F10" })).toBeNull();
 		expect(key({ key: "Delete", ctrlKey: true })).toBeNull();
 		expect(key({ key: "F2", altKey: true })).toBeNull();
+		expect(key({ key: "ArrowUp", altKey: true })).toBeNull();
 		expect(key({ key: "Delete", defaultPrevented: true })).toBeNull();
+	});
+
+	it("follows a rebound key and drops the default", () => {
+		const rebound = localKeys(
+			{
+				platform: "Linux x86_64",
+				scopes: new Map([["trees", [{ id: "trees.rename", chord: { code: "KeyR", key: "R" } }]]]),
+				isTextEntry: () => false,
+			},
+			"trees",
+			LOCAL_KEY_DEFAULTS.trees,
+		);
+		const press = (code: string) =>
+			treeRowKey(
+				{
+					code,
+					key: code === "KeyR" ? "к" : code,
+					shiftKey: false,
+					altKey: false,
+					ctrlKey: false,
+					metaKey: false,
+					isComposing: false,
+					keyCode: 0,
+					target: null,
+					defaultPrevented: false,
+				},
+				rebound,
+			);
+		expect(press("KeyR")).toBe("rename");
+		expect(press("F2")).toBeNull();
+		expect(press("Delete")).toBeNull();
+	});
+});
+
+describe("treeKeyMove", () => {
+	const rows = [
+		{ level: 1, expanded: true },
+		{ level: 2, expanded: undefined },
+		{ level: 1, expanded: false },
+	];
+
+	it("keeps an edge inside the tree by default", () => {
+		expect(treeKeyMove("ArrowUp", rows, 0, false)).toEqual({ kind: "stay" });
+		expect(treeKeyMove("ArrowDown", rows, 2, false)).toEqual({ kind: "stay" });
+		expect(treeKeyMove("ArrowRight", rows, 1, false)).toEqual({ kind: "stay" });
+	});
+
+	it("with leaveAtEdges hands every stay to the surrounding walk", () => {
+		expect(treeKeyMove("ArrowUp", rows, 0, true)).toBe("leave");
+		expect(treeKeyMove("ArrowDown", rows, 2, true)).toBe("leave");
+		expect(treeKeyMove("ArrowRight", rows, 1, true)).toBe("leave");
+		expect(treeKeyMove("ArrowLeft", rows, 2, true)).toBe("leave");
+	});
+
+	it("with leaveAtEdges still moves and toggles inside the tree", () => {
+		expect(treeKeyMove("ArrowDown", rows, 0, true)).toEqual({ kind: "focus", index: 1 });
+		expect(treeKeyMove("ArrowLeft", rows, 1, true)).toEqual({ kind: "focus", index: 0 });
+		expect(treeKeyMove("ArrowRight", rows, 2, true)).toEqual({ kind: "toggle" });
+		expect(treeKeyMove("ArrowLeft", rows, 0, true)).toEqual({ kind: "toggle" });
+		expect(treeKeyMove("End", rows, 0, true)).toEqual({ kind: "focus", index: 2 });
+		expect(treeKeyMove("Enter", rows, 0, true)).toBeNull();
+		expect(treeKeyMove(null, rows, 0, true)).toBeNull();
 	});
 });

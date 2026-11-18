@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { openFixtureProject } from "./fixtures/app";
+import { closeSettings, openFixtureProject, openSettingsSection } from "./fixtures/app";
 import { E2E_PI_AGENT_DIR, E2E_SCREENSHOT_DIR } from "./fixtures/paths";
 import { E2eWire } from "./fixtures/wire";
 
@@ -18,8 +18,7 @@ async function clearStoredEnvironment(page: Page): Promise<void> {
 }
 
 async function openEnvironmentSettings(page: Page) {
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-environment").click();
+	await openSettingsSection(page, "environment");
 	const section = page.getByTestId("settings-environment");
 	await expect(section).toBeVisible();
 	return section;
@@ -45,6 +44,15 @@ test("Settings → Environment validates, saves and asks for a restart", async (
 	await expect(section.getByTestId("settings-environment-restart")).toHaveCount(0);
 	await expect(section.getByTestId("settings-environment-save")).toBeDisabled();
 
+	const folder = section.getByTestId("settings-environment-agent-dir");
+	await folder.fill(join(agentDir, "draft"));
+	await expect(section.getByTestId("settings-environment-save")).toBeEnabled();
+	await folder.press("Escape");
+	await expect(folder).toHaveValue("");
+	await expect(folder).toBeFocused();
+	await expect(section.getByTestId("settings-environment-save")).toBeDisabled();
+	await expect(page.getByTestId("settings-dialog")).toBeVisible();
+
 	await section.getByTestId("settings-environment-agent-dir").fill(join(agentDir, "missing"));
 	await section.getByTestId("settings-environment-add-var").click();
 	await section.getByTestId("settings-environment-var-name").fill("THINKRAIL_PORT");
@@ -55,6 +63,12 @@ test("Settings → Environment validates, saves and asks for a restart", async (
 	await expect(section.getByTestId("settings-environment-restart")).toHaveCount(0);
 
 	await section.getByTestId("settings-environment-agent-dir").fill(agentDir);
+	await section.getByTestId("settings-environment-var-name").fill("TR_E2E_TOKEN");
+	await section.getByTestId("settings-environment-var-value").fill("secret-value");
+	await section.getByTestId("settings-environment-var-value").fill("secret-typo");
+	await section.getByTestId("settings-environment-var-name").press("Escape");
+	await expect(section.getByTestId("settings-environment-var-name")).toHaveValue("");
+	await expect(section.getByTestId("settings-environment-var-value")).toHaveValue("secret-typo");
 	await section.getByTestId("settings-environment-var-name").fill("TR_E2E_TOKEN");
 	await section.getByTestId("settings-environment-var-value").fill("secret-value");
 	await expect(section.getByTestId("settings-environment-var-value")).toHaveAttribute(
@@ -72,7 +86,7 @@ test("Settings → Environment validates, saves and asks for a restart", async (
 	mkdirSync(join(E2E_SCREENSHOT_DIR, "environment-settings"), { recursive: true });
 	await page.getByTestId("settings-dialog").screenshot({ path: SCREENSHOT_PATH });
 
-	await page.keyboard.press("Escape");
+	await closeSettings(page);
 	await page.reload();
 	const reopened = await openEnvironmentSettings(page);
 	await expect(reopened.getByTestId("settings-environment-agent-dir")).toHaveValue(agentDir);

@@ -1,6 +1,7 @@
 import { useT } from "@thinkrail/locales/react";
 import { isContextMenuKey } from "@thinkrail/ui/context-menu";
-import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { isImeComposing, twinArrow } from "@thinkrail/ui/keyboard";
+import { type LocalKeyEvent, type LocalKeys, useLocalKeys } from "@thinkrail/ui/local-keys";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	createContext,
@@ -14,18 +15,12 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
-import { HJKL_KEYS, TREE_KEYS } from "../keybindings";
-import { hasPlatformModifier, resolveTreeMove, type TreeMoveRow } from "../lib";
+import { LOCAL_KEY_DEFAULTS } from "../keybindings";
+import { resolveTreeMove, type TreeMove, type TreeMoveRow } from "../lib";
 
 const TREE = '[role="tree"]';
 const TREE_ITEM = '[role="treeitem"]';
 const HINT_MODE_CODE = "KeyF";
-const HJKL_MOVES: Readonly<Record<string, string>> = {
-	[HJKL_KEYS.left.key]: "ArrowLeft",
-	[HJKL_KEYS.down.key]: "ArrowDown",
-	[HJKL_KEYS.up.key]: "ArrowUp",
-	[HJKL_KEYS.right.key]: "ArrowRight",
-};
 const MATCH_STYLES =
 	"[&_[data-tree-match=match]]:bg-primary-subtle [&_[data-tree-match=current]]:bg-primary-soft";
 
@@ -38,7 +33,14 @@ export interface TreeSearchRow {
 	label: string;
 }
 
-export type TreeRowKey = "menu" | "delete" | "rename";
+export type TreeRowKey = "menu" | "delete" | "rename" | "reorderUp" | "reorderDown";
+
+const ROW_COMMANDS: Readonly<Record<string, TreeRowKey>> = {
+	"trees.delete": "delete",
+	"trees.rename": "rename",
+	"trees.reorderUp": "reorderUp",
+	"trees.reorderDown": "reorderDown",
+};
 
 function matchIndexes(rows: readonly TreeSearchRow[], query: string): number[] {
 	const needle = query.toLocaleLowerCase();
@@ -81,18 +83,27 @@ export function treeSearchStep(
 	return at === undefined ? null : (rows[at]?.id ?? null);
 }
 
+export function treeKeyMove(
+	key: string | null,
+	rows: readonly TreeMoveRow[],
+	index: number,
+	leaveAtEdges: boolean,
+): TreeMove | "leave" | null {
+	const move = key === null ? null : resolveTreeMove(key, rows, index);
+	return leaveAtEdges && move?.kind === "stay" ? "leave" : move;
+}
+
+export function useTreeKeys(): LocalKeys {
+	return useLocalKeys("trees", LOCAL_KEY_DEFAULTS.trees);
+}
+
 export function treeRowKey(
-	event: Pick<
-		KeyboardEvent,
-		"key" | "shiftKey" | "altKey" | "ctrlKey" | "metaKey" | "defaultPrevented"
-	>,
+	event: LocalKeyEvent & { readonly defaultPrevented: boolean },
+	keys: Pick<LocalKeys, "match">,
 ): TreeRowKey | null {
 	if (event.defaultPrevented) return null;
 	if (isContextMenuKey(event)) return "menu";
-	if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return null;
-	if (event.key === TREE_KEYS.delete.key) return "delete";
-	if (event.key === TREE_KEYS.rename.key) return "rename";
-	return null;
+	return ROW_COMMANDS[keys.match(event) ?? ""] ?? null;
 }
 
 function createTreeCursor() {
@@ -305,6 +316,7 @@ export function Tree({
 	focusList,
 	className,
 	focusDefault = true,
+	leaveAtEdges = false,
 	onOpenKept,
 	children,
 }: {
@@ -312,6 +324,7 @@ export function Tree({
 	focusList: string;
 	className: string;
 	focusDefault?: boolean;
+	leaveAtEdges?: boolean;
 	onOpenKept?: (id: string) => void;
 	children: ReactNode;
 }) {
@@ -321,6 +334,7 @@ export function Tree({
 	const searching = useRef(false);
 	const tree = useRef<HTMLElement | null>(null);
 	const field = useRef<HTMLDivElement | null>(null);
+	const keys = useTreeKeys();
 	const scope = useMemo(() => ({ cursor, marks, focusDefault }), [cursor, marks, focusDefault]);
 
 	const ref = useCallback(
@@ -387,35 +401,34 @@ export function Tree({
 		const container = event.currentTarget;
 		const item = ownItem(container, event.target);
 		if (!item) return;
-		if (
-			event.key === TREE_KEYS.openKept.key &&
-			hasPlatformModifier(event) &&
-			!event.altKey &&
-			!event.shiftKey
-		) {
+		const local = keys.match(event.nativeEvent);
+		if (local === "trees.search") {
+			event.preventDefault();
+			searching.current = true;
+			setSearch({ origin: item.dataset.treeItem ?? null, current: null, query: "", matches: [] });
+			return;
+		}
+		if (local === "trees.openKept") {
 			event.preventDefault();
 			const id = item.dataset.treeItem;
 			if (onOpenKept && id !== undefined && item.dataset.treeKeep !== undefined) onOpenKept(id);
 			else item.click();
 			return;
 		}
-		if (event.altKey || event.ctrlKey || event.metaKey) return;
+		const twin = twinArrow(local);
+		if (twin === undefined && (event.altKey || event.ctrlKey || event.metaKey)) return;
 		const items = treeItems(container);
 		const index = items.indexOf(item);
-		const key = HJKL_MOVES[event.key] ?? event.key;
-		const move = event.shiftKey ? null : resolveTreeMove(key, items.map(rowModel), index);
+		const key = twin ?? (event.shiftKey ? null : event.key);
+		const move = treeKeyMove(key, items.map(rowModel), index, leaveAtEdges);
+		if (move === "leave") return;
 		if (move) {
 			event.preventDefault();
 			if (move.kind === "focus") items[move.index]?.focus();
 			else if (move.kind === "toggle") toggleOf(container, item)?.click();
 			return;
 		}
-		if (event.key === TREE_KEYS.search.key && !event.shiftKey) {
-			event.preventDefault();
-			searching.current = true;
-			setSearch({ origin: item.dataset.treeItem ?? null, current: null, query: "", matches: [] });
-			return;
-		}
+		if (event.altKey || event.ctrlKey || event.metaKey) return;
 		if (event.key.length !== 1 || event.key === " ") return;
 		if (event.code === HINT_MODE_CODE && !event.shiftKey) return;
 		event.preventDefault();
@@ -446,6 +459,7 @@ export function Tree({
 			<div
 				ref={ref}
 				role="tree"
+				data-key-scope="trees"
 				aria-label={label}
 				data-focus-list={focusList}
 				className={cn(className, MATCH_STYLES)}

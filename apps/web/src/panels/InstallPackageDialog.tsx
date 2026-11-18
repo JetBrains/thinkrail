@@ -20,10 +20,9 @@ import {
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment, useId, useState } from "react";
+import { SettingsChoice, SettingsNotice } from "@/settingsKit";
 import { errorText, RequestTimeoutError, wsErrorCode } from "@/transport";
 import { CHIP_CLASS, GalleryLink, packageChips } from "./PiPackagesSettings";
-import { SegmentedControl } from "./SegmentedControl";
-import { SettingsNotice } from "./SettingsNotice";
 
 const INPUT_CLASS =
 	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default placeholder:text-text-muted focus-visible:border-control-border-active focus-visible:focus-ring disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text";
@@ -234,26 +233,27 @@ export function InstallPackageBody({
 							<span className="tr-text-ui text-text-default">
 								{t("settings.packages.installDialog.scopeLabel")}
 							</span>
-							<SegmentedControl<PiPackageScope>
-								name="install-package-scope"
-								label={t("settings.packages.installDialog.scopeLabel")}
-								testId="install-package-scope"
-								value={effectiveScope}
-								onSelect={onScopeChange}
-								options={[
-									{
-										id: "user",
-										label: t("settings.packages.installDialog.scope.user"),
-										testId: "install-package-scope-user",
-									},
-									{
-										id: "project",
-										label: t("settings.packages.installDialog.scope.project"),
-										testId: "install-package-scope-project",
-										disabled: !projectAvailable,
-									},
-								]}
-							/>
+							<div className="flex">
+								<SettingsChoice<PiPackageScope>
+									label={t("settings.packages.installDialog.scopeLabel")}
+									testId="install-package-scope"
+									value={effectiveScope}
+									onSelect={onScopeChange}
+									options={[
+										{
+											id: "user",
+											label: t("settings.packages.installDialog.scope.user"),
+											testId: "install-package-scope-user",
+										},
+										{
+											id: "project",
+											label: t("settings.packages.installDialog.scope.project"),
+											testId: "install-package-scope-project",
+											disabled: !projectAvailable,
+										},
+									]}
+								/>
+							</div>
 							<span className="tr-text-metadata text-text-muted">
 								{!projectAvailable && workspaceId === null
 									? t("settings.packages.installDialog.scopeNeedsWorkspace")

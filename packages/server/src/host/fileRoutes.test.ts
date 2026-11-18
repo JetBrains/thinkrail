@@ -6,7 +6,13 @@ import { configurePiRuntime, configurePiRuntimeFactory } from "../agent";
 import { resetAnalyticsForTests } from "../analytics";
 import { resetJbcentralStateForTests } from "../auth";
 import { resetConfigCache } from "../settings";
-import { BLOB_SIZE_LIMIT, serveBlob, serveWorktreeFile } from "./fileRoutes";
+import {
+	BLOB_SIZE_LIMIT,
+	serveBlob,
+	serveWorktreeFile,
+	serveWorktreeView,
+	viewPolicy,
+} from "./fileRoutes";
 import { createServer, type RunningServer } from "./server";
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x7f]);
@@ -101,6 +107,56 @@ test("active resource types are sandboxed on both raw routes", async () => {
 	}
 });
 
+const VIEW = (path: string) => new URL(`http://127.0.0.1:4321/view/${path}`);
+
+test("/view serves a workspace page for a browser: scripts sandboxed, sources scoped, no network", async () => {
+	writeFileSync(join(repo, "docs", "style.css"), "p { color: red }");
+	writeFileSync(join(repo, "docs", "app.mjs"), "export {};");
+	const page = await serveWorktreeView("GET", VIEW("w1/page.html"));
+	expect(page.status).toBe(200);
+	expect(page.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
+	expect(page.headers.get("Cache-Control")).toBe("no-store");
+	expect(page.headers.get("X-Content-Type-Options")).toBe("nosniff");
+	expect(page.headers.get("Access-Control-Allow-Origin")).toBeNull();
+	expect(page.headers.get("Content-Security-Policy")).toBe(
+		viewPolicy("http://127.0.0.1:4321/view/w1/"),
+	);
+	expect(viewPolicy("http://h/view/w1/")).toBe(
+		"sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox; default-src 'none'; script-src http://h/view/w1/ 'unsafe-inline'; style-src http://h/view/w1/ 'unsafe-inline'; img-src http://h/view/w1/ data: blob:; font-src http://h/view/w1/ data:; media-src http://h/view/w1/ data: blob:; frame-src http://h/view/w1/; connect-src 'none'; worker-src 'none'; object-src 'none'; base-uri http://h/view/w1/; form-action 'none'",
+	);
+	expect(await page.text()).toContain("globalThis.pwned");
+
+	for (const [path, type] of [
+		["docs/style.css", "text/css; charset=utf-8"],
+		["docs/app.mjs", "text/javascript; charset=utf-8"],
+		["docs/shot.png", "image/png"],
+	] as const) {
+		const response = await serveWorktreeView("GET", VIEW(`w1/${path}`));
+		expect(response.status).toBe(200);
+		expect(response.headers.get("Content-Type")).toBe(type);
+		expect(response.headers.get("Content-Security-Policy")).toBeNull();
+	}
+	expect(
+		(await serveWorktreeView("GET", VIEW("w1/vector.svg"))).headers.get("Content-Security-Policy"),
+	).toBe(viewPolicy("http://127.0.0.1:4321/view/w1/"));
+});
+
+test("/view answers only GET and HEAD, and 404s outside the worktree", async () => {
+	const post = await serveWorktreeView("POST", VIEW("w1/page.html"));
+	expect(post.status).toBe(405);
+	expect(post.headers.get("Allow")).toBe("GET, HEAD");
+	expect((await serveWorktreeView("HEAD", VIEW("w1/page.html"))).status).toBe(200);
+	for (const path of [
+		"w1/..%2F..%2Fescaped.txt",
+		"nope/page.html",
+		"w1/docs",
+		"w1/gone.html",
+		"w1",
+	]) {
+		expect((await serveWorktreeView("GET", VIEW(path))).status).toBe(404);
+	}
+});
+
 test("/blob 404s on malformed locations, absent blobs, and tree paths", async () => {
 	expect((await serveBlob("/blob/w1/not-an-oid/notes.md")).status).toBe(404);
 	expect((await serveBlob(`/blob/w1/${head.slice(0, 12)}/notes.md`)).status).toBe(404);
@@ -192,6 +248,11 @@ test("the host passes /files its maxBytes from the request URL", async () => {
 		expect((await fetch(`${base}?maxBytes=8`)).status).toBe(200);
 		expect((await fetch(`${base}?maxBytes=7`)).status).toBe(413);
 		expect((await fetch(`${base}?maxBytes=x`)).status).toBe(400);
+		const view = await fetch(`http://127.0.0.1:${server.port}/view/w1/page.html`);
+		expect(view.status).toBe(200);
+		expect(view.headers.get("Content-Security-Policy")).toBe(
+			viewPolicy(`http://127.0.0.1:${server.port}/view/w1/`),
+		);
 	} finally {
 		await server?.shutdown();
 		resetAnalyticsForTests();
@@ -227,6 +288,9 @@ test("file routes refuse .git and symlinks escaping the worktree", async () => {
 	expect((await serveWorktreeFile("/files/w1/metadata%2Fconfig")).status).toBe(404);
 	expect((await serveWorktreeFile("/files/w1/outside%2Fworkspaces.json")).status).toBe(404);
 	expect((await serveBlob(`/blob/w1/${head}/.git%2Fconfig`)).status).toBe(404);
+	for (const path of [".git%2Fconfig", "metadata%2Fconfig", "outside%2Fworkspaces.json"]) {
+		expect((await serveWorktreeView("GET", VIEW(`w1/${path}`))).status).toBe(404);
+	}
 });
 
 test("/blob streams a multi-megabyte blob through a live server", async () => {

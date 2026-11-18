@@ -188,7 +188,7 @@ export const BottomGroupView = memo(function BottomGroupView({
 					? t("workbench.bottom.groupNamed", { name: selectedName })
 					: t("workbench.bottom.emptyGroup")
 			}
-			className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-container-sidebar-bg focus-visible:focus-ring-inset"
+			className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-container-sidebar-bg outline-none"
 			onFocusCapture={() => shared.onFocusGroup(location, selected?.id)}
 		>
 			<AuxiliaryGroupHeader
