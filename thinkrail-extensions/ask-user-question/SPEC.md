@@ -24,7 +24,7 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
 
 - `@thinkrail/ext-ask-user-question/server` default-exports a session-only descriptor:
   - `extensions: []`;
-  - `settings: { richPreviews: { type: "boolean", default: true } }` — Settings → Extensions shows it as the
+  - `settings: { richPreviews: { type: "boolean", default: true } }` — Settings → Extensions & skills shows it as the
     nested "Rich previews in questions" switch ([[module-thinkrail-extensions]]);
   - `sessionExtensions: (session) => [factory]`, a factory that reads `session.setting("richPreviews")`
     **inside its body** and composes `createAskUserQuestionExtension({ ask, announce, guidance, filePreviews,

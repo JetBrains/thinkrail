@@ -3,15 +3,16 @@ import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import type { ToolCall } from "@thinkrail/contracts";
 import {
+	closeSettings,
 	enterDefaultWorkspace,
 	expandAllRoutineGroups,
 	openAppFresh,
 	openFixtureProject,
 	openPersistedChat,
+	settingsDialog,
 } from "./fixtures/app";
 import {
 	clearInstalledExtensions,
-	closeSettings,
 	declareExtensions,
 	installedRow,
 	openExtensionsSettings,
@@ -213,8 +214,19 @@ test("a past palette call renders its card, keeps it while switched off and fall
 	await expect(card.getByTestId("palette-swatch")).toHaveCount(5);
 
 	await openExtensionsSettings(page);
-	await installedRow(page, PALETTE_NAME).getByTestId("installed-extension-menu").click();
-	await page.getByTestId("installed-extension-menu-remove").click();
+	const row = installedRow(page, PALETTE_NAME);
+	const primary = row.locator("[data-focus-row-primary]");
+	await primary.focus();
+	await page.keyboard.press("ArrowRight");
+	await expect(row.getByTestId(`extension-toggle-${PALETTE_NAME}`)).toBeFocused();
+	await page.keyboard.press("ArrowLeft");
+	await expect(primary).toBeFocused();
+	await page.keyboard.press("Shift+F10");
+	await expect(page.getByTestId("installed-extension-menu-remove")).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("installed-extension-menu-remove")).toHaveCount(0);
+	await expect(settingsDialog(page)).toBeVisible();
+	await page.keyboard.press("Delete");
 	await page.getByTestId("installed-extension-remove-confirm").click();
 	await expect(installedRow(page, PALETTE_NAME)).toHaveCount(0, { timeout: 60_000 });
 	await closeSettings(page);

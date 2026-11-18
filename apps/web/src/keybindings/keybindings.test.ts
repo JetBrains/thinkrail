@@ -6,6 +6,7 @@ import {
 	keybindingLabel,
 	keybindingLabels,
 	keybindingShortcut,
+	LOCAL_KEY_DEFAULTS,
 	matchKeybinding,
 	resolveKeybindings,
 } from ".";
@@ -303,5 +304,40 @@ describe("keybinding shortcuts", () => {
 		expect(label("workspace.new", { browser: true, platform: PLATFORMS.linux })).toBe("Ctrl+Alt+N");
 		expect(labels("workspace.new", PLATFORMS.apple)).toEqual(["⌘N", "⌥⌘N"]);
 		expect(labels("workspace.new", PLATFORMS.windows)).toEqual(["Ctrl+N", "Ctrl+Alt+N"]);
+	});
+});
+
+describe("the Settings local scopes", () => {
+	const SCOPES = ["settings.nav", "settings", "settings.list"] as const;
+	const resolved = resolveKeybindings({ platform: PLATFORMS.linux });
+	const local = (scope: string) =>
+		(resolved.local.get(scope) ?? []).map(({ id, chord }) => `${id}=${chord.code}`);
+
+	test("declare search, reset and remove, each beside the shared arrow twins", () => {
+		const twins = ["arrows.left=KeyH", "arrows.down=KeyJ", "arrows.up=KeyK", "arrows.right=KeyL"];
+		expect(local("settings.nav")).toEqual([
+			"settings.nav.search=KeyS",
+			"settings.nav.search=Slash",
+			...twins,
+		]);
+		expect(local("settings")).toEqual(["settings.reset=Delete", ...twins]);
+		expect(local("settings.list")).toEqual(["settings.list.remove=Delete", ...twins]);
+		for (const scope of SCOPES) {
+			expect(LOCAL_KEY_DEFAULTS[scope].map(({ id }) => id)).toEqual([
+				...new Set(local(scope).map((entry) => entry.slice(0, entry.indexOf("=")))),
+			]);
+		}
+	});
+
+	test("hold no default conflict and leave F to hint mode", () => {
+		for (const platform of Object.values(PLATFORMS)) {
+			const each = resolveKeybindings({ platform });
+			expect(each.conflicts).toEqual([]);
+			for (const scope of SCOPES) {
+				expect((each.local.get(scope) ?? []).some(({ chord }) => chord.code === "KeyF")).toBe(
+					false,
+				);
+			}
+		}
 	});
 });

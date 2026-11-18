@@ -2,10 +2,12 @@ import { existsSync, mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync 
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import {
+	closeSettings,
 	createWorkspaceViaDialog,
 	enterDefaultWorkspace,
 	loadPersistedWorkspaces,
 	openFixtureProject,
+	openSettingsSection,
 	openWorkspaceChat,
 	revealWorkbenchTool,
 } from "./fixtures/app";
@@ -256,10 +258,10 @@ test("Smart groups what the agent made by folder with its working files folded u
 	await expect(folderRow(page, "loose")).toBeVisible();
 	await expect(artifact(page, "unattached/r.md")).toHaveCount(0);
 
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-artifacts").click();
+	await openSettingsSection(page, "layout");
 	await page.getByTestId("artifacts-smart-toggle").click();
-	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("artifacts-smart-toggle")).toHaveAttribute("aria-checked", "false");
+	await closeSettings(page);
 	await expect(page.getByTestId("artifacts-view-smart")).toHaveCount(0);
 	await expect(page.getByTestId("artifacts-view-list")).toHaveAttribute("data-active", "true");
 	await expect(artifact(page, "mockups/onboarding/gen.mjs")).toBeVisible();

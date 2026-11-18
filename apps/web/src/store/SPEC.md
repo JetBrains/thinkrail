@@ -541,7 +541,8 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   `beginLogin` response. **`beginLogin(loginId, providerId, target?)`** opens the login, preserving a
   matching frame-created dialog (the frame can beat the response) and refusing to overwrite a different
   active login. Workspace removal retires its targeted MCP dialog; late start responses and frames for
-  tombstoned workspaces cannot recreate it or strand the global login slot.
+  tombstoned workspaces cannot recreate it or strand the global login slot. A target without a
+  `workspaceId` (an MCP sign-in started with no workspace open) is never tombstoned.
   **`applyLoginFrame(push)`** folds an inbound `provider.login` frame (creating `activeLogin`
   if the frame arrived first; ignoring frames for a different live login); both keep an MCP
   push's `target`, which is how Providers and MCP settings each open only their own logins,
@@ -551,12 +552,18 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   provider's finished (success/error) target-less login. A terminal frame for a login this client does not
   hold opens nothing (a superseded login's error reaches every client); it is kept as **`unheldLoginFrame`**
   so `beginLogin` can replay it when it was this client's own fast failure beating the start response. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Models`/`Mcp`/`Github`/`Appearance`/`Chat`/`Layout`/`Keyboard`/`Updates`/`Terminal`/`Workspaces`/`Templates`/`Notifications`/`Privacy`/`Feedback`/`Extensions`;
-  the `LineWidth` and `Review` keys are retained so old deep links still type-check but are not navigation
-  sections — `panels/settingsNav` resolves them to an available section, and their controls now live in
-  Chat/Appearance and Models) with **`openSettings(section?)`** (deep-links to a section, defaults to Providers) /
-  **`closeSettings()`** / **`setSettingsSection()`** — lives here so the top-bar gear, Welcome provider
-  warning, and update-ready shell affordance can deep-link without prop-drilling. The optional Update key is navigation only. Native
+  **`settingsSection`** (a const-object enum: `Providers`/`Models`/`Subagents`/`Mcp`/`Github`/`Appearance`/`Text`/`Chat`/`Layout`/`Keyboard`/`Updates`/`Terminal`/`Workspaces`/`Templates`/`Notifications`/`Privacy`/`Feedback`/`Extensions`/`Environment`/`Voice`/`Language`;
+  the retired `Artifacts`, `LineWidth` and `Review` keys stay so old deep links still type-check, and
+  **`RETIRED_SETTINGS_SECTIONS`** names where each moved — Layout, Text and Models — for `panels/settingsNav`
+  to resolve) with **`openSettings(section?, settingId?)`** / **`closeSettings()`** / **`setSettingsSection()`**
+  — lives here so the top-bar gear, Welcome provider warning, and update-ready shell affordance can deep-link
+  without prop-drilling. Without a section, `openSettings` reopens the remembered one: `closeSettings` keeps
+  `settingsSection`, in memory only, so the first open of a page load is Providers. A `settingId` (a
+  `panels/settingsCatalog` id, or `shortcut:<command>`) is stored as **`settingsTarget`** in the same update;
+  the dialog takes it once with **`consumeSettingsTarget()`**, which returns and clears it, and a close or an
+  open without one clears it too. The client-local preference defaults the store starts from
+  (`artifactsSmart`, `doubleShiftSearch`, `markdownOutlineSide`) are one constant,
+  **`CLIENT_PREFERENCE_DEFAULTS`**, which Settings' Reset reads too. The optional Update key is navigation only. Native
   updater snapshots/actions remain in `updates`' shell-local hook state; the optional **`hostUpdate`** lifecycle
   snapshot is host domain state, installed atomically from `server.welcome` or replaced by the one
   `host.updateAvailable` push. It remains visible through a temporary disconnect; a later welcome replaces or
@@ -660,10 +667,10 @@ selector to hide its Projects rail and pane, so onboarding has the whole window.
   to `loading` only when the welcoming host's protocol differs from the previous welcome's, so a reconnect
   to the same host keeps the rows on screen until the new list lands. Its selectors:
   `selectBuiltinExtensions` (the Built into ThinkRail group — every row of an older host, `kind: "builtin"`
-  from v125), `selectInstalledExtensions` (installed rows in host order), `selectInstalledWebHalves` (the
+  from v126), `selectInstalledExtensions` (installed rows in host order), `selectInstalledWebHalves` (the
   `{ name, url, styles? }` set the page must have loaded — switched-off ones included — `null` while unknown,
-  empty for a host older than v125), and the gates `selectSupportsInstalledExtensions` (v125) and
-  `selectSupportsExtensionBrowse` (v126).
+  empty for a host older than v126), and the gates `selectSupportsInstalledExtensions` (v126) and
+  `selectSupportsExtensionBrowse` (v127).
   **`disabledPackages: string[]`** mirrors `disabledExtensions` from the settings broadcast; the
   Extensions page uses it only to compute the next whole list for `settings.update` — what a package
   row *shows* is the catalog's `enabled` (the host's effective state, which a `packages.changed` push

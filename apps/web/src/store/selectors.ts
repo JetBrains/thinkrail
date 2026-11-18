@@ -210,7 +210,7 @@ export function selectSupportsExtensionBrowse(state: ProtocolState): boolean {
 	);
 }
 
-/** The Built into ThinkRail group: every entry an older host lists, and `kind: "builtin"` from v125. */
+/** The Built into ThinkRail group: every entry an older host lists, and `kind: "builtin"` from v126. */
 export function selectBuiltinExtensions(catalog: ExtensionCatalogRead): ExtensionCatalogRead {
 	return Array.isArray(catalog) ? catalog.filter((entry) => entry.kind !== "installed") : catalog;
 }

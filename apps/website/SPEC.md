@@ -562,7 +562,7 @@ and a valid manifest; nothing reviewed, hidden or marked) are owned by [[module-
   half and `Chat cards` for a web half — halves, not tool names, which live in code the site cannot run —,
   the `npm:<name>` install source with the site's `data-copy` button, and npm and repository links (the
   repository with `rel="ugc nofollow"`, since it is unreviewed). One hint line says the source is pasted
-  into Settings → Extensions → Install package…. The page always states that listings are automatic and
+  into Settings → Extensions & skills → Install package…. The page always states that listings are automatic and
   unreviewed and links the guide; an empty catalog shows an empty state inviting the first extension.
   The Files rail shows `README.md` (the page) and `catalog.json`.
 - **Third-party images** are the only third-party content: rendered only when present, inside a fixed

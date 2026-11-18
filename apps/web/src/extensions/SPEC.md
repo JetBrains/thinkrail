@@ -44,7 +44,7 @@ switched-off extension's commands stay listed (Settings → Keyboard shows and r
 match nor conflict, and registry order decides between two extensions' defaults. A command with a
 `scope` is local and reaches the resolver's per-scope table as it is; the resolver drops one whose id or
 scope lacks the extension's `name.` prefix, and the tests pin that every bundled command has it.
-`webOnlyExtensions(serverNames)` is the titled entries without tool renderers that the server catalog lacks; Settings → Extensions
+`webOnlyExtensions(serverNames)` is the titled entries without tool renderers that the server catalog lacks; Settings → Extensions & skills
 lists them under the same switch ([[module-thinkrail-extensions]]).
 Composer suggestions are the one *tool-registered* affordance the switch hides: each registration carries
 its extension's `name` (an installed one's is its descriptor `name`), so the chat hides a switched-off

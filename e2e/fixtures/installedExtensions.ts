@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page } from "@playwright/test";
 import type { ExtensionCatalogEntry } from "@thinkrail/contracts";
+import { openSettingsSection } from "./app";
 import { E2E_DATA_DIR, E2E_EXTENSION_CATALOG, E2E_EXTENSION_FIXTURES_DIR } from "./paths";
 import { E2eWire } from "./wire";
 
@@ -144,22 +145,10 @@ export async function serveExtensionCatalog(
 }
 
 export async function openExtensionsSettings(page: Page) {
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-extensions").click();
+	await openSettingsSection(page, "extensions");
 	const section = page.getByTestId("settings-extensions");
 	await expect(section).toBeVisible();
 	return section;
-}
-
-export async function closeSettings(page: Page): Promise<void> {
-	const dialog = page.getByTestId("settings-dialog");
-	for (let attempt = 0; attempt < 3 && (await dialog.isVisible()); attempt += 1) {
-		await page.keyboard.press("Escape");
-		await expect(dialog)
-			.toBeHidden({ timeout: 2_000 })
-			.catch(() => {});
-	}
-	await expect(dialog).toBeHidden();
 }
 
 export function installedRow(page: Page, name: string) {

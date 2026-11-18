@@ -147,13 +147,22 @@ test("Esc leaves a panel's text field for the panel, which keeps its accent line
 		.toBe(true);
 });
 
-test("Esc in a Settings field still closes Settings", async ({ page }) => {
+test("Esc in a Settings filter clears it, then goes to the section list, then closes Settings", async ({
+	page,
+}) => {
 	await openFixtureProject(page);
 	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-keyboard").click();
+	const nav = page.getByTestId("settings-nav-keyboard");
+	await nav.click();
 	const filter = page.getByTestId("keybinding-filter");
 	await filter.fill("split");
 	await expect(filter).toBeFocused();
+	await page.keyboard.press("Escape");
+	await expect(filter).toHaveValue("");
+	await expect(filter).toBeFocused();
+	await page.keyboard.press("Escape");
+	await expect(nav).toBeFocused();
+	await expect(page.getByTestId("settings-dialog")).toBeVisible();
 	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("settings-dialog")).toBeHidden();
 });

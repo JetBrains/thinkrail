@@ -15,7 +15,7 @@ The user asked you to write it **and install it**: do both, without asking for a
 
 ## Is it an extension at all?
 
-- Only agent tools or skills, no card wanted → a plain pi package also works (Settings → Extensions →
+- Only agent tools or skills, no card wanted → a plain pi package also works (Settings → Extensions & skills →
   Install package). Make an extension when they want a card, a setting with a toggle, or ask for one.
 - Wrapping an external service that already has an MCP server → configure the MCP server instead (the
   `managing-mcp-servers` skill). An MCP server is not an extension.
@@ -121,7 +121,7 @@ valid JSON), waits for the host to read it and prints the extension's status ent
 edit the file the same way by hand: parse it, append the path, write a temporary file and rename it over —
 never leave invalid JSON, because the host then ignores the whole file and refuses to rewrite it.
 
-The host watches the file, loads the folder in place and lists it in Settings → Extensions. Open chats
+The host watches the file, loads the folder in place and lists it in Settings → Extensions & skills. Open chats
 get the new tools **when their current turn ends** — your own chat included, so the tool is not callable
 in this turn. Do not try to call it now.
 
@@ -139,7 +139,7 @@ change: `{ api, updatedAt, fileError?, extensions: [{ source, name, version, sta
 
 - what you installed (title, tools, card, settings) and the folder path;
 - that it runs code on their machine and in the app, like any installed extension;
-- that it is in **Settings → Extensions**, where they can switch it off, change its settings or remove
+- that it is in **Settings → Extensions & skills**, where they can switch it off, change its settings or remove
   it;
 - that the tools reach a chat from its next turn;
 - to share it later, they can publish it to npm: https://thinkrail.ai/docs/build-an-extension/.
@@ -150,7 +150,7 @@ change: `{ api, updatedAt, fileError?, extensions: [{ source, name, version, sta
   `node <this skill's directory>/scripts/extensions.mjs reload <folder>`. The host reloads a folder only
   when `package.json` or a manifest file (`server` entry, `web`, `styles`) changed; `reload` touches
   `package.json`, so edits to other server files are picked up too. Open chats see it after their turn.
-- **Switch off:** the user's switch in Settings → Extensions; there is no file for it. If a loaded
+- **Switch off:** the user's switch in Settings → Extensions & skills; there is no file for it. If a loaded
   extension's tools are missing, check whether it is switched off there.
 - **Uninstall:** `node <this skill's directory>/scripts/extensions.mjs remove <folder>` (or the
   Remove button). The folder stays — it is the user's; delete it only if they ask.

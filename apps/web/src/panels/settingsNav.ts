@@ -5,6 +5,7 @@ import {
 	RiChat2Line,
 	RiDownloadCloud2Line,
 	RiFolderSettingsLine,
+	RiFontSize,
 	RiGitRepositoryLine,
 	RiKeyboardLine,
 	RiKeyLine,
@@ -15,23 +16,23 @@ import {
 	RiPaletteLine,
 	RiPlugLine,
 	RiPuzzle2Line,
-	RiShapesLine,
+	RiRobot2Line,
 	RiShieldCheckLine,
 	RiTerminalBoxLine,
 	RiTranslate2,
 } from "@remixicon/react";
 import {
-	ARTIFACT_ROLES_PROTOCOL_VERSION,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
+	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
-import { SettingsSection } from "@/store";
+import { RETIRED_SETTINGS_SECTIONS, SettingsSection } from "@/store";
 
 export interface SettingsNavSection {
 	id: SettingsSection;
@@ -58,6 +59,18 @@ const NAV_GROUPS: SettingsNavGroup[] = [
 			},
 			{ id: SettingsSection.Providers, label: "settings.nav.providers", icon: RiKeyLine },
 			{
+				id: SettingsSection.Subagents,
+				label: "settings.nav.subagents",
+				icon: RiRobot2Line,
+				requiresProtocolVersion: SUBAGENT_SETTINGS_PROTOCOL_VERSION,
+			},
+			{
+				id: SettingsSection.Extensions,
+				label: "settings.nav.extensions",
+				icon: RiPuzzle2Line,
+				requiresProtocolVersion: EXTENSION_CATALOG_PROTOCOL_VERSION,
+			},
+			{
 				id: SettingsSection.Mcp,
 				label: "settings.nav.mcp",
 				icon: RiPlugLine,
@@ -75,16 +88,17 @@ const NAV_GROUPS: SettingsNavGroup[] = [
 	{
 		label: "settings.nav.group.interface",
 		sections: [
-			{ id: SettingsSection.Chat, label: "settings.nav.chat", icon: RiChat2Line },
 			{ id: SettingsSection.Appearance, label: "settings.nav.appearance", icon: RiPaletteLine },
+			{ id: SettingsSection.Text, label: "settings.nav.text", icon: RiFontSize },
+			{ id: SettingsSection.Chat, label: "settings.nav.chat", icon: RiChat2Line },
+			{ id: SettingsSection.Layout, label: "settings.nav.layout", icon: RiLayoutTop2Line },
+			{ id: SettingsSection.Keyboard, label: "settings.nav.keyboard", icon: RiKeyboardLine },
 			{
 				id: SettingsSection.Language,
 				label: "settings.nav.language",
 				icon: RiTranslate2,
 				requiresProtocolVersion: LOCALES_PROTOCOL_VERSION,
 			},
-			{ id: SettingsSection.Layout, label: "settings.nav.layout", icon: RiLayoutTop2Line },
-			{ id: SettingsSection.Keyboard, label: "settings.nav.keyboard", icon: RiKeyboardLine },
 			{
 				id: SettingsSection.Voice,
 				label: "settings.nav.voice",
@@ -92,12 +106,6 @@ const NAV_GROUPS: SettingsNavGroup[] = [
 				requiresProtocolVersion: SPEECH_PROTOCOL_VERSION,
 			},
 			{ id: SettingsSection.Terminal, label: "settings.nav.terminal", icon: RiTerminalBoxLine },
-			{
-				id: SettingsSection.Artifacts,
-				label: "settings.nav.artifacts",
-				icon: RiShapesLine,
-				requiresProtocolVersion: ARTIFACT_ROLES_PROTOCOL_VERSION,
-			},
 		],
 	},
 	{
@@ -110,12 +118,6 @@ const NAV_GROUPS: SettingsNavGroup[] = [
 				requiresProtocolVersion: WORKSPACE_SETTLE_PROTOCOL_VERSION,
 			},
 			{ id: SettingsSection.Github, label: "settings.nav.github", icon: RiApps2Line },
-			{
-				id: SettingsSection.Extensions,
-				label: "settings.nav.extensions",
-				icon: RiPuzzle2Line,
-				requiresProtocolVersion: EXTENSION_CATALOG_PROTOCOL_VERSION,
-			},
 			{
 				id: SettingsSection.Notifications,
 				label: "settings.nav.notifications",
@@ -169,8 +171,9 @@ export function resolveSettingsSection(
 	groups: SettingsNavGroup[],
 ): SettingsSection {
 	const available = groups.flatMap((g) => g.sections);
-	if (section === SettingsSection.Feedback || available.some((s) => s.id === section)) {
-		return section;
+	const live = RETIRED_SETTINGS_SECTIONS[section] ?? section;
+	if (live === SettingsSection.Feedback || available.some((s) => s.id === live)) {
+		return live;
 	}
 	if (available.some((s) => s.id === SettingsSection.Appearance)) {
 		return SettingsSection.Appearance;

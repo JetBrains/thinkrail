@@ -1282,12 +1282,19 @@ export type LoginFrame =
 	| { kind: "success" }
 	| { kind: "error"; message: string };
 
+/** The server an MCP sign-in is for and the workspace it started in; none when no workspace was open. */
+export interface McpLoginTarget {
+	kind: "mcp";
+	workspaceId?: string;
+	serverName: string;
+}
+
 export interface LoginPush {
 	loginId: string;
 	providerId: string;
 	frame: LoginFrame;
 	/** Present for MCP server sign-ins; such pushes reach only the connection that started the login. */
-	target?: { kind: "mcp"; workspaceId: string; serverName: string };
+	target?: McpLoginTarget;
 }
 
 export interface LoginReply {

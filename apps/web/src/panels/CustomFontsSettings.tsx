@@ -10,6 +10,7 @@ import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { useRef, useState } from "react";
 import { namedFamilies } from "@/fonts";
+import { SettingsGroup, SettingsNotice } from "@/settingsKit";
 import { useAppStore } from "@/store";
 import { uploadUserFont } from "@/transport";
 import { FamilyName, FontBadge } from "./FontPicker";
@@ -22,8 +23,7 @@ import {
 	SettingsFolderRow,
 	useFolderActions,
 } from "./SettingsFolder";
-import { SettingsGroup } from "./SettingsGroup";
-import { SettingsNotice } from "./SettingsNotice";
+import { SETTING, settingProps } from "./settingsCatalog";
 
 type UploadOutcome = UserFontFile | { fileName: string; ok: false; error: "upload-failed" };
 
@@ -78,7 +78,8 @@ export function CustomFontsView({
 	const t = useT();
 	const input = useRef<HTMLInputElement>(null);
 	const [dragging, setDragging] = useState(false);
-	const families = customFamilies(snapshot);
+	const families = [...customFamilies(snapshot)];
+	const empty = families.length === 0;
 	const issues = fileIssues(t, snapshot.files);
 	const added = [
 		...new Set(outcomes.flatMap((outcome) => (outcome.ok ? [outcome.face.family] : []))),
@@ -93,7 +94,10 @@ export function CustomFontsView({
 			<section
 				aria-label={t("settings.appearance.customFonts.drop")}
 				data-testid="custom-fonts-drop"
+				data-setting-row={SETTING.customFonts.id}
+				data-setting-id={SETTING.customFonts.id}
 				data-dragging={dragging}
+				data-empty={empty || undefined}
 				onDragOver={(event) => {
 					event.preventDefault();
 					setDragging(true);
@@ -104,19 +108,27 @@ export function CustomFontsView({
 					setDragging(false);
 					onFiles([...event.dataTransfer.files]);
 				}}
-				className="mb-12 flex flex-col items-center gap-8 rounded-md border border-border-default border-dashed px-16 py-16 text-center transition-colors data-[dragging=true]:border-primary data-[dragging=true]:bg-primary-subtle"
+				className="my-12 flex flex-wrap items-center gap-12 rounded-md border border-border-default border-dashed px-16 py-12 transition-colors data-[dragging=true]:border-primary data-[dragging=true]:bg-primary-subtle"
 			>
-				<Upload className="size-20 text-text-muted" aria-hidden="true" />
-				<span className="tr-text-ui text-text-default">
-					{t("settings.appearance.customFonts.drop")}
-				</span>
-				<span className="text-text-muted tr-text-metadata">
-					{t("settings.appearance.customFonts.dropHint")}
-				</span>
+				<Upload className="size-20 shrink-0 text-text-muted" aria-hidden="true" />
+				<div className="flex min-w-160 flex-1 flex-col gap-2">
+					<span className="tr-text-ui text-text-default">
+						{empty
+							? t("settings.appearance.customFonts.empty")
+							: t("settings.appearance.customFonts.drop")}
+					</span>
+					<span className="text-text-muted tr-text-metadata">
+						{empty
+							? t("settings.appearance.customFonts.emptyHint")
+							: t("settings.appearance.customFonts.dropHint")}
+					</span>
+				</div>
 				<Button
 					variant="outline"
 					size="m"
-					loading={busy}
+					tabIndex={0}
+					aria-busy={busy || undefined}
+					data-setting-stop=""
 					data-testid="custom-fonts-choose"
 					onClick={() => input.current?.click()}
 				>
@@ -149,37 +161,42 @@ export function CustomFontsView({
 					<SettingsFileIssue key={issue.fileName} issue={issue} testIdPrefix="custom-font-issue" />
 				))}
 			</div>
-			{[...families].map(([family, entry]) => (
-				<div
-					key={family}
-					data-testid="custom-font-family"
-					data-font-family={family}
-					className="flex items-center gap-8 border-border-muted border-b py-8"
-				>
-					<div className="flex min-w-0 flex-1 flex-col gap-2">
-						<FamilyName
-							family={family}
-							role={entry.monospace ? "code" : "interface"}
-							className="truncate text-text-default"
+			{empty ? null : (
+				<ul aria-label={t("settings.appearance.customFonts.title")} className="flex flex-col">
+					{families.map(([family, entry]) => (
+						<li
+							key={family}
+							data-testid="custom-font-family"
+							data-font-family={family}
+							className="flex items-center gap-8 border-border-muted border-b py-8"
 						>
-							{family}
-						</FamilyName>
-						<span className="truncate text-text-muted tr-code-text">{entry.files.join(", ")}</span>
-					</div>
-					{entry.monospace ? (
-						<FontBadge>{t("settings.appearance.fonts.picker.mono")}</FontBadge>
-					) : null}
-					{inUse.has(family) ? (
-						<FontBadge>{t("settings.appearance.customFonts.inUse")}</FontBadge>
-					) : null}
-				</div>
-			))}
+							<div className="flex min-w-0 flex-1 flex-col gap-2">
+								<FamilyName
+									family={family}
+									role={entry.monospace ? "code" : "interface"}
+									className="break-words text-text-default"
+								>
+									{family}
+								</FamilyName>
+								<span className="break-all text-text-muted tr-code-text">
+									{entry.files.join(", ")}
+								</span>
+							</div>
+							{entry.monospace ? (
+								<FontBadge>{t("settings.appearance.fonts.picker.mono")}</FontBadge>
+							) : null}
+							{inUse.has(family) ? (
+								<FontBadge>{t("settings.appearance.customFonts.inUse")}</FontBadge>
+							) : null}
+						</li>
+					))}
+				</ul>
+			)}
 			<SettingsFolderRow
-				label={t("settings.appearance.customFonts.folder")}
+				{...settingProps(t, SETTING.fontsFolder)}
 				folder={snapshot.dir}
 				hint={t("settings.appearance.customFonts.removeHint")}
 				testIdPrefix="custom-fonts"
-				noBorder={issues.length === 0}
 				onCopyFolder={onCopyFolder}
 				onRevealFolder={onRevealFolder}
 			/>

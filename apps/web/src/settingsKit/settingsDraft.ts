@@ -11,12 +11,29 @@ import {
 export const SETTINGS_INPUT =
 	"h-32 rounded-sm border border-control-border-default bg-control-bg px-8 tr-text-ui text-text-default placeholder:text-text-subtle focus:border-control-border-active focus-visible:focus-ring disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text aria-invalid:border-feedback-error";
 
-export function keepSettingsDraftOnEscape(event: { preventDefault: () => void }): void {
-	if (
-		document.activeElement instanceof HTMLElement &&
-		document.activeElement.hasAttribute("data-settings-draft-input")
-	)
-		event.preventDefault();
+export interface DraftEscape {
+	readonly next: string;
+	readonly reverted: boolean;
+}
+
+export function escapeDraft(draft: string, authoritative: string): DraftEscape {
+	return draft === authoritative
+		? { next: draft, reverted: false }
+		: { next: authoritative, reverted: true };
+}
+
+export function shouldCommitDraft({
+	draft,
+	invalid,
+	submitted,
+	authoritative,
+}: {
+	draft: string;
+	invalid: boolean;
+	submitted: string | null;
+	authoritative: string;
+}): boolean {
+	return !invalid && draft !== submitted && draft !== authoritative;
 }
 
 export interface SettingsDraftOptions {
@@ -30,13 +47,13 @@ export interface SettingsDraftOptions {
 export interface SettingsDraft {
 	draft: string;
 	invalid: boolean;
+	dirty: boolean;
 	setDraft: (next: string) => void;
 	submit: (next: string) => void;
 	commitDraft: () => void;
 	inputProps: {
 		value: string;
 		"aria-invalid": boolean;
-		"data-settings-draft-input": true;
 		onChange: (event: ChangeEvent<HTMLInputElement>) => void;
 		onBlur: () => void;
 		onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
@@ -67,6 +84,7 @@ export function useSettingsDraft({
 	}, [saved]);
 	const invalid = !isValid(draft);
 
+	const authoritative = () => pendingRef.current.at(-1)?.value ?? savedRef.current;
 	const setDraft = (next: string) => {
 		editingRef.current = true;
 		submittedRef.current = null;
@@ -87,26 +105,30 @@ export function useSettingsDraft({
 			if (index >= 0) pending.splice(index, 1);
 			if (ok || submittedRef.current !== next) return;
 			submittedRef.current = null;
-			if (!editingRef.current) setDraftState(pending.at(-1)?.value ?? savedRef.current);
+			if (!editingRef.current) setDraftState(authoritative());
 		});
 	};
 	const commitDraft = () => {
 		editingRef.current = false;
-		if (invalid || draft === submittedRef.current) return;
-		if (draft === (pendingRef.current.at(-1)?.value ?? saved)) return;
-		submit(draft);
+		const go = shouldCommitDraft({
+			draft,
+			invalid,
+			submitted: submittedRef.current,
+			authoritative: authoritative(),
+		});
+		if (go) submit(draft);
 	};
 
 	return {
 		draft,
 		invalid,
+		dirty: draft !== saved,
 		setDraft,
 		submit,
 		commitDraft,
 		inputProps: {
 			value: draft,
 			"aria-invalid": invalid,
-			"data-settings-draft-input": true,
 			onChange: (event) => setDraft(event.currentTarget.value),
 			onBlur: commitDraft,
 			onKeyDown: (event) => {
@@ -115,11 +137,15 @@ export function useSettingsDraft({
 					event.preventDefault();
 					if (enterBlurs) event.currentTarget.blur();
 					else commitDraft();
-				} else if (event.key === "Escape") {
-					editingRef.current = false;
-					setDraftState(pendingRef.current.at(-1)?.value ?? saved);
-					onEdit?.();
+					return;
 				}
+				if (event.key !== "Escape") return;
+				const step = escapeDraft(draft, authoritative());
+				if (!step.reverted) return;
+				event.preventDefault();
+				editingRef.current = false;
+				setDraftState(step.next);
+				onEdit?.();
 			},
 		},
 	};

@@ -12,9 +12,14 @@ import {
 import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import { EXTENSION_API_VERSION, extensionApiFit, type WebExtensionLoadResult } from "@/extensions";
-import { CHIP_CLASS } from "./PiPackagesSettings";
-import { SETTINGS_TAG } from "./SettingsGroup";
-import { SettingsNotice } from "./SettingsNotice";
+import {
+	SETTINGS_LIST_PRIMARY,
+	SETTINGS_TAG,
+	SettingsNotice,
+	useSettingsListRow,
+} from "@/settingsKit";
+import { CHIP_CLASS, menuControl, type RowMenuControl } from "./PiPackagesSettings";
+import { installedExtensionSettingId } from "./settingsSearch";
 
 export type InstalledExtensionAction =
 	| { kind: "toggle"; entry: ExtensionCatalogEntry; enabled: boolean }
@@ -38,13 +43,20 @@ export function installedExtensionKey(
 	return `extension\0${entry.source ?? entry.name}`;
 }
 
+/** The Installed list's row id of an extension; a pi package row's id starts with its scope instead. */
+export function installedExtensionRowId(
+	entry: Pick<ExtensionCatalogEntry, "source" | "name">,
+): string {
+	return `extension:${entry.source ?? entry.name}`;
+}
+
 const SOURCE_KIND_LABEL: Record<ExtensionSourceKind, MessageKey> = {
 	npm: "settings.packages.kind.npm",
 	git: "settings.packages.kind.git",
 	local: "settings.packages.kind.local",
 };
 
-export interface InstalledExtensionRowProps {
+export interface InstalledExtensionRowProps extends RowMenuControl {
 	entry: ExtensionCatalogEntry;
 	enabled: boolean;
 	settings: ExtensionSettingValues[string] | undefined;
@@ -89,9 +101,12 @@ export function InstalledExtensionRow({
 	updateAvailable,
 	busy,
 	error,
+	menuOpen,
+	onMenuOpenChange,
 	onAction,
 }: InstalledExtensionRowProps) {
 	const t = useT();
+	const { rowProps, primaryProps, sideProps } = useSettingsListRow(installedExtensionRowId(entry));
 	const state = entry.state ?? "loaded";
 	const runs = state === "loaded";
 	const off = runs && !enabled;
@@ -99,196 +114,203 @@ export function InstalledExtensionRow({
 	const sourceKind = extensionSourceKind(source);
 	const hasCards = runs && entry.web !== undefined;
 	const webFailed = hasCards && webLoad?.status === "failed" ? webLoad : undefined;
-	const titleClass = off || !runs ? "text-text-muted" : "text-text-default";
+	const dim = off || !runs;
 	return (
 		<li
+			{...rowProps}
 			data-testid="installed-extension-row"
+			data-setting-id={installedExtensionSettingId(entry.name)}
 			data-name={entry.name}
 			data-state={state}
 			data-enabled={enabled ? "true" : "false"}
-			className="flex items-start gap-8 px-12 py-8"
+			className="flex flex-col gap-4 border-border-muted border-b py-6 last:border-b-0"
 		>
-			<span className="w-16 shrink-0" />
-			<div className="flex min-w-0 flex-1 flex-col gap-4">
-				<div className="flex min-w-0 flex-wrap items-center gap-x-8 gap-y-4">
-					<span className={cn("min-w-0 truncate tr-title-compact", titleClass)} title={entry.name}>
-						{entry.title}
-					</span>
-					<span
-						data-testid="installed-extension-kind"
-						className={cn(SETTINGS_TAG, "border-primary-muted text-primary")}
-					>
-						{t("settings.installedExtensions.kind")}
-					</span>
-					<span className={cn(SETTINGS_TAG, "text-text-muted")}>
-						{t(SOURCE_KIND_LABEL[sourceKind])}
-					</span>
-					{state === "failed" ? (
-						<span
-							data-testid="installed-extension-failed-tag"
-							className={cn(SETTINGS_TAG, "border-feedback-error text-feedback-error")}
-						>
-							{t("settings.installedExtensions.failedTag")}
-						</span>
-					) : null}
-					{state === "incompatible" ? (
-						<span
-							data-testid="installed-extension-incompatible-tag"
-							className={cn(SETTINGS_TAG, "border-feedback-warning text-feedback-warning")}
-						>
-							{t("settings.installedExtensions.incompatibleTag")}
-						</span>
-					) : null}
-					{updateAvailable ? (
-						<span
-							data-testid="installed-extension-update-available"
-							className={cn(SETTINGS_TAG, "border-feedback-warning text-feedback-warning")}
-						>
-							{t("settings.packages.updateAvailable")}
-						</span>
-					) : null}
-				</div>
-				<span
-					className={cn(
-						"truncate tr-text-metadata",
-						off || !runs ? "text-text-subtle" : "text-text-muted",
-					)}
-					title={source}
+			<div className="flex flex-wrap items-center gap-8">
+				<button
+					type="button"
+					{...primaryProps}
+					aria-haspopup="menu"
+					className={cn(SETTINGS_LIST_PRIMARY, "min-w-[12rem]")}
+					onClick={() => onMenuOpenChange?.(true)}
 				>
-					{[
-						entry.name,
-						source === entry.name ? null : source,
-						entry.version ? t("settings.packages.installed", { version: entry.version }) : null,
-						entry.description ?? null,
-					]
-						.filter((part): part is string => part !== null)
-						.join(" · ")}
-				</span>
-				{runs && (entry.tools.length > 0 || hasCards) ? (
-					<span className="flex flex-wrap gap-4" data-testid="installed-extension-brings">
-						{entry.tools.map((tool) => (
-							<code
-								key={tool}
-								data-testid={`installed-extension-tool-${tool}`}
-								className={cn("tr-code-text-small", CHIP_CLASS, off && "text-text-subtle")}
-							>
-								{tool}
-							</code>
-						))}
-						{hasCards ? (
+					<span className="flex min-w-0 max-w-full flex-wrap items-center gap-x-8 gap-y-4">
+						<span
+							className={cn(
+								"wrap-anywhere tr-title-compact",
+								dim ? "text-text-muted" : "text-text-default",
+							)}
+						>
+							{entry.title}
+						</span>
+						<span
+							data-testid="installed-extension-kind"
+							className={cn(SETTINGS_TAG, "border-primary-muted text-primary")}
+						>
+							{t("settings.installedExtensions.kind")}
+						</span>
+						<span className={cn(SETTINGS_TAG, "text-text-muted")}>
+							{t(SOURCE_KIND_LABEL[sourceKind])}
+						</span>
+						{state === "failed" ? (
 							<span
-								data-testid="installed-extension-cards"
-								className={cn("tr-text-metadata", CHIP_CLASS, off && "text-text-subtle")}
+								data-testid="installed-extension-failed-tag"
+								className={cn(SETTINGS_TAG, "border-feedback-error text-feedback-error")}
 							>
-								{t("settings.installedExtensions.chatCards")}
+								{t("settings.installedExtensions.failedTag")}
+							</span>
+						) : null}
+						{state === "incompatible" ? (
+							<span
+								data-testid="installed-extension-incompatible-tag"
+								className={cn(SETTINGS_TAG, "border-feedback-warning text-feedback-warning")}
+							>
+								{t("settings.installedExtensions.incompatibleTag")}
+							</span>
+						) : null}
+						{updateAvailable ? (
+							<span
+								data-testid="installed-extension-update-available"
+								className={cn(SETTINGS_TAG, "border-feedback-warning text-feedback-warning")}
+							>
+								{t("settings.packages.updateAvailable")}
 							</span>
 						) : null}
 					</span>
-				) : null}
-				{state === "failed" ? (
-					<SettingsNotice variant="error" testId="installed-extension-error" className="mt-4">
-						<span className="flex flex-col gap-2 break-words">
-							<span>{entry.error}</span>
-							<span className="text-text-muted">
-								{t("settings.installedExtensions.failedHint")}
-							</span>
-						</span>
-					</SettingsNotice>
-				) : null}
-				{state === "incompatible" ? <IncompatibleNotice entry={entry} /> : null}
-				{webFailed ? (
-					<SettingsNotice
-						variant="warning"
-						testId="installed-extension-web-failed"
-						className="mt-4"
+					<span
+						className={cn(
+							"wrap-anywhere tr-text-metadata",
+							dim ? "text-text-subtle" : "text-text-muted",
+						)}
 					>
-						<span className="break-words">
-							{t("settings.installedExtensions.webFailed", { error: webFailed.message })}
-						</span>
-					</SettingsNotice>
-				) : null}
-				{runs && settingsSupported
-					? (entry.settings ?? []).map((setting) => {
-							const title = setting.title ?? setting.key;
-							return (
-								<div
-									key={setting.key}
-									data-testid={`extension-setting-${entry.name}-${setting.key}`}
-									className="flex items-start justify-between gap-12 border-border-default border-l-2 pl-12"
+						{[
+							entry.name,
+							source === entry.name ? null : source,
+							entry.version ? t("settings.packages.installed", { version: entry.version }) : null,
+							entry.description ?? null,
+						]
+							.filter((part): part is string => part !== null)
+							.join(" · ")}
+					</span>
+					{runs && (entry.tools.length > 0 || hasCards) ? (
+						<span className="flex flex-wrap gap-4" data-testid="installed-extension-brings">
+							{entry.tools.map((tool) => (
+								<code
+									key={tool}
+									data-testid={`installed-extension-tool-${tool}`}
+									className={cn("tr-code-text-small", CHIP_CLASS, off && "text-text-subtle")}
 								>
-									<div className="flex min-w-0 flex-col gap-2">
-										<span
-											className={
-												enabled ? "tr-text-ui text-text-default" : "tr-text-ui text-text-disabled"
-											}
-										>
-											{title}
-										</span>
-										{setting.description ? (
-											<span className="text-text-muted tr-text-metadata">
-												{setting.description}
-											</span>
-										) : null}
-									</div>
-									<Switch
-										checked={settings?.[setting.key] ?? setting.default}
-										disabled={!enabled || busy}
-										label={title}
-										testId={`extension-setting-toggle-${entry.name}-${setting.key}`}
-										onCheckedChange={(value) =>
-											onAction({ kind: "setting", entry, key: setting.key, value })
-										}
-									/>
-								</div>
-							);
-						})
-					: null}
-				{error ? (
-					<SettingsNotice
-						variant="error"
-						testId="installed-extension-action-error"
-						className="mt-4"
-					>
-						<span className="break-words">{error}</span>
-					</SettingsNotice>
-				) : null}
-			</div>
-			<div className="flex shrink-0 items-center gap-8 pt-2">
-				{runs ? (
-					<Switch
-						checked={enabled}
-						disabled={busy}
-						label={t("settings.extensions.enable", { title: entry.title })}
-						testId={`extension-toggle-${entry.name}`}
-						onCheckedChange={(next) => onAction({ kind: "toggle", entry, enabled: next })}
-					/>
-				) : null}
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<IconButton
-							icon={MoreVertical}
-							label={t("settings.packages.more", { name: entry.title })}
-							data-testid="installed-extension-menu"
+									{tool}
+								</code>
+							))}
+							{hasCards ? (
+								<span
+									data-testid="installed-extension-cards"
+									className={cn("tr-text-metadata", CHIP_CLASS, off && "text-text-subtle")}
+								>
+									{t("settings.installedExtensions.chatCards")}
+								</span>
+							) : null}
+						</span>
+					) : null}
+				</button>
+				<div className="ml-auto flex shrink-0 items-center gap-8">
+					{runs ? (
+						<Switch
+							checked={enabled}
+							label={t("settings.extensions.enable", { title: entry.title })}
+							testId={`extension-toggle-${entry.name}`}
+							{...sideProps}
+							onCheckedChange={(next) => onAction({ kind: "toggle", entry, enabled: next })}
 						/>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end">
-						<DropdownMenuItem
-							data-testid="installed-extension-menu-update"
-							disabled={busy}
-							onSelect={() => onAction({ kind: "update", entry })}
-						>
-							{t("settings.packages.update")}
-						</DropdownMenuItem>
-						<DropdownMenuItem
-							data-testid="installed-extension-menu-remove"
-							disabled={busy}
-							onSelect={() => onAction({ kind: "remove", entry })}
-						>
-							{t("settings.packages.remove")}
-						</DropdownMenuItem>
-					</DropdownMenuContent>
-				</DropdownMenu>
+					) : null}
+					<DropdownMenu {...menuControl({ menuOpen, onMenuOpenChange })}>
+						<DropdownMenuTrigger asChild>
+							<IconButton
+								icon={MoreVertical}
+								label={t("settings.packages.more", { name: entry.title })}
+								{...sideProps}
+								data-testid="installed-extension-menu"
+							/>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end">
+							<DropdownMenuItem
+								data-testid="installed-extension-menu-update"
+								disabled={busy}
+								onSelect={() => onAction({ kind: "update", entry })}
+							>
+								{t("settings.packages.update")}
+							</DropdownMenuItem>
+							<DropdownMenuItem
+								data-testid="installed-extension-menu-remove"
+								disabled={busy}
+								onSelect={() => onAction({ kind: "remove", entry })}
+							>
+								{t("settings.packages.remove")}
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
+				</div>
 			</div>
+			{state === "failed" ? (
+				<SettingsNotice variant="error" testId="installed-extension-error" className="mt-4">
+					<span className="flex flex-col gap-2 break-words">
+						<span>{entry.error}</span>
+						<span className="text-text-muted">{t("settings.installedExtensions.failedHint")}</span>
+					</span>
+				</SettingsNotice>
+			) : null}
+			{state === "incompatible" ? <IncompatibleNotice entry={entry} /> : null}
+			{webFailed ? (
+				<SettingsNotice variant="warning" testId="installed-extension-web-failed" className="mt-4">
+					<span className="break-words">
+						{t("settings.installedExtensions.webFailed", { error: webFailed.message })}
+					</span>
+				</SettingsNotice>
+			) : null}
+			{runs && settingsSupported
+				? (entry.settings ?? []).map((setting) => {
+						const title = setting.title ?? setting.key;
+						return (
+							<div
+								key={setting.key}
+								data-testid={`extension-setting-${entry.name}-${setting.key}`}
+								data-setting-id={installedExtensionSettingId(entry.name, setting.key)}
+								className="ml-24 flex items-center justify-between gap-12 border-border-default border-l-2 py-2 pl-12"
+							>
+								<span className="flex min-w-0 flex-col gap-2">
+									<span
+										className={cn(
+											"wrap-anywhere tr-text-ui",
+											enabled ? "text-text-default" : "text-text-disabled",
+										)}
+									>
+										{title}
+									</span>
+									{setting.description ? (
+										<span className="wrap-anywhere text-text-muted tr-text-metadata">
+											{setting.description}
+										</span>
+									) : null}
+								</span>
+								<Switch
+									checked={settings?.[setting.key] ?? setting.default}
+									disabled={!enabled}
+									label={title}
+									testId={`extension-setting-toggle-${entry.name}-${setting.key}`}
+									{...sideProps}
+									onCheckedChange={(value) =>
+										onAction({ kind: "setting", entry, key: setting.key, value })
+									}
+								/>
+							</div>
+						);
+					})
+				: null}
+			{error ? (
+				<SettingsNotice variant="error" testId="installed-extension-action-error" className="mt-4">
+					<span className="break-words">{error}</span>
+				</SettingsNotice>
+			) : null}
 		</li>
 	);
 }

@@ -9,7 +9,7 @@ This guide walks through a real extension, **Palette**: the npm package
 `@thinkrail/example-extension-palette`. Its source is in
 [`extension-examples/palette`](https://github.com/JetBrains/thinkrail/tree/main/extension-examples/palette)
 in the ThinkRail repository. It is published to npm and installable like any other extension: paste
-`npm:@thinkrail/example-extension-palette` into **Settings → Extensions → Install package…**.
+`npm:@thinkrail/example-extension-palette` into **Settings → Extensions & skills → Install package…**.
 
 Palette gives the agent one tool, `color_palette`, which builds five colours from a base hex colour and
 a colour harmony. In chat, each call is shown as a card of swatches with copy buttons. One setting,
@@ -215,10 +215,10 @@ What it does:
 
 - `name` is the package name. ThinkRail refuses to load a server half whose descriptor has any other
   name.
-- `title` and `description` are what Settings → Extensions shows when the manifest has no `title` or the
+- `title` and `description` are what Settings → Extensions & skills shows when the manifest has no `title` or the
   package no `description`; the manifest and the package fields win.
 - `settings` declares the boolean `contrast`, with its own `title` and `description`: your text is not
-  part of the app's translation files. Settings → Extensions shows it under the extension's switch.
+  part of the app's translation files. Settings → Extensions & skills shows it under the extension's switch.
 - `sessionExtensions(session)` returns pi extension factories built for one chat from the services
   ThinkRail gives that chat. `session.setting("contrast")` reads the setting by the key you declared.
   Read a setting inside the factory, as `paletteTool` does: a changed value reaches an open chat when its
@@ -433,7 +433,7 @@ The other options (`--entry`, `--css`, `--cwd`, `--no-minify`) are in the
 Install the folder you are working in before publishing anything:
 
 1. Run the build.
-2. In ThinkRail, open **Settings → Extensions → Install package…**, paste the absolute path of the
+2. In ThinkRail, open **Settings → Extensions & skills → Install package…**, paste the absolute path of the
    folder, for example `/Users/jane/code/palette`, keep **Global** selected and click
    **Install palette**. An extension is always installed for you and is on in every project: if
    **This repository only** is selected, the dialog says the extension installs for you only and
@@ -485,7 +485,7 @@ Anyone can then install it by pasting `npm:` and the package name into **Install
 
 ## Getting listed
 
-The [extensions page](/extensions/) and the Browse list in Settings → Extensions read one catalog,
+The [extensions page](/extensions/) and the Browse list in Settings → Extensions & skills read one catalog,
 `https://thinkrail.ai/extensions/catalog.json`. The site rebuilds it from npm every hour, so a new
 package or version appears within about an hour of publishing. There is no submission and no review:
 every npm package whose **latest** version has the `thinkrail-extension` keyword and a valid
@@ -493,7 +493,7 @@ every npm package whose **latest** version has the `thinkrail-extension` keyword
 installed from a git URL or a folder works the same once installed, but only npm packages are listed.
 
 Users find a listed extension in two places. On the extensions page, each card's Copy button gives the
-`npm:<name>` source to paste into **Install package…**. In the app, **Settings → Extensions → Browse**
+`npm:<name>` source to paste into **Install package…**. In the app, **Settings → Extensions & skills → Browse**
 lists the same catalog with a search and an **Install** button that opens the install dialog for that
 package. A listing built for a newer extension API than the user's ThinkRail is marked **Needs a newer
 ThinkRail** and has no Install button until they update ThinkRail; one built for an older major is
@@ -525,7 +525,7 @@ its own and the minor part is not newer than its own. A ThinkRail that supports 
 built for `1.0`, `1.1` and `1.2`; it does not load `1.3` or `2.0`.
 
 On a mismatch the extension stays installed and is not loaded: neither half runs, and its row in
-Settings → Extensions says which API it was built for and which one this ThinkRail supports. An
+Settings → Extensions & skills says which API it was built for and which one this ThinkRail supports. An
 extension built for a newer minor loads after the user updates ThinkRail; one built for another major
 needs a new release built with the matching SDK. ThinkRail decides this from the manifest before any of
 the extension's code runs, and the built web half checks the API major again when it loads.

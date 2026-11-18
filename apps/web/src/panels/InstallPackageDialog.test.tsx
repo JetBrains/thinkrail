@@ -247,7 +247,7 @@ test("a pasted `pi install -l …` line selects the repository scope when it is 
 		);
 	source = "pi install -l npm:@acme/pi-jira";
 	if (parsePiPackageInput(source).local) scope = "project";
-	expect(render()).toContain('data-testid="install-package-scope-project" data-active="true"');
+	expect(render()).toMatch(/data-active="true"[^>]*data-testid="install-package-scope-project"/);
 	expect(render()).toContain("npm · @acme/pi-jira");
 });
 

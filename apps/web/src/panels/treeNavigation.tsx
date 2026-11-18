@@ -16,7 +16,7 @@ import {
 	useSyncExternalStore,
 } from "react";
 import { LOCAL_KEY_DEFAULTS } from "../keybindings";
-import { resolveTreeMove, type TreeMoveRow } from "../lib";
+import { resolveTreeMove, type TreeMove, type TreeMoveRow } from "../lib";
 
 const TREE = '[role="tree"]';
 const TREE_ITEM = '[role="treeitem"]';
@@ -81,6 +81,16 @@ export function treeSearchStep(
 			? (matches.find((each) => each > index) ?? matches[0])
 			: (matches.findLast((each) => each < (index === -1 ? rows.length : index)) ?? matches.at(-1));
 	return at === undefined ? null : (rows[at]?.id ?? null);
+}
+
+export function treeKeyMove(
+	key: string | null,
+	rows: readonly TreeMoveRow[],
+	index: number,
+	leaveAtEdges: boolean,
+): TreeMove | "leave" | null {
+	const move = key === null ? null : resolveTreeMove(key, rows, index);
+	return leaveAtEdges && move?.kind === "stay" ? "leave" : move;
 }
 
 export function useTreeKeys(): LocalKeys {
@@ -306,6 +316,7 @@ export function Tree({
 	focusList,
 	className,
 	focusDefault = true,
+	leaveAtEdges = false,
 	onOpenKept,
 	children,
 }: {
@@ -313,6 +324,7 @@ export function Tree({
 	focusList: string;
 	className: string;
 	focusDefault?: boolean;
+	leaveAtEdges?: boolean;
 	onOpenKept?: (id: string) => void;
 	children: ReactNode;
 }) {
@@ -408,7 +420,8 @@ export function Tree({
 		const items = treeItems(container);
 		const index = items.indexOf(item);
 		const key = twin ?? (event.shiftKey ? null : event.key);
-		const move = key === null ? null : resolveTreeMove(key, items.map(rowModel), index);
+		const move = treeKeyMove(key, items.map(rowModel), index, leaveAtEdges);
+		if (move === "leave") return;
 		if (move) {
 			event.preventDefault();
 			if (move.kind === "focus") items[move.index]?.focus();

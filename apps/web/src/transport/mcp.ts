@@ -1,4 +1,8 @@
-import type { McpListResult, WsParams } from "@thinkrail/contracts";
+import {
+	MCP_USER_SERVERS_PROTOCOL_VERSION,
+	type McpListResult,
+	type WsParams,
+} from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { selectMcpRead, selectMcpWorkspaceStarting, useAppStore } from "../store";
 import { getTransport } from "./wireTransport";
@@ -15,35 +19,80 @@ export type McpListMethod =
 
 export const MCP_STARTING_POLL_MS: readonly number[] = [1_000, 2_000, 3_000, 5_000, 8_000, 13_000];
 
-const listTails = new Map<
-	string,
-	{ connectionGeneration: number; method: McpListMethod; request: Promise<McpListResult> }
->();
+export type UserMcpListMethod =
+	| "mcp.list"
+	| "mcp.add"
+	| "mcp.update"
+	| "mcp.remove"
+	| "mcp.setUserServer";
+
+interface ListTail {
+	connectionGeneration: number;
+	method: McpListMethod | UserMcpListMethod;
+	request: Promise<McpListResult>;
+}
+
+const listTails = new Map<string, ListTail>();
+const userListTails = new Map<"user", ListTail>();
+
+function enqueueList<K extends string>(
+	tails: Map<K, ListTail>,
+	key: K,
+	connectionGeneration: number,
+	method: ListTail["method"],
+	dispatch: () => Promise<McpListResult>,
+): Promise<McpListResult> {
+	const tail = tails.get(key);
+	const pending = tail?.connectionGeneration === connectionGeneration ? tail : undefined;
+	if (method === "mcp.list" && pending?.method === "mcp.list") return pending.request;
+	const request = (pending ? pending.request.then(dispatch, dispatch) : dispatch()).finally(() => {
+		if (tails.get(key)?.request === request) tails.delete(key);
+	});
+	tails.set(key, { connectionGeneration, method, request });
+	return request;
+}
 
 export function requestMcpList<M extends McpListMethod>(
 	method: M,
 	params: WsParams<M>,
 ): Promise<McpListResult> {
-	const { workspaceId } = params;
-	const scope = selectMcpRead(useAppStore.getState(), workspaceId);
+	const scope =
+		params.workspaceId === undefined
+			? null
+			: selectMcpRead(useAppStore.getState(), params.workspaceId);
 	if (!scope) return Promise.reject(new Error(t("app.transport.mcpUnavailable")));
-	const { connectionGeneration } = scope;
-	const tail = listTails.get(workspaceId);
-	const pending = tail?.connectionGeneration === connectionGeneration ? tail : undefined;
-	if (method === "mcp.list" && pending?.method === "mcp.list") return pending.request;
-	const dispatch = async (): Promise<McpListResult> => {
+	const { workspaceId, connectionGeneration } = scope;
+	return enqueueList(listTails, workspaceId, connectionGeneration, method, async () => {
 		const read = selectMcpRead(useAppStore.getState(), workspaceId);
 		if (!read || read.connectionGeneration !== connectionGeneration)
 			throw new Error(t("app.transport.mcpUnavailable"));
 		const result = await getTransport().request(method, params);
 		useAppStore.getState().installMcpList(read, result);
 		return result;
-	};
-	const request = (pending ? pending.request.then(dispatch, dispatch) : dispatch()).finally(() => {
-		if (listTails.get(workspaceId)?.request === request) listTails.delete(workspaceId);
 	});
-	listTails.set(workspaceId, { connectionGeneration, method, request });
-	return request;
+}
+
+export function supportsUserMcp(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= MCP_USER_SERVERS_PROTOCOL_VERSION;
+}
+
+function userMcpGeneration(): number | null {
+	const { status, protocolVersion, connectionGeneration } = useAppStore.getState();
+	return status === "connected" && supportsUserMcp(protocolVersion) ? connectionGeneration : null;
+}
+
+export function requestUserMcpList<M extends UserMcpListMethod>(
+	method: M,
+	params: WsParams<M> & { workspaceId?: never },
+): Promise<McpListResult> {
+	const connectionGeneration = userMcpGeneration();
+	if (connectionGeneration === null)
+		return Promise.reject(new Error(t("app.transport.mcpUnavailable")));
+	return enqueueList(userListTails, "user", connectionGeneration, method, async () => {
+		if (userMcpGeneration() !== connectionGeneration)
+			throw new Error(t("app.transport.mcpUnavailable"));
+		return getTransport().request(method, params);
+	});
 }
 
 export interface McpWatchDeps {

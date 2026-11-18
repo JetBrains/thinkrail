@@ -175,9 +175,10 @@ restart and toggle-reload regressions on upgrades.
   On upgrades, re-diff the interactive check and its call sites, and run
   `agent/anthropicExtraUsage.test.ts`.
 - **pi package management** — [[submodule-server-agent-packages]], [[submodule-server-agent]]. The
-  Settings → Extensions package catalog and mutations build on pi's public `DefaultPackageManager`
-  (`resolve(onMissing)`, `install`, `remove`, `update`, `checkForAvailableUpdates`,
-  `listConfiguredPackages`, `addSourceToSettings` / `removeSourceFromSettings`) and `SettingsManager`
+  Settings → Extensions & skills package catalog and mutations build on pi's public
+  `DefaultPackageManager` (`resolve(onMissing)`, `install`, `remove`, `update`,
+  `checkForAvailableUpdates`, `listConfiguredPackages`, `addSourceToSettings` /
+  `removeSourceFromSettings`) and `SettingsManager`
   (`setPackages` / `set*Paths`, `flush`, `drainErrors`, `inMemory`). Eight pi facts the host compensates
   for, each with its gate:
   - `resolve()` without `onMissing` installs a declared-but-missing package, and

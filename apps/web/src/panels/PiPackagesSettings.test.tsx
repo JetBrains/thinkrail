@@ -173,10 +173,12 @@ test("the group shows the host's enabled state and the update-check result", () 
 test("empty, loading, failed and untrusted states", () => {
 	const empty = renderGroup({ ...CATALOG, packages: [], loose: [] });
 	expect(empty).toContain('data-testid="packages-empty"');
-	expect(empty).toContain('data-testid="packages-gallery-link"');
+	expect(empty).toContain('data-setting-id="installed-packages"');
 	expect(empty).not.toContain("packages-empty-install");
 	expect(renderGroup("loading")).not.toContain("package-row");
 	expect(renderGroup("failed")).toContain('data-testid="packages-failed"');
+	expect(renderGroup("failed")).not.toContain("packages-retry");
+	expect(renderGroup("failed", { onRetry: noop })).toContain('data-testid="packages-retry"');
 	const untrusted = renderGroup({
 		...CATALOG,
 		projectSettingsPath: "/repo/.pi/settings.json",
@@ -276,17 +278,37 @@ test("a declared package missing on disk is a Not installed row with Remove only
 });
 
 test("installed extension rows sit first in the Installed list and outlast a failed package list", () => {
-	const row = <li key="ext" data-testid="installed-extension-row" />;
+	const row = {
+		id: "extension:/ext",
+		render: () => <li key="ext" data-testid="installed-extension-row" />,
+	};
 	const empty = renderGroup({ ...CATALOG, packages: [], loose: [] }, { extensionRows: [row] });
 	expect(empty).toContain('data-testid="installed-extension-row"');
 	expect(empty).not.toContain('data-testid="packages-empty"');
+	expect(empty).toContain('data-setting-id="installed-packages"');
 	const mixed = renderGroup(CATALOG, { extensionRows: [row], extraUpdates: 1 });
 	expect(mixed.indexOf("installed-extension-row")).toBeLessThan(
 		mixed.indexOf('data-testid="package-row"'),
 	);
 	expect(mixed).toContain('data-testid="packages-update-all"');
 	expect(mixed).toContain('data-testid="package-type"');
+	expect(mixed.match(/data-focus-list="packages"/g)).toHaveLength(1);
 	const failed = renderGroup("failed", { extensionRows: [row] });
 	expect(failed).toContain('data-testid="installed-extension-row"');
+	expect(failed).toContain('data-focus-list="packages"');
 	expect(failed).toContain('data-testid="packages-failed"');
+});
+
+test("installed packages and loose files are one keyboard list: expand as the primary, then the switch and the menu", () => {
+	const markup = renderGroup(CATALOG);
+	expect(markup).toContain('data-focus-list="packages"');
+	expect(markup).toContain('data-key-scope="settings.list"');
+	expect(markup).toContain('data-setting-id="installed-packages"');
+	expect(markup).toContain('data-focus-row="user:npm:@acme/pi-jira"');
+	expect(markup).toContain(`data-focus-row="file:${GUARD.path}"`);
+	expect(markup).toMatch(/data-focus-row-primary=""[^>]*data-testid="package-expand"/);
+	expect(markup).toMatch(/data-setting-side=""[^>]*data-testid="package-menu"/);
+	expect(markup).toMatch(/data-setting-side=""[^>]*role="switch"[^>]*data-testid="package-toggle"/);
+	expect(markup).not.toContain("truncate");
+	expect(markup).not.toContain(`title="${JIRA.installedPath}"`);
 });

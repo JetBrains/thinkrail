@@ -403,7 +403,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
     extensions through the session seam (`workspaceFiles`), so the SDK stays types + `define*`. Other
     setting types and a per-workspace on/off override remain explicit deferrals. **Extensions authored
     outside this repository are installed and loaded at runtime**: declared in
-    `<data dir>/extensions.json`, installed from Settings → Extensions or its Browse of the website's
+    `<data dir>/extensions.json`, installed from Settings → Extensions & skills or its Browse of the website's
     catalog, built with the published SDK ([[module-extension-sdk]], sample [[module-extension-examples]]),
     and written and installed by the agent through a bundled host skill. Contract:
     [[module-thinkrail-extensions]] § Installed extensions; runtimes [[submodule-server-extensions-installed]]

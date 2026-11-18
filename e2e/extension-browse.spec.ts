@@ -1,9 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { openAppFresh } from "./fixtures/app";
+import { closeSettings, openAppFresh } from "./fixtures/app";
 import {
 	type CatalogListing,
 	clearInstalledExtensions,
-	closeSettings,
 	declareExtensions,
 	openExtensionsSettings,
 	PALETTE_DIR,
@@ -127,6 +126,14 @@ test("Browse lists the catalog with search, installed and incompatible marks, an
 	await expect(browse.getByTestId("extension-browse-no-match")).toBeVisible();
 	await search.fill("");
 	await expect(browse.getByTestId("extension-browse-card")).toHaveCount(3);
+	await search.focus();
+	await page.keyboard.press("ArrowDown");
+	await expect(
+		browse.getByTestId("extension-browse-card").first().locator("[data-focus-row-primary]"),
+	).toBeFocused();
+	await search.fill("zzz");
+	await search.press("Escape");
+	await expect(search).toHaveValue("");
 
 	await weather.getByTestId("extension-browse-install").click();
 	const dialog = page.getByTestId("install-package-dialog");

@@ -299,7 +299,13 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `listSkillCatalog`; the **MCP set** (`mcp.*`, `host/mcp.ts`) composes `agent`'s MCP
   service with `projects` (approvals, overrides, pi-level trust) and publishes `mcp.status` snapshots (topic
   subscribed only by clients at `MCP_PROTOCOL_VERSION` or later) plus `session.resourcesChanged`
-  invalidations. Every request resolves its workspace and that workspace's project. Management mutations
+  invalidations. Every request that names a workspace resolves it and its project; one without (user scope
+  only, `MCP_USER_SERVERS_PROTOCOL_VERSION`) resolves none: the list is agent's `listUserMcpServers`,
+  mutations and probes are admitted by the ownership guard over agent's `userMcpContext()` (pi's agent dir
+  as cwd, untrusted, empty policy, no live owners), project scope is refused with `MCP_CONFIG_INVALID`,
+  every write reconciles all workspaces' live chats, and `mcp.setUserServer` checks the global entry's
+  rendered fingerprint in the same synchronous step as agent's `setUserMcpEntryFields` writes `enabled` /
+  `exposure`. Workspace-scoped management mutations
   and probes re-read both after asynchronous ownership resolution, then check ownership and admit work
   in one synchronous call stack. A changed project identity, cwd or pi-level trust rejects the request
   for retry; approvals and overrides come from the latest record, not the pre-await snapshot. Project
@@ -328,7 +334,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   runs agent's `reconnectMcpServer` (pi's notices stay out of the chat; pi's failure, masked, is the
   request's error) and refreshes that chat's status either way;
   `mcp.readOutput` reads agent's `readMcpToolOutput` for a session of that workspace only;
-  `mcp.readLog` resolves the workspace, checks the name against pi's charset and returns agent's
+  `mcp.readLog` resolves the workspace when one is named, checks the name against pi's charset and returns agent's
   `readMcpServerLog` (pi keeps one `mcp.log` per agent directory, so it needs no session);
   `mcp.login` / `mcp.testConnection` start agent's probe with the caller's `clientKey` as owner and return
   its `loginId` (`mcp.logout` awaits the probe). Probe admission resolves the valid effective server from

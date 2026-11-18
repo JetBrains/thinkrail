@@ -63,6 +63,21 @@ export const LOCAL_SCOPES = {
 		where: "shortcuts.scope.findInFiles.where",
 		inside: "shortcuts.scope.findInFiles.inside",
 	},
+	"settings.nav": {
+		where: "shortcuts.scope.settingsNav.where",
+		inside: "shortcuts.scope.settingsNav.inside",
+		includes: ARROWS,
+	},
+	settings: {
+		where: "shortcuts.scope.settings.where",
+		inside: "shortcuts.scope.settings.inside",
+		includes: ARROWS,
+	},
+	"settings.list": {
+		where: "shortcuts.scope.settingsList.where",
+		inside: "shortcuts.scope.settingsList.inside",
+		includes: ARROWS,
+	},
 } as const satisfies Record<string, LocalScopeInfo>;
 
 export type AppLocalScope = keyof typeof LOCAL_SCOPES;
@@ -165,6 +180,9 @@ export const APP_LOCAL_COMMANDS: readonly LocalCommandDefaults[] = [
 	local("findInFiles", "openKept", ...enter({ mod: true })),
 	local("findInFiles", "matchCase", letter("C", { alt: true })),
 	local("findInFiles", "wholeWord", letter("W", { alt: true })),
+	local("settings.nav", "search", letter("S"), { code: "Slash", key: "/" }),
+	local("settings", "reset", DELETE),
+	local("settings.list", "remove", DELETE),
 ];
 
 export const APP_LOCAL_SCOPES: readonly LocalScopeDeclaration[] = Object.entries(LOCAL_SCOPES).map(
@@ -194,6 +212,9 @@ export const LOCAL_KEY_DEFAULTS: Readonly<Record<AppLocalScope, readonly LocalKe
 	history: scopeDefaults("history"),
 	palette: scopeDefaults("palette"),
 	findInFiles: scopeDefaults("findInFiles"),
+	"settings.nav": scopeDefaults("settings.nav"),
+	settings: scopeDefaults("settings"),
+	"settings.list": scopeDefaults("settings.list"),
 };
 
 export function isAppLocalScope(scope: string): scope is AppLocalScope {

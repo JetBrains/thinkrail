@@ -1,6 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
 import type { AppConfig, ThinkingLevel } from "@thinkrail/contracts";
-import { expandModelGroup, openWorkspaceChat, revealModelGroups } from "./fixtures/app";
+import {
+	closeSettings,
+	expandModelGroup,
+	openWorkspaceChat,
+	revealModelGroups,
+} from "./fixtures/app";
 import { connectCentral, openProviders, waitForCentralState } from "./fixtures/jbcentral";
 import { shot } from "./fixtures/screenshots";
 import { E2eWire } from "./fixtures/wire";
@@ -40,14 +45,14 @@ async function connectFixtureProvider(page: Page): Promise<void> {
 	await waitForCentralState(page, "supported");
 	await connectCentral(page);
 	await waitForCentralState(page, "configured");
-	await page.keyboard.press("Escape");
+	await closeSettings(page);
 }
 
 async function disconnectFixtureProvider(page: Page): Promise<void> {
 	await openProviders(page);
 	await page.getByTestId("jetbrains-disconnect").click();
 	await waitForCentralState(page, "supported");
-	await page.keyboard.press("Escape");
+	await closeSettings(page);
 }
 
 test("the composer pill stars a favorite, records it as recent, and saves the pair as default", async ({

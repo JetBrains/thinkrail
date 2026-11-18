@@ -156,6 +156,13 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   connection and deletion fences. A new connection starts independently of an older generation's tail,
   workspaces do not block one another, and failed requests reject their callers without poisoning the queue
   or preventing a retry. This queue is transient transport coordination, not a second state owner.
+  A request without a workspace never takes this path (it rejects unsent): the user-level servers a host at
+  `MCP_USER_SERVERS_PROTOCOL_VERSION` manages with no workspace open (**`supportsUserMcp`**) go through
+  **`requestUserMcpList(method, params)`** — `mcp.list`, user-scope `add` / `update` / `remove` and
+  `mcp.setUserServer`, typed to carry no `workspaceId` — serialized on its own tail by the same rules and
+  connection fence, but returning the result to its caller only: it never installs into
+  `mcpByWorkspace`, whose projections are per-workspace chat status a user list must not leak into, and
+  never waits on or blocks a workspace's tail.
   **`watchMcpWorkspace(workspaceId, onRead?)`** reads once and then re-reads with bounded backoff
   (1 → 13 s, six attempts per streak) only while a live chat of that workspace still reports a server
   `starting`. The host's `mcpSessions.capture` continues after its caller times out and eventually publishes
@@ -178,7 +185,7 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
 
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `RequestTimeoutError`, `wsErrorCode`, `requestMcpList`,
-  `watchMcpWorkspace`, `ConnectionStatus`,
+  `requestUserMcpList` + `UserMcpListMethod`, `supportsUserMcp` (v125), `watchMcpWorkspace`, `ConnectionStatus`,
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
   `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `supportsKeybindings`,
@@ -205,7 +212,7 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   one `settings.update { keybindings }` and resolves `true` once accepted, the store converging on the
   `settings.changed` broadcast (no optimistic write); a host refusal rejects (`KEYBINDINGS_INVALID`).
   `refreshExtensionCatalog(connectionGeneration?)` is the one `extension.list` path: every welcome from a
-  host at `INSTALLED_EXTENSIONS_PROTOCOL_VERSION` (v125) or newer, every `extensions.changed` push, and each
+  host at `INSTALLED_EXTENSIONS_PROTOCOL_VERSION` (v126) or newer, every `extensions.changed` push, and each
   mount of the Extensions page (any host from v82, as before) call it; the latest request wins and only a
   response for the current connection generation installs the store's `extensionCatalog` (a failure
   installs `failed`). An older host is never asked at welcome, so its traffic is unchanged. `openSpeechSocket()`

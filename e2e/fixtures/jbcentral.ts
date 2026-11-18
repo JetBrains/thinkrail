@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page } from "@playwright/test";
 import { JBCENTRAL_STATUS_TTL_MS } from "@thinkrail/shared/jbcentral";
+import { openSettingsSection } from "./app";
 import {
 	E2E_CENTRAL_EXTENSION_SOURCE,
 	E2E_CENTRAL_LOG,
@@ -23,7 +24,7 @@ const REVIEWED_ARGV = [
 ];
 
 export async function openProviders(page: Page): Promise<Locator> {
-	await page.getByTestId("open-settings").click();
+	await openSettingsSection(page, "providers");
 	await expect(page.getByTestId("settings-providers")).toBeVisible();
 	return page.getByTestId("jetbrains-ai-card");
 }

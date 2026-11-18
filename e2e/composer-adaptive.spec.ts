@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { hideAuxiliaryWorkbench, openWorkspaceChat, PHONE_VIEWPORT } from "./fixtures/app";
+import {
+	closeSettings,
+	hideAuxiliaryWorkbench,
+	openSettingsSection,
+	openWorkspaceChat,
+	PHONE_VIEWPORT,
+} from "./fixtures/app";
 
 async function box(locator: import("@playwright/test").Locator) {
 	const value = await locator.boundingBox();
@@ -106,8 +112,7 @@ test("half-chat growth caps the editor shell and scrolls the textarea", async ({
 test("chat growth setting persists and compact means six visual lines", async ({ page }) => {
 	await page.goto("/");
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-chat").click();
+	await openSettingsSection(page, "chat");
 
 	const compact = page.getByTestId("composer-growth-compact");
 	const roomy = page.getByTestId("composer-growth-roomy");
@@ -120,10 +125,9 @@ test("chat growth setting persists and compact means six visual lines", async ({
 
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-chat").click();
+	await openSettingsSection(page, "chat");
 	await expect(compact).toHaveAttribute("data-active", "true");
-	await page.keyboard.press("Escape");
+	await closeSettings(page);
 
 	await openWorkspaceChat(page);
 	const input = page.getByTestId("chat-input");
@@ -140,10 +144,10 @@ test("chat growth setting persists and compact means six visual lines", async ({
 	expect(lines).toBeGreaterThanOrEqual(5.9);
 	expect(lines).toBeLessThanOrEqual(6.1);
 
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-chat").click();
+	await openSettingsSection(page, "chat");
 	await half.click();
 	await expect(half).toHaveAttribute("data-active", "true");
+	await closeSettings(page);
 });
 
 test("compact phone controls remain inside the chat viewport", async ({ page }) => {

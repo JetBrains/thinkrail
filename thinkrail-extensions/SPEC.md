@@ -15,13 +15,13 @@ A **ThinkRail extension** is a workspace package `thinkrail-extensions/<name>/` 
 private) that composes a pi capability — usually a [[module-pi-extensions]] package, possibly a
 third-party pi package — with its ThinkRail-specific halves: what the host bundles into sessions and how
 the web client presents the capability's tools. The host composes extensions from **one registry file per
-side**. A user sees the server registry in Settings → Extensions — plus the web-only entries below — and can
+side**. A user sees the server registry in Settings → Extensions & skills — plus the web-only entries below — and can
 switch each extension off (a host-level setting keyed on the descriptor `name`; the extension declares
 nothing for it). Extensions authored outside this repository are installed and loaded at runtime under the
 contract in § Installed extensions; everything else in this spec describes the built-in extensions.
 
 A **web-only extension** has no pi capability and no `./server` (hint mode, [[module-ext-hint-mode]]). The
-server catalog cannot list it, so Settings → Extensions also lists every web registry entry that declares a
+server catalog cannot list it, so Settings → Extensions & skills also lists every web registry entry that declares a
 `title`, renders no tool and that the catalog lacks (a tool renderer implies a server half, so ask-user-question's
 title only names its Settings → Keyboard section), with the same `disabledExtensions` switch (the host carries unknown
 names through and reloads no session for them); it applies at once. A stub server extension just to get a
@@ -32,7 +32,7 @@ drawing old transcripts.
 
 The first extension (`visualize`, [[module-ext-visualize]]) ships both halves; the host composes them from
 the two registry files below ([[submodule-server-extensions]], [[submodule-web-extensions]]). **Per-extension
-settings** exist for booleans: a descriptor declares `settings`, Settings → Extensions shows each as a nested
+settings** exist for booleans: a descriptor declares `settings`, Settings → Extensions & skills shows each as a nested
 switch under its extension (copy from locale keys; disabled while the extension is off; hidden for an older
 host), the value lives in `AppConfig.extensionSettings`, and a change reloads open chats when their current
 turn ends — ask-user-question's `richPreviews` was the first consumer. Other setting types, a per-workspace
@@ -190,7 +190,7 @@ server half composes, because a UI-only extension has none and the agent backend
 - Host runtime (`extensions.json`, install root, loader, status file, web-half URLs):
   [[submodule-server-extensions-installed]]; web runtime (shared modules, loader, tool registry):
   [[submodule-web-extensions]].
-- Settings → Extensions rows, the install dialog and Browse: [[submodule-web-panels]]; the catalog read
+- Settings → Extensions & skills rows, the install dialog and Browse: [[submodule-web-panels]]; the catalog read
   behind Browse: [[submodule-server-extension-catalog]].
 - The agent's `making-thinkrail-extensions` skill: [[submodule-server-extensions-installed]] § Decisions,
   "The agent's path in".

@@ -13,7 +13,7 @@ references: [submodule-web-chat, submodule-server-assist]
 When a turn finishes, the agent offers the user one-click next messages: follow-up prompts ("Run the
 e2e suite", "Open a PR") or short answers to a question its final message ended on ("Yes, go ahead").
 They show as chips above the composer. A click (or Alt+N) sends one as the user's next message
-([[submodule-web-chat]] owns the chip row). On by default, switchable in Settings → Extensions.
+([[submodule-web-chat]] owns the chip row). On by default, switchable in Settings → Extensions & skills.
 
 ## Boundary
 

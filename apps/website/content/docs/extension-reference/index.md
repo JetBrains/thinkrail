@@ -115,8 +115,8 @@ The default export of the `server` file, made with `defineServerExtension` from
 | Field | Meaning |
 | --- | --- |
 | `name` | Required. The package name; any other name fails the load. |
-| `title` | The name in Settings → Extensions when the manifest has no `title`. |
-| `description` | The description in Settings → Extensions when the package has none. |
+| `title` | The name in Settings → Extensions & skills when the manifest has no `title`. |
+| `description` | The description in Settings → Extensions & skills when the package has none. |
 | `extensions` | Required. pi extension factories, `(pi: ExtensionAPI) => void`, added to every chat. May be empty. |
 | `sessionExtensions` | `(session) => factories`: factories built for one chat from its services, below. |
 | `interactiveTools` | An object keyed by the names of tools whose call waits for the person. |

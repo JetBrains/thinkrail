@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import type { NativePageZoomAction, Workspace } from "@thinkrail/contracts";
+import { type NativePageZoomAction, PROTOCOL_VERSION, type Workspace } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
 import { type KeybindingId, keybindingShortcut, resolveKeybindings } from "../keybindings";
+import { availableSettings, type SettingsCatalogContext } from "../panels/settingsCatalog";
+import { settingsNavGroups } from "../panels/settingsNav";
 import { commandItems } from "../search";
 import {
 	type LayoutCenterTab,
@@ -10,7 +12,7 @@ import {
 	toolTab,
 	type WorkspaceLayoutDocument,
 } from "./layout";
-import { buildCommands, type PaletteCatalogDeps } from "./paletteCatalog";
+import { buildCommands, buildSettingsItems, type PaletteCatalogDeps } from "./paletteCatalog";
 
 const workspace: Workspace = {
 	id: "w1",
@@ -92,6 +94,7 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 		settled: false,
 		settleBlocked: false,
 		settingsGroups: [],
+		settingEntries: [],
 		tabActions: [],
 		actions: {
 			newWorkspace: noop,
@@ -352,5 +355,59 @@ describe("palette active-tab commands", () => {
 		row("group.splitDown", catalog)?.run?.();
 		row("tab.moveToNextGroup", catalog)?.run?.();
 		expect(ran).toEqual(["group.splitDown", "tab.moveToNextGroup"]);
+	});
+});
+
+describe("palette Settings rows", () => {
+	const groups = settingsNavGroups(PROTOCOL_VERSION, false);
+	const context: SettingsCatalogContext = {
+		protocolVersion: PROTOCOL_VERSION,
+		hasWorkspace: true,
+		hostPlatform: "darwin",
+		signedInProviders: true,
+		voiceFiles: true,
+		survey: true,
+	};
+	const settingsRows = (overrides: Partial<SettingsCatalogContext>, opened: unknown[][] = []) =>
+		buildSettingsItems(
+			deps({
+				settingsGroups: groups,
+				settingEntries: availableSettings(groups, { ...context, ...overrides }),
+				actions: { ...deps().actions, openSettings: (...args) => opened.push(args) },
+			}),
+		);
+
+	test("section rows keep setting:<section>; each available setting gets its own setting:<id> row", () => {
+		const opened: unknown[][] = [];
+		const rows = settingsRows({}, opened);
+		const ids = rows.map((item) => item.id);
+		expect(new Set(ids).size).toBe(ids.length);
+		expect(ids).toContain("setting:appearance");
+		expect(ids).toContain("setting:keyboard");
+		expect(ids.filter((id) => id === "setting:double-shift")).toHaveLength(1);
+		const width = rows.find((item) => item.id === "setting:chat-line-width");
+		expect(width?.title).toBe("Chat line width");
+		expect(width?.subtitle).toBe("Settings › Text & fonts");
+		expect(width?.kind).toBe("setting");
+		width?.run?.();
+		rows.find((item) => item.id === "setting:double-shift")?.run?.();
+		rows.find((item) => item.id === "setting:appearance")?.run?.();
+		expect(opened).toEqual([
+			["text", "chat-line-width"],
+			["keyboard", "double-shift"],
+			["appearance"],
+		]);
+		expect(rows.find((item) => item.id === "setting:feedback-survey")?.subtitle).toBe(
+			"Settings › Share feedback",
+		);
+	});
+
+	test("a setting the host, workspace or platform does not offer has no row", () => {
+		const ids = settingsRows({ hasWorkspace: false }).map((item) => item.id);
+		expect(ids).not.toContain("setting:mcp-project-servers");
+		expect(ids).not.toContain("setting:windows-shell");
+		expect(settingsRows({ hostPlatform: "win32" }).map((item) => item.id)).toContain(
+			"setting:windows-shell",
+		);
 	});
 });

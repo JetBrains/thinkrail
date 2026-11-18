@@ -82,6 +82,25 @@ test("a card shows its copy, halves, links, a lazy no-referrer image and the rig
 	expect(markup).toContain('data-testid="extension-browse-installed"');
 	expect(markup).toContain('data-testid="extension-browse-incompatible"');
 	expect(markup).toContain("Needs a newer ThinkRail");
+	expect(markup).toContain("Built for extension API 2.0, which this ThinkRail can&#x27;t load.");
+});
+
+test("listings are one keyboard list after the search field, said in visible text", () => {
+	const markup = render(loaded([WEATHER, CARDS, JIRA]));
+	expect(markup).toContain('data-setting-id="extension-browse"');
+	expect(markup).toMatch(
+		/data-setting-row="extension-browse-search"[^>]*>[\s\S]*data-setting-stop=""/,
+	);
+	expect(markup).toContain('data-focus-list="extension-browse"');
+	expect(markup).toContain(`data-focus-row="${WEATHER.name}"`);
+	expect(markup).toMatch(/data-focus-row-primary=""[^>]*aria-haspopup="dialog"/);
+	expect(markup).toMatch(
+		/aria-disabled="true"[^>]*data-focus-row-primary=""|data-focus-row-primary=""[^>]*aria-disabled="true"/,
+	);
+	expect(markup).toMatch(/data-setting-side=""[^>]*data-testid="extension-browse-install"/);
+	expect(markup).toMatch(/data-setting-side=""[^>]*data-testid="extension-browse-npm"/);
+	expect(markup).not.toContain("truncate");
+	expect(markup).not.toContain(" title=");
 });
 
 test("the search narrows by title, name, description or author and says when nothing matches", () => {

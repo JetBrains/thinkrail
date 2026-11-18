@@ -188,6 +188,7 @@ beforeEach(() => {
 		activeLogin: null,
 		settingsOpen: false,
 		settingsSection: "providers",
+		settingsTarget: null,
 		surveyInvitationOpen: false,
 		surveyWindowOpen: false,
 		inAppSurvey: null,
@@ -4154,7 +4155,7 @@ test("clearLoginInput drops the live input; success is terminal; clearLogin dism
 	expect(useAppStore.getState().activeLogin).toBeNull();
 });
 
-test("openSettings deep-links to a section (default providers); closeSettings hides it", () => {
+test("openSettings deep-links to a section, else reopens the remembered one (first ever: providers)", () => {
 	const s = useAppStore.getState();
 	s.openSettings();
 	expect(useAppStore.getState().settingsOpen).toBe(true);
@@ -4163,12 +4164,46 @@ test("openSettings deep-links to a section (default providers); closeSettings hi
 	s.openSettings("github");
 	expect(useAppStore.getState().settingsSection).toBe("github");
 
-	s.setSettingsSection("providers");
-	expect(useAppStore.getState().settingsSection).toBe("providers");
-
+	s.setSettingsSection("terminal");
 	s.closeSettings();
 	expect(useAppStore.getState().settingsOpen).toBe(false);
-	expect(useAppStore.getState().settingsSection).toBe("providers");
+	expect(useAppStore.getState().settingsSection).toBe("terminal");
+
+	s.openSettings();
+	expect(useAppStore.getState()).toMatchObject({
+		settingsOpen: true,
+		settingsSection: "terminal",
+		settingsTarget: null,
+	});
+});
+
+test("a setting target is set with its section and consumed once", () => {
+	const s = useAppStore.getState();
+	let updates = 0;
+	const unsubscribe = useAppStore.subscribe(() => {
+		updates += 1;
+	});
+	s.openSettings("keyboard", "double-shift");
+	expect(updates).toBe(1);
+	expect(useAppStore.getState()).toMatchObject({
+		settingsOpen: true,
+		settingsSection: "keyboard",
+		settingsTarget: "double-shift",
+	});
+
+	expect(s.consumeSettingsTarget()).toBe("double-shift");
+	expect(useAppStore.getState().settingsTarget).toBeNull();
+	expect(s.consumeSettingsTarget()).toBeNull();
+	expect(updates).toBe(2);
+
+	s.openSettings("text", "chat-line-width");
+	s.openSettings("chat");
+	expect(useAppStore.getState().settingsTarget).toBeNull();
+
+	s.openSettings("text", "chat-line-width");
+	s.closeSettings();
+	expect(useAppStore.getState().settingsTarget).toBeNull();
+	unsubscribe();
 });
 
 test("the survey invitation show action is idempotent and hide clears it", () => {

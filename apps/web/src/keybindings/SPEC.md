@@ -165,7 +165,8 @@ binding does.
 - **A local command** is `{ id, scope, chords }` acting only while focus is inside its element. The app
   declares them in `localKeys.ts` (`APP_LOCAL_COMMANDS`, ids `<scope>.<action>`, one direction per
   command) under `LOCAL_SCOPES` — `tabs`, `rails`, `trees`, `review`, `review.surface`, `transcript`,
-  `composer`, `history`, `palette`, `findInFiles`, each titled for the editor (`where`, `inside`). An
+  `composer`, `history`, `palette`, `findInFiles`, `settings.nav`, `settings`, `settings.list`, each titled
+  for the editor (`where`, `inside`). An
   extension command with a `scope` is local too ([[module-extension-api]]); its id and scope must start
   with `<extension name>.`, and the resolver drops any extension command, global or local, that does not
   (so none can shadow `trees.search` or `search.open`). Resource renderers add their own set:
@@ -174,7 +175,8 @@ binding does.
   `local` rows (the comment row behind a locked ↵).
 - **Shared scope `arrows`.** The letter twins of the arrows (`arrows.left/down/up/right`, H/J/K/L by
   `code`) are `@thinkrail/ui/keyboard`'s `ARROW_TWIN_COMMANDS`, declared once in scope `arrows`; `tabs`,
-  `rails`, `trees`, `review.surface` and `transcript` include it, so one rebind applies in every element.
+  `rails`, `trees`, `review.surface`, `transcript` and the three Settings scopes include it, so one rebind
+  applies in every element.
   A scope another includes is not an element of its own: it never appears in the `local` map.
 - **Shared scope `suggestions`.** The chat's composer-suggestion keys (`suggestions.send1…9`, `Alt+1…9`,
   and `suggestions.edit1…9`, `Shift+Alt+1…9`; `SUGGESTION_KEYS` lists both in chip order) are declared
@@ -184,6 +186,11 @@ binding does.
   every platform, Option included: the chat consumes the press only while that chip is shown, and a
   layout that types a needed character with Option rebinds. Unconfirmed: Windows' Alt+Shift input-language
   hotkey is assumed not to fire while a digit is pressed with it.
+- **Settings scopes** ([[submodule-web-settingskit]]): `settings.nav` on the section tablist
+  (`settings.nav.search`, S and `/`; no other letter, so F stays hint mode's), `settings` on the content
+  pane (`settings.reset`, Delete resets the focused row) and `settings.list` on each list inside it
+  (`settings.list.remove`, Delete removes the row). They are three scopes, not one, because a list sits
+  inside the content: the innermost scope wins, and each keeps the no-default-conflict invariant.
 - **Physical keys everywhere:** local letters match `code` (caps show US positions; Dvorak and Colemak
   users rebind). A typing local chord (no Mod/Ctrl/Alt, not Escape, not an F-key — `isTypingChord`)
   never matches in text entry; `Shift+Escape` or `Mod+Enter` still do.
@@ -205,7 +212,8 @@ binding does.
   commands act in) feed the editor's warnings.
 - **`LOCAL_KEY_DEFAULTS[scope]`** is a scope's declared commands plus its included ones, the defaults a
   handler hands `useLocalKeys`; with no provider those match. Every element key handler matches through
-  it — trees, Changes review, transcript, composer, history, tab strips, rails, palette, Find in Files —
+  it — trees, Changes review, transcript, composer, history, tab strips, rails, palette, Find in Files,
+  Settings —
   and shows its caps and `aria-keyshortcuts` from the same hook, so a rebind acts and shows at once. The
   per-feature typed-key constants (`TAB_KEYS` … `HISTORY_KEYS`) were deleted with that migration;
   `DESKTOP_KEYS` stays (display only).
@@ -235,7 +243,7 @@ binding does.
   missing). An extension default outside the grammar is dropped and a duplicate command id ignored.
 - **Priority** for a shared chord: a user override beats ThinkRail defaults, which beat extension
   defaults; within a rank, ThinkRail commands in table order, then extensions in registry order (the
-  Settings → Extensions order). **The losing chord is inactive for its loser only** — its other chords
+  Settings → Extensions & skills order). **The losing chord is inactive for its loser only** — its other chords
   still work — and is reported as a conflict.
   An override onto another command's default leaves that command losing the chord; an editor that wants
   it gone writes an explicit unbind. **A disabled extension's commands are listed but neither match nor
@@ -277,8 +285,9 @@ binding does.
   bridge exists. A multi-command row — the focus-group bindings, the suggestion keys — is shown as a range
   (`⌘1–9`, `⌥1–9`) while every command is at its default, else as each one's chords.
 - **Surfaces** are a fixed ordered set — general, tabs and groups, panels and tool rails, sidebar trees,
-  Changes review, chat input, chat transcript, chat history, search palette, Find in Files, terminal,
-  desktop app — each titled by a locale key; `shortcutRows({ desktop, keybindings })` resolves the catalog
+  Changes review, chat input, chat transcript, chat history, search palette, Find in Files, Settings
+  (the section list, a setting's walk keys, lists and Esc), terminal, desktop app — each titled by a locale
+  key; `shortcutRows({ desktop, keybindings })` resolves the catalog
   for one client into rows of caps and a text label (what the filter matches), plus each row's
   `conflicts` (a losing chord and its winner, for the editor's marks; a row with neither chords nor
   conflicts — an unbound command — is left out).

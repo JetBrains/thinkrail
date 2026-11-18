@@ -51,7 +51,7 @@ is not retried until the source is declared again or ThinkRail restarts.
 ## The script timed out
 
 ThinkRail is not running, uses another data dir (check `where` against the app), or is older than
-status files — then look in Settings → Extensions and ask the user what the row says.
+status files — then look in Settings → Extensions & skills and ask the user what the row says.
 
 ## SDK from a checkout
 

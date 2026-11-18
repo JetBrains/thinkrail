@@ -11,7 +11,7 @@ references: [module-thinkrail-extensions, module-website]
 ## Responsibility
 
 Read the community extension catalog the website publishes (`catalog.json`, [[module-thinkrail-extensions]]
-§ Installed extensions → Catalog) for Settings → Extensions → Browse, validate it and hand it to the host's
+§ Installed extensions → Catalog) for Settings → Extensions & skills → Browse, validate it and hand it to the host's
 `extensions.browse` with each listing marked when an installed extension already carries its name. The
 browser never talks to thinkrail.ai: the host fetches, so the app's origin, CSP and offline rules stay the
 host's.

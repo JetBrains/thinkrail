@@ -474,7 +474,8 @@ export function initTransport(): WsTransport {
 	transport.subscribe(WS_CHANNELS.providerLogin, (data) => {
 		const push = data as LoginPush;
 		const state = useAppStore.getState();
-		if (push.target && state.removedWorkspaceIds[push.target.workspaceId]) {
+		const workspaceId = push.target?.workspaceId;
+		if (workspaceId !== undefined && state.removedWorkspaceIds[workspaceId]) {
 			void getTransport()
 				.request("provider.loginCancel", { loginId: push.loginId })
 				.catch(() => {});

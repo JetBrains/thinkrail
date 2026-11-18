@@ -10,7 +10,7 @@ Everything is computed locally: no network, no API key.
 
 ## Install
 
-In ThinkRail, open **Settings → Extensions → Install package…** and paste
+In ThinkRail, open **Settings → Extensions & skills → Install package…** and paste
 `npm:@thinkrail/example-extension-palette`, or the path of this folder after building it.
 
 ## How it is made
