@@ -89,10 +89,12 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   `fallbacks` argument) leads with a localized explanation above the provider text, since a retry sends the
   same field again. On the current failure (the `try-again` recovery) with a v126 host, **Try again** becomes
   **Turn off fallback and retry** (`disableServerFallback`, supplied by `ChatView`): `session.disableServerFallback`
-  turns fallback off for the chat's model (only the one that failed) and moves the chat onto the updated
-  model, then the ordinary `Try again.` send follows — also after `SERVER_FALLBACK_NOT_USED` (the chat's
-  model already sends none, e.g. another chat repaired that model first), since a plain retry then works.
-  Another fallback model behind the same proxy fails once and offers the same repair. The button is pending while it runs; a failure shows a localized alert line and
+  turns fallback off for the model of the request that failed (the host reads it from pi's last assistant
+  message, not the chat's current model) and rebinds the chat to the updated model only if it is still on
+  that model, then the ordinary `Try again.` send follows — also after `SERVER_FALLBACK_NOT_USED` (no failed
+  request, or its model declares no fallbacks, e.g. a non-Fable turn whose error merely matched), since a
+  plain retry is then the answer. Another fallback model behind the same proxy fails once and offers the
+  same repair. The button is pending while it runs; a failure shows a localized alert line and
   keeps the button. Historical matches keep the explanation only; an older host keeps plain **Try again**.
   Only the current settlement-derived failure carries the
   web-local `try-again` recovery action; its **Try again** button sends one visible ordinary `Try again.` user

@@ -40,9 +40,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   joined by a different choice), `COPY_TOO_LARGE` (a Files tree folder paste with more entries than the host copies — nothing was written; the client words it), `ENTRY_CHANGED` (an entry a Files tree paste or a trash claim was acting on was replaced, moved out of the worktree or turned into a link mid-operation — the host stopped instead of following it; a paste keeps what it already wrote, a delete or a whole-file revert left the entry in place; the client words it), `TEXT_SEARCH_TIMEOUT` / `TEXT_SEARCH_FAILED` (a text search git could not
   finish in its budget, or could not run — the host's logged classifier; the client only sees the search
   end `failed`), `SERVER_FALLBACK_NOT_USED` / `SERVER_FALLBACK_STILL_ON`
-  (`session.disableServerFallback`, v126 `SERVER_FALLBACK_PROTOCOL_VERSION`: the chat's model sends no
-  Anthropic server-side fallback, so there is nothing to turn off; or pi did not apply the written
-  override — e.g. it rejected `models.json` — so a retry would fail the same way), `RESOURCE_UNAVAILABLE`, and `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is
+  (`session.disableServerFallback`, v126 `SERVER_FALLBACK_PROTOCOL_VERSION`: the chat has no failed
+  request, or the failed request's model declares no Anthropic server-side fallback, so there is nothing
+  to turn off and a plain retry is the answer; or pi did not apply the written override — e.g. it
+  rejected `models.json` — so a retry would fail the same way), `RESOURCE_UNAVAILABLE`, and `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is
   `subagent.getTranscript`'s **permanent** miss, the
   signal that stops the transcript dialog's polling. A known child whose first transcript file is not
   written yet instead returns empty messages with its current status, so a live run remains pollable;
