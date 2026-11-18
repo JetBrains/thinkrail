@@ -432,6 +432,44 @@ test("per-agent availability filters each turn and rejects stale advertised call
 	}
 });
 
+test("a queued child whose role is disabled before it leaves the queue is rejected without provider work", async () => {
+	let enabled = true;
+	const session = await makeSession(
+		undefined,
+		service,
+		createSubagentsExtension({ service, isAgentEnabled: () => enabled }),
+	);
+	service.setMaxConcurrentPerParent(1);
+	const finish = await launchDetached(session);
+	try {
+		const childCalls = fauxB.state.callCount;
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("Agent", { subagent_type: "bg-runner", task: "Wait for a slot." }),
+			),
+			fauxAssistantMessage("PARENT_RECOVERED"),
+		]);
+		const turn = session.prompt("Delegate behind the running child.");
+		await waitFor(() => service.childrenOf(session.sessionId)[1]?.snapshot?.status === "queued");
+		enabled = false;
+		finish.resolve();
+		await turn;
+
+		expect(lastToolResultText(session)).toBe('Subagent "bg-runner" is disabled.');
+		expect(fauxB.state.callCount).toBe(childCalls);
+		expect(service.childrenOf(session.sessionId).map((child) => child.snapshot?.status)).toEqual([
+			"completed",
+			"aborted",
+		]);
+	} finally {
+		finish.resolve();
+		service.setMaxConcurrentPerParent(4);
+		await service.disposeChildrenOf(session.sessionId);
+		liveParents.delete(session.sessionId);
+		session.dispose();
+	}
+});
+
 test("foreground: one Agent call runs a builtin scout and returns its report to the parent", async () => {
 	fauxA.setResponses([
 		fauxAssistantMessage(

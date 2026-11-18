@@ -51,7 +51,13 @@ choice was settled: the decision log below.
   that unstarted child before rejecting. `canDeliverCompletion` defaults to true and temporarily gates
   both transcript append and automatic wake-up, without closing the owner or losing pending outcomes.
   An embedder flushes after a provisional deletion rolls back or registration becomes addressable.
-- `isAgentEnabled(name)` defaults to true. It filters the per-turn advertised definition snapshot and is checked live before assembly and again after asynchronous child setup, before `runQueued`; a newly disabled unstarted child is disposed. Definition/model pins remain snapshotted; availability is live. Running work and completion delivery are unaffected.
+- `isAgentEnabled(name)` defaults to true. It filters the per-turn advertised definition snapshot and is
+  checked live before assembly, after asynchronous child setup (a newly disabled unstarted child is
+  disposed) and when a run leaves the concurrency queue (its first `onUpdate`, the `running` transition):
+  a disabled role is then cancelled through `ChildHandle.abort` with reason `Subagent "<name>" is
+  disabled.` before any provider work — a foreground call rejects with that message, a background run
+  completes `aborted` with it as `abortReason`. Every refusal uses that message. Definition/model pins
+  remain snapshotted; availability is live. Running children and completion delivery are unaffected.
 - `SUBAGENT_COMPLETION_MESSAGE` — the custom-message type the web's background result row keys on;
   `SubagentCompletionDetails` (the run's `DelegationRunDetails` plus `delivery: CompletionDelivery` —
   `wake` | `run` | `appended`, see Result delivery), mirrored into `@thinkrail/contracts`.
