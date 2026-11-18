@@ -75,15 +75,15 @@ export const DEFAULT_LAYOUT_PRESET_ID = "codex";
 export const BUILTIN_LAYOUT_PRESETS: readonly LayoutPreset[] = [
 	{
 		// The chat-first default: the Thread Sidebar on the left, the conversation centred, and a hidden
-		// right side that opens on demand — Files first (the top bar's Review Changes control lands on
-		// its Changed mode), then Review comments and the TODO List.
+		// right side and bottom panel that open on demand. Geometry and tool order match Balanced, so
+		// the centre keeps room to split (a group needs 640px) when a side is opened at 1280px.
 		id: "codex",
 		name: "Codex",
 		center: group("codex-primary"),
-		left: side(true, 0.2, [{ id: "codex-left", tools: ["projects"] }]),
-		right: side(false, 0.36, [
-			{ id: "codex-right-changes", tools: ["files", "specs", "artifacts"], weight: 1.4 },
-			{ id: "codex-right-review", tools: ["review", "plan"] },
+		left: side(true, 0.18, [{ id: "codex-left", tools: ["projects"] }]),
+		right: side(false, 0.28, [
+			{ id: "codex-right-top", tools: ["specs", "files", "artifacts"], weight: 1.25 },
+			{ id: "codex-right-bottom", tools: ["plan", "review"] },
 		]),
 		bottom: bottom(false, [{ id: "codex-bottom", tools: [] }]),
 	},

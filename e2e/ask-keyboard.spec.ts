@@ -106,7 +106,7 @@ async function openRound(
 ): Promise<{ card: Locator; path: string; id: string }> {
 	await openFixtureProject(page);
 	const session = seedQuestionnaire(name, `ask-keys-${name.replaceAll(" ", "-")}`, args, BASE_TS);
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await hideAuxiliaryWorkbench(page);
 	await openPersistedChatAfterInput(page, name);
 	const card = activeAsk(page);
@@ -245,7 +245,7 @@ async function openHeldRound(
 	const states = await routeSessionStates(page);
 	await openFixtureProject(page);
 	const session = seedQuestionnaire(name, toolCallId, { questions: [ROLLOUT] }, BASE_TS);
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await hideAuxiliaryWorkbench(page);
 	const held = await states.hold(session.id, toolCallId);
 	await openPersistedChat(page, name);
@@ -326,7 +326,7 @@ test("a click on Submit parks focus on the receipt without a ring; a keyboard su
 		BASE_TS + 10_000,
 	);
 	try {
-		await enterDefaultWorkspace(page);
+		await enterDefaultWorkspace(page, { panels: false });
 		await hideAuxiliaryWorkbench(page);
 		await openPersistedChatAfterInput(page, "click answer");
 		const card = activeAsk(page);
@@ -623,7 +623,7 @@ test("keys that move focus scroll the docked sheet just enough to show it, never
 	await openFixtureProject(page);
 	const session = seedQuestionnaire("tall keys", "ask-keys-tall", TALL, BASE_TS, LONG_PROMPT);
 	try {
-		await enterDefaultWorkspace(page);
+		await enterDefaultWorkspace(page, { panels: false });
 		await hideAuxiliaryWorkbench(page);
 		await openPersistedChatAfterInput(page, "tall keys");
 		const card = activeAsk(page);

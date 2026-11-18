@@ -55,7 +55,7 @@ test("a final agent failure offers Try again as an ordinary visible prompt", asy
 		],
 	});
 
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	const failure = page
@@ -99,7 +99,7 @@ test("a subscription-limit failure offers the usage page and provider settings i
 		],
 	});
 
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	const failure = page
 		.locator('[data-testid="chat-message"][data-role="error"]')
 		.filter({ hasText: "Third-party apps now draw from your extra usage" });

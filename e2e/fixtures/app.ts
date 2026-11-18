@@ -241,9 +241,14 @@ export async function releaseFocus(page: Page): Promise<void> {
 /** The Codex preset keeps the bottom panel (terminals) hidden until asked for: show it via the top bar. */
 export async function showTerminalPanel(page: Page): Promise<void> {
 	const toggle = page.getByTestId("toggle-terminal");
-	await expect(toggle).toBeVisible();
-	if ((await toggle.getAttribute("aria-pressed")) !== "true") await toggle.click();
-	await expect(toggle).toHaveAttribute("aria-pressed", "true");
+	// The top-bar toggle is hidden below the sm breakpoint; phones use the Mod+Shift+J chord.
+	if (!(await toggle.isVisible())) {
+		if (!(await page.getByTestId("bottom-panel").isVisible())) {
+			await pressPlatformShortcut(page, "Shift+J");
+		}
+	} else if ((await toggle.getAttribute("aria-pressed")) !== "true") {
+		await toggle.click();
+	}
 	await expect(page.getByTestId("bottom-panel")).toBeVisible();
 }
 
@@ -479,6 +484,8 @@ export function pseudoBackgroundColor(element: Locator, pseudo: string): Promise
 }
 
 export async function waitTerminalReady(page: Page): Promise<void> {
+	// Terminals live in the bottom panel, which the Codex frame keeps hidden until asked for.
+	await showTerminalPanel(page);
 	await expect(visibleTerminal(page)).toHaveAttribute("data-ready", "true");
 }
 

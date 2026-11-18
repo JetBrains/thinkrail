@@ -1076,7 +1076,7 @@ test("custom presets synchronize while defaults and group limits remain window-l
 	await expect(custom).toHaveCount(0);
 	await expect(peerCustom).toHaveCount(0);
 	await peer.close();
-	await expect(page.getByTestId("layout-preset").filter({ hasText: "Balanced" })).toHaveAttribute(
+	await expect(page.getByTestId("layout-preset").filter({ hasText: "Codex" })).toHaveAttribute(
 		"data-default",
 		"true",
 	);

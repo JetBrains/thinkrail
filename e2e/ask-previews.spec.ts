@@ -89,7 +89,7 @@ async function height(locator: Locator): Promise<number> {
 }
 
 async function openRound(page: Page, name: string): Promise<Locator> {
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await hideAuxiliaryWorkbench(page);
 	await openPersistedChat(page, name);
 	const card = page.locator('[data-testid="ask-user-question"][data-tone="active"]');

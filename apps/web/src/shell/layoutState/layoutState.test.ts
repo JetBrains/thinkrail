@@ -228,11 +228,11 @@ describe("frontend-local layout state", () => {
 		expect(first.left.groups[0]?.tabs).toEqual([toolTab("projects")]);
 		expect(first.right.visible).toBe(false);
 		expect(first.right.groups.flatMap((group) => group.tabs)).toEqual([
-			toolTab("files"),
 			toolTab("specs"),
+			toolTab("files"),
 			toolTab("artifacts"),
-			toolTab("review"),
 			toolTab("plan"),
+			toolTab("review"),
 		]);
 		expect(first.bottom).toMatchObject({ visible: false, groups: [{ tabs: [] }] });
 		expect(second).toBe(first);
@@ -691,7 +691,7 @@ describe("frontend-local layout state", () => {
 		setLayoutStateStorageForTests({ local, session: secondSession }, endpoint);
 
 		const second = await ensureWorkspaceLayoutState("workspace");
-		expect(second.left.width).toBe(0.2);
+		expect(second.left.width).toBe(0.18);
 		expect(local.getItem(localLayoutStorageKey(endpoint, "surface-a"))).not.toBeNull();
 		expect(local.getItem(localLayoutStorageKey(endpoint, "surface-b"))).not.toBeNull();
 	});

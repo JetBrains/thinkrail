@@ -185,7 +185,7 @@ test("a model-authored Thinking heading stays bounded and appears only while fol
 	utimesSync(chat.path, new Date(BASE_TS), new Date(BASE_TS));
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	const activity = page.getByTestId("activity-group").first();
@@ -259,7 +259,7 @@ for (const order of ["oldest-first", "newest-first"] as const) {
 		await openFixtureProject(page);
 		seedNestedActivityChat(`${order} disclosure geometry`);
 		await selectMessageOrder(page, order);
-		await enterDefaultWorkspace(page);
+		await enterDefaultWorkspace(page, { panels: false });
 		const chatScroll = page.getByTestId("chat-scroll");
 		const button = page.getByTestId(
 			order === "newest-first" ? "scroll-to-top" : "scroll-to-bottom",
@@ -587,7 +587,7 @@ test("sticky activity breadcrumbs expose the off-screen Activity â†’ Thinking â†
 	seedNestedActivityChat("sticky activity");
 
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	const chatScroll = page.getByTestId("chat-scroll");

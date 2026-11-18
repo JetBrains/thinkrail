@@ -309,9 +309,9 @@ focus to the tab. The strip's and rail's roving handlers ignore both keys.
 Codex, Balanced, Focus, and Review are web-owned resource-free frame definitions with a below-center bottom
 slot: Balanced and Review show it; Codex and Focus hide it. **Codex** is the default (`DEFAULT_LAYOUT_PRESET_ID`):
 the chat-first frame of the Codex-style shell — one center group, the Projects tool on a visible left side
-(the Thread Sidebar), and a hidden, wider right side whose first group holds Files, Specs and Artifacts and
-whose second holds Review and the TODO List, so the Review Changes control (Files on its Changed mode) and
-`Mod+J` open the review surface on demand; the hidden bottom slot is where terminals land. Codex, Balanced and Focus start with one center group; Review provides
+(the Thread Sidebar), and a hidden right side with Balanced's geometry and tool order (Specs, Files,
+Artifacts above the TODO List and Review) so the centre keeps the 640px a split needs when a side opens at
+1280px; the Review Changes control (Files on its Changed mode) and `Mod+J` open it on demand; the hidden bottom slot is where terminals land. Codex, Balanced and Focus start with one center group; Review provides
 its deliberate vertical pair. Balanced's lower right group opens on the TODO List with Review beside it: on a
 fresh workspace the plan is what there is to look at, while review comments only exist once there is a diff.
 Artifacts sits with the reference tools — after Specs and Files in Balanced's upper right group and
