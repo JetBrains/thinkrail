@@ -86,12 +86,9 @@ test("available agent switches wait for authoritative pushes and persist across 
 		await toggle.click();
 		await held.held;
 		await expect(toggle).toHaveAttribute("data-active", "true");
-		await expect(toggle).toBeDisabled();
-		await expect(page.getByTestId("agent-toggle-worker")).toBeDisabled();
 		await expect(observer).toHaveAttribute("data-active", "false");
 		release();
 		await expect(toggle).toHaveAttribute("data-active", "false");
-		await expect(toggle).toBeEnabled();
 
 		await page.reload();
 		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
@@ -131,12 +128,10 @@ test("concurrent clients disabling different roles preserve both intents before 
 		await openSubagentSettings(page);
 		for (const name of ["scout", "worker"]) {
 			const toggle = page.getByTestId(`agent-toggle-${name}`);
-			await expect(toggle).toBeEnabled();
 			baseline.set(name, await toggle.getAttribute("data-active"));
 			if (baseline.get(name) !== "true") {
 				await toggle.click();
 				await expect(toggle).toHaveAttribute("data-active", "true");
-				await expect(toggle).toBeEnabled();
 			}
 		}
 		peer = await context.newPage();
@@ -169,7 +164,6 @@ test("concurrent clients disabling different roles preserve both intents before 
 					"data-active",
 					"true",
 				);
-				await expect(client.getByTestId(`agent-toggle-${name}`)).toBeDisabled();
 			}
 		}
 		// Release in host order, preventing an older held snapshot from overtaking the latest.
@@ -187,7 +181,6 @@ test("concurrent clients disabling different roles preserve both intents before 
 					"data-active",
 					"false",
 				);
-				await expect(client.getByTestId(`agent-toggle-${name}`)).toBeEnabled();
 			}
 		}
 	} finally {
@@ -196,11 +189,9 @@ test("concurrent clients disabling different roles preserve both intents before 
 			if (!page.isClosed()) {
 				for (const [name, active] of baseline) {
 					const toggle = page.getByTestId(`agent-toggle-${name}`);
-					await expect(toggle).toBeEnabled();
 					if ((await toggle.getAttribute("data-active")) !== active) {
 						await toggle.click();
 						await expect(toggle).toHaveAttribute("data-active", active ?? "true");
-						await expect(toggle).toBeEnabled();
 					}
 				}
 			}

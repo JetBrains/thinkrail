@@ -7,13 +7,12 @@ import { AgentCatalogRows, AvailableAgents } from "./AvailableAgents";
 import { SubagentsSettings } from "./SubagentsSettings";
 import type { AgentCatalog } from "./useSubagentCatalog";
 
-const render = (catalog: AgentCatalog, disabledNames: string[] = [], disabled = false) =>
+const render = (catalog: AgentCatalog, disabledNames: string[] = []) =>
 	renderToStaticMarkup(
 		<TooltipProvider>
 			<AgentCatalogRows
 				catalog={catalog}
 				disabledNames={disabledNames}
-				disabled={disabled}
 				onChange={() => {}}
 				onRefresh={() => {}}
 			/>
@@ -62,13 +61,12 @@ test("catalog rows show metadata and global accessible switches without hiding d
 	expect(markup).not.toContain("textarea");
 });
 
-test("defaults enable all discovered roles and pending saves disable all switches", () => {
+test("defaults enable all discovered roles", () => {
 	const catalog: AgentCatalog = [
 		{ name: "worker", description: "Work", source: "builtin" },
 		{ name: "scout", description: "Explore", source: "builtin" },
 	];
 	expect(render(catalog).match(/aria-checked="true"/g)).toHaveLength(2);
-	expect(render(catalog, [], true).match(/disabled=""/g)).toHaveLength(2);
 });
 
 test("loading, empty and retryable read failures are explicit", () => {

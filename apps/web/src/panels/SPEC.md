@@ -1235,12 +1235,8 @@ a project picker, the prompt hero, and the reused
   trusted-project scope and manual Refresh after file edits. `useSubagentCatalog` reads `subagent.list` on
   mount, Refresh, context/trust change and each welcome; a context-keyed lifetime discards superseded
   responses and hides revoked project entries in render, before effects run. Loading, empty and retryable
-  failure are explicit. A role switch sends one atomic `subagent.setEnabled({ name, enabled })` intent and
-  locks every role switch until both the request succeeds and an authoritative `settings.changed` shows
-  that name in the requested state; an ACK alone never unlocks or flips a switch. Disconnect clears the
-  negotiated protocol, retiring the page until a fresh welcome; rejection, disconnect or the confirmation
-  timeout release the lock with an inline error and Retry, never optimistic state. The lock is module-level, so it
-  survives page remounts and drains the replayable RPC before releasing.
+  failure are explicit. A role switch sends one `subagent.setEnabled({ name, enabled })` request, like the
+  page's other switches: it renders only the authoritative `settings.changed` state and toasts a rejection.
   The **shell-owned injected Layout section** (`shell/LayoutSettings`) has three groups. **Presets** is
   one `SettingsList` (`layout-presets`) of Balanced/Focus/Review and the named custom presets. A row's
   primary applies it on Enter or a click, through one "Apply this layout?" confirm (`layout-apply-confirm`),

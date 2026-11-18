@@ -5,16 +5,16 @@ import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
-import { useSyncExternalStore } from "react";
 import { LEVEL_LABEL } from "@/chat/modelPicker";
 import { SETTINGS_ROWS, SettingsGroup, SettingsNotice, SettingsRow } from "@/settingsKit";
 import {
 	selectActiveRepoWorkspaceId,
 	selectActiveSubagentProjectTrust,
+	toast,
 	useAppStore,
 } from "@/store";
+import { errorText, getTransport } from "@/transport";
 import { SETTING } from "./settingsCatalog";
-import { subagentAvailability } from "./subagentAvailability";
 import { type AgentCatalog, useSubagentCatalog } from "./useSubagentCatalog";
 
 const SOURCE: Record<SubagentCatalogEntry["source"], MessageKey> = {
@@ -26,13 +26,11 @@ const SOURCE: Record<SubagentCatalogEntry["source"], MessageKey> = {
 export function AgentCatalogRows({
 	catalog,
 	disabledNames,
-	disabled,
 	onChange,
 	onRefresh,
 }: {
 	catalog: AgentCatalog;
 	disabledNames: readonly string[];
-	disabled: boolean;
 	onChange: (name: string, enabled: boolean) => void;
 	onRefresh: () => void;
 }) {
@@ -49,7 +47,6 @@ export function AgentCatalogRows({
 						variant="outline"
 						size="s"
 						tabIndex={0}
-						disabled={disabled}
 						data-testid="agents-retry"
 						onClick={onRefresh}
 					>
@@ -101,14 +98,13 @@ export function AgentCatalogRows({
 						control={
 							<Switch
 								checked={enabled}
-								disabled={disabled}
 								label={t("settings.agents.enableGlobally", { name: entry.name })}
 								testId={`agent-toggle-${entry.name}`}
 								tabIndex={0}
 								onCheckedChange={(next) => onChange(entry.name, next)}
 							/>
 						}
-						reset={{ changed: !enabled, disabled, onReset: () => onChange(entry.name, true) }}
+						reset={{ changed: !enabled, onReset: () => onChange(entry.name, true) }}
 					/>
 				);
 			})}
@@ -128,13 +124,12 @@ function AvailableAgentsGroup() {
 	const trusted = useAppStore(selectActiveSubagentProjectTrust) === "granted";
 	const welcomeGeneration = useAppStore((state) => state.welcomeGeneration);
 	const disabledNames = useAppStore((state) => state.disabledSubagents);
-	const saving = useSyncExternalStore(
-		subagentAvailability.subscribe,
-		subagentAvailability.getSnapshot,
-		subagentAvailability.getSnapshot,
-	);
 	const { catalog, refresh } = useSubagentCatalog(workspaceId, trusted, welcomeGeneration);
-	const save = (name: string, enabled: boolean) => void subagentAvailability.save(name, enabled);
+	const save = (name: string, enabled: boolean) => {
+		getTransport()
+			.request("subagent.setEnabled", { name, enabled })
+			.catch((err: unknown) => toast.error(errorText(err), t("settings.agents.saveFailed")));
+	};
 
 	return (
 		<SettingsGroup
@@ -154,7 +149,7 @@ function AvailableAgentsGroup() {
 						size="s"
 						tabIndex={0}
 						iconLeft={RiRefreshLine}
-						disabled={catalog === "loading" || saving.pending}
+						disabled={catalog === "loading"}
 						onClick={refresh}
 						data-testid="agents-refresh"
 					>
@@ -164,37 +159,9 @@ function AvailableAgentsGroup() {
 			}}
 			testId="settings-agent-catalog"
 		>
-			{saving.pending ? (
-				<p role="status" className="py-8 text-text-muted tr-text-metadata">
-					{t("settings.agents.saving")}
-				</p>
-			) : null}
-			{saving.failed ? (
-				<SettingsNotice
-					variant="error"
-					testId="agents-save-failed"
-					action={
-						<Button
-							variant="outline"
-							size="s"
-							tabIndex={0}
-							disabled={catalog === "loading"}
-							data-testid="agents-save-retry"
-							onClick={() => {
-								if (saving.failed) save(saving.failed.name, saving.failed.enabled);
-							}}
-						>
-							{t("common.retry")}
-						</Button>
-					}
-				>
-					{t("settings.agents.saveFailed")}
-				</SettingsNotice>
-			) : null}
 			<AgentCatalogRows
 				catalog={catalog}
 				disabledNames={disabledNames}
-				disabled={saving.pending}
 				onChange={save}
 				onRefresh={refresh}
 			/>
