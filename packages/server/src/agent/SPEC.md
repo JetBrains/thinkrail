@@ -988,7 +988,10 @@ re-opened transcripts provider-valid.
     `Subagents` owner per parent; its extension is injected on every resource load. A host-injected
     `setSubagentsEnabledResolver` maps that
     workspace id to its current effective policy without creating an `agent` → settings/workspaces edge.
-    `setSubagentEnabledResolver` separately injects live global per-name availability into every retained owner, without importing settings. `listSubagentCatalog(cwd?, includeProject?)` reuses portable discovery and `getAgentDir`, projecting only name, description, source, optional model/thinking (never prompts or paths). Host supplies only registered workspace cwd and admitted pi-resource trust; absent cwd never loads project definitions.
+    `setSubagentEnabledResolver` injects the host's live per-name availability into every retained owner
+    (`isAgentEnabled`), without importing settings. `listSubagentCatalog(cwd?, includeProject?)` projects
+    portable discovery onto `SubagentCatalogEntry`; without a cwd it never loads project definitions
+    ([[submodule-server-host]] supplies the trusted worktree).
     The predicate reaches the extension's launch-time guard and initial/reload activation. For live
     policy changes, `refreshSubagentTools(workspaceId?)` removes/adds `Agent` +
     `get_subagent_result` through pi's active-tool API: idle sessions update synchronously, streaming

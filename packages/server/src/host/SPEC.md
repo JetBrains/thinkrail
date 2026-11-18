@@ -8,16 +8,20 @@ depends-on: [module-contracts]
 tags: [host, public-surface-checked]
 ---
 
-## Subagent catalog and availability
-
-`subagent.list` (from `SUBAGENT_CATALOG_PROTOCOL_VERSION`, 127) accepts optional `workspaceId`, never a caller cwd. Host resolves the registered workspace and `admissionContextFor(...).piResourceTrusted` before calling agent's metadata-only catalog. No workspace means builtins/personal only; untrusted project files are never loaded. Host injects `getConfig().disabledSubagents` as a live per-name resolver and resets it on stop; settings persists before the resolver sees a change. No catalog push channel or extra catalog state is needed: each read rediscovers files.
-
-`subagent.setEnabled({ name, enabled })` shares the unreleased v127 gate and returns `Ack`. Its handler delegates through the settings barrel to `setSubagentEnabled`, never discovery or filesystem access. Malformed raw payloads reject without mutation/publication. The settings owner’s synchronous latest-state read/update preserves concurrent different-role intents; whole-list `settings.update` compatibility is unchanged.
-
 ## Responsibility
 
 The wire and composition root: `Bun.serve` HTTP+WS, static SPA serving, the WS method→handler registry,
 channel fan-out, and the process-boot wrapper both launchers share.
+
+## Subagent catalog
+
+`subagent.list` takes an optional `workspaceId`, never a caller cwd: the host resolves the registered
+workspace and passes its worktree and `admissionContextFor(...).piResourceTrusted` to agent's metadata-only
+`listSubagentCatalog`, so without a workspace or pi-resource trust only built-in and personal definitions
+are read. Each read rediscovers files; there is no catalog state or push. `subagent.setEnabled` delegates
+to settings' `setSubagentEnabled` ([[submodule-server-settings]]). The host injects
+`getConfig().disabledSubagents` as agent's live per-name resolver and resets it on stop. Wire shape and
+gate: [[module-contracts]].
 
 ## Boundary
 

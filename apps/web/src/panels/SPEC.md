@@ -1225,18 +1225,17 @@ a project picker, the prompt hero, and the reused
   `SUBAGENT_MAX_CONCURRENT`. Global mutations converge through `settings.changed`, workspace ones through
   `workspace.updated`; none is optimistic.
   From `SUBAGENT_CATALOG_PROTOCOL_VERSION` the page ends with **Available agents** (`AvailableAgents.tsx`,
-  scope *All projects*, catalog id `subagent-roles`, Refresh as the group action): one row per built-in,
-  personal and trusted active repository-workspace definition with name, translated source, description,
-  pinned raw model reference or parent/invocation inheritance, and explicit thinking effort, and a global
-  per-name switch (Changed while off; Reset re-enables). It was briefly a separate Agents section; once
-  main gave delegation its own Subagents page the roster joined it (2026-11-18). Disabled definitions
-  remain visible, new names default enabled, absent names stay in the preference; no prompt, path or
-  editor is exposed. Copy states global scope, new-launch-only enforcement (ongoing work continues),
-  trusted-project scope and manual Refresh after file edits. `useSubagentCatalog` reads `subagent.list` on
-  mount, Refresh, context/trust change and each welcome; a context-keyed lifetime discards superseded
-  responses and hides revoked project entries in render, before effects run. Loading, empty and retryable
-  failure are explicit. A role switch sends one `subagent.setEnabled({ name, enabled })` request, like the
-  page's other switches: it renders only the authoritative `settings.changed` state and toasts a rejection.
+  `SubagentSettings`' gated `roster`; scope *All projects*, catalog id `subagent-roles`, Refresh as the
+  group action): one row per definition `subagent.list` returns for the active repository workspace — name,
+  translated source, description, pinned raw model reference or parent/invocation inheritance, explicit
+  thinking effort — and a global per-name switch (Changed while off; Reset re-enables). Disabled
+  definitions stay listed and new names default enabled; no prompt, path or editor is exposed. Copy states
+  global scope, new-launch-only enforcement (ongoing work continues), trusted-project scope and manual
+  Refresh after file edits. `useSubagentCatalog` reads `subagent.list` on mount, Refresh, workspace/trust
+  change and each welcome; a context-keyed lifetime shows loading at once and discards superseded
+  responses. Loading, empty and retryable failure are explicit. A role switch sends one
+  `subagent.setEnabled({ name, enabled })` request, like the page's other switches: it renders only the
+  authoritative `settings.changed` state and toasts a rejection.
   The **shell-owned injected Layout section** (`shell/LayoutSettings`) has three groups. **Presets** is
   one `SettingsList` (`layout-presets`) of Balanced/Focus/Review and the named custom presets. A row's
   primary applies it on Enter or a click, through one "Apply this layout?" confirm (`layout-apply-confirm`),

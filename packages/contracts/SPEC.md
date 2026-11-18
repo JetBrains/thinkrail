@@ -183,7 +183,13 @@ the palette ranks with — kept here so host-side search can rank with the same 
 
 ## Subagent catalog (v127)
 
-`SUBAGENT_CATALOG_PROTOCOL_VERSION = 127` gates `subagent.list`, `subagent.setEnabled`, and `AppConfig.disabledSubagents` writes. The unreleased gate stays at 127. `subagent.setEnabled({ name: string, enabled: boolean })` returns `Ack` and applies only that name against the settings owner’s latest list, synchronously through the existing persist-before-broadcast update path. Blank/non-string names and non-boolean enabled values reject without mutation or publication; unknown nonblank names are retained. No workspace, cwd or filesystem authority is accepted. Whole-list `settings.update` remains compatible, but UI role switches use only the per-name RPC, never a stale-list fallback. `subagent.list({ workspaceId? })` returns `SubagentCatalogEntry[]`: name, description, source (`builtin`/`personal`/`project`), optional model and thinking. It never exposes prompt bodies or file paths. Host derives project discovery from the registered workspace and pi-resource trust admission; without workspace only builtins/personal are listed. Disabled entries stay in the catalog. `disabledSubagents` defaults to `[]`, is global by name, and follows disabledExtensions validation/normalization with unknown names retained. Running work/completions are not cancelled or suppressed. There is no new broadcast channel; `settings.changed` remains authoritative for switches.
+`SUBAGENT_CATALOG_PROTOCOL_VERSION` (127) gates `subagent.list`, `subagent.setEnabled` and writes of
+`AppConfig.disabledSubagents` (default `[]`); the client checks it. `subagent.list({ workspaceId? })`
+returns `SubagentCatalogEntry[]` — `name`, `description`, `source` (`builtin` | `personal` | `project`),
+optional `model` and `thinking`, disabled entries included, never a prompt body or path; it takes no cwd
+([[submodule-server-host]] derives project admission). `subagent.setEnabled({ name, enabled })` returns
+`Ack` and changes only that name ([[submodule-server-settings]]); the result converges through
+`settings.changed`, with no new channel. Enforcement: [[module-pi-subagents]].
 
 ## Contents
 

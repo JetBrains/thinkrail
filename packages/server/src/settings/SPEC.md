@@ -78,7 +78,18 @@ interval (`1–3600`, default 30), because those values govern host process cade
   rule ([[submodule-web-keybindings]]). On load, malformed chords are dropped, an entry left with none falls
   back to its defaults, and a stored `[]` stays unbound. Gated on `KEYBINDINGS_PROTOCOL_VERSION` (v123):
   an older host rejects the key, so the client sends it only above the gate (`supportsKeybindings`).
-- `disabledSubagents` is a global list of agent names, default `[]`, with the same validation, disk normalization, dedupe and unknown-name retention as `disabledExtensions`. Host injects the live name resolver into agent; it affects only new launches and advertised rosters, not running work or completion delivery. New clients gate writes on `SUBAGENT_CATALOG_PROTOCOL_VERSION` (127). `setSubagentEnabled(name, enabled)` validates a nonblank string and a boolean before reading state, applies only that name against the latest `getConfig().disabledSubagents`, then synchronously calls `updateConfig` to persist/publish. There is no await between read and update, so concurrent websocket intents for different names preserve both changes and unknown names without another state owner. Invalid intent or failed persistence leaves cache, disk and publication unchanged. Raw whole-list `settings.update` remains intentionally supported for compatibility; UI role switches use the per-name intent only.
+- `disabledSubagents` lists agent definition names switched off globally; absent means `[]`. Validation,
+  dedupe and unknown-name retention are `disabledExtensions`'; `host` turns it into the agent's live
+  per-name resolver ([[submodule-server-host]]) and [[module-pi-subagents]] enforces it.
+  **`setSubagentEnabled(name, enabled)`** (the `subagent.setEnabled` write) validates a non-blank string and
+  a boolean, then adds or removes only that name against the latest cached list and calls `updateConfig`
+  synchronously: with no await between read and write, concurrent intents for different names from
+  different windows both survive without another state owner, and an invalid intent or failed write
+  changes nothing. Whole-list `settings.update` stays accepted; the UI uses the per-name write. Accepted
+  limitations: the list is global by name, so disabling a project role `deploy` in one workspace also
+  disables an unrelated `deploy` elsewhere, and a disabled name no longer listed stays disabled but is not
+  shown; with every role disabled the `Agent` tool stays registered with an empty roster — the delegation
+  switch (`subagentsEnabled` or the workspace override) is how to remove it.
 - `disabledPackages` is the same shape for installed pi packages, keyed by the package identity the
   catalog reports (`PiPackageSummary.identity`); it exists because pi has no "whole package off" setting
   and writing pi's per-resource filters would reset a user's own filters on re-enable. Validation,
