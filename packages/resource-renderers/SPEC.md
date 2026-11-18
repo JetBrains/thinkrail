@@ -40,7 +40,7 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
 - the host seam — `ResourceHostProvider`, `ResourcePreferencesProvider`, `ResourceEnvironmentProvider`,
   `ResourceScopeProvider`, `useOptionalResourceHost`, `useResourceScope` and the `ResourceHost`,
   `ResourcePreferences`, `ResourceScope`, `ResourceFileReviewProps`, `ResourceReviewSendProps`,
-  `ResourceOpenInBrowserProps`,
+  `ResourceOpenInBrowserProps`, `ResourcePeekTarget`, `ResourcePeekOptions`,
   `ResourceMarkdown`, `ResourceCodeHost`, `ResourceCodeLanguage`, `ResourceMarkdownProps`,
   `MarkdownRehypePlugins` types;
 - `canonicalWorkspacePath` — the package's copy of the app's workspace-relative path identity (`lib`'s
@@ -70,10 +70,11 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   `sideLabels` (`DiffSideLabels`, also `ResourceDiffProps.sideLabels`) names a diff's two sides where "Old" /
   "New" would mislead, as when two alternatives are compared: the visual diffs (HTML, image, SVG) use them
   for the 2-up headings and captions, the rest ignore them;
-- **`FramedResourcePreview`** — `ResourcePreview` in a caller-sized frame with **Open in tab** (the file, or
-  the comparison for a diff) and **Full screen** (a dialog with the full chrome, sharing renderer and view
-  state; an `onFullscreen` handler replaces that dialog with the caller's own), every action an explicit tab
-  stop; nothing without a host and a workspace scope. It is the one
+- **`FramedResourcePreview`** — `ResourcePreview` in a caller-sized frame with **Peek** (only when the host
+  has `peek`: the file, or the before/after, under the scope's session; `onPeeked` tells the caller it
+  happened), **Open in tab** (the file, or the comparison for a diff) and **Full screen** (a dialog with
+  the full chrome, sharing renderer and view state; an `onFullscreen` handler replaces that dialog with the
+  caller's own), every action an explicit tab stop; nothing without a host and a workspace scope. It is the one
   framed preview of visualize's file card and the questionnaire's previews ([[module-ext-visualize]],
   [[module-ext-ask-user-question]]) — lifted from visualize when the second consumer arrived;
 - **`ResourceReveal`** and **`SOURCE_RENDERER_ID`** (`thinkrail/code`) — the open-at-a-line contract: a
@@ -139,6 +140,11 @@ A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` 
 - `bytesUrl(workspaceId, path, oid?)` — the host byte route for images, PDFs and relative markdown assets.
 - `openFile(workspaceId, path, { keep? })` and `openComparison(workspaceId, before, path)` — navigation for
   relative document links (preview) and explicit Open-in-tab actions (keep).
+- `peek?(workspaceId, { path, before? }, { sessionId?, follow? })` — the host's side pane (ThinkRail's
+  Peek) for a file or a before/after; `sessionId` is the opener chat. With `follow` (the target this
+  caller peeked last) the host replaces that entry only while it is still shown, else does nothing, so a
+  caller can keep the pane on its cursor without reopening a pane the user closed. Optional: a host
+  without a side pane, or the side pane's own host, leaves it out and no Peek action renders.
 - `readFile(workspaceId, path)` and `subscribeFileChanges(workspaceId, onChange)` — `ResourcePreview`'s
   content and live refresh (`null` paths mean "anything may have changed": a truncated batch or a new
   connection, whose missed pushes are never replayed). A read may come back without `meta` from a host that

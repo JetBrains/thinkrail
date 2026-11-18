@@ -35,7 +35,7 @@ import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FilesPanel } from "../panels/FilesPanel";
 import { startChatInTab } from "../panels/openChat";
-import { fileComparisonTab, openFileInTab } from "../panels/openTabs";
+import { fileComparisonTab } from "../panels/openTabs";
 import { ProjectTree } from "../panels/ProjectTree";
 import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
 import { reviewFlagForPaths, reviewFlags, tabReviewPaths } from "../panels/reviewModel";
@@ -234,12 +234,17 @@ function ChatResourceBody({
 }: {
 	workspaceId: string;
 	tab: Extract<LayoutCenterTab, { kind: "chat" }>;
-	onOpenFile: (path: string) => void;
+	onOpenFile: (sessionId: string, path: string) => void;
 	landingChord: string;
 	chatActions: readonly ChatAction[];
 }) {
 	const t = useT();
 	const available = useAppStore((state) => state.sessions[tab.sessionId] !== undefined);
+	const sessionId = tab.sessionId;
+	const openFile = useCallback(
+		(path: string) => onOpenFile(sessionId, path),
+		[onOpenFile, sessionId],
+	);
 	const [stalled, setStalled] = useState(false);
 	useEffect(() => {
 		if (available) return;
@@ -258,7 +263,7 @@ function ChatResourceBody({
 					<ChatView
 						sessionId={tab.sessionId}
 						workspaceId={workspaceId}
-						onOpenFile={onOpenFile}
+						onOpenFile={openFile}
 						landingChord={landingChord}
 						chatActions={chatActions}
 					/>
@@ -462,8 +467,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			: { reviewShowing: false, showingKey: "" };
 	}, [workspaceId]);
 	const openToolFile = useCallback(
-		(path: string) => {
-			void openFileInTab(workspaceId, path, "preview");
+		(sessionId: string, path: string) => {
+			useAppStore.getState().requestPeek(workspaceId, { kind: "file", path, sessionId });
 		},
 		[workspaceId],
 	);

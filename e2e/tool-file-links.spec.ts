@@ -166,12 +166,7 @@ async function toolStep(page: Page, toolName: string, index = 0): Promise<Locato
 	return step;
 }
 
-async function returnToChat(page: Page): Promise<void> {
-	await page.locator('[data-testid="editor-tab"][data-kind="chat"]').click();
-	await expect(page.getByTestId("chat-view")).toBeVisible();
-}
-
-test("assistant Markdown opens safe relative files without navigating the browser", async ({
+test("assistant Markdown opens safe relative files in Peek, as chat links do by decision, without navigating the browser", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -211,13 +206,14 @@ test("assistant Markdown opens safe relative files without navigating the browse
 	);
 
 	await clickTranscriptControl(local);
-	const fileTab = page.locator('[data-testid="editor-tab"][data-kind="file"]');
-	await expect(fileTab).toHaveCount(1);
-	await expect(fileTab).toContainText("README.md");
-	await expect(fileTab).toHaveAttribute("data-preview", "true");
+	const peek = page.locator('[data-region-kind="peek"][data-open]');
+	await expect(peek.getByTestId("peek-crumb")).toHaveText(["README.md"]);
+	await expect(peek.getByTestId("resource-preview")).toBeVisible();
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="file"]')).toHaveCount(0);
+	await expect(local).toBeFocused();
 });
 
-test("structured tool paths reuse the preview tab while rich tool results stay intentional", async ({
+test("structured tool paths open in Peek instead of the preview tab, by decision, while rich tool results stay intentional", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -232,23 +228,23 @@ test("structured tool paths reuse the preview tab while rich tool results stay i
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 
 	const localRead = await toolStep(page, "read");
-	await clickTranscriptControl(localRead.getByTestId("tool-file-link"));
-	const fileTabs = page.locator('[data-testid="editor-tab"][data-kind="file"]');
-	await expect(fileTabs).toHaveCount(1);
-	await expect(fileTabs.first()).toContainText("README.md");
-	await expect(fileTabs.first()).toHaveAttribute("data-preview", "true");
+	const readLink = localRead.getByTestId("tool-file-link");
+	await clickTranscriptControl(readLink);
+	const peek = page.locator('[data-region-kind="peek"][data-open]');
+	const crumbs = peek.getByTestId("peek-crumb");
+	await expect(crumbs).toHaveText(["README.md"]);
+	await expect(readLink).toBeFocused();
 
-	await returnToChat(page);
 	const specGet = await toolStep(page, "spec_get");
 	await expect(specGet).not.toContainText('"id"');
 	await clickTranscriptControl(
 		specGet.getByTestId("tool-file-link").filter({ hasText: "module-a/SPEC.md" }),
 	);
-	await expect(fileTabs).toHaveCount(1);
-	await expect(fileTabs.first()).toContainText("SPEC.md");
-	await expect(fileTabs.first()).toHaveAttribute("data-preview", "true");
+	await expect(crumbs).toHaveText(["README.md", "SPEC.md"]);
+	await expect(peek.locator('[data-testid="peek-crumb"][data-current]')).toHaveText("SPEC.md");
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="file"]')).toHaveCount(0);
+	await expect(page.getByTestId("chat-view")).toBeVisible();
 
-	await returnToChat(page);
 	const externalRead = await toolStep(page, "read", 1);
 	await expect(externalRead).toContainText("/tmp/outside.png");
 	await expect(externalRead.getByTestId("tool-file-link")).toHaveCount(0);

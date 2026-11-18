@@ -60,6 +60,22 @@ export function pushPeekEntry(current: PeekState | undefined, entry: PeekEntry):
 	return { stack: refreshed, index: existing, pinned, open: true };
 }
 
+export function followPeekEntry(
+	current: PeekState | undefined,
+	from: PeekEntry,
+	entry: PeekEntry,
+): PeekState | undefined {
+	const shown = current?.open ? current.stack[current.index] : undefined;
+	if (!current || !shown || peekEntryIdentity(shown) !== peekEntryIdentity(from)) return current;
+	const identity = peekEntryIdentity(entry);
+	const existing = current.stack.findIndex(
+		(candidate) => peekEntryIdentity(candidate) === identity,
+	);
+	if (existing < 0) return { ...current, stack: current.stack.with(current.index, entry) };
+	if (existing === current.index) return pushPeekEntry(current, entry);
+	return pushPeekEntry(removePeekEntry(current, current.index), entry);
+}
+
 export function showPeekIndex(
 	current: PeekState | undefined,
 	index: number,

@@ -107,6 +107,22 @@ describe("the peek stack", () => {
 		expect(peek()?.index).toBe(PEEK_STACK_LIMIT - 1);
 	});
 
+	test("following replaces the entry it put there, and only while Peek still shows it", () => {
+		const follow = (from: string, to: string) =>
+			useAppStore.getState().followPeek(WS, file(from), file(to, { sessionId: "s1" }));
+		request(file("a"));
+		request(file("b", { sessionId: "s1" }));
+		follow("b", "/repo/wt/c");
+		expect(peek()).toMatchObject({ stack: [file("a"), file("c", { sessionId: "s1" })], index: 1 });
+		follow("c", "a");
+		expect(peek()).toMatchObject({ stack: [file("a", { sessionId: "s1" })], index: 0 });
+		follow("b", "d");
+		expect(peek()?.stack).toEqual([file("a", { sessionId: "s1" })]);
+		useAppStore.getState().closePeek(WS);
+		follow("a", "d");
+		expect(peek()).toMatchObject({ stack: [file("a", { sessionId: "s1" })], open: false });
+	});
+
 	test("a removed workspace takes its Peek along and accepts no new one", () => {
 		request(file("a"));
 		useAppStore.getState().clearWorkspaceTabs(WS);

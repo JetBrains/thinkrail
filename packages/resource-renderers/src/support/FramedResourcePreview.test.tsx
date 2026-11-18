@@ -1,9 +1,32 @@
 import { describe, expect, it } from "bun:test";
+import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ResourceEnvironmentProvider } from "../host";
+import {
+	ResourceEnvironmentProvider,
+	type ResourceHost,
+	ResourceHostProvider,
+	ResourceScopeProvider,
+} from "../host";
 import { HtmlFrame } from "../renderers/html/HtmlFrame";
 import { HtmlPreviewNotice } from "../renderers/html/ViewportSwitch";
-import { FramedResourcePreview } from "./FramedResourcePreview";
+import { FramedResourcePreview, PeekAction } from "./FramedResourcePreview";
+
+const host: ResourceHost = {
+	markdown: () => null,
+	code: {
+		languages: [],
+		languageId: () => null,
+		pierreTheme: { name: "test", appearance: "dark", style: {} },
+		editorTheme: () => ({ rules: [], colors: {} }),
+	},
+	bytesUrl: () => "",
+	openFile: () => {},
+	openComparison: () => {},
+	readFile: async () => ({ content: "" }),
+	subscribeFileChanges: () => () => {},
+	FileReview: () => null,
+	ReviewSend: () => null,
+};
 
 describe("FramedResourcePreview", () => {
 	it("renders nothing without a host and a workspace scope", () => {
@@ -44,5 +67,32 @@ describe("frame focus", () => {
 		expect(frame()).not.toContain("tabindex");
 		expect(frame("auto")).not.toContain("tabindex");
 		expect(frame("manual")).toContain('tabindex="-1"');
+	});
+});
+
+describe("Peek action", () => {
+	const action = (value: ResourceHost, before?: string) =>
+		renderToStaticMarkup(
+			<TooltipProvider>
+				<ResourceHostProvider value={value}>
+					<ResourceScopeProvider value={{ workspaceId: "w1", sessionId: "s1" }}>
+						<PeekAction path="mockups/a.html" before={before} testIdPrefix="test-preview" />
+					</ResourceScopeProvider>
+				</ResourceHostProvider>
+			</TooltipProvider>,
+		);
+
+	it("is offered only by a host that peeks, so Peek's own host never offers it", () => {
+		expect(action(host)).toBe("");
+		const peeking = action({ ...host, peek: () => {} });
+		expect(peeking).toContain('data-testid="test-preview-peek"');
+		expect(peeking).toContain('aria-label="Open in Peek"');
+		expect(peeking).toContain('tabindex="0"');
+	});
+
+	it("names a before/after as a diff", () => {
+		expect(action({ ...host, peek: () => {} }, "mockups/b.html")).toContain(
+			'aria-label="Open diff in Peek"',
+		);
 	});
 });

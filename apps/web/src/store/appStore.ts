@@ -132,6 +132,7 @@ import {
 	withoutMcpSession,
 } from "./mcp";
 import {
+	followPeekEntry,
 	hidePeek,
 	type PeekEntry,
 	type PeekState,
@@ -1646,6 +1647,7 @@ interface AppState {
 	applyConfig: (config: AppConfig) => void;
 	requestToolView: (workspaceId: string, tool: LayoutToolId) => void;
 	requestPeek: (workspaceId: string, entry: PeekEntry) => void;
+	followPeek: (workspaceId: string, from: PeekEntry, entry: PeekEntry) => void;
 	peekBack: (workspaceId: string) => void;
 	peekForward: (workspaceId: string) => void;
 	showPeekEntry: (workspaceId: string, index: number) => void;
@@ -5043,6 +5045,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((state) =>
 			patchPeek(state, workspaceId, (peek) =>
 				pushPeekEntry(peek, canonicalPeekEntry(state, workspaceId, entry)),
+			),
+		),
+	followPeek: (workspaceId, from, entry) =>
+		set((state) =>
+			patchPeek(state, workspaceId, (peek) =>
+				followPeekEntry(
+					peek,
+					canonicalPeekEntry(state, workspaceId, from),
+					canonicalPeekEntry(state, workspaceId, entry),
+				),
 			),
 		),
 	peekBack: (workspaceId) =>

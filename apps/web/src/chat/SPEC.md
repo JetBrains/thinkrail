@@ -361,7 +361,7 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   opener-to-next-opener rule as the receipts below; the host stamps a round with the delivered prompt's own
   timestamp, so a follow-up queued into a running agent gets its own round — and a later round that touches
   a file again lists it too without taking it from the earlier one. Rows are named by their path inside the artifacts folder; the chip reveals the
-  Artifacts tool and opens a file through the transcript's `onOpenFile`.
+  Artifacts tool and opens a file through the transcript's `onOpenFile` (into Peek).
 - The chips are a **switch, not independent folds**: at most one list is open, choosing another
   side replaces it, and re-choosing the open one clears the selection. That invariant is *structural* — the
   divider stores the **selected key** (`useSelection`, one entry per divider row), so no state exists in
@@ -492,9 +492,9 @@ content and their own controls, which a treeitem's name would flatten and its ro
 - **Item actions.** C copies the message source, a thought's text or a tool call's result text (nothing
   for an Activity group, a running tool or a skill/review card) with a "Copied" toast; O opens the path of
   `read`/`edit`/`write` and the single-spec tools (`spec_create`/`spec_get`/`spec_update`) through the same
-  `onOpenFile` preview open a click uses; Shift+F10 / Menu opens a keyboard-anchored `DropdownMenu` with
-  the applicable Expand/Collapse, Copy, Open file, and focus returns to the item. A context menu was
-  rejected: it would take native right-click copy. Esc returns to the composer through `refocus()`, draft
+  `onOpenFile` a click uses — into Peek, focus staying on the item; Shift+F10 / Menu opens a
+  keyboard-anchored `DropdownMenu` with the applicable Expand/Collapse, Copy, Open file, and focus returns
+  to the item. A context menu was rejected: it would take native right-click copy. Esc returns to the composer through `refocus()`, draft
   and caret intact. **Esc on the parked feed does nothing** (user, 2026-11-16) — not even
   `preventDefault`, so no other listener reacts — and only an item's Esc returns: an extra Esc after
   leaving the composer never throws the reader back into the field; `Mod+L` returns. The one listener
@@ -730,8 +730,9 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   primitive offers that action only for a non-empty relative path or an absolute path contained by
   `workspaceRoot`; URLs, escaping relatives, and foreign absolute paths remain selectable text. Renderers
   source candidates only from explicit tool args/details — never regex guesses over Bash output, code, or
-  prose. A standalone renderer has no callback and therefore stays inert. The callback's preview-slot
-  semantics belong to [[submodule-web-panels]].
+  prose. A standalone renderer has no callback and therefore stays inert. The shell's callback peeks the
+  file under this chat (user decision: chat links open in Peek, no longer the preview tab;
+  [[submodule-web-shell]], *Peek*); opening it moves no focus.
 - **Tool file previews** — `ChatTranscript` wraps its row list in [[module-resource-renderers]]'
   `ResourceScopeProvider` with the chat's `{ workspaceId, sessionId }`, memoized on the two ids (one provider
   above the list, like the fold geometry). A tool card can then render

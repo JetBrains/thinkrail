@@ -4934,6 +4934,8 @@
 	"viewer.preview.openDiffInTab": "Open diff in tab",
 	"viewer.preview.openInBrowser": "Open in browser",
 	"viewer.preview.openInTab": "Open in tab",
+	"viewer.preview.peek": "Open in Peek",
+	"viewer.preview.peekDiff": "Open diff in Peek",
 	"viewer.preview.refreshFailed": "Couldn't refresh {{path}}: {{message}}. Showing the last loaded version.",
 	"viewer.region.commentOnDocument": "Comment on this document",
 	"viewer.region.commentOnImage": "Comment on this image",

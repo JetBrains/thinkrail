@@ -199,10 +199,17 @@ so an active placement motion restores the latest edge; on slow runners the rest
 mousedown and mouseup, or puts a preview iframe under the pointer, and the click is lost while the action
 reports success. Settling cannot stop a motion that later growth starts, so the probe first waits for the
 control's own content (a preview's frames or notice), and a click after a dialog waits for it to hide.
-`visualize.spec.ts` and `tool-file-links.spec.ts` click every transcript control this way: a file card's
+`visualize.spec.ts`, `tool-file-links.spec.ts` and `peek.spec.ts` click every transcript control this way: a file card's
 fixed-height preview is taller than the transcript beside the default bottom terminal, so its toolbar
 sits above the fold at the latest edge, and each tool-step expansion moves the edge a following chat then
 animates to.
+`peek.spec.ts` pins Peek on seeded chats: a tool file link, an assistant link, a questionnaire preview's
+frame action (the option pane then following the cursor without growing the stack) and a visualize card's
+action and links open it instead of a tab; Back/Forward, re-peeking selecting, Open in tab promoting to a
+kept tab, the right tool side folding and restoring, the width surviving a reload, a click dispatched over a
+focused composer leaving it focused, and Esc closing it after the composer's own Esc but never while
+pinned. `tool-file-links.spec.ts` and `keyboard-chat.spec.ts` assert Peek where they asserted the preview
+tab, by user decision.
 Entering a workspace auto-opens its latest chat, and a pending questionnaire there claims focus and reveal
 at once. Workbench shortcuts pressed afterwards are user input, and the card yields to them. Questionnaire
 attention coverage therefore closes and reopens the chat after arranging the workbench.
@@ -451,7 +458,7 @@ composer onto the newest message and Esc back with the draft and caret intact (a
 takes the caret to its start), ↑/↓ with k/j and Home/End, →/← and l/h expanding an Activity and walking
 its nested Thinking and tool steps, a keyboard expand of the newest Activity in a chat shortened by the
 bottom Terminal and focus entering an on-screen step of it leaving follow without scrolling the focused
-header or step away, C (clipboard), O (a preview tab) and the Shift+F10 item menu, Tab
+header or step away, C (clipboard), O (Peek, the item keeping focus) and the Shift+F10 item menu, Tab
 walking only the focused item's controls then leaving, PgUp/PgDn from the composer paging the transcript
 with focus kept, Latest from the keyboard and a history jump landing on the message, focus parked on the
 feed when a wheel scroll unmounts the focused row and the next key bringing it back, newest-first order,

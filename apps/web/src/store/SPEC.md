@@ -227,7 +227,10 @@ roster's catalog reads ([[submodule-web-panels]]).
   `peekEntryIdentity` — `layoutResourceIdentity` of the matching tab, over worktree-relative paths the
   action canonicalizes. **`requestPeek`** appends an entry (the oldest beyond `PEEK_STACK_LIMIT`, 20,
   drop) or selects the one with its identity, refreshing its line and opener, and opens Peek; it emits no
-  layout intent and touches no attention or focus. `peekBack` / `peekForward` / `showPeekEntry` move the
+  layout intent and touches no attention or focus. **`followPeek(from, entry)`** replaces the shown entry
+  with `entry` (selecting `entry` instead when the stack already holds it) only while Peek is open on
+  `from`, and is otherwise a no-op — an opener that follows its own cursor never reopens a Peek the user
+  closed or moved elsewhere, and never grows the stack. `peekBack` / `peekForward` / `showPeekEntry` move the
   index; `closePeekEntry` removes one (showing its predecessor; the last one drops the workspace's entry,
   which hides Peek); `closePeek` hides and unpins but keeps the stack for the next request; `pinPeek`
   applies only while open. Auto-hide folds into the writes that cause it: `applySessionState` and

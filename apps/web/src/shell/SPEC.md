@@ -214,12 +214,23 @@ the Workbench its `peek` prop (open, the `peekWidth` preference, its pointer-up 
 - **Openers** call `requestPeek(workspaceId, entry)`: it pushes the entry, or selects the one with the same
   resource identity, emits no layout intent and moves no focus — opening Peek never takes the composer's
   keyboard. An entry names its opener chat (`sessionId`), which routes review sends and drives auto-hide.
+  The openers today:
+  - **chat file navigation** — `WorkspaceWorkbench.openToolFile`, the `onOpenFile` every `ChatView`
+    gets (`ChatResourceBody` binds its chat's `sessionId`): tool-card file links, assistant Markdown
+    links, the round's artifact chips, visualize's file links and the transcript's `O` all peek a file
+    under that chat (user decision; they opened the preview tab before). A modifier click keeps no
+    tab-opening variant — no chat link had one, and Peek's Open in tab is the way to a tab;
+  - **framed previews** — the app `HOST`'s `peek` (a `ResourceHost.peek`, [[module-resource-renderers]])
+    turns `FramedResourcePreview`'s Peek action into a `file` or `compare` entry under the frame's scope
+    session, and its `follow` option into the store's `followPeek`, which lets the questionnaire's
+    option pane keep Peek on the option under its cursor without growing the stack
+    ([[module-ext-ask-user-question]]).
 - **`PeekPane`** (keyed by workspace) is a toolbar — Back / Forward, a crumb per stack entry (click shows
   it, × removes it), Pin, Open in tab, Full screen, Close — over the current entry. A file or comparison
   renders `ResourcePreview` (full chrome, renderer/layout/view state kept per entry while the pane lives)
   under `ResourceScopeProvider { workspaceId, sessionId }` and `AppResourceHost`'s **`PEEK_HOST`**: `HOST`
-  with an `openFile` that pushes onto the stack under the same opener, so a document's own links stay in
-  Peek while an explicit keep still opens a tab. A read failure (a deleted file) shows the renderer's
+  without `peek` (nothing in Peek offers to peek itself) and with an `openFile` that pushes onto the stack
+  under the same opener, so a document's own links stay in Peek while an explicit keep still opens a tab. A read failure (a deleted file) shows the renderer's
   failure state with a Remove action. An extension entry renders `ExtensionPanelBody` with an extension
   tab built from the entry, so it gets the same placeholder state machine and `createPanelHost`. Full
   screen is a dialog over the same entry body and view state, as `FramedResourcePreview`'s is.
