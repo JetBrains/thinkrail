@@ -254,6 +254,39 @@ export interface MergePrResult {
 
 export type GhSetupProblem = "missing" | "unauthenticated";
 
+export type PullRequestState = "open" | "merged" | "closed";
+
+/** v127 `pr.list` / `pr.get`: a GitHub pull request of a project's repository, as the user's `gh` reads it. */
+export interface PullRequestSummary {
+	number: number;
+	title: string;
+	/** The author's login; empty when GitHub reports none (a deleted account). */
+	author: string;
+	state: PullRequestState;
+	draft: boolean;
+	headRefName: string;
+	baseRefName: string;
+	/** The base on the local remote that hosts the PR (`origin/main`), ready to pass as a workspace `baseRef`. */
+	baseRef: string;
+	url: string;
+	additions: number;
+	deletions: number;
+	changedFiles: number;
+	/** ISO-8601 time of the PR's last update. */
+	updatedAt: string;
+	/** The signed-in `gh` user is a requested reviewer. */
+	reviewRequested: boolean;
+}
+
+/** Why `pr.list` could not list: `gh` absent, signed out, a repository with no GitHub remote, or any other failure. */
+export type PullRequestListProblem = GhSetupProblem | "not-github" | "failed";
+
+export interface PullRequestList {
+	/** Open pull requests, newest first; empty when `unavailable` is set. */
+	pullRequests: PullRequestSummary[];
+	unavailable?: PullRequestListProblem;
+}
+
 export interface PrDraft {
 	title: string;
 	body: string;
