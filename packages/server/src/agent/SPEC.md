@@ -610,8 +610,8 @@ re-opened transcripts provider-valid.
     `colors.accent` is an RGB value) and report pi's detected light/dark appearance. No honest plain
     answer exists for any of them. They cost nothing while an extension colours *through* the theme —
     every such path returns plain text — and only bite one that reads a mode or colour and then emits ANSI
-    on its own into text the bridge does not carry, such as a `pi.setSessionName` title (the bridge
-    strips displayed text, below). Its colour table exists **only** to satisfy the constructor signature:
+    on its own into text the bridge does not carry, such as a `pi.setSessionName` title (those names are
+    stripped where the host reads them; see Session titles). Its colour table exists **only** to satisfy the constructor signature:
     every method that would turn a colour into an escape is overridden, and the members that still answer
     for the terminal read the constructor's *mode* or pi's terminal guesses, never an escape. A pi
     bump that changes the palette breaks the build as a *notice that the theme surface moved*, not as a
@@ -628,8 +628,7 @@ re-opened transcripts provider-valid.
     embedder of pi-as-a-library hits this; an upstream fix would not reach us until a deliberate pi bump.
     **Every extension string the bridge publishes for display is plain text** (#890): stripping, not
     rendering colours, keeps one look with `plainTextTheme`. Each member strips its own fields, not
-    `publish`, so the stored dialog snapshot stays plain. A complete sequence goes; a broken one (no
-    final byte or terminator) loses only its control byte. **A non-string is absent text** (#1356): pi
+    `publish`, so the stored dialog snapshot stays plain. **A non-string is absent text** (#1356): pi
     loads extensions untyped, a throw outside pi's handlers kills the host, and the page trusts the wire
     contract's `string` (a non-string title once took the whole page down). So the bridge never throws
     on one and never forwards one: a title or message becomes `""`, a status clears, a widget line is
@@ -637,8 +636,8 @@ re-opened transcripts provider-valid.
     skipped. A `select` left with no string option resolves `undefined` without a dialog, `[]` included:
     a dialog with nothing to pick could only be cancelled by sending a chat message. A `select` answer
     maps back by index to a copy of the options as passed; options that differ only in colour look alike
-    and the first wins. Built-ins fail: `util.stripVTControlCharacters` leaves OSC tails, `Bun.stripANSI`
-    is missing in the Node workflow harness, and pi-tui's `stripTerminalSequences` keeps DCS strings.
+    and the first wins. The strip is `@thinkrail/shared/stripAnsi` (`plainText` for a non-string) — what it
+    removes and why no built-in fits are recorded there — the same one session-title reads use.
   - `toolResponses` — the host half of **interactive tools** (tools whose `execute` waits for the person):
     the per-session response mailbox (`ToolResponseWaiters`), respondability, restart repair support and
     late responses. The mailbox is **tool-agnostic**: every entry is keyed by `toolCallId`, the response is
@@ -1386,7 +1385,8 @@ re-opened transcripts provider-valid.
   session-lifecycle debug traces); `persistence` (`dataDir` for delegation plus the narrow session
   receipt stores); `trash` (the recoverable-delete primitive); `history` (`displayTranscript` only — `getMessages` must
   emit the same display projection the search index extracts, including turns Pi summarized away from
-  model context); `images` (projection, `imageDimensions`, and the hash its live source compares); Node.
+  model context); `images` (projection, `imageDimensions`, and the hash its live source compares);
+  `@thinkrail/shared/stripAnsi` (session titles and the ext-UI bridge); Node.
 - **Forbidden:** `host`; sibling features other than `log`, `trash`, `history` (`displayTranscript` only), `images` and those narrow persistence surfaces (session
   worktree `cwd` remains an input, never a workspace-registry lookup); Central process/filesystem knowledge—the
   caller supplies only the desired opaque extension paths for a candidate.
@@ -1505,7 +1505,13 @@ name; a disk row reads the manager the collector has just opened (not the listin
 which an awaited discovery can leave older than the transcript read beside it), and a disk-only rename
 publishes that chat's complete record (`diskStateRecord`, state + title + first prompt) after its event.
 `""` means unnamed. It costs no transcript read — the collector and the rename already hold the manager —
-and the name is read as pi stores it, never re-validated by the write rule.
+and the name is read as pi stores it, never re-validated by the write rule. Every display read (the
+forwarded `session_info_changed` event, each `SessionSummary` and `SessionStateRecord` title, including a
+disk list row's `SessionInfo.name`, and the title `history` extracts) strips terminal escapes and nothing
+more. The 80-character write cap stays on `renameSession`, so a name pi already stored — one an older
+build saved with colour codes, or one longer than that cap — shows its visible text. The session file is
+left as pi wrote it. `renameSession` still compares the stored string, so a later plain rename is a real
+write. The strip is `@thinkrail/shared/stripAnsi`.
 
 The guarded write remains authoritative across the async race. `onlyIfUnnamed` performs the check immediately
 beside the append and is the compare-and-set the `set_title` handler uses (its `false` return is how the
