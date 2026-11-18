@@ -42,10 +42,16 @@ Host seams, each a context or a prop the host fills:
   (`apps/web/src/lib/highlightCode`); the worker, the highlighter engine and the theme mapping stay in the app.
 - `Composer`'s `dictationEvent` — the DOM event name a host's dictation dispatches on the input while it
   listens (sending is held until it ends); without it the composer never waits for dictation.
+- `Composer`'s `localKeyDefaults` — the host's composer shortcuts (follow-up, interrupt, into the
+  transcript), matched through `@thinkrail/ui/local-keys`; the IDE passes its `keybindings` defaults, the phone
+  none. `composerKeys` holds the pure step rules those keys follow.
 - `ChatImage`'s `ChatMediaContext` — `resolveUrl` for a host image reference plus a `retryEpoch` the host
   advances after a reconnect; without it a referenced image renders as unavailable (inline data still shows).
 - `ChatActions` / `InteractionStatesContext` / `PendingExtUiContext` — the calls a host makes on the user's
   behalf (respond to a tool, open a file, reply to an extension dialog) and the derived states they need.
+  `usePendingExtUi` builds the context value from the pending request and the host's reply, remembering a
+  dialog's draft and whether its arrival reveal already ran; `TranscriptItem` is the keyboard-walkable row
+  wrapper the host's transcript navigation drives; `composerSuggestions` derives the one-click next messages.
 - `modelPreferences` — the `ModelPreferences` shape the composer's picker reads; the host builds it.
 - `skillGroups` — `groupSkills`: the Skills dialog's tiers (bundled, Pi, personal, plugins, project) with labels
   and hints, shared by the IDE dialog and the phone's Skills page.
