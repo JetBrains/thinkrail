@@ -56,7 +56,12 @@ import {
 	useAppStore,
 	workspaceName,
 } from "../store";
-import { errorText, getTransport, supportsTextSearch } from "../transport";
+import {
+	errorText,
+	getTransport,
+	supportsPullRequestReview,
+	supportsTextSearch,
+} from "../transport";
 import {
 	focusCenterGroup,
 	focusChatComposer,
@@ -123,6 +128,7 @@ export async function askTheAgent(
 
 export interface SearchPaletteOptions {
 	readonly openNewWorkspace: (projectId: string | null, initialPrompt?: string) => boolean;
+	readonly openReviewPullRequest: () => boolean;
 	readonly toggleProjectsHome: () => void;
 	readonly pickAndOpenProject: () => Promise<void>;
 	readonly enterHostPath: () => void;
@@ -257,6 +263,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			t,
 			contextProjectId: contextRepoProject?.id ?? null,
 			canStartChat,
+			reviewAvailable: supportsPullRequestReview(protocolVersion),
 			activeWorkspace,
 			editors,
 			historyAvailable: historySessionId !== null,
@@ -276,6 +283,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			tabActions,
 			actions: {
 				newWorkspace: options.openNewWorkspace,
+				reviewPullRequest: () => void options.openReviewPullRequest(),
 				newProjectlessChat: () => void startProjectlessChat(),
 				openDefaultWorkspace: (projectId) =>
 					void enterDefaultWorkspace(projectId, paletteNavigator.beginPick()),

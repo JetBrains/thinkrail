@@ -36,6 +36,7 @@ import {
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
+	PULL_REQUEST_REVIEW_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
@@ -64,6 +65,10 @@ export function supportsUserThemes(protocolVersion: number | null): boolean {
 
 export function supportsExtensionSettings(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= EXTENSION_SETTINGS_PROTOCOL_VERSION;
+}
+
+export function supportsPullRequestReview(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= PULL_REQUEST_REVIEW_PROTOCOL_VERSION;
 }
 
 export function supportsKeybindings(protocolVersion: number | null): boolean {

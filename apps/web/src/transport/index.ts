@@ -36,6 +36,7 @@ export {
 	supportsPiPackages,
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,
+	supportsPullRequestReview,
 	supportsRichAnchors,
 	supportsSpeech,
 	supportsTextSearch,

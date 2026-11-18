@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { WireModel } from "@thinkrail/contracts";
-import { reconcileModel } from "./NewWorkspaceDialog";
+import { openingTarget, reconcileModel } from "./NewWorkspaceDialog";
 
 const wm = (
 	provider: string,
@@ -49,5 +49,25 @@ describe("reconcileModel", () => {
 		const settled = reconcileModel(models, held, true);
 		if (!settled || settled === "unavailable") throw new Error("unexpected reconciliation");
 		expect(reconcileModel(models, settled, true)).toBe(settled);
+	});
+});
+
+describe("openingTarget", () => {
+	const base = { projectId: "p1", requested: undefined, canReview: true, retryingReview: false };
+
+	test("opens where it always did unless the review mode is asked for", () => {
+		expect(openingTarget(base)).toBe("worktree");
+		expect(openingTarget({ ...base, projectId: null })).toBe("chat");
+	});
+
+	test("the palette's review row and a failed review's retry open the review mode", () => {
+		expect(openingTarget({ ...base, requested: "review" })).toBe("review");
+		expect(openingTarget({ ...base, projectId: null, requested: "review" })).toBe("review");
+		expect(openingTarget({ ...base, retryingReview: true })).toBe("review");
+	});
+
+	test("a host or a workspace list that cannot review never opens the review mode", () => {
+		expect(openingTarget({ ...base, canReview: false, requested: "review" })).toBe("worktree");
+		expect(openingTarget({ ...base, canReview: false, retryingReview: true })).toBe("worktree");
 	});
 });

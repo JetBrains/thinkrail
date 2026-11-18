@@ -49,6 +49,7 @@ not reproduce.
 | Command | Handler | Context / gate | Palette |
 | --- | --- | --- | --- |
 | `workspace.new` New workspace… (`Mod+N`; `Mod+Alt+N` shown in a browser) | shell `NewWorkspaceDialog` | context repository (`selectContextRepoProject`, never the Chats container) | yes |
+| `workspace.reviewPr` Review a pull request… | shell `NewWorkspaceDialog`, opened on its Review a pull request target (`initialTarget: "review"`) | context repository and a v127+ host (`supportsPullRequestReview`) | yes |
 | `chat.newProjectless` New chat without a project | `panels/chatActions.startProjectlessChat` | a host with chats without a project (`canStartProjectlessChat`) | yes |
 | Start work from the typed text (the Start work row, `Mod+↵` from any row) | the same shell `NewWorkspaceDialog`, opened with the text as its prompt through `PaletteStart.openDialog` — nothing starts without the dialog | a context repository, or a host with chats without a project (the dialog then opens on its chat target); a typed query in All or Work | yes |
 | `workspace.openDefault` Work in project folder | `panels/defaultWorkspace.enterDefaultWorkspace` | context repository | yes |

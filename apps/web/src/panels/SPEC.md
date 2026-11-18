@@ -630,9 +630,12 @@ resources stop loading, running subagents stop and open chats reload only when `
 pre-session half of the user's skill settings; the chat header opens the same dialog in workspace mode
 (with Reload).
 
-**`NewWorkspaceDialog`** is the start-working surface: **a target control** (a two-option segment — a
-native radio group, `fieldset` + sr-only `legend` over visually-hidden radio inputs, so assistive tech
-hears one mutually-exclusive choice — both always visible: the two-mode model in one glance) chooses **where** the work runs, and the header is
+**`NewWorkspaceDialog`** is the start-working surface: **a target control** (a segment of up to four
+options — a native radio group, `fieldset` + sr-only `legend` over visually-hidden radio inputs, so
+assistive tech hears one mutually-exclusive choice: **Isolated workspace** and **Project folder** when a
+repository project is open, **Chat without a project** where a chat can start, and **Review a pull
+request** when a repository project is open and the host is v127+ — every available mode visible at
+once) chooses **where** the work runs, and the header is
 **mode-aware** so it always names the operation truthfully: **Isolated workspace** → title **“Create
 workspace”**, description **“A separate checkout on its own new branch. Files, chats, changes, and
 terminals stay scoped to it.”**; **Project folder** → title **“Work in project folder”**, description
@@ -724,6 +727,27 @@ a project picker, the prompt hero, and the reused
   missing API key) surfaces as an `error` turn, after the user's message, in the chat the handoff opens; a
   failed chat start toasts instead. `retryDraft` (Edit & retry) reopens the dialog prefilled with the failed
   creation's prompt, images, model + effort and base branch.
+  **Review a pull request** (`target: "review"`, title and option "Review a pull request", button **Start
+  review**) has no prompt: the dialog shows the project picker, **`PullRequestPicker`** in place of the
+  base-branch picker, the model picker and the trust notice, and hides the prompt, its slash/naming hints,
+  image paste and the Skills button. The picker (`PullRequestPicker.tsx` + `pullRequests.ts`) is a
+  `BranchPicker`-style combobox over `pr.list`, loaded when the mode is shown: a "Waiting for your review"
+  group (`reviewRequested`) above "Open", each row `#N`, title, a Draft / Merged / Closed tag, author and
+  `+additions −deletions`; its own filtering (`shouldFilter={false}`) matches words against number,
+  title, author and head branch, and a typed number, `#N` or pull-request link that is not listed is looked
+  up with `pr.get` (debounced) and offered under "Found" in any state. Its states are loading, no open pull
+  requests, `gh` missing or signed out (with a line pointing to Settings › Integrations), a repository with
+  no GitHub remote, and a failed load with Retry. Entering the mode focuses the picker's trigger; Enter on
+  it opens the list until a pull request is picked and then starts the review. Picking one prefetches its
+  `baseRef` exactly as picking a remote base does. Submit = `workspace.startCreate({ projectId, baseRef:
+  pr.baseRef, kickoff: { text: "/skill:reviewing-a-pr <url>", model?, thinkingLevel? } })` with **no name**
+  — the agent names a workspace for a linked pull request itself — then the worktree mode's
+  select-and-close tail. Edit & retry needs no extra draft state: a failed creation whose kickoff text is
+  exactly that command reopens in the review mode with the pull request picked from its URL and the
+  creation's base (refreshed by `pr.get` for its title). The palette's **Review a pull request…** row and
+  the shell's `openNewWork(…, "review")` open the dialog in this mode (`initialTarget`), only where
+  `openingTarget` allows it. The workflow behind the seeded command is the `reviewing-a-pr` skill
+  ([[submodule-workflow-skills]]).
   **`WorkspaceCreation.tsx`** renders a creation in the two places the user waits: `WorkspaceCreationRow`
   under its project in `ProjectTree` (spinner + `Creating… N%` + a `<progress>` bar while running; failed:
   `Couldn't create` in the error colour, interrupted: `Interrupted at N%` in the warning colour, the reason in a

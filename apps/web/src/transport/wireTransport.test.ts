@@ -6,6 +6,7 @@ import {
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
 	type Project,
+	PULL_REQUEST_REVIEW_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	type SessionStateRecord,
 	TOOL_RESPONSE_PROTOCOL_VERSION,
@@ -23,6 +24,7 @@ import {
 	supportsKeybindings,
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,
+	supportsPullRequestReview,
 	supportsRichAnchors,
 	supportsToolResponses,
 	supportsUserThemes,
@@ -46,6 +48,12 @@ test("keybindings are written only to a host at or beyond their capability versi
 	expect(supportsKeybindings(KEYBINDINGS_PROTOCOL_VERSION + 1)).toBe(true);
 	expect(supportsKeybindings(KEYBINDINGS_PROTOCOL_VERSION - 1)).toBe(false);
 	expect(supportsKeybindings(null)).toBe(false);
+});
+
+test("the pull-request review mode is offered only by a host that lists pull requests", () => {
+	expect(supportsPullRequestReview(PULL_REQUEST_REVIEW_PROTOCOL_VERSION)).toBe(true);
+	expect(supportsPullRequestReview(PULL_REQUEST_REVIEW_PROTOCOL_VERSION - 1)).toBe(false);
+	expect(supportsPullRequestReview(null)).toBe(false);
 });
 
 describe("updateKeybindings", () => {
