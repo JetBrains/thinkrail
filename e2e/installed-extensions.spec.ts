@@ -226,6 +226,7 @@ test("a past palette call renders its card, keeps it while switched off and fall
 	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("installed-extension-menu-remove")).toHaveCount(0);
 	await expect(settingsDialog(page)).toBeVisible();
+	await expect(primary).toBeFocused();
 	await page.keyboard.press("Delete");
 	await page.getByTestId("installed-extension-remove-confirm").click();
 	await expect(installedRow(page, PALETTE_NAME)).toHaveCount(0, { timeout: 60_000 });
