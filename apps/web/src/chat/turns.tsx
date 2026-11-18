@@ -10,6 +10,7 @@ import {
 	RiFileTextLine as FileText,
 	RiContractUpDownLine as FoldVertical,
 	RiLoopRightLine as RotateCw,
+	RiShapesLine as Shapes,
 	RiStackLine as Stack,
 	RiStopCircleLine as StopCircle,
 	RiToolsLine as Wrench,
@@ -79,7 +80,7 @@ function ChatTurnViewImpl({
 	onOpenSpec?: ((path: string) => void) | undefined;
 	onOpenChange?: ((path: string) => void) | undefined;
 	onReviewTurn?: ((scope: GitDiffScope) => void) | undefined;
-	onReveal?: ((tab: "specs" | "changes") => void) | undefined;
+	onReveal?: ((tab: DividerReveal) => void) | undefined;
 	onTryAgain?: (() => void) | undefined;
 	/** Live-resource deep link for this chat's latest turn divider only. */
 	stillRunning?: StillRunning | undefined;
@@ -178,6 +179,7 @@ function ChatTurnViewImpl({
 					workspaceRoot={workspaceRoot}
 					onOpenSpec={onOpenSpec ?? (() => {})}
 					onOpenChange={onOpenChange ?? (() => {})}
+					onOpenArtifact={onOpenFile ?? (() => {})}
 					onReviewTurn={onReviewTurn}
 					onReveal={onReveal ?? (() => {})}
 					stillRunning={stillRunning}
@@ -380,6 +382,7 @@ function PlainUserTurn({
 							ref={toggleRef}
 							type="button"
 							data-testid="user-message-toggle"
+							data-chat-item-toggle
 							aria-expanded={expanded}
 							onClick={toggle}
 							className="mt-4 flex items-center gap-4 tr-text-metadata text-text-subtle hover:text-text-default"
@@ -418,6 +421,7 @@ function SkillInvocationCard({
 				ref={toggleRef}
 				type="button"
 				data-testid="skill-invocation-toggle"
+				data-chat-item-toggle
 				aria-expanded={expanded}
 				aria-label={
 					expanded
@@ -678,6 +682,7 @@ function CompactionTurn({
 			<button
 				ref={toggleRef}
 				type="button"
+				data-chat-item-toggle
 				aria-expanded={open}
 				onClick={toggle}
 				className="flex items-center gap-8 text-text-muted tr-text-metadata hover:text-text-default"
@@ -851,8 +856,11 @@ function FileDiffGlyph({ className }: { className?: string | undefined }) {
 	return <CustomIcon name="file-diff-line" className={cn("size-14 shrink-0", className)} />;
 }
 
+export type DividerReveal = "specs" | "changes" | "artifacts";
+
 interface ArtifactGroup {
-	id: "specs" | "files";
+	id: "specs" | "files" | "artifacts";
+	display?: (path: string) => string;
 	icon: typeof FileText | ((props: { className?: string | undefined }) => ReactNode);
 	paths: string[];
 	label: (count: number) => string;
@@ -929,7 +937,7 @@ function ArtifactList({
 						>
 							<Icon className="size-12 shrink-0 text-text-muted" />
 							<span className="min-w-0 flex-1 truncate text-text-muted">
-								{projectRelativePath(path, workspaceRoot)}
+								{group.display ? group.display(path) : projectRelativePath(path, workspaceRoot)}
 							</span>
 							{stat ? (
 								<span className="shrink-0 tabular-nums">
@@ -987,6 +995,7 @@ export function TurnDivider({
 	workspaceRoot,
 	onOpenSpec,
 	onOpenChange,
+	onOpenArtifact,
 	onReviewTurn,
 	onReveal,
 	stillRunning,
@@ -996,12 +1005,14 @@ export function TurnDivider({
 	workspaceRoot?: string | undefined;
 	onOpenSpec: (path: string) => void;
 	onOpenChange: (path: string) => void;
+	onOpenArtifact: (path: string) => void;
 	onReviewTurn?: ((scope: GitDiffScope) => void) | undefined;
-	onReveal: (tab: "specs" | "changes") => void;
+	onReveal: (tab: DividerReveal) => void;
 	stillRunning?: StillRunning | undefined;
 }) {
 	const t = useT();
-	const { outcome, elapsedMs, toolCount, specs, changedFiles, receipt } = data;
+	const { outcome, elapsedMs, toolCount, specs, changedFiles, artifacts, receipt } = data;
+	const artifactLabels = new Map(artifacts.map((artifact) => [artifact.path, artifact.label]));
 	const [selected, select] = useSelection(`${id}:artifacts`);
 	const stats = receipt
 		? new Map(
@@ -1049,6 +1060,16 @@ export function TurnDivider({
 			onOpen: onOpenChange,
 			reveal: () => onReveal("changes"),
 			...(stats ? { stats } : {}),
+		},
+		{
+			id: "artifacts",
+			icon: Shapes,
+			paths: artifacts.map((artifact) => artifact.path),
+			label: (n) => t("chat.divider.artifacts", { count: n }),
+			expanded: selected === "artifacts",
+			onOpen: onOpenArtifact,
+			reveal: () => onReveal("artifacts"),
+			display: (path) => artifactLabels.get(path) ?? path,
 		},
 	];
 	const groups = allGroups.filter((group) => group.paths.length > 0);

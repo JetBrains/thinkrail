@@ -253,13 +253,14 @@ async function expectSettingsTooltip(page: Page, text: string): Promise<void> {
 	await page.mouse.move(0, 0);
 }
 
-test("native open-settings opens Settings, keeps it as is, and yields to other dialogs", async ({
+test("native open-settings toggles Settings, reopens the remembered section, and yields to other dialogs", async ({
 	page,
 }) => {
 	await installNativeShortcuts(page, "MacIntel");
 	await openFixtureProject(page);
 	await expectSettingsTooltip(page, "Settings (⌘,)");
 	const settings = page.getByTestId("settings-dialog");
+	const terminal = page.getByTestId("settings-nav-terminal");
 
 	await page.locator("body").click();
 	await page.keyboard.press("Meta+Comma");
@@ -267,10 +268,13 @@ test("native open-settings opens Settings, keeps it as is, and yields to other d
 
 	await openSettingsCommand(page);
 	await expect(settings).toBeVisible();
-	await page.getByTestId("settings-nav-terminal").click();
+	await terminal.click();
+	await openSettingsCommand(page);
+	await expect(settings).toHaveCount(0);
 	await openSettingsCommand(page);
 	await expect(settings).toBeVisible();
-	await expect(page.getByTestId("settings-nav-terminal")).toHaveAttribute("data-active", "true");
+	await expect(terminal).toHaveAttribute("data-active", "true");
+	await expect(terminal).toBeFocused();
 	await page.keyboard.press("Escape");
 	await expect(settings).toHaveCount(0);
 
@@ -279,6 +283,35 @@ test("native open-settings opens Settings, keeps it as is, and yields to other d
 	await openSettingsCommand(page);
 	await expect(settings).toHaveCount(0);
 	await expect(page.getByTestId("new-workspace-dialog")).toBeVisible();
+});
+
+test("native close-item closes Settings at once from a field, keeping the edit, and from the nav", async ({
+	page,
+}) => {
+	await installNativeShortcuts(page, "MacIntel");
+	await openFixtureProject(page);
+	const settings = page.getByTestId("settings-dialog");
+	await openSettingsCommand(page);
+	await page.getByTestId("settings-nav-chat").click();
+	const height = page.getByTestId("question-panel-height-input");
+	const saved = await height.inputValue();
+	const edited = String(Number(saved) === 50 ? 45 : 50);
+	await height.fill(edited);
+	await closeItem(page);
+	await expect(settings).toHaveCount(0);
+
+	await openSettingsCommand(page);
+	await expect(page.getByTestId("settings-nav-chat")).toBeFocused();
+	await expect(height).toHaveValue(edited);
+	await height.fill(saved);
+	await page.keyboard.press("Enter");
+	await page.getByTestId("settings-nav-chat").focus();
+	await closeItem(page);
+	await expect(settings).toHaveCount(0);
+	await openSettingsCommand(page);
+	await expect(height).toHaveValue(saved);
+	await closeItem(page);
+	await expect(settings).toHaveCount(0);
 });
 
 test("Windows Ctrl+, opens Settings, from a terminal too; Shift+Comma does not", async ({
@@ -302,6 +335,13 @@ test("Windows Ctrl+, opens Settings, from a terminal too; Shift+Comma does not",
 	await expect(settings).toHaveCount(0);
 	await page.keyboard.press("Control+Comma");
 	await expect(settings).toBeVisible();
+	await page.keyboard.press("Control+Comma");
+	await expect(settings).toHaveCount(0);
+	await expect(page.getByTestId("chat-input")).toBeFocused();
+	await page.keyboard.press("Control+Comma");
+	await page.getByTestId("settings-nav-terminal").click();
+	await page.keyboard.press("Control+w");
+	await expect(settings).toHaveCount(0);
 });
 
 test("the browser binds no Settings shortcut", async ({ page }) => {

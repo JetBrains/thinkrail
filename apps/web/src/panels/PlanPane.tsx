@@ -31,7 +31,7 @@ import {
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { type ChatActions, ChatActionsContext } from "../chat/ChatActions";
 import {
 	awaitingToolCallIdOf,
@@ -310,6 +310,7 @@ function ItemBlock({
 		<li
 			id={`plan-item-${item.id}`}
 			data-testid="plan-item"
+			data-focus-row={item.id}
 			data-status={item.status}
 			data-reviewed={reviewed}
 			data-reviewing={reviewing}
@@ -346,6 +347,7 @@ function ItemBlock({
 							<button
 								type="button"
 								data-testid="plan-item-toggle"
+								data-focus-row-primary
 								aria-expanded={expanded}
 								onClick={() => setExpanded((v) => !v)}
 								title={expanded ? t("plan.item.hideDetails") : t("plan.item.showDetails")}
@@ -587,6 +589,7 @@ function PlanComposer({
 	icon: Icon,
 	placeholder,
 	testId,
+	focusSlot,
 	autoFocus = false,
 	onSubmit,
 	onClose,
@@ -594,6 +597,7 @@ function PlanComposer({
 	icon: typeof Plus;
 	placeholder: string;
 	testId: string;
+	focusSlot?: string;
 	autoFocus?: boolean;
 	onSubmit: (text: string) => Promise<void> | void;
 	onClose?: (() => void) | undefined;
@@ -624,6 +628,7 @@ function PlanComposer({
 			<textarea
 				ref={inputRef}
 				data-testid={testId}
+				data-focus-slot={focusSlot}
 				rows={1}
 				value={draft}
 				onChange={(e) => setDraft(e.target.value)}
@@ -633,6 +638,7 @@ function PlanComposer({
 						e.preventDefault();
 						void submit();
 					} else if (e.key === "Escape" && onClose) {
+						e.preventDefault();
 						onClose();
 					}
 				}}
@@ -696,21 +702,61 @@ function PlanInteractionCard({
 }
 
 // Keep the session's live slot isolated from the heavy PlanPane.
-function PlanSessionLive({ workspaceId, sessionId }: { workspaceId: string; sessionId: string }) {
+function PlanSessionLive({
+	workspaceId,
+	sessionId,
+	landingChord,
+}: {
+	workspaceId: string;
+	sessionId: string;
+	landingChord: string;
+}) {
+	const slotRef = useRef<HTMLDivElement>(null);
+	return (
+		<div
+			ref={slotRef}
+			tabIndex={-1}
+			data-testid="plan-session-live"
+			className="rounded-sm focus-visible:focus-ring"
+		>
+			<PlanSessionLiveBody
+				workspaceId={workspaceId}
+				sessionId={sessionId}
+				landingChord={landingChord}
+				slotRef={slotRef}
+			/>
+		</div>
+	);
+}
+
+function PlanSessionLiveBody({
+	workspaceId,
+	sessionId,
+	landingChord,
+	slotRef,
+}: {
+	workspaceId: string;
+	sessionId: string;
+	landingChord: string;
+	slotRef: RefObject<HTMLDivElement | null>;
+}) {
 	const t = useT();
 	const runtime = useAppStore((s) => s.sessions[sessionId]);
 	const [focusScope] = useState<object>(() => ({}));
-	const actions = useMemo<ChatActions>(
-		() => ({
+	const actions = useMemo<ChatActions>(() => {
+		const focusSlot = () => slotRef.current?.focus({ preventScroll: true });
+		return {
 			cancelAutomaticReveal: () => {},
-			focusComposer: () => {},
+			focusComposer: focusSlot,
+			focusToolCall: focusSlot,
+			mayClaimFocus: () => true,
+			landingChord,
 			openSubagentTranscript: () => {},
 			respondToTool: (toolCallId, response) => respondToTool(sessionId, toolCallId, response),
 			resultOpener: () => undefined,
 			revealChatElement: () => {},
-		}),
-		[sessionId],
-	);
+		};
+	}, [landingChord, sessionId, slotRef]);
 	const interactionStates = useMemo(
 		() =>
 			runtime
@@ -823,6 +869,7 @@ function SessionBlock({
 					size="m"
 					iconLeft={Plus}
 					data-testid="plan-add-task"
+					data-focus-slot="plan-add-task"
 					onClick={() => setAdding((v) => !v)}
 					tooltip={t("plan.session.addTaskTitle")}
 					className="ml-auto shrink-0"
@@ -880,6 +927,7 @@ function SessionBlock({
 				<PlanComposer
 					icon={Plus}
 					testId="plan-add-input"
+					focusSlot="plan-add-task"
 					placeholder={t("plan.session.addPlaceholder")}
 					autoFocus
 					onSubmit={onAdd}
@@ -893,9 +941,11 @@ function SessionBlock({
 export default function PlanPane({
 	workspaceId,
 	sessionId,
+	landingChord,
 }: {
 	workspaceId: string;
 	sessionId: string;
+	landingChord: string;
 }) {
 	const t = useT();
 	const plan = useChatTodos(workspaceId, sessionId);
@@ -982,9 +1032,9 @@ export default function PlanPane({
 	const flagged = allItems.filter((t) => reviewChangesRequested(t) && t.review?.reviewing !== true);
 	const jumpToItem = (id: string) => {
 		setFocusRequest((prev) => ({ id, tick: (prev?.tick ?? 0) + 1 }));
-		document
-			.getElementById(`plan-item-${id}`)
-			?.scrollIntoView({ behavior: "smooth", block: "center" });
+		const item = document.getElementById(`plan-item-${id}`);
+		item?.scrollIntoView({ behavior: "smooth", block: "center" });
+		item?.querySelector<HTMLElement>("[data-focus-row-primary]")?.focus({ preventScroll: true });
 	};
 	const buildDone = total > 0 && done === total;
 	const staleSummary = planStaleSummary(data);
@@ -1106,7 +1156,7 @@ export default function PlanPane({
 			className="h-full overflow-auto bg-container-content-bg motion-safe:animate-reveal"
 		>
 			{ship.dialogs}
-			<div className="mx-auto max-w-[52rem] px-16 py-16">
+			<div data-focus-list={`plan:${sessionId}`} className="mx-auto max-w-[52rem] px-16 py-16">
 				<header className="mb-16 flex items-center gap-12">
 					<div className="min-w-0 flex-1">
 						<h1 className="truncate tr-heading-sm text-text-default">
@@ -1393,7 +1443,13 @@ export default function PlanPane({
 					pendingLoose={sections.pendingLoose}
 					allDone={buildDone}
 					glance={glance}
-					renderLive={() => <PlanSessionLive workspaceId={workspaceId} sessionId={sessionId} />}
+					renderLive={() => (
+						<PlanSessionLive
+							workspaceId={workspaceId}
+							sessionId={sessionId}
+							landingChord={landingChord}
+						/>
+					)}
 					onAdd={(title) => plan.add(title, "page")}
 					onOpenChat={() => {
 						void openChatInTab(workspaceId, sessionId);

@@ -196,3 +196,50 @@ describe("visualize extension", () => {
 		).toContain("`.scratch/mockups/`");
 	});
 });
+
+describe("saving visualizations", () => {
+	test("a diagram or comparison goes to the host's saver and the result names the saved path", async () => {
+		const saved: unknown[] = [];
+		const tool = loadTool(undefined, {
+			saveVisualization: (visualization) => {
+				saved.push(visualization);
+				return ".thinkrail/context/visualize/flow.md";
+			},
+		});
+		const res = await tool.execute(
+			"id",
+			{ type: "diagram", title: "Flow", mermaid: "flowchart LR\n A --> B" },
+			undefined,
+			undefined,
+			{ cwd: "/work" },
+		);
+		expect(res.content[0]?.text).toEndWith("Saved to `.thinkrail/context/visualize/flow.md`.");
+		expect(saved).toEqual([
+			{
+				params: { type: "diagram", title: "Flow", mermaid: "flowchart LR\n A --> B" },
+				markdown: "### Flow\n\n```mermaid\nflowchart LR\n A --> B\n```",
+				cwd: "/work",
+			},
+		]);
+	});
+
+	test("a failing saver never fails the tool, and file previews are never saved", async () => {
+		let calls = 0;
+		const tool = loadTool(undefined, {
+			saveVisualization: () => {
+				calls += 1;
+				throw new Error("disk full");
+			},
+		});
+		const res = await tool.execute(
+			"id",
+			{ type: "comparison", options: [{ name: "A" }] },
+			undefined,
+			undefined,
+			{ cwd: "/work" },
+		);
+		expect(res.content[0]?.text).not.toContain("Saved to");
+		await tool.execute("id", { type: "file", path: "a.html" }, undefined, undefined, { cwd: "/w" });
+		expect(calls).toBe(1);
+	});
+});

@@ -96,7 +96,7 @@ export function useLegacySelectionAdapter(
 					? JSON.stringify([currentActiveTabId, currentReviewedPath])
 					: null;
 			if (currentReviewedSelection !== reviewedSelection) return;
-			state.enqueueLayoutIntent({ kind: "reveal-tool", workspaceId, tool: "review" });
+			state.enqueueLayoutIntent({ kind: "reveal-tool", workspaceId, tool: "review", focus: false });
 		};
 		let revealed = false;
 		const cancel = scheduleReviewReveal(() => {

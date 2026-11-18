@@ -28,7 +28,6 @@ import {
 } from "@thinkrail/ui/dropdown-menu";
 import { useEffect, useMemo, useState } from "react";
 import { RunningIcon } from "../../components/RunningIcon";
-import { keybindingLabel } from "../../keybindings";
 import { copyText } from "../../lib";
 import { RemoveWorkspaceDialog } from "../../panels/RemoveWorkspaceDialog";
 import {
@@ -83,12 +82,14 @@ export function WorkspaceSegment({
 	workspace,
 	activeSettled,
 	now,
+	newWorkspaceShortcut,
 	onNewWorkspace,
 }: {
 	project: Project;
 	workspace: Workspace | null;
 	activeSettled: boolean;
 	now: number;
+	newWorkspaceShortcut: string;
 	onNewWorkspace: () => void;
 }) {
 	const t = useT();
@@ -179,6 +180,7 @@ export function WorkspaceSegment({
 				<input
 					ref={nameRef}
 					data-testid="scope-name"
+					data-focus-slot="scope-workspace"
 					data-editing
 					type="text"
 					spellCheck={false}
@@ -191,6 +193,7 @@ export function WorkspaceSegment({
 				<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 					<DropdownMenuTrigger
 						data-testid="scope-workspace"
+						data-focus-slot="scope-workspace"
 						aria-label={t("shell.location.workspace.label", { name })}
 						className={pillClass}
 					>
@@ -360,7 +363,7 @@ export function WorkspaceSegment({
 							<Plus />
 							{t("shell.location.workspace.new")}
 							<span className="ml-auto pl-8 text-text-subtle tr-text-metadata">
-								{keybindingLabel("workspace.new")}
+								{newWorkspaceShortcut}
 							</span>
 						</DropdownMenuItem>
 					</DropdownMenuContent>

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import {
@@ -12,8 +12,8 @@ import {
 	type SubagentOverride,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { seedArtifactsDir } from "@thinkrail/shared/artifactsDir";
 import { CodedError } from "@thinkrail/shared/codedError";
-import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import {
 	assertSafeRef,
 	canonicalPath,
@@ -343,21 +343,7 @@ export function registerManagedWorkspace(
 export function ensureWorkspaceScratchDir(ws: Workspace): void {
 	if (!statSync(ws.worktreePath, { throwIfNoEntry: false })?.isDirectory())
 		throw new Error(`Workspace directory is missing: ${ws.worktreePath}`);
-	let dir = ws.worktreePath;
-	for (const part of WORKSPACE_CONTEXT_DIR.split("/")) {
-		dir = join(dir, part);
-		const entry = lstatSync(dir, { throwIfNoEntry: false });
-		if (!entry) mkdirSync(dir);
-		else if (!entry.isDirectory())
-			throw new Error(`Refusing to seed the scratch dir: not a real directory: ${dir}`);
-	}
-	const gitignore = join(dir, ".gitignore");
-	if (lstatSync(gitignore, { throwIfNoEntry: false })) return;
-	try {
-		writeFileSync(gitignore, "*\n", { flag: "wx" });
-	} catch (err) {
-		if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
-	}
+	seedArtifactsDir(ws.worktreePath);
 }
 
 function ensureDefaultWorkspace(project: Project): Workspace {

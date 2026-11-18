@@ -17,6 +17,7 @@ import {
 	DialogFooter,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
+import { focusAndReveal } from "@thinkrail/ui/focus";
 import {
 	useCallback,
 	useEffect,
@@ -37,6 +38,7 @@ import {
 	selectCompactionTurnIds,
 	selectComposerFocusRequested,
 	selectPickerModels,
+	selectQuestionMayClaimFocus,
 	selectSkillsStale,
 	selectSupportsMcp,
 	selectWorkspaceById,
@@ -56,6 +58,7 @@ import {
 	type MentionCandidate,
 	type SubmitBehavior,
 } from "./Composer";
+import { deriveComposerSuggestions } from "./composerSuggestions";
 import { DEFAULT_DOCK_FOLD, type DockFold, dockCollapsed, withDockCollapsed } from "./dockFold";
 import { ExtraUsageNotice } from "./ExtraUsageNotice";
 import { mentionLookup } from "./fileTargets";
@@ -84,6 +87,7 @@ import {
 } from "./resources";
 import { SkillsDialog } from "./SkillsDialog";
 import { SubagentTranscriptDialog, SubagentTranscriptPane } from "./SubagentTranscriptDialog";
+import { SuggestionChips } from "./SuggestionChips";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { useChatResources, useCommandLog } from "./useChatResources";
 import { useModelCatalog } from "./useModelCatalog";
@@ -100,14 +104,18 @@ function renderSubagentModel({ model, thinkingLevel }: SubagentResourceSummary) 
 	return <RunModelLabel model={model} thinkingLevel={thinkingLevel} />;
 }
 
+const FOCUS_CLAIM = "[data-focus-claim]";
+
 export default function ChatView({
 	sessionId,
 	workspaceId,
 	onOpenFile,
+	landingChord,
 }: {
 	sessionId: string;
 	workspaceId: string;
 	onOpenFile?: ((path: string) => void) | undefined;
+	landingChord: string;
 }) {
 	const t = useT();
 	const sessionExists = useAppStore((s) => s.sessions[sessionId] !== undefined);
@@ -130,6 +138,9 @@ export default function ChatView({
 		[imageDraft, sessionId],
 	);
 	const queue = useAppStore((s) => s.sessions[sessionId]?.queue ?? EMPTY_RUNTIME.queue);
+	const suggestions = useAppStore(
+		useShallow((s) => deriveComposerSuggestions(s.sessions[sessionId], s.disabledExtensions)),
+	);
 	const sessionModel = useAppStore((s) => s.sessions[sessionId]?.model ?? null);
 	const thinkingLevel = useAppStore(
 		(s) => s.sessions[sessionId]?.thinkingLevel ?? EMPTY_RUNTIME.thinkingLevel,
@@ -395,8 +406,10 @@ export default function ChatView({
 		[resources.visible, resources.authoritative, resources.groups.activeCount, openInspector],
 	);
 
+	const [chatRoot, setChatRoot] = useState<HTMLDivElement | null>(null);
 	const chatViewRef = useCallback(
 		(element: HTMLDivElement | null) => {
+			setChatRoot(element);
 			if (element) {
 				element.style.setProperty(
 					"--chat-transcript-width",
@@ -697,6 +710,7 @@ export default function ChatView({
 		void removeQueued(kind, index).catch(() => {});
 
 	const onAbort = () => {
+		composerRef.current?.refocus();
 		void getTransport()
 			.request("session.abort", { sessionId, restoreQueue: true })
 			.then(({ restoredQueue }) => {
@@ -781,6 +795,11 @@ export default function ChatView({
 		useAppStore.getState().consumeComposerEdit(sessionId, composerEdit.id);
 	}, [composerEdit, sessionId]);
 
+	const mayClaimFocus = useCallback(
+		(toolCallId: string) =>
+			selectQuestionMayClaimFocus(useAppStore.getState(), sessionId, toolCallId),
+		[sessionId],
+	);
 	const composerFocusRequested = useAppStore((s) =>
 		selectComposerFocusRequested(s, workspaceId, sessionId),
 	);
@@ -788,7 +807,8 @@ export default function ChatView({
 		if (!composerFocusRequested) return;
 		const store = useAppStore.getState();
 		const dismissHistory = store.composerFocusRequest?.dismissHistory === true;
-		store.clearComposerFocusRequest();
+		const waiting = awaitingToolCallIdOf(store.sessions[sessionId]?.hostState ?? null) ?? null;
+		store.serveComposerFocusRequest(sessionId, waiting);
 		if (dismissHistory) {
 			if (store.historyOpenRequest?.sessionId === sessionId) store.clearHistoryOpen();
 			if (historyOverlayOpen) closeHistory();
@@ -806,6 +826,16 @@ export default function ChatView({
 			.finally(() => setDisablingNotice(false));
 	};
 	const focusComposer = useCallback(() => composerRef.current?.refocus(), []);
+	const waitingQuestion = useCallback(
+		() => dockTarget?.querySelector<HTMLElement>(FOCUS_CLAIM) ?? null,
+		[dockTarget],
+	);
+	const focusWaitingQuestion = () => {
+		const claim = waitingQuestion();
+		if (!claim) return false;
+		focusAndReveal(claim);
+		return document.activeElement === claim;
+	};
 	// Keep a stable `onTryAgain` identity (it is passed to every transcript row) while always calling the
 	// latest `performSend` closure.
 	const performSendRef = useRef(performSend);
@@ -813,6 +843,14 @@ export default function ChatView({
 		performSendRef.current = performSend;
 	});
 	const onTryAgain = useCallback(() => performSendRef.current(TRY_AGAIN_PROMPT, [], "send"), []);
+	const sendSuggestion = useCallback(
+		(text: string) => performSendRef.current(text, [], "send"),
+		[],
+	);
+	const editSuggestion = useCallback(
+		(text: string) => composerRef.current?.insertAtCaret(text),
+		[],
+	);
 
 	return (
 		<div
@@ -863,6 +901,9 @@ export default function ChatView({
 					onOpenFile={onOpenFile}
 					workspaceRoot={workspaceRoot}
 					focusComposer={focusComposer}
+					waitingQuestion={waitingQuestion}
+					mayClaimFocus={mayClaimFocus}
+					landingChord={landingChord}
 					openSubagentTranscript={setTranscriptChildId}
 					resultOpener={resultOpener}
 					onTryAgain={onTryAgain}
@@ -880,6 +921,9 @@ export default function ChatView({
 							<ResourcesInspector
 								open={inspectorOpen}
 								onOpenChange={setInspectorOpen}
+								onEscapeKeyDown={(event) => {
+									if (composerRef.current?.ownsEscape()) event.preventDefault();
+								}}
 								onCloseAutoFocus={returnToResources}
 								{...resources.groups}
 								now={now}
@@ -974,6 +1018,12 @@ export default function ChatView({
 					disabling={disablingNotice}
 				/>
 			) : null}
+			<SuggestionChips
+				suggestions={suggestions}
+				onSend={sendSuggestion}
+				onEdit={editSuggestion}
+				shortcutScope={chatRoot}
+			/>
 			<div className="relative shrink-0">
 				<HistoryOverlay
 					state={historyState}
@@ -1017,6 +1067,9 @@ export default function ChatView({
 					onSelectThinking={onSelectThinking}
 					onSubmit={onSubmit}
 					onAbort={onAbort}
+					onEnterTranscript={() => transcriptRef.current?.focusNewest()}
+					onShiftTabOut={focusWaitingQuestion}
+					onScrollTranscript={(direction) => transcriptRef.current?.scrollPage(direction)}
 					onHistoryOpen={onHistoryOpen}
 					onPickTemplate={onPickTemplate}
 					onManageTemplates={onManageTemplates}

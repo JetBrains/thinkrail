@@ -16,8 +16,14 @@ mock.module("../transport", () => ({
 
 const { useAppStore } = await import("../store");
 const { RequestError } = await import("../transport");
-const { clipboardAfterDelete, deleteEntry, pasteDestination, pasteInto, supportsFileMutations } =
-	await import("./fileTreeActions");
+const {
+	clipboardAfterDelete,
+	deleteEntry,
+	pasteDestination,
+	pasteInto,
+	renameEntry,
+	supportsFileMutations,
+} = await import("./fileTreeActions");
 
 function reset(): void {
 	requests.length = 0;
@@ -115,4 +121,45 @@ test("delete trashes through the host and forgets a clipboard entry inside it", 
 		params: { workspaceId: "w1", path: "src" },
 	});
 	expect(useAppStore.getState().fileClipboard).toBeNull();
+});
+
+test("a cut pastes as a move, once, and a taken name says so", async () => {
+	useAppStore.getState().setFileClipboard({ workspaceId: "w1", path: "notes.md", cut: true });
+	answer = () => Promise.reject(new RequestError("ENTRY_EXISTS", "taken"));
+	await pasteInto("w1", ".thinkrail/context");
+	expect(useAppStore.getState().toasts[0]?.message).toBe("notes.md already exists in this folder.");
+	expect(useAppStore.getState().fileClipboard).not.toBeNull();
+	answer = () => Promise.resolve({ path: ".thinkrail/context/notes.md" });
+	await pasteInto("w1", ".thinkrail/context");
+	expect(requests.at(-1)).toEqual({
+		method: "fs.move",
+		params: {
+			sourceWorkspaceId: "w1",
+			sourcePath: "notes.md",
+			destinationWorkspaceId: "w1",
+			destinationDirectory: ".thinkrail/context",
+		},
+	});
+	expect(useAppStore.getState().fileClipboard).toBeNull();
+});
+
+test("renaming the copied entry empties the clipboard", async () => {
+	useAppStore.getState().setFileClipboard({ workspaceId: "w1", path: "a.md" });
+	answer = () => Promise.resolve({ path: "b.md" });
+	await renameEntry("w1", "a.md", "b.md");
+	expect(requests).toEqual([
+		{ method: "fs.rename", params: { workspaceId: "w1", path: "a.md", name: "b.md" } },
+	]);
+	expect(useAppStore.getState().fileClipboard).toBeNull();
+});
+
+test("a cut that crosses file systems says so and stays on the clipboard", async () => {
+	const cut = { workspaceId: "w1", path: "notes.md", cut: true as const };
+	useAppStore.getState().setFileClipboard(cut);
+	answer = () => Promise.reject(new RequestError("MOVE_ACROSS_DEVICES", "other file system"));
+	await pasteInto("w2", ".");
+	expect(useAppStore.getState().toasts[0]?.message).toBe(
+		"notes.md is on another disk than this folder, so it can't be moved here. Copy it instead, then delete the original.",
+	);
+	expect(useAppStore.getState().fileClipboard).toEqual(cut);
 });

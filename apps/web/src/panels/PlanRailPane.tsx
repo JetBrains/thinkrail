@@ -48,7 +48,7 @@ export default function PlanRailPane({
 			<div className="shrink-0 border-border-muted border-b">
 				<TodoAddRow onAdd={(title) => plan.add(title, "rail")} onOpenPlan={plan.openPlan} />
 			</div>
-			<div className="min-h-0 flex-1 overflow-auto p-4">
+			<div data-focus-list="todos" className="min-h-0 flex-1 overflow-auto p-4">
 				{empty ? (
 					<p className="px-4 py-4 text-text-muted tr-text-metadata">{t("plan.rail.empty")}</p>
 				) : (

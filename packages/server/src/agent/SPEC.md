@@ -169,7 +169,8 @@ re-opened transcripts provider-valid.
     `settings.json`, the only state. Pi 1.5.1 made `idle` its default — every idle chat re-sends its
     prompt with a one-token reply for up to 30 minutes after a run whenever pi's economics predict a
     saving — and ThinkRail must not turn that spend on for existing users silently, so the host default is
-    `streaming` (pi 1.5.0's behavior) whenever the file names no valid mode. `buildSessionSettings` puts a
+    contracts' `DEFAULT_CACHE_WARMING_MODE`, `streaming` (pi 1.5.0's behavior), whenever the file names no
+    valid mode. `buildSessionSettings` puts a
     file-backed getter in front of `getCacheWarmingMode` (`applyCacheWarmingDefault`): pi's only caller is
     the cache warmer, which asks at each decision (`validateRun` before every warm, and when a run
     settles), and the getter answers from pi's file — re-parsed only when the file's mtime/size changed —
@@ -217,10 +218,13 @@ re-opened transcripts provider-valid.
       written only when reported; otherwise pi's defaults apply — 128K context, with pi's overflow
       recovery compacting and retrying once when the server returns a recognized "context exceeded"
       error (accepted gap: a server that silently truncates, like local Ollama with no Modelfile
-      `num_ctx`, gives it nothing to recover from). `maxTokens` is the reported max output when it fits
-      the context, else ¼ of a known context clamped to 256–16K (pi's 16K default would fail vLLM's
-      prompt + `max_tokens` check on a small context, and compaction cannot recover from that), else
-      omitted. Cost is zero. A new provider
+      `num_ctx`, gives it nothing to recover from). `maxTokens` is the draft's max output when it fits
+      the context, else ¼ of the context clamped to 256–16K (pi's 16K default would fail vLLM's prompt +
+      `max_tokens` check on a small context, and compaction cannot recover from that). With no detected
+      context the draft's value is kept, or omitted when there is none. A user window only widens a
+      detected context and is not used without one, as pi-ai clamps each request to the window pi uses
+      and fitting down would only lose a saved value (#1350). The fit runs only on Save, so a larger user
+      window never raises a value that fits. Cost is zero. A new provider
       gets conservative compat (`supportsStore: false`, `supportsDeveloperRole: false`, `maxTokensField:
       "max_tokens"`) because pi detects compat from the URL and would send OpenAI-only fields to an unknown
       host; every OpenAI-compatible server accepts these. An edit keeps the provider's `compat` and every
@@ -606,10 +610,10 @@ re-opened transcripts provider-valid.
     `colors.accent` is an RGB value) and report pi's detected light/dark appearance. No honest plain
     answer exists for any of them. They cost nothing while an extension colours *through* the theme —
     every such path returns plain text — and only bite one that reads a mode or colour and then emits ANSI
-    on its own, which is the unsanitised-bridge gap tracked outside this module. Its colour table exists
-    **only** to satisfy the constructor signature: every method that would turn a colour into an escape is
-    overridden, and the members that still answer for the terminal read the constructor's *mode* or pi's
-    terminal guesses, never an escape. A pi
+    on its own into text the bridge does not carry, such as a `pi.setSessionName` title (the bridge
+    strips displayed text, below). Its colour table exists **only** to satisfy the constructor signature:
+    every method that would turn a colour into an escape is overridden, and the members that still answer
+    for the terminal read the constructor's *mode* or pi's terminal guesses, never an escape. A pi
     bump that changes the palette breaks the build as a *notice that the theme surface moved*, not as a
     defect.
     **Rejected alternatives** (the one place these decisions are recorded): (1) `{} as
@@ -617,11 +621,24 @@ re-opened transcripts provider-valid.
     `rpc` mode, but `ctx.ui.theme` is called by the **extension**, not by pi's renderer, and pi's own rpc
     mode hands out a live theme. (2) An object literal implementing `Theme` structurally — impossible
     without a cast: `Theme` carries private fields. (3) A real `Theme` built from blank colours, no
-    overrides — pi maps `""` to the *default-colour* escape (`\x1b[39m`), not to nothing, so status text
-    would reach the browser as literal escape bytes. (4) Forwarding pi's exported `theme` singleton — it
+    overrides — pi maps `""` to the *default-colour* escape (`\x1b[39m`), not to nothing, so themed text
+    outside the bridge's frames would keep escapes. (4) Forwarding pi's exported `theme` singleton — it
     is a `Proxy` that throws `Theme not initialized` until `initTheme()` runs, and `initTheme` is called
     only from pi's own CLI entrypoints, never when pi is embedded via `createAgentSession`. Every
     embedder of pi-as-a-library hits this; an upstream fix would not reach us until a deliberate pi bump.
+    **Every extension string the bridge publishes for display is plain text** (#890): stripping, not
+    rendering colours, keeps one look with `plainTextTheme`. Each member strips its own fields, not
+    `publish`, so the stored dialog snapshot stays plain. A complete sequence goes; a broken one (no
+    final byte or terminator) loses only its control byte. **A non-string is absent text** (#1356): pi
+    loads extensions untyped, a throw outside pi's handlers kills the host, and the page trusts the wire
+    contract's `string` (a non-string title once took the whole page down). So the bridge never throws
+    on one and never forwards one: a title or message becomes `""`, a status clears, a widget line is
+    `""`, a placeholder or prefill is omitted, an option is dropped, and a notify or editor edit is
+    skipped. A `select` left with no string option resolves `undefined` without a dialog, `[]` included:
+    a dialog with nothing to pick could only be cancelled by sending a chat message. A `select` answer
+    maps back by index to a copy of the options as passed; options that differ only in colour look alike
+    and the first wins. Built-ins fail: `util.stripVTControlCharacters` leaves OSC tails, `Bun.stripANSI`
+    is missing in the Node workflow harness, and pi-tui's `stripTerminalSequences` keeps DCS strings.
   - `toolResponses` — the host half of **interactive tools** (tools whose `execute` waits for the person):
     the per-session response mailbox (`ToolResponseWaiters`), respondability, restart repair support and
     late responses. The mailbox is **tool-agnostic**: every entry is keyed by `toolCallId`, the response is
@@ -719,6 +736,22 @@ re-opened transcripts provider-valid.
     the manager bullet above). Pure over pi's `SessionManager` (compaction-aware via
     `buildSessionContext`; idempotent; appends only missing results from the active tail batch) —
     unit-tested against `SessionManager.inMemory`, including failed-attempt and historical-gap replay.
+  - `artifactsGuard` — keeps the agent's output in the workspace for the Artifacts tool
+    ([[submodule-server-artifacts]]): a `before_agent_start` system-prompt section (`thinkrail-artifacts`)
+    telling the agent to put every non-code output it produces under `.thinkrail/context/` and never to
+    delete or move files out of it, and asking softly that it link each result in its final message and
+    keep scratch work in a `_`-prefixed folder such as `_work/` (both feed the artifact roles: a linked
+    path is a result, a `_` folder holds working files), plus a `tool_call` hook that blocks a `write` that would **create a new
+    file** in a temporary folder (`/tmp`, `/var/tmp`, `os.tmpdir()`, `$TMPDIR`/`$TEMP`/`$TMP`, real paths
+    included) outside the session's own folder, with a reason naming the `.thinkrail/context/` path to use.
+    `edit`, and a `write` over a file that already exists there, go through: refusing them turned a user's
+    "fix /tmp/repro.py" into a `sed` through bash, which is no longer a reviewable diff, while what the guard
+    exists for — the agent parking a new output where it disappears — is always a new file. Elsewhere
+    nothing is refused: an edit the user asked for (`~/.zshrc`) goes through and is not an artifact, and a
+    workspace that itself lives under `/tmp` (the e2e fixtures) is inside its own folder. A shell
+    command's writes cannot be gated; the rule asks for them. The path is resolved the way pi's tools do it
+    (leading `@` dropped, `~` expanded, relative to `ctx.cwd`). One of `buildResourceLoader`'s shared
+    factories and of the delegated-child base set.
   - `imageGuard` — the oversized-image guard: an inline extension (`oversizedImageGuard`, one of
     `buildResourceLoader`'s shared factories and the whole delegated-child base set) hooked on pi's
     **`context` event** (fired before every LLM
@@ -1061,7 +1094,8 @@ re-opened transcripts provider-valid.
     (rationale + the listed-children carve-out: core decision #25). **Every** child, opted in or not,
     also loads the core's base set (`childBaseExtensionFactories`, same decision): `oversizedImageGuard`,
     since a child's `read` returns raw images under the shared settings (see the `buildSessionSettings`
-    bullet), and `skillCarryover`, since children auto-compact under those settings too.
+    bullet), `artifactsGuard`, since a child writes files like its parent, and `skillCarryover`, since
+    children auto-compact under those settings too.
     A child on an extension-registered provider's model also loads that provider's **owning
     extension** (core decision #32: such a provider may serve only sessions its extension observed):
     `liveParentContext.providerExtensionPaths(provider)` answers from a process-wide owner map that
@@ -1248,7 +1282,7 @@ re-opened transcripts provider-valid.
     extension, because it compensates for the host's UI and must also cover a user's own install of
     `pi-web-access`, which runs exactly when that extension is switched off;
     `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet),
-    `skillCarryover` (see its bullet), **and the
+    `artifactsGuard` (see its bullet), `skillCarryover` (see its bullet), **and the
     caller's `extraFactories`** — per-session host bindings (the workspace-bound subagents extension),
     value-imported so dev and the compiled binary take the same path. pi's own built-in extensions
     (`llama.cpp`, `codemode`, `tool-search`, `mcp`) are loaded only by pi's CLI; an SDK host opts in per
@@ -1292,15 +1326,17 @@ re-opened transcripts provider-valid.
   wires `workspaceId` → the admission context, derived once by `admissionContextFor(project, overrides)`);
   the **`setMcpPolicyResolver`** seam (host wires `workspaceId` → the project's MCP approvals, overrides
   and tool grants, derived by `mcpPolicyOf(project)`) and its writer twin **`setMcpToolGrantWriter`**; the MCP management surface — `listMcpServers`,
+  `listUserMcpServers` and `userMcpContext` + `McpReadContext` (the user-level servers with no workspace),
   `mcpOwnershipGuard` (resolves pi settings, then answers synchronously who manages MCP instead of
   ThinkRail — what `listMcpServers` reports as `handledElsewhere` — so the host checks it in the same call
-  stack as every management mutation), `refreshMcpStatus`,
+  stack as every management mutation; without a `workspaceId` it samples no chat), `refreshMcpStatus`,
   `setMcpStatusPublisher`, `mcpSessionView` / `liveSessionIdsOf`, `dispatchSessionMcpCommand` (with an
   optional `notify` that takes the dispatch's notifications instead of the chat), `reconnectMcpServer`,
   `readMcpServerLog` (one server's masked lines from pi's shared `mcp.log`),
   `setSessionMcpServerEnabled` (the chat-local disable, applied through the reload gate), the config
   effective-config read `effectiveMcpServerConfig` and the config
-  writers `writeMcpServerEntry` / `removeMcpServerEntry` / `mcpEntryFingerprint` /
+  writers `writeMcpServerEntry` / `removeMcpServerEntry` / `mcpEntryFingerprint` (each over an
+  `McpConfigFile`: the global file, or a worktree's `.pi/mcp.json`) / `setUserMcpEntryFields` /
   `shareMcpOverrideWithRepo` (pi-rule validation, `MCP_CONFIG_INVALID` / `MCP_PATH_UNSAFE`) and the
   sign-in probe (`startMcpProbe`, `replyMcpProbe`, `cancelMcpProbe`, `cancelMcpProbesOwnedBy`,
   `cancelAllMcpProbes`, `setMcpLoginPublisher`, `isMcpLoginId`);
@@ -1776,7 +1812,11 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   (`DefaultPackageManager` with the built-in's name, its `builtin:mcp` resource's `enabled`; missing
   packages are skipped, never installed) and reports `by: "pi settings (-builtin:mcp)"`. Whether an
   enabled non-built-in extension registers `/mcp` is not knowable without loading it, so a replacement is
-  only seen through a live chat's owner.
+  only seen through a live chat's owner. `listUserMcpServers` is the list with no workspace: it reads
+  through `userMcpContext()` — pi's agent dir as cwd, untrusted, so only the global `mcp.json` and pi's
+  global settings count, and no project policy — and consults no chat, so it carries no statuses and only
+  `-builtin:mcp` in pi's global settings makes it `handledElsewhere`: a project's own settings or a
+  replacing extension seen in one workspace's chat must not lock the servers every project shares.
 - **Calls.** The per-session host extension ([[submodule-server-agent-mcp]]) asks on the call's card
   before any `mcp__*` call without `readOnlyHint` (Deny · Allow once · Allow in this chat · Always allow;
   anything but an affirmative answer blocks, and a user message answers it like any dialog). "Allow in
@@ -1805,8 +1845,9 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   `session_shutdown` (which closes pi's loopback listener), lock released once the session is closed — and
   the host cancels the probes a client owned when it reaps that client (`cancelMcpProbesOwnedBy`), so a
   reloaded page or a discarded tab never holds a server until restart. After a successful sign-in, the
-  workspace's live chats that report the server as *needs sign-in* get `/mcp reconnect <name>` instead of
-  waiting for their next turn. Test connection is HTTP-only (a stdio server is verified when a chat starts
+  workspace's live chats (every workspace's for a probe started without one, which reads the global file
+  through `userMcpContext()` and names no workspace in its pushes) that report the server as *needs
+  sign-in* get `/mcp reconnect <name>` instead of waiting for their next turn. Test connection is HTTP-only (a stdio server is verified when a chat starts
   it) and reports *connected · N tools* or the reason; every `error` frame's message (pi's reason or
   notice) is redacted like a status detail. A live chat's own `/mcp login` keeps pi's rpc path:
   the sign-in address arrives as a transcript notice (never auto-opened; `openUrl` is a no-op on the host)

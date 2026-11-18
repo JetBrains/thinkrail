@@ -1,6 +1,9 @@
 import {
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	ARTIFACT_ROLES_PROTOCOL_VERSION,
+	ARTIFACTS_PROTOCOL_VERSION,
 	type BackgroundCommandSummary,
+	BROWSER_VIEW_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	CHATS_PROTOCOL_VERSION,
 	canMarkCompletionUnread,
@@ -35,6 +38,7 @@ import {
 	WORKSPACE_READ_STATE_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	type Workspace,
+	type WorkspaceArtifactsSnapshot,
 } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
 import type { LoginState } from "../auth";
@@ -58,6 +62,7 @@ import type {
 	WorkspaceLayoutDocument,
 } from "../shell/layout";
 import type {
+	ArtifactsView,
 	ChangesTabSection,
 	ClosedChat,
 	ComposerFocusRequest,
@@ -809,6 +814,14 @@ export function selectComposerFocusRequested(
 	);
 }
 
+export function selectQuestionMayClaimFocus(
+	state: { sessions: Record<string, { composerFocusWonOver: string | null }> },
+	sessionId: string,
+	toolCallId: string,
+): boolean {
+	return state.sessions[sessionId]?.composerFocusWonOver !== toolCallId;
+}
+
 export function selectComposerFocusRequestStale(
 	state: ChatAttentionState & {
 		composerFocusRequest: ComposerFocusRequest | null;
@@ -1306,6 +1319,73 @@ export function selectCompactionTurnIds(
 			.filter((turn) => turn.kind === "compaction")
 			.map((turn) => turn.id),
 	);
+}
+
+export function supportsBrowserView(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= BROWSER_VIEW_PROTOCOL_VERSION;
+}
+
+export function supportsArtifactRoles(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= ARTIFACT_ROLES_PROTOCOL_VERSION;
+}
+
+export function selectArtifactsSmartOffered(state: {
+	artifactsSmart: boolean;
+	protocolVersion: number | null;
+}): boolean {
+	return state.artifactsSmart && supportsArtifactRoles(state.protocolVersion);
+}
+
+export function selectArtifactsView(state: {
+	artifactsView: ArtifactsView | null;
+	artifactsSmart: boolean;
+	protocolVersion: number | null;
+}): ArtifactsView {
+	const smart = selectArtifactsSmartOffered(state);
+	if (state.artifactsView === "smart") return smart ? "smart" : "list";
+	return state.artifactsView ?? (smart ? "smart" : "list");
+}
+
+export function supportsArtifacts(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= ARTIFACTS_PROTOCOL_VERSION;
+}
+
+export function hostLacksArtifacts(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion < ARTIFACTS_PROTOCOL_VERSION;
+}
+
+export function artifactsWatermark(
+	snapshot: WorkspaceArtifactsSnapshot,
+	includeOutputs: boolean,
+): number {
+	let watermark = 0;
+	for (const artifact of snapshot.artifacts) watermark = Math.max(watermark, artifact.firstSeenAt);
+	if (!includeOutputs) return watermark;
+	for (const output of snapshot.outputs ?? []) watermark = Math.max(watermark, output.changedAt);
+	return watermark;
+}
+
+export function selectArtifactsUnseen(
+	state: {
+		artifactsByWorkspace: Record<string, WorkspaceArtifactsSnapshot>;
+		artifactsSeenByWorkspace: Record<string, number>;
+		artifactsShowIgnored: boolean;
+	},
+	workspaceId: string,
+): boolean {
+	const snapshot = state.artifactsByWorkspace[workspaceId];
+	return (
+		snapshot !== undefined &&
+		artifactsWatermark(snapshot, state.artifactsShowIgnored) >
+			(state.artifactsSeenByWorkspace[workspaceId] ?? 0)
+	);
+}
+
+export function selectArtifactsTick(
+	state: { artifactsTickByWorkspace: Record<string, number>; connectionGeneration: number },
+	workspaceId: string,
+): string {
+	return `${state.connectionGeneration}:${state.artifactsTickByWorkspace[workspaceId] ?? 0}`;
 }
 
 export function selectWorkspaceTick(

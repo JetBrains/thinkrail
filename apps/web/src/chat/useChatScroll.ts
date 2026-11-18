@@ -56,9 +56,11 @@ export interface ChatScroll {
 	scrollButtonLabel: "Follow response" | "Latest" | null;
 	scrollMoving: boolean;
 	scrollToLatest: () => void;
+	scrollPage: (direction: -1 | 1) => void;
 	armImmediateTurn: () => void;
 	cancelImmediateTurn: (streaming: boolean) => void;
 	cancelAutomaticReveal: () => void;
+	leaveFollow: () => void;
 	revealElement: (target: HTMLElement, options: ChatRevealOptions) => void;
 	revealRow: (
 		rowId: string,
@@ -79,6 +81,9 @@ const NATIVE_SCROLL_INTENT_MS = 500;
 const VIRTUOSO_PLACEMENT_WINDOW_MS = 1_300;
 const ROW_MATERIALIZATION_FRAMES = 90;
 const ROW_ALIGNMENT_STABILITY_FRAMES = 4;
+
+const KEYBOARD_PAGE_FRACTION = 0.875;
+const TRANSCRIPT_FOCUS_TARGETS = "[data-transcript-item], [data-transcript-feed]";
 
 const KEYBOARD_SCROLL_KEYS = new Set([
 	" ",
@@ -120,11 +125,11 @@ function survivesInternalClipping(
 }
 
 function isInteractiveTarget(target: EventTarget | null): boolean {
-	return (
-		target instanceof Element &&
-		target.closest("a, button, input, textarea, select, [contenteditable=true], [tabindex]") !==
-			null
+	if (!(target instanceof Element)) return false;
+	const control = target.closest(
+		"a, button, input, textarea, select, [contenteditable=true], [tabindex]",
 	);
+	return control !== null && !control.matches(TRANSCRIPT_FOCUS_TARGETS);
 }
 
 function latestEdge(messageOrder: ChatMessageOrder): ReadingBandLatestEdge {
@@ -1079,6 +1084,10 @@ export function useChatScroll(
 
 	const cancelAutomaticReveal = useCallback(() => controller.cancelReveal(), [controller]);
 
+	const leaveFollow = useCallback(() => {
+		if (controller.getSnapshot().following) readerLeft();
+	}, [controller, readerLeft]);
+
 	const revealElement = useCallback(
 		(target: HTMLElement, options: ChatRevealOptions) => {
 			const scroller = scrollerRef.current;
@@ -1313,6 +1322,41 @@ export function useChatScroll(
 		return () => scrollerElement.removeEventListener("wheel", onWheel, { capture: true });
 	}, [edge, pauseForNativeInput, rearmDetachedReaderAtEdge, scheduleTouchSettle, scrollerElement]);
 
+	const keyboardScroll = useCallback(
+		(key: string, shiftKey: boolean): "latest" | "native" | "none" => {
+			const movesTowardTop =
+				key === "ArrowUp" || key === "PageUp" || key === "Home" || (key === " " && shiftKey);
+			const movesTowardBottom =
+				key === "ArrowDown" || key === "PageDown" || key === "End" || (key === " " && !shiftKey);
+			const movesTowardLatest = edge === "top" ? movesTowardTop : movesTowardBottom;
+			const movesTowardHistory = edge === "top" ? movesTowardBottom : movesTowardTop;
+			if (!movesTowardLatest && !movesTowardHistory) return "none";
+			if (
+				movesTowardLatest &&
+				((edge === "top" && key === "Home") || (edge === "bottom" && key === "End"))
+			) {
+				scrollToLatest();
+				return "latest";
+			}
+			const scroller = scrollerRef.current;
+			const deltaY = movesTowardTop ? -1 : 1;
+			if (!scroller) return "none";
+			if (!canScrollBy(scroller, deltaY)) {
+				if (movesTowardLatest) rearmDetachedReaderAtEdge();
+				return "none";
+			}
+			pointerIntentUntil.current = 0;
+			wheelIntentUntil.current = 0;
+			programmaticScrollTop.current = null;
+			keyboardIntentUntil.current = performance.now() + NATIVE_SCROLL_INTENT_MS;
+			returnIntentUntil.current = movesTowardHistory ? 0 : keyboardIntentUntil.current;
+			pauseForNativeInput("pending");
+			scheduleTouchSettle(NATIVE_SCROLL_INTENT_MS);
+			return "native";
+		},
+		[edge, pauseForNativeInput, rearmDetachedReaderAtEdge, scheduleTouchSettle, scrollToLatest],
+	);
+
 	const onKeyDown = useCallback(
 		(event: KeyboardEvent) => {
 			if (event.defaultPrevented) return;
@@ -1327,43 +1371,21 @@ export function useChatScroll(
 				return;
 			}
 			if (interactive || !KEYBOARD_SCROLL_KEYS.has(event.key)) return;
-			const movesTowardTop =
-				event.key === "ArrowUp" ||
-				event.key === "PageUp" ||
-				event.key === "Home" ||
-				(event.key === " " && event.shiftKey);
-			const movesTowardBottom =
-				event.key === "ArrowDown" ||
-				event.key === "PageDown" ||
-				event.key === "End" ||
-				(event.key === " " && !event.shiftKey);
-			const movesTowardLatest = edge === "top" ? movesTowardTop : movesTowardBottom;
-			const movesTowardHistory = edge === "top" ? movesTowardBottom : movesTowardTop;
-			if (!movesTowardLatest && !movesTowardHistory) return;
-			if (
-				movesTowardLatest &&
-				((edge === "top" && event.key === "Home") || (edge === "bottom" && event.key === "End"))
-			) {
-				event.preventDefault();
-				scrollToLatest();
-				return;
-			}
-			const scroller = scrollerRef.current;
-			const deltaY = movesTowardTop ? -1 : 1;
-			if (!scroller) return;
-			if (!canScrollBy(scroller, deltaY)) {
-				if (movesTowardLatest) rearmDetachedReaderAtEdge();
-				return;
-			}
-			pointerIntentUntil.current = 0;
-			wheelIntentUntil.current = 0;
-			programmaticScrollTop.current = null;
-			keyboardIntentUntil.current = performance.now() + NATIVE_SCROLL_INTENT_MS;
-			returnIntentUntil.current = movesTowardHistory ? 0 : keyboardIntentUntil.current;
-			pauseForNativeInput("pending");
-			scheduleTouchSettle(NATIVE_SCROLL_INTENT_MS);
+			if (keyboardScroll(event.key, event.shiftKey) === "latest") event.preventDefault();
 		},
-		[edge, pauseForNativeInput, rearmDetachedReaderAtEdge, scheduleTouchSettle, scrollToLatest],
+		[keyboardScroll, pauseForNativeInput, scheduleTouchSettle],
+	);
+
+	const scrollPage = useCallback(
+		(direction: -1 | 1) => {
+			const scroller = scrollerRef.current;
+			if (!scroller || keyboardScroll(direction < 0 ? "PageUp" : "PageDown", false) !== "native") {
+				return;
+			}
+			scroller.scrollTop =
+				boundedScrollTop(scroller) + direction * scroller.clientHeight * KEYBOARD_PAGE_FRACTION;
+		},
+		[keyboardScroll],
 	);
 
 	useEffect(() => {
@@ -1384,9 +1406,11 @@ export function useChatScroll(
 		scrollButtonLabel: snapshot.buttonLabel,
 		scrollMoving: snapshot.moving,
 		scrollToLatest,
+		scrollPage,
 		armImmediateTurn,
 		cancelImmediateTurn,
 		cancelAutomaticReveal,
+		leaveFollow,
 		revealElement,
 		revealRow,
 		prepareFoldChange,

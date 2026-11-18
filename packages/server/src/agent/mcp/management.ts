@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { getAgentDir, type McpServerConfig } from "@earendil-works/pi-coding-agent";
-import type { McpProjectOverride, McpServerScope } from "@thinkrail/contracts";
+import type { McpExposure, McpProjectOverride } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	fingerprintMcpEntry,
@@ -31,11 +31,16 @@ export function effectiveMcpServerConfig(options: {
 	)?.config;
 }
 
-function configPath(scope: McpServerScope, worktree: string): string {
-	if (scope === "user") return globalMcpConfigPath(getAgentDir());
-	const path = projectMcpConfigPath(worktree);
+export type McpConfigFile = { scope: "user" } | { scope: "project"; worktree: string };
+
+const filePath = (file: McpConfigFile): string =>
+	file.scope === "user" ? globalMcpConfigPath(getAgentDir()) : projectMcpConfigPath(file.worktree);
+
+function writablePath(file: McpConfigFile): string {
+	const path = filePath(file);
+	if (file.scope === "user") return path;
 	try {
-		assertProjectMcpConfigWritable(worktree, path);
+		assertProjectMcpConfigWritable(file.worktree, path);
 	} catch (error) {
 		if (error instanceof McpConfigPathUnsafeError)
 			throw new CodedError("MCP_PATH_UNSAFE", error.message);
@@ -64,49 +69,47 @@ function invalid(message: string): CodedError {
 	return new CodedError("MCP_CONFIG_INVALID", message);
 }
 
-export function writeMcpServerEntry(options: {
-	scope: McpServerScope;
-	worktree: string;
-	name: string;
-	entry: Record<string, unknown>;
-	mode: "add" | "update";
-}): string | undefined {
-	const { scope, worktree, name, entry, mode } = options;
+export function writeMcpServerEntry(
+	file: McpConfigFile,
+	options: { name: string; entry: Record<string, unknown>; mode: "add" | "update" },
+): string | undefined {
+	const { name, entry, mode } = options;
 	const validated = validateMcpServerConfig(name, entry);
 	if (typeof validated === "string") throw invalid(validated);
-	if (scope === "project" && "url" in validated && validated.auth) {
+	if (file.scope === "project" && "url" in validated && validated.auth) {
 		throw invalid(`server "${name}": auth is only allowed in the global mcp.json`);
 	}
-	const path = configPath(scope, worktree);
+	const path = writablePath(file);
 	const existing = readRawEntry(path, name);
 	if (mode === "add" && existing !== undefined)
 		throw invalid(`An MCP server named "${name}" already exists`);
 	if (mode === "update" && !isRecord(existing))
 		throw invalid(`No MCP server named "${name}" in ${path}`);
 	addMcpServerConfig(path, name, entry);
-	return scope === "project" ? fingerprintMcpEntry(name, entry) : undefined;
+	return file.scope === "project" ? fingerprintMcpEntry(name, entry) : undefined;
 }
 
-export function removeMcpServerEntry(options: {
-	scope: McpServerScope;
-	worktree: string;
-	name: string;
-}): void {
-	const path = configPath(options.scope, options.worktree);
-	if (!removeMcpServerConfig(path, options.name)) {
-		throw invalid(`No MCP server named "${options.name}" in ${path}`);
+export function removeMcpServerEntry(file: McpConfigFile, name: string): void {
+	const path = writablePath(file);
+	if (!removeMcpServerConfig(path, name)) {
+		throw invalid(`No MCP server named "${name}" in ${path}`);
 	}
 }
 
-export function mcpEntryFingerprint(
-	scope: McpServerScope,
-	worktree: string,
-	name: string,
-): string | undefined {
-	const path =
-		scope === "user" ? globalMcpConfigPath(getAgentDir()) : projectMcpConfigPath(worktree);
-	const entry = readRawEntry(path, name);
+export function mcpEntryFingerprint(file: McpConfigFile, name: string): string | undefined {
+	const entry = readRawEntry(filePath(file), name);
 	return entry === undefined ? undefined : fingerprintMcpEntry(name, entry);
+}
+
+export function setUserMcpEntryFields(
+	name: string,
+	patch: { enabled?: boolean; exposure?: Exclude<McpExposure, "codemode"> },
+): void {
+	if (patch.enabled === undefined && patch.exposure === undefined) return;
+	const path = filePath({ scope: "user" });
+	if (!isRecord(readRawEntry(path, name)))
+		throw invalid(`No MCP server named "${name}" in ${path}`);
+	updateMcpServerConfig(path, name, patch);
 }
 
 export function shareMcpOverrideWithRepo(options: {
@@ -116,11 +119,11 @@ export function shareMcpOverrideWithRepo(options: {
 	approvedFingerprint: string | undefined;
 }): string {
 	const { name } = options;
-	const userEntry = readEntry(globalMcpConfigPath(getAgentDir()), name);
+	const userEntry = readEntry(filePath({ scope: "user" }), name);
 	if (!userEntry || isOverrideEntry(userEntry)) {
 		throw invalid(`"${name}" is no longer defined in your mcp.json — nothing to share.`);
 	}
-	const path = configPath("project", options.worktree);
+	const path = writablePath({ scope: "project", worktree: options.worktree });
 	const existing = readRawEntry(path, name);
 	if (existing !== undefined && (!isRecord(existing) || !isOverrideEntry(existing))) {
 		throw invalid(

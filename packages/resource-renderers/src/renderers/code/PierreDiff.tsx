@@ -15,6 +15,7 @@ import {
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
 	ResourceContent,
@@ -36,6 +37,7 @@ import {
 	computeActionBlocks,
 } from "./changeBlocks";
 import { createDiffCache } from "./diffCache";
+import { type DiffRow, diffCursorRows } from "./diffCursor";
 import PierreProvider, { usePierrePlain } from "./PierreProvider";
 import { PierreScroller } from "./PierreScroller";
 import { PlainCode } from "./PlainCode";
@@ -51,6 +53,7 @@ import {
 } from "./pierreReview";
 import { usePierreVirtualizer } from "./pierreVirtualizer";
 import { plainDiffRuns } from "./plainRuns";
+import { type DiffCursorTarget, useDiffCursor } from "./useDiffCursor";
 
 type DiffAnnotationMetadata =
 	| { kind: "thread"; id: string }
@@ -59,6 +62,22 @@ type DiffAnnotationMetadata =
 
 const NO_PLACED_THREADS: ReadonlySet<string> = new Set();
 const NO_BLOCKS: ChangeBlock[] = [];
+const NO_ROWS: DiffRow[] = [];
+const CURSOR_SIDE_CSS = `
+:host(.review-cursor-deletions) [data-additions] [data-selected-line],
+:host(.review-cursor-additions) [data-deletions] [data-selected-line] {
+	--diffs-computed-selected-line-bg: var(--diffs-computed-diff-line-bg);
+}
+:host(.review-cursor-deletions) [data-additions] :is([data-column-number], [data-gutter-buffer])[data-selected-line],
+:host(.review-cursor-additions) [data-deletions] :is([data-column-number], [data-gutter-buffer])[data-selected-line] {
+	color: var(--diffs-fg-number);
+}
+:host(.review-cursor-deletions) [data-additions] [data-column-number][data-selected-line][data-line-type="change-addition"] {
+	color: var(--diffs-fg-number-addition-override, var(--diffs-addition-base));
+}
+:host(.review-cursor-additions) [data-deletions] [data-column-number][data-selected-line][data-line-type="change-deletion"] {
+	color: var(--diffs-fg-number-deletion-override, var(--diffs-deletion-base));
+}`;
 const parsedDiffs = createDiffCache<FileDiffMetadata>();
 const actionBlocks = createDiffCache<ChangeBlock[]>();
 
@@ -154,6 +173,8 @@ function HunkToolbar({
 	return (
 		<div
 			data-testid="hunk-toolbar"
+			data-focus-row={contentKey}
+			data-block-id={changeBlockId(block)}
 			data-kept={kept ? true : undefined}
 			className={`mx-12 my-2 flex min-h-24 items-center gap-4 rounded-sm border bg-container-header-bg px-4 text-text-muted ${
 				kept ? "border-feedback-success-muted" : "border-border-muted"
@@ -180,6 +201,7 @@ function HunkToolbar({
 				icon={Revert}
 				label={t("viewer.hunk.revert")}
 				data-testid="hunk-revert"
+				data-focus-row-primary
 				disabled={reverting}
 				onClick={revert}
 			/>
@@ -307,6 +329,11 @@ function PierreDiffSurface({
 	const composer = pending.selection?.composer ?? null;
 	const selectedLines = pending.selection?.selectedLines ?? null;
 	const { select, close: closeComposer } = pending;
+	const { elementRef: rootRef, attach: attachScroller } = useScrollViewState<HTMLDivElement>(
+		viewState,
+		onViewState,
+	);
+	const { virtualizer, metrics, attach } = usePierreVirtualizer(attachScroller);
 	const nextComposerId = useRef(composer?.id ?? 0);
 	const reviewRef = useRef(review);
 	const hunkActionsRef = useRef(hunkActions);
@@ -330,12 +357,58 @@ function PierreDiffSurface({
 		},
 		[select],
 	);
+	const cursorLayout = layout === "unified" ? "unified" : "split";
+	const cursorEnabled = review !== undefined && !plain;
+	const cursorRows = useMemo(
+		() => (cursorEnabled ? diffCursorRows(fileDiff, cursorLayout) : NO_ROWS),
+		[cursorEnabled, cursorLayout, fileDiff],
+	);
+	const cursorTargets = useMemo<DiffCursorTarget[]>(
+		() => [
+			...(composer?.kind === "composer"
+				? [{ id: null, line: composer.lineNumber, side: composer.side }]
+				: []),
+			...threadAnnotations.flatMap((annotation) =>
+				annotation.metadata.kind === "thread" && placedThreadIds.has(annotation.metadata.id)
+					? [{ id: annotation.metadata.id, line: annotation.lineNumber, side: annotation.side }]
+					: [],
+			),
+		],
+		[composer, placedThreadIds, threadAnnotations],
+	);
+	const diffCursor = useDiffCursor({
+		enabled: cursorEnabled,
+		fileDiff,
+		rows: cursorRows,
+		layout: cursorLayout,
+		rootRef,
+		virtualizer,
+		virtualize,
+		targets: cursorTargets,
+		label: t("viewer.code.diffCursor", { path: resource.path }),
+		onComment: openSelection,
+		onEscape: () => {
+			if (composer?.kind !== "blocked") return false;
+			closeComposer();
+			return true;
+		},
+	});
+	const { place: placeCursor, focusCursor } = diffCursor;
+	const openPointerSelection = useCallback(
+		(range: SelectedLineRange | null) => {
+			if (!range) return;
+			openSelection(range);
+			const side = range.endSide ?? range.side ?? "additions";
+			placeCursor({ line: Math.max(range.start, range.end), side });
+		},
+		[openSelection, placeCursor],
+	);
 	const openGutterComposer = useCallback(
 		(line: { lineNumber: number; side: AnnotationSide } | undefined) => {
 			if (!line) return;
-			openSelection({ start: line.lineNumber, end: line.lineNumber, side: line.side });
+			openPointerSelection({ start: line.lineNumber, end: line.lineNumber, side: line.side });
 		},
-		[openSelection],
+		[openPointerSelection],
 	);
 	const openAskAgent = useCallback(
 		(block: ChangeBlock) => {
@@ -345,6 +418,7 @@ function PierreDiffSurface({
 			const range = request.draft.selectors.find((selector) => selector.kind === "lineRange");
 			const lineNumber = range?.kind === "lineRange" ? range.endLine : 0;
 			const id = ++nextComposerId.current;
+			if (lineNumber > 0) placeCursor({ line: lineNumber, side: "additions" });
 			select({
 				selectedLines:
 					range?.kind === "lineRange"
@@ -365,7 +439,7 @@ function PierreDiffSurface({
 				},
 			});
 		},
-		[select],
+		[placeCursor, select],
 	);
 	const composerAnnotation = useMemo<DiffLineAnnotation<DiffAnnotationMetadata>>(
 		() => ({
@@ -401,15 +475,11 @@ function PierreDiffSurface({
 			disableFileHeader: true,
 			enableLineSelection: review !== undefined,
 			enableGutterUtility: review !== undefined,
-			onLineSelectionEnd: openSelection,
+			onLineSelectionEnd: openPointerSelection,
+			unsafeCSS: CURSOR_SIDE_CSS,
 		}),
-		[ignoreWhitespace, layout, openSelection, review],
+		[ignoreWhitespace, layout, openPointerSelection, review],
 	);
-	const { elementRef: rootRef, attach: attachScroller } = useScrollViewState<HTMLDivElement>(
-		viewState,
-		onViewState,
-	);
-	const { virtualizer, metrics, attach } = usePierreVirtualizer(attachScroller);
 	usePierreFocus(
 		rootRef,
 		virtualizer,
@@ -433,6 +503,8 @@ function PierreDiffSurface({
 		<PierreScroller
 			attach={attach}
 			testId="diff-view"
+			focusList={`hunks:${resource.path}`}
+			cursor={diffCursor.proxy}
 			className="h-full overflow-auto bg-container-content-bg [overflow-anchor:none] pierre-code-surface pierre-diff-surface"
 		>
 			<StaleComposerNotice visible={pending.stale} />
@@ -450,14 +522,20 @@ function PierreDiffSurface({
 						options={options}
 						metrics={metrics}
 						lineAnnotations={annotations}
-						selectedLines={selectedLines}
-						className="flex-1"
+						selectedLines={diffCursor.drawn ?? selectedLines}
+						className={cn(
+							"flex-1",
+							diffCursor.drawn &&
+								cursorLayout === "split" &&
+								`review-cursor-${diffCursor.drawn.endSide ?? diffCursor.drawn.side}`,
+						)}
 						renderGutterUtility={(getHoveredLine) => (
 							<IconButton
 								icon={MessageSquarePlus}
 								label={t("viewer.code.commentOnLine")}
 								variant="primary"
 								data-testid="review-add-icon"
+								tabIndex={-1}
 								onPointerDown={(event) => {
 									event.preventDefault();
 									event.stopPropagation();
@@ -474,6 +552,9 @@ function PierreDiffSurface({
 										key={entry.thread.id}
 										thread={entry.thread}
 										actions={entry.actions}
+										onReturnFocus={() =>
+											focusCursor({ line: annotation.lineNumber, side: annotation.side })
+										}
 									/>
 								) : null;
 							}
@@ -521,6 +602,7 @@ function PierreDiffSurface({
 										: {})}
 									{...(composer.notice !== undefined ? { notice: composer.notice } : {})}
 									onClose={closeComposer}
+									onReturnFocus={() => focusCursor()}
 									className="review-composer-flow"
 								/>
 							);

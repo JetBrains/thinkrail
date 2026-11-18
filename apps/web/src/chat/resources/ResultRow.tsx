@@ -164,6 +164,7 @@ export function ResultRow({
 						ref={toggleRef}
 						type="button"
 						data-testid="background-result-toggle"
+						data-chat-item-toggle
 						aria-expanded={expanded}
 						onClick={onToggle}
 						className={cn(

@@ -1,7 +1,13 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { enterDefaultWorkspace, openFixtureProject, revealWorkbenchTool } from "./fixtures/app";
+import {
+	closeSettings,
+	enterDefaultWorkspace,
+	openFixtureProject,
+	openSettingsSection,
+	revealWorkbenchTool,
+} from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 
 const BUILT_IN_TRANSLATION = /\/assets\/[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*-[\w-]{8}\.json$/;
@@ -18,10 +24,7 @@ function removeLocale(name: string): void {
 }
 
 async function openLanguageSettings(page: Page) {
-	if (!(await page.getByTestId("settings-dialog").isVisible())) {
-		await page.getByTestId("open-settings").click();
-	}
-	await page.getByTestId("settings-nav-language").click();
+	await openSettingsSection(page, "language");
 	const section = page.getByTestId("settings-language");
 	await expect(section).toBeVisible();
 	return section;
@@ -66,7 +69,7 @@ test("a local language file is listed, selectable, live-reloaded, and survives d
 	writeLocale("fr.json", "{ not json");
 	const broken = section.getByTestId("language-broken-fr.json");
 	await expect(broken).toContainText("isn't valid JSON");
-	await expect(broken.locator("input")).toBeDisabled();
+	await expect(broken).toBeDisabled();
 
 	await page.reload();
 	await openLanguageSettings(page);
@@ -95,7 +98,17 @@ test("a built-in translation downloads only when picked and renders after a relo
 	const section = await openLanguageSettings(page);
 	expect(translationFiles).toEqual([]);
 
-	await section.getByTestId("language-es").click();
+	// The language is an expensive choice: arrows only move a pending pick, Enter applies it.
+	const spanish = section.getByTestId("language-es");
+	await spanish.focus();
+	await page.keyboard.press("ArrowUp");
+	await page.keyboard.press("ArrowDown");
+	await expect(spanish).toBeFocused();
+	await expect(spanish).toHaveAttribute("data-pending", "true");
+	await expect(section.getByText("Press Enter to apply")).toBeVisible();
+	await expect(page.locator("html")).toHaveAttribute("lang", "en");
+	expect(translationFiles).toEqual([]);
+	await page.keyboard.press("Enter");
 	await expect(page.locator("html")).toHaveAttribute("lang", "es");
 	await expect(page.getByTestId("settings-nav-language")).toContainText("Idioma");
 	expect(translationFiles).toHaveLength(1);
@@ -183,7 +196,7 @@ test("switching language re-renders cached labels, markup strings and a mounted 
 	const section = await openLanguageSettings(page);
 	await section.getByTestId("language-de").click();
 	await expect(section.getByTestId("language-add")).toContainText("Lade en.json herunter");
-	await page.keyboard.press("Escape");
+	await closeSettings(page);
 	await expect(filesTool).toHaveAccessibleName(/Dateien/);
 	await expect(commentButton).toHaveAttribute("title", "Auswahl kommentieren");
 	await expect(commentButton).toHaveAttribute("aria-label", "Auswahl kommentieren");

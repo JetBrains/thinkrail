@@ -93,17 +93,21 @@ without bypassing approvals or treating an occupied name as absent.
   `structuredContent` from finalized messages, so this is what lets a card render the same live, after
   reload and on another client.
 - `management.ts` — `effectiveMcpServerConfig` reads the admitted definition through the same loader
-  used by sessions, so probes never infer it from a presentation row. The host composes
+  used by sessions, so probes never infer it from a presentation row. Every writer names its file as an
+  `McpConfigFile` — `{ scope: "user" }` (the global `mcp.json`, no worktree needed, so the host can manage
+  it with no workspace) or `{ scope: "project", worktree }`. The host composes
   `writeMcpServerEntry` (pi validation plus the project `auth` ban, add vs update, project containment;
   returns a project entry's fingerprint).
   Add requires the name to be absent as an own property in the defining file's `mcpServers`, regardless
   of entry validity: scalar, null and array values occupy the name at both user and project scope, even
   if they appeared after the client's list read. Refusal changes neither file bytes nor approvals.
   Update intentionally still requires an existing object entry; it does not replace malformed
-  non-object values. The other helpers are `removeMcpServerEntry`, `mcpEntryFingerprint(scope, worktree,
-  name)` (the fingerprint of the raw entry currently in that scope's file — the global `mcp.json` or the
-  worktree's `.pi/mcp.json` — `undefined` when absent; what the host compares a rendered
-  `expectedFingerprint` against before any rewrite or removal), and
+  non-object values. The other helpers are `removeMcpServerEntry`, `mcpEntryFingerprint(file, name)` (the
+  fingerprint of the raw entry currently in that file, `undefined` when absent; what the host compares a
+  rendered `expectedFingerprint` against before any rewrite or removal), `setUserMcpEntryFields(name, {
+  enabled?, exposure? })` (merges only those keys into the user entry through `updateMcpServerConfig`, so
+  pi's writer semantics hold and every other key stays; a non-object entry is refused, an empty patch
+  writes nothing), and
   `shareMcpOverrideWithRepo` (writes pi's override entry from the record; refuses when the user-level
   server it overrides no longer exists — an override without a definition would be an invalid entry —
   when the project file has any own value that is not an override object, or when it holds an override
@@ -221,7 +225,8 @@ without bypassing approvals or treating an occupied name as absent.
   `MCP_CONFIRM_CHAT` / `MCP_CONFIRM_ALWAYS`, `createMcpEngine` (`{ loadConfig, lockSignIns?, openUrl?, onCommandSettled? }`), `HOST_BUILTIN_EXTENSION_NAMES`, `acquireMcpSignInLock`,
   `loadHostMcpConfig` + `McpProjectPolicy` + `mcpPolicyOf`, `summarizeMcpServers`, `maskMcpEndpoint` /
   `redactMcpText`, `readMcpServerLog`, `effectiveMcpServerConfig`, the `management.ts` mutations (`writeMcpServerEntry`,
-  `removeMcpServerEntry`, `mcpEntryFingerprint`, `shareMcpOverrideWithRepo`),
+  `removeMcpServerEntry`, `mcpEntryFingerprint`, `setUserMcpEntryFields`, `shareMcpOverrideWithRepo`) over
+  `McpConfigFile`,
   `summarizeMcpConfigErrors`, the status parsers (`parseMcpStatusText`, `parseMcpAttentionNotice`,
   `MCP_ATTENTION_PREFIX`, `deriveMcpServerStatuses`, `ParsedMcpStatus`), `summarizeMcpResult` /
   `isMcpResultTool` / `MCP_SUMMARY_BYTES`, and the types `LoadedMcpFiles`,

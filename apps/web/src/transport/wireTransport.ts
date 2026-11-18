@@ -4,6 +4,7 @@ import type {
 	ChatContinuation,
 	ExtUiRequest,
 	HostUpdateNotice,
+	KeybindingOverrides,
 	LoginPush,
 	McpStatusPayload,
 	Project,
@@ -16,6 +17,7 @@ import type {
 	SpeechStatus,
 	TurnChangeSet,
 	Workspace,
+	WorkspaceArtifactsChangedPayload,
 	WorkspaceCreation,
 	WorkspaceCreationRemoved,
 	WorkspaceFsChangedPayload,
@@ -29,6 +31,7 @@ import {
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
+	KEYBINDINGS_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
@@ -61,6 +64,17 @@ export function supportsUserThemes(protocolVersion: number | null): boolean {
 
 export function supportsExtensionSettings(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= EXTENSION_SETTINGS_PROTOCOL_VERSION;
+}
+
+export function supportsKeybindings(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= KEYBINDINGS_PROTOCOL_VERSION;
+}
+
+export function updateKeybindings(keybindings: KeybindingOverrides): Promise<boolean> {
+	if (!supportsKeybindings(useAppStore.getState().protocolVersion)) return Promise.resolve(false);
+	return getTransport()
+		.request("settings.update", { config: { keybindings } })
+		.then(() => true);
 }
 
 export function supportsPiPackages(protocolVersion: number | null): boolean {
@@ -430,7 +444,8 @@ export function initTransport(): WsTransport {
 	transport.subscribe(WS_CHANNELS.providerLogin, (data) => {
 		const push = data as LoginPush;
 		const state = useAppStore.getState();
-		if (push.target && state.removedWorkspaceIds[push.target.workspaceId]) {
+		const workspaceId = push.target?.workspaceId;
+		if (workspaceId !== undefined && state.removedWorkspaceIds[workspaceId]) {
 			void getTransport()
 				.request("provider.loginCancel", { loginId: push.loginId })
 				.catch(() => {});
@@ -521,6 +536,12 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.workspaceFsChanged, (data) => {
 		useAppStore.getState().noteFsChanged(data as WorkspaceFsChangedPayload);
+	});
+
+	transport.subscribe(WS_CHANNELS.workspaceArtifactsChanged, (data) => {
+		useAppStore
+			.getState()
+			.noteArtifactsChanged((data as WorkspaceArtifactsChangedPayload).workspaceId);
 	});
 
 	transport.subscribe(WS_CHANNELS.turnChanged, (data) => {

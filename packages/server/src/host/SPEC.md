@@ -55,7 +55,20 @@ channel fan-out, and the process-boot wrapper both launchers share.
   else stores the body through `saveUserFont` and answers that file's entry as JSON: 200, 413 `too-large`
   (checked against `Content-Length` before reading and again while streaming), 409 `too-many`, 422
   `unsupported-collection`/`invalid-font`, or 500 `unreadable`; any other method is 405 with
-  `Allow: GET, PUT`, the `fonts` poller's `fonts.changed` nudge reaching
+  `Allow: GET, PUT`, the **`GET /view/<workspace>/<path>`** route (`WORKSPACE_VIEW_ROUTE`, `serveWorktreeView`,
+  GET/HEAD only, else 405) — a workspace file for a *browser tab* ("Open in browser"): the same worktree
+  resolution as `/files/`, `no-store`, `nosniff`, a web type table for what a page loads (`.css`, `.js`/`.mjs`,
+  `.json`, images, fonts, media; text types with `charset=utf-8`), and for HTML/XHTML/SVG `viewPolicy(base)`:
+  `sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox; default-src 'none'`, script, style, image,
+  font, media, frame and base sources limited to `base` — the request origin plus `/view/<workspace>/`, so a
+  page loads only its own workspace's files — and `connect-src 'none'; worker-src 'none'; object-src 'none';
+  form-action 'none'`. The page's scripts run (it is the user's own file, opened on purpose), but in an
+  opaque origin that touches nothing of the app, and with no fetch or WebSocket they cannot reach the
+  host's unauthenticated wire (Decision 7). Never add CORS headers to it: they would let any website read
+  workspace files — any site can make an opaque-origin document, so even `Access-Control-Allow-Origin: null`
+  would. Known limitation that follows: what browsers fetch in CORS mode from the page's opaque origin — a
+  module script by `src` and `@font-face` files — does not load (classic scripts, inline modules,
+  stylesheets, images and `data:` fonts do); lifting it needs an isolated preview origin, not CORS, the `fonts` poller's `fonts.changed` nudge reaching
   only sockets whose `?protocol=` is at least `FONTS_PROTOCOL_VERSION`; the **`/speech` socket**
   (`SPEECH_SOCKET_ROUTE`, refused below `SPEECH_PROTOCOL_VERSION`), which shares the one `Bun.serve`
   websocket handler but is tagged at upgrade. Its `open` / `message` / `close` go straight to that
@@ -280,7 +293,13 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `listSkillCatalog`; the **MCP set** (`mcp.*`, `host/mcp.ts`) composes `agent`'s MCP
   service with `projects` (approvals, overrides, pi-level trust) and publishes `mcp.status` snapshots (topic
   subscribed only by clients at `MCP_PROTOCOL_VERSION` or later) plus `session.resourcesChanged`
-  invalidations. Every request resolves its workspace and that workspace's project. Management mutations
+  invalidations. Every request that names a workspace resolves it and its project; one without (user scope
+  only, `MCP_USER_SERVERS_PROTOCOL_VERSION`) resolves none: the list is agent's `listUserMcpServers`,
+  mutations and probes are admitted by the ownership guard over agent's `userMcpContext()` (pi's agent dir
+  as cwd, untrusted, empty policy, no live owners), project scope is refused with `MCP_CONFIG_INVALID`,
+  every write reconciles all workspaces' live chats, and `mcp.setUserServer` checks the global entry's
+  rendered fingerprint in the same synchronous step as agent's `setUserMcpEntryFields` writes `enabled` /
+  `exposure`. Workspace-scoped management mutations
   and probes re-read both after asynchronous ownership resolution, then check ownership and admit work
   in one synchronous call stack. A changed project identity, cwd or pi-level trust rejects the request
   for retry; approvals and overrides come from the latest record, not the pre-await snapshot. Project
@@ -309,7 +328,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   runs agent's `reconnectMcpServer` (pi's notices stay out of the chat; pi's failure, masked, is the
   request's error) and refreshes that chat's status either way;
   `mcp.readOutput` reads agent's `readMcpToolOutput` for a session of that workspace only;
-  `mcp.readLog` resolves the workspace, checks the name against pi's charset and returns agent's
+  `mcp.readLog` resolves the workspace when one is named, checks the name against pi's charset and returns agent's
   `readMcpServerLog` (pi keeps one `mcp.log` per agent directory, so it needs no session);
   `mcp.login` / `mcp.testConnection` start agent's probe with the caller's `clientKey` as owner and return
   its `loginId` (`mcp.logout` awaits the probe). Probe admission resolves the valid effective server from
@@ -860,6 +879,29 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `workspace.fsChanged` publisher also
   calls `invalidateRoot(worktreePath)` so a watched workspace's file list and spec snapshot refresh on the
   next keystroke. `fs.readFile` forwards `maxBytes` to `fs`.
+
+**Artifacts wiring** ([[submodule-server-artifacts]]): the `workspace.fsChanged` publisher hands every
+batch to `noteArtifactPathsChanged` (it reconciles when the batch is truncated or touches
+`.thinkrail/context`, and recounts a recorded ignored output the batch reaches);
+the session-event tee maps pi events through `createArtifactEventMapper` (`host/artifactEvents.ts`) into
+`observeArtifactSessionEvent`: `agent_start`, `agent_settled`, `tool_execution_start` (call id, name and
+args), every assistant `message_end` as `assistant_message` (its text, empty for a tool-call-only turn),
+every `message_end` that `opensChatRound` (contracts) says opens a chat round as `round_start` (its
+timestamp: queued and steered ones included),
+and `tool_execution_end` with the `presented` / `picked` paths that the enabled extensions'
+`artifactTools` declarations ([[submodule-server-extensions]]) read from the call's args and result
+`details` — only for a successful call, a throwing declaration logged and skipped; a call's args are
+held per session and call id, since providers may reuse ids across chats — so the host names no tool; an `agent_start` also
+`ensureWatch`es the workspace in watch's bounded **prewarm** tier, so a working agent nobody looks at is
+watched without promoting its watcher for the host's lifetime (on Linux each watched worktree costs one
+inotify watch per folder; background runs in big repositories would otherwise exhaust
+`max_user_watches` for the workspace the user is looking at). The reconciles at every run start, tool end
+and settle do not depend on it. `setArtifactsPublisher` fans
+the index's change out as the pathless `workspace.artifactsChanged` nudge to v121+ sockets of that
+workspace. `fs.delete`, `fs.rename` and `fs.move` run their mutation inside `withUserRemoval` (a move locks
+both workspaces in id order), `fs.copy` and `fs.move` first call `prepareArtifactsDestination` for their
+destination folder, and `workspace.remove` / `chat.delete` call `removeWorkspaceArtifacts` once the
+workspace or chat record is gone.
 
 `RunningServer.startAttributionClaim()` is the explicit launcher-readiness signal and rechecks the saved
 enabled/confirmed choice before entering analytics attribution.

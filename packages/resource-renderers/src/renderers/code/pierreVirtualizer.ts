@@ -16,6 +16,8 @@ import {
 
 type ConnectedInstance = Parameters<Virtualizer["connect"]>[1];
 
+const NEAREST_MARGIN_LINES = 3;
+
 interface LinePositioned {
 	getLinePosition(lineNumber: number, side?: AnnotationSide): { top: number } | undefined;
 }
@@ -68,14 +70,29 @@ export class PierreVirtualizer extends Virtualizer {
 		}
 	}
 
-	revealLine(lineNumber: number, side?: AnnotationSide): boolean {
+	revealLine(
+		lineNumber: number,
+		side?: AnnotationSide,
+		block: "center" | "nearest" = "center",
+	): boolean {
 		const root = this.getRoot();
 		const connected = this.connected;
 		if (!(root instanceof HTMLElement) || !connected) return false;
 		const position = connected.instance.getLinePosition(lineNumber, side);
 		if (!position) return false;
 		const top = this.getOffsetInScrollContainer(connected.container) + position.top;
-		this.scrollTo({ top: top - root.clientHeight / 2, behavior: "instant" });
+		if (block === "center") {
+			this.scrollTo({ top: top - root.clientHeight / 2, behavior: "instant" });
+		} else {
+			const lineHeight = this.metrics?.lineHeight ?? 0;
+			const margin = lineHeight * NEAREST_MARGIN_LINES;
+			const bottom = top + lineHeight + margin;
+			if (top - margin < root.scrollTop) {
+				this.scrollTo({ top: top - margin, behavior: "instant" });
+			} else if (bottom > root.scrollTop + root.clientHeight) {
+				this.scrollTo({ top: bottom - root.clientHeight, behavior: "instant" });
+			}
+		}
 		return top >= root.scrollTop && top < root.scrollTop + root.clientHeight;
 	}
 }

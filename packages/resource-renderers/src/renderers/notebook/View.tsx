@@ -6,6 +6,7 @@ import { useResourceHost } from "../../host";
 import { anchorLabel, type ResourceViewProps, type ReviewThread } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
 import { ReviewThreadCard } from "../../support/ReviewThreadCard";
+import { commentCard, revealReviewCard } from "../../support/revealFocus";
 import { useScrollViewState } from "../../support/useScrollViewState";
 import { contentStamp, useStampedComposer } from "../reviewComposerState";
 import { StaleComposerNotice } from "../StaleComposerNotice";
@@ -70,7 +71,11 @@ export default function NotebookView({
 		const element = cell ? cellRefs.current.get(cell.ref) : null;
 		if (!element) return;
 		handledFocusRef.current = focusId;
-		element.scrollIntoView({ block: "center" });
+		revealReviewCard(
+			element,
+			review?.focus?.moveFocus === true,
+			commentCard(element, focusId) ?? element,
+		);
 		review?.onFocusHandled();
 	}, [document, focusId, placed, review]);
 

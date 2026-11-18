@@ -85,11 +85,22 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   started from the Welcome screen, the Create dialog, the palette or the Chats section, deleted to the
   Trash as a whole, and continued in a real workspace when it turns into work — the agent's summary
   becomes the new chat's first message ([[submodule-server-workspaces]]).
+- **Artifacts** — what the agent produces for the user (task-specs, mockups, diagrams, screenshots,
+  reports) lives in the workspace's git-ignored artifacts folder and is shown in the Artifacts tool,
+  newest first, as a folder tree, or as what the agent made for the user (Smart: the results it showed,
+  linked or the user picked, their working files folded under them), with the chat that wrote it, beside
+  the ignored outputs its runs leave; each chat round lists the artifacts it made; nothing there
+  disappears unless the user removes it — a file deleted behind their back stays
+  restorable from a kept copy, and the agent is steered away from temporary folders ([[submodule-server-artifacts]], [[submodule-web-panels]]).
 - **Workbench** — a splittable layout of files, diffs, documents, chats, and terminals with movable side
   and bottom tool panels, kept local to each window ([[submodule-web-shell-layout]]). The region that holds
-  the keyboard stays at full contrast while the others are muted, and VS Code-style chords move between
-  regions, into the chat input, Projects, Files and the terminal, from one keybinding table that the
-  palette also shows ([[submodule-web-keybindings]]).
+  the keyboard carries an accent line, a keyboard move briefly frames the region it lands in, and
+  VS Code-style chords move between regions, into the chat input, Projects, Files and the terminal, from
+  one keybinding table that the palette also shows ([[submodule-web-keybindings]]). The user rebinds those
+  chords and extensions' commands in Settings → Keyboard, stored on the host for every window, and exports
+  or imports them as a JSON file. Hint mode, a
+  switchable extension, labels everything clickable so a typed label presses it
+  ([[module-ext-hint-mode]]); sidebar trees search their rows on `S`.
 - **Chats** — concurrent `pi` sessions per workspace, each with its own model, pi-reported token/cost,
   steering and follow-ups mid-run, skill and prompt-template autocomplete, and history search
   ([[submodule-web-chat]], [[submodule-server-agent]]).
@@ -132,9 +143,13 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   extra environment variables, chosen in Settings and applied to the whole host at the next start; one setup
   per host, not per project ([[submodule-server-environment]]).
 - **Agent tools** — web research, structured multiple-choice questions the agent asks in chat instead of
-  guessing, and inline diagrams, comparisons and file previews in chat; a proposed UI change is shown as
-  a rendered before/after mockup through the same renderers and review comments as diff review
-  ([[submodule-web-chat-tools-web]], [[module-ext-ask-user-question]], [[module-ext-visualize]]).
+  guessing (with alternatives' previews comparable full screen — one at a time, side by side, or all), and
+  inline diagrams, comparisons and file previews in chat; a proposed UI change is shown as
+  a rendered before/after mockup through the same renderers and review comments as diff review, and the
+  agent's mockups are clickable prototypes in a browser, their scripts sandboxed without network; a
+  finished turn can end with one-click next messages offered above the composer
+  ([[submodule-web-chat-tools-web]], [[module-ext-ask-user-question]], [[module-ext-visualize]],
+  [[module-ext-next-steps]]).
 - **Pi packages** — install a pi package by source (npm, git or a local folder) from Settings, for the
   user or for a repository, and see everything pi loads: each package's extensions, skills and prompts
   with their tools, hand-dropped extension files, and pi's built-ins — switching any of them off in pi's

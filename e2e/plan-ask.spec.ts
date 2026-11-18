@@ -115,8 +115,12 @@ test("a pending ask_user_question is answerable from the plan page", async ({ pa
 		const card = pane.getByTestId("plan-ask");
 		await expect(card.getByTestId("ask-question-text")).toHaveText("Which rollout should we use?");
 		await card.getByTestId("ask-option").filter({ hasText: "Green" }).click();
+		const live = pane.getByTestId("plan-session-live");
+		await page.keyboard.press("Escape");
+		await expect(live).toBeFocused();
 		await card.getByTestId("ask-submit").click();
 		await expect(card).toHaveCount(0);
+		await expect(live).toBeFocused();
 		await page.locator('[data-testid="editor-tab"][data-kind="chat"]').first().click();
 		const record = page.locator('[data-testid="ask-user-question"][data-tone="answered"]');
 		await expect(record.getByTestId("ask-receipt-answer")).toHaveText("Green");

@@ -1,6 +1,6 @@
 import type { RemixiconComponentType } from "@remixicon/react";
 
-export type CommandGroup = "work" | "navigation" | "workspace" | "view" | "settings";
+export type CommandGroup = "work" | "navigation" | "workspace" | "tab" | "view" | "settings";
 
 export interface CommandShortcut {
 	readonly key: string;

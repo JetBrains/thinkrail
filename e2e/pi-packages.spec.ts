@@ -1,7 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
+import {
+	closeSettings,
+	enterDefaultWorkspace,
+	openFixtureProject,
+	openPersistedChat,
+	openSettingsSection,
+} from "./fixtures/app";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import { piExtensionSource, writePiPackageFixture } from "./fixtures/piPackage";
 import { seedWorkspaceSession } from "./fixtures/sessions";
@@ -33,18 +39,10 @@ function clearPackageSettings(): void {
 }
 
 async function openExtensionsSettings(page: Page) {
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-extensions").click();
+	await openSettingsSection(page, "extensions");
 	const section = page.getByTestId("settings-extensions");
 	await expect(section).toBeVisible();
 	return section;
-}
-
-async function closeSettings(page: Page): Promise<void> {
-	const dialog = page.getByTestId("settings-dialog");
-	if (!(await dialog.isVisible())) return;
-	await page.keyboard.press("Escape");
-	await expect(dialog).toBeHidden();
 }
 
 test.beforeEach(() => {
@@ -215,8 +213,11 @@ test("a package declared in settings but missing on disk is listed as Not instal
 	await expect(row).toHaveAttribute("data-installed", "false");
 	await expect(row.getByTestId("package-not-installed")).toBeVisible();
 	await expect(row.getByTestId("package-toggle")).toHaveCount(0);
-	await row.getByTestId("package-menu").click();
-	await page.getByTestId("package-menu-remove").click();
+	await row.locator("[data-focus-row-primary]").focus();
+	await page.keyboard.press("Delete");
+	await expect(
+		page.getByRole("alertdialog", { name: /Remove @e2e\/never-published/ }),
+	).toBeVisible();
 	await page.getByTestId("package-remove-confirm").click();
 	await expect(section.getByTestId("packages-empty")).toBeVisible();
 	expect(readSettings().packages ?? []).toEqual([]);

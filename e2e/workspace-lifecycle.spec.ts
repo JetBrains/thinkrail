@@ -106,8 +106,8 @@ test("removing the active workspace restores the previously selected workspace",
 	const previousRow = worktreeRows(page).filter({ hasText: previous.name });
 	const removedRow = worktreeRows(page).filter({ hasText: removed.name });
 
-	await previousRow.getByRole("button").first().click();
-	await removedRow.getByRole("button").first().click();
+	await previousRow.getByRole("treeitem").click();
+	await removedRow.getByRole("treeitem").click();
 	await expect(removedRow).toHaveAttribute("data-active", "true");
 
 	await openWorkspaceMenu(removedRow);

@@ -29,7 +29,14 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   launchers stamp on their executables, `windowsProductName()`, the per-channel product name alone, and
   `windowsIconPath`, the ICO they embed;
   `@thinkrail/shared/paths` → the worktree-relative path conventions (`WORKSPACE_INTERNAL_DIR`,
-  `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`);
+  `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`, `DELETE_CLAIM_PREFIX`);
+  `@thinkrail/shared/artifactsDir` → `seedArtifactsDir(root)`, the one way anything in the host creates the
+  artifacts folder: each path part is created non-recursively and must be a real directory (a link is
+  refused, never followed), and the self-ignoring `*` `.gitignore` is written only when absent
+  (exclusive create). `workspaces` seeds at session start, `artifacts` before a restore and before a
+paste into the folder, and extensions
+  through `WorkspaceFiles.ensureArtifactsDir` before saving — so recreating a folder someone cleaned never
+  leaves files git would stage;
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
   `@thinkrail/shared/toolHomes` → `toolHomeEnv(home)`, the environment that points every agent tool's
   config home (Claude Code, Codex, Gemini, Copilot, Kimi, Grok) under one sandbox home and clears the
@@ -168,9 +175,12 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   consumers agree (today: `workspaces` *creates* the scratch dir and git *ignores* it):
   `WORKSPACE_INTERNAL_DIR` (`.thinkrail` — the repo-local host-managed dir, today holding the ephemeral
   scratch, the intended home for future host files like a cached spec index; **not** hidden from the file
-  tree), `WORKSPACE_CONTEXT_DIR` (its `context/` scratch dir for temp docs), and `WORKSPACE_TODOS_DIR`
-  (`context/todos/` — the chat TODO plans, one JSON per session, so they're ephemeral with the rest of
-  the scratch). The pi-free `pi-todos/core` can't import this package (it stays vanilla-`pi`-installable),
+  tree), `WORKSPACE_CONTEXT_DIR` (its `context/` folder — the workspace's artifacts: temp docs and
+  everything the agent produces for the user, kept until the user removes them, see
+  [[submodule-server-artifacts]]), and `WORKSPACE_TODOS_DIR` (`context/todos/` — the chat TODO plans, one
+  JSON per session; host state, not artifacts), and `DELETE_CLAIM_PREFIX` (`.thinkrail-delete-` — the name
+  `fs` gives an entry it has claimed for the trash, which the artifacts scan must not mistake for a
+  rename). The pi-free `pi-todos/core` can't import this package (it stays vanilla-`pi`-installable),
   so it keeps a local mirror of the todos path; this module is the host-side source of truth. Distinct
   from the *home* state dir `~/.thinkrail` (server `persistence`). (The `.gitignore` *body* the host seeds
   into the scratch dir — a lone `*` — is a one-off inlined at that call site, not a path, so it lives

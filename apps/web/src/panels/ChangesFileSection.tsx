@@ -223,6 +223,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 		<section
 			data-testid="changes-section"
 			data-path={path}
+			data-focus-row={path}
 			data-status={change.status}
 			data-collapsed={collapsed && mode === "stacked" ? true : undefined}
 			data-viewed={viewed ? true : undefined}
@@ -234,7 +235,9 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 		>
 			<div
 				data-testid="changes-section-header"
-				className={`${mode === "stacked" ? "sticky top-0 z-10" : ""} flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-8`}
+				data-focus-row-primary={mode === "single" || undefined}
+				tabIndex={-1}
+				className={`${mode === "stacked" ? "sticky top-0 z-10" : ""} flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-8 focus-visible:focus-ring-inset`}
 			>
 				{mode === "stacked" ? (
 					<IconButton
@@ -246,6 +249,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 								: t("changes.section.collapseFile", { name: base })
 						}
 						data-testid="changes-section-toggle"
+						data-focus-row-primary
 						aria-expanded={!collapsed}
 						onClick={toggleCollapsed}
 						className="shrink-0"

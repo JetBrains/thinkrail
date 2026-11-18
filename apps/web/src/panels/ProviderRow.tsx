@@ -2,17 +2,27 @@ import { RiKeyLine as KeyRound, RiLoginBoxLine as LogIn } from "@remixicon/react
 import type { ProviderStatus } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import type { useSettingsListRow } from "@/settingsKit";
+
+type ListRow = ReturnType<typeof useSettingsListRow>;
+
+export interface ProviderRowActions {
+	primary: ListRow["primaryProps"];
+	side: ListRow["sideProps"];
+}
 
 export function ProviderRow({
 	provider,
 	busy,
 	onSignIn,
 	onApiKey,
+	actions,
 }: {
 	provider: ProviderStatus;
 	busy: boolean;
 	onSignIn: () => void;
 	onApiKey: () => void;
+	actions?: ProviderRowActions;
 }) {
 	const t = useT();
 	return (
@@ -31,6 +41,7 @@ export function ProviderRow({
 						iconLeft={LogIn}
 						data-testid="provider-signin"
 						data-provider={provider.id}
+						{...actions?.primary}
 						disabled={busy}
 						onClick={onSignIn}
 					>
@@ -44,6 +55,7 @@ export function ProviderRow({
 						iconLeft={KeyRound}
 						data-testid="provider-apikey"
 						data-provider={provider.id}
+						{...(provider.canOAuth ? actions?.side : actions?.primary)}
 						disabled={busy}
 						onClick={onApiKey}
 					>

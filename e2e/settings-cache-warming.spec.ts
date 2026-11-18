@@ -2,8 +2,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import type { CacheWarmingMode } from "@thinkrail/contracts";
-import { openWorkspaceChat } from "./fixtures/app";
-import { openProviders } from "./fixtures/jbcentral";
+import { openSettingsSection, openWorkspaceChat } from "./fixtures/app";
 import { E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import { shot } from "./fixtures/screenshots";
 import { E2eWire } from "./fixtures/wire";
@@ -27,15 +26,18 @@ function writeSettings(settings: Record<string, unknown>): void {
 }
 
 async function openModels(page: Page): Promise<void> {
-	await openProviders(page);
-	await page.getByTestId("settings-nav-models").click();
+	await openSettingsSection(page, "models");
+}
+
+async function expectMode(page: Page, mode: CacheWarmingMode): Promise<void> {
+	await expect(page.getByTestId(`cache-warming-${mode}`)).toHaveAttribute("aria-selected", "true");
 }
 
 async function choose(page: Page, mode: CacheWarmingMode): Promise<void> {
-	const card = page.getByTestId(`cache-warming-${mode}`);
-	await expect(card.getByRole("radio")).toBeEnabled();
-	await card.click();
-	await expect(card.getByRole("radio")).toBeChecked();
+	const segment = page.getByTestId(`cache-warming-${mode}`);
+	await expect(segment).toBeEnabled();
+	await segment.click();
+	await expectMode(page, mode);
 }
 
 test.beforeAll(() => {
@@ -67,8 +69,9 @@ test("cache warming starts on ThinkRail's streaming default, saves the user's ch
 		"data-cache-warming-source",
 		"default",
 	);
-	await expect(page.getByTestId("cache-warming-streaming").getByRole("radio")).toBeChecked();
+	await expectMode(page, "streaming");
 	await expect(group).toContainText("ThinkRail default");
+	await expect(page.getByTestId("settings-reset-prompt-cache")).toHaveCount(0);
 	expect(await wire.request("cacheWarming.get", {})).toEqual({
 		mode: "streaming",
 		source: "default",
@@ -86,11 +89,22 @@ test("cache warming starts on ThinkRail's streaming default, saves the user's ch
 
 	await page.reload();
 	await openModels(page);
-	await expect(page.getByTestId("cache-warming-idle").getByRole("radio")).toBeChecked();
+	await expectMode(page, "idle");
 	await shot(group, "models-settings", "cache-warming-idle");
 
-	await choose(page, "off");
+	await page.getByTestId("cache-warming-idle").focus();
+	await page.keyboard.press("ArrowLeft");
+	await expectMode(page, "streaming");
+	await expect(page.getByTestId("cache-warming-streaming")).toBeFocused();
+	await expect.poll(savedMode).toBe("streaming");
+	await page.keyboard.press("ArrowLeft");
+	await expectMode(page, "off");
 	await expect.poll(savedMode).toBe("off");
+
+	await page.getByTestId("settings-reset-prompt-cache").click();
+	await expectMode(page, "streaming");
+	await expect.poll(savedMode).toBe("streaming");
+	await expect(page.getByTestId("settings-reset-prompt-cache")).toHaveCount(0);
 });
 
 test("a mode pi's settings.json already names is shown as the user's choice", async ({ page }) => {
@@ -98,7 +112,7 @@ test("a mode pi's settings.json already names is shown as the user's choice", as
 	writeSettings({ ...before, cacheWarming: "off" });
 	await page.reload();
 	await openModels(page);
-	await expect(page.getByTestId("cache-warming-off").getByRole("radio")).toBeChecked();
+	await expectMode(page, "off");
 	await expect(page.getByTestId("cache-warming")).toHaveAttribute(
 		"data-cache-warming-source",
 		"user",

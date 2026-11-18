@@ -8,12 +8,16 @@ import {
 	SEARCH_KINDS,
 	SETTLE_IDLE_DAYS,
 	SUBAGENT_MAX_CONCURRENT,
+	WORKSPACE_VIEW_ROUTE,
 } from "./domain";
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	ARTIFACT_ROLES_PROTOCOL_VERSION,
+	ARTIFACTS_PROTOCOL_VERSION,
 	ASK_DISCUSS_PROTOCOL_VERSION,
 	BRANCH_STATUS_PROTOCOL_VERSION,
+	BROWSER_VIEW_PROTOCOL_VERSION,
 	CACHE_WARMING_MODES,
 	CACHE_WARMING_SETTINGS_PROTOCOL_VERSION,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
@@ -28,6 +32,7 @@ import {
 	CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS,
 	completionDelivery,
 	customMessageText,
+	DEFAULT_CACHE_WARMING_MODE,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
 	EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION,
@@ -46,9 +51,11 @@ import {
 	isTodoReviewFixMessage,
 	isToolResponsePending,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
+	KEYBINDINGS_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	MCP_TOOL_GRANTS_PROTOCOL_VERSION,
+	MCP_USER_SERVERS_PROTOCOL_VERSION,
 	MODEL_CONTEXT_WINDOW_LIMITS,
 	MODEL_PICKER_PROTOCOL_VERSION,
 	modelContextWindowLimits,
@@ -274,6 +281,7 @@ test("the cache-warming setting names its two methods at v111", () => {
 	expect(CACHE_WARMING_MODES).toEqual(["off", "streaming", "idle"]);
 	expect(isCacheWarmingMode("idle")).toBe(true);
 	expect(isCacheWarmingMode("always")).toBe(false);
+	expect(DEFAULT_CACHE_WARMING_MODE).toBe("streaming");
 });
 
 test("voice input is pinned to v107", () => {
@@ -299,6 +307,28 @@ test("Files tree copy and delete are pinned to v118", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FS_MUTATIONS_PROTOCOL_VERSION);
 	expect(WS_METHODS.fsCopy).toBe("fs.copy");
 	expect(WS_METHODS.fsDelete).toBe("fs.delete");
+});
+
+test("artifact roles and round markers are pinned to v124", () => {
+	expect(ARTIFACT_ROLES_PROTOCOL_VERSION).toBe(124);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ARTIFACT_ROLES_PROTOCOL_VERSION);
+});
+
+test("workspace artifacts, rename and move are pinned to v121", () => {
+	expect(ARTIFACTS_PROTOCOL_VERSION).toBe(121);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ARTIFACTS_PROTOCOL_VERSION);
+	expect(WS_METHODS.artifactsList).toBe("artifacts.list");
+	expect(WS_METHODS.artifactsRestore).toBe("artifacts.restore");
+	expect(WS_METHODS.artifactsDiscard).toBe("artifacts.discard");
+	expect(WS_METHODS.fsRename).toBe("fs.rename");
+	expect(WS_METHODS.fsMove).toBe("fs.move");
+	expect(WS_CHANNELS.workspaceArtifactsChanged).toBe("workspace.artifactsChanged");
+});
+
+test("the browser view route is pinned to v122", () => {
+	expect(BROWSER_VIEW_PROTOCOL_VERSION).toBe(122);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(BROWSER_VIEW_PROTOCOL_VERSION);
+	expect(WORKSPACE_VIEW_ROUTE).toBe("/view/");
 });
 
 test("background workspace creation is pinned to v104", () => {
@@ -368,7 +398,7 @@ test("workspace path resolution is pinned to v119", () => {
 test("the question panel height setting is pinned to v114", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(QUESTION_PANEL_PROTOCOL_VERSION);
 	expect(QUESTION_PANEL_PROTOCOL_VERSION).toBe(114);
-	expect(DEFAULT_CONFIG.questionPanelHeight).toBe(60);
+	expect(DEFAULT_CONFIG.questionPanelHeight).toBe(70);
 });
 
 test("extension editor text is pinned to v115", () => {
@@ -479,6 +509,12 @@ test("always-allowed MCP tools and their revoke are pinned to v84", () => {
 	expect(MCP_TOOL_GRANTS_PROTOCOL_VERSION).toBe(84);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(MCP_TOOL_GRANTS_PROTOCOL_VERSION);
 	expect(WS_METHODS.mcpRevokeToolGrant).toBe("mcp.revokeToolGrant");
+});
+
+test("user-level MCP servers managed without a workspace are pinned to v125", () => {
+	expect(MCP_USER_SERVERS_PROTOCOL_VERSION).toBe(125);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(MCP_USER_SERVERS_PROTOCOL_VERSION);
+	expect(WS_METHODS.mcpSetUserServer).toBe("mcp.setUserServer");
 });
 
 test("rich review anchors advance the additive selector union to v74", () => {
@@ -711,6 +747,12 @@ test("custom endpoints are pinned to v101 and own only custom-* providers", () =
 	expect(WS_METHODS.customEndpointsProbe).toBe("customEndpoints.probe");
 	expect(isCustomEndpointId(`${CUSTOM_ENDPOINT_ID_PREFIX}gateway`)).toBe(true);
 	expect(isCustomEndpointId("ollama")).toBe(false);
+});
+
+test("keybinding overrides are pinned to v123 and default to none", () => {
+	expect(KEYBINDINGS_PROTOCOL_VERSION).toBe(123);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(KEYBINDINGS_PROTOCOL_VERSION);
+	expect(DEFAULT_CONFIG.keybindings).toEqual({});
 });
 
 test("extension settings are pinned to v105", () => {

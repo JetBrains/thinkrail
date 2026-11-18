@@ -12,7 +12,8 @@ import type { ComposerGrowthLimit, ThinkingLevel, WireModel } from "@thinkrail/c
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
-import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { hasPlatformModifier, isImeComposing, keyCap } from "@thinkrail/ui/keyboard";
+import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
@@ -27,6 +28,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { LOCAL_KEY_DEFAULTS } from "@/keybindings";
 import {
 	applyTemplateSlotEdit,
 	beginTemplateSlotSession,
@@ -59,6 +61,7 @@ import {
 	type PromptImagesOwner,
 	usePromptImages,
 } from "./promptImages";
+import { composerShiftTabOut, composerTranscriptStep } from "./transcriptNavigation";
 import type { ChatAttachment } from "./types";
 import type { ModelPreferences } from "./useModelPreferences";
 
@@ -109,28 +112,28 @@ const STREAMING_SEND_MODES = [
 		behavior: "steer" as const,
 		name: "chat.composer.mode.steer",
 		meaning: "chat.composer.mode.steerMeaning",
-		keys: "Enter",
+		command: null,
 		testid: "send-mode-steer",
 	},
 	{
 		behavior: "followUp" as const,
 		name: "chat.composer.mode.queue",
 		meaning: "chat.composer.mode.queueMeaning",
-		keys: "Cmd/Ctrl+Enter",
+		command: "composer.followUp",
 		testid: "send-mode-queue",
 	},
 	{
 		behavior: "interrupt" as const,
 		name: "chat.composer.mode.interrupt",
 		meaning: "chat.composer.mode.interruptMeaning",
-		keys: "Cmd/Ctrl+Shift+Enter",
+		command: "composer.interrupt",
 		testid: "send-mode-interrupt",
 	},
 ] satisfies {
 	behavior: SubmitBehavior;
 	name: MessageKey;
 	meaning: MessageKey;
-	keys: string;
+	command: string | null;
 	testid: string;
 }[];
 
@@ -195,6 +198,9 @@ interface ComposerProps {
 		behavior: SubmitBehavior,
 	) => ComposerSubmitDisposition;
 	onAbort: () => void;
+	onEnterTranscript?: () => void;
+	onShiftTabOut?: () => boolean;
+	onScrollTranscript?: (direction: -1 | 1) => void;
 	onHistoryOpen?: () => void;
 	onPickTemplate?: (name: string) => void;
 	onManageTemplates?: () => void;
@@ -203,12 +209,14 @@ interface ComposerProps {
 
 export interface ComposerHandle {
 	insertText: (text: string) => void;
+	insertAtCaret: (text: string) => void;
 	applyEdit: (kind: "replace" | "paste", text: string) => void;
 	insertAndSubmit: (text: string, behavior: SubmitBehavior) => void;
 	insertTemplate: (parsed: ParsedTemplate) => void;
 	restoreAttachments: (attachments: ChatAttachment[]) => void;
 	openHistory: () => void;
 	refocus: () => void;
+	ownsEscape: () => boolean;
 }
 
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
@@ -235,6 +243,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		onSelectThinking,
 		onSubmit,
 		onAbort,
+		onEnterTranscript,
+		onShiftTabOut,
+		onScrollTranscript,
 		onHistoryOpen,
 		onPickTemplate,
 		onManageTemplates,
@@ -243,6 +254,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	handleRef,
 ) {
 	const t = useT();
+	const keys = useLocalKeys("composer", LOCAL_KEY_DEFAULTS.composer);
 	const ref = useRef<HTMLTextAreaElement>(null);
 	const pickerRef = useRef<ModelEffortPickerHandle>(null);
 	const [caret, setCaret] = useState(0);
@@ -407,6 +419,17 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
 	useImperativeHandle(handleRef, () => ({
 		insertText: (text: string) => replaceDraft(text),
+		insertAtCaret: (text: string) => {
+			const at = Math.min(caret, value.length);
+			const before = value.slice(0, at);
+			const after = value.slice(at);
+			const lead = before === "" || /\s$/.test(before) ? "" : " ";
+			const trail = after === "" || /^\s/.test(after) ? "" : " ";
+			replaceDraft(
+				`${before}${lead}${text}${trail}${after}`,
+				before.length + lead.length + text.length,
+			);
+		},
 		applyEdit: (kind: "replace" | "paste", text: string) => {
 			const textarea = ref.current;
 			const focused = textarea !== null && textarea === document.activeElement;
@@ -444,6 +467,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			if (slot) focusSelection(slot.start, slot.end);
 			else focusSelection(caret);
 		},
+		ownsEscape: () =>
+			ref.current !== null &&
+			ref.current === document.activeElement &&
+			(menuOpen || slots !== null),
 	}));
 
 	const submit = (behavior: SubmitBehavior) => {
@@ -460,7 +487,22 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
 		if (isImeComposing(e.nativeEvent)) return;
-		if (slots && !menuOpen) {
+		const local = keys.match(e.nativeEvent);
+		if (onEnterTranscript && local === "composer.enterTranscript") {
+			e.preventDefault();
+			const { selectionStart, selectionEnd } = e.currentTarget;
+			const atStart = selectionStart === 0 && selectionEnd === 0;
+			if (composerTranscriptStep(draftNeedsExpansion, atStart) === "enter") onEnterTranscript();
+			else focusSelection(0);
+			return;
+		}
+		if (local === "composer.interrupt" || local === "composer.followUp") {
+			e.preventDefault();
+			submit(isStreaming ? (local === "composer.interrupt" ? "interrupt" : "followUp") : "send");
+			return;
+		}
+		const fixed = local === null && !e.altKey && !e.ctrlKey && !e.metaKey;
+		if (fixed && slots && !menuOpen) {
 			if (e.key === "Tab") {
 				e.preventDefault();
 				stepSlot(e.shiftKey ? -1 : 1);
@@ -472,14 +514,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				return;
 			}
 		}
-		if (mentionOpen) {
+		if (fixed && mentionOpen) {
 			const menuLen = mentionCandidates.length;
-			if (e.key === "ArrowDown") {
+			if (e.key === "ArrowDown" && !e.shiftKey) {
 				e.preventDefault();
 				setMentionActiveIndex((i) => (i + 1) % menuLen);
 				return;
 			}
-			if (e.key === "ArrowUp") {
+			if (e.key === "ArrowUp" && !e.shiftKey) {
 				e.preventDefault();
 				setMentionActiveIndex((i) => (i - 1 + menuLen) % menuLen);
 				return;
@@ -496,9 +538,30 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				return;
 			}
 		}
-		if (slashCompletion.handleKeyDown(e)) return;
+		if (fixed && slashCompletion.handleKeyDown(e)) return;
+		if (composerShiftTabOut(e, menuOpen || slots !== null) && onShiftTabOut?.()) {
+			e.preventDefault();
+			return;
+		}
+		if (
+			onScrollTranscript &&
+			fixed &&
+			(e.key === "PageUp" || e.key === "PageDown") &&
+			!e.shiftKey
+		) {
+			e.preventDefault();
+			onScrollTranscript(e.key === "PageUp" ? -1 : 1);
+			return;
+		}
+		if (local !== null) return;
 		const recallAt = recallIdxRef.current;
-		if (e.key === "ArrowUp" && (value === "" || recallAt !== null) && recentPrompts.length > 0) {
+		const recallKey = fixed && !e.shiftKey;
+		if (
+			recallKey &&
+			e.key === "ArrowUp" &&
+			(value === "" || recallAt !== null) &&
+			recentPrompts.length > 0
+		) {
 			e.preventDefault();
 			setSlotSession(null);
 			const next = recallAt === null ? 0 : Math.min(recallAt + 1, recentPrompts.length - 1);
@@ -508,7 +571,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			focusSelection(text.length);
 			return;
 		}
-		if (e.key === "ArrowDown" && recallAt !== null) {
+		if (recallKey && e.key === "ArrowDown" && recallAt !== null) {
 			e.preventDefault();
 			setSlotSession(null);
 			if (recallAt === 0) {
@@ -524,19 +587,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			}
 			return;
 		}
-		if (e.key === "Enter" && e.shiftKey && (e.metaKey || e.ctrlKey)) {
+		if (e.key === "Enter" && !e.shiftKey && !hasPlatformModifier(e.nativeEvent)) {
 			e.preventDefault();
-			submit(isStreaming ? "interrupt" : "send");
-			return;
-		}
-		if (e.key === "Enter" && !e.shiftKey) {
-			e.preventDefault();
-			const behavior: SubmitBehavior = isStreaming
-				? e.metaKey || e.ctrlKey
-					? "followUp"
-					: "steer"
-				: "send";
-			submit(behavior);
+			submit(isStreaming ? "steer" : "send");
 		}
 	};
 
@@ -812,7 +865,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 															{t(mode.name)}
 														</span>
 														<span className="shrink-0 text-text-muted tr-text-metadata group-disabled:text-control-disabled-text">
-															{mode.keys}
+															{mode.command === null ? keyCap("Enter") : keys.label(mode.command)}
 														</span>
 													</span>
 													<span className="text-text-muted tr-text-metadata group-disabled:text-control-disabled-text">

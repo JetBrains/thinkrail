@@ -11,7 +11,13 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { McpListResult, McpServerLog, McpServerSummary } from "@thinkrail/contracts";
+import type {
+	LoginPush,
+	McpListResult,
+	McpServerLog,
+	McpServerSummary,
+} from "@thinkrail/contracts";
+import { setMcpLoginPublisher } from "../agent";
 import {
 	approveProjectMcpServer,
 	getProjects,
@@ -1122,4 +1128,230 @@ test("probes refuse names with no admitted valid config", async () => {
 			expect(await codeOf(request(method, { workspaceId: "w1", name }))).toBe("MCP_CONFIG_INVALID");
 		}
 	}
+});
+
+test("without a workspace the list holds the user servers alone, with no live statuses, and the global file's problems", async () => {
+	writeFileSync(
+		join(agentDir, "mcp.json"),
+		JSON.stringify({ mcpServers: { docs: { url: "https://docs.example/mcp" } } }),
+	);
+	mkdirSync(join(repo, ".pi"));
+	writeFileSync(
+		join(repo, ".pi", "mcp.json"),
+		JSON.stringify({ mcpServers: { repo: { command: "unused-test-server" } } }),
+	);
+	setProjectMcpOverride("p1", "docs", { enabled: false });
+	const listed = await request("mcp.list", {});
+	expect(listed.servers.map((server) => [server.scope, server.name])).toEqual([["user", "docs"]]);
+	expect(find(listed, "user", "docs")).toMatchObject({ enabled: true });
+	expect(find(listed, "user", "docs")?.projectOverride).toBeUndefined();
+	expect(listed.statuses).toEqual([]);
+	expect(listed.configErrors).toBeUndefined();
+	expect(listed.handledElsewhere).toBeUndefined();
+	expect(find(await request("mcp.list", { workspaceId: "w1" }), "project", "repo")).toBeDefined();
+
+	writeFileSync(join(agentDir, "mcp.json"), "{ not json");
+	const broken = await request("mcp.list", {});
+	expect(broken.servers).toEqual([]);
+	expect(broken.configErrors?.map((error) => error.source)).toEqual([join(agentDir, "mcp.json")]);
+});
+
+test("without a workspace user servers are added, edited, removed and their log read; project scope is refused", async () => {
+	const file = join(agentDir, "mcp.json");
+	const added = await request("mcp.add", {
+		scope: "user",
+		name: "docs",
+		entry: { url: "https://docs.example/mcp" },
+	});
+	expect(added.statuses).toEqual([]);
+	const docs = find(added, "user", "docs");
+	expect(JSON.parse(readFileSync(file, "utf8")).mcpServers.docs).toEqual({
+		url: "https://docs.example/mcp",
+	});
+	const updated = find(
+		await request("mcp.update", {
+			scope: "user",
+			name: "docs",
+			entry: { url: "https://docs.example/v2" },
+			expectedFingerprint: docs?.fingerprint,
+		}),
+		"user",
+		"docs",
+	);
+	expect(updated?.endpoint).toBe("https://docs.example/v2");
+
+	const before = readFileSync(file, "utf8");
+	const refused: [string, object][] = [
+		["mcp.add", { scope: "project", name: "repo", entry: { command: "unused-test-server" } }],
+		[
+			"mcp.update",
+			{
+				scope: "project",
+				name: "docs",
+				entry: { command: "unused-test-server" },
+				expectedFingerprint: updated?.fingerprint,
+			},
+		],
+		["mcp.remove", { scope: "project", name: "docs", expectedFingerprint: updated?.fingerprint }],
+		["mcp.remove", { scope: "user", name: "docs", expectedFingerprint: docs?.fingerprint }],
+	];
+	for (const [method, params] of refused) {
+		expect(await codeOf(request(method, params))).toBe("MCP_CONFIG_INVALID");
+	}
+	expect(readFileSync(file, "utf8")).toBe(before);
+	expect(existsSync(join(repo, ".pi"))).toBe(false);
+
+	writeFileSync(join(agentDir, "mcp.log"), "2026-10-08T09:00:00.000Z [docs] info hello\n");
+	expect(
+		await (handleRequest("mcp.readLog", { name: "docs" }, CTX) as Promise<McpServerLog>),
+	).toEqual({
+		path: join(agentDir, "mcp.log"),
+		text: "2026-10-08T09:00:00.000Z [docs] info hello",
+	});
+
+	const removed = await request("mcp.remove", {
+		scope: "user",
+		name: "docs",
+		expectedFingerprint: updated?.fingerprint,
+	});
+	expect(find(removed, "user", "docs")).toBeUndefined();
+	expect(JSON.parse(readFileSync(file, "utf8")).mcpServers).toEqual({});
+});
+
+test("setUserServer writes enabled and exposure into the user entry, drops the enabled default, and refuses a stale fingerprint", async () => {
+	const file = join(agentDir, "mcp.json");
+	writeFileSync(
+		file,
+		JSON.stringify({ mcpServers: { docs: { url: "https://docs.example/mcp", extra: 1 } } }),
+	);
+	const rendered = find(await request("mcp.list", {}), "user", "docs");
+	const disabled = await request("mcp.setUserServer", {
+		name: "docs",
+		expectedFingerprint: rendered?.fingerprint,
+		enabled: false,
+	});
+	expect(JSON.parse(readFileSync(file, "utf8")).mcpServers.docs).toEqual({
+		url: "https://docs.example/mcp",
+		extra: 1,
+		enabled: false,
+	});
+	expect(find(disabled, "user", "docs")?.enabled).toBe(false);
+	expect(find(await request("mcp.list", { workspaceId: "w1" }), "user", "docs")?.enabled).toBe(
+		false,
+	);
+
+	const after = readFileSync(file, "utf8");
+	for (const params of [
+		{ name: "docs", expectedFingerprint: rendered?.fingerprint, enabled: true },
+		{ name: "docs", enabled: true },
+		{ name: "missing", expectedFingerprint: rendered?.fingerprint, enabled: true },
+		{ name: "docs", expectedFingerprint: find(disabled, "user", "docs")?.fingerprint, enabled: 1 },
+		{
+			name: "docs",
+			expectedFingerprint: find(disabled, "user", "docs")?.fingerprint,
+			exposure: "codemode",
+		},
+	]) {
+		expect(await codeOf(request("mcp.setUserServer", params))).toBe("MCP_CONFIG_INVALID");
+		expect(readFileSync(file, "utf8")).toBe(after);
+	}
+
+	const enabled = await request("mcp.setUserServer", {
+		name: "docs",
+		expectedFingerprint: find(disabled, "user", "docs")?.fingerprint,
+		enabled: true,
+		exposure: "direct",
+	});
+	expect(JSON.parse(readFileSync(file, "utf8")).mcpServers.docs).toEqual({
+		url: "https://docs.example/mcp",
+		extra: 1,
+		exposure: "direct",
+	});
+	expect(find(enabled, "user", "docs")).toMatchObject({
+		enabled: true,
+		effectiveExposure: "direct",
+	});
+});
+
+test("without a workspace a user server is signed in, tested and signed out, and its sign-in names no workspace", async () => {
+	writeFileSync(
+		join(agentDir, "mcp.json"),
+		JSON.stringify({
+			mcpServers: {
+				"user-docs": { url: "http://127.0.0.1:1/mcp" },
+				"user-api": { url: "http://127.0.0.1:1/api" },
+			},
+		}),
+	);
+	mkdirSync(join(repo, ".pi"));
+	writeFileSync(
+		join(repo, ".pi", "mcp.json"),
+		JSON.stringify({ mcpServers: { repo: { url: "http://127.0.0.1:1/repo" } } }),
+	);
+	const pushes: LoginPush[] = [];
+	setMcpLoginPublisher((push) => pushes.push(push));
+	try {
+		expect(await handleRequest("mcp.logout", { name: "user-docs" }, CTX)).toEqual({ ok: true });
+		for (const [method, name] of [
+			["mcp.login", "user-docs"],
+			["mcp.testConnection", "user-api"],
+		] as const) {
+			const started = (await handleRequest(method, { name }, CTX)) as { loginId: string };
+			expect(pushes.find((push) => push.loginId === started.loginId)?.target).toStrictEqual({
+				kind: "mcp",
+				serverName: name,
+			});
+			await request("provider.loginCancel", { loginId: started.loginId });
+		}
+		for (const method of ["mcp.login", "mcp.logout", "mcp.testConnection"]) {
+			expect(await codeOf(request(method, { name: "repo" }))).toBe("MCP_CONFIG_INVALID");
+		}
+	} finally {
+		setMcpLoginPublisher(() => {});
+	}
+});
+
+test("without a workspace only pi's global settings decide that MCP is handled elsewhere", async () => {
+	const file = join(agentDir, "mcp.json");
+	writeFileSync(
+		file,
+		JSON.stringify({ mcpServers: { docs: { url: "https://docs.example/mcp" } } }),
+	);
+	mkdirSync(join(repo, ".pi"));
+	writeFileSync(
+		join(repo, ".pi", "settings.json"),
+		JSON.stringify({ extensions: ["-builtin:mcp"] }),
+	);
+	expect((await request("mcp.list", {})).handledElsewhere).toBeUndefined();
+	expect((await request("mcp.list", { workspaceId: "w1" })).handledElsewhere).toEqual({
+		by: "pi settings (-builtin:mcp)",
+	});
+	rmSync(join(repo, ".pi", "settings.json"));
+
+	writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ extensions: ["-builtin:mcp"] }));
+	const listed = await request("mcp.list", {});
+	expect(listed.handledElsewhere).toEqual({ by: "pi settings (-builtin:mcp)" });
+	const fingerprint = find(listed, "user", "docs")?.fingerprint;
+	const before = readFileSync(file, "utf8");
+	const refused: [string, object][] = [
+		["mcp.add", { scope: "user", name: "more", entry: { url: "https://more.example/mcp" } }],
+		[
+			"mcp.update",
+			{
+				scope: "user",
+				name: "docs",
+				entry: { url: "https://docs.example/v2" },
+				expectedFingerprint: fingerprint,
+			},
+		],
+		["mcp.remove", { scope: "user", name: "docs", expectedFingerprint: fingerprint }],
+		["mcp.setUserServer", { name: "docs", expectedFingerprint: fingerprint, enabled: false }],
+		["mcp.login", { name: "docs" }],
+		["mcp.logout", { name: "docs" }],
+		["mcp.testConnection", { name: "docs" }],
+	];
+	for (const [method, params] of refused) {
+		expect(await codeOf(request(method, params))).toBe("MCP_HANDLED_ELSEWHERE");
+	}
+	expect(readFileSync(file, "utf8")).toBe(before);
 });

@@ -6,6 +6,7 @@ import {
 	WS_CHANNELS,
 	type WsErrorCode,
 } from "@thinkrail/contracts";
+import { closeSettings } from "./fixtures/app";
 
 const NOTICE_START = "Your answers, including anything you type, are sent to the ThinkRail team";
 
@@ -153,7 +154,10 @@ test("the invitation and Settings open one survey window, and only Send sends", 
 	await page.getByTestId("open-settings").click();
 	const nav = page.getByTestId("settings-nav-feedback");
 	await expect(nav).toHaveText("Share feedback");
-	await expect(nav).toHaveClass(/md:mt-auto/);
+	await expect(page.getByTestId("settings-dialog").getByRole("tab").last()).toHaveAttribute(
+		"data-testid",
+		"settings-nav-feedback",
+	);
 	await nav.click();
 	const pane = page.getByTestId("settings-feedback");
 	await expect(pane.getByTestId("feedback-join-discord")).toHaveAttribute(
@@ -212,7 +216,7 @@ test("the invitation and Settings open one survey window, and only Send sends", 
 	await page.getByTestId("settings-nav-feedback").click();
 	await expect(pane.getByTestId("feedback-take-survey")).toHaveCount(0);
 	await expect(pane.getByTestId("feedback-join-discord")).toBeVisible();
-	await page.keyboard.press("Escape");
+	await closeSettings(page);
 
 	invite(host);
 	await invitation.getByTestId("survey-invitation-never").click();
@@ -277,6 +281,28 @@ test("with no survey launched the Feedback pane keeps Discord and email only", a
 	await expect(pane.getByTestId("feedback-join-discord")).toBeVisible();
 	await expect(pane.getByTestId("feedback-email")).toContainText("info@thinkrail.ai");
 	await expect(pane.getByTestId("feedback-take-survey")).toHaveCount(0);
+});
+
+test("Settings search offers the survey only while one is launched", async ({ page }) => {
+	const host = await stubSurveyHost(page, survey(1));
+	const search = page.getByTestId("settings-search");
+	const hit = page.locator(
+		'[data-testid="settings-search-result"][data-result-id="feedback-survey"]',
+	);
+	await page.getByTestId("open-settings").click();
+	await search.fill("Take the survey");
+	await hit.click();
+	await expect(page.getByTestId("feedback-take-survey")).toBeFocused();
+	await closeSettings(page);
+
+	host.available = null;
+	const reads = host.reads;
+	await page.getByTestId("open-settings").click();
+	await expect.poll(() => host.reads).toBeGreaterThan(reads);
+	await expect(page.getByTestId("feedback-take-survey")).toHaveCount(0);
+	await search.fill("Take the survey");
+	await expect(page.getByTestId("settings-search-results")).toContainText("“Take the survey”");
+	await expect(hit).toHaveCount(0);
 });
 
 test("a long question scrolls inside the survey window so every control stays reachable", async ({

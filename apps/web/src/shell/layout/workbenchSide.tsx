@@ -157,7 +157,7 @@ export const SideGroupView = memo(function SideGroupView({
 			data-region-kind={side}
 			data-tools={group.tabs.flatMap((tab) => (tab.kind === "tool" ? [tab.tool] : [])).join(" ")}
 			data-folded="false"
-			className="relative flex h-full min-h-0 flex-col overflow-hidden bg-container-sidebar-bg focus-visible:focus-ring-inset"
+			className="relative flex h-full min-h-0 flex-col overflow-hidden bg-container-sidebar-bg outline-none"
 			onFocusCapture={() => {
 				if (selected) shared.onFocusGroup(location, selected.id);
 			}}
@@ -321,6 +321,11 @@ export function AuxiliaryGroupHeader({
 			<AuxiliaryPaneHideButton
 				testId={region === "bottom" ? "bottom-group-fold" : "side-group-fold"}
 				controls={groupPanelId(location)}
+				shortcut={
+					shared.document[region].groups.filter((each) => !each.folded).length === 1
+						? shared.chromeShortcuts?.hide[region]
+						: undefined
+				}
 				onClick={onFold}
 			/>
 		</>

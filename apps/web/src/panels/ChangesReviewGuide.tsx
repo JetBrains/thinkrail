@@ -6,14 +6,13 @@ import {
 import type { GitFileChange, ReviewComment, ReviewGuide } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
+import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { LOCAL_KEY_DEFAULTS } from "../keybindings";
 import type { ChangesTab } from "../store";
 import { splitPath } from "./changesModel";
 import { sendReviewBatch, sendReviewComment } from "./reviewSend";
 import { ownsReviewShortcut } from "./reviewShortcuts";
-
-const NEXT_KEY = "n";
-const PREVIOUS_KEY = "p";
 
 export type GuideStep =
 	| { kind: "read"; path: string; why: string; order: number }
@@ -79,9 +78,11 @@ export function ChangesReviewGuide({
 	files: readonly GitFileChange[];
 	guide: ReviewGuide | undefined;
 	comments: readonly ReviewComment[] | undefined;
-	onReveal: (path: string, commentId?: string) => void;
+	onReveal: (path: string, commentId: string | undefined, focus: boolean) => void;
 }) {
 	const t = useT();
+	const keys = useLocalKeys("review", LOCAL_KEY_DEFAULTS.review);
+	const nextKey = keys.label("review.nextStep");
 	const { workspaceId } = tab;
 	const steps = useMemo(() => guideSteps(guide, comments), [guide, comments]);
 	const [cursorAt, setCursorAt] = useState<{ key: string; index: number } | null>(null);
@@ -102,30 +103,31 @@ export function ChangesReviewGuide({
 		void Promise.resolve().then(operation).then(done, done);
 	};
 
-	const go = (index: number) => {
+	const go = (index: number, focus: boolean) => {
 		const step = steps[index];
 		if (!step) return;
 		setCursorAt({ key: guideStepKey(step), index });
-		if (step.path) onReveal(step.path, step.kind === "finding" ? step.comment.id : undefined);
+		if (step.path)
+			onReveal(step.path, step.kind === "finding" ? step.comment.id : undefined, focus);
 	};
-	const stepFrom = (from: number, delta: 1 | -1) => {
+	const stepFrom = (from: number, delta: 1 | -1, focus: boolean) => {
 		const index = nextGuideStep(steps, inScope, from, delta);
-		if (index !== null) go(index);
+		if (index !== null) go(index, focus);
 	};
-	const next = () => stepFrom(cursor, 1);
-	const previous = () => stepFrom(Math.max(cursor, 0), -1);
+	const next = (focus: boolean) => stepFrom(cursor, 1, focus);
+	const previous = (focus: boolean) => stepFrom(Math.max(cursor, 0), -1, focus);
 
 	useEffect(() => {
 		if (steps.length === 0) return;
 		const onKey = (event: KeyboardEvent) => {
 			if (!ownsReviewShortcut(event, tab)) return;
-			if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-			if (event.key === NEXT_KEY) {
+			const local = keys.match(event);
+			if (local === "review.nextStep") {
 				event.preventDefault();
-				next();
-			} else if (event.key === PREVIOUS_KEY) {
+				next(true);
+			} else if (local === "review.previousStep") {
 				event.preventDefault();
-				previous();
+				previous(true);
 			}
 		};
 		window.addEventListener("keydown", onKey);
@@ -175,7 +177,7 @@ export function ChangesReviewGuide({
 											data-testid="changes-review-guide-step"
 											data-active={cursor === index ? true : undefined}
 											disabled={!inScope.has(step.path)}
-											onClick={() => go(index)}
+											onClick={() => go(index, true)}
 											className={`relative flex w-full items-start gap-8 px-12 py-4 text-left hover:bg-control-bg-hovered focus-visible:focus-ring-inset disabled:opacity-50 disabled:hover:bg-transparent ${
 												cursor === index
 													? "bg-control-bg-selected before:absolute before:inset-y-0 before:left-2 before:w-2 before:bg-primary before:content-['']"
@@ -226,7 +228,7 @@ export function ChangesReviewGuide({
 									>
 										<button
 											type="button"
-											onClick={() => go(index)}
+											onClick={() => go(index, true)}
 											className="flex w-full flex-col items-start gap-2 text-left focus-visible:focus-ring-inset"
 										>
 											<span className="flex items-center gap-4 tr-text-metadata text-text-subtle">
@@ -264,17 +266,17 @@ export function ChangesReviewGuide({
 				<IconButton
 					variant="outline"
 					icon={ChevronLeft}
-					label={t("changes.guide.previous", { key: PREVIOUS_KEY.toUpperCase() })}
+					label={t("changes.guide.previous", { key: keys.label("review.previousStep") })}
 					data-testid="changes-review-guide-prev"
 					disabled={steps.length === 0}
-					onClick={previous}
+					onClick={() => previous(false)}
 				/>
 				<Button
 					size="m"
 					iconRight={ChevronRight}
 					data-testid="changes-review-guide-next"
 					disabled={steps.length === 0}
-					onClick={next}
+					onClick={() => next(false)}
 					className="flex-1"
 				>
 					{cursor < 0
@@ -285,9 +287,9 @@ export function ChangesReviewGuide({
 					<span className="tabular-nums">
 						{cursor < 0 ? "" : `${cursor + 1} / ${steps.length}`}
 					</span>
-					<kbd className="rounded-xs border border-current px-4 tr-code-text">
-						{NEXT_KEY.toUpperCase()}
-					</kbd>
+					{nextKey === "" ? null : (
+						<kbd className="rounded-xs border border-current px-4 tr-code-text">{nextKey}</kbd>
+					)}
 				</Button>
 				<Button
 					variant="outline"

@@ -8,6 +8,7 @@ import {
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import { seedAnalyticsConsent } from "./fixtures/analyticsConsent";
+import { openSettingsSection } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 import { shot } from "./fixtures/screenshots";
 
@@ -39,8 +40,7 @@ function trackSettingsUpdates(page: Page): AppConfigUpdate[] {
 
 async function openPrivacy(page: Page, legacy = false): Promise<void> {
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-privacy").click();
+	await openSettingsSection(page, "privacy");
 	await expect(page.getByTestId("settings-privacy")).toBeVisible();
 	if (!legacy) await expect(page.getByTestId("settings-privacy")).toContainText(ANALYTICS_COPY);
 }

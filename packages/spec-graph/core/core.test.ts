@@ -378,6 +378,40 @@ test("graphSlice neighbors records each edge once across depth", () => {
 	expect(keys.sort()).toEqual(["a-depends-on-b", "b-depends-on-c"]);
 });
 
+test("finished task-specs drop out of grep and slices unless task-specs are asked for", () => {
+	const content = [
+		{ path: "m.md", content: "auth flow", frontmatter: { id: "m", type: "module-design" } },
+		{
+			path: "live.md",
+			content: "auth flow",
+			frontmatter: { id: "live", type: "task-spec", status: "draft", parent: "m" },
+		},
+		{
+			path: "done.md",
+			content: "auth flow",
+			frontmatter: { id: "done", type: "task-spec", status: "done", parent: "m" },
+		},
+	];
+	expect(grepSpecs(content, { pattern: "auth" }).matches.map((m) => m.path)).toEqual([
+		"m.md",
+		"live.md",
+	]);
+	expect(
+		grepSpecs(content, { pattern: "auth", type: "task-spec" }).matches.map((m) => m.path),
+	).toEqual(["live.md", "done.md"]);
+	const graph = buildGraph(content);
+	expect(
+		graphSlice(graph, { root: "m", direction: "subtree" })
+			.nodes.map((n) => n.id)
+			.sort(),
+	).toEqual(["live", "m"]);
+	expect(
+		graphSlice(graph, { root: "done", direction: "ancestors" })
+			.nodes.map((n) => n.id)
+			.sort(),
+	).toEqual(["done", "m"]);
+});
+
 test("grepSpecs matches with metadata filters", () => {
 	const content = [
 		{

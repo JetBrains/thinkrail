@@ -1,10 +1,13 @@
 import { expect, test } from "bun:test";
-import { Theme } from "@earendil-works/pi-coding-agent";
+import { type ExtensionUIContext, Theme } from "@earendil-works/pi-coding-agent";
 import type { ExtUiRequest } from "@thinkrail/contracts";
 import {
 	cancelExtUiForSession,
 	createWebUiContext,
+	interceptExtUiNotify,
 	notifyExtensionError,
+	notifyExtUi,
+	pendingExtUiDialog,
 	resolveExtUi,
 	selectForToolCall,
 	setExtUiPublisher,
@@ -37,6 +40,230 @@ test("extension editor calls address their own chat's composer and keep paste ap
 			{ id: expect.any(String), sessionId: "editor-a", kind: "setEditorText", text: "" },
 		]);
 	} finally {
+		setExtUiPublisher(() => {});
+	}
+});
+
+test("an extension status coloured with raw escapes reaches the page as plain text", () => {
+	const frames: ExtUiRequest[] = [];
+	setExtUiPublisher((frame) => frames.push(frame));
+	try {
+		createWebUiContext("sess-status").setStatus(
+			"demo",
+			`${ESC}[38;5;208mcaveman${ESC}[0m level: FULL`,
+		);
+		expect(frames).toEqual([
+			{
+				id: expect.any(String),
+				sessionId: "sess-status",
+				kind: "setStatus",
+				key: "demo",
+				text: "caveman level: FULL",
+			},
+		]);
+	} finally {
+		setExtUiPublisher(() => {});
+	}
+});
+
+test("every text an extension pushes to the page loses its escapes, and a cleared status stays cleared", async () => {
+	const frames: ExtUiRequest[] = [];
+	setExtUiPublisher((frame) => frames.push(frame));
+	const red = (text: string) => `${ESC}[31m${text}${ESC}[39m`;
+	const ui = createWebUiContext("sess-plain");
+	try {
+		ui.notify(red("Saved"), "warning");
+		ui.setStatus("demo", undefined);
+		ui.setWidget("demo", [red("first"), `${ESC}]8;;https://example.com${ESC}\\second`]);
+		ui.setTitle(red("Chat title"));
+		ui.pasteToEditor(red("pasted"));
+		ui.setEditorText(red("replaced"));
+		const dialogs = [
+			ui.confirm(red("Proceed?"), red("Apply it?")),
+			ui.input(red("Name?"), red("placeholder")),
+			ui.editor(red("Edit"), red("prefill")),
+			ui.select(red("Pick"), [red("one"), "two"]),
+		];
+		expect(pendingExtUiDialog("sess-plain")).toMatchObject({
+			kind: "confirm",
+			title: "Proceed?",
+			message: "Apply it?",
+		});
+		cancelExtUiForSession("sess-plain");
+		await Promise.all(dialogs);
+
+		expect(frames.filter((frame) => frame.kind !== "dismiss")).toEqual([
+			{
+				id: expect.any(String),
+				sessionId: "sess-plain",
+				kind: "notify",
+				message: "Saved",
+				level: "warning",
+			},
+			{
+				id: expect.any(String),
+				sessionId: "sess-plain",
+				kind: "setStatus",
+				key: "demo",
+				text: null,
+			},
+			{
+				id: expect.any(String),
+				sessionId: "sess-plain",
+				kind: "setWidget",
+				key: "demo",
+				content: ["first", "second"],
+			},
+			{ id: expect.any(String), sessionId: "sess-plain", kind: "setTitle", title: "Chat title" },
+			{ id: expect.any(String), sessionId: "sess-plain", kind: "pasteToEditor", text: "pasted" },
+			{ id: expect.any(String), sessionId: "sess-plain", kind: "setEditorText", text: "replaced" },
+			{
+				id: expect.any(String),
+				sessionId: "sess-plain",
+				kind: "confirm",
+				title: "Proceed?",
+				message: "Apply it?",
+			},
+			{
+				id: expect.any(String),
+				sessionId: "sess-plain",
+				kind: "input",
+				title: "Name?",
+				placeholder: "placeholder",
+			},
+			{
+				id: expect.any(String),
+				sessionId: "sess-plain",
+				kind: "editor",
+				title: "Edit",
+				prefill: "prefill",
+			},
+			{
+				id: expect.any(String),
+				sessionId: "sess-plain",
+				kind: "select",
+				title: "Pick",
+				options: ["one", "two"],
+			},
+		]);
+	} finally {
+		setExtUiPublisher(() => {});
+	}
+});
+
+test("a select answer gives the extension back its own option, escapes included", async () => {
+	const frames: ExtUiRequest[] = [];
+	setExtUiPublisher((frame) => frames.push(frame));
+	const coloured = `${ESC}[32mAllow${ESC}[39m`;
+	try {
+		const answer = createWebUiContext("sess-select").select("Run it?", [coloured, "Deny"]);
+		const frame = frames.at(-1);
+		if (frame?.kind !== "select") throw new Error("expected a select frame");
+		expect(frame.options).toEqual(["Allow", "Deny"]);
+		resolveExtUi({ id: frame.id, value: "Allow" });
+		expect(await answer).toBe(coloured);
+	} finally {
+		setExtUiPublisher(() => {});
+	}
+});
+
+test("a select answer is the clicked option even if the extension changes its list meanwhile", async () => {
+	const frames: ExtUiRequest[] = [];
+	setExtUiPublisher((frame) => frames.push(frame));
+	const ui = createWebUiContext("sess-live");
+	try {
+		const cases: [(list: string[]) => unknown, string][] = [
+			[(list) => list.shift(), "test"],
+			[(list) => list.reverse(), "build"],
+		];
+		for (const [change, clicked] of cases) {
+			const tasks = ["build", "test", "deploy"];
+			const answer = ui.select("Run which task?", tasks);
+			change(tasks);
+			resolveExtUi({ id: frames.at(-1)?.id ?? "", value: clicked });
+			expect(await answer).toBe(clicked);
+		}
+	} finally {
+		setExtUiPublisher(() => {});
+	}
+});
+
+test("select reads its options by index, like pi, not through the array's iterator", async () => {
+	const frames: ExtUiRequest[] = [];
+	setExtUiPublisher((frame) => frames.push(frame));
+	const ui = createWebUiContext("sess-iter");
+	const iterators: (() => Iterator<string>)[] = [
+		() => {
+			throw new Error("iterator boom");
+		},
+		() => ["other", "items"][Symbol.iterator](),
+	];
+	try {
+		for (const iterator of iterators) {
+			const options = ["build", `${ESC}[32mtest${ESC}[39m`];
+			Object.defineProperty(options, Symbol.iterator, { value: iterator });
+			const answer = ui.select("Pick", options);
+			const frame = frames.at(-1);
+			expect(frame).toMatchObject({ kind: "select", options: ["build", "test"] });
+			resolveExtUi({ id: frame?.id ?? "", value: "test" });
+			expect(await answer).toBe(options[1]);
+		}
+	} finally {
+		setExtUiPublisher(() => {});
+	}
+});
+
+test("values that are not strings, from an untyped extension, reach the page as absent text", async () => {
+	const frames: ExtUiRequest[] = [];
+	setExtUiPublisher((frame) => frames.push(frame));
+	const intercepted: string[] = [];
+	const release = interceptExtUiNotify("sess-untyped", (message) => {
+		intercepted.push(message);
+		return false;
+	});
+	const ui = createWebUiContext("sess-untyped") as unknown as Record<
+		keyof ExtensionUIContext,
+		(...args: unknown[]) => unknown
+	>;
+	const answer = async (call: unknown, value: string | boolean) => {
+		resolveExtUi({ id: frames.at(-1)?.id ?? "", value });
+		return await call;
+	};
+	try {
+		const lines: unknown[] = ["a", undefined, null, 3];
+		lines[5] = "f";
+		for (const message of [undefined, null, 42, { text: "hi" }]) ui.notify(message);
+		ui.setStatus("count", 42);
+		ui.setWidget("demo", lines);
+		for (const title of [undefined, null, 42]) ui.setTitle(title);
+		ui.setEditorText(undefined);
+		ui.pasteToEditor(null);
+		expect(await answer(ui.confirm(null, { reason: 1 }), true)).toBe(true);
+		expect(await answer(ui.input(42, 7), "typed")).toBe("typed");
+		expect(await answer(ui.editor(undefined, {}), "edited")).toBe("edited");
+		expect(await answer(ui.select(undefined, ["a", null, 3, "b"]), "b")).toBe("b");
+		const before = frames.length;
+		for (const options of [undefined, "one", {}, [], [null, 3]]) {
+			expect(await ui.select("Pick", options)).toBeUndefined();
+		}
+		expect(frames.length).toBe(before);
+		expect(intercepted).toEqual([]);
+
+		const id = expect.any(String);
+		const sessionId = "sess-untyped";
+		expect(frames).toEqual<unknown[]>([
+			{ id, sessionId, kind: "setStatus", key: "count", text: null },
+			{ id, sessionId, kind: "setWidget", key: "demo", content: ["a", "", "", "", "", "f"] },
+			{ id, sessionId, kind: "setTitle", title: "" },
+			{ id, sessionId, kind: "setTitle", title: "" },
+			{ id, sessionId, kind: "setTitle", title: "" },
+			{ id, sessionId, kind: "confirm", title: "", message: "" },
+			{ id, sessionId, kind: "input", title: "" },
+			{ id, sessionId, kind: "editor", title: "" },
+			{ id, sessionId, kind: "select", title: "", options: ["a", "b"] },
+		]);
+	} finally {
+		release();
 		setExtUiPublisher(() => {});
 	}
 });
@@ -100,6 +327,26 @@ test("extension-UI bridge: a dialog names the running tool call it is about, if 
 	expect(await anchored).toBe(false);
 	expect(await loose).toBeUndefined();
 	setExtUiPublisher(() => {});
+});
+
+test("a tool guard title built from an extension's tool name reaches the page as plain text", async () => {
+	const frames: ExtUiRequest[] = [];
+	setExtUiPublisher((frame) => frames.push(frame));
+	try {
+		const answer = selectForToolCall(
+			"sess-guard",
+			{ toolCallId: "call-1", toolInput: {} },
+			`Allow ev${ESC}[31mil${ESC}[0m/write?`,
+			["Deny", "Allow once"],
+		);
+		const plain = { kind: "select", title: "Allow evil/write?", options: ["Deny", "Allow once"] };
+		expect(frames.at(-1)).toMatchObject(plain);
+		expect(pendingExtUiDialog("sess-guard")).toMatchObject(plain);
+		cancelExtUiForSession("sess-guard");
+		expect(await answer).toBeUndefined();
+	} finally {
+		setExtUiPublisher(() => {});
+	}
 });
 
 test("theme: pi's Theme contract is implemented and every method yields plain text", () => {
@@ -182,6 +429,49 @@ test("an extension error reaches the client with the extension, the event and th
 		kind: "notify",
 		level: "error",
 		message: "Extension theme-probe.ts failed on session_start: theme.fg is not a function",
+	});
+
+	setExtUiPublisher(() => {});
+});
+
+test("a host notice that quotes a coloured error reaches the client as plain text", () => {
+	const frames: ExtUiRequest[] = [];
+	setExtUiPublisher((f) => frames.push(f));
+
+	notifyExtUi("sess-err", `Could not reload: ${ESC}[31mlevel is not set${ESC}[39m`, "error");
+
+	expect(frames.at(-1)).toMatchObject({
+		kind: "notify",
+		message: "Could not reload: level is not set",
+	});
+
+	setExtUiPublisher(() => {});
+});
+
+test("a long coloured cause is cut after its escapes are gone, so the cap counts visible text", () => {
+	const frames: ExtUiRequest[] = [];
+	setExtUiPublisher((f) => frames.push(f));
+
+	notifyExtensionError("sess-err", {
+		extensionPath: "/home/u/.pi/agent/extensions/caveman.ts",
+		event: "session_start",
+		error: `${"a".repeat(497)}${ESC}[31m${"r".repeat(100)}${ESC}[39m`,
+	});
+
+	expect(frames.at(-1)).toMatchObject({
+		kind: "notify",
+		message: `Extension caveman.ts failed on session_start: ${"a".repeat(497)}rrr…`,
+	});
+
+	notifyExtensionError("sess-err", {
+		extensionPath: "/home/u/.pi/agent/extensions/caveman.ts",
+		event: "session_start",
+		error: `${ESC}[31m${"b".repeat(498)}${ESC}[39m`,
+	});
+
+	expect(frames.at(-1)).toMatchObject({
+		kind: "notify",
+		message: `Extension caveman.ts failed on session_start: ${"b".repeat(498)}`,
 	});
 
 	setExtUiPublisher(() => {});

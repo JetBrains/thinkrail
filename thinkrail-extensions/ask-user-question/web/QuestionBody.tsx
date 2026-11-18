@@ -3,27 +3,48 @@ import type {
 	AskUserQuestionDiscussReason,
 	AskUserQuestionItem,
 } from "@thinkrail/pi-ask-user-question/core";
+import { focusAndReveal } from "@thinkrail/ui/focus";
+import type { LocalKeys } from "@thinkrail/ui/local-keys";
 import { cn } from "@thinkrail/ui/utils";
-import { type KeyboardEvent, useEffect, useRef } from "react";
+import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { CompareOverlay } from "./CompareOverlay";
+import { compareIndexOf } from "./compareModel";
 import { type LiftKey, NoteSlot, OptionRow, OtherRow } from "./controls";
 import { DiscussPanel, DiscussToggle } from "./discuss";
 import { useTestId } from "./ghost";
-import { OptionPreviewPane, PreviewGlyph, previewSource, QuestionPreview } from "./previews";
+import { CARD_KEYS } from "./keys";
+import {
+	enterPreviewFrame,
+	isHtmlSource,
+	OptionPreviewPane,
+	PreviewGlyph,
+	type PreviewSource,
+	previewSource,
+	QuestionPreview,
+	scrollPreview,
+	scrollsWithPage,
+} from "./previews";
 import {
 	choiceKeyAction,
-	hasPreview,
+	type FootControl,
+	hasOptionPreviews,
 	paneOptionIndex,
 	type QState,
 	splitRecommended,
 } from "./state";
 
+const ROW_KEYS = "ArrowUp ArrowDown Home End Enter Space";
+const FIELD_KEYS = "ArrowUp ArrowDown Enter Escape Shift+Enter";
+
 export interface QuestionBodyProps {
 	question: AskUserQuestionItem;
 	state: QState;
+	keys: LocalKeys;
 	pageKeys: boolean;
 	discussAvailable: boolean;
 	primaryEnabled: boolean;
-	onFocusPrimary: () => boolean;
+	claimFocus: boolean;
+	onFocusFoot: (control: FootControl) => boolean;
 	onOpenFile?: ((path: string) => void) | undefined;
 	onSelect: (label: string, cursor: number) => void;
 	onToggleMulti: (label: string, cursor: number) => void;
@@ -40,16 +61,19 @@ export interface QuestionBodyProps {
 	onTogglePreview: () => void;
 }
 
-const focusOf = (element: HTMLElement | null | undefined) =>
-	element?.focus({ preventScroll: true });
+const focusOf = (element: HTMLElement | null | undefined) => {
+	if (element) focusAndReveal(element);
+};
 
 export function QuestionBody({
 	question,
 	state,
+	keys,
 	pageKeys,
 	discussAvailable,
 	primaryEnabled,
-	onFocusPrimary,
+	claimFocus,
+	onFocusFoot,
 	onOpenFile,
 	onSelect,
 	onToggleMulti,
@@ -73,18 +97,33 @@ export function QuestionBody({
 	const discussRef = useRef<HTMLElement | null>(null);
 	const discussPanelRef = useRef<HTMLElement | null>(null);
 	const discussToggleRef = useRef<HTMLButtonElement | null>(null);
-	const paneScrollRef = useRef<HTMLElement | null>(null);
+	const paneRef = useRef<HTMLDivElement | null>(null);
 	const pendingFocus = useRef<(() => HTMLElement | null | undefined) | null>(null);
 	const otherIndex = question.options.length;
-	const choiceCount = otherIndex + (primaryEnabled ? 2 : 1);
+	const skipIndex = otherIndex + 1;
+	const choiceCount = skipIndex + (primaryEnabled ? 2 : 1);
 	const cursor = Math.min(Math.max(state.cursor, 0), Math.max(otherIndex - 1, 0));
 	const discussing = discussAvailable && state.discuss;
 	const customOwnsPageFocus =
 		!discussing && state.customActive && (!question.multiSelect || state.multi.length === 0);
 	const questionPreview = previewSource(question);
-	const paneShown = !question.multiSelect && question.options.some(hasPreview);
+	const paneShown = hasOptionPreviews(question);
 	const paneIndex = paneShown ? paneOptionIndex(question, state, state.cursor) : null;
 	const paneOption = paneIndex == null ? null : (question.options[paneIndex] ?? null);
+	const [compareStartAt, setCompareStartAt] = useState<number | null>(null);
+	const compareRow = useRef<number | null>(null);
+	const openCompare = (optionIndex: number | null) => {
+		compareRow.current = optionIndex;
+		setCompareStartAt(compareIndexOf(question, optionIndex));
+	};
+	const focusChosenRow = () => {
+		const chosen = question.options.findIndex((option) => option.label === state.option);
+		const index = chosen >= 0 ? chosen : compareRow.current;
+		const row = index === null ? null : choiceRefs.current[index];
+		if (!row) return false;
+		focusOf(row);
+		return true;
+	};
 
 	useEffect(() => {
 		const resolve = pendingFocus.current;
@@ -97,7 +136,7 @@ export function QuestionBody({
 
 	const moveTo = (index: number) => {
 		if (index > otherIndex) {
-			if (onFocusPrimary()) return;
+			if (onFocusFoot(index === skipIndex ? "skip" : "primary")) return;
 			index = 0;
 		}
 		onCursor(index);
@@ -105,9 +144,28 @@ export function QuestionBody({
 	};
 
 	const move = (key: string, from: number) => {
-		const action = choiceKeyAction(key, from, choiceCount, otherIndex);
+		const action = choiceKeyAction(key, null, from, choiceCount, otherIndex);
 		if (action.type === "move") moveTo(action.index);
 	};
+
+	const rowKeys = (source: PreviewSource | null) =>
+		[
+			ROW_KEYS,
+			pageKeys ? "ArrowLeft ArrowRight" : "",
+			scrollsWithPage(source) ? "PageUp PageDown" : "",
+			keys.aria(
+				...[
+					discussAvailable ? CARD_KEYS.discuss : "",
+					isHtmlSource(source) ? CARD_KEYS.interact : "",
+					source ? CARD_KEYS.compare : "",
+					CARD_KEYS.submit,
+					CARD_KEYS.skip,
+				].filter(Boolean),
+			),
+			"Escape",
+		]
+			.filter(Boolean)
+			.join(" ");
 
 	const openNote = (label: string, index: number) => {
 		pendingFocus.current = () => noteRef.current;
@@ -134,21 +192,31 @@ export function QuestionBody({
 		label: string,
 		index: number,
 	) => {
-		if (event.altKey || event.ctrlKey || event.metaKey) return;
-		const pane = paneScrollRef.current;
-		if (pane && (event.key === "PageDown" || event.key === "PageUp")) {
+		const command = keys.match(event.nativeEvent);
+		if (command === null && (event.altKey || event.ctrlKey || event.metaKey)) return;
+		const pane = paneRef.current;
+		const page =
+			command !== null ? 0 : event.key === "PageDown" ? 1 : event.key === "PageUp" ? -1 : 0;
+		if (pane && page !== 0 && scrollPreview(pane, page)) {
 			event.preventDefault();
-			pane.scrollBy({ top: (event.key === "PageDown" ? 0.9 : -0.9) * pane.clientHeight });
 			return;
 		}
-		const action = choiceKeyAction(event.key, index, choiceCount, otherIndex);
+		const action = choiceKeyAction(event.key, command, index, choiceCount, otherIndex);
+		const option = question.options[index];
+		const source = paneShown && option ? previewSource(option) : null;
 		if (action.type === "none" || (action.type === "discuss" && !discussAvailable)) return;
+		if (action.type === "compare" && !source) return;
+		if (action.type === "interact") {
+			if (enterPreviewFrame(pane)) event.preventDefault();
+			return;
+		}
 		event.preventDefault();
 		if (action.type === "move") moveTo(action.index);
 		else if (action.type === "select") {
 			if (question.multiSelect) onToggleMulti(label, index);
 			else onSelect(label, index);
 		} else if (action.type === "note") openNote(label, index);
+		else if (action.type === "compare") openCompare(index);
 		else openDiscuss();
 	};
 
@@ -196,6 +264,7 @@ export function QuestionBody({
 					expanded={state.previewExpanded}
 					onToggleExpanded={onTogglePreview}
 					onOpenFile={onOpenFile}
+					onFullscreen={paneShown ? () => openCompare(null) : undefined}
 				/>
 			) : null}
 			<div
@@ -231,10 +300,9 @@ export function QuestionBody({
 										selected={selected}
 										cursor={ownsCursor}
 										pageFocus={ownsCursor && !customOwnsPageFocus && !discussing}
+										focusClaim={claimFocus && ownsCursor && !customOwnsPageFocus}
 										multi={!!question.multiSelect}
-										pageKeys={pageKeys}
-										previewKeys={paneShown}
-										discussKey={discussAvailable}
+										keyshortcuts={rowKeys(source)}
 										glyph={source ? <PreviewGlyph source={source} /> : null}
 										onFocus={() => onCursor(index)}
 										onKeyDown={(event) => onChoiceKeyDown(event, option.label, index)}
@@ -277,6 +345,10 @@ export function QuestionBody({
 						active={state.customActive}
 						text={state.customText}
 						pageFocus={!discussing && (question.options.length === 0 || customOwnsPageFocus)}
+						focusClaim={claimFocus && (question.options.length === 0 || customOwnsPageFocus)}
+						keyshortcuts={[FIELD_KEYS, keys.aria(CARD_KEYS.submit, CARD_KEYS.skip)]
+							.filter(Boolean)
+							.join(" ")}
 						onFocusField={() => onCursor(otherIndex)}
 						onToggle={onToggleCustom}
 						onText={onCustomText}
@@ -293,13 +365,31 @@ export function QuestionBody({
 					<OptionPreviewPane
 						label={paneOption ? splitRecommended(paneOption.label).text : null}
 						source={paneOption ? previewSource(paneOption) : null}
-						scrollRef={(node) => {
-							paneScrollRef.current = node;
+						paneRef={(node) => {
+							paneRef.current = node;
 						}}
+						interactCaps={keys.caps(CARD_KEYS.interact)}
+						onInteract={() => enterPreviewFrame(paneRef.current)}
+						onReturn={() => focusOf(choiceRefs.current[paneIndex ?? cursor])}
 						onOpenFile={onOpenFile}
+						onFullscreen={() => openCompare(paneIndex ?? 0)}
 					/>
 				) : null}
 			</div>
+			{paneShown ? (
+				<CompareOverlay
+					open={compareStartAt !== null}
+					onOpenChange={(open) => {
+						if (!open) setCompareStartAt(null);
+					}}
+					question={question}
+					start={compareStartAt ?? 0}
+					chosen={state.option}
+					onChoose={onSelect}
+					onClosed={focusChosenRow}
+					onOpenFile={onOpenFile}
+				/>
+			) : null}
 		</div>
 	);
 }

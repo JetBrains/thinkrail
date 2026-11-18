@@ -97,3 +97,16 @@ test("Send stays disabled while no host is welcomed, so nothing is queued in the
 	expect(render(null)).toMatch(/<button[^>]*data-testid="survey-send"[^>]*disabled=""/);
 	expect(render(98)).not.toMatch(/<button[^>]*data-testid="survey-send"[^>]*disabled=""/);
 });
+
+test("Feedback is a Settings page whose links and buttons are rows with explicit tab stops", () => {
+	const markup = renderToStaticMarkup(<FeedbackSettingsView surveyAvailable={true} />);
+	expect(markup).toMatch(/<h2[^>]*>Share feedback<\/h2>/);
+	for (const id of ["feedback-survey", "feedback-discord", "feedback-email"]) {
+		expect(markup).toContain(`data-setting-row="${id}"`);
+	}
+	expect(markup).toMatch(/data-testid="feedback-email"[\s\S]*href="mailto:info@thinkrail.ai"/);
+	const stops = markup.match(/<(a|button)\b[^>]*>/g) ?? [];
+	expect(stops).toHaveLength(3);
+	expect(stops.filter((stop) => !stop.includes('tabindex="0"'))).toEqual([]);
+	expect(markup).toContain(String(EN["settings.feedback.join"]));
+});

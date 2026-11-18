@@ -62,6 +62,7 @@ function render(
 				branchStatus={branchStatus}
 				noteOpenReview={() => {}}
 				refreshBranchStatus={() => {}}
+				newWorkspaceShortcut="Ctrl+Alt+N"
 				onNewWorkspace={() => {}}
 			/>
 		</TooltipProvider>,
