@@ -282,8 +282,9 @@ test("a list walks row by row; Delete asks first and focus lands on the neighbou
 });
 
 test.describe("cheap and expensive choices", () => {
-	test.afterEach(async () => {
-		const wire = await E2eWire.connect();
+	test.afterEach(async ({ baseURL }) => {
+		if (!baseURL) throw new Error("Settings keyboard fixtures require the isolated host URL");
+		const wire = await E2eWire.connect(Number(new URL(baseURL).port));
 		try {
 			await wire.request("settings.update", { config: { locale: "system" } });
 		} finally {
