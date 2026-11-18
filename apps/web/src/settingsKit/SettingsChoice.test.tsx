@@ -256,13 +256,27 @@ describe("SettingsChoice keys", () => {
 		expect(choice.selected).toEqual([]);
 	});
 
-	test("a click applies at once, even on an expensive choice", async () => {
+	test("a click applies at once, even on an expensive choice; the current value is not sent again", async () => {
 		const choice = await mountChoice("expensive");
+		await choice.click("oldest");
+		expect(choice.selected).toEqual([]);
 		await choice.click("newest");
 		expect(choice.selected).toEqual(["newest"]);
-		await choice.click("oldest");
-		expect(choice.selected).toEqual(["newest"]);
 		expect(choice.pending).toEqual([]);
+	});
+
+	test("going back before the host echoes the first pick still sends the reversal", async () => {
+		const cheap = await mountChoice("cheap");
+		await cheap.key("oldest", press("ArrowRight"));
+		await cheap.key("newest", press("ArrowLeft"));
+		expect(cheap.selected).toEqual(["newest", "oldest"]);
+		await cheap.host("oldest");
+		await cheap.click("oldest");
+		expect(cheap.selected).toEqual(["newest", "oldest"]);
+		const clicked = await mountChoice("expensive");
+		await clicked.click("newest");
+		await clicked.click("oldest");
+		expect(clicked.selected).toEqual(["newest", "oldest"]);
 	});
 
 	test("an IME composition or a modified arrow does nothing", async () => {

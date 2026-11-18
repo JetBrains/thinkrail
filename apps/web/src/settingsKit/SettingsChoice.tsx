@@ -225,6 +225,7 @@ export function useSettingsChoice<T extends string, E extends { focus(): void }>
 }: SettingsChoiceProps<T>): SettingsChoiceState<T, E> {
 	const keys = useLocalKeys("settings", LOCAL_KEY_DEFAULTS.settings);
 	const [pending, setPending] = useState<T | null>(null);
+	const [requested, setRequested] = useState<T | null>(null);
 	const waiting = cost === "expensive" && pending !== null && pending !== value ? pending : null;
 
 	const pend = (next: T | null) => {
@@ -233,7 +234,10 @@ export function useSettingsChoice<T extends string, E extends { focus(): void }>
 	};
 	const apply = (id: T) => {
 		pend(null);
-		if (id !== value) onSelect(id);
+		const outstanding = requested !== null && requested !== value;
+		if (id === value && !outstanding) return;
+		setRequested(id);
+		onSelect(id);
 	};
 
 	const onKeyDown = (event: ChoiceKeyEvent<E>) => {
