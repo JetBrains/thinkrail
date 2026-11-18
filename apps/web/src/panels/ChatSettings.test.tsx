@@ -72,5 +72,4 @@ test("the question panel height is a number field offered only to a host that st
 	expect(input).toContain('type="text"');
 	expect(input).toContain('inputMode="numeric"');
 	expect(input).toContain('tabindex="0"');
-	expect(input).not.toContain("data-settings-draft-input");
 });

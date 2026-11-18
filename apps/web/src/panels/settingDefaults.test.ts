@@ -5,7 +5,6 @@ import {
 	configResetPatch,
 	isClientPreferenceDefault,
 	isConfigDefault,
-	isThemeDefault,
 	THEME_RESET_PATCH,
 } from "./settingDefaults";
 
@@ -50,9 +49,6 @@ describe("config defaults", () => {
 
 	test("the theme resets as the fixed/dark pair", () => {
 		expect(THEME_RESET_PATCH).toEqual({ themeMode: "fixed", theme: "dark" });
-		expect(isThemeDefault({ themeMode: "fixed", theme: "dark" })).toBe(true);
-		expect(isThemeDefault({ themeMode: "system", theme: "dark" })).toBe(false);
-		expect(isThemeDefault({ themeMode: "fixed", theme: "light" })).toBe(false);
 	});
 });
 

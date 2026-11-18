@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from "bun:test";
-import { revealSetting } from "./jumpToSetting";
+import { revealSetting, showSetting } from "./jumpToSetting";
 import {
 	button,
 	control,
@@ -220,6 +220,13 @@ describe("the walk", () => {
 		expect(walk(root, "a.switch", { kind: "edge", edge: "last" }).landed).toBe("field.input");
 	});
 
+	test("from a side or a control inside a tree item, Home and End go to the tree's first and last shown item", () => {
+		const root = fresh();
+		expect(walk(root, "tree.2a.reset", { kind: "edge", edge: "first" }).landed).toBe("tree.1");
+		expect(walk(root, "tree.2a.option", { kind: "edge", edge: "last" }).landed).toBe("tree.3");
+		expect(walk(root, "tree.3.side", { kind: "edge", edge: "first" }).landed).toBe("tree.1");
+	});
+
 	test("→ walks the sides, ← walks back to the stop, and neither wraps", () => {
 		const root = fresh();
 		expect(walk(root, "a.switch", { kind: "side", delta: 1 }).landed).toBe("a.side1");
@@ -341,5 +348,21 @@ describe("revealSetting", () => {
 		expect(dom.log).toEqual([]);
 		expect(hidden.hasAttribute("data-setting-flash")).toBe(false);
 		expect(dom.focused).toBeNull();
+	});
+
+	test("showSetting scrolls to and flashes a shown owner with nothing to focus, and skips a hidden one", () => {
+		const root = fresh();
+		const note = h("p", { "data-setting-id": "untrusted", "data-name": "note" });
+		const hidden = named(root, "tree.2b");
+		hidden.setAttribute("data-setting-id", "shortcut:hidden");
+		const page = h("div", {}, root, note);
+		dom.log = [];
+		expect(revealSetting(page, "untrusted")).toBeNull();
+		expect(showSetting(page, "untrusted")).toBe(note);
+		expect(dom.log).toEqual(["scroll note"]);
+		expect(note.hasAttribute("data-setting-flash")).toBe(true);
+		expect(dom.focused).toBeNull();
+		expect(showSetting(page, "shortcut:hidden")).toBeNull();
+		expect(showSetting(page, "nowhere")).toBeNull();
 	});
 });

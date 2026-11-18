@@ -238,11 +238,11 @@ function ResourceList({
 }
 
 /** The list row id of a package: its scope and source, which pi keys a declaration by. */
-export function packageRowId(target: { scope: PiPackageScope; source: string }): string {
+function packageRowId(target: { scope: PiPackageScope; source: string }): string {
 	return `${target.scope}:${target.source}`;
 }
 
-export function looseRowId(entry: { path: string }): string {
+function looseRowId(entry: { path: string }): string {
 	return `file:${entry.path}`;
 }
 

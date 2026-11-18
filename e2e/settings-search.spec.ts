@@ -47,6 +47,9 @@ function catalogEntries(): CatalogEntry[] {
 const NOT_OFFERED_HERE: Readonly<Record<string, string>> = {
 	"software-updates": "Updates is injected only by the desktop app",
 	"windows-shell": "the Windows shell is offered only on a Windows host",
+	"signed-in-providers": "offered only while a provider is signed in (provider-login.spec.ts)",
+	"voice-files": "offered only while voice files are on disk (voice-input.spec.ts)",
+	"feedback-survey": "offered only while a survey is launched (feedback.spec.ts)",
 };
 
 test("S and / start a search from the nav, other letters do nothing, and F starts hint mode", async ({

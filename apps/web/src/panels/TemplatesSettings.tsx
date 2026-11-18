@@ -15,10 +15,10 @@ import {
 	SETTINGS_LIST_PRIMARY,
 	SETTINGS_LIST_ROW,
 	SettingsGroup,
+	type SettingsGroupAction,
 	SettingsList,
 	SettingsNotice,
 	SettingsPage,
-	SettingsRow,
 	useSettingsListRow,
 } from "@/settingsKit";
 import { toast, useAppStore } from "@/store";
@@ -277,8 +277,8 @@ export function TemplatesPage({
 					title={t("settings.templates.projectTitle")}
 					scope="project"
 					description={t("settings.templates.projectDescription")}
+					action={newTemplateAction("project", onNew)}
 				>
-					<NewTemplateRow scope="project" onNew={onNew} />
 					{split.project.length === 0 ? (
 						<p
 							data-testid="project-templates-empty"
@@ -303,8 +303,8 @@ export function TemplatesPage({
 				title={t("settings.templates.globalTitle")}
 				scope="allProjects"
 				description={t("settings.templates.globalDescription")}
+				action={newTemplateAction("global", onNew)}
 			>
-				<NewTemplateRow scope="global" onNew={onNew} />
 				{split.global.length === 0 ? (
 					<div data-setting-id={SETTING.globalTemplates.id} className="py-8">
 						<GlobalTemplatesEmpty />
@@ -327,7 +327,17 @@ export function TemplatesPage({
 	);
 }
 
-function NewTemplateRow({
+function newTemplateAction(
+	scope: TemplateScope,
+	onNew: (scope: TemplateScope) => void,
+): SettingsGroupAction {
+	return {
+		rowId: `template-new-${scope}`,
+		control: <NewTemplateButton scope={scope} onNew={onNew} />,
+	};
+}
+
+function NewTemplateButton({
 	scope,
 	onNew,
 }: {
@@ -336,28 +346,17 @@ function NewTemplateRow({
 }) {
 	const t = useT();
 	return (
-		<SettingsRow
-			rowId={`template-new-${scope}`}
-			label={t("settings.templates.newTemplate")}
-			description={
-				scope === "project"
-					? t("settings.templates.newProjectDescription")
-					: t("settings.templates.newGlobalDescription")
-			}
-			control={
-				<Button
-					variant="soft-primary"
-					size="m"
-					iconLeft={Plus}
-					tabIndex={0}
-					data-testid={`template-new-${scope}`}
-					data-focus-fallback={`templates:${scope}`}
-					onClick={() => onNew(scope)}
-				>
-					{t("settings.templates.new")}
-				</Button>
-			}
-		/>
+		<Button
+			variant="soft-primary"
+			size="m"
+			iconLeft={Plus}
+			tabIndex={0}
+			data-testid={`template-new-${scope}`}
+			data-focus-fallback={`templates:${scope}`}
+			onClick={() => onNew(scope)}
+		>
+			{t("settings.templates.new")}
+		</Button>
 	);
 }
 

@@ -60,6 +60,14 @@ export function revealSetting<E extends JumpElement<E>>(root: E, id: string): E 
 	return target;
 }
 
+export function showSetting<E extends JumpElement<E>>(root: E, id: string): E | null {
+	const target = root.querySelector(settingIdSelector(id));
+	if (!target || target.checkVisibility?.() === false) return null;
+	target.scrollIntoView({ block: "center" });
+	flash(target);
+	return target;
+}
+
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 export async function jumpToSetting(
@@ -67,9 +75,11 @@ export async function jumpToSetting(
 	id: string,
 	signal?: AbortSignal,
 ): Promise<boolean> {
+	let shown = false;
 	for (let frame = 0; frame < JUMP_FRAMES; frame += 1) {
 		if (!root.isConnected || signal?.aborted) return false;
 		if (revealSetting(root, id)) return true;
+		if (!shown) shown = showSetting(root, id) !== null;
 		await nextFrame();
 	}
 	return false;

@@ -91,7 +91,6 @@ test("fields use the kit's input style and every control is an explicit tab stop
 		const input = markup.match(new RegExp(`<input[^>]*data-testid="${testId}"[^>]*>`))?.[0] ?? "";
 		expect(input).toContain('tabindex="0"');
 		expect(input).toContain("border-control-border-default");
-		expect(input).not.toContain("data-settings-draft-input");
 	}
 	expect(markup).toContain('data-setting-id="pi-config-folder"');
 	expect(markup).toContain('data-setting-id="environment-variables"');

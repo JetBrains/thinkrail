@@ -18,7 +18,7 @@ import { saveSettings } from "./saveSettings";
 import { useConfigReset } from "./settingDefaults";
 import { SETTING, settingProps } from "./settingsCatalog";
 
-export const DICTATION_SHORTCUT_TARGET = "shortcut:dictation";
+const DICTATION_SHORTCUT_TARGET = "shortcut:dictation";
 
 function megabytes(bytes: number): string {
 	return String(Math.max(1, Math.round(bytes / 1_000_000)));
@@ -31,6 +31,19 @@ function selectedModel(status: SpeechStatus): SpeechModel | null {
 	if (install.status === "failed") return install.usable ?? install.model;
 	return null;
 }
+
+function SettingOwners({ ids, children }: { ids: readonly string[]; children: ReactNode }) {
+	return ids.reduce<ReactNode>(
+		(inner, id) => (
+			<div key={id} data-setting-id={id}>
+				{inner}
+			</div>
+		),
+		children,
+	);
+}
+
+const SWITCH_OWNS = [SETTING.voiceLanguage.id, SETTING.voiceShortcut.id];
 
 function StatusText({ status }: { status: SpeechStatus }) {
 	const t = useT();
@@ -75,12 +88,13 @@ export function VoiceSettings() {
 		</SettingsPage>
 	);
 
-	if (!status) return null;
-	if (!status.supported) {
+	if (status?.supported === false) {
 		return page(
-			<SettingsNotice variant="warning" testId="settings-voice-unsupported">
-				{t("speech.mic.unavailable.unsupportedPlatform")}
-			</SettingsNotice>,
+			<SettingOwners ids={[SETTING.voiceInput.id, ...SWITCH_OWNS]}>
+				<SettingsNotice variant="warning" testId="settings-voice-unsupported">
+					{t("speech.mic.unavailable.unsupportedPlatform")}
+				</SettingsNotice>
+			</SettingOwners>,
 		);
 	}
 
@@ -102,6 +116,35 @@ export function VoiceSettings() {
 			.catch(failed)
 			.finally(() => setRemoving(false));
 	};
+
+	const voiceInputRow = (
+		<SettingsRow
+			{...settingProps(t, SETTING.voiceInput)}
+			description={
+				enabled ? t("settings.voice.enableDescription") : t("settings.voice.disabledDescription")
+			}
+			control={
+				<Switch
+					ref={toggleRef}
+					checked={enabled}
+					label={t("settings.voice.enable")}
+					testId="settings-voice-toggle"
+					tabIndex={0}
+					onCheckedChange={(voiceInputEnabled) =>
+						void saveSettings({ voiceInputEnabled }, t("settings.voice.actionFailed"))
+					}
+				/>
+			}
+			reset={enabledReset}
+		/>
+	);
+	if (!status) {
+		return page(
+			<SettingOwners ids={SWITCH_OWNS}>
+				<div className={SETTINGS_ROWS}>{voiceInputRow}</div>
+			</SettingOwners>,
+		);
+	}
 
 	const install = status.install;
 	const installing = install.status === "installing";
@@ -136,136 +179,122 @@ export function VoiceSettings() {
 	);
 
 	return page(
-		<div className={SETTINGS_ROWS}>
-			<SettingsRow
-				{...settingProps(t, SETTING.voiceInput)}
-				description={
-					enabled ? t("settings.voice.enableDescription") : t("settings.voice.disabledDescription")
-				}
-				control={
-					<Switch
-						ref={toggleRef}
-						checked={enabled}
-						label={t("settings.voice.enable")}
-						testId="settings-voice-toggle"
-						tabIndex={0}
-						onCheckedChange={(voiceInputEnabled) =>
-							void saveSettings({ voiceInputEnabled }, t("settings.voice.actionFailed"))
+		<SettingOwners ids={enabled ? [] : SWITCH_OWNS}>
+			<div className={SETTINGS_ROWS}>
+				{voiceInputRow}
+				{enabled || installing ? (
+					<SettingsRow
+						rowId="voice-status"
+						label={t("settings.voice.status")}
+						description={<StatusText status={status} />}
+						testId="settings-voice-status"
+						control={statusAction}
+					/>
+				) : null}
+				{enabled ? (
+					<SettingsRow
+						{...settingProps(t, SETTING.voiceLanguage)}
+						testId="settings-voice-language"
+						control={
+							<SettingsChoice<SpeechModel>
+								label={t("settings.voice.language")}
+								value={model}
+								cost="expensive"
+								disabled={installing}
+								options={[
+									{
+										id: "multilingual",
+										label: t("settings.voice.language.all"),
+										testId: "settings-voice-language-all",
+									},
+									{
+										id: "english",
+										label: t("settings.voice.language.english"),
+										testId: "settings-voice-language-english",
+									},
+								]}
+								onSelect={(next) => {
+									if (next === model) return;
+									focusCancel.current = true;
+									void installModel(next);
+								}}
+							/>
 						}
 					/>
-				}
-				reset={enabledReset}
-			/>
-			{enabled || installing ? (
-				<SettingsRow
-					rowId="voice-status"
-					label={t("settings.voice.status")}
-					description={<StatusText status={status} />}
-					testId="settings-voice-status"
-					control={statusAction}
-				/>
-			) : null}
-			{enabled ? (
-				<SettingsRow
-					{...settingProps(t, SETTING.voiceLanguage)}
-					testId="settings-voice-language"
-					control={
-						<SettingsChoice<SpeechModel>
-							label={t("settings.voice.language")}
-							value={model}
-							cost="expensive"
-							disabled={installing}
-							options={[
-								{
-									id: "multilingual",
-									label: t("settings.voice.language.all"),
-									testId: "settings-voice-language-all",
-								},
-								{
-									id: "english",
-									label: t("settings.voice.language.english"),
-									testId: "settings-voice-language-english",
-								},
-							]}
-							onSelect={(next) => {
-								if (next === model) return;
-								focusCancel.current = true;
-								void installModel(next);
-							}}
-						/>
-					}
-				/>
-			) : null}
-			{enabled ? (
-				<SettingsRow
-					{...settingProps(t, SETTING.voiceShortcut)}
-					testId="settings-voice-shortcut"
-					control={
-						<div className="flex items-center gap-8">
-							<kbd
-								data-testid="settings-voice-shortcut-keys"
-								className="rounded-xs bg-control-bg px-4 py-2 text-text-default tr-text-metadata"
-							>
-								{dictationShortcutLabel()}
-							</kbd>
+				) : null}
+				{enabled ? (
+					<SettingsRow
+						{...settingProps(t, SETTING.voiceShortcut)}
+						testId="settings-voice-shortcut"
+						control={
+							<div className="flex items-center gap-8">
+								<kbd
+									data-testid="settings-voice-shortcut-keys"
+									className="rounded-xs bg-control-bg px-4 py-2 text-text-default tr-text-metadata"
+								>
+									{dictationShortcutLabel()}
+								</kbd>
+								<Button
+									variant="outline"
+									size="m"
+									tabIndex={0}
+									data-testid="settings-voice-shortcut-change"
+									onClick={() =>
+										useAppStore
+											.getState()
+											.openSettings(SettingsSection.Keyboard, DICTATION_SHORTCUT_TARGET)
+									}
+								>
+									{t("settings.voice.changeShortcut")}
+								</Button>
+							</div>
+						}
+					/>
+				) : null}
+				{status.diskBytes > 0 ? (
+					<SettingsRow
+						{...settingProps(t, SETTING.voiceFiles)}
+						description={t("settings.voice.deleteDescription", {
+							size: megabytes(status.diskBytes),
+						})}
+						testId="settings-voice-files"
+						control={
 							<Button
+								ref={deleteRef}
 								variant="outline"
 								size="m"
+								tone="danger"
 								tabIndex={0}
-								data-testid="settings-voice-shortcut-change"
-								onClick={() =>
-									useAppStore
-										.getState()
-										.openSettings(SettingsSection.Keyboard, DICTATION_SHORTCUT_TARGET)
-								}
+								data-testid="settings-voice-delete"
+								disabled={removing}
+								onClick={() => setConfirming(true)}
 							>
-								{t("settings.voice.changeShortcut")}
+								{t("settings.voice.deleteAction")}
 							</Button>
-						</div>
-					}
-				/>
-			) : null}
-			{status.diskBytes > 0 ? (
-				<SettingsRow
-					{...settingProps(t, SETTING.voiceFiles)}
+						}
+					/>
+				) : null}
+				<ConfirmDialog
+					open={confirming}
+					onOpenChange={setConfirming}
+					title={t("settings.voice.deleteConfirmTitle")}
 					description={t("settings.voice.deleteDescription", {
 						size: megabytes(status.diskBytes),
 					})}
-					testId="settings-voice-files"
-					control={
-						<Button
-							ref={deleteRef}
-							variant="outline"
-							size="m"
-							tone="danger"
-							tabIndex={0}
-							data-testid="settings-voice-delete"
-							disabled={removing}
-							onClick={() => setConfirming(true)}
-						>
-							{t("settings.voice.deleteAction")}
-						</Button>
-					}
+					confirmLabel={t("settings.voice.deleteButton")}
+					destructive
+					confirmTestId="settings-voice-delete-confirm"
+					onConfirm={() => {
+						confirmed.current = true;
+						remove();
+					}}
+					onClosedAutoFocus={() => {
+						const target = confirmed.current ? toggleRef.current : deleteRef.current;
+						confirmed.current = false;
+						(target ?? toggleRef.current)?.focus();
+					}}
 				/>
-			) : null}
-			<ConfirmDialog
-				open={confirming}
-				onOpenChange={setConfirming}
-				title={t("settings.voice.deleteConfirmTitle")}
-				description={t("settings.voice.deleteDescription", { size: megabytes(status.diskBytes) })}
-				confirmLabel={t("settings.voice.deleteButton")}
-				destructive
-				confirmTestId="settings-voice-delete-confirm"
-				onConfirm={() => {
-					confirmed.current = true;
-					remove();
-				}}
-				onClosedAutoFocus={() => {
-					const target = confirmed.current ? toggleRef.current : deleteRef.current;
-					confirmed.current = false;
-					(target ?? toggleRef.current)?.focus();
-				}}
-			/>
-		</div>,
+			</div>
+		</SettingOwners>,
 	);
 }

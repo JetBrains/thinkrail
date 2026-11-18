@@ -11,7 +11,7 @@ import {
 import type { SettingsSearchEntry } from "../panels/settingsSearch";
 import { SettingsSection } from "../store";
 
-export const SHORTCUT_SETTING_PREFIX = "shortcut:";
+const SHORTCUT_SETTING_PREFIX = "shortcut:";
 
 export interface KeybindingArea {
 	readonly id: string;

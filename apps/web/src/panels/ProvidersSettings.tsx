@@ -5,7 +5,7 @@ import {
 } from "@remixicon/react";
 import { JBCENTRAL_QUOTA_PROTOCOL_VERSION, type ProviderStatus } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, withIconClass } from "@thinkrail/ui/button";
 import { SkeletonRows } from "@thinkrail/ui/skeleton";
 import { useState } from "react";
 import { flushSync } from "react-dom";
@@ -28,6 +28,7 @@ import { SETTING, settingProps } from "./settingsCatalog";
 import { useProviderAuth } from "./useProviderAuth";
 
 const NAMED_PROVIDERS = 5;
+const SpinningRefresh = withIconClass(RefreshCw, "motion-safe:animate-spin");
 const AVAILABLE_LIST = "providers:available";
 
 function namesOf(providers: readonly ProviderStatus[]): string {
@@ -113,13 +114,15 @@ export function ProvidersSettings() {
 						<Button
 							variant="ghost"
 							size="m"
-							iconLeft={RefreshCw}
-							loading={refreshing}
-							spinIcon
+							iconLeft={refreshing ? SpinningRefresh : RefreshCw}
 							tabIndex={0}
+							aria-busy={refreshing || undefined}
+							aria-disabled={refreshing || undefined}
 							data-testid="providers-refresh"
 							aria-label={t("settings.providers.refreshLabel")}
-							onClick={refresh}
+							onClick={() => {
+								if (!refreshing) refresh();
+							}}
 						>
 							{t("settings.providers.refresh")}
 						</Button>

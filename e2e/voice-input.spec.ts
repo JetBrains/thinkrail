@@ -423,6 +423,15 @@ test("Settings turns voice input off and back on, and Delete frees its files and
 	await expect(toggle).toHaveAttribute("data-active", "false");
 	await expect(voice.getByTestId("settings-voice-status")).toHaveCount(0);
 	await expect(voice.getByTestId("settings-voice-files")).toBeVisible();
+	const search = page.getByTestId("settings-search");
+	const result = (id: string) =>
+		page.locator(`[data-testid="settings-search-result"][data-result-id="${id}"]`);
+	await search.fill("Speech language");
+	await result("voice-language").click();
+	await expect(toggle).toBeFocused();
+	await search.fill("Delete voice files");
+	await result("voice-files").click();
+	await expect(voice.getByTestId("settings-voice-delete")).toBeFocused();
 	await closeSettings(page);
 	await page.getByTestId("chat-input").focus();
 	await expect(mic(page)).toHaveCount(0);
@@ -439,6 +448,10 @@ test("Settings turns voice input off and back on, and Delete frees its files and
 	await expect(voice.getByTestId("settings-voice-status")).toContainText("Not set up");
 	await expect(voice.getByTestId("settings-voice-files")).toHaveCount(0);
 	expect(existsSync(SPEECH_DIR)).toBe(false);
+	await search.fill("Delete voice files");
+	await expect(page.getByTestId("settings-search-results")).toContainText("“Delete voice files”");
+	await expect(result("voice-files")).toHaveCount(0);
+	await search.fill("");
 
 	await voice.getByTestId("settings-voice-shortcut-change").click();
 	await expect(page.getByTestId("settings-nav-keyboard")).toHaveAttribute("data-active", "true");

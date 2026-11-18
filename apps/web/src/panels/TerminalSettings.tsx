@@ -12,7 +12,6 @@ import {
 	SettingsRow,
 } from "@/settingsKit";
 import { useAppStore } from "@/store";
-import { SettingsStackedRow } from "./SettingsStackedRow";
 import { saveSettings } from "./saveSettings";
 import { useConfigReset } from "./settingDefaults";
 import { SETTING, settingProps } from "./settingsCatalog";
@@ -84,22 +83,27 @@ export function WindowsShellSettings({
 	}
 	return (
 		<SettingsGroup title={t("settings.terminal.shell.title")} scope="device">
-			<SettingsStackedRow {...settingProps(t, SETTING.windowsShell)} reset={reset}>
-				<SettingsChoice
-					label={t("settings.terminal.shell.title")}
-					layout="list"
-					cost="expensive"
-					options={WINDOWS_SHELL_CHOICES.map((choice) => ({
-						...choice,
-						label: t(choice.label),
-						...(choice.hint ? { hint: t(choice.hint) } : {}),
-						description: t(choice.description),
-					}))}
-					value={value}
-					onSelect={onSelect}
-					testId="terminal-shell-control"
-				/>
-			</SettingsStackedRow>
+			<SettingsRow
+				{...settingProps(t, SETTING.windowsShell)}
+				reset={reset}
+				layout="stacked"
+				control={
+					<SettingsChoice
+						label={t("settings.terminal.shell.title")}
+						layout="list"
+						cost="expensive"
+						options={WINDOWS_SHELL_CHOICES.map((choice) => ({
+							...choice,
+							label: t(choice.label),
+							...(choice.hint ? { hint: t(choice.hint) } : {}),
+							description: t(choice.description),
+						}))}
+						value={value}
+						onSelect={onSelect}
+						testId="terminal-shell-control"
+					/>
+				}
+			/>
 		</SettingsGroup>
 	);
 }

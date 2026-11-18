@@ -12,6 +12,7 @@ import {
 } from "@thinkrail/contracts";
 import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
 import {
+	closeSettings,
 	createWorkspaceViaDialog,
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
@@ -510,11 +511,7 @@ test("a setting's own palette row opens Settings on that setting, focused and fl
 		"data-setting-flash",
 		"",
 	);
-	await page
-		.getByTestId("settings-dialog")
-		.getByRole("button", { name: "Close", exact: true })
-		.click();
-	await expect(page.getByTestId("settings-dialog")).toBeHidden();
+	await closeSettings(page);
 });
 
 test("an active IME owns Escape, arrows, Tab and Enter in the palette input", async ({ page }) => {

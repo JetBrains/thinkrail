@@ -1,10 +1,22 @@
+import { rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
 	closeSettings,
+	enterDefaultWorkspace,
 	openFixtureProject,
 	openSettingsSection,
 	settingsDialog,
 } from "./fixtures/app";
+import { resolveBunExecutable } from "./fixtures/executables";
+import { E2E_PI_AGENT_DIR } from "./fixtures/paths";
+import { E2eWire } from "./fixtures/wire";
+
+const USER_MCP_CONFIG = join(E2E_PI_AGENT_DIR, "mcp.json");
+const STDIO_SERVER = fileURLToPath(
+	new URL("../packages/server/src/agent/mcp/fixtures/stdioServer.ts", import.meta.url),
+);
 
 const tab = (page: Page, id: string) => page.getByTestId(`settings-nav-${id}`);
 const searchField = (page: Page) => page.getByTestId("settings-search");
@@ -160,6 +172,182 @@ test("Esc steps back: a dirty field reverts, then the section list, then Setting
 	await page.keyboard.press("Escape");
 	await expect(settingsDialog(page)).toBeHidden();
 	await expect(opener).toBeFocused();
+});
+
+test("one ↑/↓ walk crosses a switch, a field, a tree and a row without wrapping; Home and End reach the ends", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await openSettingsSection(page, "keyboard");
+	const doubleShift = page.getByTestId("settings-double-shift");
+	const filter = page.getByTestId("keybinding-filter");
+	const exportButton = page.getByTestId("keybinding-export");
+	const items = settingsDialog(page).locator(
+		'[data-setting-row="keyboard-shortcuts"] [role="treeitem"]',
+	);
+	await expect(items.nth(1)).toBeVisible();
+
+	await page.keyboard.press("ArrowRight");
+	await expect(doubleShift).toBeFocused();
+	await page.keyboard.press("ArrowUp");
+	await expect(doubleShift).toBeFocused();
+	await page.keyboard.press("ArrowDown");
+	await expect(filter).toBeFocused();
+	await page.keyboard.press("ArrowDown");
+	await expect(items.first()).toBeFocused();
+	await page.keyboard.press("j");
+	await expect(items.nth(1)).toBeFocused();
+	await page.keyboard.press("End");
+	await expect(items.last()).toBeFocused();
+	await page.keyboard.press("ArrowDown");
+	await expect(exportButton).toBeFocused();
+	await page.keyboard.press("ArrowDown");
+	await expect(exportButton).toBeFocused();
+	await page.keyboard.press("ArrowUp");
+	await expect(items.last()).toBeFocused();
+	await page.keyboard.press("Home");
+	await expect(items.first()).toBeFocused();
+	await page.keyboard.press("k");
+	await expect(filter).toBeFocused();
+
+	await exportButton.focus();
+	await page.keyboard.press("Home");
+	await expect(doubleShift).toBeFocused();
+	await page.keyboard.press("End");
+	await expect(exportButton).toBeFocused();
+
+	await filter.fill("split");
+	const shortcuts = settingsDialog(page).getByTestId("keybinding-row");
+	await expect(shortcuts.nth(1)).toBeVisible();
+	await shortcuts.nth(1).getByTestId("keybinding-change").focus();
+	await page.keyboard.press("Home");
+	await expect(items.first()).toBeFocused();
+	await shortcuts.first().getByTestId("keybinding-change").focus();
+	await page.keyboard.press("End");
+	await expect(items.last()).toBeFocused();
+});
+
+test("a list walks row by row; Delete asks first and focus lands on the neighbour; Shift+F10 opens the row menu", async ({
+	page,
+}) => {
+	const entry = { command: resolveBunExecutable(), args: [STDIO_SERVER], enabled: false };
+	writeFileSync(
+		USER_MCP_CONFIG,
+		JSON.stringify({
+			mcpServers: { "walk-alpha": entry, "walk-beta": entry, "walk-gamma": entry },
+		}),
+	);
+	try {
+		await openFixtureProject(page);
+		await enterDefaultWorkspace(page);
+		await openSettingsSection(page, "mcp");
+		const rows = page.getByTestId("mcp-server-row");
+		await expect(rows).toHaveCount(3);
+		const names = await rows.evaluateAll((list) =>
+			list.map((row) => row.getAttribute("data-name")),
+		);
+		const details = (index: number) =>
+			page
+				.locator(`[data-testid="mcp-server-row"][data-name="${names[index]}"]`)
+				.getByTestId("mcp-server-details");
+
+		await page.keyboard.press("ArrowRight");
+		await expect(page.getByTestId("mcp-add")).toBeFocused();
+		await page.keyboard.press("ArrowDown");
+		await expect(details(0)).toBeFocused();
+		await page.keyboard.press("ArrowDown");
+		await expect(details(1)).toBeFocused();
+		await page.keyboard.press("ArrowDown");
+		await expect(details(2)).toBeFocused();
+		await page.keyboard.press("ArrowUp");
+		await expect(details(1)).toBeFocused();
+
+		await page.keyboard.press("Delete");
+		const confirm = page.getByTestId("mcp-remove-confirm");
+		await expect(confirm).toBeVisible();
+		await expect(rows).toHaveCount(3);
+		await confirm.click();
+		await expect(rows).toHaveCount(2);
+		await expect(details(2)).toBeFocused();
+		await expect(settingsDialog(page)).toBeVisible();
+
+		await page.keyboard.press("Shift+F10");
+		await expect(page.getByTestId("mcp-menu-remove")).toBeVisible();
+		await page.keyboard.press("Escape");
+		await expect(page.getByTestId("mcp-menu-remove")).toHaveCount(0);
+		await expect(settingsDialog(page)).toBeVisible();
+	} finally {
+		rmSync(USER_MCP_CONFIG, { force: true });
+	}
+});
+
+test.describe("cheap and expensive choices", () => {
+	test.afterEach(async () => {
+		const wire = await E2eWire.connect();
+		try {
+			await wire.request("settings.update", { config: { locale: "system" } });
+		} finally {
+			wire.close();
+		}
+	});
+
+	test("a cheap choice applies on each arrow and → at its end reaches Reset; Delete resets the row", async ({
+		page,
+	}) => {
+		await openFixtureProject(page);
+		await openSettingsSection(page, "chat");
+		const oldest = page.getByTestId("chat-order-oldest-first");
+		const newest = page.getByTestId("chat-order-newest-first");
+		const reset = page.getByTestId("settings-reset-message-order");
+		await expect(oldest).toHaveAttribute("data-active", "true");
+		await expect(reset).toHaveCount(0);
+
+		await page.keyboard.press("ArrowRight");
+		await expect(oldest).toBeFocused();
+		await page.keyboard.press("ArrowRight");
+		await expect(newest).toBeFocused();
+		await expect(newest).toHaveAttribute("data-active", "true");
+		await expect(settingsDialog(page).getByText("Press Enter to apply")).toHaveCount(0);
+		await page.keyboard.press("ArrowRight");
+		await expect(reset).toBeFocused();
+		await page.keyboard.press("Delete");
+		await expect(oldest).toHaveAttribute("data-active", "true");
+		await expect(reset).toHaveCount(0);
+		await expect.poll(() => focusedRow(page)).toBe("message-order");
+	});
+
+	test("an expensive choice waits for Enter, Esc cancels the pending pick, and Delete resets it", async ({
+		page,
+	}) => {
+		await openFixtureProject(page);
+		await openSettingsSection(page, "language");
+		const row = settingsDialog(page).locator('[data-setting-row="interface-language"]');
+		const system = page.getByTestId("language-system");
+		const english = page.getByTestId("language-en");
+		const hint = settingsDialog(page).getByText("Press Enter to apply");
+		await expect(system).toHaveAttribute("data-active", "true");
+
+		await page.keyboard.press("ArrowRight");
+		await expect(system).toBeFocused();
+		await page.keyboard.press("ArrowDown");
+		await expect(english).toBeFocused();
+		await expect(english).toHaveAttribute("data-pending", "true");
+		await expect(system).toHaveAttribute("data-active", "true");
+		await expect(hint).toBeVisible();
+		await page.keyboard.press("Escape");
+		await expect(system).toBeFocused();
+		await expect(english).not.toHaveAttribute("data-pending", "true");
+		await expect(hint).toHaveCount(0);
+		await expect(settingsDialog(page)).toBeVisible();
+
+		await page.keyboard.press("ArrowDown");
+		await page.keyboard.press("Enter");
+		await expect(english).toHaveAttribute("data-active", "true");
+		await expect(row).toHaveAttribute("data-changed", "true");
+		await page.keyboard.press("Delete");
+		await expect(system).toHaveAttribute("data-active", "true");
+		await expect(row).not.toHaveAttribute("data-changed", "true");
+	});
 });
 
 test("content scroll starts at the top in every section", async ({ page }) => {

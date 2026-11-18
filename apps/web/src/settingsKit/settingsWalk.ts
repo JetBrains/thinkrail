@@ -51,7 +51,7 @@ export function rowIdOf<E extends WalkElement<E>>(element: E | null): string | n
 	return topRow(element)?.getAttribute(SETTING_ATTR.row) ?? null;
 }
 
-export function unitOf<E extends WalkElement<E>>(element: E): E | null {
+function unitOf<E extends WalkElement<E>>(element: E): E | null {
 	return element.closest(SETTING_SELECTOR.unit);
 }
 
@@ -132,13 +132,17 @@ export function focusUnitStop<E extends WalkElement<E>>(element: E): boolean {
 	return land(unit ? unitStop(unit) : null);
 }
 
-function neighbourItem<E extends WalkElement<E>>(target: E, delta: 1 | -1): E | null {
+function itemsAround<E extends WalkElement<E>>(target: E): { unit: E; items: E[] } | null {
 	const unit = unitOf(target);
 	if (!unit || unit === target || !unit.matches(SETTING_SELECTOR.treeItem)) return null;
 	const tree = unit.closest(SETTING_SELECTOR.tree);
-	const items = tree ? treeItems(tree) : [];
-	const index = items.indexOf(unit);
-	return index < 0 ? null : (items[index + delta] ?? null);
+	return { unit, items: tree ? treeItems(tree) : [] };
+}
+
+function neighbourItem<E extends WalkElement<E>>(target: E, delta: 1 | -1): E | null {
+	const around = itemsAround(target);
+	const index = around ? around.items.indexOf(around.unit) : -1;
+	return index < 0 ? null : (around?.items[index + delta] ?? null);
 }
 
 function neighbourRow<E extends WalkElement<E>>(root: E, target: E, delta: 1 | -1): E | null {
@@ -177,6 +181,8 @@ export function performWalk<E extends WalkElement<E>>(
 			return true;
 		}
 		case "edge": {
+			const items = itemsAround(target)?.items;
+			if (land(action.edge === "first" ? items?.[0] : items?.at(-1))) return true;
 			const rows = rowsOf(root);
 			const row = action.edge === "first" ? rows[0] : rows.at(-1);
 			return row ? land(stopOf(row, action.edge)) : false;

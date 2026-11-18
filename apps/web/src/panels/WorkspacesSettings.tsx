@@ -14,7 +14,7 @@ import { saveSettings } from "./saveSettings";
 import { useConfigReset } from "./settingDefaults";
 import { SETTING, settingProps } from "./settingsCatalog";
 
-export type IdleChoice = `${number}` | "never";
+type IdleChoice = `${number}` | "never";
 
 interface IdleChoiceSpec {
 	id: IdleChoice;

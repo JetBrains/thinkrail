@@ -15,6 +15,9 @@ const LATEST: SettingsCatalogContext = {
 	protocolVersion: PROTOCOL_VERSION,
 	hasWorkspace: true,
 	hostPlatform: "win32",
+	signedInProviders: true,
+	voiceFiles: true,
+	survey: true,
 };
 
 const groups = (hasUpdates = true, protocolVersion: number | null = PROTOCOL_VERSION) =>

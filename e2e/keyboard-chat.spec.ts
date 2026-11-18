@@ -1,6 +1,7 @@
 import { existsSync, realpathSync, rmSync, utimesSync } from "node:fs";
 import { expect, type Locator, type Page, test, type WebSocketRoute } from "@playwright/test";
 import {
+	closeSettings,
 	enterDefaultWorkspace,
 	openFixtureProject,
 	openPersistedChat,
@@ -99,7 +100,7 @@ async function selectMessageOrder(page: Page, order: "oldest-first" | "newest-fi
 	const option = page.getByTestId(`chat-order-${order}`);
 	await option.click();
 	await expect(option).toHaveAttribute("data-active", "true");
-	await page.keyboard.press("Escape");
+	await closeSettings(page);
 }
 
 const row = (page: Page, text: string): Locator =>

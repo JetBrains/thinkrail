@@ -89,7 +89,6 @@ test("without an active workspace only the global group renders, with the overri
 	expect(input).toContain('inputMode="numeric"');
 	expect(input).toContain('value="7"');
 	expect(input).toContain('tabindex="0"');
-	expect(input).not.toContain("data-settings-draft-input");
 });
 
 test("global rows show Changed and Reset only away from the default", () => {

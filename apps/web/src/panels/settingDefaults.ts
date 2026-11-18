@@ -74,19 +74,10 @@ export function configResetPatch(key: ResettableConfigKey): AppConfigUpdate {
 	return isClearable(key) ? { [key]: null } : { [key]: DEFAULT_CONFIG[key] };
 }
 
-export interface ThemeChoice {
-	themeMode: AppConfig["themeMode"];
-	theme: AppConfig["theme"];
-}
-
 export const THEME_RESET_PATCH = {
 	themeMode: DEFAULT_CONFIG.themeMode,
 	theme: DEFAULT_CONFIG.theme,
 } as const satisfies AppConfigUpdate;
-
-export function isThemeDefault({ themeMode, theme }: ThemeChoice): boolean {
-	return themeMode === THEME_RESET_PATCH.themeMode && theme === THEME_RESET_PATCH.theme;
-}
 
 export function useConfigReset(key: ResettableConfigKey, failure: MessageKey): SettingsReset {
 	const t = useT();
@@ -94,16 +85,6 @@ export function useConfigReset(key: ResettableConfigKey, failure: MessageKey): S
 	return {
 		changed: !isConfigDefault(key, value),
 		onReset: () => void saveSettings(configResetPatch(key), t(failure)),
-	};
-}
-
-export function useThemeReset(failure: MessageKey): SettingsReset {
-	const t = useT();
-	const themeMode = useAppStore((state) => state.themeMode);
-	const theme = useAppStore((state) => state.theme);
-	return {
-		changed: !isThemeDefault({ themeMode, theme }),
-		onReset: () => void saveSettings(THEME_RESET_PATCH, t(failure)),
 	};
 }
 

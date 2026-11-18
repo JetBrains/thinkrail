@@ -220,7 +220,7 @@ function writeSetting(
 }
 
 /** What a list of MCP servers reads and writes through: a workspace's projection, or the user servers alone. */
-export interface McpOps {
+interface McpOps {
 	readonly workspaceId: string | undefined;
 	reread: () => Promise<McpListResult>;
 	add: (scope: McpServerScope, name: string, entry: McpServerEntryInput) => Promise<McpListResult>;
@@ -230,7 +230,7 @@ export interface McpOps {
 	view: (t: Translator, row: McpServerRow, now: number) => McpRowView;
 }
 
-export function workspaceOps(workspaceId: string): McpOps {
+function workspaceOps(workspaceId: string): McpOps {
 	return {
 		workspaceId,
 		reread: () => requestMcpList("mcp.list", { workspaceId }),
@@ -1264,7 +1264,11 @@ export function McpServersPanel({
 						description={t("mcp.settings.projectGroupDescription")}
 					>
 						{!trusted ? (
-							<p data-testid="mcp-untrusted" className="py-8 text-text-muted tr-text-metadata">
+							<p
+								data-testid="mcp-untrusted"
+								data-setting-id={SETTING.mcpProjectServers.id}
+								className="py-8 text-text-muted tr-text-metadata"
+							>
 								{t("mcp.settings.untrusted")}
 							</p>
 						) : projectRows.length > 0 ? (

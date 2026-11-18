@@ -2,35 +2,18 @@ import {
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
 } from "@remixicon/react";
-import { isImeComposing, twinArrow } from "@thinkrail/ui/keyboard";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { cn } from "@thinkrail/ui/utils";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { ProviderGlyph } from "@/chat/ProviderGlyph";
-import { useTreeItem, useTreeKeys } from "./treeNavigation";
+import { useTreeItem } from "./treeNavigation";
 
-const TREE = '[role="tree"]';
-const TREE_ITEM = '[role="treeitem"]';
 const CONTROL = "button, input";
 
 export const MODEL_TREE = "flex flex-col rounded-sm border border-border-default";
 
 export const MODEL_TREE_ROW =
 	"flex min-h-40 cursor-default flex-wrap items-center gap-8 border-border-muted border-t py-6 pr-8 transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring-inset";
-
-export function treeNeighbour(item: HTMLElement, key: string): HTMLElement | undefined {
-	const tree = item.closest(TREE);
-	if (!tree) return undefined;
-	const items = Array.from(tree.querySelectorAll<HTMLElement>(TREE_ITEM)).filter(
-		(each) => each.closest(TREE) === tree,
-	);
-	const index = items.indexOf(item);
-	if (index < 0) return undefined;
-	if (key === "ArrowDown") return items[index + 1];
-	if (key === "ArrowUp") return items[index - 1];
-	if (key === "Home") return items[0];
-	if (key === "End") return items.at(-1);
-	return undefined;
-}
 
 export function fromItemControl(
 	event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>,
@@ -41,7 +24,7 @@ export function fromItemControl(
 	return control !== null && event.currentTarget.contains(control);
 }
 
-export function isPlainEnter(event: KeyboardEvent<HTMLElement>): boolean {
+function isPlainEnter(event: KeyboardEvent<HTMLElement>): boolean {
 	return (
 		event.key === "Enter" &&
 		event.target === event.currentTarget &&
@@ -52,24 +35,6 @@ export function isPlainEnter(event: KeyboardEvent<HTMLElement>): boolean {
 
 export function stopRowClick(event: MouseEvent<HTMLElement>): void {
 	event.stopPropagation();
-}
-
-export function useTreeItemKeys(): (event: KeyboardEvent<HTMLElement>) => boolean {
-	const keys = useTreeKeys();
-	return (event) => {
-		if (event.defaultPrevented || isImeComposing(event.nativeEvent)) return false;
-		if (event.target === event.currentTarget) return false;
-		const twin = twinArrow(keys.match(event.nativeEvent));
-		const plain = !(event.altKey || event.ctrlKey || event.metaKey || event.shiftKey);
-		const key = twin ?? (plain ? event.key : null);
-		const typing = event.target instanceof HTMLInputElement;
-		if (key === null || (typing && (key === "Home" || key === "End"))) return false;
-		const next = treeNeighbour(event.currentTarget, key);
-		if (!next) return false;
-		event.preventDefault();
-		next.focus();
-		return true;
-	};
 }
 
 export function ProviderTreeItem({
@@ -107,7 +72,6 @@ export function ProviderTreeItem({
 		expanded,
 		toggles: true,
 	});
-	const innerKeys = useTreeItemKeys();
 	const Chevron = expanded ? ChevronDown : ChevronRight;
 	return (
 		<li role="none" className="flex flex-col [&:first-child>[role=treeitem]]:border-t-0">
@@ -122,7 +86,6 @@ export function ProviderTreeItem({
 					if (!fromItemControl(event)) onToggle();
 				}}
 				onKeyDown={(event) => {
-					if (innerKeys(event)) return;
 					onKeyDown?.(event);
 					if (event.defaultPrevented || !isPlainEnter(event)) return;
 					event.preventDefault();

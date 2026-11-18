@@ -15,7 +15,6 @@ import {
 	MODEL_TREE_ROW,
 	ProviderTreeItem,
 	stopRowClick,
-	useTreeItemKeys,
 } from "./ModelProviderTree";
 import { SETTING } from "./settingsCatalog";
 import { Tree, useTreeItem } from "./treeNavigation";
@@ -47,7 +46,7 @@ function useRowKeys(onToggle: () => void, onShow: () => void, enter: boolean) {
 	};
 }
 
-export function ProviderShownToggle({
+function ProviderShownToggle({
 	provider,
 	state,
 	label,
@@ -118,7 +117,6 @@ function ModelVisibilityItem({
 		level: 2,
 		label: model.name,
 	});
-	const innerKeys = useTreeItemKeys();
 	const toggle = () => setVisible(model, hidden);
 	const rowKeys = useRowKeys(toggle, () => setVisible(model, true), true);
 	const window = formatContext(model.contextWindow);
@@ -137,9 +135,7 @@ function ModelVisibilityItem({
 				onClick={(event) => {
 					if (!fromItemControl(event)) toggle();
 				}}
-				onKeyDown={(event) => {
-					if (!innerKeys(event)) rowKeys(event);
-				}}
+				onKeyDown={rowKeys}
 			>
 				<span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-8">
 					<span className={cn("tr-text-ui", hidden ? "text-text-muted" : "text-text-default")}>
@@ -261,7 +257,9 @@ export function VisibleModelsTree({
 			testId="visible-models-group"
 		>
 			{groups.length === 0 ? (
-				<p className="py-12 text-text-muted tr-text-ui">{t("settings.visibleModels.noModels")}</p>
+				<p data-setting-id={SETTING.visibleModels.id} className="py-12 text-text-muted tr-text-ui">
+					{t("settings.visibleModels.noModels")}
+				</p>
 			) : (
 				<div
 					data-setting-row={SETTING.visibleModels.id}

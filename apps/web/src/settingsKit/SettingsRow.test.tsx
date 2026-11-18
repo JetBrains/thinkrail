@@ -61,6 +61,26 @@ test("a row id other than the setting id names the walk row", () => {
 	expect(markup).not.toContain("data-setting-id");
 });
 
+test("a stacked or card row puts its control under the label, with Reset beside the label", () => {
+	for (const layout of ["stacked", "card"] as const) {
+		const markup = renderToStaticMarkup(
+			<SettingsRow
+				settingId="interface-language"
+				label="Interface language"
+				layout={layout}
+				reset={{ changed: true, onReset: () => {} }}
+				control={<div role="listbox" aria-label="Languages" />}
+			/>,
+		);
+		expect(markup).toContain('data-setting-row="interface-language"');
+		expect(markup).toContain("flex-col");
+		expect(markup).toMatch(
+			/Reset<\/button><\/div><div data-setting-control=""[^>]*><div role="listbox"/,
+		);
+		expect(markup.includes("rounded-md")).toBe(layout === "card");
+	}
+});
+
 interface ResetProps {
 	onClick?: (event: { currentTarget: FakeNode }) => void;
 	"data-setting-reset"?: string;

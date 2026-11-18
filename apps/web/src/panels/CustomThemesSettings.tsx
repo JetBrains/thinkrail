@@ -2,8 +2,8 @@ import type { UserThemesSnapshot } from "@thinkrail/contracts";
 import { T, type Translator, useT } from "@thinkrail/locales/react";
 import { SettingsGroup } from "@/settingsKit";
 import type { UserThemeIssue } from "@/themes";
-import { FolderRow, repoSourceUrl, SettingsLink } from "./LanguageSettings";
-import { type FolderActions, SettingsFileIssues } from "./SettingsFolder";
+import { repoSourceUrl, SettingsLink } from "./LanguageSettings";
+import { type FolderActions, SettingsFileIssues, SettingsFolderRow } from "./SettingsFolder";
 import { SETTING, settingProps } from "./settingsCatalog";
 
 const EXAMPLE_THEME_PATH = "apps/web/src/themes/bundled/dark.theme.json";
@@ -44,7 +44,7 @@ export function CustomThemesGroup({
 	if (!snapshot) return null;
 	return (
 		<SettingsGroup title={t("settings.appearance.custom.title")} testId="custom-themes">
-			<FolderRow
+			<SettingsFolderRow
 				{...settingProps(t, SETTING.themeFolder)}
 				description={
 					<T

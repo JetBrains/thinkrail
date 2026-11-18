@@ -1,5 +1,6 @@
 import { type RemixiconComponentType, RiSearchLine, RiSettings3Line } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
+import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Keycaps } from "@thinkrail/ui/keycaps";
 import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { cn } from "@thinkrail/ui/utils";
@@ -46,7 +47,9 @@ export function SettingsSearchField({
 				data-testid="settings-search"
 				className={cn(SETTINGS_INPUT, "peer w-full min-w-0 pr-24 pl-24")}
 				onChange={(event: ChangeEvent<HTMLInputElement>) => onQuery(event.currentTarget.value)}
-				onKeyDown={onKeyDown}
+				onKeyDown={(event) => {
+					if (!isImeComposing(event.nativeEvent)) onKeyDown(event);
+				}}
 				onFocus={onFocus}
 			/>
 			<Keycaps

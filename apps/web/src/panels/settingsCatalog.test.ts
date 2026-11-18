@@ -21,6 +21,9 @@ const LATEST: SettingsCatalogContext = {
 	protocolVersion: PROTOCOL_VERSION,
 	hasWorkspace: true,
 	hostPlatform: "darwin",
+	signedInProviders: true,
+	voiceFiles: true,
+	survey: true,
 };
 
 const ids = (context: SettingsCatalogContext, hasUpdates = true) =>
@@ -101,6 +104,13 @@ describe("availableSettings", () => {
 		expect(outside).not.toContain("project-templates");
 		expect(outside).toContain("mcp-user-servers");
 		expect(outside).toContain("global-templates");
+	});
+
+	test("signed-in providers, voice files and the survey are offered only while there are any", () => {
+		expect(ids({ ...LATEST, signedInProviders: false })).not.toContain("signed-in-providers");
+		expect(ids({ ...LATEST, voiceFiles: false })).not.toContain("voice-files");
+		expect(ids({ ...LATEST, survey: false })).not.toContain("feedback-survey");
+		expect(ids(LATEST)).toEqual(expect.arrayContaining(["signed-in-providers", "voice-files"]));
 	});
 
 	test("user MCP servers need a workspace on a host older than the no-workspace protocol", () => {

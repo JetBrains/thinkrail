@@ -7,6 +7,7 @@ import {
 	EXTENSION_SETTINGS_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
 	type HostPlatform,
+	isCustomEndpointId,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	KEYBINDINGS_PROTOCOL_VERSION,
 	MCP_USER_SERVERS_PROTOCOL_VERSION,
@@ -19,13 +20,33 @@ import {
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
-import { SettingsSection } from "@/store";
+import { useShallow } from "zustand/react/shallow";
+import { SettingsSection, selectActiveWorkspace, useAppStore } from "@/store";
 import type { SettingsNavGroup } from "./settingsNav";
 
 export interface SettingsCatalogContext {
 	readonly protocolVersion: number | null;
 	readonly hasWorkspace: boolean;
 	readonly hostPlatform: HostPlatform | null;
+	readonly signedInProviders: boolean;
+	readonly voiceFiles: boolean;
+	readonly survey: boolean;
+}
+
+export function useSettingsCatalogContext(): SettingsCatalogContext {
+	return useAppStore(
+		useShallow((s) => ({
+			protocolVersion: s.protocolVersion,
+			hasWorkspace: selectActiveWorkspace(s) !== null,
+			hostPlatform: s.hostPlatform,
+			signedInProviders:
+				s.providerStatus.report?.providers.some(
+					(provider) => provider.configured && !isCustomEndpointId(provider.id),
+				) ?? false,
+			voiceFiles: (s.speech?.diskBytes ?? 0) > 0,
+			survey: s.inAppSurvey !== null,
+		})),
+	);
 }
 
 export interface SettingEntry {
@@ -100,6 +121,7 @@ export const SETTING = {
 		label: "settings.catalog.signedInProviders.label",
 		description: "settings.catalog.signedInProviders.description",
 		keywords: ["sign out", "connected", "anthropic", "openai", "copilot", "google"],
+		when: (context: SettingsCatalogContext) => context.signedInProviders,
 	},
 	jetbrainsCentral: {
 		id: "jetbrains-central",
@@ -527,6 +549,7 @@ export const SETTING = {
 		section: SettingsSection.Voice,
 		label: "settings.voice.delete",
 		keywords: ["speech", "model", "disk"],
+		when: (context: SettingsCatalogContext) => context.voiceFiles,
 	},
 	scrollback: {
 		id: "scrollback",
@@ -584,6 +607,7 @@ export const SETTING = {
 		label: "settings.feedback.takeSurvey",
 		description: "settings.feedback.surveyDescription",
 		keywords: ["feedback"],
+		when: (context: SettingsCatalogContext) => context.survey,
 	},
 	discord: {
 		id: "feedback-discord",

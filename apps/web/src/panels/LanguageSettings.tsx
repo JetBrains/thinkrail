@@ -1,8 +1,4 @@
-import {
-	RiFileCopyLine as Copy,
-	RiExternalLinkLine as ExternalLink,
-	RiFolderOpenLine as FolderOpen,
-} from "@remixicon/react";
+import { RiExternalLinkLine as ExternalLink } from "@remixicon/react";
 import {
 	DEFAULT_CONFIG,
 	type LocalLocaleFileErrorCode,
@@ -10,7 +6,6 @@ import {
 } from "@thinkrail/contracts";
 import { languageName, SYSTEM_LOCALE } from "@thinkrail/locales";
 import { T, useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
 import { type ReactNode, useMemo } from "react";
 import { REPO_URL } from "@/constants/branding";
 import {
@@ -30,8 +25,7 @@ import {
 } from "@/settingsKit";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
-import { type FolderActions, useFolderActions } from "./SettingsFolder";
-import { SettingsStackedRow } from "./SettingsStackedRow";
+import { type FolderActions, SettingsFolderRow, useFolderActions } from "./SettingsFolder";
 import { isConfigDefault } from "./settingDefaults";
 import { SETTING, settingProps } from "./settingsCatalog";
 
@@ -69,69 +63,6 @@ export function SettingsLink({
 		>
 			{children}
 		</a>
-	);
-}
-
-export function FolderRow({
-	settingId,
-	rowId,
-	label,
-	description,
-	folder,
-	hint,
-	testIdPrefix,
-	onCopyFolder,
-	onRevealFolder,
-}: FolderActions & {
-	settingId?: string | undefined;
-	rowId?: string | undefined;
-	label: string;
-	description?: ReactNode;
-	folder: string;
-	hint?: ReactNode;
-	testIdPrefix: string;
-}) {
-	const t = useT();
-	return (
-		<SettingsRow
-			settingId={settingId}
-			rowId={rowId}
-			label={label}
-			testId={`${testIdPrefix}-folder`}
-			description={
-				<>
-					{description ? <span className="block">{description}</span> : null}
-					<code data-testid={`${testIdPrefix}-folder-path`} className="break-all tr-code-text">
-						{folder}
-					</code>
-					{hint ? <span className="block">{hint}</span> : null}
-				</>
-			}
-			control={
-				<Button
-					variant="outline"
-					size="m"
-					iconLeft={Copy}
-					tabIndex={0}
-					onClick={() => onCopyFolder(folder)}
-				>
-					{t("settings.language.folder.copy")}
-				</Button>
-			}
-			sides={
-				<Button
-					variant="outline"
-					size="m"
-					iconLeft={FolderOpen}
-					tabIndex={0}
-					data-setting-side=""
-					data-testid={`${testIdPrefix}-open-folder`}
-					onClick={onRevealFolder}
-				>
-					{t("settings.language.folder.open")}
-				</Button>
-			}
-		/>
 	);
 }
 
@@ -278,23 +209,25 @@ export function LanguagePage({
 			testId="settings-language"
 		>
 			<div className={SETTINGS_ROWS}>
-				<SettingsStackedRow
+				<SettingsRow
 					{...settingProps(t, SETTING.interfaceLanguage)}
 					reset={{
 						changed: !isConfigDefault("locale", preference),
 						onReset: () => onSelect(DEFAULT_CONFIG.locale),
 					}}
-				>
-					<SettingsChoice
-						label={t("settings.language.title")}
-						layout="list"
-						cost="expensive"
-						options={choices}
-						value={value}
-						onSelect={onSelect}
-						testId="language-choice"
-					/>
-				</SettingsStackedRow>
+					layout="stacked"
+					control={
+						<SettingsChoice
+							label={t("settings.language.title")}
+							layout="list"
+							cost="expensive"
+							options={choices}
+							value={value}
+							onSelect={onSelect}
+							testId="language-choice"
+						/>
+					}
+				/>
 			</div>
 			<SettingsGroup
 				title={t("settings.language.add.title")}
@@ -313,7 +246,7 @@ export function LanguagePage({
 				testId="language-add"
 			>
 				{folder ? (
-					<FolderRow
+					<SettingsFolderRow
 						{...settingProps(t, SETTING.languageFolder)}
 						folder={folder}
 						testIdPrefix="language"

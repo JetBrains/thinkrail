@@ -15,12 +15,12 @@ import { useAppStore } from "@/store";
 import { uploadUserFont } from "@/transport";
 import { FamilyName, FontBadge } from "./FontPicker";
 import { customFamilies } from "./fontCatalog";
-import { FolderRow } from "./LanguageSettings";
 import {
 	type FolderActions,
 	SettingsFileIssue,
 	type SettingsFileIssueItem,
 	SettingsFileIssues,
+	SettingsFolderRow,
 	useFolderActions,
 } from "./SettingsFolder";
 import { SETTING, settingProps } from "./settingsCatalog";
@@ -192,7 +192,7 @@ export function CustomFontsView({
 					))}
 				</ul>
 			)}
-			<FolderRow
+			<SettingsFolderRow
 				{...settingProps(t, SETTING.fontsFolder)}
 				folder={snapshot.dir}
 				hint={t("settings.appearance.customFonts.removeHint")}

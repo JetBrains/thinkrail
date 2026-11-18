@@ -144,12 +144,6 @@ const SPECIALIZED: Exception[] = [
 		reason: "Settings section navigation tabs with a persistent selected state",
 	},
 	{
-		file: "panels/SettingsSwitch.tsx",
-		contains: 'role="switch"',
-		reason:
-			"a switch (role=switch), not a button; consolidation with packages/ui Switch is tracked separately (audit F-04)",
-	},
-	{
 		file: "panels/TemplatesSettings.tsx",
 		contains: 'data-testid="template-delete"',
 		reason: "red-on-hover icon action: no button variant matches a transparent red-text action yet",

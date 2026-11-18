@@ -6,12 +6,14 @@ import {
 } from "@remixicon/react";
 import type { GithubAuthStatus } from "@thinkrail/contracts";
 import { T, useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, withIconClass } from "@thinkrail/ui/button";
 import { SkeletonRows } from "@thinkrail/ui/skeleton";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { SettingsGroup, SettingsPage, SettingsRow } from "@/settingsKit";
 import { getTransport } from "@/transport";
 import { SETTING, settingProps } from "./settingsCatalog";
+
+const SpinningRefresh = withIconClass(RefreshCw, "motion-safe:animate-spin");
 
 let lastStatus: GithubAuthStatus | null = null;
 
@@ -129,12 +131,14 @@ export function GithubStatusView({
 						<Button
 							variant="outline"
 							size="m"
-							iconLeft={RefreshCw}
-							loading={checking}
-							spinIcon
+							iconLeft={checking ? SpinningRefresh : RefreshCw}
 							tabIndex={0}
+							aria-busy={checking || undefined}
+							aria-disabled={checking || undefined}
 							data-testid="settings-gh-refresh"
-							onClick={onRefresh}
+							onClick={() => {
+								if (!checking) onRefresh();
+							}}
 						>
 							{t("settings.github.refresh")}
 						</Button>

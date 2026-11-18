@@ -1,6 +1,11 @@
 import { appendFileSync, realpathSync, utimesSync } from "node:fs";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { defaultWorkspaceRow, enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
+import {
+	closeSettings,
+	defaultWorkspaceRow,
+	enterDefaultWorkspace,
+	openFixtureProject,
+} from "./fixtures/app";
 import {
 	moveMouseToChatViewport,
 	readChatScrollGeometry,
@@ -44,7 +49,7 @@ async function selectMessageOrder(
 	const option = page.getByTestId(`chat-order-${order}`);
 	await option.click();
 	await expect(option).toHaveAttribute("data-active", "true");
-	await page.keyboard.press("Escape");
+	await closeSettings(page);
 }
 
 function seedNestedActivityChat(name: string) {

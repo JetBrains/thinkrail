@@ -364,6 +364,9 @@ describe("palette Settings rows", () => {
 		protocolVersion: PROTOCOL_VERSION,
 		hasWorkspace: true,
 		hostPlatform: "darwin",
+		signedInProviders: true,
+		voiceFiles: true,
+		survey: true,
 	};
 	const settingsRows = (overrides: Partial<SettingsCatalogContext>, opened: unknown[][] = []) =>
 		buildSettingsItems(

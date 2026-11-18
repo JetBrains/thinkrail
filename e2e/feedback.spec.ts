@@ -283,6 +283,28 @@ test("with no survey launched the Feedback pane keeps Discord and email only", a
 	await expect(pane.getByTestId("feedback-take-survey")).toHaveCount(0);
 });
 
+test("Settings search offers the survey only while one is launched", async ({ page }) => {
+	const host = await stubSurveyHost(page, survey(1));
+	const search = page.getByTestId("settings-search");
+	const hit = page.locator(
+		'[data-testid="settings-search-result"][data-result-id="feedback-survey"]',
+	);
+	await page.getByTestId("open-settings").click();
+	await search.fill("Take the survey");
+	await hit.click();
+	await expect(page.getByTestId("feedback-take-survey")).toBeFocused();
+	await closeSettings(page);
+
+	host.available = null;
+	const reads = host.reads;
+	await page.getByTestId("open-settings").click();
+	await expect.poll(() => host.reads).toBeGreaterThan(reads);
+	await expect(page.getByTestId("feedback-take-survey")).toHaveCount(0);
+	await search.fill("Take the survey");
+	await expect(page.getByTestId("settings-search-results")).toContainText("“Take the survey”");
+	await expect(hit).toHaveCount(0);
+});
+
 test("a long question scrolls inside the survey window so every control stays reachable", async ({
 	page,
 }) => {

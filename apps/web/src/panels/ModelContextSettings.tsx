@@ -30,13 +30,7 @@ import {
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import type { CustomEndpointsState } from "./CustomEndpointsSettings";
-import {
-	MODEL_TREE,
-	MODEL_TREE_ROW,
-	ProviderTreeItem,
-	stopRowClick,
-	useTreeItemKeys,
-} from "./ModelProviderTree";
+import { MODEL_TREE, MODEL_TREE_ROW, ProviderTreeItem, stopRowClick } from "./ModelProviderTree";
 import { SETTING, settingProps } from "./settingsCatalog";
 import { Tree, useTreeItem, useTreeKeys } from "./treeNavigation";
 
@@ -225,14 +219,13 @@ function ContextModelItem({
 		...item
 	} = useTreeItem(`${model.provider}/${model.id}`, { level: 2, label: model.name });
 	const keys = useTreeKeys();
-	const innerKeys = useTreeItemKeys();
 	const name = `${model.name} (${model.provider})`;
 	const testId = `context-limit-${model.provider}-${model.id}`;
 	const changed = model.override !== null;
 	const tabIndex = rovingTabIndex ?? 0;
 
 	const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-		if (innerKeys(event) || event.defaultPrevented || event.target !== event.currentTarget) return;
+		if (event.defaultPrevented || event.target !== event.currentTarget) return;
 		if (isImeComposing(event.nativeEvent)) return;
 		const plain = !(event.altKey || event.ctrlKey || event.metaKey || event.shiftKey);
 		const key = twinArrow(keys.match(event.nativeEvent)) ?? (plain ? event.key : null);

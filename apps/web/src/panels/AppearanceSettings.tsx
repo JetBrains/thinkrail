@@ -37,7 +37,6 @@ import {
 import { errorText, getTransport } from "@/transport";
 import { CustomThemesGroup } from "./CustomThemesSettings";
 import { useFolderActions } from "./SettingsFolder";
-import { SettingsStackedRow } from "./SettingsStackedRow";
 import { THEME_RESET_PATCH } from "./settingDefaults";
 import { SETTING, settingProps } from "./settingsCatalog";
 
@@ -255,25 +254,26 @@ export function ThemeLists({ mode, themes, selected, defaults, onSelect }: Theme
 				}),
 			);
 		return (
-			<SettingsStackedRow
+			<SettingsRow
 				{...props}
 				description={card ? t(LIST_DESCRIPTIONS[appearance]) : undefined}
 				reset={{
 					changed: selected[appearance] !== defaults[appearance],
 					onReset: () => onSelect(appearance, defaults[appearance]),
 				}}
-				card={card}
+				layout={card ? "card" : "stacked"}
 				testId={`theme-list-${appearance}`}
-			>
-				<SettingsChoice
-					label={props.label}
-					layout="list"
-					cost="cheap"
-					options={options}
-					value={selected[appearance]}
-					onSelect={(id) => onSelect(appearance, id)}
-				/>
-			</SettingsStackedRow>
+				control={
+					<SettingsChoice
+						label={props.label}
+						layout="list"
+						cost="cheap"
+						options={options}
+						value={selected[appearance]}
+						onSelect={(id) => onSelect(appearance, id)}
+					/>
+				}
+			/>
 		);
 	};
 	if (mode !== "system") return list(mode, false);

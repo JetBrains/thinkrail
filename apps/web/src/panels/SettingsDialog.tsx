@@ -26,7 +26,7 @@ import {
 	useSettingsKeyboard,
 	walkKey,
 } from "@/settingsKit";
-import { SettingsSection, selectActiveWorkspace, useAppStore } from "@/store";
+import { SettingsSection, useAppStore } from "@/store";
 import { loadInAppSurvey } from "@/transport";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";
@@ -43,6 +43,7 @@ import { ProvidersSettings } from "./ProvidersSettings";
 import { SettingsSearchField, SettingsSearchResults } from "./SettingsSearchView";
 import { SETTINGS_PANEL_ID, SettingsTabs, settingsTabId } from "./SettingsTabs";
 import { SubagentsSettings } from "./SubagentsSettings";
+import { useSettingsCatalogContext } from "./settingsCatalog";
 import { resolveSettingsSection, settingsNavGroups } from "./settingsNav";
 import {
 	type SettingsSearchEntry,
@@ -53,6 +54,7 @@ import {
 import { TemplatesSettings } from "./TemplatesSettings";
 import { TerminalSettings } from "./TerminalSettings";
 import { TextFontsSettings } from "./TextFontsSettings";
+import { useProviderStatus } from "./useProviderStatus";
 import { VoiceSettings } from "./VoiceSettings";
 import { WorkspacesSettings } from "./WorkspacesSettings";
 
@@ -146,9 +148,9 @@ function SettingsFrame({
 	const t = useT();
 	const section = useAppStore((s) => s.settingsSection);
 	const target = useAppStore((s) => s.settingsTarget);
-	const protocolVersion = useAppStore((s) => s.protocolVersion);
-	const hasWorkspace = useAppStore((s) => selectActiveWorkspace(s) !== null);
-	const hostPlatform = useAppStore((s) => s.hostPlatform);
+	const catalogContext = useSettingsCatalogContext();
+	const { protocolVersion } = catalogContext;
+	useProviderStatus();
 	const resultKeys = useLocalKeys("settings", LOCAL_KEY_DEFAULTS.settings);
 	const groups = settingsNavGroups(protocolVersion, updateSettings !== undefined);
 	const selected = resolveSettingsSection(section, groups);
@@ -163,12 +165,7 @@ function SettingsFrame({
 	const results = showResults
 		? searchSettings(
 				query,
-				settingsSearchEntries(
-					t,
-					groups,
-					{ protocolVersion, hasWorkspace, hostPlatform },
-					searchEntries,
-				),
+				settingsSearchEntries(t, groups, catalogContext, searchEntries),
 				sectionLabels,
 			)
 		: [];
@@ -286,7 +283,6 @@ function SettingsFrame({
 	};
 
 	const onFieldKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-		if (isImeComposing(event.nativeEvent)) return;
 		if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
 		if (event.key === "Escape") {
 			event.preventDefault();

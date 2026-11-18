@@ -7,7 +7,7 @@ import { canStartProjectlessChat, startProjectlessChat } from "../panels/chatAct
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
 import { startChatInTab } from "../panels/openChat";
 import { openFileInTab } from "../panels/openTabs";
-import { availableSettings } from "../panels/settingsCatalog";
+import { availableSettings, useSettingsCatalogContext } from "../panels/settingsCatalog";
 import { settingsNavGroups } from "../panels/settingsNav";
 import {
 	canSettleWorkspace,
@@ -166,11 +166,10 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		() => settingsNavGroups(protocolVersion, options.hasUpdateSettings),
 		[protocolVersion, options.hasUpdateSettings],
 	);
-	const hostPlatform = useAppStore((s) => s.hostPlatform);
-	const hasWorkspace = activeWorkspace !== null;
+	const catalogContext = useSettingsCatalogContext();
 	const settingEntries = useMemo(
-		() => availableSettings(settingsGroups, { protocolVersion, hasWorkspace, hostPlatform }),
-		[settingsGroups, protocolVersion, hasWorkspace, hostPlatform],
+		() => availableSettings(settingsGroups, catalogContext),
+		[settingsGroups, catalogContext],
 	);
 	const editors = useEditors();
 	const [nativeShortcuts] = useState(hasNativeShortcuts);
