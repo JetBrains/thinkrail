@@ -200,7 +200,10 @@ re-opened transcripts provider-valid.
     exception to "live sessions keep their model": it refuses with `SERVER_FALLBACK_NOT_USED` unless the
     chat's model declares fallback targets, refreshes both the current and the session's generation,
     and `setModel`s the refreshed model only while the chat is still on that model (one the user picked
-    meanwhile is left alone), so the chat's next request drops the field without a restart. That rebind
+    meanwhile is left alone), so the chat's next request drops the field without a restart. If the
+    refreshed model still declares fallbacks — pi ignored the override, e.g. it rejected `models.json`
+    for an unrelated schema error — it refuses with `SERVER_FALLBACK_STILL_ON` instead of reporting a
+    repair that would fail the same way and loop on the button. That rebind
     and `setSessionModel` share one per-session model-write queue, and the re-check runs inside it: pi's
     `setModel` awaits an auth check before switching, so an unserialized rebind could overwrite a model
     the user picked meanwhile. The rebind restores the chat's thinking level afterwards, because

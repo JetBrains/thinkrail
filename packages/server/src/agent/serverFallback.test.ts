@@ -222,21 +222,44 @@ describe("disableSessionServerFallback", () => {
 		}
 	});
 
-	test("keeps a model the user switched to while the fix ran", async () => {
+	test("keeps a model the user switched to while the fix ran, on any provider", async () => {
 		const runtime = await anthropicRuntime();
 		const fable = fallbackModel(runtime);
+		const sibling = runtime
+			.getModels("anthropic")
+			.find((model) => model.id !== fable.id && declaresServerFallback(model));
 		const other = runtime.getModel("other", "other-model");
-		if (!other) throw new Error("Missing fixture model");
+		if (!sibling || !other) throw new Error("Missing fixture model");
+		for (const picked of [sibling, other]) {
+			rmSync(path, { force: true });
+			await runtime.refresh({ allowNetwork: false });
+			const { sessionId } = await createSession({
+				cwd,
+				workspaceId: "ws",
+				model: toWireModel(fable),
+			});
+
+			const pending = disableSessionServerFallback(sessionId);
+			await setSessionModel(sessionId, toWireModel(picked));
+
+			expect(await pending).toMatchObject({ provider: picked.provider, id: picked.id });
+			expect(sessionContext().model).toEqual({ provider: picked.provider, modelId: picked.id });
+		}
+	});
+
+	test("refuses when pi does not apply the override, so the retry cannot loop", async () => {
+		writeFileSync(path, JSON.stringify({ providers: { broken: { models: "not-a-list" } } }));
+		const runtime = await anthropicRuntime();
+		const fable = fallbackModel(runtime);
 		const { sessionId } = await createSession({
 			cwd,
 			workspaceId: "ws",
 			model: toWireModel(fable),
 		});
 
-		const pending = disableSessionServerFallback(sessionId);
-		await setSessionModel(sessionId, toWireModel(other));
-
-		expect(await pending).toMatchObject({ provider: "other", id: "other-model" });
+		await expect(disableSessionServerFallback(sessionId)).rejects.toMatchObject({
+			code: "SERVER_FALLBACK_STILL_ON",
+		});
 	});
 
 	test("a model picked while the repair's model switch awaits auth wins", async () => {

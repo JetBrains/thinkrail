@@ -2779,6 +2779,8 @@ export async function disableSessionServerFallback(sessionId: string): Promise<W
 		const live = entry.session.model ?? model;
 		if (!sameModel(live, model)) return sessionWireModel(live, entry.generation);
 		const resolved = resolveWireModel(entry.generation.runtime, live);
+		if (declaresServerFallback(resolved))
+			throw new CodedError("SERVER_FALLBACK_STILL_ON", "pi did not apply the fallback override");
 		const thinkingLevel = entry.session.thinkingLevel;
 		await entry.session.setModel(resolved);
 		if (entry.session.thinkingLevel !== thinkingLevel)
