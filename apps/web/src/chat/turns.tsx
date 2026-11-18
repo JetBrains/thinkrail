@@ -38,7 +38,12 @@ import {
 import { CustomIcon } from "@/components/CustomIcon";
 import { parseSkillInvocation, projectRelativePath, type SkillInvocation, userText } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
-import { type AssistantFailure, errorTurnText, subscriptionLimit } from "./assistantFailure";
+import {
+	type AssistantFailure,
+	errorTurnText,
+	fallbacksRejected,
+	subscriptionLimit,
+} from "./assistantFailure";
 import { AssistantMarkdown } from "./assistantLinks";
 import { BackgroundCommandResult, SubagentResult } from "./BackgroundResult";
 import { useChatActions } from "./ChatActions";
@@ -714,8 +719,20 @@ function ErrorTurn({
 	onTryAgain?: (() => void) | undefined;
 }) {
 	const t = useT();
-	const openProviderSettings = useChatActions()?.openProviderSettings;
+	const actions = useChatActions();
+	const openProviderSettings = actions?.openProviderSettings;
 	const limit = subscriptionLimit({ text, failure });
+	const disableServerFallback =
+		onTryAgain && fallbacksRejected({ text, failure }) ? actions?.disableServerFallback : undefined;
+	const [repair, setRepair] = useState<"idle" | "pending" | "failed">("idle");
+	const runRepair = () => {
+		if (!disableServerFallback) return;
+		setRepair("pending");
+		disableServerFallback().then(
+			() => setRepair("idle"),
+			() => setRepair("failed"),
+		);
+	};
 	return (
 		<div
 			data-testid="chat-message"
@@ -741,6 +758,24 @@ function ErrorTurn({
 							{t("chat.failure.openProviderSettings")}
 						</Button>
 					) : null}
+				</div>
+			) : disableServerFallback ? (
+				<div className="flex flex-wrap items-center justify-end gap-x-16 gap-y-4">
+					{repair === "failed" ? (
+						<span role="alert" className="min-w-0 flex-1 text-feedback-error">
+							{t("chat.failure.disableFallbackFailed")}
+						</span>
+					) : null}
+					<Button
+						variant="outline"
+						size="m"
+						iconLeft={RotateCw}
+						loading={repair === "pending"}
+						data-testid="agent-disable-fallback"
+						onClick={runRepair}
+					>
+						{t("chat.failure.disableFallback")}
+					</Button>
 				</div>
 			) : onTryAgain ? (
 				<div className="flex justify-end">

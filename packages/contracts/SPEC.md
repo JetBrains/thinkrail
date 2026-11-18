@@ -39,7 +39,11 @@ the palette ranks with — kept here so host-side search can rank with the same 
   another project while the chat is already being continued — the first gesture is never silently
   joined by a different choice), `COPY_TOO_LARGE` (a Files tree folder paste with more entries than the host copies — nothing was written; the client words it), `ENTRY_CHANGED` (an entry a Files tree paste or a trash claim was acting on was replaced, moved out of the worktree or turned into a link mid-operation — the host stopped instead of following it; a paste keeps what it already wrote, a delete or a whole-file revert left the entry in place; the client words it), `TEXT_SEARCH_TIMEOUT` / `TEXT_SEARCH_FAILED` (a text search git could not
   finish in its budget, or could not run — the host's logged classifier; the client only sees the search
-  end `failed`), `RESOURCE_UNAVAILABLE`, and `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is
+  end `failed`), `SERVER_FALLBACK_NOT_USED` / `SERVER_FALLBACK_STILL_ON`
+  (`session.disableServerFallback`, v126 `SERVER_FALLBACK_PROTOCOL_VERSION`: the chat has no failed
+  request, or the failed request's model declares no Anthropic server-side fallback, so there is nothing
+  to turn off and a plain retry is the answer; or pi did not apply the written override — e.g. it
+  rejected `models.json` — so a retry would fail the same way), `RESOURCE_UNAVAILABLE`, and `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is
   `subagent.getTranscript`'s **permanent** miss, the
   signal that stops the transcript dialog's polling. A known child whose first transcript file is not
   written yet instead returns empty messages with its current status, so a live run remains pollable;
@@ -263,7 +267,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
     `AppConfig.disabledExtensions` list keys on, `tools` the names its parent factories register, and
     `settings` (`ExtensionSettingDescriptor[]`, `{ key, default: boolean }`, absent below
     `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v105) the boolean settings the extension declares. From
-    `INSTALLED_EXTENSIONS_PROTOCOL_VERSION` (v126) an entry also says its `kind` and, for an installed
+    `INSTALLED_EXTENSIONS_PROTOCOL_VERSION` (v127) an entry also says its `kind` and, for an installed
     one, its install state (§ Installed extensions).
     `ASK_DISCUSS_PROTOCOL_VERSION` (v105) is the host version that renders `ask_user_question`
     `kind: "discuss"` answers; the card withholds Discuss below it.
@@ -1450,7 +1454,7 @@ and what it loaded, never pi's own types.
 
 ## Installed extensions
 
-`INSTALLED_EXTENSIONS_PROTOCOL_VERSION` (126) gates what the host adds for extensions authored outside
+`INSTALLED_EXTENSIONS_PROTOCOL_VERSION` (127) gates what the host adds for extensions authored outside
 the repository ([[module-thinkrail-extensions]] § Installed extensions): the extra `extension.list`
 fields, the `extensions.*` methods, the `extensions.changed` channel and `packages.install`'s `installed`
 kind. Below it a client sees installed extensions as ordinary `extension.list` rows; built-in rows mean
@@ -1490,7 +1494,7 @@ what they always did.
 
 ### Community catalog (Browse)
 
-`EXTENSION_BROWSE_PROTOCOL_VERSION` (127) adds the in-app Browse read and one field:
+`EXTENSION_BROWSE_PROTOCOL_VERSION` (128) adds the in-app Browse read and one field:
 
 - **`extensions.browse { force? }` → `ExtensionBrowseResult`** (`{ generatedAt, extensions:
   ExtensionBrowseEntry[] }`): the website's `catalog.json` ([[module-thinkrail-extensions]] § Catalog) as the

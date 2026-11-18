@@ -237,6 +237,7 @@ const ChatTranscript = forwardRef<
 		readMcpOutput?: ChatActions["readMcpOutput"];
 		openMcpSettings?: ChatActions["openMcpSettings"];
 		openProviderSettings?: ChatActions["openProviderSettings"];
+		disableServerFallback?: ChatActions["disableServerFallback"];
 		findModel?: ChatActions["findModel"];
 		dockTarget?: HTMLElement | null;
 		onDockedInteractionChange?: (toolCallId: string | null) => void;
@@ -261,6 +262,7 @@ const ChatTranscript = forwardRef<
 		readMcpOutput,
 		openMcpSettings,
 		openProviderSettings,
+		disableServerFallback,
 		findModel,
 		dockTarget,
 		onDockedInteractionChange,
@@ -742,6 +744,7 @@ const ChatTranscript = forwardRef<
 			readMcpOutput,
 			openMcpSettings,
 			openProviderSettings,
+			disableServerFallback,
 			findModel,
 			continuationOf,
 			retryContinuation: (details) => {
@@ -767,6 +770,7 @@ const ChatTranscript = forwardRef<
 		[
 			cancelAutomaticReveal,
 			continuationOf,
+			disableServerFallback,
 			findModel,
 			focusComposer,
 			landingChord,

@@ -439,6 +439,20 @@ restart and toggle-reload regressions on upgrades.
   generation and on every runtime a live chat still holds. Not a workaround but a pi fact the host must
   mirror: re-check on upgrades that credential writes are still tracked per `ModelRuntime` (a process-wide
   settle would let the host call it once) and run the manager's shutdown-settle test.
+- **Rejected server-side fallback repair** — [[submodule-server-agent]] (`agent/serverFallback.ts`),
+  [[submodule-web-chat]] (`assistantFailure.ts`). Pi sends Anthropic's `fallbacks` field and the
+  `server-side-fallback-*` beta whenever a model's `compat.allowedFallbackModels` is non-empty, and offers
+  no per-request opt-out, so the host repairs a proxy that rejects it by writing the documented
+  per-model `modelOverrides.<id>.compat.allowedFallbackModels: []` (pi: "when absent or empty, callers
+  must omit fallbacks"). Re-check on upgrades: that key name and its empty-list meaning; that
+  `modelOverrides` still apply after provider config and extension registrations; that the beta header
+  is still gated on the same list; which catalogue models declare fallbacks; and that a failed request
+  still leaves an assistant message with `stopReason: "error"`, `provider` and `model` as the last
+  message (the host reads the failed model from it). The web error-signature table matches proxy and
+  gateway wording, not pi's, so pi upgrades do not touch it. **Removal gate:** pi detects or tolerates a
+  rejected `fallbacks` field itself, or exposes a session-level opt-out. Run `serverFallback.test.ts`
+  (its fake proxy asserts the field and the beta are gone after the repair) and
+  `assistantFailure.test.ts`.
 
 ## Context-budget limitations
 

@@ -667,10 +667,10 @@ selector to hide its Projects rail and pane, so onboarding has the whole window.
   to `loading` only when the welcoming host's protocol differs from the previous welcome's, so a reconnect
   to the same host keeps the rows on screen until the new list lands. Its selectors:
   `selectBuiltinExtensions` (the Built into ThinkRail group — every row of an older host, `kind: "builtin"`
-  from v126), `selectInstalledExtensions` (installed rows in host order), `selectInstalledWebHalves` (the
+  from v127), `selectInstalledExtensions` (installed rows in host order), `selectInstalledWebHalves` (the
   `{ name, url, styles? }` set the page must have loaded — switched-off ones included — `null` while unknown,
-  empty for a host older than v126), and the gates `selectSupportsInstalledExtensions` (v126) and
-  `selectSupportsExtensionBrowse` (v127).
+  empty for a host older than v127), and the gates `selectSupportsInstalledExtensions` (v127) and
+  `selectSupportsExtensionBrowse` (v128).
   **`disabledPackages: string[]`** mirrors `disabledExtensions` from the settings broadcast; the
   Extensions page uses it only to compute the next whole list for `settings.update` — what a package
   row *shows* is the catalog's `enabled` (the host's effective state, which a `packages.changed` push
@@ -952,6 +952,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   `selectMcpRead` + `McpRead`, `selectMcpWorkspaceStarting`, `McpWorkspaceProjection`, `selectSupportsMcp`,
   and the resource helper `orderMcpResources`; `selectSupportsProjectTrust` (the
   `PROJECT_TRUST_PROTOCOL_VERSION` gate for the trust summary and the pi-level resource grant);
+  `selectSupportsServerFallbackRepair` (the `SERVER_FALLBACK_PROTOCOL_VERSION` gate for the chat's
+  rejected-fallbacks repair);
   `toast` (the fire-from-anywhere helper),
   `Toast` (type), the prompt-image draft model `newPromptImagesState` + `PromptImagesState` /
   `PromptImage` / `PromptImageError` (`chat`'s `usePromptImages` shares it for dialog-local drafts), web-local frame/workspace-view/attention selectors and atomic actions, resource render-state types

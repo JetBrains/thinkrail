@@ -27,6 +27,7 @@ import {
 	type ResourceRecord,
 	resourceTallyTotal,
 	SEARCH_PROTOCOL_VERSION,
+	SERVER_FALLBACK_PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	type SessionResourceHistory,
@@ -210,7 +211,7 @@ export function selectSupportsExtensionBrowse(state: ProtocolState): boolean {
 	);
 }
 
-/** The Built into ThinkRail group: every entry an older host lists, and `kind: "builtin"` from v126. */
+/** The Built into ThinkRail group: every entry an older host lists, and `kind: "builtin"` from v127. */
 export function selectBuiltinExtensions(catalog: ExtensionCatalogRead): ExtensionCatalogRead {
 	return Array.isArray(catalog) ? catalog.filter((entry) => entry.kind !== "installed") : catalog;
 }
@@ -252,6 +253,12 @@ export function selectInstalledWebHalves(
 
 export function selectSupportsMcp(state: ProtocolState): boolean {
 	return state.protocolVersion !== null && state.protocolVersion >= MCP_PROTOCOL_VERSION;
+}
+
+export function selectSupportsServerFallbackRepair(state: ProtocolState): boolean {
+	return (
+		state.protocolVersion !== null && state.protocolVersion >= SERVER_FALLBACK_PROTOCOL_VERSION
+	);
 }
 
 export function supportsChatResources(protocolVersion: number | null): boolean {

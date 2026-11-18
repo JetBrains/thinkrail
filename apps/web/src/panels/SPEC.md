@@ -1481,7 +1481,7 @@ a project picker, the prompt hero, and the reused
   chats when their current turn ends."; there is no dynamic notice about which chats are pending.
   **Packages** is the **Install an extension or pi package** row (`packages-install`, with **Browse the pi
   package gallery** as a side). **Built into ThinkRail** is the host-registry catalog, read from the store's
-  `extensionCatalog` (`selectBuiltinExtensions`: every row of an older host, `kind: "builtin"` from v126) —
+  `extensionCatalog` (`selectBuiltinExtensions`: every row of an older host, `kind: "builtin"` from v127) —
   `transport`'s `refreshExtensionCatalog` re-lists on each mount and each welcome while the page is open, so
   an older host or a page opened while disconnected still lands its rows, and a failure shows **Retry**,
   which re-lists — rendered by
@@ -1583,7 +1583,7 @@ a project picker, the prompt hero, and the reused
   with the reason shown otherwise, and the hints show the real settings paths from the catalog. Disabling
   never unregisters a tool renderer ([[submodule-web-extensions]]), so past transcripts still render.
 
-  **Installed ThinkRail extensions** (from `INSTALLED_EXTENSIONS_PROTOCOL_VERSION`, v126) are the first rows of
+  **Installed ThinkRail extensions** (from `INSTALLED_EXTENSIONS_PROTOCOL_VERSION`, v127) are the first rows of
   the **Installed** list (`PiPackagesGroup`'s `extensionRows`: each a list row id `extension:<source>`, its
   markup and its Delete; they also keep showing, as the list alone, while `packages.list` loads or fails), from
   `selectInstalledExtensions` in host order; every extension row carries a **ThinkRail extension** tag and every
@@ -1630,7 +1630,7 @@ a project picker, the prompt hero, and the reused
   remounts the dialog (`key`) per opening.
 
   **Browse** (`ExtensionBrowse.tsx`, props-driven; `useExtensionBrowse.ts` owns the request; catalog
-  `extension-browse`) is a group shown from `EXTENSION_BROWSE_PROTOCOL_VERSION` (v127), after Installed. The
+  `extension-browse`) is a group shown from `EXTENSION_BROWSE_PROTOCOL_VERSION` (v128), after Installed. The
   host fetches the catalog (`extensions.browse`, [[submodule-server-extension-catalog]]); the browser never
   contacts thinkrail.ai. The hook reads on mount and again, from the host's cache, whenever the store catalog
   changes (so the **Installed** marks follow installs and removals); **Retry** forces a refetch; the latest read

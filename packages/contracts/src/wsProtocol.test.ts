@@ -80,6 +80,7 @@ import {
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	readToolResponseMessage,
 	SEARCH_PROTOCOL_VERSION,
+	SERVER_FALLBACK_PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
@@ -372,15 +373,15 @@ test("host search and its previews are pinned to v106", () => {
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
 });
 
-test("the community catalog is pinned to v127", () => {
-	expect(PROTOCOL_VERSION).toBe(127);
-	expect(EXTENSION_BROWSE_PROTOCOL_VERSION).toBe(127);
+test("the community catalog is pinned to v128", () => {
+	expect(PROTOCOL_VERSION).toBe(128);
+	expect(EXTENSION_BROWSE_PROTOCOL_VERSION).toBe(128);
 	expect(WS_METHODS.extensionsBrowse).toBe("extensions.browse");
 });
 
-test("installed extensions are pinned to v126", () => {
+test("installed extensions are pinned to v127", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(INSTALLED_EXTENSIONS_PROTOCOL_VERSION);
-	expect(INSTALLED_EXTENSIONS_PROTOCOL_VERSION).toBe(126);
+	expect(INSTALLED_EXTENSIONS_PROTOCOL_VERSION).toBe(127);
 	expect(WS_METHODS.extensionsRemove).toBe("extensions.remove");
 	expect(WS_METHODS.extensionsUpdate).toBe("extensions.update");
 	expect(WS_METHODS.extensionsCheckUpdates).toBe("extensions.checkUpdates");
@@ -421,6 +422,12 @@ test("the question panel height setting is pinned to v114", () => {
 test("extension editor text is pinned to v115", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION);
 	expect(EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION).toBe(115);
+});
+
+test("turning off server-side fallback is pinned to v126", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SERVER_FALLBACK_PROTOCOL_VERSION);
+	expect(SERVER_FALLBACK_PROTOCOL_VERSION).toBe(126);
+	expect(WS_METHODS.sessionDisableServerFallback).toBe("session.disableServerFallback");
 });
 
 test("continue in workspace is pinned to v110", () => {
