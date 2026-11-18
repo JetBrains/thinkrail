@@ -8,6 +8,7 @@ import {
 	rmSync,
 	writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -85,6 +86,7 @@ import {
 	requestSessionReload,
 	respondToTool,
 	sendHostMessageToSession,
+	sessionCompletionOf,
 	sessionImageSource,
 	setAgentReviewEnabledResolver,
 	setSessionCreatedPublisher,
@@ -602,11 +604,14 @@ test("agent_settled carries the final attempt's terminal metadata", async () => 
 			}),
 		}),
 	]);
+	expect(sessionCompletionOf(session.sessionId)).toMatchObject({ outcome: "failed" });
+	expect(sessionCompletionOf("never-ran")).toBeNull();
 
 	fauxA.setResponses([fauxAssistantMessage("complete")]);
 	await promptSession(session.sessionId, "again");
 	const completionId = getSessionState(session.sessionId).completion?.completionId;
 	if (!completionId) throw new Error("settled run has no completion id");
+	expect(sessionCompletionOf(session.sessionId)).toEqual({ completionId, outcome: "succeeded" });
 	expect(acknowledgeCompletion(session.sessionId, "stale")).toMatchObject({
 		acknowledged: false,
 		record: { title: "" },
@@ -1419,6 +1424,89 @@ test.each([false, true])(
 		}
 	},
 );
+
+function sessionInsightsCorePackage(): string {
+	const extensionEntry = createRequire(import.meta.url).resolve(
+		"@thinkrail/ext-session-insights/server",
+	);
+	return dirname(
+		createRequire(extensionEntry).resolve("@thinkrail/pi-session-insights/package.json"),
+	);
+}
+
+test("switching a superseding extension reloads an open chat that has the superseded package, once its turn ends, and no other chat", async () => {
+	const settingsPath = join(process.env.PI_CODING_AGENT_DIR ?? "", "settings.json");
+	let disabled = new Set<string>();
+	setDisabledExtensionsResolver(() => disabled);
+	const originalReload = AgentSession.prototype.reload;
+	const reloads = new Map<string, number>();
+	AgentSession.prototype.reload = async function (this: AgentSession, ...args) {
+		await originalReload.apply(this, args);
+		reloads.set(this.sessionId, (reloads.get(this.sessionId) ?? 0) + 1);
+	};
+	const commands = (id: string) => getSessionCommands(id).map((command) => command.name);
+	let release = () => {};
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	let started = () => {};
+	const turnStarted = new Promise<void>((resolve) => {
+		started = resolve;
+	});
+	const ids: string[] = [];
+	try {
+		const plain = await createSession({
+			cwd: tmpCwd("trpi-superseded-none-"),
+			workspaceId: "ws-superseded-none",
+			model: toWireModel(fauxA.getModel()),
+		});
+		ids.push(plain.sessionId);
+		writeFileSync(settingsPath, JSON.stringify({ packages: [sessionInsightsCorePackage()] }));
+		const installed = await createSession({
+			cwd: tmpCwd("trpi-superseded-installed-"),
+			workspaceId: "ws-superseded-installed",
+			model: toWireModel(fauxA.getModel()),
+		});
+		ids.push(installed.sessionId);
+		expect(commands(installed.sessionId)).not.toContain("insights");
+
+		fauxA.setResponses([
+			async () => {
+				started();
+				await gate;
+				return fauxAssistantMessage("GATED_TURN_DONE");
+			},
+		]);
+		const turn = promptSession(installed.sessionId, "Start the gated turn.");
+		await turnStarted;
+		disabled = new Set(["session-insights"]);
+		refreshExtensionTools();
+		await Bun.sleep(50);
+		expect(reloads.get(installed.sessionId)).toBeUndefined();
+		expect(commands(installed.sessionId)).not.toContain("insights");
+		release();
+		await turn;
+		for (let waited = 0; !reloads.has(installed.sessionId) && waited < 300; waited++)
+			await Bun.sleep(10);
+		expect(reloads.get(installed.sessionId)).toBe(1);
+		expect(commands(installed.sessionId)).toContain("insights");
+
+		disabled = new Set();
+		refreshExtensionTools();
+		for (let waited = 0; reloads.get(installed.sessionId) === 1 && waited < 300; waited++)
+			await Bun.sleep(10);
+		expect(reloads.get(installed.sessionId)).toBe(2);
+		expect(commands(installed.sessionId)).not.toContain("insights");
+		await Bun.sleep(50);
+		expect(reloads.get(plain.sessionId)).toBeUndefined();
+	} finally {
+		release();
+		AgentSession.prototype.reload = originalReload;
+		setDisabledExtensionsResolver(() => new Set());
+		rmSync(settingsPath, { force: true });
+		for (const id of ids) await removeSession(id);
+	}
+});
 
 test("repeated streaming policy changes resolve only the latest value at settlement", async () => {
 	const slow = createFauxCore({

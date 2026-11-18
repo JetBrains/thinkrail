@@ -94,6 +94,7 @@ export const CenterGroupView = memo(function CenterGroupView({
 				onRenameChat={shared.onRenameChat}
 				registerChatRename={shared.registerChatRename}
 				{...(shared.chatFirstPrompts ? { chatFirstPrompts: shared.chatFirstPrompts } : {})}
+				{...(shared.chatActions ? { chatActions: shared.chatActions } : {})}
 				canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 				renderTabAdornment={shared.renderTabAdornment}
 				worktreePath={shared.worktreePath}

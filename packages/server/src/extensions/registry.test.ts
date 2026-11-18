@@ -21,6 +21,7 @@ describe("server extension registry", () => {
 			"@thinkrail/ext-web-access/server",
 			"@thinkrail/ext-next-steps/server",
 			"@thinkrail/ext-outputs/server",
+			"@thinkrail/ext-session-insights/server",
 		]);
 		expect(new Set(specifiers).size).toBe(specifiers.length);
 		for (const entry of serverExtensions) {
@@ -34,6 +35,7 @@ describe("server extension registry", () => {
 			"web-access",
 			"next-steps",
 			"outputs",
+			"session-insights",
 		]);
 	});
 

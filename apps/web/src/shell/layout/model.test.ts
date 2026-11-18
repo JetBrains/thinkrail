@@ -47,6 +47,7 @@ import {
 import { BUILTIN_LAYOUT_PRESETS } from "./presets";
 import type {
 	LayoutCenterTab,
+	LayoutExtensionTab,
 	LayoutFileTab,
 	LayoutTerminalTab,
 	WorkspaceLayoutDocument,
@@ -224,6 +225,60 @@ describe("workspace layout model", () => {
 					docPath: "TODO.md",
 				}),
 			).toBe("Plan: Unterhaltung");
+		} finally {
+			await applyLocale("en", {});
+		}
+	});
+
+	test("an extension tab is center-only, never a preview, and opens once per extension, panel and params", () => {
+		const panel = (id: string, params: Record<string, string>): LayoutExtensionTab => ({
+			kind: "extension",
+			id,
+			name: "",
+			extension: "insights",
+			panel: "sessions",
+			titleKey: "common.retry",
+			params,
+		});
+		let document = mutation(
+			openCenterTab(baseDocument(), panel("first", { a: "1", b: "2" }), "center-a", "preview"),
+		).document;
+		document = mutation(
+			openCenterTab(document, panel("second", { b: "2", a: "1" }), "center-a", "preview"),
+		).document;
+		if (document.center.kind !== "group") throw new Error("expected one center group");
+		expect(document.center.tabs.map((tab) => tab.id)).toEqual(["first"]);
+		expect(document.center.previewTabId).toBeUndefined();
+		document = mutation(openCenterTab(document, panel("third", {}), "center-a", "keep")).document;
+		if (document.center.kind !== "group") throw new Error("expected one center group");
+		expect(document.center.tabs.map((tab) => tab.id)).toEqual(["first", "third"]);
+		expect(validateLayoutDocument(document, 6)).toEqual([]);
+		expect(
+			isLayoutUnavailable(
+				moveTabToGroup(document, panel("first", { a: "1", b: "2" }), {
+					area: "right",
+					groupId: "right-a",
+				}),
+			),
+		).toBe(true);
+	});
+
+	test("an extension tab is named by its stored name, else its title key while this build has it, else its panel id", async () => {
+		const tab = (name: string, titleKey: string): LayoutExtensionTab => ({
+			kind: "extension",
+			id: "x",
+			name,
+			extension: "insights",
+			panel: "sessions",
+			titleKey,
+			params: {},
+		});
+		await applyLocale("de", { de: { "common.retry": "Erneut versuchen" } });
+		try {
+			const t = currentTranslator();
+			expect(layoutTabName(t, tab("", "common.retry"))).toBe("Erneut versuchen");
+			expect(layoutTabName(t, tab("", "a.key.this.build.lacks"))).toBe("sessions");
+			expect(layoutTabName(t, tab("Pinned", "common.retry"))).toBe("Pinned");
 		} finally {
 			await applyLocale("en", {});
 		}

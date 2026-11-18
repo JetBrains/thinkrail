@@ -2,7 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { currentTranslator } from "@thinkrail/locales/react";
 import type { LayoutAttention } from "../../lib";
 import { collectCenterGroups, findTabLocation, isLayoutUnavailable, toolTab } from "./model";
-import { type TabAction, type TabActionContext, tabActions, tabActionTarget } from "./tabActions";
+import {
+	performTabAction,
+	type TabAction,
+	type TabActionContext,
+	tabActions,
+	tabActionTarget,
+} from "./tabActions";
 import type {
 	LayoutCenterTab,
 	LayoutTab,
@@ -286,5 +292,46 @@ describe("tabActions", () => {
 				(action) => action.id === "tab.renameChat",
 			),
 		).toBe(true);
+	});
+
+	test("a chat tab offers the actions the shell injects for its session, in the menu and the palette", () => {
+		const chat: LayoutCenterTab = { kind: "chat", id: "chat", name: "", sessionId: "s1" };
+		const other: LayoutCenterTab = { kind: "chat", id: "other", name: "", sessionId: "s2" };
+		const document = documentWith({
+			center: { kind: "group", id: "center-a", tabs: [chat, other, file("a1")] },
+		});
+		const runs: string[] = [];
+		const chatActions = {
+			s1: [{ id: "insights.session", label: "Analyze session", run: () => runs.push("s1") }],
+		};
+		const offered = (tab: LayoutTab) =>
+			actionsFor(document, tab, { canRenameChat: true, chatActions }).filter(
+				(action) => action.testId === "tab-chat-action",
+			);
+		const [analyze] = offered(chat);
+		expect(offered(chat)).toHaveLength(1);
+		expect(analyze).toMatchObject({
+			id: "tab.chatAction.insights.session",
+			section: "tab",
+			surface: "both",
+			label: "Analyze session",
+		});
+		const ids = actionsFor(document, chat, { canRenameChat: true, chatActions }).map(
+			(action) => action.id,
+		);
+		expect(ids.indexOf("tab.chatAction.insights.session")).toBe(ids.indexOf("tab.renameChat") + 1);
+		expect(offered(other)).toEqual([]);
+		expect(offered(file("a1"))).toEqual([]);
+		if (!analyze) throw new Error("no chat action");
+		performTabAction(analyze, {
+			apply: () => {},
+			select: () => {},
+			rename: () => {},
+			focusGroup: () => {},
+			hide: () => {},
+			revealTool: () => {},
+			close: () => {},
+		});
+		expect(runs).toEqual(["s1"]);
 	});
 });

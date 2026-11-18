@@ -44,6 +44,16 @@ export interface LayoutDocumentTab {
 	docPath: string;
 }
 
+export interface LayoutExtensionTab {
+	kind: "extension";
+	id: string;
+	name: string;
+	extension: string;
+	panel: string;
+	titleKey: string;
+	params: Readonly<Record<string, string>>;
+}
+
 export interface LayoutTerminalTab {
 	kind: "terminal";
 	id: string;
@@ -64,6 +74,7 @@ export type LayoutCenterTab =
 	| LayoutChangesTab
 	| LayoutChatTab
 	| LayoutDocumentTab
+	| LayoutExtensionTab
 	| LayoutTerminalTab;
 export type LayoutAuxiliaryTab = LayoutToolTab | LayoutTerminalTab;
 export type LayoutSideTab = LayoutAuxiliaryTab;

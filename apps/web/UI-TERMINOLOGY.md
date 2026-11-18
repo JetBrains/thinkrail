@@ -441,7 +441,7 @@ the per-file diff tab. `ChangesPanel` remains arrangement-agnostic and is fed it
 | Changes List Row | inline in `ChangesPanel` | `change-item` (`data-active`, `data-viewed`) | Flat changed-file row |
 | Changes Tree | `panels/ChangesTree.tsx` | file rows `change-item`, folders `change-tree-folder` | Folder tree of changed files |
 | Viewed Mark | `panels/ViewedMark.tsx` → `ViewedMark` | `change-viewed` | Check glyph on a row the review tab marked viewed |
-| Diff-Stat Badge | `panels/DiffStatBadge.tsx` | — | Per-file / per-folder `+N −M` |
+| Diff-Stat Badge | `@thinkrail/ui/diff-stat-badge` | — | Per-file / per-folder `+N −M` |
 | Empty state | inline | `changes-empty` | No changes in this scope |
 | Error state | inline | `changes-error` / `changes-retry` | Failed read + Retry |
 

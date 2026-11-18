@@ -8,8 +8,13 @@ import type {
 	PiPackagesCatalog,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { supersedingExtension } from "../extensions";
 import { refreshExtensionTools } from "./agentSessionManager";
-import { bumpPackagesRevision, setInstalledPackagesListener } from "./extensions";
+import {
+	bumpPackagesRevision,
+	disabledExtensions,
+	setInstalledPackagesListener,
+} from "./extensions";
 import { HOST_BUILTIN_EXTENSION_NAMES } from "./mcp";
 import {
 	checkPiPackageUpdates,
@@ -80,13 +85,30 @@ async function excludedExtensionPaths(): Promise<readonly string[]> {
 	return (await getPiRuntimeGeneration()).excludedSessionExtensionPaths;
 }
 
+/** Marks each installed package a ThinkRail extension that is on replaces, so its row can say so. */
+function withSupersededBy(catalog: PiPackagesCatalog): PiPackagesCatalog {
+	const disabled = disabledExtensions();
+	let marked = false;
+	const packages = catalog.packages.map((summary): PiPackageSummary => {
+		if (summary.installedPath === undefined) return summary;
+		const extension = supersedingExtension(summary.name, (name) => disabled.has(name));
+		if (!extension) return summary;
+		marked = true;
+		return {
+			...summary,
+			supersededBy: { name: extension.name, title: extension.title ?? extension.name },
+		};
+	});
+	return marked ? { ...catalog, packages } : catalog;
+}
+
 export async function piPackagesCatalog(
 	target: PiPackagesTarget,
 	disabledPackages: ReadonlySet<string>,
 	opts: { fresh?: boolean } = {},
 ): Promise<PiPackagesCatalog> {
 	if (opts.fresh) invalidatePiPackageCatalog();
-	return listPiPackageCatalog({
+	const catalog = await listPiPackageCatalog({
 		...(target.cwd ? { cwd: target.cwd } : {}),
 		agentDir: getAgentDir(),
 		projectTrusted: target.projectTrusted(),
@@ -94,6 +116,7 @@ export async function piPackagesCatalog(
 		excludedExtensionPaths: await excludedExtensionPaths(),
 		disabledPackages,
 	});
+	return withSupersededBy(catalog);
 }
 
 // `disabledPackages` is read after the install (minutes, possibly) so another client's switch flips are honoured.

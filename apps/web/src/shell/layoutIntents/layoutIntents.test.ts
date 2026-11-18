@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { LayoutAttention } from "../../lib";
 import type { LayoutTerminalTab, WorkspaceLayoutDocument } from "../layout";
 import { findTabLocation } from "../layout";
-import { placeTerminalForIntent } from "./layoutIntents";
+import { placeTerminalForIntent, toLayoutTab } from "./layoutIntents";
 
 function document(): WorkspaceLayoutDocument {
 	return {
@@ -104,5 +104,28 @@ describe("terminal intent routing", () => {
 		);
 		if ("reason" in centered) throw new Error(centered.reason);
 		expect(findTabLocation(centered.document, terminal.id)?.area).toBe("center");
+	});
+});
+
+test("an extension cache tab places as its reference only: extension, panel, title key and params", () => {
+	expect(
+		toLayoutTab({
+			kind: "extension",
+			id: "tab",
+			workspaceId: "w1",
+			name: "",
+			extension: "insights",
+			panel: "sessions",
+			titleKey: "common.retry",
+			params: { view: "table" },
+		}),
+	).toEqual({
+		kind: "extension",
+		id: "tab",
+		name: "",
+		extension: "insights",
+		panel: "sessions",
+		titleKey: "common.retry",
+		params: { view: "table" },
 	});
 });

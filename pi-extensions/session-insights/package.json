@@ -1,0 +1,61 @@
+{
+	"name": "@thinkrail/pi-session-insights",
+	"version": "0.0.0",
+	"description": "A pi extension adding an `/insights` command: findings, usage and cost from your local pi sessions — failing commands, skills never loaded, rework, cost outliers, subagent spend pi's total misses — computed on your machine without a model or the network, every figure with its origin. Also the analysis library behind ThinkRail's Session insights.",
+	"license": "Apache-2.0",
+	"type": "module",
+	"keywords": [
+		"pi-package",
+		"pi",
+		"pi-coding-agent",
+		"extension",
+		"insights",
+		"analytics",
+		"usage",
+		"cost",
+		"sessions"
+	],
+	"homepage": "https://thinkrail.ai/?utm_source=pi-package&utm_medium=referral&utm_campaign=pi-session-insights&utm_content=homepage",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/JetBrains/thinkrail.git",
+		"directory": "pi-extensions/session-insights"
+	},
+	"bugs": "https://github.com/JetBrains/thinkrail/issues",
+	"author": "ThinkRail",
+	"files": [
+		"extension.ts",
+		"src/**/*.ts",
+		"!src/**/*.test.ts",
+		"README.md",
+		"LICENSE"
+	],
+	"exports": {
+		".": "./src/index.ts",
+		"./core": "./src/core.ts",
+		"./extension": "./extension.ts",
+		"./package.json": "./package.json"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"pi": {
+		"extensions": [
+			"./extension.ts"
+		]
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"test": "bun test"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-ai": "catalog:",
+		"@earendil-works/pi-coding-agent": "catalog:",
+		"@types/bun": "catalog:",
+		"typescript": "catalog:"
+	}
+}

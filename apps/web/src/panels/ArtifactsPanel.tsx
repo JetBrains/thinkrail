@@ -3,6 +3,8 @@ import type { FileNode } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { useTreeItem } from "@thinkrail/ui/tree-item";
+import { TreeRow } from "@thinkrail/ui/tree-row";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { QuietScrollArea } from "@/components/QuietScrollArea";
@@ -47,8 +49,7 @@ import {
 import { ConfirmDialog } from "./ConfirmDialog";
 import { deleteEntry, pasteInto, renameEntry } from "./fileTreeActions";
 import { KEYBOARD_OPEN, type OpenTabOptions, openFileInTab, treeOpenFocus } from "./openTabs";
-import { TreeRow } from "./TreeRow";
-import { Tree, treeRowControlProps, useTreeItem } from "./treeNavigation";
+import { Tree, treeRowControlProps } from "./treeNavigation";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 import { useInlineRename } from "./workspaceActions";
 

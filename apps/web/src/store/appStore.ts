@@ -281,7 +281,17 @@ export interface PlanTab {
 	name: string;
 	sessionId: string;
 }
-export type EditorTab = FileTab | ChatTab | DocTab | DiffTab | ChangesTab | PlanTab;
+export interface ExtensionTab {
+	kind: "extension";
+	id: string;
+	workspaceId: string;
+	name: string;
+	extension: string;
+	panel: string;
+	titleKey: string;
+	params: Readonly<Record<string, string>>;
+}
+export type EditorTab = FileTab | ChatTab | DocTab | DiffTab | ChangesTab | PlanTab | ExtensionTab;
 
 export function chatTabId(workspaceId: string, sessionId: string): string {
 	return tupleKey("chat", workspaceId, sessionId);
@@ -527,6 +537,10 @@ export interface ChatLocationRequest {
 	sessionId: string;
 	messageIndex: number;
 	anchorText: string;
+	/** Reveal this tool call's row; the message is the fallback when the chat does not show it. */
+	toolCallId?: string;
+	/** The message is the nearest shown ancestor of the requested entry; the chat says so. */
+	approximate?: boolean;
 	navigation?: CenterNavigationStamp | null;
 }
 
@@ -1337,7 +1351,7 @@ interface AppState {
 		syncLayout?: boolean,
 		options?: LayoutOpenOptions,
 	) => void;
-	openDoc: (tab: DocTab | PlanTab) => void;
+	openDoc: (tab: DocTab | PlanTab | ExtensionTab) => void;
 	closeTab: (
 		id: string,
 		syncLayout?: boolean,

@@ -35,8 +35,10 @@ import {
 	selectCatalogModel,
 	selectChatAttended,
 	selectChatFirstPrompt,
+	selectChatPersisted,
 	selectChatTitle,
 	selectChatWorkspaceFirstPrompt,
+	selectChatWorkspaceSession,
 	selectCompletionMarkedUnread,
 	selectContextProject,
 	selectContextRepoProject,
@@ -51,6 +53,7 @@ import {
 	selectLayoutResourcePlacement,
 	selectLayoutTabPlaced,
 	selectLayoutTabPlacement,
+	selectPersistedChatTabs,
 	selectProjectIsRunning,
 	selectProjectNeedsAttention,
 	selectReadyCompletionAck,
@@ -1034,6 +1037,46 @@ describe("the first prompt of an unnamed chat", () => {
 		};
 		expect(selectChatWorkspaceFirstPrompt(state, "chat1")).toBe("Plan the trip");
 		expect(selectChatWorkspaceFirstPrompt(state, "missing")).toBeUndefined();
+	});
+
+	test("a chat has a session file once a prompt or a turn is known, never while it is empty", () => {
+		const state = {
+			tabsByWorkspace: {
+				w1: [
+					chatTab("s1", ""),
+					chatTab("s2", "Named before a message"),
+					chatTab("s3", ""),
+					chatTab("s1", ""),
+				],
+			},
+			sessions: {
+				s3: {
+					...EMPTY_RUNTIME,
+					turns: [userTurn('<review id="r" branch="b" base="c" comments="0">')],
+				},
+				s4: EMPTY_RUNTIME,
+			},
+			sessionStateByWorkspace: {
+				w1: { s1: record("s1", "Fix the login redirect"), s2: record("s2") },
+				chat1: {
+					empty: { ...record("empty"), workspaceId: "chat1" },
+					later: { ...record("later", "Plan the trip"), workspaceId: "chat1" },
+				},
+			},
+			closedChatsByWorkspace: {
+				w1: [{ sessionId: "s5", title: "", firstPrompt: "From the closed summary", closedAt: 1 }],
+			},
+		};
+		expect(selectChatPersisted(state, "w1", "s1")).toBe(true);
+		expect(selectChatPersisted(state, "w1", "s2")).toBe(false);
+		expect(selectChatPersisted(state, "w1", "s3")).toBe(true);
+		expect(selectChatPersisted(state, "w1", "s4")).toBe(false);
+		expect(selectChatPersisted(state, "w1", "s5")).toBe(true);
+		expect(selectChatPersisted(state, "w1", "unknown")).toBe(false);
+		expect(selectPersistedChatTabs(state, "w1")).toEqual(["s1", "s3"]);
+		expect(selectPersistedChatTabs(state, "missing")).toEqual([]);
+		expect(selectChatWorkspaceSession(state, "chat1")).toBe("later");
+		expect(selectChatWorkspaceSession(state, "missing")).toBeNull();
 	});
 
 	test("titles and tab labels fall back to the prompt only while the chat has no name", () => {

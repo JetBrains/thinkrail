@@ -412,6 +412,7 @@
 	"chat.transcript.inputNeeded": "需要你的输入：{{title}}",
 	"chat.transcript.latest": "最新",
 	"chat.transcript.locateFailed": "无法定位该消息，会话可能已变更",
+	"chat.transcript.locatedNearest": "已显示最接近的消息——此对话中未显示该调用本身",
 	"chat.transcript.refreshFailed": "无法刷新此会话",
 	"chat.trust.enablesLoads": "信任后会加载其{{loads}}。",
 	"chat.trust.enablesLoadsAndRuns": "信任后会加载它的 {{loads}}，并允许它的 {{runs}} 在本机运行代码。",

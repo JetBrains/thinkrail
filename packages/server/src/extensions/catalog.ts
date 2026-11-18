@@ -55,8 +55,11 @@ async function describeEntry(entry: ServerExtensionEntry): Promise<ExtensionDesc
 		title: extension.title ?? extension.name,
 		...(extension.description ? { description: extension.description } : {}),
 		tools: [...new Set(tools)],
+		hasParentExtensions:
+			extension.extensions.length > 0 || extension.sessionExtensions !== undefined,
 		hasChildExtensions: (extension.childExtensions?.length ?? 0) > 0,
 		...(settings.length > 0 ? { settings } : {}),
+		...(extension.apiVersion === undefined ? {} : { apiVersion: extension.apiVersion }),
 	};
 }
 
