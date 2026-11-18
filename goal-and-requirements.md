@@ -95,7 +95,10 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   disappears unless the user removes it — a file deleted behind their back stays
   restorable from a kept copy, and the agent is steered away from temporary folders ([[submodule-server-artifacts]], [[submodule-web-panels]]).
 - **Workbench** — a splittable layout of files, diffs, documents, chats, and terminals with movable side
-  and bottom tool panels, kept local to each window ([[submodule-web-shell-layout]]). The region that holds
+  and bottom tool panels, kept local to each window ([[submodule-web-shell-layout]]); the right tool side is
+  optional (a Left tools preset keeps every tool on the left). A contextual Peek pane on the right shows
+  the files, diffs, artifacts and previews opened from chat and from question and visualize cards, with
+  history, pin and open-in-tab, and hides itself on Esc or a new turn ([[submodule-web-shell]]). The region that holds
   the keyboard carries an accent line, a keyboard move briefly frames the region it lands in, and
   VS Code-style chords move between regions, into the chat input, Projects, Files and the terminal, from
   one keybinding table that the palette also shows ([[submodule-web-keybindings]]). The user rebinds those

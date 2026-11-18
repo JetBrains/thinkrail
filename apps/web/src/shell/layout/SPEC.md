@@ -142,7 +142,12 @@ decides how loud it reads, never a per-theme selector in the component.
 
 - **Center:** a recursive horizontal/vertical binary tree, maximum four leaves. A split replaces one leaf with equal halves. User creation/resize requires each child to remain at least 320 px wide and 180 px high. Empty leaves are valid frame slots and render the shell-provided empty surface. Remove/Merge promotes a sibling and rehomes every affected workspace's tabs deterministically.
 - **Auxiliary eligibility:** Projects, Specs, Files, and Review are singleton auxiliary-only tools owned by the frame; terminals are workspace resources and may occupy center or any auxiliary region. Hiding a singleton preserves its restore target. View/deep-link reveal restores or unfolds it in frame-local position and focuses the requested item in current workspace attention.
-- **Left/right:** ordered vertical frame stacks beside persistent full-height tool rails. Dragging an outer separator through its minimum hides that side and retains the last expanded width. Broad upper/lower body targets create adjacent groups; the rail's cluster-boundary zones offer the same commands for folded or hidden panes. Expanded bodies have a 120 px normal minimum; folded groups occupy no interior body space and retain their expanded weights, with restoration on the edge rail. An empty frame group remains available across workspaces until explicit removal and renders a named
+- **Left/right:** ordered vertical frame stacks beside full-height tool rails. The left rail is
+  persistent; the right side is optional: its rail renders only while it has an entry (a group, or an
+  unplaced tool restoring there — `canShowSide`) or a tool/terminal drag can create a pane there (the
+  hidden-side target), so an empty right side takes no width. Showing or toggling a side with nothing to
+  show is unavailable ("This side has no panes or tools to show."), and showing a side restores only a
+  tool whose restore target (else default side) is that side. Dragging an outer separator through its minimum hides that side and retains the last expanded width. Broad upper/lower body targets create adjacent groups; the rail's cluster-boundary zones offer the same commands for folded or hidden panes. Expanded bodies have a 120 px normal minimum; folded groups occupy no interior body space and retain their expanded weights, with restoration on the edge rail. An empty frame group remains available across workspaces until explicit removal and renders a named
   Add/Reveal surface rather than disappearing; a region with groups may stay hidden.
 - **Bottom:** ordered left-to-right frame groups resize on vertical separators. Folded groups retain only
   their edge-rail controls, not an interior vertical strip. A persistent bottom tool rail spans the column
@@ -330,8 +335,11 @@ focus to the tab. The strip's and rail's roving handlers ignore both keys.
 
 ## Presets and local persistence
 
-Balanced, Focus, and Review are web-owned resource-free frame definitions with a below-center bottom slot:
-Balanced and Review show it; Focus hides it. Balanced and Focus start with one center group; Review provides
+Balanced, Focus, Review, and Left tools are web-owned resource-free frame definitions with a below-center
+bottom slot: Balanced, Review, and Left tools show it; Focus hides it. **Left tools** puts every tool on the
+left — Projects; Specs, Files and Artifacts; TODO List and Review — and leaves the right side hidden and
+empty (it keeps a width for when a pane lands there), so the right edge is free for Peek; it is not the
+default, which stays Balanced. Balanced and Focus start with one center group; Review provides
 its deliberate vertical pair. Balanced's lower right group opens on the TODO List with Review beside it: on a
 fresh workspace the plan is what there is to look at, while review comments only exist once there is a diff.
 Artifacts sits with the reference tools — after Specs and Files in Balanced's upper right group and
@@ -346,7 +354,7 @@ rejects the tool, so Layout settings explains that instead of sending it. Built-
 names are display copy: `layoutPresetName` renders them through the locale catalog by preset id while the
 definition keeps its stable `name`; custom preset names are user data and render verbatim.
 
-Applying a preset creates one replacement frame, raises this surface's local side/bottom limits if required, and remaps all retained workspace views atomically. Center resources preserve visual order and distribute across destination leaves; terminals map into compatible slots; singleton tool placement ids survive where possible. Omitted tools receive deterministic restore targets, so a sparse preset cannot strand Projects or another tool. The local default preset is the target of the explicit Reset frame command; ordinary workspace switches retain the current frame. Default selection and limits persist locally, not in host settings.
+Applying a preset creates one replacement frame, raises this surface's local side/bottom limits if required, and remaps all retained workspace views atomically. Center resources preserve visual order and distribute across destination leaves; terminals map into compatible slots; singleton tool placement ids survive where possible. Omitted tools receive deterministic restore targets, so a sparse preset cannot strand Projects or another tool; a tool whose default side is the right restores to the left when the preset's right side has no groups, so an empty right side stays empty. The local default preset is the target of the explicit Reset frame command; ordinary workspace switches retain the current frame. Default selection and limits persist locally, not in host settings.
 
 `layoutState` validates and persists the normalized frame/views/attention document under browser endpoint + frontend-surface identity or the native stable adapter's profile/window scope. Reload and supported session restoration reuse it; simultaneous windows never consume each other's storage events. Persistence contains references only. Failure leaves live state intact; unknown schema falls back to the Balanced safe frame.
 

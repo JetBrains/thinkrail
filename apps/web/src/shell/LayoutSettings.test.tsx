@@ -22,11 +22,9 @@ test("the presets are one list: each row is a walk row whose primary applies and
 	);
 	const primaries = tags(/<button[^>]*data-testid="layout-preset-apply"[^>]*>/g);
 	expect(primaries).toHaveLength(BUILTIN_LAYOUT_PRESETS.length);
-	expect(primaries.map((primary) => /tabindex="(-?\d)"/.exec(primary)?.[1])).toEqual([
-		"0",
-		"-1",
-		"-1",
-	]);
+	expect(primaries.map((primary) => /tabindex="(-?\d)"/.exec(primary)?.[1])).toEqual(
+		BUILTIN_LAYOUT_PRESETS.map((_, index) => (index === 0 ? "0" : "-1")),
+	);
 	expect(primaries.every((primary) => primary.includes("data-setting-stop"))).toBe(true);
 	expect(primaries.every((primary) => primary.includes('aria-disabled="true"'))).toBe(true);
 	expect(markup).toContain("Open a workspace to apply a layout to its window.");

@@ -8,7 +8,7 @@ import {
 	DEFAULT_CONFIG,
 	type LayoutPreset,
 } from "@thinkrail/contracts";
-import { validateCustomLayoutPresets } from "./layoutPresets";
+import { normalizeStoredCustomLayoutPresets, validateCustomLayoutPresets } from "./layoutPresets";
 import {
 	getConfig,
 	noteRecentModel,
@@ -1057,6 +1057,42 @@ test("a custom preset may place every layout tool, the TODO List included", () =
 	};
 	expect(updateConfig({ customLayoutPresets: [withTools] }).customLayoutPresets).toEqual([
 		withTools,
+	]);
+});
+
+test("a captured Left tools preset, with its right side hidden and empty, round-trips", () => {
+	const leftTools: LayoutPreset = {
+		id: "left-tools-copy",
+		name: "Left tools copy",
+		center: { kind: "group", id: "center-1" },
+		left: {
+			visible: true,
+			width: 0.24,
+			groups: [
+				{ id: "left-group-1", weight: 1 / 3.25, folded: false, tools: ["projects"] },
+				{
+					id: "left-group-2",
+					weight: 1.25 / 3.25,
+					folded: false,
+					tools: ["specs", "files", "artifacts"],
+				},
+				{ id: "left-group-3", weight: 1 / 3.25, folded: false, tools: ["plan", "review"] },
+			],
+		},
+		right: { visible: false, width: 0.28, groups: [] },
+		bottom: {
+			visible: true,
+			height: 0.3,
+			alignment: "center",
+			groups: [{ id: "bottom-group-1", weight: 1, folded: false, tools: [] }],
+		},
+	};
+	expect(validateCustomLayoutPresets([leftTools])).toEqual([leftTools]);
+	expect(normalizeStoredCustomLayoutPresets(JSON.parse(JSON.stringify([leftTools])))).toEqual([
+		leftTools,
+	]);
+	expect(updateConfig({ customLayoutPresets: [leftTools] }).customLayoutPresets).toEqual([
+		leftTools,
 	]);
 });
 

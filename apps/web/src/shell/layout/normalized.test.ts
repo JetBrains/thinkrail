@@ -173,6 +173,50 @@ describe("normalized workbench layout", () => {
 		expect(captureWorkbenchPreset(first, "custom", "Custom").bottom.groups[0]?.tools).toEqual([]);
 	});
 
+	test("Left tools puts every tool in three left groups and leaves the right side hidden and empty", () => {
+		const leftTools = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "left-tools");
+		if (!leftTools) throw new Error("missing Left tools preset");
+		const frame = instantiateWorkbenchFrame(leftTools);
+
+		expect(frame.left.groups.map((group) => group.tools.map((tool) => tool.tool))).toEqual([
+			["projects"],
+			["specs", "files", "artifacts"],
+			["plan", "review"],
+		]);
+		expect(frame.left.visible).toBe(true);
+		expect(frame.right).toMatchObject({ visible: false, groups: [] });
+		expect(frame.left.width + frame.right.width).toBeLessThan(1);
+		expect(frame.toolRestoreTargets).toEqual({});
+		expect(frameMatchesPreset(frame, leftTools)).toBe(true);
+		const captured = captureWorkbenchPreset(frame, "copy", "Copy");
+		expect(captured.right).toEqual({ visible: false, width: leftTools.right.width, groups: [] });
+		expect(frameMatchesPreset(instantiateWorkbenchFrame(captured), leftTools)).toBe(true);
+		expect(BUILTIN_LAYOUT_PRESETS[0]?.id).toBe("balanced");
+	});
+
+	test("a preset with an empty right side restores its omitted tools to the left", () => {
+		const leftTools = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "left-tools");
+		const focus = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "focus");
+		if (!leftTools || !focus) throw new Error("missing built-in presets");
+		const sparse = {
+			...leftTools,
+			left: {
+				...leftTools.left,
+				groups: leftTools.left.groups.map((group) => ({
+					...group,
+					tools: group.tools.filter((tool) => tool !== "files" && tool !== "plan"),
+				})),
+			},
+		};
+		expect(instantiateWorkbenchFrame(sparse).toolRestoreTargets).toEqual({
+			files: { region: "left", index: 2 },
+			plan: { region: "left", index: 4 },
+		});
+		expect(instantiateWorkbenchFrame(focus).toolRestoreTargets).toEqual({
+			plan: { region: "right", index: 3 },
+		});
+	});
+
 	test("preset tools are reminted when any workspace resource owns their placement id", () => {
 		const projected = document();
 		if (projected.center.kind !== "split") throw new Error("expected center split");

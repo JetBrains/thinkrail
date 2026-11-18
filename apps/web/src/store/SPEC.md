@@ -233,7 +233,9 @@ roster's catalog reads ([[submodule-web-panels]]).
   closed or moved elsewhere, and never grows the stack. `peekBack` / `peekForward` / `showPeekEntry` move the
   index; `closePeekEntry` removes one (showing its predecessor; the last one drops the workspace's entry,
   which hides Peek); `closePeek` hides and unpins but keeps the stack for the next request; `pinPeek`
-  applies only while open. Auto-hide folds into the writes that cause it: `applySessionState` and
+  applies only while open. **`toggleRightSide`** is the right edge's toggle: over an open Peek it closes it
+  as `closePeek` does and enqueues `show-side` for the right in the same write, else it enqueues
+  `toggle-side`. Auto-hide folds into the writes that cause it: `applySessionState` and
   `installSessionStateSnapshot` hide an open, unpinned Peek whose current entry's opener starts a new turn
   (`startsNewTurn`: a new non-null `runId`, or `needsInput` set → clear), and `applyConfig` / the welcome's
   config drop the entries of extensions in `disabledExtensions`. `clearWorkspaceTabs` drops the slice

@@ -123,6 +123,25 @@ describe("the peek stack", () => {
 		expect(peek()).toMatchObject({ stack: [file("a", { sessionId: "s1" })], open: false });
 	});
 
+	test("toggling the right side over an open Peek closes it and shows the right side instead", () => {
+		const intents = () => useAppStore.getState().layoutIntents;
+		useAppStore.getState().toggleRightSide(WS);
+		expect(intents()).toMatchObject([{ kind: "toggle-side", workspaceId: WS, side: "right" }]);
+
+		useAppStore.setState({ layoutIntents: [] });
+		request(file("a"));
+		useAppStore.getState().toggleRightSide(WS);
+		expect(peek()).toMatchObject({ open: false, pinned: false, stack: [file("a")] });
+		expect(intents()).toMatchObject([{ kind: "show-side", workspaceId: WS, side: "right" }]);
+
+		useAppStore.setState({ layoutIntents: [] });
+		request(file("b"));
+		useAppStore.getState().pinPeek(WS, true);
+		useAppStore.getState().toggleRightSide(WS);
+		expect(peek()).toMatchObject({ open: false, pinned: false, stack: [file("a"), file("b")] });
+		expect(intents()).toMatchObject([{ kind: "show-side", workspaceId: WS, side: "right" }]);
+	});
+
 	test("a removed workspace takes its Peek along and accepts no new one", () => {
 		request(file("a"));
 		useAppStore.getState().clearWorkspaceTabs(WS);

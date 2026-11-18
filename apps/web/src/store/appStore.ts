@@ -158,6 +158,7 @@ import {
 	selectFilesTreeView,
 	selectLayoutIdentityPlacement,
 	selectLayoutResourcePlacement,
+	selectPeekOpen,
 	selectRepoProjects,
 	selectSupportsMcp,
 	selectWorkspaceById,
@@ -450,7 +451,7 @@ export type LayoutIntent =
 	  }
 	| { id: string; kind: "close-terminal"; workspaceId: string; tabKey: string }
 	| { id: string; kind: "select-terminal"; workspaceId: string; tabKey: string }
-	| { id: string; kind: "toggle-side"; workspaceId: string; side: "left" | "right" }
+	| { id: string; kind: "toggle-side" | "show-side"; workspaceId: string; side: "left" | "right" }
 	| { id: string; kind: "toggle-bottom"; workspaceId: string };
 export type LayoutIntentInput = LayoutIntent extends infer Intent
 	? Intent extends { id: string }
@@ -1654,6 +1655,7 @@ interface AppState {
 	closePeek: (workspaceId: string) => void;
 	closePeekEntry: (workspaceId: string, index: number) => void;
 	pinPeek: (workspaceId: string, pinned: boolean) => void;
+	toggleRightSide: (workspaceId: string) => void;
 	requestChangesView: (workspaceId: string, path: string | null, scope?: GitDiffScope) => void;
 	revealChanges: (workspaceId: string) => void;
 	clearChangesRequest: () => void;
@@ -5076,6 +5078,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 				peek?.open && peek.pinned !== pinned ? { ...peek, pinned } : peek,
 			),
 		),
+	toggleRightSide: (workspaceId) =>
+		set((state) => {
+			if (state.removedWorkspaceIds[workspaceId]) return {};
+			const peekOpen = selectPeekOpen(state, workspaceId);
+			return {
+				...(peekOpen ? patchPeek(state, workspaceId, hidePeek) : {}),
+				layoutIntents: appendLayoutIntent(state.layoutIntents, {
+					kind: peekOpen ? "show-side" : "toggle-side",
+					workspaceId,
+					side: "right",
+				}),
+			};
+		}),
 	requestChangesView: (workspaceId, path, scope) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};

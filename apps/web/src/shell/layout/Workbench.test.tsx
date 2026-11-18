@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { LayoutAttention } from "../../lib";
-import { toolTab } from "./model";
-import type { WorkspaceLayoutDocument } from "./types";
+import { LAYOUT_TOOLS, toolTab } from "./model";
+import type { LayoutToolId, WorkspaceLayoutDocument } from "./types";
 import { Workbench, type WorkbenchPeek } from "./Workbench";
 
 const layout: WorkspaceLayoutDocument = {
@@ -32,13 +32,13 @@ const attention: LayoutAttention = {
 
 const noop = () => {};
 
-function render(peek: WorkbenchPeek | undefined): string {
+function render(peek: WorkbenchPeek | undefined, document = layout): string {
 	return renderToStaticMarkup(
 		<TooltipProvider>
 			<Workbench
 				workspaceId="w1"
 				worktreePath="/repo"
-				document={layout}
+				document={document}
 				attention={attention}
 				maxSideGroups={6}
 				maxBottomGroups={3}
@@ -105,5 +105,29 @@ describe("the Workbench's Peek column", () => {
 		const html = render(undefined);
 		expect(html).not.toContain("layout-peek");
 		expect(html).toContain('data-panel-id="layout-right"');
+	});
+});
+
+describe("the optional right rail", () => {
+	const allLeft = (tools: readonly LayoutToolId[]): WorkspaceLayoutDocument => ({
+		...layout,
+		left: {
+			...layout.left,
+			groups: [{ id: "left", weight: 1, folded: false, tabs: tools.map((tool) => toolTab(tool)) }],
+		},
+		right: { visible: false, width: 0.28, groups: [] },
+	});
+
+	test("is not rendered while the right side has no pane and no tool restores there", () => {
+		const html = render(undefined, allLeft(LAYOUT_TOOLS));
+		expect(html).not.toContain('data-testid="right-layout-rail"');
+		expect(html).toContain('data-testid="left-layout-rail"');
+		expect(html).not.toContain('data-panel-id="layout-right"');
+	});
+
+	test("shows a tool that restores to the right as its one unplaced entry", () => {
+		const html = render(undefined, allLeft(LAYOUT_TOOLS.filter((tool) => tool !== "files")));
+		expect(html).toContain('data-testid="right-layout-rail"');
+		expect(html).toContain('data-testid="tool-rail-files"');
 	});
 });

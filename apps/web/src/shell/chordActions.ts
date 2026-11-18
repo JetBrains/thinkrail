@@ -1,7 +1,8 @@
 import { FOCUS_GROUP_BINDINGS, type KeybindingId } from "../keybindings";
 import { openChatInTab } from "../panels/openChat";
 import { SETTING_ATTR } from "../settingsKit";
-import { selectChatAttended, selectHistoryTarget, useAppStore } from "../store";
+import { selectChatAttended, selectHistoryTarget, selectPeekOpen, useAppStore } from "../store";
+import { leavePeek } from "./peekControl";
 import {
 	focusCenterRegion,
 	focusPreviousRegion,
@@ -29,7 +30,9 @@ export function toggleLeftSide(toggleProjectsHome: () => void): void {
 export function toggleRightSide(): void {
 	const state = useAppStore.getState();
 	const workspaceId = state.activeWorkspaceId;
-	if (workspaceId) state.enqueueLayoutIntent({ kind: "toggle-side", workspaceId, side: "right" });
+	if (!workspaceId) return;
+	if (selectPeekOpen(state, workspaceId)) leavePeek();
+	state.toggleRightSide(workspaceId);
 }
 
 export function toggleBottomPanel(): void {

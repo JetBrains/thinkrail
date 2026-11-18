@@ -1189,7 +1189,7 @@ export function Workbench({
 					{workbenchColumns}
 				</div>
 				{peekOpen ? null : (
-					<AuxiliaryRegionRail region="right" shared={shared} attention={attention} />
+					<AuxiliaryRegionRail region="right" shared={shared} attention={attention} optional />
 				)}
 			</div>
 			<DragOverlay dropAnimation={null}>

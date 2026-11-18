@@ -206,7 +206,8 @@ animates to.
 `peek.spec.ts` pins Peek on seeded chats: a tool file link, an assistant link, a questionnaire preview's
 frame action (the option pane then following the cursor without growing the stack) and a visualize card's
 action and links open it instead of a tab; Back/Forward, re-peeking selecting, Open in tab promoting to a
-kept tab, the right tool side folding and restoring, the width surviving a reload, a click dispatched over a
+kept tab, the right tool side folding and restoring, `Mod+J` closing it (pinned too) for the right tools
+with its stack kept, the width surviving a reload, a click dispatched over a
 focused composer leaving it focused, and Esc closing it after the composer's own Esc but never while
 pinned. `tool-file-links.spec.ts` and `keyboard-chat.spec.ts` assert Peek where they asserted the preview
 tab, by user decision.

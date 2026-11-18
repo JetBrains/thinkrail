@@ -1028,6 +1028,32 @@ test("the local default preset drives an explicit frame reset", async ({ page })
 	await expect(layoutPreset(page, "Review")).toHaveAttribute("data-default", "true");
 });
 
+test("the Left tools preset puts every tool on the left, and the right rail appears only for a tool drag", async ({
+	page,
+}) => {
+	await openDefaultWorkbench(page);
+	await openSettingsSection(page, "layout");
+	await layoutPreset(page, "Left tools").getByTestId("layout-preset-apply").click();
+	await page.getByTestId("layout-apply-confirm").click();
+	await closeSettings(page);
+	await expect(page.getByRole("heading", { name: "Layout" })).toBeHidden();
+
+	await expect(sideGroups(page, "left")).toHaveCount(3);
+	await expect(sideGroups(page, "right")).toHaveCount(0);
+	await expect(page.getByTestId("right-layout-rail")).toHaveCount(0);
+	await pressPlatformShortcut(page, "j");
+	await expect(page.getByTestId("right-stack")).toHaveCount(0);
+	await expect(page.getByTestId("right-layout-rail")).toHaveCount(0);
+
+	const files = page.getByTestId("left-layout-rail").getByTestId("tool-rail-files");
+	const target = page.locator('[data-drop-label="Create right group in hidden side"]');
+	await dragTabToTarget(page, files, target);
+	await expect(sideGroups(page, "right")).toHaveCount(1);
+	await expect(sideGroups(page, "right")).toHaveAttribute("data-tools", "files");
+	await expect(page.getByTestId("right-layout-rail")).toBeVisible();
+	await expect(sideGroups(page, "left")).toHaveCount(3);
+});
+
 test("custom presets synchronize while defaults and group limits remain window-local", async ({
 	page,
 	context,

@@ -105,12 +105,25 @@ export const BUILTIN_LAYOUT_PRESETS: readonly LayoutPreset[] = [
 		]),
 		bottom: bottom(true, [{ id: "review-bottom", tools: [] }]),
 	},
+	{
+		id: "left-tools",
+		name: "Left tools",
+		center: group("left-tools-primary"),
+		left: side(true, 0.24, [
+			{ id: "left-tools-projects", tools: ["projects"] },
+			{ id: "left-tools-reference", tools: ["specs", "files", "artifacts"], weight: 1.25 },
+			{ id: "left-tools-work", tools: ["plan", "review"] },
+		]),
+		right: side(false, 0.28, []),
+		bottom: bottom(true, [{ id: "left-tools-bottom", tools: [] }]),
+	},
 ] as const;
 
 const BUILTIN_PRESET_NAME_KEYS: Readonly<Record<string, MessageKey>> = {
 	balanced: "workbench.preset.balanced",
 	focus: "workbench.preset.focus",
 	review: "workbench.preset.review",
+	"left-tools": "workbench.preset.leftTools",
 };
 
 export function layoutPresetName(t: Translator, preset: LayoutPreset): string {
@@ -146,14 +159,9 @@ export function resolveLayoutPreset(
 	return resolved;
 }
 
-function defaultRestoreTarget(tool: LayoutToolId) {
+function presetRestoreSide(preset: LayoutPreset, tool: LayoutToolId) {
 	const side = LAYOUT_TOOL_DEFAULT_SIDES[tool];
-	return {
-		region: side,
-		index: LAYOUT_TOOLS.filter(
-			(candidate) => LAYOUT_TOOL_DEFAULT_SIDES[candidate] === side,
-		).indexOf(tool),
-	};
+	return side === "right" && preset.right.groups.length === 0 ? "left" : side;
 }
 
 function restoreTargetsForPreset(preset: LayoutPreset): WorkbenchFrame["toolRestoreTargets"] {
@@ -163,10 +171,13 @@ function restoreTargetsForPreset(preset: LayoutPreset): WorkbenchFrame["toolRest
 		),
 	);
 	return Object.fromEntries(
-		LAYOUT_TOOLS.filter((tool) => !placed.has(tool)).map((tool) => [
-			tool,
-			defaultRestoreTarget(tool),
-		]),
+		LAYOUT_TOOLS.filter((tool) => !placed.has(tool)).map((tool) => {
+			const region = presetRestoreSide(preset, tool);
+			const index = LAYOUT_TOOLS.filter(
+				(candidate) => presetRestoreSide(preset, candidate) === region,
+			).indexOf(tool);
+			return [tool, { region, index }];
+		}),
 	);
 }
 

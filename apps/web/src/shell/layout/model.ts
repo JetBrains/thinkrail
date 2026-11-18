@@ -1033,33 +1033,25 @@ export function showSide(
 		const selectedId = attention ? readLayoutSelection(attention, group.id) : undefined;
 		const tab = group.tabs.find((candidate) => candidate.id === selectedId) ?? group.tabs[0];
 		if (!tab) {
-			const restore =
-				TOOL_RESTORE_ORDER.find(
-					(candidate) =>
-						document.toolRestoreTargets[candidate]?.region === side &&
-						!findPlacedResource(document, toolTab(candidate)),
-				) ??
-				TOOL_RESTORE_ORDER.find(
-					(candidate) =>
-						LAYOUT_TOOL_DEFAULT_SIDES[candidate] === side &&
-						!findPlacedResource(document, toolTab(candidate)),
-				);
+			const restore = restorableSideTool(document, side);
 			if (restore) return revealTool(shown, restore, maxSideGroups);
 		}
 		return focusUnfoldedGroup(shown, side, group, attention);
 	}
-	const tool =
-		TOOL_RESTORE_ORDER.find(
-			(candidate) =>
-				document.toolRestoreTargets[candidate]?.region === side &&
-				!findPlacedResource(document, toolTab(candidate)),
-		) ??
-		TOOL_RESTORE_ORDER.find(
-			(candidate) =>
-				LAYOUT_TOOL_DEFAULT_SIDES[candidate] === side &&
-				!findPlacedResource(document, toolTab(candidate)),
-		);
-	return tool ? revealTool(document, tool, maxSideGroups) : { document };
+	const tool = restorableSideTool(document, side);
+	return tool
+		? revealTool(document, tool, maxSideGroups)
+		: { reason: t("workbench.layout.sideEmpty") };
+}
+
+function restorableSideTool(
+	document: WorkspaceLayoutDocument,
+	side: LayoutSide,
+): LayoutToolId | undefined {
+	const candidates = unplacedToolsForRegion(document, side);
+	return (
+		candidates.find((tool) => document.toolRestoreTargets[tool]?.region === side) ?? candidates[0]
+	);
 }
 
 export function revealPlacedTab(

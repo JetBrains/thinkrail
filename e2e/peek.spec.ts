@@ -3,7 +3,12 @@ import { dirname, join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
-import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
+import {
+	enterDefaultWorkspace,
+	openFixtureProject,
+	openPersistedChat,
+	pressPlatformShortcut,
+} from "./fixtures/app";
 import { seedQuestionnaire } from "./fixtures/ask";
 import { clickTranscriptControl, waitForScrollStability } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
@@ -126,6 +131,33 @@ test("a tool file link opens Peek beside the chat, which folds the right tool si
 	await expect(rightStack).toBeVisible();
 	await expect(page.getByTestId("right-layout-rail")).toBeVisible();
 	await expect.poll(() => width(rightStack)).toBeCloseTo(rightWidth, 0);
+});
+
+test("Mod+J over an open Peek closes it and shows the right tools, pinned or not, keeping the stack", async ({
+	page,
+}) => {
+	await openReadChat(page);
+	const rightStack = page.getByTestId("right-stack");
+	await clickTranscriptControl(markdownLink(page, "the readme"));
+	await expect(crumbs(page)).toHaveText(["README.md"]);
+	await expect(rightStack).toHaveCount(0);
+
+	await pressPlatformShortcut(page, "j");
+	await expect(openPeek(page)).toHaveCount(0);
+	await expect(rightStack).toBeVisible();
+	await expect(page.getByTestId("right-layout-rail")).toBeVisible();
+	await pressPlatformShortcut(page, "j");
+	await expect(rightStack).toHaveCount(0);
+
+	await clickTranscriptControl(markdownLink(page, "the spec"));
+	await expect(crumbs(page)).toHaveText(["README.md", "SPEC.md"]);
+	const pin = openPeek(page).getByTestId("peek-pin");
+	await pin.click();
+	await expect(pin).toHaveAttribute("aria-pressed", "true");
+	await pressPlatformShortcut(page, "j");
+	await expect(openPeek(page)).toHaveCount(0);
+	await expect(rightStack).toBeVisible();
+	await expect(page.locator('[data-region-kind="peek"]:focus-within')).toHaveCount(0);
 });
 
 test("Peek keeps a back-stack, and Open in tab promotes the shown entry to a kept center tab", async ({

@@ -209,12 +209,14 @@ export function AuxiliaryRegionRail({
 	attention,
 	trailing,
 	footer,
+	optional = false,
 }: {
 	region: LayoutAuxiliaryRegion;
 	shared: SharedGroupProps;
 	attention: LayoutAttention;
 	trailing?: ReactNode;
 	footer?: readonly AuxiliaryRailFooterItem[] | undefined;
+	optional?: boolean;
 }) {
 	const t = useT();
 	const keys = useLocalKeys("rails", LOCAL_KEY_DEFAULTS.rails);
@@ -248,6 +250,7 @@ export function AuxiliaryRegionRail({
 		shared.draggingTab &&
 		(shared.draggingTab.kind === "tool" || shared.draggingTab.kind === "terminal") &&
 		canCreateAuxiliaryGroup(shared.document, region, shared.draggingTab, shared.maxSideGroups);
+	if (optional && entries.length === 0 && !hiddenSideDrop) return null;
 	const limit = region === "bottom" ? shared.maxBottomGroups : shared.maxSideGroups;
 	const soleGroupIndex = draggedAuxiliary
 		? groups.findIndex(

@@ -16,6 +16,7 @@ import {
 	hideBottom,
 	hideSide,
 	isLayoutUnavailable,
+	LAYOUT_TOOLS,
 	type LayoutOperationResult,
 	layoutTabName,
 	moveTabToGroup,
@@ -653,6 +654,34 @@ describe("workspace layout model", () => {
 
 		const placedAgain = mutation(revealTool(document, "files", 6)).document;
 		expect(unplacedToolsForRegion(placedAgain, "right")).not.toContain("files");
+	});
+
+	test("an empty side shows only a tool that restores there, and is otherwise unavailable", () => {
+		const allLeft: WorkspaceLayoutDocument = {
+			...baseDocument(),
+			left: {
+				visible: true,
+				width: 0.24,
+				groups: [
+					{
+						id: "left-a",
+						weight: 1,
+						folded: false,
+						tabs: LAYOUT_TOOLS.map((tool) => toolTab(tool)),
+					},
+				],
+			},
+			right: { visible: false, width: 0.28, groups: [] },
+		};
+		expect(isLayoutUnavailable(showSide(allLeft, "right", 6))).toBe(true);
+		const removed = closeLayoutTab(allLeft, "tool:files").document;
+		expect(canShowSide(removed, "right")).toBe(false);
+		expect(isLayoutUnavailable(showSide(removed, "right", 6))).toBe(true);
+
+		const unrecorded = { ...removed, toolRestoreTargets: {} };
+		expect(canShowSide(unrecorded, "right")).toBe(true);
+		const shown = mutation(showSide(unrecorded, "right", 6)).document;
+		expect(findTabLocation(shown, "tool:files")?.area).toBe("right");
 	});
 
 	test("records singleton restore targets and reveals closed tools unfolded in place", () => {

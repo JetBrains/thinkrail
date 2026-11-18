@@ -2,6 +2,7 @@ import {
 	RiAddLine as Plus,
 	RiDashboardLine,
 	RiFocusLine,
+	RiLayoutLeftLine,
 	RiLayoutLine,
 	RiLayoutRightLine,
 } from "@remixicon/react";
@@ -71,12 +72,14 @@ const PRESET_DESCRIPTIONS: Readonly<Record<string, MessageKey>> = {
 	balanced: "workbench.layoutSettings.balancedDescription",
 	focus: "workbench.layoutSettings.focusDescription",
 	review: "workbench.layoutSettings.reviewDescription",
+	"left-tools": "workbench.layoutSettings.leftToolsDescription",
 };
 
 const PRESET_ICONS: Record<string, typeof RiDashboardLine> = {
 	balanced: RiDashboardLine,
 	focus: RiFocusLine,
 	review: RiLayoutRightLine,
+	"left-tools": RiLayoutLeftLine,
 };
 
 const NEWER_HOST_TOOLS: readonly { tool: LayoutToolId; since: number; message: MessageKey }[] = [

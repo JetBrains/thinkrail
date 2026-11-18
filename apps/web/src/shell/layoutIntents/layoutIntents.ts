@@ -465,7 +465,9 @@ export function useLayoutIntentProcessing(
 				break;
 			}
 			case "toggle-side":
+			case "show-side":
 				if (
+					layoutIntent.kind === "toggle-side" &&
 					document[layoutIntent.side].visible &&
 					document[layoutIntent.side].groups.some((group) => !group.folded)
 				) {
