@@ -57,7 +57,9 @@ export function parseAgentDefinition(
 	if (!name || !description || !systemPrompt) return undefined;
 
 	const thinking = fields.get("thinking");
-	const maxTurns = Number.parseInt(fields.get("max_turns") ?? "", 10);
+	const rawMaxTurns = fields.get("max_turns");
+	const maxTurns =
+		rawMaxTurns !== undefined && /^\d+$/.test(rawMaxTurns) ? Number(rawMaxTurns) : Number.NaN;
 	const tools = fields.get("tools");
 	const skills = fields.get("skills");
 	const model = fields.get("model");
@@ -69,7 +71,7 @@ export function parseAgentDefinition(
 		...(tools !== undefined ? { tools: parseNameList(tools) } : {}),
 		...(model !== undefined ? { model } : {}),
 		...(thinking !== undefined && isThinkingLevel(thinking) ? { thinking } : {}),
-		...(Number.isFinite(maxTurns) && maxTurns > 0 ? { maxTurns } : {}),
+		...(Number.isSafeInteger(maxTurns) && maxTurns > 0 ? { maxTurns } : {}),
 		...(fields.get("inherit_project_context") === "true" ? { inheritProjectContext: true } : {}),
 		...(skills !== undefined ? { skills: parseNameList(skills) } : {}),
 		...(fields.get("extensions") === "true" ? { extensions: true } : {}),

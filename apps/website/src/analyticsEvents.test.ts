@@ -40,6 +40,12 @@ const stableDesktopAliases = {
 			architecture: "arm64",
 			artifact: "tar.gz",
 		},
+	"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-darwin-x64.dmg":
+		{
+			platform: "macos",
+			architecture: "x64",
+			artifact: "dmg",
+		},
 } as const;
 
 type Capture = <EventName extends keyof WebsiteAnalyticsEventProperties>(
@@ -173,7 +179,7 @@ describe("stable desktop artifacts", () => {
 	});
 
 	test.each([
-		"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-darwin-x64.dmg",
+		"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-darwin-unknown.dmg",
 		"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-linux-x64.tar.gz?source=test",
 		"https://github.com/JetBrains/thinkrail/releases/download/v1/thinkrail-desktop-windows-x64.zip",
 		"/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-windows-x64.zip",
@@ -379,30 +385,32 @@ describe("install command copies and link shares", () => {
 });
 
 describe("analytics event initialization", () => {
-	test("a desktop click produces exactly the CTA and download events without a bridge", () => {
-		const url = Object.keys(stableDesktopAliases)[0];
-		expect(url).toBeDefined();
-		expect(desktopClickEvents("landing", "hero", url as string)).toEqual([
-			{
-				event: "install_cta_clicked",
-				properties: {
-					content_key: "landing",
-					cta_location: "hero",
-					install_method: "desktop",
+	test.each(["arm64", "x64"] as const)(
+		"a macOS %s click produces exactly the CTA and download events without a bridge",
+		(architecture) => {
+			const url = `https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-darwin-${architecture}.dmg`;
+			expect(desktopClickEvents("landing", "hero", url)).toEqual([
+				{
+					event: "install_cta_clicked",
+					properties: {
+						content_key: "landing",
+						cta_location: "hero",
+						install_method: "desktop",
+					},
 				},
-			},
-			{
-				event: "download_started",
-				properties: {
-					content_key: "landing",
-					cta_location: "hero",
-					platform: "macos",
-					architecture: "arm64",
-					artifact: "dmg",
+				{
+					event: "download_started",
+					properties: {
+						content_key: "landing",
+						cta_location: "hero",
+						platform: "macos",
+						architecture,
+						artifact: "dmg",
+					},
 				},
-			},
-		]);
-	});
+			]);
+		},
+	);
 
 	test("attributes a download from the header install panel to the header", () => {
 		const document = new FakeDocument();

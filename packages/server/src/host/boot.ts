@@ -1,10 +1,10 @@
 import { findFreePort } from "@thinkrail/shared/freePort";
 import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
 import { reportError } from "../analytics";
-import { initializeJbcentralRuntime } from "../auth";
 import { applyHostEnvironment } from "../environment";
 import { initLogging, logger } from "../log";
 import { installCrashLog } from "./crashLog";
+import { initializeHostRuntime } from "./hostRuntime";
 import { type CreateServerOptions, createServer, type RunningServer } from "./server";
 
 export interface BootHostOptions {
@@ -68,7 +68,7 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 	installCrashLog(options.appVersion);
 	await shellEnv;
 	applyHostEnvironment();
-	await initializeJbcentralRuntime();
+	await initializeHostRuntime();
 
 	const requested = options.port;
 	const port =

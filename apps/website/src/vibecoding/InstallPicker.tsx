@@ -1,6 +1,7 @@
 import { Download, Send } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, useEffect, useId, useState } from "react";
 import { installShareUrl, isMobileDevice, shareInstallLink } from "../installLinkShare";
+import { type CpuArchitecture, detectCpuArchitecture } from "../installPlatform";
 import { detectInstallPlatform, type InstallPlatform, installPlatforms } from "./desktopDownloads";
 
 export const shareAnchor = "quick-start";
@@ -9,6 +10,31 @@ export function useDetectedInstallPlatform(): InstallPlatform | null | undefined
 	const [platform, setPlatform] = useState<InstallPlatform | null>();
 	useEffect(() => setPlatform(detectInstallPlatform(navigator) ?? null), []);
 	return platform;
+}
+
+export function useDetectedCpuArchitecture(): CpuArchitecture | undefined {
+	const [architecture, setArchitecture] = useState<CpuArchitecture>();
+	useEffect(() => {
+		const nav: Navigator & {
+			userAgentData?: {
+				getHighEntropyValues?: (hints: string[]) => Promise<{ architecture?: string }>;
+			};
+		} = navigator;
+		const hints = { platform: nav.platform, userAgent: nav.userAgent };
+		setArchitecture(detectCpuArchitecture(hints));
+		let current = true;
+		void nav.userAgentData?.getHighEntropyValues?.(["architecture"]).then(
+			(data) => {
+				const reported = detectCpuArchitecture({ ...hints, architecture: data?.architecture });
+				if (current && reported) setArchitecture(reported);
+			},
+			() => undefined,
+		);
+		return () => {
+			current = false;
+		};
+	}, []);
+	return architecture;
 }
 
 export function useIsMobileDevice(): boolean {
@@ -172,7 +198,9 @@ export function InstallPicker() {
 							<p className="text-[11px] leading-4 text-text-muted">{option.desktop.detail}</p>
 							<div
 								className={
-									option.id === "linux" ? "grid grid-cols-2 gap-2 self-start" : "flex self-start"
+									option.desktop.downloads.length > 1
+										? "grid grid-cols-2 gap-2 self-start"
+										: "flex self-start"
 								}
 							>
 								{option.desktop.downloads.map((download) => (
@@ -180,7 +208,7 @@ export function InstallPicker() {
 										key={download.href}
 										href={download.href}
 										ariaLabel={`${download.label} for ${option.label}`}
-										className={option.id === "linux" ? "min-w-24" : ""}
+										className={option.desktop.downloads.length > 1 ? "min-w-24" : ""}
 									>
 										{download.label}
 									</CompactDownloadAction>

@@ -21,6 +21,7 @@ export {
 	piDeclarationIdentity,
 	piPackageIdentity,
 	piPackageSourceKind,
+	piResourcePathKey,
 	settingsBaseDir,
 } from "./identity";
 export {

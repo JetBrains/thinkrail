@@ -5,11 +5,23 @@ const release = "https://github.com/JetBrains/thinkrail/releases/latest/download
 
 describe("heroDownloadTarget", () => {
 	test("downloads the Apple Silicon disk image on macOS", () => {
-		expect(heroDownloadTarget("macos", "x64")).toEqual({
+		expect(heroDownloadTarget("macos", "arm64")).toEqual({
 			label: "Download for Mac",
 			href: `${release}/thinkrail-desktop-darwin-arm64.dmg`,
 			ariaLabel: "Download for Mac: Apple Silicon (.dmg)",
 		});
+	});
+
+	test("downloads the Intel disk image when macOS reports an x64 CPU", () => {
+		expect(heroDownloadTarget("macos", "x64")).toEqual({
+			label: "Download for Mac",
+			href: `${release}/thinkrail-desktop-darwin-x64.dmg`,
+			ariaLabel: "Download for Mac: Intel (.dmg)",
+		});
+	});
+
+	test("keeps the Apple Silicon fallback when the macOS CPU is unknown", () => {
+		expect(heroDownloadTarget("macos", undefined)).toEqual(heroDownloadTarget("macos", "arm64"));
 	});
 
 	test("downloads the Windows zip", () => {

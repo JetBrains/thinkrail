@@ -56,6 +56,12 @@ export type DesktopClickEvents = readonly [
 ];
 
 const stableDesktopArtifacts = {
+	"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-darwin-x64.dmg":
+		{
+			platform: "macos",
+			architecture: "x64",
+			artifact: "dmg",
+		},
 	"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-darwin-arm64.dmg":
 		{
 			platform: "macos",

@@ -80,10 +80,52 @@ re-opened transcripts provider-valid.
     configuration, while an add/remove/replace can never drop process-local provider registrations. The
     initializer must be configured before the first generation and runs for every candidate. The path is the
     only artifact fact this module receives;
-    it never reads, parses, hashes, snapshots, logs, copies, or serves the file. Initializer/extension/loader/
-    provider failures discard the candidate and collapse to a closed `load-failed` outcome; raw diagnostics
+    it never reads, parses, hashes, snapshots, logs, copies, or serves the file. Initializer/opaque-extension/
+    loader/provider failures discard the candidate and collapse to a closed `load-failed` outcome; raw diagnostics
     never reach `pi.extensionUi`, the wire, logs, analytics, persistence, or snapshots. Auth owns file watching,
     coalescing, and stale-candidate rejection; agent only prepares and activates a generation.
+
+    Only after that strict pass succeeds (and its attribution is frozen) does the candidate run the
+    **user-extension pass** (#1351, the rest of #365), the step pi's CLI performs inside
+    `createAgentSessionServices` before it resolves a model: without it, extension providers reached the
+    catalog only when a chat's session bound, after that chat's model had been chosen, so `model.list`,
+    new chats, restores and `provider.status` missed them until then and again after every restart. The pass
+    resolves the user-scope extension set through pi's package manager on the `enabled` view with
+    `onMissing → skip` (project trust off: a pre-session catalog has no project), applies the **Central
+    exclusion** below, loads the rest through a `none`-view loader (`noExtensions` + those explicit paths, so
+    it can neither install nor load a switched-off package), applies their queued provider, native-provider
+    and virtual-model registrations to the candidate runtime and, when any applied, awaits pi's offline
+    `refresh({ allowNetwork: false })` as `createAgentSessionServices` does (skipped otherwise: the strict
+    pass's services call has just run it). Ids it registered are `extensionProviderIds`.
+    Unlike the strict pass it never fails a candidate: a failed load or a rejected registration skips only
+    that item, and the pass, refresh included, is bounded by 10 s: a load still running then is abandoned
+    and nothing it queued is applied, so a factory that hangs asynchronously cannot hold boot or a Central
+    rebuild (a late completion only fills the abandoned loader's queue), and a refresh still running is no
+    longer awaited (it only settles the runtime's snapshot). Its diagnostics are closed counts: no extension
+    path, load error text or per-extension error object is logged or reported. The one error object logged
+    is a throw out of pi's resolve or the loader's reload (pi collects per-extension failures instead): a
+    `warn` through `logger("agent")`, with type/message/stack in the local support log and only a
+    classifier in the analytics report the logged-error observer files. A chat's own load later
+    re-registers over the same runtime, which pi merges. Accepted gaps: a factory that blocks
+    synchronously or crashes the process now blocks or kills boot — the pass runs in-process like a chat's
+    load, under the accepted lack of crash isolation (`AGENTS.md`, "Engine and architecture");
+    project-local extensions are never loaded by the pass, so they reach the runtime only through a chat's
+    load, as before, and never join `extensionProviderIds` (`provider.status` does not list a provider only
+    they register); a user package installed after preparation reaches the runtime only through a chat's
+    load until the next generation's pass registers it; a package switched off after preparation keeps its
+    registrations until then.
+
+    **Central exclusion** (invariant). The generation's session-exclusion paths — the Central artifact
+    path, which auth configures before the first generation — are dropped **before anything loads or
+    lists** by every host resolve of user extensions: this pass (which also drops the generation's
+    additional, opaque paths), the chat session loader (`buildResourceLoader`, under `extensions`) and the
+    Settings catalog ([[submodule-server-agent-packages]]). Paths compare by pi's own resource identity,
+    `piResourcePathKey` (a port of pi's private `getResourcePathKey`: synthetic paths as-is, files by
+    realpath — else as given — case-folded on Windows), computed on both sides at each resolve, so a
+    symlinked `~/.pi` under a `PI_CODING_AGENT_DIR` that names its target, a differently-cased Windows path,
+    or an artifact that appears after the loader was built cannot slip through. Hence the artifact never
+    runs twice, nor as a user extension when the CLI is absent/unsupported or boot fell back to a plain
+    generation, and none of its provider ids or names can reach `extensionProviderIds` or `provider.status`.
 
     `getSessionRuntimeGeneration` exposes a live session's retained generation for synchronous host metadata
     reads. Activation changes the current pointer for pre-session reads and future session creation; it never
@@ -610,8 +652,8 @@ re-opened transcripts provider-valid.
     `colors.accent` is an RGB value) and report pi's detected light/dark appearance. No honest plain
     answer exists for any of them. They cost nothing while an extension colours *through* the theme —
     every such path returns plain text — and only bite one that reads a mode or colour and then emits ANSI
-    on its own into text the bridge does not carry, such as a `pi.setSessionName` title (the bridge
-    strips displayed text, below). Its colour table exists **only** to satisfy the constructor signature:
+    on its own into text the bridge does not carry, such as a `pi.setSessionName` title (those names are
+    stripped where the host reads them; see Session titles). Its colour table exists **only** to satisfy the constructor signature:
     every method that would turn a colour into an escape is overridden, and the members that still answer
     for the terminal read the constructor's *mode* or pi's terminal guesses, never an escape. A pi
     bump that changes the palette breaks the build as a *notice that the theme surface moved*, not as a
@@ -628,8 +670,7 @@ re-opened transcripts provider-valid.
     embedder of pi-as-a-library hits this; an upstream fix would not reach us until a deliberate pi bump.
     **Every extension string the bridge publishes for display is plain text** (#890): stripping, not
     rendering colours, keeps one look with `plainTextTheme`. Each member strips its own fields, not
-    `publish`, so the stored dialog snapshot stays plain. A complete sequence goes; a broken one (no
-    final byte or terminator) loses only its control byte. **A non-string is absent text** (#1356): pi
+    `publish`, so the stored dialog snapshot stays plain. **A non-string is absent text** (#1356): pi
     loads extensions untyped, a throw outside pi's handlers kills the host, and the page trusts the wire
     contract's `string` (a non-string title once took the whole page down). So the bridge never throws
     on one and never forwards one: a title or message becomes `""`, a status clears, a widget line is
@@ -637,8 +678,8 @@ re-opened transcripts provider-valid.
     skipped. A `select` left with no string option resolves `undefined` without a dialog, `[]` included:
     a dialog with nothing to pick could only be cancelled by sending a chat message. A `select` answer
     maps back by index to a copy of the options as passed; options that differ only in colour look alike
-    and the first wins. Built-ins fail: `util.stripVTControlCharacters` leaves OSC tails, `Bun.stripANSI`
-    is missing in the Node workflow harness, and pi-tui's `stripTerminalSequences` keeps DCS strings.
+    and the first wins. The strip is `@thinkrail/shared/stripAnsi` (`plainText` for a non-string) — what it
+    removes and why no built-in fits are recorded there — the same one session-title reads use.
   - `toolResponses` — the host half of **interactive tools** (tools whose `execute` waits for the person):
     the per-session response mailbox (`ToolResponseWaiters`), respondability, restart repair support and
     late responses. The mailbox is **tool-agnostic**: every entry is keyed by `toolCallId`, the response is
@@ -986,15 +1027,17 @@ re-opened transcripts provider-valid.
     activation policy included — therefore returns after a restart or a reload.
     **Installed pi packages** have a switch of the same global shape, `setDisabledPackagesResolver`
     (the `disabledPackages` setting; keys are [[submodule-server-agent-packages]] identities, since pi has
-    no "whole package off" concept and the user chose a ThinkRail setting over writing pi filter entries).
+    no "whole package off" concept and the user chose a ThinkRail setting over writing pi filter entries;
+    the host installs it before the first runtime generation, whose user-extension pass reads it).
     It is applied where pi reads declarations, not where it emits resources: every `SettingsManager`
     the host opens comes from [[submodule-server-agent-packages]]' **`createPiSettings(cwd, agentDir,
     { projectTrusted, packages })`**, whose `packages` view is `all` (the host's own reads and writes:
     the catalog, the mutations), `enabled` (anything that loads resources for a chat —
     `buildSessionSettings`, so parents and delegated children share it, `listSkillCommands`,
-    `listSkillCatalog`; the switched-off declarations are hidden from `getGlobalSettings` /
-    `getProjectSettings`, re-evaluated on every read) or `none` (a loader that resolves nothing from
-    packages — the boot runtime and extension-cache advance in `piRuntime`, the MCP sign-in probe,
+    `listSkillCatalog`, and the `skip`-resolve of `piRuntime`'s user-extension pass; the switched-off
+    declarations are hidden from `getGlobalSettings` / `getProjectSettings`, re-evaluated on every read) or
+    `none` (a loader that resolves nothing from packages — the boot runtime, the user-extension pass's
+    explicit-path loader and extension-cache advance in `piRuntime`, the MCP sign-in probe,
     `listProjectAliasSkillNames`, `isBuiltinExtensionEnabled`, the trust default read — since pi's
     `reload()` resolves and installs declared packages whatever else is switched off). A view refuses
     `setPackages` / `setProjectPackages`, so pi's `addSourceToSettings` can never persist a filtered
@@ -1150,7 +1193,8 @@ re-opened transcripts provider-valid.
     through a headless `DefaultResourceLoader` to apply provider registrations, without inspecting it.
     `buildResourceLoader(cwd, settingsManager, getAdmission, excludedPaths, extraFactories?)` then resolves
     Pi's normal settings/package +
-    `.pi` / `.agents` extension set, removes that exact opaque identity **before loading**, and explicitly loads
+    `.pi` / `.agents` extension set, removes that exact opaque identity **before loading** (the Central
+    exclusion, under `piRuntime`), and explicitly loads
     the remaining paths: sessions use the provider objects already owned by their retained generation, so
     arbitrary Central factory/errors/UI cannot reach `pi.extensionUi`. The Central identity is always excluded
     from session discovery—even if the global artifact changes—so a session cannot mutate its generation.
@@ -1399,7 +1443,8 @@ re-opened transcripts provider-valid.
   session-lifecycle debug traces); `persistence` (`dataDir` for delegation plus the narrow session
   receipt stores); `trash` (the recoverable-delete primitive); `history` (`displayTranscript` only — `getMessages` must
   emit the same display projection the search index extracts, including turns Pi summarized away from
-  model context); `images` (projection, `imageDimensions`, and the hash its live source compares); Node.
+  model context); `images` (projection, `imageDimensions`, and the hash its live source compares);
+  `@thinkrail/shared/stripAnsi` (session titles and the ext-UI bridge); Node.
 - **Forbidden:** `host`; sibling features other than `log`, `trash`, `history` (`displayTranscript` only), `images` and those narrow persistence surfaces (session
   worktree `cwd` remains an input, never a workspace-registry lookup); Central process/filesystem knowledge—the
   caller supplies only the desired opaque extension paths for a candidate.
@@ -1518,7 +1563,13 @@ name; a disk row reads the manager the collector has just opened (not the listin
 which an awaited discovery can leave older than the transcript read beside it), and a disk-only rename
 publishes that chat's complete record (`diskStateRecord`, state + title + first prompt) after its event.
 `""` means unnamed. It costs no transcript read — the collector and the rename already hold the manager —
-and the name is read as pi stores it, never re-validated by the write rule.
+and the name is read as pi stores it, never re-validated by the write rule. Every display read (the
+forwarded `session_info_changed` event, each `SessionSummary` and `SessionStateRecord` title, including a
+disk list row's `SessionInfo.name`, and the title `history` extracts) strips terminal escapes and nothing
+more. The 80-character write cap stays on `renameSession`, so a name pi already stored — one an older
+build saved with colour codes, or one longer than that cap — shows its visible text. The session file is
+left as pi wrote it. `renameSession` still compares the stored string, so a later plain rename is a real
+write. The strip is `@thinkrail/shared/stripAnsi`.
 
 The guarded write remains authoritative across the async race. `onlyIfUnnamed` performs the check immediately
 beside the append and is the compare-and-set the `set_title` handler uses (its `false` return is how the

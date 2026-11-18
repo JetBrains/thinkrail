@@ -1,3 +1,5 @@
+import type { CpuArchitecture } from "../installPlatform";
+
 export type InstallPlatform = "macos" | "windows" | "linux";
 
 type DesktopDownload = {
@@ -22,12 +24,17 @@ const installPlatformOptions = {
 		id: "macos",
 		label: "macOS",
 		desktop: {
-			detail: "Apple Silicon",
+			detail: "Apple Silicon / Intel",
 			downloads: [
 				{
 					architecture: "Apple Silicon",
-					label: "Download .dmg",
+					label: "Apple Silicon .dmg",
 					href: `${stableDesktopReleaseUrl}/thinkrail-desktop-darwin-arm64.dmg`,
+				},
+				{
+					architecture: "Intel",
+					label: "Intel .dmg",
+					href: `${stableDesktopReleaseUrl}/thinkrail-desktop-darwin-x64.dmg`,
 				},
 			],
 		},
@@ -77,8 +84,15 @@ export function getInstallPlatform(platform: InstallPlatform): InstallPlatformOp
 	return installPlatformOptions[platform];
 }
 
-export function directDesktopDownload(platform: InstallPlatform): DesktopDownload | undefined {
+export function directDesktopDownload(
+	platform: InstallPlatform,
+	architecture?: CpuArchitecture,
+): DesktopDownload | undefined {
 	const downloads = getInstallPlatform(platform).desktop.downloads;
+	if (platform === "macos") {
+		const preferred = architecture === "x64" ? "Intel" : "Apple Silicon";
+		return downloads.find((download) => download.architecture === preferred);
+	}
 	return downloads.length === 1 ? downloads[0] : undefined;
 }
 
