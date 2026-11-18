@@ -3,6 +3,7 @@ import {
 	RiLogoutBoxLine as LogOut,
 	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
+import { AUTH_KIND_LABEL } from "@thinkrail/chat-ui/modelPicker";
 import { JBCENTRAL_QUOTA_PROTOCOL_VERSION, type ProviderStatus } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button, withIconClass } from "@thinkrail/ui/button";
@@ -10,7 +11,6 @@ import { SkeletonRows } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
 import { flushSync } from "react-dom";
-import { AUTH_KIND_LABEL } from "@/chat/modelPicker";
 import {
 	SETTINGS_LIST_ROW,
 	SETTINGS_ROW_FOCUS,

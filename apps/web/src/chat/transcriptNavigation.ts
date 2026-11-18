@@ -1,11 +1,11 @@
+import { parseReviewPackage } from "@thinkrail/chat-ui/reviewPackage";
+import type { ActivityStep, ChatRow } from "@thinkrail/chat-ui/rows";
+import { specToolPaths } from "@thinkrail/chat-ui/tools/SpecToolCard";
 import { resultText, strArg } from "@thinkrail/extension-api/web";
 import { isContextMenuKey } from "@thinkrail/ui/context-menu";
 import type { LocalKeyEvent, LocalKeys } from "@thinkrail/ui/local-keys";
 import { type ReadingDirection, readingCommand } from "@thinkrail/ui/reading";
 import { parseSkillInvocation, userText } from "@/lib";
-import { parseReviewPackage } from "./reviewPackage";
-import type { ActivityStep, ChatRow } from "./rows";
-import { specToolPaths } from "./tools/SpecToolCard";
 
 export interface TranscriptNavItem {
 	id: string;

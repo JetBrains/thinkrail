@@ -16,8 +16,8 @@ import {
 import { strArg } from "@thinkrail/extension-api/web";
 import { type AssistantFailure, assistantFailure } from "./assistantFailure";
 import type { ChatMessageOrder } from "./chatMessageOrder";
-import { projectRelativePath } from "./lib";
 import { endingSuggestionsCall } from "./composerSuggestions";
+import { projectRelativePath } from "./lib";
 import { pulledResult, resultKey } from "./pulledResults";
 import { currentToolRegistry, resolveProminence, type ToolRegistry } from "./toolRegistry";
 import type { ChatTurn, CompactionState, FailureRecovery, ToolResultState } from "./types";

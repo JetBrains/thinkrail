@@ -972,6 +972,7 @@
 	"mobile.hosts.reconnect": "Reconnect",
 	"mobile.list.failed": "Couldn't load: {{reason}}",
 	"mobile.list.loading": "Loading…",
+	"mobile.model.search": "Search models…",
 	"mobile.model.title": "Model and effort",
 	"mobile.newWorktree.base": "Base branch",
 	"mobile.newWorktree.baseUnknown": "Couldn't load branches",

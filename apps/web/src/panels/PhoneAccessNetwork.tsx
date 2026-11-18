@@ -5,10 +5,9 @@ import {
 	RiLoader4Line,
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { SettingsGroup } from "@thinkrail/ui/settings";
 import { cn } from "@thinkrail/ui/utils";
+import { SettingsGroup, SettingsNotice } from "@/settingsKit";
 import type { PhoneReach } from "./phoneAccessState";
-import { SettingsNotice } from "./SettingsNotice";
 
 type RouteTone = "ok" | "warn" | "off" | "checking";
 

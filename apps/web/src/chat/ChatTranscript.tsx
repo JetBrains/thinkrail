@@ -5,11 +5,7 @@ import {
 } from "@thinkrail/chat-ui/activityBreadcrumbs";
 import { type ChatActions, ChatActionsContext } from "@thinkrail/chat-ui/ChatActions";
 import type { ChatMessageOrder } from "@thinkrail/chat-ui/chatMessageOrder";
-import {
-	type PendingExtUi,
-	PendingExtUiContext,
-	PendingExtUiPrompt,
-} from "@thinkrail/chat-ui/ExtUiPrompt";
+import { PendingExtUiContext, PendingExtUiPrompt } from "@thinkrail/chat-ui/ExtUiPrompt";
 import { workspaceFileTarget } from "@thinkrail/chat-ui/fileTargets";
 import { expandFolds, FoldGeometryProvider } from "@thinkrail/chat-ui/foldState";
 import {
@@ -21,6 +17,7 @@ import {
 	type PendingInteraction,
 } from "@thinkrail/chat-ui/interactionState";
 import { deriveMessageActions } from "@thinkrail/chat-ui/messageActions";
+import { usePendingExtUi } from "@thinkrail/chat-ui/pendingExtUi";
 import {
 	type ChatRow,
 	deriveRows,
@@ -35,6 +32,7 @@ import {
 	streamStatus,
 } from "@thinkrail/chat-ui/StreamIndicator";
 import { ToolRendererBoundary } from "@thinkrail/chat-ui/ToolRendererBoundary";
+import { TranscriptItem, TranscriptProvider } from "@thinkrail/chat-ui/TranscriptItem";
 import { useToolInteraction } from "@thinkrail/chat-ui/toolInteraction";
 import {
 	DefaultToolRenderer,
@@ -81,9 +79,7 @@ import { errorText, getTransport, respondToTool } from "@/transport";
 import { locateChatRow, locateToolItem } from "./chatLocation";
 import { refreshContinuation, requestContinuation } from "./continuations";
 import { openWorkspace } from "./openWorkspace";
-import { usePendingExtUi } from "./pendingExtUi";
 import { estimateChatRowHeights } from "./rowHeightEstimates";
-import { TranscriptItem, TranscriptProvider } from "./TranscriptItem";
 import { newestContentRowId } from "./transcriptNavigation";
 import { type ChatReadingPosition, useChatScroll } from "./useChatScroll";
 import { useTranscriptNavigation } from "./useTranscriptNavigation";
