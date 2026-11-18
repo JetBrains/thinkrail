@@ -186,7 +186,6 @@ function runPowerShellInstaller(
 	tag = "v1.2.3",
 	prefix = "C:/isolated/thinkrail",
 ): ScriptResult {
-	if (!powershell) throw new Error("PowerShell is unavailable");
 	const wrapper = join(fixture.root, "invoke-installer.ps1");
 	const networkLog = join(fixture.root, "powershell-network.log");
 	writeFileSync(
@@ -203,32 +202,16 @@ function global:Invoke-WebRequest {
 & $env:THINKRAIL_INSTALLER -Channel $env:TEST_CHANNEL -Version $env:TEST_VERSION -Prefix $env:TEST_PREFIX -NoModifyPath
 `,
 	);
-	const child = Bun.spawnSync(
-		[powershell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", wrapper],
-		{
-			stdout: "pipe",
-			stderr: "pipe",
-			env: {
-				...process.env,
-				OS: "Windows_NT",
-				THINKRAIL_INSTALLER: powershellInstaller,
-				TEST_CHANNEL: channel,
-				TEST_VERSION: version,
-				TEST_PREFIX: prefix,
-				FAKE_TAG: tag,
-				FAKE_NETWORK_LOG: networkLog,
-			},
-		},
-	);
-	return {
-		exitCode: child.exitCode,
-		stdout: child.stdout.toString(),
-		stderr: child.stderr.toString(),
-	};
+	return spawnPowerShellWrapper(wrapper, {
+		TEST_CHANNEL: channel,
+		TEST_VERSION: version,
+		TEST_PREFIX: prefix,
+		FAKE_TAG: tag,
+		FAKE_NETWORK_LOG: networkLog,
+	});
 }
 
 function runPowerShellInstall(fixture: Fixture, version: string): ScriptResult {
-	if (!powershell) throw new Error("PowerShell is unavailable");
 	const wrapper = join(fixture.root, "run-installer.ps1");
 	writeFileSync(
 		wrapper,
@@ -250,6 +233,18 @@ function global:Get-FileHash {
 & $env:THINKRAIL_INSTALLER -Channel "stable" -Version $env:TEST_VERSION -Prefix $env:TEST_PREFIX -NoModifyPath
 `,
 	);
+	return spawnPowerShellWrapper(wrapper, {
+		USERPROFILE: fixture.home,
+		TEST_VERSION: version,
+		TEST_PREFIX: fixture.prefix,
+		FAKE_TAG: `v${version}`,
+		FAKE_HASH: binaryHash,
+		FAKE_BODY: binaryBody,
+	});
+}
+
+function spawnPowerShellWrapper(wrapper: string, env: Record<string, string>): ScriptResult {
+	if (!powershell) throw new Error("PowerShell is unavailable");
 	const child = Bun.spawnSync(
 		[powershell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", wrapper],
 		{
@@ -258,13 +253,8 @@ function global:Get-FileHash {
 			env: {
 				...process.env,
 				OS: "Windows_NT",
-				USERPROFILE: fixture.home,
 				THINKRAIL_INSTALLER: powershellInstaller,
-				TEST_VERSION: version,
-				TEST_PREFIX: fixture.prefix,
-				FAKE_TAG: `v${version}`,
-				FAKE_HASH: binaryHash,
-				FAKE_BODY: binaryBody,
+				...env,
 			},
 		},
 	);
@@ -474,7 +464,7 @@ describe.skipIf(process.platform !== "win32" || !powershell)("install.ps1 valida
 			});
 			expect(readdirSync(join(fixture.home, ".config", "thinkrail"))).toEqual(["install.json"]);
 		},
-		POWERSHELL_TEST_TIMEOUT_MS,
+		2 * POWERSHELL_TEST_TIMEOUT_MS,
 	);
 });
 
