@@ -80,10 +80,31 @@ re-opened transcripts provider-valid.
     configuration, while an add/remove/replace can never drop process-local provider registrations. The
     initializer must be configured before the first generation and runs for every candidate. The path is the
     only artifact fact this module receives;
-    it never reads, parses, hashes, snapshots, logs, copies, or serves the file. Initializer/extension/loader/
-    provider failures discard the candidate and collapse to a closed `load-failed` outcome; raw diagnostics
+    it never reads, parses, hashes, snapshots, logs, copies, or serves the file. Initializer/opaque-extension/
+    loader/provider failures discard the candidate and collapse to a closed `load-failed` outcome; raw diagnostics
     never reach `pi.extensionUi`, the wire, logs, analytics, persistence, or snapshots. Auth owns file watching,
     coalescing, and stale-candidate rejection; agent only prepares and activates a generation.
+
+    Only after that strict pass succeeds (and its attribution is frozen) does the candidate run the
+    **user-extension pass** (#1351, the rest of #365), the step pi's CLI performs inside
+    `createAgentSessionServices` before it resolves a model: without it, extension providers reached the
+    catalog only when a chat's session bound, after that chat's model had been chosen, so `model.list`,
+    new chats, restores and `provider.status` missed them until then and again after every restart. The pass
+    resolves the user-scope extension set through pi's package manager on the `enabled` view with
+    `onMissing → skip` (project trust off: a pre-session catalog has no project), drops every path in the
+    generation's additional and session-exclusion sets **before anything loads** — so the Central artifact
+    never runs twice, nor as a user extension when the CLI is absent/unsupported or boot fell back to a plain
+    generation — loads the rest through a `none`-view loader (`noExtensions` + those explicit paths, so it
+    can neither install nor load a switched-off package) and applies their queued provider, native-provider
+    and virtual-model registrations to the candidate runtime. Ids it registered are `extensionProviderIds`.
+    Unlike the strict pass it never fails a candidate: a failed load or a rejected registration skips only
+    that item, and the pass is bounded by 10 s — past it, nothing it queued is applied, so a hung factory
+    cannot hold boot or a Central rebuild (a late completion only fills the abandoned loader's queue). Its
+    diagnostics are closed counts; extension paths, error text and error objects of user extensions are never
+    logged or reported. A chat's own load later re-registers over the same runtime, which pi merges. Accepted
+    gaps: project-local extensions and a package installed after preparation reach the runtime only through a
+    chat's load, as before (`provider.status` lists them from the next generation), and a package switched off
+    after preparation keeps its registrations until then.
 
     `getSessionRuntimeGeneration` exposes a live session's retained generation for synchronous host metadata
     reads. Activation changes the current pointer for pre-session reads and future session creation; it never
@@ -973,15 +994,17 @@ re-opened transcripts provider-valid.
     activation policy included — therefore returns after a restart or a reload.
     **Installed pi packages** have a switch of the same global shape, `setDisabledPackagesResolver`
     (the `disabledPackages` setting; keys are [[submodule-server-agent-packages]] identities, since pi has
-    no "whole package off" concept and the user chose a ThinkRail setting over writing pi filter entries).
+    no "whole package off" concept and the user chose a ThinkRail setting over writing pi filter entries;
+    the host installs it before the first runtime generation, whose user-extension pass reads it).
     It is applied where pi reads declarations, not where it emits resources: every `SettingsManager`
     the host opens comes from [[submodule-server-agent-packages]]' **`createPiSettings(cwd, agentDir,
     { projectTrusted, packages })`**, whose `packages` view is `all` (the host's own reads and writes:
     the catalog, the mutations), `enabled` (anything that loads resources for a chat —
     `buildSessionSettings`, so parents and delegated children share it, `listSkillCommands`,
-    `listSkillCatalog`; the switched-off declarations are hidden from `getGlobalSettings` /
-    `getProjectSettings`, re-evaluated on every read) or `none` (a loader that resolves nothing from
-    packages — the boot runtime and extension-cache advance in `piRuntime`, the MCP sign-in probe,
+    `listSkillCatalog`, and the `skip`-resolve of `piRuntime`'s user-extension pass; the switched-off
+    declarations are hidden from `getGlobalSettings` / `getProjectSettings`, re-evaluated on every read) or
+    `none` (a loader that resolves nothing from packages — the boot runtime, the user-extension pass's
+    explicit-path loader and extension-cache advance in `piRuntime`, the MCP sign-in probe,
     `listProjectAliasSkillNames`, `isBuiltinExtensionEnabled`, the trust default read — since pi's
     `reload()` resolves and installs declared packages whatever else is switched off). A view refuses
     `setPackages` / `setProjectPackages`, so pi's `addSourceToSettings` can never persist a filtered
