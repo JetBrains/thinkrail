@@ -34,7 +34,7 @@ export function isModelUnavailableError(message: string): boolean {
 const FALLBACKS_REJECTED = [
 	/does not support (?:the )?fallbacks? field/i,
 	/\bfallbacks\b["'`]?:?\s*(?:Extra inputs are not permitted|is not permitted|is not allowed|is not supported)/i,
-	/\b(?:unknown|unrecognized|unsupported|unexpected) (?:request )?(?:field|parameter|property|key|argument)s?\b[^\n]{0,20}?\bfallbacks\b/i,
+	/\b(?:unknown|unrecognized|unsupported|unexpected) (?:request |keyword )?(?:field|parameter|property|key|name|argument)s?\b[^\n]{0,20}?\bfallbacks\b/i,
 ];
 
 export function fallbacksRejected(turn: {

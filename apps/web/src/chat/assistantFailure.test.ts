@@ -85,6 +85,8 @@ test("a proxy or gateway rejecting the fallbacks field is recognized and explain
 		'400 {"type":"error","error":{"type":"invalid_request_error","message":"fallbacks: Extra inputs are not permitted"}}',
 		"400 Unrecognized request argument supplied: fallbacks",
 		"400 unknown field `fallbacks`",
+		'400 Invalid JSON payload received. Unknown name "fallbacks": Cannot find field.',
+		"500 create() got an unexpected keyword argument 'fallbacks'",
 	]) {
 		expect(fallbacksRejected({ text, failure: "error" })).toBe(true);
 		expect(errorTurnText(t, { text, failure: "error" })).toBe(
