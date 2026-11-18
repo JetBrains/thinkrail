@@ -85,9 +85,10 @@ A folder source is never copied: it loads from where it is, and nothing under it
   `createAgentSession` (pi-coding-agent) and `Type` (typebox), and default-exports a function that puts
   all three under a per-load key in a `Symbol.for("thinkrail.extensionDescriptors")` map. It is loaded with
   pi's public `discoverAndLoadExtensions([shim], empty, empty)` — uncached, so an edited entry reloads on
-  the same path — inside `withForcedJitiTransform` (`JITI_TRY_NATIVE=false`, `JITI_REBUILD_FS_CACHE=1`,
-  restored afterwards; one task at a time, shared with the agent's runtime build). The key is read and
-  deleted, the shim removed. **Identity guard:** the shim's `createAgentSession` and `Type` must be the
+  the same path; both discovery roots are the empty folder, never the pi agent dir or a workspace, so a
+  load never runs a user's pi extension or the Central artifact beside them — inside
+  `withForcedJitiTransform` (`JITI_TRY_NATIVE=false`, `JITI_REBUILD_FS_CACHE=1`, restored afterwards; one
+  task at a time, shared with the agent's runtime build). The key is read and deleted, the shim removed. **Identity guard:** the shim's `createAgentSession` and `Type` must be the
   host's own (`===`; a jiti namespace is a Proxy, so members are compared, never namespaces), else the load
   fails — the loader proves on every load that the extension resolution yields the host's single pi. The
   descriptor's shape is then validated field by field.
@@ -161,6 +162,12 @@ A folder source is never copied: it loads from where it is, and nothing under it
   `devDependencies`, as the `making-thinkrail-extensions` skill always does (`omit=peer` in `.npmrc`,
   peers only).
 
+- **An installed extension's providers are not in the boot catalog.** The agent's startup user-extension
+  pass ([[submodule-server-agent]], #1351) loads pi's resolved user extensions only; an installed
+  extension's server half is a registry inline factory, like a built-in's, and loads after host start. A
+  provider it registers reaches the shared runtime only when a chat's loader runs it, so `model.list`, a
+  new chat's default model and `provider.status` miss it until then and after every restart.
+
 ## Boundary
 
 - **Public surface (barrel):** `InstalledExtensions`, `InstalledExtensionsOptions`,
@@ -188,5 +195,8 @@ guard, shim cleanup, env serialization), reconcile (idempotence, malformed file,
 incompatible, every failure mode, duplicates, offline, stub npm installs, update, staging and adoption)
 the asset resolver (traversal, unknown extension, wrong file, stale token, links) and the status file
 (every state, tools, `installing` during an install, a refused file, no declarations).
+`auth/jbcentral.test.ts` starts this runtime beside a configured Central artifact and a user pi extension:
+a start with nothing declared calls `onChange` zero times, one with a folder source once, and neither adds
+a runtime generation nor runs the artifact or the user extension again.
 `skillExample.test.ts` keeps the host skill's worked example honest: its `package.json` passes the
 manifest reader and its server half loads through this loader with the tool it promises.
