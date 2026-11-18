@@ -85,6 +85,11 @@ test("a blank THINKRAIL_DATA_DIR falls back to ~/.thinkrail instead of the host'
 	}
 });
 
+test("a nonblank THINKRAIL_DATA_DIR keeps its surrounding spaces", () => {
+	process.env.THINKRAIL_DATA_DIR = `${root} `;
+	expect(dataDir()).toBe(`${root} `);
+});
+
 test("a THINKRAIL_DATA_DIR starting with ~ is under the home directory", () => {
 	process.env.THINKRAIL_DATA_DIR = "~/.local/state/thinkrail";
 	expect(dataDir()).toBe(join(homedir(), ".local", "state", "thinkrail"));

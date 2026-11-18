@@ -64,12 +64,13 @@ export {
 export type { InstallationRecord } from "./installation";
 
 /**
- * The app state root. `THINKRAIL_DATA_DIR` relocates it (a supported override); blank means unset, and a
- * leading `~` is the home directory, since launchers that set it outside a shell never expand it.
+ * The app state root. `THINKRAIL_DATA_DIR` relocates it (a supported override). Blank means unset; any other
+ * value is used as written, surrounding spaces included. A leading `~` is the home directory, since launchers
+ * that set it outside a shell never expand it.
  */
 export function dataDir(): string {
-	const override = process.env.THINKRAIL_DATA_DIR?.trim();
-	if (!override) return join(homedir(), ".thinkrail");
+	const override = process.env.THINKRAIL_DATA_DIR;
+	if (!override?.trim()) return join(homedir(), ".thinkrail");
 	if (override === "~") return homedir();
 	if (override.startsWith("~/") || override.startsWith("~\\"))
 		return join(homedir(), override.slice(2));
