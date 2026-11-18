@@ -201,8 +201,8 @@ export const SETTING = {
 	subagentRoles: {
 		id: "subagent-roles",
 		section: SettingsSection.Subagents,
-		label: "settings.agents.available",
-		description: "settings.agents.description",
+		label: "settings.subagents.available",
+		description: "settings.subagents.availableDescription",
 		keywords: ["agents", "roles", "disable", "model", "scout", "worker", "reviewer"],
 		requiresProtocolVersion: SUBAGENT_CATALOG_PROTOCOL_VERSION,
 	},

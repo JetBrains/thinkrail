@@ -19,11 +19,7 @@ export function useSubagentCatalog(
 		let active = true;
 		read(workspaceId).then(
 			(entries) => {
-				if (active)
-					setLoaded({
-						key,
-						catalog: entries.filter((entry) => entry.source !== "project" || trusted),
-					});
+				if (active) setLoaded({ key, catalog: entries });
 			},
 			() => {
 				if (active) setLoaded({ key, catalog: "failed" });
@@ -32,9 +28,8 @@ export function useSubagentCatalog(
 		return () => {
 			active = false;
 		};
-	}, [key, workspaceId, trusted, read]);
+	}, [key, workspaceId, read]);
 	return {
-		// A scope/reconnect/Refresh change hides held entries in render, before effect cleanup.
 		catalog: loaded?.key === key ? loaded.catalog : ("loading" as AgentCatalog),
 		refresh: () => setRefreshVersion((version) => version + 1),
 	};

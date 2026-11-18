@@ -111,7 +111,7 @@ test("workspace changes hide held rows immediately and discard stale successes a
 	await view.unmount();
 });
 
-test("trust revocation clears project entries, ignores in-flight trusted reads and filters the new result", async () => {
+test("trust revocation clears project entries and ignores in-flight trusted reads", async () => {
 	const server = host();
 	const obs = observer();
 	const props = { workspaceId: "a", read: server.read, changed: obs.changed };
@@ -122,7 +122,7 @@ test("trust revocation clears project entries, ignores in-flight trusted reads a
 	expect(obs.seen.at(-1)).toBe("loading");
 	await act(async () => server.pending[1]?.resolve([PROJECT]));
 	expect(obs.seen.at(-1)).toBe("loading");
-	await act(async () => server.pending[2]?.resolve([BUILTIN, PROJECT]));
+	await act(async () => server.pending[2]?.resolve([BUILTIN]));
 	expect(obs.seen.at(-1)).toEqual([BUILTIN]);
 	await view.unmount();
 });

@@ -17,7 +17,6 @@ import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	isControlMessage,
 	isSpeechModel,
-	SUBAGENT_CATALOG_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
@@ -1217,27 +1216,11 @@ const handlers: WsHandlers = {
 			admissionContextFor(project, ws.skillOverrides ?? {}, getConfig().otherAgentSkills),
 		);
 	},
-	"subagent.setEnabled": (p, ctx) => {
-		if (
-			ctx.protocolVersion !== undefined &&
-			ctx.protocolVersion < SUBAGENT_CATALOG_PROTOCOL_VERSION
-		) {
-			throw new Error(
-				`Subagent availability requires protocol ${SUBAGENT_CATALOG_PROTOCOL_VERSION} or newer`,
-			);
-		}
+	"subagent.setEnabled": (p) => {
 		setSubagentEnabled(p?.name, p?.enabled);
 		return { ok: true };
 	},
-	"subagent.list": (p, ctx) => {
-		if (
-			ctx.protocolVersion !== undefined &&
-			ctx.protocolVersion < SUBAGENT_CATALOG_PROTOCOL_VERSION
-		) {
-			throw new Error(
-				`Subagent catalog requires protocol ${SUBAGENT_CATALOG_PROTOCOL_VERSION} or newer`,
-			);
-		}
+	"subagent.list": (p) => {
 		if (p.workspaceId === undefined) return listSubagentCatalog();
 		const ws = getWorkspace(p.workspaceId);
 		const project = listProjects().find((candidate) => candidate.id === ws.projectId);

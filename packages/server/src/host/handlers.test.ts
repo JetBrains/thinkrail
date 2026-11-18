@@ -32,7 +32,6 @@ import type {
 import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	INITIAL_TERMINAL_TAB_KEY,
-	SUBAGENT_CATALOG_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	WS_METHODS,
 } from "@thinkrail/contracts";
@@ -1578,9 +1577,8 @@ test("subagent.list admits only pi-resource-trusted workspace metadata and never
 			{ id: "w1", projectId: "p1", name: "Default", worktreePath: repo, createdAt: 1 },
 		]),
 	);
-	const ctx = { ...CTX, protocolVersion: SUBAGENT_CATALOG_PROTOCOL_VERSION };
 	const list = (params: unknown = {}) =>
-		handleRequest("subagent.list", params, ctx) as Promise<SubagentCatalogEntry[]>;
+		handleRequest("subagent.list", params, CTX) as Promise<SubagentCatalogEntry[]>;
 	const personal: SubagentCatalogEntry = {
 		name: "personal-role",
 		description: "personal-role description",
@@ -1627,19 +1625,9 @@ test("subagent.list admits only pi-resource-trusted workspace metadata and never
 		false,
 	);
 	await expect(list({ workspaceId: "unknown" })).rejects.toThrow("Unknown workspace");
-	await expect(
-		handleRequest(
-			"subagent.list",
-			{},
-			{
-				...CTX,
-				protocolVersion: SUBAGENT_CATALOG_PROTOCOL_VERSION - 1,
-			},
-		),
-	).rejects.toThrow(`requires protocol ${SUBAGENT_CATALOG_PROTOCOL_VERSION}`);
 });
 
-test("concurrent v127 subagent intents from different clients preserve both roles and unknown names", async () => {
+test("concurrent subagent intents from different clients preserve both roles and unknown names", async () => {
 	updateConfig({ disabledSubagents: ["temporarily-missing"] });
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));
@@ -1648,18 +1636,12 @@ test("concurrent v127 subagent intents from different clients preserve both role
 			handleRequest(
 				"subagent.setEnabled",
 				{ name: "scout", enabled: false },
-				{
-					clientKey: "window-one",
-					protocolVersion: SUBAGENT_CATALOG_PROTOCOL_VERSION,
-				},
+				{ clientKey: "window-one" },
 			),
 			handleRequest(
 				"subagent.setEnabled",
 				{ name: "worker", enabled: false },
-				{
-					clientKey: "window-two",
-					protocolVersion: SUBAGENT_CATALOG_PROTOCOL_VERSION,
-				},
+				{ clientKey: "window-two" },
 			),
 		]);
 		expect(results).toEqual([{ ok: true }, { ok: true }]);
@@ -1681,7 +1663,7 @@ test("concurrent v127 subagent intents from different clients preserve both role
 	}
 });
 
-test("subagent intent rejects malformed raw payloads and old clients without mutation or publication", async () => {
+test("subagent intent rejects malformed raw payloads without mutation or publication", async () => {
 	updateConfig({ disabledSubagents: ["temporarily-missing"] });
 	const before = getConfig();
 	const stored = readFileSync(join(dataDir, "config.json"), "utf8");
@@ -1710,23 +1692,8 @@ test("subagent intent rejects malformed raw payloads and old clients without mut
 			{ name: "scout", enabled: {} },
 			{ cwd: repo, disabledSubagents: ["scout"] },
 		]) {
-			await expect(
-				handleRequest("subagent.setEnabled", params, {
-					...CTX,
-					protocolVersion: SUBAGENT_CATALOG_PROTOCOL_VERSION,
-				}),
-			).rejects.toThrow();
+			await expect(handleRequest("subagent.setEnabled", params, CTX)).rejects.toThrow();
 		}
-		await expect(
-			handleRequest(
-				"subagent.setEnabled",
-				{ name: "scout", enabled: false },
-				{
-					...CTX,
-					protocolVersion: SUBAGENT_CATALOG_PROTOCOL_VERSION - 1,
-				},
-			),
-		).rejects.toThrow(`requires protocol ${SUBAGENT_CATALOG_PROTOCOL_VERSION}`);
 		expect(getConfig()).toBe(before);
 		expect(readFileSync(join(dataDir, "config.json"), "utf8")).toBe(stored);
 		expect(published).toEqual([]);

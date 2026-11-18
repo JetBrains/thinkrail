@@ -35,7 +35,6 @@ export interface SubagentsExtensionOptions {
 	delegationRoot?: string;
 	scope?: string;
 	isEnabled?: () => boolean;
-	/** Live per-name launch policy (default: enabled); does not gate running work or completions. */
 	isAgentEnabled?: (name: string) => boolean;
 	canDeliverCompletion?: () => boolean;
 }

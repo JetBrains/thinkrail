@@ -150,7 +150,6 @@ test("concurrent clients disabling different roles preserve both intents before 
 		releases.push(...firstPushes.map((hold) => hold.release));
 		await page.getByTestId("agent-toggle-scout").click();
 		await Promise.all(firstPushes.map((hold) => hold.held));
-		// channelHold holds one frame at a time: re-arm both before the second intent.
 		const secondPushes = [
 			channelHold.arm("settings.changed"),
 			peerChannelHold.arm("settings.changed"),
@@ -166,7 +165,6 @@ test("concurrent clients disabling different roles preserve both intents before 
 				);
 			}
 		}
-		// Release in host order, preventing an older held snapshot from overtaking the latest.
 		for (const hold of firstPushes) hold.release();
 		for (const client of [page, peer]) {
 			await expect(client.getByTestId("agent-toggle-scout")).toHaveAttribute(

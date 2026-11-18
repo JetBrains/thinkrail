@@ -18,9 +18,9 @@ import { SETTING } from "./settingsCatalog";
 import { type AgentCatalog, useSubagentCatalog } from "./useSubagentCatalog";
 
 const SOURCE: Record<SubagentCatalogEntry["source"], MessageKey> = {
-	builtin: "settings.agents.source.builtin",
-	personal: "settings.agents.source.personal",
-	project: "settings.agents.source.project",
+	builtin: "settings.subagents.source.builtin",
+	personal: "settings.subagents.source.personal",
+	project: "settings.subagents.source.project",
 };
 
 export function AgentCatalogRows({
@@ -36,7 +36,9 @@ export function AgentCatalogRows({
 }) {
 	const t = useT();
 	if (catalog === "loading")
-		return <LoadingRegion rows={6} label={t("settings.agents.loading")} testId="agents-loading" />;
+		return (
+			<LoadingRegion rows={6} label={t("settings.subagents.loading")} testId="agents-loading" />
+		);
 	if (catalog === "failed")
 		return (
 			<SettingsNotice
@@ -54,13 +56,13 @@ export function AgentCatalogRows({
 					</Button>
 				}
 			>
-				{t("settings.agents.loadFailed")}
+				{t("settings.subagents.loadFailed")}
 			</SettingsNotice>
 		);
 	if (catalog.length === 0)
 		return (
 			<p className="py-8 text-text-muted tr-text-metadata" data-testid="agents-empty">
-				{t("settings.agents.empty")}
+				{t("settings.subagents.empty")}
 			</p>
 		);
 	return (
@@ -80,16 +82,16 @@ export function AgentCatalogRows({
 								<span className="mt-4 block break-all text-text-subtle">
 									{entry.model ? (
 										<>
-											{t("settings.agents.pinned")} ·{" "}
+											{t("settings.subagents.pinned")} ·{" "}
 											<code className="tr-code-text-small">{entry.model}</code>
 										</>
 									) : (
-										t("settings.agents.parentModel")
+										t("settings.subagents.parentModel")
 									)}
 									{entry.thinking !== undefined ? (
 										<>
 											{" "}
-											· {t("settings.agents.effort", { effort: t(LEVEL_LABEL[entry.thinking]) })}
+											· {t("settings.subagents.effort", { effort: t(LEVEL_LABEL[entry.thinking]) })}
 										</>
 									) : null}
 								</span>
@@ -98,7 +100,7 @@ export function AgentCatalogRows({
 						control={
 							<Switch
 								checked={enabled}
-								label={t("settings.agents.enableGlobally", { name: entry.name })}
+								label={t("settings.subagents.enableGlobally", { name: entry.name })}
 								testId={`agent-toggle-${entry.name}`}
 								tabIndex={0}
 								onCheckedChange={(next) => onChange(entry.name, next)}
@@ -128,17 +130,17 @@ function AvailableAgentsGroup() {
 	const save = (name: string, enabled: boolean) => {
 		getTransport()
 			.request("subagent.setEnabled", { name, enabled })
-			.catch((err: unknown) => toast.error(errorText(err), t("settings.agents.saveFailed")));
+			.catch((err: unknown) => toast.error(errorText(err), t("settings.subagents.saveFailed")));
 	};
 
 	return (
 		<SettingsGroup
-			title={t("settings.agents.available")}
+			title={t("settings.subagents.available")}
 			scope="allProjects"
 			description={
 				<>
-					<span className="block">{t("settings.agents.description")}</span>
-					<span className="block">{t("settings.agents.projectScope")}</span>
+					<span className="block">{t("settings.subagents.availableDescription")}</span>
+					<span className="block">{t("settings.subagents.projectScope")}</span>
 				</>
 			}
 			action={{
@@ -153,7 +155,7 @@ function AvailableAgentsGroup() {
 						onClick={refresh}
 						data-testid="agents-refresh"
 					>
-						{t("settings.agents.refresh")}
+						{t("settings.subagents.refresh")}
 					</Button>
 				),
 			}}
