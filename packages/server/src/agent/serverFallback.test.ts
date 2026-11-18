@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -34,6 +34,34 @@ let path: string;
 let published: number;
 let sessionManager: SessionManager | undefined;
 const prior = new Map<string, string | undefined>();
+const requests: { body: Record<string, unknown>; beta: string }[] = [];
+let proxy: ReturnType<typeof Bun.serve>;
+
+beforeAll(() => {
+	proxy = Bun.serve({
+		port: 0,
+		async fetch(request) {
+			requests.push({
+				body: (await request.json()) as Record<string, unknown>,
+				beta: request.headers.get("anthropic-beta") ?? "",
+			});
+			return Response.json(
+				{
+					type: "error",
+					error: {
+						type: "invalid_request_error",
+						message: "Anthropic proxy does not support fallback field",
+					},
+				},
+				{ status: 400 },
+			);
+		},
+	});
+});
+
+afterAll(() => {
+	proxy.stop(true);
+});
 
 beforeEach(() => {
 	for (const key of ENV_KEYS) prior.set(key, process.env[key]);
@@ -47,6 +75,7 @@ beforeEach(() => {
 	process.env.THINKRAIL_DATA_DIR = dataDir;
 	process.env.PI_OFFLINE = "1";
 	published = 0;
+	requests.length = 0;
 	setModelsFilePublisher(() => {
 		published++;
 	});
@@ -76,6 +105,7 @@ async function anthropicRuntime(): Promise<ModelRuntime> {
 		key: "fixture-only-key",
 	}));
 	const runtime = await ModelRuntime.create({ credentials, allowModelNetwork: false });
+	runtime.registerProvider("anthropic", { baseUrl: `http://127.0.0.1:${proxy.port}` });
 	runtime.registerProvider("other", {
 		api: "openai-responses",
 		apiKey: "fixture-only-key",
@@ -102,6 +132,12 @@ function fallbackModel(runtime: ModelRuntime): Model<string> {
 	const model = runtime.getModels("anthropic").find(declaresServerFallback);
 	if (!model) throw new Error("pi ships no Anthropic model with server-side fallback");
 	return model;
+}
+
+async function failedChat(model: Model<string>): Promise<string> {
+	const { sessionId } = await createSession({ cwd, workspaceId: "ws", model: toWireModel(model) });
+	await promptSession(sessionId, "hello");
+	return sessionId;
 }
 
 function sessionContext() {
@@ -155,11 +191,7 @@ describe("disableSessionServerFallback", () => {
 	test("turns fallback off for the failed model only and updates the open chat's model", async () => {
 		const runtime = await anthropicRuntime();
 		const fable = fallbackModel(runtime);
-		const { sessionId } = await createSession({
-			cwd,
-			workspaceId: "ws",
-			model: toWireModel(fable),
-		});
+		const sessionId = await failedChat(fable);
 
 		const model = await disableSessionServerFallback(sessionId);
 
@@ -176,50 +208,40 @@ describe("disableSessionServerFallback", () => {
 	});
 
 	test("the open chat's next request carries neither fallbacks nor the fallback beta", async () => {
-		const requests: { body: Record<string, unknown>; beta: string }[] = [];
-		const proxy = Bun.serve({
-			port: 0,
-			async fetch(request) {
-				requests.push({
-					body: (await request.json()) as Record<string, unknown>,
-					beta: request.headers.get("anthropic-beta") ?? "",
-				});
-				return Response.json(
-					{
-						type: "error",
-						error: {
-							type: "invalid_request_error",
-							message: "Anthropic proxy does not support fallback field",
-						},
-					},
-					{ status: 400 },
-				);
+		const runtime = await anthropicRuntime();
+		const sessionId = await failedChat(fallbackModel(runtime));
+		expect(requests.at(-1)?.body).toHaveProperty("fallbacks");
+		expect(requests.at(-1)?.beta).toContain("server-side-fallback");
+
+		await disableSessionServerFallback(sessionId);
+		await promptSession(sessionId, "Try again.");
+
+		expect(requests.at(-1)?.body).not.toHaveProperty("fallbacks");
+		expect(requests.at(-1)?.beta).not.toContain("server-side-fallback");
+	});
+
+	test("repairs the model that failed, not the one the chat switched to afterwards", async () => {
+		const runtime = await anthropicRuntime();
+		const fable = fallbackModel(runtime);
+		const sibling = runtime
+			.getModels("anthropic")
+			.find((model) => model.id !== fable.id && declaresServerFallback(model));
+		if (!sibling) throw new Error("pi ships a single Anthropic model with fallback");
+		const sessionId = await failedChat(fable);
+		await setSessionModel(sessionId, toWireModel(sibling));
+
+		const model = await disableSessionServerFallback(sessionId);
+
+		expect(model).toMatchObject({ provider: "anthropic", id: sibling.id });
+		expect(config()).toEqual({
+			providers: {
+				anthropic: { modelOverrides: { [fable.id]: { compat: { allowedFallbackModels: [] } } } },
 			},
 		});
-		try {
-			writeFileSync(
-				path,
-				JSON.stringify({ providers: { anthropic: { baseUrl: `http://127.0.0.1:${proxy.port}` } } }),
-			);
-			const runtime = await anthropicRuntime();
-			const fable = fallbackModel(runtime);
-			const { sessionId } = await createSession({
-				cwd,
-				workspaceId: "ws",
-				model: toWireModel(fable),
-			});
-			await promptSession(sessionId, "hello");
-			expect(requests.at(-1)?.body).toHaveProperty("fallbacks");
-			expect(requests.at(-1)?.beta).toContain("server-side-fallback");
-
-			await disableSessionServerFallback(sessionId);
-			await promptSession(sessionId, "Try again.");
-
-			expect(requests.at(-1)?.body).not.toHaveProperty("fallbacks");
-			expect(requests.at(-1)?.beta).not.toContain("server-side-fallback");
-		} finally {
-			proxy.stop(true);
-		}
+		expect(sessionContext().model).toEqual({ provider: "anthropic", modelId: sibling.id });
+		expect(runtime.getModel("anthropic", sibling.id)).toSatisfy(
+			(model) => model !== undefined && declaresServerFallback(model),
+		);
 	});
 
 	test("keeps a model the user switched to while the fix ran, on any provider", async () => {
@@ -233,11 +255,7 @@ describe("disableSessionServerFallback", () => {
 		for (const picked of [sibling, other]) {
 			rmSync(path, { force: true });
 			await runtime.refresh({ allowNetwork: false });
-			const { sessionId } = await createSession({
-				cwd,
-				workspaceId: "ws",
-				model: toWireModel(fable),
-			});
+			const sessionId = await failedChat(fable);
 
 			const pending = disableSessionServerFallback(sessionId);
 			await setSessionModel(sessionId, toWireModel(picked));
@@ -250,12 +268,7 @@ describe("disableSessionServerFallback", () => {
 	test("refuses when pi does not apply the override, so the retry cannot loop", async () => {
 		writeFileSync(path, JSON.stringify({ providers: { broken: { models: "not-a-list" } } }));
 		const runtime = await anthropicRuntime();
-		const fable = fallbackModel(runtime);
-		const { sessionId } = await createSession({
-			cwd,
-			workspaceId: "ws",
-			model: toWireModel(fable),
-		});
+		const sessionId = await failedChat(fallbackModel(runtime));
 
 		await expect(disableSessionServerFallback(sessionId)).rejects.toMatchObject({
 			code: "SERVER_FALLBACK_STILL_ON",
@@ -264,14 +277,9 @@ describe("disableSessionServerFallback", () => {
 
 	test("a model picked while the repair's model switch awaits auth wins", async () => {
 		const runtime = await anthropicRuntime();
-		const fable = fallbackModel(runtime);
 		const other = runtime.getModel("other", "other-model");
 		if (!other) throw new Error("Missing fixture model");
-		const { sessionId } = await createSession({
-			cwd,
-			workspaceId: "ws",
-			model: toWireModel(fable),
-		});
+		const sessionId = await failedChat(fallbackModel(runtime));
 		const checkAuth = runtime.checkAuth.bind(runtime);
 		let release = () => {};
 		const held = new Promise<void>((resolve) => {
@@ -312,6 +320,7 @@ describe("disableSessionServerFallback", () => {
 			model: toWireModel(fable),
 		});
 		setSessionThinkingLevel(sessionId, "low");
+		await promptSession(sessionId, "hello");
 		expect(sessionContext().thinkingLevel).toBe("low");
 
 		await disableSessionServerFallback(sessionId);
@@ -319,14 +328,24 @@ describe("disableSessionServerFallback", () => {
 		expect(sessionContext().thinkingLevel).toBe("low");
 	});
 
-	test("refuses a chat whose model sends no fallbacks without touching models.json", async () => {
+	test("refuses without touching models.json when the failed model sends no fallbacks", async () => {
 		const runtime = await anthropicRuntime();
 		const plain = runtime.getModels("anthropic").find((model) => !declaresServerFallback(model));
 		if (!plain) throw new Error("pi ships no Anthropic model without fallbacks");
+		const sessionId = await failedChat(plain);
+
+		await expect(disableSessionServerFallback(sessionId)).rejects.toMatchObject({
+			code: "SERVER_FALLBACK_NOT_USED",
+		});
+		expect(() => readFileSync(path, "utf8")).toThrow();
+	});
+
+	test("refuses without touching models.json when the chat has no failed request", async () => {
+		const runtime = await anthropicRuntime();
 		const { sessionId } = await createSession({
 			cwd,
 			workspaceId: "ws",
-			model: toWireModel(plain),
+			model: toWireModel(fallbackModel(runtime)),
 		});
 
 		await expect(disableSessionServerFallback(sessionId)).rejects.toMatchObject({
@@ -354,12 +373,7 @@ describe("disableSessionServerFallback", () => {
 			}),
 		);
 		const runtime = await anthropicRuntime();
-		const fable = fallbackModel(runtime);
-		const { sessionId } = await createSession({
-			cwd,
-			workspaceId: "ws",
-			model: toWireModel(fable),
-		});
+		const sessionId = await failedChat(fallbackModel(runtime));
 
 		await disableSessionServerFallback(sessionId);
 

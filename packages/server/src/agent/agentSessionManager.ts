@@ -2767,20 +2767,32 @@ export async function setSessionModel(sessionId: string, model: WireModel): Prom
 	});
 }
 
+function failedRequestModel(entry: Entry): Model<string> | undefined {
+	const last = entry.session.messages.findLast((message) => message.role === "assistant");
+	if (last?.role !== "assistant" || last.stopReason !== "error") return undefined;
+	const ref = { provider: last.provider, id: last.model };
+	const live = entry.session.model;
+	if (live && sameModel(live, ref)) return live;
+	return settledAvailableModels(entry.generation.runtime).find((model) => sameModel(model, ref));
+}
+
 export async function disableSessionServerFallback(sessionId: string): Promise<WireModel> {
 	const entry = mustGetEntry(sessionId);
-	const model = entry.session.model;
-	if (!model || !declaresServerFallback(model))
-		throw new CodedError("SERVER_FALLBACK_NOT_USED", "The chat's model sends no fallbacks");
+	const failed = failedRequestModel(entry);
+	if (!failed || !declaresServerFallback(failed))
+		throw new CodedError(
+			"SERVER_FALLBACK_NOT_USED",
+			"The failed request's model sends no fallbacks",
+		);
 	const current = await getPiRuntimeGeneration();
-	await disableModelFallback(model, [current.runtime, entry.generation.runtime]);
+	await disableModelFallback(failed, [current.runtime, entry.generation.runtime]);
 	return serializeModelWrite(entry, async () => {
 		if (mustGetEntry(sessionId) !== entry) throw new Error(`Unknown session: ${sessionId}`);
-		const live = entry.session.model ?? model;
-		if (!sameModel(live, model)) return sessionWireModel(live, entry.generation);
-		const resolved = resolveWireModel(entry.generation.runtime, live);
+		const resolved = resolveWireModel(entry.generation.runtime, failed);
 		if (declaresServerFallback(resolved))
 			throw new CodedError("SERVER_FALLBACK_STILL_ON", "pi did not apply the fallback override");
+		const live = entry.session.model ?? failed;
+		if (!sameModel(live, failed)) return sessionWireModel(live, entry.generation);
 		const thinkingLevel = entry.session.thinkingLevel;
 		await entry.session.setModel(resolved);
 		if (entry.session.thinkingLevel !== thinkingLevel)

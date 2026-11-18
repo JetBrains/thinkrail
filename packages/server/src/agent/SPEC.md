@@ -198,10 +198,15 @@ re-opened transcripts provider-valid.
     fallback model behind the same proxy, which the repair makes cheap. It then refreshes the given
     runtimes without network and publishes `provider.changed` only when the file changed.
     `disableSessionServerFallback` (session manager, `session.disableServerFallback`) is the one
-    exception to "live sessions keep their model": it refuses with `SERVER_FALLBACK_NOT_USED` unless the
-    chat's model declares fallback targets, refreshes both the current and the session's generation,
-    and `setModel`s the refreshed model only while the chat is still on that model (one the user picked
-    meanwhile is left alone), so the chat's next request drops the field without a restart. If the
+    exception to "live sessions keep their model". It targets **the model of the request that failed** —
+    the session's last assistant message, which must have `stopReason: "error"` — not the chat's current
+    model, so a user who switched models after the failure never repairs a model that worked. It refuses
+    with `SERVER_FALLBACK_NOT_USED` when there is no such failed request or its model declares no
+    fallback targets (e.g. a Sonnet turn whose error merely matched), refreshes both the current and the
+    session's generation, and `setModel`s the refreshed model only while the chat is still on that model
+    (one the user picked meanwhile is left alone), so the chat's next request drops the field without a
+    restart. The failed model is read host-side from pi's messages rather than sent by the client: the
+    button exists only on the current failure, whose request is by construction the last one. If the
     refreshed model still declares fallbacks — pi ignored the override, e.g. it rejected `models.json`
     for an unrelated schema error — it refuses with `SERVER_FALLBACK_STILL_ON` instead of reporting a
     repair that would fail the same way and loop on the button. That rebind
