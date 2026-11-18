@@ -1032,7 +1032,7 @@ a project picker, the prompt hero, and the reused
   naming the effective same-appearance fallback, and is never silently written back. The panel never owns
   a theme list, media-query logic, pair derivation, or fallback — all come from `themes`; it derives only
   the family/contrast counterpart the two controls move to. The theme group ends with a **Neon glow &
-  animations** switch (`neon-glow-row`, on by default): a per-client preference held in the store and
+  animations** switch (`neon-glow-row`, off by default): a per-client preference held in the store and
   persisted by `shell/neonPreference.ts`, never a host setting, which toggles the accent glow and its motion
   ([`styles/COLOR.md`](../styles/COLOR.md), *Neon glow*); reduced motion still stops the motion when it is on.
   The bundled Helios Cobalt theme is labelled through `settings.appearance.themeName.heliosCobalt`. A **Custom themes** group

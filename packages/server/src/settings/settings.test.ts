@@ -196,14 +196,25 @@ test("stored theme mode and pair normalize without interpreting opaque ids", () 
 	expect(dormant.systemThemePair).toEqual(pair);
 });
 
+test("the default config follows the system with a complete pair", () => {
+	expect(getConfig()).toMatchObject({
+		theme: "codex-dark",
+		themeMode: "system",
+		systemThemePair: { light: "codex-light", dark: "codex-dark" },
+	});
+});
+
 test("system mode requires a complete pair and replaces it atomically", () => {
+	const legacy = JSON.stringify({ theme: "acme.fixed", themeMode: "fixed" });
+	writeFileSync(join(dataDir, "config.json"), legacy);
+	resetConfigCache();
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));
 	expect(() => updateConfig({ themeMode: "system" })).toThrow(
 		"system theme mode requires a complete pair",
 	);
 	expect(published).toEqual([]);
-	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+	expect(readFileSync(join(dataDir, "config.json"), "utf8")).toBe(legacy);
 
 	const first = { light: "first.light", dark: "first.dark" };
 	const second = { light: "second.light", dark: "second.dark" };
@@ -992,9 +1003,11 @@ test("loadConfig ignores the old layout settings object", () => {
 		}),
 	);
 	resetConfigCache();
+	const { systemThemePair: _defaultPair, ...defaults } = DEFAULT_CONFIG;
 	expect(getConfig()).toEqual({
-		...DEFAULT_CONFIG,
+		...defaults,
 		theme: "acme.persisted",
+		themeMode: "fixed",
 		otherAgentSkills: true,
 	});
 });

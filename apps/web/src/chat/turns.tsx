@@ -204,7 +204,7 @@ function userAttachments(content: WireUserMessage["content"], names?: string[]) 
 }
 
 const USER_BUBBLE_BASE =
-	"whitespace-pre-wrap [overflow-wrap:anywhere] rounded-lg border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8 tr-text-reading text-text-muted";
+	"whitespace-pre-wrap [overflow-wrap:anywhere] rounded-xl border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-16 py-8 tr-text-reading text-text-default";
 const USER_BUBBLE = cn("max-w-[85%]", USER_BUBBLE_BASE);
 
 // In unbounded chat-width mode the transcript row is a fixed measure that can be far wider than the
@@ -415,7 +415,7 @@ function SkillInvocationCard({
 			data-testid="skill-invocation-card"
 			data-chat-fold-root
 			data-expanded={expanded}
-			className="max-w-[85%] overflow-hidden rounded-lg border border-bubble-user-border bg-clip-padding bg-bubble-user-bg"
+			className="max-w-[85%] overflow-hidden rounded-xl border border-bubble-user-border bg-clip-padding bg-bubble-user-bg"
 		>
 			<button
 				ref={toggleRef}
@@ -473,7 +473,7 @@ function ReviewFixCard({ id, details }: { id: string; details: ReviewFixDetails 
 	return (
 		<div
 			data-testid="review-fix-card"
-			className="max-w-[85%] overflow-hidden rounded-lg border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8"
+			className="max-w-[85%] overflow-hidden rounded-xl border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8"
 		>
 			<span data-testid="review-fix-summary" className="block tr-text-reading text-text-default">
 				{summary}
@@ -492,7 +492,7 @@ function ReviewFixCard({ id, details }: { id: string; details: ReviewFixDetails 
 }
 
 const HOST_CARD_CLASS =
-	"max-w-[85%] overflow-hidden rounded-lg border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8";
+	"max-w-[85%] overflow-hidden rounded-xl border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8";
 
 function ContinuationRequestCard({ details }: { details: ContinueInWorkspaceRequestDetails }) {
 	const t = useT();

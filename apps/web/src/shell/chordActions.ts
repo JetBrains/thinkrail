@@ -26,6 +26,16 @@ export function toggleRightSide(): void {
 	if (workspaceId) state.enqueueLayoutIntent({ kind: "toggle-side", workspaceId, side: "right" });
 }
 
+/**
+ * The top bar's Review Changes control: hide the right side when it is shown, otherwise reveal the
+ * Files tool on its Changed mode (which shows the right side wherever Files is placed). A chat without
+ * a project has no git changes, so it lands on All files.
+ */
+export function toggleReviewPanel(rightSideVisible: boolean, mode: "all" | "changed"): void {
+	if (rightSideVisible) toggleRightSide();
+	else showFiles(mode);
+}
+
 export function toggleBottomPanel(): void {
 	const state = useAppStore.getState();
 	const workspaceId = state.activeWorkspaceId;

@@ -118,13 +118,13 @@ describe("radius at a call site", () => {
 		expect(read(TOKENS)).toMatch(/@theme static \{\s*--radius-\*:\s*initial;/);
 	});
 
-	it("keeps exactly the xs/sm/md/lg primitive family capped at 8px", () => {
+	it("keeps exactly the xs/sm/md/lg/xl/2xl primitive family capped at 20px", () => {
 		const declared = Object.fromEntries(
 			[...read(TOKENS).matchAll(/^\s*--radius-([a-z0-9]+)\s*:\s*([\d.]+)px;/gm)].map(
 				([, step, value]) => [step, Number(value)],
 			),
 		);
-		expect(declared).toEqual({ xs: 2, sm: 4, md: 6, lg: 8 });
+		expect(declared).toEqual({ xs: 2, sm: 4, md: 6, lg: 8, xl: 12, "2xl": 20 });
 	});
 
 	it("declares no radius step nothing consumes", () => {

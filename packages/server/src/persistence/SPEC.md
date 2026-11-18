@@ -86,7 +86,8 @@ Every config save stamps `configVersion` (currently `2`); load strips it, so it 
 or the wire. A config without it was written before version 1, and version 1's step loads its stored
 question panel height 60 (the old default) as 70 ([[submodule-server-settings]]); the next save stamps the
 version, so a 60 chosen later stays. Version 2's step loads a pre-v2 fixed `dark` preference (the old
-default, now the green Dark theme) as `DEFAULT_CONFIG.theme` (Helios Cobalt); a Dark chosen after the
+default, now the green Dark theme) as Helios Cobalt (`helios-cobalt`, pinned: the step keeps the meaning it
+shipped with even though `DEFAULT_CONFIG` is now the Codex pair); a Dark chosen after the
 migration is saved with version 2 and survives. A later value migration bumps the version and adds its
 own step. A newer host's higher version is not kept: this host stamps its own.
 

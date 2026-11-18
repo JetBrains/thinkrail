@@ -6,6 +6,14 @@ import { DropdownMenu, DropdownMenuTrigger } from "./dropdown-menu";
 import { TooltipProvider } from "./tooltip";
 
 const VARIANTS: ButtonVariant[] = ["primary", "soft-primary", "outline", "ghost", "destructive"];
+// Primary and destructive actions are pills (circles when icon-only); every other variant is rounded-md.
+const ROUNDING: Record<(typeof VARIANTS)[number], string> = {
+	primary: "rounded-full",
+	"soft-primary": "rounded-md",
+	outline: "rounded-md",
+	ghost: "rounded-md",
+	destructive: "rounded-full",
+};
 const SIZES: Record<
 	ButtonSize,
 	{ h: string; px: string; gap: string; icon: string; square: string }
@@ -39,7 +47,7 @@ describe("geometry is the size's, identical for every variant", () => {
 						g.px,
 						g.gap,
 						g.icon,
-						"rounded-sm",
+						ROUNDING[variant],
 						"border",
 						"tr-text-button",
 					]),
@@ -48,7 +56,7 @@ describe("geometry is the size's, identical for every variant", () => {
 					render(<IconButton variant={variant} size={size} icon={RiAddLine} label="Add" />),
 				);
 				expect(icon).toEqual(
-					expect.arrayContaining([g.square, "p-0", g.icon, "rounded-sm", "border"]),
+					expect.arrayContaining([g.square, "p-0", g.icon, ROUNDING[variant], "border"]),
 				);
 				expect(icon).not.toContain(g.px);
 			});

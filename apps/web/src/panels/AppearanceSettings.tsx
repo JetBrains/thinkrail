@@ -61,6 +61,8 @@ const BUNDLED_THEME_LABELS: Readonly<Record<string, MessageKey>> = {
 	"minimal-dark": "settings.appearance.themeName.minimalDark",
 	"minimal-light": "settings.appearance.themeName.minimalLight",
 	"helios-cobalt": "settings.appearance.themeName.heliosCobalt",
+	"codex-dark": "settings.appearance.themeName.codexDark",
+	"codex-light": "settings.appearance.themeName.codexLight",
 };
 
 function themeLabel(t: Translator, theme: Pick<ThemeDescriptor, "id" | "label">): string {

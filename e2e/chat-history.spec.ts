@@ -66,7 +66,7 @@ test("a disk chat with unfinished work auto-opens; a finished one stays in local
 	});
 	setMtime(doneChat.path, BASE_TS + 100_000);
 
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 
 	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	await expect(chatTabs).toHaveCount(1);
@@ -87,7 +87,7 @@ test("the native name command renames a chat durably without sending an agent tu
 		messages: [{ role: "user", text: "existing prompt", timestamp: BASE_TS }],
 	});
 
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	await expect(chatTab).toContainText("before command rename");
 	const input = page.getByTestId("chat-input");
@@ -117,7 +117,7 @@ test("open and closed chat rename controls edit their labels inline", async ({ p
 	});
 	setMtime(open.path, BASE_TS + 10_000);
 
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	await expect(chatTab).toContainText("open before rename");
 	const startTabRename = async () => {
@@ -188,7 +188,7 @@ test("long chat history remains named and scrollable", async ({ page }) => {
 		setMtime(session.path, BASE_TS + index * 1_000);
 	}
 
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await page.getByTestId("chat-history").first().click();
 	const popover = page.getByTestId("chat-history-popover");
 	await expect(popover).toHaveAccessibleName("Recently closed");
@@ -235,7 +235,7 @@ test("coarse wheel input crosses realistic virtual geometry before a giant histo
 		],
 	});
 
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await openPersistedChat(page, "giant hydrated history");
 
 	const chatScroll = page.getByTestId("chat-scroll");
@@ -333,7 +333,7 @@ test("a closed chat can be moved to trash from history", async ({ page }) => {
 	});
 	setMtime(kept.path, BASE_TS + 50_000);
 
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await expect(page.getByText("keep this transcript")).toBeVisible();
 	await page.getByTestId("chat-history").first().click();
 	const row = page.getByTestId("closed-chat-row").filter({ hasText: "trash this chat" });
@@ -366,7 +366,7 @@ test("trashing a chat converges to a second client", async ({ page, context }) =
 	});
 	setMtime(doomed.path, BASE_TS);
 
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await expect(page.getByText("shared doomed transcript")).toBeVisible();
 
 	const page2 = await context.newPage();
@@ -400,7 +400,7 @@ test("a client that misses chat deletion while offline reconciles it after recon
 	});
 	setMtime(doomed.path, BASE_TS);
 
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await expect(page.getByText("offline doomed transcript")).toBeVisible();
 
 	const context2 = await browser.newContext();
@@ -461,7 +461,7 @@ test("with no TODOs, the single newest disk chat opens as a fallback; older ones
 	});
 	setMtime(newest.path, BASE_TS + 50_000);
 
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 
 	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	await expect(chatTabs).toHaveCount(1);

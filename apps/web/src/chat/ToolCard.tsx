@@ -59,7 +59,7 @@ export function ToolCard({
 			data-status={status}
 			data-expanded={expanded}
 			className={cn(
-				"rounded-sm border border-border-default bg-container-elevated-bg",
+				"rounded-lg border border-border-muted bg-container-elevated-bg",
 				contentWidth && CONTENT_WIDTH_BREAKOUT,
 			)}
 		>
@@ -71,7 +71,7 @@ export function ToolCard({
 				aria-expanded={expanded}
 				onClick={toggle}
 				className={cn(
-					"flex w-full cursor-pointer select-none items-center gap-4 px-8 py-4 text-left tr-text-metadata focus-visible:focus-ring-inset",
+					"flex w-full cursor-pointer select-none items-center gap-6 rounded-lg px-12 py-6 text-left tr-text-metadata focus-visible:focus-ring-inset",
 					contentWidth && "[contain:inline-size]",
 				)}
 			>
@@ -95,7 +95,7 @@ export function ToolCard({
 				/>
 			</button>
 			{expanded ? (
-				<div className={cn("px-8 pb-4", isError && "text-feedback-error")}>
+				<div className={cn("px-12 pb-8", isError && "text-feedback-error")}>
 					<ToolRendererBody {...renderProps} imageLabel={summary} />
 				</div>
 			) : null}

@@ -65,7 +65,7 @@ another.
    startup continues. An update-metadata failure here precedes host acquisition and quits directly.
    Unless the neutral or hidden artifact modes are set, startup then opens a small, centered, frameless
    splash.
-   - It reads "Starting Helios…" (under a "Helios" wordmark in the Helios Cobalt accent), or "Finishing update to X…" when the update journal is pending,
+   - It reads "Starting Helios…" (under a "Helios" wordmark on the Codex Dark canvas), or "Finishing update to X…" when the update journal is pending,
      from the saved native labels (`desktop.splash.*`, the desktop fills in `{{version}}`).
    - Its content is a `data:` URL given at creation. The SDK delays `html:` content behind a 100 ms timer,
      which the synchronous server import would block. Startup awaits the splash's own `dom-ready`,

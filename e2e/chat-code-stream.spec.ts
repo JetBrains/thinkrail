@@ -48,7 +48,7 @@ test("a streamed code block grows without losing or repeating a line, and ansi k
 		name: title,
 		messages: [{ role: "user", text: "Show the code", timestamp: BASE_TS }],
 	});
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await openPersistedChat(page, title);
 	const chat = page.getByTestId("chat-scroll").filter({ visible: true });
 	await expect(chat).toBeVisible();

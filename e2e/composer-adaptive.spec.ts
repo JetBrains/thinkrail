@@ -221,7 +221,8 @@ test("pressing composer padding focuses the input without stealing control click
 	await expect(input).not.toBeFocused();
 	const popover = refresh.locator("xpath=ancestor::*[@data-radix-popper-content-wrapper]");
 	const popoverBox = await box(popover);
-	await page.mouse.click(popoverBox.x + 2, popoverBox.y + 2);
+	// Top edge, mid-width: the popover's rounded corners (xl radius) are not hit-testable.
+	await page.mouse.click(popoverBox.x + popoverBox.width / 2, popoverBox.y + 2);
 	await expect(input).not.toBeFocused();
 	await expect(refresh).toBeVisible();
 });

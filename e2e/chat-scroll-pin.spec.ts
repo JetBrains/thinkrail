@@ -73,7 +73,7 @@ test("a following reader's streaming edge stays on the pin line after every layo
 		name: title,
 		messages: history(2),
 	});
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await openPersistedChat(page, title);
 	const chat = page.getByTestId("chat-scroll").filter({ visible: true });
 	await expect(chat).toBeVisible();
@@ -118,7 +118,7 @@ test("a reader who wheels up while the edge is pinned detaches and the text unde
 		name: title,
 		messages: history(2),
 	});
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await openPersistedChat(page, title);
 	const chat = page.getByTestId("chat-scroll").filter({ visible: true });
 	await expect(chat).toBeVisible();

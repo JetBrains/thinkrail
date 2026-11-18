@@ -14,7 +14,7 @@ export type ButtonIcon = React.ElementType<{
 
 const variantClasses = cva(
 	[
-		"relative inline-flex select-none items-center justify-center whitespace-nowrap rounded-sm border tr-text-button",
+		"relative inline-flex select-none items-center justify-center whitespace-nowrap border tr-text-button",
 		"transition-colors focus-visible:focus-ring",
 		"button-disabled:pointer-events-none data-[loading=true]:cursor-progress",
 		"[&_svg]:pointer-events-none [&_svg]:shrink-0",
@@ -23,17 +23,17 @@ const variantClasses = cva(
 		variants: {
 			variant: {
 				primary:
-					"border-transparent bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered button-disabled:bg-control-primary-disabled-bg button-disabled:text-control-primary-disabled-text active:bg-control-primary-bg-hovered",
+					"rounded-full border-transparent bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered button-disabled:bg-control-primary-disabled-bg button-disabled:text-control-primary-disabled-text active:bg-control-primary-bg-hovered",
 				"soft-primary":
-					"border-primary-soft bg-primary-subtle text-primary hover:border-primary-muted hover:bg-control-soft-primary-bg-hovered data-[selected=true]:border-primary-muted data-[selected=true]:bg-control-soft-primary-bg-hovered button-disabled:border-control-disabled-border button-disabled:bg-control-disabled-bg button-disabled:text-control-disabled-text active:border-primary-muted active:bg-control-soft-primary-bg-hovered",
+					"rounded-md border-primary-soft bg-primary-subtle text-primary hover:border-primary-muted hover:bg-control-soft-primary-bg-hovered data-[selected=true]:border-primary-muted data-[selected=true]:bg-control-soft-primary-bg-hovered button-disabled:border-control-disabled-border button-disabled:bg-control-disabled-bg button-disabled:text-control-disabled-text active:border-primary-muted active:bg-control-soft-primary-bg-hovered",
 				outline:
-					"border-control-border-default bg-control-bg text-text-default hover:bg-control-bg-hovered data-[selected=true]:bg-control-bg-selected button-disabled:border-control-disabled-border button-disabled:bg-control-disabled-bg button-disabled:text-control-disabled-text active:bg-control-bg-hovered",
+					"rounded-md border-control-border-default bg-control-bg text-text-default hover:bg-control-bg-hovered data-[selected=true]:bg-control-bg-selected button-disabled:border-control-disabled-border button-disabled:bg-control-disabled-bg button-disabled:text-control-disabled-text active:bg-control-bg-hovered",
 				ghost: [
-					"border-transparent bg-transparent text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:bg-control-bg-hovered focus-visible:text-text-default data-[selected=true]:bg-control-bg-selected data-[selected=true]:text-text-default button-disabled:text-control-disabled-text active:bg-control-bg-hovered active:text-text-default",
+					"rounded-md border-transparent bg-transparent text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:bg-control-bg-hovered focus-visible:text-text-default data-[selected=true]:bg-control-bg-selected data-[selected=true]:text-text-default button-disabled:text-control-disabled-text active:bg-control-bg-hovered active:text-text-default",
 					"[[data-row]_&]:hover:bg-container-elevated-bg [[data-row]_&]:focus-visible:bg-container-elevated-bg [[data-row]_&]:data-[selected=true]:bg-container-elevated-bg [[data-row]_&]:active:bg-container-elevated-bg",
 				],
 				destructive:
-					"border-transparent bg-control-destructive-bg text-control-destructive-text hover:bg-control-destructive-bg-hovered button-disabled:bg-control-destructive-disabled-bg button-disabled:text-control-destructive-disabled-text active:bg-control-destructive-bg-hovered",
+					"rounded-full border-transparent bg-control-destructive-bg text-control-destructive-text hover:bg-control-destructive-bg-hovered button-disabled:bg-control-destructive-disabled-bg button-disabled:text-control-destructive-disabled-text active:bg-control-destructive-bg-hovered",
 			},
 			size: {
 				s: "[&_svg]:size-14",

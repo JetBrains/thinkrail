@@ -1958,8 +1958,9 @@ export function isJbcentralQuotaRefreshSeconds(value: unknown): value is number 
 }
 
 export const DEFAULT_CONFIG: AppConfig = {
-	theme: "helios-cobalt",
-	themeMode: "fixed",
+	theme: "codex-dark",
+	themeMode: "system",
+	systemThemePair: { light: "codex-light", dark: "codex-dark" },
 	analyticsEnabled: false,
 	analyticsConsentConfirmed: false,
 	notificationsEnabled: true,
@@ -2022,6 +2023,21 @@ export function normalizeFontSettings(value: unknown): FontSettings {
 	};
 }
 
+function defaultThemePreference(): ThemePreference {
+	return {
+		theme: DEFAULT_CONFIG.theme,
+		themeMode: DEFAULT_CONFIG.themeMode,
+		...(DEFAULT_CONFIG.systemThemePair
+			? {
+					systemThemePair: {
+						light: DEFAULT_CONFIG.systemThemePair.light,
+						dark: DEFAULT_CONFIG.systemThemePair.dark,
+					},
+				}
+			: {}),
+	};
+}
+
 export function normalizeThemePreference(value: unknown): ThemePreference {
 	const record = typeof value === "object" && value !== null && !Array.isArray(value) ? value : {};
 	const rawTheme = Reflect.get(record, "theme");
@@ -2030,10 +2046,12 @@ export function normalizeThemePreference(value: unknown): ThemePreference {
 	const systemThemePair = isSystemThemePair(rawPair)
 		? { light: rawPair.light, dark: rawPair.dark }
 		: undefined;
+	if (rawTheme === undefined && rawMode === undefined && rawPair === undefined) {
+		return defaultThemePreference();
+	}
+	// A record that names any theme field predates (or opted out of) the default pair: keep it fixed.
 	const themeMode =
-		isThemeMode(rawMode) && (rawMode === "fixed" || systemThemePair)
-			? rawMode
-			: DEFAULT_CONFIG.themeMode;
+		isThemeMode(rawMode) && (rawMode === "fixed" || systemThemePair) ? rawMode : "fixed";
 	return {
 		theme: typeof rawTheme === "string" ? rawTheme : DEFAULT_CONFIG.theme,
 		themeMode,

@@ -376,7 +376,7 @@ pub fn splash_html(message: &str) -> String {
     format!(
         "<!doctype html><html><head><meta charset=\"utf-8\">\
         <meta name=\"color-scheme\" content=\"dark light\"><title>Helios Agent IDE</title>\
-        <style>:root{{--bg:#060a12;--fg:#e6f0ff;--muted:#94a8cc;--accent:#00d4ff;--track:#1b2a4a}}\
+        <style>:root{{--bg:#181818;--fg:#ececec;--muted:#a3a3a3;--accent:#ececec;--track:#2b2b2b}}\
         @media (prefers-color-scheme: light){{:root{{--bg:#ffffff;--fg:#27272a;--muted:#52525b;--accent:#2563eb;--track:#e4e4e7}}}}\
         html,body{{margin:0;height:100%;background:var(--bg);color:var(--fg);cursor:default;user-select:none;-webkit-user-select:none}}\
         body{{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font:13px/1.4 system-ui,\"Segoe UI\",sans-serif}}\

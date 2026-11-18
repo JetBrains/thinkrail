@@ -183,7 +183,10 @@ async function disposeLiveSessions(page: Page): Promise<void> {
 	}
 }
 
-export async function createWorkspaceViaDialog(page: Page): Promise<Workspace> {
+export async function createWorkspaceViaDialog(
+	page: Page,
+	{ panels = true }: { panels?: boolean } = {},
+): Promise<Workspace> {
 	const before = new Set(loadPersistedWorkspaces().map((w) => w.id));
 	const dialog = page.getByTestId("new-workspace-dialog");
 	await expect(async () => {
@@ -195,6 +198,9 @@ export async function createWorkspaceViaDialog(page: Page): Promise<Workspace> {
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]').first()).toBeVisible();
 	const created = loadPersistedWorkspaces().find((w) => !before.has(w.id) && w.kind !== "default");
 	if (!created) throw new Error("Workspace was not persisted after creation");
+	// The Codex frame starts with the right side and bottom panel hidden; reveal them once the chat tab
+	// is up (revealing earlier races the chat opening).
+	if (panels) await showAllPanels(page);
 	return created;
 }
 
@@ -218,10 +224,48 @@ export async function openFixtureProject(page: Page): Promise<void> {
 	await expect(defaultWorkspaceRow(page)).toBeVisible();
 }
 
-export async function enterDefaultWorkspace(page: Page): Promise<void> {
+export async function enterDefaultWorkspace(
+	page: Page,
+	{ panels = true }: { panels?: boolean } = {},
+): Promise<void> {
 	await page.getByTestId("welcome-action").filter({ hasText: "Work in project folder" }).click();
 	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
+	// The Codex frame starts with the right side and bottom panel hidden; most specs exercise the
+	// workbench with them open, so open them as a user does. `panels: false` keeps the default frame.
+	if (panels) await showAllPanels(page);
+}
+
+/**
+ * Releases keyboard focus. A control that regains focus when a dialog closes (Settings) reopens its
+ * tooltip, which can sit over a neighbouring button; blur it before clicking something nearby.
+ */
+export async function releaseFocus(page: Page): Promise<void> {
+	await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+}
+
+/** The Codex preset keeps the bottom panel (terminals) hidden until asked for: show it via the top bar. */
+export async function showTerminalPanel(page: Page): Promise<void> {
+	const toggle = page.getByTestId("toggle-terminal");
+	// The top-bar toggle is hidden below the sm breakpoint; phones use the Mod+Shift+J chord.
+	if (!(await toggle.isVisible())) {
+		if (!(await page.getByTestId("bottom-panel").isVisible())) {
+			await pressPlatformShortcut(page, "Shift+J");
+		}
+	} else if ((await toggle.getAttribute("aria-pressed")) !== "true") {
+		await toggle.click();
+	}
+	await expect(page.getByTestId("bottom-panel")).toBeVisible();
+}
+
+/**
+ * Reveals the right side (on Specs, the tool Balanced opened on) and the bottom panel the way a user
+ * does in the Codex shell: a rail entry and the top bar's terminal toggle. Idempotent.
+ */
+export async function showAllPanels(page: Page): Promise<void> {
+	await revealWorkbenchTool(page, "specs");
+	await expect(page.getByTestId("right-stack")).toBeVisible();
+	await showTerminalPanel(page);
 }
 
 // Use this helper when a pane must be visible; rail controls toggle on each click. "files" means Files in All mode, "changes" Files in Changed mode.
@@ -232,7 +276,12 @@ export async function revealWorkbenchTool(
 	const railTool = tool === "changes" ? "files" : tool;
 	const control = page.getByTestId(`tool-rail-${railTool}`);
 	await expect(control).toBeVisible();
-	if ((await control.getAttribute("aria-pressed")) !== "true") await control.click();
+	if ((await control.getAttribute("aria-pressed")) !== "true") {
+		// A focus tooltip left on a top-bar control (e.g. Settings after its dialog closes) can sit over
+		// the rail's first entry; release that focus before clicking.
+		await releaseFocus(page);
+		await control.click();
+	}
 	await expect(control).toHaveAttribute("aria-pressed", "true");
 	if (railTool !== "files") return;
 	const mode = page.getByTestId(tool === "changes" ? "files-mode-changed" : "files-mode-all");
@@ -376,6 +425,22 @@ export async function expandActivityStep(page: Page, tool: string): Promise<Loca
 	return step;
 }
 
+/**
+ * Expands Settings → Appearance's fixed-mode theme list. A fresh host follows the system (the Codex
+ * pair) and hides that list, so a client still in system mode first fixes an appearance: the one it is
+ * showing, unless the caller names another.
+ */
+export async function expandThemeList(page: Page, appearance?: "light" | "dark"): Promise<void> {
+	const dialog = page.getByTestId("settings-dialog");
+	const toggle = dialog.getByTestId("theme-toggle");
+	if (!(await toggle.isVisible())) {
+		const showing =
+			appearance ?? (await page.locator("html").getAttribute("data-theme-appearance"));
+		await dialog.getByTestId(`theme-mode-${showing === "light" ? "light" : "dark"}`).click();
+	}
+	await expandDisclosure(toggle);
+}
+
 /** Opens an `aria-expanded` disclosure (a Settings theme list, layout Advanced, …) unless it is already open. */
 export async function expandDisclosure(toggle: Locator): Promise<void> {
 	await expect(toggle).toBeVisible();
@@ -425,10 +490,13 @@ export function pseudoBackgroundColor(element: Locator, pseudo: string): Promise
 }
 
 export async function waitTerminalReady(page: Page): Promise<void> {
+	// Terminals live in the bottom panel, which the Codex frame keeps hidden until asked for.
+	await showTerminalPanel(page);
 	await expect(visibleTerminal(page)).toHaveAttribute("data-ready", "true");
 }
 
 export async function openTerminal(page: Page): Promise<void> {
+	await showTerminalPanel(page);
 	const tabs = page.getByTestId("terminal-tab");
 	const previousCount = await tabs.count();
 	await page.getByTestId("terminal-add").click();

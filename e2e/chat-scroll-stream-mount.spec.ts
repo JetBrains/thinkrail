@@ -121,7 +121,7 @@ for (const { order, mode, viewport } of cases) {
 			name: title,
 			messages: history(4),
 		});
-		await enterDefaultWorkspace(page);
+		await enterDefaultWorkspace(page, { panels: false });
 		const chatTab = page
 			.locator('[data-testid="editor-tab"][data-kind="chat"]')
 			.filter({ hasText: title });

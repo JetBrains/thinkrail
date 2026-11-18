@@ -206,7 +206,7 @@ test("wide code blocks and tool results grow past the chat column only while it 
 	await page.setViewportSize({ width: 1400, height: 900 });
 	await openFixtureProject(page);
 	seedTranscript();
-	await enterDefaultWorkspace(page);
+	await enterDefaultWorkspace(page, { panels: false });
 	await openPersistedChat(page, CHAT_NAME);
 	await hideAuxiliaryWorkbench(page);
 

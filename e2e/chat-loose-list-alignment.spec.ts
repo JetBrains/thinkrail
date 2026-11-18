@@ -19,7 +19,7 @@ test("settled loose list text stays on the marker's first line", async ({ page }
 		],
 	});
 	try {
-		await enterDefaultWorkspace(page);
+		await enterDefaultWorkspace(page, { panels: false });
 		await openPersistedChat(page, "Loose list alignment");
 		await expect(
 			page.locator(`[data-testid="editor-tab"][data-kind="chat"][data-session-id="${session.id}"]`),
@@ -91,7 +91,7 @@ for (const width of [1280, 900]) {
 			],
 		});
 		try {
-			await enterDefaultWorkspace(page);
+			await enterDefaultWorkspace(page, { panels: false });
 			await openPersistedChat(page, `List boundaries ${width}`);
 			await expect(
 				page.locator(

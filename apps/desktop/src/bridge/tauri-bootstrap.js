@@ -16,6 +16,10 @@
 	const INSET_RIGHT_VAR = "--window-chrome-inset-right";
 	const DRAG_REGION_ATTR = "data-window-chrome-drag-region";
 	const TITLE_BAR_REGION_PROPERTY = "--electrobun-app-region";
+	// The web UI's window-drag utilities publish this shell-neutral mirror of `app-region`; nothing
+	// rewrites stylesheets under Tauri, so it is read first and Electrobun's property is the fallback.
+	const WEB_APP_REGION_PROPERTY = "--tr-app-region";
+	const TITLE_BAR_REGION_PROPERTIES = [WEB_APP_REGION_PROPERTY, TITLE_BAR_REGION_PROPERTY];
 
 	function isInset(value) {
 		return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= MAX_INSET;
@@ -106,7 +110,7 @@
 		} catch {}
 		try {
 			const style = getComputedStyle(element);
-			for (const property of [TITLE_BAR_REGION_PROPERTY, "app-region", "-webkit-app-region"]) {
+			for (const property of [...TITLE_BAR_REGION_PROPERTIES, "app-region", "-webkit-app-region"]) {
 				const region = String(style.getPropertyValue(property)).trim().toLowerCase();
 				if (region === "drag" || region === "no-drag") return region;
 			}

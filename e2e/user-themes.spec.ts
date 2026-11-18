@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
-import { expandDisclosure } from "./fixtures/app";
+import { expandThemeList } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 
 const THEMES_DIR = join(E2E_DATA_DIR, "themes");
@@ -29,7 +29,7 @@ async function openThemeList(page: Page) {
 	const dialog = page.getByTestId("settings-dialog");
 	if (!(await dialog.isVisible())) await page.getByTestId("open-settings").click();
 	await page.getByTestId("settings-nav-appearance").click();
-	await expandDisclosure(dialog.getByTestId("theme-toggle"));
+	await expandThemeList(page);
 	return dialog;
 }
 
@@ -64,7 +64,7 @@ test("a theme file dropped into the themes folder is listed, applied, live-reloa
 	await expect.poll(() => background(page)).toBe("#002244");
 
 	removeThemes();
-	await expect(page.locator("html")).toHaveAttribute("data-theme", "helios-cobalt");
+	await expect(page.locator("html")).toHaveAttribute("data-theme", "codex-dark");
 	const restored = await openThemeList(page);
 	await expect(restored.getByTestId("theme-option-user.ocean")).toHaveCount(0);
 	await expect(restored.getByTestId("theme-fallback-warning")).toBeVisible();
