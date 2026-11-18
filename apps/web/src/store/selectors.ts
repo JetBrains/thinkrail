@@ -24,6 +24,7 @@ import {
 	type ResourceRecord,
 	resourceTallyTotal,
 	SEARCH_PROTOCOL_VERSION,
+	SERVER_FALLBACK_PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	type SessionResourceHistory,
@@ -196,6 +197,12 @@ export function selectOnboardingActive(
 
 export function selectSupportsMcp(state: ProtocolState): boolean {
 	return state.protocolVersion !== null && state.protocolVersion >= MCP_PROTOCOL_VERSION;
+}
+
+export function selectSupportsServerFallbackRepair(state: ProtocolState): boolean {
+	return (
+		state.protocolVersion !== null && state.protocolVersion >= SERVER_FALLBACK_PROTOCOL_VERSION
+	);
 }
 
 export function supportsChatResources(protocolVersion: number | null): boolean {

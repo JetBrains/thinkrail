@@ -283,6 +283,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   catalog. An ambient API key must not preempt a configured subscription; explicit selections, available
   saved defaults and pi's global default still take precedence, including environment-backed ones. This
   changes only new-chat resolution, never an existing session's model or a failed request's connection.
+  `session.disableServerFallback` delegates to agent's `disableSessionServerFallback`;
   `model.contextSettings` and `model.setContextWindow` delegate to agent's `modelContext`
   adapter and return its `ModelContextSetting[]`; the mutation names a provider/model target or all
   eligible pairs, never arbitrary model metadata, and successful saves reuse `provider.changed` to

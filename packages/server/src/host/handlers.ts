@@ -31,6 +31,7 @@ import {
 	compactSession,
 	deleteSession,
 	disableAnthropicExtraUsageWarning,
+	disableSessionServerFallback,
 	ensureSessionAttached,
 	followUpSession,
 	getResourceHistoryPage,
@@ -1368,6 +1369,7 @@ const handlers: WsHandlers = {
 		noteRecentModel(await setSessionModel(p.sessionId, p.model));
 		return { ok: true } as const;
 	},
+	"session.disableServerFallback": (p) => disableSessionServerFallback(p.sessionId),
 	"session.setThinkingLevel": (p) => {
 		setSessionThinkingLevel(p.sessionId, p.level);
 		return { ok: true } as const;
