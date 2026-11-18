@@ -79,7 +79,10 @@ lookup, skill roots — defaults to it, so an installed extension is composed ex
   stagedSkillsDir?)` (the roots that own an extension's skills: the resolved source roots without a
   staged dir or for an installed extension — never staged — that owner folder with one, nothing for an
   extension without `skillPackages`), `startInstalledExtensions({ dataDir, onChange, npmCommand?, installer? })`
-  (`installedHost.ts`: builds the installed runtime with the built-ins' names reserved,
+  (`installedHost.ts`: builds the installed runtime with every built-in's name reserved — the server
+  registry's plus the web-only built-ins the host otherwise never sees, since an installed package of
+  the same name would share their on/off switch; a test holds the list to the `thinkrail-extensions/`
+  packages —
   `skillPackageRoots` as its resolver and the catalog's tool names (`extensionToolNames`, the same
   memoised description Settings lists) for its status file, makes it the host's one, starts the watcher and a background
   reconcile, and returns its stop). The specifier is kept

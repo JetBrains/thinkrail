@@ -20,6 +20,15 @@ export const builtinServerExtensions: readonly ServerExtensionEntry[] = [
 	{ specifier: "@thinkrail/ext-next-steps/server", extension: nextSteps },
 ];
 
+const WEB_ONLY_BUILTIN_EXTENSION_NAMES: readonly string[] = ["hint-mode"];
+
+export function builtinExtensionNames(): string[] {
+	return [
+		...builtinServerExtensions.map((entry) => entry.extension.name),
+		...WEB_ONLY_BUILTIN_EXTENSION_NAMES,
+	];
+}
+
 const installedEntries = new WeakMap<InstalledServerExtension, ServerExtensionEntry>();
 let current: {
 	servers: readonly InstalledServerExtension[];

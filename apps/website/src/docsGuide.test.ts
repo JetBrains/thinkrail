@@ -403,15 +403,10 @@ describe("the guide's facts about the sample and the SDK", () => {
 
 	test("names the built-in extensions whose names are reserved", () => {
 		const listed = /built-in extension\s*\(([^)]*)\)/.exec(guide.text.replace(/\n/g, " "))?.[1];
-		const builtins = readdirSync(new URL("thinkrail-extensions/", repo))
-			.filter((folder) =>
-				existsSync(new URL(`thinkrail-extensions/${folder}/server/index.ts`, repo)),
-			)
-			.map(
-				(folder) =>
-					/^\tname: "([^"]+)",$/m.exec(read(`thinkrail-extensions/${folder}/server/index.ts`))?.[1],
-			);
-		expect(codeSpans(listed ?? "").sort()).toEqual(builtins.sort() as string[]);
+		const builtins = readdirSync(new URL("thinkrail-extensions/", repo), { withFileTypes: true })
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name);
+		expect(codeSpans(listed ?? "").sort()).toEqual(builtins.sort());
 	});
 
 	test("quotes utilities, classes, the tool and the setting the sample really uses", () => {

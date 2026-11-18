@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,8 +11,17 @@ import {
 	type ServerExtensionEntry,
 	stagedExtensionSkillRoute,
 } from "./index";
+import { builtinExtensionNames } from "./registry";
 
 describe("server extension registry", () => {
+	it("reserves the name of every built-in extension, including those with no server half", () => {
+		const root = new URL("../../../../thinkrail-extensions/", import.meta.url);
+		const packages = readdirSync(root, { withFileTypes: true })
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name);
+		expect(builtinExtensionNames().sort()).toEqual(packages.sort());
+	});
+
 	it("lists each extension with its public server specifier bound to the imported descriptor", async () => {
 		const specifiers = builtinServerExtensions.map((entry) => entry.specifier);
 		expect(specifiers).toEqual([

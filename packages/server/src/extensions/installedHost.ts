@@ -8,7 +8,7 @@ import {
 	piExtensionInstaller,
 	setInstalledExtensions,
 } from "./installed";
-import { builtinServerExtensions } from "./registry";
+import { builtinExtensionNames } from "./registry";
 import { skillPackageRoots } from "./skills";
 
 const log = logger("extensions");
@@ -25,7 +25,7 @@ export interface InstalledExtensionsHostOptions {
 export function startInstalledExtensions(options: InstalledExtensionsHostOptions): () => void {
 	const runtime = new InstalledExtensions({
 		dataDir: options.dataDir,
-		reservedNames: () => builtinServerExtensions.map((entry) => entry.extension.name),
+		reservedNames: builtinExtensionNames,
 		skillRoots: skillPackageRoots,
 		onChange: options.onChange,
 		toolNames: extensionToolNames,
