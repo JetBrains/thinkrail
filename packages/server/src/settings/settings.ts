@@ -66,6 +66,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: true,
 	settleIdleDays: true,
+	disabledSubagents: true,
 	disabledExtensions: true,
 	extensionSettings: true,
 	otherAgentSkills: true,
@@ -265,6 +266,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		systemThemePair,
 		jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds,
+		disabledSubagents,
 		disabledExtensions,
 		extensionSettings,
 		disabledPackages,
@@ -274,6 +276,10 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	const nextKeybindings = keybindings === undefined ? undefined : validateKeybindings(keybindings);
 	const extensionSettingsUpdate =
 		extensionSettings === undefined ? undefined : validateExtensionSettings(extensionSettings);
+	const nextDisabledSubagents =
+		disabledSubagents === undefined
+			? undefined
+			: validateNameList(disabledSubagents, "disabledSubagents", "agent names");
 	const nextDisabledExtensions =
 		disabledExtensions === undefined
 			? undefined
@@ -373,6 +379,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		...(favoriteModels === undefined
 			? {}
 			: { favoriteModels: validateFavoriteModels(favoriteModels) }),
+		...(nextDisabledSubagents === undefined ? {} : { disabledSubagents: nextDisabledSubagents }),
 		...(nextDisabledExtensions === undefined ? {} : { disabledExtensions: nextDisabledExtensions }),
 		...(extensionSettingsUpdate === undefined
 			? {}
@@ -405,6 +412,17 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	cached = next;
 	publishSettings?.(next, runtimeUpdate);
 	return next;
+}
+
+export function setSubagentEnabled(name: string, enabled: boolean): AppConfig {
+	if (typeof name !== "string" || !name.trim()) {
+		throw new Error("subagent name must be a non-blank string");
+	}
+	if (typeof enabled !== "boolean") {
+		throw new Error("subagent enabled must be a boolean");
+	}
+	const without = getConfig().disabledSubagents.filter((candidate) => candidate !== name);
+	return updateConfig({ disabledSubagents: enabled ? without : [...without, name] });
 }
 
 /** Records an explicit model choice at the head of `recentModels` (deduped, capped), then publishes. */

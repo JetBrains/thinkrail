@@ -75,6 +75,13 @@ first and disabled/replaced rows last. `selectMcpWorkspaceStarting` drives the b
 re-read while a server starts. The state vocabulary and the attention/active predicates live in `lib`
 (`mcpState`) because the props-only chat resources module shares them.
 
+## Agent availability
+
+`disabledSubagents` mirrors `AppConfig.disabledSubagents` through the welcome/`applyConfig` fold (`[]` from
+an older host); the roster's switches render only it. `selectActiveSubagentProjectTrust` is the active
+repository workspace's project `piResourceTrust` (undefined for a chat or no workspace), which keys the
+roster's catalog reads ([[submodule-web-panels]]).
+
 ## Boundary
 
 - **Owns:** `appStore.ts` — connection/projects/workspaces state + setters. Connection state has two

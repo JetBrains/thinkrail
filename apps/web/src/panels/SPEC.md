@@ -742,7 +742,7 @@ a project picker, the prompt hero, and the reused
   content pane. It stands near full height (the window less a `--space-24` margin) but grows no wider than
   the 220px nav plus the content column (`max-w-760`), since a wider page only stretches rows (user,
   2026-11-17). At `md`+ the tabs are a rail grouped **Agent** (Models, Providers, Subagents — the global
-  settings and this workspace's override —, Extensions & skills, MCP servers, Prompt templates, Environment) ·
+  settings, this workspace's override and the available agent roles —, Extensions & skills, MCP servers, Prompt templates, Environment) ·
   **Interface** (Appearance, Text & fonts — fonts, custom fonts and both line widths —, Chat, Layout,
   Keyboard, Language, Voice input, Terminal) · **System** (Workspaces, Integrations, Notifications, Privacy,
   Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
@@ -1224,6 +1224,18 @@ a project picker, the prompt hero, and the reused
   (an invalid draft shows its range and is never sent, no clamping), validated against
   `SUBAGENT_MAX_CONCURRENT`. Global mutations converge through `settings.changed`, workspace ones through
   `workspace.updated`; none is optimistic.
+  From `SUBAGENT_CATALOG_PROTOCOL_VERSION` the page ends with **Available agents** (`AvailableAgents.tsx`,
+  `SubagentSettings`' gated `roster`; scope *All projects*, catalog id `subagent-roles`, Refresh as the
+  group action): one row per definition `subagent.list` returns for the active repository workspace — name,
+  translated source, description, pinned raw model reference or parent/invocation inheritance, explicit
+  thinking effort — and a global per-name switch (Changed while off; Reset re-enables). Disabled
+  definitions stay listed and new names default enabled; no prompt, path or editor is exposed. Copy states
+  global scope, new-launch-only enforcement (ongoing work continues), trusted-project scope and manual
+  Refresh after file edits. `useSubagentCatalog` reads `subagent.list` on mount, Refresh, workspace/trust
+  change and each welcome; a context-keyed lifetime shows loading at once and discards superseded
+  responses. Loading, empty and retryable failure are explicit. A role switch sends one
+  `subagent.setEnabled({ name, enabled })` request, like the page's other switches: it renders only the
+  authoritative `settings.changed` state and toasts a rejection.
   The **shell-owned injected Layout section** (`shell/LayoutSettings`) has three groups. **Presets** is
   one `SettingsList` (`layout-presets`) of Balanced/Focus/Review and the named custom presets. A row's
   primary applies it on Enter or a click, through one "Apply this layout?" confirm (`layout-apply-confirm`),

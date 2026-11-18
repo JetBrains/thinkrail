@@ -35,6 +35,7 @@ export interface SubagentsExtensionOptions {
 	delegationRoot?: string;
 	scope?: string;
 	isEnabled?: () => boolean;
+	isAgentEnabled?: (name: string) => boolean;
 	canDeliverCompletion?: () => boolean;
 }
 
@@ -211,6 +212,8 @@ function createOwner(options: SubagentsExtensionOptions, retained: boolean): Sub
 		const delegationRoot = options.delegationRoot ?? defaultDelegationRoot();
 		const scope = options.scope ?? DEFAULT_SCOPE;
 		const isEnabled = () => !closed && (options.isEnabled?.() ?? true);
+		const isAgentEnabled = (name: string) => options.isAgentEnabled?.(name) ?? true;
+		const agentDisabled = (name: string) => `Subagent "${name}" is disabled.`;
 		const erroredRunDetails = new Map<string, DelegationRunDetails>();
 		pi.on("tool_result", (event) => {
 			const details = erroredRunDetails.get(event.toolCallId);
@@ -278,7 +281,7 @@ function createOwner(options: SubagentsExtensionOptions, retained: boolean): Sub
 		}
 
 		function registerAgentTool(sessionCtx: ExtensionContext): void {
-			const definitions = discoverFor(sessionCtx);
+			const definitions = discoverFor(sessionCtx).filter((d) => isAgentEnabled(d.name));
 			const known = agentListLines(definitions);
 
 			pi.registerTool({
@@ -324,6 +327,9 @@ ${known}`,
 				}),
 				async execute(toolCallId, params, signal, onUpdate, ctx) {
 					if (!isEnabled()) throw new Error("Subagents are disabled in this session.");
+					if (!isAgentEnabled(params.subagent_type)) {
+						throw new Error(agentDisabled(params.subagent_type));
+					}
 					const definition = definitions.find((d) => d.name === params.subagent_type);
 					if (!definition) {
 						throw new Error(
@@ -348,15 +354,24 @@ ${known}`,
 						session: mapping.session,
 					});
 
-					if (!isEnabled()) {
+					const enabled = isEnabled();
+					if (!enabled || !isAgentEnabled(definition.name)) {
 						await child.dispose();
-						throw new Error("Subagents are disabled in this session.");
+						throw new Error(
+							enabled ? agentDisabled(definition.name) : "Subagents are disabled in this session.",
+						);
 					}
 
+					let dequeued = false;
 					const run = child.runQueued(params.task, {
 						...(mapping.maxTurns !== undefined ? { maxTurns: mapping.maxTurns } : {}),
 						...(!params.run_in_background && signal !== undefined ? { signal } : {}),
 						onUpdate: (details) => {
+							if (!dequeued) {
+								dequeued = true;
+								if (!isAgentEnabled(definition.name))
+									void child.abort(agentDisabled(definition.name)).catch(() => {});
+							}
 							onUpdate?.({ content: [{ type: "text", text: details.status }], details });
 						},
 					});
@@ -385,6 +400,9 @@ ${known}`,
 					}
 
 					const outcome = await run;
+					if (outcome.details.abortReason === agentDisabled(definition.name)) {
+						throw new Error(agentDisabled(definition.name));
+					}
 					if (outcome.status === "error") {
 						erroredRunDetails.set(toolCallId, outcome.details);
 						throw new Error(

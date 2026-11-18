@@ -72,6 +72,7 @@ import type {
 	SessionResources,
 	SessionStateRecord,
 	SpecGraphSnapshot,
+	SubagentCatalogEntry,
 	SubagentCompletionDetails,
 	SubagentOverride,
 	SurveyInvitationResponse,
@@ -143,7 +144,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 126;
+export const PROTOCOL_VERSION = 127;
+export const SUBAGENT_CATALOG_PROTOCOL_VERSION = 127;
 export const SERVER_FALLBACK_PROTOCOL_VERSION = 126;
 export const MCP_USER_SERVERS_PROTOCOL_VERSION = 125;
 export const ARTIFACT_ROLES_PROTOCOL_VERSION = 124;
@@ -536,6 +538,8 @@ export const WS_METHODS = {
 	sessionNudge: "session.nudge",
 	sessionActivityList: "session.activityList",
 	sessionGetMessages: "session.getMessages",
+	subagentList: "subagent.list",
+	subagentSetEnabled: "subagent.setEnabled",
 	subagentGetTranscript: "subagent.getTranscript",
 	sessionResources: "session.resources",
 	sessionResourceHistory: "session.resourceHistory",
@@ -1399,6 +1403,14 @@ export interface WsMethodMap {
 	"subagent.stopAll": {
 		params: { workspaceId: string; parentSessionId: string };
 		result: Ack & { targeted: number };
+	};
+	"subagent.setEnabled": {
+		params: { name: string; enabled: boolean };
+		result: Ack;
+	};
+	"subagent.list": {
+		params: { workspaceId?: string };
+		result: SubagentCatalogEntry[];
 	};
 	"subagent.getTranscript": {
 		params: { workspaceId: string; parentSessionId: string; childSessionId: string };

@@ -5562,3 +5562,21 @@ test("a reveal the view handled is cleared, and only for its own tick, so a remo
 	s().clearFileTabReveal("ws1", "ws1:src/a.ts", 2);
 	expect(s().tabsByWorkspace.ws1?.[0]).not.toHaveProperty("reveal");
 });
+
+test("agent availability hydrates from welcome and settings.changed, with old-host defaults", () => {
+	const store = useAppStore.getState();
+	store.installWelcomeSnapshot(124, [], [], {
+		...DEFAULT_CONFIG,
+		disabledSubagents: ["worker", "missing-role"],
+	});
+	expect(useAppStore.getState().disabledSubagents).toEqual(["worker", "missing-role"]);
+	store.applyConfig({ ...DEFAULT_CONFIG, disabledSubagents: ["scout"] });
+	expect(useAppStore.getState().disabledSubagents).toEqual(["scout"]);
+	const older = { ...DEFAULT_CONFIG };
+	Reflect.deleteProperty(older, "disabledSubagents");
+	store.installWelcomeSnapshot(123, [], [], older);
+	expect(useAppStore.getState().disabledSubagents).toEqual([]);
+	store.applyConfig({ ...DEFAULT_CONFIG, disabledSubagents: ["worker"] });
+	store.applyConfig(older);
+	expect(useAppStore.getState().disabledSubagents).toEqual([]);
+});

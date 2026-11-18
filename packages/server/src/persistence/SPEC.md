@@ -93,6 +93,8 @@ from before the switch writes one (it loaded other agents' skills, #1210), and `
 Every config this host saves carries the field, so the default never flips later; an old install that never
 saved a config gets the new default.
 
+Config validation normalizes `disabledSubagents` like `disabledExtensions`: absent/non-array → `[]`, malformed entries dropped, non-blank names deduped, unknown names retained.
+
 Config validation normalizes the closed theme mode plus complete opaque system pair, the closed
 composer-growth preference, the closed Windows terminal-shell preference (invalid/absent →
 `DEFAULT_CONFIG.terminalWindowsShell`), the question panel height (whole `40–100` percent), chat/file line

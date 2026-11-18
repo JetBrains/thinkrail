@@ -84,6 +84,7 @@ import {
 	SESSION_TITLE_MAX_LENGTH,
 	SPEC_SECTIONS_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
+	SUBAGENT_CATALOG_PROTOCOL_VERSION,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
@@ -408,7 +409,7 @@ test("extension editor text is pinned to v115", () => {
 });
 
 test("turning off server-side fallback is pinned to v126", () => {
-	expect(PROTOCOL_VERSION).toBe(126);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SERVER_FALLBACK_PROTOCOL_VERSION);
 	expect(SERVER_FALLBACK_PROTOCOL_VERSION).toBe(126);
 	expect(WS_METHODS.sessionDisableServerFallback).toBe("session.disableServerFallback");
 });
@@ -772,4 +773,12 @@ test("ask_user_question discuss answers are pinned to v105, after background wor
 	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBe(105);
 	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBeGreaterThan(WORKSPACE_CREATION_PROTOCOL_VERSION);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ASK_DISCUSS_PROTOCOL_VERSION);
+});
+
+test("subagent catalog and per-name preference start at protocol 127", () => {
+	expect(WS_METHODS.subagentList).toBe("subagent.list");
+	expect(WS_METHODS.subagentSetEnabled).toBe("subagent.setEnabled");
+	expect(SUBAGENT_CATALOG_PROTOCOL_VERSION).toBe(127);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SUBAGENT_CATALOG_PROTOCOL_VERSION);
+	expect(DEFAULT_CONFIG.disabledSubagents).toEqual([]);
 });

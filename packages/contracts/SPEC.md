@@ -181,6 +181,16 @@ the palette ranks with — kept here so host-side search can rank with the same 
   (`/providers/*`, `/api/*`, `/bedrock-provider`, … — they statically load the Node provider SDKs); and
   importing `server` / `shared` / `web`.
 
+## Subagent catalog (v127)
+
+`SUBAGENT_CATALOG_PROTOCOL_VERSION` (127) gates `subagent.list`, `subagent.setEnabled` and writes of
+`AppConfig.disabledSubagents` (default `[]`); the client checks it. `subagent.list({ workspaceId? })`
+returns `SubagentCatalogEntry[]` — `name`, `description`, `source` (`builtin` | `personal` | `project`),
+optional `model` and `thinking`, disabled entries included, never a prompt body or path; it takes no cwd
+([[submodule-server-host]] derives project admission). `subagent.setEnabled({ name, enabled })` returns
+`Ack` and changes only that name ([[submodule-server-settings]]); the result converges through
+`settings.changed`, with no new channel. Enforcement: [[module-pi-subagents]].
+
 ## Contents
 
 - **piProtocol.ts** — `import type` re-exports from the pi package roots (type-only → erased at build):

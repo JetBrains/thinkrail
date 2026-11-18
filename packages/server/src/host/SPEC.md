@@ -13,6 +13,16 @@ tags: [host, public-surface-checked]
 The wire and composition root: `Bun.serve` HTTP+WS, static SPA serving, the WS method→handler registry,
 channel fan-out, and the process-boot wrapper both launchers share.
 
+## Subagent catalog
+
+`subagent.list` takes an optional `workspaceId`, never a caller cwd: the host resolves the registered
+workspace and passes its worktree and `admissionContextFor(...).piResourceTrusted` to agent's metadata-only
+`listSubagentCatalog`, so without a workspace or pi-resource trust only built-in and personal definitions
+are read. Each read rediscovers files; there is no catalog state or push. `subagent.setEnabled` delegates
+to settings' `setSubagentEnabled` ([[submodule-server-settings]]). The host injects
+`getConfig().disabledSubagents` as agent's live per-name resolver and resets it on stop. Wire shape and
+gate: [[module-contracts]].
+
 ## Boundary
 
 - **Owns:** `server.ts` (async `createServer` first asks auth to start Central artifact watching and publish

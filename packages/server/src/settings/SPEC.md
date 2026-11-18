@@ -41,7 +41,7 @@ interval (`1–3600`, default 30), because those values govern host process cade
   `null` for never; default `7`. Validated like every other known field; a hand-edited non-number falls
   back to the default rather than disabling settling.
 - **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (reject a non-object or unknown key → merge → validate known fields → persist → publish the merged `AppConfig` and successful applied `AppConfigUpdate`); the font settings' shape (`interfaceFont` / `codeFont` through `isFontChoice`, `codeFontSize`, `codeLigatures`, `fontWeightOffset`), each normalized back to its own default on load — which family a choice names, and whether it renders, is the client's; line-width and resource-free custom-preset validation/normalization; custom-preset safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
-- **Public surface (barrel):** `getConfig`, `updateConfig`, `noteRecentModel`, `setSettingsPublisher`, `SettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
+- **Public surface (barrel):** `getConfig`, `updateConfig`, `setSubagentEnabled`, `noteRecentModel`, `setSettingsPublisher`, `SettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
 - **Allowed deps:** `persistence` (`loadConfig`/`saveConfig`); `contracts` (`AppConfig`, `LayoutPreset`,
   `isTerminalWindowsShell`, `isKeybindingOverrides`); `shared` (`CodedError`).
 - **Forbidden:** host or another feature sibling; current-layout document/snapshot types; workspace ids/resources; current frame validation; owning WS channels; or importing web preset definitions.
@@ -78,6 +78,18 @@ interval (`1–3600`, default 30), because those values govern host process cade
   rule ([[submodule-web-keybindings]]). On load, malformed chords are dropped, an entry left with none falls
   back to its defaults, and a stored `[]` stays unbound. Gated on `KEYBINDINGS_PROTOCOL_VERSION` (v123):
   an older host rejects the key, so the client sends it only above the gate (`supportsKeybindings`).
+- `disabledSubagents` lists agent definition names switched off globally; absent means `[]`. Validation,
+  dedupe and unknown-name retention are `disabledExtensions`'; `host` turns it into the agent's live
+  per-name resolver ([[submodule-server-host]]) and [[module-pi-subagents]] enforces it.
+  **`setSubagentEnabled(name, enabled)`** (the `subagent.setEnabled` write) validates a non-blank string and
+  a boolean, then adds or removes only that name against the latest cached list and calls `updateConfig`
+  synchronously: with no await between read and write, concurrent intents for different names from
+  different windows both survive without another state owner, and an invalid intent or failed write
+  changes nothing. Whole-list `settings.update` stays accepted; the UI uses the per-name write. Accepted
+  limitations: the list is global by name, so disabling a project role `deploy` in one workspace also
+  disables an unrelated `deploy` elsewhere, and a disabled name no longer listed stays disabled but is not
+  shown; with every role disabled the `Agent` tool stays registered with an empty roster — the delegation
+  switch (`subagentsEnabled` or the workspace override) is how to remove it.
 - `disabledPackages` is the same shape for installed pi packages, keyed by the package identity the
   catalog reports (`PiPackageSummary.identity`); it exists because pi has no "whole package off" setting
   and writing pi's per-resource filters would reset a user's own filters on re-enable. Validation,

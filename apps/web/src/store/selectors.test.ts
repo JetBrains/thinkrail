@@ -20,6 +20,7 @@ import {
 	matchesWorktreePath,
 	selectActiveEditorTab,
 	selectActiveRepoWorkspaceId,
+	selectActiveSubagentProjectTrust,
 	selectActiveWorkspace,
 	selectActiveWorkspaceProjectId,
 	selectAgentReviewCommentCount,
@@ -1062,4 +1063,27 @@ describe("the first prompt of an unnamed chat", () => {
 			s4: "Plan this one",
 		});
 	});
+});
+
+test("agent catalog trust follows only the active repository workspace, never Chats or project Home", () => {
+	const state = {
+		projects: [{ ...projectTwo, piResourceTrust: "granted" as const }],
+		workspaces,
+		activeWorkspaceId: workspace.id,
+		selectedProjectId: projectTwo.id,
+	};
+	expect(selectActiveSubagentProjectTrust(state)).toBe("granted");
+	expect(
+		selectActiveSubagentProjectTrust({
+			...state,
+			projects: [{ ...projectTwo, piResourceTrust: "untrusted" }],
+		}),
+	).toBe("untrusted");
+	expect(selectActiveSubagentProjectTrust({ ...state, activeWorkspaceId: null })).toBeUndefined();
+	expect(
+		selectActiveSubagentProjectTrust({
+			...state,
+			workspaces: { p2: [{ ...workspace, kind: "chat" }] },
+		}),
+	).toBeUndefined();
 });

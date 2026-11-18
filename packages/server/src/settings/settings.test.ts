@@ -15,6 +15,7 @@ import {
 	resetConfigCache,
 	type SettingsPublisher,
 	setSettingsPublisher,
+	setSubagentEnabled,
 	updateConfig,
 } from "./settings";
 
@@ -472,6 +473,42 @@ test("a malformed disabled-extensions update is rejected; a malformed stored lis
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ disabledExtensions: "visualize" }));
 	resetConfigCache();
 	expect(getConfig().disabledExtensions).toEqual([]);
+});
+
+test("disabled subagents default empty, round-trip deduped, and keep unknown names", () => {
+	expect(DEFAULT_CONFIG.disabledSubagents).toEqual([]);
+	const published: AppConfigUpdate[] = [];
+	setSettingsPublisher((_config, applied) => published.push(applied));
+	expect(getConfig().disabledSubagents).toEqual([]);
+	const next = updateConfig({ disabledSubagents: ["scout", "retired", "scout"] });
+	expect(next.disabledSubagents).toEqual(["scout", "retired"]);
+	expect(published.at(-1)?.disabledSubagents).toEqual(["scout", "retired", "scout"]);
+	resetConfigCache();
+	expect(getConfig().disabledSubagents).toEqual(["scout", "retired"]);
+	expect(updateConfig({ disabledSubagents: [] }).disabledSubagents).toEqual([]);
+});
+
+test("a malformed disabled-subagents update is rejected; a malformed stored list keeps valid names", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const before = getConfig();
+	for (const value of ["scout", [""], ["  "], [1], null]) {
+		const invalid = { disabledSubagents: value } as unknown as AppConfigUpdate;
+		expect(() => updateConfig(invalid)).toThrow("disabledSubagents must be a list of agent names");
+	}
+	expect(getConfig()).toEqual(before);
+	expect(published).toEqual([]);
+	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ disabledSubagents: ["scout", 3, "", "scout"] }),
+	);
+	resetConfigCache();
+	expect(getConfig().disabledSubagents).toEqual(["scout"]);
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ disabledSubagents: "scout" }));
+	resetConfigCache();
+	expect(getConfig().disabledSubagents).toEqual([]);
 });
 
 test("keybindings replace the whole map, keep unknown command ids and empty unbinds, and dedupe chords", () => {
@@ -1203,4 +1240,35 @@ test("invalid font updates are rejected before persistence or broadcast", () => 
 	expect(getConfig()).toEqual(before);
 	expect(published).toEqual([]);
 	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+});
+
+test("per-name subagent intents merge against live state, retain unknown names and persist", async () => {
+	updateConfig({ disabledSubagents: ["temporarily-missing"] });
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	await Promise.all([
+		Promise.resolve().then(() => setSubagentEnabled("scout", false)),
+		Promise.resolve().then(() => setSubagentEnabled("worker", false)),
+	]);
+	expect(published.map((config) => config.disabledSubagents)).toEqual([
+		["temporarily-missing", "scout"],
+		["temporarily-missing", "scout", "worker"],
+	]);
+	resetConfigCache();
+	expect(getConfig().disabledSubagents).toEqual(["temporarily-missing", "scout", "worker"]);
+	setSubagentEnabled("scout", false);
+	expect(getConfig().disabledSubagents).toEqual(["temporarily-missing", "worker", "scout"]);
+	setSubagentEnabled("worker", true);
+	setSubagentEnabled("unknown-role", false);
+	expect(getConfig().disabledSubagents).toEqual(["temporarily-missing", "scout", "unknown-role"]);
+});
+
+test("failed per-name persistence leaves the live cache and publisher unchanged", () => {
+	const before = getConfig();
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	mkdirSync(join(dataDir, "config.json"));
+	expect(() => setSubagentEnabled("scout", false)).toThrow();
+	expect(getConfig()).toBe(before);
+	expect(published).toEqual([]);
 });
