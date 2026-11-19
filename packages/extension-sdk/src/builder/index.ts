@@ -11,6 +11,13 @@ export { ExtensionBuildError, ExtensionUsageError } from "./errors";
 
 export const DEFAULT_ENTRIES = ["web/index.tsx", "web/index.ts"];
 
+const stagedFiles = new Set<string>();
+
+export function discardStagedOutputs(): void {
+	for (const temp of stagedFiles) rmSync(temp, { force: true });
+	stagedFiles.clear();
+}
+
 export interface BuildOptions {
 	root: string;
 	prefix?: string | undefined;
@@ -100,6 +107,7 @@ export async function buildExtension(options: BuildOptions): Promise<BuildOutput
 	) as SharedModulesManifest;
 
 	const staged = styles === undefined ? [web] : [web, styles];
+	for (const { temp } of staged) stagedFiles.add(temp);
 	try {
 		const bundle = await bundleWebHalf({
 			root,
@@ -132,7 +140,10 @@ export async function buildExtension(options: BuildOptions): Promise<BuildOutput
 			files.push(path);
 		}
 	} finally {
-		for (const { temp } of staged) rmSync(temp, { force: true });
+		for (const { temp } of staged) {
+			rmSync(temp, { force: true });
+			stagedFiles.delete(temp);
+		}
 	}
 	return {
 		name: pkg.name,

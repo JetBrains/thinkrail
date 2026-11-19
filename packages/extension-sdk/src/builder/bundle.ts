@@ -75,7 +75,11 @@ export function bundledImports(code: string): string[] {
 	return [...new Set(sources)];
 }
 
-function hostModulesPlugin(manifest: SharedModulesManifest, root: string): Plugin {
+function hostModulesPlugin(
+	manifest: SharedModulesManifest,
+	root: string,
+	loaded: string[],
+): Plugin {
 	const from = (importer: string | undefined) =>
 		importer ? ` (imported by ${relative(root, importer)})` : "";
 	const builtins = new Map<string, string | undefined>();
@@ -106,6 +110,7 @@ function hostModulesPlugin(manifest: SharedModulesManifest, root: string): Plugi
 			return hostModuleSource(manifest, specifier, RUNTIME);
 		},
 		generateBundle(_options, bundle) {
+			for (const id of this.getModuleIds()) if (isAbsolute(id)) loaded.push(id);
 			for (const chunk of Object.values(bundle)) {
 				if (chunk.type !== "chunk") continue;
 				const left = bundledImports(chunk.code);
@@ -135,8 +140,9 @@ export interface BundleOptions {
 
 export async function bundleWebHalf({ root, entry, outFile, minify, manifest }: BundleOptions) {
 	const warnings: string[] = [];
+	const modules: string[] = [];
 	try {
-		const { output } = await build({
+		await build({
 			cwd: root,
 			input: entry,
 			platform: "browser",
@@ -149,13 +155,10 @@ export async function bundleWebHalf({ root, entry, outFile, minify, manifest }: 
 				jsx: { runtime: "automatic", importSource: "react", development: false },
 				define: { "process.env.NODE_ENV": JSON.stringify("production") },
 			},
-			plugins: [hostModulesPlugin(manifest, root)],
+			plugins: [hostModulesPlugin(manifest, root, modules)],
 			output: { file: outFile, format: "esm", minify, codeSplitting: false },
 			write: true,
 		});
-		const modules = output.flatMap((chunk) =>
-			chunk.type === "chunk" ? chunk.moduleIds.filter((id) => isAbsolute(id)) : [],
-		);
 		return { warnings, modules };
 	} catch (error) {
 		if (error instanceof ExtensionBuildError) throw error;

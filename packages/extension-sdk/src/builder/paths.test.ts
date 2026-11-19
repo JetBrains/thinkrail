@@ -68,6 +68,21 @@ describe("the build never writes over its own inputs", () => {
 		expect(readdirSync(join(root, "web")).sort()).toEqual(["app.js", "index.js"]);
 	});
 
+	it("refuses a web output that is a module the bundle tree-shakes away", async () => {
+		const app = 'export const unused = "mine";\n';
+		const { root } = setup(
+			{ web: "./web/app.js" },
+			{
+				"web/index.js": 'import { unused } from "./app.js";\nvoid unused;\nexport default {};\n',
+				"web/app.js": app,
+			},
+		);
+		expect(await refused(root, { entry: "web/index.js" })).toContain(
+			'"web" (web/app.js) would overwrite a module the web entry imports (web/app.js)',
+		);
+		expect(read(root, "web/app.js")).toBe(app);
+	});
+
 	it("refuses a styles output that is a stylesheet --css imports", async () => {
 		const shared = ".a { color: red; }\n";
 		const { root } = setup(

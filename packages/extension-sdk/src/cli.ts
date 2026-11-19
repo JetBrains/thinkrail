@@ -2,6 +2,7 @@ import { parseArgs } from "node:util";
 import {
 	buildExtension,
 	DEFAULT_ENTRIES,
+	discardStagedOutputs,
 	ExtensionBuildError,
 	ExtensionUsageError,
 } from "./builder";
@@ -75,6 +76,13 @@ async function main(argv: string[]): Promise<number> {
 	}
 	for (const file of result.files) console.log(`${result.name}: ${file.path} ${file.bytes} B`);
 	return 0;
+}
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+	process.once(signal, () => {
+		discardStagedOutputs();
+		process.kill(process.pid, signal);
+	});
 }
 
 main(process.argv.slice(2)).then(

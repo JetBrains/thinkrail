@@ -98,13 +98,15 @@ private and unchanged. It imports no pi value at runtime.
   resolves outside the package is an `ExtensionUsageError` (exit 2) naming both paths, and nothing is
   written. The manifest already keeps paths inside the package and distinct by suffix; the check
   catches what that cannot — `--entry` / `--css` / `server` equal to an output, links and case. The
-  same check runs again after building, before any rename, against every module the bundle read
-  (rolldown's `moduleIds`) and every stylesheet Tailwind read (`onDependency`), since those are known
-  only then.
+  same check runs again after building, before any rename, against every module rolldown loaded
+  (`this.getModuleIds()` in `generateBundle`, tree-shaken ones included — a chunk's `moduleIds` omit
+  them) and every stylesheet Tailwind read (`onDependency`), since those are known only then.
 - **Atomic outputs.** The bundle and the stylesheet are written to hidden temporary files beside their
   targets (`.<name>.<pid>-<random>.tmp`) and renamed over them only when both have built; on any
   failure the temporaries are removed and the previous `web` / `styles` stay as they were, never
-  half-written and never deleted.
+  half-written and never deleted. The CLI also removes them on `SIGINT` / `SIGTERM` before re-raising
+  the signal (`discardStagedOutputs`), so an interrupted build leaves nothing in `dist/` to be
+  published.
 - The stylesheet: when the manifest declares `styles`, `--prefix` (lowercase letters, Tailwind's rule) is
   **required** — there is no default, because the author writes it into every class. The template's
   Tailwind and theme imports are rewritten to absolute paths inside the SDK (the extension need not
