@@ -6,7 +6,7 @@ import {
 	type LoadExtensionsResult,
 	ModelRuntime,
 } from "@earendil-works/pi-coding-agent";
-import { withForcedJitiTransform } from "../extensions";
+import { EXTENSION_LOAD_TIMEOUT_MS, withForcedJitiTransform } from "../extensions";
 import { logger } from "../log";
 import { accountAvailableModels, type ModelAvailabilityRuntime } from "./modelAvailability";
 import { advancePiExtensionCache, createPiSettings, piResourcePathKey } from "./packages";
@@ -193,8 +193,6 @@ async function createRuntimeWithExtensions(
 	};
 }
 
-const USER_EXTENSION_LOAD_TIMEOUT_MS = 10_000;
-
 function settleWithin<T>(task: Promise<T>, ms: number): Promise<T | undefined> {
 	return new Promise((settle, fail) => {
 		const timer = setTimeout(() => settle(undefined), ms);
@@ -246,17 +244,17 @@ async function registerUserExtensionProviders(
 	runtime: ModelRuntime,
 	excludedPaths: readonly string[],
 ): Promise<ReadonlySet<string>> {
-	const deadline = Date.now() + USER_EXTENSION_LOAD_TIMEOUT_MS;
+	const deadline = Date.now() + EXTENSION_LOAD_TIMEOUT_MS;
 	let loaded: LoadExtensionsResult | undefined;
 	try {
-		loaded = await settleWithin(loadUserExtensions(excludedPaths), USER_EXTENSION_LOAD_TIMEOUT_MS);
+		loaded = await settleWithin(loadUserExtensions(excludedPaths), EXTENSION_LOAD_TIMEOUT_MS);
 	} catch (error) {
 		log.warn("user extensions could not be loaded for the model catalog", error);
 		return new Set();
 	}
 	if (!loaded) {
 		log.warn(
-			`user extension loading exceeded ${USER_EXTENSION_LOAD_TIMEOUT_MS}ms; their providers join the catalog when a chat loads them`,
+			`user extension loading exceeded ${EXTENSION_LOAD_TIMEOUT_MS}ms; their providers join the catalog when a chat loads them`,
 		);
 		return new Set();
 	}

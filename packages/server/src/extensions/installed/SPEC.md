@@ -109,7 +109,18 @@ A folder source is never copied: it loads from where it is, and nothing under it
   load never runs a user's pi extension or the Central artifact beside them — inside
   `withForcedJitiTransform` (`JITI_TRY_NATIVE=false`, `JITI_REBUILD_FS_CACHE=1`, `JITI_FS_CACHE=false`,
   restored afterwards; one task at a time, shared with the agent's runtime build). A forced rebuild never
-  reads jiti's transform cache, so writing it only grew the temp folder by a file per shim. The key is read and deleted, the shim removed. **Identity guard:** the shim's `createAgentSession` and `Type` must be the
+  reads jiti's transform cache, so writing it only grew the temp folder by a file per shim. The key is read and deleted, the shim removed.
+- **A load is bounded** by `EXTENSION_LOAD_TIMEOUT_MS` (10 s, the one constant the agent's user-extension
+  pass also uses): an entry whose top level has not settled by then is that source's `failed` row ("the
+  server entry did not finish loading within 10 s"). The bound lives in `withForcedJitiTransform(task,
+  timeoutMs)`, because the hung task holds what everyone else waits on: at the timeout the env is
+  restored, the shared jiti chain moves on (the next runtime generation build, a Central rebuild) and the
+  runtime's queue with it (a `remove` or a switch from Settings runs). JavaScript cannot cancel the hung
+  module, so it may keep running and resume later. **A late settle is dropped:** it never restores the env
+  a second time (that would clobber a later task's forced flags), its sink entry is deleted when pi's call
+  returns, its rejection is observed, so nothing it produced is registered, returned or thrown unhandled.
+  What its own code does once it resumes (timers, I/O) is outside the host's reach; it runs with the
+  process's ordinary env. Tests inject a shorter `loadTimeoutMs`. **Identity guard:** the shim's `createAgentSession` and `Type` must be the
   host's own (`===`; a jiti namespace is a Proxy, so members are compared, never namespaces), else the load
   fails — the loader proves on every load that the extension resolution yields the host's single pi. The
   descriptor's shape is then validated field by field.
@@ -208,7 +219,8 @@ A folder source is never copied: it loads from where it is, and nothing under it
 - **Public surface (barrel):** `InstalledExtensions`, `InstalledExtensionsOptions`,
   `InstalledExtensionRecord`, `InstalledServerExtension`, `StagedExtension`, `installedExtensions`,
   `setInstalledExtensions`, `ExtensionInstaller`, `NpmCommand`, `piExtensionInstaller`, `extensionSourceKind`,
-  `ExtensionSourceKind`, `loadServerDescriptor`, `withForcedJitiTransform`, `webHalfOf`, `webToken`,
+  `ExtensionSourceKind`, `loadServerDescriptor`, `withForcedJitiTransform`, `EXTENSION_LOAD_TIMEOUT_MS`,
+  `webHalfOf`, `webToken`,
   `resolveExtensionAsset`, `ExtensionAsset`.
 - `InstalledExtensions` is the runtime (`records`, `servers`, `fileError`, `reconcile`, `watch`, `stage`,
   `adopt`, `discard`, `remove`, `update`, `checkUpdates`, `declarationsPath`, `root`);
@@ -226,8 +238,10 @@ A folder source is never copied: it loads from where it is, and nothing under it
 ## Verification
 
 Unit tests over disposable temp folders: the declarations reader, the peer prune, the loader (identity
-guard, shim cleanup, env serialization, an edited entry of every allowed type re-evaluated on the same
-path with its relative imports, own `node_modules` and the host's typebox), reconcile (idempotence, malformed file, removal, folder source,
+guard, shim cleanup, env serialization, a top level that never settles and one that settles or throws
+after its timeout, an edited entry of every allowed type re-evaluated on the same
+path with its relative imports, own `node_modules` and the host's typebox), reconcile (idempotence, malformed file, removal, a hung server half — failed, and removable while it
+hangs — folder source,
 incompatible, every failure mode, duplicates, offline, stub npm installs, update, staging and adoption)
 the asset resolver (traversal, unknown extension, wrong file, stale token, links) and the status file
 (every state, tools, `installing` during an install, a refused file, no declarations).

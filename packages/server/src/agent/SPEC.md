@@ -98,7 +98,8 @@ re-opened transcripts provider-valid.
     `refresh({ allowNetwork: false })` as `createAgentSessionServices` does (skipped otherwise: the strict
     pass's services call has just run it). Ids it registered are `extensionProviderIds`.
     Unlike the strict pass it never fails a candidate: a failed load or a rejected registration skips only
-    that item, and the pass, refresh included, is bounded by 10 s: a load still running then is abandoned
+    that item, and the pass, refresh included, is bounded by 10 s (`EXTENSION_LOAD_TIMEOUT_MS`, the installed
+    loader's bound too): a load still running then is abandoned
     and nothing it queued is applied, so a factory that hangs asynchronously cannot hold boot or a Central
     rebuild (a late completion only fills the abandoned loader's queue), and a refresh still running is no
     longer awaited (it only settles the runtime's snapshot). Its diagnostics are closed counts: no extension

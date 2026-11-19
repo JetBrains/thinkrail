@@ -29,22 +29,63 @@ function sink(): Sink {
 	return map;
 }
 
+/** How long extension code may take to load: an installed server half here, a user's pi extensions in `agent`. */
+export const EXTENSION_LOAD_TIMEOUT_MS = 10_000;
+
+function loadTimeoutError(timeoutMs: number): Error {
+	return new Error(`the server entry did not finish loading within ${timeoutMs / 1000} s`);
+}
+
+/** Settles like `task`, or rejects with the load timeout; a late settle of `task` is observed, never thrown. */
+function settleWithin<T>(task: Promise<T>, timeoutMs: number): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		const timer = setTimeout(() => reject(loadTimeoutError(timeoutMs)), timeoutMs);
+		task.then(
+			(value) => {
+				clearTimeout(timer);
+				resolve(value);
+			},
+			(error: unknown) => {
+				clearTimeout(timer);
+				reject(error);
+			},
+		);
+	});
+}
+
 let jitiChain: Promise<unknown> = Promise.resolve();
 
-/** Runs `task` with pi's jiti transform forced; the env is process-wide, so callers are serialized. */
-export function withForcedJitiTransform<T>(task: () => Promise<T>): Promise<T> {
+/**
+ * Runs `task` with pi's jiti transform forced; the env is process-wide, so callers are serialized. With
+ * `timeoutMs`, a task still running then is abandoned: the env is restored, the next caller runs and this
+ * one rejects; the abandoned task's own settle changes nothing.
+ */
+export function withForcedJitiTransform<T>(task: () => Promise<T>, timeoutMs?: number): Promise<T> {
 	const run = jitiChain.then(async () => {
 		const prior = Object.fromEntries(
 			Object.keys(FORCED_JITI_ENV).map((key) => [key, process.env[key]]),
 		);
 		Object.assign(process.env, FORCED_JITI_ENV);
-		try {
-			return await task();
-		} finally {
+		let restored = false;
+		const restore = () => {
+			if (restored) return;
+			restored = true;
 			for (const [key, value] of Object.entries(prior)) {
 				if (value === undefined) delete process.env[key];
 				else process.env[key] = value;
 			}
+		};
+		const work = (async () => {
+			try {
+				return await task();
+			} finally {
+				restore();
+			}
+		})();
+		try {
+			return await (timeoutMs === undefined ? work : settleWithin(work, timeoutMs));
+		} finally {
+			restore();
 		}
 	});
 	jitiChain = run.catch(() => undefined);
@@ -124,11 +165,20 @@ export default function thinkrailDescriptorShim() {
 
 let loads = 0;
 
+export interface LoadServerDescriptorOptions {
+	/** The pi the extension must resolve; the host's own unless a test says otherwise. */
+	host?: { createAgentSession: unknown; Type: unknown };
+	timeoutMs?: number;
+}
+
 /** Imports an installed server entry through pi's public loader, so its pi imports are the host's instance. */
 export async function loadServerDescriptor(
 	entry: string,
 	hostDir: string,
-	host: { createAgentSession: unknown; Type: unknown } = { createAgentSession, Type },
+	{
+		host = { createAgentSession, Type },
+		timeoutMs = EXTENSION_LOAD_TIMEOUT_MS,
+	}: LoadServerDescriptorOptions = {},
 ): Promise<ServerExtension> {
 	const sequence = ++loads;
 	const key = `${entry}#${sequence}`;
@@ -138,15 +188,22 @@ export async function loadServerDescriptor(
 	mkdirSync(join(hostDir, "shims"), { recursive: true });
 	writeFileSync(shimPath, shim(entry, key));
 	let loaded: Loaded | undefined;
+	let loading: Promise<unknown> | undefined;
 	try {
-		const { errors } = await withForcedJitiTransform(() =>
-			discoverAndLoadExtensions([shimPath], empty, empty),
-		);
+		const { errors } = await withForcedJitiTransform(() => {
+			const pending = discoverAndLoadExtensions([shimPath], empty, empty);
+			loading = pending;
+			return pending;
+		}, timeoutMs);
 		loaded = sink().get(key);
 		if (errors.length > 0) throw new Error(errors.map((error) => error.error).join("\n"));
 	} finally {
 		sink().delete(key);
 		rmSync(shimPath, { force: true });
+		loading?.then(
+			() => sink().delete(key),
+			() => undefined,
+		);
 	}
 	if (!loaded) throw new Error("the server entry did not finish loading");
 	if (loaded.createAgentSession !== host.createAgentSession || loaded.Type !== host.Type) {

@@ -2,7 +2,11 @@ export { type ExtensionAsset, resolveExtensionAsset, webHalfOf, webToken } from 
 export { installedExtensions, setInstalledExtensions } from "./current";
 export { type ExtensionSourceKind, extensionSourceKind } from "./declarations";
 export { type ExtensionInstaller, type NpmCommand, piExtensionInstaller } from "./installer";
-export { loadServerDescriptor, withForcedJitiTransform } from "./loader";
+export {
+	EXTENSION_LOAD_TIMEOUT_MS,
+	loadServerDescriptor,
+	withForcedJitiTransform,
+} from "./loader";
 export {
 	type InstalledExtensionRecord,
 	InstalledExtensions,

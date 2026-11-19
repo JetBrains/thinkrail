@@ -466,6 +466,41 @@ describe("a bad source never aborts a pass", () => {
 	});
 });
 
+describe("a server half that never settles", () => {
+	const HUNG = "await new Promise(() => {});\nexport default { name: 'hung', extensions: [] };\n";
+
+	it("becomes a failed row after the load timeout, and the rest still loads", async () => {
+		const { root, runtime, declare } = setup({ loadTimeoutMs: 100 });
+		const hung = writeExtension(join(root, "hung"), {
+			name: "hung",
+			files: { "server/index.ts": HUNG },
+		});
+		const fine = writeExtension(join(root, "fine"), { name: "fine" });
+		declare(hung, fine);
+		await runtime.reconcile();
+		expect(stateOf(runtime, hung)).toMatchObject({
+			state: "failed",
+			error: "the server entry did not finish loading within 0.1 s",
+		});
+		expect(stateOf(runtime, fine)?.state).toBe("loaded");
+	});
+
+	it("can be removed while its load is still running", async () => {
+		const { root, runtime, declare } = setup({ loadTimeoutMs: 150 });
+		const hung = writeExtension(join(root, "hung"), {
+			name: "hung",
+			files: { "server/index.ts": HUNG },
+		});
+		declare(hung);
+		const pass = runtime.reconcile();
+		await Bun.sleep(20);
+		await runtime.remove(hung);
+		await pass;
+		expect(runtime.records()).toEqual([]);
+		expect(runtime.servers()).toEqual([]);
+	});
+});
+
 describe("name ownership follows declaration order", () => {
 	it("gives a name to the earlier npm source once it installs, over a later folder source", async () => {
 		const { root, dataDir, declare } = setup();

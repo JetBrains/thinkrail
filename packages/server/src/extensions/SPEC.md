@@ -101,8 +101,8 @@ lookup, skill roots — defaults to it, so an installed extension is composed ex
   `artifactTools`, `ArtifactTools`, `ExtensionSessionServices`, `InteractiveTool`, `ArtifactTool`,
   `ToolResponse`, `startInstalledExtensions`, `InstalledExtensionsHostOptions`, `InstalledExtensions`,
   `InstalledExtensionRecord`, `StagedExtension`, `ExtensionSourceKind`, `installedExtensions`,
-  `resolveExtensionAsset`, `withForcedJitiTransform`.
-- **Re-exported from the installed sub-module:** the last seven names of the surface above.
+  `resolveExtensionAsset`, `withForcedJitiTransform`, `EXTENSION_LOAD_TIMEOUT_MS`.
+- **Re-exported from the installed sub-module:** the last eight names of the surface above.
 - **Session-seam types:** `ExtensionSessionServices`, `InteractiveTool` and `ToolResponse` are re-exported
   from `extension-api/server` so that `agent` can type the services it builds through this barrel.
 - **Interactive tools (`interactive.ts`):** `interactiveTools(isDisabled)` folds the enabled registry
