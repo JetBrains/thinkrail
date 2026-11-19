@@ -9,8 +9,6 @@ on:
       - "package.json"
       - "bun.lock"
       - ".github/workflows/site.yml"
-  schedule:
-    - cron: "17 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -39,10 +37,9 @@ jobs:
         with:
           node-version: 22
       - run: bun install --frozen-lockfile
-      - name: Build with the production PostHog key and the npm extension catalog
+      - name: Build with the production PostHog key
         env:
           PUBLIC_POSTHOG_PROJECT_KEY: ${{ secrets.POSTHOG_PROJECT_KEY }}
-          EXTENSION_CATALOG_SOURCE: npm
         run: |
           set -eu
           case "$PUBLIC_POSTHOG_PROJECT_KEY" in
@@ -51,7 +48,6 @@ jobs:
           esac
           bun run --filter @thinkrail/website build
           grep -rqF "$PUBLIC_POSTHOG_PROJECT_KEY" apps/website/dist || { echo "::error::PostHog key missing from the built site"; exit 1; }
-          grep -qF 'data-catalog-source="npm"' apps/website/dist/extensions/index.html || { echo "::error::extensions page was not built from npm"; exit 1; }
       - run: bun run --filter @thinkrail/website smoke:attribution
       - name: Apply attribution migrations
         working-directory: apps/website
@@ -72,7 +68,7 @@ jobs:
         run: |
           for attempt in $(seq 1 18); do
             ready=true
-            for path in / /blog/ /docs/ /docs/build-an-extension/ /extensions/ /extensions/catalog.json /vibecoding/ /agentic-development/ /agentic-ide/ /attribution/claim/ /robots.txt /sitemap-index.xml; do
+            for path in / /blog/ /vibecoding/ /agentic-development/ /agentic-ide/ /attribution/claim/ /robots.txt /sitemap-index.xml; do
               code=$(curl --connect-timeout 5 --max-time 15 -s -o /dev/null -w '%{http_code}' "$PAGES_URL$path" || true)
               [ "$code" = "200" ] || ready=false
             done

@@ -18,16 +18,6 @@ const RESERVED_SLUGS = new Set([
 
 const SLUG_PATTERN = /^[a-z][a-z0-9-]{2,99}$/;
 
-const slug = z
-	.string()
-	.regex(
-		SLUG_PATTERN,
-		"slug must be 3-100 characters, start with a lowercase letter, and contain only lowercase letters, numbers, and hyphens",
-	)
-	.refine((slug) => !RESERVED_SLUGS.has(slug), {
-		message: `slug is a reserved name (${[...RESERVED_SLUGS].join(", ")})`,
-	});
-
 const authors = defineCollection({
 	loader: file("./content/authors.json"),
 	schema: z.object({
@@ -40,7 +30,15 @@ const blog = defineCollection({
 	loader: glob({ pattern: "*/index.md", base: "./content/blog" }),
 	schema: z.object({
 		title: z.string().min(1),
-		slug,
+		slug: z
+			.string()
+			.regex(
+				SLUG_PATTERN,
+				"slug must be 3-100 characters, start with a lowercase letter, and contain only lowercase letters, numbers, and hyphens",
+			)
+			.refine((slug) => !RESERVED_SLUGS.has(slug), {
+				message: `slug is a reserved name (${[...RESERVED_SLUGS].join(", ")})`,
+			}),
 		date: z.coerce.date(),
 		author: reference("authors"),
 		draft: z.boolean().default(false),
@@ -49,15 +47,4 @@ const blog = defineCollection({
 	}),
 });
 
-const docs = defineCollection({
-	loader: glob({ pattern: "*/index.md", base: "./content/docs" }),
-	schema: z.object({
-		title: z.string().min(1),
-		slug,
-		description: z.string().min(1),
-		order: z.number().int(),
-		draft: z.boolean().default(false),
-	}),
-});
-
-export const collections = { authors, blog, docs };
+export const collections = { authors, blog };

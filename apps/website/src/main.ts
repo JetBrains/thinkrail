@@ -1,6 +1,5 @@
 import { initDownloadThanks } from "./downloadThanks";
 import { deriveEditorTabs } from "./editorTabs";
-import { initExtensionsPage } from "./extensionsPage";
 import { fetchStarCount } from "./githubStars";
 import { heroDownloadTarget } from "./heroDownload";
 import { initImageZoom } from "./imageZoom";
@@ -748,4 +747,3 @@ if (mockElements.length > 0) {
 
 initDownloadThanks();
 initImageZoom();
-initExtensionsPage();
