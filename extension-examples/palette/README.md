@@ -29,8 +29,15 @@ This package is the walkthrough of ThinkRail's extension guide; it uses only
 - `bun run build` (`thinkrail-extension build --prefix palette`) writes `dist/web.js` and
   `dist/web.css`. Every utility class in the card carries the `palette:` prefix.
 
+In the ThinkRail repository:
+
 ```sh
 bun install
 bun run build
 bun test
 ```
+
+Its `package.json` there takes versions from the repository (`workspace:*`, `catalog:`). To start your
+own extension from it elsewhere, use the `package.json` in the
+[guide](https://thinkrail.ai/docs/build-an-extension/#packagejson-and-the-manifest), which carries
+versions npm can install.

@@ -244,7 +244,7 @@ restart and toggle-reload regressions on upgrades.
   - tool conflicts are reported only between extensions, before the override runs.
 
   The override moves a ThinkRail registry extension ahead of the first user package registering one of
-  its tool names, so a same-name package such as rpiv's `ask_user_question` cannot take over the card,
+  its tool names (with the registry extensions between them, keeping registry order), so a same-name package such as rpiv's `ask_user_question` cannot take over the card,
   mailbox and repair that key on the name. Remove it when pi offers an inline-extension precedence or
   replace option. Re-verify the three facts in the installed dist, and run the collision tests in
   `agentSessionManager.test.ts` (same-name questionnaire before and after reload, and a chat created with
@@ -294,7 +294,10 @@ restart and toggle-reload regressions on upgrades.
 - **Runtime extension descriptor shim** — [[submodule-server-extensions-installed]], `installed/loader.ts`.
   An installed ThinkRail extension's server entry must import the host's single pi and typebox in every
   launcher, but pi exports no "load a module with extension resolution" API. The host writes a shim that
-  default-imports the entry (and `createAgentSession` / `Type` for its identity guard) and loads it with
+  evaluates the entry with the jiti instance pi's loader gives a module as `require` (stock jiti
+  `evalModule(source, { filename, async: true, forceTranspile: true })`, so a JavaScript entry is
+  transformed and resolved like a `.ts` one instead of native-imported), imports `createAgentSession` /
+  `Type` for its identity guard, and loads it with
   the public `discoverAndLoadExtensions([shim], empty, empty)`, the descriptor coming back through a
   per-load key on a `Symbol.for` global map. It relies on four pi facts:
   - pi's extension loader applies its module resolution — the alias map in a source run (pi's own
@@ -307,7 +310,8 @@ restart and toggle-reload regressions on upgrades.
     loader of another cwd;
   - pi still calls the default-export factory during load;
   - with `JITI_TRY_NATIVE=false` and `JITI_REBUILD_FS_CACHE=1` around the load (the pair `piRuntime.ts`
-    forces, now one serialized `withForcedJitiTransform`) a `.ts` dependency of the extension is
+    forces, now one serialized `withForcedJitiTransform`, which also sets `JITI_FS_CACHE=false`: a forced
+    rebuild never reads that cache) a `.ts` dependency of the extension is
     transformed and mapped; without it a `.ts` dependency reaching pi could bind to a copy in the
     extension's `node_modules`. Plain-JavaScript dependencies are native-imported by Bun either way,
     which is why the installer prunes `@earendil-works/*` and `typebox` from an install.

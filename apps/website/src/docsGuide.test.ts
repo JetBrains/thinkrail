@@ -18,11 +18,13 @@ interface SamplePackage {
 	dependencies: Record<string, string>;
 	devDependencies: Record<string, string>;
 	peerDependencies: Record<string, string>;
-	publishConfig: { access: string };
+	publishConfig: { access: string; provenance?: boolean };
 	thinkrail: { api: string; server: string; web: string; styles: string; title: string };
 }
 
 const sample = readJson<SamplePackage>(`${roots.palette}package.json`);
+const catalog = readJson<{ workspaces: { catalog: Record<string, string> } }>("package.json")
+	.workspaces.catalog;
 const sharedModules = readJson<{ api: string; modules: Record<string, string[]> }>(
 	`${roots.sdk}assets/shared-modules.json`,
 );
@@ -186,16 +188,38 @@ describe("the docs' code blocks", () => {
 		expect(isContiguousSlice(fence.body, file)).toBe(true);
 	});
 
-	test("the package.json excerpt copies the sample's fields verbatim and is a valid manifest", () => {
+	test("the package.json is the sample's with versions npm can install, and a valid manifest", () => {
 		const [fence] = guarded("package-json");
 		expect(fence?.guard).toBe("package-json palette/package.json");
 		const shown = JSON.parse(fence?.body ?? "") as Record<string, unknown>;
 		expect(fence?.body).toBe(JSON.stringify(shown, null, "\t"));
-		const fileKeys = Object.keys(sample);
-		const keys = Object.keys(shown);
-		expect(keys).toEqual(fileKeys.filter((key) => keys.includes(key)));
-		for (const key of keys) expect(shown[key]).toEqual(sample[key as keyof SamplePackage]);
-		expect(keys).toEqual(expect.arrayContaining(["name", "keywords", "thinkrail", "scripts"]));
+		expect(Object.keys(shown)).toEqual(Object.keys(sample));
+		const ranged = new Set(["dependencies", "devDependencies", "publishConfig"]);
+		for (const key of Object.keys(sample).filter((key) => !ranged.has(key))) {
+			expect([key, shown[key]]).toEqual([key, sample[key as keyof SamplePackage]]);
+		}
+		expect(shown.publishConfig).toEqual(
+			Object.fromEntries(
+				Object.entries(sample.publishConfig).filter(([key]) => key !== "provenance"),
+			),
+		);
+		const sdk = readJson<{ name: string; version: string }>(`${roots.sdk}package.json`);
+		const portable = (ranges: Record<string, string>) =>
+			Object.fromEntries(
+				Object.entries(ranges).map(([name, range]) => {
+					if (range === "catalog:") return [name, catalog[name]];
+					if (range.startsWith("workspace:")) {
+						expect(name).toBe(sdk.name);
+						return [name, `~${apiVersion}.0`];
+					}
+					return [name, range];
+				}),
+			);
+		expect(shown.dependencies).toEqual(portable(sample.dependencies));
+		expect(shown.devDependencies).toEqual(portable(sample.devDependencies));
+		expect(shown.peerDependencies).toEqual(sample.peerDependencies);
+		expect(fence?.body).not.toMatch(/"(?:workspace|catalog):/);
+		expect(sdk.version === "0.0.0" || sdk.version.startsWith(`${apiVersion}.`)).toBe(true);
 		expect(parseExtensionManifest(shown).ok).toBe(true);
 		expect(sample.keywords).toContain(catalogKeyword);
 		expect(sample.thinkrail.api).toBe(apiVersion as string);

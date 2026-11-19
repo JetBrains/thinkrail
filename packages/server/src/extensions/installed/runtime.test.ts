@@ -333,6 +333,211 @@ describe("reconcile", () => {
 	});
 });
 
+describe("a bad source never aborts a pass", () => {
+	const statusOf = (dataDir: string): ExtensionsStatus =>
+		JSON.parse(readFileSync(join(dataDir, "extensions", "status.json"), "utf8"));
+
+	const badSources: [string, (root: string) => string, string][] = [
+		...(["null", "[]", '"x"', "5"] as const).map(
+			(json): [string, (root: string) => string, string] => [
+				`a package.json of ${json}`,
+				(root) => {
+					const folder = join(root, "bad");
+					mkdirSync(folder, { recursive: true });
+					writeFileSync(join(folder, "package.json"), json);
+					return folder;
+				},
+				'no "thinkrail" manifest',
+			],
+		),
+		[
+			"a package.json that is a folder",
+			(root) => {
+				const folder = join(root, "bad");
+				mkdirSync(join(folder, "package.json"), { recursive: true });
+				return folder;
+			},
+			"package.json cannot be read",
+		],
+		["a file URL with a host", () => "file://host/a", "not a folder path"],
+		["a file URL with an encoded slash", () => "file:///a%2Fb", "not a folder path"],
+		[
+			"a file instead of a folder",
+			(root) => {
+				mkdirSync(root, { recursive: true });
+				writeFileSync(join(root, "file.ts"), "");
+				return join(root, "file.ts");
+			},
+			"no package.json in",
+		],
+	];
+
+	it.each(badSources)(
+		"keeps loading, removing and reporting beside %s",
+		async (_label, make, error) => {
+			const { root, runtime, declare, dataDir } = setup();
+			const bad = make(root);
+			const good = writeExtension(join(root, "good"));
+			declare(good);
+			await runtime.reconcile();
+			declare(bad, good);
+			await runtime.reconcile();
+			expect(stateOf(runtime, good)?.state).toBe("loaded");
+			expect(stateOf(runtime, bad)?.state).toBe("failed");
+			expect(stateOf(runtime, bad)?.error).toContain(error);
+			expect(runtime.servers()).toHaveLength(1);
+			await runtime.remove(good);
+			expect(stateOf(runtime, good)).toBeUndefined();
+			expect(runtime.servers()).toEqual([]);
+			expect(statusOf(dataDir).extensions).toEqual([
+				expect.objectContaining({
+					source: bad,
+					state: "failed",
+					error: expect.stringContaining(error),
+				}),
+			]);
+		},
+	);
+
+	it("fails a throwing installer's source and loads the rest", async () => {
+		const { root, dataDir, declare } = setup();
+		const good = writeExtension(join(root, "good"));
+		const runtime = new InstalledExtensions({
+			...baseOptions(dataDir),
+			installer: {
+				install: () => {
+					throw new Error("installer exploded");
+				},
+				hasUpdate: async () => false,
+			},
+		});
+		declare("npm:boom", good);
+		await runtime.reconcile();
+		expect(stateOf(runtime, good)?.state).toBe("loaded");
+		expect(stateOf(runtime, "npm:boom")?.error).toContain("installer exploded");
+	});
+
+	it("turns any other throw inside one source's install into its failed row", async () => {
+		const { root, dataDir, declare } = setup();
+		const good = writeExtension(join(root, "good"));
+		const runtime = new InstalledExtensions({
+			...baseOptions(dataDir),
+			installer: { install: async () => JSON.parse("null"), hasUpdate: async () => false },
+		});
+		declare("npm:odd", good);
+		await runtime.reconcile();
+		expect(stateOf(runtime, good)?.state).toBe("loaded");
+		expect(stateOf(runtime, "npm:odd")?.state).toBe("failed");
+	});
+
+	it("omits the tools of a toolNames callback that throws, and still writes the status", async () => {
+		const { root, dataDir, declare } = setup();
+		const runtime = new InstalledExtensions({
+			...baseOptions(dataDir),
+			toolNames: () => {
+				throw new Error("no tools");
+			},
+		});
+		const good = writeExtension(join(root, "good"));
+		declare(good);
+		await runtime.reconcile();
+		expect(statusOf(dataDir).extensions).toEqual([
+			expect.objectContaining({ source: good, state: "loaded" }),
+		]);
+		expect(statusOf(dataDir).extensions[0]).not.toHaveProperty("tools");
+	});
+
+	it("finishes the pass when an onChange listener throws", async () => {
+		const { root, dataDir, declare } = setup();
+		const template = writeExtension(join(root, "template"), { name: "late-ext" });
+		const runtime = new InstalledExtensions({
+			...baseOptions(dataDir),
+			installer: stubInstaller({ "npm:late-ext": template }),
+			onChange: () => {
+				throw new Error("listener bug");
+			},
+		});
+		const good = writeExtension(join(root, "good"));
+		declare(good, "npm:late-ext");
+		await runtime.reconcile();
+		expect(stateOf(runtime, good)?.state).toBe("loaded");
+		expect(stateOf(runtime, "npm:late-ext")?.state).toBe("loaded");
+		expect(statusOf(dataDir).extensions.map((entry) => entry.state)).toEqual(["loaded", "loaded"]);
+	});
+});
+
+describe("name ownership follows declaration order", () => {
+	it("gives a name to the earlier npm source once it installs, over a later folder source", async () => {
+		const { root, dataDir, declare } = setup();
+		const template = writeExtension(join(root, "template"), { name: "same" });
+		const folder = writeExtension(join(root, "folder"), { name: "same" });
+		const runtime = new InstalledExtensions({
+			...baseOptions(dataDir),
+			installer: stubInstaller({ "npm:same": template }),
+		});
+		declare("npm:same", folder);
+		await runtime.reconcile();
+		expect(stateOf(runtime, "npm:same")?.state).toBe("loaded");
+		expect(stateOf(runtime, folder)).toMatchObject({ state: "failed", duplicateOf: "npm:same" });
+		const owner = stateOf(runtime, "npm:same")?.server;
+		expect(runtime.servers()).toHaveLength(1);
+		expect(runtime.servers()).toEqual(owner ? [owner] : []);
+		const settled = runtime.records();
+		await runtime.reconcile();
+		expect(runtime.records()).toBe(settled);
+	});
+
+	it("lets the later source keep the name while the earlier one is not installed", async () => {
+		const { root, dataDir, declare } = setup();
+		const folder = writeExtension(join(root, "folder"), { name: "same" });
+		const runtime = new InstalledExtensions({
+			...baseOptions(dataDir),
+			installer: stubInstaller({}),
+		});
+		declare("npm:same", folder);
+		await runtime.reconcile();
+		expect(stateOf(runtime, "npm:same")?.error).toContain("404");
+		expect(stateOf(runtime, folder)?.state).toBe("loaded");
+		const settled = runtime.records();
+		await runtime.reconcile();
+		expect(runtime.records()).toBe(settled);
+	});
+
+	it("keeps the name with an earlier source that is installed but does not load", async () => {
+		const { root, runtime, declare } = setup();
+		const broken = writeExtension(join(root, "broken"), {
+			name: "same",
+			files: { "server/index.ts": 'throw new Error("boom");\n' },
+		});
+		const fine = writeExtension(join(root, "fine"), { name: "same" });
+		declare(broken, fine);
+		await runtime.reconcile();
+		expect(stateOf(runtime, broken)?.error).toContain("boom");
+		expect(stateOf(runtime, fine)).toMatchObject({ state: "failed", duplicateOf: broken });
+	});
+
+	it("updates an earlier source that a later one held the name for", async () => {
+		const { root, dataDir, declare } = setup();
+		const template = writeExtension(join(root, "template"), { name: "same" });
+		const folder = writeExtension(join(root, "folder"), { name: "same" });
+		const templates: Record<string, string> = {};
+		const published: number[] = [];
+		const runtime: InstalledExtensions = new InstalledExtensions({
+			...baseOptions(dataDir),
+			installer: stubInstaller(templates),
+			onChange: () => published.push(runtime.servers().length),
+		});
+		declare("npm:same", folder);
+		await runtime.reconcile();
+		expect(stateOf(runtime, folder)?.state).toBe("loaded");
+		templates["npm:same"] = template;
+		await runtime.update("npm:same");
+		expect(stateOf(runtime, "npm:same")?.state).toBe("loaded");
+		expect(stateOf(runtime, folder)).toMatchObject({ state: "failed", duplicateOf: "npm:same" });
+		expect(published.every((count) => count <= 1)).toBe(true);
+	});
+});
+
 describe("install, update and checkUpdates", () => {
 	it("stages a folder or npm source by its package.json and adopts an extension", async () => {
 		const { root, dataDir } = setup();
@@ -431,6 +636,36 @@ describe("install, update and checkUpdates", () => {
 		expect(stateOf(runtime, "npm:npm-ext")).toBe(before);
 		expect(existsSync(before?.root as string)).toBe(true);
 		expect(readdirSync(join(dataDir, "extensions", "installs"))).toHaveLength(1);
+	});
+
+	it("re-evaluates a plain-JavaScript entry when a folder source is updated", async () => {
+		const { root, runtime, declare } = setup();
+		const entry = (answer: string) => `export default {
+	name: "js-entry",
+	extensions: [(pi) => pi.registerTool({ name: "answer", execute: async () => "${answer}" })],
+};
+`;
+		const folder = writeExtension(join(root, "js"), {
+			name: "js-entry",
+			server: "server.js",
+			files: { "server.js": entry("old") },
+		});
+		const answer = async () => {
+			let tool: { execute: () => Promise<string> } | undefined;
+			const [factory] = stateOf(runtime, folder)?.server?.extension.extensions ?? [];
+			await factory?.({
+				registerTool: (registered: typeof tool) => {
+					tool = registered;
+				},
+			} as unknown as Parameters<NonNullable<typeof factory>>[0]);
+			return tool?.execute();
+		};
+		declare(folder);
+		await runtime.reconcile();
+		expect(await answer()).toBe("old");
+		writeFileSync(join(folder, "server.js"), entry("new"));
+		await runtime.update(folder);
+		expect(await answer()).toBe("new");
 	});
 
 	it("re-loads a folder source in place on update", async () => {

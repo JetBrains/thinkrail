@@ -50,7 +50,10 @@ lookup, skill roots — defaults to it, so an installed extension is composed ex
   `preferRegistryTools(result)` (also composed into that override, after the disabled filter). It moves a
   registry extension directly ahead of the first non-registry extension that registers one of its tool
   names, so a user-installed same-name package never takes over a tool whose host UI and lifecycle key on
-  the name — `ask_user_question` is the reason. The other package's other tools, commands and hooks stay
+  the name — `ask_user_question` is the reason. Every registry extension between the two moves with it,
+  in its order: registry entries never reorder among themselves, because their order is the precedence
+  (built-ins, then installed ones in declaration order) — an installed extension promoted past a rival
+  must not cross a built-in or an earlier installed one that registers a name it also registers. The other package's other tools, commands and hooks stay
   loaded. pi's own conflict diagnostic stays in the loader result, unreported, as before. The pi facts it
   relies on are registered in [[pi-compatibility]]),
   `registryExtensionName(path)` (maps an `<inline:name>` / `<inline:name#n>` path — an extension's or its

@@ -282,6 +282,45 @@ describe("preferRegistryTools", () => {
 		expect(preferRegistryTools(untouched, entries)).toBe(untouched);
 	});
 
+	const ownerOf = (next: LoadExtensionsResult, tool: string) =>
+		next.extensions.find((extension) => extension.tools.has(tool))?.path;
+
+	it("never moves a later registry extension ahead of an earlier one it promotes past", () => {
+		const registry = [entry("asker", 0), entry("weather-ext", 0)];
+		const next = preferRegistryTools(
+			result(
+				loaded("/user/pi-weather.ts", ["weather"]),
+				loaded("<inline:asker>", ["ask_user_question"]),
+				loaded("<inline:3>", ["host"]),
+				loaded("<inline:weather-ext>", ["weather", "ask_user_question"]),
+			),
+			registry,
+		);
+		expect(paths(next)).toEqual([
+			"<inline:asker>",
+			"<inline:weather-ext>",
+			"/user/pi-weather.ts",
+			"<inline:3>",
+		]);
+		expect(ownerOf(next, "ask_user_question")).toBe("<inline:asker>");
+		expect(ownerOf(next, "weather")).toBe("<inline:weather-ext>");
+	});
+
+	it("keeps the first of two registry extensions ahead when a rival contests the second", () => {
+		const registry = [entry("first", 0), entry("second", 0)];
+		const next = preferRegistryTools(
+			result(
+				loaded("/user/pi.ts", ["weather"]),
+				loaded("<inline:first>", ["shared"]),
+				loaded("<inline:second>", ["shared", "weather"]),
+			),
+			registry,
+		);
+		expect(paths(next)).toEqual(["<inline:first>", "<inline:second>", "/user/pi.ts"]);
+		expect(ownerOf(next, "shared")).toBe("<inline:first>");
+		expect(ownerOf(next, "weather")).toBe("<inline:second>");
+	});
+
 	it("returns the result untouched when no tool names collide", () => {
 		const calm = result(loaded("/user/other.ts", ["x"]), loaded("<inline:solo>", ["y"]));
 		expect(preferRegistryTools(calm, entries)).toBe(calm);

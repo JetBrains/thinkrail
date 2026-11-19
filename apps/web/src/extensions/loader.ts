@@ -117,6 +117,18 @@ function isObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
 }
 
+const REACT_COMPONENT_OBJECTS = new Set([
+	Symbol.for("react.memo"),
+	Symbol.for("react.forward_ref"),
+	Symbol.for("react.lazy"),
+]);
+
+function isComponentType(value: unknown): boolean {
+	if (typeof value === "function") return true;
+	const kind = isObject(value) ? value.$$typeof : undefined;
+	return typeof kind === "symbol" && REACT_COMPONENT_OBJECTS.has(kind);
+}
+
 type InstalledWebHalf = WebExtension & {
 	toolRenderers: NonNullable<WebExtension["toolRenderers"]>;
 };
@@ -127,7 +139,7 @@ function webExtensionOf(module: unknown): InstalledWebHalf | null {
 	const toolRenderers = candidate.toolRenderers;
 	if (!isObject(toolRenderers)) return null;
 	for (const entry of Object.values(toolRenderers)) {
-		if (!isObject(entry) || typeof entry.renderer !== "function") return null;
+		if (!isObject(entry) || !isComponentType(entry.renderer)) return null;
 		const options = entry.options;
 		if (options === undefined) continue;
 		if (!isObject(options)) return null;

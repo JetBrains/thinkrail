@@ -492,8 +492,11 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
   an HTML comment, invisible), and `src/docsGuide.test.ts` reads the sources by relative path at test
   time — the `fonts.test.ts` pattern, never an import — and fails on drift:
   - `file` blocks equal a whole sample or SDK file; `excerpt` blocks are a contiguous, dedented slice of
-    one; the `package-json` block is a subset of the sample's top-level fields, in file order and
-    formatting, accepted by `extensionManifest.ts`;
+    one; the `package-json` block is the sample's whole `package.json` made portable — every field in
+    file order and formatting, except that each `catalog:` range is the root catalog's pin, the one
+    `workspace:` range (the SDK) is `~<API>.0` (the SDK's major.minor is the API; its own version is a
+    placeholder until the first release) and `publishConfig` has no `provenance` (npm refuses it outside
+    a trusted CI) — so an outside author can `npm install` it as shown; accepted by `extensionManifest.ts`;
   - the `tree` lists every non-test source under the sample's `server/` and `web/` and the manifest's
     built files; `shell` commands use the sample's scripts and packages, and every
     `thinkrail-extension build` option either page names exists in the SDK's `src/cli.ts`;

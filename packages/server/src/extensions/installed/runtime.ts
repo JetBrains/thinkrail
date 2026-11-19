@@ -288,7 +288,11 @@ export class InstalledExtensions {
 		) {
 			this.#servers = servers;
 		}
-		this.#options.onChange?.();
+		try {
+			this.#options.onChange?.();
+		} catch (error) {
+			log.warn("installed extensions change listener failed", error);
+		}
 	}
 
 	#failed(
@@ -320,10 +324,7 @@ export class InstalledExtensions {
 		} catch (error) {
 			return this.#failed(source, `package.json cannot be read: ${messageOf(error)}`, { root });
 		}
-		const ownName =
-			typeof (packageJson as { name?: unknown }).name === "string"
-				? (packageJson as { name: string }).name
-				: undefined;
+		const ownName = nameOf(packageJson);
 		const named = ownName ? { name: ownName } : {};
 		if (!hasExtensionManifest(packageJson)) {
 			return this.#failed(
@@ -340,15 +341,7 @@ export class InstalledExtensions {
 		});
 		if (!parsed.ok) return this.#failed(source, parsed.error, { root, ...named });
 		const { manifest } = parsed;
-		const base = {
-			root,
-			name: manifest.name,
-			title: manifest.title ?? manifest.name,
-			manifest,
-			fingerprint: fingerprintOf(root, manifest),
-			...(manifest.description ? { description: manifest.description } : {}),
-			...(manifest.version ? { version: manifest.version } : {}),
-		};
+		const base = manifestBase(root, manifest);
 		const owner = taken.get(manifest.name);
 		if (owner !== undefined) {
 			return this.#failed(source, `${manifest.name} is already installed from ${owner}`, {
@@ -416,27 +409,67 @@ export class InstalledExtensions {
 		}
 		this.#writeInstalls(installs);
 		this.#sweep(installs);
-		const taken = new Map<string, string>();
-		const claim = (record: InstalledExtensionRecord, source: string): void => {
-			if (record.manifest && !taken.has(record.name)) taken.set(record.name, source);
-		};
-		const records: (InstalledExtensionRecord | undefined)[] = [];
+		let records: (InstalledExtensionRecord | undefined)[] = [];
 		for (const source of read.sources) {
-			const record = await this.#settle(source, installs[source], previous.get(source), taken);
-			if (record) claim(record, source);
-			records.push(record);
+			const taken = owners(records);
+			records.push(
+				await this.#guarded(source, () =>
+					this.#settle(source, installs[source], previous.get(source), taken),
+				),
+			);
 		}
-		const settled = () => records.filter((record) => record !== undefined);
-		this.#publish(settled());
-		await this.#writeStatus(read.sources);
+		const publish = async () => {
+			records = await this.#ownNames(records);
+			this.#publish(records.filter((record) => record !== undefined));
+			await this.#writeStatus(read.sources);
+		};
+		await publish();
 		for (const [index, source] of read.sources.entries()) {
 			if (records[index] !== undefined) continue;
-			const record = await this.#installMissing(source, installs, taken);
+			const taken = owners(records.slice(0, index));
+			const record = await this.#guarded(source, () =>
+				this.#installMissing(source, installs, taken),
+			);
 			if (!record) continue;
-			claim(record, source);
 			records[index] = record;
-			this.#publish(settled());
-			await this.#writeStatus(read.sources);
+			await publish();
+		}
+	}
+
+	/** Gives each name to its first declaration with an installed manifest; a later one becomes a duplicate. */
+	async #ownNames(
+		records: readonly (InstalledExtensionRecord | undefined)[],
+	): Promise<(InstalledExtensionRecord | undefined)[]> {
+		const owned: (InstalledExtensionRecord | undefined)[] = [];
+		for (const record of records) {
+			let next = record;
+			if (next?.manifest && next.root) {
+				const { source, root, manifest, duplicateOf } = next;
+				const taken = owners(owned);
+				const owner = taken.get(manifest.name);
+				if (owner !== undefined && duplicateOf !== owner) {
+					next = this.#failed(source, `${manifest.name} is already installed from ${owner}`, {
+						...manifestBase(root, manifest),
+						duplicateOf: owner,
+					});
+				} else if (owner === undefined && duplicateOf !== undefined) {
+					next = await this.#guarded(source, () => this.#evaluate(source, root, taken));
+				}
+			}
+			owned.push(next);
+		}
+		return owned;
+	}
+
+	async #guarded(
+		source: string,
+		task: () => Promise<InstalledExtensionRecord | undefined>,
+	): Promise<InstalledExtensionRecord | undefined> {
+		try {
+			return await task();
+		} catch (error) {
+			log.warn(`installed extension source ${source} could not be settled`);
+			return this.#failed(source, messageOf(error));
 		}
 	}
 
@@ -448,7 +481,10 @@ export class InstalledExtensions {
 			timer = setTimeout(() => resolve(undefined), STATUS_TOOLS_TIMEOUT_MS);
 		});
 		try {
-			const tools = await Promise.race([names(extension).catch(() => undefined), timeout]);
+			const listed = Promise.resolve()
+				.then(() => names(extension))
+				.catch(() => undefined);
+			const tools = await Promise.race([listed, timeout]);
 			return tools ? [...tools] : undefined;
 		} finally {
 			clearTimeout(timer);
@@ -504,7 +540,11 @@ export class InstalledExtensions {
 		}
 		let root: string | undefined;
 		if (kind === "folder") {
-			root = folderOf(source);
+			try {
+				root = folderOf(source);
+			} catch (error) {
+				return this.#failed(source, `not a folder path: ${messageOf(error)}`);
+			}
 			if (!existsSync(join(root, "package.json"))) {
 				return this.#failed(source, `no package.json in ${root}`);
 			}
@@ -590,7 +630,7 @@ export class InstalledExtensions {
 			try {
 				const packageJson = readPackageJson(folderOf(source));
 				if (!hasExtensionManifest(packageJson)) return undefined;
-				return { source, name: nameOf(packageJson, source) };
+				return { source, name: nameOf(packageJson) ?? source };
 			} catch {
 				return undefined;
 			}
@@ -613,7 +653,7 @@ export class InstalledExtensions {
 			this.discard({ source, name: source, install });
 			return undefined;
 		}
-		return { source, name: nameOf(packageJson, source), install };
+		return { source, name: nameOf(packageJson) ?? source, install };
 	}
 
 	discard(staged: StagedExtension): void {
@@ -688,11 +728,8 @@ export class InstalledExtensions {
 				throw new CodedError("PACKAGE_UPDATE_FAILED", messageOf(error));
 			}
 			const root = this.#installRoot(ref);
-			const taken = new Map(
-				this.#records
-					.filter((record) => record.source !== source && record.manifest && !record.duplicateOf)
-					.map((record) => [record.name, record.source]),
-			);
+			const earlier = new Set(read.sources.slice(0, read.sources.indexOf(source)));
+			const taken = owners(this.#records.filter((record) => earlier.has(record.source)));
 			const record = root ? await this.#evaluate(source, root, taken) : undefined;
 			if (record?.state !== "loaded") {
 				this.discard({ source, name: source, install: ref });
@@ -706,7 +743,8 @@ export class InstalledExtensions {
 			this.#writeInstalls(installs);
 			this.#pending.delete(ref.dir);
 			this.#updates = undefined;
-			this.#publish(this.#records.map((entry) => (entry.source === source ? record : entry)));
+			const next = this.#records.map((entry) => (entry.source === source ? record : entry));
+			this.#publish((await this.#ownNames(next)).filter((entry) => entry !== undefined));
 			await this.#reconcileNow();
 		});
 	}
@@ -741,6 +779,28 @@ export class InstalledExtensions {
 	}
 }
 
+function owners(
+	records: readonly (InstalledExtensionRecord | undefined)[],
+): ReadonlyMap<string, string> {
+	const taken = new Map<string, string>();
+	for (const record of records) {
+		if (record?.manifest && !taken.has(record.name)) taken.set(record.name, record.source);
+	}
+	return taken;
+}
+
+function manifestBase(root: string, manifest: ExtensionManifest) {
+	return {
+		root,
+		name: manifest.name,
+		title: manifest.title ?? manifest.name,
+		manifest,
+		fingerprint: fingerprintOf(root, manifest),
+		...(manifest.description ? { description: manifest.description } : {}),
+		...(manifest.version ? { version: manifest.version } : {}),
+	};
+}
+
 function equivalent(a: InstalledExtensionRecord, b: InstalledExtensionRecord): boolean {
 	const view = (record: InstalledExtensionRecord) =>
 		JSON.stringify([
@@ -758,7 +818,7 @@ function equivalent(a: InstalledExtensionRecord, b: InstalledExtensionRecord): b
 	return a.server === b.server && view(a) === view(b);
 }
 
-function nameOf(packageJson: unknown, fallback: string): string {
-	const name = (packageJson as { name?: unknown } | undefined)?.name;
-	return typeof name === "string" ? name : fallback;
+function nameOf(packageJson: unknown): string | undefined {
+	const name = (packageJson as { name?: unknown } | null | undefined)?.name;
+	return typeof name === "string" ? name : undefined;
 }

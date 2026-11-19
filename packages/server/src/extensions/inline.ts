@@ -122,8 +122,13 @@ export function preferRegistryTools(
 				[...other.tools.keys()].some((name) => ours.tools.has(name)),
 		);
 		if (rival < 0) continue;
-		ordered.splice(at, 1);
-		ordered.splice(rival, 0, ours);
+		const span = ordered.slice(rival, at + 1);
+		ordered.splice(
+			rival,
+			span.length,
+			...span.filter((other) => isRegistry(other.path)),
+			...span.filter((other) => !isRegistry(other.path)),
+		);
 	}
 	return ordered.every((extension, index) => extension === result.extensions[index])
 		? result

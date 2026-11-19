@@ -59,30 +59,37 @@ The server half is published as TypeScript source; ThinkRail loads it with pi's 
 never compiled. The web half is published built: ThinkRail never bundles anything when it installs an
 extension. The sample also has tests and a `tsconfig.json`; they are not part of what ThinkRail loads.
 
-To start your own extension, copy the sample's folder. In the repository its dependency versions are
-`workspace:*` and `catalog:`; replace them by installing the packages yourself:
+To start your own extension, make an empty folder, save the `package.json` from the next section in
+it, copy the sample's `server/` and `web/` folders (and its `tsconfig.json`, for type checking) next to
+it, and install:
 
 <!-- guard: shell -->
 ```bash
-npm install @thinkrail/extension-sdk
-npm install --save-dev typescript @types/react @types/react-dom @earendil-works/pi-coding-agent typebox @remixicon/react
+npm install
 ```
 
 `@thinkrail/extension-sdk` is an ordinary dependency, because the server half imports it when it runs.
-Everything else is needed only to type-check and build: React's types, pi and typebox for the server
-half's types, and `@remixicon/react`, an icon set the build bundles into the card. React itself does not
-need to be installed: the card runs on the app's React.
+Everything else is needed only to type-check, build and test: React's types, pi and typebox for the
+server half's types, `@remixicon/react`, an icon set the build bundles into the card, and React with
+`@types/bun` for the sample's tests (`bun test`). The card itself does not use the installed React: it
+runs on the app's.
 
 ## package.json and the manifest
 
 The package declares itself in `package.json`: the `thinkrail-extension` keyword and a `thinkrail`
-manifest. The sample's fields that matter to ThinkRail, copied from its `package.json` (an excerpt):
+manifest. Below is the sample's `package.json` in the form that works outside the ThinkRail repository.
+In the repository its dependency versions are `workspace:*` and `catalog:`, which npm cannot install;
+here they are the versions the repository pins. Its `publishConfig` also leaves out `provenance`, which
+works only when publishing from a CI that npm trusts. Replace `name`, `author`, `repository`, `homepage`
+and `bugs` with your own.
 
 <!-- guard: package-json palette/package.json -->
 ```json
 {
 	"name": "@thinkrail/example-extension-palette",
+	"version": "0.0.0",
 	"description": "A sample ThinkRail extension: the agent builds colour palettes from a base colour, and chat shows them as swatches with WCAG contrast ratings.",
+	"license": "Apache-2.0",
 	"type": "module",
 	"keywords": [
 		"thinkrail-extension",
@@ -91,11 +98,13 @@ manifest. The sample's fields that matter to ThinkRail, copied from its `package
 		"palette",
 		"wcag"
 	],
+	"homepage": "https://thinkrail.ai/",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/JetBrains/thinkrail.git",
 		"directory": "extension-examples/palette"
 	},
+	"bugs": "https://github.com/JetBrains/thinkrail/issues",
 	"author": "ThinkRail",
 	"files": [
 		"server",
@@ -111,15 +120,32 @@ manifest. The sample's fields that matter to ThinkRail, copied from its `package
 		"styles": "./dist/web.css",
 		"title": "Palette"
 	},
+	"publishConfig": {
+		"access": "public"
+	},
 	"scripts": {
 		"build": "thinkrail-extension build --prefix palette",
 		"prepack": "npm run build",
 		"test": "bun test",
 		"typecheck": "tsc --noEmit"
 	},
+	"dependencies": {
+		"@thinkrail/extension-sdk": "~1.0.0"
+	},
 	"peerDependencies": {
 		"@earendil-works/pi-coding-agent": "*",
 		"typebox": "*"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "1.5.2",
+		"@remixicon/react": "4.9.0",
+		"@types/bun": "1.4.4",
+		"@types/react": "19.3.0",
+		"@types/react-dom": "19.3.0",
+		"react": "19.3.1",
+		"react-dom": "19.3.1",
+		"typebox": "1.3.27",
+		"typescript": "7.1.0-beta"
 	}
 }
 ```
@@ -458,9 +484,10 @@ used as it is.
 ThinkRail does not watch your folder. When it reconciles its extensions, at start and whenever
 `extensions.json` changes, it reloads a folder extension only if `package.json` or a file the manifest
 names changed since the last load; a change to another file, such as `server/palette.ts`, is not noticed
-that way. Updating a folder extension reloads it in place whatever changed. Restarting ThinkRail always
-loads the new code. Restart after changing the extension's dependencies: the host keeps the first copy
-of a JavaScript module it loaded.
+that way. Updating a folder extension reloads it in place whatever changed: the server entry, in any
+of its file types, and every TypeScript file it imports are read again. Restarting ThinkRail always
+loads the new code. Restart after changing the extension's dependencies or a plain-JavaScript file the
+entry imports: the host keeps the first copy of such a module for as long as it runs.
 
 If the server half fails to load (a syntax error, a throw at the top level, a missing dependency, a
 descriptor `name` other than the package name), the row says **Failed to load** with the error, and
@@ -474,7 +501,9 @@ npm publish --access public
 ```
 
 `--access public` is needed the first time you publish a scoped name such as `@jane/palette`. `prepack`
-builds `dist/` before the package is packed. Before publishing, check that:
+builds `dist/` before the package is packed. To publish with provenance from GitHub Actions, add
+`"provenance": true` to `publishConfig` and give the workflow the `id-token: write` permission; from your
+own machine npm refuses it. Before publishing, check that:
 
 - `keywords` contains `thinkrail-extension`;
 - the files the manifest names are in the package (`npm pack --dry-run` lists them);

@@ -149,7 +149,9 @@ change: `{ api, updatedAt, fileError?, extensions: [{ source, name, version, sta
 - **After editing:** rebuild if the web half changed, then
   `node <this skill's directory>/scripts/extensions.mjs reload <folder>`. The host reloads a folder only
   when `package.json` or a manifest file (`server` entry, `web`, `styles`) changed; `reload` touches
-  `package.json`, so edits to other server files are picked up too. Open chats see it after their turn.
+  `package.json`, so edits to the entry and the TypeScript files it imports are picked up too. After
+  changing a dependency or a plain-JavaScript file the entry imports, ask the user to restart ThinkRail:
+  the host keeps its first copy of such a module. Open chats see it after their turn.
 - **Switch off:** the user's switch in Settings → Extensions & skills; there is no file for it. If a loaded
   extension's tools are missing, check whether it is switched off there.
 - **Uninstall:** `node <this skill's directory>/scripts/extensions.mjs remove <folder>` (or the

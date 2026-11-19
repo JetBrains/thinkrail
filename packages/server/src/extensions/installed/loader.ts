@@ -5,7 +5,11 @@ import type { ServerExtension } from "@thinkrail/extension-api/server";
 import { Type } from "typebox";
 
 const SINK = Symbol.for("thinkrail.extensionDescriptors");
-const FORCED_JITI_ENV = { JITI_TRY_NATIVE: "false", JITI_REBUILD_FS_CACHE: "1" } as const;
+const FORCED_JITI_ENV = {
+	JITI_TRY_NATIVE: "false",
+	JITI_REBUILD_FS_CACHE: "1",
+	JITI_FS_CACHE: "false",
+} as const;
 
 interface Loaded {
 	descriptor: unknown;
@@ -105,9 +109,12 @@ function shapeError(value: unknown): string | undefined {
 }
 
 function shim(entry: string, key: string): string {
-	return `import descriptor from ${JSON.stringify(entry)};
+	return `import { readFileSync } from "node:fs";
 import { createAgentSession } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+const entry = ${JSON.stringify(entry)};
+const loaded = await require.evalModule(readFileSync(entry, "utf8"), { filename: entry, async: true, forceTranspile: true });
+const descriptor = loaded?.default ?? loaded;
 export default function thinkrailDescriptorShim() {
 	const key = Symbol.for("thinkrail.extensionDescriptors");
 	(globalThis[key] ??= new Map()).set(${JSON.stringify(key)}, { descriptor, createAgentSession, Type });

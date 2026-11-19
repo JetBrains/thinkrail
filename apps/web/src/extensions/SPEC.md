@@ -63,8 +63,11 @@ the other fields, so an installed extension cannot bind keys or mount an overlay
   variable import breaks in Vite dev (rewritten to `?import`, then 500 for a file Vite does not own).
 - **All or nothing per extension.** The bundle and its stylesheet load in parallel (the `<link>` is awaited
   so a card never paints unstyled); the default export must have the `WebExtension` shape — a string
-  `name` and `toolRenderers` whose entries carry a function `renderer` and optional object `options` with
-  optional functions `summary` and `composerSuggestions`. Only then are the renderers registered, under the descriptor's `name`
+  `name` and `toolRenderers` whose entries carry a `renderer` the chat can render as `<Renderer {...props} />`
+  — a function or a React `memo` / `forwardRef` / `lazy` object, recognised by its `$$typeof` symbol
+  without React internals (`ToolRenderer`'s call signature already admits them in TypeScript) — and
+  optional object `options` with optional functions `summary` and `composerSuggestions`, which the chat
+  calls directly. Only then are the renderers registered, under the descriptor's `name`
   (the npm identity, not the author's `defineWebExtension` name), in the precedence slot reserved when its
   load started — the descriptor order of the host's list — so a contested tool name goes to the
   extension the server runs, not to the bundle that loaded first. Any failure removes the stylesheet,

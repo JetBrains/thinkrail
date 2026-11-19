@@ -49,7 +49,7 @@ those pages starts right after a guard comment naming what it shows:
 | --- | --- |
 | `<!-- guard: file palette/<path> -->` | the whole file of `extension-examples/palette/<path>` (`sdk/<path>` for `packages/extension-sdk`) |
 | `<!-- guard: excerpt palette/<path> -->` | a contiguous run of that file's lines (common indentation removed); say "an excerpt" in the prose |
-| `<!-- guard: package-json palette/package.json -->` | some of the sample's top-level fields, in file order, printed as the file prints them |
+| `<!-- guard: package-json palette/package.json -->` | the sample's whole `package.json`, printed as the file prints it, with npm-installable versions: root-catalog pins for `catalog:`, `~<API>.0` for the SDK, no `publishConfig.provenance` |
 | `<!-- guard: tree -->` | the sample's layout: every source under `server/` and `web/`, and the manifest's built files |
 | `<!-- guard: shell -->` | commands using the sample's scripts, its packages and real `thinkrail-extension build` options |
 | `<!-- guard: extensions-json -->` | an `extensions.json` with absolute folders or `npm:` sources |

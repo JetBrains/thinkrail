@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import type { ToolRenderer, ToolRenderProps } from "@thinkrail/extension-api/web";
 import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	ResourceEnvironmentProvider,
@@ -8,6 +9,7 @@ import {
 	ResourceScopeProvider,
 } from "@thinkrail/resource-renderers";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
+import { forwardRef, memo } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { type ChatActions, ChatActionsContext } from "../chat/ChatActions";
 import { InteractionStatesContext } from "../chat/interactionState";
@@ -118,6 +120,50 @@ describe("web extension loader", () => {
 		expect(JSON.stringify(reports)).not.toContain("private detail");
 		expect(getToolRenderer("sibling_tool")).not.toBe(DefaultToolRenderer);
 		expect(getToolRenderer("tool")).toBe(DefaultToolRenderer);
+	});
+
+	test("accepts every renderer React renders: a function, memo, forwardRef and lazy", async () => {
+		fakeEnvironment();
+		const [result] = await loadWebExtensions([{ name: "exotic", url: "exotic-cards.js" }]);
+		expect(result).toEqual({
+			name: "exotic",
+			status: "loaded",
+			tools: ["memo_tool", "forward_ref_tool", "lazy_tool"],
+		});
+		const typed: ToolRenderer = memo(forwardRef<HTMLElement, ToolRenderProps>(() => null));
+		expect(typed).toBeDefined();
+		for (const tool of ["memo_tool", "forward_ref_tool"]) {
+			const markup = renderToStaticMarkup(
+				<ToolRendererBody
+					toolCallId="call-1"
+					toolName={tool}
+					args={{ kind: tool }}
+					result={null}
+					status="done"
+					streaming={false}
+					imageLabel=""
+				/>,
+			);
+			expect(markup).toContain(`data-exotic-card="${tool}"`);
+			expect(markup).not.toContain("tool-renderer-fallback");
+		}
+	});
+
+	test.each([
+		["a number", 42],
+		["null", null],
+		["a plain object", { render: () => null }],
+		["an array", [() => null]],
+		["a React element", { $$typeof: Symbol.for("react.element") }],
+	])("rejects %s as a renderer with an export failure", async (_label, renderer) => {
+		fakeEnvironment({
+			importModule: async () => ({
+				default: { name: "junk", toolRenderers: { junk_tool: { renderer } } },
+			}),
+		});
+		const [result] = await loadWebExtensions([{ name: "junk", url: "junk.js" }]);
+		expect(result).toMatchObject({ status: "failed", reason: "export" });
+		expect(getToolRenderer("junk_tool")).toBe(DefaultToolRenderer);
 	});
 
 	test("a failed stylesheet registers nothing and removes its link", async () => {

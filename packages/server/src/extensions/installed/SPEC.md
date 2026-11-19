@@ -61,6 +61,12 @@ A folder source is never copied: it loads from where it is, and nothing under it
   when its fingerprint changed at a reconcile, or on `update`. A failed npm/git install is not retried by
   a later reconcile (its failed row is kept): it is retried when the source is declared anew, on
   `update`, or at the next host start. A new declaration has no row until its first install finishes.
+  **One source never aborts a pass:** whatever throws while one source is resolved, read, validated,
+  installed, loaded or fingerprinted — a `package.json` that is `null` or a folder, a `file://` URL
+  `fileURLToPath` refuses, an installer that throws or answers nonsense — becomes that source's `failed`
+  row, and the pass still publishes and writes the status file. A non-string entry is not a source but
+  the file's error (above): the host could not rewrite it. A throwing `onChange` listener is the host's
+  bug, logged with its error; the records are already published and the pass goes on.
 - **Install folders are swept once per process**, at its first reconcile: a folder no `installs.json`
   entry names (a removed source, a superseded version, a crash's leftover) is deleted then, never while
   the process may still hold a loader built from it — a chat mid-turn keeps the old factories, their lazy
@@ -77,18 +83,33 @@ A folder source is never copied: it loads from where it is, and nothing under it
   missing or resolving outside the package (realpath), a load error, a wrong descriptor shape, a
   descriptor `name` other than the package name (the package name is the identity, and a silent rename
   would surprise the author), an unresolvable `skillPackages` entry, or a name an earlier declaration
-  already provides (the first declaration wins once both are installed). A row's `error` is the user's
+  already owns (`duplicateOf`). A row's `error` is the user's
   to read; the log records which extension failed without the error object, so a third party's bug is
   not a ThinkRail error report.
+- **A name belongs to its first declaration**, a pure function of declaration order over the sources
+  installed when a pass publishes: the first one whose installed `package.json` has a valid manifest of
+  that name owns it — whether it then loads, fails to load or is incompatible, so ownership is settled
+  before any code runs and never flips on a load error — and every later one is a failed duplicate,
+  dropped from the loaded set (its code is not run when the owner is already settled). A source with no
+  package yet (installing, a failed install, offline) claims nothing, so a later one holds the name
+  until it installs. Ownership is recomputed before every publish — after each install and in `update`
+  too — so the outcome is the same whether a source was installed before or during the pass, and a
+  later reconcile keeps it.
 - **The descriptor shim** (the seam [[pi-compatibility]] registers). The host writes
-  `host/shims/<pid>-<n>.ts`, which default-imports the entry by absolute path and also imports
-  `createAgentSession` (pi-coding-agent) and `Type` (typebox), and default-exports a function that puts
-  all three under a per-load key in a `Symbol.for("thinkrail.extensionDescriptors")` map. It is loaded with
+  `host/shims/<pid>-<n>.ts`, which evaluates the entry's source through the jiti instance pi hands it
+  (`require.evalModule(source, { filename: entry, async: true, forceTranspile: true })`, default export
+  taken) and also imports `createAgentSession` (pi-coding-agent) and `Type` (typebox), and default-exports
+  a function that puts all three under a per-load key in a `Symbol.for("thinkrail.extensionDescriptors")`
+  map. Forcing the transform makes every entry type the manifest allows load the way a `.ts` one does:
+  a plain import would let jiti hand an `.mjs`, an ES-module `.js`, a `.cjs` or a CommonJS `.js` entry
+  to Bun's native loader, whose path-keyed registry served the first evaluation on every reload and
+  whose resolution skipped pi's. It is loaded with
   pi's public `discoverAndLoadExtensions([shim], empty, empty)` — uncached, so an edited entry reloads on
   the same path; both discovery roots are the empty folder, never the pi agent dir or a workspace, so a
   load never runs a user's pi extension or the Central artifact beside them — inside
-  `withForcedJitiTransform` (`JITI_TRY_NATIVE=false`, `JITI_REBUILD_FS_CACHE=1`, restored afterwards; one
-  task at a time, shared with the agent's runtime build). The key is read and deleted, the shim removed. **Identity guard:** the shim's `createAgentSession` and `Type` must be the
+  `withForcedJitiTransform` (`JITI_TRY_NATIVE=false`, `JITI_REBUILD_FS_CACHE=1`, `JITI_FS_CACHE=false`,
+  restored afterwards; one task at a time, shared with the agent's runtime build). A forced rebuild never
+  reads jiti's transform cache, so writing it only grew the temp folder by a file per shim. The key is read and deleted, the shim removed. **Identity guard:** the shim's `createAgentSession` and `Type` must be the
   host's own (`===`; a jiti namespace is a Proxy, so members are compared, never namespaces), else the load
   fails — the loader proves on every load that the extension resolution yields the host's single pi. The
   descriptor's shape is then validated field by field.
@@ -162,6 +183,20 @@ A folder source is never copied: it loads from where it is, and nothing under it
   `devDependencies`, as the `making-thinkrail-extensions` skill always does (`omit=peer` in `.npmrc`,
   peers only).
 
+- **A reload re-reads the entry and its TypeScript, not other JavaScript.** `update` of a folder source
+  (and a fingerprint change) evaluates the server entry afresh whatever its file type, and every `.ts` /
+  `.mts` / `.cts` module it imports; a plain-JavaScript module it imports — its own `./helper.js` or a
+  dependency — goes through Bun's native loader and keeps its first evaluation until the host restarts
+  (each npm/git install has its own folder, so this concerns folder sources only). Verified in a Bun
+  source run (`loader.test.ts`, every entry type) and against jiti's static entry with pi's virtual
+  modules, the path the compiled binary and the desktop bundle take; the binary and desktop themselves
+  are covered by the artifact probe in CI.
+- **A CommonJS entry cannot use the host's pi or typebox.** A `.cjs` entry, or a `.js` one without
+  `import` / `export` in a CommonJS package, reaches them through `require`, which is synchronous: pi's
+  loader then transpiles a separate copy of typebox (pi itself fails to load) instead of sharing the
+  host's ES modules, and the identity guard, which checks the shim's imports, does not see it. Write
+  the entry as an ES module (`.ts`, `.mts`, `.mjs` or an ES-module `.js`), as the SDK's sample does.
+
 - **An installed extension's providers are not in the boot catalog.** The agent's startup user-extension
   pass ([[submodule-server-agent]], #1351) loads pi's resolved user extensions only; an installed
   extension's server half is a registry inline factory, like a built-in's, and loads after host start. A
@@ -191,7 +226,8 @@ A folder source is never copied: it loads from where it is, and nothing under it
 ## Verification
 
 Unit tests over disposable temp folders: the declarations reader, the peer prune, the loader (identity
-guard, shim cleanup, env serialization), reconcile (idempotence, malformed file, removal, folder source,
+guard, shim cleanup, env serialization, an edited entry of every allowed type re-evaluated on the same
+path with its relative imports, own `node_modules` and the host's typebox), reconcile (idempotence, malformed file, removal, folder source,
 incompatible, every failure mode, duplicates, offline, stub npm installs, update, staging and adoption)
 the asset resolver (traversal, unknown extension, wrong file, stale token, links) and the status file
 (every state, tools, `installing` during an install, a refused file, no declarations).
