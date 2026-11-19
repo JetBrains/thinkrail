@@ -15,6 +15,7 @@ import {
 	OTHER_AGENT_SKILLS_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	QUESTION_PANEL_PROTOCOL_VERSION,
+	SUBAGENT_CATALOG_PROTOCOL_VERSION,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	USER_THEMES_PROTOCOL_VERSION,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
@@ -197,6 +198,14 @@ export const SETTING = {
 		keywords: ["subagents", "concurrent", "limit", "this workspace"],
 		requiresProtocolVersion: SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 		when: inWorkspace,
+	},
+	subagentRoles: {
+		id: "subagent-roles",
+		section: SettingsSection.Subagents,
+		label: "settings.subagents.available",
+		description: "settings.subagents.availableDescription",
+		keywords: ["agents", "roles", "disable", "model", "scout", "worker", "reviewer"],
+		requiresProtocolVersion: SUBAGENT_CATALOG_PROTOCOL_VERSION,
 	},
 	installPackage: {
 		id: "install-package",

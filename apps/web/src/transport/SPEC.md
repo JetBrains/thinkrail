@@ -212,7 +212,7 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   one `settings.update { keybindings }` and resolves `true` once accepted, the store converging on the
   `settings.changed` broadcast (no optimistic write); a host refusal rejects (`KEYBINDINGS_INVALID`).
   `refreshExtensionCatalog(connectionGeneration?)` is the one `extension.list` path: every welcome from a
-  host at `INSTALLED_EXTENSIONS_PROTOCOL_VERSION` (v127) or newer, every `extensions.changed` push, and each
+  host at `INSTALLED_EXTENSIONS_PROTOCOL_VERSION` (v128) or newer, every `extensions.changed` push, and each
   mount of the Extensions page (any host from v82, as before) call it; the latest request wins and only a
   response for the current connection generation installs the store's `extensionCatalog` (a failure
   installs `failed`). An older host is never asked at welcome, so its traffic is unchanged. `openSpeechSocket()`

@@ -75,6 +75,13 @@ first and disabled/replaced rows last. `selectMcpWorkspaceStarting` drives the b
 re-read while a server starts. The state vocabulary and the attention/active predicates live in `lib`
 (`mcpState`) because the props-only chat resources module shares them.
 
+## Agent availability
+
+`disabledSubagents` mirrors `AppConfig.disabledSubagents` through the welcome/`applyConfig` fold (`[]` from
+an older host); the roster's switches render only it. `selectActiveSubagentProjectTrust` is the active
+repository workspace's project `piResourceTrust` (undefined for a chat or no workspace), which keys the
+roster's catalog reads ([[submodule-web-panels]]).
+
 ## Boundary
 
 - **Owns:** `appStore.ts` — connection/projects/workspaces state + setters. Connection state has two
@@ -667,10 +674,10 @@ selector to hide its Projects rail and pane, so onboarding has the whole window.
   to `loading` only when the welcoming host's protocol differs from the previous welcome's, so a reconnect
   to the same host keeps the rows on screen until the new list lands. Its selectors:
   `selectBuiltinExtensions` (the Built into ThinkRail group — every row of an older host, `kind: "builtin"`
-  from v127), `selectInstalledExtensions` (installed rows in host order), `selectInstalledWebHalves` (the
+  from v128), `selectInstalledExtensions` (installed rows in host order), `selectInstalledWebHalves` (the
   `{ name, url, styles? }` set the page must have loaded — switched-off ones included — `null` while unknown,
-  empty for a host older than v127), and the gates `selectSupportsInstalledExtensions` (v127) and
-  `selectSupportsExtensionBrowse` (v128).
+  empty for a host older than v128), and the gates `selectSupportsInstalledExtensions` (v128) and
+  `selectSupportsExtensionBrowse` (v129).
   **`disabledPackages: string[]`** mirrors `disabledExtensions` from the settings broadcast; the
   Extensions page uses it only to compute the next whole list for `settings.update` — what a package
   row *shows* is the catalog's `enabled` (the host's effective state, which a `packages.changed` push

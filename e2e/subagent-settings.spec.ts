@@ -55,6 +55,130 @@ async function restoreSubagentBaseline(page: Page): Promise<void> {
 	await closeSettings(page);
 }
 
+async function enableAgentRoles(page: Page): Promise<void> {
+	await closeSettings(page);
+	await openSubagentSettings(page);
+	for (const name of ["scout", "worker"]) {
+		const toggle = page.getByTestId(`agent-toggle-${name}`);
+		if ((await toggle.getAttribute("data-active")) === "false") await toggle.click();
+		await expect(toggle).toHaveAttribute("data-active", "true");
+	}
+}
+
+test("an agent switch renders only the authoritative push and persists across reload", async ({
+	page,
+}) => {
+	const channelHold = await installChannelHold(page);
+	let release = () => {};
+	try {
+		await openFixtureProject(page);
+		await enterDefaultWorkspace(page);
+		await enableAgentRoles(page);
+		const catalog = page.getByTestId("settings-agent-catalog");
+		await expect(catalog.getByTestId("agent-row-scout")).toContainText("Built-in");
+		await expect(catalog.getByTestId("agent-row-echo")).toContainText("Personal");
+		await expect(catalog.getByTestId("agent-row-echo")).toContainText("Parent model");
+		const toggle = page.getByTestId("agent-toggle-scout");
+
+		const held = channelHold.arm("settings.changed");
+		release = held.release;
+		await toggle.click();
+		await held.held;
+		await expect(toggle).toHaveAttribute("data-active", "true");
+		release();
+		await expect(toggle).toHaveAttribute("data-active", "false");
+
+		await page.reload();
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await openSubagentSettings(page);
+		await expect(toggle).toHaveAttribute("data-active", "false");
+	} finally {
+		release();
+		if (!page.isClosed()) await enableAgentRoles(page);
+	}
+});
+
+test("two windows disabling different roles from the same snapshot both converge", async ({
+	page,
+	context,
+}) => {
+	const releases: (() => void)[] = [];
+	let peer: Page | undefined;
+	try {
+		await openFixtureProject(page);
+		await enableAgentRoles(page);
+		peer = await context.newPage();
+		const peerHold = await installChannelHold(peer);
+		await peer.goto(page.url());
+		await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await openSubagentSettings(peer);
+		await expect(peer.getByTestId("agent-toggle-scout")).toHaveAttribute("data-active", "true");
+
+		const first = peerHold.arm("settings.changed");
+		releases.push(first.release);
+		await page.getByTestId("agent-toggle-scout").click();
+		await first.held;
+		const second = peerHold.arm("settings.changed");
+		releases.push(second.release);
+		await peer.getByTestId("agent-toggle-worker").click();
+		await second.held;
+		first.release();
+		second.release();
+		for (const client of [page, peer]) {
+			for (const name of ["scout", "worker"]) {
+				await expect(client.getByTestId(`agent-toggle-${name}`)).toHaveAttribute(
+					"data-active",
+					"false",
+				);
+			}
+		}
+	} finally {
+		for (const release of releases) release();
+		await peer?.close();
+		if (!page.isClosed()) await enableAgentRoles(page);
+	}
+});
+
+test("agent availability controls are inaccessible while disconnected and return after reconnect", async ({
+	page,
+}) => {
+	let offline = false;
+	let disconnect = async () => {};
+	await page.routeWebSocket(/\/ws(\?|$)/, (browser) => {
+		if (offline) {
+			void browser.close({ code: 1012, reason: "Offline availability probe" });
+			return;
+		}
+		const server = browser.connectToServer();
+		disconnect = () => browser.close({ code: 1012, reason: "Offline availability probe" });
+		browser.onMessage((message) => server.send(message));
+		server.onMessage((message) => browser.send(message));
+	});
+	try {
+		await openFixtureProject(page);
+		await openSubagentSettings(page);
+		const toggle = page.getByTestId("agent-toggle-scout");
+		const refresh = page.getByTestId("agents-refresh");
+		await expect(toggle).toBeEnabled();
+		await expect(refresh).toBeEnabled();
+		offline = true;
+		await disconnect();
+		await expect(page.getByTestId("connection-status")).not.toHaveAttribute(
+			"data-status",
+			"connected",
+		);
+		await expect(toggle).toHaveCount(0);
+		await expect(refresh).toHaveCount(0);
+		await expect(page.getByTestId("settings-nav-subagents")).toHaveCount(0);
+	} finally {
+		offline = false;
+	}
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect(page.getByTestId("settings-subagents")).toBeVisible();
+	await expect(page.getByTestId("agent-toggle-scout")).toBeEnabled();
+	await expect(page.getByTestId("agents-refresh")).toBeEnabled();
+});
+
 test("a maximal unbroken workspace name stays contained on a phone-sized settings pane", async ({
 	page,
 }) => {

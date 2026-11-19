@@ -52,6 +52,7 @@ import {
 	listSessions,
 	listSkillCatalog,
 	listSkillCommands,
+	listSubagentCatalog,
 	markWorkspaceRead,
 	markWorkspaceUnread,
 	notifyExtUi,
@@ -206,7 +207,7 @@ import {
 	sendableComments,
 	updateComment,
 } from "../reviews";
-import { getConfig, noteRecentModel, updateConfig } from "../settings";
+import { getConfig, noteRecentModel, setSubagentEnabled, updateConfig } from "../settings";
 import { evictSpecIndex, evictSpecRoot, projectHasSpecs, specGraph } from "../spec";
 import { cancelSpeechInstall, installSpeech, removeSpeech } from "../speech";
 import {
@@ -1220,6 +1221,21 @@ const handlers: WsHandlers = {
 			ws.worktreePath,
 			admissionContextFor(project, ws.skillOverrides ?? {}, getConfig().otherAgentSkills),
 		);
+	},
+	"subagent.setEnabled": (p) => {
+		setSubagentEnabled(p?.name, p?.enabled);
+		return { ok: true };
+	},
+	"subagent.list": (p) => {
+		if (p.workspaceId === undefined) return listSubagentCatalog();
+		const ws = getWorkspace(p.workspaceId);
+		const project = listProjects().find((candidate) => candidate.id === ws.projectId);
+		const admission = admissionContextFor(
+			project,
+			ws.skillOverrides ?? {},
+			getConfig().otherAgentSkills,
+		);
+		return listSubagentCatalog(ws.worktreePath, admission.piResourceTrusted);
 	},
 	"extension.list": () => listExtensionCatalog(new Set(getConfig().disabledExtensions)),
 	"packages.list": (p) => packagesList(p),

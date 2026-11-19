@@ -181,6 +181,16 @@ the palette ranks with — kept here so host-side search can rank with the same 
   (`/providers/*`, `/api/*`, `/bedrock-provider`, … — they statically load the Node provider SDKs); and
   importing `server` / `shared` / `web`.
 
+## Subagent catalog (v127)
+
+`SUBAGENT_CATALOG_PROTOCOL_VERSION` (127) gates `subagent.list`, `subagent.setEnabled` and writes of
+`AppConfig.disabledSubagents` (default `[]`); the client checks it. `subagent.list({ workspaceId? })`
+returns `SubagentCatalogEntry[]` — `name`, `description`, `source` (`builtin` | `personal` | `project`),
+optional `model` and `thinking`, disabled entries included, never a prompt body or path; it takes no cwd
+([[submodule-server-host]] derives project admission). `subagent.setEnabled({ name, enabled })` returns
+`Ack` and changes only that name ([[submodule-server-settings]]); the result converges through
+`settings.changed`, with no new channel. Enforcement: [[module-pi-subagents]].
+
 ## Contents
 
 - **piProtocol.ts** — `import type` re-exports from the pi package roots (type-only → erased at build):
@@ -267,7 +277,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
     `AppConfig.disabledExtensions` list keys on, `tools` the names its parent factories register, and
     `settings` (`ExtensionSettingDescriptor[]`, `{ key, default: boolean }`, absent below
     `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v105) the boolean settings the extension declares. From
-    `INSTALLED_EXTENSIONS_PROTOCOL_VERSION` (v127) an entry also says its `kind` and, for an installed
+    `INSTALLED_EXTENSIONS_PROTOCOL_VERSION` (v128) an entry also says its `kind` and, for an installed
     one, its install state (§ Installed extensions).
     `ASK_DISCUSS_PROTOCOL_VERSION` (v105) is the host version that renders `ask_user_question`
     `kind: "discuss"` answers; the card withholds Discuss below it.
@@ -1454,7 +1464,7 @@ and what it loaded, never pi's own types.
 
 ## Installed extensions
 
-`INSTALLED_EXTENSIONS_PROTOCOL_VERSION` (127) gates what the host adds for extensions authored outside
+`INSTALLED_EXTENSIONS_PROTOCOL_VERSION` (128) gates what the host adds for extensions authored outside
 the repository ([[module-thinkrail-extensions]] § Installed extensions): the extra `extension.list`
 fields, the `extensions.*` methods, the `extensions.changed` channel and `packages.install`'s `installed`
 kind. Below it a client sees installed extensions as ordinary `extension.list` rows; built-in rows mean
@@ -1494,7 +1504,7 @@ what they always did.
 
 ### Community catalog (Browse)
 
-`EXTENSION_BROWSE_PROTOCOL_VERSION` (128) adds the in-app Browse read and one field:
+`EXTENSION_BROWSE_PROTOCOL_VERSION` (129) adds the in-app Browse read and one field:
 
 - **`extensions.browse { force? }` → `ExtensionBrowseResult`** (`{ generatedAt, extensions:
   ExtensionBrowseEntry[] }`): the website's `catalog.json` ([[module-thinkrail-extensions]] § Catalog) as the

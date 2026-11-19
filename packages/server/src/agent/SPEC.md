@@ -984,10 +984,14 @@ re-opened transcripts provider-valid.
     A host-injected `setSubagentConcurrencyResolver` supplies each service's per-chat
     limit at creation (`null`, the default, leaves new services on the core limit), and
     `refreshSubagentConcurrency(workspaceId?)` re-resolves and live-resizes the
-    cached services (core `setMaxConcurrentPerParent`) after a global or workspace limit change; `subagentsFor(workspaceId, isEnabled, canDeliverCompletion)` creates one retained portable
+    cached services (core `setMaxConcurrentPerParent`) after a global or workspace limit change; `subagentsFor(workspaceId, isEnabled, canDeliverCompletion, isAgentEnabled)` creates one retained portable
     `Subagents` owner per parent; its extension is injected on every resource load. A host-injected
     `setSubagentsEnabledResolver` maps that
     workspace id to its current effective policy without creating an `agent` → settings/workspaces edge.
+    `setSubagentEnabledResolver` injects the host's live per-name availability into every retained owner
+    (`isAgentEnabled`), without importing settings. `listSubagentCatalog(cwd?, includeProject?)` projects
+    portable discovery onto `SubagentCatalogEntry`; without a cwd it never loads project definitions
+    ([[submodule-server-host]] supplies the trusted worktree).
     The predicate reaches the extension's launch-time guard and initial/reload activation. For live
     policy changes, `refreshSubagentTools(workspaceId?)` removes/adds `Agent` +
     `get_subagent_result` through pi's active-tool API: idle sessions update synchronously, streaming

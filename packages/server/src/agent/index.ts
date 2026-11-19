@@ -142,6 +142,7 @@ export {
 	type SkillFacts,
 } from "./skillAdmission";
 export { isProjectSkillPath, mayHoldProjectSkills } from "./skillSources";
+export { listSubagentCatalog } from "./subagentCatalog";
 export {
 	SET_TITLE_TOOL_NAME,
 	type SetTitleParams,

@@ -211,7 +211,7 @@ export function selectSupportsExtensionBrowse(state: ProtocolState): boolean {
 	);
 }
 
-/** The Built into ThinkRail group: every entry an older host lists, and `kind: "builtin"` from v127. */
+/** The Built into ThinkRail group: every entry an older host lists, and `kind: "builtin"` from v128. */
 export function selectBuiltinExtensions(catalog: ExtensionCatalogRead): ExtensionCatalogRead {
 	return Array.isArray(catalog) ? catalog.filter((entry) => entry.kind !== "installed") : catalog;
 }
@@ -1025,6 +1025,11 @@ export function selectActiveWorkspaceProjectId(state: ActiveWorkspaceState): str
 export function selectActiveRepoWorkspaceId(state: ActiveWorkspaceState): string | undefined {
 	const active = selectActiveWorkspace(state);
 	return active && !isChatWorkspace(active) ? active.id : undefined;
+}
+
+export function selectActiveSubagentProjectTrust(state: ProjectContextState) {
+	const workspaceId = selectActiveRepoWorkspaceId(state);
+	return workspaceId ? selectContextProject(state)?.piResourceTrust : undefined;
 }
 
 export function selectContextProject(state: ProjectContextState): Project | null {

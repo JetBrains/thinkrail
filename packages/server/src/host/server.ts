@@ -88,6 +88,7 @@ import {
 	setSkillAdmissionResolver,
 	setSpecsEnabledResolver,
 	setSubagentConcurrencyResolver,
+	setSubagentEnabledResolver,
 	setSubagentsEnabledResolver,
 	setTitleToolHost,
 	settleCredentialWritesForShutdown,
@@ -917,6 +918,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		grantProjectMcpTool(getWorkspace(workspaceId).projectId, server, target, tool);
 	});
 
+	setSubagentEnabledResolver((name) => !getConfig().disabledSubagents.includes(name));
 	setSubagentsEnabledResolver((workspaceId) => {
 		try {
 			return resolveSubagentsEnabled(getConfig().subagentsEnabled, getWorkspace(workspaceId));
@@ -1344,6 +1346,7 @@ function restoreSeamDefaults(): void {
 	setSkillAdmissionResolver(null);
 	setMcpPolicyResolver(null);
 	setMcpToolGrantWriter(() => {});
+	setSubagentEnabledResolver(null);
 	setSubagentsEnabledResolver(null);
 	setSubagentConcurrencyResolver(null);
 	setAgentReviewEnabledResolver(null);

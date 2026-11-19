@@ -1234,6 +1234,7 @@ interface AppState {
 	analyticsConsentConfirmed: boolean;
 	notificationsEnabled: boolean;
 	subagentsEnabled: boolean;
+	disabledSubagents: string[];
 	subagentMaxConcurrent: number;
 	settleIdleDays: number | null;
 	jbcentralQuotaEnabled: boolean;
@@ -1687,6 +1688,7 @@ function configPatch(config: AppConfig) {
 				? config.notificationsEnabled
 				: DEFAULT_CONFIG.notificationsEnabled,
 		subagentsEnabled: config.subagentsEnabled ?? DEFAULT_CONFIG.subagentsEnabled,
+		disabledSubagents: config.disabledSubagents ?? [],
 		subagentMaxConcurrent: isSubagentMaxConcurrent(config.subagentMaxConcurrent)
 			? config.subagentMaxConcurrent
 			: DEFAULT_CONFIG.subagentMaxConcurrent,
@@ -2660,6 +2662,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	analyticsConsentConfirmed: DEFAULT_CONFIG.analyticsConsentConfirmed,
 	notificationsEnabled: DEFAULT_CONFIG.notificationsEnabled,
 	subagentsEnabled: DEFAULT_CONFIG.subagentsEnabled,
+	disabledSubagents: DEFAULT_CONFIG.disabledSubagents,
 	subagentMaxConcurrent: DEFAULT_CONFIG.subagentMaxConcurrent,
 	settleIdleDays: DEFAULT_CONFIG.settleIdleDays,
 	jbcentralQuotaEnabled: DEFAULT_CONFIG.jbcentralQuotaEnabled,

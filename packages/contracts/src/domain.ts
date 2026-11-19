@@ -1536,6 +1536,14 @@ export function isLineWidth(value: unknown): value is number {
 	);
 }
 
+export interface SubagentCatalogEntry {
+	name: string;
+	description: string;
+	source: "builtin" | "personal" | "project";
+	model?: string;
+	thinking?: ThinkingLevel;
+}
+
 export interface AppConfig extends ThemePreference {
 	analyticsEnabled: boolean;
 	analyticsConsentConfirmed: boolean;
@@ -1577,6 +1585,8 @@ export interface AppConfig extends ThemePreference {
 	terminalWindowsShell: TerminalWindowsShell;
 	/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
 	settleIdleDays: number | null;
+	/** Agent definition names switched off globally; unknown names are retained. */
+	disabledSubagents: string[];
 	disabledExtensions: string[];
 	/** Values of settings bundled extensions declare, by extension name then setting key. */
 	extensionSettings: ExtensionSettingValues;
@@ -2018,6 +2028,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
 	settleIdleDays: SETTLE_IDLE_DAYS.default,
+	disabledSubagents: [],
 	disabledExtensions: [],
 	extensionSettings: {},
 	otherAgentSkills: false,

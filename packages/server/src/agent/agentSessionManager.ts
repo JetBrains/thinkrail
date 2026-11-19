@@ -735,6 +735,19 @@ export function setSubagentsEnabledResolver(
 	subagentsEnabledResolver = resolver ?? enabledByDefault;
 }
 
+let subagentEnabledResolver: (name: string) => boolean = enabledByDefault;
+export function setSubagentEnabledResolver(resolver: ((name: string) => boolean) | null): void {
+	subagentEnabledResolver = resolver ?? enabledByDefault;
+}
+
+function subagentEnabled(name: string): boolean {
+	try {
+		return subagentEnabledResolver(name);
+	} catch {
+		return false;
+	}
+}
+
 function subagentsEnabled(workspaceId: string): boolean {
 	try {
 		return subagentsEnabledResolver(workspaceId);
@@ -1555,6 +1568,7 @@ async function createParentSessionInternal(
 		workspaceId,
 		() => subagentsEnabled(workspaceId),
 		() => sessions.get(sessionId)?.subagents === subagents && canDeliverCompletion(),
+		subagentEnabled,
 	);
 	const commands = createBackgroundCommands({
 		sessionId,

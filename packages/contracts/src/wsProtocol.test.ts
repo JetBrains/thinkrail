@@ -86,6 +86,7 @@ import {
 	SESSION_TITLE_MAX_LENGTH,
 	SPEC_SECTIONS_PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
+	SUBAGENT_CATALOG_PROTOCOL_VERSION,
 	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	SURVEY_TRANSLATIONS_PROTOCOL_VERSION,
@@ -373,15 +374,15 @@ test("host search and its previews are pinned to v106", () => {
 	expect(WS_METHODS.searchPreview).toBe("search.preview");
 });
 
-test("the community catalog is pinned to v128", () => {
-	expect(PROTOCOL_VERSION).toBe(128);
-	expect(EXTENSION_BROWSE_PROTOCOL_VERSION).toBe(128);
+test("the community catalog is pinned to v129", () => {
+	expect(PROTOCOL_VERSION).toBe(129);
+	expect(EXTENSION_BROWSE_PROTOCOL_VERSION).toBe(129);
 	expect(WS_METHODS.extensionsBrowse).toBe("extensions.browse");
 });
 
-test("installed extensions are pinned to v127", () => {
+test("installed extensions are pinned to v128", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(INSTALLED_EXTENSIONS_PROTOCOL_VERSION);
-	expect(INSTALLED_EXTENSIONS_PROTOCOL_VERSION).toBe(127);
+	expect(INSTALLED_EXTENSIONS_PROTOCOL_VERSION).toBe(128);
 	expect(WS_METHODS.extensionsRemove).toBe("extensions.remove");
 	expect(WS_METHODS.extensionsUpdate).toBe("extensions.update");
 	expect(WS_METHODS.extensionsCheckUpdates).toBe("extensions.checkUpdates");
@@ -789,4 +790,12 @@ test("ask_user_question discuss answers are pinned to v105, after background wor
 	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBe(105);
 	expect(ASK_DISCUSS_PROTOCOL_VERSION).toBeGreaterThan(WORKSPACE_CREATION_PROTOCOL_VERSION);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(ASK_DISCUSS_PROTOCOL_VERSION);
+});
+
+test("subagent catalog and per-name preference start at protocol 127", () => {
+	expect(WS_METHODS.subagentList).toBe("subagent.list");
+	expect(WS_METHODS.subagentSetEnabled).toBe("subagent.setEnabled");
+	expect(SUBAGENT_CATALOG_PROTOCOL_VERSION).toBe(127);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(SUBAGENT_CATALOG_PROTOCOL_VERSION);
+	expect(DEFAULT_CONFIG.disabledSubagents).toEqual([]);
 });

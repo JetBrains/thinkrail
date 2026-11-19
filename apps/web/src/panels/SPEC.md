@@ -742,7 +742,7 @@ a project picker, the prompt hero, and the reused
   content pane. It stands near full height (the window less a `--space-24` margin) but grows no wider than
   the 220px nav plus the content column (`max-w-760`), since a wider page only stretches rows (user,
   2026-11-17). At `md`+ the tabs are a rail grouped **Agent** (Models, Providers, Subagents — the global
-  settings and this workspace's override —, Extensions & skills, MCP servers, Prompt templates, Environment) ·
+  settings, this workspace's override and the available agent roles —, Extensions & skills, MCP servers, Prompt templates, Environment) ·
   **Interface** (Appearance, Text & fonts — fonts, custom fonts and both line widths —, Chat, Layout,
   Keyboard, Language, Voice input, Terminal) · **System** (Workspaces, Integrations, Notifications, Privacy,
   Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
@@ -1225,6 +1225,18 @@ a project picker, the prompt hero, and the reused
   (an invalid draft shows its range and is never sent, no clamping), validated against
   `SUBAGENT_MAX_CONCURRENT`. Global mutations converge through `settings.changed`, workspace ones through
   `workspace.updated`; none is optimistic.
+  From `SUBAGENT_CATALOG_PROTOCOL_VERSION` the page ends with **Available agents** (`AvailableAgents.tsx`,
+  `SubagentSettings`' gated `roster`; scope *All projects*, catalog id `subagent-roles`, Refresh as the
+  group action): one row per definition `subagent.list` returns for the active repository workspace — name,
+  translated source, description, pinned raw model reference or parent/invocation inheritance, explicit
+  thinking effort — and a global per-name switch (Changed while off; Reset re-enables). Disabled
+  definitions stay listed and new names default enabled; no prompt, path or editor is exposed. Copy states
+  global scope, new-launch-only enforcement (ongoing work continues), trusted-project scope and manual
+  Refresh after file edits. `useSubagentCatalog` reads `subagent.list` on mount, Refresh, workspace/trust
+  change and each welcome; a context-keyed lifetime shows loading at once and discards superseded
+  responses. Loading, empty and retryable failure are explicit. A role switch sends one
+  `subagent.setEnabled({ name, enabled })` request, like the page's other switches: it renders only the
+  authoritative `settings.changed` state and toasts a rejection.
   The **shell-owned injected Layout section** (`shell/LayoutSettings`) has three groups. **Presets** is
   one `SettingsList` (`layout-presets`) of Balanced/Focus/Review and the named custom presets. A row's
   primary applies it on Enter or a click, through one "Apply this layout?" confirm (`layout-apply-confirm`),
@@ -1481,7 +1493,7 @@ a project picker, the prompt hero, and the reused
   chats when their current turn ends."; there is no dynamic notice about which chats are pending.
   **Packages** is the **Install an extension or pi package** row (`packages-install`, with **Browse the pi
   package gallery** as a side). **Built into ThinkRail** is the host-registry catalog, read from the store's
-  `extensionCatalog` (`selectBuiltinExtensions`: every row of an older host, `kind: "builtin"` from v127) —
+  `extensionCatalog` (`selectBuiltinExtensions`: every row of an older host, `kind: "builtin"` from v128) —
   `transport`'s `refreshExtensionCatalog` re-lists on each mount and each welcome while the page is open, so
   an older host or a page opened while disconnected still lands its rows, and a failure shows **Retry**,
   which re-lists — rendered by
@@ -1583,7 +1595,7 @@ a project picker, the prompt hero, and the reused
   with the reason shown otherwise, and the hints show the real settings paths from the catalog. Disabling
   never unregisters a tool renderer ([[submodule-web-extensions]]), so past transcripts still render.
 
-  **Installed ThinkRail extensions** (from `INSTALLED_EXTENSIONS_PROTOCOL_VERSION`, v127) are the first rows of
+  **Installed ThinkRail extensions** (from `INSTALLED_EXTENSIONS_PROTOCOL_VERSION`, v128) are the first rows of
   the **Installed** list (`PiPackagesGroup`'s `extensionRows`: each a list row id `extension:<source>`, its
   markup and its Delete; they also keep showing, as the list alone, while `packages.list` loads or fails), from
   `selectInstalledExtensions` in host order; every extension row carries a **ThinkRail extension** tag and every
@@ -1630,7 +1642,7 @@ a project picker, the prompt hero, and the reused
   remounts the dialog (`key`) per opening.
 
   **Browse** (`ExtensionBrowse.tsx`, props-driven; `useExtensionBrowse.ts` owns the request; catalog
-  `extension-browse`) is a group shown from `EXTENSION_BROWSE_PROTOCOL_VERSION` (v128), after Installed. The
+  `extension-browse`) is a group shown from `EXTENSION_BROWSE_PROTOCOL_VERSION` (v129), after Installed. The
   host fetches the catalog (`extensions.browse`, [[submodule-server-extension-catalog]]); the browser never
   contacts thinkrail.ai. The hook reads on mount and again, from the host's cache, whenever the store catalog
   changes (so the **Installed** marks follow installs and removals); **Retry** forces a refetch; the latest read
