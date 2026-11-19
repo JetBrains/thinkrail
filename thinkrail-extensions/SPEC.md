@@ -265,8 +265,13 @@ key for the on/off switch and its settings) and must not equal a built-in's `nam
   `createAgentSession` and `Type` are the host's own. The version check runs before any extension code.
 - The server registry is a runtime list — built-ins first, then installed — and the existing composition
   is reused: named inline factories, per-session services, interactive tools, owner-scoped skill roots
-  resolved from the installed entry, the on/off switch, boolean settings, built-in tool-name precedence.
+  resolved from the installed entry, the on/off switch, boolean settings.
   A change reaches open chats when their current turn ends.
+- **Host-owned tools always win.** An installed extension is composed after every host-owned factory —
+  the built-in extensions, the host's own tools, its session tools and its MCP and tool-search slots —
+  so a tool, command or flag name it shares with any of them stays the host's; a user's pi package,
+  which pi loads before every inline extension, likewise keeps a tool name it shares with an installed
+  extension, and each keeps its other tools ([[submodule-server-extensions]]).
 - A load failure (syntax error, throwing top level, missing dependency) is a row state, never a host
   failure. Extensions load individually.
 
@@ -333,10 +338,10 @@ minor and its own snapshot. It imports no pi value at runtime. The in-repo `exte
 `resource-renderers` packages stay private; samples built with it live in `extension-examples/`
 ([[module-extension-examples]]).
 
-**Catalog** — the website publishes one file, `thinkrail.ai/extensions/catalog.json`, built from npm: every
-package carrying the `thinkrail-extension` keyword whose latest `package.json` has a valid manifest.
-Nothing is reviewed, hidden or marked; an extension distributed by git URL or folder installs but is not
-listed. The showcase page and the app's Browse read the same file ([[module-website]]).
+**Catalog** — one file, `thinkrail.ai/extensions/catalog.json`, lists every npm package carrying the
+`thinkrail-extension` keyword whose latest `package.json` has a valid manifest. An extension distributed
+by git URL or folder installs but is not listed. The app's Browse reads this file; the website that
+builds and publishes it ships separately.
 
 ```json
 {
@@ -351,7 +356,6 @@ listed. The showcase page and the app's Browse read the same file ([[module-webs
       "author": "Jane Doe",
       "api": "1.0",
       "halves": ["server", "web"],
-      "image": "https://example.com/preview.png",
       "install": "npm:thinkrail-ext-weather",
       "npm": "https://www.npmjs.com/package/thinkrail-ext-weather",
       "repository": "https://github.com/jane/thinkrail-ext-weather",
@@ -361,10 +365,12 @@ listed. The showcase page and the app's Browse read the same file ([[module-webs
 }
 ```
 
-`title`, `author`, `image` and `repository` are optional. A card shows which halves exist, not tool names:
-those live in code the website cannot run. The app's Browse gets the file through the host, never from
-the browser, and offers Install only for a listing whose `api` this app can load; an incompatible listing
-is marked and cannot be installed from Browse.
+`title`, `author` and `repository` are optional. A listing shows which halves exist, not tool names:
+those live in code a catalog cannot run. **No preview images:** a manifest may carry `image`, but nothing
+fetches or shows it — an author-chosen URL would expose the address of every user who opened Browse —
+so the host accepts and ignores an `image` in the file. The app's Browse gets the file through the host,
+never from the browser, and offers Install only for a listing whose `api` this app can load; an
+incompatible listing is marked and cannot be installed from Browse.
 
 ## Members
 
