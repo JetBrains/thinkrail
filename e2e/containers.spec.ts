@@ -129,8 +129,6 @@ test("grouping two workspaces nests them under the container with its orchestrat
 	await expect(memberRow(board, "beta")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("scope-name")).toHaveText("beta");
 
-	// The menu's Orchestrator pins the orchestrator chat beside the member (decided: it no longer swaps
-	// the center); the pinned tool's own action still opens it as the workspace.
 	await page.getByTestId("scope-container").click();
 	await page
 		.getByTestId("scope-container-menu")
