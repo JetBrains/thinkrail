@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, test, type WebSocketRoute } from "@playwright/test";
+import { expect, type Page, test, type WebSocketRoute } from "@playwright/test";
 import { TodoStore } from "pi-todos/core";
 import {
 	defaultWorkspaceRow,
@@ -16,6 +16,7 @@ import {
 } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
+import { E2eWire } from "./fixtures/wire";
 
 const BASE_TS = 1_700_200_000_000;
 
@@ -470,5 +471,321 @@ test("with no TODOs, the single newest disk chat opens as a fallback; older ones
 	await expect(page.getByTestId("closed-chat-item")).toHaveCount(1);
 	await expect(
 		page.getByTestId("closed-chat-item").filter({ hasText: "older fallback chat" }),
+	).toBeVisible();
+});
+
+interface Frame {
+	id?: string;
+	method?: string;
+	params?: { sessionId?: string };
+	result?: { messages?: unknown[] };
+}
+
+function frameOf(message: string | Buffer): Frame | null {
+	try {
+		return JSON.parse(message.toString()) as Frame;
+	} catch {
+		return null;
+	}
+}
+
+const openChatTabs = (page: Page) => page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+const activeTab = (page: Page) => page.locator('[data-testid="editor-tab"][data-active="true"]');
+
+interface ChatRoute {
+	workspaceId: string;
+	sessionId: string;
+}
+
+async function currentChat(page: Page): Promise<ChatRoute> {
+	await expect.poll(() => page.evaluate(() => window.location.hash)).toContain("/chats/");
+	const segments = (await page.evaluate(() => window.location.hash)).split("/");
+	const [workspaceId, sessionId] = [segments[5], segments[7]];
+	if (!workspaceId || !sessionId) throw new Error("the route names no chat");
+	return { workspaceId: decodeURIComponent(workspaceId), sessionId: decodeURIComponent(sessionId) };
+}
+
+interface FirstSocketReads {
+	breakOf?: () => string | undefined;
+	dropOf?: () => string | undefined;
+}
+
+async function routeDroppableSocket(
+	page: Page,
+	firstSocket: FirstSocketReads = {},
+): Promise<{
+	droppedReads: string[];
+	reconnectReads: string[];
+	reconnect(): Promise<void>;
+	reconnectAndRename(chat: ChatRoute, title: string): Promise<void>;
+}> {
+	let socket: WebSocketRoute | undefined;
+	let socketsOpened = 0;
+	let listsAnswered = 0;
+	const seenRequestIds = new Set<string>();
+	const droppedReads: string[] = [];
+	const reconnectReads: string[] = [];
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		socketsOpened += 1;
+		listsAnswered = 0;
+		const reconnected = socketsOpened > 1;
+		const lists = new Set<string>();
+		const brokenReads = new Set<string>();
+		socket = ws;
+		const server = ws.connectToServer();
+		ws.onMessage((message) => {
+			const frame = frameOf(message);
+			const id = frame?.id;
+			const resent = id !== undefined && seenRequestIds.has(id);
+			if (frame?.method === "session.list" && id && !resent) lists.add(id);
+			const read = frame?.method === "session.getMessages" ? frame.params?.sessionId : undefined;
+			if (reconnected && read && !resent) reconnectReads.push(read);
+			if (id) seenRequestIds.add(id);
+			if (!reconnected && read && id) {
+				if (read === firstSocket.dropOf?.()) {
+					droppedReads.push(read);
+					return;
+				}
+				if (read === firstSocket.breakOf?.()) brokenReads.add(id);
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => {
+			const frame = frameOf(message);
+			const id = frame?.id;
+			if (id && brokenReads.has(id) && Array.isArray(frame.result?.messages)) {
+				frame.result.messages.push({ role: "user", content: null, timestamp: BASE_TS });
+				ws.send(JSON.stringify(frame));
+				return;
+			}
+			ws.send(message);
+			if (ws === socket && id && lists.has(id)) listsAnswered += 1;
+		});
+	});
+	const reconnect = async () => {
+		const before = socketsOpened;
+		await socket?.close();
+		await expect.poll(() => socketsOpened).toBeGreaterThan(before);
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await expect.poll(() => listsAnswered).toBeGreaterThan(0);
+	};
+	return {
+		droppedReads,
+		reconnectReads,
+		reconnect,
+		async reconnectAndRename(chat, title) {
+			await reconnect();
+			const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+			try {
+				await wire.request("session.rename", { ...chat, title });
+			} finally {
+				wire.close();
+			}
+		},
+	};
+}
+
+test("a chat closed to history stays there after a reconnect", async ({ page }) => {
+	const socket = await routeDroppableSocket(page);
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await page.getByTestId("new-chat").first().click();
+	await expect(openChatTabs(page)).toHaveCount(1);
+	const current = await currentChat(page);
+	await page.getByTestId("new-chat").first().click();
+	await expect(openChatTabs(page)).toHaveCount(2);
+	await expect.poll(async () => (await currentChat(page)).sessionId).not.toBe(current.sessionId);
+	await activeTab(page).getByTestId("editor-tab-close").click();
+	await expect(openChatTabs(page)).toHaveCount(1);
+	await expect.poll(async () => (await currentChat(page)).sessionId).toBe(current.sessionId);
+
+	await socket.reconnectAndRename(current, "the current chat");
+
+	await expect(activeTab(page)).toContainText("the current chat");
+	await expect(openChatTabs(page)).toHaveCount(1);
+	await page.getByTestId("chat-history").first().click();
+	await expect(page.getByTestId("closed-chat-item")).toHaveCount(1);
+});
+
+test("a chat another window started stays in history after a reconnect", async ({
+	page,
+	context,
+}) => {
+	const socket = await routeDroppableSocket(page);
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	await page.getByTestId("new-chat").first().click();
+	await expect(openChatTabs(page)).toHaveCount(1);
+	const current = await currentChat(page);
+
+	const page2 = await context.newPage();
+	await page2.goto("/");
+	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await revealFirstProjectWorkspaces(page2);
+	await defaultWorkspaceRow(page2).click();
+	await expect(openChatTabs(page2)).toHaveCount(1);
+	await page2.getByTestId("new-chat").first().click();
+	await expect(openChatTabs(page2)).toHaveCount(2);
+	await expect.poll(async () => (await currentChat(page2)).sessionId).not.toBe(current.sessionId);
+	const peer = await currentChat(page2);
+	await page.getByTestId("chat-history").first().click();
+	await expect(page.getByTestId("closed-chat-item")).toHaveCount(1);
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("closed-chat-item")).toHaveCount(0);
+
+	await socket.reconnectAndRename(current, "the current chat");
+
+	await expect(activeTab(page)).toContainText("the current chat");
+	expect(socket.reconnectReads).not.toContain(peer.sessionId);
+	await expect(openChatTabs(page)).toHaveCount(1);
+	await page.getByTestId("chat-history").first().click();
+	await expect(page.getByTestId("closed-chat-item")).toHaveCount(1);
+	await page2.close();
+});
+
+test("an auto-open cut by a dropped socket runs on the next connection", async ({ page }) => {
+	let socketsOpened = 0;
+	let cutRequestId: string | undefined;
+	let cutReadAnswered = () => {};
+	const cutReadAnsweredOnNewSocket = new Promise<void>((resolve) => {
+		cutReadAnswered = resolve;
+	});
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		socketsOpened += 1;
+		const first = socketsOpened === 1;
+		const lists = new Set<string>();
+		const server = ws.connectToServer();
+		ws.onMessage((message) => {
+			const frame = frameOf(message);
+			if (first && frame?.method === "session.getMessages") {
+				cutRequestId = frame.id;
+				void ws.close();
+				return;
+			}
+			if (!first && frame?.method === "session.list" && frame.id) lists.add(frame.id);
+			server.send(message);
+		});
+		server.onMessage((message) => {
+			const id = frameOf(message)?.id;
+			if (!first && id && lists.has(id)) {
+				void cutReadAnsweredOnNewSocket.then(() => ws.send(message));
+				return;
+			}
+			ws.send(message);
+			if (!first && id && id === cutRequestId) cutReadAnswered();
+		});
+	});
+	await openFixtureProject(page);
+	const only = seedWorkspaceSession(repoCwd(), {
+		name: "cut fallback chat",
+		messages: [{ role: "user", text: "the cut fallback chat", timestamp: BASE_TS }],
+	});
+	setMtime(only.path, BASE_TS);
+
+	await enterDefaultWorkspace(page);
+
+	await expect.poll(() => cutRequestId).toBeDefined();
+	await expect.poll(() => socketsOpened).toBeGreaterThan(1);
+	await expect(openChatTabs(page)).toHaveCount(1);
+	await expect(page.getByText("the cut fallback chat")).toBeVisible();
+});
+
+test("a reconnect after a first entry that opened a chat keeps the rest in history", async ({
+	page,
+}) => {
+	let heldSessionId: string | undefined;
+	const socket = await routeDroppableSocket(page, { dropOf: () => heldSessionId });
+	await openFixtureProject(page);
+	const opened = seedWorkspaceSession(repoCwd(), {
+		name: "opened todo chat",
+		messages: [{ role: "user", text: "the opened todo chat", timestamp: BASE_TS + 50_000 }],
+	});
+	setMtime(opened.path, BASE_TS + 50_000);
+	seedOpenTodo(opened.id, "finish the opened chat");
+	const held = seedWorkspaceSession(repoCwd(), {
+		name: "held todo chat",
+		messages: [{ role: "user", text: "the held todo chat", timestamp: BASE_TS }],
+	});
+	setMtime(held.path, BASE_TS);
+	seedOpenTodo(held.id, "finish the held chat");
+	heldSessionId = held.id;
+
+	await enterDefaultWorkspace(page);
+	await expect(page.getByText("the opened todo chat")).toBeVisible();
+	expect(socket.droppedReads).toContain(held.id);
+	const current = await currentChat(page);
+
+	await socket.reconnectAndRename(current, "the opened chat");
+
+	await expect(activeTab(page)).toContainText("the opened chat");
+	expect(socket.reconnectReads).not.toContain(held.id);
+	await expect(openChatTabs(page)).toHaveCount(1);
+	await page.getByTestId("chat-history").first().click();
+	await expect(
+		page.getByTestId("closed-chat-item").filter({ hasText: "held todo chat" }),
+	).toBeVisible();
+});
+
+test("a first entry that failed to load its chats does not retry on a reconnect", async ({
+	page,
+}) => {
+	let brokenSessionId: string | undefined;
+	const socket = await routeDroppableSocket(page, { breakOf: () => brokenSessionId });
+	await openFixtureProject(page);
+	const broken = seedWorkspaceSession(repoCwd(), {
+		name: "broken todo chat",
+		messages: [{ role: "user", text: "the broken todo chat", timestamp: BASE_TS }],
+	});
+	setMtime(broken.path, BASE_TS);
+	seedOpenTodo(broken.id, "finish the broken chat");
+	brokenSessionId = broken.id;
+
+	await enterDefaultWorkspace(page);
+	await expect(page.locator('[data-testid="toast"][data-variant="error"]')).toBeVisible();
+	await page.getByTestId("new-chat").first().click();
+	await expect(openChatTabs(page)).toHaveCount(1);
+	const current = await currentChat(page);
+
+	await socket.reconnectAndRename(current, "the current chat");
+
+	await expect(activeTab(page)).toContainText("the current chat");
+	expect(socket.reconnectReads).not.toContain(broken.id);
+	await expect(openChatTabs(page)).toHaveCount(1);
+});
+
+test("a first entry finished on the next connection keeps a later closed chat in history", async ({
+	page,
+}) => {
+	let heldSessionId: string | undefined;
+	const socket = await routeDroppableSocket(page, { dropOf: () => heldSessionId });
+	await openFixtureProject(page);
+	const held = seedWorkspaceSession(repoCwd(), {
+		name: "held todo chat",
+		messages: [{ role: "user", text: "the held todo chat", timestamp: BASE_TS }],
+	});
+	setMtime(held.path, BASE_TS);
+	seedOpenTodo(held.id, "finish the held chat");
+	heldSessionId = held.id;
+
+	await enterDefaultWorkspace(page);
+	await expect.poll(() => socket.droppedReads).toContain(held.id);
+	await socket.reconnect();
+	await expect(page.getByText("the held todo chat")).toBeVisible();
+	await page.getByTestId("new-chat").first().click();
+	await expect(openChatTabs(page)).toHaveCount(2);
+	await expect.poll(async () => (await currentChat(page)).sessionId).not.toBe(held.id);
+	const current = await currentChat(page);
+	await openChatTabs(page).filter({ hasText: "held todo chat" }).click();
+	await expect(activeTab(page)).toContainText("held todo chat");
+	await activeTab(page).getByTestId("editor-tab-close").click();
+	await expect(openChatTabs(page)).toHaveCount(1);
+
+	await socket.reconnectAndRename(current, "the current chat");
+
+	await expect(activeTab(page)).toContainText("the current chat");
+	await expect(openChatTabs(page)).toHaveCount(1);
+	await page.getByTestId("chat-history").first().click();
+	await expect(
+		page.getByTestId("closed-chat-item").filter({ hasText: "held todo chat" }),
 	).toBeVisible();
 });
