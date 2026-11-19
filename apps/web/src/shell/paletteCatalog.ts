@@ -38,6 +38,7 @@ import {
 	RiSettings3Line,
 	RiShapesLine,
 	RiSparkling2Line,
+	RiStackLine,
 	RiTerminalBoxLine,
 	RiZoomInLine,
 	RiZoomOutLine,
@@ -58,7 +59,7 @@ import {
 import type { SettingEntry } from "../panels/settingsCatalog";
 import type { SettingsNavGroup } from "../panels/settingsNav";
 import type { PaletteItem } from "../search";
-import type { SettingsSection } from "../store";
+import type { ContainerDialogRequest, SettingsSection } from "../store";
 import type { LayoutToolId, TabAction } from "./layout";
 
 export type PaletteTool = Exclude<LayoutToolId, "projects">;
@@ -97,6 +98,10 @@ export interface PaletteCatalogDeps {
 	readonly canSettle: boolean;
 	readonly settled: boolean;
 	readonly settleBlocked: boolean;
+	/** The container the active workspace belongs to (as a member or its orchestrator). */
+	readonly containerId: string | null;
+	/** The active workspace may be grouped into a new container. */
+	readonly canGroup: boolean;
 	readonly settingsGroups: readonly SettingsNavGroup[];
 	readonly settingEntries: readonly SettingEntry[];
 	readonly tabActions: readonly TabAction[];
@@ -137,6 +142,7 @@ export interface PaletteCatalogActions {
 	readonly openSettings: (section?: SettingsSection, settingId?: string) => void;
 	readonly openShortcuts: () => void;
 	readonly runTabAction: (actionId: string) => void;
+	readonly openContainerDialog: (request: ContainerDialogRequest) => void;
 }
 
 function shortcutOf(
@@ -473,11 +479,50 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 	return commands;
 }
 
+function containerCommands(deps: PaletteCatalogDeps, workspaceId: string): Command[] {
+	const { t, actions, containerId } = deps;
+	if (containerId === null) {
+		return deps.canGroup
+			? [
+					{
+						id: "container.group",
+						title: t("containers.commands.group"),
+						group: "workspace",
+						icon: RiStackLine,
+						keywords: ["container", "group", "orchestrator", "stack"],
+						mutates: true,
+						run: () => actions.openContainerDialog({ kind: "group", workspaceId }),
+					},
+				]
+			: [];
+	}
+	return [
+		{
+			id: "container.addWorkspace",
+			title: t("containers.commands.addWorkspace"),
+			group: "workspace",
+			icon: RiStackLine,
+			keywords: ["container", "worktree", "stack", "attach"],
+			mutates: true,
+			run: () => actions.openContainerDialog({ kind: "addWorkspace", containerId }),
+		},
+		{
+			id: "container.remove",
+			title: t("containers.commands.remove"),
+			group: "workspace",
+			icon: RiDeleteBinLine,
+			keywords: ["container", "dissolve", "archive"],
+			mutates: true,
+			run: () => actions.openContainerDialog({ kind: "remove", containerId }),
+		},
+	];
+}
+
 function workspaceCommands(deps: PaletteCatalogDeps): Command[] {
 	const { t, actions, activeWorkspace } = deps;
 	if (!activeWorkspace) return [];
 	const workspaceId = activeWorkspace.id;
-	const commands: Command[] = [];
+	const commands: Command[] = [...containerCommands(deps, workspaceId)];
 	if (deps.readAction === "markRead") {
 		commands.push({
 			id: "workspace.markRead",

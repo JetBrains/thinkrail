@@ -1124,7 +1124,14 @@ export interface WsMethodMap {
 		result: Workspace;
 	};
 	"workspace.startCreate": {
-		params: { projectId: string; name?: string; baseRef?: string; kickoff?: WorkspaceKickoff };
+		params: {
+			projectId: string;
+			name?: string;
+			baseRef?: string;
+			kickoff?: WorkspaceKickoff;
+			/** A container the new workspace joins as its creation hands it over (v129). */
+			into?: string;
+		};
 		result: WorkspaceCreation;
 	};
 	"workspace.listCreations": { params: Record<string, never>; result: WorkspaceCreation[] };

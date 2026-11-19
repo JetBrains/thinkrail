@@ -1322,6 +1322,9 @@ client talking to an older host sends none of it and holds no containers.
   workspace becomes standalone either way) / **`container.remove`** (`{ containerId }` → `Ack`; dissolves
   the record only, members are untouched — archiving them is `workspace.remove`). Archiving or removing a
   workspace makes it leave its container; a container left without members is removed.
+  **`workspace.startCreate`** takes **`into?: containerId`** at the same gate: the new workspace joins that
+  container as its creation hands it over, before `workspace.creationRemoved`, so a client never sends a
+  second request that a closed window could lose (an unknown container is `CONTAINER_UNKNOWN` up front).
 - Channels: **`container.updated`** (the full `Container` snapshot after every create and change —
   idempotent under last-value replay) and **`container.removed`** (`ContainerRemoved { id }`), broadcast to
   sockets at the gate only.

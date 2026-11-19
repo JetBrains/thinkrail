@@ -2,13 +2,13 @@ import { STORAGE_PREFIX } from "../constants/branding";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 
-function storageKey(): string {
-	return `${STORAGE_PREFIX}expanded-projects:${getTransport().httpBase()}`;
+function storageKey(kind: "expanded-projects" | "collapsed-containers"): string {
+	return `${STORAGE_PREFIX}${kind}:${getTransport().httpBase()}`;
 }
 
-function readPersistedExpansion(): string[] {
+function readPersistedIds(key: string): string[] {
 	try {
-		const raw = localStorage.getItem(storageKey());
+		const raw = localStorage.getItem(key);
 		if (!raw) return [];
 		const parsed = JSON.parse(raw) as unknown;
 		if (!Array.isArray(parsed)) return [];
@@ -18,18 +18,22 @@ function readPersistedExpansion(): string[] {
 	}
 }
 
-function persistExpansion(expanded: Record<string, true>): void {
+function persistIds(key: string, ids: Record<string, true>): void {
 	try {
-		localStorage.setItem(storageKey(), JSON.stringify(Object.keys(expanded)));
+		localStorage.setItem(key, JSON.stringify(Object.keys(ids)));
 	} catch {}
 }
 
 export function initProjectExpansionPersistence(): void {
-	useAppStore.getState().hydrateExpandedProjects(readPersistedExpansion());
-	let previous = useAppStore.getState().expandedProjectIds;
+	const store = useAppStore.getState();
+	store.hydrateExpandedProjects(readPersistedIds(storageKey("expanded-projects")));
+	store.hydrateCollapsedContainers(readPersistedIds(storageKey("collapsed-containers")));
+	let previous = useAppStore.getState();
 	useAppStore.subscribe((state) => {
-		if (state.expandedProjectIds === previous) return;
-		previous = state.expandedProjectIds;
-		persistExpansion(previous);
+		if (state.expandedProjectIds !== previous.expandedProjectIds)
+			persistIds(storageKey("expanded-projects"), state.expandedProjectIds);
+		if (state.collapsedContainerIds !== previous.collapsedContainerIds)
+			persistIds(storageKey("collapsed-containers"), state.collapsedContainerIds);
+		previous = state;
 	});
 }

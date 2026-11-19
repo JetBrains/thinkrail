@@ -661,6 +661,7 @@ export type WorkspaceCreationRecord = Omit<WorkspaceCreation, "kickoff"> & {
 	kickoff?: WorkspaceKickoff;
 	origin?: CreationOrigin;
 	startedBy?: WorkspaceStartedBy;
+	into?: string;
 };
 
 export function loadWorkspaceCreations(): WorkspaceCreationRecord[] {

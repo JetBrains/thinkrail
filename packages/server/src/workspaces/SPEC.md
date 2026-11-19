@@ -118,12 +118,14 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   after its git subprocess)),
   **background creation** (`creations.ts` over the `creationRecords.ts` store; issue #874 — a sync
   `worktree add` of a large monorepo froze the host's only event loop for the whole checkout and outlived the
-  client's 60s request): `startWorkspaceCreation(projectId, { name?, baseRef?, kickoff?, origin?, startedBy? })` plans the
+  client's 60s request): `startWorkspaceCreation(projectId, { name?, baseRef?, kickoff?, origin?, startedBy?, into? })` plans the
   branch and path synchronously, persists a record in `workspace-creations.json` (`state: running`, `phase:
   preparing`, the full kickoff incl. images, and for an agent's `start_workspace` a host-only `origin: "agent"`
   plus `startedBy`, neither in the wire view) and returns its `WorkspaceCreation` view before any git runs.
   `startedBy` (`{ sessionId, containerId? }`: the calling chat, and its container when that chat is an
-  orchestrator) is copied onto the registered `Workspace` and kept on the record, so a Retry keeps it. The job then
+  orchestrator) is copied onto the registered `Workspace` and kept on the record, so a Retry keeps it; so is
+  the host-only `into` (a container id from `workspace.startCreate`), which the record hands to the injected
+  handoff — this module never reads a container. The job then
   (1) fetches a missing remote base, resolves the OID, and runs `worktree add --no-checkout` through `gitAsync`
   (no file writes, so it is quick), (2) moves to `phase: checking-out` and runs `git checkout --progress
   --no-recurse-submodules -f <branch> --` in the new worktree — the split exists because git reports checkout

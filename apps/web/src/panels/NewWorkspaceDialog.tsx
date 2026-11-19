@@ -100,7 +100,7 @@ export function reconcileModel(
 	return catalogFresh && models.length > 0 ? "unavailable" : null;
 }
 
-const PILL =
+export const PICKER_PILL =
 	"flex h-32 min-w-0 items-center gap-8 rounded-sm border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
 
 async function refreshProjectWorkspaces(projectId: string): Promise<void> {
@@ -633,7 +633,7 @@ export function NewWorkspaceDialog({
 								selected={baseRef}
 								label={t("panels.newWorkspace.baseLabel")}
 								testid="ws-branch-picker"
-								triggerClassName={`${PILL} max-w-[220px]`}
+								triggerClassName={`${PICKER_PILL} max-w-[220px]`}
 								refreshing={refreshing}
 								container={dialogEl}
 								onSelect={selectBaseRef}
@@ -854,7 +854,7 @@ function TargetOption({
 	);
 }
 
-function ProjectPicker({
+export function ProjectPicker({
 	projects,
 	current,
 	container,
@@ -872,7 +872,7 @@ function ProjectPicker({
 			<PopoverTrigger
 				data-testid="ws-project-picker"
 				data-open={open}
-				className={`${PILL} max-w-[180px]`}
+				className={`${PICKER_PILL} max-w-[180px]`}
 			>
 				<span className="flex size-[18px] shrink-0 items-center justify-center rounded-sm bg-primary">
 					<Box className="size-12 text-text-on-primary" />

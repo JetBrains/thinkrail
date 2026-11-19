@@ -11,8 +11,9 @@ tags: [ui, topbar, public-surface-checked]
 ## Responsibility
 
 The persistent "where am I / what state is it in" strip after the ThinkRail mark: one row of captioned
-segments — **Project · Workspace · Branch · from base · Remote · Pull request** — whose values are the
-controls for switching project or workspace, acting on the workspace, reading or retargeting the
+segments — **Project · Workspace · Branch · from base · Remote · Pull request**, with **Container** in
+place of Project while a container member is active — whose values are the controls for switching
+project, container member or workspace, acting on the workspace, reading or retargeting the
 branch, and taking the branch's **next delivery step** (publish, push, open a PR, sync, fix checks, mark
 ready, merge, settle). It renders
 what the store and `workspace.branchStatus` (older hosts: `workspace.openReview`) already report and runs
@@ -33,13 +34,17 @@ actions through the panels-owned ship runner; it owns no host state.
   workspace… (not while its deletion is pending) and Delete chat…, and no branch, remote or pull-request
   segment is rendered — there is no repository to ask. Both dialogs it opens — Delete and Continue — are
   keyed by the id of the chat they were opened for and close when the segment moves to another chat.
+  A container member reads `Container ▾ · Workspace ▾ · Branch · …` and its orchestrator chat
+  `Container ▾ · <chat>`: `ContainerSegment` replaces the project segment (same width cap and drop
+  below `sm`), and a standalone workspace renders exactly as before.
 - **Public surface (`index.ts`):**
   - `LocationBar`
 - **Allowed deps:** `store` (projects, workspaces, session state, diff base selector, toasts), `transport`
   (`workspace.setDiffBase`), `lib` (`copyText`, `platformShortcutLabel`), `components/RunningIcon`,
   `@thinkrail/ui/*`, `@remixicon/react`, `@thinkrail/locales` (UI strings), contracts types, and these `panels` files per-file:
   `workspaceActions` (the one implementation of open-in / rename / reveal / remove / `editor.list` /
-  `workspace.list`, shared with `ProjectTree`), `RemoveWorkspaceDialog`, `BranchPicker` + `branches`,
+  `workspace.list`, shared with `ProjectTree`), `containerActions` (`renameContainer`; the dialogs are
+  the store's `containerDialog`, rendered by the shell-mounted `ContainerDialogs`), `RemoveWorkspaceDialog`, `BranchPicker` + `branches`,
   `useOpenProject`, `useBranchStatus` (`openReviewLabel`, `resolveBranchReview`), `shipActions` (the
   derivation), and `useShipRunner` (the action runner with its dialogs, shared with the Plan pane). A
   `ShipStrip` keyed by the workspace id owns the runner: a compose draft survives the segments unmounting on a
@@ -90,6 +95,12 @@ actions through the panels-owned ship runner; it owns no host state.
 - **Project** lists every open project (check on the current one), *Project home* (disabled while there),
   and *Add project…* (the shared `useOpenProject` picker + its dialogs). Choosing a project selects it with
   `reveal` and loads its workspace list, i.e. the same transition as the Projects tree.
+- **Container** (the active workspace's container, `selectWorkspaceContainerId`: a member's, or the
+  one its orchestrator chat names) shows the container name and a menu: the members (check on the
+  active one, `RunningIcon` while working, the branch — `project · branch` when they span projects) and
+  **Orchestrator** to switch to, then **Add workspace…**, **Rename** (the pill becomes the shared inline
+  rename input, `container.rename`) and **Remove container…** — the same dialogs the Projects tree opens.
+  The Workspace segment beside it is unchanged.
 - **Workspace** shows the active workspace's actions (Open in, Rename, Copy path, Reveal, the rail's
   **Mark as read / unread** toggle, **Settle** or
   **Keep active** — whichever applies, through the shared `workspaceActions` — and Remove through the

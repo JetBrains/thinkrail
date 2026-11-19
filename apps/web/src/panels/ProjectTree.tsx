@@ -21,6 +21,7 @@ import {
 	RiFolderOpenLine as FolderOpen,
 	RiGitBranchLine as GitBranch,
 	RiHome2Line as House,
+	RiLogoutBoxRLine as LeaveContainer,
 	RiMailOpenLine as MailOpen,
 	RiMailUnreadLine as MailUnread,
 	RiMore2Line as MoreVertical,
@@ -32,6 +33,7 @@ import {
 	RiFolderOpenFill,
 	RiGitBranchFill,
 	RiHome2Fill,
+	RiStackLine,
 	RiDeleteBin6Line as Trash2,
 	RiCloseLine as X,
 } from "@remixicon/react";
@@ -66,23 +68,31 @@ import { RunningIcon } from "@/components/RunningIcon";
 import { type ChatAction, copyText } from "@/lib";
 import { useNow } from "../components/useNow";
 import {
+	type ContainerGroup,
+	canJoinContainer,
 	isChatWorkspace,
 	isDefaultWorkspace,
 	isExternalWorkspace,
 	SETTLED_SHELF_MORE,
 	SETTLED_SHELF_PAGE,
 	type SettledReason,
+	selectActiveContainerId,
 	selectActiveWorkspace,
 	selectActiveWorkspaceProjectId,
 	selectAutoSettledCounts,
+	selectContainerIsRunning,
+	selectContainerNeedsAttention,
+	selectContainerTree,
 	selectProjectIsRunning,
 	selectProjectNeedsAttention,
 	selectRepoProjects,
+	selectStandalonePartition,
 	selectSupportsOnboarding,
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
 	selectWorkspacePartition,
 	selectWorkspaceReadAction,
+	selectWorkspaceSettledReason,
 	settledReasonLabel,
 	settledReasonTitle,
 	supportsWorkspaceReadState,
@@ -95,6 +105,8 @@ import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ChatsSection } from "./ChatsSection";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { ContainerGroupRows, type ContainerRowState } from "./ContainerRows";
+import { canUseContainers, leaveContainer, memberSubtitle } from "./containerActions";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { RemoveWorkspaceDialog } from "./RemoveWorkspaceDialog";
@@ -170,6 +182,9 @@ export function ProjectTree({
 }) {
 	const t = useT();
 	const projects = useAppStore(useShallow(selectRepoProjects));
+	const allProjects = useAppStore((s) => s.projects);
+	const containers = useAppStore((s) => s.containers);
+	const collapsedContainerIds = useAppStore((s) => s.collapsedContainerIds);
 	const recentProjects = useAppStore((s) => s.recentProjects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
 	const workspaces = useAppStore((s) => s.workspaces);
@@ -226,6 +241,24 @@ export function ProjectTree({
 		if (activeProjectId) useAppStore.getState().expandProject(activeProjectId);
 	}, [activeProjectId]);
 
+	const containerTree = selectContainerTree({ containers, projects: allProjects, workspaces });
+	const activeContainerId = useAppStore(selectActiveContainerId);
+	const activeContainerProjectId =
+		activeContainerId === null
+			? null
+			: (Object.entries(containerTree.byProject).find(([, groups]) =>
+					groups.some((group) => group.container.id === activeContainerId),
+				)?.[0] ?? null);
+	const activeInContainersSection = containerTree.crossProject.some(
+		(group) => group.container.id === activeContainerId,
+	);
+	useEffect(() => {
+		if (!activeContainerId) return;
+		const store = useAppStore.getState();
+		store.expandContainer(activeContainerId);
+		if (activeContainerProjectId) store.expandProject(activeContainerProjectId);
+	}, [activeContainerId, activeContainerProjectId]);
+
 	const partitionState = {
 		workspaces,
 		workspaceSettlingSupported: supportsSettling,
@@ -256,21 +289,27 @@ export function ProjectTree({
 		return () => clearTimeout(timer);
 	}, [autoSettledKey]);
 
-	const loadWorkspaces = useCallback(async (projectId: string) => {
-		await loadProjectWorkspaces(projectId);
-	}, []);
+	const loadWorkspaces = useCallback(
+		async (projectId: string, options?: { includeDiffStats?: boolean }) => {
+			await loadProjectWorkspaces(projectId, options);
+		},
+		[],
+	);
 
 	const pendingListLoadsRef = useRef(new Set<string>());
+	const membersUnresolved = containerTree.unresolved;
 	useEffect(() => {
 		for (const project of projects) {
-			if (!expandedProjectIds[project.id] || workspaces[project.id]) continue;
+			if (workspaces[project.id]) continue;
+			const expanded = !!expandedProjectIds[project.id];
+			if (!expanded && !membersUnresolved) continue;
 			if (pendingListLoadsRef.current.has(project.id)) continue;
 			pendingListLoadsRef.current.add(project.id);
-			void loadWorkspaces(project.id)
+			void loadWorkspaces(project.id, expanded ? {} : { includeDiffStats: false })
 				.catch(() => {})
 				.finally(() => pendingListLoadsRef.current.delete(project.id));
 		}
-	}, [projects, expandedProjectIds, workspaces, loadWorkspaces]);
+	}, [projects, expandedProjectIds, workspaces, membersUnresolved, loadWorkspaces]);
 
 	const selectProject = async (projectId: string) => {
 		useAppStore.getState().selectProject(projectId, { reveal: true });
@@ -350,9 +389,105 @@ export function ProjectTree({
 		void move(project, drop.projectId, drop.placement, false);
 	};
 
+	const stateProjection = { sessionStateByWorkspace };
+	const canGroup = canUseContainers(protocolVersion);
+	const projectNames = new Map(projects.map((project) => [project.id, project.name]));
+	const renderWorkspaceRow = (
+		ws: Workspace,
+		level: number,
+		settled: SettledReason | null,
+		container?: { id: string; projectName: string | undefined },
+	) =>
+		workspaceCreations[ws.id] ? null : (
+			<WorkspaceRow
+				key={ws.id}
+				workspace={ws}
+				level={level}
+				settled={settled}
+				now={now}
+				projectName={container?.projectName}
+				isActive={activeWorkspaceId === ws.id}
+				needsAttention={selectWorkspaceNeedsAttention(stateProjection, ws.id)}
+				isRunning={selectWorkspaceIsRunning(stateProjection, ws.id)}
+				canRename={canRenameWorkspace(protocolVersion, ws)}
+				canSettle={canSettleWorkspace(protocolVersion, ws)}
+				readAction={
+					supportsWorkspaceReadState(protocolVersion)
+						? selectWorkspaceReadAction(stateProjection, ws.id)
+						: null
+				}
+				editors={editors}
+				onSelect={() => selectWorkspace(ws)}
+				onOpenIn={(editor) => openWorkspaceIn(ws, editor)}
+				onCopyPath={() => void copyText(ws.worktreePath)}
+				onReveal={() => revealWorkspace(ws)}
+				onRename={(name) => renameWorkspace(ws, name)}
+				onSettle={() => settleWorkspace(ws.id)}
+				onKeepActive={() => unsettleWorkspace(ws.id)}
+				onMarkRead={() => markWorkspaceRead(ws.id)}
+				onMarkUnread={() => markWorkspaceUnread(ws.id)}
+				onGroup={
+					canGroup && !container && canJoinContainer(ws)
+						? () =>
+								useAppStore.getState().openContainerDialog({ kind: "group", workspaceId: ws.id })
+						: undefined
+				}
+				onLeaveContainer={container ? () => leaveContainer(container.id, ws.id) : undefined}
+			/>
+		);
+	const containerRowState = (group: ContainerGroup): ContainerRowState => {
+		const orchestratorId = group.orchestrator?.id ?? null;
+		return {
+			collapsed: collapsedContainerIds[group.container.id] === true,
+			active: activeContainerId === group.container.id,
+			needsAttention: selectContainerNeedsAttention(stateProjection, group),
+			isRunning: selectContainerIsRunning(stateProjection, group),
+			orchestratorActive: orchestratorId !== null && activeWorkspaceId === orchestratorId,
+			orchestratorNeedsAttention:
+				orchestratorId !== null && selectWorkspaceNeedsAttention(stateProjection, orchestratorId),
+			orchestratorRunning:
+				orchestratorId !== null && selectWorkspaceIsRunning(stateProjection, orchestratorId),
+		};
+	};
+	const renderContainer = (group: ContainerGroup, nested: boolean) => (
+		<ContainerGroupRows
+			key={group.container.id}
+			group={group}
+			level={nested ? 2 : 1}
+			nested={nested}
+			state={containerRowState(group)}
+			renderMember={(ws) =>
+				renderWorkspaceRow(
+					ws,
+					nested ? 3 : 2,
+					selectWorkspaceSettledReason(partitionState, ws, now),
+					{
+						id: group.container.id,
+						projectName: nested ? undefined : projectNames.get(ws.projectId),
+					},
+				)
+			}
+		/>
+	);
+
 	return (
 		<nav data-testid="project-tree" className="flex flex-col gap-4">
 			<ChatsSection chatActions={chatActions} />
+			{containerTree.crossProject.length > 0 ? (
+				<section data-testid="containers-section" className="flex flex-col gap-4">
+					<header className="flex h-panel-row items-center pr-4 pl-8">
+						<span className="tr-text-eyebrow text-text-muted">{t("containers.section")}</span>
+					</header>
+					<Tree
+						label={t("containers.section")}
+						focusList="containers"
+						className="flex flex-col gap-2"
+						focusDefault={activeInContainersSection}
+					>
+						{containerTree.crossProject.map((group) => renderContainer(group, false))}
+					</Tree>
+				</section>
+			) : null}
 			<header className="flex h-panel-row items-center justify-between pr-4 pl-8">
 				<span className="tr-text-eyebrow text-text-muted">{t("panels.projectTree.title")}</span>
 				<AddProjectMenu
@@ -393,12 +528,13 @@ export function ProjectTree({
 					label={t("panels.projectTree.title")}
 					focusList="projects"
 					className="flex flex-col"
-					focusDefault={!activeIsChat}
+					focusDefault={
+						!activeInContainersSection && (!activeIsChat || activeContainerProjectId !== null)
+					}
 				>
 					{projects.map((project, index) => {
 						const isExpanded = expandedProjectIds[project.id] === true;
 						const list = workspaces[project.id];
-						const stateProjection = { sessionStateByWorkspace };
 						const previous = projects[index - 1];
 						const next = projects[index + 1];
 						return (
@@ -457,40 +593,17 @@ export function ProjectTree({
 									<SettledPartition
 										enabled={supportsSettling}
 										projectId={project.id}
-										partition={selectWorkspacePartition(partitionState, project.id, now)}
+										partition={selectStandalonePartition(
+											{ ...partitionState, containers },
+											project.id,
+											now,
+										)}
+										containers={containerTree.byProject[project.id]?.map((group) =>
+											renderContainer(group, true),
+										)}
 										shelfExpanded={settledShelfExpanded[project.id] === true}
 										shelfShown={settledShelfShown[project.id] ?? SETTLED_SHELF_PAGE}
-										renderRow={(ws, settled) =>
-											workspaceCreations[ws.id] ? null : (
-												<WorkspaceRow
-													key={ws.id}
-													workspace={ws}
-													level={settled ? 3 : 2}
-													settled={settled}
-													now={now}
-													isActive={activeWorkspaceId === ws.id}
-													needsAttention={selectWorkspaceNeedsAttention(stateProjection, ws.id)}
-													isRunning={selectWorkspaceIsRunning(stateProjection, ws.id)}
-													canRename={canRenameWorkspace(protocolVersion, ws)}
-													canSettle={canSettleWorkspace(protocolVersion, ws)}
-													readAction={
-														supportsWorkspaceReadState(protocolVersion)
-															? selectWorkspaceReadAction(stateProjection, ws.id)
-															: null
-													}
-													editors={editors}
-													onSelect={() => selectWorkspace(ws)}
-													onOpenIn={(editor) => openWorkspaceIn(ws, editor)}
-													onCopyPath={() => void copyText(ws.worktreePath)}
-													onReveal={() => revealWorkspace(ws)}
-													onRename={(name) => renameWorkspace(ws, name)}
-													onSettle={() => settleWorkspace(ws.id)}
-													onKeepActive={() => unsettleWorkspace(ws.id)}
-													onMarkRead={() => markWorkspaceRead(ws.id)}
-													onMarkUnread={() => markWorkspaceUnread(ws.id)}
-												/>
-											)
-										}
+										renderRow={(ws, settled) => renderWorkspaceRow(ws, settled ? 3 : 2, settled)}
 									/>
 								)}
 								{isExpanded && (creationsByProject[project.id]?.length ?? 0) > 0 && (
@@ -587,6 +700,7 @@ function SettledPartition({
 	enabled,
 	projectId,
 	partition,
+	containers,
 	shelfExpanded,
 	shelfShown,
 	renderRow,
@@ -594,6 +708,7 @@ function SettledPartition({
 	enabled: boolean;
 	projectId: string;
 	partition: ReturnType<typeof selectWorkspacePartition>;
+	containers: ReactNode;
 	shelfExpanded: boolean;
 	shelfShown: number;
 	renderRow: (workspace: Workspace, settled: SettledReason | null) => ReactNode;
@@ -613,6 +728,15 @@ function SettledPartition({
 		toggles: true,
 	});
 	const moreItem = useTreeItem(`settled-more:${projectId}`, { level: 3, label: moreLabel });
+	const liveRows = (
+		<>
+			{partition.live.filter(isDefaultWorkspace).map((workspace) => renderRow(workspace, null))}
+			{containers}
+			{partition.live
+				.filter((workspace) => !isDefaultWorkspace(workspace))
+				.map((workspace) => renderRow(workspace, null))}
+		</>
+	);
 	if (!enabled) {
 		return (
 			<ul
@@ -620,14 +744,14 @@ function SettledPartition({
 				data-focus-list={`workspaces:${projectId}`}
 				className="mt-2 flex flex-col gap-2 motion-safe:animate-reveal"
 			>
-				{partition.live.map((workspace) => renderRow(workspace, null))}
+				{liveRows}
 			</ul>
 		);
 	}
 	return (
 		<div className="mt-2 flex flex-col gap-2 motion-safe:animate-reveal">
 			<ul role="none" data-focus-list={`workspaces:${projectId}`} className="flex flex-col gap-2">
-				{partition.live.map((ws) => renderRow(ws, null))}
+				{liveRows}
 			</ul>
 			<div
 				data-testid="settled-shelf"
@@ -980,6 +1104,7 @@ function WorkspaceRow({
 	level,
 	settled,
 	now,
+	projectName,
 	isActive,
 	needsAttention,
 	isRunning,
@@ -996,11 +1121,14 @@ function WorkspaceRow({
 	onKeepActive,
 	onMarkRead,
 	onMarkUnread,
+	onGroup,
+	onLeaveContainer,
 }: {
 	workspace: Workspace;
 	level: number;
 	settled: SettledReason | null;
 	now: number;
+	projectName: string | undefined;
 	isActive: boolean;
 	needsAttention: boolean;
 	isRunning: boolean;
@@ -1017,6 +1145,8 @@ function WorkspaceRow({
 	onKeepActive: () => void;
 	onMarkRead: () => void;
 	onMarkUnread: () => void;
+	onGroup: (() => void) | undefined;
+	onLeaveContainer: (() => void) | undefined;
 }) {
 	const t = useT();
 	const treeKeys = useTreeKeys();
@@ -1035,7 +1165,8 @@ function WorkspaceRow({
 			: isExternal
 				? FolderOpen
 				: GitBranch;
-	const isTwoLine = !isSettled && workspace.branch !== workspace.name;
+	const subtitle = memberSubtitle(t, workspace, projectName);
+	const isTwoLine = !isSettled && subtitle !== null;
 	const displayName = workspaceName(t, workspace);
 	const [menuOpen, setMenuOpen] = useState(false);
 	const openMenuFromContext = (event: MouseEvent) => {
@@ -1072,7 +1203,7 @@ function WorkspaceRow({
 			data-testid="workspace-branch"
 			className="truncate text-text-subtle tr-text-metadata leading-tight"
 		>
-			{workspace.branch}
+			{subtitle}
 		</span>
 	) : null;
 
@@ -1280,6 +1411,22 @@ function WorkspaceRow({
 								>
 									<Check />
 									{t("panels.projectTree.settle")}
+								</DropdownMenuItem>
+							) : null}
+							{onGroup || onLeaveContainer ? <DropdownMenuSeparator /> : null}
+							{onGroup ? (
+								<DropdownMenuItem data-testid="workspace-group" onSelect={onGroup}>
+									<RiStackLine />
+									{t("containers.group")}
+								</DropdownMenuItem>
+							) : null}
+							{onLeaveContainer ? (
+								<DropdownMenuItem
+									data-testid="workspace-leave-container"
+									onSelect={onLeaveContainer}
+								>
+									<LeaveContainer />
+									{t("containers.leave")}
 								</DropdownMenuItem>
 							) : null}
 							{!isDefault && (

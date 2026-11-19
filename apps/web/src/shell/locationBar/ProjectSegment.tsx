@@ -16,8 +16,8 @@ import { goToProjectHome, loadProjectWorkspaces } from "../../panels/workspaceAc
 import {
 	isChatsContainer,
 	selectChatsContainer,
-	selectChatWorkspaces,
 	selectRepoProjects,
+	selectStandaloneChats,
 	supportsProjectlessChats,
 	toast,
 	useAppStore,
@@ -46,7 +46,7 @@ export function ProjectSegment({ project, atHome }: { project: Project; atHome: 
 				return;
 			}
 		}
-		const newest = selectChatWorkspaces(useAppStore.getState()).find(
+		const newest = selectStandaloneChats(useAppStore.getState()).find(
 			(chat) => chat.deletionPending !== true,
 		);
 		if (newest) useAppStore.getState().activateWorkspace(newest);

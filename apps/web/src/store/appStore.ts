@@ -514,6 +514,12 @@ export interface CreationChatHandoff {
 	sentPrompt?: { text: string; attachments: ChatAttachment[] };
 }
 
+/** The one container dialog this window shows, wherever it was asked for (tree, topbar, palette). */
+export type ContainerDialogRequest =
+	| { kind: "addWorkspace"; containerId: string }
+	| { kind: "group"; workspaceId: string }
+	| { kind: "remove"; containerId: string };
+
 export interface WorkspaceRetryDraft {
 	projectId: string;
 	baseRef: string;
@@ -1197,6 +1203,8 @@ interface AppState {
 	chatStartsByWorkspace: Record<string, number>;
 	workspaceCreations: Record<string, WorkspaceCreation>;
 	containers: Record<string, Container>;
+	collapsedContainerIds: Record<string, true>;
+	containerDialog: ContainerDialogRequest | null;
 	activeCreationId: string | null;
 	creationChatToOpen: CreationChatHandoff | null;
 	sentCreationPrompts: Record<string, { text: string; attachments: ChatAttachment[] }>;
@@ -1540,6 +1548,11 @@ interface AppState {
 	installContainers: (containers: readonly Container[]) => void;
 	applyContainerUpdated: (container: Container) => void;
 	applyContainerRemoved: (containerId: string) => void;
+	toggleContainerCollapsed: (containerId: string) => void;
+	expandContainer: (containerId: string) => void;
+	hydrateCollapsedContainers: (containerIds: readonly string[]) => void;
+	openContainerDialog: (request: ContainerDialogRequest) => void;
+	closeContainerDialog: () => void;
 	applyWorkspaceCreation: (
 		creation: WorkspaceCreation,
 		sentPrompt?: { text: string; attachments: ChatAttachment[] },
@@ -2685,6 +2698,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	chatStartsByWorkspace: {},
 	workspaceCreations: {},
 	containers: {},
+	collapsedContainerIds: nullProto<Record<string, true>>(),
+	containerDialog: null,
 	activeCreationId: null,
 	creationChatToOpen: null,
 	sentCreationPrompts: {},
@@ -4089,8 +4104,33 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((state) => ({ containers: { ...state.containers, [container.id]: container } })),
 	applyContainerRemoved: (containerId) =>
 		set((state) =>
-			state.containers[containerId] ? { containers: omitKey(state.containers, containerId) } : {},
+			state.containers[containerId]
+				? {
+						containers: omitKey(state.containers, containerId),
+						...(state.collapsedContainerIds[containerId]
+							? { collapsedContainerIds: omitKey(state.collapsedContainerIds, containerId) }
+							: {}),
+					}
+				: {},
 		),
+	toggleContainerCollapsed: (containerId) =>
+		set((state) => ({
+			collapsedContainerIds: state.collapsedContainerIds[containerId]
+				? omitKey(state.collapsedContainerIds, containerId)
+				: withExpandedProject(state.collapsedContainerIds, containerId),
+		})),
+	expandContainer: (containerId) =>
+		set((state) =>
+			state.collapsedContainerIds[containerId]
+				? { collapsedContainerIds: omitKey(state.collapsedContainerIds, containerId) }
+				: {},
+		),
+	hydrateCollapsedContainers: (containerIds) =>
+		set(() => ({
+			collapsedContainerIds: Object.fromEntries(containerIds.map((id) => [id, true as const])),
+		})),
+	openContainerDialog: (containerDialog) => set({ containerDialog }),
+	closeContainerDialog: () => set({ containerDialog: null }),
 	applyWorkspaceCreation: (creation, sentPrompt) => {
 		const previous = get().workspaceCreations[creation.id];
 		set((state) => ({

@@ -32,10 +32,12 @@ import {
 	waitingItems,
 } from "../search";
 import {
+	canJoinContainer,
 	isChatsContainer,
 	isChatWorkspace,
 	isDefaultWorkspace,
 	type SettingsSection,
+	selectActiveContainerId,
 	selectActiveWorkspace,
 	selectChatWorkspaceFirstPrompt,
 	selectChatWorkspaceTitle,
@@ -56,7 +58,7 @@ import {
 	useAppStore,
 	workspaceName,
 } from "../store";
-import { errorText, getTransport, supportsTextSearch } from "../transport";
+import { errorText, getTransport, supportsContainers, supportsTextSearch } from "../transport";
 import {
 	focusCenterGroup,
 	focusChatComposer,
@@ -165,6 +167,11 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	const settleBlocked = useAppStore(
 		(s) => s.activeWorkspaceId !== null && selectWorkspaceSettleBlocked(s, s.activeWorkspaceId),
 	);
+	const containerId = useAppStore(selectActiveContainerId);
+	const canGroup =
+		supportsContainers(protocolVersion) &&
+		activeWorkspace !== null &&
+		canJoinContainer(activeWorkspace);
 	useWorkspaceBackfill();
 	const firstPrompts = useAppStore(useShallow(selectRecordFirstPrompts));
 	const settingsGroups = useMemo(
@@ -277,6 +284,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			canSettle: activeWorkspace !== null && canSettleWorkspace(protocolVersion, activeWorkspace),
 			settled,
 			settleBlocked,
+			containerId,
+			canGroup,
 			settingsGroups,
 			settingEntries,
 			tabActions,
@@ -317,6 +326,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 					store().openSettings(section, settingId),
 				openShortcuts: () => store().openShortcuts(),
 				runTabAction: runActiveTabAction,
+				openContainerDialog: (request) => store().openContainerDialog(request),
 			},
 		};
 		const workItems = buildWorkItems({
@@ -363,6 +373,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		protocolVersion,
 		settled,
 		settleBlocked,
+		containerId,
+		canGroup,
 		nativeShortcuts,
 		keybindings,
 		pageZoom,

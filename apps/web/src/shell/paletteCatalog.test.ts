@@ -95,6 +95,8 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 		canSettle: true,
 		settled: false,
 		settleBlocked: false,
+		containerId: null,
+		canGroup: false,
 		settingsGroups: [],
 		settingEntries: [],
 		tabActions: [],
@@ -132,6 +134,7 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 			openSettings: noop,
 			openShortcuts: noop,
 			runTabAction: noop,
+			openContainerDialog: noop,
 		},
 		...overrides,
 	};
@@ -529,5 +532,35 @@ describe("palette Settings rows", () => {
 		expect(settingsRows({ hostPlatform: "win32" }).map((item) => item.id)).toContain(
 			"setting:windows-shell",
 		);
+	});
+});
+
+describe("palette container commands", () => {
+	test("a standalone workspace offers Group into a container only where it can join one", () => {
+		expect(row("container.group", deps())).toBeUndefined();
+		const opened: unknown[] = [];
+		const grouping = deps({
+			canGroup: true,
+			actions: { ...deps().actions, openContainerDialog: (request) => opened.push(request) },
+		});
+		row("container.group", grouping)?.run?.();
+		expect(opened).toEqual([{ kind: "group", workspaceId: workspace.id }]);
+		expect(row("container.addWorkspace", grouping)).toBeUndefined();
+	});
+
+	test("a member's container offers Add workspace and Remove container, never Group", () => {
+		const opened: unknown[] = [];
+		const member = deps({
+			containerId: "c1",
+			canGroup: true,
+			actions: { ...deps().actions, openContainerDialog: (request) => opened.push(request) },
+		});
+		expect(row("container.group", member)).toBeUndefined();
+		row("container.addWorkspace", member)?.run?.();
+		row("container.remove", member)?.run?.();
+		expect(opened).toEqual([
+			{ kind: "addWorkspace", containerId: "c1" },
+			{ kind: "remove", containerId: "c1" },
+		]);
 	});
 });

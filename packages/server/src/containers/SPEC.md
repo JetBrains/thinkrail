@@ -162,6 +162,7 @@ be one of that member's chats.
   or a chat message instead merges nothing, and a GitLab MR or a member without an open PR is refused
   before anyone is asked. The refreshed review then wakes the orchestrator like any PR change.
 
-## Later
+## UI
 
-The Projects/topbar UI (until then the orchestrator is reachable as a chat in Chats).
+The web client's Projects tree and topbar show containers; a new member a person adds is made by
+`workspace.startCreate { into }`, which the host joins at hand-over ([[submodule-server-host]]).

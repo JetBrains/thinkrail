@@ -217,6 +217,8 @@ const TEXT_FIELD = /<input\b|<textarea\b|<Textarea\b|HTMLInputElement|HTMLTextAr
 const UNGUARDED_BY_DESIGN: Record<string, string> = {
 	"apps/web/src/panels/ProjectTree.tsx":
 		"its rename inputs spread workspaceActions' guarded inputProps; its own onKeyDown opens a row's context menu",
+	"apps/web/src/panels/ContainerRows.tsx":
+		"its rename input spreads workspaceActions' guarded inputProps; its own onKeyDown handlers are a row's context menu and the name button's tree-row keys",
 	"apps/web/src/panels/ArtifactsPanel.tsx":
 		"its rename input spreads workspaceActions' guarded inputProps; its only onKeyDown opens a row's context menu",
 	"apps/web/src/panels/ArtifactsTree.tsx":

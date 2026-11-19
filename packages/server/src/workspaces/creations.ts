@@ -67,6 +67,7 @@ export type CreationHandoff = (
 	workspace: Workspace,
 	kickoff: WorkspaceKickoff | undefined,
 	origin: CreationOrigin | undefined,
+	into?: string,
 ) => Promise<HandoffOutcome>;
 
 export interface HandedOff extends HandoffOutcome {
@@ -468,12 +469,12 @@ async function discard(record: WorkspaceCreationRecord): Promise<void> {
 
 async function handOff(
 	workspace: Workspace,
-	record: Pick<WorkspaceCreationRecord, "kickoff" | "origin">,
+	record: Pick<WorkspaceCreationRecord, "kickoff" | "origin" | "into">,
 ): Promise<HandedOff> {
 	let outcome: HandoffOutcome = {};
 	if (handoff) {
 		try {
-			outcome = await handoff(workspace, record.kickoff, record.origin);
+			outcome = await handoff(workspace, record.kickoff, record.origin, record.into);
 		} catch (err) {
 			outcome = { kickoffError: err instanceof Error ? err.message : String(err) };
 		}
@@ -507,6 +508,7 @@ export interface WorkspaceCreationOptions {
 	kickoff?: WorkspaceKickoff;
 	origin?: CreationOrigin;
 	startedBy?: WorkspaceStartedBy;
+	into?: string;
 }
 
 export function startWorkspaceCreation(
@@ -528,6 +530,7 @@ export function startWorkspaceCreation(
 		...(opts.kickoff ? { kickoff: opts.kickoff } : {}),
 		...(opts.origin ? { origin: opts.origin } : {}),
 		...(opts.startedBy ? { startedBy: opts.startedBy } : {}),
+		...(opts.into ? { into: opts.into } : {}),
 	};
 	addCreation(record);
 	run(record.id);

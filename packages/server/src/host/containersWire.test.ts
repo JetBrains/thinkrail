@@ -139,3 +139,54 @@ test("container pushes reach only sockets at the container protocol", async () =
 		current.close();
 	}
 }, 30_000);
+
+test("workspace.startCreate into a container joins the new workspace as it is handed over", async () => {
+	const repo = join(root, "repo-into");
+	mkdirSync(repo);
+	git(repo, "init", "-q", "-b", "main");
+	git(repo, "commit", "-q", "--allow-empty", "-m", "init");
+	const worktree = join(root, "attached-into");
+	git(repo, "worktree", "add", "-q", "-b", "feature-into", worktree);
+
+	const client = await connect("into", PROTOCOL_VERSION);
+	try {
+		const project = await client.request<Project>("project.open", { path: repo });
+		const attached = await client.request<Workspace>("workspace.openExisting", {
+			projectId: project.id,
+			path: worktree,
+		});
+		const container = await client.request<Container>("container.create", {
+			workspaceIds: [attached.id],
+		});
+		await expect(
+			client.request("workspace.startCreate", { projectId: project.id, into: "missing" }),
+		).rejects.toThrow("Unknown container: missing");
+
+		const creation = await client.request<{ id: string }>("workspace.startCreate", {
+			projectId: project.id,
+			baseRef: "feature-into",
+			into: container.id,
+		});
+		const removedFrame = (frame: Frame) =>
+			frame.channel === WS_CHANNELS.workspaceCreationRemoved &&
+			(frame.data as { id?: string }).id === creation.id;
+		for (let waited = 0; !client.frames.some(removedFrame) && waited < 200; waited += 1)
+			await Bun.sleep(100);
+		const removed = client.frames.findIndex(removedFrame);
+		const joined = client.frames.findIndex(
+			(frame) =>
+				frame.channel === WS_CHANNELS.containerUpdated &&
+				(frame.data as Container).workspaceIds.includes(creation.id),
+		);
+		expect(removed).toBeGreaterThan(-1);
+		expect(joined).toBeGreaterThan(-1);
+		expect(joined).toBeLessThan(removed);
+		const listed = await client.request<Container[]>("container.list", {});
+		expect(listed.find((candidate) => candidate.id === container.id)?.workspaceIds).toEqual([
+			attached.id,
+			creation.id,
+		]);
+	} finally {
+		client.close();
+	}
+}, 30_000);

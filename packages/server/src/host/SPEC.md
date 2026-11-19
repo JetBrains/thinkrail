@@ -715,7 +715,10 @@ gate: [[module-contracts]].
   `dismissCreation` front `workspaces`' creation job, and `createServer` marks leftover running creations
   `interrupted` before it serves, installs the creation publisher (`workspace.creationChanged` /
   `workspace.creationRemoved`, subscribed only by v104+ sockets) and the **handoff**
-  `workspaceCreationHandoff` (then replays any handoff a crash cut short): when a checkout finishes it provisions the initial terminal and, when the create
+  `workspaceCreationHandoff` (then replays any handoff a crash cut short): when a checkout finishes it first joins
+  the container a `startCreate { into }` named (`addContainerWorkspaceOrchestrated`, so the second member
+  starts the orchestrator; a container gone meanwhile is logged and the workspace stays standalone — the
+  start refused an unknown one with `CONTAINER_UNKNOWN`), then provisions the initial terminal and, when the create
   carried a kickoff, waits for the workspace watcher (`ensureWatch`, the readiness the browser's own chat start
   awaits) and starts the chat through `startChatSession` (the kickoff's model/effort, else the saved defaults)
   and sends its text/images through `sendUserMessage` under the `clientKey` that started (or last retried) the

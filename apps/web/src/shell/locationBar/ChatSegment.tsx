@@ -30,8 +30,8 @@ import {
 import { revealWorkspace } from "../../panels/workspaceActions";
 import {
 	selectChatWorkspaceFirstPrompt,
-	selectChatWorkspaces,
 	selectChatWorkspaceTitle,
+	selectStandaloneChats,
 	selectWorkspaceIsRunning,
 	useAppStore,
 } from "../../store";
@@ -47,7 +47,7 @@ export function ChatSegment({ workspace }: { workspace: Workspace }) {
 	const running = useAppStore((s) => selectWorkspaceIsRunning(s, workspace.id));
 	const siblings = useAppStore(
 		useShallow((s) =>
-			selectChatWorkspaces(s).filter(
+			selectStandaloneChats(s).filter(
 				(chat) => chat.id === workspace.id || chat.deletionPending !== true,
 			),
 		),

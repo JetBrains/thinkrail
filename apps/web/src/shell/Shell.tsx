@@ -19,6 +19,7 @@ import {
 } from "../fonts";
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
+import { ContainerDialogs } from "../panels/ContainerDialogs";
 import { canStartProjectlessChat } from "../panels/chatActions";
 import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
 import { SettingsDialog } from "../panels/SettingsDialog";
@@ -392,6 +393,7 @@ function ShellLayout() {
 				hasUpdateSettings={updates !== null}
 			/>
 			<FindInFilesHost />
+			<ContainerDialogs />
 			<ShortcutsDialogHost />
 			<NotificationPermissionPrompt />
 			<Toaster />

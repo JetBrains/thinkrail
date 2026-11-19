@@ -175,7 +175,20 @@ roster's catalog reads ([[submodule-web-panels]]).
   snapshot and `applyContainerRemoved` drops one, with no client-side membership derivation — when a
   workspace is archived the host itself pushes its container's new snapshot or removal.
   `selectContainers` (creation order) and `selectContainerOfWorkspace` (`null` for a standalone
-  workspace) are the only readers. It owns the
+  workspace) read them, and every container view derives through one selector family over the loaded
+  workspace lists: `selectContainerTree` (each container's resolved members in member order, its
+  orchestrator — the chat whose `orchestratorOf` names it, `isOrchestratorChat` — and its placement: the
+  one project of its shown members, else the cross-project section; every member id; whether a member's
+  list is still missing), `selectContainerGroup` (one container, for the topbar and dialogs),
+  `selectWorkspaceContainerId` / `selectActiveContainerId` (a member's container, or the one an
+  orchestrator chat names), `selectStandalonePartition` (a project's `selectWorkspacePartition` minus
+  container members), `selectStandaloneChats` (`selectChatWorkspaces` minus the orchestrators of loaded
+  containers — the Chats section; an orchestrator whose container is absent lists as a chat), `selectContainerNeedsAttention` / `selectContainerIsRunning` (a collapsed container's roll-up
+  of members and orchestrator) and `selectAttachableWorkspaces` (standalone worktrees of the open
+  repositories that `canJoinContainer`). Beside them it holds per-browser `collapsedContainerIds`
+  (`toggleContainerCollapsed`, `expandContainer`, `hydrateCollapsedContainers`; a removal forgets its
+  id) and the one `containerDialog` request (`openContainerDialog` / `closeContainerDialog`: add a
+  workspace, group a workspace, remove a container). It owns the
   **background-creation slice** (v104): `workspaceCreations` by id, folded from `workspace.creationChanged`
   (`applyWorkspaceCreation`, which also raises one error toast when a running creation turns `failed`) and
   replaced on hydration (`setWorkspaceCreations`), and **`activeCreationId`** — mutually exclusive with

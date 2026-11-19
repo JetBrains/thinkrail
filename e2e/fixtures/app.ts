@@ -117,6 +117,8 @@ function resetState(): void {
 	}
 
 	rmSync(join(E2E_DATA_DIR, "workspaces.json"), { force: true });
+	rmSync(join(E2E_DATA_DIR, "containers.json"), { force: true });
+	removeTree(join(E2E_DATA_DIR, "containers"));
 	resetChats();
 
 	writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);

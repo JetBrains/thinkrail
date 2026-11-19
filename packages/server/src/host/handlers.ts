@@ -409,9 +409,28 @@ async function sendUserMessage(
 
 const creationClients = new Map<string, string>();
 
-export const workspaceCreationHandoff: CreationHandoff = async (workspace, kickoff, origin) => {
+function joinCreatedWorkspace(containerId: string, workspace: Workspace): void {
+	try {
+		addContainerWorkspaceOrchestrated(containerId, workspace.id);
+	} catch (error) {
+		log.warn(`workspace ${workspace.id} could not join its container ${containerId}`, error);
+	}
+}
+
+function requireContainer(containerId: string): void {
+	if (!listContainers().some((container) => container.id === containerId))
+		throw new CodedError("CONTAINER_UNKNOWN", `Unknown container: ${containerId}`);
+}
+
+export const workspaceCreationHandoff: CreationHandoff = async (
+	workspace,
+	kickoff,
+	origin,
+	into,
+) => {
 	const clientKey = creationClients.get(workspace.id) ?? "";
 	creationClients.delete(workspace.id);
+	if (into) joinCreatedWorkspace(into, workspace);
 	provisionInitialTerminal(workspace);
 	if (!kickoff) return {};
 	await ensureWatch(workspace.id, { prewarm: false });
@@ -735,10 +754,12 @@ const handlers: WsHandlers = {
 	"workspace.create": (p) =>
 		observeSetupAction("worktree_create", () => createWorkspace(p.projectId, p.name, p.baseRef)),
 	"workspace.startCreate": (p, ctx) => {
+		if (p.into) requireContainer(p.into);
 		const creation = startWorkspaceCreation(p.projectId, {
 			...(p.name ? { name: p.name } : {}),
 			...(p.baseRef ? { baseRef: p.baseRef } : {}),
 			...(p.kickoff ? { kickoff: p.kickoff } : {}),
+			...(p.into ? { into: p.into } : {}),
 		});
 		creationClients.set(creation.id, ctx.clientKey);
 		void observeSetupAction("worktree_create", () => awaitWorkspaceCreation(creation.id)).catch(
