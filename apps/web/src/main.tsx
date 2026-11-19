@@ -5,6 +5,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { initChatPreferencesPersistence } from "./chat/chatPreferences";
 import { initModelVisibilityPersistence } from "./chat/modelVisibility";
+import { getStablePreferenceAdapter } from "./clientPreferences";
 import { ErrorBoundary, setErrorBoundaryReporter } from "./components/ErrorBoundary";
 import {
 	followInstalledWebExtensions,
@@ -21,6 +22,7 @@ import { AppResourceHost } from "./shell/AppResourceHost";
 import { initArtifactsPersistence } from "./shell/artifactsPreference";
 import { installDeepLinks } from "./shell/deepLink";
 import { initMarkdownOutlinePersistence } from "./shell/markdownOutlinePreference";
+import { preferenceStorage, readPreference, writePreference } from "./shell/preferenceStorage";
 import { Shell } from "./shell/Shell";
 import { DictationLayer } from "./speech";
 import { selectInstalledWebHalves, useAppStore } from "./store";
@@ -51,6 +53,8 @@ initNavigation();
 installDeepLinks();
 installExtensionHost();
 registerWebExtensions();
+const INSTALLED_WEB_HALVES_KEY = "installed-web-halves";
+const preferences = preferenceStorage(getStablePreferenceAdapter());
 const installedWebHalvesReady = followInstalledWebExtensions({
 	current: () => selectInstalledWebHalves(useAppStore.getState()),
 	unreachable: () => {
@@ -67,6 +71,8 @@ const installedWebHalvesReady = followInstalledWebExtensions({
 				listener();
 			}
 		}),
+	rememberedAny: () => readPreference(preferences, INSTALLED_WEB_HALVES_KEY) === "true",
+	remember: (any) => writePreference(preferences, INSTALLED_WEB_HALVES_KEY, String(any)),
 });
 
 function App() {
@@ -84,7 +90,7 @@ function App() {
 	);
 }
 
-void installedWebHalvesReady.then(() => {
+void installedWebHalvesReady.finally(() => {
 	const root = document.getElementById("root");
 	if (!root) return;
 	createRoot(root).render(

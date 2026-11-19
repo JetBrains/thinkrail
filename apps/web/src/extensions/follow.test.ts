@@ -25,11 +25,17 @@ function environment(imports: string[]): LoaderEnvironment {
 	};
 }
 
-function source(initial: readonly InstalledWebExtension[] | null, unreachable = false) {
+function source(
+	initial: readonly InstalledWebExtension[] | null,
+	unreachable = false,
+	rememberedAny = true,
+) {
 	let current = initial;
 	let down = unreachable;
 	const listeners = new Set<() => void>();
+	const remembered: boolean[] = [];
 	return {
+		remembered,
 		source: {
 			current: () => current,
 			unreachable: () => down,
@@ -37,6 +43,8 @@ function source(initial: readonly InstalledWebExtension[] | null, unreachable = 
 				listeners.add(listener);
 				return () => listeners.delete(listener);
 			},
+			rememberedAny: () => rememberedAny,
+			remember: (any: boolean) => remembered.push(any),
 		},
 		set(next: readonly InstalledWebExtension[] | null, nextDown = false) {
 			current = next;
@@ -96,6 +104,54 @@ describe("followInstalledWebExtensions", () => {
 		const started = Date.now();
 		await followInstalledWebExtensions(source(null).source, 20);
 		expect(Date.now() - started).toBeLessThan(1_000);
+	});
+
+	test("holds the first render, bounded, only when this host's last known set had a web half", async () => {
+		setLoaderEnvironment(environment([]));
+		let settled = false;
+		const remembered = followInstalledWebExtensions(source(null).source, 40).then(() => {
+			settled = true;
+		});
+		await new Promise((resolve) => setTimeout(resolve, 5));
+		expect(settled).toBe(false);
+		await remembered;
+
+		const started = Date.now();
+		const feed = source(null, false, false);
+		await followInstalledWebExtensions(feed.source, 5_000);
+		expect(Date.now() - started).toBeLessThan(100);
+		feed.set([{ name: "weather", url: "weather-v1.js" }]);
+		for (
+			let tries = 0;
+			webExtensionLoads().get("weather")?.status !== "loaded" && tries < 100;
+			tries++
+		)
+			await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(webExtensionLoads().get("weather")?.status).toBe("loaded");
+	});
+
+	test("remembers whether each learned set had a web half, writing only changes", async () => {
+		setLoaderEnvironment(environment([]));
+		const feed = source(null, false, false);
+		await followInstalledWebExtensions(feed.source, 5_000);
+		feed.set([]);
+		feed.set([{ name: "weather", url: "weather-v1.js" }]);
+		feed.set([{ name: "weather", url: "weather-v1.js" }]);
+		feed.set(null);
+		feed.set([]);
+		expect(feed.remembered).toEqual([true, false]);
+	});
+
+	test("a source that throws is reported and still settles, so the page renders", async () => {
+		const reports: unknown[] = [];
+		const failing = {
+			...source(null).source,
+			current: () => {
+				throw new Error("store exploded");
+			},
+		};
+		await followInstalledWebExtensions(failing, 5_000, (error) => reports.push(error));
+		expect(reports).toHaveLength(1);
 	});
 });
 

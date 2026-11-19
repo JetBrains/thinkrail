@@ -84,10 +84,10 @@ the other fields, so an installed extension cannot bind keys or mount an overlay
   The server half's precedence is unaffected. `loader.test.tsx` pins it.
 - **Reporting** is a classifier: `clientErrorReport("rejection", error, "extension-load:<reason>")`;
   the message reaches the caller's result only, never error tracking.
-- **Before first render, bounded.** `loadWebExtensionsBeforeRender` waits at most
-  `PRE_RENDER_WAIT_MS` (1000 ms) for the whole set, then returns; a slow or hung bundle keeps loading and
-  registers late through the subscribable registry. Rationale: the host serves the files from its own
-  origin, so a healthy set loads in milliseconds and the cap only bounds the blank page a broken one costs.
+- **Before first render, bounded.** `PRE_RENDER_WAIT_MS` (1000 ms) caps how long bootstrap holds the
+  first render for the set (§ Following the host); a slow or hung bundle keeps loading and registers late
+  through the subscribable registry. Rationale: the host serves the files from its own origin, so a
+  healthy set loads in milliseconds and the cap only bounds the blank page a broken one costs.
 - **Later loads and updates.** `loadWebExtensions` loads a set and resolves with every result. Loading a
   name again is an update: the new bundle replaces the previous registration and stylesheet atomically
   once it has loaded; a failed update keeps nothing of either version. A stale load that finishes after a
@@ -121,11 +121,20 @@ the other fields, so an installed extension cannot bind keys or mount an overlay
   `subscribe`) and calls `syncWebExtensions` whenever the set may have changed. `main.tsx` wires it to the
   store's `selectInstalledWebHalves` and fires only when `extensionCatalog`, `protocolVersion` or the
   connection status change, so a streaming chat never runs the diff. This module still reads no store.
-- **Bootstrap waits once, bounded.** The promise settles when the first known set has loaded, when the
-  source is unreachable (the connection dropped or the list failed), or after `PRE_RENDER_WAIT_MS` counted
-  from bootstrap — connection, list and load together — whichever comes first; `main.tsx` renders after
-  it. The transport is usually not connected yet when bootstrap runs, so the first render now waits for
-  the welcome (milliseconds on the host's own origin). A host older than
+- **Bootstrap waits only when it expects cards, bounded.** The source also remembers, per host, whether
+  the last set it listed had any web half (`rememberedAny` / `remember`, written by the follower only when
+  that changes). `main.tsx` keeps it as the `installed-web-halves` preference through `shell`'s
+  `preferenceStorage` — the native stable adapter (scoped per backend profile), else `localStorage`
+  qualified by the host's HTTP base; UX state, not analytics. When nothing is remembered (a first run)
+  or the last set was empty, the promise settles at once and the page renders without waiting; an
+  extension installed elsewhere in the meantime registers late through the reactive registry, as any
+  later install does. Otherwise it settles when the first known set has loaded, when the source is
+  unreachable (the connection dropped or the list failed), or after `PRE_RENDER_WAIT_MS` counted from
+  bootstrap — connection, list and load together — whichever comes first. The transport is usually not
+  connected yet when bootstrap runs, so a host with cards installed holds the first render for the
+  welcome (milliseconds on the host's own origin). The promise never rejects: a throw while following
+  (the source, the store or a sync) is reported as a client error (boundary `extension-follow`) and
+  settles it, and `main.tsx` renders in `finally`, so a follower fault never leaves a blank page. A host older than
   `INSTALLED_EXTENSIONS_PROTOCOL_VERSION` yields the empty set at once: nothing is requested and the page
   renders as before; reconnecting to such a host unloads every installed web half, and reconnecting to a
   different host converges on that host's list.

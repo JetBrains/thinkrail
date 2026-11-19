@@ -88,7 +88,9 @@ seam), the client-local preference seams (chat presentation, hidden models, proj
 expansion) and navigation, installs the extension host object (`installExtensionHost`, before
 `registerWebExtensions()` and before any installed web half can load — [[submodule-web-extensions]]), starts
 following the host's installed web halves (`followInstalledWebExtensions` over the store's
-`selectInstalledWebHalves`) and renders once that settles — bounded by `PRE_RENDER_WAIT_MS` — then wraps `<Shell />` in
+`selectInstalledWebHalves`, remembering per host whether the last set had any web half) and renders once
+that settles — at once when the remembered set was empty or absent, else bounded by `PRE_RENDER_WAIT_MS`,
+and in `finally`, so a follower fault still renders — then wraps `<Shell />` in
 `components/ErrorBoundary` as the last-resort boundary (a crash escaping every region shows a reload
 screen, not a blank root) plus the app's single `TooltipProvider`.
 
