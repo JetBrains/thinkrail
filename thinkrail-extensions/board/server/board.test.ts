@@ -629,6 +629,11 @@ describe("board tools", () => {
 			"board_card_create",
 			"board_link",
 			"board_card_note",
+			"board_initiative_get",
+			"board_initiative_create_draft",
+			"board_project_create",
+			"board_cards_create_batch",
+			"board_update_draft",
 		]);
 
 		const own = await call("board_card_get", {}, "s1");
@@ -699,17 +704,38 @@ describe("the board descriptor", () => {
 		expect(Object.keys(queries).sort()).toEqual([
 			"board.get",
 			"card.adopt",
+			"card.assignProject",
 			"card.create",
 			"card.deferrals",
 			"card.delete",
 			"card.get",
+			"card.link",
 			"card.move",
+			"card.pin",
+			"card.shiftChain",
 			"card.start",
+			"card.unlink",
+			"card.unpin",
 			"card.update",
 			"github.refresh",
 			"github.set",
 			"inbox",
+			"initiative.addCards",
+			"initiative.create",
+			"initiative.delete",
+			"initiative.move",
+			"initiative.removeCards",
+			"initiative.update",
+			"initiative.updateDraft.publish",
+			"initiative.updateDraft.save",
+			"milestone.create",
+			"milestone.delete",
+			"milestone.update",
 			"models.list",
+			"project.create",
+			"project.delete",
+			"project.update",
+			"roadmap.get",
 			"settings.get",
 			"settings.update",
 			"triage.accept",
@@ -721,7 +747,7 @@ describe("the board descriptor", () => {
 		const pi = { registerTool: (tool: { name: string }) => registered.push(tool.name) };
 		for (const factory of extension.sessionExtensions?.() ?? [])
 			await factory(pi as unknown as ExtensionAPI);
-		expect(registered).toHaveLength(5);
+		expect(registered).toHaveLength(10);
 		await service?.stop?.();
 		expect(t.listeners()).toBe(0);
 	});

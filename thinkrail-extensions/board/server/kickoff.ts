@@ -1,4 +1,11 @@
-import type { Card, Workflow } from "./model";
+import type { Card, Initiative, Workflow } from "./model";
+
+/** What a card's kickoff says about why it exists: its initiative and its project and milestone. */
+export interface KickoffContext {
+	initiative?: Pick<Initiative, "id" | "title" | "outcome" | "criteria">;
+	project?: string;
+	milestone?: string;
+}
 
 /** The skill M and L cards start with, sent the way the composer sends a picked skill. */
 export const BRAINSTORMING_COMMAND = "/skill:brainstorming";
@@ -10,13 +17,15 @@ export function workflowFor(card: Pick<Card, "type" | "size">): Workflow {
 }
 
 /**
- * The first prompt of a card's attempt: its title, description, acceptance criteria and spec refs; a
- * GitHub issue's card adds the issue's URL and that its PR must say `Closes #N`.
+ * The first prompt of a card's attempt: its title, description, acceptance criteria and spec refs, then
+ * its initiative's outcome and success criteria and its project and milestone; a GitHub issue's card adds
+ * the issue's URL and that its PR must say `Closes #N`.
  */
 export function kickoffText(
 	card: Pick<Card, "id" | "title" | "description" | "acceptance" | "specRefs"> &
 		Partial<Pick<Card, "source">>,
 	workflow: Workflow,
+	context: KickoffContext = {},
 ): string {
 	const lines = [`Card ${card.id}: ${card.title.trim()}`];
 	const description = card.description.trim();
@@ -26,6 +35,20 @@ export function kickoffText(
 		lines.push("", "Acceptance criteria:", ...acceptance.map((item) => `- ${item}`));
 	const specs = card.specRefs.map((ref) => ref.trim()).filter(Boolean);
 	if (specs.length > 0) lines.push("", "Specs:", ...specs.map((ref) => `- ${ref}`));
+	const { initiative } = context;
+	if (initiative) {
+		lines.push("", `Initiative ${initiative.id}: ${initiative.title.trim()}`);
+		const outcome = initiative.outcome.trim();
+		if (outcome) lines.push(`Outcome: ${outcome}`);
+		const criteria = initiative.criteria.map((item) => item.trim()).filter(Boolean);
+		if (criteria.length > 0)
+			lines.push("Success criteria:", ...criteria.map((item) => `- ${item}`));
+	}
+	const place = [
+		context.project ? `Project: ${context.project}` : "",
+		context.milestone ? `Milestone: ${context.milestone}` : "",
+	].filter(Boolean);
+	if (place.length > 0) lines.push(...(initiative ? [] : [""]), ...place);
 	if (card.source?.kind === "github") {
 		const { number, url } = card.source;
 		lines.push(

@@ -160,4 +160,35 @@ describe("kickoff", () => {
 			kickoffText({ ...card, description: "", acceptance: [], specRefs: [] }, "implement"),
 		).toBe("Card TR-7: Board inbox");
 	});
+
+	test("says why the card exists: its initiative's outcome and success criteria, its project and milestone", () => {
+		const bare = { ...card, description: "", acceptance: [], specRefs: [] };
+		const initiative = {
+			id: "I-2",
+			title: " Roadmap ",
+			outcome: " Plans follow the live work. ",
+			criteria: ["Forecasts from throughput", " "],
+		};
+		expect(
+			kickoffText(bare, "implement", { initiative, project: "Step graph", milestone: "Beta" }),
+		).toBe(
+			[
+				"Card TR-7: Board inbox",
+				"",
+				"Initiative I-2: Roadmap",
+				"Outcome: Plans follow the live work.",
+				"Success criteria:",
+				"- Forecasts from throughput",
+				"Project: Step graph",
+				"Milestone: Beta",
+			].join("\n"),
+		);
+		expect(kickoffText(bare, "implement", { project: "Step graph" })).toBe(
+			"Card TR-7: Board inbox\n\nProject: Step graph",
+		);
+		expect(
+			kickoffText(bare, "implement", { initiative: { ...initiative, outcome: "", criteria: [] } }),
+		).toBe("Card TR-7: Board inbox\n\nInitiative I-2: Roadmap");
+		expect(kickoffText(bare, "implement", {})).toBe("Card TR-7: Board inbox");
+	});
 });

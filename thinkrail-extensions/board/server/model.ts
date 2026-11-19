@@ -81,6 +81,14 @@ export interface Card {
 	updatedAt: number;
 	/** An attempt's workspace went away unmerged: the board asks whether to cancel; nothing is canceled. */
 	cancelPending?: { workspaceId: string; at: number };
+	/** The roadmap project (`P-n`) of this board the card belongs to. */
+	projectId?: string;
+	/** A milestone (`M-n`) of the card's roadmap project. */
+	milestoneId?: string;
+	/** The planned start pinned on the step graph, an ISO date (`YYYY-MM-DD`). */
+	pinnedStart?: string;
+	/** Days of work the card stands for on the step graph; absent, its size's (`estimateOf`). */
+	estimateDays?: number;
 }
 
 /** The chat that filed a card and the card it works on; a human's deferrals carry the card alone. */
@@ -129,6 +137,85 @@ export const DEFAULT_SETTINGS: BoardSettings = {
 	followSelection: false,
 	github: { enabled: false, filter: "open" },
 };
+
+export const HORIZONS = ["now", "next", "later"] as const;
+export type Horizon = (typeof HORIZONS)[number];
+
+export const HEALTHS = ["on_track", "at_risk", "off_track"] as const;
+export type Health = (typeof HEALTHS)[number];
+
+/** A card on another project's board, which an initiative includes. */
+export interface CardRef {
+	projectId: string;
+	cardId: string;
+}
+
+/** A status update of an initiative: a draft until a human publishes it. */
+export interface InitiativeUpdate {
+	id: string;
+	at: number;
+	text: string;
+	health: Health;
+	publishedAt?: number;
+}
+
+export interface Initiative {
+	id: string;
+	/** The initiative it nests under; a top-level one is a goal. */
+	parentId?: string;
+	title: string;
+	outcome: string;
+	criteria: string[];
+	horizon: Horizon;
+	rank: number;
+	/** An ISO date (`YYYY-MM-DD`). */
+	target?: string;
+	/** Time only: a warning past 80 % of it, never a stop. */
+	appetiteDays?: number;
+	specRefs: string[];
+	health?: { override?: Health; note?: string };
+	updates: InitiativeUpdate[];
+	/** This board's cards it includes directly, besides its projects' cards. */
+	cardIds: string[];
+	externalCards: CardRef[];
+	/** An agent's proposal, shown for acceptance; accepting clears it. */
+	proposed?: true;
+	proposedBy?: "agent";
+	createdAt: number;
+	updatedAt: number;
+}
+
+export interface Milestone {
+	id: string;
+	title: string;
+	/** An ISO date (`YYYY-MM-DD`). */
+	target?: string;
+}
+
+/** A roadmap project (Linear's project, once called an epic): its cards carry its id. */
+export interface RoadmapProject {
+	id: string;
+	initiativeId?: string;
+	title: string;
+	milestones: Milestone[];
+	proposed?: true;
+	proposedBy?: "agent";
+	createdAt: number;
+	updatedAt: number;
+}
+
+/** Days of work a size stands for on the step graph; an unsized card counts as M. */
+export const SIZE_DAYS: Record<CardSize, number> = { S: 1, M: 3, L: 6 };
+/** Points a size weighs in throughput and the forecast; an unsized card counts as M. */
+export const SIZE_POINTS: Record<CardSize, number> = { S: 1, M: 2, L: 4 };
+
+export function estimateOf(card: Pick<Card, "size" | "estimateDays">): number {
+	return card.estimateDays ?? SIZE_DAYS[card.size ?? "M"];
+}
+
+export function pointsOf(card: Pick<Card, "size">): number {
+	return SIZE_POINTS[card.size ?? "M"];
+}
 
 export function latestAttempt(card: Pick<Card, "attempts">): Attempt | undefined {
 	return card.attempts.at(-1);

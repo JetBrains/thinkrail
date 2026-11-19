@@ -44,7 +44,9 @@ import {
 	type Workflow,
 } from "./model";
 import { type ColumnDef, columnFor, columnOfCard, columnsOf, placeInColumn } from "./presets";
+import { Roadmap } from "./roadmap";
 import { applyEvent, type BoardEvent, moveByHand } from "./rules";
+import { wouldCycle } from "./schedule";
 import {
 	parseSize,
 	SIZE_DEBOUNCE_MS,
@@ -55,6 +57,7 @@ import {
 } from "./sizing";
 import { BoardStore, type CardsFile, STORE_VERSION } from "./store";
 import {
+	attemptChat,
 	DEFERRALS_HEADING,
 	isActiveTaskSpec,
 	latestChat,
@@ -157,6 +160,18 @@ export interface CardPatch {
 	blocks?: string[];
 	/** `false` dismisses the cancel question. */
 	cancelPending?: false;
+	/** `null` falls back to the size's. */
+	estimateDays?: number | null;
+}
+
+/** One card of an agent's decomposition: `blocksIndex` names the batch's cards it blocks, by position. */
+export interface BatchCardInput {
+	title: string;
+	description?: string;
+	acceptance?: string[];
+	type?: CardType;
+	size?: CardSize;
+	blocksIndex?: number[];
 }
 
 export interface StartOptions {
@@ -186,6 +201,10 @@ interface Draft {
 	placement: Placement;
 	attempts?: Attempt[];
 	origin?: CardOrigin;
+	/** The drafts written with it that it blocks, by position. */
+	blocksIndex?: number[];
+	/** Its roadmap project. */
+	projectId?: string;
 	reason: string;
 }
 
@@ -199,7 +218,7 @@ export interface BoardOptions {
 	actionRefreshMs?: number;
 }
 
-interface Located {
+export interface Located {
 	projectId: string;
 	file: CardsFile;
 	card: Card;
@@ -232,10 +251,7 @@ export function attemptLive(
 			diff: null,
 			pr: null,
 		};
-	const chat =
-		attempt.sessionId === ""
-			? latestChat(facts)
-			: facts.chats.find((candidate) => candidate.sessionId === attempt.sessionId);
+	const chat = attemptChat(attempt, facts);
 	return {
 		workspaceId: attempt.workspaceId,
 		sessionId: chat?.sessionId ?? attempt.sessionId,
@@ -373,6 +389,7 @@ function throttled(
 export class Board {
 	readonly host: ExtensionHostServices;
 	readonly store: BoardStore;
+	readonly roadmap: Roadmap;
 	private readonly now: () => number;
 	private readonly owner: string;
 	private readonly actionRefreshMs: number;
@@ -405,6 +422,18 @@ export class Board {
 			options.sizeDelayMs ?? SIZE_DEBOUNCE_MS,
 			host.signal,
 		);
+		this.roadmap = new Roadmap({
+			store: this.store,
+			now: this.now,
+			project: (projectId) => this.project(projectId),
+			locate: (id) => this.locate(id),
+			saveCards: (projectId, file) => {
+				this.store.saveCards(projectId, file);
+				this.reindex(projectId, file);
+			},
+			changed: (projectId) => this.changed(projectId),
+			facts: (cards) => this.facts(cards),
+		});
 	}
 
 	private repositories(): ExtensionHostProject[] {
@@ -804,12 +833,11 @@ export class Board {
 	): Card[] {
 		const file = this.fileFor(project);
 		const at = this.now();
-		let rank = Math.max(0, ...file.cards.map((other) => other.rank));
-		let number = file.nextNumber;
-		const cards = drafts.map((draft): Card => {
-			const id = cardId(file.prefix, number);
-			number += 1;
-			rank += 1;
+		const rank = Math.max(0, ...file.cards.map((other) => other.rank));
+		const ids = drafts.map((_, index) => cardId(file.prefix, file.nextNumber + index));
+		const number = file.nextNumber + drafts.length;
+		const cards = drafts.map((draft, index): Card => {
+			const id = cardId(file.prefix, file.nextNumber + index);
 			return {
 				id,
 				source: draft.source ?? { kind: "native", ref: id },
@@ -821,15 +849,16 @@ export class Board {
 					? { size: draft.size, ...(draft.sizeSuggested ? { sizeSuggested: true } : {}) }
 					: {}),
 				labels: draft.labels ?? [],
-				blocks: [],
+				blocks: (draft.blocksIndex ?? []).flatMap((position) => ids[position] ?? []),
 				specRefs: draft.specRefs ?? [],
-				rank,
+				rank: rank + index + 1,
 				category: draft.placement.category,
 				column: draft.placement.column,
 				ownerHuman: this.owner,
 				attempts: draft.attempts ?? [],
 				createdBy: actor,
 				...(draft.origin ? { origin: draft.origin } : {}),
+				...(draft.projectId ? { projectId: draft.projectId } : {}),
 				createdAt: at,
 				updatedAt: at,
 			};
@@ -885,6 +914,50 @@ export class Board {
 		);
 		if (!card) throw new Error("The card was not created.");
 		return card;
+	}
+
+	/**
+	 * Files an agent's decomposition into Triage in one write: one origin, so Triage shows it as one group
+	 * accepted as a whole, with its `blocks` links among the batch and, given one, its roadmap project.
+	 */
+	createBatch(
+		projectId: string,
+		inputs: readonly BatchCardInput[],
+		origin: CardOrigin,
+		roadmapProjectId?: string,
+	): Card[] {
+		const project = this.project(projectId);
+		if (inputs.length === 0) throw new Error("Pass at least one card.");
+		if (roadmapProjectId) this.roadmap.requireProject(projectId, roadmapProjectId);
+		const links = new Map<string, string[]>();
+		inputs.forEach((input, index) => {
+			for (const position of input.blocksIndex ?? []) {
+				if (!Number.isInteger(position) || position < 0 || position >= inputs.length)
+					throw new Error(`Card ${index}'s blocksIndex ${position} is not a card of this batch.`);
+				const from = String(index);
+				const to = String(position);
+				if (wouldCycle((id) => links.get(id), from, to))
+					throw new Error(`Card ${index} blocking card ${position} would close a cycle.`);
+				links.set(from, [...(links.get(from) ?? []), to]);
+			}
+		});
+		const { preset } = this.store.settings(projectId);
+		return this.insert(
+			project,
+			inputs.map((input, index) => ({
+				title: input.title,
+				...(input.description ? { description: input.description } : {}),
+				...(input.acceptance ? { acceptance: input.acceptance } : {}),
+				...(input.type ? { type: input.type } : {}),
+				...(input.size ? { size: input.size, sizeSuggested: true as const } : {}),
+				blocksIndex: [...new Set(links.get(String(index)) ?? [])].map(Number),
+				...(roadmapProjectId ? { projectId: roadmapProjectId } : {}),
+				origin,
+				placement: { category: "triage", column: columnFor(preset, "triage") },
+				reason: "created by an agent into Triage",
+			})),
+			"agent",
+		);
 	}
 
 	/** A GitHub issue's stored card, created from the cached issue the first time it is started or edited. */
@@ -1008,6 +1081,12 @@ export class Board {
 			if (id === card.id) throw new Error(`${card.id} cannot block itself.`);
 			if (!file.cards.some((other) => other.id === id))
 				throw new Error(`${id} is not a card of ${card.id}'s board.`);
+			const blocksOf = (other: string) =>
+				file.cards.find((candidate) => candidate.id === other)?.blocks;
+			if (wouldCycle(blocksOf, card.id, id))
+				throw new Error(
+					`${card.id} blocking ${id} would close a cycle: ${id} already leads to it.`,
+				);
 			targets.add(id);
 		}
 		return [...targets];
@@ -1015,8 +1094,10 @@ export class Board {
 
 	updateCard(id: string, patch: CardPatch, projectId?: string): Card {
 		const { projectId: owner, file, card } = this.writable(id, projectId);
-		const { size, cancelPending, blocks, ...fields } = patch;
+		const { size, cancelPending, blocks, estimateDays, ...fields } = patch;
 		const next: Card = { ...card, ...fields, updatedAt: this.now() };
+		if (estimateDays === null) delete next.estimateDays;
+		else if (estimateDays !== undefined) next.estimateDays = estimateDays;
 		if (size !== undefined) {
 			delete next.size;
 			delete next.sizeSuggested;
@@ -1050,6 +1131,7 @@ export class Board {
 		if (parseTaskSpecCardId(id))
 			throw new Error("A task-spec's card stays while its workspace is open.");
 		const { projectId, file, card } = this.locate(id);
+		this.roadmap.forgetCard(projectId, card.id);
 		const cards = file.cards
 			.filter((candidate) => candidate.id !== card.id)
 			.map((candidate) =>
@@ -1119,7 +1201,7 @@ export class Board {
 				projectId: owner,
 				...(options.baseRef ? { baseRef: options.baseRef } : {}),
 				kickoff: {
-					text: kickoffText(card, workflow),
+					text: kickoffText(card, workflow, this.roadmap.kickoffContext(owner, card)),
 					...(options.model ? { model: options.model } : {}),
 					...(options.thinkingLevel ? { thinkingLevel: options.thinkingLevel } : {}),
 				},
@@ -1265,6 +1347,15 @@ export class Board {
 		const { file, card } = this.locate(id);
 		const added = this.blockTargets(file, card, blocks);
 		return this.updateCard(card.id, { blocks: [...new Set([...card.blocks, ...added])] });
+	}
+
+	/** Removes the link "`id` blocks `blocked`"; a link that is not there changes nothing. */
+	unlink(id: string, blocked: string): Card {
+		const { card } = this.locate(id);
+		const parsed = parseCardId(blocked);
+		const target = parsed ? cardId(parsed.prefix, parsed.number) : blocked;
+		if (!card.blocks.includes(target)) return card;
+		return this.updateCard(card.id, { blocks: card.blocks.filter((other) => other !== target) });
 	}
 
 	/** Appends a progress note to the attempt a chat works on. */

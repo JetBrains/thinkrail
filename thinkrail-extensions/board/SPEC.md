@@ -14,7 +14,9 @@ A board per project whose cards launch agent work and follow it. **The column is
 preset names the columns over fixed categories. **The agent's state is live**, computed per request
 from host facts and never stored. **Host events move cards** through pure rules, and a human's move is
 a logged override. Besides its own cards it shows two **sources**: the task-specs of the project's
-workspaces and, when switched on, the project's open GitHub issues through the user's own `gh`. There is no portable pi package, because every tool acts on host-owned state. The web
+workspaces and, when switched on, the project's open GitHub issues through the user's own `gh`. Above the cards sits a **roadmap** per board (§ Roadmap): initiatives, roadmap projects
+with milestones, and what is derived from the live work — rollups, a forecast, a suggested health and the
+step graph's schedule. There is no portable pi package, because every tool acts on host-owned state. The web
 half is the Board side tool, the card in Peek, the cross-project "Needs you" inbox (above the board and as
 a topbar counter) and Board mode.
 
@@ -50,6 +52,10 @@ The store lives at `<dataDir>/<projectId>/`, the extension's data folder (`~/.th
 - **`transitions.jsonl`**: an append-only log of `{ cardId, from, to, at, actor, reason }`.
   - `from` and `to` are `{ category, column }`, or `null` at creation or deletion.
   - `actor` is `human`, `agent`, `git` or `automation`.
+- **`initiatives.json`**: `{ version: 1, nextNumber, nextUpdateNumber, initiatives }`, ids `I-n` and updates'
+  `U-n`, sequential per board and never reused (§ Roadmap).
+- **`projects.json`**: `{ version: 1, nextNumber, nextMilestoneNumber, projects }`, ids `P-n` and milestones'
+  `M-n`, likewise.
 
 Write rules:
 
@@ -65,7 +71,9 @@ Failure handling:
 - **An unreadable file** (bad JSON, a missing or unknown version) is **moved aside** to
   `<file>.corrupt-<ms>`, logged, and read as empty or default. A later write therefore never destroys it.
 - **A file of a newer version** makes that board refuse to read or write, rather than lose data.
-- **Unreadable cards** are dropped with a warning. Missing fields take defaults.
+- **Unreadable cards** (and initiatives, projects) are dropped with a warning. Missing fields take defaults;
+  a malformed roadmap field (a date that is not `YYYY-MM-DD`, a non-positive number, a milestone without a
+  project) is dropped.
 
 **Card ids** are `PREFIX-n`:
 
@@ -90,8 +98,63 @@ Failure handling:
 - `attempts[] { workspaceId, sessionId, workflow, startedAt, notes[], merged?, removedAt?, closesLinked? }`
   — an adopted workspace without a chat has `sessionId: ""` and follows the workspace's latest chat;
   `closesLinked` is the PR seen to carry the issue's `Closes #N`;
-- `cancelPending?`, the question "cancel?" after an unmerged workspace went away.
+- `cancelPending?`, the question "cancel?" after an unmerged workspace went away;
+- the roadmap's `projectId?` (a roadmap project `P-n` of its board — **not** a ThinkRail project id: on a card
+  and in `card.assignProject` only, `projectId` names the roadmap project), `milestoneId?` (one of that
+  project's), `pinnedStart?` (an ISO date) and `estimateDays?` (absent: S 1, M 3, L 6; unsized counts as M).
 
+
+## Roadmap
+
+The model of `TASK-roadmap` (Linear's hierarchy), stored per board; everything derived is computed per
+`roadmap.get` and never stored.
+
+- **An initiative** is `{ id, parentId?, title, outcome, criteria[], horizon (now / next / later), rank,
+  target? (ISO date), appetiteDays? (time only), specRefs[], health? { override?, note? }, updates[],
+  cardIds[], externalCards[], proposed?, proposedBy?, createdAt, updatedAt }`. It nests (a top-level one is
+  a goal; a parent can't move under its own subtree). It holds this board's cards listed in `cardIds`, the
+  cards of the roadmap projects whose `initiativeId` is it, other boards' cards as `externalCards
+  { projectId, cardId }` and, for every derivation, its nested initiatives' cards.
+- **An update** is `{ id, at, text, health, publishedAt? }`: one draft (no `publishedAt`) at a time, which a
+  save replaces and a human's publish stamps. An agent only ever saves.
+- **A roadmap project** is `{ id, initiativeId?, title, milestones[{ id, title, target? }], proposed?,
+  proposedBy?, … }`; a card belongs to at most one.
+- **An agent's proposal** (`proposed: true, proposedBy: "agent"`) is accepted by `proposed: false`, which
+  keeps `proposedBy`.
+- Deleting an initiative moves its nested ones to its parent and frees its projects; deleting a project or a
+  milestone frees its cards; deleting a card drops it from every board's initiatives.
+
+**Derivations** are pure modules, each with its own tests:
+
+- **`rollups.ts`**: per initiative, project and milestone — cards by category, size points (S 1, M 2, L 4;
+  canceled left out) total and completed, the active cards' agents (`working`, `waiting` = `needs_you`,
+  `failed` = failed or interrupted, from the latest attempt's chat), blocked cards (active, with a blocker
+  neither completed nor canceled) and time spent (every span in started, until now when still open).
+- **`throughput.ts`**: a card's completion is its last move into completed unless it left again (a deletion
+  keeps it); weekly throughput counts and weighs completions per whole ISO week (Monday UTC) from the log's
+  first week to the week before now's; cycle time runs from the first start to the completion. Fewer than
+  `MIN_HISTORY_WEEKS` (3) weeks or no completion in them is **not enough data**.
+- **`forecast.ts`**: Monte Carlo over the board's weekly points, `FORECAST_TRIALS` (2000) trials, each drawing
+  weeks until the remaining points are covered (capped at 520 weeks); the 50 % and 85 % trials' week counts
+  from today are the dates. The RNG (mulberry32) is seeded with FNV-1a of `projectId:initiativeId` and the
+  data, so a forecast is stable until the data changes. Statuses: `ok`, `done` (nothing remains) and
+  `insufficient` (`no-scope`, `history`, `no-completions`); every answer carries its `inputs`.
+- **`health.ts`**: reasons `{ kind, level, … }` the web words through locale keys — `forecast_late` (85 %
+  past the target: at risk, off track past a quarter of the span from the initiative's creation to the
+  target), `blocked` (a critical card blocked while Ready, started or in review), `waiting` (a wait for the
+  human older than 24 h on the critical path, aged from the chat's last update), `review_wip` (Review over
+  its limit with this initiative's card in it), `failed`, `appetite` (time spent past 80 %). The worst level
+  wins; a human's `override` is the `effective` health, the suggestion and its reasons stay visible.
+- **`schedule.ts`**, the step graph (the prototype's pass): nodes are the board's cards (canceled left out)
+  and every roadmap project's milestones, zero-length after their cards; edges are `blocks`. A card not
+  started starts at its pin, else when its blockers end, not before today; a started (or review) card at
+  its latest start and ends after its estimate, not before today; a completed card keeps its actual span.
+  The backward pass from the latest end gives `slack` and `critical`; a pin before its blockers' end is a
+  `conflict` (node and link); a milestone past its target day is `late`. Days are days since 1970-01-01 UTC,
+  fractional; nodes come in topological order. A cycle in stored data is cut at one link and reported in
+  `cycles`; `criticalWithin` gives an initiative's own critical path over its cards and milestones.
+- **Links never close a cycle**: `card.link`, `card.update { blocks }`, `board_link` and a batch's
+  `blocksIndex` refuse one (`wouldCycle`).
 
 ## Presets
 
@@ -251,8 +314,9 @@ Every query validates its params (lengths, enums, lists of at most 100) and answ
   an issue started or edited) answers as the stored card. `#N` needs the `projectId`.
 - **`card.create { projectId, title, description?, acceptance?, type?, size?, labels?, specRefs?,
   column? }`**: a human's card, in Backlog by default.
-- **`card.update { cardId, projectId?, …, size: null clears, blocks, cancelPending: false dismisses }`**.
-  An edited size is no longer a suggestion. `blocks` must name other cards of the same board.
+- **`card.update { cardId, projectId?, …, size: null clears, blocks, cancelPending: false dismisses,
+  estimateDays: null clears }`**. An edited size is no longer a suggestion. `blocks` must name other cards of
+  the same board and close no cycle.
 - **`card.move { cardId, projectId?, column, rank? }`**: an override, logged.
 - **`card.delete { cardId }`**: the card leaves the other cards' `blocks` too.
 - **`triage.accept { cardIds }`** moves the cards to Backlog as a whole. It moves nothing unless every
@@ -261,7 +325,10 @@ Every query validates its params (lengths, enums, lists of at most 100) and answ
   - It refuses a Triage card and a card already starting.
   - The workflow is the size's (S, a bug or no size → `implement`; M / L → `brainstorm`) unless one is
     named.
-  - The kickoff is `Card <id>: <title>`, then the description, the acceptance criteria and the specs.
+  - The kickoff is `Card <id>: <title>`, then the description, the acceptance criteria and the specs, then
+    the card's initiative (`Initiative <id>: <title>`, its outcome and success criteria) and its project and
+    milestone. The initiative is the card's project's, else one of its board's listing it, else one on
+    another board listing it as an external card.
   - A brainstorm kickoff is prefixed `/skill:brainstorming `, exactly as the composer sends a picked
     skill, so pi expands it.
   - It calls `actions.createWorkspace` and then records the attempt and applies Start. It answers the
@@ -271,6 +338,33 @@ Every query validates its params (lengths, enums, lists of at most 100) and answ
 - **`settings.get` / `settings.update { projectId, preset?, wipLimits?, followSelection? }`**.
 - **`models.list {}`** → `{ models }`, the host's `models()` — the models a new chat can use, as host facts
   — for the Start form's picker.
+
+The roadmap's queries (§ Roadmap) take the board's `projectId`; every write publishes `board.changed`:
+
+- **`roadmap.get { projectId }`** → `{ projectId, projectName, initiatives` (depth-first, each with `depth`,
+  `childIds`, `memberCardIds`, `memberExternalCards`)`, projects, externalCards` (title, category, size,
+  project name, or `missing`)`, rollups { initiatives, projects, milestones }, health, forecast` (by
+  initiative id)`, schedule, critical` (each initiative's critical node ids)`, throughput, cycleTimes,
+  insufficientData { throughput, initiatives } }`.
+- **`initiative.create { projectId, title, outcome?, criteria?, horizon? (later), parentId?, target?,
+  appetiteDays?, specRefs? }`**, **`initiative.update { projectId, initiativeId, …, parentId / target /
+  appetiteDays: null clears, health { override?, note? } (null clears each), proposed: false accepts }`**,
+  **`initiative.delete`**, **`initiative.move { projectId, initiativeId, horizon, rank? }`**.
+- **`initiative.addCards` / `initiative.removeCards { projectId, initiativeId, cardIds }`**: card ids name
+  one card across boards, so another board's card becomes an external card.
+- **`initiative.updateDraft.save { projectId, initiativeId, text, health }`** and
+  **`initiative.updateDraft.publish { projectId, initiativeId, text?, health? }`** (without a draft, `text`
+  makes one).
+- **`project.create { projectId, title, initiativeId?, milestones? }`**, **`project.update { projectId,
+  roadmapProjectId, title?, initiativeId? (null frees), proposed: false }`**, **`project.delete`**;
+  **`milestone.create { projectId, roadmapProjectId, title, target? }`**, **`milestone.update { projectId,
+  milestoneId, title?, target? (null clears) }`**, **`milestone.delete`**.
+- **`card.assignProject { cardId, projectId?, milestoneId? }`** (the roadmap project; a milestone alone
+  names its project, `null` takes the card out), **`card.link` / `card.unlink { from, to }`** ("from blocks
+  to"), **`card.pin { cardId, start }`** / **`card.unpin`** (only a card not started yet: Triage, Backlog,
+  Ready) and **`card.shiftChain { cardId, days }`**: pins the card at its planned start + `days` and moves
+  every pinned card it blocks, transitively, by the same; unpinned dependents follow by themselves and
+  started ones keep their actual start.
 
 ## Web half
 
@@ -388,6 +482,15 @@ id, else the attempt of its workspace (located from its cwd).
   suggested.
 - **`board_link { cardId, blocks[] }`**: adds "blocks" links on one board.
 - **`board_card_note { text }`**: appends a progress note to the chat's attempt.
+- **`board_initiative_get { initiativeId? }`**: an initiative's text, health with its reasons, forecast,
+  progress, projects and cards; by default the initiative of the chat's card.
+- **`board_initiative_create_draft { title, outcome, criteria?, horizon? }`** and **`board_project_create
+  { initiativeId, title, milestones? }`**: proposals (`proposed: true, proposedBy: agent`) a human accepts.
+- **`board_cards_create_batch { projectId?, cards: [{ title, description?, acceptance?, type?, size?,
+  blocksIndex? }] }`**: a decomposition in one write, into Triage with one `origin` (so one group accepted as
+  a whole), suggested sizes, the `blocks` links `blocksIndex` names among the batch (no cycle) and, given a
+  roadmap project, in it.
+- **`board_update_draft { initiativeId, text, health }`**: saves the draft update; it never publishes.
 
 Their guidelines say two things:
 
@@ -401,6 +504,12 @@ Their guidelines say two things:
   - prefixes and ids, the presets, the rule table (idempotence included) and the kickoff text;
   - query validation, create / update / move / delete / accept / start, overlays, WIP and inbox;
   - the rules wired to a fake host's events and Triage-only creation by the tools;
+  - the roadmap: the derivations each on their own (`rollups`, `throughput` with the day helpers, `forecast`'s
+    determinism and not-enough-data, `health`'s rule table, `schedule` with pins, conflicts, milestones,
+    cycles and per-initiative critical paths) and, through the queries (`roadmap.test.ts`), validation,
+    initiative / project / milestone CRUD, assignment, links refusing cycles, pins and `shiftChain`, external
+    cards, draft updates, `roadmap.get`'s rollups, schedule, forecast and health, the kickoff's initiative
+    context and the roadmap tools (proposals, a Triage batch with its links, the draft update);
   - the sources (`sources.test.ts`): task-specs bound vs unbound, placement by live facts, Adopt once,
     refused writes, watched chats, deferrals sent once and their parsing; GitHub through a fake `gh`
     (argv, the Default workspace, the TTL, Refresh, the filter, the error kept beside the last issues,
@@ -449,4 +558,7 @@ These land later:
   re-reads on its own writes, chat and review changes and workspace switches);
 - a task-spec committed to the branch shows in every unbound workspace that has it;
 - removing a "blocks" link from the tools;
-- an initiative's `into` (D / G).
+- an initiative's `into` (D / G);
+- the roadmap's web views (Now / Next / Later, Timeline, Goals, the step graph), `insights.get`, the roadmap
+  skills and Publish (the next steps of `TASK-roadmap`);
+- another board's write does not publish the boards whose initiatives list its cards as external.

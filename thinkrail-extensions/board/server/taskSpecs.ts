@@ -67,6 +67,16 @@ export function latestChat(facts: ExtensionWorkspaceFacts | null): ExtensionChat
 	return [...(facts?.chats ?? [])].sort((a, b) => b.updatedAt - a.updatedAt)[0];
 }
 
+/** An attempt's chat: its own session's, or for an attempt adopted without one the workspace's latest. */
+export function attemptChat(
+	attempt: { sessionId: string },
+	facts: ExtensionWorkspaceFacts | null,
+): ExtensionChatFacts | undefined {
+	return attempt.sessionId === ""
+		? latestChat(facts)
+		: facts?.chats.find((candidate) => candidate.sessionId === attempt.sessionId);
+}
+
 export interface Deferral {
 	title: string;
 	description: string;

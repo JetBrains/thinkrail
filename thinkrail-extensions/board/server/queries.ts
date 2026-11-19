@@ -1,20 +1,36 @@
 import type { ExtensionQuery, ThinkingLevel } from "@thinkrail/extension-api/server";
 import type { Board, CardInput, CardPatch, SettingsPatch, StartOptions } from "./board";
+import { isIsoDate } from "./days";
 import {
 	CARD_SIZES,
 	CARD_TYPES,
 	GITHUB_FILTERS,
 	type GithubSettings,
+	HEALTHS,
+	HORIZONS,
 	PRESETS,
 	TEXT_MAX,
 	TITLE_MAX,
 	WORKFLOWS,
 } from "./model";
+import type {
+	InitiativeInput,
+	InitiativePatch,
+	MilestoneInput,
+	MilestonePatch,
+	ProjectInput,
+	ProjectPatch,
+} from "./roadmap";
 
 const ITEM_MAX = 1_000;
 const CARD_ID_MAX = 300;
 const LIST_MAX = 100;
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+const ENTITY_ID_MAX = 40;
+const ESTIMATE_MAX_DAYS = 365;
+const APPETITE_MAX_DAYS = 3650;
+const SHIFT_MAX_DAYS = 365;
+const MILESTONES_MAX = 50;
 
 type Params = Record<string, unknown>;
 
@@ -79,6 +95,40 @@ function optionalNumber(p: Params, key: string): number | undefined {
 	return value;
 }
 
+function optionalDate(p: Params, key: string): string | undefined {
+	const value = p[key];
+	if (value === undefined) return undefined;
+	if (typeof value !== "string" || !isIsoDate(value))
+		throw new Error(`${key} must be a date written YYYY-MM-DD.`);
+	return value;
+}
+
+function optionalDays(p: Params, key: string, max: number): number | undefined {
+	const value = optionalNumber(p, key);
+	if (value !== undefined && (value <= 0 || value > max))
+		throw new Error(`${key} must be more than 0 and at most ${max} days.`);
+	return value;
+}
+
+/** A param that `null` clears: `null`, else what `read` makes of it. */
+function nullable<T>(p: Params, key: string, read: (p: Params, key: string) => T): T | null {
+	return p[key] === null ? null : read(p, key);
+}
+
+function onlyFalse(p: Params, key: string): false | undefined {
+	if (p[key] === undefined) return undefined;
+	if (p[key] !== false) throw new Error(`${key} can only be cleared (false).`);
+	return false;
+}
+
+function record(p: Params, key: string): Params | undefined {
+	const value = p[key];
+	if (value === undefined) return undefined;
+	if (typeof value !== "object" || value === null || Array.isArray(value))
+		throw new Error(`${key} must be an object.`);
+	return value as Params;
+}
+
 /** Drops the absent keys, so an omitted param stays omitted rather than `undefined`. */
 function defined<T extends object>(value: { [K in keyof T]: T[K] | undefined }): T {
 	return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
@@ -112,7 +162,99 @@ function cardPatch(p: Params): CardPatch {
 		specRefs: optionalList(p, "specRefs"),
 		blocks: optionalList(p, "blocks"),
 		cancelPending: p.cancelPending === false ? (false as const) : undefined,
+		estimateDays: nullable(p, "estimateDays", (q, key) => optionalDays(q, key, ESTIMATE_MAX_DAYS)),
 	});
+}
+
+function initiativeInput(p: Params): InitiativeInput {
+	return defined<InitiativeInput>({
+		title: text(p, "title", TITLE_MAX),
+		outcome: optionalText(p, "outcome", TEXT_MAX),
+		criteria: optionalList(p, "criteria"),
+		horizon: optionalOneOf(p, "horizon", HORIZONS),
+		parentId: optionalText(p, "parentId", ENTITY_ID_MAX) || undefined,
+		target: optionalDate(p, "target"),
+		appetiteDays: optionalDays(p, "appetiteDays", APPETITE_MAX_DAYS),
+		specRefs: optionalList(p, "specRefs"),
+	});
+}
+
+function initiativePatch(p: Params): InitiativePatch {
+	const health = record(p, "health");
+	return defined<InitiativePatch>({
+		title: p.title === undefined ? undefined : text(p, "title", TITLE_MAX),
+		outcome: optionalText(p, "outcome", TEXT_MAX),
+		criteria: optionalList(p, "criteria"),
+		horizon: optionalOneOf(p, "horizon", HORIZONS),
+		parentId: nullable(p, "parentId", (q, key) => optionalText(q, key, ENTITY_ID_MAX) || undefined),
+		target: nullable(p, "target", optionalDate),
+		appetiteDays: nullable(p, "appetiteDays", (q, key) => optionalDays(q, key, APPETITE_MAX_DAYS)),
+		specRefs: optionalList(p, "specRefs"),
+		health: health
+			? defined<NonNullable<InitiativePatch["health"]>>({
+					override: nullable(health, "override", (q, key) => optionalOneOf(q, key, HEALTHS)),
+					note: nullable(health, "note", (q, key) => optionalText(q, key, ITEM_MAX)),
+				})
+			: undefined,
+		proposed: onlyFalse(p, "proposed"),
+	});
+}
+
+function milestoneInput(p: Params): MilestoneInput {
+	return defined<MilestoneInput>({
+		title: text(p, "title", TITLE_MAX),
+		target: optionalDate(p, "target"),
+	});
+}
+
+function milestonePatch(p: Params): MilestonePatch {
+	return defined<MilestonePatch>({
+		title: p.title === undefined ? undefined : text(p, "title", TITLE_MAX),
+		target: nullable(p, "target", optionalDate),
+	});
+}
+
+function projectInput(p: Params): ProjectInput {
+	const raw = p.milestones;
+	if (raw !== undefined && (!Array.isArray(raw) || raw.length > MILESTONES_MAX))
+		throw new Error(`milestones must be a list of at most ${MILESTONES_MAX}.`);
+	return defined<ProjectInput>({
+		title: text(p, "title", TITLE_MAX),
+		initiativeId: optionalText(p, "initiativeId", ENTITY_ID_MAX) || undefined,
+		milestones: raw?.map((milestone: unknown) => milestoneInput(params(milestone))),
+	});
+}
+
+function projectPatch(p: Params): ProjectPatch {
+	return defined<ProjectPatch>({
+		title: p.title === undefined ? undefined : text(p, "title", TITLE_MAX),
+		initiativeId: nullable(
+			p,
+			"initiativeId",
+			(q, key) => optionalText(q, key, ENTITY_ID_MAX) || undefined,
+		),
+		proposed: onlyFalse(p, "proposed"),
+	});
+}
+
+function requiredOneOf<T extends string>(p: Params, key: string, values: readonly T[]): T {
+	const value = optionalOneOf(p, key, values);
+	if (value === undefined) throw new Error(`Pass a ${key}: one of ${values.join(", ")}.`);
+	return value;
+}
+
+function shiftDays(p: Params): number {
+	const days = p.days;
+	if (
+		typeof days !== "number" ||
+		!Number.isInteger(days) ||
+		days === 0 ||
+		Math.abs(days) > SHIFT_MAX_DAYS
+	)
+		throw new Error(
+			`days must be a whole number of days, not 0, at most ${SHIFT_MAX_DAYS} either way.`,
+		);
+	return days;
 }
 
 function startOptions(p: Params): StartOptions {
@@ -155,9 +297,9 @@ function githubPatch(p: Params): Partial<GithubSettings> {
 	return patch;
 }
 
-function cardIds(p: Params): string[] {
+function cardIds(p: Params, purpose = "accept"): string[] {
 	const ids = optionalList(p, "cardIds");
-	if (!ids || ids.length === 0) throw new Error("Pass the cardIds to accept.");
+	if (!ids || ids.length === 0) throw new Error(`Pass the cardIds to ${purpose}.`);
 	return ids;
 }
 
@@ -167,6 +309,10 @@ export function boardQueries(board: Board): Readonly<Record<string, ExtensionQue
 	const cardId = (p: Params) => text(p, "cardId", CARD_ID_MAX);
 	/** The board of a source's card (`#12`) that is not stored yet. */
 	const boardOf = (p: Params) => optionalText(p, "projectId", 200) || undefined;
+	const initiativeId = (p: Params) => text(p, "initiativeId", ENTITY_ID_MAX);
+	const roadmapProjectId = (p: Params) => text(p, "roadmapProjectId", ENTITY_ID_MAX);
+	const milestoneId = (p: Params) => text(p, "milestoneId", ENTITY_ID_MAX);
+	const { roadmap } = board;
 	return {
 		"board.get": (raw) => board.get(projectId(params(raw))),
 		inbox: (raw) => {
@@ -218,6 +364,108 @@ export function boardQueries(board: Board): Readonly<Record<string, ExtensionQue
 		"settings.update": (raw) => {
 			const p = params(raw);
 			return board.updateSettings(projectId(p), settingsPatch(p));
+		},
+		"roadmap.get": (raw) => roadmap.get(projectId(params(raw))),
+		"initiative.create": (raw) => {
+			const p = params(raw);
+			return roadmap.createInitiative(projectId(p), initiativeInput(p), "human");
+		},
+		"initiative.update": (raw) => {
+			const p = params(raw);
+			return roadmap.updateInitiative(projectId(p), initiativeId(p), initiativePatch(p));
+		},
+		"initiative.delete": (raw) => {
+			const p = params(raw);
+			return roadmap.deleteInitiative(projectId(p), initiativeId(p));
+		},
+		"initiative.move": (raw) => {
+			const p = params(raw);
+			return roadmap.moveInitiative(
+				projectId(p),
+				initiativeId(p),
+				requiredOneOf(p, "horizon", HORIZONS),
+				optionalNumber(p, "rank"),
+			);
+		},
+		"initiative.addCards": (raw) => {
+			const p = params(raw);
+			return roadmap.addCards(projectId(p), initiativeId(p), cardIds(p, "add"));
+		},
+		"initiative.removeCards": (raw) => {
+			const p = params(raw);
+			return roadmap.removeCards(projectId(p), initiativeId(p), cardIds(p, "remove"));
+		},
+		"initiative.updateDraft.save": (raw) => {
+			const p = params(raw);
+			return roadmap.saveDraft(
+				projectId(p),
+				initiativeId(p),
+				text(p, "text", TEXT_MAX),
+				requiredOneOf(p, "health", HEALTHS),
+			);
+		},
+		"initiative.updateDraft.publish": (raw) => {
+			const p = params(raw);
+			return roadmap.publishDraft(
+				projectId(p),
+				initiativeId(p),
+				defined<{ text?: string; health?: (typeof HEALTHS)[number] }>({
+					text: optionalText(p, "text", TEXT_MAX) || undefined,
+					health: optionalOneOf(p, "health", HEALTHS),
+				}),
+			);
+		},
+		"project.create": (raw) => {
+			const p = params(raw);
+			return roadmap.createProject(projectId(p), projectInput(p), "human");
+		},
+		"project.update": (raw) => {
+			const p = params(raw);
+			return roadmap.updateProject(projectId(p), roadmapProjectId(p), projectPatch(p));
+		},
+		"project.delete": (raw) => {
+			const p = params(raw);
+			return roadmap.deleteProject(projectId(p), roadmapProjectId(p));
+		},
+		"milestone.create": (raw) => {
+			const p = params(raw);
+			return roadmap.createMilestone(projectId(p), roadmapProjectId(p), milestoneInput(p));
+		},
+		"milestone.update": (raw) => {
+			const p = params(raw);
+			return roadmap.updateMilestone(projectId(p), milestoneId(p), milestonePatch(p));
+		},
+		"milestone.delete": (raw) => {
+			const p = params(raw);
+			return roadmap.deleteMilestone(projectId(p), milestoneId(p));
+		},
+		"card.assignProject": (raw) => {
+			const p = params(raw);
+			const entity = (q: Params, key: string) => optionalText(q, key, ENTITY_ID_MAX) || undefined;
+			return roadmap.assignProject(
+				cardId(p),
+				nullable(p, "projectId", entity),
+				nullable(p, "milestoneId", entity),
+			);
+		},
+		"card.link": (raw) => {
+			const p = params(raw);
+			return board.link(text(p, "from", CARD_ID_MAX), [text(p, "to", CARD_ID_MAX)]);
+		},
+		"card.unlink": (raw) => {
+			const p = params(raw);
+			return board.unlink(text(p, "from", CARD_ID_MAX), text(p, "to", CARD_ID_MAX));
+		},
+		"card.pin": (raw) => {
+			const p = params(raw);
+			const start = optionalDate(p, "start");
+			if (!start) throw new Error("Pass the start, a date written YYYY-MM-DD.");
+			return roadmap.pin(cardId(p), start);
+		},
+		"card.unpin": (raw) => roadmap.unpin(cardId(params(raw))),
+		"card.shiftChain": (raw) => {
+			const p = params(raw);
+			return roadmap.shiftChain(cardId(p), shiftDays(p));
 		},
 	};
 }

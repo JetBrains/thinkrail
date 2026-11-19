@@ -3,7 +3,13 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_SETTINGS } from "./model";
-import { BoardStore, type CardsFile, NewerBoardStoreError } from "./store";
+import {
+	BoardStore,
+	type CardsFile,
+	type InitiativesFile,
+	NewerBoardStoreError,
+	type ProjectsFile,
+} from "./store";
 
 const roots: string[] = [];
 
@@ -174,6 +180,182 @@ describe("BoardStore", () => {
 		writeFileSync(join(root, "p1", "cards.json"), JSON.stringify({ version: 2, cards: [] }));
 		expect(() => store().cards("p1")).toThrow(NewerBoardStoreError);
 		expect(readdirSync(join(root, "p1"))).toEqual(["cards.json"]);
+	});
+
+	test("round-trips initiatives and roadmap projects, and reads the cards' roadmap fields", () => {
+		const { root, store } = setup();
+		const first = store();
+		expect(first.initiatives("p1")).toEqual({
+			version: 1,
+			nextNumber: 1,
+			nextUpdateNumber: 1,
+			initiatives: [],
+		});
+		expect(first.roadmapProjects("p1")).toEqual({
+			version: 1,
+			nextNumber: 1,
+			nextMilestoneNumber: 1,
+			projects: [],
+		});
+		const initiatives: InitiativesFile = {
+			version: 1,
+			nextNumber: 3,
+			nextUpdateNumber: 2,
+			initiatives: [
+				{
+					id: "I-2",
+					parentId: "I-1",
+					title: "Roadmap",
+					outcome: "Plans follow the work",
+					criteria: ["forecast"],
+					horizon: "now",
+					rank: 2,
+					target: "2026-12-01",
+					appetiteDays: 20,
+					specRefs: ["module-ext-board"],
+					health: { override: "at_risk", note: "slipping" },
+					updates: [{ id: "U-1", at: 5, text: "Week one", health: "on_track", publishedAt: 6 }],
+					cardIds: ["TR-1"],
+					externalCards: [{ projectId: "p2", cardId: "OT-1" }],
+					proposed: true,
+					proposedBy: "agent",
+					createdAt: 1,
+					updatedAt: 2,
+				},
+			],
+		};
+		const projects: ProjectsFile = {
+			version: 1,
+			nextNumber: 2,
+			nextMilestoneNumber: 3,
+			projects: [
+				{
+					id: "P-1",
+					initiativeId: "I-2",
+					title: "Step graph",
+					milestones: [
+						{ id: "M-1", title: "Alpha", target: "2026-11-30" },
+						{ id: "M-2", title: "Beta" },
+					],
+					proposed: true,
+					proposedBy: "agent",
+					createdAt: 3,
+					updatedAt: 4,
+				},
+			],
+		};
+		first.saveInitiatives("p1", initiatives);
+		first.saveRoadmapProjects("p1", projects);
+		expect(readdirSync(join(root, "p1")).sort()).toEqual(["initiatives.json", "projects.json"]);
+		const second = store();
+		expect(second.initiatives("p1")).toEqual(initiatives);
+		expect(second.roadmapProjects("p1")).toEqual(projects);
+		expect(second.projectIds()).toEqual(["p1"]);
+
+		const card = file.cards[0] as CardsFile["cards"][number];
+		second.saveCards("p1", {
+			...file,
+			cards: [
+				{
+					...card,
+					projectId: "P-1",
+					milestoneId: "M-1",
+					pinnedStart: "2026-11-20",
+					estimateDays: 2.5,
+				},
+			],
+		});
+		expect(store().cards("p1")?.cards[0]).toMatchObject({
+			projectId: "P-1",
+			milestoneId: "M-1",
+			pinnedStart: "2026-11-20",
+			estimateDays: 2.5,
+		});
+	});
+
+	test("fills roadmap defaults, drops malformed roadmap fields and moves unreadable roadmap files aside", () => {
+		const { root, store, warnings } = setup();
+		mkdirSync(join(root, "p1"));
+		writeFileSync(
+			join(root, "p1", "initiatives.json"),
+			JSON.stringify({
+				version: 1,
+				initiatives: [
+					{
+						id: "I-1",
+						title: "Bare",
+						horizon: "someday",
+						target: "2026-02-30",
+						appetiteDays: -3,
+						health: { override: "great" },
+						updates: [{ id: "U-1", text: "x", health: "meh" }, { text: "no id" }],
+						externalCards: [{ projectId: "p2" }],
+					},
+					{ id: "I-2" },
+				],
+			}),
+		);
+		writeFileSync(join(root, "p1", "projects.json"), JSON.stringify({ version: 1, projects: "x" }));
+		writeFileSync(
+			join(root, "p1", "cards.json"),
+			JSON.stringify({
+				version: 1,
+				prefix: "TR",
+				cards: [
+					{
+						id: "TR-1",
+						title: "Odd",
+						category: "backlog",
+						column: "backlog",
+						milestoneId: "M-1",
+						pinnedStart: "soon",
+						estimateDays: 0,
+					},
+				],
+			}),
+		);
+		const board = store();
+		expect(board.initiatives("p1")).toEqual({
+			version: 1,
+			nextNumber: 1,
+			nextUpdateNumber: 1,
+			initiatives: [
+				{
+					id: "I-1",
+					title: "Bare",
+					outcome: "",
+					criteria: [],
+					horizon: "later",
+					rank: 0,
+					specRefs: [],
+					updates: [{ id: "U-1", at: 0, text: "x", health: "on_track" }],
+					cardIds: [],
+					externalCards: [],
+					createdAt: 0,
+					updatedAt: 0,
+				},
+			],
+		});
+		expect(warnings.some((warning) => warning.includes("dropped 1 unreadable initiative"))).toBe(
+			true,
+		);
+		expect(board.roadmapProjects("p1").projects).toEqual([]);
+		expect(readdirSync(join(root, "p1"))).toContain("projects.json.corrupt-42");
+		const card = board.cards("p1")?.cards[0];
+		for (const key of ["milestoneId", "pinnedStart", "estimateDays"])
+			expect(card).not.toHaveProperty(key);
+	});
+
+	test("refuses roadmap files a newer ThinkRail wrote", () => {
+		const { root, store } = setup();
+		mkdirSync(join(root, "p1"));
+		writeFileSync(
+			join(root, "p1", "initiatives.json"),
+			JSON.stringify({ version: 2, initiatives: [] }),
+		);
+		writeFileSync(join(root, "p1", "projects.json"), JSON.stringify({ version: 2, projects: [] }));
+		expect(() => store().initiatives("p1")).toThrow(NewerBoardStoreError);
+		expect(() => store().roadmapProjects("p1")).toThrow(NewerBoardStoreError);
 	});
 
 	test("refuses a project id that is not a plain folder name", () => {
