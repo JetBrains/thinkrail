@@ -1,6 +1,7 @@
 import type { ExtensionQuery, ThinkingLevel } from "@thinkrail/extension-api/server";
 import type { Board, CardInput, CardPatch, SettingsPatch, StartOptions } from "./board";
 import { isIsoDate } from "./days";
+import { ROADMAP_CHATS } from "./kickoff";
 import {
 	CARD_SIZES,
 	CARD_TYPES,
@@ -366,6 +367,14 @@ export function boardQueries(board: Board): Readonly<Record<string, ExtensionQue
 			return board.updateSettings(projectId(p), settingsPatch(p));
 		},
 		"roadmap.get": (raw) => roadmap.get(projectId(params(raw))),
+		"roadmap.chat": (raw) => {
+			const p = params(raw);
+			return board.startRoadmapChat(
+				projectId(p),
+				requiredOneOf(p, "kind", ROADMAP_CHATS),
+				optionalText(p, "initiativeId", ENTITY_ID_MAX) || undefined,
+			);
+		},
 		"initiative.create": (raw) => {
 			const p = params(raw);
 			return roadmap.createInitiative(projectId(p), initiativeInput(p), "human");
@@ -444,7 +453,7 @@ export function boardQueries(board: Board): Readonly<Record<string, ExtensionQue
 			const entity = (q: Params, key: string) => optionalText(q, key, ENTITY_ID_MAX) || undefined;
 			return roadmap.assignProject(
 				cardId(p),
-				nullable(p, "projectId", entity),
+				nullable(p, "roadmapProjectId", entity),
 				nullable(p, "milestoneId", entity),
 			);
 		},

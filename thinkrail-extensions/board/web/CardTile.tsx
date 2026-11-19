@@ -5,7 +5,14 @@ import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import type { KeyboardEvent } from "react";
 import { type Card, canAdopt, canStart } from "./api";
-import { CardMeta, LiveLine, StartWarning, TaskSpecLine, TaskSpecStatus } from "./CardParts";
+import {
+	CardMeta,
+	InitiativeChip,
+	LiveLine,
+	StartWarning,
+	TaskSpecLine,
+	TaskSpecStatus,
+} from "./CardParts";
 
 export interface CardActions {
 	open: (card: Card) => void;
@@ -65,6 +72,7 @@ export function CardTile({
 				<span className={cn("tr-text-ui text-text-default", compact ? "truncate" : "line-clamp-3")}>
 					{card.title}
 				</span>
+				<InitiativeChip card={card} />
 				{adoptable ? (
 					<span className="flex">
 						<TaskSpecStatus status={card.taskSpecs[0]?.status ?? null} />

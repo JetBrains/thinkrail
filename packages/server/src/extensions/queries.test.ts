@@ -15,6 +15,7 @@ function services(name: string, signal: AbortSignal): ExtensionHostServices {
 		signal,
 		actions: {
 			createWorkspace: refused,
+			startChat: refused,
 			sendToChat: refused,
 			stopChat: refused,
 			openPr: refused,

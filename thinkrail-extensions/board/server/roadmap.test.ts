@@ -114,8 +114,8 @@ describe("roadmap queries", () => {
 				"No project P-9",
 			],
 			["milestone.update", { projectId: "p1", milestoneId: "M-9" }, "No milestone M-9"],
-			["card.assignProject", { cardId: "TR-1" }, "projectId or the milestoneId"],
-			["card.assignProject", { cardId: "TR-1", projectId: "P-9" }, "No project P-9"],
+			["card.assignProject", { cardId: "TR-1" }, "roadmapProjectId or the milestoneId"],
+			["card.assignProject", { cardId: "TR-1", roadmapProjectId: "P-9" }, "No project P-9"],
 			["card.link", { from: "TR-1" }, "non-empty to"],
 			["card.link", { from: "TR-1", to: "TR-1" }, "cannot block itself"],
 			["card.pin", { cardId: "TR-1" }, "Pass the start"],
@@ -290,12 +290,16 @@ describe("roadmap queries", () => {
 		await card("A");
 		await card("B");
 		await query("card.assignProject", { cardId: "TR-1", milestoneId: "M-1" });
-		await query("card.assignProject", { cardId: "TR-2", projectId: "P-1", milestoneId: "M-2" });
+		await query("card.assignProject", {
+			cardId: "TR-2",
+			roadmapProjectId: "P-1",
+			milestoneId: "M-2",
+		});
 		await query("milestone.delete", { projectId: "p1", milestoneId: "M-1" });
-		expect(board.find("TR-1")).toMatchObject({ projectId: "P-1" });
+		expect(board.find("TR-1")).toMatchObject({ roadmapProjectId: "P-1" });
 		expect(board.find("TR-1")).not.toHaveProperty("milestoneId");
 		await query("project.delete", { projectId: "p1", roadmapProjectId: "P-1" });
-		expect(board.find("TR-2")).not.toHaveProperty("projectId");
+		expect(board.find("TR-2")).not.toHaveProperty("roadmapProjectId");
 		expect(board.find("TR-2")).not.toHaveProperty("milestoneId");
 	});
 
@@ -307,32 +311,37 @@ describe("roadmap queries", () => {
 		const assign = (params: Record<string, unknown>) =>
 			query<Card>("card.assignProject", { cardId: "tr-1", ...params });
 		expect(await assign({ milestoneId: "M-1" })).toMatchObject({
-			projectId: "P-1",
+			roadmapProjectId: "P-1",
 			milestoneId: "M-1",
 		});
-		expect(await assign({ projectId: "P-1" })).toMatchObject({
-			projectId: "P-1",
+		expect(await assign({ roadmapProjectId: "P-1" })).toMatchObject({
+			roadmapProjectId: "P-1",
 			milestoneId: "M-1",
 		});
-		const moved = await assign({ projectId: "P-2" });
-		expect(moved.projectId).toBe("P-2");
+		const moved = await assign({ roadmapProjectId: "P-2" });
+		expect(moved.roadmapProjectId).toBe("P-2");
 		expect(moved).not.toHaveProperty("milestoneId");
-		await expect(assign({ projectId: "P-2", milestoneId: "M-1" })).rejects.toThrow(
+		await expect(assign({ roadmapProjectId: "P-2", milestoneId: "M-1" })).rejects.toThrow(
 			"not a milestone of P-2",
 		);
 		expect(await assign({ milestoneId: "M-2" })).toMatchObject({
-			projectId: "P-2",
+			roadmapProjectId: "P-2",
 			milestoneId: "M-2",
 		});
 		const unmilestoned = await assign({ milestoneId: null });
-		expect(unmilestoned.projectId).toBe("P-2");
+		expect(unmilestoned.roadmapProjectId).toBe("P-2");
 		expect(unmilestoned).not.toHaveProperty("milestoneId");
-		await expect(assign({ projectId: null, milestoneId: "M-2" })).rejects.toThrow("no milestone");
-		const out = await assign({ projectId: null });
-		expect(out).not.toHaveProperty("projectId");
-		await expect(query("card.assignProject", { cardId: "#4", projectId: "P-1" })).rejects.toThrow(
-			"Not a card id",
+		await expect(assign({ roadmapProjectId: null, milestoneId: "M-2" })).rejects.toThrow(
+			"no milestone",
 		);
+		const out = await assign({ roadmapProjectId: null });
+		expect(out).not.toHaveProperty("roadmapProjectId");
+		await expect(assign({ projectId: "P-1" })).rejects.toThrow(
+			"roadmapProjectId or the milestoneId",
+		);
+		await expect(
+			query("card.assignProject", { cardId: "#4", roadmapProjectId: "P-1" }),
+		).rejects.toThrow("Not a card id");
 	});
 
 	test("link and unlink cards, refusing a link that closes a cycle wherever it comes from", async () => {
@@ -601,7 +610,7 @@ describe("roadmap.get", () => {
 		});
 		expect(view.forecast["I-1"]).toMatchObject({ status: "insufficient", reason: "history" });
 		expect(view.insufficientData).toEqual({ throughput: true, initiatives: ["I-1", "I-2"] });
-		expect(board.find("TR-4")).not.toHaveProperty("projectId");
+		expect(board.find("TR-4")).not.toHaveProperty("roadmapProjectId");
 	});
 
 	test("forecasts from the board's weekly throughput and suggests health from the signals, a human's override winning", async () => {
@@ -739,6 +748,98 @@ describe("the kickoff and the roadmap tools", () => {
 		expect(texts[3]).toContain("Initiative I-1: Roadmap\nOutcome: Plans follow the work");
 	});
 
+	test("a card's live overlay names the initiative it serves, on its board or another", async () => {
+		const { query, card } = setup();
+		await query("initiative.create", { projectId: "p1", title: "Goal", outcome: "Why" });
+		await query("initiative.create", { projectId: "p1", title: "Via project", outcome: "Lane" });
+		await query("project.create", { projectId: "p1", title: "Lane", initiativeId: "I-2" });
+		await card("Listed");
+		await card("In project");
+		await card("Plain");
+		await card("Abroad", {}, "p2");
+		await query("initiative.addCards", {
+			projectId: "p1",
+			initiativeId: "I-1",
+			cardIds: ["TR-1", "TR-2", "OT-1"],
+		});
+		await query("card.assignProject", { cardId: "TR-2", roadmapProjectId: "P-1" });
+		const view = await query<{ cards: { id: string; initiative?: unknown }[] }>("board.get", {
+			projectId: "p1",
+		});
+		const served = Object.fromEntries(view.cards.map((entry) => [entry.id, entry.initiative]));
+		expect(served).toEqual({
+			"TR-1": { projectId: "p1", id: "I-1", title: "Goal", outcome: "Why" },
+			"TR-2": { projectId: "p1", id: "I-2", title: "Via project", outcome: "Lane" },
+			"TR-3": undefined,
+		});
+		const abroad = await query<{ card: { initiative?: unknown } }>("card.get", { cardId: "OT-1" });
+		expect(abroad.card.initiative).toEqual({
+			projectId: "p1",
+			id: "I-1",
+			title: "Goal",
+			outcome: "Why",
+		});
+	});
+
+	test("roadmap.chat starts a planning chat in the Default workspace whose kickoff carries the initiative", async () => {
+		const { t, query } = setup();
+		t.projects[0] = project("p1", "ThinkRail", [
+			{ id: "w-default", name: "Default", kind: "default", branch: "main" },
+		]);
+		await query("initiative.create", {
+			projectId: "p1",
+			title: "Roadmap",
+			outcome: "Plans follow the work",
+			criteria: ["Forecasts"],
+			horizon: "next",
+			target: "2026-12-01",
+		});
+		const started = await query<Record<string, unknown>>("roadmap.chat", {
+			projectId: "p1",
+			kind: "plan",
+			initiativeId: "I-1",
+		});
+		expect(started).toMatchObject({ projectId: "p1", workspaceId: "w-default", sessionId: "s1" });
+		expect(t.chats).toHaveLength(1);
+		const text = t.chats[0]?.kickoff.text ?? "";
+		expect(started.kickoff).toBe(text);
+		expect(t.chats[0]?.workspaceId).toBe("w-default");
+		expect(text.startsWith("/skill:roadmap-plan Plan initiative I-1 of the ThinkRail board")).toBe(
+			true,
+		);
+		expect(text).toContain(
+			"Initiative I-1: Roadmap\nOutcome: Plans follow the work\nSuccess criteria:\n- Forecasts\n(horizon next, target 2026-12-01)",
+		);
+		expect(text).toContain("board_cards_create_batch");
+		for (const [kind, skill, tool] of [
+			["shape", "roadmap-shape", "goal-and-requirements"],
+			["report", "roadmap-report", "board_update_draft"],
+			["review", "roadmap-review", "- I-1 (next): Roadmap"],
+		] as const) {
+			await query("roadmap.chat", { projectId: "p1", kind, initiativeId: "I-1" });
+			const kickoff = t.chats.at(-1)?.kickoff.text ?? "";
+			expect(kickoff.startsWith(`/skill:${skill} `)).toBe(true);
+			expect(kickoff).toContain(tool);
+		}
+		await query("roadmap.chat", { projectId: "p1", kind: "review" });
+		expect(t.chats.at(-1)?.kickoff.text).not.toContain("Start with");
+
+		t.chat.kickoffError = "No model selected";
+		expect(
+			await query("roadmap.chat", { projectId: "p1", kind: "report", initiativeId: "I-1" }),
+		).toMatchObject({ kickoffError: "No model selected" });
+		const refusals: [unknown, string][] = [
+			[{ projectId: "p1", kind: "plan" }, "Pass the initiativeId to plan"],
+			[{ projectId: "p1", kind: "sing", initiativeId: "I-1" }, "kind must be one of"],
+			[{ projectId: "p1", kind: "plan", initiativeId: "I-9" }, "No initiative I-9"],
+			[{ projectId: "p2", kind: "review" }, "no Default workspace"],
+		];
+		const before = t.chats.length;
+		for (const [params, message] of refusals)
+			await expect(query("roadmap.chat", params)).rejects.toThrow(message);
+		expect(t.chats).toHaveLength(before);
+	});
+
 	test("an agent proposes initiatives and projects, which a human accepts", async () => {
 		const { t, query, board } = setup();
 		t.places.set("/worktrees/w1", { projectId: "p1", workspaceId: "w1" });
@@ -800,7 +901,7 @@ describe("the kickoff and the roadmap tools", () => {
 		const call = tools(board);
 		const before = t.published.length;
 		const reply = await call("board_cards_create_batch", {
-			projectId: "p-1",
+			roadmapProjectId: "p-1",
 			cards: [
 				{ title: "Model", size: "M", acceptance: ["stored", " "], blocksIndex: [1, 2] },
 				{ title: "Queries", description: "CRUD", blocksIndex: [2] },
@@ -817,7 +918,7 @@ describe("the kickoff and the roadmap tools", () => {
 			expect(entry).toMatchObject({
 				category: "triage",
 				createdBy: "agent",
-				projectId: "P-1",
+				roadmapProjectId: "P-1",
 				origin: { sessionId: "s1", cardId: "TR-1" },
 			});
 		expect(cards[0]).toMatchObject({ size: "M", sizeSuggested: true, acceptance: ["stored"] });
@@ -842,7 +943,7 @@ describe("the kickoff and the roadmap tools", () => {
 			call("board_cards_create_batch", { cards: [{ title: "A", blocksIndex: [3] }] }),
 		).rejects.toThrow("not a card of this batch");
 		await expect(
-			call("board_cards_create_batch", { projectId: "P-7", cards: [{ title: "A" }] }),
+			call("board_cards_create_batch", { roadmapProjectId: "P-7", cards: [{ title: "A" }] }),
 		).rejects.toThrow("No project P-7");
 		expect(board.cards("p1")).toHaveLength(4);
 	});
@@ -865,7 +966,7 @@ describe("the kickoff and the roadmap tools", () => {
 		});
 		await card("Own");
 		await card("Abroad", {}, "p2");
-		await query("card.assignProject", { cardId: "TR-1", projectId: "P-1" });
+		await query("card.assignProject", { cardId: "TR-1", roadmapProjectId: "P-1" });
 		await query("initiative.addCards", { projectId: "p1", initiativeId: "I-1", cardIds: ["OT-1"] });
 		await query("card.start", { cardId: "TR-1" });
 		t.places.set("/repo", { projectId: "p1", workspaceId: "w-default" });

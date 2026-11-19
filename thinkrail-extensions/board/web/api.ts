@@ -95,8 +95,20 @@ export interface Card {
 	live: AttemptLive[];
 	blockedBy: string[];
 	taskSpecs: TaskSpecRef[];
+	/** Its roadmap project (`P-n`) and one of that project's milestones. */
+	roadmapProjectId?: string;
+	milestoneId?: string;
+	/** The initiative it serves, live: its roadmap project's, else one listing it, on this board or another. */
+	initiative?: ServedInitiative;
 	/** A source's item the board has not stored: an unbound workspace's task-spec, an untouched issue. */
 	virtual?: true;
+}
+
+export interface ServedInitiative {
+	projectId: string;
+	id: string;
+	title: string;
+	outcome: string;
 }
 
 export interface Column {

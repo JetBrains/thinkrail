@@ -735,6 +735,7 @@ describe("the board descriptor", () => {
 			"project.create",
 			"project.delete",
 			"project.update",
+			"roadmap.chat",
 			"roadmap.get",
 			"settings.get",
 			"settings.update",

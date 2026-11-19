@@ -81,8 +81,8 @@ export interface Card {
 	updatedAt: number;
 	/** An attempt's workspace went away unmerged: the board asks whether to cancel; nothing is canceled. */
 	cancelPending?: { workspaceId: string; at: number };
-	/** The roadmap project (`P-n`) of this board the card belongs to. */
-	projectId?: string;
+	/** The roadmap project (`P-n`) of this board the card belongs to; `projectId` is always a ThinkRail project. */
+	roadmapProjectId?: string;
 	/** A milestone (`M-n`) of the card's roadmap project. */
 	milestoneId?: string;
 	/** The planned start pinned on the step graph, an ISO date (`YYYY-MM-DD`). */

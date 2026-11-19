@@ -271,7 +271,10 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   Artifacts, each a named host operation with contracts-shaped params, never a shell or a host internal:
   `createWorkspace({ projectId, baseRef?, into?, name?, kickoff: { text, model?, thinkingLevel? } })` →
   `{ workspaceId, sessionId, branch, kickoffError? }` (the New Workspace dialog's creation, marked as the
-  extension's), `sendToChat({ sessionId, text, mode })` (a follow-up or steer the transcript shows as the
+  extension's), `startChat({ workspaceId, kickoff: { text, model?, thinkingLevel? } })` → `{ workspaceId,
+  sessionId, kickoffError? }` (a new chat in an open workspace of a repository project, its first prompt the
+  kickoff as internal work — a New chat with a prompt; `kickoffError` when the chat started but the prompt was
+  not taken, e.g. no model), `sendToChat({ sessionId, text, mode })` (a follow-up or steer the transcript shows as the
   extension's message under its title), `stopChat({ sessionId })` → `{ stopped }`, `openPr({ workspaceId,
   title?, body?, draft? })` → `OpenPrResult`, and `runInWorkspace({ workspaceId, argv, timeoutMs })` →
   `{ ok, out, err, timedOut }` (one program by `argv` in a repository workspace's worktree, stopped once

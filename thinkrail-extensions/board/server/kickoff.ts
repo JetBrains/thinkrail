@@ -60,3 +60,92 @@ export function kickoffText(
 	const body = lines.join("\n");
 	return workflow === "brainstorm" ? `${BRAINSTORMING_COMMAND} ${body}` : body;
 }
+
+export const ROADMAP_CHATS = ["plan", "shape", "report", "review"] as const;
+/** A roadmap chat: decompose an initiative, shape it, draft its update, or review the whole roadmap. */
+export type RoadmapChat = (typeof ROADMAP_CHATS)[number];
+
+/** The skill each roadmap chat names; an unknown skill passes through, and the text alone instructs. */
+export const ROADMAP_SKILLS: Record<RoadmapChat, string> = {
+	plan: "roadmap-plan",
+	shape: "roadmap-shape",
+	report: "roadmap-report",
+	review: "roadmap-review",
+};
+
+type RoadmapInitiative = Pick<
+	Initiative,
+	"id" | "title" | "outcome" | "criteria" | "horizon" | "target" | "appetiteDays" | "proposed"
+>;
+
+function initiativeBlock(initiative: RoadmapInitiative): string[] {
+	const lines = [`Initiative ${initiative.id}: ${initiative.title.trim()}`];
+	const outcome = initiative.outcome.trim();
+	lines.push(outcome ? `Outcome: ${outcome}` : "Outcome: not written yet.");
+	const criteria = initiative.criteria.map((item) => item.trim()).filter(Boolean);
+	if (criteria.length > 0) lines.push("Success criteria:", ...criteria.map((item) => `- ${item}`));
+	const facets = [
+		`horizon ${initiative.horizon}`,
+		initiative.target ? `target ${initiative.target}` : "",
+		initiative.appetiteDays !== undefined ? `appetite ${initiative.appetiteDays} days` : "",
+	].filter(Boolean);
+	lines.push(`(${facets.join(", ")})`);
+	return lines;
+}
+
+/**
+ * The first prompt of a roadmap chat: its skill as `/skill:<name>` (the way the composer sends one), the
+ * task in one line, the initiative's text, and instructions that stand alone when the skill is missing.
+ */
+export function roadmapKickoff(
+	kind: RoadmapChat,
+	context: {
+		board: string;
+		initiative?: RoadmapInitiative;
+		initiatives: readonly Pick<Initiative, "id" | "title" | "horizon" | "proposed">[];
+	},
+): string {
+	const { board, initiative } = context;
+	const id = initiative?.id ?? "";
+	const read = `board_initiative_get { initiativeId: "${id}" }`;
+	const body: string[] = [];
+	if (kind === "plan")
+		body.push(
+			`Plan initiative ${id} of the ${board} board into cards.`,
+			"",
+			...(initiative ? initiativeBlock(initiative) : []),
+			"",
+			`Read it first with ${read}: its progress, projects and cards. Break the work toward its outcome into cards, each with a title, a short description, acceptance criteria, an S / M / L size and the cards it blocks. File them in one go with board_cards_create_batch and pass a roadmap project of ${id} as roadmapProjectId — propose one with board_project_create { initiativeId: "${id}" } first when it has none — so they land in Triage as one group I accept as a whole. File only what the outcome needs, start no card, and tell me what you left out.`,
+		);
+	else if (kind === "shape")
+		body.push(
+			`Shape initiative ${id} of the ${board} board with me.`,
+			"",
+			...(initiative ? initiativeBlock(initiative) : []),
+			"",
+			`Read it with ${read} and the project's goal-and-requirements spec. Ask me what you need, then propose its outcome (why it matters), success criteria I can check, the risks and rabbit holes, what is out of scope, a horizon (now, next or later) and, if it helps, an appetite in days. Tie it to a goal-and-requirements capability and check it against the non-goals. Only propose: I edit the initiative myself.`,
+		);
+	else if (kind === "report")
+		body.push(
+			`Draft a status update of initiative ${id} of the ${board} board.`,
+			"",
+			...(initiative ? initiativeBlock(initiative) : []),
+			"",
+			`Read its progress, health with its reasons and forecast with ${read}. Write a short update: what was done, what is stuck and why, the forecast against the target, and the health you suggest. Save it with board_update_draft { initiativeId: "${id}", text, health } (health: on_track, at_risk or off_track); I edit and publish it.`,
+		);
+	else {
+		const list = context.initiatives.map(
+			(entry) =>
+				`- ${entry.id} (${entry.horizon}${entry.proposed ? ", proposed" : ""}): ${entry.title.trim()}`,
+		);
+		body.push(
+			`Review the roadmap of the ${board} board with me.`,
+			"",
+			...(list.length > 0 ? ["Initiatives:", ...list] : ["It has no initiatives yet."]),
+			...(initiative ? ["", `Start with ${initiative.id}: ${initiative.title.trim()}.`] : []),
+			"",
+			"Read each initiative with board_initiative_get. From their progress, health reasons, forecasts and appetite, suggest what to move between Now, Next and Later, what scope to trim and what to defer, each with the data behind it. Change nothing yourself: I decide.",
+		);
+	}
+	return `/skill:${ROADMAP_SKILLS[kind]} ${body.join("\n")}`;
+}

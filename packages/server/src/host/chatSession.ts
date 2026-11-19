@@ -32,3 +32,24 @@ export async function startChatSession(
 	noteNewChat(pick ? requested : {}, defaults, created);
 	return created;
 }
+
+/**
+ * Sends a new chat's first prompt and waits until pi's preflight took it or the send failed: the failure's
+ * message (no model, no credentials), else `undefined`. The run itself goes on after this returns.
+ */
+export async function awaitKickoff(
+	send: (onPreflight: () => void) => Promise<unknown>,
+): Promise<string | undefined> {
+	let preflighted: () => void = () => {};
+	const preflight = new Promise<void>((resolve) => {
+		preflighted = resolve;
+	});
+	const sent = send(preflighted);
+	sent.catch(() => {});
+	try {
+		await Promise.race([preflight, sent]);
+		return undefined;
+	} catch (err) {
+		return err instanceof Error ? err.message : String(err);
+	}
+}

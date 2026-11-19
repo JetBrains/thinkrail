@@ -70,6 +70,7 @@ function setup(
 		waitedMs: 3,
 	}));
 	const assist = mock<ExtensionActionDeps["assist"]>(async () => "M");
+	const startChat = mock<ExtensionActionDeps["startChat"]>(async () => ({ sessionId: "s-chat" }));
 	const deps: ExtensionActionDeps = {
 		isDisabled: (name) => disabled.has(name),
 		title: () => "Board",
@@ -79,6 +80,7 @@ function setup(
 		settledModels: async () => [model],
 		defaultBaseBranch: async () => "main",
 		create,
+		startChat,
 		chatWorkspace: async (sessionId) => (sessionId === "s1" ? feature : null),
 		attach: async () => true,
 		send,
@@ -98,6 +100,7 @@ function setup(
 		openPr,
 		run,
 		assist,
+		startChat,
 	};
 }
 
@@ -112,10 +115,11 @@ async function codeOf(answer: Promise<unknown>): Promise<string | undefined> {
 
 describe("extension host actions", () => {
 	test("every action refuses while the extension is switched off, before any effect", async () => {
-		const { actions, disabled, create, send, abort, openPr, run, assist } = setup();
+		const { actions, disabled, create, send, abort, openPr, run, assist, startChat } = setup();
 		disabled.add("board");
 		const refusals = await Promise.all([
 			codeOf(actions.createWorkspace({ projectId: "p1", kickoff: { text: "go" } })),
+			codeOf(actions.startChat({ workspaceId: "w1", kickoff: { text: "go" } })),
 			codeOf(actions.sendToChat({ sessionId: "s1", text: "hi", mode: "follow_up" })),
 			codeOf(actions.stopChat({ sessionId: "running" })),
 			codeOf(actions.openPr({ workspaceId: "w1" })),
@@ -129,8 +133,9 @@ describe("extension host actions", () => {
 			"EXTENSION_DISABLED",
 			"EXTENSION_DISABLED",
 			"EXTENSION_DISABLED",
+			"EXTENSION_DISABLED",
 		]);
-		for (const effect of [create, send, abort, openPr, run, assist])
+		for (const effect of [create, startChat, send, abort, openPr, run, assist])
 			expect(effect).not.toHaveBeenCalled();
 	});
 
@@ -206,6 +211,41 @@ describe("extension host actions", () => {
 		expect(
 			await unsent.actions.createWorkspace({ projectId: "p1", kickoff: { text: "go" } }),
 		).toEqual({ workspaceId: "w1", sessionId: "s2", branch: "feature", kickoffError: "busy" });
+	});
+
+	test("startChat opens a new chat in a repository workspace on a validated kickoff", async () => {
+		const { actions, startChat } = setup();
+		expect(
+			await actions.startChat({
+				workspaceId: "w1",
+				kickoff: { text: "  /skill:roadmap-plan Plan I-1  ", model: "big", thinkingLevel: "low" },
+			}),
+		).toEqual({ workspaceId: "w1", sessionId: "s-chat" });
+		expect(startChat.mock.calls).toEqual([
+			[feature, { text: "/skill:roadmap-plan Plan I-1", model, thinkingLevel: "low" }],
+		]);
+		await expect(
+			actions.startChat({ workspaceId: "gone", kickoff: { text: "go" } }),
+		).rejects.toThrow("No open workspace gone");
+		await expect(
+			actions.startChat({ workspaceId: "chat-1", kickoff: { text: "go" } }),
+		).rejects.toThrow("of a repository project");
+		await expect(actions.startChat({ workspaceId: "w1", kickoff: { text: "" } })).rejects.toThrow(
+			"kickoff text",
+		);
+		await expect(
+			actions.startChat({ workspaceId: "w1", kickoff: { text: "go", model: "nope" } }),
+		).rejects.toThrow('Unknown model "nope"');
+		expect(startChat).toHaveBeenCalledTimes(1);
+
+		const unsent = setup({
+			startChat: async () => ({ sessionId: "s3", kickoffError: "No model selected" }),
+		});
+		expect(await unsent.actions.startChat({ workspaceId: "w1", kickoff: { text: "go" } })).toEqual({
+			workspaceId: "w1",
+			sessionId: "s3",
+			kickoffError: "No model selected",
+		});
 	});
 
 	test("sendToChat delivers the extension's words as its own card, as a follow-up or a steer", async () => {

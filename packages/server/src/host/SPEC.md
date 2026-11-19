@@ -280,7 +280,7 @@ gate: [[module-contracts]].
   model list and Pi thinking clamp; `model.default` and chat creation share that resolver.
   `chatSession.ts#startChatSession` is the one `createSession` call: `session.create`, the review chat,
   Continue in workspace, the creation hand-off's kickoff chat (the New Workspace dialog's and an agent's
-  `start_workspace`), and a chat without a project — `chat.create` and recovery through `session.create`,
+  `start_workspace`), an extension's `startChat`, and a chat without a project — `chat.create` and recovery through `session.create`,
   inside its per-chat claim, whose `assertClaimed` refuses a chat being deleted before, around and after
   the agent's barrier — all start their chat through it, so no path can diverge on the scratch folder, the
   resolver, the explicit model and effort, or `chat_started`. Its one bookkeeping is `noteNewChat` (recent
@@ -576,7 +576,12 @@ gate: [[module-contracts]].
   `resolveModel` over the settled models, the base defaulting to `defaultBaseBranch`'s fetched default
   branch) and runs `createWorkspaceWithChat` with `origin: "extension"` — internal like an agent's start,
   no recent-model pick, no `message_sent` —, failing only when no chat was created and otherwise answering
-  the hand-off's `kickoffError` beside the ids; `sendToChat` finds the chat's workspace (its live
+  the hand-off's `kickoffError` beside the ids; `startChat` takes a registered workspace of a repository
+  project (never a chat without one), validates the kickoff like `createWorkspace` (text, thinking level,
+  model), opens a chat there with `startChatSession` (no recent-model pick) and sends the kickoff as internal
+  work (`ackSend` + `runObservation.send(…, "internal")`), answering once pi's preflight took it or with the
+  send's failure as `kickoffError` — `chatSession.ts`'s `awaitKickoff`, which the creation hand-off shares;
+  `sendToChat` finds the chat's workspace (its live
   attribution, else the workspace whose chats list it), attaches it and sends an **`extension-message`**
   host message (`ExtensionMessageDetails` under the descriptor's title, the content saying it is not the
   human) through the `message_chat` path (`ackSend` + `runObservation.send(…, "internal")`); `stopChat`

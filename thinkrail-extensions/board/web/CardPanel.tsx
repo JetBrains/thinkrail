@@ -1,5 +1,4 @@
 import {
-	RiAddLine,
 	RiChat3Line,
 	RiCloseLine,
 	RiDeleteBinLine,
@@ -12,10 +11,8 @@ import {
 import type { PanelHost, PanelProps } from "@thinkrail/extension-api/web";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
-import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { Textarea } from "@thinkrail/ui/textarea";
-import { type ReactNode, useId, useState } from "react";
+import { useId, useState } from "react";
 import {
 	adoptCard,
 	agentBadge,
@@ -45,145 +42,11 @@ import {
 	PrChip,
 	TaskSpecStatus,
 } from "./CardParts";
+import { CardRoadmap } from "./CardRoadmap";
+import { ItemList, SavedInput, SavedTextarea, Section } from "./Fields";
 import { ACTOR_LABELS, columnTitle, TYPE_LABELS, WORKFLOW_LABELS } from "./labels";
 import { StartSection } from "./StartSection";
 import { useBoardChanged, useHostQuery } from "./useHostQuery";
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-	return (
-		<section className="flex flex-col gap-4">
-			<h3 className="tr-text-eyebrow text-text-muted">{title}</h3>
-			{children}
-		</section>
-	);
-}
-
-/** A text field that writes on blur or Enter, when its value changed; keyed by the saved value. */
-function SavedInput({
-	value,
-	label,
-	testId,
-	onSave,
-}: {
-	value: string;
-	label: string;
-	testId: string;
-	onSave: (value: string) => void;
-}) {
-	const [draft, setDraft] = useState(value);
-	const save = () => {
-		const trimmed = draft.trim();
-		if (trimmed && trimmed !== value) onSave(trimmed);
-		else setDraft(value);
-	};
-	return (
-		<input
-			data-testid={testId}
-			aria-label={label}
-			value={draft}
-			onChange={(event) => setDraft(event.currentTarget.value)}
-			onBlur={save}
-			onKeyDown={(event) => {
-				if (event.key !== "Enter" || isImeComposing(event.nativeEvent)) return;
-				event.preventDefault();
-				save();
-			}}
-			className={`${FIELD} tr-title-compact`}
-		/>
-	);
-}
-
-function SavedTextarea({
-	value,
-	label,
-	onSave,
-}: {
-	value: string;
-	label: string;
-	onSave: (value: string) => void;
-}) {
-	const [draft, setDraft] = useState(value);
-	return (
-		<Textarea
-			data-testid="board-card-description"
-			aria-label={label}
-			rows={4}
-			value={draft}
-			onChange={(event) => setDraft(event.currentTarget.value)}
-			onBlur={() => {
-				if (draft !== value) onSave(draft);
-			}}
-		/>
-	);
-}
-
-/** An editable list of short strings: acceptance criteria, spec refs. */
-function ItemList({
-	items,
-	label,
-	addLabel,
-	testId,
-	onChange,
-}: {
-	items: readonly string[];
-	label: string;
-	addLabel: string;
-	testId: string;
-	onChange: (items: string[]) => void;
-}) {
-	const t = useT();
-	const [draft, setDraft] = useState("");
-	const add = () => {
-		const trimmed = draft.trim();
-		if (!trimmed) return;
-		onChange([...items, trimmed]);
-		setDraft("");
-	};
-	return (
-		<div data-testid={testId} className="flex flex-col gap-4">
-			<ul className="flex flex-col gap-2">
-				{items.map((item, index) => (
-					<li
-						key={`${index}:${item}`}
-						data-testid={`${testId}-item`}
-						className="flex items-start gap-4 tr-text-ui text-text-default"
-					>
-						<span className="min-w-0 flex-1 wrap-anywhere">{item}</span>
-						<IconButton
-							icon={RiCloseLine}
-							size="s"
-							label={t("board.card.removeItem", { item })}
-							onClick={() => onChange(items.filter((_, position) => position !== index))}
-						/>
-					</li>
-				))}
-			</ul>
-			<form
-				className="flex items-center gap-4"
-				onSubmit={(event) => {
-					event.preventDefault();
-					add();
-				}}
-			>
-				<input
-					data-testid={`${testId}-add`}
-					aria-label={label}
-					placeholder={addLabel}
-					value={draft}
-					onChange={(event) => setDraft(event.currentTarget.value)}
-					className={FIELD}
-				/>
-				<IconButton
-					icon={RiAddLine}
-					size="s"
-					type="submit"
-					label={addLabel}
-					disabled={!draft.trim()}
-				/>
-			</form>
-		</div>
-	);
-}
 
 function placementText(t: Translator, placement: Transition["from"]): string {
 	return placement ? columnTitle(t, placement.column) : t("board.activity.none");
@@ -614,12 +477,15 @@ function CardDetails({
 	host,
 	detail,
 	onPatch,
+	onWrite,
 	onDelete,
 	onReload,
 }: {
 	host: PanelHost;
 	detail: CardDetail;
 	onPatch: (patch: CardPatch) => void;
+	/** Runs a write, then re-reads the card (or shows the failure). */
+	onWrite: (run: () => Promise<unknown>) => void;
 	onDelete: () => void;
 	onReload: () => void;
 }) {
@@ -697,11 +563,17 @@ function CardDetails({
 					</Button>
 				) : null}
 			</div>
+			{card.virtual ? null : (
+				<Section title={t("board.roadmap.card.title")}>
+					<CardRoadmap host={host} projectId={projectId} card={card} onWrite={onWrite} />
+				</Section>
+			)}
 			<Section title={t("board.card.description")}>
 				<SavedTextarea
 					key={card.description}
 					value={card.description}
 					label={t("board.card.description")}
+					testId="board-card-description"
 					onSave={(description) => onPatch({ description })}
 				/>
 			</Section>
@@ -819,6 +691,7 @@ export default function CardPanel({ host, params }: PanelProps) {
 					host={host}
 					detail={card.state.value}
 					onPatch={(patch) => void write(() => updateCard(host, currentId, patch, projectId ?? ""))}
+					onWrite={(run) => void write(run)}
 					onDelete={() =>
 						void deleteCard(host, currentId).then(
 							() => setDeleted(true),

@@ -856,3 +856,166 @@ test("Show GitHub issues lists the user's open issues through gh as Backlog card
 	await expect(card(page, "Export the cards")).toHaveCount(0);
 	await expect(card(page, "Crash on an empty board")).toHaveAttribute("data-card-id", "SP-1");
 });
+
+/** The kickoffs of the roadmap chats the board started, read from its `roadmap.chat` replies (no model needed). */
+function observeRoadmapChats(page: Page): () => string[] {
+	const texts: string[] = [];
+	page.on("websocket", (socket) => {
+		socket.on("framereceived", ({ payload }) => {
+			const frame = JSON.parse(payload.toString()) as {
+				ok?: boolean;
+				result?: { kickoff?: unknown; sessionId?: unknown; workspaceId?: unknown };
+			};
+			const kickoff = frame.result?.kickoff;
+			if (frame.ok && typeof kickoff === "string" && typeof frame.result?.sessionId === "string")
+				texts.push(kickoff);
+		});
+	});
+	return () => [...texts];
+}
+
+function horizon(page: Page, id: "now" | "next" | "later"): Locator {
+	return boardTool(page).locator(`[data-testid="board-horizon"][data-horizon="${id}"]`);
+}
+
+function peekInitiative(page: Page): Locator {
+	return page.getByTestId("peek-pane").getByTestId("board-initiative-panel");
+}
+
+async function newInitiative(page: Page, where: "now" | "next" | "later", title: string) {
+	await horizon(page, where).getByTestId("board-initiative-new").click();
+	const field = horizon(page, where).getByTestId("board-initiative-new-title");
+	await field.fill(title);
+	await field.press("Enter");
+	await expect(horizon(page, where).getByTestId("board-initiative")).toContainText([title]);
+	await expect(peekInitiative(page).getByTestId("board-initiative-title")).toHaveValue(title);
+}
+
+test("the roadmap: an initiative made in Next is dragged to Now, edited in Peek with a card, shown under its goal, and planned with the agent", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1720, height: 1000 });
+	const kickoffs = observeRoadmapChats(page);
+	await openBoard(page);
+	await createCard(page, "Wire the roadmap views");
+	const cardId = await card(page, "Wire the roadmap views").getAttribute("data-card-id");
+	if (!cardId) throw new Error("the card has no id");
+	await page.getByTestId("peek-close").click();
+	await boardTool(page).getByTestId("board-mode-toggle").click();
+	await expect(boardTool(page)).toHaveAttribute("data-layout", "columns");
+
+	await boardTool(page).getByTestId("board-view-roadmap").click();
+	await expect(boardTool(page).getByTestId("board-roadmap")).toHaveAttribute(
+		"data-view",
+		"horizons",
+	);
+	await expect(boardTool(page).getByTestId("board-horizon")).toHaveCount(3);
+	await newInitiative(page, "later", "Planning surface");
+	const goalId = await peekInitiative(page).getAttribute("data-initiative-id");
+	await peekInitiative(page).getByTestId("board-initiative-specs-add").fill("capability-board");
+	await peekInitiative(page).getByTestId("board-initiative-specs-add").press("Enter");
+	await expect(peekInitiative(page).getByTestId("board-initiative-specs-item")).toHaveText([
+		"capability-board",
+	]);
+	await newInitiative(page, "next", "Roadmap views");
+	const id = await peekInitiative(page).getAttribute("data-initiative-id");
+	if (!goalId || !id) throw new Error("the initiatives have no ids");
+
+	const roadmapCard = horizon(page, "next")
+		.getByTestId("board-initiative")
+		.filter({ hasText: "Roadmap views" });
+	await dragTo(page, roadmapCard.getByTestId("board-initiative-open"), horizon(page, "now"));
+	await expect(horizon(page, "now").getByTestId("board-initiative")).toContainText([
+		"Roadmap views",
+	]);
+	await expect(horizon(page, "next").getByTestId("board-initiative")).toHaveCount(0);
+
+	await page.getByTestId("peek-close").click();
+	await horizon(page, "now").getByTestId("board-initiative-open").click();
+	await expect(peekInitiative(page)).toHaveAttribute("data-initiative-id", id);
+	await expect(peekInitiative(page).getByTestId("board-roadmap-horizon").first()).toHaveAttribute(
+		"data-horizon",
+		"now",
+	);
+	const outcome = "Initiatives show their live progress, health and forecast";
+	await peekInitiative(page).getByTestId("board-initiative-outcome").fill(outcome);
+	await peekInitiative(page).getByTestId("board-initiative-outcome").press("Tab");
+	await peekInitiative(page)
+		.getByTestId("board-initiative-criteria-add")
+		.fill("Now, Next and Later");
+	await peekInitiative(page).getByTestId("board-initiative-criteria-add").press("Enter");
+	await expect(peekInitiative(page).getByTestId("board-initiative-criteria-item")).toHaveText([
+		"Now, Next and Later",
+	]);
+	await peekInitiative(page).getByTestId("board-initiative-target").fill("2026-12-31");
+	await expect(peekInitiative(page).getByTestId("board-initiative-forecast")).toContainText("2026");
+	await peekInitiative(page).getByTestId("board-initiative-add-card").selectOption(cardId);
+	await expect(
+		peekInitiative(page).locator(`[data-testid="board-initiative-card"][data-card-id="${cardId}"]`),
+	).toContainText("Wire the roadmap views");
+	const nowCard = horizon(page, "now").getByTestId("board-initiative");
+	await expect(nowCard.getByTestId("board-roadmap-progress")).toHaveText("0/1 cards · 0 %");
+	await expect(nowCard.getByTestId("board-roadmap-stack")).toBeVisible();
+	await expect(nowCard.getByTestId("board-roadmap-health")).toHaveAttribute(
+		"data-suggested",
+		"true",
+	);
+	await expect(peekInitiative(page).getByTestId("board-initiative-forecast-value")).toHaveAttribute(
+		"data-status",
+		"insufficient",
+	);
+	await expect(peekInitiative(page).getByTestId("board-initiative-forecast")).toContainText(
+		"Not enough data — needs ≥3 weeks of history",
+	);
+	await peekInitiative(page).getByTestId("board-initiative-parent").selectOption(goalId);
+	await expect(nowCard.getByTestId("board-initiative-goal")).toHaveText("Planning surface");
+	await peekInitiative(page).getByTestId("board-initiative-project-add").fill("Roadmap UI");
+	await peekInitiative(page).getByTestId("board-initiative-project-add").press("Enter");
+	const project = peekInitiative(page).getByTestId("board-initiative-project");
+	await expect(project.getByTestId("board-initiative-project-title")).toHaveValue("Roadmap UI");
+	await project.getByTestId("board-initiative-milestone-add").fill("Views usable");
+	await project.getByTestId("board-initiative-milestone-add").press("Enter");
+	await expect(project.getByTestId("board-initiative-milestone-title")).toHaveValue("Views usable");
+	await project.getByTestId("board-initiative-project-assign").selectOption(cardId);
+	await expect(project).toContainText("1 card");
+	await expect(nowCard.getByTestId("board-roadmap-progress")).toHaveText("0/1 cards · 0 %");
+	await peekInitiative(page).getByTestId("board-initiative-progress").click();
+	await shot(page, "board", "roadmap-now-next-later");
+	await page.setViewportSize({ width: 1720, height: 1700 });
+	await shot(page.getByTestId("peek-pane"), "board", "initiative-in-peek");
+	await page.setViewportSize({ width: 1720, height: 1000 });
+
+	await boardTool(page).getByTestId("board-roadmap-view-goals").click();
+	const goalGroup = boardTool(page).locator(
+		`[data-testid="board-goal"][data-initiative-id="${goalId}"]`,
+	);
+	await expect(goalGroup.getByTestId("board-goal-initiative")).toHaveCount(1);
+	await expect(goalGroup.getByTestId("board-goal-initiative")).toHaveAttribute(
+		"data-initiative-id",
+		id,
+	);
+	await expect(goalGroup.getByTestId("board-goal-initiative")).toContainText("Roadmap views");
+	await expect(goalGroup.getByTestId("board-roadmap-horizon")).toHaveAttribute(
+		"data-horizon",
+		"now",
+	);
+	await expect(goalGroup.getByTestId("board-goal-spec")).toHaveText("capability-board");
+	await shot(page, "board", "roadmap-goals");
+
+	const chats = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+	const before = await chats.count();
+	await peekInitiative(page).getByTestId("board-initiative-chat-plan").click();
+	await expect.poll(kickoffs).toHaveLength(1);
+	const [kickoff] = kickoffs();
+	expect(kickoff?.startsWith(`/skill:roadmap-plan Plan initiative ${id} of the`)).toBe(true);
+	expect(kickoff).toContain(`Initiative ${id}: Roadmap views\nOutcome: ${outcome}`);
+	expect(kickoff).toContain("- Now, Next and Later");
+	expect(kickoff).toContain("target 2026-12-31");
+	await expect(chats).toHaveCount(before + 1);
+
+	await boardTool(page).getByTestId("board-view-board").click();
+	await expect(
+		card(page, "Wire the roadmap views").getByTestId("board-card-initiative"),
+	).toHaveText("Roadmap views");
+	await boardTool(page).getByTestId("board-mode-toggle").click();
+});

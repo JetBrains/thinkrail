@@ -25,7 +25,7 @@ import {
 	withCloses,
 } from "./github";
 import { allocatePrefix, cardId, parseCardId } from "./ids";
-import { kickoffText, workflowFor } from "./kickoff";
+import { kickoffText, type RoadmapChat, roadmapKickoff, workflowFor } from "./kickoff";
 import {
 	type Attempt,
 	type BoardSettings,
@@ -36,6 +36,7 @@ import {
 	type CardType,
 	type Category,
 	type GithubSettings,
+	type Initiative,
 	type Placement,
 	TEXT_MAX,
 	TITLE_MAX,
@@ -55,7 +56,7 @@ import {
 	sizePrompt,
 	wantsSize,
 } from "./sizing";
-import { BoardStore, type CardsFile, STORE_VERSION } from "./store";
+import { BoardStore, CARDS_VERSION, type CardsFile } from "./store";
 import {
 	attemptChat,
 	DEFERRALS_HEADING,
@@ -87,15 +88,25 @@ export interface AttemptLive {
 	pr: ExtensionWorkspaceFacts["review"];
 }
 
+/** The initiative a card serves (`Roadmap.initiativesOf`), on its board or another. */
+export interface ServedInitiative {
+	projectId: string;
+	id: string;
+	title: string;
+	outcome: string;
+}
+
 /**
  * A card with its live state, computed per request from host facts and never stored: its attempts'
- * overlays, the cards blocking it and its workspaces' task-specs. A `virtual` card is a source's item the
- * board has not stored (an unbound workspace's task-spec, a GitHub issue nobody started or edited).
+ * overlays, the cards blocking it, its workspaces' task-specs and the initiative it serves. A `virtual`
+ * card is a source's item the board has not stored (an unbound workspace's task-spec, a GitHub issue
+ * nobody started or edited).
  */
 export type CardView = Card & {
 	live: AttemptLive[];
 	blockedBy: string[];
 	taskSpecs: TaskSpecRef[];
+	initiative?: ServedInitiative;
 	virtual?: true;
 };
 
@@ -204,7 +215,7 @@ interface Draft {
 	/** The drafts written with it that it blocks, by position. */
 	blocksIndex?: number[];
 	/** Its roadmap project. */
-	projectId?: string;
+	roadmapProjectId?: string;
 	reason: string;
 }
 
@@ -458,7 +469,7 @@ export class Board {
 				.flatMap((id) => this.safeCards(id)?.prefix ?? []),
 		);
 		return {
-			version: STORE_VERSION,
+			version: CARDS_VERSION,
 			prefix: allocatePrefix(project.name, taken),
 			nextNumber: 1,
 			cards: [],
@@ -594,7 +605,9 @@ export class Board {
 		facts: ReadonlyMap<string, ExtensionWorkspaceFacts | null>,
 		all: readonly Card[],
 		specs: ReadonlyMap<string, readonly ExtensionTaskSpec[]> = new Map(),
+		served: ReadonlyMap<string, { projectId: string; initiative: Initiative }> = new Map(),
 	): CardView {
+		const initiative = served.get(card.id);
 		return {
 			...card,
 			live: card.attempts.map((attempt) =>
@@ -602,6 +615,16 @@ export class Board {
 			),
 			blockedBy: all.filter((other) => other.blocks.includes(card.id)).map((other) => other.id),
 			taskSpecs: this.taskSpecsOn(card, specs),
+			...(initiative
+				? {
+						initiative: {
+							projectId: initiative.projectId,
+							id: initiative.initiative.id,
+							title: initiative.initiative.title,
+							outcome: initiative.initiative.outcome,
+						},
+					}
+				: {}),
 		};
 	}
 
@@ -716,7 +739,8 @@ export class Board {
 					.map((attempt) => attempt.workspaceId),
 			),
 		);
-		const views = cards.map((card) => this.view(card, facts, cards, specs));
+		const served = this.roadmap.initiativesOf(projectId, cards);
+		const views = cards.map((card) => this.view(card, facts, cards, specs, served));
 		const rank = Math.max(0, ...cards.map((card) => card.rank)) + 1;
 		const fromSpecs = await this.taskSpecCards(project, cards, settings, rank);
 		const fromIssues = this.issueCards(project, cards, settings, rank + fromSpecs.length);
@@ -762,7 +786,13 @@ export class Board {
 		);
 		return {
 			projectId,
-			card: this.view(card, facts, file.cards, specs),
+			card: this.view(
+				card,
+				facts,
+				file.cards,
+				specs,
+				this.roadmap.initiativesOf(projectId, [card]),
+			),
 			transitions: this.store.transitions(projectId).filter((entry) => entry.cardId === card.id),
 		};
 	}
@@ -858,7 +888,7 @@ export class Board {
 				attempts: draft.attempts ?? [],
 				createdBy: actor,
 				...(draft.origin ? { origin: draft.origin } : {}),
-				...(draft.projectId ? { projectId: draft.projectId } : {}),
+				...(draft.roadmapProjectId ? { roadmapProjectId: draft.roadmapProjectId } : {}),
 				createdAt: at,
 				updatedAt: at,
 			};
@@ -951,7 +981,7 @@ export class Board {
 				...(input.type ? { type: input.type } : {}),
 				...(input.size ? { size: input.size, sizeSuggested: true as const } : {}),
 				blocksIndex: [...new Set(links.get(String(index)) ?? [])].map(Number),
-				...(roadmapProjectId ? { projectId: roadmapProjectId } : {}),
+				...(roadmapProjectId ? { roadmapProjectId } : {}),
 				origin,
 				placement: { category: "triage", column: columnFor(preset, "triage") },
 				reason: "created by an agent into Triage",
@@ -1182,6 +1212,46 @@ export class Board {
 			})),
 		);
 		return [...accepted.values()];
+	}
+
+	/**
+	 * A roadmap chat (plan, shape, report or review) in a new chat of the project's Default workspace: the
+	 * kickoff names its skill and carries the initiative's text and the instructions, so it works without it.
+	 */
+	async startRoadmapChat(
+		projectId: string,
+		kind: RoadmapChat,
+		initiativeId?: string,
+	): Promise<{
+		projectId: string;
+		workspaceId: string;
+		sessionId: string;
+		kickoff: string;
+		kickoffError?: string;
+	}> {
+		const project = this.project(projectId);
+		const { initiatives } = this.store.initiatives(projectId);
+		const initiative = initiativeId
+			? initiatives.find((candidate) => candidate.id === initiativeId)
+			: undefined;
+		if (initiativeId && !initiative)
+			throw new Error(`No initiative ${initiativeId} on this board.`);
+		if (kind !== "review" && !initiative) throw new Error(`Pass the initiativeId to ${kind}.`);
+		const workspaceId = this.defaultWorkspace(project);
+		if (!workspaceId) throw new Error(`${project.name} has no Default workspace open.`);
+		const kickoff = roadmapKickoff(kind, {
+			board: project.name,
+			...(initiative ? { initiative } : {}),
+			initiatives,
+		});
+		const started = await this.host.actions.startChat({ workspaceId, kickoff: { text: kickoff } });
+		return {
+			projectId,
+			workspaceId: started.workspaceId,
+			sessionId: started.sessionId,
+			kickoff,
+			...(started.kickoffError ? { kickoffError: started.kickoffError } : {}),
+		};
 	}
 
 	/** Starts an attempt: a new workspace whose chat takes the card's kickoff; the card moves to started. */

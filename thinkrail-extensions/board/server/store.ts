@@ -34,6 +34,11 @@ import {
 } from "./model";
 
 export const STORE_VERSION = 1;
+/**
+ * `cards.json`'s version: 2 renamed a card's roadmap project from `projectId` to `roadmapProjectId`, so
+ * `projectId` always names a ThinkRail project; a version-1 file is read with the old name and written as 2.
+ */
+export const CARDS_VERSION = 2;
 const CARDS = "cards.json";
 const SETTINGS = "settings.json";
 const TRANSITIONS = "transitions.jsonl";
@@ -42,7 +47,7 @@ const PROJECTS = "projects.json";
 const PROJECT_DIR = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 
 export interface CardsFile {
-	version: typeof STORE_VERSION;
+	version: typeof CARDS_VERSION;
 	prefix: string;
 	nextNumber: number;
 	cards: Card[];
@@ -128,8 +133,11 @@ function readSource(raw: unknown, id: string): CardSource {
 	return { kind: "native", ref: source.kind === "native" ? ref : id };
 }
 
-/** A stored card, defaults filled in; `null` when it lacks what identifies or places it. */
-export function readCard(raw: unknown): Card | null {
+/**
+ * A stored card, defaults filled in; `null` when it lacks what identifies or places it. A card of a
+ * version-1 file names its roadmap project `projectId`.
+ */
+export function readCard(raw: unknown, version: number = CARDS_VERSION): Card | null {
 	if (!isRecord(raw)) return null;
 	const { id, title, category, column } = raw;
 	if (typeof id !== "string" || typeof title !== "string" || typeof column !== "string")
@@ -137,6 +145,7 @@ export function readCard(raw: unknown): Card | null {
 	if (!oneOf(CATEGORIES, category)) return null;
 	const pending = isRecord(raw.cancelPending) ? raw.cancelPending : null;
 	const origin = isRecord(raw.origin) ? raw.origin : null;
+	const roadmapProject = version < 2 ? raw.projectId : raw.roadmapProjectId;
 	return {
 		id,
 		source: readSource(raw.source, id),
@@ -170,8 +179,8 @@ export function readCard(raw: unknown): Card | null {
 		...(pending && typeof pending.workspaceId === "string"
 			? { cancelPending: { workspaceId: pending.workspaceId, at: finite(pending.at, 0) } }
 			: {}),
-		...(typeof raw.projectId === "string" ? { projectId: raw.projectId } : {}),
-		...(typeof raw.projectId === "string" && typeof raw.milestoneId === "string"
+		...(typeof roadmapProject === "string" ? { roadmapProjectId: roadmapProject } : {}),
+		...(typeof roadmapProject === "string" && typeof raw.milestoneId === "string"
 			? { milestoneId: raw.milestoneId }
 			: {}),
 		...(isoDate(raw.pinnedStart) ? { pinnedStart: raw.pinnedStart } : {}),
@@ -316,7 +325,8 @@ export class BoardStore {
 		}
 	}
 
-	private readVersioned(path: string): Raw | null {
+	/** A file of version 1 to `current`, else `null` (moved aside when unreadable); a newer one throws. */
+	private readVersioned(path: string, current: number = STORE_VERSION): Raw | null {
 		let text: string;
 		try {
 			text = readFileSync(path, "utf8");
@@ -329,9 +339,15 @@ export class BoardStore {
 		} catch {
 			parsed = undefined;
 		}
-		if (isRecord(parsed) && typeof parsed.version === "number" && parsed.version > STORE_VERSION)
+		if (isRecord(parsed) && typeof parsed.version === "number" && parsed.version > current)
 			throw new NewerBoardStoreError(path);
-		if (isRecord(parsed) && parsed.version === STORE_VERSION) return parsed;
+		if (
+			isRecord(parsed) &&
+			typeof parsed.version === "number" &&
+			Number.isInteger(parsed.version) &&
+			parsed.version >= 1
+		)
+			return parsed;
 		this.quarantine(path);
 		return null;
 	}
@@ -350,14 +366,15 @@ export class BoardStore {
 	cards(projectId: string): CardsFile | null {
 		if (this.cardsByProject.has(projectId)) return this.cardsByProject.get(projectId) ?? null;
 		const path = join(this.dir(projectId), CARDS);
-		const raw = this.readVersioned(path);
+		const raw = this.readVersioned(path, CARDS_VERSION);
 		let file: CardsFile | null = null;
 		if (raw && typeof raw.prefix === "string" && Array.isArray(raw.cards)) {
-			const cards = raw.cards.flatMap((card) => readCard(card) ?? []);
+			const version = finite(raw.version, CARDS_VERSION);
+			const cards = raw.cards.flatMap((card) => readCard(card, version) ?? []);
 			if (cards.length !== raw.cards.length)
 				this.log.warn(`dropped ${raw.cards.length - cards.length} unreadable card(s) of ${path}`);
 			file = {
-				version: STORE_VERSION,
+				version: CARDS_VERSION,
 				prefix: raw.prefix,
 				nextNumber: counter(raw.nextNumber),
 				cards,

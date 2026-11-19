@@ -4,6 +4,7 @@ import type { Translator } from "@thinkrail/locales/react";
 import type {
 	AgentBadge,
 	CardType,
+	Category,
 	GithubFilter,
 	GithubProblem,
 	InboxReason,
@@ -12,6 +13,14 @@ import type {
 	WipKey,
 	Workflow,
 } from "./api";
+import type {
+	ForecastMiss,
+	Health,
+	HealthReason,
+	Horizon,
+	RoadmapChat,
+	StackCategory,
+} from "./roadmapApi";
 
 const COLUMN_TITLES: Readonly<Record<string, MessageKey>> = {
 	triage: "board.column.triage",
@@ -120,3 +129,81 @@ export const INBOX_REASON_LABELS = {
 	needs_you: "board.inbox.reason.needsYou",
 	failed: "board.inbox.reason.failed",
 } as const satisfies Record<InboxReason, MessageKey>;
+
+export const HORIZON_LABELS = {
+	now: "board.roadmap.horizon.now",
+	next: "board.roadmap.horizon.next",
+	later: "board.roadmap.horizon.later",
+} as const satisfies Record<Horizon, MessageKey>;
+
+export const HORIZON_HINTS = {
+	now: "board.roadmap.horizon.nowHint",
+	next: "board.roadmap.horizon.nextHint",
+	later: "board.roadmap.horizon.laterHint",
+} as const satisfies Record<Horizon, MessageKey>;
+
+export const HEALTH_LABELS = {
+	on_track: "board.roadmap.health.onTrack",
+	at_risk: "board.roadmap.health.atRisk",
+	off_track: "board.roadmap.health.offTrack",
+} as const satisfies Record<Health, MessageKey>;
+
+export const STACK_LABELS = {
+	completed: "board.roadmap.progress.done",
+	review: "board.roadmap.progress.review",
+	started: "board.roadmap.progress.started",
+	unstarted: "board.roadmap.progress.ready",
+	backlog: "board.roadmap.progress.backlog",
+} as const satisfies Record<StackCategory, MessageKey>;
+
+export const FORECAST_MISSES = {
+	"no-scope": "board.roadmap.forecast.noScope",
+	history: "board.roadmap.forecast.history",
+	"no-completions": "board.roadmap.forecast.noCompletions",
+} as const satisfies Record<ForecastMiss, MessageKey>;
+
+export const ROADMAP_CHAT_LABELS = {
+	plan: "board.roadmap.chat.plan",
+	shape: "board.roadmap.chat.shape",
+	report: "board.roadmap.chat.report",
+	review: "board.roadmap.chat.review",
+} as const satisfies Record<RoadmapChat, MessageKey>;
+
+/** An ISO day (`YYYY-MM-DD`) in the reader's locale; one that does not parse shows as written. */
+export function dayText(iso: string): string {
+	const date = new Date(`${iso}T00:00:00Z`);
+	return Number.isNaN(date.getTime())
+		? iso
+		: date.toLocaleDateString(undefined, { timeZone: "UTC", dateStyle: "medium" });
+}
+
+/** Why a health was suggested, in words: each reason kind's key with its figures. */
+export function healthReasonText(t: Translator, reason: HealthReason): string {
+	switch (reason.kind) {
+		case "forecast_late":
+			return t("board.roadmap.reason.forecastLate", {
+				p85: dayText(reason.p85),
+				target: dayText(reason.target),
+			});
+		case "blocked":
+			return t("board.roadmap.reason.blocked", { ids: reason.cardIds.join(", ") });
+		case "waiting":
+			return t("board.roadmap.reason.waiting", { ids: reason.cardIds.join(", ") });
+		case "review_wip":
+			return t("board.roadmap.reason.reviewWip", { count: reason.count, limit: reason.limit });
+		case "failed":
+			return t("board.roadmap.reason.failed", { ids: reason.cardIds.join(", ") });
+		case "appetite":
+			return t("board.roadmap.reason.appetite", { percent: reason.usedPercent });
+	}
+}
+
+export const CATEGORY_LABELS = {
+	triage: "board.roadmap.category.triage",
+	backlog: "board.roadmap.category.backlog",
+	unstarted: "board.roadmap.category.unstarted",
+	started: "board.roadmap.category.started",
+	review: "board.roadmap.category.review",
+	completed: "board.roadmap.category.completed",
+	canceled: "board.roadmap.category.canceled",
+} as const satisfies Record<Category, MessageKey>;

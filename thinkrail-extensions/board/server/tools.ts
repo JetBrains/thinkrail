@@ -89,7 +89,7 @@ const ProjectCreateParams = Type.Object({
 });
 
 const BatchParams = Type.Object({
-	projectId: Type.Optional(
+	roadmapProjectId: Type.Optional(
 		Type.String({ description: "A roadmap project (P-n) of this board the cards join." }),
 	),
 	cards: Type.Array(
@@ -457,7 +457,7 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 					project.id,
 					inputs,
 					{ sessionId, ...(own ? { cardId: own.id } : {}) },
-					params.projectId?.trim().toUpperCase() || undefined,
+					params.roadmapProjectId?.trim().toUpperCase() || undefined,
 				);
 				return reply(
 					`Filed ${cards.length} cards in Triage as one group: ${cards.map((card) => `${card.id}${card.blocks.length > 0 ? ` (blocks ${card.blocks.join(", ")})` : ""}`).join(", ")}`,

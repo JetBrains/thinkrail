@@ -371,6 +371,7 @@ test("session insights declares its project-scoped Sessions panel, a per-session
 		"session-insights/session",
 		"session-insights/compare",
 		"board/card",
+		"board/initiative",
 	]);
 	for (const declaration of [registered?.declaration, session?.declaration, compare?.declaration]) {
 		const loaded = await declaration?.load();
@@ -388,6 +389,7 @@ test("the board declares its Board side tool at the left, a Peek card panel kept
 	expect(findExtensionSideTool("ext:board:missing")).toBeUndefined();
 	expect(typeof (await tool?.declaration.load())?.default).toBe("function");
 	expect(findExtensionPanel("board", "card")?.declaration.scopes).toEqual(["session"]);
+	expect(findExtensionPanel("board", "initiative")?.declaration.scopes).toEqual(["session"]);
 	const rows = [...board.commands, ...board.shortcuts];
 	expect(rows.every((row) => Object.hasOwn(EN, row.title))).toBe(true);
 	expect(board.commands.map(({ id, scope }) => [id, scope])).toEqual([

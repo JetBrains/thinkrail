@@ -1,4 +1,4 @@
-import { RiKanbanView2, RiStickyNoteLine } from "@remixicon/react";
+import { RiFlag2Line, RiKanbanView2, RiStickyNoteLine } from "@remixicon/react";
 import { defineWebExtension } from "@thinkrail/extension-api/web";
 import { BOARD_SHORTCUTS, CARD_COMMANDS } from "./keys";
 
@@ -19,6 +19,12 @@ export default defineWebExtension({
 			icon: RiStickyNoteLine,
 			scopes: ["session"],
 			load: () => import("./CardPanel"),
+		},
+		initiative: {
+			title: "board.roadmap.panelTitle",
+			icon: RiFlag2Line,
+			scopes: ["session"],
+			load: () => import("./InitiativePanel"),
 		},
 	},
 	statusItems: {

@@ -240,6 +240,19 @@ export interface ExtensionCreateWorkspaceParams {
 	};
 }
 
+/** A new chat in an existing workspace whose first prompt is `kickoff` (pi's `/skill:` expansion applies). */
+export interface ExtensionStartChatParams {
+	workspaceId: string;
+	kickoff: ExtensionCreateWorkspaceParams["kickoff"];
+}
+
+export interface ExtensionStartedChat {
+	workspaceId: string;
+	sessionId: string;
+	/** Set when the chat started but did not take its first prompt (no model, no credentials). */
+	kickoffError?: string;
+}
+
 export interface ExtensionCreatedWorkspace {
 	workspaceId: string;
 	sessionId: string;
@@ -262,6 +275,8 @@ export interface ExtensionRunResult {
 export interface ExtensionHostActions {
 	/** A new managed workspace with a chat that starts on `kickoff` — the New Workspace dialog's creation. */
 	createWorkspace(params: ExtensionCreateWorkspaceParams): Promise<ExtensionCreatedWorkspace>;
+	/** A new chat in an open workspace of a repository project, starting on `kickoff` — a New chat with a first prompt. */
+	startChat(params: ExtensionStartChatParams): Promise<ExtensionStartedChat>;
 	/** A follow-up or steer into a chat, shown in its transcript as the extension's message. */
 	sendToChat(params: {
 		sessionId: string;

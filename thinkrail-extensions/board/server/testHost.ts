@@ -8,6 +8,7 @@ import type {
 	ExtensionHostProject,
 	ExtensionHostServices,
 	ExtensionRunResult,
+	ExtensionStartChatParams,
 	ExtensionTaskSpec,
 	ExtensionWorkspaceFacts,
 	GhSetupProblem,
@@ -23,6 +24,9 @@ export interface TestHost {
 	/** cwd → `{ projectId, workspaceId }` for `sessionScope().locate`. */
 	places: Map<string, { projectId: string; workspaceId: string }>;
 	created: ExtensionCreateWorkspaceParams[];
+	/** Every `startChat`, in order, and how the host answers it. */
+	chats: ExtensionStartChatParams[];
+	chat: { kickoffError?: string };
 	published: { type: string; payload: unknown; scope: unknown }[];
 	warnings: string[];
 	/** Workspace id → its task-specs, for `taskSpecs`. */
@@ -80,6 +84,8 @@ export function createTestHost(): TestHost {
 		facts: new Map(),
 		places: new Map(),
 		created: [],
+		chats: [],
+		chat: {},
 		published: [],
 		warnings: [],
 		taskSpecs: new Map(),
@@ -103,6 +109,15 @@ export function createTestHost(): TestHost {
 				state.created.push(params);
 				next += 1;
 				return { workspaceId: `w${next}`, sessionId: `s${next}`, branch: `workspace-${next}` };
+			},
+			startChat: async (params) => {
+				state.chats.push(params);
+				next += 1;
+				return {
+					workspaceId: params.workspaceId,
+					sessionId: `s${next}`,
+					...(state.chat.kickoffError ? { kickoffError: state.chat.kickoffError } : {}),
+				};
 			},
 			sendToChat: refused,
 			stopChat: refused,

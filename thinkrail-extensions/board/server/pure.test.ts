@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { allocatePrefix, cardId, parseCardId, prefixCandidates } from "./ids";
-import { BRAINSTORMING_COMMAND, kickoffText, workflowFor } from "./kickoff";
+import {
+	BRAINSTORMING_COMMAND,
+	kickoffText,
+	ROADMAP_SKILLS,
+	roadmapKickoff,
+	workflowFor,
+} from "./kickoff";
 import type { Card, Category } from "./model";
 import { columnFor, columnOfCard, columnsOf, placeInColumn } from "./presets";
 
@@ -190,5 +196,33 @@ describe("kickoff", () => {
 			kickoffText(bare, "implement", { initiative: { ...initiative, outcome: "", criteria: [] } }),
 		).toBe("Card TR-7: Board inbox\n\nInitiative I-2: Roadmap");
 		expect(kickoffText(bare, "implement", {})).toBe("Card TR-7: Board inbox");
+	});
+
+	test("a roadmap chat names its skill the composer's way and carries its instructions in the text too", () => {
+		const initiative = {
+			id: "I-2",
+			title: " Roadmap ",
+			outcome: "",
+			criteria: [],
+			horizon: "later" as const,
+			appetiteDays: 5,
+		};
+		const context = { board: "ThinkRail", initiative, initiatives: [initiative] };
+		const plan = roadmapKickoff("plan", context);
+		expect(plan.split("\n").slice(0, 5)).toEqual([
+			"/skill:roadmap-plan Plan initiative I-2 of the ThinkRail board into cards.",
+			"",
+			"Initiative I-2: Roadmap",
+			"Outcome: not written yet.",
+			"(horizon later, appetite 5 days)",
+		]);
+		expect(plan).toContain('board_project_create { initiativeId: "I-2" }');
+		for (const kind of ["plan", "shape", "report", "review"] as const)
+			expect(roadmapKickoff(kind, context).startsWith(`/skill:${ROADMAP_SKILLS[kind]} `)).toBe(
+				true,
+			);
+		expect(roadmapKickoff("review", { board: "ThinkRail", initiatives: [] })).toContain(
+			"It has no initiatives yet.",
+		);
 	});
 });

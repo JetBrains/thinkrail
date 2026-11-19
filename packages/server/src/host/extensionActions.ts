@@ -18,6 +18,7 @@ import {
 	isSessionStreaming,
 	listSessions,
 	listSettledModels,
+	promptSession,
 	sendHostMessageToSession,
 } from "../agent";
 import { type AssistAsk, assistText } from "../assist";
@@ -36,6 +37,7 @@ import {
 	listAllWorkspaceRecords,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
+import { awaitKickoff, startChatSession } from "./chatSession";
 import { openWorkspacePr } from "./orchestratorTools";
 import { runObservation } from "./runAnalytics";
 import { defaultBaseBranch, resolveModel } from "./workspaceTools";
@@ -58,6 +60,12 @@ const THINKING_LEVELS: readonly string[] = [
 
 type CreationOptions = Parameters<typeof createWorkspaceWithChat>[1];
 
+export interface ChatKickoff {
+	text: string;
+	model?: WireModel;
+	thinkingLevel?: ThinkingLevel;
+}
+
 export interface ExtensionActionDeps {
 	isDisabled: (extension: string) => boolean;
 	title: (extension: string) => string;
@@ -67,6 +75,11 @@ export interface ExtensionActionDeps {
 	settledModels: () => Promise<WireModel[]>;
 	defaultBaseBranch: (projectId: string) => Promise<string>;
 	create: (projectId: string, options: CreationOptions) => Promise<HandedOff>;
+	/** A new chat in the workspace, sent `kickoff` as internal work: its id and the send's failure, if any. */
+	startChat: (
+		workspace: Workspace,
+		kickoff: ChatKickoff,
+	) => Promise<{ sessionId: string; kickoffError?: string }>;
 	/** The workspace holding a chat: its live attribution, else the workspace whose chats list it. */
 	chatWorkspace: (sessionId: string) => Promise<Workspace | null>;
 	attach: (sessionId: string, workspace: Workspace) => Promise<boolean>;
@@ -112,6 +125,20 @@ export const liveActionDeps: ExtensionActionDeps = {
 	settledModels: listSettledModels,
 	defaultBaseBranch: (projectId) => defaultBaseBranch(projectId),
 	create: (projectId, options) => createWorkspaceWithChat(projectId, options),
+	startChat: async (workspace, { text, model, thinkingLevel }) => {
+		const { sessionId } = await startChatSession(workspace, {
+			...(model ? { model } : {}),
+			...(thinkingLevel ? { thinkingLevel } : {}),
+		});
+		const kickoffError = await awaitKickoff((onPreflight) =>
+			ackSend(
+				runObservation.send(sessionId, "internal", () =>
+					promptSession(sessionId, text, undefined, { onPreflight }),
+				),
+			),
+		);
+		return { sessionId, ...(kickoffError ? { kickoffError } : {}) };
+	},
 	chatWorkspace,
 	attach: async (sessionId, workspace) =>
 		getSessionWorkspaceId(sessionId) === workspace.id ||
@@ -171,6 +198,17 @@ export function extensionActions(
 			throw new Error(`A chat without a project has no worktree to ${what}.`);
 		return workspace;
 	};
+	const kickoffOf = async (
+		kickoff: Parameters<ExtensionHostActions["startChat"]>[0]["kickoff"] | undefined,
+	): Promise<ChatKickoff> => {
+		const text = requiredText(kickoff?.text, "kickoff text");
+		const thinkingLevel = kickoff?.thinkingLevel;
+		if (thinkingLevel !== undefined && !THINKING_LEVELS.includes(thinkingLevel))
+			throw new Error(`Unknown thinking level: ${String(thinkingLevel)}`);
+		const modelRef = optionalText(kickoff?.model, "model");
+		const model = modelRef ? resolveModel(modelRef, await deps.settledModels()) : undefined;
+		return { text, ...(model ? { model } : {}), ...(thinkingLevel ? { thinkingLevel } : {}) };
+	};
 	return {
 		async createWorkspace(params) {
 			admit();
@@ -178,21 +216,16 @@ export function extensionActions(
 				.projects()
 				.find((candidate) => candidate.id === params.projectId && !isChatsContainer(candidate));
 			if (!project) throw new Error(`No open repository project ${String(params.projectId)}.`);
-			const text = requiredText(params.kickoff?.text, "kickoff text");
+			const kickoff = await kickoffOf(params.kickoff);
 			const into = optionalText(params.into, "into");
 			if (into !== undefined && !deps.containers().some((container) => container.id === into))
 				throw new CodedError("CONTAINER_UNKNOWN", `Unknown container: ${into}`);
-			const { thinkingLevel } = params.kickoff;
-			if (thinkingLevel !== undefined && !THINKING_LEVELS.includes(thinkingLevel))
-				throw new Error(`Unknown thinking level: ${String(thinkingLevel)}`);
-			const modelRef = optionalText(params.kickoff.model, "model");
-			const model = modelRef ? resolveModel(modelRef, await deps.settledModels()) : undefined;
 			const name = optionalText(params.name, "name");
 			const baseRef =
 				optionalText(params.baseRef, "baseRef") ?? (await deps.defaultBaseBranch(project.id));
 			const handed = await deps.create(project.id, {
 				baseRef,
-				kickoff: { text, ...(model ? { model } : {}), ...(thinkingLevel ? { thinkingLevel } : {}) },
+				kickoff,
 				origin: "extension",
 				...(name ? { name } : {}),
 				...(into ? { into } : {}),
@@ -207,6 +240,21 @@ export function extensionActions(
 				sessionId,
 				branch: workspace.branch,
 				...(kickoffError ? { kickoffError } : {}),
+			};
+		},
+		async startChat(params) {
+			admit();
+			const workspace = deps.workspaces().find((candidate) => candidate.id === params.workspaceId);
+			const project = workspace
+				? deps.projects().find((candidate) => candidate.id === workspace.projectId)
+				: undefined;
+			if (!workspace || !project || isChatsContainer(project) || isChatWorkspace(workspace))
+				throw new Error(`No open workspace ${String(params.workspaceId)} of a repository project.`);
+			const started = await deps.startChat(workspace, await kickoffOf(params.kickoff));
+			return {
+				workspaceId: workspace.id,
+				sessionId: started.sessionId,
+				...(started.kickoffError ? { kickoffError: started.kickoffError } : {}),
 			};
 		},
 		async sendToChat(params) {

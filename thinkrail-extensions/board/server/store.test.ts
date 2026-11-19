@@ -26,7 +26,7 @@ afterEach(() => {
 });
 
 const file: CardsFile = {
-	version: 1,
+	version: 2,
 	prefix: "TR",
 	nextNumber: 2,
 	cards: [
@@ -146,7 +146,7 @@ describe("BoardStore", () => {
 		writeFileSync(join(root, "p1", "transitions.jsonl"), 'not json\n{"cardId":"TR-1","at":1}\n\n');
 		const board = store();
 		expect(board.cards("p1")).toEqual({
-			version: 1,
+			version: 2,
 			prefix: "TR",
 			nextNumber: 1,
 			cards: [
@@ -177,7 +177,7 @@ describe("BoardStore", () => {
 	test("refuses a board a newer ThinkRail wrote rather than lose its data", () => {
 		const { root, store } = setup();
 		mkdirSync(join(root, "p1"));
-		writeFileSync(join(root, "p1", "cards.json"), JSON.stringify({ version: 2, cards: [] }));
+		writeFileSync(join(root, "p1", "cards.json"), JSON.stringify({ version: 3, cards: [] }));
 		expect(() => store().cards("p1")).toThrow(NewerBoardStoreError);
 		expect(readdirSync(join(root, "p1"))).toEqual(["cards.json"]);
 	});
@@ -258,7 +258,7 @@ describe("BoardStore", () => {
 			cards: [
 				{
 					...card,
-					projectId: "P-1",
+					roadmapProjectId: "P-1",
 					milestoneId: "M-1",
 					pinnedStart: "2026-11-20",
 					estimateDays: 2.5,
@@ -266,7 +266,7 @@ describe("BoardStore", () => {
 			],
 		});
 		expect(store().cards("p1")?.cards[0]).toMatchObject({
-			projectId: "P-1",
+			roadmapProjectId: "P-1",
 			milestoneId: "M-1",
 			pinnedStart: "2026-11-20",
 			estimateDays: 2.5,
@@ -344,6 +344,37 @@ describe("BoardStore", () => {
 		const card = board.cards("p1")?.cards[0];
 		for (const key of ["milestoneId", "pinnedStart", "estimateDays"])
 			expect(card).not.toHaveProperty(key);
+	});
+
+	test("migrates a version-1 cards file on read: its roadmap `projectId` becomes `roadmapProjectId`", () => {
+		const { root, store } = setup();
+		mkdirSync(join(root, "p1"));
+		const card = { id: "TR-1", title: "Old", category: "backlog", column: "backlog" };
+		writeFileSync(
+			join(root, "p1", "cards.json"),
+			JSON.stringify({
+				version: 1,
+				prefix: "TR",
+				nextNumber: 3,
+				cards: [
+					{ ...card, projectId: "P-1", milestoneId: "M-1" },
+					{ ...card, id: "TR-2", roadmapProjectId: "P-9" },
+				],
+			}),
+		);
+		const board = store();
+		const read = board.cards("p1");
+		expect(read?.version).toBe(2);
+		expect(read?.cards[0]).toMatchObject({ roadmapProjectId: "P-1", milestoneId: "M-1" });
+		expect(read?.cards[0]).not.toHaveProperty("projectId");
+		expect(read?.cards[1]).not.toHaveProperty("roadmapProjectId");
+		if (read) board.saveCards("p1", read);
+		const written = JSON.parse(readFileSync(join(root, "p1", "cards.json"), "utf8"));
+		expect(written.version).toBe(2);
+		expect(written.cards[0]).toMatchObject({ roadmapProjectId: "P-1", milestoneId: "M-1" });
+		expect(written.cards[0]).not.toHaveProperty("projectId");
+		expect(store().cards("p1")?.cards[0]).toMatchObject({ roadmapProjectId: "P-1" });
+		expect(readdirSync(join(root, "p1"))).toEqual(["cards.json"]);
 	});
 
 	test("refuses roadmap files a newer ThinkRail wrote", () => {

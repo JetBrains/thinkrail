@@ -126,7 +126,7 @@ export function initiativeCards(
 	id: string,
 	initiatives: readonly Initiative[],
 	projects: readonly RoadmapProject[],
-	cards: readonly Pick<Card, "id" | "projectId">[],
+	cards: readonly Pick<Card, "id" | "roadmapProjectId">[],
 ): { local: string[]; external: CardRef[] } {
 	const ids = subtree(initiatives, id);
 	const members = initiatives.filter((initiative) => ids.has(initiative.id));
@@ -137,7 +137,10 @@ export function initiativeCards(
 	);
 	const listed = new Set(members.flatMap((initiative) => initiative.cardIds));
 	const local = cards
-		.filter((card) => listed.has(card.id) || (card.projectId && projectIds.has(card.projectId)))
+		.filter(
+			(card) =>
+				listed.has(card.id) || (card.roadmapProjectId && projectIds.has(card.roadmapProjectId)),
+		)
 		.map((card) => card.id);
 	const external = new Map<string, CardRef>();
 	for (const initiative of members)

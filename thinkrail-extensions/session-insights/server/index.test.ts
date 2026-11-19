@@ -245,6 +245,7 @@ function fakeHost(
 			signal: overrides.signal ?? new AbortController().signal,
 			actions: {
 				createWorkspace: noActions,
+				startChat: noActions,
 				sendToChat: noActions,
 				stopChat: noActions,
 				openPr: noActions,
@@ -421,6 +422,7 @@ describe("session-insights server descriptor", () => {
 			signal: new AbortController().signal,
 			actions: {
 				createWorkspace: refuse,
+				startChat: refuse,
 				sendToChat: refuse,
 				stopChat: refuse,
 				openPr: refuse,

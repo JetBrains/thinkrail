@@ -179,9 +179,9 @@ describe("initiative membership", () => {
 	const cards = [
 		{ id: "TR-1" },
 		{ id: "TR-2" },
-		{ id: "TR-3", projectId: "P-1" },
-		{ id: "TR-4", projectId: "P-2" },
-		{ id: "TR-5", projectId: "P-3" },
+		{ id: "TR-3", roadmapProjectId: "P-1" },
+		{ id: "TR-4", roadmapProjectId: "P-2" },
+		{ id: "TR-5", roadmapProjectId: "P-3" },
 		{ id: "TR-6" },
 	];
 

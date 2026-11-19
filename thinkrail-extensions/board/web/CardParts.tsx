@@ -4,6 +4,7 @@ import {
 	RiCheckboxCircleLine,
 	RiErrorWarningLine,
 	RiFileList3Line,
+	RiFlag2Line,
 	RiGithubLine,
 	RiGitPullRequestLine,
 	RiLoader4Line,
@@ -186,6 +187,24 @@ export function CardMeta({
 					{card.sizeSuggested ? t("board.card.sizeSuggestedShort", { size: card.size }) : card.size}
 				</span>
 			) : null}
+		</span>
+	);
+}
+
+/** The initiative a card serves, as a small chip on its tile. */
+export function InitiativeChip({ card }: { card: Pick<Card, "initiative"> }) {
+	const t = useT();
+	const { initiative } = card;
+	if (!initiative) return null;
+	return (
+		<span
+			data-testid="board-card-initiative"
+			data-initiative-id={initiative.id}
+			title={t("board.roadmap.card.chipTitle", { id: initiative.id, title: initiative.title })}
+			className="flex min-w-0 items-center gap-2 self-start rounded-xs bg-control-bg-selected px-4 tr-text-metadata text-text-muted"
+		>
+			<RiFlag2Line aria-hidden className="size-12 shrink-0" />
+			<span className="min-w-0 truncate">{initiative.title}</span>
 		</span>
 	);
 }

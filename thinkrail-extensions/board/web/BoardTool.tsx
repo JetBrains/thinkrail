@@ -19,6 +19,7 @@ import {
 	RiKanbanView2,
 	RiListUnordered,
 	RiRefreshLine,
+	RiRoadMapLine,
 	RiSettings3Line,
 } from "@remixicon/react";
 import type { PanelHost, PanelProps } from "@thinkrail/extension-api/web";
@@ -94,10 +95,11 @@ import {
 	startWarningText,
 	WIP_LABELS,
 } from "./labels";
+import { RoadmapPane } from "./Roadmap";
 import { type TriageActions, TriageLane } from "./Triage";
 import { useBoardChanged, useHostQuery } from "./useHostQuery";
 
-export type BoardMode = "board" | "list";
+export type BoardMode = "board" | "list" | "roadmap";
 
 /** The board's columns, Canceled only while it holds cards; Triage is its own lane (`TriageLane`). */
 export function shownColumns(view: Pick<BoardView, "columns" | "cards">): Column[] {
@@ -674,6 +676,15 @@ function BoardHeader({
 					selected={mode === "list"}
 					onClick={() => onMode("list")}
 				/>
+				<IconButton
+					icon={RiRoadMapLine}
+					size="s"
+					label={t("board.view.roadmap")}
+					data-testid="board-view-roadmap"
+					aria-pressed={mode === "roadmap"}
+					selected={mode === "roadmap"}
+					onClick={() => onMode("roadmap")}
+				/>
 				<Button
 					variant="soft-primary"
 					size="s"
@@ -910,7 +921,13 @@ export default function BoardTool({ host }: PanelProps) {
 					/>
 				</div>
 			) : null}
-			{board.state.kind === "loading" ? (
+			{mode === "roadmap" ? (
+				<RoadmapPane
+					host={host}
+					layout={layout}
+					onError={(error) => setNotice(errorMessage(t, error))}
+				/>
+			) : board.state.kind === "loading" ? (
 				<LoadingRegion
 					rows={8}
 					label={t("board.loading")}

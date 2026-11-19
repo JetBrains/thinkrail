@@ -91,6 +91,7 @@ describe("defineServerExtension", () => {
 			signal: new AbortController().signal,
 			actions: {
 				createWorkspace: refused,
+				startChat: refused,
 				sendToChat: refused,
 				stopChat: refused,
 				openPr: refused,

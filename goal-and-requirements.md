@@ -147,8 +147,9 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   accepted as a whole, and Board mode widens the board and restores the previous layout on exit. The
   workspaces' task-specs show on their cards (an unbound one's as a card to adopt, its deferrals sent
   into Triage), the open GitHub issues show through the user's own `gh` (Start asks for `Closes #N`; the
-  board never edits an issue), and the host's model suggests a card's size until the human sets one
-  ([[module-ext-board]]).
+  board never edits an issue), the host's model suggests a card's size until the human sets one, and above
+  the cards sits a roadmap of initiatives (Now / Next / Later, Goals) with suggested health and a forecast
+  from the live work ([[module-ext-board]]).
 - **Workspaces from chat** — on request ("in a side workspace"), the agent starts ordinary workspaces
   with their own chats in any open project and checks their chats', PRs', and diffs' status; the agent,
   not the host, decides what to do with them ([[submodule-server-agent]], [[submodule-server-host]]).

@@ -278,7 +278,7 @@ import {
 } from "../workspaces";
 import { ackSend } from "./ackSend";
 import { sessionProviderAnalytics } from "./authAnalytics";
-import { startChatSession } from "./chatSession";
+import { awaitKickoff, startChatSession } from "./chatSession";
 import {
 	assertChatOpen,
 	assertSessionDeletable,
@@ -445,22 +445,13 @@ export const workspaceCreationHandoff: CreationHandoff = async (
 	);
 	const { sessionId } = chat;
 	if (!kickoff.text && !kickoff.images?.length) return chat;
-	let preflighted: () => void = () => {};
-	const preflight = new Promise<void>((resolve) => {
-		preflighted = resolve;
+	const kickoffError = await awaitKickoff((onPreflight) => {
+		const send = () => promptSession(sessionId, kickoff.text, kickoff.images, { onPreflight });
+		return internal
+			? ackSend(runObservation.send(sessionId, "internal", send))
+			: sendUserMessage("prompt", sessionId, kickoff.text, clientKey, send);
 	});
-	const send = () =>
-		promptSession(sessionId, kickoff.text, kickoff.images, { onPreflight: preflighted });
-	const sent = internal
-		? ackSend(runObservation.send(sessionId, "internal", send))
-		: sendUserMessage("prompt", sessionId, kickoff.text, clientKey, send);
-	sent.catch(() => {});
-	try {
-		await Promise.race([preflight, sent]);
-		return chat;
-	} catch (err) {
-		return { ...chat, kickoffError: err instanceof Error ? err.message : String(err) };
-	}
+	return kickoffError ? { ...chat, kickoffError } : chat;
 };
 
 function revealDataFolder(dir: string) {

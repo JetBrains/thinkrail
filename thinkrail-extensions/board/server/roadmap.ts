@@ -195,7 +195,7 @@ function scheduleOf(data: BoardData, now: number): Schedule {
 	const done = completions(data.transitions);
 	const projects = new Map(data.projects.map((project) => [project.id, project]));
 	const cards = data.cards.map((card): ScheduleCard => {
-		const project = card.projectId ? projects.get(card.projectId) : undefined;
+		const project = card.roadmapProjectId ? projects.get(card.roadmapProjectId) : undefined;
 		const span = started.get(card.id);
 		const lastStart = span?.last ?? latestAttempt(card)?.startedAt;
 		const completedAt =
@@ -477,7 +477,7 @@ export class Roadmap {
 			});
 		}
 		for (const roadmapProject of data.projects) {
-			const cards = data.cards.filter((card) => card.projectId === roadmapProject.id);
+			const cards = data.cards.filter((card) => card.roadmapProjectId === roadmapProject.id);
 			rollups.projects[roadmapProject.id] = rollupOf(cards.map((card) => card.id));
 			for (const milestone of roadmapProject.milestones)
 				rollups.milestones[milestone.id] = rollupOf(
@@ -726,7 +726,7 @@ export class Roadmap {
 		this.host.project(projectId);
 		const { file } = this.roadmapProject(projectId, id);
 		const cards = this.store.cards(projectId);
-		const held = cards?.cards.filter((card) => card.projectId === id) ?? [];
+		const held = cards?.cards.filter((card) => card.roadmapProjectId === id) ?? [];
 		const at = this.host.now();
 		this.commit(projectId, {
 			projects: { ...file, projects: file.projects.filter((project) => project.id !== id) },
@@ -735,7 +735,7 @@ export class Roadmap {
 						cards: this.replaceCards(
 							cards,
 							held.map((card) => {
-								const { projectId: _project, milestoneId: _milestone, ...rest } = card;
+								const { roadmapProjectId: _project, milestoneId: _milestone, ...rest } = card;
 								return { ...rest, updatedAt: at };
 							}),
 						),
@@ -832,29 +832,36 @@ export class Roadmap {
 
 	/**
 	 * Puts a card into one of its board's roadmap projects and milestones: a milestone alone names its
-	 * project, `projectId: null` takes it out of both, `milestoneId: null` out of the milestone.
+	 * project, `roadmapProjectId: null` takes it out of both, `milestoneId: null` out of the milestone.
 	 */
-	assignProject(cardId: string, projectId?: string | null, milestoneId?: string | null): Card {
+	assignProject(
+		cardId: string,
+		roadmapProjectId?: string | null,
+		milestoneId?: string | null,
+	): Card {
 		const located = this.host.locate(cardId);
 		const { card } = located;
-		if (projectId === undefined && milestoneId === undefined)
-			throw new Error("Pass the projectId or the milestoneId.");
-		const { projectId: _project, milestoneId: _milestone, ...rest } = card;
+		if (roadmapProjectId === undefined && milestoneId === undefined)
+			throw new Error("Pass the roadmapProjectId or the milestoneId.");
+		const { roadmapProjectId: _project, milestoneId: _milestone, ...rest } = card;
 		let next: Card = { ...rest, updatedAt: this.host.now() };
-		if (projectId === null) {
+		if (roadmapProjectId === null) {
 			if (milestoneId) throw new Error("A card outside every project has no milestone.");
-		} else if (projectId !== undefined) {
-			const { project } = this.roadmapProject(located.projectId, projectId);
+		} else if (roadmapProjectId !== undefined) {
+			const { project } = this.roadmapProject(located.projectId, roadmapProjectId);
 			const keep = milestoneId === undefined ? card.milestoneId : (milestoneId ?? undefined);
 			if (milestoneId && !project.milestones.some((milestone) => milestone.id === milestoneId))
-				throw new Error(`${milestoneId} is not a milestone of ${projectId}.`);
+				throw new Error(`${milestoneId} is not a milestone of ${roadmapProjectId}.`);
 			const inProject = keep && project.milestones.some((milestone) => milestone.id === keep);
-			next = { ...next, projectId, ...(inProject ? { milestoneId: keep } : {}) };
+			next = { ...next, roadmapProjectId, ...(inProject ? { milestoneId: keep } : {}) };
 		} else if (milestoneId === null) {
-			next = { ...next, ...(card.projectId ? { projectId: card.projectId } : {}) };
+			next = {
+				...next,
+				...(card.roadmapProjectId ? { roadmapProjectId: card.roadmapProjectId } : {}),
+			};
 		} else if (milestoneId !== undefined) {
 			const { project } = this.milestoneHolder(located.projectId, milestoneId);
-			next = { ...next, projectId: project.id, milestoneId };
+			next = { ...next, roadmapProjectId: project.id, milestoneId };
 		}
 		this.writeCards(located, [next]);
 		return next;
@@ -975,49 +982,61 @@ export class Roadmap {
 	}
 
 	/**
-	 * The initiative a card serves: its roadmap project's, else one of its board's that lists it, else one
-	 * on another board that lists it as an external card.
+	 * The initiative each card of a board serves: its roadmap project's, else the first by rank of its board's
+	 * listing it, else one on another board listing it as an external card.
 	 */
+	initiativesOf(
+		projectId: string,
+		cards: readonly Card[],
+	): Map<string, { projectId: string; initiative: Initiative }> {
+		const served = new Map<string, { projectId: string; initiative: Initiative }>();
+		if (cards.length === 0) return served;
+		const initiatives = [...this.store.initiatives(projectId).initiatives].sort(byRank);
+		const projects = new Map(
+			this.store.roadmapProjects(projectId).projects.map((project) => [project.id, project]),
+		);
+		const abroad = new Set<string>();
+		for (const card of cards) {
+			const via = card.roadmapProjectId
+				? projects.get(card.roadmapProjectId)?.initiativeId
+				: undefined;
+			const own =
+				initiatives.find((initiative) => initiative.id === via) ??
+				initiatives.find((initiative) => initiative.cardIds.includes(card.id));
+			if (own) served.set(card.id, { projectId, initiative: own });
+			else abroad.add(card.id);
+		}
+		if (abroad.size === 0) return served;
+		for (const other of this.store.projectIds()) {
+			if (other === projectId) continue;
+			let listing: Initiative[];
+			try {
+				listing = this.store.initiatives(other).initiatives;
+			} catch {
+				continue;
+			}
+			for (const initiative of listing)
+				for (const ref of initiative.externalCards)
+					if (abroad.has(ref.cardId) && !served.has(ref.cardId))
+						served.set(ref.cardId, { projectId: other, initiative });
+		}
+		return served;
+	}
+
 	initiativeOfCard(
 		projectId: string,
 		card: Card,
 	): { projectId: string; initiative: Initiative } | null {
-		const { initiatives } = this.store.initiatives(projectId);
-		const project = card.projectId
-			? this.store
-					.roadmapProjects(projectId)
-					.projects.find((candidate) => candidate.id === card.projectId)
-			: undefined;
-		const viaProject = initiatives.find((initiative) => initiative.id === project?.initiativeId);
-		const listed = [...initiatives]
-			.sort(byRank)
-			.find((initiative) => initiative.cardIds.includes(card.id));
-		const own = viaProject ?? listed;
-		if (own) return { projectId, initiative: own };
-		for (const other of this.store.projectIds()) {
-			if (other === projectId) continue;
-			let found: Initiative | undefined;
-			try {
-				found = this.store
-					.initiatives(other)
-					.initiatives.find((initiative) =>
-						initiative.externalCards.some((ref) => ref.cardId === card.id),
-					);
-			} catch {
-				continue;
-			}
-			if (found) return { projectId: other, initiative: found };
-		}
-		return null;
+		return this.initiativesOf(projectId, [card]).get(card.id) ?? null;
 	}
 
 	/** The kickoff's context of a card: its initiative's outcome and criteria, its project and milestone. */
 	kickoffContext(projectId: string, card: Card): KickoffContext {
 		const served = this.initiativeOfCard(projectId, card);
-		const project = card.projectId
+		const project = card.roadmapProjectId
 			? this.store
 					.roadmapProjects(projectId)
-					.projects.find((candidate) => candidate.id === card.projectId)
+					.projects.find((candidate) => candidate.id === card.roadmapProjectId)
 			: undefined;
 		const milestone = project?.milestones.find((candidate) => candidate.id === card.milestoneId);
 		return {
