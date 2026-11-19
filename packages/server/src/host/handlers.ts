@@ -1,4 +1,5 @@
 import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import type {
 	Ack,
 	OpenBranchReview,
@@ -120,7 +121,12 @@ import {
 import { providerFromRemoteUrl } from "../branch-review";
 import { forgetWorkspaceChanges, revertChange, undoChange } from "../changes";
 import { selectDirectory } from "../dialog";
-import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
+import {
+	listAvailableEditors,
+	openEditor,
+	openWithDefaultApp,
+	revealInFileManager,
+} from "../editors";
 import { hostEnvironmentStatus, updateHostEnvironment } from "../environment";
 import { createExtensionQueries, listExtensionCatalog } from "../extensions";
 import {
@@ -143,6 +149,7 @@ import {
 	readDir,
 	readFile,
 	renameWorktreeEntry,
+	resolveWorktreeFile,
 } from "../fs";
 import {
 	commitsAheadOf,
@@ -974,6 +981,14 @@ const handlers: WsHandlers = {
 			p.path,
 			p.maxBytes === undefined ? {} : { maxBytes: p.maxBytes },
 		);
+	},
+	"fs.openExternally": (p) => {
+		openWithDefaultApp(resolveWorktreeFile(p.workspaceId, p.path));
+		return { ok: true } as const;
+	},
+	"fs.reveal": (p) => {
+		revealInFileManager(dirname(resolveWorktreeFile(p.workspaceId, p.path)));
+		return { ok: true } as const;
 	},
 	"fs.copy": (p) => {
 		void ensureWatch(p.destinationWorkspaceId);

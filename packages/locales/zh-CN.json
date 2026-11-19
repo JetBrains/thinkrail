@@ -2782,6 +2782,7 @@
 	"viewer.binary.modified": "改后：{{size}}",
 	"viewer.binary.openExternally": "用外部应用打开",
 	"viewer.binary.original": "原始：{{size}}",
+	"viewer.binary.revealInFileManager": "在文件管理器中显示",
 	"viewer.binary.unavailable": "不可用",
 	"viewer.code.commentOnLine": "评论此行",
 	"viewer.code.crossSide": "评论锚定在 diff 的某一侧。请在原文或新文本中选择行。",

@@ -470,6 +470,8 @@ export const WS_METHODS = {
 	prReopen: "pr.reopen",
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
+	fsOpenExternally: "fs.openExternally",
+	fsReveal: "fs.reveal",
 	fsCopy: "fs.copy",
 	fsDelete: "fs.delete",
 	fsRename: "fs.rename",
@@ -1168,6 +1170,8 @@ export interface WsMethodMap {
 		params: { workspaceId: string; path: string; maxBytes?: number };
 		result: { content: string; meta: ResourceMeta };
 	};
+	"fs.openExternally": { params: { workspaceId: string; path: string }; result: Ack };
+	"fs.reveal": { params: { workspaceId: string; path: string }; result: Ack };
 	"fs.copy": {
 		params: {
 			sourceWorkspaceId: string;

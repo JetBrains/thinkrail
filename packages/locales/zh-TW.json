@@ -2581,6 +2581,7 @@
 	"viewer.binary.modified": "修改後：{{size}}",
 	"viewer.binary.openExternally": "使用外部應用程式開啟",
 	"viewer.binary.original": "原始：{{size}}",
+	"viewer.binary.revealInFileManager": "在檔案管理員中顯示",
 	"viewer.binary.unavailable": "無法使用",
 	"viewer.code.commentOnLine": "在此行留言",
 	"viewer.code.crossSide": "留言只能附加在差異的一側。請選取原始或新文字中的行。",

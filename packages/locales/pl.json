@@ -2691,6 +2691,7 @@
 	"viewer.binary.modified": "Zmodyfikowany: {{size}}",
 	"viewer.binary.openExternally": "Otwórz zewnętrznie",
 	"viewer.binary.original": "Oryginał: {{size}}",
+	"viewer.binary.revealInFileManager": "Pokaż w menedżerze plików",
 	"viewer.binary.unavailable": "Niedostępny",
 	"viewer.code.commentOnLine": "Skomentuj tę linię",
 	"viewer.code.crossSide": "Komentarz jest zakotwiczony po jednej stronie diffu. Zaznacz linie w tekście oryginalnym albo nowym.",

@@ -2734,6 +2734,7 @@
 	"viewer.binary.modified": "Modificado: {{size}}",
 	"viewer.binary.openExternally": "Abrir externamente",
 	"viewer.binary.original": "Original: {{size}}",
+	"viewer.binary.revealInFileManager": "Mostrar en el gestor de archivos",
 	"viewer.binary.unavailable": "No disponible",
 	"viewer.code.commentOnLine": "Comentar esta línea",
 	"viewer.code.crossSide": "Un comentario se ancla a un lado del diff. Selecciona líneas en el texto original o en el nuevo.",

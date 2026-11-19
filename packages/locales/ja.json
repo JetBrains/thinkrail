@@ -2544,6 +2544,7 @@
 	"viewer.binary.modified": "変更後: {{size}}",
 	"viewer.binary.openExternally": "外部で開く",
 	"viewer.binary.original": "元: {{size}}",
+	"viewer.binary.revealInFileManager": "ファイルマネージャーで表示",
 	"viewer.binary.unavailable": "利用不可",
 	"viewer.code.commentOnLine": "この行にコメント",
 	"viewer.code.crossSide": "コメントは差分の片側に紐づきます。元のテキストか新しいテキストのどちらか一方で行を選択してください。",

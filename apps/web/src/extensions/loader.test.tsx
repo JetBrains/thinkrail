@@ -369,6 +369,8 @@ const resourceHost: ResourceHost = {
 	},
 	bytesUrl: () => "",
 	openFile: () => {},
+	openPathExternally: () => {},
+	revealInFileManager: () => {},
 	openComparison: () => {},
 	readFile: () => new Promise(() => {}),
 	subscribeFileChanges: () => () => {},
