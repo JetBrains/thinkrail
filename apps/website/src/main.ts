@@ -1,7 +1,9 @@
 import { initDownloadThanks } from "./downloadThanks";
 import { deriveEditorTabs } from "./editorTabs";
+import { fetchStarCount } from "./githubStars";
 import { heroDownloadTarget } from "./heroDownload";
 import { initImageZoom } from "./imageZoom";
+import { installCommandFor } from "./installCommands";
 import { installShareUrl, isMobileDevice, shareInstallLink } from "./installLinkShare";
 import {
 	type BrowserPlatformHints,
@@ -328,10 +330,14 @@ const platformHints: BrowserPlatformHints = {
 	maxTouchPoints: browserNavigator.maxTouchPoints,
 };
 
-const sendLink = document.querySelector<HTMLElement>("[data-send-link]");
-if (sendLink && isMobileDevice(platformHints)) {
-	sendLink.hidden = false;
-	for (const button of sendLink.querySelectorAll<HTMLButtonElement>("[data-share-install-link]")) {
+if (isMobileDevice(platformHints)) {
+	for (const element of document.querySelectorAll<HTMLElement>("[data-install-desktop]")) {
+		element.hidden = true;
+	}
+	for (const element of document.querySelectorAll<HTMLElement>("[data-send-link]")) {
+		element.hidden = false;
+	}
+	for (const button of document.querySelectorAll<HTMLButtonElement>("[data-share-install-link]")) {
 		button.addEventListener("click", async () => {
 			const url = installShareUrl(window.location.href, button.dataset.shareInstallLink ?? "");
 			if ((await shareInstallLink(navigator, url)) !== "copied") return;
@@ -342,6 +348,50 @@ if (sendLink && isMobileDevice(platformHints)) {
 }
 
 const detectedInstallPlatform = detectInstallPlatform(platformHints);
+
+const preferredInstallCommand = installCommandFor(detectedInstallPlatform);
+for (const chip of document.querySelectorAll<HTMLElement>("[data-install-cmd]")) {
+	const text = chip.querySelector<HTMLElement>("[data-install-cmd-text]");
+	if (text) {
+		text.textContent = preferredInstallCommand;
+		text.title = preferredInstallCommand;
+	}
+	chip.querySelector("[data-copy]")?.setAttribute("data-copy", preferredInstallCommand);
+}
+
+const installPopover = document.querySelector<HTMLElement>("[data-install-popover]");
+if (installPopover) {
+	let invoker: HTMLElement | undefined;
+	let open = false;
+	const follow = () => {
+		if (!open || !invoker) return;
+		const rect = invoker.getBoundingClientRect();
+		const view = editor?.contains(invoker) ? editor.getBoundingClientRect() : undefined;
+		if (view && (rect.bottom <= view.top || rect.top >= view.bottom)) {
+			installPopover.hidePopover();
+			return;
+		}
+		installPopover.style.setProperty("--install-popover-top", `${rect.bottom + 6}px`);
+		installPopover.style.setProperty(
+			"--install-popover-right",
+			`${window.innerWidth - rect.right}px`,
+		);
+		installPopover.classList.add("is-anchored");
+	};
+	for (const button of document.querySelectorAll<HTMLElement>(
+		`[popovertarget="${installPopover.id}"]`,
+	)) {
+		button.addEventListener("click", () => {
+			invoker = button;
+		});
+	}
+	installPopover.addEventListener("beforetoggle", (event) => {
+		open = event.newState === "open";
+		follow();
+	});
+	window.addEventListener("resize", follow);
+	document.addEventListener("scroll", follow, { capture: true, passive: true });
+}
 
 function applyHeroDownload(architecture: CpuArchitecture | undefined): void {
 	const link = document.querySelector<HTMLAnchorElement>("[data-hero-download]");
@@ -382,8 +432,7 @@ for (const row of document.querySelectorAll<HTMLElement>("[data-desktop-platform
 	);
 }
 
-const installPicker = document.querySelector<HTMLElement>("[data-install-picker]");
-if (installPicker) {
+for (const installPicker of document.querySelectorAll<HTMLElement>("[data-install-picker]")) {
 	const platformTabs = [
 		...installPicker.querySelectorAll<HTMLButtonElement>("[data-install-platform]"),
 	];
@@ -502,20 +551,15 @@ if (navToggle && railRight && backdrop) {
 
 const starBadges = document.querySelectorAll<HTMLElement>(".gh-stars");
 if (starBadges.length > 0) {
-	fetch("https://api.github.com/repos/JetBrains/thinkrail")
-		.then((response) => (response.ok ? response.json() : null))
-		.then((data: { stargazers_count?: number } | null) => {
-			if (typeof data?.stargazers_count !== "number") return;
-			const n = data.stargazers_count;
-			const formatted = n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
-			for (const stars of starBadges) {
-				const count = stars.querySelector<HTMLElement>("[data-gh-stars-count]");
-				if (count) count.textContent = formatted;
-				else stars.textContent = formatted;
-				stars.hidden = false;
-			}
-		})
-		.catch(() => {});
+	void fetchStarCount().then((formatted) => {
+		if (!formatted) return;
+		for (const stars of starBadges) {
+			const count = stars.querySelector<HTMLElement>("[data-gh-stars-count]");
+			if (count) count.textContent = formatted;
+			else stars.textContent = formatted;
+			stars.hidden = false;
+		}
+	});
 }
 
 const railNote = document.getElementById("rail-note");

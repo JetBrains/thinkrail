@@ -20,7 +20,9 @@ checklist.
      `.github/readme-assets/pi-packages/<name>.mp4` and linked by its raw GitHub URL on `main`. Record it
      in vanilla `pi` from the local source (`pi -e ./pi-extensions/<name>/index.ts`), e.g. with a VHS
      tape: 1920×1080, H.264, no audio, ≈20 s, ending on the result. pi.dev shows no poster, so the
-     first frame is the thumbnail: open on about a second of the final frame.
+     first frame is the thumbnail: open on about a second of the final frame. Export `COLORTERM=truecolor`
+     (otherwise pi falls back to 256 colours). VHS cannot type `Alt+<digit>`; send `Escape` then
+     `Type@0ms "1"` with `PI_TUI_ESC_TIMEOUT=150` so pi reads the pair as one Alt chord.
    - `files`: everything the entrypoints and `exports` transitively import, tests excluded. The parity
      gate installs from the tarball, so an omission fails there.
    - Pi SDK packages (`@earendil-works/pi-ai`, `pi-coding-agent`, `pi-tui`, `pi-agent-core`, `typebox`) are

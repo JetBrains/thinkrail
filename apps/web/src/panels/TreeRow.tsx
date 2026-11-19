@@ -1,41 +1,63 @@
 import {
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
+	type RemixiconComponentType,
 	RiFileFill,
 	RiFileLine,
 	RiFolderFill,
 	RiFolderLine,
 } from "@remixicon/react";
-import type { MouseEvent, ReactNode, Ref } from "react";
+import type { ComponentPropsWithoutRef, MouseEvent, ReactNode, Ref } from "react";
+import { useTreeItem } from "./treeNavigation";
+
+type MenuTriggerHandlers = Pick<
+	ComponentPropsWithoutRef<"button">,
+	"onKeyDown" | "onPointerDown" | "onPointerMove" | "onPointerCancel" | "onPointerUp"
+>;
 
 export function TreeRow({
 	ref,
 	testid,
+	treeId,
+	level,
+	path,
 	kind,
 	expanded,
 	active,
+	highlighted = false,
 	subtle = false,
 	dataStatus,
 	dataViewed,
 	label,
 	labelClassName,
+	icon,
 	trailing,
 	highlight = "self",
 	onClick,
 	onDoubleClick,
 	onContextMenu,
+	onKeyDown,
+	onPointerDown,
+	onPointerMove,
+	onPointerCancel,
+	onPointerUp,
 	onWarm,
-}: {
+}: MenuTriggerHandlers & {
 	ref?: Ref<HTMLButtonElement> | undefined;
 	testid: string;
+	treeId: string;
+	level: number;
+	path?: string | undefined;
 	kind: "dir" | "file";
 	expanded?: boolean;
 	active?: boolean;
+	highlighted?: boolean;
 	subtle?: boolean;
 	dataStatus?: string | undefined;
 	dataViewed?: boolean;
 	label: string;
-	labelClassName?: string;
+	labelClassName?: string | undefined;
+	icon?: RemixiconComponentType | undefined;
 	trailing?: ReactNode;
 	highlight?: "self" | "wrapper";
 	onClick?: ((event: MouseEvent) => void) | undefined;
@@ -45,13 +67,24 @@ export function TreeRow({
 }) {
 	const Chevron = expanded ? ChevronDown : ChevronRight;
 	const Folder = active ? RiFolderFill : RiFolderLine;
-	const FileIcon = active ? RiFileFill : RiFileLine;
+	const FileIcon = icon ?? (active ? RiFileFill : RiFileLine);
 	const tone = subtle ? "text-text-subtle" : "text-text-muted";
+	const treeItem = useTreeItem(treeId, {
+		level,
+		label,
+		expanded: kind === "dir" ? Boolean(expanded) : undefined,
+		selected: active === true,
+		toggles: kind === "dir",
+		openKept: kind === "file",
+	});
 	return (
 		<button
 			ref={ref}
 			type="button"
+			{...treeItem}
 			data-testid={testid}
+			data-path={path}
+			data-focus-row-primary
 			data-kind={kind}
 			data-active={active ? true : undefined}
 			data-status={dataStatus}
@@ -59,11 +92,16 @@ export function TreeRow({
 			onClick={onClick}
 			onDoubleClick={onDoubleClick}
 			onContextMenu={onContextMenu}
+			onKeyDown={onKeyDown}
+			onPointerDown={onPointerDown}
+			onPointerMove={onPointerMove}
+			onPointerCancel={onPointerCancel}
+			onPointerUp={onPointerUp}
 			onPointerEnter={onWarm && (() => onWarm("hover"))}
 			onFocus={onWarm && (() => onWarm("focus"))}
-			className={`flex h-panel-row w-full min-w-0 items-center gap-4 rounded-sm px-4 text-left tr-text-ui ${tone} outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${
+			className={`flex h-panel-row w-full min-w-0 items-center gap-4 rounded-sm px-4 text-left tr-text-ui ${tone} focus-visible:focus-ring-inset ${
 				highlight === "self"
-					? `hover:bg-control-bg-hovered ${active ? "bg-control-bg-selected" : ""}`
+					? `hover:bg-control-bg-hovered ${active || highlighted ? "bg-control-bg-selected" : ""}`
 					: ""
 			}`}
 		>

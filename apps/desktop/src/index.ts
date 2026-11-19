@@ -2,7 +2,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { NativeCommand, NativeQuitHint, NativeWindowState } from "@thinkrail/contracts";
+import type {
+	NativeCommand,
+	NativeOpenFileRequest,
+	NativeQuitHint,
+	NativeWindowState,
+} from "@thinkrail/contracts";
 import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
 import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
 import Electrobun, {
@@ -20,6 +25,7 @@ import {
 	readMenuLabels,
 } from "./applicationMenu";
 import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
+import { deliverDeepLinkWhenReady } from "./deepLinkBootstrap";
 import { desktopError, setDesktopErrorReporter } from "./errorReporting";
 import { installExternalNavigation, windowNavigationRules } from "./externalNavigation";
 import { createKeyStateReader } from "./keyState";
@@ -563,6 +569,12 @@ async function start(): Promise<void> {
 		command: (command) => rpc.send.nativeCommand({ command }),
 	};
 
+	const revealDeepLink = (request: NativeOpenFileRequest) => {
+		if (mainWindow.isMinimized()) mainWindow.unminimize();
+		mainWindow.show();
+		mainWindow.activate();
+		rpc.send.openFile(request);
+	};
 	let ready = false;
 	const startAttributionClaim = attributionClaimOnFirstReadiness(() =>
 		host.server.startAttributionClaim(),
@@ -572,6 +584,7 @@ async function start(): Promise<void> {
 		ready = true;
 		releaseStartupSplash?.();
 		startupSplash = undefined;
+		if (!neutral) deliverDeepLinkWhenReady(revealDeepLink);
 		startAttributionClaim();
 		updateController.start();
 		const readyPath = process.env.THINKRAIL_DESKTOP_READY_FILE;

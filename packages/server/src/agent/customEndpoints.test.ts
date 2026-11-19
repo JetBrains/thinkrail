@@ -491,7 +491,7 @@ test("saved endpoints become available pi models, and a keyless one gets pi's pl
 	expect((await listCustomEndpoints())[0]?.hasApiKey).toBe(false);
 });
 
-test("edits keep hand-added fields, clear managed overrides and guard the saved key", async () => {
+test("edits keep hand-added fields and the user's context window, clear managed overrides and guard the saved key", async () => {
 	await runtime();
 	writeFileSync(
 		path,
@@ -505,13 +505,13 @@ test("edits keep hand-added fields, clear managed overrides and guard the saved 
 					authHeader: true,
 					compat: { supportsStore: false },
 					models: [{ id: "a", contextWindow: 8_000, maxTokens: 2_000, temperature: 0.2 }],
-					modelOverrides: { a: { contextWindow: 4_000, name: "Alias" } },
+					modelOverrides: { a: { contextWindow: 4_000, maxTokens: 1_000, name: "Alias" } },
 				},
 			},
 		}),
 	);
 	const [listed] = await listCustomEndpoints();
-	expect(listed?.models[0]).toEqual(model("a", { contextWindow: 4_000, maxTokens: 2_000 }));
+	expect(listed?.models[0]).toEqual(model("a", { contextWindow: 8_000, maxTokens: 1_000 }));
 
 	await saveCustomEndpoint({
 		id: "custom-gw",
@@ -525,7 +525,7 @@ test("edits keep hand-added fields, clear managed overrides and guard the saved 
 		apiKey: "sk-saved",
 		authHeader: true,
 		compat: { supportsStore: false },
-		modelOverrides: { a: { name: "Alias" } },
+		modelOverrides: { a: { contextWindow: 4_000, name: "Alias" } },
 	});
 	expect(saved?.models).toEqual([expect.objectContaining({ id: "a", temperature: 0.2 })]);
 
@@ -686,6 +686,62 @@ test("a re-detected smaller context never keeps an output budget that no longer 
 	expect(providers()[saved?.id ?? ""]?.models).toEqual([
 		expect.objectContaining({ contextWindow: 4_096, maxTokens: 1_024 }),
 	]);
+});
+
+test("a user context window only widens the context that max output is fitted against", async () => {
+	const pi = await runtime();
+	writeFileSync(
+		path,
+		JSON.stringify({
+			providers: {
+				"custom-gw": {
+					name: "GW",
+					baseUrl: "https://gw.example/v1",
+					api: "openai-completions",
+					apiKey: "sk-saved",
+					models: [
+						{ id: "hand-set" },
+						{ id: "derived" },
+						{ id: "smaller-window" },
+						{ id: "unreported" },
+						{ id: "plain" },
+					],
+					modelOverrides: {
+						"hand-set": { contextWindow: 262_144 },
+						derived: { contextWindow: 262_144 },
+						"smaller-window": { contextWindow: 16_384 },
+						unreported: { contextWindow: 8_192 },
+					},
+				},
+			},
+		}),
+	);
+	await saveCustomEndpoint({
+		id: "custom-gw",
+		name: "GW",
+		baseUrl: "https://gw.example/v1",
+		models: [
+			model("hand-set", { contextWindow: 32_768, maxTokens: 65_536 }),
+			model("derived", { contextWindow: 32_768 }),
+			model("smaller-window", { contextWindow: 131_072, maxTokens: 32_000 }),
+			model("unreported"),
+			model("plain", { contextWindow: 32_768, maxTokens: 65_536 }),
+		],
+	});
+	expect(providers()["custom-gw"]?.models).toEqual([
+		expect.objectContaining({ id: "hand-set", maxTokens: 65_536 }),
+		expect.objectContaining({ id: "derived", maxTokens: defaultMaxTokens(262_144) }),
+		expect.objectContaining({ id: "smaller-window", maxTokens: 32_000 }),
+		{
+			id: "unreported",
+			name: "unreported",
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		},
+		expect.objectContaining({ id: "plain", maxTokens: defaultMaxTokens(32_768) }),
+	]);
+	expect(
+		settledAvailableModels(pi).find((m) => m.provider === "custom-gw" && m.id === "hand-set"),
+	).toMatchObject({ contextWindow: 262_144, maxTokens: 65_536 });
 });
 
 test("only custom-* providers are listed, edited or removed", async () => {

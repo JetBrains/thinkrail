@@ -53,6 +53,8 @@ export interface PaletteItem {
 	/** How many leading characters of `title` are context (a section's spec name) and render muted. */
 	readonly titleLead?: number;
 	readonly subtitle?: string;
+	/** Spans of `subtitle` that name where the row lives (project, workspace) and render one step stronger. */
+	readonly subtitleEmphasis?: readonly (readonly [number, number])[];
 	readonly titleSource?: ChatTitleSource;
 	readonly titleTooltip?: string;
 	readonly keywords?: readonly string[];

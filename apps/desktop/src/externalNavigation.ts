@@ -1,4 +1,5 @@
 import type { EventEmitter } from "node:events";
+import { WORKSPACE_VIEW_ROUTE } from "@thinkrail/contracts";
 import type Electrobun from "electrobun/main";
 
 type NavigationEvent = ReturnType<
@@ -36,7 +37,8 @@ export function externalNavigationUrl(value: unknown, origin: string): string | 
 	if (!raw || raw.length > MAX_NAVIGATION_DETAIL_LENGTH) return null;
 	try {
 		const url = new URL(raw, origin);
-		if (url.origin === origin) return null;
+		if (url.origin === origin)
+			return url.pathname.startsWith(WORKSPACE_VIEW_ROUTE) ? url.href : null;
 		return ["https:", "http:", "mailto:"].includes(url.protocol) ? url.href : null;
 	} catch {
 		return null;
@@ -44,7 +46,13 @@ export function externalNavigationUrl(value: unknown, origin: string): string | 
 }
 
 export function windowNavigationRules(origin: string): string[] {
-	return ["^*", `${origin}/*`, "about:srcdoc", `blob:${origin}/*`];
+	return [
+		"^*",
+		`${origin}/*`,
+		"about:srcdoc",
+		`blob:${origin}/*`,
+		`^${origin}${WORKSPACE_VIEW_ROUTE}*`,
+	];
 }
 
 function isElement(target: EventTarget | null): target is Element {

@@ -1,11 +1,19 @@
-import { mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
 import type { WsRequest } from "@thinkrail/contracts";
-import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
+import {
+	closeSettings,
+	enterDefaultWorkspace,
+	openAppFresh,
+	openFixtureProject,
+	openPersistedChat,
+	openSettingsSection,
+} from "./fixtures/app";
 import { resolveBunExecutable } from "./fixtures/executables";
 import { E2E_FIXTURE_REPO, E2E_PI_AGENT_DIR } from "./fixtures/paths";
+import { shot } from "./fixtures/screenshots";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const BUN = resolveBunExecutable();
@@ -17,19 +25,23 @@ const MCP_LOG = join(E2E_PI_AGENT_DIR, "mcp.log");
 const PROJECT_CONFIG_DIR = join(E2E_FIXTURE_REPO, ".pi");
 
 async function openMcpSettings(page: Page): Promise<void> {
-	await page.getByTestId("open-settings").click();
-	await expect(page.getByTestId("settings-dialog")).toBeVisible();
-	await page.getByTestId("settings-nav-mcp").click();
+	await openSettingsSection(page, "mcp");
 	await expect(page.getByTestId("settings-mcp")).toBeVisible();
-}
-
-async function closeSettings(page: Page): Promise<void> {
-	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("settings-dialog")).toBeHidden();
 }
 
 function serverRow(page: Page, name: string) {
 	return page.locator(`[data-testid="mcp-server-row"][data-name="${name}"]`);
+}
+
+function groupRow(page: Page, group: "mcp-user-servers" | "mcp-project-servers", name: string) {
+	return page.getByTestId(group).locator(`[data-testid="mcp-server-row"][data-name="${name}"]`);
+}
+
+function userEntry(name: string): Record<string, unknown> | undefined {
+	const config = JSON.parse(readFileSync(USER_CONFIG, "utf8")) as {
+		mcpServers?: Record<string, Record<string, unknown>>;
+	};
+	return config.mcpServers?.[name];
 }
 
 type McpWrite = WsRequest<"mcp.add"> | WsRequest<"mcp.setProjectOverride">;
@@ -194,17 +206,45 @@ test("a stdio server added through the form connects in a chat, is disabled ther
 	rmSync(USER_CONFIG, { force: true });
 	try {
 		await openFixtureProject(page);
+		const at = Date.now();
 		seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 			name: "MCP chat",
-			messages: [{ role: "user", text: "Use the fixture server.", timestamp: Date.now() }],
+			messages: [
+				{ role: "user", text: "Use the fixture server.", timestamp: at },
+				{
+					role: "assistant",
+					content: [
+						{
+							type: "toolCall",
+							id: "call-fixture-echo",
+							name: "mcp__fixture__echo",
+							arguments: { text: "ping" },
+						},
+					],
+					stopReason: "toolUse",
+					timestamp: at + 1,
+				},
+				{
+					role: "toolResult",
+					toolCallId: "call-fixture-echo",
+					toolName: "mcp__fixture__echo",
+					content: [{ type: "text", text: "ECHO_PING" }],
+					details: { server: "fixture", tool: "echo" },
+					isError: false,
+					timestamp: at + 2,
+				},
+			],
 		});
 		await enterDefaultWorkspace(page);
 		await openPersistedChat(page, "MCP chat");
 
 		await openMcpSettings(page);
 		const settings = page.getByTestId("settings-mcp");
-		await expect(settings.getByTestId("mcp-confirm-banner")).toHaveText(
+		await expect(settings.getByTestId("mcp-confirm-text")).toHaveText(
 			"ThinkRail asks in the chat before MCP calls that may change data. Always allow trusts a tool in every chat of this project; those tools are listed on their server below.",
+		);
+		await expect(settings.getByTestId("mcp-host-notice")).toHaveText(
+			"Servers run on the host that runs ThinkRail and inherit its environment.",
 		);
 		await settings.getByTestId("mcp-empty-add").click();
 		const dialog = page.getByTestId("mcp-add-dialog");
@@ -227,7 +267,8 @@ test("a stdio server added through the form connects in a chat, is disabled ther
 		);
 
 		const row = serverRow(page, "fixture");
-		await expect(row.getByTestId("mcp-server-scope")).toHaveText("User");
+		await expect(groupRow(page, "mcp-user-servers", "fixture")).toHaveCount(1);
+		await expect(row).toHaveAttribute("data-scope", "user");
 		await expect(row.getByTestId("mcp-server-transport")).toContainText("stdio");
 		await expect(row.getByTestId("mcp-server-status")).toHaveText("Connected · 4 tools", {
 			timeout: 30_000,
@@ -240,10 +281,23 @@ test("a stdio server added through the form connects in a chat, is disabled ther
 		await expect(chatRow.getByTestId("resource-mcp-state")).toHaveText("Connected · 4 tools", {
 			timeout: 30_000,
 		});
-		await chatRow.getByTestId("resource-mcp-disable").click();
+		await expect(chatRow.getByTestId("resource-mcp-disable")).toHaveCount(0);
+		await chatRow.getByRole("option").click();
+		await expect(chatRow).toHaveAttribute("data-selected", "true");
+		const detail = inspector.getByTestId("resource-mcp-detail");
+		await expect(detail).toHaveAttribute("data-name", "fixture");
+		await expect(detail).toContainText("stdio · runs on host");
+		const call = inspector.locator('[data-testid="resource-mcp-call"]');
+		await expect(call).toHaveCount(1);
+		await expect(call).toHaveAttribute("data-status", "done");
+		await expect(call).toContainText("echo");
+		await call.getByTestId("resource-mcp-call-toggle").click();
+		await expect(call).toContainText("ECHO_PING");
+		await shot(inspector, "chat-resources", "mcp-detail");
+		await detail.getByTestId("resource-mcp-disable").click();
 		await expect(chatRow).toHaveAttribute("data-state", "disabled-in-chat", { timeout: 30_000 });
 		await expect(chatRow.getByTestId("resource-mcp-state")).toHaveText("Disabled in this chat");
-		await expect(chatRow.getByTestId("resource-mcp-enable")).toBeVisible();
+		await expect(detail.getByTestId("resource-mcp-enable")).toBeVisible();
 		await inspector.getByTestId("resources-inspector-close").click();
 
 		await openMcpSettings(page);
@@ -380,7 +434,8 @@ test("a repository-defined server flags the chat, waits for approval and starts 
 		await expect(page.getByTestId("settings-mcp")).toBeVisible();
 		const row = serverRow(page, "repo-fixture");
 		await expect(row).toHaveAttribute("data-state", "pending-approval");
-		await expect(row.getByTestId("mcp-server-scope")).toHaveText("Project");
+		await expect(groupRow(page, "mcp-project-servers", "repo-fixture")).toHaveCount(1);
+		await expect(row).toHaveAttribute("data-scope", "project");
 		await expect(row.getByTestId("mcp-server-status")).toHaveText("Pending approval");
 		await expect(row.getByTestId("mcp-server-toggle")).toBeDisabled();
 
@@ -414,5 +469,65 @@ test("a repository-defined server flags the chat, waits for approval and starts 
 		await expect(attention).toHaveCount(0, { timeout: 30_000 });
 	} finally {
 		rmSync(PROJECT_CONFIG_DIR, { recursive: true, force: true });
+	}
+});
+
+test("with no workspace open, user servers are listed, added, switched off for every project and removed", async ({
+	page,
+}) => {
+	writeFileSync(
+		USER_CONFIG,
+		JSON.stringify({ mcpServers: { "user-alpha": { command: BUN, args: [STDIO_SERVER] } } }),
+	);
+	try {
+		await openAppFresh(page);
+		await openMcpSettings(page);
+		const settings = page.getByTestId("settings-mcp");
+		await expect(settings.getByTestId("mcp-no-workspace")).toHaveCount(0);
+		await expect(settings.getByTestId("mcp-project-servers")).toHaveCount(0);
+		await expect(settings.getByTestId("mcp-project-servers-hint")).toHaveText(
+			"Project servers appear when a workspace is open.",
+		);
+		const alpha = groupRow(page, "mcp-user-servers", "user-alpha");
+		await expect(alpha.getByTestId("mcp-server-status")).toHaveText("On");
+		await expect(alpha.getByTestId("mcp-server-action")).toHaveCount(0);
+
+		await settings.getByTestId("mcp-add").click();
+		const dialog = page.getByTestId("mcp-add-dialog");
+		await expect(dialog.getByTestId("mcp-add-scope")).toHaveCount(0);
+		await expect(dialog.getByTestId("mcp-add-user-only")).toBeVisible();
+		await dialog.getByTestId("mcp-form-name").fill("user-beta");
+		await dialog.getByTestId("mcp-form-command").fill(BUN);
+		await dialog.getByTestId("mcp-form-args").fill(STDIO_SERVER);
+		await dialog.getByTestId("mcp-add-submit").click();
+		await dialog.getByTestId("mcp-add-confirm").click();
+		await expect(dialog).toBeHidden();
+		const beta = groupRow(page, "mcp-user-servers", "user-beta");
+		await expect(beta.getByTestId("mcp-server-status")).toHaveText("On");
+		await expect(settings.getByTestId("mcp-feedback")).toContainText("pi CLI");
+		expect(userEntry("user-beta")).toMatchObject({ command: BUN, args: [STDIO_SERVER] });
+
+		const toggle = beta.getByTestId("mcp-server-toggle");
+		await expect(toggle).toHaveAttribute("aria-label", "Disable user-beta");
+		await toggle.click();
+		await expect(toggle).toHaveAttribute("aria-checked", "false");
+		await expect(beta).toContainText("Turned off.");
+		await expect(beta).not.toContainText("this project");
+		expect(userEntry("user-beta")?.enabled).toBe(false);
+		await toggle.click();
+		await expect(toggle).toHaveAttribute("aria-checked", "true");
+		await expect.poll(() => userEntry("user-beta")?.enabled).toBeUndefined();
+
+		await beta.getByTestId("mcp-server-details").focus();
+		await page.keyboard.press("Delete");
+		await expect(page.getByRole("alertdialog", { name: "Remove user-beta?" })).toBeVisible();
+		await page.getByTestId("mcp-remove-confirm").click();
+		await expect(beta).toHaveCount(0);
+		expect(userEntry("user-beta")).toBeUndefined();
+		await expect(alpha.getByTestId("mcp-server-details")).toBeFocused();
+		await expect(settings.getByTestId("mcp-project-servers-hint")).toBeVisible();
+		await closeSettings(page);
+	} finally {
+		rmSync(USER_CONFIG, { force: true });
 	}
 });

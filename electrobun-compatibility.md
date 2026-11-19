@@ -58,6 +58,16 @@ product contract (it then guards upstream's behavior instead).
   `quitShortcut.ts`, `keyState.ts`. **Removal gate:** menu actions carry a key-repeat flag and their
   trigger (key or pointer). Verify `repeatGate.test.ts`, `quitShortcut.test.ts`, `keyState.test.ts`.
 
+- **Static agent mockups inside the desktop window.** Owner [[module-resource-renderers]] (the
+  interactive-HTML rule), `apps/web/src/shell/nativeBridges.ts` + `AppResourceHost.tsx`. Electrobun 2.0.5
+  registers its WebKit message handlers (`bunBridge`, `internalBridge`) for every frame, and the internal RPC
+  dispatcher runs `webviewTagExecuteJavascript` in a view id the caller supplies, so any script in a subframe
+  — even an opaque `sandbox="allow-scripts"` one — reaches native code and the trusted page; the web app
+  therefore registers no interactive-HTML globs when its page has a native message bridge. **Removal gate:**
+  native message handlers answer only the main frame and the internal dispatcher rejects target views its
+  caller does not own, on WebKit (macOS, Linux) and WebView2. Verify `nativeBridges.test.ts` and a scripted
+  subframe probe against the packaged app.
+
 ## Windows identity
 
 - **Executable icon groups and VERSIONINFO.** Owner [[module-desktop]], `postBuild.ts`,
@@ -79,6 +89,12 @@ product contract (it then guards upstream's behavior instead).
   `quitCoordinator.ts`. **Removal gate:** the first `applyUpdate()` arms its replacement helper despite
   the `before-quit` veto. Verify `quitCoordinator.test.ts`, `installJourney.test.ts` and updater
   qualification.
+- **Cold-launch `open-url` listener before the SDK.** Owner [[module-desktop]], `entry.ts`,
+  `deepLinkBootstrap.ts`. `open-url` has no replay, and `electrobun/main` installs the native URL handler
+  that delivers a cold-launch link while it loads, so `entry.ts` imports the bootstrap's listener first.
+  **Removal gate:** Electrobun replays or buffers `open-url` for a listener added after startup. Verify
+  `buildConfig.test.ts` (entry order), `deepLinkBootstrap.test.ts` and a cold launch from a
+  `thinkrail://` link.
 - **Leaving the bundle directory at startup.** Owner [[module-desktop]], `index.ts`. **Removal gates:**
   the read-before-`chdir` ordering goes once Electrobun resolves resources from the executable path;
   the `chdir` goes once its launcher starts the main process outside the replaceable bundle. Verify a
@@ -124,8 +140,9 @@ product contract (it then guards upstream's behavior instead).
 ## Not temporary workarounds
 
 No custom SDK resolver, metadata validator or command runner; the web-owned title bar; Linux without an
-application menu; and unsupported DevTools focus and notification-click callbacks are deliberate
-choices or accepted gaps in [[module-desktop]]. An Electrobun upgrade does not remove them silently.
+application menu; unsupported DevTools focus and notification-click callbacks; and `thinkrail://` links
+only on macOS (`app.urlSchemes` registers nothing on Windows or Linux) are deliberate choices or accepted
+gaps in [[module-desktop]]. An Electrobun upgrade does not remove them silently.
 
 These native identity gaps, present in Electrobun 2.0.5 / Hutch 0.28.2, are accepted rather than
 worked around; an upgrade that closes one drops it from this list:

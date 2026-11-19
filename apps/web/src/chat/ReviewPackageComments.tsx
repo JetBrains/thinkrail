@@ -33,7 +33,7 @@ function PackageCommentRow({
 				data-testid="review-package-item-toggle"
 				aria-expanded={expanded}
 				onClick={toggle}
-				className="flex w-full cursor-pointer select-none items-start gap-4 rounded-sm px-4 py-4 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex w-full cursor-pointer select-none items-start gap-4 rounded-sm px-4 py-4 text-left transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring-inset"
 			>
 				<ChevronRight
 					className={cn(

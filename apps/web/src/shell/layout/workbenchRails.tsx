@@ -6,9 +6,11 @@ import {
 } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
+import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
+import { LOCAL_KEY_DEFAULTS } from "../../keybindings";
 import { type LayoutAttention, tupleKey } from "../../lib";
 import {
 	AuxiliaryRail,
@@ -100,6 +102,12 @@ export function AuxiliaryRailButton({
 		disabled: !dropEnabled,
 	});
 	const active = entry.selected && entry.expanded;
+	const shortcut =
+		entry.kind === "tool"
+			? shared.chromeShortcuts?.tools[entry.tool]
+			: entry.kind === "terminals" || entry.region === "bottom"
+				? shared.chromeShortcuts?.terminal
+				: undefined;
 	const name =
 		entry.kind === "tool"
 			? layoutTabName(t, toolTab(entry.tool))
@@ -122,6 +130,7 @@ export function AuxiliaryRailButton({
 						name
 					)
 				}
+				shortcut={shortcut}
 				side={railTooltipSide(entry.region)}
 			>
 				<button
@@ -166,6 +175,16 @@ export function AuxiliaryRailButton({
 					) : (
 						<PanelsTopLeft className={RAIL_ICON} />
 					)}
+					{entry.kind === "tool" ? (
+						<span
+							className={cn(
+								"pointer-events-none absolute -right-4 flex",
+								entry.region === "bottom" ? "top-0" : "-top-4",
+							)}
+						>
+							{shared.renderTabAdornment(toolTab(entry.tool))}
+						</span>
+					) : null}
 					{entry.kind === "terminals" && ordinal > 1 ? (
 						<span
 							aria-hidden="true"
@@ -188,13 +207,16 @@ export function AuxiliaryRegionRail({
 	shared,
 	attention,
 	trailing,
+	footer,
 }: {
 	region: LayoutAuxiliaryRegion;
 	shared: SharedGroupProps;
 	attention: LayoutAttention;
 	trailing?: ReactNode;
+	footer?: ((control: AuxiliaryRailControlProps) => ReactNode) | undefined;
 }) {
 	const t = useT();
+	const keys = useLocalKeys("rails", LOCAL_KEY_DEFAULTS.rails);
 	const entries = projectAuxiliaryRail(shared.document, attention, region);
 	const groups = shared.document[region].groups;
 	const draggedAuxiliary =
@@ -257,6 +279,7 @@ export function AuxiliaryRegionRail({
 			<AuxiliaryRail
 				region={region}
 				entries={entries}
+				footer={footer}
 				renderBoundary={renderBoundary}
 				trailing={
 					hiddenSideDrop ? (
@@ -303,6 +326,7 @@ export function AuxiliaryRegionRail({
 									rail={{
 										...control,
 										entryKey: entry.key,
+										shortcut: shared.chromeShortcuts?.tools[entry.tool],
 										vertical: region !== "bottom",
 										beforeIndex: anchor(entry),
 										afterIndex,
@@ -328,27 +352,23 @@ export function AuxiliaryRegionRail({
 									onRenameChat={shared.onRenameChat}
 									canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
 									renderTabAdornment={shared.renderTabAdornment}
+									worktreePath={shared.worktreePath}
 									draggingTab={shared.draggingTab}
 									panelId={groupPanelId(location)}
 									onKeyDown={(event) => {
 										if (!entry.tab) return;
-										if (
-											event.key === "Delete" &&
-											!event.altKey &&
-											!event.ctrlKey &&
-											!event.metaKey
-										) {
+										const local = keys.match(event.nativeEvent);
+										if (local === "rails.remove") {
 											event.preventDefault();
 											shared.onClose(entry.tab);
 											return;
 										}
-										if (!event.altKey || !event.shiftKey) return;
+										const [before, after] =
+											region === "bottom"
+												? ["rails.moveLeft", "rails.moveRight"]
+												: ["rails.moveUp", "rails.moveDown"];
 										const target =
-											event.key === (region === "bottom" ? "ArrowLeft" : "ArrowUp")
-												? previousIndex
-												: event.key === (region === "bottom" ? "ArrowRight" : "ArrowDown")
-													? nextIndex
-													: undefined;
+											local === before ? previousIndex : local === after ? nextIndex : undefined;
 										if (target === undefined) return;
 										event.preventDefault();
 										const moved = moveTabToGroup(shared.document, entry.tab, location, target);

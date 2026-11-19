@@ -86,6 +86,16 @@ export interface NativeNotificationBridge {
 	isWindowFocused?: () => boolean;
 }
 
+export interface NativeOpenFileRequest {
+	file: string;
+	line: number;
+	column?: number;
+}
+
+export interface NativeDeepLinkBridge {
+	subscribe(listener: (request: NativeOpenFileRequest) => void): () => void;
+}
+
 export type NativeQuitHint = "hidden" | "armed" | "release" | "quitting";
 
 export type NativeCommand = "close-item" | "open-settings";
@@ -94,6 +104,12 @@ export interface NativeShortcutsBridge {
 	subscribeQuitHint(listener: (hint: NativeQuitHint) => void): () => void;
 	subscribeCommand(listener: (command: NativeCommand) => void): () => void;
 	quit(): Promise<void>;
+}
+
+export type NativePageZoomAction = "in" | "out" | "reset";
+
+export interface NativePageZoomBridge {
+	request(action: NativePageZoomAction): void;
 }
 
 /** Translated labels for the desktop's custom native menu items, keyed by catalog key. */

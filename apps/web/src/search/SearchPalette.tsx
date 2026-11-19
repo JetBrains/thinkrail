@@ -20,9 +20,12 @@ import { localeOf, type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { Keycaps } from "@thinkrail/ui/keycaps";
+import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import {
+	Fragment,
 	type KeyboardEvent as ReactKeyboardEvent,
 	type MouseEvent as ReactMouseEvent,
 	type ReactNode,
@@ -36,9 +39,10 @@ import {
 } from "react";
 import { shortcutKeys } from "../commands";
 import { AttentionDot } from "../components/AttentionDot";
-import { Keycaps, KeyHint } from "../components/Keycaps";
+import { KeyHint } from "../components/KeyHint";
 import { highlightRanges } from "../components/MatchHighlight";
 import { RunningIcon } from "../components/RunningIcon";
+import { LOCAL_KEY_DEFAULTS } from "../keybindings";
 import { hasPlatformModifier, useMediaQuery } from "../lib";
 import { selectHostReachable, useAppStore } from "../store";
 import { hostItems, hostOverflow } from "./hostItems";
@@ -58,6 +62,7 @@ import type {
 	PaletteSection,
 	PaletteStart,
 } from "./model";
+import { currentPlaceIds } from "./places";
 import { readLearning, readPreviewOpen, writeLearning, writePreviewOpen } from "./preferences";
 import {
 	parseSearchQuery,
@@ -151,6 +156,7 @@ function PaletteContent({
 	notice,
 }: SearchPaletteProps) {
 	const t = useT();
+	const keys = useLocalKeys("palette", LOCAL_KEY_DEFAULTS.palette);
 	const [query, setQuery] = useState("");
 	const [expanded, setExpanded] = useState<ReadonlySet<string>>(NO_GROUPS);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -160,6 +166,7 @@ function PaletteContent({
 	const generation = useAppStore((s) => s.welcomeGeneration);
 	const [learning, setLearning] = useState(readLearning);
 	const [nowMs] = useState(Date.now);
+	const [currentPlaces] = useState(() => currentPlaceIds(useAppStore.getState()));
 	const inputRef = useRef<HTMLInputElement>(null);
 	const listRef = useRef<HTMLDivElement>(null);
 	const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -238,6 +245,7 @@ function PaletteContent({
 				learning,
 				nowMs,
 				keep: selectedId,
+				currentPlaces,
 			}),
 		[
 			ranked,
@@ -253,6 +261,7 @@ function PaletteContent({
 			learning,
 			nowMs,
 			selectedId,
+			currentPlaces,
 		],
 	);
 	const rows = useMemo(() => flattenRows(sections), [sections]);
@@ -294,7 +303,7 @@ function PaletteContent({
 	};
 
 	const remember = (item: PaletteItem) => {
-		const next = recordPick(learning, parsed.text, item.id, Date.now());
+		const next = recordPick(readLearning(), parsed.text, item.id, Date.now(), currentPlaces);
 		setLearning(next);
 		writeLearning(next);
 	};
@@ -354,9 +363,26 @@ function PaletteContent({
 		});
 	};
 
+	const runLocal = (local: string | null, repeat: boolean): boolean => {
+		if (local === "palette.startWork") {
+			if (!repeat) startFromText();
+			return true;
+		}
+		if (askInput && local === "palette.ask") {
+			if (!repeat) askFromText();
+			return true;
+		}
+		if (local === "palette.preview") {
+			if (wide) togglePreview();
+			return true;
+		}
+		return false;
+	};
+
 	const onEscapeKeyDown = (event: KeyboardEvent) => {
 		event.preventDefault();
 		if (isImeComposing(event)) return;
+		if (runLocal(keys.match(event), event.repeat)) return;
 		if (!event.isTrusted || !query) {
 			onClose();
 			return;
@@ -377,31 +403,22 @@ function PaletteContent({
 			event.preventDefault();
 			if (fromFrame) inputRef.current?.focus();
 		};
+		const local = keys.match(event.nativeEvent);
+		if (runLocal(local, event.repeat)) {
+			claim();
+			return;
+		}
+		const commandModifier = event.altKey || event.ctrlKey || event.metaKey;
+		if (event.key === "Tab") {
+			claim();
+			if (local === null && !commandModifier) cycleScope(event.shiftKey ? -1 : 1);
+			return;
+		}
 		const mod = hasPlatformModifier(event.nativeEvent);
 		if (mod && event.code === "KeyK" && !event.shiftKey && !event.altKey) {
 			event.preventDefault();
 			event.stopPropagation();
 			onClose();
-			return;
-		}
-		if (event.key === "Tab") {
-			claim();
-			cycleScope(event.shiftKey ? -1 : 1);
-			return;
-		}
-		if (mod && event.key === "Enter" && !event.altKey && !event.shiftKey) {
-			claim();
-			if (!event.repeat) startFromText();
-			return;
-		}
-		if (askInput && event.altKey && event.key === "Enter" && !mod && !event.shiftKey) {
-			claim();
-			if (!event.repeat) askFromText();
-			return;
-		}
-		if (mod && event.code === "KeyI" && !event.shiftKey && !event.altKey) {
-			claim();
-			if (wide) togglePreview();
 			return;
 		}
 		const chord = scopeChordIndex(event.nativeEvent);
@@ -413,19 +430,23 @@ function PaletteContent({
 			}
 			return;
 		}
-		switch (event.key) {
-			case "ArrowDown":
-				claim();
-				select(selectedIndexRef.current + 1);
-				return;
-			case "ArrowUp":
-				claim();
-				select(selectedIndexRef.current - 1);
-				return;
-			case "Enter":
-				claim();
-				if (!event.repeat) activate(selected);
-				return;
+		if (local === null && !commandModifier) {
+			switch (event.key) {
+				case "ArrowDown":
+					if (event.shiftKey) break;
+					claim();
+					select(selectedIndexRef.current + 1);
+					return;
+				case "ArrowUp":
+					if (event.shiftKey) break;
+					claim();
+					select(selectedIndexRef.current - 1);
+					return;
+				case "Enter":
+					claim();
+					if (!event.repeat) activate(selected);
+					return;
+			}
 		}
 		if (fromFrame && !event.ctrlKey && !event.metaKey && !MODIFIER_KEYS.has(event.key)) {
 			inputRef.current?.focus();
@@ -560,13 +581,10 @@ function PaletteContent({
 						<KeyHint keys={["↵"]} label={t(enterLabel(selected?.item))} />
 						<KeyHint keys={["Tab"]} label={t("search.hint.scope")} />
 						{startInput ? (
-							<KeyHint
-								keys={shortcutKeys({ key: "↵", mod: true })}
-								label={t("search.hint.start")}
-							/>
+							<KeyHint keys={keys.caps("palette.startWork")} label={t("search.hint.start")} />
 						) : null}
 						{askInput && !askInput.disabledReason && selected?.item.kind !== "ask" ? (
-							<KeyHint keys={shortcutKeys({ key: "↵", alt: true })} label={t("search.hint.ask")} />
+							<KeyHint keys={keys.caps("palette.ask")} label={t("search.hint.ask")} />
 						) : null}
 						<KeyHint keys={["esc"]} label={t(query ? "search.hint.clear" : "search.hint.close")} />
 					</div>
@@ -585,7 +603,7 @@ function PaletteContent({
 							onClick={togglePreview}
 						>
 							{t("search.palette.preview")}
-							<Keycaps keys={shortcutKeys({ key: "I", mod: true })} />
+							<Keycaps keys={keys.caps("palette.preview")} />
 						</Button>
 					) : null}
 				</footer>
@@ -862,8 +880,11 @@ function Row({
 					<RowTitle title={item.title} lead={item.titleLead ?? 0} ranges={row.ranges.title} />
 				</span>
 				{item.subtitle ? (
-					<span className="truncate tr-text-metadata text-text-subtle">
-						{highlightRanges(item.subtitle, row.ranges.subtitle)}
+					<span
+						data-testid="search-row-subtitle"
+						className="truncate tr-text-metadata text-text-subtle"
+					>
+						{highlightSpans(item.subtitle, row.ranges.subtitle, item.subtitleEmphasis)}
 					</span>
 				) : null}
 			</span>
@@ -891,19 +912,35 @@ function RowTitle({
 	lead: number;
 	ranges: readonly (readonly [number, number])[] | undefined;
 }): ReactNode {
-	if (lead <= 0) return highlightRanges(title, ranges);
-	const before = ranges
-		.filter(([start]) => start < lead)
-		.map(([start, end]): [number, number] => [start, Math.min(end, lead)]);
-	const after = ranges
-		.filter(([, end]) => end > lead)
-		.map(([start, end]): [number, number] => [Math.max(start, lead) - lead, end - lead]);
-	return (
-		<>
-			<span className="text-text-muted">{highlightRanges(title.slice(0, lead), before)}</span>
-			{highlightRanges(title.slice(lead), after)}
-		</>
-	);
+	return highlightSpans(title, ranges, lead > 0 ? [[0, lead]] : undefined);
+}
+
+type Span = readonly [number, number];
+
+function highlightSpans(
+	text: string,
+	ranges: readonly Span[] | undefined,
+	spans: readonly Span[] | undefined,
+): ReactNode {
+	if (!spans?.length) return highlightRanges(text, ranges);
+	const cuts = [...new Set([0, text.length, ...spans.flat()])]
+		.filter((cut) => cut >= 0 && cut <= text.length)
+		.sort((a, b) => a - b);
+	return cuts.slice(1).map((end, index) => {
+		const start = cuts[index] ?? 0;
+		const inner = (ranges ?? [])
+			.filter(([from, to]) => from < end && to > start)
+			.map(([from, to]): Span => [Math.max(from, start) - start, Math.min(to, end) - start]);
+		const content = highlightRanges(text.slice(start, end), inner);
+		const marked = spans.some(([from, to]) => from <= start && end <= to);
+		return marked ? (
+			<span key={start} className="text-text-muted">
+				{content}
+			</span>
+		) : (
+			<Fragment key={start}>{content}</Fragment>
+		);
+	});
 }
 
 function Preview({

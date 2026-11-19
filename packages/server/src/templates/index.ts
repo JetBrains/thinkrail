@@ -1,7 +1,6 @@
 export {
 	deleteTemplate,
 	getTemplate,
-	isValidTemplateName,
 	listTemplates,
 	saveTemplate,
 	type TemplateDirs,

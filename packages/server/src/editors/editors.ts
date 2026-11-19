@@ -38,10 +38,18 @@ const PATH_SCAN_CONCURRENCY = 8;
 
 export type WhichFn = (bin: string) => string | null;
 
-async function binsListedIn(dir: string, bins: readonly string[]): Promise<Set<string> | null> {
+type ListDirFn = (dir: string) => Promise<string[]>;
+
+const listDirEntries: ListDirFn = (dir) => readdir(dir);
+
+async function binsListedIn(
+	dir: string,
+	bins: readonly string[],
+	listDir: ListDirFn,
+): Promise<Set<string> | null> {
 	let entries: string[];
 	try {
-		entries = await readdir(dir);
+		entries = await listDir(dir);
 	} catch (error) {
 		const code = (error as NodeJS.ErrnoException).code;
 		return code === "ENOENT" || code === "ENOTDIR" ? new Set() : null;
@@ -57,6 +65,7 @@ async function binsListedIn(dir: string, bins: readonly string[]): Promise<Set<s
 export async function pathWhich(
 	bins: readonly string[],
 	searchPath: string = process.env.PATH ?? "",
+	listDir: ListDirFn = listDirEntries,
 ): Promise<WhichFn> {
 	const names = bins.map((bin) => bin.toLowerCase());
 	const dirs = searchPath.split(delimiter).filter(Boolean);
@@ -65,7 +74,7 @@ export async function pathWhich(
 	const scan = async () => {
 		while (next < dirs.length) {
 			const index = next++;
-			listed[index] = await binsListedIn(dirs[index] ?? "", names);
+			listed[index] = await binsListedIn(dirs[index] ?? "", names, listDir);
 		}
 	};
 	await Promise.all(Array.from({ length: Math.min(PATH_SCAN_CONCURRENCY, dirs.length) }, scan));

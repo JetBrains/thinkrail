@@ -304,7 +304,7 @@ describe("settlement outcomes do not equate stop with verified success", () => {
 		["error", "error"],
 		["length", "truncated"],
 		["aborted", "aborted"],
-		["toolUse", "other"],
+		["toolUse", "normal_stop"],
 	] as const) {
 		test(stopReason, () => {
 			expect(runOutcome({ type: "agent_settled", terminal: { stopReason } })).toBe(expected);

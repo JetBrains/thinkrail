@@ -63,6 +63,12 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   recency, and a prewarm can never demote a real watcher (including across an inode-change
   re-creation). Correctness under eviction rides the existing recovery paths: the next real call
   re-creates the watcher and its fresh conservative startup nudge covers the blind window.
+- **On macOS a fresh watcher may report writes made just before it started.** FSEvents coalesces over a
+  short latency, so a `.git` pointer or `HEAD` written moments before `ensureWatch` can arrive as the
+  watcher's first events and produce one repo-metadata nudge. In the product that is one redundant
+  refresh at watch start. A test that asserts silence therefore awaits `ensureWatch`, waits past the
+  debounce, and clears what it collected before acting. The submodule test failed on macOS until it did
+  this, because it counted its own setup writes.
 - **On Linux each directory gets its own watcher, and ignored folders get none.** Bun's recursive watch
   there adds an inotify watch per directory, so a large git-ignored folder used up
   `fs.inotify.max_user_watches` and every start failed (#852); Bun keeps all watches on one inotify
@@ -137,7 +143,13 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
     for a remote dir appearing or vanishing — `git pack-refs` deletes an emptied `refs/remotes/<remote>/`
     and the next push recreates it. Unlike the sources above these match exact names: the shared dir
     serves every worktree of the repo, so another branch's ref update must not nudge this one, and a ref
-    update always ends in a rename onto the ref's own name. Whenever the nudge fires, the target set is
+    update always ends in a rename onto the ref's own name. Name matching alone is not enough, because
+    `packed-refs` and the `refs/remotes` directory are shared by every worktree. A `git pack-refs`, or a
+    push that recreates a packed-away remote dir, used to nudge every watched worktree of the repo at
+    once (15 of 15 in a probe). So a ref event only schedules a **check**: after the debounce it re-derives
+    this worktree's remote-tracking refs by value (loose refs over `packed-refs`, per remote) and nudges
+    only when they differ from the last-known state. Every other nudge refreshes that baseline, and a
+    reftable repo, whose refs it cannot read, stays conservative and always nudges. Whenever the nudge fires, the target set is
     re-derived and every one of these watches is closed and re-created, never diffed against the old set:
     `git pack-refs` and the next push can delete and recreate a remote dir within one debounce, under the
     same path and often (ext4) the same inode, so a kept watch would stay bound to the deleted dir. A
@@ -173,7 +185,16 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   while unwatched still records activity, while an unchanged HEAD is a no-op. It runs inside the registration's guarded
   region, and a throw there — from it or from anything after `entries.set` — tears the fresh entry down
   (`stopWatch`) rather than leaving a registered watcher whose readiness never settles.
-- **Public surface (barrel):** `ensureWatch`, `stopWatch`, `stopAllWatches`, `setWatchPublisher`,
-  `setRepoMetaPublisher`, `setWatchStartedPublisher`, `setSkillPathClassifier`, `setIgnoredPathsResolver`.
+- **Host-owned mutations (fourth seam):** `notifyWorkspacePathsChanged(workspaceId, paths, { subtrees? })`
+  publishes one immediate invalidation after a successful host mutation (the Files tree's copy and
+  delete). It bypasses the coalescer and the ignore filter, so a copy into `node_modules` or a gitignored,
+  unwatched folder still converges; the later native frame, if any, is a harmless duplicate. The same
+  100-path cap applies (`truncated: true` past it), and skill relevance comes from the same injected
+  classifier over every listed path, before the cap. `subtrees` says each path also stands for
+  descendants the call does not list (a deleted folder): a path the classifier rejects then contributes
+  `unknown`, never false-clean — the same rule as a null filename.
+- **Public surface (barrel):** `ensureWatch`, `notifyWorkspacePathsChanged`, `stopWatch`, `stopAllWatches`,
+  `setWatchPublisher`, `setRepoMetaPublisher`, `setWatchStartedPublisher`, `setSkillPathClassifier`,
+  `setIgnoredPathsResolver`.
 - **Allowed deps:** `persistence` (workspace lookup), `log`; `contracts` (payload type); Bun/Node.
 - **Forbidden:** `host`; sibling features; any pi package.

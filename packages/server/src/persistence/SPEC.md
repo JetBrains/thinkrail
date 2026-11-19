@@ -82,16 +82,26 @@ Analytics config preserves a saved boolean preference and a valid `analyticsCons
 independently; absent/malformed values default false. A preference-only write never implies completion.
 Settings owns initial preference priming and preference-plus-confirmation writes.
 
+Every config save stamps `configVersion` (currently `1`); load strips it, so it never reaches `AppConfig`
+or the wire. A config without it was written before version 1, and version 1's one step loads its stored
+question panel height 60 (the old default) as 70 ([[submodule-server-settings]]); the next save stamps the
+version, so a 60 chosen later stays. A later value migration bumps the version and adds its own step. A
+newer host's higher version is not kept: this host stamps its own.
+
 An absent `otherAgentSkills` defaults by install age: `true` in a stored config that lacks it, since only a host
 from before the switch writes one (it loaded other agents' skills, #1210), and `false` with no readable config.
 Every config this host saves carries the field, so the default never flips later; an old install that never
 saved a config gets the new default.
 
+Config validation normalizes `disabledSubagents` like `disabledExtensions`: absent/non-array → `[]`, malformed entries dropped, non-blank names deduped, unknown names retained.
+
 Config validation normalizes the closed theme mode plus complete opaque system pair, the closed
 composer-growth preference, the closed Windows terminal-shell preference (invalid/absent →
 `DEFAULT_CONFIG.terminalWindowsShell`), the question panel height (whole `40–100` percent), chat/file line
 widths plus their pane-bound switches, and the
-JetBrains quota boolean + whole `1–3600` second cadence over their defaults; it accepts only the current bounded
+JetBrains quota boolean + whole `1–3600` second cadence over their defaults, and the `keybindings` map
+(chords failing `isKeybindingChord` dropped, an entry left with none dropped, unknown ids and stored `[]`
+kept); it accepts only the current bounded
 `customLayoutPresets` catalog as synchronized layout data. Current/default preset ids, group limits, and
 chat message order are not config fields; retired config shapes are stripped rather than upgraded or
 preserved as extensions. Historical `layouts/` files remain untouched and inert.

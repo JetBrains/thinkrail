@@ -57,8 +57,9 @@ terminal state for foreign workspaces.
       red flags for discipline violations, positive recipes for output shape.
 - [ ] Durable output goes to the spec graph (rule 8). If the workflow needs ephemeral working files —
       resume state, scratch plans — declare them (rule 9): name their shape in the skill and put them
-      in the workspace's gitignored `.thinkrail/context/` (the home for every temp doc), consume/delete
-      them when the work lands, and promote anything durable to specs before cleanup.
+      in the workspace's gitignored `.thinkrail/context/` (the home for every temp doc), retire rather
+      than delete them when the work lands (a task-spec gets `status: done`; only the user removes
+      artifacts), and promote anything durable to specs before retiring them.
 - [ ] End the body by naming the ending chosen in Design (rule 6) — a concept skips this: no ending
       section.
 

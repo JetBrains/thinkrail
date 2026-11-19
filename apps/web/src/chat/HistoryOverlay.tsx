@@ -8,6 +8,7 @@ import type { HistoryScope, MessageHit, PromptHit } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
+import { isContextMenuKey } from "@thinkrail/ui/context-menu";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -15,10 +16,12 @@ import {
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useNow } from "@/components/useNow";
-import { fileName, firstNonBlankLine, platformShortcutLabel, relativeTime } from "@/lib";
+import { LOCAL_KEY_DEFAULTS } from "@/keybindings";
+import { fileName, firstNonBlankLine, relativeTime } from "@/lib";
 import {
 	type ChatLocationRequest,
 	type HistorySearchState,
@@ -41,8 +44,6 @@ const SCOPE_MENU_LABELS = {
 	project: "chat.history.scopeMenu.project",
 	all: "chat.history.scopeMenu.all",
 } satisfies Record<HistoryScope["kind"], MessageKey>;
-
-const SAVE_SHORTCUT_LABEL = platformShortcutLabel("S");
 
 function escapeRegExp(term: string): string {
 	return term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -120,28 +121,98 @@ function DeleteChatButton({
 	);
 }
 
+type DeletableChat = { workspaceId: string; sessionId: string };
+
+function HistoryEntryMenu({
+	item,
+	deletable,
+	onClose,
+	onOpenMessage,
+	onSaveAsTemplate,
+	onDeleteChat,
+	onRestoreFocus,
+}: {
+	item: HistorySelection;
+	deletable: DeletableChat | null;
+	onClose: () => void;
+	onOpenMessage: (target: ChatLocationRequest) => void;
+	onSaveAsTemplate: (hit: PromptHit) => void;
+	onDeleteChat: (workspaceId: string, sessionId: string) => void;
+	onRestoreFocus: () => void;
+}) {
+	const t = useT();
+	const target = jumpTarget(item.hit);
+	return (
+		<DropdownMenu
+			open
+			onOpenChange={(open) => {
+				if (!open) onClose();
+			}}
+		>
+			<DropdownMenuTrigger asChild>
+				<span aria-hidden className="pointer-events-none absolute bottom-0 left-8 h-0 w-0" />
+			</DropdownMenuTrigger>
+			<DropdownMenuContent
+				align="start"
+				data-testid="history-entry-menu"
+				aria-label={t("chat.history.entryMenu")}
+				onCloseAutoFocus={(event) => {
+					event.preventDefault();
+					onRestoreFocus();
+				}}
+			>
+				{target ? (
+					<DropdownMenuItem data-testid="history-entry-jump" onSelect={() => onOpenMessage(target)}>
+						{t("chat.history.jump")}
+					</DropdownMenuItem>
+				) : null}
+				{item.kind === "prompt" ? (
+					<DropdownMenuItem
+						data-testid="history-entry-save-template"
+						onSelect={() => onSaveAsTemplate(item.hit)}
+					>
+						{t("chat.history.saveTemplate")}
+					</DropdownMenuItem>
+				) : null}
+				{deletable ? (
+					<DropdownMenuItem
+						data-testid="history-entry-delete"
+						onSelect={() => onDeleteChat(deletable.workspaceId, deletable.sessionId)}
+					>
+						{t("chat.history.deleteChat")}
+					</DropdownMenuItem>
+				) : null}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
 function PromptRow({
 	hit,
 	highlight,
 	scope,
 	workspaceName,
 	isSelected,
+	saveShortcut,
 	onPick,
 	onSaveAsTemplate,
 	onOpenMessage,
 	onDeleteChat,
 	canDeleteChat,
+	entryMenu,
 }: {
 	hit: PromptHit;
 	highlight: HighlightTerms;
 	scope: HistoryScope;
 	workspaceName: string | undefined;
 	isSelected: boolean;
+	saveShortcut: string;
 	onPick: () => void;
 	onSaveAsTemplate: () => void;
 	onOpenMessage: (target: ChatLocationRequest) => void;
 	onDeleteChat: (workspaceId: string, sessionId: string) => void;
 	canDeleteChat: (workspaceId: string) => boolean;
+	entryMenu: ReactNode;
 }) {
 	const t = useT();
 	const now = useNow();
@@ -154,7 +225,7 @@ function PromptRow({
 			data-kind="prompt"
 			data-row={isSelected || undefined}
 			data-selected={isSelected}
-			className={`group flex w-full items-center gap-4 rounded-sm border-l-2 py-4 pl-8 pr-4 text-left tr-text-ui ${
+			className={`group relative flex w-full items-center gap-4 rounded-sm border-l-2 py-4 pl-8 pr-4 text-left tr-text-ui ${
 				isSelected
 					? "border-l-primary bg-control-bg-selected text-text-default"
 					: "border-l-transparent text-text-muted"
@@ -177,12 +248,12 @@ function PromptRow({
 					{relativeTime(t, hit.timestamp, now)}
 				</span>
 			</button>
-			{isSelected ? (
+			{isSelected && saveShortcut !== "" ? (
 				<span
 					data-testid="history-save-shortcut"
 					className="shrink-0 text-text-muted tr-text-metadata"
 				>
-					{SAVE_SHORTCUT_LABEL}
+					{saveShortcut}
 				</span>
 			) : null}
 			<IconButton
@@ -190,7 +261,11 @@ function PromptRow({
 				size="s"
 				data-testid="history-save-template"
 				label={t("chat.history.saveTemplate")}
-				tooltip={t("chat.history.saveTemplateTooltip", { shortcut: SAVE_SHORTCUT_LABEL })}
+				tooltip={
+					saveShortcut === ""
+						? t("chat.history.saveTemplate")
+						: t("chat.history.saveTemplateTooltip", { shortcut: saveShortcut })
+				}
 				onClick={(e) => {
 					e.stopPropagation();
 					onSaveAsTemplate();
@@ -228,6 +303,7 @@ function PromptRow({
 				onDeleteChat={onDeleteChat}
 				canDeleteChat={canDeleteChat}
 			/>
+			{entryMenu}
 		</div>
 	);
 }
@@ -239,6 +315,7 @@ function MessageRow({
 	onPick,
 	onDeleteChat,
 	canDeleteChat,
+	entryMenu,
 }: {
 	hit: MessageHit;
 	highlight: HighlightTerms;
@@ -246,6 +323,7 @@ function MessageRow({
 	onPick: () => void;
 	onDeleteChat: (workspaceId: string, sessionId: string) => void;
 	canDeleteChat: (workspaceId: string) => boolean;
+	entryMenu: ReactNode;
 }) {
 	const t = useT();
 	const now = useNow();
@@ -256,7 +334,7 @@ function MessageRow({
 			data-kind="message"
 			data-row={isSelected || undefined}
 			data-selected={isSelected}
-			className={`group flex w-full items-center gap-4 rounded-sm border-l-2 pr-4 tr-text-ui ${
+			className={`group relative flex w-full items-center gap-4 rounded-sm border-l-2 pr-4 tr-text-ui ${
 				isSelected
 					? "border-l-primary bg-control-bg-selected text-text-default"
 					: "border-l-transparent text-text-muted"
@@ -289,6 +367,7 @@ function MessageRow({
 				onDeleteChat={onDeleteChat}
 				canDeleteChat={canDeleteChat}
 			/>
+			{entryMenu}
 		</div>
 	);
 }
@@ -390,11 +469,14 @@ function HistoryPicker({
 	onSetScope,
 }: HistoryOverlayProps) {
 	const t = useT();
+	const keys = useLocalKeys("history", LOCAL_KEY_DEFAULTS.history);
+	const saveShortcut = keys.label("history.saveTemplate");
 	const { stage, query, scope, result, selected, error } = state;
 	const inputRef = useRef<HTMLInputElement>(null);
 	const resultsRef = useRef<HTMLDivElement>(null);
 	const rootRef = useRef<HTMLDivElement>(null);
 	const [scopeMenuOpen, setScopeMenuOpen] = useState(false);
+	const [entryMenuKey, setEntryMenuKey] = useState<string | null>(null);
 	const highlight = useMemo(() => highlightTerms(query), [query]);
 
 	useEffect(() => {
@@ -404,20 +486,30 @@ function HistoryPicker({
 		el.select();
 	}, []);
 
+	const selectedKey = useMemo(() => {
+		const sel = resolveHistorySelection(stage, result, selected);
+		if (!sel) return null;
+		return sel.kind === "prompt"
+			? `p:${sel.hit.sessionId}:${sel.hit.messageIndex ?? sel.hit.timestamp}`
+			: `m:${sel.hit.sessionId}:${sel.hit.messageIndex}`;
+	}, [stage, result, selected]);
+	const entryMenuOpen = entryMenuKey !== null && entryMenuKey === selectedKey;
+	const layerOpen = scopeMenuOpen || entryMenuOpen;
+
 	useEffect(() => {
-		if (scopeMenuOpen) return;
+		if (layerOpen) return;
 		const onWindowKeyDown = (e: globalThis.KeyboardEvent) => {
-			if (e.key !== "Escape" || isImeComposing(e)) return;
+			if (e.key !== "Escape" || isImeComposing(e) || keys.match(e) !== null) return;
 			e.preventDefault();
 			e.stopPropagation();
 			onClose();
 		};
 		window.addEventListener("keydown", onWindowKeyDown, true);
 		return () => window.removeEventListener("keydown", onWindowKeyDown, true);
-	}, [scopeMenuOpen, onClose]);
+	}, [layerOpen, onClose, keys]);
 
 	useEffect(() => {
-		if (scopeMenuOpen) return;
+		if (layerOpen) return;
 		const onWindowPointerDown = (e: PointerEvent) => {
 			const target = e.target as Element | null;
 			if (!target) return;
@@ -427,15 +519,7 @@ function HistoryPicker({
 		};
 		window.addEventListener("pointerdown", onWindowPointerDown, true);
 		return () => window.removeEventListener("pointerdown", onWindowPointerDown, true);
-	}, [scopeMenuOpen, onOutsidePress]);
-
-	const selectedKey = useMemo(() => {
-		const sel = resolveHistorySelection(stage, result, selected);
-		if (!sel) return null;
-		return sel.kind === "prompt"
-			? `p:${sel.hit.sessionId}:${sel.hit.messageIndex ?? sel.hit.timestamp}`
-			: `m:${sel.hit.sessionId}:${sel.hit.messageIndex}`;
-	}, [stage, result, selected]);
+	}, [layerOpen, onOutsidePress]);
 
 	useEffect(() => {
 		if (selectedKey === null) return;
@@ -444,22 +528,59 @@ function HistoryPicker({
 			?.scrollIntoView({ block: "nearest" });
 	}, [selectedKey]);
 
+	const deletableChat = (item: HistorySelection | null): DeletableChat | null => {
+		const workspaceId = item?.hit.workspaceId;
+		return item && workspaceId && canDeleteChat(workspaceId)
+			? { workspaceId, sessionId: item.hit.sessionId }
+			: null;
+	};
+	const hasEntryActions = (item: HistorySelection | null) =>
+		!!item && (item.kind === "prompt" || !!jumpTarget(item.hit) || !!deletableChat(item));
+
 	const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
 		if (isImeComposing(e.nativeEvent)) return;
-		if ((e.metaKey || e.ctrlKey) && e.code === "KeyS") {
+		if (isContextMenuKey(e) && !e.altKey && !e.ctrlKey && !e.metaKey) {
+			if (
+				selectedKey === null ||
+				!hasEntryActions(resolveHistorySelection(stage, result, selected))
+			)
+				return;
+			e.preventDefault();
+			setEntryMenuKey(selectedKey);
+			return;
+		}
+		const { selectionStart, selectionEnd } = e.currentTarget;
+		const editsQuery =
+			e.key.length === 1 ||
+			e.key === "Backspace" ||
+			selectionStart !== query.length ||
+			selectionEnd !== query.length;
+		const local = keys.match(e.nativeEvent, { textEntry: editsQuery });
+		if (local === "history.deleteChat") {
+			const chat = deletableChat(resolveHistorySelection(stage, result, selected));
+			if (!chat) return;
+			e.preventDefault();
+			onDeleteChat(chat.workspaceId, chat.sessionId);
+			return;
+		}
+		if (local === "history.saveTemplate") {
 			e.preventDefault();
 			const item = resolveHistorySelection(stage, result, selected);
 			if (item?.kind === "prompt") onSaveAsTemplate(item.hit);
 			return;
 		}
-		if (e.key === "ArrowDown") {
+		if (local === "history.send") {
 			e.preventDefault();
-			onMoveSelection(1);
+			const item = resolveHistorySelection(stage, result, selected);
+			const target = item && item.kind !== "prompt" ? jumpTarget(item.hit) : null;
+			if (item?.kind === "prompt") onInsertAndSend(item.hit);
+			else if (target) onOpenMessage(target);
 			return;
 		}
-		if (e.key === "ArrowUp") {
+		if (local !== null || e.altKey || e.ctrlKey || e.metaKey) return;
+		if ((e.key === "ArrowDown" || e.key === "ArrowUp") && !e.shiftKey) {
 			e.preventDefault();
-			onMoveSelection(-1);
+			onMoveSelection(e.key === "ArrowDown" ? 1 : -1);
 			return;
 		}
 		if (e.key === "Tab") {
@@ -472,8 +593,7 @@ function HistoryPicker({
 			const item = resolveHistorySelection(stage, result, selected);
 			if (!item) return;
 			if (item.kind === "prompt" && !e.shiftKey) {
-				if (e.metaKey || e.ctrlKey) onInsertAndSend(item.hit);
-				else onInsert(item.hit);
+				onInsert(item.hit);
 				return;
 			}
 			const target = jumpTarget(item.hit);
@@ -488,6 +608,18 @@ function HistoryPicker({
 	const isEmpty = !!result && !result.indexing && !hasResults;
 
 	const selectedItem = resolveHistorySelection(stage, result, selected);
+	const entryMenu =
+		entryMenuOpen && selectedItem ? (
+			<HistoryEntryMenu
+				item={selectedItem}
+				deletable={deletableChat(selectedItem)}
+				onClose={() => setEntryMenuKey(null)}
+				onOpenMessage={onOpenMessage}
+				onSaveAsTemplate={onSaveAsTemplate}
+				onDeleteChat={onDeleteChat}
+				onRestoreFocus={() => inputRef.current?.focus()}
+			/>
+		) : null;
 	const selectedWorkspaceName = selectedItem?.hit.workspaceId
 		? workspaceNames[selectedItem.hit.workspaceId]
 		: undefined;
@@ -524,11 +656,13 @@ function HistoryPicker({
 									scope={scope}
 									workspaceName={hit.workspaceId ? workspaceNames[hit.workspaceId] : undefined}
 									isSelected={i === selected}
+									saveShortcut={saveShortcut}
 									onPick={() => onInsert(hit)}
 									onSaveAsTemplate={() => onSaveAsTemplate(hit)}
 									onOpenMessage={onOpenMessage}
 									onDeleteChat={onDeleteChat}
 									canDeleteChat={canDeleteChat}
+									entryMenu={i === selected ? entryMenu : null}
 								/>
 							))}
 						</div>
@@ -553,6 +687,7 @@ function HistoryPicker({
 									}}
 									onDeleteChat={onDeleteChat}
 									canDeleteChat={canDeleteChat}
+									entryMenu={result.prompts.length + i === selected ? entryMenu : null}
 								/>
 							))}
 						</div>
@@ -581,13 +716,13 @@ function HistoryPicker({
 					onChange={(e) => onQueryChange(e.target.value)}
 					onKeyDown={onKeyDown}
 					placeholder={t("chat.history.placeholder")}
-					className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
+					className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default focus-visible:focus-ring placeholder:text-text-muted"
 				/>
 				<DropdownMenu open={scopeMenuOpen} onOpenChange={setScopeMenuOpen}>
 					<DropdownMenuTrigger
 						data-testid="history-scope"
 						data-scope={scope.kind}
-						className="flex shrink-0 items-center gap-4 rounded-full border border-border-default bg-container-workspace-bg px-8 py-2 text-text-muted tr-text-metadata outline-none hover:bg-control-bg-hovered"
+						className="flex shrink-0 items-center gap-4 rounded-full border border-border-default bg-container-workspace-bg px-8 py-2 text-text-muted tr-text-metadata hover:bg-control-bg-hovered focus-visible:focus-ring"
 					>
 						<span>{t(SCOPE_LABELS[scope.kind])}</span>
 						<span className="text-text-muted">⌃R</span>

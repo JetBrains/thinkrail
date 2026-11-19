@@ -17,7 +17,7 @@ test("compaction_end serializes only the versioned token-count allowlist", () =>
 		willRetry: false,
 	};
 
-	expect(JSON.stringify(projectSessionEvent(source, null))).toBe(
+	expect(JSON.stringify(projectSessionEvent(source, null, "session-1"))).toBe(
 		JSON.stringify({
 			type: "compaction_end",
 			reason: "threshold",
@@ -41,7 +41,7 @@ test("tool_execution_end drops the programmatic structuredContent and keeps the 
 		isError: false,
 	};
 
-	expect(projectSessionEvent(source, null)).toEqual({
+	expect(projectSessionEvent(source, null, "session-1")).toEqual({
 		type: "tool_execution_end",
 		toolCallId: "call-1",
 		toolName: "bash",
@@ -63,7 +63,7 @@ test("tool_execution_update drops structuredContent from the partial result", ()
 		},
 	};
 
-	expect(projectSessionEvent(source, null)).toEqual({
+	expect(projectSessionEvent(source, null, "session-1")).toEqual({
 		type: "tool_execution_update",
 		toolCallId: "call-2",
 		toolName: "stream_tool",
@@ -77,8 +77,28 @@ test("tool results without structuredContent pass through by identity", () => {
 	const projected = projectSessionEvent(
 		{ type: "tool_execution_end", toolCallId: "call-3", toolName: "read", result, isError: false },
 		null,
+		"session-1",
 	);
 	expect(projected.type === "tool_execution_end" && projected.result).toBe(result);
+});
+
+test("session_info_changed drops terminal escapes and keeps a visible title past the write cap", () => {
+	const visible = "x".repeat(100);
+	const raw = `\u001b[31m${visible}\u001b[0m`;
+	expect(raw.length).toBeGreaterThan(80);
+	expect(
+		projectSessionEvent({ type: "session_info_changed", name: raw }, null, "session-1"),
+	).toEqual({ type: "session_info_changed", name: visible });
+	expect(
+		projectSessionEvent(
+			{ type: "session_info_changed", name: "\u001b[31mred\u001b[0m name" },
+			null,
+			"session-1",
+		),
+	).toEqual({ type: "session_info_changed", name: "red name" });
+	expect(
+		projectSessionEvent({ type: "session_info_changed", name: undefined }, null, "session-1"),
+	).toEqual({ type: "session_info_changed", name: undefined });
 });
 
 test("entry_appended carries only the appended entry's type", () => {
@@ -95,6 +115,52 @@ test("entry_appended carries only the appended entry's type", () => {
 			},
 		},
 		null,
+		"session-1",
 	);
 	expect(projected).toEqual({ type: "entry_appended", entryType: "custom" });
+});
+
+test("every image an event carries leaves as a reference, while pi's own objects keep their bytes", () => {
+	const image = { type: "image" as const, data: "iVBORw0KGgoAAAANSUhEUg==", mimeType: "image/png" };
+	const toolResult = {
+		role: "toolResult" as const,
+		toolCallId: "call-9",
+		toolName: "read",
+		content: [{ type: "text" as const, text: "shot.png" }, image],
+		isError: false,
+		timestamp: 1,
+	};
+	const sources: AgentSessionEvent[] = [
+		{
+			type: "tool_execution_end",
+			toolCallId: "call-9",
+			toolName: "read",
+			result: { content: [image], details: {} },
+			isError: false,
+		},
+		{ type: "message_start", message: toolResult },
+		{ type: "message_end", message: toolResult },
+		{
+			type: "turn_end",
+			message: {
+				role: "assistant",
+				content: [],
+				api: "x",
+				provider: "x",
+				model: "x",
+				usage: {} as never,
+				stopReason: "toolUse",
+				timestamp: 1,
+			},
+			toolResults: [toolResult],
+		},
+		{ type: "agent_end", messages: [toolResult], willRetry: false },
+	];
+	for (const source of sources) {
+		const wire = JSON.stringify(projectSessionEvent(source, null, "session-1"));
+		expect(wire).not.toContain(image.data);
+		expect(wire).toContain("/images/session-1/");
+	}
+	expect(toolResult.content[1]).toBe(image);
+	expect(image.data).toBe("iVBORw0KGgoAAAANSUhEUg==");
 });

@@ -3,6 +3,7 @@ import { createServer, type Server } from "node:http";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import {
+	closeSettings,
 	expandModelGroup,
 	openWorkspaceChat,
 	revealModelGroups,
@@ -92,6 +93,7 @@ test("a keyed gateway is found, saved to models.json, chatted with, edited and r
 	await openProviders(page);
 	const group = page.getByTestId("settings-custom-endpoints");
 	await expect(group).toBeVisible();
+	await expect(group.getByTestId("custom-endpoints-empty")).toContainText("No custom servers yet.");
 
 	await group.getByTestId("custom-endpoints-add").click();
 	const dialog = page.getByTestId("custom-endpoints-dialog");
@@ -155,7 +157,7 @@ test("a keyed gateway is found, saved to models.json, chatted with, edited and r
 		wire.close();
 	}
 
-	await page.keyboard.press("Escape");
+	await closeSettings(page);
 	await page.getByTestId("model-selector").last().click();
 	await revealModelGroups(page);
 	await expandModelGroup(page, providerId);
@@ -173,15 +175,38 @@ test("a keyed gateway is found, saved to models.json, chatted with, edited and r
 	expect(chatRequests.at(-1)).toMatchObject({ model: MODEL, stream: true, max_tokens: 16_384 });
 	expect(chatRequests.at(-1)).not.toHaveProperty("store");
 
+	const handSet = JSON.parse(readFileSync(modelsPath, "utf8"));
+	handSet.providers[providerId].name = "Hand-set output";
+	handSet.providers[providerId].models[0].maxTokens = 100_000;
+	writeFileSync(modelsPath, JSON.stringify(handSet));
 	await openProviders(page);
+	await page.getByTestId("providers-refresh").click();
+	await expect(endpoint).toContainText("Hand-set output");
 	await endpoint.getByTestId("custom-endpoints-edit").click();
+	const context = row.getByTestId("custom-endpoints-context");
+	await expect(context).toBeEnabled();
+	await expect(context).toHaveAttribute("placeholder", "Detected");
+	await context.fill("12");
+	await expect(row.getByTestId("custom-endpoints-context-error")).toBeVisible();
+	await context.press("Escape");
+	await expect(dialog).toBeVisible();
+	await expect(context).toHaveValue("");
+	await context.fill("262144");
+	await context.press("Enter");
+	const userWindow = () =>
+		JSON.parse(readFileSync(modelsPath, "utf8")).providers[providerId].modelOverrides?.[MODEL]
+			?.contextWindow;
+	await expect.poll(userWindow).toBe(262_144);
 	await dialog.getByTestId("custom-endpoints-detect").click();
 	await expect(dialog.getByTestId("custom-endpoints-status")).toHaveAttribute("data-tone", "ok");
+	await expect(context).toHaveValue("262144");
 	await expect(
 		dialog
 			.locator(`[data-testid="custom-endpoints-row"][data-model="${UNREPORTED}"]`)
 			.getByTestId("custom-endpoints-use"),
 	).toHaveAttribute("aria-checked", "false");
+	await expect(unreported.getByTestId("custom-endpoints-context")).toBeDisabled();
+	await shot(dialog, "providers-settings", "custom-endpoint-context-window");
 	await dialog.getByTestId("custom-endpoints-name").fill("Gateway");
 	await dialog.getByTestId("custom-endpoints-save").click();
 	await expect(dialog).toHaveCount(0);
@@ -189,7 +214,30 @@ test("a keyed gateway is found, saved to models.json, chatted with, edited and r
 	expect(JSON.parse(readFileSync(modelsPath, "utf8")).providers[providerId]).toMatchObject({
 		name: "Gateway",
 		apiKey: KEY,
+		models: [{ id: MODEL, contextWindow: 65_536, maxTokens: 100_000 }],
+		modelOverrides: { [MODEL]: { contextWindow: 262_144 } },
 	});
+	const contextWire = await E2eWire.connect(Number(new URL(page.url()).port));
+	try {
+		await expect
+			.poll(
+				async () =>
+					(await contextWire.request("model.list", {})).find(
+						(model) => model.provider === providerId && model.id === MODEL,
+					)?.contextWindow,
+			)
+			.toBe(262_144);
+	} finally {
+		contextWire.close();
+	}
+
+	await endpoint.getByTestId("custom-endpoints-edit").click();
+	await expect(context).toHaveValue("262144");
+	await row.getByTestId("custom-endpoints-context-reset").click();
+	await expect.poll(userWindow).toBeUndefined();
+	await expect(context).toHaveValue("");
+	await dialog.getByRole("button", { name: "Cancel" }).click();
+	await expect(dialog).toHaveCount(0);
 
 	const external = JSON.parse(readFileSync(modelsPath, "utf8"));
 	external.providers[providerId].name = "Renamed outside the app";
@@ -198,7 +246,14 @@ test("a keyed gateway is found, saved to models.json, chatted with, edited and r
 	await expect(endpoint).toContainText("Renamed outside the app");
 
 	await endpoint.getByTestId("custom-endpoints-remove").click();
+	await expect(page.getByTestId("confirm-dialog")).toContainText("Renamed outside the app");
+	await page.getByRole("button", { name: "Cancel" }).click();
+	await expect(endpoint).toHaveCount(1);
+
+	await endpoint.getByTestId("custom-endpoints-edit").focus();
+	await page.keyboard.press("Delete");
 	await page.getByTestId("custom-endpoints-remove-confirm").click();
 	await expect(endpoint).toHaveCount(0);
+	await expect(group.getByTestId("custom-endpoints-empty")).toBeVisible();
 	expect(JSON.parse(readFileSync(modelsPath, "utf8")).providers).toEqual({});
 });

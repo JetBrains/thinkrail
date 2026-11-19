@@ -35,10 +35,13 @@ export function heroDownloadTarget(
 		};
 	}
 	if (platform === "macos") {
+		const intel = architecture === "x64";
 		return {
 			label: "Download for Mac",
-			href: downloadHref("macos", "Download .dmg"),
-			ariaLabel: "Download for Mac: Apple Silicon (.dmg)",
+			href: downloadHref("macos", intel ? "Intel .dmg" : "Apple Silicon .dmg"),
+			ariaLabel: intel
+				? "Download for Mac: Intel (.dmg)"
+				: "Download for Mac: Apple Silicon (.dmg)",
 		};
 	}
 	return {

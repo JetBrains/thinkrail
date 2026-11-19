@@ -112,7 +112,9 @@ export function toSpawnMapping(
 	let model: { provider: string; id: string } | undefined;
 	let thinkingLevel = definition.thinking;
 	const invocationRef =
-		options.model !== undefined && PARENT_MODEL_ALIASES.has(options.model.toLowerCase())
+		options.model === undefined ||
+		options.model.trim() === "" ||
+		PARENT_MODEL_ALIASES.has(options.model.toLowerCase())
 			? undefined
 			: options.model;
 	const modelRef = definition.model ?? invocationRef;

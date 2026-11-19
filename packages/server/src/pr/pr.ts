@@ -31,7 +31,7 @@ import { generateTodoSummary, listTodos } from "../todos";
 import { getWorkspace, syncWorkspaceBranch } from "../workspaces";
 import { flatItems, renderPrBody } from "./prBody";
 
-const COMPARE_BODY_LIMIT = 4_000;
+const COMPARE_URL_LIMIT = 4_000;
 
 export type PrCommandRunner = (
 	cwd: string,
@@ -257,6 +257,20 @@ export function gitlabProject(remoteUrl: string): string | null {
 	return match?.[1] ?? null;
 }
 
+function withBody(url: string, key: string, body: string): string {
+	const chars = Array.from(body);
+	const urlWith = (count: number) =>
+		count ? `${url}&${new URLSearchParams({ [key]: chars.slice(0, count).join("") })}` : url;
+	let low = 0;
+	let high = chars.length;
+	while (low < high) {
+		const mid = Math.ceil((low + high) / 2);
+		if (urlWith(mid).length <= COMPARE_URL_LIMIT) low = mid;
+		else high = mid - 1;
+	}
+	return urlWith(low);
+}
+
 export function gitlabNewMrUrl(
 	project: string,
 	baseBranch: string,
@@ -269,8 +283,11 @@ export function gitlabNewMrUrl(
 		"merge_request[target_branch]": baseRef(baseBranch),
 		"merge_request[title]": title,
 	});
-	if (body) query.set("merge_request[description]", body.slice(0, COMPARE_BODY_LIMIT));
-	return `https://gitlab.com/${project}/-/merge_requests/new?${query}`;
+	return withBody(
+		`https://gitlab.com/${project}/-/merge_requests/new?${query}`,
+		"merge_request[description]",
+		body,
+	);
 }
 
 export function baseRef(baseBranch: string): string {
@@ -295,8 +312,11 @@ export function compareQuickPullUrl(
 ): string {
 	const base = baseRef(baseBranch);
 	const query = new URLSearchParams({ quick_pull: "1", title });
-	if (body) query.set("body", body.slice(0, COMPARE_BODY_LIMIT));
-	return `https://github.com/${slug}/compare/${encodeURIComponent(base)}...${encodeURIComponent(branch)}?${query}`;
+	return withBody(
+		`https://github.com/${slug}/compare/${encodeURIComponent(base)}...${encodeURIComponent(branch)}?${query}`,
+		"body",
+		body,
+	);
 }
 
 export async function ghPrFlow(

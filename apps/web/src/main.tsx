@@ -14,6 +14,9 @@ import { initFilesTreePersistence } from "./panels/filesTreeState";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
 import { initSearchPreferences } from "./search";
 import { AppResourceHost } from "./shell/AppResourceHost";
+import { initArtifactsPersistence } from "./shell/artifactsPreference";
+import { installDeepLinks } from "./shell/deepLink";
+import { initMarkdownOutlinePersistence } from "./shell/markdownOutlinePreference";
 import { Shell } from "./shell/Shell";
 import { DictationLayer } from "./speech";
 import { applyThemePreference, initializeThemes, readThemeHint } from "./themes";
@@ -37,7 +40,10 @@ initModelVisibilityPersistence();
 initProjectExpansionPersistence();
 initFilesTreePersistence();
 initSearchPreferences();
+initMarkdownOutlinePersistence();
+initArtifactsPersistence();
 initNavigation();
+installDeepLinks();
 registerWebExtensions();
 
 function App() {

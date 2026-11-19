@@ -37,9 +37,13 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `CONTINUATION_UNKNOWN` (`chat.continuationStatus` for an operation the host neither holds nor linked —
   a restart lost it mid-flight; the card offers Retry), `CONTINUATION_IN_FLIGHT` (`chat.continue` for
   another project while the chat is already being continued — the first gesture is never silently
-  joined by a different choice), `TEXT_SEARCH_TIMEOUT` / `TEXT_SEARCH_FAILED` (a text search git could not
+  joined by a different choice), `COPY_TOO_LARGE` (a Files tree folder paste with more entries than the host copies — nothing was written; the client words it), `ENTRY_CHANGED` (an entry a Files tree paste or a trash claim was acting on was replaced, moved out of the worktree or turned into a link mid-operation — the host stopped instead of following it; a paste keeps what it already wrote, a delete or a whole-file revert left the entry in place; the client words it), `TEXT_SEARCH_TIMEOUT` / `TEXT_SEARCH_FAILED` (a text search git could not
   finish in its budget, or could not run — the host's logged classifier; the client only sees the search
-  end `failed`), `RESOURCE_UNAVAILABLE`, and `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is
+  end `failed`), `SERVER_FALLBACK_NOT_USED` / `SERVER_FALLBACK_STILL_ON`
+  (`session.disableServerFallback`, v126 `SERVER_FALLBACK_PROTOCOL_VERSION`: the chat has no failed
+  request, or the failed request's model declares no Anthropic server-side fallback, so there is nothing
+  to turn off and a plain retry is the answer; or pi did not apply the written override — e.g. it
+  rejected `models.json` — so a retry would fail the same way), `RESOURCE_UNAVAILABLE`, and `SUBAGENT_TRANSCRIPT_NOT_FOUND` — the latter is
   `subagent.getTranscript`'s **permanent** miss, the
   signal that stops the transcript dialog's polling. A known child whose first transcript file is not
   written yet instead returns empty messages with its current status, so a live run remains pollable;
@@ -69,8 +73,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
   (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,
   `NativeQuitHint` / `NativeCommand` / `NativeShortcutsBridge`, and
-  `NativeNotificationInput` / `NativeNotificationBridge`, and `NativeMenuBridge` (translated native menu
-  labels), the optional shell-local desktop capabilities);
+  `NativeNotificationInput` / `NativeNotificationBridge`, `NativePageZoomAction` / `NativePageZoomBridge`,
+  and `NativeMenuBridge` (translated native menu labels), the optional shell-local desktop capabilities);
   `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`;
   **`matchFields`** + `parseMatchTerms` + `foldMatchText` + `MATCH_TIER` and the `Match*` types from
   `match` (the one search matcher: fixed tiers exact > prefix > word start/camel hump/acronym > substring >
@@ -113,8 +117,16 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `InstalledFontsResult`, served by `fonts.list` /
   `fonts.installed` from `FONTS_PROTOCOL_VERSION`, v102, with `USER_FONTS_ROUTE`, `USER_FONT_UPLOAD_HEADER` and
   `USER_FONT_EXTENSIONS` naming the host's `/fonts/` route and its upload guard,
+  **`WORKSPACE_VIEW_ROUTE`** (`/view/`) naming the host's browser view of a workspace file, served from
+  **`BROWSER_VIEW_PROTOCOL_VERSION`** (v122; the UI offers "Open in browser" only from it, and the desktop
+  routes same-origin URLs under it to the OS),
   `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
   `parsePiPackageInput` (§ pi packages),
+  **`isValidTemplateName(name)`** (the one prompt-template name rule — the host's traversal gate in
+  [[submodule-server-templates]] and the web template editor's inline check call this same function) +
+  **`isWindowsDeviceName(name)`** (`CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9` and the
+  `¹²³` variants, any case, alone or before spaces or an extension, as Windows 10 reads `NUL .md` as `NUL`;
+  also the clone destination's device-name check),
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
   `SESSION_RENAME_PROTOCOL_VERSION`, `SESSION_TITLE_MAX_LENGTH`, `normalizeSessionTitle`,
   `FIRST_PROMPT_MAX_LENGTH` + **`firstPromptHead(text)`** + **`firstPromptOfTexts(texts)`** +
@@ -126,6 +138,11 @@ the palette ranks with — kept here so host-side search can rank with the same 
   no text has no head and the next user text is tried — a prompt that merely starts with `<Button>` keeps
   its head; only the first 800 units of a line are normalized —
   host and client call the same functions over their user texts so the label never jumps),
+  **`isKeybindingChord(value)`** + `isKeybindingOverrides` + `isModifierKeyCode` + `KEYBINDING_MODIFIERS`
+  (`keybindingChord`: the one chord shape — modifiers in the order `Mod`, `Ctrl`, `Alt`, `Shift`, each at
+  most once, then a `KeyboardEvent.code` that is not a modifier key, joined by `+`, e.g. `Mod+Alt+KeyS`;
+  the host validates `AppConfig.keybindings` with it and the web's grammar parses with it), the types
+  `KeybindingOverrides` / `KeybindingModifier`,
   `LINE_WIDTH_COLUMNS` + **`isLineWidth(value)`** (the shared 40–240 integer contract for synchronized
   chat/file wrap columns), `MAX_HISTORY_LIMIT`, `MAX_HISTORY_QUERY_LENGTH`, `TODO_NUDGE_PREFIX` +
   **`isControlMessage(text)`** (the one shared reading of that marker — the client hides such sends on
@@ -152,7 +169,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   native menu commands, and offer `quit()` for a client that confirms the quit gesture itself;
   `NativeNotificationInput` and `NativeNotificationBridge` carry `show({ title, subtitle?, body,
   silent? })` (fire-and-forget OS notification, no callback or id) and an optional `isWindowFocused()`
-  that reports OS-level window focus (true even when DevTools has renderer focus). The
+  that reports OS-level window focus (true even when DevTools has renderer focus);
+  `NativePageZoomAction` and `NativePageZoomBridge` carry `request("in" | "out" | "reset")`, a
+  fire-and-forget step of the native page zoom. The
   same web bundle discovers these capabilities without importing a native SDK. An optional
   `HostUpdateNotice` carries a closed CLI-host update lifecycle; protocol-gated `host.update` is an empty
   request that can start only the launcher's pre-bound updater. The browser never supplies a command, path,
@@ -161,6 +180,16 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `@earendil-works/pi-coding-agent` (pulls `node:fs`); the pi-ai **provider / API subpaths**
   (`/providers/*`, `/api/*`, `/bedrock-provider`, … — they statically load the Node provider SDKs); and
   importing `server` / `shared` / `web`.
+
+## Subagent catalog (v127)
+
+`SUBAGENT_CATALOG_PROTOCOL_VERSION` (127) gates `subagent.list`, `subagent.setEnabled` and writes of
+`AppConfig.disabledSubagents` (default `[]`); the client checks it. `subagent.list({ workspaceId? })`
+returns `SubagentCatalogEntry[]` — `name`, `description`, `source` (`builtin` | `personal` | `project`),
+optional `model` and `thinking`, disabled entries included, never a prompt body or path; it takes no cwd
+([[submodule-server-host]] derives project admission). `subagent.setEnabled({ name, enabled })` returns
+`Ack` and changes only that name ([[submodule-server-settings]]); the result converges through
+`settings.changed`, with no new channel. Enforcement: [[module-pi-subagents]].
 
 ## Contents
 
@@ -192,9 +221,25 @@ the palette ranks with — kept here so host-side search can rank with the same 
     `session_info_changed` / `thinking_level_changed` / host-projected `entry_appended { entryType }`
     members, plus `bash_execution_update` — mirrored
     for union fidelity only; the host never calls `executeBash`, so the UI never receives it).
-    Every message an event carries (`message_*`, `turn_end`, `agent_end.messages`) is typed as
-    **`WireAgentMessage`** — `TranscriptMessage` plus the `WireBranchSummary` / `WireBashExecution`
-    mirrors — never pi-agent-core's `AgentMessage`. That type is `Message` plus whatever
+    Every message an event carries (`message_*`, `turn_end` with its `toolResults`, `agent_end.messages`) is
+    typed as **`WireAgentMessage`** — `TranscriptMessage` plus the `WireBranchSummary` / `WireBashExecution`
+    mirrors — never pi-agent-core's `AgentMessage`.
+    **Image blocks travel as `WireImage`** (#1180, `IMAGE_REFS_PROTOCOL_VERSION` v120). `WireImage` is a union:
+    - `RefImage` (`{type:"image", mimeType, ref, width?, height?}`) is what the host sends in every host→page
+      payload. Its `ref` is a host-relative path under **`IMAGES_ROUTE`** (`/images/`), fetched over HTTP
+      ([[submodule-server-images]]).
+    - pi's inline `ImageContent` is the other member. It covers the page's optimistic echo and a page talking to
+      an older host.
+
+    `WireUserMessage` / `WireToolResultMessage` and `WireCustomMessage.content` carry `WireImage`; with
+    `AssistantMessage` they form **`WireMessage`**, the base of `TranscriptMessage`. A consumer must narrow
+    (`"ref" in image`) before it reads `data`, so a forgotten consumer fails to compile instead of rendering an
+    empty `data:` URL. The union is not a projection guarantee: the host's wire tests prove no `data` leaves it.
+    Opaque tool fields (`result`, `partialResult`, `args`) stay `any`, and page parsing of them stays
+    defensive. Page→host shapes (`session.prompt` / `steer` / `followUp` / `nudge` images) and the
+    composer-restore replies keep inline `ImageContent`.
+    There is no gating, by the user's decision: an older page against this host is unsupported until it
+    reloads. That type is `Message` plus whatever
     `CustomAgentMessages` augmentation the compilation happens to include: pi-coding-agent adds the
     custom roles only in Node builds, and pi-agent-core itself no longer adds them, so the same
     `PiEvent` would otherwise mean two different unions on the server and in the browser (where the
@@ -208,6 +253,19 @@ the palette ranks with — kept here so host-side search can rank with the same 
     casting pi's richer object wholesale, and wire data remains untrusted, so the reducer guards the field
     shapes rather than assuming them;
   - **`SessionEventPayload`** (`{ sessionId, event: PiEvent }`) — the `pi.event` push frame.
+    - **Two events are full snapshots.** A `message_update` whose `assistantMessageEvent` carries
+      `partial` holds the whole response so far; that includes `text_end`, `thinking_end` and
+      `toolcall_end`. A `tool_execution_update` holds the whole `partialResult` for its
+      `(sessionId, toolCallId)`.
+    - **A backpressured connection may get only the newest unsent snapshot** per assistant message or
+      tool call. That snapshot is still delivered once the backpressure clears, even if the producer
+      emits nothing more. Consumers render these events from the snapshot, never by accumulating the
+      nested deltas, and never by requiring every content-boundary event.
+    - **Ordering.** No other Pi event is conflated. A held snapshot is delivered before any later
+      non-snapshot Pi event, `session.state` or `pi.extensionUi` of the same session.
+    - **Discarding.** Session deletion and connection teardown discard held snapshots.
+    - **What reopens this contract.** A delta-only representation, or a consumer that needs every
+      event, must revisit it.
   - the cheap-win mirrors (declared in the Node-only `pi-coding-agent`): **`SessionStats`** + **`ContextUsage`**
     (tokens/cost/context bar — display only) and **`SlashCommandInfo`** + **`SlashCommandSourceInfo`** (the
     command autocomplete rows, returned by live `session.getCommands`, skill-only pre-session `skill.list`,
@@ -241,7 +299,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
     **`QueuedMessageContent`** shapes, which return each drained message's text and optional images exactly
     once so the composer can restore complete content without making ordinary queue broadcasts heavy.
     `session.getMessages` returns `{ summary, messages }` (the transcript is
-    **`TranscriptMessage[]`** — the pi-canonical `Message` union widened with **`WireCustomMessage`**, a
+    **`TranscriptMessage[]`** — the wire `WireMessage` union widened with **`WireCustomMessage`**, a
     type-only mirror of pi-coding-agent's Node-only `CustomMessage`, so extension-injected messages like
     the ask replies cross the wire, and with **`WireCompactionSummary`** (mirror of the Node-only
     `CompactionSummaryMessage`: `summary`/`tokensBefore`/`timestamp`), the resolved-context record of a
@@ -273,7 +331,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
     it into the session, and an older host simply omits it (the client shows its generic label).
   - the **extension-UI frames** **`ExtUiRequest`** / **`ExtUiResponse`** — our wire shape for pi's in-process
     `uiContext` calls (`select`/`confirm`/`input`/`editor` round-trip; `notify`/`setStatus`/`setWidget`/
-    `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel. One member is
+    `setTitle`/`setEditorText`/`pasteToEditor`/`dismiss` are fire-and-forget), carried on the
+    `pi.extensionUi` channel. `setEditorText` and `pasteToEditor` (`EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION`,
+    v115) carry `text` for the addressed session's composer: the first replaces the draft (an empty string
+    clears it), the second inserts like a paste. Older clients ignore the unknown kinds. One member is
     host-authored, not pi's: `notice` (v99) carries a closed `ProviderWarning` code for a session, such
     as the Anthropic extra-usage warning. It has no text, so the client localizes it, and older clients
     ignore the unknown kind. A round-trip
@@ -321,7 +382,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
     [[submodule-web-chat]].
 - **domain.ts** — app entities: `Project` (git repo + unique `slug` + optional **`closed: true`** — the
   persisted open-rail membership bit; absence means open for backward compatibility, and closing never
-  changes the project's id or deletes its workspace associations — plus the skill-trust fields **`trusted`**
+  changes the project's id or deletes its workspace associations — plus optional **`rank`**, the host-owned
+  place among the open projects (highest first; absent reads as `lastOpened`, so a pre-v117 record or host
+  keeps the newest-opened order). The pure **`projectRank`** / **`compareProjectRank`** (id breaks ties)
+  are the one ordering, so the host's `project.list` and every client's rail agree — plus the skill-trust fields **`trusted`**
   (the per-project grant), **`acknowledgedSkills`** (re-confirm-new — which committed aliases are OK'd) and
   **`disabledSkills`** / **`disabledGroups`** (project-baseline per-skill and per-group off — a group is a
   plugin, a source tier, or the special `@plugins`) plus **`enabledGroups`** (per-group on against the host
@@ -382,7 +446,39 @@ the palette ranks with — kept here so host-side search can rank with the same 
   Pull request segments derive their next action from, independent of whether a review exists),
   **`ExistingWorktreeCandidate`** (a `workspace.listExisting` row: absolute `path` + `branch`, or a
   `detached` row the chooser disables),
+  **`WorkspacePathMatch`** (a `workspace.resolvePath` answer: `workspaceId`, `projectId`, and a POSIX
+  `relativePath` contained in that workspace),
   `FileNode` (file-tree node; worktree-relative `/` path, `gitignored` set by the host when git ignores it),
+  the Files tree's two mutations from **`FS_MUTATIONS_PROTOCOL_VERSION`** (v118): `fs.copy`
+  (`{ sourceWorkspaceId, sourcePath, destinationWorkspaceId, destinationDirectory }` → `{ path }`, a file,
+  folder or symlink copied — never moved, even across workspaces — under a collision-free ` copy` / ` copy N`
+  name, refused with `COPY_TOO_LARGE` for a folder past the host's entry bound, stopped with
+  `ENTRY_CHANGED` when an entry changes under it) and `fs.delete` (`{ workspaceId, path }` → ack, a move to
+  the OS trash, `ENTRY_CHANGED` when the entry changed while it was claimed); a client hides both from
+  older hosts, and from **`ARTIFACTS_PROTOCOL_VERSION`** (v121) two more: `fs.rename` (`{ workspaceId, path,
+  name }` → `{ path }`, in place, refused with `ENTRY_EXISTS` when another entry holds the name) and
+  `fs.move` (`fs.copy`'s params → `{ path }`, the Cut-and-Paste move, same or another workspace, refused
+  with `ENTRY_EXISTS` instead of renaming, for a folder into itself, and with `MOVE_ACROSS_DEVICES` when
+  source and destination are on different file systems),
+  the **Artifacts** tool's wire from the same version: `artifacts.list` (`{ workspaceId }` →
+  **`WorkspaceArtifactsSnapshot`**: `dir` (the artifacts folder, `.thinkrail/context`; agents write mockups to
+  its **`WORKSPACE_MOCKUP_DIR`**, `.thinkrail/context/mockups`, the one name the host's mockup check and the
+  browser UI's interactive-HTML glob share), `artifacts`
+  (**`WorkspaceArtifact`**: worktree-relative `path`, `state: "live" | "deleted"` — deleted means gone from
+  disk but restorable from the host's kept copy — `size`, `changedAt` (for a deleted row, when the host saw
+  it gone, so a new deletion of the same path carries a new value), `firstSeenAt`, the writing chat's
+  optional `sessionId`, and from **`ARTIFACT_ROLES_PROTOCOL_VERSION`** (v124) the host's **`role`**
+  (`ArtifactRole`: `"result" | "working"`), its **`reason`** (`ArtifactRoleReason`: `picked`, `shown`,
+  `linked`, `document` for a result; `working-folder`, `script`, `data`, `unshown` for a working file)
+  and **`rounds`** (`ArtifactRound[]`: the chat rounds, `{ sessionId, startedAt }`, that created or
+  changed it, oldest first and bounded; `startedAt` is the round's prompt timestamp, or the run start for a
+  run no prompt opened) — absent from an older host, so a client that needs them checks the
+  version rather than reading absence as "working") and `outputs` (**`WorkspaceIgnoredOutput`** rows — an ignored file or folder an
+  agent run produced, with its live `files` count and `filesTruncated` — or `null` where there is no git),
+  `artifacts.restore` / `artifacts.discard` (`{ workspaceId, path }` → ack; a deleted row only, otherwise
+  `ARTIFACT_UNKNOWN`; restore refuses a path that exists again with `ENTRY_EXISTS`; discard sends the kept
+  copy to the OS trash), and the pathless **`workspace.artifactsChanged`** nudge
+  (**`WorkspaceArtifactsChangedPayload`**: `{ workspaceId }`) — clients re-list,
   **`ResourceMeta`** (what a resource's bytes *are*, host-decided and pinned by
   `RESOURCE_META_PROTOCOL_VERSION` = v75: sha-256 `hash` + `byteLength`, both `null` when the resource is
   absent; `text` = valid UTF-8, BOM-aware, and not claimed by a recognized binary magic number (an ASCII
@@ -468,8 +564,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`ComposerGrowthLimit`** (`"compact" | "roomy" | "half-chat"`) is the closed, server-synced composer
   height preference: 6 visual lines, 10 visual lines, or 50% of the mounted chat panel respectively;
   `"half-chat"` is the default, and the web owns translating these semantic ids into geometry;
-  **`LINE_WIDTH_COLUMNS`** owns the shared `{ min: 40, max: 240, default: 120 }` integer contract for
-  the independently bounded chat/file visual wrap columns; **`isLineWidth`** is the one validator consumed
+  **`LINE_WIDTH_COLUMNS`** owns the shared 40–240 integer contract for the independently bounded
+  chat/file visual wrap columns, with a per-**`LineWidthKind`** (`"chat" | "file"`) default of 80 / 120 —
+  chat is a reading measure, files keep a code-width column; the wire still carries both values, so a
+  default change needs no protocol bump; **`isLineWidth`** is the one validator consumed
   on both sides of the wire;
   **`SUBAGENT_SETTINGS_PROTOCOL_VERSION`** pins the global/workspace controls to their v57 wire
   introduction so a later web client hides them against an older host without comparing against the moving
@@ -486,12 +584,12 @@ the palette ranks with — kept here so host-side search can rank with the same 
   fileLineWidthBounded, voiceInputEnabled, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
   favoriteModels, recentModels, reviewAutoFix, agentReviewEnabled, subagentsEnabled, subagentMaxConcurrent,
   jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds, disabledExtensions, extensionSettings, otherAgentSkills,
-  onboardingDismissed, interfaceFont, codeFont, codeFontSize, codeLigatures, fontWeightOffset }` — an extensible
+  onboardingDismissed, interfaceFont, codeFont, codeFontSize, codeLigatures, fontWeightOffset, keybindings }` — an extensible
   bag; the five font fields join at v102 and normalize together through `normalizeFontSettings` (host load, web
   store, fonts runtime); the line-width fields join the wire at protocol v61, `terminalWindowsShell` at v62, and
   `voiceInputEnabled` (default `true`) with voice input at v107, and `questionPanelHeight`
   (**`QUESTION_PANEL_PROTOCOL_VERSION`** = v114; whole percents `QUESTION_PANEL_HEIGHT_PERCENT` 40–100,
-  default 60, `isQuestionPanelHeight`) caps the chat's interaction dock; a client of an older host hides
+  default 70 since 2026-11-17, `isQuestionPanelHeight`) caps the chat's interaction dock; a client of an older host hides
   the setting and uses the default. `onboardingDismissed` (v94, default `false`)
   records that the user finished or skipped the cold-start onboarding wizard, so it never returns.
   `otherAgentSkills` (**`OTHER_AGENT_SKILLS_PROTOCOL_VERSION`** = v108, default `false`) is the host-wide
@@ -530,7 +628,11 @@ the palette ranks with — kept here so host-side search can rank with the same 
   [[submodule-server-extensions]]); `extensionSettings` (`ExtensionSettingValues`, default `{}`, on the wire from
   `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v105) maps extension name → setting key → boolean for the settings
   an `ExtensionCatalogEntry` declares — an absent key means the descriptor's `default`, and
-  `settings.update { extensionSettings }` merges per key; `customLayoutPresets` is the bounded
+  `settings.update { extensionSettings }` merges per key; `keybindings` (`KeybindingOverrides`, default `{}`,
+  on the wire from **`KEYBINDINGS_PROTOCOL_VERSION`** = v123) maps a command id — the app's or a web
+  extension's — to the user's chords, replacing its defaults (`[]` unbinds, an absent id keeps them); an
+  update replaces the whole map, unknown ids are kept, and a malformed value is refused with
+  **`KEYBINDINGS_INVALID`** (a client bug Error Tracking tells apart); `customLayoutPresets` is the bounded
   resource-free catalog and is the **only** layout value synchronized by the host; current/default preset
   and group limits are web-local); `analyticsEnabled` is the additional-data preference and host gate,
   default `false`, while `analyticsConsentConfirmed` defaults `false` and records completion of the initial
@@ -671,7 +773,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **layout preset DTO** — portable **`LayoutPreset`**, the bounded resource-free frame grammar synchronized
   in `AppConfig.customLayoutPresets`: center topology, left/right/bottom group geometry, visibility/folds,
   bottom alignment, and singleton tools (`plan`, the TODO List, is accepted from
-  `LAYOUT_PLAN_PRESET_PROTOCOL_VERSION` = v94), but no workspace, file, diff, chat, document, terminal, preview,
+  `LAYOUT_PLAN_PRESET_PROTOCOL_VERSION` = v94, `artifacts` from `ARTIFACTS_PROTOCOL_VERSION` = v121), but no workspace, file, diff, chat, document, terminal, preview,
   attention, or current/default-selection identity. Every current-layout type—including the projected
   `WorkspaceLayoutDocument`, `WorkbenchFrame`, and `WorkspaceViewState`—is web-local and deliberately absent
   from contracts. There is no current-layout method or push channel.
@@ -687,7 +789,12 @@ the palette ranks with — kept here so host-side search can rank with the same 
   focused in-app item, and `open-settings`, open Settings unless a modal is open), and its one action `quit()` asks the host for an ordinary coordinated quit. The
   notification bridge exposes `show({ title, subtitle?, body, silent? })` (fire-and-forget OS notification,
   no callback or id) and an optional `isWindowFocused()` that reports OS-level window focus — true even
-  when DevTools has renderer focus, unlike `document.hasFocus()`. A browser
+  when DevTools has renderer focus, unlike `document.hasFocus()`. The deep-link bridge pushes
+  `NativeOpenFileRequest` (`file`, `line`, optional `column`) from an OS `thinkrail://` URL; it is a
+  desktop-only subscription seam, not host-wire state. The page-zoom bridge's one action
+  `request(action)` asks the native side to step (`in` / `out`) or reset its page zoom; it returns nothing
+  and the web keeps no zoom state. `NativePageZoomAction` is the one definition of the actions; the
+  desktop's zoom chords send the same ones. A browser
   connection has none of these bridges and renders none of their affordances.
 - **quitConfirmation.ts** — the single home of the quit-confirmation gesture shared by the desktop main
   process (macOS Cmd+Q, key state polled through CoreGraphics) and the web shell (Linux Ctrl+Q, key state
@@ -707,7 +814,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   closed without deleting associated state), **`project.rename`** (`{ id, name }` → the updated `Project`;
   changes only the display `name` — path, slug, and id stay — and broadcasts the full `project.updated`;
   `PROJECT_RENAME_PROTOCOL_VERSION` pins its v85 introduction so a newer client omits the action against
-  an older host), **`project.inspect`** (classify a path) + **`project.init`**
+  an older host), **`project.move`** (`{ id, targetId, placement: "before" | "after" }` → the moved
+  `Project`; places one open repository project next to another — never the Chats container — and
+  broadcasts each record whose `rank` changed; `PROJECT_ORDER_PROTOCOL_VERSION` pins its v117
+  introduction), **`project.inspect`** (classify a path) + **`project.init`**
   (`git init` + commit, then open) + **`project.create`** (`{ parentPath, name, displayName? }` → the opened
   `Project`: make the folder `name` under `parentPath`, creating missing parents, then the same bootstrap as
   init, and name the project `displayName` — what the user typed — when it differs from the folder;
@@ -752,16 +862,21 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`ModelContextSetting[]`** — the eligible OpenAI models' `provider`/`id`/`name`, pi's effective
   `contextWindow`, and the explicit models.json `override` or `null` for pi's default. The mutation takes
   `{target: "available" | {provider,id}, contextWindow: number | null}`: `null` removes the override;
-  a number must satisfy **`isModelContextWindow`** within **`MODEL_CONTEXT_WINDOW_LIMITS`**
-  (272,000–1,000,000), the app's editing policy rather than a verified provider capacity, enforced on
-  both sides. External values outside it are read without clamping, and the `available` target covers
-  only settings **`isSharedModelContextTarget`** accepts (no override, or one inside the range): an
-  override the app could not have written is changed only by naming its `{provider,id}`. Saves emit the
+  a number must satisfy **`isModelContextWindow`** within the target's
+  **`modelContextWindowLimits(provider)`** — **`MODEL_CONTEXT_WINDOW_LIMITS`** (272,000–1,000,000) for
+  `available` and every provider but a custom server's — the app's editing policy rather than a verified
+  provider capacity, enforced on both sides. From **`CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION`** (v116) the
+  list also carries every available `custom-*` provider model (`isCustomEndpointId`), editable only by a
+  targeted save within **`CUSTOM_MODEL_CONTEXT_WINDOW_LIMITS`** (1,024–10,000,000: a guard against typos,
+  wide enough for any served window); an older host refuses that target as ineligible. External values
+  outside a range are read without clamping, and the `available` target covers only settings
+  **`isSharedModelContextTarget`** accepts (not a custom server's, and no override or one inside the
+  range): an override the app could not have written is changed only by naming its `{provider,id}`. Saves emit the
   existing `provider.changed` invalidation; no AppConfig state or raw configuration crosses the wire) /
   **`cacheWarming.get`** / **`cacheWarming.set`** (v111, `CACHE_WARMING_SETTINGS_PROTOCOL_VERSION`; both
   return a **`CacheWarmingSetting`** — pi's `cacheWarming` mode, one of **`CACHE_WARMING_MODES`** `off` /
   `streaming` / `idle` tested by `isCacheWarmingMode`, and `source`: `user` when pi's global `settings.json`
-  names it, `default` when the host's own default applies. The mutation takes `{mode}`; a write pi's
+  names it, `default` when the host's own default, **`DEFAULT_CACHE_WARMING_MODE`** (`streaming`), applies. The mutation takes `{mode}`; a write pi's
   settings loader would silently skip fails with **`CACHE_WARMING_WRITE_FAILED`**. The value lives only in
   pi's file; no AppConfig field mirrors it) /
   **`customEndpoints.list`** / **`customEndpoints.probe`** / **`customEndpoints.save`** /
@@ -770,7 +885,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   tested by `isCustomEndpointId`). A `CustomEndpointModel` carries only what a server reported —
   `contextWindow` / `maxTokens` / `reasoning` / `vision` / `chatTemplateThinking` are `null` when it did
   not say (distinct from an explicit `false`, so a re-detect can clear a capability), and a `tools` hint is
-  never saved. `chatTemplateThinking` is additive on the wire: a draft without it is read as `null`, so an
+  never saved. A listed `contextWindow` is the detected one; a window the user set is a
+  `model.contextSettings` override and never travels in a draft. `chatTemplateThinking` is additive on the wire: a draft without it is read as `null`, so an
   older client never changes a saved thinking format. Probing takes `{baseUrl, apiKey? | endpointId?}` (an `endpointId` without `apiKey` reuses
   that endpoint's saved key host-side, only for its unchanged address) and returns either the normalized
   `baseUrl` with the models, or a closed `CustomEndpointProbeFailure` (`invalid-url`, `unauthorized`,
@@ -816,6 +932,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   **`workspace.listExisting`** (the selected project's unattached Git worktrees, with detached rows
   disabled by status) / **`workspace.openExisting`** (revalidate + register one branch-backed checkout as
   `kind: "external"`, emitting the ordinary `workspace.created`, without mutating Git or disk) /
+  **`workspace.resolvePath`** (`{ path }` → `WorkspacePathMatch | null`, v119,
+  **`WORKSPACE_PATH_RESOLVE_PROTOCOL_VERSION`**: the open workspace that holds an absolute native path, matched
+  on real paths so a symlinked or `/tmp`-style spelling of either side still matches; `null` outside every
+  open workspace and for `..`, `.git` or a root itself — [[submodule-server-workspaces]]) /
   **`workspace.rename`** (`{ id, name }` → the locked updated `Workspace`; managed worktrees only;
   changes the display name while preserving the Git branch + cwd, and broadcasts the ordinary full-snapshot
   `workspace.updated`; `WORKSPACE_RENAME_PROTOCOL_VERSION` pins its v55 introduction so a newer client with
@@ -983,7 +1103,7 @@ the palette ranks with — kept here so host-side search can rank with the same 
   the browser / **`host.updateAvailable`** — the backward-compatible full CLI-update snapshot: initially
   published when a launcher finds a newer release, then replaced as a v70 host-run moves through
   running/succeeded/failed; absent on discovery failure/no-update / **`project.updated`** — the
-  full persisted `Project` snapshot after open/reopen/close, including `closed` membership, so every client
+  full persisted `Project` snapshot after open/reopen/close/rename/move, including `closed` membership and `rank`, so every client
   atomically converges its rail + Recents without optimistic removal / `pi.event` / `pi.extensionUi` /
   **`session.created`** (the initial `SessionSummary`, broadcast when a new host-owned session registers so
   other frontends can list it in history without opening local placement) / **`session.deleted`** (workspace +
@@ -1112,7 +1232,10 @@ plain-text diagnostic excerpt and truncation flag, and the same optional `delive
 subagent completion (`wake` | `run` | `appended` — how the result reached the agent; absent in
 transcripts written before it, which keep the old round rules). The guards do not validate it; the
 shared `completionDelivery(details)` reader returns the marker or `undefined`, so an unknown value
-reads as absent everywhere. The conversation may render that historical notice,
+reads as absent everywhere. **`opensChatRound(message)`** is the message-level twin of the chat's
+turn-level `opensRound` ([[submodule-web-chat]]): a user prompt other than a control message, a
+`todo-review-fix`, a continuation request, a handoff, or a completion not delivered as `run`. The host
+uses it to cut artifact round markers where the chat cuts rounds; a web test pins the two together. The conversation may render that historical notice,
 but must never infer current resource authority from it; logs and controls still use scoped reads.
 
 Every read/control validates workspace membership and parent lineage, not merely a syntactically
@@ -1162,6 +1285,20 @@ contracts only.
 - Every request names its target: `workspaceId` for configuration (project scope = that workspace's
   `.pi/mcp.json`; `user` = the global file), plus `sessionId` for per-session actions (`reconnect`,
   `setSessionOverride`, `readOutput`). The host has no notion of an "active workspace".
+- **User-level servers without a workspace** (`MCP_USER_SERVERS_PROTOCOL_VERSION`, 125). `mcp.list`,
+  `mcp.login`, `mcp.logout`, `mcp.testConnection` and `mcp.readLog` take `workspaceId` optionally;
+  `add` / `update` / `remove` take it optionally only at `scope: "user"` (`McpScopeTarget`), and the host
+  refuses project scope without one (`MCP_CONFIG_INVALID`). Without a workspace the list holds the user
+  servers alone with `statuses: []`, the global file's `configErrors`, and `handledElsewhere` from pi's
+  global settings only (no chat is consulted); mutations reconcile every workspace's live chats; probes
+  run against the global file with no project policy, and their `provider.login` pushes carry a
+  `LoginPush.target` (`McpLoginTarget`, whose `workspaceId` is optional) that names no workspace.
+  **`mcp.setUserServer { name, expectedFingerprint, enabled?, exposure? }`** is the no-workspace switch: it merges only those keys into the user entry of
+  the global `mcp.json` (pi's writer semantics — `enabled: true` is removed as the default; exposure is
+  `deferred` / `direct` / `hidden`), so it applies to every project without its own override and to the
+  pi CLI, refused like `update` when the entry no longer has the rendered fingerprint. Inside a workspace
+  the switch stays `setProjectOverride`, a record write; the global file is never written by a toggle
+  there.
 - `mcp.list` returns the configured `McpServerSummary` set (scope, defining file, the `fingerprint` of the
   defining file's entry as rendered, masked endpoint, configured and effective exposure, enablement,
   project override, repo-approval state, pi-equivalent config error — one per named entry, an entry that
@@ -1186,7 +1323,7 @@ contracts only.
   (`{ tool, label }`: grants still valid for the effective entry, listed on that row only) and
   `mcp.revokeToolGrant { workspaceId, name, tool }`, a record-only mutation like `setProjectOverride`.
   An older host never lists grants, so a client needs no gate to hide the revoke.
-- Mutations (`add`, `update`, `remove`, `setProjectOverride`, `approve`, `shareWithRepo`, `revokeToolGrant`) re-check that
+- Mutations (`add`, `update`, `remove`, `setUserServer`, `setProjectOverride`, `approve`, `shareWithRepo`, `revokeToolGrant`) re-check that
   ownership and the current project policy in the same synchronous step as the write and fail with `MCP_HANDLED_ELSEWHERE` where
   `mcp.list` would set `handledElsewhere`, so a stale client cannot write while another manager owns MCP; they return the fresh
   list without waiting for the open chats to reload; `mcp.status` pushes report each reload, so the returned
@@ -1232,7 +1369,7 @@ contracts only.
   `details.thinkrail` that lets cards render identically live, after reload and on another client.
   `mcp.readOutput` serves a result's recorded `fullOutputPath` only and reports `expired` when the temp
   file is gone.
-- `mcp.readLog { workspaceId, name }` returns `McpServerLog`: the server's latest lines (at most 200, oldest
+- `mcp.readLog { workspaceId?, name }` returns `McpServerLog`: the server's latest lines (at most 200, oldest
   first) from pi's shared `mcp.log` and its rotated copy — the `notifications/message` log messages servers
   send pi, attributed by each entry's `[<server>]` head — masked like `detail`; `text` is empty when the
   server logged nothing there. It needs no session: pi keeps one log per agent directory.

@@ -1,9 +1,10 @@
 import { Download, Send } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, useEffect, useId, useState } from "react";
 import { installShareUrl, isMobileDevice, shareInstallLink } from "../installLinkShare";
+import { type CpuArchitecture, detectCpuArchitecture } from "../installPlatform";
 import { detectInstallPlatform, type InstallPlatform, installPlatforms } from "./desktopDownloads";
 
-const shareAnchor = "quick-start";
+export const shareAnchor = "quick-start";
 
 export function useDetectedInstallPlatform(): InstallPlatform | null | undefined {
 	const [platform, setPlatform] = useState<InstallPlatform | null>();
@@ -11,7 +12,32 @@ export function useDetectedInstallPlatform(): InstallPlatform | null | undefined
 	return platform;
 }
 
-function useIsMobileDevice(): boolean {
+export function useDetectedCpuArchitecture(): CpuArchitecture | undefined {
+	const [architecture, setArchitecture] = useState<CpuArchitecture>();
+	useEffect(() => {
+		const nav: Navigator & {
+			userAgentData?: {
+				getHighEntropyValues?: (hints: string[]) => Promise<{ architecture?: string }>;
+			};
+		} = navigator;
+		const hints = { platform: nav.platform, userAgent: nav.userAgent };
+		setArchitecture(detectCpuArchitecture(hints));
+		let current = true;
+		void nav.userAgentData?.getHighEntropyValues?.(["architecture"]).then(
+			(data) => {
+				const reported = detectCpuArchitecture({ ...hints, architecture: data?.architecture });
+				if (current && reported) setArchitecture(reported);
+			},
+			() => undefined,
+		);
+		return () => {
+			current = false;
+		};
+	}, []);
+	return architecture;
+}
+
+export function useIsMobileDevice(): boolean {
 	const [mobile, setMobile] = useState(false);
 	useEffect(() => {
 		const nav: Navigator & { userAgentData?: { platform?: string } } = navigator;
@@ -27,7 +53,7 @@ function useIsMobileDevice(): boolean {
 	return mobile;
 }
 
-function SendLinkAction() {
+export function useInstallLinkShare(): { copied: boolean; send: () => Promise<void> } {
 	const [copied, setCopied] = useState(false);
 
 	async function send() {
@@ -36,6 +62,12 @@ function SendLinkAction() {
 		setCopied(true);
 		setTimeout(() => setCopied(false), 1400);
 	}
+
+	return { copied, send };
+}
+
+function SendLinkAction() {
+	const { copied, send } = useInstallLinkShare();
 
 	return (
 		<div className="mb-3">
@@ -166,7 +198,9 @@ export function InstallPicker() {
 							<p className="text-[11px] leading-4 text-text-muted">{option.desktop.detail}</p>
 							<div
 								className={
-									option.id === "linux" ? "grid grid-cols-2 gap-2 self-start" : "flex self-start"
+									option.desktop.downloads.length > 1
+										? "grid grid-cols-2 gap-2 self-start"
+										: "flex self-start"
 								}
 							>
 								{option.desktop.downloads.map((download) => (
@@ -174,7 +208,7 @@ export function InstallPicker() {
 										key={download.href}
 										href={download.href}
 										ariaLabel={`${download.label} for ${option.label}`}
-										className={option.id === "linux" ? "min-w-24" : ""}
+										className={option.desktop.downloads.length > 1 ? "min-w-24" : ""}
 									>
 										{download.label}
 									</CompactDownloadAction>

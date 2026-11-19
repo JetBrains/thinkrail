@@ -7,7 +7,9 @@ export type ToolResponse =
 
 export interface WorkspaceFiles {
 	check(path: string, cwd: string): Promise<void>;
+	ensureArtifactsDir(cwd: string): Promise<void>;
 	scratchDir: string;
+	artifactsDir: string;
 }
 
 export interface ExtensionSessionServices {
@@ -28,6 +30,11 @@ export interface InteractiveTool {
 	describeResponse?: (args: unknown, response: unknown) => string | undefined;
 }
 
+export interface ArtifactTool {
+	presented?: (args: unknown, details: unknown) => readonly string[];
+	picked?: (args: unknown, details: unknown) => readonly string[];
+}
+
 export interface ServerExtension {
 	name: string;
 	title?: string;
@@ -35,6 +42,7 @@ export interface ServerExtension {
 	extensions: ExtensionFactory[];
 	sessionExtensions?: (session: ExtensionSessionServices) => ExtensionFactory[];
 	interactiveTools?: Record<string, InteractiveTool>;
+	artifactTools?: Record<string, ArtifactTool>;
 	settings?: Record<string, ExtensionSetting>;
 	childExtensions?: ExtensionFactory[];
 	skillPackages?: string[];

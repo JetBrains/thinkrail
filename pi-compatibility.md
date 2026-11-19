@@ -144,13 +144,17 @@ full-output paths; run `mcp/results.test.ts`, `mcpEngine.test.ts`, web MCP card 
 
 ## Other pi-sensitive host seams
 
-**Registry-tool reconcile at attach** — [[submodule-server-agent]], `agentSessionManager.ts`. Pi ≥ 1.3
+**Registry-tool reconcile at attach and reload** — [[submodule-server-agent]], `agentSessionManager.ts`. Pi ≥ 1.3
 restores a resumed chat's recorded tool loadout and keeps recorded removals inactive, so a tool withheld
-while its registry extension was disabled would stay off after re-enabling. Attach re-activates enabled
-registry-extension tools by mirroring Pi's private `_isActivatedOnRegistration` (declarable exposure,
-`defaultActive !== false`); re-check that rule on upgrades. If the host ever calls `navigateTree`, which
-re-runs the restore, reconcile after it too. **Removal gate:** a public Pi way to keep host-withheld tools
-apart from the recorded selection. Run the manager's restart regressions on upgrades.
+while its registry extension was disabled would stay off after re-enabling. Pi's own `reload()` activates
+every extension tool again, but an extension's `session_start` can replay the same record
+(`pi-web-access`'s activation selection does, on reloads too), so the reconcile runs at attach and after
+every successful gated resource reload. It re-activates enabled registry-extension tools by mirroring
+Pi's private `_isActivatedOnRegistration` (declarable exposure, `defaultActive !== false`); re-check that
+rule on upgrades. If the host ever calls `navigateTree`, which re-runs the restore, reconcile after it
+too. **Removal gate:** a public Pi way to keep host-withheld tools apart from the recorded selection, so
+neither Pi's restore nor an extension reading the transcript sees them as removals. Run the manager's
+restart and toggle-reload regressions on upgrades.
 
 - **Anthropic extra-usage warning parity** — [[submodule-server-agent]], `agent/anthropicExtraUsage.ts`.
   Pi's warning exists only in interactive mode (`maybeWarnAboutAnthropicSubscriptionAuth`), and its
@@ -161,10 +165,11 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   On upgrades, re-diff the interactive check and its call sites, and run
   `agent/anthropicExtraUsage.test.ts`.
 - **pi package management** — [[submodule-server-agent-packages]], [[submodule-server-agent]]. The
-  Settings → Extensions package catalog and mutations build on pi's public `DefaultPackageManager`
-  (`resolve(onMissing)`, `install`, `remove`, `update`, `checkForAvailableUpdates`,
-  `listConfiguredPackages`, `addSourceToSettings` / `removeSourceFromSettings`) and `SettingsManager`
-  (`setPackages` / `set*Paths`, `flush`, `drainErrors`, `inMemory`). Eight pi facts the host compensates
+  Settings → Extensions & skills package catalog and mutations build on pi's public
+  `DefaultPackageManager` (`resolve(onMissing)`, `install`, `remove`, `update`,
+  `checkForAvailableUpdates`, `listConfiguredPackages`, `addSourceToSettings` /
+  `removeSourceFromSettings`) and `SettingsManager`
+  (`setPackages` / `set*Paths`, `flush`, `drainErrors`, `inMemory`). Nine pi facts the host compensates
   for, each with its gate:
   - `resolve()` without `onMissing` installs a declared-but-missing package, and
     `DefaultResourceLoader.reload()` always calls it that way; the catalog therefore reads with
@@ -180,6 +185,10 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
     `setResourceEnabled`-style API.
   - `getPackageIdentity` is private; `identity.ts` ports it for the host-wide `disabledPackages` key.
     **Gate:** pi exporting its identity rule.
+  - `getResourcePathKey` (synthetic paths as-is, else realpath with a raw-path fallback, case-folded on
+    Windows) is private; `identity.ts` ports it as `piResourcePathKey`, the path identity of
+    [[submodule-server-agent]]'s Central exclusion, so it matches the paths pi's resolve and loader dedupe.
+    Re-diff it against `core/source-info.js` / `utils/paths.js` on every bump. **Gate:** pi exporting it.
   - `installAndPersist` persists before the caller can re-check project trust, and settings writes are
     queued with swallowed errors; the host sequences `install → trust → addSourceToSettings → flush →
     drainErrors`. **Gate:** a persist step that reports failure and accepts a trust predicate.
@@ -242,6 +251,23 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   queues still carry `extensionPath` and are filled before `extensionsOverride` runs; run the provider-owner
   regressions in `agent/extensions.test.ts`, `agent/delegation.test.ts` and `pi-delegation`'s
   `service.test.ts` on every upgrade.
+- **Extension providers in the shared catalog** — [[submodule-server-agent]], the user-extension pass in
+  `piRuntime.ts` (`registerUserExtensionProviders`, #1351). Pi applies the queued
+  `pendingProviderRegistrations` / `pendingNativeProviderRegistrations` / `pendingVirtualModelRegistrations`
+  of a load only in `createAgentSessionServices` (the CLI, before model resolution) or at a session's
+  `bindCore` (after it). The services call cannot carry the catalog's user pass: it applies a load's
+  registrations whenever that load finishes, so a pass abandoned at its deadline would still register late,
+  after the generation's attribution was taken. The host therefore resolves the enabled set itself
+  (`resolve(onMissing → skip)`, then the Central exclusion of [[submodule-server-agent]]), loads it through
+  its own `noExtensions` loader and mirrors pi's apply loop over those queues on the candidate runtime, then
+  its awaited `refresh({ allowNetwork: false })` — only when something was applied, since the strict pass's
+  services call has just run it — all within the deadline. It does not clear the queues (the loader is
+  discarded) nor apply extension flags (the pass has none). It relies on the queues carrying every
+  registration of a load until bind and on a later session bind's re-registration merging over the boot one.
+  **Removal gate:** a public way to apply a path-filtered extension load's registrations to a given
+  `ModelRuntime` with cancellation (e.g. `createAgentSessionServices` taking an extension filter and a
+  signal). On upgrades re-diff the apply loop in `agent-session-services.js` against the host's and run the
+  user-extension tests in `piRuntime.test.ts`, `runtimeGenerations.test.ts` and `auth/jbcentral.test.ts`.
 - **Queued-message images** — [[submodule-server-agent]], queue projection. Pi's queue API is text-only:
   `getSteeringMessages()` / `getFollowUpMessages()` / `clearQueue()` return strings and drop image blocks,
   so the host keeps a transient per-lane copy of browser-queued message content (images included) while
@@ -361,6 +387,20 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   generation and on every runtime a live chat still holds. Not a workaround but a pi fact the host must
   mirror: re-check on upgrades that credential writes are still tracked per `ModelRuntime` (a process-wide
   settle would let the host call it once) and run the manager's shutdown-settle test.
+- **Rejected server-side fallback repair** — [[submodule-server-agent]] (`agent/serverFallback.ts`),
+  [[submodule-web-chat]] (`assistantFailure.ts`). Pi sends Anthropic's `fallbacks` field and the
+  `server-side-fallback-*` beta whenever a model's `compat.allowedFallbackModels` is non-empty, and offers
+  no per-request opt-out, so the host repairs a proxy that rejects it by writing the documented
+  per-model `modelOverrides.<id>.compat.allowedFallbackModels: []` (pi: "when absent or empty, callers
+  must omit fallbacks"). Re-check on upgrades: that key name and its empty-list meaning; that
+  `modelOverrides` still apply after provider config and extension registrations; that the beta header
+  is still gated on the same list; which catalogue models declare fallbacks; and that a failed request
+  still leaves an assistant message with `stopReason: "error"`, `provider` and `model` as the last
+  message (the host reads the failed model from it). The web error-signature table matches proxy and
+  gateway wording, not pi's, so pi upgrades do not touch it. **Removal gate:** pi detects or tolerates a
+  rejected `fallbacks` field itself, or exposes a session-level opt-out. Run `serverFallback.test.ts`
+  (its fake proxy asserts the field and the beta are gone after the repair) and
+  `assistantFailure.test.ts`.
 
 ## Context-budget limitations
 

@@ -1,11 +1,12 @@
 import { describe, expect, it, spyOn } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DefaultPackageManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { SPEC_SECTION } from "pi-spec-graph";
 import { type HostSessionServices, registryInlineExtensions, workspaceFiles } from "../extensions";
+import { artifactsGuard } from "./artifactsGuard";
 import {
 	buildResourceLoader,
 	bumpPackagesRevision,
@@ -557,7 +558,7 @@ describe("registry extensions", () => {
 		return {
 			extension,
 			execute: (params: unknown) =>
-				tool.definition.execute("call", params, undefined, undefined, undefined as never),
+				tool.definition.execute("call", params, undefined, undefined, { cwd } as never),
 		};
 	}
 
@@ -573,9 +574,16 @@ describe("registry extensions", () => {
 		try {
 			const { extension, execute } = await visualizeTool(project, agentDir);
 			expect(extension.path).toBe("<inline:visualize>");
-			await expect(
-				execute({ type: "diagram", mermaid: "flowchart LR\n A --> B" }),
-			).resolves.toMatchObject({ details: { type: "diagram" } });
+			const drawn = await execute({ type: "diagram", mermaid: "flowchart LR\n A --> B" });
+			expect(drawn).toMatchObject({ details: { type: "diagram" } });
+			const saved = /Saved to `(\.thinkrail\/context\/visualize\/[^`]+\.md)`/.exec(
+				drawn.content.map((part) => (part.type === "text" ? part.text : "")).join(""),
+			)?.[1];
+			expect(saved).toBeDefined();
+			expect(readFileSync(join(project, saved as string), "utf8")).toContain("```mermaid");
+			expect(readFileSync(join(project, ".thinkrail", "context", ".gitignore"), "utf8")).toBe(
+				"*\n",
+			);
 			await expect(execute({ type: "diagram", mermaid: "flowchart LR\n A -->" })).rejects.toThrow(
 				/invalid Mermaid syntax in `mermaid`[\s\S]*Parse error/,
 			);
@@ -905,8 +913,12 @@ describe("registry extensions", () => {
 		}
 	});
 
-	it("guards every child's images and compacted skills from the tool-free base set, and offers the skill catalog only to opted-in children", () => {
-		expect(childBaseExtensionFactories()).toEqual([oversizedImageGuard, skillCarryover]);
+	it("guards every child's images, artifacts and compacted skills from the tool-free base set, and offers the skill catalog only to opted-in children", () => {
+		expect(childBaseExtensionFactories()).toEqual([
+			oversizedImageGuard,
+			artifactsGuard,
+			skillCarryover,
+		]);
 		expect(childExtensionFactories("w1")).not.toContain(oversizedImageGuard);
 		expect(childExtensionFactories("w1")).not.toContain(skillCarryover);
 		expect(childExtensionFactories("w1")).toContain(skillCatalog);

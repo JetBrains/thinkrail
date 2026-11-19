@@ -1,6 +1,12 @@
 import { expect, test } from "bun:test";
 import type { ReviewThread } from "../../registry";
-import { classifyJsonDiff, oldToRenderedJsonPointers, stableObjectHash } from "./jsonDiff";
+import {
+	classifyJsonDiff,
+	jsonPathLabel,
+	nestedJsonDiffChanges,
+	oldToRenderedJsonPointers,
+	stableObjectHash,
+} from "./jsonDiff";
 import { buildJsonDiffReviewLayout } from "./jsonDiffReview";
 import { scanJson } from "./jsonScanner";
 
@@ -117,4 +123,59 @@ test("a malformed JSON side reports no rendered thread placements", () => {
 		expect(layout.placedThreadIds).toEqual(new Set());
 		expect(layout.placements).toEqual([]);
 	}
+});
+
+test("nested changes keep each ancestor's total and its first changes in document order", () => {
+	const original = { a: { b: 1, gone: true }, list: ["x", "y", "z"], same: 1 };
+	const modified = { a: { b: 2, extra: [1] }, list: ["new", "x", "z"], same: 1 };
+	const classification = classifyJsonDiff(original, modified);
+	const lines = new Map([
+		["/a", 1],
+		["/a/b", 2],
+		["/a/extra", 3],
+		["/list", 4],
+		["/list/0", 5],
+	]);
+	const changes = nestedJsonDiffChanges(classification, (pointer) => lines.get(pointer) ?? 0, 4);
+	const summary = (pointer: string) =>
+		changes.get(pointer)?.first.map(({ mark, path }) => `${mark.kind} ${jsonPathLabel(path)}`);
+	expect(summary("/a")).toEqual(["removed a.gone", "changed a.b", "added a.extra"]);
+	expect(summary("/list")).toEqual(["removed list[1]", "added list[0]"]);
+	expect(summary("")).toEqual([
+		"removed a.gone",
+		"changed a.b",
+		"added a.extra",
+		"removed list[1]",
+	]);
+	expect(changes.get("")?.total).toBe(5);
+	expect(changes.has("/same")).toBe(false);
+	expect(changes.has("/a/b")).toBe(false);
+});
+
+test("removals inside reordered or shifted array items keep base pointers and attach to the rendered parent", () => {
+	const reordered = classifyJsonDiff(
+		{ items: [{ id: "a" }, { id: "b", gone: true }] },
+		{ items: [{ id: "b" }, { id: "a" }] },
+	);
+	expect(reordered.removed.get("/items/1/gone")).toMatchObject({
+		renderedParent: "/items/0",
+		path: ["items", 0, "gone"],
+	});
+	const shifted = classifyJsonDiff(
+		{ items: [{ id: "x" }, { id: "a", gone: 1 }] },
+		{ items: [{ id: "a" }] },
+	);
+	expect([...shifted.removed.keys()].sort()).toEqual(["/items/0", "/items/1/gone"]);
+	const counts = nestedJsonDiffChanges(shifted, () => 0, 8);
+	expect(counts.get("/items/0")?.total).toBe(1);
+	expect(counts.get("/items")?.total).toBe(2);
+});
+
+test("path labels keep distinct pointers distinct", () => {
+	expect(jsonPathLabel(["a.b"])).toBe('["a.b"]');
+	expect(jsonPathLabel(["a", "b"])).toBe("a.b");
+	expect(jsonPathLabel(["a", 0])).toBe("a[0]");
+	expect(jsonPathLabel(["a", "0"])).toBe('a["0"]');
+	expect(jsonPathLabel(["a[0]"])).toBe('["a[0]"]');
+	expect(jsonPathLabel(["", "@scope/pkg"])).toBe('[""]["@scope/pkg"]');
 });

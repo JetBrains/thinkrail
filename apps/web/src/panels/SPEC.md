@@ -4,7 +4,7 @@ type: submodule-design
 status: active
 title: panels — feature views
 parent: module-web
-depends-on: [module-contracts]
+depends-on: [module-contracts, submodule-web-settingskit]
 references: [central-integration]
 tags: [ui]
 ---
@@ -80,17 +80,39 @@ treatment.
   **always-visible chevron** + folder/name + a collapsed-only plain workspace count + an **always-visible Create
   workspace `+` in a fixed right-edge column**. That `+` is the **same control as the Projects-header Add
   project `+`** — both are `IconButton` ghost `s`, so they render identically and their glyphs
-  line up on one vertical axis (both sit at the row's `pr-xs` right edge). The Create workspace `+` carries a
-  tooltip and accessible name naming the shell's `Mod+N` chord and its `Mod+Alt+N` browser alias through `lib`'s
-  `platformShortcutLabel` (see `submodule-web-shell` global chords); the context-menu item stays plain.
+  line up on one vertical axis (both sit at the row's `pr-xs` right edge). The Create workspace `+`'s tooltip
+  shows the one `workspace.new` chord that reaches this client as keycaps — `Mod+N` on the desktop, the
+  `Mod+Alt+N` alias in a browser — from `ProjectTree`'s `newWorkspaceShortcut` caps, which the shell
+  injects from the resolved table (see `submodule-web-shell` global chords, *Chords in tooltips*); the
+  context-menu item stays plain.
   Long names truncate before the count/action; there is deliberately **no visible Close or overflow icon**.
   Hover highlights the full row and the highlight remains while its **project context menu** is open.
   Right-click opens that PR-#167-styled menu at the pointer without selecting/navigating; a scroll-cancelled
   ~700ms long press is its touch equivalent. With a project-name button focused, the standard Context Menu
   key or Shift+F10 opens the same menu for keyboard-only use; arrow/activate/Escape keys work normally.
   The menu is neutral: **Plus Create workspace**, **FolderOpen Open existing worktree…**, separator,
-  **Pencil Rename** (only when the host's protocol is at least `PROJECT_RENAME_PROTOCOL_VERSION`), **X Close
-  project**. Rename swaps the project name for the same inline input as workspace rename (Enter/blur
+  **ArrowUp Move up** / **ArrowDown Move down** + separator (only when the host's protocol is at least
+  `PROJECT_ORDER_PROTOCOL_VERSION`; disabled at either end), **Pencil Rename** (only when the host's protocol is at least `PROJECT_RENAME_PROTOCOL_VERSION`), **X Close
+  project**. **Project order is host-owned** (`Project.rank`, architecture Decision 9: projects are domain
+  state), so every window and client shows one arrangement and converges on the `project.updated` push;
+  `workspaceActions.moveProject` sends `project.move` and toasts a refusal; its reply is never applied as
+  state, because a reconnect can replay a cached reply over a newer welcome snapshot, and the host has
+  already pushed the moved ranks. Three equivalent gestures place a project before/after a neighbour:
+  dragging its name button (not the chevron, `+`, or rename input), the menu's Move up/down, and
+  **Alt+Shift+↑/↓** on the focused name (`aria-keyshortcuts`, the workbench's reorder chord); below
+  `PROJECT_ORDER_PROTOCOL_VERSION` none of them is offered and the chord passes through untouched. The
+  drag is `@dnd-kit/core`'s, like the workbench's tab drag, with a `MouseSensor` (5 px activation, so a
+  click still selects and a drag never navigates; touch keeps scrolling and reorders through the
+  long-press menu) and `pointerWithin`: each
+  project group carries before/after half drop zones that light the workbench's `border-primary`
+  insertion line, zones whose move would be a no-op stay disabled, the source dims, and a `DragOverlay`
+  chip names the project. Escape or a drop outside a zone changes nothing. The Chats section sits outside
+  that drag context, so it is never draggable or a drop target and no project can land above it; the
+  host refuses the container at either end anyway. After a keyboard or menu move focus returns to the
+  moved name; every completed move fills the rail's polite `role="status"` region ("… moved to position
+  2 of 3"), while dnd-kit's own announcements stay silent and its screen-reader instructions are the
+  localized keyboard hint the name button is described by. A project opened or reopened lands on top;
+  the rest keep their order. Rename swaps the project name for the same inline input as workspace rename (Enter/blur
   commits a changed trimmed name via `project.rename`, Escape cancels) and waits for the `project.updated`
   push — no optimistic label; rejection raises an error toast. Create is exactly the direct `+` flow. Open existing worktree opens the
   `ExistingWorktreeDialog` chooser fed by `workspace.listExisting` (branch + absolute path per row;
@@ -102,11 +124,12 @@ treatment.
   Escape dismiss. Confirm fires `project.close` and waits for the full `project.updated` push—no optimistic
   removal; success is the
   row disappearing with no toast, while rejection keeps it and raises an error toast. Menu/dialog dismissal
-  restores the source project-name focus; successful close focuses the fallback project name or the Projects
-  view's Add project control. `ProjectTree` also owns the `NewWorkspaceDialog` the per-project `+` opens **and** each
+  restores the source project-name focus; a successful close leaves focus to the shell's recovery engine
+  (the project rows are a `projects` focus list with Add project as its fallback): the next project's name,
+  else the previous, else Add project. `ProjectTree` also owns the `NewWorkspaceDialog` the per-project `+` opens **and** each
   workspace row's hover-revealed **kebab menu** (`MoreVertical`, controlled `DropdownMenu`) — right-clicking
   anywhere on the row opens that exact menu at the kebab without selecting/activating the workspace, while
-  the kebab remains the touch and keyboard-focus path. Its actions are a `DropdownMenuSub` **"Open in"**
+  the kebab remains the touch path (keyboard users open the menu from the row, see *Sidebar trees*). Its actions are a `DropdownMenuSub` **"Open in"**
   (rendered only when at least one editor was detected), **Copy path**, and **Reveal in file manager**. A
   ThinkRail-managed worktree additionally gets **Rename** when the connected host's protocol is at least
   `WORKSPACE_RENAME_PROTOCOL_VERSION`, plus **Remove workspace**; an external row gets only **Remove from
@@ -114,7 +137,8 @@ treatment.
   The Default gets neither mutation. "Open in" comes from the host-wide `editor.list`; GUI entries call
   `workspace.openIn`, while terminal-kind Vim activates the workspace and runs through `addTerminal`'s
   one-shot `initialCommand`. Copy writes `worktreePath`; Reveal calls `workspace.reveal`. These requests,
-  `editor.list`, the project workspace-list load, the remove confirm (`RemoveWorkspaceDialog`), and the
+  `editor.list`, the project workspace-list load, the remove confirm (`RemoveWorkspaceDialog`, which for a
+  workspace ThinkRail made also says how many artifacts go with it, from the loaded artifacts snapshot), and the
   inline-rename controller below (`createRenameController` / `useInlineRename`, shared with project rename) live once in
   `workspaceActions.ts` so the shell's topbar workspace menu ([[submodule-web-shell-location-bar]]) offers
   the same actions — including the capability-aware pending rename — without a second implementation. The
@@ -128,7 +152,7 @@ treatment.
   capable host, an expanded project renders its **live** rows from `selectWorkspacePartition` newest
   created first (never re-sorted by activity, so rows stay put while agents work), then a **`Settled · N`** disclosure header (collapsed by default, store-held
   per browser) whose body lists the settled rows **slim** — single line, name only, a small **reason chip**
-  (`merged` / `closed` / `idle 2w` / `by you`, long form in its tooltip), a hover **↩ Keep active** beside the kebab — ten at
+  (`merged` / `closed` / `idle 2w` / `by you`, long form in its tooltip), a hover **↩ Keep active** beside the kebab (also in the menu) — ten at
   a time with a *Show 25 more* row. Live rows gain a hover **✓ Settle** beside the kebab (also in the menu
   and on right-click); it is disabled while the row's agent works or a result is unread, absent on Default.
   On a v86+ host the same menu section carries one read toggle from `selectWorkspaceReadAction`: **Mark as
@@ -299,8 +323,34 @@ treatment.
   is showing its folders expand (and stay expanded) and it scrolls `nearest` into view; on return All
   reveals only if the active file differs from the persisted `seenActivePath`, and then skips the scroll
   restore so the two cannot fight. Auto-reveal never switches the side tab or the mode. Clicks still open
-  the editor. A failed first status read shows no marks; a failed refresh keeps the last ones, like the
-  Changed list. The tree's look is remembered per workspace across reloads (`store.filesTreeByWorkspace`:
+  the editor. Right-clicking a file or folder row (a touch long-press, or the Context Menu key / Shift+F10 on
+  a focused row) opens its menu: **Open in browser** first for an HTML file from a host at
+  `BROWSER_VIEW_PROTOCOL_VERSION` (v122; `OpenInBrowserMenuItem`, also in the Artifacts row menu after
+  Reveal, and `OpenInBrowserButton` in the file tab's toolbar and, through `ResourceHost.OpenInBrowser`, in
+  every framed preview), then **Copy path** (absolute, through `joinWorkspacePath`) and **Copy relative
+  path** (worktree-relative). "Open in browser" opens the host's `/view/` URL with `window.open(…,
+  "noopener,noreferrer")`: a new tab on the web, the system browser on the desktop
+  ([[submodule-server-host]] serves it sandboxed, [[module-desktop]] routes it to the OS). A compacted folder copies its deepest path, matching its label, and copying
+  neither opens nor selects the row. The row stays highlighted while its menu is open. From a host at
+  `FS_MUTATIONS_PROTOCOL_VERSION` (v118) the menu adds the tree's two mutations, both host-owned and
+  watcher-refreshed, never patched into the rows (`fileTreeActions`): **Copy** puts the row's entry — file,
+  folder or link, a compacted folder's deepest folder — on the session-only in-app clipboard
+  (`store.fileClipboard`, not the OS clipboard, cleared with its workspace or when its entry is deleted);
+  **Paste** (only while the clipboard holds an entry) asks `fs.copy` for a copy beside a file or inside a
+  folder — across workspaces too, a copy unless the entry was cut (below) — under the host's ` copy` /
+  ` copy N` name, then expands
+  that folder, and an empty tree offers the same Paste as a button next to *Empty*; **Delete** (also the Delete key on a row) asks for
+  confirmation and `fs.delete` moves the entry to the OS trash. From `ARTIFACTS_PROTOCOL_VERSION` (v121)
+  the menu also has **Cut**: the same clipboard entry marked `cut`, which the next Paste (here or in the
+  Artifacts tool) turns into `fs.move` — refused with "already exists" rather than renamed, and with "on
+  another disk" across file systems, where the entry stays on the clipboard so the user can copy it — and
+  clears once it succeeds.
+  The confirmation says when an agent is
+  working in the workspace but does not block — the user's explicit action wins, as with a hunk revert —
+  and an open tab of a deleted file keeps its stale-content contract. Failures toast; a folder past the
+  host's copy bound and an entry that changed under the paste or delete (`ENTRY_CHANGED`) get their own
+  messages. A failed first status read shows no marks; a failed refresh keeps the
+  last ones, like the Changed list. The tree's look is remembered per workspace across reloads (`store.filesTreeByWorkspace`:
   All expanded folders, Changed-tree collapsed folders shared by every scope, scroll per view through
   `RememberedScrollArea` — a Changed view's scroll belongs to its scope and compare target, so changing
   either starts at the top), persisted by the `filesTreeState` module (native stable preferences, else
@@ -328,8 +378,9 @@ treatment.
   The `ChangesPanel` secondary toolbar paints **no surface of its own**: like the right-panel tab strip
   it shows the panel's `container-sidebar-bg`, so the two chrome rows read as one continuous surface. The **file-style tree row** (chevron/spacer
   lead, folder/file icon, truncated label, trailing slot; `min-w-0` so a row can shrink when it shares a
-  flex line with a trailing control) is the shared **`TreeRow`**, used by both
-  `FileTree` and `ChangesTree` so the two trees stay identical. `TreeRow`'s optional `onWarm` reports
+  flex line with a trailing control) is the shared **`TreeRow`**, used by `FileTree`, `ChangesTree`
+  and the Artifacts tree so the trees stay identical; its optional `icon` replaces the file glyph (the
+  Artifacts tree's type icons). `TreeRow`'s optional `onWarm` reports
   `hover` (pointer enter) or `focus`. `FileTree` file rows warm at once on focus and through
   `warmOnHover` on hover, which keeps one pending row and fires after the pointer rests 150 ms, so a
   sweep across the tree loads nothing. A warm preloads the code view
@@ -538,7 +589,9 @@ while it is invisible; under reduced motion the swap is instant. Reaching done p
 `onboardingDismissed`; the wizard (and with it the hidden rail and held prompts) stays until a project opens. A still-empty
 refresh warns and offers **Check again**
 (re-runs both reads, e.g. after fixing the account elsewhere) and Back to the choices — Back alone could not
-return, since the provider is configured and so no longer listed. The wizard owns no project step of its own and shows no progress strip.
+return, since the provider is configured and so no longer listed. Each step that replaces another moves
+focus to its title (`tabIndex=-1`), so the keyboard never rests on a vanished button; Back focuses the
+picked provider's option when it is still listed, else the options' first control. The wizard owns no project step of its own and shows no progress strip.
 **Skip setup** is on every screen before done except privacy, whose Continue is the only way on; skipping also cancels any
 target-less login still pending in the dialog (`cancelUnownedLogin`, shared with `ConnectProviderDialog`).
 A login is owned by the start that requested it (`startReservedLogin`): when the surface closes before
@@ -685,47 +738,112 @@ a project picker, the prompt hero, and the reused
   workspace exists — the toast is the only place left
   to report the dropped kick-off). (`gh` status lives in `SettingsDialog`, not the
   create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — a
-  **store-driven two-pane shell**: one nav list, rendered once, beside a scrollable content pane. At `md`+
-  the list is a rail grouped **Agent** (Models, Providers, MCP servers, Prompt templates, Environment) ·
-  **Interface** (Chat, Appearance, Language, Layout, Terminal) · **System** (Workspaces, Integrations, Extensions,
-  Notifications, Privacy, Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
+  **store-driven two-pane frame**: a nav column (title, search field, section tabs) beside one scrollable
+  content pane. It stands near full height (the window less a `--space-24` margin) but grows no wider than
+  the 220px nav plus the content column (`max-w-760`), since a wider page only stretches rows (user,
+  2026-11-17). At `md`+ the tabs are a rail grouped **Agent** (Models, Providers, Subagents — the global
+  settings, this workspace's override and the available agent roles —, Extensions & skills, MCP servers, Prompt templates, Environment) ·
+  **Interface** (Appearance, Text & fonts — fonts, custom fonts and both line widths —, Chat, Layout,
+  Keyboard, Language, Voice input, Terminal) · **System** (Workspaces, Integrations, Notifications, Privacy,
+  Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
   and it is the home for further integrations. Below `md` the same list is a horizontal scrolling strip without group labels. The
-  Feedback card (`settings-nav-feedback`, “Share feedback”) belongs to that list at
-  every width, pinned to the rail's bottom at `md`+. The pure nav data — groups, protocol and
-  injected-content gating, and resolving a requested section to an available one (a gated or retired id,
-  e.g. an old `review` / `line-width` deep link, falls back to Appearance) — lives in `panels/settingsNav.ts`,
+  Feedback tab (`settings-nav-feedback`, “Share feedback”) belongs to that list at
+  every width, pinned to the rail's bottom at `md`+. There is no Artifacts section: its one switch, Smart
+  view, is a Layout group. The pure nav data — groups, protocol and
+  injected-content gating, and resolving a requested section to an available one (a retired id opens where
+  its settings moved — the store's `RETIRED_SETTINGS_SECTIONS`: `artifacts` → Layout, `line-width` → Text &
+  fonts, `review` → Models; a gated one falls back to Appearance) — lives in `panels/settingsNav.ts`,
   so the dialog only renders it. `settingsOpen`/`settingsSection` live in the store so the gear AND the
-  Welcome banner can open it deep-linked to a section. Escape closes the dialog except while focus is in an
-  input carrying `data-settings-draft-input`, where Escape reverts that draft instead.
-  **Shared Settings primitives** keep every page one shape (shell's injected Layout section reuses them):
-  `SettingsPageContainer` stacks a page's groups with spacing and a divider drawn only between children
-  that actually render (each child keeps its element key, so a conditional group never remounts its
-  siblings); `SettingsGroup` is a titled block of `SettingsRow`s — label, optional description, one
-  control, wrapping the control below the label at narrow widths; `SegmentedControl` is a native-radio
-  group with `value: T | null` (`null` selects nothing, for a host value no option names) and per-option
-  disabled; `SettingsNotice` is the one inline neutral/info/success/warning/error notice;
-  `SettingsSubheading` titles a run of rows inside a group; `SETTINGS_TAG` is the bordered row tag;
-  `SettingsRange` is the range-slider skin and segmented track; `SettingsFolder` is a data folder's
-  Copy path / Open folder row (`useFolderActions` binds a `*.reveal` method) and its per-file issue notices,
-  shared by Language, Custom themes and Custom fonts; `saveSettings` is the one `settings.update` call that
-  toasts its failure. Popovers inside the dialog render into the dialog element
-  (`settingsDialogContainer`), because Radix's scroll lock cancels wheel and touch scrolling anywhere
-  outside it (the Models pickers missed this, so their lists ignored the wheel: #607). The dialog clips
-  overflow, so these popovers also take it as their collision boundary and cap their height at Radix's
-  available height; the model popover caps its width too (without that cap, arrow keys scrolled a
-  narrow dialog sideways). Under the dialog's focus scope, a popover whose trigger can't take focus back
-  on close leaves focus on the dialog element, so the Models pickers use `aria-disabled`, not
-  `disabled`, while busy; `FontPicker` doesn't yet. A modal `DropdownMenu` holds its own scroll lock and
-  may stay on `body`; the Layout "Add new layout" and Templates delete popovers still render there (only
-  a long layout name can't be swiped sideways in its field).
-  Free-text settings and the font weight slider share one **auto-save input pattern**
-  (`settingsDraft.useSettingsDraft`): Enter, blur or a slider release saves a valid, changed value once
-  (no Save/Apply button); an invalid draft stays visible with `aria-invalid` and a range message linked by
-  `aria-describedby`, and is never sent; Escape reverts to the authoritative value; the input carries
-  `data-settings-draft-input`; a host echo never overwrites an edit in progress or rolls back to a value a
-  newer in-flight save replaces; a rejected save toasts and the field returns to the authoritative value. **`McpSettings`** is the **MCP servers** section
-  (hidden below `MCP_PROTOCOL_VERSION`). It describes the active workspace's project
-  (no active workspace → "Open a workspace to manage its MCP servers") and reads `mcp.list` through
+  Welcome banner can open it deep-linked to a section; without a section `openSettings()` reopens the one
+  last shown (kept in memory, so a page load starts on Providers).
+  **Nav keys.** The tabs are one `role=tablist` (`SettingsTabs`, key scope `settings.nav`) with a single
+  roving tab stop; they keep `settings-nav-<id>` and `data-active`. Opening focuses the current tab. ↑/↓
+  (j/k) and Home/End **open** the section at once; → (l), Enter and Space enter its content on the setting
+  focused there last — a per-section map the dialog keeps for the page's life, keyed by the resolved
+  section, so a retired id shares its successor's entry — else on its first; ← in the content comes back
+  to the tab. Besides the arrow twins, only S and `/` act in the nav (they start a search), so F stays
+  hint mode's. Each section mounts in its own keyed scroller, so it opens scrolled to the top. Inside the
+  content the kit's walk takes over ([[submodule-web-settingskit]], *The walk*).
+  **Search over individual settings.** The field above the tabs searches `panels/settingsCatalog.ts`, one
+  declarative entry per setting (id, section, label and description keys, keywords, and protocol / `when`
+  gates over `useSettingsCatalogContext`: the protocol, an active workspace, the host platform, and the
+  states without which a row does not render at all — a signed-in provider, voice files on disk, a launched
+  survey), kept to the sections the nav shows (`availableSettings`), plus the `searchEntries` shell
+  injects (one per shortcut, [[submodule-web-shell]]). `settingsSearch.ts` ranks them with contracts' tiered matcher over label, description, section name and
+  keywords. While a query is active its results replace the content pane: a listbox whose options name
+  their section and highlight the matched ranges (`components/highlightRanges`); ↓ enters it from the field,
+  ↑/↓ (j/k) and Home/End walk it, ↑ on the first returns to the field, ← goes to the tabs, Enter or → jumps
+  (Enter in the field jumps to the first), and Esc clears the query back in the field. **The catalog is the
+  one source of a setting's id and words:** rows take their label, description and `data-setting-id` from
+  it (`settingProps`), the palette lists the same entries ([[submodule-web-shell]]), and e2e's drift check
+  jumps to every entry ([[module-browser-e2e]]). Indexing the rendered DOM was rejected: only one section is mounted, and the palette
+  needs the index while Settings is closed.
+  **Jump.** A result opens its section and jumps there ([[submodule-web-settingskit]], *Jump and flash*):
+  the row's disclosure or tree group opens itself, the row takes focus and flashes, and when nothing took
+  focus the section's tab does. A section change, a new query or a newer jump abandons a jump. After a jump
+  the query stays: Esc in that section's content returns to the results on the same hit. From outside,
+  `openSettings(section, settingId)` leaves a target the dialog consumes once (`consumeSettingsTarget`, on
+  open or while open) and jumps to the same way — the palette's setting rows and Voice's "Change…" use it.
+  **Esc and closing.** One Esc is one step back: the focused element's own step first (a dirty draft
+  reverts, a pending choice cancels, a filter clears, a recording cancels), then the results after a jump,
+  then the section's tab, then close; in the search, Esc clears the query, then goes to the tab. The kit's
+  `holdSettingsEscape` keeps Radix from dismissing meanwhile (*Esc and Radix* there); on a tab, the Close
+  button or the dialog itself Esc closes, and Radix returns focus to the opener. `Mod+,` toggles Settings
+  and `close-item` (Mod+W) closes it at once from anywhere inside, a dirty field committing as on blur
+  ([[submodule-web-shell]], *Native shortcuts*).
+  **Building blocks.** Every section — shell's Layout and Keyboard and `updates`' Updates included — is
+  made of `settingsKit` blocks ([[submodule-web-settingskit]]): page, groups with a scope tag, rows with
+  Changed/Reset, choices, sliders, number fields, disclosures, lists, the draft, and the markup the walk and
+  the jump read. What knows which settings exist stays here: the catalog (above); `settingDefaults.ts`, every
+  Reset against contracts' `DEFAULT_CONFIG` or the store's `CLIENT_PREFERENCE_DEFAULTS` (the four model
+  fields clear with `null`), as `useConfigReset` / `useClientPreferenceReset` / `useLayoutLimitReset`; `saveSettings`, the one `settings.update` call that toasts its failure;
+  `SettingsFolder`, a data folder's row (`SettingsFolderRow`: the path as visible text, Copy path as its
+  stop and Open folder as a side; `useFolderActions` binds a `*.reveal` method) and its per-file issue
+  notices, shared by Language, Custom themes and Custom fonts. A control that needs the full width under
+  its label (the theme lists, the interface language, the Windows shell) uses the kit's `SettingsRow
+  layout="stacked"` (`"card"` for System mode's two theme lists). Every section keeps these rules:
+  - **Shape:** a `SettingsPage` titled with its nav name over a one-line description, then groups of rows;
+    a group whose settings are not global carries its scope tag (This workspace, This project, All
+    projects, This computer).
+  - **Reset:** every setting with a default shows Changed and Reset while it differs, and Delete on its row
+    resets it. **Skills from other agents** has no Reset: hosts send `true` for a config that predates the
+    key while `DEFAULT_CONFIG` says `false`, so a Reset would switch it off for users who never chose.
+  - **Cheap and expensive choices:** a cheap choice applies on each arrow (theme mode, the theme lists,
+    contrast, message order, composer size, scrollback, Markdown outline position, the context-window and
+    cache-warming presets, a workspace's subagents); an expensive or disruptive one only moves a pending
+    option marked "Press Enter to apply" and applies on Enter or Space (the UI and voice languages, which
+    download; the Windows shell; the settle period). A click applies at once either way.
+  - **Deletions confirm through `ConfirmDialog`** (MCP servers, custom servers, templates, layout presets,
+    packages, voice files), from the row's Delete key and its button alike — never a `ConfirmPopover`,
+    never unasked; focus recovery then lands on the neighbouring row, else on the list's
+    `data-focus-fallback` (the empty state's add button).
+  - **Nothing is said only on hover:** what a `title=` tooltip or a "?" icon carried is visible text (the
+    Providers "Managed" lock, Environment's launch override, MCP names and reasons, endpoint addresses,
+    the Layout limit and default help, Notifications' How to enable).
+  - **No control disables itself under focus,** which would drop focus to the dialog: writes queue instead
+    (themes, model context; the latest wins), busy pickers read `aria-disabled` and ignore presses (the
+    Models pickers, `FontPicker`), and starting a voice download moves focus to its Cancel. A failed load
+    offers Retry.
+  - **Every tab stop has an explicit `tabIndex`,** and hint mode can label and press every control; nothing
+    in Settings binds F.
+
+  Popovers inside the dialog render into the dialog element (`SettingsDialogContainer`), because Radix's
+  scroll lock cancels wheel and touch scrolling anywhere outside it (the Models pickers missed this, so
+  their lists ignored the wheel: #607). The dialog clips overflow, so these popovers also take it as their
+  collision boundary and cap their height at Radix's available height; the model popover caps its width
+  too (`fitContainer`; without that cap, arrow keys scrolled a narrow dialog sideways). A modal
+  `DropdownMenu` holds its own scroll lock and may stay on `body`.
+  Free-text and number settings and the font weight slider save through the kit's draft (`useSettingsDraft`):
+  no Save/Apply button, Enter or blur saves, Esc reverts only a dirty draft. Environment alone keeps an
+  explicit Save (below). **`McpSettings`** is the **MCP servers** section (hidden below
+  `MCP_PROTOCOL_VERSION`), a `SettingsPage`: one info `SettingsNotice` (`mcp-confirm-banner`: the host
+  notice — servers run on the host and inherit its environment — and, in a workspace, the in-chat confirm
+  sentence, `mcp-confirm-text`), the `handledElsewhere` warning notice, one error notice per unreadable
+  `mcp.json`, the save status line and, once any server exists, an **Add MCP servers** row (catalog
+  `mcp-add`, button `mcp-add`); then two groups, **User servers** (scope tag *All projects*,
+  `mcp-user-servers`, list `mcp:user`) and **Project servers** (scope tag *This project*,
+  `mcp-project-servers`, list `mcp:project`; the untrusted line, or "No servers in this repository's
+  .pi/mcp.json…" when it lists none). In a workspace it reads `mcp.list` through
   `transport`'s `watchMcpWorkspace` — on mount, every welcome, a project-trust change, and with bounded
   backoff while a live chat still reports a server `starting`, because the host pushes no connected edge.
   Rows come from the store's `deriveMcpServerRows`. Its row `effective` flag gates name-only Sign in,
@@ -736,24 +854,31 @@ a project picker, the prompt hero, and the reused
   approved project definition, never ambiguous same-name rows. Review, Edit and Remove remain
   scope-specific. While the project is untrusted, project-scope rows are
   dropped client-side at once, so a revoke never leaves the cached repository rows actionable until the
-  refresh lands (the host omits them anyway, and the banner says so); the revoke also closes an open Edit,
+  refresh lands (the host omits them anyway, and the Project servers group says so); the revoke also closes an open Edit,
   Review & approve or project-scope Remove dialog, drops an Edit / Review read that was still in flight,
   and an open Add dialog falls back to User scope — including a review step it had reached for Project
-  scope (the host refuses repository writes for an untrusted project regardless). A user-server
+  scope (the host refuses repository writes for an untrusted project regardless). In a workspace a user-server
   enable/exposure change sends only the changed field (`mcp.setProjectOverride` merges), and Remove (at
   either scope) and Edit carry the rendered `summary.fingerprint` (`mcpRenderedTarget`, built from the row
   the dialog opened with, never a re-read), so a stale row refuses instead of rewriting or deleting
   changed content — a repository entry a checkout changed, or a user entry another client or editor
   replaced while the Remove dialog was open; both refresh the list on failure, so the user sees the
-  current entry and can retry from it. Rows show a status dot + label + one reason line, the name,
-  User/Project and HTTP/stdio chips (stdio: "Runs on host — inherits the host environment"), an exposure
-  menu (`deferred | direct | hidden`; configured codemode reads "treated as deferred (codemode not available
-  yet)"), the enable switch, at most one primary and one secondary action — the status table `mcpRowView`
+  current entry and can retry from it. Each row is a `SettingsList` row (`McpServerRowView`,
+  `data-focus-row` = `<scope>:<name>`). Its primary button (`mcp-server-details`, Enter) opens **Details**
+  and holds the name, the HTTP/stdio and effective-exposure chips and the status dot + label + one reason
+  line, all wrapping — no truncation and no hover-only title (stdio's "runs on host" is screen-reader text;
+  the page notice says it visibly). Its sides (→) are the secondary and primary status actions, the ⋯ menu
+  and the enable switch; Space on the primary toggles the switch, Shift+F10 opens the menu, and Delete asks
+  to **Remove** through `ConfirmDialog` (`mcp-remove-confirm`), after which focus recovery lands on the
+  neighbouring row's primary, else on the empty state's `mcp-empty-add` (fallback `mcp:user`) or the Add
+  button (fallback `mcp:project`). The exposure choice (`deferred | direct | hidden`; configured codemode
+  reads "treated as deferred (codemode not available yet)") is a submenu of the ⋯ menu, which also always
+  offers Details and Show log. A row has at most one primary and one secondary action — the status table `mcpRowView`
   encodes: Sign in (needs sign-in) · Review & approve (pending approval, or a pending repo override)
   · Edit (an invalid repo entry) · **Reconnect** (failed, with **Show log** beside it; disconnected) ·
   **Reload now** (pending reload) · **Open a chat** (not running, with Test connection beside it for HTTP)
-  — and an overflow menu (Sign in / Sign out for OAuth servers, Test connection
-  for HTTP, Edit or Review & approve, Share with repo when a user server has a project setting, Details,
+  — and an overflow menu (Exposure, Sign in / Sign out for OAuth servers, Test connection
+  for HTTP, Show log, Edit or Review & approve, Share with repo when a user server has a project setting, Details,
   Remove behind a confirm). Reconnect and Reload now act per chat: they run, one chat after another,
   for the live chats that report the row's state (`McpServerRow.sessions.reporting`) — `mcp.reconnect`, and
   `session.reloadResources` through the skills baseline (so the chat's skills badge clears too). Failures
@@ -774,9 +899,14 @@ a project picker, the prompt hero, and the reused
   (`McpConfigFileErrors`) naming its path, pi's message and "Edit the file directly to fix it", above the
   list or the empty state alike — so a file pi cannot read never passes for "no servers". Status details
   (pi's report) arrive already redacted by the host.
-  **Enablement and exposure follow one routing rule (`mcpSettingWrite`):** a user-level server
-  changes for this project only, through `mcp.setProjectOverride` (the host merges fields atomically,
-  so only the changed field travels), and the global `mcp.json` is never written; a repo-defined server is
+  **Enablement and exposure follow one routing rule (`mcpSettingWrite`):** inside a workspace a user-level
+  server changes for this project only, through `mcp.setProjectOverride` (the host merges fields
+  atomically, so only the changed field travels), and a toggle there never writes the global `mcp.json`;
+  with no workspace open (a host at `MCP_USER_SERVERS_PROTOCOL_VERSION`, `supportsUserMcp`) the switch and
+  exposure write the user entry's own `enabled` / `exposure` in `~/.pi/agent/mcp.json` through
+  `mcp.setUserServer` (`mcpUserServerWrite`), carrying the row's `summary.fingerprint` as
+  `expectedFingerprint` — the change applies to every project without its own override and to the pi CLI
+  (user, 2026-11-17), and a stale fingerprint is refused and re-read like an update; a repo-defined server is
   rewritten in `.pi/mcp.json` with `mcp.update`, whose whole-entry replacement starts from the entry as
   written, read through `fs.readFile`. Every `mcp.update` (toggle, exposure, Edit) is built by
   `mcpEntryUpdate` and carries the fingerprint the row was rendered with as `expectedFingerprint`
@@ -798,8 +928,8 @@ a project picker, the prompt hero, and the reused
   (`mcpEditedEntry`), and a new value must be a reference. A user-level server's Edit is a disabled menu
   item naming its source file (`McpServerSummary.source`): `mcp.update` replaces the whole entry and the
   host returns no raw user entry, so Settings could only rebuild it lossily — users edit
-  `~/.pi/agent/mcp.json` directly, and the switch and exposure menu keep writing this project's record
-  override. **Add** has three tiers: presets from
+  `~/.pi/agent/mcp.json` directly, and the switch and exposure keep writing this project's record
+  override (with no workspace, the user entry itself). **Add** has three tiers: presets from
   `mcpPresets.ts` — five, verified and pinned (no `@latest`): Context7 and DeepWiki (`direct`, authless),
   Linear through its vendor read-only endpoint (`/mcp/readonly`) and Sentry (both OAuth — sign in after
   adding), and Playwright (`npx -y @playwright/mcp@<pinned>`), which is added as a disabled user entry plus
@@ -838,47 +968,92 @@ a project picker, the prompt hero, and the reused
   waits until it is idle" — the host answers before it reloads them, so the returned snapshots cannot say
   which already did; the rows' live statuses do. Sign in / Test connection start
   `mcp.login` / `mcp.testConnection` and reuse `auth/LoginDialog` as Providers does: the login state keeps
-  the push's `target`, so only an MCP login for this workspace opens this section's dialog (Providers
-  ignores it, and so does the section shown for another workspace), and the sign-in page opens only from
-  the dialog's button. A banner reads "ThinkRail asks in the chat before MCP calls that may change data.
+  the push's `target`, so only an MCP login started from this workspace — or, on the no-workspace page,
+  from none — opens this section's dialog (`mcpLoginFor`; Providers ignores it, and so does the section
+  shown for another workspace), and the sign-in page opens only from the dialog's button. The page notice
+  reads "ThinkRail asks in the chat before MCP calls that may change data.
   Always allow trusts a tool in every chat of this project; those tools are listed on their server
   below." A row whose summary carries `alwaysAllowed` shows an **Always allowed in this project:** line
-  of tool chips (the host's `label`, the pi tool name as title) — the scope is spelled out because the
-  row's USER chip describes the server, not the grant; each chip's × ("Ask again before <tool> in this
+  of tool chips (the host's `label`) — the scope is spelled out because the row's group describes the
+  server, not the grant; each chip's × ("Ask again before <tool> in this
   project") sends `mcp.revokeToolGrant` through `requestMcpList` and is
-  disabled while the row is read-only or busy. This is the only place grants are revoked. The empty state offers presets, the form, JSON import and a
-  host notice. Live sections: **`ProvidersSettings`** (the in-app
-  provider-auth surface — a header line with an in-page **Refresh** (`providers-refresh`, disabled while a
-  status read is in flight) over the groups **Connected** (each row with a **Sign-out only when
-  `canLogout`** — env / models.json auth shows a "Managed" tag instead, since the host can't unset it; a
-  `kind: "central"` row is labelled "JetBrains AI" and its Managed tag points at the JetBrains AI card,
-  which owns that connection), the **JetBrains AI** card, **Subscriptions** (unconfigured `canOAuth`
-  providers) and **Available (N)** (the `canApiKey`-only rest, capped with a "Show N more" expander).
-  Every unconfigured provider is one row offering **Sign in** when `canOAuth` and **API key** when
+  disabled while the row is read-only or busy. This is the only place grants are revoked. An empty **User
+  servers** group offers presets, the form and JSON import (the host notice is the page's).
+  **Without a workspace**, a host at `MCP_USER_SERVERS_PROTOCOL_VERSION` gets the same page through the
+  props-driven `McpServersPanel`, fed by `panels/useUserMcpList`: transport's `requestUserMcpList`
+  (`mcp.list` on mount, on every welcome and connection generation and after Retry; each mutation's
+  returned list replaces the hook's state and a failed one re-reads), never installed in `mcpByWorkspace`.
+  There are no live statuses, so rows show configuration only (`mcpUserRowView`: **On** — "Starts in the
+  chats of every project that doesn't turn it off." — or pi's "Turned off." for a disabled entry, with
+  Sign in for an OAuth server, Test connection for HTTP and Show log; never Open a chat, Reconnect or Reload
+  now). Only **User servers** shows, followed by the muted line "Project servers appear when a workspace is
+  open."; Add offers User scope only (a line replaces the dialog's scope picker, and a preset's per-project
+  opt-in is skipped, so the Playwright preset stays off until switched on); Remove (`mcp.remove { scope:
+  "user", expectedFingerprint }`), Sign in/out, Test connection and Show log work as in a workspace (the
+  probes and `mcp.readLog` without `workspaceId`; the sign-in dialog shows a login whose target names no
+  workspace); Share with repo, Review & approve and per-chat actions are absent; the save line reads "Saved
+  — applies to every project that doesn't override it, and to the pi CLI." An older host keeps "Open a
+  workspace to manage its MCP servers" (`McpNoWorkspace`). **`ProvidersSettings`** (the in-app
+  provider-auth surface) is a `SettingsPage` ("Providers", the intro line with the in-page **Refresh**,
+  `providers-refresh`, as a walk row) over these groups in order: **Signed in** — a `SettingsList`
+  (`providers:signed-in`) of every configured provider; a row with `canLogout` offers **Sign out** as its
+  primary (`provider-signout`, Enter), and a row the host can't unset shows a visible note in place of the
+  old hover-only "Managed" lock — "Connected through JetBrains AI" for `kind: "central"`, "Configured
+  outside the app (environment / models.json)" otherwise — and is not a walk row; **JetBrains AI**
+  (`JetBrainsAiSettings`, below; always shown once the status loads, whatever Central's state);
+  **Subscriptions** (unconfigured `canOAuth` providers); **Custom servers** (below); and **Available (N)**
+  (the `canApiKey`-only rest, folded behind one "Providers with an API key" row that names five of them and
+  offers **Show all N**, `providers-show-more`, which moves focus to the first listed row), the two
+  provider lists' rows wrapping the shared `ProviderRow` — its additive `actions` prop puts the list's
+  primary/side markup on Sign in / API key, so `ConnectProviderOptions` keeps the plain row; then the "N
+  more configured outside the app" note. A failed status read with nothing loaded shows the error with a
+  **Retry** (`providers-retry`). Every unconfigured provider is one row offering **Sign in** when `canOAuth` and **API key** when
   `canApiKey` — **both routes start `provider.loginStart`**
   (`type` `"oauth"` / `"api_key"`, issue #97) into the same store-driven `auth/LoginDialog` (open the
   URL / paste a code / answer the provider's own key prompts, `provider.loginReply` — no inline key
-  field); a "configured outside the app" note for rows with neither flag; **`CustomEndpointsSettings`**
+  field); a provider with neither flag is named only in the closing note; **`CustomEndpointsSettings`**
   (v101, hidden below `CUSTOM_ENDPOINTS_PROTOCOL_VERSION`; re-read on `providerVersion`) — the **Custom
-  servers** group listing every `customEndpoints.list` endpoint (name, address, model count; **Edit** and a
-  **Remove** icon behind a `ConfirmDialog`) plus **Add server**. The page's **Refresh** reloads the list together with
+  servers** group: a `SettingsList` (`custom-servers`) whose row primary is the server itself (name, then
+  the address and model count as visible wrapping text; Enter or a click edits, `custom-endpoints-edit`)
+  with **Remove** as a side (`custom-endpoints-remove`); Delete on a row asks through `ConfirmDialog`
+  (`custom-endpoints-remove-confirm`) like Remove does. **Add server** follows the list; with no server the
+  group shows an empty state ("No custom servers yet." and the dialog's one-line description) whose Add
+  server is the list's `data-focus-fallback`, so removing the last server lands there. A failed list shows
+  **Retry**. The page's **Refresh** reloads the list together with
   `provider.status`. Providers the group lists are filtered out of the
   generic provider rows so each appears once (only listed ids: an unlisted `custom-*` provider, or any on
-  a host without the group, stays a generic row); hand-written `models.json` providers stay in Connected as
-  "Managed", not repeated here. The dialog is one form for a company gateway and a local server: name,
+  a host without the group, stays a generic row); hand-written `models.json` providers stay in Signed in
+  with the outside-the-app note, not repeated here. The dialog is one form for a company gateway and a local server: name,
   address with local preset chips (Ollama, LM Studio, vLLM, llama.cpp — they only fill the address and an
   empty or preset name; there is no server-kind choice), a password key field (blank keeps a saved key on
   edit; an edit that changes the address's origin shows a warning and disables Save, since a different
   server is added as a new one; **Remove key** sends `apiKey: ""` and keeps Detect from reusing it), **Find models**
   (`customEndpoints.probe`, only on click — never on open, since gateways can list thousands), a manual
-  model-id field above the list, a filter field and 50-row paging once the list exceeds a page, and a per-model use switch. **A model row has no editable parameters** (decision: they
-  describe the server rather than configure it — its real limits are set by whoever runs it). It shows only
-  the facts the server reported (context, thinking, images, tools; "No tools" in warning tone), and an
-  unreported fact is simply absent and left to pi's default. Re-detecting keeps selections and saved
-  facts the server doesn't report, takes reported ones, drops a saved max output once a new context is
-  reported, keeps models the server no longer lists, and keeps existing rows first with newly found ones appended; an unchanged saved address stays as written. The
-  pure draft rules live in `customEndpointDraft`; probe failures render as localized inline status and
-  host save errors render inline; and
+  model-id field above the list, a filter field and 50-row paging once the list exceeds a page, and a per-model use switch. **A model row's only editable parameter is its context
+  window** (decision: the other facts describe the server rather than configure it, but a gateway's
+  listing rarely reports the window whoever runs the server set, and pi's 128K default then sizes
+  compaction and budgets for the wrong model). The row shows only the facts the server reported
+  (context, thinking, images, tools; "No tools" in warning tone), and an unreported fact is simply absent
+  and left to pi's default. From `CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION` (v116) it also carries a
+  compact **context window** field (`custom-endpoints-context`) that is not part of the draft: it reads
+  and writes the model's `modelOverrides` value through the same `useModelContextSettings` hook as
+  `ModelContextSettings` (`model.contextSettings` / a targeted `model.setContextWindow`), so a re-Detect
+  or Save never touches it. Empty means the detected window (placeholder "Detected", or "Unknown" when
+  the server reported none); a whole number in the contracts' custom range saves on Enter or blur through
+  the kit's draft, an emptied field or the reset icon returns to the detected window,
+  and Escape reverts a dirty draft without closing the dialog (the dialog's `onEscapeKeyDown` holds the
+  press only while the focused field differs from its saved value, `data-draft-dirty`); a clean field lets
+  Escape close it. The field is disabled while the dialog is
+  busy, for an unused row, and for a model pi doesn't serve yet (an unsaved server or newly found model —
+  its title asks to save the server first). A failed context read or write is not an unsaved model: every
+  field locks with the load-failure title, and the list is headed by the same `ModelContextLoadFailed`
+  line and Retry that `ModelContextControls` shows. Re-detecting keeps selections and saved facts the
+  server doesn't report, takes reported ones, keeps models the server no longer lists, and keeps
+  existing rows first with newly found ones appended; an unchanged saved address stays as written.
+  Re-detecting drops a saved max output only when a context was saved and the server now reports a
+  different one: that value may be derived from the old context, and the draft can't tell a derived
+  value from a hand-set one. The pure draft rules live in `customEndpointDraft`; probe failures render
+  as localized inline status and host save errors render inline; and
   the **`JetBrainsAiCard`** — route Central-supported models through the user's JetBrains subscription while
   keeping ThinkRail's embedded PI — a state machine over the typed `JbcentralStatus` +
   `provider.jbcentral*`: absent (official host-OS install guidance + Recheck), outdated — below the host's
@@ -912,71 +1087,88 @@ a project picker, the prompt hero, and the reused
   re-read plus model-list invalidation. Status reads are request-sequenced so an older response cannot replace
   a newer watched/action result. Copy never promises only Claude/GPT, never asks for standalone PI,
   never renders child output/diagnostics/artifact content/paths/proxy data/secrets/raw models, and maps only
-  closed reason codes to ThinkRail-authored text. On protocol v59+, the same card always shows the
-  synchronized **Show quota in top bar** switch and **Refresh every _ seconds** field, in every Central
-  lifecycle state. The flag defaults on; the interval defaults to 30 and accepts whole `1–3600` values.
-  Off disables (but retains) the interval. The field edits locally, commits on blur/Enter, reports invalid
-  range inline, and waits for `settings.changed` rather than installing optimistic authority. Older hosts get
-  neither control. **`GithubSettings`** (the Integrations section's "Local GitHub" group —
-  `github.authStatus()` shown as `settings-gh-status[data-connected]`: Connected + login, or a Not connected
-  notice naming `gh auth login`; Refresh (`github.refresh`) is offered in both states. Only an answered
+  closed reason codes to ThinkRail-authored text. In Settings the same state machine
+  (`useJetBrainsCentral`, shared with the connect surfaces' unchanged `JetBrainsAiCard`) renders as
+  **`JetBrainsAiSettings`**, one **JetBrains AI** group: the Central status line with its action (Start
+  proxy / Update / Connect / Disconnect / Sign in / Retry; Recheck joins them when Central is absent) as
+  one walk row (`jetbrains-central`; the first action is the row's stop, the rest and the inline copy
+  buttons its sides), then, from `JBCENTRAL_QUOTA_PROTOCOL_VERSION` and in every Central lifecycle state,
+  **Show quota in top bar** (switch, `jbcentral-quota-toggle`, default on) and **Quota refresh interval**
+  (`SettingsNumberField`, whole `1–3600` seconds, default 30, disabled but kept while the quota is hidden,
+  `jbcentral-quota-interval`), each with Changed/Reset to `DEFAULT_CONFIG`. Both wait for
+  `settings.changed` rather than installing optimistic authority, and save failures toast through
+  `saveSettings`. The connect surfaces' card shows no quota settings. **`GithubSettings`** (the Integrations section's **Local GitHub** group, one
+  **GitHub CLI** row — `github.authStatus()` as its visible description, `settings-gh-status[data-connected]`:
+  Connected + login, or Not connected naming `gh auth login`; its control, Refresh (`github.refresh`), is
+  offered in both states and stays enabled while busy (`aria-busy`, clicks ignored), as Providers' Refresh
+  does, because disabling the focused button dropped focus and the next Esc closed Settings. Only an answered
   probe is a status, and only the latest request's: reopening the section shows the last answer while it
   re-probes, and a failed request never reads as signed out — it keeps the answer, or with none shows a
   could-not-check notice. Before any answer the block is a skeleton; `data-connected` exists only once
   gh has answered);
   **`LanguageSettings`** (gated by `LOCALES_PROTOCOL_VERSION`; a store-integrating container over the
-  props-driven `LanguagePage`, whose derivations come from [[submodule-web-i18n]]): one radio list — **System**
-  (default; names the language System resolves to) then every available language by its own-language name
-  with a source badge (*Built-in*, *Local file*, *Built-in, customized by local file*), then unselectable rows
-  for a selected-but-missing file (*File not found*; English renders, the choice is kept) and for each broken
-  file (its translated error code plus the untranslated parser detail). Selecting writes `settings.update
-  { locale }` and converges on the broadcast. *Add a language* gives the steps with a link to
-  `packages/locales/en.json` at `v<appVersion>` (released versions; `main` otherwise), the host's folder path
-  with **Copy path** and **Open folder** (`locales.reveal`, offered in every client like workspace reveal —
-  a remote browser uses the path), and a **How to contribute** link to CONTRIBUTING's Translations section);
-  **`AppearanceSettings`** (the catalog-driven theme settings: a **Theme mode** segmented control,
-  **System / Light / Dark** with System offered only from `THEME_SYSTEM_PROTOCOL_VERSION` (older hosts keep
-  fixed-only behavior), and a **Contrast level** control, **Default / High**. Light/Dark write a fixed
-  theme: from System they adopt the pair's half for that appearance — what the control showed — never a
-  stale retained fixed theme; in fixed mode they move to the current theme family's counterpart. Contrast swaps to the
-  same family's other-contrast theme (in System mode both pair halves at once), so the family survives
-  either switch; an option with no target in the catalog is disabled rather than mapped to an unrelated
-  theme. The specific theme sits behind a collapsed disclosure — the manifest list in fixed mode, the
-  appearance-filtered `Light theme` / `Dark theme` selectors in System mode, either slot independently
-  normal or high contrast — because mode and contrast answer the common question. Mode stays separate from
-  the manifest list: making System another theme row would nest configuration inside a radio-like option.
-  System mode adds a `Current on this device` row (`system-theme-current`) reading
-  `<device icon> <Light|Dark> → <palette icon> <resolved label>` — the icons carry which half is the device
-  appearance and which is the theme, since both halves are often the same word; mode and pair follow the
-  user while each device reads its own system setting. First enable of System sends mode + the
-  themes-derived same-contrast pair atomically; later slot edits replace the complete pair, and returning
-  to fixed changes only mode, preserving both choices. Exactly one theme mutation may be in flight from this panel; its
-  controls use their real disabled state until the request settles, preventing rapid complete-pair writes
-  from overwriting one another with stale sibling slots. Every action fires `settings.update` and
-  **converges on the `settings.changed` broadcast** with no optimistic apply; rejection leaves
-  controls/theme unchanged and raises a toast. An unavailable or wrong-appearance configured id is
-  disclosed by a warning notice under the mode control — outside the disclosure, so it is always visible —
-  naming the effective same-appearance fallback, and is never silently written back. The panel never owns
-  a theme list, media-query logic, pair derivation, or fallback — all come from `themes`; it derives only
-  the family/contrast counterpart the two controls move to. A **Custom themes** group
+  props-driven `LanguagePage`, whose derivations come from [[submodule-web-i18n]]): the **Interface
+  language** is an **expensive** list choice — arrows only move a pending pick, Enter or Space applies it,
+  Esc or leaving the list cancels, a click applies at once — so browsing never downloads a translation.
+  **System** comes first (default; names the language System resolves to), then every available language
+  by its own-language name with a source hint (*Built-in*, *Local file*, *Built-in, customized by local
+  file*), then disabled entries for a selected-but-missing file (*File not found*; English renders, the
+  choice is kept) and for each broken file (its translated error plus the untranslated parser detail). The
+  row resets to System. Selecting writes `settings.update { locale }` and converges on the broadcast. *Add a
+  language* gives the steps (with a link to `packages/locales/en.json` at `v<appVersion>` for released
+  versions, `main` otherwise) as its description, the **Language files folder** row (Copy path / Open
+  folder, `locales.reveal`, offered in every client like workspace reveal — a remote browser uses the path)
+  and a **How to contribute** link to CONTRIBUTING's Translations section;
+  **`AppearanceSettings`** holds only themes. **Theme mode** is a cheap segmented choice, **System / Light
+  / Dark**, System only from `THEME_SYSTEM_PROTOCOL_VERSION` (older hosts keep fixed-only behavior). Light
+  or Dark shows **one always-open list of that mode's themes** (`theme-list-light|dark`, options
+  `theme-option-<id>`); System shows **the Light theme and Dark theme lists side by side** as two cards, like
+  the line widths, under a `Current on this device` row (`system-theme-current`) reading `<device icon>
+  <Light|Dark> → <palette icon> <resolved label>` — the icons carry which half is the device appearance and
+  which is the theme, since both halves are often the same word; mode and pair follow the user while each
+  device reads its own system setting. Mode stays separate from the lists: making System another theme row
+  would nest configuration inside an option. The lists are cheap: ↑/↓ apply a theme at once; past a list's
+  first or last theme the press is left to the walk, so it continues to the next setting — in System from
+  the Light list into the Dark list — and entering a list lands on its current theme without changing it.
+  **Contrast level** (Default / High) is cheap too. Light/Dark write a fixed theme: from System they adopt
+  the pair's half for that appearance — what the list showed — never a stale retained fixed theme; in fixed
+  mode they move to the current family's counterpart. Contrast swaps to the same family's other-contrast
+  theme (in System both halves at once), so the family survives either switch; an option with no target
+  in the catalog is disabled rather than mapped to an unrelated theme. First enable of System sends mode +
+  the derived same-contrast pair atomically; list edits replace the complete pair; returning to fixed
+  changes only mode, preserving both choices. **Resets:** Theme mode is Changed while the mode differs
+  from Dark and resets the `DEFAULT_CONFIG` pair (`fixed`/`dark`); each list is Changed while its
+  theme differs from the default pair's half and resets that half; Contrast resets to Default. A list whose
+  configured id is unavailable selects nothing, so picking the fallback writes it; the warning notice under
+  the mode names the effective same-appearance fallback, and nothing is written back silently. While a mode
+  hides a list, its catalog id (`light-theme` / `dark-theme`) sits on the Theme mode row, so a search jump
+  lands one arrow away from it. **Writes:** one `settings.update` is in flight at a time; a press during it
+  is queued (the latest wins) and computed from the store when it is sent, so rapid arrows never write a
+  stale sibling half, and no control is disabled under focus. Every write **converges on the
+  `settings.changed` broadcast** with no optimistic apply; rejection toasts. The panel never owns a theme
+  list, media-query logic, pair derivation or fallback — all come from `themes`; it derives only the
+  family/contrast counterpart the controls move to. A **Custom themes** group
   (`CustomThemesSettings.tsx`, props-driven like `LanguagePage`, hidden below
-  `USER_THEMES_PROTOCOL_VERSION`) gives the copy-a-bundled-file steps with a version-pinned link to
-  `dark.theme.json`, the `<dataDir>/themes` folder with **Copy path** / **Open folder** (`themes.reveal`),
-  and one warning notice per unusable file (`themes`' issue list). The page reads the catalog and issues
-  through `onThemesChange`, so a dropped file appears in the lists without reopening. From
-  `FONTS_PROTOCOL_VERSION` two groups sit between the theme group and Custom themes ([[submodule-web-fonts]]
-  applies what they save). **Fonts** (`FontsSettings.tsx`) opens with an inert preview on the chat canvas —
-  a chat message in the chat prose system, buttons, an editor sample in `.tr-code-editor` and a terminal
-  sample in `.tr-code-block` — then an **Interface** sub-heading (Font picker; **Text weight** slider, which
-  shifts code weights too, offset −70…+130 in steps of 10, previewed through the fonts runtime while it
-  drags and saved once on release; when a chosen named family
-  does not change between the range's ends on this device — a static face with only regular and bold — an
-  info notice under the slider says so and points at variable fonts, and one that changes only one way says
-  it moves in steps) and a **Code** sub-heading
-  (Font picker listing monospaced fonts only; **Size**, 10–24 on the auto-save input pattern with − / +;
-  **Ligatures**), and an **Advanced** disclosure with Interface and Code **fallback fonts** as chips added
-  through the same picker. A row whose value differs from its default carries a reset button named for its
-  setting. The props-driven picker (`FontPicker.tsx`) groups Built-in / Custom / Installed, draws each name
+  `USER_THEMES_PROTOCOL_VERSION`) gives the copy-a-bundled-file steps (version-pinned `dark.theme.json` link)
+  as the description of the **Theme files folder** row (`theme-folder`; Copy path / Open folder,
+  `themes.reveal`) and one warning notice per unusable file (`themes`' issue list). The page reads the
+  catalog and issues through `onThemesChange`, so a dropped file appears in the lists without reopening.
+  **`TextFontsSettings`** (**Text & fonts**) composes, from `FONTS_PROTOCOL_VERSION`
+  ([[submodule-web-fonts]] applies what they save), an **Interface** group (`InterfaceFontsGroup`: the
+  Interface font picker; **Text weight**, a cheap `SettingsSlider` −70…+130 in steps of 10 that shifts code
+  weights too, previewed through the fonts runtime while it moves and saved once on release — when a chosen
+  named family does not change between the range's ends on this device, a static face with only regular
+  and bold, an info notice under it says so and points at variable fonts, and one that changes only one way
+  says it moves in steps; Interface fallback fonts), a **Code** group (`CodeFontsGroup`: the Code font
+  picker, monospaced only; **Code size**, a 10–24 `SettingsNumberField`; **Ligatures**; Code fallback fonts;
+  then an inert preview on the chat canvas — a chat message in the chat prose system, buttons, an editor
+  sample in `.tr-code-editor` and a terminal sample in `.tr-code-block`), the **Line width** group (below;
+  any protocol) and **Custom fonts**. Every row with a default carries the kit's Changed/Reset: a font
+  resets its family (fallbacks kept), a fallback row clears its chips. Fallback chips are added through
+  the same picker, never typed (a free-text CSS stack proved unclear in review); in their row **Add** is
+  the stop and the chip removes are sides. Fonts and both line widths have this page of their own (user,
+  2026-11-17), which overturned the earlier choice of one page with the theme. The props-driven picker
+  (`FontPicker.tsx`) groups Built-in / Custom / Installed, draws each name
   in its own face through `FamilyName` (typography's one token exception: picker rows, the trigger label,
   fallback chips and the Custom fonts family list), badges Default / Mono / Not on this device, asks the
   host for `fonts.installed` on every open — keeping the last list while it re-reads, and through a failed
@@ -985,124 +1177,169 @@ a project picker, the prompt hero, and the reused
   typed name that matches nothing as **Use “X”**; merging, shadowing and the monospace/renders filters are
   the pure `fontCatalog.ts`. A named family that does not render on this device puts a warning icon on the
   trigger and a notice under the row while the choice is kept. Choices go through `settings.update` and
-  converge on `settings.changed`; one role's choice saves at a time, its picker, chips and reset disabled
-  until it lands. **Custom fonts**
-  (`CustomFontsSettings.tsx`) holds the drop zone with **Choose files…** (each file a `PUT /fonts/<name>`
-  through `transport`'s `uploadUserFont`; outcomes land in one polite live region, and overlapping drops
-  add to the same list), the custom families with Mono / In use
-  badges, the `<dataDir>/fonts` folder row with Copy path / Open folder (`fonts.reveal`) and the rule that
-  fonts are removed in the folder, and one warning per unusable file. `SettingsDisclosure` is the shared
-  collapsible row both pages use. Fonts live on Appearance, one page with the theme, because a page of their
-  own added a nav item and in-page tabs a pattern Settings does not have; fallback fonts are picked through
-  the same list, never typed, after a free-text CSS stack proved unclear in review. Whether an OS file drop
-  reaches the page in WKWebView, WebKitGTK and WebView2 is unconfirmed; **Choose files…** is the path that
-  never depends on it. An **Editor** group hosts the file
-  `LineWidthControl`); **`LineWidthControl({kind})`** (`LineWidthSettings.tsx`, no page of its own — the
-  `chat` control sits in Chat, the `file` one in Appearance → Editor — a 40–240 integer **Line width** field
-  on the auto-save input pattern plus an independent host-synchronized **Fit to pane** switch
-  (`${kind}-line-width-bounded`); defaults are 120/on. A changed authoritative width from
+  converge on `settings.changed`; one role's choice saves at a time, and while it does its trigger,
+  fallback **Add** and chip removes read `aria-disabled` and ignore presses. **Custom fonts**
+  (`CustomFontsSettings.tsx`): the drop zone is the `custom-fonts` row — "No custom fonts yet." with the
+  accepted types while the folder is empty — whose stop is **Choose files…** (each file a `PUT
+  /fonts/<name>` through `transport`'s `uploadUserFont`; outcomes land in one polite live region, and
+  overlapping drops add to the same list; it only sets `aria-busy` while uploading), then the families as a
+  list with Mono / In use badges, the **Fonts folder** row (`fonts-folder`, Copy path / Open folder,
+  `fonts.reveal`) with the rule that fonts are removed in the folder, and one warning per unusable file.
+  Whether an OS file drop reaches the page in WKWebView, WebKitGTK and WebView2 is unconfirmed; **Choose
+  files…** is the path that never depends on it. **Line width** (`LineWidthSettings.tsx`, in Text & fonts):
+  **Chat** and **Files & diffs** side by side (stacked when the group is narrow), each a card
+  (`<kind>-line-width-control`, a labelled region) with a 40–240 **Line width** `SettingsNumberField`
+  (`<kind>-line-width-input`) and an independent host-synchronized **Fit to pane** switch
+  (`<kind>-line-width-bounded`). Each of the four rows has **its own Reset**, so the chat and code widths
+  reset independently; defaults are 80 (chat) / 120 (file), Fit to pane on. `LineWidthCard` is
+  props-driven, `LineWidthControl({kind})` binds it to the store. A changed authoritative width from
   `settings.changed` replaces a stale draft; mutations converge only on that broadcast and rejected calls
-  toast without changing geometry); **`ChatSettings`** (one **Appearance and behavior** group of rows —
-  **Message order** segmented over `store.chatMessageOrder` (Oldest first, the compatibility default /
-  Newest first, the opt-in), **Composer size** segmented over the composer-growth limit (Compact / Roomy /
-  Half chat), **Question panel height** (`QuestionPanelHeightControl`, props-driven: the same auto-save
-  integer field as Line width over `questionPanelHeight`, 40–100 with an inline range error, hidden below
-  `QUESTION_PANEL_PROTOCOL_VERSION`), and the chat `LineWidthControl`. It exposes no scroll-follow controls: streaming follow is
+  toast without changing geometry. **`ChatSettings`** (props-driven `ChatPage` + a store container): one
+  **Messages** group — **Message order**, a cheap segmented choice over `store.chatMessageOrder` (Oldest
+  first, the compatibility default / Newest first), **Composer size**, a cheap segmented choice over the
+  composer-growth limit (Compact / Roomy / Half chat), and **Question panel height**
+  (`QuestionPanelHeightControl`, a 40–100 `SettingsNumberField` over `questionPanelHeight`, hidden below
+  `QUESTION_PANEL_PROTOCOL_VERSION`); each resets to its default. It exposes no scroll-follow controls: streaming follow is
   fixed (see `apps/web/src/chat/SPEC.md`). Message order applies immediately and persists only in this
   client through the chat preference seam: browsers use current-host-qualified keys, while a native shell
   may inject its stable backend-profile/window adapter. Another browser, native window, or host is unaffected. Composer growth
   remains a top-level `AppConfig` field and converges on `settings.changed`, with a toast on rejection.
   Explanatory copy says “message box” rather than the internal “composer” name for where the user types.
-  The final **Subagents** group (`SubagentSettings.tsx`) is rows, not a table: global **Allow subagents**
-  and, from `SUBAGENT_CONCURRENCY_PROTOCOL_VERSION`, **Per chat at once**; then, with an active workspace, a
-  **This workspace** sub-heading naming it over the same two rows. The whole group requires
-  `SUBAGENT_SETTINGS_PROTOCOL_VERSION`, so an
-  independently shipped client never offers unsupported mutations against an older host. Workspace rows
-  show the *effective* value with a Global/Custom tag: toggling writes `on`/`off`, a typed limit writes an
-  override, an empty limit field (placeholder = global) or the Custom tag (a reset button) sends `null`, so later global
-  changes keep flowing through. Limit fields follow the auto-save input pattern, validated by
-  `isSubagentMaxConcurrent` (an invalid draft stays visible with its range error and is not saved), and
-  never clamp. A workspace limit is disabled while that workspace's subagents are effectively off; the
-  global limit stays editable even when global is off, because workspaces forced on still inherit it.
-  Global mutations converge through `settings.changed`, workspace ones through `workspace.updated`; none
-  is optimistic);
-  the
-  **shell-owned injected Layout
-  section** (Balanced/Focus/Review
-  plus named custom preset cards. The card whose preset matches the live frame reads as applied — derived
-  by comparing geometry, since no current layout is published — and its Apply is disabled. The effective
-  default carries a **Default** badge (**Fallback** when the stored default no longer exists) whose tooltip
-  says Reset uses it and that it is remembered per window. An **Add new layout** card opens a popover (name
-  + Save preset) that captures the live frame. Custom capture/rename/delete updates the host-synchronized
-  catalog and converges through `settings.changed`; default selection and the independent side/bottom group
-  limits are frontend-local, the limits auto-saved inside a collapsed **Advanced** disclosure. With an
-  active workspace each card's **Apply now…** and the **Reset to default** row (`layout-reset-default`) go
-  through one confirm, then ask shell to replace this window's frame and atomically preserve/reflow open
-  resource identities in every retained workspace view); the optional **shell-owned injected Update section**
-  (the Settings shell includes its row only when content is provided; `panels` neither discovers native nor
-  host update capabilities. If a later welcome removes injected content while Updates is selected, Appearance
+  **`SubagentsSettings`** (the **Subagents** section in Agent, listed from
+  `SUBAGENT_SETTINGS_PROTOCOL_VERSION`, so an independently shipped client never offers unsupported
+  mutations against an older host) composes the props-driven `SubagentSettings`: the global settings and
+  this workspace's override on one page (user, 2026-11-17). A **Global** group holds **Allow subagents**
+  (switch, Reset to on) and, from `SUBAGENT_CONCURRENCY_PROTOCOL_VERSION`, **Per chat at once**
+  (`SettingsNumberField`, 1–16, Reset to 4), both reset from `DEFAULT_CONFIG` through `useConfigReset`. With
+  an active workspace a **Workspace override** group follows, with the *This workspace* scope tag and the
+  workspace named in its description: **Subagents in this workspace** is a cheap `SettingsChoice` (Use
+  global / On / Off — while it follows global, the row's description states the global value) writing
+  `workspace.setSubagentsOverride` (`on` / `off` / `null`), and **Subagents per chat in this workspace** is
+  a `SettingsNumberField` with `value={null}` while it inherits (placeholder = the global limit; clearing a
+  set value commits through `onClear`, which sends `null`). Each override row is Changed while set, and its
+  Reset (or Delete) sends `null`, so later global changes keep flowing through. The workspace limit is
+  disabled while that workspace's subagents are effectively off; the global limit stays editable when
+  global is off, because workspaces forced on still inherit it. Without a workspace the Global group ends
+  with the muted line "Workspace overrides appear when a workspace is open." Limits follow the kit's draft
+  (an invalid draft shows its range and is never sent, no clamping), validated against
+  `SUBAGENT_MAX_CONCURRENT`. Global mutations converge through `settings.changed`, workspace ones through
+  `workspace.updated`; none is optimistic.
+  From `SUBAGENT_CATALOG_PROTOCOL_VERSION` the page ends with **Available agents** (`AvailableAgents.tsx`,
+  `SubagentSettings`' gated `roster`; scope *All projects*, catalog id `subagent-roles`, Refresh as the
+  group action): one row per definition `subagent.list` returns for the active repository workspace — name,
+  translated source, description, pinned raw model reference or parent/invocation inheritance, explicit
+  thinking effort — and a global per-name switch (Changed while off; Reset re-enables). Disabled
+  definitions stay listed and new names default enabled; no prompt, path or editor is exposed. Copy states
+  global scope, new-launch-only enforcement (ongoing work continues), trusted-project scope and manual
+  Refresh after file edits. `useSubagentCatalog` reads `subagent.list` on mount, Refresh, workspace/trust
+  change and each welcome; a context-keyed lifetime shows loading at once and discards superseded
+  responses. Loading, empty and retryable failure are explicit. A role switch sends one
+  `subagent.setEnabled({ name, enabled })` request, like the page's other switches: it renders only the
+  authoritative `settings.changed` state and toasts a rejection.
+  The **shell-owned injected Layout section** (`shell/LayoutSettings`) has three groups. **Presets** is
+  one `SettingsList` (`layout-presets`) of Balanced/Focus/Review and the named custom presets. A row's
+  primary applies it on Enter or a click, through one "Apply this layout?" confirm (`layout-apply-confirm`),
+  and only with an active workspace; otherwise the group says "Open a workspace to apply a layout to its
+  window." The row whose preset matches the live frame carries a visible **Current** tag and can't be
+  applied again — derived by comparing geometry, since no current layout is published. → reaches the sides
+  **Set default** (every preset but the stored default), **Rename** (inline; Enter saves, Esc cancels) and
+  **Delete…** (custom only); Delete on a custom row, or Delete…, asks through `ConfirmDialog`
+  (`layout-delete-confirm`). The effective default carries **Default** (**Fallback** when the stored default
+  no longer exists) and, below it as visible text, what Reset to default does and that the default is
+  remembered per window. **Add new layout** opens a popover (name + Save preset) that captures the live
+  frame, and states its limit as text ("Up to 32 custom layouts; N used."). **Reset to default**
+  (`layout-reset-default`) goes through the same confirm. **Advanced** (a `SettingsDisclosure`) holds the
+  independent side and bottom group limits (1–32, each with Reset). Custom capture/rename/delete update the
+  host-synchronized catalog and converge through `settings.changed`; the default and the limits are
+  window-local. **Artifacts** (from `ARTIFACT_ROLES_PROTOCOL_VERSION`, This computer) holds **Smart view**
+  (`artifacts-smart-toggle`), which was the retired Artifacts section's one switch; **Documents** (This
+  computer) holds the **Markdown outline position** (Left / Right, a cheap choice,
+  `markdown-outline-side-control`, moved from Appearance), applied at once with no host round trip. Each
+  has Reset to its client default. With an active workspace, Apply and Reset ask shell to replace this
+  window's frame and atomically preserve/reflow open
+  resource identities in every retained workspace view; the optional **shell-owned injected Update section**
+  (its page is [[submodule-web-updates]]'s; the Settings shell includes its row only when content is
+  provided; `panels` neither discovers native nor host update capabilities. If a later welcome removes injected content while Updates is selected, Appearance
   is rendered and highlighted rather than leaving no active row);
   **`WorkspacesSettings`** (the **Workspaces** section, listed only at
-  `protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION`) — one `SettingsRadioCards` group, **Settle idle
-  workspaces after**: 1 / 3 / 7 (default) / 14 days / Never, written as `settings.update { settleIdleDays }`
-  (`null` for Never) and converging through `settings.changed`; a valid host-configured non-preset value
-  leaves the preset cards unselected rather than falsely displaying the default. The default is a week, not
+  `protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION`) — one row, **Settle idle workspaces after**, an
+  **expensive** choice of 1 / 3 / 7 (default) / 14 days / Never (a stray arrow must not settle workspaces),
+  written as `settings.update { settleIdleDays }` (`null` for Never) and converging through
+  `settings.changed`, with Reset to 7; a valid host-configured non-preset value selects no option rather
+  than falsely displaying the default. The row describes the applied option, and the pending option while it
+  waits for Enter (`SettingsChoice onPendingChange`). The default is a week, not
   a long weekend: merged/closed PRs already settle at once, so the idle rule only catches dormant work and
   errs toward keeping a paused workspace live (a Thursday's work on the shelf by Monday reads as loss, not
-  tidying). The copy names the three things
+  tidying). The page description names the three things
   that count as activity and the three things that never settle, because the setting is only legible
   together with those rules;
-  **`VoiceSettings`** (from `SPEECH_PROTOCOL_VERSION`, in the Interface group after Keyboard) shows the
+  **`VoiceSettings`** (from `SPEECH_PROTOCOL_VERSION`, in the Interface group after Language) shows the
   store's `speech` status ([[submodule-web-speech]]). An unsupported platform gets a warning notice and
-  nothing else. Otherwise its rows say what the user can do, never how voice is built: no engine,
+  nothing else; the switch row renders even when the host could not read the voice state. Otherwise its
+  rows say what the user can do, never how voice is built: no engine,
   version, backend or PATH text, which an earlier version showed and users found unreadable (the
   speech SPECs carry those details).
-  - **Voice input:** a switch for `AppConfig.voiceInputEnabled` (`settings.update`). While it is off,
-    only this row and Delete voice files remain, plus Status while a download is still running, so its
-    progress and Cancel never disappear.
+  - **Voice input:** a switch for `AppConfig.voiceInputEnabled` (`settings.update`), with Reset. While it
+    is off, only this row and Delete voice files remain, plus Status while a download is still running, so
+    its progress and Cancel never disappear. While it is off the Language and Shortcut catalog ids sit on wrappers around this row,
+    so a search jump to them lands on the switch.
   - **Status:** not set up (with the download size), downloading with a percentage, ready, or the
     failure in error colour. Its action is Download, Try again, or Cancel download.
-  - **Language:** an All languages / English only segmented control. Selecting the other one sends
-    `speech.install {model}`, which downloads that model and deletes the current one. Disabled while
-    installing.
-  - **Shortcut:** the platform chord.
-  - **Delete voice files:** shown only while ThinkRail's speech files use disk. It states the space it
-    frees and sends `speech.remove`, which never touches a `nemo-speech` on PATH.
+  - **Language:** All languages / English only, an **expensive** choice: selecting the other one sends
+    `speech.install {model}`, which downloads that model and deletes the current one, so arrows only move a
+    pending pick and Enter applies (a click applies at once). Disabled while installing; starting a
+    download moves focus to Cancel download, since the focused option becomes disabled.
+  - **Shortcut:** the current chord as visible text and **Change…**, which opens Settings › Keyboard at
+    `shortcut:dictation` (`openSettings("keyboard", "shortcut:dictation")`; Keyboard reveals the row).
+  - **Delete voice files:** shown only while ThinkRail's speech files use disk. **Delete…** asks through
+    `ConfirmDialog` (it states the space it frees), then sends `speech.remove`, which never touches a
+    `nemo-speech` on PATH; focus returns to the Delete button on cancel and to the Voice input switch
+    after deleting.
   The mic itself is not here: the page-level dictation layer ([[submodule-web-speech]]) shows it on
   whichever text field has focus;
-  **`TerminalSettings`** — a **Scrollback** segmented control (`store.terminalReplayKb`, five presets from
-  Off to 1 MB; a valid non-preset host value selects none rather than a wrong preset;
+  **`TerminalSettings`** — **Scrollback**, a cheap segmented choice (`store.terminalReplayKb`, five presets
+  from Off to 1 MB; a valid non-preset host value selects none rather than a wrong preset;
   `settings.update { terminalReplayKb }`, applies to terminals opened from now on) and, on
-  Windows hosts at `protocolVersion >= WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`, a **Windows shell** picker
-  (Auto / PowerShell 7 (pwsh) / Windows PowerShell / Command Prompt,
-  `settings.update { terminalWindowsShell }` — see `submodule-server-terminal`'s shell-selection decision
-  for what each choice spawns). The protocol gate keeps a newer independently shipped client from presenting
+  Windows hosts at `protocolVersion >= WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`, a **Windows shell** group
+  (This computer) whose **Shell for new terminal tabs** is an **expensive** list (Auto / PowerShell 7
+  (pwsh) / Windows PowerShell / Command Prompt, `settings.update { terminalWindowsShell }` — see
+  `submodule-server-terminal`'s shell-selection decision for what each choice spawns): arrows move a
+  pending pick, Enter applies, a click applies at once; open tabs keep their shell. Both reset to their
+  defaults. The protocol gate keeps a newer independently shipped client from presenting
   a setting an older host preserves but does not act on. The Windows-shell
   half is split into a **props-driven** `WindowsShellSettings` component rather than reading the store
   inline like the replay picker: zustand's React binding feeds `renderToStaticMarkup` its frozen
   `getInitialState()` snapshot (`useSyncExternalStore`'s `getServerSnapshot` argument), never a test's
   `setState`, so any settings section that must stay assertable under that render path takes its store
-  values as props instead — the same shape `ChatSettings` already uses for `SubagentSettings`; and
-  **`TemplatesSettings`** — two groups, **Project templates** then **Global templates**, each a header
-  with a soft **New** button plus its rows (without an active workspace the project group is only a notice
-  to open a project, with no New), fetched via **two independent `template.list` calls** (both refetched whenever the
-  store's `templatesVersion` bumps, each with its own failure flag so one's success can never clobber the
-  other's still-real failure): unscoped (`{}`) for **Global**, and `{ workspaceId }` filtered to
-  `scope === "project"` for the project group. The unscoped call matters specifically because the server's
+  values as props instead — the same shape `SubagentsSettings` uses for `SubagentSettings` and
+  `TemplatesSettings` for `TemplatesPage`; and
+  **`TemplatesSettings`** — a `SettingsPage` (props-driven body `TemplatesPage`) with two groups, **Project
+  templates** (scope tag *This project*, stored in `.pi/prompts/`) then **Global templates** (scope tag
+  *All projects*). Each group's header action is its own **New template** (`template-new-project` /
+  `template-new-global`, also its list's `data-focus-fallback`) over a `SettingsList` (`templates:project` /
+  `templates:global`) whose rows (`data-testid="template-row"`) have the name and description, wrapping, as
+  the primary (`template-edit`: Enter opens the editor), then **Open as file** (project rows only) and
+  **Delete** as sides. Delete — the key or the side — asks through `ConfirmDialog`
+  (`template-confirm-delete`) and then calls `template.delete`, and focus recovery lands on the
+  neighbouring row, else the group's New. There are no per-row scope chips. Without an active workspace
+  only Global templates shows, followed by the muted line "Project templates appear when a workspace is
+  open." The lists come from **two independent `template.list` calls** run together and re-run whenever
+  the store's `templatesVersion` bumps (a failure of either shows the read error with **Retry**, each with
+  its own failure flag so one's success can never clobber the other's still-real failure): unscoped (`{}`)
+  for **Global**, and `{ workspaceId }` filtered to `scope === "project"` for the project group. The
+  unscoped call matters specifically because the server's
   `template.list { workspaceId }` response is **shadow-merged** (`templates.ts`'s `listTemplates`: a
   project template wins over a same-named global one) — right for the composer's `/` menu, but if Settings
   used that same workspace-scoped call for its Global group too, a shadowed global template would vanish
-  from view entirely with no way to find, edit, or delete it
-  (`data-testid="template-row"`: name + description, and — project rows only — an
-  **Open as file** action that opens `.pi/prompts/<name>.md` through the exact same `openTabs.ts`
+  from view entirely with no way to find, edit, or delete it. **Open as file** opens
+  `.pi/prompts/<name>.md` through the exact same `openTabs.ts`
   `openFileInTab` the file tree uses — at the **`keep`** intent, since a deliberate "open in editor" must
-  not land in a preview slot a later click would silently replace — then closes Settings, and an
-  **Edit** action; a global template has
-  no worktree to open a file tab against, so global rows stay dialog-only). **New**/**Edit** open the shared
+  not land in a preview slot a later click would silently replace — then closes Settings; a global
+  template has no worktree to open a file tab against, so global rows stay dialog-only. **New**/**Edit**
+  open the shared
   `chat/TemplateEditorDialog` (see `chat/SPEC.md`'s Save-as-template bullet — it lives in `chat/` because
   `HistoryOverlay`'s save-as-template action needs the identical form, and `chat/` can't import
-  `panels/`). **Delete** is a `ConfirmPopover` anchored to the row's own Delete button, calling
-  `template.delete` directly — the dialog itself is never involved in deletion. **R4 — starter-templates
+  `panels/`). **R4 — starter-templates
   offer:** when the **Global** group's fetch has
   resolved with zero rows and no error, its empty state is a notice with an **Add starter templates**
   button (`data-testid="template-starters"`) — clicking it `template.save`s five verbatim
@@ -1117,17 +1354,20 @@ a project picker, the prompt hero, and the reused
   here when no template exists anywhere), since this offer is otherwise two clicks deep in a dialog. The
   project group's empty state is a plain, icon-less notice naming the project's `.pi/prompts/` — the offer is
   Global-only, since it only ever seeds global files. No server change. **`NotificationsSettings`** is the single master on/off control
-  for out-of-app attention notifications (default on), persisting `{ notificationsEnabled }` through
+  for out-of-app attention notifications (default on, with Reset; its description names the delivering
+  channel, browser or operating system), persisting `{ notificationsEnabled }` through
   `settings.update`. While enabled it also surfaces the live browser permission via the
   [[submodule-web-notifications]] barrel: an **Allow in browser** notice while permission is still
   `default` (the click is the user gesture that calls the channel's `requestPermission`; switching the
-  master on from `default` asks too), a warning on `denied` with collapsible **How to enable** steps, a
-  warning without steps when the browser has no Notification API, and nothing once granted or on the OS
+  master on from `default` asks too), a warning on `denied` with the **How to enable** steps as visible
+  text, a warning without steps when the browser has no Notification API, and nothing once granted or on the OS
   channel — the visible, in-app acquisition path that does not depend on an
   out-of-focus event. The notification pipeline, suppression, and away-path permission preface live in
   [[submodule-web-notifications]].
   **`PrivacySettings`** manages the additional-data preference and
-  confirmation together; the event contract belongs to [[submodule-server-analytics]]. The pane ends with a link to the analytics section of the project readme.
+  confirmation together: one **Usage analytics** group with the **Share additional usage data** switch
+  (Reset to `DEFAULT_CONFIG`'s off) over the report details as visible text; the event contract belongs to
+  [[submodule-server-analytics]].
   **`AnalyticsConsentDialog`** mounts once through shell after a capable host's unconfirmed config hydrates,
   held back (with the survey invitation) while the cold-start onboarding wizard may still show or is
   showing (`selectOnboardingActive`): a new user meets the product before a privacy question, and sharing
@@ -1167,98 +1407,116 @@ a project picker, the prompt hero, and the reused
   mixing languages, and Send echoes `survey.language`. A pre-v98 host gets the older submission shape (Other text
   inline, no `language`) through `surveyDraft`'s `inlineOthers`; while no host is welcomed (disconnected) Send is
   disabled, so no request is queued and replayed in a shape chosen without knowing the host.
-  **`ModelsSettings`** is the **Models** section, visible only at protocol v72 or newer. It re-reads
-  `model.default` on open, whenever the live catalog changes (empty included), and after every save — the
-  host resolves the saved model and its effort levels against its settled catalog, so a vanished or changed
-  model never offers stale levels; only the latest read applies, and a failed read replaces the controls
-  with a retry — and writes `defaultModel` / `defaultEffort` through `settings.update`, with an error toast
-  if persistence fails. The host's `model.default` result is the displayed effective choice, including the
-  first-available fallback when a saved model is missing; supported effort levels and the displayed effort
-  come from that same resolved, Pi-clamped model. Both triggers are disabled, and choices in an already-open
-  picker are ignored, while a save or re-read is in flight. At v76, **`ModelContextSettings`** adds
-  one Default / 1M / Custom selector over every eligible GPT model the host returns as
-  `ModelContextSetting[]`; a collapsed **By each model** disclosure reveals one selector per provider/model
-  pair, so the same model on
-  different providers stays independently editable. Selection is keyed on the explicit `override`
-  (Default = `null`, the catalog value pi reports). The shared control summarizes only the rows the
-  contracts' `isSharedModelContextTarget` admits — it shows "Customized by model" when their overrides
-  differ, counts the external rows it leaves alone, and is omitted when it would govern none — and
-  choosing a shared preset replaces those rows' overrides in one `model.setContextWindow` call. Custom reveals a whole-number field bounded by the contracts' 272K–1M
-  range that saves on Enter or blur — except a blur onto a sibling preset of the same control, so picking
-  Default/1M never first commits a half-typed value; the copy labels it an app policy, not a verified provider limit, and
-  external values outside it stay visible but cannot be re-applied. Drafts are UI-local and are dropped
-  when their authoritative override changes; inputs are not remounted, and after a disabled save focus
-  returns only to the control that initiated it. Pi's shared configuration is authoritative — there is
-  no optimistic value or AppConfig field; reads follow catalog/provider invalidation, fence stale
-  replies, disable controls while pending, and replace controls with Retry on failure. The props-driven
-  `ModelContextControls` owns presentation; older hosts get neither the block nor its requests.
-  At v111, **`CacheWarmingSettings`** adds a **Prompt cache** group: three `SettingsRadioCards` (Off /
-  While a run is active / Also between runs) over pi's `cacheWarming` setting, read through
-  `cacheWarming.get` and written through `cacheWarming.set` — pi's `settings.json` is the only state, there
-  is no AppConfig field. The reply's `source` drives the **ThinkRail default** hint on the streaming card
-  (shown only while pi's file names no mode, since ThinkRail's default differs from pi's `idle`), and the
-  `data-cache-warming-source` attribute on `cache-warming`. Reads fence stale replies, disable the cards
-  while pending, and replace them with Retry on failure; a failed write toasts. The props-driven
-  `CacheWarmingControls` owns presentation; older hosts get neither the group nor its requests.
-  `ModelsSettings` organizes its controls into four visual groups:
+  **`ModelsSettings`** is the **Models** section (from protocol v72), a `SettingsPage` with five groups:
+  **Default model**, **Review** (`models-review-group` — everything that configures review in one place,
+  because users look for it by that word; there is no separate Review section), the GPT context window,
+  **Prompt cache** and **Visible models**.
 
-  **DEFAULT MODEL** — a **Chat model** row (`defaultModel`, `defaultEffort`) and the **Visible models**
-  disclosure. **REVIEW** (`models-review-group`) — everything that configures review in one place, because
-  users look for it by that word: the **Review model** row (`review-model-row`; `reviewModel`,
-  `reviewEffort`), independent of the Chat model row's loading state, then the two automation toggles
-  below. Both model rows use `ModelSelector`/`ThinkingSelector` over `useModelCatalog`; the review selector carries an
-  **explicit default-model row** (`model-option-default`, labelled with the host's `model.default` result)
-  that writes `{ reviewModel: null, reviewEffort: null }` — the null-clears wire form, see
-  `submodule-server-settings` — so a chosen reviewer model can be restored to the host's new-chat default
-  without hand-editing host state; while unset, the effort control runs on the default model's supported
-  levels (fetched once from `model.default`) instead of an empty list. **`VisibleModelsSettings`** is a
-  collapsed disclosure (its summary counts hidden models) listing every catalog provider/model pair with a
-  search field and a switch; hidden models leave every model picker (pinned, recent, provider groups,
-  search) through `store`'s `selectPickerModels`, which always keeps the caller's current selection even
-  when hidden, and new models are shown by default. Hiding is a **client-local** preference, not host
+  **Chat model** (`default-model-row`) and **Review model** (`review-model-row`) are the chat's own
+  **`chat/ModelEffortPicker`** — model and effort in one control, the same picker as the chat (user,
+  2026-11-17) — with `canSetDefault={false}`, `tabIndex={0}` and `fitContainer` (the popover stays inside
+  the dialog's clipped root). The chat row re-reads `model.default` on open, whenever the live catalog or
+  the saved pair changes, and after every save; the host's resolved pair (with the first-available fallback
+  and the Pi-clamped level) is what it shows, so a vanished or changed model never offers stale levels. A
+  pick shows at once (an optimistic pair until the save's re-read lands; saves run one after another),
+  writes `defaultModel` / `defaultEffort` through `settings.update`, and keeps the popover open for the
+  effort; a failed save toasts and the re-read restores the host's pair; a failed read shows Retry. The
+  pair is Changed while either field is saved; Reset (or Delete) clears both with `null`, back to the first
+  available model. The review picker carries the **Default** row (`defaultOption`: the resolved chat pair,
+  active while `reviewModel` and `reviewEffort` are both unset), so a chosen reviewer model can be restored
+  to the host's new-chat default (`{ reviewModel: null, reviewEffort: null }`, the null-clears wire form,
+  see `submodule-server-settings`), and shows the effective reviewer model and level (`reviewEffort ?? the
+  default level`); its Reset clears both. The Review group's switches, each with Reset: **Agent-triggered
+  review** (`agent-review-toggle`, `agent-review-row`, over `store.agentReviewEnabled`) — off withholds the
+  worker's in-session `request_review` tool so review happens only via the Review button (the host
+  live-toggles the tool's active set on it, see `submodule-server-host-plan-review`); the row is hidden
+  below `AGENT_REVIEW_SETTING_PROTOCOL_VERSION` (v68), where a host could store the field while still
+  registering the tool — and **Automatic fix cycle** (`review-autofix-toggle`, `review-autofix-row`, over
+  `store.reviewAutoFix`) — off means a `request_changes` verdict records findings and waits (the host
+  gates its auto-fix cycle on it, see `submodule-server-todos`).
+
+  At v76, **`ModelContextSettings`** adds the **GPT context window** group (the pi CLI / restart note as its
+  description): **All GPT models**, one cheap Default / 1M / Custom choice over the rows the contracts'
+  `isSharedModelContextTarget` admits (summary, "Customized by model" when their overrides differ and the
+  count of external rows it leaves alone as its description; omitted when it would govern none;
+  Changed/Reset while any is overridden; one `model.setContextWindow` call), then a `Tree leaveAtEdges` of
+  every row grouped by provider, so the same model on different providers stays independently editable.
+  Rows of a server the **Custom servers** group lists are left to that server's dialog: `ModelsSettings`
+  passes the same `useCustomEndpoints` state, and the block stays on its loading line until that list
+  answers, so rows never flash in and out (a failed list, or a host without the group, hides none); any
+  other `custom-*` provider — say a hand-written `openai-responses` one the dialog can't represent — keeps
+  its row, bounded by `modelContextWindowLimits` (the GPT range on a host older than
+  `CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION`, which still enforces it), and never joins the shared choice.
+  Provider rows show the model count and "N of M customized" / "All Default" and expand like the file tree;
+  a model row (`context-limit-<provider>-<id>`) holds its own cheap choice, keyed on the explicit
+  `override` (Default = `null`, the catalog value pi reports), which claims ←/→ while the row has focus (the
+  edges fall through to the tree: ← to the provider, → to the row's sides), a Custom field (`…-input`, a
+  side; empty is neutral, a whole number in the row's range saves on Enter or blur, an outside value stays
+  visible but never re-applies; the copy labels the range an app policy, not a verified provider limit)
+  and Reset (`model.setContextWindow { contextWindow: null }`). ↑/↓/Home/End pressed on a control inside a
+  tree row move to the neighbouring row, as on the row itself. Choices are never disabled while a write is
+  in flight — writes queue one after another, and the authoritative reply redraws; drafts are UI-local and
+  dropped when their authoritative override changes. Pi's shared configuration is authoritative — there is
+  no AppConfig field; reads follow catalog/provider invalidation and fence stale replies, and a failed read
+  or write shows Retry. The props-driven `ModelContextControls` owns presentation and
+  `useModelContextSettings` the reads and writes, shared with the custom server dialog; older hosts get
+  neither the group nor its requests.
+
+  At v111, **`CacheWarmingSettings`** adds **Prompt cache**: **Keep the prompt cache warm**, a cheap
+  segmented choice (Off / While a run is active / Also between runs) over pi's `cacheWarming` setting
+  (`cacheWarming.get` / `.set`; pi's `settings.json` is the only state, there is no AppConfig field). The
+  description follows the chosen mode, with the **ThinkRail default** hint while pi's file names no mode
+  (ThinkRail's default differs from pi's `idle`; `data-cache-warming-source` on `cache-warming`); a pick
+  shows at once and a failed write toasts and re-reads. Changed/Reset against contracts'
+  `DEFAULT_CACHE_WARMING_MODE`. The props-driven `CacheWarmingControls` owns presentation; older hosts get
+  neither the group nor its requests.
+
+  **`VisibleModelsSettings`** is a `Tree leaveAtEdges` grouped by provider (every list of models is, user
+  2026-11-17) inside the section's own scroll (no nested scroller): a provider row shows its connection
+  detail, "N of M shown" and a tri-state toggle (`aria-pressed` true / mixed / false) that shows every model
+  unless all are shown, then hides them all; model rows are indented, each with its own switch
+  (`model-visibility-<provider>-<id>`). Space toggles the focused row, Enter expands a provider or toggles a
+  model, Delete shows a hidden model again (all of a provider's on its row), and the arrows, twins,
+  Home/End and S follow the app's trees. Hidden models leave every model picker (pinned, recent, provider
+  groups, search) through `store`'s `selectPickerModels`, which always keeps the caller's current selection
+  even when hidden, and new models are shown by default. Hiding is a **client-local** preference, not host
   config: `chat/modelVisibility`'s `initModelVisibilityPersistence` (called once from `main.tsx`)
   hydrates `store.hiddenModels` and writes changes back — through the native shell's stable
   `clientPreferences` adapter under key `hidden-models` when one is injected, else browser localStorage
   `${STORAGE_PREFIX}hidden-models:<httpBase>`, whose `storage` events sync other tabs. The full catalog
   remains available here for configuration.
-
-  The REVIEW group's toggles: an **agent-review toggle**
-  (`agent-review-toggle`, `agent-review-row`, a switch over `store.agentReviewEnabled` →
-  `settings.update { agentReviewEnabled }`) — off withholds the worker's in-session `request_review` tool
-  so review happens only via the Review button (the host live-toggles the tool's active set on it, see
-  `submodule-server-host-plan-review`); the row is hidden below `AGENT_REVIEW_SETTING_PROTOCOL_VERSION`
-  (v68), where a host could store the field while still registering the tool. And an **auto-fix toggle** (`review-autofix-toggle`,
-  `review-autofix-row`, a switch over `store.reviewAutoFix` → `settings.update { reviewAutoFix }`) — off
-  means a `request_changes` verdict records findings and waits (the host gates its auto-fix cycle on it,
-  see `submodule-server-todos`).
-
-  **GPT CONTEXT WINDOW** — the `ModelContextSettings` block described above.
-
-  **PROMPT CACHE** (`cache-warming-group`) — the `CacheWarmingSettings` block described above.
-
-  There is **no separate Review navigation section**; all review-related controls live in Models' REVIEW group.
-  **`ExtensionsSettings`** (the **Extensions** section, nav `settings-nav-extensions`, listed only at
-  `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) is one page in up to four groups. Its description
-  carries the page's only statement about chats — "Changes apply to open chats when their current turn
-  ends." — and a primary **Install package…** button; there is no dynamic notice about which chats are
-  pending. **Built into ThinkRail** is the host-registry catalog as before: `extension.list` each time the
-  section mounts (static per host process, so section-local state), rendered by the props-driven
-  `ExtensionsCatalog` — title, description, tool-name chips and a `@thinkrail/ui/switch`
+  **`ExtensionsSettings`** (the **Extensions & skills** section in Agent, next to MCP servers and Prompt
+  templates; nav `settings-nav-extensions`, listed only at
+  `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) is one `SettingsPage` of rows, not cards, in up
+  to five groups. Its description carries the page's only statement about chats — "Changes apply to open
+  chats when their current turn ends."; there is no dynamic notice about which chats are pending.
+  **Packages** is the **Install a pi package** row (`packages-install`, with **Browse the pi package
+  gallery** as a side). **Built into ThinkRail** is the host-registry catalog: `extension.list` each time the
+  section mounts (static per host process, so section-local state; a failure shows **Retry**), rendered by
+  the props-driven `ExtensionsCatalog` as one `SettingsRow` per entry — title, description and its tools as
+  visible text ("Tools: a, b", each `extension-tool-<tool>`) with a `@thinkrail/ui/switch`
   (`extension-toggle-<name>`) whose state is **`store.disabledExtensions`**, not the catalog's snapshot; a
-  toggle writes the whole list through `settings.update { disabledExtensions }` and converges on the
-  broadcast. Unknown names already in the list are carried through. A catalog entry's declared `settings`
-  render as nested switches under its row (`extension-setting-<name>-<key>`, copy from a static
+  row switched off is Changed and its Reset turns it back on. A toggle writes the whole list through
+  `settings.update { disabledExtensions }` and converges on the broadcast. Unknown names already in the list are carried through. Once the catalog has loaded, the group
+  also lists the **web-only extensions** it lacks (`withWebOnlyEntries` over `extensions`'
+  `webOnlyExtensions`: titled registry entries, today Hint mode) after the host's rows, with their locale
+  title and description, no tool chips and the same switch; the switch applies at once (the shell
+  unmounts the extension), which the row's own description says, since the page's "when their current
+  turn ends" is about the agent's extensions. A catalog entry's declared `settings`
+  render as nested switch rows under its row (`extension-setting-<name>-<key>`; Rich previews is catalog
+  `rich-previews`, Reset to the declared default; copy from a static
   `MessageKey` map — a setting without copy is not shown), valued from **`store.extensionSettings`** else the
   declared default, disabled while the extension is off, and written one key at a time through
   `settings.update { extensionSettings: { name: { key: value } } }` (the host merges); they appear only
   while `supportsExtensionSettings(protocolVersion)` holds. **Skills** (only at
-  `protocolVersion >= OTHER_AGENT_SKILLS_PROTOCOL_VERSION`) is one switch, `other-agent-skills-toggle`, over
-  `store.otherAgentSkills`, writing `settings.update { otherAgentSkills }`; per-project choices made in the
-  Skills dialog still win over it. **Installed** and **pi built-in**
+  `protocolVersion >= OTHER_AGENT_SKILLS_PROTOCOL_VERSION`) is **Skills from other agents**,
+  `other-agent-skills-toggle`, over `store.otherAgentSkills`, writing `settings.update { otherAgentSkills }`,
+  with no Reset (see the rules above); per-project choices made in the Skills dialog still win over it.
+  **Installed packages** and **pi built-in**
   (`PiPackagesSettings.tsx`, props-driven; every `packages.*` request and the row state live in the
   **`usePiPackages`** hook, `usePiPackages.ts`, so the page component only composes) exist only while
   `supportsPiPackages(protocolVersion)` holds — against an older host the page is the bundled group
-  alone with its former description, no Install button and no package request — and list
+  alone with its former description, no Packages row and no package request — and list
   `packages.list` for the active workspace (user scope alone without one, or for a chat without a project —
   `selectActiveRepoWorkspaceId`) through **one** request path
   (`listPackages`, generation-guarded so a slow older response never overwrites a newer one), re-run on
@@ -1267,13 +1525,21 @@ a project picker, the prompt hero, and the reused
   workspace-change reads pass `force`, so the host rebuilds its catalog: an extension file dropped into a
   scanned folder by hand changes nothing the host watches, and a cached list would hide it for minutes. The update check
   is guarded the same way: a check started later (a workspace switch, a manual check, the re-check
-  after an update) wins, and only the latest clears "Checking…" or re-flags rows. A **package row** (`PackageRow`) is name ·
-  kind / scope tags (`npm` / `git` / `local`, Global / Repository) · an **Update available** tag when the
-  update check flagged it · one provenance line (declared source · "<version> installed" · description) ·
+  after an update) wins, and only the latest clears "Checking…" or re-flags rows. **Installed packages**
+  opens with an **Updates** row (Check for updates; Update all as a side while the last check flagged rows;
+  that check's error as visible text) over one `SettingsList` (`packages`) of package rows then loose-file
+  rows. A **package row** (`PackageRow`, row id `<scope>:<source>`) has as its primary (Enter) the expand
+  control — name ·
+  kind / scope tags (`npm` / `git` / `local`, Global / Repository) · an **Update available** or **Not
+  installed** tag · one provenance line (declared source · "<version> installed" · description) ·
   tool and `/command` chips of its extensions as a chat's loader last recorded them (a file no chat has
   loaded since it changed has none — the host never runs extension code to list; the install dialog
-  probes its new package once, so a fresh install shows chips at once) · the **switch** · a ⋯ menu
-  (Update, Open folder, Remove…). The group's one-line description says the switch affects ThinkRail chats only (the pi CLI
+  probes its new package once, so a fresh install shows chips at once) — with the **switch** and a ⋯ menu
+  (Update, Open folder, Remove…; Shift+F10) as sides; names, sources and paths wrap. Delete asks to remove
+  the package through `ConfirmDialog` (`package-remove-confirm`). A package missing on disk and a loose
+  file have nothing to expand, so their primary opens the menu; a loose file has no uninstall, so Delete
+  does nothing on it. A failed `packages.list` shows **Retry**. **pi built-in** is one row per built-in
+  with its `builtin:<name>` key as visible text. The group's one-line description says the switch affects ThinkRail chats only (the pi CLI
   still loads the package — `disabledPackages` is a ThinkRail setting). The switch is the only state
   control; it renders the host's `enabled` (closed over pi's package equivalence) and writes
   `settings.update { disabledPackages }` — on removes every key in the row's `switchKeys`, off adds its
@@ -1296,16 +1562,16 @@ a project picker, the prompt hero, and the reused
   workspaceId? }` and a `rowKey` the page keys busy and error state on (an error renders inline on the
   row, never a toast; the bundled group's switch keeps its older toast); Remove goes through
   `ConfirmDialog`; Update and Remove run with a ten-minute `timeoutMs`. Updates are checked once on mount
-  (`packages.checkUpdates`, cached by the host) and on **Check for updates** (`force: true`); a failed
-  check renders under the group header; **Update all** sends the flagged rows as **one**
-  `packages.update` request and marks them busy together. The empty state offers
-  Install and the pi.dev gallery link; an untrusted project shows one info notice; a failed list renders
-  `packages-failed`. The **`InstallPackageDialog`** (`InstallPackageDialog.tsx`; its `InstallPackageBody` is
+  (`packages.checkUpdates`, cached by the host) and on **Check for updates** (`force: true`); **Update
+  all** sends the flagged rows as **one** `packages.update` request and marks them busy together. An empty
+  list says so (installing is the Packages row's); an untrusted project shows one info notice; a failed
+  list renders `packages-failed`. The **`InstallPackageDialog`** (`InstallPackageDialog.tsx`; its `InstallPackageBody` is
   props-driven so each step renders without a portal, `installStepHeader` supplies the Radix title per
   step) is source (an info icon beside the label opens a tooltip listing what can be pasted — gallery
   or npm link, `pi install` line, npm name, git URL, local folder — in place of a permanent hint; there
-  is no trust warning in the dialog, the empty state's notice and pi's own trust prompt cover it) → scope
-  (**Global** / **This repository only**; there is no per-workspace choice, a
+  is no trust warning in the dialog, the list's untrusted notice and pi's own trust prompt cover it) → scope
+  (a cheap kit `SettingsChoice`, `install-package-scope-user` / `-project`: **Global** / **This repository
+  only**; there is no per-workspace choice, a
   package is on wherever its declaration loads) → one confirm → **Installing…** (indeterminate, no
   progress log, no Cancel — pi has none) → **Installed** (name · version · description, chips for every
   tool / command / skill / prompt it added, and one line: "Installed globally — new chats have it now;
@@ -1326,22 +1592,29 @@ a project picker, the prompt hero, and the reused
   never unregisters a tool renderer ([[submodule-web-extensions]]), so past transcripts still render.
   **`EnvironmentSettings`** (the **Environment** section, nav `settings-nav-environment`, listed only at
   `protocolVersion >= HOST_ENVIRONMENT_PROTOCOL_VERSION`) edits the stored host environment
-  ([[submodule-server-environment]]): the pi config folder, the folder in use (`effectiveAgentDir`), and
-  ordered name/value rows whose values are masked until revealed per row. It fetches `environment.get` on
-  mount into section-local state — never a store slice, because values may be secrets — and keeps an
-  explicit draft (Save / Discard, not per-field writes), since nothing applies before a restart. The form is one `<fieldset disabled>` while a save is in flight, so a
+  ([[submodule-server-environment]]) as a `SettingsPage`: a **Pi configuration** group (scope tag *This
+  computer*) with the **Pi config folder** row — its hint, the folder in use (`effectiveAgentDir`) and the
+  launch-override warning, all visible text — and an **Environment variables** group (*This computer*) of
+  ordered name/value rows (one walk row each; values masked until revealed per row; a "Set at launch"
+  badge followed by its explanation as visible text), then **Discard** / **Save**. It fetches
+  `environment.get` on mount into section-local state — never a store slice, because values may be
+  secrets — and keeps an explicit draft (Save / Discard, not per-field writes), since nothing applies before
+  a restart. **Esc in a field reverts that one field** to the value the form last loaded or saved
+  (`revertDraftField`; a new row's field reverts to empty) and is consumed only when it changed something,
+  so a second Esc steps back to the section list. The form is one `<fieldset disabled>` while a save is in flight, so a
   response can never overwrite edits made after it was sent, nor attach its issues to rows it never saw. Save sends
   the whole record through `environment.update`; `{ ok: false }` maps each issue back to its field or row
-  (blank rows are dropped client-side first so server indexes line up). A pending restart shows
-  `settings-environment-restart`; names set at launch carry a "Set at launch" badge. Pure draft helpers
+  (blank rows are dropped client-side first so server indexes line up). After a save,
+  `settings-environment-restart` ("Saved changes apply after you restart ThinkRail.") stays at the top for
+  as long as the host reports `restartRequired`; a failed load shows **Retry**. Pure draft helpers
   live in `panels/environmentDraft.ts`; the props-driven `EnvironmentForm` is what tests render. No folder
   picker: `dialog.selectDirectory` is the project-setup picker and records setup analytics.
-  `ProvidersSettings`/`McpSettings`/`AppearanceSettings`/`LineWidthControl`/`ChatSettings`/`TemplatesSettings`/
+  `ProvidersSettings`/`McpSettings`/`AppearanceSettings`/`LineWidthControl`/`ChatSettings`/`SubagentsSettings`/`TemplatesSettings`/
   `WorkspacesSettings`/`PrivacySettings`/`ModelsSettings`/`FeedbackSettings`/`ExtensionsSettings`/`EnvironmentSettings`, the onboarding
   `ConnectProviderDialog`/`CreateProjectDialog`/`OnboardingWizard`, and the app-wide **`SurveyInvitationDialog`** /
   **`SurveyWindow`** are the panels-owned **integration pieces** (store + transport).
-  `SettingsDialog` receives the Layout section from the
-  shell composition root so no panel reaches sideways into shell, and the `LoginDialog` stays presentational
+  `SettingsDialog` receives the Layout and Keyboard sections, the optional Updates section and the
+  shortcuts' search entries from the shell composition root so no panel reaches sideways into shell, and the `LoginDialog` stays presentational
   (`auth` module).
 
   Panels compose their own sub-panels
@@ -1550,8 +1823,8 @@ a project picker, the prompt hero, and the reused
   branch has no commits. The total diff comes from the workspace record's `diffStats`; each piece
   hides when unknown. Between header and summary lives the **NEXT-ACTION banner** (`plan-next-action`,
   `data-kind`) — the report's one "what now", rendering the FIRST matching state by urgency:
-  `fix` (N steps carry changes_requested → **Show step** scrolls to the first flagged item and
-  auto-expands it via the `focusRequest` token — `{ id, tick }`, tick bumped per click and consumed
+  `fix` (N steps carry changes_requested → **Show step** scrolls to the first flagged item, focuses its
+  toggle (`preventScroll`, the scroll is already smooth) and auto-expands it via the `focusRequest` token — `{ id, tick }`, tick bumped per click and consumed
   once per tick by the target `ItemBlock`, so a re-click re-expands a manually collapsed row and a
   stale request can't reopen it later) → `review`
   (N unsettled reviewables → an inline **Review All** button, same `todo.reviewAll` flow as the
@@ -1747,13 +2020,16 @@ own section. The kebab menu (`plan-menu`, a
   panes, singleton side tools, terminal bodies, Settings, and `Toaster`), imported **per-file** so
   Monaco/xterm stay lazy. Tab strips, group headers, side stacks, and center topology are not panel
   surfaces; the shell layout module wraps these renderers.
-- **Allowed deps:** `store`, `transport`, `components` (`SkeletonRows` — every async panel's pending
-  state renders content-shaped skeleton rows, never a bare "Loading…" line), `@thinkrail/ui/*` (incl. `popover`/`command`/`textarea` for the
+- **Allowed deps:** `store`, `transport`, `settingsKit` (every Settings block, the walk and the jump),
+  `components` (`SkeletonRows` — every async panel's pending
+  state renders content-shaped skeleton rows, never a bare "Loading…" line; `highlightRanges` for Settings
+  search results), `@thinkrail/ui/*` (incl. `popover`/`command`/`textarea` for the
   dialog), `chat` (`ModelEffortPicker` + the `useModelCatalog`/`useModelPreferences` hooks that feed it,
-  reused by `NewWorkspaceDialog`; `ModelSelector`/`ThinkingSelector`, still mounted by
-  `ModelsSettings`; `modelPicker`'s `AUTH_KIND_LABEL`, the one connection-kind vocabulary (catalog keys)
-  `ProvidersSettings` shares with the picker, and its `formatContext` plus `ProviderGlyph`, reused by
-  `VisibleModelsSettings`' rows; `TemplateEditorDialog`, reused by `TemplatesSettings`; `ExtraUsageNotice`, the
+  reused by `NewWorkspaceDialog` and `ModelsSettings`; `modelPicker`'s `AUTH_KIND_LABEL`, the one
+  connection-kind vocabulary (catalog keys) `ProvidersSettings` shares with the picker, and its
+  `formatContext` / `groupByProvider`, reused by `VisibleModelsSettings` (`formatContext` by the custom
+  server dialog too); `ProviderGlyph`, reused by `ModelProviderTree`, the provider tree of Visible models
+  and the context window; `chatPreferences`' message-order default, read by `settingDefaults`; `TemplateEditorDialog`, reused by `TemplatesSettings`; `ExtraUsageNotice`, the
   sign-in notice `useProviderAuth` passes to `LoginDialog`), `auth` (`LoginDialog`, mounted through
   `useProviderAuth` and by `McpSettings`), `@thinkrail/resource-renderers`, `lib`, `themes` (catalog + generic application contract),
   `contracts`; `@remixicon/react`; and the heavy libs each lazy panel owns (`@xterm/*`) loaded via `import()`.
@@ -1869,7 +2145,9 @@ own section. The kebab menu (`plan-menu`, a
   fold the section the user was reading); **Drafts rows are numbered** (1., 2., …) instead of wearing
   the pending glyph — and the workbench tool router **reveals the Review tool** when such a tab is
   ACTIVATED (keyed on the local selected-resource change, so a draft saved in an already selected resource
-  never yanks attention; `selectActiveReviewedPath` is the shared derivation). Each
+  never yanks attention; `selectActiveReviewedPath` is the shared derivation). The reveal never takes
+  keyboard focus (`focus: false`): a file's first draft also makes its tab "reviewed", and a reveal that
+  focused the Review rail pulled a just-saved keyboard comment away from its line. Each
   comment row is a **navigation gesture**, one rule for every author: a row with a linked chat
   (`comment.sessionId`) opens **the discussion** (its chat tab); one without — every draft, since a
   draft is never sent — opens the file **focused on the comment**. The file stays one hover-action
@@ -1950,7 +2228,8 @@ own section. The kebab menu (`plan-menu`, a
   into the hovered line's number cell whenever the hovered line changes and removes it on
   `pointerleave`. Only a custom `renderGutterUtility`, which we use, puts a `<slot>` in that node; the
   default gutter button does not crash, and the crash does not depend on diff size. Invariant: a Pierre
-  surface never inserts, removes, or moves a `<slot>` synchronously from a pointer or mouse handler.
+  surface never inserts, removes, or moves a `<slot>` synchronously from a pointer or mouse handler; the
+  keyboard line cursor, whose `selectedLines` move the gutter utility too, applies them a frame later.
   `patches/@pierre%2Fdiffs@1.6.4.patch` (root `patchedDependencies`) makes placement a no-op while a
   mouse button is held outside Pierre's own selection session — armed by `pointermove` and by
   `pointerleave`, so a drag whose first move already exits the diff cannot remove the slot — and the
@@ -1979,7 +2258,9 @@ own section. The kebab menu (`plan-menu`, a
   zone nodes keyed by comment id; `MonacoReviewZones` portals the shared React `ReviewThreadCard` and
   `ReviewComposer` into them, while `ResizeObserver` feeds their measured heights back to Monaco. An
   unrelated push therefore keeps the same keyed draft textarea, including the shared card's Escape-cancel
-  and shortcut-save behavior. Threads without a `lineRange` stay in the same unplaced
+  and shortcut-save behavior. `Mod+Shift+M` comments on the selection, or on the caret's line when nothing
+  is selected; the context-menu entry still needs a selection. A closed composer or a card's save,
+  discard, Send or Delete returns focus to the editor (at the card's line). Threads without a `lineRange` stay in the same unplaced
   strip. `monacoMenuIcons.ts` decorates Monaco's standalone file-editor menu; no diff editor or diff-side
   branch remains. **Rendered preview**:
   `MarkdownPreview` splits the stripped document at each insert's
@@ -2156,7 +2437,9 @@ own section. The kebab menu (`plan-menu`, a
   no/dangling parent; default-expanded). There is **no persistent Refresh control or panel toolbar row**:
   routine synchronization is automatic. A fetch **failure renders a distinct inline error hint with Retry**,
   never the "No specs" empty state — offline and empty are different answers. With a previous snapshot, the
-  hint sits above the retained tree; without one, it replaces the loading state. The tree build (`specTree.ts`)
+  hint sits above the retained tree; without one, it replaces the loading state. A **finished task-spec**
+  (`type: task-spec`, `status: done`) is left out of the tree, as the spec tools leave it out of search
+  ([[submodule-spec-graph-core]]); the host still reports it, and the Artifacts tool lists its file. The tree build (`specTree.ts`)
   assumes a well-formed graph — **parent cycles are `spec_validate`'s problem, not the viewer's** (cycle
   members are unreachable from any root and simply don't render) — but the walk is **visited-guarded**,
   so a malformed graph can never hang or loop the UI. Tree only in this slice — no cross-edge display,
@@ -2164,7 +2447,7 @@ own section. The kebab menu (`plan-menu`, a
 - `SpecsPanel` is a compact **document-first tree**: spec nodes are container **and** document, so the
   controls make both roles explicit. Hierarchy uses fixed per-depth indentation + chevrons, deliberately
   **without connector rails or branch elbows** (persistent lines overloaded the narrow rail). The padded
-  **chevron alone** expands/collapses, while the rest of the row is a native document button whose
+  **chevron alone** expands/collapses (→ / ← from the keyboard), while the rest of the row is a native document button whose
   **single click previews** the rendered spec — and whose **double click keeps** it — through the same
   `fs.readFile` → `openTab` flow as `FileTree` (see the Preview tabs bullet; reading down a spec graph is
   the case the reusable slot exists for). Every row stays on one line: indentation → chevron →
@@ -2177,7 +2460,94 @@ own section. The kebab menu (`plan-menu`, a
   feature, not speculative dots or reused status chrome. This remains a restrained hierarchy — no hero,
   duplicate root, preview pane, or graph canvas. `FileTree` shares the same file gesture model
   (preview/keep) but keeps its own directory behaviour — a whole-row click toggles dirs, no collision
-  there.
+  there. File and folder rows also carry the copy-path, Copy / Paste and Delete context menu described with
+  `FilesPanel`.
+- **`ArtifactsPanel` is the Artifacts tool's body** — a reader of the host's artifact index
+  ([[submodule-server-artifacts]]). Like specs, the `artifacts.list` snapshot lands in the store
+  (`artifactsByWorkspace`) through **`useWorkspaceArtifacts`**, which the workbench calls for every
+  workspace (chats included) so the rail can show new arrivals while the tool is hidden; it re-reads on the
+  host's `workspace.artifactsChanged` nudge and on reconnect (`selectArtifactsTick`, passed to
+  `useWorkspaceRead` instead of the fs tick, because the host already reconciles on file changes and an fs
+  tick per agent edit would re-list for nothing). The panel is two sections: **Artifacts**
+  (files under `.thinkrail/context/`) and **Other agent files · ignored** (one row per ignored output,
+  newest first, a folder lazily expandable through `fs.readDir`, with its file count), hidden by the
+  header's eye toggle. Artifacts shows as a **List**, a **Tree** or **Smart** (`List | Tree | Smart` segments
+  on the toolbar's right; `selectArtifactsView` resolves the per-client `artifactsView`: the user's explicit
+  choice, else Smart while the Settings switch `artifactsSmart` (on by default) is on and the host serves
+  roles (v124), else List; Smart is never offered otherwise). The toolbar (`ArtifactsToolbar`, which takes
+  the views it offers) stays one row at any sidebar width: when its content overflows it folds the
+  secondary actions (Collapse all, the ignored toggle, Paste) into a **More** menu, then the view segments
+  too, and unfolds once the width it needed is back (measured with a `ResizeObserver`, refolded from
+  scratch when the set of actions changes) — a fixed breakpoint cannot, because the actions come and go.
+  List answers *what is
+  new*: newest first, a two-line row — the name, then the folder inside the artifacts folder — or
+  `Task spec · <status>` joined from the spec snapshot by path — and a chip naming the writing chat that
+  opens it; no relative age, since the order already says what is newest. Tree answers *where is it*: it
+  is built by `artifactsModel.artifactTree` from the same filtered rows, never from `fs.readDir`, so deleted
+  rows, attribution, the new-dot and task-spec status survive (a real artifacts folder reached 1 700
+  records in 114 folders, which the flat list renders as 1 700 two-line rows). Folders come first, A→Z
+  like Files; single-folder chains compact (`folderChains`); a folder shows its file count, the new-dot while collapsed and holding a new file, and,
+  when no live artifact of any chat remains inside, a struck name reading "Deleted" with a menu of only
+  the Copy paths (liveness comes from the whole snapshot, so This chat never strikes a folder another
+  chat still fills; no per-folder deleted counts — in real folders nearly every one has some). A file
+  row is one line: type icon, name (struck when deleted), task-spec status, the new-dot, Restore — whose
+  hover title is the "Deleted, not by you" phrase — and the chat chip only under All chats (under This
+  chat every chip would name the same chat). A folder's row id is its path plus `/`, since the index
+  keeps deleted rows and a deleted file can share a path with a live folder. The tree starts collapsed;
+  expansion is kept per workspace (`artifactsTreeExpandedByWorkspace`) and toggling a compacted chain sets every folder in it, so a filter
+  that reshapes the chain keeps it open. Collapse all shows while a shown top-level folder is open. The
+  exact change time is a file row's hover title in both views, and the file open in the center
+  (`selectActiveFilePath`) is highlighted in both. A List row the host marks `deleted` reads "Deleted, not
+  by you" with Restore. **Smart** answers *what did the agent make for me*: `artifactsModel.smartGroups`
+  arranges the host's roles ([[submodule-server-artifacts]]) — results grouped by their folder, nested under
+  the nearest folder that holds results itself (sibling groups with no common result folder share one
+  for their top folder), collapsed and newest first, each group row reading "N results · M groups"; a
+  working file folds under the nearest group as one soft-primary **"N working files"** chip (the chat
+  divider's chip, a tree toggle) that expands a Tree of them relative to the group, and working files of no
+  group sit under one chip at the bottom. A result row is the Tree's file row (`ArtifactFileRow`) whose
+  hover title says why it counts (picked, shown in the chat, linked in the reply, a document) and whose
+  user's pick carries a ★ picked badge and an accent stripe. Grouping lives on the web because it depends
+  on the This-chat filter; the role does not, so the host owns it. Opening it — a click or a double click on its
+  name — restores it silently first (`artifactActions.openArtifact`): opening a file asks for its contents, so
+  the restore is implied. The click's center navigation is stamped before the restore, as any async open
+  stamps it at request time, so a click elsewhere while the restore runs keeps its tab. A row's restore (`restoreDeletedArtifact`, kept per workspace and path for the page's
+  life and shared by a click, `Mod+Enter` and both Restore controls) is reused, in flight or done, for as long
+  as the row shows the same deletion — a deleted row's `changedAt` is
+  when the host saw it gone, while a list refresh only replaces the object: a double click, a click in the
+  gap before the live snapshot, or a refresh in between never asks again (the host would refuse a row that
+  is already live), while a row deleted again right after its restore shows a newer deletion and gets a
+  fresh one. A failed restore is dropped at
+  once and opens nothing — not even a new file that has since taken the path — and Restore's error toast
+  says why. The panel
+  **opens on This chat**: the attended chat's artifacts (`selectArtifactMentionTarget`), following it as the
+  center switches chats; with no chat attended it shows all, and All chats is a click away but not
+  remembered across mounts. Unattributed artifacts belong to no chat. Whenever the filter hides rows, a
+  line under the list counts them ("N more from other chats") with **Show all chats**, so the default never
+  makes a workspace look emptier than it is; in Tree the filter prunes to the folders holding the chat's
+  files. Paste puts the Files clipboard into the artifacts folder. Every row has one context menu
+  (`artifactRowParts.ArtifactEntryMenu`, shared by both views): Mention in chat
+  (pastes `@<path> ` into the attended chat's composer through `pasteIntoComposer` and focuses it, closing the chat's history overlay as `Mod+L` does — run once the row
+menu has closed, because a closing menu returns focus to its row; disabled
+  without one), Reveal in Files, Open ‹chat› for an attributed row (the chip's action), the two Copy paths,
+  Copy / Cut (the shared Files clipboard; a cut pastes
+  through `fs.move`), Rename (inline, `fs.rename`), Restore for a deleted row, and Delete — `fs.delete` for a
+  live file, `artifacts.discard` for a kept copy, both behind a confirmation. A Tree folder's menu is
+  Mention in chat (`@<folder>/ `), Reveal in Files, the two Copy paths, Copy / Cut, Paste here (with a
+  clipboard) and Rename — no Delete or Restore: removing or restoring a folder of kept copies one
+  request per file would mean hundreds of reconciles and trash calls, and a host batch was not worth it
+  yet. Each section is its own sidebar
+  tree (see *Sidebar trees*; the heading stays outside it) and emits the shell's
+  focus-recovery markup (lists `artifacts[:<folder>]` and `artifacts-outputs[:<folder>]`, the path as row
+  id, the name as the row's landing control), so a delete, restore or rename moves focus to the row or
+  its neighbour instead of `<body>`. **New** means newer than this
+  client's per-workspace seen watermark (`artifactsSeenByWorkspace`, the newest `firstSeenAt` / output
+  `changedAt`, so only host timestamps are compared): the first snapshot of a workspace is taken as seen, a
+  showing panel advances the watermark, rows newer than the watermark it opened with stay highlighted while
+  it shows, and `selectArtifactsUnseen` drives the rail dot. While the eye toggle hides ignored outputs,
+  their changes neither advance the watermark nor light the dot. The watermarks, the ignored toggle, the
+  view and the Tree's expanded folders persist per client (`shell/artifactsPreference.ts`, bounded at
+  5 000 folders per workspace like the Files tree). "Update the ThinkRail host" shows only once a welcome reports
+  a host older than v121; between sockets the panel keeps its last snapshot.
 - **Chat deep-links remain arrangement-agnostic.** A shell-owned **`LayoutIntent`** names the singleton tool;
   the shell resolves its current side/group, reveals it in place, and selects it locally. `changesRequest`
   and `specRequest` add the one path to focus/open without naming a layout destination. A divider chip that
@@ -2345,10 +2715,31 @@ own section. The kebab menu (`plan-menu`, a
   one busy flag, not new mutations. The cursor is the step's identity (a reading step's position in the order — the contract allows one file twice — or a finding id), so a
   finding resolved from under it yields to its successor instead of skipping one. The rail never renders
   on phone-class viewports — 280px of a 390px
-  screen would leave no diff to guide through. Plain-letter shortcuts (`V`, `J`, `N`, `P`) belong to the
+  screen would leave no diff to guide through. A keyboard step (`Alt+↑` / `Alt+↓`, `V` advancing, `J`, `N`,
+  `P`) and a click on a reading step or finding move focus to what it revealed — the section's collapse
+  toggle (stacked layout) or its header itself (single-file layout, `tabIndex=-1` and the section's
+  `data-focus-row-primary`, so a diff cursor's Esc and focus recovery land there too; never the header's
+  first control, which there is Revert file, so a following Enter or Space cannot revert), or the finding card
+  once `useReviewReveal` scrolls it into view (a draft's text, a sent card itself); the
+  `Prev / Next`, guide and bottom-bar buttons keep focus, so they can be pressed again (the reveal reaches
+  the renderer as a review focus with `moveFocus: false`: it scrolls to a finding without focusing it), and
+  one that disables at the end hands focus to its nearest enabled sibling through the shell's recovery
+  engine.
+  Plain-letter shortcuts (`V`, `J`, `N`, `P`) belong to the
   review tab the center is looking at (`ownsReviewShortcut`: the attention group's selected tab, no
   modal or menu layer open, no text-entry target, and no earlier handler consumed the event), so two review scopes split side by side cannot both answer
-  one keystroke. **Scale rules**:
+  one keystroke. Inside a diff's **line cursor** ([[module-resource-renderers]], *Keyboard review
+  surfaces*) `j`/`k` move lines and are consumed there, so `J` means next unreviewed only outside it;
+  `V`, `N`, `P` and `Alt+↑/↓` pass through the cursor. A comment authored from the cursor returns focus to
+  its line on save, send or cancel, and so do a draft card's `Mod+Enter`, Esc, Send and Delete — never to
+  `<body>`, another card or another file; Esc on a cursor without a range lands on the section header.
+  **Show in file** and the guide's keyboard steps land in a draft's text (caret at the end), not on its
+  Send button, and on a sent card itself. These keys are the rebindable local keys of scope `review`
+  ([[submodule-web-keybindings]], *Local keys*): the pane and the guide match them through
+  `useLocalKeys("review", LOCAL_KEY_DEFAULTS.review)` by physical `code`, and every cap they show (the
+  `V` / `J` / `N` keycaps, the guide's previous-step label, the Prev / Next file tooltip caps — `Alt+↓` /
+  `Alt+↑`, `⌥↓` / `⌥↑` on a Mac — rather than in their label) is that hook's `caps` / `label`, so a rebind
+  shows everywhere it acts and an unbound key shows no cap. **Scale rules**:
   a section whose file changed more than 400 lines, or whose path is a lock/generated file, mounts
   collapsed behind *Expand* / *Open as tab*; a scope with more than 50 files shows a dismissable notice
   offering *One file*; nothing switches mode on its own, because a review surface that re-arranges
@@ -2458,13 +2849,82 @@ own section. The kebab menu (`plan-menu`, a
   selects that placement instead of duplicating it. Preview placement and attention commit locally. Unit
   and E2E tests pin double-click coalescing, stale-read rejection, per-group isolation, local identity
   convergence, and promote-by-keyboard/touch.
+- **Sidebar trees share one keyboard model (`treeNavigation.tsx`).** Files, Changes (both views), Specs,
+  Chats, Projects and the Artifacts tool's two sections are each a `Tree` — a `div role=tree` with **one Tab stop** (roving tabindex) — whose
+  rows' focusable controls are `useTreeItem` treeitems (`aria-level`, `aria-expanded` on expandables,
+  `aria-current` for the selected row) under `li role=none`; the tree is a `div role=tree` and every
+  list inside it is `role=none`, so the hierarchy is the explicit `aria-level` (VS Code's flat-tree
+  markup) rather than nested `group`s, which Biome's semantic-element rules reject on lists. Chats and
+  Projects are two trees (Projects: project → workspaces and creations → the Settled header as an
+  expandable item → settled rows and *Show more*); so are Artifacts (List: flat, the name is the
+  treeitem; Tree: a folder row is its own toggle) and Other agent files (an output folder is its own
+  toggle), their headings outside the trees. No tree is
+  virtualized, so the model is DOM-driven: the visible rows are the tree's treeitems in DOM order, parent and first child come from `aria-level`
+  (the pure move rule is `lib`'s `resolveTreeMove`, which the virtualized chat transcript applies to rows it derives from data),
+  and →/← click the row's `[data-tree-toggle]` (a Files/Changes folder row is its own toggle; Specs,
+  projects and the Settled header use their chevron), so every tree keeps its own expansion state and
+  markup.
+  - **The tab stop is the current row:** the last focused row (focus-in, so clicks and focus recovery move
+    it); a row that becomes selected while focus is elsewhere (a file opened from the palette) takes it
+    over; else the last selected row, else the first. A `MutationObserver` re-elects when the current row
+    leaves the DOM, because rows load per directory and per project asynchronously. Only the current row
+    carries `data-focus-default`, so F6, `Mod+0` and `Mod+Shift+E/G` land on it ([[submodule-web-shell]]
+    prefers the innermost default; its focusable test counts `tabIndex=-1` buttons, so without the marker
+    landing took the first row). Of Chats and Projects only the tree holding the active workspace marks
+    its default (Projects when none is active); of the Artifacts tool's, Artifacts when it has rows, else
+    Other agent files.
+  - **Keys** are the tree's own, not global chords: ↑/↓ and the arrow twins (`j`/`k` by default),
+    Home/End; → / `l` expands, else enters the first child; ← / `h` collapses, else goes to the parent. The
+    twins and `trees.search` are rebindable local keys of scope `trees` ([[submodule-web-keybindings]],
+    *Local keys*): `Tree` asks `useLocalKeys("trees", LOCAL_KEY_DEFAULTS.trees)` at event time, matched by
+    physical `code` (a Russian layout's `ы` is `S`), and a matched twin maps onto its arrow before
+    `resolveTreeMove`; the arrows themselves are locked and always work, never during IME composition.
+    `trees.openKept` (`Mod+Enter`), `trees.rename` (`F2`), `trees.delete` (`Delete`) and
+    `trees.reorderUp` / `trees.reorderDown` (`Alt+Shift+↑/↓`) are local keys of the same scope; rows read
+    them through `useTreeKeys()`, and the project row's `aria-keyshortcuts` is that hook's `aria`.
+    Letters belong to a focused tree, so the Changes review's `V`/`J`/`N` do not fire from a focused Changes
+    row: every other printable key is swallowed, except Space (the button's activation) and `F` (by
+    `code`, unmodified), which belongs to hint mode ([[module-ext-hint-mode]]). Letter type-ahead was
+    removed when F became hint mode's (2026-11-15); search moved to `S`.
+  - **`S` (`trees.search`, rebindable) searches the visible rows** (isearch). `Tree` renders a labelled field ("Search Files") as a
+    sticky sibling *before* its `role="tree"` element — outside it, so the tree's `MutationObserver` and
+    roving model never see it — and focuses it. Typing matches the query as a case-insensitive substring of
+    each rendered row's `data-tree-label` (collapsed children are not rendered, so not searched); the
+    cursor (tab stop, `data-focus-default`) moves to the first match at or after the current match, else
+    the row the search started from, wrapping, and is scrolled into view (re-centred if the sticky field
+    covers it). Matches carry `data-tree-match="match"`, the current one `"current"` (`primary-subtle` /
+    `primary-soft` fills through the tree's arbitrary variants); the field shows "n of m" or "No match".
+    ↓ / ↑ step to the next / previous match, wrapping; Enter keeps the current match (or the start row)
+    and Esc returns to the start row — both focus that row **before** the field unmounts, so focus never
+    drops to `<body>`; blur (Tab lands on the current match, the tree's tab stop) keeps the match. Plain
+    `S` types into the field, so `S`-again-as-next (the product brief) is not bound: a query must be able
+    to contain an s. The pure model is `treeSearchMatches` / `treeSearchTarget` / `treeSearchStep`.
+    Enter is the button's own click; `Mod+Enter` is the row's double-click — Files, Specs and Artifacts open
+    kept (a deleted artifact restores first), Changes opens its kept diff with `claimPreview`; rows without a double-click treat it as Enter.
+  - **Row keys live in each row**, through `treeRowKey(event, keys)` (names the matched `trees.*`
+    command: `menu`, `delete`, `rename`, `reorderUp`, `reorderDown`): Shift+F10 / the Menu key open the row's menu
+    (context-menu rows through `openContextMenuFromKeyboard`, dropdown rows through `isContextMenuKey`,
+    after which the menu returns focus to the row); **Delete** opens the menu's own confirmation (file,
+    Remove workspace except on Default, Delete chat — a pending deletion retries directly —, Close project,
+    an artifact's or ignored output's Delete — a deleted artifact discards its kept copy; nothing on Changes
+    and Specs rows); **F2** renames a project, managed workspace or artifact where the
+    menu offers Rename (chats and ignored outputs have no rename). A pending chat stays
+    focusable (`aria-disabled`) so its Retry is reachable; a deleted artifact's name is enabled, since opening
+    it restores it.
+  - **Inner row buttons leave the Tab order and the accessibility tree** (`treeRowControlProps`:
+    `tabIndex=-1` and `aria-hidden` — a `tree` may own only treeitems, and these are pointer duplicates:
+    chevrons, kebabs, Settle / Keep active, the project's Create workspace `+`, a creation's retry /
+    dismiss, an artifact's chat chip and Restore); each action stays reachable — arrows expand, the row's
+    menu carries the rest (Create workspace, Settle, Keep active, Open ‹chat›, Restore), a creation's
+    actions are in the creation view its row opens; hint mode labels none of them, by the same markup. dnd-kit's draggable `attributes` stay unspread on the project name
+    (they would add a second tab stop); dragging needs only its listeners.
 - **Row actions: one menu, two triggers.** Every **file** row (both views) is wrapped in
-  **`ChangeRowActions`**: a hover/focus-revealed `⌄` button *and* right-click on the row open the same
+  **`ChangeRowActions`**: a hover-revealed `⌄` button *and* right-click on the row (Shift+F10 / Menu key on it) open the same
   dropdown. The `⌄` is not garnish — it is the **touch path**, where right-click does not exist (mobile-first).
-  Items: **View** (the same action as a plain click) and **Copy path** (worktree-relative). Deliberately
+  Items: **View** (the same action as a plain click) and **Copy relative path**. Deliberately
   nothing else: the panel is **read-only** — no discard-file/-folder/-all — and no “Open in ‹external app›”,
-  which a host-side `open` would make silently wrong for every remote/phone client (Copy path is the portable
-  escape hatch). **Folder rows get no menu** — nothing in that list applies to a folder. Built on the existing
+  which a host-side `open` would make silently wrong for every remote/phone client (Copy relative path is the
+  portable escape hatch). **Folder rows get no menu** — nothing in that list applies to a folder. Built on the existing
   `@thinkrail/ui/dropdown-menu` (no new `context-menu` primitive); the right-click handler is handed back
   through a render prop so it lands on the row's real interactive element rather than a bare div, and the `⌄`
   trigger is a *sibling* of the row's button (a button inside a button is invalid).
@@ -2521,6 +2981,20 @@ own section. The kebab menu (`plan-menu`, a
   renderer, so the rendered spec scrolls to its heading). An open that finds a read of the same file in flight joins it —
   `openReadTab` hands every caller that read's completion — so each caller reveals after the tab is
   installed, in call order, and the latest hit wins.
+  **`workspaceForPath.resolveWorkspaceFile(path)`** is the client's one entry to "which open workspace holds
+  this absolute path" for any caller that holds a path from outside the app's own trees (desktop deep links
+  now; terminal path links reuse it rather than match roots themselves). From
+  `WORKSPACE_PATH_RESOLVE_PROTOCOL_VERSION` (v119) it asks the host's `workspace.resolvePath`, which matches
+  real paths ([[submodule-server-workspaces]]): the browser cannot see a symlink, so `/tmp/x` against
+  `/private/tmp/x`, or a project opened through a symlinked folder, only matches there. Against an older host
+  it falls back to the loaded roots' spelling: it lists the workspaces of unlisted open projects whose folder
+  encloses the path first, so a nested project is never shadowed by an already loaded parent, then the
+  remaining unlisted open projects (a worktree usually lives outside its project folder), and picks by
+  `pathWithinRoot` the most specific root, the active workspace between equal roots, never a deleting or
+  removed workspace, a closed project's cached rows or a root itself; it never overwrites a list that loaded
+  meanwhile. Either way it answers a `WorkspacePathMatch` (`workspaceId`, `projectId`, POSIX `relativePath`)
+  or `null`; entering the workspace, which loads its project's list when this client lacks the row, is the
+  caller's.
 
   `MarkdownPreview` retains the document typography, frontmatter stripping, alerts, Mermaid rendering,
   source-line stamps, review commenting, and bounded reading measure described above. These are renderer
@@ -2593,6 +3067,16 @@ own section. The kebab menu (`plan-menu`, a
   key handler intercepts keydown at `keyCode === 229` and derives the control bytes from `event.code`
   (which stays accurate under an IME) via `imeControlBytes`, writing them to the PTY itself; anything
   that isn't a rescued chord is left to normal text input.
+- **Terminal copy chord.** xterm allows one custom key handler, so `TerminalInstance` asks the pure
+  `terminalKeys.terminalKeyDecision(event, platform, hasSelection)`: nothing while an IME is composing, then
+  the copy chord, and only then the keyCode-229 rescue above (`imeControlBytes` lives beside it). The chord
+  comes first because an IME that reports 229 without composing would otherwise turn Ctrl+Shift+C into the
+  rescue's `^C`. Off Apple platforms (where Cmd+C already copies) **Ctrl+Shift+C** copies
+  `term.getSelection()` through `copyText`, as GNOME Terminal, Konsole and Windows Terminal do; without a
+  selection it does nothing. Either way the keydown is swallowed and `preventDefault`ed (Chromium would
+  otherwise open inspect-element), so it never writes `^C`; xterm itself encodes Ctrl+letter only without
+  Shift. Plain Ctrl+C stays xterm's SIGINT, and macOS keeps xterm's defaults. Ctrl+Shift+V needs no handler:
+  xterm leaves it unencoded, so Chromium's paste-as-plain-text reaches xterm's own paste listener.
 - **Korean IME replacement bridge (WebKit).** WebKit — Safari and the desktop app's WKWebView — drives
   the macOS Korean input method without `composition*` events: a syllable's first jamo lands as an
   `insertText` input, every re-composition of it (`ㄱ`→`가`→`간`) as `insertReplacementText`, the next

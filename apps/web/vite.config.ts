@@ -50,6 +50,8 @@ export default defineConfig(({ mode }) => {
 				"/files": { target: `http://localhost:${hostPort}` },
 				"/blob": { target: `http://localhost:${hostPort}` },
 				"/fonts": { target: `http://localhost:${hostPort}` },
+				"/images": { target: `http://localhost:${hostPort}` },
+				"/view": { target: `http://localhost:${hostPort}` },
 			},
 		},
 		worker: { format: "es", plugins: () => [diffsStub()] },

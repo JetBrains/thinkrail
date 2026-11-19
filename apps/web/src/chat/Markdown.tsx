@@ -1,8 +1,10 @@
 import { MermaidView } from "@thinkrail/ext-visualize/web";
+import { cn } from "@thinkrail/ui/utils";
 import { type ComponentProps, memo, type ReactNode, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useHighlightedCode } from "@/lib/highlightCode";
+import { CONTENT_WIDTH_BREAKOUT } from "./contentWidth";
 import { HighlightedHtml } from "./HighlightedHtml";
 import { createMarkdownSplitter } from "./markdownBlocks";
 
@@ -18,9 +20,10 @@ interface MarkdownProps {
 	rehypePlugins?: ReactMarkdownProps["rehypePlugins"];
 	urlTransform?: ReactMarkdownProps["urlTransform"];
 	components?: ReactMarkdownProps["components"];
+	wideBlocks?: boolean;
 }
 
-interface MarkdownBlockProps extends Omit<MarkdownProps, "text" | "className"> {
+interface MarkdownBlockProps extends Omit<MarkdownProps, "text" | "className" | "wideBlocks"> {
 	raw: string;
 	separated: boolean;
 }
@@ -30,13 +33,14 @@ export const Markdown = memo(function Markdown({
 	className = CHAT_PROSE,
 	remarkPlugins,
 	components,
+	wideBlocks = false,
 	...rest
 }: MarkdownProps) {
 	return (
 		<div className={className}>
 			<ReactMarkdown
 				remarkPlugins={withDefaultPlugins(remarkPlugins)}
-				components={withDefaultComponents(components)}
+				components={withDefaultComponents(components, wideBlocks)}
 				{...rest}
 			>
 				{text}
@@ -50,12 +54,16 @@ export const BlockMarkdown = memo(function BlockMarkdown({
 	className = CHAT_PROSE,
 	remarkPlugins,
 	components,
+	wideBlocks = false,
 	...rest
 }: MarkdownProps) {
 	const [split] = useState(createMarkdownSplitter);
 	const { blocks } = useMemo(() => split(text), [split, text]);
 	const plugins = useMemo(() => withDefaultPlugins(remarkPlugins), [remarkPlugins]);
-	const merged = useMemo(() => withDefaultComponents(components), [components]);
+	const merged = useMemo(
+		() => withDefaultComponents(components, wideBlocks),
+		[components, wideBlocks],
+	);
 	return (
 		<div className={className}>
 			{blocks.map((block) => (
@@ -91,6 +99,18 @@ function Table({ children }: { children?: ReactNode }) {
 			<table>{children}</table>
 		</div>
 	);
+}
+
+function WideTable({ children }: { children?: ReactNode }) {
+	return (
+		<div className={cn("overflow-x-auto", CONTENT_WIDTH_BREAKOUT)}>
+			<table>{children}</table>
+		</div>
+	);
+}
+
+function WidePre({ children }: { children?: ReactNode }) {
+	return <pre className={CONTENT_WIDTH_BREAKOUT}>{children}</pre>;
 }
 
 function Anchor({ href, children }: { href?: string | undefined; children?: ReactNode }) {
@@ -164,11 +184,17 @@ const DEFAULT_COMPONENTS: ReactMarkdownProps["components"] = {
 	a: Anchor,
 	table: Table,
 };
+const WIDE_COMPONENTS: ReactMarkdownProps["components"] = {
+	...DEFAULT_COMPONENTS,
+	pre: WidePre,
+	table: WideTable,
+};
 
 function withDefaultPlugins(plugins: ReactMarkdownProps["remarkPlugins"]) {
 	return plugins ? [remarkGfm, ...plugins] : DEFAULT_REMARK_PLUGINS;
 }
 
-function withDefaultComponents(components: ReactMarkdownProps["components"]) {
-	return components ? { ...DEFAULT_COMPONENTS, ...components } : DEFAULT_COMPONENTS;
+function withDefaultComponents(components: ReactMarkdownProps["components"], wideBlocks: boolean) {
+	const defaults = wideBlocks ? WIDE_COMPONENTS : DEFAULT_COMPONENTS;
+	return components ? { ...defaults, ...components } : defaults;
 }

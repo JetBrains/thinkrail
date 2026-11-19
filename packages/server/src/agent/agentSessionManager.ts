@@ -54,6 +54,7 @@ import {
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { stripAnsi } from "@thinkrail/shared/stripAnsi";
 import {
 	type BackgroundCommands,
 	createBackgroundCommands,
@@ -68,6 +69,7 @@ import {
 	workspaceFiles,
 } from "../extensions";
 import { displayTranscriptMessages } from "../history";
+import { findImageBlock, type ImageBlock, type ImageSource, projectImages } from "../images";
 import { logger } from "../log";
 import {
 	dataDir,
@@ -144,6 +146,7 @@ import {
 import { catalogProviderAuth } from "./providerAuth";
 import { REQUEST_REVIEW_TOOL_NAME } from "./requestReviewTool";
 import { resourceInterruptionExtension } from "./resourceInterruptions";
+import { declaresServerFallback, disableModelFallback } from "./serverFallback";
 import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import { deriveSessionState } from "./sessionState";
@@ -483,8 +486,12 @@ function entryFirstPrompt(entry: Entry): { firstPrompt?: string } {
 	return entry.firstPrompt === null ? {} : { firstPrompt: entry.firstPrompt };
 }
 
+function displayedSessionTitle(name: string | undefined): string {
+	return name === undefined ? "" : stripAnsi(name);
+}
+
 function entryTitle(entry: Entry): string {
-	return entry.session.sessionName ?? "";
+	return displayedSessionTitle(entry.session.sessionName);
 }
 
 function publishEntryState(entry: Entry): void {
@@ -534,7 +541,7 @@ function diskStateRecord(
 		workspaceId: workspace.id,
 		projectId: workspace.projectId,
 		state: stateFromDisk(sessionId, manager, legacy),
-		title: manager.getSessionName() ?? "",
+		title: displayedSessionTitle(manager.getSessionName()),
 		...firstPromptOf(manager.getEntries()),
 	};
 }
@@ -731,6 +738,19 @@ export function setSubagentsEnabledResolver(
 	resolver: ((workspaceId: string) => boolean) | null,
 ): void {
 	subagentsEnabledResolver = resolver ?? enabledByDefault;
+}
+
+let subagentEnabledResolver: (name: string) => boolean = enabledByDefault;
+export function setSubagentEnabledResolver(resolver: ((name: string) => boolean) | null): void {
+	subagentEnabledResolver = resolver ?? enabledByDefault;
+}
+
+function subagentEnabled(name: string): boolean {
+	try {
+		return subagentEnabledResolver(name);
+	} catch {
+		return false;
+	}
 }
 
 function subagentsEnabled(workspaceId: string): boolean {
@@ -1073,6 +1093,7 @@ function runGatedReload(entry: Entry): Promise<void> {
 				applySubagentTools(entry);
 				applyReviewTool(entry);
 				applySpecTools(entry);
+				if (reloaded) activateRegistryTools(entry);
 				applyExtensionTools(entry, {
 					allowReload: entry.reloadPolicyGeneration !== extensionPolicy.generation,
 				});
@@ -1321,7 +1342,7 @@ async function prepareSessionEntry(
 					}
 				: null;
 		}
-		const baseEvent = projectSessionEvent(event, terminal);
+		const baseEvent = projectSessionEvent(event, terminal, sessionId);
 		const projected =
 			baseEvent.type === "queue_update" && hasQueuedImages(entry)
 				? { ...baseEvent, hasImages: true as const }
@@ -1530,7 +1551,7 @@ async function createParentSessionInternal(
 		askForToolCall: (toolCallId, input, title, choices, signal) =>
 			selectForToolCall(
 				sessionId,
-				{ toolCallId, toolInput: input },
+				{ toolCallId, toolInput: projectImages(input, sessionId) as Record<string, unknown> },
 				title,
 				choices,
 				signal ? { signal } : undefined,
@@ -1552,6 +1573,7 @@ async function createParentSessionInternal(
 		workspaceId,
 		() => subagentsEnabled(workspaceId),
 		() => sessions.get(sessionId)?.subagents === subagents && canDeliverCompletion(),
+		subagentEnabled,
 	);
 	const commands = createBackgroundCommands({
 		sessionId,
@@ -1662,7 +1684,7 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 	return {
 		sessionId,
 		workspaceId: entry.workspaceId,
-		title: session.sessionName ?? "",
+		title: displayedSessionTitle(session.sessionName),
 		...entryFirstPrompt(entry),
 		model:
 			session.model && !entry.unavailableSavedModel
@@ -1801,7 +1823,7 @@ async function listSessionsInternal(workspaceId: string, cwd: string): Promise<S
 			return {
 				sessionId: info.id,
 				workspaceId,
-				title: info.name ?? "",
+				title: displayedSessionTitle(info.name),
 				...firstPromptOf(manager.getEntries()),
 				model: null,
 				thinkingLevel: "medium",
@@ -1899,7 +1921,7 @@ async function collectSessionStateSources(
 					const current = {
 						...record,
 						state: stateFromDisk(info.id, manager),
-						title: manager.getSessionName() ?? "",
+						title: displayedSessionTitle(manager.getSessionName()),
 					};
 					publishState(current);
 					return current;
@@ -2234,8 +2256,32 @@ async function getSessionMessagesInternal(
 		entry = sessions.get(sessionId);
 		if (!entry) throw new Error(`Unknown session: ${sessionId}`);
 	}
-	return { summary: summaryOf(sessionId, entry), messages: transcriptMessages(entry.session) };
+	return {
+		summary: summaryOf(sessionId, entry),
+		messages: projectImages(transcriptMessages(entry.session), sessionId) as TranscriptMessage[],
+	};
 }
+
+function findMessageImage(messages: Iterable<unknown>, hash: string): ImageBlock | null {
+	for (const message of messages) {
+		if (typeof message !== "object" || message === null || !("content" in message)) continue;
+		const found = findImageBlock(message.content, hash);
+		if (found) return found;
+	}
+	return null;
+}
+
+export const sessionImageSource: ImageSource = {
+	isServable: (sessionId) => sessions.has(sessionId) && !hasDeletionTombstone(sessionId),
+	find: (sessionId, hash) => {
+		const entry = sessions.get(sessionId);
+		if (!entry || hasDeletionTombstone(sessionId)) return null;
+		const persisted = entry.session.sessionManager
+			.getEntries()
+			.flatMap((candidate) => (candidate.type === "message" ? [candidate.message] : []));
+		return findMessageImage(entry.session.messages, hash) ?? findMessageImage(persisted, hash);
+	},
+};
 
 export function getSessionMessages(
 	sessionId: string,
@@ -2730,12 +2776,56 @@ async function abortEntry(
 	return restoredQueue;
 }
 
+const modelWrites = new WeakMap<Entry, Promise<unknown>>();
+
+function serializeModelWrite<T>(entry: Entry, run: () => Promise<T>): Promise<T> {
+	const next = (modelWrites.get(entry) ?? Promise.resolve()).catch(() => undefined).then(run);
+	modelWrites.set(entry, next);
+	return next;
+}
+
 export async function setSessionModel(sessionId: string, model: WireModel): Promise<WireModel> {
 	const entry = mustGetEntry(sessionId);
-	const resolved = resolveWireModel(entry.generation.runtime, model);
-	await entry.session.setModel(resolved);
-	entry.unavailableSavedModel = undefined;
-	return sessionWireModel(resolved, entry.generation);
+	return serializeModelWrite(entry, async () => {
+		const resolved = resolveWireModel(entry.generation.runtime, model);
+		await entry.session.setModel(resolved);
+		entry.unavailableSavedModel = undefined;
+		return sessionWireModel(resolved, entry.generation);
+	});
+}
+
+function failedRequestModel(entry: Entry): Model<string> | undefined {
+	const last = entry.session.messages.findLast((message) => message.role === "assistant");
+	if (last?.role !== "assistant" || last.stopReason !== "error") return undefined;
+	const ref = { provider: last.provider, id: last.model };
+	const live = entry.session.model;
+	if (live && sameModel(live, ref)) return live;
+	return settledAvailableModels(entry.generation.runtime).find((model) => sameModel(model, ref));
+}
+
+export async function disableSessionServerFallback(sessionId: string): Promise<WireModel> {
+	const entry = mustGetEntry(sessionId);
+	const failed = failedRequestModel(entry);
+	if (!failed || !declaresServerFallback(failed))
+		throw new CodedError(
+			"SERVER_FALLBACK_NOT_USED",
+			"The failed request's model sends no fallbacks",
+		);
+	const current = await getPiRuntimeGeneration();
+	await disableModelFallback(failed, [current.runtime, entry.generation.runtime]);
+	return serializeModelWrite(entry, async () => {
+		if (mustGetEntry(sessionId) !== entry) throw new Error(`Unknown session: ${sessionId}`);
+		const resolved = resolveWireModel(entry.generation.runtime, failed);
+		if (declaresServerFallback(resolved))
+			throw new CodedError("SERVER_FALLBACK_STILL_ON", "pi did not apply the fallback override");
+		const live = entry.session.model ?? failed;
+		if (!sameModel(live, failed)) return sessionWireModel(live, entry.generation);
+		const thinkingLevel = entry.session.thinkingLevel;
+		await entry.session.setModel(resolved);
+		if (entry.session.thinkingLevel !== thinkingLevel)
+			entry.session.setThinkingLevel(thinkingLevel);
+		return sessionWireModel(resolved, entry.generation);
+	});
 }
 
 function extraUsageModelSelectExtension(sessionId: string): ExtensionFactory {

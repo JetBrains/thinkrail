@@ -336,6 +336,140 @@ test("a disable during asynchronous child creation disposes it before provider w
 	}
 });
 
+test("a per-agent disable during asynchronous child creation disposes it before provider work starts", async () => {
+	let enabled = true;
+	let releaseChild = () => {};
+	const childGate = new Promise<void>((resolve) => {
+		releaseChild = resolve;
+	});
+	let signalChildCreated = () => {};
+	const childCreated = new Promise<void>((resolve) => {
+		signalChildCreated = resolve;
+	});
+	const gatedService: DelegationService = {
+		...service,
+		async createChild(spec) {
+			const child = await service.createChild(spec);
+			signalChildCreated();
+			await childGate;
+			return child;
+		},
+	};
+	const session = await makeSession(
+		undefined,
+		gatedService,
+		createSubagentsExtension({
+			service: gatedService,
+			isAgentEnabled: (name) => name !== "bg-runner" || enabled,
+		}),
+	);
+	const childCallsBefore = fauxB.state.callCount;
+	try {
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("Agent", { subagent_type: "bg-runner", task: "Do not start." }),
+			),
+			fauxAssistantMessage("PARENT_RECOVERED"),
+		]);
+		fauxB.setResponses([fauxAssistantMessage("CHILD_SHOULD_NOT_RUN")]);
+		const turn = session.prompt("Try to delegate during a policy change.");
+		await childCreated;
+		enabled = false;
+		releaseChild();
+		await turn;
+
+		expect(lastToolResultText(session)).toContain('Subagent "bg-runner" is disabled');
+		expect(fauxB.state.callCount).toBe(childCallsBefore);
+		expect(service.childrenOf(session.sessionId)).toEqual([]);
+	} finally {
+		releaseChild();
+		await service.disposeChildrenOf(session.sessionId);
+		liveParents.delete(session.sessionId);
+		session.dispose();
+	}
+});
+
+test("per-agent availability filters each turn and rejects stale advertised calls live", async () => {
+	let enabled = false;
+	const session = await makeSession(
+		undefined,
+		service,
+		createSubagentsExtension({
+			service,
+			isAgentEnabled: (name) => name !== "bg-runner" || enabled,
+		}),
+	);
+	try {
+		fauxA.setResponses([
+			() => {
+				expect(session.getToolDefinition("Agent")?.description).not.toContain('"bg-runner"');
+				expect(session.getToolDefinition("Agent")?.description).toContain('"scout"');
+				return fauxAssistantMessage("HIDDEN");
+			},
+		]);
+		await session.prompt("Check hidden roles.");
+		enabled = true;
+		fauxA.setResponses([
+			() => {
+				expect(session.getToolDefinition("Agent")?.description).toContain('"bg-runner"');
+				enabled = false;
+				return fauxAssistantMessage(
+					fauxToolCall("Agent", {
+						subagent_type: "bg-runner",
+						task: "Stale selection.",
+					}),
+				);
+			},
+			fauxAssistantMessage("REJECTED"),
+		]);
+		await session.prompt("Try a stale advertised role.");
+		expect(lastToolResultText(session)).toContain('Subagent "bg-runner" is disabled');
+		expect(service.childrenOf(session.sessionId)).toEqual([]);
+	} finally {
+		await service.disposeChildrenOf(session.sessionId);
+		liveParents.delete(session.sessionId);
+		session.dispose();
+	}
+});
+
+test("a queued child whose role is disabled before it leaves the queue is rejected without provider work", async () => {
+	let enabled = true;
+	const session = await makeSession(
+		undefined,
+		service,
+		createSubagentsExtension({ service, isAgentEnabled: () => enabled }),
+	);
+	service.setMaxConcurrentPerParent(1);
+	const finish = await launchDetached(session);
+	try {
+		const childCalls = fauxB.state.callCount;
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("Agent", { subagent_type: "bg-runner", task: "Wait for a slot." }),
+			),
+			fauxAssistantMessage("PARENT_RECOVERED"),
+		]);
+		const turn = session.prompt("Delegate behind the running child.");
+		await waitFor(() => service.childrenOf(session.sessionId)[1]?.snapshot?.status === "queued");
+		enabled = false;
+		finish.resolve();
+		await turn;
+
+		expect(lastToolResultText(session)).toBe('Subagent "bg-runner" is disabled.');
+		expect(fauxB.state.callCount).toBe(childCalls);
+		expect(service.childrenOf(session.sessionId).map((child) => child.snapshot?.status)).toEqual([
+			"completed",
+			"aborted",
+		]);
+	} finally {
+		finish.resolve();
+		service.setMaxConcurrentPerParent(4);
+		await service.disposeChildrenOf(session.sessionId);
+		liveParents.delete(session.sessionId);
+		session.dispose();
+	}
+});
+
 test("foreground: one Agent call runs a builtin scout and returns its report to the parent", async () => {
 	fauxA.setResponses([
 		fauxAssistantMessage(
@@ -392,23 +526,27 @@ test("a per-call model runs an unpinned agent on a different model than the pare
 	await service.disposeChildrenOf(parent.sessionId);
 });
 
-test("a call that sets model to inherit runs the unpinned agent on the parent's model", async () => {
-	fauxA.setResponses([
-		fauxAssistantMessage(
-			fauxToolCall("Agent", { subagent_type: "worker", task: "Use my model.", model: "inherit" }),
-		),
-		fauxAssistantMessage("INHERIT_CHILD_OK"),
-		fauxAssistantMessage("PARENT_AFTER_INHERIT"),
-	]);
+test.each(["inherit", ""])(
+	"a call that sets model to %p runs the unpinned agent on the parent's model",
+	async (model) => {
+		const tag = model || "blank";
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("Agent", { subagent_type: "worker", task: "Use my model.", model }),
+			),
+			fauxAssistantMessage(`CHILD_OK_${tag}`),
+			fauxAssistantMessage(`PARENT_AFTER_${tag}`),
+		]);
 
-	await parent.prompt("Delegate on the parent's model.");
+		await parent.prompt("Delegate on the parent's model.");
 
-	expect(transcript()).toContain("INHERIT_CHILD_OK");
-	expect(transcript()).toContain("PARENT_AFTER_INHERIT");
-	const child = service.childrenOf(parent.sessionId)[0];
-	expect(child?.snapshot?.details.model).toBe("fauxa/fauxa");
-	await service.disposeChildrenOf(parent.sessionId);
-});
+		expect(lastToolResultText()).toContain(`CHILD_OK_${tag}`);
+		expect(transcript()).toContain(`PARENT_AFTER_${tag}`);
+		const child = service.childrenOf(parent.sessionId)[0];
+		expect(child?.snapshot?.details.model).toBe("fauxa/fauxa");
+		await service.disposeChildrenOf(parent.sessionId);
+	},
+);
 
 test.each([
 	["fauxreasoner", "xhigh", false],
@@ -1015,10 +1153,12 @@ async function launchDetached(session: AgentSession) {
 test("retained completion waits behind a closed gate, then repeated flush accepts exactly once", async () => {
 	let allowed = false;
 	let enabled = true;
+	let roleEnabled = true;
 	const owner = createSubagents({
 		service,
 		canDeliverCompletion: () => allowed,
 		isEnabled: () => enabled,
+		isAgentEnabled: () => roleEnabled,
 	});
 	expect(Object.keys(owner).sort()).toEqual(["dispose", "extension", "flushCompletions"]);
 	const session = await makeSession(undefined, service, owner.extension);
@@ -1028,6 +1168,7 @@ test("retained completion waits behind a closed gate, then repeated flush accept
 	});
 	const finish = await launchDetached(session);
 	try {
+		roleEnabled = false;
 		finish.resolve();
 		await waitFor(() => service.childrenOf(session.sessionId)[0]?.snapshot?.status === "completed");
 		owner.flushCompletions();

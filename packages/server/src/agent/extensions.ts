@@ -31,12 +31,14 @@ import {
 	serverExtensions,
 } from "../extensions";
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
+import { artifactsGuard } from "./artifactsGuard";
 import { continueInWorkspaceExtension } from "./continueTool";
 import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
 import {
 	createPiSettings,
 	disabledPackages,
+	piResourcePathKey,
 	recordLoadedExtensions,
 	setDisabledPackagesResolver,
 } from "./packages";
@@ -405,7 +407,7 @@ export function withoutSpecRule(workspaceId: string): InlineExtension {
 }
 
 export function childBaseExtensionFactories(): InlineExtension[] {
-	return [oversizedImageGuard, skillCarryover];
+	return [oversizedImageGuard, artifactsGuard, skillCarryover];
 }
 
 export function childExtensionFactories(workspaceId: string): InlineExtension[] {
@@ -445,6 +447,7 @@ export async function buildResourceLoader(
 		continueInWorkspaceExtension,
 		workspaceToolsExtension,
 		oversizedImageGuard,
+		artifactsGuard,
 		skillCatalog,
 		skillCarryover,
 		...extraFactories,
@@ -492,8 +495,7 @@ export async function buildResourceLoader(
 		}
 	};
 
-	const excluded = new Set(excludedExtensionPaths.map((path) => resolve(path)));
-	if (excluded.size === 0) {
+	if (excludedExtensionPaths.length === 0) {
 		const loader = new DefaultResourceLoader({
 			...common,
 			additionalExtensionPaths: devExtensionPaths,
@@ -513,6 +515,7 @@ export async function buildResourceLoader(
 	const resolveExtensionPaths = async (): Promise<void> => {
 		await settingsManager.reload();
 		const resolvedResources = await packageManager.resolve();
+		const excluded = new Set(excludedExtensionPaths.map(piResourcePathKey));
 		const next: string[] = [];
 		const metadata = new Map<string, PathMetadata>();
 		for (const resource of resolvedResources.extensions) {
@@ -521,10 +524,9 @@ export async function buildResourceLoader(
 				next.push(resource.path);
 				continue;
 			}
-			const path = resolve(resource.path);
-			if (excluded.has(path)) continue;
+			if (excluded.has(piResourcePathKey(resource.path))) continue;
 			next.push(resource.path);
-			metadata.set(path, resource.metadata);
+			metadata.set(resolve(resource.path), resource.metadata);
 		}
 		additionalExtensionPaths.splice(
 			0,

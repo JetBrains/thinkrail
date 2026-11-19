@@ -78,7 +78,9 @@ renderers are registered by the host's `extensions/registry.ts`. Unregistered to
 ## Boundary
 
 - **Public surface:** the side-effect `register` import + shared `CodeBlock`/`Collapsible` for sibling
-  renderers. No barrel (chat pulls the highlighter — per-file imports, as in the parent).
+  renderers, and pure readers the parent reuses outside a card: `subagent/runDetails` (result rows) and
+  `mcp/mcpResult` (the Resources MCP server detail). No barrel (chat pulls the highlighter — per-file
+  imports, as in the parent).
 - **Allowed deps:** parent chat primitives (`toolRegistry`, `Markdown`, `ChatActions`, `interactionState`,
   `fileTargets`, `foldState`, `HighlightedHtml`);
   `contracts` (types and pure guards); `@thinkrail/ui/*` (including

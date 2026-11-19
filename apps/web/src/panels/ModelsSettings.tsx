@@ -1,225 +1,265 @@
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
+	type AppConfigUpdate,
 	type ModelDefault,
 	type ThinkingLevel,
 	type WireModel,
 } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { Switch } from "@thinkrail/ui/switch";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ModelSelector } from "@/chat/ModelSelector";
-import { ThinkingSelector } from "@/chat/ThinkingSelector";
+import { type DefaultPairOption, ModelEffortPicker } from "@/chat/ModelEffortPicker";
 import { useModelCatalog } from "@/chat/useModelCatalog";
 import { useModelPreferences } from "@/chat/useModelPreferences";
-import { selectCatalogModel, selectPickerModels, toast, useAppStore } from "@/store";
+import {
+	SettingsGroup,
+	SettingsPage,
+	SettingsRow,
+	useSettingsDialogContainer,
+} from "@/settingsKit";
+import { selectCatalogModel, selectPickerModels, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { CacheWarmingSettings } from "./CacheWarmingSettings";
+import { useCustomEndpoints } from "./CustomEndpointsSettings";
 import { ModelContextSettings } from "./ModelContextSettings";
-import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
-import { SettingsRow } from "./SettingsRow";
-import { SettingsSwitch } from "./SettingsSwitch";
-import { useSettingsDialogContainer } from "./settingsDialogContainer";
+import { saveSettings } from "./saveSettings";
+import { configResetPatch, isConfigDefault, useConfigReset } from "./settingDefaults";
+import { SETTING, settingProps } from "./settingsCatalog";
 import { VisibleModelsSettings } from "./VisibleModelsSettings";
+
+interface ModelPair {
+	model: WireModel | null;
+	level: ThinkingLevel;
+}
+
+export const CHAT_PAIR_RESET: AppConfigUpdate = {
+	...configResetPatch("defaultModel"),
+	...configResetPatch("defaultEffort"),
+};
+
+export const REVIEW_PAIR_RESET: AppConfigUpdate = {
+	...configResetPatch("reviewModel"),
+	...configResetPatch("reviewEffort"),
+};
+
+function useDefaultPair(models: readonly WireModel[]) {
+	const defaultModel = useAppStore((s) => s.defaultModel);
+	const defaultEffort = useAppStore((s) => s.defaultEffort);
+	const [resolved, setResolved] = useState<ModelDefault | null>(null);
+	const [failed, setFailed] = useState(false);
+	const [optimistic, setOptimistic] = useState<ModelPair | null>(null);
+	const reads = useRef(0);
+	const saves = useRef({ seq: 0, queue: Promise.resolve() });
+
+	const read = useCallback(async () => {
+		const seq = ++reads.current;
+		const next = await getTransport()
+			.request("model.default", {})
+			.catch(() => null);
+		if (seq !== reads.current) return;
+		if (next) setResolved(next);
+		setFailed(next === null);
+	}, []);
+
+	useEffect(() => {
+		void read();
+	}, [models, defaultModel, defaultEffort, read]);
+
+	const save = (config: AppConfigUpdate, next: ModelPair | null, failure: string) => {
+		const seq = ++saves.current.seq;
+		setOptimistic(next);
+		saves.current.queue = saves.current.queue.then(async () => {
+			await saveSettings(config, failure);
+			if (seq !== saves.current.seq) return;
+			await read();
+			if (seq === saves.current.seq) setOptimistic(null);
+		});
+	};
+
+	const configured = selectCatalogModel(models, defaultModel ?? null);
+	const pair: ModelPair = optimistic ?? {
+		model: resolved ? resolved.model : configured,
+		level: resolved?.thinkingLevel ?? defaultEffort ?? "medium",
+	};
+	return {
+		pair,
+		resolved,
+		ready: resolved !== null,
+		failed,
+		retry: () => void read(),
+		save,
+		changed:
+			!isConfigDefault("defaultModel", defaultModel) ||
+			!isConfigDefault("defaultEffort", defaultEffort),
+	};
+}
 
 export function ModelsSettings() {
 	const t = useT();
 	const container = useSettingsDialogContainer();
-	const defaultModel = useAppStore((s) => s.defaultModel);
-	const defaultEffort = useAppStore((s) => s.defaultEffort);
 	const reviewModel = useAppStore((s) => s.reviewModel);
 	const reviewEffort = useAppStore((s) => s.reviewEffort);
 	const autoFix = useAppStore((s) => s.reviewAutoFix);
 	const agentReviewEnabled = useAppStore((s) => s.agentReviewEnabled);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
-	const { models: allModels, refreshing, refresh } = useModelCatalog(true);
 	const hiddenModels = useAppStore((s) => s.hiddenModels);
+	const { models: allModels, refreshing, refresh } = useModelCatalog(true);
 	const visibleModels = useMemo(
 		() => selectPickerModels(allModels, hiddenModels, []),
 		[allModels, hiddenModels],
 	);
 	const preferences = useModelPreferences(visibleModels);
-	const [resolvedDefault, setResolvedDefault] = useState<ModelDefault | null>(null);
-	const [loadFailed, setLoadFailed] = useState(false);
-	const [saving, setSaving] = useState(false);
-	const [reading, setReading] = useState(true);
-	const readSeq = useRef(0);
+	const customEndpoints = useCustomEndpoints();
+	const chat = useDefaultPair(allModels);
+	const agentReviewReset = useConfigReset(
+		"agentReviewEnabled",
+		"settings.models.agentReviewFailed",
+	);
+	const autoFixReset = useConfigReset("reviewAutoFix", "settings.models.autoFixFailed");
 
-	const readDefault = useCallback(async () => {
-		const seq = ++readSeq.current;
-		setReading(true);
-		const read = async () => {
-			const next = await getTransport().request("model.default", {});
-			if (seq !== readSeq.current) return;
-			setResolvedDefault(next);
-			setLoadFailed(false);
-		};
-		await read()
-			.catch(() => {
-				if (seq === readSeq.current) setLoadFailed(true);
-			})
-			.finally(() => {
-				if (seq === readSeq.current) setReading(false);
-			});
-	}, []);
+	const { model: chatModel, level: chatLevel } = chat.pair;
+	const reviewCurrent = reviewModel
+		? (selectCatalogModel(allModels, reviewModel) ?? reviewModel)
+		: chatModel;
+	const reviewLevel = reviewEffort ?? chat.resolved?.thinkingLevel ?? chatLevel;
+	const followsDefault = !reviewModel && !reviewEffort;
 
-	useEffect(() => {
-		void readDefault();
-	}, [allModels, defaultModel, defaultEffort, readDefault]);
+	const saveReview = (config: AppConfigUpdate) =>
+		void saveSettings(config, t("settings.models.reviewModelFailed"));
 
-	const saveConfig = async (
-		config: { defaultModel?: WireModel | null; defaultEffort?: ThinkingLevel | null },
-		message: string,
-	) => {
-		if (saving || reading) return;
-		setSaving(true);
-		const save = async () => {
-			await getTransport().request("settings.update", { config });
-			await readDefault();
-		};
-		await save()
-			.catch(() => toast.error(message))
-			.finally(() => setSaving(false));
+	const reviewDefault: DefaultPairOption = {
+		resolved: chat.resolved,
+		active: followsDefault,
+		onSelect: () => saveReview(REVIEW_PAIR_RESET),
 	};
 
-	const configuredModel = selectCatalogModel(allModels, defaultModel ?? null);
-	const model = resolvedDefault ? resolvedDefault.model : configuredModel;
-	const level = resolvedDefault?.thinkingLevel ?? defaultEffort ?? "medium";
-	const chatPickerModels = selectPickerModels(allModels, hiddenModels, [model]);
-	const reviewPickerModels = selectPickerModels(allModels, hiddenModels, [reviewModel]);
-
-	const reviewerEffortModel = reviewModel ?? resolvedDefault?.model ?? null;
-	const reviewerEffortLevel =
-		reviewEffort ?? (reviewModel ? "medium" : (resolvedDefault?.thinkingLevel ?? "medium"));
-	const reviewerPlaceholder = resolvedDefault?.model
-		? t("settings.models.reviewerDefault", { name: resolvedDefault.model.name })
-		: t("settings.models.defaultModelPlaceholder");
-
-	const updateReviewer = (config: {
-		reviewModel?: WireModel | null;
-		reviewEffort?: ThinkingLevel | null;
-	}) => {
-		getTransport()
-			.request("settings.update", { config })
-			.catch(() => toast.error(t("settings.models.reviewModelFailed")));
-	};
-
-	const setAutoFix = (reviewAutoFix: boolean) => {
-		getTransport()
-			.request("settings.update", { config: { reviewAutoFix } })
-			.catch(() => toast.error(t("settings.models.autoFixFailed")));
-	};
-
-	const setAgentReviewEnabled = (value: boolean) => {
-		getTransport()
-			.request("settings.update", { config: { agentReviewEnabled: value } })
-			.catch(() => toast.error(t("settings.models.agentReviewFailed")));
-	};
+	const pickerProps = {
+		refreshing,
+		onRefresh: refresh,
+		preferences,
+		container,
+		fitContainer: true,
+		canSetDefault: false,
+		tabIndex: 0,
+		className: "max-w-full",
+	} as const;
 
 	return (
-		<SettingsPageContainer testId="settings-models">
+		<SettingsPage
+			title={t("settings.nav.models")}
+			description={t("settings.models.description")}
+			testId="settings-models"
+		>
 			<SettingsGroup title={t("settings.models.defaultGroup")}>
-				{loadFailed ? (
-					<div className="flex items-center gap-8 border-border-muted border-b py-12">
-						<p className="text-text-muted tr-text-ui">{t("settings.models.loadFailed")}</p>
-						<Button variant="ghost" size="m" onClick={() => void readDefault()}>
-							{t("common.retry")}
-						</Button>
-					</div>
-				) : resolvedDefault || !reading ? (
-					<div
-						data-testid="default-model-row"
-						className="flex flex-wrap items-center justify-between gap-12 border-border-muted border-b py-12"
-					>
-						<span className="tr-text-ui text-text-default">{t("settings.models.chatModel")}</span>
-						<div className="flex flex-wrap items-center gap-8">
-							<ModelSelector
-								models={chatPickerModels}
-								current={model}
-								refreshing={refreshing}
-								onRefresh={refresh}
-								onSelect={(selected) =>
-									void saveConfig({ defaultModel: selected }, t("settings.models.saveModelFailed"))
-								}
-								placeholder={t("settings.models.firstAvailable")}
-								disabled={saving || reading}
-								preferences={preferences}
-								container={container}
-							/>
-							<ThinkingSelector
-								level={level}
-								levels={model?.thinkingLevels ?? []}
-								onSelect={(defaultEffort) =>
-									void saveConfig({ defaultEffort }, t("settings.models.saveEffortFailed"))
-								}
-								disabled={saving || reading}
-								container={container}
-							/>
-						</div>
-					</div>
-				) : null}
-				<VisibleModelsSettings models={allModels} />
-			</SettingsGroup>
-
-			<SettingsGroup title={t("settings.models.reviewGroup")} testId="models-review-group">
-				<div
-					data-testid="review-model-row"
-					className="flex flex-wrap items-center justify-between gap-12 border-border-muted border-b py-12"
-				>
-					<span className="tr-text-ui text-text-default">{t("settings.models.reviewModel")}</span>
-					<div className="flex flex-wrap items-center gap-8">
-						<ModelSelector
-							models={reviewPickerModels}
-							current={reviewModel ?? null}
-							refreshing={refreshing}
-							onRefresh={refresh}
-							onSelect={(m) => updateReviewer({ reviewModel: m })}
-							placeholder={reviewerPlaceholder}
-							defaultOption={reviewerPlaceholder}
-							onSelectDefault={() => updateReviewer({ reviewModel: null, reviewEffort: null })}
-							preferences={preferences}
-							container={container}
-						/>
-						<ThinkingSelector
-							level={reviewerEffortLevel}
-							levels={reviewerEffortModel?.thinkingLevels ?? []}
-							onSelect={(level) => updateReviewer({ reviewEffort: level })}
-							container={container}
-						/>
-					</div>
-				</div>
-				{protocolVersion !== null && protocolVersion >= AGENT_REVIEW_SETTING_PROTOCOL_VERSION && (
-					<SettingsRow
-						testId="agent-review-row"
-						label={t("settings.models.agentReview")}
-						description={t("settings.models.agentReviewDescription")}
-						control={
-							<SettingsSwitch
-								checked={agentReviewEnabled}
-								label={t("settings.models.agentReview")}
-								testId="agent-review-toggle"
-								onChange={setAgentReviewEnabled}
-							/>
-						}
-					/>
-				)}
 				<SettingsRow
-					testId="review-autofix-row"
-					label={t("settings.models.autoFix")}
-					description={t("settings.models.autoFixDescription")}
+					{...settingProps(t, SETTING.chatModel)}
+					{...(chat.failed ? { description: t("settings.models.loadFailed") } : {})}
+					testId="default-model-row"
 					control={
-						<SettingsSwitch
-							checked={autoFix}
-							label={t("settings.models.autoFix")}
-							testId="review-autofix-toggle"
-							onChange={setAutoFix}
-						/>
+						chat.failed ? (
+							<Button
+								variant="outline"
+								size="m"
+								tabIndex={0}
+								data-testid="default-model-retry"
+								onClick={chat.retry}
+							>
+								{t("common.retry")}
+							</Button>
+						) : chat.ready ? (
+							<ModelEffortPicker
+								{...pickerProps}
+								models={selectPickerModels(allModels, hiddenModels, [chatModel])}
+								current={chatModel}
+								level={chatLevel}
+								onSelect={({ model, level }) =>
+									chat.save(
+										{ defaultModel: model, ...(level ? { defaultEffort: level } : {}) },
+										{ model, level: level ?? chatLevel },
+										t("settings.models.saveModelFailed"),
+									)
+								}
+								onSelectLevel={(level) =>
+									chat.save(
+										{ defaultEffort: level },
+										{ model: chatModel, level },
+										t("settings.models.saveEffortFailed"),
+									)
+								}
+							/>
+						) : null
 					}
+					reset={{
+						changed: chat.changed,
+						onReset: () => chat.save(CHAT_PAIR_RESET, null, t("settings.models.saveModelFailed")),
+					}}
 				/>
 			</SettingsGroup>
 
-			<ModelContextSettings />
+			<SettingsGroup title={t("settings.models.reviewGroup")} testId="models-review-group">
+				<SettingsRow
+					{...settingProps(t, SETTING.reviewModel)}
+					testId="review-model-row"
+					control={
+						<ModelEffortPicker
+							{...pickerProps}
+							models={selectPickerModels(allModels, hiddenModels, [reviewCurrent])}
+							current={reviewCurrent}
+							level={reviewLevel}
+							defaultOption={reviewDefault}
+							onSelect={({ model, level }) =>
+								saveReview({ reviewModel: model, ...(level ? { reviewEffort: level } : {}) })
+							}
+							onSelectLevel={(level) => saveReview({ reviewEffort: level })}
+						/>
+					}
+					reset={{ changed: !followsDefault, onReset: () => saveReview(REVIEW_PAIR_RESET) }}
+				/>
+				{protocolVersion !== null && protocolVersion >= AGENT_REVIEW_SETTING_PROTOCOL_VERSION ? (
+					<SettingsRow
+						{...settingProps(t, SETTING.agentReview)}
+						testId="agent-review-row"
+						control={
+							<Switch
+								checked={agentReviewEnabled}
+								label={t("settings.models.agentReview")}
+								testId="agent-review-toggle"
+								tabIndex={0}
+								onCheckedChange={(value) =>
+									void saveSettings(
+										{ agentReviewEnabled: value },
+										t("settings.models.agentReviewFailed"),
+									)
+								}
+							/>
+						}
+						reset={agentReviewReset}
+					/>
+				) : null}
+				<SettingsRow
+					{...settingProps(t, SETTING.autoFix)}
+					testId="review-autofix-row"
+					control={
+						<Switch
+							checked={autoFix}
+							label={t("settings.models.autoFix")}
+							testId="review-autofix-toggle"
+							tabIndex={0}
+							onCheckedChange={(reviewAutoFix) =>
+								void saveSettings({ reviewAutoFix }, t("settings.models.autoFixFailed"))
+							}
+						/>
+					}
+					reset={autoFixReset}
+				/>
+			</SettingsGroup>
+
+			<ModelContextSettings customEndpoints={customEndpoints} />
 
 			<CacheWarmingSettings />
-		</SettingsPageContainer>
+
+			<VisibleModelsSettings models={allModels} />
+		</SettingsPage>
 	);
 }

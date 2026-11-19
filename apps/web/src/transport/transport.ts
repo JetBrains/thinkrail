@@ -17,6 +17,20 @@ interface TransportDispatchHooks {
 }
 
 const DEFAULT_TIMEOUT_MS = 60_000;
+const RECONNECT_INITIAL_MS = 500;
+const RECONNECT_MAX_MS = 10_000;
+const RECONNECT_STABLE_MS = 5_000;
+
+export function reconnectDelay(
+	previousDelayMs: number,
+	connectedForMs: number | null,
+): { waitMs: number; nextMs: number } {
+	const waitMs =
+		connectedForMs !== null && connectedForMs >= RECONNECT_STABLE_MS
+			? RECONNECT_INITIAL_MS
+			: previousDelayMs;
+	return { waitMs, nextMs: Math.min(waitMs * 2, RECONNECT_MAX_MS) };
+}
 
 const NON_REPLAYABLE_CHANNELS: ReadonlySet<string> = new Set([
 	WS_CHANNELS.terminalData,
@@ -76,7 +90,7 @@ export class WsTransport {
 	private readonly latest = new Map<string, unknown>();
 	private ackQueue: string[] = [];
 	private ackScheduled = false;
-	private backoff = 500;
+	private backoff = RECONNECT_INITIAL_MS;
 
 	constructor(opts: TransportOptions = {}, dispatchHooks: TransportDispatchHooks = {}) {
 		this.url = opts.url ?? inferUrl();
@@ -94,12 +108,13 @@ export class WsTransport {
 		this.onStatus?.("connecting");
 		const ws = new WebSocket(withClientId(this.url));
 		this.ws = ws;
+		let openedAt: number | null = null;
 		ws.onopen = () => {
 			if (this.ws !== ws) {
 				ws.close();
 				return;
 			}
-			this.backoff = 500;
+			openedAt = Date.now();
 			this.onStatus?.("connected");
 			this.ackQueue = [];
 			this.sendFrame(JSON.stringify({ resume: [...this.pending.keys()] }));
@@ -110,8 +125,12 @@ export class WsTransport {
 			if (this.ws !== ws) return;
 			this.ws = null;
 			this.onStatus?.("disconnected");
-			setTimeout(() => this.connect(), this.backoff);
-			this.backoff = Math.min(this.backoff * 2, 10_000);
+			const { waitMs, nextMs } = reconnectDelay(
+				this.backoff,
+				openedAt === null ? null : Date.now() - openedAt,
+			);
+			setTimeout(() => this.connect(), waitMs);
+			this.backoff = nextMs;
 		};
 		ws.onerror = () => ws.close();
 	}

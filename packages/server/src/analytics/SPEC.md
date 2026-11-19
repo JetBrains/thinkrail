@@ -55,7 +55,7 @@ bounded browser-derived strings, never resource identities or arbitrary product 
 | `setup_state_observed` | Provider/model/project readiness (`yes/no/unknown`); first current observation and changes, not every poll. |
 | `setup_action_finished` | Explicit setup operation, outcome and fixed failure category; automatic Default provisioning is excluded. `directory_pick` is the native folder picker (succeeded / cancelled / failed, never the path); `project_create` is the in-app new-project bootstrap; `project_open` reports the typed `not_git` / `already_open` reasons from the projects module's coded errors, and every untyped failure stays `unknown` — reasons are never derived from error text. |
 | `agent_run_started` | Work-cycle origin, workspace kind and catalog-bucketed provider/model. |
-| `agent_run_settled` | Final outcome, elapsed-time/retry/compaction buckets; only `agent_settled`, never attempt-level `agent_end`. |
+| `agent_run_settled` | Final outcome, elapsed-time/retry/compaction buckets; only `agent_settled`, never attempt-level `agent_end`. A `toolUse` terminal is `normal_stop`: pi settles on one only when a tool batch ended the run (`terminate`, e.g. next-step suggestions or a deferred question); an abort during tools settles as `aborted`. |
 | `task_completed` | Nonempty task-group completion transition after artifact reconciliation, change evidence and whether verification was recorded. |
 | `plan_opened` | The plan surfaced for the user, by `surface` (`page`/`rail`); a deliberate open action, not every plan refetch. |
 | `plan_item_added` | A user-added plan item (`origin:"user"`), by `surface` (`chat`/`page`/`rail`); the user curating the plan, not agent re-plans. |

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { PROTOCOL_VERSION, WS_CHANNELS, WS_MAX_FRAME_BYTES } from "@thinkrail/contracts";
 import { wsErrorCode } from "./requestError";
-import { WsTransport } from "./transport";
+import { reconnectDelay, WsTransport } from "./transport";
 
 class TestWebSocket {
 	static readonly CONNECTING = 0;
@@ -359,5 +359,27 @@ describe("WsTransport frame cap", () => {
 		const replacement = TestWebSocket.instances[1];
 		replacement?.open();
 		expect(replacement?.sent).toEqual([JSON.stringify({ resume: [] })]);
+	});
+});
+
+describe("reconnectDelay", () => {
+	test("a connection that keeps dying fast backs off to the 10 s cap instead of retrying every 0.5 s", () => {
+		const waits: number[] = [];
+		let delay = 500;
+		for (let attempt = 0; attempt < 8; attempt++) {
+			const { waitMs, nextMs } = reconnectDelay(delay, 2_000);
+			waits.push(waitMs);
+			delay = nextMs;
+		}
+		expect(waits).toEqual([500, 1_000, 2_000, 4_000, 8_000, 10_000, 10_000, 10_000]);
+	});
+
+	test("a connect that never opens keeps doubling", () => {
+		expect(reconnectDelay(4_000, null)).toEqual({ waitMs: 4_000, nextMs: 8_000 });
+	});
+
+	test("a connection that stayed up for 5 s retries after 0.5 s again", () => {
+		expect(reconnectDelay(10_000, 5_000)).toEqual({ waitMs: 500, nextMs: 1_000 });
+		expect(reconnectDelay(10_000, 4_999)).toEqual({ waitMs: 10_000, nextMs: 10_000 });
 	});
 });

@@ -11,7 +11,7 @@ tags: [pi, extensions]
 
 ## Responsibility
 
-What ThinkRail owns around pi's package manager so Settings → Extensions can list and manage the pi
+What ThinkRail owns around pi's package manager so Settings → Extensions & skills can list and manage the pi
 packages, loose extension files and built-ins a chat loads: a **read-only catalog** that never installs
 and never runs extension code, the **settings views** every pi loader in the host goes through, pi's
 **package identity rule** for the host-wide package switch, and the install / remove / update / toggle
@@ -49,7 +49,9 @@ this module never spawns npm or git itself.
   set closed over pi's equivalence: when any declaration of a pi identity is switched off, every alias
   is — hiding one must never let pi load the package through another; the `enabled` view and the
   catalog's `enabled` both use it), `resolveLocalSource` (pi's private `resolvePath` for a local
-  source: trim, `~`, `file://`, then the base dir), `settingsBaseDir`, `isOfflineMode` (`PI_OFFLINE`).
+  source: trim, `~`, `file://`, then the base dir), `piResourcePathKey` (pi's private `getResourcePathKey`:
+  synthetic paths as-is, files by realpath, case-folded on Windows — the path identity of agent's Central
+  exclusion), `settingsBaseDir`, `isOfflineMode` (`PI_OFFLINE`).
 - `settingsView.ts` — `createPiSettings(cwd, agentDir, { projectTrusted?, packages })` and the
   `disabledPackages` resolver the host sets from its config. `enabled` hides the switched-off
   declarations from `getGlobalSettings` / `getProjectSettings`, re-evaluated per read; `none` hides all.
@@ -80,8 +82,8 @@ this module never spawns npm or git itself.
   its resources land on the user row with their override state. `resolve(async () => "skip")` then
   attaches each resource (`origin: "package"` → its declaration, by source and scope, falling back to the
   same identity), yields loose files (`origin: "top-level"`, `source: "auto"` for a discovered file,
-  `"local"` for an explicit `extensions[]` entry) and the host-supplied built-ins, and excludes the Central
-  artifact path like the session loader does. Human-readable metadata comes only from a package's
+  `"local"` for an explicit `extensions[]` entry) and the host-supplied built-ins, and applies agent's
+  Central exclusion ([[submodule-server-agent]]) to the extensions. Human-readable metadata comes only from a package's
   `package.json` (a loaded `Extension` has no name). The result cache is long-lived because every change
   path calls `invalidatePiPackageCatalog()`; a file dropped into a scanned folder by hand is the one change
   no path sees, so the Extensions page's opening read (`packages.list` with `force`) drops the cache first. `listPiPackageRevealTargets` validates a reveal path from

@@ -15,6 +15,7 @@ import { createCoalescer } from "./coalesce";
 import {
 	ensureWatch,
 	isIgnoredPath,
+	notifyWorkspacePathsChanged,
 	setIgnoredPathsResolver,
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
@@ -196,6 +197,41 @@ afterEach(() => {
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+});
+
+test("host mutations publish ignored paths immediately with skill evidence", () => {
+	notifyWorkspacePathsChanged("ws1", ["node_modules/demo/copied.txt"]);
+	notifyWorkspacePathsChanged("ws1", ["skills copy", ".claude/skills/demo/SKILL.md"]);
+	expect(payloads).toEqual([
+		{
+			workspaceId: "ws1",
+			paths: ["node_modules/demo/copied.txt"],
+			truncated: false,
+			skillChange: "none",
+		},
+		{
+			workspaceId: "ws1",
+			paths: ["skills copy", ".claude/skills/demo/SKILL.md"],
+			truncated: false,
+			skillChange: "detected",
+		},
+	]);
+});
+
+test("a host mutation of an unlisted subtree is never skill-clean", () => {
+	notifyWorkspacePathsChanged("ws1", [".claude"], { subtrees: true });
+	notifyWorkspacePathsChanged("ws1", [".claude/skills/demo"], { subtrees: true });
+	expect(payloads.map((payload) => payload.skillChange)).toEqual(["unknown", "detected"]);
+});
+
+test("a host mutation caps its paths but classifies every one", () => {
+	const paths = Array.from({ length: 150 }, (_, index) => `copy/file-${index}.txt`);
+	paths.push(".claude/skills/late/SKILL.md");
+	notifyWorkspacePathsChanged("ws1", paths);
+	expect(payloads).toHaveLength(1);
+	expect(payloads[0]?.paths).toEqual(paths.slice(0, 100));
+	expect(payloads[0]?.truncated).toBe(true);
+	expect(payloads[0]?.skillChange).toBe("detected");
 });
 
 test("a watched worktree publishes a debounced fsChanged batch for a new file", async () => {
@@ -396,8 +432,9 @@ test("a linked worktree's nested submodule git dirs never nudge repo metadata", 
 
 	const nudges: string[] = [];
 	setRepoMetaPublisher((id) => nudges.push(id));
-	void ensureWatch("ws1");
-	await sleep(100);
+	await ensureWatch("ws1");
+	await sleep(550);
+	nudges.length = 0;
 
 	mkdirSync(join(objects, "ab"));
 	writeFileSync(join(objects, "ab", "cdef"), "blob\n");
@@ -874,6 +911,37 @@ test("a linked worktree push refreshes remote metadata, and only for its own bra
 	await sleep(700);
 	expect(nudges).toHaveLength(0);
 }, 15_000);
+
+test("repacking refs or another branch's push never nudges a worktree whose remote refs held still", async () => {
+	const repo = seedRepoWithRemote();
+	git(repo, "push", "-q", "origin", "main");
+	git(repo, "worktree", "add", "-q", "--no-track", "-b", "feat", worktree, "main");
+	const other = join(dataDir, "other");
+	git(repo, "worktree", "add", "-q", "--no-track", "-b", "other", other, "main");
+	git(worktree, "push", "-q", "origin", "HEAD");
+	git(other, "push", "-q", "origin", "HEAD");
+	const nudges: string[] = [];
+	setRepoMetaPublisher((id) => nudges.push(id));
+	await ensureWatch("ws1");
+	await sleep(550);
+	nudges.length = 0;
+
+	git(repo, "pack-refs", "--all");
+	await sleep(700);
+	expect(nudges).toHaveLength(0);
+
+	commitIn(other, "other.txt");
+	git(other, "push", "-q", "origin", "HEAD");
+	await sleep(700);
+	expect(nudges).toHaveLength(0);
+
+	commitIn(worktree, "mine.txt");
+	await sleep(550);
+	nudges.length = 0;
+	git(worktree, "push", "-q", "origin", "HEAD");
+	await waitFor(() => nudges.length > 0, 4000);
+	expect(nudges).toEqual(["ws1"]);
+}, 20_000);
 
 test("a push without an upstream refreshes remote metadata across pack-refs and a branch switch", async () => {
 	const repo = seedRepoWithRemote();

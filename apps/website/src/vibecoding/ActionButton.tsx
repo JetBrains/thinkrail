@@ -1,6 +1,6 @@
 type Props = {
 	href: string;
-	variant?: "primary" | "secondary" | "light";
+	variant?: "primary" | "light";
 	children: React.ReactNode;
 	className?: string;
 };
@@ -10,7 +10,6 @@ const base =
 
 const variants = {
 	primary: "bg-primary text-primary-foreground transition-opacity hover:opacity-90",
-	secondary: "border border-border text-text-default hover:bg-container-card-bg",
 	light: "bg-text-strong text-background transition-opacity hover:opacity-90",
 } as const;
 

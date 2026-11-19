@@ -18,7 +18,7 @@ export const DEFAULT_PROJECT_PARENT = "~/thinkrail";
 
 const PICK_TIMEOUT_MS = 30 * 60_000;
 const FIELD_CLASS =
-	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-12 py-8 tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active";
+	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-12 py-8 tr-text-ui text-text-default transition-colors placeholder:text-text-muted focus-visible:border-control-border-active focus-visible:focus-ring";
 
 export function projectFolderName(name: string): string {
 	return name

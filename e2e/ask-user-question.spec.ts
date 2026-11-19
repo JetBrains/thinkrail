@@ -1,19 +1,24 @@
-import { readFileSync, realpathSync, rmSync, utimesSync } from "node:fs";
+import { readFileSync, realpathSync, rmSync } from "node:fs";
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import type { ToolCall, ToolResponsePendingDetails } from "@thinkrail/contracts";
 import type {
 	AskUserQuestionArgs,
 	AskUserQuestionOption,
 	AskUserQuestionResult,
 } from "@thinkrail/pi-ask-user-question/core";
 import {
+	closeSettings,
 	enterDefaultWorkspace,
 	hideAuxiliaryWorkbench,
 	openFixtureProject,
 	openPersistedChat,
 	pressPlatformShortcut,
 } from "./fixtures/app";
+import {
+	openPersistedChatAfterInput,
+	type QuestionnaireArgs,
+	seedQuestionnaire as seedFixtureQuestionnaire,
+} from "./fixtures/ask";
 import { nestedVerticalScrollSurfaces, waitForScrollStability } from "./fixtures/chatScroll";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { shot } from "./fixtures/screenshots";
@@ -37,63 +42,17 @@ function optionsFor(pageName: string) {
 	] satisfies AskUserQuestionOption[];
 }
 
-async function openPersistedChatAfterInput(page: Page, title: string): Promise<void> {
-	await openPersistedChat(page, title);
-	const chatTab = page
-		.locator('[data-testid="editor-tab"][data-kind="chat"]')
-		.filter({ hasText: title });
-	await chatTab.hover();
-	await chatTab.getByTestId("editor-tab-close").click();
-	await expect(chatTab).toHaveCount(0);
-	await openPersistedChat(page, title);
-}
-
 async function selectOldestFirst(page: Page): Promise<void> {
 	await page.getByTestId("open-settings").click();
 	await page.getByTestId("settings-nav-chat").click();
 	const option = page.getByTestId("chat-order-oldest-first");
 	await option.click();
 	await expect(option).toHaveAttribute("data-active", "true");
-	await page.keyboard.press("Escape");
+	await closeSettings(page);
 }
 
-function seedQuestionnaire(
-	name: string,
-	toolCallId: string,
-	args: AskUserQuestionArgs & ToolCall["arguments"],
-) {
-	const ack: ToolResponsePendingDetails = { kind: "ack" };
-	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
-		name,
-		messages: [
-			{ role: "user", text: "Ask me these questions.", timestamp: BASE_TS },
-			{
-				role: "assistant",
-				content: [
-					{
-						type: "toolCall",
-						id: toolCallId,
-						name: "ask_user_question",
-						arguments: args,
-					},
-				],
-				stopReason: "toolUse",
-				timestamp: BASE_TS + 1_000,
-			},
-			{
-				role: "toolResult",
-				toolCallId,
-				toolName: "ask_user_question",
-				content: [{ type: "text", text: "Questions shown to the user; awaiting an answer." }],
-				details: ack,
-				isError: false,
-				timestamp: BASE_TS + 2_000,
-			},
-		],
-	});
-	utimesSync(session.path, new Date(BASE_TS), new Date(BASE_TS));
-	return session;
-}
+const seedQuestionnaire = (name: string, toolCallId: string, args: QuestionnaireArgs) =>
+	seedFixtureQuestionnaire(name, toolCallId, args, BASE_TS);
 
 function seedPanedQuestionnaire(name: string, toolCallId: string) {
 	const paned = (pageName: string) =>
@@ -204,9 +163,14 @@ test("the keyboard alone reaches every control and answers a two-page questionna
 			await expect(card.getByTestId(target)).toBeFocused();
 		}
 		await page.keyboard.press("ArrowUp");
+		await expect(card.getByTestId("ask-skip")).toBeFocused();
+		await page.keyboard.press("ArrowUp");
 		await expect(card.getByTestId("ask-custom")).toBeFocused();
 		await page.keyboard.press("ArrowDown");
+		await expect(card.getByTestId("ask-skip")).toBeFocused();
+		await page.keyboard.press("ArrowRight");
 		await expect(card.getByTestId("ask-continue")).toBeFocused();
+		await expect(questionText).toHaveText(KEYBOARD_ROLLOUT.question);
 		await page.keyboard.press("Enter");
 		await expect(questionText).toHaveText("Which keyboard checks should run?");
 		await expect(options.first()).toBeFocused();
@@ -306,7 +270,7 @@ test("a tall questionnaire docks above the composer with pinned controls and a s
 			"ask-dock-body",
 		]);
 		const chatHeight = (await box(page.getByTestId("chat-view"))).height;
-		expect((await box(dock)).height).toBeLessThanOrEqual(chatHeight * 0.6 + 1);
+		expect((await box(dock)).height).toBeLessThanOrEqual(chatHeight * 0.7 + 1);
 		expect((await box(dock)).y + (await box(dock)).height).toBeLessThanOrEqual(
 			(await box(page.getByTestId("chat-input"))).y,
 		);
@@ -462,7 +426,7 @@ test("a coarse pointer never focuses a returning page's text target in the dock"
 			.getByTestId("chat-dock")
 			.locator('[data-testid="ask-user-question"][data-tone="active"]');
 		await expect(card).toBeVisible();
-		await expect(card.getByTestId("ask-option").first()).not.toBeFocused();
+		await expect(card.getByTestId("ask-custom")).not.toBeFocused();
 		await card.getByTestId("ask-option").first().click();
 		const next = card.getByTestId("ask-continue");
 		await expect(next).toBeInViewport({ ratio: 1 });
@@ -736,7 +700,11 @@ test("Other, notes and Discuss park on their own row, and the platform chord sub
 		await page.keyboard.press("End");
 		await expect(custom).toBeFocused();
 		await page.keyboard.press("ArrowDown");
+		await expect(card.getByTestId("ask-skip")).toBeFocused();
+		await page.keyboard.press("ArrowDown");
 		await expect(options.first()).toBeFocused();
+		await page.keyboard.press("ArrowUp");
+		await expect(card.getByTestId("ask-skip")).toBeFocused();
 		await page.keyboard.press("ArrowUp");
 		await expect(custom).toBeFocused();
 
@@ -750,7 +718,11 @@ test("Other, notes and Discuss park on their own row, and the platform chord sub
 		await page.keyboard.press("Escape");
 		await expect(customRow).toBeFocused();
 		await page.keyboard.press("ArrowDown");
+		await expect(card.getByTestId("ask-skip")).toBeFocused();
+		await page.keyboard.press("ArrowRight");
 		await expect(card.getByTestId("ask-submit")).toBeFocused();
+		await page.keyboard.press("ArrowLeft");
+		await expect(card.getByTestId("ask-skip")).toBeFocused();
 		await page.keyboard.press("ArrowUp");
 		await expect(custom).toBeFocused();
 
@@ -777,6 +749,89 @@ test("Other, notes and Discuss park on their own row, and the platform chord sub
 		const record = page.locator('[data-testid="ask-user-question"][data-tone="answered"]');
 		await expect(record.getByTestId("ask-receipt-answer")).toContainText("Let’s discuss first");
 		await expect(record).toContainText("“Explain the rollouts first.”");
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+test("a press below an open note lands on the control it was aimed at", async ({ page }) => {
+	await openFixtureProject(page);
+	const session = seedQuestionnaire("press below note", "ask-press-below-note", KEYBOARD_ROUND);
+
+	try {
+		await enterDefaultWorkspace(page);
+		await hideAuxiliaryWorkbench(page);
+		await openPersistedChatAfterInput(page, "press below note");
+		const card = activeAsk(page);
+		const options = card.getByTestId("ask-option");
+		const note = card.getByTestId("ask-note");
+		await expect(options.first()).toBeFocused();
+
+		await options.first().click();
+		await card.getByTestId("ask-note-toggle").click();
+		await expect(note).toBeFocused();
+		await options.nth(1).click();
+		await expect(options.nth(1)).toHaveAttribute("data-selected", "true");
+		await expect(options.first()).toHaveAttribute("data-selected", "false");
+
+		await card.getByTestId("ask-tab").nth(1).click();
+		await expect(card.getByTestId("ask-question-text")).toHaveText(
+			"Which keyboard checks should run?",
+		);
+		await options.first().click();
+		await options.nth(1).click();
+		await card.getByTestId("ask-note-toggle").first().click();
+		await expect(note).toBeFocused();
+		await page.keyboard.type("Lint because");
+		await card.getByTestId("ask-note-toggle").click();
+		await expect(note).toBeFocused();
+		await expect(note).toHaveAccessibleName("Note for Keyboard types");
+		await expect(card.getByTestId("ask-note-text")).toHaveText("Lint because");
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+test("a note closes when the card's background is pressed or focus leaves the card, and keeps its text", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const session = seedQuestionnaire("note leaves", "ask-note-leaves", KEYBOARD_ROUND);
+
+	try {
+		await enterDefaultWorkspace(page);
+		await hideAuxiliaryWorkbench(page);
+		await openPersistedChatAfterInput(page, "note leaves");
+		const card = activeAsk(page);
+		const options = card.getByTestId("ask-option");
+		const questionText = card.getByTestId("ask-question-text");
+		const note = card.getByTestId("ask-note");
+		const noteText = card.getByTestId("ask-note-text");
+		await expect(options.first()).toBeFocused();
+
+		await options.first().click();
+		await card.getByTestId("ask-note-toggle").click();
+		await expect(note).toBeFocused();
+		await page.keyboard.type("Kept after the press");
+		await questionText.click();
+		await expect(note).toHaveCount(0);
+		await expect(noteText).toHaveText("Kept after the press");
+		await expect(card).toBeFocused();
+		await page.keyboard.press("ArrowRight");
+		await expect(questionText).toHaveText("Which keyboard checks should run?");
+		await page.keyboard.press("ArrowLeft");
+		await expect(questionText).toHaveText(KEYBOARD_ROLLOUT.question);
+
+		await questionText.click();
+		await expect(card).toBeFocused();
+		await page.keyboard.press("ArrowDown");
+		await expect(options.first()).toBeFocused();
+
+		await card.getByTestId("ask-note-toggle").click();
+		await expect(note).toBeFocused();
+		await page.getByTestId("chat-input").click();
+		await expect(note).toHaveCount(0);
+		await expect(noteText).toHaveText("Kept after the press");
 	} finally {
 		rmSync(session.path, { force: true });
 	}
@@ -1046,12 +1101,6 @@ async function openChatSettings(page: Page): Promise<Locator> {
 	return input;
 }
 
-async function closeSettingsDialog(page: Page): Promise<void> {
-	const dialog = page.getByTestId("settings-dialog");
-	await dialog.getByRole("button", { name: "Close" }).click();
-	await expect(dialog).toBeHidden();
-}
-
 async function saveQuestionPanelHeight(input: Locator, value: number): Promise<void> {
 	await input.fill(String(value));
 	await input.press("Enter");
@@ -1068,15 +1117,16 @@ test("the question panel height follows the chat setting", async ({ page }) => {
 		await enterDefaultWorkspace(page);
 		await hideAuxiliaryWorkbench(page);
 		const input = await openChatSettings(page);
-		await expect(input).toHaveValue("60");
+		await expect(input).toHaveValue("70");
+		const rangeError = page.getByTestId("settings-chat").getByText("Use 40–100");
 		await input.fill("30");
-		await expect(page.getByTestId("question-panel-height-error")).toHaveText(
-			"Enter a whole number from 40 to 100.",
-		);
+		await expect(input).toHaveAttribute("aria-invalid", "true");
+		await expect(rangeError).toBeVisible();
 		await saveQuestionPanelHeight(input, 40);
-		await expect(page.getByTestId("question-panel-height-error")).toHaveCount(0);
+		await expect(input).not.toHaveAttribute("aria-invalid", "true");
+		await expect(rangeError).toHaveCount(0);
 		await shot(page.getByTestId("settings-chat"), "ask-dock", "settings-row");
-		await closeSettingsDialog(page);
+		await closeSettings(page);
 
 		await openPersistedChatAfterInput(page, "capped questionnaire");
 		await expect(activeAsk(page)).toBeVisible();
@@ -1088,8 +1138,8 @@ test("the question panel height follows the chat setting", async ({ page }) => {
 	} finally {
 		if (!page.isClosed()) {
 			const input = await openChatSettings(page);
-			if ((await input.inputValue()) !== "60") await saveQuestionPanelHeight(input, 60);
-			await closeSettingsDialog(page);
+			if ((await input.inputValue()) !== "70") await saveQuestionPanelHeight(input, 70);
+			await closeSettings(page);
 		}
 		rmSync(session.path, { force: true });
 	}

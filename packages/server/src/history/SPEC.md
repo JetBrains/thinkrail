@@ -25,7 +25,9 @@ to preserve).
 - `extract.ts` — pure JSONL→`ExtractedSession | null` (`extractSession`): the session's identity
   (`id`/`cwd` from the header, mirroring pi's own rejection rule — the first parseable entry must be a
   `type: "session"` header with a string `id`, else `null`), its `title` (the **latest** `session_info`
-  entry's name, including explicit clears — the same latest-wins rule as pi's `buildSessionInfo`), and its
+  entry's name, including explicit clears — the same latest-wins rule as pi's `buildSessionInfo`, with
+  terminal escapes removed on read so a name already saved with them stays plain, and a name that is only
+  escapes is a clear; the 80-character write cap is not applied), and its
   `HistoryEntry[]` — all from **one parse**, so the index never needs a second source (`listAll`) for
   metadata. Pi session files are **trees** (abandoned branches) that compaction rewrites, so it resolves
   the file the way pi does before the client renders it — `parseSessionEntries` →
@@ -132,7 +134,7 @@ Verified against the installed `dist/core/session-manager.{js,d.ts}`. Re-verify 
   / `sessionEntryToContextMessages` used by `extract.ts` and `displayTranscript.ts`; **not `SessionManager`**
   in production code — see Responsibility. Tests may use
   `SessionManager` to *pin* layout/format facts against the real thing), `@thinkrail/contracts`,
-  `node:fs`, `node:fs/promises`, `node:path`.
+  `@thinkrail/shared/stripAnsi` (session titles, on read), `node:fs`, `node:fs/promises`, `node:path`.
 - **`displayTranscript.ts`** is the one display projection `extractSession` and `session.getMessages`
   share: model context still drops summarized turns; the UI/index keep them above the compaction marker,
   each through the active branch's latest `context_edit` for it, as pi projects kept entries — an omission

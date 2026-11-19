@@ -16,12 +16,15 @@ import {
 	ContextMenuItem,
 	ContextMenuSeparator,
 	ContextMenuTrigger,
+	openContextMenuFromKeyboard,
 } from "@thinkrail/ui/context-menu";
-import { isImeComposing } from "@thinkrail/ui/keyboard";
+import { isImeComposing, twinArrow } from "@thinkrail/ui/keyboard";
+import { type LocalKeys, useLocalKeys } from "@thinkrail/ui/local-keys";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
-import { Fragment, memo, type ReactNode, useEffect, useRef, useState } from "react";
+import { Fragment, memo, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { LOCAL_KEY_DEFAULTS } from "../../keybindings";
 import { chatLabel, DOUBLE_CLICK_SETTLE_MS, type LayoutAttention, tupleKey } from "../../lib";
 import {
 	type AuxiliaryRailControlProps,
@@ -32,25 +35,19 @@ import {
 	railTooltipSide,
 } from "./AuxiliaryRail";
 import {
-	type CenterSplitDirection,
-	canCreateAuxiliaryGroup,
-	canJoinAuxiliaryGroup,
-	collectAllGroups,
-	collectCenterGroups,
-	createAuxiliaryGroup,
-	describeLayoutGroup,
 	isLayoutUnavailable,
-	LAYOUT_LIMITS,
 	type LayoutGroupLocation,
 	type LayoutMutationResult,
 	layoutTabName,
 	moveTabToGroup,
-	removeLayoutGroup,
-	separatePanesReason,
-	splitCenterGroup,
-	toolTab,
-	unplacedTools,
 } from "./model";
+import {
+	type CenterSplitGeometry,
+	performTabAction,
+	type TabActionContext,
+	type TabActionHandlers,
+	tabActions,
+} from "./tabActions";
 import { tabIcon } from "./tabIcon";
 import type {
 	LayoutAuxiliaryRegion,
@@ -58,7 +55,7 @@ import type {
 	LayoutToolId,
 	WorkspaceLayoutDocument,
 } from "./types";
-import type { DragData, DropTarget, WorkbenchProps } from "./workbenchShared";
+import type { DragData, DropTarget, RegisterChatRename, WorkbenchProps } from "./workbenchShared";
 import {
 	canInsertDraggedTab,
 	DropZone,
@@ -69,6 +66,32 @@ import {
 	tabSearchKeywords,
 	useHorizontalOverflow,
 } from "./workbenchShared";
+
+const GROUP_SHORTCUTS = "Control+F6 Control+Shift+F6 Shift+F10 ContextMenu";
+
+function tabKeyShortcuts(keys: LocalKeys, rail: WorkbenchTabProps["rail"]): string {
+	const [locked, local] = !rail
+		? [
+				"Home End ArrowLeft ArrowRight",
+				keys.aria("tabs.close", "arrows.left", "arrows.right", "tabs.moveBefore", "tabs.moveAfter"),
+			]
+		: rail.vertical
+			? [
+					"Enter Space Home End ArrowUp ArrowDown",
+					keys.aria("rails.remove", "arrows.up", "arrows.down", "rails.moveUp", "rails.moveDown"),
+				]
+			: [
+					"Enter Space Home End ArrowLeft ArrowRight",
+					keys.aria(
+						"rails.remove",
+						"arrows.left",
+						"arrows.right",
+						"rails.moveLeft",
+						"rails.moveRight",
+					),
+				];
+	return [locked, local, GROUP_SHORTCUTS].filter(Boolean).join(" ");
+}
 
 export interface TabStripProps {
 	document: WorkspaceLayoutDocument;
@@ -88,11 +111,13 @@ export interface TabStripProps {
 	onHideSide: (region: LayoutAuxiliaryRegion) => void;
 	onRevealTool: (tool: LayoutToolId) => void;
 	onRenameChat: WorkbenchProps["onRenameChat"];
+	registerChatRename?: RegisterChatRename | undefined;
 	chatFirstPrompts?: WorkbenchProps["chatFirstPrompts"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
-	splitGeometry?: { horizontal: boolean; vertical: boolean };
+	splitGeometry?: CenterSplitGeometry;
 	trailing?: ReactNode;
+	worktreePath: string;
 }
 
 const GROUP_TABS_LABELS = {
@@ -101,26 +126,6 @@ const GROUP_TABS_LABELS = {
 	right: "workbench.tabs.rightGroupTabs",
 	bottom: "workbench.tabs.bottomGroupTabs",
 } as const satisfies Record<LayoutGroupLocation["area"], MessageKey>;
-
-const MOVE_TO_PANE_LABELS = {
-	center: "workbench.tab.moveToCenterPane",
-	left: "workbench.tab.moveToLeftPane",
-	right: "workbench.tab.moveToRightPane",
-	bottom: "workbench.tab.moveToBottomPane",
-} as const satisfies Record<LayoutGroupLocation["area"], MessageKey>;
-
-const NEW_REGION_GROUP_LABELS = {
-	left: { start: "workbench.tab.newLeftGroupTop", end: "workbench.tab.newLeftGroupBottom" },
-	right: { start: "workbench.tab.newRightGroupTop", end: "workbench.tab.newRightGroupBottom" },
-	bottom: { start: "workbench.tab.newBottomGroupLeft", end: "workbench.tab.newBottomGroupRight" },
-} as const satisfies Record<LayoutAuxiliaryRegion, Record<"start" | "end", MessageKey>>;
-
-const SPLIT_LABELS = {
-	left: "workbench.center.splitLeft",
-	right: "workbench.center.splitRight",
-	up: "workbench.center.splitUp",
-	down: "workbench.center.splitDown",
-} as const satisfies Record<CenterSplitDirection, MessageKey>;
 
 export const TabStrip = memo(function TabStrip({
 	document,
@@ -140,13 +145,16 @@ export const TabStrip = memo(function TabStrip({
 	onHideSide,
 	onRevealTool,
 	onRenameChat,
+	registerChatRename,
 	chatFirstPrompts,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
 	splitGeometry,
 	trailing,
+	worktreePath,
 }: TabStripProps) {
 	const t = useT();
+	const keys = useLocalKeys("tabs", LOCAL_KEY_DEFAULTS.tabs);
 	const scroller = useRef<HTMLDivElement>(null);
 	const scrollOverflow = useHorizontalOverflow(scroller);
 	const tabRefs = useRef(new Map<string, HTMLElement>());
@@ -213,6 +221,7 @@ export const TabStrip = memo(function TabStrip({
 				<div
 					ref={scroller}
 					role="tablist"
+					data-key-scope="tabs"
 					aria-label={t(GROUP_TABS_LABELS[location.area])}
 					className="flex h-full w-full min-w-0 items-stretch overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
 					onWheel={(event) => {
@@ -248,40 +257,46 @@ export const TabStrip = memo(function TabStrip({
 							onHideSide={onHideSide}
 							onRevealTool={onRevealTool}
 							onRenameChat={onRenameChat}
+							registerChatRename={registerChatRename}
 							{...(chatFirstPrompts ? { chatFirstPrompts } : {})}
 							canFocusAdjacentGroup={canFocusAdjacentGroup}
 							renderTabAdornment={renderTabAdornment}
+							worktreePath={worktreePath}
 							draggingTab={draggingTab}
 							panelId={panelId}
 							{...(splitGeometry ? { splitGeometry } : {})}
 							onKeyDown={(event) => {
-								if (event.altKey && event.shiftKey && event.key === "ArrowLeft") {
+								const local = keys.match(event.nativeEvent);
+								const twin = twinArrow(local);
+								const plain = !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+								const key = twin ?? (local === null && plain ? event.key : null);
+								if (local === "tabs.moveBefore") {
 									event.preventDefault();
 									if (index > 0) {
 										const moved = moveTabToGroup(document, tab, location, index - 1);
 										if (!isLayoutUnavailable(moved)) applyResult(moved);
 									}
-								} else if (event.altKey && event.shiftKey && event.key === "ArrowRight") {
+								} else if (local === "tabs.moveAfter") {
 									event.preventDefault();
 									if (index < tabs.length - 1) {
 										const moved = moveTabToGroup(document, tab, location, index + 1);
 										if (!isLayoutUnavailable(moved)) applyResult(moved);
 									}
-								} else if (event.key === "ArrowLeft") {
-									event.preventDefault();
-									selectAt(index === 0 ? tabs.length - 1 : index - 1);
-								} else if (event.key === "ArrowRight") {
-									event.preventDefault();
-									selectAt(index === tabs.length - 1 ? 0 : index + 1);
-								} else if (event.key === "Home") {
-									event.preventDefault();
-									selectAt(0);
-								} else if (event.key === "End") {
-									event.preventDefault();
-									selectAt(tabs.length - 1);
-								} else if (event.key === "Delete") {
+								} else if (local === "tabs.close") {
 									event.preventDefault();
 									closeTab(tab);
+								} else if (key === "ArrowLeft") {
+									event.preventDefault();
+									selectAt(index === 0 ? tabs.length - 1 : index - 1);
+								} else if (key === "ArrowRight") {
+									event.preventDefault();
+									selectAt(index === tabs.length - 1 ? 0 : index + 1);
+								} else if (key === "Home") {
+									event.preventDefault();
+									selectAt(0);
+								} else if (key === "End") {
+									event.preventDefault();
+									selectAt(tabs.length - 1);
 								}
 							}}
 						/>
@@ -375,6 +390,7 @@ export interface WorkbenchTabProps {
 	reorderIndexes?: { previous: number | undefined; next: number | undefined };
 	rail?: AuxiliaryRailControlProps & {
 		entryKey: string;
+		shortcut?: readonly string[] | undefined;
 		vertical: boolean;
 		beforeIndex: number;
 		afterIndex: number;
@@ -396,12 +412,14 @@ export interface WorkbenchTabProps {
 	onHideSide: (region: LayoutAuxiliaryRegion) => void;
 	onRevealTool: (tool: LayoutToolId) => void;
 	onRenameChat: WorkbenchProps["onRenameChat"];
+	registerChatRename?: RegisterChatRename | undefined;
 	chatFirstPrompts?: WorkbenchProps["chatFirstPrompts"];
 	canFocusAdjacentGroup: boolean;
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
+	worktreePath: string;
 	draggingTab: LayoutTab | null;
 	panelId: string;
-	splitGeometry?: { horizontal: boolean; vertical: boolean };
+	splitGeometry?: CenterSplitGeometry;
 	onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => void;
 }
 
@@ -426,15 +444,21 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 	onHideSide,
 	onRevealTool,
 	onRenameChat,
+	registerChatRename,
 	chatFirstPrompts,
 	canFocusAdjacentGroup,
 	renderTabAdornment,
+	worktreePath,
 	draggingTab,
 	panelId,
 	splitGeometry,
 	onKeyDown,
 }: WorkbenchTabProps) {
 	const t = useT();
+	const keys = useLocalKeys(
+		rail ? "rails" : "tabs",
+		rail ? LOCAL_KEY_DEFAULTS.rails : LOCAL_KEY_DEFAULTS.tabs,
+	);
 	const {
 		setNodeRef: setDragRef,
 		isDragging,
@@ -452,6 +476,16 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 			if (pendingPreviewKeep.current) clearTimeout(pendingPreviewKeep.current);
 		},
 		[],
+	);
+	const beginRename = useCallback((currentName: string) => {
+		editStartNameRef.current = currentName;
+		cancelNextBlurRef.current = false;
+		restoreTabFocusRef.current = false;
+		setEditingName(true);
+	}, []);
+	useEffect(
+		() => (tab.kind === "chat" ? registerChatRename?.(tab.id, beginRename) : undefined),
+		[beginRename, registerChatRename, tab.id, tab.kind],
 	);
 	useEffect(() => {
 		if (!editingName) return;
@@ -552,45 +586,10 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 		data: { target: { kind: "insert", location, index: afterIndex } satisfies DropTarget },
 		disabled: !acceptsAfter,
 	});
-	const groups = collectAllGroups(document);
-	const missingTools = unplacedTools(document);
-	const splitReason = (direction: CenterSplitDirection): string | null => {
-		if (location.area !== "center") return t("workbench.tab.splitCenterOnly");
-		if (tab.kind === "tool") return t("workbench.layout.toolsStayInSide");
-		if (collectCenterGroups(document.center).length >= LAYOUT_LIMITS.maxCenterGroups) {
-			return t("workbench.layout.centerGroupLimit", { limit: LAYOUT_LIMITS.maxCenterGroups });
-		}
-		const horizontal = direction === "left" || direction === "right";
-		if (splitGeometry && !(horizontal ? splitGeometry.horizontal : splitGeometry.vertical)) {
-			return horizontal
-				? t("workbench.tab.splitNeedsWidth", { size: LAYOUT_LIMITS.minCenterWidth * 2 })
-				: t("workbench.tab.splitNeedsHeight", { size: LAYOUT_LIMITS.minCenterHeight * 2 });
-		}
-		return null;
-	};
-	const moveTargets = groups.filter(
-		(group) =>
-			group.location.groupId !== location.groupId &&
-			(tab.kind === "terminal" || group.location.area === "center"
-				? tab.kind !== "tool"
-				: tab.kind === "tool"),
-	);
-	const currentAuxiliary = location.area === "center" ? null : location.area;
-	const currentAuxiliaryGroupIndex = currentAuxiliary
-		? document[currentAuxiliary].groups.findIndex((group) => group.id === location.groupId)
-		: -1;
-	const currentAuxiliaryLimit = currentAuxiliary === "bottom" ? maxBottomGroups : maxSideGroups;
 	const name = layoutTabName(t, tab, chatFirstPrompts);
 	const chatTitle =
 		tab.kind === "chat" ? chatLabel(t, tab.name, chatFirstPrompts?.[tab.sessionId]) : undefined;
-	const groupRemoval = removeLayoutGroup(t, document, location);
-
-	const move = (target: LayoutGroupLocation, targetIndex?: number) => {
-		const result = moveTabToGroup(document, tab, target, targetIndex);
-		if (!isLayoutUnavailable(result)) onApply(result);
-	};
-	const reorder = (nextIndex: number) => move(location, nextIndex);
-	const focusTab = (keep?: boolean) => {
+	const focusTab = (keep: boolean) => {
 		onSelect(tab.id, keep);
 		focusControl();
 	};
@@ -603,13 +602,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 			{...(rail
 				? { "aria-label": name, "aria-pressed": active, ...railEntryButtonProps(active) }
 				: { role: "tab", "aria-selected": active })}
-			aria-keyshortcuts={
-				rail
-					? rail.vertical
-						? "Enter Space Delete Home End ArrowUp ArrowDown Alt+Shift+ArrowUp Alt+Shift+ArrowDown Control+F6 Control+Shift+F6"
-						: "Enter Space Delete Home End ArrowLeft ArrowRight Alt+Shift+ArrowLeft Alt+Shift+ArrowRight Control+F6 Control+Shift+F6"
-					: "Delete Home End ArrowLeft ArrowRight Alt+Shift+ArrowLeft Alt+Shift+ArrowRight Control+F6 Control+Shift+F6"
-			}
+			aria-keyshortcuts={tabKeyShortcuts(keys, rail)}
 			aria-controls={panelId}
 			data-testid={rail && tab.kind === "tool" ? `tool-rail-${tab.tool}` : undefined}
 			data-rail-entry={rail?.entryKey}
@@ -656,7 +649,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 				: "editor-tab";
 	return (
 		<ContextMenu>
-			<ContextMenuTrigger asChild>
+			<ContextMenuTrigger asChild onKeyDown={openContextMenuFromKeyboard}>
 				<div
 					ref={setDragRef}
 					role="presentation"
@@ -671,7 +664,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 						"group data-[dragging]:opacity-40",
 						rail
 							? railEntryFrameClass(location.area)
-							: "relative flex min-w-96 max-w-192 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-[2px] after:rounded-full after:content-[''] has-[[role=tab]:focus-visible]:ring-2 has-[[role=tab]:focus-visible]:ring-inset has-[[role=tab]:focus-visible]:ring-primary data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary",
+							: "relative flex min-w-96 max-w-192 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-[2px] after:rounded-full after:content-[''] has-[[role=tab]:focus-visible]:focus-ring-inset-deep data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary",
 					)}
 				>
 					<div
@@ -710,11 +703,15 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 								defaultValue={tab.name}
 								onKeyDown={onNameKeyDown}
 								onBlur={commitRename}
-								className="min-w-0 flex-1 border-0 bg-transparent p-0 tr-text-ui text-text-default outline-none"
+								className="min-w-0 flex-1 border-0 bg-transparent p-0 tr-text-ui text-text-default focus-visible:focus-ring-inset"
 							/>
 						</div>
 					) : rail ? (
-						<IconTooltip label={name} side={railTooltipSide(location.area)}>
+						<IconTooltip
+							label={name}
+							shortcut={rail.shortcut}
+							side={railTooltipSide(location.area)}
+						>
 							{tabButton}
 						</IconTooltip>
 					) : (
@@ -741,266 +738,63 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 					event.preventDefault();
 				}}
 			>
-				<ContextMenuItem onSelect={() => focusTab()}>{t("workbench.tab.focus")}</ContextMenuItem>
-				{tab.kind === "chat" && onRenameChat ? (
-					<ContextMenuItem
-						onSelect={() => {
-							editStartNameRef.current = tab.name;
-							cancelNextBlurRef.current = false;
-							restoreTabFocusRef.current = false;
+				<TabMenuItems
+					context={{
+						document,
+						tab,
+						location,
+						preview,
+						reorder: { previous: previousIndex, next: nextIndex },
+						maxSideGroups,
+						maxBottomGroups,
+						splitGeometry,
+						canFocusAdjacentGroup,
+						canRenameChat: onRenameChat !== undefined,
+						worktreePath,
+						chatFirstPrompts,
+					}}
+					handlers={{
+						apply: onApply,
+						select: focusTab,
+						rename: () => {
 							enterRenameRef.current = true;
-							setEditingName(true);
-						}}
-					>
-						{t("workbench.tab.renameChat")}
-					</ContextMenuItem>
-				) : null}
-				<ContextMenuItem
-					disabled={!canFocusAdjacentGroup}
-					onSelect={() => onFocusAdjacentGroup(-1, location.groupId)}
-				>
-					{canFocusAdjacentGroup
-						? t("workbench.tab.focusPreviousGroup")
-						: t("workbench.tab.focusPreviousGroupUnavailable")}
-				</ContextMenuItem>
-				<ContextMenuItem
-					disabled={!canFocusAdjacentGroup}
-					onSelect={() => onFocusAdjacentGroup(1, location.groupId)}
-				>
-					{canFocusAdjacentGroup
-						? t("workbench.tab.focusNextGroup")
-						: t("workbench.tab.focusNextGroupUnavailable")}
-				</ContextMenuItem>
-				{location.area === "center" ? (
-					<ContextMenuItem disabled={!preview} onSelect={() => focusTab(true)}>
-						{preview ? t("workbench.tab.keepPreview") : t("workbench.tab.keepPreviewUnavailable")}
-					</ContextMenuItem>
-				) : null}
-				<ContextMenuItem
-					disabled={previousIndex === undefined}
-					onSelect={() => {
-						if (previousIndex !== undefined) reorder(previousIndex);
+							beginRename(tab.name);
+						},
+						focusGroup: (delta) => onFocusAdjacentGroup(delta, location.groupId),
+						hide: onHideSide,
+						revealTool: onRevealTool,
+						close: onClose,
 					}}
-				>
-					{previousIndex === undefined
-						? t(rail?.vertical ? "workbench.tab.moveUpFirst" : "workbench.tab.moveLeftFirst")
-						: t(rail?.vertical ? "workbench.tab.moveUp" : "workbench.tab.moveLeft")}
-				</ContextMenuItem>
-				<ContextMenuItem
-					disabled={nextIndex === undefined}
-					onSelect={() => {
-						if (nextIndex !== undefined) reorder(nextIndex);
-					}}
-				>
-					{nextIndex === undefined
-						? t(rail?.vertical ? "workbench.tab.moveDownLast" : "workbench.tab.moveRightLast")
-						: t(rail?.vertical ? "workbench.tab.moveDown" : "workbench.tab.moveRight")}
-				</ContextMenuItem>
-				{location.area === "center" ? (
-					<>
-						<ContextMenuSeparator />
-						{(["left", "right", "up", "down"] as const).map((direction) => {
-							const unavailable = splitReason(direction);
-							return (
-								<ContextMenuItem
-									key={direction}
-									disabled={unavailable !== null}
-									title={unavailable ?? undefined}
-									onSelect={() => {
-										if (location.area !== "center" || tab.kind === "tool") return;
-										const result = splitCenterGroup(document, location.groupId, direction, tab);
-										if (!isLayoutUnavailable(result)) onApply(result);
-									}}
-								>
-									{unavailable
-										? t("workbench.menu.unavailable", {
-												label: t(SPLIT_LABELS[direction]),
-												reason: unavailable,
-											})
-										: t(SPLIT_LABELS[direction])}
-								</ContextMenuItem>
-							);
-						})}
-					</>
-				) : null}
-				{moveTargets.length > 0 ? <ContextMenuSeparator /> : null}
-				{moveTargets.map((group) => {
-					const separate = group.location.area !== "center" && !canJoinAuxiliaryGroup(group, tab);
-					const label = t(MOVE_TO_PANE_LABELS[group.location.area], {
-						group: describeLayoutGroup(t, group.tabs, chatFirstPrompts),
-					});
-					return (
-						<ContextMenuItem
-							key={tupleKey("move-target", group.location.area, group.location.groupId)}
-							disabled={separate}
-							title={separate ? separatePanesReason(t) : undefined}
-							onSelect={() => move(group.location)}
-						>
-							{separate
-								? t("workbench.menu.unavailable", { label, reason: separatePanesReason(t) })
-								: label}
-						</ContextMenuItem>
-					);
-				})}
-				{currentAuxiliary &&
-				currentAuxiliaryGroupIndex >= 0 &&
-				(tab.kind === "terminal" || tab.kind === "tool") ? (
-					<>
-						<ContextMenuSeparator />
-						{(["before", "after"] as const).map((position) => {
-							const insertAt = currentAuxiliaryGroupIndex + (position === "after" ? 1 : 0);
-							const countAvailable = canCreateAuxiliaryGroup(
-								document,
-								currentAuxiliary,
-								tab,
-								currentAuxiliaryLimit,
-							);
-							const available = canCreateAuxiliaryGroup(
-								document,
-								currentAuxiliary,
-								tab,
-								currentAuxiliaryLimit,
-								insertAt,
-							);
-							const unavailable = countAvailable
-								? t("workbench.tab.alreadyAtPosition")
-								: t("workbench.tab.limitedTo", { limit: currentAuxiliaryLimit });
-							const positionLabel =
-								currentAuxiliary === "bottom"
-									? position === "before"
-										? t("workbench.tab.newGroupLeft")
-										: t("workbench.tab.newGroupRight")
-									: position === "before"
-										? t("workbench.tab.newGroupAbove")
-										: t("workbench.tab.newGroupBelow");
-							return (
-								<ContextMenuItem
-									key={position}
-									disabled={!available}
-									title={available ? undefined : unavailable}
-									onSelect={() => {
-										const result = createAuxiliaryGroup(
-											document,
-											currentAuxiliary,
-											tab,
-											insertAt,
-											currentAuxiliaryLimit,
-										);
-										if (!isLayoutUnavailable(result)) onApply(result);
-									}}
-								>
-									{available
-										? positionLabel
-										: t("workbench.menu.unavailable", {
-												label: positionLabel,
-												reason: unavailable,
-											})}
-								</ContextMenuItem>
-							);
-						})}
-					</>
-				) : null}
-				{tab.kind === "terminal" || tab.kind === "tool" ? (
-					<>
-						<ContextMenuSeparator />
-						{(["left", "right", "bottom"] as const).map((region) => {
-							const limit = region === "bottom" ? maxBottomGroups : maxSideGroups;
-							const countAvailable = canCreateAuxiliaryGroup(document, region, tab, limit);
-							const startAvailable = canCreateAuxiliaryGroup(document, region, tab, limit, 0);
-							const endIndex = document[region].groups.length;
-							const endAvailable = canCreateAuxiliaryGroup(document, region, tab, limit, endIndex);
-							const unavailableSuffix = (available: boolean, edge: "start" | "end") =>
-								available
-									? null
-									: countAvailable
-										? t(
-												edge === "start"
-													? "workbench.tab.alreadyAtStart"
-													: "workbench.tab.alreadyAtEnd",
-											)
-										: t("workbench.tab.limitedTo", { limit });
-							const startLabel = t(NEW_REGION_GROUP_LABELS[region].start);
-							const endLabel = t(NEW_REGION_GROUP_LABELS[region].end);
-							const startUnavailable = unavailableSuffix(startAvailable, "start");
-							const endUnavailable = unavailableSuffix(endAvailable, "end");
-							return (
-								<Fragment key={region}>
-									<ContextMenuItem
-										disabled={!startAvailable}
-										title={startUnavailable ?? undefined}
-										onSelect={() => {
-											const result = createAuxiliaryGroup(document, region, tab, 0, limit);
-											if (!isLayoutUnavailable(result)) onApply(result);
-										}}
-									>
-										{startUnavailable
-											? t("workbench.menu.unavailable", {
-													label: startLabel,
-													reason: startUnavailable,
-												})
-											: startLabel}
-									</ContextMenuItem>
-									<ContextMenuItem
-										disabled={!endAvailable}
-										title={endUnavailable ?? undefined}
-										onSelect={() => {
-											const result = createAuxiliaryGroup(document, region, tab, endIndex, limit);
-											if (!isLayoutUnavailable(result)) onApply(result);
-										}}
-									>
-										{endUnavailable
-											? t("workbench.menu.unavailable", { label: endLabel, reason: endUnavailable })
-											: endLabel}
-									</ContextMenuItem>
-								</Fragment>
-							);
-						})}
-					</>
-				) : null}
-				{location.area !== "center" && missingTools.length > 0 ? (
-					<>
-						<ContextMenuSeparator />
-						{missingTools.map((tool) => (
-							<ContextMenuItem key={tool} onSelect={() => onRevealTool(tool)}>
-								{t("workbench.tab.showTool", { name: layoutTabName(t, toolTab(tool)) })}
-							</ContextMenuItem>
-						))}
-					</>
-				) : null}
-				<ContextMenuSeparator />
-				{location.area !== "center" ? (
-					<ContextMenuItem onSelect={() => onHideSide(location.area)}>
-						{location.area === "bottom"
-							? t("workbench.bottom.hide")
-							: t(
-									location.area === "left"
-										? "workbench.tab.hideLeftSide"
-										: "workbench.tab.hideRightSide",
-								)}
-					</ContextMenuItem>
-				) : null}
-				<ContextMenuItem
-					disabled={isLayoutUnavailable(groupRemoval)}
-					title={isLayoutUnavailable(groupRemoval) ? groupRemoval.reason : undefined}
-					onSelect={() => {
-						if (!isLayoutUnavailable(groupRemoval)) onApply(groupRemoval);
-					}}
-				>
-					{isLayoutUnavailable(groupRemoval)
-						? t("workbench.menu.unavailable", {
-								label: t("workbench.group.remove"),
-								reason: groupRemoval.reason,
-							})
-						: t("workbench.group.remove")}
-				</ContextMenuItem>
-				<ContextMenuItem
-					onSelect={onClose}
-					className="text-feedback-error focus:text-feedback-error"
-				>
-					{rail ? t("workbench.tab.removeToolFromGroup") : t("common.close")}
-				</ContextMenuItem>
+				/>
 			</ContextMenuContent>
 		</ContextMenu>
 	);
 });
 WorkbenchTab.displayName = "WorkbenchTab";
+
+function TabMenuItems({
+	context,
+	handlers,
+}: {
+	context: TabActionContext;
+	handlers: TabActionHandlers;
+}) {
+	const t = useT();
+	const actions = tabActions(t, context).filter((action) => action.surface !== "palette");
+	return actions.map((action, index) => (
+		<Fragment key={action.id}>
+			{index > 0 && actions[index - 1]?.section !== action.section ? (
+				<ContextMenuSeparator />
+			) : null}
+			<ContextMenuItem
+				disabled={action.unavailable !== undefined}
+				title={action.unavailable?.reason}
+				data-testid={action.testId}
+				onSelect={() => performTabAction(action, handlers)}
+				className={action.destructive ? "text-feedback-error focus:text-feedback-error" : undefined}
+			>
+				{action.unavailable?.label ?? action.label}
+			</ContextMenuItem>
+		</Fragment>
+	));
+}

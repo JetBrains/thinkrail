@@ -45,7 +45,9 @@ fixture value-imports a bare `@earendil-works/pi-coding-agent` specifier and sur
 its model name, so the load exercises pi's virtual-module mapping through the transform path the host
 forces — a bundle missing the `PI_BUNDLED_NODE` define fails this probe; [[submodule-server-agent]] owns
 the seam),
-exercise the bundled factories/skills, run **two scripted provider turns** — the fixture also registers a
+exercise the bundled factories/skills (`extension.list` must report a tool for every registry extension,
+so an extension entry the bundle cannot load — `pi-web-access`'s lazily imported `dist` included — fails),
+run **two scripted provider turns** — the fixture also registers a
 pi-ai faux `streamSimple` under its own `api` name that calls `visualize` with a dangling flowchart edge,
 so the probe asserts the strict mermaid parse error reaches the transcript as an `isError` tool result
 (the packaged host composes the ThinkRail extension registry, never the portable package's best-effort

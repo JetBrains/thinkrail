@@ -45,6 +45,7 @@ import type {
 	UserThemesSnapshot,
 	WireModel,
 	Workspace,
+	WorkspaceArtifactsSnapshot,
 	WorkspaceCreation,
 	WorkspaceCreationRemoved,
 	WorkspaceFsChangedPayload,
@@ -52,6 +53,7 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	canMarkCompletionUnread,
+	compareProjectRank,
 	customMessageText,
 	DEFAULT_CONFIG,
 	type ExtensionSettingValues,
@@ -67,6 +69,7 @@ import {
 	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
 	isTodoReviewFixMessage,
+	type KeybindingOverrides,
 	normalizeFontSettings,
 	normalizeThemePreference,
 	readToolResponseMessage,
@@ -129,6 +132,7 @@ import {
 } from "./mcp";
 import { newPromptImagesState, type PromptImagesState } from "./promptImageState";
 import {
+	artifactsWatermark,
 	type HistoryTarget,
 	isChatResourceConnectionCurrent,
 	isChatResourceReadCurrent,
@@ -171,6 +175,21 @@ export interface FileReveal {
 	column?: number;
 	length?: number;
 	tick: number;
+}
+export interface FileClipboard {
+	workspaceId: string;
+	path: string;
+	cut?: true;
+}
+
+export type ArtifactsView = "list" | "tree" | "smart";
+
+export interface ArtifactsPreferences {
+	seen: Record<string, number>;
+	showIgnored: boolean;
+	view: ArtifactsView | null;
+	smart: boolean;
+	treeExpanded: Record<string, readonly string[]>;
 }
 export interface ChatTab {
 	kind: "chat";
@@ -221,6 +240,7 @@ export function isFileComparison<T extends { kind: string; before?: string | und
 	return tab.kind === "diff" && tab.before !== undefined;
 }
 export type ChangesLayout = "stacked" | "single";
+export type MarkdownOutlineSide = "left" | "right";
 type FilesMode = "all" | "changed";
 export type FilesScrollView = "all" | "changedList" | "changedTree";
 export interface FilesTreeView {
@@ -353,6 +373,7 @@ export interface ComposerFocusRequest {
 	workspaceId: string;
 	sessionId: string | null;
 	navTick: number;
+	dismissHistory?: true;
 }
 
 export interface LayoutOpenOptions {
@@ -389,7 +410,7 @@ export type LayoutIntent =
 			navigation?: CenterNavigationStamp | null;
 			countNavigation?: boolean;
 	  }
-	| { id: string; kind: "reveal-tool"; workspaceId: string; tool: LayoutToolId }
+	| { id: string; kind: "reveal-tool"; workspaceId: string; tool: LayoutToolId; focus?: false }
 	| { id: string; kind: "remove-session"; workspaceId: string; sessionId: string }
 	| {
 			id: string;
@@ -436,8 +457,29 @@ export const SettingsSection = {
 	Extensions: "extensions",
 	Environment: "environment",
 	Voice: "voice",
+	Artifacts: "artifacts",
+	Subagents: "subagents",
+	Text: "text",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
+
+export const RETIRED_SETTINGS_SECTIONS: Readonly<
+	Partial<Record<SettingsSection, SettingsSection>>
+> = {
+	[SettingsSection.Artifacts]: SettingsSection.Layout,
+	[SettingsSection.LineWidth]: SettingsSection.Text,
+	[SettingsSection.Review]: SettingsSection.Models,
+};
+
+export const CLIENT_PREFERENCE_DEFAULTS = {
+	artifactsSmart: true,
+	doubleShiftSearch: true,
+	markdownOutlineSide: "right",
+} as const satisfies {
+	artifactsSmart: boolean;
+	doubleShiftSearch: boolean;
+	markdownOutlineSide: MarkdownOutlineSide;
+};
 
 export interface CreationChatHandoff {
 	workspaceId: string;
@@ -503,6 +545,12 @@ export interface ChatReadingAnchor {
 	offset: number;
 }
 
+export interface ComposerEdit {
+	id: string;
+	kind: "replace" | "paste";
+	text: string;
+}
+
 export interface SessionRuntime {
 	turns: ChatTurn[];
 	turnIdByMessageIndex?: (string | null)[];
@@ -521,8 +569,10 @@ export interface SessionRuntime {
 	stats: SessionStats | null;
 	commands: SlashCommandInfo[];
 	draft: string;
+	composerEdit: ComposerEdit | null;
 	promptImages: PromptImagesState;
 	readingAnchor: ChatReadingAnchor | null;
+	composerFocusWonOver: string | null;
 	pendingExtUi: ExtUiDialogRequest | null;
 	extUiQueue: ExtUiDialogRequest[];
 	extUiStatus: Record<string, string>;
@@ -555,8 +605,10 @@ function newRuntime(
 		stats: null,
 		commands: [],
 		draft: "",
+		composerEdit: null,
 		promptImages: newPromptImagesState(),
 		readingAnchor: null,
+		composerFocusWonOver: null,
 		pendingExtUi: null,
 		extUiQueue: [],
 		extUiStatus: {},
@@ -949,11 +1001,23 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 	}
 }
 
+function pasteComposerEdit(rt: SessionRuntime, id: string, text: string): SessionRuntime {
+	const pending = rt.composerEdit;
+	return {
+		...rt,
+		composerEdit: { id, kind: pending?.kind ?? "paste", text: `${pending?.text ?? ""}${text}` },
+	};
+}
+
 function reduceExtUi(
 	rt: SessionRuntime,
 	request: Exclude<ExtUiRequest, { kind: "setTitle" }>,
 ): SessionRuntime {
 	switch (request.kind) {
+		case "setEditorText":
+			return { ...rt, composerEdit: { id: request.id, kind: "replace", text: request.text } };
+		case "pasteToEditor":
+			return pasteComposerEdit(rt, request.id, request.text);
 		case "dismiss":
 			if (rt.pendingExtUi?.id === request.id) {
 				const [next, ...rest] = rt.extUiQueue;
@@ -1126,11 +1190,19 @@ interface AppState {
 		navigation: CenterNavigationStamp | null;
 	} | null;
 	specsByWorkspace: Record<string, SpecGraphNode[]>;
+	artifactsByWorkspace: Record<string, WorkspaceArtifactsSnapshot>;
+	artifactsTickByWorkspace: Record<string, number>;
+	artifactsSeenByWorkspace: Record<string, number>;
+	artifactsShowIgnored: boolean;
+	artifactsView: ArtifactsView | null;
+	artifactsSmart: boolean;
+	artifactsTreeExpandedByWorkspace: Record<string, readonly string[]>;
 	reviewsByWorkspace: Record<string, ReviewSnapshot>;
 	reviewFocusRequest: {
 		workspaceId: string;
 		commentId: string;
 		surface: ReviewFocusSurface;
+		moveFocus: boolean;
 	} | null;
 	fsChangesByWorkspace: Record<string, { tick: number; paths: string[]; truncated: boolean }>;
 	skillChangeTickByWorkspace: Record<string, number>;
@@ -1140,12 +1212,14 @@ interface AppState {
 	unheldLoginFrame: LoginPush | null;
 	settingsOpen: boolean;
 	settingsSection: SettingsSection;
+	settingsTarget: string | null;
 	surveyInvitationOpen: boolean;
 	surveyWindowOpen: boolean;
 	inAppSurvey: AppSurvey | null;
 	notificationPromptOpen: boolean;
 	searchOpen: boolean;
 	searchSession: number;
+	shortcutsOpen: boolean;
 	doubleShiftSearch: boolean;
 	theme: ThemeId;
 	themeMode: ThemeMode;
@@ -1154,6 +1228,7 @@ interface AppState {
 	analyticsConsentConfirmed: boolean;
 	notificationsEnabled: boolean;
 	subagentsEnabled: boolean;
+	disabledSubagents: string[];
 	subagentMaxConcurrent: number;
 	settleIdleDays: number | null;
 	jbcentralQuotaEnabled: boolean;
@@ -1168,6 +1243,8 @@ interface AppState {
 	fileLineWidthBounded: boolean;
 	voiceInputEnabled: boolean;
 	chatMessageOrder: ChatMessageOrder;
+	markdownOutlineVisible: boolean | null;
+	markdownOutlineSide: MarkdownOutlineSide;
 	defaultModel: WireModel | undefined;
 	defaultEffort: ThinkingLevel | undefined;
 	reviewModel: WireModel | undefined;
@@ -1178,6 +1255,7 @@ interface AppState {
 	agentReviewEnabled: boolean;
 	disabledExtensions: string[];
 	extensionSettings: ExtensionSettingValues;
+	keybindingOverrides: KeybindingOverrides;
 	otherAgentSkills: boolean;
 	disabledPackages: string[];
 	locale: string;
@@ -1236,8 +1314,13 @@ interface AppState {
 	) => void;
 	validateRouteChatTarget: (sessionId: string) => void;
 	clearRouteChatTarget: () => void;
-	requestComposerFocus: (workspaceId: string, sessionId?: string) => void;
+	requestComposerFocus: (
+		workspaceId: string,
+		sessionId?: string,
+		options?: { dismissHistory?: boolean },
+	) => void;
 	clearComposerFocusRequest: () => void;
+	serveComposerFocusRequest: (sessionId: string, waitingToolCallId: string | null) => void;
 	hydrateLocalLayoutState: (payload: LocalLayoutStatePayload) => void;
 	applyLocalLayoutState: (payload: LocalLayoutStatePayload, invalidateProjection?: boolean) => void;
 	setLocalLayoutPreferences: (preferences: LocalLayoutPreferences) => void;
@@ -1305,7 +1388,7 @@ interface AppState {
 	consumeChangesTabReveal: (
 		workspaceId: string,
 		id: string,
-		target: { path: string; commentId?: string } | null,
+		target: { path: string; commentId?: string; moveFocus?: boolean } | null,
 	) => void;
 	setChangesTabSectionRenderer: (
 		workspaceId: string,
@@ -1338,6 +1421,8 @@ interface AppState {
 	setChangesView: (view: "list" | "tree") => void;
 	filesMode: FilesMode;
 	setFilesMode: (mode: FilesMode) => void;
+	fileClipboard: FileClipboard | null;
+	setFileClipboard: (clipboard: FileClipboard | null) => void;
 	filesTreeByWorkspace: Record<string, FilesTreeView>;
 	hydrateFilesTree: (views: Record<string, FilesTreeView>) => void;
 	setFilesTreeExpanded: (workspaceId: string, paths: readonly string[], expanded: boolean) => void;
@@ -1489,6 +1574,8 @@ interface AppState {
 	setStats: (sessionId: string, stats: SessionStats) => void;
 	setCommands: (sessionId: string, commands: SlashCommandInfo[]) => void;
 	setChatDraft: (sessionId: string, text: string) => void;
+	consumeComposerEdit: (sessionId: string, editId: string) => void;
+	pasteIntoComposer: (sessionId: string, text: string) => void;
 	updateChatPromptImages: (
 		sessionId: string,
 		update: (current: PromptImagesState) => PromptImagesState,
@@ -1510,9 +1597,10 @@ interface AppState {
 	clearLoginInput: () => void;
 	clearLogin: (loginId?: string) => void;
 	clearSettledLogin: (providerId: string) => void;
-	openSettings: (section?: SettingsSection) => void;
+	openSettings: (section?: SettingsSection, settingId?: string) => void;
 	closeSettings: () => void;
 	setSettingsSection: (section: SettingsSection) => void;
+	consumeSettingsTarget: () => string | null;
 	showSurveyInvitation: () => void;
 	hideSurveyInvitation: () => void;
 	openSurveyWindow: () => void;
@@ -1522,8 +1610,12 @@ interface AppState {
 	closeNotificationPrompt: () => void;
 	openSearch: () => void;
 	closeSearch: () => void;
+	openShortcuts: () => void;
+	closeShortcuts: () => void;
 	setDoubleShiftSearch: (enabled: boolean) => void;
 	setChatMessageOrder: (order: ChatMessageOrder) => void;
+	setMarkdownOutlineVisible: (visible: boolean) => void;
+	setMarkdownOutlineSide: (side: MarkdownOutlineSide) => void;
 	applyConfig: (config: AppConfig) => void;
 	requestToolView: (workspaceId: string, tool: LayoutToolId) => void;
 	requestChangesView: (workspaceId: string, path: string | null, scope?: GitDiffScope) => void;
@@ -1536,6 +1628,19 @@ interface AppState {
 	requestSpecView: (workspaceId: string, path: string, line?: number) => void;
 	clearSpecRequest: () => void;
 	setWorkspaceSpecs: (workspaceId: string, nodes: SpecGraphNode[]) => void;
+	setWorkspaceArtifacts: (workspaceId: string, snapshot: WorkspaceArtifactsSnapshot) => void;
+	noteArtifactsChanged: (workspaceId: string) => void;
+	markArtifactsSeen: (workspaceId: string, watermark: number) => void;
+	setArtifactsShowIgnored: (show: boolean) => void;
+	setArtifactsView: (view: ArtifactsView) => void;
+	setArtifactsSmart: (enabled: boolean) => void;
+	setArtifactsTreeExpanded: (
+		workspaceId: string,
+		paths: readonly string[],
+		expanded: boolean,
+	) => void;
+	collapseAllArtifacts: (workspaceId: string) => void;
+	hydrateArtifactsPreferences: (preferences: ArtifactsPreferences) => void;
 	setWorkspaceReview: (workspaceId: string, snapshot: ReviewSnapshot) => void;
 	requestReviewFocus: (workspaceId: string, commentId: string, surface: ReviewFocusSurface) => void;
 	clearReviewFocus: (commentId?: string) => void;
@@ -1544,7 +1649,11 @@ interface AppState {
 	dismissToast: (id: string) => void;
 }
 
-function sortProjects(projects: Project[]): Project[] {
+function sortOpenProjects(projects: Project[]): Project[] {
+	return [...projects].sort(compareProjectRank);
+}
+
+function sortRecentProjects(projects: Project[]): Project[] {
 	return [...projects].sort((a, b) => b.lastOpened - a.lastOpened);
 }
 
@@ -1572,6 +1681,7 @@ function configPatch(config: AppConfig) {
 				? config.notificationsEnabled
 				: DEFAULT_CONFIG.notificationsEnabled,
 		subagentsEnabled: config.subagentsEnabled ?? DEFAULT_CONFIG.subagentsEnabled,
+		disabledSubagents: config.disabledSubagents ?? [],
 		subagentMaxConcurrent: isSubagentMaxConcurrent(config.subagentMaxConcurrent)
 			? config.subagentMaxConcurrent
 			: DEFAULT_CONFIG.subagentMaxConcurrent,
@@ -1623,6 +1733,12 @@ function configPatch(config: AppConfig) {
 			config.extensionSettings && typeof config.extensionSettings === "object"
 				? config.extensionSettings
 				: DEFAULT_CONFIG.extensionSettings,
+		keybindingOverrides:
+			config.keybindings &&
+			typeof config.keybindings === "object" &&
+			!Array.isArray(config.keybindings)
+				? config.keybindings
+				: DEFAULT_CONFIG.keybindings,
 		otherAgentSkills: typeof config.otherAgentSkills === "boolean" ? config.otherAgentSkills : true,
 		disabledPackages: Array.isArray(config.disabledPackages)
 			? config.disabledPackages
@@ -2207,6 +2323,8 @@ const REPLAYABLE_EXT_UI: ReadonlySet<ExtUiRequest["kind"]> = new Set([
 	"setStatus",
 	"setWidget",
 	"setTitle",
+	"setEditorText",
+	"pasteToEditor",
 	"notice",
 ]);
 
@@ -2356,6 +2474,15 @@ function withRuntime(
 	return next === rt ? {} : { sessions: { ...s.sessions, [sessionId]: next } };
 }
 
+function loginWorkspaceRemoved(
+	state: Pick<AppState, "removedWorkspaceIds">,
+	target: LoginPush["target"] | undefined,
+): boolean {
+	return (
+		target?.workspaceId !== undefined && state.removedWorkspaceIds[target.workspaceId] === true
+	);
+}
+
 function newLoginState(
 	loginId: string,
 	providerId: string,
@@ -2485,10 +2612,18 @@ export const useAppStore = create<AppState>((set, get) => ({
 	changesRequest: null,
 	specRequest: null,
 	specsByWorkspace: {},
+	artifactsByWorkspace: {},
+	artifactsTickByWorkspace: {},
+	artifactsSeenByWorkspace: {},
+	artifactsShowIgnored: true,
+	artifactsView: null,
+	artifactsSmart: CLIENT_PREFERENCE_DEFAULTS.artifactsSmart,
+	artifactsTreeExpandedByWorkspace: {},
 	reviewsByWorkspace: {},
 	reviewFocusRequest: null,
 	changesView: "tree",
 	filesMode: "all",
+	fileClipboard: null,
 	filesTreeByWorkspace: {},
 	changesLayout: "stacked",
 	diffScopeByWorkspace: {},
@@ -2503,13 +2638,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 	unheldLoginFrame: null,
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
+	settingsTarget: null,
 	surveyInvitationOpen: false,
 	surveyWindowOpen: false,
 	inAppSurvey: null,
 	notificationPromptOpen: false,
 	searchOpen: false,
 	searchSession: 0,
-	doubleShiftSearch: true,
+	shortcutsOpen: false,
+	doubleShiftSearch: CLIENT_PREFERENCE_DEFAULTS.doubleShiftSearch,
 	theme: DEFAULT_CONFIG.theme,
 	themeMode: DEFAULT_CONFIG.themeMode,
 	systemThemePair: DEFAULT_CONFIG.systemThemePair,
@@ -2517,6 +2654,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	analyticsConsentConfirmed: DEFAULT_CONFIG.analyticsConsentConfirmed,
 	notificationsEnabled: DEFAULT_CONFIG.notificationsEnabled,
 	subagentsEnabled: DEFAULT_CONFIG.subagentsEnabled,
+	disabledSubagents: DEFAULT_CONFIG.disabledSubagents,
 	subagentMaxConcurrent: DEFAULT_CONFIG.subagentMaxConcurrent,
 	settleIdleDays: DEFAULT_CONFIG.settleIdleDays,
 	jbcentralQuotaEnabled: DEFAULT_CONFIG.jbcentralQuotaEnabled,
@@ -2531,6 +2669,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	fileLineWidthBounded: DEFAULT_CONFIG.fileLineWidthBounded,
 	voiceInputEnabled: DEFAULT_CONFIG.voiceInputEnabled,
 	chatMessageOrder: "oldest-first",
+	markdownOutlineVisible: null,
+	markdownOutlineSide: CLIENT_PREFERENCE_DEFAULTS.markdownOutlineSide,
 	customLayoutPresets: DEFAULT_CONFIG.customLayoutPresets,
 	defaultModel: DEFAULT_CONFIG.defaultModel,
 	defaultEffort: DEFAULT_CONFIG.defaultEffort,
@@ -2542,6 +2682,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
 	disabledExtensions: DEFAULT_CONFIG.disabledExtensions,
 	extensionSettings: DEFAULT_CONFIG.extensionSettings,
+	keybindingOverrides: DEFAULT_CONFIG.keybindings,
 	otherAgentSkills: DEFAULT_CONFIG.otherAgentSkills,
 	disabledPackages: DEFAULT_CONFIG.disabledPackages,
 	locale: DEFAULT_CONFIG.locale,
@@ -2740,7 +2881,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		speech,
 	) =>
 		set((state) => {
-			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
+			const openProjects = sortOpenProjects(projects.filter((project) => project.closed !== true));
 			return {
 				protocolVersion,
 				welcomeProtocolVersion: protocolVersion,
@@ -2750,7 +2891,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					: {},
 				mcpByWorkspace: selectSupportsMcp({ protocolVersion }) ? state.mcpByWorkspace : {},
 				projects: openProjects,
-				recentProjects: sortProjects(recentProjects),
+				recentProjects: sortRecentProjects(recentProjects),
 				hostPlatform: hostPlatform ?? null,
 				hostUpdate: hostUpdate ?? null,
 				hostAppVersion: hostAppVersion ?? null,
@@ -2765,10 +2906,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 	applyHostUpdate: (hostUpdate) => set({ hostUpdate }),
 	installProjectSnapshot: (projects, recentProjects) =>
 		set((state) => {
-			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
+			const openProjects = sortOpenProjects(projects.filter((project) => project.closed !== true));
 			return {
 				projects: openProjects,
-				recentProjects: sortProjects(recentProjects),
+				recentProjects: sortRecentProjects(recentProjects),
 				...reconcileProjectNavigation(state, openProjects),
 				...pruneExpandedProjects(state, openProjects),
 			};
@@ -2778,10 +2919,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const projects =
 				project.closed === true
 					? state.projects.filter((candidate) => candidate.id !== project.id)
-					: sortProjects(upsertProject(state.projects, project));
+					: sortOpenProjects(upsertProject(state.projects, project));
 			return {
 				projects,
-				recentProjects: sortProjects(upsertProject(state.recentProjects, project)),
+				recentProjects: sortRecentProjects(upsertProject(state.recentProjects, project)),
 				...reconcileProjectNavigation(state, projects),
 				...pruneExpandedProjects(state, projects),
 			};
@@ -2866,8 +3007,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 				sessionStateByWorkspace: omitKey(state.sessionStateByWorkspace, workspaceId),
 				skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
 				specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
+				artifactsByWorkspace: omitKey(state.artifactsByWorkspace, workspaceId),
+				artifactsTickByWorkspace: omitKey(state.artifactsTickByWorkspace, workspaceId),
+				artifactsSeenByWorkspace: omitKey(state.artifactsSeenByWorkspace, workspaceId),
+				artifactsTreeExpandedByWorkspace: omitKey(
+					state.artifactsTreeExpandedByWorkspace,
+					workspaceId,
+				),
 				diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
 				filesTreeByWorkspace: omitKey(state.filesTreeByWorkspace, workspaceId),
+				fileClipboard:
+					state.fileClipboard?.workspaceId === workspaceId ? null : state.fileClipboard,
 				reviewsByWorkspace: omitKey(state.reviewsByWorkspace, workspaceId),
 				changesRequest:
 					state.changesRequest?.workspaceId === workspaceId ? null : state.changesRequest,
@@ -2976,16 +3126,26 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	clearRouteChatTarget: () =>
 		set((state) => (state.routeChatTarget ? { routeChatTarget: null } : state)),
-	requestComposerFocus: (workspaceId, sessionId) =>
+	requestComposerFocus: (workspaceId, sessionId, options) =>
 		set((state) => ({
 			composerFocusRequest: {
 				workspaceId,
 				sessionId: sessionId ?? null,
 				navTick: selectWorkspaceNavTick(state, workspaceId),
+				...(options?.dismissHistory ? { dismissHistory: true as const } : {}),
 			},
 		})),
 	clearComposerFocusRequest: () =>
 		set((state) => (state.composerFocusRequest ? { composerFocusRequest: null } : state)),
+	serveComposerFocusRequest: (sessionId, waitingToolCallId) =>
+		set((state) => ({
+			composerFocusRequest: null,
+			...withRuntime(state, sessionId, (rt) =>
+				rt.composerFocusWonOver === waitingToolCallId
+					? rt
+					: { ...rt, composerFocusWonOver: waitingToolCallId },
+			),
+		})),
 	hydrateLocalLayoutState: (payload) => {
 		set((state) =>
 			state.layoutStateReady
@@ -3380,6 +3540,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 							workspaceId,
 							commentId: target.commentId,
 							surface: { kind: "diff", scope },
+							moveFocus: target.moveFocus === true,
 						},
 					}
 				: patched;
@@ -3447,6 +3608,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		),
 	setChangesView: (view) => set({ changesView: view }),
 	setFilesMode: (filesMode) => set({ filesMode }),
+	setFileClipboard: (fileClipboard) => set({ fileClipboard }),
 	hydrateFilesTree: (filesTreeByWorkspace) => set({ filesTreeByWorkspace }),
 	setFilesTreeExpanded: (workspaceId, paths, expanded) =>
 		set((s) =>
@@ -4628,6 +4790,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, commands }))),
 	setChatDraft: (sessionId, draft) =>
 		set((s) => withRuntime(s, sessionId, (rt) => ({ ...rt, draft }))),
+	consumeComposerEdit: (sessionId, editId) =>
+		set((s) =>
+			withRuntime(s, sessionId, (rt) =>
+				rt.composerEdit?.id === editId ? { ...rt, composerEdit: null } : rt,
+			),
+		),
+	pasteIntoComposer: (sessionId, text) =>
+		set((s) =>
+			withRuntime(s, sessionId, (rt) => pasteComposerEdit(rt, randomId("composer-paste"), text)),
+		),
 	updateChatPromptImages: (sessionId, update) =>
 		set((s) =>
 			withRuntime(s, sessionId, (rt) => {
@@ -4669,8 +4841,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 		),
 	applyExtUi: (request) =>
 		set((s): Partial<AppState> => {
-			if (request.kind === "setTitle")
-				return renameChat(s, request.sessionId, request.title) ?? bufferExtUiOrphan(s, request);
+			if (request.kind === "setTitle") {
+				const title = typeof request.title === "string" ? request.title : "";
+				return renameChat(s, request.sessionId, title) ?? bufferExtUiOrphan(s, request);
+			}
 			if (!s.sessions[request.sessionId]) return bufferExtUiOrphan(s, request);
 			return withRuntime(s, request.sessionId, (rt) => reduceExtUi(rt, request));
 		}),
@@ -4683,7 +4857,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	finishLoginStart: () => set({ loginStarting: false }),
 	beginLogin: (loginId, providerId, target, method) =>
 		set((s) => {
-			if (target && s.removedWorkspaceIds[target.workspaceId]) return {};
+			if (loginWorkspaceRemoved(s, target)) return {};
 			if (s.activeLogin?.loginId === loginId)
 				return method && !s.activeLogin.method ? { activeLogin: { ...s.activeLogin, method } } : {};
 			if (s.activeLogin?.status === "active") return {};
@@ -4699,7 +4873,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	applyLoginFrame: (push) =>
 		set((s) => {
-			if (push.target && s.removedWorkspaceIds[push.target.workspaceId]) return {};
+			if (loginWorkspaceRemoved(s, push.target)) return {};
 			const statusChanged =
 				push.frame.kind === "success" && !push.target
 					? { providerStatusVersion: s.providerStatusVersion + 1 }
@@ -4731,15 +4905,26 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (!login || login.target || login.providerId !== providerId) return {};
 			return login.status === "active" ? {} : { activeLogin: null };
 		}),
-	openSettings: (section = SettingsSection.Providers) =>
-		set({ settingsOpen: true, settingsSection: section }),
-	closeSettings: () => set({ settingsOpen: false }),
+	openSettings: (section, settingId) =>
+		set((state) => ({
+			settingsOpen: true,
+			settingsSection: section ?? state.settingsSection,
+			settingsTarget: settingId ?? null,
+		})),
+	closeSettings: () => set({ settingsOpen: false, settingsTarget: null }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
+	consumeSettingsTarget: () => {
+		const target = get().settingsTarget;
+		if (target !== null) set({ settingsTarget: null });
+		return target;
+	},
 	openNotificationPrompt: () =>
 		set((state) => (state.notificationPromptOpen ? state : { notificationPromptOpen: true })),
 	closeNotificationPrompt: () => set({ notificationPromptOpen: false }),
 	openSearch: () => set((state) => ({ searchOpen: true, searchSession: state.searchSession + 1 })),
 	closeSearch: () => set((state) => (state.searchOpen ? { searchOpen: false } : state)),
+	openShortcuts: () => set((state) => (state.shortcutsOpen ? state : { shortcutsOpen: true })),
+	closeShortcuts: () => set((state) => (state.shortcutsOpen ? { shortcutsOpen: false } : state)),
 	setDoubleShiftSearch: (doubleShiftSearch) =>
 		set((state) => (state.doubleShiftSearch === doubleShiftSearch ? state : { doubleShiftSearch })),
 	showSurveyInvitation: () =>
@@ -4750,6 +4935,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closeSurveyWindow: () => set({ surveyWindowOpen: false }),
 	setInAppSurvey: (survey) => set({ inAppSurvey: survey }),
 	setChatMessageOrder: (chatMessageOrder) => set({ chatMessageOrder }),
+	setMarkdownOutlineVisible: (markdownOutlineVisible) => set({ markdownOutlineVisible }),
+	setMarkdownOutlineSide: (markdownOutlineSide) => set({ markdownOutlineSide }),
 	applyConfig: (config) => set(configPatch(config)),
 	requestToolView: (workspaceId, tool) =>
 		set((state) =>
@@ -4876,11 +5063,86 @@ export const useAppStore = create<AppState>((set, get) => ({
 				? {}
 				: { specsByWorkspace: { ...s.specsByWorkspace, [workspaceId]: nodes } },
 		),
+	setWorkspaceArtifacts: (workspaceId, snapshot) =>
+		set((s) =>
+			s.removedWorkspaceIds[workspaceId]
+				? {}
+				: {
+						artifactsByWorkspace: { ...s.artifactsByWorkspace, [workspaceId]: snapshot },
+						...(s.artifactsSeenByWorkspace[workspaceId] === undefined
+							? {
+									artifactsSeenByWorkspace: {
+										...s.artifactsSeenByWorkspace,
+										[workspaceId]: artifactsWatermark(snapshot, true),
+									},
+								}
+							: {}),
+					},
+		),
+	noteArtifactsChanged: (workspaceId) =>
+		set((s) =>
+			s.removedWorkspaceIds[workspaceId]
+				? {}
+				: {
+						artifactsTickByWorkspace: {
+							...s.artifactsTickByWorkspace,
+							[workspaceId]: (s.artifactsTickByWorkspace[workspaceId] ?? 0) + 1,
+						},
+					},
+		),
+	markArtifactsSeen: (workspaceId, watermark) =>
+		set((s) =>
+			s.removedWorkspaceIds[workspaceId] ||
+			watermark <= (s.artifactsSeenByWorkspace[workspaceId] ?? 0)
+				? {}
+				: {
+						artifactsSeenByWorkspace: { ...s.artifactsSeenByWorkspace, [workspaceId]: watermark },
+					},
+		),
+	setArtifactsShowIgnored: (artifactsShowIgnored) => set({ artifactsShowIgnored }),
+	setArtifactsView: (artifactsView) => set({ artifactsView }),
+	setArtifactsSmart: (artifactsSmart) => set({ artifactsSmart }),
+	setArtifactsTreeExpanded: (workspaceId, paths, expanded) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId]) return {};
+			const current = s.artifactsTreeExpandedByWorkspace[workspaceId] ?? [];
+			const next = withPathMembership(current, paths, expanded);
+			return next === current
+				? {}
+				: {
+						artifactsTreeExpandedByWorkspace: {
+							...s.artifactsTreeExpandedByWorkspace,
+							[workspaceId]: next,
+						},
+					};
+		}),
+	collapseAllArtifacts: (workspaceId) =>
+		set((s) =>
+			s.artifactsTreeExpandedByWorkspace[workspaceId]?.length
+				? {
+						artifactsTreeExpandedByWorkspace: omitKey(
+							s.artifactsTreeExpandedByWorkspace,
+							workspaceId,
+						),
+					}
+				: {},
+		),
+	hydrateArtifactsPreferences: ({ seen, showIgnored, view, smart, treeExpanded }) =>
+		set((s) => ({
+			artifactsSeenByWorkspace: { ...seen, ...s.artifactsSeenByWorkspace },
+			artifactsShowIgnored: showIgnored,
+			artifactsView: view,
+			artifactsSmart: smart,
+			artifactsTreeExpandedByWorkspace: {
+				...treeExpanded,
+				...s.artifactsTreeExpandedByWorkspace,
+			},
+		})),
 	requestReviewFocus: (workspaceId, commentId, surface) =>
 		set((state) =>
 			state.removedWorkspaceIds[workspaceId]
 				? {}
-				: { reviewFocusRequest: { workspaceId, commentId, surface } },
+				: { reviewFocusRequest: { workspaceId, commentId, surface, moveFocus: true } },
 		),
 	clearReviewFocus: (commentId) =>
 		set((state) =>

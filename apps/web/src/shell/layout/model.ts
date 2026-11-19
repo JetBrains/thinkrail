@@ -82,6 +82,7 @@ export const LAYOUT_TOOLS: readonly LayoutToolId[] = [
 	"files",
 	"review",
 	"plan",
+	"artifacts",
 ];
 
 export const LAYOUT_TOOL_DEFAULT_SIDES: Record<LayoutToolId, LayoutSide> = {
@@ -90,6 +91,7 @@ export const LAYOUT_TOOL_DEFAULT_SIDES: Record<LayoutToolId, LayoutSide> = {
 	files: "right",
 	review: "right",
 	plan: "right",
+	artifacts: "right",
 };
 
 const LAYOUT_TOOL_NAMES: Record<LayoutToolId, string> = {
@@ -98,6 +100,7 @@ const LAYOUT_TOOL_NAMES: Record<LayoutToolId, string> = {
 	files: "Files",
 	review: "Review",
 	plan: "TODO List",
+	artifacts: "Artifacts",
 };
 
 const LAYOUT_TOOL_NAME_KEYS = {
@@ -106,6 +109,7 @@ const LAYOUT_TOOL_NAME_KEYS = {
 	files: "workbench.tool.files",
 	review: "workbench.tool.review",
 	plan: "workbench.tool.plan",
+	artifacts: "workbench.tool.artifacts",
 } as const satisfies Record<LayoutToolId, MessageKey>;
 
 export type ChatFirstPrompts = Readonly<Record<string, string>>;
@@ -1045,6 +1049,36 @@ export function showSide(
 	return tool ? revealTool(document, tool, maxSideGroups) : { document };
 }
 
+export function revealPlacedTab(
+	document: WorkspaceLayoutDocument,
+	tabId: string,
+): LayoutMutationResult | null {
+	const location = findTabLocation(document, tabId);
+	if (!location) return null;
+	if (location.area === "center") {
+		return { document, focusGroupId: location.groupId, focusTabId: tabId };
+	}
+	const region = document[location.area];
+	const group = region.groups.find((candidate) => candidate.id === location.groupId);
+	const changed = !region.visible || group?.folded === true;
+	return {
+		document: changed
+			? {
+					...document,
+					[location.area]: {
+						...region,
+						visible: true,
+						groups: region.groups.map((candidate) =>
+							candidate.id === location.groupId ? { ...candidate, folded: false } : candidate,
+						),
+					},
+				}
+			: document,
+		focusGroupId: location.groupId,
+		focusTabId: tabId,
+	};
+}
+
 export function revealTool(
 	document: WorkspaceLayoutDocument,
 	tool: LayoutToolId,
@@ -1055,25 +1089,7 @@ export function revealTool(
 	const placedTab = resolvePlacedResource(document, requestedTab).placed;
 	const existing = placedTab ? findTabLocation(document, placedTab.id) : null;
 	if (placedTab && existing && existing.area !== "center") {
-		const region = document[existing.area];
-		const group = region.groups.find((candidate) => candidate.id === existing.groupId);
-		const changed = !region.visible || group?.folded === true;
-		return {
-			document: changed
-				? {
-						...document,
-						[existing.area]: {
-							...region,
-							visible: true,
-							groups: region.groups.map((candidate) =>
-								candidate.id === existing.groupId ? { ...candidate, folded: false } : candidate,
-							),
-						},
-					}
-				: document,
-			focusGroupId: existing.groupId,
-			focusTabId: placedTab.id,
-		};
+		return revealPlacedTab(document, placedTab.id) ?? { document };
 	}
 	const restore = document.toolRestoreTargets[tool];
 	const region: LayoutAuxiliaryRegion = restore?.region ?? LAYOUT_TOOL_DEFAULT_SIDES[tool];

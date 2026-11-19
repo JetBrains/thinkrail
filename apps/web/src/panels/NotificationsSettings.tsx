@@ -1,52 +1,80 @@
-import { RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
+import { DEFAULT_CONFIG } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
-import { useId, useState } from "react";
+import { Switch } from "@thinkrail/ui/switch";
+import { useState } from "react";
 import {
 	type NotificationChannel,
 	type NotificationPermissionState,
 	selectNotificationChannel,
 } from "@/notifications";
+import { SETTINGS_ROWS, SettingsNotice, SettingsPage, SettingsRow } from "@/settingsKit";
 import { toast, useAppStore } from "@/store";
-import { getTransport } from "@/transport";
-import { SettingsNotice } from "./SettingsNotice";
-import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
-import { SettingsSwitch } from "./SettingsSwitch";
+import { saveSettings } from "./saveSettings";
+import { isConfigDefault } from "./settingDefaults";
+import { SETTING, settingProps } from "./settingsCatalog";
 
-function HowToEnableInstructions() {
+export function NotificationPermissionNotice({
+	permission,
+	onAllow,
+}: {
+	permission: NotificationPermissionState;
+	onAllow: () => void;
+}) {
 	const t = useT();
-	const [expanded, setExpanded] = useState(false);
-	const stepsId = useId();
-
-	return (
-		<div className="flex flex-col">
-			<button
-				type="button"
-				aria-expanded={expanded}
-				aria-controls={stepsId}
-				onClick={() => setExpanded((v) => !v)}
-				className="flex items-center gap-4 tr-text-metadata text-text-muted transition-colors hover:text-text-default"
-			>
-				{expanded ? (
-					<RiArrowDownSLine className="size-14" />
-				) : (
-					<RiArrowRightSLine className="size-14" />
-				)}
-				{t("settings.notifications.howToEnable")}
-			</button>
-			{expanded ? (
-				<ol
-					id={stepsId}
-					className="mt-8 ml-24 list-decimal space-y-4 tr-text-metadata text-text-muted"
+	if (permission === "default") {
+		return (
+			<div data-setting-row="notifications-permission" className="py-12">
+				<SettingsNotice
+					variant="info"
+					testId="notifications-permission-prompt"
+					action={
+						<Button
+							variant="outline"
+							size="m"
+							tabIndex={0}
+							data-testid="notifications-allow"
+							onClick={onAllow}
+						>
+							{t("settings.notifications.allowInBrowser")}
+						</Button>
+					}
 				>
-					<li>{t("settings.notifications.step.lock")}</li>
-					<li>{t("settings.notifications.step.find")}</li>
-					<li>{t("settings.notifications.step.allow")}</li>
-					<li>{t("settings.notifications.step.refresh")}</li>
-				</ol>
-			) : null}
-		</div>
-	);
+					{t("settings.notifications.notGranted")}
+				</SettingsNotice>
+			</div>
+		);
+	}
+	if (permission === "unsupported") {
+		return (
+			<div className="py-12">
+				<SettingsNotice variant="warning" testId="notifications-permission-warning">
+					{t("settings.notifications.unsupported")}
+				</SettingsNotice>
+			</div>
+		);
+	}
+	if (permission === "denied") {
+		return (
+			<div className="py-12">
+				<SettingsNotice variant="warning" testId="notifications-permission-warning">
+					<p>{t("settings.notifications.blocked")}</p>
+					<div data-testid="notifications-how-to-enable" className="mt-8 flex flex-col gap-4">
+						<p className="text-text-default tr-text-metadata">
+							{t("settings.notifications.howToEnable")}
+						</p>
+						<ol className="ml-24 list-decimal space-y-4 text-text-muted tr-text-metadata">
+							<li>{t("settings.notifications.step.lock")}</li>
+							<li>{t("settings.notifications.step.find")}</li>
+							<li>{t("settings.notifications.step.allow")}</li>
+							<li>{t("settings.notifications.step.refresh")}</li>
+						</ol>
+					</div>
+				</SettingsNotice>
+			</div>
+		);
+	}
+	return null;
 }
 
 export function NotificationsSettings() {
@@ -74,9 +102,7 @@ export function NotificationsSettings() {
 	};
 
 	const setEnabled = (notificationsEnabled: boolean) => {
-		getTransport()
-			.request("settings.update", { config: { notificationsEnabled } })
-			.catch(() => toast.error(t("settings.notifications.changeFailed")));
+		void saveSettings({ notificationsEnabled }, t("settings.notifications.changeFailed"));
 		if (notificationsEnabled && permission === "default") {
 			requestPermission();
 		}
@@ -85,56 +111,35 @@ export function NotificationsSettings() {
 	const browserPermission = enabled && channelKind === "browser" ? permission : "granted";
 
 	return (
-		<div data-testid="settings-notifications" className={SETTINGS_ROWS_CONTAINER}>
-			<SettingsRow
-				label={t("settings.notifications.enable")}
-				description={
-					channelKind === "os"
-						? t("settings.notifications.osDescription")
-						: t("settings.notifications.browserDescription")
-				}
-				control={
-					<SettingsSwitch
-						checked={enabled}
-						label={t("settings.notifications.enable")}
-						testId="notifications-toggle"
-						onChange={setEnabled}
-					/>
-				}
-			/>
-
-			{browserPermission === "default" ? (
-				<div className="border-border-muted border-b py-12">
-					<SettingsNotice
-						variant="info"
-						testId="notifications-permission-prompt"
-						action={
-							<Button
-								variant="outline"
-								size="m"
-								data-testid="notifications-allow"
-								onClick={requestPermission}
-							>
-								{t("settings.notifications.allowInBrowser")}
-							</Button>
-						}
-					>
-						{t("settings.notifications.notGranted")}
-					</SettingsNotice>
-				</div>
-			) : browserPermission === "denied" || browserPermission === "unsupported" ? (
-				<div className="border-border-muted border-b py-12">
-					<SettingsNotice
-						variant="warning"
-						testId="notifications-permission-warning"
-						action={browserPermission === "denied" ? <HowToEnableInstructions /> : null}
-					>
-						{browserPermission === "unsupported"
-							? t("settings.notifications.unsupported")
-							: t("settings.notifications.blocked")}
-					</SettingsNotice>
-				</div>
-			) : null}
-		</div>
+		<SettingsPage
+			title={t("settings.nav.notifications")}
+			description={t("settings.notifications.browserDescription")}
+			testId="settings-notifications"
+		>
+			<div className={SETTINGS_ROWS}>
+				<SettingsRow
+					{...settingProps(t, SETTING.notifications)}
+					description={
+						channelKind === "os"
+							? t("settings.notifications.osDescription")
+							: t("settings.notifications.browserDelivery")
+					}
+					reset={{
+						changed: !isConfigDefault("notificationsEnabled", enabled),
+						onReset: () => setEnabled(DEFAULT_CONFIG.notificationsEnabled),
+					}}
+					control={
+						<Switch
+							checked={enabled}
+							label={t(SETTING.notifications.label)}
+							testId="notifications-toggle"
+							tabIndex={0}
+							onCheckedChange={setEnabled}
+						/>
+					}
+				/>
+				<NotificationPermissionNotice permission={browserPermission} onAllow={requestPermission} />
+			</div>
+		</SettingsPage>
 	);
 }

@@ -25,6 +25,9 @@ not this module; the theme-aware highlighter remains app-local.
   `@thinkrail/resource-renderers` keeps its own `canonicalWorkspacePath` for `describeResource` and
   `ResourcePreview` because a package cannot import the app's `lib`; `panels/pathIdentity.test.ts` pins it to
   `projectRelativePath` for workspace-relative paths),
+  **`joinWorkspacePath()`** (a worktree-relative path as the absolute path Copy path hands out, in the
+  worktree's own separators: a Windows or UNC root joins with `\`, a POSIX root keeps a name's literal `\`;
+  a path already outside the worktree passes through),
   **`viewport.ts`** → `isPhoneViewport()` plus the live `usePhoneViewport()` projection (coarse pointer
   or a viewport below 768px is phone-class; one combined media query is observed), built on the general
   **`useMediaQuery(query)`** (false where `matchMedia` is missing), and **`shallowEqualArrays()`** (element-wise `Object.is` — the "did this really change?" test behind the
@@ -35,6 +38,9 @@ not this module; the theme-aware highlighter remains app-local.
   anchored browser-side mirror of Pi's canonical expanded `<skill>` user-message grammar, shared by
   `chat`'s compact renderer and `store`'s optimistic-echo reconciliation; malformed/quoted blocks fail
   closed),
+  **`resolveTreeMove()`** (`treeMove.ts`: the one ↑/↓, Home/End, →/← move rule over levelled rows —
+  expand, else enter the first child; collapse, else go to the parent — shared by `panels`' sidebar trees
+  and `chat`'s transcript, which may not import `panels`),
   **`relativeTime(t, ms, now)`** (`just now` / `5m ago` / `2d ago` against an explicit `now`, never `Date.now`
   — shared by chat history, the tab strip's closed chats, and the Changes scope menu's commit rows; it lives
   here because `chat/` may not import from `panels/`, which is what let three private twins of it
@@ -120,6 +126,9 @@ not this module; the theme-aware highlighter remains app-local.
   `usePhoneViewport`, `useMediaQuery`, `normalizePath`, `isAbsolutePath`, `fileName`, `projectRelativePath` (canonical worktree-relative POSIX identity;
   collapses in-root `.`/`..` aliases but preserves an attempted leading escape for host rejection; Windows
   drive-rooted containment compares path/root case-insensitively while preserving the candidate's casing),
+  `pathWithinRoot` (the same canonical containment as a predicate: an absolute path's root-relative form,
+  `""` for the root itself, `null` outside it or for a relative input, so `..` can never borrow a root),
+  `joinWorkspacePath`,
   `shallowEqualArrays`, `userText`, `firstNonBlankLine` (first trimmed non-empty line, `undefined` when
   the text is blank — shared by chat's thinking-heading extraction and history prompt rows), `isShellInert` (a value made only of characters that stay literal in POSIX, PowerShell,
   and cmd, so it may be interpolated into a command a human copies and runs), `parseSkillInvocation`, `matchesSkillInvocationCommand`,

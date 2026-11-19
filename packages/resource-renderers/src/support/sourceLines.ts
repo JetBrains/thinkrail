@@ -36,6 +36,55 @@ export function sourceBlockAt(container: ParentNode, line: number): HTMLElement 
 	return best;
 }
 
+export function closedDetailsAround(element: Element, root: Element): HTMLElement[] {
+	const closed: HTMLElement[] = [];
+	let child = element;
+	for (let node = element.parentElement; node && node !== root; node = node.parentElement) {
+		if (node.tagName === "DETAILS" && !node.hasAttribute("open") && child.tagName !== "SUMMARY")
+			closed.push(node);
+		child = node;
+	}
+	return closed;
+}
+
+export function openDetailsAround(element: Element, root: Element): void {
+	for (const details of closedDetailsAround(element, root)) details.setAttribute("open", "");
+}
+
+export interface StampedHeading {
+	element: HTMLElement;
+	line: number;
+	depth: number;
+	text: string;
+	hidden: boolean;
+}
+
+const TEXT_NODE = 3;
+const ELEMENT_NODE = 1;
+
+// A heading's label as rendered: its text, with each image read as its alt text,
+// so `# ![Overview](diagram.png)` is "Overview" rather than an empty heading.
+function renderedLabel(node: Node): string {
+	if (node.nodeType === TEXT_NODE) return node.nodeValue ?? "";
+	if (node.nodeType === ELEMENT_NODE && (node as Element).tagName === "IMG") {
+		return (node as Element).getAttribute("alt") ?? "";
+	}
+	return Array.from(node.childNodes, renderedLabel).join("");
+}
+
+export function stampedHeadings(container: HTMLElement): StampedHeading[] {
+	return Array.from(container.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6")).flatMap(
+		(element) => {
+			const line = Number(element.dataset.mdLineStart);
+			const text = renderedLabel(element).replace(/\s+/g, " ").trim();
+			if (!(line >= 1) || !text) return [];
+			const depth = Number(element.tagName.slice(1));
+			const hidden = closedDetailsAround(element, container).length > 0;
+			return [{ element, line, depth, text, hidden }];
+		},
+	);
+}
+
 export function revealSourceLine(
 	container: HTMLElement,
 	line: number,
@@ -46,6 +95,7 @@ export function revealSourceLine(
 			sourceBlockAt(container, line) ??
 			container.querySelector<HTMLElement>("[data-md-line-start]");
 		if (!block) return false;
+		openDetailsAround(block, container);
 		block.scrollIntoView({ block: "start" });
 		onRevealed();
 		return true;

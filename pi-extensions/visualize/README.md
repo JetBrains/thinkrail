@@ -66,6 +66,20 @@ export default createVisualizeExtension({
 
 Without `checkFile` paths are not checked (the package stays `node:`-free).
 
+To keep what the tool draws, pass `saveVisualization`. It gets each diagram or comparison as markdown
+with the session's `cwd`, and the path it returns is named in the tool result. A saver that throws
+never fails the tool:
+
+```ts
+export default createVisualizeExtension({
+  saveVisualization: async ({ markdown, cwd }) => {
+    const path = `.scratch/visualize/${Date.now()}.md`;
+    await writeFile(resolve(cwd, path), markdown);
+    return path;
+  },
+});
+```
+
 ## Requirements
 
 pi ≥ the version listed under `devDependencies` in this package's `package.json` (the pi SDK packages

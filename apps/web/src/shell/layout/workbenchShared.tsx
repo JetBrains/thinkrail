@@ -16,6 +16,7 @@ import {
 	useState,
 } from "react";
 import { type LayoutAttention, readLayoutNavigationClock, tupleKey } from "../../lib";
+import type { AuxiliaryRailControlProps } from "./AuxiliaryRail";
 import type { AuxiliaryRailEntry } from "./auxiliaryPresentation";
 import {
 	type CenterSplitDirection,
@@ -31,6 +32,7 @@ import {
 	type LayoutSide,
 	layoutTabName,
 } from "./model";
+import type { WorkbenchTabCommands } from "./tabActions";
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutCenterTab,
@@ -48,6 +50,8 @@ export interface LayoutTabFocusRequest {
 	onlyIfFocusLost?: true;
 }
 
+export type RegisterChatRename = (tabId: string, begin: (name: string) => void) => () => void;
+
 export interface PreparedLayoutClose {
 	document: WorkspaceLayoutDocument;
 	onAccepted: (current?: { document: WorkspaceLayoutDocument; attention: LayoutAttention }) => void;
@@ -55,13 +59,14 @@ export interface PreparedLayoutClose {
 
 export interface WorkbenchProps {
 	workspaceId: string;
+	worktreePath: string;
 	document: WorkspaceLayoutDocument;
 	attention: LayoutAttention;
 	maxSideGroups: number;
 	maxBottomGroups: number;
 	projectionEpoch: number;
 	focusRequest?: LayoutTabFocusRequest;
-	subscribeCloseRequest?: (listener: () => void) => () => void;
+	registerTabCommands?: (commands: WorkbenchTabCommands) => () => void;
 	renderTabBody: (tab: LayoutCenterTab | Extract<LayoutSideTab, { kind: "terminal" }>) => ReactNode;
 	renderTabAdornment: (tab: LayoutTab) => ReactNode;
 	renderToolBody: (tool: LayoutToolId) => ReactNode;
@@ -84,6 +89,14 @@ export interface WorkbenchProps {
 		options?: { newPaneBelow?: boolean },
 	) => void;
 	onGestureCanceled?: () => void;
+	chromeShortcuts?: WorkbenchChromeShortcuts;
+	renderLeftRailFooter?: (control: AuxiliaryRailControlProps) => ReactNode;
+}
+
+export interface WorkbenchChromeShortcuts {
+	readonly hide: Readonly<Partial<Record<LayoutAuxiliaryRegion, readonly string[]>>>;
+	readonly tools: Readonly<Partial<Record<LayoutToolId, readonly string[]>>>;
+	readonly terminal: readonly string[];
 }
 
 export type DropTarget =
@@ -596,6 +609,7 @@ export function findLayoutGroupTabs(
 
 export interface SharedGroupProps {
 	workspaceId: string;
+	worktreePath: string;
 	document: WorkspaceLayoutDocument;
 	readAttention: () => LayoutAttention;
 	selectionEpochRef: React.MutableRefObject<number>;
@@ -620,8 +634,10 @@ export interface SharedGroupProps {
 	onHideSide: (region: LayoutAuxiliaryRegion) => void;
 	onRevealTool: (tool: LayoutToolId) => void;
 	onRenameChat: WorkbenchProps["onRenameChat"];
+	registerChatRename: RegisterChatRename;
 	chatFirstPrompts: WorkbenchProps["chatFirstPrompts"];
 	canFocusAdjacentGroup: boolean;
+	chromeShortcuts: WorkbenchChromeShortcuts | undefined;
 }
 
 export const GroupTabBody = memo(function GroupTabBody({

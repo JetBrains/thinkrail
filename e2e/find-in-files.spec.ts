@@ -13,6 +13,7 @@ import {
 	pressPlatformShortcut,
 } from "./fixtures/app";
 import { expectDialogContained } from "./fixtures/dialogContainment";
+import { resetKeybindings, setKeybindings } from "./fixtures/keybindings";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 
 const FIND_DIR = join(E2E_FIXTURE_REPO, "find");
@@ -180,6 +181,42 @@ test("smart case, the Aa and W toggles narrow the search, and the limit banner s
 	await input(page).fill("n");
 	await expect(matches(page)).toHaveCount(0);
 	await expect(page.getByTestId("find-in-files-empty")).toHaveCount(0);
+});
+
+test.describe("rebound find keys", () => {
+	test.afterEach(async ({ page }) => resetKeybindings(page));
+
+	test("toggles rebound onto Alt+↓ and Alt+Esc act instead of moving the selection or closing, and Shift+↓ moves nothing", async ({
+		page,
+	}) => {
+		await openFixtureProject(page);
+		await enterDefaultWorkspace(page);
+		await setKeybindings(page, {
+			"findInFiles.matchCase": ["Alt+ArrowDown"],
+			"findInFiles.wholeWord": ["Alt+Escape"],
+		});
+		await openFindInFiles(page);
+		await input(page).fill("needle");
+		await expectStatus(page, "4 matches in 2 files");
+		await expect(matches(page).first()).toHaveAttribute("aria-selected", "true");
+
+		await page.keyboard.press("Alt+ArrowDown");
+		await expect(page.getByTestId("find-in-files-case")).toHaveAttribute("aria-pressed", "true");
+		await expectStatus(page, "3 matches in 2 files");
+		await expect(matches(page).first()).toHaveAttribute("aria-selected", "true");
+
+		await page.keyboard.press("Alt+Escape");
+		await expect(dialog(page)).toBeVisible();
+		await expect(page.getByTestId("find-in-files-word")).toHaveAttribute("aria-pressed", "true");
+		await expectStatus(page, "2 matches in 2 files");
+
+		await page.keyboard.press("Shift+ArrowDown");
+		await expect(matches(page).first()).toHaveAttribute("aria-selected", "true");
+		await page.keyboard.press("ArrowDown");
+		await expect(matches(page).nth(1)).toHaveAttribute("aria-selected", "true");
+		await page.keyboard.press("Escape");
+		await expect(dialog(page)).toBeHidden();
+	});
 });
 
 test("a kept tab opened at a hit keeps the reading position the user scrolled to across a tab switch", async ({

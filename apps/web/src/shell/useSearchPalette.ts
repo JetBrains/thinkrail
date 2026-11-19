@@ -7,6 +7,7 @@ import { canStartProjectlessChat, startProjectlessChat } from "../panels/chatAct
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
 import { startChatInTab } from "../panels/openChat";
 import { openFileInTab } from "../panels/openTabs";
+import { availableSettings, useSettingsCatalogContext } from "../panels/settingsCatalog";
 import { settingsNavGroups } from "../panels/settingsNav";
 import {
 	canSettleWorkspace,
@@ -57,11 +58,19 @@ import {
 } from "../store";
 import { errorText, getTransport, supportsTextSearch } from "../transport";
 import {
+	focusCenterGroup,
+	focusChatComposer,
+	focusProjects,
+	focusTerminal,
 	openChatHistory,
+	showFiles,
 	toggleBottomPanel,
 	toggleLeftSide,
 	toggleRightSide,
 } from "./chordActions";
+import { useResolvedKeybindings } from "./keybindingState";
+import { collectCenterGroups } from "./layout";
+import { readNativePageZoomBridge } from "./nativePageZoom";
 import { type HostHitTargets, openHostHit } from "./openHostHit";
 import { createPaletteBackfill } from "./paletteBackfill";
 import {
@@ -71,7 +80,9 @@ import {
 	type PaletteCatalogDeps,
 } from "./paletteCatalog";
 import { paletteNavigator } from "./paletteNavigation";
-import { readSettingsShortcutLabel } from "./useAppShortcuts";
+import { focusAdjacentRegion } from "./regions";
+import { hasNativeShortcuts } from "./useAppShortcuts";
+import { activeTabActions, runActiveTabAction } from "./workbenchCommands";
 
 const LOCAL_SCOPES: readonly SearchScope[] = ["all", "work", "commands"];
 const HOST_SCOPES: readonly SearchScope[] = ["all", "work", "files", "specs", "commands"];
@@ -155,8 +166,16 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		() => settingsNavGroups(protocolVersion, options.hasUpdateSettings),
 		[protocolVersion, options.hasUpdateSettings],
 	);
+	const catalogContext = useSettingsCatalogContext();
+	const settingEntries = useMemo(
+		() => availableSettings(settingsGroups, catalogContext),
+		[settingsGroups, catalogContext],
+	);
 	const editors = useEditors();
-	const [nativeShortcuts] = useState(() => readSettingsShortcutLabel() !== null);
+	const [nativeShortcuts] = useState(hasNativeShortcuts);
+	const keybindings = useResolvedKeybindings();
+	const [pageZoom] = useState(readNativePageZoomBridge);
+	const [tabActions] = useState(activeTabActions);
 
 	const online = useAppStore(selectHostReachable);
 	const hostSearch = useAppStore(selectHostSearchAvailable);
@@ -165,7 +184,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		const names = new Map(
 			projects.map((project) => [
 				project.id,
-				isChatsContainer(project) ? t("panels.chats.title") : project.name,
+				isChatsContainer(project) ? t("search.item.noProject") : project.name,
 			]),
 		);
 		const workspaceNames = new Map<string, string>();
@@ -233,6 +252,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 
 	const binding = useMemo(() => {
 		const store = () => useAppStore.getState();
+		const activeLayout = activeWorkspaceId ? layoutDocumentsByWorkspace[activeWorkspaceId] : null;
 		const deps: PaletteCatalogDeps = {
 			t,
 			contextProjectId: contextRepoProject?.id ?? null,
@@ -242,12 +262,18 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			historyAvailable: historySessionId !== null,
 			canCreateProject: selectSupportsOnboarding({ protocolVersion }),
 			nativeShortcuts,
+			keybindings,
+			pageZoom,
 			findInFilesAvailable: supportsTextSearch(protocolVersion) && textSearchScoped,
+			changesAvailable: activeWorkspace !== null && !isChatWorkspace(activeWorkspace),
+			centerGroupCount: activeLayout ? collectCenterGroups(activeLayout.center).length : 0,
 			readAction,
 			canSettle: activeWorkspace !== null && canSettleWorkspace(protocolVersion, activeWorkspace),
 			settled,
 			settleBlocked,
 			settingsGroups,
+			settingEntries,
+			tabActions,
 			actions: {
 				newWorkspace: options.openNewWorkspace,
 				newProjectlessChat: () => void startProjectlessChat(),
@@ -262,6 +288,12 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				toggleRight: toggleRightSide,
 				toggleBottom: toggleBottomPanel,
 				showTool: (workspaceId, tool) => store().requestToolView(workspaceId, tool),
+				showFiles,
+				focusRegion: focusAdjacentRegion,
+				focusComposer: focusChatComposer,
+				focusProjects: () => focusProjects(options.toggleProjectsHome),
+				focusTerminal,
+				focusGroup: focusCenterGroup,
 				openHistory: openChatHistory,
 				findInFiles: openFindInFiles,
 				markRead: markWorkspaceRead,
@@ -271,7 +303,10 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				reveal: revealWorkspace,
 				copyPath: (workspace) => void copyText(workspace.worktreePath),
 				openIn: openWorkspaceIn,
-				openSettings: (section?: SettingsSection) => store().openSettings(section),
+				openSettings: (section?: SettingsSection, settingId?: string) =>
+					store().openSettings(section, settingId),
+				openShortcuts: () => store().openShortcuts(),
+				runTabAction: runActiveTabAction,
 			},
 		};
 		const workItems = buildWorkItems({
@@ -311,6 +346,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		t,
 		online,
 		settingsGroups,
+		settingEntries,
 		activeWorkspace,
 		historySessionId,
 		readAction,
@@ -318,6 +354,9 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		settled,
 		settleBlocked,
 		nativeShortcuts,
+		keybindings,
+		pageZoom,
+		tabActions,
 		options,
 		contextProject,
 		contextRepoProject,

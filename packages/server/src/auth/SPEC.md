@@ -47,9 +47,12 @@ ourselves and never surface a credential value over the wire.
     fixture data; the kind/detail mapping itself is `agent`'s `describeProviderAuth`, shared with the
     catalog's per-model `WireModel.auth` projection so a provider row and a picker row never disagree. Its runtime reads are restricted to the generation's provider-id allowlist captured before
     the opaque Central extension loads (after invariant host registrations), plus any `custom-*` provider the
-    runtime knows now that is not opaque (`statusProviderIds`), so a custom server saved after the
-    generation started counts as connected without a host restart: providers Central *introduces*
-    never become rows or cross the wire. A built-in Central *replaces* (`anthropic`, `openai`, `google-vertex`
+    runtime knows now that is not opaque, plus the generation's `extensionProviderIds` that are not opaque
+    (`statusProviderIds`), so a custom server saved after the generation started counts as connected without
+    a host restart, and a provider a user's pi extension registered is an ordinary row (named by that
+    extension) that counts as a model source for onboarding (#1351): providers Central *introduces*
+    never become rows or cross the wire, and an id that is both Central and a user extension's stays
+    Central. A built-in Central *replaces* (`anthropic`, `openai`, `google-vertex`
     in the real artifact) stays a row — the user must be able to see which providers reach them through
     JetBrains AI — and is reported as `kind: "central"` with no `detail`, decided purely by the id's membership
     in the generation's `opaqueProviderIds`; its `name` is the generation's pre-extension display name (pi
@@ -138,7 +141,10 @@ ourselves and never surface a credential value over the wire.
       or serialized onto the wire.
   - `jbcentral` — the in-app **JetBrains AI** native flow. It composes `shared/jbcentral`'s host-local adapter
     and artifact watcher with `agent`'s candidate-generation seam; it never reaches manager internals. Host boot
-    starts the watcher and requests one initial generation before model work. A reviewed configured artifact is
+    starts the watcher and requests one initial generation before model work. The artifact path is configured as
+    the session-extension exclusion before that first generation; agent's Central-exclusion invariant
+    ([[submodule-server-agent]]) then keeps it out of every chat, catalog and user-extension load, so it never
+    yields an `extensionProviderIds` entry. A reviewed configured artifact is
     passed as an opaque extension path; absent or unsupported configuration produces a plain runtime. If the
     Central candidate fails at initial boot, auth records `load-failed` and asks agent for a plain runtime so
     the UI and unrelated providers remain usable; failure of that plain runtime still fails startup.

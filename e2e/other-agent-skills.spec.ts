@@ -1,20 +1,23 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import {
+	closeSettings,
+	createWorkspaceViaDialog,
+	openFixtureProject,
+	openSettingsSection,
+} from "./fixtures/app";
 import { E2E_HOME_DIR } from "./fixtures/paths";
 
 const SKILL = "e2e-other-agent-widget";
 const skillDir = join(E2E_HOME_DIR, ".claude", "skills", SKILL);
 
 async function setOtherAgentSkills(page: Page, enabled: boolean): Promise<void> {
-	await page.getByTestId("open-settings").click();
-	await page.getByTestId("settings-nav-extensions").click();
+	await openSettingsSection(page, "extensions");
 	const toggle = page.getByTestId("other-agent-skills-toggle");
 	if ((await toggle.getAttribute("data-active")) !== String(enabled)) await toggle.click();
 	await expect(toggle).toHaveAttribute("data-active", String(enabled));
-	await page.keyboard.press("Escape");
-	await expect(page.getByTestId("settings-dialog")).toBeHidden();
+	await closeSettings(page);
 }
 
 async function openSkills(page: Page) {

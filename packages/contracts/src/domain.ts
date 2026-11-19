@@ -1,3 +1,4 @@
+import type { KeybindingOverrides } from "./keybindingChord";
 import type { MatchTier } from "./match";
 import type { SessionState, ThinkingLevel, WireModel } from "./piProtocol";
 
@@ -64,6 +65,8 @@ export interface Project {
 	path: string;
 	slug: string;
 	lastOpened: number;
+	/** Open projects list highest rank first; absent reads as `lastOpened`. */
+	rank?: number;
 	/** The one built-in container of chats without a project: not a repository, never git, never closed. */
 	kind?: "chats";
 	closed?: true;
@@ -84,6 +87,17 @@ export interface Project {
 	mcpOverrides?: Record<string, McpProjectOverride>;
 	/** "Always allow" MCP tools per server name (never written to `.pi/mcp.json`). */
 	mcpToolGrants?: Record<string, McpToolGrant>;
+}
+
+export function projectRank(project: Pick<Project, "rank" | "lastOpened">): number {
+	return project.rank ?? project.lastOpened;
+}
+
+export function compareProjectRank(
+	a: Pick<Project, "id" | "rank" | "lastOpened">,
+	b: Pick<Project, "id" | "rank" | "lastOpened">,
+): number {
+	return projectRank(b) - projectRank(a) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 }
 
 /** Tools (pi tool names) granted while the server keeps the command + args or URL hashed as `target`. */
@@ -294,6 +308,13 @@ export type ExistingWorktreeCandidate =
 	| { path: string; branch: string; status: "available" }
 	| { path: string; status: "detached" };
 
+/** The open workspace holding an absolute path, matched on real paths; `relativePath` is POSIX and contained. */
+export interface WorkspacePathMatch {
+	workspaceId: string;
+	projectId: string;
+	relativePath: string;
+}
+
 export interface EditorInfo {
 	id: string;
 	label: string;
@@ -310,6 +331,63 @@ export interface WorkspaceFsChangedPayload {
 }
 
 export type FileKind = "file" | "dir";
+
+export type WorkspaceArtifactState = "live" | "deleted";
+
+export type ArtifactRole = "result" | "working";
+
+export type ArtifactRoleReason =
+	| "picked"
+	| "shown"
+	| "linked"
+	| "document"
+	| "working-folder"
+	| "script"
+	| "data"
+	| "unshown";
+
+export interface ArtifactRound {
+	sessionId: string;
+	startedAt: number;
+}
+
+export interface WorkspaceArtifact {
+	path: string;
+	state: WorkspaceArtifactState;
+	size: number;
+	changedAt: number;
+	firstSeenAt: number;
+	sessionId?: string;
+	role?: ArtifactRole;
+	reason?: ArtifactRoleReason;
+	rounds?: ArtifactRound[];
+}
+
+export interface WorkspaceIgnoredOutput {
+	path: string;
+	kind: FileKind;
+	files: number;
+	filesTruncated: boolean;
+	changedAt: number;
+	sessionId?: string;
+}
+
+/** Where agents write HTML mockups; a browser UI runs their scripts (sandboxed, no network). */
+export const WORKSPACE_MOCKUP_DIR = ".thinkrail/context/mockups";
+
+/** The host route that serves a workspace file for a browser tab (sandboxed, see the host spec). */
+export const WORKSPACE_VIEW_ROUTE = "/view/";
+
+export interface WorkspaceArtifactsSnapshot {
+	workspaceId: string;
+	dir: string;
+	artifacts: WorkspaceArtifact[];
+	outputs: WorkspaceIgnoredOutput[] | null;
+}
+
+export interface WorkspaceArtifactsChangedPayload {
+	workspaceId: string;
+}
 
 export interface FileNode {
 	path: string;
@@ -1204,12 +1282,19 @@ export type LoginFrame =
 	| { kind: "success" }
 	| { kind: "error"; message: string };
 
+/** The server an MCP sign-in is for and the workspace it started in; none when no workspace was open. */
+export interface McpLoginTarget {
+	kind: "mcp";
+	workspaceId?: string;
+	serverName: string;
+}
+
 export interface LoginPush {
 	loginId: string;
 	providerId: string;
 	frame: LoginFrame;
 	/** Present for MCP server sign-ins; such pushes reach only the connection that started the login. */
-	target?: { kind: "mcp"; workspaceId: string; serverName: string };
+	target?: McpLoginTarget;
 }
 
 export interface LoginReply {
@@ -1364,7 +1449,7 @@ export function isFontWeightOffset(value: unknown): value is number {
 	);
 }
 
-export type LayoutToolId = "projects" | "specs" | "files" | "review" | "plan";
+export type LayoutToolId = "projects" | "specs" | "files" | "review" | "plan" | "artifacts";
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
 
@@ -1423,7 +1508,7 @@ export function isComposerGrowthLimit(value: unknown): value is ComposerGrowthLi
 	return COMPOSER_GROWTH_LIMITS.some((limit) => limit === value);
 }
 
-export const QUESTION_PANEL_HEIGHT_PERCENT = { min: 40, max: 100, default: 60 } as const;
+export const QUESTION_PANEL_HEIGHT_PERCENT = { min: 40, max: 100, default: 70 } as const;
 
 export function isQuestionPanelHeight(value: unknown): value is number {
 	return (
@@ -1434,7 +1519,13 @@ export function isQuestionPanelHeight(value: unknown): value is number {
 	);
 }
 
-export const LINE_WIDTH_COLUMNS = { min: 40, max: 240, default: 120 } as const;
+export type LineWidthKind = "chat" | "file";
+
+export const LINE_WIDTH_COLUMNS = {
+	min: 40,
+	max: 240,
+	default: { chat: 80, file: 120 } satisfies Record<LineWidthKind, number>,
+} as const;
 
 export function isLineWidth(value: unknown): value is number {
 	return (
@@ -1443,6 +1534,14 @@ export function isLineWidth(value: unknown): value is number {
 		value >= LINE_WIDTH_COLUMNS.min &&
 		value <= LINE_WIDTH_COLUMNS.max
 	);
+}
+
+export interface SubagentCatalogEntry {
+	name: string;
+	description: string;
+	source: "builtin" | "personal" | "project";
+	model?: string;
+	thinking?: ThinkingLevel;
 }
 
 export interface AppConfig extends ThemePreference {
@@ -1486,6 +1585,8 @@ export interface AppConfig extends ThemePreference {
 	terminalWindowsShell: TerminalWindowsShell;
 	/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
 	settleIdleDays: number | null;
+	/** Agent definition names switched off globally; unknown names are retained. */
+	disabledSubagents: string[];
 	disabledExtensions: string[];
 	/** Values of settings bundled extensions declare, by extension name then setting key. */
 	extensionSettings: ExtensionSettingValues;
@@ -1507,6 +1608,8 @@ export interface AppConfig extends ThemePreference {
 	codeLigatures: boolean;
 	/** Shifts every text weight but the brand face's together. */
 	fontWeightOffset: number;
+	/** The user's chords by command id, replacing its defaults; `[]` unbinds it, an absent id keeps them. */
+	keybindings: KeybindingOverrides;
 }
 
 export type ExtensionSettingValues = Record<string, Record<string, boolean>>;
@@ -1839,8 +1942,8 @@ export const DEFAULT_CONFIG: AppConfig = {
 	terminalWindowsShell: "auto",
 	composerGrowthLimit: "half-chat",
 	questionPanelHeight: QUESTION_PANEL_HEIGHT_PERCENT.default,
-	chatLineWidth: LINE_WIDTH_COLUMNS.default,
-	fileLineWidth: LINE_WIDTH_COLUMNS.default,
+	chatLineWidth: LINE_WIDTH_COLUMNS.default.chat,
+	fileLineWidth: LINE_WIDTH_COLUMNS.default.file,
 	chatLineWidthBounded: true,
 	fileLineWidthBounded: true,
 	voiceInputEnabled: true,
@@ -1854,6 +1957,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
 	settleIdleDays: SETTLE_IDLE_DAYS.default,
+	disabledSubagents: [],
 	disabledExtensions: [],
 	extensionSettings: {},
 	otherAgentSkills: false,
@@ -1865,6 +1969,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	codeFontSize: CODE_FONT_SIZE.default,
 	codeLigatures: false,
 	fontWeightOffset: FONT_WEIGHT_OFFSET.default,
+	keybindings: {},
 };
 
 export type FontSettings = Pick<
@@ -2126,6 +2231,24 @@ export interface TemplateInfo {
 
 export interface Template extends TemplateInfo {
 	content: string;
+}
+
+const WINDOWS_DEVICE_NAME = /^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³]) *(?:\.|$)/i;
+
+export function isWindowsDeviceName(name: string): boolean {
+	return WINDOWS_DEVICE_NAME.test(name);
+}
+
+export function isValidTemplateName(name: string): boolean {
+	if (name.length === 0) return false;
+	if (name.startsWith(".")) return false;
+	return (
+		!name.includes("/") &&
+		!name.includes("\\") &&
+		!name.includes("\0") &&
+		!name.includes(":") &&
+		!isWindowsDeviceName(name)
+	);
 }
 
 export type ReviewCommentKind = "inline" | "diff" | "file" | "review";

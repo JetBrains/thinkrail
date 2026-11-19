@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import {
 	MCP_PROTOCOL_VERSION,
+	MCP_USER_SERVERS_PROTOCOL_VERSION,
 	type McpListResult,
 	type McpStatusSnapshot,
 	type WsMethodName,
@@ -12,7 +13,9 @@ import {
 	MCP_STARTING_POLL_MS,
 	type McpWatchDeps,
 	requestMcpList,
+	requestUserMcpList,
 	startMcpWorkspaceWatch,
+	supportsUserMcp,
 } from "./mcp";
 import { WsTransport } from "./transport";
 import * as wireTransport from "./wireTransport";
@@ -510,5 +513,124 @@ describe("MCP list request ordering", () => {
 		await queued;
 		expectInstalled(updated);
 		expectInstalled(otherCurrent, otherWorkspace);
+	});
+});
+
+test("user-level MCP management needs a host at its protocol version", () => {
+	expect(supportsUserMcp(null)).toBe(false);
+	expect(supportsUserMcp(MCP_USER_SERVERS_PROTOCOL_VERSION - 1)).toBe(false);
+	expect(supportsUserMcp(MCP_USER_SERVERS_PROTOCOL_VERSION)).toBe(true);
+});
+
+describe("user-level MCP list without a workspace", () => {
+	let transport: DeferredTransport;
+	let restoreTransport: () => void;
+	let previousState: ReturnType<typeof state>;
+	const readUser = () => requestUserMcpList("mcp.list", {});
+	const toggle = () =>
+		requestUserMcpList("mcp.setUserServer", {
+			name: "docs",
+			expectedFingerprint: "fingerprint",
+			enabled: false,
+		});
+
+	beforeEach(() => {
+		previousState = state();
+		useAppStore.setState({
+			mcpByWorkspace: {},
+			mcpRevision: 0,
+			removedWorkspaceIds: {},
+			deletedSessionsByWorkspace: {},
+			status: "connected",
+			connectionGeneration: 3,
+			protocolVersion: MCP_USER_SERVERS_PROTOCOL_VERSION,
+		});
+		transport = new DeferredTransport({ url: "ws://localhost:24242/ws" });
+		const spy = spyOn(wireTransport, "getTransport").mockReturnValue(transport);
+		restoreTransport = () => spy.mockRestore();
+	});
+
+	afterEach(() => {
+		restoreTransport();
+		useAppStore.setState(previousState, true);
+	});
+
+	test("its tail serializes reads and mutations and never installs into a workspace's MCP state", async () => {
+		const first = readUser();
+		expect(readUser()).toBe(first);
+		const added = requestUserMcpList("mcp.add", {
+			scope: "user",
+			name: "docs",
+			entry: { command: "docs" },
+		});
+		const toggled = toggle();
+		const again = toggle();
+		const last = readUser();
+		expect(again).not.toBe(toggled);
+		expect(readUser()).toBe(last);
+		const methods: WsMethodName[] = [
+			"mcp.list",
+			"mcp.add",
+			"mcp.setUserServer",
+			"mcp.setUserServer",
+			"mcp.list",
+		];
+		for (const [index, request] of [first, added, toggled, again, last].entries()) {
+			expect(transport.requests.map((sent) => sent.method)).toEqual(methods.slice(0, index + 1));
+			const result = listResult(`result-${index}`);
+			transport.at(index).resolve(result);
+			expect(await request).toBe(result);
+		}
+		expect(transport.at(0).params).toEqual({});
+		expect(transport.at(2).params).toEqual({
+			name: "docs",
+			expectedFingerprint: "fingerprint",
+			enabled: false,
+		});
+		expect(state().mcpByWorkspace).toEqual({});
+		expect(state().mcpRevision).toBe(0);
+	});
+
+	test("the workspace path never serves a list without a workspace", async () => {
+		await expect(requestMcpList("mcp.list", {})).rejects.toThrow("until the host reconnects");
+		expect(transport.requests).toHaveLength(0);
+	});
+
+	test("its tail and a workspace's do not wait for each other", async () => {
+		const user = toggle();
+		const workspace = read();
+		expect(transport.requests.map((sent) => sent.params)).toEqual([
+			{ name: "docs", expectedFingerprint: "fingerprint", enabled: false },
+			{ workspaceId },
+		]);
+		const installed = listResult("workspace");
+		transport.at(1).resolve(installed);
+		await workspace;
+		expectInstalled(installed);
+		transport.at(0).resolve(listResult("user"));
+		await user;
+		expectInstalled(installed);
+		expect(Object.keys(state().mcpByWorkspace)).toEqual([workspaceId]);
+	});
+
+	test.each([
+		[
+			"an older host",
+			() => useAppStore.setState({ protocolVersion: MCP_USER_SERVERS_PROTOCOL_VERSION - 1 }),
+		],
+		["a dropped connection", () => state().setStatus("disconnected")],
+	] as const)("%s refuses queued work without sending it", async (_name, invalidate) => {
+		const first = readUser();
+		const queued = Promise.allSettled([toggle(), readUser()]);
+		invalidate();
+		transport.at(0).resolve(listResult("obsolete"));
+		await first;
+		const unavailable: PromiseRejectedResult = {
+			status: "rejected",
+			reason: new Error("MCP servers are unavailable until the host reconnects."),
+		};
+		expect(await queued).toEqual([unavailable, unavailable]);
+		await expect(readUser()).rejects.toThrow("until the host reconnects");
+		expect(transport.requests).toHaveLength(1);
 	});
 });

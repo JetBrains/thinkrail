@@ -1,0 +1,32 @@
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 39f4d5de4bce8a6fabc2824328b6d8dbd20f1b70..0c30e0e6448b24788c7afab0c6345b6a41096105 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -1351,9 +1351,9 @@ const ce = "up", ne = "down", Uo = "none", Ko = {
+         { changed: !1, jump: 0, scrollHeight: 0, scrollTop: 0 }
+       ),
+       V((a) => a.changed),
+-      k((a) => a.jump)
++      k((a) => ({ jump: a.jump }))
+     ),
+-    0
++    { jump: 0 }
+   );
+   z(
+     S(
+@@ -2134,12 +2134,12 @@ const rr = ro(() => /iP(ad|od|hone)/i.test(navigator.userAgent) && /WebKit/i.tes
+         d,
+         $(l),
+         Ht(
+-          ([, I, w, B], [{ bottom: N, items: c, offsetBottom: p, totalCount: b }, O]) => {
++          ([, I, w, B, J], [{ bottom: N, items: c, offsetBottom: p, totalCount: b }, O]) => {
+             const L = N + p;
+             let F = 0;
+-            return w === b && I.length > 0 && c.length > 0 && (c[0].originalIndex === 0 && I[0].originalIndex === 0 || (F = L - B, F !== 0 && (F += O))), [F, c, b, L];
++            return w === b && I.length > 0 && c.length > 0 && (c[0].originalIndex === 0 && I[0].originalIndex === 0 || (F = L - B, F !== 0 && O !== J && (F += O.jump, J = O))), [F, c, b, L, J];
+           },
+-          [0, [], 0, 0]
++          [0, [], 0, 0, null]
+         ),
+         V(([I]) => I !== 0),
+         $(r, u, o, s, v, R),

@@ -1,11 +1,13 @@
-import { RiDiscordLine as Discord } from "@remixicon/react";
-import { T, useT } from "@thinkrail/locales/react";
+import { RiDiscordLine as Discord, RiMailLine as Mail } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import { Button, buttonVariants } from "@thinkrail/ui/button";
-import type { ReactNode } from "react";
+import { SETTINGS_ROWS, SettingsPage, SettingsRow } from "@/settingsKit";
 import { useAppStore } from "@/store";
+import { SETTING, settingProps } from "./settingsCatalog";
 
 const DISCORD_URL = "https://thinkrail.ai/discord";
 const FEEDBACK_EMAIL = "info@thinkrail.ai";
+const LINK_BUTTON = buttonVariants({ variant: "outline", size: "m" });
 
 export function FeedbackSettings() {
 	const surveyAvailable = useAppStore((state) => state.inAppSurvey !== null);
@@ -15,56 +17,55 @@ export function FeedbackSettings() {
 export function FeedbackSettingsView({ surveyAvailable }: { surveyAvailable: boolean }) {
 	const t = useT();
 	return (
-		<section data-testid="settings-feedback" className="flex flex-col gap-16">
-			<h3 className="tr-title-section text-text-default">{t("settings.feedback.title")}</h3>
-			{surveyAvailable ? (
-				<div className="flex flex-col items-start gap-8">
-					<p className="text-text-muted tr-text-metadata">
-						{t("settings.feedback.surveyDescription")}
-					</p>
-					<Button
-						variant="primary"
-						size="l"
-						data-testid="feedback-take-survey"
-						onClick={() => useAppStore.getState().openSurveyWindow()}
-					>
-						{t("settings.feedback.takeSurvey")}
-					</Button>
-				</div>
-			) : null}
-			<div className="flex flex-col items-start gap-8">
-				<p className="text-text-muted tr-text-metadata">
-					{t("settings.feedback.discordDescription")}
-				</p>
-				<a
-					data-testid="feedback-join-discord"
-					href={DISCORD_URL}
-					target="_blank"
-					rel="noopener noreferrer"
-					className={buttonVariants({ variant: "outline", size: "l" })}
-				>
-					<Discord aria-hidden />
-					{t("settings.feedback.joinDiscord")}
-				</a>
-			</div>
-			<p data-testid="feedback-email" className="text-text-muted tr-text-metadata">
-				<T
-					i18nKey="settings.feedback.email"
-					components={[<EmailLink key="email" />]}
-					values={{ email: FEEDBACK_EMAIL }}
-				/>
-			</p>
-		</section>
-	);
-}
-
-function EmailLink({ children }: { children?: ReactNode }) {
-	return (
-		<a
-			href={`mailto:${FEEDBACK_EMAIL}`}
-			className="text-primary underline underline-offset-2 hover:opacity-80"
+		<SettingsPage
+			title={t("settings.dialog.feedbackCta")}
+			description={t("settings.feedback.description")}
+			testId="settings-feedback"
 		>
-			{children}
-		</a>
+			<div className={SETTINGS_ROWS}>
+				{surveyAvailable ? (
+					<SettingsRow
+						{...settingProps(t, SETTING.survey)}
+						control={
+							<Button
+								variant="primary"
+								size="m"
+								tabIndex={0}
+								data-testid="feedback-take-survey"
+								onClick={() => useAppStore.getState().openSurveyWindow()}
+							>
+								{t("settings.feedback.takeSurvey")}
+							</Button>
+						}
+					/>
+				) : null}
+				<SettingsRow
+					{...settingProps(t, SETTING.discord)}
+					control={
+						<a
+							data-testid="feedback-join-discord"
+							href={DISCORD_URL}
+							target="_blank"
+							rel="noopener noreferrer"
+							tabIndex={0}
+							className={LINK_BUTTON}
+						>
+							<Discord aria-hidden />
+							{t("settings.feedback.join")}
+						</a>
+					}
+				/>
+				<SettingsRow
+					{...settingProps(t, SETTING.feedbackEmail)}
+					testId="feedback-email"
+					control={
+						<a href={`mailto:${FEEDBACK_EMAIL}`} tabIndex={0} className={LINK_BUTTON}>
+							<Mail aria-hidden />
+							{FEEDBACK_EMAIL}
+						</a>
+					}
+				/>
+			</div>
+		</SettingsPage>
 	);
 }

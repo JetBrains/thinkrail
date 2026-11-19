@@ -45,21 +45,26 @@ export {
 } from "./extensions";
 export {
 	effectiveMcpServerConfig,
+	type McpConfigFile,
 	mcpEntryFingerprint,
 	mcpPolicyOf,
 	readMcpServerLog,
 	removeMcpServerEntry,
+	setUserMcpEntryFields,
 	shareMcpOverrideWithRepo,
 	writeMcpServerEntry,
 } from "./mcp";
 export {
 	listMcpServers,
+	listUserMcpServers,
+	type McpReadContext,
 	mcpOwnershipGuard,
 	readMcpToolOutput,
 	reconcileMcpSessions,
 	reconnectMcpServer,
 	refreshMcpStatus,
 	setMcpStatusPublisher,
+	userMcpContext,
 	watchUserMcpConfig,
 } from "./mcpSessions";
 export {
@@ -134,6 +139,7 @@ export {
 	type SkillFacts,
 } from "./skillAdmission";
 export { isProjectSkillPath, mayHoldProjectSkills } from "./skillSources";
+export { listSubagentCatalog } from "./subagentCatalog";
 export {
 	SET_TITLE_TOOL_NAME,
 	type SetTitleParams,

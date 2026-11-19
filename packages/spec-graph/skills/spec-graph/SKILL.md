@@ -62,8 +62,9 @@ description: "Use when locating, reading, creating, updating, or validating proj
   - `architecture-design` — system-wide topology, cross-cutting decisions, and invariants.
   - `module-design` — a package or module's responsibility and boundary.
   - `submodule-design` — the same, for a directory-level module inside a package.
-  - `task-spec` — a temporary working document for a piece of work; not durable, and removed once the
-    work lands.
+  - `task-spec` — a working document for one piece of work; not durable. Once the work lands it is
+    retired with `status: done`, never deleted: spec search skips it, and the user keeps it as an
+    artifact.
 
 ## Tools
 

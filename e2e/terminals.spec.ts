@@ -90,7 +90,7 @@ test("a shell start failure explains recovery and retries the same tab", async (
 	attachFailuresRemaining = 2;
 	await page.getByTestId("project-item").first().click();
 	await expect(page.getByTestId("terminal-panel")).toHaveCount(0);
-	await worktreeRows(page).first().getByRole("button").first().click();
+	await worktreeRows(page).first().getByRole("treeitem").click();
 	const chatTab = page.locator('[data-testid="editor-tab"][data-kind="chat"]').getByRole("tab");
 	await expect(chatTab).toBeVisible();
 	await chatTab.focus();
@@ -268,7 +268,7 @@ test("terminals are workspace-scoped and survive workspace switches", async ({ p
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
 	await expect(visibleTerminalScreen(page)).not.toContainText("TR_WS1_BUFFER");
 
-	await worktreeRow(page, "workspace-1").getByRole("button").first().click();
+	await worktreeRow(page, "workspace-1").getByRole("treeitem").click();
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
 	await expect(visibleTerminalScreen(page)).toContainText("TR_WS1_BUFFER");
 });
@@ -330,7 +330,7 @@ test("a shell survives a trip to Project Home and back", async ({ page }) => {
 	await page.getByTestId("project-item").first().click();
 	await expect(page.getByTestId("terminal-panel")).toHaveCount(0);
 
-	await worktreeRow(page, "workspace-1").getByRole("button").first().click();
+	await worktreeRow(page, "workspace-1").getByRole("treeitem").click();
 	await waitTerminalReady(page);
 	await expect(visibleTerminalScreen(page)).toContainText("CHECK=alive");
 
@@ -366,7 +366,7 @@ test("historical terminal queries do not become input on remount", async ({ page
 	writes.length = 0;
 
 	await page.getByTestId("project-item").first().click();
-	await worktreeRows(page).first().getByRole("button").first().click();
+	await worktreeRows(page).first().getByRole("treeitem").click();
 	await waitTerminalReady(page);
 	await expect(visibleTerminalScreen(page)).toContainText("TR_DSR_CONSUMED");
 	expect(writes.filter((data) => CURSOR_POSITION_REPLY.test(data))).toEqual([]);
@@ -415,7 +415,7 @@ test("rapid re-entry never spawns a second shell", async ({ page }) => {
 	for (let round = 0; round < 2; round++) {
 		await page.getByTestId("project-item").first().click();
 		await expect(page.getByTestId("terminal-panel")).toHaveCount(0);
-		await worktreeRow(page, "workspace-1").getByRole("button").first().click();
+		await worktreeRow(page, "workspace-1").getByRole("treeitem").click();
 		await expect(visibleTerminal(page)).toHaveCount(1);
 	}
 	delayAttachMs = 0;
@@ -513,6 +513,61 @@ test("Ctrl+C still interrupts while an input method is active", async ({ page })
 	await expect(term).toContainText("TR_INTERRUPTED_42");
 });
 
+test("Ctrl+Shift+C copies the selection off macOS, Ctrl+Shift+V pastes it, neither sends ^C", async ({
+	page,
+}) => {
+	test.skip(process.platform === "darwin", "Cmd+C copies on macOS");
+	const writes: string[] = [];
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		ws.onMessage((message) => {
+			try {
+				const frame = JSON.parse(message.toString()) as {
+					method?: string;
+					params?: { data?: string };
+				};
+				if (frame.method === "terminal.write" && frame.params?.data) writes.push(frame.params.data);
+			} catch {}
+			server.send(message);
+		});
+		server.onMessage((message) => ws.send(message));
+	});
+	await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	const term = visibleTerminalScreen(page);
+	const clipboard = () => page.evaluate(() => navigator.clipboard.readText());
+	const writtenAfter = (mark: number) => writes.slice(mark).join("");
+
+	await runInTerminal(page, "echo TR_COPY_$((21 + 21))");
+	const output = term.locator(":scope > div").filter({ hasText: /^TR_COPY_42\s*$/ });
+	await expect(output).toHaveCount(1);
+	await page.evaluate(() => navigator.clipboard.writeText("TR_BEFORE"));
+	const box = await output.boundingBox();
+	if (!box) throw new Error("terminal row has no box");
+	await page.mouse.dblclick(box.x + 4, box.y + box.height / 2);
+	const copyMark = writes.length;
+	await page.keyboard.press("Control+Shift+C");
+	await expect.poll(clipboard).toBe("TR_COPY_42");
+	const pasteMark = writes.length;
+	await page.keyboard.press("Control+Shift+V");
+	await expect.poll(() => writtenAfter(pasteMark)).toContain("TR_COPY_42");
+	await page.keyboard.press("Control+U");
+
+	await page.evaluate(() => navigator.clipboard.writeText("TR_UNCHANGED"));
+	await page.keyboard.type("echo TR_AFTER_$((1 + 1))");
+	await page.keyboard.press("Control+Shift+C");
+	await page.keyboard.press("Enter");
+	await expect(term.locator(":scope > div").filter({ hasText: /^TR_AFTER_2\s*$/ })).toHaveCount(1);
+	expect(writtenAfter(copyMark)).not.toContain("\x03");
+	expect(await clipboard()).toBe("TR_UNCHANGED");
+
+	const interruptMark = writes.length;
+	await page.keyboard.press("Control+C");
+	await expect.poll(() => writtenAfter(interruptMark)).toContain("\x03");
+});
+
 test("a held Korean syllable reaches the shell before a paste or a rescued chord", async ({
 	page,
 }) => {
@@ -584,7 +639,7 @@ test("a shell that dies while detached is not re-attached as if alive", async ({
 	await expect(page.getByTestId("terminal-panel")).toHaveCount(0);
 	await page.waitForTimeout(3500);
 
-	await worktreeRow(page, "workspace-1").getByRole("button").first().click();
+	await worktreeRow(page, "workspace-1").getByRole("treeitem").click();
 	const term = visibleTerminal(page);
 	await expect(term).toBeVisible();
 

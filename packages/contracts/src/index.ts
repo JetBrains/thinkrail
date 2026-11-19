@@ -5,6 +5,7 @@ export {
 	CODE_FONT_SIZE,
 	COMPOSER_GROWTH_LIMITS,
 	clampToCodePoints,
+	compareProjectRank,
 	compareResourceHistory,
 	DEFAULT_CONFIG,
 	DEFAULT_WORKSPACE_NAME,
@@ -43,6 +44,8 @@ export {
 	isTerminalWindowsShell,
 	isThemeMode,
 	isUserFontFile,
+	isValidTemplateName,
+	isWindowsDeviceName,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
 	LINE_WIDTH_COLUMNS,
 	MAX_HISTORY_LIMIT,
@@ -55,6 +58,7 @@ export {
 	OTHER_AGENT_SKILL_GROUPS,
 	PLAN_REVIEW_VERDICTS,
 	parsePiPackageInput,
+	projectRank,
 	QUESTION_PANEL_HEIGHT_PERCENT,
 	RECENT_MODELS_LIMIT,
 	REQUEST_IMAGE_BASE64_BUDGET,
@@ -82,7 +86,16 @@ export {
 	USER_FONT_EXTENSIONS,
 	USER_FONT_UPLOAD_HEADER,
 	USER_FONTS_ROUTE,
+	WORKSPACE_MOCKUP_DIR,
+	WORKSPACE_VIEW_ROUTE,
 } from "./domain";
+export type { KeybindingModifier, KeybindingOverrides } from "./keybindingChord";
+export {
+	isKeybindingChord,
+	isKeybindingOverrides,
+	isModifierKeyCode,
+	KEYBINDING_MODIFIERS,
+} from "./keybindingChord";
 export type {
 	ContentMatch,
 	FieldMatch,
@@ -107,6 +120,7 @@ export type * from "./piProtocol";
 export {
 	assistantToolCallsAreExecutable,
 	canMarkCompletionUnread,
+	isRefImage,
 	isSessionWorking,
 	isTranscriptMessageRole,
 	sameModel,

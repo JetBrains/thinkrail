@@ -10,6 +10,7 @@ import {
 	RiFileTextLine as FileText,
 	RiContractUpDownLine as FoldVertical,
 	RiLoopRightLine as RotateCw,
+	RiShapesLine as Shapes,
 	RiStackLine as Stack,
 	RiStopCircleLine as StopCircle,
 	RiToolsLine as Wrench,
@@ -18,9 +19,9 @@ import type {
 	ChatHandoffDetails,
 	ContinueInWorkspaceRequestDetails,
 	GitDiffScope,
-	ImageContent,
 	ReviewFixDetails,
-	UserMessage,
+	WireImage,
+	WireUserMessage,
 } from "@thinkrail/contracts";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import { type Translator, useT } from "@thinkrail/locales/react";
@@ -37,11 +38,18 @@ import {
 import { CustomIcon } from "@/components/CustomIcon";
 import { parseSkillInvocation, projectRelativePath, type SkillInvocation, userText } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
-import { type AssistantFailure, errorTurnText, subscriptionLimit } from "./assistantFailure";
+import {
+	type AssistantFailure,
+	errorTurnText,
+	fallbacksRejected,
+	subscriptionLimit,
+} from "./assistantFailure";
 import { AssistantMarkdown } from "./assistantLinks";
 import { BackgroundCommandResult, SubagentResult } from "./BackgroundResult";
 import { useChatActions } from "./ChatActions";
+import { ChatImage } from "./ChatImage";
 import { CopyButton } from "./CopyButton";
+import { CONTENT_WIDTH_BREAKOUT } from "./contentWidth";
 import { NoticeLink } from "./ExtraUsageNotice";
 import { ToolPromptSlot } from "./ExtUiPrompt";
 import { FileChip } from "./FileChip";
@@ -53,7 +61,7 @@ import { type ChatRow, LARGE_USER_MESSAGE, type TurnDividerData } from "./rows";
 import { formatElapsed, formatTokens } from "./SessionStatsBar";
 import { ToolCard } from "./ToolCard";
 import { ToolRendererBody } from "./ToolRendererBody";
-import { getToolChrome, getToolSummary } from "./toolRegistry";
+import { getToolChrome, getToolSummary, getToolWidth } from "./toolRegistry";
 import type { CompactionState } from "./types";
 
 function ChatTurnViewImpl({
@@ -77,7 +85,7 @@ function ChatTurnViewImpl({
 	onOpenSpec?: ((path: string) => void) | undefined;
 	onOpenChange?: ((path: string) => void) | undefined;
 	onReviewTurn?: ((scope: GitDiffScope) => void) | undefined;
-	onReveal?: ((tab: "specs" | "changes") => void) | undefined;
+	onReveal?: ((tab: DividerReveal) => void) | undefined;
 	onTryAgain?: (() => void) | undefined;
 	/** Live-resource deep link for this chat's latest turn divider only. */
 	stillRunning?: StillRunning | undefined;
@@ -176,6 +184,7 @@ function ChatTurnViewImpl({
 					workspaceRoot={workspaceRoot}
 					onOpenSpec={onOpenSpec ?? (() => {})}
 					onOpenChange={onOpenChange ?? (() => {})}
+					onOpenArtifact={onOpenFile ?? (() => {})}
 					onReviewTurn={onReviewTurn}
 					onReveal={onReveal ?? (() => {})}
 					stillRunning={stillRunning}
@@ -192,17 +201,11 @@ function ChatTurnViewImpl({
  */
 export const ChatTurnView = memo(ChatTurnViewImpl);
 
-function userAttachments(content: UserMessage["content"], names?: string[]) {
+function userAttachments(content: WireUserMessage["content"], names?: string[]) {
 	if (typeof content === "string") return [];
-	const seen = new Map<string, number>();
 	return content
 		.filter((c) => c.type === "image")
-		.map((img, i) => {
-			const tail = img.data.slice(-24);
-			const n = seen.get(tail) ?? 0;
-			seen.set(tail, n + 1);
-			return { key: `${tail}-${n}`, label: names?.[i] ?? img.mimeType, img };
-		});
+		.map((img, i) => ({ key: `attachment-${i}`, label: names?.[i] ?? img.mimeType, img }));
 }
 
 const USER_BUBBLE_BASE =
@@ -217,7 +220,7 @@ const USER_BUBBLE = cn("max-w-[85%]", USER_BUBBLE_BASE);
 const USER_SIDE_UNBOUNDED_CLAMP =
 	"[[data-line-width-bounded=false]_&]:max-w-[calc(100cqw-2*var(--chat-gutter))]";
 
-function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
+function AttachmentChip({ label, img }: { label: string; img: WireImage }) {
 	const t = useT();
 	const [open, setOpen] = useState(false);
 	return (
@@ -235,11 +238,7 @@ function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 						<DialogTitle>{label}</DialogTitle>
 					</DialogHeader>
 					<div className="relative min-h-0 flex-1 overflow-auto">
-						<img
-							src={`data:${img.mimeType};base64,${img.data}`}
-							alt=""
-							className="max-h-[80vh] max-w-full rounded-sm"
-						/>
+						<ChatImage image={img} label={label} fit="screen" />
 					</div>
 				</DialogContent>
 			</Dialog>
@@ -287,7 +286,7 @@ function UserTurn({
 	agentResponded,
 }: {
 	id: string;
-	message: UserMessage;
+	message: WireUserMessage;
 	attachmentNames?: string[] | undefined;
 	agentResponded: boolean;
 }) {
@@ -388,6 +387,7 @@ function PlainUserTurn({
 							ref={toggleRef}
 							type="button"
 							data-testid="user-message-toggle"
+							data-chat-item-toggle
 							aria-expanded={expanded}
 							onClick={toggle}
 							className="mt-4 flex items-center gap-4 tr-text-metadata text-text-subtle hover:text-text-default"
@@ -426,6 +426,7 @@ function SkillInvocationCard({
 				ref={toggleRef}
 				type="button"
 				data-testid="skill-invocation-toggle"
+				data-chat-item-toggle
 				aria-expanded={expanded}
 				aria-label={
 					expanded
@@ -433,7 +434,7 @@ function SkillInvocationCard({
 						: t("chat.turn.showSkillInstructions", { skill: invocation.name })
 				}
 				onClick={toggle}
-				className="flex w-full items-center gap-4 px-12 py-8 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex w-full items-center gap-4 px-12 py-8 text-left transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring-inset"
 			>
 				<BookOpen className="size-14 shrink-0 text-text-muted" aria-hidden="true" />
 				<span className="shrink-0 tr-text-ui text-text-muted">{t("chat.turn.skill")}</span>
@@ -618,7 +619,12 @@ function ToolRow({
 			streaming: row.streaming,
 		};
 		return (
-			<div className="tr-text-ui text-text-default">
+			<div
+				className={cn(
+					"tr-text-ui text-text-default",
+					getToolWidth(row.toolName) === "content" && CONTENT_WIDTH_BREAKOUT,
+				)}
+			>
 				<ToolRendererBody
 					{...renderProps}
 					imageLabel={getToolSummary(t, row.toolName, renderProps)}
@@ -681,6 +687,7 @@ function CompactionTurn({
 			<button
 				ref={toggleRef}
 				type="button"
+				data-chat-item-toggle
 				aria-expanded={open}
 				onClick={toggle}
 				className="flex items-center gap-8 text-text-muted tr-text-metadata hover:text-text-default"
@@ -711,8 +718,20 @@ function ErrorTurn({
 	onTryAgain?: (() => void) | undefined;
 }) {
 	const t = useT();
-	const openProviderSettings = useChatActions()?.openProviderSettings;
+	const actions = useChatActions();
+	const openProviderSettings = actions?.openProviderSettings;
 	const limit = subscriptionLimit({ text, failure });
+	const disableServerFallback =
+		onTryAgain && fallbacksRejected({ text, failure }) ? actions?.disableServerFallback : undefined;
+	const [repair, setRepair] = useState<"idle" | "pending" | "failed">("idle");
+	const runRepair = () => {
+		if (!disableServerFallback) return;
+		setRepair("pending");
+		disableServerFallback().then(
+			() => setRepair("idle"),
+			() => setRepair("failed"),
+		);
+	};
 	return (
 		<div
 			data-testid="chat-message"
@@ -738,6 +757,24 @@ function ErrorTurn({
 							{t("chat.failure.openProviderSettings")}
 						</Button>
 					) : null}
+				</div>
+			) : disableServerFallback ? (
+				<div className="flex flex-wrap items-center justify-end gap-x-16 gap-y-4">
+					{repair === "failed" ? (
+						<span role="alert" className="min-w-0 flex-1 text-feedback-error">
+							{t("chat.failure.disableFallbackFailed")}
+						</span>
+					) : null}
+					<Button
+						variant="outline"
+						size="m"
+						iconLeft={RotateCw}
+						loading={repair === "pending"}
+						data-testid="agent-disable-fallback"
+						onClick={runRepair}
+					>
+						{t("chat.failure.disableFallback")}
+					</Button>
 				</div>
 			) : onTryAgain ? (
 				<div className="flex justify-end">
@@ -854,8 +891,11 @@ function FileDiffGlyph({ className }: { className?: string | undefined }) {
 	return <CustomIcon name="file-diff-line" className={cn("size-14 shrink-0", className)} />;
 }
 
+export type DividerReveal = "specs" | "changes" | "artifacts";
+
 interface ArtifactGroup {
-	id: "specs" | "files";
+	id: "specs" | "files" | "artifacts";
+	display?: (path: string) => string;
 	icon: typeof FileText | ((props: { className?: string | undefined }) => ReactNode);
 	paths: string[];
 	label: (count: number) => string;
@@ -932,7 +972,7 @@ function ArtifactList({
 						>
 							<Icon className="size-12 shrink-0 text-text-muted" />
 							<span className="min-w-0 flex-1 truncate text-text-muted">
-								{projectRelativePath(path, workspaceRoot)}
+								{group.display ? group.display(path) : projectRelativePath(path, workspaceRoot)}
 							</span>
 							{stat ? (
 								<span className="shrink-0 tabular-nums">
@@ -990,6 +1030,7 @@ export function TurnDivider({
 	workspaceRoot,
 	onOpenSpec,
 	onOpenChange,
+	onOpenArtifact,
 	onReviewTurn,
 	onReveal,
 	stillRunning,
@@ -999,12 +1040,14 @@ export function TurnDivider({
 	workspaceRoot?: string | undefined;
 	onOpenSpec: (path: string) => void;
 	onOpenChange: (path: string) => void;
+	onOpenArtifact: (path: string) => void;
 	onReviewTurn?: ((scope: GitDiffScope) => void) | undefined;
-	onReveal: (tab: "specs" | "changes") => void;
+	onReveal: (tab: DividerReveal) => void;
 	stillRunning?: StillRunning | undefined;
 }) {
 	const t = useT();
-	const { outcome, elapsedMs, toolCount, specs, changedFiles, receipt } = data;
+	const { outcome, elapsedMs, toolCount, specs, changedFiles, artifacts, receipt } = data;
+	const artifactLabels = new Map(artifacts.map((artifact) => [artifact.path, artifact.label]));
 	const [selected, select] = useSelection(`${id}:artifacts`);
 	const stats = receipt
 		? new Map(
@@ -1052,6 +1095,16 @@ export function TurnDivider({
 			onOpen: onOpenChange,
 			reveal: () => onReveal("changes"),
 			...(stats ? { stats } : {}),
+		},
+		{
+			id: "artifacts",
+			icon: Shapes,
+			paths: artifacts.map((artifact) => artifact.path),
+			label: (n) => t("chat.divider.artifacts", { count: n }),
+			expanded: selected === "artifacts",
+			onOpen: onOpenArtifact,
+			reveal: () => onReveal("artifacts"),
+			display: (path) => artifactLabels.get(path) ?? path,
 		},
 	];
 	const groups = allGroups.filter((group) => group.paths.length > 0);

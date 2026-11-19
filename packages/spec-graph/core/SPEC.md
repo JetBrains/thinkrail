@@ -105,6 +105,15 @@ does on retrieval benchmarks.
   expected section in the top 3. Five paraphrase misses are recorded but not gated. `bun
   core/bench/live.ts [root]` prints the same report over a live tree and never fails.
 
+## Finished task-specs
+
+A task-spec is never deleted when its work lands: workflows mark it `status: done` and leave the file
+where it is (a ThinkRail host shows it in its Artifacts tool). So that finished designs do not compete
+with live ones, `matchesFilters` drops a task-spec whose status is `done` — grep and section search, the
+agent's and the host palette's alike — unless the caller filters for `type: "task-spec"`, and
+`graphSlice` never walks into one unless it is the slice's root. Lookups by id (`spec_get`) and
+validation still see every spec.
+
 ## Invariants
 
 - No `@earendil-works/*` import anywhere under `core/`.

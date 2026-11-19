@@ -74,7 +74,7 @@ function MergeForm({
 						disabled={busy}
 						onClick={() => setMethod(option)}
 						className={cn(
-							"h-28 rounded-sm px-8 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text",
+							"h-28 rounded-sm px-8 text-left tr-text-ui transition-colors focus-visible:focus-ring-inset disabled:text-control-disabled-text",
 							method === option
 								? "bg-control-bg-selected text-text-default"
 								: "text-text-muted hover:text-text-default",

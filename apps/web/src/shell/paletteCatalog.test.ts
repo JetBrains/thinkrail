@@ -1,8 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import type { Workspace } from "@thinkrail/contracts";
+import { type NativePageZoomAction, PROTOCOL_VERSION, type Workspace } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
+import { type KeybindingId, keybindingShortcut, resolveKeybindings } from "../keybindings";
+import { availableSettings, type SettingsCatalogContext } from "../panels/settingsCatalog";
+import { settingsNavGroups } from "../panels/settingsNav";
 import { commandItems } from "../search";
-import { buildCommands, type PaletteCatalogDeps } from "./paletteCatalog";
+import {
+	type LayoutCenterTab,
+	type TabAction,
+	tabActions,
+	toolTab,
+	type WorkspaceLayoutDocument,
+} from "./layout";
+import { buildCommands, buildSettingsItems, type PaletteCatalogDeps } from "./paletteCatalog";
 
 const workspace: Workspace = {
 	id: "w1",
@@ -15,6 +25,55 @@ const workspace: Workspace = {
 
 const noop = () => {};
 
+const readme: LayoutCenterTab = {
+	kind: "file",
+	id: "readme",
+	name: "README.md",
+	path: "README.md",
+};
+
+const layout: WorkspaceLayoutDocument = {
+	version: 2,
+	center: {
+		kind: "split",
+		id: "split",
+		direction: "horizontal",
+		weights: [0.5, 0.5],
+		children: [
+			{
+				kind: "group",
+				id: "center-a",
+				tabs: [readme],
+				previewTabId: "readme",
+			},
+			{ kind: "group", id: "center-b", tabs: [] },
+		],
+	},
+	left: {
+		visible: true,
+		width: 0.2,
+		groups: [{ id: "left-a", weight: 1, folded: false, tabs: [toolTab("projects")] }],
+	},
+	right: { visible: false, width: 0.2, groups: [] },
+	bottom: { visible: false, height: 0.3, alignment: "center", groups: [] },
+	toolRestoreTargets: {},
+};
+
+function readmeActions(): TabAction[] {
+	return tabActions(currentTranslator(), {
+		document: layout,
+		tab: readme,
+		location: { area: "center", groupId: "center-a" },
+		preview: true,
+		reorder: { previous: undefined, next: undefined },
+		maxSideGroups: 6,
+		maxBottomGroups: 3,
+		canFocusAdjacentGroup: true,
+		canRenameChat: false,
+		worktreePath: "/tmp/w1",
+	});
+}
+
 function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 	return {
 		t: currentTranslator(),
@@ -24,13 +83,19 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 		editors: [],
 		historyAvailable: false,
 		findInFilesAvailable: false,
+		changesAvailable: true,
+		centerGroupCount: 1,
 		canCreateProject: true,
 		nativeShortcuts: false,
+		keybindings: resolveKeybindings({ platform: "" }),
+		pageZoom: null,
 		readAction: null,
 		canSettle: true,
 		settled: false,
 		settleBlocked: false,
 		settingsGroups: [],
+		settingEntries: [],
+		tabActions: [],
 		actions: {
 			newWorkspace: noop,
 			newProjectlessChat: noop,
@@ -44,6 +109,12 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 			toggleRight: noop,
 			toggleBottom: noop,
 			showTool: noop,
+			showFiles: noop,
+			focusRegion: noop,
+			focusComposer: noop,
+			focusProjects: noop,
+			focusTerminal: noop,
+			focusGroup: noop,
 			openHistory: noop,
 			findInFiles: noop,
 			markRead: noop,
@@ -54,6 +125,8 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 			copyPath: noop,
 			openIn: noop,
 			openSettings: noop,
+			openShortcuts: noop,
+			runTabAction: noop,
 		},
 		...overrides,
 	};
@@ -78,6 +151,18 @@ describe("palette project and Settings commands", () => {
 			key: ",",
 			mod: true,
 		});
+	});
+
+	test("Keyboard shortcuts opens the cheatsheet and shows its Mod+? chord", () => {
+		let opened = 0;
+		const shortcuts = row(
+			"shortcuts.open",
+			deps({ actions: { ...deps().actions, openShortcuts: () => (opened += 1) } }),
+		);
+		expect(shortcuts?.title).toBe("Keyboard shortcuts");
+		expect(shortcuts?.shortcut).toEqual({ key: "?", mod: true });
+		shortcuts?.run?.();
+		expect(opened).toBe(1);
 	});
 
 	test("a chat without a project is offered only where one can start, and repository commands only with a repository", () => {
@@ -105,6 +190,121 @@ describe("palette project and Settings commands", () => {
 			mod: true,
 		});
 	});
+
+	test("every chord-bound command shows its keybinding's shortcut", () => {
+		const bound: readonly KeybindingId[] = [
+			"workspace.new",
+			"files.findInFiles",
+			"chat.history",
+			"view.toggleLeft",
+			"view.toggleRight",
+			"view.toggleBottom",
+			"view.changes",
+			"region.next",
+			"region.previous",
+			"focus.composer",
+			"focus.projects",
+			"focus.terminal",
+			"focus.group1",
+			"tab.close",
+			"group.splitRight",
+			"tab.moveToNextGroup",
+		];
+		for (const nativeShortcuts of [false, true]) {
+			const catalog = deps({
+				historyAvailable: true,
+				findInFilesAvailable: true,
+				nativeShortcuts,
+				tabActions: readmeActions(),
+			});
+			for (const id of bound) {
+				expect(row(id, catalog)?.shortcut).toEqual(
+					keybindingShortcut(catalog.keybindings, id, { browser: !nativeShortcuts }),
+				);
+			}
+		}
+	});
+});
+
+describe("palette shortcuts follow the user's bindings", () => {
+	test("a rebound command shows its new chord and an unbound one shows none", () => {
+		const catalog = deps({
+			keybindings: resolveKeybindings({
+				platform: "",
+				overrides: { "region.next": ["Mod+Alt+KeyR"], "focus.projects": [] },
+			}),
+		});
+		expect(row("region.next", catalog)?.shortcut).toEqual({ key: "R", mod: true, alt: true });
+		const projects = row("focus.projects", catalog);
+		expect(projects).toBeDefined();
+		expect(projects?.shortcut).toBeUndefined();
+	});
+});
+
+describe("palette focus commands", () => {
+	test("region and Projects focus are always offered with their chords", () => {
+		const home = deps({ activeWorkspace: null, centerGroupCount: 0 });
+		expect(row("region.next", home)?.shortcut).toEqual({ key: "F6" });
+		expect(row("region.previous", home)?.shortcut).toEqual({ key: "F6", shift: true });
+		expect(row("focus.projects", home)?.shortcut).toEqual({ key: "0", mod: true });
+		expect(row("focus.terminal", home)).toBeUndefined();
+		expect(row("focus.group1", home)).toBeUndefined();
+	});
+
+	test("the chat input needs a chat and the terminal an active workspace", () => {
+		expect(row("focus.composer", deps())).toBeUndefined();
+		expect(row("focus.composer", deps({ historyAvailable: true }))?.shortcut).toEqual({
+			key: "L",
+			mod: true,
+		});
+		expect(row("focus.terminal", deps())?.shortcut).toEqual({ key: "`", ctrl: true });
+	});
+
+	test("one group row per existing center group, numbered in visual order", () => {
+		const catalog = deps({ centerGroupCount: 2 });
+		expect(row("focus.group1", catalog)?.title).toBe("Focus center group 1");
+		expect(row("focus.group2", catalog)?.shortcut).toEqual({ key: "2", mod: true });
+		expect(row("focus.group3", catalog)).toBeUndefined();
+	});
+
+	test("Show Files carries Mod+Shift+E and Show Changes exists only where Changes do", () => {
+		const shown: string[] = [];
+		const catalog = deps({
+			actions: { ...deps().actions, showFiles: (mode) => shown.push(mode) },
+		});
+		expect(row("view.show.files", catalog)?.shortcut).toEqual({ key: "E", mod: true, shift: true });
+		expect(row("view.changes", catalog)?.title).toBe("Show Changes");
+		row("view.show.files", catalog)?.run?.();
+		row("view.changes", catalog)?.run?.();
+		expect(shown).toEqual(["all", "changed"]);
+		expect(row("view.changes", deps({ changesAvailable: false }))).toBeUndefined();
+	});
+});
+
+describe("palette page zoom commands", () => {
+	const zoomRows = ["view.zoomIn", "view.zoomOut", "view.zoomReset"] as const;
+
+	test("are offered only where the desktop exposes the page zoom bridge", () => {
+		for (const id of zoomRows) expect(row(id, deps())).toBeUndefined();
+		const catalog = deps({ pageZoom: { request: noop }, activeWorkspace: null });
+		expect(zoomRows.map((id) => row(id, catalog)?.title)).toEqual([
+			"Zoom in",
+			"Zoom out",
+			"Reset zoom",
+		]);
+	});
+
+	test("show the preload's chords and run the matching request", () => {
+		const requested: NativePageZoomAction[] = [];
+		const catalog = deps({ pageZoom: { request: (action) => requested.push(action) } });
+		expect(zoomRows.map((id) => row(id, catalog)?.shortcut)).toEqual([
+			{ key: "=", mod: true },
+			{ key: "-", mod: true },
+			{ key: "Num 0", mod: true },
+		]);
+		for (const id of zoomRows) row(id, catalog)?.run?.();
+		expect(requested).toEqual(["in", "out", "reset"]);
+	});
 });
 
 describe("palette Settle availability", () => {
@@ -125,5 +325,89 @@ describe("palette Settle availability", () => {
 			currentTranslator()("search.palette.offlineReason"),
 		);
 		expect(row("workspace.settle", deps({ canSettle: false }))).toBeUndefined();
+	});
+});
+
+describe("palette active-tab commands", () => {
+	test("list what the tab menu offers and can run now, under the Active tab group", () => {
+		const catalog = deps({ tabActions: readmeActions() });
+		expect(row("tab.close", catalog)?.title).toBe("Close tab");
+		expect(row("tab.close", catalog)?.subtitle).toBe("Active tab");
+		expect(row("group.splitDown", catalog)?.title).toBe("Split down");
+		expect(row("tab.keepPreview", catalog)?.title).toBe("Keep preview");
+		expect(row("tab.copyRelativePath", catalog)?.title).toBe("Copy relative path");
+		expect(row("tab.moveTo.center-b", catalog)?.title).toBe("Move to center pane (empty)");
+		expect(row("tab.focus", catalog)).toBeUndefined();
+		expect(row("tab.reorderNext", catalog)).toBeUndefined();
+		expect(row("tab.moveToPreviousGroup", catalog)).toBeUndefined();
+	});
+
+	test("an unavailable tab command is left out, and a pick runs the workbench's action by id", () => {
+		const ran: string[] = [];
+		const narrow = readmeActions().map((action) =>
+			action.id === "group.splitRight" ? { ...action, unavailable: { label: "no room" } } : action,
+		);
+		const catalog = deps({
+			tabActions: narrow,
+			actions: { ...deps().actions, runTabAction: (id) => ran.push(id) },
+		});
+		expect(row("group.splitRight", catalog)).toBeUndefined();
+		row("group.splitDown", catalog)?.run?.();
+		row("tab.moveToNextGroup", catalog)?.run?.();
+		expect(ran).toEqual(["group.splitDown", "tab.moveToNextGroup"]);
+	});
+});
+
+describe("palette Settings rows", () => {
+	const groups = settingsNavGroups(PROTOCOL_VERSION, false);
+	const context: SettingsCatalogContext = {
+		protocolVersion: PROTOCOL_VERSION,
+		hasWorkspace: true,
+		hostPlatform: "darwin",
+		signedInProviders: true,
+		voiceFiles: true,
+		survey: true,
+	};
+	const settingsRows = (overrides: Partial<SettingsCatalogContext>, opened: unknown[][] = []) =>
+		buildSettingsItems(
+			deps({
+				settingsGroups: groups,
+				settingEntries: availableSettings(groups, { ...context, ...overrides }),
+				actions: { ...deps().actions, openSettings: (...args) => opened.push(args) },
+			}),
+		);
+
+	test("section rows keep setting:<section>; each available setting gets its own setting:<id> row", () => {
+		const opened: unknown[][] = [];
+		const rows = settingsRows({}, opened);
+		const ids = rows.map((item) => item.id);
+		expect(new Set(ids).size).toBe(ids.length);
+		expect(ids).toContain("setting:appearance");
+		expect(ids).toContain("setting:keyboard");
+		expect(ids.filter((id) => id === "setting:double-shift")).toHaveLength(1);
+		const width = rows.find((item) => item.id === "setting:chat-line-width");
+		expect(width?.title).toBe("Chat line width");
+		expect(width?.subtitle).toBe("Settings › Text & fonts");
+		expect(width?.kind).toBe("setting");
+		width?.run?.();
+		rows.find((item) => item.id === "setting:double-shift")?.run?.();
+		rows.find((item) => item.id === "setting:appearance")?.run?.();
+		expect(opened).toEqual([
+			["text", "chat-line-width"],
+			["keyboard", "double-shift"],
+			["appearance"],
+		]);
+		expect(rows.find((item) => item.id === "setting:feedback-survey")?.subtitle).toBe(
+			"Settings › Share feedback",
+		);
+	});
+
+	test("a setting the host, workspace or platform does not offer has no row", () => {
+		const ids = settingsRows({ hasWorkspace: false }).map((item) => item.id);
+		expect(ids).not.toContain("setting:mcp-project-servers");
+		expect(ids).not.toContain("setting:windows-shell");
+		expect(settingsRows({ hostPlatform: "win32" }).map((item) => item.id)).toContain(
+			"setting:windows-shell",
+		);
 	});
 });

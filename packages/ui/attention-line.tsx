@@ -3,9 +3,11 @@ import { useT } from "@thinkrail/locales/react";
 
 export function AttentionLine({
 	announced = false,
+	announcement,
 	live = true,
 }: {
 	announced?: boolean;
+	announcement?: string | undefined;
 	live?: boolean;
 }) {
 	const t = useT();
@@ -18,7 +20,7 @@ export function AttentionLine({
 			</span>
 			{live ? (
 				<span role="status" aria-live="polite" className="sr-only">
-					{announced ? t("chat.attention.announcement") : ""}
+					{announced ? (announcement ?? t("chat.attention.announcement")) : ""}
 				</span>
 			) : null}
 		</div>

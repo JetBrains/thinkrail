@@ -24,7 +24,7 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
 - **Public surface (barrel):** `revertChange`, `undoChange`, `RevertChangeParams`, `UndoChangeParams`,
   `forgetWorkspaceChanges`, `retainReceipts`.
 - **Allowed deps:** `contracts` (`ChangeReceipt`/`RevertTarget`/`LineSpan`/`GitDiffScope`), `git`
-  (`resolveDiffRange`, bounded `readBlobBytesAtAsync` + `readPathModeAtAsync`), `fs` (`resolveWorktreeFile` for containment, `classifyBytes`/
+  (`resolveDiffRange`, bounded `readBlobBytesAtAsync` + `readPathModeAtAsync`), `fs` (`resolveWorktreeEntry` for containment and the validated parent a trash claim is checked against, `classifyBytes`/
   `hashBytes`/`decodeText` for identity and textness), `persistence` (workspace lookup), `trash`,
   `@thinkrail/shared/codedError`, Node `fs`/`crypto`/`path`.
 - **Forbidden:** `host`, `agent`, `reviews`; any write outside `fs`'s contained path; `unlink`.
@@ -61,10 +61,13 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
 - **Whole-file revert, by the file's status in the scope** (read from the two sides, not from a status
   word): present in both → write the original bytes (bytes, so binary files are covered); **absent in
   the original** (added or untracked) → rename the CAS-verified worktree file to a hidden same-directory
-  claim, then move that claim to the OS trash; **absent in the worktree** (deleted) → restore the original
+  claim, then move that claim to the OS trash (`trash.claimAndTrashFile`, shared with the Files tree's
+  Delete); **absent in the worktree** (deleted) → restore the original
   bytes, creating missing parent directories. Undo uses the same claim before an inverse removes a file.
   The rename occurs in the synchronous verify pass, so a later agent write recreates the real path and
-  cannot become the object an awaited trash helper removes. If trash fails, the claim is restored only
+  cannot become the object an awaited trash helper removes; the claim must still be the `lstat`ed inode
+  inside `fs`'s validated real parent, otherwise it is put back and the revert fails with
+  `ENTRY_CHANGED`. If trash fails, the claim is restored only
   while the destination is absent; a concurrent recreation wins, and the original claim is preserved as
   `.thinkrail-recovery-<ulid>` beside it with that absolute recovery path in the thrown error.
   `receipt.trashed` is the helper's absolute input path, so the file appears in the OS trash under its
@@ -101,7 +104,7 @@ The platform decision behind it is [[architecture]] decision #19; the rules belo
   the client's hash alone decides, as before — then applies the inverse,
   then **consumes** the receipt and emits an `undo` receipt that is itself undoable once — so redo is the
   same operation, not a second mechanism. A refused undo (`STALE_VIEW`) or failed inverse leaves the
-  receipt usable; every attempt re-runs `resolveWorktreeFile`, so a symlink introduced after the revert
+  receipt usable; every attempt re-runs `resolveWorktreeEntry`, so a symlink introduced after the revert
   cannot redirect the inverse outside the worktree.
 - **Receipts are host memory only**, lost on restart: the worktree is git-tracked and a trashed file is
   recoverable from the OS trash, so persisting them would add a data-dir format for a convenience those

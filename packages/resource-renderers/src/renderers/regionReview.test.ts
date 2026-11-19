@@ -1,10 +1,17 @@
 import { expect, test } from "bun:test";
 import type { ReviewAnchor } from "@thinkrail/contracts";
+import type { CursorCommand } from "../support/cursorKeys";
+import { pdfRegionDraft } from "./pdf/pdfModel";
 import {
 	clampRegion,
 	containedMediaRect,
 	denormalizeRegion,
+	FRAME_MIN_SIZE,
+	FRAME_STEP,
+	frameCommand,
+	initialFrame,
 	normalizeRegion,
+	type Region,
 	regionDraft,
 	regionOfAnchor,
 } from "./regionReview";
@@ -73,4 +80,85 @@ test("a region selection round-trips through a stored anchor", () => {
 			selectors: [{ kind: "region", x: Number.NaN, y: 0, width: 1, height: 1 }],
 		}),
 	).toBeNull();
+});
+
+const move = (direction: "up" | "down" | "left" | "right", extend = false): CursorCommand => ({
+	kind: "move",
+	direction,
+	extend,
+});
+
+function frameAfter(region: Region, commands: CursorCommand[]): Region {
+	let current = region;
+	for (const command of commands) {
+		const outcome = frameCommand(current, command);
+		if (outcome?.kind !== "frame") throw new Error("expected a frame");
+		current = outcome.region;
+	}
+	return current;
+}
+
+test("Enter draws a centred frame, and a second Enter comments on it", () => {
+	const first = frameCommand(null, { kind: "comment" });
+	expect(first).toEqual({ kind: "frame", region: initialFrame() });
+	const frame = initialFrame();
+	expect(frame.x + frame.width / 2).toBeCloseTo(0.5);
+	expect(frame.y + frame.height / 2).toBeCloseTo(0.5);
+	expect(frameCommand(frame, { kind: "comment" })).toEqual({ kind: "comment", region: frame });
+	expect(frameCommand(null, move("left"))).toBeNull();
+	expect(frameCommand(frame, { kind: "escape" })).toEqual({ kind: "clear" });
+	expect(frameCommand(null, { kind: "escape" })).toBeNull();
+});
+
+test("arrows move the frame inside the media, Shift+arrows resize it from its corner", () => {
+	const frame = initialFrame();
+	const moved = frameAfter(frame, [move("right"), move("down"), move("down")]);
+	expect(moved.x).toBeCloseTo(frame.x + FRAME_STEP);
+	expect(moved.y).toBeCloseTo(frame.y + 2 * FRAME_STEP);
+	expect(moved.width).toBe(frame.width);
+
+	const resized = frameAfter(frame, [move("right", true), move("up", true)]);
+	expect(resized.x).toBe(frame.x);
+	expect(resized.width).toBeCloseTo(frame.width + FRAME_STEP);
+	expect(resized.height).toBeCloseTo(frame.height - FRAME_STEP);
+
+	const edge = frameAfter(
+		frame,
+		Array.from({ length: 60 }, () => move("left")),
+	);
+	expect(edge.x).toBe(0);
+	const far = frameAfter(
+		frame,
+		Array.from({ length: 60 }, () => move("down")),
+	);
+	expect(far.y + far.height).toBeCloseTo(1);
+	const tiny = frameAfter(
+		frame,
+		Array.from({ length: 60 }, () => move("left", true)),
+	);
+	expect(tiny.width).toBe(FRAME_MIN_SIZE);
+	const wide = frameAfter(
+		frame,
+		Array.from({ length: 60 }, () => move("right", true)),
+	);
+	expect(wide.x + wide.width).toBeCloseTo(1);
+});
+
+test("a keyboard frame anchors exactly like a drag over the same rectangle", () => {
+	const frame = frameAfter(initialFrame(), [move("right"), move("down", true)]);
+	const bounds = { x: 10, y: 20, width: 400, height: 200 };
+	const dragged = normalizeRegion(
+		{ x: bounds.x + frame.x * bounds.width, y: bounds.y + frame.y * bounds.height },
+		{
+			x: bounds.x + (frame.x + frame.width) * bounds.width,
+			y: bounds.y + (frame.y + frame.height) * bounds.height,
+		},
+		bounds,
+	);
+	const [keyboard] = regionDraft(frame).selectors;
+	const [drag] = regionDraft(dragged).selectors;
+	if (keyboard?.kind !== "region" || drag?.kind !== "region") throw new Error("expected regions");
+	for (const key of ["x", "y", "width", "height"] as const)
+		expect(keyboard[key]).toBeCloseTo(drag[key]);
+	expect(pdfRegionDraft(frame, 3).selectors[0]).toMatchObject({ kind: "region", page: 3 });
 });
