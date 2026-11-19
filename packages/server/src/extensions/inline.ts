@@ -4,6 +4,7 @@ import type {
 	LoadExtensionsResult,
 } from "@earendil-works/pi-coding-agent";
 import type { ExtensionSessionServices, ServerExtension } from "@thinkrail/extension-api/server";
+import { EXTENSION_LOAD_TIMEOUT_MS } from "./installed";
 import { type ServerExtensionEntry, serverExtensions } from "./registry";
 
 export type RegistryExtensionKind = "extensions" | "childExtensions";
@@ -33,6 +34,31 @@ export function isFactoryList(value: unknown): value is ExtensionFactory[] {
 	return Array.isArray(value) && value.every((entry) => typeof entry === "function");
 }
 
+/** A `sessionExtensions` answer that is not a list is dropped; a promise among them must not reject unobserved. */
+export function dropAnswer(value: unknown): void {
+	const then = (value as { then?: unknown } | null | undefined)?.then;
+	if (typeof then === "function") {
+		Promise.resolve(value).catch(() => undefined);
+	}
+}
+
+/** `true` when `task` settles within the load timeout, `false` after it; a late rejection is observed, never thrown. */
+export function settlesWithinLoadTimeout(task: Promise<unknown>): Promise<boolean> {
+	return new Promise((resolve, reject) => {
+		const timer = setTimeout(() => resolve(false), EXTENSION_LOAD_TIMEOUT_MS);
+		task.then(
+			() => {
+				clearTimeout(timer);
+				resolve(true);
+			},
+			(error: unknown) => {
+				clearTimeout(timer);
+				reject(error);
+			},
+		);
+	});
+}
+
 function failing(error: unknown): ExtensionFactory {
 	return () => {
 		throw error;
@@ -57,6 +83,7 @@ function factoriesOf(
 		return [...extension.extensions, failing(error)];
 	}
 	if (!isFactoryList(perSession)) {
+		dropAnswer(perSession);
 		return [
 			...extension.extensions,
 			failing(new Error(`${extension.name}: sessionExtensions must return a list of factories`)),
@@ -79,7 +106,13 @@ export function registryInlineExtensions(
 			name: factories.length === 1 ? name : `${name}#${index + 1}`,
 			factory: async (pi) => {
 				if (isDisabled(name)) return;
-				await factory(pi);
+				if (!entry.installed) return factory(pi);
+				const loading = Promise.resolve().then(() => factory(pi));
+				if (!(await settlesWithinLoadTimeout(loading))) {
+					throw new Error(
+						`${name} did not finish loading within ${EXTENSION_LOAD_TIMEOUT_MS / 1000} s`,
+					);
+				}
 			},
 		}));
 	});

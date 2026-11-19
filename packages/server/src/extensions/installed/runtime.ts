@@ -72,6 +72,8 @@ export interface InstalledExtensionsOptions {
 	onChange?: () => void;
 	/** The tool names a loaded server half registers, for the status file. */
 	toolNames?: (extension: ServerExtension) => Promise<readonly string[]>;
+	/** How long a server half may take to load; `EXTENSION_LOAD_TIMEOUT_MS` unless a test says otherwise. */
+	loadTimeoutMs?: number;
 }
 
 export type ExtensionStatusState = InstalledExtensionState | "installing";
@@ -373,7 +375,9 @@ export class InstalledExtensions {
 			return { source, sourceKind: extensionSourceKind(source), ...base, state: "loaded" };
 		const entry = join(root, manifest.server);
 		try {
-			const extension = await loadServerDescriptor(entry, this.#hostDir);
+			const extension = await loadServerDescriptor(entry, this.#hostDir, {
+				...(this.#options.loadTimeoutMs ? { timeoutMs: this.#options.loadTimeoutMs } : {}),
+			});
 			if (extension.name !== manifest.name) {
 				throw new Error(
 					`the server descriptor's name "${extension.name}" must be the package name "${manifest.name}"`,

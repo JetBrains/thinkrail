@@ -18,6 +18,7 @@ export {
 	registryInlineExtensions,
 } from "./inline";
 export {
+	EXTENSION_LOAD_TIMEOUT_MS,
 	type ExtensionSourceKind,
 	type InstalledExtensionRecord,
 	InstalledExtensions,

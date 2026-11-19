@@ -1,4 +1,4 @@
-import { describe, expect, it, spyOn } from "bun:test";
+import { describe, expect, it, jest, spyOn } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { DefaultPackageManager, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { SPEC_SECTION } from "pi-spec-graph";
 import {
+	EXTENSION_LOAD_TIMEOUT_MS,
 	type HostSessionServices,
 	installedExtensions,
 	registryInlineExtensions,
@@ -690,6 +691,65 @@ describe("registry extensions", () => {
 			await loader.reload();
 			expect(paths()).not.toContain("<inline:loader-installed>");
 		} finally {
+			stop();
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("starts a chat past an installed factory that never settles, with that extension's load error", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-hung-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		const dataDir = join(root, "data");
+		for (const dir of [project, home, agentDir, dataDir]) mkdirSync(dir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		const folder = join(root, "ext");
+		mkdirSync(join(folder, "server"), { recursive: true });
+		writeFileSync(
+			join(folder, "package.json"),
+			JSON.stringify({
+				name: "hung-factory",
+				thinkrail: { api: "1.0", server: "server/index.ts" },
+			}),
+		);
+		writeFileSync(
+			join(folder, "server", "index.ts"),
+			'export default { name: "hung-factory", extensions: [() => new Promise(() => {})] };\n',
+		);
+		writeFileSync(join(dataDir, "extensions.json"), JSON.stringify({ extensions: [folder] }));
+		const stop = startInstalledExtensions({ dataDir, onChange: () => {} });
+		try {
+			await installedExtensions()?.reconcile();
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			jest.useFakeTimers();
+			let built: Awaited<ReturnType<typeof buildResourceLoader>> | undefined;
+			const building = buildResourceLoader(
+				project,
+				settingsManager,
+				() => ctx(true),
+				[],
+				[],
+				hostServices,
+			).then((loader) => {
+				built = loader;
+			});
+			while (!built) {
+				await new Promise((resolve) => setImmediate(resolve));
+				if (jest.getTimerCount() > 0) jest.advanceTimersByTime(EXTENSION_LOAD_TIMEOUT_MS);
+			}
+			jest.useRealTimers();
+			await building;
+			const result = built?.getExtensions();
+			expect(result?.extensions.map((extension) => extension.path)).toContain("<inline:visualize>");
+			expect(result?.errors).toContainEqual(
+				expect.objectContaining({
+					error: "hung-factory did not finish loading within 10 s",
+				}),
+			);
+		} finally {
+			jest.useRealTimers();
 			stop();
 			restore();
 			rmSync(root, { recursive: true, force: true });

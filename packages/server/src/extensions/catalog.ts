@@ -1,7 +1,13 @@
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import type { ExtensionCatalogEntry, ExtensionSettingDescriptor } from "@thinkrail/contracts";
 import type { ServerExtension } from "@thinkrail/extension-api/server";
-import { extensionSessionServices, type HostSessionServices, isFactoryList } from "./inline";
+import {
+	dropAnswer,
+	extensionSessionServices,
+	type HostSessionServices,
+	isFactoryList,
+	settlesWithinLoadTimeout,
+} from "./inline";
 import { type InstalledExtensionRecord, installedExtensions, webHalfOf } from "./installed";
 import { builtinServerExtensions, type ServerExtensionEntry } from "./registry";
 
@@ -21,10 +27,10 @@ async function recordToolNames(factory: ExtensionFactory): Promise<string[]> {
 			},
 		},
 	);
-	await Promise.resolve()
-		.then(() => factory(recorder as ExtensionAPI))
-		.catch(() => undefined);
-	return tools;
+	await settlesWithinLoadTimeout(
+		Promise.resolve().then(() => factory(recorder as ExtensionAPI)),
+	).catch(() => false);
+	return [...tools];
 }
 
 const inertSession: HostSessionServices = {
@@ -45,7 +51,9 @@ function inertSessionFactories(extension: ServerExtension): ExtensionFactory[] {
 		const factories = extension.sessionExtensions?.(
 			extensionSessionServices(extension, inertSession),
 		);
-		return isFactoryList(factories) ? factories : [];
+		if (isFactoryList(factories)) return factories;
+		dropAnswer(factories);
+		return [];
 	} catch {
 		return [];
 	}
