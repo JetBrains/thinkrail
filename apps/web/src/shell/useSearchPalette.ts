@@ -4,6 +4,7 @@ import { useShallow } from "zustand/react/shallow";
 import { openFindInFiles } from "../findInFiles";
 import { chatDisplayName, copyText } from "../lib";
 import { canStartProjectlessChat, startProjectlessChat } from "../panels/chatActions";
+import { openContainerOverview } from "../panels/containerActions";
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
 import { startChatInTab } from "../panels/openChat";
 import { openFileInTab } from "../panels/openTabs";
@@ -327,6 +328,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				openShortcuts: () => store().openShortcuts(),
 				runTabAction: runActiveTabAction,
 				openContainerDialog: (request) => store().openContainerDialog(request),
+				openContainerOverview,
 			},
 		};
 		const workItems = buildWorkItems({

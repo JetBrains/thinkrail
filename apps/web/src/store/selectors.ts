@@ -6,6 +6,7 @@ import {
 	BROWSER_VIEW_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	CHATS_PROTOCOL_VERSION,
+	type ChatState,
 	type Container,
 	canMarkCompletionUnread,
 	chatState,
@@ -1105,6 +1106,160 @@ export function selectActiveContainerId(
 ): string | null {
 	const active = selectActiveWorkspace(state);
 	return active ? selectWorkspaceContainerId(state, active) : null;
+}
+
+/** The chat that orchestrates the container; `null` before the host starts one or the Chats list loads. */
+export function selectContainerOrchestrator(
+	state: Pick<ProjectContextState, "projects" | "workspaces">,
+	containerId: string,
+): Workspace | null {
+	const chats = selectChatsContainer(state);
+	if (!chats) return null;
+	return state.workspaces[chats.id]?.find((chat) => chat.orchestratorOf === containerId) ?? null;
+}
+
+/** The member the user was in last (`workspaceSelectionHistory`), else the first; `null` with none shown. */
+export function selectLastContainerMember(
+	state: { workspaceSelectionHistory: readonly string[] },
+	group: ContainerGroup,
+): Workspace | null {
+	for (const id of state.workspaceSelectionHistory) {
+		const member = group.members.find((candidate) => candidate.id === id);
+		if (member) return member;
+	}
+	return group.members[0] ?? null;
+}
+
+/** A base or branch name as the stack line shows it: the remote's `origin/` dropped. */
+export function stackBranchName(branch: string): string {
+	return branch.replace(/^origin\//, "");
+}
+
+export interface ContainerStackLine {
+	/** What the line starts from: its first member's base, or the member it forks from. */
+	base: string;
+	members: Workspace[];
+}
+
+export interface ContainerStacks {
+	/** Each stacked member's parent, by id: the member of its project whose branch is its base. */
+	stackedOn: ReadonlyMap<string, Workspace>;
+	/** One line per stack (`main ← A ← B`), a fork continuing on its own line from the member it forks. */
+	lines: ContainerStackLine[];
+	/** Members based on no member that no member is based on. */
+	independent: Workspace[];
+}
+
+/** The PR stacks among a container's members, from each member's base branch; member order breaks ties. */
+export function containerStacks(members: readonly Workspace[]): ContainerStacks {
+	const branchKey = (projectId: string, branch: string) => `${projectId}\u0000${branch}`;
+	const byBranch = new Map<string, Workspace>();
+	for (const member of members) {
+		if (member.branch) byBranch.set(branchKey(member.projectId, member.branch), member);
+	}
+	const parent = new Map<string, Workspace>();
+	for (const member of members) {
+		const base = byBranch.get(branchKey(member.projectId, stackBranchName(member.baseBranch)));
+		if (base && base.id !== member.id) parent.set(member.id, base);
+	}
+	for (const member of members) {
+		const seen = new Set<string>([member.id]);
+		for (
+			let next: Workspace | undefined = parent.get(member.id);
+			next;
+			next = parent.get(next.id)
+		) {
+			if (next.id === member.id) {
+				parent.delete(member.id);
+				break;
+			}
+			if (seen.has(next.id)) break;
+			seen.add(next.id);
+		}
+	}
+	const children = new Map<string, Workspace[]>();
+	for (const member of members) {
+		const above = parent.get(member.id);
+		if (above) children.set(above.id, [...(children.get(above.id) ?? []), member]);
+	}
+	const lines: ContainerStackLine[] = [];
+	const independent: Workspace[] = [];
+	const walk = (base: string, first: Workspace) => {
+		const line: ContainerStackLine = { base, members: [first] };
+		lines.push(line);
+		const forks: Workspace[] = [];
+		for (let current: Workspace | undefined = first; current; ) {
+			const below: Workspace[] = children.get(current.id) ?? [];
+			const [next, ...others] = below;
+			forks.push(...others);
+			if (next) line.members.push(next);
+			current = next;
+		}
+		for (const fork of forks) {
+			walk(stackBranchName(parent.get(fork.id)?.branch ?? fork.baseBranch), fork);
+		}
+	};
+	for (const member of members) {
+		if (parent.has(member.id)) continue;
+		if (children.has(member.id)) walk(stackBranchName(member.baseBranch), member);
+		else independent.push(member);
+	}
+	return { stackedOn: parent, lines, independent };
+}
+
+const CHAT_STATE_URGENCY: readonly ChatState[] = [
+	"needs_you",
+	"working",
+	"failed",
+	"interrupted",
+	"finished",
+	"idle",
+];
+
+/** A workspace's most urgent chat state across its chats (`chatState` per chat). */
+export function selectWorkspaceChatState(
+	state: SessionStateProjection,
+	workspaceId: string,
+): ChatState {
+	let best = CHAT_STATE_URGENCY.length - 1;
+	for (const record of Object.values(state.sessionStateByWorkspace[workspaceId] ?? {})) {
+		best = Math.min(best, CHAT_STATE_URGENCY.indexOf(chatState(record.state)));
+	}
+	return CHAT_STATE_URGENCY[best] ?? "idle";
+}
+
+export interface ContainerMemberOverview {
+	workspace: Workspace;
+	projectName: string;
+	/** The member it is stacked on; `null` when it starts from its project's base. */
+	stackedOn: Workspace | null;
+	chat: ChatState;
+}
+
+export interface ContainerOverview {
+	group: ContainerGroup;
+	members: ContainerMemberOverview[];
+	stacks: ContainerStacks;
+}
+
+/** One container's overview: each member's project, stack parent and chat state, and the PR stack lines. */
+export function selectContainerOverview(
+	state: ContainerTreeState & SessionStateProjection,
+	containerId: string,
+): ContainerOverview | null {
+	const group = selectContainerGroup(state, containerId);
+	if (!group) return null;
+	const stacks = containerStacks(group.members);
+	return {
+		group,
+		stacks,
+		members: group.members.map((workspace) => ({
+			workspace,
+			projectName: state.projects.find((project) => project.id === workspace.projectId)?.name ?? "",
+			stackedOn: stacks.stackedOn.get(workspace.id) ?? null,
+			chat: selectWorkspaceChatState(state, workspace.id),
+		})),
+	};
 }
 
 /** A project's partition without its container members, which render inside their container. */

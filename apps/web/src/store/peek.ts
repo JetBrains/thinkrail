@@ -1,5 +1,5 @@
 import type { SessionState } from "@thinkrail/contracts";
-import { layoutResourceIdentity } from "../lib";
+import { layoutResourceIdentity, tupleKey } from "../lib";
 
 interface PeekOpener {
 	sessionId?: string;
@@ -14,7 +14,8 @@ export type PeekEntry =
 			panel: string;
 			params: Readonly<Record<string, string>>;
 			titleKey: string;
-	  } & PeekOpener);
+	  } & PeekOpener)
+	| ({ kind: "container"; containerId: string } & PeekOpener);
 
 export interface PeekState {
 	stack: readonly PeekEntry[];
@@ -33,6 +34,8 @@ export function peekEntryIdentity(entry: PeekEntry): string {
 			return layoutResourceIdentity({ kind: "diff", path: entry.after, before: entry.before });
 		case "extension":
 			return layoutResourceIdentity(entry);
+		case "container":
+			return tupleKey("peek-resource", "container", entry.containerId);
 	}
 }
 
@@ -105,6 +108,17 @@ export function hidePeek(current: PeekState | undefined): PeekState | undefined 
 	return { ...current, open: false, pinned: false };
 }
 
+/** Opens the shown container overview on `to`, pinned if either Peek was, so a member switch keeps it showing. */
+export function carryPeekEntry(
+	from: PeekState | undefined,
+	to: PeekState | undefined,
+): PeekState | undefined {
+	const entry = from?.open ? from.stack[from.index] : undefined;
+	if (!from || entry?.kind !== "container") return to;
+	const pushed = pushPeekEntry(to, entry);
+	return from.pinned && !pushed.pinned ? { ...pushed, pinned: true } : pushed;
+}
+
 export function startsNewTurn(
 	previous: SessionState | undefined,
 	next: SessionState | undefined,
@@ -135,15 +149,28 @@ export function peeksAfterTurns(
 	return result;
 }
 
+export function peeksWithoutContainers(
+	peeks: Record<string, PeekState>,
+	gone: (containerId: string) => boolean,
+): Record<string, PeekState> {
+	return peeksWithout(peeks, (entry) => entry.kind === "container" && gone(entry.containerId));
+}
+
 export function peeksWithoutExtensions(
 	peeks: Record<string, PeekState>,
 	disabled: readonly string[],
 ): Record<string, PeekState> {
 	if (disabled.length === 0) return peeks;
 	const off = new Set(disabled);
+	return peeksWithout(peeks, (entry) => entry.kind === "extension" && off.has(entry.extension));
+}
+
+function peeksWithout(
+	peeks: Record<string, PeekState>,
+	gone: (entry: PeekEntry) => boolean,
+): Record<string, PeekState> {
 	let result = peeks;
 	for (const [workspaceId, peek] of Object.entries(peeks)) {
-		const gone = (entry: PeekEntry) => entry.kind === "extension" && off.has(entry.extension);
 		if (!peek.stack.some(gone)) continue;
 		if (result === peeks) result = { ...peeks };
 		let next: PeekState | undefined = peek;

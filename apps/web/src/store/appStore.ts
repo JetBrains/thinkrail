@@ -134,11 +134,13 @@ import {
 	withoutMcpSession,
 } from "./mcp";
 import {
+	carryPeekEntry,
 	followPeekEntry,
 	hidePeek,
 	type PeekEntry,
 	type PeekState,
 	peeksAfterTurns,
+	peeksWithoutContainers,
 	peeksWithoutExtensions,
 	pushPeekEntry,
 	removePeekEntry,
@@ -1690,6 +1692,7 @@ interface AppState {
 	closePeek: (workspaceId: string) => void;
 	closePeekEntry: (workspaceId: string, index: number) => void;
 	pinPeek: (workspaceId: string, pinned: boolean) => void;
+	carryPeek: (fromWorkspaceId: string, toWorkspaceId: string) => void;
 	toggleRightSide: (workspaceId: string) => void;
 	requestChangesView: (workspaceId: string, path: string | null, scope?: GitDiffScope) => void;
 	revealChanges: (workspaceId: string) => void;
@@ -2018,7 +2021,7 @@ function canonicalPeekEntry(
 	workspaceId: string,
 	entry: PeekEntry,
 ): PeekEntry {
-	if (entry.kind === "extension") return entry;
+	if (entry.kind === "extension" || entry.kind === "container") return entry;
 	const root = selectWorkspaceById(state, workspaceId)?.worktreePath;
 	if (entry.kind === "file") return { ...entry, path: projectRelativePath(entry.path, root) };
 	return {
@@ -4097,8 +4100,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 		else get().selectProject(lostActive.projectId);
 	},
 	installContainers: (containers) =>
-		set({
-			containers: Object.fromEntries(containers.map((container) => [container.id, container])),
+		set((state) => {
+			const held = Object.fromEntries(containers.map((container) => [container.id, container]));
+			return {
+				containers: held,
+				peekByWorkspace: peeksWithoutContainers(state.peekByWorkspace, (id) => !held[id]),
+			};
 		}),
 	applyContainerUpdated: (container) =>
 		set((state) => ({ containers: { ...state.containers, [container.id]: container } })),
@@ -4107,6 +4114,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 			state.containers[containerId]
 				? {
 						containers: omitKey(state.containers, containerId),
+						peekByWorkspace: peeksWithoutContainers(
+							state.peekByWorkspace,
+							(id) => id === containerId,
+						),
 						...(state.collapsedContainerIds[containerId]
 							? { collapsedContainerIds: omitKey(state.collapsedContainerIds, containerId) }
 							: {}),
@@ -5145,6 +5156,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closePeek: (workspaceId) => set((state) => patchPeek(state, workspaceId, hidePeek)),
 	closePeekEntry: (workspaceId, index) =>
 		set((state) => patchPeek(state, workspaceId, (peek) => removePeekEntry(peek, index))),
+	carryPeek: (fromWorkspaceId, toWorkspaceId) =>
+		set((state) =>
+			patchPeek(state, toWorkspaceId, (peek) =>
+				carryPeekEntry(state.peekByWorkspace[fromWorkspaceId], peek),
+			),
+		),
 	pinPeek: (workspaceId, pinned) =>
 		set((state) =>
 			patchPeek(state, workspaceId, (peek) =>

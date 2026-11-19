@@ -40,7 +40,7 @@ For latest version, see the [Releases page](https://github.com/JetBrains/thinkra
 
   * Finished and dormant workspaces are settled when their pull request merges or closes, or after a quiet week, and return the moment you work in them again.
 
-  * Group related workspaces, such as a PR stack or the same change across several repositories, into a container: they nest under it in Projects, the topbar switches between them, and an orchestrator chat coordinates their agents.
+  * Group related workspaces, such as a PR stack or the same change across several repositories, into a container: they nest under it in Projects, the topbar switches between them, an orchestrator chat that stays pinned beside whichever member you're in coordinates their agents, and an overview shows every member and the pull request stack.
 
   * The topbar shows where the active branch stands against `origin`, and the state of its pull request. From there you can publish, push, or open a new PR described from the plan, the commits, your PR template, or an agent-written draft.
 

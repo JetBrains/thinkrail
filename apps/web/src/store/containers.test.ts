@@ -2,16 +2,21 @@ import { beforeEach, expect, test } from "bun:test";
 import type { Container, Project, SessionStateRecord, Workspace } from "@thinkrail/contracts";
 import { useAppStore } from "./appStore";
 import {
+	containerStacks,
 	selectActiveContainerId,
 	selectAttachableWorkspaces,
 	selectContainerGroup,
 	selectContainerIsRunning,
 	selectContainerNeedsAttention,
 	selectContainerOfWorkspace,
+	selectContainerOrchestrator,
+	selectContainerOverview,
 	selectContainers,
 	selectContainerTree,
+	selectLastContainerMember,
 	selectStandaloneChats,
 	selectStandalonePartition,
+	selectWorkspaceChatState,
 } from "./selectors";
 
 const container = (id: string, workspaceIds: string[], createdAt = 1): Container => ({
@@ -226,4 +231,105 @@ test("collapsing a container is per-browser view state that a removal forgets", 
 	expect(useAppStore.getState().collapsedContainerIds).toEqual({});
 	store.hydrateCollapsedContainers(["c9"]);
 	expect(useAppStore.getState().collapsedContainerIds).toEqual({ c9: true });
+});
+
+const names = (rows: readonly Workspace[]) => rows.map((row) => row.id);
+
+test("the stack line follows each member's base to a sibling's branch, independents apart", () => {
+	const a = ws("a", "p1", { baseBranch: "origin/main" });
+	const b = ws("b", "p1", { baseBranch: "branch-a" });
+	const c = ws("c", "p1", { baseBranch: "origin/branch-b" });
+	const x = ws("x", "p2", { baseBranch: "branch-a" });
+	const y = ws("y", "p2", { baseBranch: "develop" });
+	const stacks = containerStacks([c, x, a, b, y]);
+	expect(stacks.lines.map((line) => [line.base, names(line.members)])).toEqual([
+		["main", ["a", "b", "c"]],
+	]);
+	expect(names(stacks.independent)).toEqual(["x", "y"]);
+	expect(stacks.stackedOn.get("b")?.id).toBe("a");
+	expect(stacks.stackedOn.get("c")?.id).toBe("b");
+	expect(stacks.stackedOn.has("x")).toBe(false);
+});
+
+test("a fork continues on its own line from the member it forks, and a base cycle is broken", () => {
+	const a = ws("a", "p1");
+	const b = ws("b", "p1", { baseBranch: "branch-a" });
+	const c = ws("c", "p1", { baseBranch: "branch-a" });
+	const d = ws("d", "p1", { baseBranch: "branch-c" });
+	expect(
+		containerStacks([a, b, c, d]).lines.map((line) => [line.base, names(line.members)]),
+	).toEqual([
+		["main", ["a", "b"]],
+		["branch-a", ["c", "d"]],
+	]);
+	const looped = containerStacks([
+		ws("p", "p1", { baseBranch: "branch-q" }),
+		ws("q", "p1", { baseBranch: "branch-p" }),
+	]);
+	expect(looped.lines.map((line) => [line.base, names(line.members)])).toEqual([
+		["branch-q", ["p", "q"]],
+	]);
+	expect(looped.independent).toEqual([]);
+	expect(containerStacks([a]).lines).toEqual([]);
+});
+
+test("a member's chat state is its most urgent chat's", () => {
+	const states = (...chats: Partial<SessionStateRecord["state"]>[]) => ({
+		sessionStateByWorkspace: {
+			a: Object.fromEntries(
+				chats.map((chat, index) => {
+					const held = record("a", chat).a?.s1;
+					if (!held) throw new Error("session record missing");
+					return [`s${index}`, { ...held, sessionId: `s${index}` }];
+				}),
+			),
+		},
+	});
+	expect(selectWorkspaceChatState({ sessionStateByWorkspace: {} }, "a")).toBe("idle");
+	expect(selectWorkspaceChatState(states({}, { execution: "running" }), "a")).toBe("working");
+	expect(
+		selectWorkspaceChatState(
+			states(
+				{ execution: "running" },
+				{ needsInput: { interactionId: "i", kind: "tool-response", toolCallId: "t" } },
+			),
+			"a",
+		),
+	).toBe("needs_you");
+});
+
+test("the overview resolves members in order with their project, stack parent and chat state", () => {
+	const stacked = {
+		...treeState([container("single", ["b", "a"])]),
+		workspaces: {
+			...workspaces,
+			p1: [ws("a", "p1"), ws("b", "p1", { baseBranch: "branch-a" })],
+		},
+		sessionStateByWorkspace: record("b", { execution: "running" }),
+	};
+	const overview = selectContainerOverview(stacked, "single");
+	expect(
+		overview?.members.map((member) => [
+			member.workspace.id,
+			member.projectName,
+			member.stackedOn?.id ?? null,
+			member.chat,
+		]),
+	).toEqual([
+		["b", "Project p1", "a", "working"],
+		["a", "Project p1", null, "idle"],
+	]);
+	expect(overview?.stacks.lines.map((line) => names(line.members))).toEqual([["a", "b"]]);
+	expect(selectContainerOverview(stacked, "gone")).toBeNull();
+	expect(selectContainerOrchestrator(stacked, "single")?.id).toBe("orch");
+	expect(selectContainerOrchestrator(stacked, "cross")).toBeNull();
+});
+
+test("the last member is the one most recently entered, else the first", () => {
+	const group = selectContainerGroup(treeState([container("single", ["a", "b"])]), "single");
+	if (!group) throw new Error("container group missing");
+	expect(selectLastContainerMember({ workspaceSelectionHistory: ["c", "b", "a"] }, group)?.id).toBe(
+		"b",
+	);
+	expect(selectLastContainerMember({ workspaceSelectionHistory: ["x"] }, group)?.id).toBe("a");
 });

@@ -14,6 +14,7 @@ const TOOL_IDS = new Set<LayoutToolId>([
 	"review",
 	"plan",
 	"artifacts",
+	"orchestrator",
 ]);
 
 function record(value: unknown): Record<string, unknown> | null {

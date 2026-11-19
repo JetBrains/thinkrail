@@ -43,7 +43,7 @@ actions through the panels-owned ship runner; it owns no host state.
   (`workspace.setDiffBase`), `lib` (`copyText`, `platformShortcutLabel`), `components/RunningIcon`,
   `@thinkrail/ui/*`, `@remixicon/react`, `@thinkrail/locales` (UI strings), contracts types, and these `panels` files per-file:
   `workspaceActions` (the one implementation of open-in / rename / reveal / remove / `editor.list` /
-  `workspace.list`, shared with `ProjectTree`), `containerActions` (`renameContainer`; the dialogs are
+  `workspace.list`, shared with `ProjectTree`), `containerActions` (`renameContainer`, `openOrchestrator`, `openContainerOverview`; the dialogs are
   the store's `containerDialog`, rendered by the shell-mounted `ContainerDialogs`), `RemoveWorkspaceDialog`, `BranchPicker` + `branches`,
   `useOpenProject`, `useBranchStatus` (`openReviewLabel`, `resolveBranchReview`), `shipActions` (the
   derivation), and `useShipRunner` (the action runner with its dialogs, shared with the Plan pane). A
@@ -97,9 +97,11 @@ actions through the panels-owned ship runner; it owns no host state.
   `reveal` and loads its workspace list, i.e. the same transition as the Projects tree.
 - **Container** (the active workspace's container, `selectWorkspaceContainerId`: a member's, or the
   one its orchestrator chat names) shows the container name and a menu: the members (check on the
-  active one, `RunningIcon` while working, the branch — `project · branch` when they span projects) and
-  **Orchestrator** to switch to, then **Add workspace…**, **Rename** (the pill becomes the shared inline
-  rename input, `container.rename`) and **Remove container…** — the same dialogs the Projects tree opens.
+  active one, `RunningIcon` while working, the branch — `project · branch` when they span projects) to
+  switch to and **Orchestrator**, which pins the orchestrator chat beside the member (`openOrchestrator`,
+  the shell's Orchestrator tool), then **Overview** (the container overview in Peek), **Add workspace…**,
+  **Rename** (the pill becomes the shared inline rename input, `container.rename`) and **Remove
+  container…** — the same dialogs and actions the Projects tree opens.
   The Workspace segment beside it is unchanged.
 - **Workspace** shows the active workspace's actions (Open in, Rename, Copy path, Reveal, the rail's
   **Mark as read / unread** toggle, **Settle** or

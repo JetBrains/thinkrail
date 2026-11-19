@@ -31,7 +31,7 @@ export function openPeekInTab(workspaceId: string): void {
 	const state = useAppStore.getState();
 	const entry = selectPeekEntry(state, workspaceId);
 	const index = state.peekByWorkspace[workspaceId]?.index;
-	if (!entry || index === undefined) return;
+	if (!entry || index === undefined || entry.kind === "container") return;
 	removePeekEntryFrom(workspaceId, index);
 	switch (entry.kind) {
 		case "file":

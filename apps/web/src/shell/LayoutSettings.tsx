@@ -9,6 +9,7 @@ import {
 import {
 	ARTIFACT_ROLES_PROTOCOL_VERSION,
 	ARTIFACTS_PROTOCOL_VERSION,
+	CONTAINER_PROTOCOL_VERSION,
 	LAYOUT_PLAN_PRESET_PROTOCOL_VERSION,
 	type LayoutPreset,
 	type LayoutToolId,
@@ -92,6 +93,11 @@ const NEWER_HOST_TOOLS: readonly { tool: LayoutToolId; since: number; message: M
 		tool: "artifacts",
 		since: ARTIFACTS_PROTOCOL_VERSION,
 		message: "workbench.layoutSettings.artifactsNeedsNewerHost",
+	},
+	{
+		tool: "orchestrator",
+		since: CONTAINER_PROTOCOL_VERSION,
+		message: "workbench.layoutSettings.orchestratorNeedsNewerHost",
 	},
 ];
 

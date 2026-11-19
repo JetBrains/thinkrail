@@ -3,6 +3,7 @@ import {
 	RiArrowRightSLine as ChevronRight,
 	RiPencilLine as Pencil,
 	RiAddLine as Plus,
+	RiLayoutGridLine,
 	RiSparkling2Fill,
 	RiSparkling2Line,
 	RiStackFill,
@@ -26,7 +27,7 @@ import { type ReactNode, useRef, useState } from "react";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
 import { type ContainerGroup, useAppStore } from "../store";
-import { renameContainer } from "./containerActions";
+import { openContainerOverview, openOrchestrator, renameContainer } from "./containerActions";
 import { treeRowControlProps, treeRowKey, useTreeKeys } from "./treeNavigation";
 import { useInlineRename } from "./workspaceActions";
 
@@ -123,6 +124,7 @@ function ContainerRow({
 		useAppStore.getState().openContainerDialog({ kind: "addWorkspace", containerId: container.id });
 	const remove = () =>
 		useAppStore.getState().openContainerDialog({ kind: "remove", containerId: container.id });
+	const overview = () => openContainerOverview(container.id);
 	const fromMenu = (action: () => void) => {
 		openingRef.current = true;
 		setMenuOpen(false);
@@ -192,6 +194,7 @@ function ContainerRow({
 							data-testid="container-name"
 							data-focus-row-primary
 							onClick={toggle}
+							onDoubleClick={overview}
 							onKeyDown={(event) => {
 								const key = treeRowKey(event.nativeEvent, treeKeys);
 								if (key === "rename") startRename();
@@ -233,6 +236,10 @@ function ContainerRow({
 					openingRef.current = false;
 				}}
 			>
+				<ContextMenuItem data-testid="container-menu-overview" onSelect={overview}>
+					<RiLayoutGridLine />
+					{t("containers.overview.title")}
+				</ContextMenuItem>
 				<ContextMenuItem
 					data-testid="container-menu-add-workspace"
 					onSelect={(event) => {
@@ -307,7 +314,9 @@ function OrchestratorRow({
 					type="button"
 					{...treeItem}
 					data-focus-row-primary
-					onClick={() => useAppStore.getState().activateWorkspace(workspace)}
+					onClick={() => {
+						if (workspace.orchestratorOf) openOrchestrator(workspace.orchestratorOf);
+					}}
 					className="-mx-4 -my-2 flex min-w-0 flex-1 items-center gap-4 rounded-sm px-4 py-2 text-left focus-visible:focus-ring-inset"
 				>
 					{isRunning ? <RunningIcon className={iconClass} /> : <Icon className={iconClass} />}

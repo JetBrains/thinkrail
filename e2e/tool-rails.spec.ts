@@ -268,8 +268,10 @@ test("rail clusters include unplaced tools, boundary drops create panes, and too
 	await expect(title).toHaveCSS("cursor", "grab");
 	await startDrag(page, title);
 	await finishDrag(page, page.locator('[data-drop-label="Join left group"]'));
+	// The Orchestrator tool is placed by no built-in preset, so it trails the left rail as unplaced.
 	expect(await railClusters(page, "left-layout-rail")).toEqual([
 		["tool-rail-projects", "tool-rail-files"],
+		["tool-rail-orchestrator"],
 	]);
 	await expect(page.getByTestId("auxiliary-pane-title").filter({ hasText: "Files" })).toBeVisible();
 

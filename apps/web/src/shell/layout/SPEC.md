@@ -141,7 +141,7 @@ decides how loud it reads, never a per-theme selector in the component.
 ## Layout grammar
 
 - **Center:** a recursive horizontal/vertical binary tree, maximum four leaves. A split replaces one leaf with equal halves. User creation/resize requires each child to remain at least 320 px wide and 180 px high. Empty leaves are valid frame slots and render the shell-provided empty surface. Remove/Merge promotes a sibling and rehomes every affected workspace's tabs deterministically.
-- **Auxiliary eligibility:** Projects, Specs, Files, and Review are singleton auxiliary-only tools owned by the frame; terminals are workspace resources and may occupy center or any auxiliary region. Hiding a singleton preserves its restore target. View/deep-link reveal restores or unfolds it in frame-local position and focuses the requested item in current workspace attention.
+- **Auxiliary eligibility:** Projects, Specs, Files, Review, TODO List, Artifacts, and Orchestrator are singleton auxiliary-only tools owned by the frame; terminals are workspace resources and may occupy center or any auxiliary region. Hiding a singleton preserves its restore target. View/deep-link reveal restores or unfolds it in frame-local position and focuses the requested item in current workspace attention.
 - **Left/right:** ordered vertical frame stacks beside full-height tool rails. The left rail is
   persistent; the right side is optional: its rail renders only while it has an entry (a group, or an
   unplaced tool restoring there — `canShowSide`) or a tool/terminal drag can create a pane there (the
@@ -336,7 +336,7 @@ focus to the tab. The strip's and rail's roving handlers ignore both keys.
 ## Presets and local persistence
 
 Balanced, Focus, Review, and Left tools are web-owned resource-free frame definitions with a below-center
-bottom slot: Balanced, Review, and Left tools show it; Focus hides it. **Left tools** puts every tool on the
+bottom slot: Balanced, Review, and Left tools show it; Focus hides it. **Left tools** puts its tools on the
 left — Projects; Specs, Files and Artifacts; TODO List and Review — and leaves the right side hidden and
 empty (it keeps a width for when a pane lands there), so the right edge is free for Peek; it is not the
 default, which stays Balanced. Balanced and Focus start with one center group; Review provides
@@ -344,12 +344,19 @@ its deliberate vertical pair. Balanced's lower right group opens on the TODO Lis
 fresh workspace the plan is what there is to look at, while review comments only exist once there is a diff.
 Artifacts sits with the reference tools — after Specs and Files in Balanced's upper right group and
 Review's lower reference group, and last in Focus's one group; it is appended to `LAYOUT_TOOLS` so every existing tool keeps its default
-restore index, and a saved frame from before it shows it as an unplaced entry until placed. Custom presets use the same grammar and capture geometry,
+restore index, and a saved frame from before it shows it as an unplaced entry until placed. **Orchestrator**
+(the pinned container orchestrator chat, [[submodule-web-shell]] *Orchestrator tool*) is appended after it,
+defaults to the **left** side and is placed by **no** built-in preset: most workspaces are in no container, so
+it waits as a dimmed unplaced left-rail entry, and its first reveal opens a new left pane below Projects (its
+restore target names no group). The left keeps it clear of Peek, which folds the right side while open — the
+container overview Peek and the orchestrator show side by side. A frame that records its restore target or
+placement is rejected by an older build's local decoder, which falls back to Balanced, as Artifacts' was. Custom presets use the same grammar and capture geometry,
 topology, tools, folds, and empty structural slots, never workspace resources or terminal count. Preset node
 ids are template-local labels: instantiation mints frontend-local frame ids and returns the old→new group map
 used to rehome every workspace view. Only custom definitions cross the wire through settings; a set that
 places the TODO List (`plan`) is saved only to a host at `LAYOUT_PLAN_PRESET_PROTOCOL_VERSION` or newer, and one
-that places Artifacts only to a host at `ARTIFACTS_PROTOCOL_VERSION` or newer — an older host's validator
+that places Artifacts only to a host at `ARTIFACTS_PROTOCOL_VERSION` or newer, and one that places the
+Orchestrator only to a host at `CONTAINER_PROTOCOL_VERSION` or newer — an older host's validator
 rejects the tool, so Layout settings explains that instead of sending it. Built-in preset
 names are display copy: `layoutPresetName` renders them through the locale catalog by preset id while the
 definition keeps its stable `name`; custom preset names are user data and render verbatim.

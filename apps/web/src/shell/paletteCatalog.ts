@@ -27,6 +27,7 @@ import {
 	RiKeyboardLine,
 	RiLayoutBottomLine,
 	RiLayoutColumnLine,
+	RiLayoutGridLine,
 	RiLayoutLeftLine,
 	RiLayoutRightLine,
 	RiListCheck3,
@@ -70,6 +71,7 @@ const TOOL_LABELS: Record<PaletteTool, MessageKey> = {
 	review: "workbench.tool.review",
 	plan: "workbench.tool.plan",
 	artifacts: "workbench.tool.artifacts",
+	orchestrator: "workbench.tool.orchestrator",
 };
 
 const TOOL_ICONS: Record<PaletteTool, RemixiconComponentType> = {
@@ -78,6 +80,7 @@ const TOOL_ICONS: Record<PaletteTool, RemixiconComponentType> = {
 	review: RiFileList3Line,
 	plan: RiListCheck3,
 	artifacts: RiShapesLine,
+	orchestrator: RiSparkling2Line,
 };
 
 export interface PaletteCatalogDeps {
@@ -143,6 +146,7 @@ export interface PaletteCatalogActions {
 	readonly openShortcuts: () => void;
 	readonly runTabAction: (actionId: string) => void;
 	readonly openContainerDialog: (request: ContainerDialogRequest) => void;
+	readonly openContainerOverview: (containerId: string) => void;
 }
 
 function shortcutOf(
@@ -497,6 +501,14 @@ function containerCommands(deps: PaletteCatalogDeps, workspaceId: string): Comma
 			: [];
 	}
 	return [
+		{
+			id: "container.overview",
+			title: t("containers.commands.overview"),
+			group: "workspace",
+			icon: RiLayoutGridLine,
+			keywords: ["container", "overview", "stack", "members"],
+			run: () => actions.openContainerOverview(containerId),
+		},
 		{
 			id: "container.addWorkspace",
 			title: t("containers.commands.addWorkspace"),

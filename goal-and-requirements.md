@@ -77,7 +77,8 @@ What ThinkRail does, at product level; the linked spec owns the detail.
 - **Projects → workspaces** — a git repo is a project; a workspace is a git worktree, plus the built-in
   Default workspace (the project folder itself) and existing worktrees attached in place
   ([[submodule-server-workspaces]]); a container groups workspaces, from one project or several, under
-  an orchestrator chat that coordinates them ([[submodule-server-containers]]). A Git repository URL can be cloned into a chosen new host folder and
+  an orchestrator chat that coordinates them, pinned beside whichever member is open, with an overview
+  of the members and their pull request stack ([[submodule-server-containers]], [[submodule-web-shell]]). A Git repository URL can be cloned into a chosen new host folder and
   opened as a project, with optional shallow history and cancellation ([[submodule-server-projects]]).
 - **Voice input** — local dictation into every text field, extensions' included and with no work on
   their part (the code editor and the terminal excepted), through a mic on the focused field or ⌘⇧Space /

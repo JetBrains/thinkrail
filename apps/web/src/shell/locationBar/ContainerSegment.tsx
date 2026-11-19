@@ -3,6 +3,7 @@ import {
 	RiGitBranchLine as GitBranch,
 	RiPencilLine as Pencil,
 	RiAddLine as Plus,
+	RiLayoutGridLine,
 	RiSparkling2Line,
 	RiStackLine,
 	RiDeleteBin6Line as Trash2,
@@ -17,7 +18,12 @@ import {
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { RunningIcon } from "../../components/RunningIcon";
-import { memberSubtitle, renameContainer } from "../../panels/containerActions";
+import {
+	memberSubtitle,
+	openContainerOverview,
+	openOrchestrator,
+	renameContainer,
+} from "../../panels/containerActions";
 import { useInlineRename } from "../../panels/workspaceActions";
 import {
 	selectContainerGroup,
@@ -127,10 +133,7 @@ export function ContainerSegment({
 							<DropdownMenuItem
 								data-testid="scope-container-orchestrator"
 								data-active={group.orchestrator.id === activeWorkspaceId || undefined}
-								onSelect={() => {
-									if (group.orchestrator)
-										useAppStore.getState().activateWorkspace(group.orchestrator);
-								}}
+								onSelect={() => openOrchestrator(containerId)}
 							>
 								{group.orchestrator.id === activeWorkspaceId ? (
 									<Check className="text-primary" />
@@ -141,6 +144,13 @@ export function ContainerSegment({
 							</DropdownMenuItem>
 						) : null}
 						<DropdownMenuSeparator />
+						<DropdownMenuItem
+							data-testid="scope-container-overview"
+							onSelect={() => openContainerOverview(containerId)}
+						>
+							<RiLayoutGridLine />
+							{t("containers.overview.title")}
+						</DropdownMenuItem>
 						<DropdownMenuItem
 							data-testid="scope-container-add"
 							onSelect={() => open("addWorkspace")}

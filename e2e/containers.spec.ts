@@ -44,6 +44,10 @@ function containerGroup(page: Page, name: string): Locator {
 	});
 }
 
+function orchestratorTool(page: Page): Locator {
+	return page.locator('[data-tool-body="orchestrator"]').getByTestId("orchestrator-tool");
+}
+
 function memberRow(group: Locator, name: string): Locator {
 	return group.getByTestId("workspace-item").filter({
 		has: group.page().getByTestId("workspace-name").getByText(name, { exact: true }),
@@ -125,14 +129,21 @@ test("grouping two workspaces nests them under the container with its orchestrat
 	await expect(memberRow(board, "beta")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("scope-name")).toHaveText("beta");
 
+	// The menu's Orchestrator pins the orchestrator chat beside the member (decided: it no longer swaps
+	// the center); the pinned tool's own action still opens it as the workspace.
 	await page.getByTestId("scope-container").click();
 	await page
 		.getByTestId("scope-container-menu")
 		.getByTestId("scope-container-orchestrator")
 		.click();
+	const orchestrator = orchestratorTool(page);
+	await expect(orchestrator).toHaveAttribute("data-state", "chat");
+	await expect(page.getByTestId("scope-name")).toHaveText("beta");
+	await orchestrator.getByTestId("orchestrator-tool-open").click();
 	await expect(board.getByTestId("container-orchestrator")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("scope-context")).toHaveAttribute("data-context", "chat");
 	await expect(page.getByTestId("scope-container-name")).toHaveText("Board work");
+	await expect(orchestrator).toHaveAttribute("data-state", "center");
 
 	await worktreeRow(page, "gamma").getByRole("treeitem").click();
 	await expect(page.getByTestId("scope-container-segment")).toHaveCount(0);
@@ -232,4 +243,87 @@ test("a container takes a stacked workspace and an attached one, then is removed
 	expect(kept).toContain(stacked.id);
 	expect(kept).not.toContain(beta.id);
 	expect(kept).not.toContain(gamma.id);
+});
+
+test("the orchestrator stays pinned across member switches, and the overview in Peek shows the members and enters one", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	let alpha: Workspace;
+	let beta: Workspace;
+	let gamma: Workspace;
+	try {
+		const projects = await wire.request("project.list", {});
+		const project = projects.find((candidate) => candidate.kind !== "chats");
+		if (!project) throw new Error("the fixture project is not open");
+		const create = (name: string, baseRef?: string) =>
+			wire.request(
+				"workspace.create",
+				{ projectId: project.id, name, ...(baseRef ? { baseRef } : {}) },
+				30_000,
+			);
+		alpha = await create("alpha");
+		beta = await create("beta", alpha.branch);
+		gamma = await create("gamma");
+		await wire.request("container.create", {
+			name: "Board work",
+			workspaceIds: [alpha.id, beta.id, gamma.id],
+		});
+	} finally {
+		wire.close();
+	}
+	expect(beta.baseBranch).toBe(alpha.branch);
+	await reloadConnected(page);
+	const board = containerGroup(page, "Board work");
+	await expect(board.getByTestId("container-orchestrator")).toBeVisible({ timeout: 30_000 });
+	await memberRow(board, "alpha").getByRole("treeitem").click();
+	await expect(page.getByTestId("scope-name")).toHaveText("alpha");
+
+	await board.getByTestId("container-orchestrator").getByRole("treeitem").click();
+	const orchestrator = orchestratorTool(page);
+	await expect(orchestrator).toHaveAttribute("data-state", "chat");
+	await expect(orchestrator.getByTestId("chat-view")).toBeVisible();
+	await expect(orchestrator.getByTestId("orchestrator-tool-container")).toHaveText("Board work");
+	await expect(page.getByTestId("scope-name")).toHaveText("alpha");
+	const sessionId = await orchestrator.getAttribute("data-session-id");
+	expect(sessionId).toBeTruthy();
+
+	await memberRow(board, "beta").getByRole("treeitem").click();
+	await expect(page.getByTestId("scope-name")).toHaveText("beta");
+	await expect(orchestrator).toHaveAttribute("data-session-id", sessionId ?? "");
+	await expect(orchestrator.getByTestId("chat-view")).toBeVisible();
+
+	await page.getByTestId("scope-container").click();
+	await page.getByTestId("scope-container-menu").getByTestId("scope-container-overview").click();
+	const peek = page.locator('[data-region-kind="peek"][data-open]');
+	const overview = peek.getByTestId("container-overview");
+	await expect(overview.getByTestId("container-overview-member")).toHaveCount(3);
+	const card = (workspace: Workspace) => overview.locator(`[data-member-id="${workspace.id}"]`);
+	await expect(card(beta)).toHaveAttribute("data-active", "true");
+	await expect(card(beta).getByTestId("container-overview-base")).toHaveText("stacked on alpha");
+	await expect(overview.getByTestId("container-overview-stack-line")).toHaveText(
+		/ ← alpha ← beta$/,
+	);
+	await expect(overview.getByTestId("container-overview-independent")).toHaveText(
+		"Independent: gamma",
+	);
+	await expect(peek.getByTestId("peek-open-tab")).toHaveCount(0);
+
+	await peek.getByTestId("peek-pin").click();
+	await card(alpha).getByTestId("container-overview-member-open").click();
+	await expect(page.getByTestId("scope-name")).toHaveText("alpha");
+	await expect(card(alpha)).toHaveAttribute("data-active", "true");
+	await expect(peek.getByTestId("peek-pin")).toHaveAttribute("aria-pressed", "true");
+	await expect(orchestrator).toHaveAttribute("data-session-id", sessionId ?? "");
+
+	await peek.getByTestId("peek-close").click();
+	await expect(peek).toHaveCount(0);
+	await board.getByTestId("container-item").click({ button: "right" });
+	await page.getByTestId("container-menu-overview").click();
+	await expect(overview.getByTestId("container-overview-member")).toHaveCount(3);
+	await card(gamma).getByTestId("container-overview-member-remove").click();
+	await expect(overview.getByTestId("container-overview-member")).toHaveCount(2);
+	await expect(board.getByTestId("workspace-item")).toHaveCount(2);
+	await expect(worktreeRow(page, "gamma")).toBeVisible();
 });

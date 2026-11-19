@@ -135,6 +135,7 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 			openShortcuts: noop,
 			runTabAction: noop,
 			openContainerDialog: noop,
+			openContainerOverview: noop,
 		},
 		...overrides,
 	};
@@ -548,19 +549,26 @@ describe("palette container commands", () => {
 		expect(row("container.addWorkspace", grouping)).toBeUndefined();
 	});
 
-	test("a member's container offers Add workspace and Remove container, never Group", () => {
+	test("a member's container offers its overview, Add workspace and Remove container, never Group", () => {
 		const opened: unknown[] = [];
 		const member = deps({
 			containerId: "c1",
 			canGroup: true,
-			actions: { ...deps().actions, openContainerDialog: (request) => opened.push(request) },
+			actions: {
+				...deps().actions,
+				openContainerDialog: (request) => opened.push(request),
+				openContainerOverview: (containerId) => opened.push({ overview: containerId }),
+			},
 		});
 		expect(row("container.group", member)).toBeUndefined();
+		row("container.overview", member)?.run?.();
 		row("container.addWorkspace", member)?.run?.();
 		row("container.remove", member)?.run?.();
 		expect(opened).toEqual([
+			{ overview: "c1" },
 			{ kind: "addWorkspace", containerId: "c1" },
 			{ kind: "remove", containerId: "c1" },
 		]);
+		expect(row("container.overview", deps())).toBeUndefined();
 	});
 });

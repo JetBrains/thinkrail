@@ -82,7 +82,7 @@ treatment.
   label and its current value. A first chat loads the container's list through
   `loadProjectWorkspaces` instead of seeding it, so the Chats section never shows a partial list. A chat row reads "Continued in <project>" from the record's
   `continuedTo`.
-- **Owns:** containers in Projects (`ContainerRows.tsx`, `ContainerDialogs.tsx`, `containerActions.ts`;
+- **Owns:** containers in Projects (`ContainerRows.tsx`, `ContainerDialogs.tsx`, `ContainerOverview.tsx`, `containerActions.ts`;
   v129, `canUseContainers`). Placement is one selector, `selectContainerTree`: a container whose shown
   members all belong to one project nests in that project after its Default row (a container row at
   level 2, its rows at level 3, indented by its list), one spanning several gets the **Containers**
@@ -95,10 +95,20 @@ treatment.
   toggles (`toggles`, click, →/←): chevron, Stack glyph (Fill while the active workspace is a member or its
   orchestrator), name, member count, a hover `+`, and — collapsed — the members' and orchestrator's rolled-up
   attention dot / running badge (`selectContainerNeedsAttention` / `selectContainerIsRunning`). Its context
-  menu (right-click, Shift+F10, long press) holds **Add workspace…**, **Rename** (inline, the shared
-  `useInlineRename`, `container.rename`; F2) and **Remove container…** (Delete). The **Orchestrator** row
+  menu (right-click, Shift+F10, long press) holds **Overview**, **Add workspace…**, **Rename** (inline, the shared
+  `useInlineRename`, `container.rename`; F2) and **Remove container…** (Delete); a double-click on its name
+  opens the overview too. The **Orchestrator** row
   (the chat whose `orchestratorOf` names the container, Sparkling glyph, its attention and working state)
-  comes first under an expanded container and opens that chat. Collapse is per-browser view state
+  comes first under an expanded container and pins that chat beside a member (`openOrchestrator`: the
+  shell's Orchestrator tool revealed in the active member, else in the member entered last; the orchestrator
+  chat itself only when no member is shown). **`ContainerOverview`** is the container's Peek body
+  ([[submodule-web-shell]], *Peek*), live from the store through `selectContainerOverview`: a card per member
+  (`project · workspace`, branch, `from <base>` or `stacked on <member>`, its most urgent chat state, open
+  TODO steps, diff stats, PR number and state; the active member outlined) with Open (`openContainerMember`:
+  carry the overview, then enter the member) and Remove from container; the **Pull request stack** lines
+  (`main ← A ← B`, `#N` before a member with a PR) and the independent members; **Show orchestrator** and
+  **Add workspace…**. Open steps are the one value the store lacks: it sums `session.list`'s
+  `openTodos` per member, re-read when the connection or any member chat's run or completion changes. Collapse is per-browser view state
   (`collapsedContainerIds`, persisted by `projectExpansion` like project expansion, default expanded),
   and the active member's or orchestrator's container (with its project) is revealed. A standalone
   worktree row's menu adds **Group into a container…**; a member's adds **Remove from container**

@@ -235,3 +235,51 @@ describe("Peek hides by itself", () => {
 		expect(peek()).toBeUndefined();
 	});
 });
+
+describe("the container overview entry", () => {
+	const overview = (containerId: string) => ({ kind: "container", containerId }) as const;
+	const container = (id: string) => ({
+		id,
+		name: id,
+		workspaceIds: [WS],
+		createdAt: 1,
+		updatedAt: 1,
+	});
+
+	test("dedupes by container and travels with its pin to the member a click enters", () => {
+		request(file("a.md"));
+		request(overview("c1"));
+		request(overview("c1"));
+		expect(peek()?.stack).toEqual([file("a.md"), overview("c1")]);
+		useAppStore.getState().pinPeek(WS, true);
+		useAppStore.getState().carryPeek(WS, "w2");
+		expect(useAppStore.getState().peekByWorkspace.w2).toEqual({
+			stack: [overview("c1")],
+			index: 0,
+			pinned: true,
+			open: true,
+		});
+	});
+
+	test("only a shown container overview travels", () => {
+		request(overview("c1"));
+		request(file("a.md"));
+		useAppStore.getState().carryPeek(WS, "w2");
+		expect(useAppStore.getState().peekByWorkspace.w2).toBeUndefined();
+		useAppStore.getState().showPeekEntry(WS, 0);
+		useAppStore.getState().closePeek(WS);
+		useAppStore.getState().carryPeek(WS, "w2");
+		expect(useAppStore.getState().peekByWorkspace.w2).toBeUndefined();
+	});
+
+	test("leaves the stack when its container is removed or no longer listed", () => {
+		useAppStore.getState().installContainers([container("c1"), container("c2")]);
+		request(overview("c1"));
+		request(file("a.md"));
+		request(overview("c2"));
+		useAppStore.getState().applyContainerRemoved("c1");
+		expect(peek()).toMatchObject({ stack: [file("a.md"), overview("c2")], index: 1 });
+		useAppStore.getState().installContainers([]);
+		expect(peek()).toMatchObject({ stack: [file("a.md")], index: 0, open: true });
+	});
+});

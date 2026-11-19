@@ -1060,6 +1060,24 @@ test("a custom preset may place every layout tool, the TODO List included", () =
 	]);
 });
 
+test("a custom preset may place the container orchestrator beside Projects", () => {
+	const withOrchestrator: LayoutPreset = {
+		...preset(),
+		left: {
+			visible: true,
+			width: 0.24,
+			groups: [
+				{ id: "left-projects", weight: 0.5, folded: false, tools: ["projects"] },
+				{ id: "left-orchestrator", weight: 0.5, folded: false, tools: ["orchestrator"] },
+			],
+		},
+	};
+	expect(validateCustomLayoutPresets([withOrchestrator])).toEqual([withOrchestrator]);
+	expect(updateConfig({ customLayoutPresets: [withOrchestrator] }).customLayoutPresets).toEqual([
+		withOrchestrator,
+	]);
+});
+
 test("a captured Left tools preset, with its right side hidden and empty, round-trips", () => {
 	const leftTools: LayoutPreset = {
 		id: "left-tools-copy",

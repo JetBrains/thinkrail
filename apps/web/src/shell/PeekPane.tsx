@@ -7,6 +7,7 @@ import {
 	RiPushpinFill as Pinned,
 	RiPushpinLine as Unpinned,
 } from "@remixicon/react";
+import type { Container } from "@thinkrail/contracts";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import {
 	ResourceHostProvider,
@@ -19,6 +20,7 @@ import { Button, IconButton } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
 import { useMemo, useState } from "react";
 import { fileName } from "../lib";
+import { ContainerOverview } from "../panels/ContainerOverview";
 import { type PeekEntry, peekEntryIdentity, useAppStore } from "../store";
 import { PEEK_HOST } from "./AppResourceHost";
 import { ExtensionPanelBody } from "./ExtensionPanelBody";
@@ -32,7 +34,8 @@ interface PeekView {
 }
 
 type ExtensionEntry = Extract<PeekEntry, { kind: "extension" }>;
-type ResourceEntry = Exclude<PeekEntry, ExtensionEntry>;
+type ResourceEntry = Extract<PeekEntry, { kind: "file" | "compare" }>;
+type ContainerNames = Readonly<Record<string, Pick<Container, "name">>>;
 
 function extensionTab(entry: ExtensionEntry): LayoutExtensionTab {
 	return {
@@ -46,7 +49,7 @@ function extensionTab(entry: ExtensionEntry): LayoutExtensionTab {
 	};
 }
 
-function entryName(t: Translator, entry: PeekEntry): string {
+function entryName(t: Translator, entry: PeekEntry, containers: ContainerNames): string {
 	switch (entry.kind) {
 		case "file":
 			return fileName(entry.path);
@@ -57,6 +60,10 @@ function entryName(t: Translator, entry: PeekEntry): string {
 			});
 		case "extension":
 			return layoutTabName(t, extensionTab(entry));
+		case "container":
+			return t("containers.overview.crumb", {
+				name: containers[entry.containerId]?.name ?? "",
+			});
 	}
 }
 
@@ -139,6 +146,13 @@ function PeekEntryBody({
 			</div>
 		);
 	}
+	if (entry.kind === "container") {
+		return (
+			<div className={className}>
+				<ContainerOverview containerId={entry.containerId} workspaceId={workspaceId} />
+			</div>
+		);
+	}
 	return (
 		<PeekResource
 			workspaceId={workspaceId}
@@ -161,6 +175,7 @@ function PeekCrumbs({
 	index: number;
 }) {
 	const t = useT();
+	const containers = useAppStore((state) => state.containers);
 	return (
 		<ol
 			aria-label={t("peek.history")}
@@ -168,7 +183,7 @@ function PeekCrumbs({
 			className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden"
 		>
 			{stack.map((entry, position) => {
-				const name = entryName(t, entry);
+				const name = entryName(t, entry, containers);
 				const current = position === index;
 				return (
 					<li
@@ -204,6 +219,7 @@ function PeekCrumbs({
 export function PeekPane({ workspaceId }: { workspaceId: string }) {
 	const t = useT();
 	const peek = useAppStore((state) => state.peekByWorkspace[workspaceId]);
+	const containers = useAppStore((state) => state.containers);
 	const [views, setViews] = useState<Readonly<Record<string, PeekView>>>({});
 	const [fullscreen, setFullscreen] = useState(false);
 	const entry = peek?.stack[peek.index];
@@ -244,12 +260,14 @@ export function PeekPane({ workspaceId }: { workspaceId: string }) {
 					selected={peek.pinned}
 					onClick={() => store().pinPeek(workspaceId, !peek.pinned)}
 				/>
-				<IconButton
-					icon={OpenTab}
-					label={t("peek.openInTab")}
-					data-testid="peek-open-tab"
-					onClick={() => openPeekInTab(workspaceId)}
-				/>
+				{entry.kind === "container" ? null : (
+					<IconButton
+						icon={OpenTab}
+						label={t("peek.openInTab")}
+						data-testid="peek-open-tab"
+						onClick={() => openPeekInTab(workspaceId)}
+					/>
+				)}
 				<IconButton
 					icon={Fullscreen}
 					label={t("peek.fullScreen")}
@@ -278,7 +296,7 @@ export function PeekPane({ workspaceId }: { workspaceId: string }) {
 					className="h-[90vh] w-[95vw] max-w-[95vw] gap-8"
 				>
 					<DialogHeader>
-						<DialogTitle>{entryName(t, entry)}</DialogTitle>
+						<DialogTitle>{entryName(t, entry, containers)}</DialogTitle>
 					</DialogHeader>
 					{fullscreen ? (
 						<PeekEntryBody

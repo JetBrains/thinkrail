@@ -109,6 +109,7 @@ import {
 	workspaceProjectionReference,
 } from "./layoutState";
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
+import { OrchestratorTool } from "./OrchestratorTool";
 import { PeekPane } from "./PeekPane";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { hasNativeShortcuts } from "./useAppShortcuts";
@@ -799,6 +800,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			) : (
 				<ReviewPanel key={workspaceId} workspaceId={workspaceId} failed={review.failed} />
 			),
+			orchestrator: <OrchestratorTool workspaceId={workspaceId} landingChord={landingChord} />,
 			plan: railPlanSessionId ? (
 				<ErrorBoundary
 					label={t("shell.workbench.panel.planRail")}
@@ -836,6 +838,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		chatActions,
 		isChat,
 		keybindings,
+		landingChord,
 		nativeShortcuts,
 		railPlanSessionId,
 		review.failed,

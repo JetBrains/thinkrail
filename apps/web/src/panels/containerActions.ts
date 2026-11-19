@@ -1,6 +1,12 @@
 import type { Container, Workspace } from "@thinkrail/contracts";
 import { type Translator, t } from "@thinkrail/locales/react";
-import { toast, useAppStore } from "../store";
+import {
+	selectActiveWorkspace,
+	selectContainerGroup,
+	selectLastContainerMember,
+	toast,
+	useAppStore,
+} from "../store";
 import { errorText, getTransport, supportsContainers, wsErrorCode } from "../transport";
 import { loadProjectWorkspaces } from "./workspaceActions";
 
@@ -123,4 +129,43 @@ export async function removeContainer(containerId: string, archiveIds: string[])
 		reportContainerFailure(containerId, err, t("containers.removeFailed"));
 		return false;
 	}
+}
+
+/**
+ * Shows the container's orchestrator pinned beside a member: in the active member, else in the member the
+ * user was in last. Without a shown member it opens the orchestrator chat as the workspace instead.
+ */
+export function openOrchestrator(containerId: string): void {
+	const state = useAppStore.getState();
+	const group = selectContainerGroup(state, containerId);
+	if (!group?.orchestrator) return;
+	const active = selectActiveWorkspace(state);
+	if (active?.id === group.orchestrator.id) return;
+	const member = group.members.some((candidate) => candidate.id === active?.id)
+		? active
+		: selectLastContainerMember(state, group);
+	if (!member) {
+		state.activateWorkspace(group.orchestrator);
+		return;
+	}
+	state.activateWorkspace(member);
+	useAppStore.getState().requestToolView(member.id, "orchestrator");
+}
+
+/** Opens the container's overview in Peek: the active workspace's, else the last member's it enters. */
+export function openContainerOverview(containerId: string): void {
+	const state = useAppStore.getState();
+	const group = selectContainerGroup(state, containerId);
+	if (!group) return;
+	const target = selectActiveWorkspace(state) ?? selectLastContainerMember(state, group);
+	if (!target) return;
+	if (state.activeWorkspaceId !== target.id) state.activateWorkspace(target);
+	useAppStore.getState().requestPeek(target.id, { kind: "container", containerId });
+}
+
+/** Enters a member from the overview Peek in `fromWorkspaceId`, which then shows there too. */
+export function openContainerMember(fromWorkspaceId: string, member: Workspace): void {
+	const state = useAppStore.getState();
+	state.carryPeek(fromWorkspaceId, member.id);
+	state.activateWorkspace(member);
 }
