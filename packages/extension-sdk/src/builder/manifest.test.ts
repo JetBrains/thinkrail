@@ -39,7 +39,6 @@ describe("the thinkrail manifest", () => {
 				web: "./dist/web.js",
 				styles: "./dist/web.css",
 				title: "Weather",
-				image: "https://example.com/preview.png",
 			},
 		});
 		expect(pkg.name).toBe("thinkrail-ext-weather");
@@ -86,16 +85,20 @@ describe("the thinkrail manifest", () => {
 		expect(message).toContain("@earendil-works/pi-ai, typebox must be peerDependencies");
 	});
 
-	it("warns that the catalog shows only an https image", () => {
-		const pkg = read({
-			name: "thinkrail-ext-x",
-			keywords: ["thinkrail-extension"],
-			thinkrail: { api: "1.0", web: "./dist/web.js", image: "http://x/y.png" },
-		});
-		expect(pkg.warnings).toEqual([
-			'"image" is not an https:// URL, so the ThinkRail extension catalog will not show it (got "http://x/y.png").',
-		]);
-	});
+	it.each(["https://example.com/preview.png", "http://x/y.png", "preview.png"])(
+		"accepts an image of %s and warns that nothing shows it",
+		(image) => {
+			const pkg = read({
+				name: "thinkrail-ext-x",
+				keywords: ["thinkrail-extension"],
+				thinkrail: { api: "1.0", web: "./dist/web.js", image },
+			});
+			expect(pkg.manifest.image).toBe(image);
+			expect(pkg.warnings).toEqual([
+				'"image" is not used: neither the showcase nor ThinkRail shows preview images.',
+			]);
+		},
+	);
 
 	it("warns about a missing keyword, a missing SDK dependency and unknown fields", () => {
 		const pkg = read({

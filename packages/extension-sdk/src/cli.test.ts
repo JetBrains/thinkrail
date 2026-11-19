@@ -41,6 +41,20 @@ describe("thinkrail-extension", () => {
 		expect(result.stderr).not.toContain("    at ");
 	});
 
+	it("reports a name outside the allow-list as a build error", () => {
+		current = fixture(WEB_PACKAGE, {
+			"web/index.tsx":
+				'import { unstable_batchedUpdates } from "react-dom";\nexport default { unstable_batchedUpdates };\n',
+		});
+		const result = run(["build", "--prefix", "fx"], current.root);
+		expect(result.code).toBe(1);
+		expect(result.stderr).toStartWith(
+			"thinkrail-extension: unstable_batchedUpdates is not part of extension API 1.0: react-dom exports only browser, createPortal,",
+		);
+		expect(result.stderr).toContain("(imported by web/index.tsx)");
+		expect(result.stderr).not.toContain("MISSING_EXPORT");
+	});
+
 	it("exits 2 with usage when an output would overwrite an input, touching nothing", () => {
 		current = fixture(
 			{ ...WEB_PACKAGE, thinkrail: { api: "1.0", web: "./web/index.js" } },

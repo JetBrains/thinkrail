@@ -47,16 +47,6 @@ function packagePath(path: string): string | undefined {
 	return segments.length > 0 && !segments.includes("..") ? segments.join("/") : undefined;
 }
 
-function httpsUrl(text: string): boolean {
-	if (/\s/.test(text)) return false;
-	try {
-		const url = new URL(text);
-		return url.protocol === "https:" && url.hostname !== "";
-	} catch {
-		return false;
-	}
-}
-
 export function readExtensionPackage(root: string): ExtensionPackage {
 	const path = join(root, "package.json");
 	if (!existsSync(path)) {
@@ -165,10 +155,8 @@ export function readExtensionPackage(root: string): ExtensionPackage {
 		);
 	}
 	if (problems.length > 0) fail(problems);
-	if (typeof manifest.image === "string" && !httpsUrl(manifest.image.trim())) {
-		warnings.push(
-			`"image" is not an https:// URL, so the ThinkRail extension catalog will not show it (got "${manifest.image}").`,
-		);
+	if (manifest.image !== undefined) {
+		warnings.push('"image" is not used: neither the showcase nor ThinkRail shows preview images.');
 	}
 	const keywords = Array.isArray(pkg.keywords) ? pkg.keywords : [];
 	if (!keywords.includes(EXTENSION_KEYWORD)) {

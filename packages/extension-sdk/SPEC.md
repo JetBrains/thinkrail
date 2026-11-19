@@ -92,7 +92,8 @@ private and unchanged. It imports no pi value at runtime.
   checks the package: the `server` file present and pi packages / `typebox` never in `dependencies`
   (they must be peers), with or without a server half — a web-only package would install a second pi
   for nothing. Warnings: a missing keyword, a missing SDK dependency for a server half, unknown
-  manifest keys and an `image` that is not an `https://` URL (the catalog does not show it). A
+  manifest keys and any `image` — still valid, but neither the showcase nor ThinkRail shows preview images
+  ([[module-thinkrail-extensions]] § Catalog). A
   server-only extension has nothing to build.
 - **Bundler: rolldown** (a dependency of the SDK, the same version Vite 8 brings to the app). It runs
   under Node and Bun, so the command does too; the spike's `Bun.build` was rejected because an outside
@@ -107,9 +108,20 @@ private and unchanged. It imports no pi value at runtime.
   specifiers). Re-exporting every listed name costs about 1 KB per bundle, because rolldown keeps
   property reads; narrowing to the names an extension imports is a deferred optimisation. `react/jsx-dev-runtime` maps onto the production `jsx`. Rejected with a hint, naming the
   importer: `react-dom/client`, `react/compiler-runtime` / `react-compiler-runtime` (the React Compiler
-  is not supported in v1), any other `react` / `react-dom` subpath, `./server` and unknown SDK subpaths,
-  the private `@thinkrail/ui|extension-api|resource-renderers` names (pointing at the SDK specifier), and
-  CSS imported from JavaScript.
+  is not supported in v1), any other `react` / `react-dom` subpath, `./server` and unknown SDK subpaths
+  (an unshared `./ui/*` one — dialog, textarea, … — says the extension brings its own and names the shared
+  UI modules), the private `@thinkrail/ui|extension-api|resource-renderers` names (the hint derives from
+  `SHARED_SPECIFIERS`: the SDK counterpart when it is shared, else that counterpart's own rejection, else
+  the shared SDK modules), and CSS imported from JavaScript.
+- **Names outside the allow-list.** A named import (or re-export) of a name a shared specifier does not
+  export fails the build with the name, the specifier, its importer, the API version and the specifier's
+  names — from rolldown's `MISSING_EXPORT`, inside `node_modules` too, since such an import is an ESM link
+  error anyway. A namespace member read statically (`React.someName`) that is not exported is rolldown's
+  `IMPORT_IS_UNDEFINED`: the same error in the extension's own code, a warning (`It is undefined at
+  runtime.`) when a dependency reads it, because a dependency may be feature-detecting. A default import
+  or a computed member (`React[name]`) is not checked: the default export is the host's module object,
+  which holds only the allow-listed names, so anything else reads `undefined`. Both texts are parsed from
+  the pinned rolldown's messages (ANSI stripped); `src/builder/build.test.ts` fails if they change.
 - A bundle imports nothing, since the app loads it as one file and a browser cannot resolve a bare
   specifier. Every other bare specifier is resolved through rolldown first: one that does not resolve is
   a build error naming it and its importer (install it or remove the import) instead of rolldown's

@@ -60,6 +60,14 @@ npx thinkrail-extension build --prefix weather
   root, and the React Compiler is not supported in API 1.0.
 - The bundle imports nothing: an import of a package that is not installed, or of a Node built-in the
   bundle uses, fails the build.
+- Only the names in `@thinkrail/extension-sdk/shared-modules.json` exist. A named import of any other
+  name (`import { unstable_batchedUpdates } from "react-dom"`) fails the build with the names that module
+  does export; so does a namespace read such as `React.someName` in your own code (in a dependency it is a
+  warning). A default import (`import React from "react"`) and a computed read (`React[name]`) are not
+  checked: an unlisted name read through them is `undefined` at runtime.
+- The app's other components (a dialog, a textarea, …) and the private `@thinkrail/*` packages are not
+  part of API 1.0: bring your own, or use `…/ui/button`, `…/ui/utils`, `…/ui/theme` and
+  `…/resources`.
 - Exit codes: 0 on success (and for `--help`), 1 when the build fails, 2 on a usage error (an unknown
   command, option or argument, a missing option value, or a `web` / `styles` path that is also an
   input — the entry, `--css`, the `server` file or `package.json`). A failed build leaves the previous
