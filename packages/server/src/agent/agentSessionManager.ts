@@ -133,6 +133,7 @@ import {
 } from "./mcpSessions";
 import { refreshModelListings } from "./modelAvailability";
 import { orchestratorPolicy } from "./orchestratorPolicy";
+import { orchestratorTools } from "./orchestratorTools";
 import { createPiSettings } from "./packages";
 import {
 	getPiRuntimeGeneration,
@@ -182,9 +183,12 @@ interface PendingHostMessage {
 	readonly customType: string;
 	readonly content: string;
 	readonly details: unknown;
+	readonly deliverAs: HostMessageDelivery;
 	readonly onDropped: (() => void) | undefined;
 	queued: boolean;
 }
+
+export type HostMessageDelivery = "followUp" | "steer";
 
 interface Entry {
 	subagents: Subagents;
@@ -1609,6 +1613,7 @@ async function createParentSessionInternal(
 					extraUsageModelSelectExtension(sessionId),
 					withoutSpecRule(workspaceId),
 					orchestratorPolicy(workspaceId),
+					orchestratorTools(workspaceId),
 				],
 				{ ...toolResponseSessionServices(toolResponseWaiters), workspaceFiles },
 			),
@@ -2548,13 +2553,13 @@ export async function sendReviewFixToSession(
 	await sendHostMessageToSession(sessionId, TODO_REVIEW_FIX_CUSTOM_TYPE, content, details);
 }
 
-/** A host-authored custom message the agent answers: a card in the transcript, queued behind a running turn, never a steer. */
+/** A host-authored custom message the agent answers: a card in the transcript, queued behind a running turn unless sent as a steer. */
 export async function sendHostMessageToSession(
 	sessionId: string,
 	customType: string,
 	content: string,
 	details: unknown,
-	options: { onDropped?: () => void } = {},
+	options: { onDropped?: () => void; deliverAs?: HostMessageDelivery } = {},
 ): Promise<void> {
 	const entry = mustGetEntry(sessionId);
 	const release = admitPreflight(entry);
@@ -2563,6 +2568,7 @@ export async function sendHostMessageToSession(
 		customType,
 		content,
 		details,
+		deliverAs: options.deliverAs ?? "followUp",
 		onDropped: options.onDropped,
 		queued: false,
 	};
@@ -2606,7 +2612,7 @@ function deliverHostMessage(entry: Entry, message: PendingHostMessage): Promise<
 			display: true,
 			details: message.details,
 		},
-		{ deliverAs: "followUp", triggerTurn: true },
+		{ deliverAs: message.deliverAs, triggerTurn: true },
 	);
 }
 

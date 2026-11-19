@@ -380,6 +380,73 @@ export interface ContainerBriefDetails {
 	containerId: string;
 }
 
+export const CONTAINER_WAKE_CUSTOM_TYPE = "container-wake";
+
+/** What changed in a member: one of its chats settled, started needing the human or failed (`chat`), or its PR's state (`review`). */
+export type ContainerWakeReason = "chat" | "review";
+
+/** The host's card that wakes an orchestrator (starts its turn) about one member workspace. */
+export interface ContainerWakeDetails {
+	containerId: string;
+	workspaceId: string;
+	workspaceName: string;
+	reasons: ContainerWakeReason[];
+}
+
+export const ORCHESTRATOR_MESSAGE_CUSTOM_TYPE = "orchestrator-message";
+
+/** An orchestrator's `message_chat` in a member chat: another agent's message, never the human's. */
+export interface OrchestratorMessageDetails {
+	containerId: string;
+	containerName: string;
+	orchestratorSessionId: string;
+	mode: "follow_up" | "steer";
+	/** The orchestrator's own words; the message `content` frames them for the member's agent. */
+	text: string;
+}
+
+/** The container cards a chat transcript shows: the brief, a wake-up, an orchestrator's message. */
+export type ContainerNote =
+	| { kind: "brief"; details: ContainerBriefDetails }
+	| { kind: "wake"; details: ContainerWakeDetails }
+	| { kind: "orchestratorMessage"; details: OrchestratorMessageDetails };
+
+function isStringRecord(value: unknown, keys: readonly string[]): value is Record<string, string> {
+	if (!value || typeof value !== "object") return false;
+	const record = value as Record<string, unknown>;
+	return keys.every((key) => typeof record[key] === "string");
+}
+
+export function readContainerNote(message: unknown): ContainerNote | null {
+	if (!message || typeof message !== "object") return null;
+	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
+	if (m.role !== "custom") return null;
+	const { details } = m;
+	if (m.customType === CONTAINER_BRIEF_CUSTOM_TYPE && isStringRecord(details, ["containerId"]))
+		return { kind: "brief", details: details as unknown as ContainerBriefDetails };
+	if (
+		m.customType === CONTAINER_WAKE_CUSTOM_TYPE &&
+		isStringRecord(details, ["containerId", "workspaceId", "workspaceName"]) &&
+		Array.isArray((details as { reasons?: unknown }).reasons)
+	)
+		return { kind: "wake", details: details as unknown as ContainerWakeDetails };
+	if (
+		m.customType === ORCHESTRATOR_MESSAGE_CUSTOM_TYPE &&
+		isStringRecord(details, [
+			"containerId",
+			"containerName",
+			"orchestratorSessionId",
+			"mode",
+			"text",
+		])
+	)
+		return {
+			kind: "orchestratorMessage",
+			details: details as unknown as OrchestratorMessageDetails,
+		};
+	return null;
+}
+
 export type WorkspaceCreationState = "running" | "interrupted" | "failed";
 export type WorkspaceCreationPhase = "preparing" | "checking-out";
 
@@ -830,10 +897,12 @@ export function opensChatRound(message: unknown): boolean {
 	if (role === "user") return !isControlMessage(plainText(content));
 	if (isBackgroundCommandCompletionMessage(message) || isSubagentCompletionMessage(message))
 		return completionDelivery(message.details) !== "run";
+	const note = readContainerNote(message);
 	return (
 		isTodoReviewFixMessage(message) ||
 		isContinueInWorkspaceRequestMessage(message) ||
-		isChatHandoffMessage(message)
+		isChatHandoffMessage(message) ||
+		(note !== null && note.kind !== "brief")
 	);
 }
 

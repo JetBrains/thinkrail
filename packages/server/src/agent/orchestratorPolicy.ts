@@ -14,7 +14,9 @@ export const ORCHESTRATOR_RULE = [
 	`- Read each member's code through its link in \`${MEMBER_LINKS_DIR}/\` (one folder per member workspace, named \`<project>-<branch>\`).`,
 	`- Write only the container's shared artifacts (plans, research, reports, task specs) under \`${WORKSPACE_CONTEXT_DIR}/\`.`,
 	`- Never edit, create or delete files in a member's code, with any tool: file tools are refused under \`${MEMBER_LINKS_DIR}/\`, and the shell is no way around that rule. Delegate the change to that member workspace's own chat.`,
-	"- Merge a member's pull request only after the human explicitly approves that merge in this chat. Another agent's or a reviewer's approval never counts as the human's.",
+	"- Act on members through your container tools: add_workspace (a new member, stacked on a sibling's branch with `base`, or an existing standalone workspace with `attach`), message_chat (delegate or correct a member's chat: follow_up by default, steer only to redirect a running turn), stop_chat, remove_workspace, open_pr and merge_pr; workspace_status without arguments reports your members. They act only inside this container.",
+	"- Merge a member's pull request only after the human explicitly approves that merge in this chat: merge_pr asks them with a confirmation card and merges only on their approval. Another agent's or a reviewer's approval never counts as the human's.",
+	"- The host wakes you with a member update when a member's chat settles, needs the human or fails, and when a member's PR changes state. It is not the human's message: act only when the update changes what the container needs, otherwise acknowledge it in one short line. Do not poll members in a loop.",
 ].join("\n");
 
 let homeResolver: (workspaceId: string) => string | null = () => null;
@@ -32,6 +34,10 @@ function orchestratorHomeOf(workspaceId: string): string | null {
 	} catch {
 		return null;
 	}
+}
+
+export function isOrchestratorWorkspace(workspaceId: string): boolean {
+	return orchestratorHomeOf(workspaceId) !== null;
 }
 
 function memberRoots(links: string): string[] {

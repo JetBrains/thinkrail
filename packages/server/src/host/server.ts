@@ -75,6 +75,7 @@ import {
 	setModelListingPublisher,
 	setModelsFilePublisher,
 	setOrchestratorHomeResolver,
+	setOrchestratorToolsHost,
 	setPiPackagesPublisher,
 	setRequestReviewHandler,
 	setReviewCommentHandler,
@@ -223,6 +224,8 @@ import { initializeHostRuntime } from "./hostRuntime";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
 import { disposeContainerOrchestrator, orchestratorHomeOf } from "./orchestrator";
+import { orchestratorToolsHost } from "./orchestratorTools";
+import { createOrchestratorWakeups, liveWakeupDeps } from "./orchestratorWakeups";
 import {
 	additionalCapture,
 	applyAdditionalAnalyticsSettings,
@@ -979,6 +982,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		publishScoped(channel, event.kind === "changed" ? event.creation : event.removed);
 	});
 
+	const wakeups = createOrchestratorWakeups(liveWakeupDeps);
+	wakeups.seed(listAllWorkspaceRecords());
 	const publishWorkspaceEvent = (event: WorkspaceLifecycleEvent) => {
 		const channel =
 			event.kind === "created"
@@ -992,6 +997,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		const projectId = event.kind === "removed" ? event.projectId : event.workspace.projectId;
 		publishScoped(channel, data, { workspaceId, projectId });
 		observeWorkspaceForContainers(event);
+		wakeups.onWorkspaceEvent(event);
 	};
 	setWorkspacePublisher(publishWorkspaceEvent);
 	setContainerDissolveHook(disposeContainerOrchestrator);
@@ -1087,6 +1093,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}),
 	);
 	setWorkspaceToolsHost(workspaceToolsHost);
+	setOrchestratorToolsHost(orchestratorToolsHost);
 	reconcilePendingReviewsOnBoot();
 
 	setSettingsPublisher((config, appliedUpdate) => {
@@ -1131,6 +1138,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 
 	setSessionStatePublisher((record: SessionStateRecord) => {
 		stampSessionActivity(record);
+		wakeups.onSessionState(record);
 		publishScoped(
 			WS_CHANNELS.sessionState,
 			record,
@@ -1190,6 +1198,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setSessionPublisher((payload, workspaceId) => {
 		runObservation.observe(payload.sessionId, payload.event);
 		observeContinuation(payload.sessionId, payload.event);
+		wakeups.onSessionEvent(payload.sessionId, workspaceId, payload.event);
 		void turnTracker.observe(payload.sessionId, payload.event);
 		const artifactEvent = artifactSessionEvent(payload.sessionId, payload.event);
 		if (artifactEvent) {
@@ -1283,6 +1292,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		setupObservation.clear();
 		runObservation.reset();
 		taskObservation.clear();
+		wakeups.dispose();
 		observeLoggedErrors(null);
 		void shutdownAnalytics();
 		stopHostUpdateChecks();
@@ -1368,6 +1378,7 @@ function restoreSeamDefaults(): void {
 	setContainerPublisher(null);
 	setContainerDissolveHook(null);
 	setOrchestratorHomeResolver(null);
+	setOrchestratorToolsHost(null);
 	setWorkspaceCreationPublisher(null);
 	setWorkspaceCreationHandoff(null);
 	setProjectPathGuard(null);

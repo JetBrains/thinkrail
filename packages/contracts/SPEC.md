@@ -1251,8 +1251,9 @@ transcripts written before it, which keep the old round rules). The guards do no
 shared `completionDelivery(details)` reader returns the marker or `undefined`, so an unknown value
 reads as absent everywhere. **`opensChatRound(message)`** is the message-level twin of the chat's
 turn-level `opensRound` ([[submodule-web-chat]]): a user prompt other than a control message, a
-`todo-review-fix`, a continuation request, a handoff, or a completion not delivered as `run`. The host
-uses it to cut artifact round markers where the chat cuts rounds; a web test pins the two together. The conversation may render that historical notice,
+`todo-review-fix`, a continuation request, a handoff, a container wake-up or orchestrator message (not
+the brief), or a completion not delivered as `run`. The host uses it to cut artifact round markers where
+the chat cuts rounds; a web test pins the two together. The conversation may render that historical notice,
 but must never infer current resource authority from it; logs and controls still use scoped reads.
 
 Every read/control validates workspace membership and parent lineage, not merely a syntactically
@@ -1302,6 +1303,16 @@ client talking to an older host sends none of it and holds no containers.
   entry is the **`container-brief`** custom message (`CONTAINER_BRIEF_CUSTOM_TYPE`,
   `ContainerBriefDetails { containerId }`), a summary of the members that only adds context. Removing the
   container deletes it like a chat; deleting it alone clears `orchestratorSessionId`.
+- **Container cards** — two more custom messages, both starting a turn: **`container-wake`**
+  (`CONTAINER_WAKE_CUSTOM_TYPE`, `ContainerWakeDetails { containerId, workspaceId, workspaceName, reasons:
+  ("chat" | "review")[] }`), the host's update about one member in the orchestrator's chat, and
+  **`orchestrator-message`** (`ORCHESTRATOR_MESSAGE_CUSTOM_TYPE`, `OrchestratorMessageDetails { containerId,
+  containerName, orchestratorSessionId, mode: "follow_up" | "steer", text }`), an orchestrator's
+  `message_chat` in a member chat — its provenance, never a user message; `text` is the orchestrator's own
+  words, the `content` frames them for the member's agent. **`readContainerNote(message)`** reads any of
+  the three into `ContainerNote` (`brief` | `wake` | `orchestratorMessage`), `null` for anything else or a
+  malformed one, and `opensChatRound` opens a round at a wake-up or an orchestrator message, not at the
+  brief. No method or protocol gate: an older client shows none of them.
 - **`Workspace.startedBy`** (`WorkspaceStartedBy { sessionId, containerId? }`) — on a workspace an agent's
   `start_workspace` created: the calling session, plus its container when that session is an orchestrator.
 - Methods: **`container.list`** (→ `Container[]`) / **`container.create`** (`{ name?, workspaceIds }` →

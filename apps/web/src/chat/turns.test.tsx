@@ -188,3 +188,51 @@ describe("system and failure notices", () => {
 		).toContain('data-testid="agent-try-again"');
 	});
 });
+
+describe("container notes", () => {
+	test("an orchestrator's message shows its own words under its provenance; a wake-up folds its update", () => {
+		const message = renderRow(
+			{
+				kind: "containerNote",
+				id: "n1",
+				note: {
+					kind: "orchestratorMessage",
+					details: {
+						containerId: "c1",
+						containerName: "Docs everywhere",
+						orchestratorSessionId: "o1",
+						mode: "steer",
+						text: "Rebase on **main** first.",
+					},
+				},
+				text: "Message from the orchestrator of the container …",
+			},
+			false,
+		);
+		expect(message).toContain('data-note="orchestratorMessage"');
+		expect(message).toContain("From the orchestrator of “Docs everywhere” · steer");
+		expect(message).toContain("<strong>main</strong>");
+		expect(message).not.toContain("Message from the orchestrator of the container");
+
+		const wake = renderRow(
+			{
+				kind: "containerNote",
+				id: "n2",
+				note: {
+					kind: "wake",
+					details: {
+						containerId: "c1",
+						workspaceId: "w1",
+						workspaceName: "board",
+						reasons: ["chat"],
+					},
+				},
+				text: "Member update · ThinkRail · board",
+			},
+			false,
+		);
+		expect(wake).toContain("Update from board");
+		expect(wake).toContain('aria-expanded="false"');
+		expect(wake).not.toContain("container-note-body");
+	});
+});

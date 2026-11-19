@@ -57,6 +57,9 @@ export function deriveMessageActions(
 			case "handoff":
 				roundHasLaterContent = false;
 				break;
+			case "containerNote":
+				if (row.note.kind !== "brief") roundHasLaterContent = false;
+				break;
 		}
 	}
 

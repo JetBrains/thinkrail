@@ -1,6 +1,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { extname, isAbsolute, resolve } from "node:path";
 import {
+	type Container,
 	chatState,
 	type ImageContent,
 	type Project,
@@ -20,6 +21,7 @@ import {
 	type WorkspaceStatusParams,
 	type WorkspaceToolsHost,
 } from "../agent";
+import { listContainers } from "../containers";
 import { listBranches, prefetchBranch } from "../git";
 import { logger } from "../log";
 import { listProjects } from "../projects";
@@ -187,6 +189,24 @@ const liveStartDeps: StartWorkspaceDeps = {
 
 const NOTHING_CREATED = "Stopped; no workspace was created.";
 
+/** `start_workspace` whose new workspace is handed to `join` as soon as it exists, before the tool returns. */
+export function startWorkspaceJoining(
+	callerSessionId: string,
+	params: StartWorkspaceParams,
+	join: (workspace: Workspace) => void,
+	signal?: AbortSignal,
+): Promise<StartedWorkspace> {
+	const deps: StartWorkspaceDeps = {
+		...liveStartDeps,
+		create: async (...args) => {
+			const handed = await liveStartDeps.create(...args);
+			join(handed.workspace);
+			return handed;
+		},
+	};
+	return startWorkspace(callerSessionId, params, deps, signal);
+}
+
 export async function startWorkspace(
 	callerSessionId: string,
 	params: StartWorkspaceParams,
@@ -351,6 +371,7 @@ export interface WorkspaceStatusDeps {
 	callerWorkspace: (sessionId: string) => Workspace;
 	openProjects: () => Project[];
 	allWorkspaces: () => Workspace[];
+	containers: () => Container[];
 	projectWorkspaces: (projectId: string) => Promise<Workspace[]>;
 	withDiffStats: (workspace: Workspace) => Promise<Workspace>;
 	chatReports: (workspace: Workspace, withFinal: boolean) => Promise<ChatReport[]>;
@@ -360,6 +381,7 @@ const liveStatusDeps: WorkspaceStatusDeps = {
 	callerWorkspace,
 	openProjects: listProjects,
 	allWorkspaces: listAllWorkspaceRecords,
+	containers: listContainers,
 	projectWorkspaces: (projectId) => listWorkspaces(projectId, { includeDiffStats: true }),
 	withDiffStats,
 	chatReports,
@@ -392,6 +414,21 @@ export async function workspaceStatus(
 		);
 		if (missing.length > 0) reports.unshift(`No workspace matches: ${missing.join(", ")}.`);
 		return reports.join("\n\n");
+	}
+
+	const container = params.project?.trim()
+		? undefined
+		: deps.containers().find((candidate) => candidate.id === caller.orchestratorOf);
+	if (container) {
+		const records = new Map(deps.allWorkspaces().map((workspace) => [workspace.id, workspace]));
+		const members = container.workspaceIds.flatMap((id) => records.get(id) ?? []);
+		const reports = await Promise.all(
+			members.map(async (workspace) => report(await deps.withDiffStats(workspace), false)),
+		);
+		return [
+			`# Container ${container.name}: ${members.length} member workspace(s)`,
+			...reports,
+		].join("\n\n");
 	}
 
 	const project = resolveProject(params.project, ownProjectId(caller), open);

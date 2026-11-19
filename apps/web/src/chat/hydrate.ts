@@ -8,6 +8,7 @@ import {
 	isRetriedAttempt,
 	isSubagentCompletionMessage,
 	isTodoReviewFixMessage,
+	readContainerNote,
 	readToolResponseMessage,
 } from "@thinkrail/contracts";
 import { randomUuid, userText } from "../lib";
@@ -47,6 +48,7 @@ export function messagesToRuntime(
 	const turnIdByMessageIndex: HydratedRuntime["turnIdByMessageIndex"] = [];
 	for (const [index, message] of messages.entries()) {
 		const toolResponse = readToolResponseMessage(message);
+		const note = readContainerNote(message);
 		let turnId: string | null = null;
 		if (message.role === "user") {
 			if (!isControlMessage(userText(message.content))) {
@@ -114,6 +116,15 @@ export function messagesToRuntime(
 				kind: "handoff",
 				id: turnId,
 				details: message.details,
+				timestamp: message.timestamp,
+			});
+		} else if (note && message.role === "custom") {
+			turnId = transcriptTurnId(message, index, options);
+			turns.push({
+				kind: "containerNote",
+				id: turnId,
+				note,
+				text: customMessageText(message.content),
 				timestamp: message.timestamp,
 			});
 		}

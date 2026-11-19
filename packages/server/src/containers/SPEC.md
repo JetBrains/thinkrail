@@ -100,14 +100,68 @@ joins this module, `workspaces` and `agent`; this module only stores the link.
 - **Feed, don't assemble.** The orchestrator's sessions carry a role rule and a file-tool guard
   ([[submodule-server-agent]]): coordinate only, read members through `workspaces/`, write only under
   `.thinkrail/context/`, delegate code changes to the member's chat, merge only after the human approves
-  in this chat. pi's `write`/`edit` into member code are refused (lexically under `workspaces/` or, by
+  in this chat, use the container tools below. pi's `write`/`edit` into member code are refused (lexically under `workspaces/` or, by
   real path, inside a linked worktree); bash cannot be guarded, so the rule asks.
 - **Goes with its container.** Dissolving (`container.remove`, or the last member leaving) deletes the
   orchestrator chat through the chat delete path — sessions closed, transcripts and delegated
   conversations to the Trash, record dropped — before the home is retired; no member is touched.
   Deleting the orchestrator chat on its own clears the link and keeps the container and its home.
 
+## Wake-ups
+
+The host (`host/orchestratorWakeups.ts`) wakes a container's orchestrator about its members, so it never
+has to poll. A trigger is a member chat's `agent_settled`, a member chat's `chatState` turning
+`needs_you` or `failed` (a chat's first state record is a baseline, not a change), or a member's review
+(`kind#number:state`, baselined from every record at host start and on `created`) changing on an `updated`
+event. Checks are not on the record, so they never trigger.
+
+- **Card.** A `container-wake` custom message sent with `sendHostMessageToSession`, so it starts a turn
+  like `subagent-completion` and, while the orchestrator streams, queues as a follow-up behind its turn.
+  Its text names the member (project, workspace, branch, id), each changed chat's `chatState` with its open
+  todo count (`countOpenTodos`, cheap) and final assistant text (`readFinalAssistantTexts`, clamped like
+  `workspace_status`), the other chats' states and the PR line, and closes by saying it is an automatic
+  update, not the human's, to act on only when it matters. `ContainerWakeDetails { containerId,
+  workspaceId, workspaceName, reasons }` carries what changed.
+- **Coalescing.** Triggers for one member gather for `WAKE_WINDOW_MS` (1.5 s) from the first into one
+  card with every chat that changed. At most one card per member is in flight: while the last one is
+  being sent or still waits in the orchestrator's queue (`isHostMessagePending`), the next one re-arms
+  instead of stacking a second.
+- **Never.** No wake for the orchestrator's own session, for a container without an orchestrator, or
+  for a workspace in no container; a member that left before the window closed is dropped. A failed
+  delivery is logged. The orchestrator's session is attached first when it is only on disk.
+
+## Container tools
+
+The orchestrator acts on its members through tools only it has ([[submodule-server-agent]]), composed by
+the host (`host/orchestratorTools.ts`). Scope is the caller's container: the caller's session must
+belong to the chat that orchestrates it, and every `workspace` is matched (id, name or branch) among its
+members only, with a tool error naming the container and listing its members otherwise; a `session` must
+be one of that member's chats.
+
+- **`message_chat`** sends the member's chat (default: its most recently updated one) an
+  `orchestrator-message` card through `sendHostMessageToSession` — `follow_up` queues behind a running
+  turn, `steer` lands at its next steering point, either starts a turn when idle — attaching the chat first
+  when it is only on disk. It is an internal send (`runObservation` `internal`, never a user
+  `message_sent`): `OrchestratorMessageDetails { containerId, containerName, orchestratorSessionId, mode,
+  text }` keeps the provenance, and the content frames the text for the member's agent as another agent's
+  message, not the human's.
+- **`stop_chat`** aborts the member's running chats (or the named one).
+- **`add_workspace`** is `start_workspace` into the caller's container: the new workspace joins
+  (`addContainerWorkspaceOrchestrated`) as soon as its creation hands it over, before the tool returns, and
+  a join failure is reported, never hidden. `base` naming a sibling member stacks the new workspace on
+  that sibling's branch and project (so its PR targets the sibling's branch); another project is refused;
+  any other `base` is a branch or ref of `project`. `attach` instead adds an existing standalone workspace
+  of an open project; one in another container is refused.
+- **`remove_workspace`** makes the member standalone (`removeContainerWorkspace`). With `archive` it
+  archives it through the `workspace.remove` path only when its review is `merged` (the cached record, else
+  a fresh lookup) and otherwise refuses, saying that unmerged work is the human's call. Removing the last
+  member is refused: it would dissolve the container and delete the calling orchestrator.
+- **`open_pr`** runs the PR panel's `openPr` for the member and records the review it reports.
+- **`merge_pr`** merges an open GitHub PR (`mergePr`, `squash` unless `method` says otherwise, the branch
+  kept) only after the human approved it on the tool's in-chat confirmation card; a denial, timeout, Stop
+  or a chat message instead merges nothing, and a GitLab MR or a member without an open PR is refused
+  before anyone is asked. The refreshed review then wakes the orchestrator like any PR change.
+
 ## Later
 
-Wake-ups, `message_chat` / `stop_chat`, `start_workspace into:` and merge gating, then the
-Projects/topbar UI (until then the orchestrator is reachable as a chat in Chats).
+The Projects/topbar UI (until then the orchestrator is reachable as a chat in Chats).

@@ -73,6 +73,7 @@ import {
 	type KeybindingOverrides,
 	normalizeFontSettings,
 	normalizeThemePreference,
+	readContainerNote,
 	readToolResponseMessage,
 	sameModel,
 } from "@thinkrail/contracts";
@@ -924,6 +925,22 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 							kind: "handoff",
 							id: randomUuid(),
 							details: event.message.details,
+							timestamp: event.message.timestamp,
+						},
+					],
+				};
+			}
+			const note = readContainerNote(event.message);
+			if (note && event.message.role === "custom") {
+				return {
+					...rt,
+					turns: [
+						...rt.turns,
+						{
+							kind: "containerNote",
+							id: randomUuid(),
+							note,
+							text: customMessageText(event.message.content),
 							timestamp: event.message.timestamp,
 						},
 					],

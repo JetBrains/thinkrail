@@ -26,8 +26,10 @@ import {
 	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
 	CONTAINER_BRIEF_CUSTOM_TYPE,
 	CONTAINER_PROTOCOL_VERSION,
+	CONTAINER_WAKE_CUSTOM_TYPE,
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	CONTINUATION_PROTOCOL_VERSION,
+	type ContainerWakeDetails,
 	CUSTOM_ENDPOINT_ID_PREFIX,
 	CUSTOM_ENDPOINTS_PROTOCOL_VERSION,
 	CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION,
@@ -64,7 +66,10 @@ import {
 	modelContextWindowLimits,
 	normalizeSessionTitle,
 	ONBOARDING_PROTOCOL_VERSION,
+	ORCHESTRATOR_MESSAGE_CUSTOM_TYPE,
+	type OrchestratorMessageDetails,
 	OTHER_AGENT_SKILLS_PROTOCOL_VERSION,
+	opensChatRound,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
@@ -79,6 +84,7 @@ import {
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
+	readContainerNote,
 	readToolResponseMessage,
 	SEARCH_PROTOCOL_VERSION,
 	SERVER_FALLBACK_PROTOCOL_VERSION,
@@ -815,6 +821,56 @@ test("containers are pinned to v129 with their methods, channels and refusal cod
 		"CONTAINERS_STORE_UNAVAILABLE",
 	];
 	expect(refusals).toHaveLength(5);
+});
+
+test("container cards are read from their custom messages, and a malformed one is no card", () => {
+	const custom = (customType: string, details: unknown) => ({
+		role: "custom",
+		customType,
+		content: "text",
+		display: true,
+		details,
+		timestamp: 1,
+	});
+	const wake: ContainerWakeDetails = {
+		containerId: "c1",
+		workspaceId: "w1",
+		workspaceName: "board",
+		reasons: ["chat"],
+	};
+	const message: OrchestratorMessageDetails = {
+		containerId: "c1",
+		containerName: "Docs",
+		orchestratorSessionId: "o1",
+		mode: "steer",
+		text: "Rebase",
+	};
+	expect([CONTAINER_WAKE_CUSTOM_TYPE, ORCHESTRATOR_MESSAGE_CUSTOM_TYPE]).toEqual([
+		"container-wake",
+		"orchestrator-message",
+	]);
+	expect(readContainerNote(custom(CONTAINER_BRIEF_CUSTOM_TYPE, { containerId: "c1" }))).toEqual({
+		kind: "brief",
+		details: { containerId: "c1" },
+	});
+	expect(readContainerNote(custom(CONTAINER_WAKE_CUSTOM_TYPE, wake))).toEqual({
+		kind: "wake",
+		details: wake,
+	});
+	expect(readContainerNote(custom(ORCHESTRATOR_MESSAGE_CUSTOM_TYPE, message))).toEqual({
+		kind: "orchestratorMessage",
+		details: message,
+	});
+	expect(opensChatRound(custom(CONTAINER_WAKE_CUSTOM_TYPE, wake))).toBe(true);
+	expect(opensChatRound(custom(ORCHESTRATOR_MESSAGE_CUSTOM_TYPE, message))).toBe(true);
+	expect(opensChatRound(custom(CONTAINER_BRIEF_CUSTOM_TYPE, { containerId: "c1" }))).toBe(false);
+	for (const malformed of [
+		custom(CONTAINER_WAKE_CUSTOM_TYPE, { ...wake, reasons: "chat" }),
+		custom(ORCHESTRATOR_MESSAGE_CUSTOM_TYPE, { ...message, text: 3 }),
+		{ ...custom(CONTAINER_BRIEF_CUSTOM_TYPE, { containerId: "c1" }), role: "user" },
+		null,
+	])
+		expect(readContainerNote(malformed)).toBeNull();
 });
 
 test("ask_user_question discuss answers are pinned to v105, after background workspace creation", () => {

@@ -626,11 +626,15 @@ gate: [[module-contracts]].
       user `message_sent`, never claims the feedback invitation, and its model is not the user's choice.
     - Status reuses existing state only: `listSessions` state (labelled by contracts' `chatState` —
       working / needs_you / finished / failed / interrupted / idle), the cached `Workspace.review` (no
-      new PR refresh), and diff stats.
+      new PR refresh), and diff stats. From an orchestrator, a call without `project` or `workspaces`
+      reports its container's members (the compact form, like a project overview).
+    - `startWorkspaceJoining` is the same start with a `join(workspace)` hook run as soon as the creation
+      hands the new workspace over — `add_workspace`'s way into a container.
       Start and status take their reads and effects as injected deps, so both are unit-tested without
       projects, worktrees or sessions.
-  - The **workspace-archive teardown** — the other composition of `agent` + `terminal` + `workspaces` only
-    the host may make. `workspace.remove` **rejects a `kind: "default"` workspace loudly, before any
+  - The **workspace-archive teardown** (`workspaceArchive.ts`, `archiveWorkspace(id)`, shared by
+    `workspace.remove` and an orchestrator's `remove_workspace { archive }`) — the other composition of
+    `agent` + `terminal` + `workspaces` only the host may make. `workspace.remove` **rejects a `kind: "default"` workspace loudly, before any
     side-effect** (the record's `worktreePath` is the project folder — the reclaim's `rm -rf` fallback
     must never see it; the UI hides Remove, this guard is for buggy/rogue clients). Otherwise it
     reaps *everything* rooted in the worktree (for a user-owned `kind: "external"` one, everything except
@@ -942,6 +946,20 @@ gate: [[module-contracts]].
   with `orchestratorOf` → its folder, answered from the in-memory chat ids first). Deleting an
   orchestrator chat clears its container's link (`forgetContainerOrchestrator`), and `historyHiddenCwd`
   hides orchestrator homes, like chat folders, from clients that do not see chats.
+- **Container tools (`orchestratorTools.ts`):** the `setOrchestratorToolsHost` side of the orchestrator's
+  `message_chat` / `stop_chat` / `add_workspace` / `remove_workspace` / `open_pr` / `merge_pr`
+  ([[submodule-server-containers]] owns the rules): composes `agent` (attach, `sendHostMessageToSession`
+  with its lane, `abortSession`), `containers`, `pr` (`openPr`, `mergePr`), `workspaces` and this module's
+  start, archive and review lookup. Every read and effect is an injected dep, so scope refusals, the
+  provenance card, stacking, attach, the archive refusal and the merge gate are unit-tested without
+  sessions. `message_chat` is an `ackSend`-wrapped internal send with a 3 s window. `recordOpenedReview`
+  is the one place an open's reported review becomes `Workspace.review` (`pr.open` uses it too).
+- **Wake-ups (`orchestratorWakeups.ts`):** `createServer` builds one `createOrchestratorWakeups` over live
+  deps, seeds it with every workspace record, and feeds it each `pi.event` (its workspace beside it), each
+  `session.state` record and each workspace lifecycle event after the containers observer; `stop`
+  disposes it. The triggers, the card and the coalescing are [[submodule-server-containers]]'s; delivery
+  attaches the orchestrator's session when needed and sends through `ackSend` + `runObservation`
+  `internal`.
 - **Search composition (`search.ts`):** `search.query` / `search.preview` / `search.text` go to one lazily
   created `SearchService` ([[submodule-server-search]]) fed with `listProjects`, `listAllWorkspaceRecords`, the
   history index's `sessions()`, `specSnapshot` and `listStoredPlans`, plus `listWorkspaces` (without diff

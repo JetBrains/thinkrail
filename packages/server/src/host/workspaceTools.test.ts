@@ -344,6 +344,7 @@ function statusDeps(overrides: Partial<WorkspaceStatusDeps> = {}) {
 		callerWorkspace: () => workspaces[0] as Workspace,
 		openProjects: () => [chats, repo],
 		allWorkspaces: () => workspaces,
+		containers: () => [],
 		projectWorkspaces: async (projectId) => workspaces.filter((w) => w.projectId === projectId),
 		withDiffStats: async (workspace) => workspace,
 		chatReports: async (workspace, withFinal) => {
@@ -376,5 +377,32 @@ test("workspace_status by name reads final messages, never matches a chat withou
 			"## main — main (id w1, project ThinkRail, default)\nbase origin/main · no PR · diff +1 -2\nchats unreadable: transcripts unreadable",
 			'## fix-login — fix-login (id w2, project ThinkRail)\nbase origin/main · PR #7 open https://pr/7 · diff unknown\n- chat "Fix it" (s2): working\n  final message: none yet\n- chat unnamed (s3): finished\n  final message:\n    Done.\n    Opened PR #7.',
 		].join("\n\n"),
+	);
+});
+
+test("workspace_status from an orchestrator without arguments reports its container's members", async () => {
+	const orchestrator = {
+		id: "chat-o",
+		projectId: "c1",
+		name: "Orchestrator",
+		branch: "",
+		baseBranch: "",
+		kind: "chat",
+		orchestratorOf: "box",
+	} as Workspace;
+	const { deps } = statusDeps({
+		callerWorkspace: () => orchestrator,
+		containers: () => [
+			{ id: "box", name: "Docs", workspaceIds: ["w2", "gone"], createdAt: 1, updatedAt: 1 },
+		],
+	});
+	expect(await workspaceStatus("s9", {}, deps)).toBe(
+		[
+			"# Container Docs: 1 member workspace(s)",
+			'## fix-login — fix-login (id w2, project ThinkRail)\nbase origin/main · PR #7 open https://pr/7 · diff unknown\n- chat "Fix it" (s2): working\n- chat unnamed (s3): finished',
+		].join("\n\n"),
+	);
+	expect(await workspaceStatus("s9", { project: "thinkrail" }, deps)).toStartWith(
+		"# ThinkRail: 2 workspace(s)",
 	);
 });

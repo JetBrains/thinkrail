@@ -70,7 +70,6 @@ import {
 	removeCustomEndpoint,
 	removeQueuedSession,
 	removeSession,
-	removeWorkspaceSessions,
 	renameSession,
 	replyMcpProbe,
 	resolveExtUi,
@@ -98,7 +97,6 @@ import {
 	discardArtifact,
 	listArtifacts,
 	prepareArtifactsDestination,
-	removeWorkspaceArtifacts,
 	restoreArtifact,
 	withUserRemoval,
 } from "../artifacts";
@@ -118,7 +116,7 @@ import {
 	updateJbcentral,
 } from "../auth";
 import { providerFromRemoteUrl } from "../branch-review";
-import { forgetWorkspaceChanges, revertChange, undoChange } from "../changes";
+import { revertChange, undoChange } from "../changes";
 import {
 	listContainers,
 	removeContainer,
@@ -207,14 +205,13 @@ import {
 	markCommentsSent,
 	markFileDone,
 	REVIEW_LEVEL_KEY,
-	removeWorkspaceReviews,
 	reviewSessionKey,
 	rollbackSend,
 	sendableComments,
 	updateComment,
 } from "../reviews";
 import { getConfig, noteRecentModel, setSubagentEnabled, updateConfig } from "../settings";
-import { evictSpecIndex, evictSpecRoot, projectHasSpecs, specGraph } from "../spec";
+import { projectHasSpecs, specGraph } from "../spec";
 import { cancelSpeechInstall, installSpeech, removeSpeech } from "../speech";
 import {
 	deleteTemplate,
@@ -226,7 +223,6 @@ import {
 import {
 	attachTerminal,
 	closeTerminalTab,
-	closeWorkspaceTerminals,
 	listTerminals,
 	reserveTerminal,
 	resizeTerminal,
@@ -243,12 +239,11 @@ import {
 	removeTodo,
 	requestTodoFix,
 	rollbackTodoFix,
-	settleChangeArtifacts,
 	type TodoReviewRecord,
 	updateTodo,
 } from "../todos";
-import { forgetWorkspaceTurns, listTurns } from "../turns";
-import { ensureWatch, notifyWorkspacePathsChanged, stopWatch } from "../watch";
+import { listTurns } from "../turns";
+import { ensureWatch, notifyWorkspacePathsChanged } from "../watch";
 import {
 	assertNotChatsContainer,
 	assertNotChatWorkspace,
@@ -256,7 +251,6 @@ import {
 	type CreationHandoff,
 	createWorkspace,
 	dismissWorkspaceCreation,
-	forgetWorkspace,
 	getWorkspace,
 	isChatsContainer,
 	isChatsContainerId,
@@ -268,7 +262,6 @@ import {
 	listWorkspaceRecords,
 	listWorkspaces,
 	openExistingWorktree,
-	reclaimWorktree,
 	recordWorkspaceActivity,
 	renameWorkspace,
 	resolveWorkspacePath,
@@ -327,6 +320,7 @@ import {
 	recoverOrchestratorSession,
 	startContainerOrchestrator,
 } from "./orchestrator";
+import { recordOpenedReview } from "./orchestratorTools";
 import {
 	packagesCheckUpdates,
 	packagesInstall,
@@ -365,6 +359,7 @@ import {
 	markClientStale,
 	releaseItemFix,
 } from "./todoReview";
+import { archiveWorkspace } from "./workspaceArchive";
 
 const log = logger("host");
 
@@ -391,16 +386,6 @@ type WsHandler<M extends WsMethodName> = (
 ) => WsResult<M> | Promise<WsResult<M>>;
 
 type WsHandlers = { [M in WsMethodName]: WsHandler<M> };
-
-async function archiveTeardown(ws: Workspace): Promise<void> {
-	try {
-		await removeWorkspaceSessions(ws.id, ws.worktreePath);
-		await settleChangeArtifacts(ws.id);
-		await reclaimWorktree(ws);
-	} catch {
-		log.warn(`workspace archive teardown failed for ${ws.id}`);
-	}
-}
 
 async function sendUserMessage(
 	mode: SendMode,
@@ -873,19 +858,7 @@ const handlers: WsHandlers = {
 		records: await markWorkspaceRead(sessionStateWorkspace(getWorkspace(params.id))),
 	}),
 	"workspace.remove": (params) => {
-		const id = params.id;
-		const ws = forgetWorkspace(id);
-		if (ws) {
-			evictSpecIndex(ws.id);
-			evictSpecRoot(ws.worktreePath);
-			removeWorkspaceReviews(ws.id);
-			forgetWorkspaceChanges(ws.id);
-			forgetWorkspaceTurns(ws.id);
-			removeWorkspaceArtifacts(ws.id);
-			stopWatch(ws.id);
-			closeWorkspaceTerminals(ws.id);
-			void archiveTeardown(ws);
-		}
+		archiveWorkspace(params.id);
 		return { ok: true } as const;
 	},
 	"workspace.diffStats": (params) => workspaceDiffStats(params.id),
@@ -957,17 +930,7 @@ const handlers: WsHandlers = {
 	"pr.open": async (p) => {
 		recordWorkspaceActivity(p.workspaceId);
 		const { branch, ...result } = await observePrAction(() => openPr(p), p.source ?? "other");
-		if (result.review) {
-			setWorkspaceReview(
-				p.workspaceId,
-				{
-					...result.review,
-					state: "open",
-					...(result.url ? { url: result.url } : {}),
-				},
-				branch,
-			);
-		}
+		recordOpenedReview(p.workspaceId, result, branch);
 		return result;
 	},
 	"dialog.selectDirectory": () =>

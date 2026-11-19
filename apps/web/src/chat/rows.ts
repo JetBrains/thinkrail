@@ -2,6 +2,7 @@ import {
 	assistantToolCallsAreExecutable,
 	type BackgroundCommandCompletionDetails,
 	type ChatHandoffDetails,
+	type ContainerNote,
 	type ContinueInWorkspaceRequestDetails,
 	completionDelivery,
 	type GitDiffScope,
@@ -70,6 +71,7 @@ export type ChatRow =
 	| { kind: "reviewFix"; id: string; details: ReviewFixDetails; text: string }
 	| { kind: "continuationRequest"; id: string; details: ContinueInWorkspaceRequestDetails }
 	| { kind: "handoff"; id: string; details: ChatHandoffDetails }
+	| { kind: "containerNote"; id: string; note: ContainerNote; text: string }
 	| ({ kind: "tool"; id: string } & ToolCallData)
 	| {
 			kind: "activity";
@@ -138,6 +140,11 @@ function nestRoutineRun(steps: ActivityStep[]): ActivityStep[] {
 	return nested;
 }
 
+/** What a container card shows: an orchestrator's own words, else the host's text. */
+export function containerNoteBody(note: ContainerNote, text: string): string {
+	return note.kind === "orchestratorMessage" ? note.details.text : text;
+}
+
 export function opensRound(turn: ChatTurn): boolean {
 	switch (turn.kind) {
 		case "user":
@@ -145,6 +152,8 @@ export function opensRound(turn: ChatTurn): boolean {
 		case "continuationRequest":
 		case "handoff":
 			return true;
+		case "containerNote":
+			return turn.note.kind !== "brief";
 		case "backgroundCommandCompletion":
 		case "subagentCompletion":
 			return completionDelivery(turn.details) !== "run";
@@ -315,6 +324,9 @@ export function deriveRows(
 					break;
 				case "handoff":
 					rows.push({ kind: "handoff", id: turn.id, details: turn.details });
+					break;
+				case "containerNote":
+					rows.push({ kind: "containerNote", id: turn.id, note: turn.note, text: turn.text });
 					break;
 			}
 		}

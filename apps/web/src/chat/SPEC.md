@@ -416,6 +416,15 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   again and followed on the connection that overtook it), and a failure is told once. A Retry from the
   card (`requestContinuation`) registers the new operation as initiated, so this client follows it like
   the original gesture.
+- `containerNote` — the container cards (`readContainerNote` in contracts: `container-brief`,
+  `container-wake`, `orchestrator-message`), one turn kind carrying the `ContainerNote` and the content
+  text, rendered by the props-driven `ContainerNoteCard` (`turns.tsx`, `data-testid="container-note-card"`,
+  `data-note=<kind>`) as a foldable host card: the title says where it came from — "Container summary",
+  "Update from <workspace>", or "From the orchestrator of “<container>”" (with "· steer" for a steer) —
+  and the body is Markdown (`containerNoteBody`, `rows.ts`: an orchestrator's own `details.text`, never
+  the framing the member's agent reads; otherwise the host's text). An orchestrator's message starts
+  unfolded, the brief and a wake-up folded. A wake-up and an orchestrator's message open a round (they
+  start a turn); the brief does not.
 
 Row/step ids are stable across streaming snapshots (the outer run's first atomic-step id, each thinking
 block's message-anchored index, and each tool's own id — pi appends, never reorders), so fold state survives
@@ -848,7 +857,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `ask-user-answers`) indexes into `toolResponses` (never a turn — the interactive tool's card is its
   rendering); `subagent-completion` **becomes its own `subagentCompletion` turn** (the result
   row is transcript-positioned, so it maps its message index too); `todo-review-fix` **becomes its own
-  `reviewFix` turn** (same positioning); unknown customTypes are ignored. No
+  `reviewFix` turn** (same positioning), a container card its `containerNote` turn; unknown customTypes
+  are ignored. No
   store/transport/highlighter.
 - **Composer focus on arrival** (`composerFocusRequest`, see `store/SPEC.md`): `ChatView` subscribes to
   `selectComposerFocusRequested` for its own chat. When it holds, the view serves the request

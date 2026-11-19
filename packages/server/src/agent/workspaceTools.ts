@@ -60,7 +60,7 @@ export const WorkspaceStatusSchema = Type.Object({
 	project: Type.Optional(
 		Type.String({
 			description:
-				"Open project (name, slug, or id) to overview. Default: this chat's project; required in a chat without a project. Ignored when `workspaces` is given.",
+				"Open project (name, slug, or id) to overview. Default: this chat's project — in a container's orchestrator, the container's members; required in any other chat without a project. Ignored when `workspaces` is given.",
 		}),
 	),
 	workspaces: Type.Optional(
