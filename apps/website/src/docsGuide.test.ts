@@ -31,6 +31,10 @@ const sharedModules = readJson<{ api: string; modules: Record<string, string[]> 
 const apiVersion = /^export const EXTENSION_API_VERSION = "([^"]+)";$/m.exec(
 	read("packages/extension-api/src/manifest.ts"),
 )?.[1];
+const snapshot = read(`${roots.sdk}api/${apiVersion}.api.md`);
+const snapshotExports = JSON.parse(
+	/## Runtime exports\n\n```json\n([\s\S]*?)\n```/.exec(snapshot)?.[1] ?? "null",
+) as Record<string, string[]>;
 
 const pages = ["build-an-extension", "extension-reference"].map((name) => ({
 	name,
@@ -95,15 +99,33 @@ function tableRows(page: (typeof pages)[number], guard: string): string[][] {
 		);
 }
 
+const numberWords = [
+	"no",
+	"one",
+	"two",
+	"three",
+	"four",
+	"five",
+	"six",
+	"seven",
+	"eight",
+	"nine",
+	"ten",
+];
+
+const flat = (text: string) => text.replace(/\s+/g, " ");
+
 const codeSpans = (text: string) =>
 	[...text.matchAll(/`([^`]+)`/g)].map((match) => match[1] as string);
 
-function interfaceKeys(path: string, name: string): string[] {
-	const body = new RegExp(`export interface ${name}(?:<[^>]*>)? \\{\\n([\\s\\S]*?)\\n\\}`).exec(
-		read(path),
-	)?.[1];
-	if (body === undefined) throw new Error(`${path} has no interface ${name}`);
-	return [...body.matchAll(/^\t(\w+)\??[:(]/gm)].map((match) => match[1] as string);
+function declaredKeys(name: string): string[] {
+	const body = new RegExp(
+		`^(?:export )?interface ${name}(?:<[^>]*>)? \\{\\n([\\s\\S]*?)\\n\\}`,
+		"m",
+	).exec(snapshot)?.[1];
+	if (body === undefined)
+		throw new Error(`the API ${apiVersion} snapshot has no interface ${name}`);
+	return [...body.matchAll(/^ {2}(\w+)\??[:(]/gm)].map((match) => match[1] as string);
 }
 
 function sourcePath(guard: string): string {
@@ -338,67 +360,60 @@ describe("the docs' reference tables", () => {
 		expect(firstColumn("manifest-fields").map((spans) => spans[0])).toEqual(expected);
 	});
 
-	test("the server descriptor and session services match the SDK's types", () => {
+	test("the server descriptor and session services match the frozen API snapshot", () => {
 		expect(firstColumn("server-descriptor").map((spans) => spans[0])).toEqual(
-			interfaceKeys(`${roots.sdk}src/server.ts`, "ServerExtension"),
+			declaredKeys("ServerExtension"),
 		);
 		const services = firstColumn("session-services").map((spans) =>
 			(spans[0] as string).replace(/\(.*$/, ""),
 		);
-		expect(services.sort()).toEqual(
-			interfaceKeys(`${roots.sdk}src/server.ts`, "ExtensionSessionServices").sort(),
-		);
+		expect(services.sort()).toEqual(declaredKeys("ExtensionSessionServices").sort());
 	});
 
-	test("the render props and registration options match the web contract the SDK re-exports", () => {
-		expect(read(`${roots.sdk}src/types/web.ts`).trim()).toBe(
-			'export * from "@thinkrail/extension-api/web";',
-		);
-		const web = "packages/extension-api/src/web.ts";
+	test("the web descriptor, render props and registration options match the frozen API snapshot", () => {
 		expect(firstColumn("render-props").map((spans) => spans[0])).toEqual(
-			interfaceKeys(web, "ToolRenderProps"),
+			declaredKeys("ToolRenderProps"),
 		);
 		expect(firstColumn("registration-options").map((spans) => spans[0])).toEqual(
-			interfaceKeys(web, "ToolRegistrationOptions"),
+			declaredKeys("ToolRegistrationOptions"),
 		);
+		const [shape] = codeSpans(guardedLines(reference, "web-descriptor").join(" "));
+		const fields = /^\{ (.+) \}$/.exec(shape ?? "")?.[1]?.split(", ");
+		expect(fields).toEqual(declaredKeys("WebExtension"));
+		const options = declaredKeys("ToolRegistrationOptions");
+		expect(reference.text).toContain(`reads only these ${numberWords[options.length]} options`);
+		expect(guide.text).toContain(`lists all ${numberWords[options.length]}`);
 	});
 
-	test("the shared modules are the SDK's shared-module manifest, in order, with every export", () => {
+	test("the shared modules are the frozen allow-list, in order, with every export name", () => {
 		const items = guardedLines(reference, "shared-modules").map((line) => {
 			const match = /^- `([^`]+)`: (.+)$/.exec(line);
 			if (!match) throw new Error(`not a shared-module item: ${line}`);
-			return [match[1] as string, match[2] as string] as const;
+			return [match[1] as string, codeSpans(match[2] as string)] as const;
 		});
-		expect(items.map(([specifier]) => specifier)).toEqual(Object.keys(sharedModules.modules));
-		for (const [specifier, exports] of items) {
-			if (specifier.startsWith("@thinkrail/")) {
-				expect(codeSpans(exports)).toEqual(sharedModules.modules[specifier] as string[]);
-			}
-		}
+		expect(Object.fromEntries(items)).toEqual(snapshotExports);
+		expect(items.map(([specifier]) => specifier)).toEqual(Object.keys(snapshotExports));
+		expect(sharedModules.modules).toEqual(snapshotExports);
+		expect(Object.keys(sharedModules.modules)).toEqual(Object.keys(snapshotExports));
 		expect(sharedModules.api).toBe(apiVersion as string);
 	});
 
-	test("the guide's summary of the shared modules names every one of them", () => {
+	test("the guide's summary of the shared modules names exactly those modules and real exports", () => {
 		const spans = codeSpans(guardedLines(guide, "shared-modules-summary").join("\n"));
-		const named = new Set<string>();
-		for (const span of spans) {
-			if (/^(?:react|@thinkrail\/)/.test(span)) named.add(span);
-		}
 		const uiPrefix = "@thinkrail/extension-sdk/ui/<module>";
-		expect(named.has(uiPrefix)).toBe(true);
-		const uiModules = spans
-			.slice(spans.indexOf(uiPrefix) + 1)
-			.filter((span) => /^[a-z-]+$/.test(span));
-		const expected = Object.keys(sharedModules.modules);
-		for (const specifier of expected) {
-			const ui = /^@thinkrail\/extension-sdk\/ui\/(.+)$/.exec(specifier)?.[1];
-			if (ui) expect(uiModules).toContain(ui);
-			else expect(named).toContain(specifier);
+		const uiAt = spans.indexOf(uiPrefix);
+		expect(uiAt).toBeGreaterThan(-1);
+		const modules = Object.keys(snapshotExports);
+		const exports = new Set(Object.values(snapshotExports).flat());
+		const named = new Set<string>();
+		for (const [index, span] of spans.entries()) {
+			if (span === uiPrefix) continue;
+			if (/^(?:react|@thinkrail\/)/.test(span)) named.add(span);
+			else if (index > uiAt && modules.includes(`@thinkrail/extension-sdk/ui/${span}`)) {
+				named.add(`@thinkrail/extension-sdk/ui/${span}`);
+			} else expect([span, exports.has(span)]).toEqual([span, true]);
 		}
-		const exports = new Set(Object.values(sharedModules.modules).flat());
-		for (const name of uiModules) {
-			if (!exports.has(name)) expect(expected).toContain(`@thinkrail/extension-sdk/ui/${name}`);
-		}
+		expect([...named].sort()).toEqual([...modules].sort());
 	});
 
 	test("the build options are exactly the CLI's options, with its default entries", () => {
@@ -425,12 +440,118 @@ describe("the guide's facts about the sample and the SDK", () => {
 		expect(guide.text).toContain(`npm:${sample.name}`);
 	});
 
-	test("names the built-in extensions whose names are reserved", () => {
-		const listed = /built-in extension\s*\(([^)]*)\)/.exec(guide.text.replace(/\n/g, " "))?.[1];
+	test("lists exactly the package names the host reserves, on both pages", () => {
 		const builtins = readdirSync(new URL("thinkrail-extensions/", repo), { withFileTypes: true })
 			.filter((entry) => entry.isDirectory())
 			.map((entry) => entry.name);
-		expect(codeSpans(listed ?? "").sort()).toEqual(builtins.sort());
+		expect(builtins.length).toBeGreaterThan(0);
+		for (const name of builtins) {
+			const half = ["server/index.ts", "web/index.ts", "web/index.tsx"]
+				.map((file) => `thinkrail-extensions/${name}/${file}`)
+				.find((path) => existsSync(new URL(path, repo)));
+			expect([name, half && read(half).includes(`\tname: "${name}",`)]).toEqual([name, true]);
+		}
+		const slots = /export const HOST_BUILTIN_EXTENSION_NAMES = \[([^\]]+)\]/.exec(
+			read("packages/server/src/agent/mcp/engine.ts"),
+		)?.[1];
+		const hostNames = [...(slots ?? "").matchAll(/"([^"]+)"/g)].map((match) => match[1] as string);
+		expect(hostNames.length).toBeGreaterThan(0);
+		expect(read("packages/server/src/extensions/installedHost.ts")).toContain(
+			"reservedNames: () => [...builtinExtensionNames(), ...(options.hostExtensionNames ?? [])]",
+		);
+		for (const page of pages) {
+			const listed = codeSpans(guardedLines(page, "reserved-names").join(" "));
+			expect([page.name, listed.sort()]).toEqual([page.name, [...builtins, ...hostNames].sort()]);
+		}
+	});
+
+	test("names only tools the host really registers as host-owned", () => {
+		const sources = [
+			"packages/server/src/agent/titleTool.ts",
+			"packages/server/src/agent/requestReviewTool.ts",
+			"packages/server/src/agent/mcp/engine.ts",
+			"packages/pi-subagents/src/mapping.ts",
+			"pi-extensions/ask-user-question/src/core.ts",
+		].map(read);
+		const tools = codeSpans(guardedLines(guide, "host-tools").join(" "));
+		expect(tools.length).toBeGreaterThan(0);
+		for (const tool of tools) {
+			const declared = sources.some((source) => new RegExp(`= \\[?"${tool}"`).test(source));
+			expect([tool, declared]).toEqual([tool, true]);
+		}
+	});
+
+	test("states the server load timeout and its message as the host has them", () => {
+		const loader = read("packages/server/src/extensions/installed/loader.ts");
+		const ms = Number(
+			/export const EXTENSION_LOAD_TIMEOUT_MS = ([\d_]+);/.exec(loader)?.[1]?.replace(/_/g, ""),
+		);
+		expect(ms).toBeGreaterThan(0);
+		const seconds = ms / 1000;
+		const message =
+			/new Error\(`(the server entry did not finish loading within) \$\{timeoutMs \/ 1000\} s`\)/.exec(
+				loader,
+			)?.[1];
+		expect(message).toBeDefined();
+		expect(read("packages/server/src/extensions/inline.ts")).toMatch(
+			/did not finish loading within \$\{EXTENSION_LOAD_TIMEOUT_MS \/ 1000\} s/,
+		);
+		for (const page of pages) {
+			expect(flat(page.text)).toContain(`"${message} ${seconds} s"`);
+			for (const match of page.text.matchAll(/(\d+) seconds/g)) {
+				expect(Number(match[1])).toBe(seconds);
+			}
+		}
+	});
+
+	test("states the build's exit codes and what counts as a usage error", () => {
+		const cli = read(`${roots.sdk}src/cli.ts`);
+		expect(cli).toMatch(
+			/function usageError\(message: string\): number \{\n[^\n]*\n\treturn 2;\n\}/,
+		);
+		expect(cli).toContain(
+			"if (error instanceof ExtensionUsageError) {\n\t\t\tprocess.exitCode = usageError(error.message);",
+		);
+		expect(cli).toMatch(/console\.error\(error\);\n\t\tprocess\.exitCode = 1;/);
+		expect(read(`${roots.sdk}src/builder/paths.ts`)).toContain("throw new ExtensionUsageError(");
+		const text = guardedLines(reference, "exit-codes").join(" ");
+		expect(text).toContain(
+			"with 0 after a build or `--help`, with 1 when the build fails, and with 2 on a usage error",
+		);
+		expect(flat(guide.text)).toContain(
+			"exits with 1 when the build fails and with 2 on a usage error",
+		);
+	});
+
+	test("asks for the SDK as a tilde range of the API version", () => {
+		expect(guide.text).toContain(`\`~${apiVersion}.0\``);
+		expect(guide.text).toContain("never with a caret");
+		for (const page of pages) {
+			for (const match of page.text.matchAll(/\^\d+\.\d+\.\d+/g)) {
+				const line = page.text.slice(
+					page.text.lastIndexOf("\n", match.index) + 1,
+					page.text.indexOf("\n", match.index),
+				);
+				expect([page.name, line]).toEqual([
+					page.name,
+					expect.stringContaining("would let npm install"),
+				]);
+			}
+		}
+	});
+
+	test("mentions a manifest image only where the manifest fields are described", () => {
+		const within = (page: (typeof pages)[number], from: string, to: string) => {
+			const start = page.text.indexOf(from);
+			const end = page.text.indexOf(to, start);
+			expect(start).toBeGreaterThan(-1);
+			expect(end).toBeGreaterThan(start);
+			for (const match of page.text.matchAll(/\bimages?\b/gi)) {
+				expect([page.name, match.index > start && match.index < end]).toEqual([page.name, true]);
+			}
+		};
+		within(guide, "The `thinkrail` manifest:", "The description, author and version");
+		within(reference, "## The thinkrail manifest", "### What the build adds");
 	});
 
 	test("quotes utilities, classes, the tool and the setting the sample really uses", () => {

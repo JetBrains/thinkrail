@@ -368,9 +368,11 @@ step of `site.yml` is conditional on it) decides per trigger:
 
 Accepted gaps: the decision trusts that `canonical_deployment` follows a rollback (Cloudflare documents it
 as the project's production deployment; the gate was tested only against responses shaped after the
-documented schema, never against the live project). A push run that GitHub's concurrency replaces with a
-pending scheduled run while a rollback is in effect is not deployed (the scheduled run skips); the
-notice says to run the workflow manually. Rejected: a repository variable or file that pauses the
+documented schema, never against the live project). A pending push or manual run that GitHub's
+concurrency replaces with a scheduled run while a rollback is in effect is not deployed — the
+scheduled run skips — so a manual run meant to end a rollback can be lost if the hourly run fires
+while another run is in progress; the notice says to run the workflow manually, and the person starts
+it again. Rejected: a repository variable or file that pauses the
 schedule — it is a second switch a person must remember to flip back, while the dashboard rollback
 already says what is live.
 
@@ -534,13 +536,20 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
   - the `tree` lists every non-test source under the sample's `server/` and `web/` and the manifest's
     built files; `shell` commands use the sample's scripts and packages, and every
     `thinkrail-extension build` option either page names exists in the SDK's `src/cli.ts`;
-  - the reference's tables and lists match the SDK's `MANIFEST_KEYS`, `ServerExtension`,
-    `ExtensionSessionServices`, the re-exported `ToolRenderProps` / `ToolRegistrationOptions`, the CLI's
-    options and default entries, and `assets/shared-modules.json` (order and every export name); its
-    `manifest-cases` block uses `manifestCases.json`'s shape and holds under the site's validator;
-  - the built-in names the guide calls reserved, the tool, setting and utility classes it quotes, the
-    SDK's Node floor and the API version are read from their sources, and every `#fragment` link
-    resolves to a heading.
+  - the reference's tables and lists match the SDK's `MANIFEST_KEYS`, the CLI's options, default
+    entries and exit codes, and — for everything an author builds against — the **frozen API snapshot**
+    `packages/extension-sdk/api/<API>.api.md` ([[module-extension-sdk]]): `ServerExtension`,
+    `ExtensionSessionServices`, `ToolRenderProps`, `ToolRegistrationOptions`, `WebExtension`, and its
+    runtime exports (every module in order with every name, also checked equal to
+    `assets/shared-modules.json`). The snapshot, not the in-repo `extension-api` source, is the source
+    of truth because it is the surface the SDK release promises; its `manifest-cases` block uses
+    `manifestCases.json`'s shape and holds under the site's validator;
+  - the reserved package names (the `thinkrail-extensions/` folders, each checked against its
+    descriptor's `name`, plus the host's `HOST_BUILTIN_EXTENSION_NAMES`) on both pages, the host-owned
+    tool names the guide quotes, the load timeout and its message, the `~<API>.0` SDK range, the tool,
+    setting and utility classes it quotes, the SDK's Node floor and the API version are read from their
+    sources; a manifest `image` may be mentioned only where the manifest fields are described; and every
+    `#fragment` link resolves to a heading.
 
   The author guide `content/docs/DOCS.md` lists the guard kinds. A change to the sample, the SDK or the
   contract updates these pages in the same change; the failing test names the block.
