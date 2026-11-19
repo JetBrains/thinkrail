@@ -12,6 +12,10 @@ export const searchOffsetLimit = 5000;
 const registryOrigin = "https://registry.npmjs.org";
 const maxTitleLength = 100;
 const maxDescriptionLength = 400;
+const maxNameLength = 214;
+const maxVersionLength = 256;
+const semver =
+	/^\d+\.\d+\.\d+(?:-[\dA-Za-z-]+(?:\.[\dA-Za-z-]+)*)?(?:\+[\dA-Za-z-]+(?:\.[\dA-Za-z-]+)*)?$/;
 const fetchAttempts = 3;
 
 export interface CatalogEntry {
@@ -64,6 +68,18 @@ function nonEmptyText(value: unknown, maxLength: number): string | undefined {
 	return text.length > maxLength ? `${text.slice(0, maxLength - 1).trimEnd()}…` : text;
 }
 
+function isCatalogName(value: unknown): value is string {
+	return isPackageName(value) && value.length <= maxNameLength;
+}
+
+function isCatalogVersion(value: unknown): value is string {
+	return typeof value === "string" && value.length <= maxVersionLength && semver.test(value);
+}
+
+function boundedText(value: unknown, maxLength: number): boolean {
+	return typeof value === "string" && value.length <= maxLength && value === value.trim();
+}
+
 function isoDate(value: unknown): string | undefined {
 	if (typeof value !== "string") return undefined;
 	const date = new Date(value);
@@ -86,7 +102,8 @@ function httpsUrl(value: unknown): string | undefined {
 	if (typeof value !== "string") return undefined;
 	try {
 		const url = new URL(value.trim());
-		return url.protocol === "https:" && url.hostname !== "" ? url.href : undefined;
+		const plain = url.username === "" && url.password === "";
+		return url.protocol === "https:" && url.hostname !== "" && plain ? url.href : undefined;
 	} catch {
 		return undefined;
 	}
@@ -136,8 +153,10 @@ function catalogEntry(pkg: unknown, hit: SearchHit): EntryResult {
 	if (!("thinkrail" in pkg)) return { rejected: "no thinkrail manifest" };
 	const parsed = parseExtensionManifest(pkg);
 	if (!parsed.ok) return { rejected: `invalid thinkrail manifest: ${parsed.reason}` };
-	if (typeof pkg.version !== "string" || pkg.version.length === 0) {
-		return { rejected: "no version" };
+	if (!isCatalogVersion(pkg.version)) {
+		return {
+			rejected: `the version is not a semver version of at most ${maxVersionLength} characters`,
+		};
 	}
 	const publishedAt = isoDate(hit.date);
 	if (publishedAt === undefined) return { rejected: "no publish date" };
@@ -201,7 +220,7 @@ async function searchHits(options: BuildCatalogOptions): Promise<SearchHit[]> {
 		total = page.total;
 		for (const object of page.objects) {
 			const pkg = isRecord(object) ? object.package : undefined;
-			if (!isRecord(pkg) || !isPackageName(pkg.name)) continue;
+			if (!isRecord(pkg) || !isCatalogName(pkg.name)) continue;
 			if (hits.has(pkg.name)) continue;
 			hits.set(pkg.name, {
 				name: pkg.name,
@@ -290,22 +309,30 @@ export function catalogErrors(value: unknown): string[] {
 			if (!entryKeys.has(key)) errors.push(`${at} has unknown field ${key}`);
 		}
 		const { name } = entry;
-		if (!isPackageName(name)) {
-			errors.push(`${at}.name is not a package name`);
+		if (!isCatalogName(name)) {
+			errors.push(`${at}.name is not a package name of at most ${maxNameLength} characters`);
 			return;
 		}
 		if (name <= previous) errors.push(`${at} is not sorted by unique name`);
 		previous = name;
-		for (const key of ["version", "description", "api"] as const) {
-			if (typeof entry[key] !== "string") errors.push(`${at}.${key} must be a string`);
+		if (!isCatalogVersion(entry.version)) {
+			errors.push(
+				`${at}.version must be a semver version of at most ${maxVersionLength} characters`,
+			);
+		}
+		if (typeof entry.api !== "string") errors.push(`${at}.api must be a string`);
+		if (!boundedText(entry.description, maxDescriptionLength)) {
+			errors.push(
+				`${at}.description must be trimmed text of at most ${maxDescriptionLength} characters`,
+			);
 		}
 		for (const key of ["title", "author"] as const) {
-			if (entry[key] !== undefined && typeof entry[key] !== "string") {
-				errors.push(`${at}.${key} must be a string`);
+			if (entry[key] !== undefined && !boundedText(entry[key], maxTitleLength)) {
+				errors.push(`${at}.${key} must be trimmed text of at most ${maxTitleLength} characters`);
 			}
 		}
 		if (entry.repository !== undefined && httpsUrl(entry.repository) === undefined) {
-			errors.push(`${at}.repository must be an https URL`);
+			errors.push(`${at}.repository must be an https URL without credentials`);
 		}
 		const halves = entry.halves;
 		if (!Array.isArray(halves) || !["server", "web", "server,web"].includes(halves.join(","))) {

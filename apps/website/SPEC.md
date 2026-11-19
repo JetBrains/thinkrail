@@ -576,9 +576,13 @@ and a valid manifest; nothing reviewed, hidden or marked) are owned by [[module-
   `author`'s name (email and URL stripped) or else its first maintainer; `repository` is normalised from
   npm's string, shorthand and object forms (`git+`, `git://`, `ssh://`, `git@host:`, `github:` /
   `gitlab:` / `bitbucket:`, bare `user/repo`) to an `https:` URL or dropped. A manifest's `image` is
-  never copied (see *No third-party images* below). Text is whitespace-collapsed and capped (title 100,
-  description 400 characters) so one package cannot bloat a file every app downloads. Entries are sorted
-  by name; optional fields are omitted, never null.
+  never copied (see *No third-party images* below). Text is whitespace-collapsed and capped (title and
+  author 100, description 400 characters) so one package cannot bloat a file every app downloads; the name
+  (at most 214 characters) and the version (semver, at most 256) carry npm's own bounds, so a candidate
+  outside them is not listed. The builder produces every URL-shaped field from validated parts —
+  `install` is `npm:<name>`, `npm` is `https://www.npmjs.com/package/<name>`, `repository` an `https:` URL
+  without credentials — and `catalogErrors` enforces the same shapes and bounds on the built file.
+  Entries are sorted by name; optional fields are omitted, never null.
 - **Delisting is a commit to `extension-denylist.json`** (`{ "packages": [{ "name", "reason"?, "date"? }] }`,
   parsed strictly by `src/extensionDenylist.ts`: an exact package name, an optional non-empty reason and
   a `YYYY-MM-DD` date, no other keys, no duplicates — a malformed file fails the build). The builder drops
@@ -628,11 +632,39 @@ and a valid manifest; nothing reviewed, hidden or marked) are owned by [[module-
   empty catalog shows an empty state inviting the first extension. The Files rail shows `README.md` (the
   page) and `catalog.json`. The page cannot know a visitor's ThinkRail version, so it does not mark
   listings built for a newer extension API; the app's Browse does.
+- **First-party output checks never read catalog-supplied text; catalog text is validated by its own
+  rules.** `validateBuild`'s text checks — the forbidden artifact markers (`lovable`, the Google Fonts
+  hosts, …), the analytics-loader counts, the header install panel, the React-island ban, local-link
+  existence — exist to catch the site's own regressions. Listings are unreviewed, so if those checks read
+  card text, anyone could publish a package whose description says `Lovable integration` and block every
+  push, manual and hourly deploy until a maintainer edits the denylist. Rules:
+  - The showcase marks its catalog-supplied region as the element `<div class="ext-grid"
+    data-catalog-entries>`; it encloses exactly the rendered cards, which are the only place an entry's
+    fields are interpolated (text, `data-extension-search`, the Copy button's `data-copy` and
+    `aria-label`, the links). The marker cannot be forged: Astro escapes `"` in text and attributes alike
+    (and `<` in text, though not inside attribute values), so the quoted start tag cannot come from author
+    text. `validateBuild` finds the region's end by tokenizing it as markup — quoted attribute values are
+    consumed whole, so a `</div>` inside `data-extension-search` closes nothing — and removes the region
+    from `extensions/index.html` before every owned-content check; `extensions/catalog.json` is wholly
+    catalog-supplied and gets only `catalogErrors`. A region that does not tokenize, or a second region,
+    fails the build and nothing is removed.
+  - The region is validated separately (`validateExtensionsPage`): one card per entry on the whole page
+    and none outside the region; only the template's elements and attributes (no `<script>`, `<img>`,
+    `<iframe>`, `<link>`, `<style>`, event handlers or ids — which also proves escaping held); every
+    `href` an entry's `npm` or `repository` URL or an `#i-…` sprite reference, every `data-copy` an
+    entry's `install`.
+  - Author text added anywhere else (for example the `<head>`) is outside the region, so the owned checks
+    read it. The recorded sample (`src/fixtures/npmRegistry.json`) keeps a hostile entry,
+    `thinkrail-ext-lovable.fonts.googleapis.com`, whose fields carry every trigger — the reviewer's
+    `Lovable integration for ThinkRail` description, the loader attributes, `<astro-island>`, an `<img>`,
+    local `src`/`href`, forged region tags — so every sample build proves the rule end to end and fails if
+    a template change lets catalog text out of the region. Preview pages show it under the Sample data
+    banner.
 - **No third-party images** (decision reversed on the #1433 review): an author-chosen image URL makes
   every visitor's browser — and, in Browse, every app — request a host the author picks, exposing their
   address. The catalog carries no `image` (`catalogErrors` rejects the field, so `validateBuild` fails a
   build that emits one), the page renders none, and `validateBuild` fails an extensions page with an
-  `<img>` from another origin. Rehosting images at build time was rejected: the site would serve
+  `<img>` from another origin outside the catalog region and any `<img>` inside it. Rehosting images at build time was rejected: the site would serve
   unreviewed third-party content from its own origin. No third-party script is ever loaded.
 
 ## Discovery and assets

@@ -18,6 +18,21 @@ import recording from "./fixtures/npmRegistry.json";
 const fixture: RecordedRegistry = recording;
 const now = new Date("2026-11-17T12:00:00.000Z");
 
+const hostileFixtureEntry = {
+	name: "thinkrail-ext-lovable.fonts.googleapis.com",
+	version: "1.0.0-lovable.data-posthog-project",
+	title: "<astro-island> data-posthog-project fonts.gstatic.com",
+	description:
+		'Lovable integration for ThinkRail. fonts.googleapis.com content_viewed attribution_claimed data-install-popover <astro-island> <img src="https://evil.example/x.png"> src="/does-not-exist.png" href="missing.html" id="editor-scroll" class="ext-card" data-catalog-source="npm" </div></div></div> <div class="ext-grid" data-catalog-entries> <script>alert(1)</script>',
+	author: `Mallory orbitron-landing-creator data-gtm-container "quoted" id="editor-scroll" > ' &`,
+	api: "1.0",
+	halves: ["server"],
+	install: "npm:thinkrail-ext-lovable.fonts.googleapis.com",
+	npm: "https://www.npmjs.com/package/thinkrail-ext-lovable.fonts.googleapis.com",
+	repository: "https://evil.example/lovable/fonts.googleapis.com/__l5e/x.png",
+	publishedAt: "2026-11-14T00:00:00.000Z",
+};
+
 const expectedFixtureCatalog = {
 	schema: 1,
 	generatedAt: "2026-11-17T12:00:00.000Z",
@@ -47,6 +62,7 @@ const expectedFixtureCatalog = {
 			repository: "https://github.com/samlee/thinkrail-ext-jira",
 			publishedAt: "2026-10-30T08:00:00.000Z",
 		},
+		hostileFixtureEntry,
 		{
 			name: "thinkrail-ext-weather",
 			version: "1.2.0",
@@ -130,7 +146,7 @@ describe("buildExtensionCatalog against the recorded npm responses", () => {
 			"not listed: thinkrail-ext-broken: invalid thinkrail manifest: styles is declared without web",
 			"not listed: thinkrail-ext-gone: unpublished",
 			"not listed: thinkrail-ext-no-manifest: no thinkrail manifest",
-			"listed 3 of 6 npm candidates",
+			"listed 4 of 7 npm candidates",
 		]);
 	});
 
@@ -193,12 +209,13 @@ describe("the denylist", () => {
 		expect(catalog.extensions.map((entry) => entry.name)).toEqual([
 			"@acme/thinkrail-review-cards",
 			"thinkrail-ext-jira",
+			"thinkrail-ext-lovable.fonts.googleapis.com",
 		]);
 		expect(urls).not.toContain(latestUrl("thinkrail-ext-weather"));
 		expect(lines).toContain(
 			"not listed: thinkrail-ext-weather: on the site's denylist (malware report)",
 		);
-		expect(lines.at(-1)).toBe("listed 2 of 6 npm candidates");
+		expect(lines.at(-1)).toBe("listed 3 of 7 npm candidates");
 		expect(catalogErrors(catalog)).toEqual([]);
 	});
 
@@ -341,10 +358,35 @@ describe("normalisation", () => {
 		["jane/ext", "https://github.com/jane/ext"],
 		["https://codeberg.org/jane/ext/", "https://codeberg.org/jane/ext"],
 		["http://example.com/jane/ext", undefined],
+		["https://jane:token@github.com/jane/ext", undefined],
 		["javascript:alert(1)", undefined],
 		[{ type: "git" }, undefined],
 	])("repository %p becomes %p", (repository, expected) => {
 		expect(normalizeRepository(repository)).toBe(expected);
+	});
+
+	test("leaves out a package whose name or version is unbounded", async () => {
+		const longName = `ext-${"a".repeat(211)}`;
+		const registry = syntheticRegistry(["ext-a", "ext-b", longName], 3, 250);
+		const latestB = registry.responses[latestUrl("ext-b")];
+		if (latestB === undefined) throw new Error("synthetic registry lacks ext-b");
+		registry.responses[latestUrl("ext-b")] = {
+			...latestB,
+			body: { ...latestDocument("ext-b"), version: "1.0.0 <b>" },
+		};
+		const lines: string[] = [];
+		const catalog = await buildExtensionCatalog({
+			fetch: recordedFetch(registry),
+			now,
+			log: (line) => lines.push(line),
+		});
+
+		expect(catalog.extensions.map((listed) => listed.name)).toEqual(["ext-a"]);
+		expect(lines).toEqual([
+			"not listed: ext-b: the version is not a semver version of at most 256 characters",
+			"listed 1 of 2 npm candidates",
+		]);
+		expect(catalogErrors(catalog)).toEqual([]);
 	});
 
 	test("falls back to the first maintainer when the package names no author", async () => {
@@ -357,7 +399,7 @@ describe("normalisation", () => {
 });
 
 describe("catalogErrors", () => {
-	const entry = expectedFixtureCatalog.extensions[2];
+	const entry = expectedFixtureCatalog.extensions[3];
 
 	test("rejects entries that break the schema", () => {
 		expect(
@@ -382,10 +424,51 @@ describe("catalogErrors", () => {
 			"extensions[0].install must be npm:thinkrail-ext-weather",
 			"extensions[1] has unknown field image",
 			"extensions[1] is not sorted by unique name",
-			"extensions[1].repository must be an https URL",
+			"extensions[1].repository must be an https URL without credentials",
 			"extensions[1].halves must be server, web, or both in that order",
 			"extensions[1].install must be npm:thinkrail-ext-a",
 			"extensions[1].npm must be https://www.npmjs.com/package/thinkrail-ext-a",
+		]);
+	});
+
+	test("bounds every author-controlled field", () => {
+		expect(
+			catalogErrors({
+				schema: 1,
+				generatedAt: now.toISOString(),
+				extensions: [
+					{
+						...entry,
+						name: "a".repeat(215),
+					},
+					{
+						...entry,
+						name: "thinkrail-ext-b",
+						version: "1.0",
+						title: "t".repeat(101),
+						description: "d".repeat(401),
+						author: " Jane",
+						install: "npm:thinkrail-ext-b",
+						npm: "https://www.npmjs.com/package/thinkrail-ext-b",
+					},
+					{
+						...entry,
+						name: "thinkrail-ext-c",
+						version: `1.0.0-${"a".repeat(251)}`,
+						install: "npm:thinkrail-ext-c",
+						npm: "https://www.npmjs.com/package/thinkrail-ext-c",
+						repository: "https://jane:token@github.com/jane/ext",
+					},
+				],
+			}),
+		).toEqual([
+			"extensions[0].name is not a package name of at most 214 characters",
+			"extensions[1].version must be a semver version of at most 256 characters",
+			"extensions[1].description must be trimmed text of at most 400 characters",
+			"extensions[1].title must be trimmed text of at most 100 characters",
+			"extensions[1].author must be trimmed text of at most 100 characters",
+			"extensions[2].version must be a semver version of at most 256 characters",
+			"extensions[2].repository must be an https URL without credentials",
 		]);
 	});
 
