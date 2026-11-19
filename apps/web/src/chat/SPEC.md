@@ -619,7 +619,11 @@ Unregistered tools fall back to `DefaultToolRenderer`. **Every renderer renders 
 alike, built-in or installed: a
 renderer that throws shows `DefaultToolRenderer` for that one row (chat wraps it in
 `data-testid="tool-renderer-fallback"`) while the card chrome, result images and every other row keep
-working. The boundary resets when the renderer identity (an update) or the `toolCallId` changes and reports
+working. The boundary gives the renderer another try when the renderer identity (an update), the
+`toolCallId`, the call's `status` or its `streaming` flag changes — so a card that threw on partial arguments
+renders once streaming ends or the result arrives (a result lands with the status change) — but not on
+other prop changes such as each streamed argument delta, so a permanently broken card retries a bounded
+number of times per call rather than on every render. It reports
 through `components`' `reportBoundaryError` (reportId `tool-renderer`, classifier only) **once per renderer
 function**, so a broken card in fifty rows is one report. A registration's `summary` runs outside any
 boundary (card headers, activity steps), so a throwing summary reads as no summary and reports once

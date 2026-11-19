@@ -701,6 +701,8 @@ function PlanInteractionCard({
 			<ToolRendererBoundary
 				renderer={Renderer}
 				toolCallId={pending.toolCallId}
+				status={pending.status}
+				streaming={pending.streaming}
 				fallback={<DefaultToolRenderer {...props} />}
 			>
 				<Renderer {...props} />
