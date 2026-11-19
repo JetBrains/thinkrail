@@ -21,7 +21,7 @@ The manifest is the `thinkrail` object in the package's `package.json`. Together
 | `web` | The built web half: one ESM file ending in `.js` or `.mjs`. |
 | `styles` | The built stylesheet of the web half, ending in `.css`. Only together with `web`. |
 | `title` | The display name. Without it, the package name is shown. |
-| `image` | Accepted and ignored: nothing shows a preview image. The build warns when it is not an `https:` URL. |
+| `image` | Accepted and ignored: nothing shows a preview image, and the build warns that it is not used. |
 
 At least one of `server` and `web` is required; the other fields are optional.
 
@@ -201,9 +201,9 @@ streaming state changes.
 A web half receives these modules from the app at runtime instead of bundling them. The build replaces
 each import with a lookup on the app; at build time the SDK provides their type declarations. Extension
 API 1.0 is exactly these modules and, in each, exactly these names; any other name is not shared, even
-when React's type declarations offer it. A named import of such a name fails the build; read through a
-namespace or default import (`React.unstable_…`), it builds, with at most a warning, and is `undefined`
-at runtime. Later API minors may add modules and names; only a new major removes one.
+when React's type declarations offer it. Importing such a name fails the build, by name or read from a namespace
+import in your own code (inside a dependency that is only a warning). Read from a default import
+(`React.unstable_…`), it builds and is `undefined` at runtime. Later API minors may add modules and names; only a new major removes one.
 
 <!-- guard: shared-modules -->
 - `react`: `Activity`, `Children`, `Component`, `Fragment`, `Profiler`, `PureComponent`, `StrictMode`, `Suspense`, `ViewTransition`, `addTransitionType`, `cache`, `cacheSignal`, `cloneElement`, `createContext`, `createElement`, `createRef`, `forwardRef`, `isValidElement`, `lazy`, `memo`, `startTransition`, `use`, `useActionState`, `useCallback`, `useContext`, `useDebugValue`, `useDeferredValue`, `useEffect`, `useEffectEvent`, `useId`, `useImperativeHandle`, `useInsertionEffect`, `useLayoutEffect`, `useMemo`, `useOptimistic`, `useReducer`, `useRef`, `useState`, `useSyncExternalStore`, `useTransition`, `version`
@@ -323,8 +323,10 @@ imports, its own or a dependency's, keeps its first version until ThinkRail rest
 An installed extension is added to a chat after everything ThinkRail owns: its built-in extensions, its
 own tools and session tools, and its MCP and tool-search slots. A tool, command or flag name the
 extension shares with any of them stays ThinkRail's: the extension's registration of that name has no
-effect, and its other registrations work. Nothing reports the clash, and Settings and `status.json` still
-list the name among the extension's tools. pi loads a user's own pi packages before every extension
+effect, and its other registrations work. Where ThinkRail knows the name up front (a built-in extension's
+tool or one of its own fixed tools), Settings leaves it out of the extension's tools and `status.json`
+lists it under `shadowed`; a name that exists only inside a chat (the subagent tool, MCP tools, tool
+search) is still listed. pi loads a user's own pi packages before every extension
 ThinkRail adds, so a pi package keeps a tool name it shares with an installed extension; between two
 installed extensions, the one listed first in `extensions.json` keeps it.
 
