@@ -1,5 +1,10 @@
 import { parseArgs } from "node:util";
-import { buildExtension, DEFAULT_ENTRIES, ExtensionBuildError } from "./builder";
+import {
+	buildExtension,
+	DEFAULT_ENTRIES,
+	ExtensionBuildError,
+	ExtensionUsageError,
+} from "./builder";
 import { EXTENSION_API_VERSION } from "./shared";
 
 const USAGE = `Usage: thinkrail-extension build [options]
@@ -77,6 +82,10 @@ main(process.argv.slice(2)).then(
 		process.exitCode = code;
 	},
 	(error: unknown) => {
+		if (error instanceof ExtensionUsageError) {
+			process.exitCode = usageError(error.message);
+			return;
+		}
 		if (error instanceof ExtensionBuildError)
 			console.error(`thinkrail-extension: ${error.message}`);
 		else console.error(error);

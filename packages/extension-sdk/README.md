@@ -55,6 +55,8 @@ npx thinkrail-extension build --prefix weather
 - The bundle imports nothing: an import of a package that is not installed, or of a Node built-in the
   bundle uses, fails the build.
 - Exit codes: 0 on success (and for `--help`), 1 when the build fails, 2 on a usage error (an unknown
-  command, option or argument, or a missing option value).
+  command, option or argument, a missing option value, or a `web` / `styles` path that is also an
+  input — the entry, `--css`, the `server` file or `package.json`). A failed build leaves the previous
+  `dist/` files as they were.
 
 Runs under Node ≥ 22.19 and Bun.

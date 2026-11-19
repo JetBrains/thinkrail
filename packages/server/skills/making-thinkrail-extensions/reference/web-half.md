@@ -91,6 +91,7 @@ printed for a mistyped command or option):
 | `<pkg> cannot be resolved: install <name> in the extension, or remove the import.` | `npm install --omit=peer <name>` (or remove the import) and rebuild |
 | `<module> is a Node built-in, which a web half cannot use` | move that code to `server/` or use a browser alternative |
 | `the bundle still imports …` | install the named package or remove the import, and rebuild |
+| `"web" (…) would overwrite …` / `… overlap, one inside the other` / `… outside the package` (exit 2) | point `web` / `styles` at files of their own under the package, such as `./dist/web.js` and `./dist/web.css`; nothing was written |
 
 A built `dist/web.js` imports nothing: the build fails on any import it would leave in the bundle,
 since the app could not resolve it.

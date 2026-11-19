@@ -1,13 +1,13 @@
-import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { rm } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { existsSync, readFileSync, realpathSync, renameSync, rmSync, statSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import type { SharedModulesManifest } from "../shared";
 import { bundleWebHalf } from "./bundle";
 import { ExtensionBuildError } from "./errors";
 import { displayPath, readExtensionPackage } from "./manifest";
+import { checkOutputPaths, type LabelledPath, tempBeside } from "./paths";
 import { buildStylesheet, PREFIX_PATTERN } from "./styles";
 
-export { ExtensionBuildError } from "./errors";
+export { ExtensionBuildError, ExtensionUsageError } from "./errors";
 
 export const DEFAULT_ENTRIES = ["web/index.tsx", "web/index.ts"];
 
@@ -77,36 +77,55 @@ export async function buildExtension(options: BuildOptions): Promise<BuildOutput
 		}
 	}
 	const entry = resolveEntry(root, options.entry);
+	const staging = (path: string) => ({ path, temp: tempBeside(path) });
+	const web = staging(resolve(root, manifest.web));
+	const styles =
+		manifest.styles !== undefined && options.prefix !== undefined
+			? { ...staging(resolve(root, manifest.styles)), prefix: options.prefix }
+			: undefined;
+	const inputs: LabelledPath[] = [
+		{ label: options.entry === undefined ? "the web entry" : "--entry", path: entry },
+		{ label: "package.json", path: join(root, "package.json") },
+	];
+	if (css !== undefined) inputs.push({ label: "--css", path: css });
+	if (manifest.server !== undefined)
+		inputs.push({ label: 'the "server" file', path: resolve(root, manifest.server) });
+	const outputs = [{ label: '"web"', ...web }];
+	if (styles !== undefined) outputs.push({ label: '"styles"', ...styles });
+	checkOutputPaths(root, inputs, outputs);
+
 	const minify = options.minify ?? true;
 	const sharedModules = JSON.parse(
 		readFileSync(new URL("shared-modules.json", options.assetsDir), "utf8"),
 	) as SharedModulesManifest;
 
-	const webFile = resolve(root, manifest.web);
-	await rm(webFile, { force: true });
-	const bundle = await bundleWebHalf({
-		root,
-		entry,
-		outFile: webFile,
-		minify,
-		manifest: sharedModules,
-	});
-	warnings.push(...bundle.warnings);
-	files.push(webFile);
-
-	if (manifest.styles !== undefined && options.prefix !== undefined) {
-		const stylesFile = resolve(root, manifest.styles);
-		await rm(stylesFile, { force: true });
-		await buildStylesheet({
+	const staged = styles === undefined ? [web] : [web, styles];
+	try {
+		const bundle = await bundleWebHalf({
 			root,
-			sourceDir: dirname(entry),
-			prefix: options.prefix,
-			css,
-			outFile: stylesFile,
+			entry,
+			outFile: web.temp,
 			minify,
-			assetsDir: options.assetsDir,
+			manifest: sharedModules,
 		});
-		files.push(stylesFile);
+		warnings.push(...bundle.warnings);
+		if (styles !== undefined) {
+			await buildStylesheet({
+				root,
+				sourceDir: dirname(entry),
+				prefix: styles.prefix,
+				css,
+				outFile: styles.temp,
+				minify,
+				assetsDir: options.assetsDir,
+			});
+		}
+		for (const { path, temp } of staged) {
+			renameSync(temp, path);
+			files.push(path);
+		}
+	} finally {
+		for (const { temp } of staged) rmSync(temp, { force: true });
 	}
 	return {
 		name: pkg.name,

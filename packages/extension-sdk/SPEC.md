@@ -48,8 +48,9 @@ private and unchanged. It imports no pi value at runtime.
   `dist/cli.js`, so a workspace install links it before the SDK is built: `thinkrail-extension build
   [--prefix <a-z>] [--entry <file>] [--css <file>] [--cwd <dir>] [--no-minify]`. Exit codes: 0 on
   success and for `--help` / `-h` (usage on stdout), 1 when the build fails (`thinkrail-extension:
-  <message>`, no stack), 2 on a usage error — an unknown command, option or extra argument, or a
-  missing option value — with the message and the usage on stderr. Also `./theme.css`
+  <message>`, no stack), 2 on a usage error — an unknown command, option or extra argument, a
+  missing option value, or an output path that collides with an input (§ The build command) — with
+  the message and the usage on stderr. Also `./theme.css`
   (the theme file) and `assets/extension.css` (the stylesheet template).
 - Versioning: the package's `major.minor` is the extension API it builds (`EXTENSION_API_VERSION` in
   `src/shared.ts`); patch releases change no promise. The first changeset is a major bump from `0.0.0`
@@ -88,6 +89,19 @@ private and unchanged. It imports no pi value at runtime.
   `UNRESOLVED_IMPORT` warning and a kept import. A Node built-in is external without side effects, so
   one only unused code imports is dropped. Then the output is parsed and any import left — a used
   built-in or anything another path leaves — fails the build before it is written.
+- **Outputs never touch inputs.** Before anything is removed or written, every path is resolved —
+  the web entry (`--entry` or the default), `--css`, the manifest's `server` file, `package.json`, and
+  the `web` / `styles` outputs — through `realpath` (for an output, of its deepest existing ancestor,
+  so a symlinked folder or a link to an input counts), compared case-insensitively when the package's
+  file system is (`PACKAGE.JSON` names the same inode as `package.json`). An output that equals, or is
+  an ancestor or descendant of, an input or the other output, that is an existing directory, or that
+  resolves outside the package is an `ExtensionUsageError` (exit 2) naming both paths, and nothing is
+  written. The manifest already keeps paths inside the package and distinct by suffix; the check
+  catches what that cannot — `--entry` / `--css` / `server` equal to an output, links and case.
+- **Atomic outputs.** The bundle and the stylesheet are written to hidden temporary files beside their
+  targets (`.<name>.<pid>-<random>.tmp`) and renamed over them only when both have built; on any
+  failure the temporaries are removed and the previous `web` / `styles` stay as they were, never
+  half-written and never deleted.
 - The stylesheet: when the manifest declares `styles`, `--prefix` (lowercase letters, Tailwind's rule) is
   **required** — there is no default, because the author writes it into every class. The template's
   Tailwind and theme imports are rewritten to absolute paths inside the SDK (the extension need not
