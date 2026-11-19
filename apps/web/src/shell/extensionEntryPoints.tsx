@@ -161,17 +161,19 @@ function layoutExtensionTools(
 	);
 }
 
-export function useLayoutExtensionTools(): LayoutToolCatalog {
+/** The side tools whose extension is on, on a host that serves it and — once read — lists it. */
+export function useOpenableSideTools(): readonly RegisteredSideTool[] {
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
 	const disabled = useAppStore((state) => state.disabledExtensions);
 	const tools = extensionSideTools();
 	const { read } = useExtensionCatalog(tools.length > 0 && supportsExtensionQuery(protocolVersion));
 	return useMemo(
-		() =>
-			layoutExtensionTools(
-				tools,
-				openableContributions({ disabled, protocolVersion, catalog: read, items: tools }),
-			),
+		() => openableContributions({ disabled, protocolVersion, catalog: read, items: tools }),
 		[disabled, protocolVersion, read, tools],
 	);
+}
+
+export function useLayoutExtensionTools(): LayoutToolCatalog {
+	const openable = useOpenableSideTools();
+	return useMemo(() => layoutExtensionTools(extensionSideTools(), openable), [openable]);
 }

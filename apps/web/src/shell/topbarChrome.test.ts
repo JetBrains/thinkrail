@@ -57,6 +57,16 @@ test("the trailing topbar action cluster owns the no-drag boundary", () => {
 	}
 });
 
+test("the extensions' status items mount inside the action cluster, before the status readouts", () => {
+	const cluster = header.indexOf('data-testid="topbar-actions"');
+	const items = header.indexOf("<ExtensionStatusItems");
+	expect(cluster).toBeGreaterThanOrEqual(0);
+	expect(items).toBeGreaterThan(cluster);
+	expect(items).toBeLessThan(header.indexOf("<JbcentralQuotaTopbar"));
+	expect(items).toBeLessThan(header.indexOf('data-testid="connection-status"'));
+	expect([...header.matchAll(/<ExtensionStatusItems\b/g)]).toHaveLength(1);
+});
+
 test("the topbar reserves host-published window-chrome insets at both edges through width tokens", () => {
 	for (const edge of ["left", "right"]) {
 		const spacer = [...header.matchAll(jsxTag("div"))]

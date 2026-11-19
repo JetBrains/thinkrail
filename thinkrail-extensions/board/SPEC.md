@@ -14,7 +14,8 @@ A board per project whose cards launch agent work and follow it. **The column is
 preset names the columns over fixed categories. **The agent's state is live**, computed per request
 from host facts and never stored. **Host events move cards** through pure rules, and a human's move is
 a logged override. There is no portable pi package, because every tool acts on host-owned state. The web
-half is the Board side tool and the card in Peek; the inbox status item and Board mode come later.
+half is the Board side tool, the card in Peek, the cross-project "Needs you" inbox (above the board and as
+a topbar counter) and Board mode.
 
 ## Boundary
 
@@ -30,7 +31,7 @@ half is the Board side tool and the card in Peek; the inbox status item and Boar
   - Enabled by default. Switching it off refuses its queries and actions, stops its host service and
     withholds its tools.
 - **`./web`**: `defineWebExtension({ name: "board", title, sideTools: { board }, panels: { card },
-  commands, shortcuts })`, in the web registry.
+  statusItems: { inbox }, layoutPresets: { board }, commands, shortcuts })`, in the web registry.
   - It imports `extension-api/web`, `contracts` types, `locales`, `ui`, React and `@dnd-kit/core`, never its
     `./server` half: the wire shapes it reads are restated in `web/api.ts` and checked on arrival (an unknown
     shape is a `BoardReplyError`, a version skew), and `workflowFor` mirrors the server's size rule for the
@@ -77,6 +78,8 @@ Failure handling:
 - `type` (feature / bug / chore), `size?` (S / M / L) and `sizeSuggested?`;
 - `labels[]`, `blocks[]` (the ids it blocks), `specRefs[]` and `rank`;
 - `category` and `column`, `ownerHuman` (the local user) and `createdBy` (human / agent);
+- `origin? { sessionId, cardId? }` on an agent's card: the chat that filed it and the card that chat works
+  on, by which Triage groups a decomposition;
 - `attempts[] { workspaceId, sessionId, workflow, startedAt, notes[], merged?, removedAt? }`;
 - `cancelPending?`, the question "cancel?" after an unmerged workspace went away.
 
@@ -149,7 +152,8 @@ Every query validates its params (lengths, enums, lists of at most 100) and answ
 - **`board.get { projectId }`** → `{ projectId, projectName, prefix, settings, columns, cards, wip }`,
   each card with its `live[]`. It refuses a project that is not an open repository.
 - **`inbox {}`** → the active cards across the open projects whose latest attempt is `needs_you` or
-  `failed`, with project and reason.
+  `failed`, with project and reason; an `interrupted` run (a stop, a host restart) reads as `failed`, as the
+  card's badge does, since the card is stalled either way.
 - **`card.get { cardId }`** → the card with its live overlay, its project and its transitions, for the
   Peek card.
 - **`card.create { projectId, title, description?, acceptance?, type?, size?, labels?, specRefs?,
@@ -182,16 +186,35 @@ on every `board.changed` for that project (`PanelHost.onEvent`), keeping the las
 re-read is in flight. Loading, empty (*No cards yet — create one or ask the agent to break work down*) and
 error (with *Retry*) states replace the body; a failed write shows a dismissible notice.
 
-- **Header**: the project's name, the preset switch (Agentic kanban / Solo → `settings.update`), the view
-  switch (Board / List) and *New card*, an inline title field → `card.create`, then the new card in Peek.
+- **Header**: the project's name, the preset switch (Agentic kanban / Solo → `settings.update`), the WIP
+  figures (*Needs you*, *Review*, *Agents* as `count/limit`, `feedback-error` and `data-over` past the limit;
+  a limit of 0 is none and shows the count alone), the view switch (Board / List), the Board mode toggle
+  (*Board mode* / *Exit Board mode*, `PanelHost.layoutPreset`, absent on a host without modes), the board
+  settings (a popover editing the three WIP limits, 0–99 → `settings.update { wipLimits }`) and *New card*,
+  an inline title field → `card.create`, then the new card in Peek.
+- **Inbox** ("Needs you · N · All projects"): under the header, the `inbox` query's cards of every open
+  project, re-read on any project's `board.changed` (which the host service also publishes when a bound
+  chat's state flips). A row names the project, the card id and title (a click peeks the card), the reason
+  (*Question pending* / *Failed*, from the latest attempt's chat state) and *Answer* or *Retry*, both opening
+  that attempt's chat (`PanelHost.openChat`) — Retry sends nothing. Chips that wrap when wide, a list when
+  stacked; absent while nobody waits.
 - **Adaptive by its own pane's width** (a `ResizeObserver`, `boardLayout`): from 720 px the columns sit side
   by side (`data-layout="columns"`), below that they stack into one list grouped by column (`stacked`).
-  Triage and Canceled show only while they hold cards.
+  Canceled shows only while it holds cards. A column of Review cards only shows *WIP* `count/limit` against
+  the Review limit, marked past it (Solo's Doing mixes started cards in and shows its count alone).
+- **Triage** is a lane of its own at the board's start, not a column, present while it holds cards and
+  collapsed to *Triage · N* by default. Expanded, it groups the cards by `origin.sessionId` (`triageGroups`:
+  *Filed from TR-4's chat*, *Filed from a chat*, *Filed by an agent*), each group with *Accept all* →
+  `triage.accept` with all its ids (a decomposition is accepted as a whole) and *Dismiss* (behind an inline
+  confirm, `card.delete` each); a card shows its suggested size (`M?`), peeks on a click and has its own
+  *Accept*.
 - **A card** shows its id, type, size (a suggested one marked `M?`), title, the agent badge of its latest
   open attempt (`agentBadge`: working, waiting for you, failed — interrupted included —, finished, finished ·
   unread; `feedback-*` / `primary` tokens), the plan's progress, the diff, the PR chip and the cards
   blocking it. *Start* shows on a backlog or unstarted card with no open attempt and starts it with the
-  size's workflow and the host's defaults; the host's toast reports a kickoff that failed.
+  size's workflow and the host's defaults; the host's toast reports a kickoff that failed. While Review or
+  Needs you is past its limit (`attentionOverLimit`, Review first), Start asks inline instead — *Review is
+  over its limit (6/5) — finish before starting?* with *Start anyway* / *Not now* — a warning, never a block.
 - **Moving**: cards drag between columns with `@dnd-kit/core` (pointer within a column; a drag overlay) →
   `card.move`, the logged override. A card is a focusable button: Enter or a click peeks it, a double click
   enters its open attempt's workspace (`PanelHost.openWorkspace`), and the local commands
@@ -199,6 +222,16 @@ error (with *Retry*) states replace the body; a failed write shows a dismissible
   shown column, focus following the card.
 - **List** view: one table (id, title, column, size, agent, plan, PR) sorted by column then rank, or by
   rank; a title peeks its card.
+
+**The Needs-you status item** (`statusItems.inbox`) is the inbox in the topbar: a `feedback-warning` chip
+*Needs you · N* over the same query and refreshes, absent at zero, whose popover lists the same rows (an
+action closes it); a row peeks its card only with a workspace active.
+
+**Board mode** (`layoutPresets.board`, *Board mode*) arranges the sides as one wide left side (0.6 of the
+workbench): Projects in a folded pane, then the Board tool; the right side empty, so Peek shows the cards
+there. The center and the bottom keep the chat and the terminals, and leaving restores the previous frame
+([[submodule-web-shell]] § Layout modes). It is entered from the Board tool's header and the palette's
+*Enter Board mode*, and left from the same button (*Exit Board mode*) or the palette.
 
 **The card in Peek** is the `card` panel (scope `session`: it opens only from the board, with params
 `{ projectId, cardId }`, the crumb named `<id> · <title>`). It reads `card.get` and re-reads on
@@ -226,7 +259,8 @@ id, else the attempt of its workspace (located from its cwd).
 - **`board_card_get { cardId? }`**: a card's text, by default the chat's own.
 - **`board_cards_list { status? }`**: the chat's project's cards, by category.
 - **`board_card_create { title, description?, acceptance?, type?, size? }`**: always into Triage, with
-  `createdBy: agent`. A size given is marked suggested.
+  `createdBy: agent` and the filing chat as its `origin` (with that chat's own card). A size given is marked
+  suggested.
 - **`board_link { cardId, blocks[] }`**: adds "blocks" links on one board.
 - **`board_card_note { text }`**: appends a progress note to the chat's attempt.
 
@@ -246,18 +280,23 @@ Their guidelines say two things:
   `extension.event` push and the host service following the Settings switch.
 - **Web** (`web/*.test.ts(x)`): the agent badge by overlay state, Start's offer and its defaults by size,
   the drop → `card.move` call, Alt+arrow steps, the list sort, the adaptive layout and the rendered tile,
-  columns, list and empty board.
+  columns, list and empty board; the WIP math (over a limit, 0 as none, the Review column's limit, Start's
+  warning order), Triage grouping by origin and the collapsed lane, the inbox's reply check and its rows'
+  chat target, and the rendered inbox strip and Start warning.
 - **No-agent e2e** (`e2e/board.spec.ts`): open the Board tool, create a card into Backlog, edit it in Peek,
   Start it (a worktree and a chat; the kickoff text captured from `workspace.creationChanged`, no model
   needed), the card in Building; a drag and Alt+→ logged as overrides; List view; the Solo preset; the
-  extension switched off → the disabled placeholder in the same pane, through a reload.
+  extension switched off → the disabled placeholder in the same pane, through a reload; the inbox across two
+  projects (cards seeded on attempts whose seeded chats hold a pending question or failed), the topbar
+  counter and its popover, Answer entering the chat; Board mode entered from the header and left from the
+  palette with the layout snapshot unchanged; a WIP limit edited to 1 and Review marked over it, with
+  Start's warning; Triage's Accept all moving a seeded decomposition into Backlog.
 
 ## Deferrals
 
 These land later:
 
-- the inbox and its topbar counter (`statusItems`), Board mode (`layoutPresets`), a palette command for the
-  Board tool, and follow selection;
+- follow selection, and Start's WIP warning in the Peek card's Start form (only the tile warns);
 - cost / time per card;
 - task-spec and GitHub sources;
 - a last-action fact, and the last action on a card;

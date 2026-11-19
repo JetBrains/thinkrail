@@ -2,11 +2,14 @@ import { describe, expect, it, mock } from "bun:test";
 import {
 	defineWebExtension,
 	type GlobalOverlayProps,
+	type LayoutPresetDeclaration,
 	type PanelDeclaration,
 	type PanelHost,
 	type PanelPeekEntry,
 	type PanelProps,
 	type SideToolDeclaration,
+	type StatusItemDeclaration,
+	type StatusItemProps,
 	type ToolRegistrationOptions,
 	type ToolRenderProps,
 	type WebExtension,
@@ -174,6 +177,33 @@ describe("side tools and the panel host's workspace, Peek and event seams", () =
 		expect(listeners.size).toBe(1);
 		unsubscribe();
 		expect(listeners.size).toBe(0);
+	});
+
+	it("preserves status items without loading them, and layout presets as side regions", async () => {
+		const Inbox = ({ host }: StatusItemProps) => host.scope?.projectId ?? null;
+		const load = mock(async () => ({ default: Inbox }));
+		const inbox: StatusItemDeclaration = { load };
+		const mode: LayoutPresetDeclaration = {
+			title: "common.retry",
+			icon: () => null,
+			left: {
+				visible: true,
+				width: 0.6,
+				groups: [{ id: "board", weight: 1, folded: false, tools: ["ext:board:board"] }],
+			},
+			right: { visible: false, width: 0.28, groups: [] },
+		};
+		const extension = defineWebExtension({
+			name: "board",
+			statusItems: { inbox },
+			layoutPresets: { board: mode },
+		});
+
+		expect(extension.statusItems.inbox).toBe(inbox);
+		expect(extension.layoutPresets.board).toBe(mode);
+		expect(extension).not.toHaveProperty("sideTools");
+		expect(load).not.toHaveBeenCalled();
+		expect((await extension.statusItems.inbox.load()).default).toBe(Inbox);
 	});
 });
 

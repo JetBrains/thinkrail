@@ -1,8 +1,4 @@
-import {
-	type ExtensionCatalogEntry,
-	type ExtensionLayoutToolId,
-	WS_CHANNELS,
-} from "@thinkrail/contracts";
+import type { ExtensionCatalogEntry, ExtensionLayoutToolId } from "@thinkrail/contracts";
 import type {
 	PanelDeclaration,
 	PanelHost,
@@ -24,8 +20,15 @@ import {
 } from "../extensions";
 import { openFileAtLine, openFileInTab } from "../panels/openTabs";
 import { SettingsSection, selectWorkspaceById, useAppStore } from "../store";
-import { getTransport, supportsExtensionQuery } from "../transport";
+import { supportsExtensionQuery } from "../transport";
 import {
+	enterOwnLayoutPreset,
+	exitOwnLayoutPreset,
+	extensionLayoutMode,
+	useLayoutModeId,
+} from "./extensionLayoutModes";
+import {
+	APP_HOST_LINKS,
 	createPanelHost,
 	type ExtensionCatalogRead,
 	openExtensionPanel,
@@ -176,19 +179,13 @@ function useAppPanelHost({
 	apiVersion: number | undefined;
 	protocolVersion: number | null;
 }): PanelHost {
+	const modeId = useLayoutModeId();
+	const layoutPreset = extensionLayoutMode(modeId, extension);
 	return useMemo(
 		() =>
 			createPanelHost({
+				...APP_HOST_LINKS,
 				extension,
-				request: (params) => getTransport().request("extension.query", params),
-				navigate: (workspace, sessionId) =>
-					void paletteNavigator.navigateToWorkspace(workspace, sessionId),
-				locate: (location) =>
-					void paletteNavigator
-						.loadWorkspaceRow({ id: location.workspaceId, projectId: location.projectId })
-						.then((ok) => {
-							if (ok) useAppStore.getState().requestChatLocation(location);
-						}),
 				openPanel: (id, params, title) => {
 					const target = findExtensionPanel(extension, id);
 					if (target) openExtensionPanel(workspaceId, target, params, title);
@@ -211,19 +208,16 @@ function useAppPanelHost({
 						});
 				},
 				openArtifacts: () => useAppStore.getState().requestToolView(workspaceId, "artifacts"),
-				openWorkspace: (target) =>
-					void paletteNavigator.navigateToWorkspace(
-						{ id: target.workspaceId, projectId: target.projectId },
-						target.sessionId,
-					),
 				peek: (entry) => useAppStore.getState().requestPeek(workspaceId, entry),
-				subscribe: (listener) => getTransport().subscribe(WS_CHANNELS.extensionEvent, listener),
 				disabled: () => useAppStore.getState().disabledExtensions.includes(extension),
+				layoutPreset,
+				enterLayoutPreset: (preset) => enterOwnLayoutPreset(extension, preset),
+				exitLayoutPreset: () => exitOwnLayoutPreset(extension),
 				scope: { workspaceId, projectId },
 				hostProtocol: protocolVersion,
 				hostApiVersion: apiVersion,
 			}),
-		[apiVersion, extension, projectId, protocolVersion, workspaceId],
+		[apiVersion, extension, layoutPreset, projectId, protocolVersion, workspaceId],
 	);
 }
 

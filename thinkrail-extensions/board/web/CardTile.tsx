@@ -11,7 +11,9 @@ export interface CardActions {
 	open: (card: Card) => void;
 	/** Enter the workspace of its open attempt. */
 	enter: (card: Card) => void;
-	start: (card: Card) => void;
+	/** Starts the card; without `anyway`, a human-attention limit past its count asks first. */
+	start: (card: Card, anyway?: boolean) => void;
+	cancelStart: () => void;
 	keyDown: (card: Card, event: KeyboardEvent<HTMLElement>) => void;
 }
 
@@ -19,11 +21,14 @@ export function CardTile({
 	card,
 	actions,
 	starting,
+	startWarning = null,
 	compact = false,
 }: {
 	card: Card;
 	actions: CardActions;
 	starting: boolean;
+	/** Start was pressed past a human-attention limit: the question to confirm. */
+	startWarning?: string | null;
 	compact?: boolean;
 }) {
 	const t = useT();
@@ -61,7 +66,28 @@ export function CardTile({
 					</span>
 				) : null}
 			</button>
-			{canStart(card) ? (
+			{startWarning ? (
+				<div
+					role="alert"
+					data-testid="board-start-warning"
+					className="flex flex-col gap-4 rounded-xs bg-feedback-warning-subtle p-4"
+				>
+					<span className="tr-text-metadata text-feedback-warning">{startWarning}</span>
+					<span className="flex flex-wrap gap-4">
+						<Button
+							variant="outline"
+							size="s"
+							data-testid="board-start-anyway"
+							onClick={() => actions.start(card, true)}
+						>
+							{t("board.wip.startAnyway")}
+						</Button>
+						<Button variant="ghost" size="s" onClick={actions.cancelStart}>
+							{t("board.wip.notNow")}
+						</Button>
+					</span>
+				</div>
+			) : canStart(card) ? (
 				<Button
 					variant="soft-primary"
 					size="s"

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { RiBarChartBoxLine } from "@remixicon/react";
 import { type NativePageZoomAction, PROTOCOL_VERSION, type Workspace } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
-import type { RegisteredPanel } from "../extensions";
+import type { RegisteredLayoutPreset, RegisteredPanel } from "../extensions";
 import { type KeybindingId, keybindingShortcut, resolveKeybindings } from "../keybindings";
 import { availableSettings, type SettingsCatalogContext } from "../panels/settingsCatalog";
 import { settingsNavGroups } from "../panels/settingsNav";
@@ -101,6 +101,9 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 		settingEntries: [],
 		tabActions: [],
 		extensionPanels: [],
+		extensionTools: [],
+		layoutModes: [],
+		activeLayoutMode: null,
 		actions: {
 			newWorkspace: noop,
 			newProjectlessChat: noop,
@@ -114,6 +117,8 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 			toggleRight: noop,
 			toggleBottom: noop,
 			showTool: noop,
+			enterLayoutMode: noop,
+			exitLayoutMode: noop,
 			openExtensionPanel: noop,
 			openExtensionPanelInProject: noop,
 			showFiles: noop,
@@ -402,6 +407,87 @@ describe("palette extension panel commands", () => {
 		expect(
 			row("view.extension.insights.sessions", deps({ extensionPanels: [projectPanel] })),
 		).not.toHaveProperty("shortcut");
+	});
+});
+
+describe("palette extension side tools and layout modes", () => {
+	const mode: RegisteredLayoutPreset = {
+		extension: "board",
+		preset: "board",
+		id: "board:board",
+		declaration: {
+			title: "board.mode.title",
+			icon: RiBarChartBoxLine,
+			left: { visible: true, width: 0.6, groups: [] },
+			right: { visible: false, width: 0.28, groups: [] },
+		},
+	};
+
+	test("shows an offered extension side tool like a built-in tool, in the active workspace", () => {
+		const shown: [string, string][] = [];
+		const catalog = deps({
+			extensionTools: [
+				{ id: "ext:board:board", title: "board.tool.title", icon: RiBarChartBoxLine },
+			],
+			actions: {
+				...deps().actions,
+				showTool: (workspaceId, tool) => shown.push([workspaceId, tool]),
+			},
+		});
+		const command = row("view.show.ext:board:board", catalog);
+		expect(command).toMatchObject({ title: "Show Board", subtitle: "View" });
+		command?.run?.();
+		expect(shown).toEqual([["w1", "ext:board:board"]]);
+		expect(
+			row(
+				"view.show.ext:board:board",
+				deps({
+					activeWorkspace: null,
+					extensionTools: [
+						{ id: "ext:board:board", title: "board.tool.title", icon: RiBarChartBoxLine },
+					],
+				}),
+			),
+		).toBeUndefined();
+	});
+
+	test("offers Enter for a mode not active and Exit for the active one, even one this build lacks", () => {
+		const entered: RegisteredLayoutPreset[] = [];
+		let exited = 0;
+		const actions = {
+			...deps().actions,
+			enterLayoutMode: (preset: RegisteredLayoutPreset) => entered.push(preset),
+			exitLayoutMode: () => {
+				exited += 1;
+			},
+		};
+		const idle = deps({ layoutModes: [mode], actions });
+		expect(row("view.layoutMode.enter.board:board", idle)?.title).toBe("Enter Board mode");
+		expect(row("view.layoutMode.exit", idle)).toBeUndefined();
+		row("view.layoutMode.enter.board:board", idle)?.run?.();
+		expect(entered).toEqual([mode]);
+
+		const active = deps({
+			layoutModes: [mode],
+			activeLayoutMode: { id: "board:board", preset: mode },
+			actions,
+		});
+		expect(row("view.layoutMode.enter.board:board", active)).toBeUndefined();
+		expect(row("view.layoutMode.exit", active)?.title).toBe("Exit Board mode");
+		row("view.layoutMode.exit", active)?.run?.();
+		expect(exited).toBe(1);
+
+		const orphan = deps({
+			activeWorkspace: null,
+			activeLayoutMode: { id: "gone:wide", preset: undefined },
+		});
+		expect(row("view.layoutMode.exit", orphan)?.title).toBe("Exit layout mode");
+		expect(
+			row(
+				"view.layoutMode.enter.board:board",
+				deps({ activeWorkspace: null, layoutModes: [mode] }),
+			),
+		).toBeUndefined();
 	});
 });
 

@@ -297,11 +297,15 @@ describe("board queries", () => {
 			["p1", "Waiting"],
 			["p1", "Fine"],
 			["p2", "Failed"],
+			["p2", "Stopped"],
 		] as const) {
 			const card = board.createCard(projectId, { title }, "human");
 			await query("card.start", { cardId: card.id });
 		}
-		const chat = (sessionId: string, state: "needs_you" | "finished" | "failed") => ({
+		const chat = (
+			sessionId: string,
+			state: "needs_you" | "finished" | "failed" | "interrupted",
+		) => ({
 			sessionId,
 			title: "",
 			state,
@@ -312,12 +316,14 @@ describe("board queries", () => {
 		t.facts.set("w1", facts("w1", { chats: [chat("s1", "needs_you")] }));
 		t.facts.set("w2", facts("w2", { chats: [chat("s2", "finished")] }));
 		t.facts.set("w3", facts("w3", { projectId: "p2", chats: [chat("s3", "failed")] }));
+		t.facts.set("w4", facts("w4", { projectId: "p2", chats: [chat("s4", "interrupted")] }));
 		const { items } = await query<{
 			items: { projectName: string; reason: string; card: CardView }[];
 		}>("inbox", {});
 		expect(items.map((item) => [item.projectName, item.reason, item.card.title])).toEqual([
 			["ThinkRail", "needs_you", "Waiting"],
 			["Other", "failed", "Failed"],
+			["Other", "failed", "Stopped"],
 		]);
 	});
 
@@ -577,7 +583,9 @@ describe("board tools", () => {
 			createdBy: "agent",
 			size: "L",
 			sizeSuggested: true,
+			origin: { sessionId: "s1", cardId: "TR-1" },
 		});
+		expect(board.find("TR-3").origin).toEqual({ sessionId: "s1", cardId: "TR-1" });
 		await expect(call("board_card_create", { title: "x" }, "s1", "/elsewhere")).rejects.toThrow(
 			"has no board",
 		);

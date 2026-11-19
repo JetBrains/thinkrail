@@ -51,6 +51,7 @@ const file: CardsFile = {
 				},
 			],
 			createdBy: "agent",
+			origin: { sessionId: "s0", cardId: "TR-9" },
 			createdAt: 1,
 			updatedAt: 2,
 			cancelPending: { workspaceId: "w1", at: 5 },

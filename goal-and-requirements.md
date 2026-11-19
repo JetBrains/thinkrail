@@ -141,7 +141,10 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   defaults and workspace concurrency controls ([[submodule-web-panels]]).
 - **Board** — a project board extension: cards start agent work in new workspaces, host events
   (start, settle, merge) move them across preset columns while a human's move is a logged override, each
-  card badges its agent's live state, and a card opens in Peek with its details, attempts and Start
+  card badges its agent's live state, and a card opens in Peek with its details, attempts and Start.
+  A cross-project "Needs you" inbox (above the board and as a topbar counter) lists the cards waiting
+  for an answer or failed, WIP limits watch human attention, agent-filed cards wait in Triage to be
+  accepted as a whole, and Board mode widens the board and restores the previous layout on exit
   ([[module-ext-board]]).
 - **Workspaces from chat** — on request ("in a side workspace"), the agent starts ordinary workspaces
   with their own chats in any open project and checks their chats', PRs', and diffs' status; the agent,

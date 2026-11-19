@@ -20,6 +20,8 @@ vocabulary of the two search surfaces, and the shared loading-skeleton primitive
   self-contained fallback instead of propagating a throw to the root. It:
   - resets a caught error when any `resetKeys` value changes (wire to the subtree's identity —
     workspace/tab id — so navigating away auto-recovers);
+  - renders an optional `fallback` instead of the panel fallback (`null` for a topbar readout, which has no
+    room for one), still logging and reporting the crash;
   - classifies failed dynamic `import()`s via the pure, unit-tested **`isChunkLoadError`** (stale Vite
     chunk / 504 / Safari "module script failed") and steers those to a page **reload** (re-fetches the
     chunk) rather than an in-place retry;

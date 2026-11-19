@@ -17,8 +17,11 @@ import {
 	applyLayoutPresetLocally,
 	claimLayoutSurfaceId,
 	commitWorkspaceLayout,
+	currentLayoutMode,
 	emptyWorkspaceProjection,
 	ensureWorkspaceLayoutState,
+	enterLayoutModeLocally,
+	exitLayoutModeLocally,
 	initializeLocalLayoutState,
 	localLayoutStorageKey,
 	resetLayoutStateForTests,
@@ -251,6 +254,119 @@ describe("frontend-local layout state", () => {
 			maxBottomGroups: 3,
 		});
 		expect(useAppStore.getState().workbenchFrame?.left.width).toBe(0.31);
+	});
+
+	test("a layout mode survives reload and leaving it restores the frame and the tools its panes showed", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		const reload = async () => {
+			resetLayoutStateForTests();
+			resetStore();
+			setLayoutStateStorageForTests({ local, session }, endpoint);
+			await initializeLocalLayoutState();
+			await ensureWorkspaceLayoutState("A");
+			useAppStore.setState({ activeWorkspaceId: "A" });
+		};
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		const opened = structuredClone(await ensureWorkspaceLayoutState("A"));
+		if (opened.center.kind !== "group") throw new Error("missing center group");
+		opened.center.tabs = [{ kind: "file", id: "one.ts", name: "one.ts", path: "one.ts" }];
+		await commitWorkspaceLayout("A", opened);
+		useAppStore.setState({ activeWorkspaceId: "A" });
+		const before = useAppStore.getState();
+		const document = before.layoutDocumentsByWorkspace.A;
+		const rightTop = document?.right.groups[0];
+		const files = rightTop?.tabs.find((tab) => tab.kind === "tool" && tab.tool === "files");
+		if (!document || !rightTop || !files) throw new Error("missing Balanced's right group");
+		const attention = before.layoutAttentionByWorkspace.A;
+		if (!attention) throw new Error("missing attention");
+		applyLayoutAttention("A", {
+			...attention,
+			selectedByGroup: { ...attention.selectedByGroup, [rightTop.id]: files.id },
+		});
+		const frame = structuredClone(useAppStore.getState().workbenchFrame);
+		const center = document.center.id;
+
+		enterLayoutModeLocally("board:board", {
+			left: {
+				visible: true,
+				width: 0.6,
+				groups: [
+					{ id: "p", weight: 0.1, folded: true, tools: ["projects"] },
+					{ id: "b", weight: 0.9, folded: false, tools: ["ext:board:board"] },
+				],
+			},
+			right: { visible: false, width: 0.28, groups: [] },
+		});
+		const inMode = useAppStore.getState();
+		expect(
+			inMode.workbenchFrame?.left.groups.map((group) => group.tools.map((tool) => tool.tool)),
+		).toEqual([["projects"], ["ext:board:board"]]);
+		expect(inMode.workbenchFrame?.right.groups).toEqual([]);
+		expect(inMode.layoutDocumentsByWorkspace.A?.center.id).toBe(center);
+		expect(currentLayoutMode()).toMatchObject({
+			id: "board:board",
+			selected: { [rightTop.id]: files.id },
+		});
+
+		await reload();
+		expect(currentLayoutMode()?.id).toBe("board:board");
+		expect(useAppStore.getState().workbenchFrame?.left.width).toBe(0.6);
+
+		exitLayoutModeLocally();
+		const after = useAppStore.getState();
+		expect(after.workbenchFrame).toEqual(frame);
+		expect(after.localLayoutPreferences.layoutMode).toBeUndefined();
+		expect(after.layoutAttentionByWorkspace.A?.selectedByGroup[rightTop.id]).toBe(files.id);
+		expect(
+			collectAllGroups(after.layoutDocumentsByWorkspace.A ?? document).flatMap((group) =>
+				group.tabs.filter((tab) => tab.kind === "file").map((tab) => tab.id),
+			),
+		).toEqual(["one.ts"]);
+		exitLayoutModeLocally();
+		expect(useAppStore.getState().workbenchFrame).toEqual(frame);
+	});
+
+	test("a malformed layout mode is dropped alone, and applying a preset leaves the mode", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		await ensureWorkspaceLayoutState("A");
+		const sides = {
+			left: {
+				visible: true,
+				width: 0.6,
+				groups: [{ id: "b", weight: 1, folded: false, tools: ["ext:board:board" as const] }],
+			},
+			right: { visible: false, width: 0.28, groups: [] },
+		};
+		enterLayoutModeLocally("board:board", sides);
+		const balanced = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "balanced");
+		if (!balanced) throw new Error("missing Balanced");
+		applyLayoutPresetLocally(balanced);
+		expect(currentLayoutMode()).toBeNull();
+
+		enterLayoutModeLocally("board:board", sides);
+		const key = localLayoutStorageKey(endpoint, "surface-a");
+		const stored = JSON.parse(local.getItem(key) ?? "{}");
+		local.setItem(
+			key,
+			JSON.stringify({
+				...stored,
+				preferences: {
+					...stored.preferences,
+					layoutMode: { ...stored.preferences.layoutMode, restore: { left: "wide" } },
+				},
+			}),
+		);
+		resetLayoutStateForTests();
+		resetStore();
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		await initializeLocalLayoutState();
+		expect(currentLayoutMode()).toBeNull();
+		expect(useAppStore.getState().workbenchFrame?.left.width).toBe(0.6);
 	});
 
 	test("a pristine surface initializes a Balanced workspace locally without transport", async () => {

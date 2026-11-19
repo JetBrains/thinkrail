@@ -42,7 +42,7 @@ For latest version, see the [Releases page](https://github.com/JetBrains/thinkra
 
   * Group related workspaces, such as a PR stack or the same change across several repositories, into a container: they nest under it in Projects, the topbar switches between them, an orchestrator chat that stays pinned beside whichever member you're in coordinates their agents, and an overview shows every member and the pull request stack.
 
-  * Plan work on a project board: the Board tool in the left rail keeps cards in columns, *Start* launches a card into a new workspace with the card as its first prompt, each card shows what its agent is doing, cards move on as the agent finishes and the PR merges, and a card opens in Peek with its details, attempts and activity.
+  * Plan work on a project board: the Board tool in the left rail keeps cards in columns, *Start* launches a card into a new workspace with the card as its first prompt, each card shows what its agent is doing, cards move on as the agent finishes and the PR merges, and a card opens in Peek with its details, attempts and activity. A "Needs you" strip above the board and a topbar counter gather the cards from every open project whose agent is waiting for an answer or failed, one click from their chat; column headers show work-in-progress limits on what waits for your review, cards the agent files for later wait in Triage to be accepted or dismissed as a whole, and Board mode widens the board to most of the window and puts your layout back when you leave it.
 
   * The topbar shows where the active branch stands against `origin`, and the state of its pull request. From there you can publish, push, or open a new PR described from the plan, the commits, your PR template, or an agent-written draft.
 

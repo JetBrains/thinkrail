@@ -1,14 +1,22 @@
 import { describe, expect, test } from "bun:test";
 import {
+	acceptTriage,
 	adjacentColumn,
 	agentBadge,
+	attentionOverLimit,
 	BoardReplyError,
 	boardLayout,
 	COLUMNS_MIN_WIDTH,
 	canStart,
+	columnWip,
+	inboxTarget,
 	loadBoard,
+	loadInbox,
 	moveOnDrop,
+	overLimit,
+	setWipLimits,
 	sortCards,
+	triageGroups,
 	workflowFor,
 } from "./api";
 import { boardOf, cardOf, fakeHost, liveOf } from "./fixtures.test";
@@ -126,4 +134,112 @@ test("a reply of an unknown shape is a version skew, not a board", async () => {
 	expect(queries).toEqual([{ method: "board.get", params: { projectId: "p1" } }]);
 	const good = fakeHost(() => boardOf([]));
 	expect((await loadBoard(good.host, "p1")).projectName).toBe("ThinkRail");
+});
+
+describe("WIP, Triage and the inbox", () => {
+	const wip = (review: [number, number], needsYou: [number, number] = [0, 3]) =>
+		boardOf([], {
+			wip: {
+				needsYou: { count: needsYou[0], limit: needsYou[1] },
+				review: { count: review[0], limit: review[1] },
+				agents: { count: 0, limit: 3 },
+			},
+		});
+
+	test("a count is over its limit only past it, and a limit of 0 is none", () => {
+		expect(overLimit({ count: 3, limit: 2 })).toBe(true);
+		expect(overLimit({ count: 2, limit: 2 })).toBe(false);
+		expect(overLimit({ count: 9, limit: 0 })).toBe(false);
+	});
+
+	test("Start warns about Review first, then Needs you, and not about agents", () => {
+		expect(attentionOverLimit(wip([6, 5]))).toEqual(["review"]);
+		expect(attentionOverLimit(wip([6, 5], [4, 3]))).toEqual(["review", "needsYou"]);
+		expect(attentionOverLimit(wip([5, 5], [4, 3]))).toEqual(["needsYou"]);
+		expect(attentionOverLimit(wip([5, 5]))).toEqual([]);
+	});
+
+	test("only a column of Review cards carries the Review limit", () => {
+		const view = wip([1, 5]);
+		const limits = view.columns.map((column) => [column.id, columnWip(view, column)]);
+		expect(limits.filter(([, limit]) => limit !== null)).toEqual([
+			["review", { count: 1, limit: 5 }],
+		]);
+		expect(columnWip(view, { id: "doing", categories: ["started", "review"] })).toBeNull();
+	});
+
+	test("groups Triage cards by the chat that filed them, by rank, with the chat's own card", () => {
+		const view = boardOf([
+			cardOf({
+				id: "TR-4",
+				category: "triage",
+				column: "triage",
+				rank: 4,
+				origin: { sessionId: "s1", cardId: "TR-1" },
+			}),
+			cardOf({
+				id: "TR-2",
+				category: "triage",
+				column: "triage",
+				rank: 2,
+				origin: { sessionId: "s1", cardId: "TR-1" },
+			}),
+			cardOf({ id: "TR-3", category: "triage", column: "triage", rank: 3 }),
+			cardOf({
+				id: "TR-5",
+				category: "triage",
+				column: "triage",
+				rank: 5,
+				origin: { sessionId: "s2" },
+			}),
+			cardOf({ id: "TR-1", rank: 1 }),
+		]);
+		expect(
+			triageGroups(view).map(({ key, cardId, cards }) => [
+				key,
+				cardId,
+				cards.map((card) => card.id),
+			]),
+		).toEqual([
+			["s1", "TR-1", ["TR-2", "TR-4"]],
+			["", null, ["TR-3"]],
+			["s2", null, ["TR-5"]],
+		]);
+	});
+
+	test("reads the inbox, refusing an unknown shape, and answers in the latest attempt's chat", async () => {
+		const card = cardOf({
+			category: "started",
+			column: "building",
+			live: [
+				liveOf({
+					workspaceId: "w7",
+					sessionId: "s7",
+					chat: { state: "needs_you", unread: false, title: "" },
+				}),
+			],
+		});
+		const item = { projectId: "p2", projectName: "Payments", reason: "needs_you" as const, card };
+		const { host, queries } = fakeHost(() => ({ items: [item] }));
+		expect(await loadInbox(host)).toEqual([item]);
+		expect(queries).toEqual([{ method: "inbox", params: {} }]);
+		await expect(loadInbox(fakeHost(() => ({ items: [{ card }] })).host)).rejects.toBeInstanceOf(
+			BoardReplyError,
+		);
+		expect(inboxTarget(item)).toEqual({ projectId: "p2", workspaceId: "w7", sessionId: "s7" });
+		expect(inboxTarget({ ...item, card: { ...card, live: [liveOf({ open: false })] } })).toBeNull();
+	});
+
+	test("accepts Triage cards and saves WIP limits through the board's queries", async () => {
+		const { host, queries } = fakeHost();
+		await acceptTriage(host, ["TR-2", "TR-4"]);
+		await setWipLimits(host, "p1", { needsYou: 2, review: 1, agents: 4 });
+		expect(queries).toEqual([
+			{ method: "triage.accept", params: { cardIds: ["TR-2", "TR-4"] } },
+			{
+				method: "settings.update",
+				params: { projectId: "p1", wipLimits: { needsYou: 2, review: 1, agents: 4 } },
+			},
+		]);
+	});
 });

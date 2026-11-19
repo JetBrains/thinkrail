@@ -1,3 +1,4 @@
+import type { LayoutPresetSideRegion } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import type { ComponentType, ReactNode } from "react";
@@ -182,9 +183,45 @@ export interface PanelHost {
 	 * after the call arrive; none below the host's gate or while the extension is switched off.
 	 */
 	onEvent(type: string, listener: PanelEventListener): () => void;
+	/** The id of this extension's `layoutPresets` entry that is the window's layout mode now, else `null`; absent on a host without modes. */
+	readonly layoutPreset?: string | null;
+	/** Enters this extension's layout preset `preset`: the window's frame is kept to restore, then arranged by it. */
+	enterLayoutPreset?(preset: string): void;
+	/** Leaves this extension's layout mode, restoring the frame it replaced; nothing while none is active. */
+	exitLayoutPreset?(): void;
 	readonly scope: PanelHostScope;
 	readonly hostProtocol: number | null;
 	readonly hostApiVersion: number | undefined;
+}
+
+/**
+ * A status item's host: a `PanelHost`'s reads and navigation for its own extension. `scope` is the active
+ * workspace and its project, `null` on Project Home and Welcome, where `peek` shows nothing.
+ */
+export type StatusItemHost = Pick<
+	PanelHost,
+	"query" | "onEvent" | "openChat" | "openWorkspace" | "peek" | "hostProtocol" | "hostApiVersion"
+> & { readonly scope: PanelHostScope | null };
+
+export interface StatusItemProps {
+	host: StatusItemHost;
+}
+
+/** A compact readout in the topbar's action cluster; it renders nothing while it has nothing to say. */
+export interface StatusItemDeclaration {
+	load: () => Promise<{ default: ComponentType<StatusItemProps> }>;
+}
+
+/**
+ * A layout mode: the side arrangement the shell enters and leaves, restoring the frame it replaced. It
+ * places built-in tools and the extension's own side tools; the center and the bottom stay as they are.
+ */
+export interface LayoutPresetDeclaration {
+	/** The mode's name, "Board mode"; the shell's Enter / Exit commands are worded from it. */
+	title: MessageKey;
+	icon: ComponentType<{ className?: string | undefined }>;
+	left: LayoutPresetSideRegion;
+	right: LayoutPresetSideRegion;
 }
 
 export interface PanelProps {
@@ -241,6 +278,8 @@ export interface WebExtension {
 	shortcuts?: readonly ExtensionShortcut[];
 	panels?: Record<string, PanelDeclaration>;
 	sideTools?: Record<string, SideToolDeclaration>;
+	statusItems?: Record<string, StatusItemDeclaration>;
+	layoutPresets?: Record<string, LayoutPresetDeclaration>;
 }
 
 export function defineWebExtension<T extends WebExtension>(extension: T): T {

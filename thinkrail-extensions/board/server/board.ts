@@ -14,6 +14,7 @@ import type {
 	Attempt,
 	BoardSettings,
 	Card,
+	CardOrigin,
 	CardSize,
 	CardType,
 	Category,
@@ -72,6 +73,8 @@ export interface InboxItem {
 
 export interface CardInput {
 	title: string;
+	/** An agent's card: the chat that filed it. */
+	origin?: CardOrigin;
 	description?: string;
 	acceptance?: string[];
 	type?: CardType;
@@ -142,6 +145,12 @@ export function attemptLive(attempt: Attempt, facts: ExtensionWorkspaceFacts | n
 }
 
 const latestChatState = (view: CardView): ChatState | undefined => view.live.at(-1)?.chat?.state;
+
+/** Why a card's latest chat state puts it in the inbox: an interrupted run counts as failed, as its badge does. */
+function inboxReason(state: ChatState | undefined): InboxItem["reason"] | null {
+	if (state === "needs_you") return "needs_you";
+	return state === "failed" || state === "interrupted" ? "failed" : null;
+}
 
 /** Human attention (Needs you, Review) and running agents against the board's limits. */
 export function wipOf(views: readonly CardView[], limits: WipLimits): Wip {
@@ -333,7 +342,7 @@ export class Board {
 		};
 	}
 
-	/** Cards across the open projects whose latest attempt waits for the human or failed. */
+	/** Cards across the open projects whose latest attempt waits for the human, failed or was interrupted. */
 	async inbox(): Promise<{ items: InboxItem[] }> {
 		const items: InboxItem[] = [];
 		for (const project of this.repositories()) {
@@ -345,14 +354,9 @@ export class Board {
 			const facts = await this.facts(cards);
 			for (const card of cards) {
 				const view = this.view(card, facts, file.cards);
-				const state = latestChatState(view);
-				if (state === "needs_you" || state === "failed")
-					items.push({
-						projectId: project.id,
-						projectName: project.name,
-						reason: state,
-						card: view,
-					});
+				const reason = inboxReason(latestChatState(view));
+				if (reason)
+					items.push({ projectId: project.id, projectName: project.name, reason, card: view });
 			}
 		}
 		return { items };
@@ -402,6 +406,7 @@ export class Board {
 			ownerHuman: this.owner,
 			attempts: [],
 			createdBy,
+			...(createdBy === "agent" && input.origin ? { origin: input.origin } : {}),
 			createdAt: at,
 			updatedAt: at,
 		};

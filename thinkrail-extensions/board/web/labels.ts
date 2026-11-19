@@ -1,7 +1,15 @@
 import type { ThinkingLevel } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
-import type { AgentBadge, CardType, Preset, Transition, Workflow } from "./api";
+import type {
+	AgentBadge,
+	CardType,
+	InboxReason,
+	Preset,
+	Transition,
+	WipKey,
+	Workflow,
+} from "./api";
 
 const COLUMN_TITLES: Readonly<Record<string, MessageKey>> = {
 	triage: "board.column.triage",
@@ -61,3 +69,19 @@ export const EFFORT_LABELS = {
 	xhigh: "board.effort.xhigh",
 	max: "board.effort.max",
 } as const satisfies Record<ThinkingLevel, MessageKey>;
+
+export const WIP_LABELS = {
+	needsYou: "board.wip.needsYou",
+	review: "board.wip.review",
+	agents: "board.wip.agents",
+} as const satisfies Record<WipKey, MessageKey>;
+
+export const START_WARNINGS = {
+	review: "board.wip.startWarningReview",
+	needsYou: "board.wip.startWarningNeedsYou",
+} as const satisfies Record<"review" | "needsYou", MessageKey>;
+
+export const INBOX_REASON_LABELS = {
+	needs_you: "board.inbox.reason.needsYou",
+	failed: "board.inbox.reason.failed",
+} as const satisfies Record<InboxReason, MessageKey>;

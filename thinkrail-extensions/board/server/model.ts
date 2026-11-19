@@ -65,10 +65,17 @@ export interface Card {
 	ownerHuman: string;
 	attempts: Attempt[];
 	createdBy: "human" | "agent";
+	/** The chat that filed an agent's card, and the card that chat works on: Triage groups by it. */
+	origin?: CardOrigin;
 	createdAt: number;
 	updatedAt: number;
 	/** An attempt's workspace went away unmerged: the board asks whether to cancel; nothing is canceled. */
 	cancelPending?: { workspaceId: string; at: number };
+}
+
+export interface CardOrigin {
+	sessionId: string;
+	cardId?: string;
 }
 
 export interface Placement {

@@ -14,7 +14,7 @@ The responsive composition root: top-level app chrome, active-project/workspace 
 
 ## Boundary
 
-- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-project/workspace routing; single Settings, analytics-consent, survey-invitation, survey-window, attention-notification permission-preface, and Toaster mounts plus the keyboard-opened Create workspace dialog, the `Mod+K` / double-Shift search palette host, the `Mod+Shift+F` Find in Files host and the `Mod+?` keyboard-shortcuts dialog (and the once-mounted attention-notification observer from [[submodule-web-notifications]]); the enabled web extensions' global overlays (`ExtensionOverlays`, *Global chords*); theme application and global shortcuts; focus recovery (*Focus recovery*) and the Esc that leaves a text field, then climbs to the main area (*Esc leaves a text field*, *Esc climbs to the main area*); the Peek pane (*Peek*); the Orchestrator tool body (*Orchestrator tool*); the command catalog the palette runs ([[submodule-web-commands]], [[submodule-web-search]]); the injected Layout, Keyboard and optional application Update settings sections; and integration of the workbench engine with store, persistence, panels, transport-backed domain state, and error boundaries.
+- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-project/workspace routing; single Settings, analytics-consent, survey-invitation, survey-window, attention-notification permission-preface, and Toaster mounts plus the keyboard-opened Create workspace dialog, the `Mod+K` / double-Shift search palette host, the `Mod+Shift+F` Find in Files host and the `Mod+?` keyboard-shortcuts dialog (and the once-mounted attention-notification observer from [[submodule-web-notifications]]); the enabled web extensions' global overlays (`ExtensionOverlays`, *Global chords*) and topbar status items (`ExtensionStatusItems`, *Extension status items*); the window's layout mode (*Layout modes*); theme application and global shortcuts; focus recovery (*Focus recovery*) and the Esc that leaves a text field, then climbs to the main area (*Esc leaves a text field*, *Esc climbs to the main area*); the Peek pane (*Peek*); the Orchestrator tool body (*Orchestrator tool*); the command catalog the palette runs ([[submodule-web-commands]], [[submodule-web-search]]); the injected Layout, Keyboard and optional application Update settings sections; and integration of the workbench engine with store, persistence, panels, transport-backed domain state, and error boundaries.
 - **Public surface:** `Shell`.
 - **Allowed deps:** child layout modules; `updates`; `settingsKit` (the Layout and Keyboard sections' blocks, and `SETTING_ATTR`, by which `chordActions` and `useAppShortcuts` find the Settings layer); `search` + `commands` (the palette and the command contract it composes for it); `keybindings` (the chord table and resolver `useGlobalHotkeys` matches through and the palette's shortcuts read, and the shortcut catalog the cheatsheet renders); `findInFiles` (the window `FindInFilesHost` composes); `extensions` (the enabled extensions whose overlays and shortcut rows it mounts, every extension's commands it resolves, and the panel list) and `@thinkrail/extension-api/web` (panel types); `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types, wire constants, and the shared `createQuitConfirmation` rule), `@thinkrail/ui/*`, `@thinkrail/locales` (UI strings), `i18n` (`useLocaleSync`, mounted once), `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, `themes`, and `clientPreferences` (`markdownOutlinePreference` persists the store's Markdown outline visibility and side per client, through the same adapter `layoutState` uses).
 - **Forbidden:** server/shared/pi imports; being imported by panels/store/transport; putting arrangement knowledge into a feature panel; or sending current frame/view state through transport.
@@ -79,7 +79,8 @@ for Project Home), the branch status from `useBranchStatus`, and the callback th
 New workspace dialog. No selected project
 leaves the logo alone.
 
-Immediately before host connection status, the topbar conditionally renders the **JetBrains recurring-quota
+Right after Search, the action cluster mounts the extensions' status items (*Extension status items*),
+so they sit before every status readout. Immediately before host connection status, the topbar conditionally renders the **JetBrains recurring-quota
 readout** (protocol v59): a neutral Coins icon + locale-formatted `remaining / total credits`. It exists only
 when the synchronized setting is enabled and the host reports healthy Central; zero has no warning policy.
 Loaded/loading are non-button content with a freshness tooltip. First failure is `Quota unavailable · Retry`;
@@ -223,8 +224,44 @@ the **active** workspace and its project, built by the same `useAppPanelHost` as
 a workspace switch keeps it mounted and hands it a new host. A placed tool whose extension is off or gone
 keeps its place and shows the placeholder — the frame is never reset. Layout settings refuses to save a
 custom preset placing an extension tool to a host below `EXTENSION_EVENT_PROTOCOL_VERSION` (v130), whose
-validator would reject the id. The palette lists no Show command for extension tools yet; the rail entry
-is the way in.
+validator would reject the id. The palette lists `view.show.<tool id>` (*Show Board*) for every offered
+extension tool while a workspace is active, like the built-in tools' `view.show.<tool>`, through the same
+`requestToolView` (`useOpenableSideTools`, the rule the catalog's `offered` reads).
+
+## Extension status items
+
+`ExtensionStatusItems` (mounted once inside `topbar-actions`, after Search and before the quota readout and
+connection status; `topbarChrome.test.ts` pins the place) renders every web extension's `statusItems`
+([[module-extension-api]]) that `mountedStatusItems` admits: the panels' openable rule
+(`openableContributions`: not in `disabledExtensions`, `supportsExtensionQuery`) **and** a read catalog that
+lists the extension — while the catalog loads or failed nothing mounts, since a readout has no placeholder
+to show. Each lazy-loads (one `React.lazy` per declaration) under `Suspense` with no fallback, inside an
+`ErrorBoundary` (`reportId: "extension-status-item"`) whose fallback is nothing, so a crashing readout
+reports and vanishes instead of filling the topbar. Its `StatusItemHost` (`createStatusItemHost`,
+`extensionPanelHost.ts`) shares the panel host's query, event and chat-navigation code and the transport and
+navigator links both are built over (`APP_HOST_LINKS`); `scope` and `peek`
+follow the active workspace (`requestPeek` there), `null` / a no-op without one. The board's Needs-you
+counter is the first ([[module-ext-board]]).
+
+## Layout modes
+
+An extension's `layoutPresets` entry is a **layout mode**: Board mode is the first. The window has at most
+one, kept as the local preference `layoutMode` ([[submodule-web-shell-layout-state]]), never in the frame.
+
+- **Entering** (`extensionLayoutModes.enterExtensionLayoutPreset`, with a workspace active) captures the
+  frame's sides (`captureWorkbenchPreset`), its restore targets and the tool each side pane shows, then
+  arranges the sides by the preset (`applyWorkbenchSides`, [[submodule-web-shell-layout]]). The center and
+  the bottom stay as they are — the chat stays in the center. Entering another mode leaves the current one
+  first; entering the active one does nothing.
+- **Leaving** restores the captured sides by group id, their restore targets and the tools they showed, so
+  the frame is the one entered from; changes made to the sides inside the mode are dropped with it.
+  Applying a preset or Reset from Layout settings leaves the mode without restoring (the applied preset wins).
+- **Entry points**: the palette's `view.layoutMode.enter.<extension>:<preset>` (*Enter Board mode*) for the
+  presets whose extension is openable (`useOpenableLayoutPresets`) while a workspace is active, and
+  `view.layoutMode.exit` (*Exit Board mode*) whenever a mode is active — even one whose extension is off or
+  gone (*Exit layout mode*), so a window is never stuck in it; and `PanelHost.layoutPreset` /
+  `enterLayoutPreset` / `exitLayoutPreset` for a panel's own button, scoped to its extension
+  (`useAppPanelHost` rebuilds the host when the mode changes). A failure is a toast and leaves the frame.
 
 ## Peek
 

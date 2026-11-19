@@ -1,6 +1,8 @@
 import type { ChatState, ThinkingLevel } from "@thinkrail/contracts";
 import type { PanelHost } from "@thinkrail/extension-api/web";
 
+type Querying = Pick<PanelHost, "query">;
+
 export type Category =
 	| "triage"
 	| "backlog"
@@ -20,6 +22,8 @@ export const WORKFLOWS: readonly Workflow[] = ["implement", "brainstorm"];
 export const PRESETS: readonly Preset[] = ["agentic-kanban", "solo"];
 export const BOARD_CHANGED = "board.changed";
 export const CARD_PANEL = "card";
+/** The board's `layoutPresets` entry: Board mode. */
+export const BOARD_MODE = "board";
 
 export interface Attempt {
 	workspaceId: string;
@@ -56,6 +60,8 @@ export interface Card {
 	column: string;
 	attempts: Attempt[];
 	createdBy: "human" | "agent";
+	/** The chat that filed an agent's card, and the card that chat works on. */
+	origin?: { sessionId: string; cardId?: string };
 	createdAt: number;
 	cancelPending?: { workspaceId: string; at: number };
 	live: AttemptLive[];
@@ -75,6 +81,14 @@ export interface BoardSettings {
 	followSelection: boolean;
 }
 
+export type WipKey = keyof BoardSettings["wipLimits"];
+export const WIP_KEYS: readonly WipKey[] = ["needsYou", "review", "agents"];
+
+export interface WipCount {
+	count: number;
+	limit: number;
+}
+
 export interface BoardView {
 	projectId: string;
 	projectName: string;
@@ -82,7 +96,17 @@ export interface BoardView {
 	settings: BoardSettings;
 	columns: Column[];
 	cards: Card[];
-	wip: Record<"needsYou" | "review" | "agents", { count: number; limit: number }>;
+	wip: Record<WipKey, WipCount>;
+}
+
+export type InboxReason = "needs_you" | "failed";
+
+/** A card of any open project whose latest attempt waits for the human or failed. */
+export interface InboxItem {
+	projectId: string;
+	projectName: string;
+	reason: InboxReason;
+	card: Card;
 }
 
 export interface Placement {
@@ -143,6 +167,22 @@ export function isBoardView(value: unknown): value is BoardView {
 	);
 }
 
+function isInboxItem(value: unknown): value is InboxItem {
+	return (
+		isObject(value) &&
+		typeof value.projectId === "string" &&
+		typeof value.projectName === "string" &&
+		(value.reason === "needs_you" || value.reason === "failed") &&
+		isObject(value.card) &&
+		typeof value.card.id === "string" &&
+		Array.isArray(value.card.live)
+	);
+}
+
+function isInbox(value: unknown): value is { items: InboxItem[] } {
+	return isObject(value) && Array.isArray(value.items) && value.items.every(isInboxItem);
+}
+
 function isCardDetail(value: unknown): value is CardDetail {
 	return (
 		isObject(value) &&
@@ -161,7 +201,7 @@ function checked<T>(value: unknown, guard: (value: unknown) => value is T): T {
 }
 
 export async function loadBoard(
-	host: PanelHost,
+	host: Querying,
 	projectId: string,
 	signal?: AbortSignal,
 ): Promise<BoardView> {
@@ -169,11 +209,15 @@ export async function loadBoard(
 }
 
 export async function loadCard(
-	host: PanelHost,
+	host: Querying,
 	cardId: string,
 	signal?: AbortSignal,
 ): Promise<CardDetail> {
 	return checked(await host.query("card.get", { cardId }, signal), isCardDetail);
+}
+
+export async function loadInbox(host: Querying, signal?: AbortSignal): Promise<InboxItem[]> {
+	return checked(await host.query("inbox", {}, signal), isInbox).items;
 }
 
 export async function listModels(host: PanelHost, signal?: AbortSignal): Promise<HostModel[]> {
@@ -212,6 +256,19 @@ export async function startCard(
 
 export async function setPreset(host: PanelHost, projectId: string, preset: Preset): Promise<void> {
 	await host.query("settings.update", { projectId, preset });
+}
+
+export async function setWipLimits(
+	host: PanelHost,
+	projectId: string,
+	wipLimits: BoardSettings["wipLimits"],
+): Promise<void> {
+	await host.query("settings.update", { projectId, wipLimits });
+}
+
+/** Accepts Triage cards of one board into Backlog, as a whole. */
+export async function acceptTriage(host: PanelHost, cardIds: readonly string[]): Promise<void> {
+	await host.query("triage.accept", { cardIds });
 }
 
 /** S cards, bugs and unsized cards implement directly; M and L start by brainstorming (the server's rule). */
@@ -315,4 +372,55 @@ export function sortCards(view: Pick<BoardView, "columns" | "cards">, sort: List
 			? (order.get(a.column) ?? 0) - (order.get(b.column) ?? 0) || a.rank - b.rank
 			: a.rank - b.rank,
 	);
+}
+
+/** Where an inbox row's Answer or Retry goes: its latest attempt's chat, while that workspace is open. */
+export function inboxTarget(
+	item: InboxItem,
+): { projectId: string; workspaceId: string; sessionId: string } | null {
+	const live = item.card.live.at(-1);
+	return live?.open
+		? { projectId: item.projectId, workspaceId: live.workspaceId, sessionId: live.sessionId }
+		: null;
+}
+
+/** A limit of 0 is no limit; a count past a limit is over it. */
+export function overLimit({ count, limit }: WipCount): boolean {
+	return limit > 0 && count > limit;
+}
+
+/** A column holding only Review cards shows the Review limit; others show just their count. */
+export function columnWip(view: Pick<BoardView, "wip">, column: Column): WipCount | null {
+	return column.categories.length > 0 &&
+		column.categories.every((category) => category === "review")
+		? view.wip.review
+		: null;
+}
+
+/** The human-attention limits Start warns about, Review first; empty when there is room. */
+export function attentionOverLimit(view: Pick<BoardView, "wip">): ("review" | "needsYou")[] {
+	return (["review", "needsYou"] as const).filter((key) => overLimit(view.wip[key]));
+}
+
+export interface TriageGroup {
+	/** The filing chat's session id, `""` for cards filed by no known chat. */
+	key: string;
+	/** The card the filing chat works on. */
+	cardId: string | null;
+	cards: Card[];
+}
+
+/** Triage cards grouped by the chat that filed them (a decomposition), groups and cards by rank. */
+export function triageGroups(view: Pick<BoardView, "cards">): TriageGroup[] {
+	const groups = new Map<string, TriageGroup>();
+	const triage = view.cards
+		.filter((card) => card.category === "triage")
+		.sort((a, b) => a.rank - b.rank);
+	for (const card of triage) {
+		const key = card.origin?.sessionId ?? "";
+		const group = groups.get(key) ?? { key, cardId: card.origin?.cardId ?? null, cards: [] };
+		group.cards.push(card);
+		groups.set(key, group);
+	}
+	return [...groups.values()];
 }

@@ -13,6 +13,7 @@ import { RequestError, wsErrorCode } from "../transport";
 import {
 	cachedExtensionCatalog,
 	createPanelHost,
+	createStatusItemHost,
 	openableExtensionPanels,
 	openExtensionPanel,
 	type PanelHostDeps,
@@ -43,6 +44,9 @@ function hostDeps(overrides: Partial<PanelHostDeps> = {}): PanelHostDeps {
 		peek: () => {},
 		subscribe: () => () => {},
 		disabled: () => false,
+		layoutPreset: null,
+		enterLayoutPreset: () => {},
+		exitLayoutPreset: () => {},
 		scope: { workspaceId: "w1", projectId: "p1" },
 		hostProtocol: EXTENSION_QUERY_PROTOCOL_VERSION,
 		hostApiVersion: 3,
@@ -121,6 +125,73 @@ describe("PanelHost workspace, Peek and events", () => {
 		);
 		older.onEvent("board.changed", () => {})();
 		expect(subscribe).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("PanelHost layout presets and the status item host", () => {
+	test("reports and enters or leaves only its own extension's layout preset", () => {
+		const enterLayoutPreset = mock((_preset: string) => {});
+		const exitLayoutPreset = mock(() => {});
+		const host = createPanelHost(
+			hostDeps({ layoutPreset: "board", enterLayoutPreset, exitLayoutPreset }),
+		);
+		expect(host.layoutPreset).toBe("board");
+		host.enterLayoutPreset?.("board");
+		host.exitLayoutPreset?.();
+		expect(enterLayoutPreset.mock.calls).toEqual([["board"]]);
+		expect(exitLayoutPreset).toHaveBeenCalledTimes(1);
+	});
+
+	test("a status item's host queries and listens like a panel's and peeks only into an active workspace", async () => {
+		const request = mock(async (_params: ExtensionQueryParams) => ({ items: [] }));
+		const navigate = mock((_workspace: unknown, _sessionId: string) => {});
+		let push: (value: unknown) => void = () => {};
+		const base = {
+			extension: "board",
+			request,
+			navigate,
+			locate: () => {},
+			openWorkspace: () => {},
+			subscribe: (listener: (value: unknown) => void) => {
+				push = listener;
+				return () => {};
+			},
+			disabled: () => false,
+			hostProtocol: EXTENSION_EVENT_PROTOCOL_VERSION,
+			hostApiVersion: 1,
+		};
+		const home = createStatusItemHost({ ...base, peek: null, scope: null });
+		expect(await home.query("inbox", {})).toEqual({ items: [] });
+		expect(request.mock.calls).toEqual([[{ extension: "board", method: "inbox", params: {} }]]);
+		const seen: unknown[] = [];
+		home.onEvent("board.changed", (payload) => seen.push(payload));
+		push({ extension: "board", type: "board.changed", payload: { projectId: "p2" } });
+		push({ extension: "insights", type: "board.changed", payload: {} });
+		expect(seen).toEqual([{ projectId: "p2" }]);
+		home.openChat({ projectId: "p2", workspaceId: "w2", sessionId: "s2" });
+		expect(navigate.mock.calls).toEqual([[{ id: "w2", projectId: "p2" }, "s2"]]);
+		expect(home.scope).toBeNull();
+		home.peek({ kind: "extension", panel: "card", params: { cardId: "TR-1" } });
+
+		const peek = mock((_entry: unknown) => {});
+		const active = createStatusItemHost({
+			...base,
+			peek,
+			scope: { workspaceId: "w1", projectId: "p1" },
+		});
+		active.peek({ kind: "extension", panel: "card", params: { cardId: "TR-1" } });
+		active.peek({ kind: "extension", panel: "not-declared" });
+		expect(peek.mock.calls).toEqual([
+			[
+				{
+					kind: "extension",
+					extension: "board",
+					panel: "card",
+					params: { cardId: "TR-1" },
+					titleKey: "board.card.panelTitle",
+				},
+			],
+		]);
 	});
 });
 

@@ -44,11 +44,16 @@ import {
 	RiZoomInLine,
 	RiZoomOutLine,
 } from "@remixicon/react";
-import type { EditorInfo, NativePageZoomBridge, Workspace } from "@thinkrail/contracts";
+import type {
+	EditorInfo,
+	ExtensionLayoutToolId,
+	NativePageZoomBridge,
+	Workspace,
+} from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import type { Command, CommandShortcut } from "../commands";
-import type { RegisteredPanel } from "../extensions";
+import type { RegisteredLayoutPreset, RegisteredPanel } from "../extensions";
 import {
 	DESKTOP_KEYS,
 	FOCUS_GROUP_BINDINGS,
@@ -109,7 +114,19 @@ export interface PaletteCatalogDeps {
 	readonly settingEntries: readonly SettingEntry[];
 	readonly tabActions: readonly TabAction[];
 	readonly extensionPanels: readonly RegisteredPanel[];
+	/** The extensions' side tools a Show command may reveal: offered ones (their extension on and listed). */
+	readonly extensionTools: readonly PaletteExtensionTool[];
+	/** The extensions' layout presets an Enter command may apply. */
+	readonly layoutModes: readonly RegisteredLayoutPreset[];
+	/** The window's layout mode: its id and, when this build declares it, its preset. */
+	readonly activeLayoutMode: { id: string; preset: RegisteredLayoutPreset | undefined } | null;
 	readonly actions: PaletteCatalogActions;
+}
+
+export interface PaletteExtensionTool {
+	readonly id: ExtensionLayoutToolId;
+	readonly title: MessageKey;
+	readonly icon: Command["icon"];
 }
 
 export interface PaletteCatalogActions {
@@ -124,7 +141,9 @@ export interface PaletteCatalogActions {
 	readonly toggleLeft: () => void;
 	readonly toggleRight: () => void;
 	readonly toggleBottom: () => void;
-	readonly showTool: (workspaceId: string, tool: PaletteTool) => void;
+	readonly showTool: (workspaceId: string, tool: PaletteTool | ExtensionLayoutToolId) => void;
+	readonly enterLayoutMode: (preset: RegisteredLayoutPreset) => void;
+	readonly exitLayoutMode: () => void;
 	readonly openExtensionPanel: (workspaceId: string, panel: RegisteredPanel) => void;
 	readonly openExtensionPanelInProject: (projectId: string, panel: RegisteredPanel) => void;
 	readonly showFiles: (mode: "all" | "changed") => void;
@@ -350,6 +369,37 @@ function pageZoomCommands({ t, pageZoom }: PaletteCatalogDeps): Command[] {
 	];
 }
 
+function layoutModeCommands(deps: PaletteCatalogDeps): Command[] {
+	const { t, actions, activeLayoutMode } = deps;
+	const commands: Command[] = [];
+	if (activeLayoutMode) {
+		const { preset } = activeLayoutMode;
+		commands.push({
+			id: "view.layoutMode.exit",
+			title: t("commands.view.exitLayoutMode", {
+				mode: preset ? t(preset.declaration.title) : t("commands.view.layoutModeFallback"),
+			}),
+			group: "view",
+			icon: preset?.declaration.icon ?? RiLayoutGridLine,
+			keywords: ["layout", "mode", "restore", "leave"],
+			run: actions.exitLayoutMode,
+		});
+	}
+	if (!deps.activeWorkspace) return commands;
+	for (const preset of deps.layoutModes) {
+		if (preset.id === activeLayoutMode?.id) continue;
+		commands.push({
+			id: `view.layoutMode.enter.${preset.id}`,
+			title: t("commands.view.enterLayoutMode", { mode: t(preset.declaration.title) }),
+			group: "view",
+			icon: preset.declaration.icon,
+			keywords: ["layout", "mode", "preset", preset.extension],
+			run: () => actions.enterLayoutMode(preset),
+		});
+	}
+	return commands;
+}
+
 function viewCommands(deps: PaletteCatalogDeps): Command[] {
 	const { t, actions, activeWorkspace } = deps;
 	const commands: Command[] = [];
@@ -389,7 +439,18 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 					: { run: () => actions.showTool(activeWorkspace.id, tool) }),
 			});
 		}
+		for (const tool of deps.extensionTools) {
+			commands.push({
+				id: `view.show.${tool.id}`,
+				title: t("commands.view.showTool", { tool: t(tool.title) }),
+				group: "view",
+				icon: tool.icon,
+				keywords: ["panel", "tool", "extension", t(tool.title)],
+				run: () => actions.showTool(activeWorkspace.id, tool.id),
+			});
+		}
 	}
+	commands.push(...layoutModeCommands(deps));
 	const { contextProjectId } = deps;
 	const openPanel = activeWorkspace
 		? (panel: RegisteredPanel) => actions.openExtensionPanel(activeWorkspace.id, panel)

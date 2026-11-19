@@ -85,6 +85,7 @@ export function readCard(raw: unknown): Card | null {
 	if (!oneOf(CATEGORIES, category)) return null;
 	const source = isRecord(raw.source) ? raw.source : {};
 	const pending = isRecord(raw.cancelPending) ? raw.cancelPending : null;
+	const origin = isRecord(raw.origin) ? raw.origin : null;
 	return {
 		id,
 		source: {
@@ -108,6 +109,14 @@ export function readCard(raw: unknown): Card | null {
 			? raw.attempts.flatMap((attempt) => readAttempt(attempt) ?? [])
 			: [],
 		createdBy: raw.createdBy === "agent" ? "agent" : "human",
+		...(origin && typeof origin.sessionId === "string"
+			? {
+					origin: {
+						sessionId: origin.sessionId,
+						...(typeof origin.cardId === "string" ? { cardId: origin.cardId } : {}),
+					},
+				}
+			: {}),
 		createdAt: finite(raw.createdAt, 0),
 		updatedAt: finite(raw.updatedAt, 0),
 		...(pending && typeof pending.workspaceId === "string"

@@ -13,8 +13,11 @@ import {
 	RiAddLine,
 	RiArrowDownSLine,
 	RiCloseLine,
+	RiCollapseDiagonalLine,
+	RiExpandDiagonalLine,
 	RiKanbanView2,
 	RiListUnordered,
+	RiSettings3Line,
 } from "@remixicon/react";
 import type { PanelHost, PanelProps } from "@thinkrail/extension-api/web";
 import { type Translator, useT } from "@thinkrail/locales/react";
@@ -28,42 +31,59 @@ import {
 } from "@thinkrail/ui/dropdown-menu";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { type LocalKeys, useLocalKeys } from "@thinkrail/ui/local-keys";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, type ReactNode, useEffect, useState } from "react";
 import {
+	acceptTriage,
 	adjacentColumn,
+	attentionOverLimit,
+	BOARD_MODE,
 	type BoardLayout,
+	type BoardSettings,
 	type BoardView,
 	boardLayout,
 	CARD_PANEL,
 	type Card,
 	type Column,
 	cardsIn,
+	columnWip,
 	createCard,
+	deleteCard,
 	type ListSort,
 	loadBoard,
 	moveCard,
 	moveOnDrop,
 	openAttempt,
+	overLimit,
 	PRESETS,
 	type Preset,
 	setPreset,
+	setWipLimits,
 	startCard,
+	WIP_KEYS,
+	type WipCount,
 	workflowFor,
 } from "./api";
 import { CardList } from "./CardList";
 import { CardMeta, FIELD } from "./CardParts";
 import { type CardActions, CardTile } from "./CardTile";
+import { InboxStrip, useInbox } from "./Inbox";
 import { CARD_COMMANDS, CARD_KEYS, CARDS_SCOPE } from "./keys";
-import { columnTitle, PRESET_LABELS } from "./labels";
+import { columnTitle, PRESET_LABELS, START_WARNINGS, WIP_LABELS } from "./labels";
+import { type TriageActions, TriageLane } from "./Triage";
 import { useBoardChanged, useHostQuery } from "./useHostQuery";
 
 export type BoardMode = "board" | "list";
 
-/** The board's columns, Triage and Canceled only while they hold cards. */
+/** The board's columns, Canceled only while it holds cards; Triage is its own lane (`TriageLane`). */
 export function shownColumns(view: Pick<BoardView, "columns" | "cards">): Column[] {
-	return view.columns.filter((column) => !column.hidden || cardsIn(view, column.id).length > 0);
+	return view.columns.filter(
+		(column) =>
+			!column.categories.includes("triage") &&
+			(!column.hidden || cardsIn(view, column.id).length > 0),
+	);
 }
 
 function useMeasuredRoot(): {
@@ -91,14 +111,30 @@ function peekCard(host: PanelHost, projectId: string, card: Pick<Card, "id" | "t
 	});
 }
 
+function WipFigure({ wip, testId }: { wip: WipCount; testId: string }) {
+	const over = overLimit(wip);
+	return (
+		<span
+			data-testid={testId}
+			data-over={over || undefined}
+			className={cn("tabular-nums", over ? "text-feedback-error" : "text-text-subtle")}
+		>
+			{wip.limit > 0 ? `${wip.count}/${wip.limit}` : wip.count}
+		</span>
+	);
+}
+
 function ColumnDrop({
 	column,
 	count,
+	wip,
 	layout,
 	children,
 }: {
 	column: Column;
 	count: number;
+	/** A Review column's count against the Review limit. */
+	wip: WipCount | null;
 	layout: BoardLayout;
 	children: ReactNode;
 }) {
@@ -118,7 +154,15 @@ function ColumnDrop({
 		>
 			<h3 className="flex items-center gap-4 px-4 tr-text-eyebrow text-text-muted">
 				<span className="truncate">{columnTitle(t, column.id)}</span>
-				<span className="tabular-nums text-text-subtle">{count}</span>
+				<span data-testid="board-column-count" className="tabular-nums text-text-subtle">
+					{count}
+				</span>
+				{wip ? (
+					<span className="ml-auto flex items-center gap-4 normal-case">
+						{t("board.wip.short")}
+						<WipFigure wip={wip} testId="board-column-wip" />
+					</span>
+				) : null}
 			</h3>
 			{children}
 		</section>
@@ -129,13 +173,17 @@ export function BoardColumns({
 	view,
 	layout,
 	actions,
+	triage,
 	starting,
+	startWarning,
 	onDragEnd,
 }: {
 	view: BoardView;
 	layout: BoardLayout;
 	actions: CardActions;
+	triage: TriageActions;
 	starting: string | null;
+	startWarning: { cardId: string; text: string } | null;
 	onDragEnd: (event: DragEndEvent) => void;
 }) {
 	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -159,10 +207,17 @@ export function BoardColumns({
 					layout === "columns" ? "flex gap-8" : "flex flex-col gap-8",
 				)}
 			>
+				<TriageLane view={view} layout={layout} actions={triage} />
 				{shownColumns(view).map((column) => {
 					const cards = cardsIn(view, column.id);
 					return (
-						<ColumnDrop key={column.id} column={column} count={cards.length} layout={layout}>
+						<ColumnDrop
+							key={column.id}
+							column={column}
+							count={cards.length}
+							wip={columnWip(view, column)}
+							layout={layout}
+						>
 							<ul className={cn("flex flex-col gap-4", layout === "columns" && "min-h-32")}>
 								{cards.map((card) => (
 									<CardTile
@@ -170,6 +225,7 @@ export function BoardColumns({
 										card={card}
 										actions={actions}
 										starting={starting === card.id}
+										startWarning={startWarning?.cardId === card.id ? startWarning.text : null}
 										compact={layout === "stacked"}
 									/>
 								))}
@@ -280,17 +336,146 @@ function PresetMenu({ preset, onPreset }: { preset: Preset; onPreset: (preset: P
 	);
 }
 
+function WipChips({ view }: { view: BoardView }) {
+	const t = useT();
+	return (
+		<span className="flex flex-wrap items-center gap-8 tr-text-metadata text-text-muted">
+			{WIP_KEYS.map((key) => (
+				<span key={key} className="flex items-center gap-4">
+					{t(WIP_LABELS[key])}
+					<WipFigure wip={view.wip[key]} testId={`board-wip-${key}`} />
+				</span>
+			))}
+		</span>
+	);
+}
+
+function WipSettings({
+	settings,
+	onSave,
+}: {
+	settings: BoardSettings;
+	onSave: (limits: BoardSettings["wipLimits"]) => void;
+}) {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const [draft, setDraft] = useState(settings.wipLimits);
+	return (
+		<Popover
+			open={open}
+			onOpenChange={(next) => {
+				setOpen(next);
+				if (next) setDraft(settings.wipLimits);
+			}}
+		>
+			<PopoverTrigger asChild>
+				<IconButton
+					icon={RiSettings3Line}
+					size="s"
+					label={t("board.settings.open")}
+					data-testid="board-settings"
+				/>
+			</PopoverTrigger>
+			<PopoverContent align="end" className="w-280 p-12">
+				<form
+					data-testid="board-wip-form"
+					className="flex flex-col gap-8"
+					onSubmit={(event) => {
+						event.preventDefault();
+						onSave(draft);
+						setOpen(false);
+					}}
+				>
+					<span className="tr-text-emphasis text-text-default">{t("board.settings.wip")}</span>
+					{WIP_KEYS.map((key) => (
+						<label key={key} className="flex items-center justify-between gap-8">
+							<span className="tr-text-ui text-text-default">{t(WIP_LABELS[key])}</span>
+							<input
+								type="number"
+								min={0}
+								max={99}
+								step={1}
+								data-testid={`board-wip-limit-${key}`}
+								value={draft[key]}
+								onChange={(event) => {
+									const value = Number.parseInt(event.currentTarget.value, 10);
+									setDraft((current) => ({
+										...current,
+										[key]: Number.isFinite(value) ? Math.min(99, Math.max(0, value)) : 0,
+									}));
+								}}
+								className={cn(FIELD, "w-64 tabular-nums")}
+							/>
+						</label>
+					))}
+					<span className="tr-text-metadata text-text-subtle">{t("board.settings.wipHint")}</span>
+					<Button type="submit" size="s" data-testid="board-wip-save" className="self-end">
+						{t("board.settings.save")}
+					</Button>
+				</form>
+			</PopoverContent>
+		</Popover>
+	);
+}
+
+function ModeToggle({
+	active,
+	compact,
+	onToggle,
+}: {
+	active: boolean;
+	compact: boolean;
+	onToggle: () => void;
+}) {
+	const t = useT();
+	const label = active ? t("board.mode.exit") : t("board.mode.enter");
+	if (compact)
+		return (
+			<IconButton
+				icon={active ? RiCollapseDiagonalLine : RiExpandDiagonalLine}
+				size="s"
+				label={label}
+				data-testid="board-mode-toggle"
+				data-active={active || undefined}
+				selected={active}
+				onClick={onToggle}
+			/>
+		);
+	return (
+		<Button
+			variant={active ? "soft-primary" : "ghost"}
+			size="s"
+			iconLeft={active ? RiCollapseDiagonalLine : RiExpandDiagonalLine}
+			data-testid="board-mode-toggle"
+			data-active={active || undefined}
+			onClick={onToggle}
+		>
+			{label}
+		</Button>
+	);
+}
+
 function BoardHeader({
 	view,
+	compact,
 	mode,
+	boardMode,
 	onMode,
 	onPreset,
+	onWipLimits,
+	onBoardMode,
 	onNew,
 }: {
 	view: BoardView | null;
+	/** A narrow pane: the WIP figures stay in the column headers and the toggle is an icon. */
+	compact: boolean;
 	mode: BoardMode;
+	boardMode: boolean;
 	onMode: (mode: BoardMode) => void;
 	onPreset: (preset: Preset) => void;
+	onWipLimits: (limits: BoardSettings["wipLimits"]) => void;
+	/** Absent on a host without layout modes. */
+	onBoardMode: (() => void) | null;
 	onNew: () => void;
 }) {
 	const t = useT();
@@ -307,7 +492,12 @@ function BoardHeader({
 				{view?.projectName ?? ""}
 			</span>
 			{view ? <PresetMenu preset={view.settings.preset} onPreset={onPreset} /> : null}
+			{view && !compact ? <WipChips view={view} /> : null}
 			<span className="ml-auto flex items-center gap-2">
+				{onBoardMode ? (
+					<ModeToggle active={boardMode} compact={compact} onToggle={onBoardMode} />
+				) : null}
+				{view ? <WipSettings settings={view.settings} onSave={onWipLimits} /> : null}
 				<IconButton
 					icon={RiKanbanView2}
 					size="s"
@@ -361,7 +551,9 @@ export function BoardBody({
 	layout,
 	sort,
 	actions,
+	triage,
 	starting,
+	startWarning,
 	onSort,
 	onDragEnd,
 	onNew,
@@ -371,7 +563,9 @@ export function BoardBody({
 	layout: BoardLayout;
 	sort: ListSort;
 	actions: CardActions;
+	triage: TriageActions;
 	starting: string | null;
+	startWarning: { cardId: string; text: string } | null;
 	onSort: (sort: ListSort) => void;
 	onDragEnd: (event: DragEndEvent) => void;
 	onNew: () => void;
@@ -398,10 +592,21 @@ export function BoardBody({
 			view={view}
 			layout={layout}
 			actions={actions}
+			triage={triage}
 			starting={starting}
+			startWarning={startWarning}
 			onDragEnd={onDragEnd}
 		/>
 	);
+}
+
+/** Enters or leaves Board mode, on a host that has layout modes. */
+function boardModeToggle(host: PanelHost): (() => void) | null {
+	if (!host.enterLayoutPreset || !host.exitLayoutPreset) return null;
+	return () =>
+		host.layoutPreset === BOARD_MODE
+			? host.exitLayoutPreset?.()
+			: host.enterLayoutPreset?.(BOARD_MODE);
 }
 
 /** The Board side tool: the active workspace's project's board, adaptive to its pane's width. */
@@ -412,7 +617,9 @@ export default function BoardTool({ host }: PanelProps) {
 		loadBoard(host, projectId, signal),
 	);
 	useBoardChanged(host, projectId, board.reload);
+	const inbox = useInbox(host);
 	const [mode, setMode] = useState<BoardMode>("board");
+	const [confirmStart, setConfirmStart] = useState<string | null>(null);
 	const [sort, setSort] = useState<ListSort>("column");
 	const { node: root, width, attach } = useMeasuredRoot();
 	const [starting, setStarting] = useState<string | null>(null);
@@ -445,12 +652,18 @@ export default function BoardTool({ host }: PanelProps) {
 					sessionId: attempt.sessionId,
 				});
 		},
-		start: (card) => {
+		start: (card, anyway = false) => {
+			if (!anyway && view && attentionOverLimit(view).length > 0) {
+				setConfirmStart(card.id);
+				return;
+			}
+			setConfirmStart(null);
 			setStarting(card.id);
 			void write(() => startCard(host, card.id, { workflow: workflowFor(card) })).finally(() =>
 				setStarting(null),
 			);
 		},
+		cancelStart: () => setConfirmStart(null),
 		keyDown: (card, event) => {
 			const delta = moveCommand(keys, event);
 			if (delta === null || !view) return;
@@ -461,6 +674,25 @@ export default function BoardTool({ host }: PanelProps) {
 			void write(() => moveCard(host, card.id, column));
 		},
 	};
+	const triage: TriageActions = {
+		accept: (cardIds) => void write(() => acceptTriage(host, cardIds)),
+		dismiss: (cardIds) =>
+			void write(async () => {
+				for (const id of cardIds) await deleteCard(host, id);
+			}),
+		open: actions.open,
+	};
+	const [overKey] = view && confirmStart ? attentionOverLimit(view) : [];
+	const startWarning =
+		view && confirmStart && overKey
+			? {
+					cardId: confirmStart,
+					text: t(START_WARNINGS[overKey], {
+						n: view.wip[overKey].count,
+						limit: view.wip[overKey].limit,
+					}),
+				}
+			: null;
 	const onDragEnd = ({ active, over }: DragEndEvent) => {
 		if (!view) return;
 		const moving = moveOnDrop(host, view, String(active.id), over ? String(over.id) : null);
@@ -488,11 +720,16 @@ export default function BoardTool({ host }: PanelProps) {
 		>
 			<BoardHeader
 				view={view}
+				compact={layout === "stacked"}
 				mode={mode}
+				boardMode={host.layoutPreset === BOARD_MODE}
 				onMode={setMode}
 				onPreset={(preset) => void write(() => setPreset(host, projectId, preset))}
+				onWipLimits={(limits) => void write(() => setWipLimits(host, projectId, limits))}
+				onBoardMode={boardModeToggle(host)}
 				onNew={() => setCreating(true)}
 			/>
+			<InboxStrip host={host} items={inbox} compact={layout === "stacked"} />
 			{creating ? <NewCardForm onCreate={create} onCancel={() => setCreating(false)} /> : null}
 			{notice ? (
 				<div
@@ -536,7 +773,9 @@ export default function BoardTool({ host }: PanelProps) {
 					layout={layout}
 					sort={sort}
 					actions={actions}
+					triage={triage}
 					starting={starting}
+					startWarning={startWarning}
 					onSort={setSort}
 					onDragEnd={onDragEnd}
 					onNew={() => setCreating(true)}

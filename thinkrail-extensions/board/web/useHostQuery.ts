@@ -61,7 +61,7 @@ export function useHostQuery<T>(
 
 /** Calls `onChange` on every `board.changed` the server half publishes for `projectId`. */
 export function useBoardChanged(
-	host: PanelHost,
+	host: Pick<PanelHost, "onEvent">,
 	projectId: string | null,
 	onChange: () => void,
 ): void {
@@ -73,4 +73,10 @@ export function useBoardChanged(
 			if ((event as { projectId?: unknown }).projectId === projectId) changed();
 		});
 	}, [host, projectId]);
+}
+
+/** Calls `onChange` on every `board.changed` of any project: a write, or a bound chat's state or PR. */
+export function useAnyBoardChanged(host: Pick<PanelHost, "onEvent">, onChange: () => void): void {
+	const changed = useEffectEvent(onChange);
+	useEffect(() => host.onEvent(BOARD_CHANGED, () => changed()), [host]);
 }

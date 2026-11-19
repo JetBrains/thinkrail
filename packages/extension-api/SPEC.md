@@ -22,7 +22,9 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   `ExtensionChord`, `ExtensionShortcut`, `ExtensionShortcutKey`, `defineWebExtension`, the panel contract
   (`PanelDeclaration`, `PanelChatAction`, `PanelRail`, `PanelProps`, `PanelHost`, `PanelChatTarget`,
   `PanelChatAnchor`, `PanelToolCall`, `PanelHostScope`, `PanelScope`, `PanelWorkspaceTarget`, `PanelPeekEntry`,
-  `PanelEventListener`), the side-tool contract (`SideToolDeclaration`), and the pure argument/result readers
+  `PanelEventListener`), the side-tool contract (`SideToolDeclaration`), the status-item contract
+  (`StatusItemDeclaration`, `StatusItemProps`, `StatusItemHost`), the layout-preset contract
+  (`LayoutPresetDeclaration`), and the pure argument/result readers
   from `toolHelpers` and `toolResultContent`.
 - **Images are references.** `parseToolResultContent(result).images` returns `contracts`' `WireImage`s,
   in block order.
@@ -93,7 +95,7 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   through and may change with the chat (a renderer must tolerate their absence). Its DOM-typed members
   are the reason the package's `lib` includes `DOM`; the package still never touches the DOM.
 - `WebExtension` is `{ name, title?, description?, toolRenderers?, globalOverlay?, commands?, shortcuts?,
-  panels?, sideTools? }`.
+  panels?, sideTools?, statusItems?, layoutPresets? }`.
   Each tool-name entry carries a `renderer` and optional `ToolRegistrationOptions` under `options`;
   `toolRenderers` is optional because a web-only extension renders no tool. `title` / `description` are
   `MessageKey`s for the Settings row of an extension the server catalog lacks; `title` also names a
@@ -174,7 +176,11 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   `compare` pair. `onEvent(type, listener)` (`PanelEventListener`) hears the extension's own
   `extension.event`s of `type` published after the call — never the channel's replayed last push —, nothing
   below the event gate or while the extension is off, and returns the unsubscribe; it is how a panel
-  re-reads what its server half's `host.publish` says changed.
+  re-reads what its server half's `host.publish` says changed. `layoutPreset` names the extension's own
+  `layoutPresets` entry that is the window's layout mode now (else `null`; the host object is rebuilt when
+  it changes), `enterLayoutPreset(preset)` enters one of the extension's own presets and
+  `exitLayoutPreset()` leaves the mode while it is the extension's — a panel's Enter / Exit button. The
+  three are optional, like `openArtifacts`, so a panel offers the button only on a host with modes.
 - **Side tools are singleton tools of the workbench's rails**, like Files or Review: a
   `sideTools` entry (`SideToolDeclaration { title, icon, defaultSide: "left" | "right", load }`) becomes the
   layout tool `ext:<extension>:<id>` ([[module-contracts]]' bounded `ExtensionLayoutToolId`). It waits as a
@@ -184,6 +190,22 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   survives workspace switches, so the scope (and the host object) changes under it. A switched-off, missing
   or too-old extension's placed tool shows the panels' placeholders in its pane; the layout is never reset
   ([[submodule-web-shell]] § Extension side tools).
+- **Status items are topbar readouts**: a `statusItems` entry (`StatusItemDeclaration { load }`) is a lazy
+  `ComponentType<StatusItemProps>` the shell mounts in the topbar's action cluster, before the host's own
+  status readouts, while the extension is on, served and listed by the host (the panels' rule) — never a
+  placeholder. It renders nothing while it has nothing to say. Its `StatusItemHost` is a `PanelHost`'s
+  `query`, `onEvent`, `openChat`, `openWorkspace`, `peek`, `hostProtocol` and `hostApiVersion` for its own
+  extension, with `scope` the active workspace and its project or `null` (Project Home, Welcome), where
+  `peek` shows nothing; there is no tab, file or tool-call rendering, since the topbar holds no
+  workspace view. The precedent is `globalOverlay`'s mount; a component was preferred to a declarative
+  count so an extension decides its own popover.
+- **Layout presets are modes**: a `layoutPresets` entry (`LayoutPresetDeclaration { title, icon, left,
+  right }`) is a side arrangement — contracts' resource-free `LayoutPresetSideRegion`s placing built-in
+  tools and the extension's own side tools — the window enters and leaves. Entering keeps the replaced
+  frame to restore in this window's local preferences; the center and the bottom are never part of a
+  mode, so their resources stay put and leaving restores the frame exactly ([[submodule-web-shell]]
+  § Layout modes). A full `LayoutPreset` was rejected for this: applying one reflows the center's tabs,
+  which a round trip cannot undo. The shell words the palette's Enter / Exit commands from `title`.
 - `./server` exposes `ServerExtension` and `defineServerExtension`, with pi `ExtensionFactory` types
   only. Descriptors carry `name` (the identity — the Settings on/off switch and `disabledExtensions` key
   on it), optional display copy `title` / `description` for the Settings catalog, `extensions`, optional

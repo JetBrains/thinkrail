@@ -52,13 +52,22 @@ declaration order as `RegisteredSideTool { extension, tool, id, declaration }`, 
 both ignore the switch, and an extension with side tools is never web-only. The shell turns them into the
 layout's tool catalog and the tools' bodies ([[submodule-web-shell]] § Extension side tools).
 
+**Status items** and **layout presets** read the same way: `extensionStatusItems()` lists every
+extension's `statusItems` as `RegisteredStatusItem { extension, item, declaration }`, which the topbar
+mounts ([[submodule-web-shell]] § Extension status items); `extensionLayoutPresets()` lists every
+`layoutPresets` entry as `RegisteredLayoutPreset { extension, preset, id, declaration }`, `id` being the
+mode's `<extension>:<preset>` in the window's preferences, and `findExtensionLayoutPreset(id)` looks one up
+([[submodule-web-shell]] § Layout modes). They ignore the switch too, and an extension with either is never
+web-only.
+
 ## Boundary
 
 `index.ts` exports `webExtensions`, `registerWebExtensions`, `enabledWebExtensions`,
 `webExtensionCommands` (with its `WebExtensionCommands` type), `webOnlyExtensions`, `webExtensionTitle`,
 `extensionPanels`,
-`findExtensionPanel`, the `RegisteredPanel` type, `extensionSideTools`, `findExtensionSideTool` and the
-`RegisteredSideTool` type only. Imports reach public extension `./web` entries,
+`findExtensionPanel`, the `RegisteredPanel` type, `extensionSideTools`, `findExtensionSideTool`, the
+`RegisteredSideTool` type, `extensionStatusItems`, the `RegisteredStatusItem` type, `extensionLayoutPresets`,
+`findExtensionLayoutPreset` and the `RegisteredLayoutPreset` type only. Imports reach public extension `./web` entries,
 the web SDK contract, and chat's registration function; never `ChatView`, stores, transport, extension
 internals or server halves. The registry Map remains owned by chat, so this module creates no parallel
 state owner or runtime extension loader. `registerWebExtensions()` runs once at app bootstrap

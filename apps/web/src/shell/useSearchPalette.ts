@@ -1,6 +1,7 @@
 import { t as globalT, useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { findExtensionLayoutPreset } from "../extensions";
 import { openFindInFiles } from "../findInFiles";
 import { chatDisplayName, copyText } from "../lib";
 import { canStartProjectlessChat, startProjectlessChat } from "../panels/chatActions";
@@ -71,6 +72,13 @@ import {
 	toggleLeftSide,
 	toggleRightSide,
 } from "./chordActions";
+import { useOpenableSideTools } from "./extensionEntryPoints";
+import {
+	enterExtensionLayoutPreset,
+	exitLayoutMode,
+	useLayoutModeId,
+	useOpenableLayoutPresets,
+} from "./extensionLayoutModes";
 import {
 	openExtensionPanel,
 	openExtensionPanelInProject,
@@ -190,6 +198,18 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	const [pageZoom] = useState(readNativePageZoomBridge);
 	const [tabActions] = useState(activeTabActions);
 	const openablePanels = useOpenableExtensionPanels();
+	const openableTools = useOpenableSideTools();
+	const extensionTools = useMemo(
+		() =>
+			openableTools.map(({ id, declaration }) => ({
+				id,
+				title: declaration.title,
+				icon: declaration.icon,
+			})),
+		[openableTools],
+	);
+	const layoutModes = useOpenableLayoutPresets();
+	const layoutModeId = useLayoutModeId();
 
 	const online = useAppStore(selectHostReachable);
 	const hostSearch = useAppStore(selectHostSearchAvailable);
@@ -291,6 +311,11 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			settingEntries,
 			tabActions,
 			extensionPanels: openablePanels,
+			extensionTools,
+			layoutModes,
+			activeLayoutMode: layoutModeId
+				? { id: layoutModeId, preset: findExtensionLayoutPreset(layoutModeId) }
+				: null,
 			actions: {
 				newWorkspace: options.openNewWorkspace,
 				newProjectlessChat: () => void startProjectlessChat(),
@@ -305,6 +330,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				toggleRight: toggleRightSide,
 				toggleBottom: toggleBottomPanel,
 				showTool: (workspaceId, tool) => store().requestToolView(workspaceId, tool),
+				enterLayoutMode: enterExtensionLayoutPreset,
+				exitLayoutMode,
 				openExtensionPanel,
 				openExtensionPanelInProject: (projectId, panel) =>
 					void openExtensionPanelInProject(projectId, panel),
@@ -382,6 +409,9 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		pageZoom,
 		tabActions,
 		openablePanels,
+		extensionTools,
+		layoutModes,
+		layoutModeId,
 		options,
 		contextProject,
 		contextRepoProject,

@@ -136,6 +136,8 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 				const project = current.projectOfCwd(ctx.cwd);
 				const title = params.title.trim();
 				if (!title) throw new Error("Pass a non-empty title.");
+				const sessionId = ctx.sessionManager.getSessionId();
+				const own = current.cardOfSession(sessionId, ctx.cwd)?.card;
 				const card = current.createCard(
 					project.id,
 					{
@@ -146,6 +148,7 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 							: {}),
 						...(params.type ? { type: params.type } : {}),
 						...(params.size ? { size: params.size } : {}),
+						origin: { sessionId, ...(own ? { cardId: own.id } : {}) },
 					},
 					"agent",
 				);

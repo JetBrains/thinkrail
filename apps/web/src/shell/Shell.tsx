@@ -69,6 +69,7 @@ import {
 	toggleRightSide,
 } from "./chordActions";
 import { ExtensionOverlays } from "./ExtensionOverlays";
+import { ExtensionStatusItems } from "./ExtensionStatusItems";
 import { installEscapeLeavesField } from "./escapeLeavesField";
 import { FindInFilesHost } from "./FindInFilesHost";
 import { installFocusRecovery } from "./focusRecovery";
@@ -300,6 +301,7 @@ function ShellLayout() {
 						data-testid="open-search"
 						onClick={() => useAppStore.getState().openSearch()}
 					/>
+					<ExtensionStatusItems />
 					<JbcentralQuotaTopbar />
 					<span
 						data-testid="connection-status"

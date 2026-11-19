@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { isLayoutToolId } from "@thinkrail/contracts";
 import askUserQuestion from "@thinkrail/ext-ask-user-question/web";
 import board from "@thinkrail/ext-board/web";
 import hintMode from "@thinkrail/ext-hint-mode/web";
@@ -22,8 +23,11 @@ import { matchKeybinding, matchLocal, resolveKeybindings, SHORTCUT_CATALOG } fro
 import { isMessageKey } from "../lib";
 import {
 	enabledWebExtensions,
+	extensionLayoutPresets,
 	extensionPanels,
 	extensionSideTools,
+	extensionStatusItems,
+	findExtensionLayoutPreset,
 	findExtensionPanel,
 	findExtensionSideTool,
 	registerWebExtensions,
@@ -393,4 +397,30 @@ test("the board declares its Board side tool at the left, a Peek card panel kept
 	expect(webOnlyExtensions(new Set())).not.toContainEqual(
 		expect.objectContaining({ name: "board" }),
 	);
+});
+
+test("the board declares its Needs-you status item and Board mode, a wide left Board pane over a folded Projects", async () => {
+	expect(extensionStatusItems().map(({ extension, item }) => [extension, item])).toEqual([
+		["board", "inbox"],
+	]);
+	const [item] = extensionStatusItems();
+	expect(typeof (await item?.declaration.load())?.default).toBe("function");
+	expect(extensionLayoutPresets().map(({ id }) => id)).toEqual(["board:board"]);
+	const mode = findExtensionLayoutPreset("board:board")?.declaration;
+	expect(isMessageKey(mode?.title ?? "")).toBe(true);
+	expect(mode?.left.groups.map(({ tools, folded }) => [tools, folded])).toEqual([
+		[["projects"], true],
+		[["ext:board:board"], false],
+	]);
+	expect(mode?.left.width).toBeGreaterThanOrEqual(0.55);
+	expect(mode?.right.groups).toEqual([]);
+	expect(
+		[...(mode?.left.groups ?? []), ...(mode?.right.groups ?? [])]
+			.flatMap(({ tools }) => tools)
+			.every(isLayoutToolId),
+	).toBe(true);
+	expect(findExtensionLayoutPreset("board:missing")).toBeUndefined();
+	if (!mode) throw new Error("Board mode is not declared");
+	const fake: WebExtension = { name: "fake", layoutPresets: { wide: mode } };
+	expect(extensionLayoutPresets([fake]).map(({ id }) => id)).toEqual(["fake:wide"]);
 });

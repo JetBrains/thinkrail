@@ -7,8 +7,10 @@ import sessionInsights from "@thinkrail/ext-session-insights/web";
 import visualize from "@thinkrail/ext-visualize/web";
 import type {
 	ExtensionCommand,
+	LayoutPresetDeclaration,
 	PanelDeclaration,
 	SideToolDeclaration,
+	StatusItemDeclaration,
 	WebExtension,
 } from "@thinkrail/extension-api/web";
 import { registerToolRenderer } from "../chat/toolRegistry";
@@ -66,7 +68,9 @@ export function webOnlyExtensions(
 			title !== undefined &&
 			extension.toolRenderers === undefined &&
 			extension.panels === undefined &&
-			extension.sideTools === undefined;
+			extension.sideTools === undefined &&
+			extension.statusItems === undefined &&
+			extension.layoutPresets === undefined;
 		return webOnly && !serverNames.has(extension.name) ? [{ ...extension, title }] : [];
 	});
 }
@@ -129,4 +133,64 @@ export function findExtensionSideTool(
 	extensions?: readonly WebExtension[],
 ): RegisteredSideTool | undefined {
 	return extensionSideTools(extensions).find((candidate) => candidate.id === id);
+}
+
+export interface RegisteredStatusItem {
+	extension: string;
+	item: string;
+	declaration: StatusItemDeclaration;
+}
+
+function collectStatusItems(extensions: readonly WebExtension[]): readonly RegisteredStatusItem[] {
+	return extensions.flatMap((extension) =>
+		Object.entries(extension.statusItems ?? {}).map(([item, declaration]) => ({
+			extension: extension.name,
+			item,
+			declaration,
+		})),
+	);
+}
+
+const registeredStatusItems = collectStatusItems(webExtensions);
+
+export function extensionStatusItems(
+	extensions?: readonly WebExtension[],
+): readonly RegisteredStatusItem[] {
+	return extensions ? collectStatusItems(extensions) : registeredStatusItems;
+}
+
+export interface RegisteredLayoutPreset {
+	extension: string;
+	preset: string;
+	/** The mode's id in the window's preferences, `<extension>:<preset>`. */
+	id: string;
+	declaration: LayoutPresetDeclaration;
+}
+
+function collectLayoutPresets(
+	extensions: readonly WebExtension[],
+): readonly RegisteredLayoutPreset[] {
+	return extensions.flatMap((extension) =>
+		Object.entries(extension.layoutPresets ?? {}).map(([preset, declaration]) => ({
+			extension: extension.name,
+			preset,
+			id: `${extension.name}:${preset}`,
+			declaration,
+		})),
+	);
+}
+
+const registeredLayoutPresets = collectLayoutPresets(webExtensions);
+
+export function extensionLayoutPresets(
+	extensions?: readonly WebExtension[],
+): readonly RegisteredLayoutPreset[] {
+	return extensions ? collectLayoutPresets(extensions) : registeredLayoutPresets;
+}
+
+export function findExtensionLayoutPreset(
+	id: string,
+	extensions?: readonly WebExtension[],
+): RegisteredLayoutPreset | undefined {
+	return extensionLayoutPresets(extensions).find((candidate) => candidate.id === id);
 }

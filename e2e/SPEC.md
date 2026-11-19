@@ -22,7 +22,9 @@ Per-test isolation is `resetState()` in `fixtures/app.ts`: it clears the host's 
 `workspaces.json`, `containers.json` and the container homes, every chat in `chats.json` and the `chats/` folders, turns, reviews, artifact indexes and
 kept copies, worktrees, the board extension's boards (`extensions/board/`) and pi
 sessions, and resets the fixture repository, so a chat without a project created by one test never
-reaches the next. The Chats container the host ensured at boot is kept (an empty `chats/` root and the
+reaches the next. A board test that needs cards in a state the UI cannot reach without an agent (an
+attempt on a seeded chat, an agent's Triage cards) writes the project's `cards.json` and then switches the
+extension off and on, which rebuilds the board over the files, since a running board keeps what it read. The Chats container the host ensured at boot is kept (an empty `chats/` root and the
 record), because a fresh install always has it: a cold start in a test is the cold start a user gets.
 
 `bun run e2e` is the complete no-agent gate. It builds the web bundle once and runs machine-adaptive,

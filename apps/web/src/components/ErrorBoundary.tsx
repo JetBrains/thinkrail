@@ -33,6 +33,8 @@ type Props = {
 	label?: string;
 	reportId?: string;
 	resetKeys?: readonly unknown[];
+	/** Rendered instead of the themed panel fallback, e.g. `null` for a readout too small for one. */
+	fallback?: ReactNode;
 };
 
 type State = { error: Error | null };
@@ -64,6 +66,7 @@ export class ErrorBoundary extends Component<Props, State> {
 	override render(): ReactNode {
 		const { error } = this.state;
 		if (!error) return this.props.children;
+		if (this.props.fallback !== undefined) return this.props.fallback;
 		return (
 			<PanelErrorFallback
 				label={this.props.label}

@@ -1,10 +1,15 @@
-import type { ExtensionCatalogEntry, ExtensionQueryParams } from "@thinkrail/contracts";
+import {
+	type ExtensionCatalogEntry,
+	type ExtensionQueryParams,
+	WS_CHANNELS,
+} from "@thinkrail/contracts";
 import type {
 	PanelHost,
 	PanelHostScope,
 	PanelPeekEntry,
 	PanelToolCall,
 	PanelWorkspaceTarget,
+	StatusItemHost,
 } from "@thinkrail/extension-api/web";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { extensionPanels, findExtensionPanel, type RegisteredPanel } from "../extensions";
@@ -47,10 +52,54 @@ export interface PanelHostDeps {
 	readonly subscribe: (listener: (push: unknown) => void) => () => void;
 	/** The extension is switched off now. */
 	readonly disabled: () => boolean;
+	/** This extension's layout preset that is the window's mode, else `null`. */
+	readonly layoutPreset: string | null;
+	readonly enterLayoutPreset: (preset: string) => void;
+	readonly exitLayoutPreset: () => void;
 	readonly scope: PanelHostScope;
 	readonly hostProtocol: number | null;
 	readonly hostApiVersion: number | undefined;
 }
+
+/** What a status item's host is built over: a panel host's query, events and navigation, no tab or file. */
+export type StatusItemHostDeps = Pick<
+	PanelHostDeps,
+	| "extension"
+	| "request"
+	| "navigate"
+	| "locate"
+	| "openWorkspace"
+	| "subscribe"
+	| "disabled"
+	| "hostProtocol"
+	| "hostApiVersion"
+> & {
+	/** Shows a Peek entry in the active workspace; absent without one. */
+	readonly peek: ((entry: PeekEntry) => void) | null;
+	readonly scope: PanelHostScope | null;
+};
+
+/** The app's transport and navigation every extension host (a panel's, a status item's) is built over. */
+export const APP_HOST_LINKS: Pick<
+	PanelHostDeps,
+	"request" | "navigate" | "locate" | "openWorkspace" | "subscribe"
+> = {
+	request: (params) => getTransport().request("extension.query", params),
+	navigate: (workspace, sessionId) =>
+		void paletteNavigator.navigateToWorkspace(workspace, sessionId),
+	locate: (location) =>
+		void paletteNavigator
+			.loadWorkspaceRow({ id: location.workspaceId, projectId: location.projectId })
+			.then((ok) => {
+				if (ok) useAppStore.getState().requestChatLocation(location);
+			}),
+	openWorkspace: (target) =>
+		void paletteNavigator.navigateToWorkspace(
+			{ id: target.workspaceId, projectId: target.projectId },
+			target.sessionId,
+		),
+	subscribe: (listener) => getTransport().subscribe(WS_CHANNELS.extensionEvent, listener),
+};
 
 function abortReason(signal: AbortSignal): unknown {
 	return signal.reason ?? new DOMException("The extension query was aborted", "AbortError");
@@ -88,43 +137,66 @@ function eventPush(push: unknown): { extension: unknown; type: unknown; payload:
 		: null;
 }
 
+type QueryDeps = Pick<PanelHostDeps, "extension" | "request" | "hostProtocol">;
+
+function extensionQuery(deps: QueryDeps): PanelHost["query"] {
+	return (method, params, signal) => {
+		if (signal?.aborted) return Promise.reject(abortReason(signal));
+		if (!supportsExtensionQuery(deps.hostProtocol)) {
+			return Promise.reject(
+				new RequestError("UNKNOWN_EXTENSION_QUERY", "The host predates extension queries"),
+			);
+		}
+		const sent = deps.request({
+			extension: deps.extension,
+			method,
+			...(params === undefined ? {} : { params }),
+		});
+		if (!signal) return sent;
+		return new Promise((resolve, reject) => {
+			const abort = () => reject(abortReason(signal));
+			signal.addEventListener("abort", abort, { once: true });
+			void sent.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+		});
+	};
+}
+
+type EventDeps = Pick<PanelHostDeps, "extension" | "subscribe" | "disabled" | "hostProtocol">;
+
+function extensionEvents(deps: EventDeps): PanelHost["onEvent"] {
+	return (type, listener) => {
+		if (!supportsExtensionEvents(deps.hostProtocol)) return () => {};
+		return deps.subscribe((raw) => {
+			const push = eventPush(raw);
+			if (push?.extension !== deps.extension || push.type !== type || deps.disabled()) return;
+			listener(push.payload);
+		});
+	};
+}
+
+function openChatVia(deps: Pick<PanelHostDeps, "navigate" | "locate">): PanelHost["openChat"] {
+	return (target) => {
+		const { at } = target;
+		if (!at) {
+			deps.navigate({ id: target.workspaceId, projectId: target.projectId }, target.sessionId);
+			return;
+		}
+		deps.locate({
+			workspaceId: target.workspaceId,
+			projectId: target.projectId,
+			sessionId: target.sessionId,
+			messageIndex: at.messageIndex,
+			anchorText: at.anchorText,
+			...(at.toolCallId ? { toolCallId: at.toolCallId } : {}),
+			...(at.approximate ? { approximate: true } : {}),
+		});
+	};
+}
+
 export function createPanelHost(deps: PanelHostDeps): PanelHost {
 	return {
-		query(method, params, signal) {
-			if (signal?.aborted) return Promise.reject(abortReason(signal));
-			if (!supportsExtensionQuery(deps.hostProtocol)) {
-				return Promise.reject(
-					new RequestError("UNKNOWN_EXTENSION_QUERY", "The host predates extension queries"),
-				);
-			}
-			const sent = deps.request({
-				extension: deps.extension,
-				method,
-				...(params === undefined ? {} : { params }),
-			});
-			if (!signal) return sent;
-			return new Promise((resolve, reject) => {
-				const abort = () => reject(abortReason(signal));
-				signal.addEventListener("abort", abort, { once: true });
-				void sent.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
-			});
-		},
-		openChat(target) {
-			const { at } = target;
-			if (!at) {
-				deps.navigate({ id: target.workspaceId, projectId: target.projectId }, target.sessionId);
-				return;
-			}
-			deps.locate({
-				workspaceId: target.workspaceId,
-				projectId: target.projectId,
-				sessionId: target.sessionId,
-				messageIndex: at.messageIndex,
-				anchorText: at.anchorText,
-				...(at.toolCallId ? { toolCallId: at.toolCallId } : {}),
-				...(at.approximate ? { approximate: true } : {}),
-			});
-		},
+		query: extensionQuery(deps),
+		openChat: openChatVia(deps),
 		openPanel(panel, params = {}, title) {
 			deps.openPanel(panel, params, title);
 		},
@@ -142,14 +214,33 @@ export function createPanelHost(deps: PanelHostDeps): PanelHost {
 			const peeked = panelPeekEntry(deps.extension, entry);
 			if (peeked) deps.peek(peeked);
 		},
-		onEvent(type, listener) {
-			if (!supportsExtensionEvents(deps.hostProtocol)) return () => {};
-			return deps.subscribe((raw) => {
-				const push = eventPush(raw);
-				if (push?.extension !== deps.extension || push.type !== type || deps.disabled()) return;
-				listener(push.payload);
-			});
+		onEvent: extensionEvents(deps),
+		layoutPreset: deps.layoutPreset,
+		enterLayoutPreset(preset) {
+			deps.enterLayoutPreset(preset);
 		},
+		exitLayoutPreset() {
+			deps.exitLayoutPreset();
+		},
+		scope: deps.scope,
+		hostProtocol: deps.hostProtocol,
+		hostApiVersion: deps.hostApiVersion,
+	};
+}
+
+/** A status item's host: the panel host's query and event rules, navigation, and Peek in the active workspace. */
+export function createStatusItemHost(deps: StatusItemHostDeps): StatusItemHost {
+	return {
+		query: extensionQuery(deps),
+		openChat: openChatVia(deps),
+		openWorkspace(target) {
+			deps.openWorkspace(target);
+		},
+		peek(entry) {
+			const peeked = panelPeekEntry(deps.extension, entry);
+			if (peeked) deps.peek?.(peeked);
+		},
+		onEvent: extensionEvents(deps),
 		scope: deps.scope,
 		hostProtocol: deps.hostProtocol,
 		hostApiVersion: deps.hostApiVersion,
