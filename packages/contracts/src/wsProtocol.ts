@@ -74,6 +74,7 @@ import type {
 	SpecGraphSnapshot,
 	SubagentCompletionDetails,
 	SubagentOverride,
+	SubagentRoster,
 	SurveyInvitationResponse,
 	SurveySubmitParams,
 	Template,
@@ -148,7 +149,9 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 126;
+export const PROTOCOL_VERSION = 127;
+/** `subagent.roster` and the `subagent.rosterChanged` channel: the workspace-wide subagent roster. */
+export const SUBAGENT_ROSTER_PROTOCOL_VERSION = 127;
 /** `wiki.*` methods: the repo wiki reader, its build prompt and the GitHub Pages publish. */
 export const REPO_WIKI_PROTOCOL_VERSION = 126;
 /** `prBabysit.*` methods and the `prBabysit.changed` channel. */
@@ -559,6 +562,7 @@ export const WS_METHODS = {
 	sessionResourceHistory: "session.resourceHistory",
 	backgroundCommandOutput: "backgroundCommand.output",
 	backgroundCommandStop: "backgroundCommand.stop",
+	subagentRoster: "subagent.roster",
 	subagentStop: "subagent.stop",
 	subagentStopAll: "subagent.stopAll",
 	modelList: "model.list",
@@ -635,6 +639,7 @@ export const WS_CHANNELS = {
 	sessionCreated: "session.created",
 	sessionDeleted: "session.deleted",
 	sessionResourcesChanged: "session.resourcesChanged",
+	subagentRosterChanged: "subagent.rosterChanged",
 	sessionState: "session.state",
 	providerLogin: "provider.login",
 	providerChanged: "provider.changed",
@@ -1404,6 +1409,10 @@ export interface WsMethodMap {
 	"backgroundCommand.stop": {
 		params: { workspaceId: string; sessionId: string; commandId: string };
 		result: Ack;
+	};
+	"subagent.roster": {
+		params: { workspaceId: string };
+		result: SubagentRoster;
 	};
 	"subagent.stop": {
 		params: { workspaceId: string; parentSessionId: string; childSessionId: string };

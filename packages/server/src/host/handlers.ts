@@ -83,6 +83,7 @@ import {
 	stopAllSubagents,
 	stopBackgroundCommand,
 	stopSubagent,
+	subagentRosterFor,
 	writeCacheWarmingMode,
 } from "../agent";
 import {
@@ -1496,6 +1497,11 @@ const handlers: WsHandlers = {
 			resourceCwd(p.workspaceId),
 		);
 		return { ok: true } as const;
+	},
+	"subagent.roster": (params) => {
+		const p = resourceParams(params, ["workspaceId"]);
+		resourceCwd(p.workspaceId);
+		return subagentRosterFor(p.workspaceId).read();
 	},
 	"subagent.stop": async (params) => {
 		const p = resourceParams(params, ["workspaceId", "parentSessionId", "childSessionId"]);

@@ -78,6 +78,16 @@ function subagentSummary(
 			? { abortReason: snapshot.details.abortReason }
 			: {}),
 		...(live ? {} : { durationMs: snapshot.details.durationMs }),
+		...(snapshot.details.activity !== undefined
+			? { activity: snapshot.details.activity.slice(0, 300) }
+			: {}),
+		usage: snapshot.details.usage,
+		...(snapshot.errorMessage !== undefined
+			? { errorMessage: snapshot.errorMessage.slice(0, 1000) }
+			: {}),
+		...(!live && snapshot.finalText !== undefined
+			? { finalText: snapshot.finalText.slice(0, 2000) }
+			: {}),
 	};
 }
 

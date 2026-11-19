@@ -27,6 +27,7 @@ import {
 	useState,
 } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { AgentsTrigger } from "@/agents";
 import { useNow } from "@/components/useNow";
 import { LspResourcesSection, useWorkspaceLsps } from "@/lsp";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
@@ -847,6 +848,7 @@ export default function ChatView({
 					resources={
 						resources.visible ? (
 							<span className="flex shrink-0 items-center gap-2">
+								<AgentsTrigger workspaceId={workspaceId} />
 								<ResourcesButton
 									ref={resourcesTrigger}
 									activeCount={

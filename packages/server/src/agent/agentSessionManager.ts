@@ -950,6 +950,11 @@ export function getSessionWorkspaceId(sessionId: string): string | undefined {
 	return sessions.get(sessionId)?.workspaceId;
 }
 
+export function getSessionTitle(sessionId: string): string {
+	const entry = sessions.get(sessionId);
+	return entry ? entryTitle(entry) : "";
+}
+
 export function getSessionAttribution(sessionId: string): string | undefined {
 	return sessions.get(sessionId)?.workspaceId ?? preparingEntries.get(sessionId)?.workspaceId;
 }

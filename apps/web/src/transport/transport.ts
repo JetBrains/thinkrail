@@ -38,6 +38,7 @@ const NON_REPLAYABLE_CHANNELS: ReadonlySet<string> = new Set([
 	WS_CHANNELS.terminalDetached,
 	WS_CHANNELS.sessionDeleted,
 	WS_CHANNELS.sessionResourcesChanged,
+	WS_CHANNELS.subagentRosterChanged,
 	WS_CHANNELS.mcpStatus,
 	WS_CHANNELS.providerChanged,
 	WS_CHANNELS.feedbackInterview,

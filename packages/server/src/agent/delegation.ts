@@ -27,6 +27,7 @@ import { trashFile } from "../trash";
 import {
 	buildSessionSettings,
 	canUseSessionResources,
+	getSessionTitle,
 	liveParentContext,
 	recordSessionUsage,
 	scheduleSessionStatePublish,
@@ -35,6 +36,7 @@ import { archiveSubagentRun, publishSessionResourcesChanged } from "./chatResour
 import { childBaseExtensionFactories, childExtensionFactories } from "./extensions";
 import { getPiRuntime } from "./piRuntime";
 import { isHostResourceId, isPiSessionId } from "./resourceIdentity";
+import { createSubagentRoster, type SubagentRosterRegistry } from "./subagentRoster";
 import {
 	createRunUsageRecorder,
 	reconcileSubagentUsage,
@@ -47,6 +49,20 @@ export function delegationRootDir(): string {
 }
 
 const services = new Map<string, DelegationService>();
+const rosters = new Map<string, SubagentRosterRegistry>();
+
+function releaseRoster(workspaceId: string): void {
+	rosters.get(workspaceId)?.dispose();
+	rosters.delete(workspaceId);
+}
+
+/** The workspace-wide subagent roster; created together with the delegation service. */
+export function subagentRosterFor(workspaceId: string): SubagentRosterRegistry {
+	delegationServiceFor(workspaceId);
+	const roster = rosters.get(workspaceId);
+	if (!roster) throw new Error(`No subagent roster for workspace ${workspaceId}`);
+	return roster;
+}
 let concurrencyResolver: ((workspaceId: string) => number) | null = null;
 
 export function setSubagentConcurrencyResolver(
@@ -107,7 +123,14 @@ export function delegationServiceFor(workspaceId: string): DelegationService {
 			childExtensionFactories: childExtensionFactories(workspaceId),
 			buildChildSettings: buildSessionSettings,
 		});
+		const roster = createSubagentRoster({
+			workspaceId,
+			service: created,
+			titleOf: getSessionTitle,
+		});
+		rosters.set(workspaceId, roster);
 		created.onLifecycle((event) => {
+			roster.handle(event);
 			if (event.type === "run-progress") {
 				runUsage.progress(event.parentSessionId, event.sessionId, event.details);
 				return;
@@ -183,6 +206,7 @@ export async function disposeSessionChildren(
 
 export function removeWorkspaceDelegation(workspaceId: string): void {
 	services.delete(workspaceId);
+	releaseRoster(workspaceId);
 	rmSync(join(delegationRootDir(), workspaceId), { recursive: true, force: true });
 }
 
@@ -192,6 +216,7 @@ export async function trashWorkspaceDelegation(workspaceId: string): Promise<voi
 	const store = join(delegationRootDir(), workspaceId);
 	if (existsSync(store)) await trashFile(store);
 	services.delete(workspaceId);
+	releaseRoster(workspaceId);
 }
 
 function assertWorkspaceStorageId(value: string): void {

@@ -25,6 +25,7 @@ import {
 	PROTOCOL_VERSION,
 	SPEECH_PROTOCOL_VERSION,
 	SPEECH_SOCKET_ROUTE,
+	SUBAGENT_ROSTER_PROTOCOL_VERSION,
 	TEXT_SEARCH_PROTOCOL_VERSION,
 	USER_FONTS_ROUTE,
 	USER_THEMES_PROTOCOL_VERSION,
@@ -85,6 +86,7 @@ import {
 	setSkillAdmissionResolver,
 	setSpecsEnabledResolver,
 	setSubagentConcurrencyResolver,
+	setSubagentRosterPublisher,
 	setSubagentsEnabledResolver,
 	setTitleToolHost,
 	settleCredentialWritesForShutdown,
@@ -530,6 +532,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.sessionCreated);
 				ws.subscribe(WS_CHANNELS.sessionDeleted);
 				ws.subscribe(WS_CHANNELS.sessionResourcesChanged);
+				if (ws.data.protocolVersion >= SUBAGENT_ROSTER_PROTOCOL_VERSION)
+					ws.subscribe(WS_CHANNELS.subagentRosterChanged);
 				ws.subscribe(WS_CHANNELS.sessionState);
 				ws.subscribe(WS_CHANNELS.providerLogin);
 				ws.subscribe(WS_CHANNELS.providerChanged);
@@ -1150,6 +1154,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			workspaceId: payload.workspaceId,
 		});
 	});
+	setSubagentRosterPublisher((payload) => {
+		publishScoped(WS_CHANNELS.subagentRosterChanged, payload, {
+			workspaceId: payload.workspaceId,
+		});
+	});
 
 	const turnTracker = new TurnTracker((sessionId) => {
 		const workspaceId = getSessionWorkspaceId(sessionId);
@@ -1373,6 +1382,7 @@ function restoreSeamDefaults(): void {
 	setMcpLoginPublisher(() => {});
 	setMcpStatusPublisher(() => {});
 	setSessionResourcesPublisher(() => {});
+	setSubagentRosterPublisher(() => {});
 	setTurnPublisher(() => {});
 	setArtifactsPublisher(null);
 	setSessionPublisher(() => {});

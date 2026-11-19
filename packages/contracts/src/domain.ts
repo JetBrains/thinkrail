@@ -650,6 +650,34 @@ export interface SubagentResourceSummary {
 	finishedAt?: number;
 	/** The host or the chat's teardown ended this run; `status` is then terminal (see `interruptedResource`). */
 	interrupted?: true;
+	/** Latest tool/activity line; present on hosts at `SUBAGENT_ROSTER_PROTOCOL_VERSION`. */
+	activity?: string;
+	usage?: DelegationRunDetails["usage"];
+	/** Epoch ms of the last progress or lifecycle event the host saw for this run. */
+	lastEventAt?: number;
+	errorMessage?: string;
+	finalText?: string;
+}
+
+/** One live or recently finished subagent in a workspace, across every chat. */
+export interface SubagentRosterRow extends SubagentResourceSummary {
+	parentTitle: string;
+}
+
+export interface SubagentRosterCounts {
+	queued: number;
+	running: number;
+	failed: number;
+	done: number;
+	stopped: number;
+}
+
+export interface SubagentRoster {
+	workspaceId: string;
+	/** Monotonic per workspace; bumps whenever `rows` changes. */
+	revision: number;
+	rows: SubagentRosterRow[];
+	counts: SubagentRosterCounts;
 }
 
 export type ResourceRecord =

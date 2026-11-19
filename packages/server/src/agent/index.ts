@@ -29,6 +29,7 @@ export {
 	refreshSubagentConcurrency,
 	runReviewSubagent,
 	setSubagentConcurrencyResolver,
+	subagentRosterFor,
 	trashWorkspaceDelegation,
 } from "./delegation";
 export {
@@ -135,6 +136,7 @@ export {
 	type SkillFacts,
 } from "./skillAdmission";
 export { isProjectSkillPath, mayHoldProjectSkills } from "./skillSources";
+export { setSubagentRosterPublisher } from "./subagentRoster";
 export {
 	SET_TITLE_TOOL_NAME,
 	type SetTitleParams,
