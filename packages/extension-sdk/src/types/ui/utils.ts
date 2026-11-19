@@ -1,1 +1,1 @@
-export * from "@thinkrail/ui/utils";
+export { cn } from "@thinkrail/ui/utils";

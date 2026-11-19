@@ -48,10 +48,13 @@ export function stylesheetInput({
 
 export async function buildStylesheet(options: StylesOptions) {
 	let compiled: Awaited<ReturnType<typeof compile>>;
+	const dependencies: string[] = [];
 	try {
 		compiled = await compile(stylesheetInput(options), {
 			base: options.root,
-			onDependency() {},
+			onDependency(path) {
+				dependencies.push(path);
+			},
 		});
 	} catch (error) {
 		throw new ExtensionBuildError(
@@ -63,4 +66,5 @@ export async function buildStylesheet(options: StylesOptions) {
 	const { code } = optimize(built, { minify: options.minify });
 	await mkdir(dirname(options.outFile), { recursive: true });
 	await writeFile(options.outFile, code);
+	return { dependencies };
 }

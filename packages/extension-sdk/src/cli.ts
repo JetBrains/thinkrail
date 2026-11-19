@@ -1,5 +1,11 @@
 import { parseArgs } from "node:util";
-import { buildExtension, DEFAULT_ENTRIES, ExtensionBuildError } from "./builder";
+import {
+	buildExtension,
+	DEFAULT_ENTRIES,
+	discardStagedOutputs,
+	ExtensionBuildError,
+	ExtensionUsageError,
+} from "./builder";
 import { EXTENSION_API_VERSION } from "./shared";
 
 const USAGE = `Usage: thinkrail-extension build [options]
@@ -72,11 +78,22 @@ async function main(argv: string[]): Promise<number> {
 	return 0;
 }
 
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+	process.once(signal, () => {
+		discardStagedOutputs();
+		process.kill(process.pid, signal);
+	});
+}
+
 main(process.argv.slice(2)).then(
 	(code) => {
 		process.exitCode = code;
 	},
 	(error: unknown) => {
+		if (error instanceof ExtensionUsageError) {
+			process.exitCode = usageError(error.message);
+			return;
+		}
 		if (error instanceof ExtensionBuildError)
 			console.error(`thinkrail-extension: ${error.message}`);
 		else console.error(error);

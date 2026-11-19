@@ -11,8 +11,6 @@
 			"StrictMode",
 			"Suspense",
 			"ViewTransition",
-			"__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE",
-			"__COMPILER_RUNTIME",
 			"addTransitionType",
 			"cache",
 			"cacheSignal",
@@ -25,7 +23,6 @@
 			"lazy",
 			"memo",
 			"startTransition",
-			"unstable_useCacheRefresh",
 			"use",
 			"useActionState",
 			"useCallback",
@@ -49,7 +46,6 @@
 		],
 		"react/jsx-runtime": ["Fragment", "jsx", "jsxs"],
 		"react-dom": [
-			"__DOM_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE",
 			"browser",
 			"createPortal",
 			"flushSync",
@@ -60,70 +56,17 @@
 			"preload",
 			"preloadModule",
 			"requestFormReset",
-			"unstable_batchedUpdates",
-			"useFormState",
 			"useFormStatus",
 			"version"
 		],
-		"@thinkrail/extension-sdk/web": [
-			"defineWebExtension",
-			"languageFromPath",
-			"numArg",
-			"parseToolResultContent",
-			"resultText",
-			"strArg",
-			"toolValueText"
-		],
+		"@thinkrail/extension-sdk/web": ["defineWebExtension", "numArg", "resultText", "strArg"],
 		"@thinkrail/extension-sdk/resources": [
 			"FramedResourcePreview",
 			"ResourcePreview",
 			"useOptionalResourceHost",
 			"useResourceScope"
 		],
-		"@thinkrail/extension-sdk/ui/attention-line": ["AttentionLine"],
-		"@thinkrail/extension-sdk/ui/button": [
-			"Button",
-			"IconButton",
-			"buttonDataAttributes",
-			"buttonVariants",
-			"withIconClass"
-		],
-		"@thinkrail/extension-sdk/ui/dialog": [
-			"Dialog",
-			"DialogClose",
-			"DialogContent",
-			"DialogDescription",
-			"DialogFooter",
-			"DialogHeader",
-			"DialogPanel",
-			"DialogTitle",
-			"DialogTrigger",
-			"useModalLayerOpen"
-		],
-		"@thinkrail/extension-sdk/ui/fonts": [
-			"fontsLoaded",
-			"fontsRevision",
-			"onFontsChange",
-			"resolveFont",
-			"watchFont"
-		],
-		"@thinkrail/extension-sdk/ui/keyboard": [
-			"ARROW_TWINS_SCOPE",
-			"ARROW_TWIN_COMMANDS",
-			"ariaKeyShortcuts",
-			"browserPlatform",
-			"chordCaps",
-			"chordPressed",
-			"codeLabel",
-			"hasPlatformModifier",
-			"isApplePlatform",
-			"isImeComposing",
-			"isTypingChord",
-			"keyCap",
-			"twinArrow",
-			"yieldEscapeToIme"
-		],
-		"@thinkrail/extension-sdk/ui/textarea": ["Textarea"],
+		"@thinkrail/extension-sdk/ui/button": ["Button", "IconButton", "withIconClass"],
 		"@thinkrail/extension-sdk/ui/theme": ["onThemeSwap"],
 		"@thinkrail/extension-sdk/ui/utils": ["cn"]
 	}

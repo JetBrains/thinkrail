@@ -410,8 +410,11 @@ dependency. This keeps test process drivers outside both launchers and the serve
     and [[submodule-web-extensions]]; Settings and Browse [[submodule-web-panels]]; catalog
     [[module-website]] and [[submodule-server-extension-catalog]]. Runtime loading was first rejected
     until three answers existed; they are the React singleton — the app exposes its own React and a
-    small UI set on one host object, and an extension's pre-built bundle contains neither; a versioned UI API — an `api` version in the
-    extension's manifest, a published SDK, and all-or-nothing loading; a security story — installing is
+    small UI set on one host object — eight specifiers, each holding only the export names of one
+    committed allow-list (`SHARED_MODULE_EXPORTS`), so nothing becomes API by being exported — and an
+    extension's pre-built bundle contains neither; a versioned UI API — an `api` version in the
+    extension's manifest, a published SDK whose `major.minor` is that API, a frozen per-version snapshot
+    of its surface, and all-or-nothing loading; a security story — installing is
     the consent, global scope only, no isolation, an unreviewed npm-keyword catalog, each an accepted
     risk. The server half is imported through pi's public loader so its pi imports stay the host's single
     instance in every launcher. Rejected: a logical extension inside

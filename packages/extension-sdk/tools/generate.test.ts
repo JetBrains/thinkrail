@@ -1,13 +1,15 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { SHARED_MODULE_EXPORTS } from "@thinkrail/extension-api/installed";
 import {
 	EXTENSION_API_VERSION,
 	SDK_PACKAGE,
 	SHARED_SPECIFIERS,
 	type SharedModulesManifest,
 } from "../src/shared";
-import { MANIFEST_FILE, THEME_FILE, themeCss } from "./generate";
+import { MANIFEST_FILE, THEME_FILE, themeCss, unlistedPublicNames } from "./generate";
+import { WHOLE_PUBLIC_API_EXCEPT } from "./sources";
 
 const committed = JSON.parse(readFileSync(MANIFEST_FILE, "utf8")) as SharedModulesManifest;
 const packageJson = JSON.parse(
@@ -43,14 +45,47 @@ describe("generated assets stay in step with the app", () => {
 describe("the shared-specifier list", () => {
 	it("is exactly the manifest's modules, for the current API", () => {
 		expect(committed.api).toBe(EXTENSION_API_VERSION);
-		expect(Object.keys(committed.modules).sort()).toEqual([...SHARED_SPECIFIERS].sort());
+		expect(Object.keys(committed.modules)).toEqual([...SHARED_SPECIFIERS]);
 	});
 
-	it("gives every SDK specifier a package export", () => {
+	it("names exactly the app's allow-list", () => {
+		expect(JSON.stringify(committed.modules)).toBe(JSON.stringify(SHARED_MODULE_EXPORTS));
+	});
+
+	it("gives every SDK specifier a package export, and nothing else", () => {
 		const sdkSubpaths = SHARED_SPECIFIERS.filter((specifier) =>
 			specifier.startsWith(`${SDK_PACKAGE}/`),
 		).map((specifier) => `.${specifier.slice(SDK_PACKAGE.length)}`);
-		for (const subpath of [...sdkSubpaths, "./server"])
-			expect(packageJson.exports[subpath]).toBeDefined();
+		expect(Object.keys(packageJson.exports).sort()).toEqual(
+			[...sdkSubpaths, "./server", "./shared-modules.json", "./theme.css", "./package.json"].sort(),
+		);
+	});
+});
+
+describe("the React specifiers", () => {
+	it("allow-list the whole public API save internals, unstable names and the listed exceptions", () => {
+		expect(Object.keys(WHOLE_PUBLIC_API_EXCEPT)).toEqual([
+			"react",
+			"react/jsx-runtime",
+			"react-dom",
+		]);
+		for (const [specifier, leftOut] of Object.entries(WHOLE_PUBLIC_API_EXCEPT)) {
+			const listed: readonly string[] =
+				SHARED_MODULE_EXPORTS[specifier as keyof typeof SHARED_MODULE_EXPORTS];
+			for (const name of leftOut ?? []) expect(listed).not.toContain(name);
+		}
+	});
+
+	it("name an export the allow-list neither lists nor leaves out", () => {
+		const namespace = {
+			default: {},
+			__CLIENT_INTERNALS: {},
+			unstable_batchedUpdates: () => undefined,
+			experimental_taint: () => undefined,
+			useFormState: () => undefined,
+			useState: () => undefined,
+			useNewHook: () => undefined,
+		};
+		expect(unlistedPublicNames(namespace, ["useState"], ["useFormState"])).toEqual(["useNewHook"]);
 	});
 });

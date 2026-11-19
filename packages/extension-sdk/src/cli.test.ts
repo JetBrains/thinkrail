@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type Fixture, fixture, WEB_PACKAGE } from "./builder/testing";
@@ -39,6 +39,20 @@ describe("thinkrail-extension", () => {
 		expect(result.code).toBe(1);
 		expect(result.stderr).toStartWith("thinkrail-extension: --prefix is required");
 		expect(result.stderr).not.toContain("    at ");
+	});
+
+	it("exits 2 with usage when an output would overwrite an input, touching nothing", () => {
+		current = fixture(
+			{ ...WEB_PACKAGE, thinkrail: { api: "1.0", web: "./web/index.js" } },
+			{ "web/index.js": 'export default { name: "x", toolRenderers: {} };\n' },
+		);
+		const result = run(["build", "--entry", "web/index.js"], current.root);
+		expect(result.code).toBe(2);
+		expect(result.stderr).toStartWith(
+			'thinkrail-extension: "web" (web/index.js) would overwrite --entry (web/index.js)',
+		);
+		expect(result.stderr).toContain("Usage: thinkrail-extension build");
+		expect(readFileSync(join(current.root, "web/index.js"), "utf8")).toContain("toolRenderers");
 	});
 
 	it.each([

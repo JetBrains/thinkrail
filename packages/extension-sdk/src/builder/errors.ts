@@ -1,3 +1,7 @@
 export class ExtensionBuildError extends Error {
-	override readonly name = "ExtensionBuildError";
+	override readonly name: string = "ExtensionBuildError";
+}
+
+export class ExtensionUsageError extends ExtensionBuildError {
+	override readonly name = "ExtensionUsageError";
 }
