@@ -4,16 +4,7 @@ export const HOST_OBJECT = "__thinkrailExtensionHost";
 
 export const SDK_PACKAGE = "@thinkrail/extension-sdk";
 
-export const UI_MODULES = [
-	"attention-line",
-	"button",
-	"dialog",
-	"fonts",
-	"keyboard",
-	"textarea",
-	"theme",
-	"utils",
-] as const;
+export const UI_MODULES = ["button", "theme", "utils"] as const;
 
 export type UiModule = (typeof UI_MODULES)[number];
 

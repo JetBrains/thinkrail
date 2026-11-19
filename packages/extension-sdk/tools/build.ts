@@ -7,14 +7,17 @@ import { SHARED_SPECIFIERS, type SharedModulesManifest, UI_MODULES } from "../sr
 import { MANIFEST_FILE } from "./generate";
 
 const root = resolve(import.meta.dir, "..");
-const dist = join(root, "dist");
 const LOCALES_STUB = join(root, "src/types/locales.d.ts");
 const RUNTIME_DEPENDENCIES = /^(?:node:|rolldown(?:$|\/)|tailwindcss(?:$|\/)|@tailwindcss\/)/;
 const PEERS = /^(?:react(?:$|\/)|react-dom(?:$|\/)|@earendil-works\/)/;
 
 const REACT = /^(?:react|react-dom)(?:$|\/)/;
 
-async function declarations(input: Record<string, string>, external: RegExp): Promise<void> {
+async function declarations(
+	dist: string,
+	input: Record<string, string>,
+	external: RegExp,
+): Promise<void> {
 	const bundle = await rolldown({
 		input,
 		cwd: root,
@@ -36,12 +39,12 @@ async function declarations(input: Record<string, string>, external: RegExp): Pr
 	await bundle.write({
 		dir: dist,
 		format: "es",
-		chunkFileNames: "types/chunks/[name]-[hash].d.ts",
+		chunkFileNames: "types/chunks/[name].d.ts",
 	});
 	await bundle.close();
 }
 
-async function javascript(): Promise<void> {
+async function javascript(dist: string): Promise<void> {
 	await build({
 		cwd: root,
 		input: { server: join(root, "src/server.ts"), cli: join(root, "src/cli.ts") },
@@ -57,7 +60,7 @@ async function javascript(): Promise<void> {
 	});
 }
 
-function hostStubs(): void {
+function hostStubs(dist: string): void {
 	const manifest = JSON.parse(readFileSync(MANIFEST_FILE, "utf8")) as SharedModulesManifest;
 	const hostDir = join(dist, "host");
 	mkdirSync(hostDir, { recursive: true });
@@ -81,7 +84,7 @@ function files(dir: string): string[] {
 
 const NODE_REFERENCE = /^\/\/\/ <reference types="node" \/>\n/m;
 
-function assertPortable(): void {
+function assertPortable(dist: string): void {
 	const leaks: string[] = [];
 	for (const path of files(dist)) {
 		let code = readFileSync(path, "utf8");
@@ -99,15 +102,27 @@ function assertPortable(): void {
 
 const typeEntries = ["web", "resources", ...UI_MODULES.map((name) => `ui/${name}`)];
 
-rmSync(dist, { recursive: true, force: true });
-await declarations(
-	Object.fromEntries(
-		typeEntries.map((name) => [`types/${name}`, join(root, `src/types/${name}.ts`)]),
-	),
-	REACT,
-);
-await declarations({ server: join(root, "src/server.ts") }, PEERS);
-await javascript();
-hostStubs();
-assertPortable();
-console.log(`extension-sdk: built ${files(dist).length} files into dist/`);
+export async function buildDeclarations(dist: string): Promise<void> {
+	await declarations(
+		dist,
+		Object.fromEntries(
+			typeEntries.map((name) => [`types/${name}`, join(root, `src/types/${name}.ts`)]),
+		),
+		REACT,
+	);
+	await declarations(dist, { server: join(root, "src/server.ts") }, PEERS);
+}
+
+export async function buildSdk(dist: string): Promise<number> {
+	rmSync(dist, { recursive: true, force: true });
+	await buildDeclarations(dist);
+	await javascript(dist);
+	hostStubs(dist);
+	assertPortable(dist);
+	return files(dist).length;
+}
+
+if (import.meta.main) {
+	const count = await buildSdk(join(root, "dist"));
+	console.log(`extension-sdk: built ${count} files into dist/`);
+}

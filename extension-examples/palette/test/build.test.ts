@@ -57,13 +57,19 @@ function Stand(props: Record<string, unknown>) {
 	});
 }
 
+function allowListed(specifier: string, module: object): Record<string, unknown> {
+	return Object.fromEntries(
+		(SHARED.modules[specifier] ?? []).map((name) => [name, Reflect.get(module, name)]),
+	);
+}
+
 function host() {
 	const asText = (value: unknown) => (typeof value === "string" ? value : "");
 	return {
 		api: "1.0",
 		modules: {
-			react: React,
-			"react/jsx-runtime": jsxRuntime,
+			react: allowListed("react", React),
+			"react/jsx-runtime": allowListed("react/jsx-runtime", jsxRuntime),
 			"react-dom": {},
 			"@thinkrail/extension-sdk/web": {
 				defineWebExtension: (extension: unknown) => extension,
@@ -132,8 +138,15 @@ describe("the palette extension as built by the SDK", () => {
 		expect(stylesheet).not.toMatch(/#[0-9a-f]{3,8}\b/i);
 	});
 
-	it("renders the card on the host's React and components", async () => {
-		Reflect.set(globalThis, "__thinkrailExtensionHost", host());
+	it("renders the card in a host exposing only the allow-listed names", async () => {
+		const shared = host();
+		for (const [specifier, values] of Object.entries(shared.modules)) {
+			const allowed = SHARED.modules[specifier] ?? [];
+			for (const name of Object.keys(values)) {
+				expect(allowed).toContain(name);
+			}
+		}
+		Reflect.set(globalThis, "__thinkrailExtensionHost", shared);
 		const loaded = (await import(pathToFileURL(join(ROOT, "dist/web.js")).href)) as {
 			default: WebHalf;
 		};

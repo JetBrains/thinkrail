@@ -98,7 +98,9 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   dialog or menu, else the document), `platform`, and the command channel below — so the SDK stays
   type-only. `title`, `description`, `globalOverlay`, `commands` and `shortcuts` are honoured for the
   app's built-in extensions only: an installed web half contributes its `toolRenderers` (and their
-  options) and nothing else ([[submodule-web-extensions]]).
+  options) and nothing else ([[submodule-web-extensions]]). The published SDK therefore declares its
+  own, narrowed `WebExtension` — `{ name, toolRenderers }` — and none of the built-in-only fields or
+  their types ([[module-extension-sdk]]); this package's shape stays the built-ins' contract.
 - **Commands** are the extension's rebindable keybindings: `ExtensionCommand` is `{ id, title, scope?, chords }`,
   each `ExtensionChord` a physical `code`, a display `key` (a `KeyboardEvent.key`-style value, capped like a
   catalog key) and `mod` / `ctrl` / `alt` / `shift` (`mod` is ⌘ on Apple, Ctrl elsewhere). A chord with no
@@ -163,10 +165,13 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   - `SHARED_MODULE_EXPORTS` / `SharedExportName<S>` (`src/sharedModules.ts`) — **the allow-list that is
     extension API v1**: for each shared specifier, the exact value export names an installed web half
     may use, sorted. It is the one canonical list: the app's host object exposes only these names
-    ([[submodule-web-extensions]]). Nothing
+    ([[submodule-web-extensions]]), and the SDK's export manifest, runtime stubs and declarations are
+    generated from or type-checked against it ([[module-extension-sdk]]). Nothing
     exported by `@thinkrail/ui/*`, `./web` or `@thinkrail/resource-renderers` becomes API by being
-    exported; adding a name here is an API minor, removing or changing one an API major. What it holds
-    and why is [[module-thinkrail-extensions]] § Installed extensions.
+    exported; adding a name here is an API minor, removing or changing one an API major, and each
+    `EXTENSION_API_VERSION` is frozen by a committed snapshot of the list and the SDK's declarations
+    ([[module-extension-sdk]] § Frozen API snapshots). What it holds and why is
+    [[module-thinkrail-extensions]] § Installed extensions.
   - The manifest reader (`src/manifest.ts`; the manifest is [[module-thinkrail-extensions]] § Installed
     extensions): `EXTENSION_KEYWORD`, `EXTENSION_MANIFEST_KEY` (`thinkrail`), `hasExtensionManifest` (the
     kind rule: the key is present at all), `parseExtensionManifest(packageJson, { reservedNames? })` →

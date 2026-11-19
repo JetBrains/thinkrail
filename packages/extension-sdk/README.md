@@ -6,10 +6,14 @@ agent tools (its server half) and chat cards for them (its web half) to every Th
 This package carries extension API **1.0**:
 
 - `@thinkrail/extension-sdk/server` — `defineServerExtension` and its types.
-- `@thinkrail/extension-sdk/web` — `defineWebExtension`, the tool-card types and helpers.
-- `@thinkrail/extension-sdk/resources` and `@thinkrail/extension-sdk/ui/<module>` (`button`, `dialog`,
-  `textarea`, `keyboard`, `attention-line`, `utils`, `theme`, `fonts`) — the app's own components,
-  shared with extensions at runtime. At build time they are type declarations only.
+- `@thinkrail/extension-sdk/web` — `defineWebExtension({ name, toolRenderers })`, the tool-card types
+  and the helpers `strArg`, `numArg`, `resultText`.
+- `@thinkrail/extension-sdk/resources` (`ResourcePreview`, `FramedResourcePreview`, `useResourceScope`,
+  `useOptionalResourceHost`), `@thinkrail/extension-sdk/ui/button` (`Button`, `IconButton`,
+  `withIconClass`), `…/ui/utils` (`cn`) and `…/ui/theme` (`onThemeSwap`) — the app's own components,
+  shared with extensions at runtime, together with `react`, `react/jsx-runtime` and `react-dom`. At
+  build time they are type declarations only. Only the names listed in
+  `@thinkrail/extension-sdk/shared-modules.json` exist at runtime.
 - `thinkrail-extension build` — bundles the web half to one ESM file that uses the app's React and
   components, and builds its stylesheet against the app's theme.
 
@@ -28,12 +32,14 @@ This package carries extension API **1.0**:
 		"title": "Weather"
 	},
 	"scripts": { "build": "thinkrail-extension build --prefix weather" },
-	"dependencies": { "@thinkrail/extension-sdk": "^1.0.0" },
+	"dependencies": { "@thinkrail/extension-sdk": "~1.0.0" },
 	"peerDependencies": { "@earendil-works/pi-coding-agent": "*", "typebox": "*" },
 	"devDependencies": { "@types/react": "^19.3.0", "typescript": "^5.9.0" }
 }
 ```
 
+- Depend on `~1.0.0`, never a caret range: the SDK's `major.minor` is the extension API it builds, and
+  a bundle built by a later minor needs a ThinkRail that provides that minor.
 - `server` is TypeScript source, loaded by ThinkRail as pi loads extensions. Keep pi and typebox as
   peer dependencies: ThinkRail provides them.
 - `web` and `styles` are what `thinkrail-extension build` writes. The web entry is `web/index.tsx`

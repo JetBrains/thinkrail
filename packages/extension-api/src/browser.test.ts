@@ -111,6 +111,7 @@ describe("browser-safe public surface", () => {
 		expect(imports).toEqual([]);
 		const output = await build.outputs[0]?.text();
 		expect(output).not.toContain("defineServerExtension");
-		expect(output).not.toContain("defineWebExtension");
+		expect(output).not.toContain("function defineWebExtension");
+		expect(output).not.toContain("function parseToolResultContent");
 	});
 });

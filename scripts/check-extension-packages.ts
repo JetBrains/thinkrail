@@ -14,6 +14,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
+import { versionMismatch } from "../packages/extension-sdk/tools/version.ts";
 import {
 	BUN_ONLY,
 	dependenciesFirst,
@@ -113,6 +114,7 @@ function assertPackedPackage(pkg: PiPackage, tarball: string, scratch: string, s
 	if (pkg.dir === EXTENSION_SDK_DIR) {
 		const leaked = shipped.filter((path) => /^(?:src|tools)\//.test(path));
 		if (leaked.length > 0) fail(`${pkg.name} ships repository sources: ${leaked.join(", ")}`);
+		assertApiVersion(manifest.version, sharedApi(dir));
 		return;
 	}
 	if (manifest.dependencies?.["@thinkrail/extension-sdk"] !== sdkVersion) {
@@ -124,38 +126,61 @@ function assertPackedPackage(pkg: PiPackage, tarball: string, scratch: string, s
 	if (singletons.length > 0) fail(`${pkg.name} bundles host singletons: ${singletons.join(", ")}`);
 }
 
+function sharedApi(sdkDir: string): string {
+	return (
+		JSON.parse(readFileSync(join(sdkDir, "assets/shared-modules.json"), "utf8")) as { api: string }
+	).api;
+}
+
+function assertApiVersion(version: string, api: string): void {
+	const mismatch = versionMismatch(version, api);
+	if (mismatch !== undefined) fail(mismatch);
+}
+
+const SDK_RANGE = /"@thinkrail\/extension-sdk":\s*"([^"]+)"/g;
+
+function assertDocumentedRanges(api: string): void {
+	const docs = [
+		join(EXTENSION_SDK_DIR, "README.md"),
+		...files(join(repoRoot, "packages/server/skills/making-thinkrail-extensions")),
+		...readdirSync(join(repoRoot, "extension-examples")).map((name) =>
+			join(repoRoot, "extension-examples", name, "README.md"),
+		),
+	].filter((path) => path.endsWith(".md") && existsSync(path));
+	for (const path of docs) {
+		for (const match of readFileSync(path, "utf8").matchAll(SDK_RANGE)) {
+			const range = match[1];
+			if (range !== `~${api}.0` && range !== "~<api>.0")
+				fail(
+					`${relative(repoRoot, path)} asks for @thinkrail/extension-sdk "${range}": document "~${api}.0", the range of extension API ${api}`,
+				);
+		}
+	}
+}
+
 const WEB = `import { RiPaletteLine } from "@remixicon/react";
-import { AttentionLine } from "@thinkrail/extension-sdk/ui/attention-line";
-import { Button, IconButton } from "@thinkrail/extension-sdk/ui/button";
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@thinkrail/extension-sdk/ui/dialog";
-import { watchFont } from "@thinkrail/extension-sdk/ui/fonts";
-import { isImeComposing } from "@thinkrail/extension-sdk/ui/keyboard";
-import { Textarea } from "@thinkrail/extension-sdk/ui/textarea";
+import { Button, IconButton, withIconClass } from "@thinkrail/extension-sdk/ui/button";
 import { onThemeSwap } from "@thinkrail/extension-sdk/ui/theme";
 import { cn } from "@thinkrail/extension-sdk/ui/utils";
 import { FramedResourcePreview, useOptionalResourceHost, useResourceScope } from "@thinkrail/extension-sdk/resources";
-import { defineWebExtension, strArg, type ToolRenderProps } from "@thinkrail/extension-sdk/web";
+import { defineWebExtension, numArg, resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-sdk/web";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
-function Card({ args, interaction }: ToolRenderProps) {
+const Glyph = withIconClass(RiPaletteLine, "${PREFIX}:text-primary");
+
+function Card({ args, result, interaction }: ToolRenderProps) {
 	const [text, setText] = useState("");
 	const scope = useResourceScope();
 	const host = useOptionalResourceHost();
 	useEffect(() => onThemeSwap(() => setText("")), []);
-	useEffect(() => watchFont("tr-text-ui", ["family"], () => setText("")), []);
 	return (
 		<div className={cn("${PREFIX}:flex ${PREFIX}:gap-8 ${PREFIX}:bg-feedback-info-subtle", text && "${PREFIX}:border")}>
-			<AttentionLine live={false} />
-			<Button variant="outline" size="s" iconLeft={RiPaletteLine} onClick={() => host?.openFile(scope?.workspaceId ?? "", "a.md")}>
-				{strArg(args, "city")}
+			<Button variant="outline" size="s" iconLeft={Glyph} onClick={() => host?.openFile(scope?.workspaceId ?? "", "a.md")}>
+				{strArg(args, "city")} {numArg(args, "days") ?? 0} {resultText(result)}
 			</Button>
 			<IconButton icon={RiPaletteLine} label="Pick" onClick={() => interaction?.focusComposer()} />
-			<Textarea value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => isImeComposing(event.nativeEvent)} />
-			<Dialog>
-				<DialogTrigger asChild><Button>Open</Button></DialogTrigger>
-				<DialogContent><DialogTitle>Gate</DialogTitle></DialogContent>
-			</Dialog>
+			<textarea className="${PREFIX}:rounded-md" value={text} onChange={(event) => setText(event.target.value)} />
 			{scope ? <FramedResourcePreview path="a.md" title="a" frameClassName="${PREFIX}:h-200" testIdPrefix="gate" /> : null}
 			{text ? createPortal(<span>{text}</span>, document.body) : null}
 		</div>
@@ -286,6 +311,7 @@ try {
 	console.log(
 		`check-extension-packages: node ${run("node", ["--version"], repoRoot).trim()}, npm ${run("npm", ["--version"], repoRoot).trim()}, bun ${Bun.version}`,
 	);
+	assertDocumentedRanges(sharedApi(sdk.dir));
 	const tarballs = new Map<PiPackage, string>();
 	for (const pkg of packages) {
 		const tarball = packPiPackage(pkg, scratch);

@@ -320,12 +320,16 @@ key for the on/off switch and its settings) and must not equal a built-in's `nam
   major and layer order, and the React major. Breaking any of them is API v2.
 
 **SDK** — one published package, `@thinkrail/extension-sdk` ([[module-extension-sdk]]), versioned with the
-extension API and released like the portable pi packages (Decision 20): `./server` and `./web` (the
-`define*` helpers and types of [[module-extension-api]]), `./ui/*` and `./resources` (type declarations
+extension API (its `major.minor` is the API, so an extension depends on `~<major.minor>.0`) and released
+like the portable pi packages (Decision 20): `./server` (the server contract of [[module-extension-api]]),
+`./web` (the installed-extension contract: a `WebExtension` of only `name` and `toolRenderers`, none of
+the built-in-only fields), `./ui/button`, `./ui/theme`, `./ui/utils` and `./resources` (type declarations
 for the shared set), the build command `thinkrail-extension build --prefix <x>` (the prefix every
 utility in the extension's stylesheet carries), the manifest of shared export names and the theme file.
 Its build accepts only an `api` equal to its own version, since a bundle can only rely on the export
-names its SDK knew. It imports no pi value at runtime. The in-repo `extension-api`, `ui` and
+names its SDK knew. Each API version's surface — the allow-list and the SDK's declarations — is a
+committed snapshot a test holds the code to: a removal or change needs a new major, an addition a new
+minor and its own snapshot. It imports no pi value at runtime. The in-repo `extension-api`, `ui` and
 `resource-renderers` packages stay private; samples built with it live in `extension-examples/`
 ([[module-extension-examples]]).
 

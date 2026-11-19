@@ -1,1 +1,1 @@
-export * from "@thinkrail/ui/theme";
+export { onThemeSwap } from "@thinkrail/ui/theme";

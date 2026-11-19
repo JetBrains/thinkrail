@@ -45,29 +45,9 @@
 			"types": "./dist/types/resources.d.ts",
 			"default": "./dist/host/resources.js"
 		},
-		"./ui/attention-line": {
-			"types": "./dist/types/ui/attention-line.d.ts",
-			"default": "./dist/host/ui/attention-line.js"
-		},
 		"./ui/button": {
 			"types": "./dist/types/ui/button.d.ts",
 			"default": "./dist/host/ui/button.js"
-		},
-		"./ui/dialog": {
-			"types": "./dist/types/ui/dialog.d.ts",
-			"default": "./dist/host/ui/dialog.js"
-		},
-		"./ui/fonts": {
-			"types": "./dist/types/ui/fonts.d.ts",
-			"default": "./dist/host/ui/fonts.js"
-		},
-		"./ui/keyboard": {
-			"types": "./dist/types/ui/keyboard.d.ts",
-			"default": "./dist/host/ui/keyboard.js"
-		},
-		"./ui/textarea": {
-			"types": "./dist/types/ui/textarea.d.ts",
-			"default": "./dist/host/ui/textarea.js"
 		},
 		"./ui/theme": {
 			"types": "./dist/types/ui/theme.d.ts",
@@ -86,6 +66,7 @@
 		"provenance": true
 	},
 	"scripts": {
+		"api:snapshot": "bun tools/apiSnapshot.ts",
 		"build": "bun tools/build.ts",
 		"generate": "NODE_ENV=production bun tools/generate.ts",
 		"prepack": "bun tools/build.ts",

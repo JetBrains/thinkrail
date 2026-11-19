@@ -1,11 +1,12 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { SHARED_MODULE_EXPORTS } from "@thinkrail/extension-api/installed";
 import {
 	EXTENSION_API_VERSION,
 	SHARED_SPECIFIERS,
 	type SharedModulesManifest,
 } from "../src/shared";
-import { SHARED_SOURCES } from "./sources";
+import { SHARED_SOURCES, WHOLE_PUBLIC_API_EXCEPT } from "./sources";
 
 const ASSETS = new URL("../assets/", import.meta.url);
 const APP_SRC = new URL("../../../apps/web/src/", import.meta.url);
@@ -13,7 +14,17 @@ const APP_SRC = new URL("../../../apps/web/src/", import.meta.url);
 export const MANIFEST_FILE = new URL("shared-modules.json", ASSETS);
 export const THEME_FILE = new URL("thinkrail-theme.css", ASSETS);
 
-const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
+const NOT_PUBLIC = /^(?:default$|__|unstable_|experimental_)/;
+
+export function unlistedPublicNames(
+	namespace: Record<string, unknown>,
+	listed: readonly string[],
+	leftOut: readonly string[],
+): string[] {
+	return Object.keys(namespace)
+		.filter((name) => !NOT_PUBLIC.test(name) && !listed.includes(name) && !leftOut.includes(name))
+		.sort();
+}
 
 export async function sharedModulesManifest(): Promise<SharedModulesManifest> {
 	if (process.env.NODE_ENV !== "production") {
@@ -22,17 +33,22 @@ export async function sharedModulesManifest(): Promise<SharedModulesManifest> {
 	const modules = {} as SharedModulesManifest["modules"];
 	for (const specifier of SHARED_SPECIFIERS) {
 		const source = SHARED_SOURCES[specifier];
-		const namespace = (await import(source.module)) as Record<string, unknown>;
-		const names = Object.keys(namespace).filter(
-			(name) => name !== "default" && name !== "__esModule" && IDENTIFIER.test(name),
-		);
-		if (source.pick) {
-			const missing = source.pick.filter((name) => !names.includes(name));
-			if (missing.length > 0) {
-				throw new Error(`${source.module} no longer exports ${missing.join(", ")}`);
-			}
+		const namespace = (await import(source)) as Record<string, unknown>;
+		const names: readonly string[] = SHARED_MODULE_EXPORTS[specifier];
+		const missing = names.filter((name) => namespace[name] === undefined);
+		if (missing.length > 0) {
+			throw new Error(
+				`${source} no longer exports ${missing.join(", ")}, which extension API ${EXTENSION_API_VERSION} promises as ${specifier}`,
+			);
 		}
-		modules[specifier] = [...(source.pick ?? names)].sort();
+		const leftOut = WHOLE_PUBLIC_API_EXCEPT[specifier];
+		const unlisted = leftOut ? unlistedPublicNames(namespace, names, leftOut) : [];
+		if (unlisted.length > 0) {
+			throw new Error(
+				`${source} now exports ${unlisted.join(", ")}, which extension API ${EXTENSION_API_VERSION} does not list as ${specifier}: allow-list it in SHARED_MODULE_EXPORTS (an API minor, with a new snapshot) or leave it out in WHOLE_PUBLIC_API_EXCEPT (packages/extension-sdk/tools/sources.ts)`,
+			);
+		}
+		modules[specifier] = [...names];
 	}
 	return { api: EXTENSION_API_VERSION, modules };
 }
