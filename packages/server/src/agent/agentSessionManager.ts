@@ -29,6 +29,7 @@ import type {
 	RefreshedModels,
 	RemovedQueuedMessage,
 	ReviewFixDetails,
+	SessionCompletion,
 	SessionCreatedPayload,
 	SessionDeletedPayload,
 	SessionEventPayload,
@@ -413,6 +414,10 @@ function persistedCompletion(sessionId: string) {
 	return stateReceipts?.baselineComplete
 		? (lifecycle().completionBySession[sessionId] ?? null)
 		: undefined;
+}
+
+export function sessionCompletionOf(sessionId: string): SessionCompletion | null {
+	return persistedCompletion(sessionId)?.completion ?? null;
 }
 
 function backgroundWorkActive(entry: Entry): boolean {

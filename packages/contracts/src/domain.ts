@@ -1046,6 +1046,11 @@ export interface PiPackageSummary {
 	enabled: boolean;
 	/** `true` for a user declaration pi leaves aside because the repository declares the same identity. */
 	shadowed?: boolean;
+	/**
+	 * The ThinkRail extension, on now, that replaces this installed package (its `supersedesPackages`):
+	 * host sessions leave the package's extensions out. Absent otherwise, and before v128.
+	 */
+	supersededBy?: { name: string; title: string };
 	resources: PiPackageResource[];
 }
 
@@ -1625,9 +1630,22 @@ export interface ExtensionCatalogEntry {
 	description?: string;
 	enabled: boolean;
 	tools: string[];
+	/** Whether the descriptor composes parent factories (`extensions` or `sessionExtensions`); absent before `EXTENSION_QUERY_PROTOCOL_VERSION`. */
+	hasParentExtensions?: boolean;
 	hasChildExtensions: boolean;
 	/** Absent before `EXTENSION_SETTINGS_PROTOCOL_VERSION`. */
 	settings?: ExtensionSettingDescriptor[];
+	/** The server half's payload version for its `extension.query` methods; absent when undeclared or before `EXTENSION_QUERY_PROTOCOL_VERSION`. */
+	apiVersion?: number;
+}
+
+export interface ExtensionQueryParams {
+	/** An `ExtensionCatalogEntry.name`. */
+	extension: string;
+	/** A query method that entry's server half declares. */
+	method: string;
+	/** The extension's own payload, validated by the extension. */
+	params?: unknown;
 }
 
 /** How many recently chosen models the host remembers. */

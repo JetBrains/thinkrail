@@ -58,8 +58,10 @@ the palette ranks with — kept here so host-side search can rank with the same 
   the four `feedback.survey.submit` refusals `SURVEY_INVALID`, `SURVEY_UNAVAILABLE`, `SURVEY_CHANGED` and
   `SURVEY_NOT_SENT`, and `fonts.installed`'s `INSTALLED_FONTS_UNAVAILABLE`: the host's OS font service could
   not be read, a failure analytics tells apart from a lost connection while the font picker offers Retry for
-  either; and the closed `SPEECH_ERROR_CODES` (§ Voice input), each naming a voice state the UI words
-  differently), so a client can react to one specific failure
+  either; the two `extension.query` refusals **`EXTENSION_DISABLED`** (the user switched the extension
+  off — its panel shows the off placeholder) and **`UNKNOWN_EXTENSION_QUERY`** (no such extension or method
+  on this host, or a malformed request); and the closed `SPEECH_ERROR_CODES` (§ Voice input), each naming
+  a voice state the UI words differently), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it or Error Tracking must tell it apart (it never sees `message`). Two codes exist for the latter:
   **`REQUEST_REPLAY_OVERFLOW`** — the host's replay namespace for this page is full
@@ -272,11 +274,18 @@ optional `model` and `thinking`, disabled entries included, never a prompt body 
     and mapped prompt-template listings), and **`SkillCatalogEntry`** + **`SkillDecision`** (`load`/`untrusted`/`pending-ack`/
     `disabled`) — the workspace Skills manager's `skills.state` rows; the additive optional `manualOnly`
     marks pi's `disable-model-invocation` skills, which pi never lists in the prompt (an older host omits it).
-  - **`ExtensionCatalogEntry`** (`{ name, title, description?, enabled, tools, hasChildExtensions, settings? }`) — one
+  - **`ExtensionCatalogEntry`** (`{ name, title, description?, enabled, tools, hasParentExtensions?, hasChildExtensions, settings?, apiVersion? }`) — one
     host-registry ThinkRail extension as `extension.list` reports it; `name` is the identity the
-    `AppConfig.disabledExtensions` list keys on, `tools` the names its parent factories register, and
+    `AppConfig.disabledExtensions` list keys on, `tools` the names its parent factories register,
+    `hasParentExtensions` (absent below `EXTENSION_QUERY_PROTOCOL_VERSION`) whether its descriptor
+    composes any parent factory at all — so an empty `tools` reads as "queries only by design" rather than
+    "its factories failed to load" ([[module-artifact-tests]]' smoke relies on it),
     `settings` (`ExtensionSettingDescriptor[]`, `{ key, default: boolean }`, absent below
-    `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v105) the boolean settings the extension declares.
+    `EXTENSION_SETTINGS_PROTOCOL_VERSION` = v105) the boolean settings the extension declares, and
+    `apiVersion` (absent when undeclared, and below `EXTENSION_QUERY_PROTOCOL_VERSION` = v128) the version
+    of the payloads its server half answers through `extension.query`. Neither query methods nor panels are
+    in the catalog: the extension's own halves agree on the methods, and the web registry is the panels' one
+    authority.
     `ASK_DISCUSS_PROTOCOL_VERSION` (v105) is the host version that renders `ask_user_question`
     `kind: "discuss"` answers; the card withholds Discuss below it.
   - **`SessionSummary`** — a chat session as the host reports it for hydration (read side); `live`
@@ -1002,7 +1011,12 @@ optional `model` and `thinking`, disabled entries included, never a prompt body 
   frames to the workspaces whose diff base that ref is, so their git-derived reads re-converge) / **`skills.state`** (`SkillCatalogEntry[]` — full catalog +
   per-skill `decision` + `group` — for a `workspaceId`) / **`extension.list`** (`ExtensionCatalogEntry[]`,
   no params — the host registry joined with `disabledExtensions`; v82, **`EXTENSION_CATALOG_PROTOCOL_VERSION`**;
-  there is no write method — the Settings switch writes `settings.update { disabledExtensions }`) / **`packages.*`**
+  there is no write method — the Settings switch writes `settings.update { disabledExtensions }`) /
+  **`extension.query`** (`ExtensionQueryParams` `{ extension, method, params? }` → `unknown`; v128,
+  **`EXTENSION_QUERY_PROTOCOL_VERSION`**: one query of a host-registry extension's server half (reads, and
+  writes only to the extension's own data folder or the workspace's Artifacts).
+  The payload is the extension's own, versioned by its catalog `apiVersion` rather than by the protocol,
+  and the extension validates `params`; refusals are `EXTENSION_DISABLED` / `UNKNOWN_EXTENSION_QUERY`) / **`packages.*`**
   (installed pi packages; v99, § pi packages below) / **`project.skills`** (the same, project-scoped, for
   the pre-session manager) / **`session.reloadResources`** (re-scan skills + rebuild the system prompt for one
   running session; rejected while streaming) /
@@ -1428,7 +1442,11 @@ and what it loaded, never pi's own types.
   (the host's effective state: `false` when any of `switchKeys` is in `disabledPackages`; a client
   renders it as is, never recomputes it), `shadowed` (a user declaration pi leaves aside because the
   repository declares the same identity outright; a repository `autoload: false` override is a delta
-  over the user install, so its resources land on the user row and nothing is shadowed), and
+  over the user install, so its resources land on the user row and nothing is shadowed), `supersededBy`
+  (`{ name, title }` of the ThinkRail extension, on now, whose `supersedesPackages` names this installed
+  package — host sessions leave its extensions out, so the row says it is replaced rather than showing a
+  package that never loads as merely enabled; absent otherwise and before v128; a switch of that
+  extension re-lists through `packages.changed`), and
   `resources: PiPackageResource[]` — every extension, skill and prompt file (themes are terminal-only and
   never listed) with pi's `enabled` (read-only here: a resource inside a package is switched with its
   package), pi's `pi config` display name, and for an extension some loader has recorded the `tools`
@@ -1450,7 +1468,7 @@ and what it loaded, never pi's own types.
   (opens the install folder or a loose file's folder; the path must be in the current catalog). The
   package switch is `settings.update { disabledPackages }`, converging on `settings.changed` like the
   extension switches. **`packages.changed`** (no payload) tells an open page to re-list after an outside
-  edit, a chat load that installed something, or an update.
+  edit, a chat load that installed something, an update, or a package or extension switch.
 - Error codes: `PACKAGE_SOURCE_INVALID` (also an unsupported `type` / `scope`, validated at the boundary),
   `PACKAGE_OFFLINE` (npm/git only; local installs work offline), `PACKAGE_UNTRUSTED`, `PACKAGE_UNKNOWN`,
   `PACKAGE_INSTALL_FAILED`, `PACKAGE_REMOVE_FAILED`, `PACKAGE_UPDATE_FAILED`,

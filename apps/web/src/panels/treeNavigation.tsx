@@ -2,18 +2,16 @@ import { useT } from "@thinkrail/locales/react";
 import { isContextMenuKey } from "@thinkrail/ui/context-menu";
 import { isImeComposing, twinArrow } from "@thinkrail/ui/keyboard";
 import { type LocalKeyEvent, type LocalKeys, useLocalKeys } from "@thinkrail/ui/local-keys";
+import { TreeItemScopeContext, type TreeMatch } from "@thinkrail/ui/tree-item";
 import { cn } from "@thinkrail/ui/utils";
 import {
-	createContext,
 	type FocusEvent,
 	type KeyboardEvent,
 	type ReactNode,
-	use,
 	useCallback,
 	useMemo,
 	useRef,
 	useState,
-	useSyncExternalStore,
 } from "react";
 import { LOCAL_KEY_DEFAULTS } from "../keybindings";
 import { resolveTreeMove, type TreeMove, type TreeMoveRow } from "../lib";
@@ -130,8 +128,6 @@ function createTreeCursor() {
 
 type TreeCursor = ReturnType<typeof createTreeCursor>;
 
-type TreeMatch = "match" | "current";
-
 function createTreeMarks() {
 	let matches: ReadonlySet<string> = new Set();
 	let current: string | null = null;
@@ -153,22 +149,12 @@ function createTreeMarks() {
 	};
 }
 
-type TreeMarks = ReturnType<typeof createTreeMarks>;
-
-interface TreeScope {
-	cursor: TreeCursor;
-	marks: TreeMarks;
-	focusDefault: boolean;
-}
-
 interface TreeSearch {
 	origin: string | null;
 	current: string | null;
 	query: string;
 	matches: readonly string[];
 }
-
-const TreeContext = createContext<TreeScope | null>(null);
 
 function ownItem(container: Element, target: EventTarget | null): HTMLElement | null {
 	return target instanceof HTMLElement &&
@@ -226,8 +212,6 @@ function reconcile(container: Element, cursor: TreeCursor, records: readonly Mut
 	if (selected) cursor.set(selected.dataset.treeItem ?? null, true);
 	else if (!present) cursor.set(items[0]?.dataset.treeItem ?? null, false);
 }
-
-const subscribeNothing = () => () => {};
 
 function searchRows(container: Element): TreeSearchRow[] {
 	return treeItems(container).map((item) => ({
@@ -435,7 +419,7 @@ export function Tree({
 	};
 
 	return (
-		<TreeContext value={scope}>
+		<TreeItemScopeContext value={scope}>
 			{search ? (
 				<TreeSearchField
 					tree={label}
@@ -470,52 +454,8 @@ export function Tree({
 					{children}
 				</ul>
 			</div>
-		</TreeContext>
+		</TreeItemScopeContext>
 	);
-}
-
-export function useTreeItem(
-	id: string,
-	{
-		level,
-		label,
-		expanded,
-		selected = false,
-		toggles = false,
-		openKept = false,
-	}: {
-		level: number;
-		label: string;
-		expanded?: boolean | undefined;
-		selected?: boolean;
-		toggles?: boolean;
-		openKept?: boolean;
-	},
-) {
-	const scope = use(TreeContext);
-	const current = useSyncExternalStore(
-		scope?.cursor.subscribe ?? subscribeNothing,
-		() => scope?.cursor.current() === id,
-		() => false,
-	);
-	const match = useSyncExternalStore(
-		scope?.marks.subscribe ?? subscribeNothing,
-		() => scope?.marks.of(id),
-		() => undefined,
-	);
-	return {
-		role: "treeitem" as const,
-		tabIndex: scope ? (current ? 0 : -1) : undefined,
-		"aria-level": level,
-		"aria-expanded": expanded,
-		"aria-current": selected ? ("true" as const) : undefined,
-		"data-tree-item": id,
-		"data-tree-label": label,
-		"data-tree-toggle": toggles ? id : undefined,
-		"data-tree-keep": openKept || undefined,
-		"data-focus-default": (current && scope?.focusDefault) || undefined,
-		"data-tree-match": match,
-	};
 }
 
 export const treeRowControlProps = { tabIndex: -1, "aria-hidden": true } as const;

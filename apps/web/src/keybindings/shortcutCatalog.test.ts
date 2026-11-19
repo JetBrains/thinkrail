@@ -137,6 +137,8 @@ describe("the shortcut catalog", () => {
 				.slice(-2)
 				.map((row) => row.id),
 		).toEqual(["hint-mode.show", "hint-mode.exit"]);
+		expect(mac.find((row) => row.id === "hint-mode.show")?.extension).toBe("hint-mode");
+		expect(mac.find((row) => row.id === "search.open")?.extension).toBeUndefined();
 		expect(labels(rowsFor(false, LINUX), "hint-mode.show")).toBeUndefined();
 		const off = rowsFor(false, LINUX, { extensions: [{ ...extensions[0], enabled: false }] });
 		expect(labels(off, "hint-mode.show")).toBeUndefined();

@@ -401,6 +401,7 @@
 	"chat.transcript.inputNeeded": "需要你輸入內容：{{title}}",
 	"chat.transcript.latest": "最新",
 	"chat.transcript.locateFailed": "找不到訊息 — 工作階段可能已變更",
+	"chat.transcript.locatedNearest": "已顯示最接近的訊息——此對話中未顯示該呼叫本身",
 	"chat.transcript.refreshFailed": "無法重新整理此對話",
 	"chat.trust.enablesLoads": "信任後，會載入其中的{{loads}}。",
 	"chat.trust.enablesLoadsAndRuns": "信任後，會載入其中的{{loads}}，並允許其中的{{runs}}在這台電腦上執行程式碼。",

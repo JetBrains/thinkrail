@@ -25,10 +25,13 @@ import {
 	extensionSkillRoots,
 	type HostSessionServices,
 	omitDisabledRegistryExtensions,
+	omitSupersededPackages,
 	preferRegistryTools,
 	registryInlineExtensions,
 	STAGED_HOST_SKILLS_ROUTE,
 	serverExtensions,
+	supersedablePackagesIn,
+	supersedingExtension,
 } from "../extensions";
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
 import { artifactsGuard } from "./artifactsGuard";
@@ -358,10 +361,33 @@ function loaderPolicyKey(settings = extensionSettings()): string {
 	return `${packagePolicyKey()}\0${extensionSettingsKey(settings)}`;
 }
 
-/** `true` when the loader last resolved under a package policy or extension settings other than the current ones. */
+/** What a loader's last load found of the packages registry extensions supersede, and which it left out. */
+interface SupersededAtLoad {
+	present: ReadonlySet<string>;
+	omitted: string;
+}
+
+const loaderSupersedes = new WeakMap<ResourceLoader, SupersededAtLoad>();
+
+function omittedKey(present: ReadonlySet<string>, isDisabled: (name: string) => boolean): string {
+	return [...present]
+		.filter((name) => supersedingExtension(name, isDisabled) !== undefined)
+		.sort()
+		.join("\n");
+}
+
+/**
+ * `true` when the loader last resolved under a package policy or extension settings other than the
+ * current ones, or when a superseding extension's switch flipped over a package its last load found.
+ */
 export function isLoaderPolicyStale(loader: ResourceLoader): boolean {
 	const recorded = loaderPolicies.get(loader);
-	return recorded !== undefined && recorded !== loaderPolicyKey();
+	if (recorded !== undefined && recorded !== loaderPolicyKey()) return true;
+	const superseded = loaderSupersedes.get(loader);
+	return (
+		superseded !== undefined &&
+		superseded.omitted !== omittedKey(superseded.present, isExtensionDisabled)
+	);
 }
 
 let installedPackagesListener: (() => void) | null = null;
@@ -459,6 +485,7 @@ export async function buildResourceLoader(
 		disabledAtReload,
 	);
 	const agentDir = getAgentDir();
+	const superseded: SupersededAtLoad = { present: new Set(), omitted: "" };
 	const common = {
 		cwd,
 		agentDir,
@@ -468,7 +495,14 @@ export async function buildResourceLoader(
 		extensionsOverride: (result: LoadExtensionsResult) => {
 			recordProviderOwners(result);
 			recordLoadedExtensions(result);
-			return preferRegistryTools(omitDisabledRegistryExtensions(result, isDisabledAtReload));
+			superseded.present = supersedablePackagesIn(result);
+			superseded.omitted = omittedKey(superseded.present, isDisabledAtReload);
+			return preferRegistryTools(
+				omitSupersededPackages(
+					omitDisabledRegistryExtensions(result, isDisabledAtReload),
+					isDisabledAtReload,
+				),
+			);
 		},
 	};
 	const devExtensionPaths = bundled ? [] : resolveDevPaths().extensionPaths;
@@ -500,6 +534,7 @@ export async function buildResourceLoader(
 			...common,
 			additionalExtensionPaths: devExtensionPaths,
 		});
+		loaderSupersedes.set(loader, superseded);
 		const reloadTrusted = loader.reload.bind(loader);
 		loader.reload = async (options) => {
 			applyCurrentPolicy(loader);
@@ -541,6 +576,7 @@ export async function buildResourceLoader(
 		noExtensions: true,
 		additionalExtensionPaths,
 	});
+	loaderSupersedes.set(loader, superseded);
 	const reloadResolved = loader.reload.bind(loader);
 	loader.reload = async (options) => {
 		applyCurrentPolicy(loader);

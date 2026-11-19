@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { RiBarChartBoxLine } from "@remixicon/react";
 import { type NativePageZoomAction, PROTOCOL_VERSION, type Workspace } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
+import type { RegisteredPanel } from "../extensions";
 import { type KeybindingId, keybindingShortcut, resolveKeybindings } from "../keybindings";
 import { availableSettings, type SettingsCatalogContext } from "../panels/settingsCatalog";
 import { settingsNavGroups } from "../panels/settingsNav";
@@ -96,6 +98,7 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 		settingsGroups: [],
 		settingEntries: [],
 		tabActions: [],
+		extensionPanels: [],
 		actions: {
 			newWorkspace: noop,
 			newProjectlessChat: noop,
@@ -109,6 +112,8 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 			toggleRight: noop,
 			toggleBottom: noop,
 			showTool: noop,
+			openExtensionPanel: noop,
+			openExtensionPanelInProject: noop,
 			showFiles: noop,
 			focusRegion: noop,
 			focusComposer: noop,
@@ -278,6 +283,121 @@ describe("palette focus commands", () => {
 		row("view.changes", catalog)?.run?.();
 		expect(shown).toEqual(["all", "changed"]);
 		expect(row("view.changes", deps({ changesAvailable: false }))).toBeUndefined();
+	});
+});
+
+describe("palette extension panel commands", () => {
+	const load = async () => ({ default: () => null });
+	const projectPanel: RegisteredPanel = {
+		extension: "insights",
+		panel: "sessions",
+		declaration: {
+			title: "settings.nav.extensions",
+			icon: RiBarChartBoxLine,
+			scopes: ["project"],
+			load,
+		},
+	};
+	const sessionPanel: RegisteredPanel = {
+		extension: "insights",
+		panel: "turn",
+		declaration: { title: "common.retry", icon: RiBarChartBoxLine, scopes: ["session"], load },
+	};
+
+	test("lists one command per project-scoped panel while a workspace is active, and opens it there", () => {
+		const opened: [string, RegisteredPanel][] = [];
+		const catalog = deps({
+			extensionPanels: [projectPanel, sessionPanel],
+			actions: {
+				...deps().actions,
+				openExtensionPanel: (workspaceId, panel) => opened.push([workspaceId, panel]),
+			},
+		});
+		const command = row("view.extension.insights.sessions", catalog);
+		expect(command).toMatchObject({
+			title: "Open Extensions & skills",
+			subtitle: "View",
+			icon: RiBarChartBoxLine,
+		});
+		expect(row("view.extension.insights.turn", catalog)).toBeUndefined();
+		command?.run?.();
+		expect(opened).toEqual([["w1", projectPanel]]);
+		expect(
+			row(
+				"view.extension.insights.sessions",
+				deps({ extensionPanels: [projectPanel], activeWorkspace: null, contextProjectId: null }),
+			),
+		).toBeUndefined();
+	});
+
+	test("on a project's Home, a panel command enters the project to open it there", () => {
+		const opened: [string, RegisteredPanel][] = [];
+		const home = deps({
+			extensionPanels: [projectPanel],
+			activeWorkspace: null,
+			contextProjectId: "p1",
+			actions: {
+				...deps().actions,
+				openExtensionPanel: () => {
+					throw new Error("no workspace is active");
+				},
+				openExtensionPanelInProject: (projectId, panel) => opened.push([projectId, panel]),
+			},
+		});
+		row("view.extension.insights.sessions", home)?.run?.();
+		expect(opened).toEqual([["p1", projectPanel]]);
+	});
+
+	test("a panel is also found by its translated keywords", () => {
+		const withKeywords: RegisteredPanel = {
+			...projectPanel,
+			declaration: { ...projectPanel.declaration, keywords: "sessionInsights.panel.keywords" },
+		};
+		const keywords = (panel: RegisteredPanel) =>
+			row("view.extension.insights.sessions", deps({ extensionPanels: [panel] }))?.keywords;
+		expect(keywords(withKeywords)).toContain(
+			"cost tokens stats statistics usage spend session history analysis",
+		);
+		expect(keywords(projectPanel)).toEqual(["panel", "extension", "insights", "sessions"]);
+	});
+
+	test("a panel with a rail command shows that command's current chord, rebound or not", () => {
+		const railed: RegisteredPanel = {
+			...projectPanel,
+			declaration: { ...projectPanel.declaration, rail: { command: "insights.open" } },
+		};
+		const extensions = [
+			{
+				extension: "insights",
+				enabled: true,
+				commands: [
+					{
+						id: "insights.open",
+						title: "common.retry" as const,
+						chords: [{ code: "KeyI", key: "I", ctrl: true, alt: true }],
+					},
+				],
+			},
+		];
+		const shortcut = (overrides: Record<string, readonly string[]>, platform: string) =>
+			row(
+				"view.extension.insights.sessions",
+				deps({
+					extensionPanels: [railed],
+					keybindings: resolveKeybindings({ platform, extensions, overrides }),
+				}),
+			)?.shortcut;
+		expect(shortcut({}, "Win32")).toMatchObject({ key: "I", ctrl: true, alt: true });
+		expect(shortcut({}, "MacIntel")).toMatchObject({ key: "I", ctrl: true, alt: true });
+		expect(shortcut({ "insights.open": ["Mod+Shift+KeyY"] }, "Win32")).toMatchObject({
+			key: "Y",
+			mod: true,
+			shift: true,
+		});
+		expect(shortcut({ "insights.open": [] }, "Win32")).toBeUndefined();
+		expect(
+			row("view.extension.insights.sessions", deps({ extensionPanels: [projectPanel] })),
+		).not.toHaveProperty("shortcut");
 	});
 });
 

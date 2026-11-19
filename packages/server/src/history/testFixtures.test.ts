@@ -3,8 +3,20 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ToolResponsePendingDetails } from "@thinkrail/contracts";
-import { defaultSessionDirFor, writeFixtureSession } from "./testFixtures";
+import type { ToolResponsePendingDetails, Usage } from "@thinkrail/contracts";
+import { deriveChildSessionFile } from "pi-delegation";
+import { defaultSessionDirFor, delegationSessionDirFor, writeFixtureSession } from "./testFixtures";
+
+function fixtureUsage(input: number, output: number, cost: number): Usage {
+	return {
+		input,
+		output,
+		cacheRead: 0,
+		cacheWrite: 0,
+		totalTokens: input + output,
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: cost },
+	};
+}
 
 describe("writeFixtureSession — pinned against pi's real SessionManager", () => {
 	test("explicit sessionDir layout: SessionManager.list(cwd, dir) round-trips id/cwd/name/messageCount", async () => {
@@ -98,6 +110,181 @@ describe("writeFixtureSession — pinned against pi's real SessionManager", () =
 			});
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("system messages, a model change and a compaction round-trip through SessionManager's context", () => {
+		const dir = mkdtempSync(join(tmpdir(), "trpi-fixture-system-"));
+		try {
+			const tool = { name: "read", description: "Read a file.", parameters: { type: "object" } };
+			const { path } = writeFixtureSession(dir, {
+				id: "pin-system-1",
+				cwd: "/tmp/thinkrail-system-pin",
+				messages: [
+					{
+						role: "system",
+						sections: { preamble: "You are a coding agent." },
+						toolsAdded: [tool],
+						timestamp: 1_700_000_000_000,
+					},
+					{ role: "user", text: "First.", timestamp: 1_700_000_000_500 },
+					{ role: "assistant", text: "One.", timestamp: 1_700_000_001_000 },
+					{
+						role: "modelChange",
+						provider: "openai",
+						modelId: "gpt-test",
+						timestamp: 1_700_000_001_500,
+					},
+					{ role: "user", text: "Second.", timestamp: 1_700_000_002_000 },
+					{
+						role: "compaction",
+						summary: "We said one.",
+						tokensBefore: 1_000,
+						firstKept: 4,
+						systemMessage: {
+							role: "system",
+							content: "",
+							sections: { preamble: "You are a coding agent." },
+							toolsAdded: [tool],
+							timestamp: 1_700_000_002_500,
+						},
+						timestamp: 1_700_000_002_500,
+					},
+				],
+			});
+
+			const context = SessionManager.open(path).buildSessionContext();
+			expect(context.model).toEqual({ provider: "openai", modelId: "gpt-test" });
+			expect(context.messages.map((message) => message.role)).toEqual([
+				"system",
+				"compactionSummary",
+				"user",
+			]);
+			expect(context.messages[0]).toMatchObject({
+				sections: { preamble: "You are a coding agent." },
+			});
+			expect(context.messages[2]).toMatchObject({ content: "Second." });
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("an assistant's provider, model, usage and duration and an erroring tool result round-trip through SessionManager", () => {
+		const dir = mkdtempSync(join(tmpdir(), "trpi-fixture-usage-"));
+		try {
+			const priced = fixtureUsage(1_200, 300, 0.42);
+			const unpriced = fixtureUsage(800, 100, 0);
+			const { path } = writeFixtureSession(dir, {
+				id: "pin-usage-1",
+				cwd: "/tmp/thinkrail-usage-pin",
+				name: "Usage pin",
+				messages: [
+					{ role: "user", text: "Run the tests.", timestamp: 1_700_000_000_000 },
+					{
+						role: "assistant",
+						content: [
+							{ type: "toolCall", id: "bash-1", name: "bash", arguments: { command: "bun test" } },
+						],
+						provider: "anthropic",
+						model: "claude-sonnet-4-5",
+						usage: priced,
+						stopReason: "toolUse",
+						timestamp: 1_700_000_001_000,
+						durationMs: 900,
+					},
+					{
+						role: "toolResult",
+						toolCallId: "bash-1",
+						toolName: "bash",
+						content: [{ type: "text", text: "1 test failed" }],
+						isError: true,
+						timestamp: 1_700_000_002_000,
+						durationMs: 650,
+					},
+					{
+						role: "assistant",
+						text: "One test fails.",
+						provider: "claude-bridge",
+						model: "claude-sonnet-4-5",
+						usage: unpriced,
+						timestamp: 1_700_000_003_000,
+					},
+				],
+			});
+
+			const manager = SessionManager.open(path);
+			const info = manager.getEntries().find((entry) => entry.type === "session_info");
+			expect(info?.timestamp).toBe(manager.getHeader()?.timestamp);
+			const messages = manager.buildSessionContext().messages;
+			expect(messages).toHaveLength(4);
+			expect(messages[1]).toMatchObject({
+				role: "assistant",
+				provider: "anthropic",
+				model: "claude-sonnet-4-5",
+				usage: priced,
+				durationMs: 900,
+				content: [{ type: "toolCall", id: "bash-1", name: "bash" }],
+			});
+			expect(messages[2]).toMatchObject({
+				role: "toolResult",
+				toolCallId: "bash-1",
+				isError: true,
+				durationMs: 650,
+			});
+			expect(messages[3]).toMatchObject({
+				role: "assistant",
+				provider: "claude-bridge",
+				usage: unpriced,
+			});
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("a custom message lands as pi's custom_message entry in the conversation", () => {
+		const dir = mkdtempSync(join(tmpdir(), "trpi-fixture-custom-"));
+		try {
+			const { path } = writeFixtureSession(dir, {
+				id: "pin-custom-1",
+				cwd: "/tmp/thinkrail-custom-pin",
+				messages: [
+					{ role: "user", text: "Build it in the background.", timestamp: 1_700_000_000_000 },
+					{
+						role: "custom",
+						customType: "background-command-completion",
+						text: "Finished background command bun run build (exit 0)",
+						details: { delivery: "wake" },
+						timestamp: 1_700_000_060_000,
+					},
+				],
+			});
+			const manager = SessionManager.open(path);
+			const entry = manager.getEntries().find((candidate) => candidate.type === "custom_message");
+			expect(entry).toMatchObject({
+				customType: "background-command-completion",
+				content: "Finished background command bun run build (exit 0)",
+				details: { delivery: "wake" },
+			});
+			expect(manager.buildSessionContext().messages).toHaveLength(2);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("a child transcript written under delegationSessionDirFor is the one pi-delegation finds for its parent", () => {
+		const dataDir = mkdtempSync(join(tmpdir(), "trpi-fixture-delegation-"));
+		try {
+			const { path } = writeFixtureSession(delegationSessionDirFor(dataDir, "ws-1", "parent-1"), {
+				id: "child-1",
+				cwd: "/tmp/thinkrail-delegation-pin",
+				messages: [{ role: "user", text: "Investigate.", timestamp: 1_700_000_000_000 }],
+			});
+
+			expect(
+				deriveChildSessionFile(join(dataDir, "delegation"), "ws-1", "parent-1", "child-1"),
+			).toBe(path);
+		} finally {
+			rmSync(dataDir, { recursive: true, force: true });
 		}
 	});
 

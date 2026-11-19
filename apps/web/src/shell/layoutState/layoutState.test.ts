@@ -481,6 +481,84 @@ describe("frontend-local layout state", () => {
 		});
 	});
 
+	test("a persisted extension tab survives reload with its params, even for an extension this build lacks", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		const initial = await ensureWorkspaceLayoutState("workspace");
+		if (initial.center.kind !== "group") throw new Error("expected a single center group");
+		const tab = {
+			kind: "extension",
+			id: "ws:extension:not-bundled",
+			name: "",
+			extension: "not-bundled",
+			panel: "overview",
+			titleKey: "notBundled.panel.title",
+			params: { view: "table", sort: "start" },
+		} as const;
+		const opened = openCenterTab(initial, tab, initial.center.id, "preview");
+		if (!("document" in opened)) throw new Error(opened.reason);
+		await commitWorkspaceLayout("workspace", opened.document);
+
+		resetLayoutStateForTests();
+		resetStore();
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+
+		const restored = await ensureWorkspaceLayoutState("workspace");
+		expect(restored.center).toMatchObject({ kind: "group", tabs: [tab] });
+		expect(restored.center.kind === "group" && restored.center.previewTabId).toBeFalsy();
+	});
+
+	test.each([
+		["flat string params", { view: "table" }, true],
+		["a non-string param", { view: 1 }, false],
+		["a nested param", { view: { kind: "table" } }, false],
+		["missing params", undefined, false],
+	])(
+		"an extension tab with %s decodes only while its params are a flat string map",
+		async (_label, params, valid) => {
+			const local = new MemoryStorage();
+			const session = new MemoryStorage();
+			session.setItem("thinkrail:layout-surface-id", "surface-a");
+			setLayoutStateStorageForTests({ local, session }, endpoint);
+			const initial = await ensureWorkspaceLayoutState("workspace");
+			if (initial.center.kind !== "group") throw new Error("expected a single center group");
+			const centerId = initial.center.id;
+			await commitWorkspaceLayout("workspace", resizeSideRegion(initial, "left", 0.31));
+			const key = localLayoutStorageKey(endpoint, "surface-a");
+			const raw = local.getItem(key);
+			if (!raw) throw new Error("Missing persistence");
+			const stored = JSON.parse(raw) as { viewsByWorkspace: Record<string, unknown> };
+			stored.viewsByWorkspace.workspace = {
+				groups: {
+					[centerId]: {
+						tabs: [
+							{
+								kind: "extension",
+								id: "ws:extension:bad",
+								name: "",
+								extension: "insights",
+								panel: "sessions",
+								titleKey: "common.retry",
+								...(params === undefined ? {} : { params }),
+							},
+						],
+					},
+				},
+			};
+			local.setItem(key, JSON.stringify(stored));
+
+			resetLayoutStateForTests();
+			resetStore();
+			setLayoutStateStorageForTests({ local, session }, endpoint);
+
+			const restored = await ensureWorkspaceLayoutState("workspace");
+			expect(restored.left.width === 0.31).toBe(valid);
+			expect(restored.center.kind === "group" && restored.center.tabs.length).toBe(valid ? 1 : 0);
+		},
+	);
+
 	test("reload restores the same surface without another host read", async () => {
 		const local = new MemoryStorage();
 		const session = new MemoryStorage();

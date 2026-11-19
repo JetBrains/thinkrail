@@ -1,0 +1,33 @@
+{
+	"name": "@thinkrail/ext-session-insights",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./server": "./server/index.ts",
+		"./web": "./web/index.ts"
+	},
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@dagrejs/dagre": "catalog:",
+		"@remixicon/react": "catalog:",
+		"@thinkrail/extension-api": "workspace:*",
+		"@thinkrail/locales": "workspace:*",
+		"@thinkrail/pi-session-insights": "workspace:*",
+		"@thinkrail/ui": "workspace:*",
+		"@xyflow/react": "catalog:",
+		"react": "catalog:",
+		"react-virtuoso": "catalog:"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "catalog:",
+		"@types/bun": "catalog:",
+		"@types/react": "catalog:",
+		"@types/react-dom": "catalog:",
+		"react-dom": "catalog:",
+		"typescript": "catalog:"
+	}
+}

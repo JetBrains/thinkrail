@@ -9,8 +9,10 @@
 		"./command": "./command.tsx",
 		"./context-menu": "./context-menu.tsx",
 		"./dialog": "./dialog.tsx",
+		"./diff-stat-badge": "./diff-stat-badge.tsx",
 		"./dropdown-menu": "./dropdown-menu.tsx",
 		"./focus": "./focus.ts",
+		"./folder-chains": "./folder-chains.ts",
 		"./fonts": "./fonts.ts",
 		"./keyboard": "./keyboard.ts",
 		"./keycaps": "./keycaps.tsx",
@@ -25,6 +27,8 @@
 		"./toast": "./toast.tsx",
 		"./toggle-segment": "./toggle-segment.tsx",
 		"./tooltip": "./tooltip.tsx",
+		"./tree-item": "./tree-item.ts",
+		"./tree-row": "./tree-row.tsx",
 		"./utils": "./utils.ts"
 	},
 	"scripts": {

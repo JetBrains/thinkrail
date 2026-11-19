@@ -873,14 +873,20 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   a mapped message hit; see `store/SPEC.md` for the store-level request/clear contract and
   the workbench shell integration's open/reopen/hydrate half) — `ChatTranscript` is the sole consumer. Once
   `rows.length > 0`,
-  it resolves the request's `messageIndex` via `runtime.turnIdByMessageIndex` (present only on a
+  it resolves the target through the pure **`locateChatRow`** (`chatLocation.ts`): a request naming a
+  `toolCallId` lands on that call's row — its own `tool` row or the `activity` row grouping it
+  (`rowIndexForToolCall`, which reads the rows, so it works for a live runtime too); otherwise, or when the
+  chat does not show the call, it resolves the request's `messageIndex` via `runtime.turnIdByMessageIndex` (present only on a
   *hydrated* runtime — a live/already-open session's runtime, built by the event reducer, never carries
   one), falling back to scanning `turns` for the newest whose own text contains `anchorText`'s prefix — the
   same fallback also covers a hydrated map entry whose turn no longer contains the anchor (e.g. the
-  transcript changed underneath it). The resolved turn maps to a row via the pure **`rowIndexForTurn(rows,
+  transcript changed underneath it). The fallback never runs with an empty (or blank) prefix, which every
+  turn would match: a text-less target (a tool result, a tool-call-only assistant message) resolves only
+  through its `toolCallId` or the map. The resolved turn maps to a row via the pure **`rowIndexForTurn(rows,
   turnId)`** (`rows.ts`), called with the projected rows — a turn's own row for
   `user`/`system`/`error`/`retry`, or its first `:text:` row for `assistant` (whose turns dissolve
-  into `markdown`/`tool`/`activity` rows, never a row of their own)
+  into `markdown`/`tool`/`activity` rows, never a row of their own); an `assistant` turn with no text row
+  lands on its first tool call's row (`rowIndexForToolCall`), flagged nearest
   — then a cancellable, non-animated materialization derives the target from Virtuoso's measured size
   snapshot (with conservative estimates only for never-measured rows) before the controller-owned centered
   pixel correction. Materialization remains pending until the exact row stays mounted and measured at that
@@ -890,7 +896,11 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   its live row-index resolver follows projections that change while the request is pending. A transient
   `flashRowId` (rendered as `data-flash` + a `bg-primary-subtle` transition on the row wrapper, cleared after
   1600ms) draws the eye only after the row mounts, and the same "found" result focuses the row (with
-  `preventScroll`, in whichever transcript mounted for the jump), so the keyboard lands where the reader looks. Resolving a row, explicit reader cancellation, or
+  `preventScroll`, in whichever transcript mounted for the jump), so the keyboard lands where the reader looks.
+  A landing that stands in for the target — the request is `approximate` (the host anchored the nearest
+  shown ancestor), the named tool call is not in the rows, or a text-less assistant message stands on its
+  first tool call — also toasts "showing the nearest message" (`chat.transcript.locatedNearest`) once the
+  row is found. Resolving a row, explicit reader cancellation, or
   exhausting the bounded materialization wait (toasted as "couldn't locate the message") clears that exact
   still-current request; an older effect may not clear a newer jump. Cancellation is the user-wins failure
   path and is intentionally silent rather than restarted against the reader. Effect teardown defers its
@@ -1268,7 +1278,11 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `h-panel-header-row` (`--panel-header-row-height`, currently 28px), the shared structural geometry with
   workbench Group Headers and the Changes toolbar, not a value pinned here; it never scrolls,
   and constrained widths clip/truncate TODO + status/usage text while preserving the trailing Skills
-  action. Its **Skills** button is the presentational **`SkillsButton`**
+  action. After the usage figures, before Resources, it renders `links` — a compact link per chat action
+  the shell offers (an extension panel opened for this chat, "Session analysis ↗"): `ChatView` receives
+  them as its `chatActions` prop (`lib`'s `ChatAction`, [[submodule-web-shell]] § Extension panels) and
+  shows them once the chat has a session file (the store's `selectChatPersisted`), so chat never reads
+  the extension registry. Its **Skills** button is the presentational **`SkillsButton`**
   primitive — a `BookOpen` pill, badged when a skill dir changed on disk — also shared with
   `NewWorkspaceDialog` so the two triggers cannot drift), and **`SkillsDialog`** (the **Skills manager**: a catalog
   grouped by source with **sticky section headers** — the first-party **ThinkRail** and **Pi** groups lead

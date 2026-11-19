@@ -441,6 +441,7 @@
 	"chat.transcript.inputNeeded": "Potrzebne są Twoje dane: {{title}}",
 	"chat.transcript.latest": "Najnowsze",
 	"chat.transcript.locateFailed": "nie udało się zlokalizować wiadomości — sesja mogła się zmienić",
+	"chat.transcript.locatedNearest": "pokazano najbliższą wiadomość — samego wywołania nie widać w tym czacie",
 	"chat.transcript.refreshFailed": "Nie udało się odświeżyć tego czatu",
 	"chat.trust.enablesLoads": "Zaufanie ładuje jego {{loads}}.",
 	"chat.trust.enablesLoadsAndRuns": "Zaufanie ładuje jego {{loads}} i pozwala jego {{runs}} uruchamiać kod na tym komputerze.",

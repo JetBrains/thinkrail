@@ -2,6 +2,8 @@ import { describe, expect, it, mock } from "bun:test";
 import {
 	defineWebExtension,
 	type GlobalOverlayProps,
+	type PanelDeclaration,
+	type PanelProps,
 	type ToolRegistrationOptions,
 	type ToolRenderProps,
 	type WebExtension,
@@ -66,6 +68,65 @@ describe("defineWebExtension", () => {
 		expect(onOpenFile).toHaveBeenCalledWith("src/example.ts");
 		expect(extension.toolRenderers.file.options.summary(props)).toBe("running");
 		expect(defineWebExtension({ name: "empty", toolRenderers: {} }).toolRenderers).toEqual({});
+		expect(defineWebExtension({ name: "empty", toolRenderers: {} })).not.toHaveProperty("panels");
+	});
+
+	it("preserves panel declarations without loading their components", async () => {
+		const Panel = ({ params }: PanelProps) => params.view ?? null;
+		const load = mock(async () => ({ default: Panel }));
+		const icon = () => null;
+		const declaration: PanelDeclaration = {
+			title: "common.retry",
+			icon,
+			scopes: ["project"],
+			load,
+		};
+		const extension = defineWebExtension({ name: "panels", panels: { overview: declaration } });
+
+		expect(extension.panels.overview).toBe(declaration);
+		expect(load).not.toHaveBeenCalled();
+		expect((await extension.panels.overview.load()).default).toBe(Panel);
+	});
+
+	it("preserves a panel's chat action and rail entry, with the rail's command among the extension's own", () => {
+		const params = mock(({ sessionId }: { sessionId: string }) => ({ sessionId }));
+		const load = async () => ({ default: () => null });
+		const open = {
+			id: "panels.openList",
+			title: "common.retry",
+			chords: [{ code: "KeyI", key: "I", ctrl: true, alt: true }],
+		} as const;
+		const descriptor = {
+			name: "panels",
+			commands: [open],
+			panels: {
+				list: {
+					title: "common.retry",
+					icon: () => null,
+					scopes: ["project"],
+					rail: { command: open.id },
+					load,
+				},
+				chat: {
+					title: "common.retry",
+					icon: () => null,
+					scopes: ["session"],
+					chatAction: { menuLabel: "common.close", params },
+					load,
+				},
+			},
+		} satisfies WebExtension;
+		const extension = defineWebExtension(descriptor);
+		const chat = { projectId: "p", workspaceId: "w", sessionId: "s" };
+
+		expect(extension).toBe(descriptor);
+		expect(extension.panels.list.rail).toEqual({ command: "panels.openList" });
+		expect(extension.panels.list.rail).not.toHaveProperty("label");
+		expect(extension.commands.map(({ id }) => id)).toContain(extension.panels.list.rail.command);
+		expect(extension.panels.chat.chatAction).not.toHaveProperty("label");
+		expect(params).not.toHaveBeenCalled();
+		expect(extension.panels.chat.chatAction.params(chat)).toEqual({ sessionId: "s" });
+		expect(extension.panels.list).not.toHaveProperty("chatAction");
 	});
 });
 

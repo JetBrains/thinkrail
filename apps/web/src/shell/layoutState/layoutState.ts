@@ -368,6 +368,15 @@ function isWorkspaceView(value: unknown): value is WorkspaceViewState {
 				);
 			case "terminal":
 				return hasOnlyKeys(tab, ["kind", "id", "name", "tabKey"]) && typeof tab.tabKey === "string";
+			case "extension":
+				return (
+					hasOnlyKeys(tab, ["kind", "id", "name", "extension", "panel", "titleKey", "params"]) &&
+					typeof tab.extension === "string" &&
+					typeof tab.panel === "string" &&
+					typeof tab.titleKey === "string" &&
+					isRecord(tab.params) &&
+					Object.values(tab.params).every((value) => typeof value === "string")
+				);
 			default:
 				return false;
 		}

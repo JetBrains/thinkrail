@@ -5,8 +5,8 @@ import type {
 	WorkspaceIgnoredOutput,
 } from "@thinkrail/contracts";
 import { localeOf, type Translator } from "@thinkrail/locales/react";
+import { extendFolderChain, startFolderChain } from "@thinkrail/ui/folder-chains";
 import { ancestorPaths } from "../lib";
-import { extendFolderChain, startFolderChain } from "./folderChains";
 
 export interface ArtifactRow {
 	artifact: WorkspaceArtifact;

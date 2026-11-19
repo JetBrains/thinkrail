@@ -17,7 +17,9 @@ import {
 	ContextMenuTrigger,
 	openContextMenuFromKeyboard,
 } from "@thinkrail/ui/context-menu";
+import { type ResolvedFolderChain, resolveFolderChain } from "@thinkrail/ui/folder-chains";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { TreeRow } from "@thinkrail/ui/tree-row";
 import { type ReactElement, useEffect, useMemo, useRef, useState } from "react";
 import { statusLetter } from "../chat/planView";
 import { copyText, fileName, firstClickOnly, joinWorkspacePath } from "../lib";
@@ -34,10 +36,8 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { type ChangeMarks, statusMarkClass } from "./changesModel";
 import { holdEditorWarm, useEditorWarm, warmOnHover } from "./editorWarm";
 import { deleteEntry, pasteDestination, pasteInto, supportsFileMutations } from "./fileTreeActions";
-import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
 import { OpenInBrowserMenuItem } from "./OpenInBrowserButton";
 import { openFileInTab } from "./openTabs";
-import { TreeRow } from "./TreeRow";
 import { Tree, treeRowKey, useTreeKeys } from "./treeNavigation";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 

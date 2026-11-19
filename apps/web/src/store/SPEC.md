@@ -376,7 +376,12 @@ roster's catalog reads ([[submodule-web-panels]]).
     leads **`selectKnownChatTitle`** (the palette's chat name): when the host sends it, it wins — `""` reads
     as unnamed, so a stale tab name or history row cannot outlive a rename or clear that happened while
     this client was away — and only a record from an older host without the field falls back to the named
-    layout tab, then the history row.
+    layout tab, then the history row. **`selectChatPersisted`** says whether a chat has a session file
+    for a reader of past sessions: pi writes the file with the first user or assistant message, so it is a
+    known first prompt, else a loaded user or assistant turn (a turn without a readable prompt, such as a
+    review package, still counts); `selectPersistedChatTabs` lists a workspace's chat tabs that hold one
+    (by session id, for `useShallow`) and `selectChatWorkspaceSession` the first such chat of a chat
+    workspace — the shell's chat actions are offered only there ([[submodule-web-shell]]).
     `SessionRuntime.hostState` is installed with transcript hydration and by state pushes delivered after Pi
     events. A result is **read when it is seen**, not on a gesture: `selectReadyCompletionAck` returns the
     exact unread completion id only while the connection is current, the runtime is synced to this
@@ -744,7 +749,10 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   the re-read found no change** — most fs ticks touch no spec, and a fresh identity would invalidate
   `ChatView`'s matcher memo and re-derive every open chat's whole transcript about once a second.
   **`openDoc(tab)`** caches and places either a resolved **`DocTab`** or a **`PlanTab`** (`kind: "plan"`,
-  id `${workspaceId}:plan:${sessionId}` — one page per chat, re-open focuses). Local placement persistence
+  id `${workspaceId}:plan:${sessionId}` — one page per chat, re-open focuses) or an **`ExtensionTab`**
+  (`kind: "extension"`, an extension panel with its `titleKey` and flat string `params`; always a keep,
+  one per (extension, panel, params) by resource identity, so a re-open focuses it; no session, so
+  `editorSessionId` is `null`). Local placement persistence
   keeps only resolver kind + durable session identity, never cached content. `PlanPane` reads the host-owned
   plan live, so the page has no snapshot to go stale. **`DiffTab`** is one renderer-dispatched changed file over **one diff scope** (id `${workspaceId}:diff:${scopeKey}:${path}` — one tab per *(file,
 scope)*: **the scope is part of a tab's identity**, because a tab's content must never change meaning
@@ -853,11 +861,13 @@ extension's `pasteToEditor` request does, so both paste at the caret the same wa
 panel is diffing (read through **`selectDiffScope`**, which defaults to the shared, referentially stable
 `BRANCH_SCOPE`); keyed **per workspace**, not app-wide like `changesView`, because a scope belongs to that
 branch's review — a commit sha means nothing in another worktree — and dropped with the workspace in
-`applyWorkspaceRemoved`. The transient **`chatLocationRequest`** — the history-search jump
+`applyWorkspaceRemoved`. The transient **`chatLocationRequest`** — the history-search jump and an
+  extension panel's *Open in chat* (`PanelHost.openChat` with an anchor)
   deep link; the requester activates the target project+workspace, the workbench shell integration
   opens/hydrates the target
   chat, `ChatView` consumes + clears — is **`ChatLocationRequest { workspaceId, projectId, sessionId,
-  messageIndex, anchorText, navigation? }`**, set by **`requestChatLocation(req)`** (which captures and
+  messageIndex, anchorText, toolCallId?, approximate?, navigation? }`** (`toolCallId` asks for that call's
+  row, `approximate` marks an anchor that is the nearest shown ancestor), set by **`requestChatLocation(req)`** (which captures and
   advances an already-hydrated destination group's local clock *before* switching workspaces, and sets `selectedProjectId` +
   `activeWorkspaceId` **atomically**, the same invariant `activateWorkspace` upholds, since the target chat
   can live in a different project/workspace than the one the search ran from — the caller
@@ -893,7 +903,7 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   and while a chat row's route target for that session is pending. A request left waiting for a chat that
   appears later through an unrelated path (another group taking focus, a closed tab) would steal focus from
   whatever the user was doing, so the shell drops a stale request as soon as the destination settles. The `EditorTab` (`FileTab`
-  | `ChatTab` | `DocTab` | `DiffTab` | `ChangesTab` | `PlanTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types.
+  | `ChatTab` | `DocTab` | `DiffTab` | `ChangesTab` | `PlanTab` | `ExtensionTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types.
   (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context
   project from those canonical ids and collections; derived active-project state is never stored separately.

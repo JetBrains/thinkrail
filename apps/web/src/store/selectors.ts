@@ -1273,6 +1273,41 @@ export function selectChatFirstPrompt(
 	return runtime ? firstPromptOfTexts(userTurnTexts(runtime.turns)) : undefined;
 }
 
+export function selectChatPersisted(
+	state: ChatFirstPromptState,
+	workspaceId: string,
+	sessionId: string,
+): boolean {
+	if (selectChatFirstPrompt(state, workspaceId, sessionId)) return true;
+	return (
+		state.sessions[sessionId]?.turns.some(
+			(turn) => turn.kind === "user" || turn.kind === "assistant",
+		) ?? false
+	);
+}
+
+export function selectPersistedChatTabs(
+	state: { tabsByWorkspace: Record<string, EditorTab[]> } & ChatFirstPromptState,
+	workspaceId: string,
+): string[] {
+	const sessions: string[] = [];
+	for (const tab of state.tabsByWorkspace[workspaceId] ?? []) {
+		if (tab.kind !== "chat" || sessions.includes(tab.sessionId)) continue;
+		if (selectChatPersisted(state, workspaceId, tab.sessionId)) sessions.push(tab.sessionId);
+	}
+	return sessions;
+}
+
+export function selectChatWorkspaceSession(
+	state: ChatFirstPromptState,
+	workspaceId: string,
+): string | null {
+	for (const sessionId of Object.keys(state.sessionStateByWorkspace[workspaceId] ?? {})) {
+		if (selectChatPersisted(state, workspaceId, sessionId)) return sessionId;
+	}
+	return null;
+}
+
 export function selectChatWorkspaceFirstPrompt(
 	state: ChatFirstPromptState,
 	workspaceId: string,

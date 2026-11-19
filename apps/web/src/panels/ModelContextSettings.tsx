@@ -16,6 +16,7 @@ import type { MessageKey } from "@thinkrail/locales";
 import { localeOf, type Translator, t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { isImeComposing, twinArrow } from "@thinkrail/ui/keyboard";
+import { useTreeItem } from "@thinkrail/ui/tree-item";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, useCallback, useEffect, useId, useRef, useState } from "react";
 import {
@@ -32,7 +33,7 @@ import { getTransport } from "@/transport";
 import type { CustomEndpointsState } from "./CustomEndpointsSettings";
 import { MODEL_TREE, MODEL_TREE_ROW, ProviderTreeItem, stopRowClick } from "./ModelProviderTree";
 import { SETTING, settingProps } from "./settingsCatalog";
-import { Tree, useTreeItem, useTreeKeys } from "./treeNavigation";
+import { Tree, useTreeKeys } from "./treeNavigation";
 
 const PRESETS = [
 	{ id: "default", label: "common.default", override: null },

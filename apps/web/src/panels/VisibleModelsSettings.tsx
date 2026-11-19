@@ -3,6 +3,7 @@ import { useT } from "@thinkrail/locales/react";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { Switch } from "@thinkrail/ui/switch";
+import { useTreeItem } from "@thinkrail/ui/tree-item";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, type MouseEvent, useMemo, useState } from "react";
 import { formatContext, groupByProvider } from "@/chat/modelPicker";
@@ -17,7 +18,7 @@ import {
 	stopRowClick,
 } from "./ModelProviderTree";
 import { SETTING } from "./settingsCatalog";
-import { Tree, useTreeItem } from "./treeNavigation";
+import { Tree } from "./treeNavigation";
 
 export type Shown = "all" | "some" | "none";
 

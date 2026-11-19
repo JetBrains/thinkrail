@@ -1,17 +1,28 @@
+import { RiArrowRightUpLine } from "@remixicon/react";
 import type { SessionStats } from "@thinkrail/contracts";
 import type { ReactNode } from "react";
 import { SessionStatsBar } from "./SessionStatsBar";
 import { SkillsButton } from "./SkillsButton";
 
+export interface ChatHeaderLink {
+	readonly id: string;
+	readonly label: string;
+	readonly onOpen: () => void;
+}
+
+const NO_LINKS: readonly ChatHeaderLink[] = [];
+
 export function ChatHeader({
 	stats,
 	statusEntries,
+	links = NO_LINKS,
 	resources,
 	onOpenSkills,
 	skillsStale,
 }: {
 	stats: SessionStats | null;
 	statusEntries: [string, string][];
+	links?: readonly ChatHeaderLink[];
 	resources?: ReactNode;
 	onOpenSkills?: () => void;
 	skillsStale?: boolean;
@@ -29,6 +40,19 @@ export function ChatHeader({
 					</span>
 				))}
 				<SessionStatsBar stats={stats} />
+				{links.map((link) => (
+					<button
+						key={link.id}
+						type="button"
+						data-testid="chat-header-link"
+						data-action={link.id}
+						onClick={link.onOpen}
+						className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-sm text-primary tr-text-metadata underline-offset-2 hover:underline focus-visible:focus-ring"
+					>
+						{link.label}
+						<RiArrowRightUpLine aria-hidden className="size-14 shrink-0" />
+					</button>
+				))}
 			</div>
 			{resources}
 			{onOpenSkills ? (

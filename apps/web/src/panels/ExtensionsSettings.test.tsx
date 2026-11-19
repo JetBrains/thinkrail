@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { ExtensionCatalogEntry } from "@thinkrail/contracts";
-import { currentTranslator } from "@thinkrail/locales/react";
+import { applyLocale, currentTranslator } from "@thinkrail/locales/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ExtensionsCatalog, withWebOnlyEntries } from "./ExtensionsSettings";
 import { nextDisabledPackages } from "./usePiPackages";
@@ -57,6 +57,45 @@ test("a switched-off extension is Changed with a Reset that turns it back on", (
 test("a bundled extension's description comes from the catalog; any other shows its own", () => {
 	const other = { ...VISUALIZE, name: "third-party", title: "Third party" };
 	expect(render([other])).toContain("Lets the agent draw diagrams.");
+});
+
+test("a query-only extension lists without tool chips, with its translated description", () => {
+	const markup = render([
+		{
+			name: "session-insights",
+			title: "Session insights",
+			description: "Server copy.",
+			enabled: true,
+			tools: [],
+			hasChildExtensions: false,
+			apiVersion: 1,
+		},
+	]);
+	expect(markup).toContain('data-testid="extension-row-session-insights"');
+	expect(markup).toContain("A local breakdown of your past pi sessions per project");
+	expect(markup).not.toContain("Server copy.");
+	expect(markup).not.toContain("extension-tool-");
+	expect(markup).toContain('data-testid="extension-toggle-session-insights" data-active="true"');
+});
+
+test("a bundled row takes its web half's translated title, else the host's", async () => {
+	const insights: ExtensionCatalogEntry = {
+		name: "session-insights",
+		title: "Host copy",
+		enabled: true,
+		tools: [],
+		hasChildExtensions: false,
+	};
+	expect(render([insights, VISUALIZE])).toContain('aria-label="Enable Session insights"');
+	expect(render([VISUALIZE])).toContain('aria-label="Enable Visualize"');
+	await applyLocale("ru", {});
+	try {
+		const markup = render([insights]);
+		expect(markup).toContain("Разбор сессий");
+		expect(markup).not.toContain("Host copy");
+	} finally {
+		await applyLocale("en", {});
+	}
 });
 
 test("the switch follows the synced disabled list, not the catalog's snapshot", () => {

@@ -1,6 +1,7 @@
 import { RiArrowRightSLine as ChevronRight, RiFolderLine, RiStarFill } from "@remixicon/react";
 import type { ArtifactRoleReason } from "@thinkrail/contracts";
 import { type Translator, useT } from "@thinkrail/locales/react";
+import { TreeRow } from "@thinkrail/ui/tree-row";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
 import { fileName, firstClickOnly } from "../lib";
@@ -20,7 +21,6 @@ import {
 	artifactTimeLabel,
 } from "./artifactsModel";
 import { renameEntry } from "./fileTreeActions";
-import { TreeRow } from "./TreeRow";
 import { treeRowControlProps } from "./treeNavigation";
 import { useInlineRename } from "./workspaceActions";
 

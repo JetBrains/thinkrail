@@ -4,6 +4,7 @@ import {
 	changesTabName,
 	chatDisplayName,
 	diffTabName,
+	isMessageKey,
 	isPreviewCompatibleTabKind,
 	type LayoutAttention,
 	layoutResourceIdentity,
@@ -134,6 +135,8 @@ export function layoutTabName(
 			return tab.before === undefined ? diffTabName(t, tab.scope, tab.path) : tab.name;
 		case "document":
 			return planDocumentName(t, chatDisplayName(t, tab.name, chatFirstPrompts[tab.sourceId]));
+		case "extension":
+			return tab.name || (isMessageKey(tab.titleKey) ? t(tab.titleKey) : tab.panel);
 		case "file":
 			return tab.name;
 	}
@@ -698,7 +701,8 @@ export function moveTabToGroup(
 		movingTab.kind === "diff" ||
 		movingTab.kind === "changes" ||
 		movingTab.kind === "chat" ||
-		movingTab.kind === "document"
+		movingTab.kind === "document" ||
+		movingTab.kind === "extension"
 	) {
 		return { reason: t("workbench.layout.destinationGroupMissing") };
 	}

@@ -8,7 +8,7 @@ import {
 	RiFolderLine,
 } from "@remixicon/react";
 import type { ComponentPropsWithoutRef, MouseEvent, ReactNode, Ref } from "react";
-import { useTreeItem } from "./treeNavigation";
+import { useTreeItem } from "./tree-item";
 
 type MenuTriggerHandlers = Pick<
 	ComponentPropsWithoutRef<"button">,

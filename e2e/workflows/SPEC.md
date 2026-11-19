@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: e2e/workflows — headless workflow-test harness + scenarios
 parent: architecture
-references: [module-thinkrail-workflow, submodule-server-agent, submodule-workflow-skills, module-server]
+references: [module-thinkrail-workflow, submodule-server-agent, submodule-workflow-skills, module-server, module-ext-session-insights]
 tags: [testing, workflow-system, pi]
 ---
 
@@ -72,6 +72,14 @@ user?, dialog?, stopWhen?, forbid?, watchdog?, expect, judge?, record? }`.
   ignoring `e2e/` would swallow this real spec, a name-based "fixtures" ignore would change a
   portable package's semantics for a repo-local test concern, and masking also shields every other
   `*.md` scanner, not just spec discovery.
+  **Fixtures exported from Session insights** ([[module-ext-session-insights]] § Exports) use the same
+  layout, written to the workspace's Artifacts as `session-insights/fixtures/<name>/` for a person to
+  copy in: `session.jsonl` is the redacted active branch up to the chosen cut (the recorded `cwd` is a
+  placeholder the replay rewrites like any other), `workspace/` is present only when ThinkRail had a turn
+  tree for that turn (text files masked, `*.md` as `*.md.test`, binaries left out), and
+  `insights-export.json` records the provenance (source session id and revision, the cut, whether a
+  snapshot came from a turn tree). The harness reads only the first two; review a copied fixture like a
+  recorded one — masking is best effort and the session was cut, not run.
 - `signals` — predicates over the log; `stopWhen` (pass → abort, the main cost control) and `forbid`
   (fail → abort immediately).
 - `watchdog` — deterministic budget tripwires (turns / tool calls / wall time, defaults on every

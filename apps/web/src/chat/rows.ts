@@ -495,6 +495,11 @@ export function rowIndexForTurn(rows: ChatRow[], turnId: string): number {
 	return rows.findIndex((r) => r.id === turnId || r.id.startsWith(`${turnId}:text:`));
 }
 
+/** The row that shows a tool call: its own `tool` row, or the `activity` row that groups it. */
+export function rowIndexForToolCall(rows: readonly ChatRow[], toolCallId: string): number {
+	return rows.findIndex((row) => rowsHaveToolCall([row], toolCallId));
+}
+
 function valueEqual(a: unknown, b: unknown): boolean {
 	if (a === b) return true;
 	if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
