@@ -203,6 +203,8 @@ describe("ToolRendererBoundary", () => {
 					key={label}
 					renderer={renderer}
 					toolCallId={toolCallId}
+					status="done"
+					streaming={false}
 					fallback={<Mark label={`fallback:${label}`} />}
 				>
 					<Renderer
@@ -244,6 +246,71 @@ describe("ToolRendererBoundary", () => {
 			expect(rendered.at(-1)).toBe("fallback:one");
 			await act(async () => root.render([row(brokenOnFirstCall, "c2", "one")]));
 			expect(rendered.at(-1)).toBe("second call");
+			expect(reports).toEqual(["tool-renderer", "tool-renderer"]);
+		} finally {
+			await act(async () => root.unmount());
+			setErrorBoundaryReporter(null);
+			consoleError.mockRestore();
+		}
+	});
+
+	test("a card that threw on partial arguments renders once the call completes; one that always throws stays on the fallback and reports once", async () => {
+		const reports: Array<string | undefined> = [];
+		setErrorBoundaryReporter((_error, reportId) => reports.push(reportId));
+		const consoleError = spyOn(console, "error").mockImplementation(() => {});
+		const rendered: string[] = [];
+		const Mark = ({ label }: { label: string }) => {
+			rendered.push(label);
+			return null;
+		};
+		const partialArgsBreak: ToolRenderer = ({ args }) => {
+			if (typeof args.title !== "string") throw new Error("partial args");
+			return <Mark label={`card:${args.title}`} />;
+		};
+		const alwaysBreaks: ToolRenderer = () => {
+			throw new Error("always");
+		};
+		const call = (
+			renderer: ToolRenderer,
+			status: "running" | "done",
+			streaming: boolean,
+			args: Record<string, unknown>,
+		) => {
+			const Renderer = renderer;
+			return (
+				<ToolRendererBoundary
+					renderer={renderer}
+					toolCallId="c1"
+					status={status}
+					streaming={streaming}
+					fallback={<Mark label="fallback" />}
+				>
+					<Renderer
+						toolCallId="c1"
+						toolName="t"
+						args={args}
+						result={null}
+						status={status}
+						streaming={streaming}
+					/>
+				</ToolRendererBoundary>
+			);
+		};
+		const root = createRoot(headlessContainer(), { onCaughtError: () => {} });
+		try {
+			await act(async () => root.render(call(partialArgsBreak, "running", true, {})));
+			expect(rendered.at(-1)).toBe("fallback");
+			await act(async () => root.render(call(partialArgsBreak, "running", true, { tit: 1 })));
+			expect(rendered.at(-1)).toBe("fallback");
+			await act(async () => root.render(call(partialArgsBreak, "done", false, { title: "Ready" })));
+			expect(rendered.at(-1)).toBe("card:Ready");
+			expect(reports).toEqual(["tool-renderer"]);
+
+			await act(async () => root.render(call(alwaysBreaks, "running", true, {})));
+			await act(async () => root.render(call(alwaysBreaks, "running", false, {})));
+			await act(async () => root.render(call(alwaysBreaks, "done", false, {})));
+			await act(async () => root.render(call(alwaysBreaks, "done", false, { more: true })));
+			expect(rendered.at(-1)).toBe("fallback");
 			expect(reports).toEqual(["tool-renderer", "tool-renderer"]);
 		} finally {
 			await act(async () => root.unmount());

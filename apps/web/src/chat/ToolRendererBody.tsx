@@ -18,6 +18,8 @@ export function ToolRendererBody({
 			<ToolRendererBoundary
 				renderer={Renderer}
 				toolCallId={props.toolCallId}
+				status={props.status}
+				streaming={props.streaming}
 				fallback={
 					<div data-testid="tool-renderer-fallback">
 						<DefaultToolRenderer {...props} />

@@ -1,4 +1,4 @@
-import type { ToolRenderer } from "@thinkrail/extension-api/web";
+import type { ToolRenderer, ToolStatus } from "@thinkrail/extension-api/web";
 import { Component, type ReactNode } from "react";
 import { reportBoundaryError } from "../components/ErrorBoundary";
 
@@ -17,31 +17,36 @@ export function reportToolPresentationError(
 interface Props {
 	renderer: ToolRenderer;
 	toolCallId: string;
+	status: ToolStatus;
+	streaming: boolean;
 	fallback: ReactNode;
 	children: ReactNode;
 }
 
-interface State {
+type Attempt = Pick<Props, "renderer" | "toolCallId" | "status" | "streaming">;
+
+interface State extends Attempt {
 	failed: boolean;
-	renderer: ToolRenderer;
-	toolCallId: string;
+}
+
+function attemptOf({ renderer, toolCallId, status, streaming }: Attempt): Attempt {
+	return { renderer, toolCallId, status, streaming };
 }
 
 export class ToolRendererBoundary extends Component<Props, State> {
-	override state: State = {
-		failed: false,
-		renderer: this.props.renderer,
-		toolCallId: this.props.toolCallId,
-	};
+	override state: State = { failed: false, ...attemptOf(this.props) };
 
 	static getDerivedStateFromError(): Partial<State> {
 		return { failed: true };
 	}
 
 	static getDerivedStateFromProps(props: Props, state: State): Partial<State> | null {
-		return props.renderer === state.renderer && props.toolCallId === state.toolCallId
+		return props.renderer === state.renderer &&
+			props.toolCallId === state.toolCallId &&
+			props.status === state.status &&
+			props.streaming === state.streaming
 			? null
-			: { failed: false, renderer: props.renderer, toolCallId: props.toolCallId };
+			: { failed: false, ...attemptOf(props) };
 	}
 
 	override componentDidCatch(error: Error): void {

@@ -21,15 +21,17 @@ import {
 	isInteractiveTool,
 	resolveProminence,
 } from "../chat/toolRegistry";
+import { followInstalledWebExtensions } from "./follow";
+import { installExtensionHost } from "./index";
 import {
-	installExtensionHost,
+	browserLoaderEnvironment,
+	type LoaderEnvironment,
 	loadWebExtensions,
-	loadWebExtensionsBeforeRender,
+	setLoaderEnvironment,
 	unloadWebExtension,
 	type WebExtensionLoadFailure,
 	webExtensionLoads,
-} from "./index";
-import { browserLoaderEnvironment, type LoaderEnvironment, setLoaderEnvironment } from "./loader";
+} from "./loader";
 
 const FIXTURES = new URL("./fixtures/", import.meta.url).href;
 
@@ -257,7 +259,17 @@ describe("web extension loader", () => {
 			},
 		});
 		const started = Date.now();
-		await loadWebExtensionsBeforeRender([{ name: "slow", url: "sibling.js" }], 20);
+		const set = [{ name: "slow", url: "sibling.js" }];
+		await followInstalledWebExtensions(
+			{
+				current: () => set,
+				unreachable: () => false,
+				subscribe: () => () => {},
+				rememberedAny: () => true,
+				remember: () => {},
+			},
+			20,
+		);
 		expect(Date.now() - started).toBeLessThan(1000);
 		expect(webExtensionLoads().get("slow")?.status).toBe("loading");
 		expect(getToolRenderer("sibling_tool")).toBe(DefaultToolRenderer);

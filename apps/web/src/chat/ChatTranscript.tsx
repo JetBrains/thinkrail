@@ -984,6 +984,8 @@ function DockedTool({
 		<ToolRendererBoundary
 			renderer={Renderer}
 			toolCallId={call.toolCallId}
+			status={call.status}
+			streaming={call.streaming}
 			fallback={
 				<div data-testid="tool-renderer-fallback">
 					<DefaultToolRenderer {...props} />

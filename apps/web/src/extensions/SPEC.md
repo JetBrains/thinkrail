@@ -84,10 +84,10 @@ the other fields, so an installed extension cannot bind keys or mount an overlay
   The server half's precedence is unaffected. `loader.test.tsx` pins it.
 - **Reporting** is a classifier: `clientErrorReport("rejection", error, "extension-load:<reason>")`;
   the message reaches the caller's result only, never error tracking.
-- **Before first render, bounded.** `loadWebExtensionsBeforeRender` waits at most
-  `PRE_RENDER_WAIT_MS` (1000 ms) for the whole set, then returns; a slow or hung bundle keeps loading and
-  registers late through the subscribable registry. Rationale: the host serves the files from its own
-  origin, so a healthy set loads in milliseconds and the cap only bounds the blank page a broken one costs.
+- **Before first render, bounded.** `PRE_RENDER_WAIT_MS` (1000 ms) caps how long bootstrap holds the
+  first render for the set (§ Following the host); a slow or hung bundle keeps loading and registers late
+  through the subscribable registry. Rationale: the host serves the files from its own origin, so a
+  healthy set loads in milliseconds and the cap only bounds the blank page a broken one costs.
 - **Later loads and updates.** `loadWebExtensions` loads a set and resolves with every result. Loading a
   name again is an update: the new bundle replaces the previous registration and stylesheet atomically
   once it has loaded; a failed update keeps nothing of either version. A stale load that finishes after a
@@ -121,11 +121,20 @@ the other fields, so an installed extension cannot bind keys or mount an overlay
   `subscribe`) and calls `syncWebExtensions` whenever the set may have changed. `main.tsx` wires it to the
   store's `selectInstalledWebHalves` and fires only when `extensionCatalog`, `protocolVersion` or the
   connection status change, so a streaming chat never runs the diff. This module still reads no store.
-- **Bootstrap waits once, bounded.** The promise settles when the first known set has loaded, when the
-  source is unreachable (the connection dropped or the list failed), or after `PRE_RENDER_WAIT_MS` counted
-  from bootstrap — connection, list and load together — whichever comes first; `main.tsx` renders after
-  it. The transport is usually not connected yet when bootstrap runs, so the first render now waits for
-  the welcome (milliseconds on the host's own origin). A host older than
+- **Bootstrap waits only when it expects cards, bounded.** The source also remembers, per host, whether
+  the last set it listed had any web half (`rememberedAny` / `remember`, written by the follower only when
+  that changes). `main.tsx` keeps it as the `installed-web-halves` preference through `shell`'s
+  `preferenceStorage` — the native stable adapter (scoped per backend profile), else `localStorage`
+  qualified by the host's HTTP base; UX state, not analytics. When nothing is remembered (a first run)
+  or the last set was empty, the promise settles at once and the page renders without waiting; an
+  extension installed elsewhere in the meantime registers late through the reactive registry, as any
+  later install does. Otherwise it settles when the first known set has loaded, when the source is
+  unreachable (the connection dropped or the list failed), or after `PRE_RENDER_WAIT_MS` counted from
+  bootstrap — connection, list and load together — whichever comes first. The transport is usually not
+  connected yet when bootstrap runs, so a host with cards installed holds the first render for the
+  welcome (milliseconds on the host's own origin). The promise never rejects: a throw while following
+  (the source, the store or a sync) is reported as a client error (boundary `extension-follow`) and
+  settles it, and `main.tsx` renders in `finally`, so a follower fault never leaves a blank page. A host older than
   `INSTALLED_EXTENSIONS_PROTOCOL_VERSION` yields the empty set at once: nothing is requested and the page
   renders as before; reconnecting to such a host unloads every installed web half, and reconnecting to a
   different host converges on that host's list.
@@ -135,21 +144,19 @@ the other fields, so an installed extension cannot bind keys or mount an overlay
 ## Boundary
 
 - **Public surface:** `webExtensions`, `registerWebExtensions`, `enabledWebExtensions`,
-  `webExtensionCommands`, `WebExtensionCommands`, `webOnlyExtensions`, `installExtensionHost`,
-  `ExtensionHost`,
-  `loadWebExtensions`, `loadWebExtensionsBeforeRender`, `syncWebExtensions`, `unloadWebExtension`,
-  `webExtensionLoads`, `subscribeWebExtensionLoads`, `useWebExtensionLoads`, `PRE_RENDER_WAIT_MS`,
-  `InstalledWebExtension`, `WebExtensionLoadResult`, `WebExtensionLoadFailure`,
-  `followInstalledWebExtensions`, `InstalledWebExtensionSource`, `extensionApiFit`, `ExtensionApiFit`,
-  `EXTENSION_API_VERSION`.
+  `webExtensionCommands`, `webOnlyExtensions`, `installExtensionHost`, `followInstalledWebExtensions`,
+  `useWebExtensionLoads`, `WebExtensionLoadResult`, `extensionApiFit`, `EXTENSION_API_VERSION`.
+- The barrel carries only what other modules import. The loader's set-level functions
+  (`loadWebExtensions`, `syncWebExtensions`, `unloadWebExtension`, `webExtensionLoads`) are reached only
+  through the follower and the hook; tests import them from `loader.ts`.
 - **Imports:** public extension `./web` entries, the web SDK contract, `@thinkrail/extension-api/installed`
   (the host object's constants), chat's registration functions, `transport` (`getTransport().httpBase()`
-  and the client error reports — the loader's only reach into app integration), and, for the host object
+  and the client error reports — the loader's and follower's only reach into app integration), and, for the host object
   only, the shared module set. Never `ChatView`, stores, extension internals or server halves. The
   registry Map remains owned by chat; the loader owns only its per-name load state and stylesheet links.
 - **Bootstrap order** (`main.tsx`): `installExtensionHost()` → `registerWebExtensions()` →
-  `followInstalledWebExtensions(store-backed source)` (bounded) → first render. `loadWebExtensionsBeforeRender`
-  stays for a caller holding a known set; bootstrap's own wait also covers the connection and the list. Interaction state and the
+  `followInstalledWebExtensions(store-backed source)` (bounded, and only when cards are expected) → first
+  render. Interaction state and the
   plan/review glances derive from the registry's `interactive` registrations, so the built-in set must be
   complete before any lazy view reads a transcript; installed ones that land later re-derive through the
   registry's snapshot hooks ([[submodule-web-chat]]).
