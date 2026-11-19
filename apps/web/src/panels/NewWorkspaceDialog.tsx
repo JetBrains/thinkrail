@@ -324,15 +324,16 @@ export function NewWorkspaceDialog({
 
 	useEffect(() => {
 		if (!open || !review || !retryPr || !retryDraft) return;
+		if (selectedProjectId !== retryDraft.projectId) return;
 		let cancelled = false;
 		void getPullRequest(retryDraft.projectId, retryPr.number).then((found) => {
-			if (cancelled || !found) return;
-			setPickedPr((current) => (current?.number === found.number ? found : current));
+			if (cancelled || !found || found.url !== retryPr.url) return;
+			setPickedPr((current) => (current?.url === found.url ? found : current));
 		});
 		return () => {
 			cancelled = true;
 		};
-	}, [open, review, retryPr, retryDraft]);
+	}, [open, review, retryPr, retryDraft, selectedProjectId]);
 
 	const selectProject = (id: string) => {
 		if (id !== selectedProjectId) setPickedPr(null);
