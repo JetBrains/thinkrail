@@ -78,10 +78,18 @@ export const WIP_LABELS = {
 	agents: "board.wip.agents",
 } as const satisfies Record<WipKey, MessageKey>;
 
-export const START_WARNINGS = {
+const START_WARNINGS = {
 	review: "board.wip.startWarningReview",
 	needsYou: "board.wip.startWarningNeedsYou",
 } as const satisfies Record<"review" | "needsYou", MessageKey>;
+
+/** Start's question past a human-attention limit (`attentionWarning`'s figures). */
+export function startWarningText(
+	t: Translator,
+	warning: { key: "review" | "needsYou"; n: number; limit: number },
+): string {
+	return t(START_WARNINGS[warning.key], { n: warning.n, limit: warning.limit });
+}
 
 const TASK_SPEC_STATUSES: Readonly<Record<string, MessageKey>> = {
 	draft: "board.taskSpec.status.draft",

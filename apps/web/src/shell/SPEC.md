@@ -160,7 +160,8 @@ the target workspace through the navigator when it is not the panel's own; `open
 to reveal this workspace's Artifacts tool (`requestToolView(workspaceId, "artifacts")`); and
 `hostApiVersion` comes from the extension's catalog entry, read once per connection generation (a failed
 read is forgotten, so *Retry* asks again). `openWorkspace` enters the target workspace through the
-navigator (on its chat when given); `peek` turns a `PanelPeekEntry` into the store's Peek entry
+navigator (on its chat when given), its `peek` entry turned like `peek`'s and `requestPeek`ed in that target
+workspace first (Peek is per workspace, so a board card followed into its attempt's workspace shows there); `peek` turns a `PanelPeekEntry` into the store's Peek entry
 (`panelPeekEntry`: an `extension` entry only for a panel the caller's own extension declares, with its
 title key and the given crumb `name`; `file` and `compare` as they are) and `requestPeek`s it in the
 panel's workspace; `onEvent` subscribes to transport's `extension.event` channel — which never replays its

@@ -5,7 +5,7 @@ import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import type { KeyboardEvent } from "react";
 import { type Card, canAdopt, canStart } from "./api";
-import { CardMeta, LiveLine, TaskSpecLine, TaskSpecStatus } from "./CardParts";
+import { CardMeta, LiveLine, StartWarning, TaskSpecLine, TaskSpecStatus } from "./CardParts";
 
 export interface CardActions {
 	open: (card: Card) => void;
@@ -80,26 +80,11 @@ export function CardTile({
 				) : null}
 			</button>
 			{startWarning ? (
-				<div
-					role="alert"
-					data-testid="board-start-warning"
-					className="flex flex-col gap-4 rounded-xs bg-feedback-warning-subtle p-4"
-				>
-					<span className="tr-text-metadata text-feedback-warning">{startWarning}</span>
-					<span className="flex flex-wrap gap-4">
-						<Button
-							variant="outline"
-							size="s"
-							data-testid="board-start-anyway"
-							onClick={() => actions.start(card, true)}
-						>
-							{t("board.wip.startAnyway")}
-						</Button>
-						<Button variant="ghost" size="s" onClick={actions.cancelStart}>
-							{t("board.wip.notNow")}
-						</Button>
-					</span>
-				</div>
+				<StartWarning
+					text={startWarning}
+					onAnyway={() => actions.start(card, true)}
+					onCancel={actions.cancelStart}
+				/>
 			) : adoptable ? (
 				<Button
 					variant="soft-primary"

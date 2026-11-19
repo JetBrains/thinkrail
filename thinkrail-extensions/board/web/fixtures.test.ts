@@ -1,4 +1,4 @@
-import type { PanelHost, PanelPeekEntry } from "@thinkrail/extension-api/web";
+import type { PanelHost, PanelPeekEntry, PanelWorkspaceTarget } from "@thinkrail/extension-api/web";
 import type { AttemptLive, BoardView, Card } from "./api";
 
 export function liveOf(overrides: Partial<AttemptLive> = {}): AttemptLive {
@@ -75,12 +75,14 @@ export interface FakeHost {
 	queries: { method: string; params: unknown }[];
 	peeks: PanelPeekEntry[];
 	files: { workspaceId: string; path: string }[];
+	workspaces: PanelWorkspaceTarget[];
 }
 
 export function fakeHost(answer: (method: string) => unknown = () => ({})): FakeHost {
 	const queries: { method: string; params: unknown }[] = [];
 	const peeks: PanelPeekEntry[] = [];
 	const files: { workspaceId: string; path: string }[] = [];
+	const workspaces: PanelWorkspaceTarget[] = [];
 	const host: PanelHost = {
 		query: async (method, params) => {
 			queries.push({ method, params });
@@ -90,7 +92,7 @@ export function fakeHost(answer: (method: string) => unknown = () => ({})): Fake
 		openPanel: () => {},
 		renderToolCall: () => null,
 		openFile: (workspaceId, path) => files.push({ workspaceId, path }),
-		openWorkspace: () => {},
+		openWorkspace: (target) => workspaces.push(target),
 		peek: (entry) => peeks.push(entry),
 		onEvent: () => () => {},
 		layoutPreset: null,
@@ -100,5 +102,5 @@ export function fakeHost(answer: (method: string) => unknown = () => ({})): Fake
 		hostProtocol: 130,
 		hostApiVersion: 1,
 	};
-	return { host, queries, peeks, files };
+	return { host, queries, peeks, files, workspaces };
 }

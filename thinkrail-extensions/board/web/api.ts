@@ -1,5 +1,5 @@
 import type { ChatState, ThinkingLevel } from "@thinkrail/contracts";
-import type { PanelHost } from "@thinkrail/extension-api/web";
+import type { PanelHost, PanelPeekEntry } from "@thinkrail/extension-api/web";
 
 type Querying = Pick<PanelHost, "query">;
 
@@ -38,11 +38,18 @@ export interface Attempt {
 	removedAt?: number;
 }
 
+/** A chat's most recent tool start, a host fact: the tool and a short target (a path, a command's start). */
+export interface LastAction {
+	tool: string;
+	target?: string;
+	at: number;
+}
+
 export interface AttemptLive {
 	workspaceId: string;
 	sessionId: string;
 	open: boolean;
-	chat: { state: ChatState; unread: boolean; title: string } | null;
+	chat: { state: ChatState; unread: boolean; title: string; lastAction?: LastAction } | null;
 	plan: { open: number; total: number } | null;
 	diff: { added: number; removed: number } | null;
 	pr: { kind: string; number: number; state: string; url?: string } | null;
@@ -346,6 +353,14 @@ export async function setPreset(host: PanelHost, projectId: string, preset: Pres
 	await host.query("settings.update", { projectId, preset });
 }
 
+export async function setFollowSelection(
+	host: PanelHost,
+	projectId: string,
+	followSelection: boolean,
+): Promise<void> {
+	await host.query("settings.update", { projectId, followSelection });
+}
+
 export async function setWipLimits(
 	host: PanelHost,
 	projectId: string,
@@ -390,9 +405,68 @@ export function latestLive(card: Pick<Card, "live">): AttemptLive | undefined {
 	return card.live.at(-1);
 }
 
+/** What a working card's agent is doing: its latest attempt's last action, only while it works. */
+export function workingAction(card: Pick<Card, "live">): LastAction | undefined {
+	return agentBadge(card) === "working" ? latestLive(card)?.chat?.lastAction : undefined;
+}
+
 /** The attempt whose workspace is still open, the one a double click enters. */
 export function openAttempt(card: Pick<Card, "live">): AttemptLive | undefined {
 	return card.live.findLast((live) => live.open);
+}
+
+/** A card's Peek entry: the `card` panel on its board. */
+export function cardPeekEntry(
+	projectId: string,
+	card: Pick<Card, "id" | "title" | "source" | "virtual">,
+): PanelPeekEntry {
+	return {
+		kind: "extension",
+		panel: CARD_PANEL,
+		params: { projectId, cardId: card.id },
+		title: `${shownId(card)} · ${card.title}`,
+	};
+}
+
+/**
+ * A click on a card: Peek. With follow selection on, a card with an open attempt also switches to that
+ * attempt's workspace (on its chat), the card shown in that workspace's Peek.
+ */
+export function selectCard(
+	host: Pick<PanelHost, "peek" | "openWorkspace">,
+	projectId: string,
+	card: Pick<Card, "id" | "title" | "source" | "virtual" | "live">,
+	followSelection: boolean,
+): "peek" | "follow" {
+	const entry = cardPeekEntry(projectId, card);
+	const attempt = followSelection ? openAttempt(card) : undefined;
+	if (!attempt) {
+		host.peek(entry);
+		return "peek";
+	}
+	host.openWorkspace({
+		workspaceId: attempt.workspaceId,
+		projectId,
+		...(attempt.chat ? { sessionId: attempt.sessionId } : {}),
+		peek: entry,
+	});
+	return "follow";
+}
+
+/** Double click or Enter's switch: the card's open attempt's workspace, on its chat. */
+export function enterCard(
+	host: Pick<PanelHost, "openWorkspace">,
+	projectId: string,
+	card: Pick<Card, "live">,
+): boolean {
+	const attempt = openAttempt(card);
+	if (!attempt) return false;
+	host.openWorkspace({
+		workspaceId: attempt.workspaceId,
+		projectId,
+		...(attempt.chat ? { sessionId: attempt.sessionId } : {}),
+	});
+	return true;
 }
 
 /** Start is offered on a backlog or unstarted card with no attempt still running (an issue's included). */
@@ -499,6 +573,14 @@ export function columnWip(view: Pick<BoardView, "wip">, column: Column): WipCoun
 /** The human-attention limits Start warns about, Review first; empty when there is room. */
 export function attentionOverLimit(view: Pick<BoardView, "wip">): ("review" | "needsYou")[] {
 	return (["review", "needsYou"] as const).filter((key) => overLimit(view.wip[key]));
+}
+
+/** The limit Start asks about first, with its figures; `null` when there is room or no board yet. */
+export function attentionWarning(
+	view: Pick<BoardView, "wip"> | null,
+): { key: "review" | "needsYou"; n: number; limit: number } | null {
+	const [key] = view ? attentionOverLimit(view) : [];
+	return view && key ? { key, n: view.wip[key].count, limit: view.wip[key].limit } : null;
 }
 
 export interface TriageGroup {

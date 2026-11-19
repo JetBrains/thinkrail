@@ -134,13 +134,19 @@ The host service (`Board.listen`) subscribes to `agent.settled`, `workspace.upda
 - Every write publishes **`board.changed { projectId }`**, and so does a bound (or watched, § Sources)
   chat's `session.state` or workspace's review when its signature changes. The web side re-reads the
   board.
+- A bound (or watched) chat's tool start (`agent.tool`) publishes it too, **throttled per project**: at
+  once, then at most once per `ACTION_REFRESH_MS` (2 s) while starts keep coming, the last one included, so
+  a card's last action follows the agent without a re-read per tool. Stopping the service drops the timers.
+- A project opening or closing (`project.opened` / `project.closed`) publishes it for that project, so the
+  inbox, which lists the open projects' cards, re-reads.
 - A GitHub issue's card's open pull request gets its `Closes #N` check on that chain (§ Sources).
 
 ## Live overlay
 
 Per request and per open attempt, `workspaceFacts` gives:
 
-- the chat's `chatState`, unread and title;
+- the chat's `chatState`, unread and title, and its `lastAction` (`{ tool, target?, at }`, the host's
+  record of its latest tool start — never read from the transcript), carried as `chat.lastAction`;
 - the plan's open / total;
 - the workspace's diff and PR (number, state, url).
 
@@ -154,7 +160,6 @@ task-spec of an open attempt's workspace, from the host's `taskSpecs` fact (any 
 - **Review**: cards in review.
 - **Agents**: active cards whose latest attempt is `working`.
 
-The last action is **not shown yet**: the host reports no tool-level fact for it.
 
 ## Sources
 
@@ -280,7 +285,8 @@ error (with *Retry*) states replace the body; a failed write shows a dismissible
   figures (*Needs you*, *Review*, *Agents* as `count/limit`, `feedback-error` and `data-over` past the limit;
   a limit of 0 is none and shows the count alone), the view switch (Board / List), the Board mode toggle
   (*Board mode* / *Exit Board mode*, `PanelHost.layoutPreset`, absent on a host without modes), the board
-  settings (a popover editing the three WIP limits, 0–99 → `settings.update { wipLimits }`) and *New card*,
+  settings (a popover with the *Follow selection* switch and the three WIP limits, 0–99 →
+  `settings.update { wipLimits }` on *Save*) and *New card*,
   an inline title field → `card.create`, then the new card in Peek. The GitHub menu (`RiGithubLine`,
   *GitHub issues*) offers *Show GitHub issues* / *Hide GitHub issues* (`github.set`; a `missing` or
   `unauthenticated` gh answers with the notice saying to install gh or run `gh auth login`), and while on
@@ -289,7 +295,7 @@ error (with *Retry*) states replace the body; a failed write shows a dismissible
   *Refresh issues* and *Dismiss* (until the error changes); the board and the last good issues stay.
 - **Inbox** ("Needs you · N · All projects"): under the header, the `inbox` query's cards of every open
   project, re-read on any project's `board.changed` (which the host service also publishes when a bound
-  chat's state flips). A row names the project, the card id and title (a click peeks the card), the reason
+  chat's state flips and when a project opens or closes). A row names the project, the card id and title (a click peeks the card), the reason
   (*Question pending* / *Failed*, from the latest attempt's chat state) and *Answer* or *Retry*, both opening
   that attempt's chat (`PanelHost.openChat`) — Retry sends nothing. Chips that wrap when wide, a list when
   stacked; absent while nobody waits.
@@ -308,15 +314,21 @@ error (with *Retry*) states replace the body; a failed write shows a dismissible
   *GitHub*, `data-source`), type, size (a suggested one marked `M?`), title, its task-specs with their
   status (`draft`, `active`, `stale`, `done`), the agent badge of its latest
   open attempt (`agentBadge`: working, waiting for you, failed — interrupted included —, finished, finished ·
-  unread; `feedback-*` / `primary` tokens), the plan's progress, the diff, the PR chip and the cards
+  unread; `feedback-*` / `primary` tokens) with, under it while the agent works (`workingAction`), its last
+  action — the tool and its target on one line, `tr-code-text-small`, cut with an ellipsis, the whole in its
+  tooltip —, the plan's progress, the diff, the PR chip and the cards
   blocking it. An unbound workspace's task-spec card shows its status and *Adopt* (`card.adopt`) and never
   drags. *Start* shows on a backlog or unstarted card with no open attempt — an unstored issue's card
   included, which Start stores — and starts it with the size's workflow and the host's defaults; the host's toast reports a kickoff that failed. While Review or
   Needs you is past its limit (`attentionOverLimit`, Review first), Start asks inline instead — *Review is
   over its limit (6/5) — finish before starting?* with *Start anyway* / *Not now* — a warning, never a block.
 - **Moving**: cards drag between columns with `@dnd-kit/core` (pointer within a column; a drag overlay) →
-  `card.move`, the logged override. A card is a focusable button: Enter or a click peeks it, a double click
-  enters its open attempt's workspace (`PanelHost.openWorkspace`), and the local commands
+  `card.move`, the logged override. A card is a focusable button: Enter or a click peeks it (`selectCard`),
+  a double click enters its open attempt's workspace (`enterCard` → `PanelHost.openWorkspace`, on its chat
+  when it has one). With **follow selection** on, a click on a card with an open attempt also enters that
+  workspace, the card shown in *its* Peek (`openWorkspace`'s `peek`, since Peek belongs to a workspace); a
+  card without one only peeks. It is off by default and switched in the board settings popover
+  (*Follow selection*, applied at once → `settings.update { followSelection }`). The local commands
   `board.moveLeft` / `board.moveRight` (Alt+← / Alt+→ in scope `board.cards`, rebindable) move it one
   shown column, focus following the card.
 - **List** view: one table (id, title, column, size, agent, plan, PR) sorted by column then rank, or by
@@ -349,12 +361,15 @@ there. The center and the bottom keep the chat and the terminals, and leaving re
   deferrals*;
 - an unbound workspace's task-spec card instead shows its title, column and live line, its task-spec and
   *Adopt*, after which the panel shows the stored card, and *Open workspace*;
-- the attempts, each with its workflow, start time, live badge, plan, PR and notes, and *Open workspace* /
-  *Open chat* while its workspace is open;
+- the attempts, each with its workflow, start time, live badge, chat title and last action (while the chat's
+  session is live, working or not), plan, PR and notes, and *Open workspace* / *Open chat* while its
+  workspace is open;
 - **Start**: workflow (the size's by default: S, bugs and unsized → Implement; M / L → Brainstorm → build;
   re-derived when the size or type changes), model and effort (*Default* = the host's new-chat choice;
   `models.list`, the effort list narrowed to the model's levels), base (empty = the project's default) →
-  `card.start`, showing a refusal or a returned `kickoffError`;
+  `card.start`, showing a refusal or a returned `kickoffError`. Past a human-attention limit it asks the
+  tile's question in place of its button (`attentionWarning` over the panel's one `board.get`, which the
+  blocks picker shares; Start waits while that read loads and does not ask when it failed);
 - the activity from the transitions, newest first (*Created in Backlog*, *Backlog → Ready by you* with the
   host's reason), and *Delete card* behind a confirm.
 
@@ -394,7 +409,12 @@ Their guidelines say two things:
     model or switched off or for an agent's card, the debounce, issues' cards).
 - **Host-level**: `packages/server/src/host/extensionEventsWire.test.ts` covers the gated
   `extension.event` push and the host service following the Settings switch.
-- **Web** (`web/*.test.ts(x)`): the agent badge by overlay state, Start's offer and its defaults by size,
+- **Host-level** also: `packages/server/src/host/lastActions.test.ts` covers the last-action target (a
+  workspace-relative path, nothing outside the worktree, a bash command's cut start, the folders shortened,
+  nothing for other tools) and the tracker (latest start only, dropped once disposed or deleted);
+  `extensionEventsWire.test.ts` a project's close and reopen republishing its board, a rename not.
+- **Web** (`web/*.test.ts(x)`): the agent badge by overlay state, the working last action and its tile line,
+  `selectCard` with follow selection off and on and `enterCard`, Start's offer and its defaults by size,
   the drop → `card.move` call, Alt+arrow steps, the list sort, the adaptive layout and the rendered tile,
   columns, list and empty board; the source badges, Adopt and Start by source, the task-spec panel's Open
   targets and Send deferrals, the GitHub menu and banner, and deferral groups in Triage; the WIP math (over a limit, 0 as none, the Review column's limit, Start's
@@ -411,17 +431,22 @@ Their guidelines say two things:
   projects (cards seeded on attempts whose seeded chats hold a pending question or failed), the topbar
   counter and its popover, Answer entering the chat; Board mode entered from the header and left from the
   palette with the layout snapshot unchanged; a WIP limit edited to 1 and Review marked over it, with
-  Start's warning; Triage's Accept all moving a seeded decomposition into Backlog.
+  Start's warning on the tile and in Peek's Start form; Triage's Accept all moving a seeded decomposition
+  into Backlog; follow selection off (a click only peeks a started card) and on (the click enters
+  `workspace-1` with the card in its Peek); the inbox counter dropping a closed project's card and taking
+  it back on reopen.
+- **Live e2e** (`e2e/board.live.spec.ts`, `@agent`, through `bun run e2e:full e2e/board.live.spec.ts`): an S
+  card asking for a one-line README example, started from Peek; the tile's last-action line seen while
+  the agent works (recorded by a `MutationObserver`, since it is transient); the card in Review with its
+  diff, the badge finished and the line gone.
 
 ## Deferrals
 
 These land later:
 
-- follow selection, and Start's WIP warning in the Peek card's Start form (only the tile warns);
 - cost / time per card;
 - live re-reads when a task-spec file changes (the host pushes no file events to extensions; the board
   re-reads on its own writes, chat and review changes and workspace switches);
 - a task-spec committed to the branch shows in every unbound workspace that has it;
-- a last-action fact, and the last action on a card;
 - removing a "blocks" link from the tools;
 - an initiative's `into` (D / G).

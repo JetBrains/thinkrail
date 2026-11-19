@@ -229,6 +229,7 @@ import {
 import { HeldSnapshots, terminalsMayResume } from "./heldSnapshots";
 import { initializeHostRuntime } from "./hostRuntime";
 import { provisionInitialTerminal } from "./initialTerminal";
+import { lastActions } from "./lastActions";
 import { trackLoginOutcome } from "./loginAnalytics";
 import { disposeContainerOrchestrator, orchestratorHomeOf } from "./orchestrator";
 import { orchestratorToolsHost } from "./orchestratorTools";
@@ -957,7 +958,18 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setDisabledExtensionsResolver(() => new Set(getConfig().disabledExtensions));
 	setExtensionSettingsResolver(() => getConfig().extensionSettings ?? {});
 
+	const openProjectIds = new Set(
+		getProjects()
+			.filter((project) => project.closed !== true)
+			.map((project) => project.id),
+	);
 	setProjectPublisher((project) => {
+		const open = project.closed !== true;
+		if (open !== openProjectIds.has(project.id)) {
+			if (open) openProjectIds.add(project.id);
+			else openProjectIds.delete(project.id);
+			extensionEvents.emit(open ? "project.opened" : "project.closed", { projectId: project.id });
+		}
 		const capture = additionalCapture();
 		if (capture) {
 			try {
@@ -1169,6 +1181,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 
 	setSessionDeletedPublisher((payload: SessionDeletedPayload) => {
 		forgetImageSession(payload.sessionId);
+		lastActions.forget(payload.sessionId);
 		runObservation.forget(payload.sessionId);
 		taskObservation.forget(payload.sessionId);
 		for (const socket of sockets.values()) socket.data.held?.forgetSession(payload.sessionId);
@@ -1229,6 +1242,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 		if (payload.event.type === "tool_execution_start") {
 			taskObservation.toolStarted(workspaceId, payload.sessionId, payload.event);
+			lastActions.note(workspaceId, payload.sessionId, payload.event);
+			extensionEvents.emit("agent.tool", { workspaceId, sessionId: payload.sessionId });
 		}
 		if (payload.event.type === "agent_settled")
 			extensionEvents.emit("agent.settled", { workspaceId, sessionId: payload.sessionId });

@@ -3,7 +3,7 @@ import type { StatusItemHost } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
-import { CARD_PANEL, type InboxItem, inboxTarget, loadInbox } from "./api";
+import { cardPeekEntry, type InboxItem, inboxTarget, loadInbox } from "./api";
 import { INBOX_REASON_LABELS } from "./labels";
 import { useAnyBoardChanged, useHostQuery } from "./useHostQuery";
 
@@ -29,12 +29,7 @@ export function InboxRow({
 	const { card, reason } = item;
 	const target = inboxTarget(item);
 	const peek = () => {
-		host.peek({
-			kind: "extension",
-			panel: CARD_PANEL,
-			params: { projectId: item.projectId, cardId: card.id },
-			title: `${card.id} · ${card.title}`,
-		});
+		host.peek(cardPeekEntry(item.projectId, card));
 		onAct?.();
 	};
 	return (

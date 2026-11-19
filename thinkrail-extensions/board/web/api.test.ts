@@ -4,20 +4,25 @@ import {
 	adjacentColumn,
 	agentBadge,
 	attentionOverLimit,
+	attentionWarning,
 	BoardReplyError,
 	boardLayout,
 	COLUMNS_MIN_WIDTH,
 	canStart,
 	columnWip,
+	enterCard,
 	inboxTarget,
 	loadBoard,
 	loadInbox,
 	moveOnDrop,
 	overLimit,
+	selectCard,
+	setFollowSelection,
 	setWipLimits,
 	sortCards,
 	triageGroups,
 	workflowFor,
+	workingAction,
 } from "./api";
 import { boardOf, cardOf, fakeHost, liveOf } from "./fixtures.test";
 import { startDefaults, startRequest } from "./StartSection";
@@ -36,6 +41,21 @@ describe("the agent badge", () => {
 		expect(badge({ open: false })).toBeNull();
 		expect(badge({ chat: null })).toBeNull();
 		expect(agentBadge(cardOf())).toBeNull();
+	});
+
+	test("names what a working agent does, from its latest attempt, only while it works", () => {
+		const lastAction = { tool: "edit", target: "src/a.ts", at: 1 };
+		const working = liveOf({ chat: { state: "working", unread: false, title: "", lastAction } });
+		expect(workingAction(cardOf({ live: [working] }))).toEqual(lastAction);
+		expect(
+			workingAction(
+				cardOf({
+					live: [liveOf({ chat: { state: "finished", unread: false, title: "", lastAction } })],
+				}),
+			),
+		).toBeUndefined();
+		expect(workingAction(cardOf({ live: [working, liveOf()] }))).toBeUndefined();
+		expect(workingAction(cardOf({ live: [{ ...working, open: false }] }))).toBeUndefined();
 	});
 
 	test("follows the latest attempt, not an earlier one", () => {
@@ -155,6 +175,10 @@ describe("WIP, Triage and the inbox", () => {
 	});
 
 	test("Start warns about Review first, then Needs you, and not about agents", () => {
+		expect(attentionWarning(wip([6, 5], [4, 3]))).toEqual({ key: "review", n: 6, limit: 5 });
+		expect(attentionWarning(wip([5, 5], [4, 3]))).toEqual({ key: "needsYou", n: 4, limit: 3 });
+		expect(attentionWarning(wip([5, 5]))).toBeNull();
+		expect(attentionWarning(null)).toBeNull();
 		expect(attentionOverLimit(wip([6, 5]))).toEqual(["review"]);
 		expect(attentionOverLimit(wip([6, 5], [4, 3]))).toEqual(["review", "needsYou"]);
 		expect(attentionOverLimit(wip([5, 5], [4, 3]))).toEqual(["needsYou"]);
@@ -242,6 +266,67 @@ describe("WIP, Triage and the inbox", () => {
 				method: "settings.update",
 				params: { projectId: "p1", wipLimits: { needsYou: 2, review: 1, agents: 4 } },
 			},
+		]);
+	});
+});
+
+describe("selecting a card", () => {
+	const running = cardOf({
+		category: "started",
+		column: "building",
+		live: [
+			liveOf({ workspaceId: "w1", open: false }),
+			liveOf({ workspaceId: "w2", sessionId: "s2" }),
+		],
+	});
+	const peekOf = (card: typeof running) => ({
+		kind: "extension" as const,
+		panel: "card",
+		params: { projectId: "p1", cardId: card.id },
+		title: `${card.id} · ${card.title}`,
+	});
+
+	test("a click only peeks the card while follow selection is off", () => {
+		const { host, peeks, workspaces } = fakeHost();
+		expect(selectCard(host, "p1", running, false)).toBe("peek");
+		expect(peeks).toEqual([peekOf(running)]);
+		expect(workspaces).toEqual([]);
+	});
+
+	test("with follow selection a click enters the open attempt's chat and peeks the card there", () => {
+		const { host, peeks, workspaces } = fakeHost();
+		expect(selectCard(host, "p1", running, true)).toBe("follow");
+		expect(peeks).toEqual([]);
+		expect(workspaces).toEqual([
+			{ workspaceId: "w2", projectId: "p1", sessionId: "s2", peek: peekOf(running) },
+		]);
+	});
+
+	test("with follow selection a card without an open attempt still only peeks", () => {
+		const { host, peeks, workspaces } = fakeHost();
+		const idle = cardOf({ live: [liveOf({ open: false })] });
+		expect(selectCard(host, "p1", idle, true)).toBe("peek");
+		expect(selectCard(host, "p1", cardOf(), true)).toBe("peek");
+		expect(peeks).toHaveLength(2);
+		expect(workspaces).toEqual([]);
+	});
+
+	test("a double click enters the open attempt's workspace, on its chat when it has one", () => {
+		const { host, workspaces } = fakeHost();
+		expect(enterCard(host, "p1", running)).toBe(true);
+		expect(enterCard(host, "p1", cardOf({ live: [liveOf({ chat: null })] }))).toBe(true);
+		expect(enterCard(host, "p1", cardOf())).toBe(false);
+		expect(workspaces).toEqual([
+			{ workspaceId: "w2", projectId: "p1", sessionId: "s2" },
+			{ workspaceId: "w1", projectId: "p1" },
+		]);
+	});
+
+	test("saves follow selection through the board's settings", async () => {
+		const { host, queries } = fakeHost();
+		await setFollowSelection(host, "p1", true);
+		expect(queries).toEqual([
+			{ method: "settings.update", params: { projectId: "p1", followSelection: true } },
 		]);
 	});
 });

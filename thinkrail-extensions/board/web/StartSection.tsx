@@ -5,6 +5,8 @@ import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { useId, useState } from "react";
 import {
+	attentionWarning,
+	type BoardView,
 	type Card,
 	type HostModel,
 	listModels,
@@ -14,9 +16,9 @@ import {
 	type Workflow,
 	workflowFor,
 } from "./api";
-import { FIELD } from "./CardParts";
-import { EFFORT_LABELS, WORKFLOW_LABELS } from "./labels";
-import { useHostQuery } from "./useHostQuery";
+import { FIELD, StartWarning } from "./CardParts";
+import { EFFORT_LABELS, startWarningText, WORKFLOW_LABELS } from "./labels";
+import { type Loaded, useHostQuery } from "./useHostQuery";
 
 const THINKING_LEVELS: readonly ThinkingLevel[] = [
 	"off",
@@ -57,17 +59,23 @@ function effortsOf(models: readonly HostModel[], model: string): readonly Thinki
 	return levels && levels.length > 0 ? levels : THINKING_LEVELS;
 }
 
-/** Starts another attempt of the card: a new workspace whose chat takes the card's kickoff. */
+/**
+ * Starts another attempt of the card: a new workspace whose chat takes the card's kickoff. Past a
+ * human-attention limit it asks first, as the board's tile does.
+ */
 export function StartSection({
 	host,
 	card,
 	projectId,
+	board,
 	onStarted,
 }: {
 	host: PanelHost;
 	card: Card;
 	/** The card's board, which stores a GitHub issue's card on its first Start. */
 	projectId: string;
+	/** That board, for the WIP warning: Start waits while it loads and starts unasked when it failed. */
+	board: Loaded<Pick<BoardView, "wip">>;
 	onStarted: () => void;
 }) {
 	const t = useT();
@@ -76,9 +84,17 @@ export function StartSection({
 	const [choice, setChoice] = useState<StartChoice>(() => startDefaults(card));
 	const [busy, setBusy] = useState(false);
 	const [outcome, setOutcome] = useState<{ kind: "error" | "kickoff"; text: string } | null>(null);
+	const [confirming, setConfirming] = useState(false);
 	const available = models.state.kind === "ready" ? models.state.value : [];
+	const view = board.kind === "ready" ? board.value : null;
+	const warning = confirming ? attentionWarning(view) : null;
 	const set = (patch: Partial<StartChoice>) => setChoice((current) => ({ ...current, ...patch }));
-	const start = () => {
+	const start = (anyway = false) => {
+		if (!anyway && attentionWarning(view)) {
+			setConfirming(true);
+			return;
+		}
+		setConfirming(false);
 		setBusy(true);
 		setOutcome(null);
 		startCard(host, card.id, startRequest(choice), projectId)
@@ -170,18 +186,26 @@ export function StartSection({
 				</label>
 			</div>
 			<p className="tr-text-metadata text-text-subtle">{t("board.start.prompt")}</p>
-			<Button
-				variant="primary"
-				size="m"
-				iconLeft={RiPlayLine}
-				loading={busy}
-				data-testid="board-start-submit"
-				disabled={card.category === "triage"}
-				className="self-start"
-				onClick={start}
-			>
-				{t("board.start.submit")}
-			</Button>
+			{warning ? (
+				<StartWarning
+					text={startWarningText(t, warning)}
+					onAnyway={() => start(true)}
+					onCancel={() => setConfirming(false)}
+				/>
+			) : (
+				<Button
+					variant="primary"
+					size="m"
+					iconLeft={RiPlayLine}
+					loading={busy}
+					data-testid="board-start-submit"
+					disabled={card.category === "triage" || board.kind === "loading"}
+					className="self-start"
+					onClick={() => start()}
+				>
+					{t("board.start.submit")}
+				</Button>
+			)}
 			{outcome ? (
 				<p
 					role="alert"

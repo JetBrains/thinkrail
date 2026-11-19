@@ -64,6 +64,38 @@ describe("PanelHost workspace, Peek and events", () => {
 		]);
 	});
 
+	test("opens a workspace with a Peek entry of its own declared panel for that workspace, never an undeclared one", () => {
+		const openWorkspace = mock((_target: unknown) => {});
+		const host = createPanelHost(hostDeps({ extension: "board", openWorkspace }));
+		host.openWorkspace({
+			workspaceId: "w2",
+			projectId: "p1",
+			peek: { kind: "extension", panel: "card", params: { cardId: "TR-1" }, title: "TR-1 · Ship" },
+		});
+		host.openWorkspace({
+			workspaceId: "w3",
+			projectId: "p1",
+			peek: { kind: "extension", panel: "not-declared" },
+		});
+		expect(openWorkspace.mock.calls).toEqual([
+			[
+				{
+					workspaceId: "w2",
+					projectId: "p1",
+					peek: {
+						kind: "extension",
+						extension: "board",
+						panel: "card",
+						params: { cardId: "TR-1" },
+						titleKey: "board.card.panelTitle",
+						name: "TR-1 · Ship",
+					},
+				},
+			],
+			[{ workspaceId: "w3", projectId: "p1" }],
+		]);
+	});
+
 	test("peeks its own declared panel with its title key and crumb name, and files of its workspace", () => {
 		const peek = mock((_entry: unknown) => {});
 		const host = createPanelHost(hostDeps({ extension: "board", peek }));

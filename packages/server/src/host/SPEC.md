@@ -557,8 +557,15 @@ gate: [[module-contracts]].
   and answers it absolute and worktree-relative, `null` for an unknown workspace; `workspaceFacts(id)`
   joins a registered workspace's record (its cached `review`), `workspaceDiffStats` (`null` for a chat or a
   failed git read) and `listSessions` — each chat's state through contracts' `chatState`, its
-  `completionUnread`, and `todos`' `todoCounts` (`null` for a chat without a plan) —, `null` for an unknown
-  workspace; `taskSpecs(id)` is `spec`'s `workspaceTaskSpecs` over a registered workspace's worktree (none
+  `completionUnread`, `todos`' `todoCounts` (`null` for a chat without a plan) and its `lastAction` —, `null`
+  for an unknown workspace. **The last action is a host fact, not a parsed transcript**: `lastActions.ts`
+  records each session's most recent `tool_execution_start` from inside the session publisher's callback
+  (no second publisher) — the tool name and `lastActionTarget`'s short target: a `read` / `edit` / `write`
+  path resolved against the workspace's worktree and shown worktree-relative, omitted when it leaves the
+  worktree (`..`, another folder, `~`); a `bash` command's first 60 characters on one line with the
+  worktree (whole-path matches only) and the home folder shortened; nothing for any other tool. It lives in
+  memory only: `session.deleted` forgets it and a session `agent` no longer holds (`hasSession`, disposed)
+  is dropped instead of reported; `taskSpecs(id)` is `spec`'s `workspaceTaskSpecs` over a registered workspace's worktree (none
   for a chat, `null` for an unknown workspace) and `specSection(id, specId, heading)` its
   `workspaceSpecSection` (`null` for a chat or an unknown workspace); `githubProblem()` is `github`'s
   `ghSetupProblem` (`null` under `THINKRAIL_GH_OFFLINE`, which is what lets e2e reach the lane's fake `gh`).
@@ -584,8 +591,10 @@ gate: [[module-contracts]].
   **Extension events** are tapped inside the existing publisher callbacks, never through a second
   `setX`: `server.ts` emits `session.state` from the session-state publisher, `workspace.created|updated|
   removed` from the workspace-lifecycle tee (a review refresh arrives as `updated`), `agent.settled` from
-  the session publisher at pi's `agent_settled`, and `container.updated|removed` from the container
-  publisher into one hub (`extensionEvents.ts`) that hands each enabled extension's listener its own copy
+  the session publisher at pi's `agent_settled` and `agent.tool` there at `tool_execution_start` (after
+  recording the last action), `project.opened|closed` from the projects publisher when a project's
+  `closed` flag flips against the open set it seeded at boot (a rename or a trust change emits nothing),
+  and `container.updated|removed` from the container publisher into one hub (`extensionEvents.ts`) that hands each enabled extension's listener its own copy
   and logs, never rethrows, a listener's throw or rejection. `publish` validates the type and drops the
   push while the extension is off or no server runs; `server.ts` sends it as `extension.event` through
   `publishScoped` to sockets at `EXTENSION_EVENT_PROTOCOL_VERSION`, which alone subscribe to the channel.

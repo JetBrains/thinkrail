@@ -55,6 +55,7 @@ import { historyHiddenCwd } from "./chats";
 import { extensionActions } from "./extensionActions";
 import { createExtensionEventHub } from "./extensionEvents";
 import { buildHistoryScope } from "./historyScope";
+import { lastActions } from "./lastActions";
 
 export const isExtensionDisabled = (name: string): boolean =>
 	getConfig().disabledExtensions.includes(name);
@@ -323,7 +324,7 @@ function chatPlan(workspaceId: string, sessionId: string): ExtensionChatFacts["p
 	}
 }
 
-/** An open workspace's review, diff and chats, from the records, git and the session states. */
+/** An open workspace's review, diff and chats, from the records, git, the session states and the last actions. */
 export async function workspaceFacts(workspaceId: string): Promise<ExtensionWorkspaceFacts | null> {
 	const workspace = listAllWorkspaceRecords().find((candidate) => candidate.id === workspaceId);
 	if (!workspace) return null;
@@ -353,14 +354,18 @@ export async function workspaceFacts(workspaceId: string): Promise<ExtensionWork
 				}
 			: null,
 		diff,
-		chats: chats.map((chat) => ({
-			sessionId: chat.sessionId,
-			title: chat.title,
-			state: chatState(chat.state),
-			unread: chat.state?.completionUnread ?? false,
-			plan: chatPlan(workspace.id, chat.sessionId),
-			updatedAt: chat.updatedAt,
-		})),
+		chats: chats.map((chat) => {
+			const lastAction = lastActions.get(chat.sessionId);
+			return {
+				sessionId: chat.sessionId,
+				title: chat.title,
+				state: chatState(chat.state),
+				unread: chat.state?.completionUnread ?? false,
+				plan: chatPlan(workspace.id, chat.sessionId),
+				updatedAt: chat.updatedAt,
+				...(lastAction ? { lastAction } : {}),
+			};
+		}),
 	};
 }
 

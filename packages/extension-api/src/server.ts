@@ -143,6 +143,13 @@ export interface ExtensionChatFacts {
 	/** `null` when the chat keeps no plan. */
 	plan: { open: number; total: number } | null;
 	updatedAt: number;
+	/**
+	 * The live chat's most recent tool start, tracked by the host in memory (never parsed from the
+	 * transcript): the tool's name and a short target — a workspace-relative path for read / edit / write,
+	 * the start of a bash command — when it has one. Absent before the first tool and once the chat's
+	 * session was disposed.
+	 */
+	lastAction?: { tool: string; target?: string; at: number };
 }
 
 /** A model a new chat can use, from the host's model catalog; `id` is `provider/id`, as `createWorkspace` takes it. */
@@ -188,6 +195,10 @@ export interface ExtensionHostEvents {
 	"workspace.removed": { projectId: string; id: string };
 	/** A chat's automatic work ended (pi's `agent_settled`, never an attempt-level `agent_end`). */
 	"agent.settled": { workspaceId: string; sessionId: string };
+	/** A chat's agent started a tool (pi's `tool_execution_start`): its `lastAction` fact changed. */
+	"agent.tool": { workspaceId: string; sessionId: string };
+	"project.opened": { projectId: string };
+	"project.closed": { projectId: string };
 	"container.updated": Container;
 	"container.removed": { id: string };
 }

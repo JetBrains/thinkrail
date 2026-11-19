@@ -290,6 +290,38 @@ describe("board queries", () => {
 		expect(gone.cards[0]?.live[0]).toMatchObject({ open: false, chat: null, pr: null });
 	});
 
+	test("carry a chat's last action into its attempt's overlay, as the host reports it", async () => {
+		const { t, query } = setup();
+		await query("card.create", { projectId: "p1", title: "Working" });
+		await query("card.start", { cardId: "TR-1" });
+		const lastAction = { tool: "edit", target: "src/board.ts", at: 5 };
+		t.facts.set(
+			"w1",
+			facts("w1", {
+				chats: [
+					{
+						sessionId: "s1",
+						title: "Work",
+						state: "working",
+						unread: false,
+						plan: null,
+						updatedAt: 1,
+						lastAction,
+					},
+				],
+			}),
+		);
+		const view = await query<BoardView>("board.get", { projectId: "p1" });
+		expect(view.cards[0]?.live[0]?.chat).toEqual({
+			state: "working",
+			unread: false,
+			title: "Work",
+			lastAction,
+		});
+		const detail = await query<{ card: CardView }>("card.get", { cardId: "TR-1" });
+		expect(detail.card.live[0]?.chat?.lastAction).toEqual(lastAction);
+	});
+
 	test("gather the cards that wait for the human or failed, across the open projects", async () => {
 		const { t, board, query } = setup();
 		t.projects.push(project("p2", "Other"));
@@ -501,6 +533,43 @@ describe("board rules over host events", () => {
 		expect(t.listeners()).toBe(0);
 	});
 
+	test("republish a bound chat's tool starts at most once per window, the last one included", async () => {
+		const t = createTestHost();
+		hosts.push(t);
+		const board = new Board(t.host, { owner: "dana", sizeDelayMs: 0, actionRefreshMs: 40 });
+		const stop = board.listen();
+		const card = board.createCard("p1", { title: "Card" }, "human");
+		await boardQueries(board)["card.start"]?.({ cardId: card.id });
+		const changes = () => t.published.filter((entry) => entry.type === "board.changed").length;
+		const before = changes();
+		t.emit("agent.tool", { workspaceId: "w1", sessionId: "s1" });
+		t.emit("agent.tool", { workspaceId: "w1", sessionId: "s1" });
+		t.emit("agent.tool", { workspaceId: "w1", sessionId: "s1" });
+		t.emit("agent.tool", { workspaceId: "elsewhere", sessionId: "x" });
+		expect(changes() - before).toBe(1);
+		await Bun.sleep(60);
+		expect(changes() - before).toBe(2);
+		await Bun.sleep(60);
+		expect(changes() - before).toBe(2);
+		t.emit("agent.tool", { workspaceId: "w1", sessionId: "s1" });
+		stop();
+		t.emit("agent.tool", { workspaceId: "w1", sessionId: "s1" });
+		await Bun.sleep(60);
+		expect(changes() - before).toBe(3);
+	});
+
+	test("republish a project's board when the project opens or closes, for the inbox", async () => {
+		const { t, board } = setup();
+		const stop = board.listen();
+		t.emit("project.closed", { projectId: "p2" });
+		t.emit("project.opened", { projectId: "p3" });
+		expect(t.published).toEqual([
+			{ type: "board.changed", payload: { projectId: "p2" }, scope: { projectId: "p2" } },
+			{ type: "board.changed", payload: { projectId: "p3" }, scope: { projectId: "p3" } },
+		]);
+		stop();
+	});
+
 	test("log a failing rule and keep applying later events", async () => {
 		const s = setup();
 		const { t, board } = s;
@@ -646,7 +715,7 @@ describe("the board descriptor", () => {
 			"triage.accept",
 		]);
 		const service = extension.hostService?.(t.host);
-		expect(t.listeners()).toBe(4);
+		expect(t.listeners()).toBe(7);
 		await (queries["card.create"] as ExtensionQuery)({ projectId: "p1", title: "Shared" });
 		const registered: string[] = [];
 		const pi = { registerTool: (tool: { name: string }) => registered.push(tool.name) };
@@ -662,7 +731,7 @@ describe("the board descriptor", () => {
 		hosts.push(t);
 		const first = new AbortController();
 		const service = extension.hostService?.({ ...t.host, signal: first.signal });
-		expect(t.listeners()).toBe(4);
+		expect(t.listeners()).toBe(7);
 		await service?.stop?.();
 		first.abort();
 		const subscribed: string[] = [];
@@ -679,6 +748,9 @@ describe("the board descriptor", () => {
 		expect(t.listeners()).toBe(0);
 		expect(subscribed.sort()).toEqual([
 			"agent.settled",
+			"agent.tool",
+			"project.closed",
+			"project.opened",
 			"session.state",
 			"workspace.removed",
 			"workspace.updated",

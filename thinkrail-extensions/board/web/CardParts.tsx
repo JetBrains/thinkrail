@@ -10,6 +10,7 @@ import {
 	RiQuestionLine,
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import { DiffStatBadge } from "@thinkrail/ui/diff-stat-badge";
 import { cn } from "@thinkrail/ui/utils";
 import {
@@ -17,9 +18,11 @@ import {
 	type AttemptLive,
 	agentBadge,
 	type Card,
+	type LastAction,
 	latestLive,
 	shownId,
 	type TaskSpecRef,
+	workingAction,
 } from "./api";
 import { BADGE_LABELS, TYPE_LABELS, taskSpecStatusLabel } from "./labels";
 
@@ -187,17 +190,72 @@ export function CardMeta({
 	);
 }
 
-/** The latest attempt's live line: agent badge, plan progress, diff and PR. */
+/** A chat's most recent tool start: the tool and its target, monospace, cut to one line. */
+export function LastActionLine({ action }: { action: LastAction | undefined }) {
+	const t = useT();
+	if (!action) return null;
+	const text = action.target ? `${action.tool} ${action.target}` : action.tool;
+	return (
+		<span
+			data-testid="board-last-action"
+			data-tool={action.tool}
+			title={t("board.lastAction", { action: text })}
+			className="flex min-w-0 items-center gap-4 tr-code-text-small text-text-muted"
+		>
+			<span className="shrink-0 text-text-default">{action.tool}</span>
+			{action.target ? <span className="min-w-0 truncate">{action.target}</span> : null}
+		</span>
+	);
+}
+
+/** The latest attempt's live line: agent badge, plan progress, diff and PR, and what a working agent does. */
 export function LiveLine({ card }: { card: Pick<Card, "live"> }) {
 	const live = latestLive(card);
 	const badge = agentBadge(card);
 	if (!live?.open && !badge) return null;
 	return (
-		<span className="flex min-w-0 flex-wrap items-center gap-8">
-			<AgentBadgeChip badge={badge} />
-			<PlanProgress plan={live?.plan ?? null} />
-			{live?.diff ? <DiffStatBadge added={live.diff.added} removed={live.diff.removed} /> : null}
-			<PrChip pr={live?.pr ?? null} />
-		</span>
+		<>
+			<span className="flex min-w-0 flex-wrap items-center gap-8">
+				<AgentBadgeChip badge={badge} />
+				<PlanProgress plan={live?.plan ?? null} />
+				{live?.diff ? (
+					<span data-testid="board-diff" className="flex">
+						<DiffStatBadge added={live.diff.added} removed={live.diff.removed} />
+					</span>
+				) : null}
+				<PrChip pr={live?.pr ?? null} />
+			</span>
+			<LastActionLine action={workingAction(card)} />
+		</>
+	);
+}
+
+/** Start pressed past a human-attention limit: the question, with Start anyway and Not now. */
+export function StartWarning({
+	text,
+	onAnyway,
+	onCancel,
+}: {
+	text: string;
+	onAnyway: () => void;
+	onCancel: () => void;
+}) {
+	const t = useT();
+	return (
+		<div
+			role="alert"
+			data-testid="board-start-warning"
+			className="flex flex-col gap-4 rounded-xs bg-feedback-warning-subtle p-4"
+		>
+			<span className="tr-text-metadata text-feedback-warning">{text}</span>
+			<span className="flex flex-wrap gap-4">
+				<Button variant="outline" size="s" data-testid="board-start-anyway" onClick={onAnyway}>
+					{t("board.wip.startAnyway")}
+				</Button>
+				<Button variant="ghost" size="s" onClick={onCancel}>
+					{t("board.wip.notNow")}
+				</Button>
+			</span>
+		</div>
 	);
 }

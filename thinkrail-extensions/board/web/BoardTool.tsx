@@ -38,26 +38,28 @@ import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { type LocalKeys, useLocalKeys } from "@thinkrail/ui/local-keys";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, type ReactNode, useEffect, useState } from "react";
 import {
 	acceptTriage,
 	adjacentColumn,
 	adoptCard,
-	attentionOverLimit,
+	attentionWarning,
 	BOARD_MODE,
 	type BoardLayout,
 	type BoardSettings,
 	type BoardView,
 	boardLayout,
-	CARD_PANEL,
 	type Card,
 	type Column,
 	canAdopt,
+	cardPeekEntry,
 	cardsIn,
 	columnWip,
 	createCard,
 	deleteCard,
+	enterCard,
 	GITHUB_FILTERS,
 	type GithubFilter,
 	type GithubStatus,
@@ -65,15 +67,15 @@ import {
 	loadBoard,
 	moveCard,
 	moveOnDrop,
-	openAttempt,
 	overLimit,
 	PRESETS,
 	type Preset,
 	refreshGithub,
+	selectCard,
+	setFollowSelection,
 	setGithub,
 	setPreset,
 	setWipLimits,
-	shownId,
 	startCard,
 	WIP_KEYS,
 	type WipCount,
@@ -89,7 +91,7 @@ import {
 	GITHUB_FILTER_LABELS,
 	GITHUB_PROBLEMS,
 	PRESET_LABELS,
-	START_WARNINGS,
+	startWarningText,
 	WIP_LABELS,
 } from "./labels";
 import { type TriageActions, TriageLane } from "./Triage";
@@ -120,19 +122,6 @@ function useMeasuredRoot(): {
 		return () => observer.disconnect();
 	}, [node]);
 	return { node, width, attach: setNode };
-}
-
-function peekCard(
-	host: PanelHost,
-	projectId: string,
-	card: Pick<Card, "id" | "title" | "source" | "virtual">,
-) {
-	host.peek({
-		kind: "extension",
-		panel: CARD_PANEL,
-		params: { projectId, cardId: card.id },
-		title: `${shownId(card)} · ${card.title}`,
-	});
 }
 
 function WipFigure({ wip, testId }: { wip: WipCount; testId: string }) {
@@ -374,11 +363,14 @@ function WipChips({ view }: { view: BoardView }) {
 	);
 }
 
-function WipSettings({
+/** The board's settings: follow selection, applied at once, and the WIP limits, saved together. */
+function BoardSettingsMenu({
 	settings,
+	onFollow,
 	onSave,
 }: {
 	settings: BoardSettings;
+	onFollow: (followSelection: boolean) => void;
 	onSave: (limits: BoardSettings["wipLimits"]) => void;
 }) {
 	const t = useT();
@@ -400,7 +392,21 @@ function WipSettings({
 					data-testid="board-settings"
 				/>
 			</PopoverTrigger>
-			<PopoverContent align="end" className="w-280 p-12">
+			<PopoverContent align="end" className="flex w-280 flex-col gap-12 p-12">
+				<div className="flex items-start justify-between gap-8">
+					<span className="flex min-w-0 flex-col gap-2">
+						<span className="tr-text-emphasis text-text-default">{t("board.settings.follow")}</span>
+						<span className="tr-text-metadata text-text-subtle">
+							{t("board.settings.followHint")}
+						</span>
+					</span>
+					<Switch
+						checked={settings.followSelection}
+						label={t("board.settings.follow")}
+						testId="board-follow-selection"
+						onCheckedChange={onFollow}
+					/>
+				</div>
 				<form
 					data-testid="board-wip-form"
 					className="flex flex-col gap-8"
@@ -596,6 +602,7 @@ function BoardHeader({
 	boardMode,
 	onMode,
 	onPreset,
+	onFollow,
 	onWipLimits,
 	onBoardMode,
 	onGithub,
@@ -610,6 +617,7 @@ function BoardHeader({
 	boardMode: boolean;
 	onMode: (mode: BoardMode) => void;
 	onPreset: (preset: Preset) => void;
+	onFollow: (followSelection: boolean) => void;
 	onWipLimits: (limits: BoardSettings["wipLimits"]) => void;
 	/** Absent on a host without layout modes. */
 	onBoardMode: (() => void) | null;
@@ -645,7 +653,9 @@ function BoardHeader({
 						onRefresh={onGithubRefresh}
 					/>
 				) : null}
-				{view ? <WipSettings settings={view.settings} onSave={onWipLimits} /> : null}
+				{view ? (
+					<BoardSettingsMenu settings={view.settings} onFollow={onFollow} onSave={onWipLimits} />
+				) : null}
 				<IconButton
 					icon={RiKanbanView2}
 					size="s"
@@ -790,18 +800,10 @@ export default function BoardTool({ host }: PanelProps) {
 			board.reload();
 		});
 	const actions: CardActions = {
-		open: (card) => peekCard(host, projectId, card),
-		enter: (card) => {
-			const attempt = openAttempt(card);
-			if (attempt)
-				host.openWorkspace({
-					workspaceId: attempt.workspaceId,
-					projectId,
-					sessionId: attempt.sessionId,
-				});
-		},
+		open: (card) => selectCard(host, projectId, card, view?.settings.followSelection ?? false),
+		enter: (card) => enterCard(host, projectId, card),
 		start: (card, anyway = false) => {
-			if (!anyway && view && attentionOverLimit(view).length > 0) {
+			if (!anyway && attentionWarning(view)) {
 				setConfirmStart(card.id);
 				return;
 			}
@@ -834,17 +836,9 @@ export default function BoardTool({ host }: PanelProps) {
 			}),
 		open: actions.open,
 	};
-	const [overKey] = view && confirmStart ? attentionOverLimit(view) : [];
+	const warning = confirmStart ? attentionWarning(view) : null;
 	const startWarning =
-		view && confirmStart && overKey
-			? {
-					cardId: confirmStart,
-					text: t(START_WARNINGS[overKey], {
-						n: view.wip[overKey].count,
-						limit: view.wip[overKey].limit,
-					}),
-				}
-			: null;
+		confirmStart && warning ? { cardId: confirmStart, text: startWarningText(t, warning) } : null;
 	const onDragEnd = ({ active, over }: DragEndEvent) => {
 		if (!view) return;
 		const moving = moveOnDrop(host, view, String(active.id), over ? String(over.id) : null);
@@ -855,7 +849,7 @@ export default function BoardTool({ host }: PanelProps) {
 			const card = await createCard(host, projectId, title);
 			setCreating(false);
 			board.reload();
-			peekCard(host, projectId, card);
+			host.peek(cardPeekEntry(projectId, card));
 		} catch (error) {
 			setNotice(errorMessage(t, error));
 		}
@@ -884,6 +878,7 @@ export default function BoardTool({ host }: PanelProps) {
 				boardMode={host.layoutPreset === BOARD_MODE}
 				onMode={setMode}
 				onPreset={(preset) => void write(() => setPreset(host, projectId, preset))}
+				onFollow={(follow) => void write(() => setFollowSelection(host, projectId, follow))}
 				onWipLimits={(limits) => void write(() => setWipLimits(host, projectId, limits))}
 				onBoardMode={boardModeToggle(host)}
 				onGithub={showGithub}

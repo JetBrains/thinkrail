@@ -140,11 +140,13 @@ export interface PanelHostScope {
 	projectId: string;
 }
 
-/** A workspace to switch to, optionally on one of its chats. */
+/** A workspace to switch to, optionally on one of its chats and showing an entry in its Peek. */
 export interface PanelWorkspaceTarget {
 	workspaceId: string;
 	projectId: string;
 	sessionId?: string | undefined;
+	/** Shown in the target workspace's Peek, as `PanelHost.peek` shows one in `scope`'s. */
+	peek?: PanelPeekEntry | undefined;
 }
 
 /** What `PanelHost.peek` shows in Peek: a panel of the caller's own extension, or a file or two of `scope`'s workspace. */
@@ -174,7 +176,7 @@ export interface PanelHost {
 	openFile(workspaceId: string, path: string, line?: number): void;
 	/** Reveals the Artifacts tool of `scope`'s workspace, where files an extension wrote there show; absent on a host without one. */
 	openArtifacts?(): void;
-	/** Switches to another workspace (on one of its chats when given); every panel follows the switch. */
+	/** Switches to another workspace (on one of its chats, showing `peek` there, when given); every panel follows the switch. */
 	openWorkspace(target: PanelWorkspaceTarget): void;
 	/** Shows the entry in `scope`'s workspace's Peek, the contextual pane at the workbench's right edge. */
 	peek(entry: PanelPeekEntry): void;

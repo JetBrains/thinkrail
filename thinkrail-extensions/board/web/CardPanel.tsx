@@ -19,6 +19,7 @@ import { type ReactNode, useId, useState } from "react";
 import {
 	adoptCard,
 	agentBadge,
+	type BoardView,
 	CARD_SIZES,
 	CARD_TYPES,
 	type Card,
@@ -38,6 +39,7 @@ import {
 	AgentBadgeChip,
 	CardMeta,
 	FIELD,
+	LastActionLine,
 	LiveLine,
 	PlanProgress,
 	PrChip,
@@ -255,6 +257,7 @@ function Attempts({ host, projectId, card }: { host: PanelHost; projectId: strin
 						{live?.chat ? (
 							<span className="truncate tr-text-ui text-text-default">{live.chat.title}</span>
 						) : null}
+						<LastActionLine action={live?.chat?.lastAction} />
 						<span className="flex flex-wrap items-center gap-8">
 							<PlanProgress plan={live?.plan ?? null} />
 							<PrChip pr={live?.pr ?? null} />
@@ -302,26 +305,20 @@ function Attempts({ host, projectId, card }: { host: PanelHost; projectId: strin
 }
 
 function BlocksEditor({
-	host,
-	projectId,
+	board,
 	card,
 	onChange,
 }: {
-	host: PanelHost;
-	projectId: string;
+	/** The card's board, `null` while it loads. */
+	board: BoardView | null;
 	card: Card;
 	onChange: (blocks: string[]) => void;
 }) {
 	const t = useT();
 	const id = useId();
-	const board = useHostQuery(`blocks:${projectId}`, (signal) => loadBoard(host, projectId, signal));
-	useBoardChanged(host, projectId, board.reload);
-	const others =
-		board.state.kind === "ready"
-			? board.state.value.cards.filter(
-					(other) => other.id !== card.id && !card.blocks.includes(other.id),
-				)
-			: [];
+	const others = (board?.cards ?? []).filter(
+		(other) => other.id !== card.id && !card.blocks.includes(other.id),
+	);
 	return (
 		<div className="flex flex-col gap-4">
 			<ul className="flex flex-wrap gap-4">
@@ -629,6 +626,8 @@ function CardDetails({
 	const t = useT();
 	const id = useId();
 	const { card, projectId } = detail;
+	const board = useHostQuery(`board:${projectId}`, (signal) => loadBoard(host, projectId, signal));
+	useBoardChanged(host, projectId, board.reload);
 	return (
 		<div className="flex flex-col gap-16 p-12">
 			<div className="flex flex-col gap-4">
@@ -717,8 +716,7 @@ function CardDetails({
 			</Section>
 			<Section title={t("board.card.blocks")}>
 				<BlocksEditor
-					host={host}
-					projectId={projectId}
+					board={board.state.kind === "ready" ? board.state.value : null}
 					card={card}
 					onChange={(blocks) => onPatch({ blocks })}
 				/>
@@ -750,6 +748,7 @@ function CardDetails({
 				host={host}
 				card={card}
 				projectId={projectId}
+				board={board.state}
 				onStarted={onReload}
 			/>
 			<Section title={t("board.activity.title")}>

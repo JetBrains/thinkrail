@@ -29,6 +29,9 @@ import {
 } from "../transport";
 import { paletteNavigator } from "./paletteNavigation";
 
+/** A panel's `openWorkspace` target with its Peek entry already the store's. */
+export type HostWorkspaceTarget = Omit<PanelWorkspaceTarget, "peek"> & { peek?: PeekEntry };
+
 export interface PanelHostDeps {
 	readonly extension: string;
 	readonly request: (params: ExtensionQueryParams) => Promise<unknown>;
@@ -45,7 +48,8 @@ export interface PanelHostDeps {
 	readonly openFile: (workspaceId: string, path: string, line: number | undefined) => void;
 	/** Reveals the Artifacts tool of the panel's workspace. */
 	readonly openArtifacts: () => void;
-	readonly openWorkspace: (target: PanelWorkspaceTarget) => void;
+	/** Enters the workspace (on its chat when given) and shows `peek` in that workspace's Peek. */
+	readonly openWorkspace: (target: HostWorkspaceTarget) => void;
 	/** Shows a Peek entry in the panel's workspace. */
 	readonly peek: (entry: PeekEntry) => void;
 	/** Listens to the `extension.event` channel, which never replays its last push. */
@@ -93,11 +97,13 @@ export const APP_HOST_LINKS: Pick<
 			.then((ok) => {
 				if (ok) useAppStore.getState().requestChatLocation(location);
 			}),
-	openWorkspace: (target) =>
+	openWorkspace: ({ peek, ...target }) => {
+		if (peek) useAppStore.getState().requestPeek(target.workspaceId, peek);
 		void paletteNavigator.navigateToWorkspace(
 			{ id: target.workspaceId, projectId: target.projectId },
 			target.sessionId,
-		),
+		);
+	},
 	subscribe: (listener) => getTransport().subscribe(WS_CHANNELS.extensionEvent, listener),
 };
 
@@ -174,6 +180,15 @@ function extensionEvents(deps: EventDeps): PanelHost["onEvent"] {
 	};
 }
 
+function openWorkspaceVia(
+	deps: Pick<PanelHostDeps, "extension" | "openWorkspace">,
+): PanelHost["openWorkspace"] {
+	return ({ peek, ...target }) => {
+		const peeked = peek ? panelPeekEntry(deps.extension, peek) : null;
+		deps.openWorkspace(peeked ? { ...target, peek: peeked } : target);
+	};
+}
+
 function openChatVia(deps: Pick<PanelHostDeps, "navigate" | "locate">): PanelHost["openChat"] {
 	return (target) => {
 		const { at } = target;
@@ -207,9 +222,7 @@ export function createPanelHost(deps: PanelHostDeps): PanelHost {
 		openArtifacts() {
 			deps.openArtifacts();
 		},
-		openWorkspace(target) {
-			deps.openWorkspace(target);
-		},
+		openWorkspace: openWorkspaceVia(deps),
 		peek(entry) {
 			const peeked = panelPeekEntry(deps.extension, entry);
 			if (peeked) deps.peek(peeked);
@@ -233,9 +246,7 @@ export function createStatusItemHost(deps: StatusItemHostDeps): StatusItemHost {
 	return {
 		query: extensionQuery(deps),
 		openChat: openChatVia(deps),
-		openWorkspace(target) {
-			deps.openWorkspace(target);
-		},
+		openWorkspace: openWorkspaceVia(deps),
 		peek(entry) {
 			const peeked = panelPeekEntry(deps.extension, entry);
 			if (peeked) deps.peek?.(peeked);

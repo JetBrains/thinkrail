@@ -4,6 +4,7 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
 import {
 	closeSettings,
+	defaultWorkspaceRow,
 	enterDefaultWorkspace,
 	openFixtureProject,
 	openSettingsSection,
@@ -297,6 +298,42 @@ test("the Board tool creates a card, edits it in Peek and starts it into a new w
 	await expect(card(page, "Ship the board")).toBeVisible();
 });
 
+test("follow selection: off, a click only peeks a running card; on, it enters the card's workspace with the card in Peek there", async ({
+	page,
+}) => {
+	await openBoard(page);
+	await createCard(page, "Follow me");
+	await page.getByTestId("peek-close").click();
+	await card(page, "Follow me").getByTestId("board-card-start").click();
+	await expect(column(page, "building").getByTestId("board-card")).toContainText("Follow me", {
+		timeout: 30_000,
+	});
+	await expect(worktreeRows(page)).toHaveCount(1);
+
+	await card(page, "Follow me").getByTestId("board-card-open").click();
+	await expect(peekCard(page).getByTestId("board-card-title")).toHaveValue("Follow me");
+	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
+	await page.getByTestId("peek-close").click();
+
+	await boardTool(page).getByTestId("board-settings").click();
+	const follow = page.getByTestId("board-follow-selection");
+	await expect(follow).toHaveAttribute("aria-checked", "false");
+	await follow.click();
+	await expect(follow).toHaveAttribute("aria-checked", "true");
+	await page.keyboard.press("Escape");
+	await expect(follow).toBeHidden();
+
+	await card(page, "Follow me").getByTestId("board-card-open").click();
+	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
+	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
+	await expect(peekCard(page).getByTestId("board-card-title")).toHaveValue("Follow me");
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
+	await expect(boardTool(page)).toBeVisible();
+
+	await boardTool(page).getByTestId("board-settings").click();
+	await expect(page.getByTestId("board-follow-selection")).toHaveAttribute("aria-checked", "true");
+});
+
 test("dragging and Alt+arrows move a card with a logged override, and the preset switch remaps the columns", async ({
 	page,
 }) => {
@@ -471,6 +508,16 @@ test("the Needs-you inbox lists waiting and failed cards of every open project, 
 		"Pick the rollout",
 	]);
 
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	try {
+		await wire.request("project.close", { id: other.id });
+		await expect(counter).toHaveText("Needs you · 2");
+		await wire.request("project.open", { path: second });
+		await expect(counter).toHaveText("Needs you · 3");
+	} finally {
+		wire.close();
+	}
+
 	await page.getByTestId(BOARD_RAIL).click();
 	await expect(boardTool(page)).toBeVisible();
 	const strip = boardTool(page).getByTestId("board-inbox-strip");
@@ -596,6 +643,16 @@ test("column headers carry the Review WIP limit, marked once over it, and Start 
 	await warning.getByRole("button", { name: "Not now" }).click();
 	await expect(warning).toHaveCount(0);
 	await expect(card(page, "Ready to start").getByTestId("board-card-start")).toBeVisible();
+
+	await card(page, "Ready to start").getByTestId("board-card-open").click();
+	await peekCard(page).getByTestId("board-start-submit").click();
+	const peekWarning = peekCard(page).getByTestId("board-start-warning");
+	await expect(peekWarning).toContainText("Review is over its limit (2/1)");
+	await expect(peekCard(page).getByTestId("board-start-submit")).toHaveCount(0);
+	await expect(worktreeRows(page)).toHaveCount(0);
+	await peekWarning.getByRole("button", { name: "Not now" }).click();
+	await expect(peekWarning).toHaveCount(0);
+	await expect(peekCard(page).getByTestId("board-start-submit")).toBeVisible();
 });
 
 test("Triage groups an agent's decomposition, and Accept all moves it into Backlog as a whole", async ({

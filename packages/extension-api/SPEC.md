@@ -169,8 +169,9 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   optional so a panel offers the action only on a host that has one. `scope` is the workspace whose view
   holds the tab. `hostProtocol` and `hostApiVersion` (the server half's declared `apiVersion`) let a
   panel degrade against an older host or server half. `openWorkspace(target)` (`PanelWorkspaceTarget {
-  workspaceId, projectId, sessionId? }`) switches to that workspace, on one of its chats when given — every
-  panel and side tool follows the switch. `peek(entry)` (`PanelPeekEntry`) shows an entry in `scope`'s
+  workspaceId, projectId, sessionId?, peek? }`) switches to that workspace, on one of its chats when given — every
+  panel and side tool follows the switch — and shows `peek` (a `PanelPeekEntry`, `peek`'s rules) in that
+  workspace's Peek, since Peek belongs to one workspace. `peek(entry)` (`PanelPeekEntry`) shows an entry in `scope`'s
   workspace's Peek: a panel of the caller's **own** extension (`{ kind: "extension", panel, params?, title? }`,
   `title` naming its crumb; an undeclared panel is ignored) or a workspace-relative `file` (at `line`) or
   `compare` pair. `onEvent(type, listener)` (`PanelEventListener`) hears the extension's own
@@ -252,8 +253,12 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   recreated with its self-ignoring `.gitignore` when missing — the session-level `workspaceFiles` rule,
   addressed by workspace id since queries have no session; `null` for a workspace that is not open) and
   `workspaceFacts(workspaceId)` (`ExtensionWorkspaceFacts`: an open workspace's last-known review, its diff
-  stats against the base and its chats as `ExtensionChatFacts` — contracts' `chatState`, unread and the TODO
-  plan's open/total —, `null` for a workspace that is not open) and `taskSpecs(workspaceId)`
+  stats against the base and its chats as `ExtensionChatFacts` — contracts' `chatState`, unread, the TODO
+  plan's open/total and, for a live chat, `lastAction? { tool, target?, at }`: its most recent tool start as
+  the host saw it in pi's event stream, never parsed from the transcript, with a short, safe target (a
+  workspace-relative path for `read` / `edit` / `write`, omitted outside the worktree; the first 60
+  characters of a `bash` command, the worktree and home folders shortened; else none), kept in memory and
+  gone once the session is disposed —, `null` for a workspace that is not open) and `taskSpecs(workspaceId)`
   (`ExtensionTaskSpec[]`: the `task-spec` nodes of an open workspace's spec graph — `id`, `title`, `status`
   or `null`, the worktree-relative `path` —, none for a chat, `null` for a workspace that is not open) and
   `specSection(workspaceId, specId, heading)` (the text of one named section of a spec of that graph, its
@@ -283,7 +288,9 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   those services' `signal`, and delivers
   `ExtensionHostEvents`: `session.state` (`SessionStateRecord`), `workspace.created` / `workspace.updated`
   (`Workspace`, the review refresh included) / `workspace.removed` (`{ projectId, id }`), `agent.settled`
-  (`{ workspaceId, sessionId }`, pi's `agent_settled`) and `container.updated` / `container.removed`. Each
+  (`{ workspaceId, sessionId }`, pi's `agent_settled`), `agent.tool` (`{ workspaceId, sessionId }`, pi's
+  `tool_execution_start`: the chat's `lastAction` fact changed), `project.opened` / `project.closed`
+  (`{ projectId }`, a project joining or leaving the open ones) and `container.updated` / `container.removed`. Each
   listener gets its own copy; a throw or a rejection is logged and never reaches the host.
   `host.publish(type, payload, scope?)` pushes contracts' `extension.event { extension, type, payload }`
   to the clients that may see `scope` (`ExtensionPublishScope { workspaceId?, projectId? }`), dropped while

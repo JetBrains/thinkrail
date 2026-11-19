@@ -93,6 +93,32 @@ describe("a card tile", () => {
 		}
 	});
 
+	test("shows a working agent's last action under its badge, monospace and cut, and nothing once it stops", () => {
+		const lastAction = { tool: "bash", target: "bun test thinkrail-extensions/board", at: 1 };
+		const markup = tile(
+			cardOf({
+				category: "started",
+				column: "building",
+				live: [liveOf({ chat: { state: "working", unread: false, title: "", lastAction } })],
+			}),
+		);
+		expect(markup).toContain('data-testid="board-last-action"');
+		expect(markup).toContain('data-tool="bash"');
+		expect(markup).toContain("tr-code-text-small");
+		expect(markup).toContain("truncate");
+		expect(markup).toContain("bun test thinkrail-extensions/board");
+		expect(markup).toContain('title="Last action: bash bun test thinkrail-extensions/board"');
+		expect(markup.indexOf("board-agent-badge")).toBeLessThan(markup.indexOf("board-last-action"));
+		const settled = tile(
+			cardOf({
+				category: "review",
+				column: "review",
+				live: [liveOf({ chat: { state: "finished", unread: false, title: "", lastAction } })],
+			}),
+		);
+		expect(settled).not.toContain('data-testid="board-last-action"');
+	});
+
 	test("names the cards that block it", () => {
 		expect(tile(cardOf({ blockedBy: ["TR-7", "TR-8"] }))).toContain("Blocked by TR-7, TR-8");
 	});

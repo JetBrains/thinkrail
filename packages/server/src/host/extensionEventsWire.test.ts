@@ -37,6 +37,7 @@ const saved = {
 };
 const root = realpathSync.native(mkdtempSync(join(tmpdir(), "trpi-extension-events-")));
 const dataDir = join(root, "data");
+const repo = join(root, "repo");
 let server: RunningServer;
 let nextRequest = 0;
 
@@ -84,7 +85,6 @@ beforeAll(async () => {
 	process.env.THINKRAIL_DATA_DIR = dataDir;
 	process.env.PI_CODING_AGENT_DIR = join(root, "agent");
 	process.env.PI_OFFLINE = "1";
-	const repo = join(root, "repo");
 	mkdirSync(repo);
 	git(repo, "init", "-q", "-b", "main");
 	git(repo, "commit", "-q", "--allow-empty", "-m", "init");
@@ -217,6 +217,33 @@ test("the board's host service follows host events, stops while switched off and
 		await client.request("workspace.remove", { id: "w-c" });
 		await eventually(async () => (await cancelPending(client, "TR-3")) !== undefined);
 		expect(await cancelPending(client, "TR-2")).toBeUndefined();
+	} finally {
+		client.close();
+	}
+}, 30_000);
+
+test("closing and reopening a project republishes its board, so the inbox re-reads; a rename does not", async () => {
+	const client = await connect("projects", PROTOCOL_VERSION);
+	try {
+		const changes = () =>
+			client.frames.filter(
+				(frame) =>
+					frame.channel === WS_CHANNELS.extensionEvent &&
+					(frame.data as ExtensionEventPush).type === "board.changed",
+			).length;
+		await client.request("project.rename", { id: "p1", name: "Renamed" });
+		await client.request("project.list", {});
+		expect(changes()).toBe(0);
+		await client.request("project.close", { id: "p1" });
+		await eventually(async () => changes() === 1);
+		await client.request("project.open", { path: repo });
+		await eventually(async () => changes() === 2);
+		expect(
+			client.frames.filter((frame) => frame.channel === WS_CHANNELS.extensionEvent).at(-1),
+		).toEqual({
+			channel: WS_CHANNELS.extensionEvent,
+			data: { extension: "board", type: "board.changed", payload: { projectId: "p1" } },
+		});
 	} finally {
 		client.close();
 	}

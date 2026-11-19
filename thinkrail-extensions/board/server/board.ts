@@ -1,6 +1,7 @@
 import { userInfo } from "node:os";
 import type {
 	ChatState,
+	ExtensionChatFacts,
 	ExtensionHostProject,
 	ExtensionHostServices,
 	ExtensionTaskSpec,
@@ -72,7 +73,12 @@ export interface AttemptLive {
 	sessionId: string;
 	/** The workspace is still open. */
 	open: boolean;
-	chat: { state: ChatState; unread: boolean; title: string } | null;
+	chat: {
+		state: ChatState;
+		unread: boolean;
+		title: string;
+		lastAction?: ExtensionChatFacts["lastAction"];
+	} | null;
 	plan: { open: number; total: number } | null;
 	diff: { added: number; removed: number } | null;
 	pr: ExtensionWorkspaceFacts["review"];
@@ -189,6 +195,8 @@ export interface BoardOptions {
 	/** How long a size suggestion waits for more edits. */
 	sizeDelayMs?: number;
 	issueTtlMs?: number;
+	/** How often a running chat's tool starts re-publish its board, at most. */
+	actionRefreshMs?: number;
 }
 
 interface Located {
@@ -232,7 +240,14 @@ export function attemptLive(
 		workspaceId: attempt.workspaceId,
 		sessionId: chat?.sessionId ?? attempt.sessionId,
 		open: true,
-		chat: chat ? { state: chat.state, unread: chat.unread, title: chat.title } : null,
+		chat: chat
+			? {
+					state: chat.state,
+					unread: chat.unread,
+					title: chat.title,
+					...(chat.lastAction ? { lastAction: chat.lastAction } : {}),
+				}
+			: null,
 		plan: chat?.plan ?? null,
 		diff: facts.diff,
 		pr: facts.review,
@@ -316,6 +331,43 @@ function issueSource(issue: GithubIssue): CardSource {
 }
 
 const LINK_RETRY_MS = 5 * 60_000;
+const ACTION_REFRESH_MS = 2_000;
+
+/** Calls `fire(key)` at once, then at most once per `ms` per key while hits keep coming (the last one included). */
+function throttled(
+	fire: (key: string) => void,
+	ms: number,
+): { hit(key: string): void; stop(): void } {
+	const timers = new Map<string, ReturnType<typeof setTimeout>>();
+	const pending = new Set<string>();
+	const arm = (key: string) =>
+		timers.set(
+			key,
+			setTimeout(() => {
+				if (!pending.delete(key)) {
+					timers.delete(key);
+					return;
+				}
+				fire(key);
+				arm(key);
+			}, ms),
+		);
+	return {
+		hit(key) {
+			if (timers.has(key)) {
+				pending.add(key);
+				return;
+			}
+			fire(key);
+			arm(key);
+		},
+		stop() {
+			for (const timer of timers.values()) clearTimeout(timer);
+			timers.clear();
+			pending.clear();
+		},
+	};
+}
 
 /** One board service per data folder: the store, the rules over host events and the queries' reads. */
 export class Board {
@@ -323,6 +375,7 @@ export class Board {
 	readonly store: BoardStore;
 	private readonly now: () => number;
 	private readonly owner: string;
+	private readonly actionRefreshMs: number;
 	private index: Map<string, { projectId: string; cardId: string }> | null = null;
 	private chain: Promise<void> = Promise.resolve();
 	private readonly starting = new Set<string>();
@@ -338,12 +391,13 @@ export class Board {
 		this.host = host;
 		this.now = options.now ?? Date.now;
 		this.owner = options.owner ?? localUser();
+		this.actionRefreshMs = options.actionRefreshMs ?? ACTION_REFRESH_MS;
 		this.store = new BoardStore(host.dataDir, host.log, this.now);
 		this.issues = new IssueCache({
 			run: (workspaceId, argv) =>
 				this.host.actions.runInWorkspace({ workspaceId, argv, timeoutMs: GH_TIMEOUT_MS }),
 			now: this.now,
-			onChange: (projectId) => this.host.publish(BOARD_CHANGED, { projectId }, { projectId }),
+			onChange: (projectId) => this.changed(projectId),
 			...(options.issueTtlMs !== undefined ? { ttlMs: options.issueTtlMs } : {}),
 		});
 		this.sizes = new SizeQueue(
@@ -395,7 +449,7 @@ export class Board {
 		this.store.saveCards(projectId, file);
 		this.store.appendTransitions(projectId, transitions);
 		this.reindex(projectId, file);
-		this.host.publish(BOARD_CHANGED, { projectId }, { projectId });
+		this.changed(projectId);
 	}
 
 	private replace(file: CardsFile, card: Card): CardsFile {
@@ -1135,7 +1189,7 @@ export class Board {
 				column: columnOfCard(next.preset, card),
 			}));
 			this.write(projectId, { ...file, cards }, []);
-		} else this.host.publish(BOARD_CHANGED, { projectId }, { projectId });
+		} else this.changed(projectId);
 		return next;
 	}
 
@@ -1157,7 +1211,7 @@ export class Board {
 		this.store.saveSettings(projectId, next);
 		if (!next.github.enabled) this.issues.forget(projectId);
 		else this.issues.read(projectId, this.defaultWorkspace(project), next.github.filter);
-		this.host.publish(BOARD_CHANGED, { projectId }, { projectId });
+		this.changed(projectId);
 		return { settings: next, problem: null };
 	}
 
@@ -1378,7 +1432,7 @@ export class Board {
 	private changedLive(key: string, signature: string, projectId: string): void {
 		if (this.signatures.get(key) === signature) return;
 		this.signatures.set(key, signature);
-		this.host.publish(BOARD_CHANGED, { projectId }, { projectId });
+		this.changed(projectId);
 	}
 
 	/** The project whose board shows a workspace live: a card's attempt, or an unbound task-spec's card. */
@@ -1386,10 +1440,22 @@ export class Board {
 		return this.bound(workspaceId)?.projectId ?? this.watched.get(workspaceId);
 	}
 
+	private changed(projectId: string): void {
+		this.host.publish(BOARD_CHANGED, { projectId }, { projectId });
+	}
+
 	/** Subscribes the rules to the host's events; returns the unsubscribe. */
 	listen(): () => void {
 		const { events } = this.host;
+		const actions = throttled((projectId) => this.changed(projectId), this.actionRefreshMs);
 		const unsubscribes = [
+			actions.stop,
+			events.subscribe("agent.tool", ({ workspaceId }) => {
+				const projectId = this.shownIn(workspaceId);
+				if (projectId) actions.hit(projectId);
+			}),
+			events.subscribe("project.opened", ({ projectId }) => this.changed(projectId)),
+			events.subscribe("project.closed", ({ projectId }) => this.changed(projectId)),
 			events.subscribe("agent.settled", ({ workspaceId, sessionId }) =>
 				this.enqueue(() => this.settled(workspaceId, sessionId)),
 			),
@@ -1410,7 +1476,7 @@ export class Board {
 				const watched = this.watched.get(id);
 				if (watched) {
 					this.watched.delete(id);
-					this.host.publish(BOARD_CHANGED, { projectId: watched }, { projectId: watched });
+					this.changed(watched);
 				}
 				this.enqueue(() => this.applyBound(id, { kind: "removed", workspaceId: id }));
 			}),
