@@ -97,7 +97,9 @@ describe("moving cards", () => {
 	test("a drop onto another column calls card.move; onto its own column or nowhere, nothing", async () => {
 		const { host, queries } = fakeHost();
 		await moveOnDrop(host, view, "TR-1", "ready");
-		expect(queries).toEqual([{ method: "card.move", params: { cardId: "TR-1", column: "ready" } }]);
+		expect(queries).toEqual([
+			{ method: "card.move", params: { cardId: "TR-1", column: "ready", projectId: "p1" } },
+		]);
 		expect(moveOnDrop(host, view, "TR-1", "backlog")).toBeNull();
 		expect(moveOnDrop(host, view, "TR-1", null)).toBeNull();
 		expect(moveOnDrop(host, view, "TR-9", "ready")).toBeNull();

@@ -7,7 +7,10 @@ import type {
 	ExtensionHostEventType,
 	ExtensionHostProject,
 	ExtensionHostServices,
+	ExtensionRunResult,
+	ExtensionTaskSpec,
 	ExtensionWorkspaceFacts,
+	GhSetupProblem,
 } from "@thinkrail/extension-api/server";
 
 type Listener = (payload: unknown) => void | Promise<void>;
@@ -22,12 +25,32 @@ export interface TestHost {
 	created: ExtensionCreateWorkspaceParams[];
 	published: { type: string; payload: unknown; scope: unknown }[];
 	warnings: string[];
+	/** Workspace id → its task-specs, for `taskSpecs`. */
+	taskSpecs: Map<string, ExtensionTaskSpec[]>;
+	/** `workspaceId:specId:heading` → the section's text, for `specSection`. */
+	sections: Map<string, string>;
+	/** Every `runInWorkspace`, in order. */
+	runs: { workspaceId: string; argv: string[] }[];
+	/** Answers a `runInWorkspace` (the fake `gh`); by default a failed run. */
+	run: { answer: (argv: readonly string[], workspaceId: string) => ExtensionRunResult };
+	/** Every `assist` prompt, in order, and how the host answers it. */
+	asks: string[];
+	assist: { answer: (prompt: string) => { text: string } | null };
+	gh: { problem: GhSetupProblem | null };
 	emit<T extends ExtensionHostEventType>(type: T, payload: ExtensionHostEvents[T]): void;
 	listeners(): number;
 }
 
-export function project(id: string, name: string): ExtensionHostProject {
-	return { id, name, kind: "repository", workspaces: [] };
+export function project(
+	id: string,
+	name: string,
+	workspaces: ExtensionHostProject["workspaces"] = [],
+): ExtensionHostProject {
+	return { id, name, kind: "repository", workspaces };
+}
+
+export function ran(out: string, ok = true): ExtensionRunResult {
+	return { ok, out, err: ok ? "" : out, timedOut: false };
 }
 
 export function facts(
@@ -59,6 +82,13 @@ export function createTestHost(): TestHost {
 		created: [],
 		published: [],
 		warnings: [],
+		taskSpecs: new Map(),
+		sections: new Map(),
+		runs: [],
+		run: { answer: () => ran("gh: not in this test", false) },
+		asks: [],
+		assist: { answer: () => null },
+		gh: { problem: null },
 	};
 	let next = 0;
 	const refused = async (): Promise<never> => {
@@ -77,7 +107,14 @@ export function createTestHost(): TestHost {
 			sendToChat: refused,
 			stopChat: refused,
 			openPr: refused,
-			runInWorkspace: refused,
+			runInWorkspace: async ({ workspaceId, argv }) => {
+				state.runs.push({ workspaceId, argv: [...argv] });
+				return state.run.answer(argv, workspaceId);
+			},
+			assist: async ({ prompt }) => {
+				state.asks.push(prompt);
+				return state.assist.answer(prompt);
+			},
 		},
 		events: {
 			subscribe(type, listener) {
@@ -89,6 +126,11 @@ export function createTestHost(): TestHost {
 		},
 		publish: (type, payload, scope) => state.published.push({ type, payload, scope }),
 		workspaceFacts: async (workspaceId) => state.facts.get(workspaceId) ?? null,
+		taskSpecs: async (workspaceId) =>
+			state.facts.has(workspaceId) ? (state.taskSpecs.get(workspaceId) ?? []) : null,
+		specSection: async (workspaceId, specId, heading) =>
+			state.sections.get(`${workspaceId}:${specId}:${heading}`) ?? null,
+		githubProblem: async () => state.gh.problem,
 		sessionsRoot: () => join(root, "sessions"),
 		sessionScope: () => ({
 			projects: state.projects,

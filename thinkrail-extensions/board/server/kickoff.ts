@@ -9,9 +9,13 @@ export function workflowFor(card: Pick<Card, "type" | "size">): Workflow {
 	return card.size === "M" || card.size === "L" ? "brainstorm" : "implement";
 }
 
-/** The first prompt of a card's attempt: its title, description, acceptance criteria and spec refs. */
+/**
+ * The first prompt of a card's attempt: its title, description, acceptance criteria and spec refs; a
+ * GitHub issue's card adds the issue's URL and that its PR must say `Closes #N`.
+ */
 export function kickoffText(
-	card: Pick<Card, "id" | "title" | "description" | "acceptance" | "specRefs">,
+	card: Pick<Card, "id" | "title" | "description" | "acceptance" | "specRefs"> &
+		Partial<Pick<Card, "source">>,
 	workflow: Workflow,
 ): string {
 	const lines = [`Card ${card.id}: ${card.title.trim()}`];
@@ -22,6 +26,14 @@ export function kickoffText(
 		lines.push("", "Acceptance criteria:", ...acceptance.map((item) => `- ${item}`));
 	const specs = card.specRefs.map((ref) => ref.trim()).filter(Boolean);
 	if (specs.length > 0) lines.push("", "Specs:", ...specs.map((ref) => `- ${ref}`));
+	if (card.source?.kind === "github") {
+		const { number, url } = card.source;
+		lines.push(
+			"",
+			`GitHub issue #${number}${url ? `: ${url}` : ""}`,
+			`The pull request's description must contain "Closes #${number}".`,
+		);
+	}
 	const body = lines.join("\n");
 	return workflow === "brainstorm" ? `${BRAINSTORMING_COMMAND} ${body}` : body;
 }

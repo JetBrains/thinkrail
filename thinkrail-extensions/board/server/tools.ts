@@ -56,6 +56,12 @@ function describe(card: Card): string {
 	const lines = [
 		`${card.id} · ${card.title} (${facets}) · ${card.category}, column ${card.column}`,
 	];
+	if (card.source.kind === "github")
+		lines.push(
+			`GitHub issue #${card.source.number}: ${card.source.url} (its PR must say "Closes #${card.source.number}")`,
+		);
+	if (card.source.kind === "task-spec")
+		lines.push(`Task-spec ${card.source.ref} at ${card.source.path}`);
 	if (card.description) lines.push("", card.description);
 	if (card.acceptance.length > 0)
 		lines.push("", "Acceptance criteria:", ...card.acceptance.map((item) => `- ${item}`));

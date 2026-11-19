@@ -15,11 +15,14 @@ export type CardType = "feature" | "bug" | "chore";
 export type CardSize = "S" | "M" | "L";
 export type Workflow = "brainstorm" | "implement";
 export type Preset = "agentic-kanban" | "solo";
+export type GithubFilter = "open" | "mine";
+export type GithubProblem = "missing" | "unauthenticated";
 
 export const CARD_TYPES: readonly CardType[] = ["feature", "bug", "chore"];
 export const CARD_SIZES: readonly CardSize[] = ["S", "M", "L"];
 export const WORKFLOWS: readonly Workflow[] = ["implement", "brainstorm"];
 export const PRESETS: readonly Preset[] = ["agentic-kanban", "solo"];
+export const GITHUB_FILTERS: readonly GithubFilter[] = ["open", "mine"];
 export const BOARD_CHANGED = "board.changed";
 export const CARD_PANEL = "card";
 /** The board's `layoutPresets` entry: Board mode. */
@@ -45,14 +48,32 @@ export interface AttemptLive {
 	pr: { kind: string; number: number; state: string; url?: string } | null;
 }
 
+/** Where a card comes from: the board, a workspace's task-spec or a GitHub issue. */
+export type CardSource =
+	| { kind: "native"; ref: string }
+	| { kind: "task-spec"; ref: string; workspaceId: string; path: string }
+	| { kind: "github"; ref: string; number: number; url: string };
+
+/** A task-spec of one of the card's workspaces, live from the host's spec graph. */
+export interface TaskSpecRef {
+	kind: "task-spec";
+	workspaceId: string;
+	id: string;
+	title: string;
+	status: string | null;
+	path: string;
+}
+
 export interface Card {
 	id: string;
+	source: CardSource;
 	title: string;
 	description: string;
 	acceptance: string[];
 	type: CardType;
 	size?: CardSize;
 	sizeSuggested?: boolean;
+	labels: string[];
 	blocks: string[];
 	specRefs: string[];
 	rank: number;
@@ -60,12 +81,15 @@ export interface Card {
 	column: string;
 	attempts: Attempt[];
 	createdBy: "human" | "agent";
-	/** The chat that filed an agent's card, and the card that chat works on. */
-	origin?: { sessionId: string; cardId?: string };
+	/** The chat that filed an agent's card and the card that chat works on; a human's deferrals carry the card. */
+	origin?: { sessionId?: string; cardId?: string };
 	createdAt: number;
 	cancelPending?: { workspaceId: string; at: number };
 	live: AttemptLive[];
 	blockedBy: string[];
+	taskSpecs: TaskSpecRef[];
+	/** A source's item the board has not stored: an unbound workspace's task-spec, an untouched issue. */
+	virtual?: true;
 }
 
 export interface Column {
@@ -79,6 +103,16 @@ export interface BoardSettings {
 	preset: Preset;
 	wipLimits: { needsYou: number; review: number; agents: number };
 	followSelection: boolean;
+	github: { enabled: boolean; filter: GithubFilter };
+}
+
+export interface GithubStatus {
+	enabled: boolean;
+	filter: GithubFilter;
+	loading: boolean;
+	fetchedAt: number | null;
+	/** The last fetch's failure; the last good issues stay shown. */
+	error: string | null;
 }
 
 export type WipKey = keyof BoardSettings["wipLimits"];
@@ -97,6 +131,7 @@ export interface BoardView {
 	columns: Column[];
 	cards: Card[];
 	wip: Record<WipKey, WipCount>;
+	github: GithubStatus;
 }
 
 export type InboxReason = "needs_you" | "failed";
@@ -162,6 +197,7 @@ export function isBoardView(value: unknown): value is BoardView {
 		typeof value.projectId === "string" &&
 		typeof value.projectName === "string" &&
 		isObject(value.settings) &&
+		isObject(value.github) &&
 		Array.isArray(value.columns) &&
 		Array.isArray(value.cards)
 	);
@@ -208,12 +244,17 @@ export async function loadBoard(
 	return checked(await host.query("board.get", { projectId }, signal), isBoardView);
 }
 
+/** A card for Peek; `projectId` names the board of a GitHub issue's card the board has not stored. */
 export async function loadCard(
 	host: Querying,
 	cardId: string,
+	projectId: string | null,
 	signal?: AbortSignal,
 ): Promise<CardDetail> {
-	return checked(await host.query("card.get", { cardId }, signal), isCardDetail);
+	return checked(
+		await host.query("card.get", { cardId, ...(projectId ? { projectId } : {}) }, signal),
+		isCardDetail,
+	);
 }
 
 export async function loadInbox(host: Querying, signal?: AbortSignal): Promise<InboxItem[]> {
@@ -229,17 +270,29 @@ export async function createCard(host: PanelHost, projectId: string, title: stri
 	return (await host.query("card.create", { projectId, title })) as Card;
 }
 
-export async function updateCard(host: PanelHost, cardId: string, patch: CardPatch): Promise<void> {
-	await host.query("card.update", { cardId, ...patch });
+/** Edits a card; an issue's card the board has not stored is stored first, on `projectId`'s board. */
+export async function updateCard(
+	host: PanelHost,
+	cardId: string,
+	patch: CardPatch,
+	projectId: string,
+): Promise<Card> {
+	return (await host.query("card.update", { cardId, projectId, ...patch })) as Card;
 }
 
 export async function moveCard(
 	host: PanelHost,
 	cardId: string,
 	column: string,
+	projectId: string,
 	rank?: number,
 ): Promise<void> {
-	await host.query("card.move", { cardId, column, ...(rank === undefined ? {} : { rank }) });
+	await host.query("card.move", {
+		cardId,
+		column,
+		projectId,
+		...(rank === undefined ? {} : { rank }),
+	});
 }
 
 export async function deleteCard(host: PanelHost, cardId: string): Promise<void> {
@@ -250,8 +303,43 @@ export async function startCard(
 	host: PanelHost,
 	cardId: string,
 	request: StartRequest,
+	projectId: string,
 ): Promise<StartResult> {
-	return (await host.query("card.start", { cardId, ...request })) as StartResult;
+	return (await host.query("card.start", { cardId, projectId, ...request })) as StartResult;
+}
+
+/** Stores an unbound workspace's task-spec card, bound to that workspace. */
+export async function adoptCard(host: PanelHost, cardId: string): Promise<Card> {
+	return (await host.query("card.adopt", { cardId })) as Card;
+}
+
+/** Files a card's task-spec's Deferrals bullets into Triage; answers how many were new. */
+export async function sendDeferrals(
+	host: PanelHost,
+	cardId: string,
+	specId: string,
+): Promise<{ created: number; skipped: number }> {
+	const value = await host.query("card.deferrals", { cardId, specId });
+	const reply = isObject(value) ? value : {};
+	return {
+		created: Array.isArray(reply.created) ? reply.created.length : 0,
+		skipped: typeof reply.skipped === "number" ? reply.skipped : 0,
+	};
+}
+
+/** Switches the GitHub source; a problem with the user's `gh` comes back instead of switching on. */
+export async function setGithub(
+	host: PanelHost,
+	projectId: string,
+	patch: { enabled?: boolean; filter?: GithubFilter },
+): Promise<{ problem: GithubProblem | null }> {
+	const value = await host.query("github.set", { projectId, ...patch });
+	const problem = isObject(value) ? value.problem : null;
+	return { problem: problem === "missing" || problem === "unauthenticated" ? problem : null };
+}
+
+export async function refreshGithub(host: PanelHost, projectId: string): Promise<void> {
+	await host.query("github.refresh", { projectId });
 }
 
 export async function setPreset(host: PanelHost, projectId: string, preset: Preset): Promise<void> {
@@ -307,9 +395,20 @@ export function openAttempt(card: Pick<Card, "live">): AttemptLive | undefined {
 	return card.live.findLast((live) => live.open);
 }
 
-/** Start is offered on a backlog or unstarted card with no attempt still running. */
-export function canStart(card: Pick<Card, "category" | "live">): boolean {
+/** Start is offered on a backlog or unstarted card with no attempt still running (an issue's included). */
+export function canStart(card: Pick<Card, "category" | "live" | "source" | "virtual">): boolean {
+	if (card.virtual && card.source.kind === "task-spec") return false;
 	return (card.category === "backlog" || card.category === "unstarted") && !openAttempt(card);
+}
+
+/** An unbound workspace's task-spec card: it can only be adopted, never moved or edited. */
+export function canAdopt(card: Pick<Card, "source" | "virtual">): boolean {
+	return !!card.virtual && card.source.kind === "task-spec";
+}
+
+/** The id a card shows: a task-spec's card shows its spec's id, an issue's `#N`. */
+export function shownId(card: Pick<Card, "id" | "source" | "virtual">): string {
+	return card.virtual && card.source.kind === "task-spec" ? card.source.ref : card.id;
 }
 
 export function visibleColumns(view: Pick<BoardView, "columns">): Column[] {
@@ -346,12 +445,12 @@ export function dropMove(
 /** A drop's write: `card.move` onto the column under the pointer, or nothing. */
 export function moveOnDrop(
 	host: PanelHost,
-	view: Pick<BoardView, "cards">,
+	view: Pick<BoardView, "cards" | "projectId">,
 	cardId: string,
 	column: string | null,
 ): Promise<void> | null {
 	const move = dropMove(view, cardId, column);
-	return move ? moveCard(host, move.cardId, move.column) : null;
+	return move ? moveCard(host, move.cardId, move.column, view.projectId) : null;
 }
 
 export type BoardLayout = "columns" | "stacked";
@@ -403,24 +502,41 @@ export function attentionOverLimit(view: Pick<BoardView, "wip">): ("review" | "n
 }
 
 export interface TriageGroup {
-	/** The filing chat's session id, `""` for cards filed by no known chat. */
+	/** The filing chat's session id, `card:<id>` for a card's deferrals, `""` for cards of no known origin. */
 	key: string;
-	/** The card the filing chat works on. */
+	/** `chat`: filed by an agent's chat; `deferrals`: a card's task-spec deferrals the human sent. */
+	kind: "chat" | "deferrals" | "none";
+	/** The card the filing chat works on, or whose deferrals these are. */
 	cardId: string | null;
 	cards: Card[];
 }
 
-/** Triage cards grouped by the chat that filed them (a decomposition), groups and cards by rank. */
+/** Triage cards grouped by where they came from (a decomposition, a card's deferrals), by rank. */
 export function triageGroups(view: Pick<BoardView, "cards">): TriageGroup[] {
 	const groups = new Map<string, TriageGroup>();
 	const triage = view.cards
 		.filter((card) => card.category === "triage")
 		.sort((a, b) => a.rank - b.rank);
 	for (const card of triage) {
-		const key = card.origin?.sessionId ?? "";
-		const group = groups.get(key) ?? { key, cardId: card.origin?.cardId ?? null, cards: [] };
+		const { sessionId, cardId } = card.origin ?? {};
+		const kind = sessionId ? "chat" : cardId ? "deferrals" : "none";
+		const key = sessionId ?? (cardId ? `card:${cardId}` : "");
+		const group = groups.get(key) ?? { key, kind, cardId: cardId ?? null, cards: [] };
 		group.cards.push(card);
 		groups.set(key, group);
 	}
 	return [...groups.values()];
+}
+
+/** Where a task-spec opens: Peek in this workspace; another workspace's is entered first (Peek is per workspace). */
+export function openTaskSpec(
+	host: Pick<PanelHost, "peek" | "openFile" | "scope">,
+	spec: Pick<TaskSpecRef, "workspaceId" | "path">,
+): "peek" | "file" {
+	if (spec.workspaceId === host.scope.workspaceId) {
+		host.peek({ kind: "file", path: spec.path });
+		return "peek";
+	}
+	host.openFile(spec.workspaceId, spec.path);
+	return "file";
 }

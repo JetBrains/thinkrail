@@ -497,4 +497,37 @@ describe("extensionHostServices", () => {
 		expect(await host.ensureArtifactsDir("nope")).toBeNull();
 		expect(existsSync(join(other, ".thinkrail", "context"))).toBe(true);
 	});
+
+	test("lists an open workspace's task-specs and reads one of their sections, none for a chat", async () => {
+		const host = extensionHostServices("board", SIGNAL);
+		mkdirSync(join(repo, ".thinkrail", "context"), { recursive: true });
+		writeFileSync(
+			join(repo, ".thinkrail", "context", "TASK-x.md"),
+			"---\nid: task-x\ntype: task-spec\nstatus: draft\ntitle: Task X\n---\n\n## Deferrals\n\n- Later\n",
+		);
+		try {
+			expect(await host.taskSpecs("w1")).toEqual([
+				{ id: "task-x", title: "Task X", status: "draft", path: ".thinkrail/context/TASK-x.md" },
+			]);
+			expect(await host.specSection("w1", "task-x", "Deferrals")).toBe("- Later");
+			expect(await host.specSection("w1", "task-x", "Request")).toBeNull();
+			expect(await host.taskSpecs(chat.id)).toEqual([]);
+			expect(await host.specSection(chat.id, "task-x", "Deferrals")).toBeNull();
+			expect(await host.taskSpecs("nope")).toBeNull();
+			expect(await host.specSection("nope", "task-x", "Deferrals")).toBeNull();
+		} finally {
+			rmSync(join(repo, ".thinkrail"), { recursive: true, force: true });
+		}
+	});
+
+	test("reports no gh problem under the offline seam", async () => {
+		const saved = process.env.THINKRAIL_GH_OFFLINE;
+		process.env.THINKRAIL_GH_OFFLINE = "1";
+		try {
+			expect(await extensionHostServices("board", SIGNAL).githubProblem()).toBeNull();
+		} finally {
+			if (saved === undefined) delete process.env.THINKRAIL_GH_OFFLINE;
+			else process.env.THINKRAIL_GH_OFFLINE = saved;
+		}
+	});
 });

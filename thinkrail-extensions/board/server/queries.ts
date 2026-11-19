@@ -1,10 +1,18 @@
 import type { ExtensionQuery, ThinkingLevel } from "@thinkrail/extension-api/server";
 import type { Board, CardInput, CardPatch, SettingsPatch, StartOptions } from "./board";
-import { CARD_SIZES, CARD_TYPES, PRESETS, WORKFLOWS } from "./model";
+import {
+	CARD_SIZES,
+	CARD_TYPES,
+	GITHUB_FILTERS,
+	type GithubSettings,
+	PRESETS,
+	TEXT_MAX,
+	TITLE_MAX,
+	WORKFLOWS,
+} from "./model";
 
-const TITLE_MAX = 300;
-const TEXT_MAX = 20_000;
 const ITEM_MAX = 1_000;
+const CARD_ID_MAX = 300;
 const LIST_MAX = 100;
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 
@@ -138,6 +146,15 @@ function settingsPatch(p: Params): SettingsPatch {
 	});
 }
 
+function githubPatch(p: Params): Partial<GithubSettings> {
+	const patch = defined<Partial<GithubSettings>>({
+		enabled: optionalBoolean(p, "enabled"),
+		filter: optionalOneOf(p, "filter", GITHUB_FILTERS),
+	});
+	if (Object.keys(patch).length === 0) throw new Error("Pass enabled or filter.");
+	return patch;
+}
+
 function cardIds(p: Params): string[] {
 	const ids = optionalList(p, "cardIds");
 	if (!ids || ids.length === 0) throw new Error("Pass the cardIds to accept.");
@@ -147,32 +164,52 @@ function cardIds(p: Params): string[] {
 /** The board's `extension.query` methods: each validates its params and answers JSON. */
 export function boardQueries(board: Board): Readonly<Record<string, ExtensionQuery>> {
 	const projectId = (p: Params) => text(p, "projectId", 200);
-	const cardId = (p: Params) => text(p, "cardId", 40);
+	const cardId = (p: Params) => text(p, "cardId", CARD_ID_MAX);
+	/** The board of a source's card (`#12`) that is not stored yet. */
+	const boardOf = (p: Params) => optionalText(p, "projectId", 200) || undefined;
 	return {
 		"board.get": (raw) => board.get(projectId(params(raw))),
 		inbox: (raw) => {
 			params(raw);
 			return board.inbox();
 		},
-		"card.get": (raw) => board.card(cardId(params(raw))),
+		"card.get": (raw) => {
+			const p = params(raw);
+			return board.card(cardId(p), boardOf(p));
+		},
 		"card.create": (raw) => {
 			const p = params(raw);
 			return board.createCard(projectId(p), cardInput(p), "human");
 		},
 		"card.update": (raw) => {
 			const p = params(raw);
-			return board.updateCard(cardId(p), cardPatch(p));
+			return board.updateCard(cardId(p), cardPatch(p), boardOf(p));
 		},
 		"card.move": (raw) => {
 			const p = params(raw);
-			return board.moveCard(cardId(p), text(p, "column", 100), optionalNumber(p, "rank"));
+			return board.moveCard(
+				cardId(p),
+				text(p, "column", 100),
+				optionalNumber(p, "rank"),
+				boardOf(p),
+			);
 		},
 		"card.delete": (raw) => board.deleteCard(cardId(params(raw))),
 		"triage.accept": (raw) => board.acceptTriage(cardIds(params(raw))),
 		"card.start": (raw) => {
 			const p = params(raw);
-			return board.startCard(cardId(p), startOptions(p));
+			return board.startCard(cardId(p), startOptions(p), boardOf(p));
 		},
+		"card.adopt": (raw) => board.adoptTaskSpec(cardId(params(raw))),
+		"card.deferrals": (raw) => {
+			const p = params(raw);
+			return board.sendDeferrals(cardId(p), text(p, "specId", CARD_ID_MAX));
+		},
+		"github.set": (raw) => {
+			const p = params(raw);
+			return board.setGithub(projectId(p), githubPatch(p));
+		},
+		"github.refresh": (raw) => board.refreshIssues(projectId(params(raw))),
 		"models.list": async (raw) => {
 			params(raw);
 			return { models: await board.host.models() };

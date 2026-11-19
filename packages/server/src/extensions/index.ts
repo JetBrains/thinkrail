@@ -19,6 +19,7 @@ export type {
 	ExtensionSessionServices,
 	ExtensionSessionStatus,
 	ExtensionSessionView,
+	ExtensionTaskSpec,
 	ExtensionTreeFile,
 	ExtensionTurnReceipt,
 	ExtensionTurnTree,

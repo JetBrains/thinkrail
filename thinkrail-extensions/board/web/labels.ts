@@ -4,6 +4,8 @@ import type { Translator } from "@thinkrail/locales/react";
 import type {
 	AgentBadge,
 	CardType,
+	GithubFilter,
+	GithubProblem,
 	InboxReason,
 	Preset,
 	Transition,
@@ -80,6 +82,31 @@ export const START_WARNINGS = {
 	review: "board.wip.startWarningReview",
 	needsYou: "board.wip.startWarningNeedsYou",
 } as const satisfies Record<"review" | "needsYou", MessageKey>;
+
+const TASK_SPEC_STATUSES: Readonly<Record<string, MessageKey>> = {
+	draft: "board.taskSpec.status.draft",
+	active: "board.taskSpec.status.active",
+	stale: "board.taskSpec.status.stale",
+	done: "board.taskSpec.status.done",
+	deprecated: "board.taskSpec.status.deprecated",
+};
+
+/** A task-spec's status in words; one outside the spec vocabulary shows as written. */
+export function taskSpecStatusLabel(t: Translator, status: string | null): string {
+	if (status === null) return t("board.taskSpec.status.none");
+	const key = TASK_SPEC_STATUSES[status];
+	return key ? t(key) : status;
+}
+
+export const GITHUB_FILTER_LABELS = {
+	open: "board.github.filter.open",
+	mine: "board.github.filter.mine",
+} as const satisfies Record<GithubFilter, MessageKey>;
+
+export const GITHUB_PROBLEMS = {
+	missing: "board.github.problem.missing",
+	unauthenticated: "board.github.problem.unauthenticated",
+} as const satisfies Record<GithubProblem, MessageKey>;
 
 export const INBOX_REASON_LABELS = {
 	needs_you: "board.inbox.reason.needsYou",

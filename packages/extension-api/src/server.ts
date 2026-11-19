@@ -3,6 +3,7 @@ import type {
 	BranchReviewState,
 	ChatState,
 	Container,
+	GhSetupProblem,
 	HistoryScope,
 	OpenBranchReview,
 	OpenPrResult,
@@ -16,6 +17,7 @@ export type {
 	BranchReviewState,
 	ChatState,
 	Container,
+	GhSetupProblem,
 	OpenPrResult,
 	SessionStateRecord,
 	ThinkingLevel,
@@ -170,6 +172,14 @@ export interface ExtensionWorkspaceFacts {
 	chats: readonly ExtensionChatFacts[];
 }
 
+/** A task-spec of an open workspace's spec graph; `path` is worktree-relative, `status` `null` without one. */
+export interface ExtensionTaskSpec {
+	id: string;
+	title: string;
+	status: string | null;
+	path: string;
+}
+
 /** What `host.events.subscribe` delivers, by event type. */
 export interface ExtensionHostEvents {
 	"session.state": SessionStateRecord;
@@ -262,6 +272,11 @@ export interface ExtensionHostActions {
 		argv: readonly string[];
 		timeoutMs: number;
 	}): Promise<ExtensionRunResult>;
+	/**
+	 * A one-shot ask on the host's assist model (through pi, never a second runtime), stopped once the
+	 * services' `signal` aborts; `null` when no model is configured, it timed out or the answer was empty.
+	 */
+	assist(params: { prompt: string; maxTokens?: number }): Promise<{ text: string } | null>;
 }
 
 export interface ExtensionHostServices {
@@ -281,6 +296,12 @@ export interface ExtensionHostServices {
 	publish(type: string, payload: unknown, scope?: ExtensionPublishScope): void;
 	/** An open workspace's host facts (review, diff, chats with their state and plan); `null` otherwise. */
 	workspaceFacts(workspaceId: string): Promise<ExtensionWorkspaceFacts | null>;
+	/** An open workspace's task-specs, from its spec graph; `null` for a workspace that is not open. */
+	taskSpecs(workspaceId: string): Promise<readonly ExtensionTaskSpec[] | null>;
+	/** The text of one named section (`Deferrals`) of a spec of an open workspace; `null` without either. */
+	specSection(workspaceId: string, specId: string, heading: string): Promise<string | null>;
+	/** Why the user's GitHub CLI (`gh`) cannot run now (`missing`, `unauthenticated`), else `null`. */
+	githubProblem(): Promise<GhSetupProblem | null>;
 	sessionsRoot(): string;
 	sessionScope(scope: HistoryScope): ExtensionSessionView;
 	childTranscriptDirs(parentSessionId: string, cwd: string): Promise<string[]>;

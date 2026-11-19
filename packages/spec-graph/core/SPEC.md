@@ -41,7 +41,7 @@ Acyclic and one-way: `parse` is the root, `graph` builds on it, and `query`/`val
 | `query.ts` | content grep with metadata filters; bounded graph slices | `parse`, `graph` |
 | `validate.ts` | dangling links, duplicate ids, parent cycles | `parse`, `graph` |
 | `tokenize.ts` | text → index terms (the tokenizer, stopwords, the light stemmer) and the flattened form a phrase check compares | — |
-| `sections.ts` | a spec → its sections by heading, with file line numbers | `parse` |
+| `sections.ts` | a spec → its sections by heading, with file line numbers (`splitSections`, which the host also reads one named section with) | `parse` |
 | `search.ts` | the section index (`indexSections`) and ranked section search (`searchSpecs`) | `parse`, `query`, `sections`, `tokenize` |
 | `store.ts` | `SpecIndex`: the on-demand fs glob + per-file parse cache + memoized graph (the `core/index` module); the indexable-path rule (`resolveSpecPath`) | `parse`, `graph`, `query` |
 

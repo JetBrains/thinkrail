@@ -60,11 +60,13 @@ function TriageGroupView({ group, actions }: { group: TriageGroup; actions: Tria
 		>
 			<h4 className="flex min-w-0 items-center gap-4 px-4 tr-text-metadata text-text-muted">
 				<span className="min-w-0 truncate">
-					{group.cardId
-						? t("board.triage.fromCard", { id: group.cardId })
-						: group.key
-							? t("board.triage.fromChat")
-							: t("board.triage.fromNowhere")}
+					{group.kind === "deferrals" && group.cardId
+						? t("board.triage.fromDeferrals", { id: group.cardId })
+						: group.cardId
+							? t("board.triage.fromCard", { id: group.cardId })
+							: group.key
+								? t("board.triage.fromChat")
+								: t("board.triage.fromNowhere")}
 				</span>
 				<span className="tabular-nums text-text-subtle">{group.cards.length}</span>
 			</h4>

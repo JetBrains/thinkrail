@@ -61,10 +61,13 @@ function effortsOf(models: readonly HostModel[], model: string): readonly Thinki
 export function StartSection({
 	host,
 	card,
+	projectId,
 	onStarted,
 }: {
 	host: PanelHost;
 	card: Card;
+	/** The card's board, which stores a GitHub issue's card on its first Start. */
+	projectId: string;
 	onStarted: () => void;
 }) {
 	const t = useT();
@@ -78,7 +81,7 @@ export function StartSection({
 	const start = () => {
 		setBusy(true);
 		setOutcome(null);
-		startCard(host, card.id, startRequest(choice))
+		startCard(host, card.id, startRequest(choice), projectId)
 			.then(
 				(result) => {
 					if (result.kickoffError) setOutcome({ kind: "kickoff", text: result.kickoffError });

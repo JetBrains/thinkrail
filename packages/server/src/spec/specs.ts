@@ -9,6 +9,7 @@ import {
 	type SpecSectionHit,
 	scalar,
 	searchSpecs,
+	splitSections,
 } from "pi-spec-graph/core";
 import { loadWorkspaces } from "../persistence";
 
@@ -196,4 +197,68 @@ export function specGraph(workspaceId: string): SpecGraphSnapshot {
 		};
 	});
 	return { nodes };
+}
+
+export interface TaskSpecEntry {
+	readonly id: string;
+	readonly title: string;
+	readonly status: string | null;
+	readonly path: string;
+}
+
+const TASK_SPEC = "task-spec";
+
+export function workspaceTaskSpecs(workspaceId: string, root: string): TaskSpecEntry[] {
+	try {
+		return [...indexFor(workspaceId, root).graph().nodes.values()]
+			.filter((node) => node.type === TASK_SPEC)
+			.map((node) => ({
+				id: node.id,
+				title: node.title ?? node.id,
+				status: scalar(node.frontmatter, FIELDS.status) ?? null,
+				path: node.path,
+			}));
+	} catch {
+		return [];
+	}
+}
+
+const sameHeading = (left: string, right: string) =>
+	left.trim().toLowerCase() === right.trim().toLowerCase();
+
+export function workspaceSpecSection(
+	workspaceId: string,
+	root: string,
+	specId: string,
+	heading: string,
+): string | null {
+	let content: string | undefined;
+	try {
+		content = indexFor(workspaceId, root).recordForId(specId)?.content;
+	} catch {
+		return null;
+	}
+	if (!content) return null;
+	const sections = splitSections(content);
+	const matches = sections.filter((section) => {
+		const last = section.headings.at(-1);
+		return last !== undefined && sameHeading(last, heading);
+	});
+	const depth = Math.min(...matches.map((section) => section.headings.length));
+	const start = matches.find((section) => section.headings.length === depth);
+	if (!start) return null;
+	const trail = start.headings;
+	let end = start.endLine;
+	for (const section of sections.slice(sections.indexOf(start) + 1)) {
+		const inside =
+			section.headings.length > trail.length &&
+			trail.every((name, index) => section.headings[index] === name);
+		if (!inside) break;
+		end = section.endLine;
+	}
+	const lines = content.split("\n").map((line) => (line.endsWith("\r") ? line.slice(0, -1) : line));
+	return lines
+		.slice(start.bodyLine - 1, end)
+		.join("\n")
+		.trim();
 }

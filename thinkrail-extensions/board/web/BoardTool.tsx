@@ -15,8 +15,10 @@ import {
 	RiCloseLine,
 	RiCollapseDiagonalLine,
 	RiExpandDiagonalLine,
+	RiGithubLine,
 	RiKanbanView2,
 	RiListUnordered,
+	RiRefreshLine,
 	RiSettings3Line,
 } from "@remixicon/react";
 import type { PanelHost, PanelProps } from "@thinkrail/extension-api/web";
@@ -25,8 +27,11 @@ import { Button, IconButton } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuLabel,
 	DropdownMenuRadioGroup,
 	DropdownMenuRadioItem,
+	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
@@ -38,6 +43,7 @@ import { type KeyboardEvent, type ReactNode, useEffect, useState } from "react";
 import {
 	acceptTriage,
 	adjacentColumn,
+	adoptCard,
 	attentionOverLimit,
 	BOARD_MODE,
 	type BoardLayout,
@@ -47,10 +53,14 @@ import {
 	CARD_PANEL,
 	type Card,
 	type Column,
+	canAdopt,
 	cardsIn,
 	columnWip,
 	createCard,
 	deleteCard,
+	GITHUB_FILTERS,
+	type GithubFilter,
+	type GithubStatus,
 	type ListSort,
 	loadBoard,
 	moveCard,
@@ -59,8 +69,11 @@ import {
 	overLimit,
 	PRESETS,
 	type Preset,
+	refreshGithub,
+	setGithub,
 	setPreset,
 	setWipLimits,
+	shownId,
 	startCard,
 	WIP_KEYS,
 	type WipCount,
@@ -71,7 +84,14 @@ import { CardMeta, FIELD } from "./CardParts";
 import { type CardActions, CardTile } from "./CardTile";
 import { InboxStrip, useInbox } from "./Inbox";
 import { CARD_COMMANDS, CARD_KEYS, CARDS_SCOPE } from "./keys";
-import { columnTitle, PRESET_LABELS, START_WARNINGS, WIP_LABELS } from "./labels";
+import {
+	columnTitle,
+	GITHUB_FILTER_LABELS,
+	GITHUB_PROBLEMS,
+	PRESET_LABELS,
+	START_WARNINGS,
+	WIP_LABELS,
+} from "./labels";
 import { type TriageActions, TriageLane } from "./Triage";
 import { useBoardChanged, useHostQuery } from "./useHostQuery";
 
@@ -102,12 +122,16 @@ function useMeasuredRoot(): {
 	return { node, width, attach: setNode };
 }
 
-function peekCard(host: PanelHost, projectId: string, card: Pick<Card, "id" | "title">) {
+function peekCard(
+	host: PanelHost,
+	projectId: string,
+	card: Pick<Card, "id" | "title" | "source" | "virtual">,
+) {
 	host.peek({
 		kind: "extension",
 		panel: CARD_PANEL,
 		params: { projectId, cardId: card.id },
-		title: `${card.id} · ${card.title}`,
+		title: `${shownId(card)} · ${card.title}`,
 	});
 }
 
@@ -455,6 +479,116 @@ function ModeToggle({
 	);
 }
 
+/** The board's GitHub source: show or hide the project's issues, which ones, and refresh them. */
+export function GithubMenu({
+	github,
+	onShow,
+	onFilter,
+	onRefresh,
+}: {
+	github: GithubStatus;
+	onShow: (enabled: boolean) => void;
+	onFilter: (filter: GithubFilter) => void;
+	onRefresh: () => void;
+}) {
+	const t = useT();
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<IconButton
+					icon={RiGithubLine}
+					size="s"
+					label={t("board.github.menu")}
+					data-testid="board-github-menu"
+					data-enabled={github.enabled || undefined}
+					selected={github.enabled}
+				/>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end">
+				<DropdownMenuItem
+					data-testid="board-github-toggle"
+					onSelect={() => onShow(!github.enabled)}
+				>
+					{github.enabled ? t("board.github.hide") : t("board.github.show")}
+				</DropdownMenuItem>
+				{github.enabled ? (
+					<>
+						<DropdownMenuSeparator />
+						<DropdownMenuLabel>{t("board.github.filter.title")}</DropdownMenuLabel>
+						<DropdownMenuRadioGroup
+							value={github.filter}
+							onValueChange={(value) => {
+								const next = GITHUB_FILTERS.find((candidate) => candidate === value);
+								if (next) onFilter(next);
+							}}
+						>
+							{GITHUB_FILTERS.map((filter) => (
+								<DropdownMenuRadioItem
+									key={filter}
+									value={filter}
+									data-testid={`board-github-filter-${filter}`}
+								>
+									{t(GITHUB_FILTER_LABELS[filter])}
+								</DropdownMenuRadioItem>
+							))}
+						</DropdownMenuRadioGroup>
+						<DropdownMenuSeparator />
+						<DropdownMenuItem
+							data-testid="board-github-refresh"
+							disabled={github.loading}
+							onSelect={onRefresh}
+						>
+							<RiRefreshLine aria-hidden className="size-16" />
+							{github.loading ? t("board.github.loading") : t("board.github.refresh")}
+						</DropdownMenuItem>
+					</>
+				) : null}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
+
+/** A failed issue fetch: a notice over the board, which keeps showing the last good issues. */
+export function GithubBanner({
+	github,
+	onRefresh,
+	onDismiss,
+}: {
+	github: GithubStatus;
+	onRefresh: () => void;
+	onDismiss: () => void;
+}) {
+	const t = useT();
+	if (!github.enabled || !github.error) return null;
+	return (
+		<div
+			role="status"
+			data-testid="board-github-error"
+			className="flex shrink-0 items-start gap-4 border-border-muted border-b bg-feedback-warning-subtle px-8 py-4 tr-text-metadata text-feedback-warning"
+		>
+			<RiGithubLine aria-hidden className="mt-2 size-12 shrink-0" />
+			<span className="min-w-0 flex-1 wrap-anywhere">
+				{t("board.github.error", { error: github.error })}
+			</span>
+			<Button
+				variant="ghost"
+				size="s"
+				data-testid="board-github-retry"
+				loading={github.loading}
+				onClick={onRefresh}
+			>
+				{t("board.github.refresh")}
+			</Button>
+			<IconButton
+				icon={RiCloseLine}
+				size="s"
+				label={t("board.notice.dismiss")}
+				onClick={onDismiss}
+			/>
+		</div>
+	);
+}
+
 function BoardHeader({
 	view,
 	compact,
@@ -464,6 +598,9 @@ function BoardHeader({
 	onPreset,
 	onWipLimits,
 	onBoardMode,
+	onGithub,
+	onGithubFilter,
+	onGithubRefresh,
 	onNew,
 }: {
 	view: BoardView | null;
@@ -476,6 +613,9 @@ function BoardHeader({
 	onWipLimits: (limits: BoardSettings["wipLimits"]) => void;
 	/** Absent on a host without layout modes. */
 	onBoardMode: (() => void) | null;
+	onGithub: (enabled: boolean) => void;
+	onGithubFilter: (filter: GithubFilter) => void;
+	onGithubRefresh: () => void;
 	onNew: () => void;
 }) {
 	const t = useT();
@@ -496,6 +636,14 @@ function BoardHeader({
 			<span className="ml-auto flex items-center gap-2">
 				{onBoardMode ? (
 					<ModeToggle active={boardMode} compact={compact} onToggle={onBoardMode} />
+				) : null}
+				{view ? (
+					<GithubMenu
+						github={view.github}
+						onShow={onGithub}
+						onFilter={onGithubFilter}
+						onRefresh={onGithubRefresh}
+					/>
 				) : null}
 				{view ? <WipSettings settings={view.settings} onSave={onWipLimits} /> : null}
 				<IconButton
@@ -659,19 +807,23 @@ export default function BoardTool({ host }: PanelProps) {
 			}
 			setConfirmStart(null);
 			setStarting(card.id);
-			void write(() => startCard(host, card.id, { workflow: workflowFor(card) })).finally(() =>
-				setStarting(null),
-			);
+			void write(() =>
+				startCard(host, card.id, { workflow: workflowFor(card) }, projectId),
+			).finally(() => setStarting(null));
+		},
+		adopt: (card) => {
+			setStarting(card.id);
+			void write(() => adoptCard(host, card.id)).finally(() => setStarting(null));
 		},
 		cancelStart: () => setConfirmStart(null),
 		keyDown: (card, event) => {
 			const delta = moveCommand(keys, event);
-			if (delta === null || !view) return;
+			if (delta === null || !view || canAdopt(card)) return;
 			event.preventDefault();
 			const column = adjacentColumn(view, card, delta);
 			if (!column) return;
 			setFocusCard({ id: card.id, column });
-			void write(() => moveCard(host, card.id, column));
+			void write(() => moveCard(host, card.id, column, projectId));
 		},
 	};
 	const triage: TriageActions = {
@@ -708,6 +860,13 @@ export default function BoardTool({ host }: PanelProps) {
 			setNotice(errorMessage(t, error));
 		}
 	};
+	const [hiddenError, setHiddenError] = useState<string | null>(null);
+	const showGithub = (enabled: boolean) =>
+		void write(async () => {
+			const { problem } = await setGithub(host, projectId, { enabled });
+			if (problem) setNotice(t(GITHUB_PROBLEMS[problem]));
+		});
+	const refreshIssues = () => void write(() => refreshGithub(host, projectId));
 	const layout = boardLayout(width);
 	return (
 		<div
@@ -727,9 +886,19 @@ export default function BoardTool({ host }: PanelProps) {
 				onPreset={(preset) => void write(() => setPreset(host, projectId, preset))}
 				onWipLimits={(limits) => void write(() => setWipLimits(host, projectId, limits))}
 				onBoardMode={boardModeToggle(host)}
+				onGithub={showGithub}
+				onGithubFilter={(filter) => void write(() => setGithub(host, projectId, { filter }))}
+				onGithubRefresh={refreshIssues}
 				onNew={() => setCreating(true)}
 			/>
 			<InboxStrip host={host} items={inbox} compact={layout === "stacked"} />
+			{view && view.github.error !== hiddenError ? (
+				<GithubBanner
+					github={view.github}
+					onRefresh={refreshIssues}
+					onDismiss={() => setHiddenError(view.github.error)}
+				/>
+			) : null}
 			{creating ? <NewCardForm onCreate={create} onCancel={() => setCreating(false)} /> : null}
 			{notice ? (
 				<div

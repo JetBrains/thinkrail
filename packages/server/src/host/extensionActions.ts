@@ -20,6 +20,7 @@ import {
 	listSettledModels,
 	sendHostMessageToSession,
 } from "../agent";
+import { type AssistAsk, assistText } from "../assist";
 import { listContainers } from "../containers";
 import type { ExtensionHostActions } from "../extensions";
 import { serverExtensions } from "../extensions";
@@ -41,6 +42,9 @@ import { defaultBaseBranch, resolveModel } from "./workspaceTools";
 
 const MESSAGE_ACK_MS = 3_000;
 export const MAX_RUN_MS = 10 * 60_000;
+export const MAX_ASSIST_PROMPT = 20_000;
+export const MAX_ASSIST_TOKENS = 1_024;
+const DEFAULT_ASSIST_TOKENS = 256;
 
 const THINKING_LEVELS: readonly string[] = [
 	"off",
@@ -82,6 +86,8 @@ export interface ExtensionActionDeps {
 		argv: string[],
 		options: { timeoutMs: number; cwd: string; signal: AbortSignal },
 	) => Promise<BoundedRun>;
+	/** The one-shot assist path: the trimmed answer, `null` without a model or an answer. */
+	assist: (ask: AssistAsk) => Promise<string | null>;
 }
 
 async function chatWorkspace(sessionId: string): Promise<Workspace | null> {
@@ -126,6 +132,7 @@ export const liveActionDeps: ExtensionActionDeps = {
 	},
 	openPr: openWorkspacePr,
 	run: (argv, options) => runBounded(argv, { ...options, env: nonInteractiveGitEnv() }),
+	assist: assistText,
 };
 
 function requiredText(value: unknown, what: string): string {
@@ -260,6 +267,23 @@ export function extensionActions(
 				signal,
 			});
 			return { ok: run.ok, out: run.out, err: run.err, timedOut: run.timedOut };
+		},
+		async assist(params) {
+			admit();
+			const prompt = requiredText(params.prompt, "prompt");
+			if (prompt.length > MAX_ASSIST_PROMPT)
+				throw new Error(`The prompt is longer than ${MAX_ASSIST_PROMPT} characters.`);
+			const { maxTokens = DEFAULT_ASSIST_TOKENS } = params;
+			if (
+				typeof maxTokens !== "number" ||
+				!Number.isInteger(maxTokens) ||
+				maxTokens < 1 ||
+				maxTokens > MAX_ASSIST_TOKENS
+			)
+				throw new Error(`Pass maxTokens as a whole number from 1 to ${MAX_ASSIST_TOKENS}.`);
+			if (signal.aborted) return null;
+			const text = await deps.assist({ prompt, maxTokens, signal });
+			return text === null ? null : { text };
 		},
 	};
 }

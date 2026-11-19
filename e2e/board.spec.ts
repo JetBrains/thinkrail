@@ -11,6 +11,7 @@ import {
 	worktreeRows,
 } from "./fixtures/app";
 import { git } from "./fixtures/git";
+import { ghCalls, writeGhScenario } from "./fixtures/github";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PICK_DIR_POINTER } from "./fixtures/paths";
 import { shot } from "./fixtures/screenshots";
 import { seedWorkspaceSession } from "./fixtures/sessions";
@@ -654,4 +655,147 @@ test("Triage groups an agent's decomposition, and Accept all moves it into Backl
 	await expect(column(page, "backlog")).toContainText("Refund flow");
 	await expect(triage.getByTestId("board-triage-toggle")).toHaveText("Triage · 1");
 	await expect(triage.getByTestId("board-triage-card")).toHaveCount(1);
+});
+
+const TASK_SPEC = [
+	"---",
+	"id: task-board-sources",
+	"type: task-spec",
+	"status: draft",
+	"title: Board sources",
+	"---",
+	"",
+	"## Request",
+	"",
+	"Show task-specs and GitHub issues on the board.",
+	"",
+	"## Deferrals",
+	"",
+	"- OpenSpec source",
+	"- Linear source",
+	"",
+].join("\n");
+
+test("an unbound workspace's task-spec shows as a card, Adopt binds it once, and its deferrals go to Triage", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1600, height: 900 });
+	await openFixtureProject(page);
+	const [project] = await openProjects(page);
+	if (!project) throw new Error("missing the fixture project");
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	let worktree: string;
+	try {
+		const workspace = await wire.request(
+			"workspace.create",
+			{ projectId: project.id, name: "sources" },
+			30_000,
+		);
+		worktree = workspace.worktreePath;
+	} finally {
+		wire.close();
+	}
+	mkdirSync(join(worktree, ".thinkrail", "context"), { recursive: true });
+	writeFileSync(join(worktree, ".thinkrail", "context", "TASK-x.md"), TASK_SPEC);
+
+	await enterDefaultWorkspace(page);
+	await page.getByTestId(BOARD_RAIL).click();
+	await boardTool(page).getByTestId("board-mode-toggle").click();
+	const unbound = card(page, "Board sources");
+	await expect(unbound).toHaveAttribute("data-source", "task-spec");
+	await expect(unbound).toHaveAttribute("data-virtual", "true");
+	await expect(unbound).toHaveAttribute("data-column", "building");
+	await expect(unbound.getByTestId("board-task-spec-status")).toHaveText("draft");
+	await expect(unbound.getByTestId("board-card-start")).toHaveCount(0);
+	await shot(page, "board", "task-spec-card");
+
+	await unbound.getByTestId("board-card-adopt").click();
+	await expect(card(page, "Board sources")).toHaveCount(1);
+	const adopted = card(page, "Board sources");
+	await expect(adopted).toHaveAttribute("data-card-id", "SP-1");
+	await expect(adopted).not.toHaveAttribute("data-virtual", "true");
+	await expect(adopted).toHaveAttribute("data-column", "building");
+	await expect(adopted.getByTestId("board-task-spec")).toContainText("Board sources");
+
+	await adopted.getByTestId("board-card-open").click();
+	const spec = peekCard(page).getByTestId("board-card-task-spec");
+	await expect(spec).toHaveCount(1);
+	await expect(spec.getByTestId("board-task-spec-open")).toHaveAttribute(
+		"data-target",
+		"workspace",
+	);
+	await spec.getByTestId("board-task-spec-deferrals").click();
+	await expect(peekCard(page).getByTestId("board-task-spec-outcome")).toHaveText(
+		"Filed 2 deferrals into Triage.",
+	);
+	const triage = boardTool(page).getByTestId("board-triage");
+	await expect(triage.getByTestId("board-triage-toggle")).toHaveText("Triage · 2");
+	await triage.getByTestId("board-triage-toggle").click();
+	await expect(triage.getByTestId("board-triage-group")).toContainText("Deferred from SP-1");
+	await spec.getByTestId("board-task-spec-deferrals").click();
+	await expect(peekCard(page).getByTestId("board-task-spec-outcome")).toHaveText(
+		"No new deferrals; 2 are already on the board.",
+	);
+	await expect(triage.getByTestId("board-triage-card")).toHaveCount(2);
+});
+
+test("Show GitHub issues lists the user's open issues through gh as Backlog cards, and an edit keeps one on the board", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1600, height: 900 });
+	await openBoard(page);
+	await boardTool(page).getByTestId("board-mode-toggle").click();
+	await boardTool(page).getByTestId("board-github-menu").click();
+	await page.getByTestId("board-github-toggle").click();
+	const banner = boardTool(page).getByTestId("board-github-error");
+	await expect(banner).toContainText("gh auth login");
+	await expect(boardTool(page).getByTestId("board-empty")).toBeVisible();
+
+	writeGhScenario({
+		prs: [],
+		issues: [
+			{
+				number: 12,
+				title: "Crash on an empty board",
+				body: "Open the board with no cards.",
+				labels: [{ name: "bug" }],
+			},
+			{ number: 13, title: "Export the cards" },
+			{ number: 14, title: "Already closed", state: "CLOSED" },
+		],
+	});
+	await banner.getByTestId("board-github-retry").click();
+	await expect(banner).toHaveCount(0);
+	const issue = card(page, "Crash on an empty board");
+	await expect(issue).toHaveAttribute("data-source", "github");
+	await expect(issue).toHaveAttribute("data-card-id", "#12");
+	await expect(issue).toHaveAttribute("data-column", "backlog");
+	await expect(card(page, "Export the cards")).toBeVisible();
+	await expect(card(page, "Already closed")).toHaveCount(0);
+	expect(ghCalls()).toContainEqual([
+		"issue",
+		"list",
+		"--state",
+		"open",
+		"--limit",
+		"100",
+		"--json",
+		"number,title,body,labels,url,assignees,updatedAt",
+	]);
+	await shot(page, "board", "github-issues");
+
+	await issue.getByTestId("board-card-open").click();
+	await expect(peekCard(page).getByTestId("board-card-issue")).toHaveText("Issue #12 on GitHub");
+	await peekCard(page).getByTestId("board-card-acceptance-add").fill("No crash");
+	await peekCard(page).getByTestId("board-card-acceptance-add").press("Enter");
+	await expect(card(page, "Crash on an empty board")).toHaveAttribute("data-card-id", "SP-1");
+	await expect(card(page, "Crash on an empty board")).not.toHaveAttribute("data-virtual", "true");
+	await expect(card(page, "Crash on an empty board")).toHaveCount(1);
+	await expect(peekCard(page).getByTestId("board-card-acceptance-item")).toHaveText(["No crash"]);
+	expect(ghCalls().every((argv) => argv[0] === "issue" && argv[1] === "list")).toBe(true);
+
+	await boardTool(page).getByTestId("board-github-menu").click();
+	await page.getByTestId("board-github-toggle").click();
+	await expect(card(page, "Export the cards")).toHaveCount(0);
+	await expect(card(page, "Crash on an empty board")).toHaveAttribute("data-card-id", "SP-1");
 });

@@ -58,6 +58,7 @@ export {
 	searchSpecs,
 	type TextRange,
 } from "./search.ts";
+export { type SpecSection, splitSections } from "./sections.ts";
 export {
 	resolveSpecPath,
 	SPEC_FILE_EXTENSION,

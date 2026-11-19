@@ -15,6 +15,7 @@ const ACTIONS: CardActions = {
 	open: noop,
 	enter: noop,
 	start: noop,
+	adopt: noop,
 	cancelStart: noop,
 	keyDown: noop,
 };

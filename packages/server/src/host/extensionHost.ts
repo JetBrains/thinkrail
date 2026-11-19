@@ -29,17 +29,20 @@ import type {
 	ExtensionPublishScope,
 	ExtensionSessionPlacement,
 	ExtensionSessionView,
+	ExtensionTaskSpec,
 	ExtensionTreeFile,
 	ExtensionTurnReceipt,
 	ExtensionTurnTree,
 	ExtensionWorkspaceFacts,
 } from "../extensions";
 import { gitAsync, nonInteractiveGitEnv, readBlobBytesAtAsync } from "../git";
+import { ghSetupProblem } from "../github";
 import { locateEntry } from "../history";
 import { logger } from "../log";
 import { dataDir } from "../persistence";
 import { listProjects } from "../projects";
 import { getConfig } from "../settings";
+import { workspaceSpecSection, workspaceTaskSpecs } from "../spec";
 import { todoCounts } from "../todos";
 import { listTurns } from "../turns";
 import {
@@ -361,6 +364,26 @@ export async function workspaceFacts(workspaceId: string): Promise<ExtensionWork
 	};
 }
 
+/** An open repository workspace's task-specs from its spec graph; none for a chat, `null` when not open. */
+export async function taskSpecs(workspaceId: string): Promise<ExtensionTaskSpec[] | null> {
+	const workspace = listAllWorkspaceRecords().find((candidate) => candidate.id === workspaceId);
+	if (!workspace) return null;
+	if (isChatWorkspace(workspace)) return [];
+	return workspaceTaskSpecs(workspace.id, workspace.worktreePath);
+}
+
+/** One named section of a spec of an open repository workspace, through its spec graph. */
+export async function specSection(
+	workspaceId: string,
+	specId: string,
+	heading: string,
+): Promise<string | null> {
+	if (typeof specId !== "string" || typeof heading !== "string" || !heading.trim()) return null;
+	const workspace = listAllWorkspaceRecords().find((candidate) => candidate.id === workspaceId);
+	if (!workspace || isChatWorkspace(workspace)) return null;
+	return workspaceSpecSection(workspace.id, workspace.worktreePath, specId, heading);
+}
+
 export function extensionHostServices(name: string, signal: AbortSignal): ExtensionHostServices {
 	return {
 		dataDir: join(dataDir(), "extensions", name),
@@ -370,6 +393,9 @@ export function extensionHostServices(name: string, signal: AbortSignal): Extens
 		events: extensionEvents.bus(name, signal),
 		publish: publishFor(name),
 		workspaceFacts,
+		taskSpecs,
+		specSection,
+		githubProblem: ghSetupProblem,
 		sessionsRoot,
 		sessionScope,
 		childTranscriptDirs,

@@ -144,7 +144,10 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   card badges its agent's live state, and a card opens in Peek with its details, attempts and Start.
   A cross-project "Needs you" inbox (above the board and as a topbar counter) lists the cards waiting
   for an answer or failed, WIP limits watch human attention, agent-filed cards wait in Triage to be
-  accepted as a whole, and Board mode widens the board and restores the previous layout on exit
+  accepted as a whole, and Board mode widens the board and restores the previous layout on exit. The
+  workspaces' task-specs show on their cards (an unbound one's as a card to adopt, its deferrals sent
+  into Triage), the open GitHub issues show through the user's own `gh` (Start asks for `Closes #N`; the
+  board never edits an issue), and the host's model suggests a card's size until the human sets one
   ([[module-ext-board]]).
 - **Workspaces from chat** — on request ("in a side workspace"), the agent starts ordinary workspaces
   with their own chats in any open project and checks their chats', PRs', and diffs' status; the agent,

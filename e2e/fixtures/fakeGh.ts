@@ -23,7 +23,18 @@ export interface FakePr {
 	headOwner?: string;
 }
 
+export interface FakeIssue {
+	number: number;
+	title: string;
+	body?: string;
+	labels?: { name: string }[];
+	assignees?: { login: string }[];
+	state?: "OPEN" | "CLOSED";
+	updatedAt?: string;
+}
+
 export interface FakeGhScenario {
+	issues?: FakeIssue[];
 	repo?: {
 		mergeCommitAllowed?: boolean;
 		squashMergeAllowed?: boolean;
@@ -91,6 +102,25 @@ function main(): void {
 			...scenario.repo,
 		};
 		process.stdout.write(`${JSON.stringify(project(repo))}\n`);
+		return;
+	}
+	if (group === "issue" && command === "list") {
+		const state = (flag("--state") ?? "open").toUpperCase();
+		const limit = Number(flag("--limit") ?? "30");
+		const rows = (scenario.issues ?? [])
+			.filter((issue) => state === "ALL" || (issue.state ?? "OPEN") === state)
+			.slice(0, limit)
+			.map((issue) =>
+				project({
+					body: "",
+					labels: [],
+					assignees: [],
+					updatedAt: "2026-01-01T00:00:00Z",
+					url: `https://github.com/${slug}/issues/${issue.number}`,
+					...issue,
+				}),
+			);
+		process.stdout.write(`${JSON.stringify(rows)}\n`);
 		return;
 	}
 	if (group !== "pr") fail(`fake gh: unsupported command ${argv.join(" ")}`);

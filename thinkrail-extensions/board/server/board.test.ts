@@ -15,7 +15,7 @@ function setup() {
 	const t = createTestHost();
 	hosts.push(t);
 	let now = 1_000;
-	const board = new Board(t.host, { now: () => ++now, owner: "dana" });
+	const board = new Board(t.host, { now: () => ++now, owner: "dana", sizeDelayMs: 0 });
 	const queries = boardQueries(board);
 	const query = async <T>(method: string, params?: unknown): Promise<T> =>
 		(await (queries[method] as ExtensionQuery)(params)) as T;
@@ -341,6 +341,7 @@ describe("board queries", () => {
 			preset: "solo",
 			wipLimits: { needsYou: 3, review: 2, agents: 3 },
 			followSelection: true,
+			github: { enabled: false, filter: "open" },
 		});
 		const view = await query<BoardView>("board.get", { projectId: "p1" });
 		expect(view.cards.map((card) => `${card.category}/${card.column}`)).toEqual([
@@ -628,12 +629,16 @@ describe("the board descriptor", () => {
 		const queries = extension.queries?.(t.host) ?? {};
 		expect(Object.keys(queries).sort()).toEqual([
 			"board.get",
+			"card.adopt",
 			"card.create",
+			"card.deferrals",
 			"card.delete",
 			"card.get",
 			"card.move",
 			"card.start",
 			"card.update",
+			"github.refresh",
+			"github.set",
 			"inbox",
 			"models.list",
 			"settings.get",

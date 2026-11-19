@@ -6,6 +6,7 @@ import {
 	extensionActions,
 	extensionMessageContent,
 	liveActionDeps,
+	MAX_ASSIST_TOKENS,
 	MAX_RUN_MS,
 } from "./extensionActions";
 
@@ -68,6 +69,7 @@ function setup(
 		launchFailed: false,
 		waitedMs: 3,
 	}));
+	const assist = mock<ExtensionActionDeps["assist"]>(async () => "M");
 	const deps: ExtensionActionDeps = {
 		isDisabled: (name) => disabled.has(name),
 		title: () => "Board",
@@ -84,6 +86,7 @@ function setup(
 		abort,
 		openPr,
 		run,
+		assist,
 		...overrides,
 	};
 	return {
@@ -94,6 +97,7 @@ function setup(
 		abort,
 		openPr,
 		run,
+		assist,
 	};
 }
 
@@ -108,7 +112,7 @@ async function codeOf(answer: Promise<unknown>): Promise<string | undefined> {
 
 describe("extension host actions", () => {
 	test("every action refuses while the extension is switched off, before any effect", async () => {
-		const { actions, disabled, create, send, abort, openPr, run } = setup();
+		const { actions, disabled, create, send, abort, openPr, run, assist } = setup();
 		disabled.add("board");
 		const refusals = await Promise.all([
 			codeOf(actions.createWorkspace({ projectId: "p1", kickoff: { text: "go" } })),
@@ -116,6 +120,7 @@ describe("extension host actions", () => {
 			codeOf(actions.stopChat({ sessionId: "running" })),
 			codeOf(actions.openPr({ workspaceId: "w1" })),
 			codeOf(actions.runInWorkspace({ workspaceId: "w1", argv: ["gh"], timeoutMs: 1_000 })),
+			codeOf(actions.assist({ prompt: "Size it" })),
 		]);
 		expect(refusals).toEqual([
 			"EXTENSION_DISABLED",
@@ -123,8 +128,10 @@ describe("extension host actions", () => {
 			"EXTENSION_DISABLED",
 			"EXTENSION_DISABLED",
 			"EXTENSION_DISABLED",
+			"EXTENSION_DISABLED",
 		]);
-		for (const effect of [create, send, abort, openPr, run]) expect(effect).not.toHaveBeenCalled();
+		for (const effect of [create, send, abort, openPr, run, assist])
+			expect(effect).not.toHaveBeenCalled();
 	});
 
 	test("createWorkspace starts a creation marked as the extension's, on the default base and a resolved model", async () => {
@@ -300,5 +307,30 @@ describe("extension host actions", () => {
 		});
 		controller.abort();
 		expect(await pending).toMatchObject({ ok: false, timedOut: false });
+	});
+
+	test("assist asks the host's one-shot path with a bounded prompt and the services' signal", async () => {
+		const controller = new AbortController();
+		const { actions, assist } = setup({}, controller.signal);
+		expect(await actions.assist({ prompt: "  Size it  ", maxTokens: 16 })).toEqual({ text: "M" });
+		expect(assist.mock.calls).toEqual([
+			[{ prompt: "Size it", maxTokens: 16, signal: controller.signal }],
+		]);
+		await actions.assist({ prompt: "Again" });
+		expect(assist.mock.calls[1]?.[0].maxTokens).toBe(256);
+		await expect(actions.assist({ prompt: " " })).rejects.toThrow("non-empty prompt");
+		await expect(actions.assist({ prompt: "x".repeat(20_001) })).rejects.toThrow("longer than");
+		await expect(actions.assist({ prompt: "x", maxTokens: MAX_ASSIST_TOKENS + 1 })).rejects.toThrow(
+			"maxTokens",
+		);
+		await expect(actions.assist({ prompt: "x", maxTokens: 1.5 })).rejects.toThrow("maxTokens");
+		controller.abort();
+		expect(await actions.assist({ prompt: "late" })).toBeNull();
+		expect(assist).toHaveBeenCalledTimes(2);
+	});
+
+	test("assist answers null when the host has no model or no answer", async () => {
+		const { actions } = setup({ assist: async () => null });
+		expect(await actions.assist({ prompt: "Size it" })).toBeNull();
 	});
 });

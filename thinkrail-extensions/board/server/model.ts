@@ -21,12 +21,20 @@ export type Workflow = (typeof WORKFLOWS)[number];
 export const PRESETS = ["agentic-kanban", "solo"] as const;
 export type Preset = (typeof PRESETS)[number];
 
+/** Which open issues the GitHub source lists: all of them, or those assigned to the gh user. */
+export const GITHUB_FILTERS = ["open", "mine"] as const;
+export type GithubFilter = (typeof GITHUB_FILTERS)[number];
+
+export const TITLE_MAX = 300;
+export const TEXT_MAX = 20_000;
+
 export type Actor = "human" | "agent" | "git" | "automation";
 
-export interface CardSource {
-	kind: "native" | "task-spec" | "github";
-	ref: string;
-}
+/** Where a card comes from: the board itself, a workspace's task-spec or a GitHub issue. */
+export type CardSource =
+	| { kind: "native"; ref: string }
+	| { kind: "task-spec"; ref: string; workspaceId: string; path: string }
+	| { kind: "github"; ref: string; number: number; url: string };
 
 export interface AttemptNote {
 	text: string;
@@ -43,6 +51,8 @@ export interface Attempt {
 	merged?: true;
 	/** The workspace was removed (archived or deleted). */
 	removedAt?: number;
+	/** The PR whose description was seen to carry the card's issue's `Closes #N`. */
+	closesLinked?: number;
 }
 
 export interface Card {
@@ -73,8 +83,9 @@ export interface Card {
 	cancelPending?: { workspaceId: string; at: number };
 }
 
+/** The chat that filed a card and the card it works on; a human's deferrals carry the card alone. */
 export interface CardOrigin {
-	sessionId: string;
+	sessionId?: string;
 	cardId?: string;
 }
 
@@ -100,16 +111,23 @@ export interface WipLimits {
 	agents: number;
 }
 
+export interface GithubSettings {
+	enabled: boolean;
+	filter: GithubFilter;
+}
+
 export interface BoardSettings {
 	preset: Preset;
 	wipLimits: WipLimits;
 	followSelection: boolean;
+	github: GithubSettings;
 }
 
 export const DEFAULT_SETTINGS: BoardSettings = {
 	preset: "agentic-kanban",
 	wipLimits: { needsYou: 3, review: 5, agents: 3 },
 	followSelection: false,
+	github: { enabled: false, filter: "open" },
 };
 
 export function latestAttempt(card: Pick<Card, "attempts">): Attempt | undefined {

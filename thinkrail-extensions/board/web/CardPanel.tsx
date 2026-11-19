@@ -4,6 +4,10 @@ import {
 	RiCloseLine,
 	RiDeleteBinLine,
 	RiExternalLinkLine,
+	RiFileList3Line,
+	RiGithubLine,
+	RiInboxArchiveLine,
+	RiInboxUnarchiveLine,
 } from "@remixicon/react";
 import type { PanelHost, PanelProps } from "@thinkrail/extension-api/web";
 import { type Translator, useT } from "@thinkrail/locales/react";
@@ -13,19 +17,32 @@ import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { type ReactNode, useId, useState } from "react";
 import {
+	adoptCard,
 	agentBadge,
 	CARD_SIZES,
 	CARD_TYPES,
 	type Card,
 	type CardDetail,
 	type CardPatch,
+	canAdopt,
 	deleteCard,
 	loadBoard,
 	loadCard,
+	openTaskSpec,
+	sendDeferrals,
+	type TaskSpecRef,
 	type Transition,
 	updateCard,
 } from "./api";
-import { AgentBadgeChip, CardMeta, FIELD, PlanProgress, PrChip } from "./CardParts";
+import {
+	AgentBadgeChip,
+	CardMeta,
+	FIELD,
+	LiveLine,
+	PlanProgress,
+	PrChip,
+	TaskSpecStatus,
+} from "./CardParts";
 import { ACTOR_LABELS, columnTitle, TYPE_LABELS, WORKFLOW_LABELS } from "./labels";
 import { StartSection } from "./StartSection";
 import { useBoardChanged, useHostQuery } from "./useHostQuery";
@@ -349,6 +366,220 @@ function BlocksEditor({
 	);
 }
 
+/**
+ * The card's task-specs, live from its workspaces: each opens in Peek when it is in this workspace (Peek
+ * shows the workspace it belongs to), else in its own workspace; a stored card can send one's Deferrals
+ * section into Triage.
+ */
+export function TaskSpecs({
+	host,
+	card,
+	onSent,
+}: {
+	host: PanelHost;
+	card: Card;
+	onSent: () => void;
+}) {
+	const t = useT();
+	const [sending, setSending] = useState<string | null>(null);
+	const [outcome, setOutcome] = useState<{ error: boolean; text: string } | null>(null);
+	const send = (spec: TaskSpecRef) => {
+		setSending(spec.id);
+		setOutcome(null);
+		sendDeferrals(host, card.id, spec.id)
+			.then(
+				({ created, skipped }) => {
+					setOutcome({
+						error: false,
+						text:
+							created > 0
+								? t("board.taskSpec.deferralsSent", { count: created })
+								: t("board.taskSpec.deferralsNone", { count: skipped }),
+					});
+					onSent();
+				},
+				(error: unknown) =>
+					setOutcome({
+						error: true,
+						text: error instanceof Error ? error.message : t("board.error.unknown"),
+					}),
+			)
+			.finally(() => setSending(null));
+	};
+	return (
+		<div className="flex flex-col gap-4">
+			<ul data-testid="board-card-task-specs" className="flex flex-col gap-4">
+				{card.taskSpecs.map((spec) => {
+					const here = spec.workspaceId === host.scope.workspaceId;
+					return (
+						<li
+							key={`${spec.workspaceId}:${spec.id}`}
+							data-testid="board-card-task-spec"
+							data-spec-id={spec.id}
+							className="flex flex-col gap-4 rounded-sm border border-border-muted p-8"
+						>
+							<span className="flex min-w-0 items-center gap-4">
+								<RiFileList3Line aria-hidden className="size-12 shrink-0 text-text-muted" />
+								<span className="min-w-0 flex-1 truncate tr-text-ui text-text-default">
+									{spec.title}
+								</span>
+								<TaskSpecStatus status={spec.status} />
+							</span>
+							<span className="truncate tr-code-text-small text-text-subtle">{spec.path}</span>
+							<span className="flex flex-wrap gap-4">
+								<Button
+									variant="outline"
+									size="s"
+									iconLeft={RiExternalLinkLine}
+									data-testid="board-task-spec-open"
+									data-target={here ? "peek" : "workspace"}
+									onClick={() => openTaskSpec(host, spec)}
+								>
+									{here ? t("board.taskSpec.open") : t("board.taskSpec.openThere")}
+								</Button>
+								{card.virtual ? null : (
+									<Button
+										variant="ghost"
+										size="s"
+										iconLeft={RiInboxUnarchiveLine}
+										loading={sending === spec.id}
+										data-testid="board-task-spec-deferrals"
+										onClick={() => send(spec)}
+									>
+										{t("board.taskSpec.sendDeferrals")}
+									</Button>
+								)}
+							</span>
+						</li>
+					);
+				})}
+			</ul>
+			{outcome ? (
+				<p
+					role={outcome.error ? "alert" : "status"}
+					data-testid="board-task-spec-outcome"
+					className={
+						outcome.error
+							? "tr-text-metadata text-feedback-error wrap-anywhere"
+							: "tr-text-metadata text-text-muted"
+					}
+				>
+					{outcome.text}
+				</p>
+			) : null}
+		</div>
+	);
+}
+
+/** A GitHub issue's card: the issue, linked, and that the board never changes it there. */
+export function IssueLink({ card }: { card: Card }) {
+	const t = useT();
+	if (card.source.kind !== "github") return null;
+	const { number, url } = card.source;
+	return (
+		<span className="flex flex-wrap items-center gap-4 tr-text-metadata text-text-muted">
+			<RiGithubLine aria-hidden className="size-12" />
+			{url ? (
+				<a
+					href={url}
+					target="_blank"
+					rel="noreferrer"
+					data-testid="board-card-issue"
+					className="rounded-xs text-text-default underline focus-visible:focus-ring"
+				>
+					{t("board.source.issue", { number })}
+				</a>
+			) : (
+				<span data-testid="board-card-issue">{t("board.source.issue", { number })}</span>
+			)}
+			<span className="text-text-subtle">
+				{card.virtual ? t("board.source.issueUnstored") : t("board.source.issueStored", { number })}
+			</span>
+		</span>
+	);
+}
+
+/** An unbound workspace's task-spec in Peek: what it is, where its work stands, and Adopt. */
+export function TaskSpecCardDetails({
+	host,
+	detail,
+	onAdopted,
+}: {
+	host: PanelHost;
+	detail: CardDetail;
+	/** The adopted card is the one `card.get` answers for this id from now on. */
+	onAdopted: () => void;
+}) {
+	const t = useT();
+	const { card, projectId } = detail;
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const live = card.live.at(-1);
+	return (
+		<div className="flex flex-col gap-16 p-12">
+			<div className="flex flex-col gap-4">
+				<span className="flex flex-wrap items-center gap-8">
+					<CardMeta card={card} />
+					<span data-testid="board-card-column" className="tr-text-metadata text-text-muted">
+						{columnTitle(t, card.column)}
+					</span>
+				</span>
+				<h2 data-testid="board-card-heading" className="tr-title-compact text-text-default">
+					{card.title}
+				</h2>
+				<span className="tr-text-metadata text-text-muted">{t("board.taskSpec.unbound")}</span>
+				<LiveLine card={card} />
+			</div>
+			<Section title={t("board.taskSpec.title")}>
+				<TaskSpecs host={host} card={card} onSent={() => {}} />
+			</Section>
+			<span className="flex flex-wrap gap-4">
+				<Button
+					variant="primary"
+					size="m"
+					iconLeft={RiInboxArchiveLine}
+					loading={busy}
+					data-testid="board-card-panel-adopt"
+					onClick={() => {
+						setBusy(true);
+						setError(null);
+						adoptCard(host, card.id)
+							.then(onAdopted, (failure: unknown) =>
+								setError(failure instanceof Error ? failure.message : t("board.error.unknown")),
+							)
+							.finally(() => setBusy(false));
+					}}
+				>
+					{t("board.card.adopt")}
+				</Button>
+				{live?.open ? (
+					<Button
+						variant="outline"
+						size="m"
+						iconLeft={RiExternalLinkLine}
+						data-testid="board-attempt-workspace"
+						onClick={() =>
+							host.openWorkspace({
+								workspaceId: live.workspaceId,
+								projectId,
+								...(live.chat ? { sessionId: live.sessionId } : {}),
+							})
+						}
+					>
+						{t("board.attempts.openWorkspace")}
+					</Button>
+				) : null}
+			</span>
+			<p className="tr-text-metadata text-text-subtle">{t("board.taskSpec.adoptHint")}</p>
+			{error ? (
+				<p role="alert" className="tr-text-metadata text-feedback-error wrap-anywhere">
+					{error}
+				</p>
+			) : null}
+		</div>
+	);
+}
+
 function DeleteCard({ onDelete }: { onDelete: () => void }) {
 	const t = useT();
 	const [confirming, setConfirming] = useState(false);
@@ -414,6 +645,7 @@ function CardDetails({
 					testId="board-card-title"
 					onSave={(title) => onPatch({ title })}
 				/>
+				<IssueLink card={card} />
 			</div>
 			<div className="flex flex-wrap items-end gap-8">
 				<label htmlFor={`${id}-type`} className="flex flex-col gap-2">
@@ -505,6 +737,11 @@ function CardDetails({
 					onChange={(specRefs) => onPatch({ specRefs })}
 				/>
 			</Section>
+			{card.taskSpecs.length > 0 ? (
+				<Section title={t("board.taskSpec.title")}>
+					<TaskSpecs host={host} card={card} onSent={onReload} />
+				</Section>
+			) : null}
 			<Section title={t("board.attempts.title")}>
 				<Attempts host={host} projectId={projectId} card={card} />
 			</Section>
@@ -512,12 +749,13 @@ function CardDetails({
 				key={`${card.id}:${card.type}:${card.size ?? ""}`}
 				host={host}
 				card={card}
+				projectId={projectId}
 				onStarted={onReload}
 			/>
 			<Section title={t("board.activity.title")}>
 				<Activity transitions={detail.transitions} />
 			</Section>
-			<DeleteCard onDelete={onDelete} />
+			{card.virtual ? null : <DeleteCard onDelete={onDelete} />}
 		</div>
 	);
 }
@@ -528,10 +766,13 @@ export default function CardPanel({ host, params }: PanelProps) {
 	const cardId = params.cardId ?? "";
 	const [deleted, setDeleted] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const card = useHostQuery(cardId || null, (signal) => loadCard(host, cardId, signal));
+	const card = useHostQuery(cardId ? `${cardId}:${params.projectId ?? ""}` : null, (signal) =>
+		loadCard(host, cardId, params.projectId ?? null, signal),
+	);
 	const projectId =
 		card.state.kind === "ready" ? card.state.value.projectId : (params.projectId ?? null);
 	useBoardChanged(host, projectId, card.reload);
+	const currentId = card.state.kind === "ready" ? card.state.value.card.id : cardId;
 	const write = (run: () => Promise<unknown>) =>
 		run().then(
 			() => {
@@ -546,7 +787,7 @@ export default function CardPanel({ host, params }: PanelProps) {
 	if (deleted)
 		return (
 			<div data-testid="board-card-deleted" className="p-16 tr-text-ui text-text-muted">
-				{t("board.card.deleted", { id: cardId })}
+				{t("board.card.deleted", { id: currentId })}
 			</div>
 		);
 	return (
@@ -572,13 +813,15 @@ export default function CardPanel({ host, params }: PanelProps) {
 						{t("board.retry")}
 					</Button>
 				</div>
+			) : canAdopt(card.state.value.card) ? (
+				<TaskSpecCardDetails host={host} detail={card.state.value} onAdopted={card.reload} />
 			) : (
 				<CardDetails
 					host={host}
 					detail={card.state.value}
-					onPatch={(patch) => void write(() => updateCard(host, cardId, patch))}
+					onPatch={(patch) => void write(() => updateCard(host, currentId, patch, projectId ?? ""))}
 					onDelete={() =>
-						void deleteCard(host, cardId).then(
+						void deleteCard(host, currentId).then(
 							() => setDeleted(true),
 							(failure: unknown) =>
 								setError(failure instanceof Error ? failure.message : t("board.error.unknown")),

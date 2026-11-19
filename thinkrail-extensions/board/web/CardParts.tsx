@@ -3,6 +3,8 @@ import {
 	RiCheckboxCircleFill,
 	RiCheckboxCircleLine,
 	RiErrorWarningLine,
+	RiFileList3Line,
+	RiGithubLine,
 	RiGitPullRequestLine,
 	RiLoader4Line,
 	RiQuestionLine,
@@ -10,8 +12,16 @@ import {
 import { useT } from "@thinkrail/locales/react";
 import { DiffStatBadge } from "@thinkrail/ui/diff-stat-badge";
 import { cn } from "@thinkrail/ui/utils";
-import { type AgentBadge, type AttemptLive, agentBadge, type Card, latestLive } from "./api";
-import { BADGE_LABELS, TYPE_LABELS } from "./labels";
+import {
+	type AgentBadge,
+	type AttemptLive,
+	agentBadge,
+	type Card,
+	latestLive,
+	shownId,
+	type TaskSpecRef,
+} from "./api";
+import { BADGE_LABELS, TYPE_LABELS, taskSpecStatusLabel } from "./labels";
 
 export const FIELD =
 	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default placeholder:text-text-subtle focus:border-control-border-active focus-visible:focus-ring";
@@ -85,11 +95,83 @@ export function PrChip({ pr }: { pr: AttemptLive["pr"] }) {
 	);
 }
 
-export function CardMeta({ card }: { card: Pick<Card, "id" | "type" | "size" | "sizeSuggested"> }) {
+/** Where a card comes from, when not the board itself: a task-spec or a GitHub issue. */
+export function SourceBadge({ card }: { card: Pick<Card, "source"> }) {
+	const t = useT();
+	const { source } = card;
+	if (source.kind === "native") return null;
+	const Icon = source.kind === "github" ? RiGithubLine : RiFileList3Line;
+	return (
+		<span
+			data-testid="board-source"
+			data-source={source.kind}
+			title={
+				source.kind === "github"
+					? t("board.source.githubTitle", { number: source.number })
+					: t("board.source.taskSpecTitle", { id: source.ref })
+			}
+			className="inline-flex shrink-0 items-center gap-2 text-text-muted"
+		>
+			<Icon aria-hidden className="size-12" />
+			{source.kind === "github" ? t("board.source.github") : t("board.source.taskSpec")}
+		</span>
+	);
+}
+
+const STATUS_LOOKS: Readonly<Record<string, string>> = {
+	draft: "bg-control-bg-selected text-text-muted",
+	active: "bg-primary-subtle text-primary",
+	stale: "bg-feedback-warning-subtle text-feedback-warning",
+	done: "bg-feedback-success-subtle text-feedback-success",
+};
+
+export function TaskSpecStatus({ status }: { status: string | null }) {
+	const t = useT();
+	return (
+		<span
+			data-testid="board-task-spec-status"
+			data-status={status ?? undefined}
+			className={cn(
+				"inline-flex shrink-0 rounded-full px-8 tr-text-label-pill",
+				(status && STATUS_LOOKS[status]) ?? "bg-control-bg-selected text-text-muted",
+			)}
+		>
+			{taskSpecStatusLabel(t, status)}
+		</span>
+	);
+}
+
+/** A card's task-specs on its tile: each one's title and status. */
+export function TaskSpecLine({ specs }: { specs: readonly TaskSpecRef[] }) {
+	if (specs.length === 0) return null;
+	return (
+		<span className="flex min-w-0 flex-wrap items-center gap-4">
+			{specs.map((spec) => (
+				<span
+					key={`${spec.workspaceId}:${spec.id}`}
+					data-testid="board-task-spec"
+					data-spec-id={spec.id}
+					className="flex min-w-0 items-center gap-4 tr-text-metadata text-text-muted"
+				>
+					<RiFileList3Line aria-hidden className="size-12 shrink-0" />
+					<span className="min-w-0 truncate">{spec.title}</span>
+					<TaskSpecStatus status={spec.status} />
+				</span>
+			))}
+		</span>
+	);
+}
+
+export function CardMeta({
+	card,
+}: {
+	card: Pick<Card, "id" | "type" | "size" | "sizeSuggested" | "source" | "virtual">;
+}) {
 	const t = useT();
 	return (
 		<span className="flex min-w-0 items-center gap-4 tr-text-metadata text-text-subtle">
-			<span className="tr-code-text-small text-text-muted">{card.id}</span>
+			<span className="truncate tr-code-text-small text-text-muted">{shownId(card)}</span>
+			<SourceBadge card={card} />
 			<span>{t(TYPE_LABELS[card.type])}</span>
 			{card.size ? (
 				<span

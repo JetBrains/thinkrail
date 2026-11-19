@@ -5,6 +5,7 @@ import {
 	readdirSync,
 	readFileSync,
 	renameSync,
+	rmSync,
 	writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -16,7 +17,9 @@ import {
 	CARD_TYPES,
 	CATEGORIES,
 	type Card,
+	type CardSource,
 	DEFAULT_SETTINGS,
+	GITHUB_FILTERS,
 	PRESETS,
 	type Transition,
 	WORKFLOWS,
@@ -73,7 +76,28 @@ function readAttempt(raw: unknown): Attempt | null {
 		notes,
 		...(raw.merged === true ? { merged: true as const } : {}),
 		...(typeof raw.removedAt === "number" ? { removedAt: raw.removedAt } : {}),
+		...(typeof raw.closesLinked === "number" ? { closesLinked: raw.closesLinked } : {}),
 	};
+}
+
+/** A stored source; one missing what locates it reads as the card's own. */
+function readSource(raw: unknown, id: string): CardSource {
+	const source = isRecord(raw) ? raw : {};
+	const ref = typeof source.ref === "string" ? source.ref : id;
+	if (
+		source.kind === "task-spec" &&
+		typeof source.workspaceId === "string" &&
+		typeof source.path === "string"
+	)
+		return { kind: "task-spec", ref, workspaceId: source.workspaceId, path: source.path };
+	if (
+		source.kind === "github" &&
+		typeof source.number === "number" &&
+		Number.isSafeInteger(source.number) &&
+		typeof source.url === "string"
+	)
+		return { kind: "github", ref, number: source.number, url: source.url };
+	return { kind: "native", ref: source.kind === "native" ? ref : id };
 }
 
 /** A stored card, defaults filled in; `null` when it lacks what identifies or places it. */
@@ -83,15 +107,11 @@ export function readCard(raw: unknown): Card | null {
 	if (typeof id !== "string" || typeof title !== "string" || typeof column !== "string")
 		return null;
 	if (!oneOf(CATEGORIES, category)) return null;
-	const source = isRecord(raw.source) ? raw.source : {};
 	const pending = isRecord(raw.cancelPending) ? raw.cancelPending : null;
 	const origin = isRecord(raw.origin) ? raw.origin : null;
 	return {
 		id,
-		source: {
-			kind: oneOf(["native", "task-spec", "github"] as const, source.kind) ? source.kind : "native",
-			ref: typeof source.ref === "string" ? source.ref : id,
-		},
+		source: readSource(raw.source, id),
 		title,
 		description: typeof raw.description === "string" ? raw.description : "",
 		acceptance: strings(raw.acceptance),
@@ -109,10 +129,10 @@ export function readCard(raw: unknown): Card | null {
 			? raw.attempts.flatMap((attempt) => readAttempt(attempt) ?? [])
 			: [],
 		createdBy: raw.createdBy === "agent" ? "agent" : "human",
-		...(origin && typeof origin.sessionId === "string"
+		...(origin && (typeof origin.sessionId === "string" || typeof origin.cardId === "string")
 			? {
 					origin: {
-						sessionId: origin.sessionId,
+						...(typeof origin.sessionId === "string" ? { sessionId: origin.sessionId } : {}),
 						...(typeof origin.cardId === "string" ? { cardId: origin.cardId } : {}),
 					},
 				}
@@ -133,10 +153,15 @@ function readSettings(raw: Raw): BoardSettings {
 			? value
 			: DEFAULT_SETTINGS.wipLimits[key];
 	};
+	const github = isRecord(raw.github) ? raw.github : {};
 	return {
 		preset: oneOf(PRESETS, raw.preset) ? raw.preset : DEFAULT_SETTINGS.preset,
 		wipLimits: { needsYou: limit("needsYou"), review: limit("review"), agents: limit("agents") },
 		followSelection: raw.followSelection === true,
+		github: {
+			enabled: github.enabled === true,
+			filter: oneOf(GITHUB_FILTERS, github.filter) ? github.filter : DEFAULT_SETTINGS.github.filter,
+		},
 	};
 }
 
@@ -262,6 +287,19 @@ export class BoardStore {
 			join(dir, TRANSITIONS),
 			transitions.map((transition) => `${JSON.stringify(transition)}\n`).join(""),
 		);
+	}
+
+	/** Writes a short-lived file into the project's folder (a PR body `gh` reads); returns its path. */
+	writeScratch(projectId: string, name: string, text: string): string {
+		const dir = this.dir(projectId);
+		mkdirSync(dir, { recursive: true });
+		const path = join(dir, name);
+		writeFileSync(path, text);
+		return path;
+	}
+
+	removeScratch(path: string): void {
+		rmSync(path, { force: true });
 	}
 
 	/** The project's transition log, oldest first; a line that does not parse is skipped. */

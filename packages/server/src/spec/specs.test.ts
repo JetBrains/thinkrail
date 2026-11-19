@@ -10,6 +10,8 @@ import {
 	specGraph,
 	specSections,
 	specSnapshot,
+	workspaceSpecSection,
+	workspaceTaskSpecs,
 } from "./specs";
 
 let dataDir: string;
@@ -180,4 +182,60 @@ test("section search builds its index off the request, then ranks sections and f
 			.search("zebra", 5)
 			.hits.map((hit) => hit.path),
 	).toEqual(["zoo/SPEC.md"]);
+});
+
+test("lists a workspace's task-specs with their status and path, and nothing else", () => {
+	writeSpec("SPEC.md", "id: root-spec\ntype: goal-and-requirements\ntitle: Root");
+	writeSpec(
+		".thinkrail/context/TASK-a.md",
+		"id: task-a\ntype: task-spec\nstatus: active\ntitle: Task A",
+	);
+	writeSpec("docs/TASK-b.md", "id: task-b\ntype: task-spec");
+
+	expect(
+		workspaceTaskSpecs("ws1", worktree).sort((left, right) => left.id.localeCompare(right.id)),
+	).toEqual([
+		{ id: "task-a", title: "Task A", status: "active", path: ".thinkrail/context/TASK-a.md" },
+		{ id: "task-b", title: "task-b", status: null, path: "docs/TASK-b.md" },
+	]);
+	expect(workspaceTaskSpecs("ws-missing", join(dataDir, "nowhere"))).toEqual([]);
+});
+
+test("reads one named section of a spec, its subsections included, the shallowest match first", () => {
+	mkdirSync(join(worktree, ".thinkrail", "context"), { recursive: true });
+	writeFileSync(
+		join(worktree, ".thinkrail", "context", "TASK-a.md"),
+		[
+			"---",
+			"id: task-a",
+			"type: task-spec",
+			"---",
+			"",
+			"## Design",
+			"",
+			"### Deferrals",
+			"",
+			"- nested, not this one",
+			"",
+			"## Deferrals",
+			"",
+			"- Roadmap view",
+			"- Charts",
+			"",
+			"### Later",
+			"",
+			"- Linear source",
+			"",
+			"## Verification",
+			"",
+			"Tests.",
+			"",
+		].join("\n"),
+	);
+
+	expect(workspaceSpecSection("ws1", worktree, "task-a", "deferrals")).toBe(
+		"- Roadmap view\n- Charts\n\n### Later\n\n- Linear source",
+	);
+	expect(workspaceSpecSection("ws1", worktree, "task-a", "Missing")).toBeNull();
+	expect(workspaceSpecSection("ws1", worktree, "nope", "Deferrals")).toBeNull();
 });

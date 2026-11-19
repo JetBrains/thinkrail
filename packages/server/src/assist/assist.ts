@@ -211,3 +211,31 @@ export function toPrDescription(raw: string): string | null {
 		.trim();
 	return hasTitleContent(text) ? text : null;
 }
+
+const ASK_TIMEOUT_MS = 30_000;
+
+export interface AssistAsk {
+	prompt: string;
+	maxTokens: number;
+	signal?: AbortSignal | undefined;
+}
+
+/**
+ * A caller-worded one-shot ask (an extension's `assist` action) on the same cheap-model path, time-boxed
+ * and aborted with `signal`. The trimmed answer, or `null` (never throws) when nothing is authenticated,
+ * it times out or is aborted, or the answer is empty.
+ */
+export async function assistText(ask: AssistAsk): Promise<string | null> {
+	const timeout = AbortSignal.timeout(ASK_TIMEOUT_MS);
+	try {
+		const { text } = await runOneShot({
+			prompt: ask.prompt,
+			tier: "cheap",
+			maxTokens: ask.maxTokens,
+			signal: ask.signal ? AbortSignal.any([ask.signal, timeout]) : timeout,
+		});
+		return text.trim() || null;
+	} catch {
+		return null;
+	}
+}

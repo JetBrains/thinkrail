@@ -1,4 +1,4 @@
-import type { PanelHost } from "@thinkrail/extension-api/web";
+import type { PanelHost, PanelPeekEntry } from "@thinkrail/extension-api/web";
 import type { AttemptLive, BoardView, Card } from "./api";
 
 export function liveOf(overrides: Partial<AttemptLive> = {}): AttemptLive {
@@ -17,10 +17,12 @@ export function liveOf(overrides: Partial<AttemptLive> = {}): AttemptLive {
 export function cardOf(overrides: Partial<Card> = {}): Card {
 	return {
 		id: "TR-1",
+		source: { kind: "native", ref: "TR-1" },
 		title: "Ship the board",
 		description: "",
 		acceptance: [],
 		type: "feature",
+		labels: [],
 		blocks: [],
 		specRefs: [],
 		rank: 1,
@@ -31,6 +33,7 @@ export function cardOf(overrides: Partial<Card> = {}): Card {
 		createdAt: 1,
 		live: [],
 		blockedBy: [],
+		taskSpecs: [],
 		...overrides,
 	};
 }
@@ -44,6 +47,7 @@ export function boardOf(cards: Card[], overrides: Partial<BoardView> = {}): Boar
 			preset: "agentic-kanban",
 			wipLimits: { needsYou: 3, review: 5, agents: 3 },
 			followSelection: false,
+			github: { enabled: false, filter: "open" },
 		},
 		columns: [
 			{ id: "triage", categories: ["triage"], hidden: true },
@@ -61,6 +65,7 @@ export function boardOf(cards: Card[], overrides: Partial<BoardView> = {}): Boar
 			review: { count: 0, limit: 5 },
 			agents: { count: 0, limit: 3 },
 		},
+		github: { enabled: false, filter: "open", loading: false, fetchedAt: null, error: null },
 		...overrides,
 	};
 }
@@ -68,10 +73,14 @@ export function boardOf(cards: Card[], overrides: Partial<BoardView> = {}): Boar
 export interface FakeHost {
 	host: PanelHost;
 	queries: { method: string; params: unknown }[];
+	peeks: PanelPeekEntry[];
+	files: { workspaceId: string; path: string }[];
 }
 
 export function fakeHost(answer: (method: string) => unknown = () => ({})): FakeHost {
 	const queries: { method: string; params: unknown }[] = [];
+	const peeks: PanelPeekEntry[] = [];
+	const files: { workspaceId: string; path: string }[] = [];
 	const host: PanelHost = {
 		query: async (method, params) => {
 			queries.push({ method, params });
@@ -80,9 +89,9 @@ export function fakeHost(answer: (method: string) => unknown = () => ({})): Fake
 		openChat: () => {},
 		openPanel: () => {},
 		renderToolCall: () => null,
-		openFile: () => {},
+		openFile: (workspaceId, path) => files.push({ workspaceId, path }),
 		openWorkspace: () => {},
-		peek: () => {},
+		peek: (entry) => peeks.push(entry),
 		onEvent: () => () => {},
 		layoutPreset: null,
 		enterLayoutPreset: () => {},
@@ -91,5 +100,5 @@ export function fakeHost(answer: (method: string) => unknown = () => ({})): Fake
 		hostProtocol: 130,
 		hostApiVersion: 1,
 	};
-	return { host, queries };
+	return { host, queries, peeks, files };
 }

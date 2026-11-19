@@ -7,6 +7,7 @@ import {
 	type Card,
 	type ListSort,
 	latestLive,
+	shownId,
 	sortCards,
 } from "./api";
 import { AgentBadgeChip, PlanProgress, PrChip } from "./CardParts";
@@ -68,7 +69,7 @@ export function CardList({
 									data-card-id={card.id}
 									className="border-border-muted border-t hover:bg-control-bg-hovered"
 								>
-									<td className={`${CELL} tr-code-text-small text-text-muted`}>{card.id}</td>
+									<td className={`${CELL} tr-code-text-small text-text-muted`}>{shownId(card)}</td>
 									<td className={CELL}>
 										<button
 											type="button"

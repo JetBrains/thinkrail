@@ -558,7 +558,11 @@ gate: [[module-contracts]].
   joins a registered workspace's record (its cached `review`), `workspaceDiffStats` (`null` for a chat or a
   failed git read) and `listSessions` — each chat's state through contracts' `chatState`, its
   `completionUnread`, and `todos`' `todoCounts` (`null` for a chat without a plan) —, `null` for an unknown
-  workspace. **Extension writes are named host actions** (`extensionActions.ts`, deps injected so it is
+  workspace; `taskSpecs(id)` is `spec`'s `workspaceTaskSpecs` over a registered workspace's worktree (none
+  for a chat, `null` for an unknown workspace) and `specSection(id, specId, heading)` its
+  `workspaceSpecSection` (`null` for a chat or an unknown workspace); `githubProblem()` is `github`'s
+  `ghSetupProblem` (`null` under `THINKRAIL_GH_OFFLINE`, which is what lets e2e reach the lane's fake `gh`).
+  **Extension writes are named host actions** (`extensionActions.ts`, deps injected so it is
   unit-tested without worktrees or sessions), each refused with `EXTENSION_DISABLED` while the extension is
   off: `createWorkspace` validates like `start_workspace` before anything exists (an open repository
   project, a non-empty kickoff, a known container for `into`, the thinking level, the model through
@@ -573,7 +577,10 @@ gate: [[module-contracts]].
   recorded on the workspace) for a repository workspace; `runInWorkspace` runs `argv` (a non-empty string
   list, never a shell string) with `subprocess`' `runBounded` in a repository workspace's worktree under
   the non-interactive git env, its budget capped at ten minutes, stopped once the extension's services
-  `signal` aborts (a switch-off or the host stopping), and answers `{ ok, out, err, timedOut }`.
+  `signal` aborts (a switch-off or the host stopping), and answers `{ ok, out, err, timedOut }`; `assist`
+  bounds the prompt (non-empty, at most 20,000 characters) and `maxTokens` (a whole 1–1,024, 256 by
+  default) and asks `assist`'s `assistText` — the cheap-model one-shot path through pi's runtime — with the
+  services' `signal`, answering `{ text }` or `null` (no model, a timeout, an abort, an empty answer).
   **Extension events** are tapped inside the existing publisher callbacks, never through a second
   `setX`: `server.ts` emits `session.state` from the session-state publisher, `workspace.created|updated|
   removed` from the workspace-lifecycle tee (a review refresh arrives as `updated`), `agent.settled` from

@@ -217,8 +217,8 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   the same capability), plus optional `apiVersion`, `queries` and `hostService`. Its identity
   helper preserves factories, order and optional-field absence; loading and skill resolution remain host
   responsibilities. It re-exports, as types, the contracts shapes its services carry (`SessionStateRecord`,
-  `Workspace`, `Container`, `ChatState`, `ThinkingLevel`, `OpenPrResult`, `BranchReviewState`), because an
-  extension's `server/**` imports only this SDK.
+  `Workspace`, `Container`, `ChatState`, `ThinkingLevel`, `OpenPrResult`, `BranchReviewState`,
+  `GhSetupProblem`), because an extension's `server/**` imports only this SDK.
 - `queries(host: ExtensionHostServices)` returns `ExtensionQuery` methods by name — queries (reads, and
   writes only to the extension's own data folder or the workspace's Artifacts); the contract
   is in [[module-thinkrail-extensions]] § Shape. **A table lives while its extension is on**: `signal`
@@ -253,7 +253,13 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   addressed by workspace id since queries have no session; `null` for a workspace that is not open) and
   `workspaceFacts(workspaceId)` (`ExtensionWorkspaceFacts`: an open workspace's last-known review, its diff
   stats against the base and its chats as `ExtensionChatFacts` — contracts' `chatState`, unread and the TODO
-  plan's open/total —, `null` for a workspace that is not open).
+  plan's open/total —, `null` for a workspace that is not open) and `taskSpecs(workspaceId)`
+  (`ExtensionTaskSpec[]`: the `task-spec` nodes of an open workspace's spec graph — `id`, `title`, `status`
+  or `null`, the worktree-relative `path` —, none for a chat, `null` for a workspace that is not open) and
+  `specSection(workspaceId, specId, heading)` (the text of one named section of a spec of that graph, its
+  subsections included, `null` without the spec or the section — a spec-graph read, never a general file
+  read) and `githubProblem()` (contracts' `GhSetupProblem`: why the user's own `gh` cannot run now,
+  `missing` or `unauthenticated`, else `null` — the host's `gh auth status` probe, no credentials).
   A service is added with the consumer that needs it.
 - **Queries read; actions write through named host actions.** `ExtensionHostServices.actions`
   (`ExtensionHostActions`) are the only writes an extension makes outside its own data folder and the
@@ -264,7 +270,10 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   extension's message under its title), `stopChat({ sessionId })` → `{ stopped }`, `openPr({ workspaceId,
   title?, body?, draft? })` → `OpenPrResult`, and `runInWorkspace({ workspaceId, argv, timeoutMs })` →
   `{ ok, out, err, timedOut }` (one program by `argv` in a repository workspace's worktree, stopped once
-  those services' `signal` aborts). Every action
+  those services' `signal` aborts), and `assist({ prompt, maxTokens? })` → `{ text } | null` (a one-shot ask
+  on the host's own assist model through pi — never a second runtime —, the prompt up to 20,000 characters,
+  `maxTokens` 1–1,024 (256 by default), stopped once the services' `signal` aborts; `null` when no model is
+  configured, it timed out or the answer was empty, so a caller skips silently). Every action
   is refused with `EXTENSION_DISABLED` while the extension is off.
 - **Host lifetime.** `ServerExtension.hostService?(host)` returns an `ExtensionHostService { stop? }`; the
   host starts it once its publishers are wired and whenever the extension is switched back on, and stops

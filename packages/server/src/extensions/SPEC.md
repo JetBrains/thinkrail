@@ -104,7 +104,7 @@ list for registry extensions.
   `ExtensionModel`, `ExtensionTurnReceipt`, `ExtensionTurnTree`, `ExtensionTreeFile`, `ExtensionArtifactsDir`,
   `ExtensionLog`, `ExtensionQuery`, `ExtensionHostActions`, `ExtensionHostEvents`, `ExtensionHostEventType`,
   `ExtensionHostEventBus`, `ExtensionPublishScope`, `ExtensionWorkspaceFacts`, `ExtensionChatFacts`,
-  `ExtensionHostService`.
+  `ExtensionTaskSpec`, `ExtensionHostService`.
 - **Session-seam types:** `ExtensionSessionServices`, `InteractiveTool` and `ToolResponse` are re-exported
   from `extension-api/server` so that `agent` can type the services it builds through this barrel.
 - **Query-seam types:** `ExtensionHostServices` and its value types (`ExtensionSessionView`,
@@ -112,8 +112,8 @@ list for registry extensions.
   `ExtensionMessageAnchor`, `ExtensionModel`, `ExtensionTurnReceipt`, `ExtensionTurnTree`, `ExtensionTreeFile`,
   `ExtensionArtifactsDir`, `ExtensionLog`, `ExtensionQuery`, and the action, event and facts types —
   `ExtensionHostActions`, `ExtensionHostEvents`, `ExtensionHostEventType`, `ExtensionHostEventBus`,
-  `ExtensionPublishScope`, `ExtensionWorkspaceFacts`, `ExtensionChatFacts`, `ExtensionHostService`) are
-  re-exported the same way, beside `ExtensionHostServicesFor`, so `host` builds each extension's services
+  `ExtensionPublishScope`, `ExtensionWorkspaceFacts`, `ExtensionChatFacts`, `ExtensionTaskSpec`,
+  `ExtensionHostService`) are re-exported the same way, beside `ExtensionHostServicesFor`, so `host` builds each extension's services
   through this barrel. This module never builds them: the
   services arrive as a parameter, so there is no edge to `projects`, `workspaces` or `agent`.
 - **Interactive tools (`interactive.ts`):** `interactiveTools(isDisabled)` folds the enabled registry
