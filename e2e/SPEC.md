@@ -561,7 +561,14 @@ receive-pack from a local bare repo, so pushes, fetches, and remote-branch delet
 local path and never find a PR. The lane's fake **`gh`** (`fixtures/fakeGh.ts`, launched by a generated
 fake-bin shim under the runner's bun, since the host PATH has none) answers `pr list|view` and `repo view`
 from a test-written scenario file, applies `pr ready|merge|reopen` to it, and logs every argv so a spec
-asserts the exact mutations. Without a scenario it fails like an unauthenticated gh, so every other spec
+asserts the exact mutations. `pr list` without `--head` lists every pull request of the scenario (the New
+Workspace picker's listing), `--search review-requested:@me` keeps those marked `reviewRequested`, and `pr
+view <n>` answers in any state — rows carry `title`, `author` (a login, projected as `{ login }`), size and
+`updatedAt` with defaults. `review-pull-request.spec.ts` points the lane fixture repository's own
+`origin` at that seam (the reset removes it again), so the picker's `pr.list` / `pr.get` and the review
+workspace's `origin/main` base resolve without a network; signed out, the lane shows the picker's
+failed-with-Retry state, because `THINKRAIL_GH_OFFLINE` makes the host's gh setup probe answer `null`.
+Without a scenario it fails like an unauthenticated gh, so every other spec
 keeps the gh-less behaviour; `THINKRAIL_GH_OFFLINE` still keeps `pr.open` on the compare hand-off. The reset
 deletes the scenario and log and unsets the ssh config. The host caches repository merge settings per origin
 URL for the whole run, so a spec that sets its own repository settings names its own repository.

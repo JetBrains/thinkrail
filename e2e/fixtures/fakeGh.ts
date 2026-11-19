@@ -21,6 +21,13 @@ export interface FakePr {
 	queued?: boolean;
 	mergedWith?: string | undefined;
 	headOwner?: string;
+	title?: string;
+	author?: string;
+	additions?: number;
+	deletions?: number;
+	changedFiles?: number;
+	updatedAt?: string;
+	reviewRequested?: boolean;
 }
 
 export interface FakeGhScenario {
@@ -74,7 +81,13 @@ function main(): void {
 		mergedAt: null,
 		closedAt: null,
 		createdAt: "2026-01-01T00:00:00Z",
+		title: `Pull request ${pr.number}`,
+		additions: 0,
+		deletions: 0,
+		changedFiles: 0,
+		updatedAt: "2026-01-01T00:00:00Z",
 		...pr,
+		author: { login: pr.author ?? "octo" },
 	});
 	const find = (selector: string | undefined) =>
 		scenario.prs.find((pr) => String(pr.number) === selector) ??
@@ -98,10 +111,14 @@ function main(): void {
 		case "list": {
 			const head = flag("--head");
 			const base = flag("--base");
+			const search = flag("--search");
+			if (search !== undefined && search !== "review-requested:@me")
+				fail(`fake gh: unsupported search ${search}`);
 			const state = (flag("--state") ?? "open").toUpperCase();
 			const limit = Number(flag("--limit") ?? "30");
 			const rows = scenario.prs
-				.filter((pr) => pr.headRefName === head)
+				.filter((pr) => head === undefined || pr.headRefName === head)
+				.filter((pr) => search === undefined || pr.reviewRequested === true)
 				.filter((pr) => base === undefined || (pr.baseRefName ?? "main") === base)
 				.filter((pr) => state === "ALL" || pr.state === state)
 				.sort((left, right) => right.number - left.number)

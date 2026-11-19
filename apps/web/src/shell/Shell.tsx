@@ -20,7 +20,7 @@ import {
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
 import { canStartProjectlessChat } from "../panels/chatActions";
-import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
+import { NewWorkspaceDialog, type WorkspaceTarget } from "../panels/NewWorkspaceDialog";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { SurveyInvitationDialog } from "../panels/SurveyInvitationDialog";
 import { SurveyWindow } from "../panels/SurveyWindow";
@@ -139,6 +139,7 @@ function ShellLayout() {
 	const [newWorkspace, setNewWorkspace] = useState<{
 		projectId: string | null;
 		initialPrompt?: string;
+		initialTarget?: WorkspaceTarget;
 	} | null>(null);
 	const activeCreation = useAppStore((s) =>
 		s.activeCreationId ? s.workspaceCreations[s.activeCreationId] : undefined,
@@ -146,12 +147,13 @@ function ShellLayout() {
 	const workspaceRetryDraft = useAppStore((s) => s.workspaceRetryDraft);
 	useCreationChatHandoff();
 	const canStartChat = useAppStore(canStartProjectlessChat);
-	const openNewWork = (initialPrompt?: string): boolean => {
+	const openNewWork = (initialPrompt?: string, initialTarget?: WorkspaceTarget): boolean => {
 		if (!contextRepoProject && !canStartChat) return false;
 		if (newWorkspace !== null || workspaceRetryDraft !== null) return false;
 		setNewWorkspace({
 			projectId: contextRepoProject?.id ?? null,
 			...(initialPrompt === undefined ? {} : { initialPrompt }),
+			...(initialTarget === undefined ? {} : { initialTarget }),
 		});
 		return true;
 	};
@@ -353,6 +355,9 @@ function ShellLayout() {
 						{...(newWorkspace.initialPrompt === undefined
 							? {}
 							: { initialPrompt: newWorkspace.initialPrompt })}
+						{...(newWorkspace.initialTarget === undefined
+							? {}
+							: { initialTarget: newWorkspace.initialTarget })}
 						onOpenChange={(isOpen) => {
 							if (!isOpen) setNewWorkspace(null);
 						}}
@@ -386,6 +391,7 @@ function ShellLayout() {
 			<SurveyWindow />
 			<SearchPaletteHost
 				onNewWorkspace={(_projectId, initialPrompt) => openNewWork(initialPrompt)}
+				onReviewPullRequest={() => openNewWork(undefined, "review")}
 				onToggleProjectsHome={homeProjects.toggle}
 				hasUpdateSettings={updates !== null}
 			/>

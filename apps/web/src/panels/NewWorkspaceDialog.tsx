@@ -5,6 +5,7 @@ import {
 	RiHome2Line as House,
 	type RemixiconComponentType as LucideIcon,
 	RiChat3Line,
+	RiGitPullRequestLine,
 	RiSparkling2Line as Sparkles,
 	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
@@ -18,6 +19,7 @@ import {
 	type WireModel,
 	WORKSPACE_CREATION_PROTOCOL_VERSION,
 	type Workspace,
+	type WorkspaceKickoff,
 } from "@thinkrail/contracts";
 import { i18n, T, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
@@ -82,13 +84,41 @@ import {
 	useAppStore,
 	type WorkspaceRetryDraft,
 } from "@/store";
-import { createSessionWithSkillBaseline, errorText, getTransport } from "@/transport";
+import {
+	createSessionWithSkillBaseline,
+	errorText,
+	getTransport,
+	supportsPullRequestReview,
+} from "@/transport";
 import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
 import { canStartProjectlessChat, startProjectlessChat } from "./chatActions";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
+import { PullRequestPicker } from "./PullRequestPicker";
+import {
+	getPullRequest,
+	type PickedPullRequest,
+	reviewKickoffPullRequest,
+	reviewKickoffText,
+	usePullRequestList,
+} from "./pullRequests";
 
-type WorkspaceTarget = "worktree" | "default" | "chat";
+export type WorkspaceTarget = "worktree" | "default" | "chat" | "review";
+
+export function openingTarget({
+	projectId,
+	requested,
+	canReview,
+	retryingReview,
+}: {
+	projectId: string | null;
+	requested: WorkspaceTarget | undefined;
+	canReview: boolean;
+	retryingReview: boolean;
+}): WorkspaceTarget {
+	if (canReview && (retryingReview || requested === "review")) return "review";
+	return projectId === null ? "chat" : "worktree";
+}
 
 export function reconcileModel(
 	models: readonly WireModel[],
@@ -115,6 +145,7 @@ export function NewWorkspaceDialog({
 	initialPrompt,
 	promptNote,
 	retryDraft,
+	initialTarget: requestedTarget,
 	onOpenChange,
 }: {
 	open: boolean;
@@ -123,6 +154,7 @@ export function NewWorkspaceDialog({
 	initialPrompt?: string;
 	promptNote?: string;
 	retryDraft?: WorkspaceRetryDraft;
+	initialTarget?: WorkspaceTarget;
 	onOpenChange: (open: boolean) => void;
 }) {
 	const t = useT();
@@ -132,12 +164,30 @@ export function NewWorkspaceDialog({
 	const canChat = useAppStore(canStartProjectlessChat);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 
-	const initialTarget: WorkspaceTarget = projectId === null ? "chat" : "worktree";
+	const canReview = repoProjects.length > 0 && supportsPullRequestReview(protocolVersion);
+	const retryPr = useMemo(
+		() => reviewKickoffPullRequest(retryDraft?.kickoff?.text ?? ""),
+		[retryDraft],
+	);
 	const [selectedProjectId, setSelectedProjectId] = useState(
 		projectId ?? repoProjects[0]?.id ?? chatsContainer?.id ?? "",
 	);
-	const [target, setTarget] = useState<WorkspaceTarget>(initialTarget);
+	const [target, setTarget] = useState<WorkspaceTarget>(() =>
+		openingTarget({
+			projectId,
+			requested: requestedTarget,
+			canReview,
+			retryingReview: retryPr !== null,
+		}),
+	);
 	const chat = target === "chat";
+	const review = target === "review";
+	const [pickedPr, setPickedPr] = useState<PickedPullRequest | null>(null);
+	const [prPickerOpen, setPrPickerOpen] = useState(false);
+	const prTriggerRef = useRef<HTMLButtonElement>(null);
+	const { state: prList, retry: retryPrList } = usePullRequestList(
+		open && review ? selectedProjectId : null,
+	);
 	const scopeProjectId = chat && chatsContainer ? chatsContainer.id : selectedProjectId;
 	const [baseRef, setBaseRef] = useState<string>("");
 	const [prompt, setPrompt] = useState("");
@@ -225,8 +275,23 @@ export function NewWorkspaceDialog({
 		setSelectedProjectId(
 			projectId ?? selectRepoProjects(opened)[0]?.id ?? selectChatsContainer(opened)?.id ?? "",
 		);
-		updatePromptDraft(retryDraft?.kickoff?.text ?? initialPrompt ?? "", null);
+		const initialTarget = openingTarget({
+			projectId,
+			requested: requestedTarget,
+			canReview:
+				selectRepoProjects(opened).length > 0 && supportsPullRequestReview(opened.protocolVersion),
+			retryingReview: retryPr !== null,
+		});
+		const retryingReview = initialTarget === "review" && retryPr !== null;
+		updatePromptDraft(
+			retryingReview ? "" : (retryDraft?.kickoff?.text ?? initialPrompt ?? ""),
+			null,
+		);
 		setTarget(initialTarget);
+		setPickedPr(
+			retryingReview && retryPr && retryDraft ? { ...retryPr, baseRef: retryDraft.baseRef } : null,
+		);
+		setPrPickerOpen(false);
 		setCreating(false);
 		attachedImages.reset();
 		const retryImages = retryDraft?.kickoff?.images ?? [];
@@ -241,9 +306,10 @@ export function NewWorkspaceDialog({
 	}, [
 		open,
 		projectId,
-		initialTarget,
+		requestedTarget,
 		initialPrompt,
 		retryDraft,
+		retryPr,
 		updatePromptDraft,
 		attachedImages.reset,
 		attachedImages.restore,
@@ -256,11 +322,30 @@ export function NewWorkspaceDialog({
 		toast.info(i18n.t("panels.newWorkspace.projectClosed"));
 	}, [open, chat, projects, selectedProjectId, onOpenChange]);
 
+	useEffect(() => {
+		if (!open || !review || !retryPr || !retryDraft) return;
+		if (selectedProjectId !== retryDraft.projectId) return;
+		let cancelled = false;
+		void getPullRequest(retryDraft.projectId, retryPr.number).then((found) => {
+			if (cancelled || !found || found.url !== retryPr.url) return;
+			setPickedPr((current) => (current?.url === found.url ? found : current));
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [open, review, retryPr, retryDraft, selectedProjectId]);
+
+	const selectProject = (id: string) => {
+		if (id !== selectedProjectId) setPickedPr(null);
+		setSelectedProjectId(id);
+	};
+
 	const chooseTarget = (next: WorkspaceTarget) => {
 		setTarget(next);
+		if (next === "review") requestAnimationFrame(() => prTriggerRef.current?.focus());
 		if (next === "chat" || repoProjects.some((p) => p.id === selectedProjectId)) return;
 		const first = repoProjects[0];
-		if (first) setSelectedProjectId(first.id);
+		if (first) selectProject(first.id);
 	};
 
 	useEffect(() => {
@@ -411,7 +496,8 @@ export function NewWorkspaceDialog({
 		setBaseRef(initial);
 		prefetchBase(initial);
 	});
-	const submitEnabled = !creating && !templatePending && attachedImages.pending === 0;
+	const submitEnabled =
+		!creating && (review ? pickedPr !== null : !templatePending && attachedImages.pending === 0);
 
 	const create = async () => {
 		if (!submitEnabled) return;
@@ -428,6 +514,43 @@ export function NewWorkspaceDialog({
 			if (started) onOpenChange(false);
 			return;
 		}
+		const startCreation = async (
+			creationBase: string,
+			kickoff: WorkspaceKickoff,
+			sent: { text: string; attachments: typeof attachments },
+		) => {
+			const creation = await getTransport()
+				.request("workspace.startCreate", {
+					projectId: selectedProjectId,
+					...(creationBase ? { baseRef: creationBase } : {}),
+					kickoff,
+				})
+				.catch((err: unknown) => {
+					toast.error(errorText(err), t("panels.newWorkspace.createFailed"));
+					setCreating(false);
+					return null;
+				});
+			if (!creation) return;
+			const store = useAppStore.getState();
+			store.applyWorkspaceCreation(creation, sent);
+			void refreshProjectWorkspaces(creation.projectId).catch(() => {});
+			store.selectCreation(creation.id);
+			onOpenChange(false);
+		};
+		const pickedModel = model && explicitPair ? { model, thinkingLevel } : {};
+		if (target === "review") {
+			if (!pickedPr) {
+				setCreating(false);
+				return;
+			}
+			const reviewText = reviewKickoffText(pickedPr.url);
+			await startCreation(
+				pickedPr.baseRef,
+				{ text: reviewText, ...pickedModel },
+				{ text: reviewText, attachments: [] },
+			);
+			return;
+		}
 		let workspace: Workspace;
 		if (target === "default") {
 			const def = await enterDefaultWorkspace(selectedProjectId);
@@ -437,28 +560,15 @@ export function NewWorkspaceDialog({
 			}
 			workspace = def;
 		} else if (protocolVersion !== null && protocolVersion >= WORKSPACE_CREATION_PROTOCOL_VERSION) {
-			const kickoff = {
-				text,
-				...(attachments.length > 0 ? { images: attachments.map((a) => a.content) } : {}),
-				...(model && explicitPair ? { model, thinkingLevel } : {}),
-			};
-			const started = async () =>
-				getTransport().request("workspace.startCreate", {
-					projectId: selectedProjectId,
-					...(baseRef ? { baseRef } : {}),
-					kickoff,
-				});
-			const creation = await started().catch((err: unknown) => {
-				toast.error(errorText(err), t("panels.newWorkspace.createFailed"));
-				setCreating(false);
-				return null;
-			});
-			if (!creation) return;
-			const store = useAppStore.getState();
-			store.applyWorkspaceCreation(creation, { text, attachments });
-			void refreshProjectWorkspaces(creation.projectId).catch(() => {});
-			store.selectCreation(creation.id);
-			onOpenChange(false);
+			await startCreation(
+				baseRef,
+				{
+					text,
+					...(attachments.length > 0 ? { images: attachments.map((a) => a.content) } : {}),
+					...pickedModel,
+				},
+				{ text, attachments },
+			);
 			return;
 		} else {
 			const createWorktree = async () =>
@@ -559,7 +669,7 @@ export function NewWorkspaceDialog({
 				}}
 				onOpenAutoFocus={(e) => {
 					e.preventDefault();
-					promptRef.current?.focus();
+					(review ? prTriggerRef.current : promptRef.current)?.focus();
 				}}
 			>
 				<div className="-mx-12 -mt-12 -mb-2 flex min-h-0 flex-1 flex-col gap-12 overflow-y-auto px-12 pt-12 pb-2">
@@ -567,16 +677,20 @@ export function NewWorkspaceDialog({
 						<DialogTitle>
 							{chat
 								? t("panels.newWorkspace.titleChat")
-								: isolated
-									? t("panels.newWorkspace.titleIsolated")
-									: t("panels.newWorkspace.titleDefault")}
+								: review
+									? t("panels.newWorkspace.titleReview")
+									: isolated
+										? t("panels.newWorkspace.titleIsolated")
+										: t("panels.newWorkspace.titleDefault")}
 						</DialogTitle>
 						<DialogDescription>
 							{chat
 								? t("panels.newWorkspace.descriptionChat")
-								: isolated
-									? t("panels.newWorkspace.descriptionIsolated")
-									: t("panels.newWorkspace.descriptionDefault")}
+								: review
+									? t("panels.newWorkspace.descriptionReview")
+									: isolated
+										? t("panels.newWorkspace.descriptionIsolated")
+										: t("panels.newWorkspace.descriptionDefault")}
 						</DialogDescription>
 					</DialogHeader>
 
@@ -615,6 +729,16 @@ export function NewWorkspaceDialog({
 								onSelect={() => chooseTarget("chat")}
 							/>
 						) : null}
+						{canReview ? (
+							<TargetOption
+								icon={RiGitPullRequestLine}
+								label={t("panels.newWorkspace.targetReview")}
+								name={targetGroupName}
+								active={review}
+								testid="ws-target-review"
+								onSelect={() => chooseTarget("review")}
+							/>
+						) : null}
 					</fieldset>
 
 					<div className="flex flex-wrap items-center gap-8">
@@ -623,10 +747,28 @@ export function NewWorkspaceDialog({
 								projects={repoProjects}
 								current={selectedProject?.name ?? t("panels.newWorkspace.projectFallback")}
 								container={dialogEl}
-								onSelect={setSelectedProjectId}
+								onSelect={selectProject}
 							/>
 						)}
-						{isolated ? (
+						{review ? (
+							<PullRequestPicker
+								projectId={selectedProjectId}
+								list={prList}
+								selected={pickedPr}
+								open={prPickerOpen}
+								testid="ws-pr-picker"
+								triggerClassName={`${PILL} max-w-[360px]`}
+								triggerRef={prTriggerRef}
+								container={dialogEl}
+								onOpenChange={setPrPickerOpen}
+								onSelect={(pr) => {
+									setPickedPr(pr);
+									prefetchBase(pr.baseRef);
+								}}
+								onRetry={retryPrList}
+								onSubmit={() => void create()}
+							/>
+						) : isolated ? (
 							<BranchPicker
 								branches={branches}
 								failed={branchesFailed}
@@ -640,7 +782,7 @@ export function NewWorkspaceDialog({
 								onRefresh={refreshBranches}
 							/>
 						) : null}
-						{chat ? null : (
+						{chat || review ? null : (
 							<SkillsButton
 								onOpen={() => setManageSkills(true)}
 								testId="ws-manage-skills"
@@ -690,10 +832,12 @@ export function NewWorkspaceDialog({
 							<span className="min-w-0 wrap-anywhere">{promptNote}</span>
 						</p>
 					) : null}
-					<PromptImageChips controller={attachedImages} testId="ws-prompt-images" className="" />
+					{review ? null : (
+						<PromptImageChips controller={attachedImages} testId="ws-prompt-images" className="" />
+					)}
 				</div>
 
-				<div className="relative shrink-0">
+				<div className={cn("relative shrink-0", review && "hidden")}>
 					<Textarea
 						ref={promptRef}
 						data-testid="ws-prompt"
@@ -805,7 +949,11 @@ export function NewWorkspaceDialog({
 							)
 						) : (
 							<>
-								{isolated ? t("panels.newWorkspace.create") : t("panels.newWorkspace.start")}
+								{review
+									? t("panels.newWorkspace.startReview")
+									: isolated
+										? t("panels.newWorkspace.create")
+										: t("panels.newWorkspace.start")}
 								<span className="inline-flex h-16 min-w-16 items-center justify-center rounded-sm bg-on-primary-soft px-4 tr-code-text">
 									↵
 								</span>

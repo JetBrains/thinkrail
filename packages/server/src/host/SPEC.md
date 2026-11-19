@@ -806,7 +806,7 @@ gate: [[module-contracts]].
   the handler (`REPOSITORY_ONLY_METHODS` — git, changes, reviews, pull requests, turns, diff stats and
   base, and the plan's review doors `todo.review` / `startReview` / `reviewAll` / `requestFix`, which
   would reach a git-backed review snapshot — plus project close/rename/trust/skills,
-  `workspace.create`/`listExisting`, `git.listBranches`/`prefetch`); **the capability matrix of a chat
+  `workspace.create`/`listExisting`, `git.listBranches`/`prefetch`, `pr.list`/`pr.get`); **the capability matrix of a chat
   is files, terminal and Plan, never git, review or specs**: `fs.readDir` lists a chat's folder without
   the git-ignore decoration, the `/blob` route answers 404 for a chat before any git, the
   Agent-review resolver handed to `agent` answers `false` for a chat (so its sessions get neither

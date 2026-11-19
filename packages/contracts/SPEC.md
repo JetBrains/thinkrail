@@ -960,6 +960,14 @@ optional `model` and `thinking`, disabled entries included, never a prompt body 
   queued it (merge queue / auto-merge), in which case the branch is never deleted; a merge that landed while
   the branch deletion failed is a success with the reason), and **`workspace.deleteRemoteBranch`** (`{ workspaceId,
   branch }` → `Ack`; `PUSH_AUTH_FAILED` as for a push) /
+  the v128 **pull-request reads** (`PULL_REQUEST_REVIEW_PROTOCOL_VERSION`, gating the New Workspace
+  dialog's Review mode so a newer client hides it against an older host): **`pr.list`** (`{ projectId }` →
+  `PullRequestList { pullRequests, unavailable? }` — the open pull requests of the project's GitHub
+  repository, each a `PullRequestSummary` with `baseRef` already resolved on the local remote and
+  `reviewRequested` for the signed-in `gh` user; when it cannot list, an empty list with the reason —
+  `missing` / `unauthenticated` (the `GhSetupProblem` pair), `not-github`, or `failed`) and
+  **`pr.get`** (`{ projectId, number }` → `PullRequestSummary | null` in any state, `null` when it does
+  not exist or cannot be read; `reviewRequested` is always `false` there) /
   **`project.setTrust`** (persist a project's trust grant → the updated `Project`; gates its committed
   cross-agent skill aliases; `resources: true` also grants pi-level resource trust, see Project trust) /
   **`skill.list`** (a pre-session, skill-only `SlashCommandInfo[]` preview for a `projectId`, resolved from
