@@ -324,20 +324,55 @@ the claim protocol and framing protections.
 
 Cloudflare Pages project `thinkrail-website` owns production and previews for the static artifact and
 claim Functions. Pinned Wrangler `4.124.0` deploys from `apps/website` so its configuration,
-`functions/`, and `dist` artifact form one deployment. The top-level `ATTRIBUTION_DB` serves production
+`functions/`, and `dist` artifact form one deployment, tagged with the run's commit (`--commit-hash`). The top-level `ATTRIBUTION_DB` serves production
 and local Pages/D1 workflows; production applies committed attribution migrations before deploy. The
 build compiles the Functions, and a local Pages/D1 smoke starts Pages from the checked-in configuration,
 applies the actual migration, and exercises create, bind, and redeem. `.github/workflows/site.yml` runs
 `bun run --filter @thinkrail/website build` (the full `typecheck` — `.astro`, Functions and tests — the
 Functions build, `astro build`, and artifact validation) on pushes that
 touch this module, [[module-website-analytics]], the root package manifest, or the lockfile, **every hour**
-(`17 * * * *`) so the extension catalog follows npm, and on manual dispatch. It verifies the provider URL
-before succeeding. `thinkrail.ai` is the project's custom apex
+(`17 * * * *`) so the extension catalog follows npm, and on manual dispatch. Between the build and the
+D1 migrations, `src/deployGate.ts` decides whether the run deploys (below); when it does, the run
+applies migrations, deploys and verifies the provider URL before succeeding. `thinkrail.ai` is the project's custom apex
 domain; provider URLs are deployment probes, not product identities.
 
 Production concurrency never cancels an in-flight publish. Cloudflare retains successful production
 deployments as rollback targets, so rollback selects the prior `main` deployment instead of running a
 second hosting pipeline.
+
+### Scheduled runs and rollback
+
+A rollback is a person selecting an older production deployment in the Pages dashboard (or through its
+rollback API). The hourly run must not undo it, so `src/deployGate.ts` (run as `bun
+apps/website/src/deployGate.ts`; it writes `deploy=true|false` to `$GITHUB_OUTPUT`, and every later
+step of `site.yml` is conditional on it) decides per trigger:
+
+- **push and manual dispatch always deploy**, without asking Cloudflare. A push to `main` ends a
+  rollback, as before; **a manual run is how a person ends one on purpose** (re-run the workflow on
+  `main` once the cause is fixed or reverted).
+- **a scheduled run** reads the project (`GET …/pages/projects/thinkrail-website`) and its production
+  deployments (`…/deployments?env=production`) with the workflow's `CLOUDFLARE_*` secrets, and:
+  - **skips while a rollback is in effect** — the project's `canonical_deployment` (the deployment
+    serving production) is not the newest production deployment whose latest stage succeeded. The run
+    stays green and shows a `Deploy skipped` notice naming both deployments and saying to run the
+    workflow manually to end the rollback. Deployments are compared by id, not commit: hourly runs
+    deploy the same commit with different catalogs, so rolling back one hour's catalog keeps the commit;
+  - **skips when nothing changed** — the live deployment carries this run's commit and serves the same
+    `catalog.json` as the one just built, ignoring `generatedAt`. The live catalog is read from the live
+    deployment's own immutable `*.pages.dev` URL, so no cache can answer for it; when it cannot be read
+    the run deploys. The extensions page's "Catalog generated" time is therefore the time of the
+    deployment that last changed the catalog;
+  - otherwise deploys, printing why (a changed catalog, or `main` moved).
+  - A Cloudflare API failure (three attempts on 5xx/429, one otherwise) fails the run before anything is
+    deployed, like a registry failure: production keeps serving, and the red run is visible.
+
+Accepted gaps: the decision trusts that `canonical_deployment` follows a rollback (Cloudflare documents it
+as the project's production deployment; the gate was tested only against responses shaped after the
+documented schema, never against the live project). A push run that GitHub's concurrency replaces with a
+pending scheduled run while a rollback is in effect is not deployed (the scheduled run skips); the
+notice says to run the workflow manually. Rejected: a repository variable or file that pauses the
+schedule — it is a second switch a person must remember to flip back, while the dashboard rollback
+already says what is live.
 
 ### PR preview deploys
 
@@ -365,8 +400,8 @@ claim-enabled production deployment.
 ### Hosting and retired hostname
 
 Cloudflare-managed DNS routes `thinkrail.ai` to the verified `main` deployment. Production rollback
-selects a prior successful `main` deployment through Pages; legacy hosting is not part of the steady
-state.
+selects a prior successful `main` deployment through Pages and holds until a push or a manual run of
+`site.yml` (§ Scheduled runs and rollback); legacy hosting is not part of the steady state.
 
 `vibecoding.thinkrail.ai` is a Cloudflare Single Redirect: hostname match, dynamic target
 `concat("https://thinkrail.ai/vibecoding", http.request.uri.path)`, status 301, and query preservation
@@ -538,8 +573,9 @@ and a valid manifest; nothing reviewed, hidden or marked) are owned by [[module-
 - **Delisting is a commit to `extension-denylist.json`** (`{ "packages": [{ "name", "reason"?, "date"? }] }`,
   parsed strictly by `src/extensionDenylist.ts`: an exact package name, an optional non-empty reason and
   a `YYYY-MM-DD` date, no other keys, no duplicates — a malformed file fails the build). The builder drops
-  a listed name before fetching its `package.json`, for the npm and the sample source alike, and logs it
-  as `not listed: <name>: on the site's denylist (<reason>)`, so the delisting is visible in the run log;
+  a listed name before fetching its `package.json`, for the npm and the sample source alike; the npm
+  build logs it as `not listed: <name>: on the site's denylist (<reason>)`, so the delisting is visible
+  in the run log;
   the push of the commit deploys the shorter catalog at once. Any maintainer with merge rights edits it
   through an ordinary PR that says why (in `reason` or the PR). *It is not a review:* every other package
   is still listed unchecked, and a denylisted package stays on npm and installable by its `npm:` source.
@@ -566,11 +602,13 @@ and a valid manifest; nothing reviewed, hidden or marked) are owned by [[module-
     card UI unreviewable.
   - *Why a fetch at build time and not in the browser:* the page reads complete without JavaScript and
     the app and the page see one validated list; the app never queries npm itself.
-- **Hourly rebuild.** `site.yml` runs on `17 * * * *` so a new package is listed within about an hour.
-  Each scheduled run deploys current `main`, even when nothing changed: skipping an unchanged catalog was
-  rejected because a correct check needs the deployed commit (a scheduled run can replace a pending push
-  run in the shared, non-cancelling `site-deploy` group). `/extensions/catalog.json` is served
-  `Access-Control-Allow-Origin: *` with a five-minute cache (`public/_headers`).
+- **Hourly rebuild.** `site.yml` runs on `17 * * * *` so a new package is listed within about an hour. A
+  scheduled run deploys only when the commit or the catalog differs from what is live, and never while
+  a rollback is in effect (§ Scheduled runs and rollback). The check compares the live deployment's
+  commit as well as its catalog because a scheduled run can replace a pending push run in the shared,
+  non-cancelling `site-deploy` group, and must then deploy that push's commit.
+  `/extensions/catalog.json` is served `Access-Control-Allow-Origin: *` with a five-minute cache
+  (`public/_headers`).
 - **Showcase page** (`src/pages/extensions/index.astro`), rendered statically from the catalog: a card per
   entry with title (or name), name and version, description (clamped), author, `Agent tools` for a server
   half and `Chat cards` for a web half — halves, not tool names, which live in code the site cannot run —,
