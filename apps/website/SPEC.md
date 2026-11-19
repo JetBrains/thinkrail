@@ -6,14 +6,15 @@ title: Project website (thinkrail.ai)
 parent: architecture
 tags: [website, marketing]
 depends-on: [module-website-analytics]
-references: [module-ci-release]
+references: [module-ci-release, module-thinkrail-extensions, module-extension-sdk, module-extension-examples, submodule-server-extensions-installed]
 ---
 
 ## Responsibility
 
-The project's public website at `thinkrail.ai`: the IDE-shell landing, its blog, and the audience-specific
+The project's public website at `thinkrail.ai`: the IDE-shell landing, its blog, the Docs section, the
+extensions showcase with the extension catalog it publishes, and the audience-specific
 vibecoding experience at `/vibecoding/` (also served, with per-route hero titles and copy variants
-and a canonical back to `/vibecoding/`, at `/agentic-development/` and `/agentic-ide/`). The landing and blog's creative conceit is that **the site IS
+and a canonical back to `/vibecoding/`, at `/agentic-development/` and `/agentic-ide/`). The IDE-shell routes' creative conceit is that **the site IS
 the IDE**: a faithful HTML/CSS recreation of the ThinkRail shell (title bar, project rail, tab strip,
 files rail, terminal, status bar) whose center "editor" is the normally-scrolling page content. Each
 landing section poses as a file of a `website` workspace (`README.md`, `why.md`, `features/*.md`,
@@ -43,12 +44,12 @@ binary.
   must never import contracts, server, shared, or web. It never joins the product host wire;
   [[submodule-website-attribution]] alone owns an independent, bounded HTTP claim protocol and D1 state.
 - **One static Astro artifact plus same-project claim functions, with a route-local framework exception.**
-  The landing and blog retain vanilla TypeScript + hand-written CSS: no React island and no Tailwind
-  stylesheet or runtime reaches those routes. [[submodule-website-attribution]] alone adds Pages Functions
+  The landing, blog, docs and extensions routes retain vanilla TypeScript + hand-written CSS: no React
+  island and no Tailwind stylesheet or runtime reaches those routes. [[submodule-website-attribution]] alone adds Pages Functions
   and D1; only `/vibecoding/`, `/agentic-development/`, and `/agentic-ide/` may use the shared React
   island and Tailwind v4. Astro's React integration and Tailwind Vite plugin are build-wide tooling; build validation
   requires one island in each allowed route output and rejects islands in the fixed landing, blog,
-  article, and claim outputs. The browser analytics
+  article, claim, docs index, guide, reference, and extensions outputs. The browser analytics
   workspace module is compiled into the static output. The `@fontsource-variable/*` packages are
   build-time asset sources whose woff2 files are emitted into `dist/`. Shared with `apps/web`, they
   come from the root `workspaces.catalog` — one pin for both apps that keeps the site's faces
@@ -80,7 +81,8 @@ The parent owns the route-composition edges; the vibecoding leaf has no sibling 
 ```text
 src/pages/{vibecoding,agentic-development,agentic-ide}/index.astro ──▶ src/vibecoding (through index.ts)
 src/pages/{vibecoding,agentic-development,agentic-ide}/index.astro ──▶ src/components/Analytics.astro
-landing + blog shells                                              ──▶ src/components/Analytics.astro
+landing + ShellLayout (blog, docs, extensions)                     ──▶ src/components/Analytics.astro
+src/pages/extensions/**, src/validateBuild.ts                      ──▶ src/extensionCatalog*.ts, src/extensionManifest.ts
 src/main.ts, src/vibecoding                                        ──▶ src/installLinkShare.ts, src/installCommands.ts, src/installPlatform.ts, src/githubStars.ts
 ```
 
@@ -103,21 +105,25 @@ IDE shell.
   own CSS custom properties under `[data-theme]`; the site never reaches into `apps/web` at build time
   (the app's tokens assume the theme engine's runtime swap).
 - **IDE-shell page chrome is single-sourced in components.** `src/components/BaseHead.astro` is the one
-  head the landing and blog use: charset/viewport, favicon, their global stylesheet (which bundles the
+  head the IDE-shell routes use: charset/viewport, favicon, their global stylesheet (which bundles the
   fonts), and the pre-paint theme guard. `src/components/Analytics.astro` is presentation-free and is
-  included once by every route family. `src/components/IdeShell.astro` is the one IDE shell the landing
-  and blog render through — icon sprite, skip link, title bar (workspace name
-  parameterized: `website` on the landing, `blog` on blog pages, each with the matching
+  included once by every route family. `src/components/IdeShell.astro` is the one IDE shell the landing,
+  blog, docs and extensions pages render through — icon sprite, skip link, title bar (workspace name
+  parameterized: `website` on the landing, `blog`, `docs` or `extensions` elsewhere, each with the matching
   `workspace/<name> · from main` branch label, then GitHub (stars) · Discord · install launcher · theme toggle,
   plus the right-rail drawer toggle below 1180px), the one install popover, the left project rail, the right files rail +
   terminal, the status bar, the post-download thank-you dialog (`DownloadThanks.astro`), and the
   `main.ts` script import; the center column is its default slot
   and the right rail's Files rows its `filetree` slot. The left rail carries the site's real
-  navigation as child rows of the `website` workspace — **Landing** (`/`) and **Blog** (`/blog/`,
-  selected on the index and on every article) as links, **Docs** disabled with a `Coming soon` chip
-  (no tooltip — the tag carries the state) — while the remaining mock rows keep the
+  navigation as child rows of the `website` workspace, all links — **Landing** (`/`), **Blog**
+  (`/blog/`, selected on the index and on every article), **Docs** (`/docs/`, selected on the index and
+  on every doc page) and **Extensions** (`/extensions/`) — while the remaining mock rows keep the
   `data-mock-hint` treatment; the selected row wears the same accent-tinted grammar as the right
-  rail's active file row (one grouped CSS rule). `src/components/Copyright.astro` is the one
+  rail's active file row (one grouped CSS rule). Every page except the landing renders through
+  `src/layouts/ShellLayout.astro` — head meta (description, canonical, OG), the shell, a `.page-main`
+  editor container with the landing sections' geometry, and the right rail's Files rows from a
+  `files` list (the current one active); `BlogLayout` and `DocsLayout` only supply that list.
+  `src/components/Copyright.astro` is the one
   copyright line (shell statusbar). The dark/light theme model lives in
   `src/theme.ts` (explicit choice in `localStorage` → `prefers-color-scheme` fallback, live
   system-follow, legacy `darcula`/`gruvbox` values normalize to dark); the inline FOUC guard in
@@ -140,6 +146,10 @@ IDE shell.
   editor tabs are a JS-built navigation affordance over content that is already reachable by scrolling
   and via the file tree), and animations are skipped under `prefers-reduced-motion`.
 - **Enhancement behaviors owned by `main.ts`** (the code carries no rationale — this is it):
+  - *Extensions page* (`src/extensionsPage.ts`, inert elsewhere): reveals the search box (hidden in
+    markup, since it does nothing without JS), filters cards on every whitespace-separated term over
+    title, name, description and author, keeps the live count and the no-match line in step, and hides
+    a preview image that fails so its fixed box shows the placeholder instead.
   - *Terminal replay*: the Install section's command tabs keep the launcher command in static markup;
     that command is the single source of truth for the terminal,
     which subscribes and types it before the short install transcript. A generation counter invalidates an
@@ -223,7 +233,8 @@ state stays cookieless and carries no journey ID. Localhost, `astro dev`, every 
 once per document; it remains the analytics composition point for the IDE-shell and vibecoding routes.
 Content keys derive from `window.location.pathname`: `/` → `landing`, `/blog/` → `blog/index`, and
 other paths containing only lowercase safe characters become the path without outer slashes (so
-`/blog/<slug>/` → `blog/<slug>`). Keys allow only lowercase letters, digits, hyphens, and path
+`/blog/<slug>/` → `blog/<slug>`, `/docs/` → `docs`, `/docs/<slug>/` → `docs/<slug>`, `/extensions/` →
+`extensions`). Keys allow only lowercase letters, digits, hyphens, and path
 separators and are limited to 105 characters, enough for `blog/` plus the maximum 100-character post
 slug; invalid paths emit no content or action events. Query and fragment strings are absent from
 `pathname`; dotted `index.html` paths are not route aliases. New pages and posts need no analytics code
@@ -280,7 +291,8 @@ nothing. That open is browsing, not install intent: a
 primary-button click on a `[data-copy]` control whose value is a known install command emits
 `install_command_copied` with its `sh`/`powershell`/`cmd` shell and hero, install-section, blog-post, `header`
 (title-bar chip, popover) or `post_header` (post-row chip) location
-(other copy values emit nothing; selecting and copying the text manually is not observed). Any other
+(other copy values emit nothing — the extensions page's `npm:<name>` Copy buttons included; selecting
+and copying the text manually is not observed). Any other
 link into the `JetBrains/thinkrail` repository (exact repo, `#`/`?` suffix, or sub-path; never a
 sibling repository or a desktop alias) emits `github_clicked` with a `repo`/`releases`/`other` target
 and a location from the containing blog post, final CTA, quick start, install section, hero (`#readme`
@@ -319,8 +331,9 @@ build compiles the Functions, and a local Pages/D1 smoke starts Pages from the c
 applies the actual migration, and exercises create, bind, and redeem. `.github/workflows/site.yml` runs
 `bun run --filter @thinkrail/website build` (the full `typecheck` — `.astro`, Functions and tests — the
 Functions build, `astro build`, and artifact validation) on pushes that
-touch this module, [[module-website-analytics]], the root package manifest, or the lockfile (plus manual
-dispatch). It verifies the provider URL before succeeding. `thinkrail.ai` is the project's custom apex
+touch this module, [[module-website-analytics]], the root package manifest, or the lockfile, **every hour**
+(`17 * * * *`) so the extension catalog follows npm, and on manual dispatch. It verifies the provider URL
+before succeeding. `thinkrail.ai` is the project's custom apex
 domain; provider URLs are deployment probes, not product identities.
 
 Production concurrency never cancels an in-flight publish. Cloudflare retains successful production
@@ -334,8 +347,8 @@ second hosting pipeline.
 the production-origin guard independently continues to return not-found for preview attribution
 requests before D1 access. The deterministic alias
 `https://pr-<number>.thinkrail-website.pages.dev` is surfaced as one sticky PR comment and one
-`Website preview` commit status covering `/`, `/blog/`, `/vibecoding/`, `/agentic-development/`,
-and `/agentic-ide/`. It waits for all of those routes to serve before publishing the URL.
+`Website preview` commit status covering `/`, `/blog/`, `/docs/`, `/extensions/`, `/vibecoding/`,
+`/agentic-development/`, and `/agentic-ide/`. It waits for all of those routes to serve before publishing the URL.
 
 Same-repository PRs only receive previews; fork PRs skip because Cloudflare credentials never cross the
 repository boundary. Preview URLs are public and analytics-silent while their PR is open. A separate
@@ -402,9 +415,9 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
   non-primary clicks and no-JS visits follow the link instead.
 - **Chrome: blog pages live inside the IDE shell**, not a separate page frame (decision, 2026-08 —
   the prior standalone blog header/footer is deleted). `BlogLayout.astro` renders through
-  `IdeShell.astro`: the content sits in the same scrolling editor pane as the landing sections, in a
-  `.blog-main` container sharing their exact geometry (one grouped `.file-section, .blog-main` CSS
-  rule — deliberately *not* the `.file-section` class, whose typography cascade would fight the blog
+  `ShellLayout.astro` and `IdeShell.astro`: the content sits in the same scrolling editor pane as the
+  landing sections, in a `.page-main` container sharing their exact geometry (one grouped
+  `.file-section, .page-main` CSS rule — deliberately *not* the `.file-section` class, whose typography cascade would fight the blog
   content styles). Opening an article replaces the index in that same central area. **No tab strip on
   blog pages** (the landing keeps its section tabs; page-level Landing/Blog tabs were explicitly
   rejected for now). The right rail's Files list shows the published articles (current one
@@ -449,11 +462,124 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
 - **Deployment**: alongside the main site via the same `site.yml` workflow; changes to
   `apps/website/content/blog/**` trigger a rebuild.
 
+## Docs
+
+`/docs/` is a typed content collection over Markdown pages in `content/docs/<folder>/index.md`, rendered by
+`src/pages/docs/` through `src/layouts/DocsLayout.astro` — the blog's pattern, minus dates and authors.
+`content/docs/DOCS.md` is the author guide.
+
+- **Schema is the gate** (`src/content.config.ts`): required `title`, `slug` (the blog's slug rule and
+  reserved names), `description` (the lead under the title, the index card and the meta description) and
+  an integer `order`; optional `draft`. `src/docsCollection.ts` is the one query — draft-filtered in
+  production, sorted by `order` then title, failing on a duplicate slug — shared by the index, the pages
+  and the Files rail.
+- **Chrome and styles:** inside the IDE shell with the blog's geometry, no tab strip; the Docs rail row is
+  selected on the index and every page, and the Files rail lists the docs. Pages reuse the blog's index,
+  card and prose classes (Shiki code blocks included) rather than a parallel set. They are not wrapped in
+  `.blog-post`, so an install link in a doc never reports the `blog_post` location; they carry no install
+  picker. Relative links on a doc page must resolve to a built file (`validateBuild`). Doc images are
+  not supported yet: there is no `images/` route for docs.
+- **The extension docs are two pages**: the authoring guide (`/docs/build-an-extension/`, the entry URL
+  the app and the showcase link to) walks through the published sample, and the reference
+  (`/docs/extension-reference/`) lists the manifest, both descriptors, the shared modules, the build
+  command and the install states. *Why two:* the walkthrough stays readable while every rule has one
+  findable place; the guide links into the reference's sections rather than repeating its tables.
+- **Their source of truth is the sample and the SDK as built, not the contract's prose.** The guide
+  walks through `extension-examples/palette` (`@thinkrail/example-extension-palette`,
+  [[module-extension-examples]]) and states what [[module-extension-sdk]] and the host
+  ([[module-thinkrail-extensions]] § Installed extensions, [[submodule-server-extensions-installed]]) do.
+  Code is shown, never paraphrased: every fenced block carries a `<!-- guard: … -->` comment (emitted as
+  an HTML comment, invisible), and `src/docsGuide.test.ts` reads the sources by relative path at test
+  time — the `fonts.test.ts` pattern, never an import — and fails on drift:
+  - `file` blocks equal a whole sample or SDK file; `excerpt` blocks are a contiguous, dedented slice of
+    one; the `package-json` block is the sample's whole `package.json` made portable — every field in
+    file order and formatting, except that each `catalog:` range is the root catalog's pin, the one
+    `workspace:` range (the SDK) is `~<API>.0` (the SDK's major.minor is the API; its own version is a
+    placeholder until the first release) and `publishConfig` has no `provenance` (npm refuses it outside
+    a trusted CI) — so an outside author can `npm install` it as shown; accepted by `extensionManifest.ts`;
+  - the `tree` lists every non-test source under the sample's `server/` and `web/` and the manifest's
+    built files; `shell` commands use the sample's scripts and packages, and every
+    `thinkrail-extension build` option either page names exists in the SDK's `src/cli.ts`;
+  - the reference's tables and lists match the SDK's `MANIFEST_KEYS`, `ServerExtension`,
+    `ExtensionSessionServices`, the re-exported `ToolRenderProps` / `ToolRegistrationOptions`, the CLI's
+    options and default entries, and `assets/shared-modules.json` (order and every export name); its
+    `manifest-cases` block uses `manifestCases.json`'s shape and holds under the site's validator;
+  - the built-in names the guide calls reserved, the tool, setting and utility classes it quotes, the
+    SDK's Node floor and the API version are read from their sources, and every `#fragment` link
+    resolves to a heading.
+
+  The author guide `content/docs/DOCS.md` lists the guard kinds. A change to the sample, the SDK or the
+  contract updates these pages in the same change; the failing test names the block.
+- `catalogKeyword` (`src/extensionCatalog.ts`) is a copy of `EXTENSION_KEYWORD`; `extensionCatalog.test.ts`
+  reads `packages/extension-api/src/manifest.ts` at test time and fails when they differ.
+- **Doc styles beyond the blog's:** inline code on doc pages may break anywhere (long package names and
+  specifiers would widen a phone layout), tables scroll horizontally inside their own box, and code
+  blocks use a tab size of 2, because the sample's files are indented with tabs.
+
+## Extensions page and catalog
+
+`/extensions/` showcases installable ThinkRail extensions, and the site publishes the catalog behind it
+— `https://thinkrail.ai/extensions/catalog.json`, the file the app's Browse also reads. The schema and the
+listing rule (every npm package whose latest `package.json` carries the `thinkrail-extension` keyword
+and a valid manifest; nothing reviewed, hidden or marked) are owned by [[module-thinkrail-extensions]]
+§ Installed extensions; this module owns how the file is built and shown.
+
+- **Catalog builder** (`src/extensionCatalog.ts`): npm registry search for `keywords:thinkrail-extension`,
+  250 per page while below the total, never at or past offset 5000 (the registry stops paging there;
+  beyond it the build logs and lists the first 5000), deduplicated by name; then each candidate's
+  `/<name>/latest` document, eight at a time. A candidate is listed only when that document still names
+  the keyword and has a valid manifest. `publishedAt` is the search hit's `date`: the full packument
+  would give the exact version's time but can be megabytes per package. `author` is the package
+  `author`'s name (email and URL stripped) or else its first maintainer; `repository` is normalised from
+  npm's string, shorthand and object forms (`git+`, `git://`, `ssh://`, `git@host:`, `github:` /
+  `gitlab:` / `bitbucket:`, bare `user/repo`) to an `https:` URL or dropped; only an `https:` image is
+  kept (the package stays listed without it). Text is whitespace-collapsed and capped (title 100,
+  description 400 characters) so one package cannot bloat a file every app downloads. Entries are sorted
+  by name; optional fields are omitted, never null.
+- **Manifest rules are copied, not imported** (`src/extensionManifest.ts`): the site must not depend on the
+  app, so it keeps its own copy of the host's rules ([[module-extension-api]] `./installed`), reading a
+  whole `package.json` as the host does. Its tests run the host's table of manifest cases, read at test
+  time from `packages/extension-api/src/manifestCases.json` by relative path (the way `fonts.test.ts`
+  reads the app's typography), so a divergence fails here; the host's validator is the authority.
+- **Failure policy — the first build-time external fetch.** `EXTENSION_CATALOG_SOURCE` selects the
+  source (`src/extensionCatalogSource.ts`, memoised so the page and the JSON endpoint share one fetch):
+  - `npm` (production `site.yml` only): any registry failure — a network error, a non-404 error status
+    after three attempts on 5xx/429, an unexpected search body — throws inside `astro build`. The job
+    fails before deploying, Cloudflare keeps serving the previous deployment, and the run shows as
+    failed. A 404 for one package is an unpublish between search and fetch, not a failure. `site.yml`
+    also fails a build whose page does not say `data-catalog-source="npm"`, so production can never ship
+    sample data.
+  - unset or `sample` (local dev, tests, CI and PR previews): the builder replays recorded registry
+    responses (`src/fixtures/npmRegistry.json`) through the same code, so nothing depends on the network.
+    The page then shows a **Sample data** banner and the preview comment labels the link, so a fixture is
+    never mistaken for the live list. Rejected: an empty catalog for previews — it would leave the
+    card UI unreviewable.
+  - *Why a fetch at build time and not in the browser:* the page reads complete without JavaScript and
+    the app and the page see one validated list; the app never queries npm itself.
+- **Hourly rebuild.** `site.yml` runs on `17 * * * *` so a new package is listed within about an hour.
+  Each scheduled run deploys current `main`, even when nothing changed: skipping an unchanged catalog was
+  rejected because a correct check needs the deployed commit (a scheduled run can replace a pending push
+  run in the shared, non-cancelling `site-deploy` group). `/extensions/catalog.json` is served
+  `Access-Control-Allow-Origin: *` with a five-minute cache (`public/_headers`).
+- **Showcase page** (`src/pages/extensions/index.astro`), rendered statically from the catalog: a card per
+  entry with title (or name), name and version, description (clamped), author, `Agent tools` for a server
+  half and `Chat cards` for a web half — halves, not tool names, which live in code the site cannot run —,
+  the `npm:<name>` install source with the site's `data-copy` button, and npm and repository links (the
+  repository with `rel="ugc nofollow"`, since it is unreviewed). One hint line says the source is pasted
+  into Settings → Extensions & skills → Install package…. The page always states that listings are automatic and
+  unreviewed and links the guide; an empty catalog shows an empty state inviting the first extension.
+  The Files rail shows `README.md` (the page) and `catalog.json`.
+- **Third-party images** are the only third-party content: rendered only when present, inside a fixed
+  16:9 box with a placeholder behind them, `loading="lazy"`, `decoding="async"`, low fetch priority and
+  `referrerpolicy="no-referrer"`; a failed image is hidden and the box keeps its size. No third-party
+  script is ever loaded. The image request itself still reaches the author's host — accepted with the
+  contract's `image` field.
+
 ## Discovery and assets
 
 One apex `robots.txt` allows the public site and points crawlers at Astro's generated sitemap. The
 sitemap derives from the same static route build and therefore covers `/`, the blog index and published
-posts, and `/vibecoding/`; `/agentic-development/` and `/agentic-ide/` are filtered out of the
+posts, the docs index and published docs, `/extensions/`, and `/vibecoding/`; `/agentic-development/` and `/agentic-ide/` are filtered out of the
 sitemap because they canonicalize to `/vibecoding/` (see [[submodule-website-vibecoding]]). Previews keep production
 canonical URLs and do not become a second search identity.
 
