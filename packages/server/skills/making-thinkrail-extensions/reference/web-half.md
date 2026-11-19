@@ -31,16 +31,22 @@ Always handle the running and error states. A card that throws falls back to the
 
 ## What a web half may import
 
-Shared with the app at runtime — never bundled, never installed separately:
+Shared with the app at runtime — never bundled, never installed separately. These are the only names
+a web half can use from them (extension API 1.0); anything else is `undefined` at runtime:
 
-- `react`, `react/jsx-runtime`, `react-dom` (React 19; `createPortal` is fine);
-- `@thinkrail/extension-sdk/web` — `defineWebExtension`, the types, and helpers `strArg(args, key)`
-  (a string, `""` when missing), `numArg(args, key)` (a number or `null`), `resultText(result)` (the
-  result's text), `parseToolResultContent`, `toolValueText`, `languageFromPath`;
-- `@thinkrail/extension-sdk/ui/button` (`Button`, `IconButton`), `…/ui/dialog`, `…/ui/textarea`,
-  `…/ui/attention-line`, `…/ui/keyboard`, `…/ui/utils` (`cn`), `…/ui/theme`, `…/ui/fonts`;
+- `react`, `react/jsx-runtime`, `react-dom` — the stable React 19 API (hooks, `memo`, `forwardRef`,
+  `lazy`, `Suspense`, `createContext`, …; `createPortal`, `flushSync` from `react-dom`). No
+  `unstable_*` names, no `react-dom/client` or `react-dom/server`;
+- `@thinkrail/extension-sdk/web` — `defineWebExtension`, the types (`ToolRenderProps`, `ToolRenderer`,
+  `ToolRegistrationOptions`, …) and the helpers `strArg(args, key)` (a string, `""` when missing),
+  `numArg(args, key)` (a number or `null`) and `resultText(result)` (the result's text);
+- `@thinkrail/extension-sdk/ui/button` (`Button`, `IconButton`, `withIconClass`),
+  `@thinkrail/extension-sdk/ui/utils` (`cn`), `@thinkrail/extension-sdk/ui/theme` (`onThemeSwap`);
 - `@thinkrail/extension-sdk/resources` — `ResourcePreview`, `FramedResourcePreview`,
   `useResourceScope`, `useOptionalResourceHost`.
+
+There is no shared dialog, textarea or keyboard helper: draw your own markup (a `<textarea>` with
+token classes, an in-card panel instead of a modal).
 
 Anything else (an icon set such as `@remixicon/react`, a chart library) is bundled into `dist/web.js`:
 `npm install --omit=peer <pkg>` it first. Keep it small.

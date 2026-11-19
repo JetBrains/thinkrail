@@ -275,9 +275,26 @@ key for the on/off switch and its settings) and must not equal a built-in's `nam
 - At bootstrap the app exposes its own modules on one frozen object,
   `globalThis.__thinkrailExtensionHost = { api, modules }`, keyed by the specifier an author imports:
   `react`, `react/jsx-runtime`, `react-dom`, `@thinkrail/extension-sdk/web`,
-  `@thinkrail/extension-sdk/resources`, and `@thinkrail/extension-sdk/ui/<m>` for `attention-line`,
-  `button`, `dialog`, `fonts`, `keyboard`, `textarea`, `theme`, `utils`. That list — what the built-in cards
-  import today — is extension API v1. Rejected: the whole UI kit (every primitive becomes a promise) and
+  `@thinkrail/extension-sdk/resources`, `@thinkrail/extension-sdk/ui/button`, `…/ui/theme` and
+  `…/ui/utils`. **Extension API v1 is an allow-list of names, not of modules**: each specifier's value
+  holds only the export names `SHARED_MODULE_EXPORTS` in `@thinkrail/extension-api/installed` lists
+  ([[module-extension-api]]) — the one canonical list the app's host object and the SDK both read — so
+  nothing the app's packages happen to export becomes a promise by being exported. What it holds:
+  - `react`, `react/jsx-runtime`, `react-dom`: the stable public React 19 API as the app's production
+    build exports it — internals (`__*`), `unstable_*` / experimental names, the deprecated `react-dom`
+    `useFormState` (now `useActionState`) and every `react-dom` subpath (`client`, `server`) left out.
+  - `./web`: `defineWebExtension`, `strArg`, `numArg`, `resultText` (plus the tool-card types).
+  - `./resources`: `ResourcePreview`, `FramedResourcePreview`, `useResourceScope`,
+    `useOptionalResourceHost`.
+  - `./ui/button`: `Button`, `IconButton`, `withIconClass`; `./ui/theme`: `onThemeSwap`; `./ui/utils`: `cn`.
+
+  Chosen from what the sample and the built-in cards actually import; when in doubt a name was left
+  out, because adding one is an API minor and removing one an API major. Dropped from the first draft:
+  `ui/dialog`, `ui/textarea`, `ui/keyboard`, `ui/attention-line` and `ui/fonts` (a card draws its own
+  markup; they can return as minors once an outside author needs them), `languageFromPath` (a
+  highlighter's language map with no highlighter in the set), and `parseToolResultContent` /
+  `toolValueText` (they promise the wire image shape, and images are rendered by the host's common
+  result layer, never by a card). Rejected: the whole UI kit (every primitive becomes a promise) and
   self-contained cards (no app components, a second contract).
 - An extension's bundle contains none of those modules: the SDK's build resolves each shared specifier,
   including imports made from inside the extension's own `node_modules`, to a generated module that reads
