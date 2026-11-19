@@ -119,6 +119,14 @@ import {
 } from "../auth";
 import { providerFromRemoteUrl } from "../branch-review";
 import { forgetWorkspaceChanges, revertChange, undoChange } from "../changes";
+import {
+	addContainerWorkspace,
+	createContainer,
+	listContainers,
+	removeContainer,
+	removeContainerWorkspace,
+	renameContainer,
+} from "../containers";
 import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
 import { hostEnvironmentStatus, updateHostEnvironment } from "../environment";
@@ -877,6 +885,17 @@ const handlers: WsHandlers = {
 		return { ok: true } as const;
 	},
 	"workspace.diffStats": (params) => workspaceDiffStats(params.id),
+	"container.list": () => listContainers(),
+	"container.create": (params) => createContainer(params),
+	"container.rename": (params) => renameContainer(params.containerId, params.name),
+	"container.addWorkspace": (params) =>
+		addContainerWorkspace(params.containerId, params.workspaceId),
+	"container.removeWorkspace": (params) =>
+		removeContainerWorkspace(params.containerId, params.workspaceId),
+	"container.remove": async (params) => {
+		await removeContainer(params.containerId);
+		return { ok: true } as const;
+	},
 	"chat.create": (params) => createChat(params),
 	"chat.delete": async (params) => {
 		await deleteChat(params.workspaceId);

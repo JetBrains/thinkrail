@@ -29,6 +29,7 @@ export {
 	respondToTool,
 	runHostUpdate,
 	supportsChangeMutations,
+	supportsContainers,
 	supportsExtensionQuery,
 	supportsExtensionSettings,
 	supportsFonts,

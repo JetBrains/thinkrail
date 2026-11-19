@@ -60,7 +60,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   not be read, a failure analytics tells apart from a lost connection while the font picker offers Retry for
   either; the two `extension.query` refusals **`EXTENSION_DISABLED`** (the user switched the extension
   off — its panel shows the off placeholder) and **`UNKNOWN_EXTENSION_QUERY`** (no such extension or method
-  on this host, or a malformed request); and the closed `SPEECH_ERROR_CODES` (§ Voice input), each naming
+  on this host, or a malformed request); the five container refusals (§ Containers); and the closed
+  `SPEECH_ERROR_CODES` (§ Voice input), each naming
   a voice state the UI words differently), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it or Error Tracking must tell it apart (it never sees `message`). Two codes exist for the latter:
@@ -1279,6 +1280,30 @@ the pi-level resource grant. A client talking to an older host sends neither.
   resources (`Project.piResourceTrust` — settings and extensions run code). Without it a grant sets the
   alias trust only, so a surface that does not name what pi-level trust loads (an older client) never
   enables it; `trusted: false` revokes both.
+
+## Containers
+
+`CONTAINER_PROTOCOL_VERSION` (129) gates the container wire; a client talking to an older host sends none
+of it and holds no containers.
+
+- **`Container`** (`domain`) — `{ id, name, workspaceIds, orchestratorSessionId?, createdAt, updatedAt }`:
+  a host-owned group of workspaces, possibly of several projects, in member order. Each member stays one
+  `Workspace` (one worktree) and belongs to at most one container; a project's Default workspace and a
+  chat without a project never belong to one. A workspace in no container has no record. The home
+  folder's path stays host-side.
+- Methods: **`container.list`** (→ `Container[]`) / **`container.create`** (`{ name?, workspaceIds }` →
+  `Container`; at least one member, the name defaulting to the first member's) / **`container.rename`**
+  (`{ containerId, name }`) / **`container.addWorkspace`** and **`container.removeWorkspace`**
+  (`{ containerId, workspaceId }`; removal answers `null` when it dissolved the container — the
+  workspace becomes standalone either way) / **`container.remove`** (`{ containerId }` → `Ack`; dissolves
+  the record only, members are untouched — archiving them is `workspace.remove`). Archiving or removing a
+  workspace makes it leave its container; a container left without members is removed.
+- Channels: **`container.updated`** (the full `Container` snapshot after every create and change —
+  idempotent under last-value replay) and **`container.removed`** (`ContainerRemoved { id }`), broadcast to
+  sockets at the gate only.
+- Refusals: `CONTAINER_UNKNOWN` (the client drops its stale record), `CONTAINER_EMPTY`,
+  `CONTAINER_MEMBER_TAKEN` (already in another container), `CONTAINER_MEMBER_REFUSED` (a Default
+  workspace or a chat) and `CONTAINERS_STORE_UNAVAILABLE` (a newer host's `containers.json`, read-only here).
 
 ## MCP servers
 

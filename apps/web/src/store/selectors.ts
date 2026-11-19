@@ -6,6 +6,7 @@ import {
 	BROWSER_VIEW_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	CHATS_PROTOCOL_VERSION,
+	type Container,
 	canMarkCompletionUnread,
 	DEFAULT_WORKSPACE_NAME,
 	firstPromptOfTexts,
@@ -959,6 +960,29 @@ export function selectChatWorkspaceTitle(
 		if (record.title) return record.title;
 	}
 	return null;
+}
+
+interface ContainersState {
+	containers: Record<string, Container>;
+}
+
+/** The host's containers in creation order (id breaks ties). */
+export function selectContainers(state: ContainersState): Container[] {
+	return Object.values(state.containers).sort(
+		(a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+	);
+}
+
+/** The container a workspace belongs to; `null` for a standalone workspace. */
+export function selectContainerOfWorkspace(
+	state: ContainersState,
+	workspaceId: string,
+): Container | null {
+	return (
+		Object.values(state.containers).find((container) =>
+			container.workspaceIds.includes(workspaceId),
+		) ?? null
+	);
 }
 
 export function selectActiveWorkspace(state: ActiveWorkspaceState): Workspace | null {

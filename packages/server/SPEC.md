@@ -80,6 +80,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `speech` | on-demand local voice input: pinned `nemo-speech` + Nemotron download, PATH reuse, `speech.*` state | [speech/SPEC.md](src/speech/SPEC.md) |
 | `projects` | stable known-repo registry: open/recent views + lossless close/reopen (validate, dedupe, slug) | [projects/SPEC.md](src/projects/SPEC.md) |
 | `workspaces` | workspaces = `git worktree`s on their own branch | [workspaces/SPEC.md](src/workspaces/SPEC.md) |
+| `containers` | containers = workspaces grouped across projects (`containers.json`) + each one's home folder of shared artifacts and member links | [containers/SPEC.md](src/containers/SPEC.md) |
 | `git` | the `git(cwd, args)` runner + worktree status/diff vs base + branch list | [git/SPEC.md](src/git/SPEC.md) |
 | `subprocess` | `runBounded(argv, …)`: one child, one budget, killed by process group on expiry | [subprocess/SPEC.md](src/subprocess/SPEC.md) |
 | `github` | read-only local `gh` auth status (shell-out) for the New-Workspace surface | [github/SPEC.md](src/github/SPEC.md) |
@@ -117,9 +118,13 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `fonts`, `speech`, `history`, `search`, `templates`, `analytics`, `feedback`, `artifacts`, `trash` (a chat's folder), `log`, `persistence` (`dataDir`, for the crash report), `images` (the `/images` route, its source seam, and forgetting a deleted chat)
+- `host` → `projects`, `workspaces`, `containers`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `fonts`, `speech`, `history`, `search`, `templates`, `analytics`, `feedback`, `artifacts`, `trash` (a chat's folder), `log`, `persistence` (`dataDir`, for the crash report), `images` (the `/images` route, its source seam, and forgetting a deleted chat)
 - `search` → `contracts`, `git` (`gitAsyncStream` for `ls-files` and `grep`), `log`; `history`, `spec` and `todos` for types only — `host/search.ts` injects every reader (projects, workspace records, the history index's `sessions()`, spec snapshots, stored plans, the file check `fs.readableFileSize` and the text check `fs.classifyBytes`), the Default provisioning (`workspaces.listWorkspaces`) and the root watch (`watch.ensureWatch`, prewarm); it opens no file itself but the bounded text search's direct read of a chat folder's walked files (`git grep` reads a repository's) — files and specs preview client-side over `fs.readFile`
 - `workspaces` → `projects`, `git`, `persistence`
+- `containers` → `persistence` (`containers.json`, `dataDir`, the project and workspace records), `trash` (a
+  dissolved home that holds shared artifacts), `log`; it never imports `workspaces` — `host` routes the
+  workspace lifecycle to it (`removed` → `forgetContainerMember`, `updated` → `syncContainerMemberLinks`), the
+  same composition as `turns` and `artifacts`
 - `branch-review` → `git`, `subprocess`
 - `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)
 - `projects` → `git` (shared runner), `persistence`
@@ -133,7 +138,7 @@ the host from env via `bootHost` for dev/e2e.
 - `git`, `spec`, `watch`, `terminal`, `settings`, `locales`, `themes`, `fonts`, `analytics`, `feedback` → `persistence` (`locales` also → `@thinkrail/locales` root, external-style: catalog validation and file naming) (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external—the identity-bucketing vocabulary and delivery SDK)
 - `log` → `persistence` (`dataDir`) — and **any feature module (+ `host`) may → `log`**: it is the one
   cross-cutting edge, like `persistence`, exempt from the never-each-other rule (today: `host`,
-  `agent`, `workspaces`, `watch`, `git`, `todos`, `reviews`, `analytics`, `resourceHistory`, `artifacts`, `fonts`, `speech`, `search`). `persistence` never imports
+  `agent`, `workspaces`, `containers`, `watch`, `git`, `todos`, `reviews`, `analytics`, `resourceHistory`, `artifacts`, `fonts`, `speech`, `search`). `persistence` never imports
   `log` (would cycle); `initLogging` is called only from `host`'s `bootHost`
 - `todos` → `workspaces` (worktree path lookup) + `pi-todos/core` (external, value-imported, pi-free)
 - `reviews` → `workspaces` (worktree path lookup), `persistence` (data dir), `git` (the review's baseSha
@@ -167,7 +172,8 @@ own never import `host` either: they expose a **publisher-injection seam** (`set
 `setSessionPublisher` + `setSessionCreatedPublisher` + `setSessionDeletedPublisher` +
 `setSessionStatePublisher`, `setLoginPublisher`, `projects`' `setProjectPublisher` for the full-snapshot
 `project.updated` lifecycle, `workspaces`' `setWorkspacePublisher` for the
-`workspace.created`/`updated`/`removed` lifecycle trio, `settings`' `setSettingsPublisher` for
+`workspace.created`/`updated`/`removed` lifecycle trio, `containers`' `setContainerPublisher` for
+`container.updated`/`removed`, `settings`' `setSettingsPublisher` for
 `settings.changed` (full merged config plus the successful applied update for host-side explicit-field effects),
 `feedback`'s addressed invitation publisher, and auth's Central action analytics +
 `provider.changed` invalidation publishers) that

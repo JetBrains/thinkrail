@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { join, normalize } from "node:path";
 import type {
+	ContainerRemoved,
 	HostPlatform,
 	HostUpdateNotice,
 	ServerWelcome,
@@ -13,6 +14,7 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	ARTIFACTS_PROTOCOL_VERSION,
+	CONTAINER_PROTOCOL_VERSION,
 	CONTINUATION_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
@@ -115,6 +117,7 @@ import {
 	stopJbcentralRuntime,
 } from "../auth";
 import { forgetOpenBranchReview } from "../branch-review";
+import { setContainerPublisher } from "../containers";
 import { artifactTools } from "../extensions";
 import {
 	configureSurveySource,
@@ -195,6 +198,7 @@ import {
 } from "../workspaces";
 import { createArtifactEventMapper } from "./artifactEvents";
 import { seesChats } from "./chats";
+import { observeWorkspaceForContainers } from "./containers";
 import { continueToolHost, observeContinuation, setContinuationPublisher } from "./continuations";
 import {
 	BLOB_PREFIX,
@@ -541,6 +545,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				}
 				if (ws.data.protocolVersion >= CONTINUATION_PROTOCOL_VERSION)
 					ws.subscribe(WS_CHANNELS.chatContinuation);
+				if (ws.data.protocolVersion >= CONTAINER_PROTOCOL_VERSION) {
+					ws.subscribe(WS_CHANNELS.containerUpdated);
+					ws.subscribe(WS_CHANNELS.containerRemoved);
+				}
 				ws.subscribe(WS_CHANNELS.settingsChanged);
 				if (hostUpdate) ws.subscribe(WS_CHANNELS.hostUpdateAvailable);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
@@ -980,8 +988,18 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		const workspaceId = event.kind === "removed" ? event.id : event.workspace.id;
 		const projectId = event.kind === "removed" ? event.projectId : event.workspace.projectId;
 		publishScoped(channel, data, { workspaceId, projectId });
+		observeWorkspaceForContainers(event);
 	};
 	setWorkspacePublisher(publishWorkspaceEvent);
+	const containerAudience = { belowProtocol: CONTAINER_PROTOCOL_VERSION };
+	setContainerPublisher((event) => {
+		if (event.kind === "updated")
+			publishScoped(WS_CHANNELS.containerUpdated, event.container, containerAudience);
+		else {
+			const removed: ContainerRemoved = { id: event.id };
+			publishScoped(WS_CHANNELS.containerRemoved, removed, containerAudience);
+		}
+	});
 	setChatPublishers({
 		project: (project) =>
 			publishScoped(WS_CHANNELS.projectUpdated, project, { projectId: project.id }),
@@ -1343,6 +1361,7 @@ function restoreSeamDefaults(): void {
 	setProjectPublisher(null);
 	setTerminalTabsPublisher(() => {});
 	setWorkspacePublisher(null);
+	setContainerPublisher(null);
 	setWorkspaceCreationPublisher(null);
 	setWorkspaceCreationHandoff(null);
 	setProjectPathGuard(null);

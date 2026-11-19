@@ -3,6 +3,7 @@ import type {
 	AppSurvey,
 	ChatContinuation,
 	ComposerGrowthLimit,
+	Container,
 	ExtUiRequest,
 	FontChoice,
 	GitDiffScope,
@@ -1178,6 +1179,7 @@ interface AppState {
 	closedChatsByWorkspace: Record<string, ClosedChat[]>;
 	chatStartsByWorkspace: Record<string, number>;
 	workspaceCreations: Record<string, WorkspaceCreation>;
+	containers: Record<string, Container>;
 	activeCreationId: string | null;
 	creationChatToOpen: CreationChatHandoff | null;
 	sentCreationPrompts: Record<string, { text: string; attachments: ChatAttachment[] }>;
@@ -1518,6 +1520,9 @@ interface AppState {
 	beginChatStart: (workspaceId: string) => void;
 	endChatStart: (workspaceId: string) => void;
 	setWorkspaceCreations: (creations: WorkspaceCreation[]) => void;
+	installContainers: (containers: readonly Container[]) => void;
+	applyContainerUpdated: (container: Container) => void;
+	applyContainerRemoved: (containerId: string) => void;
 	applyWorkspaceCreation: (
 		creation: WorkspaceCreation,
 		sentPrompt?: { text: string; attachments: ChatAttachment[] },
@@ -2662,6 +2667,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closedChatsByWorkspace: {},
 	chatStartsByWorkspace: {},
 	workspaceCreations: {},
+	containers: {},
 	activeCreationId: null,
 	creationChatToOpen: null,
 	sentCreationPrompts: {},
@@ -4058,6 +4064,16 @@ export const useAppStore = create<AppState>((set, get) => ({
 		if (finished) get().activateWorkspace(finished);
 		else get().selectProject(lostActive.projectId);
 	},
+	installContainers: (containers) =>
+		set({
+			containers: Object.fromEntries(containers.map((container) => [container.id, container])),
+		}),
+	applyContainerUpdated: (container) =>
+		set((state) => ({ containers: { ...state.containers, [container.id]: container } })),
+	applyContainerRemoved: (containerId) =>
+		set((state) =>
+			state.containers[containerId] ? { containers: omitKey(state.containers, containerId) } : {},
+		),
 	applyWorkspaceCreation: (creation, sentPrompt) => {
 		const previous = get().workspaceCreations[creation.id];
 		set((state) => ({

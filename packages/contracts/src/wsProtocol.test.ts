@@ -24,6 +24,7 @@ import {
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	CHATS_PROTOCOL_VERSION,
 	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
+	CONTAINER_PROTOCOL_VERSION,
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	CONTINUATION_PROTOCOL_VERSION,
 	CUSTOM_ENDPOINT_ID_PREFIX,
@@ -777,6 +778,39 @@ test("extension queries are pinned to v128 with their two refusal codes", () => 
 	expect(WS_METHODS.extensionQuery).toBe("extension.query");
 	const refusals: WsErrorCode[] = ["EXTENSION_DISABLED", "UNKNOWN_EXTENSION_QUERY"];
 	expect(refusals).toHaveLength(2);
+});
+
+test("containers are pinned to v129 with their methods, channels and refusal codes", () => {
+	expect(CONTAINER_PROTOCOL_VERSION).toBe(129);
+	expect(CONTAINER_PROTOCOL_VERSION).toBeGreaterThan(EXTENSION_QUERY_PROTOCOL_VERSION);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CONTAINER_PROTOCOL_VERSION);
+	expect([
+		WS_METHODS.containerList,
+		WS_METHODS.containerCreate,
+		WS_METHODS.containerRename,
+		WS_METHODS.containerAddWorkspace,
+		WS_METHODS.containerRemoveWorkspace,
+		WS_METHODS.containerRemove,
+	]).toEqual([
+		"container.list",
+		"container.create",
+		"container.rename",
+		"container.addWorkspace",
+		"container.removeWorkspace",
+		"container.remove",
+	]);
+	expect([WS_CHANNELS.containerUpdated, WS_CHANNELS.containerRemoved]).toEqual([
+		"container.updated",
+		"container.removed",
+	]);
+	const refusals: WsErrorCode[] = [
+		"CONTAINER_UNKNOWN",
+		"CONTAINER_EMPTY",
+		"CONTAINER_MEMBER_TAKEN",
+		"CONTAINER_MEMBER_REFUSED",
+		"CONTAINERS_STORE_UNAVAILABLE",
+	];
+	expect(refusals).toHaveLength(5);
 });
 
 test("ask_user_question discuss answers are pinned to v105, after background workspace creation", () => {

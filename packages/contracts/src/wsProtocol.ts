@@ -8,6 +8,7 @@ import type {
 	BranchStatus,
 	ChangeReceipt,
 	CompletionDelivery,
+	Container,
 	DelegationRunStatus,
 	DetectedAccount,
 	DiffStats,
@@ -145,7 +146,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 128;
+export const PROTOCOL_VERSION = 129;
+export const CONTAINER_PROTOCOL_VERSION = 129;
 export const EXTENSION_QUERY_PROTOCOL_VERSION = 128;
 export const SUBAGENT_CATALOG_PROTOCOL_VERSION = 127;
 export const SERVER_FALLBACK_PROTOCOL_VERSION = 126;
@@ -360,6 +362,10 @@ export interface WorkspaceRemoved {
 	id: string;
 }
 
+export interface ContainerRemoved {
+	id: string;
+}
+
 export type WorkspaceCreationState = "running" | "interrupted" | "failed";
 export type WorkspaceCreationPhase = "preparing" | "checking-out";
 
@@ -439,6 +445,12 @@ export const WS_METHODS = {
 	workspaceSetSubagentsOverride: "workspace.setSubagentsOverride",
 	workspaceSetSubagentMaxConcurrent: "workspace.setSubagentMaxConcurrent",
 	workspaceSetDiffBase: "workspace.setDiffBase",
+	containerList: "container.list",
+	containerCreate: "container.create",
+	containerRename: "container.rename",
+	containerAddWorkspace: "container.addWorkspace",
+	containerRemoveWorkspace: "container.removeWorkspace",
+	containerRemove: "container.remove",
 	chatCreate: "chat.create",
 	chatDelete: "chat.delete",
 	chatInspect: "chat.inspect",
@@ -639,6 +651,8 @@ export const WS_CHANNELS = {
 	workspaceArtifactsChanged: "workspace.artifactsChanged",
 	workspaceCreationChanged: "workspace.creationChanged",
 	workspaceCreationRemoved: "workspace.creationRemoved",
+	containerUpdated: "container.updated",
+	containerRemoved: "container.removed",
 	chatContinuation: "chat.continuation",
 	searchTextResults: "search.textResults",
 	settingsChanged: "settings.changed",
@@ -1066,6 +1080,18 @@ export interface WsMethodMap {
 		result: Ack;
 	};
 	"workspace.remove": { params: { id: string }; result: Ack };
+	"container.list": { params: Record<string, never>; result: Container[] };
+	"container.create": { params: { name?: string; workspaceIds: string[] }; result: Container };
+	"container.rename": { params: { containerId: string; name: string }; result: Container };
+	"container.addWorkspace": {
+		params: { containerId: string; workspaceId: string };
+		result: Container;
+	};
+	"container.removeWorkspace": {
+		params: { containerId: string; workspaceId: string };
+		result: Container | null;
+	};
+	"container.remove": { params: { containerId: string }; result: Ack };
 	"chat.create": {
 		params: { model?: WireModel; thinkingLevel?: ThinkingLevel };
 		result: ChatCreateResult;
@@ -1705,6 +1731,11 @@ export type WsErrorCode =
 	| "SERVER_FALLBACK_STILL_ON"
 	| "EXTENSION_DISABLED"
 	| "UNKNOWN_EXTENSION_QUERY"
+	| "CONTAINER_UNKNOWN"
+	| "CONTAINER_EMPTY"
+	| "CONTAINER_MEMBER_TAKEN"
+	| "CONTAINER_MEMBER_REFUSED"
+	| "CONTAINERS_STORE_UNAVAILABLE"
 	| SpeechErrorCode;
 
 export interface WsResponse {

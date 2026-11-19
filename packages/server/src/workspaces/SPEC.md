@@ -398,6 +398,10 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   `removed` carries `{ projectId, id }`) and the host maps `kind` → `workspace.*` channel. This makes the
   module the **single source of workspace lifecycle pushes** (the naming handler never pushes — rename
   self-publishes), so registry membership stays shared domain state across every client (architecture #9).
+  The same events carry container membership without this module knowing containers exist: the host
+  routes every `removed` to [[submodule-server-containers]], so an archived or removed workspace leaves its
+  container (which goes once empty), and every `updated` relinks the member's container home after a branch
+  move.
   Creations publish the same way through `setWorkspaceCreationPublisher` (`WorkspaceCreationEvent`:
   `changed` with the `WorkspaceCreation` view, `removed` with `WorkspaceCreationRemoved`); the host owns the
   handoff that turns a finished creation into a terminal and a chat, so this module never reaches `agent`.

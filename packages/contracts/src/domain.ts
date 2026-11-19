@@ -172,6 +172,20 @@ export interface Workspace {
 	continuedTo?: ChatContinuationLink[];
 }
 
+/**
+ * A host-owned group of workspaces, possibly from several projects; each member stays one worktree.
+ * A workspace belongs to at most one container, and one that belongs to none has no record.
+ */
+export interface Container {
+	id: string;
+	name: string;
+	/** Ordered members: managed or attached worktrees, never a Default workspace or a chat. */
+	workspaceIds: string[];
+	orchestratorSessionId?: string;
+	createdAt: number;
+	updatedAt: number;
+}
+
 export interface ChatContinuationLink {
 	/** The gesture that made the link: a continuation card finds its outcome here after a host restart. */
 	operationId: string;

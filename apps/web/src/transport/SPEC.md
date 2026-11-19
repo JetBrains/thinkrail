@@ -70,6 +70,9 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   container, whose list is its membership: a chat it lists that this surface does not hold is added
   through `addWorkspace`, the `workspace.created` path (which refuses an id this surface saw removed), so
   a chat another window started while this one was away appears;
+  on a host at `CONTAINER_PROTOCOL_VERSION` (v129, `supportsContainers`) it re-reads `container.list` into
+  `installContainers`, generation-fenced like the lists above (an older host installs none), and folds
+  `container.updated` / `container.removed` through `applyContainerUpdated` / `applyContainerRemoved`;
   on a v104+ host it also re-reads `workspace.listCreations` (older hosts install an empty set), first
   re-listing the watched creation's project when the creation is gone, so a create that finished while
   disconnected lands on its workspace instead of racing the list refresh;
@@ -189,7 +192,7 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
   `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `supportsKeybindings`,
-  `updateKeybindings`, `supportsExtensionQuery`, `supportsSpeech`, `openSpeechSocket`,
+  `updateKeybindings`, `supportsExtensionQuery`, `supportsContainers`, `supportsSpeech`, `openSpeechSocket`,
   `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`,
   `supportsTextSearch` (v112 — Find in Files asks `search.text` and listens on `search.textResults` only of a
   host that serves them; against an older host the palette hides the command and the window opened by the
@@ -235,7 +238,8 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   client showed — and `/blob` is only ever addressed for a side the host itself reported as byte-only.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `WS_MAX_FRAME_BYTES`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
-  `WorkspaceRemoved` for `workspace.removed`, `SessionCreatedPayload` for `session.created`,
+  `WorkspaceRemoved` for `workspace.removed`, `Container` + `ContainerRemoved` +
+  `CONTAINER_PROTOCOL_VERSION` for the container pair, `SessionCreatedPayload` for `session.created`,
   `SessionDeletedPayload` for `session.deleted`,
   `HOST_UPDATE_RUN_PROTOCOL_VERSION` + `Ack` + the typed `host.update` method for the CLI-host update action,
   `PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION` for the `supportsPlanReview` gate,

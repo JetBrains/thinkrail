@@ -908,6 +908,16 @@ gate: [[module-contracts]].
   scoped `chat.continuation` push (sockets ≥ `CONTINUATION_PROTOCOL_VERSION`, and only those that see
   chats); `chat.continuationStatus` answers a client that missed the pushes (a reload, a reconnect). Only
   the initiating client navigates — a web-side rule.
+- **Containers (`containers.ts`):** `container.list` / `create` / `rename` / `addWorkspace` /
+  `removeWorkspace` / `remove` are thin handlers over [[submodule-server-containers]], which enforces the
+  membership rules and their codes. `createServer` installs `setContainerPublisher`, publishing the full
+  record on `container.updated` and `{ id }` on `container.removed` to sockets at or above
+  `CONTAINER_PROTOCOL_VERSION` (the only ones subscribed to them); the welcome is unchanged and a client
+  hydrates with `container.list`. The workspace lifecycle publisher hands every event to
+  `observeWorkspaceForContainers` after its own push, so a `workspace.remove` (or any other removal) makes
+  the workspace leave its container — a container left empty goes — and a member's `updated` relinks its
+  container's home; the module never learns of workspaces any other way. `container.remove` dissolves the
+  record only: per-member archive choices are the client's, through `workspace.remove`.
 - **Search composition (`search.ts`):** `search.query` / `search.preview` / `search.text` go to one lazily
   created `SearchService` ([[submodule-server-search]]) fed with `listProjects`, `listAllWorkspaceRecords`, the
   history index's `sessions()`, `specSnapshot` and `listStoredPlans`, plus `listWorkspaces` (without diff
@@ -1021,6 +1031,7 @@ enabled/confirmed choice before entering analytics attribution.
   the `projects` module's injected publisher) + the workspace lifecycle trio
   (`workspace.created`/`updated`/`removed`, published from the `workspaces` module's injected publisher) +
   the creation pair (`workspace.creationChanged`/`creationRemoved`, from its creation publisher) +
+  the container pair (`container.updated`/`removed`, from `containers`' publisher) +
   **`session.deleted`** (published from the agent module's injected publisher) + **`provider.changed`**
   (published from auth's Central/runtime invalidation seam and on a successful provider login) + **`host.updateAvailable`** (published for each
   retained CLI-update lifecycle replacement) use push channels. Every

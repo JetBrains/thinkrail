@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
+	CONTAINER_PROTOCOL_VERSION,
+	type Container,
 	EXTENSION_QUERY_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	KEYBINDINGS_PROTOCOL_VERSION,
@@ -19,7 +21,9 @@ import * as wireTransport from "./wireTransport";
 import {
 	applyWorkspaceListRefresh,
 	mergeSessionStateRecords,
+	refreshContainers,
 	supportsChangeMutations,
+	supportsContainers,
 	supportsExtensionQuery,
 	supportsHostUpdateRun,
 	supportsKeybindings,
@@ -41,6 +45,64 @@ test("extension queries are sent only to a v128 host", () => {
 	expect(supportsExtensionQuery(EXTENSION_QUERY_PROTOCOL_VERSION)).toBe(true);
 	expect(supportsExtensionQuery(EXTENSION_QUERY_PROTOCOL_VERSION - 1)).toBe(false);
 	expect(supportsExtensionQuery(null)).toBe(false);
+});
+
+test("containers are read only from a v129 host", () => {
+	expect(supportsContainers(CONTAINER_PROTOCOL_VERSION)).toBe(true);
+	expect(supportsContainers(CONTAINER_PROTOCOL_VERSION - 1)).toBe(false);
+	expect(supportsContainers(null)).toBe(false);
+});
+
+describe("refreshContainers", () => {
+	const held: Container = {
+		id: "held",
+		name: "Held",
+		workspaceIds: ["w0"],
+		createdAt: 1,
+		updatedAt: 1,
+	};
+	const listed: Container = { ...held, id: "listed", workspaceIds: ["w1"] };
+	const requests: string[] = [];
+	let spy: ReturnType<typeof spyOn> | null = null;
+	beforeEach(() => {
+		requests.length = 0;
+		const transport = {
+			request: (method: string) => {
+				requests.push(method);
+				return Promise.resolve([listed]);
+			},
+		} as unknown as ReturnType<typeof wireTransport.getTransport>;
+		spy = spyOn(wireTransport, "getTransport").mockReturnValue(transport);
+		useAppStore.setState({
+			status: "connected",
+			connectionGeneration: 4,
+			containers: { held },
+		});
+	});
+	afterEach(() => {
+		spy?.mockRestore();
+		useAppStore.setState({ protocolVersion: null, containers: {}, status: "connecting" });
+	});
+
+	test("hydrates the host's list on a container host", async () => {
+		useAppStore.setState({ protocolVersion: CONTAINER_PROTOCOL_VERSION });
+		await refreshContainers(4);
+		expect(requests).toEqual(["container.list"]);
+		expect(useAppStore.getState().containers).toEqual({ listed });
+	});
+
+	test("drops a reply that belongs to an earlier connection", async () => {
+		useAppStore.setState({ protocolVersion: CONTAINER_PROTOCOL_VERSION });
+		await refreshContainers(3);
+		expect(useAppStore.getState().containers).toEqual({ held });
+	});
+
+	test("clears containers without asking an older host", async () => {
+		useAppStore.setState({ protocolVersion: CONTAINER_PROTOCOL_VERSION - 1 });
+		await refreshContainers(4);
+		expect(requests).toEqual([]);
+		expect(useAppStore.getState().containers).toEqual({});
+	});
 });
 
 test("user theme files are read only from a host at or beyond their capability version", () => {

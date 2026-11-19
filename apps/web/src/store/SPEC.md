@@ -169,7 +169,13 @@ roster's catalog reads ([[submodule-web-panels]]).
   navigation stamp still hold. The shell's chat-reconciliation module validates/hydrates that exact target
   before ordinary locally placed-chat hydration; successful authoritative absence consumes it, while failures
   retain it for reconnect.
-  The store owns no URL/history/storage access — `navigation` owns serialization and drivers. It owns the
+  The store owns no URL/history/storage access — `navigation` owns serialization and drivers. It holds
+  the host's **containers** (v129) as `containers` by id: `installContainers` replaces them whole (the
+  `container.list` hydration; empty for an older host), `applyContainerUpdated` upserts a pushed full
+  snapshot and `applyContainerRemoved` drops one, with no client-side membership derivation — when a
+  workspace is archived the host itself pushes its container's new snapshot or removal.
+  `selectContainers` (creation order) and `selectContainerOfWorkspace` (`null` for a standalone
+  workspace) are the only readers. It owns the
   **background-creation slice** (v104): `workspaceCreations` by id, folded from `workspace.creationChanged`
   (`applyWorkspaceCreation`, which also raises one error toast when a running creation turns `failed`) and
   replaced on hydration (`setWorkspaceCreations`), and **`activeCreationId`** — mutually exclusive with

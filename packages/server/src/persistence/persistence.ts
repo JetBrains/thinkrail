@@ -16,6 +16,7 @@ import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import {
 	type AppConfig,
+	type Container,
 	DEFAULT_CONFIG,
 	type ExtensionSettingValues,
 	type HostEnvironment,
@@ -347,6 +348,76 @@ export function loadTurns(): PersistedTurns {
 
 export function saveTurns(turns: PersistedTurns): void {
 	writeJsonAtomic("turns.json", turns);
+}
+
+const CONTAINERS_FILE_VERSION = 1;
+
+interface PersistedContainers {
+	version: typeof CONTAINERS_FILE_VERSION;
+	containers: Container[];
+}
+
+/** `writable: false` when a newer host wrote the file: it is left untouched and reads as empty. */
+export interface ContainersLoad {
+	containers: Container[];
+	writable: boolean;
+}
+
+const CONTAINER_ID = /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/;
+
+/** A container id names its home folder, so it is one plain path segment. */
+export function isContainerId(value: unknown): value is string {
+	return typeof value === "string" && CONTAINER_ID.test(value);
+}
+
+function isContainerRecord(raw: unknown): raw is Container {
+	return (
+		isRecord(raw) &&
+		isContainerId(raw.id) &&
+		typeof raw.name === "string" &&
+		Array.isArray(raw.workspaceIds) &&
+		raw.workspaceIds.every((id) => typeof id === "string" && id !== "") &&
+		(raw.orchestratorSessionId === undefined || typeof raw.orchestratorSessionId === "string") &&
+		Number.isFinite(raw.createdAt) &&
+		Number.isFinite(raw.updatedAt)
+	);
+}
+
+function parseContainers(raw: unknown): Container[] | null {
+	if (!isRecord(raw) || raw.version !== CONTAINERS_FILE_VERSION) return null;
+	const { containers } = raw;
+	if (!Array.isArray(containers) || !containers.every(isContainerRecord)) return null;
+	const members = containers.flatMap((container) => container.workspaceIds);
+	if (new Set(containers.map((container) => container.id)).size !== containers.length) return null;
+	return new Set(members).size === members.length ? containers : null;
+}
+
+export function loadContainers(): ContainersLoad {
+	const path = join(dataDir(), "containers.json");
+	let raw: unknown;
+	try {
+		raw = JSON.parse(readFileSync(path, "utf8"));
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "ENOENT") setAside(path);
+		return { containers: [], writable: true };
+	}
+	const version = isRecord(raw) ? raw.version : undefined;
+	if (
+		typeof version === "number" &&
+		Number.isInteger(version) &&
+		version > CONTAINERS_FILE_VERSION
+	) {
+		return { containers: [], writable: false };
+	}
+	const containers = parseContainers(raw);
+	if (containers) return { containers, writable: true };
+	setAside(path);
+	return { containers: [], writable: true };
+}
+
+export function saveContainers(containers: Container[]): void {
+	const stored: PersistedContainers = { version: CONTAINERS_FILE_VERSION, containers };
+	writeJsonAtomic("containers.json", stored);
 }
 
 export const CHATS_FILE_VERSION = 1;
