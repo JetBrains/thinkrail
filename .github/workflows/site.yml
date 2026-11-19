@@ -53,13 +53,21 @@ jobs:
           grep -rqF "$PUBLIC_POSTHOG_PROJECT_KEY" apps/website/dist || { echo "::error::PostHog key missing from the built site"; exit 1; }
           grep -qF 'data-catalog-source="npm"' apps/website/dist/extensions/index.html || { echo "::error::extensions page was not built from npm"; exit 1; }
       - run: bun run --filter @thinkrail/website smoke:attribution
+      - name: Decide whether to deploy
+        id: gate
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bun apps/website/src/deployGate.ts
       - name: Apply attribution migrations
+        if: steps.gate.outputs.deploy == 'true'
         working-directory: apps/website
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bunx wrangler@4.124.0 d1 migrations apply ATTRIBUTION_DB --remote
       - name: Deploy website
+        if: steps.gate.outputs.deploy == 'true'
         working-directory: apps/website
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -68,7 +76,9 @@ jobs:
           bunx wrangler@4.124.0 pages deploy dist
           --project-name=thinkrail-website
           --branch=main
+          --commit-hash=${{ github.sha }}
       - name: Verify deployment
+        if: steps.gate.outputs.deploy == 'true'
         run: |
           for attempt in $(seq 1 18); do
             ready=true
