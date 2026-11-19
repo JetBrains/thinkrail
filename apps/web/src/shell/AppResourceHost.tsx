@@ -58,6 +58,12 @@ const HOST: ResourceHost = {
 		pierreTheme: THINKRAIL_PIERRE_THEME,
 	},
 	bytesUrl: resourceBytesUrl,
+	openPathExternally: (workspaceId, path) => {
+		void getTransport().request("fs.openExternally", { workspaceId, path });
+	},
+	revealInFileManager: (workspaceId, path) => {
+		void getTransport().request("fs.reveal", { workspaceId, path });
+	},
 	openFile: (workspaceId, path, options) => {
 		void openFileInTab(workspaceId, path, options?.keep ? "keep" : "preview");
 	},

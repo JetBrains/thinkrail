@@ -1,4 +1,5 @@
 import { localeOf, type Translator, useT } from "@thinkrail/locales/react";
+import { useOptionalResourceHost } from "../../host";
 import type { ResourceViewProps } from "../../registry";
 
 function fileName(path: string): string {
@@ -15,6 +16,7 @@ function byteSize(t: Translator, bytes: number | undefined): string {
 
 export default function BinaryView({ resource, content }: ResourceViewProps) {
 	const t = useT();
+	const host = useOptionalResourceHost();
 	const bytes = content.kind === "bytes" ? content : null;
 	return (
 		<div className="flex h-full items-center justify-center bg-container-workspace-bg p-24">
@@ -31,14 +33,27 @@ export default function BinaryView({ resource, content }: ResourceViewProps) {
 						{bytes ? bytes.hash.slice(0, 12) : t("viewer.binary.unavailable")}
 					</dd>
 				</dl>
-				{bytes ? (
-					<a
-						href={bytes.url}
-						download={fileName(resource.path)}
-						className="mt-16 inline-flex rounded-sm bg-control-primary-bg px-12 py-4 tr-text-action text-control-primary-text hover:bg-control-primary-bg-hovered focus-visible:focus-ring"
-					>
-						{t("viewer.binary.openExternally")}
-					</a>
+				{bytes && host ? (
+					<div className="mt-16 flex flex-wrap gap-8">
+						{host ? (
+							<button
+								type="button"
+								onClick={() => host.openPathExternally(resource.workspaceId, resource.path)}
+								className="inline-flex rounded-sm bg-control-primary-bg px-12 py-4 tr-text-action text-control-primary-text hover:bg-control-primary-bg-hovered focus-visible:focus-ring"
+							>
+								{t("viewer.binary.openExternally")}
+							</button>
+						) : null}
+						{host ? (
+							<button
+								type="button"
+								onClick={() => host.revealInFileManager(resource.workspaceId, resource.path)}
+								className="inline-flex rounded-sm border border-border-default px-12 py-4 tr-text-action text-text-default hover:bg-control-bg-hovered focus-visible:focus-ring"
+							>
+								{t("viewer.binary.revealInFileManager")}
+							</button>
+						) : null}
+					</div>
 				) : null}
 			</section>
 		</div>

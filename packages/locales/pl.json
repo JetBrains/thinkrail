@@ -2691,6 +2691,7 @@
 	"viewer.binary.differ": "Pliki binarne różnią się",
 	"viewer.binary.modified": "Zmodyfikowany: {{size}}",
 	"viewer.binary.openExternally": "Otwórz zewnętrznie",
+	"viewer.binary.revealInFileManager": "Pokaż w menedżerze plików",
 	"viewer.binary.original": "Oryginał: {{size}}",
 	"viewer.binary.unavailable": "Niedostępny",
 	"viewer.code.commentOnLine": "Skomentuj tę linię",

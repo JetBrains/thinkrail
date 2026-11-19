@@ -5,6 +5,7 @@ import { delimiter, join, win32 } from "node:path";
 import {
 	listAvailableEditors,
 	openEditor,
+	openWithDefaultApp,
 	pathWhich,
 	revealInFileManager,
 	type SpawnFn,
@@ -213,5 +214,41 @@ describe("revealInFileManager", () => {
 			throw new Error("ENOENT");
 		};
 		expect(() => revealInFileManager(dir, throwingSpawn, "linux")).toThrow(/linux/);
+	});
+});
+
+describe("openWithDefaultApp", () => {
+	const dir = mkdtempSync(join(tmpdir(), "thinkrail-open-"));
+	const file = join(dir, "sheet.xlsx");
+	writeFileSync(file, "x");
+	const appOpenCalls: { cmd: string[]; options: { windowsHide?: boolean } | undefined }[] = [];
+	const recordingOpenSpawn: SpawnFn = (cmd, options) => {
+		appOpenCalls.push({ cmd, options });
+	};
+	afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+	test("macOS: open with the default application", () => {
+		appOpenCalls.length = 0;
+		openWithDefaultApp(file, recordingOpenSpawn, "darwin");
+		expect(appOpenCalls.map((call) => call.cmd)).toEqual([["open", file]]);
+		expect(appOpenCalls[0]?.options).toEqual({ windowsHide: false });
+	});
+
+	test("Windows: explorer opens the file with its association", () => {
+		appOpenCalls.length = 0;
+		openWithDefaultApp(file.replaceAll("\\", "/"), recordingOpenSpawn, "win32");
+		expect(appOpenCalls.map((call) => call.cmd)).toEqual([["explorer", win32.normalize(file)]]);
+	});
+
+	test("Linux: xdg-open honors the desktop default", () => {
+		appOpenCalls.length = 0;
+		openWithDefaultApp(file, recordingOpenSpawn, "linux");
+		expect(appOpenCalls.map((call) => call.cmd)).toEqual([["xdg-open", file]]);
+	});
+
+	test("a missing file is an error, not a silent no-op", () => {
+		expect(() =>
+			openWithDefaultApp(join(dir, "missing.bin"), recordingOpenSpawn, "darwin"),
+		).toThrow(/File not found/);
 	});
 });

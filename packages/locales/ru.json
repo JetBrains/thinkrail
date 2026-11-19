@@ -3535,6 +3535,7 @@
 	"viewer.binary.differ": "Бинарные файлы различаются",
 	"viewer.binary.modified": "Изменено: {{size}}",
 	"viewer.binary.openExternally": "Открыть во внешнем приложении",
+	"viewer.binary.revealInFileManager": "Показать в файловом менеджере",
 	"viewer.binary.original": "Исходный файл: {{size}}",
 	"viewer.binary.unavailable": "Недоступно",
 	"viewer.code.commentOnLine": "Оставить комментарий к этой строке",
