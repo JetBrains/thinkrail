@@ -98,6 +98,8 @@ export interface Card {
 	/** Its roadmap project (`P-n`) and one of that project's milestones. */
 	roadmapProjectId?: string;
 	milestoneId?: string;
+	/** Its planned start pinned on the step graph, an ISO date. */
+	pinnedStart?: string;
 	/** The initiative it serves, live: its roadmap project's, else one listing it, on this board or another. */
 	initiative?: ServedInitiative;
 	/** A source's item the board has not stored: an unbound workspace's task-spec, an untouched issue. */

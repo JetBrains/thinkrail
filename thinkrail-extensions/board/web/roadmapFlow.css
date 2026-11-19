@@ -1,0 +1,42 @@
+@import "@xyflow/react/dist/base.css" layer(xyflow);
+
+@layer xyflow {
+	.react-flow {
+		--xy-background-color: var(--container-content-bg);
+		--xy-background-pattern-color: var(--border-muted);
+		--xy-node-color: var(--text-default);
+		--xy-node-background-color: var(--container-elevated-bg);
+		--xy-node-border: 1px solid var(--border-default);
+		--xy-node-border-selected: 1px solid var(--primary);
+		--xy-node-group-background-color: var(--container-elevated-bg);
+		--xy-node-boxshadow-hover: none;
+		--xy-node-boxshadow-selected: none;
+		--xy-node-border-radius: var(--radius-sm);
+		--xy-edge-stroke: var(--text-subtle);
+		--xy-edge-stroke-width: 1;
+		--xy-edge-stroke-selected: var(--primary);
+		--xy-edge-label-background-color: var(--container-elevated-bg);
+		--xy-edge-label-color: var(--text-muted);
+		--xy-connectionline-stroke: var(--primary);
+		--xy-connectionline-stroke-width: 2;
+		--xy-handle-background-color: var(--text-muted);
+		--xy-handle-border-color: var(--container-elevated-bg);
+		--xy-selection-background-color: var(--primary-subtle);
+		--xy-selection-border: 1px dashed var(--primary);
+		--xy-resize-background-color: var(--primary);
+		--xy-attribution-background-color: var(--container-elevated-bg);
+		--xy-minimap-background-color: var(--container-elevated-bg);
+		--xy-minimap-mask-background-color: var(--overlay);
+		--xy-minimap-mask-stroke-color: var(--border-default);
+		--xy-minimap-mask-stroke-width: 1;
+		--xy-minimap-node-background-color: var(--text-subtle);
+		--xy-minimap-node-stroke-color: transparent;
+		--xy-minimap-node-stroke-width: 0;
+		--xy-controls-button-background-color: var(--container-elevated-bg);
+		--xy-controls-button-background-color-hover: var(--control-bg-hovered);
+		--xy-controls-button-color: var(--text-muted);
+		--xy-controls-button-color-hover: var(--text-default);
+		--xy-controls-button-border-color: var(--border-muted);
+		--xy-controls-box-shadow: none;
+	}
+}

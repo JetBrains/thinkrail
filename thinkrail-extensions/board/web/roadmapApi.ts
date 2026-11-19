@@ -113,10 +113,38 @@ export type Forecast =
 	| { status: "done" }
 	| { status: "insufficient"; reason: ForecastMiss };
 
-/** The step graph's links; the graph's other facts arrive with its view. */
+/** A step graph node; days are days since 1970-01-01 UTC, fractional. */
+export interface ScheduleNode {
+	id: string;
+	kind: "card" | "milestone";
+	/** Its roadmap project, the graph's lane. */
+	lane: string | null;
+	start: number;
+	end: number;
+	slack: number;
+	critical: boolean;
+	/** A pinned start before its blockers' end. */
+	conflict: boolean;
+	pinned: boolean;
+	done: boolean;
+	late?: true;
+}
+
+/** "`from` blocks `to`", or a card ahead of its milestone. */
 export interface ScheduleEdge {
 	from: string;
 	to: string;
+	critical: boolean;
+	conflict: boolean;
+}
+
+export interface Schedule {
+	today: number;
+	finish: number;
+	/** Every node after its blockers. */
+	nodes: ScheduleNode[];
+	edges: ScheduleEdge[];
+	criticalPath: string[];
 }
 
 export interface RoadmapView {
@@ -133,7 +161,10 @@ export interface RoadmapView {
 	};
 	health: Record<string, HealthView>;
 	forecast: Record<string, Forecast>;
-	schedule: { edges: ScheduleEdge[] };
+	schedule: Schedule;
+	/** Each initiative's own critical path: the critical node ids among its cards and milestones. */
+	critical: Record<string, string[]>;
+	insufficientData: { throughput: boolean; initiatives: string[] };
 }
 
 export interface InitiativePatch {
@@ -173,7 +204,10 @@ export function isRoadmapView(value: unknown): value is RoadmapView {
 		isObject(value.health) &&
 		isObject(value.forecast) &&
 		isObject(value.schedule) &&
-		Array.isArray(value.schedule.edges)
+		typeof value.schedule.today === "number" &&
+		Array.isArray(value.schedule.nodes) &&
+		Array.isArray(value.schedule.edges) &&
+		isObject(value.critical)
 	);
 }
 
@@ -333,6 +367,29 @@ export async function assignCard(
 	place: { roadmapProjectId?: string | null; milestoneId?: string | null },
 ): Promise<void> {
 	await host.query("card.assignProject", { cardId, ...place });
+}
+
+/** Pins a card's planned start on the step graph, an ISO date; only a card not started yet. */
+export async function pinCard(host: Querying, cardId: string, start: string): Promise<void> {
+	await host.query("card.pin", { cardId, start });
+}
+
+export async function unpinCard(host: Querying, cardId: string): Promise<void> {
+	await host.query("card.unpin", { cardId });
+}
+
+/** Moves a card's planned start by whole `days`, with every pinned card it blocks. */
+export async function shiftChain(host: Querying, cardId: string, days: number): Promise<void> {
+	await host.query("card.shiftChain", { cardId, days });
+}
+
+/** "`from` blocks `to`"; the host refuses a link that closes a cycle. */
+export async function linkCards(host: Querying, from: string, to: string): Promise<void> {
+	await host.query("card.link", { from, to });
+}
+
+export async function unlinkCards(host: Querying, from: string, to: string): Promise<void> {
+	await host.query("card.unlink", { from, to });
 }
 
 /** Starts a roadmap chat in a new chat of the project's Default workspace, then opens it. */

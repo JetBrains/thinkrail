@@ -1,5 +1,6 @@
 import type { PanelHost, PanelPeekEntry, PanelWorkspaceTarget } from "@thinkrail/extension-api/web";
-import type { AttemptLive, BoardView, Card } from "./api";
+import type { AttemptLive, BoardView, Card, Category } from "./api";
+import type { Initiative, RoadmapView, Rollup, Schedule, ScheduleEdge } from "./roadmapApi";
 
 export function liveOf(overrides: Partial<AttemptLive> = {}): AttemptLive {
 	return {
@@ -103,4 +104,83 @@ export function fakeHost(answer: (method: string) => unknown = () => ({})): Fake
 		hostApiVersion: 1,
 	};
 	return { host, queries, peeks, files, workspaces };
+}
+
+export function scheduleOf(overrides: Partial<Schedule> = {}): Schedule {
+	return { today: 20_000, finish: 20_000, nodes: [], edges: [], criticalPath: [], ...overrides };
+}
+
+export function edgeOf(
+	from: string,
+	to: string,
+	overrides: Partial<ScheduleEdge> = {},
+): ScheduleEdge {
+	return { from, to, critical: false, conflict: false, ...overrides };
+}
+
+export function initiativeOf(overrides: Partial<Initiative> = {}): Initiative {
+	return {
+		id: "I-1",
+		title: "Planning surface",
+		outcome: "Work is visible and starts in one place.",
+		criteria: [],
+		horizon: "now",
+		rank: 1,
+		specRefs: [],
+		updates: [],
+		cardIds: [],
+		externalCards: [],
+		createdAt: 1,
+		updatedAt: 1,
+		depth: 0,
+		childIds: [],
+		memberCardIds: [],
+		memberExternalCards: [],
+		...overrides,
+	};
+}
+
+export function rollupOf(
+	counts: Partial<Record<Category, number>> = {},
+	extra: Partial<Rollup> = {},
+) {
+	const byCategory = {
+		triage: 0,
+		backlog: 0,
+		unstarted: 0,
+		started: 0,
+		review: 0,
+		completed: 0,
+		canceled: 0,
+		...counts,
+	};
+	return {
+		cards: Object.values(byCategory).reduce((sum, count) => sum + count, 0),
+		byCategory,
+		points: { total: 0, completed: 0 },
+		agents: { working: 0, waiting: 0, failed: 0 },
+		blocked: 0,
+		timeSpentMs: 0,
+		...extra,
+	} satisfies Rollup;
+}
+
+export function viewOf(
+	initiatives: Initiative[],
+	overrides: Partial<RoadmapView> = {},
+): RoadmapView {
+	return {
+		projectId: "p1",
+		projectName: "ThinkRail",
+		initiatives,
+		projects: [],
+		externalCards: [],
+		rollups: { initiatives: {}, projects: {}, milestones: {} },
+		health: {},
+		forecast: {},
+		schedule: scheduleOf(),
+		critical: {},
+		insufficientData: { throughput: true, initiatives: [] },
+		...overrides,
+	};
 }

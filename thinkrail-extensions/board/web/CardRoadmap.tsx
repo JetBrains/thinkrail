@@ -1,9 +1,11 @@
-import { RiFlag2Line } from "@remixicon/react";
+import { RiFlag2Line, RiPushpinFill } from "@remixicon/react";
 import type { PanelHost } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import { useId } from "react";
 import type { Card } from "./api";
 import { FIELD } from "./CardParts";
+import { dayText } from "./labels";
 import {
 	addInitiativeCards,
 	assignCard,
@@ -11,6 +13,7 @@ import {
 	loadRoadmap,
 	type RoadmapView,
 	removeInitiativeCards,
+	unpinCard,
 } from "./roadmapApi";
 import { useBoardChanged, useHostQuery } from "./useHostQuery";
 
@@ -32,7 +35,10 @@ export async function setCardInitiative(
 		await addInitiativeCards(host, view.projectId, target.id, [cardId]);
 }
 
-/** The card's place on the roadmap: initiative, project and milestone, with its initiative's outcome. */
+/**
+ * The card's place on the roadmap: initiative, project and milestone, with its initiative's outcome, and
+ * its planned start when the step graph pinned one.
+ */
 export function CardRoadmap({
 	host,
 	projectId,
@@ -157,6 +163,24 @@ export function CardRoadmap({
 					</select>
 				</label>
 			</div>
+			{card.pinnedStart ? (
+				<div
+					data-testid="board-card-pinned"
+					data-start={card.pinnedStart}
+					className="flex flex-wrap items-center gap-4 tr-text-metadata text-text-muted"
+				>
+					<RiPushpinFill aria-hidden className="size-12 shrink-0" />
+					<span>{t("board.roadmap.card.pinned", { date: dayText(card.pinnedStart) })}</span>
+					<Button
+						variant="ghost"
+						size="s"
+						data-testid="board-card-unpin"
+						onClick={() => write(() => unpinCard(host, card.id))}
+					>
+						{t("board.roadmap.graph.unpin")}
+					</Button>
+				</div>
+			) : null}
 			{viaProject && project ? (
 				<span className="tr-text-metadata text-text-subtle">
 					{t("board.roadmap.card.viaProject", { project: project.title })}

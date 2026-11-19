@@ -3,10 +3,17 @@ import type { PanelChatTarget } from "@thinkrail/extension-api/web";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { Category } from "./api";
 import { setCardInitiative } from "./CardRoadmap";
 import { CardTile } from "./CardTile";
-import { cardOf, fakeHost } from "./fixtures.test";
+import {
+	cardOf,
+	edgeOf,
+	fakeHost,
+	initiativeOf,
+	rollupOf,
+	scheduleOf,
+	viewOf,
+} from "./fixtures.test";
 import { InitiativeDetails } from "./InitiativePanel";
 import { dayText } from "./labels";
 import { GoalsView, HorizonsView, InitiativeCard, type RoadmapActions } from "./Roadmap";
@@ -18,15 +25,12 @@ import {
 	goalGroups,
 	horizonColumns,
 	horizonMove,
-	type Initiative,
 	initiativeDependencies,
 	initiativePeekEntry,
 	isRoadmapView,
 	moveInitiative,
 	openRoadmapChat,
 	parentOptions,
-	type RoadmapView,
-	type Rollup,
 	rollupBar,
 	updateInitiative,
 } from "./roadmapApi";
@@ -40,65 +44,6 @@ const ACTIONS: RoadmapActions = {
 	accept: noop,
 	discard: noop,
 };
-
-function initiativeOf(overrides: Partial<Initiative> = {}): Initiative {
-	return {
-		id: "I-1",
-		title: "Planning surface",
-		outcome: "Work is visible and starts in one place.",
-		criteria: [],
-		horizon: "now",
-		rank: 1,
-		specRefs: [],
-		updates: [],
-		cardIds: [],
-		externalCards: [],
-		createdAt: 1,
-		updatedAt: 1,
-		depth: 0,
-		childIds: [],
-		memberCardIds: [],
-		memberExternalCards: [],
-		...overrides,
-	};
-}
-
-function rollupOf(counts: Partial<Record<Category, number>> = {}, extra: Partial<Rollup> = {}) {
-	const byCategory = {
-		triage: 0,
-		backlog: 0,
-		unstarted: 0,
-		started: 0,
-		review: 0,
-		completed: 0,
-		canceled: 0,
-		...counts,
-	};
-	return {
-		cards: Object.values(byCategory).reduce((sum, count) => sum + count, 0),
-		byCategory,
-		points: { total: 0, completed: 0 },
-		agents: { working: 0, waiting: 0, failed: 0 },
-		blocked: 0,
-		timeSpentMs: 0,
-		...extra,
-	} satisfies Rollup;
-}
-
-function viewOf(initiatives: Initiative[], overrides: Partial<RoadmapView> = {}): RoadmapView {
-	return {
-		projectId: "p1",
-		projectName: "ThinkRail",
-		initiatives,
-		projects: [],
-		externalCards: [],
-		rollups: { initiatives: {}, projects: {}, milestones: {} },
-		health: {},
-		forecast: {},
-		schedule: { edges: [] },
-		...overrides,
-	};
-}
 
 const goal = initiativeOf({ id: "I-1", title: "Agents without losing control", horizon: "later" });
 const child = initiativeOf({
@@ -202,14 +147,14 @@ describe("the roadmap's derivations", () => {
 
 	test("say an initiative waits for another whose card blocks one of its own, never for its relatives", () => {
 		const view = viewOf(tree, {
-			schedule: {
+			schedule: scheduleOf({
 				edges: [
-					{ from: "TR-9", to: "TR-1" },
-					{ from: "TR-9", to: "TR-2" },
-					{ from: "TR-1", to: "TR-2" },
-					{ from: "TR-7", to: "TR-1" },
+					edgeOf("TR-9", "TR-1"),
+					edgeOf("TR-9", "TR-2"),
+					edgeOf("TR-1", "TR-2"),
+					edgeOf("TR-7", "TR-1"),
 				],
-			},
+			}),
 		});
 		const after = initiativeDependencies(view);
 		expect(after.get("I-2")?.map((entry) => entry.id)).toEqual(["I-4"]);

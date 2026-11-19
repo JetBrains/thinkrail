@@ -5,7 +5,7 @@ status: draft
 title: Board extension
 parent: module-thinkrail-extensions
 depends-on: [module-extension-api]
-references: [task-board-core, task-project-board, submodule-server-extensions, submodule-server-host, module-contracts, submodule-web-shell, submodule-web-shell-layout]
+references: [task-board-core, task-project-board, submodule-server-extensions, submodule-server-host, module-contracts, submodule-web-shell, submodule-web-shell-layout, module-ext-session-insights]
 ---
 
 ## Responsibility
@@ -35,8 +35,8 @@ half is the Board side tool (with its Roadmap views), the card and the initiativ
     withholds its tools.
 - **`./web`**: `defineWebExtension({ name: "board", title, sideTools: { board }, panels: { card, initiative },
   statusItems: { inbox }, layoutPresets: { board }, commands, shortcuts })`, in the web registry.
-  - It imports `extension-api/web`, `contracts` types, `locales`, `ui`, React and `@dnd-kit/core`, never its
-    `./server` half: the wire shapes it reads are restated in `web/api.ts` (the roadmap's in
+  - It imports `extension-api/web`, `contracts` types, `locales`, `ui`, React, `@dnd-kit/core` and, in the
+    Roadmap view's lazy chunk alone, `@xyflow/react` (the catalog pin, 12.12.1), never its `./server` half: the wire shapes it reads are restated in `web/api.ts` (the roadmap's in
     `web/roadmapApi.ts`) and checked on arrival (an unknown shape is a `BoardReplyError`, a version skew), and
     `workflowFor` mirrors the server's size rule for the Start form's default.
   - It reaches the host only through its `PanelHost`.
@@ -445,8 +445,9 @@ error (with *Retry*) states replace the body; a failed write shows a dismissible
 
 **The Roadmap view** (`RoadmapPane`) reads `roadmap.get` for the same project and re-reads it on its own
 writes and every `board.changed`; it does not depend on the board having cards. Its sub-switch is *Now /
-Next / Later* and *Goals* (the Timeline and the step graph come with D3, Insights with D4; no disabled tabs),
-beside *Roadmap review* (a `review` roadmap chat). The derivations it draws are pure (`web/roadmapApi.ts`):
+Next / Later*, *Timeline*, *Goals* and *Step graph* (Insights comes with D4; no disabled tabs), beside
+*Roadmap review* (a `review` roadmap chat). The derivations it draws are pure (`web/roadmapApi.ts`,
+`web/roadmapGraph.ts`, the graph's edits in `web/graphEdits.ts`):
 
 - **Now / Next / Later** (`horizonColumns`): three horizon columns (side by side from 720 px, else stacked)
   holding every initiative, top-level and nested, by rank. A card shows its goal chip (the top-level
@@ -465,6 +466,45 @@ beside *Roadmap review* (a `review` roadmap chat). The derivations it draws are 
 - **Goals** (`goalGroups`): each top-level initiative as a group — its title, its spec refs as chips (a
   goal-and-requirements capability, say), its figures and health — listing its descendants in tree order,
   each with its horizon chip, stack bar, percent and health.
+- **Step graph** (`stepGraphLayout` over `roadmap.get`'s `schedule` and the Board tool's own `board.get` for
+  titles and agent states): the whole board or one initiative (a picker; an initiative shows its member cards
+  and its projects' milestones with its own `critical` path). x is time — today at 0, a day 40 px (*Days*) or
+  16 px (*Weeks*), a week line per Monday, the today line, lane bands — all SVG in a `ViewportPortal`, their
+  labels held at the visible edges. Lanes are the roadmap projects in order, then *No project*, each lane's
+  nodes packed first-fit into rows (`packRows`, a 12 px clearance, a milestone's label counted). A card is
+  as wide as its span (at least 72 px) and looks its status (`nodeStatus`, `NODE_LOOKS`): done dimmed,
+  working `primary` with a spinner, waiting `feedback-warning` with the hatched wait from today to its end,
+  failed `feedback-error`, started `primary-muted`, Triage dashed `series-3`, Ready / Backlog neutral;
+  critical rings `feedback-warning`, a conflict borders `feedback-error`, a pin shows `RiPushpinFill` and a
+  non-critical card its slack *+Nd*. A milestone is a diamond with its date (`feedback-warning` critical,
+  `feedback-error` late). Links are `blocks` (and a card's edge to its milestone, not deletable): critical
+  `feedback-warning` animated, conflict `feedback-error` dashed, each with its arrow. The header gives the
+  finish, each milestone's forecast date and the critical path; a legend sits under the canvas; MiniMap and
+  zoom controls. **Editing**: a card not started and with no agent working or waiting drags along time, y
+  held to its row, snapped to days (`dragCommit`): the drop → `card.pin` at its day, with Shift →
+  `card.shiftChain` by the days moved (from the start the host counts from); the same day is no edit, and an
+  arrow key on a selected card pins it a day over. A right handle dragged to a card's left handle →
+  `card.link`; one closing a cycle (`linkRefusal`, over the board's `blocks`) is refused in place with an
+  error notice and no query. A selected or focused link and Delete / Backspace → `card.unlink`. A pinned
+  card's context menu (right click, or the context-menu key on a focused node) has *Unpin* → `card.unpin`,
+  beside *Open in Peek* and *Open workspace*. A click peeks the card (a milestone its project's initiative),
+  a double click enters its open attempt's workspace. A dragged node and a deleted link hold their place
+  until the next answer replaces the view; each edit reports in a status line over the canvas for 5 s.
+- **Timeline** (`timelineLayout`, the same scale): a row per initiative, depth-first, its bar from its
+  member cards' earliest scheduled start (else its creation) to its target, else its 50 % forecast, else its
+  cards' latest end, filled as done (`rollupBar`), the 50–85 % forecast band hatched in `feedback-info`
+  when there is one, the target a diamond; *insufficient data* leaves plain bars and says so in the toolbar.
+  An initiative with roadmap projects unfolds them under it (their cards' span and milestones). Dashed arrows
+  join the initiatives `initiativeDependencies` links; a click opens the initiative (a project's) in Peek.
+- **The graph and the timeline are one lazy chunk** (`RoadmapFlow`, `React.lazy` from `Roadmap.tsx`), so
+  neither the entry chunk nor the Board tool's carries `@xyflow/react`; the app's build shares xyflow with
+  the session-insights process map. They follow [[module-ext-session-insights]]'s process-map rules:
+  `base.css` imported only `layer(xyflow)` (`web/roadmapFlow.css`), a layer `apps/web`'s `index.css` orders
+  below `components` and `utilities` so token utilities win, every `--xy-*` variable mapped to a semantic
+  token there, `colorMode` from `<html data-theme-appearance>` (`data-theme` is a theme id) followed through
+  `onThemeSwap`, xyflow's screen-reader texts from locale keys (`ariaLabelConfig`), and the attribution kept,
+  restyled with token utilities on the frame. Nodes carry their width, height and handles, so xyflow never
+  waits on a measure; node and edge looks are token utilities, SVG attributes or classes, never style objects.
 
 **The initiative in Peek** is the `initiative` panel (scope `session`, params `{ projectId, initiativeId }`,
 the crumb `<id> · <title>`). It reads `roadmap.get` and `board.get` for that board and re-reads both on its
@@ -515,7 +555,8 @@ there. The center and the bottom keep the chat and the terminals, and leaving re
   its initiative's id, title (opening it in Peek) and outcome, and the *Initiative*, *Project* and *Milestone*
   selectors — an initiative moves it off those listing it directly onto the picked one (`setCardInitiative`:
   `initiative.removeCards` / `addCards`) and is fixed by a roadmap project that has one, the project and the
-  milestone → `card.assignProject` —, the description, the acceptance criteria and spec refs (add / remove), the
+  milestone → `card.assignProject` —, its planned start when the step graph pinned one, with *Unpin*
+  (`card.unpin`), the description, the acceptance criteria and spec refs (add / remove), the
   cards it blocks (picked from the board) and those blocking it. Its writes go to the id `card.get`
   answered, so an issue's card stored by the first edit takes the next ones;
 - **Task-specs**: each of the card's task-specs with its status and path. *Open* shows the file in Peek
@@ -609,7 +650,12 @@ Their guidelines say two things:
   horizon drop and parent options, the writes each sends (accept / discard / move, the panel's
   `initiative.update` patches, `card.assignProject`, moving a card between initiatives, `roadmap.chat` then
   `openChat`), and the rendered initiative card (proposed or not), horizons, goals, the tile's chip and the
-  initiative panel.
+  initiative panel; the step graph and timeline (`roadmapGraph.test.tsx`): x mapping, ISO days and Mondays,
+  row packing, lanes and their bands, statuses, slack, pins, waits, links' critical and conflict, an
+  initiative's scope and critical path, the timeline's bars, bands, done fill, unfolded projects and links,
+  the status look mapping, the drop's pin / shift / none, the writes each edit sends (`card.pin`,
+  `card.shiftChain`, `card.link` with its cycle refusal, `card.unlink` only for `blocks` links, `card.unpin`)
+  and both views rendered (xyflow's server render).
 - **No-agent e2e** (`e2e/board.spec.ts`): open the Board tool, create a card into Backlog, edit it in Peek,
   Start it (a worktree and a chat; the kickoff text captured from `workspace.creationChanged`, no model
   needed), the card in Building; a drag and Alt+→ logged as overrides; List view; the Solo preset; the
@@ -627,7 +673,11 @@ Their guidelines say two things:
   it back on reopen; the roadmap: an initiative created in Next, dragged to Now, opened in Peek, given
   criteria and a target and a card (the rollup *0/1*), shown under its goal in Goals, and *Plan with agent*
   starting a chat in the Default workspace whose kickoff (from the `roadmap.chat` reply, no model needed)
-  carries the outcome.
+  carries the outcome; the step graph: three cards (two linked, two in a roadmap project with a milestone)
+  as nodes with the link, a node dragged three days right pinned (the card in Peek shows that date), a link
+  drawn handle to handle (a conflict, the dragged card being pinned earlier), a cycle refused in place, a
+  link clicked and deleted; the timeline: the initiative's bar and target with not enough data, the link to
+  the initiative it blocks, its project unfolded and a click opening it in Peek.
 - **Live e2e** (`e2e/board.live.spec.ts`, `@agent`, through `bun run e2e:full e2e/board.live.spec.ts`): an S
   card asking for a one-line README example, started from Peek; the tile's last-action line seen while
   the agent works (recorded by a `MutationObserver`, since it is transient); the card in Review with its
@@ -643,6 +693,7 @@ These land later:
 - a task-spec committed to the branch shows in every unbound workspace that has it;
 - removing a "blocks" link from the tools;
 - an initiative's `into` (D / G);
-- the Timeline and the step graph (D3), `insights.get` and Insights (D4), the roadmap skills (D4; until then
+- the prototype's "What if you answered now?" toggle on the step graph (the schedule has no wait estimate);
+- `insights.get` and Insights (D4), the roadmap skills (D4; until then
   a roadmap chat's kickoff carries its instructions) and Publish — the next steps of `TASK-roadmap`;
 - another board's write does not publish the boards whose initiatives list its cards as external.

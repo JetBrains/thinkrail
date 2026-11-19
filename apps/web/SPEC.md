@@ -330,6 +330,10 @@ themselves.
   strict consumers still pass through `lib.cssColorToHex`. Data-driven tests enforce the existing
   contrast floor (body/muted ≥ 4.5:1 and hint ≥ 3:1 on the primary declared surfaces) for every discovered
   manifest.
+- **The cascade layers are declared once, first in `index.css`:** `theme, base, xyflow, components,
+  utilities`. So a lazy chunk's `@layer xyflow` (xyflow's structural `base.css`, which extension web halves
+  import only `layer(xyflow)`, their `--xy-*` variables mapped to tokens) sits below the semantic classes
+  and every utility whenever it loads, instead of landing after `utilities`.
 - Radius tokens **are** Tailwind's radius namespace: `tokens.css` declares `--radius-xs/sm/md/lg` in an
   `@theme static` block that first resets Tailwind's default scale (`--radius-*: initial`). So
   `rounded-<step>` and its side variants resolve to the live tokens, an undeclared step such as

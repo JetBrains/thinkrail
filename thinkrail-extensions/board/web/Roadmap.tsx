@@ -27,8 +27,8 @@ import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactNode, useState } from "react";
-import type { BoardLayout } from "./api";
+import { lazy, type ReactNode, Suspense, useState } from "react";
+import type { BoardLayout, BoardView } from "./api";
 import { FIELD } from "./CardParts";
 import { HORIZON_HINTS, HORIZON_LABELS } from "./labels";
 import { AgentDots, HealthChip, HorizonChip, ProgressFigures, StackBar } from "./RoadmapParts";
@@ -54,7 +54,9 @@ import {
 } from "./roadmapApi";
 import { useBoardChanged, useHostQuery } from "./useHostQuery";
 
-export type RoadmapSubView = "horizons" | "goals";
+export type RoadmapSubView = "horizons" | "timeline" | "goals" | "graph";
+
+const RoadmapFlow = lazy(() => import("./RoadmapFlow"));
 
 export interface RoadmapActions {
 	open: (initiative: Initiative) => void;
@@ -491,15 +493,18 @@ export function GoalsView({ view, actions }: { view: RoadmapView; actions: Roadm
 
 /**
  * The Board tool's Roadmap view: the board's `roadmap.get`, re-read on `board.changed`, as Now / Next /
- * Later or Goals; an initiative opens in Peek.
+ * Later, the timeline, Goals or the step graph (those two a lazy chunk); an initiative opens in Peek.
  */
 export function RoadmapPane({
 	host,
 	layout,
+	board,
 	onError,
 }: {
 	host: PanelHost;
 	layout: BoardLayout;
+	/** The Board tool's own `board.get`: the step graph's card titles and states. */
+	board: BoardView | null;
 	onError: (error: unknown) => void;
 }) {
 	const t = useT();
@@ -550,10 +555,22 @@ export function RoadmapPane({
 					onClick={() => setSub("horizons")}
 				/>
 				<ToggleSegment
+					testid="board-roadmap-view-timeline"
+					label={t("board.roadmap.view.timeline")}
+					active={sub === "timeline"}
+					onClick={() => setSub("timeline")}
+				/>
+				<ToggleSegment
 					testid="board-roadmap-view-goals"
 					label={t("board.roadmap.view.goals")}
 					active={sub === "goals"}
 					onClick={() => setSub("goals")}
+				/>
+				<ToggleSegment
+					testid="board-roadmap-view-graph"
+					label={t("board.roadmap.view.graph")}
+					active={sub === "graph"}
+					onClick={() => setSub("graph")}
 				/>
 				<Button
 					variant="ghost"
@@ -589,8 +606,29 @@ export function RoadmapPane({
 				</div>
 			) : sub === "horizons" ? (
 				<HorizonsView view={roadmap.state.value} layout={layout} actions={actions} />
-			) : (
+			) : sub === "goals" ? (
 				<GoalsView view={roadmap.state.value} actions={actions} />
+			) : (
+				<Suspense
+					fallback={
+						<LoadingRegion
+							rows={6}
+							label={t("board.loading")}
+							testId="board-roadmap-flow-loading"
+							className="min-h-0 flex-1 overflow-hidden p-8"
+						/>
+					}
+				>
+					<RoadmapFlow
+						host={host}
+						view={roadmap.state.value}
+						board={board}
+						kind={sub}
+						layout={layout}
+						onError={onError}
+						onReload={roadmap.reload}
+					/>
+				</Suspense>
 			)}
 		</div>
 	);

@@ -1019,3 +1019,161 @@ test("the roadmap: an initiative made in Next is dragged to Now, edited in Peek 
 	).toHaveText("Roadmap views");
 	await boardTool(page).getByTestId("board-mode-toggle").click();
 });
+
+function graphNode(page: Page, id: string): Locator {
+	return boardTool(page).locator(`.react-flow__node[data-id="${id}"]`);
+}
+
+function graphEdge(page: Page, from: string, to: string): Locator {
+	return boardTool(page).locator(
+		`[data-testid="board-graph-edge"][data-from="${from}"][data-to="${to}"]`,
+	);
+}
+
+/** A press, a stepped move and a release on the page, as a person drags on React Flow's canvas. */
+async function dragBy(page: Page, from: { x: number; y: number }, to: { x: number; y: number }) {
+	await page.mouse.move(from.x, from.y);
+	await page.mouse.down();
+	await page.mouse.move(from.x + 6, from.y, { steps: 2 });
+	await page.mouse.move(to.x, to.y, { steps: 12 });
+	await page.mouse.up();
+}
+
+async function centerOf(target: Locator): Promise<{ x: number; y: number }> {
+	const box = await target.boundingBox();
+	if (!box) throw new Error("the target has no geometry");
+	return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+/** The screen point halfway along an edge's drawn path, where a click lands on the edge itself. */
+async function edgeMiddle(edge: Locator): Promise<{ x: number; y: number }> {
+	return edge.locator("path.react-flow__edge-path").evaluate((path: SVGPathElement) => {
+		const point = path.getPointAtLength(path.getTotalLength() / 2);
+		const matrix = path.getScreenCTM();
+		if (!matrix) throw new Error("the edge is not drawn");
+		const screen = new DOMPoint(point.x, point.y).matrixTransform(matrix);
+		return { x: screen.x, y: screen.y };
+	});
+}
+
+const isoInDays = (days: number) =>
+	new Date((Math.floor(Date.now() / 86_400_000) + days) * 86_400_000).toISOString().slice(0, 10);
+
+test("the step graph draws linked cards over time, a drag pins a card, a drawn link and Delete edit the links, and the timeline shows the initiative", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1720, height: 1000 });
+	await openBoard(page);
+	const titles = ["Lay the rails", "Run the trains", "Paint the stations"];
+	for (const title of titles) await createCard(page, title);
+	const [rails, trains, stations] = await Promise.all(
+		titles.map((title) => card(page, title).getAttribute("data-card-id")),
+	);
+	if (!rails || !trains || !stations) throw new Error("the cards have no ids");
+	await card(page, "Lay the rails").getByTestId("board-card-open").click();
+	await expect(peekCard(page).getByTestId("board-card-title")).toHaveValue("Lay the rails");
+	await peekCard(page).getByTestId("board-card-add-block").selectOption(trains);
+	await expect(peekCard(page).getByTestId("board-card-block")).toHaveText([trains]);
+	await page.getByTestId("peek-close").click();
+	await boardTool(page).getByTestId("board-mode-toggle").click();
+	await boardTool(page).getByTestId("board-view-roadmap").click();
+	await newInitiative(page, "now", "Rail network");
+	const network = await peekInitiative(page).getAttribute("data-initiative-id");
+	await peekInitiative(page).getByTestId("board-initiative-target").fill(isoInDays(20));
+	await peekInitiative(page).getByTestId("board-initiative-project-add").fill("Track");
+	await peekInitiative(page).getByTestId("board-initiative-project-add").press("Enter");
+	const project = peekInitiative(page).getByTestId("board-initiative-project");
+	await project.getByTestId("board-initiative-milestone-add").fill("First train");
+	await project.getByTestId("board-initiative-milestone-add").press("Enter");
+	await project.getByTestId("board-initiative-project-assign").selectOption(rails);
+	await expect(project).toContainText("1 card");
+	await project.getByTestId("board-initiative-project-assign").selectOption(trains);
+	await expect(project).toContainText("2 cards");
+	await newInitiative(page, "next", "Stations");
+	const stationsInitiative = await peekInitiative(page).getAttribute("data-initiative-id");
+	await peekInitiative(page).getByTestId("board-initiative-add-card").selectOption(stations);
+	await expect(
+		peekInitiative(page).locator(
+			`[data-testid="board-initiative-card"][data-card-id="${stations}"]`,
+		),
+	).toBeVisible();
+	await page.getByTestId("peek-close").click();
+
+	await boardTool(page).getByTestId("board-roadmap-view-graph").click();
+	await expect(boardTool(page).getByTestId("board-graph")).toBeVisible();
+	await expect(boardTool(page).getByTestId("board-graph-node")).toHaveCount(3);
+	await expect(boardTool(page).getByTestId("board-graph-milestone")).toHaveCount(1);
+	await expect(graphEdge(page, rails, trains)).toHaveCount(1);
+	await expect(boardTool(page).getByTestId("board-graph-kpi")).toContainText("First train");
+	await expect(boardTool(page).getByTestId("board-graph-critical")).toContainText(rails);
+
+	const station = graphNode(page, stations);
+	const start = await centerOf(station);
+	await dragBy(page, start, { x: start.x + 3 * 40, y: start.y + 18 });
+	await expect(boardTool(page).getByTestId("board-graph-notice")).toContainText(
+		`${stations} pinned to start`,
+	);
+	await expect(station.getByTestId("board-graph-pin")).toBeVisible();
+	await station.click();
+	await expect(peekCard(page).getByTestId("board-card-pinned")).toHaveAttribute(
+		"data-start",
+		isoInDays(3),
+	);
+	await page.getByTestId("peek-close").click();
+
+	await dragBy(
+		page,
+		await centerOf(graphNode(page, trains).locator(".react-flow__handle-right")),
+		await centerOf(station.locator(".react-flow__handle-left")),
+	);
+	await expect(graphEdge(page, trains, stations)).toHaveCount(1);
+	await expect(graphEdge(page, trains, stations)).toHaveAttribute("data-conflict", "true");
+	await page.mouse.move(0, 0);
+	await shot(boardTool(page), "board", "step-graph");
+
+	await dragBy(
+		page,
+		await centerOf(station.locator(".react-flow__handle-right")),
+		await centerOf(graphNode(page, rails).locator(".react-flow__handle-left")),
+	);
+	await expect(boardTool(page).getByTestId("board-graph-notice")).toHaveAttribute(
+		"data-tone",
+		"error",
+	);
+	await expect(graphEdge(page, stations, rails)).toHaveCount(0);
+
+	const link = graphEdge(page, rails, trains);
+	const middle = await edgeMiddle(link);
+	await page.mouse.click(middle.x, middle.y);
+	await expect(link).toHaveAttribute("data-selected", "true");
+	await page.keyboard.press("Delete");
+	await expect(link).toHaveCount(0);
+	await expect(boardTool(page).getByTestId("board-graph-notice")).toContainText(
+		`${rails} no longer blocks ${trains}`,
+	);
+
+	await boardTool(page).getByTestId("board-roadmap-view-timeline").click();
+	const row = boardTool(page).locator(
+		`[data-testid="board-timeline-row"][data-kind="initiative"][data-row-id="${network}"]`,
+	);
+	await expect(row.getByTestId("board-timeline-bar")).toBeVisible();
+	await expect(row.getByTestId("board-timeline-target")).toHaveCount(1);
+	await expect(row).toHaveAttribute("data-insufficient", "true");
+	await expect(boardTool(page).getByTestId("board-timeline-insufficient")).toBeVisible();
+	await expect(
+		boardTool(page).locator(
+			`[data-testid="board-timeline-edge"][data-to="initiative:${stationsInitiative}"]`,
+		),
+	).toHaveCount(1);
+	await row.getByTestId("board-timeline-toggle").click();
+	await expect(
+		boardTool(page).locator('[data-testid="board-timeline-row"][data-kind="project"]'),
+	).toHaveCount(1);
+	await boardTool(page).getByTestId("board-graph-scale-weeks").click();
+	await expect(row.getByTestId("board-timeline-target")).toBeInViewport();
+	await page.mouse.move(0, 0);
+	await shot(boardTool(page), "board", "timeline");
+	await row.getByTestId("board-timeline-bar").click();
+	await expect(peekInitiative(page)).toHaveAttribute("data-initiative-id", network ?? "");
+	await boardTool(page).getByTestId("board-mode-toggle").click();
+});

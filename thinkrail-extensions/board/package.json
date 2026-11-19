@@ -18,6 +18,7 @@
 		"@thinkrail/extension-api": "workspace:*",
 		"@thinkrail/locales": "workspace:*",
 		"@thinkrail/ui": "workspace:*",
+		"@xyflow/react": "catalog:",
 		"react": "catalog:",
 		"typebox": "catalog:"
 	},

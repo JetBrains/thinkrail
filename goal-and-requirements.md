@@ -149,7 +149,8 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   into Triage), the open GitHub issues show through the user's own `gh` (Start asks for `Closes #N`; the
   board never edits an issue), the host's model suggests a card's size until the human sets one, and above
   the cards sits a roadmap of initiatives (Now / Next / Later, Goals) with suggested health and a forecast
-  from the live work ([[module-ext-board]]).
+  from the live work, a step graph with the critical path and a timeline with the forecast
+  ([[module-ext-board]]).
 - **Workspaces from chat** — on request ("in a side workspace"), the agent starts ordinary workspaces
   with their own chats in any open project and checks their chats', PRs', and diffs' status; the agent,
   not the host, decides what to do with them ([[submodule-server-agent]], [[submodule-server-host]]).

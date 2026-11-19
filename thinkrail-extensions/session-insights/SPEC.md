@@ -230,7 +230,7 @@ only through host-injected locators.
   goes next as a share bar, the sessions where it occurs most (each opens that session at its first
   occurrence) with *Show sessions*, and its real example — the pair and a call on each side — whose steps
   open the trace. *Process map* (`ProcessMap`, `React.lazy`, its own chunk with xyflow, dagre and xyflow's
-  structural `base.css`): the directly-follows graph at the chosen edge threshold (≥ 1 / 2 / 5 % of the
+  structural `base.css` in `@layer xyflow`): the directly-follows graph at the chosen edge threshold (≥ 1 / 2 / 5 % of the
   transitions) laid out left to right by dagre, nodes with calls, failures and ▶ starts / ■ ends, edges
   thick by count with count, share and after-error share as SVG labels, self-loops as arcs over the node,
   paired directions bent apart; the note names what the threshold hides (edges, transitions, nodes) from
@@ -648,7 +648,8 @@ only through host-injected locators.
   hotspot view; a treemap only if it proves insufficient.
 - **The process map is its own lazy chunk.** `@xyflow/react` and `@dagrejs/dagre` (exact catalog pins)
   load only when the map view is shown: about 186 KB (60 KB gzipped) plus 11 KB of xyflow's structural
-  CSS, none of it in the entry chunk or the statistics chunk. Edge labels are SVG inside the custom edge
+  CSS, none of it in the entry chunk or the statistics chunk. That CSS is imported `layer(xyflow)`, a layer
+  the app orders below `components` and `utilities`, so token utilities win over it. Edge labels are SVG inside the custom edge
   (an HTML label renderer would need an inline style), nodes carry their own token classes, and the
   attribution stays (xyflow asks that only Pro subscribers hide it), restyled with token utilities on the
   map's frame (`[&_.react-flow\_\_attribution]:…`); it is a link that leaves only when clicked. "What follows an error" stays hand-laid

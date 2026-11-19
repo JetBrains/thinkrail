@@ -925,6 +925,7 @@ export default function BoardTool({ host }: PanelProps) {
 				<RoadmapPane
 					host={host}
 					layout={layout}
+					board={view}
 					onError={(error) => setNotice(errorMessage(t, error))}
 				/>
 			) : board.state.kind === "loading" ? (

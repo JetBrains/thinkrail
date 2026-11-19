@@ -1,3 +1,4 @@
+@layer theme, base, xyflow, components, utilities;
 @import "tailwindcss";
 @import "./styles/generated/fonts.css";
 @import "./styles/generated/typography.css";
