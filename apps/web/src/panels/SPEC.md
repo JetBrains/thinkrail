@@ -1616,8 +1616,11 @@ a project picker, the prompt hero, and the reused
   nothing listed as running; **incompatible** — a tag and a notice saying "Needs a newer ThinkRail" or "Built
   for an older ThinkRail" (`extensionApiFit` over the entry's `api`; an unreadable `api` reads as needing a
   newer app), the host's reason and an update hint; and a **web half that failed in this window**
-  (`useWebExtensionLoads`) — a warning that its cards could not load here while its tools still work, with the
-  switch kept. **Search** finds them as the pi packages are found (the catalog's `installed-packages`, whose
+  (`useWebExtensionLoads`) — a warning that its cards could not load here: its tools still run and their
+  calls show as plain rows, but a tool that waits for an answer cannot be answered in this window until the
+  cards load (interactivity comes from the renderer registration, which failed), so it says to reload the
+  window or choose Update; the switch is kept. One sentence for every extension: the row cannot tell which
+  tools are interactive without the web half that failed. **Search** finds them as the pi packages are found (the catalog's `installed-packages`, whose
   keywords name ThinkRail extensions too) and, beyond the static catalog, each installed extension and each
   setting it declares by its own words: `SettingsDialog` injects `installedExtensionSearchEntries`
   (`settingsSearch.ts`) from the store's catalog, jumping to the row (`installed-extension-<name>`) or to the

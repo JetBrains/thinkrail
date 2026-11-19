@@ -103,13 +103,18 @@ test("an incompatible extension says which side is out of date, with the reason 
 	expect(older).toContain("extension API 1.0");
 });
 
-test("a web half that failed in this window says the tools still work", () => {
+test("a web half that failed in this window says its calls show as plain rows and its questions can't be answered here", () => {
 	const markup = render({
 		webLoad: { name: PALETTE.name, status: "failed", reason: "import", message: "boom" },
 	});
 	expect(markup).toContain('data-testid="installed-extension-web-failed"');
 	expect(markup).toContain("boom");
-	expect(markup).toContain("Its tools still work");
+	expect(markup).toContain("their calls show as plain rows");
+	expect(markup).toContain(
+		"a tool that waits for your answer can&#x27;t be answered here until the cards load",
+	);
+	expect(markup).toContain("Reload the window or choose Update.");
+	expect(markup).not.toContain("Its tools still work;");
 	expect(markup).toContain('role="switch"');
 });
 

@@ -2200,7 +2200,7 @@
 	"settings.installedExtensions.kind": "ThinkRail extension",
 	"settings.installedExtensions.removeConfirm": "Remove extension",
 	"settings.installedExtensions.removeDescription": "Removes it from ThinkRail for every project. Open chats lose its tools when their current turn ends, and past calls show as plain rows.",
-	"settings.installedExtensions.webFailed": "Its chat cards couldn't load in this window: {{error}}. Its tools still work; their calls show as plain rows.",
+	"settings.installedExtensions.webFailed": "Its chat cards couldn't load in this window: {{error}}. Its tools still run and their calls show as plain rows, but a tool that waits for your answer can't be answered here until the cards load. Reload the window or choose Update.",
 	"settings.jbcentral.action.connect": "Connect",
 	"settings.jbcentral.action.disconnect": "Disconnect",
 	"settings.jbcentral.action.startProxy": "Start proxy",
