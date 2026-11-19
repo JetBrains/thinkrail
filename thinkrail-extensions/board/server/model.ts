@@ -18,7 +18,7 @@ export type CardSize = (typeof CARD_SIZES)[number];
 export const WORKFLOWS = ["brainstorm", "implement"] as const;
 export type Workflow = (typeof WORKFLOWS)[number];
 
-export const PRESETS = ["agentic-kanban", "solo"] as const;
+export const PRESETS = ["agentic-kanban", "solo", "spec-driven"] as const;
 export type Preset = (typeof PRESETS)[number];
 
 /** Which open issues the GitHub source lists: all of them, or those assigned to the gh user. */
@@ -30,11 +30,12 @@ export const TEXT_MAX = 20_000;
 
 export type Actor = "human" | "agent" | "git" | "automation";
 
-/** Where a card comes from: the board itself, a workspace's task-spec or a GitHub issue. */
+/** Where a card comes from: the board itself, a workspace's task-spec, a GitHub issue or an OpenSpec change. */
 export type CardSource =
 	| { kind: "native"; ref: string }
 	| { kind: "task-spec"; ref: string; workspaceId: string; path: string }
-	| { kind: "github"; ref: string; number: number; url: string };
+	| { kind: "github"; ref: string; number: number; url: string }
+	| { kind: "openspec"; ref: string; change: string };
 
 export interface AttemptNote {
 	text: string;

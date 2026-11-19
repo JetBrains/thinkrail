@@ -1,0 +1,87 @@
+{
+	"changes": [
+		{
+			"changeName": "drop-legacy-sms",
+			"schemaName": "spec-driven",
+			"planningHome": {
+				"kind": "repo",
+				"root": "<root>",
+				"changesDir": "<root>/openspec/changes",
+				"defaultSchema": "spec-driven"
+			},
+			"changeRoot": "<root>/openspec/changes/drop-legacy-sms",
+			"artifactPaths": {
+				"proposal": {
+					"outputPath": "proposal.md",
+					"resolvedOutputPath": "<root>/openspec/changes/drop-legacy-sms/proposal.md",
+					"existingOutputPaths": ["<root>/openspec/changes/drop-legacy-sms/proposal.md"]
+				},
+				"specs": {
+					"outputPath": "specs/**/*.md",
+					"resolvedOutputPath": "<root>/openspec/changes/drop-legacy-sms/specs/**/*.md",
+					"existingOutputPaths": [
+						"<root>/openspec/changes/drop-legacy-sms/specs/notifications/spec.md"
+					]
+				},
+				"design": {
+					"outputPath": "design.md",
+					"resolvedOutputPath": "<root>/openspec/changes/drop-legacy-sms/design.md",
+					"existingOutputPaths": []
+				},
+				"tasks": {
+					"outputPath": "tasks.md",
+					"resolvedOutputPath": "<root>/openspec/changes/drop-legacy-sms/tasks.md",
+					"existingOutputPaths": []
+				}
+			},
+			"isPlanningComplete": false,
+			"isComplete": false,
+			"applyRequires": ["tasks"],
+			"nextSteps": [
+				"Run openspec instructions design --change \"drop-legacy-sms\" --json before writing that artifact."
+			],
+			"actionContext": {
+				"mode": "repo-local",
+				"sourceOfTruth": "repo",
+				"planningArtifacts": ["proposal", "specs", "design", "tasks"],
+				"linkedContext": [],
+				"allowedEditRoots": ["<root>"],
+				"requiresAffectedAreaSelection": false,
+				"constraints": [
+					"Repo-local change artifacts and implementation edits are scoped to this project."
+				]
+			},
+			"artifacts": [
+				{
+					"id": "proposal",
+					"outputPath": "proposal.md",
+					"status": "done",
+					"requires": []
+				},
+				{
+					"id": "specs",
+					"outputPath": "specs/**/*.md",
+					"status": "done",
+					"requires": ["proposal"]
+				},
+				{
+					"id": "design",
+					"outputPath": "design.md",
+					"status": "ready",
+					"requires": ["proposal"]
+				},
+				{
+					"id": "tasks",
+					"outputPath": "tasks.md",
+					"status": "blocked",
+					"requires": ["specs", "design"],
+					"missingDeps": ["design"]
+				}
+			]
+		}
+	],
+	"root": {
+		"path": "<root>",
+		"source": "nearest"
+	}
+}

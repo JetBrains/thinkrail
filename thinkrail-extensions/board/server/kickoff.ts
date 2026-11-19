@@ -16,6 +16,65 @@ export function workflowFor(card: Pick<Card, "type" | "size">): Workflow {
 	return card.size === "M" || card.size === "L" ? "brainstorm" : "implement";
 }
 
+/** The OpenSpec skills the board's actions name, sent the way the composer sends a picked skill. */
+export const OPENSPEC_SKILLS = {
+	propose: "openspec-propose",
+	apply: "openspec-apply-change",
+	archive: "openspec-archive-change",
+} as const;
+
+function contextLines(context: KickoffContext): string[] {
+	const lines: string[] = [];
+	const { initiative } = context;
+	if (initiative) {
+		lines.push("", `Initiative ${initiative.id}: ${initiative.title.trim()}`);
+		const outcome = initiative.outcome.trim();
+		if (outcome) lines.push(`Outcome: ${outcome}`);
+		const criteria = initiative.criteria.map((item) => item.trim()).filter(Boolean);
+		if (criteria.length > 0)
+			lines.push("Success criteria:", ...criteria.map((item) => `- ${item}`));
+	}
+	const place = [
+		context.project ? `Project: ${context.project}` : "",
+		context.milestone ? `Milestone: ${context.milestone}` : "",
+	].filter(Boolean);
+	if (place.length > 0) lines.push(...(initiative ? [] : [""]), ...place);
+	return lines;
+}
+
+/**
+ * An OpenSpec change's Apply: `/skill:openspec-apply-change <name>`, the card, and instructions that stand
+ * alone when the workspace lacks the skill — tick each task in tasks.md as it is done, archive nothing.
+ */
+export function openspecApplyKickoff(
+	card: Pick<Card, "id" | "title">,
+	change: string,
+	context: KickoffContext = {},
+): string {
+	return [
+		`/skill:${OPENSPEC_SKILLS.apply} ${change}`,
+		"",
+		`Card ${card.id}: ${card.title.trim()}`,
+		"",
+		`Apply the OpenSpec change ${change} (openspec/changes/${change}/): read its proposal, spec deltas and design, then work through its tasks.md in order and tick each task (- [x]) as soon as it is done, so the board shows the progress. Keep the change's artifacts in step when the plan moves. Do not archive the change; that waits until I ask.`,
+		...contextLines(context),
+	].join("\n");
+}
+
+/** A new change from a description, proposed in a chat with `/skill:openspec-propose`. */
+export function openspecProposeKickoff(description: string): string {
+	return [
+		`/skill:${OPENSPEC_SKILLS.propose} ${description.trim()}`,
+		"",
+		"Propose it as an OpenSpec change under openspec/changes/ — proposal, spec deltas, design and tasks — for me to review. Write no code yet.",
+	].join("\n");
+}
+
+/** What "Archive in workspace" asks the agent of the change's apply workspace, before the PR merges. */
+export function openspecArchiveMessage(change: string): string {
+	return `Run ${OPENSPEC_SKILLS.archive} ${change}, then update the PR. Archive the change in this workspace (/skill:${OPENSPEC_SKILLS.archive}): its spec deltas merge into openspec/specs/ and its folder moves to openspec/changes/archive/. Commit that and push, so the pull request carries the code and the updated specs together.`;
+}
+
 /**
  * The first prompt of a card's attempt: its title, description, acceptance criteria and spec refs, then
  * its initiative's outcome and success criteria and its project and milestone; a GitHub issue's card adds
@@ -35,20 +94,7 @@ export function kickoffText(
 		lines.push("", "Acceptance criteria:", ...acceptance.map((item) => `- ${item}`));
 	const specs = card.specRefs.map((ref) => ref.trim()).filter(Boolean);
 	if (specs.length > 0) lines.push("", "Specs:", ...specs.map((ref) => `- ${ref}`));
-	const { initiative } = context;
-	if (initiative) {
-		lines.push("", `Initiative ${initiative.id}: ${initiative.title.trim()}`);
-		const outcome = initiative.outcome.trim();
-		if (outcome) lines.push(`Outcome: ${outcome}`);
-		const criteria = initiative.criteria.map((item) => item.trim()).filter(Boolean);
-		if (criteria.length > 0)
-			lines.push("Success criteria:", ...criteria.map((item) => `- ${item}`));
-	}
-	const place = [
-		context.project ? `Project: ${context.project}` : "",
-		context.milestone ? `Milestone: ${context.milestone}` : "",
-	].filter(Boolean);
-	if (place.length > 0) lines.push(...(initiative ? [] : [""]), ...place);
+	lines.push(...contextLines(context));
 	if (card.source?.kind === "github") {
 		const { number, url } = card.source;
 		lines.push(

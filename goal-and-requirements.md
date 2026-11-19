@@ -147,7 +147,9 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   accepted as a whole, and Board mode widens the board and restores the previous layout on exit. The
   workspaces' task-specs show on their cards (an unbound one's as a card to adopt, its deferrals sent
   into Triage), the open GitHub issues show through the user's own `gh` (Start asks for `Closes #N`; the
-  board never edits an issue), the host's model suggests a card's size until the human sets one, and above
+  board never edits an issue), OpenSpec changes show as cards with propose / apply / archive through the
+  user's own `openspec` CLI and skills (a Spec-driven preset, read-only parsing without the CLI), the
+  host's model suggests a card's size until the human sets one, and above
   the cards sits a roadmap of initiatives (Now / Next / Later, Goals) with suggested health and a forecast
   from the live work, a step graph with the critical path and a timeline with the forecast, flow insights
   (WIP, throughput, cycle time, work item age, cumulative flow, agent vs human-wait time), agent skills

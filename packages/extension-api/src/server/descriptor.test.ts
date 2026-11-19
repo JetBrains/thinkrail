@@ -104,6 +104,7 @@ describe("defineServerExtension", () => {
 			workspaceFacts: async () => null,
 			taskSpecs: async () => null,
 			specSection: async () => null,
+			openspecTree: async () => null,
 			githubProblem: async () => null,
 			sessionsRoot: () => "/agent/sessions",
 			sessionScope: () => ({ projects: [], locate: () => null }),

@@ -4,7 +4,7 @@ import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import type { KeyboardEvent } from "react";
-import { type Card, canAdopt, canStart } from "./api";
+import { type Card, canAdopt, canApply, canStart } from "./api";
 import {
 	CardMeta,
 	InitiativeChip,
@@ -13,6 +13,7 @@ import {
 	TaskSpecLine,
 	TaskSpecStatus,
 } from "./CardParts";
+import { OpenspecTileLines } from "./OpenspecParts";
 
 export interface CardActions {
 	open: (card: Card) => void;
@@ -73,6 +74,7 @@ export function CardTile({
 					{card.title}
 				</span>
 				<InitiativeChip card={card} />
+				{card.openspec ? <OpenspecTileLines change={card.openspec} /> : null}
 				{adoptable ? (
 					<span className="flex">
 						<TaskSpecStatus status={card.taskSpecs[0]?.status ?? null} />
@@ -104,6 +106,18 @@ export function CardTile({
 					onClick={() => actions.adopt(card)}
 				>
 					{t("board.card.adopt")}
+				</Button>
+			) : canApply(card) ? (
+				<Button
+					variant="soft-primary"
+					size="s"
+					iconLeft={RiPlayLine}
+					loading={starting}
+					data-testid="board-card-apply"
+					className="self-start"
+					onClick={() => actions.start(card)}
+				>
+					{t("board.openspec.apply")}
 				</Button>
 			) : canStart(card) ? (
 				<Button

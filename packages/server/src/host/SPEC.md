@@ -567,7 +567,11 @@ gate: [[module-contracts]].
   memory only: `session.deleted` forgets it and a session `agent` no longer holds (`hasSession`, disposed)
   is dropped instead of reported; `taskSpecs(id)` is `spec`'s `workspaceTaskSpecs` over a registered workspace's worktree (none
   for a chat, `null` for an unknown workspace) and `specSection(id, specId, heading)` its
-  `workspaceSpecSection` (`null` for a chat or an unknown workspace); `githubProblem()` is `github`'s
+  `workspaceSpecSection` (`null` for a chat or an unknown workspace); `openspecTree(id)` is
+  `openspecTree.ts`'s `readOpenspecTree` over a registered repository workspace's worktree (`null` for a chat
+  or an unknown workspace): it `lstat`s `openspec/` (a symlink there reads as none) and walks it sorted,
+  skipping every symlink and `.git`, taking only regular `.md` / `.yaml` / `.yml` files up to 16 folders deep,
+  and stops at 2 MiB or 2,000 files with `truncated`; `githubProblem()` is `github`'s
   `ghSetupProblem` (`null` under `THINKRAIL_GH_OFFLINE`, which is what lets e2e reach the lane's fake `gh`).
   **Extension writes are named host actions** (`extensionActions.ts`, deps injected so it is
   unit-tested without worktrees or sessions), each refused with `EXTENSION_DISABLED` while the extension is

@@ -1,0 +1,16 @@
+{
+	"changes": [
+		{
+			"name": "drop-legacy-sms",
+			"completedTasks": 0,
+			"totalTasks": 0,
+			"lastModified": "2026-11-19T21:17:52.853Z",
+			"status": "no-tasks",
+			"archived": false
+		}
+	],
+	"root": {
+		"path": "<root>",
+		"source": "nearest"
+	}
+}

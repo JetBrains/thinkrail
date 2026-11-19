@@ -3,11 +3,13 @@ import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import type {
 	AgentBadge,
+	ArtifactStatus,
 	CardType,
 	Category,
 	GithubFilter,
 	GithubProblem,
 	InboxReason,
+	OpenspecStage,
 	Preset,
 	Transition,
 	WipKey,
@@ -33,6 +35,11 @@ const COLUMN_TITLES: Readonly<Record<string, MessageKey>> = {
 	canceled: "board.column.canceled",
 	todo: "board.column.todo",
 	doing: "board.column.doing",
+	planning: "board.column.planning",
+	"ready-to-apply": "board.column.readyToApply",
+	"in-progress": "board.column.inProgress",
+	complete: "board.column.complete",
+	archived: "board.column.archived",
 };
 
 export function columnTitle(t: Translator, column: string): string {
@@ -49,7 +56,36 @@ export const TYPE_LABELS = {
 export const PRESET_LABELS = {
 	"agentic-kanban": "board.preset.agenticKanban",
 	solo: "board.preset.solo",
+	"spec-driven": "board.preset.specDriven",
 } as const satisfies Record<Preset, MessageKey>;
+
+export const STAGE_LABELS = {
+	planning: "board.openspec.stage.planning",
+	ready: "board.openspec.stage.ready",
+	"in-progress": "board.openspec.stage.inProgress",
+	complete: "board.openspec.stage.complete",
+	archived: "board.openspec.stage.archived",
+} as const satisfies Record<OpenspecStage, MessageKey>;
+
+export const ARTIFACT_STATUS_LABELS = {
+	done: "board.openspec.artifact.done",
+	ready: "board.openspec.artifact.ready",
+	blocked: "board.openspec.artifact.blocked",
+	skipped: "board.openspec.artifact.skipped",
+} as const satisfies Record<ArtifactStatus, MessageKey>;
+
+const ARTIFACT_NAMES: Readonly<Record<string, MessageKey>> = {
+	proposal: "board.openspec.tab.proposal",
+	specs: "board.openspec.tab.specs",
+	design: "board.openspec.tab.design",
+	tasks: "board.openspec.tab.tasks",
+};
+
+/** A spec-driven artifact's name (Proposal, Spec deltas, …); a custom schema's artifact shows its id. */
+export function artifactName(t: Translator, id: string): string {
+	const key = ARTIFACT_NAMES[id];
+	return key ? t(key) : id;
+}
 
 export const WORKFLOW_LABELS = {
 	implement: "board.workflow.implement",

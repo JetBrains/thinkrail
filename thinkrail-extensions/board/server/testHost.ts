@@ -7,6 +7,7 @@ import type {
 	ExtensionHostEventType,
 	ExtensionHostProject,
 	ExtensionHostServices,
+	ExtensionOpenspecTree,
 	ExtensionRunResult,
 	ExtensionStartChatParams,
 	ExtensionTaskSpec,
@@ -34,6 +35,10 @@ export interface TestHost {
 	taskSpecs: Map<string, ExtensionTaskSpec[]>;
 	/** `workspaceId:specId:heading` → the section's text, for `specSection`. */
 	sections: Map<string, string>;
+	/** Workspace id → its `openspec/` tree, for `openspecTree`. */
+	openspec: Map<string, ExtensionOpenspecTree>;
+	/** Every `sendToChat`, in order. */
+	sent: { sessionId: string; text: string; mode: string }[];
 	/** Every `runInWorkspace`, in order. */
 	runs: { workspaceId: string; argv: string[] }[];
 	/** Answers a `runInWorkspace` (the fake `gh`); by default a failed run. */
@@ -94,6 +99,8 @@ export function createTestHost(): TestHost {
 		warnings: [],
 		taskSpecs: new Map(),
 		sections: new Map(),
+		openspec: new Map(),
+		sent: [],
 		runs: [],
 		run: { answer: () => ran("gh: not in this test", false) },
 		writes: [],
@@ -125,7 +132,9 @@ export function createTestHost(): TestHost {
 					...(state.chat.kickoffError ? { kickoffError: state.chat.kickoffError } : {}),
 				};
 			},
-			sendToChat: refused,
+			sendToChat: async (params) => {
+				state.sent.push(params);
+			},
 			stopChat: refused,
 			openPr: refused,
 			runInWorkspace: async ({ workspaceId, argv }) => {
@@ -161,6 +170,7 @@ export function createTestHost(): TestHost {
 			state.facts.has(workspaceId) ? (state.taskSpecs.get(workspaceId) ?? []) : null,
 		specSection: async (workspaceId, specId, heading) =>
 			state.sections.get(`${workspaceId}:${specId}:${heading}`) ?? null,
+		openspecTree: async (workspaceId) => state.openspec.get(workspaceId) ?? null,
 		githubProblem: async () => state.gh.problem,
 		sessionsRoot: () => join(root, "sessions"),
 		sessionScope: () => ({

@@ -520,6 +520,25 @@ describe("extensionHostServices", () => {
 		}
 	});
 
+	test("reads an open workspace's openspec/ tree, none for a chat or a workspace not open", async () => {
+		const host = extensionHostServices("board", SIGNAL);
+		mkdirSync(join(repo, "openspec", "changes", "add-x"), { recursive: true });
+		writeFileSync(join(repo, "openspec", "config.yaml"), "schema: spec-driven\n");
+		writeFileSync(join(repo, "openspec", "changes", "add-x", "tasks.md"), "- [ ] one\n");
+		try {
+			expect(await host.openspecTree("w1")).toEqual({
+				files: [
+					{ path: "openspec/changes/add-x/tasks.md", text: "- [ ] one\n" },
+					{ path: "openspec/config.yaml", text: "schema: spec-driven\n" },
+				],
+			});
+			expect(await host.openspecTree(chat.id)).toBeNull();
+			expect(await host.openspecTree("nope")).toBeNull();
+		} finally {
+			rmSync(join(repo, "openspec"), { recursive: true, force: true });
+		}
+	});
+
 	test("reports no gh problem under the offline seam", async () => {
 		const saved = process.env.THINKRAIL_GH_OFFLINE;
 		process.env.THINKRAIL_GH_OFFLINE = "1";

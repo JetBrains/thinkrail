@@ -1,0 +1,45 @@
+{
+	"id": "drop-legacy-sms",
+	"title": "Remove SMS notification channel",
+	"deltaCount": 2,
+	"deltas": [
+		{
+			"spec": "notifications",
+			"operation": "ADDED",
+			"description": "Add requirement: Order updates go out as push notifications.",
+			"requirement": {
+				"name": "Push channel",
+				"text": "Order updates go out as push notifications.",
+				"scenarios": []
+			},
+			"requirements": [
+				{
+					"name": "Push channel",
+					"text": "Order updates go out as push notifications.",
+					"scenarios": []
+				}
+			]
+		},
+		{
+			"spec": "notifications",
+			"operation": "REMOVED",
+			"description": "Remove requirement: Requirement: SMS channel",
+			"requirement": {
+				"name": "SMS channel",
+				"text": "Requirement: SMS channel",
+				"scenarios": []
+			},
+			"requirements": [
+				{
+					"name": "SMS channel",
+					"text": "Requirement: SMS channel",
+					"scenarios": []
+				}
+			]
+		}
+	],
+	"root": {
+		"path": "<root>",
+		"source": "nearest"
+	}
+}

@@ -1,5 +1,14 @@
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import {
+	cpSync,
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
 import {
@@ -1349,5 +1358,109 @@ test("Publish writes the roadmap snapshot into the Default workspace, and Close 
 		expect(kickoff).toContain(`Initiative ${id}: Flow insights\nOutcome: ${outcome}`);
 	} finally {
 		rmSync(snapshot, { force: true });
+	}
+});
+
+const OPENSPEC_FIXTURE = join(
+	dirname(fileURLToPath(import.meta.url)),
+	"..",
+	"thinkrail-extensions",
+	"board",
+	"server",
+	"openspec",
+	"fixtures",
+	"in-progress",
+	"openspec",
+);
+
+test("an OpenSpec change is a card of the Spec-driven preset, read-only without the CLI, and Apply starts it on the apply skill", async ({
+	page,
+}) => {
+	const repo = realpathSync(E2E_FIXTURE_REPO);
+	const tree = join(repo, "openspec");
+	rmSync(tree, { recursive: true, force: true });
+	await page.setViewportSize({ width: 1720, height: 1000 });
+	const kickoffs = observeKickoffs(page);
+	try {
+		await openFixtureProject(page);
+		cpSync(OPENSPEC_FIXTURE, tree, { recursive: true });
+		await enterDefaultWorkspace(page);
+		await page.getByTestId(BOARD_RAIL).click();
+		await boardTool(page).getByTestId("board-mode-toggle").click();
+		await expect(boardTool(page).getByTestId("board-openspec-propose")).toBeVisible();
+
+		await boardTool(page).getByTestId("board-preset").click();
+		await page.getByTestId("board-preset-spec-driven").click();
+		await expect(boardTool(page).getByTestId("board-preset")).toHaveAttribute(
+			"data-preset",
+			"spec-driven",
+		);
+		const change = card(page, "Add TOTP two-factor login");
+		await expect(change).toHaveAttribute("data-source", "openspec");
+		await expect(change).toHaveAttribute("data-column", "in-progress");
+		await expect(column(page, "in-progress").getByTestId("board-card")).toHaveCount(1);
+		await expect(change.getByTestId("board-openspec-tasks")).toContainText("3/7 tasks");
+		await expect(change.getByTestId("board-openspec-delta")).toHaveText([
+			/audit-log\s*\+1/,
+			/auth\s*\+2 ~1/,
+		]);
+		await expect(change.getByTestId("board-openspec-artifact")).toHaveCount(4);
+		await expect(
+			change.locator('[data-testid="board-openspec-artifact"][data-status="done"]'),
+		).toHaveCount(4);
+		await expect(boardTool(page).getByTestId("board-openspec-install")).toContainText(
+			"npm install -g @fission-ai/openspec",
+		);
+
+		await change.getByTestId("board-card-open").click();
+		const panel = peekCard(page);
+		const section = panel.getByTestId("board-openspec-section");
+		await expect(section).toHaveAttribute("data-stage", "in-progress");
+		await expect(section.getByTestId("board-openspec-validate")).toBeDisabled();
+		await expect(section.getByTestId("board-openspec-install")).toBeVisible();
+		await section.getByTestId("board-openspec-tab-tasks").click();
+		await expect(section.getByTestId("board-openspec-task-lines").locator("li")).toHaveCount(7);
+		await section.getByTestId("board-openspec-tab-specs").click();
+		await expect(section.getByTestId("board-openspec-capability")).toHaveCount(2);
+		await page.mouse.move(0, 0);
+		await shot(page, "board", "openspec-board");
+
+		await section.getByTestId("board-openspec-apply").click();
+		await expect(section.getByTestId("board-openspec-outcome")).toBeVisible({ timeout: 30_000 });
+		await expect
+			.poll(kickoffs)
+			.toContainEqual(
+				expect.stringMatching(
+					/^\/skill:openspec-apply-change add-2fa-login\n\nCard \w+-1: Add TOTP two-factor login\n/,
+				),
+			);
+		const applied = card(page, "Add TOTP two-factor login");
+		await expect(applied).not.toHaveAttribute("data-virtual", "true");
+		await expect(applied).toHaveAttribute("data-column", "in-progress");
+		const cardId = await applied.getAttribute("data-card-id");
+		const [project] = await openProjects(page);
+		if (!project || !cardId) throw new Error("missing the project or the stored card");
+		const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+		let worktree = "";
+		let workspaceId = "";
+		try {
+			const workspaces = await wire.request("workspace.list", { projectId: project.id });
+			const attempt = workspaces.find((workspace) => workspace.kind !== "default");
+			worktree = attempt?.worktreePath ?? "";
+			workspaceId = attempt?.id ?? "";
+		} finally {
+			wire.close();
+		}
+		const metadata = join(worktree, "openspec", "changes", "add-2fa-login", ".openspec.yaml");
+		await expect.poll(() => existsSync(metadata)).toBe(true);
+		expect(readFileSync(metadata, "utf8")).toContain(
+			`goal: Add TOTP two-factor login\nx-thinkrail:\n  card: ${cardId}\n  workspace: ${workspaceId}\n`,
+		);
+		expect(existsSync(join(worktree, "openspec", "changes", "add-2fa-login", "tasks.md"))).toBe(
+			true,
+		);
+		await expect(applied.getByTestId("board-openspec-tasks")).toContainText("3/7 tasks");
+	} finally {
+		rmSync(tree, { recursive: true, force: true });
 	}
 });

@@ -39,6 +39,15 @@ const COLUMNS: Record<Preset, readonly ColumnDef[]> = {
 		{ id: "done", categories: ["completed"] },
 		CANCELED,
 	],
+	"spec-driven": [
+		TRIAGE,
+		{ id: "planning", categories: ["backlog"] },
+		{ id: "ready-to-apply", categories: ["unstarted"] },
+		{ id: "in-progress", categories: ["started"] },
+		{ id: "complete", categories: ["review"] },
+		{ id: "archived", categories: ["completed"] },
+		CANCELED,
+	],
 };
 
 export function columnsOf(preset: Preset): readonly ColumnDef[] {

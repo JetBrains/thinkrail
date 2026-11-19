@@ -187,6 +187,21 @@ export interface ExtensionTaskSpec {
 	path: string;
 }
 
+/** A text file of a workspace, its path worktree-relative (`/`-separated). */
+export interface ExtensionTextFile {
+	path: string;
+	text: string;
+}
+
+/**
+ * An open repository workspace's `openspec/` tree: its `.md`, `.yaml` and `.yml` files by path, `truncated`
+ * when the host's size cap stopped the read. Never a symlink followed, never a file outside `openspec/`.
+ */
+export interface ExtensionOpenspecTree {
+	files: readonly ExtensionTextFile[];
+	truncated?: true;
+}
+
 /** What `host.events.subscribe` delivers, by event type. */
 export interface ExtensionHostEvents {
 	"session.state": SessionStateRecord;
@@ -346,6 +361,11 @@ export interface ExtensionHostServices {
 	workspaceFacts(workspaceId: string): Promise<ExtensionWorkspaceFacts | null>;
 	/** An open workspace's task-specs, from its spec graph; `null` for a workspace that is not open. */
 	taskSpecs(workspaceId: string): Promise<readonly ExtensionTaskSpec[] | null>;
+	/**
+	 * An open repository workspace's `openspec/**` markdown and YAML (2 MiB in all, symlinks skipped);
+	 * `null` without an `openspec/` folder or for a workspace that is not open.
+	 */
+	openspecTree(workspaceId: string): Promise<ExtensionOpenspecTree | null>;
 	/** The text of one named section (`Deferrals`) of a spec of an open workspace; `null` without either. */
 	specSection(workspaceId: string, specId: string, heading: string): Promise<string | null>;
 	/** Why the user's GitHub CLI (`gh`) cannot run now (`missing`, `unauthenticated`), else `null`. */

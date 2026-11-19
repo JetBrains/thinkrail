@@ -70,8 +70,9 @@ import {
 	moveCard,
 	moveOnDrop,
 	overLimit,
-	PRESETS,
 	type Preset,
+	presetsFor,
+	proposeChange,
 	refreshGithub,
 	selectCard,
 	setFollowSelection,
@@ -97,6 +98,7 @@ import {
 	startWarningText,
 	WIP_LABELS,
 } from "./labels";
+import { InstallHint, ProposeForm } from "./OpenspecParts";
 import { BoardMoreMenu, PublishDialog } from "./PublishDialog";
 import { RoadmapPane } from "./Roadmap";
 import { type TriageActions, TriageLane } from "./Triage";
@@ -316,7 +318,15 @@ function NewCardForm({
 	);
 }
 
-function PresetMenu({ preset, onPreset }: { preset: Preset; onPreset: (preset: Preset) => void }) {
+function PresetMenu({
+	preset,
+	presets,
+	onPreset,
+}: {
+	preset: Preset;
+	presets: readonly Preset[];
+	onPreset: (preset: Preset) => void;
+}) {
 	const t = useT();
 	return (
 		<DropdownMenu>
@@ -335,11 +345,11 @@ function PresetMenu({ preset, onPreset }: { preset: Preset; onPreset: (preset: P
 				<DropdownMenuRadioGroup
 					value={preset}
 					onValueChange={(value) => {
-						const next = PRESETS.find((candidate) => candidate === value);
+						const next = presets.find((candidate) => candidate === value);
 						if (next) onPreset(next);
 					}}
 				>
-					{PRESETS.map((candidate) => (
+					{presets.map((candidate) => (
 						<DropdownMenuRadioItem
 							key={candidate}
 							value={candidate}
@@ -615,6 +625,7 @@ function BoardHeader({
 	onGithubRefresh,
 	onPublish,
 	onNew,
+	onPropose,
 }: {
 	view: BoardView | null;
 	/** A narrow pane: the WIP figures stay in the column headers and the toggle is an icon. */
@@ -632,6 +643,7 @@ function BoardHeader({
 	onGithubRefresh: () => void;
 	onPublish: () => void;
 	onNew: () => void;
+	onPropose: () => void;
 }) {
 	const t = useT();
 	return (
@@ -646,7 +658,9 @@ function BoardHeader({
 			>
 				{view?.projectName ?? ""}
 			</span>
-			{view ? <PresetMenu preset={view.settings.preset} onPreset={onPreset} /> : null}
+			{view ? (
+				<PresetMenu preset={view.settings.preset} presets={presetsFor(view)} onPreset={onPreset} />
+			) : null}
 			{view && !compact ? <WipChips view={view} /> : null}
 			<span className="ml-auto flex items-center gap-2">
 				{onBoardMode ? (
@@ -700,6 +714,17 @@ function BoardHeader({
 					selected={mode === "insights"}
 					onClick={() => onMode("insights")}
 				/>
+				{view?.openspec?.present ? (
+					<Button
+						variant="outline"
+						size="s"
+						iconLeft={RiAddLine}
+						data-testid="board-openspec-propose"
+						onClick={onPropose}
+					>
+						{t("board.openspec.propose")}
+					</Button>
+				) : null}
 				<Button
 					variant="soft-primary"
 					size="s"
@@ -809,6 +834,7 @@ export default function BoardTool({ host }: PanelProps) {
 	const [starting, setStarting] = useState<string | null>(null);
 	const [notice, setNotice] = useState<string | null>(null);
 	const [creating, setCreating] = useState(false);
+	const [proposing, setProposing] = useState(false);
 	const [publishing, setPublishing] = useState(false);
 	const [focusCard, setFocusCard] = useState<{ id: string; column: string } | null>(null);
 	const keys = useLocalKeys(CARDS_SCOPE, CARD_COMMANDS);
@@ -881,6 +907,16 @@ export default function BoardTool({ host }: PanelProps) {
 			setNotice(errorMessage(t, error));
 		}
 	};
+	const propose = async (description: string) => {
+		try {
+			const started = await proposeChange(host, projectId, description);
+			setProposing(false);
+			if (started.kickoffError)
+				setNotice(t("board.roadmap.chat.notSent", { error: started.kickoffError }));
+		} catch (error) {
+			setNotice(errorMessage(t, error));
+		}
+	};
 	const [hiddenError, setHiddenError] = useState<string | null>(null);
 	const showGithub = (enabled: boolean) =>
 		void write(async () => {
@@ -913,6 +949,7 @@ export default function BoardTool({ host }: PanelProps) {
 				onGithubRefresh={refreshIssues}
 				onPublish={() => setPublishing(true)}
 				onNew={() => setCreating(true)}
+				onPropose={() => setProposing(true)}
 			/>
 			{publishing ? (
 				<PublishDialog
@@ -931,6 +968,13 @@ export default function BoardTool({ host }: PanelProps) {
 				/>
 			) : null}
 			{creating ? <NewCardForm onCreate={create} onCancel={() => setCreating(false)} /> : null}
+			{proposing ? <ProposeForm onPropose={propose} onCancel={() => setProposing(false)} /> : null}
+			{view?.openspec?.present &&
+			!view.openspec.cli &&
+			!view.openspec.checking &&
+			view.settings.preset === "spec-driven" ? (
+				<InstallHint className="shrink-0 border-border-muted border-b px-8 py-4" />
+			) : null}
 			{notice ? (
 				<div
 					role="alert"

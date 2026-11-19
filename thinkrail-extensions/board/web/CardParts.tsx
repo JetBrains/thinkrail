@@ -2,6 +2,7 @@ import {
 	type RemixiconComponentType,
 	RiCheckboxCircleFill,
 	RiCheckboxCircleLine,
+	RiDraftLine,
 	RiErrorWarningLine,
 	RiFileList3Line,
 	RiFlag2Line,
@@ -104,7 +105,12 @@ export function SourceBadge({ card }: { card: Pick<Card, "source"> }) {
 	const t = useT();
 	const { source } = card;
 	if (source.kind === "native") return null;
-	const Icon = source.kind === "github" ? RiGithubLine : RiFileList3Line;
+	const Icon =
+		source.kind === "github"
+			? RiGithubLine
+			: source.kind === "openspec"
+				? RiDraftLine
+				: RiFileList3Line;
 	return (
 		<span
 			data-testid="board-source"
@@ -112,12 +118,18 @@ export function SourceBadge({ card }: { card: Pick<Card, "source"> }) {
 			title={
 				source.kind === "github"
 					? t("board.source.githubTitle", { number: source.number })
-					: t("board.source.taskSpecTitle", { id: source.ref })
+					: source.kind === "openspec"
+						? t("board.source.openspecTitle", { change: source.change })
+						: t("board.source.taskSpecTitle", { id: source.ref })
 			}
 			className="inline-flex shrink-0 items-center gap-2 text-text-muted"
 		>
 			<Icon aria-hidden className="size-12" />
-			{source.kind === "github" ? t("board.source.github") : t("board.source.taskSpec")}
+			{source.kind === "github"
+				? t("board.source.github")
+				: source.kind === "openspec"
+					? t("board.source.openspec")
+					: t("board.source.taskSpec")}
 		</span>
 	);
 }

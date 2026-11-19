@@ -372,6 +372,18 @@ export function boardQueries(board: Board): Readonly<Record<string, ExtensionQue
 			return board.setGithub(projectId(p), githubPatch(p));
 		},
 		"github.refresh": (raw) => board.refreshIssues(projectId(params(raw))),
+		"openspec.validate": (raw) => {
+			const p = params(raw);
+			return board.validateChange(cardId(p), boardOf(p));
+		},
+		"openspec.archive": (raw) => {
+			const p = params(raw);
+			return board.archiveChange(cardId(p), boardOf(p));
+		},
+		"openspec.propose": (raw) => {
+			const p = params(raw);
+			return board.proposeChange(projectId(p), text(p, "description", TEXT_MAX));
+		},
 		"models.list": async (raw) => {
 			params(raw);
 			return { models: await board.host.models() };

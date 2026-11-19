@@ -130,6 +130,8 @@ function readSource(raw: unknown, id: string): CardSource {
 		typeof source.url === "string"
 	)
 		return { kind: "github", ref, number: source.number, url: source.url };
+	if (source.kind === "openspec" && typeof source.change === "string" && source.change)
+		return { kind: "openspec", ref, change: source.change };
 	return { kind: "native", ref: source.kind === "native" ? ref : id };
 }
 

@@ -263,7 +263,11 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   or `null`, the worktree-relative `path` —, none for a chat, `null` for a workspace that is not open) and
   `specSection(workspaceId, specId, heading)` (the text of one named section of a spec of that graph, its
   subsections included, `null` without the spec or the section — a spec-graph read, never a general file
-  read) and `githubProblem()` (contracts' `GhSetupProblem`: why the user's own `gh` cannot run now,
+  read) and `openspecTree(workspaceId)` (`ExtensionOpenspecTree { files: ExtensionTextFile[], truncated? }`:
+  an open repository workspace's `openspec/**` `.md`, `.yaml` and `.yml` files as worktree-relative paths
+  and text, sorted, at most 2 MiB and 2,000 files in all — `truncated` once the cap stopped the read —, no
+  symlink followed (the `openspec/` folder itself included), nothing outside `openspec/`; `null` without
+  the folder, for a chat or a workspace that is not open — the board's OpenSpec reader) and `githubProblem()` (contracts' `GhSetupProblem`: why the user's own `gh` cannot run now,
   `missing` or `unauthenticated`, else `null` — the host's `gh auth status` probe, no credentials).
   A service is added with the consumer that needs it.
 - **Queries read; actions write through named host actions.** `ExtensionHostServices.actions`
@@ -283,7 +287,7 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   file at a worktree-relative `/`-separated path of a repository workspace, missing folders created and the
   file left uncommitted for the user — never an absolute path, `.`, `..` or an empty segment, nothing under
   `.git`, no symlink or non-folder on the way, a target that is a regular file or none, at most 1 MiB of
-  content (`FILE_TOO_LARGE`); the board's Publish is its consumer), and `assist({ prompt, maxTokens? })` → `{ text } | null` (a one-shot ask
+  content (`FILE_TOO_LARGE`); the board's Publish and its OpenSpec Apply are its consumers), and `assist({ prompt, maxTokens? })` → `{ text } | null` (a one-shot ask
   on the host's own assist model through pi — never a second runtime —, the prompt up to 20,000 characters,
   `maxTokens` 1–1,024 (256 by default), stopped once the services' `signal` aborts; `null` when no model is
   configured, it timed out or the answer was empty, so a caller skips silently). Every action

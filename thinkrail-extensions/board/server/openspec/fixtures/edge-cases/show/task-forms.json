@@ -1,0 +1,47 @@
+{
+	"id": "task-forms",
+	"title": "Task forms",
+	"deltaCount": 2,
+	"deltas": [
+		{
+			"spec": "identity/sso",
+			"operation": "ADDED",
+			"description": "Add requirement: The system SHALL accept an OpenID Connect ID token from the configured provider.",
+			"requirement": {
+				"name": "OIDC login",
+				"text": "The system SHALL accept an OpenID Connect ID token from the configured provider.",
+				"scenarios": [
+					{
+						"name": "an employee returns with",
+						"rawText": "- **WHEN** an employee returns with a valid ID token\n- **THEN** a session starts for that employee\n\n```md\n### Requirement: Fenced example is no requirement\n```"
+					}
+				]
+			},
+			"requirements": [
+				{
+					"name": "OIDC login",
+					"text": "The system SHALL accept an OpenID Connect ID token from the configured provider.",
+					"scenarios": [
+						{
+							"name": "an employee returns with",
+							"rawText": "- **WHEN** an employee returns with a valid ID token\n- **THEN** a session starts for that employee\n\n```md\n### Requirement: Fenced example is no requirement\n```"
+						}
+					]
+				}
+			]
+		},
+		{
+			"spec": "identity/sso",
+			"operation": "RENAMED",
+			"description": "Rename requirement from \"SAML login\" to \"SAML sign-in\"",
+			"rename": {
+				"from": "SAML login",
+				"to": "SAML sign-in"
+			}
+		}
+	],
+	"root": {
+		"path": "<root>",
+		"source": "nearest"
+	}
+}

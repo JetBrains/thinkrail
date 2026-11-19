@@ -14,14 +14,14 @@ export type Category =
 export type CardType = "feature" | "bug" | "chore";
 export type CardSize = "S" | "M" | "L";
 export type Workflow = "brainstorm" | "implement";
-export type Preset = "agentic-kanban" | "solo";
+export type Preset = "agentic-kanban" | "solo" | "spec-driven";
 export type GithubFilter = "open" | "mine";
 export type GithubProblem = "missing" | "unauthenticated";
 
 export const CARD_TYPES: readonly CardType[] = ["feature", "bug", "chore"];
 export const CARD_SIZES: readonly CardSize[] = ["S", "M", "L"];
 export const WORKFLOWS: readonly Workflow[] = ["implement", "brainstorm"];
-export const PRESETS: readonly Preset[] = ["agentic-kanban", "solo"];
+export const PRESETS: readonly Preset[] = ["agentic-kanban", "solo", "spec-driven"];
 export const GITHUB_FILTERS: readonly GithubFilter[] = ["open", "mine"];
 export const BOARD_CHANGED = "board.changed";
 export const CARD_PANEL = "card";
@@ -55,11 +55,68 @@ export interface AttemptLive {
 	pr: { kind: string; number: number; state: string; url?: string } | null;
 }
 
-/** Where a card comes from: the board, a workspace's task-spec or a GitHub issue. */
+/** Where a card comes from: the board, a workspace's task-spec, a GitHub issue or an OpenSpec change. */
 export type CardSource =
 	| { kind: "native"; ref: string }
 	| { kind: "task-spec"; ref: string; workspaceId: string; path: string }
-	| { kind: "github"; ref: string; number: number; url: string };
+	| { kind: "github"; ref: string; number: number; url: string }
+	| { kind: "openspec"; ref: string; change: string };
+
+export type OpenspecStage = "planning" | "ready" | "in-progress" | "complete" | "archived";
+export type ArtifactStatus = "done" | "ready" | "blocked" | "skipped";
+
+export interface DeltaCount {
+	capability: string;
+	path: string;
+	added: number;
+	modified: number;
+	removed: number;
+	renamed: number;
+}
+
+/** An OpenSpec change on its card, live from the workspace it was read in (the apply one while applying). */
+export interface OpenspecOverlay {
+	change: string;
+	workspaceId: string;
+	dir: string;
+	archived: boolean;
+	stage: OpenspecStage;
+	schema: string;
+	/** Why the artifact chain is unknown (a schema OpenSpec could not resolve). */
+	error?: string;
+	artifacts: { id: string; status: ArtifactStatus; files: string[] }[];
+	nextArtifact: string | null;
+	tasks: { completed: number; total: number };
+	deltas: DeltaCount[];
+	validation: { valid: boolean; errors: number; warnings: number } | null;
+	source: "cli" | "files";
+	/** The card in Peek only. */
+	requirements?: { capability: string; operation: string; name: string }[];
+	taskLines?: { done: boolean; text: string; path: string; line: number }[];
+}
+
+/** The project's OpenSpec: whether Default has `openspec/`, and the user's CLI version (`null` without). */
+export interface OpenspecStatus {
+	present: boolean;
+	cli: string | null;
+	checking: boolean;
+}
+
+export interface ValidationIssue {
+	level: "ERROR" | "WARNING" | "INFO";
+	message: string;
+	path?: string;
+	line?: number;
+}
+
+export interface ChangeValidation {
+	change: string;
+	workspaceId: string;
+	valid: boolean;
+	errors: number;
+	warnings: number;
+	issues: ValidationIssue[];
+}
 
 /** A task-spec of one of the card's workspaces, live from the host's spec graph. */
 export interface TaskSpecRef {
@@ -102,6 +159,8 @@ export interface Card {
 	pinnedStart?: string;
 	/** The initiative it serves, live: its roadmap project's, else one listing it, on this board or another. */
 	initiative?: ServedInitiative;
+	/** An OpenSpec change's card: the change, live. */
+	openspec?: OpenspecOverlay;
 	/** A source's item the board has not stored: an unbound workspace's task-spec, an untouched issue. */
 	virtual?: true;
 }
@@ -155,6 +214,8 @@ export interface BoardView {
 	cards: Card[];
 	wip: Record<WipKey, WipCount>;
 	github: GithubStatus;
+	/** Absent from an older host. */
+	openspec?: OpenspecStatus;
 }
 
 export type InboxReason = "needs_you" | "failed";
@@ -204,6 +265,8 @@ export interface StartRequest {
 export interface StartResult {
 	card: Card;
 	kickoffError?: string;
+	/** Apply started, but carrying the change or writing its `x-thinkrail` into the workspace failed. */
+	openspecError?: string;
 }
 
 export type CardPatch = Partial<
@@ -485,10 +548,109 @@ export function enterCard(
 	return true;
 }
 
-/** Start is offered on a backlog or unstarted card with no attempt still running (an issue's included). */
+/**
+ * Start is offered on a backlog or unstarted card with no attempt still running (an issue's included); an
+ * OpenSpec change's card offers Apply instead.
+ */
 export function canStart(card: Pick<Card, "category" | "live" | "source" | "virtual">): boolean {
 	if (card.virtual && card.source.kind === "task-spec") return false;
+	if (card.source.kind === "openspec") return false;
 	return (card.category === "backlog" || card.category === "unstarted") && !openAttempt(card);
+}
+
+/** Apply is offered on an OpenSpec change with tasks written, not archived, and no attempt running. */
+export function canApply(card: Pick<Card, "live" | "source" | "openspec">): boolean {
+	const change = card.openspec;
+	return (
+		card.source.kind === "openspec" &&
+		!!change &&
+		!change.archived &&
+		change.tasks.total > 0 &&
+		!openAttempt(card)
+	);
+}
+
+/** Archive in workspace is offered while an attempt's workspace is open with the change not archived. */
+export function canArchive(card: Pick<Card, "live" | "source" | "openspec" | "virtual">): boolean {
+	return (
+		card.source.kind === "openspec" &&
+		!card.virtual &&
+		!!card.openspec &&
+		!card.openspec.archived &&
+		!!openAttempt(card)?.chat
+	);
+}
+
+/** The presets the switch offers: Spec-driven only for a project whose Default workspace has `openspec/`. */
+export function presetsFor(view: Pick<BoardView, "openspec" | "settings">): Preset[] {
+	return PRESETS.filter(
+		(preset) =>
+			preset !== "spec-driven" || !!view.openspec?.present || view.settings.preset === preset,
+	);
+}
+
+/** Where an artifact of a change opens: Peek in this workspace, else that workspace's file tab. */
+export function openChangeFile(
+	host: Pick<PanelHost, "peek" | "openFile" | "scope">,
+	change: Pick<OpenspecOverlay, "workspaceId">,
+	path: string,
+): "peek" | "file" {
+	return openTaskSpec(host, { workspaceId: change.workspaceId, path });
+}
+
+/** A change's delta on one capability as its chip says it: `+2 ~1 −1 →1`, zero counts left out. */
+export function deltaText(
+	delta: Pick<DeltaCount, "added" | "modified" | "removed" | "renamed">,
+): string {
+	return [
+		delta.added ? `+${delta.added}` : "",
+		delta.modified ? `~${delta.modified}` : "",
+		delta.removed ? `−${delta.removed}` : "",
+		delta.renamed ? `→${delta.renamed}` : "",
+	]
+		.filter(Boolean)
+		.join(" ");
+}
+
+export async function validateChange(
+	host: Pick<PanelHost, "query">,
+	cardId: string,
+	projectId: string,
+): Promise<ChangeValidation> {
+	return (await host.query("openspec.validate", { cardId, projectId })) as ChangeValidation;
+}
+
+/** Asks the card's apply chat to archive the change there and update the PR. */
+export async function archiveChange(
+	host: Pick<PanelHost, "query">,
+	cardId: string,
+	projectId: string,
+): Promise<{ sessionId: string; workspaceId: string }> {
+	return (await host.query("openspec.archive", { cardId, projectId })) as {
+		sessionId: string;
+		workspaceId: string;
+	};
+}
+
+/** A chat in the Default workspace proposing a change from `description`, then that chat opened. */
+export async function proposeChange(
+	host: Pick<PanelHost, "query" | "openChat">,
+	projectId: string,
+	description: string,
+): Promise<{ workspaceId: string; sessionId: string; kickoffError?: string }> {
+	const value = await host.query("openspec.propose", { projectId, description });
+	if (
+		!isObject(value) ||
+		typeof value.workspaceId !== "string" ||
+		typeof value.sessionId !== "string"
+	)
+		throw new BoardReplyError("The board's host replied in an unknown shape.");
+	host.openChat({ projectId, workspaceId: value.workspaceId, sessionId: value.sessionId });
+	return {
+		workspaceId: value.workspaceId,
+		sessionId: value.sessionId,
+		...(typeof value.kickoffError === "string" ? { kickoffError: value.kickoffError } : {}),
+	};
 }
 
 /** An unbound workspace's task-spec card: it can only be adopted, never moved or edited. */
@@ -496,9 +658,11 @@ export function canAdopt(card: Pick<Card, "source" | "virtual">): boolean {
 	return !!card.virtual && card.source.kind === "task-spec";
 }
 
-/** The id a card shows: a task-spec's card shows its spec's id, an issue's `#N`. */
+/** The id a card shows: a task-spec's card shows its spec's id, an issue's `#N`, an unstored change its name. */
 export function shownId(card: Pick<Card, "id" | "source" | "virtual">): string {
-	return card.virtual && card.source.kind === "task-spec" ? card.source.ref : card.id;
+	if (!card.virtual) return card.id;
+	if (card.source.kind === "task-spec") return card.source.ref;
+	return card.source.kind === "openspec" ? card.source.change : card.id;
 }
 
 export function visibleColumns(view: Pick<BoardView, "columns">): Column[] {

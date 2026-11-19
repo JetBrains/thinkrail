@@ -1,0 +1,27 @@
+{
+	"items": [],
+	"summary": {
+		"totals": {
+			"items": 0,
+			"passed": 0,
+			"failed": 0
+		},
+		"byType": {
+			"change": {
+				"items": 0,
+				"passed": 0,
+				"failed": 0
+			},
+			"spec": {
+				"items": 0,
+				"passed": 0,
+				"failed": 0
+			}
+		}
+	},
+	"version": "1.0",
+	"root": {
+		"path": "<root>",
+		"source": "nearest"
+	}
+}

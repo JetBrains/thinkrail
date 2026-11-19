@@ -26,6 +26,7 @@ import type {
 	ExtensionHostServices,
 	ExtensionMessageAnchor,
 	ExtensionModel,
+	ExtensionOpenspecTree,
 	ExtensionPublishScope,
 	ExtensionSessionPlacement,
 	ExtensionSessionView,
@@ -56,6 +57,7 @@ import { extensionActions } from "./extensionActions";
 import { createExtensionEventHub } from "./extensionEvents";
 import { buildHistoryScope } from "./historyScope";
 import { lastActions } from "./lastActions";
+import { readOpenspecTree } from "./openspecTree";
 
 export const isExtensionDisabled = (name: string): boolean =>
 	getConfig().disabledExtensions.includes(name);
@@ -377,6 +379,13 @@ export async function taskSpecs(workspaceId: string): Promise<ExtensionTaskSpec[
 	return workspaceTaskSpecs(workspace.id, workspace.worktreePath);
 }
 
+/** An open repository workspace's `openspec/` markdown and YAML; `null` without it, for a chat or when not open. */
+export async function openspecTree(workspaceId: string): Promise<ExtensionOpenspecTree | null> {
+	const workspace = listAllWorkspaceRecords().find((candidate) => candidate.id === workspaceId);
+	if (!workspace || isChatWorkspace(workspace)) return null;
+	return readOpenspecTree(workspace.worktreePath);
+}
+
 /** One named section of a spec of an open repository workspace, through its spec graph. */
 export async function specSection(
 	workspaceId: string,
@@ -400,6 +409,7 @@ export function extensionHostServices(name: string, signal: AbortSignal): Extens
 		workspaceFacts,
 		taskSpecs,
 		specSection,
+		openspecTree,
 		githubProblem: ghSetupProblem,
 		sessionsRoot,
 		sessionScope,

@@ -1,0 +1,119 @@
+{
+	"id": "add-2fa-login",
+	"title": "Add TOTP two-factor login",
+	"deltaCount": 4,
+	"deltas": [
+		{
+			"spec": "audit-log",
+			"operation": "ADDED",
+			"description": "Add requirement: The system SHALL record every second-factor enrollment and login attempt.",
+			"requirement": {
+				"name": "Security events",
+				"text": "The system SHALL record every second-factor enrollment and login attempt.",
+				"scenarios": [
+					{
+						"name": "a user enrolls a",
+						"rawText": "- **WHEN** a user enrolls a TOTP authenticator\n- **THEN** an audit entry names the user and the time"
+					}
+				]
+			},
+			"requirements": [
+				{
+					"name": "Security events",
+					"text": "The system SHALL record every second-factor enrollment and login attempt.",
+					"scenarios": [
+						{
+							"name": "a user enrolls a",
+							"rawText": "- **WHEN** a user enrolls a TOTP authenticator\n- **THEN** an audit entry names the user and the time"
+						}
+					]
+				}
+			]
+		},
+		{
+			"spec": "auth",
+			"operation": "ADDED",
+			"description": "Add requirement: The system SHALL let a user enroll a TOTP authenticator.",
+			"requirement": {
+				"name": "TOTP enrollment",
+				"text": "The system SHALL let a user enroll a TOTP authenticator.",
+				"scenarios": [
+					{
+						"name": "a user scans the",
+						"rawText": "- **WHEN** a user scans the QR code and confirms a valid code\n- **THEN** two-factor login is enabled and recovery codes are shown once"
+					}
+				]
+			},
+			"requirements": [
+				{
+					"name": "TOTP enrollment",
+					"text": "The system SHALL let a user enroll a TOTP authenticator.",
+					"scenarios": [
+						{
+							"name": "a user scans the",
+							"rawText": "- **WHEN** a user scans the QR code and confirms a valid code\n- **THEN** two-factor login is enabled and recovery codes are shown once"
+						}
+					]
+				}
+			]
+		},
+		{
+			"spec": "auth",
+			"operation": "ADDED",
+			"description": "Add requirement: The system SHALL accept a single-use recovery code in place of a TOTP code.",
+			"requirement": {
+				"name": "Recovery codes",
+				"text": "The system SHALL accept a single-use recovery code in place of a TOTP code.",
+				"scenarios": [
+					{
+						"name": "a user enters an",
+						"rawText": "- **WHEN** a user enters an unused recovery code\n- **THEN** the login completes and that code is spent"
+					}
+				]
+			},
+			"requirements": [
+				{
+					"name": "Recovery codes",
+					"text": "The system SHALL accept a single-use recovery code in place of a TOTP code.",
+					"scenarios": [
+						{
+							"name": "a user enters an",
+							"rawText": "- **WHEN** a user enters an unused recovery code\n- **THEN** the login completes and that code is spent"
+						}
+					]
+				}
+			]
+		},
+		{
+			"spec": "auth",
+			"operation": "MODIFIED",
+			"description": "Modify requirement: The system SHALL authenticate a user with an email and a password and, once enrolled, a TOTP code.",
+			"requirement": {
+				"name": "Password login",
+				"text": "The system SHALL authenticate a user with an email and a password and, once enrolled, a TOTP code.",
+				"scenarios": [
+					{
+						"name": "a user submits a",
+						"rawText": "- **WHEN** a user submits a matching email and password\n- **THEN** a session starts for that user"
+					}
+				]
+			},
+			"requirements": [
+				{
+					"name": "Password login",
+					"text": "The system SHALL authenticate a user with an email and a password and, once enrolled, a TOTP code.",
+					"scenarios": [
+						{
+							"name": "a user submits a",
+							"rawText": "- **WHEN** a user submits a matching email and password\n- **THEN** a session starts for that user"
+						}
+					]
+				}
+			]
+		}
+	],
+	"root": {
+		"path": "<root>",
+		"source": "nearest"
+	}
+}

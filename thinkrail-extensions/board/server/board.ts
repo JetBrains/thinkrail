@@ -26,7 +26,15 @@ import {
 	withCloses,
 } from "./github";
 import { allocatePrefix, cardId, parseCardId } from "./ids";
-import { kickoffText, type RoadmapChat, roadmapKickoff, workflowFor } from "./kickoff";
+import {
+	kickoffText,
+	openspecApplyKickoff,
+	openspecArchiveMessage,
+	openspecProposeKickoff,
+	type RoadmapChat,
+	roadmapKickoff,
+	workflowFor,
+} from "./kickoff";
 import {
 	type Attempt,
 	type BoardSettings,
@@ -45,6 +53,26 @@ import {
 	type WipLimits,
 	type Workflow,
 } from "./model";
+import {
+	OPENSPEC_TIMEOUT_MS,
+	type OpenspecChange,
+	OpenspecReader,
+	type OpenspecSnapshot,
+	parseOpenspec,
+	SPEC_DRIVEN,
+	stageOf,
+	upsertTopLevelKey,
+	type Validation,
+} from "./openspec";
+import {
+	findChange,
+	type OpenspecOverlay,
+	type OpenspecStatus,
+	openspecCardId,
+	overlayOf,
+	parseOpenspecCardId,
+	STAGE_CATEGORIES,
+} from "./openspecCards";
 import { type ColumnDef, columnFor, columnOfCard, columnsOf, placeInColumn } from "./presets";
 import { Roadmap } from "./roadmap";
 import { applyEvent, type BoardEvent, moveByHand } from "./rules";
@@ -110,6 +138,8 @@ export type CardView = Card & {
 	blockedBy: string[];
 	taskSpecs: TaskSpecRef[];
 	initiative?: ServedInitiative;
+	/** An OpenSpec change's card: the change as its attempt's workspace (else Default) has it. */
+	openspec?: OpenspecOverlay;
 	virtual?: true;
 };
 
@@ -141,7 +171,11 @@ export interface BoardView {
 	cards: CardView[];
 	wip: Wip;
 	github: GithubStatus;
+	openspec: OpenspecStatus;
 }
+
+/** `openspec validate <change> --strict`'s verdict, from the workspace the card reads the change in. */
+export type ChangeValidation = Validation & { change: string; workspaceId: string };
 
 export interface InboxItem {
 	projectId: string;
@@ -342,6 +376,26 @@ const isDisabledError = (error: unknown) =>
 	error !== null &&
 	(error as { code?: unknown }).code === "EXTENSION_DISABLED";
 
+const INSTALL_OPENSPEC =
+	"Install the OpenSpec CLI (npm install -g @fission-ai/openspec) for the board to run it.";
+
+/** A card's latest attempt whose workspace is still open. */
+function openAttemptOf(
+	card: Pick<Card, "attempts">,
+	facts: ReadonlyMap<string, ExtensionWorkspaceFacts | null>,
+): Attempt | undefined {
+	return card.attempts.findLast(
+		(attempt) => attempt.removedAt === undefined && !!facts.get(attempt.workspaceId),
+	);
+}
+
+/** One board read's OpenSpec: each workspace's snapshot read once, and the project's CLI as probed. */
+interface OpenspecReads {
+	defaultId: string | null;
+	read(workspaceId: string): Promise<OpenspecSnapshot | null>;
+	cli(): { version: string | null; checking: boolean };
+}
+
 /** A source item shown as a card: never stored, so it has no attempts, links or history. */
 function virtualCard(
 	fields: Pick<Card, "id" | "source" | "title" | "category" | "column" | "rank"> &
@@ -424,6 +478,9 @@ export class Board {
 	private readonly watched = new Map<string, string>();
 	/** A PR whose `Closes #N` check failed, by `workspaceId#pr`: when to try again. */
 	private readonly linkRetry = new Map<string, number>();
+	private readonly openspec: OpenspecReader;
+	/** Each project's Default workspace's changes as the last read saw them, by name: what a write stores. */
+	private readonly openspecSeen = new Map<string, Map<string, OpenspecChange>>();
 
 	constructor(host: ExtensionHostServices, options: BoardOptions = {}) {
 		this.host = host;
@@ -437,6 +494,13 @@ export class Board {
 			now: this.now,
 			onChange: (projectId) => this.changed(projectId),
 			...(options.issueTtlMs !== undefined ? { ttlMs: options.issueTtlMs } : {}),
+		});
+		this.openspec = new OpenspecReader({
+			tree: (workspaceId) => this.host.openspecTree(workspaceId),
+			run: (workspaceId, argv) =>
+				this.host.actions.runInWorkspace({ workspaceId, argv, timeoutMs: OPENSPEC_TIMEOUT_MS }),
+			now: this.now,
+			onChange: (projectId) => this.changed(projectId),
 		});
 		this.sizes = new SizeQueue(
 			(id) => this.suggestSize(id),
@@ -533,6 +597,11 @@ export class Board {
 			return this.materializeIssue(projectId, issue);
 		}
 		if (parseTaskSpecCardId(id)) throw new Error("Adopt this task-spec's card before changing it.");
+		const change = parseOpenspecCardId(id);
+		if (change !== null) {
+			if (!projectId) throw new Error(`Pass the projectId of ${id}'s board.`);
+			return this.materializeOpenspec(projectId, change);
+		}
 		return this.locate(id);
 	}
 
@@ -736,6 +805,119 @@ export class Board {
 		return this.issues.status(projectId, github.enabled, github.filter);
 	}
 
+	/** One read's OpenSpec access: each workspace's snapshot read at most once, the CLI probed in Default. */
+	private openspecReads(project: ExtensionHostProject): OpenspecReads {
+		const defaultId = this.defaultWorkspace(project);
+		const reads = new Map<string, Promise<OpenspecSnapshot | null>>();
+		return {
+			defaultId,
+			cli: () => this.openspec.cli(project.id),
+			read: (workspaceId) => {
+				let read = reads.get(workspaceId);
+				if (!read) {
+					read = this.openspec
+						.read(project.id, workspaceId, defaultId ?? workspaceId)
+						.then((snapshot) => {
+							if (workspaceId === defaultId)
+								this.openspecSeen.set(
+									project.id,
+									new Map((snapshot?.changes ?? []).map((change) => [change.name, change])),
+								);
+							return snapshot;
+						});
+					reads.set(workspaceId, read);
+				}
+				return read;
+			},
+		};
+	}
+
+	/**
+	 * The change an OpenSpec card names, as its open attempt's workspace has it (the apply branch, live),
+	 * else as the Default workspace has it.
+	 */
+	private async changeOf(
+		reads: OpenspecReads,
+		card: Pick<Card, "source" | "attempts">,
+		facts: ReadonlyMap<string, ExtensionWorkspaceFacts | null>,
+	): Promise<{ change: OpenspecChange; snapshot: OpenspecSnapshot } | null> {
+		if (card.source.kind !== "openspec") return null;
+		const name = card.source.change;
+		const attempt = openAttemptOf(card, facts);
+		for (const workspaceId of [attempt?.workspaceId, reads.defaultId]) {
+			if (!workspaceId) continue;
+			const snapshot = await reads.read(workspaceId);
+			const change = snapshot ? findChange(snapshot.changes, name) : undefined;
+			if (snapshot && change) return { change, snapshot };
+		}
+		return null;
+	}
+
+	private openspecStatus(reads: OpenspecReads, present: boolean): OpenspecStatus {
+		const { version, checking } = reads.cli();
+		return { present, cli: present ? version : null, checking: present && checking };
+	}
+
+	/** A change no stored card names, as a card placed by its stage. */
+	private openspecView(
+		change: OpenspecChange,
+		snapshot: OpenspecSnapshot,
+		settings: BoardSettings,
+		rank: number,
+		detail = false,
+	): CardView {
+		const category = STAGE_CATEGORIES[stageOf(change)];
+		return {
+			...virtualCard({
+				id: openspecCardId(change.name),
+				source: { kind: "openspec", ref: change.name, change: change.name },
+				title: clip(change.title, TITLE_MAX),
+				description: clip(change.summary, TEXT_MAX),
+				category,
+				column: columnFor(settings.preset, category),
+				rank,
+			}),
+			live: [],
+			blockedBy: [],
+			taskSpecs: [],
+			openspec: overlayOf(change, snapshot, detail),
+			virtual: true,
+		};
+	}
+
+	/**
+	 * The project's OpenSpec on its board: each stored change card's overlay and the Default workspace's
+	 * changes no stored card names, as virtual cards. Default is watched while it has `openspec/`, so a
+	 * chat proposing there moves the board.
+	 */
+	private async openspecCards(
+		project: ExtensionHostProject,
+		views: readonly CardView[],
+		facts: ReadonlyMap<string, ExtensionWorkspaceFacts | null>,
+		settings: BoardSettings,
+		rank: number,
+	): Promise<{ status: OpenspecStatus; views: CardView[]; virtual: CardView[] }> {
+		const reads = this.openspecReads(project);
+		const base = reads.defaultId ? await reads.read(reads.defaultId) : null;
+		if (base && reads.defaultId) this.watched.set(reads.defaultId, project.id);
+		const claimed = new Set<string>();
+		const overlaid: CardView[] = [];
+		for (const view of views) {
+			const found = await this.changeOf(reads, view, facts);
+			if (view.source.kind === "openspec" && base) {
+				const named = findChange(base.changes, view.source.change);
+				if (named) claimed.add(named.name);
+			}
+			overlaid.push(found ? { ...view, openspec: overlayOf(found.change, found.snapshot) } : view);
+		}
+		const virtual = base
+			? base.changes
+					.filter((change) => !claimed.has(change.name))
+					.map((change, index) => this.openspecView(change, base, settings, rank + index))
+			: [];
+		return { status: this.openspecStatus(reads, base !== null), views: overlaid, virtual };
+	}
+
 	async get(projectId: string): Promise<BoardView> {
 		const project = this.project(projectId);
 		const file = this.store.cards(projectId);
@@ -750,19 +932,28 @@ export class Board {
 			),
 		);
 		const served = this.roadmap.initiativesOf(projectId, cards);
-		const views = cards.map((card) => this.view(card, facts, cards, specs, served));
+		const stored = cards.map((card) => this.view(card, facts, cards, specs, served));
 		const rank = Math.max(0, ...cards.map((card) => card.rank)) + 1;
 		const fromSpecs = await this.taskSpecCards(project, cards, settings, rank);
 		const fromIssues = this.issueCards(project, cards, settings, rank + fromSpecs.length);
+		const openspec = await this.openspecCards(
+			project,
+			stored,
+			facts,
+			settings,
+			rank + fromSpecs.length + fromIssues.length,
+		);
+		const views = openspec.views;
 		return {
 			projectId,
 			projectName: project.name,
 			prefix: file?.prefix ?? null,
 			settings,
 			columns: columnsOf(settings.preset),
-			cards: [...views, ...fromSpecs, ...fromIssues],
+			cards: [...views, ...fromSpecs, ...fromIssues, ...openspec.virtual],
 			wip: wipOf(views, settings.wipLimits),
 			github: this.githubStatus(projectId, settings.github),
+			openspec: openspec.status,
 		};
 	}
 
@@ -794,17 +985,34 @@ export class Board {
 				.filter((attempt) => attempt.removedAt === undefined && facts.get(attempt.workspaceId))
 				.map((attempt) => attempt.workspaceId),
 		);
+		const view = this.view(
+			card,
+			facts,
+			file.cards,
+			specs,
+			this.roadmap.initiativesOf(projectId, [card]),
+		);
+		const found =
+			card.source.kind === "openspec"
+				? await this.changeOf(this.openspecReads(this.project(projectId)), card, facts)
+				: null;
 		return {
 			projectId,
-			card: this.view(
-				card,
-				facts,
-				file.cards,
-				specs,
-				this.roadmap.initiativesOf(projectId, [card]),
-			),
+			card: found ? { ...view, openspec: overlayOf(found.change, found.snapshot, true) } : view,
 			transitions: this.store.transitions(projectId).filter((entry) => entry.cardId === card.id),
 		};
+	}
+
+	/** The stored card naming an OpenSpec change, by its folder's name or an archived one's base name. */
+	private openspecCardOf(projectId: string, name: string): Card | undefined {
+		const base = this.openspecSeen.get(projectId)?.get(name)?.baseName ?? name;
+		return this.store
+			.cards(projectId)
+			?.cards.find(
+				(card) =>
+					card.source.kind === "openspec" &&
+					(card.source.change === name || card.source.change === base),
+			);
 	}
 
 	/** The open repository project holding a workspace. */
@@ -843,6 +1051,22 @@ export class Board {
 			return {
 				projectId: project.id,
 				card: this.issueView(found, this.store.settings(project.id), 0),
+				transitions: [],
+			};
+		}
+		const change = parseOpenspecCardId(id);
+		if (change !== null) {
+			if (!projectId) throw new Error(`Pass the projectId of ${id}'s board.`);
+			const project = this.project(projectId);
+			const reads = this.openspecReads(project);
+			const base = reads.defaultId ? await reads.read(reads.defaultId) : null;
+			const stored = this.openspecCardOf(project.id, change);
+			if (stored) return this.detail(this.locate(stored.id));
+			const found = base ? findChange(base.changes, change) : undefined;
+			if (!base || !found) throw new Error(`The OpenSpec change ${change} is not on this board.`);
+			return {
+				projectId: project.id,
+				card: this.openspecView(found, base, this.store.settings(project.id), 0, true),
 				transitions: [],
 			};
 		}
@@ -1030,6 +1254,77 @@ export class Board {
 		return this.locate(card.id);
 	}
 
+	/** An OpenSpec change's stored card, created from the last read of Default the first time a write needs it. */
+	private materializeOpenspec(projectId: string, name: string): Located {
+		const project = this.project(projectId);
+		const stored = this.openspecCardOf(project.id, name);
+		if (stored) return this.locate(stored.id);
+		const change = this.openspecSeen.get(project.id)?.get(name);
+		if (!change) throw new Error(`The OpenSpec change ${name} is not on this board; refresh it.`);
+		const { preset } = this.store.settings(project.id);
+		const category = STAGE_CATEGORIES[stageOf(change)];
+		const [card] = this.insert(
+			project,
+			[
+				{
+					title: clip(change.title, TITLE_MAX),
+					source: { kind: "openspec", ref: change.name, change: change.name },
+					description: clip(change.summary, TEXT_MAX),
+					placement: { category, column: columnFor(preset, category) },
+					reason: `created from the OpenSpec change ${change.name}`,
+				},
+			],
+			"human",
+		);
+		if (!card) throw new Error(`The card of the OpenSpec change ${name} was not created.`);
+		return this.locate(card.id);
+	}
+
+	/**
+	 * After Apply: the change in the attempt's workspace — carried over from Default when its branch lacks
+	 * it (a change proposed and not committed; with `openspec/` missing there, also its config and living
+	 * specs) — gets `x-thinkrail { card, workspace }` in its `.openspec.yaml`, every other key kept.
+	 */
+	private async markApplied(
+		projectId: string,
+		cardId: string,
+		workspaceId: string,
+		name: string,
+	): Promise<void> {
+		const project = this.project(projectId);
+		const defaultId = this.defaultWorkspace(project);
+		const write = (path: string, content: string) =>
+			this.host.actions.writeWorkspaceFile({ workspaceId, path, content });
+		const tree = await this.host.openspecTree(workspaceId);
+		const active = (files: typeof tree) =>
+			files ? parseOpenspec(files).filter((change) => !change.archived) : [];
+		let change = findChange(active(tree), name);
+		let files = tree;
+		if (!change) {
+			const base =
+				defaultId && defaultId !== workspaceId ? await this.host.openspecTree(defaultId) : null;
+			const source = findChange(active(base), name);
+			if (!base || !source) throw new Error(`The OpenSpec change ${name} is in neither workspace.`);
+			const carried = base.files.filter(
+				(file) =>
+					file.path.startsWith(`${source.dir}/`) ||
+					(!tree &&
+						(file.path === "openspec/config.yaml" || file.path.startsWith("openspec/specs/"))),
+			);
+			for (const file of carried) await write(file.path, file.text);
+			change = source;
+			files = base;
+		}
+		const metadataPath = `${change.dir}/.openspec.yaml`;
+		const metadata =
+			files?.files.find((file) => file.path === metadataPath)?.text ??
+			`schema: ${change.error ? SPEC_DRIVEN.name : change.schema}\n`;
+		await write(
+			metadataPath,
+			upsertTopLevelKey(metadata, "x-thinkrail", { card: cardId, workspace: workspaceId }),
+		);
+	}
+
 	/**
 	 * Stores an unbound workspace's task-spec card as a board card bound to that workspace (its attempt
 	 * recorded), placed where it showed; a workspace some card already holds answers that card.
@@ -1170,6 +1465,8 @@ export class Board {
 			throw new Error("A GitHub issue's card stays while the issue is open; close it on GitHub.");
 		if (parseTaskSpecCardId(id))
 			throw new Error("A task-spec's card stays while its workspace is open.");
+		if (parseOpenspecCardId(id) !== null)
+			throw new Error("An OpenSpec change's card stays while its change folder is there.");
 		const { projectId, file, card } = this.locate(id);
 		this.roadmap.forgetCard(projectId, card.id);
 		const cards = file.cards
@@ -1331,14 +1628,29 @@ export class Board {
 		if (card.category === "triage")
 			throw new Error(`Accept ${card.id} from Triage before starting it.`);
 		if (this.starting.has(card.id)) throw new Error(`${card.id} is already starting.`);
-		const workflow = options.workflow ?? workflowFor(card);
+		const change = card.source.kind === "openspec" ? card.source.change : null;
+		if (change !== null) {
+			const seen = this.openspecSeen.get(owner);
+			const found = seen ? findChange([...seen.values()], change) : undefined;
+			if (found && (found.archived || found.tasks.total === 0))
+				throw new Error(
+					found.archived
+						? `${change} is archived; there is nothing left to apply.`
+						: `${change} has no tasks yet; finish its artifacts before applying it.`,
+				);
+		}
+		const workflow = change !== null ? "implement" : (options.workflow ?? workflowFor(card));
+		const context = this.roadmap.kickoffContext(owner, card);
 		this.starting.add(card.id);
 		try {
 			const created = await this.host.actions.createWorkspace({
 				projectId: owner,
 				...(options.baseRef ? { baseRef: options.baseRef } : {}),
 				kickoff: {
-					text: kickoffText(card, workflow, this.roadmap.kickoffContext(owner, card)),
+					text:
+						change !== null
+							? openspecApplyKickoff(card, change, context)
+							: kickoffText(card, workflow, context),
 					...(options.model ? { model: options.model } : {}),
 					...(options.thinkingLevel ? { thinkingLevel: options.thinkingLevel } : {}),
 				},
@@ -1376,14 +1688,105 @@ export class Board {
 				this.replace(latest.file, next),
 				result?.transition ? [result.transition] : [],
 			);
+			let openspecError: string | undefined;
+			if (change !== null)
+				await this.markApplied(owner, card.id, created.workspaceId, change).catch((error) => {
+					openspecError = error instanceof Error ? error.message : String(error);
+					this.host.log.warn(`marking ${change} applied in ${created.workspaceId} failed`, error);
+				});
 			return {
 				card: next,
 				attempt,
 				...(created.kickoffError ? { kickoffError: created.kickoffError } : {}),
+				...(openspecError ? { openspecError } : {}),
 			};
 		} finally {
 			this.starting.delete(card.id);
 		}
+	}
+
+	/** A change card's action target: its stored card (`openspec:<name>` names one once stored) and its change. */
+	private async changeForAction(
+		id: string,
+		projectId?: string,
+	): Promise<{
+		reads: OpenspecReads;
+		card: Card | null;
+		found: { change: OpenspecChange; snapshot: OpenspecSnapshot } | null;
+	}> {
+		const name = parseOpenspecCardId(id);
+		const located = name === null ? this.locate(id) : null;
+		const project = this.project(located?.projectId ?? projectId ?? "");
+		const reads = this.openspecReads(project);
+		const base = reads.defaultId ? await reads.read(reads.defaultId) : null;
+		const card =
+			located?.card ?? (name !== null ? this.openspecCardOf(project.id, name) : null) ?? null;
+		if (card && card.source.kind !== "openspec")
+			throw new Error(`${card.id} is not an OpenSpec change's card.`);
+		if (card)
+			return { reads, card, found: await this.changeOf(reads, card, await this.facts([card])) };
+		const change = base && name !== null ? findChange(base.changes, name) : undefined;
+		return { reads, card: null, found: base && change ? { change, snapshot: base } : null };
+	}
+
+	/** `openspec validate <change> --strict --json` through the user's CLI, where the card reads its change. */
+	async validateChange(id: string, projectId?: string): Promise<ChangeValidation> {
+		const { reads, found } = await this.changeForAction(id, projectId);
+		if (!reads.cli().version) throw new Error(INSTALL_OPENSPEC);
+		if (!found) throw new Error(`The OpenSpec change of ${id} is not in its workspace.`);
+		if (found.change.archived)
+			throw new Error(`${found.change.name} is archived; validate checks active changes.`);
+		const verdict = await this.openspec.validate(found.snapshot.workspaceId, found.change.name);
+		if (!verdict)
+			throw new Error(`openspec validate answered no verdict for ${found.change.name}.`);
+		return { change: found.change.name, workspaceId: found.snapshot.workspaceId, ...verdict };
+	}
+
+	/**
+	 * "Archive in workspace": asks the agent of the card's apply workspace, in its chat, to run
+	 * openspec-archive-change and update the PR — the archive lands in that workspace before the merge.
+	 */
+	async archiveChange(
+		id: string,
+		projectId?: string,
+	): Promise<{ cardId: string; workspaceId: string; sessionId: string; text: string }> {
+		const { reads, card, found } = await this.changeForAction(id, projectId);
+		if (card?.source.kind !== "openspec")
+			throw new Error("Apply the change first: it is archived in its apply workspace.");
+		if (!reads.cli().version) throw new Error(INSTALL_OPENSPEC);
+		const facts = await this.facts([card]);
+		const attempt = openAttemptOf(card, facts);
+		const chat = attempt ? attemptChat(attempt, facts.get(attempt.workspaceId) ?? null) : undefined;
+		if (!attempt || !chat) throw new Error(`${card.id} has no open workspace with a chat to ask.`);
+		if (found?.change.archived) throw new Error(`${found.change.name} is already archived there.`);
+		const text = openspecArchiveMessage(found?.change.name ?? card.source.change);
+		await this.host.actions.sendToChat({ sessionId: chat.sessionId, text, mode: "follow_up" });
+		return { cardId: card.id, workspaceId: attempt.workspaceId, sessionId: chat.sessionId, text };
+	}
+
+	/** "＋ Propose change": a new chat in the Default workspace on `/skill:openspec-propose` and the description. */
+	async proposeChange(
+		projectId: string,
+		description: string,
+	): Promise<{
+		projectId: string;
+		workspaceId: string;
+		sessionId: string;
+		kickoff: string;
+		kickoffError?: string;
+	}> {
+		const project = this.project(projectId);
+		const workspaceId = this.defaultWorkspace(project);
+		if (!workspaceId) throw new Error(`${project.name} has no Default workspace open.`);
+		const kickoff = openspecProposeKickoff(description);
+		const started = await this.host.actions.startChat({ workspaceId, kickoff: { text: kickoff } });
+		return {
+			projectId,
+			workspaceId: started.workspaceId,
+			sessionId: started.sessionId,
+			kickoff,
+			...(started.kickoffError ? { kickoffError: started.kickoffError } : {}),
+		};
 	}
 
 	settings(projectId: string): BoardSettings {
@@ -1571,6 +1974,7 @@ export class Board {
 		await this.chain;
 		await this.sizes.idle();
 		await this.issues.idle();
+		await this.openspec.idle();
 		await this.chain;
 	}
 
@@ -1701,6 +2105,7 @@ export class Board {
 					this.enqueue(() => this.linkIssue(workspace.id, review.number));
 			}),
 			events.subscribe("workspace.removed", ({ id }) => {
+				this.openspec.forget(id);
 				const watched = this.watched.get(id);
 				if (watched) {
 					this.watched.delete(id);

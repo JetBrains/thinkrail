@@ -5,7 +5,7 @@ status: draft
 title: Board extension
 parent: module-thinkrail-extensions
 depends-on: [module-extension-api]
-references: [task-board-core, task-project-board, submodule-server-extensions, submodule-server-host, module-contracts, submodule-web-shell, submodule-web-shell-layout, module-ext-session-insights]
+references: [task-board-core, task-project-board, task-openspec-board, submodule-server-extensions, submodule-server-host, module-contracts, submodule-web-shell, submodule-web-shell-layout, module-ext-session-insights]
 ---
 
 ## Responsibility
@@ -13,8 +13,10 @@ references: [task-board-core, task-project-board, submodule-server-extensions, s
 A board per project whose cards launch agent work and follow it. **The column is the work status**: a
 preset names the columns over fixed categories. **The agent's state is live**, computed per request
 from host facts and never stored. **Host events move cards** through pure rules, and a human's move is
-a logged override. Besides its own cards it shows two **sources**: the task-specs of the project's
-workspaces and, when switched on, the project's open GitHub issues through the user's own `gh`. Above the cards sits a **roadmap** per board (§ Roadmap): initiatives, roadmap projects
+a logged override. Besides its own cards it shows three **sources**: the task-specs of the project's
+workspaces, when switched on the project's open GitHub issues through the user's own `gh`, and the
+project's **OpenSpec changes** (§ OpenSpec) with propose, apply and archive through the user's own
+`openspec` CLI and skills. Above the cards sits a **roadmap** per board (§ Roadmap): initiatives, roadmap projects
 with milestones, and what is derived from the live work — rollups, a forecast, a suggested health and the
 step graph's schedule — and **flow insights** from the transition log. Five **roadmap skills** (§ Skills)
 put the agent to work on the roadmap: shape, plan, report, review and close. There is no portable pi
@@ -31,6 +33,9 @@ and Insights views and *Publish roadmap snapshot…*), the card and the initiati
     `skills/extensions/board/` and the switch drops the skills with the tools (§ Skills).
   - It imports `extension-api/server`, `typebox` and pi types only. Contracts types come through the
     SDK's re-exports.
+  - **`server/openspec/`** ([[submodule-ext-board-openspec]]) is the pure OpenSpec sub-module the board
+    reads changes through (its `index.ts` barrel); the board's glue — card ids, overlays, stage → category,
+    Apply, Validate, Archive, Propose — lives in `openspecCards.ts`, `kickoff.ts` and `board.ts`.
   - The queries, the host service and the tools share **one `Board` per data folder**. The first
     `queries(host)` or `hostService(host)` builds it, without I/O. Once the services it was built on
     have their `signal` aborted (a switch-off), the next run builds a fresh one on its own services.
@@ -96,8 +101,8 @@ Failure handling:
 
 - `id`, `source`, `title`, `description`, `acceptance[]`. The source is `{ kind: native, ref }` (the
   card's own id), `{ kind: task-spec, ref: <spec id>, workspaceId, path }` for an adopted task-spec, or
-  `{ kind: github, ref: "#N", number, url }` for an issue's card; one missing what locates it reads as
-  native;
+  `{ kind: github, ref: "#N", number, url }` for an issue's card, or `{ kind: openspec, ref, change }` for
+  an OpenSpec change's card (`change` its folder's name); one missing what locates it reads as native;
 - `type` (feature / bug / chore), `size?` (S / M / L) and `sizeSuggested?`;
 - `labels[]`, `blocks[]` (the ids it blocks), `specRefs[]` and `rank`;
 - `category` and `column`, `ownerHuman` (the local user) and `createdBy` (human / agent);
@@ -194,6 +199,10 @@ column lists is the one a card moved into it takes.
 | --- | --- |
 | Agentic kanban | Backlog (backlog) · Ready (unstarted) · Designing (started, `brainstorm`) · Building (started, `implement`) · Review (review) · Done (completed) |
 | Solo | Todo (backlog + unstarted) · Doing (started + review) · Done (completed) |
+| Spec-driven (OpenSpec) | Planning (backlog) · Ready to apply (unstarted) · In progress (started) · Complete (review) · Archived (completed) |
+
+The Spec-driven preset is offered by the switch only while the project's Default workspace has `openspec/`
+(or it is the board's preset already); any preset shows the changes, by their stage's category.
 
 - **A move keeps the card's category when the target column shows it**, so Doing keeps a card in
   review.
@@ -311,6 +320,56 @@ stored card: `spec:<workspaceId>:<specId>` and `#N`.
   A PR seen to carry it is recorded on the attempt (`closesLinked`), so it runs once per PR; a failure is
   logged and retried after five minutes, not on every review refresh.
 
+## OpenSpec
+
+The board reads and writes OpenSpec changes (`TASK-openspec-board`, integration depth O2; the unified spec
+graph, O3, is not this). Everything about a change is **derived from its files**, never stored.
+
+- **Reading.** The host's `openspecTree(workspaceId)` fact (markdown and YAML of one workspace's
+  `openspec/`, size-capped) is parsed by [[submodule-ext-board-openspec]]: artifacts by file presence and
+  the schema's dependencies (`spec-driven` built in, a project schema from `openspec/schemas/<name>/`, an
+  unresolvable one reported as the change's `error` with no chain), the tasks by OpenSpec's own checkbox
+  regex, deltas per capability, archived by location. **The stage** is openspec-ui's: archived → Archived;
+  no tasks → Planning; none checked → Ready to apply; some → In progress; all → Complete. Its category is
+  backlog, unstarted, started, review, completed.
+- **The CLI path.** `openspec --version` is probed once per project in its Default workspace once that has
+  `openspec/` (a missing CLI is probed again after 5 minutes). With a version, `openspec list --all --json
+  --sort name`, `status --all --json` and `validate --all --strict --json` run through
+  `actions.runInWorkspace` (argv only) **behind the read**, keyed by the tree's content: they are
+  authoritative for task counts and the artifact chain once in, `board.changed` says when, and the parse
+  fills in until then (and always supplies paths, deltas and titles). A failed reading waits for the tree
+  to change. Without the CLI the board is read-only: it parses the files.
+- **Cards.** Each change of the Default workspace that no stored card names is a **virtual** card
+  `openspec:<change>` (`source { kind: openspec, change }`, the proposal's `# ` heading as title, the goal or
+  Why as description), placed by its stage. A write stores it first, like an issue's card — **it is
+  materialized into a stored card** (`created from the OpenSpec change <name>`), placed where it showed. A
+  stored card keeps its own category (the board's rules and overrides apply) and carries the change as
+  its live `openspec` overlay: `{ change, workspaceId, dir, archived, stage, schema, error?, artifacts
+  [{ id, status, files }], nextArtifact, tasks, deltas, validation, source }`, `requirements` and
+  `taskLines` added for Peek. It is read in **its open attempt's workspace** (the apply branch, live, an
+  archived copy there included), else in Default. Default is watched while it has `openspec/`, so a chat
+  proposing there re-reads the board.
+- **Apply** is Start on a change's card (refused without tasks or once archived): a new workspace whose
+  kickoff is `/skill:openspec-apply-change <name>`, the card, and instructions that stand alone without
+  the skill — tick each task as it is done, archive nothing. Then the change in that workspace gets
+  `x-thinkrail: { card, workspace }` in its `.openspec.yaml` through `actions.writeWorkspaceFile`, every
+  other key and line kept (`upsertTopLevelKey`; OpenSpec has no metadata command, and `x-` keys pass
+  `validate --strict` and survive archive — both recorded with the real CLI). When the new branch lacks
+  the change (proposed in Default, not committed), Apply first **carries its files over** from Default,
+  with `openspec/config.yaml` and the living specs when the branch has no `openspec/` at all; a failure
+  there is answered as `openspecError` beside the started attempt.
+- **Validate** runs `openspec validate <name> --strict --json` where the card reads its change and answers
+  its issues; **Propose** (`＋ Propose change`) starts a chat in Default on `/skill:openspec-propose
+  <description>`; both, and Archive, are queries below.
+- **Archive timing — decided by the agent, unconfirmed, reported to the user:** a change is archived **in
+  its apply workspace, before the PR merges**, so the PR carries the code and the merged spec deltas
+  together — ThinkRail's "a change updates its specs in the same change" rule. *Archive in workspace* asks
+  that attempt's chat (`actions.sendToChat`, a follow-up): "Run openspec-archive-change <name>, then update
+  the PR." The card then reads the archived copy there (stage Archived); the merge completes it.
+- **Without the CLI**, Validate and Archive (a mechanical merge the CLI does) are disabled with the install
+  command; Propose and Apply only need the skills in the agent's workspace — without them the kickoff's
+  text alone instructs.
+
 ## Size suggestions
 
 `sizing.ts`: a human's card with no size, or still the board's own suggestion, gets one from the
@@ -335,8 +394,9 @@ S / M / L scale and the card's type, title, description and criteria.
 
 Every query validates its params (lengths, enums, lists of at most 100) and answers JSON.
 
-- **`board.get { projectId }`** → `{ projectId, projectName, prefix, settings, columns, cards, wip }`,
-  each card with its `live[]`. It refuses a project that is not an open repository.
+- **`board.get { projectId }`** → `{ projectId, projectName, prefix, settings, columns, cards, wip, github,
+  openspec }`, each card with its `live[]`; `openspec` is `{ present, cli, checking }` (Default has
+  `openspec/`, the CLI's version or `null`). It refuses a project that is not an open repository.
 - **`inbox {}`** → the active cards across the open projects whose latest attempt is `needs_you` or
   `failed`, with project and reason; an `interrupted` run (a stop, a host restart) reads as `failed`, as the
   card's badge does, since the card is stalled either way.
@@ -364,6 +424,12 @@ Every query validates its params (lengths, enums, lists of at most 100) and answ
     skill, so pi expands it.
   - It calls `actions.createWorkspace` and then records the attempt and applies Start. It answers the
     card, the attempt and any `kickoffError`.
+- **`openspec.validate { cardId, projectId? }`** → `{ change, workspaceId, valid, errors, warnings, issues }`
+  (refused without the CLI or for an archived change), **`openspec.archive { cardId, projectId? }`** →
+  `{ cardId, workspaceId, sessionId, text }` (a stored card with an open attempt and a chat; refused without
+  the CLI) and **`openspec.propose { projectId, description }`** → `{ projectId, workspaceId, sessionId,
+  kickoff, kickoffError? }`: see § OpenSpec. An `openspec:<change>` id needs the `projectId`, as `#N` does;
+  `card.get`, `card.update`, `card.move` and `card.start` take it, `card.delete` refuses it.
 - **`card.adopt { cardId }`**, **`card.deferrals { cardId, specId }`** → `{ created, skipped }`,
   **`github.set`** → `{ settings, problem }` and **`github.refresh`**: see § Sources.
 - **`settings.get` / `settings.update { projectId, preset?, wipLimits?, followSelection? }`**.
@@ -422,7 +488,7 @@ on every `board.changed` for that project (`PanelHost.onEvent`), keeping the las
 re-read is in flight. Loading, empty (*No cards yet — create one or ask the agent to break work down*) and
 error (with *Retry*) states replace the body; a failed write shows a dismissible notice.
 
-- **Header**: the project's name, the preset switch (Agentic kanban / Solo → `settings.update`), the WIP
+- **Header**: the project's name, the preset switch (Agentic kanban / Solo, and Spec-driven while Default has `openspec/` → `settings.update`), the WIP
   figures (*Needs you*, *Review*, *Agents* as `count/limit`, `feedback-error` and `data-over` past the limit;
   a limit of 0 is none and shows the count alone), the view switch (Board / List / Roadmap / Insights), the Board mode toggle
   (*Board mode* / *Exit Board mode*, `PanelHost.layoutPreset`, absent on a host without modes), the board
@@ -477,6 +543,16 @@ error (with *Retry*) states replace the body; a failed write shows a dismissible
   rank; a title peeks its card.
 - **A tile's initiative chip** (`RiFlag2Line` and the title, from the card's `initiative` overlay) says which
   initiative the card serves.
+- **An OpenSpec change's tile** (`OpenspecTileLines`) shows the artifact chain chip — each artifact's
+  initial, P · S · D · T for spec-driven, looking done / ready / blocked / skipped —, its delta chips per
+  capability (`auth +2 ~1`, `−n` removed, `→n` renamed), the tasks bar *x/y tasks*, the validation badge
+  (*Valid* / *Invalid: n errors, n warnings*, from the CLI's last `validate --all`), *Next: <artifact>* while
+  planning and *Unknown schema* with its reason; an unstored change's tile shows the change's name. It offers
+  **Apply** (`canApply`: tasks written, not archived, no attempt running) instead of Start.
+- **The header** offers *＋ Propose change* while Default has `openspec/` (an inline description →
+  `openspec.propose`, then its chat opened), the preset switch the Spec-driven preset only then
+  (`presetsFor`), and, in that preset without the CLI, the install hint (`npm install -g
+  @fission-ai/openspec`).
 
 **The Roadmap view** (`RoadmapPane`) reads `roadmap.get` for the same project and re-reads it on its own
 writes and every `board.changed`; it does not depend on the board having cards. Its sub-switch is *Now /
@@ -632,7 +708,14 @@ there. The center and the bottom keep the chat and the terminals, and leaving re
   tile's question in place of its button (`attentionWarning` over the panel's one `board.get`, which the
   blocks picker shares; Start waits while that read loads and does not ask when it failed);
 - the activity from the transitions, newest first (*Created in Backlog*, *Backlog → Ready by you* with the
-  host's reason), and *Delete card* behind a confirm.
+  host's reason), and *Delete card* behind a confirm;
+- **an OpenSpec change's card** (`OpenspecSection`, in place of Start): its stage, chain, tasks and
+  validation, its folder, a tab per artifact (*Proposal*, *Spec deltas*, *Design*, *Tasks*) whose files open
+  in Peek (`PanelHost.peek({ kind: "file" })`, rendered as markdown there; another workspace's through
+  `openFile`) — the deltas tab lists each capability's requirements by operation, the tasks tab the task
+  lines —, and **Apply** (`card.start`), **Validate** (`openspec.validate`, its issues listed) and **Archive in
+  workspace** (`openspec.archive`, while an attempt's chat is open); without the CLI Validate and Archive are
+  disabled beside the install hint, and the archive-timing decision is stated under them.
 
 Its UI text is `board.*` keys, the roadmap's `board.roadmap.*`.
 
@@ -725,7 +808,10 @@ A capability's closing edit is a normal PR the user opens; the board writes no s
   skills and drops them while it is off, and `buildSupport.test.ts` stages them under `extensions/board`;
   `packages/server/src/host/extensionEventsWire.test.ts` covers the gated
   `extension.event` push and the host service following the Settings switch.
-- **Host-level** also: `packages/server/src/host/lastActions.test.ts` covers the last-action target (a
+- **Host-level** also: `packages/server/src/host/openspecTree.test.ts` covers the `openspec/` read (only
+  its markdown and YAML, sorted; `null` without it; no symlink followed, the folder itself included; the
+  size and file caps with `truncated`) and `extensionHost.test.ts` the fact per workspace (none for a chat or
+  a workspace not open); `packages/server/src/host/lastActions.test.ts` covers the last-action target (a
   workspace-relative path, nothing outside the worktree, a bash command's cut start, the folders shortened,
   nothing for other tools) and the tracker (latest start only, dropped once disposed or deleted);
   `extensionEventsWire.test.ts` a project's close and reopen republishing its board, a rename not.
@@ -749,6 +835,19 @@ A capability's closing edit is a normal PR the user opens; the board writes no s
   nice maxima and ticks, flow bands, the time split, the spread), each chart's data check, the six charts
   rendered with titles, descriptions, percentile and SLE lines or their not-enough-data states, and Publish's
   query and Peek target; the panel's *Close initiative* and a closed initiative's chip.
+- **OpenSpec** (`server/openspec/*.test.ts`, `server/openspecSource.test.ts`, `web/openspec.test.tsx`):
+  conformance of the parse against every recorded fixture (`list`'s counts and archived flag, the stage,
+  `status`'s schema, chain, `missingDeps` and next artifact, an unknown schema's error, `show
+  --deltas-only`'s deltas per capability), the checkbox edge cases (fences and comments count, as the
+  recorded CLI does), globs, delta sections, schemas and `skip_specs`, the YAML subset and the
+  `x-thinkrail` upsert (byte-equal to the recorded file `validate --strict` passed; kept through the
+  recorded archive); the source over a fake host: nothing without `openspec/`, the parse without the CLI
+  (one probe per project, retried after its TTL), the CLI's three runs once per tree and authoritative, the
+  preset's columns, materializing on a move, Apply's kickoff, carry-over and `x-thinkrail`, live progress
+  and archive from the attempt's workspace, Validate, Archive and Propose; the web: the preset offered by
+  `openspec.present`, Apply by stage, the tile by stage, the panel's tabs, the disabled Validate with the
+  install hint, and the actions' queries and Peek targets. `scripts/record-openspec-fixtures.ts` re-records
+  the fixtures (`server/openspec/fixtures/<case>/`) for a given CLI version; it is not run in CI.
 - **No-agent e2e** (`e2e/board.spec.ts`): open the Board tool, create a card into Backlog, edit it in Peek,
   Start it (a worktree and a chat; the kickoff text captured from `workspace.creationChanged`, no model
   needed), the card in Building; a drag and Alt+→ logged as overrides; List view; the Solo preset; the
@@ -774,7 +873,13 @@ A capability's closing edit is a normal PR the user opens; the board writes no s
   on an empty board, then a seeded flow history drawing every chart (dots per completed card, the window
   switch, percentile and SLE lines, one card past the SLE, five flow bands); Publish writing `ROADMAP.md` in the
   fixture repository (the Default workspace) with its headings, *Open in Peek* showing it, and *Close
-  initiative* starting a chat whose kickoff starts `/skill:initiative-close`.
+  initiative* starting a chat whose kickoff starts `/skill:initiative-close`; OpenSpec: the recorded
+  in-progress fixture copied into the fixture repository's `openspec/` (no CLI on the e2e PATH) offers
+  *Propose change* and the Spec-driven preset, its change a virtual card in *In progress* with *3/7 tasks*,
+  its delta chips and four done artifacts, the install hint over the board, in Peek Validate disabled beside
+  the hint, the tasks and deltas tabs, then Apply: a stored card whose workspace's kickoff (no model) starts
+  `/skill:openspec-apply-change add-2fa-login`, the change carried into that worktree with its
+  `.openspec.yaml`'s `x-thinkrail { card, workspace }`, and the tile reading its tasks from there.
 - **Live e2e** (`e2e/board.live.spec.ts`, `@agent`, through `bun run e2e:full e2e/board.live.spec.ts`): an S
   card asking for a one-line README example, started from Peek; the tile's last-action line seen while
   the agent works (recorded by a `MutationObserver`, since it is transient); the card in Review with its
@@ -795,4 +900,7 @@ These land later:
 - the prototype's "What if you answered now?" toggle on the step graph (the schedule has no wait estimate);
 - a history of waits for the human (Insights counts only the open ones), reopening a closed initiative, and
   an entry point for shaping a new idea from the board (the skill runs from any chat);
-- another board's write does not publish the boards whose initiatives list its cards as external.
+- another board's write does not publish the boards whose initiatives list its cards as external;
+- OpenSpec: the unified spec graph (O3), multi-repo "stores", carrying a change's non-text files on Apply,
+  a CLI installed meanwhile noticed before the probe's TTL, and file events (the board re-reads on chats'
+  activity and its own writes, not on a file changing).

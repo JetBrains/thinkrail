@@ -45,6 +45,7 @@ import {
 import { CardRoadmap } from "./CardRoadmap";
 import { ItemList, SavedInput, SavedTextarea, Section } from "./Fields";
 import { ACTOR_LABELS, columnTitle, TYPE_LABELS, WORKFLOW_LABELS } from "./labels";
+import { OpenspecSection } from "./OpenspecParts";
 import { StartSection } from "./StartSection";
 import { useBoardChanged, useHostQuery } from "./useHostQuery";
 
@@ -512,6 +513,19 @@ function CardDetails({
 				/>
 				<IssueLink card={card} />
 			</div>
+			{card.openspec ? (
+				<OpenspecSection
+					host={host}
+					projectId={projectId}
+					card={card}
+					status={
+						board.state.kind === "ready"
+							? (board.state.value.openspec ?? { present: false, cli: null, checking: false })
+							: null
+					}
+					onChanged={onReload}
+				/>
+			) : null}
 			<div className="flex flex-wrap items-end gap-8">
 				<label htmlFor={`${id}-type`} className="flex flex-col gap-2">
 					<span className="tr-text-metadata text-text-muted">{t("board.card.type")}</span>
@@ -615,14 +629,16 @@ function CardDetails({
 			<Section title={t("board.attempts.title")}>
 				<Attempts host={host} projectId={projectId} card={card} />
 			</Section>
-			<StartSection
-				key={`${card.id}:${card.type}:${card.size ?? ""}`}
-				host={host}
-				card={card}
-				projectId={projectId}
-				board={board.state}
-				onStarted={onReload}
-			/>
+			{card.source.kind === "openspec" ? null : (
+				<StartSection
+					key={`${card.id}:${card.type}:${card.size ?? ""}`}
+					host={host}
+					card={card}
+					projectId={projectId}
+					board={board.state}
+					onStarted={onReload}
+				/>
+			)}
 			<Section title={t("board.activity.title")}>
 				<Activity transitions={detail.transitions} />
 			</Section>

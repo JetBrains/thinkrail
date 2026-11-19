@@ -258,6 +258,7 @@ function fakeHost(
 			workspaceFacts: async () => null,
 			taskSpecs: async () => null,
 			specSection: async () => null,
+			openspecTree: async () => null,
 			githubProblem: async () => null,
 			sessionsRoot: () => {
 				fake.sessionsRootReads += 1;
@@ -436,6 +437,7 @@ describe("session-insights server descriptor", () => {
 			workspaceFacts: refuse,
 			taskSpecs: refuse,
 			specSection: refuse,
+			openspecTree: refuse,
 			githubProblem: refuse,
 			sessionsRoot: refuse,
 			sessionScope: refuse,

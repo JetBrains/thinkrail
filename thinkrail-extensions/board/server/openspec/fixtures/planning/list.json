@@ -1,0 +1,16 @@
+{
+	"changes": [
+		{
+			"name": "add-webhook-retries",
+			"completedTasks": 0,
+			"totalTasks": 0,
+			"lastModified": "2026-11-19T21:17:46.129Z",
+			"status": "no-tasks",
+			"archived": false
+		}
+	],
+	"root": {
+		"path": "<root>",
+		"source": "nearest"
+	}
+}
