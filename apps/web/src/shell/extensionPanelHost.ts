@@ -1,11 +1,27 @@
 import type { ExtensionCatalogEntry, ExtensionQueryParams } from "@thinkrail/contracts";
-import type { PanelHost, PanelHostScope, PanelToolCall } from "@thinkrail/extension-api/web";
+import type {
+	PanelHost,
+	PanelHostScope,
+	PanelPeekEntry,
+	PanelToolCall,
+	PanelWorkspaceTarget,
+} from "@thinkrail/extension-api/web";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { extensionPanels, type RegisteredPanel } from "../extensions";
+import { extensionPanels, findExtensionPanel, type RegisteredPanel } from "../extensions";
 import { extensionParamsKey, tupleKey } from "../lib";
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
-import { type ChatLocationRequest, selectContextRepoProject, useAppStore } from "../store";
-import { getTransport, RequestError, supportsExtensionQuery } from "../transport";
+import {
+	type ChatLocationRequest,
+	type PeekEntry,
+	selectContextRepoProject,
+	useAppStore,
+} from "../store";
+import {
+	getTransport,
+	RequestError,
+	supportsExtensionEvents,
+	supportsExtensionQuery,
+} from "../transport";
 import { paletteNavigator } from "./paletteNavigation";
 
 export interface PanelHostDeps {
@@ -24,6 +40,13 @@ export interface PanelHostDeps {
 	readonly openFile: (workspaceId: string, path: string, line: number | undefined) => void;
 	/** Reveals the Artifacts tool of the panel's workspace. */
 	readonly openArtifacts: () => void;
+	readonly openWorkspace: (target: PanelWorkspaceTarget) => void;
+	/** Shows a Peek entry in the panel's workspace. */
+	readonly peek: (entry: PeekEntry) => void;
+	/** Listens to the `extension.event` channel, which never replays its last push. */
+	readonly subscribe: (listener: (push: unknown) => void) => () => void;
+	/** The extension is switched off now. */
+	readonly disabled: () => boolean;
 	readonly scope: PanelHostScope;
 	readonly hostProtocol: number | null;
 	readonly hostApiVersion: number | undefined;
@@ -31,6 +54,38 @@ export interface PanelHostDeps {
 
 function abortReason(signal: AbortSignal): unknown {
 	return signal.reason ?? new DOMException("The extension query was aborted", "AbortError");
+}
+
+/** The store's Peek entry for a panel's `peek`: an extension entry only for the caller's own, declared panel. */
+export function panelPeekEntry(extension: string, entry: PanelPeekEntry): PeekEntry | null {
+	switch (entry.kind) {
+		case "extension": {
+			const target = findExtensionPanel(extension, entry.panel);
+			if (!target) return null;
+			return {
+				kind: "extension",
+				extension,
+				panel: entry.panel,
+				params: { ...entry.params },
+				titleKey: target.declaration.title,
+				...(entry.title ? { name: entry.title } : {}),
+			};
+		}
+		case "file":
+			return {
+				kind: "file",
+				path: entry.path,
+				...(entry.line === undefined ? {} : { line: entry.line }),
+			};
+		case "compare":
+			return { kind: "compare", before: entry.before, after: entry.after };
+	}
+}
+
+function eventPush(push: unknown): { extension: unknown; type: unknown; payload: unknown } | null {
+	return typeof push === "object" && push !== null
+		? (push as { extension: unknown; type: unknown; payload: unknown })
+		: null;
 }
 
 export function createPanelHost(deps: PanelHostDeps): PanelHost {
@@ -79,6 +134,21 @@ export function createPanelHost(deps: PanelHostDeps): PanelHost {
 		},
 		openArtifacts() {
 			deps.openArtifacts();
+		},
+		openWorkspace(target) {
+			deps.openWorkspace(target);
+		},
+		peek(entry) {
+			const peeked = panelPeekEntry(deps.extension, entry);
+			if (peeked) deps.peek(peeked);
+		},
+		onEvent(type, listener) {
+			if (!supportsExtensionEvents(deps.hostProtocol)) return () => {};
+			return deps.subscribe((raw) => {
+				const push = eventPush(raw);
+				if (push?.extension !== deps.extension || push.type !== type || deps.disabled()) return;
+				listener(push.payload);
+			});
 		},
 		scope: deps.scope,
 		hostProtocol: deps.hostProtocol,
@@ -166,13 +236,23 @@ export function openableExtensionPanels(input: {
 	catalog: ExtensionCatalogRead;
 	panels?: readonly RegisteredPanel[];
 }): readonly RegisteredPanel[] {
+	return openableContributions({ ...input, items: input.panels ?? extensionPanels() });
+}
+
+/** `openableExtensionPanels`' rule for any extension contribution: a panel, a side tool. */
+export function openableContributions<T extends { extension: string }>(input: {
+	disabled: readonly string[];
+	protocolVersion: number | null;
+	catalog: ExtensionCatalogRead;
+	items: readonly T[];
+}): readonly T[] {
 	if (!supportsExtensionQuery(input.protocolVersion)) return [];
 	const listed = Array.isArray(input.catalog)
 		? new Set(input.catalog.map((entry) => entry.name))
 		: null;
-	return (input.panels ?? extensionPanels()).filter(
-		(panel) =>
-			!input.disabled.includes(panel.extension) && (listed === null || listed.has(panel.extension)),
+	return input.items.filter(
+		(item) =>
+			!input.disabled.includes(item.extension) && (listed === null || listed.has(item.extension)),
 	);
 }
 

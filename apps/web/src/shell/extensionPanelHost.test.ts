@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import {
+	EXTENSION_EVENT_PROTOCOL_VERSION,
 	EXTENSION_QUERY_PROTOCOL_VERSION,
 	type ExtensionCatalogEntry,
 	type ExtensionQueryParams,
@@ -38,12 +39,90 @@ function hostDeps(overrides: Partial<PanelHostDeps> = {}): PanelHostDeps {
 		renderToolCall: () => null,
 		openFile: () => {},
 		openArtifacts: () => {},
+		openWorkspace: () => {},
+		peek: () => {},
+		subscribe: () => () => {},
+		disabled: () => false,
 		scope: { workspaceId: "w1", projectId: "p1" },
 		hostProtocol: EXTENSION_QUERY_PROTOCOL_VERSION,
 		hostApiVersion: 3,
 		...overrides,
 	};
 }
+
+describe("PanelHost workspace, Peek and events", () => {
+	test("opens a workspace target as given", () => {
+		const openWorkspace = mock((_target: unknown) => {});
+		const host = createPanelHost(hostDeps({ openWorkspace }));
+		host.openWorkspace({ workspaceId: "w2", projectId: "p1", sessionId: "s2" });
+		expect(openWorkspace.mock.calls).toEqual([
+			[{ workspaceId: "w2", projectId: "p1", sessionId: "s2" }],
+		]);
+	});
+
+	test("peeks its own declared panel with its title key and crumb name, and files of its workspace", () => {
+		const peek = mock((_entry: unknown) => {});
+		const host = createPanelHost(hostDeps({ extension: "board", peek }));
+		host.peek({
+			kind: "extension",
+			panel: "card",
+			params: { cardId: "TR-1" },
+			title: "TR-1 · Ship",
+		});
+		host.peek({ kind: "extension", panel: "not-declared" });
+		host.peek({ kind: "file", path: "src/a.ts", line: 4 });
+		host.peek({ kind: "compare", before: "a.md", after: "b.md" });
+		expect(peek.mock.calls).toEqual([
+			[
+				{
+					kind: "extension",
+					extension: "board",
+					panel: "card",
+					params: { cardId: "TR-1" },
+					titleKey: "board.card.panelTitle",
+					name: "TR-1 · Ship",
+				},
+			],
+			[{ kind: "file", path: "src/a.ts", line: 4 }],
+			[{ kind: "compare", before: "a.md", after: "b.md" }],
+		]);
+	});
+
+	test("hands on only its own extension's events of the type, while on and on a host that sends them", () => {
+		let push: (value: unknown) => void = () => {};
+		const unsubscribe = mock(() => {});
+		const subscribe = mock((listener: (value: unknown) => void) => {
+			push = listener;
+			return unsubscribe;
+		});
+		let off = false;
+		const host = createPanelHost(
+			hostDeps({
+				extension: "board",
+				subscribe,
+				disabled: () => off,
+				hostProtocol: EXTENSION_EVENT_PROTOCOL_VERSION,
+			}),
+		);
+		const seen: unknown[] = [];
+		const stop = host.onEvent("board.changed", (payload) => seen.push(payload));
+		push({ extension: "board", type: "board.changed", payload: { projectId: "p1" } });
+		push({ extension: "other", type: "board.changed", payload: { projectId: "p2" } });
+		push({ extension: "board", type: "board.other", payload: {} });
+		push(null);
+		off = true;
+		push({ extension: "board", type: "board.changed", payload: { projectId: "p3" } });
+		expect(seen).toEqual([{ projectId: "p1" }]);
+		stop();
+		expect(unsubscribe).toHaveBeenCalledTimes(1);
+
+		const older = createPanelHost(
+			hostDeps({ subscribe, hostProtocol: EXTENSION_EVENT_PROTOCOL_VERSION - 1 }),
+		);
+		older.onEvent("board.changed", () => {})();
+		expect(subscribe).toHaveBeenCalledTimes(1);
+	});
+});
 
 describe("PanelHost", () => {
 	test("queries only its own extension and hands the host's answer through", async () => {

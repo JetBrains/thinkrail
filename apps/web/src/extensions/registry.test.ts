@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import askUserQuestion from "@thinkrail/ext-ask-user-question/web";
+import board from "@thinkrail/ext-board/web";
 import hintMode from "@thinkrail/ext-hint-mode/web";
 import nextSteps from "@thinkrail/ext-next-steps/web";
 import sessionInsights from "@thinkrail/ext-session-insights/web";
@@ -22,7 +23,9 @@ import { isMessageKey } from "../lib";
 import {
 	enabledWebExtensions,
 	extensionPanels,
+	extensionSideTools,
 	findExtensionPanel,
+	findExtensionSideTool,
 	registerWebExtensions,
 	webExtensionCommands,
 	webExtensions,
@@ -39,7 +42,14 @@ const props: ToolRenderProps = {
 };
 
 test("the ordered web registry composes the public visualize descriptor without replacing fallback", () => {
-	expect(webExtensions).toEqual([visualize, askUserQuestion, hintMode, nextSteps, sessionInsights]);
+	expect(webExtensions).toEqual([
+		visualize,
+		askUserQuestion,
+		hintMode,
+		nextSteps,
+		sessionInsights,
+		board,
+	]);
 	expect(typeof MermaidView).toBe("function");
 	for (let i = 0; i < 2; i++) {
 		registerWebExtensions();
@@ -102,8 +112,9 @@ test("the switch decides which global contributions mount; tool renderers stay r
 		hintMode,
 		nextSteps,
 		sessionInsights,
+		board,
 	]);
-	expect(enabledWebExtensions(["hint-mode", "visualize"])).toEqual([
+	expect(enabledWebExtensions(["hint-mode", "visualize", "board"])).toEqual([
 		askUserQuestion,
 		nextSteps,
 		sessionInsights,
@@ -126,11 +137,13 @@ test("commands are listed for every extension in registry order, the switched-of
 		{ extension: "ask-user-question", enabled: true, commands: askUserQuestion.commands },
 		{ extension: "hint-mode", enabled: true, commands: hintMode.commands },
 		{ extension: "session-insights", enabled: true, commands: sessionInsights.commands },
+		{ extension: "board", enabled: true, commands: board.commands },
 	]);
 	expect(webExtensionCommands(["hint-mode"])).toEqual([
 		{ extension: "ask-user-question", enabled: true, commands: askUserQuestion.commands },
 		{ extension: "hint-mode", enabled: false, commands: hintMode.commands },
 		{ extension: "session-insights", enabled: true, commands: sessionInsights.commands },
+		{ extension: "board", enabled: true, commands: board.commands },
 	]);
 });
 
@@ -353,9 +366,31 @@ test("session insights declares its project-scoped Sessions panel, a per-session
 		"session-insights/sessions",
 		"session-insights/session",
 		"session-insights/compare",
+		"board/card",
 	]);
 	for (const declaration of [registered?.declaration, session?.declaration, compare?.declaration]) {
 		const loaded = await declaration?.load();
 		expect(typeof loaded?.default).toBe("function");
 	}
+});
+
+test("the board declares its Board side tool at the left, a Peek card panel kept off the palette, and local move keys", async () => {
+	expect(extensionSideTools().map(({ id, extension, tool }) => [id, extension, tool])).toEqual([
+		["ext:board:board", "board", "board"],
+	]);
+	const tool = findExtensionSideTool("ext:board:board");
+	expect(tool?.declaration.defaultSide).toBe("left");
+	expect(isMessageKey(tool?.declaration.title ?? "")).toBe(true);
+	expect(findExtensionSideTool("ext:board:missing")).toBeUndefined();
+	expect(typeof (await tool?.declaration.load())?.default).toBe("function");
+	expect(findExtensionPanel("board", "card")?.declaration.scopes).toEqual(["session"]);
+	const rows = [...board.commands, ...board.shortcuts];
+	expect(rows.every((row) => Object.hasOwn(EN, row.title))).toBe(true);
+	expect(board.commands.map(({ id, scope }) => [id, scope])).toEqual([
+		["board.moveLeft", "board.cards"],
+		["board.moveRight", "board.cards"],
+	]);
+	expect(webOnlyExtensions(new Set())).not.toContainEqual(
+		expect.objectContaining({ name: "board" }),
+	);
 });

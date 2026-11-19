@@ -62,6 +62,7 @@ function resetState(): void {
 	removeTree(join(E2E_DATA_DIR, "artifacts"));
 	removeTree(join(E2E_DATA_DIR, "resource-history"));
 	removeTree(join(E2E_DATA_DIR, "worktrees"));
+	removeTree(join(E2E_DATA_DIR, "extensions", "board"));
 	removeTree(join(E2E_PI_AGENT_DIR, "sessions"));
 	if (isRealCentralE2e()) {
 		preserveStagedCentralArtifact();

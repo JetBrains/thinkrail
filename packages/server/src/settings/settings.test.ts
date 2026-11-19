@@ -1078,6 +1078,33 @@ test("a custom preset may place the container orchestrator beside Projects", () 
 	]);
 });
 
+test("a custom preset may place an extension's side tool by its bounded ext: id, never another string", () => {
+	const withBoard: LayoutPreset = {
+		...preset(),
+		left: {
+			visible: true,
+			width: 0.24,
+			groups: [
+				{ id: "left-projects", weight: 0.5, folded: false, tools: ["projects"] },
+				{ id: "left-board", weight: 0.5, folded: false, tools: ["ext:board:board"] },
+			],
+		},
+	};
+	expect(validateCustomLayoutPresets([withBoard])).toEqual([withBoard]);
+	for (const tool of ["ext:Board:board", "ext:board", `ext:board:${"b".repeat(65)}`, "board"]) {
+		const malformed = {
+			...withBoard,
+			left: {
+				...withBoard.left,
+				groups: [{ id: "left-bad", weight: 1, folded: false, tools: [tool] }],
+			},
+		};
+		expect(() => validateCustomLayoutPresets([malformed])).toThrow(
+			"Malformed preset left side group",
+		);
+	}
+});
+
 test("a captured Left tools preset, with its right side hidden and empty, round-trips", () => {
 	const leftTools: LayoutPreset = {
 		id: "left-tools-copy",

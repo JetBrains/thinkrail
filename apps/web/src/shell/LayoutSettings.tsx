@@ -10,6 +10,8 @@ import {
 	ARTIFACT_ROLES_PROTOCOL_VERSION,
 	ARTIFACTS_PROTOCOL_VERSION,
 	CONTAINER_PROTOCOL_VERSION,
+	EXTENSION_EVENT_PROTOCOL_VERSION,
+	isExtensionLayoutToolId,
 	LAYOUT_PLAN_PRESET_PROTOCOL_VERSION,
 	type LayoutPreset,
 	type LayoutToolId,
@@ -58,7 +60,7 @@ import {
 	layoutPresetName,
 	minimumBottomGroupLimit,
 	minimumSideGroupLimit,
-	presetPlacesTool,
+	presetTools,
 	resolveLayoutPreset,
 } from "./layout";
 import { applyLayoutPresetLocally } from "./layoutState";
@@ -83,21 +85,30 @@ const PRESET_ICONS: Record<string, typeof RiDashboardLine> = {
 	"left-tools": RiLayoutLeftLine,
 };
 
-const NEWER_HOST_TOOLS: readonly { tool: LayoutToolId; since: number; message: MessageKey }[] = [
+const NEWER_HOST_TOOLS: readonly {
+	matches: (tool: LayoutToolId) => boolean;
+	since: number;
+	message: MessageKey;
+}[] = [
 	{
-		tool: "plan",
+		matches: (tool) => tool === "plan",
 		since: LAYOUT_PLAN_PRESET_PROTOCOL_VERSION,
 		message: "workbench.layoutSettings.planNeedsNewerHost",
 	},
 	{
-		tool: "artifacts",
+		matches: (tool) => tool === "artifacts",
 		since: ARTIFACTS_PROTOCOL_VERSION,
 		message: "workbench.layoutSettings.artifactsNeedsNewerHost",
 	},
 	{
-		tool: "orchestrator",
+		matches: (tool) => tool === "orchestrator",
 		since: CONTAINER_PROTOCOL_VERSION,
 		message: "workbench.layoutSettings.orchestratorNeedsNewerHost",
+	},
+	{
+		matches: isExtensionLayoutToolId,
+		since: EXTENSION_EVENT_PROTOCOL_VERSION,
+		message: "workbench.layoutSettings.extensionToolNeedsNewerHost",
 	},
 ];
 
@@ -108,9 +119,9 @@ const focusOnMount = (node: HTMLInputElement | null) => node?.focus();
 async function updateCustomPresets(customLayoutPresets: LayoutPreset[]): Promise<boolean> {
 	const protocolVersion = useAppStore.getState().protocolVersion ?? 0;
 	const tooNew = NEWER_HOST_TOOLS.find(
-		({ tool, since }) =>
+		({ matches, since }) =>
 			protocolVersion < since &&
-			customLayoutPresets.some((preset) => presetPlacesTool(preset, tool)),
+			customLayoutPresets.some((preset) => presetTools(preset).some(matches)),
 	);
 	if (tooNew) {
 		toast.error(translate(tooNew.message), translate("workbench.layoutSettings.saveFailed"));

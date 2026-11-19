@@ -51,6 +51,7 @@ import {
 	type LayoutSide,
 	layoutTabName,
 	moveTabToGroup,
+	NO_EXTENSION_TOOLS,
 	normalizePeekWidth,
 	reconcileAttention,
 	resizeBottomRegion,
@@ -81,6 +82,7 @@ import type {
 	WorkbenchProps,
 } from "./workbenchShared";
 import {
+	ExtensionToolsContext,
 	findLayoutGroupTabs,
 	groupDomId,
 	PeekRegion,
@@ -126,6 +128,7 @@ export function Workbench({
 	onRenameChat,
 	chatFirstPrompts,
 	chatActions,
+	extensionTools = NO_EXTENSION_TOOLS,
 	onNewChat,
 	onNewTerminal,
 	onGestureCanceled,
@@ -777,10 +780,16 @@ export function Workbench({
 	);
 	const revealMissingTool = useCallback(
 		(tool: LayoutToolId) => {
-			const result = revealTool(documentRef.current, tool, maxSideGroups, maxBottomGroups);
+			const result = revealTool(
+				documentRef.current,
+				tool,
+				maxSideGroups,
+				maxBottomGroups,
+				extensionTools,
+			);
 			if (!isLayoutUnavailable(result)) apply(result);
 		},
-		[apply, maxBottomGroups, maxSideGroups],
+		[apply, extensionTools, maxBottomGroups, maxSideGroups],
 	);
 	const renameEditors = useRef(new Map<string, (name: string) => void>());
 	const registerChatRename = useCallback<RegisterChatRename>((tabId, begin) => {
@@ -816,10 +825,20 @@ export function Workbench({
 				worktreePath,
 				chatFirstPrompts,
 				chatActions,
+				extensionTools,
 			});
 			return { tab, location, actions };
 		},
-		[chatActions, chatFirstPrompts, maxBottomGroups, maxSideGroups, onRenameChat, t, worktreePath],
+		[
+			chatActions,
+			chatFirstPrompts,
+			extensionTools,
+			maxBottomGroups,
+			maxSideGroups,
+			onRenameChat,
+			t,
+			worktreePath,
+		],
 	);
 	useEffect(
 		() =>
@@ -1157,49 +1176,53 @@ export function Workbench({
 	);
 
 	return (
-		<DndContext
-			sensors={sensors}
-			collisionDetection={workbenchCollisionDetection}
-			measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
-			onDragStart={handleDragStart}
-			onDragCancel={() => setDraggingTab(null)}
-			onDragEnd={handleDragEnd}
-		>
-			<div
-				ref={workbenchRef}
-				data-testid="workbench"
-				className="flex h-full min-h-0 min-w-0 overflow-hidden"
-				onPointerDownCapture={() => {
-					tabSelectionEpoch.current += 1;
-				}}
-				onKeyDownCapture={(event) => {
-					if (!event.ctrlKey || event.altKey || event.metaKey || event.key !== "F6") return;
-					event.preventDefault();
-					event.stopPropagation();
-					focusAdjacentGroup(event.shiftKey ? -1 : 1);
-				}}
+		<ExtensionToolsContext value={extensionTools}>
+			<DndContext
+				sensors={sensors}
+				collisionDetection={workbenchCollisionDetection}
+				measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+				onDragStart={handleDragStart}
+				onDragCancel={() => setDraggingTab(null)}
+				onDragEnd={handleDragEnd}
 			>
-				<AuxiliaryRegionRail
-					region="left"
-					shared={shared}
-					attention={attention}
-					footer={leftRailFooter}
-				/>
-				<div ref={columnsRef} className="min-h-0 min-w-0 flex-1">
-					{workbenchColumns}
-				</div>
-				{peekOpen ? null : (
-					<AuxiliaryRegionRail region="right" shared={shared} attention={attention} optional />
-				)}
-			</div>
-			<DragOverlay dropAnimation={null}>
-				{draggingTab ? (
-					<div className="flex max-w-224 items-center gap-4 rounded-sm border border-primary bg-container-elevated-bg px-8 py-4 tr-text-ui text-text-default shadow-lg">
-						{tabIcon(draggingTab)}
-						<span className="truncate">{layoutTabName(t, draggingTab, chatFirstPrompts)}</span>
+				<div
+					ref={workbenchRef}
+					data-testid="workbench"
+					className="flex h-full min-h-0 min-w-0 overflow-hidden"
+					onPointerDownCapture={() => {
+						tabSelectionEpoch.current += 1;
+					}}
+					onKeyDownCapture={(event) => {
+						if (!event.ctrlKey || event.altKey || event.metaKey || event.key !== "F6") return;
+						event.preventDefault();
+						event.stopPropagation();
+						focusAdjacentGroup(event.shiftKey ? -1 : 1);
+					}}
+				>
+					<AuxiliaryRegionRail
+						region="left"
+						shared={shared}
+						attention={attention}
+						footer={leftRailFooter}
+					/>
+					<div ref={columnsRef} className="min-h-0 min-w-0 flex-1">
+						{workbenchColumns}
 					</div>
-				) : null}
-			</DragOverlay>
-		</DndContext>
+					{peekOpen ? null : (
+						<AuxiliaryRegionRail region="right" shared={shared} attention={attention} optional />
+					)}
+				</div>
+				<DragOverlay dropAnimation={null}>
+					{draggingTab ? (
+						<div className="flex max-w-224 items-center gap-4 rounded-sm border border-primary bg-container-elevated-bg px-8 py-4 tr-text-ui text-text-default shadow-lg">
+							{tabIcon(draggingTab, false, undefined, extensionTools)}
+							<span className="truncate">
+								{layoutTabName(t, draggingTab, chatFirstPrompts, extensionTools)}
+							</span>
+						</div>
+					) : null}
+				</DragOverlay>
+			</DndContext>
+		</ExtensionToolsContext>
 	);
 }

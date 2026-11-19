@@ -21,8 +21,9 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   `ToolInteractionState`, `ToolPlacement`, `WebExtension`, `GlobalOverlayProps`, `ExtensionCommand`,
   `ExtensionChord`, `ExtensionShortcut`, `ExtensionShortcutKey`, `defineWebExtension`, the panel contract
   (`PanelDeclaration`, `PanelChatAction`, `PanelRail`, `PanelProps`, `PanelHost`, `PanelChatTarget`,
-  `PanelChatAnchor`, `PanelToolCall`, `PanelHostScope`, `PanelScope`), and the pure argument/result readers from `toolHelpers` and
-  `toolResultContent`.
+  `PanelChatAnchor`, `PanelToolCall`, `PanelHostScope`, `PanelScope`, `PanelWorkspaceTarget`, `PanelPeekEntry`,
+  `PanelEventListener`), the side-tool contract (`SideToolDeclaration`), and the pure argument/result readers
+  from `toolHelpers` and `toolResultContent`.
 - **Images are references.** `parseToolResultContent(result).images` returns `contracts`' `WireImage`s,
   in block order.
   - A host reference (`ref` plus optional `width`/`height`) is accepted when its `ref` lies under
@@ -92,7 +93,7 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   through and may change with the chat (a renderer must tolerate their absence). Its DOM-typed members
   are the reason the package's `lib` includes `DOM`; the package still never touches the DOM.
 - `WebExtension` is `{ name, title?, description?, toolRenderers?, globalOverlay?, commands?, shortcuts?,
-  panels? }`.
+  panels?, sideTools? }`.
   Each tool-name entry carries a `renderer` and optional `ToolRegistrationOptions` under `options`;
   `toolRenderers` is optional because a web-only extension renders no tool. `title` / `description` are
   `MessageKey`s for the Settings row of an extension the server catalog lacks; `title` also names a
@@ -165,7 +166,24 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   tool of `scope`'s workspace (where an extension's writes through `ensureArtifactsDir` appear); it is
   optional so a panel offers the action only on a host that has one. `scope` is the workspace whose view
   holds the tab. `hostProtocol` and `hostApiVersion` (the server half's declared `apiVersion`) let a
-  panel degrade against an older host or server half.
+  panel degrade against an older host or server half. `openWorkspace(target)` (`PanelWorkspaceTarget {
+  workspaceId, projectId, sessionId? }`) switches to that workspace, on one of its chats when given — every
+  panel and side tool follows the switch. `peek(entry)` (`PanelPeekEntry`) shows an entry in `scope`'s
+  workspace's Peek: a panel of the caller's **own** extension (`{ kind: "extension", panel, params?, title? }`,
+  `title` naming its crumb; an undeclared panel is ignored) or a workspace-relative `file` (at `line`) or
+  `compare` pair. `onEvent(type, listener)` (`PanelEventListener`) hears the extension's own
+  `extension.event`s of `type` published after the call — never the channel's replayed last push —, nothing
+  below the event gate or while the extension is off, and returns the unsubscribe; it is how a panel
+  re-reads what its server half's `host.publish` says changed.
+- **Side tools are singleton tools of the workbench's rails**, like Files or Review: a
+  `sideTools` entry (`SideToolDeclaration { title, icon, defaultSide: "left" | "right", load }`) becomes the
+  layout tool `ext:<extension>:<id>` ([[module-contracts]]' bounded `ExtensionLayoutToolId`). It waits as a
+  dimmed rail entry at `defaultSide` until placed, its first reveal opening a pane there, and then moves,
+  folds and rides presets like a built-in tool. Its body is the same props-driven `PanelProps` component a
+  panel is, `params` empty, its `PanelHost.scope` the active workspace and its project — a tool's pane
+  survives workspace switches, so the scope (and the host object) changes under it. A switched-off, missing
+  or too-old extension's placed tool shows the panels' placeholders in its pane; the layout is never reset
+  ([[submodule-web-shell]] § Extension side tools).
 - `./server` exposes `ServerExtension` and `defineServerExtension`, with pi `ExtensionFactory` types
   only. Descriptors carry `name` (the identity — the Settings on/off switch and `disabledExtensions` key
   on it), optional display copy `title` / `description` for the Settings catalog, `extensions`, optional
@@ -200,7 +218,9 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   message without text (a tool result, a tool-call-only assistant message) — or its nearest shown
   ancestor with `exact: false`; `null` for a file outside `sessionsRoot()`) and `contextWindow(provider,
   model)` (a model's context window from the host's model catalog with its overrides, `null` when unknown)
-  and `turnReceipts(sessionId)` (`ExtensionTurnReceipt[]`: the run change sets the host recorded for that
+  and `models()` (`ExtensionModel[]`: the models a new chat can use — `id` as `provider/id`, the form
+  `createWorkspace`'s `kickoff.model` takes —, `name`, `provider` and its `thinkingLevels`; host facts for a
+  picker, never credentials) and `turnReceipts(sessionId)` (`ExtensionTurnReceipt[]`: the run change sets the host recorded for that
   session, oldest first — start, settle and each changed path, workspace-relative as git reports it, with
   its status and line counts; empty when it kept none) and `turnTree(sessionId, startedAt, limits)`
   (`ExtensionTurnTree`: the workspace as that receipt's run left it — its recorded tree's regular files as

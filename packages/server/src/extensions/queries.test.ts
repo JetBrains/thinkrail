@@ -29,6 +29,7 @@ function services(name: string, signal: AbortSignal): ExtensionHostServices {
 		sessionStatus: () => ({ live: false, completion: null }),
 		messageAnchor: async () => null,
 		contextWindow: async () => null,
+		models: async () => [],
 		turnReceipts: async () => [],
 		turnTree: async () => null,
 		ensureArtifactsDir: async () => null,

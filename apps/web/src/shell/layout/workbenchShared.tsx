@@ -6,6 +6,7 @@ import {
 	ResizablePanel,
 } from "@thinkrail/ui/resizable";
 import {
+	createContext,
 	memo,
 	type ReactNode,
 	useCallback,
@@ -38,9 +39,13 @@ import type {
 	LayoutCenterTab,
 	LayoutSideTab,
 	LayoutTab,
+	LayoutToolCatalog,
 	LayoutToolId,
 	WorkspaceLayoutDocument,
 } from "./types";
+
+/** The shell's extension side tools, which every tool name and icon inside the Workbench reads. */
+export const ExtensionToolsContext = createContext<LayoutToolCatalog>({});
 
 export interface LayoutTabFocusRequest {
 	workspaceId: string;
@@ -83,6 +88,8 @@ export interface WorkbenchProps {
 	onRenameChat?: (sessionId: string, titleInput: string, currentTitle: string) => void;
 	chatFirstPrompts?: ChatFirstPrompts;
 	chatActions?: ChatTabActions;
+	/** The extensions' side tools: names, icons, default sides and whether each is offered. */
+	extensionTools?: LayoutToolCatalog;
 	onNewChat: (groupId: string) => void;
 	onNewTerminal: (
 		groupId: string,
@@ -387,8 +394,9 @@ export function tabSearchKeywords(
 	t: Translator,
 	tab: LayoutTab,
 	chatFirstPrompts: ChatFirstPrompts | undefined,
+	tools?: LayoutToolCatalog,
 ): string[] {
-	const name = layoutTabName(t, tab, chatFirstPrompts);
+	const name = layoutTabName(t, tab, chatFirstPrompts, tools);
 	switch (tab.kind) {
 		case "file":
 		case "diff":

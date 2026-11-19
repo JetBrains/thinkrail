@@ -16,6 +16,7 @@ import {
 	hasSession,
 	isPiSessionId,
 	listSessions,
+	listSettledModels,
 	sessionCompletionOf,
 } from "../agent";
 import type {
@@ -24,6 +25,7 @@ import type {
 	ExtensionHostProject,
 	ExtensionHostServices,
 	ExtensionMessageAnchor,
+	ExtensionModel,
 	ExtensionPublishScope,
 	ExtensionSessionPlacement,
 	ExtensionSessionView,
@@ -209,6 +211,16 @@ export async function modelContextWindow(provider: string, model: string): Promi
 	}
 }
 
+/** The models a new chat can use, as `provider/id` with their catalog name and thinking levels. */
+export async function extensionModels(): Promise<ExtensionModel[]> {
+	return (await listSettledModels()).map((model) => ({
+		id: `${model.provider}/${model.id}`,
+		name: model.name,
+		provider: model.provider,
+		thinkingLevels: model.thinkingLevels,
+	}));
+}
+
 /** A session's turn receipts across the registered workspaces, oldest first; paths stay repo-relative. */
 export async function turnReceipts(sessionId: string): Promise<ExtensionTurnReceipt[]> {
 	return listAllWorkspaceRecords()
@@ -367,6 +379,7 @@ export function extensionHostServices(name: string, signal: AbortSignal): Extens
 		}),
 		messageAnchor: (sessionFile, entryId) => messageAnchor(sessionFile, entryId),
 		contextWindow: modelContextWindow,
+		models: extensionModels,
 		turnReceipts,
 		turnTree,
 		ensureArtifactsDir,

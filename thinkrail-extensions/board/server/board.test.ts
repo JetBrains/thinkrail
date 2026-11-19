@@ -343,6 +343,21 @@ describe("board queries", () => {
 		]);
 		expect(await query("settings.get", { projectId: "p1" })).toEqual(settings);
 	});
+
+	test("list the host's new-chat models for the Start dialog, as host facts", async () => {
+		const { t, query } = setup();
+		const models = [
+			{
+				id: "acme/big",
+				name: "Big",
+				provider: "acme",
+				thinkingLevels: ["off" as const, "high" as const],
+			},
+		];
+		t.host.models = async () => models;
+		expect(await query("models.list")).toEqual({ models });
+		await expect(query("models.list", "nope")).rejects.toThrow("object of params");
+	});
 });
 
 describe("board rules over host events", () => {
@@ -612,6 +627,7 @@ describe("the board descriptor", () => {
 			"card.start",
 			"card.update",
 			"inbox",
+			"models.list",
 			"settings.get",
 			"settings.update",
 			"triage.accept",

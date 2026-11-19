@@ -786,10 +786,19 @@ optional `model` and `thinking`, disabled entries included, never a prompt body 
   in `AppConfig.customLayoutPresets`: center topology, left/right/bottom group geometry, visibility/folds,
   bottom alignment, and singleton tools (`plan`, the TODO List, is accepted from
   `LAYOUT_PLAN_PRESET_PROTOCOL_VERSION` = v94, `artifacts` from `ARTIFACTS_PROTOCOL_VERSION` = v121,
-  `orchestrator`, the pinned container orchestrator chat, from `CONTAINER_PROTOCOL_VERSION` = v129), but no workspace, file, diff, chat, document, terminal, preview,
+  `orchestrator`, the pinned container orchestrator chat, from `CONTAINER_PROTOCOL_VERSION` = v129, and an
+  extension's side tool from `EXTENSION_EVENT_PROTOCOL_VERSION` = v130, the release of the extension events
+  its first consumer, the board, needs), but no workspace, file, diff, chat, document, terminal, preview,
   attention, or current/default-selection identity. Every current-layout type—including the projected
   `WorkspaceLayoutDocument`, `WorkbenchFrame`, and `WorkspaceViewState`—is web-local and deliberately absent
-  from contracts. There is no current-layout method or push channel.
+  from contracts. There is no current-layout method or push channel. **`LayoutToolId`** is
+  `BuiltinLayoutToolId` (`BUILTIN_LAYOUT_TOOL_IDS`) or **`ExtensionLayoutToolId`**,
+  `ext:<extension>:<tool>` — the singleton side tool an extension's web half declares — whose parts are
+  each 1–64 lowercase letters, digits or dashes, starting with a letter or digit. The guards
+  `isBuiltinLayoutToolId`, `isExtensionLayoutToolId`, `parseExtensionLayoutToolId` and `isLayoutToolId`
+  are the one bounded validation the host's preset validator and the web's local-layout decoder share;
+  `extensionLayoutToolId(extension, tool)` builds one. Which extension tools exist is the web registry's,
+  never the wire's.
 - **nativeClient.ts** — type-only optional native-client capabilities outside the host wire. The desktop
   update bridge exposes a monotonic state snapshot, prompt check/download/install actions, failed-operation
   identity, and state subscription without exposing feed selection. Available, byte-transfer, preparation,
@@ -1340,8 +1349,9 @@ client talking to an older host sends none of it and holds no containers.
 (**`ExtensionEventPush { extension, type, payload }`**): what a host-registry extension's server half
 `publish`es for its web half, broadcast to the sockets at the gate that may see the push's workspace or
 project. The payload is the extension's own (versioned by its `apiVersion`); the web side filters by
-`extension` and treats a replayed latest value as stale, so the channel carries invalidations, not state.
-An older client subscribes to nothing.
+`extension` and never replays the channel's latest push to a late subscriber (the web transport lists it
+as non-replayable), so the channel carries invalidations, not state. An older client subscribes to
+nothing.
 
 - **`extension-message`** (`EXTENSION_MESSAGE_CUSTOM_TYPE`, `ExtensionMessageDetails { extension,
   extensionTitle, mode: "follow_up" | "steer", text }`) — an extension's `sendToChat` host action in a

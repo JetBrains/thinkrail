@@ -12,6 +12,7 @@ export type {
 	ExtensionHostWorkspace,
 	ExtensionLog,
 	ExtensionMessageAnchor,
+	ExtensionModel,
 	ExtensionPublishScope,
 	ExtensionQuery,
 	ExtensionSessionPlacement,

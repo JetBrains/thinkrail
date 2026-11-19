@@ -1,8 +1,11 @@
 export {
 	enabledWebExtensions,
 	extensionPanels,
+	extensionSideTools,
 	findExtensionPanel,
+	findExtensionSideTool,
 	type RegisteredPanel,
+	type RegisteredSideTool,
 	registerWebExtensions,
 	type WebExtensionCommands,
 	webExtensionCommands,

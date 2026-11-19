@@ -143,6 +143,14 @@ export interface ExtensionChatFacts {
 	updatedAt: number;
 }
 
+/** A model a new chat can use, from the host's model catalog; `id` is `provider/id`, as `createWorkspace` takes it. */
+export interface ExtensionModel {
+	id: string;
+	name: string;
+	provider: string;
+	thinkingLevels: ThinkingLevel[];
+}
+
 /** An open workspace's host facts: its last-known review, its diff against the base and its chats. */
 export interface ExtensionWorkspaceFacts {
 	id: string;
@@ -281,6 +289,8 @@ export interface ExtensionHostServices {
 	messageAnchor(sessionFile: string, entryId: string): Promise<ExtensionMessageAnchor | null>;
 	/** A model's context window in tokens from the host's model catalog (overrides applied); `null` when unknown. */
 	contextWindow(provider: string, model: string): Promise<number | null>;
+	/** The models a new chat can use (the New Workspace dialog's picker), from the host's catalog. */
+	models(): Promise<ExtensionModel[]>;
 	/** The run receipts the host kept for a session, oldest first; empty when it kept none. */
 	turnReceipts(sessionId: string): Promise<ExtensionTurnReceipt[]>;
 	/**

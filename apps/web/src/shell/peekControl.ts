@@ -43,7 +43,7 @@ export function openPeekInTab(workspaceId: string): void {
 			void openFileComparisonInTab(workspaceId, entry.before, entry.after, "keep");
 			return;
 		case "extension":
-			openExtensionTab(workspaceId, entry, entry.params);
+			openExtensionTab(workspaceId, entry, entry.params, entry.name);
 			return;
 	}
 }

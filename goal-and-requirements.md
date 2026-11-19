@@ -139,6 +139,10 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   lists the built-in, personal and trusted current-workspace roles with their model policies; global
   per-role switches block new launches without interrupting work already running, beside delegation
   defaults and workspace concurrency controls ([[submodule-web-panels]]).
+- **Board** — a project board extension: cards start agent work in new workspaces, host events
+  (start, settle, merge) move them across preset columns while a human's move is a logged override, each
+  card badges its agent's live state, and a card opens in Peek with its details, attempts and Start
+  ([[module-ext-board]]).
 - **Workspaces from chat** — on request ("in a side workspace"), the agent starts ordinary workspaces
   with their own chats in any open project and checks their chats', PRs', and diffs' status; the agent,
   not the host, decides what to do with them ([[submodule-server-agent]], [[submodule-server-host]]).

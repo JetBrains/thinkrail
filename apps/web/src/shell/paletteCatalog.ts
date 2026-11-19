@@ -61,9 +61,9 @@ import type { SettingEntry } from "../panels/settingsCatalog";
 import type { SettingsNavGroup } from "../panels/settingsNav";
 import type { PaletteItem } from "../search";
 import type { ContainerDialogRequest, SettingsSection } from "../store";
-import type { LayoutToolId, TabAction } from "./layout";
+import type { BuiltinLayoutToolId, TabAction } from "./layout";
 
-export type PaletteTool = Exclude<LayoutToolId, "projects">;
+export type PaletteTool = Exclude<BuiltinLayoutToolId, "projects">;
 
 const TOOL_LABELS: Record<PaletteTool, MessageKey> = {
 	specs: "workbench.tool.specs",

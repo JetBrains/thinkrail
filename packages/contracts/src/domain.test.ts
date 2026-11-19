@@ -1,24 +1,29 @@
 import { describe, expect, test } from "bun:test";
 import {
 	ACCEPTED_IMAGE_TYPES,
+	BUILTIN_LAYOUT_TOOL_IDS,
 	base64EncodedLength,
 	CODE_FONT_SIZE,
 	clampToCodePoints,
 	compareResourceHistory,
 	DEFAULT_CONFIG,
+	extensionLayoutToolId,
 	FIRST_PROMPT_MAX_LENGTH,
 	firstPromptHead,
 	firstPromptOfTexts,
 	hasControlCharacter,
 	IMAGE_MAX_BASE64_BYTES,
 	interruptedResource,
+	isBuiltinLayoutToolId,
 	isCodeFontSize,
 	isDelegationRunDetails,
+	isExtensionLayoutToolId,
 	isFontChoice,
 	isFontFamilyRef,
 	isFontWeightOffset,
 	isJbcentralConnected,
 	isJbcentralQuotaRefreshSeconds,
+	isLayoutToolId,
 	isLiveResource,
 	isLocalePreference,
 	isPlanReviewResult,
@@ -29,6 +34,7 @@ import {
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
 	LINE_WIDTH_COLUMNS,
 	normalizeFontSettings,
+	parseExtensionLayoutToolId,
 	parsePiPackageInput,
 	QUESTION_PANEL_HEIGHT_PERCENT,
 	REQUEST_IMAGE_BASE64_BUDGET,
@@ -283,6 +289,45 @@ describe("isDelegationRunDetails", () => {
 	test("rejects every optional display field when present with a non-string value", () => {
 		for (const field of ["roleName", "roleSource", "model", "activity", "abortReason"]) {
 			expect(isDelegationRunDetails({ ...valid, [field]: { malformed: true } })).toBe(false);
+		}
+	});
+});
+
+describe("layout tool ids", () => {
+	test("accept the built-in tools and a bounded ext:<extension>:<tool> id", () => {
+		for (const tool of BUILTIN_LAYOUT_TOOL_IDS) {
+			expect(isBuiltinLayoutToolId(tool)).toBe(true);
+			expect(isLayoutToolId(tool)).toBe(true);
+		}
+		const board = extensionLayoutToolId("board", "board");
+		expect(board).toBe("ext:board:board");
+		expect(isExtensionLayoutToolId(board)).toBe(true);
+		expect(isBuiltinLayoutToolId(board)).toBe(false);
+		expect(parseExtensionLayoutToolId("ext:session-insights:list")).toEqual({
+			extension: "session-insights",
+			tool: "list",
+		});
+		expect(isLayoutToolId(`ext:${"a".repeat(64)}:${"b".repeat(64)}`)).toBe(true);
+	});
+
+	test("reject unknown tools, odd characters and overlong parts", () => {
+		for (const value of [
+			"terminal",
+			"ext:",
+			"ext:board",
+			"ext:board:",
+			"ext::board",
+			"ext:Board:board",
+			"ext:board:board:extra",
+			"ext:-board:board",
+			"ext:board:bo ard",
+			`ext:${"a".repeat(65)}:board`,
+			`ext:board:${"b".repeat(65)}`,
+			42,
+			null,
+		]) {
+			expect(isLayoutToolId(value)).toBe(false);
+			expect(parseExtensionLayoutToolId(value)).toBeNull();
 		}
 	});
 });

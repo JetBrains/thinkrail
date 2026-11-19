@@ -38,8 +38,9 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `resume` repairs them all at once by restating the truth rather than confirming the confirmations —, channel
   `subscribe` with last-value replay for snapshots; append-only terminal data and the one-shot terminal
   exit/detach + session-creation/deletion + `provider.changed` invalidation + addressed `feedback.interview`, `feedback.githubStar`
-  and `search.textResults` channels, plus scoped `session.resourcesChanged` invalidations and per-session `mcp.status` snapshots, are never cached or replayed to late
-  subscribers. Resource metadata hydration belongs to the mounted chat integration, not replayed
+  and `search.textResults` channels, plus scoped `session.resourcesChanged` invalidations, per-session `mcp.status` snapshots and the
+  extensions' `extension.event` invalidations (a panel's `onEvent` hears only what arrives after it
+  subscribed), are never cached or replayed to late subscribers. Resource metadata hydration belongs to the mounted chat integration, not replayed
   invalidation payloads. **Reconnect backoff** (`reconnectDelay`) starts at 0.5 s, doubles to a 10 s cap,
   and resets only after a connection that stayed open for 5 s. Resetting on every successful open let a
   socket that the host closed seconds after each welcome reconnect at 0.5 s for hours: that was the >16 MiB
@@ -192,7 +193,8 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
   `supportsUserThemes`, `supportsFonts`, `supportsExtensionSettings`, `supportsKeybindings`,
-  `updateKeybindings`, `supportsExtensionQuery`, `supportsContainers`, `supportsSpeech`, `openSpeechSocket`,
+  `updateKeybindings`, `supportsExtensionQuery`, `supportsExtensionEvents`, `supportsContainers`,
+  `supportsSpeech`, `openSpeechSocket`,
   `hostUrl`, `uploadUserFont`, `supportsToolResponses`, `respondToTool`,
   `supportsTextSearch` (v112 — Find in Files asks `search.text` and listens on `search.textResults` only of a
   host that serves them; against an older host the palette hides the command and the window opened by the
@@ -215,7 +217,8 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   one `settings.update { keybindings }` and resolves `true` once accepted, the store converging on the
   `settings.changed` broadcast (no optimistic write); a host refusal rejects (`KEYBINDINGS_INVALID`); `supportsExtensionQuery` (v128) lets the shell's extension
   panel body show its placeholder, and its `PanelHost` refuse a query locally, against a host without
-  `extension.query`. `openSpeechSocket()`
+  `extension.query`; `supportsExtensionEvents` (v130) lets a `PanelHost.onEvent` subscribe to nothing on a
+  host without `extension.event`. `openSpeechSocket()`
   opens the dictation side socket (`/speech?protocol=`) on the same endpoint for [[submodule-web-speech]].
   It carries binary audio and never a request. `server.welcome`'s `speech` seed and every `speech.changed`
   push install the store's `speech` status whole; `supportsSpeech` (v107) gates the same way.

@@ -139,6 +139,28 @@ export interface PanelHostScope {
 	projectId: string;
 }
 
+/** A workspace to switch to, optionally on one of its chats. */
+export interface PanelWorkspaceTarget {
+	workspaceId: string;
+	projectId: string;
+	sessionId?: string | undefined;
+}
+
+/** What `PanelHost.peek` shows in Peek: a panel of the caller's own extension, or a file or two of `scope`'s workspace. */
+export type PanelPeekEntry =
+	| {
+			kind: "extension";
+			panel: string;
+			params?: Readonly<Record<string, string>> | undefined;
+			/** The crumb's name; the panel's `title` where absent. */
+			title?: string | undefined;
+	  }
+	| { kind: "file"; path: string; line?: number | undefined }
+	| { kind: "compare"; before: string; after: string };
+
+/** An `extension.event` payload the extension's server half published with `host.publish`. */
+export type PanelEventListener = (payload: unknown) => void;
+
 export interface PanelHost {
 	/** `extension.query` for this panel's own extension; rejects with the host's coded errors; an aborted signal rejects locally only. */
 	query(method: string, params?: unknown, signal?: AbortSignal): Promise<unknown>;
@@ -151,6 +173,15 @@ export interface PanelHost {
 	openFile(workspaceId: string, path: string, line?: number): void;
 	/** Reveals the Artifacts tool of `scope`'s workspace, where files an extension wrote there show; absent on a host without one. */
 	openArtifacts?(): void;
+	/** Switches to another workspace (on one of its chats when given); every panel follows the switch. */
+	openWorkspace(target: PanelWorkspaceTarget): void;
+	/** Shows the entry in `scope`'s workspace's Peek, the contextual pane at the workbench's right edge. */
+	peek(entry: PanelPeekEntry): void;
+	/**
+	 * Listens to this extension's `extension.event`s of `type`; returns the unsubscribe. Only events published
+	 * after the call arrive; none below the host's gate or while the extension is switched off.
+	 */
+	onEvent(type: string, listener: PanelEventListener): () => void;
 	readonly scope: PanelHostScope;
 	readonly hostProtocol: number | null;
 	readonly hostApiVersion: number | undefined;
@@ -190,6 +221,16 @@ export interface PanelDeclaration {
 	load: () => Promise<{ default: ComponentType<PanelProps> }>;
 }
 
+/** A singleton side tool: the layout's tool `ext:<extension>:<id>`, in the rails like Files or Review. */
+export interface SideToolDeclaration {
+	title: MessageKey;
+	icon: ComponentType<{ className?: string | undefined }>;
+	/** Where its rail entry waits until placed, and where its first reveal opens a pane. */
+	defaultSide: "left" | "right";
+	/** Its body; its `PanelHost.scope` is the active workspace and its project, and `params` is empty. */
+	load: () => Promise<{ default: ComponentType<PanelProps> }>;
+}
+
 export interface WebExtension {
 	name: string;
 	title?: MessageKey;
@@ -199,6 +240,7 @@ export interface WebExtension {
 	commands?: readonly ExtensionCommand[];
 	shortcuts?: readonly ExtensionShortcut[];
 	panels?: Record<string, PanelDeclaration>;
+	sideTools?: Record<string, SideToolDeclaration>;
 }
 
 export function defineWebExtension<T extends WebExtension>(extension: T): T {

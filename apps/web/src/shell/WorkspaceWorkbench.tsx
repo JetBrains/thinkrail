@@ -3,6 +3,7 @@ import {
 	RiChatNewLine as MessageSquarePlus,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
+import { isBuiltinLayoutToolId } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { t, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
@@ -81,10 +82,16 @@ import {
 	useDeletedChatPlacementReconciliation,
 	useWorkspaceChatCatalogReconciliation,
 } from "./chatReconciliation";
-import { ExtensionPanelBody } from "./ExtensionPanelBody";
-import { useChatActions, useChatTabActions, useLeftRailFooter } from "./extensionEntryPoints";
+import { ExtensionPanelBody, ExtensionSideToolBody } from "./ExtensionPanelBody";
+import {
+	useChatActions,
+	useChatTabActions,
+	useLayoutExtensionTools,
+	useLeftRailFooter,
+} from "./extensionEntryPoints";
 import { useResolvedKeybindings } from "./keybindingState";
 import {
+	type BuiltinLayoutToolId,
 	collectAllGroups,
 	findPlacedResource,
 	findTabLocation,
@@ -441,6 +448,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const chatActions = useChatActions();
 	const chatTabActions = useChatTabActions(workspaceId, chatActions);
 	const railFooter = useLeftRailFooter();
+	const extensionTools = useLayoutExtensionTools();
 	const requestRenameChat = useCallback(
 		(sessionId: string, titleInput: string, currentTitle: string) => {
 			const prepared = prepareChatTitle(titleInput);
@@ -541,7 +549,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	useLegacySelectionAdapter(workspaceId, activeReviewedPath, readActiveReviewedPath, readAuxiliary);
 	useDeletedChatPlacementReconciliation(workspaceId);
 	useTerminalReservation(workspaceId);
-	useLayoutIntentProcessing(workspaceId, commit, changeAttention, setFocusRequest);
+	useLayoutIntentProcessing(workspaceId, commit, changeAttention, setFocusRequest, extensionTools);
 	useWorkspaceChatCatalogReconciliation(workspaceId, commit);
 	const { terminals } = useTerminalPlacementReconciliation(workspaceId, commit);
 	useChatLocationReconciliation(workspaceId, changeAttention);
@@ -763,8 +771,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[renderResourceBody, workspaceId],
 	);
 
-	const toolBodies = useMemo<Record<LayoutToolId, ReactNode>>(() => {
-		const bodies: Record<LayoutToolId, ReactNode> = {
+	const toolBodies = useMemo<Record<BuiltinLayoutToolId, ReactNode>>(() => {
+		const bodies: Record<BuiltinLayoutToolId, ReactNode> = {
 			projects: (
 				<QuietScrollArea
 					data-testid="left-nav"
@@ -820,7 +828,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				</div>
 			),
 		};
-		for (const tool of Object.keys(bodies) as LayoutToolId[]) {
+		for (const tool of Object.keys(bodies) as BuiltinLayoutToolId[]) {
 			bodies[tool] = (
 				<ErrorBoundary
 					label={t("shell.workbench.panel.tool", { tool })}
@@ -847,7 +855,15 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		t,
 		workspaceId,
 	]);
-	const renderToolBody = useCallback((tool: LayoutToolId) => toolBodies[tool], [toolBodies]);
+	const renderToolBody = useCallback(
+		(tool: LayoutToolId) =>
+			isBuiltinLayoutToolId(tool) ? (
+				toolBodies[tool]
+			) : (
+				<ExtensionSideToolBody workspaceId={workspaceId} toolId={tool} />
+			),
+		[toolBodies, workspaceId],
+	);
 
 	const isDefault = workspace != null && isDefaultWorkspace(workspace);
 	const isExternal = workspace != null && isExternalWorkspace(workspace);
@@ -1042,6 +1058,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
 				chatFirstPrompts={chatFirstPrompts}
 				{...(chatTabActions ? { chatActions: chatTabActions } : {})}
+				extensionTools={extensionTools}
 				onRequestClose={(tab, prepare) => {
 					if (tab.kind === "terminal") {
 						const close = () => {

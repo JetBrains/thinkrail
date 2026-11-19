@@ -310,7 +310,7 @@ describe("extensionHostServices", () => {
 		expect(host.sessionStatus("never-ran")).toEqual({ live: false, completion: null });
 	});
 
-	test("reads a model's context window from the host's model catalog, null when it has none", async () => {
+	test("reads a model's context window and the new-chat models from the host's model catalog", async () => {
 		const runtime = await ModelRuntime.create({
 			credentials: new InMemoryCredentialStore(),
 			allowModelNetwork: false,
@@ -337,6 +337,12 @@ describe("extensionHostServices", () => {
 			const host = extensionHostServices("insights", SIGNAL);
 			expect(await host.contextWindow("acme", "big")).toBe(640_000);
 			expect(await host.contextWindow("acme", "missing")).toBeNull();
+			expect(await host.models()).toContainEqual({
+				id: "acme/big",
+				name: "Big",
+				provider: "acme",
+				thinkingLevels: expect.any(Array),
+			});
 		} finally {
 			configurePiRuntime(null);
 		}

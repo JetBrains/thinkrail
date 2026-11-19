@@ -43,6 +43,7 @@ const NON_REPLAYABLE_CHANNELS: ReadonlySet<string> = new Set([
 	WS_CHANNELS.feedbackInterview,
 	WS_CHANNELS.feedbackGithubStar,
 	WS_CHANNELS.searchTextResults,
+	WS_CHANNELS.extensionEvent,
 ]);
 
 let clientId: string | undefined;

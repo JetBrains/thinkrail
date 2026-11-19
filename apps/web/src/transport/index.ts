@@ -30,6 +30,7 @@ export {
 	runHostUpdate,
 	supportsChangeMutations,
 	supportsContainers,
+	supportsExtensionEvents,
 	supportsExtensionQuery,
 	supportsExtensionSettings,
 	supportsFonts,

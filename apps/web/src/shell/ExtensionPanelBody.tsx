@@ -1,4 +1,8 @@
-import type { ExtensionCatalogEntry } from "@thinkrail/contracts";
+import {
+	type ExtensionCatalogEntry,
+	type ExtensionLayoutToolId,
+	WS_CHANNELS,
+} from "@thinkrail/contracts";
 import type {
 	PanelDeclaration,
 	PanelHost,
@@ -12,7 +16,12 @@ import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { type ComponentType, type LazyExoticComponent, lazy, Suspense, useMemo } from "react";
 import { ToolCallPreview } from "../chat/ToolCallPreview";
 import { ErrorBoundary } from "../components/ErrorBoundary";
-import { findExtensionPanel, type RegisteredPanel } from "../extensions";
+import {
+	findExtensionPanel,
+	findExtensionSideTool,
+	type RegisteredPanel,
+	type RegisteredSideTool,
+} from "../extensions";
 import { openFileAtLine, openFileInTab } from "../panels/openTabs";
 import { SettingsSection, selectWorkspaceById, useAppStore } from "../store";
 import { getTransport, supportsExtensionQuery } from "../transport";
@@ -27,17 +36,18 @@ import { paletteNavigator } from "./paletteNavigation";
 
 export type ExtensionPanelPlaceholderKind = "unsupported" | "missing" | "disabled" | "failed";
 
-export type ExtensionPanelState =
+export type ExtensionPanelState<T extends { extension: string } = RegisteredPanel> =
 	| { kind: "loading" }
 	| { kind: ExtensionPanelPlaceholderKind }
-	| { kind: "ready"; panel: RegisteredPanel; entry: ExtensionCatalogEntry };
+	| { kind: "ready"; panel: T; entry: ExtensionCatalogEntry };
 
-export function extensionPanelState(input: {
-	panel: RegisteredPanel | undefined;
+/** What an extension's panel or side tool shows: itself, or a placeholder; first match wins. */
+export function extensionPanelState<T extends { extension: string }>(input: {
+	panel: T | undefined;
 	protocolVersion: number | null;
 	disabled: readonly string[];
 	catalog: ExtensionCatalogRead;
-}): ExtensionPanelState {
+}): ExtensionPanelState<T> {
 	const { panel, protocolVersion, catalog } = input;
 	if (!panel) return { kind: "missing" };
 	if (protocolVersion === null) return { kind: "loading" };
@@ -87,9 +97,11 @@ export function ExtensionPanelPlaceholder({
 	);
 }
 
-const lazyPanels = new WeakMap<PanelDeclaration, LazyExoticComponent<ComponentType<PanelProps>>>();
+type PanelBody = Pick<PanelDeclaration, "title" | "load">;
 
-function lazyPanel(declaration: PanelDeclaration): LazyExoticComponent<ComponentType<PanelProps>> {
+const lazyPanels = new WeakMap<PanelBody, LazyExoticComponent<ComponentType<PanelProps>>>();
+
+function lazyPanel(declaration: PanelBody): LazyExoticComponent<ComponentType<PanelProps>> {
 	let component = lazyPanels.get(declaration);
 	if (!component) {
 		component = lazy(declaration.load);
@@ -104,7 +116,7 @@ export function ExtensionPanelFrame({
 	params,
 	resetKeys,
 }: {
-	declaration: PanelDeclaration;
+	declaration: PanelBody;
 	host: PanelHost;
 	params: Readonly<Record<string, string>>;
 	resetKeys: readonly unknown[];
@@ -151,24 +163,20 @@ export function PanelToolCallView({ call }: { call: PanelToolCall }) {
 	);
 }
 
-function LoadedExtensionPanel({
+function useAppPanelHost({
+	extension,
 	workspaceId,
 	projectId,
-	tab,
-	panel,
-	entry,
+	apiVersion,
 	protocolVersion,
 }: {
+	extension: string;
 	workspaceId: string;
 	projectId: string;
-	tab: LayoutExtensionTab;
-	panel: RegisteredPanel;
-	entry: ExtensionCatalogEntry;
+	apiVersion: number | undefined;
 	protocolVersion: number | null;
-}) {
-	const extension = panel.extension;
-	const apiVersion = entry.apiVersion;
-	const host = useMemo(
+}): PanelHost {
+	return useMemo(
 		() =>
 			createPanelHost({
 				extension,
@@ -203,12 +211,44 @@ function LoadedExtensionPanel({
 						});
 				},
 				openArtifacts: () => useAppStore.getState().requestToolView(workspaceId, "artifacts"),
+				openWorkspace: (target) =>
+					void paletteNavigator.navigateToWorkspace(
+						{ id: target.workspaceId, projectId: target.projectId },
+						target.sessionId,
+					),
+				peek: (entry) => useAppStore.getState().requestPeek(workspaceId, entry),
+				subscribe: (listener) => getTransport().subscribe(WS_CHANNELS.extensionEvent, listener),
+				disabled: () => useAppStore.getState().disabledExtensions.includes(extension),
 				scope: { workspaceId, projectId },
 				hostProtocol: protocolVersion,
 				hostApiVersion: apiVersion,
 			}),
 		[apiVersion, extension, projectId, protocolVersion, workspaceId],
 	);
+}
+
+function LoadedExtensionPanel({
+	workspaceId,
+	projectId,
+	tab,
+	panel,
+	entry,
+	protocolVersion,
+}: {
+	workspaceId: string;
+	projectId: string;
+	tab: LayoutExtensionTab;
+	panel: RegisteredPanel;
+	entry: ExtensionCatalogEntry;
+	protocolVersion: number | null;
+}) {
+	const host = useAppPanelHost({
+		extension: panel.extension,
+		workspaceId,
+		projectId,
+		apiVersion: entry.apiVersion,
+		protocolVersion,
+	});
 	return (
 		<ExtensionPanelFrame
 			declaration={panel.declaration}
@@ -219,6 +259,105 @@ function LoadedExtensionPanel({
 	);
 }
 
+const NO_PARAMS: Readonly<Record<string, string>> = {};
+
+function LoadedSideTool({
+	workspaceId,
+	projectId,
+	tool,
+	entry,
+	protocolVersion,
+}: {
+	workspaceId: string;
+	projectId: string;
+	tool: RegisteredSideTool;
+	entry: ExtensionCatalogEntry;
+	protocolVersion: number | null;
+}) {
+	const host = useAppPanelHost({
+		extension: tool.extension,
+		workspaceId,
+		projectId,
+		apiVersion: entry.apiVersion,
+		protocolVersion,
+	});
+	return (
+		<ExtensionPanelFrame
+			declaration={tool.declaration}
+			host={host}
+			params={NO_PARAMS}
+			resetKeys={[tool.id]}
+		/>
+	);
+}
+
+function ExtensionPlaceholderBody({
+	state,
+	onRetry,
+}: {
+	state: ExtensionPanelState<{ extension: string }>;
+	onRetry: () => void;
+}) {
+	const t = useT();
+	if (state.kind === "ready" || state.kind === "loading") {
+		return (
+			<LoadingRegion
+				rows={12}
+				label={t("shell.extensionPanel.loading")}
+				testId="extension-panel-loading"
+				className="h-full overflow-hidden p-16"
+			/>
+		);
+	}
+	return (
+		<ExtensionPanelPlaceholder
+			kind={state.kind}
+			onOpenSettings={() => useAppStore.getState().openSettings(SettingsSection.Extensions)}
+			onRetry={onRetry}
+		/>
+	);
+}
+
+/** An extension's side tool in its pane: the active workspace's scope, or the panels' placeholders. */
+export function ExtensionSideToolBody({
+	workspaceId,
+	toolId,
+}: {
+	workspaceId: string;
+	toolId: ExtensionLayoutToolId;
+}) {
+	const tool = findExtensionSideTool(toolId);
+	const protocolVersion = useAppStore((state) => state.protocolVersion);
+	const disabled = useAppStore((state) => state.disabledExtensions);
+	const projectId = useAppStore(
+		(state) => selectWorkspaceById(state, workspaceId)?.projectId ?? null,
+	);
+	const catalog = useExtensionCatalog(
+		tool !== undefined && supportsExtensionQuery(protocolVersion),
+	);
+	const state = extensionPanelState({
+		panel: tool,
+		protocolVersion,
+		disabled,
+		catalog: catalog.read,
+	});
+	return (
+		<div data-testid="extension-side-tool" data-tool={toolId} className="h-full min-h-0">
+			{state.kind === "ready" && projectId !== null ? (
+				<LoadedSideTool
+					workspaceId={workspaceId}
+					projectId={projectId}
+					tool={state.panel}
+					entry={state.entry}
+					protocolVersion={protocolVersion}
+				/>
+			) : (
+				<ExtensionPlaceholderBody state={state} onRetry={catalog.retry} />
+			)}
+		</div>
+	);
+}
+
 export function ExtensionPanelBody({
 	workspaceId,
 	tab,
@@ -226,7 +365,6 @@ export function ExtensionPanelBody({
 	workspaceId: string;
 	tab: LayoutExtensionTab;
 }) {
-	const t = useT();
 	const panel = findExtensionPanel(tab.extension, tab.panel);
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
 	const disabled = useAppStore((state) => state.disabledExtensions);
@@ -249,21 +387,5 @@ export function ExtensionPanelBody({
 			/>
 		);
 	}
-	if (state.kind === "ready" || state.kind === "loading") {
-		return (
-			<LoadingRegion
-				rows={12}
-				label={t("shell.extensionPanel.loading")}
-				testId="extension-panel-loading"
-				className="h-full overflow-hidden p-16"
-			/>
-		);
-	}
-	return (
-		<ExtensionPanelPlaceholder
-			kind={state.kind}
-			onOpenSettings={() => useAppStore.getState().openSettings(SettingsSection.Extensions)}
-			onRetry={catalog.retry}
-		/>
-	);
+	return <ExtensionPlaceholderBody state={state} onRetry={catalog.retry} />;
 }

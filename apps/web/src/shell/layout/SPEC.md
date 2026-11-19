@@ -15,8 +15,8 @@ The shell-owned, headless workbench engine: the normalized frontend-local frame 
 ## Boundary
 
 - **Owns:** web-local `WorkbenchFrame`/`WorkspaceViewState` types; frame-plus-view projection; pure topology, placement, attention, and policy operations; semantic minimum and independent group-limit checks; one-result drag previews; center/side/bottom renderers; alignment-owned nested composition and side-width projection; tab-strip overflow; ARIA tab/separator behavior; and the terminal visibility gate.
-- **Public surface (`index.ts`):** all current-layout types; workbench renderer/controller; the edge-chrome primitives (`AuxiliaryRail`, `AuxiliaryRailToolButton`, `AuxiliaryRailActionButton`, `AuxiliaryPaneHeader`, `AuxiliaryPaneHideButton`); pure mutations, projection, and validation helpers; the tab-action list (`tabActions`, `TabAction`), the injected chat actions' shape (`ChatTabAction`, `ChatTabActions`) and the `WorkbenchTabCommands` provider contract; built-in preset definitions plus instantiate/apply/capture operations and `frameMatchesPreset` (geometry equality ignoring generated ids, which Settings uses to mark the applied preset); attention fallback helpers; and unavailable-reason results. Callers inject resource renderers, the workspace worktree path for file-tab copy actions, the left rail's footer items (`leftRailFooter`, `AuxiliaryRailFooterItem`s), the chat tabs' extra actions (`chatActions`), the key caps of the chords that repeat a chrome control (`chromeShortcuts`) and the optional Peek column (`peek`, `WorkbenchPeek`), and commit complete pure results rather than splicing arrays.
-- **External deps:** `@thinkrail/contracts` for the resource-free custom-preset DTO and git diff-scope type only; shell-neutral `lib` attention/id primitives plus `copyText` / `joinWorkspacePath` for file-tab copy actions; React; `@thinkrail/ui/*` (including `@thinkrail/ui/resizable`); `@dnd-kit/core`; the `keybindings` module's `LOCAL_KEY_DEFAULTS` for scopes `tabs` / `rails`, matched through `@thinkrail/ui/local-keys`' `useLocalKeys` (reading the shell-provided keymap context keeps the layout props-pure: never a chord's meaning, which the shell injects).
+- **Public surface (`index.ts`):** all current-layout types; workbench renderer/controller; the edge-chrome primitives (`AuxiliaryRail`, `AuxiliaryRailToolButton`, `AuxiliaryRailActionButton`, `AuxiliaryPaneHeader`, `AuxiliaryPaneHideButton`); pure mutations, projection, and validation helpers; the tab-action list (`tabActions`, `TabAction`), the injected chat actions' shape (`ChatTabAction`, `ChatTabActions`) and the `WorkbenchTabCommands` provider contract; built-in preset definitions plus instantiate/apply/capture operations and `frameMatchesPreset` (geometry equality ignoring generated ids, which Settings uses to mark the applied preset); attention fallback helpers; and unavailable-reason results. Callers inject resource renderers, the workspace worktree path for file-tab copy actions, the left rail's footer items (`leftRailFooter`, `AuxiliaryRailFooterItem`s), the chat tabs' extra actions (`chatActions`), the key caps of the chords that repeat a chrome control (`chromeShortcuts`), the optional Peek column (`peek`, `WorkbenchPeek`) and the extensions' side tools (`extensionTools`, a `LayoutToolCatalog`), and commit complete pure results rather than splicing arrays.
+- **External deps:** `@thinkrail/contracts` for the resource-free custom-preset DTO, the git diff-scope type and the layout tool id guards only; shell-neutral `lib` attention/id primitives plus `copyText` / `joinWorkspacePath` for file-tab copy actions; React; `@thinkrail/ui/*` (including `@thinkrail/ui/resizable`); `@dnd-kit/core`; the `keybindings` module's `LOCAL_KEY_DEFAULTS` for scopes `tabs` / `rails`, matched through `@thinkrail/ui/local-keys`' `useLocalKeys` (reading the shell-provided keymap context keeps the layout props-pure: never a chord's meaning, which the shell injects).
 - **Forbidden:** server/shared/pi imports; domain-resource lifetime; browser persistence or WS calls; feature-panel internals; a mutable third-party docking model; inline component styles; or non-semantic colour values.
 
 ## State contract
@@ -141,7 +141,7 @@ decides how loud it reads, never a per-theme selector in the component.
 ## Layout grammar
 
 - **Center:** a recursive horizontal/vertical binary tree, maximum four leaves. A split replaces one leaf with equal halves. User creation/resize requires each child to remain at least 320 px wide and 180 px high. Empty leaves are valid frame slots and render the shell-provided empty surface. Remove/Merge promotes a sibling and rehomes every affected workspace's tabs deterministically.
-- **Auxiliary eligibility:** Projects, Specs, Files, Review, TODO List, Artifacts, and Orchestrator are singleton auxiliary-only tools owned by the frame; terminals are workspace resources and may occupy center or any auxiliary region. Hiding a singleton preserves its restore target. View/deep-link reveal restores or unfolds it in frame-local position and focuses the requested item in current workspace attention.
+- **Auxiliary eligibility:** Projects, Specs, Files, Review, TODO List, Artifacts, and Orchestrator are singleton auxiliary-only tools owned by the frame, and so is every **extension side tool** (*Extension tools* below); terminals are workspace resources and may occupy center or any auxiliary region. Hiding a singleton preserves its restore target. View/deep-link reveal restores or unfolds it in frame-local position and focuses the requested item in current workspace attention.
 - **Left/right:** ordered vertical frame stacks beside full-height tool rails. The left rail is
   persistent; the right side is optional: its rail renders only while it has an entry (a group, or an
   unplaced tool restoring there — `canShowSide`) or a tool/terminal drag can create a pane there (the
@@ -202,6 +202,31 @@ commit makes it index a stale layout and throw. The enforcement effect keys on t
 committed sizes are re-applied once the real constraints are live. The outer group's settle key includes
 Peek's open state, and on that commit Peek's own minimum and maximum relax (0 / 100) with the rest. A gesture's rollback (`restore`)
 likewise refuses to write a layout whose length no longer matches the group.
+
+## Extension tools
+
+A `LayoutToolId` is a built-in (`BuiltinLayoutToolId`) or an extension's side tool
+`ext:<extension>:<tool>` ([[module-contracts]]). The built-in maps (`LAYOUT_TOOLS`,
+`LAYOUT_TOOL_DEFAULT_SIDES`, names, icons, the shell's tool bodies) stay exhaustive over the built-ins only;
+an extension tool is resolved by lookup in the **`LayoutToolCatalog`** the shell injects
+(`LayoutExtensionTool { titleKey, icon, defaultSide, offered }`) — the layout never reads the extension
+registry. The Workbench hands its `extensionTools` prop down through `ExtensionToolsContext` to every name
+and icon it draws (`layoutTabName`'s and `tabIcon`'s optional catalog argument), and passes it to the pure
+functions that need to know which tools exist or where one restores: `layoutTools`, `unplacedTools`,
+`unplacedToolsForRegion`, `canShowSide`, `showSide`, `showBottom`, `revealTool`, `projectAuxiliaryRail`,
+`activateAuxiliaryRailEntry`, `describeLayoutGroup` and `tabActions` (each defaults to no extension tools).
+
+- **Unplaced** — only an `offered` tool waits as a dimmed entry in the trailing cluster of its restore
+  target's region, else its `defaultSide` (`layoutToolDefaultSide`; `"left"` for one the catalog lacks),
+  after the built-ins, and only it is offered by Show menus and side restores. Its first reveal opens a new
+  pane at the end of that region, as the Orchestrator's does; afterwards it carries a restore target like
+  any tool.
+- **Placed** — a placed extension tool stays where it is whether or not it is offered; its name is its
+  `titleKey` translated when that is a key of this build, else the id's tool part, its icon the declared one
+  (no Fill variant), else the generic layout icon. What its body shows — the tool or a placeholder — is the
+  shell's.
+- **Presets** place extension tools like built-ins; instantiation computes restore targets for the
+  built-ins only, so an extension tool a preset omits falls back to its default side.
 
 ## Arrangement and accessibility
 
@@ -355,8 +380,9 @@ topology, tools, folds, and empty structural slots, never workspace resources or
 ids are template-local labels: instantiation mints frontend-local frame ids and returns the old→new group map
 used to rehome every workspace view. Only custom definitions cross the wire through settings; a set that
 places the TODO List (`plan`) is saved only to a host at `LAYOUT_PLAN_PRESET_PROTOCOL_VERSION` or newer, and one
-that places Artifacts only to a host at `ARTIFACTS_PROTOCOL_VERSION` or newer, and one that places the
-Orchestrator only to a host at `CONTAINER_PROTOCOL_VERSION` or newer — an older host's validator
+that places Artifacts only to a host at `ARTIFACTS_PROTOCOL_VERSION` or newer, one that places the
+Orchestrator only to a host at `CONTAINER_PROTOCOL_VERSION` or newer, and one that places an extension
+tool only to a host at `EXTENSION_EVENT_PROTOCOL_VERSION` or newer — an older host's validator
 rejects the tool, so Layout settings explains that instead of sending it. Built-in preset
 names are display copy: `layoutPresetName` renders them through the locale catalog by preset id while the
 definition keeps its stable `name`; custom preset names are user data and render verbatim.
@@ -384,4 +410,4 @@ The memoization assumes the injected render callbacks are referentially stable: 
 
 ## Internal module structure
 
-The renderer is one submodule behind `index.ts`; its files are internal and import each other directly. `workbenchShared` holds the public prop contracts (`WorkbenchProps`, `WorkbenchPeek`, `SharedGroupProps`, `LayoutTabFocusRequest`), the drag-and-drop primitives, the resize/size/overflow/settle hooks, the DOM-id helpers (group, tab, rail group, rail control), and the shared leaf primitives (`DropZone`, `CenterSplitTarget`, `PanelWithHandle`, `GroupTabBody`, the memoized `PeekRegion`). `workbenchTabs` owns the tab strip and tab (including a tab's rail mode); `workbenchCenter`, `workbenchSide` (also the `AuxiliaryGroupHeader` both edge families share), and `workbenchBottom` own their region view families; `workbenchRails` owns the region rail and its droppable entry button; `tabActions` owns the pure tab-command list, its target rule and executor; `tabIcon` is the one Line/Fill icon resolver, shared with the shell's Project Home; `Workbench` is the root that composes them and owns state. The rail is the one leaf that renders from `attention` (its entries' selected state), so the root passes it the overlay explicitly like a stack, while its activation runs through `onApply` and the shared `onUserNavigation`. `index.ts` re-exports the component, its public types, and the rail/pane-header primitives Project Home composes.
+The renderer is one submodule behind `index.ts`; its files are internal and import each other directly. `workbenchShared` holds the public prop contracts (`WorkbenchProps`, `WorkbenchPeek`, `SharedGroupProps`, `LayoutTabFocusRequest`), the `ExtensionToolsContext` the root provides, the drag-and-drop primitives, the resize/size/overflow/settle hooks, the DOM-id helpers (group, tab, rail group, rail control), and the shared leaf primitives (`DropZone`, `CenterSplitTarget`, `PanelWithHandle`, `GroupTabBody`, the memoized `PeekRegion`). `workbenchTabs` owns the tab strip and tab (including a tab's rail mode); `workbenchCenter`, `workbenchSide` (also the `AuxiliaryGroupHeader` both edge families share), and `workbenchBottom` own their region view families; `workbenchRails` owns the region rail and its droppable entry button; `tabActions` owns the pure tab-command list, its target rule and executor; `tabIcon` is the one Line/Fill icon resolver, shared with the shell's Project Home; `Workbench` is the root that composes them and owns state. The rail is the one leaf that renders from `attention` (its entries' selected state), so the root passes it the overlay explicitly like a stack, while its activation runs through `onApply` and the shared `onUserNavigation`. `index.ts` re-exports the component, its public types, and the rail/pane-header primitives Project Home composes.

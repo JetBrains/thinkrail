@@ -8,6 +8,7 @@ import {
 	openCenterTab,
 	resizeBottomRegion,
 	resizeSideRegion,
+	revealTool,
 	selectTab,
 	toolTab,
 } from "../layout";
@@ -593,6 +594,75 @@ describe("frontend-local layout state", () => {
 			const restored = await ensureWorkspaceLayoutState("workspace");
 			expect(restored.left.width === 0.31).toBe(valid);
 			expect(restored.center.kind === "group" && restored.center.tabs.length).toBe(valid ? 1 : 0);
+		},
+	);
+
+	test("an extension side tool, placed and with a restore target, survives reload even when this build lacks it", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		const initial = await ensureWorkspaceLayoutState("workspace");
+		const revealed = revealTool(initial, "ext:board:board", 6);
+		if (!("document" in revealed)) throw new Error(revealed.reason);
+		const placed = {
+			...revealed.document,
+			toolRestoreTargets: {
+				...revealed.document.toolRestoreTargets,
+				"ext:not-bundled:tool": { region: "right" as const, index: 0 },
+			},
+		};
+		await commitWorkspaceLayout("workspace", placed);
+
+		resetLayoutStateForTests();
+		resetStore();
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+
+		const restored = await ensureWorkspaceLayoutState("workspace");
+		expect(restored.left.groups.map((group) => group.tabs.map((tab) => tab.id))).toEqual([
+			["tool:projects"],
+			["tool:ext:board:board"],
+		]);
+		expect(restored.toolRestoreTargets["ext:not-bundled:tool"]).toEqual({
+			region: "right",
+			index: 0,
+		});
+	});
+
+	test.each([
+		["a bounded ext: id", "ext:board:board", true],
+		["an id with uppercase", "ext:Board:board", false],
+		["an id without its tool", "ext:board", false],
+		["an unknown built-in", "terminal", false],
+	])(
+		"a frame placing %s decodes only while the id is a layout tool",
+		async (_label, tool, valid) => {
+			const local = new MemoryStorage();
+			const session = new MemoryStorage();
+			session.setItem("thinkrail:layout-surface-id", "surface-a");
+			setLayoutStateStorageForTests({ local, session }, endpoint);
+			const initial = await ensureWorkspaceLayoutState("workspace");
+			await commitWorkspaceLayout("workspace", resizeSideRegion(initial, "left", 0.31));
+			const key = localLayoutStorageKey(endpoint, "surface-a");
+			const raw = local.getItem(key);
+			if (!raw) throw new Error("Missing persistence");
+			const stored = JSON.parse(raw) as {
+				frame: {
+					left: { groups: { tools: { kind: string; id: string; name: string; tool: string }[] }[] };
+				};
+			};
+			stored.frame.left.groups[0]?.tools.push({ kind: "tool", id: `tool:${tool}`, name: "", tool });
+			local.setItem(key, JSON.stringify(stored));
+
+			resetLayoutStateForTests();
+			resetStore();
+			setLayoutStateStorageForTests({ local, session }, endpoint);
+
+			const restored = await ensureWorkspaceLayoutState("workspace");
+			expect(restored.left.width === 0.31).toBe(valid);
+			expect(restored.left.groups[0]?.tabs.map((tab) => tab.id)).toEqual(
+				valid ? ["tool:projects", `tool:${tool}`] : ["tool:projects"],
+			);
 		},
 	);
 

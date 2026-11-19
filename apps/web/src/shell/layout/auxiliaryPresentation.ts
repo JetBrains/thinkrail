@@ -7,6 +7,7 @@ import {
 	isLayoutUnavailable,
 	LAYOUT_LIMITS,
 	type LayoutOperationResult,
+	NO_EXTENSION_TOOLS,
 	resizeAuxiliaryGroups,
 	revealTool,
 	setAuxiliaryGroupFolded,
@@ -21,6 +22,7 @@ import type {
 	LayoutSideGroup,
 	LayoutTab,
 	LayoutTerminalTab,
+	LayoutToolCatalog,
 	LayoutToolId,
 	LayoutToolTab,
 	WorkspaceLayoutDocument,
@@ -189,6 +191,7 @@ export function projectAuxiliaryRail(
 	document: WorkspaceLayoutDocument,
 	attention: LayoutAttention,
 	region: LayoutAuxiliaryRegion,
+	tools: LayoutToolCatalog = NO_EXTENSION_TOOLS,
 ): readonly AuxiliaryRailEntry[] {
 	const entries: AuxiliaryRailEntry[] = [];
 	for (const group of document[region].groups) {
@@ -232,7 +235,7 @@ export function projectAuxiliaryRail(
 				expanded,
 			});
 	}
-	for (const tool of unplacedToolsForRegion(document, region)) {
+	for (const tool of unplacedToolsForRegion(document, region, tools)) {
 		entries.push({
 			kind: "tool",
 			key: tupleKey("rail-tool", region, tool),
@@ -308,10 +311,11 @@ export function activateAuxiliaryRailEntry(
 	entry: AuxiliaryRailEntry,
 	maxSideGroups: number,
 	maxBottomGroups: number,
+	tools: LayoutToolCatalog = NO_EXTENSION_TOOLS,
 ): LayoutOperationResult {
 	if (entry.kind === "tool") {
 		const placed = findPlacedResource(document, toolTab(entry.tool));
-		if (!placed) return revealTool(document, entry.tool, maxSideGroups, maxBottomGroups);
+		if (!placed) return revealTool(document, entry.tool, maxSideGroups, maxBottomGroups, tools);
 		const location = findTabLocation(document, placed.id);
 		if (!location || location.area === "center")
 			return { reason: t("workbench.rail.toolUnavailable") };
@@ -329,7 +333,7 @@ export function activateAuxiliaryRailEntry(
 	}
 	if (!entry.groupId) {
 		return entry.region === "bottom"
-			? showBottom(document, maxSideGroups, maxBottomGroups, attention)
+			? showBottom(document, maxSideGroups, maxBottomGroups, attention, tools)
 			: { reason: t("workbench.rail.toolUnavailable") };
 	}
 	const group = findAuxiliaryGroup(document, entry.region, entry.groupId);

@@ -270,7 +270,7 @@ test("rail clusters include unplaced tools, boundary drops create panes, and too
 	await finishDrag(page, page.locator('[data-drop-label="Join left group"]'));
 	expect(await railClusters(page, "left-layout-rail")).toEqual([
 		["tool-rail-projects", "tool-rail-files"],
-		["tool-rail-orchestrator"],
+		["tool-rail-orchestrator", "tool-rail-ext:board:board"],
 	]);
 	await expect(page.getByTestId("auxiliary-pane-title").filter({ hasText: "Files" })).toBeVisible();
 

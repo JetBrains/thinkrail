@@ -41,7 +41,7 @@ function extensionTab(entry: ExtensionEntry): LayoutExtensionTab {
 	return {
 		kind: "extension",
 		id: peekEntryIdentity(entry),
-		name: "",
+		name: entry.name ?? "",
 		extension: entry.extension,
 		panel: entry.panel,
 		titleKey: entry.titleKey,

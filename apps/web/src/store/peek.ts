@@ -14,6 +14,8 @@ export type PeekEntry =
 			panel: string;
 			params: Readonly<Record<string, string>>;
 			titleKey: string;
+			/** The crumb's name, set by the panel that peeked it; the title key's translation where absent. */
+			name?: string;
 	  } & PeekOpener)
 	| ({ kind: "container"; containerId: string } & PeekOpener);
 
@@ -42,7 +44,8 @@ export function peekEntryIdentity(entry: PeekEntry): string {
 function samePeekEntry(a: PeekEntry, b: PeekEntry): boolean {
 	if (peekEntryIdentity(a) !== peekEntryIdentity(b) || a.sessionId !== b.sessionId) return false;
 	if (a.kind === "file" && b.kind === "file") return a.line === b.line;
-	if (a.kind === "extension" && b.kind === "extension") return a.titleKey === b.titleKey;
+	if (a.kind === "extension" && b.kind === "extension")
+		return a.titleKey === b.titleKey && a.name === b.name;
 	return true;
 }
 

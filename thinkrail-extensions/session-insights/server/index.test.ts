@@ -273,6 +273,7 @@ function fakeHost(
 				overrides.status?.[sessionId] ?? { live: false, completion: null },
 			messageAnchor: overrides.messageAnchor ?? (async () => null),
 			contextWindow: overrides.contextWindow ?? (async () => null),
+			models: async () => [],
 			turnReceipts: overrides.turnReceipts ?? (async () => []),
 			turnTree: overrides.turnTree ?? (async () => null),
 			ensureArtifactsDir: async (workspaceId) =>
@@ -430,6 +431,7 @@ describe("session-insights server descriptor", () => {
 			sessionStatus: refuse,
 			messageAnchor: refuse,
 			contextWindow: refuse,
+			models: refuse,
 			turnReceipts: refuse,
 			turnTree: refuse,
 			ensureArtifactsDir: refuse,

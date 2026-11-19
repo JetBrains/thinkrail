@@ -30,6 +30,7 @@ import type {
 import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	CONTAINER_PROTOCOL_VERSION,
+	EXTENSION_EVENT_PROTOCOL_VERSION,
 	EXTENSION_QUERY_PROTOCOL_VERSION,
 	EXTENSION_SETTINGS_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
@@ -83,6 +84,10 @@ export function updateKeybindings(keybindings: KeybindingOverrides): Promise<boo
 
 export function supportsExtensionQuery(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= EXTENSION_QUERY_PROTOCOL_VERSION;
+}
+
+export function supportsExtensionEvents(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= EXTENSION_EVENT_PROTOCOL_VERSION;
 }
 
 export function supportsContainers(protocolVersion: number | null): boolean {

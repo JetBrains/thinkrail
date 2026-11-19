@@ -173,6 +173,10 @@ export function boardQueries(board: Board): Readonly<Record<string, ExtensionQue
 			const p = params(raw);
 			return board.startCard(cardId(p), startOptions(p));
 		},
+		"models.list": async (raw) => {
+			params(raw);
+			return { models: await board.host.models() };
+		},
 		"settings.get": (raw) => board.settings(projectId(params(raw))),
 		"settings.update": (raw) => {
 			const p = params(raw);

@@ -158,7 +158,14 @@ registered renderer, no card, fold or interaction — inside its own `ErrorBound
 the target workspace through the navigator when it is not the panel's own; `openArtifacts` asks the store
 to reveal this workspace's Artifacts tool (`requestToolView(workspaceId, "artifacts")`); and
 `hostApiVersion` comes from the extension's catalog entry, read once per connection generation (a failed
-read is forgotten, so *Retry* asks again). A panel therefore never reaches the store or transport itself.
+read is forgotten, so *Retry* asks again). `openWorkspace` enters the target workspace through the
+navigator (on its chat when given); `peek` turns a `PanelPeekEntry` into the store's Peek entry
+(`panelPeekEntry`: an `extension` entry only for a panel the caller's own extension declares, with its
+title key and the given crumb `name`; `file` and `compare` as they are) and `requestPeek`s it in the
+panel's workspace; `onEvent` subscribes to transport's `extension.event` channel — which never replays its
+last push — and hands on only that extension's pushes of the type, nothing below
+`supportsExtensionEvents` (v130) and nothing while the extension is in `disabledExtensions`. A panel
+therefore never reaches the store or transport itself.
 
 **Which panels an entry point offers is one rule**, `openableExtensionPanels` (`extensionPanelHost.ts`;
 `useOpenableExtensionPanels()` reads it from the store and the host's catalog): a panel is openable
@@ -202,6 +209,23 @@ and `rail`, and nothing here names an extension):
   modal is open, else the press is left alone — so the command lists, rebinds and shows under the
   extension's own area like any other ([[submodule-web-keybindings]]).
 
+## Extension side tools
+
+An extension's `sideTools` are singleton tools of the frame ([[submodule-web-shell-layout]]), id
+`ext:<extension>:<tool>`; the layout knows them only through the **`extensionTools`** catalog the shell
+injects into the Workbench and `useLayoutIntentProcessing` (`useLayoutExtensionTools`,
+`extensionEntryPoints.tsx`: each registered tool's title key, icon, `defaultSide` and `offered` — the
+panels' openable rule, `openableContributions`, so a switched-off, missing or too-old extension's tool waits
+in no rail). `WorkspaceWorkbench.renderToolBody` renders an extension tool as `ExtensionSideToolBody`
+(`ExtensionPanelBody.tsx`): the panels' placeholder state machine (`extensionPanelState` — missing, unsupported, disabled with *Open Settings*,
+catalog failed with *Retry*, loading), else the lazy body in the panels' own `ErrorBoundary` (`ExtensionPanelFrame`) with a `PanelHost` scoped to
+the **active** workspace and its project, built by the same `useAppPanelHost` as a panel tab's. The pane is frame-level, so
+a workspace switch keeps it mounted and hands it a new host. A placed tool whose extension is off or gone
+keeps its place and shows the placeholder — the frame is never reset. Layout settings refuses to save a
+custom preset placing an extension tool to a host below `EXTENSION_EVENT_PROTOCOL_VERSION` (v130), whose
+validator would reject the id. The palette lists no Show command for extension tools yet; the rail entry
+is the way in.
+
 ## Peek
 
 Peek is one contextual pane at the workbench's right edge, outside the tool groups: it shows whatever was
@@ -235,9 +259,9 @@ the Workbench its `peek` prop (open, the `peekWidth` preference, its pointer-up 
     member's Peek, so a pinned overview stays up across the switch even though Peek is per workspace; the
     entry leaves every stack when its container is removed.
 
-  No opener makes an `extension` entry yet: the SDK's `PanelHost.peek?` ([[module-extension-api]]) is
-  deferred to the board workstream, its first consumer, because an SDK addition lands with its first
-  consumer ([[architecture]] Decision 21).
+  - **an extension's own panel** — `PanelHost.peek` ([[module-extension-api]]) pushes an `extension` entry
+    (with the crumb `name` the panel gave) in the panel's workspace; the board's card is the first
+    ([[module-ext-board]]).
 - **`PeekPane`** (keyed by workspace) is a toolbar — Back / Forward, a crumb per stack entry (click shows
   it, × removes it), Pin, Open in tab, Full screen, Close — over the current entry. A file or comparison
   renders `ResourcePreview` (full chrome, renderer/layout/view state kept per entry while the pane lives)

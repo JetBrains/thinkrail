@@ -252,7 +252,8 @@ roster's catalog reads ([[submodule-web-panels]]).
   **Peek** (`peek.ts`, the slice's private implementation) is runtime-only and never persisted:
   `peekByWorkspace[workspaceId] = { stack, index, pinned, open }`, where a `PeekEntry` is a `file`
   (`path`, `line?`), a `compare` (`before`, `after`), an `extension` panel (`extension`, `panel`,
-  `params`, `titleKey`) or a `container` overview (`containerId`), each with the opener chat's
+  `params`, `titleKey`, and the crumb `name?` the peeking panel gave, which refreshes like a line) or a
+  `container` overview (`containerId`), each with the opener chat's
   `sessionId?`. Entries are identified by `peekEntryIdentity` — `layoutResourceIdentity` of the matching
   tab, over worktree-relative paths the action canonicalizes, and the container id for an overview. **`requestPeek`** appends an entry (the oldest beyond `PEEK_STACK_LIMIT`, 20,
   drop) or selects the one with its identity, refreshing its line and opener, and opens Peek; it emits no

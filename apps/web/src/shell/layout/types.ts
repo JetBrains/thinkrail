@@ -1,7 +1,29 @@
-import type { GitDiffScope, LayoutPreset } from "@thinkrail/contracts";
+import type {
+	BuiltinLayoutToolId,
+	ExtensionLayoutToolId,
+	GitDiffScope,
+	LayoutPreset,
+	LayoutToolId,
+} from "@thinkrail/contracts";
+import type { ComponentType } from "react";
 
+export type { BuiltinLayoutToolId, ExtensionLayoutToolId, LayoutToolId };
 export type LayoutBottomAlignment = LayoutPreset["bottom"]["alignment"];
-export type LayoutToolId = LayoutPreset["left"]["groups"][number]["tools"][number];
+
+/** An extension's side tool as the shell describes it; the layout never reads the extension registry. */
+export interface LayoutExtensionTool {
+	/** A locale key of this build, translated where the tool is named. */
+	readonly titleKey: string;
+	readonly icon: ComponentType<{ className?: string | undefined }>;
+	readonly defaultSide: "left" | "right";
+	/** Its extension is on and served: only then does an unplaced tool wait in its rail. */
+	readonly offered: boolean;
+}
+
+/** The extension side tools the shell injects, by layout tool id. */
+export type LayoutToolCatalog = Readonly<
+	Partial<Record<ExtensionLayoutToolId, LayoutExtensionTool>>
+>;
 
 export interface LayoutFileTab {
 	kind: "file";

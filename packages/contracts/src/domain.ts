@@ -1479,14 +1479,45 @@ export function isFontWeightOffset(value: unknown): value is number {
 	);
 }
 
-export type LayoutToolId =
-	| "projects"
-	| "specs"
-	| "files"
-	| "review"
-	| "plan"
-	| "artifacts"
-	| "orchestrator";
+export const BUILTIN_LAYOUT_TOOL_IDS = [
+	"projects",
+	"specs",
+	"files",
+	"review",
+	"plan",
+	"artifacts",
+	"orchestrator",
+] as const;
+export type BuiltinLayoutToolId = (typeof BUILTIN_LAYOUT_TOOL_IDS)[number];
+/** A singleton side tool an extension's web half declares: `ext:<extension>:<tool>`. */
+export type ExtensionLayoutToolId = `ext:${string}:${string}`;
+export type LayoutToolId = BuiltinLayoutToolId | ExtensionLayoutToolId;
+
+const EXTENSION_LAYOUT_TOOL_ID = /^ext:([a-z0-9][a-z0-9-]{0,63}):([a-z0-9][a-z0-9-]{0,63})$/;
+
+export function isBuiltinLayoutToolId(value: unknown): value is BuiltinLayoutToolId {
+	return BUILTIN_LAYOUT_TOOL_IDS.some((tool) => tool === value);
+}
+
+export function parseExtensionLayoutToolId(
+	value: unknown,
+): { extension: string; tool: string } | null {
+	if (typeof value !== "string") return null;
+	const match = EXTENSION_LAYOUT_TOOL_ID.exec(value);
+	return match?.[1] && match[2] ? { extension: match[1], tool: match[2] } : null;
+}
+
+export function isExtensionLayoutToolId(value: unknown): value is ExtensionLayoutToolId {
+	return parseExtensionLayoutToolId(value) !== null;
+}
+
+export function extensionLayoutToolId(extension: string, tool: string): ExtensionLayoutToolId {
+	return `ext:${extension}:${tool}`;
+}
+
+export function isLayoutToolId(value: unknown): value is LayoutToolId {
+	return isBuiltinLayoutToolId(value) || isExtensionLayoutToolId(value);
+}
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
 

@@ -5,7 +5,7 @@ status: draft
 title: Board extension
 parent: module-thinkrail-extensions
 depends-on: [module-extension-api]
-references: [task-board-core, task-project-board, submodule-server-extensions, submodule-server-host, module-contracts]
+references: [task-board-core, task-project-board, submodule-server-extensions, submodule-server-host, module-contracts, submodule-web-shell, submodule-web-shell-layout]
 ---
 
 ## Responsibility
@@ -13,8 +13,8 @@ references: [task-board-core, task-project-board, submodule-server-extensions, s
 A board per project whose cards launch agent work and follow it. **The column is the work status**: a
 preset names the columns over fixed categories. **The agent's state is live**, computed per request
 from host facts and never stored. **Host events move cards** through pure rules, and a human's move is
-a logged override. There is no portable pi package, because every tool acts on host-owned state. This
-slice is the server half; the panel, the inbox status item and Board mode are the web half's.
+a logged override. There is no portable pi package, because every tool acts on host-owned state. The web
+half is the Board side tool and the card in Peek; the inbox status item and Board mode come later.
 
 ## Boundary
 
@@ -29,8 +29,13 @@ slice is the server half; the panel, the inbox status item and Board mode are th
     not running.
   - Enabled by default. Switching it off refuses its queries and actions, stops its host service and
     withholds its tools.
-- **`./web`**: a bare `defineWebExtension({ name: "board" })` stub. It stays out of the web registry
-  until the panel lands, so it renders nothing.
+- **`./web`**: `defineWebExtension({ name: "board", title, sideTools: { board }, panels: { card },
+  commands, shortcuts })`, in the web registry.
+  - It imports `extension-api/web`, `contracts` types, `locales`, `ui`, React and `@dnd-kit/core`, never its
+    `./server` half: the wire shapes it reads are restated in `web/api.ts` and checked on arrival (an unknown
+    shape is a `BoardReplyError`, a version skew), and `workflowFor` mirrors the server's size rule for the
+    Start form's default.
+  - It reaches the host only through its `PanelHost`.
 
 ## Store
 
@@ -165,6 +170,53 @@ Every query validates its params (lengths, enums, lists of at most 100) and answ
   - It calls `actions.createWorkspace` and then records the attempt and applies Start. It answers the
     card, the attempt and any `kickoffError`.
 - **`settings.get` / `settings.update { projectId, preset?, wipLimits?, followSelection? }`**.
+- **`models.list {}`** → `{ models }`, the host's `models()` — the models a new chat can use, as host facts
+  — for the Start form's picker.
+
+## Web half
+
+**The Board side tool** is `ext:board:board` (title *Board*, `RiKanbanView2`, default side left): it waits
+as a dimmed left-rail entry until opened, then lives in its own pane like Files. Its scope is the active
+workspace's project; it re-reads `board.get` when that workspace changes, after each of its own writes and
+on every `board.changed` for that project (`PanelHost.onEvent`), keeping the last board shown while a
+re-read is in flight. Loading, empty (*No cards yet — create one or ask the agent to break work down*) and
+error (with *Retry*) states replace the body; a failed write shows a dismissible notice.
+
+- **Header**: the project's name, the preset switch (Agentic kanban / Solo → `settings.update`), the view
+  switch (Board / List) and *New card*, an inline title field → `card.create`, then the new card in Peek.
+- **Adaptive by its own pane's width** (a `ResizeObserver`, `boardLayout`): from 720 px the columns sit side
+  by side (`data-layout="columns"`), below that they stack into one list grouped by column (`stacked`).
+  Triage and Canceled show only while they hold cards.
+- **A card** shows its id, type, size (a suggested one marked `M?`), title, the agent badge of its latest
+  open attempt (`agentBadge`: working, waiting for you, failed — interrupted included —, finished, finished ·
+  unread; `feedback-*` / `primary` tokens), the plan's progress, the diff, the PR chip and the cards
+  blocking it. *Start* shows on a backlog or unstarted card with no open attempt and starts it with the
+  size's workflow and the host's defaults; the host's toast reports a kickoff that failed.
+- **Moving**: cards drag between columns with `@dnd-kit/core` (pointer within a column; a drag overlay) →
+  `card.move`, the logged override. A card is a focusable button: Enter or a click peeks it, a double click
+  enters its open attempt's workspace (`PanelHost.openWorkspace`), and the local commands
+  `board.moveLeft` / `board.moveRight` (Alt+← / Alt+→ in scope `board.cards`, rebindable) move it one
+  shown column, focus following the card.
+- **List** view: one table (id, title, column, size, agent, plan, PR) sorted by column then rank, or by
+  rank; a title peeks its card.
+
+**The card in Peek** is the `card` panel (scope `session`: it opens only from the board, with params
+`{ projectId, cardId }`, the crumb named `<id> · <title>`). It reads `card.get` and re-reads on
+`board.changed`:
+
+- the title (saved on Enter or blur), type, size — a suggested size gets *Confirm size*, which re-saves it
+  so it is no longer a suggestion —, the description, the acceptance criteria and spec refs (add / remove),
+  the cards it blocks (picked from the board) and those blocking it;
+- the attempts, each with its workflow, start time, live badge, plan, PR and notes, and *Open workspace* /
+  *Open chat* while its workspace is open;
+- **Start**: workflow (the size's by default: S, bugs and unsized → Implement; M / L → Brainstorm → build;
+  re-derived when the size or type changes), model and effort (*Default* = the host's new-chat choice;
+  `models.list`, the effort list narrowed to the model's levels), base (empty = the project's default) →
+  `card.start`, showing a refusal or a returned `kickoffError`;
+- the activity from the transitions, newest first (*Created in Backlog*, *Backlog → Ready by you* with the
+  host's reason), and *Delete card* behind a confirm.
+
+Its UI text is `board.*` keys.
 
 ## Agent tools
 
@@ -192,13 +244,22 @@ Their guidelines say two things:
   - the rules wired to a fake host's events and Triage-only creation by the tools.
 - **Host-level**: `packages/server/src/host/extensionEventsWire.test.ts` covers the gated
   `extension.event` push and the host service following the Settings switch.
+- **Web** (`web/*.test.ts(x)`): the agent badge by overlay state, Start's offer and its defaults by size,
+  the drop → `card.move` call, Alt+arrow steps, the list sort, the adaptive layout and the rendered tile,
+  columns, list and empty board.
+- **No-agent e2e** (`e2e/board.spec.ts`): open the Board tool, create a card into Backlog, edit it in Peek,
+  Start it (a worktree and a chat; the kickoff text captured from `workspace.creationChanged`, no model
+  needed), the card in Building; a drag and Alt+→ logged as overrides; List view; the Solo preset; the
+  extension switched off → the disabled placeholder in the same pane, through a reload.
 
 ## Deferrals
 
 These land later:
 
-- the web half (panel, Peek card, inbox counter, Board mode);
+- the inbox and its topbar counter (`statusItems`), Board mode (`layoutPresets`), a palette command for the
+  Board tool, and follow selection;
+- cost / time per card;
 - task-spec and GitHub sources;
-- a last-action fact;
+- a last-action fact, and the last action on a card;
 - removing a "blocks" link from the tools;
 - an initiative's `into` (D / G).

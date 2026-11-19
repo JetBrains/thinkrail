@@ -1,4 +1,5 @@
 import type {
+	BuiltinLayoutToolId,
 	LayoutPreset,
 	LayoutPresetBottomRegion,
 	LayoutPresetCenterNode,
@@ -133,9 +134,9 @@ export function layoutPresetName(t: Translator, preset: LayoutPreset): string {
 	return key ? t(key) : preset.name;
 }
 
-export function presetPlacesTool(preset: LayoutPreset, tool: LayoutToolId): boolean {
-	return [preset.left, preset.right, preset.bottom].some((region) =>
-		region.groups.some((group) => group.tools.includes(tool)),
+export function presetTools(preset: LayoutPreset): LayoutToolId[] {
+	return [preset.left, preset.right, preset.bottom].flatMap((region) =>
+		region.groups.flatMap((group) => group.tools),
 	);
 }
 
@@ -159,7 +160,7 @@ export function resolveLayoutPreset(
 	return resolved;
 }
 
-function presetRestoreSide(preset: LayoutPreset, tool: LayoutToolId) {
+function presetRestoreSide(preset: LayoutPreset, tool: BuiltinLayoutToolId) {
 	const side = LAYOUT_TOOL_DEFAULT_SIDES[tool];
 	return side === "right" && preset.right.groups.length === 0 ? "left" : side;
 }

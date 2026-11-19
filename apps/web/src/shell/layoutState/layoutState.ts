@@ -1,4 +1,4 @@
-import type { LayoutPreset } from "@thinkrail/contracts";
+import { isLayoutToolId, type LayoutPreset } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { useEffect, useLayoutEffect } from "react";
 import { getStablePreferenceAdapter, type StablePreferenceAdapter } from "../../clientPreferences";
@@ -21,7 +21,6 @@ import {
 	emptyWorkspaceView,
 	ensureWorkbenchToolPlacementIds,
 	instantiateWorkbenchFrame,
-	LAYOUT_TOOLS,
 	minimumBottomGroupLimit,
 	minimumSideGroupLimit,
 	normalizePeekWidth,
@@ -39,7 +38,6 @@ const LOCAL_LAYOUT_VERSION = 1;
 const SURFACE_ID_KEY = "thinkrail:layout-surface-id";
 const NATIVE_LAYOUT_PREFERENCE_KEY = "workbench-layout";
 const NATIVE_LAYOUT_MAX_CHARACTERS = 256 * 1024;
-const TOOL_IDS = new Set<string>(LAYOUT_TOOLS);
 
 interface PersistedLocalLayout {
 	version: 1;
@@ -285,8 +283,7 @@ function isResourceFreeFrame(value: unknown): value is WorkbenchFrame {
 						tool.kind !== "tool" ||
 						typeof tool.id !== "string" ||
 						typeof tool.name !== "string" ||
-						typeof tool.tool !== "string" ||
-						!TOOL_IDS.has(tool.tool),
+						!isLayoutToolId(tool.tool),
 				)
 			) {
 				return false;
@@ -295,7 +292,7 @@ function isResourceFreeFrame(value: unknown): value is WorkbenchFrame {
 	}
 	if (!isRecord(value.toolRestoreTargets)) return false;
 	return Object.entries(value.toolRestoreTargets).every(([tool, candidate]) => {
-		if (!TOOL_IDS.has(tool) || !isRecord(candidate)) return false;
+		if (!isLayoutToolId(tool) || !isRecord(candidate)) return false;
 		return (
 			hasOnlyKeys(candidate, ["region", "groupId", "index"]) &&
 			(candidate.region === "left" ||

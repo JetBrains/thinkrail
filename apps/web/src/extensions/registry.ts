@@ -1,4 +1,6 @@
+import { type ExtensionLayoutToolId, extensionLayoutToolId } from "@thinkrail/contracts";
 import askUserQuestion from "@thinkrail/ext-ask-user-question/web";
+import board from "@thinkrail/ext-board/web";
 import hintMode from "@thinkrail/ext-hint-mode/web";
 import nextSteps from "@thinkrail/ext-next-steps/web";
 import sessionInsights from "@thinkrail/ext-session-insights/web";
@@ -6,6 +8,7 @@ import visualize from "@thinkrail/ext-visualize/web";
 import type {
 	ExtensionCommand,
 	PanelDeclaration,
+	SideToolDeclaration,
 	WebExtension,
 } from "@thinkrail/extension-api/web";
 import { registerToolRenderer } from "../chat/toolRegistry";
@@ -16,6 +19,7 @@ export const webExtensions: readonly WebExtension[] = [
 	hintMode,
 	nextSteps,
 	sessionInsights,
+	board,
 ];
 
 export interface RegisteredPanel {
@@ -61,7 +65,8 @@ export function webOnlyExtensions(
 		const webOnly =
 			title !== undefined &&
 			extension.toolRenderers === undefined &&
-			extension.panels === undefined;
+			extension.panels === undefined &&
+			extension.sideTools === undefined;
 		return webOnly && !serverNames.has(extension.name) ? [{ ...extension, title }] : [];
 	});
 }
@@ -90,4 +95,38 @@ export function findExtensionPanel(
 	return extensionPanels(extensions).find(
 		(candidate) => candidate.extension === extension && candidate.panel === panel,
 	);
+}
+
+export interface RegisteredSideTool {
+	extension: string;
+	tool: string;
+	/** The layout's singleton tool id, `ext:<extension>:<tool>`. */
+	id: ExtensionLayoutToolId;
+	declaration: SideToolDeclaration;
+}
+
+function collectSideTools(extensions: readonly WebExtension[]): readonly RegisteredSideTool[] {
+	return extensions.flatMap((extension) =>
+		Object.entries(extension.sideTools ?? {}).map(([tool, declaration]) => ({
+			extension: extension.name,
+			tool,
+			id: extensionLayoutToolId(extension.name, tool),
+			declaration,
+		})),
+	);
+}
+
+const registeredSideTools = collectSideTools(webExtensions);
+
+export function extensionSideTools(
+	extensions?: readonly WebExtension[],
+): readonly RegisteredSideTool[] {
+	return extensions ? collectSideTools(extensions) : registeredSideTools;
+}
+
+export function findExtensionSideTool(
+	id: string,
+	extensions?: readonly WebExtension[],
+): RegisteredSideTool | undefined {
+	return extensionSideTools(extensions).find((candidate) => candidate.id === id);
 }

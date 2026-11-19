@@ -1,7 +1,7 @@
 import { type Translator, t as translate, useT } from "@thinkrail/locales/react";
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import type { RegisteredPanel } from "../extensions";
+import { extensionSideTools, type RegisteredPanel, type RegisteredSideTool } from "../extensions";
 import { type ChatAction, type ChatActionTarget, chatDisplayName } from "../lib";
 import {
 	selectChatFirstPrompt,
@@ -11,9 +11,12 @@ import {
 	selectWorkspaceById,
 	useAppStore,
 } from "../store";
+import { supportsExtensionQuery } from "../transport";
 import {
+	openableContributions,
 	openExtensionPanel,
 	openExtensionPanelHere,
+	useExtensionCatalog,
 	useOpenableExtensionPanels,
 } from "./extensionPanelHost";
 import { useKeybindingKeys } from "./keybindingState";
@@ -22,6 +25,7 @@ import {
 	type AuxiliaryRailControlProps,
 	type AuxiliaryRailFooterItem,
 	type ChatTabActions,
+	type LayoutToolCatalog,
 } from "./layout";
 import { renderShortcutsRailButton } from "./ShortcutsDialog";
 
@@ -137,4 +141,37 @@ export function useLeftRailFooter(): readonly AuxiliaryRailFooterItem[] {
 		(state) => state.activeWorkspaceId !== null || selectContextRepoProject(state) !== null,
 	);
 	return useMemo(() => railFooterItems(panels, placeable), [panels, placeable]);
+}
+
+/** The layout's description of the extensions' side tools; only an openable one waits unplaced in its rail. */
+function layoutExtensionTools(
+	tools: readonly RegisteredSideTool[],
+	openable: readonly RegisteredSideTool[],
+): LayoutToolCatalog {
+	return Object.fromEntries(
+		tools.map((tool) => [
+			tool.id,
+			{
+				titleKey: tool.declaration.title,
+				icon: tool.declaration.icon,
+				defaultSide: tool.declaration.defaultSide,
+				offered: openable.includes(tool),
+			},
+		]),
+	);
+}
+
+export function useLayoutExtensionTools(): LayoutToolCatalog {
+	const protocolVersion = useAppStore((state) => state.protocolVersion);
+	const disabled = useAppStore((state) => state.disabledExtensions);
+	const tools = extensionSideTools();
+	const { read } = useExtensionCatalog(tools.length > 0 && supportsExtensionQuery(protocolVersion));
+	return useMemo(
+		() =>
+			layoutExtensionTools(
+				tools,
+				openableContributions({ disabled, protocolVersion, catalog: read, items: tools }),
+			),
+		[disabled, protocolVersion, read, tools],
+	);
 }

@@ -19,6 +19,7 @@ import {
 	LAYOUT_TOOLS,
 	type LayoutOperationResult,
 	layoutTabName,
+	layoutToolDefaultSide,
 	moveTabToGroup,
 	openCenterTab,
 	reconcileAttention,
@@ -51,6 +52,7 @@ import type {
 	LayoutExtensionTab,
 	LayoutFileTab,
 	LayoutTerminalTab,
+	LayoutToolCatalog,
 	WorkspaceLayoutDocument,
 } from "./types";
 
@@ -654,6 +656,38 @@ describe("workspace layout model", () => {
 
 		const placedAgain = mutation(revealTool(document, "files", 6)).document;
 		expect(unplacedToolsForRegion(placedAgain, "right")).not.toContain("files");
+	});
+
+	test("an extension's side tool waits unplaced at its default side only while offered, and reveals there", () => {
+		const icon = () => null;
+		const offered: LayoutToolCatalog = {
+			"ext:board:board": { titleKey: "board.tool.title", icon, defaultSide: "left", offered: true },
+			"ext:notes:list": { titleKey: "notes.missing", icon, defaultSide: "right", offered: true },
+			"ext:off:tool": { titleKey: "board.tool.title", icon, defaultSide: "left", offered: false },
+		};
+		const document = baseDocument();
+		expect(unplacedTools(document)).not.toContain("ext:board:board");
+		expect(unplacedToolsForRegion(document, "left", offered)).toEqual([
+			"orchestrator",
+			"ext:board:board",
+		]);
+		expect(unplacedToolsForRegion(document, "right", offered)).toContain("ext:notes:list");
+		expect(unplacedTools(document, offered)).not.toContain("ext:off:tool");
+
+		const revealed = mutation(revealTool(document, "ext:notes:list", 6, 3, offered)).document;
+		expect(revealed.right.groups.map((group) => group.tabs.map((tab) => tab.id))).toEqual([
+			["tool:files"],
+			["tool:ext:notes:list"],
+		]);
+		const closed = closeLayoutTab(revealed, "tool:ext:notes:list").document;
+		expect(closed.toolRestoreTargets["ext:notes:list"]).toMatchObject({ region: "right" });
+		expect(validateLayoutDocument(revealed, 6)).toEqual([]);
+
+		const t = currentTranslator();
+		expect(layoutTabName(t, toolTab("ext:board:board"), undefined, offered)).toBe("Board");
+		expect(layoutTabName(t, toolTab("ext:notes:list"), undefined, offered)).toBe("list");
+		expect(layoutTabName(t, toolTab("ext:gone:tool"))).toBe("tool");
+		expect(layoutToolDefaultSide("ext:gone:tool")).toBe("left");
 	});
 
 	test("an empty side shows only a tool that restores there, and is otherwise unavailable", () => {

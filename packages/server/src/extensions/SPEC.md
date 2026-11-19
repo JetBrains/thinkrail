@@ -101,15 +101,15 @@ list for registry extensions.
   `ExtensionSessionServices`, `InteractiveTool`, `ArtifactTool`, `ToolResponse`, `createExtensionQueries`,
   `ExtensionQueries`, `ExtensionHostServicesFor`, `ExtensionHostServices`, `ExtensionSessionView`, `ExtensionSessionPlacement`,
   `ExtensionHostProject`, `ExtensionHostWorkspace`, `ExtensionSessionStatus`, `ExtensionMessageAnchor`,
-  `ExtensionTurnReceipt`, `ExtensionTurnTree`, `ExtensionTreeFile`, `ExtensionArtifactsDir`, `ExtensionLog`,
-  `ExtensionQuery`, `ExtensionHostActions`, `ExtensionHostEvents`, `ExtensionHostEventType`,
+  `ExtensionModel`, `ExtensionTurnReceipt`, `ExtensionTurnTree`, `ExtensionTreeFile`, `ExtensionArtifactsDir`,
+  `ExtensionLog`, `ExtensionQuery`, `ExtensionHostActions`, `ExtensionHostEvents`, `ExtensionHostEventType`,
   `ExtensionHostEventBus`, `ExtensionPublishScope`, `ExtensionWorkspaceFacts`, `ExtensionChatFacts`,
   `ExtensionHostService`.
 - **Session-seam types:** `ExtensionSessionServices`, `InteractiveTool` and `ToolResponse` are re-exported
   from `extension-api/server` so that `agent` can type the services it builds through this barrel.
 - **Query-seam types:** `ExtensionHostServices` and its value types (`ExtensionSessionView`,
   `ExtensionSessionPlacement`, `ExtensionHostProject`, `ExtensionHostWorkspace`, `ExtensionSessionStatus`,
-  `ExtensionMessageAnchor`, `ExtensionTurnReceipt`, `ExtensionTurnTree`, `ExtensionTreeFile`,
+  `ExtensionMessageAnchor`, `ExtensionModel`, `ExtensionTurnReceipt`, `ExtensionTurnTree`, `ExtensionTreeFile`,
   `ExtensionArtifactsDir`, `ExtensionLog`, `ExtensionQuery`, and the action, event and facts types —
   `ExtensionHostActions`, `ExtensionHostEvents`, `ExtensionHostEventType`, `ExtensionHostEventBus`,
   `ExtensionPublishScope`, `ExtensionWorkspaceFacts`, `ExtensionChatFacts`, `ExtensionHostService`) are

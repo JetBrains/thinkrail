@@ -544,7 +544,10 @@ gate: [[module-contracts]].
   same display projection `session.getMessages` sends, or its nearest shown ancestor — so the chat jump
   never needs a second copy of that pi mirror; `contextWindow(provider, model)` reads the active pi
   runtime's `getModel(...).contextWindow` (catalog plus `models.json` overrides and custom endpoints),
-  `null` when the runtime has no such model or fails; `turnReceipts(sessionId)` gathers that session's
+  `null` when the runtime has no such model or fails; `models()` is `listSettledModels` — the models a
+  new chat can use, the New Workspace dialog's picker — as `ExtensionModel`s (`provider/id`, the catalog
+  name, the provider and its thinking levels), the ids `createWorkspace`'s `resolveModel` accepts;
+  `turnReceipts(sessionId)` gathers that session's
   `turns` receipts across the registered workspaces (`listTurns`), oldest first, paths as git reported
   them; `turnTree(sessionId, startedAt, limits)` finds that receipt and reads its `headTree` from the
   workspace's repository (`git ls-tree -r --long`, regular files only — no links or submodules —, then
