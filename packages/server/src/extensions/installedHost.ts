@@ -19,13 +19,15 @@ export interface InstalledExtensionsHostOptions {
 	/** The user's pi `npmCommand`, read at each install. */
 	npmCommand?: NpmCommand;
 	installer?: ExtensionInstaller;
+	/** The names of the host's own named inline extensions (pi's built-in slots it supplies), also reserved. */
+	hostExtensionNames?: readonly string[];
 }
 
 /** Starts the host's installed-extension runtime: watches `extensions.json` and reconciles in the background. */
 export function startInstalledExtensions(options: InstalledExtensionsHostOptions): () => void {
 	const runtime = new InstalledExtensions({
 		dataDir: options.dataDir,
-		reservedNames: builtinExtensionNames,
+		reservedNames: () => [...builtinExtensionNames(), ...(options.hostExtensionNames ?? [])],
 		skillRoots: skillPackageRoots,
 		onChange: options.onChange,
 		toolNames: extensionToolNames,

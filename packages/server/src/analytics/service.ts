@@ -38,6 +38,8 @@ export interface AnalyticsOptions {
 	posthogHost?: string;
 	appRoot?: string;
 	remapBase?: string;
+	/** Folders of third-party code whose frames stay external even inside `appRoot`. */
+	foreignFrameRoots?: () => readonly string[];
 	mute?: boolean;
 	additionalEnabled: boolean;
 	env?: AnalyticsEnv;
@@ -123,6 +125,7 @@ export function initializeAnalyticsWithSinkFactoryForTests(
 				frames: {
 					...(options.appRoot ? { appRoot: options.appRoot } : {}),
 					...(options.remapBase ? { remapBase: options.remapBase } : {}),
+					...(options.foreignFrameRoots ? { foreignRoots: options.foreignFrameRoots } : {}),
 				},
 				...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
 			});

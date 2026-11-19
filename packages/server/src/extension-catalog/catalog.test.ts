@@ -22,7 +22,6 @@ const WEATHER = {
 	author: "Jane Doe",
 	api: "1.0",
 	halves: ["server", "web"] as ExtensionHalf[],
-	image: "https://example.com/preview.png",
 	install: "npm:thinkrail-ext-weather",
 	npm: "https://www.npmjs.com/package/thinkrail-ext-weather",
 	repository: "https://github.com/jane/thinkrail-ext-weather",
@@ -72,6 +71,16 @@ describe("parseExtensionCatalog", () => {
 		expect(catalog?.extensions).toEqual([REVIEW, WEATHER]);
 	});
 
+	test.each([
+		["https", "https://example.com/preview.png"],
+		["plain http", "http://x/y.png"],
+		["not a URL", 42],
+	])("accepts a listing with a %s image and never passes the image on", (_label, image) => {
+		const catalog = parseExtensionCatalog({ ...CATALOG, extensions: [{ ...WEATHER, image }] });
+		expect(catalog?.extensions).toEqual([WEATHER]);
+		expect(catalog?.extensions[0]).not.toHaveProperty("image");
+	});
+
 	test("drops fields it does not know instead of failing", () => {
 		const catalog = parseExtensionCatalog({
 			...CATALOG,
@@ -87,7 +96,6 @@ describe("parseExtensionCatalog", () => {
 		["install not npm:<name>", { ...CATALOG, extensions: [{ ...REVIEW, install: "npm:other" }] }],
 		["an unknown half", { ...CATALOG, extensions: [{ ...REVIEW, halves: ["web", "cli"] }] }],
 		["no halves", { ...CATALOG, extensions: [{ ...REVIEW, halves: [] }] }],
-		["a non-https image", { ...CATALOG, extensions: [{ ...WEATHER, image: "http://x/y.png" }] }],
 		["a duplicate name", { ...CATALOG, extensions: [REVIEW, REVIEW] }],
 		["a bad package name", { ...CATALOG, extensions: [{ ...REVIEW, name: "Bad Name" }] }],
 		["a non-string api", { ...CATALOG, extensions: [{ ...REVIEW, api: 1 }] }],

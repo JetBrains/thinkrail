@@ -34,6 +34,10 @@ function entry(name: string, parents: number, children = 0): ServerExtensionEntr
 	};
 }
 
+function installed(name: string, parents: number): ServerExtensionEntry {
+	return { ...entry(name, parents), installed: { skillRoots: [] } };
+}
+
 async function registered(inline: InlineExtension): Promise<string[]> {
 	const tools: string[] = [];
 	const pi = { registerTool: (tool: { name: string }) => tools.push(tool.name) };
@@ -56,6 +60,15 @@ describe("registryInlineExtensions", () => {
 		expect(registryInlineExtensions("childExtensions", undefined, entries).map(nameOf)).toEqual([
 			"multi",
 		]);
+	});
+
+	it("names an installed extension's factories in their own namespace", () => {
+		expect(
+			registryInlineExtensions("extensions", undefined, [
+				installed("mcp", 1),
+				installed("two", 2),
+			]).map(nameOf),
+		).toEqual(["ext:mcp", "ext:two#1", "ext:two#2"]);
 	});
 
 	it("decides at load time whether a factory registers anything", async () => {
@@ -312,6 +325,15 @@ describe("registryExtensionName", () => {
 		expect(registryExtensionName("<inline:3>", entries)).toBeUndefined();
 		expect(registryExtensionName("/disk/solo.ts", entries)).toBeUndefined();
 	});
+
+	it("never confuses an installed extension with a built-in or a host inline of the same name", () => {
+		const mixed = [entry("solo", 1), installed("mcp", 1), installed("solo", 1)];
+		expect(registryExtensionName("<inline:mcp>", mixed)).toBeUndefined();
+		expect(registryExtensionName("<inline:ext:mcp>", mixed)).toBe("mcp");
+		expect(registryExtensionName("<inline:ext:mcp#2>", mixed)).toBe("mcp");
+		expect(registryExtensionName("<inline:solo>", [installed("solo", 1)])).toBeUndefined();
+		expect(registryExtensionName("<inline:ext:solo>", [entry("solo", 1)])).toBeUndefined();
+	});
 });
 
 describe("preferRegistryTools", () => {
@@ -357,25 +379,35 @@ describe("preferRegistryTools", () => {
 	const ownerOf = (next: LoadExtensionsResult, tool: string) =>
 		next.extensions.find((extension) => extension.tools.has(tool))?.path;
 
-	it("never moves a later registry extension ahead of an earlier one it promotes past", () => {
-		const registry = [entry("asker", 0), entry("weather-ext", 0)];
+	it("never promotes an installed extension: a pi package keeps its tool and a built-in its own", () => {
+		const registry = [entry("asker", 0), installed("weather-ext", 0)];
+		const loadedSet = result(
+			loaded("/user/pi-weather.ts", ["weather"]),
+			loaded("<inline:asker>", ["ask_user_question"]),
+			loaded("<inline:3>", ["host"]),
+			loaded("<inline:ext:weather-ext>", ["weather", "ask_user_question"]),
+		);
+		const next = preferRegistryTools(loadedSet, registry);
+		expect(next).toBe(loadedSet);
+		expect(ownerOf(next, "ask_user_question")).toBe("<inline:asker>");
+		expect(ownerOf(next, "weather")).toBe("/user/pi-weather.ts");
+	});
+
+	it("moves a built-in past a rival without carrying an installed extension along", () => {
+		const registry = [entry("asker", 0), installed("weather-ext", 0)];
 		const next = preferRegistryTools(
 			result(
-				loaded("/user/pi-weather.ts", ["weather"]),
+				loaded("/user/pi-asker.ts", ["ask_user_question"]),
 				loaded("<inline:asker>", ["ask_user_question"]),
-				loaded("<inline:3>", ["host"]),
-				loaded("<inline:weather-ext>", ["weather", "ask_user_question"]),
+				loaded("<inline:ext:weather-ext>", ["ask_user_question"]),
 			),
 			registry,
 		);
 		expect(paths(next)).toEqual([
 			"<inline:asker>",
-			"<inline:weather-ext>",
-			"/user/pi-weather.ts",
-			"<inline:3>",
+			"/user/pi-asker.ts",
+			"<inline:ext:weather-ext>",
 		]);
-		expect(ownerOf(next, "ask_user_question")).toBe("<inline:asker>");
-		expect(ownerOf(next, "weather")).toBe("<inline:weather-ext>");
 	});
 
 	it("keeps the first of two registry extensions ahead when a rival contests the second", () => {

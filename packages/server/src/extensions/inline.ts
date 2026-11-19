@@ -14,6 +14,8 @@ export type ExtensionSettingValue = (extension: string, key: string) => boolean 
 
 const never: ExtensionDisabled = () => false;
 const noValues: ExtensionSettingValue = () => undefined;
+const INSTALLED_INLINE_PREFIX = "ext:";
+const INLINE_PATH = new RegExp(`^<inline:(${INSTALLED_INLINE_PREFIX})?([^#>]+)(?:#\\d+)?>$`);
 
 export function extensionSessionServices(
 	extension: ServerExtension,
@@ -101,9 +103,10 @@ export function registryInlineExtensions(
 ): InlineExtension[] {
 	return entries.flatMap((entry) => {
 		const { name } = entry.extension;
+		const inlineName = entry.installed ? `${INSTALLED_INLINE_PREFIX}${name}` : name;
 		const factories = factoriesOf(entry, kind, session, settingValue);
 		return factories.map((factory, index) => ({
-			name: factories.length === 1 ? name : `${name}#${index + 1}`,
+			name: factories.length === 1 ? inlineName : `${inlineName}#${index + 1}`,
 			factory: async (pi) => {
 				if (isDisabled(name)) return;
 				if (!entry.installed) return factory(pi);
@@ -122,9 +125,12 @@ export function registryExtensionName(
 	path: string,
 	entries: readonly ServerExtensionEntry[] = serverExtensions(),
 ): string | undefined {
-	const match = /^<inline:([^#>]+)(?:#\d+)?>$/.exec(path);
+	const match = INLINE_PATH.exec(path);
 	if (!match) return undefined;
-	return entries.find((entry) => entry.extension.name === match[1])?.extension.name;
+	const installed = match[1] !== undefined;
+	return entries.find(
+		(entry) => (entry.installed !== undefined) === installed && entry.extension.name === match[2],
+	)?.extension.name;
 }
 
 export function omitDisabledRegistryExtensions(
@@ -143,15 +149,16 @@ export function preferRegistryTools(
 	result: LoadExtensionsResult,
 	entries: readonly ServerExtensionEntry[] = serverExtensions(),
 ): LoadExtensionsResult {
-	const isRegistry = (path: string) => registryExtensionName(path, entries) !== undefined;
+	const builtins = entries.filter((entry) => !entry.installed);
+	const isBuiltin = (path: string) => registryExtensionName(path, builtins) !== undefined;
 	const ordered = [...result.extensions];
 	for (const ours of result.extensions) {
-		if (!isRegistry(ours.path)) continue;
+		if (!isBuiltin(ours.path)) continue;
 		const at = ordered.indexOf(ours);
 		const rival = ordered.findIndex(
 			(other, index) =>
 				index < at &&
-				!isRegistry(other.path) &&
+				!isBuiltin(other.path) &&
 				[...other.tools.keys()].some((name) => ours.tools.has(name)),
 		);
 		if (rival < 0) continue;
@@ -159,8 +166,8 @@ export function preferRegistryTools(
 		ordered.splice(
 			rival,
 			span.length,
-			...span.filter((other) => isRegistry(other.path)),
-			...span.filter((other) => !isRegistry(other.path)),
+			...span.filter((other) => isBuiltin(other.path)),
+			...span.filter((other) => !isBuiltin(other.path)),
 		);
 	}
 	return ordered.every((extension, index) => extension === result.extensions[index])

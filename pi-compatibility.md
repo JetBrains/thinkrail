@@ -237,18 +237,27 @@ restart and toggle-reload regressions on upgrades.
   test catches that. If only the "behavior the patch keeps" group fails, pi changed that behavior: decide
   whether to follow it before porting anything.
 - **Registry tool precedence** — [[submodule-server-extensions]], `preferRegistryTools` in the session
-  loader's `extensionsOverride`. It relies on three pi facts:
+  loader's `extensionsOverride`, and the composition order around it. It relies on three pi facts:
   - pi keeps every extension and gives a tool name to its first registration
     (`ExtensionRunner.getAllRegisteredTools`);
   - path extensions (user packages) load before inline factories;
   - tool conflicts are reported only between extensions, before the override runs.
 
-  The override moves a ThinkRail registry extension ahead of the first user package registering one of
-  its tool names (with the registry extensions between them, keeping registry order), so a same-name package such as rpiv's `ask_user_question` cannot take over the card,
-  mailbox and repair that key on the name. Remove it when pi offers an inline-extension precedence or
-  replace option. Re-verify the three facts in the installed dist, and run the collision tests in
+  The override moves a **built-in** registry extension ahead of the first user package registering one
+  of its tool names (with the built-ins between them, keeping their order), so a same-name package such as rpiv's `ask_user_question` cannot take over the card,
+  mailbox and repair that key on the name. An installed extension is never promoted: it is composed
+  after every host-owned inline factory, so by the first fact any host tool (a built-in's, a host
+  factory's, a session extra's, an MCP tool of the `builtin:mcp` path) beats it, and by the second a
+  user's pi package beats it on a shared tool name — the pi package's tool wins, both extensions' other
+  tools stay. A fourth fact closes the gap order cannot: pi drops a **replaceable `builtin:` slot** when
+  any non-replaceable extension registers one of its names (`omitReplacedExtensions`), and loads the
+  slots before every inline factory; the session loader records the names the host's slots (`mcp`,
+  `tool-search`) register and refuses those registrations to an installed extension, so
+  `tool_search` and `/mcp` stay the host's. Remove it when pi offers an inline-extension precedence or
+  replace option. Re-verify the four facts in the installed dist, and run the collision tests in
   `agentSessionManager.test.ts` (same-name questionnaire before and after reload, and a chat created with
-  ours off that re-enables it over the package) on every upgrade.
+  ours off that re-enables it over the package) and `agent/extensions.test.ts` (an installed extension
+  registering every class of host name) on every upgrade.
 - **Provider-registration provenance** — [[submodule-server-agent]], `recordProviderOwners` in the
   session loader's `extensionsOverride` ([[module-pi-delegation]] decision #32). Pi keeps no
   provider-to-extension provenance: `LoadExtensionsResult.runtime.pendingProviderRegistrations` /

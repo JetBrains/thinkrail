@@ -1,11 +1,22 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	symlinkSync,
+	utimesSync,
+	writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
 	type ExtensionsStatus,
 	InstalledExtensions,
 	type InstalledExtensionsOptions,
+	SWEEP_MIN_AGE_MS,
 } from "./runtime";
 import { stubInstaller, tempDir, toolDescriptor, writeExtension } from "./testFixtures";
 
@@ -34,6 +45,17 @@ function setup(overrides: Partial<InstalledExtensionsOptions> = {}) {
 	const declare = (...sources: string[]) =>
 		writeFileSync(join(dataDir, "extensions.json"), JSON.stringify({ extensions: sources }));
 	return { root, dataDir, runtime, declare, changes: () => changes };
+}
+
+/** Sets every install folder's and its direct entries' mtime `ms` into the past. */
+function age(installs: string, ms: number): void {
+	const then = (Date.now() - ms) / 1000;
+	for (const dir of readdirSync(installs)) {
+		for (const entry of readdirSync(join(installs, dir))) {
+			utimesSync(join(installs, dir, entry), then, then);
+		}
+		utimesSync(join(installs, dir), then, then);
+	}
 }
 
 const stateOf = (runtime: InstalledExtensions, source: string) =>
@@ -77,6 +99,18 @@ describe("reconcile", () => {
 		expect(runtime.servers()).toEqual(record?.server ? [record.server] : []);
 		expect(runtime.servers()).toHaveLength(1);
 		expect(existsSync(join(dataDir, "extensions", "installs"))).toBe(false);
+	});
+
+	it("names every folder its code ran from, as given and resolved, even after removal", async () => {
+		const { root, runtime, declare, dataDir } = setup();
+		const folder = writeExtension(join(root, "real-weather"), { name: "weather" });
+		const link = join(root, "linked-weather");
+		symlinkSync(folder, link);
+		declare(link);
+		await runtime.reconcile();
+		declare();
+		await runtime.reconcile();
+		expect(runtime.codeRoots()).toEqual([join(dataDir, "extensions"), link, realpathSync(folder)]);
 	});
 
 	it("loads a web-only extension without a server half", async () => {
@@ -234,11 +268,30 @@ describe("reconcile", () => {
 		expect(runtime.records()).toEqual([]);
 		expect(existsSync(installed)).toBe(true);
 		expect(existsSync(join(folder, "package.json"))).toBe(true);
+		age(join(dataDir, "extensions", "installs"), SWEEP_MIN_AGE_MS + 60_000);
 		await new InstalledExtensions(baseOptions(dataDir)).reconcile();
 		expect(existsSync(installed)).toBe(false);
 		expect(existsSync(join(folder, "package.json"))).toBe(true);
 		const missing = await runtime.remove(folder).catch((error: unknown) => error);
 		expect(errorCodeOf(missing)).toBe("EXTENSION_UNKNOWN");
+	});
+
+	it("leaves an unrecorded install folder changed within a day, which another host may be filling", async () => {
+		const { dataDir } = setup();
+		const installs = join(dataDir, "extensions", "installs");
+		for (const dir of ["abandoned", "recent"]) {
+			mkdirSync(join(installs, dir, "npm", "node_modules"), { recursive: true });
+		}
+		age(installs, SWEEP_MIN_AGE_MS + 60_000);
+		const recent = join(installs, "recent");
+		const justUnder = (Date.now() - SWEEP_MIN_AGE_MS + 60_000) / 1000;
+		utimesSync(recent, justUnder, justUnder);
+		utimesSync(join(recent, "npm"), justUnder, justUnder);
+		await new InstalledExtensions(baseOptions(dataDir)).reconcile();
+		expect(readdirSync(installs)).toEqual(["recent"]);
+		age(installs, SWEEP_MIN_AGE_MS + 60_000);
+		await new InstalledExtensions(baseOptions(dataDir)).reconcile();
+		expect(readdirSync(installs)).toEqual([]);
 	});
 
 	it("never runs an incompatible extension's code", async () => {
@@ -631,6 +684,7 @@ describe("install, update and checkUpdates", () => {
 		expect(after?.state).toBe("loaded");
 		expect(after?.root).not.toBe(before?.root);
 		expect(existsSync(before?.root as string)).toBe(true);
+		age(join(dataDir, "extensions", "installs"), SWEEP_MIN_AGE_MS + 60_000);
 		await new InstalledExtensions(baseOptions(dataDir)).reconcile();
 		expect(existsSync(before?.root as string)).toBe(false);
 		expect(existsSync(after?.root as string)).toBe(true);

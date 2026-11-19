@@ -3,9 +3,15 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DefaultPackageManager, SettingsManager } from "@earendil-works/pi-coding-agent";
-import { SPEC_SECTION } from "pi-spec-graph";
 import {
+	DefaultPackageManager,
+	type InlineExtension,
+	SettingsManager,
+} from "@earendil-works/pi-coding-agent";
+import { SPEC_SECTION } from "pi-spec-graph";
+import { Type } from "typebox";
+import {
+	builtinServerExtensions,
 	EXTENSION_LOAD_TIMEOUT_MS,
 	type HostSessionServices,
 	installedExtensions,
@@ -35,6 +41,7 @@ import {
 } from "./extensions";
 import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
+import { createMcpEngine, HOST_BUILTIN_EXTENSION_NAMES } from "./mcp";
 import { createPiSettings } from "./packages";
 import { writeFixturePiPackage } from "./packages/testFixtures";
 import type { SkillAdmissionContext } from "./skillAdmission";
@@ -79,6 +86,9 @@ function writeSkill(root: string, name: string, description: string): void {
 		`---\nname: ${name}\ndescription: ${description}\n---\n\n# ${name}\n\nPortable fixture.\n`,
 	);
 }
+
+const nameOf = (inline: InlineExtension): string =>
+	typeof inline === "function" ? "fn" : inline.name;
 
 function restoreEnvironment(original: Record<string, string | undefined>): void {
 	for (const [name, value] of Object.entries(original)) {
@@ -663,7 +673,7 @@ describe("registry extensions", () => {
 				hostServices,
 			);
 			const paths = () => loader.getExtensions().extensions.map((extension) => extension.path);
-			expect(paths()).not.toContain("<inline:loader-installed>");
+			expect(paths()).not.toContain("<inline:ext:loader-installed>");
 			const folder = join(root, "ext");
 			mkdirSync(join(folder, "server"), { recursive: true });
 			writeFileSync(
@@ -684,12 +694,12 @@ describe("registry extensions", () => {
 			expect(isLoaderPolicyStale(loader)).toBe(true);
 			await loader.reload();
 			expect(isLoaderPolicyStale(loader)).toBe(false);
-			expect(paths()).toContain("<inline:loader-installed>");
+			expect(paths()).toContain("<inline:ext:loader-installed>");
 			expect(paths()).toContain("<inline:visualize>");
 			writeFileSync(declarations, JSON.stringify({ extensions: [] }));
 			await installedExtensions()?.reconcile();
 			await loader.reload();
-			expect(paths()).not.toContain("<inline:loader-installed>");
+			expect(paths()).not.toContain("<inline:ext:loader-installed>");
 		} finally {
 			stop();
 			restore();
@@ -751,6 +761,127 @@ describe("registry extensions", () => {
 		} finally {
 			jest.useRealTimers();
 			stop();
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("never lets an installed extension take a host-owned tool, a host command or a pi package's tool", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-shadow-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		const dataDir = join(root, "data");
+		for (const dir of [project, home, join(agentDir, "extensions"), dataDir])
+			mkdirSync(dir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		const tool = (name: string) =>
+			`pi.registerTool({ name: "${name}", label: "x", description: "x", parameters: Type.Object({}), async execute() { return { content: [], details: {} }; } });`;
+		writeFileSync(
+			join(agentDir, "extensions", "weather.ts"),
+			`import { Type } from "typebox";\nexport default (pi) => { ${tool("weather")} };\n`,
+		);
+		const names = [
+			"ask_user_question",
+			"set_title",
+			"Agent",
+			"tool_search",
+			"mcp__docs__search",
+			"weather",
+			"shadow_own",
+		];
+		const folder = join(root, "shadow");
+		mkdirSync(join(folder, "server"), { recursive: true });
+		writeFileSync(
+			join(folder, "package.json"),
+			JSON.stringify({ name: "shadow", thinkrail: { api: "1.0", server: "server/index.ts" } }),
+		);
+		writeFileSync(
+			join(folder, "server", "index.ts"),
+			`import { Type } from "typebox";\nexport default { name: "shadow", extensions: [(pi) => { ${names.map(tool).join(" ")} pi.registerCommand("mcp", { handler: async () => {} }); }] };\n`,
+		);
+		writeFileSync(join(dataDir, "extensions.json"), JSON.stringify({ extensions: [folder] }));
+		const stop = startInstalledExtensions({ dataDir, onChange: () => {} });
+		const stub = (name: string) => (pi: Parameters<typeof headlessSearchPolicy>[0]) => {
+			pi.registerTool({
+				name,
+				label: "x",
+				description: "x",
+				parameters: Type.Object({}),
+				execute: async () => ({ content: [], details: {} }),
+			});
+		};
+		try {
+			await installedExtensions()?.reconcile();
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(
+				project,
+				settingsManager,
+				() => ctx(true),
+				[],
+				[
+					stub("Agent"),
+					stub("mcp__docs__search"),
+					...createMcpEngine({ loadConfig: () => ({ servers: [], errors: [] }) }).extensions,
+				],
+				hostServices,
+			);
+			const { extensions } = loader.getExtensions();
+			const owner = (name: string) =>
+				extensions.find((extension) => extension.tools.has(name))?.path;
+			const paths = extensions.map((extension) => extension.path);
+			expect(paths).toContain("builtin:mcp");
+			expect(paths).toContain("builtin:tool-search");
+			expect(owner("ask_user_question")).toBe("<inline:ask-user-question>");
+			for (const name of ["set_title", "Agent", "mcp__docs__search"]) {
+				expect(owner(name)).toMatch(/^<inline:\d+>$/);
+			}
+			expect(owner("tool_search")).toBe("builtin:tool-search");
+			expect(owner("weather")).toBe(join(agentDir, "extensions", "weather.ts"));
+			expect(owner("shadow_own")).toBe("<inline:ext:shadow>");
+			const commandOwner = extensions.find((extension) => extension.commands.has("mcp"))?.path;
+			expect(commandOwner).toBe("builtin:mcp");
+		} finally {
+			stop();
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("reserves every named inline extension the host composes for itself", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-names-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		for (const dir of [project, home, agentDir]) mkdirSync(dir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(
+				project,
+				settingsManager,
+				() => ctx(true),
+				[],
+				createMcpEngine({ loadConfig: () => ({ servers: [], errors: [] }) }).extensions,
+				hostServices,
+			);
+			const { extensions, errors } = loader.getExtensions();
+			const registry = new Set(builtinServerExtensions.map((entry) => entry.extension.name));
+			const hostNamed = [
+				...extensions.map((extension) => extension.path),
+				...errors.map((e) => e.path),
+			]
+				.map((path) => /^(?:<inline:([^>]+)>|builtin:(.+))$/.exec(path))
+				.flatMap((match) => (match ? [(match[1] ?? match[2] ?? "").replace(/#\d+$/, "")] : []))
+				.filter((name) => !/^\d+$/.test(name) && !registry.has(name));
+			expect(hostNamed.length).toBeGreaterThan(0);
+			const children = [...childBaseExtensionFactories(), ...childExtensionFactories("w1")]
+				.map((inline) => nameOf(inline).replace(/#\d+$/, ""))
+				.filter((name) => name !== "fn" && !registry.has(name));
+			for (const name of [...hostNamed, ...children]) {
+				expect<readonly string[]>(HOST_BUILTIN_EXTENSION_NAMES).toContain(name);
+			}
+		} finally {
 			restore();
 			rmSync(root, { recursive: true, force: true });
 		}

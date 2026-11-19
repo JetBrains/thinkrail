@@ -44,6 +44,7 @@ import {
 	disposeAllSessions,
 	getSessionAttribution,
 	getSessionWorkspaceId,
+	HOST_BUILTIN_EXTENSION_NAMES,
 	handlePiSettingsFileChanged,
 	handleProjectPiSettingsChanged,
 	initializeSessionStates,
@@ -119,7 +120,7 @@ import {
 	stopJbcentralRuntime,
 } from "../auth";
 import { forgetOpenBranchReview } from "../branch-review";
-import { artifactTools, startInstalledExtensions } from "../extensions";
+import { artifactTools, installedExtensions, startInstalledExtensions } from "../extensions";
 import {
 	configureSurveySource,
 	redeliverInvitation,
@@ -1031,6 +1032,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	const stopInstalledExtensions = startInstalledExtensions({
 		dataDir: dataDir(),
 		npmCommand: piNpmCommand,
+		hostExtensionNames: HOST_BUILTIN_EXTENSION_NAMES,
 		onChange: () => {
 			refreshInstalledExtensions();
 			publishScoped(WS_CHANNELS.extensionsChanged, {});
@@ -1246,6 +1248,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	initializeAnalytics({
 		...(appVersion ? { appVersion } : {}),
 		...(analytics ?? {}),
+		foreignFrameRoots: () => installedExtensions()?.codeRoots() ?? [join(dataDir(), "extensions")],
 		additionalEnabled: initialAdditionalAnalyticsEnabled(initialConfig),
 	});
 	configureSurveySource(surveyEndpoint());
