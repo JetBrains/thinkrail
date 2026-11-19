@@ -40,8 +40,12 @@ import {
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
 	EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION,
+	EXTENSION_EVENT_PROTOCOL_VERSION,
+	EXTENSION_MESSAGE_CUSTOM_TYPE,
 	EXTENSION_QUERY_PROTOCOL_VERSION,
 	EXTENSION_SETTINGS_PROTOCOL_VERSION,
+	type ExtensionEventPush,
+	type ExtensionMessageDetails,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
 	FS_MUTATIONS_PROTOCOL_VERSION,
@@ -871,6 +875,36 @@ test("container cards are read from their custom messages, and a malformed one i
 		null,
 	])
 		expect(readContainerNote(malformed)).toBeNull();
+});
+
+test("extension events are pinned to v130 on their own channel, after containers", () => {
+	expect(EXTENSION_EVENT_PROTOCOL_VERSION).toBe(130);
+	expect(EXTENSION_EVENT_PROTOCOL_VERSION).toBeGreaterThan(CONTAINER_PROTOCOL_VERSION);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXTENSION_EVENT_PROTOCOL_VERSION);
+	expect(WS_CHANNELS.extensionEvent).toBe("extension.event");
+	const push: ExtensionEventPush = { extension: "board", type: "board.changed", payload: {} };
+	expect(Object.keys(push)).toEqual(["extension", "type", "payload"]);
+});
+
+test("an extension's chat message reads as a host card with the extension's title", () => {
+	const custom = (details: unknown) => ({
+		role: "custom",
+		customType: EXTENSION_MESSAGE_CUSTOM_TYPE,
+		content: "framed",
+		display: true,
+		details,
+		timestamp: 1,
+	});
+	const details: ExtensionMessageDetails = {
+		extension: "board",
+		extensionTitle: "Board",
+		mode: "follow_up",
+		text: "Card TR-1 changed",
+	};
+	expect(EXTENSION_MESSAGE_CUSTOM_TYPE).toBe("extension-message");
+	expect(readContainerNote(custom(details))).toEqual({ kind: "extensionMessage", details });
+	expect(opensChatRound(custom(details))).toBe(true);
+	expect(readContainerNote(custom({ ...details, extensionTitle: 1 }))).toBeNull();
 });
 
 test("ask_user_question discuss answers are pinned to v105, after background workspace creation", () => {

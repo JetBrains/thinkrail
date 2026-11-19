@@ -146,7 +146,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 129;
+export const PROTOCOL_VERSION = 130;
+export const EXTENSION_EVENT_PROTOCOL_VERSION = 130;
 export const CONTAINER_PROTOCOL_VERSION = 129;
 export const EXTENSION_QUERY_PROTOCOL_VERSION = 128;
 export const SUBAGENT_CATALOG_PROTOCOL_VERSION = 127;
@@ -366,6 +367,13 @@ export interface ContainerRemoved {
 	id: string;
 }
 
+/** An extension server half's `host.publish`: for its own web half, which filters by `extension`. */
+export interface ExtensionEventPush {
+	extension: string;
+	type: string;
+	payload: unknown;
+}
+
 /** A container's orchestrator: its chat without a project (whose folder is the container's home) and that chat's session. */
 export interface ContainerOrchestrator {
 	container: Container;
@@ -405,11 +413,25 @@ export interface OrchestratorMessageDetails {
 	text: string;
 }
 
-/** The container cards a chat transcript shows: the brief, a wake-up, an orchestrator's message. */
+export const EXTENSION_MESSAGE_CUSTOM_TYPE = "extension-message";
+
+/** An extension's `sendToChat` host action in a chat: the extension's message, never the human's. */
+export interface ExtensionMessageDetails {
+	/** The extension's descriptor `name`. */
+	extension: string;
+	/** Its Settings title, the label the card shows. */
+	extensionTitle: string;
+	mode: "follow_up" | "steer";
+	/** The extension's own words; the message `content` frames them for the agent. */
+	text: string;
+}
+
+/** The host cards a chat transcript shows: the brief, a wake-up, an orchestrator's or an extension's message. */
 export type ContainerNote =
 	| { kind: "brief"; details: ContainerBriefDetails }
 	| { kind: "wake"; details: ContainerWakeDetails }
-	| { kind: "orchestratorMessage"; details: OrchestratorMessageDetails };
+	| { kind: "orchestratorMessage"; details: OrchestratorMessageDetails }
+	| { kind: "extensionMessage"; details: ExtensionMessageDetails };
 
 function isStringRecord(value: unknown, keys: readonly string[]): value is Record<string, string> {
 	if (!value || typeof value !== "object") return false;
@@ -444,6 +466,11 @@ export function readContainerNote(message: unknown): ContainerNote | null {
 			kind: "orchestratorMessage",
 			details: details as unknown as OrchestratorMessageDetails,
 		};
+	if (
+		m.customType === EXTENSION_MESSAGE_CUSTOM_TYPE &&
+		isStringRecord(details, ["extension", "extensionTitle", "mode", "text"])
+	)
+		return { kind: "extensionMessage", details: details as unknown as ExtensionMessageDetails };
 	return null;
 }
 
@@ -735,6 +762,7 @@ export const WS_CHANNELS = {
 	workspaceCreationRemoved: "workspace.creationRemoved",
 	containerUpdated: "container.updated",
 	containerRemoved: "container.removed",
+	extensionEvent: "extension.event",
 	chatContinuation: "chat.continuation",
 	searchTextResults: "search.textResults",
 	settingsChanged: "settings.changed",

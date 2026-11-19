@@ -44,6 +44,7 @@ describe("defineServerExtension", () => {
 		expect(extension).not.toHaveProperty("description");
 		expect(extension).not.toHaveProperty("apiVersion");
 		expect(extension).not.toHaveProperty("queries");
+		expect(extension).not.toHaveProperty("hostService");
 	});
 
 	it("keeps per-session factories as an uncalled function of the session's services", () => {
@@ -81,10 +82,23 @@ describe("defineServerExtension", () => {
 		expect(extension.apiVersion).toBe(2);
 		expect(extension.queries).toBe(queries);
 		expect(queries).not.toHaveBeenCalled();
+		const refused = async (): Promise<never> => {
+			throw new Error("not in this test");
+		};
 		const host: ExtensionHostServices = {
 			dataDir: "/data/extensions/queried",
 			log: { info: () => {}, warn: () => {} },
 			signal: new AbortController().signal,
+			actions: {
+				createWorkspace: refused,
+				sendToChat: refused,
+				stopChat: refused,
+				openPr: refused,
+				runInWorkspace: refused,
+			},
+			events: { subscribe: () => () => {} },
+			publish: () => {},
+			workspaceFacts: async () => null,
 			sessionsRoot: () => "/agent/sessions",
 			sessionScope: () => ({ projects: [], locate: () => null }),
 			childTranscriptDirs: async () => [],
@@ -98,6 +112,16 @@ describe("defineServerExtension", () => {
 		expect(extension.queries?.(host)).toEqual({ "rows.list": list });
 		expect(queries).toHaveBeenCalledWith(host);
 		expect(list).not.toHaveBeenCalled();
+	});
+
+	it("keeps a host service as an uncalled function until the host starts it", () => {
+		const stop = mock(() => {});
+		const hostService = mock((_host: ExtensionHostServices) => ({ stop }));
+		const extension = defineServerExtension({ name: "serviced", extensions: [], hostService });
+
+		expect(extension.hostService).toBe(hostService);
+		expect(hostService).not.toHaveBeenCalled();
+		expect(stop).not.toHaveBeenCalled();
 	});
 
 	it("keeps display copy beside the identity", () => {

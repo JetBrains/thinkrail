@@ -75,7 +75,14 @@ list for registry extensions.
   an `EXTENSION_DISABLED` reason, and forgets the table of every extension now off, so its background work
   stops and its memory goes; the first query after it is back on builds a new table with a fresh signal.
   The host calls it on a switch rather than the dispatcher on its next call, because a switched-off
-  extension receives no next call), and `resolveExtensionSkillRoots(entry)` (the owner-scoped skill resolver: the extension's
+  extension receives no next call), `runExtensionHostServices({ isDisabled, services, entries? })`
+  (→ `ExtensionHostServiceRunner { sync, stop }`: `sync()` calls each enabled extension's
+  `hostService(services(name, signal))` that is not running, the signal its own `AbortController`'s, and
+  stops each disabled one's, so the host calls it once its publishers are wired and again on every
+  `disabledExtensions` change; a start that throws is logged on the extension's own `log` and retried at
+  the next `sync`; `stop()` awaits every running service's `stop` (a failing one is logged) and makes later
+  `sync`s inert; after each stop the service's signal is aborted, which ends what the host holds for that
+  run alone — its event subscriptions — so a run restarted while an older `stop` is pending keeps its own), and `resolveExtensionSkillRoots(entry)` (the owner-scoped skill resolver: the extension's
   entry file from `specifier`, then each `skillPackages` manifest via `createRequire(extensionEntry)`,
   returning its `pi.skills` directories; a named package with no skills fails loudly),
   `STAGED_HOST_SKILLS_ROUTE` (`host`) and `stagedExtensionSkillRoute(name)` (`extensions/<name>`) — the
@@ -88,21 +95,26 @@ list for registry extensions.
   `RegistryExtensionKind`, `ExtensionDisabled`, `omitDisabledRegistryExtensions`, `omitSupersededPackages`, `preferRegistryTools`,
   `registryExtensionName`, `extensionSessionServices`, `HostSessionServices`, `ExtensionSettingValue`,
   `checkWorkspaceFile`, `workspaceFiles`, `MOCKUP_DIR`, `supersedablePackagesIn`, `supersedingExtension`,
-  `listExtensionCatalog`,
+  `listExtensionCatalog`, `runExtensionHostServices`, `ExtensionHostServiceRunner`,
   `resolveExtensionSkillRoots`, `STAGED_HOST_SKILLS_ROUTE`, `stagedExtensionSkillRoute`,
   `extensionSkillRoots`, `interactiveTools`, `InteractiveTools`, `artifactTools`, `ArtifactTools`,
   `ExtensionSessionServices`, `InteractiveTool`, `ArtifactTool`, `ToolResponse`, `createExtensionQueries`,
   `ExtensionQueries`, `ExtensionHostServicesFor`, `ExtensionHostServices`, `ExtensionSessionView`, `ExtensionSessionPlacement`,
   `ExtensionHostProject`, `ExtensionHostWorkspace`, `ExtensionSessionStatus`, `ExtensionMessageAnchor`,
   `ExtensionTurnReceipt`, `ExtensionTurnTree`, `ExtensionTreeFile`, `ExtensionArtifactsDir`, `ExtensionLog`,
-  `ExtensionQuery`.
+  `ExtensionQuery`, `ExtensionHostActions`, `ExtensionHostEvents`, `ExtensionHostEventType`,
+  `ExtensionHostEventBus`, `ExtensionPublishScope`, `ExtensionWorkspaceFacts`, `ExtensionChatFacts`,
+  `ExtensionHostService`.
 - **Session-seam types:** `ExtensionSessionServices`, `InteractiveTool` and `ToolResponse` are re-exported
   from `extension-api/server` so that `agent` can type the services it builds through this barrel.
 - **Query-seam types:** `ExtensionHostServices` and its value types (`ExtensionSessionView`,
   `ExtensionSessionPlacement`, `ExtensionHostProject`, `ExtensionHostWorkspace`, `ExtensionSessionStatus`,
   `ExtensionMessageAnchor`, `ExtensionTurnReceipt`, `ExtensionTurnTree`, `ExtensionTreeFile`,
-  `ExtensionArtifactsDir`, `ExtensionLog`, `ExtensionQuery`) are re-exported the same way, beside `ExtensionHostServicesFor`, so
-  `host` builds each extension's services through this barrel. This module never builds them: the
+  `ExtensionArtifactsDir`, `ExtensionLog`, `ExtensionQuery`, and the action, event and facts types —
+  `ExtensionHostActions`, `ExtensionHostEvents`, `ExtensionHostEventType`, `ExtensionHostEventBus`,
+  `ExtensionPublishScope`, `ExtensionWorkspaceFacts`, `ExtensionChatFacts`, `ExtensionHostService`) are
+  re-exported the same way, beside `ExtensionHostServicesFor`, so `host` builds each extension's services
+  through this barrel. This module never builds them: the
   services arrive as a parameter, so there is no edge to `projects`, `workspaces` or `agent`.
 - **Interactive tools (`interactive.ts`):** `interactiveTools(isDisabled)` folds the enabled registry
   extensions' `interactiveTools` declarations into one name → `InteractiveTool` map (first declaration of a
@@ -123,9 +135,10 @@ list for registry extensions.
 
 ## Consumers
 
-`host` answers `extension.list` with `listExtensionCatalog` over the `disabledExtensions` setting, and
+`host` answers `extension.list` with `listExtensionCatalog` over the `disabledExtensions` setting,
 `extension.query` with one `createExtensionQueries` over the same setting and its per-extension host
-services, releasing a switched-off extension's table on each change of that setting.
+services, releasing a switched-off extension's table on each change of that setting, and runs the
+extensions' host services with one `runExtensionHostServices` per server.
 `agent/extensions.ts` composes the flattened parent set into every resource loader and the child set
 into the curated hidden-child extensions in dev and bundled mode alike, and leaves a disabled extension's
 `extensionSkillRoots` out of pi's skill inputs; `buildSupport.ts` hands both packagers each extension's skill roots

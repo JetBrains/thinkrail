@@ -21,6 +21,7 @@ describe("server extension registry", () => {
 			"@thinkrail/ext-web-access/server",
 			"@thinkrail/ext-next-steps/server",
 			"@thinkrail/ext-session-insights/server",
+			"@thinkrail/ext-board/server",
 		]);
 		expect(new Set(specifiers).size).toBe(specifiers.length);
 		for (const entry of serverExtensions) {
@@ -34,6 +35,7 @@ describe("server extension registry", () => {
 			"web-access",
 			"next-steps",
 			"session-insights",
+			"board",
 		]);
 	});
 
@@ -54,7 +56,7 @@ describe("server extension registry", () => {
 					artifactsDir: "",
 				},
 			}),
-		).toEqual(["visualize", "ask-user-question", "web-access", "next-steps"]);
+		).toEqual(["visualize", "ask-user-question", "web-access", "next-steps", "board"]);
 		expect(
 			registryInlineExtensions("childExtensions").map((inline) =>
 				typeof inline === "function" ? "fn" : inline.name,

@@ -67,6 +67,22 @@ describe("listExtensionCatalog", () => {
 				hasChildExtensions: false,
 				...shippedApiVersion("session-insights"),
 			},
+			{
+				name: "board",
+				title: "Board",
+				description: expect.any(String),
+				enabled: true,
+				tools: [
+					"board_card_get",
+					"board_cards_list",
+					"board_card_create",
+					"board_link",
+					"board_card_note",
+				],
+				hasParentExtensions: true,
+				hasChildExtensions: false,
+				...shippedApiVersion("board"),
+			},
 		]);
 		const [visualize, ask] = await listExtensionCatalog(new Set(["visualize", "retired"]));
 		expect(visualize?.enabled).toBe(false);

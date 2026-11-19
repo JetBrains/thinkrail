@@ -901,6 +901,23 @@ test("extension.list reflects disabledExtensions written through settings.update
 			apiVersion: serverExtensions.find((entry) => entry.extension.name === "session-insights")
 				?.extension.apiVersion,
 		},
+		{
+			name: "board",
+			title: "Board",
+			description: expect.any(String),
+			enabled: true,
+			tools: [
+				"board_card_get",
+				"board_cards_list",
+				"board_card_create",
+				"board_link",
+				"board_card_note",
+			],
+			hasParentExtensions: true,
+			hasChildExtensions: false,
+			apiVersion: serverExtensions.find((entry) => entry.extension.name === "board")?.extension
+				.apiVersion,
+		},
 	]);
 	await handleRequest(
 		"settings.update",
@@ -913,6 +930,7 @@ test("extension.list reflects disabledExtensions written through settings.update
 		{ name: "web-access", enabled: false },
 		{ name: "next-steps", enabled: true },
 		{ name: "session-insights", enabled: true },
+		{ name: "board", enabled: true },
 	]);
 	await handleRequest("settings.update", { config: { disabledExtensions: [] } }, CTX);
 	expect(await handleRequest("extension.list", {}, CTX)).toMatchObject([
@@ -921,6 +939,7 @@ test("extension.list reflects disabledExtensions written through settings.update
 		{ name: "web-access", enabled: true },
 		{ name: "next-steps", enabled: true },
 		{ name: "session-insights", enabled: true },
+		{ name: "board", enabled: true },
 	]);
 });
 

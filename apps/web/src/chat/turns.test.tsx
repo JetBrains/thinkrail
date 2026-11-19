@@ -235,4 +235,28 @@ describe("container notes", () => {
 		expect(wake).toContain('aria-expanded="false"');
 		expect(wake).not.toContain("container-note-body");
 	});
+
+	test("an extension's message shows its own words under the extension's title", () => {
+		const message = renderRow(
+			{
+				kind: "containerNote",
+				id: "n3",
+				note: {
+					kind: "extensionMessage",
+					details: {
+						extension: "board",
+						extensionTitle: "Board",
+						mode: "follow_up",
+						text: "Card **TR-1** was moved back.",
+					},
+				},
+				text: "Message from the ThinkRail extension …",
+			},
+			false,
+		);
+		expect(message).toContain('data-note="extensionMessage"');
+		expect(message).toContain("From the Board extension");
+		expect(message).toContain("<strong>TR-1</strong>");
+		expect(message).not.toContain("Message from the ThinkRail extension");
+	});
 });

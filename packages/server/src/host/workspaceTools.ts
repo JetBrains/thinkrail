@@ -153,7 +153,7 @@ export function composePrompt(prompt: string, files: readonly string[]): string 
 	return `${prompt}\n\nAttached files:\n${files.map((file) => `- ${file}`).join("\n")}`;
 }
 
-async function defaultBaseBranch(projectId: string, signal?: AbortSignal): Promise<string> {
+export async function defaultBaseBranch(projectId: string, signal?: AbortSignal): Promise<string> {
 	const { defaultBranch } = await listBranches(projectId);
 	try {
 		const { moved } = await prefetchBranch(projectId, defaultBranch, signal);

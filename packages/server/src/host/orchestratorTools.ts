@@ -104,6 +104,23 @@ export function recordOpenedReview(
 	);
 }
 
+/** `open_pr` and an extension's `openPr` action: push and open (or update) the PR, its review recorded. */
+export async function openWorkspacePr(
+	workspace: Workspace,
+	params: { title?: string; body?: string; draft?: boolean },
+): Promise<OpenPrResult & { branch: string }> {
+	recordWorkspaceActivity(workspace.id);
+	const opened = await openPr({
+		workspaceId: workspace.id,
+		...(params.title?.trim() ? { title: params.title.trim(), titleEdited: true } : {}),
+		...(params.body !== undefined ? { body: params.body } : {}),
+		...(params.draft ? { draft: true } : {}),
+	});
+	const { branch, ...result } = opened;
+	recordOpenedReview(workspace.id, result, branch);
+	return opened;
+}
+
 function callerChat(sessionId: string): Workspace | null {
 	const workspaceId = getSessionWorkspaceId(sessionId);
 	if (!workspaceId || !isChatWorkspaceId(workspaceId)) return null;
@@ -150,18 +167,7 @@ const liveDeps: OrchestratorToolsDeps = {
 			return workspace;
 		}
 	},
-	openPr: async (workspace, params) => {
-		recordWorkspaceActivity(workspace.id);
-		const opened = await openPr({
-			workspaceId: workspace.id,
-			...(params.title?.trim() ? { title: params.title.trim(), titleEdited: true } : {}),
-			...(params.body !== undefined ? { body: params.body } : {}),
-			...(params.draft ? { draft: true } : {}),
-		});
-		const { branch, ...result } = opened;
-		recordOpenedReview(workspace.id, result, branch);
-		return opened;
-	},
+	openPr: openWorkspacePr,
 	mergePr: (params) => {
 		recordWorkspaceActivity(params.workspaceId);
 		return mergePr(params);

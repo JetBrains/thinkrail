@@ -17,8 +17,9 @@ import type { Workspace } from "@thinkrail/contracts";
 import { configurePiRuntime } from "../agent";
 import type { ExtensionSessionPlacement } from "../extensions";
 import { resetChatsStoreForTests } from "../persistence";
+import { resetConfigCache, updateConfig } from "../settings";
 import { createChatRecord, markChatDeletionPending, resetChatIdCache } from "../workspaces";
-import { extensionHostServices, messageAnchor } from "./extensionHost";
+import { extensionHostServices, messageAnchor, setExtensionEventPublisher } from "./extensionHost";
 
 const saved = {
 	data: process.env.THINKRAIL_DATA_DIR,
@@ -72,6 +73,7 @@ beforeAll(() => {
 				branch: "feature-a",
 				worktreePath: managed,
 				baseBranch: "main",
+				review: { kind: "pull-request", number: 7, state: "merged", url: "https://example.test/7" },
 			},
 			{
 				id: "w3",
@@ -423,6 +425,58 @@ describe("extensionHostServices", () => {
 		});
 		expect(await host.turnTree("s-tree", 1, { files: 10, bytes: 1_000 })).toBeNull();
 		rmSync(join(dataDir, "turns.json"), { force: true });
+	});
+
+	test("reports an open workspace's review, diff and chats as facts, null for one that is not open", async () => {
+		const host = extensionHostServices("board", SIGNAL);
+		expect(await host.workspaceFacts("w2")).toEqual({
+			id: "w2",
+			projectId: "p1",
+			name: "Feature A",
+			branch: "feature-a",
+			baseBranch: "main",
+			kind: "worktree",
+			review: { kind: "pull-request", number: 7, state: "merged", url: "https://example.test/7" },
+			diff: null,
+			chats: [],
+		});
+		expect(await host.workspaceFacts(chat.id)).toMatchObject({
+			kind: "chat",
+			diff: null,
+			review: null,
+		});
+		expect(await host.workspaceFacts("nope")).toBeNull();
+	});
+
+	test("publishes an extension's event in its own name, scoped, and drops it while the extension is off", () => {
+		const pushes: unknown[] = [];
+		setExtensionEventPublisher((push, scope) => pushes.push({ push, scope }));
+		try {
+			const host = extensionHostServices("board", SIGNAL);
+			host.publish(
+				"board.changed",
+				{ projectId: "p1" },
+				{
+					projectId: "p1",
+					workspaceId: 3 as unknown as string,
+				},
+			);
+			expect(pushes).toEqual([
+				{
+					push: { extension: "board", type: "board.changed", payload: { projectId: "p1" } },
+					scope: { projectId: "p1" },
+				},
+			]);
+			expect(() => host.publish("", {})).toThrow();
+			expect(() => host.publish("has space", {})).toThrow();
+			updateConfig({ disabledExtensions: ["board"] });
+			host.publish("board.changed", {});
+			expect(pushes).toHaveLength(1);
+		} finally {
+			updateConfig({ disabledExtensions: [] });
+			resetConfigCache();
+			setExtensionEventPublisher(null);
+		}
 	});
 
 	test("seeds an open workspace's artifacts folder and names it both ways", async () => {

@@ -1,7 +1,13 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import type { HistoryScope, Project, Workspace } from "@thinkrail/contracts";
+import {
+	chatState,
+	type ExtensionEventPush,
+	type HistoryScope,
+	type Project,
+	type Workspace,
+} from "@thinkrail/contracts";
 import { seedArtifactsDir } from "@thinkrail/shared/artifactsDir";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import {
@@ -9,28 +15,75 @@ import {
 	getPiRuntimeGeneration,
 	hasSession,
 	isPiSessionId,
+	listSessions,
 	sessionCompletionOf,
 } from "../agent";
 import type {
 	ExtensionArtifactsDir,
+	ExtensionChatFacts,
 	ExtensionHostProject,
 	ExtensionHostServices,
 	ExtensionMessageAnchor,
+	ExtensionPublishScope,
 	ExtensionSessionPlacement,
 	ExtensionSessionView,
 	ExtensionTreeFile,
 	ExtensionTurnReceipt,
 	ExtensionTurnTree,
+	ExtensionWorkspaceFacts,
 } from "../extensions";
 import { gitAsync, nonInteractiveGitEnv, readBlobBytesAtAsync } from "../git";
 import { locateEntry } from "../history";
 import { logger } from "../log";
 import { dataDir } from "../persistence";
 import { listProjects } from "../projects";
+import { getConfig } from "../settings";
+import { todoCounts } from "../todos";
 import { listTurns } from "../turns";
-import { listAllWorkspaceRecords, listWorkspaceRecords } from "../workspaces";
+import {
+	isChatWorkspace,
+	listAllWorkspaceRecords,
+	listWorkspaceRecords,
+	workspaceDiffStats,
+} from "../workspaces";
 import { historyHiddenCwd } from "./chats";
+import { extensionActions } from "./extensionActions";
+import { createExtensionEventHub } from "./extensionEvents";
 import { buildHistoryScope } from "./historyScope";
+
+export const isExtensionDisabled = (name: string): boolean =>
+	getConfig().disabledExtensions.includes(name);
+
+/** The live host events: `server.ts` emits from inside its existing publishers, never a second one. */
+export const extensionEvents = createExtensionEventHub({
+	isDisabled: isExtensionDisabled,
+	log: (name) => logger(`extension:${name}`),
+});
+
+type ExtensionEventPublisher = (push: ExtensionEventPush, scope: ExtensionPublishScope) => void;
+
+let extensionEventPublisher: ExtensionEventPublisher | null = null;
+
+export function setExtensionEventPublisher(publisher: ExtensionEventPublisher | null): void {
+	extensionEventPublisher = publisher;
+}
+
+const EVENT_TYPE = /^[\w.:-]{1,100}$/;
+
+function publishFor(extension: string): ExtensionHostServices["publish"] {
+	return (type, payload, scope = {}) => {
+		if (typeof type !== "string" || !EVENT_TYPE.test(type))
+			throw new Error(`An extension event type is 1–100 word characters, dots or dashes: ${type}`);
+		if (isExtensionDisabled(extension) || !extensionEventPublisher) return;
+		extensionEventPublisher(
+			{ extension, type, payload },
+			{
+				...(typeof scope.workspaceId === "string" ? { workspaceId: scope.workspaceId } : {}),
+				...(typeof scope.projectId === "string" ? { projectId: scope.projectId } : {}),
+			},
+		);
+	};
+}
 
 function strictlyInside(root: string, path: string): string | null {
 	const rel = relative(root, path);
@@ -246,11 +299,65 @@ export async function ensureArtifactsDir(
 	}
 }
 
+function chatPlan(workspaceId: string, sessionId: string): ExtensionChatFacts["plan"] {
+	try {
+		const counts = todoCounts({ workspaceId, sessionId });
+		return counts.total > 0 ? counts : null;
+	} catch {
+		return null;
+	}
+}
+
+/** An open workspace's review, diff and chats, from the records, git and the session states. */
+export async function workspaceFacts(workspaceId: string): Promise<ExtensionWorkspaceFacts | null> {
+	const workspace = listAllWorkspaceRecords().find((candidate) => candidate.id === workspaceId);
+	if (!workspace) return null;
+	const [diff, chats] = await Promise.all([
+		isChatWorkspace(workspace)
+			? null
+			: workspaceDiffStats(workspace.id).then(
+					({ added, removed }) => ({ added, removed }),
+					() => null,
+				),
+		listSessions(workspace.id, workspace.worktreePath).catch(() => []),
+	]);
+	const { review } = workspace;
+	return {
+		id: workspace.id,
+		projectId: workspace.projectId,
+		name: workspace.name,
+		branch: workspace.branch,
+		baseBranch: workspace.baseBranch,
+		kind: workspace.kind ?? "worktree",
+		review: review
+			? {
+					kind: review.kind,
+					number: review.number,
+					state: review.state ?? "open",
+					...(review.url ? { url: review.url } : {}),
+				}
+			: null,
+		diff,
+		chats: chats.map((chat) => ({
+			sessionId: chat.sessionId,
+			title: chat.title,
+			state: chatState(chat.state),
+			unread: chat.state?.completionUnread ?? false,
+			plan: chatPlan(workspace.id, chat.sessionId),
+			updatedAt: chat.updatedAt,
+		})),
+	};
+}
+
 export function extensionHostServices(name: string, signal: AbortSignal): ExtensionHostServices {
 	return {
 		dataDir: join(dataDir(), "extensions", name),
 		log: logger(`extension:${name}`),
 		signal,
+		actions: extensionActions(name, signal),
+		events: extensionEvents.bus(name, signal),
+		publish: publishFor(name),
+		workspaceFacts,
 		sessionsRoot,
 		sessionScope,
 		childTranscriptDirs,

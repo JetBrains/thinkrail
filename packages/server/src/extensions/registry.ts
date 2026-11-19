@@ -1,4 +1,5 @@
 import askUserQuestion from "@thinkrail/ext-ask-user-question/server";
+import board from "@thinkrail/ext-board/server";
 import nextSteps from "@thinkrail/ext-next-steps/server";
 import sessionInsights from "@thinkrail/ext-session-insights/server";
 import visualize from "@thinkrail/ext-visualize/server";
@@ -16,4 +17,5 @@ export const serverExtensions: readonly ServerExtensionEntry[] = [
 	{ specifier: "@thinkrail/ext-web-access/server", extension: webAccess },
 	{ specifier: "@thinkrail/ext-next-steps/server", extension: nextSteps },
 	{ specifier: "@thinkrail/ext-session-insights/server", extension: sessionInsights },
+	{ specifier: "@thinkrail/ext-board/server", extension: board },
 ];

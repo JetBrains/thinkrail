@@ -1311,9 +1311,10 @@ client talking to an older host sends none of it and holds no containers.
   containerName, orchestratorSessionId, mode: "follow_up" | "steer", text }`), an orchestrator's
   `message_chat` in a member chat — its provenance, never a user message; `text` is the orchestrator's own
   words, the `content` frames them for the member's agent. **`readContainerNote(message)`** reads any of
-  the three into `ContainerNote` (`brief` | `wake` | `orchestratorMessage`), `null` for anything else or a
-  malformed one, and `opensChatRound` opens a round at a wake-up or an orchestrator message, not at the
-  brief. No method or protocol gate: an older client shows none of them.
+  the three, and an extension's message (§ Extension events), into `ContainerNote` (`brief` | `wake` |
+  `orchestratorMessage` | `extensionMessage`), `null` for anything else or a malformed one, and
+  `opensChatRound` opens a round at a wake-up or a message, not at the brief. No method or protocol gate:
+  an older client shows none of them.
 - **`Workspace.startedBy`** (`WorkspaceStartedBy { sessionId, containerId? }`) — on a workspace an agent's
   `start_workspace` created: the calling session, plus its container when that session is an orchestrator.
 - Methods: **`container.list`** (→ `Container[]`) / **`container.create`** (`{ name?, workspaceIds }` →
@@ -1332,6 +1333,21 @@ client talking to an older host sends none of it and holds no containers.
 - Refusals: `CONTAINER_UNKNOWN` (the client drops its stale record), `CONTAINER_EMPTY`,
   `CONTAINER_MEMBER_TAKEN` (already in another container), `CONTAINER_MEMBER_REFUSED` (a Default
   workspace or a chat) and `CONTAINERS_STORE_UNAVAILABLE` (a newer host's `containers.json`, read-only here).
+
+## Extension events
+
+`EXTENSION_EVENT_PROTOCOL_VERSION` (130) gates the **`extension.event`** channel
+(**`ExtensionEventPush { extension, type, payload }`**): what a host-registry extension's server half
+`publish`es for its web half, broadcast to the sockets at the gate that may see the push's workspace or
+project. The payload is the extension's own (versioned by its `apiVersion`); the web side filters by
+`extension` and treats a replayed latest value as stale, so the channel carries invalidations, not state.
+An older client subscribes to nothing.
+
+- **`extension-message`** (`EXTENSION_MESSAGE_CUSTOM_TYPE`, `ExtensionMessageDetails { extension,
+  extensionTitle, mode: "follow_up" | "steer", text }`) — an extension's `sendToChat` host action in a
+  chat, starting a turn: its provenance, never a user message, shown under the extension's title; `text`
+  is the extension's own words, the `content` frames them for the agent. It reads as a `ContainerNote`
+  (`extensionMessage`), with no gate of its own.
 
 ## MCP servers
 

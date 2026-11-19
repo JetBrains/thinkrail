@@ -551,7 +551,38 @@ gate: [[module-contracts]].
   each blob), answering `tooLarge` past the file or byte limit before reading any blob and `null` when the
   receipt, the workspace or the objects are gone; `ensureArtifactsDir(workspaceId)` seeds a registered
   workspace's `.thinkrail/context/` with `seedArtifactsDir` (as `workspaceFiles.ensureArtifactsDir` does)
-  and answers it absolute and worktree-relative, `null` for an unknown workspace;
+  and answers it absolute and worktree-relative, `null` for an unknown workspace; `workspaceFacts(id)`
+  joins a registered workspace's record (its cached `review`), `workspaceDiffStats` (`null` for a chat or a
+  failed git read) and `listSessions` — each chat's state through contracts' `chatState`, its
+  `completionUnread`, and `todos`' `todoCounts` (`null` for a chat without a plan) —, `null` for an unknown
+  workspace. **Extension writes are named host actions** (`extensionActions.ts`, deps injected so it is
+  unit-tested without worktrees or sessions), each refused with `EXTENSION_DISABLED` while the extension is
+  off: `createWorkspace` validates like `start_workspace` before anything exists (an open repository
+  project, a non-empty kickoff, a known container for `into`, the thinking level, the model through
+  `resolveModel` over the settled models, the base defaulting to `defaultBaseBranch`'s fetched default
+  branch) and runs `createWorkspaceWithChat` with `origin: "extension"` — internal like an agent's start,
+  no recent-model pick, no `message_sent` —, failing only when no chat was created and otherwise answering
+  the hand-off's `kickoffError` beside the ids; `sendToChat` finds the chat's workspace (its live
+  attribution, else the workspace whose chats list it), attaches it and sends an **`extension-message`**
+  host message (`ExtensionMessageDetails` under the descriptor's title, the content saying it is not the
+  human) through the `message_chat` path (`ackSend` + `runObservation.send(…, "internal")`); `stopChat`
+  aborts a streaming chat only; `openPr` is `open_pr`'s `openWorkspacePr` (`pr.openPr` + the review
+  recorded on the workspace) for a repository workspace; `runInWorkspace` runs `argv` (a non-empty string
+  list, never a shell string) with `subprocess`' `runBounded` in a repository workspace's worktree under
+  the non-interactive git env, its budget capped at ten minutes, stopped once the extension's services
+  `signal` aborts (a switch-off or the host stopping), and answers `{ ok, out, err, timedOut }`.
+  **Extension events** are tapped inside the existing publisher callbacks, never through a second
+  `setX`: `server.ts` emits `session.state` from the session-state publisher, `workspace.created|updated|
+  removed` from the workspace-lifecycle tee (a review refresh arrives as `updated`), `agent.settled` from
+  the session publisher at pi's `agent_settled`, and `container.updated|removed` from the container
+  publisher into one hub (`extensionEvents.ts`) that hands each enabled extension's listener its own copy
+  and logs, never rethrows, a listener's throw or rejection. `publish` validates the type and drops the
+  push while the extension is off or no server runs; `server.ts` sends it as `extension.event` through
+  `publishScoped` to sockets at `EXTENSION_EVENT_PROTOCOL_VERSION`, which alone subscribe to the channel.
+  `createServer` runs the registry's host services with `runExtensionHostServices` — started after the
+  publishers are wired, re-synced when a settings update carries `disabledExtensions`, stopped in `stop()`
+  and awaited in `shutdown()` — and each run's bus (`extensionEvents.bus(name, signal)`) drops that run's
+  subscriptions once its signal aborts, never a restarted run's;
   **Review marks are memory-plus-disk, and only the disk half survives a restart.** The serial chain and
   the per-item latches are in-memory; `pending` marks are a disk sidecar. `createServer` calls
   **`reconcilePendingReviewsOnBoot`** once, before the server accepts connections: it walks every project's
@@ -620,8 +651,8 @@ gate: [[module-contracts]].
     - The creation carries `startedBy { sessionId, containerId? }` — the calling session, and its
       container when the caller's chat is an orchestrator (`orchestratorOf`) — which `workspaces` records
       on the new `Workspace`.
-    - `origin: "agent"` (persisted on the creation record, so a hand-off replayed after a restart keeps
-      it) makes the hand-off send through `ackSend` + `runObservation.send(…, "internal")` rather than
+    - `origin: "agent"` — or `"extension"`, an extension's `createWorkspace` action — (persisted on the
+      creation record, so a hand-off replayed after a restart keeps it) makes the hand-off send through `ackSend` + `runObservation.send(…, "internal")` rather than
       `sendUserMessage`, and start the chat without the recent-model pick: an agent-sent prompt is not a
       user `message_sent`, never claims the feedback invitation, and its model is not the user's choice.
     - Status reuses existing state only: `listSessions` state (labelled by contracts' `chatState` —

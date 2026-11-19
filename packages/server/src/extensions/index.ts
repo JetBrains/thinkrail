@@ -1,11 +1,18 @@
 export type {
 	ArtifactTool,
 	ExtensionArtifactsDir,
+	ExtensionChatFacts,
+	ExtensionHostActions,
+	ExtensionHostEventBus,
+	ExtensionHostEvents,
+	ExtensionHostEventType,
 	ExtensionHostProject,
+	ExtensionHostService,
 	ExtensionHostServices,
 	ExtensionHostWorkspace,
 	ExtensionLog,
 	ExtensionMessageAnchor,
+	ExtensionPublishScope,
 	ExtensionQuery,
 	ExtensionSessionPlacement,
 	ExtensionSessionServices,
@@ -14,11 +21,13 @@ export type {
 	ExtensionTreeFile,
 	ExtensionTurnReceipt,
 	ExtensionTurnTree,
+	ExtensionWorkspaceFacts,
 	InteractiveTool,
 	ToolResponse,
 } from "@thinkrail/extension-api/server";
 export { type ArtifactTools, artifactTools } from "./artifactTools";
 export { listExtensionCatalog } from "./catalog";
+export { type ExtensionHostServiceRunner, runExtensionHostServices } from "./hostServices";
 export {
 	type ExtensionDisabled,
 	type ExtensionSettingValue,

@@ -416,15 +416,15 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   again and followed on the connection that overtook it), and a failure is told once. A Retry from the
   card (`requestContinuation`) registers the new operation as initiated, so this client follows it like
   the original gesture.
-- `containerNote` — the container cards (`readContainerNote` in contracts: `container-brief`,
-  `container-wake`, `orchestrator-message`), one turn kind carrying the `ContainerNote` and the content
-  text, rendered by the props-driven `ContainerNoteCard` (`turns.tsx`, `data-testid="container-note-card"`,
-  `data-note=<kind>`) as a foldable host card: the title says where it came from — "Container summary",
-  "Update from <workspace>", or "From the orchestrator of “<container>”" (with "· steer" for a steer) —
-  and the body is Markdown (`containerNoteBody`, `rows.ts`: an orchestrator's own `details.text`, never
-  the framing the member's agent reads; otherwise the host's text). An orchestrator's message starts
-  unfolded, the brief and a wake-up folded. A wake-up and an orchestrator's message open a round (they
-  start a turn); the brief does not.
+- `containerNote` — the host cards (`readContainerNote` in contracts: `container-brief`,
+  `container-wake`, `orchestrator-message`, `extension-message`), one turn kind carrying the
+  `ContainerNote` and the content text, rendered by the props-driven `ContainerNoteCard` (`turns.tsx`,
+  `data-testid="container-note-card"`, `data-note=<kind>`) as a foldable host card: the title says where
+  it came from — "Container summary", "Update from <workspace>", "From the orchestrator of “<container>”"
+  or "From the <title> extension" (with "· steer" for a steer) — and the body is Markdown
+  (`containerNoteBody`, `rows.ts`: an orchestrator's or extension's own `details.text`, never the framing
+  the agent reads; otherwise the host's text). A message starts unfolded, the brief and a wake-up folded.
+  A wake-up and a message open a round (they start a turn); the brief does not.
 
 Row/step ids are stable across streaming snapshots (the outer run's first atomic-step id, each thinking
 block's message-anchored index, and each tool's own id — pi appends, never reorders), so fold state survives

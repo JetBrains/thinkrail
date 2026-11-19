@@ -16,6 +16,7 @@ import {
 	ARTIFACTS_PROTOCOL_VERSION,
 	CONTAINER_PROTOCOL_VERSION,
 	CONTINUATION_PROTOCOL_VERSION,
+	EXTENSION_EVENT_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
 	GITHUB_STAR_PROTOCOL_VERSION,
@@ -120,7 +121,7 @@ import {
 } from "../auth";
 import { forgetOpenBranchReview } from "../branch-review";
 import { setContainerDissolveHook, setContainerPublisher } from "../containers";
-import { artifactTools } from "../extensions";
+import { artifactTools, runExtensionHostServices } from "../extensions";
 import {
 	configureSurveySource,
 	redeliverInvitation,
@@ -202,6 +203,12 @@ import { createArtifactEventMapper } from "./artifactEvents";
 import { seesChats } from "./chats";
 import { observeWorkspaceForContainers } from "./containers";
 import { continueToolHost, observeContinuation, setContinuationPublisher } from "./continuations";
+import {
+	extensionEvents,
+	extensionHostServices,
+	isExtensionDisabled,
+	setExtensionEventPublisher,
+} from "./extensionHost";
 import {
 	BLOB_PREFIX,
 	FILES_PREFIX,
@@ -554,6 +561,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					ws.subscribe(WS_CHANNELS.containerUpdated);
 					ws.subscribe(WS_CHANNELS.containerRemoved);
 				}
+				if (ws.data.protocolVersion >= EXTENSION_EVENT_PROTOCOL_VERSION)
+					ws.subscribe(WS_CHANNELS.extensionEvent);
 				ws.subscribe(WS_CHANNELS.settingsChanged);
 				if (hostUpdate) ws.subscribe(WS_CHANNELS.hostUpdateAvailable);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
@@ -998,16 +1007,21 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		publishScoped(channel, data, { workspaceId, projectId });
 		observeWorkspaceForContainers(event);
 		wakeups.onWorkspaceEvent(event);
+		if (event.kind === "removed")
+			extensionEvents.emit("workspace.removed", { projectId: event.projectId, id: event.id });
+		else extensionEvents.emit(`workspace.${event.kind}`, event.workspace);
 	};
 	setWorkspacePublisher(publishWorkspaceEvent);
 	setContainerDissolveHook(disposeContainerOrchestrator);
 	const containerAudience = { belowProtocol: CONTAINER_PROTOCOL_VERSION };
 	setContainerPublisher((event) => {
-		if (event.kind === "updated")
+		if (event.kind === "updated") {
 			publishScoped(WS_CHANNELS.containerUpdated, event.container, containerAudience);
-		else {
+			extensionEvents.emit("container.updated", event.container);
+		} else {
 			const removed: ContainerRemoved = { id: event.id };
 			publishScoped(WS_CHANNELS.containerRemoved, removed, containerAudience);
+			extensionEvents.emit("container.removed", removed);
 		}
 	});
 	setChatPublishers({
@@ -1096,6 +1110,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setOrchestratorToolsHost(orchestratorToolsHost);
 	reconcilePendingReviewsOnBoot();
 
+	const extensionServices = runExtensionHostServices({
+		isDisabled: isExtensionDisabled,
+		services: extensionHostServices,
+	});
 	setSettingsPublisher((config, appliedUpdate) => {
 		publishScoped(WS_CHANNELS.settingsChanged, config);
 		if (applyAdditionalAnalyticsSettings(config, appliedUpdate)) {
@@ -1129,6 +1147,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		) {
 			publishPiPackagesChanged();
 		}
+		if (appliedUpdate.disabledExtensions !== undefined) extensionServices.sync();
 		if (appliedUpdate.otherAgentSkills !== undefined) void refreshSkillAdmission();
 	});
 
@@ -1145,6 +1164,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			{ workspaceId: record.workspaceId },
 			record.sessionId,
 		);
+		extensionEvents.emit("session.state", record);
 	});
 
 	setSessionDeletedPublisher((payload: SessionDeletedPayload) => {
@@ -1210,6 +1230,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		if (payload.event.type === "tool_execution_start") {
 			taskObservation.toolStarted(workspaceId, payload.sessionId, payload.event);
 		}
+		if (payload.event.type === "agent_settled")
+			extensionEvents.emit("agent.settled", { workspaceId, sessionId: payload.sessionId });
 		const frame = JSON.stringify({ channel: WS_CHANNELS.piEvent, data: payload });
 		fanOut(WS_CHANNELS.piEvent, admitsScope({ workspaceId }), (socket) => {
 			if (socket.data.held) socket.data.held.deliver(payload, frame);
@@ -1260,6 +1282,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setLogoutPublisher(publishProviderChanged);
 	setModelsFilePublisher(publishProviderChanged);
 	setModelListingPublisher(publishProviderChanged);
+	setExtensionEventPublisher((push, scope) =>
+		publishScoped(WS_CHANNELS.extensionEvent, push, {
+			...scope,
+			belowProtocol: EXTENSION_EVENT_PROTOCOL_VERSION,
+		}),
+	);
+	extensionServices.sync();
 
 	const initialConfig = getConfig();
 	initializeAnalytics({
@@ -1293,6 +1322,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		runObservation.reset();
 		taskObservation.clear();
 		wakeups.dispose();
+		void extensionServices.stop();
 		observeLoggedErrors(null);
 		void shutdownAnalytics();
 		stopHostUpdateChecks();
@@ -1325,6 +1355,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				settleSessionsForShutdown(),
 				shutdownAnalytics(),
 				stopWorkspaceCreations(),
+				extensionServices.stop(),
 			]);
 			await turnTracker.drain();
 			await settleCredentialWritesForShutdown();
@@ -1412,6 +1443,7 @@ function restoreSeamDefaults(): void {
 	setLogoutPublisher(() => {});
 	setModelsFilePublisher(null);
 	setModelListingPublisher(null);
+	setExtensionEventPublisher(null);
 }
 
 async function serveStatic(pathname: string, staticDir: string): Promise<Response> {

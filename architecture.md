@@ -59,7 +59,7 @@ pi-extensions/*     portable pi packages published to npm as @thinkrail/pi-<name
                     awaiting its first (human) release
 thinkrail-extensions/*  ThinkRail extensions: a pi capability + ./server and ./web halves, composed by one
                     registry file per side (Decision 21; visualize, ask-user-question, web-access and
-                    session-insights shipped) ── depends on ─▶ pi-extensions/*,
+                    session-insights shipped; board's server half in) ── depends on ─▶ pi-extensions/*,
                     packages/extension-api, packages/ui, packages/locales (web half)
 packages/extension-api  types + define* helpers for extension halves ── depends on ─▶ packages/contracts, packages/locales (types)
 packages/ui         owned shadcn/Radix primitives + cn + onThemeSwap ── may depend on ─▶ packages/contracts, packages/locales
@@ -421,7 +421,12 @@ dependency. This keeps test process drivers outside both launchers and the serve
     extension's own rebindable commands — all offered only while openable (declared, switched on, a host
     that answers queries), so the core names no extension; a placeholder shows while the extension is
     off, missing or the host too old. The server never
-    lists panels — the web registry is their one authority. Install UX,
+    lists panels — the web registry is their one authority. **Queries read; actions write through named
+    host actions** (shipped with the board): outside its data folder and the Artifacts an extension
+    writes only through `ExtensionHostServices.actions` — create a workspace with a kickoff, message or
+    stop a chat, open a PR, run argv in a worktree — each refused while it is off, and a host-lifetime
+    `hostService(host)` hears host events tapped inside the existing publishers and pushes
+    `extension.event` to its web half behind its own protocol gate. Install UX,
     marketplace, other setting types, a per-workspace on/off override and runtime-loaded third-party
     extensions remain explicit deferrals. Rejected: runtime-loaded
     bundles now (React singleton, versioned UI API, security story first), a logical extension inside

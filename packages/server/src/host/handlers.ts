@@ -290,7 +290,7 @@ import {
 	seesChats,
 } from "./chats";
 import { continuationStatus, startContinuation } from "./continuations";
-import { extensionHostServices } from "./extensionHost";
+import { extensionHostServices, isExtensionDisabled } from "./extensionHost";
 import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { provisionInitialTerminal } from "./initialTerminal";
@@ -364,7 +364,7 @@ import { archiveWorkspace } from "./workspaceArchive";
 const log = logger("host");
 
 const extensionQueries = createExtensionQueries({
-	isDisabled: (name) => getConfig().disabledExtensions.includes(name),
+	isDisabled: isExtensionDisabled,
 	services: extensionHostServices,
 });
 
@@ -434,7 +434,7 @@ export const workspaceCreationHandoff: CreationHandoff = async (
 	provisionInitialTerminal(workspace);
 	if (!kickoff) return {};
 	await ensureWatch(workspace.id, { prewarm: false });
-	const internal = origin === "agent";
+	const internal = origin !== undefined;
 	const chat = await startChatSession(
 		workspace,
 		{

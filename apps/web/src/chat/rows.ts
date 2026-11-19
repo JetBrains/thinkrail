@@ -140,9 +140,11 @@ function nestRoutineRun(steps: ActivityStep[]): ActivityStep[] {
 	return nested;
 }
 
-/** What a container card shows: an orchestrator's own words, else the host's text. */
+/** What a host card shows: an orchestrator's or an extension's own words, else the host's text. */
 export function containerNoteBody(note: ContainerNote, text: string): string {
-	return note.kind === "orchestratorMessage" ? note.details.text : text;
+	return note.kind === "orchestratorMessage" || note.kind === "extensionMessage"
+		? note.details.text
+		: text;
 }
 
 export function opensRound(turn: ChatTurn): boolean {

@@ -228,6 +228,9 @@ function fakeHost(
 		signal?: AbortSignal;
 	} = {},
 ): FakeHost {
+	const noActions = async (): Promise<never> => {
+		throw new Error("session insights takes no host actions");
+	};
 	const sessions = join(root, name, "sessions");
 	mkdirSync(sessions, { recursive: true });
 	const fake: FakeHost = {
@@ -240,6 +243,16 @@ function fakeHost(
 				warn: (message, error) => fake.warnings.push({ message, error }),
 			},
 			signal: overrides.signal ?? new AbortController().signal,
+			actions: {
+				createWorkspace: noActions,
+				sendToChat: noActions,
+				stopChat: noActions,
+				openPr: noActions,
+				runInWorkspace: noActions,
+			},
+			events: { subscribe: () => () => {} },
+			publish: () => {},
+			workspaceFacts: async () => null,
 			sessionsRoot: () => {
 				fake.sessionsRootReads += 1;
 				return sessions;
@@ -401,6 +414,16 @@ describe("session-insights server descriptor", () => {
 			dataDir: join(root, "inert", "never-created"),
 			log: { info: refuse, warn: refuse },
 			signal: new AbortController().signal,
+			actions: {
+				createWorkspace: refuse,
+				sendToChat: refuse,
+				stopChat: refuse,
+				openPr: refuse,
+				runInWorkspace: refuse,
+			},
+			events: { subscribe: refuse },
+			publish: refuse,
+			workspaceFacts: refuse,
 			sessionsRoot: refuse,
 			sessionScope: refuse,
 			childTranscriptDirs: () => Promise.reject(new Error("inert")),

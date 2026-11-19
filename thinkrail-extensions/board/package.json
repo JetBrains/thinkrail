@@ -1,0 +1,23 @@
+{
+	"name": "@thinkrail/ext-board",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./server": "./server/index.ts",
+		"./web": "./web/index.ts"
+	},
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@thinkrail/extension-api": "workspace:*",
+		"typebox": "catalog:"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "catalog:",
+		"@types/bun": "catalog:",
+		"typescript": "catalog:"
+	}
+}

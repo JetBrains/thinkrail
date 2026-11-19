@@ -1,5 +1,26 @@
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
-import type { HistoryScope, SessionCompletion, Workspace } from "@thinkrail/contracts";
+import type {
+	BranchReviewState,
+	ChatState,
+	Container,
+	HistoryScope,
+	OpenBranchReview,
+	OpenPrResult,
+	SessionCompletion,
+	SessionStateRecord,
+	ThinkingLevel,
+	Workspace,
+} from "@thinkrail/contracts";
+
+export type {
+	BranchReviewState,
+	ChatState,
+	Container,
+	OpenPrResult,
+	SessionStateRecord,
+	ThinkingLevel,
+	Workspace,
+};
 
 export type ToolResponse =
 	| { kind: "response"; value: unknown }
@@ -111,6 +132,130 @@ export type ExtensionTurnTree =
 	| { kind: "files"; files: readonly ExtensionTreeFile[] }
 	| { kind: "tooLarge"; files: number; bytes: number };
 
+/** A chat of an open workspace as the host reports it: contracts' `chatState`, unread, and its TODO plan's counts. */
+export interface ExtensionChatFacts {
+	sessionId: string;
+	title: string;
+	state: ChatState;
+	unread: boolean;
+	/** `null` when the chat keeps no plan. */
+	plan: { open: number; total: number } | null;
+	updatedAt: number;
+}
+
+/** An open workspace's host facts: its last-known review, its diff against the base and its chats. */
+export interface ExtensionWorkspaceFacts {
+	id: string;
+	projectId: string;
+	name: string;
+	branch: string;
+	baseBranch: string;
+	kind: ExtensionHostWorkspace["kind"];
+	review: {
+		kind: OpenBranchReview["kind"];
+		number: number;
+		state: BranchReviewState;
+		url?: string;
+	} | null;
+	/** `null` for a chat without a project or when git could not tell. */
+	diff: { added: number; removed: number } | null;
+	chats: readonly ExtensionChatFacts[];
+}
+
+/** What `host.events.subscribe` delivers, by event type. */
+export interface ExtensionHostEvents {
+	"session.state": SessionStateRecord;
+	"workspace.created": Workspace;
+	"workspace.updated": Workspace;
+	"workspace.removed": { projectId: string; id: string };
+	/** A chat's automatic work ended (pi's `agent_settled`, never an attempt-level `agent_end`). */
+	"agent.settled": { workspaceId: string; sessionId: string };
+	"container.updated": Container;
+	"container.removed": { id: string };
+}
+
+export type ExtensionHostEventType = keyof ExtensionHostEvents;
+
+/** May be async: a rejection is logged like a throw. */
+export type ExtensionHostEventListener<T extends ExtensionHostEventType> = (
+	payload: ExtensionHostEvents[T],
+) => void;
+
+export interface ExtensionHostEventBus {
+	/** Returns the unsubscribe. A listener that throws or rejects is logged and never breaks the host. */
+	subscribe<T extends ExtensionHostEventType>(
+		type: T,
+		listener: ExtensionHostEventListener<T>,
+	): () => void;
+}
+
+/** Which sockets an `extension.event` reaches: those that may see this workspace / project. */
+export interface ExtensionPublishScope {
+	workspaceId?: string;
+	projectId?: string;
+}
+
+export interface ExtensionCreateWorkspaceParams {
+	projectId: string;
+	/** A branch or ref of the project; default: the project's default branch, freshly fetched. */
+	baseRef?: string;
+	/** A container the new workspace joins. */
+	into?: string;
+	name?: string;
+	kickoff: {
+		/** The first prompt, sent as is (pi's `/skill:` and `/template` expansion applies). */
+		text: string;
+		/** `provider/id` or a unique model id; default: the app's new-chat model. */
+		model?: string;
+		thinkingLevel?: ThinkingLevel;
+	};
+}
+
+export interface ExtensionCreatedWorkspace {
+	workspaceId: string;
+	sessionId: string;
+	branch: string;
+	/** Set when the chat started but did not take its first prompt. */
+	kickoffError?: string;
+}
+
+export interface ExtensionRunResult {
+	ok: boolean;
+	out: string;
+	err: string;
+	timedOut: boolean;
+}
+
+/**
+ * Named host writes, each refused (`EXTENSION_DISABLED`) while the extension is switched off. Queries
+ * read; actions write through these, never through a shell or host internals.
+ */
+export interface ExtensionHostActions {
+	/** A new managed workspace with a chat that starts on `kickoff` — the New Workspace dialog's creation. */
+	createWorkspace(params: ExtensionCreateWorkspaceParams): Promise<ExtensionCreatedWorkspace>;
+	/** A follow-up or steer into a chat, shown in its transcript as the extension's message. */
+	sendToChat(params: {
+		sessionId: string;
+		text: string;
+		mode: "follow_up" | "steer";
+	}): Promise<void>;
+	/** Stops a chat's running turn; `stopped: false` when it was not running. */
+	stopChat(params: { sessionId: string }): Promise<{ stopped: boolean }>;
+	/** Pushes the workspace's branch and opens (or updates) its PR, like the Open PR button. */
+	openPr(params: {
+		workspaceId: string;
+		title?: string;
+		body?: string;
+		draft?: boolean;
+	}): Promise<OpenPrResult>;
+	/** Runs one program with `argv` (never a shell string) in the worktree of a repository workspace. */
+	runInWorkspace(params: {
+		workspaceId: string;
+		argv: readonly string[];
+		timeoutMs: number;
+	}): Promise<ExtensionRunResult>;
+}
+
 export interface ExtensionHostServices {
 	readonly dataDir: string;
 	readonly log: ExtensionLog;
@@ -119,6 +264,15 @@ export interface ExtensionHostServices {
 	 * services, so the table stops its background work and timers, and a switch back on builds a new one.
 	 */
 	readonly signal: AbortSignal;
+	readonly actions: ExtensionHostActions;
+	readonly events: ExtensionHostEventBus;
+	/**
+	 * Pushes `extension.event { extension, type, payload }` to the clients that may see `scope`; dropped
+	 * while the extension is off. `payload` must be JSON-serializable.
+	 */
+	publish(type: string, payload: unknown, scope?: ExtensionPublishScope): void;
+	/** An open workspace's host facts (review, diff, chats with their state and plan); `null` otherwise. */
+	workspaceFacts(workspaceId: string): Promise<ExtensionWorkspaceFacts | null>;
 	sessionsRoot(): string;
 	sessionScope(scope: HistoryScope): ExtensionSessionView;
 	childTranscriptDirs(parentSessionId: string, cwd: string): Promise<string[]>;
@@ -148,6 +302,11 @@ export interface ExtensionHostServices {
 /** May return a Promise; the result must be JSON-serializable. */
 export type ExtensionQuery = (params: unknown) => unknown;
 
+/** A running host-lifetime service; `stop` releases what `hostService` started. */
+export interface ExtensionHostService {
+	stop?(): void | Promise<void>;
+}
+
 export interface ServerExtension {
 	name: string;
 	title?: string;
@@ -167,6 +326,11 @@ export interface ServerExtension {
 	apiVersion?: number;
 	/** Called lazily on the first query while the extension is on, again after each switch-off; must not do I/O itself. */
 	queries?: (host: ExtensionHostServices) => Readonly<Record<string, ExtensionQuery>>;
+	/**
+	 * Started once the host's publishers are wired and again each time the extension is switched back
+	 * on; stopped when it is switched off and when the host stops. Must return promptly.
+	 */
+	hostService?: (host: ExtensionHostServices) => ExtensionHostService;
 }
 
 export function defineServerExtension<T extends ServerExtension>(extension: T): T {

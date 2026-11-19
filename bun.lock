@@ -344,6 +344,7 @@
         "@stroncium/procfs": "1.2.1",
         "@thinkrail/contracts": "workspace:*",
         "@thinkrail/ext-ask-user-question": "workspace:*",
+        "@thinkrail/ext-board": "workspace:*",
         "@thinkrail/ext-next-steps": "workspace:*",
         "@thinkrail/ext-session-insights": "workspace:*",
         "@thinkrail/ext-visualize": "workspace:*",
@@ -520,6 +521,19 @@
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
         "react-dom": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "thinkrail-extensions/board": {
+      "name": "@thinkrail/ext-board",
+      "version": "0.0.0",
+      "dependencies": {
+        "@thinkrail/extension-api": "workspace:*",
+        "typebox": "catalog:",
+      },
+      "devDependencies": {
+        "@earendil-works/pi-coding-agent": "catalog:",
+        "@types/bun": "catalog:",
         "typescript": "catalog:",
       },
     },
@@ -1332,6 +1346,8 @@
     "@thinkrail/desktop": ["@thinkrail/desktop@workspace:apps/desktop"],
 
     "@thinkrail/ext-ask-user-question": ["@thinkrail/ext-ask-user-question@workspace:thinkrail-extensions/ask-user-question"],
+
+    "@thinkrail/ext-board": ["@thinkrail/ext-board@workspace:thinkrail-extensions/board"],
 
     "@thinkrail/ext-hint-mode": ["@thinkrail/ext-hint-mode@workspace:thinkrail-extensions/hint-mode"],
 

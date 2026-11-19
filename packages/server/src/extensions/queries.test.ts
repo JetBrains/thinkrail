@@ -4,11 +4,25 @@ import { errorCodeOf } from "@thinkrail/shared/codedError";
 import { createExtensionQueries } from "./queries";
 import type { ServerExtensionEntry } from "./registry";
 
+const refused = async (): Promise<never> => {
+	throw new Error("no host actions in this test");
+};
+
 function services(name: string, signal: AbortSignal): ExtensionHostServices {
 	return {
 		dataDir: `/data/extensions/${name}`,
 		log: { info: () => {}, warn: () => {} },
 		signal,
+		actions: {
+			createWorkspace: refused,
+			sendToChat: refused,
+			stopChat: refused,
+			openPr: refused,
+			runInWorkspace: refused,
+		},
+		events: { subscribe: () => () => {} },
+		publish: () => {},
+		workspaceFacts: async () => null,
 		sessionsRoot: () => "/agent/sessions",
 		sessionScope: () => ({ projects: [], locate: () => null }),
 		childTranscriptDirs: async () => [],

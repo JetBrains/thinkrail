@@ -174,9 +174,11 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   and the Settings copy is the app's locale keys), optional `childExtensions`, optional
   `skillPackages` specifiers and optional `supersedesPackages` (npm names of vanilla pi packages whose
   extensions the host leaves out of its sessions while this extension is on — a user's vanilla install of
-  the same capability), plus optional `apiVersion` and `queries`. Its identity
+  the same capability), plus optional `apiVersion`, `queries` and `hostService`. Its identity
   helper preserves factories, order and optional-field absence; loading and skill resolution remain host
-  responsibilities.
+  responsibilities. It re-exports, as types, the contracts shapes its services carry (`SessionStateRecord`,
+  `Workspace`, `Container`, `ChatState`, `ThinkingLevel`, `OpenPrResult`, `BranchReviewState`), because an
+  extension's `server/**` imports only this SDK.
 - `queries(host: ExtensionHostServices)` returns `ExtensionQuery` methods by name — queries (reads, and
   writes only to the extension's own data folder or the workspace's Artifacts); the contract
   is in [[module-thinkrail-extensions]] § Shape. **A table lives while its extension is on**: `signal`
@@ -206,8 +208,35 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   `null` when the host no longer has the tree) and `ensureArtifactsDir(workspaceId)`
   (`ExtensionArtifactsDir`: an open workspace's artifacts folder, absolute and worktree-relative,
   recreated with its self-ignoring `.gitignore` when missing — the session-level `workspaceFiles` rule,
-  addressed by workspace id since queries have no session; `null` for a workspace that is not open).
+  addressed by workspace id since queries have no session; `null` for a workspace that is not open) and
+  `workspaceFacts(workspaceId)` (`ExtensionWorkspaceFacts`: an open workspace's last-known review, its diff
+  stats against the base and its chats as `ExtensionChatFacts` — contracts' `chatState`, unread and the TODO
+  plan's open/total —, `null` for a workspace that is not open).
   A service is added with the consumer that needs it.
+- **Queries read; actions write through named host actions.** `ExtensionHostServices.actions`
+  (`ExtensionHostActions`) are the only writes an extension makes outside its own data folder and the
+  Artifacts, each a named host operation with contracts-shaped params, never a shell or a host internal:
+  `createWorkspace({ projectId, baseRef?, into?, name?, kickoff: { text, model?, thinkingLevel? } })` →
+  `{ workspaceId, sessionId, branch, kickoffError? }` (the New Workspace dialog's creation, marked as the
+  extension's), `sendToChat({ sessionId, text, mode })` (a follow-up or steer the transcript shows as the
+  extension's message under its title), `stopChat({ sessionId })` → `{ stopped }`, `openPr({ workspaceId,
+  title?, body?, draft? })` → `OpenPrResult`, and `runInWorkspace({ workspaceId, argv, timeoutMs })` →
+  `{ ok, out, err, timedOut }` (one program by `argv` in a repository workspace's worktree, stopped once
+  those services' `signal` aborts). Every action
+  is refused with `EXTENSION_DISABLED` while the extension is off.
+- **Host lifetime.** `ServerExtension.hostService?(host)` returns an `ExtensionHostService { stop? }`; the
+  host starts it once its publishers are wired and whenever the extension is switched back on, and stops
+  it when the extension is switched off and when the host stops, so it must return promptly. Each run gets
+  services of its own whose `signal` aborts once that run stopped, as a query table's does on a switch-off.
+  `host.events.subscribe(type, listener)` (`ExtensionHostEventBus`) returns the unsubscribe, ends with
+  those services' `signal`, and delivers
+  `ExtensionHostEvents`: `session.state` (`SessionStateRecord`), `workspace.created` / `workspace.updated`
+  (`Workspace`, the review refresh included) / `workspace.removed` (`{ projectId, id }`), `agent.settled`
+  (`{ workspaceId, sessionId }`, pi's `agent_settled`) and `container.updated` / `container.removed`. Each
+  listener gets its own copy; a throw or a rejection is logged and never reaches the host.
+  `host.publish(type, payload, scope?)` pushes contracts' `extension.event { extension, type, payload }`
+  to the clients that may see `scope` (`ExtensionPublishScope { workspaceId?, projectId? }`), dropped while
+  the extension is off; `type` is 1–100 word characters, dots or dashes.
 - `sessionExtensions(session: ExtensionSessionServices) => ExtensionFactory[]` is how an extension uses
   per-session state the host owns: the host calls it once per parent session with that session's
   services: `setting(key)` (the extension's own declared setting, read inside a factory body so a pi
@@ -225,8 +254,8 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   - `awaitToolResponse(toolCallId, signal)` resolves a `ToolResponse`: `{kind: "response", value}`,
     `{kind: "deferred"}` or `{kind: "abandoned"}`.
 - The root is browser-safe and exposes only the web contract; it never re-exports the server half.
-- Workspace dependencies are `contracts` (types, now also `HistoryScope`, `SessionCompletion` and
-  `Workspace` for the host services) and, type-only, `@thinkrail/locales`' `MessageKey` and
+- Workspace dependencies are `contracts` (types, now also `HistoryScope`, `SessionCompletion`,
+  `Workspace` and the event, action and facts shapes for the host services) and, type-only, `@thinkrail/locales`' `MessageKey` and
   `@thinkrail/locales/react`'s `Translator`.
   React and pi are type-only contract dependencies; there are no React components, registry, DOM access,
   host imports, or pi runtime values.

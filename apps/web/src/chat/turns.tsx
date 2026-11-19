@@ -610,6 +610,10 @@ function containerNoteTitle(t: Translator, note: ContainerNote): string {
 			return note.details.mode === "steer"
 				? t("chat.turn.container.orchestratorSteer", { container: note.details.containerName })
 				: t("chat.turn.container.orchestrator", { container: note.details.containerName });
+		case "extensionMessage":
+			return note.details.mode === "steer"
+				? t("chat.turn.container.extensionSteer", { extension: note.details.extensionTitle })
+				: t("chat.turn.container.extension", { extension: note.details.extensionTitle });
 	}
 }
 
@@ -617,7 +621,7 @@ function ContainerNoteCard({ id, note, text }: { id: string; note: ContainerNote
 	const t = useT();
 	const [expanded, toggle, toggleRef] = useFold(
 		`${id}:container-note`,
-		note.kind === "orchestratorMessage",
+		note.kind === "orchestratorMessage" || note.kind === "extensionMessage",
 	);
 	return (
 		<div

@@ -457,6 +457,8 @@
 	"chat.trust.stopTrustingSkills": "Its project skills stop loading in new chats.",
 	"chat.trust.untrustedNotice": "This project ships {{items}} — off until you trust it.",
 	"chat.turn.container.brief": "Container summary",
+	"chat.turn.container.extension": "From the {{extension}} extension",
+	"chat.turn.container.extensionSteer": "From the {{extension}} extension · steer",
 	"chat.turn.container.orchestrator": "From the orchestrator of “{{container}}”",
 	"chat.turn.container.orchestratorSteer": "From the orchestrator of “{{container}}” · steer",
 	"chat.turn.container.wake": "Update from {{workspace}}",

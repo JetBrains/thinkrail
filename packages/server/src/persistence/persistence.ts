@@ -652,7 +652,7 @@ export function saveWorkspaces(workspaces: Workspace[]): void {
 	saveChats({ ...stored, chats });
 }
 
-export type CreationOrigin = "agent";
+export type CreationOrigin = "agent" | "extension";
 
 export type WorkspaceCreationRecord = Omit<WorkspaceCreation, "kickoff"> & {
 	worktreePath: string;
