@@ -169,12 +169,12 @@ The description, author and version ThinkRail shows are the package's own `descr
 `version`.
 
 The package `name` is the extension's identity: ThinkRail keys the extension's on/off switch and its
-settings by it, so renaming the package makes it a different extension. It must be a valid npm name
-and cannot be one of the names ThinkRail reserves:
+settings by it, so renaming the package makes it a different extension.
 
 <!-- guard: reserved-names -->
-the names of its built-in extensions, `ask-user-question`, `hint-mode`, `next-steps`, `visualize` and
-`web-access`, and of its own `mcp` and `tool-search` slots.
+It must be a valid npm name and cannot be one of the names ThinkRail reserves: the names of its
+built-in extensions, `ask-user-question`, `hint-mode`, `next-steps`, `visualize` and `web-access`, and
+of its own `mcp` and `tool-search` slots.
 
 `files` publishes the server source and `dist/`, nothing else. `prepack` runs the build, so every
 `npm publish` and `npm pack` ships a fresh `dist/`.
@@ -273,13 +273,11 @@ is that chat's load error for your extension. Do slow work lazily, inside a tool
 
 ### Tool names
 
-Give your tools names of their own, such as `color_palette`. A tool, command or flag name that
-ThinkRail already owns stays ThinkRail's:
-
 <!-- guard: host-tools -->
-the tools of its built-in extensions (such as `ask_user_question`), its own tools (such as `set_title`,
-`request_review` and the subagent tool `Agent`), and the tools of MCP servers and of tool search
-(`tool_search`).
+Give your tools names of their own. A tool, command or flag name that ThinkRail already owns stays
+ThinkRail's: the tools of its built-in extensions (such as `ask_user_question`), its own tools (such as
+`set_title`, `request_review` and the subagent tool `Agent`), and the tools of MCP servers and of tool
+search (`tool_search`).
 
 If your extension registers one of these names, that registration has no effect: the agent keeps
 calling ThinkRail's tool, and your extension's other tools work as usual. Nothing reports it, and
@@ -330,8 +328,9 @@ export default defineWebExtension({
 ```
 
 Set `name` to the package name, as on the server half; ThinkRail registers the cards under the package
-name. `name` and `toolRenderers` are the whole descriptor: `defineWebExtension` does not accept other
-fields. A card can be registered for any tool name, also one that comes from a pi package or an MCP
+name. `name` and `toolRenderers` are the whole descriptor: another field is a type error in
+`defineWebExtension`, and since the build does not type-check, ThinkRail ignores it at runtime without
+a warning. A card can be registered for any tool name, also one that comes from a pi package or an MCP
 server, but a card ThinkRail registers for a tool by name keeps winning
 ([Names ThinkRail keeps](/docs/extension-reference/#names-thinkrail-keeps)). The registration `options`
 (the [reference](/docs/extension-reference/#web-descriptor) lists all eight):

@@ -41,12 +41,10 @@ ThinkRail does not load, and the catalog does not list, a package whose `package
   the table;
 - has a `title` or `image` that is not a non-empty string.
 
-ThinkRail also refuses a package with a name it reserves; the catalog does not check this. The reserved
-names are
-
 <!-- guard: reserved-names -->
-those of its built-in extensions, `ask-user-question`, `hint-mode`, `next-steps`, `visualize` and
-`web-access`, and of its own `mcp` and `tool-search` slots.
+ThinkRail also refuses a package with a name it reserves; the catalog does not check this. The reserved
+names are those of its built-in extensions, `ask-user-question`, `hint-mode`, `next-steps`, `visualize`
+and `web-access`, and of its own `mcp` and `tool-search` slots.
 
 Fields the manifest does not define are ignored. Paths are compared after removing `.` segments
 and repeated slashes, so `./dist/web.js` and `dist/web.js` are the same file.
@@ -158,11 +156,11 @@ factory still running after 10 seconds is that chat's load error for the extensi
 
 ## Web descriptor
 
-The default export of the `web` file, made with `defineWebExtension` from
-`@thinkrail/extension-sdk/web`:
-
 <!-- guard: web-descriptor -->
-`{ name, toolRenderers }`, and nothing else: `defineWebExtension` rejects other fields.
+The default export of the `web` file, made with `defineWebExtension` from
+`@thinkrail/extension-sdk/web`, is `{ name, toolRenderers }` and nothing else. Another field is a type
+error in `defineWebExtension`; at runtime, where the build does not type-check, ThinkRail ignores it
+without a warning.
 
 ThinkRail registers the renderers under the package name. `toolRenderers` is keyed by tool name; each
 entry is `{ renderer, options }`, where `renderer` is a React component receiving `ToolRenderProps`

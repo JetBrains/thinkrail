@@ -377,7 +377,11 @@ describe("the docs' reference tables", () => {
 		expect(firstColumn("registration-options").map((spans) => spans[0])).toEqual(
 			declaredKeys("ToolRegistrationOptions"),
 		);
-		const [shape] = codeSpans(guardedLines(reference, "web-descriptor").join(" "));
+		const shapes = codeSpans(guardedLines(reference, "web-descriptor").join(" ")).filter((span) =>
+			span.startsWith("{"),
+		);
+		expect(shapes).toHaveLength(1);
+		const [shape] = shapes;
 		const fields = /^\{ (.+) \}$/.exec(shape ?? "")?.[1]?.split(", ");
 		expect(fields).toEqual(declaredKeys("WebExtension"));
 		const options = declaredKeys("ToolRegistrationOptions");
