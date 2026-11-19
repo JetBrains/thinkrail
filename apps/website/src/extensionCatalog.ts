@@ -1,3 +1,4 @@
+import type { Denylist } from "./extensionDenylist";
 import {
 	type ExtensionHalf,
 	isPackageName,
@@ -21,7 +22,6 @@ export interface CatalogEntry {
 	author?: string;
 	api: string;
 	halves: ExtensionHalf[];
-	image?: string;
 	install: string;
 	npm: string;
 	repository?: string;
@@ -39,6 +39,7 @@ export type RegistryFetch = (url: string) => Promise<Response>;
 export interface BuildCatalogOptions {
 	fetch: RegistryFetch;
 	now: Date;
+	denylist?: Denylist;
 	pageSize?: number;
 	retryDelayMs?: number;
 	log?: (line: string) => void;
@@ -144,7 +145,6 @@ function catalogEntry(pkg: unknown, hit: SearchHit): EntryResult {
 	const { manifest } = parsed;
 	const title = nonEmptyText(manifest.title, maxTitleLength);
 	const author = normalizeAuthor(pkg.author) ?? firstMaintainer(pkg.maintainers) ?? hit.maintainer;
-	const image = httpsUrl(manifest.image);
 	const repository = normalizeRepository(pkg.repository);
 	return {
 		entry: {
@@ -155,7 +155,6 @@ function catalogEntry(pkg: unknown, hit: SearchHit): EntryResult {
 			...(author === undefined ? {} : { author }),
 			api: manifest.api,
 			halves: manifestHalves(manifest),
-			...(image === undefined ? {} : { image }),
 			install: `npm:${hit.name}`,
 			npm: npmPageUrl(hit.name),
 			...(repository === undefined ? {} : { repository }),
@@ -242,6 +241,11 @@ export async function buildExtensionCatalog(
 ): Promise<ExtensionCatalog> {
 	const hits = await searchHits(options);
 	const results = await mapLimited(hits, 8, async (hit) => {
+		const denied = options.denylist?.get(hit.name);
+		if (denied !== undefined) {
+			const reason = denied.reason === undefined ? "" : ` (${denied.reason})`;
+			return { name: hit.name, result: { rejected: `on the site's denylist${reason}` } };
+		}
 		const response = await registryResponse(options, latestUrl(hit.name), true);
 		if (response === undefined) return { name: hit.name, result: { rejected: "unpublished" } };
 		return { name: hit.name, result: catalogEntry(await response.json(), hit) };
@@ -263,7 +267,6 @@ const entryKeys = new Set([
 	"author",
 	"api",
 	"halves",
-	"image",
 	"install",
 	"npm",
 	"repository",
@@ -301,10 +304,8 @@ export function catalogErrors(value: unknown): string[] {
 				errors.push(`${at}.${key} must be a string`);
 			}
 		}
-		for (const key of ["image", "repository"] as const) {
-			if (entry[key] !== undefined && httpsUrl(entry[key]) === undefined) {
-				errors.push(`${at}.${key} must be an https URL`);
-			}
+		if (entry.repository !== undefined && httpsUrl(entry.repository) === undefined) {
+			errors.push(`${at}.repository must be an https URL`);
 		}
 		const halves = entry.halves;
 		if (!Array.isArray(halves) || !["server", "web", "server,web"].includes(halves.join(","))) {

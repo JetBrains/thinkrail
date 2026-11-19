@@ -82,7 +82,7 @@ The parent owns the route-composition edges; the vibecoding leaf has no sibling 
 src/pages/{vibecoding,agentic-development,agentic-ide}/index.astro ──▶ src/vibecoding (through index.ts)
 src/pages/{vibecoding,agentic-development,agentic-ide}/index.astro ──▶ src/components/Analytics.astro
 landing + ShellLayout (blog, docs, extensions)                     ──▶ src/components/Analytics.astro
-src/pages/extensions/**, src/validateBuild.ts                      ──▶ src/extensionCatalog*.ts, src/extensionManifest.ts
+src/pages/extensions/**, src/validateBuild.ts                      ──▶ src/extensionCatalog*.ts, src/extensionDenylist.ts, src/extensionManifest.ts
 src/main.ts, src/vibecoding                                        ──▶ src/installLinkShare.ts, src/installCommands.ts, src/installPlatform.ts, src/githubStars.ts
 ```
 
@@ -148,8 +148,7 @@ IDE shell.
 - **Enhancement behaviors owned by `main.ts`** (the code carries no rationale — this is it):
   - *Extensions page* (`src/extensionsPage.ts`, inert elsewhere): reveals the search box (hidden in
     markup, since it does nothing without JS), filters cards on every whitespace-separated term over
-    title, name, description and author, keeps the live count and the no-match line in step, and hides
-    a preview image that fails so its fixed box shows the placeholder instead.
+    title, name, description and author, and keeps the live count and the no-match line in step.
   - *Terminal replay*: the Install section's command tabs keep the launcher command in static markup;
     that command is the single source of truth for the terminal,
     which subscribes and types it before the short install transcript. A generation counter invalidates an
@@ -532,10 +531,21 @@ and a valid manifest; nothing reviewed, hidden or marked) are owned by [[module-
   would give the exact version's time but can be megabytes per package. `author` is the package
   `author`'s name (email and URL stripped) or else its first maintainer; `repository` is normalised from
   npm's string, shorthand and object forms (`git+`, `git://`, `ssh://`, `git@host:`, `github:` /
-  `gitlab:` / `bitbucket:`, bare `user/repo`) to an `https:` URL or dropped; only an `https:` image is
-  kept (the package stays listed without it). Text is whitespace-collapsed and capped (title 100,
+  `gitlab:` / `bitbucket:`, bare `user/repo`) to an `https:` URL or dropped. A manifest's `image` is
+  never copied (see *No third-party images* below). Text is whitespace-collapsed and capped (title 100,
   description 400 characters) so one package cannot bloat a file every app downloads. Entries are sorted
   by name; optional fields are omitted, never null.
+- **Delisting is a commit to `extension-denylist.json`** (`{ "packages": [{ "name", "reason"?, "date"? }] }`,
+  parsed strictly by `src/extensionDenylist.ts`: an exact package name, an optional non-empty reason and
+  a `YYYY-MM-DD` date, no other keys, no duplicates — a malformed file fails the build). The builder drops
+  a listed name before fetching its `package.json`, for the npm and the sample source alike, and logs it
+  as `not listed: <name>: on the site's denylist (<reason>)`, so the delisting is visible in the run log;
+  the push of the commit deploys the shorter catalog at once. Any maintainer with merge rights edits it
+  through an ordinary PR that says why (in `reason` or the PR). *It is not a review:* every other package
+  is still listed unchecked, and a denylisted package stays on npm and installable by its `npm:` source.
+  It is for a package reported as malicious, abusive or impersonating after it was listed; an author who
+  wants to be removed publishes a version without the keyword. Exact names only — a scope or pattern rule
+  was rejected until a real case needs one.
 - **Manifest rules are copied, not imported** (`src/extensionManifest.ts`): the site must not depend on the
   app, so it keeps its own copy of the host's rules ([[module-extension-api]] `./installed`), reading a
   whole `package.json` as the host does. Its tests run the host's table of manifest cases, read at test
@@ -565,15 +575,18 @@ and a valid manifest; nothing reviewed, hidden or marked) are owned by [[module-
   entry with title (or name), name and version, description (clamped), author, `Agent tools` for a server
   half and `Chat cards` for a web half — halves, not tool names, which live in code the site cannot run —,
   the `npm:<name>` install source with the site's `data-copy` button, and npm and repository links (the
-  repository with `rel="ugc nofollow"`, since it is unreviewed). One hint line says the source is pasted
-  into Settings → Extensions & skills → Install package…. The page always states that listings are automatic and
-  unreviewed and links the guide; an empty catalog shows an empty state inviting the first extension.
-  The Files rail shows `README.md` (the page) and `catalog.json`.
-- **Third-party images** are the only third-party content: rendered only when present, inside a fixed
-  16:9 box with a placeholder behind them, `loading="lazy"`, `decoding="async"`, low fetch priority and
-  `referrerpolicy="no-referrer"`; a failed image is hidden and the box keeps its size. No third-party
-  script is ever loaded. The image request itself still reaches the author's host — accepted with the
-  contract's `image` field.
+  repository with `rel="ugc nofollow"`, since it is unreviewed). One hint line says to install from
+  Settings → Extensions & skills → Browse, or to paste the source into Install package… there. The page
+  always states that listings are automatic, unreviewed and subject to delisting, and links the guide; an
+  empty catalog shows an empty state inviting the first extension. The Files rail shows `README.md` (the
+  page) and `catalog.json`. The page cannot know a visitor's ThinkRail version, so it does not mark
+  listings built for a newer extension API; the app's Browse does.
+- **No third-party images** (decision reversed on the #1433 review): an author-chosen image URL makes
+  every visitor's browser — and, in Browse, every app — request a host the author picks, exposing their
+  address. The catalog carries no `image` (`catalogErrors` rejects the field, so `validateBuild` fails a
+  build that emits one), the page renders none, and `validateBuild` fails an extensions page with an
+  `<img>` from another origin. Rehosting images at build time was rejected: the site would serve
+  unreviewed third-party content from its own origin. No third-party script is ever loaded.
 
 ## Discovery and assets
 

@@ -3250,34 +3250,6 @@ a.feature-card:hover {
 	display: none;
 }
 
-.ext-card-media {
-	position: relative;
-	display: grid;
-	place-items: center;
-	aspect-ratio: 16 / 9;
-	overflow: hidden;
-	border-bottom: 1px solid var(--border2);
-	background: var(--container-workspace-bg);
-	color: var(--hint);
-}
-
-.ext-card-placeholder {
-	font-size: 32px;
-	opacity: 0.6;
-}
-
-.ext-card-image {
-	position: absolute;
-	inset: 0;
-	width: 100%;
-	height: 100%;
-	object-fit: cover;
-}
-
-.ext-card-media.broken .ext-card-image {
-	display: none;
-}
-
 .ext-card-body {
 	display: flex;
 	flex: 1;

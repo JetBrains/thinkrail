@@ -1,8 +1,10 @@
+import denylistFile from "../extension-denylist.json";
 import {
 	buildExtensionCatalog,
 	type ExtensionCatalog,
 	type RegistryFetch,
 } from "./extensionCatalog";
+import { parseDenylist } from "./extensionDenylist";
 import recording from "./fixtures/npmRegistry.json";
 
 export type CatalogSource = "npm" | "sample";
@@ -42,16 +44,18 @@ const npmFetch: RegistryFetch = (url) =>
 
 async function load(): Promise<LoadedCatalog> {
 	const source = catalogSource(process.env.EXTENSION_CATALOG_SOURCE);
+	const denylist = parseDenylist(denylistFile);
 	const log = (line: string) => console.log(`[extension catalog] ${line}`);
 	if (source === "npm") {
 		return {
 			source,
-			catalog: await buildExtensionCatalog({ fetch: npmFetch, now: new Date(), log }),
+			catalog: await buildExtensionCatalog({ fetch: npmFetch, now: new Date(), denylist, log }),
 		};
 	}
 	const catalog = await buildExtensionCatalog({
 		fetch: recordedFetch(recording),
 		now: new Date(recording.recordedAt),
+		denylist,
 	});
 	return { source, catalog };
 }

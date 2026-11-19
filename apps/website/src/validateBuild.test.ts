@@ -209,4 +209,16 @@ describe("validateExtensionsPage", () => {
 			"extensions: empty catalog without the empty state",
 		]);
 	});
+
+	test("rejects an image from another origin", () => {
+		const card = '<article class="ext-card">';
+		for (const src of ["https://example.com/p.png", "//example.com/p.png"]) {
+			expect(
+				validateExtensionsPage(page(`${card}<img alt="" src="${src}">`), catalog([entry])),
+			).toEqual(["extensions: loads an image from another origin"]);
+		}
+		expect(
+			validateExtensionsPage(page(`${card}<img alt="" src="/_astro/a.webp">`), catalog([entry])),
+		).toEqual([]);
+	});
 });

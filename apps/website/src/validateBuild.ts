@@ -161,6 +161,9 @@ export function validateExtensionsPage(html: string, catalogText: string): strin
 	if (!html.includes('href="/docs/build-an-extension/"')) {
 		failures.push("extensions: missing the link to the authoring guide");
 	}
+	if (/<img\b[^>]*\ssrc="(?:https?:)?\/\//i.test(html)) {
+		failures.push("extensions: loads an image from another origin");
+	}
 	return failures;
 }
 
