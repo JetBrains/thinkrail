@@ -6,16 +6,22 @@ Entry: a PR reference in the request (a link or a number), or none. Saves `pr.md
 
 ## 1. Resolve the PR
 
-- Take the link or number from the request. With none, list open PRs (`gh pr list`) and ask which
-  one with `ask_user_question`; this is the only question before the brief.
+- Take the link or number from the request. With none, list open PRs (`gh pr list --repo
+  <owner>/<repo>`, the repository chosen as for a bare number below) and ask which one with
+  `ask_user_question`; this is the only question before the brief.
+- Pin the PR to its repository. From a link, `<owner>/<repo>` is in the URL. From a bare number,
+  take the first GitHub remote in the order `upstream`, `github`, `origin`, then the rest (the New
+  Workspace picker's order), and confirm it with the user when the checkout has several. Every later
+  `gh` call names `<url>` or `--repo <owner>/<repo>`, never a bare number: `gh` prefers its own
+  configured default repository, which may be another one.
 - No `gh`, not signed in, or a remote that is not GitHub: say so in one line and stop. That is a
   terminal state of the workflow.
 
 ## 2. Read the facts
 
 ```
-gh pr view <n> --json number,title,author,state,isDraft,baseRefName,headRefName,headRefOid,additions,deletions,changedFiles,mergeable,reviewDecision,mergedAt,url,body
-gh pr checks <n>
+gh pr view <url> --json number,title,author,state,isDraft,baseRefName,headRefName,headRefOid,additions,deletions,changedFiles,mergeable,reviewDecision,mergedAt,mergeCommit,url,body
+gh pr checks <url>
 gh api --paginate repos/<owner>/<repo>/pulls/<n>/reviews
 gh api --paginate repos/<owner>/<repo>/pulls/<n>/comments
 ```
@@ -29,18 +35,26 @@ gh api --paginate repos/<owner>/<repo>/pulls/<n>/comments
 
 Only a fresh workspace is moved: a clean tree and no commits of its own.
 
+`<remote>` is the remote whose URL names `<owner>/<repo>` (`git remote -v`) and `<name>` is that
+remote's name; when no remote does, `<remote>` is `https://github.com/<owner>/<repo>.git` and
+`<name>` is `review`.
+
 ```
 git status --porcelain                                   # must print nothing
-git fetch <remote> <base>
-git rev-list --count <remote>/<base>..HEAD               # must be 0
-git fetch <remote> pull/<n>/head:refs/remotes/<remote>/pr-<n>
-git merge --ff-only <remote>/pr-<n> || git reset --hard <remote>/pr-<n>
-git merge-base <remote>/<base> HEAD                      # the base for every later diff
+git fetch <remote> +refs/heads/<base>:refs/remotes/<name>/<base>
+git rev-list --count <name>/<base>..HEAD                 # must be 0
+git fetch <remote> +pull/<n>/head:refs/remotes/<name>/pr-<n>
+git reset --hard <name>/pr-<n>                           # the branch now is the PR head
+git merge-base <name>/<base> HEAD                        # the base for every later diff
 ```
 
+- **A PR merged with a merge commit** is already inside `<base>`, so that merge base is the head
+  itself and every diff is empty. Take the base from before the merge instead:
+  `git merge-base <mergeCommit>^1 HEAD`. Say in the first message that the Changes tab, which
+  measures against today's base, shows nothing for this workspace; the stages use the recorded base.
 - If the tree is dirty or the branch has commits, do not touch it. Tell the user and offer to
   start a separate workspace with the same request. Stop here unless they ask to continue.
-- Record the head SHA and the merge base in `pr.md`. Every later stage uses these two.
+- Record the PR's URL, the head SHA and the merge base in `pr.md`. Every later stage uses these.
 - When the repository needs an install before tests run, start it as a background command now.
 
 ## 4. State, and the merge race

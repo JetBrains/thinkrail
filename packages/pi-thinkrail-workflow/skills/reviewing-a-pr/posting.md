@@ -6,7 +6,7 @@ This doc ends the workflow in one of the terminal states at the bottom.
 ## 1. Read the PR again
 
 ```
-gh pr view <n> --json state,isDraft,headRefOid,mergedAt,reviewDecision
+gh pr view <url> --json state,isDraft,headRefOid,mergedAt,reviewDecision
 ```
 
 - **The head moved** since intake: say so. Findings may be outdated. Offer to check the new
@@ -67,7 +67,8 @@ One call, so the review arrives whole:
 gh api --method POST repos/<owner>/<repo>/pulls/<n>/reviews --input review-payload.json
 ```
 
-with `commit_id` (the reviewed head), `event` (`REQUEST_CHANGES`, `COMMENT` or `APPROVE`),
+with `<owner>/<repo>` from the PR's URL recorded at intake (never the checkout's default), `commit_id`
+(the reviewed head), `event` (`REQUEST_CHANGES`, `COMMENT` or `APPROVE`),
 `body`, and `comments` as `{path, line, side: "RIGHT", body}`.
 
 - Read the response and give the user the review's link.

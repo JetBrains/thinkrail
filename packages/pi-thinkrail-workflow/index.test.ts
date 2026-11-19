@@ -138,6 +138,18 @@ describe("pi-thinkrail-workflow extension", () => {
 		expect(readFileSync(new URL("brief-template.html", dir), "utf8")).not.toContain("<script");
 	});
 
+	test("reviewing-a-pr reads and posts the picked PR's own repository, never gh's default", () => {
+		const dir = new URL("./skills/reviewing-a-pr/", import.meta.url);
+		for (const doc of ["intake.md", "posting.md"]) {
+			const text = readFileSync(new URL(doc, dir), "utf8");
+			expect(text).not.toMatch(/gh pr (view|checks) <n>/);
+			expect(text).toContain("gh pr view <url>");
+		}
+		const intake = readFileSync(new URL("intake.md", dir), "utf8");
+		expect(intake).toContain("git reset --hard <name>/pr-<n>");
+		expect(intake).toContain("git merge-base <mergeCommit>^1 HEAD");
+	});
+
 	test("classifies every GitHub merge state before declaring a PR ready", () => {
 		const checks = readFileSync(
 			new URL("./skills/shipping-a-pr/checks.md", import.meta.url),
