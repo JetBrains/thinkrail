@@ -422,7 +422,7 @@ makes it.
 
 That is the whole of extension API 1.0, and only the names the
 [reference](/docs/extension-reference/#shared-modules) lists exist at runtime, even where React's
-own type declarations show more. There is no dialog, text field or keyboard module: draw a
+own type declarations show more; the build fails on an import of any other name. There is no dialog, text field or keyboard module: draw a
 `<textarea>` or a panel inside your card rather than opening a dialog. Palette uses the app's
 `Button`, `IconButton` and `cn`. Anything else you import is bundled into `dist/web.js`: Palette
 bundles its two icons from `@remixicon/react`, and its whole bundle is about 6 KB.
