@@ -17,6 +17,8 @@ const host: ResourceHost = {
 	},
 	bytesUrl: () => "",
 	openFile: () => {},
+	openPathExternally: () => {},
+	revealInFileManager: () => {},
 	openComparison: () => {},
 	readFile: async () => ({ content: "" }),
 	subscribeFileChanges: () => () => {},

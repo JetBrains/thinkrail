@@ -31,6 +31,7 @@ export {
 	supportsChangeMutations,
 	supportsExtensionSettings,
 	supportsFonts,
+	supportsFsExternalActions,
 	supportsHostUpdateRun,
 	supportsKeybindings,
 	supportsPiPackages,
