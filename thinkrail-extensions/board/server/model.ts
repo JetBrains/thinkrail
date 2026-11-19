@@ -129,13 +129,18 @@ export interface BoardSettings {
 	wipLimits: WipLimits;
 	followSelection: boolean;
 	github: GithubSettings;
+	/** Where Publish writes the roadmap snapshot in the Default workspace, worktree-relative. */
+	snapshotPath: string;
 }
+
+export const DEFAULT_SNAPSHOT_PATH = "ROADMAP.md";
 
 export const DEFAULT_SETTINGS: BoardSettings = {
 	preset: "agentic-kanban",
 	wipLimits: { needsYou: 3, review: 5, agents: 3 },
 	followSelection: false,
 	github: { enabled: false, filter: "open" },
+	snapshotPath: DEFAULT_SNAPSHOT_PATH,
 };
 
 export const HORIZONS = ["now", "next", "later"] as const;
@@ -181,6 +186,8 @@ export interface Initiative {
 	/** An agent's proposal, shown for acceptance; accepting clears it. */
 	proposed?: true;
 	proposedBy?: "agent";
+	/** When the human confirmed it done in an initiative-close chat. */
+	closedAt?: number;
 	createdAt: number;
 	updatedAt: number;
 }

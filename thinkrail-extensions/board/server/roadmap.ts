@@ -2,11 +2,13 @@ import type {
 	ExtensionHostProject,
 	ExtensionWorkspaceFacts,
 } from "@thinkrail/extension-api/server";
+import { type Activity, initiativeActivity } from "./activity";
 import type { Located } from "./board";
-import { dayOf, dayOfIso, isoOfDay, today } from "./days";
+import { DAY_MS, dayOf, dayOfIso, isoOfDay, today } from "./days";
 import { type Forecast, forecast } from "./forecast";
 import { type HealthView, suggestHealth } from "./health";
 import { cardId as formatCardId, parseCardId } from "./ids";
+import { type Insights, insights } from "./insights";
 import type { KickoffContext } from "./kickoff";
 import {
 	type Card,
@@ -515,6 +517,32 @@ export class Roadmap {
 		};
 	}
 
+	/** The board's flow over the last `weeks` weeks (`insights.ts`), its cards' current waits included. */
+	async insights(projectId: string, weeks: number): Promise<Insights> {
+		this.host.project(projectId);
+		const { cards, transitions } = this.data(projectId);
+		const waiting = cards.filter((card) => card.category === "started");
+		const facts = await this.host.facts(waiting);
+		const since = new Map<string, number>();
+		for (const card of waiting) {
+			const agent = agentOf(card, facts);
+			if (agent?.state === "waiting") since.set(card.id, agent.since);
+		}
+		return insights({
+			transitions,
+			cards: cards.map((card) => {
+				const waitingSince = since.get(card.id);
+				return {
+					id: card.id,
+					category: card.category,
+					...(waitingSince !== undefined ? { waitingSince } : {}),
+				};
+			}),
+			now: this.host.now(),
+			weeks,
+		});
+	}
+
 	createInitiative(projectId: string, input: InitiativeInput, by: "human" | "agent"): Initiative {
 		this.host.project(projectId);
 		const file = this.store.initiatives(projectId);
@@ -626,6 +654,58 @@ export class Roadmap {
 		};
 		this.commit(projectId, { initiatives: this.replaceInitiative(file, next) });
 		return next;
+	}
+
+	/** Marks an initiative closed, once the human confirmed it done; a closed one stays closed. */
+	closeInitiative(projectId: string, id: string): Initiative {
+		this.host.project(projectId);
+		const { file, initiative } = this.initiative(projectId, id);
+		if (initiative.closedAt !== undefined) throw new Error(`${id} is already closed.`);
+		if (initiative.proposed) throw new Error(`${id} is a proposal; accept it before closing it.`);
+		const at = this.host.now();
+		const next: Initiative = { ...initiative, closedAt: at, updatedAt: at };
+		this.commit(projectId, { initiatives: this.replaceInitiative(file, next) });
+		return next;
+	}
+
+	/**
+	 * What moved in an initiative over the last `sinceDays` days: its cards' (nested initiatives' and other
+	 * boards' included) category changes and notes, from each board's transition log.
+	 */
+	activity(
+		projectId: string,
+		id: string,
+		sinceDays: number,
+	): { initiative: Initiative; activity: Activity; titles: Record<string, string> } {
+		this.host.project(projectId);
+		const { initiative } = this.initiative(projectId, id);
+		const data = this.data(projectId);
+		const members = initiativeCards(
+			id,
+			this.store.initiatives(projectId).initiatives,
+			data.projects,
+			data.cards,
+		);
+		const local = new Set(members.local);
+		const cards = data.cards.filter((card) => local.has(card.id));
+		const transitions = data.transitions.filter((transition) => local.has(transition.cardId));
+		for (const ref of members.external) {
+			try {
+				const located = this.host.locate(ref.cardId);
+				cards.push(located.card);
+				transitions.push(
+					...this.store
+						.transitions(located.projectId)
+						.filter((transition) => transition.cardId === located.card.id),
+				);
+			} catch {}
+		}
+		const now = this.host.now();
+		return {
+			initiative,
+			activity: initiativeActivity(cards, transitions, now - sinceDays * DAY_MS, now),
+			titles: Object.fromEntries(cards.map((card) => [card.id, card.title])),
+		};
 	}
 
 	/** Adds cards by id: this board's into the initiative's cards, another board's as external cards. */

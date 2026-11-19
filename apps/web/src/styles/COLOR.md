@@ -117,6 +117,12 @@ or ANSI entry as `syntax.<key>` / `ansi.<key>` (`scripts/colors.ts` maps them to
   `feedback-warning`; the hotspot list's read · edit · write bar and the heat tree reuse the files matrix's
   roles (touch bar `series-1`, changes `text-series-2`, rework `feedback-error`); a finding's Wilson bar is
   `feedback-error` with the rule's threshold in `feedback-warning`.
+- The board's Insights charts (`thinkrail-extensions/board/web/Insights.tsx`, plain SVG) draw statuses on one
+  mapping: done `series-7` (throughput bars, cycle-time dots, the flow's done band), review `series-1`,
+  started `series-3` (as the roadmap's stack bar), ready `ramp-2`, backlog `series-8`; the WIP line is
+  `series-1`, the 50 % / 85 % cycle-time lines and the SLE dashed `series-3` / `series-4`, ageing cards past
+  the SLE `feedback-warning`, and where time goes agent `series-3`, waiting for you `primary`, review
+  `series-1` (the session-insights actors).
 - The statistics' action sequences colour activities by family: searches and web `series-1`, reads
   `series-5`, edits `series-2`, every shell run (tests, builds, linters, git, other) `series-4`, plans
   and specs `series-7`, subagents `series-6`, questions to you `primary`, skills `series-3`, MCP and the

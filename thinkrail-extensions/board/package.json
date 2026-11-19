@@ -5,7 +5,8 @@
 	"type": "module",
 	"exports": {
 		"./server": "./server/index.ts",
-		"./web": "./web/index.ts"
+		"./web": "./web/index.ts",
+		"./package.json": "./package.json"
 	},
 	"scripts": {
 		"test": "bun test",
@@ -29,5 +30,10 @@
 		"@types/react-dom": "catalog:",
 		"react-dom": "catalog:",
 		"typescript": "catalog:"
+	},
+	"pi": {
+		"skills": [
+			"./skills"
+		]
 	}
 }

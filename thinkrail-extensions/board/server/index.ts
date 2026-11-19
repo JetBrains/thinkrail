@@ -24,9 +24,10 @@ export default defineServerExtension({
 	name: "board",
 	title: "Board",
 	description:
-		"A board per project whose cards start agent workspaces and move with their progress, with tools for the agent to read cards and file new ones into Triage.",
+		"A board per project whose cards start agent workspaces and move with their progress, with tools for the agent to read cards and file new ones into Triage, and roadmap skills to shape, plan, report on, review and close initiatives.",
 	apiVersion: 1,
 	extensions: [],
+	skillPackages: ["@thinkrail/ext-board"],
 	sessionExtensions: () => [createBoardTools(() => current)],
 	queries: (host) => boardQueries(boardFor(host)),
 	hostService: (host) => ({ stop: boardFor(host).listen() }),

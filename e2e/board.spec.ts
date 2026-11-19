@@ -1,4 +1,4 @@
-import { mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
@@ -1176,4 +1176,178 @@ test("the step graph draws linked cards over time, a drag pins a card, a drawn l
 	await row.getByTestId("board-timeline-bar").click();
 	await expect(peekInitiative(page)).toHaveAttribute("data-initiative-id", network ?? "");
 	await boardTool(page).getByTestId("board-mode-toggle").click();
+});
+
+/** A flow history: completions over the last weeks, work in progress (one past the SLE) and a backlog. */
+function seedFlow(projectId: string): void {
+	const now = Date.now();
+	const day = 86_400_000;
+	const lines: string[] = [];
+	const log = (cardId: string, from: string | null, to: string, at: number) =>
+		lines.push(
+			JSON.stringify({
+				cardId,
+				from: from ? { category: from, column: from === "started" ? "building" : from } : null,
+				to: {
+					category: to,
+					column: to === "started" ? "building" : to === "completed" ? "done" : to,
+				},
+				at,
+				actor: "automation",
+				reason: "seeded",
+			}),
+		);
+	const cards: SeedCard[] = [];
+	const done = [
+		[30, 2],
+		[24, 4],
+		[18, 1],
+		[12, 3],
+		[9, 6],
+		[5, 2],
+		[3, 5],
+		[1, 1],
+	] as const;
+	done.forEach(([ago, cycle], index) => {
+		const id = `IN-${index + 1}`;
+		const end = now - ago * day;
+		log(id, null, "backlog", end - (cycle + 2) * day);
+		log(id, "backlog", "started", end - cycle * day);
+		log(id, "started", "review", end - day / 3);
+		log(id, "review", "completed", end);
+		cards.push({
+			id,
+			title: `Shipped ${index + 1}`,
+			category: "completed",
+			column: "done",
+			rank: index,
+		});
+	});
+	const open = [
+		["IN-9", "started", 2],
+		["IN-10", "started", 9],
+		["IN-11", "review", 3],
+		["IN-12", "backlog", 0],
+	] as const;
+	open.forEach(([id, category, age], index) => {
+		log(id, null, "backlog", now - (age + 4) * day);
+		if (category !== "backlog") log(id, "backlog", "started", now - age * day);
+		if (category === "review") log(id, "started", "review", now - day);
+		cards.push({
+			id,
+			title: `Open ${index + 1}`,
+			category,
+			column: category === "started" ? "building" : category,
+			rank: 20 + index,
+		});
+	});
+	seedBoard(projectId, "IN", cards);
+	writeFileSync(
+		join(E2E_DATA_DIR, "extensions", "board", projectId, "transitions.jsonl"),
+		`${lines.join("\n")}\n`,
+	);
+}
+
+test("Insights draws WIP, throughput, cycle time, work item age, cumulative flow and where time goes, or says there is not enough data", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1720, height: 1100 });
+	await openBoard(page);
+	await boardTool(page).getByTestId("board-view-insights").click();
+	const charts = boardTool(page).getByTestId("board-insights-chart");
+	await expect(charts).toHaveCount(6);
+	await expect(
+		boardTool(page).locator('[data-testid="board-insights-chart"][data-empty]'),
+	).toHaveCount(6);
+	await expect(charts.first().getByTestId("board-insights-empty")).toHaveText(
+		"Not enough data yet — this fills in as cards move.",
+	);
+
+	const [project] = await openProjects(page);
+	if (!project) throw new Error("missing the fixture project");
+	seedFlow(project.id);
+	await reloadBoards(page);
+	if ((await page.getByTestId(BOARD_RAIL).getAttribute("aria-pressed")) !== "true")
+		await page.getByTestId(BOARD_RAIL).click();
+	await boardTool(page).getByTestId("board-mode-toggle").click();
+	await boardTool(page).getByTestId("board-view-insights").click();
+	const chart = (name: string) =>
+		boardTool(page).locator(`[data-testid="board-insights-chart"][data-chart="${name}"]`);
+	await expect(
+		boardTool(page).locator('[data-testid="board-insights-chart"][data-empty]'),
+	).toHaveCount(0);
+	for (const name of ["wip", "throughput", "cycle", "aging", "flow", "time"])
+		await expect(chart(name).getByTestId("board-insights-svg")).toBeVisible();
+	await expect(chart("wip").locator("svg title")).toHaveText("Work in progress");
+	await expect(chart("cycle").getByTestId("board-insights-cycle-dot")).toHaveCount(8);
+	await boardTool(page).getByTestId("board-insights-weeks-4").click();
+	await expect
+		.poll(() => chart("cycle").getByTestId("board-insights-cycle-dot").count())
+		.toBeLessThan(8);
+	await boardTool(page).getByTestId("board-insights-weeks-12").click();
+	await expect(chart("cycle").getByTestId("board-insights-cycle-dot")).toHaveCount(8);
+	await expect(chart("cycle").getByTestId("board-insights-p50")).toBeVisible();
+	await expect(chart("cycle").getByTestId("board-insights-p85")).toBeVisible();
+	await expect(chart("aging").getByTestId("board-insights-age-dot")).toHaveCount(3);
+	await expect(chart("aging").getByTestId("board-insights-sle")).toBeVisible();
+	await expect(
+		chart("aging").locator('[data-testid="board-insights-age-dot"][data-over]'),
+	).toHaveCount(1);
+	await expect(chart("flow").getByTestId("board-insights-flow-band")).toHaveCount(5);
+	await expect(chart("time").getByTestId("board-insights-time-segment").first()).toBeVisible();
+	await page.mouse.move(0, 0);
+	await shot(boardTool(page), "board", "insights");
+	await boardTool(page).getByTestId("board-mode-toggle").click();
+});
+
+test("Publish writes the roadmap snapshot into the Default workspace, and Close initiative starts its closing chat", async ({
+	page,
+}) => {
+	const snapshot = join(realpathSync(E2E_FIXTURE_REPO), "ROADMAP.md");
+	rmSync(snapshot, { force: true });
+	await page.setViewportSize({ width: 1720, height: 1000 });
+	const kickoffs = observeRoadmapChats(page);
+	try {
+		await openBoard(page);
+		await boardTool(page).getByTestId("board-view-roadmap").click();
+		await newInitiative(page, "now", "Flow insights");
+		const id = await peekInitiative(page).getAttribute("data-initiative-id");
+		if (!id) throw new Error("the initiative has no id");
+		const outcome = "Everyone sees where the work waits";
+		await peekInitiative(page).getByTestId("board-initiative-outcome").fill(outcome);
+		await peekInitiative(page).getByTestId("board-initiative-outcome").press("Tab");
+		await expect(peekInitiative(page).getByTestId("board-initiative-outcome")).toHaveValue(outcome);
+
+		await boardTool(page).getByTestId("board-more-menu").click();
+		await page.getByTestId("board-publish-open").click();
+		const dialog = page.getByTestId("board-publish-dialog");
+		await expect(dialog.getByTestId("board-publish-path")).toHaveValue("ROADMAP.md");
+		await dialog.getByTestId("board-publish-submit").click();
+		await expect(dialog.getByTestId("board-publish-done")).toContainText(
+			"Wrote ROADMAP.md in the Default workspace. Commit it",
+		);
+		expect(existsSync(snapshot)).toBe(true);
+		const text = readFileSync(snapshot, "utf8");
+		expect(text).toMatch(
+			/^# Roadmap — .+\n\nGenerated on \d{4}-\d{2}-\d{2} from the ThinkRail board/,
+		);
+		expect(text).toContain(`## Now\n\n### ${id} · Flow insights\n\n${outcome}\n`);
+		expect(text).toContain("## Next\n\n_No initiatives._");
+		expect(text).toContain("## Later");
+		await dialog.getByTestId("board-publish-peek").click();
+		await expect(dialog).toBeHidden();
+		await expect(
+			page.getByTestId("peek-pane").locator('[data-testid="peek-crumb"][data-current]'),
+		).toContainText("ROADMAP.md");
+
+		await boardTool(page).getByTestId("board-initiative-open").first().click();
+		await expect(peekInitiative(page)).toHaveAttribute("data-initiative-id", id);
+		await peekInitiative(page).getByTestId("board-initiative-chat-close").click();
+		await expect.poll(kickoffs).toHaveLength(1);
+		const [kickoff] = kickoffs();
+		expect(kickoff?.startsWith(`/skill:initiative-close Close initiative ${id} of the`)).toBe(true);
+		expect(kickoff).toContain(`Initiative ${id}: Flow insights\nOutcome: ${outcome}`);
+	} finally {
+		rmSync(snapshot, { force: true });
+	}
 });

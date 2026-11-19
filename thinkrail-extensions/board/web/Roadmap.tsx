@@ -31,7 +31,14 @@ import { lazy, type ReactNode, Suspense, useState } from "react";
 import type { BoardLayout, BoardView } from "./api";
 import { FIELD } from "./CardParts";
 import { HORIZON_HINTS, HORIZON_LABELS } from "./labels";
-import { AgentDots, HealthChip, HorizonChip, ProgressFigures, StackBar } from "./RoadmapParts";
+import {
+	AgentDots,
+	ClosedChip,
+	HealthChip,
+	HorizonChip,
+	ProgressFigures,
+	StackBar,
+} from "./RoadmapParts";
 import {
 	acceptInitiative,
 	appetiteUsed,
@@ -166,6 +173,7 @@ export function InitiativeCard({
 						{goal ? goal.title : t("board.roadmap.goalSelf")}
 					</span>
 					<HealthChip health={view.health[initiative.id]} />
+					<ClosedChip initiative={initiative} />
 					{initiative.proposed ? (
 						<span
 							data-testid="board-initiative-proposed"

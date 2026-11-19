@@ -16,14 +16,19 @@ from host facts and never stored. **Host events move cards** through pure rules,
 a logged override. Besides its own cards it shows two **sources**: the task-specs of the project's
 workspaces and, when switched on, the project's open GitHub issues through the user's own `gh`. Above the cards sits a **roadmap** per board (§ Roadmap): initiatives, roadmap projects
 with milestones, and what is derived from the live work — rollups, a forecast, a suggested health and the
-step graph's schedule. There is no portable pi package, because every tool acts on host-owned state. The web
-half is the Board side tool (with its Roadmap views), the card and the initiative in Peek, the cross-project
+step graph's schedule — and **flow insights** from the transition log. Five **roadmap skills** (§ Skills)
+put the agent to work on the roadmap: shape, plan, report, review and close. There is no portable pi
+package, because every tool acts on host-owned state. The web half is the Board side tool (with its Roadmap
+and Insights views and *Publish roadmap snapshot…*), the card and the initiative in Peek, the cross-project
 "Needs you" inbox (above the board and as a topbar counter) and Board mode.
 
 ## Boundary
 
 - **`./server`**: `defineServerExtension({ name: "board", title, description, apiVersion: 1,
-  extensions: [], sessionExtensions, queries, hostService })`.
+  extensions: [], skillPackages: ["@thinkrail/ext-board"], sessionExtensions, queries, hostService })`.
+  - `skillPackages` names this package itself: its manifest exports `./package.json` and declares
+    `pi.skills: ["./skills"]`, so the host's owner-scoped resolver stages `skills/` under
+    `skills/extensions/board/` and the switch drops the skills with the tools (§ Skills).
   - It imports `extension-api/server`, `typebox` and pi types only. Contracts types come through the
     SDK's re-exports.
   - The queries, the host service and the tools share **one `Board` per data folder**. The first
@@ -49,8 +54,9 @@ The store lives at `<dataDir>/<projectId>/`, the extension's data folder (`~/.th
   from `projectId` to `roadmapProjectId`, so `projectId` always names a ThinkRail project: a version-1 file is
   read with the old name (**migrated on read**) and written back as version 2. The other files are version 1.
 - **`settings.json`**: `{ version: 1, preset, wipLimits { needsYou, review, agents }, followSelection,
-  github { enabled, filter } }`. The defaults are `agentic-kanban`, 3 / 5 / 3, off, and GitHub off with
-  the `open` filter (`mine` is the issues assigned to the gh user).
+  github { enabled, filter }, snapshotPath }`. The defaults are `agentic-kanban`, 3 / 5 / 3, off, GitHub off
+  with the `open` filter (`mine` is the issues assigned to the gh user) and `ROADMAP.md` (where Publish
+  writes, § Roadmap).
 - **`transitions.jsonl`**: an append-only log of `{ cardId, from, to, at, actor, reason }`.
   - `from` and `to` are `{ category, column }`, or `null` at creation or deletion.
   - `actor` is `human`, `agent`, `git` or `automation`.
@@ -113,7 +119,9 @@ The model of `TASK-roadmap` (Linear's hierarchy), stored per board; everything d
 
 - **An initiative** is `{ id, parentId?, title, outcome, criteria[], horizon (now / next / later), rank,
   target? (ISO date), appetiteDays? (time only), specRefs[], health? { override?, note? }, updates[],
-  cardIds[], externalCards[], proposed?, proposedBy?, createdAt, updatedAt }`. It nests (a top-level one is
+  cardIds[], externalCards[], proposed?, proposedBy?, closedAt?, createdAt, updatedAt }`. `closedAt` is set
+  once, by the agent's `board_initiative_close` after the human confirmed it done in an initiative-close
+  chat (a proposal can't close); a closed initiative stays on the roadmap, marked *Closed*. It nests (a top-level one is
   a goal; a parent can't move under its own subtree). It holds this board's cards listed in `cardIds`, the
   cards of the roadmap projects whose `initiativeId` is it, other boards' cards as `externalCards
   { projectId, cardId }` and, for every derivation, its nested initiatives' cards.
@@ -155,6 +163,25 @@ The model of `TASK-roadmap` (Linear's hierarchy), stored per board; everything d
   `conflict` (node and link); a milestone past its target day is `late`. Days are days since 1970-01-01 UTC,
   fractional; nodes come in topological order. A cycle in stored data is cut at one link and reported in
   `cycles`; `criticalWithin` gives an initiative's own critical path over its cards and milestones.
+- **`insights.ts`**, the Insights view over the last `weeks` weeks (Monday UTC `weeks - 1` weeks before this
+  week's, to now; 1–52): the log replayed day by day gives each day's end WIP (started + review) and the
+  cumulative flow (completed, review, started, unstarted, backlog); throughput counts completions per week
+  (the current one partial); each card completed in the window has its cycle time (first start → done, in
+  days) and, from `MIN_CYCLE_SAMPLES` (3) of them, nearest-rank 50 / 85 % percentiles — the 85th is the
+  **SLE**; work item age is now minus the first start of each card started or in review. **Where time
+  goes** sums the window's started time (agent working) and review time (in review) and moves the waits
+  for the human open now — a started card whose latest attempt's chat is `needs_you`, since that chat's
+  update — from agent working to waiting for you. The host keeps no chat-state history, so an earlier,
+  answered wait counts as agent time; that is the stated approximation, not a recomputation of pi state.
+- **`activity.ts`**, an initiative's window for the report skill: its cards' category changes inside it
+  (oldest first, with actor and reason; a move within a category is none), which reached completed,
+  started, review, canceled or were filed, their attempts' notes, and the active cards that did not move
+  (with their last move).
+- **`snapshot.ts`**, the published roadmap: the accepted open initiatives by horizon (Now, Next, Later), each
+  by rank then id, with its parent, outcome, health (and reasons, *suggested* unless overridden), progress
+  (done of the cards neither in Triage nor canceled), target, forecast, criteria and latest published
+  update quoted; then *Closed*. Deterministic: the same roadmap on the same day writes the same bytes, and
+  its only date of its own is the generation line (forecast dates move with the day, as they do in the UI).
 - **Links never close a cycle**: `card.link`, `card.update { blocks }`, `board_link` and a batch's
   `blocksIndex` refuse one (`wouldCycle`).
 
@@ -345,15 +372,22 @@ Every query validates its params (lengths, enums, lists of at most 100) and answ
 
 The roadmap's queries (§ Roadmap) take the board's `projectId`; every write publishes `board.changed`:
 
-- **`roadmap.chat { projectId, kind, initiativeId? }`** (`kind`: `plan`, `shape`, `report` or `review`; the
-  first three need the initiative) starts a **roadmap chat**: a new chat in the project's **Default** workspace
-  through the host's `actions.startChat`, and answers `{ projectId, workspaceId, sessionId, kickoff,
-  kickoffError? }` for the web half to open it. The kickoff (`roadmapKickoff`) starts with the skill's
-  `/skill:roadmap-plan` (`-shape`, `-report`, `-review`), exactly as the composer sends a picked skill, then the
-  task in one line, the initiative's id, title, outcome, success criteria, horizon, target and appetite (a
-  review lists every initiative instead), and instructions that stand on their own — which `board_*` tools to
-  read and write with, what to propose rather than change —, since pi passes an unknown skill through: the
-  prompt works before the skills ship and after.
+- **`roadmap.chat { projectId, kind, initiativeId? }`** (`kind`: `plan`, `shape`, `report`, `review` or
+  `close`; all but `review` need the initiative, and `close` refuses one already closed) starts a **roadmap
+  chat**: a new chat in the project's **Default** workspace through the host's `actions.startChat`, and
+  answers `{ projectId, workspaceId, sessionId, kickoff, kickoffError? }` for the web half to open it. The
+  kickoff (`roadmapKickoff`) starts with its skill (§ Skills) — `/skill:roadmap-plan` (`-shape`, `-report`,
+  `-review`) or `/skill:initiative-close` —, exactly as the composer sends a picked skill, then the task in one
+  line, the initiative's id, title, outcome, success criteria, horizon, target and appetite (a review lists
+  every open initiative instead), and instructions that stand on their own — which `board_*` tools to read
+  and write with, what to propose rather than change, what waits for the human's confirmation —, so the
+  prompt still works on a host that left the skills out.
+- **`roadmap.publish { projectId, path? }`** writes the roadmap snapshot (`snapshot.ts`, dated today UTC) into
+  the project's **Default** workspace through the host's `actions.writeWorkspaceFile` at `path` (up to 400
+  characters) or the settings' `snapshotPath`, and remembers a new path there; the host refuses an unsafe
+  path and the board passes its refusal on. It answers `{ projectId, workspaceId, path, bytes }`. Storage
+  stays local: the file is the user's to commit and open a PR with; the board never commits.
+- **`insights.get { projectId, weeks? }`** (1–52, default 12) → `insights.ts`'s answer for that board.
 - **`roadmap.get { projectId }`** → `{ projectId, projectName, initiatives` (depth-first, each with `depth`,
   `childIds`, `memberCardIds`, `memberExternalCards`)`, projects, externalCards` (title, category, size,
   project name, or `missing`)`, rollups { initiatives, projects, milestones }, health, forecast` (by
@@ -390,10 +424,11 @@ error (with *Retry*) states replace the body; a failed write shows a dismissible
 
 - **Header**: the project's name, the preset switch (Agentic kanban / Solo → `settings.update`), the WIP
   figures (*Needs you*, *Review*, *Agents* as `count/limit`, `feedback-error` and `data-over` past the limit;
-  a limit of 0 is none and shows the count alone), the view switch (Board / List / Roadmap), the Board mode toggle
+  a limit of 0 is none and shows the count alone), the view switch (Board / List / Roadmap / Insights), the Board mode toggle
   (*Board mode* / *Exit Board mode*, `PanelHost.layoutPreset`, absent on a host without modes), the board
   settings (a popover with the *Follow selection* switch and the three WIP limits, 0–99 →
-  `settings.update { wipLimits }` on *Save*) and *New card*,
+  `settings.update { wipLimits }` on *Save*), the overflow menu (`RiMore2Line`, *More*) with *Publish roadmap
+  snapshot…* and *New card*,
   an inline title field → `card.create`, then the new card in Peek. The GitHub menu (`RiGithubLine`,
   *GitHub issues*) offers *Show GitHub issues* / *Hide GitHub issues* (`github.set`; a `missing` or
   `unauthenticated` gh answers with the notice saying to install gh or run `gh auth login`), and while on
@@ -445,8 +480,7 @@ error (with *Retry*) states replace the body; a failed write shows a dismissible
 
 **The Roadmap view** (`RoadmapPane`) reads `roadmap.get` for the same project and re-reads it on its own
 writes and every `board.changed`; it does not depend on the board having cards. Its sub-switch is *Now /
-Next / Later*, *Timeline*, *Goals* and *Step graph* (Insights comes with D4; no disabled tabs), beside
-*Roadmap review* (a `review` roadmap chat). The derivations it draws are pure (`web/roadmapApi.ts`,
+Next / Later*, *Timeline*, *Goals* and *Step graph*, beside *Roadmap review* (a `review` roadmap chat). The derivations it draws are pure (`web/roadmapApi.ts`,
 `web/roadmapGraph.ts`, the graph's edits in `web/graphEdits.ts`):
 
 - **Now / Next / Later** (`horizonColumns`): three horizon columns (side by side from 720 px, else stacked)
@@ -506,6 +540,25 @@ Next / Later*, *Timeline*, *Goals* and *Step graph* (Insights comes with D4; no 
   restyled with token utilities on the frame. Nodes carry their width, height and handles, so xyflow never
   waits on a measure; node and edge looks are token utilities, SVG attributes or classes, never style objects.
 
+**Publish roadmap snapshot…** opens a dialog (mounted while open) with the file path — the board's
+`snapshotPath`, editable — and *Publish* → `roadmap.publish`; it then says *Wrote ROADMAP.md in the Default
+workspace. Commit it and open a PR…* and offers *Open in Peek* (`peekSnapshot`: `PanelHost.peek` when the
+panel's workspace is the Default one, else `openWorkspace` with the file as its `peek`). A refusal shows in
+the dialog.
+
+**The Insights view** (`InsightsPane`, `web/Insights.tsx`; its math pure in `web/insightsApi.ts`) reads
+`insights.get` for the board's project with a window switch (*4 / 12 / 26 weeks*, 12 by default) and re-reads
+on `board.changed`. Six plain-SVG chart cards (two columns from 720 px, else one), each drawn at its card's
+measured width (a `ResizeObserver`) with a `<title>` and a `<desc>` summing it up (`role="img"`), a legend,
+and *Not enough data yet* instead of an empty plot: **work in progress** (a `series-1` line), **throughput per
+week** (`series-7` bars, the partial week dashed), **cycle time** (a dot per completed card in `series-7`, the
+50 % and 85 % percentiles as dashed `series-3` / `series-4` lines), **work item age** (dots per in-progress
+column, started `series-3` and review `series-1`, those past the SLE `feedback-warning`, the SLE a dashed
+`series-4` line), the **cumulative flow** (stacked bands, done `series-7`, review `series-1`, started
+`series-3`, ready `ramp-2`, backlog `series-8`) and **where time goes** (one bar: agent working `series-3`,
+waiting for you `primary`, in review `series-1`, with hours and shares, and the note that only open waits
+count). No chart library.
+
 **The initiative in Peek** is the `initiative` panel (scope `session`, params `{ projectId, initiativeId }`,
 the crumb `<id> · <title>`). It reads `roadmap.get` and `board.get` for that board and re-reads both on its
 writes and `board.changed`:
@@ -529,10 +582,12 @@ writes and `board.changed`:
 - **Cards**: its member cards with column and live badge, other boards' labelled *From <project>*; the
   directly listed ones can be removed, and a picker adds a board card (`initiative.addCards` /
   `removeCards`);
-- **Agent**: *Plan with agent*, *Shape with agent*, *Draft update* and *Roadmap review* — each a roadmap chat
-  (`roadmap.chat`) opened with `PanelHost.openChat`; a returned `kickoffError` is shown as the prompt not sent —
-  and the draft update when there is one, with *Publish* (`initiative.updateDraft.publish`) and *Edit* (its
-  text and health → `initiative.updateDraft.save`);
+- **Agent**: *Plan with agent*, *Shape with agent*, *Draft update*, *Roadmap review* and *Close initiative* —
+  each a roadmap chat (`roadmap.chat`) opened with `PanelHost.openChat`; a returned `kickoffError` is shown as
+  the prompt not sent; a closed initiative (*Closed*, also on its horizon card) keeps only *Draft update* and
+  *Roadmap review* — and the draft update when there is one, with *Publish*
+  (`initiative.updateDraft.publish`, stamping `publishedAt`) and *Edit* (its text and health →
+  `initiative.updateDraft.save`);
 - *Delete initiative* behind a confirm.
 
 **The Needs-you status item** (`statusItems.inbox`) is the inbox in the topbar: a `feedback-warning` chip
@@ -603,11 +658,36 @@ id, else the attempt of its workspace (located from its cwd).
   a whole), suggested sizes, the `blocks` links `blocksIndex` names among the batch (no cycle) and, given a
   roadmap project, in it.
 - **`board_update_draft { initiativeId, text, health }`**: saves the draft update; it never publishes.
+- **`board_initiative_activity { initiativeId, sinceDays? (7) }`**: `activity.ts` over the initiative's cards
+  (nested initiatives' and other boards' included) as text — completed, started, into review, filed,
+  canceled, every move with its day, actor and reason, progress notes, the cards that did not move.
+- **`board_initiative_move { initiativeId, horizon }`**: `initiative.move`; its description says only after
+  the human confirmed the move.
+- **`board_initiative_close { initiativeId }`**: sets `closedAt`; only after the human confirmed it done.
+- `board_initiative_get` also lists the **deferrals** of its member cards' task-specs (`Deferrals` sections of
+  their open workspaces' task-specs through `specSection`, parsed like `card.deferrals`), minus those whose
+  title a card of the board already has, for the close skill to file.
 
 Their guidelines say two things:
 
 - Read your card and treat its criteria as done.
 - File deferred work into Triage, never steps of the current task.
+
+## Skills
+
+The package's own `skills/` (`pi.skills`), each a short `SKILL.md` — frontmatter `name` + a *Use when…*
+description, numbered steps, red flags — that acts through the `board_*` tools; they are board skills, not
+the workflow family's. Each roadmap chat's kickoff names one, and a user can pick one in any chat:
+
+| Skill | Does | Writes |
+| --- | --- | --- |
+| `roadmap-shape` | raw idea → initiative: outcome tied to a goal capability, checkable criteria, rabbit holes, no-gos, horizon; asks (`ask_user_question`) when a product decision is missing | `board_initiative_create_draft` (rabbit holes and no-gos in the outcome, so card kickoffs carry them); an existing initiative is only proposed in the chat |
+| `roadmap-plan` | initiative → project with milestones and sized, linked cards grounded in the specs (`spec_search`, `spec_get`) and code; never starts work | `board_project_create`, then one `board_cards_create_batch` into Triage |
+| `roadmap-report` | a draft update from `board_initiative_get` and `board_initiative_activity`: done, stuck, forecast, next, a suggested health | `board_update_draft`; never publishes |
+| `roadmap-review` | every open initiative: forecast vs target, blocked chains, waits for the human, WIP, appetite → a list of moves, trims, deferrals | `board_initiative_move`, each only after the human confirmed it (`ask_user_question`) |
+| `initiative-close` | criteria checked against the cards; the goal-and-requirements Capabilities edit (or the owning spec's) shown as a diff, made in the Default workspace on approval with a PR suggested; its task-specs' deferrals filed | `board_cards_create_batch`; `board_initiative_close` only after the human confirmed |
+
+A capability's closing edit is a normal PR the user opens; the board writes no spec itself.
 
 ## Verification
 
@@ -623,8 +703,15 @@ Their guidelines say two things:
     initiative / project / milestone CRUD, assignment, links refusing cycles, pins and `shiftChain`, external
     cards, draft updates, `roadmap.get`'s rollups, schedule, forecast and health, the kickoff's initiative
     context, the cards' `initiative` overlay, `roadmap.chat` (the Default workspace, each kind's skill and
-    text, the refusals, a `kickoffError` passed on) and the roadmap tools (proposals, a Triage batch with its
-    links, the draft update);
+    text, `close` and its refusal once closed, a `kickoffError` passed on), the roadmap tools (proposals, a
+    Triage batch with its links, the draft update, activity, move, close, the deferrals listed),
+    `roadmap.publish` (the Default workspace, the remembered path, a host refusal passed on) and
+    `insights.get`'s validation;
+  - `insights.test.ts` (WIP and the flow replayed per day, throughput, cycle-time percentiles and the SLE,
+    work item age, the time split with open waits, the empty window) with `activity.ts`'s window, and
+    `snapshot.test.ts` (the markdown and its determinism);
+  - `index.test.ts`: `skillPackages` resolves to the five skills (names matching their folders, *Use when*
+    descriptions), every roadmap chat names one, and each names only registered `board_*` tools;
   - the sources (`sources.test.ts`): task-specs bound vs unbound, placement by live facts, Adopt once,
     refused writes, watched chats, deferrals sent once and their parsing; GitHub through a fake `gh`
     (argv, the Default workspace, the TTL, Refresh, the filter, the error kept beside the last issues,
@@ -632,7 +719,10 @@ Their guidelines say two things:
     the retry); size suggestions (strict parsing, a human's size never overwritten, skipped without a
     model or switched off or for an agent's card, the debounce, issues' cards).
 - **Host-level**: `packages/server/src/host/extensionActions.test.ts` covers `startChat` (a repository
-  workspace only, the kickoff validated, refused while switched off, `kickoffError` passed on);
+  workspace only, the kickoff validated, refused while switched off, `kickoffError` passed on) and
+  `writeWorkspaceFile` (written atomically with folders, refused: absolute, `..`, `.`, empty segments,
+  `.git`, NUL, symlinks on the way, a folder target, past 1 MiB); `agent/extensions.test.ts` loads the board's
+  skills and drops them while it is off, and `buildSupport.test.ts` stages them under `extensions/board`;
   `packages/server/src/host/extensionEventsWire.test.ts` covers the gated
   `extension.event` push and the host service following the Settings switch.
 - **Host-level** also: `packages/server/src/host/lastActions.test.ts` covers the last-action target (a
@@ -655,7 +745,10 @@ Their guidelines say two things:
   initiative's scope and critical path, the timeline's bars, bands, done fill, unfolded projects and links,
   the status look mapping, the drop's pin / shift / none, the writes each edit sends (`card.pin`,
   `card.shiftChain`, `card.link` with its cycle refusal, `card.unlink` only for `blocks` links, `card.unpin`)
-  and both views rendered (xyflow's server render).
+  and both views rendered (xyflow's server render); Insights (`insights.test.tsx`): the chart math (scales,
+  nice maxima and ticks, flow bands, the time split, the spread), each chart's data check, the six charts
+  rendered with titles, descriptions, percentile and SLE lines or their not-enough-data states, and Publish's
+  query and Peek target; the panel's *Close initiative* and a closed initiative's chip.
 - **No-agent e2e** (`e2e/board.spec.ts`): open the Board tool, create a card into Backlog, edit it in Peek,
   Start it (a worktree and a chat; the kickoff text captured from `workspace.creationChanged`, no model
   needed), the card in Building; a drag and Alt+→ logged as overrides; List view; the Solo preset; the
@@ -677,11 +770,17 @@ Their guidelines say two things:
   as nodes with the link, a node dragged three days right pinned (the card in Peek shows that date), a link
   drawn handle to handle (a conflict, the dragged card being pinned earlier), a cycle refused in place, a
   link clicked and deleted; the timeline: the initiative's bar and target with not enough data, the link to
-  the initiative it blocks, its project unfolded and a click opening it in Peek.
+  the initiative it blocks, its project unfolded and a click opening it in Peek; Insights: six empty states
+  on an empty board, then a seeded flow history drawing every chart (dots per completed card, the window
+  switch, percentile and SLE lines, one card past the SLE, five flow bands); Publish writing `ROADMAP.md` in the
+  fixture repository (the Default workspace) with its headings, *Open in Peek* showing it, and *Close
+  initiative* starting a chat whose kickoff starts `/skill:initiative-close`.
 - **Live e2e** (`e2e/board.live.spec.ts`, `@agent`, through `bun run e2e:full e2e/board.live.spec.ts`): an S
   card asking for a one-line README example, started from Peek; the tile's last-action line seen while
   the agent works (recorded by a `MutationObserver`, since it is transient); the card in Review with its
-  diff, the badge finished and the line gone.
+  diff, the badge finished and the line gone. `e2e/board-roadmap.live.spec.ts` (`@agent`): *Plan with
+  agent* on an initiative with an outcome and two criteria → at least two cards in Triage from one chat
+  (one group), at least one `blocks` link among them, read from `board.get` over the wire.
 
 ## Deferrals
 
@@ -694,6 +793,6 @@ These land later:
 - removing a "blocks" link from the tools;
 - an initiative's `into` (D / G);
 - the prototype's "What if you answered now?" toggle on the step graph (the schedule has no wait estimate);
-- `insights.get` and Insights (D4), the roadmap skills (D4; until then
-  a roadmap chat's kickoff carries its instructions) and Publish — the next steps of `TASK-roadmap`;
+- a history of waits for the human (Insights counts only the open ones), reopening a closed initiative, and
+  an entry point for shaping a new idea from the board (the skill runs from any chat);
 - another board's write does not publish the boards whose initiatives list its cards as external.

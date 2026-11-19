@@ -33,6 +33,23 @@ const HORIZON_LOOKS: Readonly<Record<Horizon, string>> = {
 	later: "bg-control-bg-selected text-text-muted",
 };
 
+/** *Closed* on an initiative a human confirmed done, with the day in its tooltip; nothing otherwise. */
+export function ClosedChip({ initiative }: { initiative: { closedAt?: number } }) {
+	const t = useT();
+	if (initiative.closedAt === undefined) return null;
+	return (
+		<span
+			data-testid="board-initiative-closed"
+			title={t("board.roadmap.closedOn", {
+				date: new Date(initiative.closedAt).toLocaleDateString(),
+			})}
+			className="rounded-full bg-feedback-success-subtle px-8 tr-text-label-pill text-feedback-success"
+		>
+			{t("board.roadmap.closed")}
+		</span>
+	);
+}
+
 /** The rollup's cards by category as one bar: done, review, started, ready, backlog. */
 export function StackBar({
 	rollup,

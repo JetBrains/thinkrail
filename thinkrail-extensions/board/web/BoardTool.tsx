@@ -12,6 +12,7 @@ import {
 import {
 	RiAddLine,
 	RiArrowDownSLine,
+	RiBarChartBoxLine,
 	RiCloseLine,
 	RiCollapseDiagonalLine,
 	RiExpandDiagonalLine,
@@ -86,6 +87,7 @@ import { CardList } from "./CardList";
 import { CardMeta, FIELD } from "./CardParts";
 import { type CardActions, CardTile } from "./CardTile";
 import { InboxStrip, useInbox } from "./Inbox";
+import { InsightsPane } from "./Insights";
 import { CARD_COMMANDS, CARD_KEYS, CARDS_SCOPE } from "./keys";
 import {
 	columnTitle,
@@ -95,11 +97,12 @@ import {
 	startWarningText,
 	WIP_LABELS,
 } from "./labels";
+import { BoardMoreMenu, PublishDialog } from "./PublishDialog";
 import { RoadmapPane } from "./Roadmap";
 import { type TriageActions, TriageLane } from "./Triage";
 import { useBoardChanged, useHostQuery } from "./useHostQuery";
 
-export type BoardMode = "board" | "list" | "roadmap";
+export type BoardMode = "board" | "list" | "roadmap" | "insights";
 
 /** The board's columns, Canceled only while it holds cards; Triage is its own lane (`TriageLane`). */
 export function shownColumns(view: Pick<BoardView, "columns" | "cards">): Column[] {
@@ -610,6 +613,7 @@ function BoardHeader({
 	onGithub,
 	onGithubFilter,
 	onGithubRefresh,
+	onPublish,
 	onNew,
 }: {
 	view: BoardView | null;
@@ -626,6 +630,7 @@ function BoardHeader({
 	onGithub: (enabled: boolean) => void;
 	onGithubFilter: (filter: GithubFilter) => void;
 	onGithubRefresh: () => void;
+	onPublish: () => void;
 	onNew: () => void;
 }) {
 	const t = useT();
@@ -658,6 +663,7 @@ function BoardHeader({
 				{view ? (
 					<BoardSettingsMenu settings={view.settings} onFollow={onFollow} onSave={onWipLimits} />
 				) : null}
+				<BoardMoreMenu onPublish={onPublish} />
 				<IconButton
 					icon={RiKanbanView2}
 					size="s"
@@ -684,6 +690,15 @@ function BoardHeader({
 					aria-pressed={mode === "roadmap"}
 					selected={mode === "roadmap"}
 					onClick={() => onMode("roadmap")}
+				/>
+				<IconButton
+					icon={RiBarChartBoxLine}
+					size="s"
+					label={t("board.view.insights")}
+					data-testid="board-view-insights"
+					aria-pressed={mode === "insights"}
+					selected={mode === "insights"}
+					onClick={() => onMode("insights")}
 				/>
 				<Button
 					variant="soft-primary"
@@ -794,6 +809,7 @@ export default function BoardTool({ host }: PanelProps) {
 	const [starting, setStarting] = useState<string | null>(null);
 	const [notice, setNotice] = useState<string | null>(null);
 	const [creating, setCreating] = useState(false);
+	const [publishing, setPublishing] = useState(false);
 	const [focusCard, setFocusCard] = useState<{ id: string; column: string } | null>(null);
 	const keys = useLocalKeys(CARDS_SCOPE, CARD_COMMANDS);
 	const view = board.state.kind === "ready" ? board.state.value : null;
@@ -895,8 +911,17 @@ export default function BoardTool({ host }: PanelProps) {
 				onGithub={showGithub}
 				onGithubFilter={(filter) => void write(() => setGithub(host, projectId, { filter }))}
 				onGithubRefresh={refreshIssues}
+				onPublish={() => setPublishing(true)}
 				onNew={() => setCreating(true)}
 			/>
+			{publishing ? (
+				<PublishDialog
+					host={host}
+					projectId={projectId}
+					path={view?.settings.snapshotPath}
+					onClose={() => setPublishing(false)}
+				/>
+			) : null}
 			<InboxStrip host={host} items={inbox} compact={layout === "stacked"} />
 			{view && view.github.error !== hiddenError ? (
 				<GithubBanner
@@ -921,7 +946,9 @@ export default function BoardTool({ host }: PanelProps) {
 					/>
 				</div>
 			) : null}
-			{mode === "roadmap" ? (
+			{mode === "insights" ? (
+				<InsightsPane host={host} layout={layout} />
+			) : mode === "roadmap" ? (
 				<RoadmapPane
 					host={host}
 					layout={layout}

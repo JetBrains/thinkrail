@@ -1,6 +1,7 @@
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import type { Board } from "./board";
+import type { Activity } from "./activity";
+import type { Board, CardDeferrals } from "./board";
 import { isIsoDate } from "./days";
 import {
 	CARD_SIZES,
@@ -111,6 +112,26 @@ const BatchParams = Type.Object({
 	),
 });
 
+const ActivityParams = Type.Object({
+	initiativeId: Type.String({ description: "The initiative (I-n) whose cards' activity to read." }),
+	sinceDays: Type.Optional(
+		Type.Integer({
+			description: "How many days back to read (default 7).",
+			minimum: 1,
+			maximum: 365,
+		}),
+	),
+});
+
+const MoveParams = Type.Object({
+	initiativeId: Type.String({ description: "The initiative (I-n) to move." }),
+	horizon: literals(HORIZONS, "The horizon it moves to: now, next or later."),
+});
+
+const CloseParams = Type.Object({
+	initiativeId: Type.String({ description: "The initiative (I-n) the human confirmed done." }),
+});
+
 const UpdateDraftParams = Type.Object({
 	initiativeId: Type.String({ description: "The initiative (I-n) the update reports on." }),
 	text: Type.String({
@@ -163,6 +184,7 @@ function describeInitiative(view: RoadmapView, initiative: Initiative): string {
 		initiative.target ? `target ${initiative.target}` : "",
 		initiative.appetiteDays !== undefined ? `appetite ${initiative.appetiteDays} days` : "",
 		initiative.proposed ? "proposed, not accepted yet" : "",
+		initiative.closedAt !== undefined ? `closed ${isoDay(initiative.closedAt)}` : "",
 	].filter(Boolean);
 	const lines = [`${initiative.id} · ${initiative.title} (${facets.join(", ")})`];
 	if (initiative.outcome) lines.push("", `Outcome: ${initiative.outcome}`);
@@ -212,6 +234,69 @@ function describeInitiative(view: RoadmapView, initiative: Initiative): string {
 			`Cards: ${[...cards, ...external.map((card) => `${card.cardId} (${card.projectName ?? card.projectId})`)].join(", ")}`,
 		);
 	if (initiative.specRefs.length > 0) lines.push(`Specs: ${initiative.specRefs.join(", ")}`);
+	return lines.join("\n");
+}
+
+const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+function describeDeferrals(found: readonly CardDeferrals[]): string {
+	if (found.length === 0) return "";
+	return [
+		"",
+		"Deferrals its cards' task-specs list (not on the board yet):",
+		...found.flatMap(({ cardId, specId, deferrals }) =>
+			deferrals.map(
+				(deferral) =>
+					`- ${deferral.title} (from ${specId} of ${cardId})${deferral.description ? ` — ${deferral.description.replace(/\s+/g, " ").trim()}` : ""}`,
+			),
+		),
+	].join("\n");
+}
+
+/** An initiative's activity as the agent reads it: what reached each state, the moves, notes and quiet cards. */
+function describeActivity(
+	initiative: Initiative,
+	activity: Activity,
+	titles: Record<string, string>,
+	days: number,
+): string {
+	const named = (id: string) => `${id} ${titles[id] ?? ""}`.trim();
+	const lines = [
+		`Activity of ${initiative.id} · ${initiative.title} over the last ${days} days (${isoDay(activity.since)} to ${isoDay(activity.until)}):`,
+	];
+	for (const [label, ids] of [
+		["Completed", activity.completed],
+		["Started", activity.started],
+		["Into review", activity.review],
+		["Filed", activity.filed],
+		["Canceled", activity.canceled],
+	] as const)
+		if (ids.length > 0) lines.push(`${label} (${ids.length}): ${ids.map(named).join("; ")}`);
+	if (activity.moves.length === 0) lines.push("No card moved.");
+	else
+		lines.push(
+			"",
+			"Moves:",
+			...activity.moves.map(
+				(move) =>
+					`- ${isoDay(move.at)} ${move.cardId}: ${move.from ?? "new"} → ${move.to ?? "deleted"} (${move.actor}${move.reason ? `: ${move.reason}` : ""})`,
+			),
+		);
+	if (activity.notes.length > 0)
+		lines.push(
+			"",
+			"Progress notes:",
+			...activity.notes.map((note) => `- ${isoDay(note.at)} ${note.cardId}: ${note.text}`),
+		);
+	if (activity.still.length > 0)
+		lines.push(
+			"",
+			"Did not move:",
+			...activity.still.map(
+				(card) =>
+					`- ${named(card.cardId)} (${card.category}${card.since !== null ? ` since ${isoDay(card.since)}` : ""})`,
+			),
+		);
 	return lines.join("\n");
 }
 
@@ -359,7 +444,13 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 					boardId = served.projectId;
 				}
 				const view = await current.roadmap.get(boardId);
-				return reply(describeInitiative(view, initiative), { initiative });
+				const members =
+					view.initiatives.find((candidate) => candidate.id === initiative?.id)?.memberCardIds ??
+					[];
+				const deferrals = await current.deferralsOf(boardId, members);
+				return reply(describeInitiative(view, initiative) + describeDeferrals(deferrals), {
+					initiative,
+				});
 			},
 		});
 		pi.registerTool({
@@ -463,6 +554,63 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 					`Filed ${cards.length} cards in Triage as one group: ${cards.map((card) => `${card.id}${card.blocks.length > 0 ? ` (blocks ${card.blocks.join(", ")})` : ""}`).join(", ")}`,
 					{ cards },
 				);
+			},
+		});
+		pi.registerTool({
+			name: "board_initiative_activity",
+			label: "Initiative activity",
+			description:
+				"Read what moved in a roadmap initiative over the last days, from the board's transition log: cards completed, started, into review, filed and canceled, every move with its actor and reason, progress notes, and the active cards that did not move.",
+			promptSnippet:
+				"board_initiative_activity — read an initiative's card moves and notes over the last days.",
+			parameters: ActivityParams,
+			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+				const current = running();
+				const project = current.projectOfCwd(ctx.cwd);
+				const days = params.sinceDays ?? 7;
+				const { initiative, activity, titles } = current.roadmap.activity(
+					project.id,
+					params.initiativeId.trim().toUpperCase(),
+					days,
+				);
+				return reply(describeActivity(initiative, activity, titles, days), { activity });
+			},
+		});
+		pi.registerTool({
+			name: "board_initiative_move",
+			label: "Move an initiative",
+			description:
+				"Move a roadmap initiative to another horizon (now, next or later). Only after the human confirmed this move.",
+			promptSnippet:
+				"board_initiative_move — move an initiative between Now, Next and Later once the human confirmed it.",
+			parameters: MoveParams,
+			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+				const current = running();
+				const project = current.projectOfCwd(ctx.cwd);
+				const initiative = current.roadmap.moveInitiative(
+					project.id,
+					params.initiativeId.trim().toUpperCase(),
+					params.horizon,
+				);
+				return reply(`Moved ${initiative.id} to ${initiative.horizon}.`, { initiative });
+			},
+		});
+		pi.registerTool({
+			name: "board_initiative_close",
+			label: "Close an initiative",
+			description:
+				"Mark a roadmap initiative closed. Only after the human confirmed in this chat that it is done.",
+			promptSnippet:
+				"board_initiative_close — mark an initiative closed once the human confirmed it is done.",
+			parameters: CloseParams,
+			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+				const current = running();
+				const project = current.projectOfCwd(ctx.cwd);
+				const initiative = current.roadmap.closeInitiative(
+					project.id,
+					params.initiativeId.trim().toUpperCase(),
+				);
+				return reply(`Closed ${initiative.id}: ${initiative.title}.`, { initiative });
 			},
 		});
 		pi.registerTool({

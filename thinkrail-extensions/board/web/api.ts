@@ -125,6 +125,8 @@ export interface BoardSettings {
 	wipLimits: { needsYou: number; review: number; agents: number };
 	followSelection: boolean;
 	github: { enabled: boolean; filter: GithubFilter };
+	/** Where Publish writes the roadmap snapshot; absent from an older host. */
+	snapshotPath?: string;
 }
 
 export interface GithubStatus {

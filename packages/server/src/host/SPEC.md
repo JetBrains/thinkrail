@@ -589,7 +589,13 @@ gate: [[module-contracts]].
   recorded on the workspace) for a repository workspace; `runInWorkspace` runs `argv` (a non-empty string
   list, never a shell string) with `subprocess`' `runBounded` in a repository workspace's worktree under
   the non-interactive git env, its budget capped at ten minutes, stopped once the extension's services
-  `signal` aborts (a switch-off or the host stopping), and answers `{ ok, out, err, timedOut }`; `assist`
+  `signal` aborts (a switch-off or the host stopping), and answers `{ ok, out, err, timedOut }`;
+  `writeWorkspaceFile` takes a repository workspace, normalizes the path (`workspaceFilePath`: `\` read as
+  `/`; refused when absolute — `/…`, a drive letter or a UNC path —, holding a NUL, `.`, `..` or an empty
+  segment, any `.git` segment, or past 400 characters), refuses content past 1 MiB (`FILE_TOO_LARGE`) and
+  writes it with `writeWorktreeFile`: each folder on the way `lstat`ed (created when missing, refused when a
+  symlink or not a folder), the target refused unless absent or a regular file, then a temp file beside it
+  renamed over it — nothing can land outside the worktree, nothing is committed; `assist`
   bounds the prompt (non-empty, at most 20,000 characters) and `maxTokens` (a whole 1–1,024, 256 by
   default) and asks `assist`'s `assistText` — the cheap-model one-shot path through pi's runtime — with the
   services' `signal`, answering `{ text }` or `null` (no model, a timeout, an abort, an empty answer).

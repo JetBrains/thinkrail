@@ -278,7 +278,12 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   extension's message under its title), `stopChat({ sessionId })` → `{ stopped }`, `openPr({ workspaceId,
   title?, body?, draft? })` → `OpenPrResult`, and `runInWorkspace({ workspaceId, argv, timeoutMs })` →
   `{ ok, out, err, timedOut }` (one program by `argv` in a repository workspace's worktree, stopped once
-  those services' `signal` aborts), and `assist({ prompt, maxTokens? })` → `{ text } | null` (a one-shot ask
+  those services' `signal` aborts), `writeWorkspaceFile({ workspaceId, path, content })` →
+  `ExtensionWrittenFile { workspaceId, path, bytes }` (`ExtensionWriteWorkspaceFileParams`: one UTF-8 text
+  file at a worktree-relative `/`-separated path of a repository workspace, missing folders created and the
+  file left uncommitted for the user — never an absolute path, `.`, `..` or an empty segment, nothing under
+  `.git`, no symlink or non-folder on the way, a target that is a regular file or none, at most 1 MiB of
+  content (`FILE_TOO_LARGE`); the board's Publish is its consumer), and `assist({ prompt, maxTokens? })` → `{ text } | null` (a one-shot ask
   on the host's own assist model through pi — never a second runtime —, the prompt up to 20,000 characters,
   `maxTokens` 1–1,024 (256 by default), stopped once the services' `signal` aborts; `null` when no model is
   configured, it timed out or the answer was empty, so a caller skips silently). Every action

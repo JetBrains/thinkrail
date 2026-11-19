@@ -1,4 +1,16 @@
 import { describe, expect, mock, test } from "bun:test";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Project, WireModel, Workspace } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
@@ -8,6 +20,8 @@ import {
 	liveActionDeps,
 	MAX_ASSIST_TOKENS,
 	MAX_RUN_MS,
+	MAX_WORKSPACE_FILE_BYTES,
+	workspaceFilePath,
 } from "./extensionActions";
 
 const repo: Project = {
@@ -125,8 +139,10 @@ describe("extension host actions", () => {
 			codeOf(actions.openPr({ workspaceId: "w1" })),
 			codeOf(actions.runInWorkspace({ workspaceId: "w1", argv: ["gh"], timeoutMs: 1_000 })),
 			codeOf(actions.assist({ prompt: "Size it" })),
+			codeOf(actions.writeWorkspaceFile({ workspaceId: "w1", path: "ROADMAP.md", content: "x" })),
 		]);
 		expect(refusals).toEqual([
+			"EXTENSION_DISABLED",
 			"EXTENSION_DISABLED",
 			"EXTENSION_DISABLED",
 			"EXTENSION_DISABLED",
@@ -372,5 +388,92 @@ describe("extension host actions", () => {
 	test("assist answers null when the host has no model or no answer", async () => {
 		const { actions } = setup({ assist: async () => null });
 		expect(await actions.assist({ prompt: "Size it" })).toBeNull();
+	});
+
+	test("writeWorkspaceFile writes one relative file inside the worktree, folders created, atomically", async () => {
+		const worktree = mkdtempSync(join(tmpdir(), "ext-write-"));
+		try {
+			const { actions } = setup({
+				workspaces: () => [{ ...feature, worktreePath: worktree }, chat],
+			});
+			expect(
+				await actions.writeWorkspaceFile({
+					workspaceId: "w1",
+					path: "ROADMAP.md",
+					content: "# Roadmap\n",
+				}),
+			).toEqual({ workspaceId: "w1", path: "ROADMAP.md", bytes: 10 });
+			expect(readFileSync(join(worktree, "ROADMAP.md"), "utf8")).toBe("# Roadmap\n");
+			await actions.writeWorkspaceFile({
+				workspaceId: "w1",
+				path: "docs\\plan/ROADMAP.md",
+				content: "é",
+			});
+			expect(readFileSync(join(worktree, "docs", "plan", "ROADMAP.md"), "utf8")).toBe("é");
+			await actions.writeWorkspaceFile({ workspaceId: "w1", path: "ROADMAP.md", content: "v2" });
+			expect(readFileSync(join(worktree, "ROADMAP.md"), "utf8")).toBe("v2");
+			expect(readdirSync(worktree).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+			await expect(
+				actions.writeWorkspaceFile({ workspaceId: "chat-1", path: "a.md", content: "x" }),
+			).rejects.toThrow("no worktree");
+		} finally {
+			rmSync(worktree, { recursive: true, force: true });
+		}
+	});
+
+	test("writeWorkspaceFile refuses absolute paths, .., .git, symlinks on the way and oversized content", async () => {
+		const root = mkdtempSync(join(tmpdir(), "ext-write-refuse-"));
+		const worktree = join(root, "worktree");
+		const outside = join(root, "outside");
+		mkdirSync(worktree);
+		mkdirSync(outside);
+		mkdirSync(join(worktree, "dir"));
+		symlinkSync(outside, join(worktree, "escape"));
+		writeFileSync(join(outside, "target.md"), "keep");
+		symlinkSync(join(outside, "target.md"), join(worktree, "linked.md"));
+		try {
+			const { actions } = setup({ workspaces: () => [{ ...feature, worktreePath: worktree }] });
+			for (const path of [
+				"",
+				"/etc/passwd",
+				"C:/Windows/x.md",
+				"\\\\server\\share.md",
+				"../ROADMAP.md",
+				"docs/../../x.md",
+				"./ROADMAP.md",
+				"docs//x.md",
+				".git/config",
+				"sub/.GIT/hooks/pre-commit",
+				"a\0b.md",
+				"x".repeat(401),
+			])
+				await expect(
+					actions.writeWorkspaceFile({ workspaceId: "w1", path, content: "x" }),
+				).rejects.toThrow();
+			await expect(
+				actions.writeWorkspaceFile({ workspaceId: "w1", path: "escape/x.md", content: "x" }),
+			).rejects.toThrow("not a plain folder");
+			await expect(
+				actions.writeWorkspaceFile({ workspaceId: "w1", path: "linked.md", content: "x" }),
+			).rejects.toThrow("not a regular file");
+			await expect(
+				actions.writeWorkspaceFile({ workspaceId: "w1", path: "dir", content: "x" }),
+			).rejects.toThrow("not a regular file");
+			expect(
+				await codeOf(
+					actions.writeWorkspaceFile({
+						workspaceId: "w1",
+						path: "big.md",
+						content: "x".repeat(MAX_WORKSPACE_FILE_BYTES + 1),
+					}),
+				),
+			).toBe("FILE_TOO_LARGE");
+			expect(readFileSync(join(outside, "target.md"), "utf8")).toBe("keep");
+			expect(readdirSync(outside)).toEqual(["target.md"]);
+			expect(existsSync(join(worktree, "big.md"))).toBe(false);
+			expect(workspaceFilePath(" docs/ROADMAP.md ")).toBe("docs/ROADMAP.md");
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 });

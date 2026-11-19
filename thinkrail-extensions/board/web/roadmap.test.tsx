@@ -484,7 +484,38 @@ describe("the roadmap's views", () => {
 		expect(markup).toContain("From Payments");
 		expect(markup).toContain('data-testid="board-initiative-draft"');
 		expect(markup).toContain("Inbox shipped.");
-		for (const kind of ["plan", "shape", "report", "review"])
+		for (const kind of ["plan", "shape", "report", "review", "close"])
 			expect(markup).toContain(`data-testid="board-initiative-chat-${kind}"`);
+		expect(markup).not.toContain('data-testid="board-initiative-closed"');
+	});
+
+	test("a closed initiative is marked Closed, on its card and in its panel, and offers no Close", () => {
+		const closed = initiativeOf({ ...child, closedAt: Date.UTC(2026, 10, 18) });
+		const view = viewOf([goal, closed]);
+		const { host } = fakeHost();
+		const panel = html(
+			<InitiativeDetails
+				host={host}
+				view={view}
+				board={null}
+				initiative={closed}
+				write={noop}
+				onError={noop}
+				onDeleted={noop}
+			/>,
+		);
+		expect(panel).toContain('data-testid="board-initiative-closed"');
+		expect(panel).not.toContain('data-testid="board-initiative-chat-close"');
+		expect(panel).not.toContain('data-testid="board-initiative-chat-plan"');
+		expect(panel).toContain('data-testid="board-initiative-chat-report"');
+		const card = html(
+			<InitiativeCard
+				entry={{ initiative: closed, goal, parent: null }}
+				view={view}
+				after={[]}
+				actions={ACTIONS}
+			/>,
+		);
+		expect(card).toContain("Closed");
 	});
 });

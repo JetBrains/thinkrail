@@ -6,7 +6,7 @@ type Querying = Pick<PanelHost, "query">;
 export type Horizon = "now" | "next" | "later";
 export type Health = "on_track" | "at_risk" | "off_track";
 /** A roadmap chat the server starts in the project's Default workspace. */
-export type RoadmapChat = "plan" | "shape" | "report" | "review";
+export type RoadmapChat = "plan" | "shape" | "report" | "review" | "close";
 export type AgentState = "working" | "waiting" | "failed";
 
 export const HORIZONS: readonly Horizon[] = ["now", "next", "later"];
@@ -45,6 +45,8 @@ export interface Initiative {
 	externalCards: CardRef[];
 	proposed?: true;
 	proposedBy?: "agent";
+	/** When the human confirmed it done in an initiative-close chat. */
+	closedAt?: number;
 	createdAt: number;
 	updatedAt: number;
 	depth: number;
@@ -178,6 +180,14 @@ export interface InitiativePatch {
 	specRefs?: string[];
 	health?: { override?: Health | null; note?: string | null };
 	proposed?: false;
+}
+
+/** What Publish wrote: the snapshot file in the project's Default workspace. */
+export interface PublishedSnapshot {
+	projectId: string;
+	workspaceId: string;
+	path: string;
+	bytes: number;
 }
 
 export interface StartedChat {
@@ -390,6 +400,43 @@ export async function linkCards(host: Querying, from: string, to: string): Promi
 
 export async function unlinkCards(host: Querying, from: string, to: string): Promise<void> {
 	await host.query("card.unlink", { from, to });
+}
+
+function isPublishedSnapshot(value: unknown): value is PublishedSnapshot {
+	return (
+		isObject(value) &&
+		typeof value.projectId === "string" &&
+		typeof value.workspaceId === "string" &&
+		typeof value.path === "string" &&
+		typeof value.bytes === "number"
+	);
+}
+
+/** Writes the roadmap snapshot into the project's Default workspace, at `path` or the board's own. */
+export async function publishSnapshot(
+	host: Querying,
+	projectId: string,
+	path?: string,
+): Promise<PublishedSnapshot> {
+	const value = await host.query("roadmap.publish", { projectId, ...(path ? { path } : {}) });
+	if (!isPublishedSnapshot(value))
+		throw new BoardReplyError("The board's host replied in an unknown shape.");
+	return value;
+}
+
+/** Shows the written snapshot in Peek: here when Peek belongs to its workspace, else entering that one. */
+export function peekSnapshot(
+	host: Pick<PanelHost, "peek" | "openWorkspace" | "scope">,
+	written: PublishedSnapshot,
+): void {
+	const entry: PanelPeekEntry = { kind: "file", path: written.path };
+	if (host.scope.workspaceId === written.workspaceId) host.peek(entry);
+	else
+		host.openWorkspace({
+			workspaceId: written.workspaceId,
+			projectId: written.projectId,
+			peek: entry,
+		});
 }
 
 /** Starts a roadmap chat in a new chat of the project's Default workspace, then opens it. */

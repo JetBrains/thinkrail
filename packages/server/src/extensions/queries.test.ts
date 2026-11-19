@@ -20,6 +20,7 @@ function services(name: string, signal: AbortSignal): ExtensionHostServices {
 			stopChat: refused,
 			openPr: refused,
 			runInWorkspace: refused,
+			writeWorkspaceFile: refused,
 			assist: refused,
 		},
 		events: { subscribe: () => () => {} },

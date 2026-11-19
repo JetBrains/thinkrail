@@ -1,3 +1,5 @@
+import { lstatSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import {
 	type Container,
 	EXTENSION_MESSAGE_CUSTOM_TYPE,
@@ -46,6 +48,8 @@ const MESSAGE_ACK_MS = 3_000;
 export const MAX_RUN_MS = 10 * 60_000;
 export const MAX_ASSIST_PROMPT = 20_000;
 export const MAX_ASSIST_TOKENS = 1_024;
+export const MAX_WORKSPACE_FILE_BYTES = 1024 * 1024;
+const MAX_WORKSPACE_PATH = 400;
 const DEFAULT_ASSIST_TOKENS = 256;
 
 const THINKING_LEVELS: readonly string[] = [
@@ -172,6 +176,56 @@ function optionalText(value: unknown, what: string): string | undefined {
 	if (value === undefined) return undefined;
 	if (typeof value !== "string") throw new Error(`${what} must be a string.`);
 	return value.trim() || undefined;
+}
+
+/**
+ * A worktree-relative file path an extension may write: `/`-separated segments, never absolute, never `.`,
+ * `..` or empty, never under `.git`; answers the normalized path.
+ */
+export function workspaceFilePath(path: unknown): string {
+	if (typeof path !== "string" || !path.trim()) throw new Error("Pass a non-empty relative path.");
+	if (path.length > MAX_WORKSPACE_PATH)
+		throw new Error(`The path is longer than ${MAX_WORKSPACE_PATH} characters.`);
+	if (path.includes("\0")) throw new Error("The path holds a NUL character.");
+	const unified = path.trim().replaceAll("\\", "/");
+	if (unified.startsWith("/") || /^[A-Za-z]:/.test(unified))
+		throw new Error(`${path} is absolute; pass a path relative to the worktree.`);
+	const segments = unified.split("/");
+	if (segments.some((segment) => segment === "" || segment === "." || segment === ".."))
+		throw new Error(`${path} is not a plain relative path inside the worktree.`);
+	if (segments.some((segment) => segment.toLowerCase() === ".git"))
+		throw new Error(`${path} is under .git.`);
+	return segments.join("/");
+}
+
+/**
+ * Writes `content` at the relative `path` inside `worktree` atomically (a temp file, then a rename),
+ * creating missing folders; refuses a symlink or a non-folder on the way and a target that is not a
+ * regular file, so nothing lands outside the worktree.
+ */
+export function writeWorktreeFile(worktree: string, path: string, content: string): number {
+	const segments = path.split("/");
+	const name = segments.pop() ?? "";
+	let dir = worktree;
+	for (const segment of segments) {
+		dir = join(dir, segment);
+		const stat = lstatSync(dir, { throwIfNoEntry: false });
+		if (!stat) mkdirSync(dir);
+		else if (stat.isSymbolicLink() || !stat.isDirectory())
+			throw new Error(`${path} passes through ${segment}, which is not a plain folder.`);
+	}
+	const target = join(dir, name);
+	const existing = lstatSync(target, { throwIfNoEntry: false });
+	if (existing && !existing.isFile()) throw new Error(`${path} exists and is not a regular file.`);
+	const temporary = join(dir, `.${name}.${process.pid}-${Date.now()}.tmp`);
+	try {
+		writeFileSync(temporary, content, { flag: "wx" });
+		renameSync(temporary, target);
+	} catch (error) {
+		rmSync(temporary, { force: true });
+		throw error;
+	}
+	return Buffer.byteLength(content, "utf8");
 }
 
 export function extensionMessageContent(title: string, text: string): string {
@@ -315,6 +369,19 @@ export function extensionActions(
 				signal,
 			});
 			return { ok: run.ok, out: run.out, err: run.err, timedOut: run.timedOut };
+		},
+		async writeWorkspaceFile(params) {
+			admit();
+			const workspace = repositoryWorkspace(params.workspaceId, "write in");
+			const path = workspaceFilePath(params.path);
+			if (typeof params.content !== "string") throw new Error("Pass the content as text.");
+			if (Buffer.byteLength(params.content, "utf8") > MAX_WORKSPACE_FILE_BYTES)
+				throw new CodedError(
+					"FILE_TOO_LARGE",
+					`The content is larger than ${MAX_WORKSPACE_FILE_BYTES} bytes.`,
+				);
+			const bytes = writeWorktreeFile(workspace.worktreePath, path, params.content);
+			return { workspaceId: workspace.id, path, bytes };
 		},
 		async assist(params) {
 			admit();

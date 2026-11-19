@@ -1,6 +1,7 @@
 import {
 	RiAddLine,
 	RiChat3Line,
+	RiCheckboxCircleLine,
 	RiCheckLine,
 	RiCloseLine,
 	RiDeleteBinLine,
@@ -39,7 +40,7 @@ import {
 	healthReasonText,
 	ROADMAP_CHAT_LABELS,
 } from "./labels";
-import { HealthChip, HorizonChip, ProgressLegend, StackBar } from "./RoadmapParts";
+import { ClosedChip, HealthChip, HorizonChip, ProgressLegend, StackBar } from "./RoadmapParts";
 import {
 	acceptInitiative,
 	addInitiativeCards,
@@ -773,7 +774,11 @@ const CHAT_ICONS = {
 	shape: RiShapesLine,
 	report: RiQuillPenLine,
 	review: RiDiscussLine,
+	close: RiCheckboxCircleLine,
 } as const satisfies Record<RoadmapChat, unknown>;
+
+const OPEN_CHATS: readonly RoadmapChat[] = ["plan", "shape", "report", "review", "close"];
+const CLOSED_CHATS: readonly RoadmapChat[] = ["report", "review"];
 
 function AgentActions({
 	host,
@@ -803,7 +808,7 @@ function AgentActions({
 	return (
 		<div className="flex flex-col gap-4">
 			<span className="flex flex-wrap gap-4">
-				{(["plan", "shape", "report", "review"] as const).map((kind) => (
+				{(initiative.closedAt === undefined ? OPEN_CHATS : CLOSED_CHATS).map((kind) => (
 					<Button
 						key={kind}
 						variant={kind === "plan" ? "soft-primary" : "outline"}
@@ -982,6 +987,7 @@ export function InitiativeDetails({
 							{t("board.roadmap.proposed")}
 						</span>
 					) : null}
+					<ClosedChip initiative={initiative} />
 				</span>
 				<SavedInput
 					key={initiative.title}

@@ -268,6 +268,22 @@ export interface ExtensionRunResult {
 	timedOut: boolean;
 }
 
+/** One text file written into a repository workspace's worktree, at a relative path inside it. */
+export interface ExtensionWriteWorkspaceFileParams {
+	workspaceId: string;
+	/** Worktree-relative, `/`-separated: never absolute, never `..`, never under `.git`. */
+	path: string;
+	/** UTF-8 text, at most 1 MiB. */
+	content: string;
+}
+
+export interface ExtensionWrittenFile {
+	workspaceId: string;
+	/** The normalized worktree-relative path written. */
+	path: string;
+	bytes: number;
+}
+
 /**
  * Named host writes, each refused (`EXTENSION_DISABLED`) while the extension is switched off. Queries
  * read; actions write through these, never through a shell or host internals.
@@ -298,6 +314,12 @@ export interface ExtensionHostActions {
 		argv: readonly string[];
 		timeoutMs: number;
 	}): Promise<ExtensionRunResult>;
+	/**
+	 * Writes one text file at a relative path inside a repository workspace's worktree (parents created),
+	 * leaving it uncommitted for the user; refuses an absolute path, `..`, `.git`, a symlink on the way and
+	 * content past 1 MiB.
+	 */
+	writeWorkspaceFile(params: ExtensionWriteWorkspaceFileParams): Promise<ExtensionWrittenFile>;
 	/**
 	 * A one-shot ask on the host's assist model (through pi, never a second runtime), stopped once the
 	 * services' `signal` aborts; `null` when no model is configured, it timed out or the answer was empty.

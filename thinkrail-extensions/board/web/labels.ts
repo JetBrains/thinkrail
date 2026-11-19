@@ -167,6 +167,7 @@ export const ROADMAP_CHAT_LABELS = {
 	shape: "board.roadmap.chat.shape",
 	report: "board.roadmap.chat.report",
 	review: "board.roadmap.chat.review",
+	close: "board.roadmap.chat.close",
 } as const satisfies Record<RoadmapChat, MessageKey>;
 
 /** An ISO day (`YYYY-MM-DD`) in the reader's locale; one that does not parse shows as written. */

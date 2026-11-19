@@ -234,6 +234,9 @@ export function readInitiative(raw: unknown): Initiative | null {
 			: [],
 		...(raw.proposed === true ? { proposed: true as const } : {}),
 		...(raw.proposedBy === "agent" ? { proposedBy: "agent" as const } : {}),
+		...(typeof raw.closedAt === "number" && Number.isFinite(raw.closedAt)
+			? { closedAt: raw.closedAt }
+			: {}),
 		createdAt: finite(raw.createdAt, 0),
 		updatedAt: finite(raw.updatedAt, 0),
 	};
@@ -278,6 +281,10 @@ function readSettings(raw: Raw): BoardSettings {
 			enabled: github.enabled === true,
 			filter: oneOf(GITHUB_FILTERS, github.filter) ? github.filter : DEFAULT_SETTINGS.github.filter,
 		},
+		snapshotPath:
+			typeof raw.snapshotPath === "string" && raw.snapshotPath.trim()
+				? raw.snapshotPath
+				: DEFAULT_SETTINGS.snapshotPath,
 	};
 }
 

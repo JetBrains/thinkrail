@@ -374,6 +374,7 @@ describe("board queries", () => {
 			wipLimits: { needsYou: 3, review: 2, agents: 3 },
 			followSelection: true,
 			github: { enabled: false, filter: "open" },
+			snapshotPath: "ROADMAP.md",
 		});
 		const view = await query<BoardView>("board.get", { projectId: "p1" });
 		expect(view.cards.map((card) => `${card.category}/${card.column}`)).toEqual([
@@ -633,6 +634,9 @@ describe("board tools", () => {
 			"board_initiative_create_draft",
 			"board_project_create",
 			"board_cards_create_batch",
+			"board_initiative_activity",
+			"board_initiative_move",
+			"board_initiative_close",
 			"board_update_draft",
 		]);
 
@@ -699,6 +703,7 @@ describe("the board descriptor", () => {
 			title: "Board",
 			apiVersion: 1,
 			extensions: [],
+			skillPackages: ["@thinkrail/ext-board"],
 		});
 		const queries = extension.queries?.(t.host) ?? {};
 		expect(Object.keys(queries).sort()).toEqual([
@@ -728,6 +733,7 @@ describe("the board descriptor", () => {
 			"initiative.update",
 			"initiative.updateDraft.publish",
 			"initiative.updateDraft.save",
+			"insights.get",
 			"milestone.create",
 			"milestone.delete",
 			"milestone.update",
@@ -737,6 +743,7 @@ describe("the board descriptor", () => {
 			"project.update",
 			"roadmap.chat",
 			"roadmap.get",
+			"roadmap.publish",
 			"settings.get",
 			"settings.update",
 			"triage.accept",
@@ -748,7 +755,7 @@ describe("the board descriptor", () => {
 		const pi = { registerTool: (tool: { name: string }) => registered.push(tool.name) };
 		for (const factory of extension.sessionExtensions?.() ?? [])
 			await factory(pi as unknown as ExtensionAPI);
-		expect(registered).toHaveLength(10);
+		expect(registered).toHaveLength(13);
 		await service?.stop?.();
 		expect(t.listeners()).toBe(0);
 	});

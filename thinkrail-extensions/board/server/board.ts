@@ -11,6 +11,7 @@ import type {
 	ThinkingLevel,
 	Workspace,
 } from "@thinkrail/extension-api/server";
+import { isoOfDay, today } from "./days";
 import {
 	closesIssue,
 	GH_TIMEOUT_MS,
@@ -56,10 +57,12 @@ import {
 	sizePrompt,
 	wantsSize,
 } from "./sizing";
+import { roadmapSnapshot } from "./snapshot";
 import { BoardStore, CARDS_VERSION, type CardsFile } from "./store";
 import {
 	attemptChat,
 	DEFERRALS_HEADING,
+	type Deferral,
 	isActiveTaskSpec,
 	latestChat,
 	liveCategory,
@@ -109,6 +112,13 @@ export type CardView = Card & {
 	initiative?: ServedInitiative;
 	virtual?: true;
 };
+
+/** A card's task-spec's deferrals the board has no card for yet. */
+export interface CardDeferrals {
+	cardId: string;
+	specId: string;
+	deferrals: Deferral[];
+}
 
 export interface WipCount {
 	count: number;
@@ -1237,6 +1247,8 @@ export class Board {
 		if (initiativeId && !initiative)
 			throw new Error(`No initiative ${initiativeId} on this board.`);
 		if (kind !== "review" && !initiative) throw new Error(`Pass the initiativeId to ${kind}.`);
+		if (kind === "close" && initiative?.closedAt !== undefined)
+			throw new Error(`${initiative.id} is already closed.`);
 		const workspaceId = this.defaultWorkspace(project);
 		if (!workspaceId) throw new Error(`${project.name} has no Default workspace open.`);
 		const kickoff = roadmapKickoff(kind, {
@@ -1252,6 +1264,61 @@ export class Board {
 			kickoff,
 			...(started.kickoffError ? { kickoffError: started.kickoffError } : {}),
 		};
+	}
+
+	/**
+	 * Writes the roadmap snapshot (`snapshot.ts`) into the project's Default workspace through the host's
+	 * `writeWorkspaceFile`, at `path` or the settings' `snapshotPath`; a new path is remembered.
+	 */
+	async publishSnapshot(
+		projectId: string,
+		path?: string,
+	): Promise<{ projectId: string; workspaceId: string; path: string; bytes: number }> {
+		const project = this.project(projectId);
+		const workspaceId = this.defaultWorkspace(project);
+		if (!workspaceId) throw new Error(`${project.name} has no Default workspace open.`);
+		const settings = this.store.settings(projectId);
+		const view = await this.roadmap.get(projectId);
+		const written = await this.host.actions.writeWorkspaceFile({
+			workspaceId,
+			path: path ?? settings.snapshotPath,
+			content: roadmapSnapshot(view, isoOfDay(today(this.now()))),
+		});
+		if (written.path !== settings.snapshotPath) {
+			this.store.saveSettings(projectId, { ...settings, snapshotPath: written.path });
+			this.changed(projectId);
+		}
+		return { projectId, workspaceId, path: written.path, bytes: written.bytes };
+	}
+
+	/**
+	 * The deferrals the task-specs of these cards' open workspaces list (their `Deferrals` sections), each
+	 * card's once, minus those whose title a card of the board already has.
+	 */
+	async deferralsOf(projectId: string, cardIds: readonly string[]): Promise<CardDeferrals[]> {
+		const all = this.store.cards(projectId)?.cards ?? [];
+		const wanted = new Set(cardIds);
+		const cards = all.filter((card) => wanted.has(card.id));
+		const specs = await this.specsOf(
+			cards.flatMap((card) =>
+				card.attempts
+					.filter((attempt) => attempt.removedAt === undefined)
+					.map((attempt) => attempt.workspaceId),
+			),
+		);
+		const found: CardDeferrals[] = [];
+		for (const card of cards)
+			for (const ref of this.taskSpecsOn(card, specs)) {
+				const section = await this.host
+					.specSection(ref.workspaceId, ref.id, DEFERRALS_HEADING)
+					.catch(() => null);
+				if (section === null) continue;
+				const deferrals = parseDeferrals(section).filter(
+					(deferral) => !all.some((other) => sameTitle(other.title, deferral.title)),
+				);
+				if (deferrals.length > 0) found.push({ cardId: card.id, specId: ref.id, deferrals });
+			}
+		return found;
 	}
 
 	/** Starts an attempt: a new workspace whose chat takes the card's kickoff; the card moves to started. */

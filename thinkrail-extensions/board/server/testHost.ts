@@ -11,6 +11,7 @@ import type {
 	ExtensionStartChatParams,
 	ExtensionTaskSpec,
 	ExtensionWorkspaceFacts,
+	ExtensionWriteWorkspaceFileParams,
 	GhSetupProblem,
 } from "@thinkrail/extension-api/server";
 
@@ -37,6 +38,9 @@ export interface TestHost {
 	runs: { workspaceId: string; argv: string[] }[];
 	/** Answers a `runInWorkspace` (the fake `gh`); by default a failed run. */
 	run: { answer: (argv: readonly string[], workspaceId: string) => ExtensionRunResult };
+	/** Every `writeWorkspaceFile`, in order; a path in `refusePaths` is refused like the host would. */
+	writes: ExtensionWriteWorkspaceFileParams[];
+	refusePaths: Set<string>;
 	/** Every `assist` prompt, in order, and how the host answers it. */
 	asks: string[];
 	assist: { answer: (prompt: string) => { text: string } | null };
@@ -92,6 +96,8 @@ export function createTestHost(): TestHost {
 		sections: new Map(),
 		runs: [],
 		run: { answer: () => ran("gh: not in this test", false) },
+		writes: [],
+		refusePaths: new Set(),
 		asks: [],
 		assist: { answer: () => null },
 		gh: { problem: null },
@@ -125,6 +131,16 @@ export function createTestHost(): TestHost {
 			runInWorkspace: async ({ workspaceId, argv }) => {
 				state.runs.push({ workspaceId, argv: [...argv] });
 				return state.run.answer(argv, workspaceId);
+			},
+			writeWorkspaceFile: async (params) => {
+				if (state.refusePaths.has(params.path))
+					throw new Error(`${params.path} is not a plain relative path inside the worktree.`);
+				state.writes.push(params);
+				return {
+					workspaceId: params.workspaceId,
+					path: params.path,
+					bytes: Buffer.byteLength(params.content),
+				};
 			},
 			assist: async ({ prompt }) => {
 				state.asks.push(prompt);

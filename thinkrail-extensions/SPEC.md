@@ -74,8 +74,8 @@ pi drops its extensions and skills together.
   work stops at its next yield and its memory is released.
   **Queries read; actions write through named host actions:** anything an extension changes outside its
   data folder and the Artifacts goes through `host.actions` — create a workspace with a kickoff, message or
-  stop a chat, open a PR, run one program by argv in a worktree, ask the host's assist model once — each
-  refused while the extension is off. `hostService(host)` is the host-lifetime half: started once the host's publishers are wired,
+  stop a chat, open a PR, run one program by argv in a worktree, write one text file at a relative path
+  inside a worktree, ask the host's assist model once — each refused while the extension is off. `hostService(host)` is the host-lifetime half: started once the host's publishers are wired,
   stopped and restarted with the extension's switch and stopped with the host (each run gets its own
   `signal`, aborted once it stopped); it listens through
   `host.events` (session state, workspace created / updated / removed, `agent.settled`, container changes)

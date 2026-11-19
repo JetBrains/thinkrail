@@ -1015,4 +1015,171 @@ describe("the kickoff and the roadmap tools", () => {
 		});
 		expect(board.store.initiatives("p1").initiatives[0]?.updates).toHaveLength(1);
 	});
+
+	test("roadmap.chat close names initiative-close, and refuses an initiative already closed", async () => {
+		const { t, query, board } = setup();
+		t.projects[0] = project("p1", "ThinkRail", [
+			{ id: "w-default", name: "Default", kind: "default", branch: "main" },
+		]);
+		await query("initiative.create", {
+			projectId: "p1",
+			title: "Roadmap",
+			outcome: "Plans follow the work",
+			criteria: ["Forecasts"],
+		});
+		const started = await query<{ kickoff: string }>("roadmap.chat", {
+			projectId: "p1",
+			kind: "close",
+			initiativeId: "I-1",
+		});
+		expect(
+			started.kickoff.startsWith("/skill:initiative-close Close initiative I-1 of the ThinkRail"),
+		).toBe(true);
+		expect(started.kickoff).toContain("Initiative I-1: Roadmap\nOutcome: Plans follow the work");
+		for (const part of [
+			"goal-and-requirements Capabilities",
+			"board_cards_create_batch",
+			"ask_user_question",
+			'board_initiative_close { initiativeId: "I-1" }',
+		])
+			expect(started.kickoff).toContain(part);
+		await expect(query("roadmap.chat", { projectId: "p1", kind: "close" })).rejects.toThrow(
+			"Pass the initiativeId to close",
+		);
+		board.roadmap.closeInitiative("p1", "I-1");
+		await expect(
+			query("roadmap.chat", { projectId: "p1", kind: "close", initiativeId: "I-1" }),
+		).rejects.toThrow("already closed");
+		await query("roadmap.chat", { projectId: "p1", kind: "review" });
+		expect(t.chats.at(-1)?.kickoff.text).toContain("It has no initiatives yet.");
+		expect(t.chats.at(-1)?.kickoff.text).toContain("board_initiative_move");
+	});
+
+	test("an agent reads an initiative's activity, moves it once confirmed, and closes it with its deferrals listed", async () => {
+		const { t, query, board, card } = setup();
+		t.places.set("/worktrees/w1", { projectId: "p1", workspaceId: "w1" });
+		await query("initiative.create", { projectId: "p1", title: "Roadmap", horizon: "later" });
+		await card("Chart");
+		await card("Export");
+		await card("Elsewhere");
+		await query("initiative.addCards", {
+			projectId: "p1",
+			initiativeId: "I-1",
+			cardIds: ["TR-1", "TR-2"],
+		});
+		await query("card.start", { cardId: "TR-1" });
+		board.note("s1", "/worktrees/w1", "Charts drawn");
+		await query("card.move", { cardId: "TR-1", column: "review" });
+		const call = tools(board);
+
+		const read = await call("board_initiative_activity", { initiativeId: "i-1", sinceDays: 3 });
+		const text = read.content[0]?.text ?? "";
+		expect(text).toContain(
+			"Activity of I-1 · Roadmap over the last 3 days (2026-11-15 to 2026-11-18)",
+		);
+		expect(text).toContain("Started (1): TR-1 Chart");
+		expect(text).toContain("Into review (1): TR-1 Chart");
+		expect(text).toContain("Filed (2): TR-1 Chart; TR-2 Export");
+		expect(text).toContain("- 2026-11-18 TR-1: started → review (human");
+		expect(text).toContain("- 2026-11-18 TR-1: Charts drawn");
+		expect(text).not.toContain("TR-3");
+		expect(
+			(await call("board_initiative_activity", { initiativeId: "I-1" })).content[0]?.text,
+		).toContain("over the last 7 days");
+		await expect(call("board_initiative_activity", { initiativeId: "I-9" })).rejects.toThrow(
+			"No initiative I-9",
+		);
+
+		const before = t.published.length;
+		const moved = await call("board_initiative_move", { initiativeId: "i-1", horizon: "now" });
+		expect(moved.content[0]?.text).toBe("Moved I-1 to now.");
+		expect(board.store.initiatives("p1").initiatives[0]?.horizon).toBe("now");
+		expect(t.published.length).toBeGreaterThan(before);
+
+		t.facts.set("w1", facts("w1"));
+		t.taskSpecs.set("w1", [{ id: "task-chart", title: "Chart", status: "done", path: "x.md" }]);
+		t.sections.set("w1:task-chart:Deferrals", "- Dark mode charts\n- Export\n- [x] Done already");
+		const got = (await call("board_initiative_get", { initiativeId: "I-1" })).content[0]?.text;
+		expect(got).toContain("Deferrals its cards' task-specs list (not on the board yet):");
+		expect(got).toContain("- Dark mode charts (from task-chart of TR-1)");
+		expect(got).not.toContain("- Export (from");
+
+		const closed = await call("board_initiative_close", { initiativeId: "I-1" });
+		expect(closed.content[0]?.text).toBe("Closed I-1: Roadmap.");
+		expect(board.store.initiatives("p1").initiatives[0]?.closedAt).toBe(NOW);
+		expect(
+			(await call("board_initiative_get", { initiativeId: "I-1" })).content[0]?.text,
+		).toContain("closed 2026-11-18");
+		await expect(call("board_initiative_close", { initiativeId: "I-1" })).rejects.toThrow(
+			"already closed",
+		);
+		await call("board_initiative_create_draft", { title: "Idea", outcome: "Why" });
+		await expect(call("board_initiative_close", { initiativeId: "I-2" })).rejects.toThrow(
+			"a proposal",
+		);
+	});
+
+	test("roadmap.publish writes the snapshot into the Default workspace through the host, at the remembered path", async () => {
+		const { t, query } = setup();
+		await expect(query("roadmap.publish", { projectId: "p1" })).rejects.toThrow(
+			"no Default workspace",
+		);
+		t.projects[0] = project("p1", "ThinkRail", [
+			{ id: "w-default", name: "Default", kind: "default", branch: "main" },
+		]);
+		await query("initiative.create", { projectId: "p1", title: "Roadmap", horizon: "now" });
+		const written = await query<Record<string, unknown>>("roadmap.publish", { projectId: "p1" });
+		expect(written).toMatchObject({
+			projectId: "p1",
+			workspaceId: "w-default",
+			path: "ROADMAP.md",
+		});
+		expect(t.writes).toHaveLength(1);
+		const [first] = t.writes;
+		expect(first?.workspaceId).toBe("w-default");
+		expect(first?.content.startsWith("# Roadmap — ThinkRail\n\nGenerated on 2026-11-18")).toBe(
+			true,
+		);
+		expect(first?.content).toContain("## Now\n\n### I-1 · Roadmap");
+		expect(written.bytes).toBe(Buffer.byteLength(first?.content ?? ""));
+
+		await query("roadmap.publish", { projectId: "p1", path: "docs/ROADMAP.md" });
+		expect(t.writes.at(-1)?.path).toBe("docs/ROADMAP.md");
+		expect(t.writes.at(-1)?.content).toBe(first?.content);
+		expect(
+			(await query<{ snapshotPath: string }>("settings.get", { projectId: "p1" })).snapshotPath,
+		).toBe("docs/ROADMAP.md");
+		await query("roadmap.publish", { projectId: "p1" });
+		expect(t.writes.at(-1)?.path).toBe("docs/ROADMAP.md");
+
+		t.refusePaths.add("../ROADMAP.md");
+		await expect(
+			query("roadmap.publish", { projectId: "p1", path: "../ROADMAP.md" }),
+		).rejects.toThrow("not a plain relative path");
+		expect(
+			(await query<{ snapshotPath: string }>("settings.get", { projectId: "p1" })).snapshotPath,
+		).toBe("docs/ROADMAP.md");
+		await expect(
+			query("roadmap.publish", { projectId: "p1", path: "x".repeat(401) }),
+		).rejects.toThrow("longer than 400");
+	});
+
+	test("insights.get answers the board's flow over the asked weeks, validated", async () => {
+		const { query, card } = setup();
+		await card("One");
+		await query("card.move", { cardId: "TR-1", column: "building" });
+		const result = await query<{ weeks: number; days: unknown[]; empty: boolean }>("insights.get", {
+			projectId: "p1",
+			weeks: 2,
+		});
+		expect(result.weeks).toBe(2);
+		expect(result.days.length).toBeGreaterThan(7);
+		expect(result.empty).toBe(false);
+		expect((await query<{ weeks: number }>("insights.get", { projectId: "p1" })).weeks).toBe(12);
+		for (const weeks of [0, 53, 1.5, "4"])
+			await expect(query("insights.get", { projectId: "p1", weeks })).rejects.toThrow(
+				"weeks must be",
+			);
+		await expect(query("insights.get", { projectId: "nope" })).rejects.toThrow("No open project");
+	});
 });

@@ -1,6 +1,7 @@
 import type { ExtensionQuery, ThinkingLevel } from "@thinkrail/extension-api/server";
 import type { Board, CardInput, CardPatch, SettingsPatch, StartOptions } from "./board";
 import { isIsoDate } from "./days";
+import { INSIGHTS_MAX_WEEKS } from "./insights";
 import { ROADMAP_CHATS } from "./kickoff";
 import {
 	CARD_SIZES,
@@ -32,6 +33,8 @@ const ESTIMATE_MAX_DAYS = 365;
 const APPETITE_MAX_DAYS = 3650;
 const SHIFT_MAX_DAYS = 365;
 const MILESTONES_MAX = 50;
+const PATH_MAX = 400;
+const DEFAULT_INSIGHT_WEEKS = 12;
 
 type Params = Record<string, unknown>;
 
@@ -258,6 +261,18 @@ function shiftDays(p: Params): number {
 	return days;
 }
 
+function insightWeeks(p: Params): number {
+	const weeks = p.weeks ?? DEFAULT_INSIGHT_WEEKS;
+	if (
+		typeof weeks !== "number" ||
+		!Number.isInteger(weeks) ||
+		weeks < 1 ||
+		weeks > INSIGHTS_MAX_WEEKS
+	)
+		throw new Error(`weeks must be a whole number from 1 to ${INSIGHTS_MAX_WEEKS}.`);
+	return weeks;
+}
+
 function startOptions(p: Params): StartOptions {
 	return defined<StartOptions>({
 		workflow: optionalOneOf(p, "workflow", WORKFLOWS),
@@ -367,6 +382,14 @@ export function boardQueries(board: Board): Readonly<Record<string, ExtensionQue
 			return board.updateSettings(projectId(p), settingsPatch(p));
 		},
 		"roadmap.get": (raw) => roadmap.get(projectId(params(raw))),
+		"roadmap.publish": (raw) => {
+			const p = params(raw);
+			return board.publishSnapshot(projectId(p), optionalText(p, "path", PATH_MAX) || undefined);
+		},
+		"insights.get": (raw) => {
+			const p = params(raw);
+			return roadmap.insights(projectId(p), insightWeeks(p));
+		},
 		"roadmap.chat": (raw) => {
 			const p = params(raw);
 			return board.startRoadmapChat(

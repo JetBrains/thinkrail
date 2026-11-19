@@ -96,6 +96,7 @@ describe("defineServerExtension", () => {
 				stopChat: refused,
 				openPr: refused,
 				runInWorkspace: refused,
+				writeWorkspaceFile: refused,
 				assist: refused,
 			},
 			events: { subscribe: () => () => {} },
