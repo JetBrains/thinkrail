@@ -2735,6 +2735,8 @@
 	"viewer.binary.modified": "Modificado: {{size}}",
 	"viewer.binary.openExternally": "Abrir externamente",
 	"viewer.binary.revealInFileManager": "Mostrar en el gestor de archivos",
+	"viewer.binary.downloadCopy": "Descargar una copia",
+	"viewer.binary.hostTooOld": "Esta acción requiere un host más reciente",
 	"viewer.binary.original": "Original: {{size}}",
 	"viewer.binary.unavailable": "No disponible",
 	"viewer.code.commentOnLine": "Comentar esta línea",

@@ -30,6 +30,11 @@ worktree in the host's file manager — the workspace row's "Open in" menu.
   client's failure toast fires instead of Explorer falling back to Documents), hands `explorer` a
   backslash-normalized path (it also opens Documents for a forward-slash path), and launches with
   `windowsHide: false` — `explorer` applies the hide flag to the folder window it opens.
+  `openWithDefaultApp(filePath)` is the file sibling of `revealInFileManager`: the same platform
+  commands (`open` / `explorer` / `xdg-open`) aimed at a file, so the OS default application opens
+  it in place (`explorer` given a file path launches its association). It throws up front when the
+  file is missing, mirroring the folder guard, and takes the same optional `spawn`/`platform` test
+  hooks.
 - **Vim is `kind: "terminal"`, not launched here.** It has no GUI window of its own — spawning it detached
   with no attached TTY would just print "Warning: Output is not to a terminal" and exit. The **client**
   handles that case itself: open/focus the clicked workspace's embedded terminal and run `vim .` there
@@ -56,8 +61,8 @@ worktree in the host's file manager — the workspace row's "Open in" menu.
   `platform` (default `process.platform`), the same testable-parameter pattern `dialog`'s `pickersFor`
   uses, so its darwin/win32/linux branches are each asserted directly rather than only on whichever OS
   runs the test.
-- **Public surface (barrel):** `listAvailableEditors`, `openEditor`, `revealInFileManager`, `WhichFn`,
-  `SpawnFn`.
+- **Public surface (barrel):** `listAvailableEditors`, `openEditor`, `openWithDefaultApp`,
+  `revealInFileManager`, `WhichFn`, `SpawnFn`.
 - **Allowed deps:** `Bun.which`, `node:fs/promises` (`readdir`), `@thinkrail/shared/spawn` (`spawnDetached`),
   `node:fs` (`existsSync`), `node:path` (`win32.normalize`), `process.env`/`process.platform`,
   `contracts` (the `EditorInfo` wire type).

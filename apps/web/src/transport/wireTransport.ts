@@ -30,6 +30,7 @@ import {
 	EXTENSION_SETTINGS_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
+	FS_EXTERNAL_ACTIONS_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	KEYBINDINGS_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
@@ -107,6 +108,10 @@ export function respondToTool(
 
 export function supportsChangeMutations(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= CHANGE_MUTATIONS_PROTOCOL_VERSION;
+}
+
+export function supportsFsExternalActions(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= FS_EXTERNAL_ACTIONS_PROTOCOL_VERSION;
 }
 
 export function supportsRichAnchors(protocolVersion: number | null): boolean {

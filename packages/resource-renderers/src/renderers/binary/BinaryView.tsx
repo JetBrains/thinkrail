@@ -33,7 +33,7 @@ export default function BinaryView({ resource, content }: ResourceViewProps) {
 						{bytes ? bytes.hash.slice(0, 12) : t("viewer.binary.unavailable")}
 					</dd>
 				</dl>
-				{bytes && host ? (
+				{bytes ? (
 					<div className="mt-16 flex flex-wrap gap-8">
 						{host ? (
 							<button
@@ -53,6 +53,13 @@ export default function BinaryView({ resource, content }: ResourceViewProps) {
 								{t("viewer.binary.revealInFileManager")}
 							</button>
 						) : null}
+						<a
+							href={bytes.url}
+							download={fileName(resource.path)}
+							className="inline-flex rounded-sm border border-border-default px-12 py-4 tr-text-action text-text-default hover:bg-control-bg-hovered focus-visible:focus-ring"
+						>
+							{t("viewer.binary.downloadCopy")}
+						</a>
 					</div>
 				) : null}
 			</section>

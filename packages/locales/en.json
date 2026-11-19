@@ -3400,6 +3400,8 @@
 	"viewer.binary.modified": "Modified: {{size}}",
 	"viewer.binary.openExternally": "Open externally",
 	"viewer.binary.revealInFileManager": "Reveal in file manager",
+	"viewer.binary.downloadCopy": "Download a copy",
+	"viewer.binary.hostTooOld": "This action needs a newer host",
 	"viewer.binary.original": "Original: {{size}}",
 	"viewer.binary.unavailable": "Unavailable",
 	"viewer.code.commentOnLine": "Comment on this line",
