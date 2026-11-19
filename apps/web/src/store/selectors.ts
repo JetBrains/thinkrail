@@ -8,6 +8,7 @@ import {
 	CHATS_PROTOCOL_VERSION,
 	type Container,
 	canMarkCompletionUnread,
+	chatState,
 	DEFAULT_WORKSPACE_NAME,
 	firstPromptOfTexts,
 	type GitDiffScope,
@@ -612,11 +613,10 @@ export function selectCompletionMarkedUnread(
 export type SessionAttention = "needs-input" | "error" | "unread" | "running";
 
 export function getSessionAttention(state: SessionState): SessionAttention | null {
-	if (state.needsInput !== null) return "needs-input";
-	if (state.completionUnread && state.completion?.outcome === "failed") return "error";
-	if (state.completionUnread) return "unread";
-	if (isSessionWorking(state)) return "running";
-	return null;
+	const chat = chatState(state);
+	if (chat === "needs_you") return "needs-input";
+	if (state.completionUnread) return chat === "failed" ? "error" : "unread";
+	return chat === "working" ? "running" : null;
 }
 
 export function selectWorkspaceIsRunning(

@@ -14,7 +14,6 @@ import { WorkspaceCreationStopped } from "../workspaces";
 import {
 	type ChatReport,
 	chatName,
-	chatStateLabel,
 	clampFinalMessage,
 	composePrompt,
 	matchWorkspaces,
@@ -115,32 +114,6 @@ const state = (patch: Partial<SessionState>): SessionState => ({
 	queuedCount: 0,
 	backgroundWork: false,
 	...patch,
-});
-
-test("chatStateLabel maps session state to the agent-facing vocabulary", () => {
-	expect(chatStateLabel(undefined)).toBe("idle");
-	expect(chatStateLabel(state({}))).toBe("idle");
-	expect(chatStateLabel(state({ execution: "running" }))).toBe("working");
-	expect(chatStateLabel(state({ backgroundWork: true }))).toBe("working");
-	expect(
-		chatStateLabel(
-			state({
-				execution: "running",
-				needsInput: { interactionId: "i1", kind: "tool-response", toolCallId: "t1" },
-			}),
-		),
-	).toBe("needs_you");
-	expect(chatStateLabel(state({ completion: { completionId: "c", outcome: "succeeded" } }))).toBe(
-		"finished",
-	);
-	expect(
-		chatStateLabel(
-			state({ completion: { completionId: "c", outcome: "failed", failure: "error" } }),
-		),
-	).toBe("failed");
-	expect(chatStateLabel(state({ completion: { completionId: "c", outcome: "cancelled" } }))).toBe(
-		"interrupted",
-	);
 });
 
 test("clampFinalMessage keeps the tail of a long final message", () => {

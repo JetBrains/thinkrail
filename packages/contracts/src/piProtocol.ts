@@ -102,6 +102,25 @@ export function isSessionWorking(state: SessionState): boolean {
 	return state.execution === "running" || state.backgroundWork === true;
 }
 
+export type ChatState = "needs_you" | "working" | "finished" | "failed" | "interrupted" | "idle";
+
+export function chatState(state: SessionState | undefined): ChatState {
+	if (!state) return "idle";
+	if (state.needsInput) return "needs_you";
+	if (isSessionWorking(state)) return "working";
+	switch (state.completion?.outcome) {
+		case "succeeded":
+			return "finished";
+		case "failed":
+			return "failed";
+		case "interrupted":
+		case "cancelled":
+			return "interrupted";
+		default:
+			return "idle";
+	}
+}
+
 export function canMarkCompletionUnread(state: SessionState): boolean {
 	return (
 		!isSessionWorking(state) &&

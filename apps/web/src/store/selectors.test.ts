@@ -13,11 +13,13 @@ import type { WorkspaceLayoutDocument } from "../shell/layout";
 import { type EditorTab, EMPTY_RUNTIME } from "./appStore";
 import {
 	fsChangedPaths,
+	getSessionAttention,
 	isConnectedGeneration,
 	isDefaultWorkspace,
 	isExternalWorkspace,
 	isUserOwnedWorkspace,
 	matchesWorktreePath,
+	type SessionAttention,
 	selectActiveEditorTab,
 	selectActiveRepoWorkspaceId,
 	selectActiveSubagentProjectTrust,
@@ -157,6 +159,43 @@ test("normalized rail flags keep attention binary and working orthogonal", () =>
 	expect(selectProjectIsRunning(state, "p2")).toBe(false);
 	expect(selectWorkspaceIsRunning(state, "w4")).toBe(true);
 	expect(selectProjectIsRunning(state, "p3")).toBe(true);
+});
+
+test("session attention ranks needs-input, then an unread failure, then unread, then working", () => {
+	const quiet: SessionState = {
+		execution: "idle",
+		runId: "r1",
+		needsInput: null,
+		completion: null,
+		completionUnread: false,
+		queuedCount: 0,
+		backgroundWork: false,
+	};
+	const needsInput = {
+		interactionId: "tool:q1",
+		kind: "tool-response",
+		toolCallId: "q1",
+	} as const;
+	const succeeded = { completionId: "c1", outcome: "succeeded" } as const;
+	const failed = { completionId: "c1", outcome: "failed", failure: "error" } as const;
+	const interrupted = { completionId: "c1", outcome: "interrupted" } as const;
+	const table: [Partial<SessionState>, SessionAttention | null][] = [
+		[{}, null],
+		[{ completion: succeeded }, null],
+		[{ completion: failed }, null],
+		[{ execution: "running" }, "running"],
+		[{ backgroundWork: true }, "running"],
+		[{ execution: "running", needsInput }, "needs-input"],
+		[{ needsInput, completion: failed, completionUnread: true }, "needs-input"],
+		[{ completion: failed, completionUnread: true }, "error"],
+		[{ completion: { ...failed, failure: "length" }, completionUnread: true }, "error"],
+		[{ completion: succeeded, completionUnread: true }, "unread"],
+		[{ completion: interrupted, completionUnread: true }, "unread"],
+		[{ execution: "running", completion: succeeded, completionUnread: true }, "unread"],
+	];
+	for (const [patch, expected] of table) {
+		expect(getSessionAttention({ ...quiet, ...patch })).toBe(expected);
+	}
 });
 
 test("the workspace read action offers read over unread and hides with nothing to relight", () => {

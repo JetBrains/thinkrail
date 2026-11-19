@@ -153,9 +153,11 @@ the palette ranks with — kept here so host-side search can rank with the same 
   sides agree here rather than each re-deriving `startsWith`) + **`isRetriedAttempt(messages, index)`**
   (the one shared reading of pi's persisted-but-superseded auto-retry attempts — the client's hydration
   hides their turns, the host's history indexer skips their text; both consume the index slot so jump
-  anchors stay aligned) from `domain`; **`isTranscriptMessageRole(role)`**
-  and **`isSessionWorking(state)`** (running or idle on background work — the one working test every
-  badge and glance uses) from `piProtocol` (`isTranscriptMessageRole` is the one definition of which roles a transcript carries: the host filters
+  anchors stay aligned) from `domain`; **`isTranscriptMessageRole(role)`**,
+  **`isSessionWorking(state)`** (running or idle on background work — the one working test every
+  badge and glance uses) and **`chatState(state)`** (`ChatState`, the one chat-state reading:
+  needs-you, then working, then the latest completion's outcome, else idle; unread is not a state —
+  callers combine `completionUnread` explicitly) from `piProtocol` (`isTranscriptMessageRole` is the one definition of which roles a transcript carries: the host filters
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `wsProtocol`
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, `WS_MAX_FRAME_BYTES`, and
@@ -1540,7 +1542,8 @@ pending dialog its exact replayable request), nullable latest `completion` (stab
 `backgroundWork` flag (the session still owns running background commands or subagents), and the
 owner-global `completionUnread` receipt projection (held false while an idle session has background work).
 `isSessionWorking` is the one *working* test: `execution` running or `backgroundWork`; an older host omits
-the flag, which reads as false. `SessionStateRecord` adds session/workspace/project
+the flag, which reads as false. `chatState` builds on it for the one vocabulary the host's
+`workspace_status` and the web's attention share (`cancelled` reads as `interrupted`). `SessionStateRecord` adds session/workspace/project
 attribution plus the chat's `title` and `firstPrompt`; `SessionSummary.state` carries the exact attached
 session's state.
 

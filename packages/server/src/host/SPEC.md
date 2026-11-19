@@ -621,8 +621,9 @@ gate: [[module-contracts]].
       it) makes the hand-off send through `ackSend` + `runObservation.send(…, "internal")` rather than
       `sendUserMessage`, and start the chat without the recent-model pick: an agent-sent prompt is not a
       user `message_sent`, never claims the feedback invitation, and its model is not the user's choice.
-    - Status reuses existing state only: `listSessions` state (labelled working / needs_you / finished /
-      failed / interrupted / idle), the cached `Workspace.review` (no new PR refresh), and diff stats.
+    - Status reuses existing state only: `listSessions` state (labelled by contracts' `chatState` —
+      working / needs_you / finished / failed / interrupted / idle), the cached `Workspace.review` (no
+      new PR refresh), and diff stats.
       Start and status take their reads and effects as injected deps, so both are unit-tested without
       projects, worktrees or sessions.
   - The **workspace-archive teardown** — the other composition of `agent` + `terminal` + `workspaces` only

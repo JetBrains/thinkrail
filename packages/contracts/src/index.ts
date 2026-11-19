@@ -120,6 +120,7 @@ export type * from "./piProtocol";
 export {
 	assistantToolCallsAreExecutable,
 	canMarkCompletionUnread,
+	chatState,
 	isRefImage,
 	isSessionWorking,
 	isTranscriptMessageRole,

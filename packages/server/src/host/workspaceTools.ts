@@ -1,13 +1,13 @@
 import { readFileSync, statSync } from "node:fs";
 import { extname, isAbsolute, resolve } from "node:path";
-import type {
-	ImageContent,
-	Project,
-	SessionState,
-	SessionSummary,
-	WireModel,
-	Workspace,
-	WorkspaceKickoff,
+import {
+	chatState,
+	type ImageContent,
+	type Project,
+	type SessionSummary,
+	type WireModel,
+	type Workspace,
+	type WorkspaceKickoff,
 } from "@thinkrail/contracts";
 import {
 	getSessionWorkspaceId,
@@ -236,23 +236,6 @@ export async function startWorkspace(
 	};
 }
 
-export function chatStateLabel(state: SessionState | undefined): string {
-	if (!state) return "idle";
-	if (state.needsInput) return "needs_you";
-	if (state.execution === "running" || state.backgroundWork) return "working";
-	switch (state.completion?.outcome) {
-		case "succeeded":
-			return "finished";
-		case "failed":
-			return "failed";
-		case "interrupted":
-		case "cancelled":
-			return "interrupted";
-		default:
-			return "idle";
-	}
-}
-
 export function clampFinalMessage(text: string, limit = FINAL_MESSAGE_LIMIT): string {
 	return text.length <= limit ? text : `…${text.slice(text.length - limit)}`;
 }
@@ -314,7 +297,7 @@ function renderWorkspace(
 	for (const { summary, finalMessage } of chats) {
 		const self = summary.sessionId === callerSessionId ? ", this chat" : "";
 		lines.push(
-			`- chat ${chatName(summary)} (${summary.sessionId}${self}): ${chatStateLabel(summary.state)}`,
+			`- chat ${chatName(summary)} (${summary.sessionId}${self}): ${chatState(summary.state)}`,
 		);
 		if (finalMessage === undefined) continue;
 		lines.push(
