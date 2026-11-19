@@ -6,7 +6,7 @@ import { type FakePr, githubOrigin, writeGhScenario } from "./fixtures/github";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { E2eWire } from "./fixtures/wire";
 
-// v127 New Workspace › Review a pull request against the fake gh + github-ssh seam (e2e/SPEC.md).
+// v128 New Workspace › Review a pull request against the fake gh + github-ssh seam (e2e/SPEC.md).
 
 const PR_URL = (number: number) => `https://github.com/acme/sample/pull/${number}`;
 

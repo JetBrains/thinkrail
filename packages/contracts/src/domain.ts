@@ -256,7 +256,7 @@ export type GhSetupProblem = "missing" | "unauthenticated";
 
 export type PullRequestState = "open" | "merged" | "closed";
 
-/** v127 `pr.list` / `pr.get`: a GitHub pull request of a project's repository, as the user's `gh` reads it. */
+/** v128 `pr.list` / `pr.get`: a GitHub pull request of a project's repository, as the user's `gh` reads it. */
 export interface PullRequestSummary {
 	number: number;
 	title: string;

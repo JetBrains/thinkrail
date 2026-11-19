@@ -28,7 +28,7 @@ consumer that only understood open reviews reads a merged/closed row as a live P
 contracts spec pins `state` to `WORKSPACE_SETTLE_PROTOCOL_VERSION` and the host answers such a client's
 `workspace.openReview` with `null` for a merged or closed review.
 
-It also answers the New Workspace dialog's pull-request picker (`pr.list` / `pr.get`, v127,
+It also answers the New Workspace dialog's pull-request picker (`pr.list` / `pr.get`, v128,
 `pullRequests.ts`): a project's open GitHub pull requests and one pull request by number in any state,
 as `PullRequestSummary` rows. Not keyed by a branch, and not cached — the picker asks once per opening.
 

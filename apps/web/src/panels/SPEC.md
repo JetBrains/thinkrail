@@ -634,7 +634,7 @@ pre-session half of the user's skill settings; the chat header opens the same di
 options — a native radio group, `fieldset` + sr-only `legend` over visually-hidden radio inputs, so
 assistive tech hears one mutually-exclusive choice: **Isolated workspace** and **Project folder** when a
 repository project is open, **Chat without a project** where a chat can start, and **Review a pull
-request** when a repository project is open and the host is v127+ — every available mode visible at
+request** when a repository project is open and the host is v128+ — every available mode visible at
 once) chooses **where** the work runs, and the header is
 **mode-aware** so it always names the operation truthfully: **Isolated workspace** → title **“Create
 workspace”**, description **“A separate checkout on its own new branch. Files, chats, changes, and
