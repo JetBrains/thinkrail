@@ -12,6 +12,7 @@ import {
 	searchUrl,
 } from "./extensionCatalog";
 import { type RecordedRegistry, recordedFetch } from "./extensionCatalogSource";
+import { parseDenylist } from "./extensionDenylist";
 import recording from "./fixtures/npmRegistry.json";
 
 const fixture: RecordedRegistry = recording;
@@ -54,7 +55,6 @@ const expectedFixtureCatalog = {
 			author: "Jane Doe",
 			api: "1.0",
 			halves: ["server", "web"],
-			image: "https://example.com/preview.png",
 			install: "npm:thinkrail-ext-weather",
 			npm: "https://www.npmjs.com/package/thinkrail-ext-weather",
 			repository: "https://github.com/jane/thinkrail-ext-weather",
@@ -134,12 +134,15 @@ describe("buildExtensionCatalog against the recorded npm responses", () => {
 		]);
 	});
 
-	test("keeps only an https image", async () => {
-		const catalog = await buildExtensionCatalog({ fetch: recordedFetch(fixture), now });
-		const cards = catalog.extensions.find((entry) => entry.name === "@acme/thinkrail-review-cards");
+	test("never carries a preview image, even an https one the manifest declares", async () => {
+		const weather = fixture.responses[latestUrl("thinkrail-ext-weather")]?.body as {
+			thinkrail: { image?: string };
+		};
+		expect(weather.thinkrail.image).toStartWith("https://");
 
-		expect(cards).toBeDefined();
-		expect(cards).not.toHaveProperty("image");
+		const catalog = await buildExtensionCatalog({ fetch: recordedFetch(fixture), now });
+		for (const entry of catalog.extensions) expect(entry).not.toHaveProperty("image");
+		expect(JSON.stringify(catalog)).not.toContain("preview.png");
 	});
 
 	test("fetches a package listed twice by the search only once", async () => {
@@ -166,6 +169,47 @@ describe("buildExtensionCatalog against the recorded npm responses", () => {
 		const first = await buildExtensionCatalog({ fetch: recordedFetch(fixture), now });
 		const second = await buildExtensionCatalog({ fetch: recordedFetch(reversed), now });
 		expect(JSON.stringify(second)).toBe(JSON.stringify(first));
+	});
+});
+
+describe("the denylist", () => {
+	const denylist = parseDenylist({
+		packages: [
+			{ name: "thinkrail-ext-weather", reason: "malware report", date: "2026-11-18" },
+			{ name: "thinkrail-ext-not-on-npm" },
+		],
+	});
+
+	test("leaves a denylisted package out without fetching it, and says why", async () => {
+		const lines: string[] = [];
+		const { urls, fetch } = counting(recordedFetch(fixture));
+		const catalog = await buildExtensionCatalog({
+			fetch,
+			now,
+			denylist,
+			log: (line) => lines.push(line),
+		});
+
+		expect(catalog.extensions.map((entry) => entry.name)).toEqual([
+			"@acme/thinkrail-review-cards",
+			"thinkrail-ext-jira",
+		]);
+		expect(urls).not.toContain(latestUrl("thinkrail-ext-weather"));
+		expect(lines).toContain(
+			"not listed: thinkrail-ext-weather: on the site's denylist (malware report)",
+		);
+		expect(lines.at(-1)).toBe("listed 2 of 6 npm candidates");
+		expect(catalogErrors(catalog)).toEqual([]);
+	});
+
+	test("matches the exact package name only", async () => {
+		const scoped = parseDenylist({ packages: [{ name: "@other/thinkrail-review-cards" }] });
+		const catalog = await buildExtensionCatalog({
+			fetch: recordedFetch(fixture),
+			now,
+			denylist: scoped,
+		});
+		expect(JSON.stringify(catalog)).toBe(JSON.stringify(expectedFixtureCatalog));
 	});
 });
 
@@ -326,7 +370,8 @@ describe("catalogErrors", () => {
 						...entry,
 						name: "thinkrail-ext-a",
 						halves: ["web", "server"],
-						image: "http://x.example/a.png",
+						image: "https://x.example/a.png",
+						repository: "http://x.example/a",
 					},
 				],
 			}),
@@ -335,8 +380,9 @@ describe("catalogErrors", () => {
 			"generatedAt must be ISO",
 			"extensions[0] has unknown field extra",
 			"extensions[0].install must be npm:thinkrail-ext-weather",
+			"extensions[1] has unknown field image",
 			"extensions[1] is not sorted by unique name",
-			"extensions[1].image must be an https URL",
+			"extensions[1].repository must be an https URL",
 			"extensions[1].halves must be server, web, or both in that order",
 			"extensions[1].install must be npm:thinkrail-ext-a",
 			"extensions[1].npm must be https://www.npmjs.com/package/thinkrail-ext-a",

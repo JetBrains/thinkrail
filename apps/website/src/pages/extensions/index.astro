@@ -44,8 +44,9 @@ const countLabel = `${extensions.length} ${extensions.length === 1 ? "extension"
 
 		<p class="ext-notice">
 			Listings are automatic and unreviewed: every npm package with the <code>thinkrail-extension</code> keyword
-			and a valid manifest appears here within about an hour of publishing. An extension runs code on your
-			machine and in the app, so install the ones you trust. <a href="/docs/build-an-extension/">Build your own</a>.
+			and a valid manifest appears here within about an hour of publishing, unless ThinkRail's maintainers have
+			delisted it. An extension runs code on your machine and in the app, so install the ones you trust.
+			<a href="/docs/build-an-extension/">Build your own</a>.
 		</p>
 
 		{
@@ -81,8 +82,8 @@ const countLabel = `${extensions.length} ${extensions.length === 1 ? "extension"
 						</p>
 					</div>
 					<p class="ext-hint">
-						Copy an install source and paste it into <strong>Settings → Extensions &amp; skills → Install package…</strong> in
-						ThinkRail.
+						In ThinkRail, install one from <strong>Settings → Extensions &amp; skills → Browse</strong>, or copy its install
+						source here and paste it into <strong>Install package…</strong> on the same page.
 					</p>
 					<div class="ext-grid">
 						{extensions.map((entry) => (
@@ -93,24 +94,6 @@ const countLabel = `${extensions.length} ${extensions.length === 1 ? "extension"
 									.join(" ")
 									.toLowerCase()}
 							>
-								{entry.image && (
-									<div class="ext-card-media">
-										<svg class="i ext-card-placeholder" aria-hidden="true">
-											<use href="#i-blocks" />
-										</svg>
-										<img
-											class="ext-card-image"
-											src={entry.image}
-											alt=""
-											width="640"
-											height="360"
-											loading="lazy"
-											decoding="async"
-											fetchpriority="low"
-											referrerpolicy="no-referrer"
-										/>
-									</div>
-								)}
 								<div class="ext-card-body">
 									<h2 class="ext-card-title">{entry.title ?? entry.name}</h2>
 									<p class="ext-card-meta">

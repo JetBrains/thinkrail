@@ -15,14 +15,6 @@ export function initExtensionsPage(root: ParentNode = document): void {
 	const page = root.querySelector<HTMLElement>("[data-extensions]");
 	if (!page) return;
 
-	for (const media of page.querySelectorAll<HTMLElement>(".ext-card-media")) {
-		const image = media.querySelector<HTMLImageElement>(".ext-card-image");
-		if (!image) continue;
-		const fail = () => media.classList.add("broken");
-		image.addEventListener("error", fail, { once: true });
-		if (image.complete && image.naturalWidth === 0) fail();
-	}
-
 	const box = page.querySelector<HTMLElement>("[data-extension-search-box]");
 	const input = page.querySelector<HTMLInputElement>("[data-extension-search-input]");
 	const count = page.querySelector<HTMLElement>("[data-extension-count]");
