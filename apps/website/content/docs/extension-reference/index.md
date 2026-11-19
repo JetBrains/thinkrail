@@ -21,7 +21,7 @@ The manifest is the `thinkrail` object in the package's `package.json`. Together
 | `web` | The built web half: one ESM file ending in `.js` or `.mjs`. |
 | `styles` | The built stylesheet of the web half, ending in `.css`. Only together with `web`. |
 | `title` | The display name. Without it, the package name is shown. |
-| `image` | A preview image for the extensions page. Only an `https:` URL is shown. |
+| `image` | Accepted and ignored: nothing shows a preview image. The build warns when it is not an `https:` URL. |
 
 At least one of `server` and `web` is required; the other fields are optional.
 
@@ -41,8 +41,14 @@ ThinkRail does not load, and the catalog does not list, a package whose `package
   the table;
 - has a `title` or `image` that is not a non-empty string.
 
-ThinkRail also refuses a package named like one of its built-in extensions; the catalog does not check
-this. Fields the manifest does not define are ignored. Paths are compared after removing `.` segments
+ThinkRail also refuses a package with a name it reserves; the catalog does not check this. The reserved
+names are
+
+<!-- guard: reserved-names -->
+those of its built-in extensions, `ask-user-question`, `hint-mode`, `next-steps`, `visualize` and
+`web-access`, and of its own `mcp` and `tool-search` slots.
+
+Fields the manifest does not define are ignored. Paths are compared after removing `.` segments
 and repeated slashes, so `./dist/web.js` and `dist/web.js` are the same file.
 
 The same rules as cases, in the format of ThinkRail's own test table of manifests:
@@ -100,11 +106,12 @@ The same rules as cases, in the format of ThinkRail's own test table of manifest
 
 - `api` is not exactly the SDK's own API version (`1.0` for SDK 1.0);
 - the `server` file does not exist;
-- `typebox` or an `@earendil-works/*` package is in `dependencies` instead of `peerDependencies`.
+- `typebox` or an `@earendil-works/*` package is in `dependencies` instead of `peerDependencies`, with
+  or without a server half.
 
 It warns, and builds anyway, when `keywords` lacks `thinkrail-extension`, when a server half is declared
-but `@thinkrail/extension-sdk` is not in `dependencies`, when the manifest has a field it does not
-define, and when `image` is not an `https:` URL.
+but `@thinkrail/extension-sdk` is not in `dependencies`, and when the manifest has a field it does not
+define.
 
 ## Server descriptor
 
@@ -145,12 +152,22 @@ the agent reads for an answer that arrives after a ThinkRail restart. On the web
 with `interactive: true`; the card then receives `interaction` and answers with
 `interaction.respond(value)`.
 
+The server entry's top level must finish within 10 seconds, or the extension fails to load ("the server
+entry did not finish loading within 10 s"). The same bound applies to its factories in each chat: a
+factory still running after 10 seconds is that chat's load error for the extension.
+
 ## Web descriptor
 
 The default export of the `web` file, made with `defineWebExtension` from
-`@thinkrail/extension-sdk/web`: `{ name, toolRenderers }`. ThinkRail registers the renderers under the
-package name. `toolRenderers` is keyed by tool name; each entry is `{ renderer, options }`, where
-`renderer` is a React component receiving `ToolRenderProps`.
+`@thinkrail/extension-sdk/web`:
+
+<!-- guard: web-descriptor -->
+`{ name, toolRenderers }`, and nothing else: `defineWebExtension` rejects other fields.
+
+ThinkRail registers the renderers under the package name. `toolRenderers` is keyed by tool name; each
+entry is `{ renderer, options }`, where `renderer` is a React component receiving `ToolRenderProps`
+(a function component, or one made with `memo`, `forwardRef` or `lazy`). Which card wins when two
+register one tool name is under [Names ThinkRail keeps](#names-thinkrail-keeps).
 
 <!-- guard: render-props -->
 | Prop | Meaning |
@@ -177,28 +194,30 @@ package name. `toolRenderers` is keyed by tool name; each entry is `{ renderer, 
 | `dock` | With `interactive`: a call the app is waiting on is shown above the message box, the transcript row as its stub. |
 | `composerSuggestions` | `(args, result) => string[]`: when the call ends a finished turn, the strings become one-click next messages above the message box. |
 
-A renderer that throws while rendering is replaced by the default row for that call.
+ThinkRail reads only these eight options and ignores any other key in `options`. A renderer that throws
+while rendering is replaced by the default row for that call; it is tried again when the call's status or
+streaming state changes.
 
 ## Shared modules
 
 A web half receives these modules from the app at runtime instead of bundling them. The build replaces
-each import with a lookup on the app; at build time the SDK provides their type declarations. The names
-each module exports are extension API 1.0.
+each import with a lookup on the app; at build time the SDK provides their type declarations. Extension
+API 1.0 is exactly these modules and, in each, exactly these names; any other name is not shared, even
+when React's type declarations offer it. Later API minors may add modules and names; only a new major
+removes one.
 
 <!-- guard: shared-modules -->
-- `react`: React 19's own exports
-- `react/jsx-runtime`: React 19's own exports
-- `react-dom`: React 19's own exports; not `react-dom/client`
-- `@thinkrail/extension-sdk/web`: `defineWebExtension`, `languageFromPath`, `numArg`, `parseToolResultContent`, `resultText`, `strArg`, `toolValueText`
+- `react`: `Activity`, `Children`, `Component`, `Fragment`, `Profiler`, `PureComponent`, `StrictMode`, `Suspense`, `ViewTransition`, `addTransitionType`, `cache`, `cacheSignal`, `cloneElement`, `createContext`, `createElement`, `createRef`, `forwardRef`, `isValidElement`, `lazy`, `memo`, `startTransition`, `use`, `useActionState`, `useCallback`, `useContext`, `useDebugValue`, `useDeferredValue`, `useEffect`, `useEffectEvent`, `useId`, `useImperativeHandle`, `useInsertionEffect`, `useLayoutEffect`, `useMemo`, `useOptimistic`, `useReducer`, `useRef`, `useState`, `useSyncExternalStore`, `useTransition`, `version`
+- `react/jsx-runtime`: `Fragment`, `jsx`, `jsxs`
+- `react-dom`: `browser`, `createPortal`, `flushSync`, `preconnect`, `prefetchDNS`, `preinit`, `preinitModule`, `preload`, `preloadModule`, `requestFormReset`, `useFormStatus`, `version`
+- `@thinkrail/extension-sdk/web`: `defineWebExtension`, `numArg`, `resultText`, `strArg`
 - `@thinkrail/extension-sdk/resources`: `FramedResourcePreview`, `ResourcePreview`, `useOptionalResourceHost`, `useResourceScope`
-- `@thinkrail/extension-sdk/ui/attention-line`: `AttentionLine`
-- `@thinkrail/extension-sdk/ui/button`: `Button`, `IconButton`, `buttonDataAttributes`, `buttonVariants`, `withIconClass`
-- `@thinkrail/extension-sdk/ui/dialog`: `Dialog`, `DialogClose`, `DialogContent`, `DialogDescription`, `DialogFooter`, `DialogHeader`, `DialogPanel`, `DialogTitle`, `DialogTrigger`, `useModalLayerOpen`
-- `@thinkrail/extension-sdk/ui/fonts`: `fontsLoaded`, `fontsRevision`, `onFontsChange`, `resolveFont`, `watchFont`
-- `@thinkrail/extension-sdk/ui/keyboard`: `ARROW_TWINS_SCOPE`, `ARROW_TWIN_COMMANDS`, `ariaKeyShortcuts`, `browserPlatform`, `chordCaps`, `chordPressed`, `codeLabel`, `hasPlatformModifier`, `isApplePlatform`, `isImeComposing`, `isTypingChord`, `keyCap`, `twinArrow`, `yieldEscapeToIme`
-- `@thinkrail/extension-sdk/ui/textarea`: `Textarea`
+- `@thinkrail/extension-sdk/ui/button`: `Button`, `IconButton`, `withIconClass`
 - `@thinkrail/extension-sdk/ui/theme`: `onThemeSwap`
 - `@thinkrail/extension-sdk/ui/utils`: `cn`
+
+`react`, `react/jsx-runtime` and `react-dom` also have a default export, so `import React from "react"`
+works. There is no dialog, text field or keyboard module in API 1.0: a card draws its own.
 
 ## The build command
 
@@ -218,11 +237,17 @@ thinkrail-extension build [--prefix <letters>] [--entry <file>] [--css <file>] [
 | `-h`, `--help` | Prints the usage. |
 
 The command reads `package.json` in the extension's folder and writes the bundle to the manifest's
-`web` path and the stylesheet to its `styles` path, replacing what was there. The bundle is one minified
-ESM file: JSX uses React's production runtime, `process.env.NODE_ENV` is `"production"`, and your
-`tsconfig.json` is not read. It exits with 0 after a build or `--help`, with 1 when the build fails, and
-with 2 on a usage error: a command other than `build`, another argument after it, an unknown option or
-a missing option value.
+`web` path and the stylesheet to its `styles` path. Both are written to temporary files beside their
+targets and replace them only when both are built, so a failed or interrupted build leaves the previous
+files as they were. The bundle is one minified ESM file: JSX uses React's production runtime,
+`process.env.NODE_ENV` is `"production"`, and your `tsconfig.json` is not read.
+
+<!-- guard: exit-codes -->
+It exits with 0 after a build or `--help`, with 1 when the build fails, and with 2 on a usage error: a
+command other than `build`, another argument after it, an unknown option, a missing option value, or a
+`web` or `styles` path that would overwrite an input (the web entry, `--css`, the `server` file,
+`package.json` or a module the build read), that equals, contains or sits inside the other output, that
+is a folder, or that resolves outside the package.
 
 The build fails on these imports in the web half, also when they come from one of your dependencies:
 
@@ -233,7 +258,9 @@ The build fails on these imports in the web half, also when they come from one o
   `@thinkrail/resource-renderers`;
 - CSS files;
 - a package that is not installed, and a Node built-in the bundle uses (one that only unused code
-  imports is dropped). The bundle may import nothing: the app loads it as one file.
+  imports is dropped);
+- any import still left in the bundle after bundling: the app loads the bundle as one file and cannot
+  resolve imports.
 
 The bundle starts with a check that throws when it is loaded outside ThinkRail or in a ThinkRail with
 another API major.
@@ -266,16 +293,43 @@ uses the npm command configured for pi). Each installed version gets its own fol
 `node_modules`. With `PI_OFFLINE` set, npm and git sources are not installed; folders still load. A
 failed install is retried when you update the extension or restart ThinkRail.
 
+Install package… decides the kind from the fetched `package.json`: a package with a `thinkrail`
+manifest is installed as an extension, for you, in every project; any other package is installed as a
+pi package, exactly as before extensions existed. `extensions.json` holds extensions only: another
+package listed there is a failed row.
+
 **States.** Each installed extension is in one of three states:
 
 - **loaded**: the server half's tools and skills reach chats, and the web half's cards are registered;
 - **incompatible**: the manifest's `api` is not supported by this ThinkRail, decided before any of the
   extension's code runs; the row says which API it was built for;
 - **failed**: nothing of the extension runs, and the row shows why: the install failed, the package has
-  no or an invalid manifest, a file the manifest names is missing or resolves outside the package, the
-  server half threw while loading, its descriptor is malformed or named differently from the package, a
-  `skillPackages` entry cannot be resolved, or an extension with the same name is already installed from
-  a source listed earlier.
+  no or an invalid manifest or a reserved name, a file the manifest names is missing or resolves outside
+  the package, the server half threw while loading or did not finish loading within 10 seconds, its
+  descriptor is malformed or named differently from the package, a `skillPackages` entry cannot be
+  resolved, or an extension with the same name is already installed from a source listed earlier.
 
 A web half that fails to load registers no cards; its tool calls show as default rows, and the server
 half keeps working. Changes to the loaded set reach open chats when their current turn ends.
+
+**Reloading.** At start and whenever `extensions.json` changes, ThinkRail reloads a folder source whose
+`package.json` or manifest files changed since the last load. **Update** reloads any source: an npm or
+git source is installed again into a fresh folder and replaces the old one only once it loads; a folder
+source is evaluated again in place. Either way the server entry is evaluated afresh whatever its file
+type, and so is every TypeScript file it imports; a plain-JavaScript file the entry of a folder source
+imports, its own or a dependency's, keeps its first version until ThinkRail restarts.
+
+### Names ThinkRail keeps
+
+An installed extension is added to a chat after everything ThinkRail owns: its built-in extensions, its
+own tools and session tools, and its MCP and tool-search slots. A tool, command or flag name the
+extension shares with any of them stays ThinkRail's: the extension's registration of that name has no
+effect, and its other registrations work. Nothing reports the clash, and Settings and `status.json` still
+list the name among the extension's tools. pi loads a user's own pi packages before every extension
+ThinkRail adds, so a pi package keeps a tool name it shares with an installed extension; between two
+installed extensions, the one listed first in `extensions.json` keeps it.
+
+Cards follow a different rule, because a card may be meant for a tool from elsewhere: a card ThinkRail
+registers for a tool by its exact name wins over an installed one, while MCP tools, which ThinkRail
+draws by their `mcp__` prefix, show an installed extension's card when one is registered for their
+exact name. Between installed extensions, the one listed first wins.

@@ -55,11 +55,24 @@ those pages starts right after a guard comment naming what it shows:
 | `<!-- guard: extensions-json -->` | an `extensions.json` with absolute folders or `npm:` sources |
 | `<!-- guard: manifest-cases -->` | manifest cases in the format of `packages/extension-api/src/manifestCases.json` that hold under the site's validator |
 
-Tables and lists with a guard comment (`manifest-fields`, `server-descriptor`, `session-services`,
-`render-props`, `registration-options`, `build-options`, `shared-modules`, `shared-modules-summary`)
-are compared with the SDK's types, CLI and shared-module list. To change a sample file shown in a doc,
-change the sample and paste the new text into the block; `bun test src/docsGuide.test.ts` says where
-they differ.
+Tables, lists and paragraphs with a guard comment are compared with the sources too. The comment sits
+on the line before the table, list or paragraph, which ends at the next blank line:
+
+| Guard | Compared with |
+| --- | --- |
+| `manifest-fields` | the SDK build's `MANIFEST_KEYS` |
+| `server-descriptor`, `session-services`, `render-props`, `registration-options`, `web-descriptor` | the interfaces in the frozen API snapshot, `packages/extension-sdk/api/<API>.api.md` |
+| `shared-modules` | the snapshot's runtime exports (every module, in order, with every name) and the SDK's `assets/shared-modules.json` |
+| `shared-modules-summary` | the same modules, exactly; every name it quotes must be a shared export |
+| `build-options` | the options in the SDK's `src/cli.ts` and its default entries |
+| `exit-codes` | the exit codes in `src/cli.ts` and the usage errors the builder raises |
+| `reserved-names` | the folders under `thinkrail-extensions/` (each its descriptor's `name`) and the host's `HOST_BUILTIN_EXTENSION_NAMES` |
+| `host-tools` | the tool-name constants of the host, its subagents and its built-in extensions |
+
+The test also checks the load timeout and its message against the host's loader, the `~<API>.0` SDK
+range, the Node floor, that a manifest `image` is mentioned only where the manifest fields are
+described, and that every `#fragment` link resolves. To change a sample file shown in a doc, change the
+sample and paste the new text into the block; `bun test src/docsGuide.test.ts` says where they differ.
 
 ## Preview
 
