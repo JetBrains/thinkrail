@@ -538,6 +538,23 @@ describe("a server half that never settles", () => {
 		expect(stateOf(runtime, fine)?.state).toBe("loaded");
 	});
 
+	it("is a foreign code root before its entry runs, and stays one after the load fails", async () => {
+		const { root, runtime, declare } = setup({ loadTimeoutMs: 150 });
+		const hung = writeExtension(join(root, "hung"), {
+			name: "hung",
+			files: { "server/index.ts": HUNG },
+		});
+		declare(hung);
+		const pass = runtime.reconcile();
+		await Bun.sleep(20);
+		expect(runtime.records()).toEqual([]);
+		expect(runtime.codeRoots()).toContain(hung);
+		expect(runtime.codeRoots()).toContain(realpathSync(hung));
+		await pass;
+		expect(stateOf(runtime, hung)?.state).toBe("failed");
+		expect(runtime.codeRoots()).toContain(hung);
+	});
+
 	it("can be removed while its load is still running", async () => {
 		const { root, runtime, declare } = setup({ loadTimeoutMs: 150 });
 		const hung = writeExtension(join(root, "hung"), {

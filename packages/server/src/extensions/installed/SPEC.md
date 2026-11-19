@@ -232,8 +232,10 @@ A folder source is never copied: it loads from where it is, and nothing under it
   `resolveExtensionAsset`, `ExtensionAsset`.
 - `InstalledExtensions` is the runtime (`records`, `servers`, `fileError`, `reconcile`, `watch`, `isExtensionAt`, `stage`,
   `adopt`, `discard`, `remove`, `update`, `checkUpdates`, `declarationsPath`, `root`, and `codeRoots` —
-  `root` plus every package root it published in this process, as given and resolved, which `host` hands
-  analytics so error reports keep an installed extension's frames external);
+  `root` plus every package root it evaluated in this process, as given and resolved, recorded **before**
+  any of the package's code runs and kept after a failed or timed-out load, since a module that started
+  can still reject later; `host` hands them to analytics so error reports keep an installed extension's
+  frames external);
   `installedExtensions()` is the host's one runtime, absent until the host starts it. The status file's
   schema is `ExtensionsStatus` in `runtime.ts`; the file, not the type, is the contract.
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (`DefaultPackageManager`, `SettingsManager`,

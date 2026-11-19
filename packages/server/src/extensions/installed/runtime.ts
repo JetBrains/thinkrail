@@ -318,13 +318,6 @@ export class InstalledExtensions {
 			return;
 		}
 		this.#records = records;
-		for (const { root } of records) {
-			if (root === undefined || this.#codeRoots.has(root)) continue;
-			this.#codeRoots.add(root);
-			try {
-				this.#codeRoots.add(realpathSync(root));
-			} catch {}
-		}
 		const servers = records.flatMap((record) => (record.server ? [record.server] : []));
 		if (
 			servers.length !== this.#servers.length ||
@@ -357,11 +350,20 @@ export class InstalledExtensions {
 		};
 	}
 
+	#rememberCodeRoot(root: string): void {
+		if (this.#codeRoots.has(root)) return;
+		this.#codeRoots.add(root);
+		try {
+			this.#codeRoots.add(realpathSync(root));
+		} catch {}
+	}
+
 	async #evaluate(
 		source: string,
 		root: string,
 		taken: ReadonlyMap<string, string>,
 	): Promise<InstalledExtensionRecord> {
+		this.#rememberCodeRoot(root);
 		let packageJson: unknown;
 		try {
 			packageJson = readPackageJson(root);
