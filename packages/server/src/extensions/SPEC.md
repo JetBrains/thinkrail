@@ -29,7 +29,9 @@ lookup, skill roots — defaults to it, so an installed extension is composed ex
 - **Owns:** `serverExtensions` (the ordered entries), `registryInlineExtensions(kind, isDisabled?,
   entries?, session?)` (flattens `extensions` / `childExtensions` into pi `InlineExtension`s named after
   the extension — one factory keeps the bare name, several get `name#n` — so pi diagnostics show
-  `<inline:visualize>` instead of a position; each factory asks `isDisabled(name)` **when pi loads it**, so
+  `<inline:visualize>` instead of a position; an installed extension's names live in their own namespace,
+  `ext:<name>` / `ext:<name>#n` (`<inline:ext:weather>`): an npm name holds no `:`, so an installed
+  package can never be read back as a built-in or a host inline of the same name; each factory asks `isDisabled(name)` **when pi loads it**, so
   a reload re-decides membership without rebuilding the loader. A parent flatten given the host's
   `HostSessionServices` appends `sessionExtensions(services)` after the static factories under the same
   naming; it calls it once per flatten, so every parent session's factories close over its own services.
@@ -39,7 +41,8 @@ lookup, skill roots — defaults to it, so an installed extension is composed ex
   or per-session, is raced against `EXTENSION_LOAD_TIMEOUT_MS` when pi loads it: one still running then is
   that extension's load error (`<name> did not finish loading within 10 s`) and the chat starts without it.
   pi stages a factory's registrations until it returns and discards them when it throws, so a late settle
-  registers nothing; built-ins are ours and are not raced. Each extension gets its **own view** (`extensionSessionServices`): `setting(key)` answers only that
+  registers nothing; built-ins are ours and are not raced. The bound is per factory, as pi loads them one at
+  a time: an extension whose several factories all hang delays a chat's start by 10 s each. Each extension gets its **own view** (`extensionSessionServices`): `setting(key)` answers only that
   extension's declared settings — the stored value from the injected `ExtensionSettingValue` lookup, else
   the declared default; an undeclared key throws — and is read **inside the factory body**, so every pi
   (re)load sees current values. Without services, and in the child set, session factories are absent),
@@ -52,16 +55,18 @@ lookup, skill roots — defaults to it, so an installed extension is composed ex
   extension's `<inline:…>` entries from a pi `LoadExtensionsResult`, for the parent loader's
   `extensionsOverride`, so a disabled extension is absent rather than present-and-empty),
   `preferRegistryTools(result)` (also composed into that override, after the disabled filter). It moves a
-  registry extension directly ahead of the first non-registry extension that registers one of its tool
-  names, so a user-installed same-name package never takes over a tool whose host UI and lifecycle key on
-  the name — `ask_user_question` is the reason. Every registry extension between the two moves with it,
-  in its order: registry entries never reorder among themselves, because their order is the precedence
-  (built-ins, then installed ones in declaration order) — an installed extension promoted past a rival
-  must not cross a built-in or an earlier installed one that registers a name it also registers. The other package's other tools, commands and hooks stay
+  **built-in** directly ahead of the first other extension that registers one of its tool names, so a
+  user-installed same-name package never takes over a tool whose host UI and lifecycle key on the name —
+  `ask_user_question` is the reason. Every built-in between the two moves with it, in its order: built-ins
+  never reorder among themselves, because their order is the precedence. An installed extension is never
+  promoted — **host-owned tools always win**: the agent composes it after every host inline factory
+  ([[submodule-server-agent]] § composition), so a built-in's, a host factory's or an MCP tool beats it,
+  and a user's pi package, which pi loads before any inline factory, beats it on a shared name. The other package's other tools, commands and hooks stay
   loaded. pi's own conflict diagnostic stays in the loader result, unreported, as before. The pi facts it
   relies on are registered in [[pi-compatibility]]),
   `registryExtensionName(path)` (maps an `<inline:name>` / `<inline:name#n>` path — an extension's or its
-  tools' `sourceInfo.path` — back to the registry extension that owns it by name, `undefined` otherwise;
+  tools' `sourceInfo.path` — back to the registry extension that owns it by name, a bare name to a
+  built-in only and an `ext:` name to an installed extension only, `undefined` otherwise;
   matching by name rather than by recomputed names keeps it independent of how many per-session factories
   a session got),
   `listExtensionCatalog(disabled, builtins?, installed?)` (the Settings catalog: the built-ins, then
@@ -88,11 +93,15 @@ lookup, skill roots — defaults to it, so an installed extension is composed ex
   support and the runtime so a disabled extension's folder can be left out of pi's skill inputs and `extensionSkillRoots(entry,
   stagedSkillsDir?)` (the roots that own an extension's skills: the resolved source roots without a
   staged dir or for an installed extension — never staged — that owner folder with one, nothing for an
-  extension without `skillPackages`), `startInstalledExtensions({ dataDir, onChange, npmCommand?, installer? })`
+  extension without `skillPackages`), `startInstalledExtensions({ dataDir, onChange, npmCommand?, installer?, hostExtensionNames? })`
   (`installedHost.ts`: builds the installed runtime with every built-in's name reserved — the server
   registry's plus the web-only built-ins the host otherwise never sees, since an installed package of
   the same name would share their on/off switch; a test holds the list to the `thinkrail-extensions/`
-  packages —
+  packages — and the `hostExtensionNames` the host hands in: the names of its own named inline
+  extensions, pi's built-in slots it supplies (`mcp`, `tool-search`; `agent`'s
+  `HOST_BUILTIN_EXTENSION_NAMES`, the constant that names them, and a test fails when the composed loader
+  holds a named host inline outside it). The host's other inline factories are unnamed (`<inline:<n>>`);
+  the `ext:` namespace keeps every one of them apart from an installed extension —
   `skillPackageRoots` as its resolver and the catalog's tool names (`extensionToolNames`, the same
   memoised description Settings lists) for its status file, makes it the host's one, starts the watcher and a background
   reconcile, and returns its stop). The specifier is kept

@@ -45,6 +45,7 @@ export {
 } from "./extensions";
 export {
 	effectiveMcpServerConfig,
+	HOST_BUILTIN_EXTENSION_NAMES,
 	type McpConfigFile,
 	mcpEntryFingerprint,
 	mcpPolicyOf,

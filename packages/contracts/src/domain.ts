@@ -1670,7 +1670,6 @@ export interface ExtensionListing {
 	author?: string;
 	api: string;
 	halves: ExtensionHalf[];
-	image?: string;
 	/** Always `npm:<name>`. */
 	install: string;
 	npm: string;

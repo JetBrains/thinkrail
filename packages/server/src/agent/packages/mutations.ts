@@ -171,11 +171,16 @@ export function resolvePiInstallSource(ctx: PiPackageHostContext, target: PiPack
 	return source;
 }
 
-/** Installs, then persists the declaration; a relative local source reads like `pi install ./x` from the workspace. */
+/**
+ * Installs, then persists the declaration; a relative local source reads like `pi install ./x` from the
+ * workspace. When `isForeign` claims what pi just fetched (an npm/git source), nothing is declared, the
+ * install is undone unless pi's root already held that package, and the result is `undefined`.
+ */
 export function installPiPackage(
 	ctx: PiPackageHostContext,
 	target: PiPackageTarget,
-): Promise<string> {
+	isForeign?: (installedPath: string) => boolean,
+): Promise<string | undefined> {
 	return enqueue(async () => {
 		const source = resolvePiInstallSource(ctx, target);
 		const kind = piPackageSourceKind(source);
@@ -187,12 +192,26 @@ export function installPiPackage(
 		}
 		const local = target.scope === "project";
 		const { settings, packageManager } = openSettings(ctx, target.scope);
+		const heldBefore =
+			kind === "local" ? undefined : packageManager.getInstalledPath(source, target.scope);
 		try {
 			await packageManager.install(source, { local });
 		} catch (error) {
 			throw new CodedError("PACKAGE_INSTALL_FAILED", messageOf(error));
 		}
 		assertScopeWritable(ctx, target.scope);
+		const installedPath =
+			kind === "local" ? undefined : packageManager.getInstalledPath(source, target.scope);
+		if (installedPath !== undefined && isForeign?.(installedPath)) {
+			if (heldBefore === undefined) {
+				try {
+					await packageManager.remove(source, { local });
+				} catch (error) {
+					throw new CodedError("PACKAGE_REMOVE_FAILED", messageOf(error));
+				}
+			}
+			return undefined;
+		}
 		await settings.reload();
 		assertScopeLoaded(settings, target.scope);
 		packageManager.addSourceToSettings(source, { local });

@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import {
 	existsSync,
+	lstatSync,
 	mkdirSync,
 	readdirSync,
 	readFileSync,
@@ -132,6 +133,31 @@ function readPackageJson(root: string): unknown {
 	return JSON.parse(readFileSync(join(root, "package.json"), "utf8").replace(/^\uFEFF/, ""));
 }
 
+/** How long an unrecorded install folder is left alone: another host on this data dir may be filling it. */
+export const SWEEP_MIN_AGE_MS = 24 * 60 * 60 * 1000;
+
+/** The newest mtime of a folder and its direct entries; now when it cannot be read, so it is kept. */
+function lastChanged(dir: string): number {
+	try {
+		return Math.max(
+			statSync(dir).mtimeMs,
+			...readdirSync(dir).map((entry) => lstatSync(join(dir, entry)).mtimeMs),
+		);
+	} catch {
+		return Date.now();
+	}
+}
+
+/** `root`'s package.json when it carries a `thinkrail` manifest, else `undefined`; never throws. */
+function extensionPackageAt(root: string): unknown {
+	try {
+		const packageJson = readPackageJson(root);
+		return hasExtensionManifest(packageJson) ? packageJson : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 function statKey(path: string): string {
 	try {
 		const info = statSync(path);
@@ -161,6 +187,7 @@ export class InstalledExtensions {
 	#chain: Promise<unknown> = Promise.resolve();
 	#reconcileQueued: Promise<void> | undefined;
 	readonly #pending = new Set<string>();
+	readonly #codeRoots = new Set<string>();
 	#watcher: StatWatcher | undefined;
 	#swept = false;
 	#updates: { at: number; value: Promise<{ source: string }[]> } | undefined;
@@ -178,6 +205,11 @@ export class InstalledExtensions {
 
 	records(): readonly InstalledExtensionRecord[] {
 		return this.#records;
+	}
+
+	/** Where installed extension code lives: this runtime's folder and every package root it published, as given and resolved. */
+	codeRoots(): readonly string[] {
+		return [this.root, ...this.#codeRoots];
 	}
 
 	/** Loaded server halves, in declaration order; a new array only when the set changed. */
@@ -265,8 +297,11 @@ export class InstalledExtensions {
 		} catch {
 			return;
 		}
+		const now = Date.now();
 		for (const entry of entries) {
-			if (!kept.has(entry) && !this.#pending.has(entry)) this.#removeInstallDir(entry);
+			if (kept.has(entry) || this.#pending.has(entry)) continue;
+			if (now - lastChanged(join(this.#installsDir, entry)) < SWEEP_MIN_AGE_MS) continue;
+			this.#removeInstallDir(entry);
 		}
 	}
 
@@ -283,6 +318,13 @@ export class InstalledExtensions {
 			return;
 		}
 		this.#records = records;
+		for (const { root } of records) {
+			if (root === undefined || this.#codeRoots.has(root)) continue;
+			this.#codeRoots.add(root);
+			try {
+				this.#codeRoots.add(realpathSync(root));
+			} catch {}
+		}
 		const servers = records.flatMap((record) => (record.server ? [record.server] : []));
 		if (
 			servers.length !== this.#servers.length ||
@@ -623,6 +665,11 @@ export class InstalledExtensions {
 		return read;
 	}
 
+	/** The kind rule on an installed package: whether `root/package.json` carries a `thinkrail` manifest. */
+	isExtensionAt(root: string): boolean {
+		return extensionPackageAt(root) !== undefined;
+	}
+
 	/**
 	 * The kind rule at install time: fetches the source (an npm/git source into a fresh folder of this
 	 * root) and reads its package.json. `undefined` — and nothing left behind — for a plain package.
@@ -631,13 +678,15 @@ export class InstalledExtensions {
 		const kind = extensionSourceKind(source);
 		if (kind === undefined) return undefined;
 		if (kind === "folder") {
+			let packageJson: unknown;
 			try {
-				const packageJson = readPackageJson(folderOf(source));
-				if (!hasExtensionManifest(packageJson)) return undefined;
-				return { source, name: nameOf(packageJson) ?? source };
+				packageJson = extensionPackageAt(folderOf(source));
 			} catch {
 				return undefined;
 			}
+			return packageJson === undefined
+				? undefined
+				: { source, name: nameOf(packageJson) ?? source };
 		}
 		if ((this.#options.offline ?? isOffline)()) {
 			throw new CodedError("PACKAGE_OFFLINE", "offline: npm and git packages cannot be installed.");
@@ -649,11 +698,8 @@ export class InstalledExtensions {
 			throw new CodedError("PACKAGE_INSTALL_FAILED", messageOf(error));
 		}
 		const root = this.#installRoot(install);
-		let packageJson: unknown;
-		try {
-			packageJson = root ? readPackageJson(root) : undefined;
-		} catch {}
-		if (!hasExtensionManifest(packageJson)) {
+		const packageJson = root === undefined ? undefined : extensionPackageAt(root);
+		if (packageJson === undefined) {
 			this.discard({ source, name: source, install });
 			return undefined;
 		}

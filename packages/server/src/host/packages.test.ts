@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	cpSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { DefaultPackageManager } from "@earendil-works/pi-coding-agent";
@@ -404,5 +412,140 @@ test("still installs a plain pi package as a package while extensions run", asyn
 		);
 	} finally {
 		stop();
+	}
+});
+
+function fetchCounts(templates: Record<string, string>) {
+	delete process.env.PI_OFFLINE;
+	const pi: string[] = [];
+	const removed: string[] = [];
+	const thinkrail: string[] = [];
+	const install = spyOn(DefaultPackageManager.prototype, "install").mockImplementation(
+		async (source, options) => {
+			pi.push(source);
+			const template = templates[source];
+			if (!template) throw new Error(`404 Not Found - ${source}`);
+			const name = source.replace(/^npm:/, "");
+			const base = options?.local ? join(repo, ".pi") : agentDir;
+			cpSync(template, join(base, "npm", "node_modules", name), { recursive: true });
+		},
+	);
+	const remove = spyOn(DefaultPackageManager.prototype, "remove").mockImplementation(
+		async (source, options) => {
+			removed.push(source);
+			const base = options?.local ? join(repo, ".pi") : agentDir;
+			rmSync(join(base, "npm", "node_modules", source.replace(/^npm:/, "")), {
+				recursive: true,
+				force: true,
+			});
+		},
+	);
+	const stop = startInstalledExtensions({
+		dataDir: join(root, "data"),
+		onChange: () => {},
+		installer: {
+			async install(source, installDir) {
+				thinkrail.push(source);
+				const template = templates[source];
+				if (!template) throw new Error(`404 Not Found - ${source}`);
+				const path = join("npm", "node_modules", source.replace(/^npm:/, ""));
+				cpSync(template, join(installDir, path), { recursive: true });
+				return path;
+			},
+			async hasUpdate() {
+				return false;
+			},
+		},
+	});
+	return {
+		pi,
+		removed,
+		thinkrail,
+		restore: () => {
+			stop();
+			install.mockRestore();
+			remove.mockRestore();
+		},
+	};
+}
+
+test("an npm pi package is fetched once, by pi, and declared in pi's settings", async () => {
+	const counts = fetchCounts({ "npm:fixture-tools": pkg });
+	try {
+		const result = (await handleRequest(
+			"packages.install",
+			{ source: "npm:fixture-tools", scope: "user" },
+			CTX,
+		)) as PackageInstallResult;
+		expect(result).toMatchObject({ installed: "package", name: "@fixture/pi-tools" });
+		expect(counts.pi).toEqual(["npm:fixture-tools"]);
+		expect(counts.removed).toEqual([]);
+		expect(counts.thinkrail).toEqual([]);
+		expect(JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf8")).packages).toEqual([
+			"npm:fixture-tools",
+		]);
+		expect(() => readFileSync(join(root, "data", "extensions.json"), "utf8")).toThrow();
+	} finally {
+		counts.restore();
+	}
+});
+
+test("an npm extension is fetched by pi, removed from pi's root, and installed into ThinkRail's", async () => {
+	const folder = writeExtensionPackage(join(root, "pkgs", "host-ext"));
+	const counts = fetchCounts({ "npm:host-ext": folder });
+	try {
+		const result = (await handleRequest(
+			"packages.install",
+			{ source: "npm:host-ext", scope: "user" },
+			CTX,
+		)) as PackageInstallResult;
+		expect(result).toMatchObject({ installed: "extension", name: "host-ext" });
+		expect(counts.pi).toEqual(["npm:host-ext"]);
+		expect(counts.removed).toEqual(["npm:host-ext"]);
+		expect(counts.thinkrail).toEqual(["npm:host-ext"]);
+		expect(existsSync(join(agentDir, "npm", "node_modules", "host-ext"))).toBe(false);
+		expect(() => readFileSync(join(agentDir, "settings.json"), "utf8")).toThrow();
+		expect(JSON.parse(readFileSync(join(root, "data", "extensions.json"), "utf8"))).toEqual({
+			extensions: ["npm:host-ext"],
+		});
+	} finally {
+		counts.restore();
+	}
+});
+
+test("an npm extension pi's root already held stays there, undeclared", async () => {
+	const folder = writeExtensionPackage(join(root, "pkgs", "host-ext"));
+	cpSync(folder, join(agentDir, "npm", "node_modules", "host-ext"), { recursive: true });
+	const counts = fetchCounts({ "npm:host-ext": folder });
+	try {
+		await handleRequest("packages.install", { source: "npm:host-ext", scope: "user" }, CTX);
+		expect(counts.removed).toEqual([]);
+		expect(counts.thinkrail).toEqual(["npm:host-ext"]);
+		expect(existsSync(join(agentDir, "npm", "node_modules", "host-ext", "package.json"))).toBe(
+			true,
+		);
+		expect(() => readFileSync(join(agentDir, "settings.json"), "utf8")).toThrow();
+	} finally {
+		counts.restore();
+	}
+});
+
+test("an npm extension asked for the repository is refused after one fetch, leaving nothing", async () => {
+	const folder = writeExtensionPackage(join(root, "pkgs", "host-ext"));
+	const counts = fetchCounts({ "npm:host-ext": folder });
+	try {
+		const failure = await handleRequest(
+			"packages.install",
+			{ source: "npm:host-ext", scope: "project", workspaceId: "w1" },
+			CTX,
+		).catch((error: unknown) => error);
+		expect(errorCodeOf(failure)).toBe("EXTENSION_SCOPE_UNSUPPORTED");
+		expect(counts.pi).toEqual(["npm:host-ext"]);
+		expect(counts.removed).toEqual(["npm:host-ext"]);
+		expect(counts.thinkrail).toEqual([]);
+		expect(() => readFileSync(join(repo, ".pi", "settings.json"), "utf8")).toThrow();
+		expect(() => readFileSync(join(root, "data", "extensions.json"), "utf8")).toThrow();
+	} finally {
+		counts.restore();
 	}
 });

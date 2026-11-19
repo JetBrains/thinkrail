@@ -1509,9 +1509,10 @@ what they always did.
 - **`extensions.browse { force? }` → `ExtensionBrowseResult`** (`{ generatedAt, extensions:
   ExtensionBrowseEntry[] }`): the website's `catalog.json` ([[module-thinkrail-extensions]] § Catalog) as the
   host fetched and validated it ([[submodule-server-extension-catalog]]), each `ExtensionListing` (`name`,
-  `version`, `title?`, `description`, `author?`, `api`, `halves` ⊆ `server`/`web`, `image?`, `install`
+  `version`, `title?`, `description`, `author?`, `api`, `halves` ⊆ `server`/`web`, `install`
   = `npm:<name>`, `npm`, `repository?`, `publishedAt`) plus **`installed`** — an installed extension already
-  has that name. The host caches the file for minutes; `force` refetches. Codes: **`EXTENSION_CATALOG_OFFLINE`**
+  has that name. A listing carries no image: the host ignores a catalog entry's `image`
+  ([[submodule-server-extension-catalog]]), so no author-chosen URL reaches a client. The host caches the file for minutes; `force` refetches. Codes: **`EXTENSION_CATALOG_OFFLINE`**
   (`PI_OFFLINE`), **`EXTENSION_CATALOG_UNREACHABLE`** (network, timeout, HTTP status) and
   **`EXTENSION_CATALOG_INVALID`** (not the expected shape). `api` is passed through uninterpreted; the client
   decides whether this app can load it.

@@ -34,9 +34,12 @@ host's.
 - **Strict, whole-file validation.** `schema` must be `1`, `generatedAt` a date, and every listing well
   formed: a valid npm `name` (unique in the file), non-empty `version`, string `description` and `api`,
   `halves` a non-empty duplicate-free subset of `server`/`web`, `install` exactly `npm:<name>`, `npm` an
-  https URL, `publishedAt` a date, and, when present, non-empty `title`/`author` and https
-  `image`/`repository`. One bad listing rejects the file (`EXTENSION_CATALOG_INVALID`): it is our own build's
-  output, so a bad shape means a broken publish, not a bad author. **Unknown fields are dropped, not
+  https URL, `publishedAt` a date, and, when present, non-empty `title`/`author` and an https
+  `repository`. One bad listing rejects the file (`EXTENSION_CATALOG_INVALID`): it is our own build's
+  output, so a bad shape means a broken publish, not a bad author. **Catalog images are dropped:** an
+  author-chosen image URL would make every Browse visitor's app fetch from a host the author picks,
+  exposing their IP, so a listing's `image` — whatever its value — is accepted and never passed on, and
+  `ExtensionListing` has no image field. **Unknown fields are dropped, not
   rejected**, unlike the website's own build check: a field the site adds within `schema: 1` must not blank
   Browse for every older app. `api` is not interpreted here; the web client applies the extension API rule
   to it ([[submodule-web-extensions]]).

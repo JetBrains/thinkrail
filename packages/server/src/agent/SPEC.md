@@ -1022,7 +1022,21 @@ re-opened transcripts provider-valid.
     extensions calls `refreshInstalledExtensions()` (`bumpPackagesRevision` + `refreshExtensionTools`),
     so every chat's loader is stale and rebuilds when its turn ends, exactly as a pi package change.
     `enabledExtensionMissing`, owner lookup and skill roots read the same getter; skill roots are memoised
-    per registry entry. `piPackagesInstall` applies the kind rule ([[submodule-server-agent-packages]]
+    per registry entry. **Composition order — host-owned tools always win.** A parent's inline factories
+    are the bundled factories (bundled mode), the built-in registry extensions, the host's own factories
+    (headless-search policy through `skillCarryover`), the caller's `extraFactories` (subagents, background
+    commands, the MCP host and its `mcp` / `tool-search` slots, usage policy, spec rule), and **then** the
+    installed extensions; pi gives a duplicate tool to its first registration, so an installed extension
+    never takes a host tool, and `preferRegistryTools` promotes built-ins only. A user's pi package and the
+    `builtin:` slots load before every inline factory, so they too beat an installed extension on a shared
+    name. Because pi drops a replaceable slot that another extension shares a name with, the installed
+    factories see a view of `pi` that silently refuses any tool, command or flag the host's slots
+    registered earlier in the same load (recorded per reload), so an installed `tool_search` or `/mcp`
+    never replaces the host's (registered in [[pi-compatibility]] § Registry tool precedence). The child
+    set keeps the same rule: `childExtensionFactories` ends with the registry's child factories, built-ins
+    before installed ones; `pi-delegation` appends its own (`dropCancelledPrompt`, a DAG resource's worker
+    factories) after that list, so an installed child factory can still shadow a DAG worker tool until
+    `pi-delegation` places resource factories ahead of the installed child set. `piPackagesInstall` applies the kind rule ([[submodule-server-agent-packages]]
     § Kind detection) and returns `{ installed: "package" | "extension", … }`. The pi runtime build forces
     jiti's transform through the shared `withForcedJitiTransform`, serialized with installed-extension
     loads because the env is process-wide.

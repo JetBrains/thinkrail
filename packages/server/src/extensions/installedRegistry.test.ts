@@ -177,11 +177,14 @@ describe("the runtime registry", () => {
 			host,
 			(extension, key) => (extension === "session-ext" && key === "loud" ? true : undefined),
 		);
-		const own = inline.find((entry) => typeof entry !== "function" && entry.name === "session-ext");
+		const own = inline.find(
+			(entry) => typeof entry !== "function" && entry.name === "ext:session-ext",
+		);
 		if (!own || typeof own === "function") throw new Error("session-ext is not composed");
 		await own.factory(pi);
 		expect(tools).toEqual(["loud_tool"]);
-		expect(registryExtensionName("<inline:session-ext>")).toBe("session-ext");
+		expect(registryExtensionName("<inline:ext:session-ext>")).toBe("session-ext");
+		expect(registryExtensionName("<inline:session-ext>")).toBeUndefined();
 		expect(interactiveTools(() => false).has("ask_later")).toBe(true);
 		expect(interactiveTools((name) => name === "session-ext").has("ask_later")).toBe(false);
 		const off = registryInlineExtensions(
@@ -191,12 +194,25 @@ describe("the runtime registry", () => {
 			host,
 		);
 		const disabled = off.find(
-			(entry) => typeof entry !== "function" && entry.name === "session-ext",
+			(entry) => typeof entry !== "function" && entry.name === "ext:session-ext",
 		);
 		if (!disabled || typeof disabled === "function") throw new Error("session-ext is not composed");
 		tools.length = 0;
 		await disabled.factory(pi);
 		expect(tools).toEqual([]);
+	});
+
+	it("refuses a package named after one of the host's own inline extensions", async () => {
+		root = tempDir();
+		const dataDir = join(root, "data");
+		mkdirSync(dataDir);
+		const mcp = writeExtension(join(root, "mcp"), { name: "mcp" });
+		writeFileSync(join(dataDir, "extensions.json"), JSON.stringify({ extensions: [mcp] }));
+		stop = startInstalledExtensions({ dataDir, onChange: () => {}, hostExtensionNames: ["mcp"] });
+		await installedExtensions()?.reconcile();
+		expect(installedExtensions()?.records()).toEqual([
+			expect.objectContaining({ state: "failed", error: expect.stringContaining("built-in") }),
+		]);
 	});
 
 	it("resolves an installed extension's skill roots from its own entry, never a staged folder", async () => {

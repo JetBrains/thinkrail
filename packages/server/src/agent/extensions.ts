@@ -5,6 +5,7 @@ import {
 	createSyntheticSourceInfo,
 	DefaultPackageManager,
 	DefaultResourceLoader,
+	type ExtensionAPI,
 	type ExtensionFactory,
 	getAgentDir,
 	type InlineExtension,
@@ -479,6 +480,58 @@ export async function buildResourceLoader(
 	return loader;
 }
 
+const REGISTRARS: Readonly<Record<string, string>> = {
+	registerTool: "tool",
+	registerCommand: "command",
+	registerFlag: "flag",
+};
+
+function registrationKey(method: string, args: readonly unknown[]): string | undefined {
+	const [first] = args;
+	const name = method === "registerTool" ? (first as { name?: unknown } | null)?.name : first;
+	return typeof name === "string" ? `${REGISTRARS[method]}:${name}` : undefined;
+}
+
+/** `pi` with every tool, command and flag registration passed through `admit` first. */
+function registrationView(pi: ExtensionAPI, admit: (key: string) => boolean): ExtensionAPI {
+	return new Proxy(pi, {
+		get: (target, key) => {
+			const value = Reflect.get(target, key);
+			if (typeof key !== "string" || !(key in REGISTRARS) || typeof value !== "function")
+				return value;
+			return (...args: unknown[]) => {
+				const claim = registrationKey(key, args);
+				if (claim !== undefined && !admit(claim)) return;
+				return Reflect.apply(value, target, args);
+			};
+		},
+	});
+}
+
+/** Names the host's `builtin:` slots register in a load, refused to installed extensions. */
+function builtinSlotClaims(): {
+	record: (inline: InlineExtension) => InlineExtension;
+	refuse: (inline: InlineExtension) => InlineExtension;
+	reset: () => void;
+} {
+	const claimed = new Set<string>();
+	const wrap = (inline: InlineExtension, admit: (key: string) => boolean): InlineExtension => {
+		if (typeof inline === "function") return inline;
+		return { ...inline, factory: (pi) => inline.factory(registrationView(pi, admit)) };
+	};
+	return {
+		record: (inline) =>
+			typeof inline !== "function" && inline.builtin
+				? wrap(inline, (key) => {
+						claimed.add(key);
+						return true;
+					})
+				: inline,
+		refuse: (inline) => wrap(inline, (key) => !claimed.has(key)),
+		reset: () => claimed.clear(),
+	};
+}
+
 function createRegistryLoader(
 	registry: readonly ServerExtensionEntry[],
 	owner: ResourceLoader,
@@ -496,14 +549,18 @@ function createRegistryLoader(
 	let settingsAtReload = extensionSettings();
 	const settingAtReload = (extension: string, key: string): boolean | undefined =>
 		settingsAtReload[extension]?.[key];
-	const sharedFactories: InlineExtension[] = [
-		...registryInlineExtensions(
+	const registryFactories = (installed: boolean): InlineExtension[] =>
+		registryInlineExtensions(
 			"extensions",
 			isDisabledAtReload,
-			registry,
+			registry.filter((entry) => (entry.installed !== undefined) === installed),
 			session,
 			settingAtReload,
-		),
+		);
+	const slots = builtinSlotClaims();
+	const hostFactories: InlineExtension[] = [
+		...(bundled?.factories ?? []),
+		...registryFactories(false),
 		headlessSearchPolicy,
 		reviewToolExtension,
 		requestReviewExtension,
@@ -516,7 +573,10 @@ function createRegistryLoader(
 		skillCarryover,
 		...extraFactories,
 	];
-	const extensionFactories = bundled ? [...bundled.factories, ...sharedFactories] : sharedFactories;
+	const extensionFactories = [
+		...hostFactories.map(slots.record),
+		...registryFactories(true).map(slots.refuse),
+	];
 	const { refreshSkillPaths, ...skillInputs } = resolveSkillInputs(
 		cwd,
 		getAdmission,
@@ -546,6 +606,7 @@ function createRegistryLoader(
 		builtinExtensions: builtinExtensionNames(extensionFactories),
 	});
 	const applyCurrentPolicy = (): void => {
+		slots.reset();
 		settingsManager.setProjectTrusted(getAdmission().piResourceTrusted);
 		disabledAtReload = disabledExtensions();
 		settingsAtReload = extensionSettings();

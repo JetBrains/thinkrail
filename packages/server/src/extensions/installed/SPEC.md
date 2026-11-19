@@ -70,7 +70,13 @@ A folder source is never copied: it loads from where it is, and nothing under it
 - **Install folders are swept once per process**, at its first reconcile: a folder no `installs.json`
   entry names (a removed source, a superseded version, a crash's leftover) is deleted then, never while
   the process may still hold a loader built from it — a chat mid-turn keeps the old factories, their lazy
-  imports and skill files until its end-of-turn rebuild. A staged folder of a plain pi package, an
+  imports and skill files until its end-of-turn rebuild. **Only a clearly abandoned folder goes:** one
+  whose newest mtime — the folder's own and its direct entries' (`npm/`, `git/`, which the installer
+  creates and fills) — is at least a day old (`SWEEP_MIN_AGE_MS`). Several hosts may share one data dir
+  uncoordinated ([[submodule-server-host]] § Get right), and another host's in-progress install is in neither
+  the shared `installs.json` nor this process's pending set; a day is far beyond any install. An old
+  superseded folder another live host still loads can still go; that host re-reads `installs.json` at
+  its next reconcile. No marker file is written: the mtimes the install already produces suffice. A staged folder of a plain pi package, an
   install that lost its declaration and a failed update's new folder were never loaded and are removed at
   once.
 - **Update never loses a working install.** `update` installs into a new folder and evaluates it first;
@@ -124,12 +130,14 @@ A folder source is never copied: it loads from where it is, and nothing under it
   host's own (`===`; a jiti namespace is a Proxy, so members are compared, never namespaces), else the load
   fails — the loader proves on every load that the extension resolution yields the host's single pi. The
   descriptor's shape is then validated field by field.
-- **Kind detection at install** (`stage`): a folder is read in place; an npm/git source is installed into a
-  fresh, pending `installs/<id>` and its `package.json` read. A `thinkrail` key makes it an extension
-  (`StagedExtension`); otherwise the folder is removed and `undefined` returned, so the caller installs a
-  pi package the usual way — a plain npm/git pi package is therefore fetched twice through the dialog, the
-  second time from npm's cache. `adopt` records the install, appends the source to `extensions.json` if
-  absent and reconciles; `discard` drops a staged folder.
+- **Kind detection at install** ([[submodule-server-agent-packages]] § Kind detection runs it): pi installs
+  an npm/git source first and `isExtensionAt(root)` reads the package pi installed — a `thinkrail` key makes
+  it an extension — so a plain pi package is fetched once, by pi, as before extensions existed. Only an
+  extension is then `stage`d: a folder is read in place; an npm/git source is installed into a fresh,
+  pending `installs/<id>` (its second fetch) and its `package.json` read again. A `thinkrail` key gives a
+  `StagedExtension`; otherwise the folder is removed and `undefined` returned. `adopt` records the
+  install, appends the source to `extensions.json` if absent and reconciles; `discard` drops a staged
+  folder.
 - **The status file is how an agent learns the outcome** (the `making-thinkrail-extensions` host skill
   reads it): a load failure, an incompatible `api` or a refused `extensions.json` is otherwise visible
   only in Settings and the host log, and an agent has files, not the wire. After every reconcile pass —
@@ -222,8 +230,10 @@ A folder source is never copied: it loads from where it is, and nothing under it
   `ExtensionSourceKind`, `loadServerDescriptor`, `withForcedJitiTransform`, `EXTENSION_LOAD_TIMEOUT_MS`,
   `webHalfOf`, `webToken`,
   `resolveExtensionAsset`, `ExtensionAsset`.
-- `InstalledExtensions` is the runtime (`records`, `servers`, `fileError`, `reconcile`, `watch`, `stage`,
-  `adopt`, `discard`, `remove`, `update`, `checkUpdates`, `declarationsPath`, `root`);
+- `InstalledExtensions` is the runtime (`records`, `servers`, `fileError`, `reconcile`, `watch`, `isExtensionAt`, `stage`,
+  `adopt`, `discard`, `remove`, `update`, `checkUpdates`, `declarationsPath`, `root`, and `codeRoots` —
+  `root` plus every package root it published in this process, as given and resolved, which `host` hands
+  analytics so error reports keep an installed extension's frames external);
   `installedExtensions()` is the host's one runtime, absent until the host starts it. The status file's
   schema is `ExtensionsStatus` in `runtime.ts`; the file, not the type, is the contract.
 - **Allowed deps:** `@earendil-works/pi-coding-agent` (`DefaultPackageManager`, `SettingsManager`,
@@ -240,7 +250,7 @@ A folder source is never copied: it loads from where it is, and nothing under it
 Unit tests over disposable temp folders: the declarations reader, the peer prune, the loader (identity
 guard, shim cleanup, env serialization, a top level that never settles and one that settles or throws
 after its timeout, an edited entry of every allowed type re-evaluated on the same
-path with its relative imports, own `node_modules` and the host's typebox), reconcile (idempotence, malformed file, removal, a hung server half — failed, and removable while it
+path with its relative imports, own `node_modules` and the host's typebox), reconcile (idempotence, malformed file, removal, the sweep on both sides of its age, a hung server half — failed, and removable while it
 hangs — folder source,
 incompatible, every failure mode, duplicates, offline, stub npm installs, update, staging and adoption)
 the asset resolver (traversal, unknown extension, wrong file, stale token, links) and the status file

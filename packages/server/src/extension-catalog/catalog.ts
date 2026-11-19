@@ -61,7 +61,6 @@ function listingOf(entry: unknown): ExtensionListing | null {
 	if (!halves.every((half) => typeof half === "string" && HALVES.has(half))) return null;
 	if (new Set(halves).size !== halves.length) return null;
 	if (install !== `npm:${name}` || !httpsUrl(npm) || !isoDate(publishedAt)) return null;
-	if (entry.image !== undefined && !httpsUrl(entry.image)) return null;
 	if (entry.repository !== undefined && !httpsUrl(entry.repository)) return null;
 	return {
 		name,
@@ -71,7 +70,6 @@ function listingOf(entry: unknown): ExtensionListing | null {
 		...(typeof entry.author === "string" ? { author: entry.author } : {}),
 		api,
 		halves: halves as ExtensionHalf[],
-		...(typeof entry.image === "string" ? { image: entry.image } : {}),
 		install,
 		npm,
 		...(typeof entry.repository === "string" ? { repository: entry.repository } : {}),
