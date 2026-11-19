@@ -1285,14 +1285,25 @@ the pi-level resource grant. A client talking to an older host sends neither.
 
 ## Containers
 
-`CONTAINER_PROTOCOL_VERSION` (129) gates the container wire; a client talking to an older host sends none
-of it and holds no containers.
+`CONTAINER_PROTOCOL_VERSION` (129) gates the container wire, `container.startOrchestrator` included; a
+client talking to an older host sends none of it and holds no containers.
 
 - **`Container`** (`domain`) — `{ id, name, workspaceIds, orchestratorSessionId?, createdAt, updatedAt }`:
   a host-owned group of workspaces, possibly of several projects, in member order. Each member stays one
   `Workspace` (one worktree) and belongs to at most one container; a project's Default workspace and a
   chat without a project never belong to one. A workspace in no container has no record. The home
   folder's path stays host-side.
+- **Orchestrator** — a `kind: "chat"` workspace in the Chats project with **`Workspace.orchestratorOf`**
+  naming its container (its folder is the home, so its `worktreePath` is the one home path a client sees);
+  `orchestratorSessionId` is its session. Created by **`container.startOrchestrator`** (`{ containerId,
+  model?, thinkingLevel? }` → **`ContainerOrchestrator { container, workspace, sessionId }`**; joins a start
+  in flight, answers an existing orchestrator as it is) and by the host itself when `container.create`
+  has two or more members or `container.addWorkspace` brings it to two. It starts with no turn: its first
+  entry is the **`container-brief`** custom message (`CONTAINER_BRIEF_CUSTOM_TYPE`,
+  `ContainerBriefDetails { containerId }`), a summary of the members that only adds context. Removing the
+  container deletes it like a chat; deleting it alone clears `orchestratorSessionId`.
+- **`Workspace.startedBy`** (`WorkspaceStartedBy { sessionId, containerId? }`) — on a workspace an agent's
+  `start_workspace` created: the calling session, plus its container when that session is an orchestrator.
 - Methods: **`container.list`** (→ `Container[]`) / **`container.create`** (`{ name?, workspaceIds }` →
   `Container`; at least one member, the name defaulting to the first member's) / **`container.rename`**
   (`{ containerId, name }`) / **`container.addWorkspace`** and **`container.removeWorkspace`**

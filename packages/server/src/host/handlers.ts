@@ -120,8 +120,6 @@ import {
 import { providerFromRemoteUrl } from "../branch-review";
 import { forgetWorkspaceChanges, revertChange, undoChange } from "../changes";
 import {
-	addContainerWorkspace,
-	createContainer,
 	listContainers,
 	removeContainer,
 	removeContainerWorkspace,
@@ -323,6 +321,12 @@ import {
 	mcpUpdate,
 } from "./mcp";
 import { resolveNewChatModel } from "./newChatModel";
+import {
+	addContainerWorkspaceOrchestrated,
+	createContainerOrchestrated,
+	recoverOrchestratorSession,
+	startContainerOrchestrator,
+} from "./orchestrator";
 import {
 	packagesCheckUpdates,
 	packagesInstall,
@@ -886,16 +890,18 @@ const handlers: WsHandlers = {
 	},
 	"workspace.diffStats": (params) => workspaceDiffStats(params.id),
 	"container.list": () => listContainers(),
-	"container.create": (params) => createContainer(params),
+	"container.create": (params) => createContainerOrchestrated(params),
 	"container.rename": (params) => renameContainer(params.containerId, params.name),
 	"container.addWorkspace": (params) =>
-		addContainerWorkspace(params.containerId, params.workspaceId),
+		addContainerWorkspaceOrchestrated(params.containerId, params.workspaceId),
 	"container.removeWorkspace": (params) =>
 		removeContainerWorkspace(params.containerId, params.workspaceId),
 	"container.remove": async (params) => {
 		await removeContainer(params.containerId);
 		return { ok: true } as const;
 	},
+	"container.startOrchestrator": ({ containerId, ...requested }) =>
+		startContainerOrchestrator(containerId, requested),
 	"chat.create": (params) => createChat(params),
 	"chat.delete": async (params) => {
 		await deleteChat(params.workspaceId);
@@ -1349,7 +1355,9 @@ const handlers: WsHandlers = {
 	"session.create": async (p) => {
 		const ws = getWorkspace(p.workspaceId);
 		if (isChatWorkspace(ws)) {
-			const { workspace: _workspace, ...created } = await recoverChatSession(ws.id, p);
+			const { workspace: _workspace, ...created } = ws.orchestratorOf
+				? await recoverOrchestratorSession(ws, p)
+				: await recoverChatSession(ws.id, p);
 			return created;
 		}
 		return startChatSession(ws, p, { pick: true });

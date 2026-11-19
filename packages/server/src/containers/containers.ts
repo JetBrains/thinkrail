@@ -3,7 +3,7 @@ import type { Container, Workspace } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { logger } from "../log";
 import { loadContainers, loadProjects, loadWorkspaces, saveContainers } from "../persistence";
-import { retireContainerHome, syncContainerHome } from "./home";
+import { containerHome, retireContainerHome, syncContainerHome } from "./home";
 
 const log = logger("containers");
 
@@ -17,6 +17,15 @@ let publish: ContainerPublisher | null = null;
 
 export function setContainerPublisher(fn: ContainerPublisher | null): void {
 	publish = fn;
+}
+
+type DissolveHook = (container: Container) => Promise<void>;
+
+let beforeRetire: DissolveHook | null = null;
+
+/** Awaited on every dissolve after the record is gone and before its home is retired. */
+export function setContainerDissolveHook(fn: DissolveHook | null): void {
+	beforeRetire = fn;
 }
 
 const MAX_NAME = 80;
@@ -87,6 +96,11 @@ function commit(all: Container[], changed: Container): Container {
 async function dissolve(all: readonly Container[], container: Container): Promise<void> {
 	saveContainers(all.filter((candidate) => candidate.id !== container.id));
 	publish?.({ kind: "removed", id: container.id });
+	try {
+		await beforeRetire?.(container);
+	} catch (error) {
+		log.warn(`the dissolve hook of container ${container.id} failed`, error);
+	}
 	try {
 		await retireContainerHome(container.id);
 	} catch (error) {
@@ -183,4 +197,30 @@ export function syncContainerMemberLinks(workspaceId: string): void {
 		candidate.workspaceIds.includes(workspaceId),
 	);
 	if (container) syncHome(container);
+}
+
+/** The home, synced now; a home that cannot be made throws, unlike the best-effort sync after a change. */
+export function prepareContainerHome(containerId: string): string {
+	const container = requireContainer(listContainers(), containerId);
+	syncContainerHome(container, loadWorkspaces(), loadProjects());
+	return containerHome(container.id);
+}
+
+export function setContainerOrchestrator(containerId: string, sessionId: string): Container {
+	const all = writableContainers();
+	const container = requireContainer(all, containerId);
+	if (container.orchestratorSessionId === sessionId) return container;
+	container.orchestratorSessionId = sessionId;
+	container.updatedAt = Date.now();
+	return commit(all, container);
+}
+
+/** Its orchestrator chat was deleted; a container that is gone or has none is left alone. */
+export function forgetContainerOrchestrator(containerId: string): void {
+	const all = writableContainers();
+	const container = all.find((candidate) => candidate.id === containerId);
+	if (!container?.orchestratorSessionId) return;
+	delete container.orchestratorSessionId;
+	container.updatedAt = Date.now();
+	commit(all, container);
 }

@@ -617,6 +617,9 @@ gate: [[module-contracts]].
       regardless: the start completes and reports it.
     - An agent's spawn is not the user's explicit setup operation, so it records no `worktree_create`
       setup action ([[submodule-server-analytics]]); its chat still reports `chat_started`.
+    - The creation carries `startedBy { sessionId, containerId? }` — the calling session, and its
+      container when the caller's chat is an orchestrator (`orchestratorOf`) — which `workspaces` records
+      on the new `Workspace`.
     - `origin: "agent"` (persisted on the creation record, so a hand-off replayed after a restart keeps
       it) makes the hand-off send through `ackSend` + `runObservation.send(…, "internal")` rather than
       `sendUserMessage`, and start the chat without the recent-model pick: an agent-sent prompt is not a
@@ -846,9 +849,10 @@ gate: [[module-contracts]].
   ([[submodule-server-search]]); the settled lifecycle, turn snapshots, plan artifacts, the plan's
   unattributed-change and adopted-commit reads, head recording and the setup funnel's `project_present`
   skip chats; and
-  `applyGitCeiling()` merges `<dataDir>/chats` into `GIT_CEILING_DIRECTORIES` before the server exists
-  (the root created first), so git, `gh`, PTYs and pi's bash inherit a ceiling that stops any walk up
-  out of a chat folder into a repository that happens to enclose the data dir. The container is ensured
+  `applyGitCeiling()` merges `<dataDir>/chats` and `<dataDir>/containers` into `GIT_CEILING_DIRECTORIES`
+  before the server exists (each root created first — git drops a ceiling it cannot resolve), so git, `gh`,
+  PTYs and pi's bash inherit a ceiling that stops any walk up out of a chat folder or a container home
+  into a repository that happens to enclose the data dir. The container is ensured
   at boot. **Older clients:** one visibility policy, `seesChats(protocolVersion)` (`chats.ts`), decides
   what a socket below `CHATS_PROTOCOL_VERSION` may learn — nothing of the container, its chats or their
   sessions. Its welcome, `project.list` and `session.stateList` omit them; `workspace.list` of the
@@ -919,6 +923,25 @@ gate: [[module-contracts]].
   the workspace leave its container — a container left empty goes — and a member's `updated` relinks its
   container's home; the module never learns of workspaces any other way. `container.remove` dissolves the
   record only: per-member archive choices are the client's, through `workspace.remove`.
+- **Container orchestrator (`orchestrator.ts`):** composes [[submodule-server-containers]] (the link,
+  `prepareContainerHome`), `workspaces` (`createOrchestratorChatRecord`, `orchestratorChat`), `chats.ts`
+  (the start claim, `recoverChatSession`, `deleteChat`) and `agent`. `container.create` /
+  `container.addWorkspace` go through `createContainerOrchestrated` / `addContainerWorkspaceOrchestrated`,
+  which start an orchestrator in the background (failure logged) when a create has two or more members or
+  an add brings the container from fewer than two to two, and it has none. `startContainerOrchestrator`
+  (`container.startOrchestrator`) is single-flight per container: it reuses the existing orchestrator
+  chat (adopting its linked, else first, session; one with no session recovers a session) or creates the
+  chat in the synced home through the chat start claim with the initial terminal, then seeds a *new*
+  session — `renameSession` to `orchestratorName` (`Orchestrator · <container>`, clamped to the title
+  limit), the `container-brief` card through `appendHostMessageToSession` (members with project, branch,
+  `prLine`, chats and `chatState`; no turn) — and writes the link last; a container gone by then deletes
+  the chat it made. `session.create` on an orchestrator chat recovers through
+  `recoverOrchestratorSession`, so a recovered session is seeded and linked too. `createServer` installs
+  `disposeContainerOrchestrator` as the containers dissolve hook (it awaits a start in flight, then
+  `deleteChat`s the orchestrator) and `orchestratorHomeOf` as the agent's orchestrator resolver (a chat
+  with `orchestratorOf` → its folder, answered from the in-memory chat ids first). Deleting an
+  orchestrator chat clears its container's link (`forgetContainerOrchestrator`), and `historyHiddenCwd`
+  hides orchestrator homes, like chat folders, from clients that do not see chats.
 - **Search composition (`search.ts`):** `search.query` / `search.preview` / `search.text` go to one lazily
   created `SearchService` ([[submodule-server-search]]) fed with `listProjects`, `listAllWorkspaceRecords`, the
   history index's `sessions()`, `specSnapshot` and `listStoredPlans`, plus `listWorkspaces` (without diff

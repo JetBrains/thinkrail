@@ -103,7 +103,7 @@ export function delegationServiceFor(workspaceId: string): DelegationService {
 			delegationRoot: delegationRootDir(),
 			scope: workspaceId,
 			modelRuntime: getPiRuntime,
-			childBaseExtensionFactories: childBaseExtensionFactories(),
+			childBaseExtensionFactories: childBaseExtensionFactories(workspaceId),
 			childExtensionFactories: childExtensionFactories(workspaceId),
 			buildChildSettings: buildSessionSettings,
 		});

@@ -38,6 +38,7 @@ import { artifactsGuard } from "./artifactsGuard";
 import { continueInWorkspaceExtension } from "./continueTool";
 import { headlessSearchPolicy } from "./headlessSearch";
 import { oversizedImageGuard } from "./imageGuard";
+import { orchestratorPolicy } from "./orchestratorPolicy";
 import {
 	createPiSettings,
 	disabledPackages,
@@ -432,8 +433,13 @@ export function withoutSpecRule(workspaceId: string): InlineExtension {
 	};
 }
 
-export function childBaseExtensionFactories(): InlineExtension[] {
-	return [oversizedImageGuard, artifactsGuard, skillCarryover];
+export function childBaseExtensionFactories(workspaceId: string): InlineExtension[] {
+	return [
+		oversizedImageGuard,
+		artifactsGuard,
+		skillCarryover,
+		orchestratorPolicy(workspaceId, { rule: false }),
+	];
 }
 
 export function childExtensionFactories(workspaceId: string): InlineExtension[] {

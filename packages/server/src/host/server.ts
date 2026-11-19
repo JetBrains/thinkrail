@@ -74,6 +74,7 @@ import {
 	setMcpToolGrantWriter,
 	setModelListingPublisher,
 	setModelsFilePublisher,
+	setOrchestratorHomeResolver,
 	setPiPackagesPublisher,
 	setRequestReviewHandler,
 	setReviewCommentHandler,
@@ -117,7 +118,7 @@ import {
 	stopJbcentralRuntime,
 } from "../auth";
 import { forgetOpenBranchReview } from "../branch-review";
-import { setContainerPublisher } from "../containers";
+import { setContainerDissolveHook, setContainerPublisher } from "../containers";
 import { artifactTools } from "../extensions";
 import {
 	configureSurveySource,
@@ -221,6 +222,7 @@ import { HeldSnapshots, terminalsMayResume } from "./heldSnapshots";
 import { initializeHostRuntime } from "./hostRuntime";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { trackLoginOutcome } from "./loginAnalytics";
+import { disposeContainerOrchestrator, orchestratorHomeOf } from "./orchestrator";
 import {
 	additionalCapture,
 	applyAdditionalAnalyticsSettings,
@@ -938,6 +940,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		(workspaceId) => !isChatWorkspaceId(workspaceId) && getConfig().agentReviewEnabled !== false,
 	);
 	setSpecsEnabledResolver((workspaceId) => !isChatWorkspaceId(workspaceId));
+	setOrchestratorHomeResolver(orchestratorHomeOf);
 
 	setDisabledExtensionsResolver(() => new Set(getConfig().disabledExtensions));
 	setExtensionSettingsResolver(() => getConfig().extensionSettings ?? {});
@@ -991,6 +994,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		observeWorkspaceForContainers(event);
 	};
 	setWorkspacePublisher(publishWorkspaceEvent);
+	setContainerDissolveHook(disposeContainerOrchestrator);
 	const containerAudience = { belowProtocol: CONTAINER_PROTOCOL_VERSION };
 	setContainerPublisher((event) => {
 		if (event.kind === "updated")
@@ -1362,6 +1366,8 @@ function restoreSeamDefaults(): void {
 	setTerminalTabsPublisher(() => {});
 	setWorkspacePublisher(null);
 	setContainerPublisher(null);
+	setContainerDissolveHook(null);
+	setOrchestratorHomeResolver(null);
 	setWorkspaceCreationPublisher(null);
 	setWorkspaceCreationHandoff(null);
 	setProjectPathGuard(null);

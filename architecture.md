@@ -140,7 +140,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
    workspaces, possibly from several projects, plus a non-git home folder of shared artifacts and links to
    its members. Each member stays one worktree on its own branch, so every workspace-keyed path is
    unchanged; a workspace belongs to at most one container, and Default and chat workspaces to none
-   ([[submodule-server-containers]]).
+   ([[submodule-server-containers]]). A container's **orchestrator** is a chat without a project whose
+   folder is the home, so every no-git rule above holds for it; it coordinates and never implements —
+   pi's file tools are refused in member code.
 7. **Auth is external.** Tailscale ACLs / device identity are the auth; the app carries an `owner` field,
    not a login UI. The host sends no CORS headers, and its one HTTP write route (`PUT /fonts/<file>`)
    requires a non-simple request header, so a website the user visits cannot write through it

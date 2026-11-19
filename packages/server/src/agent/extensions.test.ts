@@ -982,12 +982,11 @@ describe("registry extensions", () => {
 		}
 	});
 
-	it("guards every child's images, artifacts and compacted skills from the tool-free base set, and offers the skill catalog only to opted-in children", () => {
-		expect(childBaseExtensionFactories()).toEqual([
-			oversizedImageGuard,
-			artifactsGuard,
-			skillCarryover,
-		]);
+	it("guards every child's images, artifacts, compacted skills and orchestrator edits from the tool-free base set, and offers the skill catalog only to opted-in children", () => {
+		const base = childBaseExtensionFactories("w1");
+		expect(base.slice(0, 3)).toEqual([oversizedImageGuard, artifactsGuard, skillCarryover]);
+		expect(base).toHaveLength(4);
+		expect(typeof base[3]).toBe("function");
 		expect(childExtensionFactories("w1")).not.toContain(oversizedImageGuard);
 		expect(childExtensionFactories("w1")).not.toContain(skillCarryover);
 		expect(childExtensionFactories("w1")).toContain(skillCatalog);

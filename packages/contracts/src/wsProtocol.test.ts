@@ -24,6 +24,7 @@ import {
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	CHATS_PROTOCOL_VERSION,
 	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
+	CONTAINER_BRIEF_CUSTOM_TYPE,
 	CONTAINER_PROTOCOL_VERSION,
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	CONTINUATION_PROTOCOL_VERSION,
@@ -791,6 +792,7 @@ test("containers are pinned to v129 with their methods, channels and refusal cod
 		WS_METHODS.containerAddWorkspace,
 		WS_METHODS.containerRemoveWorkspace,
 		WS_METHODS.containerRemove,
+		WS_METHODS.containerStartOrchestrator,
 	]).toEqual([
 		"container.list",
 		"container.create",
@@ -798,7 +800,9 @@ test("containers are pinned to v129 with their methods, channels and refusal cod
 		"container.addWorkspace",
 		"container.removeWorkspace",
 		"container.remove",
+		"container.startOrchestrator",
 	]);
+	expect(CONTAINER_BRIEF_CUSTOM_TYPE).toBe("container-brief");
 	expect([WS_CHANNELS.containerUpdated, WS_CHANNELS.containerRemoved]).toEqual([
 		"container.updated",
 		"container.removed",

@@ -9,6 +9,7 @@ import type {
 	Workspace,
 	WorkspaceCreation,
 	WorkspaceKickoff,
+	WorkspaceStartedBy,
 	WsErrorCode,
 } from "@thinkrail/contracts";
 import { CodedError, errorCodeOf } from "@thinkrail/shared/codedError";
@@ -500,14 +501,17 @@ function run(id: string): void {
 	running.set(id, { abort, done });
 }
 
+export interface WorkspaceCreationOptions {
+	name?: string;
+	baseRef?: string;
+	kickoff?: WorkspaceKickoff;
+	origin?: CreationOrigin;
+	startedBy?: WorkspaceStartedBy;
+}
+
 export function startWorkspaceCreation(
 	projectId: string,
-	opts: {
-		name?: string;
-		baseRef?: string;
-		kickoff?: WorkspaceKickoff;
-		origin?: CreationOrigin;
-	} = {},
+	opts: WorkspaceCreationOptions = {},
 ): WorkspaceCreation {
 	const plan = planManagedWorkspace(projectId, opts.name, opts.baseRef);
 	const record: WorkspaceCreationRecord = {
@@ -523,6 +527,7 @@ export function startWorkspaceCreation(
 		...(plan.renamed ? { renamed: true as const } : {}),
 		...(opts.kickoff ? { kickoff: opts.kickoff } : {}),
 		...(opts.origin ? { origin: opts.origin } : {}),
+		...(opts.startedBy ? { startedBy: opts.startedBy } : {}),
 	};
 	addCreation(record);
 	run(record.id);
@@ -552,7 +557,7 @@ export class WorkspaceCreationStopped extends Error {}
 
 export async function createWorkspaceWithChat(
 	projectId: string,
-	opts: { name?: string; baseRef?: string; kickoff?: WorkspaceKickoff; origin?: CreationOrigin },
+	opts: WorkspaceCreationOptions,
 	signal?: AbortSignal,
 ): Promise<HandedOff> {
 	const creation = startWorkspaceCreation(projectId, opts);

@@ -86,6 +86,7 @@ export {
 export { piDefaultModelRef, preferredDefaultModel } from "./modelDefaults";
 export { setModelsFilePublisher } from "./modelsFile";
 export * from "./oneshot";
+export { setOrchestratorHomeResolver } from "./orchestratorPolicy";
 export {
 	handlePiSettingsFileChanged,
 	handleProjectPiSettingsChanged,

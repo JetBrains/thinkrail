@@ -132,6 +132,7 @@ import {
 	watchMcpStatus,
 } from "./mcpSessions";
 import { refreshModelListings } from "./modelAvailability";
+import { orchestratorPolicy } from "./orchestratorPolicy";
 import { createPiSettings } from "./packages";
 import {
 	getPiRuntimeGeneration,
@@ -1607,6 +1608,7 @@ async function createParentSessionInternal(
 					...mcpHost.extensions,
 					extraUsageModelSelectExtension(sessionId),
 					withoutSpecRule(workspaceId),
+					orchestratorPolicy(workspaceId),
 				],
 				{ ...toolResponseSessionServices(toolResponseWaiters), workspaceFiles },
 			),
@@ -2573,6 +2575,19 @@ export async function sendHostMessageToSession(
 	} finally {
 		release();
 	}
+}
+
+/** A host-authored card that only adds context: appended to the transcript (after a running turn) and starts no turn. */
+export async function appendHostMessageToSession(
+	sessionId: string,
+	customType: string,
+	content: string,
+	details: unknown,
+): Promise<void> {
+	await mustGetEntry(sessionId).session.sendCustomMessage(
+		{ customType, content, display: true, details },
+		{ triggerTurn: false },
+	);
 }
 
 /** `true` while a message `sendHostMessageToSession` sent with these `details` has not reached the agent yet. */

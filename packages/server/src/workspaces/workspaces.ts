@@ -316,7 +316,10 @@ export function assertManagedPathFree(path: string): void {
 }
 
 export function registerManagedWorkspace(
-	entry: Pick<Workspace, "id" | "projectId" | "name" | "branch" | "worktreePath" | "baseBranch"> & {
+	entry: Pick<
+		Workspace,
+		"id" | "projectId" | "name" | "branch" | "worktreePath" | "baseBranch" | "startedBy"
+	> & {
 		renamed?: true;
 	},
 ): Workspace {
@@ -332,6 +335,7 @@ export function registerManagedWorkspace(
 		initialTerminalPending: true,
 		lastActiveAt: Date.now(),
 		...(entry.renamed ? { renamed: true } : {}),
+		...(entry.startedBy ? { startedBy: entry.startedBy } : {}),
 	};
 	ensureWorkspaceScratchDir(workspace);
 	all.push(workspace);

@@ -8,6 +8,7 @@ import {
 	type WireModel,
 	type Workspace,
 	type WorkspaceKickoff,
+	type WorkspaceStartedBy,
 } from "@thinkrail/contracts";
 import {
 	getSessionWorkspaceId,
@@ -170,6 +171,7 @@ export interface StartWorkspaceDeps {
 		projectId: string,
 		baseRef: string,
 		kickoff: WorkspaceKickoff,
+		startedBy: WorkspaceStartedBy,
 		signal?: AbortSignal,
 	) => Promise<HandedOff>;
 }
@@ -179,8 +181,8 @@ const liveStartDeps: StartWorkspaceDeps = {
 	openProjects: listProjects,
 	settledModels: listSettledModels,
 	defaultBaseBranch,
-	create: (projectId, baseRef, kickoff, signal) =>
-		createWorkspaceWithChat(projectId, { baseRef, kickoff, origin: "agent" }, signal),
+	create: (projectId, baseRef, kickoff, startedBy, signal) =>
+		createWorkspaceWithChat(projectId, { baseRef, kickoff, origin: "agent", startedBy }, signal),
 };
 
 const NOTHING_CREATED = "Stopped; no workspace was created.";
@@ -207,9 +209,13 @@ export async function startWorkspace(
 		...(model ? { model } : {}),
 		...(params.effort ? { thinkingLevel: params.effort } : {}),
 	};
+	const startedBy: WorkspaceStartedBy = {
+		sessionId: callerSessionId,
+		...(caller.orchestratorOf ? { containerId: caller.orchestratorOf } : {}),
+	};
 	let handed: HandedOff;
 	try {
-		handed = await deps.create(project.id, baseRef, kickoff, signal);
+		handed = await deps.create(project.id, baseRef, kickoff, startedBy, signal);
 	} catch (error) {
 		if (error instanceof WorkspaceCreationStopped) throw new Error(NOTHING_CREATED);
 		throw error;
@@ -246,7 +252,7 @@ export function chatName(summary: Pick<SessionSummary, "title" | "firstPrompt">)
 	return summary.firstPrompt ? `unnamed, first prompt "${summary.firstPrompt}"` : "unnamed";
 }
 
-function prLine(workspace: Workspace): string {
+export function prLine(workspace: Workspace): string {
 	const review = workspace.review;
 	if (!review) return "no PR";
 	const label = review.kind === "merge-request" ? "MR" : "PR";

@@ -9,6 +9,7 @@ import type {
 	WireModel,
 	Workspace,
 	WorkspaceKickoff,
+	WorkspaceStartedBy,
 } from "@thinkrail/contracts";
 import { WorkspaceCreationStopped } from "../workspaces";
 import {
@@ -141,6 +142,7 @@ test("chatName prefers the chat's title, then its first prompt", () => {
 function startDeps(overrides: Partial<StartWorkspaceDeps> = {}) {
 	const calls: string[] = [];
 	const kickoffs: WorkspaceKickoff[] = [];
+	const starters: WorkspaceStartedBy[] = [];
 	const caller = { id: "w1", projectId: "p1", worktreePath: dir } as Workspace;
 	const child = {
 		id: "w9",
@@ -159,20 +161,21 @@ function startDeps(overrides: Partial<StartWorkspaceDeps> = {}) {
 			calls.push(`defaultBase ${projectId}${signal ? " signal" : ""}`);
 			return "origin/main";
 		},
-		create: async (projectId, baseRef, kickoff, signal) => {
+		create: async (projectId, baseRef, kickoff, startedBy, signal) => {
 			calls.push(`create ${projectId} ${baseRef}${signal ? " signal" : ""}`);
 			kickoffs.push(kickoff);
+			starters.push(startedBy);
 			return { workspace: child, sessionId: "s9", model, thinkingLevel: "high" };
 		},
 		...overrides,
 	};
-	return { deps, calls, kickoffs, child };
+	return { deps, calls, kickoffs, starters, child };
 }
 
 test("startWorkspace creates in the named project from its default base and hands the new chat its prompt", async () => {
 	writeFileSync(join(dir, "spec.md"), "# spec");
 	writeFileSync(join(dir, "shot.png"), "png");
-	const { deps, calls, kickoffs } = startDeps();
+	const { deps, calls, kickoffs, starters } = startDeps();
 	const started = await startWorkspace(
 		"s1",
 		{
@@ -186,6 +189,7 @@ test("startWorkspace creates in the named project from its default base and hand
 		new AbortController().signal,
 	);
 	expect(calls).toEqual(["defaultBase p2 signal", "create p2 origin/main signal"]);
+	expect(starters).toEqual([{ sessionId: "s1" }]);
 	expect(kickoffs).toEqual([
 		{
 			text: `Do X\n\nAttached files:\n- ${join(dir, "spec.md")}`,
@@ -234,6 +238,20 @@ test("startWorkspace from a chat without a project needs a named repository and 
 	await startWorkspace("s1", { prompt: "x", project: "backend" }, named.deps);
 	expect(named.calls).toEqual(["defaultBase p2", "create p2 origin/main"]);
 	expect(named.kickoffs).toEqual([{ text: "x" }]);
+	expect(named.starters).toEqual([{ sessionId: "s1" }]);
+});
+
+test("startWorkspace from a container's orchestrator records the container beside the calling chat", async () => {
+	const caller = {
+		id: "chat-o",
+		projectId: "c1",
+		kind: "chat",
+		worktreePath: dir,
+		orchestratorOf: "box-1",
+	} as Workspace;
+	const { deps, starters } = startDeps({ callerWorkspace: () => caller });
+	await startWorkspace("s-orch", { prompt: "x", project: "backend" }, deps);
+	expect(starters).toEqual([{ sessionId: "s-orch", containerId: "box-1" }]);
 });
 
 test("startWorkspace names a created workspace, and its chat, when the chat fails", async () => {

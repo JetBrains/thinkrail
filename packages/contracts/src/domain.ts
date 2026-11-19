@@ -170,6 +170,16 @@ export interface Workspace {
 	deletionPending?: true;
 	/** Where a chat without a project was continued: the workspaces (and their first chats) its summary went to. */
 	continuedTo?: ChatContinuationLink[];
+	/** The chat whose `start_workspace` call created this workspace. */
+	startedBy?: WorkspaceStartedBy;
+	/** On a chat without a project: the container it orchestrates; its folder is that container's home. */
+	orchestratorOf?: string;
+}
+
+export interface WorkspaceStartedBy {
+	sessionId: string;
+	/** Set when the calling chat was a container's orchestrator. */
+	containerId?: string;
 }
 
 /**
@@ -181,6 +191,7 @@ export interface Container {
 	name: string;
 	/** Ordered members: managed or attached worktrees, never a Default workspace or a chat. */
 	workspaceIds: string[];
+	/** The orchestrator chat's session; that chat's record names this container in `orchestratorOf`. */
 	orchestratorSessionId?: string;
 	createdAt: number;
 	updatedAt: number;

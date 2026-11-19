@@ -18,6 +18,7 @@ import { stopAllWatches } from "../watch";
 import { setWorkspacePublisher } from "../workspaces";
 import { observeWorkspaceForContainers } from "./containers";
 import { handleRequest } from "./handlers";
+import { settleOrchestratorStartsForTests } from "./orchestrator";
 
 const CTX = { clientKey: "containers-test" };
 
@@ -84,6 +85,7 @@ beforeEach(() => {
 
 afterEach(async () => {
 	await Bun.sleep(20);
+	await settleOrchestratorStartsForTests();
 	stopAllWatches();
 	setWorkspacePublisher(null);
 	setContainerPublisher(null);

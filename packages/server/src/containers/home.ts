@@ -19,7 +19,7 @@ const LINKS_DIR = "workspaces";
 const LINK_NAME_MAX = 100;
 const LINK_TYPE = process.platform === "win32" ? "junction" : "dir";
 
-function containersRoot(): string {
+export function containersRoot(): string {
 	return join(dataDir(), "containers");
 }
 

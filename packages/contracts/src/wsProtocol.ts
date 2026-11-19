@@ -366,6 +366,20 @@ export interface ContainerRemoved {
 	id: string;
 }
 
+/** A container's orchestrator: its chat without a project (whose folder is the container's home) and that chat's session. */
+export interface ContainerOrchestrator {
+	container: Container;
+	workspace: Workspace;
+	sessionId: string;
+}
+
+export const CONTAINER_BRIEF_CUSTOM_TYPE = "container-brief";
+
+/** The orchestrator's first card: a summary of the container's members that adds context and starts no turn. */
+export interface ContainerBriefDetails {
+	containerId: string;
+}
+
 export type WorkspaceCreationState = "running" | "interrupted" | "failed";
 export type WorkspaceCreationPhase = "preparing" | "checking-out";
 
@@ -451,6 +465,7 @@ export const WS_METHODS = {
 	containerAddWorkspace: "container.addWorkspace",
 	containerRemoveWorkspace: "container.removeWorkspace",
 	containerRemove: "container.remove",
+	containerStartOrchestrator: "container.startOrchestrator",
 	chatCreate: "chat.create",
 	chatDelete: "chat.delete",
 	chatInspect: "chat.inspect",
@@ -1092,6 +1107,10 @@ export interface WsMethodMap {
 		result: Container | null;
 	};
 	"container.remove": { params: { containerId: string }; result: Ack };
+	"container.startOrchestrator": {
+		params: { containerId: string; model?: WireModel; thinkingLevel?: ThinkingLevel };
+		result: ContainerOrchestrator;
+	};
 	"chat.create": {
 		params: { model?: WireModel; thinkingLevel?: ThinkingLevel };
 		result: ChatCreateResult;

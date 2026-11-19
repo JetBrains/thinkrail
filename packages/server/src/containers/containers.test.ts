@@ -11,10 +11,14 @@ import {
 	type ContainerEvent,
 	createContainer,
 	forgetContainerMember,
+	forgetContainerOrchestrator,
 	listContainers,
+	prepareContainerHome,
 	removeContainer,
 	removeContainerWorkspace,
 	renameContainer,
+	setContainerDissolveHook,
+	setContainerOrchestrator,
 	setContainerPublisher,
 } from ".";
 
@@ -73,6 +77,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	setContainerPublisher(null);
+	setContainerDissolveHook(null);
 	setTrashImplementationForTests(undefined);
 	rmSync(root, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
@@ -220,4 +225,40 @@ test("records written earlier are read back as stored", () => {
 		orchestratorSessionId: "s1",
 		workspaceIds: ["w1", "w2"],
 	});
+});
+
+test("the orchestrator link is set, kept and forgotten, and a gone container refuses a link", () => {
+	const container = createContainer({ workspaceIds: ["w1", "w2"] });
+	expect(setContainerOrchestrator(container.id, "s-orch")).toMatchObject({
+		orchestratorSessionId: "s-orch",
+	});
+	const published = events.length;
+	expect(setContainerOrchestrator(container.id, "s-orch").orchestratorSessionId).toBe("s-orch");
+	expect(events).toHaveLength(published);
+	forgetContainerOrchestrator(container.id);
+	const [forgotten] = listContainers();
+	if (!forgotten) throw new Error("the container is gone");
+	expect(forgotten.orchestratorSessionId).toBeUndefined();
+	expect(events.at(-1)).toEqual({ kind: "updated", container: forgotten });
+	forgetContainerOrchestrator("gone");
+	expect(codeOf(() => setContainerOrchestrator("gone", "s"))).toBe("CONTAINER_UNKNOWN");
+	expect(codeOf(() => prepareContainerHome("gone"))).toBe("CONTAINER_UNKNOWN");
+	expect(prepareContainerHome(container.id)).toBe(join(root, "containers", container.id));
+});
+
+test("a dissolve awaits its hook after the record is gone and before the home is retired", async () => {
+	const container = createContainer({ workspaceIds: ["w1"] });
+	const home = prepareContainerHome(container.id);
+	const seen: unknown[] = [];
+	setContainerDissolveHook(async (dissolved) => {
+		seen.push({
+			id: dissolved.id,
+			stored: listContainers().length,
+			home: readFileSync(join(home, ".thinkrail", "context", ".gitignore"), "utf8"),
+		});
+		throw new Error("a failing hook is logged, never fails the dissolve");
+	});
+	await removeContainer(container.id);
+	expect(seen).toEqual([{ id: container.id, stored: 0, home: "*\n" }]);
+	expect(listContainers()).toEqual([]);
 });

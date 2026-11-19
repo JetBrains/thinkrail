@@ -25,7 +25,7 @@ Durable host state—projects, workspaces, containers, cross-frontend app config
   stamps, slug backfill, review stamps…) keeps a chat or container record out of them — an older host
   (the CLI is the supported rollback artifact) never sees a chat and its reclaim path can never `rm -rf`
   a chat folder. The store is **schema-validated** (the container's and every chat's required fields,
-  each chat in that container, ids unique). Only a file that is not JSON, or is not a valid version-1
+  each chat in that container, ids unique, an orchestrator chat's `orchestratorOf` a container id). Only a file that is not JSON, or is not a valid version-1
   store and names no newer version, is set aside as `.corrupt-<epoch>`: it loads as empty and chat writes
   are refused until restart. A store whose integer `version` is newer is **left untouched** (an older
   host must not destroy a newer host's chats): it loads as empty and refuses writes. Any other read

@@ -39,6 +39,7 @@ import {
 	type Workspace,
 	type WorkspaceCreation,
 	type WorkspaceKickoff,
+	type WorkspaceStartedBy,
 } from "@thinkrail/contracts";
 import {
 	claimBrowserAttributionAttemptIn,
@@ -465,7 +466,8 @@ function isChatRecord(raw: unknown, containerId: string): raw is Workspace {
 		optional(raw.renamed, (value) => typeof value === "boolean") &&
 		optional(raw.deletionPending, (value) => value === true) &&
 		optional(raw.initialTerminalPending, (value) => value === true) &&
-		optional(raw.lastActiveAt, Number.isFinite)
+		optional(raw.lastActiveAt, Number.isFinite) &&
+		optional(raw.orchestratorOf, isContainerId)
 	);
 }
 
@@ -658,6 +660,7 @@ export type WorkspaceCreationRecord = Omit<WorkspaceCreation, "kickoff"> & {
 	baseOid?: string;
 	kickoff?: WorkspaceKickoff;
 	origin?: CreationOrigin;
+	startedBy?: WorkspaceStartedBy;
 };
 
 export function loadWorkspaceCreations(): WorkspaceCreationRecord[] {

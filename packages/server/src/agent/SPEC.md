@@ -821,6 +821,20 @@ re-opened transcripts provider-valid.
     command's writes cannot be gated; the rule asks for them. The path is resolved the way pi's tools do it
     (leading `@` dropped, `~` expanded, relative to `ctx.cwd`). One of `buildResourceLoader`'s shared
     factories and of the delegated-child base set.
+  - `orchestratorPolicy(workspaceId, { rule? })` — a container orchestrator's role, fed rather than
+    assembled ([[submodule-server-containers]]). A host-injected `setOrchestratorHomeResolver` (no `agent`
+    → containers/workspaces edge; a throwing resolver means "not an orchestrator") answers the home of the
+    container a workspace's chat orchestrates. For such a session a `before_agent_start` section
+    (`thinkrail-orchestrator`) states the policy — coordinate only; read members through `workspaces/`;
+    write only shared artifacts under `.thinkrail/context/`; never edit member code, delegate it to the
+    member's chat; merge only after the human's explicit approval in this chat — and a `tool_call` hook
+    blocks pi's `write` and `edit` (the session's only path-taking file writers: a chat has no spec tools,
+    and plans land in its own `.thinkrail/context/`) whose target is lexically under the home's
+    `workspaces/` or whose real path (nearest existing ancestor `realpath`ed, so a link the agent made
+    elsewhere counts) lies inside a linked member worktree, with a reason naming the path and the member's
+    chat. Bash cannot be guarded; the rule asks. Per parent session through the manager's extra
+    factories; children get the guard alone (`rule: false`) through the base set, since a subagent writes
+    files in the same folder but is no orchestrator.
   - `imageGuard` — the oversized-image guard: an inline extension (`oversizedImageGuard`, one of
     `buildResourceLoader`'s shared factories and the whole delegated-child base set) hooked on pi's
     **`context` event** (fired before every LLM
@@ -1116,7 +1130,8 @@ re-opened transcripts provider-valid.
       accepted (pi's preflight in the host's creation hand-off), and never waits for the child's turn to
       finish. It hands pi's abort signal to the host's `start`, because pi awaits a running tool and reports
       Stop only through that signal: without it, Stop would wait out the base fetch and the checkout and
-      still spawn the workspace.
+      still spawn the workspace. The host records the calling session on the new workspace
+      (`Workspace.startedBy`, with the container when the caller is its orchestrator).
     - **`workspace_status { project?, workspaces? }`** reports chat states, PR state, diff stats and
       (for named workspaces) each chat's final message. The report is bounded like pi's own tools
       (`truncateHead` at pi's default line and byte limits) with a footer saying the later workspaces and
@@ -1175,10 +1190,10 @@ re-opened transcripts provider-valid.
     [[submodule-server-extensions]]; today `web-access`'s `pi-web-access`) — deliberately not the parent's
     full set
     (rationale + the listed-children carve-out: core decision #25). **Every** child, opted in or not,
-    also loads the core's base set (`childBaseExtensionFactories`, same decision): `oversizedImageGuard`,
+    also loads the core's base set (`childBaseExtensionFactories(workspaceId)`, same decision): `oversizedImageGuard`,
     since a child's `read` returns raw images under the shared settings (see the `buildSessionSettings`
-    bullet), `artifactsGuard`, since a child writes files like its parent, and `skillCarryover`, since
-    children auto-compact under those settings too.
+    bullet), `artifactsGuard`, since a child writes files like its parent, `skillCarryover`, since
+    children auto-compact under those settings too, and the orchestrator guard (see `orchestratorPolicy`).
     A child on an extension-registered provider's model also loads that provider's **owning
     extension** (core decision #32: such a provider may serve only sessions its extension observed):
     `liveParentContext.providerExtensionPaths(provider)` answers from a process-wide owner map that
@@ -1567,6 +1582,10 @@ place among the kept follow-ups — and any other clear (Stop, disposal, shutdow
 outlast, drops it and calls the sender's `onDropped`. Like a text keeper, a host message pi already took
 for a turn still preparing (a pre-turn compaction) is queued once more by an edit in that window; a
 second continuation call joins the first, so the repeat costs one turn, nothing else.
+`appendHostMessageToSession` is its context-only sibling (the orchestrator's `container-brief`): the same
+`display: true` card sent with `triggerTurn: false`, which pi appends at once when idle and after the
+running turn otherwise, so it starts no turn and is never pending. Like any entry before the first
+user or assistant message, it reaches disk with the conversation's first message.
 
 ## Session titles
 
