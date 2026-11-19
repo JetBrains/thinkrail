@@ -10,7 +10,6 @@ import { Button } from "@thinkrail/ui/button";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
-import { useState } from "react";
 import { extensionApiFit } from "@/extensions";
 import {
 	SETTINGS_LIST_PRIMARY,
@@ -76,30 +75,6 @@ function ExternalLink({
 	);
 }
 
-function PreviewImage({ src }: { src: string }) {
-	const [broken, setBroken] = useState(false);
-	return (
-		<div
-			data-testid="extension-browse-image-box"
-			data-broken={broken ? "true" : "false"}
-			className="aspect-video w-[8rem] shrink-0 overflow-hidden rounded-sm bg-container-elevated-bg"
-		>
-			{broken ? null : (
-				<img
-					data-testid="extension-browse-image"
-					src={src}
-					alt=""
-					loading="lazy"
-					decoding="async"
-					referrerPolicy="no-referrer"
-					className="size-full object-cover"
-					onError={() => setBroken(true)}
-				/>
-			)}
-		</div>
-	);
-}
-
 export function ExtensionBrowseCard({
 	entry,
 	onInstall,
@@ -119,7 +94,6 @@ export function ExtensionBrowseCard({
 			data-name={entry.name}
 			className="flex flex-wrap items-start gap-8 border-border-muted border-b py-6 last:border-b-0"
 		>
-			{entry.image ? <PreviewImage src={entry.image} /> : null}
 			<button
 				type="button"
 				{...primaryProps}

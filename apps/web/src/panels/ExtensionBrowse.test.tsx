@@ -17,7 +17,6 @@ const WEATHER: ExtensionBrowseEntry = {
 	author: "Jane Doe",
 	api: "1.0",
 	halves: ["server", "web"],
-	image: "https://example.com/preview.png",
 	install: "npm:thinkrail-ext-weather",
 	npm: "https://www.npmjs.com/package/thinkrail-ext-weather",
 	repository: "https://github.com/jane/thinkrail-ext-weather",
@@ -63,8 +62,9 @@ const loaded = (extensions: ExtensionBrowseEntry[]): ExtensionBrowseRead => ({
 	result: { generatedAt: "2026-11-17T12:00:00.000Z", extensions },
 });
 
-test("a card shows its copy, halves, links, a lazy no-referrer image and the right action", () => {
-	const markup = render(loaded([WEATHER, CARDS, JIRA]));
+test("a card shows its copy, halves, links and the right action, and never an author-chosen image", () => {
+	const withImage = { ...WEATHER, image: "https://example.com/preview.png" };
+	const markup = render(loaded([withImage, CARDS, JIRA]));
 	expect(markup).toContain("Listings are automatic and unreviewed");
 	expect(markup).toContain("runs code on this machine and in the app");
 	expect(markup).toContain("Weather");
@@ -74,10 +74,8 @@ test("a card shows its copy, halves, links, a lazy no-referrer image and the rig
 	expect(markup).toContain('data-testid="extension-browse-cards"');
 	expect(markup).toContain('href="https://www.npmjs.com/package/thinkrail-ext-weather"');
 	expect(markup).toContain('href="https://github.com/jane/thinkrail-ext-weather"');
-	expect(markup).toMatch(
-		/<img[^>]*loading="lazy"[^>]*referrerPolicy="no-referrer"|<img[^>]*referrerpolicy="no-referrer"[^>]*/i,
-	);
-	expect(markup).toContain("aspect-video");
+	expect(markup).not.toContain("<img");
+	expect(markup).not.toContain("example.com");
 	expect(markup.match(/data-testid="extension-browse-install"/g)).toHaveLength(1);
 	expect(markup).toContain('data-testid="extension-browse-installed"');
 	expect(markup).toContain('data-testid="extension-browse-incompatible"');

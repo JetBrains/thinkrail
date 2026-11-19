@@ -1652,8 +1652,9 @@ a project picker, the prompt hero, and the reused
   wins. The group's description states plainly that listings are automatic and unreviewed and that an extension
   runs code on this machine and in the app. A search field row (Esc clears a query) narrows by title, name,
   description and author ("No extensions match …") over one `SettingsList` (`extension-browse`) of listing
-  rows: a preview thumbnail in a fixed 16:9 box (`loading="lazy"`, `referrerPolicy="no-referrer"`; a broken
-  image hides itself and the box keeps its size), then the primary — title, version, **Agent tools** /
+  rows — no preview image: an author-chosen image URL would expose every user's IP to its host, so Browse
+  never reads a listing's `image` and no catalog entry makes the app request another origin (pinned by
+  `e2e/extension-browse.spec.ts`) — the primary: title, version, **Agent tools** /
   **Chat cards** from `halves`, package name · author, description, and an **Installed** mark or an
   incompatible mark (`extensionApiFit`) with its reason as visible text — which opens the install dialog's
   confirm step with the listing's `npm:<name>` (inert, `aria-disabled`, when the listing cannot be installed),
