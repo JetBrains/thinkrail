@@ -1,16 +1,24 @@
+import { isAbsolute, relative } from "node:path";
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import type { Activity } from "./activity";
 import type { Board, CardDeferrals } from "./board";
 import { isIsoDate } from "./days";
+import type { IdeaView } from "./discovery";
+import { ideaLines } from "./kickoff";
 import {
 	CARD_SIZES,
 	CARD_TYPES,
 	CATEGORIES,
 	type Card,
+	EVIDENCE_KINDS,
 	HEALTHS,
 	HORIZONS,
+	IDEA_STATUSES,
 	type Initiative,
+	SCORE_MAX,
+	SCORE_MIN,
+	type WatchEntry,
 } from "./model";
 import type { RoadmapView } from "./roadmap";
 
@@ -73,6 +81,94 @@ const InitiativeDraftParams = Type.Object({
 		Type.Array(Type.String(), { description: "Success criteria, one per item." }),
 	),
 	horizon: Type.Optional(literals(HORIZONS, "now, next or later (default).")),
+	ideaId: Type.Optional(
+		Type.String({
+			description:
+				"The discovery idea (D-n) this initiative is shaped from; the idea is then marked promoted and linked to it.",
+		}),
+	),
+});
+
+const IdeasListParams = Type.Object({
+	ideaId: Type.Optional(
+		Type.String({
+			description:
+				"An idea id such as D-3: read it whole (pitch, evidence, scores with reasons). Omit to list every idea.",
+		}),
+	),
+	status: Type.Optional(literals(IDEA_STATUSES, "Only ideas in this status.")),
+});
+
+const IdeaCreateParams = Type.Object({
+	title: Type.String({ description: "One line: the idea." }),
+	pitch: Type.String({
+		description: "Who it is for, the problem and the bet, in a few sentences.",
+	}),
+});
+
+const EvidenceParams = Type.Object({
+	ideaId: Type.String({ description: "The idea (D-n) the evidence backs." }),
+	kind: literals(
+		EVIDENCE_KINDS,
+		"artifact (a report you wrote into this workspace's .thinkrail/context/), url (a source on the web) or note.",
+	),
+	ref: Type.String({
+		description:
+			"artifact: its path relative to this workspace (.thinkrail/context/…); url: the http(s) URL; note: the text.",
+	}),
+	quote: Type.Optional(
+		Type.String({ description: "What it says that matters for the idea, quoted or in one line." }),
+	),
+});
+
+const score = (what: string) =>
+	Type.Object(
+		{
+			score: Type.Integer({
+				minimum: SCORE_MIN,
+				maximum: SCORE_MAX,
+				description: `${what}, from ${SCORE_MIN} (low) to ${SCORE_MAX} (high).`,
+			}),
+			reasons: Type.Array(Type.String(), {
+				minItems: 1,
+				description: "Why, one reason per item, citing the evidence (E-n) or the spec behind it.",
+			}),
+		},
+		{ description: `The suggested ${what.toLowerCase()} with its reasons.` },
+	);
+
+const ScoreParams = Type.Object({
+	ideaId: Type.String({ description: "The idea (D-n) you analyzed." }),
+	value: Type.Optional(score("Value")),
+	effort: Type.Optional(score("Effort")),
+	horizon: Type.Optional(
+		Type.Object(
+			{
+				horizon: literals(HORIZONS, "now, next or later."),
+				reason: Type.String({ description: "Why that horizon, in one line." }),
+			},
+			{ description: "The horizon you suggest for it." },
+		),
+	),
+});
+
+const WatchGetParams = Type.Object({
+	watchId: Type.Optional(
+		Type.String({ description: "A watchlist entry such as W-2. Omit for the whole watchlist." }),
+	),
+});
+
+const SnapshotParams = Type.Object({
+	watchId: Type.String({ description: "The watchlist entry (W-n) you refreshed." }),
+	text: Type.String({
+		description:
+			"The new snapshot: plain text of what the competitor offers now (features, pricing, recent releases), stable enough to diff against the next one.",
+	}),
+	artifactPath: Type.Optional(
+		Type.String({
+			description: "The dated report you wrote, relative to this workspace (.thinkrail/context/…).",
+		}),
+	),
 });
 
 const ProjectCreateParams = Type.Object({
@@ -300,6 +396,55 @@ function describeActivity(
 	return lines.join("\n");
 }
 
+function scoreText(idea: Pick<IdeaView, "value" | "effort">): string {
+	return (["value", "effort"] as const)
+		.flatMap((key) => {
+			const entry = idea[key];
+			return entry ? [`${key} ${entry.score}${entry.suggested ? " (suggested)" : ""}`] : [];
+		})
+		.join(", ");
+}
+
+function ideaSummary(idea: IdeaView): string {
+	const facets = [
+		scoreText(idea) || "not scored",
+		`${idea.evidence.length} evidence`,
+		idea.initiativeId ? `promoted to ${idea.initiativeId}` : "",
+	].filter(Boolean);
+	return `${idea.id} [${idea.status}] ${idea.title} (${facets.join(", ")})`;
+}
+
+function describeIdea(idea: IdeaView): string {
+	return [
+		...ideaLines(idea),
+		`Status: ${idea.status}${idea.initiativeId ? `, promoted to ${idea.initiativeId}${idea.initiative ? ` (${idea.initiative.title})` : ""}` : ""}`,
+	].join("\n");
+}
+
+function describeWatch(entry: WatchEntry): string {
+	const lines = [`${entry.id} · ${entry.name}`, `URLs: ${entry.urls.join(", ") || "none yet"}`];
+	if (entry.notes.trim()) lines.push(`Notes: ${entry.notes.trim()}`);
+	if (entry.snapshot)
+		lines.push(
+			`Last snapshot (${isoDay(entry.snapshot.at)}${entry.snapshot.artifactPath ? `, report ${entry.snapshot.artifactPath}` : ""}):`,
+			entry.snapshot.text,
+		);
+	else lines.push("No snapshot yet.");
+	return lines.join("\n");
+}
+
+/** A path the agent gives inside its workspace, made workspace-relative. */
+function workspacePath(cwd: string, path: string): string {
+	const trimmed = path.trim();
+	if (!isAbsolute(trimmed)) return trimmed;
+	const inside = relative(cwd, trimmed);
+	if (!inside || inside.startsWith("..") || isAbsolute(inside))
+		throw new Error(
+			`${trimmed} is outside this workspace; write the report into .thinkrail/context/.`,
+		);
+	return inside;
+}
+
 const trimmed = (items: readonly string[] | undefined) =>
 	(items ?? []).map((item) => item.trim()).filter(Boolean);
 
@@ -457,7 +602,7 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 			name: "board_initiative_create_draft",
 			label: "Propose an initiative",
 			description:
-				"Propose a roadmap initiative on this project's board from an idea: its outcome, success criteria and horizon. It is shown to the human as a proposal to accept.",
+				"Propose a roadmap initiative on this project's board from an idea: its outcome, success criteria and horizon. It is shown to the human as a proposal to accept. Shaping a discovery idea (D-n), pass its ideaId so the idea links to the initiative.",
 			promptSnippet:
 				"board_initiative_create_draft — propose a roadmap initiative for the human to accept.",
 			parameters: InitiativeDraftParams,
@@ -466,6 +611,9 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 				const project = current.projectOfCwd(ctx.cwd);
 				const title = params.title.trim();
 				if (!title) throw new Error("Pass a non-empty title.");
+				const idea = params.ideaId?.trim()
+					? current.discovery.promotable(project.id, params.ideaId)
+					: undefined;
 				const initiative = current.roadmap.createInitiative(
 					project.id,
 					{
@@ -476,11 +624,12 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 					},
 					"agent",
 				);
+				const promoted = idea
+					? current.discovery.markPromoted(project.id, idea.id, initiative.id)
+					: undefined;
 				return reply(
-					`Proposed ${initiative.id}: ${initiative.title}. The human accepts it on the board.`,
-					{
-						initiative,
-					},
+					`Proposed ${initiative.id}: ${initiative.title}.${promoted ? ` Idea ${promoted.id} is promoted to it.` : ""} The human accepts it on the board.`,
+					{ initiative, ...(promoted ? { idea: promoted } : {}) },
 				);
 			},
 		});
@@ -635,6 +784,162 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 				return reply(`Saved a draft update of ${params.initiativeId}; the human publishes it.`, {
 					update,
 				});
+			},
+		});
+		pi.registerTool({
+			name: "board_ideas_list",
+			label: "Discovery ideas",
+			description:
+				"List this project's discovery ideas with their status and scores, or read one whole: its pitch, evidence (E-n) with quotes, value and effort with their reasons, and suggested horizon.",
+			promptSnippet: "board_ideas_list — list the board's discovery ideas, or read one (ideaId).",
+			parameters: IdeasListParams,
+			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+				const current = running();
+				const project = current.projectOfCwd(ctx.cwd);
+				const view = current.discovery.get(project.id);
+				if (params.ideaId) {
+					const id = current.discovery.idea(project.id, params.ideaId).id;
+					const idea = view.ideas.find((candidate) => candidate.id === id);
+					return idea ? reply(describeIdea(idea), { idea }) : reply(`No idea ${id}.`, {});
+				}
+				const ideas = view.ideas.filter(
+					(idea) => params.status === undefined || idea.status === params.status,
+				);
+				return reply(
+					ideas.length > 0
+						? ideas.map(ideaSummary).join("\n")
+						: `No ideas${params.status ? ` ${params.status}` : ""} on ${project.name}'s board.`,
+					{},
+				);
+			},
+		});
+		pi.registerTool({
+			name: "board_idea_create",
+			label: "New discovery idea",
+			description:
+				"File a discovery idea on this project's board: a title and a pitch, for the human to research, analyze, promote or dismiss.",
+			promptSnippet: "board_idea_create — file a discovery idea (title and pitch) on the board.",
+			parameters: IdeaCreateParams,
+			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+				const current = running();
+				const project = current.projectOfCwd(ctx.cwd);
+				const title = params.title.trim();
+				if (!title) throw new Error("Pass a non-empty title.");
+				const idea = current.discovery.createIdea(project.id, {
+					title,
+					pitch: params.pitch.trim(),
+				});
+				return reply(`Filed idea ${idea.id}: ${idea.title}.`, { idea });
+			},
+		});
+		pi.registerTool({
+			name: "board_idea_add_evidence",
+			label: "Idea evidence",
+			description:
+				"Attach evidence to a discovery idea: a report you wrote into this workspace's artifacts folder (.thinkrail/context/), a web source's URL, or a note, each with the quote that matters.",
+			promptSnippet:
+				"board_idea_add_evidence — attach a report, a URL or a note (with its quote) to an idea.",
+			parameters: EvidenceParams,
+			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+				const current = running();
+				const project = current.projectOfCwd(ctx.cwd);
+				const artifact = params.kind === "artifact";
+				const workspaceId = artifact
+					? (current.host.sessionScope({ kind: "all" }).locate(ctx.cwd)?.workspaceId ?? undefined)
+					: undefined;
+				const { idea, evidence } = current.discovery.addEvidence(
+					project.id,
+					params.ideaId,
+					{
+						kind: params.kind,
+						ref: artifact ? workspacePath(ctx.cwd, params.ref) : params.ref,
+						...(params.quote?.trim() ? { quote: params.quote.trim() } : {}),
+						...(workspaceId ? { workspaceId } : {}),
+					},
+					"agent",
+				);
+				return reply(`Attached ${evidence.id} (${evidence.kind}) to ${idea.id}.`, { evidence });
+			},
+		});
+		pi.registerTool({
+			name: "board_idea_score",
+			label: "Score an idea",
+			description:
+				"Suggest a discovery idea's value and effort (each 1–5 with reasons citing its evidence) and a horizon. They show as suggestions the human confirms or edits; a score the human set is never overwritten.",
+			promptSnippet:
+				"board_idea_score — suggest an idea's value, effort (1–5, with reasons) and horizon.",
+			parameters: ScoreParams,
+			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+				const current = running();
+				const project = current.projectOfCwd(ctx.cwd);
+				const { idea, kept } = current.discovery.suggestScores(project.id, params.ideaId, {
+					...(params.value
+						? { value: { score: params.value.score, reasons: params.value.reasons } }
+						: {}),
+					...(params.effort
+						? { effort: { score: params.effort.score, reasons: params.effort.reasons } }
+						: {}),
+					...(params.horizon
+						? { horizon: { horizon: params.horizon.horizon, reason: params.horizon.reason } }
+						: {}),
+				});
+				const keptText = kept
+					.map((key) => ` The human set ${key} ${idea[key]?.score}; it stays.`)
+					.join("");
+				return reply(
+					`Suggested on ${idea.id}: ${scoreText(idea) || "no score"}${idea.horizonSuggestion ? `, horizon ${idea.horizonSuggestion.horizon}` : ""}.${keptText} The human decides.`,
+					{ idea, kept },
+				);
+			},
+		});
+		pi.registerTool({
+			name: "board_watchlist_get",
+			label: "Competitor watchlist",
+			description:
+				"Read this project's competitor watchlist, or one entry: names, URLs, notes and the last snapshot's text and date.",
+			promptSnippet: "board_watchlist_get — read the competitor watchlist and its last snapshots.",
+			parameters: WatchGetParams,
+			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+				const current = running();
+				const project = current.projectOfCwd(ctx.cwd);
+				const entries = params.watchId
+					? [current.discovery.watchEntry(project.id, params.watchId)]
+					: current.discovery.get(project.id).watchlist;
+				return reply(
+					entries.length > 0
+						? entries.map(describeWatch).join("\n\n")
+						: `${project.name}'s competitor watchlist is empty.`,
+					{ entries },
+				);
+			},
+		});
+		pi.registerTool({
+			name: "board_watchlist_snapshot",
+			label: "Store a competitor snapshot",
+			description:
+				"Store a watchlist entry's new snapshot (what the competitor offers now, as text) with its dated report; it returns the previous snapshot to diff against.",
+			promptSnippet:
+				"board_watchlist_snapshot — store a competitor's new snapshot; returns the previous one.",
+			parameters: SnapshotParams,
+			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+				const current = running();
+				const project = current.projectOfCwd(ctx.cwd);
+				const workspaceId = params.artifactPath
+					? (current.host.sessionScope({ kind: "all" }).locate(ctx.cwd)?.workspaceId ?? undefined)
+					: undefined;
+				const { entry, previous } = current.discovery.snapshot(project.id, params.watchId, {
+					text: params.text,
+					...(params.artifactPath
+						? { artifactPath: workspacePath(ctx.cwd, params.artifactPath) }
+						: {}),
+					...(workspaceId ? { workspaceId } : {}),
+				});
+				return reply(
+					previous
+						? `Stored the snapshot of ${entry.id} (${entry.name}). The previous one, of ${isoDay(previous.at)}, to diff against:\n\n${previous.text}`
+						: `Stored the first snapshot of ${entry.id} (${entry.name}); there is no previous one to compare with.`,
+					{ entry, previous },
+				);
 			},
 		});
 	};

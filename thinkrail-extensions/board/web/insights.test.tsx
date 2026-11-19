@@ -19,7 +19,7 @@ import {
 	ticks,
 	timeSplit,
 } from "./insightsApi";
-import { peekSnapshot, publishSnapshot } from "./roadmapApi";
+import { peekWorkspaceFile, publishSnapshot } from "./roadmapApi";
 
 const html = (node: ReactNode) => renderToStaticMarkup(<TooltipProvider>{node}</TooltipProvider>);
 const DAY = 86_400_000;
@@ -192,7 +192,7 @@ describe("publishing the roadmap snapshot", () => {
 			{ method: "roadmap.publish", params: { projectId: "p1" } },
 		]);
 		await expect(publishSnapshot(fakeHost(() => ({})).host, "p1")).rejects.toThrow("unknown shape");
-		peekSnapshot(host, written);
+		peekWorkspaceFile(host, written);
 		expect(workspaces).toEqual([
 			{
 				workspaceId: "w-default",
@@ -200,7 +200,7 @@ describe("publishing the roadmap snapshot", () => {
 				peek: { kind: "file", path: "ROADMAP.md" },
 			},
 		]);
-		peekSnapshot(host, { ...written, workspaceId: "w0" });
+		peekWorkspaceFile(host, { ...written, workspaceId: "w0" });
 		expect(peeks).toEqual([{ kind: "file", path: "ROADMAP.md" }]);
 	});
 });

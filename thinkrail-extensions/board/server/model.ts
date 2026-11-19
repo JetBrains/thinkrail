@@ -228,3 +228,71 @@ export function pointsOf(card: Pick<Card, "size">): number {
 export function latestAttempt(card: Pick<Card, "attempts">): Attempt | undefined {
 	return card.attempts.at(-1);
 }
+
+export const IDEA_STATUSES = ["new", "analyzed", "promoted", "dismissed"] as const;
+export type IdeaStatus = (typeof IDEA_STATUSES)[number];
+
+export const EVIDENCE_KINDS = ["artifact", "url", "note"] as const;
+export type EvidenceKind = (typeof EVIDENCE_KINDS)[number];
+
+/** A value or effort score runs from 1 (low) to 5 (high). */
+export const SCORE_MIN = 1;
+export const SCORE_MAX = 5;
+
+/**
+ * Evidence behind an idea: a report in a workspace's artifacts folder (`ref` its worktree-relative path,
+ * `workspaceId` where it lives), an external URL, or a note; `quote` what it says that matters.
+ */
+export interface Evidence {
+	id: string;
+	kind: EvidenceKind;
+	ref: string;
+	quote?: string;
+	workspaceId?: string;
+	addedBy: "human" | "agent";
+	at: number;
+}
+
+/** A value or effort score with its reasons; `suggested` until a human set or confirmed it. */
+export interface IdeaScore {
+	score: number;
+	reasons: string[];
+	suggested: boolean;
+}
+
+/** An idea before Shape: its pitch, evidence, scores and where it went. */
+export interface Idea {
+	id: string;
+	title: string;
+	pitch: string;
+	evidence: Evidence[];
+	value?: IdeaScore;
+	effort?: IdeaScore;
+	/** The agent's suggested horizon, with why. */
+	horizonSuggestion?: { horizon: Horizon; reason: string };
+	status: IdeaStatus;
+	/** The initiative it was promoted to. */
+	initiativeId?: string;
+	createdAt: number;
+	updatedAt: number;
+}
+
+/** A competitor snapshot: what the watch found, as text, and the dated report it came with. */
+export interface WatchSnapshot {
+	at: number;
+	text: string;
+	artifactPath?: string;
+	workspaceId?: string;
+}
+
+/** A competitor on the watchlist, with its last snapshot and the one before it (for the diff). */
+export interface WatchEntry {
+	id: string;
+	name: string;
+	urls: string[];
+	notes: string;
+	snapshot?: WatchSnapshot;
+	previous?: WatchSnapshot;
+	createdAt: number;
+	updatedAt: number;
+}

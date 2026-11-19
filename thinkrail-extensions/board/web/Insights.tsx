@@ -4,7 +4,7 @@ import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactNode, useEffect, useId, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 import type { BoardLayout } from "./api";
 import {
 	bandPath,
@@ -26,6 +26,7 @@ import {
 } from "./insightsApi";
 import { CATEGORY_LABELS } from "./labels";
 import { useBoardChanged, useHostQuery } from "./useHostQuery";
+import { useWidth } from "./useWidth";
 
 const HEIGHT = 160;
 const PAD = { left: 32, right: 12, top: 10, bottom: 20 };
@@ -49,20 +50,6 @@ const dateText = (ms: number) =>
 	new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", timeZone: "UTC" }).format(
 		ms,
 	);
-
-function useWidth(initial: number): { width: number; attach: (node: HTMLElement | null) => void } {
-	const [node, setNode] = useState<HTMLElement | null>(null);
-	const [width, setWidth] = useState(initial);
-	useEffect(() => {
-		if (!node) return;
-		const observer = new ResizeObserver(([entry]) =>
-			setWidth(Math.floor(entry?.contentRect.width ?? 0)),
-		);
-		observer.observe(node);
-		return () => observer.disconnect();
-	}, [node]);
-	return { width, attach: setNode };
-}
 
 function Swatch({ className, label }: { className: string; label: string }) {
 	return (

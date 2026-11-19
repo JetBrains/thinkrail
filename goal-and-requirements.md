@@ -154,7 +154,11 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   from the live work, a step graph with the critical path and a timeline with the forecast, flow insights
   (WIP, throughput, cycle time, work item age, cumulative flow, agent vs human-wait time), agent skills
   that shape, plan, report on, review and close initiatives, and a published roadmap snapshot file for a
-  PR ([[module-ext-board]]).
+  PR. Before Shape sits discovery: ideas with evidence (cited research reports in the artifacts, links,
+  notes) that the agent researches and scores for value × effort against the goal spec and the signals it
+  can reach, on a matrix where the human confirms the scores and promotes an idea through Shape, and a
+  competitor watchlist whose "What changed?" diffs each snapshot against the last, on demand only
+  ([[module-ext-board]]).
 - **Workspaces from chat** — on request ("in a side workspace"), the agent starts ordinary workspaces
   with their own chats in any open project and checks their chats', PRs', and diffs' status; the agent,
   not the host, decides what to do with them ([[submodule-server-agent]], [[submodule-server-host]]).

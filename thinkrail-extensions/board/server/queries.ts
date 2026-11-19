@@ -1,11 +1,20 @@
 import type { ExtensionQuery, ThinkingLevel } from "@thinkrail/extension-api/server";
 import type { Board, CardInput, CardPatch, SettingsPatch, StartOptions } from "./board";
 import { isIsoDate } from "./days";
+import {
+	type IdeaPatch,
+	QUOTE_MAX,
+	REF_MAX,
+	type ScoreInput,
+	type WatchInput,
+	type WatchPatch,
+} from "./discovery";
 import { INSIGHTS_MAX_WEEKS } from "./insights";
-import { ROADMAP_CHATS } from "./kickoff";
+import { DISCOVERY_CHATS, ROADMAP_CHATS } from "./kickoff";
 import {
 	CARD_SIZES,
 	CARD_TYPES,
+	EVIDENCE_KINDS,
 	GITHUB_FILTERS,
 	type GithubSettings,
 	HEALTHS,
@@ -241,6 +250,40 @@ function projectPatch(p: Params): ProjectPatch {
 	});
 }
 
+function scoreInput(p: Params, key: string): ScoreInput | undefined {
+	const score = record(p, key);
+	if (!score) return undefined;
+	const value = score.score;
+	if (typeof value !== "number") throw new Error(`${key}.score must be a number.`);
+	return defined<ScoreInput>({ score: value, reasons: optionalList(score, "reasons") });
+}
+
+function ideaPatch(p: Params): IdeaPatch {
+	return defined<IdeaPatch>({
+		title: p.title === undefined ? undefined : text(p, "title", TITLE_MAX),
+		pitch: optionalText(p, "pitch", TEXT_MAX),
+		value: nullable(p, "value", scoreInput),
+		effort: nullable(p, "effort", scoreInput),
+		dismissed: optionalBoolean(p, "dismissed"),
+	});
+}
+
+function watchInput(p: Params): WatchInput {
+	return defined<WatchInput>({
+		name: text(p, "name", TITLE_MAX),
+		urls: optionalList(p, "urls"),
+		notes: optionalText(p, "notes", TEXT_MAX),
+	});
+}
+
+function watchPatch(p: Params): WatchPatch {
+	return defined<WatchPatch>({
+		name: p.name === undefined ? undefined : text(p, "name", TITLE_MAX),
+		urls: optionalList(p, "urls"),
+		notes: optionalText(p, "notes", TEXT_MAX),
+	});
+}
+
 function requiredOneOf<T extends string>(p: Params, key: string, values: readonly T[]): T {
 	const value = optionalOneOf(p, key, values);
 	if (value === undefined) throw new Error(`Pass a ${key}: one of ${values.join(", ")}.`);
@@ -328,7 +371,9 @@ export function boardQueries(board: Board): Readonly<Record<string, ExtensionQue
 	const initiativeId = (p: Params) => text(p, "initiativeId", ENTITY_ID_MAX);
 	const roadmapProjectId = (p: Params) => text(p, "roadmapProjectId", ENTITY_ID_MAX);
 	const milestoneId = (p: Params) => text(p, "milestoneId", ENTITY_ID_MAX);
-	const { roadmap } = board;
+	const ideaId = (p: Params) => text(p, "ideaId", ENTITY_ID_MAX);
+	const watchId = (p: Params) => text(p, "watchId", ENTITY_ID_MAX);
+	const { roadmap, discovery } = board;
 	return {
 		"board.get": (raw) => board.get(projectId(params(raw))),
 		inbox: (raw) => {
@@ -507,6 +552,79 @@ export function boardQueries(board: Board): Readonly<Record<string, ExtensionQue
 			return roadmap.pin(cardId(p), start);
 		},
 		"card.unpin": (raw) => roadmap.unpin(cardId(params(raw))),
+		"discovery.get": (raw) => discovery.get(projectId(params(raw))),
+		"discovery.chat": (raw) => {
+			const p = params(raw);
+			return board.startDiscoveryChat(
+				projectId(p),
+				requiredOneOf(p, "kind", DISCOVERY_CHATS),
+				defined<{ ideaId?: string; watchId?: string }>({
+					ideaId: optionalText(p, "ideaId", ENTITY_ID_MAX) || undefined,
+					watchId: optionalText(p, "watchId", ENTITY_ID_MAX) || undefined,
+				}),
+			);
+		},
+		"idea.create": (raw) => {
+			const p = params(raw);
+			return discovery.createIdea(
+				projectId(p),
+				defined<{ title: string; pitch?: string }>({
+					title: text(p, "title", TITLE_MAX),
+					pitch: optionalText(p, "pitch", TEXT_MAX),
+				}),
+			);
+		},
+		"idea.update": (raw) => {
+			const p = params(raw);
+			return discovery.updateIdea(projectId(p), ideaId(p), ideaPatch(p));
+		},
+		"idea.delete": (raw) => {
+			const p = params(raw);
+			return discovery.deleteIdea(projectId(p), ideaId(p));
+		},
+		"idea.addEvidence": (raw) => {
+			const p = params(raw);
+			return discovery.addEvidence(
+				projectId(p),
+				ideaId(p),
+				defined<{
+					kind: (typeof EVIDENCE_KINDS)[number];
+					ref: string;
+					quote?: string;
+					workspaceId?: string;
+				}>({
+					kind: requiredOneOf(p, "kind", EVIDENCE_KINDS),
+					ref: text(p, "ref", REF_MAX),
+					quote: optionalText(p, "quote", QUOTE_MAX) || undefined,
+					workspaceId: optionalText(p, "workspaceId", 200) || undefined,
+				}),
+				"human",
+			);
+		},
+		"idea.removeEvidence": (raw) => {
+			const p = params(raw);
+			return discovery.removeEvidence(
+				projectId(p),
+				ideaId(p),
+				text(p, "evidenceId", ENTITY_ID_MAX),
+			);
+		},
+		"idea.promote": (raw) => {
+			const p = params(raw);
+			return board.promoteIdea(projectId(p), ideaId(p));
+		},
+		"watchlist.create": (raw) => {
+			const p = params(raw);
+			return discovery.createWatch(projectId(p), watchInput(p));
+		},
+		"watchlist.update": (raw) => {
+			const p = params(raw);
+			return discovery.updateWatch(projectId(p), watchId(p), watchPatch(p));
+		},
+		"watchlist.delete": (raw) => {
+			const p = params(raw);
+			return discovery.deleteWatch(projectId(p), watchId(p));
+		},
 		"card.shiftChain": (raw) => {
 			const p = params(raw);
 			return roadmap.shiftChain(cardId(p), shiftDays(p));

@@ -424,33 +424,27 @@ export async function publishSnapshot(
 	return value;
 }
 
-/** Shows the written snapshot in Peek: here when Peek belongs to its workspace, else entering that one. */
-export function peekSnapshot(
+/**
+ * Shows a file of a workspace in Peek — the written snapshot, an idea's report: here when Peek belongs to
+ * its workspace, else entering that one.
+ */
+export function peekWorkspaceFile(
 	host: Pick<PanelHost, "peek" | "openWorkspace" | "scope">,
-	written: PublishedSnapshot,
+	file: Pick<PublishedSnapshot, "projectId" | "workspaceId" | "path">,
 ): void {
-	const entry: PanelPeekEntry = { kind: "file", path: written.path };
-	if (host.scope.workspaceId === written.workspaceId) host.peek(entry);
+	const entry: PanelPeekEntry = { kind: "file", path: file.path };
+	if (host.scope.workspaceId === file.workspaceId) host.peek(entry);
 	else
-		host.openWorkspace({
-			workspaceId: written.workspaceId,
-			projectId: written.projectId,
-			peek: entry,
-		});
+		host.openWorkspace({ workspaceId: file.workspaceId, projectId: file.projectId, peek: entry });
 }
 
-/** Starts a roadmap chat in a new chat of the project's Default workspace, then opens it. */
-export async function openRoadmapChat(
+/** Asks the host to start a chat (a roadmap or discovery one, a promotion), then opens it. */
+export async function openStartedChat(
 	host: Pick<PanelHost, "query" | "openChat">,
-	projectId: string,
-	kind: RoadmapChat,
-	initiativeId?: string,
+	method: string,
+	params: Record<string, unknown>,
 ): Promise<StartedChat> {
-	const value = await host.query("roadmap.chat", {
-		projectId,
-		kind,
-		...(initiativeId ? { initiativeId } : {}),
-	});
+	const value = await host.query(method, params);
 	if (!isStartedChat(value))
 		throw new BoardReplyError("The board's host replied in an unknown shape.");
 	host.openChat({
@@ -459,6 +453,20 @@ export async function openRoadmapChat(
 		sessionId: value.sessionId,
 	});
 	return value;
+}
+
+/** Starts a roadmap chat in a new chat of the project's Default workspace, then opens it. */
+export function openRoadmapChat(
+	host: Pick<PanelHost, "query" | "openChat">,
+	projectId: string,
+	kind: RoadmapChat,
+	initiativeId?: string,
+): Promise<StartedChat> {
+	return openStartedChat(host, "roadmap.chat", {
+		projectId,
+		kind,
+		...(initiativeId ? { initiativeId } : {}),
+	});
 }
 
 /** An initiative's Peek entry: the `initiative` panel on its board. */

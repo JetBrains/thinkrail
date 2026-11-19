@@ -802,7 +802,7 @@ describe("registry extensions", () => {
 		}
 	});
 
-	it("loads the board's roadmap skills and drops them while the board is off", async () => {
+	it("loads the board's roadmap and discovery skills and drops them while the board is off", async () => {
 		const root = mkdtempSync(join(tmpdir(), "thinkrail-board-skills-"));
 		const project = join(root, "project");
 		const home = join(root, "home");
@@ -814,6 +814,9 @@ describe("registry extensions", () => {
 		let disabled = new Set<string>();
 		setDisabledExtensionsResolver(() => disabled);
 		const roadmap = [
+			"competitor-watch",
+			"discovery-analyze",
+			"discovery-research",
 			"initiative-close",
 			"roadmap-plan",
 			"roadmap-report",

@@ -638,6 +638,12 @@ describe("board tools", () => {
 			"board_initiative_move",
 			"board_initiative_close",
 			"board_update_draft",
+			"board_ideas_list",
+			"board_idea_create",
+			"board_idea_add_evidence",
+			"board_idea_score",
+			"board_watchlist_get",
+			"board_watchlist_snapshot",
 		]);
 
 		const own = await call("board_card_get", {}, "s1");
@@ -722,8 +728,16 @@ describe("the board descriptor", () => {
 			"card.unlink",
 			"card.unpin",
 			"card.update",
+			"discovery.chat",
+			"discovery.get",
 			"github.refresh",
 			"github.set",
+			"idea.addEvidence",
+			"idea.create",
+			"idea.delete",
+			"idea.promote",
+			"idea.removeEvidence",
+			"idea.update",
 			"inbox",
 			"initiative.addCards",
 			"initiative.create",
@@ -750,6 +764,9 @@ describe("the board descriptor", () => {
 			"settings.get",
 			"settings.update",
 			"triage.accept",
+			"watchlist.create",
+			"watchlist.delete",
+			"watchlist.update",
 		]);
 		const service = extension.hostService?.(t.host);
 		expect(t.listeners()).toBe(7);
@@ -758,7 +775,7 @@ describe("the board descriptor", () => {
 		const pi = { registerTool: (tool: { name: string }) => registered.push(tool.name) };
 		for (const factory of extension.sessionExtensions?.() ?? [])
 			await factory(pi as unknown as ExtensionAPI);
-		expect(registered).toHaveLength(13);
+		expect(registered).toHaveLength(19);
 		await service?.stop?.();
 		expect(t.listeners()).toBe(0);
 	});

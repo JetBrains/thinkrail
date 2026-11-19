@@ -5,7 +5,7 @@ status: draft
 title: Board extension
 parent: module-thinkrail-extensions
 depends-on: [module-extension-api]
-references: [task-board-core, task-project-board, task-openspec-board, submodule-server-extensions, submodule-server-host, module-contracts, submodule-web-shell, submodule-web-shell-layout, module-ext-session-insights]
+references: [task-board-core, task-project-board, task-openspec-board, submodule-server-extensions, submodule-server-host, module-contracts, submodule-web-shell, submodule-web-shell-layout, module-ext-session-insights, task-discovery, module-ext-web-access]
 ---
 
 ## Responsibility
@@ -18,11 +18,13 @@ workspaces, when switched on the project's open GitHub issues through the user's
 project's **OpenSpec changes** (§ OpenSpec) with propose, apply and archive through the user's own
 `openspec` CLI and skills. Above the cards sits a **roadmap** per board (§ Roadmap): initiatives, roadmap projects
 with milestones, and what is derived from the live work — rollups, a forecast, a suggested health and the
-step graph's schedule — and **flow insights** from the transition log. Five **roadmap skills** (§ Skills)
-put the agent to work on the roadmap: shape, plan, report, review and close. There is no portable pi
-package, because every tool acts on host-owned state. The web half is the Board side tool (with its Roadmap
-and Insights views and *Publish roadmap snapshot…*), the card and the initiative in Peek, the cross-project
-"Needs you" inbox (above the board and as a topbar counter) and Board mode.
+step graph's schedule — and **flow insights** from the transition log. Before Shape sits **discovery**
+(§ Discovery): ideas with evidence and a value × effort score, and a competitor watchlist. Eight skills
+(§ Skills) put the agent to work: five on the roadmap (shape, plan, report, review, close) and three on
+discovery (research, analyze, competitor watch). There is no portable pi package, because every tool acts
+on host-owned state. The web half is the Board side tool (with its Roadmap — Discovery included — and
+Insights views and *Publish roadmap snapshot…*), the card, the initiative and the idea in Peek, the
+cross-project "Needs you" inbox (above the board and as a topbar counter) and Board mode.
 
 ## Boundary
 
@@ -43,7 +45,7 @@ and Insights views and *Publish roadmap snapshot…*), the card and the initiati
     not running.
   - Enabled by default. Switching it off refuses its queries and actions, stops its host service and
     withholds its tools.
-- **`./web`**: `defineWebExtension({ name: "board", title, sideTools: { board }, panels: { card, initiative },
+- **`./web`**: `defineWebExtension({ name: "board", title, sideTools: { board }, panels: { card, initiative, idea },
   statusItems: { inbox }, layoutPresets: { board }, commands, shortcuts })`, in the web registry.
   - It imports `extension-api/web`, `contracts` types, `locales`, `ui`, React, `@dnd-kit/core` and, in the
     Roadmap view's lazy chunk alone, `@xyflow/react` (the catalog pin, 12.12.1), never its `./server` half: the wire shapes it reads are restated in `web/api.ts` (the roadmap's in
@@ -69,6 +71,8 @@ The store lives at `<dataDir>/<projectId>/`, the extension's data folder (`~/.th
   `U-n`, sequential per board and never reused (§ Roadmap).
 - **`projects.json`**: `{ version: 1, nextNumber, nextMilestoneNumber, projects }`, ids `P-n` and milestones'
   `M-n`, likewise.
+- **`ideas.json`**: `{ version: 1, nextNumber, nextEvidenceNumber, ideas }`, ids `D-n` and evidence's `E-n`, and
+  **`watchlist.json`**: `{ version: 1, nextNumber, entries }`, ids `W-n` — likewise (§ Discovery).
 
 Write rules:
 
@@ -84,7 +88,8 @@ Failure handling:
 - **An unreadable file** (bad JSON, a missing or unknown version) is **moved aside** to
   `<file>.corrupt-<ms>`, logged, and read as empty or default. A later write therefore never destroys it.
 - **A file of a newer version** makes that board refuse to read or write, rather than lose data.
-- **Unreadable cards** (and initiatives, projects) are dropped with a warning. Missing fields take defaults;
+- **Unreadable cards** (and initiatives, projects, ideas, watchlist entries, evidence) are dropped with a
+  warning. Missing fields take defaults;
   a malformed roadmap field (a date that is not `YYYY-MM-DD`, a non-positive number, a milestone without a
   project) is dropped.
 
@@ -189,6 +194,41 @@ The model of `TASK-roadmap` (Linear's hierarchy), stored per board; everything d
   its only date of its own is the generation line (forecast dates move with the day, as they do in the UI).
 - **Links never close a cycle**: `card.link`, `card.update { blocks }`, `board_link` and a batch's
   `blocksIndex` refuse one (`wouldCycle`).
+
+## Discovery
+
+The idea stage before Shape (`TASK-discovery`, `roadmap-options.md` §5a), stored per board in `discovery.ts`;
+nothing about it is derived from the live work. The human decides; the agent suggests.
+
+- **An idea** is `{ id, title, pitch, evidence[], value?, effort?, horizonSuggestion? { horizon, reason },
+  status (new / analyzed / promoted / dismissed), initiativeId?, createdAt, updatedAt }`.
+  - **Evidence** is `{ id, kind (artifact / url / note), ref, quote?, workspaceId?, addedBy (human / agent), at }`:
+    an artifact's `ref` is a workspace-relative path (no `..`, not absolute; the tool makes an absolute
+    path inside its cwd relative) in `workspaceId`, a url's an http(s) URL, a note's its text.
+  - **A score** (value or effort) is `{ score 1–5, reasons[], suggested }`. The agent's (`board_idea_score`,
+    reasons required) is `suggested`; a human's pick, a confirm (the same score re-saved, reasons kept) or
+    an edit of its reasons is not, and **the agent never overwrites a score that is not suggested** — the
+    tool keeps it and says so.
+  - **Status**: a score makes a new idea analyzed (clearing both makes it new again); Dismiss and its
+    reversal flip dismissed; a promoted idea can't be dismissed.
+- **Promote** (`idea.promote`) starts a `shape` roadmap chat whose kickoff carries the idea — pitch, evidence
+  with quotes, scores with reasons, the suggested horizon — and asks for `board_initiative_create_draft {
+  …, ideaId }`. That call validates the idea first (neither promoted nor dismissed), proposes the initiative,
+  then marks the idea promoted with its `initiativeId`; `discovery.get` names the initiative while it exists.
+- **A watchlist entry** is `{ id, name, urls[] (http(s), at most 20), notes, snapshot?, previous?, createdAt,
+  updatedAt }`, a snapshot `{ at, text (at most 50 000 characters), artifactPath?, workspaceId? }`.
+  `board_watchlist_snapshot` moves `snapshot` to `previous`, stores the new one and answers the previous
+  for the agent to diff; the web half diffs the two. There is no scheduler: a watch runs on *What changed?*.
+- **Discovery chats** (`discovery.chat`), like the roadmap's, start in the project's **Default** workspace
+  with their skill first and stand-alone instructions: `research` (an idea: search and fetch with
+  web-access, a cited report into the workspace's artifacts folder `.thinkrail/context/`
+  `research-<id>-<day>.md`, attached as artifact evidence with its key sources as url evidence),
+  `analyze` (an idea: the goal spec through `spec_search`, competitors from its evidence, session insights
+  only if a tool for them is available — the session-insights extension ships none — and the user's
+  analytics MCP tools if configured; then one `board_idea_score`) and `watch` (the watchlist, or one entry:
+  a dated report `competitor-watch-<day>.md`, a snapshot per entry, what changed). The chat runs in the
+  Default workspace, so its report lands in that workspace's artifacts (a container's chat in the
+  container's shared ones).
 
 ## Presets
 
@@ -472,6 +512,15 @@ The roadmap's queries (§ Roadmap) take the board's `projectId`; every write pub
   roadmapProjectId, title?, initiativeId? (null frees), proposed: false }`**, **`project.delete`**;
   **`milestone.create { projectId, roadmapProjectId, title, target? }`**, **`milestone.update { projectId,
   milestoneId, title?, target? (null clears) }`**, **`milestone.delete`**.
+- Discovery's (§ Discovery): **`discovery.get { projectId }`** → `{ projectId, projectName, ideas` (each with
+  `initiative? { id, title }`)`, watchlist }`; **`idea.create { projectId, title, pitch? }`**, **`idea.update
+  { projectId, ideaId, title?, pitch?, value? / effort? { score, reasons? } (null clears), dismissed? }`**,
+  **`idea.delete`**, **`idea.addEvidence { projectId, ideaId, kind, ref, quote?, workspaceId? }`** (a human's),
+  **`idea.removeEvidence { projectId, ideaId, evidenceId }`**, **`idea.promote { projectId, ideaId }`** and
+  **`discovery.chat { projectId, kind (research / analyze / watch), ideaId?, watchId? }`** (research and
+  analyze need the idea; watch refuses an empty watchlist) → the started chat as `roadmap.chat` answers it;
+  **`watchlist.create { projectId, name, urls?, notes? }`**, **`watchlist.update { projectId, watchId, name?,
+  urls?, notes? }`**, **`watchlist.delete`**. Ids are case-insensitive.
 - **`card.assignProject { cardId, roadmapProjectId?, milestoneId? }`** (a milestone alone names its project,
   `null` takes the card out), **`card.link` / `card.unlink { from, to }`** ("from blocks
   to"), **`card.pin { cardId, start }`** / **`card.unpin`** (only a card not started yet: Triage, Backlog,
@@ -556,7 +605,8 @@ error (with *Retry*) states replace the body; a failed write shows a dismissible
 
 **The Roadmap view** (`RoadmapPane`) reads `roadmap.get` for the same project and re-reads it on its own
 writes and every `board.changed`; it does not depend on the board having cards. Its sub-switch is *Now /
-Next / Later*, *Timeline*, *Goals* and *Step graph*, beside *Roadmap review* (a `review` roadmap chat). The derivations it draws are pure (`web/roadmapApi.ts`,
+Next / Later*, *Timeline*, *Goals*, *Step graph* and *Discovery* (below), beside *Roadmap review* (a `review`
+roadmap chat). The derivations it draws are pure (`web/roadmapApi.ts`,
 `web/roadmapGraph.ts`, the graph's edits in `web/graphEdits.ts`):
 
 - **Now / Next / Later** (`horizonColumns`): three horizon columns (side by side from 720 px, else stacked)
@@ -616,9 +666,44 @@ Next / Later*, *Timeline*, *Goals* and *Step graph*, beside *Roadmap review* (a 
   restyled with token utilities on the frame. Nodes carry their width, height and handles, so xyflow never
   waits on a measure; node and edge looks are token utilities, SVG attributes or classes, never style objects.
 
+**Discovery** (`DiscoveryPane`, `web/Discovery.tsx`; its math pure in `web/discoveryApi.ts`) reads
+`discovery.get` on its own — whatever `roadmap.get` answered — and re-reads on its writes and `board.changed`:
+
+- **Ideas**: *Idea* opens an inline title field → `idea.create`, then the new idea in Peek. Beside the list
+  (side by side from 720 px, else stacked) sits the **value × effort matrix**, plain SVG at its frame's
+  measured width (`matrixLayout`): effort left to right, value bottom to top, each score 1–5 a cell's centre;
+  the quadrants split between 2 and 3 (`quadrantOf`: a 3 counts as high on either axis) — *Quick wins*
+  `feedback-success-subtle`, *Big bets* `feedback-info-subtle`, *Fill-ins* `control-bg`, *Time sinks*
+  `feedback-warning-subtle` —; a dot per idea with both scores (the dismissed left out) — a circle, `primary`
+  confirmed, dashed `primary-subtle` while either score is suggested, `feedback-success` promoted, under a
+  transparent `<button>` in a `foreignObject` that peeks the idea —, ideas sharing a cell side by side within
+  it, a lone dot labelled with its id, and *N ideas need a value and an effort*. The **list** (`rankIdeas`): open ideas by value
+  (high first) then effort (low first), then promoted, then dismissed (dimmed), each row its id, title,
+  `V4? · E2` (a `?` marks a suggestion) and status; a click peeks it.
+- **Competitor watchlist** (*Checked only when you ask*): *Competitor* opens a form (name, URLs, notes) →
+  `watchlist.create`; each entry edits its name, URLs (links, add / remove) and notes in place
+  (`watchlist.update`), is removed behind a confirm, and offers **What changed?** (`discovery.chat { kind:
+  watch, watchId }`, the chat opened). It shows the last snapshot's date, *Open report* (Peek, in the
+  workspace the report was written in) and its text folded, and — once there is a `previous` — the **line
+  diff** of the last two snapshots (`lineDiff`, a longest-common-subsequence diff; `diffHunks` folds unchanged
+  runs past two lines of context), added lines `feedback-success`, removed `feedback-error`, or *Nothing
+  changed*.
+
+**The idea in Peek** is the `idea` panel (scope `session`, params `{ projectId, ideaId }`, the crumb `<id> ·
+<title>`), reading `discovery.get` and re-reading on its writes and `board.changed`: the id, status and, once
+promoted, *Promoted to I-n · <title>* opening the initiative in Peek; the title and pitch; **Value and effort**,
+each a 1–5 select (*Not scored* clears) → `idea.update`, *Suggested* with **Confirm** while the agent's,
+and its reasons (add / remove); the **suggested horizon** with its reason; the **evidence** — a link opens
+in the browser (http(s) only), a report opens in Peek (`peekWorkspaceFile`: here when Peek belongs to its
+workspace, else entering it), a note reads as text —, each with its quote and who added it, removable, and a
+form adding a link, a report path (in the panel's workspace) or a note with a quote; **Research**,
+**Analyze** (`discovery.chat`) and **Promote** (`idea.promote`), each opening its chat (`openStartedChat`), a
+returned `kickoffError` shown as the prompt not sent — a promoted or dismissed idea keeps only Research —;
+*Dismiss* / *Bring back* and *Delete idea* behind a confirm.
+
 **Publish roadmap snapshot…** opens a dialog (mounted while open) with the file path — the board's
 `snapshotPath`, editable — and *Publish* → `roadmap.publish`; it then says *Wrote ROADMAP.md in the Default
-workspace. Commit it and open a PR…* and offers *Open in Peek* (`peekSnapshot`: `PanelHost.peek` when the
+workspace. Commit it and open a PR…* and offers *Open in Peek* (`peekWorkspaceFile`: `PanelHost.peek` when the
 panel's workspace is the Default one, else `openWorkspace` with the file as its `peek`). A refusal shows in
 the dialog.
 
@@ -717,7 +802,7 @@ there. The center and the bottom keep the chat and the terminals, and leaving re
   workspace** (`openspec.archive`, while an attempt's chat is open); without the CLI Validate and Archive are
   disabled beside the install hint, and the archive-timing decision is stated under them.
 
-Its UI text is `board.*` keys, the roadmap's `board.roadmap.*`.
+Its UI text is `board.*` keys, the roadmap's `board.roadmap.*`, discovery's `board.discovery.*`.
 
 ## Agent tools
 
@@ -734,8 +819,9 @@ id, else the attempt of its workspace (located from its cwd).
 - **`board_card_note { text }`**: appends a progress note to the chat's attempt.
 - **`board_initiative_get { initiativeId? }`**: an initiative's text, health with its reasons, forecast,
   progress, projects and cards; by default the initiative of the chat's card.
-- **`board_initiative_create_draft { title, outcome, criteria?, horizon? }`** and **`board_project_create
-  { initiativeId, title, milestones? }`**: proposals (`proposed: true, proposedBy: agent`) a human accepts.
+- **`board_initiative_create_draft { title, outcome, criteria?, horizon?, ideaId? }`** and
+  **`board_project_create { initiativeId, title, milestones? }`**: proposals (`proposed: true, proposedBy:
+  agent`) a human accepts; an `ideaId` promotes that idea to the initiative (§ Discovery).
 - **`board_cards_create_batch { roadmapProjectId?, cards: [{ title, description?, acceptance?, type?, size?,
   blocksIndex? }] }`**: a decomposition in one write, into Triage with one `origin` (so one group accepted as
   a whole), suggested sizes, the `blocks` links `blocksIndex` names among the batch (no cycle) and, given a
@@ -747,6 +833,13 @@ id, else the attempt of its workspace (located from its cwd).
 - **`board_initiative_move { initiativeId, horizon }`**: `initiative.move`; its description says only after
   the human confirmed the move.
 - **`board_initiative_close { initiativeId }`**: sets `closedAt`; only after the human confirmed it done.
+- Discovery's (§ Discovery), on the chat's project's board: **`board_ideas_list { ideaId?, status? }`** (one line
+  per idea, or one idea whole: pitch, evidence with quotes, scores with reasons, horizon),
+  **`board_idea_create { title, pitch }`**, **`board_idea_add_evidence { ideaId, kind, ref, quote? }`** (an
+  artifact's path relative to the chat's workspace, which it records), **`board_idea_score { ideaId, value?,
+  effort? { score, reasons }, horizon? { horizon, reason } }`** (suggestions; a human's score stays),
+  **`board_watchlist_get { watchId? }`** (entries with the last snapshot's text) and
+  **`board_watchlist_snapshot { watchId, text, artifactPath? }`** (answers the previous snapshot).
 - `board_initiative_get` also lists the **deferrals** of its member cards' task-specs (`Deferrals` sections of
   their open workspaces' task-specs through `specSection`, parsed like `card.deferrals`), minus those whose
   title a card of the board already has, for the close skill to file.
@@ -760,14 +853,20 @@ Their guidelines say two things:
 
 The package's own `skills/` (`pi.skills`), each a short `SKILL.md` — frontmatter `name` + a *Use when…*
 description, numbered steps, red flags — that acts through the `board_*` tools; they are board skills, not
-the workflow family's. Each roadmap chat's kickoff names one, and a user can pick one in any chat:
+the workflow family's. Each roadmap and discovery chat's kickoff names one, and a user can pick one in any
+chat. Besides the board's tools they name only web-access's (`web_search`, `fetch_content`,
+`get_search_content`), the spec graph's and `ask_user_question`; analytics come through the user's MCP
+tools when configured, session insights only if a tool for them exists:
 
 | Skill | Does | Writes |
 | --- | --- | --- |
-| `roadmap-shape` | raw idea → initiative: outcome tied to a goal capability, checkable criteria, rabbit holes, no-gos, horizon; asks (`ask_user_question`) when a product decision is missing | `board_initiative_create_draft` (rabbit holes and no-gos in the outcome, so card kickoffs carry them); an existing initiative is only proposed in the chat |
+| `roadmap-shape` | raw idea (or a promoted discovery idea, read with `board_ideas_list`) → initiative: outcome tied to a goal capability, checkable criteria, rabbit holes, no-gos, horizon; asks (`ask_user_question`) when a product decision is missing | `board_initiative_create_draft` (rabbit holes and no-gos in the outcome, so card kickoffs carry them; a promoted idea's `ideaId` links it); an existing initiative is only proposed in the chat |
 | `roadmap-plan` | initiative → project with milestones and sized, linked cards grounded in the specs (`spec_search`, `spec_get`) and code; never starts work | `board_project_create`, then one `board_cards_create_batch` into Triage |
 | `roadmap-report` | a draft update from `board_initiative_get` and `board_initiative_activity`: done, stuck, forecast, next, a suggested health | `board_update_draft`; never publishes |
 | `roadmap-review` | every open initiative: forecast vs target, blocked chains, waits for the human, WIP, appetite → a list of moves, trims, deferrals | `board_initiative_move`, each only after the human confirmed it (`ask_user_question`) |
+| `discovery-research` | an idea researched on the web (competitors, pricing, reviews, user signals) into a report citing every claim, in the workspace's `.thinkrail/context/`; never scores | `board_idea_add_evidence` (the report as artifact, key sources as url) |
+| `discovery-analyze` | an idea against the goal spec (capability moved, non-goals), competitors from its evidence and the signals it can reach, the effort from the code | one `board_idea_score` (value, effort with reasons citing evidence, horizon); a human's score stays |
+| `competitor-watch` | the watchlist (or one entry) refreshed, a dated cited report, stable plain-text snapshots, what changed per entry | `board_watchlist_snapshot` per entry; an idea for a gap only once the user agrees (`board_idea_create`) |
 | `initiative-close` | criteria checked against the cards; the goal-and-requirements Capabilities edit (or the owning spec's) shown as a diff, made in the Default workspace on approval with a PR suggested; its task-specs' deferrals filed | `board_cards_create_batch`; `board_initiative_close` only after the human confirmed |
 
 A capability's closing edit is a normal PR the user opens; the board writes no spec itself.
@@ -793,8 +892,16 @@ A capability's closing edit is a normal PR the user opens; the board writes no s
   - `insights.test.ts` (WIP and the flow replayed per day, throughput, cycle-time percentiles and the SLE,
     work item age, the time split with open waits, the empty window) with `activity.ts`'s window, and
     `snapshot.test.ts` (the markdown and its determinism);
-  - `index.test.ts`: `skillPackages` resolves to the five skills (names matching their folders, *Use when*
-    descriptions), every roadmap chat names one, and each names only registered `board_*` tools;
+  - `index.test.ts`: `skillPackages` resolves to the eight skills (names matching their folders, *Use when*
+    descriptions), every roadmap and discovery chat names one, and each names only registered `board_*` tools
+    and web-access's (as its SPEC names them), the spec graph's and `ask_user_question`;
+  - discovery: the store (`ideas.json`, `watchlist.json`: round-trip, defaults, malformed scores and evidence
+    dropped, the move-aside, the newer-version refusal) and, through the queries and tools
+    (`discovery.test.ts`), validation, idea / evidence / watchlist CRUD with board.changed, human scores and
+    dismissal, the three kickoffs (skill, idea or watchlist, report path, the Default workspace,
+    `kickoffError`), the agent's ideas and workspace-relative evidence, `board_idea_score` never overwriting a
+    human's score, `board_watchlist_snapshot` keeping and answering the previous snapshot, and Promote: the
+    Shape kickoff with the idea, the drafted initiative linked back, a second promotion refused;
   - the sources (`sources.test.ts`): task-specs bound vs unbound, placement by live facts, Adopt once,
     refused writes, watched chats, deferrals sent once and their parsing; GitHub through a fake `gh`
     (argv, the Default workspace, the TTL, Refresh, the filter, the error kept beside the last issues,
@@ -834,7 +941,12 @@ A capability's closing edit is a normal PR the user opens; the board writes no s
   and both views rendered (xyflow's server render); Insights (`insights.test.tsx`): the chart math (scales,
   nice maxima and ticks, flow bands, the time split, the spread), each chart's data check, the six charts
   rendered with titles, descriptions, percentile and SLE lines or their not-enough-data states, and Publish's
-  query and Peek target; the panel's *Close initiative* and a closed initiative's chip.
+  query and Peek target; the panel's *Close initiative* and a closed initiative's chip; discovery
+  (`discovery.test.tsx`): the quadrant split, the matrix placement (cell centres, shared cells spread, the
+  dismissed left out, the unscored counted), the ranking, the line diff and its folding, the rendered matrix,
+  diff and watchlist (the diff only with a previous snapshot), every panel write's query, the chats' queries
+  and `openChat`, `discovery.get`'s check, the idea and report Peek targets, and the rendered idea panel
+  (suggested and confirmed scores, evidence links — http(s) only —, actions by status).
 - **OpenSpec** (`server/openspec/*.test.ts`, `server/openspecSource.test.ts`, `web/openspec.test.tsx`):
   conformance of the parse against every recorded fixture (`list`'s counts and archived flag, the stage,
   `status`'s schema, chain, `missingDeps` and next artifact, an unknown schema's error, `show
@@ -879,13 +991,19 @@ A capability's closing edit is a normal PR the user opens; the board writes no s
   its delta chips and four done artifacts, the install hint over the board, in Peek Validate disabled beside
   the hint, the tasks and deltas tabs, then Apply: a stored card whose workspace's kickoff (no model) starts
   `/skill:openspec-apply-change add-2fa-login`, the change carried into that worktree with its
-  `.openspec.yaml`'s `x-thinkrail { card, workspace }`, and the tile reading its tasks from there.
+  `.openspec.yaml`'s `x-thinkrail { card, workspace }`, and the tile reading its tasks from there;
+  Discovery: an idea created, a URL evidence added in Peek (a link), value 5 and effort 1 set, its dot in
+  *Quick wins* and its row in the list, *Promote* starting a chat whose kickoff (the `idea.promote` reply)
+  starts `/skill:roadmap-shape` and carries the pitch; a competitor added to the watchlist and *What
+  changed?* starting `/skill:competitor-watch` on it.
 - **Live e2e** (`e2e/board.live.spec.ts`, `@agent`, through `bun run e2e:full e2e/board.live.spec.ts`): an S
   card asking for a one-line README example, started from Peek; the tile's last-action line seen while
   the agent works (recorded by a `MutationObserver`, since it is transient); the card in Review with its
   diff, the badge finished and the line gone. `e2e/board-roadmap.live.spec.ts` (`@agent`): *Plan with
   agent* on an initiative with an outcome and two criteria → at least two cards in Triage from one chat
   (one group), at least one `blocks` link among them, read from `board.get` over the wire.
+  `e2e/board-discovery.live.spec.ts` (`@agent`): *Analyze* on an idea with a pitch and a quoted evidence →
+  the idea suggested a value and an effort, each with reasons, read from `discovery.get`.
 
 ## Deferrals
 
@@ -898,9 +1016,11 @@ These land later:
 - removing a "blocks" link from the tools;
 - an initiative's `into` (D / G);
 - the prototype's "What if you answered now?" toggle on the step graph (the schedule has no wait estimate);
-- a history of waits for the human (Insights counts only the open ones), reopening a closed initiative, and
-  an entry point for shaping a new idea from the board (the skill runs from any chat);
+- a history of waits for the human (Insights counts only the open ones) and reopening a closed initiative
+  (a new idea is shaped from the board through Discovery's Promote);
 - another board's write does not publish the boards whose initiatives list its cards as external;
+- discovery: a scheduled watch, automatic signal ingestion (issues, analytics, session insights), and a
+  session-insights tool for the agent (the analyze skill uses one only if it exists);
 - OpenSpec: the unified spec graph (O3), multi-repo "stores", carrying a change's non-text files on Apply,
   a CLI installed meanwhile noticed before the probe's TTL, and file events (the board re-reads on chats'
   activity and its own writes, not on a file changing).

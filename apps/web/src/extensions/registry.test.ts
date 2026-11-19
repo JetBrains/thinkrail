@@ -372,6 +372,7 @@ test("session insights declares its project-scoped Sessions panel, a per-session
 		"session-insights/compare",
 		"board/card",
 		"board/initiative",
+		"board/idea",
 	]);
 	for (const declaration of [registered?.declaration, session?.declaration, compare?.declaration]) {
 		const loaded = await declaration?.load();

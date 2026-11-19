@@ -1,6 +1,6 @@
-import { RiAddLine, RiCloseLine } from "@remixicon/react";
+import { RiAddLine, RiCloseLine, RiDeleteBinLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { IconButton } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { cn } from "@thinkrail/ui/utils";
@@ -144,12 +144,15 @@ export function ItemList({
 	addLabel,
 	testId,
 	onChange,
+	renderItem,
 }: {
 	items: readonly string[];
 	label: string;
 	addLabel: string;
 	testId: string;
 	onChange: (items: string[]) => void;
+	/** How an item shows (a link, say); its text by default. */
+	renderItem?: (item: string) => ReactNode;
 }) {
 	const t = useT();
 	const [draft, setDraft] = useState("");
@@ -168,7 +171,9 @@ export function ItemList({
 						data-testid={`${testId}-item`}
 						className="flex items-start gap-4 tr-text-ui text-text-default"
 					>
-						<span className="min-w-0 flex-1 wrap-anywhere">{item}</span>
+						<span className="min-w-0 flex-1 wrap-anywhere">
+							{renderItem ? renderItem(item) : item}
+						</span>
 						<IconButton
 							icon={RiCloseLine}
 							size="s"
@@ -202,5 +207,62 @@ export function ItemList({
 				/>
 			</form>
 		</div>
+	);
+}
+
+/** A delete behind an inline confirm; `wide` shows its label beside the icon. */
+export function ConfirmDelete({
+	label,
+	question,
+	testId,
+	wide = false,
+	onDelete,
+}: {
+	label: string;
+	question: string;
+	testId: string;
+	wide?: boolean;
+	onDelete: () => void;
+}) {
+	const t = useT();
+	const [confirming, setConfirming] = useState(false);
+	return confirming ? (
+		<span className="flex flex-wrap items-center gap-4">
+			<span className="tr-text-metadata text-text-muted">{question}</span>
+			<Button
+				variant="destructive"
+				size="s"
+				data-testid={`${testId}-confirm`}
+				onClick={() => {
+					setConfirming(false);
+					onDelete();
+				}}
+			>
+				{label}
+			</Button>
+			<Button variant="ghost" size="s" onClick={() => setConfirming(false)}>
+				{t("board.card.keep")}
+			</Button>
+		</span>
+	) : wide ? (
+		<Button
+			variant="ghost"
+			size="s"
+			tone="danger"
+			iconLeft={RiDeleteBinLine}
+			data-testid={testId}
+			className="self-start"
+			onClick={() => setConfirming(true)}
+		>
+			{label}
+		</Button>
+	) : (
+		<IconButton
+			icon={RiDeleteBinLine}
+			size="s"
+			label={label}
+			data-testid={testId}
+			onClick={() => setConfirming(true)}
+		/>
 	);
 }

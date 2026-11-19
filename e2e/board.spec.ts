@@ -1464,3 +1464,140 @@ test("an OpenSpec change is a card of the Spec-driven preset, read-only without 
 		rmSync(tree, { recursive: true, force: true });
 	}
 });
+
+function peekIdea(page: Page): Locator {
+	return page.getByTestId("peek-pane").getByTestId("board-idea-panel");
+}
+
+test("Discovery: an idea with a URL and scores lands in its quadrant, Promote shapes it, and the watchlist asks what changed and diffs its snapshots", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1720, height: 1100 });
+	const kickoffs = observeRoadmapChats(page);
+	await openBoard(page);
+	await boardTool(page).getByTestId("board-mode-toggle").click();
+	await boardTool(page).getByTestId("board-view-roadmap").click();
+	await boardTool(page).getByTestId("board-roadmap-view-discovery").click();
+	const discovery = boardTool(page).getByTestId("board-discovery");
+	await expect(discovery.getByTestId("board-discovery-empty")).toBeVisible();
+
+	await discovery.getByTestId("board-idea-new").click();
+	await discovery.getByTestId("board-idea-new-title").fill("Offline mode");
+	await discovery.getByTestId("board-idea-new-title").press("Enter");
+	await expect(peekIdea(page).getByTestId("board-idea-title")).toHaveValue("Offline mode");
+	const id = await peekIdea(page).getAttribute("data-idea-id");
+	if (!id) throw new Error("the idea has no id");
+	const pitch = "Work on a plane, with no connection, and sync when back online";
+	await peekIdea(page).getByTestId("board-idea-pitch").fill(pitch);
+	await peekIdea(page).getByTestId("board-idea-pitch").press("Tab");
+	await expect(peekIdea(page).getByTestId("board-idea-pitch")).toHaveValue(pitch);
+
+	await peekIdea(page)
+		.getByTestId("board-idea-evidence-ref")
+		.fill("https://example.com/forum/offline-mode");
+	await peekIdea(page).getByTestId("board-idea-evidence-quote").fill("Please add an offline mode");
+	await peekIdea(page).getByTestId("board-idea-evidence-add").click();
+	await expect(peekIdea(page).getByTestId("board-idea-evidence-link")).toHaveAttribute(
+		"href",
+		"https://example.com/forum/offline-mode",
+	);
+	await expect(peekIdea(page).getByTestId("board-idea-evidence")).toContainText(
+		"Please add an offline mode",
+	);
+
+	await peekIdea(page).getByTestId("board-idea-value-score").selectOption("5");
+	await expect(peekIdea(page).getByTestId("board-idea-value-score")).toHaveValue("5");
+	await peekIdea(page).getByTestId("board-idea-effort-score").selectOption("1");
+	await expect(peekIdea(page).getByTestId("board-idea-effort-score")).toHaveValue("1");
+	const dot = discovery.locator(`[data-testid="board-discovery-dot"][data-idea-id="${id}"]`);
+	await expect(dot).toHaveAttribute("data-quadrant", "quick-win");
+	await expect(dot).not.toHaveAttribute("data-suggested", "true");
+	await expect(
+		discovery.locator(`[data-testid="board-idea-row"][data-idea-id="${id}"]`),
+	).toContainText("V 5");
+	await expect(
+		discovery
+			.locator(`[data-testid="board-idea-row"][data-idea-id="${id}"]`)
+			.getByTestId("board-idea-status"),
+	).toHaveAttribute("data-status", "analyzed");
+
+	await peekIdea(page).getByTestId("board-idea-chat-promote").click();
+	await expect.poll(kickoffs).toHaveLength(1);
+	const [shape] = kickoffs();
+	expect(shape?.startsWith(`/skill:roadmap-shape Shape idea ${id} of the`)).toBe(true);
+	expect(shape).toContain(`Idea ${id}: Offline mode\nPitch: ${pitch}`);
+	expect(shape).toContain(
+		'- E-1 (url) https://example.com/forum/offline-mode: "Please add an offline mode"',
+	);
+	expect(shape).toContain(`ideaId: "${id}"`);
+
+	await discovery.getByTestId("board-watch-new").click();
+	await discovery.getByTestId("board-watch-new-name").fill("Linear");
+	await discovery.getByTestId("board-watch-new-urls").fill("https://linear.app/changelog");
+	await discovery.getByTestId("board-watch-new-notes").fill("Cycles and their pricing");
+	await discovery
+		.getByTestId("board-watch-new-form")
+		.getByRole("button", { name: "Add competitor" })
+		.click();
+	const entry = discovery.getByTestId("board-watch-entry");
+	await expect(entry).toHaveCount(1);
+	await expect(entry.getByTestId("board-watch-name")).toHaveValue("Linear");
+	await expect(entry.getByRole("link", { name: "https://linear.app/changelog" })).toBeVisible();
+	const watchId = await entry.getAttribute("data-watch-id");
+	await entry.getByTestId("board-watch-changed").click();
+	await expect.poll(kickoffs).toHaveLength(2);
+	const watch = kickoffs()[1];
+	expect(
+		watch?.startsWith(`/skill:competitor-watch Check what changed at Linear (${watchId})`),
+	).toBe(true);
+	expect(watch).toContain("https://linear.app/changelog — Cycles and their pricing");
+
+	const [project] = await openProjects(page);
+	if (!project || !watchId) throw new Error("missing the project or the entry");
+	const file = join(E2E_DATA_DIR, "extensions", "board", project.id, "watchlist.json");
+	const stored = JSON.parse(readFileSync(file, "utf8")) as { entries: Record<string, unknown>[] };
+	const day = 86_400_000;
+	writeFileSync(
+		file,
+		JSON.stringify({
+			...stored,
+			entries: stored.entries.map((candidate) => ({
+				...candidate,
+				previous: {
+					at: Date.now() - 7 * day,
+					text: "Features: issues, projects\nPricing: $8 per seat\nReleases: none",
+				},
+				snapshot: {
+					at: Date.now(),
+					text: "Features: issues, projects, cycles\nPricing: $10 per seat\nReleases: none",
+				},
+			})),
+		}),
+	);
+	await reloadBoards(page);
+	if ((await page.getByTestId(BOARD_RAIL).getAttribute("aria-pressed")) !== "true")
+		await page.getByTestId(BOARD_RAIL).click();
+	const mode = boardTool(page).getByTestId("board-mode-toggle");
+	if ((await mode.getAttribute("data-active")) !== "true") await mode.click();
+	await expect(mode).toHaveAttribute("data-active", "true");
+	await boardTool(page).getByTestId("board-view-roadmap").click();
+	await boardTool(page).getByTestId("board-roadmap-view-discovery").click();
+	const diff = boardTool(page).getByTestId("board-watch-diff");
+	await expect(diff.locator('[data-kind="removed"]')).toContainText([
+		"Features: issues, projects",
+		"Pricing: $8 per seat",
+	]);
+	await expect(diff.locator('[data-kind="added"]')).toContainText([
+		"Features: issues, projects, cycles",
+		"Pricing: $10 per seat",
+	]);
+	await expect(diff.locator('[data-kind="same"]')).toContainText(["Releases: none"]);
+	await boardTool(page)
+		.locator(`[data-testid="board-idea-row"][data-idea-id="${id}"] button`)
+		.click();
+	await expect(peekIdea(page)).toHaveAttribute("data-idea-id", id);
+	await page.mouse.move(0, 0);
+	await shot(page, "board", "discovery");
+	await mode.click();
+	await expect(mode).not.toHaveAttribute("data-active", "true");
+});

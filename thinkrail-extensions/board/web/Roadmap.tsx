@@ -30,6 +30,7 @@ import { cn } from "@thinkrail/ui/utils";
 import { lazy, type ReactNode, Suspense, useState } from "react";
 import type { BoardLayout, BoardView } from "./api";
 import { FIELD } from "./CardParts";
+import { DiscoveryPane } from "./Discovery";
 import { HORIZON_HINTS, HORIZON_LABELS } from "./labels";
 import {
 	AgentDots,
@@ -61,7 +62,7 @@ import {
 } from "./roadmapApi";
 import { useBoardChanged, useHostQuery } from "./useHostQuery";
 
-export type RoadmapSubView = "horizons" | "timeline" | "goals" | "graph";
+export type RoadmapSubView = "horizons" | "timeline" | "goals" | "graph" | "discovery";
 
 const RoadmapFlow = lazy(() => import("./RoadmapFlow"));
 
@@ -501,7 +502,8 @@ export function GoalsView({ view, actions }: { view: RoadmapView; actions: Roadm
 
 /**
  * The Board tool's Roadmap view: the board's `roadmap.get`, re-read on `board.changed`, as Now / Next /
- * Later, the timeline, Goals or the step graph (those two a lazy chunk); an initiative opens in Peek.
+ * Later, the timeline, Goals or the step graph (those two a lazy chunk), or Discovery's ideas and
+ * watchlist (its own `discovery.get`); an initiative or an idea opens in Peek.
  */
 export function RoadmapPane({
 	host,
@@ -580,6 +582,12 @@ export function RoadmapPane({
 					active={sub === "graph"}
 					onClick={() => setSub("graph")}
 				/>
+				<ToggleSegment
+					testid="board-roadmap-view-discovery"
+					label={t("board.roadmap.view.discovery")}
+					active={sub === "discovery"}
+					onClick={() => setSub("discovery")}
+				/>
 				<Button
 					variant="ghost"
 					size="s"
@@ -592,7 +600,9 @@ export function RoadmapPane({
 					{t("board.roadmap.chat.review")}
 				</Button>
 			</div>
-			{roadmap.state.kind === "loading" ? (
+			{sub === "discovery" ? (
+				<DiscoveryPane host={host} layout={layout} onError={onError} />
+			) : roadmap.state.kind === "loading" ? (
 				<LoadingRegion
 					rows={6}
 					label={t("board.loading")}

@@ -6,9 +6,11 @@ import { DEFAULT_SETTINGS } from "./model";
 import {
 	BoardStore,
 	type CardsFile,
+	type IdeasFile,
 	type InitiativesFile,
 	NewerBoardStoreError,
 	type ProjectsFile,
+	type WatchlistFile,
 } from "./store";
 
 const roots: string[] = [];
@@ -387,6 +389,126 @@ describe("BoardStore", () => {
 		writeFileSync(join(root, "p1", "projects.json"), JSON.stringify({ version: 2, projects: [] }));
 		expect(() => store().initiatives("p1")).toThrow(NewerBoardStoreError);
 		expect(() => store().roadmapProjects("p1")).toThrow(NewerBoardStoreError);
+	});
+
+	test("round-trips discovery ideas and the watchlist, fills defaults and drops what is malformed", () => {
+		const { root, store, warnings } = setup();
+		const ideas: IdeasFile = {
+			version: 1,
+			nextNumber: 3,
+			nextEvidenceNumber: 2,
+			ideas: [
+				{
+					id: "D-1",
+					title: "Offline mode",
+					pitch: "Work on a plane",
+					evidence: [
+						{
+							id: "E-1",
+							kind: "artifact",
+							ref: ".thinkrail/context/research-D-1.md",
+							quote: "Nobody does it",
+							workspaceId: "w1",
+							addedBy: "agent",
+							at: 5,
+						},
+					],
+					value: { score: 4, reasons: ["Moves capability X (E-1)"], suggested: true },
+					effort: { score: 2, reasons: [], suggested: false },
+					horizonSuggestion: { horizon: "next", reason: "After sync" },
+					status: "promoted",
+					initiativeId: "I-2",
+					createdAt: 1,
+					updatedAt: 6,
+				},
+			],
+		};
+		const watchlist: WatchlistFile = {
+			version: 1,
+			nextNumber: 2,
+			entries: [
+				{
+					id: "W-1",
+					name: "Linear",
+					urls: ["https://linear.app/"],
+					notes: "Issues",
+					snapshot: {
+						at: 9,
+						text: "new",
+						artifactPath: ".thinkrail/context/w.md",
+						workspaceId: "w1",
+					},
+					previous: { at: 4, text: "old" },
+					createdAt: 1,
+					updatedAt: 9,
+				},
+			],
+		};
+		store().saveIdeas("p1", ideas);
+		store().saveWatchlist("p1", watchlist);
+		expect(store().ideas("p1")).toEqual(ideas);
+		expect(store().watchlist("p1")).toEqual(watchlist);
+		expect(readdirSync(join(root, "p1")).sort()).toEqual(["ideas.json", "watchlist.json"]);
+
+		writeFileSync(
+			join(root, "p1", "ideas.json"),
+			JSON.stringify({
+				version: 1,
+				ideas: [
+					{
+						id: "D-1",
+						title: "Bare",
+						status: "maybe",
+						value: { score: 9 },
+						effort: { score: 2.5 },
+						horizonSuggestion: { horizon: "soon" },
+						evidence: [{ id: "E-1", kind: "rumour", ref: "x" }, { kind: "url" }],
+					},
+					{ title: "no id" },
+				],
+			}),
+		);
+		writeFileSync(
+			join(root, "p1", "watchlist.json"),
+			JSON.stringify({
+				version: 1,
+				entries: [{ id: "W-1", name: "Bare", previous: { text: "x" } }],
+			}),
+		);
+		const board = store();
+		expect(board.ideas("p1")).toEqual({
+			version: 1,
+			nextNumber: 1,
+			nextEvidenceNumber: 1,
+			ideas: [
+				{
+					id: "D-1",
+					title: "Bare",
+					pitch: "",
+					evidence: [],
+					status: "new",
+					createdAt: 0,
+					updatedAt: 0,
+				},
+			],
+		});
+		expect(warnings.some((warning) => warning.includes("dropped 1 unreadable idea"))).toBe(true);
+		expect(board.watchlist("p1").entries).toEqual([
+			{ id: "W-1", name: "Bare", urls: [], notes: "", createdAt: 0, updatedAt: 0 },
+		]);
+
+		writeFileSync(join(root, "p1", "ideas.json"), "{nope");
+		writeFileSync(join(root, "p1", "watchlist.json"), JSON.stringify({ version: 1, entries: 1 }));
+		expect(store().ideas("p1").ideas).toEqual([]);
+		expect(store().watchlist("p1").entries).toEqual([]);
+		expect(readdirSync(join(root, "p1"))).toEqual(
+			expect.arrayContaining(["ideas.json.corrupt-42", "watchlist.json.corrupt-42"]),
+		);
+
+		writeFileSync(join(root, "p1", "ideas.json"), JSON.stringify({ version: 2, ideas: [] }));
+		writeFileSync(join(root, "p1", "watchlist.json"), JSON.stringify({ version: 2, entries: [] }));
+		expect(() => store().ideas("p1")).toThrow(NewerBoardStoreError);
+		expect(() => store().watchlist("p1")).toThrow(NewerBoardStoreError);
 	});
 
 	test("refuses a project id that is not a plain folder name", () => {

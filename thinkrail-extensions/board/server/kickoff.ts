@@ -1,4 +1,4 @@
-import type { Card, Initiative, Workflow } from "./model";
+import type { Card, Evidence, Idea, Initiative, WatchEntry, Workflow } from "./model";
 
 /** What a card's kickoff says about why it exists: its initiative and its project and milestone. */
 export interface KickoffContext {
@@ -143,24 +143,74 @@ function initiativeBlock(initiative: RoadmapInitiative): string[] {
 	return lines;
 }
 
+type KickoffIdea = Pick<
+	Idea,
+	"id" | "title" | "pitch" | "evidence" | "value" | "effort" | "horizonSuggestion"
+>;
+
+/** How many pieces of an idea's evidence a prompt quotes; the rest are a tool call away. */
+const EVIDENCE_QUOTED = 30;
+
+function evidenceLine(evidence: Evidence): string {
+	return `- ${evidence.id} (${evidence.kind}) ${evidence.ref}${evidence.quote ? `: "${evidence.quote}"` : ""}`;
+}
+
+/** An idea as a prompt or a tool reads it: pitch, evidence, scores with their reasons, horizon. */
+export function ideaLines(idea: KickoffIdea): string[] {
+	const lines = [`Idea ${idea.id}: ${idea.title.trim()}`];
+	const pitch = idea.pitch.trim();
+	lines.push(pitch ? `Pitch: ${pitch}` : "Pitch: not written yet.");
+	if (idea.evidence.length === 0) lines.push("Evidence: none yet.");
+	else {
+		lines.push("Evidence:", ...idea.evidence.slice(0, EVIDENCE_QUOTED).map(evidenceLine));
+		const more = idea.evidence.length - EVIDENCE_QUOTED;
+		if (more > 0) lines.push(`- … and ${more} more (board_ideas_list { ideaId: "${idea.id}" })`);
+	}
+	for (const [label, score] of [
+		["Value", idea.value],
+		["Effort", idea.effort],
+	] as const)
+		lines.push(
+			score
+				? `${label}: ${score.score} of 5 (${score.suggested ? "suggested" : "set by the human"})${score.reasons.length > 0 ? ` — ${score.reasons.join("; ")}` : ""}`
+				: `${label}: not scored yet.`,
+		);
+	if (idea.horizonSuggestion)
+		lines.push(
+			`Suggested horizon: ${idea.horizonSuggestion.horizon}${idea.horizonSuggestion.reason ? ` — ${idea.horizonSuggestion.reason}` : ""}`,
+		);
+	return lines;
+}
+
 /**
  * The first prompt of a roadmap chat: its skill as `/skill:<name>` (the way the composer sends one), the
- * task in one line, the initiative's text, and instructions that stand alone when the skill is missing.
+ * task in one line, the initiative's text (or, shaping an idea, the idea's), and instructions that stand
+ * alone when the skill is missing.
  */
 export function roadmapKickoff(
 	kind: RoadmapChat,
 	context: {
 		board: string;
 		initiative?: RoadmapInitiative;
+		/** Shape: the idea a promotion turns into an initiative. */
+		idea?: KickoffIdea;
 		initiatives: readonly Pick<Initiative, "id" | "title" | "horizon" | "proposed" | "closedAt">[];
 	},
 ): string {
-	const { board, initiative } = context;
+	const { board, initiative, idea } = context;
 	const id = initiative?.id ?? "";
 	const read = `board_initiative_get { initiativeId: "${id}" }`;
 	const block = initiative ? initiativeBlock(initiative) : [];
 	const body: string[] = [];
-	if (kind === "plan")
+	if (kind === "shape" && idea)
+		body.push(
+			`Shape idea ${idea.id} of the ${board} board into a roadmap initiative with me.`,
+			"",
+			...ideaLines(idea),
+			"",
+			`Read the project's goal-and-requirements spec and the idea's evidence. Ask me what you need (ask_user_question), then shape the initiative: its outcome (why it matters) tied to a goal-and-requirements capability and checked against the non-goals, success criteria I can check, the risks and rabbit holes, what is out of scope and a horizon (now, next or later). Propose it with board_initiative_create_draft { title, outcome, criteria, horizon, ideaId: "${idea.id}" }, so the idea links to the initiative it became; I accept it on the board.`,
+		);
+	else if (kind === "plan")
 		body.push(
 			`Plan initiative ${id} of the ${board} board into cards.`,
 			"",
@@ -209,4 +259,78 @@ export function roadmapKickoff(
 		);
 	}
 	return `/skill:${ROADMAP_SKILLS[kind]} ${body.join("\n")}`;
+}
+
+export const DISCOVERY_CHATS = ["research", "analyze", "watch"] as const;
+/** A discovery chat: research an idea, analyze it into scores, or check what changed at the competitors. */
+export type DiscoveryChat = (typeof DISCOVERY_CHATS)[number];
+
+/** The skill each discovery chat names; the text alone instructs without it. */
+export const DISCOVERY_SKILLS: Record<DiscoveryChat, string> = {
+	research: "discovery-research",
+	analyze: "discovery-analyze",
+	watch: "competitor-watch",
+};
+
+const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+function watchLine(entry: Pick<WatchEntry, "id" | "name" | "urls" | "notes" | "snapshot">): string {
+	const notes = entry.notes.replace(/\s+/g, " ").trim();
+	return `- ${entry.id} ${entry.name.trim()}: ${entry.urls.join(", ") || "no URLs yet"}${notes ? ` — ${notes}` : ""} (${entry.snapshot ? `last snapshot ${isoDay(entry.snapshot.at)}` : "no snapshot yet"})`;
+}
+
+/**
+ * The first prompt of a discovery chat: its skill as `/skill:<name>`, the task in one line, the idea (or the
+ * watchlist), and instructions that stand alone — the report goes to this workspace's artifacts folder.
+ */
+export function discoveryKickoff(
+	kind: DiscoveryChat,
+	context: {
+		board: string;
+		/** Today, `YYYY-MM-DD`: the report's date. */
+		today: string;
+		idea?: KickoffIdea;
+		entries?: readonly Pick<WatchEntry, "id" | "name" | "urls" | "notes" | "snapshot">[];
+		/** The one entry "What changed?" asks about; absent, the whole watchlist. */
+		watchId?: string;
+	},
+): string {
+	const { board, today, idea } = context;
+	const id = idea?.id ?? "";
+	const block = idea ? ideaLines(idea) : [];
+	const body: string[] = [];
+	if (kind === "research") {
+		const report = `.thinkrail/context/research-${id}-${today}.md`;
+		body.push(
+			`Research idea ${id} of the ${board} board.`,
+			"",
+			...block,
+			"",
+			`Search the web (web_search) and read the sources worth it (fetch_content): who else solves this — competitors, their features, pricing and reviews — and what users say they need. Write a report, every claim cited with its URL, into this workspace's artifacts folder: ${report}. Attach it with board_idea_add_evidence { ideaId: "${id}", kind: "artifact", ref: "${report}", quote: its main finding in one line }, and the few sources that matter most with kind "url" and the quote each backs. Score nothing: the analysis does that.`,
+		);
+	} else if (kind === "analyze")
+		body.push(
+			`Analyze idea ${id} of the ${board} board: suggest its value, effort and horizon.`,
+			"",
+			...block,
+			"",
+			`Ground it before you score: the goal-and-requirements capability it moves and whether it breaks a non-goal (spec_search, spec_get); the gap against competitors in its evidence; signals — session insights if a tool for them is available to you, and product analytics through my MCP tools if any are configured (say which you could not reach). Read the code it would touch to size the effort. Then suggest a value and an effort, each 1 to 5 with reasons citing the evidence (E-n) or the spec, and a horizon (now, next or later) with why, in one board_idea_score { ideaId: "${id}", value, effort, horizon }. A score I set stays; I decide.`,
+		);
+	else {
+		const entries = context.entries ?? [];
+		const one = context.watchId ? entries.find((entry) => entry.id === context.watchId) : undefined;
+		const report = `.thinkrail/context/competitor-watch-${today}.md`;
+		body.push(
+			one
+				? `Check what changed at ${one.name.trim()} (${one.id}), on the ${board} board's competitor watchlist.`
+				: `Check what changed at the competitors on the ${board} board's watchlist.`,
+			"",
+			...(entries.length > 0
+				? ["Watchlist:", ...(one ? [one] : entries).map(watchLine)]
+				: ["The watchlist is empty."]),
+			"",
+			`Read the last snapshot with board_watchlist_get${one ? ` { watchId: "${one.id}" }` : ""}. Refresh each competitor from its URLs and the web (fetch_content, web_search): what it offers, pricing, recent releases and what users say. Write one dated report, every source cited, into this workspace's artifacts folder: ${report}. Then store each entry's new snapshot — plain text of what it offers now — with board_watchlist_snapshot { watchId, text, artifactPath: "${report}" }, which returns the previous one, and tell me what changed since it, entry by entry. Change no idea or initiative; offer to file a gap you find as an idea.`,
+		);
+	}
+	return `/skill:${DISCOVERY_SKILLS[kind]} ${body.join("\n")}`;
 }

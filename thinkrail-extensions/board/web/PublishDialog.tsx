@@ -18,7 +18,7 @@ import {
 } from "@thinkrail/ui/dropdown-menu";
 import { useId, useState } from "react";
 import { FIELD } from "./CardParts";
-import { type PublishedSnapshot, peekSnapshot, publishSnapshot } from "./roadmapApi";
+import { type PublishedSnapshot, peekWorkspaceFile, publishSnapshot } from "./roadmapApi";
 
 const DEFAULT_PATH = "ROADMAP.md";
 
@@ -137,7 +137,7 @@ export function PublishDialog({
 								iconLeft={RiEyeLine}
 								data-testid="board-publish-peek"
 								onClick={() => {
-									peekSnapshot(host, written);
+									peekWorkspaceFile(host, written);
 									onClose();
 								}}
 							>

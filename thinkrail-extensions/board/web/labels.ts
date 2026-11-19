@@ -15,6 +15,7 @@ import type {
 	WipKey,
 	Workflow,
 } from "./api";
+import type { DiscoveryChat, EvidenceKind, IdeaStatus, Quadrant, ScoreKey } from "./discoveryApi";
 import type {
 	ForecastMiss,
 	Health,
@@ -244,3 +245,34 @@ export const CATEGORY_LABELS = {
 	completed: "board.roadmap.category.completed",
 	canceled: "board.roadmap.category.canceled",
 } as const satisfies Record<Category, MessageKey>;
+
+export const IDEA_STATUS_LABELS = {
+	new: "board.discovery.status.new",
+	analyzed: "board.discovery.status.analyzed",
+	promoted: "board.discovery.status.promoted",
+	dismissed: "board.discovery.status.dismissed",
+} as const satisfies Record<IdeaStatus, MessageKey>;
+
+export const EVIDENCE_KIND_LABELS = {
+	artifact: "board.discovery.evidence.kind.artifact",
+	url: "board.discovery.evidence.kind.url",
+	note: "board.discovery.evidence.kind.note",
+} as const satisfies Record<EvidenceKind, MessageKey>;
+
+export const QUADRANT_LABELS = {
+	"quick-win": "board.discovery.quadrant.quickWin",
+	"big-bet": "board.discovery.quadrant.bigBet",
+	filler: "board.discovery.quadrant.fillIn",
+	"time-sink": "board.discovery.quadrant.timeSink",
+} as const satisfies Record<Quadrant, MessageKey>;
+
+export const SCORE_LABELS = {
+	value: "board.discovery.score.value",
+	effort: "board.discovery.score.effort",
+} as const satisfies Record<ScoreKey, MessageKey>;
+
+export const DISCOVERY_CHAT_LABELS = {
+	research: "board.discovery.chat.research",
+	analyze: "board.discovery.chat.analyze",
+	watch: "board.discovery.chat.watch",
+} as const satisfies Record<DiscoveryChat, MessageKey>;

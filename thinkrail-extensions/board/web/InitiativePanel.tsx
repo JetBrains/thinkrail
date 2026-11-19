@@ -29,7 +29,14 @@ import {
 	shownId,
 } from "./api";
 import { AgentBadgeChip, FIELD, LastActionLine } from "./CardParts";
-import { ClearableInput, ItemList, SavedInput, SavedTextarea, Section } from "./Fields";
+import {
+	ClearableInput,
+	ConfirmDelete,
+	ItemList,
+	SavedInput,
+	SavedTextarea,
+	Section,
+} from "./Fields";
 import {
 	CATEGORY_LABELS,
 	columnTitle,
@@ -74,63 +81,6 @@ import {
 import { useBoardChanged, useHostQuery } from "./useHostQuery";
 
 type Write = (run: () => Promise<unknown>) => void;
-
-/** A delete behind an inline confirm; `wide` shows its label beside the icon. */
-function ConfirmDelete({
-	label,
-	question,
-	testId,
-	wide = false,
-	onDelete,
-}: {
-	label: string;
-	question: string;
-	testId: string;
-	wide?: boolean;
-	onDelete: () => void;
-}) {
-	const t = useT();
-	const [confirming, setConfirming] = useState(false);
-	return confirming ? (
-		<span className="flex flex-wrap items-center gap-4">
-			<span className="tr-text-metadata text-text-muted">{question}</span>
-			<Button
-				variant="destructive"
-				size="s"
-				data-testid={`${testId}-confirm`}
-				onClick={() => {
-					setConfirming(false);
-					onDelete();
-				}}
-			>
-				{label}
-			</Button>
-			<Button variant="ghost" size="s" onClick={() => setConfirming(false)}>
-				{t("board.card.keep")}
-			</Button>
-		</span>
-	) : wide ? (
-		<Button
-			variant="ghost"
-			size="s"
-			tone="danger"
-			iconLeft={RiDeleteBinLine}
-			data-testid={testId}
-			className="self-start"
-			onClick={() => setConfirming(true)}
-		>
-			{label}
-		</Button>
-	) : (
-		<IconButton
-			icon={RiDeleteBinLine}
-			size="s"
-			label={label}
-			data-testid={testId}
-			onClick={() => setConfirming(true)}
-		/>
-	);
-}
 
 /** A select of the board's cards to add somewhere, offering only those `available` lets through. */
 function CardPicker({

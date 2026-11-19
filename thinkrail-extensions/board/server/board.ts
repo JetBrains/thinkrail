@@ -12,6 +12,7 @@ import type {
 	Workspace,
 } from "@thinkrail/extension-api/server";
 import { isoOfDay, today } from "./days";
+import { Discovery } from "./discovery";
 import {
 	closesIssue,
 	GH_TIMEOUT_MS,
@@ -27,6 +28,8 @@ import {
 } from "./github";
 import { allocatePrefix, cardId, parseCardId } from "./ids";
 import {
+	type DiscoveryChat,
+	discoveryKickoff,
 	kickoffText,
 	openspecApplyKickoff,
 	openspecArchiveMessage,
@@ -176,6 +179,15 @@ export interface BoardView {
 
 /** `openspec validate <change> --strict`'s verdict, from the workspace the card reads the change in. */
 export type ChangeValidation = Validation & { change: string; workspaceId: string };
+
+/** A chat the board started in a project's Default workspace, for the web half to open. */
+export interface StartedChat {
+	projectId: string;
+	workspaceId: string;
+	sessionId: string;
+	kickoff: string;
+	kickoffError?: string;
+}
 
 export interface InboxItem {
 	projectId: string;
@@ -465,6 +477,7 @@ export class Board {
 	readonly host: ExtensionHostServices;
 	readonly store: BoardStore;
 	readonly roadmap: Roadmap;
+	readonly discovery: Discovery;
 	private readonly now: () => number;
 	private readonly owner: string;
 	private readonly actionRefreshMs: number;
@@ -518,6 +531,12 @@ export class Board {
 			},
 			changed: (projectId) => this.changed(projectId),
 			facts: (cards) => this.facts(cards),
+		});
+		this.discovery = new Discovery({
+			store: this.store,
+			now: this.now,
+			project: (projectId) => this.project(projectId),
+			changed: (projectId) => this.changed(projectId),
 		});
 	}
 
@@ -1529,13 +1548,7 @@ export class Board {
 		projectId: string,
 		kind: RoadmapChat,
 		initiativeId?: string,
-	): Promise<{
-		projectId: string;
-		workspaceId: string;
-		sessionId: string;
-		kickoff: string;
-		kickoffError?: string;
-	}> {
+	): Promise<StartedChat> {
 		const project = this.project(projectId);
 		const { initiatives } = this.store.initiatives(projectId);
 		const initiative = initiativeId
@@ -1546,21 +1559,74 @@ export class Board {
 		if (kind !== "review" && !initiative) throw new Error(`Pass the initiativeId to ${kind}.`);
 		if (kind === "close" && initiative?.closedAt !== undefined)
 			throw new Error(`${initiative.id} is already closed.`);
+		return this.chatInDefault(
+			project,
+			roadmapKickoff(kind, {
+				board: project.name,
+				...(initiative ? { initiative } : {}),
+				initiatives,
+			}),
+		);
+	}
+
+	/** A new chat in the project's Default workspace on `kickoff`, as the roadmap and discovery chats start. */
+	private async chatInDefault(
+		project: ExtensionHostProject,
+		kickoff: string,
+	): Promise<StartedChat> {
 		const workspaceId = this.defaultWorkspace(project);
 		if (!workspaceId) throw new Error(`${project.name} has no Default workspace open.`);
-		const kickoff = roadmapKickoff(kind, {
-			board: project.name,
-			...(initiative ? { initiative } : {}),
-			initiatives,
-		});
 		const started = await this.host.actions.startChat({ workspaceId, kickoff: { text: kickoff } });
 		return {
-			projectId,
+			projectId: project.id,
 			workspaceId: started.workspaceId,
 			sessionId: started.sessionId,
 			kickoff,
 			...(started.kickoffError ? { kickoffError: started.kickoffError } : {}),
 		};
+	}
+
+	/**
+	 * Promote: a Shape chat whose kickoff carries the idea; the agent's `board_initiative_create_draft` with
+	 * its `ideaId` links the idea to the initiative it proposes.
+	 */
+	async promoteIdea(projectId: string, ideaId: string): Promise<StartedChat> {
+		const project = this.project(projectId);
+		const idea = this.discovery.promotable(projectId, ideaId);
+		return this.chatInDefault(
+			project,
+			roadmapKickoff("shape", {
+				board: project.name,
+				idea,
+				initiatives: this.store.initiatives(projectId).initiatives,
+			}),
+		);
+	}
+
+	/** A discovery chat: research or analyze an idea, or ask the watchlist (or one entry) what changed. */
+	async startDiscoveryChat(
+		projectId: string,
+		kind: DiscoveryChat,
+		target: { ideaId?: string; watchId?: string },
+	): Promise<StartedChat> {
+		const project = this.project(projectId);
+		const idea = target.ideaId ? this.discovery.idea(projectId, target.ideaId) : undefined;
+		if (kind !== "watch" && !idea) throw new Error(`Pass the ideaId to ${kind}.`);
+		const watchId = target.watchId
+			? this.discovery.watchEntry(projectId, target.watchId).id
+			: undefined;
+		const { entries } = this.store.watchlist(projectId);
+		if (kind === "watch" && entries.length === 0)
+			throw new Error("The watchlist is empty; add a competitor first.");
+		return this.chatInDefault(
+			project,
+			discoveryKickoff(kind, {
+				board: project.name,
+				today: isoOfDay(today(this.now())),
+				...(kind !== "watch" && idea ? { idea } : {}),
+				...(kind === "watch" ? { entries, ...(watchId ? { watchId } : {}) } : {}),
+			}),
+		);
 	}
 
 	/**
@@ -1765,28 +1831,8 @@ export class Board {
 	}
 
 	/** "＋ Propose change": a new chat in the Default workspace on `/skill:openspec-propose` and the description. */
-	async proposeChange(
-		projectId: string,
-		description: string,
-	): Promise<{
-		projectId: string;
-		workspaceId: string;
-		sessionId: string;
-		kickoff: string;
-		kickoffError?: string;
-	}> {
-		const project = this.project(projectId);
-		const workspaceId = this.defaultWorkspace(project);
-		if (!workspaceId) throw new Error(`${project.name} has no Default workspace open.`);
-		const kickoff = openspecProposeKickoff(description);
-		const started = await this.host.actions.startChat({ workspaceId, kickoff: { text: kickoff } });
-		return {
-			projectId,
-			workspaceId: started.workspaceId,
-			sessionId: started.sessionId,
-			kickoff,
-			...(started.kickoffError ? { kickoffError: started.kickoffError } : {}),
-		};
+	async proposeChange(projectId: string, description: string): Promise<StartedChat> {
+		return this.chatInDefault(this.project(projectId), openspecProposeKickoff(description));
 	}
 
 	settings(projectId: string): BoardSettings {
