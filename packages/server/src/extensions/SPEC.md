@@ -75,7 +75,8 @@ lookup, skill roots — defaults to it, so an installed extension is composed ex
   inert. Per-session factories are built for this with an inert session whose `awaitToolResponse` and
   `workspaceFiles.check` reject and whose `setting` answers the declared defaults. The tools are computed once per descriptor object (a reloaded installed extension is a new one), never from a live session, and a factory that throws against the stub,
   or is still running after `EXTENSION_LOAD_TIMEOUT_MS`, keeps the tools it recorded until then; a
-  `sessionExtensions` that throws or answers anything but a list (a promise included) adds none — so no
+  `sessionExtensions` that throws or answers anything but a list adds none (a promise among such answers has
+  its rejection observed, here and in a session's flatten, so it never reaches the crash handler) — so no
   third-party code holds `extension.list` or the status file for longer than that bound), `skillPackageRoots(extensionEntry, extension)` (the
   shared owner-scoped resolver: each `skillPackages` manifest via `createRequire(extensionEntry)`,
   returning its `pi.skills` directories; a named package with no skills fails loudly — the installed

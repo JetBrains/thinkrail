@@ -183,6 +183,34 @@ describe("registryInlineExtensions with per-session factories", () => {
 		);
 	});
 
+	it("observes a sessionExtensions promise that rejects and reports a load error instead", async () => {
+		const unhandled: unknown[] = [];
+		const onUnhandled = (reason: unknown) => unhandled.push(reason);
+		process.on("unhandledRejection", onUnhandled);
+		try {
+			const entries: ServerExtensionEntry[] = [
+				{
+					specifier: "/installed/server/index.ts",
+					extension: {
+						name: "rejects",
+						extensions: [],
+						sessionExtensions: (async (services: ExtensionSessionServices) =>
+							services.setting("undeclared") ? [] : []) as unknown as () => [],
+					},
+				},
+			];
+			const [inline] = registryInlineExtensions("extensions", undefined, entries, session("a"));
+			if (!inline || typeof inline === "function") throw new Error("missing rejects");
+			await expect(Promise.resolve(inline.factory({} as ExtensionAPI))).rejects.toThrow(
+				"sessionExtensions must return a list of factories",
+			);
+			await Bun.sleep(20);
+			expect(unhandled).toEqual([]);
+		} finally {
+			process.off("unhandledRejection", onUnhandled);
+		}
+	});
+
 	it("gates session factories on the extension switch at load time", async () => {
 		const disabled = new Set(["asker"]);
 		const [asker] = registryInlineExtensions(

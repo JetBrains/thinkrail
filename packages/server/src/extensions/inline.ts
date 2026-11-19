@@ -34,6 +34,14 @@ export function isFactoryList(value: unknown): value is ExtensionFactory[] {
 	return Array.isArray(value) && value.every((entry) => typeof entry === "function");
 }
 
+/** A `sessionExtensions` answer that is not a list is dropped; a promise among them must not reject unobserved. */
+export function dropAnswer(value: unknown): void {
+	const then = (value as { then?: unknown } | null | undefined)?.then;
+	if (typeof then === "function") {
+		Promise.resolve(value).catch(() => undefined);
+	}
+}
+
 /** `true` when `task` settles within the load timeout, `false` after it; a late rejection is observed, never thrown. */
 export function settlesWithinLoadTimeout(task: Promise<unknown>): Promise<boolean> {
 	return new Promise((resolve, reject) => {
@@ -75,6 +83,7 @@ function factoriesOf(
 		return [...extension.extensions, failing(error)];
 	}
 	if (!isFactoryList(perSession)) {
+		dropAnswer(perSession);
 		return [
 			...extension.extensions,
 			failing(new Error(`${extension.name}: sessionExtensions must return a list of factories`)),

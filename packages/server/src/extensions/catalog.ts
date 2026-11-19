@@ -2,6 +2,7 @@ import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-a
 import type { ExtensionCatalogEntry, ExtensionSettingDescriptor } from "@thinkrail/contracts";
 import type { ServerExtension } from "@thinkrail/extension-api/server";
 import {
+	dropAnswer,
 	extensionSessionServices,
 	type HostSessionServices,
 	isFactoryList,
@@ -50,7 +51,9 @@ function inertSessionFactories(extension: ServerExtension): ExtensionFactory[] {
 		const factories = extension.sessionExtensions?.(
 			extensionSessionServices(extension, inertSession),
 		);
-		return isFactoryList(factories) ? factories : [];
+		if (isFactoryList(factories)) return factories;
+		dropAnswer(factories);
+		return [];
 	} catch {
 		return [];
 	}

@@ -193,6 +193,32 @@ describe("listExtensionCatalog", () => {
 		}
 	});
 
+	it("observes a sessionExtensions promise that rejects, and keeps the static tools", async () => {
+		const unhandled: unknown[] = [];
+		const onUnhandled = (reason: unknown) => unhandled.push(reason);
+		process.on("unhandledRejection", onUnhandled);
+		try {
+			const entries: ServerExtensionEntry[] = [
+				{
+					specifier: "/x/rejects/server/index.ts",
+					extension: {
+						name: "rejects",
+						extensions: [tool("static")],
+						sessionExtensions: (async (session: { setting: (key: string) => boolean }) => [
+							tool(String(session.setting("undeclared"))),
+						]) as unknown as () => ExtensionFactory[],
+					},
+				},
+			];
+			const [entry] = await listExtensionCatalog(new Set(), entries, []);
+			expect(entry?.tools).toEqual(["static"]);
+			await Bun.sleep(20);
+			expect(unhandled).toEqual([]);
+		} finally {
+			process.off("unhandledRejection", onUnhandled);
+		}
+	});
+
 	it("lists the static tools of a sessionExtensions that answers a promise", async () => {
 		const entries: ServerExtensionEntry[] = [
 			{
