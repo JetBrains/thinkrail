@@ -136,7 +136,7 @@ export interface BundleOptions {
 export async function bundleWebHalf({ root, entry, outFile, minify, manifest }: BundleOptions) {
 	const warnings: string[] = [];
 	try {
-		await build({
+		const { output } = await build({
 			cwd: root,
 			input: entry,
 			platform: "browser",
@@ -153,7 +153,10 @@ export async function bundleWebHalf({ root, entry, outFile, minify, manifest }: 
 			output: { file: outFile, format: "esm", minify, codeSplitting: false },
 			write: true,
 		});
-		return { warnings };
+		const modules = output.flatMap((chunk) =>
+			chunk.type === "chunk" ? chunk.moduleIds.filter((id) => isAbsolute(id)) : [],
+		);
+		return { warnings, modules };
 	} catch (error) {
 		if (error instanceof ExtensionBuildError) throw error;
 		const nested = findBuildError(error);

@@ -109,8 +109,12 @@ export async function buildExtension(options: BuildOptions): Promise<BuildOutput
 			manifest: sharedModules,
 		});
 		warnings.push(...bundle.warnings);
+		const read = bundle.modules.map((path) => ({
+			label: "a module the web entry imports",
+			path,
+		}));
 		if (styles !== undefined) {
-			await buildStylesheet({
+			const stylesheet = await buildStylesheet({
 				root,
 				sourceDir: dirname(entry),
 				prefix: styles.prefix,
@@ -119,7 +123,10 @@ export async function buildExtension(options: BuildOptions): Promise<BuildOutput
 				minify,
 				assetsDir: options.assetsDir,
 			});
+			for (const path of stylesheet.dependencies)
+				read.push({ label: "a stylesheet the build reads", path });
 		}
+		checkOutputPaths(root, [...inputs, ...read], outputs);
 		for (const { path, temp } of staged) {
 			renameSync(temp, path);
 			files.push(path);

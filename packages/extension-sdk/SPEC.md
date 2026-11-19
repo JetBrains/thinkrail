@@ -97,7 +97,10 @@ private and unchanged. It imports no pi value at runtime.
   an ancestor or descendant of, an input or the other output, that is an existing directory, or that
   resolves outside the package is an `ExtensionUsageError` (exit 2) naming both paths, and nothing is
   written. The manifest already keeps paths inside the package and distinct by suffix; the check
-  catches what that cannot — `--entry` / `--css` / `server` equal to an output, links and case.
+  catches what that cannot — `--entry` / `--css` / `server` equal to an output, links and case. The
+  same check runs again after building, before any rename, against every module the bundle read
+  (rolldown's `moduleIds`) and every stylesheet Tailwind read (`onDependency`), since those are known
+  only then.
 - **Atomic outputs.** The bundle and the stylesheet are written to hidden temporary files beside their
   targets (`.<name>.<pid>-<random>.tmp`) and renamed over them only when both have built; on any
   failure the temporaries are removed and the previous `web` / `styles` stay as they were, never

@@ -55,6 +55,36 @@ describe("the build never writes over its own inputs", () => {
 		expect(read(root, "web/index.js")).toBe(ENTRY);
 	});
 
+	it("refuses a web output that is a module the entry imports, after building it aside", async () => {
+		const app = 'export const app = "mine";\n';
+		const { root } = setup(
+			{ web: "./web/app.js" },
+			{ "web/index.js": 'export { app as default } from "./app.js";\n', "web/app.js": app },
+		);
+		expect(await refused(root, { entry: "web/index.js" })).toContain(
+			'"web" (web/app.js) would overwrite a module the web entry imports (web/app.js)',
+		);
+		expect(read(root, "web/app.js")).toBe(app);
+		expect(readdirSync(join(root, "web")).sort()).toEqual(["app.js", "index.js"]);
+	});
+
+	it("refuses a styles output that is a stylesheet --css imports", async () => {
+		const shared = ".a { color: red; }\n";
+		const { root } = setup(
+			{ web: "./dist/web.js", styles: "./styles/shared.css" },
+			{
+				"web/index.tsx": ENTRY,
+				"styles/own.css": '@import "./shared.css";\n',
+				"styles/shared.css": shared,
+			},
+		);
+		expect(await refused(root, { css: "styles/own.css" })).toContain(
+			'"styles" (styles/shared.css) would overwrite a stylesheet the build reads',
+		);
+		expect(read(root, "styles/shared.css")).toBe(shared);
+		expect(existsSync(join(root, "dist/web.js"))).toBe(false);
+	});
+
 	it("refuses a web output linked to the default entry", async () => {
 		const { root } = setup({ web: "./dist/web.js" }, { "web/index.tsx": ENTRY });
 		mkdirSync(join(root, "dist"));
