@@ -35,7 +35,11 @@ lookup, skill roots — defaults to it, so an installed extension is composed ex
   naming; it calls it once per flatten, so every parent session's factories close over its own services.
   A `sessionExtensions` that throws, or returns anything but a list of factories, becomes one factory that rethrows when pi loads it, so the failure is
   that extension's `<inline:name>` load error rather than a loader that cannot be built (the catalog's
-  inert-session call likewise keeps only the static tools). Each extension gets its **own view** (`extensionSessionServices`): `setting(key)` answers only that
+  inert-session call likewise keeps only the static tools). An **installed** extension's factory, static
+  or per-session, is raced against `EXTENSION_LOAD_TIMEOUT_MS` when pi loads it: one still running then is
+  that extension's load error (`<name> did not finish loading within 10 s`) and the chat starts without it.
+  pi stages a factory's registrations until it returns and discards them when it throws, so a late settle
+  registers nothing; built-ins are ours and are not raced. Each extension gets its **own view** (`extensionSessionServices`): `setting(key)` answers only that
   extension's declared settings — the stored value from the injected `ExtensionSettingValue` lookup, else
   the declared default; an undeclared key throws — and is read **inside the factory body**, so every pi
   (re)load sees current values. Without services, and in the child set, session factories are absent),
@@ -69,8 +73,10 @@ lookup, skill roots — defaults to it, so an installed extension is composed ex
   `settings` (`key` + `default`, plus an installed setting's own `title` / `description`), and the tool names
   its **parent** factories register against a recording stub `ExtensionAPI` whose every other member is
   inert. Per-session factories are built for this with an inert session whose `awaitToolResponse` and
-  `workspaceFiles.check` reject and whose `setting` answers the declared defaults. The tools are computed once per descriptor object (a reloaded installed extension is a new one), never from a live session, and a factory that throws against the stub
-  keeps the tools it recorded before throwing), `skillPackageRoots(extensionEntry, extension)` (the
+  `workspaceFiles.check` reject and whose `setting` answers the declared defaults. The tools are computed once per descriptor object (a reloaded installed extension is a new one), never from a live session, and a factory that throws against the stub,
+  or is still running after `EXTENSION_LOAD_TIMEOUT_MS`, keeps the tools it recorded until then; a
+  `sessionExtensions` that throws or answers anything but a list (a promise included) adds none — so no
+  third-party code holds `extension.list` or the status file for longer than that bound), `skillPackageRoots(extensionEntry, extension)` (the
   shared owner-scoped resolver: each `skillPackages` manifest via `createRequire(extensionEntry)`,
   returning its `pi.skills` directories; a named package with no skills fails loudly — the installed
   loader calls it once per load, so an unresolvable skill package is a failed row, not a broken chat),

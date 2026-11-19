@@ -1,6 +1,7 @@
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it, jest, mock } from "bun:test";
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
-import { listExtensionCatalog } from "./catalog";
+import { extensionToolNames, listExtensionCatalog } from "./catalog";
+import { EXTENSION_LOAD_TIMEOUT_MS } from "./installed";
 import type { ServerExtensionEntry } from "./registry";
 
 function tool(name: string): ExtensionFactory {
@@ -164,5 +165,46 @@ describe("listExtensionCatalog", () => {
 			},
 		]);
 		await expect(response).rejects.toThrow("no session");
+	});
+
+	it("never waits longer than the load timeout for a factory that hangs against the stub", async () => {
+		const hanging: ExtensionFactory = (pi) => {
+			pi.registerTool({ name: "before_hang" } as Parameters<ExtensionAPI["registerTool"]>[0]);
+			return new Promise(() => {});
+		};
+		const hung = {
+			name: "hung",
+			extensions: [hanging, tool("static")],
+			sessionExtensions: () => [() => new Promise<void>(() => {})],
+		};
+		const entries: ServerExtensionEntry[] = [
+			{ specifier: "/x/hung/server/index.ts", extension: hung },
+		];
+		jest.useFakeTimers();
+		try {
+			const listing = listExtensionCatalog(new Set(), entries, []);
+			for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
+			jest.advanceTimersByTime(EXTENSION_LOAD_TIMEOUT_MS);
+			const [entry] = await listing;
+			expect(entry?.tools).toEqual(["before_hang", "static"]);
+			expect(await extensionToolNames(hung)).toEqual(["before_hang", "static"]);
+		} finally {
+			jest.useRealTimers();
+		}
+	});
+
+	it("lists the static tools of a sessionExtensions that answers a promise", async () => {
+		const entries: ServerExtensionEntry[] = [
+			{
+				specifier: "/x/async/server/index.ts",
+				extension: {
+					name: "async-session",
+					extensions: [tool("static")],
+					sessionExtensions: (() => new Promise(() => {})) as unknown as () => ExtensionFactory[],
+				},
+			},
+		];
+		const [entry] = await listExtensionCatalog(new Set(), entries, []);
+		expect(entry?.tools).toEqual(["static"]);
 	});
 });

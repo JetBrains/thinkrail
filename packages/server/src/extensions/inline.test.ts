@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, jest } from "bun:test";
 import type {
 	Extension,
 	ExtensionAPI,
@@ -14,6 +14,7 @@ import {
 	registryExtensionName,
 	registryInlineExtensions,
 } from "./inline";
+import { EXTENSION_LOAD_TIMEOUT_MS } from "./installed";
 import type { ServerExtensionEntry } from "./registry";
 
 function entry(name: string, parents: number, children = 0): ServerExtensionEntry {
@@ -195,6 +196,49 @@ describe("registryInlineExtensions with per-session factories", () => {
 		disabled.clear();
 		expect(await registered(asker)).toEqual(["asker-session-a"]);
 	});
+});
+
+describe("an installed factory that never settles", () => {
+	const hang = () => new Promise<void>(() => {});
+	const installed = (name: string, factories: ServerExtensionEntry["extension"]) => ({
+		specifier: `/installed/${name}/server/index.ts`,
+		extension: factories,
+		installed: { skillRoots: [] },
+	});
+
+	it.each([
+		["a static factory", { name: "hung", extensions: [hang] }],
+		["a per-session factory", { name: "hung", extensions: [], sessionExtensions: () => [hang] }],
+	])(
+		"fails %s as that extension's load error once the load timeout passes",
+		async (_, extension) => {
+			const [inline] = registryInlineExtensions(
+				"extensions",
+				undefined,
+				[installed("hung", extension)],
+				{
+					expectToolResponse: () => {},
+					awaitToolResponse: async () => ({ kind: "deferred" }),
+					workspaceFiles: {
+						check: async () => {},
+						ensureArtifactsDir: async () => {},
+						scratchDir: "",
+						artifactsDir: "",
+					},
+				},
+			);
+			if (!inline || typeof inline === "function") throw new Error("missing hung");
+			jest.useFakeTimers();
+			try {
+				const loading = Promise.resolve(inline.factory({} as ExtensionAPI));
+				for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
+				jest.advanceTimersByTime(EXTENSION_LOAD_TIMEOUT_MS);
+				await expect(loading).rejects.toThrow("hung did not finish loading within 10 s");
+			} finally {
+				jest.useRealTimers();
+			}
+		},
+	);
 });
 
 describe("omitDisabledRegistryExtensions", () => {
