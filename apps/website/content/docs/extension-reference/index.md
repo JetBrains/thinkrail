@@ -201,8 +201,9 @@ streaming state changes.
 A web half receives these modules from the app at runtime instead of bundling them. The build replaces
 each import with a lookup on the app; at build time the SDK provides their type declarations. Extension
 API 1.0 is exactly these modules and, in each, exactly these names; any other name is not shared, even
-when React's type declarations offer it, and importing it fails the build. Later API minors may add
-modules and names; only a new major removes one.
+when React's type declarations offer it. A named import of such a name fails the build; read through a
+namespace or default import (`React.unstable_…`), it builds, with at most a warning, and is `undefined`
+at runtime. Later API minors may add modules and names; only a new major removes one.
 
 <!-- guard: shared-modules -->
 - `react`: `Activity`, `Children`, `Component`, `Fragment`, `Profiler`, `PureComponent`, `StrictMode`, `Suspense`, `ViewTransition`, `addTransitionType`, `cache`, `cacheSignal`, `cloneElement`, `createContext`, `createElement`, `createRef`, `forwardRef`, `isValidElement`, `lazy`, `memo`, `startTransition`, `use`, `useActionState`, `useCallback`, `useContext`, `useDebugValue`, `useDeferredValue`, `useEffect`, `useEffectEvent`, `useId`, `useImperativeHandle`, `useInsertionEffect`, `useLayoutEffect`, `useMemo`, `useOptimistic`, `useReducer`, `useRef`, `useState`, `useSyncExternalStore`, `useTransition`, `version`
