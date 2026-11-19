@@ -177,4 +177,19 @@ describe("the making-thinkrail-extensions skill", () => {
 			stop();
 		}
 	}, 60_000);
+
+	it("tells the author which tool names the host keeps", async () => {
+		const { folder, dataDir } = writeExample();
+		mkdirSync(join(dataDir, "extensions"));
+		const entry = { source: folder, state: "loaded", tools: [], shadowed: ["visualize"] };
+		writeFileSync(
+			join(dataDir, "extensions", "status.json"),
+			JSON.stringify({ api: "1.0", updatedAt: new Date().toISOString(), extensions: [entry] }),
+		);
+		const result = await script(dataDir, "status", folder);
+		expect(result.code).toBe(0);
+		expect(result.stderr).toBe(
+			"Note: ThinkRail keeps its own tool named visualize — rename yours; it never runs.\n",
+		);
+	});
 });

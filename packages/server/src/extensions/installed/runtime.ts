@@ -71,8 +71,10 @@ export interface InstalledExtensionsOptions {
 	installer?: ExtensionInstaller;
 	offline?: () => boolean;
 	onChange?: () => void;
-	/** The tool names a loaded server half registers, for the status file. */
-	toolNames?: (extension: ServerExtension) => Promise<readonly string[]>;
+	/** The tool names a loaded server half registers and owns, and the ones the host keeps, for the status file. */
+	toolNames?: (
+		extension: ServerExtension,
+	) => Promise<{ tools: readonly string[]; shadowed: readonly string[] }>;
 	/** How long a server half may take to load; `EXTENSION_LOAD_TIMEOUT_MS` unless a test says otherwise. */
 	loadTimeoutMs?: number;
 }
@@ -86,6 +88,7 @@ export interface ExtensionStatusEntry {
 	state: ExtensionStatusState;
 	error?: string;
 	tools?: string[];
+	shadowed?: string[];
 }
 
 /** `<data dir>/extensions/status.json`, rewritten after every reconcile for agents to read. */
@@ -318,13 +321,6 @@ export class InstalledExtensions {
 			return;
 		}
 		this.#records = records;
-		for (const { root } of records) {
-			if (root === undefined || this.#codeRoots.has(root)) continue;
-			this.#codeRoots.add(root);
-			try {
-				this.#codeRoots.add(realpathSync(root));
-			} catch {}
-		}
 		const servers = records.flatMap((record) => (record.server ? [record.server] : []));
 		if (
 			servers.length !== this.#servers.length ||
@@ -357,11 +353,20 @@ export class InstalledExtensions {
 		};
 	}
 
+	#rememberCodeRoot(root: string): void {
+		if (this.#codeRoots.has(root)) return;
+		this.#codeRoots.add(root);
+		try {
+			this.#codeRoots.add(realpathSync(root));
+		} catch {}
+	}
+
 	async #evaluate(
 		source: string,
 		root: string,
 		taken: ReadonlyMap<string, string>,
 	): Promise<InstalledExtensionRecord> {
+		this.#rememberCodeRoot(root);
 		let packageJson: unknown;
 		try {
 			packageJson = readPackageJson(root);
@@ -519,7 +524,9 @@ export class InstalledExtensions {
 		}
 	}
 
-	async #toolsOf(extension: ServerExtension): Promise<string[] | undefined> {
+	async #toolsOf(
+		extension: ServerExtension,
+	): Promise<{ tools: string[]; shadowed: string[] } | undefined> {
 		const names = this.#options.toolNames;
 		if (!names) return undefined;
 		let timer: ReturnType<typeof setTimeout> | undefined;
@@ -531,7 +538,7 @@ export class InstalledExtensions {
 				.then(() => names(extension))
 				.catch(() => undefined);
 			const tools = await Promise.race([listed, timeout]);
-			return tools ? [...tools] : undefined;
+			return tools ? { tools: [...tools.tools], shadowed: [...tools.shadowed] } : undefined;
 		} finally {
 			clearTimeout(timer);
 		}
@@ -554,7 +561,8 @@ export class InstalledExtensions {
 				...(record.version ? { version: record.version } : {}),
 				state: record.state,
 				...(record.error ? { error: record.error } : {}),
-				...(tools ? { tools } : {}),
+				...(tools ? { tools: tools.tools } : {}),
+				...(tools?.shadowed.length ? { shadowed: tools.shadowed } : {}),
 			});
 		}
 		const status: ExtensionsStatus = {

@@ -27,6 +27,7 @@ import {
 	childExtensionFactories,
 	disabledExtensions,
 	extensionSettings,
+	HOST_INLINE_FACTORIES,
 	isLoaderPolicyStale,
 	listProjectAliasSkillNames,
 	listSkillCatalog,
@@ -801,7 +802,11 @@ describe("registry extensions", () => {
 			`import { Type } from "typebox";\nexport default { name: "shadow", extensions: [(pi) => { ${names.map(tool).join(" ")} pi.registerCommand("mcp", { handler: async () => {} }); }] };\n`,
 		);
 		writeFileSync(join(dataDir, "extensions.json"), JSON.stringify({ extensions: [folder] }));
-		const stop = startInstalledExtensions({ dataDir, onChange: () => {} });
+		const stop = startInstalledExtensions({
+			dataDir,
+			onChange: () => {},
+			hostToolFactories: HOST_INLINE_FACTORIES,
+		});
 		const stub = (name: string) => (pi: Parameters<typeof headlessSearchPolicy>[0]) => {
 			pi.registerTool({
 				name,
@@ -841,6 +846,12 @@ describe("registry extensions", () => {
 			expect(owner("shadow_own")).toBe("<inline:ext:shadow>");
 			const commandOwner = extensions.find((extension) => extension.commands.has("mcp"))?.path;
 			expect(commandOwner).toBe("builtin:mcp");
+			const status = JSON.parse(readFileSync(join(dataDir, "extensions", "status.json"), "utf8"));
+			expect(status.extensions[0]).toMatchObject({
+				state: "loaded",
+				tools: ["Agent", "tool_search", "mcp__docs__search", "weather", "shadow_own"],
+				shadowed: ["ask_user_question", "set_title"],
+			});
 		} finally {
 			stop();
 			restore();

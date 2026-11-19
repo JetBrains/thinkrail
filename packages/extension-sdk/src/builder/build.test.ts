@@ -191,6 +191,136 @@ describe("thinkrail-extension build", () => {
 		expect(message).toContain("(imported by web/inner.ts)");
 	});
 
+	const SDK_UI =
+		"@thinkrail/extension-sdk/ui/button, @thinkrail/extension-sdk/ui/theme, @thinkrail/extension-sdk/ui/utils";
+	const SDK_ALL = `@thinkrail/extension-sdk/web, @thinkrail/extension-sdk/resources, ${SDK_UI}`;
+	const BRING_OWN = `is not part of extension API 1.0: the extension must bring its own (a dependency it bundles, or its own code). The shared UI modules are ${SDK_UI}.`;
+
+	it.each([
+		[
+			"@thinkrail/ui/button",
+			"@thinkrail/ui/button is private to the ThinkRail repository; import @thinkrail/extension-sdk/ui/button instead.",
+		],
+		[
+			"@thinkrail/resource-renderers",
+			"@thinkrail/resource-renderers is private to the ThinkRail repository; import @thinkrail/extension-sdk/resources instead.",
+		],
+		[
+			"@thinkrail/ui/dialog",
+			`@thinkrail/ui/dialog is private to the ThinkRail repository, and @thinkrail/extension-sdk/ui/dialog ${BRING_OWN}`,
+		],
+		[
+			"@thinkrail/ui/made-up",
+			`@thinkrail/ui/made-up is private to the ThinkRail repository, and @thinkrail/extension-sdk/ui/made-up ${BRING_OWN}`,
+		],
+		["@thinkrail/extension-sdk/ui/dialog", `@thinkrail/extension-sdk/ui/dialog ${BRING_OWN}`],
+		[
+			"@thinkrail/extension-sdk/charts",
+			`@thinkrail/extension-sdk/charts is not part of extension API 1.0. The web half may import: ${SDK_ALL}.`,
+		],
+		[
+			"@thinkrail/extension-api/server",
+			"@thinkrail/extension-api/server is private to the ThinkRail repository, and @thinkrail/extension-sdk/server belongs to the server half; the web half cannot import it.",
+		],
+		[
+			"@thinkrail/extension-api/installed",
+			`@thinkrail/extension-api/installed is private to the ThinkRail repository and not part of extension API 1.0. The web half may import: ${SDK_ALL}.`,
+		],
+	])("derives the hint for %s from the shared modules", async (specifier, reason) => {
+		const { root } = setup({
+			"web/index.tsx": `import * as forbidden from ${JSON.stringify(specifier)};\nexport default forbidden;\n`,
+		});
+		expect(await buildFails(root)).toBe(`${reason} (imported by web/index.tsx)`);
+	});
+
+	const REACT_DOM =
+		"browser, createPortal, flushSync, preconnect, prefetchDNS, preinit, preinitModule, preload, preloadModule, requestFormReset, useFormStatus, version";
+	const REACT = sharedModules.modules.react.join(", ");
+	const UNLISTED_DEPENDENCY = {
+		"node_modules/detecting-dep/package.json": JSON.stringify({
+			name: "detecting-dep",
+			type: "module",
+			main: "index.js",
+		}),
+		"node_modules/detecting-dep/index.js":
+			'import * as React from "react";\nexport const useEvent = React.useEffectEvent ?? React.someUnlistedThing;\n',
+	};
+
+	it("names an import outside the allow-list, its module's names and its importer", async () => {
+		const { root } = setup({
+			"web/index.tsx": 'import "./inner";\nexport default {};\n',
+			"web/inner.ts": [
+				'import { unstable_batchedUpdates } from "react-dom";',
+				'import { Dialog } from "@thinkrail/extension-sdk/ui/button";',
+				'import Button from "@thinkrail/extension-sdk/ui/button";',
+				"export const kept = [unstable_batchedUpdates, Dialog, Button];",
+				"",
+			].join("\n"),
+		});
+		expect(await buildFails(root)).toBe(
+			[
+				`unstable_batchedUpdates is not part of extension API 1.0: react-dom exports only ${REACT_DOM}. (imported by web/inner.ts)`,
+				"Dialog is not part of extension API 1.0: @thinkrail/extension-sdk/ui/button exports only Button, IconButton, withIconClass. (imported by web/inner.ts)",
+				"the default export is not part of extension API 1.0: @thinkrail/extension-sdk/ui/button exports only Button, IconButton, withIconClass. (imported by web/inner.ts)",
+			].join("\n"),
+		);
+		expect(existsSync(join(root, "dist/web.js"))).toBe(false);
+	});
+
+	it("rejects a named import outside the allow-list made from inside node_modules", async () => {
+		const { root } = setup({
+			"web/index.tsx": 'import { batch } from "old-dep";\nexport default { batch };\n',
+			"node_modules/old-dep/package.json": JSON.stringify({ name: "old-dep", type: "module" }),
+			"node_modules/old-dep/index.js":
+				'export { unstable_batchedUpdates as batch } from "react-dom";\n',
+		});
+		expect(await buildFails(root)).toBe(
+			`unstable_batchedUpdates is not part of extension API 1.0: react-dom exports only ${REACT_DOM}. (imported by node_modules/old-dep/index.js)`,
+		);
+	});
+
+	it("rejects a namespace member outside the allow-list the web half reads", async () => {
+		const { root } = setup({
+			"web/index.tsx":
+				'import * as React from "react";\nexport default { state: React.useState, other: React.someUnlistedThing };\n',
+		});
+		expect(await buildFails(root)).toBe(
+			`someUnlistedThing is not part of extension API 1.0: react exports only ${REACT}. (imported by web/index.tsx)`,
+		);
+		expect(existsSync(join(root, "dist/web.js"))).toBe(false);
+	});
+
+	it("only warns about a namespace member a dependency reads, which may be feature detection", async () => {
+		const { root } = setup({
+			"web/index.tsx": 'import { useEvent } from "detecting-dep";\nexport default { useEvent };\n',
+			...UNLISTED_DEPENDENCY,
+		});
+		const output = await buildExtension({ root, prefix: "fx", assetsDir: ASSETS });
+		expect(output.warnings).toEqual([
+			`someUnlistedThing is not part of extension API 1.0: react exports only ${REACT}. It is undefined at runtime. (imported by node_modules/detecting-dep/index.js)`,
+		]);
+	});
+
+	it("builds a default import, whose unlisted members are undefined at runtime", async () => {
+		const { root } = setup(
+			{
+				"web/index.tsx":
+					'import React from "react";\nexport default { state: React.useState, other: React.someUnlistedThing };\n',
+			},
+			{ ...WEB_PACKAGE, thinkrail: { api: "1.0", web: "./dist/web.js" } },
+		);
+		const output = await buildExtension({ root, assetsDir: ASSETS });
+		expect(output.warnings).toEqual([]);
+		const host = fakeHost("1.0");
+		Reflect.set(globalThis, HOST_OBJECT, host);
+		const loaded = (await import(pathToFileURL(join(root, "dist/web.js")).href)) as {
+			default: { state: unknown; other: unknown };
+		};
+		expect(loaded.default.state).toBe(host.modules.react?.useState);
+		expect(Object.keys(loaded.default)).toEqual(["state", "other"]);
+		expect(loaded.default.other).toBeUndefined();
+	});
+
 	it("rejects a forbidden import made from inside node_modules", async () => {
 		const { root } = setup({
 			"web/index.tsx": 'import { c } from "compiled-dep";\nexport default c;\n',

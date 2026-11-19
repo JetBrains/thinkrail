@@ -1,7 +1,7 @@
 import { describe, expect, it, jest, mock } from "bun:test";
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
-import { extensionToolNames, listExtensionCatalog } from "./catalog";
-import { EXTENSION_LOAD_TIMEOUT_MS } from "./installed";
+import { extensionToolNames, listExtensionCatalog, setHostToolFactories } from "./catalog";
+import { EXTENSION_LOAD_TIMEOUT_MS, type InstalledExtensionRecord } from "./installed";
 import type { ServerExtensionEntry } from "./registry";
 
 function tool(name: string): ExtensionFactory {
@@ -187,7 +187,10 @@ describe("listExtensionCatalog", () => {
 			jest.advanceTimersByTime(EXTENSION_LOAD_TIMEOUT_MS);
 			const [entry] = await listing;
 			expect(entry?.tools).toEqual(["before_hang", "static"]);
-			expect(await extensionToolNames(hung)).toEqual(["before_hang", "static"]);
+			expect(await extensionToolNames(hung)).toEqual({
+				tools: ["before_hang", "static"],
+				shadowed: [],
+			});
 		} finally {
 			jest.useRealTimers();
 		}
@@ -232,5 +235,43 @@ describe("listExtensionCatalog", () => {
 		];
 		const [entry] = await listExtensionCatalog(new Set(), entries, []);
 		expect(entry?.tools).toEqual(["static"]);
+	});
+
+	it("leaves the names the host owns out of an installed extension's tools", async () => {
+		const builtin: ServerExtensionEntry = {
+			specifier: "@acme/builtin/server",
+			extension: {
+				name: "builtin",
+				extensions: [tool("builtin_tool")],
+				sessionExtensions: () => [tool("session_tool")],
+			},
+		};
+		const extension = {
+			name: "shadowing",
+			extensions: [tool("own"), tool("builtin_tool"), tool("host_tool"), tool("session_tool")],
+		};
+		const record: InstalledExtensionRecord = {
+			source: "/x/shadowing",
+			sourceKind: "folder",
+			name: "shadowing",
+			title: "shadowing",
+			state: "loaded",
+			server: { extension, entry: "/x/shadowing/server/index.ts", skillRoots: [] },
+		};
+		setHostToolFactories([tool("host_tool")]);
+		try {
+			const [, entry] = await listExtensionCatalog(new Set(), [builtin], [record]);
+			expect(entry).toMatchObject({ name: "shadowing", kind: "installed", tools: ["own"] });
+			expect(await extensionToolNames(extension, [builtin])).toEqual({
+				tools: ["own"],
+				shadowed: ["builtin_tool", "host_tool", "session_tool"],
+			});
+			expect(await extensionToolNames(extension)).toEqual({
+				tools: ["own", "builtin_tool", "session_tool"],
+				shadowed: ["host_tool"],
+			});
+		} finally {
+			setHostToolFactories([]);
+		}
 	});
 });

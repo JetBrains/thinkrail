@@ -1024,7 +1024,8 @@ re-opened transcripts provider-valid.
     `enabledExtensionMissing`, owner lookup and skill roots read the same getter; skill roots are memoised
     per registry entry. **Composition order — host-owned tools always win.** A parent's inline factories
     are the bundled factories (bundled mode), the built-in registry extensions, the host's own factories
-    (headless-search policy through `skillCarryover`), the caller's `extraFactories` (subagents, background
+    (`HOST_INLINE_FACTORIES`, headless-search policy through `skillCarryover`; `host` also hands the list to
+    `startInstalledExtensions`, so an installed extension's same-named tools are listed as shadowed), the caller's `extraFactories` (subagents, background
     commands, the MCP host and its `mcp` / `tool-search` slots, usage policy, spec rule), and **then** the
     installed extensions; pi gives a duplicate tool to its first registration, so an installed extension
     never takes a host tool, and `preferRegistryTools` promotes built-ins only. A user's pi package and the

@@ -182,8 +182,8 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
     with `web`; every path relative and inside the package — no leading `/`, no `\`, NUL, URL scheme or
     drive letter, no `..` segment at all — returned normalised without `./`; `server` names a
     `.ts`/`.mts`/`.cts`/`.js`/`.mjs`/`.cjs` file, `web` a `.js`/`.mjs` and `styles` a `.css` one;
-    `title` / `image` non-empty strings, trimmed (`image` is not checked further: only a catalog shows it,
-    and showing only an `https:` image is the catalog's rule); `version`, `description` and `author` (a
+    `title` / `image` non-empty strings, trimmed (`image` is not checked further: it stays valid, but nothing
+    shows it — [[module-thinkrail-extensions]] § Catalog); `version`, `description` and `author` (a
     string or `{ name }`) are the package's own fields.
   - `src/manifestCases.json`, the one table of manifest cases with their verdicts. This package's tests,
     the SDK's `tools/` tests (expecting each valid case whose `api` is not its own to fail, its one

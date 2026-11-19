@@ -91,16 +91,44 @@ function describeOnce(extension: ServerExtension): Promise<ExtensionDescription>
 	return description;
 }
 
-/** The tool names a server half registers, as the Settings catalog lists them. */
-export async function extensionToolNames(extension: ServerExtension): Promise<string[]> {
-	return (await describeOnce(extension)).tools;
+let hostFactories: readonly ExtensionFactory[] = [];
+let hostFactoryTools: Promise<string[]> | undefined;
+
+/** The host's own inline factories, whose tool names an installed extension never owns. */
+export function setHostToolFactories(factories: readonly ExtensionFactory[]): void {
+	hostFactories = factories;
+	hostFactoryTools = undefined;
+}
+
+async function hostToolNames(builtins: readonly ServerExtensionEntry[]): Promise<Set<string>> {
+	hostFactoryTools ??= Promise.all(hostFactories.map(recordToolNames)).then((names) =>
+		names.flat(),
+	);
+	const described = await Promise.all(builtins.map(({ extension }) => describeOnce(extension)));
+	return new Set([...described.flatMap(({ tools }) => tools), ...(await hostFactoryTools)]);
+}
+
+/** An installed server half's tool names split into the ones it owns and the ones the host keeps. */
+export async function extensionToolNames(
+	extension: ServerExtension,
+	builtins: readonly ServerExtensionEntry[] = builtinServerExtensions,
+): Promise<{ tools: string[]; shadowed: string[] }> {
+	const [{ tools }, host] = await Promise.all([describeOnce(extension), hostToolNames(builtins)]);
+	return {
+		tools: tools.filter((name) => !host.has(name)),
+		shadowed: tools.filter((name) => host.has(name)),
+	};
 }
 
 async function installedEntry(
 	record: InstalledExtensionRecord,
 	disabled: ReadonlySet<string>,
+	builtins: readonly ServerExtensionEntry[],
 ): Promise<ExtensionCatalogEntry> {
 	const server = record.server ? await describeOnce(record.server.extension) : undefined;
+	const owned = record.server
+		? await extensionToolNames(record.server.extension, builtins)
+		: undefined;
 	const title = record.manifest?.title ?? server?.title ?? record.title;
 	const description = record.description ?? server?.description;
 	const web = webHalfOf(record);
@@ -108,6 +136,7 @@ async function installedEntry(
 		tools: [],
 		hasChildExtensions: false,
 		...server,
+		...(owned ? { tools: owned.tools } : {}),
 		name: record.name,
 		title,
 		...(description ? { description } : {}),
@@ -137,6 +166,6 @@ export async function listExtensionCatalog(
 	);
 	return [
 		...builtins,
-		...(await Promise.all(installed.map((record) => installedEntry(record, disabled)))),
+		...(await Promise.all(installed.map((record) => installedEntry(record, disabled, entries)))),
 	];
 }

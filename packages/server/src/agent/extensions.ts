@@ -532,6 +532,20 @@ function builtinSlotClaims(): {
 	};
 }
 
+/** The host's own static inline factories, composed into every parent session after the built-ins. */
+export const HOST_INLINE_FACTORIES: readonly ExtensionFactory[] = [
+	headlessSearchPolicy,
+	reviewToolExtension,
+	requestReviewExtension,
+	setTitleExtension,
+	continueInWorkspaceExtension,
+	workspaceToolsExtension,
+	oversizedImageGuard,
+	artifactsGuard,
+	skillCatalog,
+	skillCarryover,
+];
+
 function createRegistryLoader(
 	registry: readonly ServerExtensionEntry[],
 	owner: ResourceLoader,
@@ -561,16 +575,7 @@ function createRegistryLoader(
 	const hostFactories: InlineExtension[] = [
 		...(bundled?.factories ?? []),
 		...registryFactories(false),
-		headlessSearchPolicy,
-		reviewToolExtension,
-		requestReviewExtension,
-		setTitleExtension,
-		continueInWorkspaceExtension,
-		workspaceToolsExtension,
-		oversizedImageGuard,
-		artifactsGuard,
-		skillCatalog,
-		skillCarryover,
+		...HOST_INLINE_FACTORIES,
 		...extraFactories,
 	];
 	const extensionFactories = [
