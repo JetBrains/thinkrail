@@ -21,10 +21,16 @@ ones loaded at runtime ([[module-thinkrail-extensions]] § Installed extensions)
 - **Host object:** `host.ts` exposes the app's own modules to installed web halves on one frozen
   `globalThis.__thinkrailExtensionHost = { api, modules }`, keyed by the specifier an author imports.
   The object's name, `api` and keys are `EXTENSION_HOST_OBJECT`, `EXTENSION_API_VERSION` and
-  `SHARED_SPECIFIERS` from `@thinkrail/extension-api/installed` ([[module-extension-api]]), the one list
-  of extension API v1 that the SDK's copy is tested against. Every module in it is already in the
-  initial graph, so eager exposure costs only namespace objects (≈1.5 KB gzip measured on the
-  production build).
+  `SHARED_SPECIFIERS` from `@thinkrail/extension-api/installed` ([[module-extension-api]]). Each value
+  is **not** the live module namespace but a frozen object holding only the names
+  `SHARED_MODULE_EXPORTS` allow-lists for that specifier (`allowed(namespace, names)`, typed so a name
+  the module does not export fails `tsc`), so an installed bundle cannot reach — and the app cannot
+  accidentally promise — anything outside extension API v1. A React specifier has no `default`: the
+  SDK's stub falls back to the picked object itself. Every module in it is already in the initial
+  graph, so eager exposure costs only the picked objects and the allow-list's strings: moving to the
+  eight-specifier allow-list grew the production entry chunk by 1.1 KB raw (0.5 KB gzip) and the whole
+  initial set by 0.4 KB raw (<0.1 KB gzip), with the same chunks in the initial set. `host.test.ts` pins
+  the keys, the frozen objects, each module's exact name set and the app's own values.
 - **Loader:** `loader.ts` turns host-provided descriptors `{ name, url, styles? }` into registered tool
   renderers and back.
 - **Following the host:** `follow.ts` keeps the loaded set in step with the host's `extension.list` for the
