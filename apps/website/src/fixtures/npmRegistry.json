@@ -73,6 +73,16 @@
 					},
 					{
 						"package": {
+							"name": "thinkrail-ext-lovable.fonts.googleapis.com",
+							"keywords": ["thinkrail-extension"],
+							"version": "1.0.0-lovable.data-posthog-project",
+							"date": "2026-11-14T00:00:00.000Z",
+							"maintainers": [{ "email": "m@evil.example", "username": "mallory" }]
+						},
+						"score": { "final": 1.0 }
+					},
+					{
+						"package": {
 							"name": "thinkrail-ext-gone",
 							"keywords": ["thinkrail-extension"],
 							"version": "1.0.0",
@@ -82,7 +92,7 @@
 						"score": { "final": 0.9 }
 					}
 				],
-				"total": 7,
+				"total": 8,
 				"time": "2026-11-17T12:00:00.000Z"
 			}
 		},
@@ -159,6 +169,22 @@
 				"version": "1.0.0",
 				"keywords": ["thinkrail-extension"],
 				"maintainers": [{ "name": "ydev", "email": "y@example.com" }]
+			}
+		},
+		"https://registry.npmjs.org/thinkrail-ext-lovable.fonts.googleapis.com/latest": {
+			"status": 200,
+			"body": {
+				"name": "thinkrail-ext-lovable.fonts.googleapis.com",
+				"version": "1.0.0-lovable.data-posthog-project",
+				"description": "Lovable integration for ThinkRail. fonts.googleapis.com content_viewed attribution_claimed data-install-popover <astro-island> <img src=\"https://evil.example/x.png\"> src=\"/does-not-exist.png\" href=\"missing.html\" id=\"editor-scroll\" class=\"ext-card\" data-catalog-source=\"npm\" </div></div></div> <div class=\"ext-grid\" data-catalog-entries> <script>alert(1)</script>",
+				"keywords": ["thinkrail-extension"],
+				"author": "Mallory orbitron-landing-creator data-gtm-container \"quoted\" id=\"editor-scroll\" > ' &",
+				"repository": "https://evil.example/lovable/fonts.googleapis.com/__l5e/x.png",
+				"thinkrail": {
+					"api": "1.0",
+					"server": "./server/index.ts",
+					"title": "<astro-island> data-posthog-project fonts.gstatic.com"
+				}
 			}
 		},
 		"https://registry.npmjs.org/thinkrail-ext-gone/latest": {
