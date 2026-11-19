@@ -1,5 +1,5 @@
 import { localeOf, type Translator, useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, buttonVariants } from "@thinkrail/ui/button";
 import { useOptionalResourceHost } from "../../host";
 import type { ResourceViewProps } from "../../registry";
 
@@ -34,7 +34,7 @@ export default function BinaryView({ resource, content }: ResourceViewProps) {
 						{bytes ? bytes.hash.slice(0, 12) : t("viewer.binary.unavailable")}
 					</dd>
 				</dl>
-				{bytes && host ? (
+				{bytes ? (
 					<div className="mt-16 flex flex-wrap gap-8">
 						{host ? (
 							<Button
@@ -52,6 +52,13 @@ export default function BinaryView({ resource, content }: ResourceViewProps) {
 								{t("viewer.binary.revealInFileManager")}
 							</Button>
 						) : null}
+						<a
+							href={bytes.url}
+							download={fileName(resource.path)}
+							className={buttonVariants({ variant: "outline", size: "l" })}
+						>
+							{t("viewer.binary.downloadCopy")}
+						</a>
 					</div>
 				) : null}
 			</section>

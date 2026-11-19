@@ -2578,6 +2578,8 @@
 	"viewer.binary.bytes_one": "{{size}} 位元組",
 	"viewer.binary.bytes_other": "{{size}} 位元組",
 	"viewer.binary.differ": "二進位檔案不同",
+	"viewer.binary.downloadCopy": "下載副本",
+	"viewer.binary.hostTooOld": "此操作需要更新的宿主",
 	"viewer.binary.modified": "修改後：{{size}}",
 	"viewer.binary.openExternally": "使用外部應用程式開啟",
 	"viewer.binary.original": "原始：{{size}}",

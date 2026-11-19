@@ -2779,6 +2779,8 @@
 	"viewer.binary.bytes_one": "{{size}} 字节",
 	"viewer.binary.bytes_other": "{{size}} 字节",
 	"viewer.binary.differ": "二进制文件有差异",
+	"viewer.binary.downloadCopy": "下载副本",
+	"viewer.binary.hostTooOld": "此操作需要更新的宿主",
 	"viewer.binary.modified": "改后：{{size}}",
 	"viewer.binary.openExternally": "用外部应用打开",
 	"viewer.binary.original": "原始：{{size}}",

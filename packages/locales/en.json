@@ -5167,6 +5167,8 @@
 	"viewer.binary.bytes_one": "{{size}} byte",
 	"viewer.binary.bytes_other": "{{size}} bytes",
 	"viewer.binary.differ": "Binary files differ",
+	"viewer.binary.downloadCopy": "Download a copy",
+	"viewer.binary.hostTooOld": "This action needs a newer host",
 	"viewer.binary.modified": "Modified: {{size}}",
 	"viewer.binary.openExternally": "Open externally",
 	"viewer.binary.original": "Original: {{size}}",

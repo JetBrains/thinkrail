@@ -45,11 +45,13 @@ function renderView(withHost: boolean): string {
 		: renderToStaticMarkup(view);
 }
 
-test("the external-open action is a host action, not a webview download of a copy", () => {
+test("the external-open action is a host action, and a download stays available", () => {
 	const markup = renderView(true);
 	expect(markup).toContain("Open externally");
-	expect(markup).not.toContain("download=");
-	expect(markup).not.toContain("<a ");
+	// exactly one anchor: the explicitly labeled download copy for remote browsers
+	expect(markup.split("<a ").length - 1).toBe(1);
+	expect(markup).toContain("download=");
+	expect(markup).toContain("Download a copy");
 });
 
 test("a reveal-in-file-manager action ships next to it", () => {
@@ -57,8 +59,8 @@ test("a reveal-in-file-manager action ships next to it", () => {
 	expect(markup).toContain("Reveal in file manager");
 });
 
-test("both actions stay hidden without a resource host", () => {
+test("host actions stay hidden without a resource host, the download remains", () => {
 	const markup = renderView(false);
 	expect(markup).not.toContain("<button");
-	expect(markup).not.toContain("<a ");
+	expect(markup).toContain("Download a copy");
 });

@@ -24,10 +24,11 @@ import {
 	selectFileChangeSince,
 	selectHostSearchReady,
 	selectWorkspaceById,
+	toast,
 	useAppStore,
 } from "../store";
 import { resolveThinkrailEditorTheme, THINKRAIL_PIERRE_THEME } from "../themes";
-import { getTransport, wsErrorCode } from "../transport";
+import { getTransport, supportsFsExternalActions, wsErrorCode } from "../transport";
 import { hasNativeMessageBridge } from "./nativeBridges";
 
 registerBundledResourceRenderers({
@@ -59,10 +60,26 @@ const HOST: ResourceHost = {
 	},
 	bytesUrl: resourceBytesUrl,
 	openPathExternally: (workspaceId, path) => {
-		void getTransport().request("fs.openExternally", { workspaceId, path });
+		if (!supportsFsExternalActions(useAppStore.getState().protocolVersion)) {
+			toast.info(t("viewer.binary.hostTooOld"));
+			return;
+		}
+		getTransport()
+			.request("fs.openExternally", { workspaceId, path })
+			.catch((error: unknown) => {
+				toast.error(`${t("viewer.binary.openExternally")}: ${errorMessage(error)}`);
+			});
 	},
 	revealInFileManager: (workspaceId, path) => {
-		void getTransport().request("fs.reveal", { workspaceId, path });
+		if (!supportsFsExternalActions(useAppStore.getState().protocolVersion)) {
+			toast.info(t("viewer.binary.hostTooOld"));
+			return;
+		}
+		getTransport()
+			.request("fs.reveal", { workspaceId, path })
+			.catch((error: unknown) => {
+				toast.error(`${t("viewer.binary.revealInFileManager")}: ${errorMessage(error)}`);
+			});
 	},
 	openFile: (workspaceId, path, options) => {
 		void openFileInTab(workspaceId, path, options?.keep ? "keep" : "preview");
@@ -147,4 +164,8 @@ export function AppResourceHost({ children }: { children: ReactNode }) {
 			</ResourcePreferencesProvider>
 		</ResourceHostProvider>
 	);
+}
+
+function errorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
 }

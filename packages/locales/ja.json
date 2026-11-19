@@ -2541,6 +2541,8 @@
 	"viewer.binary.absent": "なし",
 	"viewer.binary.bytes_other": "{{size}} バイト",
 	"viewer.binary.differ": "バイナリファイルが異なります",
+	"viewer.binary.downloadCopy": "コピーをダウンロード",
+	"viewer.binary.hostTooOld": "この操作には新しいホストが必要です",
 	"viewer.binary.modified": "変更後: {{size}}",
 	"viewer.binary.openExternally": "外部で開く",
 	"viewer.binary.original": "元: {{size}}",
