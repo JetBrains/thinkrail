@@ -63,9 +63,9 @@ test("open pull requests list the ones waiting for your review first, with numbe
 	expect(markup).toContain("#9");
 	expect(markup).toContain("Change 9");
 	expect(markup).toContain("octo · +19,217 −8,006");
-	expect(markup.match(/data-testid="pr-tag"/g)).toHaveLength(1);
+	expect(markup.match(/data-testid="pull-request-tag"/g)).toHaveLength(1);
 	expect(markup).toContain(`>${text("panels.prPicker.draft")}<`);
-	expect(markup).toContain('data-testid="pr-picker-search"');
+	expect(markup).toContain('data-testid="pull-request-picker-search"');
 });
 
 test("a looked-up merged or closed pull request shows with its state tag", () => {
@@ -90,9 +90,9 @@ test("a looked-up merged or closed pull request shows with its state tag", () =>
 });
 
 test("loading, empty and every unavailable reason render their own state", () => {
-	expect(view({ kind: "loading" })).toContain('data-testid="pr-picker-loading"');
+	expect(view({ kind: "loading" })).toContain('data-testid="pull-request-picker-loading"');
 	const empty = view({ kind: "ready", pullRequests: [] });
-	expect(empty).toContain('data-testid="pr-picker-empty"');
+	expect(empty).toContain('data-testid="pull-request-picker-empty"');
 	expect(empty).toContain(text("panels.prPicker.none"));
 	expect(view({ kind: "ready", pullRequests: [pr(1)] }, { query: "zzz" })).toContain(
 		text("panels.prPicker.noMatch"),
@@ -106,10 +106,10 @@ test("loading, empty and every unavailable reason render their own state", () =>
 	expect(signedOut).toContain(text("panels.prPicker.integrations"));
 	const notGithub = view({ kind: "unavailable", reason: "not-github" });
 	expect(notGithub).toContain(text("panels.prPicker.notGithub"));
-	expect(notGithub).not.toContain("pr-picker-retry");
+	expect(notGithub).not.toContain("pull-request-picker-retry");
 	const failed = view({ kind: "unavailable", reason: "failed" });
 	expect(failed).toContain(text("panels.prPicker.failed"));
-	expect(failed).toContain('data-testid="pr-picker-retry"');
+	expect(failed).toContain('data-testid="pull-request-picker-retry"');
 	expect(failed).not.toContain(text("panels.prPicker.integrations"));
 });
 

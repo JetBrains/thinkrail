@@ -171,16 +171,17 @@ export function NewWorkspaceDialog({
 		() => reviewKickoffPullRequest(retryDraft?.kickoff?.text ?? ""),
 		[retryDraft],
 	);
-	const initialTarget = openingTarget({
-		projectId,
-		requested: requestedTarget,
-		canReview,
-		retryingReview: retryPr !== null,
-	});
 	const [selectedProjectId, setSelectedProjectId] = useState(
 		projectId ?? repoProjects[0]?.id ?? chatsContainer?.id ?? "",
 	);
-	const [target, setTarget] = useState<WorkspaceTarget>(initialTarget);
+	const [target, setTarget] = useState<WorkspaceTarget>(() =>
+		openingTarget({
+			projectId,
+			requested: requestedTarget,
+			canReview,
+			retryingReview: retryPr !== null,
+		}),
+	);
 	const chat = target === "chat";
 	const review = target === "review";
 	const [pickedPr, setPickedPr] = useState<PickedPullRequest | null>(null);
@@ -276,6 +277,13 @@ export function NewWorkspaceDialog({
 		setSelectedProjectId(
 			projectId ?? selectRepoProjects(opened)[0]?.id ?? selectChatsContainer(opened)?.id ?? "",
 		);
+		const initialTarget = openingTarget({
+			projectId,
+			requested: requestedTarget,
+			canReview:
+				selectRepoProjects(opened).length > 0 && supportsPullRequestReview(opened.protocolVersion),
+			retryingReview: retryPr !== null,
+		});
 		const retryingReview = initialTarget === "review" && retryPr !== null;
 		updatePromptDraft(
 			retryingReview ? "" : (retryDraft?.kickoff?.text ?? initialPrompt ?? ""),
@@ -300,7 +308,7 @@ export function NewWorkspaceDialog({
 	}, [
 		open,
 		projectId,
-		initialTarget,
+		requestedTarget,
 		initialPrompt,
 		retryDraft,
 		retryPr,
@@ -317,7 +325,7 @@ export function NewWorkspaceDialog({
 	}, [open, chat, projects, selectedProjectId, onOpenChange]);
 
 	useEffect(() => {
-		if (!open || initialTarget !== "review" || !retryPr || !retryDraft) return;
+		if (!open || !review || !retryPr || !retryDraft) return;
 		let cancelled = false;
 		void getPullRequest(retryDraft.projectId, retryPr.number).then((found) => {
 			if (cancelled || !found) return;
@@ -326,7 +334,7 @@ export function NewWorkspaceDialog({
 		return () => {
 			cancelled = true;
 		};
-	}, [open, initialTarget, retryPr, retryDraft]);
+	}, [open, review, retryPr, retryDraft]);
 
 	const selectProject = (id: string) => {
 		if (id !== selectedProjectId) setPickedPr(null);

@@ -47,7 +47,7 @@ function StateTag({ pr }: { pr: PullRequestSummary }) {
 	if (label === null) return null;
 	return (
 		<span
-			data-testid="pr-tag"
+			data-testid="pull-request-tag"
 			className="shrink-0 rounded-sm border border-border-muted px-4 text-text-muted tr-text-metadata"
 		>
 			{label}
@@ -68,7 +68,7 @@ function PullRequestRow({
 	return (
 		<CommandItem
 			value={`pr-${pr.number}`}
-			data-testid="pr-option"
+			data-testid="pull-request-option"
 			data-pr={pr.number}
 			data-active={selected ? true : undefined}
 			onSelect={() => onSelect(pr)}
@@ -102,13 +102,13 @@ function LookupRows({
 			return null;
 		case "searching":
 			return (
-				<p data-testid="pr-lookup-searching" className={NOTICE}>
+				<p data-testid="pull-request-lookup-searching" className={NOTICE}>
 					{t("panels.prPicker.lookingUp", { number: lookup.number })}
 				</p>
 			);
 		case "missing":
 			return (
-				<p data-testid="pr-lookup-missing" className={NOTICE}>
+				<p data-testid="pull-request-lookup-missing" className={NOTICE}>
 					{t("panels.prPicker.notFound", { number: lookup.number })}
 				</p>
 			);
@@ -146,7 +146,7 @@ export function PullRequestPickerBody({
 	const t = useT();
 	if (list.kind === "loading") {
 		return (
-			<p data-testid="pr-picker-loading" className={NOTICE}>
+			<p data-testid="pull-request-picker-loading" className={NOTICE}>
 				{t("panels.prPicker.loading")}
 			</p>
 		);
@@ -155,7 +155,7 @@ export function PullRequestPickerBody({
 		const reason = list.reason;
 		return (
 			<div
-				data-testid="pr-picker-unavailable"
+				data-testid="pull-request-picker-unavailable"
 				data-reason={reason}
 				className="flex flex-col gap-8 px-12 py-12"
 			>
@@ -173,7 +173,12 @@ export function PullRequestPickerBody({
 				) : null}
 				{reason === "failed" ? (
 					<div>
-						<Button variant="outline" size="m" data-testid="pr-picker-retry" onClick={onRetry}>
+						<Button
+							variant="outline"
+							size="m"
+							data-testid="pull-request-picker-retry"
+							onClick={onRetry}
+						>
 							{t("panels.prPicker.retry")}
 						</Button>
 					</div>
@@ -188,12 +193,15 @@ export function PullRequestPickerBody({
 			<CommandInput
 				value={query}
 				onValueChange={onQueryChange}
-				data-testid="pr-picker-search"
+				data-testid="pull-request-picker-search"
 				placeholder={t("panels.prPicker.search")}
 			/>
 			<CommandList>
 				{rows.waiting.length > 0 ? (
-					<CommandGroup heading={t("panels.prPicker.waiting")} data-testid="pr-group-waiting">
+					<CommandGroup
+						heading={t("panels.prPicker.waiting")}
+						data-testid="pull-request-group-waiting"
+					>
 						{rows.waiting.map((pr) => (
 							<PullRequestRow
 								key={pr.number}
@@ -205,7 +213,7 @@ export function PullRequestPickerBody({
 					</CommandGroup>
 				) : null}
 				{rows.open.length > 0 ? (
-					<CommandGroup heading={t("panels.prPicker.open")} data-testid="pr-group-open">
+					<CommandGroup heading={t("panels.prPicker.open")} data-testid="pull-request-group-open">
 						{rows.open.map((pr) => (
 							<PullRequestRow
 								key={pr.number}
@@ -220,7 +228,7 @@ export function PullRequestPickerBody({
 					<LookupRows lookup={lookup} selected={selected} onSelect={onSelect} />
 				) : null}
 				{nothing ? (
-					<p data-testid="pr-picker-empty" className={NOTICE}>
+					<p data-testid="pull-request-picker-empty" className={NOTICE}>
 						{list.pullRequests.length === 0 && !query.trim()
 							? t("panels.prPicker.none")
 							: t("panels.prPicker.noMatch")}
@@ -301,7 +309,7 @@ export function PullRequestPicker({
 			<PopoverContent
 				align="start"
 				container={container}
-				data-testid="pr-picker"
+				data-testid="pull-request-picker"
 				className="w-[520px] max-w-[calc(100vw-48px)] p-0"
 			>
 				<Command shouldFilter={false}>
