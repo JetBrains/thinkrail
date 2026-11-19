@@ -1,0 +1,24 @@
+---
+import { docPath, publishedDocs } from "../../docsCollection";
+import DocsLayout from "../../layouts/DocsLayout.astro";
+
+const docs = await publishedDocs();
+---
+
+<DocsLayout title="Docs — ThinkRail" description="Guides for building on ThinkRail.">
+	<header class="blog-index-header">
+		<h1 class="blog-index-title">Docs</h1>
+		<p class="blog-index-subtitle">Guides for building on ThinkRail.</p>
+	</header>
+
+	<div class="blog-posts-list">
+		{
+			docs.map((doc) => (
+				<a href={docPath(doc)} class="blog-post-card">
+					<h2 class="blog-post-card-title">{doc.data.title}</h2>
+					<p class="blog-post-card-excerpt">{doc.data.description}</p>
+				</a>
+			))
+		}
+	</div>
+</DocsLayout>

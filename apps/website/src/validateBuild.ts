@@ -1,3 +1,5 @@
+import { catalogErrors } from "./extensionCatalog";
+
 const forbiddenOutput = [
 	"/__l5e/",
 	"lovable",
@@ -10,6 +12,10 @@ const requiredSitemapUrls = [
 	"https://thinkrail.ai/",
 	"https://thinkrail.ai/blog/",
 	"https://thinkrail.ai/vibecoding/",
+	"https://thinkrail.ai/docs/",
+	"https://thinkrail.ai/docs/build-an-extension/",
+	"https://thinkrail.ai/docs/extension-reference/",
+	"https://thinkrail.ai/extensions/",
 ] as const;
 
 const desktopDownloadUrls = [
@@ -132,6 +138,32 @@ async function outputPathExists(distDirectory: string, url: string): Promise<boo
 	return (await Promise.all(candidates.map((path) => Bun.file(path).exists()))).some(Boolean);
 }
 
+export function validateExtensionsPage(html: string, catalogText: string): string[] {
+	let catalog: unknown;
+	try {
+		catalog = JSON.parse(catalogText);
+	} catch {
+		return ["extensions/catalog.json: not JSON"];
+	}
+	const failures = catalogErrors(catalog).map((error) => `extensions/catalog.json: ${error}`);
+	if (failures.length > 0) return failures;
+	const listed = (catalog as { extensions: unknown[] }).extensions.length;
+	const cards = occurrences(html, 'class="ext-card"');
+	if (cards !== listed) {
+		failures.push(`extensions: renders ${cards} cards for ${listed} catalog entries`);
+	}
+	if (listed === 0 && !html.includes('class="ext-empty"')) {
+		failures.push("extensions: empty catalog without the empty state");
+	}
+	if (!/data-catalog-source="(?:npm|sample)"/.test(html)) {
+		failures.push("extensions: missing data-catalog-source");
+	}
+	if (!html.includes('href="/docs/build-an-extension/"')) {
+		failures.push("extensions: missing the link to the authoring guide");
+	}
+	return failures;
+}
+
 export function validateAnalyticsPages(
 	pages: readonly { path: string; runtimeContent: string }[],
 ): string[] {
@@ -183,9 +215,22 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		agenticDevelopment: requiredPage("agentic-development/index.html"),
 		agenticIde: requiredPage("agentic-ide/index.html"),
 		claim: requiredPage("attribution/claim/index.html"),
+		docs: requiredPage("docs/index.html"),
+		buildAnExtension: requiredPage("docs/build-an-extension/index.html"),
+		extensionReference: requiredPage("docs/extension-reference/index.html"),
+		extensions: requiredPage("extensions/index.html"),
 	};
 	const islandPages = ["vibecoding", "agenticDevelopment", "agenticIde"] as const;
-	const staticPages = ["landing", "blog", "introducingThinkRail", "claim"] as const;
+	const staticPages = [
+		"landing",
+		"blog",
+		"introducingThinkRail",
+		"claim",
+		"docs",
+		"buildAnExtension",
+		"extensionReference",
+		"extensions",
+	] as const;
 	const installPages = [
 		{ name: "landing", html: splitSiteHeader(pages.landing).body, expectedDownloads: 1 },
 		{
@@ -290,13 +335,36 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 	for (const [path, html] of htmlPages) {
 		if (!analyticsFreePages.has(path)) failures.push(...validateHeaderInstall(path, html));
 		for (const id of duplicateIds(html)) failures.push(`${path} duplicate id: ${id}`);
-		if (!/^blog\/[^/]+\/index\.html$/.test(path)) continue;
-		failures.push(...validatePostInstall(path, html));
+		if (!/^(?:blog|docs)\/[^/]+\/index\.html$/.test(path)) continue;
+		if (path.startsWith("blog/")) failures.push(...validatePostInstall(path, html));
+		if (
+			path.startsWith("docs/") &&
+			!html.includes('<a class="tree-row page selected" href="/docs/"')
+		) {
+			failures.push(`${path}: the Docs rail row is not selected`);
+		}
 		for (const url of relativeLinkTargets(path, html)) {
 			if (!(await outputPathExists(distDirectory, url))) {
 				failures.push(`${path}: missing local output for ${url}`);
 			}
 		}
+	}
+	for (const [name, href] of [
+		["docs", "/docs/"],
+		["extensions", "/extensions/"],
+	] as const) {
+		if (!pages.landing.includes(`<a class="tree-row page" href="${href}"`)) {
+			failures.push(`landing: rail row missing: ${href}`);
+		}
+		if (!pages[name].includes(`<a class="tree-row page selected" href="${href}"`)) {
+			failures.push(`${name}: its rail row is not selected`);
+		}
+	}
+	const catalogPath = `${distDirectory}/extensions/catalog.json`;
+	if (await Bun.file(catalogPath).exists()) {
+		failures.push(...validateExtensionsPage(pages.extensions, await Bun.file(catalogPath).text()));
+	} else {
+		failures.push("extensions/catalog.json: missing");
 	}
 	if (!pages.landing.includes("Browser UI via command line")) {
 		failures.push("landing: browser UI command-line option is missing");
@@ -403,6 +471,13 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		"X-Frame-Options: DENY",
 	]) {
 		if (!headers.includes(required)) failures.push(`headers: missing ${required}`);
+	}
+	if (
+		!/^\/extensions\/catalog\.json\n(?:[ \t]+.*\n)*?[ \t]+Access-Control-Allow-Origin: \*$/m.test(
+			headers,
+		)
+	) {
+		failures.push("headers: catalog.json is not CORS-open");
 	}
 
 	const redirects = await Bun.file(`${distDirectory}/_redirects`).text();

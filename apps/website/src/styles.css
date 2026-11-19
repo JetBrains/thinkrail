@@ -544,25 +544,6 @@ a.tree-row:hover {
 	text-decoration: none;
 }
 
-.tree-row.disabled {
-	color: var(--hint);
-}
-
-.tree-tag {
-	margin-left: auto;
-	flex: none;
-	padding: 1px 6px;
-	border: 1px solid var(--border2);
-	border-radius: 4px;
-	background: var(--elevated);
-	font-family: var(--font-mono);
-	font-weight: 500;
-	font-size: 9.5px;
-	letter-spacing: 0.4px;
-	color: var(--muted);
-	white-space: nowrap;
-}
-
 /* The rows that remain a static mock (the `data-mock-hint` wrapper) keep the tree's row rhythm. */
 .tree-mock {
 	display: flex;
@@ -726,7 +707,7 @@ a.tree-row:hover {
 /* ── Sections: files ────────────────────────────────────────────────────── */
 
 .file-section,
-.blog-main {
+.page-main {
 	max-width: 860px;
 	margin: 0 auto;
 	padding: clamp(40px, 7vh, 84px) clamp(20px, 5vw, 56px);
@@ -3150,4 +3131,264 @@ a.feature-card:hover {
 
 .download-thanks [hidden] {
 	display: none;
+}
+
+/* ══ DOCS — /docs pages reuse the blog's index, card and prose styles (SPEC.md "Docs") ══ */
+
+.doc-page-lead {
+	font-size: var(--text-lg);
+	line-height: 1.6;
+	color: var(--blog-text-muted);
+	margin: 0;
+}
+
+.doc-page .blog-post-content :not(pre) > code {
+	overflow-wrap: anywhere;
+}
+
+.doc-page .blog-post-content table {
+	display: block;
+	overflow-x: auto;
+}
+
+.doc-page .blog-post-content td > code {
+	overflow-wrap: break-word;
+}
+
+.doc-page .blog-post-content pre {
+	tab-size: 2;
+}
+
+/* ══ EXTENSIONS — the /extensions/ showcase (SPEC.md "Extensions page") ══ */
+
+.ext-notice {
+	margin: 0 0 var(--space-md);
+	padding: var(--space-sm) var(--space-md);
+	border: 1px solid var(--border2);
+	border-radius: 4px;
+	font-size: var(--text-sm);
+	line-height: 1.55;
+	color: var(--blog-text-muted);
+}
+
+.ext-notice-sample {
+	border-color: color-mix(in srgb, var(--gold) 55%, var(--border2));
+	background: color-mix(in srgb, var(--gold) 8%, transparent);
+	color: var(--text);
+}
+
+.ext-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-sm) var(--space-md);
+	margin-top: var(--space-xl);
+}
+
+.ext-search {
+	display: flex;
+	flex: 1 1 260px;
+	align-items: center;
+	gap: 8px;
+	height: 36px;
+	padding: 0 10px;
+	border: 1px solid var(--border2);
+	border-radius: 4px;
+	background: var(--input);
+	color: var(--hint);
+}
+
+.ext-search[hidden] {
+	display: none;
+}
+
+.ext-search:focus-within {
+	border-color: var(--focus-ring);
+}
+
+.ext-search input {
+	flex: 1;
+	min-width: 0;
+	border: none;
+	outline: none;
+	background: transparent;
+	color: var(--text);
+	font: inherit;
+	font-size: var(--text-sm);
+}
+
+.ext-count {
+	margin: 0 0 0 auto;
+	font-family: var(--font-mono);
+	font-size: var(--text-xs);
+	color: var(--blog-text-hint);
+}
+
+.ext-hint {
+	margin: var(--space-sm) 0 var(--space-lg);
+	font-size: var(--text-sm);
+	color: var(--blog-text-muted);
+}
+
+.ext-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+	gap: var(--space-lg);
+}
+
+.ext-card {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	overflow: hidden;
+	border: 1px solid var(--border2);
+	border-radius: 0.5rem;
+	background: color-mix(in srgb, var(--elevated) 40%, var(--container-workspace-bg));
+}
+
+.ext-card[hidden] {
+	display: none;
+}
+
+.ext-card-media {
+	position: relative;
+	display: grid;
+	place-items: center;
+	aspect-ratio: 16 / 9;
+	overflow: hidden;
+	border-bottom: 1px solid var(--border2);
+	background: var(--container-workspace-bg);
+	color: var(--hint);
+}
+
+.ext-card-placeholder {
+	font-size: 32px;
+	opacity: 0.6;
+}
+
+.ext-card-image {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.ext-card-media.broken .ext-card-image {
+	display: none;
+}
+
+.ext-card-body {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: var(--space-sm);
+	padding: var(--space-md);
+}
+
+.ext-card-title {
+	margin: 0;
+	font-size: var(--text-lg);
+	font-weight: 600;
+	color: var(--blog-text);
+	overflow-wrap: anywhere;
+}
+
+.ext-card-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-sm);
+	margin: 0;
+	font-size: var(--text-xs);
+	color: var(--blog-text-hint);
+}
+
+.ext-card-name {
+	overflow-wrap: anywhere;
+}
+
+.ext-card-description {
+	display: -webkit-box;
+	margin: 0;
+	overflow: hidden;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 4;
+	line-clamp: 4;
+	font-size: var(--text-sm);
+	line-height: 1.5;
+	color: var(--blog-text-muted);
+	overflow-wrap: anywhere;
+}
+
+.ext-card-author {
+	margin: 0;
+	font-size: var(--text-xs);
+	color: var(--blog-text-hint);
+	overflow-wrap: anywhere;
+}
+
+.ext-card-halves {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-xs);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.ext-card-install {
+	margin-top: auto;
+}
+
+.ext-card-source {
+	font-size: 12px;
+}
+
+.ext-card-links {
+	display: flex;
+	gap: var(--space-md);
+	margin: 0;
+	font-size: var(--text-sm);
+}
+
+.ext-no-match {
+	margin: var(--space-lg) 0 0;
+	text-align: center;
+	color: var(--blog-text-muted);
+}
+
+.ext-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--space-sm);
+	margin-top: var(--space-xl);
+	padding: var(--space-2xl) var(--space-lg);
+	border: 1px dashed var(--border2);
+	border-radius: 0.5rem;
+	text-align: center;
+	color: var(--blog-text-muted);
+}
+
+.ext-empty-icon {
+	font-size: 32px;
+	color: var(--hint);
+}
+
+.ext-empty-title {
+	margin: 0;
+	font-size: var(--text-xl);
+	font-weight: 600;
+	color: var(--blog-text);
+}
+
+.ext-empty-text {
+	max-width: 46ch;
+	margin: 0 0 var(--space-sm);
+}
+
+.ext-footnote {
+	margin: var(--space-2xl) 0 0;
+	font-size: var(--text-xs);
+	color: var(--blog-text-hint);
 }

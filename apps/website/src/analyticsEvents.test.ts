@@ -141,6 +141,9 @@ describe("website content keys", () => {
 		["/vibecoding/", "vibecoding"],
 		["/agentic-development/", "agentic-development"],
 		["/agentic-ide/", "agentic-ide"],
+		["/docs/", "docs"],
+		["/docs/build-an-extension/", "docs/build-an-extension"],
+		["/extensions/", "extensions"],
 	] as const)("keeps %s mapped to %s", (pathname, contentKey) => {
 		expect(contentKeyForPathname(pathname)).toBe(contentKey);
 	});
@@ -336,6 +339,14 @@ describe("install command copies and link shares", () => {
 			installCommandCopiedEvent(
 				"landing",
 				attributeElement("#cta", "[data-copy]", { "data-copy": installCommands.macos }),
+			),
+		).toBeUndefined();
+		expect(
+			installCommandCopiedEvent(
+				"extensions",
+				attributeElement("[data-extensions]", "[data-copy]", {
+					"data-copy": "npm:thinkrail-ext-weather",
+				}),
 			),
 		).toBeUndefined();
 		expect(
