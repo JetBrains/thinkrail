@@ -72,8 +72,11 @@ the other fields, so an installed extension cannot bind keys or mount an overlay
   `name` and `toolRenderers` whose entries carry a `renderer` the chat can render as `<Renderer {...props} />`
   — a function or a React `memo` / `forwardRef` / `lazy` object, recognised by its `$$typeof` symbol
   without React internals (`ToolRenderer`'s call signature already admits them in TypeScript) — and
-  optional object `options` with optional functions `summary` and `composerSuggestions`, which the chat
-  calls directly. Only then are the renderers registered, under the descriptor's `name`
+  optional object `options`. The loader copies only the eight registration options the contract names
+  (`summary`, `chrome`, `prominence`, `width`, `defaultExpanded`, `interactive`, `dock`,
+  `composerSuggestions`), each checked against its type or its allowed values, and drops every other
+  key: an extension's own `renderer` or `extension` field inside `options` can therefore never replace
+  the checked renderer or the owner the registry stamps. Only then are the renderers registered, under the descriptor's `name`
   (the npm identity, not the author's `defineWebExtension` name), in the precedence slot reserved when its
   load started — the descriptor order of the host's list — so a contested tool name goes to the
   extension the server runs, not to the bundle that loaded first. Any failure removes the stylesheet,

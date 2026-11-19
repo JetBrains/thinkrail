@@ -1,4 +1,8 @@
-import type { WebExtension } from "@thinkrail/extension-api/web";
+import type {
+	ToolRegistrationOptions,
+	ToolRenderer,
+	WebExtension,
+} from "@thinkrail/extension-api/web";
 import { useSyncExternalStore } from "react";
 import {
 	removeInstalledToolRenderers,
@@ -133,25 +137,49 @@ type InstalledWebHalf = WebExtension & {
 	toolRenderers: NonNullable<WebExtension["toolRenderers"]>;
 };
 
+const isFunction = (value: unknown) => typeof value === "function";
+const isBoolean = (value: unknown) => typeof value === "boolean";
+const oneOf =
+	(...allowed: string[]) =>
+	(value: unknown) =>
+		typeof value === "string" && allowed.includes(value);
+
+const REGISTRATION_OPTIONS: Record<keyof ToolRegistrationOptions, (value: unknown) => boolean> = {
+	summary: isFunction,
+	chrome: oneOf("card", "bare"),
+	prominence: oneOf("routine", "primary"),
+	width: oneOf("column", "content"),
+	defaultExpanded: isBoolean,
+	interactive: isBoolean,
+	dock: isBoolean,
+	composerSuggestions: isFunction,
+};
+
+function registrationOptionsOf(value: unknown): ToolRegistrationOptions | null {
+	if (value === undefined) return {};
+	if (!isObject(value)) return null;
+	const options: Record<string, unknown> = {};
+	for (const [key, accepts] of Object.entries(REGISTRATION_OPTIONS)) {
+		const option = value[key];
+		if (option === undefined) continue;
+		if (!accepts(option)) return null;
+		options[key] = option;
+	}
+	return options;
+}
+
 function webExtensionOf(module: unknown): InstalledWebHalf | null {
 	const candidate = isObject(module) ? module.default : undefined;
 	if (!isObject(candidate) || typeof candidate.name !== "string") return null;
-	const toolRenderers = candidate.toolRenderers;
-	if (!isObject(toolRenderers)) return null;
-	for (const entry of Object.values(toolRenderers)) {
+	if (!isObject(candidate.toolRenderers)) return null;
+	const toolRenderers: InstalledWebHalf["toolRenderers"] = {};
+	for (const [tool, entry] of Object.entries(candidate.toolRenderers)) {
 		if (!isObject(entry) || !isComponentType(entry.renderer)) return null;
-		const options = entry.options;
-		if (options === undefined) continue;
-		if (!isObject(options)) return null;
-		if (options.summary !== undefined && typeof options.summary !== "function") return null;
-		if (
-			options.composerSuggestions !== undefined &&
-			typeof options.composerSuggestions !== "function"
-		) {
-			return null;
-		}
+		const options = registrationOptionsOf(entry.options);
+		if (!options) return null;
+		toolRenderers[tool] = { renderer: entry.renderer as ToolRenderer, options };
 	}
-	return candidate as unknown as InstalledWebHalf;
+	return { name: candidate.name, toolRenderers };
 }
 
 async function fetchExtension(

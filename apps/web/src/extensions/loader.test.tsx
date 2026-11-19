@@ -15,6 +15,7 @@ import { type ChatActions, ChatActionsContext } from "../chat/ChatActions";
 import { InteractionStatesContext } from "../chat/interactionState";
 import { ToolRendererBody } from "../chat/ToolRendererBody";
 import {
+	currentToolRegistry,
 	DefaultToolRenderer,
 	getToolRenderer,
 	getToolSummary,
@@ -166,6 +167,45 @@ describe("web extension loader", () => {
 		const [result] = await loadWebExtensions([{ name: "junk", url: "junk.js" }]);
 		expect(result).toMatchObject({ status: "failed", reason: "export" });
 		expect(getToolRenderer("junk_tool")).toBe(DefaultToolRenderer);
+	});
+
+	test.each([
+		["an unknown chrome", { chrome: "floating" }],
+		["a non-boolean dock", { dock: "yes" }],
+		["a summary that is not a function", { summary: "text" }],
+		["options that are not an object", "primary"],
+	])("rejects %s with an export failure", async (_label, options) => {
+		fakeEnvironment({
+			importModule: async () => ({
+				default: { name: "junk", toolRenderers: { junk_tool: { renderer: () => null, options } } },
+			}),
+		});
+		const [result] = await loadWebExtensions([{ name: "junk", url: "junk.js" }]);
+		expect(result).toMatchObject({ status: "failed", reason: "export" });
+		expect(getToolRenderer("junk_tool")).toBe(DefaultToolRenderer);
+	});
+
+	test("registration keeps only the options the contract names", async () => {
+		const renderer = () => null;
+		const impostor = () => null;
+		fakeEnvironment({
+			importModule: async () => ({
+				default: {
+					name: "picky",
+					toolRenderers: {
+						picky_tool: {
+							renderer,
+							options: { prominence: "primary", renderer: impostor, extension: "visualize" },
+						},
+					},
+				},
+			}),
+		});
+		const [result] = await loadWebExtensions([{ name: "picky", url: "picky.js" }]);
+		expect(result).toMatchObject({ status: "loaded" });
+		expect(getToolRenderer("picky_tool")).toBe(renderer);
+		const registration = currentToolRegistry().exact.get("picky_tool");
+		expect(registration).toMatchObject({ prominence: "primary", extension: "picky" });
 	});
 
 	test("a failed stylesheet registers nothing and removes its link", async () => {
