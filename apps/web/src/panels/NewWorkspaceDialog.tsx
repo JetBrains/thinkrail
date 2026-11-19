@@ -105,7 +105,6 @@ import {
 
 export type WorkspaceTarget = "worktree" | "default" | "chat" | "review";
 
-/** Where the dialog opens: a failed review's retry and an asked-for review mode win when the host can review. */
 export function openingTarget({
 	projectId,
 	requested,
@@ -155,7 +154,6 @@ export function NewWorkspaceDialog({
 	initialPrompt?: string;
 	promptNote?: string;
 	retryDraft?: WorkspaceRetryDraft;
-	/** `review` opens the dialog in the pull-request review mode when the host supports it. */
 	initialTarget?: WorkspaceTarget;
 	onOpenChange: (open: boolean) => void;
 }) {

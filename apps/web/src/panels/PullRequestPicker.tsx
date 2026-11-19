@@ -125,7 +125,6 @@ function LookupRows({
 	}
 }
 
-/** The popover's body: the list in its state, grouped and filtered by the query. */
 export function PullRequestPickerBody({
 	list,
 	query,
@@ -264,7 +263,6 @@ export function PullRequestPicker({
 	onOpenChange: (open: boolean) => void;
 	onSelect: (pr: PullRequestSummary) => void;
 	onRetry: () => void;
-	/** Enter on the closed trigger once a pull request is picked. */
 	onSubmit: () => void;
 }) {
 	const t = useT();

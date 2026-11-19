@@ -27,7 +27,6 @@ export interface FakePr {
 	deletions?: number;
 	changedFiles?: number;
 	updatedAt?: string;
-	/** Answered by `pr list --search review-requested:@me`. */
 	reviewRequested?: boolean;
 }
 

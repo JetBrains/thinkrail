@@ -83,7 +83,6 @@ export interface PaletteCatalogDeps {
 	readonly t: Translator;
 	readonly contextProjectId: string | null;
 	readonly canStartChat: boolean;
-	/** The host lists pull requests (v127), so the New Workspace dialog offers its review mode. */
 	readonly reviewAvailable: boolean;
 	readonly activeWorkspace: Workspace | null;
 	readonly editors: readonly EditorInfo[];

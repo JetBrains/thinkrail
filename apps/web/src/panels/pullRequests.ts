@@ -4,7 +4,6 @@ import { getTransport } from "../transport";
 
 export const REVIEW_PR_COMMAND = "/skill:reviewing-a-pr ";
 
-/** What the dialog needs of a picked pull request; a full summary once `pr.list` / `pr.get` answered. */
 export type PickedPullRequest = Pick<PullRequestSummary, "number" | "url" | "baseRef"> &
 	Partial<PullRequestSummary>;
 
@@ -26,7 +25,6 @@ export function reviewKickoffText(url: string): string {
 	return `${REVIEW_PR_COMMAND}${url}`;
 }
 
-/** The pull request a review kickoff names — how Edit & retry reopens a failed review in its mode. */
 export function reviewKickoffPullRequest(text: string): { number: number; url: string } | null {
 	if (!text.startsWith(REVIEW_PR_COMMAND)) return null;
 	const url = text.slice(REVIEW_PR_COMMAND.length).trim();
@@ -36,11 +34,9 @@ export function reviewKickoffPullRequest(text: string): { number: number; url: s
 
 export interface PullRequestReference {
 	number: number;
-	/** `owner/repo`, lower-cased, when the reference was a link. */
 	repository: string | null;
 }
 
-/** A pasted number (`1431`, `#1431`) or pull-request link, or `null` for ordinary search text. */
 export function pullRequestReferenceOf(query: string): PullRequestReference | null {
 	const text = query.trim();
 	const link = PULL_URL.exec(text);
@@ -55,7 +51,6 @@ export function pullRequestNumberOf(query: string): number | null {
 	return pullRequestReferenceOf(query)?.number ?? null;
 }
 
-/** Whether a pull request is the one a reference names — a link from another repository never is. */
 export function isReferencedPullRequest(
 	pr: Pick<PullRequestSummary, "number" | "url">,
 	reference: PullRequestReference,
@@ -77,7 +72,6 @@ export function matchesPullRequest(pr: PullRequestSummary, query: string): boole
 export interface PullRequestRows {
 	waiting: PullRequestSummary[];
 	open: PullRequestSummary[];
-	/** Asked by number or link and not among the open ones: looked up with `pr.get`. */
 	lookup: PullRequestReference | null;
 }
 

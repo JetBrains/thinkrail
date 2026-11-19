@@ -33,7 +33,6 @@ function deadline(now: () => number): () => number {
 	return () => Math.max(1, end - now());
 }
 
-/** The remote hosting the project's pull requests: the first GitHub one in `gh`'s own order. */
 async function githubRemote(
 	cwd: string,
 	left: () => number,
