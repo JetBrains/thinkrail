@@ -225,8 +225,7 @@ key for the on/off switch and its settings) and must not equal a built-in's `nam
     "server": "./server/index.ts",
     "web": "./dist/web.js",
     "styles": "./dist/web.css",
-    "title": "Weather",
-    "image": "https://example.com/preview.png"
+    "title": "Weather"
   }
 }
 ```
@@ -234,7 +233,8 @@ key for the on/off switch and its settings) and must not equal a built-in's `nam
 - `api` is `major.minor`. The host loads an extension whose major equals its own and whose minor is not
   newer. At least one of `server` / `web`; `styles` only with `web`; every path is relative and stays
   inside the package, with no `..` segment. `title` falls back to the package name; description, author
-  and version are the package's own fields.
+  and version are the package's own fields. An `image` is still valid but unused (§ Catalog); the SDK
+  build warns about it.
 - `server` is a TypeScript (or JavaScript) module whose default export is a `defineServerExtension`
   descriptor whose `name` is the package name, else the row fails. `web` is a pre-built ESM file (`.js` /
   `.mjs`) whose default export is a `defineWebExtension` descriptor, registered under the package name:
@@ -271,7 +271,9 @@ key for the on/off switch and its settings) and must not equal a built-in's `nam
   the built-in extensions, the host's own tools, its session tools and its MCP and tool-search slots —
   so a tool, command or flag name it shares with any of them stays the host's; a user's pi package,
   which pi loads before every inline extension, likewise keeps a tool name it shares with an installed
-  extension, and each keeps its other tools ([[submodule-server-extensions]]).
+  extension, and each keeps its other tools ([[submodule-server-extensions]]). Settings and the status
+  file list an installed extension's tool only when no built-in or static host tool has its name; such
+  a name is listed as `shadowed` in the status file instead.
 - A load failure (syntax error, throwing top level, missing dependency) is a row state, never a host
   failure. Extensions load individually.
 

@@ -93,7 +93,18 @@ function report(status, folder) {
 	if (status.fileError) console.log(`extensions.json was refused: ${status.fileError}`);
 	const entry = entryFor(status, folder);
 	console.log(JSON.stringify(entry ?? { source: folder, state: "not declared" }, null, 2));
-	if (entry?.state === "loaded" && Array.isArray(entry.tools) && entry.tools.length === 0) {
+	const shadowed = Array.isArray(entry?.shadowed) ? entry.shadowed : [];
+	if (shadowed.length > 0) {
+		console.error(
+			`Note: ThinkRail keeps its own tool named ${shadowed.join(", ")} — rename yours; it never runs.`,
+		);
+	}
+	if (
+		entry?.state === "loaded" &&
+		Array.isArray(entry.tools) &&
+		entry.tools.length === 0 &&
+		shadowed.length === 0
+	) {
 		console.error(
 			"Note: its server half registered no tools — a factory threw or never called pi.registerTool.",
 		);

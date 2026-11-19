@@ -819,7 +819,10 @@ describe("status file", () => {
 		const { root, dataDir, declare } = setup();
 		const runtime = new InstalledExtensions({
 			...baseOptions(dataDir),
-			toolNames: async (extension) => [`${extension.name}_tool`],
+			toolNames: async (extension) => ({
+				tools: [`${extension.name}_tool`],
+				shadowed: extension.name === "fine-ext" ? ["visualize"] : [],
+			}),
 		});
 		const fine = writeExtension(join(root, "fine"), { name: "fine-ext", version: "0.2.0" });
 		const broken = writeExtension(join(root, "broken"), {
@@ -843,6 +846,7 @@ describe("status file", () => {
 				version: "0.2.0",
 				state: "loaded",
 				tools: ["fine-ext_tool"],
+				shadowed: ["visualize"],
 			},
 			expect.objectContaining({ source: broken, name: "broken-ext", state: "failed" }),
 			expect.objectContaining({ source: newer, name: "newer-ext", state: "incompatible" }),
@@ -851,6 +855,7 @@ describe("status file", () => {
 		expect(status.extensions[1]?.error).toContain("top-level boom");
 		expect(status.extensions[2]?.error).toContain("update ThinkRail");
 		expect(status.extensions[3]?.tools).toBeUndefined();
+		expect(status.extensions[3]).not.toHaveProperty("shadowed");
 	});
 
 	it("is written with no declarations, and omits tools it cannot determine", async () => {

@@ -77,7 +77,7 @@ lookup, skill roots — defaults to it, so an installed extension is composed ex
   `source` / `version` / `state` / `error` / `web` (`webHalfOf`), the declared
   `settings` (`key` + `default`, plus an installed setting's own `title` / `description`), and the tool names
   its **parent** factories register against a recording stub `ExtensionAPI` whose every other member is
-  inert. Per-session factories are built for this with an inert session whose `awaitToolResponse` and
+  inert — for an installed row only the names it owns (`extensionToolNames` below). Per-session factories are built for this with an inert session whose `awaitToolResponse` and
   `workspaceFiles.check` reject and whose `setting` answers the declared defaults. The tools are computed once per descriptor object (a reloaded installed extension is a new one), never from a live session, and a factory that throws against the stub,
   or is still running after `EXTENSION_LOAD_TIMEOUT_MS`, keeps the tools it recorded until then; a
   `sessionExtensions` that throws or answers anything but a list adds none (a promise among such answers has
@@ -102,9 +102,19 @@ lookup, skill roots — defaults to it, so an installed extension is composed ex
   `HOST_BUILTIN_EXTENSION_NAMES`, the constant that names them, and a test fails when the composed loader
   holds a named host inline outside it). The host's other inline factories are unnamed (`<inline:<n>>`);
   the `ext:` namespace keeps every one of them apart from an installed extension —
-  `skillPackageRoots` as its resolver and the catalog's tool names (`extensionToolNames`, the same
-  memoised description Settings lists) for its status file, makes it the host's one, starts the watcher and a background
-  reconcile, and returns its stop). The specifier is kept
+  `skillPackageRoots` as its resolver and the catalog's tool names for its status file, makes it the
+  host's one, starts the watcher and a background reconcile, and returns its stop; it also hands the
+  catalog `hostToolFactories` — `agent`'s `HOST_INLINE_FACTORIES`, the one list the parent composition
+  uses too). **`extensionToolNames(extension)`** splits an installed half's recorded names (the same
+  memoised description Settings lists) into `tools` it owns and `shadowed` ones the host owns, so neither
+  Settings nor the status file presents a name whose registration has no effect. The host names it knows
+  without a session are every built-in's (parent and inert-session factories, whether switched on or
+  off — a switch can take the name back at any reload) and those the host's static inline factories
+  register against the same stub. **Not known, so left listed:** names that only a session's loader
+  reveals — the per-session host factories (subagents' `Agent`, background commands, the MCP host's
+  server tools and `mcp` / `tool-search` slots, the usage policy), the host's pi packages (pi-spec-graph,
+  pi-thinkrail-workflow, pi-todos: extension paths from source, bundled factories in a binary) and the
+  user's own pi packages and extensions. The specifier is kept
   as a string precisely because a descriptor holds functions, which yield no module identity.
 - **Public surface (barrel):** `serverExtensions`, `builtinServerExtensions`, `ServerExtensionEntry`,
   `registryInlineExtensions`,

@@ -147,16 +147,19 @@ A folder source is never copied: it loads from where it is, and nothing under it
   { "api": "1.0", "updatedAt": "<ISO time>", "declarations": "<data dir>/extensions.json",
     "fileError": "<why extensions.json was refused — only then>",
     "extensions": [{ "source": "<as declared>", "name": "…", "version": "…",
-                     "state": "loaded | failed | incompatible | installing", "error": "…", "tools": ["…"] }] }
+                     "state": "loaded | failed | incompatible | installing", "error": "…", "tools": ["…"],
+                     "shadowed": ["…"] }] }
   ```
 
   One entry per declared source, in declaration order; `installing` is a declared source with no row yet
   (only npm/git), so a failed install keeps its `failed` row. When the file is refused the entries are
   the last good rows. `api` is the host's `EXTENSION_API_VERSION`, so an agent can pick a matching SDK
   before anything is declared — the file is written even with no declarations. `tools` is present for a
-  loaded server half: the names its factories register, from the injected `toolNames` (the catalog's
-  description, bounded by a 2 s wait and omitted when it fails or times out) — a loaded half whose
-  factory throws lists none. `updatedAt` changes on every pass, so an agent that touched
+  loaded server half: the names its factories register **and own**, from the injected `toolNames` (the
+  catalog's description, bounded by a 2 s wait and omitted when it fails or times out) — a loaded half
+  whose factory throws lists none. `shadowed`, only when non-empty, is the names it registers that the
+  host already owns, so the host's tool runs and its own never does
+  ([[submodule-server-extensions]] § `extensionToolNames` says which host names are known). `updatedAt` changes on every pass, so an agent that touched
   `extensions.json` knows when its edit was read. The file is a report, never an input; a failed write is
   logged and skipped.
 - **The data dir reaches agent sessions** as `THINKRAIL_DATA_DIR`: `createServer` sets it to the resolved
@@ -256,7 +259,7 @@ path with its relative imports, own `node_modules` and the host's typebox), reco
 hangs — folder source,
 incompatible, every failure mode, duplicates, offline, stub npm installs, update, staging and adoption)
 the asset resolver (traversal, unknown extension, wrong file, stale token, links) and the status file
-(every state, tools, `installing` during an install, a refused file, no declarations).
+(every state, tools and shadowed names, `installing` during an install, a refused file, no declarations).
 `auth/jbcentral.test.ts` starts this runtime beside a configured Central artifact and a user pi extension:
 a start with nothing declared calls `onChange` zero times, one with a folder source once, and neither adds
 a runtime generation nor runs the artifact or the user extension again.

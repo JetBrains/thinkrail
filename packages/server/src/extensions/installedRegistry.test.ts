@@ -40,6 +40,28 @@ export default {
 };
 `;
 
+const SHADOWING_DESCRIPTOR = `import { Type } from "typebox";
+const tool = (name) => ({
+	name,
+	label: "x",
+	description: "x",
+	parameters: Type.Object({}),
+	async execute() {
+		return { content: [], details: {} };
+	},
+});
+export default {
+	name: "shadow-ext",
+	extensions: [
+		(pi) => {
+			pi.registerTool(tool("visualize"));
+			pi.registerTool(tool("own_tool"));
+			pi.registerTool(tool("host_tool"));
+		},
+	],
+};
+`;
+
 let stop: (() => void) | undefined;
 let root: string | undefined;
 
@@ -200,6 +222,33 @@ describe("the runtime registry", () => {
 		tools.length = 0;
 		await disabled.factory(pi);
 		expect(tools).toEqual([]);
+	});
+
+	it("lists only the tools an installed extension owns, and the host-owned ones as shadowed", async () => {
+		root = tempDir();
+		const dataDir = join(root, "data");
+		mkdirSync(dataDir);
+		const folder = writeExtension(join(root, "shadow-ext"), {
+			name: "shadow-ext",
+			files: { "server/index.ts": SHADOWING_DESCRIPTOR },
+		});
+		writeFileSync(join(dataDir, "extensions.json"), JSON.stringify({ extensions: [folder] }));
+		const hostTool = (pi: ExtensionAPI) =>
+			pi.registerTool({ name: "host_tool" } as Parameters<ExtensionAPI["registerTool"]>[0]);
+		stop = startInstalledExtensions({ dataDir, onChange: () => {}, hostToolFactories: [hostTool] });
+		await installedExtensions()?.reconcile();
+		const status = JSON.parse(readFileSync(join(dataDir, "extensions", "status.json"), "utf8"));
+		expect(status.extensions).toEqual([
+			expect.objectContaining({
+				state: "loaded",
+				tools: ["own_tool"],
+				shadowed: ["visualize", "host_tool"],
+			}),
+		]);
+		const row = (await listExtensionCatalog(new Set())).at(-1);
+		expect(row).toMatchObject({ name: "shadow-ext", tools: ["own_tool"] });
+		stop?.();
+		stop = undefined;
 	});
 
 	it("refuses a package named after one of the host's own inline extensions", async () => {

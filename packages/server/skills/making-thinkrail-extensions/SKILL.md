@@ -128,10 +128,12 @@ in this turn. Do not try to call it now.
 ### 7. Read the outcome
 
 The printed entry comes from `<data dir>/extensions/status.json`, which the host rewrites after every
-change: `{ api, updatedAt, fileError?, extensions: [{ source, name, version, state, error?, tools? }] }`.
+change: `{ api, updatedAt, fileError?, extensions: [{ source, name, version, state, error?, tools?,
+shadowed? }] }`.
 
 - `loaded` and `tools` lists your tool names → done. A `loaded` server half with a tool missing from
-  `tools` threw or skipped `registerTool` in its factory — fix it.
+  `tools` threw or skipped `registerTool` in its factory — fix it. A name in `shadowed` is one ThinkRail
+  already owns: its own tool wins and yours never runs — rename it.
 - `failed`, `incompatible`, or a top-level `fileError` → `reference/troubleshooting.md`, fix, rebuild and
   run `reload`. Do not hand the user a broken extension.
 

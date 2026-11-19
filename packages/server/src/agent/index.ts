@@ -34,6 +34,7 @@ export {
 	type BundledExtensionFactory,
 	type BundledExtensions,
 	bumpPackageSwitchGeneration,
+	HOST_INLINE_FACTORIES,
 	listProjectAliasSkillNames,
 	listSkillCatalog,
 	listSkillCommands,

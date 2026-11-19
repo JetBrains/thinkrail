@@ -36,6 +36,15 @@ note when `tools` is empty. Fix the factory and reload. If `tools` is right but 
 the tool: the chat has not finished its turn yet, or the user switched the extension off in Settings →
 Extensions (an extension's on/off state is not in the status file).
 
+## My tool is listed as `shadowed`
+
+`shadowed` names the tools your server half registers that ThinkRail already owns — a built-in
+extension's (`visualize`, `ask_user_question`, …) or the host's own (`set_title`, `skill_search`, …). The
+host's tool always wins, so yours never runs, and it is left out of `tools` and Settings. Rename it (keep
+the card's `toolRenderers` key in step), rebuild if the web half changed, reload. A name a pi package,
+an MCP server or a per-chat host tool (`Agent`, `tool_search`) owns is not detected: it stays in `tools`
+but loses the same way — if the agent calls a different tool than yours, pick a more specific name.
+
 ## `fileError` at the top of the status
 
 `extensions.json` itself was refused (not valid JSON, not `{ "extensions": [ … ] }`, an entry that is

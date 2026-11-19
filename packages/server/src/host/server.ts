@@ -45,6 +45,7 @@ import {
 	getSessionAttribution,
 	getSessionWorkspaceId,
 	HOST_BUILTIN_EXTENSION_NAMES,
+	HOST_INLINE_FACTORIES,
 	handlePiSettingsFileChanged,
 	handleProjectPiSettingsChanged,
 	initializeSessionStates,
@@ -1033,6 +1034,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		dataDir: dataDir(),
 		npmCommand: piNpmCommand,
 		hostExtensionNames: HOST_BUILTIN_EXTENSION_NAMES,
+		hostToolFactories: HOST_INLINE_FACTORIES,
 		onChange: () => {
 			refreshInstalledExtensions();
 			publishScoped(WS_CHANNELS.extensionsChanged, {});
