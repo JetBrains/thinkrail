@@ -737,8 +737,12 @@ a project picker, the prompt hero, and the reused
   title, author and head branch, and a typed number, `#N` or pull-request link that is not listed is looked
   up with `pr.get` (debounced) and offered under "Found" in any state. Its states are loading, no open pull
   requests, `gh` missing or signed out (with a line pointing to Settings › Integrations), a repository with
-  no GitHub remote, and a failed load with Retry. Entering the mode focuses the picker's trigger; Enter on
-  it opens the list until a pull request is picked and then starts the review. Picking one prefetches its
+  no GitHub remote, and a failed load with Retry. Entering the mode focuses the picker's trigger (the list
+  is not opened for the user); Enter on it opens the list until a pull request is picked and then starts
+  the review. The mode is the segment's last option because entering it moves focus: as the last radio
+  it never strands a keyboard user arrowing through the group. The opening mode is decided once per
+  opening from a store snapshot, so a reconnect (which clears the protocol version) never resets an
+  open dialog and drops the picked pull request. Picking one prefetches its
   `baseRef` exactly as picking a remote base does. Submit = `workspace.startCreate({ projectId, baseRef:
   pr.baseRef, kickoff: { text: "/skill:reviewing-a-pr <url>", model?, thinkingLevel? } })` with **no name**
   — the agent names a workspace for a linked pull request itself — then the worktree mode's
