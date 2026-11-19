@@ -343,7 +343,10 @@ function SettingsFrame({
 	return (
 		<>
 			<div className="flex shrink-0 flex-col border-border-default border-b md:min-h-0 md:w-220 md:border-r md:border-b-0">
-				<div className="flex shrink-0 items-center px-16 pt-12 pb-8">
+				{/* A whole-pixel height here keeps the scroll pane below off a fractional y. That pane is
+				    composited in a layer of its own, and a layer on a half pixel is composited with a
+				    bilinear resample, which smears every glyph inside it (#1443). */}
+				<div className="flex h-38 shrink-0 items-center px-16">
 					<DialogTitle>{t("settings.dialog.title")}</DialogTitle>
 				</div>
 				<SettingsSearchField
@@ -440,7 +443,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
 					if (!focusSelectedTab(root)) root?.focus();
 				}}
 				onEscapeKeyDown={holdSettingsEscape}
-				className="h-[calc(100dvh-2*var(--space-24))] w-[calc(100%-2*var(--space-24))] max-w-1028 gap-0 overflow-hidden p-0 md:flex-row"
+				className="h-[calc(100dvh-2*var(--space-24))] w-[round(calc(100%-2*var(--space-24)),2px)]! max-w-1028 gap-0 overflow-hidden p-0 md:flex-row"
 			>
 				<SettingsFrame {...props} container={dialogEl} lastFocused={lastFocused} />
 				<DialogClose asChild>
