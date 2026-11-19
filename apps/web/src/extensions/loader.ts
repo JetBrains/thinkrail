@@ -236,19 +236,6 @@ export function loadWebExtensions(
 	return Promise.all(descriptors.map(loadOne));
 }
 
-export async function loadWebExtensionsBeforeRender(
-	descriptors: readonly InstalledWebExtension[],
-	waitMs: number = PRE_RENDER_WAIT_MS,
-): Promise<void> {
-	if (descriptors.length === 0) return;
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	const deadline = new Promise<void>((resolve) => {
-		timer = setTimeout(resolve, waitMs);
-	});
-	await Promise.race([loadWebExtensions(descriptors).then(() => undefined), deadline]);
-	clearTimeout(timer);
-}
-
 export function unloadWebExtension(name: string): boolean {
 	const known = state.results.has(name);
 	state.generations.set(name, (state.generations.get(name) ?? 0) + 1);

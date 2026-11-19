@@ -4,12 +4,16 @@ import {
 	EXTENSION_API_VERSION,
 	extensionApiFit,
 	followInstalledWebExtensions,
-	type InstalledWebExtension,
 	installExtensionHost,
+} from "./index";
+import {
+	browserLoaderEnvironment,
+	type InstalledWebExtension,
+	type LoaderEnvironment,
+	setLoaderEnvironment,
 	syncWebExtensions,
 	webExtensionLoads,
-} from "./index";
-import { browserLoaderEnvironment, type LoaderEnvironment, setLoaderEnvironment } from "./loader";
+} from "./loader";
 
 const FIXTURES = new URL("./fixtures/", import.meta.url).href;
 

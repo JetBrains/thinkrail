@@ -144,21 +144,19 @@ the other fields, so an installed extension cannot bind keys or mount an overlay
 ## Boundary
 
 - **Public surface:** `webExtensions`, `registerWebExtensions`, `enabledWebExtensions`,
-  `webExtensionCommands`, `WebExtensionCommands`, `webOnlyExtensions`, `installExtensionHost`,
-  `ExtensionHost`,
-  `loadWebExtensions`, `loadWebExtensionsBeforeRender`, `syncWebExtensions`, `unloadWebExtension`,
-  `webExtensionLoads`, `subscribeWebExtensionLoads`, `useWebExtensionLoads`, `PRE_RENDER_WAIT_MS`,
-  `InstalledWebExtension`, `WebExtensionLoadResult`, `WebExtensionLoadFailure`,
-  `followInstalledWebExtensions`, `InstalledWebExtensionSource`, `extensionApiFit`, `ExtensionApiFit`,
-  `EXTENSION_API_VERSION`.
+  `webExtensionCommands`, `webOnlyExtensions`, `installExtensionHost`, `followInstalledWebExtensions`,
+  `useWebExtensionLoads`, `WebExtensionLoadResult`, `extensionApiFit`, `EXTENSION_API_VERSION`.
+- The barrel carries only what other modules import. The loader's set-level functions
+  (`loadWebExtensions`, `syncWebExtensions`, `unloadWebExtension`, `webExtensionLoads`) are reached only
+  through the follower and the hook; tests import them from `loader.ts`.
 - **Imports:** public extension `./web` entries, the web SDK contract, `@thinkrail/extension-api/installed`
   (the host object's constants), chat's registration functions, `transport` (`getTransport().httpBase()`
-  and the client error reports — the loader's only reach into app integration), and, for the host object
+  and the client error reports — the loader's and follower's only reach into app integration), and, for the host object
   only, the shared module set. Never `ChatView`, stores, extension internals or server halves. The
   registry Map remains owned by chat; the loader owns only its per-name load state and stylesheet links.
 - **Bootstrap order** (`main.tsx`): `installExtensionHost()` → `registerWebExtensions()` →
-  `followInstalledWebExtensions(store-backed source)` (bounded) → first render. `loadWebExtensionsBeforeRender`
-  stays for a caller holding a known set; bootstrap's own wait also covers the connection and the list. Interaction state and the
+  `followInstalledWebExtensions(store-backed source)` (bounded, and only when cards are expected) → first
+  render. Interaction state and the
   plan/review glances derive from the registry's `interactive` registrations, so the built-in set must be
   complete before any lazy view reads a transcript; installed ones that land later re-derive through the
   registry's snapshot hooks ([[submodule-web-chat]]).
