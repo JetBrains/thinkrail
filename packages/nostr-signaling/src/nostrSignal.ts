@@ -9,6 +9,7 @@ import {
 	parseEnvelope,
 	SIGNALING_KIND,
 } from "./envelope";
+import { createPeerTable } from "./peerTable";
 import { normalizeRelays } from "./relays";
 
 export interface NostrSignalOptions {
@@ -55,6 +56,7 @@ export const nostrPublicKey = (secretKey: Uint8Array): string => getPublicKey(se
 const DEFAULT_MAX_AGE_SECONDS = 60;
 const DEFAULT_READY_TIMEOUT_MS = 8_000;
 const MAX_SEEN = 2_048;
+const MAX_PEERS = 256;
 const RETRY_MS = [2_000, 5_000, 15_000, 60_000];
 
 /**
@@ -68,21 +70,16 @@ export function openNostrSignal(options: NostrSignalOptions): NostrSignal {
 	const publicKey = getPublicKey(options.secretKey);
 	const pool = new SimplePool({ enablePing: true, enableReconnect: true });
 	const seen = new Set<string>();
-	const inbound = new Map<string, (envelope: Envelope) => void>();
-	const outboundSeq = new Map<string, number>();
-	const conversationKeys = new Map<string, Uint8Array>();
+	const peers = createPeerTable(MAX_PEERS, (peer) => ({
+		key: nip44.getConversationKey(options.secretKey, peer),
+		deliver: createInOrder((data) => {
+			if (!closed) options.onMessage(peer, data);
+		}),
+		outboundSeq: 0,
+	}));
 	const timers = new Set<ReturnType<typeof setTimeout>>();
 	const subs = new Map<string, { close(): void }>();
 	let closed = false;
-
-	const conversationKey = (peer: string): Uint8Array => {
-		let key = conversationKeys.get(peer);
-		if (!key) {
-			key = nip44.getConversationKey(options.secretKey, peer);
-			conversationKeys.set(peer, key);
-		}
-		return key;
-	};
 
 	const onEvent = (event: Event): void => {
 		if (closed || seen.has(event.id)) return;
@@ -91,21 +88,14 @@ export function openNostrSignal(options: NostrSignalOptions): NostrSignal {
 		if (event.created_at < Math.floor(Date.now() / 1000) - maxAge) return;
 		if (options.notBefore !== undefined && event.created_at < options.notBefore) return;
 		let envelope: Envelope | null;
+		let peer: ReturnType<typeof peers.use>;
 		try {
-			envelope = parseEnvelope(nip44.decrypt(event.content, conversationKey(event.pubkey)));
+			peer = peers.use(event.pubkey);
+			envelope = parseEnvelope(nip44.decrypt(event.content, peer.key));
 		} catch {
 			return;
 		}
-		if (!envelope) return;
-		let deliver = inbound.get(event.pubkey);
-		if (!deliver) {
-			const from = event.pubkey;
-			deliver = createInOrder((data) => {
-				if (!closed) options.onMessage(from, data);
-			});
-			inbound.set(from, deliver);
-		}
-		deliver(envelope);
+		if (envelope) peer.deliver(envelope);
 	};
 
 	let markReady: () => void = () => {};
@@ -165,14 +155,15 @@ export function openNostrSignal(options: NostrSignalOptions): NostrSignal {
 		async send(to, data) {
 			if (closed) throw new Error("signal closed");
 			if (data.length > MAX_DATA) throw new Error("signaling frame too large");
-			const seq = outboundSeq.get(to) ?? 0;
-			outboundSeq.set(to, seq + 1);
+			const peer = peers.use(to);
+			const seq = peer.outboundSeq;
+			peer.outboundSeq += 1;
 			const event = finalizeEvent(
 				{
 					kind: SIGNALING_KIND,
 					created_at: Math.floor(Date.now() / 1000),
 					tags: [["p", to]],
-					content: nip44.encrypt(encodeEnvelope({ seq, data }), conversationKey(to)),
+					content: nip44.encrypt(encodeEnvelope({ seq, data }), peer.key),
 				},
 				options.secretKey,
 			);
@@ -188,9 +179,7 @@ export function openNostrSignal(options: NostrSignalOptions): NostrSignal {
 			return open;
 		},
 		forget(peer) {
-			inbound.delete(peer);
-			outboundSeq.delete(peer);
-			conversationKeys.delete(peer);
+			peers.delete(peer);
 		},
 		close() {
 			if (closed) return;
