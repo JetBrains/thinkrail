@@ -208,7 +208,9 @@ The native shell's background is the Dark palette's `background`, read from the 
 composer rises with the keyboard. `native` resized the web view only after the keyboard's animation plus 0.2s
 (the plugin's own delay), so the keyboard covered the composer and the screen jumped half a second later; letting
 iOS scroll the page instead left the header off-screen once the keyboard closed. The chat keeps its last line in
-view while its scroller is resized (`stickToBottom.ts`), unless the reader scrolled up.
+view while its scroller or its content is resized (`stickToBottom.ts`) — the keyboard, the composer, a new row, a
+streaming answer — only while it is pinned to that line: a reader who scrolled up stays put until they scroll back
+down or send a message, which pins it again.
 
 **Screen motion.** A pushed screen slides in from the right and a popped one slides out (`stackMotion` in
 `navigation.ts` names them; a popped screen stays mounted for the slide), as iOS does; a swap of the top (an
