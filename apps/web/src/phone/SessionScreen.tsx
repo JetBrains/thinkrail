@@ -9,7 +9,6 @@ import {
 import { ExtraUsageNotice } from "@thinkrail/chat-ui/ExtraUsageNotice";
 import { PendingExtUiContext, PendingExtUiPrompt } from "@thinkrail/chat-ui/ExtUiPrompt";
 import {
-	awaitingToolCallIdOf,
 	deriveInteractionStates,
 	InteractionStatesContext,
 } from "@thinkrail/chat-ui/interactionState";
@@ -44,6 +43,7 @@ import { EMPTY_RUNTIME, useAppStore } from "../store";
 import { getTransport, respondToTool } from "../transport";
 import { reasonOf, singleFlight } from "./async";
 import { ResourcesTool, SkillsTool } from "./ChatTools";
+import { chatAccess } from "./chatAccess";
 import { useHostClient, useHostWelcome } from "./hostView";
 import { Loader, Notice, Screen } from "./layout";
 import { ModelSheet } from "./ModelSheet";
@@ -219,7 +219,13 @@ export function SessionScreen({
 		[rows, isStreaming],
 	);
 	const focusScope = useMemo(() => ({ sessionId }), [sessionId]);
-	const awaitingToolCallId = awaitingToolCallIdOf(runtime?.hostState ?? null);
+	const access = chatAccess({
+		readOnly,
+		hostState: runtime?.hostState ?? null,
+		pendingExtUi: runtime?.pendingExtUi ?? null,
+		isStreaming,
+	});
+	const { awaitingToolCallId } = access;
 	const interactionContext = useMemo(
 		() => ({
 			states: runtime
@@ -230,8 +236,7 @@ export function SessionScreen({
 		}),
 		[runtime, focusScope, awaitingToolCallId],
 	);
-	const pendingRequest = runtime?.pendingExtUi ?? null;
-	const pendingExtUi = usePendingExtUi(pendingRequest, ({ id }, value) => {
+	const pendingExtUi = usePendingExtUi(access.pendingExtUi, ({ id }, value) => {
 		useAppStore.getState().clearPendingExtUi(sessionId, id);
 		getTransport()
 			.request("session.extUiReply", { response: { id, value } })
@@ -256,7 +261,7 @@ export function SessionScreen({
 						hostProtocol,
 					}
 				: null,
-		[ready, sessionId, onOpenSubagent, hostProtocol],
+		[ready, readOnly, sessionId, onOpenSubagent, hostProtocol],
 	);
 
 	useEffect(() => {
@@ -544,7 +549,7 @@ export function SessionScreen({
 									<div key={row.id}>
 										<ChatTurnView
 											row={row}
-											onTryAgain={isStreaming ? undefined : tryAgain}
+											onTryAgain={access.canTryAgain ? tryAgain : undefined}
 											agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
 											isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
 										/>
