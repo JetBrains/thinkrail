@@ -2233,6 +2233,7 @@
 	"settings.extensions.descriptionBundledOnly": "Расширения ThinkRail, доступные агенту на этом хосте. Отключение удаляет их инструменты и навыки из новых чатов и из открытых после завершения текущего хода; прошлые результаты остаются. Выбор сохраняется на хосте и доступен на других устройствах.",
 	"settings.extensions.empty": "На этом хосте не зарегистрированы расширения ThinkRail.",
 	"settings.extensions.enable": "Включить {{title}}",
+	"settings.extensions.gallery": "Открыть каталог расширений ThinkRail",
 	"settings.extensions.group.builtin": "Встроено в pi",
 	"settings.extensions.group.builtinDescription": "Часть движка pi, поставляемого с ThinkRail; переключается записями ±builtin в {{path}}.",
 	"settings.extensions.group.bundled": "Встроено в ThinkRail",

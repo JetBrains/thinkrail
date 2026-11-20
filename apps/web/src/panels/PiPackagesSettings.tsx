@@ -783,21 +783,46 @@ export function PiPackagesGroup({
 	);
 }
 
-export function GalleryLink({ side = false }: { side?: boolean }) {
+export const EXTENSIONS_SHOWCASE_URL = "https://thinkrail.ai/extensions/";
+
+export function GalleryLinks({
+	extensions,
+	side = false,
+}: {
+	extensions: boolean;
+	side?: boolean;
+}) {
 	const t = useT();
-	return (
+	const links = [
+		...(extensions
+			? [
+					{
+						testId: "extensions-gallery-link",
+						href: EXTENSIONS_SHOWCASE_URL,
+						label: t("settings.extensions.gallery"),
+					},
+				]
+			: []),
+		{
+			testId: "packages-gallery-link",
+			href: "https://pi.dev/packages",
+			label: t("settings.packages.gallery"),
+		},
+	];
+	return links.map((link) => (
 		<a
-			data-testid="packages-gallery-link"
-			href="https://pi.dev/packages"
+			key={link.testId}
+			data-testid={link.testId}
+			href={link.href}
 			target="_blank"
 			rel="noopener noreferrer"
 			tabIndex={0}
 			data-setting-side={side ? "" : undefined}
 			className="tr-text-metadata text-primary underline underline-offset-2 focus-visible:focus-ring"
 		>
-			{t("settings.packages.gallery")} ↗
+			{link.label} ↗
 		</a>
-	);
+	));
 }
 
 function builtinTitle(t: Translator, name: string): string {

@@ -23,7 +23,7 @@ import { cn } from "@thinkrail/ui/utils";
 import { Fragment, useId, useState } from "react";
 import { SettingsChoice, SettingsNotice } from "@/settingsKit";
 import { errorText, RequestTimeoutError, wsErrorCode } from "@/transport";
-import { CHIP_CLASS, GalleryLink, packageChips } from "./PiPackagesSettings";
+import { CHIP_CLASS, GalleryLinks, packageChips } from "./PiPackagesSettings";
 
 const INPUT_CLASS =
 	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default placeholder:text-text-muted focus-visible:border-control-border-active focus-visible:focus-ring disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text";
@@ -226,6 +226,7 @@ export interface InstallPackageBodyProps {
 	scope: PiPackageScope;
 	catalog: PiPackagesCatalog | null;
 	workspaceId: string | null;
+	extensionsSupported: boolean;
 	onSourceChange: (source: string) => void;
 	onScopeChange: (scope: PiPackageScope) => void;
 	onSubmit: () => void;
@@ -274,6 +275,7 @@ export function InstallPackageBody({
 	scope,
 	catalog,
 	workspaceId,
+	extensionsSupported,
 	onSourceChange,
 	onScopeChange,
 	onSubmit,
@@ -337,7 +339,9 @@ export function InstallPackageBody({
 								</span>
 							) : null}
 						</div>
-						<GalleryLink />
+						<div className="flex flex-wrap gap-x-12 gap-y-4">
+							<GalleryLinks extensions={extensionsSupported} />
+						</div>
 						<div className="flex flex-col gap-4">
 							<span className="tr-text-ui text-text-default">
 								{t("settings.packages.installDialog.scopeLabel")}
@@ -488,6 +492,7 @@ export interface InstallPackageDialogProps {
 	install: (request: { source: string; scope: PiPackageScope }) => Promise<PackageInstallResult>;
 	/** Opens at the confirm step for this source, installing globally; read when the dialog mounts. */
 	preset?: InstallPreset | null | undefined;
+	extensionsSupported: boolean;
 }
 
 export function InstallPackageDialog({
@@ -497,6 +502,7 @@ export function InstallPackageDialog({
 	workspaceId,
 	install,
 	preset,
+	extensionsSupported,
 }: InstallPackageDialogProps) {
 	const t = useT();
 	const [source, setSource] = useState(preset?.source ?? "");
@@ -555,6 +561,7 @@ export function InstallPackageDialog({
 					scope={scope}
 					catalog={catalog}
 					workspaceId={workspaceId}
+					extensionsSupported={extensionsSupported}
 					onSourceChange={(next) => {
 						setSource(next);
 						if (parsePiPackageInput(next).local) setScope("project");

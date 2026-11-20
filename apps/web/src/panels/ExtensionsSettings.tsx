@@ -42,7 +42,7 @@ import {
 	installedExtensionRowId,
 } from "./InstalledExtensionRow";
 import { InstallPackageDialog, type InstallPreset } from "./InstallPackageDialog";
-import { GalleryLink, PiBuiltinsGroup, PiPackagesGroup } from "./PiPackagesSettings";
+import { GalleryLinks, PiBuiltinsGroup, PiPackagesGroup } from "./PiPackagesSettings";
 import { saveSettings } from "./saveSettings";
 import { SETTING, settingProps } from "./settingsCatalog";
 import { useExtensionBrowse } from "./useExtensionBrowse";
@@ -340,7 +340,7 @@ export function ExtensionsSettings() {
 								{t("settings.extensions.install")}
 							</Button>
 						}
-						sides={<GalleryLink side />}
+						sides={<GalleryLinks side extensions={installedSupported} />}
 					/>
 				</SettingsGroup>
 			) : null}
@@ -495,6 +495,7 @@ export function ExtensionsSettings() {
 						catalog={loaded}
 						workspaceId={workspaceId ?? null}
 						install={packages.install}
+						extensionsSupported={installedSupported}
 					/>
 				</>
 			) : null}
