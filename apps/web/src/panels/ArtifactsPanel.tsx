@@ -202,6 +202,7 @@ export function ArtifactsPanel({
 									testid="artifacts-section"
 									focusList="artifacts"
 									title={t("panels.artifacts.sectionPublished")}
+									strong
 									label={t("panels.artifacts.artifactsTree")}
 									onOpenKept={openArtifactKept}
 								>
@@ -343,6 +344,7 @@ function Section({
 	title,
 	label,
 	count,
+	strong = false,
 	focusDefault = true,
 	onOpenKept,
 	children,
@@ -352,13 +354,19 @@ function Section({
 	title: string;
 	label: string;
 	count?: number;
+	strong?: boolean;
 	focusDefault?: boolean;
 	onOpenKept: (path: string) => void;
 	children: ReactNode;
 }) {
 	return (
 		<section data-testid={testid} className="flex flex-col">
-			<h3 className="flex items-center justify-between px-4 pb-4 text-text-subtle tr-text-metadata">
+			<h3
+				className={cn(
+					"flex items-center justify-between px-4",
+					strong ? "pb-8 text-text-default tr-text-ui" : "pb-4 text-text-subtle tr-text-metadata",
+				)}
+			>
 				<span>{title}</span>
 				{count === undefined ? null : <span>{count}</span>}
 			</h3>

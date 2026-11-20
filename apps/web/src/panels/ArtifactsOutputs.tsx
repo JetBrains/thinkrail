@@ -91,7 +91,7 @@ function OutputFileRow({
 							time: artifactTimeLabel(t, artifact.changedAt),
 						})}
 						className={cn(
-							"flex h-32 min-w-0 items-center gap-12 rounded-sm px-8",
+							"group/output flex h-32 min-w-0 items-center gap-12 rounded-sm px-8",
 							menuOpen || active ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered",
 						)}
 					>
@@ -118,7 +118,16 @@ function OutputFileRow({
 								onKeyDown={onRowKeyDown}
 								className="flex h-full min-w-0 flex-1 items-center gap-8 text-left focus-visible:focus-ring-inset"
 							>
-								<span className="min-w-0 shrink truncate text-text-default tr-text-ui">{name}</span>
+								<span
+									className={cn(
+										"min-w-0 shrink truncate tr-text-ui",
+										menuOpen || active
+											? "text-text-default"
+											: "text-text-muted group-hover/output:text-text-default",
+									)}
+								>
+									{name}
+								</span>
 								<span
 									data-testid="artifact-output-folder"
 									className="min-w-0 flex-1 truncate text-text-subtle tr-text-metadata"

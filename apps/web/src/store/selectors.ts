@@ -1342,7 +1342,7 @@ export function supportsArtifactRoles(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= ARTIFACT_ROLES_PROTOCOL_VERSION;
 }
 
-export const OUTPUTS_EXTENSION = "outputs";
+const OUTPUTS_EXTENSION = "outputs";
 
 export function selectArtifactOutputsOffered(state: {
 	protocolVersion: number | null;
