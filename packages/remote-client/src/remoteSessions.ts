@@ -1,6 +1,7 @@
 import {
 	type RemoteDeviceAccess,
 	type ServerWelcome,
+	type SessionDeletedPayload,
 	type SessionStateRecord,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
@@ -84,6 +85,8 @@ interface HostEntry {
 	opened: boolean;
 	open: boolean;
 	sessions: Map<string, SessionStateRecord>;
+	/** The sessions a push changed or removed since the running `session.stateList` was asked for. */
+	seeding: Set<string> | null;
 	welcome: ServerWelcome | null;
 	access: RemoteDeviceAccess;
 }
@@ -130,15 +133,29 @@ export function createRemoteSessions(
 	const isLive = (entry: HostEntry | undefined): entry is HostEntry =>
 		entry !== undefined && hosts.get(entry.host.hostKey) === entry;
 
+	/** Replaces the host's sessions with its list, keeping what a push said about a session since it was asked. */
 	const seed = (entry: HostEntry): void => {
-		void entry.connection.client
-			.request<SessionStateRecord[]>("session.stateList", {})
-			.catch(() => [] as SessionStateRecord[])
-			.then((initial) => {
-				if (!isLive(entry)) return;
-				for (const record of initial) entry.sessions.set(record.sessionId, record);
+		const touched = new Set<string>();
+		entry.seeding = touched;
+		void entry.connection.client.request<SessionStateRecord[]>("session.stateList", {}).then(
+			(listed) => {
+				if (!isLive(entry) || entry.seeding !== touched) return;
+				entry.seeding = null;
+				const next = new Map<string, SessionStateRecord>();
+				for (const record of listed) {
+					if (!touched.has(record.sessionId)) next.set(record.sessionId, record);
+				}
+				for (const sessionId of touched) {
+					const pushed = entry.sessions.get(sessionId);
+					if (pushed) next.set(sessionId, pushed);
+				}
+				entry.sessions = next;
 				notify();
-			});
+			},
+			() => {
+				if (entry.seeding === touched) entry.seeding = null;
+			},
+		);
 	};
 
 	/** The connection's reports, bound to the entry it will belong to; one that is no longer tracked is ignored. */
@@ -148,7 +165,7 @@ export function createRemoteSessions(
 			if (!isLive(entry)) return;
 			entry.open = open;
 			setStatus(entry.host.hostKey, open ? CONNECTED : CONNECTING);
-			if (open && !entry.opened) {
+			if (open) {
 				entry.opened = true;
 				seed(entry);
 			}
@@ -184,6 +201,7 @@ export function createRemoteSessions(
 			opened: open,
 			open,
 			sessions: new Map(),
+			seeding: null,
 			welcome: null,
 			access: "write",
 		};
@@ -201,8 +219,14 @@ export function createRemoteSessions(
 		});
 		client.subscribe(WS_CHANNELS.sessionState, (data) => {
 			const record = data as SessionStateRecord;
+			entry.seeding?.add(record.sessionId);
 			entry.sessions.set(record.sessionId, record);
 			notify();
+		});
+		client.subscribe(WS_CHANNELS.sessionDeleted, (data) => {
+			const { sessionId } = data as SessionDeletedPayload;
+			entry.seeding?.add(sessionId);
+			if (entry.sessions.delete(sessionId)) notify();
 		});
 		if (open) seed(entry);
 		notify();
