@@ -19,8 +19,15 @@ export class RemoteRequestError extends Error {
 export interface DeviceWireClient {
 	/** Points the client at a (new) channel and replays any in-flight requests onto it. */
 	attach(channel: DeviceChannel): void;
-	/** Issues a wire request; resolves with the host's result (or rejects on error). Survives a reconnect. */
-	request<T = unknown>(method: string, params?: unknown): Promise<T>;
+	/**
+	 * Issues a wire request; resolves with the host's result (or rejects on error). Survives a reconnect. An
+	 * aborted `signal` rejects it with the signal's reason and forgets it, so it is never replayed.
+	 */
+	request<T = unknown>(
+		method: string,
+		params?: unknown,
+		options?: { signal?: AbortSignal },
+	): Promise<T>;
 	/** Subscribes to a host push channel; returns an unsubscribe function. Persists across reconnects; a snapshot channel (`server.welcome`) replays its last value at once. */
 	subscribe(channel: string, handler: (data: unknown) => void): () => void;
 	close(): void;
@@ -38,8 +45,9 @@ interface Pending {
  * channel, it sends `resume` with the ids still waiting and replays them, and subscriptions persist. Ids are
  * unique per client, so the host's replay cache answers a re-sent request from its first run instead of running
  * it twice; the responses read are `ack`ed, batched once per microtask, so the host can drop them. Only
- * `close` rejects outstanding work. Responses are matched by id; `{ channel, data }` pushes fan to subscribers;
- * a snapshot push (`server.welcome`) is also kept and replayed to a subscriber that arrives after it.
+ * `close` rejects outstanding work, or a request's own aborted signal that one. Responses are matched by id;
+ * `{ channel, data }` pushes fan to subscribers; a snapshot push (`server.welcome`) is also kept and replayed
+ * to a subscriber that arrives after it.
  */
 export function createDeviceWireClient(): DeviceWireClient {
 	let channel: DeviceChannel | null = null;
@@ -101,7 +109,8 @@ export function createDeviceWireClient(): DeviceWireClient {
 			next.send(JSON.stringify({ resume: [...pending.keys()] }));
 			for (const entry of pending.values()) next.send(entry.frame);
 		},
-		request(method, params) {
+		request(method, params, options = {}) {
+			const { signal } = options;
 			const id = `${instance}:${++nextId}`;
 			const frame = JSON.stringify({ id, method, ...(params !== undefined ? { params } : {}) });
 			return new Promise((resolve, reject) => {
@@ -109,7 +118,27 @@ export function createDeviceWireClient(): DeviceWireClient {
 					reject(new RemoteRequestError("remote session closed"));
 					return;
 				}
-				pending.set(id, { frame, resolve: resolve as (value: unknown) => void, reject });
+				if (signal?.aborted) {
+					reject(signal.reason);
+					return;
+				}
+				const forget = (): void => {
+					if (!pending.delete(id)) return;
+					if (channel?.open) ack(id);
+					reject(signal?.reason);
+				};
+				signal?.addEventListener("abort", forget, { once: true });
+				const settle =
+					<V>(done: (value: V) => void) =>
+					(value: V): void => {
+						signal?.removeEventListener("abort", forget);
+						done(value);
+					};
+				pending.set(id, {
+					frame,
+					resolve: settle(resolve as (value: unknown) => void),
+					reject: settle(reject),
+				});
 				if (channel?.open) channel.send(frame);
 			});
 		},

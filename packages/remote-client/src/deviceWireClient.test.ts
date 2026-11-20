@@ -145,3 +145,40 @@ describe("createDeviceWireClient", () => {
 		await expect(result).rejects.toBeInstanceOf(RemoteRequestError);
 	});
 });
+
+describe("aborting a request", () => {
+	test("rejects it with the reason and drops it, so a reconnect does not replay it", async () => {
+		const first = fakeChannel();
+		const client = createDeviceWireClient();
+		client.attach(first.channel);
+		const controller = new AbortController();
+		const answer = client.request("session.list", undefined, { signal: controller.signal });
+		const id = first.sent.at(-1)?.id;
+		void client.request("project.list");
+		const keptId = first.sent.at(-1)?.id;
+		const reason = new Error("timed out");
+		controller.abort(reason);
+		await expect(answer).rejects.toBe(reason);
+		await Promise.resolve();
+		expect(first.sent.at(-1)).toEqual({ ack: [id] });
+		first.drop();
+		const second = fakeChannel();
+		client.attach(second.channel);
+		expect(second.sent.map((frame) => frame.method ?? frame.resume)).toEqual([
+			[keptId],
+			"project.list",
+		]);
+	});
+
+	test("an already-aborted signal rejects at once without sending", async () => {
+		const io = fakeChannel();
+		const client = createDeviceWireClient();
+		client.attach(io.channel);
+		const sentBefore = io.sent.length;
+		const reason = new Error("gone");
+		await expect(
+			client.request("session.list", undefined, { signal: AbortSignal.abort(reason) }),
+		).rejects.toBe(reason);
+		expect(io.sent.length).toBe(sentBefore);
+	});
+});
