@@ -461,7 +461,7 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   are the one ordering, so the host's `project.list` and every client's rail agree — plus the skill-trust fields **`trusted`**
   (the per-project grant), **`acknowledgedSkills`** (re-confirm-new — which committed aliases are OK'd) and
   **`disabledSkills`** / **`disabledGroups`** (project-baseline per-skill and per-group off — a group is a
-  plugin, a source tier, or the special `@plugins`) plus **`enabledGroups`** (per-group on against the host
+  plugin, a source tier, or the special `@plugins`, **`ALL_PLUGINS_GROUP`**, that gates every plugin) plus **`enabledGroups`** (per-group on against the host
   default), which gate what its skills contribute. **`isSkillGroupEnabled`** is the one group rule shared by
   the host gate and the Skills dialog: a project's explicit choice (on wins over off) beats
   `AppConfig.otherAgentSkills`, which governs only **`OTHER_AGENT_SKILL_GROUPS`** (`personal`, `@plugins`).

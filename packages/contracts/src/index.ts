@@ -15,6 +15,7 @@ export * from "./channelFraming";
 export type * from "./domain";
 export {
 	ACCEPTED_IMAGE_TYPES,
+	ALL_PLUGINS_GROUP,
 	base64EncodedLength,
 	CODE_FONT_SIZE,
 	COMPOSER_GROWTH_LIMITS,

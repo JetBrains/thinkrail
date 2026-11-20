@@ -4,13 +4,9 @@ import {
 	RiShieldCheckLine as ShieldCheck,
 	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
+import { groupSkills, isLeadingSkillGroup, type SkillGroup } from "@thinkrail/chat-ui/skillGroups";
 import {
 	ALL_PLUGINS_GROUP,
-	groupSkills,
-	isLeadingSkillGroup,
-	type SkillGroup,
-} from "@thinkrail/chat-ui/skillGroups";
-import {
 	isSkillGroupEnabled,
 	OTHER_AGENT_SKILL_GROUPS,
 	type Project,

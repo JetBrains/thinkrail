@@ -1734,7 +1734,10 @@ export interface ExtensionCatalogEntry {
 /** How many recently chosen models the host remembers. */
 export const RECENT_MODELS_LIMIT = 5;
 
-export const OTHER_AGENT_SKILL_GROUPS: readonly string[] = ["personal", "@plugins"];
+/** The master skill group that gates every plugin group. */
+export const ALL_PLUGINS_GROUP = "@plugins";
+
+export const OTHER_AGENT_SKILL_GROUPS: readonly string[] = ["personal", ALL_PLUGINS_GROUP];
 
 /** Bounds of the host's per-request skill listing budget; a larger catalog is listed in part. */
 export const SKILL_LISTING_MIN_TOKENS = 4_000;

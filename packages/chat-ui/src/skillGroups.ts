@@ -11,9 +11,6 @@ const TIER_META: Record<string, { label: MessageKey | null; hint: MessageKey; ra
 
 const TIER_BRAND: Record<string, string> = { bundled: "ThinkRail", pi: "Pi" };
 
-/** The `@plugins` master group that gates every plugin group. */
-export const ALL_PLUGINS_GROUP = "@plugins";
-
 export interface SkillGroup {
 	key: string;
 	label: string;
