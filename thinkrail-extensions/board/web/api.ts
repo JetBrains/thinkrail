@@ -664,12 +664,28 @@ export function sortAgents(agents: readonly AgentEntry[]): AgentEntry[] {
 }
 
 const DAY_MS = 24 * 60 * 60_000;
+/** Past a month, an attempt's age in days says less than the day it started. */
+const ELAPSED_DAYS_MAX = 30;
 
-/** How long an agent has been on its attempt: as the packet words a duration, in days past two. */
+/** When an attempt started, or `null` for a start the store does not know (its `0`) or one no date holds. */
+export function attemptStart(startedAt: number): Date | null {
+	const date = new Date(startedAt);
+	return startedAt > 0 && !Number.isNaN(date.getTime()) ? date : null;
+}
+
+/**
+ * How long an agent has been on its attempt: as the packet words a duration, in days past two and, past
+ * a month, the day it started instead; empty for an unknown start.
+ */
 export function elapsedText(startedAt: number, now: number): string {
+	const start = attemptStart(startedAt);
+	if (!start) return "";
 	const elapsed = Math.max(0, now - startedAt);
 	if (elapsed < 2 * DAY_MS) return durationText(elapsed);
-	return `${Math.floor(elapsed / DAY_MS)}d`;
+	const days = Math.floor(elapsed / DAY_MS);
+	return days <= ELAPSED_DAYS_MAX
+		? `${days}d`
+		: start.toLocaleDateString(undefined, { dateStyle: "medium" });
 }
 
 /**
@@ -903,15 +919,27 @@ export function inboxTarget(
 }
 
 /**
- * An inbox row's Answer or Retry: the card in Peek, whose Chat tab answers the agent there — no workspace
- * switch; on Project Home, where Peek shows nothing, the attempt's chat itself.
+ * Answer or Retry on a card whose agent waits or failed: the card in Peek, which opens on its Chat tab
+ * (`defaultCardTab`) where the human answers the agent — no workspace switch, Board view kept.
+ */
+export function answerCard(
+	host: Pick<PanelHost, "peek">,
+	projectId: string,
+	card: Pick<Card, "id" | "title" | "source" | "virtual">,
+): void {
+	host.peek(cardPeekEntry(projectId, card));
+}
+
+/**
+ * An inbox row's Answer or Retry: the card in Peek on its Chat tab (`answerCard`); on Project Home, where
+ * Peek shows nothing, the attempt's chat itself.
  */
 export function answerInbox(
 	host: Pick<StatusItemHost, "peek" | "openChat" | "scope">,
 	item: InboxItem,
 ): "peek" | "chat" | null {
 	if (host.scope) {
-		host.peek(cardPeekEntry(item.projectId, item.card));
+		answerCard(host, item.projectId, item.card);
 		return "peek";
 	}
 	const target = inboxTarget(item);

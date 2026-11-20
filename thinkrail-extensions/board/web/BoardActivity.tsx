@@ -5,6 +5,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import {
 	type ActivityEntry,
 	type AgentEntry,
+	attemptStart,
 	cardIdPeekEntry,
 	elapsedText,
 	loadActivity,
@@ -145,6 +146,22 @@ function Feed({ host, state }: { host: PanelHost; state: Loaded<ActivityEntry[]>
 	);
 }
 
+/** The time on an attempt, its start in the tooltip; nothing for a start the store does not know. */
+function Elapsed({ startedAt, now }: { startedAt: number; now: number }) {
+	const start = attemptStart(startedAt);
+	if (!start) return null;
+	return (
+		<time
+			data-testid="board-agent-elapsed"
+			dateTime={start.toISOString()}
+			title={start.toLocaleString()}
+			className="shrink-0 whitespace-nowrap tabular-nums tr-text-metadata text-text-subtle"
+		>
+			{elapsedText(startedAt, now)}
+		</time>
+	);
+}
+
 function Agents({ host, state }: { host: PanelHost; state: Loaded<AgentEntry[]> }) {
 	const t = useT();
 	const now = useNow();
@@ -181,12 +198,7 @@ function Agents({ host, state }: { host: PanelHost; state: Loaded<AgentEntry[]> 
 								{agent.title}
 							</span>
 							<PlanProgress plan={agent.plan} />
-							<span
-								data-testid="board-agent-elapsed"
-								className="shrink-0 tabular-nums tr-text-metadata text-text-subtle"
-							>
-								{elapsedText(agent.startedAt, now)}
-							</span>
+							<Elapsed startedAt={agent.startedAt} now={now} />
 						</span>
 						{agent.state === "working" ? <LastActionLine action={agent.lastAction} /> : null}
 					</button>

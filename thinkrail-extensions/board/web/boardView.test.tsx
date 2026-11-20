@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import type { PanelChatTarget, PanelHost } from "@thinkrail/extension-api/web";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
 	type AgentEntry,
+	answerCard,
 	answerInbox,
+	attemptStart,
 	BoardReplyError,
 	cardIdPeekEntry,
 	elapsedText,
@@ -27,11 +30,15 @@ import {
 	toggleQueue,
 } from "./boardState";
 import { CardChat, cardChats, defaultCardTab } from "./CardTabs";
-import { boardOf, cardOf, fakeHost, initiativeOf, liveOf } from "./fixtures.test";
+import { boardOf, cardOf, fakeHost, initiativeOf, liveOf, viewOf } from "./fixtures.test";
+import { InitiativeDetails } from "./InitiativePanel";
 
 const html = (node: ReactNode) => renderToStaticMarkup(<TooltipProvider>{node}</TooltipProvider>);
 
 afterEach(resetBoardSelection);
+
+const MINUTE = 60_000;
+const DAY = 24 * 60 * MINUTE;
 
 const waiting = cardOf({
 	id: "TR-2",
@@ -151,10 +158,26 @@ describe("Board view's bottom: activity and agents", () => {
 	});
 
 	test("word how long an agent has been on its attempt", () => {
-		expect(elapsedText(0, 23 * 60_000)).toBe("23m");
-		expect(elapsedText(0, 125 * 60_000)).toBe("2h 05m");
-		expect(elapsedText(10, 0)).toBe("0m");
-		expect(elapsedText(0, 3 * 24 * 60 * 60_000 + 5)).toBe("3d");
+		const start = Date.UTC(2026, 10, 20, 9);
+		expect(elapsedText(start, start + 23 * MINUTE)).toBe("23m");
+		expect(elapsedText(start, start + 125 * MINUTE)).toBe("2h 05m");
+		expect(elapsedText(start + 10, start)).toBe("0m");
+		expect(elapsedText(start, start + 3 * DAY + 5)).toBe("3d");
+		expect(elapsedText(start, start + 30 * DAY + 5)).toBe("30d");
+	});
+
+	test("show the day an attempt started past a month, and nothing for a start the store does not know", () => {
+		const seeded = 1_704_000_000_000;
+		const now = seeded + 1055 * DAY;
+		const day = new Date(seeded).toLocaleDateString(undefined, { dateStyle: "medium" });
+		expect(elapsedText(seeded, now)).toBe(day);
+		expect(elapsedText(seeded, seeded + 31 * DAY)).toBe(day);
+		expect(elapsedText(0, now)).toBe("");
+		expect(elapsedText(-5, now)).toBe("");
+		expect(attemptStart(seeded)?.getTime()).toBe(seeded);
+		expect(attemptStart(0)).toBeNull();
+		expect(attemptStart(Number.NaN)).toBeNull();
+		expect(attemptStart(9e15)).toBeNull();
 	});
 
 	test("check the activity, agents and projects answers on arrival, and send their params", async () => {
@@ -252,5 +275,76 @@ describe("the inbox's Answer", () => {
 			answerInbox({ ...host, scope: null, openChat: (target) => opened.push(target) }, item),
 		).toBe("chat");
 		expect(opened).toEqual([{ projectId: "p2", workspaceId: "w1", sessionId: "s1" }]);
+	});
+});
+
+describe("the initiative panel's Agents now", () => {
+	const failed = cardOf({
+		id: "TR-5",
+		category: "started",
+		column: "building",
+		live: [
+			liveOf({
+				workspaceId: "w5",
+				sessionId: "s5",
+				chat: { state: "failed", unread: false, title: "" },
+			}),
+		],
+	});
+	const working = cardOf({
+		id: "TR-6",
+		category: "started",
+		column: "building",
+		live: [liveOf({ workspaceId: "w6", sessionId: "s6" })],
+	});
+	const initiative = initiativeOf({ id: "I-1", memberCardIds: ["TR-2", "TR-5", "TR-6"] });
+	const rows = (markup: string) =>
+		new Map(
+			markup
+				.split('data-testid="board-initiative-agent"')
+				.slice(1)
+				.map((row) => [/data-card-id="([^"]+)"/.exec(row)?.[1] ?? "", row]),
+		);
+
+	test("offer Answer or Retry on the cards that need the human, and Open workspace on each", () => {
+		const { host } = fakeHost();
+		const markup = html(
+			<InitiativeDetails
+				host={host}
+				view={viewOf([initiative])}
+				board={boardOf([waiting, failed, working])}
+				initiative={initiative}
+				write={() => {}}
+				onError={() => {}}
+				onDeleted={() => {}}
+			/>,
+		);
+		const byCard = rows(markup);
+		expect([...byCard.keys()]).toEqual(["TR-2", "TR-5", "TR-6"]);
+		expect(byCard.get("TR-2")).toContain('data-testid="board-initiative-agent-answer"');
+		expect(byCard.get("TR-2")).toContain("Answer");
+		expect(byCard.get("TR-5")).toContain("Retry");
+		expect(byCard.get("TR-6")).not.toContain('data-testid="board-initiative-agent-answer"');
+		for (const row of byCard.values())
+			expect(row).toContain('data-testid="board-initiative-agent-workspace"');
+	});
+
+	test("Answer shows the card in Peek, opened on its Chat tab, never switching workspace", () => {
+		const { host, peeks, workspaces } = fakeHost();
+		const opened: PanelChatTarget[] = [];
+		const spy: PanelHost = { ...host, openChat: (target) => opened.push(target) };
+		answerCard(spy, "p1", waiting);
+		expect(peeks).toEqual([
+			{
+				kind: "extension",
+				panel: "card",
+				params: { projectId: "p1", cardId: "TR-2" },
+				title: "TR-2 · Ship the board",
+			},
+		]);
+		expect(opened).toEqual([]);
+		expect(workspaces).toEqual([]);
+		expect(defaultCardTab(waiting)).toBe("chat");
+		expect(defaultCardTab(failed)).toBe("chat");
 	});
 });

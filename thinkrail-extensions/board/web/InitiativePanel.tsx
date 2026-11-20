@@ -1,15 +1,17 @@
 import {
 	RiAddLine,
-	RiChat3Line,
 	RiCheckboxCircleLine,
 	RiCheckLine,
 	RiCloseLine,
 	RiDeleteBinLine,
 	RiDiscussLine,
 	RiEditLine,
+	RiExternalLinkLine,
 	RiListCheck3,
 	RiPlayLine,
+	RiQuestionLine,
 	RiQuillPenLine,
+	RiRefreshLine,
 	RiSendPlaneLine,
 	RiShapesLine,
 	RiStackLine,
@@ -25,6 +27,7 @@ import { type ReactNode, useId, useState } from "react";
 import { AutopilotFacts } from "./AutopilotParts";
 import {
 	agentBadge,
+	answerCard,
 	type BoardView,
 	type Card,
 	cardPeekEntry,
@@ -410,7 +413,10 @@ function MemberCards({
 	);
 }
 
-/** The member cards whose agent works, waits for the human or failed, each one click from its chat. */
+/**
+ * The member cards whose agent works, waits for the human or failed. As in Board view, a row peeks its card
+ * and *Answer* / *Retry* shows it on its Chat tab, the reply given there; *Open workspace* is the way out.
+ */
 function AgentsNow({
 	host,
 	board,
@@ -422,6 +428,7 @@ function AgentsNow({
 }) {
 	const t = useT();
 	const members = new Set(initiative.memberCardIds);
+	const projectId = board?.projectId ?? host.scope.projectId;
 	const rows = (board?.cards ?? []).filter((card) => {
 		const badge = agentBadge(card);
 		return (
@@ -437,34 +444,52 @@ function AgentsNow({
 			{rows.map((card) => {
 				const badge = agentBadge(card);
 				const attempt = openAttempt(card);
+				const attention = badge === "waiting" || badge === "failed";
 				return (
 					<li
 						key={card.id}
 						data-testid="board-initiative-agent"
 						data-card-id={card.id}
+						data-state={badge ?? undefined}
 						className="flex min-w-0 flex-col gap-2"
 					>
 						<span className="flex min-w-0 items-center gap-4">
 							<AgentBadgeChip badge={badge} />
-							<span className="shrink-0 tr-code-text-small text-text-muted">{card.id}</span>
-							<span className="min-w-0 flex-1 truncate tr-text-ui text-text-default">
-								{card.title}
-							</span>
-							{attempt ? (
+							<button
+								type="button"
+								data-testid="board-initiative-agent-card"
+								aria-label={t("board.inbox.peek", { id: shownId(card), title: card.title })}
+								onClick={() => host.peek(cardPeekEntry(projectId, card))}
+								className="flex min-w-0 flex-1 items-center gap-4 overflow-hidden rounded-xs text-left hover:underline focus-visible:focus-ring"
+							>
+								<span className="shrink-0 tr-code-text-small text-text-muted">{shownId(card)}</span>
+								<span className="min-w-0 truncate tr-text-ui text-text-default">{card.title}</span>
+							</button>
+							{attention ? (
 								<Button
-									variant={badge === "waiting" ? "primary" : "ghost"}
+									variant={badge === "failed" ? "outline" : "soft-primary"}
 									size="s"
-									iconLeft={RiChat3Line}
+									iconLeft={badge === "failed" ? RiRefreshLine : RiQuestionLine}
+									data-testid="board-initiative-agent-answer"
+									onClick={() => answerCard(host, projectId, card)}
+								>
+									{badge === "failed" ? t("board.inbox.retry") : t("board.inbox.answer")}
+								</Button>
+							) : null}
+							{attempt ? (
+								<IconButton
+									icon={RiExternalLinkLine}
+									size="s"
+									label={t("board.inbox.openWorkspace")}
+									data-testid="board-initiative-agent-workspace"
 									onClick={() =>
-										host.openChat({
-											projectId: board?.projectId ?? host.scope.projectId,
+										host.openWorkspace({
 											workspaceId: attempt.workspaceId,
+											projectId,
 											sessionId: attempt.sessionId,
 										})
 									}
-								>
-									{badge === "waiting" ? t("board.inbox.answer") : t("board.attempts.openChat")}
-								</Button>
+								/>
 							) : null}
 						</span>
 						<LastActionLine action={badge === "working" ? attempt?.chat?.lastAction : undefined} />

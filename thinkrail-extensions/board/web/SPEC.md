@@ -144,7 +144,8 @@ none does.
 }`, newest first: the time, the card's id peeking it, the actor chip, *Created in …* / *From → To* /
 *Deleted* and the project) and the **agents** (`agents.get`, *Agents · N*, ordered waiting, failed, then
 working, oldest first — `sortAgents`): the badge, id, title, plan progress, the time on the attempt
-(`elapsedText`, in days past two) and, while working, its last action; a click peeks the card (on its Chat
+(`elapsedText`: in days past two, past a month the day it started; none for a start the store does not
+know, its `0`; the start in the tooltip) and, while working, its last action; a click peeks the card (on its Chat
 tab while its agent waits or failed), a double click enters its workspace on that chat.
 
 ## Card panel
@@ -265,8 +266,9 @@ reads `roadmap.get` and `board.get` for that board:
   refs → `initiative.update`;
 - **Progress** (the stack bar by category) and **Health**: the suggestion when overridden, the reasons
   worded from their kinds, the human's override (*Use the suggestion* clears it) and note;
-- **Agents now**: the member cards whose agent works, waits or failed, the last action while working, and
-  *Answer* / *Open chat*;
+- **Agents now**: the member cards whose agent works, waits or failed, the last action while working; as in
+  Board view a row peeks its card, **Answer** (waiting) or **Retry** (failed) shows it in Peek on its Chat
+  tab (`answerCard`, the inbox's Answer too) and *Open workspace* enters the attempt's chat in its workspace;
 - **Forecast and appetite**: the 50 % / 85 % dates — or *Not enough data — needs ≥3 weeks of history* with
   its reason —, *Nothing left to do*, the appetite bar;
 - **Projects and milestones**: each roadmap project (rename, delete behind a confirm, its stack bar), its

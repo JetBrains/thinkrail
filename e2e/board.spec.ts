@@ -173,13 +173,14 @@ async function openProjects(
 function seedBoard(projectId: string, prefix: string, cards: SeedCard[]): void {
 	const dir = join(E2E_DATA_DIR, "extensions", "board", projectId);
 	mkdirSync(dir, { recursive: true });
+	const startedAt = Date.now() - 12 * 60_000;
 	const stored = cards.map(({ attempt, ...card }) => ({
 		...card,
 		...(card.size ? { sizeSuggested: card.createdBy === "agent" } : {}),
 		createdBy: card.createdBy ?? "human",
 		createdAt: BASE_TS,
 		updatedAt: BASE_TS,
-		attempts: attempt ? [{ ...attempt, workflow: "implement", startedAt: BASE_TS, notes: [] }] : [],
+		attempts: attempt ? [{ ...attempt, workflow: "implement", startedAt, notes: [] }] : [],
 	}));
 	writeFileSync(
 		join(dir, "cards.json"),
@@ -615,12 +616,35 @@ test("an agent's question is answered from its card's Chat tab in Peek, never le
 			attempt: { workspaceId: project.defaultId, sessionId: "board-e2e-answer" },
 		},
 	]);
+	seedInitiative(project.id, {
+		id: "I-1",
+		title: "Rollout",
+		outcome: "Ship it safely",
+		criteria: [],
+		cardIds: ["SP-1"],
+	});
 	await reloadBoards(page);
 	await enterDefaultWorkspace(page);
 	await enterBoardView(page);
 	await expect(page.getByTestId("peek-empty")).toHaveText("Select a card");
 	const agent = page.getByTestId("board-agents").getByTestId("board-agent");
 	await expect(agent).toHaveAttribute("data-state", "waiting");
+	await expect(agent.getByTestId("board-agent-elapsed")).toHaveText(/^\d+m$/);
+
+	await boardTool(page).getByTestId("board-view-roadmap").click();
+	await horizon(page, "now").getByTestId("board-initiative-open").click();
+	const agentNow = peekInitiative(page).locator(
+		'[data-testid="board-initiative-agent"][data-card-id="SP-1"]',
+	);
+	await expect(agentNow).toHaveAttribute("data-state", "waiting");
+	await expect(agentNow.getByTestId("board-initiative-agent-workspace")).toBeVisible();
+	await agentNow.getByTestId("board-initiative-agent-answer").click();
+	await expect(peekCard(page)).toHaveAttribute("data-card-id", "SP-1");
+	await expect(peekCard(page).getByTestId("board-card-tabbed")).toHaveAttribute("data-tab", "chat");
+	await expect(page.getByTestId(BOARD_VIEW_RAIL)).toHaveAttribute("aria-pressed", "true");
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
+	await boardTool(page).getByTestId("board-view-board").click();
+
 	await agent.click();
 	await expect(peekCard(page).getByTestId("board-card-tabbed")).toHaveAttribute("data-tab", "chat");
 	const chat = peekCard(page).getByTestId("board-card-chat");
