@@ -57,7 +57,7 @@ sets live in `App` so returning from a chat keeps the tree. The header's **+ Dev
 was opened from, and the phone names itself to the computer by its kind (`deviceLabel.ts`: iPhone, iPad,
 Android phone / tablet), renamable there. A computer that made this phone **read-only** (`accessFor`, from
 `remote.deviceAccess`) shows "Connected · Read only" with no project or workspace actions, its chats end in a
-read-only note instead of the composer and model picker, a chat list without **+**, and a workspace without a
+read-only note instead of the composer and model picker and answer no tool card, extension dialog or **Try again** (`chatAccess.ts`), a chat list without **+**, and a workspace without a
 chat says it cannot start one — the computer refuses those writes anyway. A computer row's ⋯ reconnects or forgets it (confirmed; pairing again needs a new QR, the last one leaves for
 Welcome). **Sessions** (`ChatsScreen.tsx`, `chats.ts`): the sessions that need a look — **Needs you** (a
 question, an unread result or failure), then **Running**, then **Done**: the ones the phone saw waiting or working
