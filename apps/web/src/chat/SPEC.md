@@ -1184,7 +1184,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   beside the text draft: ready images, pending decodes, errors and the decode generation survive
   file/chat tab and workspace remounts. `usePromptImages` accepts that owner from `ChatView` through
   `Composer`; other prompt dialogs keep a local owner. The draft model (`PromptImagesState` /
-  `newPromptImagesState`) belongs to `store`. Decode completion updates the owner's current
+  `newPromptImagesState`) is [[module-chat-ui]]'s `promptImageState`; the store holds each session's draft. Decode completion updates the owner's current
   state atomically, so concurrent or remounted decodes share one request budget. Every new owner and
   reset gets a fresh opaque generation; a late completion cannot populate a reset or closed/reopened
   session. Session/workspace retirement releases the draft with its runtime. This state is never
@@ -2128,8 +2128,8 @@ Unknown custom messages retain their existing behavior.
   (the hidden-models persistence seam `main.tsx` starts once: hydrates `store.hiddenModels` and writes it
   back through the stable client-preference adapter or host-qualified localStorage — the store itself
   touches no storage). `promptImages.tsx` is not an integration file: the pure prompt-image draft model it reads
-  (`promptImageState`) sits beside it in [[module-chat-ui]], and the store re-exports it; uploads reach it only
-  through `Composer.onSubmit`. `useModelCatalog` is the shared
+  (`promptImageState`) sits beside it in [[module-chat-ui]]; uploads reach it only through `Composer.onSubmit`.
+  `useModelCatalog` is the shared
   models-catalog seam `panels/NewWorkspaceDialog` also imports per-file, so the two pickers cannot
   drift; on activation it **drops catalog authority synchronously** (a flag an earlier consumer set says
   nothing about the list this one inherited) and reads `model.list` only when the shared list is **empty** —

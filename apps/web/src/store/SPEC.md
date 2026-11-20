@@ -315,8 +315,8 @@ roster's catalog reads ([[submodule-web-panels]]).
   token; the pure model `PromptImagesState` + `newPromptImagesState` and its transitions
   `withoutPromptChips` / `withCopiedPromptFile` / `withPendingWork` (pending work counts only on the
   generation it started on) are [[module-chat-ui]]'s `promptImageState` — a dependency-free module beside the
-  composer that reads it — re-exported by the store barrel, so runtime creation runs no renderer code).
-  `updateChatPromptImages(sessionId, update)` changes
+  composer that reads it, so runtime creation runs no renderer code; the store barrel re-exports only the
+  `PromptFile` type `transport`'s uploader takes). `updateChatPromptImages(sessionId, update)` changes
   that draft atomically through the same existing-runtime-only boundary as text drafts. Remounts and
   transcript reconciliation retain it; closing the runtime or clearing its workspace releases it.
   A new runtime gets a different generation even when its session id is reused, so old decodes cannot
