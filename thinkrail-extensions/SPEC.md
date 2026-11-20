@@ -137,10 +137,10 @@ What a `./web` half may import:
   composer suggestions). `Shell` mounts the `globalOverlay` of each extension not in `disabledExtensions`,
   and the cheatsheet adds their `shortcuts` ([[submodule-web-extensions]]). App-local tool registrations
   retain their side-effect imports; extension descriptors need none.
-- **Phone:** `apps/mobile/src/extensions.ts` is the phone's own web registry over the same `./web`
-  descriptors. It is a second list on purpose: a phone renders only the cards that work without the IDE's
-  workbench, so an extension joins it once its cards degrade there (visualize's file preview renders nothing
-  without a resource host and leaves the path).
+- **Phone:** the phone shell (`apps/web/src/phone/main.tsx`) calls the same `registerWebExtensions()`, so
+  every extension's tool cards register there too; there is no second list. The phone mounts no
+  `globalOverlay` and no resource host, so a card must degrade without the IDE's workbench (visualize's file
+  preview renders nothing there and leaves the path).
 
 ## Boundary rules (enforced by `scripts/check-module-boundaries.ts`, with negative tests)
 
