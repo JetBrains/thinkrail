@@ -50,6 +50,8 @@ export interface RemoteAccessOptions {
 	/** The computer's name, shown on the paired device. */
 	hostName?: string;
 	identity?: HostIdentity;
+	/** Where the identity and device registry live; the host data dir by default. */
+	dataDir?: string;
 	onPaired?: (device: PairedDevice, channel: RemoteChannel, protocolVersion: number) => void;
 	/** Broker connector; defaults to a real WebSocket. Injected in tests. */
 	connect?: (url: string, deps: HostBrokerDeps) => BrokerConnection;
@@ -62,7 +64,7 @@ export interface RemoteAccessOptions {
 }
 
 export function startRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
-	const identity = options.identity ?? loadOrCreateIdentity();
+	const identity = options.identity ?? loadOrCreateIdentity(options.dataDir);
 	const tokens = createPairingTokens();
 	const connect = options.connect ?? connectHostBroker;
 	const configured: readonly RelayAddress[] = [{ url: options.relayUrl, route: "relay" }];
@@ -76,8 +78,8 @@ export function startRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
 			consumeToken: (tokenId) => tokens.consume(tokenId),
 			verifyProof: (proof) => verifyPairingProof(identity.publicKey, proof),
 			verifyMac: verifyPairingMac,
-			registerDevice: (device) => void addDevice(device),
-			findDevice: (key) => findDeviceByKey(key),
+			registerDevice: (device) => void addDevice(device, options.dataDir),
+			findDevice: (key) => findDeviceByKey(key, options.dataDir),
 		});
 		const peer = createWeriftHostPeer(undefined, portMapper);
 		const session = createHostSession({

@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import { parsePairingUri } from "@thinkrail/contracts";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { type HostMessage, parsePairingUri } from "@thinkrail/contracts";
+import { addDevice } from "../remote";
 import type { BrokerConnection, HostBrokerDeps } from "./hostBrokerClient";
 import type { RelayAddress } from "./localRelay";
 import { startRemoteAccess } from "./remoteAccess";
@@ -104,4 +108,28 @@ test("routes follow the advertised addresses and carry the Nostr route the link 
 
 	advertised[0] = { url: "ws://10.0.0.9:24243", route: "lan" };
 	expect(access.routes().signalingUrls).toEqual(["ws://10.0.0.9:24243"]);
+});
+
+test("the identity and device registry are read under the given data dir", () => {
+	const dir = mkdtempSync(join(tmpdir(), "trpi-remote-access-"));
+	try {
+		addDevice({ id: "d1", label: "Phone", publicKey: "PHONEKEY", pairedAt: 1 }, dir);
+		const { connect, captured } = fakeConnect();
+		const access = startRemoteAccess({
+			relayUrl: "ws://relay:1",
+			dataDir: dir,
+			connect,
+			portMapper: null,
+		});
+		expect(existsSync(join(dir, "remote-identity.json"))).toBe(true);
+
+		const sent: HostMessage[] = [];
+		const session = captured.deps?.openSession("S1", (message) => sent.push(message));
+		session?.receive({ kind: "resume", devicePublicKey: "PHONEKEY", nonce: "N" });
+		expect(sent.map((message) => message.kind)).toEqual(["challenge"]);
+		session?.close();
+		access.stop();
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
 });

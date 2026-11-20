@@ -51,7 +51,7 @@ export interface RemoteAccessControlOptions {
 	onAccessChanged?: (deviceId: string, access: RemoteDeviceAccess) => void;
 	/** The state changed: coalesced, and only when it differs from the last one heard. */
 	onStatus?: (state: RemoteAccessState) => void;
-	/** Where the setting and device registry live; the host data dir by default. Injected in tests. */
+	/** Where the setting, identity and device registry live; the host data dir by default. Injected in tests. */
 	dataDir?: string;
 	startLocal?: () => LocalRelay;
 	startAccess?: (options: RemoteAccessOptions) => RemoteAccess;
@@ -141,6 +141,7 @@ export function createRemoteAccessControl(
 				relayUrl: relay ? relay.connectUrl : (options.relayUrl ?? ""),
 				...(relay ? { advertised: () => relay.addresses } : {}),
 				...(options.hostName ? { hostName: options.hostName } : {}),
+				...(options.dataDir ? { dataDir: options.dataDir } : {}),
 				nostrRelays: options.nostrRelays ?? DEFAULT_NOSTR_RELAYS,
 				onPaired: track,
 			});
