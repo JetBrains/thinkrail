@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { DEFAULT_NOSTR_RELAYS } from "@thinkrail/nostr-signaling";
 import type { PairedDevice } from "../remote";
 import { addDevice, loadRemoteAccessEnabled, saveRemoteAccessEnabled } from "../remote";
@@ -152,7 +153,7 @@ test("a device shows connected while it has a live channel, and revoking closes 
 		channel.onClose(() => {
 			closed = true;
 		});
-		f.started[0]?.onPaired?.(phone, channel);
+		f.started[0]?.onPaired?.(phone, channel, PROTOCOL_VERSION);
 		expect(f.control.state().devices.map((d) => [d.id, d.connected])).toEqual([
 			["d1", true],
 			["d2", false],
@@ -173,7 +174,7 @@ test("a closed channel leaves the device paired but no longer connected", () => 
 		addDevice(phone, f.dir);
 		f.control.setEnabled(true, { persist: false });
 		const channel = fakeChannel();
-		f.started[0]?.onPaired?.(phone, channel);
+		f.started[0]?.onPaired?.(phone, channel, PROTOCOL_VERSION);
 		channel.close();
 		expect(f.control.state().devices).toEqual([{ ...phone, access: "write", connected: false }]);
 	} finally {
@@ -197,7 +198,7 @@ test("turning access off closes every live channel, whichever route it came by, 
 		] as const) {
 			const channel = fakeChannel();
 			channel.onClose(() => closed.push(name));
-			f.started[0]?.onPaired?.(device, channel);
+			f.started[0]?.onPaired?.(device, channel, PROTOCOL_VERSION);
 		}
 		expect(f.control.mayRequest("d1", "session.prompt")).toBe("allowed");
 
@@ -253,16 +254,17 @@ test("every change is heard once as the whole state, a burst coalesced and a no-
 	const paired: string[] = [];
 	const f = fixture({
 		onStatus: (state) => heard.push(state),
-		onPaired: (device) => paired.push(`${device.id}:${device.access}`),
+		onPaired: (device, _channel, protocolVersion) =>
+			paired.push(`${device.id}:${device.access}:${protocolVersion}`),
 	});
 	try {
 		const phone: PairedDevice = { id: "d1", label: "Phone", publicKey: "P1", pairedAt: 1 };
 		addDevice(phone, f.dir);
 		f.control.setEnabled(true, { persist: false });
 		const channel = fakeChannel();
-		f.started[0]?.onPaired?.(phone, channel);
+		f.started[0]?.onPaired?.(phone, channel, PROTOCOL_VERSION);
 		await settle();
-		expect(paired).toEqual(["d1:write"]);
+		expect(paired).toEqual([`d1:write:${PROTOCOL_VERSION}`]);
 		expect(heard).toHaveLength(1);
 		expect(heard[0]).toMatchObject({ enabled: true, devices: [{ id: "d1", connected: true }] });
 

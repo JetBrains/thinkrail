@@ -8,6 +8,23 @@ import {
 	parseHostMessage,
 } from "./signalingProtocol";
 
+test("hello and resume carry the device's wire protocol version only when it is a whole number", () => {
+	const hello = { kind: "hello", tokenId: "t", devicePublicKey: "k", label: "Phone", nonce: "n" };
+	expect(parseDeviceMessage(JSON.stringify({ ...hello, protocolVersion: 128 }))).toEqual({
+		...hello,
+		protocolVersion: 128,
+	} as DeviceMessage);
+	const resume = { kind: "resume", devicePublicKey: "k", nonce: "n" };
+	expect(parseDeviceMessage(JSON.stringify({ ...resume, protocolVersion: 7 }))).toEqual({
+		...resume,
+		protocolVersion: 7,
+	} as DeviceMessage);
+	for (const bad of [-1, 1.5, "129", null])
+		expect(parseDeviceMessage(JSON.stringify({ ...resume, protocolVersion: bad }))).toEqual(
+			resume as DeviceMessage,
+		);
+});
+
 test("parseDeviceMessage accepts valid device frames and trims the label", () => {
 	expect(
 		parseDeviceMessage(

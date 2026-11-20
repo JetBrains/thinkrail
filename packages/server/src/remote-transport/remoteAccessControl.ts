@@ -41,7 +41,12 @@ export interface RemoteAccessControlOptions {
 	/** Public Nostr relays a phone on any network signals through; the public defaults unless given, `[]` turns it off. */
 	nostrRelays?: readonly string[];
 	hostName?: string;
-	onPaired: (device: PairedDevice & { access: RemoteDeviceAccess }, channel: RemoteChannel) => void;
+	/** A device's channel opened; `protocolVersion` is the wire protocol it speaks. */
+	onPaired: (
+		device: PairedDevice & { access: RemoteDeviceAccess },
+		channel: RemoteChannel,
+		protocolVersion: number,
+	) => void;
 	/** A paired device's access changed on this computer; its live channels should hear of it. */
 	onAccessChanged?: (deviceId: string, access: RemoteDeviceAccess) => void;
 	/** The state changed: coalesced, and only when it differs from the last one heard. */
@@ -108,7 +113,7 @@ export function createRemoteAccessControl(
 		}, STATUS_COALESCE_MS);
 	};
 
-	const track = (device: PairedDevice, channel: RemoteChannel): void => {
+	const track = (device: PairedDevice, channel: RemoteChannel, protocolVersion: number): void => {
 		const open = channels.get(device.id) ?? new Set<RemoteChannel>();
 		open.add(channel);
 		channels.set(device.id, open);
@@ -117,7 +122,7 @@ export function createRemoteAccessControl(
 			if (open.size === 0 && channels.get(device.id) === open) channels.delete(device.id);
 			changed();
 		});
-		options.onPaired({ ...device, access: accessOf(device) }, channel);
+		options.onPaired({ ...device, access: accessOf(device) }, channel, protocolVersion);
 		changed();
 	};
 

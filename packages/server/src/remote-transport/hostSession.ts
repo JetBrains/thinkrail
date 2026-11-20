@@ -24,7 +24,10 @@ export interface HostSession {
 	receive(message: DeviceMessage): void;
 	/** Feeds a frame that did not parse: the app is older than the host, so the session ends `outdated_app`. */
 	receiveUnreadable(): void;
-	onChannel(handler: (channel: RemoteChannel, device: PairedDevice) => void): void;
+	/** The open channel, the device it authorized, and the wire protocol that device speaks. */
+	onChannel(
+		handler: (channel: RemoteChannel, device: PairedDevice, protocolVersion: number) => void,
+	): void;
 	/** True once the data channel is open: signaling is done and the session must outlive its broker entry. */
 	readonly opened: boolean;
 	/** The session ended, by its own terminal step or deadline or by `close()`; heard once. */
@@ -45,7 +48,8 @@ export function createHostSession(deps: HostSessionDeps): HostSession {
 	let authorized: AuthorizedDevice | null = null;
 	let closed = false;
 	let opened = false;
-	let emitChannel: (channel: RemoteChannel, device: PairedDevice) => void = () => {};
+	let emitChannel: (channel: RemoteChannel, device: PairedDevice, protocolVersion: number) => void =
+		() => {};
 	let emitClose: () => void = () => {};
 
 	const close = (): void => {
@@ -76,7 +80,7 @@ export function createHostSession(deps: HostSessionDeps): HostSession {
 		if (!authorized || closed) return;
 		opened = true;
 		clearTimeout(deadline);
-		emitChannel(channel, authorized.device);
+		emitChannel(channel, authorized.device, authorized.protocolVersion);
 	});
 
 	return {

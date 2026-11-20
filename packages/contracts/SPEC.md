@@ -109,6 +109,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   shape a device checks before signing) — the domain-separated (`thinkrail/<purpose>/v1`) byte strings the
   host, device and relay sign or MAC, shared so every party builds them identically; the crypto stays per
   platform. The broker (`brokerProtocol.ts`) and signaling (`signalingProtocol.ts`) frames carry the results.
+  A device's `hello` / `resume` carries its wire `protocolVersion` (the WS's `?protocol=`), so the host serves
+  it as the version it speaks; a frame without one (or with a malformed one) is served as the host's own,
+  which needs no protocol bump.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
   (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,
   `NativeQuitHint` / `NativeCommand` / `NativeShortcutsBridge`, and

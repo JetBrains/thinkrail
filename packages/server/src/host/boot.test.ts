@@ -9,7 +9,12 @@ import type {
 	ServerWelcome,
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
-import { PROTOCOL_VERSION, WS_CHANNELS, WS_MAX_FRAME_BYTES } from "@thinkrail/contracts";
+import {
+	PROTOCOL_VERSION,
+	SPEECH_PROTOCOL_VERSION,
+	WS_CHANNELS,
+	WS_MAX_FRAME_BYTES,
+} from "@thinkrail/contracts";
 import { isPortFree } from "@thinkrail/shared/freePort";
 import {
 	configurePiRuntime,
@@ -25,7 +30,7 @@ import {
 } from "../analytics";
 import { resetJbcentralStateForTests } from "../auth";
 import { logger } from "../log";
-import type { PairedDevice } from "../remote";
+import { addDevice, type PairedDevice } from "../remote";
 import type { RemoteChannel } from "../remote-transport/channel";
 import type { RemoteAccess, RemoteAccessOptions } from "../remote-transport/remoteAccess";
 import { resetConfigCache, updateConfig } from "../settings";
@@ -546,17 +551,27 @@ test("a paired device's channel hears the host's broadcasts beside the local soc
 		remote: { relayUrl: "ws://127.0.0.1:1", startAccess },
 	});
 	const decoder = new TextDecoder();
-	const pushed: { channel?: string }[] = [];
-	const channel: RemoteChannel = {
+	const deviceChannel = (into: { channel?: string; data?: unknown }[]): RemoteChannel => ({
 		open: true,
-		send: (data) => pushed.push(JSON.parse(decoder.decode(data))),
+		send: (data) => into.push(JSON.parse(decoder.decode(data))),
 		onMessage: () => {},
 		onClose: () => {},
 		close: () => {},
-	};
+	});
+	const pushed: { channel?: string; data?: unknown }[] = [];
 	const device: PairedDevice = { id: "phone", label: "Phone", publicKey: "P", pairedAt: 1 };
-	pair?.(device, channel);
-	expect(pushed.map((frame) => frame.channel)).toContain(WS_CHANNELS.serverWelcome);
+	addDevice(device);
+	pair?.(device, deviceChannel(pushed), PROTOCOL_VERSION);
+	const welcome = pushed.find((frame) => frame.channel === WS_CHANNELS.serverWelcome);
+	expect(welcome?.data).toHaveProperty("speech");
+
+	const older: { channel?: string; data?: unknown }[] = [];
+	const olderDevice: PairedDevice = { id: "old", label: "Old", publicKey: "O", pairedAt: 1 };
+	addDevice(olderDevice);
+	pair?.(olderDevice, deviceChannel(older), SPEECH_PROTOCOL_VERSION - 1);
+	const olderWelcome = older.find((frame) => frame.channel === WS_CHANNELS.serverWelcome);
+	expect(olderWelcome?.data).toMatchObject({ protocolVersion: PROTOCOL_VERSION });
+	expect(olderWelcome?.data).not.toHaveProperty("speech");
 
 	const local = await collectSocket(b.port, "broadcast-local");
 	local.socket.send(

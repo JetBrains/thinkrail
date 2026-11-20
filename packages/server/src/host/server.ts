@@ -741,7 +741,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		};
 	};
 
-	const remoteBridges = new Set<RemoteWireBridge>();
+	const remoteBridges = new Map<RemoteWireBridge, number>();
 
 	const deviceBridges = new Map<string, Set<RemoteWireBridge>>();
 	const remoteClients = new Set<string>();
@@ -749,7 +749,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		...(remote?.relayUrl ? { relayUrl: remote.relayUrl } : {}),
 		...(remote?.startAccess ? { startAccess: remote.startAccess } : {}),
 		hostName: computerName(),
-		onPaired: (device, channel) => {
+		onPaired: (device, channel, protocolVersion) => {
 			const clientKey = `remote:${device.id}`;
 			remoteClients.add(clientKey);
 			const pendingReap = reapTimers.get(clientKey);
@@ -783,14 +783,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 							"REMOTE_DEVICE_READ_ONLY",
 							"This device can only read. Allow changes for it on the computer.",
 						);
-					return handleRequest(method, params, { clientKey, protocolVersion: PROTOCOL_VERSION });
+					return handleRequest(method, params, { clientKey, protocolVersion });
 				},
 				errorCodeOf,
 			});
 			const own = deviceBridges.get(device.id) ?? new Set<RemoteWireBridge>();
 			own.add(bridge);
 			deviceBridges.set(device.id, own);
-			remoteBridges.add(bridge);
+			remoteBridges.set(bridge, protocolVersion);
 			channel.onClose(() => {
 				remoteBridges.delete(bridge);
 				own.delete(bridge);
@@ -801,7 +801,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				}
 			});
 			// The device has no WS "open" event, so hand it the same welcome snapshot over the bridge.
-			bridge.push(WS_CHANNELS.serverWelcome, buildWelcome(PROTOCOL_VERSION));
+			bridge.push(WS_CHANNELS.serverWelcome, buildWelcome(protocolVersion));
 			bridge.push(WS_CHANNELS.remoteDeviceAccess, { access: device.access });
 			const routes = remoteAccess.routes();
 			if (routes) bridge.push(WS_CHANNELS.remoteHostRoutes, routes);
@@ -852,8 +852,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		for (const socket of sockets.values()) {
 			if (socket.isSubscribed(channel) && admits(socket.data.protocolVersion)) deliver(socket);
 		}
-		if (toDevices && remoteBridges.size > 0 && admits(PROTOCOL_VERSION)) {
-			for (const bridge of remoteBridges) bridge.pushFramed(frame);
+		if (!toDevices) return;
+		for (const [bridge, protocolVersion] of remoteBridges) {
+			if (admits(protocolVersion)) bridge.pushFramed(frame);
 		}
 	};
 
