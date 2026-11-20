@@ -3,7 +3,7 @@ id: module-chat-ui
 type: module-design
 status: active
 parent: architecture
-depends-on: [module-contracts, module-locales, module-ui, module-extension-api]
+depends-on: [module-contracts, module-locales, module-ui, module-extension-api, module-ext-visualize]
 references: [submodule-web-chat, submodule-web-prompt]
 title: chat-ui — the shared, store-free conversation UI
 ---
