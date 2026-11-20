@@ -47,8 +47,10 @@ each step's mechanics and invariants live in the module spec it links.
    one only if a self-probe proves it reachable), the Nostr route (host Nostr key + relays), the host public
    key, the token and the computer's name.
 3. The phone sends `hello` with the token **id** (never the token), its public key and a nonce. The host
-   answers a `challenge`; the phone returns a `proof` — its signature over the challenge plus an HMAC of the
-   token. Only then is the device registered, with an access level (`write` or `read`). The connection that
+   answers a `challenge` (exactly 32 random bytes; the phone signs nothing else as one); the phone returns a
+   `proof` — its signature over the domain-separated `proofTranscript(host key, challenge)`, never the raw
+   challenge, so a relay that picks the challenge cannot harvest a signature valid for another purpose — plus
+   an HMAC of the token. Only then is the device registered, with an access level (`write` or `read`). The connection that
    paired is the phone's connection from then on; a failed pairing is reported, never retried.
 
 ## Connecting (every time)

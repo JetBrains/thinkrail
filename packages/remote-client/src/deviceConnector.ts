@@ -4,12 +4,14 @@ import {
 	encodeDeviceMessage,
 	type HostMessage,
 	type IceServer,
+	isPairingChallenge,
 	offerTranscript,
 	type PairingNostrRoute,
 	pairingMacInput,
 	parseHostMessage,
 	parsePairingUri,
 	parseRemoteHostRoutes,
+	proofTranscript,
 	type RemoteHostRoutes,
 	WS_CHANNELS,
 	withPublicStun,
@@ -330,8 +332,12 @@ function openRemote(params: OpenParams): { connection: RemoteConnection; paired:
 					switch (message.kind) {
 						case "challenge": {
 							if (challenge) return;
+							if (!isPairingChallenge(message.challenge)) {
+								dropped(new RemoteConnectError("identity_mismatch", "host challenge malformed"));
+								return;
+							}
 							challenge = message.challenge;
-							const signature = await sign(base64urlToBytes(challenge));
+							const signature = await sign(proofTranscript(params.hostKey, challenge));
 							send(
 								tokenId !== undefined && params.token !== undefined
 									? {

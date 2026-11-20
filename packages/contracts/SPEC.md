@@ -101,8 +101,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   `thinkrail://pair?v=1` link — relay addresses (`s`), token, host key, project, name, and the optional Nostr
   route (`PairingNostrRoute`: hex key `o`, relays `r`). A link needs at least one route; a malformed Nostr
   route is dropped, and an older app ignores it and keeps the relay addresses.
-- **Remote auth transcripts (`pairingAuth.ts`):** `registerTranscript`, `offerTranscript`,
-  `answerTranscript`, `pairingMacInput` — the domain-separated (`thinkrail/<purpose>/v1`) byte strings the
+- **Remote auth transcripts (`pairingAuth.ts`):** `registerTranscript`, `proofTranscript`,
+  `offerTranscript`, `answerTranscript`, `pairingMacInput`, plus `isPairingChallenge` (the 32-byte challenge
+  shape a device checks before signing) — the domain-separated (`thinkrail/<purpose>/v1`) byte strings the
   host, device and relay sign or MAC, shared so every party builds them identically; the crypto stays per
   platform. The broker (`brokerProtocol.ts`) and signaling (`signalingProtocol.ts`) frames carry the results.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`

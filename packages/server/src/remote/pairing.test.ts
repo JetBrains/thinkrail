@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { sign as edSign, generateKeyPairSync, type KeyObject } from "node:crypto";
+import { answerTranscript, isPairingChallenge, proofTranscript } from "@thinkrail/contracts";
 import { newChallenge, pairingMac, verifyPairingMac, verifyPairingProof } from "./pairing";
 
 function deviceKey(): { publicKey: string; privateKey: KeyObject } {
@@ -7,39 +8,57 @@ function deviceKey(): { publicKey: string; privateKey: KeyObject } {
 	return { publicKey: (publicKey.export({ format: "jwk" }) as { x: string }).x, privateKey };
 }
 
-function signChallenge(privateKey: KeyObject, challenge: string): string {
-	return edSign(null, Buffer.from(challenge, "base64url"), privateKey).toString("base64url");
+const HOST = deviceKey().publicKey;
+
+function signed(privateKey: KeyObject, data: Uint8Array): string {
+	return edSign(null, data, privateKey).toString("base64url");
 }
 
-test("verifyPairingProof accepts a valid device signature", () => {
+test("verifyPairingProof accepts a device signature over the proof transcript for this host", () => {
 	const { publicKey, privateKey } = deviceKey();
 	const challenge = newChallenge();
 	expect(
-		verifyPairingProof({
+		verifyPairingProof(HOST, {
 			devicePublicKey: publicKey,
 			challenge,
-			signature: signChallenge(privateKey, challenge),
+			signature: signed(privateKey, proofTranscript(HOST, challenge)),
 		}),
 	).toBe(true);
 });
 
-test("verifyPairingProof rejects a replayed challenge, a wrong key, and garbage", () => {
+test("verifyPairingProof rejects a replayed challenge, another host, a wrong key, and garbage", () => {
 	const { publicKey, privateKey } = deviceKey();
 	const challenge = newChallenge();
-	const signature = signChallenge(privateKey, challenge);
-	expect(
-		verifyPairingProof({ devicePublicKey: publicKey, challenge: newChallenge(), signature }),
-	).toBe(false);
-	expect(verifyPairingProof({ devicePublicKey: deviceKey().publicKey, challenge, signature })).toBe(
+	const signature = signed(privateKey, proofTranscript(HOST, challenge));
+	const proof = { devicePublicKey: publicKey, challenge, signature };
+	expect(verifyPairingProof(HOST, { ...proof, challenge: newChallenge() })).toBe(false);
+	expect(verifyPairingProof(deviceKey().publicKey, proof)).toBe(false);
+	expect(verifyPairingProof(HOST, { ...proof, devicePublicKey: deviceKey().publicKey })).toBe(
 		false,
 	);
-	expect(verifyPairingProof({ devicePublicKey: publicKey, challenge, signature: "!!!" })).toBe(
-		false,
-	);
+	expect(verifyPairingProof(HOST, { ...proof, signature: "!!!" })).toBe(false);
 });
 
-test("newChallenge is unique", () => {
+test("a signature over the raw challenge or another transcript never passes as a proof", () => {
+	const { publicKey, privateKey } = deviceKey();
+	const challenge = newChallenge();
+	for (const data of [
+		new Uint8Array(Buffer.from(challenge, "base64url")),
+		answerTranscript(challenge, "v=0"),
+	]) {
+		expect(
+			verifyPairingProof(HOST, {
+				devicePublicKey: publicKey,
+				challenge,
+				signature: signed(privateKey, data),
+			}),
+		).toBe(false);
+	}
+});
+
+test("newChallenge is unique and has the shape a device accepts", () => {
 	expect(newChallenge()).not.toBe(newChallenge());
+	expect(isPairingChallenge(newChallenge())).toBe(true);
 });
 
 test("verifyPairingMac binds the QR token to the device key and the challenge", () => {
