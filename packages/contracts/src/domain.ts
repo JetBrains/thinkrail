@@ -297,6 +297,13 @@ export interface OpenPrResult {
 	review?: OpenBranchReview;
 	url?: string;
 	compareUrl?: string;
+	/**
+	 * `compare` only: the description that did not fit the compare URL, carried back so the client
+	 * can hand it over another way (it copies it to the clipboard). A body is never cut to a prefix
+	 * that happens to fit, because the resulting URL looks like a complete description.
+	 * (`PR_COMPARE_BODY_PROTOCOL_VERSION`)
+	 */
+	omittedBody?: string;
 	/** `updated` only: whether the `gh pr edit --body` refresh actually succeeded. */
 	bodyRefreshed?: boolean;
 	/** `compare` only: why the direct gh path was unavailable, when the host could tell. */

@@ -144,7 +144,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 128;
+export const PROTOCOL_VERSION = 129;
+export const PR_COMPARE_BODY_PROTOCOL_VERSION = 129;
 export const ARTIFACT_OUTPUTS_PROTOCOL_VERSION = 128;
 export const SUBAGENT_CATALOG_PROTOCOL_VERSION = 127;
 export const SERVER_FALLBACK_PROTOCOL_VERSION = 126;

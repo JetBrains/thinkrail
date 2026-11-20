@@ -183,11 +183,30 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 		});
 	};
 
+	// The host leaves a description out of the compare URL rather than cutting it, so the surface has to
+	// carry it: a dialog shows the full text in a selectable box, and copying is a convenience that dialog
+	// offers rather than the only way out. That matters because `copyText` fails on a plain-HTTP remote
+	// client or a denied permission, and `lib/SPEC.md` asks the text to stay visible in exactly that case.
 	const onPrOpened = (submit: PrSubmit, result: OpenPrResult): void => {
 		setCompose(null);
 		if (result.review) noteOpenReview(result.review, result.url);
 		refresh();
 		toastDirty(result.dirtyFiles);
+		const omitted = result.omittedBody;
+		if (omitted !== undefined) {
+			setSetup(
+				result.ghProblem
+					? {
+							kind: "gh",
+							problem: result.ghProblem,
+							...(result.compareUrl ? { compareUrl: result.compareUrl } : {}),
+							omittedBody: omitted,
+						}
+					: { kind: "compare-body", compareUrl: result.compareUrl ?? "", body: omitted },
+			);
+			if (result.ghProblem) retry.current = { kind: "pr", submit };
+			return;
+		}
 		if (result.action === "compare" && result.ghProblem) {
 			retry.current = { kind: "pr", submit };
 			setSetup({

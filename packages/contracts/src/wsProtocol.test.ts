@@ -3,6 +3,7 @@ import {
 	DEFAULT_CONFIG,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
+	type OpenPrResult,
 	RECENT_MODELS_LIMIT,
 	type ReviewFixDetails,
 	SEARCH_KINDS,
@@ -66,6 +67,7 @@ import {
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
+	PR_COMPARE_BODY_PROTOCOL_VERSION,
 	PROJECT_ORDER_PROTOCOL_VERSION,
 	PROJECT_RENAME_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
@@ -337,6 +339,18 @@ test("the browser view route is pinned to v122", () => {
 	expect(BROWSER_VIEW_PROTOCOL_VERSION).toBe(122);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(BROWSER_VIEW_PROTOCOL_VERSION);
 	expect(WORKSPACE_VIEW_ROUTE).toBe("/view/");
+});
+
+test("the compare hand-off carries an omitted body from v129", () => {
+	expect(PR_COMPARE_BODY_PROTOCOL_VERSION).toBe(129);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PR_COMPARE_BODY_PROTOCOL_VERSION);
+	const handoff: OpenPrResult = {
+		action: "compare",
+		compareUrl: "https://github.com/o/r/compare/main...feat",
+		omittedBody: "# Plan\n\nToo long for a URL.",
+		dirtyFiles: 0,
+	};
+	expect(handoff.omittedBody).toContain("Too long");
 });
 
 test("background workspace creation is pinned to v104", () => {

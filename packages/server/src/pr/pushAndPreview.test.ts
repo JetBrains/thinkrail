@@ -345,7 +345,9 @@ describe("gitlab new-MR hand-off", () => {
 		expect(gitlabProject("git@gitlab.com:acme/tools/widgets.git")).toBe("acme/tools/widgets");
 		expect(gitlabProject("https://gitlab.com/acme/widgets")).toBe("acme/widgets");
 		expect(gitlabProject("https://github.com/acme/widgets")).toBeNull();
-		const url = new URL(gitlabNewMrUrl("acme/widgets", "origin/main", "feature", "Ship", "Body"));
+		const url = new URL(
+			gitlabNewMrUrl("acme/widgets", "origin/main", "feature", "Ship", "Body").url,
+		);
 		expect(url.origin + url.pathname).toBe("https://gitlab.com/acme/widgets/-/merge_requests/new");
 		expect(url.searchParams.get("merge_request[source_branch]")).toBe("feature");
 		expect(url.searchParams.get("merge_request[target_branch]")).toBe("main");
@@ -353,14 +355,16 @@ describe("gitlab new-MR hand-off", () => {
 		expect(url.searchParams.get("merge_request[description]")).toBe("Body");
 	});
 
-	test("a multibyte description is trimmed until the encoded URL fits", async () => {
+	test("a multibyte description that cannot fit is handed back whole, not trimmed", async () => {
 		sh(repo, "remote", "set-url", "origin", "https://gitlab.com/acme/widgets.git");
 		sh(repo, "config", `url.${remote}.pushInsteadOf`, "https://gitlab.com/acme/widgets.git");
 		const body = "修复到期日漂移并补回归测试".repeat(500);
-		const url = (await openPr({ workspaceId: "w1", title: "标题", body })).compareUrl ?? "";
-		expect(url.length).toBeLessThanOrEqual(4_000);
-		expect(url.length).toBeGreaterThan(4_000 - 9);
-		const description = new URL(url).searchParams.get("merge_request[description]") ?? "";
-		expect(body.startsWith(description)).toBe(true);
+		const result = await openPr({ workspaceId: "w1", title: "标题", body });
+		expect(result.compareUrl ?? "").not.toContain("merge_request%5Bdescription%5D");
+		expect(
+			new URL(result.compareUrl ?? "https://x").searchParams.get("merge_request[description]"),
+		).toBeNull();
+		// The client copies this: a trimmed description looks complete once it is in the form.
+		expect(result.omittedBody).toBe(body);
 	});
 });

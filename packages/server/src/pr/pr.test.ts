@@ -167,30 +167,51 @@ describe("pushGitEnv", () => {
 
 describe("compareQuickPullUrl", () => {
 	test("prefills title and body and strips the origin/ base prefix", () => {
-		const url = compareQuickPullUrl("acme/widgets", "origin/main", "feat/x", "My title", "Body");
+		const { url } = compareQuickPullUrl(
+			"acme/widgets",
+			"origin/main",
+			"feat/x",
+			"My title",
+			"Body",
+		);
 		expect(url).toStartWith("https://github.com/acme/widgets/compare/main...feat%2Fx?");
 		expect(url).toContain("quick_pull=1");
 		expect(url).toContain("title=My+title");
 		expect(url).toContain("body=Body");
 	});
 
-	test("caps the body for URL-length safety and omits it when empty", () => {
-		const long = compareQuickPullUrl("a/b", "main", "x", "t", "y".repeat(10_000));
-		expect(long).toHaveLength(4_000);
-		expect(compareQuickPullUrl("a/b", "main", "x", "t", "")).not.toContain("body=");
+	test("leaves an empty body out without reporting anything omitted", () => {
+		const handoff = compareQuickPullUrl("a/b", "main", "x", "t", "");
+		expect(handoff.url).not.toContain("body=");
+		expect(handoff.omittedBody).toBeUndefined();
 	});
 
-	test("trims a multibyte body by whole code points until the encoded URL fits", () => {
+	test("carries a body that fits and never cuts one that does not", () => {
+		const fits = compareQuickPullUrl("a/b", "main", "x", "t", "y".repeat(3_000));
+		expect(fits.url.length).toBeLessThanOrEqual(4_000);
+		expect(fits.omittedBody).toBeUndefined();
+
+		const long = "y".repeat(10_000);
+		const overflow = compareQuickPullUrl("a/b", "main", "x", "t", long);
+		expect(overflow.url).not.toContain("body=");
+		expect(overflow.url.length).toBeLessThanOrEqual(4_000);
+		// The whole description, not a prefix: a cut body reads as a complete one.
+		expect(overflow.omittedBody).toBe(long);
+	});
+
+	test("hands back a multibyte body rather than the whole-code-point prefix that fits", () => {
 		const body = "修复到期日漂移并补回归测试".repeat(500);
-		const url = compareQuickPullUrl("o/r", "main", "feature", "标题", body);
+		const { url, omittedBody } = compareQuickPullUrl("o/r", "main", "feature", "标题", body);
 		expect(url.length).toBeLessThanOrEqual(4_000);
-		expect(url.length).toBeGreaterThan(4_000 - 9);
-		expect(body.startsWith(new URL(url).searchParams.get("body") ?? "")).toBe(true);
-		for (let pad = 0; pad < 12; pad++) {
-			const emoji = `${"x".repeat(pad)}${"😀".repeat(2_000)}`;
-			const sent = new URL(compareQuickPullUrl("o/r", "main", "f", "t", emoji)).searchParams;
-			expect(sent.get("body")).toMatch(/^x*(?:😀)+$/u);
-		}
+		expect(url).not.toContain("body=");
+		expect(omittedBody).toBe(body);
+
+		// A body just inside the budget still rides in the URL untouched.
+		const short = "修复到期日漂移".repeat(40);
+		const kept = compareQuickPullUrl("o/r", "main", "feature", "标题", short);
+		expect(kept.url.length).toBeLessThanOrEqual(4_000);
+		expect(new URL(kept.url).searchParams.get("body")).toBe(short);
+		expect(kept.omittedBody).toBeUndefined();
 	});
 });
 
