@@ -137,7 +137,7 @@ export function WorkspaceOpener({
 	const started = useRef(-1);
 
 	useLayoutEffect(() => {
-		if (started.current === attempt || chats.kind !== "ready" || !client) return;
+		if (started.current === attempt || chats.kind !== "ready" || chats.cached || !client) return;
 		started.current = attempt;
 		const main =
 			chats.value.find((summary) => summary.sessionId === sessionId) ?? ordered(chats.value)[0];

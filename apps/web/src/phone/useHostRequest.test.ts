@@ -31,6 +31,7 @@ test("other params or another computer never show the previous read's rows: that
 	expect(shownLoaded(settled(), a, "k2", "r3", { value: ["two"] })).toEqual({
 		kind: "ready",
 		value: ["two"],
+		cached: true,
 	});
 	expect(
 		shownLoaded(settled({ loaded: { kind: "failed", reason: "x" } }), a, "k2", "r3", undefined),
@@ -43,10 +44,11 @@ test("a failure stays until the read is issued again, which loads instead of kee
 	expect(shownLoaded(failed, a, "k1", "r2", undefined)).toEqual({ kind: "loading" });
 });
 
-test("nothing settled yet starts from the cache, so returning never flashes a loader", () => {
+test("nothing settled yet starts from the cache, marked as such, so returning never flashes a loader", () => {
 	expect(shownLoaded(null, a, "k1", "r1", { value: ["cached"] })).toEqual({
 		kind: "ready",
 		value: ["cached"],
+		cached: true,
 	});
 	expect(shownLoaded(null, a, "k1", "r1", undefined)).toEqual({ kind: "loading" });
 });
@@ -65,6 +67,7 @@ test("a prefetched read is what the screen then opens on, and a slow or failed o
 	expect(shownLoaded(null, answering, key, "", cachedFor(answering, key))).toEqual({
 		kind: "ready",
 		value: ["p1"],
+		cached: true,
 	});
 
 	const silent = { request: () => new Promise(() => {}) } as unknown as DeviceWireClient;

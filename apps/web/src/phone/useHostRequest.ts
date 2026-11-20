@@ -4,7 +4,8 @@ import { reasonOf } from "./async";
 
 export type Loaded<T> =
 	| { kind: "loading" }
-	| { kind: "ready"; value: T }
+	/** `cached`: the read's last value from an earlier mount, shown while this one has not answered yet. */
+	| { kind: "ready"; value: T; cached?: true }
 	| { kind: "failed"; reason: string; retry?: () => void };
 
 const lastValues = new WeakMap<DeviceWireClient, Map<string, { value: unknown }>>();
@@ -57,7 +58,7 @@ export function shownLoaded<T>(
 	cached: { value: unknown } | undefined,
 ): Loaded<T> {
 	if (!settled || settled.client !== client || settled.key !== key)
-		return cached ? { kind: "ready", value: cached.value as T } : { kind: "loading" };
+		return cached ? { kind: "ready", value: cached.value as T, cached: true } : { kind: "loading" };
 	if (settled.loaded.kind === "failed" && settled.request !== request) return { kind: "loading" };
 	return settled.loaded;
 }
