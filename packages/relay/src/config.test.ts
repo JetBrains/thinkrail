@@ -26,7 +26,7 @@ test("TURN, proxy and limits are read from the environment", () => {
 	expect(config.turn).toEqual({
 		urls: ["turn:turn.example:3478?transport=udp", "turns:turn.example:443?transport=tcp"],
 		secret: "s3cret",
-		ttlSeconds: 600,
+		ttlSeconds: 43_200,
 		issuesPerMinute: 10,
 	});
 	expect(

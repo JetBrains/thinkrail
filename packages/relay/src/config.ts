@@ -28,7 +28,7 @@ export const DEFAULT_LIMITS: RelayLimits = {
 	maxSessionsPerHost: 64,
 };
 
-export const DEFAULT_TURN_TTL_SECONDS = 10 * 60;
+export const DEFAULT_TURN_TTL_SECONDS = 12 * 60 * 60;
 export const DEFAULT_TURN_ISSUES_PER_MINUTE = 10;
 
 function positiveInt(value: string | undefined, fallback: number, name: string): number {

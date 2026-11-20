@@ -71,13 +71,13 @@ See [[submodule-server-remote-transport]] (the host side of the same handshake) 
 
 ## Decisions
 
-- **TURN credentials are short-lived and rate-limited per address.** The broker hands them out on `connect`,
-  before the host has authorized anyone, because a device must hold them before signaling starts; so anyone
-  who knows a registered host key can ask. The bounds are therefore on the credential, not the asker: a
-  10-minute TTL (`TURN_TTL_SECONDS`, was 12 h) limits how long a harvested one relays, and each client
-  address gets at most `TURN_ISSUES_PER_MINUTE` (10, also the burst) — past it the device still gets `ready`,
-  only without TURN, so it falls back to STUN rather than failing. A device fetches fresh credentials on
-  every attempt, since each re-dial goes through `connect`.
+- **TURN credentials are rate-limited per address.** The broker hands them out on `connect`, before the host
+  has authorized anyone, because a device must hold them before signaling starts; so anyone who knows a
+  registered host key can ask. The bound is on issuance: each client address gets at most
+  `TURN_ISSUES_PER_MINUTE` (10, also the burst) — past it the device still gets `ready`,
+  only without TURN, so it falls back to STUN rather than failing. The TTL (`TURN_TTL_SECONDS`, 12 h) is
+  not the bound: coturn re-checks a REST credential's expiry on every allocation refresh, so a short one
+  would cut a relayed session that outlives it.
 
 - **Relay data path stays WebRTC.** The relay brokers signaling and TURN; it does not carry session bytes
   over its WebSocket. Tunnelling the wire through the relay would need its own end-to-end encryption layer
