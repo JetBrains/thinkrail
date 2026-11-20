@@ -2573,6 +2573,7 @@ type HostState = Pick<
 	| "activeWorkspaceLiveLatch"
 	| "workspaceSelectionHistory"
 	| "routeChatTarget"
+	| "composerFocusRequest"
 	| "workspaceViewsByWorkspace"
 	| "layoutDocumentsByWorkspace"
 	| "layoutAttentionByWorkspace"
@@ -2629,6 +2630,7 @@ type HostState = Pick<
 	| "localLocales"
 	| "userThemes"
 	| "userFonts"
+	| "speech"
 	| "resourceSnapshots"
 	| "mcpByWorkspace"
 >;
@@ -2679,6 +2681,7 @@ function initialHostState(): HostState {
 		activeWorkspaceLiveLatch: false,
 		workspaceSelectionHistory: [],
 		routeChatTarget: null,
+		composerFocusRequest: null,
 		workspaceViewsByWorkspace: {},
 		layoutDocumentsByWorkspace: {},
 		layoutAttentionByWorkspace: {},
@@ -2735,6 +2738,7 @@ function initialHostState(): HostState {
 		localLocales: null,
 		userThemes: null,
 		userFonts: null,
+		speech: null,
 		resourceSnapshots: {},
 		mcpByWorkspace: {},
 	};
@@ -2745,7 +2749,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 	connectionGeneration: 0,
 	welcomeGeneration: 0,
 	routeChatTargetGeneration: 0,
-	composerFocusRequest: null,
 	workbenchFrame: null,
 	layoutStateReady: false,
 	localLayoutPreferences: { ...DEFAULT_LOCAL_LAYOUT_PREFERENCES },
@@ -2817,7 +2820,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 	codeLigatures: DEFAULT_CONFIG.codeLigatures,
 	fontWeightOffset: DEFAULT_CONFIG.fontWeightOffset,
 	installUserFonts: (snapshot) => set({ userFonts: snapshot }),
-	speech: null,
 	installSpeechStatus: (speech) => set({ speech }),
 	onboardingDismissed: DEFAULT_CONFIG.onboardingDismissed,
 	onboardingWizard: "pending",
