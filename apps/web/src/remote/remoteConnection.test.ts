@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
-import type { RemoteConnection } from "@thinkrail/remote-client";
-import { createRemoteConnectionController } from "./remoteConnection";
+import { t } from "@thinkrail/locales/react";
+import { RemoteConnectError, type RemoteConnection } from "@thinkrail/remote-client";
+import { useAppStore } from "../store";
+import { connectFailureText } from "./connectFailure";
+import { createRemoteConnectionController, reportRemoteHostLost } from "./remoteConnection";
 
 const LINK = "thinkrail://pair?v=1&s=ws://relay:1&t=tok&k=KEY&p=proj";
 
@@ -8,6 +11,9 @@ function connection(): RemoteConnection {
 	return {
 		client: {
 			attach: () => {},
+			detach: () => {},
+			open: true,
+			onOpenChange: () => () => {},
 			request: () => Promise.reject(new Error("not used")),
 			subscribe: () => () => {},
 			close: () => {},
@@ -50,7 +56,7 @@ test("surfaces a connector failure as an error state", async () => {
 	expect(controller.getState()).toEqual({
 		status: "error",
 		kind: "failed",
-		message: "relay connection failed",
+		failure: { kind: "error", message: "relay connection failed" },
 	});
 	controller.reset();
 	expect(controller.getState()).toEqual({ status: "idle" });
@@ -114,4 +120,48 @@ test("only the newest connect wins; an older one finishing later is closed", asy
 	expect(state.status === "connected" && state.connection).toBe(newer.connection);
 	expect(older.state.closed).toBe(true);
 	expect(newer.state.closed).toBe(false);
+});
+
+test("a failure keeps its code, and its text is the localized reason, never the raw detail", async () => {
+	const controller = createRemoteConnectionController(async () => {
+		throw new RemoteConnectError("code_expired", "expired at ws://10.0.0.2:7777");
+	});
+	await controller.connect(LINK, "Phone");
+	const state = controller.getState();
+	if (state.status !== "error" || state.kind !== "failed") throw new Error("expected a failure");
+	expect(state.failure).toMatchObject({ kind: "remote", code: "code_expired" });
+	expect(connectFailureText(t, state.failure)).toBe(t("panels.connectByLink.errors.codeExpired"));
+	const raw = { kind: "remote", code: "rejected", message: "denied by 10.0.0.2" } as const;
+	expect(connectFailureText(t, raw)).toBe(t("panels.connectByLink.errors.failed"));
+	expect(connectFailureText(t, { kind: "network" })).toBe(t("panels.connectByLink.errors.network"));
+});
+
+test("a connection lost later is reported with the link's host key", async () => {
+	const lost: [string, string][] = [];
+	let loseIt: (error: RemoteConnectError) => void = () => {};
+	const controller = createRemoteConnectionController(
+		async (_link, options) => {
+			loseIt = options.onLost;
+			return connection();
+		},
+		(hostKey, error) => lost.push([hostKey, error.code]),
+	);
+	await controller.connect(LINK, "Phone");
+	loseIt(new RemoteConnectError("unknown_device", "revoked"));
+	expect(lost).toEqual([["KEY", "unknown_device"]]);
+});
+
+test("losing the mounted remote host reads disconnected with a toast back to this computer", () => {
+	useAppStore.getState().resetHostState();
+	useAppStore.getState().enterRemoteHost("KEY", true);
+	const toasts = useAppStore.getState().toasts.length;
+	reportRemoteHostLost("OTHER", new RemoteConnectError("unknown_device", "revoked"));
+	expect(useAppStore.getState().status).toBe("connected");
+	expect(useAppStore.getState().toasts).toHaveLength(toasts);
+
+	reportRemoteHostLost("KEY", new RemoteConnectError("unknown_device", "revoked"));
+	expect(useAppStore.getState().status).toBe("disconnected");
+	const toast = useAppStore.getState().toasts.at(-1);
+	expect(toast?.message).toBe(t("panels.connectByLink.errors.unknownDevice"));
+	expect(toast?.action?.label).toBe(t("panels.connectByLink.lost.backToLocal"));
 });

@@ -9,8 +9,8 @@ import {
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { createRemoteConnectionController } from "../remote/remoteConnection";
-import { mountRemoteSession } from "../transport";
+import { connectFailureText } from "../remote/connectFailure";
+import { createRemoteConnectionController, mountRemoteHost } from "../remote/remoteConnection";
 
 export function ConnectByLinkDialog({ onClose }: { onClose: () => void }) {
 	const t = useT();
@@ -22,7 +22,7 @@ export function ConnectByLinkDialog({ onClose }: { onClose: () => void }) {
 
 	useEffect(() => {
 		if (state.status === "connected") {
-			mountRemoteSession(state.connection.client, state.connection.hostKey);
+			mountRemoteHost(state.connection);
 			onClose();
 		}
 	}, [state, onClose]);
@@ -61,7 +61,7 @@ export function ConnectByLinkDialog({ onClose }: { onClose: () => void }) {
 						>
 							{state.kind === "invalid-link"
 								? t("panels.connectByLink.invalidLink")
-								: state.message}
+								: connectFailureText(t, state.failure)}
 						</p>
 					) : null}
 					<Button
