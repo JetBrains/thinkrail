@@ -10,9 +10,10 @@ references: [module-contracts, submodule-web-shell, submodule-web-shell-layout, 
 
 ## Responsibility
 
-The board's UI: the Board side tool with its Board, List, Roadmap (with Discovery) and Insights views, the
-card, initiative and idea panels in Peek, the cross-project "Needs you" status item, an initiative's
-section of a container's overview and Board mode. It owns presentation and the pure view math only: every
+The board's UI: **Board view** — the whole workbench given to the board, its navigation on the left, its
+Board, List, Roadmap, Graph, Timeline, Insights and Discovery views in the center, what is happening below
+—, the card (with its attempt's live chat), initiative and idea panels in Peek, the cross-project "Needs
+you" status item and an initiative's section of a container's overview. It owns presentation and the pure view math only: every
 fact, rule and write is the server half's, reached through its queries ([[module-ext-board]] § Queries).
 
 ## Boundary
@@ -24,7 +25,7 @@ fact, rule and write is the server half's, reached through its queries ([[module
   `web/roadmapApi.ts`) and checked on arrival: an unknown shape is a `BoardReplyError`, a version skew, not
   a crash. `workflowFor` mirrors the server's size rule for the Start form's default.
 - **The host only through `PanelHost`** (or the status item's host): `query`, `onEvent`, `openChat`,
-  `openFile`, `openWorkspace`, `peek` and the layout-mode members ([[module-extension-api]]).
+  `openFile`, `openWorkspace`, `peek`, `openView` and `renderChat` ([[module-extension-api]]).
 - Its UI text is `board.*` keys, the roadmap's `board.roadmap.*`, discovery's `board.discovery.*`, smart
   review's `board.review.*`.
 
@@ -32,8 +33,8 @@ fact, rule and write is the server half's, reached through its queries ([[module
 
 - **Reads follow events, never a pushed state.** Each surface reads its query and re-reads on its own
   writes and on `board.changed` for its project (`PanelHost.onEvent`); `board.activity` re-reads only the
-  surfaces that show an agent's last action (the Board tool, the card panel, the initiative panel's
-  `board.get`), never the inbox. The last answer stays shown while a re-read is in flight.
+  surfaces that show an agent's last action (Board view's center, its agents list, the card panel, the
+  initiative panel's `board.get`), never the inbox. The last answer stays shown while a re-read is in flight.
 - **Peek belongs to a workspace.** Its entries are workspace-relative, so a file in the panel's workspace
   opens in Peek (`PanelHost.peek({ kind: "file" })`), and another workspace's either in a tab there
   (`openFile`, which enters it: task-spec files, OpenSpec artifacts, review evidence) or in that
@@ -46,37 +47,63 @@ fact, rule and write is the server half's, reached through its queries ([[module
   Propose chat opens it with `PanelHost.openChat` (`openStartedChat`); a returned `kickoffError` shows as
   the prompt not sent there, on *Run initiative* and on the card panel's Start, while a tile's Start leaves a
   failed kickoff to the host's toast. A refusal shows where it was asked.
-- **Adaptive by its own width**, never the window's: a `ResizeObserver` switches side-by-side layouts to
-  stacked below 720 px, and charts are drawn at their frame's measured width.
+- **Adaptive by its own width**, never the window's: the roadmap, Insights and Discovery switch side-by-side
+  layouts to stacked below 720 px of the center (`boardLayout`), and charts are drawn at their frame's
+  measured width. The board's columns always sit side by side, scrolling.
+- **A center open leaves Board view**: following a card into its workspace, an attempt's *Open chat* or
+  *Open workspace*, a task-spec in another workspace and a started roadmap, discovery or Propose chat go
+  where they go and the shell leaves the view to show them; the rail icon brings it back as it was (the
+  selection below is kept). Peek entries and the card's Chat tab keep it.
 
-## Board tool
+## Board view
 
-The Board side tool is `ext:board:board` (title *Board*, `RiKanbanView2`, default side left): it waits as a
-dimmed left-rail entry until opened, then lives in its own pane like Files. Its scope is the active
-workspace's project, re-read when that workspace changes. Loading, empty (*No cards yet — create one or ask
-the agent to break work down*) and error (with *Retry*) states replace the body; a failed write shows a
-dismissible notice.
+`views.board` (*Board view*, `RiKanbanView2`) is the board's one surface ([[submodule-web-shell]] § Extension
+views): the `main` panel in the center, the `nav` side tool leading the left (0.16 of the workbench), the
+`activity` side tool leading the bottom (0.26), Peek on the right saying *Select a card* while empty. It is
+entered from its rail toggle, the palette and the counter's *Open board*, and left by the same toggle, the
+palette and *Back to workbench*. The three surfaces share one **selection per window** (`boardState.ts`, a
+module store, never persisted): the project shown (`shownProject`: the picked one while it is open, else
+the active workspace's), the center view, and the cards' narrowing — an initiative, a queue, the saved
+filters. Picking another project clears the initiative and the queue; picking an initiative or a queue
+shows the Board (or List) view.
 
-- **Header**: the project's name; the preset switch (`presetsFor`, [[module-ext-board]] § Presets), with
-  *＋ Propose change* beside it while Default has `openspec/` (an inline description → `openspec.propose`,
-  its chat opened) and, in the Spec-driven preset without the CLI, the install hint (`npm install -g
-  @fission-ai/openspec`); the WIP figures (*Needs you*, *Review*, *Agents* as `count/limit`, marked past the
-  limit; a limit of 0 is none and shows the count alone); the view switch (Board / List / Roadmap /
-  Insights); the Board mode toggle (absent on a host without modes); the board settings (*Follow
-  selection* and the three WIP limits, 0–99); the overflow menu (*Publish roadmap snapshot…*, *New card*:
-  an inline title → `card.create`, then the card in Peek); the GitHub menu (show / hide → `github.set` — a
-  `missing` or `unauthenticated` gh answers with the notice to install gh or run `gh auth login` —, and
-  while on the filter and *Refresh issues*).
+### Navigation (left)
+
+`BoardNav` (`board-nav`): **Projects** — the open projects (`projects.list`, re-read on any board's change)
+with their active card counts and an attention dot while the inbox holds one of their cards, one shown at a
+time; **Initiatives** — *All cards*, then the roadmap's initiatives in tree order (proposals left out),
+indented by depth, with their member counts and an attention dot while a member's agent waits or failed;
+**Queues** — *Needs you*, *Triage*, *Review* (`count/limit`, marked past it) and *Failed*; **Filters** —
+*Mine* (created by a human), each type and each size, toggles that combine. Each narrows the center's cards
+(`filterCards`: an initiative's members, its nested initiatives' and roadmap projects' included); the
+center names what it shows (*Showing …*) with *Clear filters*, and says *No cards match the filters* when
+none does.
+
+### Center
+
+`BoardMain` (`board-main`) reads the shown project's `board.get` and, while an initiative narrows it,
+`roadmap.get`. Loading, empty (*No cards yet — create one or ask the agent to break work down*) and error
+(with *Retry*) states replace the body; a failed write shows a dismissible notice.
+
+- **Header**: the project's name; the view switch (Board / List / Roadmap / Graph / Timeline / Insights /
+  Discovery); the preset switch (`presetsFor`, [[module-ext-board]] § Presets), with *＋ Propose change*
+  while Default has `openspec/` (an inline description → `openspec.propose`, its chat opened) and, in the
+  Spec-driven preset without the CLI, the install hint (`npm install -g @fission-ai/openspec`); the WIP
+  figures (*Needs you*, *Review*, *Agents* as `count/limit`, marked past the limit; a limit of 0 is none and
+  shows the count alone); the GitHub menu (show / hide → `github.set` — a `missing` or `unauthenticated` gh
+  answers with the notice to install gh or run `gh auth login` —, and while on the filter and *Refresh
+  issues*); the board settings (*Follow selection* and the three WIP limits, 0–99); the overflow menu
+  (*Publish roadmap snapshot…*); *New card* (an inline title → `card.create`, then the card in Peek).
 - **GitHub banner**: a failed fetch shows *Couldn't fetch GitHub issues: <gh's line>* with *Refresh issues*
   and *Dismiss* (until the error changes); the board and the last good issues stay.
 - **Inbox** ("Needs you · N · All projects"): the `inbox` query's cards of every open project, re-read on
-  any project's `board.changed`. A row names the project, the card (a click peeks it), the reason
-  (*Question pending* / *Failed*) and *Answer* or *Retry*, both opening that attempt's chat — **Retry sends
-  nothing**. Chips that wrap when wide, a list when stacked; absent while nobody waits.
-- **Columns** side by side from 720 px (`boardLayout`, `data-layout="columns"`), else one list grouped by
-  column (`stacked`). Canceled shows only while it holds cards. A column of Review cards only shows *WIP*
-  `count/limit` against the Review limit, marked past it (Solo's Doing mixes started cards in and shows its
-  count alone).
+  any project's `board.changed`, as chips that wrap. A row names the project, the card (a click peeks it),
+  the reason (*Question pending* / *Failed*), **Answer** or **Retry** — the card in Peek on its Chat tab,
+  where the human answers or retries; with no workspace active, the attempt's chat (`answerInbox`) — and
+  *Open workspace* (the attempt's chat in its workspace); absent while nobody waits.
+- **Columns** side by side (`board-column`); Canceled shows only while it holds cards. A column of Review
+  cards only shows *WIP* `count/limit` against the Review limit, marked past it (Solo's Doing mixes started
+  cards in and shows its count alone).
 - **Triage** is a lane of its own at the board's start, not a column, present while it holds cards and
   collapsed to *Triage · N* by default. Expanded, it groups the cards by `origin.sessionId` (`triageGroups`:
   *Filed from TR-4's chat*, *Filed from a chat*, *Filed by an agent*; a card's sent deferrals as *Deferred
@@ -107,12 +134,36 @@ dismissible notice.
   following the card.
 - **List** view: one table (id, title, column, size, agent, plan, PR) sorted by column then rank, or by
   rank; a title peeks its card.
+- **Roadmap**, **Graph**, **Timeline**, **Insights** and **Discovery** are the views below, at the center's
+  full width.
+
+### Bottom: what is happening
+
+`BoardActivity` (`board-activity-tool`) is two columns across the open projects, re-read on any board's
+`board.changed` (the agents also on any `board.activity`): the **activity feed** (`activity.get { limit: 50
+}`, newest first: the time, the card's id peeking it, the actor chip, *Created in …* / *From → To* /
+*Deleted* and the project) and the **agents** (`agents.get`, *Agents · N*, ordered waiting, failed, then
+working, oldest first — `sortAgents`): the badge, id, title, plan progress, the time on the attempt
+(`elapsedText`, in days past two) and, while working, its last action; a click peeks the card (on its Chat
+tab while its agent waits or failed), a double click enters its workspace on that chat.
 
 ## Card panel
 
 The `card` panel (scope `session`: opened only from the board, params `{ projectId, cardId }`, the crumb
 `<id> · <title>`) reads `card.get`. **Its writes go to the id `card.get` answered**, so an issue's card
-stored by the first edit takes the next ones.
+stored by the first edit takes the next ones. A stored card is in **tabs — Details / Chat / Review /
+Activity** —, opened on **Chat while its agent waits or failed** (`defaultCardTab`, decided once as the
+card loads, so a state change never moves the reader), else on Details; an unbound workspace's task-spec
+card has no tabs.
+
+- **Chat** (`CardChat`): the latest attempt with an open workspace's live chat through `PanelHost.renderChat`
+  — transcript, questions, composer —, so the human answers the agent here without leaving Board view;
+  with several open attempts a picker (workflow · start); the agent badge and *Open workspace* above it;
+  *No chat yet* before a Start and *Its attempts' workspaces are closed* after.
+- **Review**: Smart review below (*Smart review needs a started card* before a Start). **Activity**: the
+  transitions, newest first, with the host's reason.
+
+**Details**:
 
 - The fields: title (saved on Enter or blur), an issue's link (saying an unstored one is kept by an edit or
   Start), type, size — *Confirm size* re-saves a suggested one so it is no longer a suggestion —,
@@ -132,15 +183,15 @@ stored by the first edit takes the next ones.
   (*Default* = the host's new-chat choice; `models.list`, the effort list narrowed to the model's levels),
   base (empty = the project's default) → `card.start`. The attention warning reads the panel's one
   `board.get` (which the blocks picker shares); Start waits while it loads and does not ask when it failed.
-- **Activity** from the transitions, newest first, with the host's reason; *Delete card* behind a confirm.
+- *Delete card* behind a confirm.
 - **An OpenSpec change's card** (`OpenspecSection`, in place of Start): stage, chain, tasks and validation,
   its folder, a tab per artifact (*Proposal*, *Spec deltas* by capability and operation, *Design*, *Tasks*)
   whose files open per the Peek rule, rendered as markdown, and **Apply** (`card.start`), **Validate**
   (`openspec.validate`, its issues listed) and **Archive in workspace** (`openspec.archive`, while an
   attempt's chat is open); without the CLI Validate and Archive are disabled beside the install hint, and
   the archive-timing decision ([[module-ext-board]] § OpenSpec) is stated under them.
-- **Smart review** (`SmartReviewSection`, `web/SmartReview.tsx`, below the attempts of a stored card with
-  one): the advisory hint, *Smart review* / *Review again* (`card.review`; disabled without an open latest
+- **Smart review** (`SmartReviewSection`, `web/SmartReview.tsx`, the Review tab of a stored card with an
+  attempt): the advisory hint, *Smart review* / *Review again* (`card.review`; disabled without an open latest
   attempt and while `reviewing`), a failure, then the **conformance table** — each requirement's source,
   verdict chip (success met, error unmet, warning untested), evidence (`path:line` opening the file at its
   line per the Peek rule, `openEvidence`) and tests —, the tally and the summary; *Open review comments*
@@ -148,11 +199,11 @@ stored by the first edit takes the next ones.
   **packet** (`card.packet`, re-read per review) with *Add to PR* (`card.packetToPr`, disabled without the
   attempt's pull request) reporting *Added…* or *already carries…*.
 
-## Roadmap view
+## Roadmap views
 
-`RoadmapPane` reads `roadmap.get` for the same project; it does not depend on the board having cards. Its
-sub-switch is *Now / Next / Later*, *Timeline*, *Goals*, *Step graph* and *Discovery*, beside *Roadmap
-review* (a `review` roadmap chat). Its derivations are pure (`web/roadmapApi.ts`, `web/roadmapGraph.ts`,
+`RoadmapPane` reads `roadmap.get` for the shown project; it does not depend on the board having cards. It
+is three of the center's views — **Roadmap** (*Now / Next / Later*, or *Goals* by its toggle), **Graph**
+(the step graph) and **Timeline** —, each beside *Roadmap review* (a `review` roadmap chat). Its derivations are pure (`web/roadmapApi.ts`, `web/roadmapGraph.ts`,
 the graph's edits in `web/graphEdits.ts`).
 
 - **Now / Next / Later** (`horizonColumns`): three horizon columns holding every initiative, top-level and
@@ -169,8 +220,8 @@ the graph's edits in `web/graphEdits.ts`).
 - **Goals** (`goalGroups`): each top-level initiative as a group — its spec refs as chips (a
   goal-and-requirements capability, say), figures and health — listing its descendants in tree order, each
   with its horizon, stack bar and health.
-- **Step graph** (`stepGraphLayout` over `schedule` and the Board tool's own `board.get` for titles and
-  agent states): the whole board or one initiative (its member cards, its roadmap projects' milestones and
+- **Step graph** (`stepGraphLayout` over `schedule` and the center's own `board.get` for titles and agent
+  states): the whole board or one initiative (its member cards, its roadmap projects' milestones and
   its own `critical` path). x is time — today at 0, *Days* or *Weeks*, a week line per Monday, the today line
   —, in SVG in a `ViewportPortal` with labels held at the visible edges. Lanes are the roadmap projects in
   order, then *No project*, their nodes packed first-fit into rows (`packRows`, a milestone's label
@@ -195,7 +246,7 @@ the graph's edits in `web/graphEdits.ts`).
   cards' span and milestones); dashed arrows join the initiatives `initiativeDependencies` links; a click
   opens the initiative (a project's) in Peek.
 - **The graph and the timeline are one lazy chunk** (`RoadmapFlow`, `React.lazy` from `Roadmap.tsx`), so
-  neither the entry chunk nor the Board tool's carries `@xyflow/react`; the app's build shares xyflow with
+  neither the entry chunk nor the center's carries `@xyflow/react`; the app's build shares xyflow with
   the session-insights process map. They follow [[module-ext-session-insights]]'s process-map rules:
   `base.css` imported only `layer(xyflow)` (`web/roadmapFlow.css`), a layer `apps/web`'s `index.css` orders
   below `components` and `utilities` so token utilities win, every `--xy-*` variable mapped to a semantic
@@ -285,25 +336,22 @@ review, with hours and shares, and the note that only open waits count).
 and *Publish* → `roadmap.publish`; it then says *Wrote ROADMAP.md in the Default workspace. Commit it and
 open a PR…* and offers *Open in Peek* (`peekWorkspaceFile`). A refusal shows in the dialog.
 
-## Status item, container section and Board mode
+## Status item and container section
 
 - **The Needs-you status item** (`statusItems.inbox`) is the inbox in the topbar: a warning chip *Needs you
   · N* over the same query and refreshes, absent at zero, whose popover lists the same rows (an action
-  closes it); a row peeks its card only with a workspace active.
+  closes it) and, with a workspace active, **Open board** (`openView`, Board view); a row peeks its card
+  only with a workspace active.
 - **The container's section** (`containerSections.initiative`, `ContainerAutopilot`) in a container's
   overview in Peek: `autopilot.ofContainer`, re-read on any project's `board.changed`; nothing for a
   container no initiative runs, else *Initiative I-n · title* (peeking it) and the panel's state line,
   agents and ready cards.
-- **Board mode** (`layoutPresets.board`, *Board mode*) arranges the sides as one wide left side (0.6 of the
-  workbench): the Projects tool in a folded pane, then the Board tool; the right side empty, so Peek shows
-  the cards there. The center and the bottom keep the chat and the terminals, and leaving restores the
-  previous frame ([[submodule-web-shell]] § Layout modes). It is entered and left from the Board tool's
-  header and the palette.
 
 ## Verification
 
-`web/*.test.ts(x)`: the pure math of every view (badges, WIP and Start's warning, Triage groups, horizon and
-goal grouping, the stack bar, the step graph's layout and edits, the timeline, the chart scales, the matrix
+`web/*.test.ts(x)`: the pure math of every view (badges, WIP and Start's warning, Triage groups, the
+navigation's narrowing and queue counts, the agents' order and elapsed time, the card's default tab and its
+chats, Answer's target, horizon and goal grouping, the stack bar, the step graph's layout and edits, the timeline, the chart scales, the matrix
 and the line diff, the conformance tally), each reply check, the query every control sends, and each view
 rendered (xyflow's server render for the graph and the timeline). The no-agent e2e drives the UI end to end
 ([[module-ext-board]] § Verification).

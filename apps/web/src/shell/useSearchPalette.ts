@@ -1,7 +1,7 @@
 import { t as globalT, useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { findExtensionLayoutPreset } from "../extensions";
+import { findExtensionView } from "../extensions";
 import { openFindInFiles } from "../findInFiles";
 import { chatDisplayName, copyText } from "../lib";
 import { canStartProjectlessChat, startProjectlessChat } from "../panels/chatActions";
@@ -72,18 +72,13 @@ import {
 	toggleLeftSide,
 	toggleRightSide,
 } from "./chordActions";
-import { useOpenableSideTools } from "./extensionEntryPoints";
-import {
-	enterExtensionLayoutPreset,
-	exitLayoutMode,
-	useLayoutModeId,
-	useOpenableLayoutPresets,
-} from "./extensionLayoutModes";
+import { useOpenableSideTools, useOpenableViews } from "./extensionEntryPoints";
 import {
 	openExtensionPanel,
 	openExtensionPanelInProject,
 	useOpenableExtensionPanels,
 } from "./extensionPanelHost";
+import { enterExtensionView, exitExtensionView, useActiveViewId } from "./extensionViews";
 import { useResolvedKeybindings } from "./keybindingState";
 import { collectCenterGroups } from "./layout";
 import { readNativePageZoomBridge } from "./nativePageZoom";
@@ -208,8 +203,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			})),
 		[openableTools],
 	);
-	const layoutModes = useOpenableLayoutPresets();
-	const layoutModeId = useLayoutModeId();
+	const views = useOpenableViews();
+	const activeViewId = useActiveViewId();
 
 	const online = useAppStore(selectHostReachable);
 	const hostSearch = useAppStore(selectHostSearchAvailable);
@@ -312,10 +307,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			tabActions,
 			extensionPanels: openablePanels,
 			extensionTools,
-			layoutModes,
-			activeLayoutMode: layoutModeId
-				? { id: layoutModeId, preset: findExtensionLayoutPreset(layoutModeId) }
-				: null,
+			views,
+			activeView: activeViewId ? { id: activeViewId, view: findExtensionView(activeViewId) } : null,
 			actions: {
 				newWorkspace: options.openNewWorkspace,
 				newProjectlessChat: () => void startProjectlessChat(),
@@ -330,8 +323,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				toggleRight: toggleRightSide,
 				toggleBottom: toggleBottomPanel,
 				showTool: (workspaceId, tool) => store().requestToolView(workspaceId, tool),
-				enterLayoutMode: enterExtensionLayoutPreset,
-				exitLayoutMode,
+				enterView: enterExtensionView,
+				exitView: exitExtensionView,
 				openExtensionPanel,
 				openExtensionPanelInProject: (projectId, panel) =>
 					void openExtensionPanelInProject(projectId, panel),
@@ -410,8 +403,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		tabActions,
 		openablePanels,
 		extensionTools,
-		layoutModes,
-		layoutModeId,
+		views,
+		activeViewId,
 		options,
 		contextProject,
 		contextRepoProject,

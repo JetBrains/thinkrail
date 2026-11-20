@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { BoardLayout, BoardView, Card, InboxItem } from "./api";
-import { BoardBody, type BoardMode, shownColumns } from "./BoardTool";
+import type { BoardView, Card, InboxItem } from "./api";
+import { BoardBody, type CardsView, shownColumns } from "./BoardMain";
 import type { CardActions } from "./CardTile";
 import { CardTile } from "./CardTile";
 import { boardOf, cardOf, fakeHost, liveOf } from "./fixtures.test";
@@ -31,12 +31,12 @@ function tile(card: Card, starting = false, startWarning: string | null = null):
 	);
 }
 
-function body(view: BoardView, layout: BoardLayout, mode: BoardMode = "board"): string {
+function body(view: BoardView, mode: CardsView = "board", filtered = false): string {
 	return html(
 		<BoardBody
 			view={view}
 			mode={mode}
-			layout={layout}
+			filtered={filtered}
 			sort="column"
 			actions={ACTIONS}
 			triage={TRIAGE}
@@ -130,22 +130,19 @@ describe("the board body", () => {
 		cardOf({ id: "TR-2", title: "Done thing", column: "done", category: "completed", rank: 2 }),
 	]);
 
-	test("lays the columns side by side when wide and stacks them when narrow", () => {
-		for (const layout of ["columns", "stacked"] as const) {
-			const markup = body(view, layout);
-			expect(markup.match(/data-testid="board-column"/g)).toHaveLength(6);
-			expect(markup).toContain(layout === "columns" ? "w-208" : "flex flex-col gap-8");
-			expect(markup).toContain('data-column="backlog"');
-		}
-		expect(body(view, "columns")).not.toContain("flex flex-col gap-8");
+	test("lays the columns side by side at the center's full width", () => {
+		const markup = body(view);
+		expect(markup.match(/data-testid="board-column"/g)).toHaveLength(6);
+		expect(markup).toContain("w-208");
+		expect(markup).toContain('data-column="backlog"');
 	});
 
 	test("keeps Triage off the columns, as its own collapsed lane while it holds cards", () => {
 		expect(shownColumns(view).map((column) => column.id)).not.toContain("triage");
 		const triaged = boardOf([cardOf({ category: "triage", column: "triage" })]);
 		expect(shownColumns(triaged).map((column) => column.id)).not.toContain("triage");
-		expect(body(view, "columns")).not.toContain('data-testid="board-triage"');
-		const lane = body(triaged, "columns");
+		expect(body(view)).not.toContain('data-testid="board-triage"');
+		const lane = body(triaged);
 		expect(lane).toContain('data-testid="board-triage"');
 		expect(lane).toContain("Triage · 1");
 		expect(lane).not.toContain('data-testid="board-triage-group"');
@@ -167,18 +164,19 @@ describe("the board body", () => {
 				},
 			},
 		);
-		const markup = body(reviewing, "columns");
+		const markup = body(reviewing);
 		expect(markup.match(/data-testid="board-column-wip"/g)).toHaveLength(1);
 		expect(markup).toContain('data-testid="board-column-wip" data-over="true"');
 		expect(markup).toContain("2/1");
-		expect(body(view, "columns")).not.toContain('data-over="true"');
+		expect(body(view)).not.toContain('data-over="true"');
 	});
 
 	test("lists every card in a table in list mode, and invites a first card when empty", () => {
-		const list = body(view, "columns", "list");
+		const list = body(view, "list");
 		expect(list).toContain('data-testid="board-list"');
 		expect(list.match(/data-testid="board-list-row"/g)).toHaveLength(2);
-		expect(body(boardOf([]), "columns")).toContain("No cards yet");
+		expect(body(boardOf([]))).toContain("No cards yet");
+		expect(body(boardOf([]), "board", true)).toContain("No cards match the filters.");
 	});
 });
 
@@ -201,10 +199,10 @@ describe("the triage lane", () => {
 		const view = boardOf([
 			cardOf({ id: "TR-5", category: "triage", column: "triage", size: "S", sizeSuggested: true }),
 		]);
-		const markup = html(<TriageLane view={view} layout="stacked" actions={TRIAGE} />);
+		const markup = html(<TriageLane view={view} actions={TRIAGE} />);
 		expect(markup).toContain('aria-expanded="false"');
 		expect(markup).toContain("Triage · 1");
-		expect(html(<TriageLane view={boardOf([])} layout="stacked" actions={TRIAGE} />)).toBe("");
+		expect(html(<TriageLane view={boardOf([])} actions={TRIAGE} />)).toBe("");
 	});
 });
 
@@ -221,14 +219,10 @@ describe("the inbox strip", () => {
 		}),
 	});
 
-	test("lists each card with its project, id, reason and Answer or Retry; nothing when empty", () => {
+	test("lists each card with its project, id, reason, Answer or Retry and Open workspace; nothing when empty", () => {
 		const { host } = fakeHost();
 		const markup = html(
-			<InboxStrip
-				host={host}
-				items={[item("needs_you", "PA-1"), item("failed", "PA-2")]}
-				compact={false}
-			/>,
+			<InboxStrip host={host} items={[item("needs_you", "PA-1"), item("failed", "PA-2")]} />,
 		);
 		expect(markup).toContain("Needs you · 2");
 		expect(markup).toContain("payments-api");
@@ -237,9 +231,7 @@ describe("the inbox strip", () => {
 		expect(markup).toContain("Answer");
 		expect(markup).toContain("Retry");
 		expect(markup.match(/data-testid="board-inbox-row"/g)).toHaveLength(2);
-		expect(html(<InboxStrip host={host} items={[]} compact />)).toBe("");
-		expect(html(<InboxStrip host={host} items={[item("needs_you", "PA-1")]} compact />)).toContain(
-			'data-compact="true"',
-		);
+		expect(markup.match(/data-testid="board-inbox-workspace"/g)).toHaveLength(2);
+		expect(html(<InboxStrip host={host} items={[]} />)).toBe("");
 	});
 });

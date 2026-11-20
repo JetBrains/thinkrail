@@ -1,5 +1,5 @@
 import type { PanelHost, PanelPeekEntry } from "@thinkrail/extension-api/web";
-import { BoardReplyError, type CardSize, type Category } from "./api";
+import { type AgentState, BoardReplyError, type CardSize, type Category } from "./api";
 
 type Querying = Pick<PanelHost, "query">;
 
@@ -7,7 +7,6 @@ export type Horizon = "now" | "next" | "later";
 export type Health = "on_track" | "at_risk" | "off_track";
 /** A roadmap chat the server starts in the project's Default workspace. */
 export type RoadmapChat = "plan" | "shape" | "report" | "review" | "close";
-export type AgentState = "working" | "waiting" | "failed";
 
 export const HORIZONS: readonly Horizon[] = ["now", "next", "later"];
 export const HEALTHS: readonly Health[] = ["on_track", "at_risk", "off_track"];

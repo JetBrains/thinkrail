@@ -51,6 +51,7 @@ export const LAYOUT_LIMITS = {
 	maxBottomHeight: 0.7,
 	minPeekWidth: 240,
 	defaultPeekWidth: 0.4,
+	defaultViewPeekWidth: 0.3,
 	minPeekRatio: 0.1,
 	maxPeekRatio: 0.9,
 } as const;

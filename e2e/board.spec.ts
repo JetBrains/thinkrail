@@ -27,10 +27,10 @@ import { shot } from "./fixtures/screenshots";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 import { E2eWire } from "./fixtures/wire";
 
-const BOARD_RAIL = "tool-rail-ext:board:board";
+const BOARD_VIEW_RAIL = "view-rail-board:board";
 
 function boardTool(page: Page): Locator {
-	return page.getByTestId("board-tool");
+	return page.getByTestId("board-main");
 }
 
 function column(page: Page, id: string): Locator {
@@ -62,15 +62,45 @@ function observeKickoffs(page: Page): () => string[] {
 	return () => [...texts];
 }
 
+/** Enters Board view from the rail, unless the window is in it already. */
+async function enterBoardView(page: Page): Promise<void> {
+	const rail = page.getByTestId(BOARD_VIEW_RAIL);
+	await expect(rail).toBeVisible();
+	if ((await rail.getAttribute("aria-pressed")) !== "true") await rail.click();
+	await expect(rail).toHaveAttribute("aria-pressed", "true");
+	await expect(boardTool(page)).toBeVisible();
+}
+
 async function openBoard(page: Page): Promise<void> {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
-	const rail = page.getByTestId(BOARD_RAIL);
-	await expect(rail).toBeVisible();
-	await expect(rail).toHaveAttribute("aria-pressed", "false");
-	await rail.click();
+	await expect(page.getByTestId(BOARD_VIEW_RAIL)).toHaveAttribute("aria-pressed", "false");
+	await enterBoardView(page);
+}
+
+/** Shows the Projects pane Board view keeps folded under its navigation. */
+async function showProjects(page: Page): Promise<void> {
+	const rail = page.getByTestId("tool-rail-projects");
+	if ((await rail.getAttribute("aria-pressed")) !== "true") await rail.click();
 	await expect(rail).toHaveAttribute("aria-pressed", "true");
-	await expect(boardTool(page)).toBeVisible();
+}
+
+function projectWorkspace(page: Page, name: string): Locator {
+	return page
+		.getByTestId("project-group")
+		.filter({ has: page.getByTestId("project-name").filter({ hasText: name }) })
+		.getByTestId("workspace-item")
+		.first();
+}
+
+async function dismissToasts(page: Page): Promise<void> {
+	for (const toast of await page.getByTestId("toast").all())
+		await toast.getByRole("button").last().click();
+}
+
+async function cardTab(page: Page, tab: "details" | "chat" | "review" | "activity") {
+	await peekCard(page).getByTestId(`board-card-tab-${tab}`).click();
+	await expect(peekCard(page).getByTestId("board-card-tabbed")).toHaveAttribute("data-tab", tab);
 }
 
 async function createCard(page: Page, title: string): Promise<void> {
@@ -259,7 +289,7 @@ async function runPaletteCommand(page: Page, id: string, query: string): Promise
 	await expect(palette).toBeHidden();
 }
 
-test("the Board tool creates a card, edits it in Peek and starts it into a new workspace whose chat takes the kickoff", async ({
+test("Board view creates a card, edits it in Peek and starts it into a new workspace whose chat takes the kickoff", async ({
 	page,
 }) => {
 	const kickoffs = observeKickoffs(page);
@@ -270,6 +300,10 @@ test("the Board tool creates a card, edits it in Peek and starts it into a new w
 	await createCard(page, "Draft the board");
 	await expect(column(page, "backlog").getByTestId("board-card")).toHaveCount(1);
 	await expect(peekCard(page)).toBeVisible();
+	await expect(peekCard(page).getByTestId("board-card-tabbed")).toHaveAttribute(
+		"data-tab",
+		"details",
+	);
 	const title = peekCard(page).getByTestId("board-card-title");
 	await expect(title).toHaveValue("Draft the board");
 	await title.fill("Ship the board");
@@ -287,8 +321,8 @@ test("the Board tool creates a card, edits it in Peek and starts it into a new w
 	await peekCard(page).getByTestId("board-start-workflow").selectOption("implement");
 	await peekCard(page).getByTestId("board-start-submit").click();
 	await expect(peekCard(page).getByTestId("board-attempt")).toHaveCount(1, { timeout: 30_000 });
-	await expect(worktreeRows(page)).toHaveCount(1);
 	await expect(column(page, "building").getByTestId("board-card")).toContainText("Ship the board");
+	await cardTab(page, "activity");
 	await expect(peekCard(page).getByTestId("board-activity-item").first()).toContainText(
 		"automatically",
 	);
@@ -300,10 +334,15 @@ test("the Board tool creates a card, edits it in Peek and starts it into a new w
 		"Acceptance criteria:\n- Cards launch a workspace",
 	);
 
+	await cardTab(page, "details");
+	await dismissToasts(page);
 	await peekCard(page).getByTestId("board-attempt-chat").click();
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
-	await expect(boardTool(page)).toBeVisible();
+	await expect(boardTool(page)).toBeHidden();
+	await expect(page.getByTestId(BOARD_VIEW_RAIL)).toHaveAttribute("aria-pressed", "false");
+	await expect(worktreeRows(page)).toHaveCount(1);
+	await enterBoardView(page);
 	await expect(card(page, "Ship the board")).toBeVisible();
 });
 
@@ -317,11 +356,10 @@ test("follow selection: off, a click only peeks a running card; on, it enters th
 	await expect(column(page, "building").getByTestId("board-card")).toContainText("Follow me", {
 		timeout: 30_000,
 	});
-	await expect(worktreeRows(page)).toHaveCount(1);
 
 	await card(page, "Follow me").getByTestId("board-card-open").click();
-	await expect(peekCard(page).getByTestId("board-card-title")).toHaveValue("Follow me");
-	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
+	await expect(peekCard(page)).toBeVisible();
+	await expect(boardTool(page)).toBeVisible();
 	await page.getByTestId("peek-close").click();
 
 	await boardTool(page).getByTestId("board-settings").click();
@@ -335,10 +373,11 @@ test("follow selection: off, a click only peeks a running card; on, it enters th
 	await card(page, "Follow me").getByTestId("board-card-open").click();
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
 	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
-	await expect(peekCard(page).getByTestId("board-card-title")).toHaveValue("Follow me");
+	await expect(peekCard(page)).toBeVisible();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
-	await expect(boardTool(page)).toBeVisible();
+	await expect(boardTool(page)).toBeHidden();
 
+	await enterBoardView(page);
 	await boardTool(page).getByTestId("board-settings").click();
 	await expect(page.getByTestId("board-follow-selection")).toHaveAttribute("aria-checked", "true");
 });
@@ -354,6 +393,7 @@ test("dragging and Alt+arrows move a card with a logged override, and the preset
 	await expect(column(page, "ready").getByTestId("board-card")).toContainText("Drag me");
 	await card(page, "Drag me").getByTestId("board-card-open").click();
 	await expect(peekCard(page).getByTestId("board-card-column")).toHaveText("Ready");
+	await cardTab(page, "activity");
 	const moved = peekCard(page).getByTestId("board-activity-item").first();
 	await expect(moved).toContainText("Backlog → Ready");
 	await expect(moved).toHaveAttribute("data-actor", "human");
@@ -375,32 +415,33 @@ test("dragging and Alt+arrows move a card with a logged override, and the preset
 	await expect(column(page, "ready")).toHaveCount(0);
 });
 
-test("switching the extension off shows the Board tool's disabled placeholder in place and keeps the layout", async ({
+test("switching the extension off shows the placeholder in Board view's center and side tools, and keeps the view", async ({
 	page,
 }) => {
 	await openBoard(page);
 	await createCard(page, "Survives the switch");
-	const pane = page.locator('[data-tool-body="ext:board:board"]');
-	await expect(pane).toBeVisible();
+	const center = page.getByTestId("extension-view-center");
+	const nav = page.locator('[data-tool-body="ext:board:nav"]');
+	await expect(nav.getByTestId("board-nav")).toBeVisible();
 
 	await setBoardExtension(page, false);
-	await expect(pane.getByTestId("extension-panel-disabled")).toBeVisible();
-	await expect(page.getByTestId(BOARD_RAIL)).toHaveAttribute("aria-pressed", "true");
-	await expect(page.getByTestId("tool-rail-projects")).toBeVisible();
+	await expect(center.getByTestId("extension-panel-disabled")).toBeVisible();
+	await expect(nav.getByTestId("extension-panel-disabled")).toBeVisible();
+	await expect(page.getByTestId(BOARD_VIEW_RAIL)).toHaveCount(0);
+	await expect(page.getByTestId("view-exit")).toBeVisible();
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await expect(
-		page.locator('[data-tool-body="ext:board:board"]').getByTestId("extension-panel-disabled"),
-	).toBeVisible();
+	await expect(center.getByTestId("extension-panel-disabled")).toBeVisible();
 
 	await setBoardExtension(page, true);
+	await expect(page.getByTestId(BOARD_VIEW_RAIL)).toHaveAttribute("aria-pressed", "true");
 	await expect(card(page, "Survives the switch")).toBeVisible();
 });
 
-test("screenshots: the board narrow in a side pane, wide with cards in several columns, and a card in Peek", async ({
+test("screenshots: Board view on every region, the roadmap at full width, and a card in Peek", async ({
 	page,
 }) => {
-	await page.setViewportSize({ width: 1920, height: 1000 });
+	await page.setViewportSize({ width: 1920, height: 1080 });
 	await openBoard(page);
 	const titles = [
 		"Sticky breadcrumb segments overlap",
@@ -432,25 +473,23 @@ test("screenshots: the board narrow in a side pane, wide with cards in several c
 	});
 	for (const toast of await page.getByTestId("toast").all())
 		await toast.getByRole("button").last().click();
-	await expect(boardTool(page)).toHaveAttribute("data-layout", "stacked");
-	await shot(page, "board", "narrow-side-pane");
-
-	await pressPlatformShortcut(page, "J");
-	await expect(page.getByTestId("right-stack")).toHaveCount(0);
-	await page.getByTestId("tool-rail-projects").click();
-	const handle = page.getByTestId("resize-left");
-	const box = await handle.boundingBox();
-	if (!box) throw new Error("the left side has no separator");
-	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-	await page.mouse.down();
-	await page.mouse.move(1500, box.y + box.height / 2, { steps: 12 });
-	await page.mouse.up();
-	await expect(boardTool(page)).toHaveAttribute("data-layout", "columns");
-	await shot(page, "board", "board-wide");
-
 	await card(page, titles[1]).getByTestId("board-card-open").click();
 	await expect(peekCard(page)).toBeVisible();
-	await shot(page, "board", "card-in-peek");
+	await expect(page.getByTestId("board-feed-item").first()).toBeVisible();
+	await page.mouse.move(0, 0);
+	await shot(page, "board", "board-view");
+
+	const startedId = await card(page, titles[0]).getAttribute("data-card-id");
+	if (!startedId) throw new Error("the started card has no id");
+	await boardTool(page).getByTestId("board-view-roadmap").click();
+	await expect(boardTool(page).getByTestId("board-horizon")).toHaveCount(3);
+	await newInitiative(page, "now", "Planning surface");
+	await peekInitiative(page).getByTestId("board-initiative-add-card").selectOption(startedId);
+	await newInitiative(page, "next", "Session insights");
+	await newInitiative(page, "later", "OpenSpec in the graph");
+	await expect(page.getByTestId("board-nav").getByTestId("board-nav-initiative")).toHaveCount(3);
+	await page.mouse.move(0, 0);
+	await shot(page, "board", "board-view-roadmap");
 });
 
 test("the Needs-you inbox lists waiting and failed cards of every open project, above the board and as a topbar counter", async ({
@@ -510,7 +549,7 @@ test("the Needs-you inbox lists waiting and failed cards of every open project, 
 	await expect(rows.filter({ hasText: "BS-1" })).toContainText(other.name);
 	await expect(rows.filter({ hasText: "BS-1" })).toContainText("Question pending");
 	await shot(page, "board", "inbox-topbar-popover");
-	await rows.filter({ hasText: "SP-1" }).getByTestId("board-inbox-answer").click();
+	await rows.filter({ hasText: "SP-1" }).getByTestId("board-inbox-workspace").click();
 	await expect(popover).toBeHidden();
 	await expect(page.getByTestId("scope-project-name")).toHaveText("sample-project");
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toContainText([
@@ -527,11 +566,12 @@ test("the Needs-you inbox lists waiting and failed cards of every open project, 
 		wire.close();
 	}
 
-	await page.getByTestId(BOARD_RAIL).click();
-	await expect(boardTool(page)).toBeVisible();
+	await counter.click();
+	await popover.getByTestId("board-inbox-open-board").click();
+	await expect(popover).toBeHidden();
+	await expect(page.getByTestId(BOARD_VIEW_RAIL)).toHaveAttribute("aria-pressed", "true");
 	const strip = boardTool(page).getByTestId("board-inbox-strip");
 	await expect(strip.getByTestId("board-inbox-row")).toHaveCount(3);
-	await expect(strip).toHaveAttribute("data-compact", "true");
 	await expect(card(page, "Pick the rollout").getByTestId("board-agent-badge")).toHaveAttribute(
 		"data-badge",
 		"waiting",
@@ -540,77 +580,191 @@ test("the Needs-you inbox lists waiting and failed cards of every open project, 
 		"data-badge",
 		"failed",
 	);
+	await expect(page.getByTestId("board-agents").getByTestId("board-agent")).toHaveCount(3);
 	await shot(page, "board", "inbox-strip");
-	await boardTool(page).getByTestId("board-mode-toggle").click();
-	await expect(strip).not.toHaveAttribute("data-compact", "true");
-	await shot(page, "board", "board-mode-inbox");
-	await boardTool(page).getByTestId("board-mode-toggle").click();
-	await expect(strip).toHaveAttribute("data-compact", "true");
 
 	await strip
 		.getByTestId("board-inbox-row")
 		.filter({ hasText: "BS-1" })
 		.getByTestId("board-inbox-answer")
 		.click();
-	await expect(page.getByTestId("scope-project-name")).toHaveText(other.name);
-	await expect(card(page, "Which font license to ship")).toBeVisible();
+	await expect(page.getByTestId("scope-project-name")).toHaveText("sample-project");
+	await expect(peekCard(page)).toHaveAttribute("data-card-id", "BS-1");
+	await expect(peekCard(page).getByTestId("board-card-tabbed")).toHaveAttribute("data-tab", "chat");
+	await expect(peekCard(page).getByTestId("board-card-chat")).toHaveAttribute(
+		"data-session-id",
+		"board-e2e-second-question",
+	);
 });
 
-test("Board mode widens the Board tool on the left and leaving it restores the exact previous layout", async ({
+test("an agent's question is answered from its card's Chat tab in Peek, never leaving Board view", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 1600, height: 900 });
-	await openBoard(page);
+	await openFixtureProject(page);
+	seedQuestion(realpathSync(E2E_FIXTURE_REPO), "board-e2e-answer");
+	const [project] = await openProjects(page);
+	if (!project) throw new Error("missing the fixture project");
+	seedBoard(project.id, "SP", [
+		{
+			id: "SP-1",
+			title: "Pick the rollout",
+			category: "started",
+			column: "designing",
+			rank: 1,
+			attempt: { workspaceId: project.defaultId, sessionId: "board-e2e-answer" },
+		},
+	]);
+	await reloadBoards(page);
+	await enterDefaultWorkspace(page);
+	await enterBoardView(page);
+	await expect(page.getByTestId("peek-empty")).toHaveText("Select a card");
+	const agent = page.getByTestId("board-agents").getByTestId("board-agent");
+	await expect(agent).toHaveAttribute("data-state", "waiting");
+	await agent.click();
+	await expect(peekCard(page).getByTestId("board-card-tabbed")).toHaveAttribute("data-tab", "chat");
+	const chat = peekCard(page).getByTestId("board-card-chat");
+	const question = chat.locator('[data-testid="ask-user-question"][data-tone="active"]');
+	await expect(question.getByTestId("ask-question-text")).toHaveText("Which rollout?", {
+		timeout: 20_000,
+	});
+	await expect(chat.getByTestId("chat-composer")).toBeVisible();
+	await page.mouse.move(0, 0);
+	await shot(page, "board", "board-view-chat-in-peek");
+	await question.getByTestId("ask-option").filter({ hasText: "Canary" }).click();
+	await question.getByTestId("ask-submit").click();
+	await expect(
+		chat.locator('[data-testid="ask-user-question"][data-tone="answered"]'),
+	).toBeVisible();
+	await expect(boardTool(page)).toBeVisible();
+	await expect(page.getByTestId(BOARD_VIEW_RAIL)).toHaveAttribute("aria-pressed", "true");
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
+});
+
+test("Board view takes every region — nav, its center, Peek and the activity below — and leaving it restores the exact previous layout", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1600, height: 900 });
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
 	await page.getByTestId("start-chat").first().click();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
-	await createCard(page, "Card in Board mode");
-	await page.getByTestId("peek-close").click();
 	const before = await layoutSnapshot(page);
 
-	await boardTool(page).getByTestId("board-mode-toggle").click();
-	await expect(boardTool(page).getByTestId("board-mode-toggle")).toHaveAttribute(
-		"data-active",
-		"true",
-	);
-	await expect(boardTool(page).getByTestId("board-mode-toggle")).toHaveText("Exit Board mode");
-	await expect(page.locator('[data-side="right"][data-group-id]')).toHaveCount(0);
-	await expect(page.locator('[data-side="left"][data-group-id]')).toHaveCount(1);
-	await expect(page.getByTestId("tool-rail-projects")).toBeVisible();
+	await enterBoardView(page);
+	await expect(
+		page.locator('[data-tool-body="ext:board:nav"]').getByTestId("board-nav"),
+	).toBeVisible();
+	await expect(
+		page.locator('[data-tool-body="ext:board:activity"]').getByTestId("board-activity-tool"),
+	).toBeVisible();
+	await expect(page.getByTestId("center-override")).toHaveAttribute("data-region-kind", "center");
+	await expect(page.getByTestId("peek-empty")).toBeVisible();
+	await expect(page.getByTestId("center-group")).toHaveCount(0);
+	await expect(page.getByTestId("view-exit")).toHaveText("Back to workbench");
+	await createCard(page, "Card in Board view");
 	const workbench = await page.getByTestId("workbench").boundingBox();
 	const board = await boardTool(page).boundingBox();
 	if (!workbench || !board) throw new Error("the board has no geometry");
-	expect(board.width).toBeGreaterThan(workbench.width * 0.5);
-	await expect(boardTool(page)).toHaveAttribute("data-layout", "columns");
-	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
-	await shot(page, "board", "board-mode");
+	expect(board.width).toBeGreaterThan(workbench.width * 0.4);
 
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await expect(boardTool(page).getByTestId("board-mode-toggle")).toHaveAttribute(
-		"data-active",
-		"true",
-	);
+	await expect(page.getByTestId(BOARD_VIEW_RAIL)).toHaveAttribute("aria-pressed", "true");
+	await expect(card(page, "Card in Board view")).toBeVisible();
 
-	await runPaletteCommand(page, "view.layoutMode.exit", "Exit Board mode");
-	await expect(boardTool(page).getByTestId("board-mode-toggle")).not.toHaveAttribute(
-		"data-active",
-		"true",
-	);
+	await page.getByTestId("view-exit").click();
+	await expect(boardTool(page)).toBeHidden();
+	await expect(page.getByTestId("view-exit")).toHaveCount(0);
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
 	expect(await layoutSnapshot(page)).toEqual(before);
 
-	await runPaletteCommand(page, "view.layoutMode.enter.board:board", "Enter Board mode");
-	await expect(page.locator('[data-side="right"][data-group-id]')).toHaveCount(0);
-	await boardTool(page).getByTestId("board-mode-toggle").click();
+	await runPaletteCommand(page, "view.extensionView.enter.board:board", "Enter Board view");
+	await expect(boardTool(page)).toBeVisible();
+	await runPaletteCommand(page, "view.extensionView.exit", "Exit Board view");
+	expect(await layoutSnapshot(page)).toEqual(before);
+
+	await enterBoardView(page);
+	await page.getByTestId(BOARD_VIEW_RAIL).click();
+	await expect(page.getByTestId(BOARD_VIEW_RAIL)).toHaveAttribute("aria-pressed", "false");
 	expect(await layoutSnapshot(page)).toEqual(before);
 });
 
-test("the palette shows the Board tool like a built-in tool", async ({ page }) => {
+test("Board view's navigation switches the project, narrows the cards to an initiative and a queue, and the view follows a workspace switch", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1600, height: 900 });
+	await openFixtureProject(page);
+	await openSecondProject(page);
+	const projects = await openProjects(page);
+	const first = projects.find((project) => project.name === "sample-project");
+	const other = projects.find((project) => project.name !== "sample-project");
+	if (!first || !other) throw new Error("missing the two projects");
+	seedBoard(first.id, "SP", [
+		{ id: "SP-1", title: "In the initiative", category: "backlog", column: "backlog", rank: 1 },
+		{ id: "SP-2", title: "Outside it", category: "review", column: "review", rank: 2 },
+	]);
+	seedInitiative(first.id, {
+		id: "I-1",
+		title: "Checkout",
+		outcome: "Buyers pay in one step",
+		criteria: [],
+		cardIds: ["SP-1"],
+	});
+	seedBoard(other.id, "BS", [
+		{ id: "BS-1", title: "Other project's card", category: "backlog", column: "backlog", rank: 1 },
+	]);
+	await reloadBoards(page);
+	await projectWorkspace(page, "sample-project").click();
+	await expect(page.getByTestId("center-tabs")).toBeVisible();
+	await enterBoardView(page);
+	const nav = page.getByTestId("board-nav");
+	await expect(boardTool(page)).toHaveAttribute("data-project-id", first.id);
+	await expect(nav.getByTestId("board-nav-project")).toHaveCount(2);
+	await expect(boardTool(page).getByTestId("board-card")).toHaveCount(2);
+
+	const initiative = nav.locator('[data-testid="board-nav-initiative"][data-initiative-id="I-1"]');
+	await expect(initiative).toContainText("Checkout");
+	await initiative.click();
+	await expect(initiative).toHaveAttribute("aria-pressed", "true");
+	await expect(boardTool(page).getByTestId("board-filters-active")).toContainText("I-1 · Checkout");
+	await expect(boardTool(page).getByTestId("board-card")).toHaveCount(1);
+	await expect(card(page, "In the initiative")).toBeVisible();
+	await nav.getByTestId("board-nav-all").click();
+	await expect(boardTool(page).getByTestId("board-card")).toHaveCount(2);
+	await nav.getByTestId("board-nav-queue-review").click();
+	await expect(nav.getByTestId("board-nav-queue-review")).toContainText("1/5");
+	await expect(boardTool(page).getByTestId("board-card")).toHaveCount(1);
+	await expect(card(page, "Outside it")).toBeVisible();
+	await boardTool(page).getByTestId("board-filters-clear").click();
+	await expect(boardTool(page).getByTestId("board-card")).toHaveCount(2);
+
+	await nav.locator(`[data-testid="board-nav-project"][data-project-id="${other.id}"]`).click();
+	await expect(boardTool(page)).toHaveAttribute("data-project-id", other.id);
+	await expect(boardTool(page).getByTestId("board-project")).toHaveText(other.name);
+	await expect(card(page, "Other project's card")).toBeVisible();
+	await expect(page.getByTestId("scope-project-name")).toHaveText("sample-project");
+
+	await showProjects(page);
+	await projectWorkspace(page, other.name).click();
+	await expect(page.getByTestId("scope-project-name")).toHaveText(other.name);
+	await expect(page.getByTestId(BOARD_VIEW_RAIL)).toHaveAttribute("aria-pressed", "true");
+	await expect(boardTool(page)).toBeVisible();
+});
+
+test("the palette enters and leaves Board view, which offers its own side tools nowhere else", async ({
+	page,
+}) => {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
 	await expect(boardTool(page)).toHaveCount(0);
-	await runPaletteCommand(page, "view.show.ext:board:board", "Show Board");
+	await expect(page.getByTestId("tool-rail-ext:board:nav")).toHaveCount(0);
+	await runPaletteCommand(page, "view.extensionView.enter.board:board", "Enter Board view");
 	await expect(boardTool(page)).toBeVisible();
-	await expect(page.getByTestId(BOARD_RAIL)).toHaveAttribute("aria-pressed", "true");
+	await expect(page.getByTestId(BOARD_VIEW_RAIL)).toHaveAttribute("aria-pressed", "true");
+	await runPaletteCommand(page, "view.extensionView.exit", "Exit Board view");
+	await expect(boardTool(page)).toHaveCount(0);
+	await expect(page.getByTestId("tool-rail-ext:board:nav")).toHaveCount(0);
 });
 
 test("column headers carry the Review WIP limit, marked once over it, and Start past it asks first", async ({
@@ -627,9 +781,7 @@ test("column headers carry the Review WIP limit, marked once over it, and Start 
 	]);
 	await reloadBoards(page);
 	await enterDefaultWorkspace(page);
-	await page.getByTestId(BOARD_RAIL).click();
-	await boardTool(page).getByTestId("board-mode-toggle").click();
-	await expect(boardTool(page)).toHaveAttribute("data-layout", "columns");
+	await enterBoardView(page);
 	const review = column(page, "review");
 	await expect(review.getByTestId("board-column-count")).toHaveText("2");
 	await expect(review.getByTestId("board-column-wip")).toHaveText("2/5");
@@ -704,7 +856,7 @@ test("Triage groups an agent's decomposition, and Accept all moves it into Backl
 	]);
 	await reloadBoards(page);
 	await enterDefaultWorkspace(page);
-	await page.getByTestId(BOARD_RAIL).click();
+	await enterBoardView(page);
 	const triage = boardTool(page).getByTestId("board-triage");
 	await expect(triage.getByTestId("board-triage-toggle")).toHaveText("Triage · 3");
 	await expect(triage.getByTestId("board-triage-group")).toHaveCount(0);
@@ -765,8 +917,7 @@ test("an unbound workspace's task-spec shows as a card, Adopt binds it once, and
 	writeFileSync(join(worktree, ".thinkrail", "context", "TASK-x.md"), TASK_SPEC);
 
 	await enterDefaultWorkspace(page);
-	await page.getByTestId(BOARD_RAIL).click();
-	await boardTool(page).getByTestId("board-mode-toggle").click();
+	await enterBoardView(page);
 	const unbound = card(page, "Board sources");
 	await expect(unbound).toHaveAttribute("data-source", "task-spec");
 	await expect(unbound).toHaveAttribute("data-virtual", "true");
@@ -810,7 +961,6 @@ test("Show GitHub issues lists the user's open issues through gh as Backlog card
 }) => {
 	await page.setViewportSize({ width: 1600, height: 900 });
 	await openBoard(page);
-	await boardTool(page).getByTestId("board-mode-toggle").click();
 	await boardTool(page).getByTestId("board-github-menu").click();
 	await page.getByTestId("board-github-toggle").click();
 	const banner = boardTool(page).getByTestId("board-github-error");
@@ -910,8 +1060,6 @@ test("the roadmap: an initiative made in Next is dragged to Now, edited in Peek 
 	const cardId = await card(page, "Wire the roadmap views").getAttribute("data-card-id");
 	if (!cardId) throw new Error("the card has no id");
 	await page.getByTestId("peek-close").click();
-	await boardTool(page).getByTestId("board-mode-toggle").click();
-	await expect(boardTool(page)).toHaveAttribute("data-layout", "columns");
 
 	await boardTool(page).getByTestId("board-view-roadmap").click();
 	await expect(boardTool(page).getByTestId("board-roadmap")).toHaveAttribute(
@@ -1021,12 +1169,13 @@ test("the roadmap: an initiative made in Next is dragged to Now, edited in Peek 
 	expect(kickoff).toContain("- Now, Next and Later");
 	expect(kickoff).toContain("target 2026-12-31");
 	await expect(chats).toHaveCount(before + 1);
+	await expect(boardTool(page)).toBeHidden();
 
+	await enterBoardView(page);
 	await boardTool(page).getByTestId("board-view-board").click();
 	await expect(
 		card(page, "Wire the roadmap views").getByTestId("board-card-initiative"),
 	).toHaveText("Roadmap views");
-	await boardTool(page).getByTestId("board-mode-toggle").click();
 });
 
 /** Writes a board's initiatives file as a host restart would find it. */
@@ -1106,7 +1255,8 @@ test("Run initiative makes a container of its first ready card with an orchestra
 	});
 	await reloadBoards(page);
 	await enterDefaultWorkspace(page);
-	await page.getByTestId(BOARD_RAIL).click();
+	await enterBoardView(page);
+	await showProjects(page);
 	await boardTool(page).getByTestId("board-view-roadmap").click();
 	await horizon(page, "now").getByTestId("board-initiative-open").click();
 	await expect(peekInitiative(page)).toHaveAttribute("data-initiative-id", "I-1");
@@ -1241,7 +1391,6 @@ test("the step graph draws linked cards over time, a drag pins a card, a drawn l
 	await peekCard(page).getByTestId("board-card-add-block").selectOption(trains);
 	await expect(peekCard(page).getByTestId("board-card-block")).toHaveText([trains]);
 	await page.getByTestId("peek-close").click();
-	await boardTool(page).getByTestId("board-mode-toggle").click();
 	await boardTool(page).getByTestId("board-view-roadmap").click();
 	await newInitiative(page, "now", "Rail network");
 	const network = await peekInitiative(page).getAttribute("data-initiative-id");
@@ -1265,7 +1414,7 @@ test("the step graph draws linked cards over time, a drag pins a card, a drawn l
 	).toBeVisible();
 	await page.getByTestId("peek-close").click();
 
-	await boardTool(page).getByTestId("board-roadmap-view-graph").click();
+	await boardTool(page).getByTestId("board-view-graph").click();
 	await expect(boardTool(page).getByTestId("board-graph")).toBeVisible();
 	await expect(boardTool(page).getByTestId("board-graph-node")).toHaveCount(3);
 	await expect(boardTool(page).getByTestId("board-graph-milestone")).toHaveCount(1);
@@ -1318,7 +1467,7 @@ test("the step graph draws linked cards over time, a drag pins a card, a drawn l
 		`${rails} no longer blocks ${trains}`,
 	);
 
-	await boardTool(page).getByTestId("board-roadmap-view-timeline").click();
+	await boardTool(page).getByTestId("board-view-timeline").click();
 	const row = boardTool(page).locator(
 		`[data-testid="board-timeline-row"][data-kind="initiative"][data-row-id="${network}"]`,
 	);
@@ -1341,7 +1490,6 @@ test("the step graph draws linked cards over time, a drag pins a card, a drawn l
 	await shot(boardTool(page), "board", "timeline");
 	await row.getByTestId("board-timeline-bar").click();
 	await expect(peekInitiative(page)).toHaveAttribute("data-initiative-id", network ?? "");
-	await boardTool(page).getByTestId("board-mode-toggle").click();
 });
 
 /** A flow history: completions over the last weeks, work in progress (one past the SLE) and a backlog. */
@@ -1433,9 +1581,7 @@ test("Insights draws WIP, throughput, cycle time, work item age, cumulative flow
 	if (!project) throw new Error("missing the fixture project");
 	seedFlow(project.id);
 	await reloadBoards(page);
-	if ((await page.getByTestId(BOARD_RAIL).getAttribute("aria-pressed")) !== "true")
-		await page.getByTestId(BOARD_RAIL).click();
-	await boardTool(page).getByTestId("board-mode-toggle").click();
+	await enterBoardView(page);
 	await boardTool(page).getByTestId("board-view-insights").click();
 	const chart = (name: string) =>
 		boardTool(page).locator(`[data-testid="board-insights-chart"][data-chart="${name}"]`);
@@ -1463,7 +1609,6 @@ test("Insights draws WIP, throughput, cycle time, work item age, cumulative flow
 	await expect(chart("time").getByTestId("board-insights-time-segment").first()).toBeVisible();
 	await page.mouse.move(0, 0);
 	await shot(boardTool(page), "board", "insights");
-	await boardTool(page).getByTestId("board-mode-toggle").click();
 });
 
 test("Publish writes the roadmap snapshot into the Default workspace, and Close initiative starts its closing chat", async ({
@@ -1542,8 +1687,7 @@ test("an OpenSpec change is a card of the Spec-driven preset, read-only without 
 		await openFixtureProject(page);
 		cpSync(OPENSPEC_FIXTURE, tree, { recursive: true });
 		await enterDefaultWorkspace(page);
-		await page.getByTestId(BOARD_RAIL).click();
-		await boardTool(page).getByTestId("board-mode-toggle").click();
+		await enterBoardView(page);
 		await expect(boardTool(page).getByTestId("board-openspec-propose")).toBeVisible();
 
 		await boardTool(page).getByTestId("board-preset").click();
@@ -1683,6 +1827,7 @@ test("Smart review checks a started card against its criteria, comments the unme
 			prs: [{ number: 128, headRefName: branch, state: "OPEN", body: "Adds the greeting." }],
 		});
 		await wire.request("workspace.openReview", { workspaceId: attempt.id, allowCached: false });
+		await cardTab(page, "review");
 		const section = panel.getByTestId("board-review-section");
 		await expect(section.getByTestId("board-packet-to-pr")).toBeEnabled({ timeout: 30_000 });
 
@@ -1749,9 +1894,7 @@ test("Discovery: an idea with a URL and scores lands in its quadrant, Promote sh
 	await page.setViewportSize({ width: 1720, height: 1100 });
 	const kickoffs = observeRoadmapChats(page);
 	await openBoard(page);
-	await boardTool(page).getByTestId("board-mode-toggle").click();
-	await boardTool(page).getByTestId("board-view-roadmap").click();
-	await boardTool(page).getByTestId("board-roadmap-view-discovery").click();
+	await boardTool(page).getByTestId("board-view-discovery").click();
 	const discovery = boardTool(page).getByTestId("board-discovery");
 	await expect(discovery.getByTestId("board-discovery-empty")).toBeVisible();
 
@@ -1804,6 +1947,8 @@ test("Discovery: an idea with a URL and scores lands in its quadrant, Promote sh
 		'- E-1 (url) https://example.com/forum/offline-mode: "Please add an offline mode"',
 	);
 	expect(shape).toContain(`ideaId: "${id}"`);
+	await expect(boardTool(page)).toBeHidden();
+	await enterBoardView(page);
 
 	await discovery.getByTestId("board-watch-new").click();
 	await discovery.getByTestId("board-watch-new-name").fill("Linear");
@@ -1825,6 +1970,7 @@ test("Discovery: an idea with a URL and scores lands in its quadrant, Promote sh
 		watch?.startsWith(`/skill:competitor-watch Check what changed at Linear (${watchId})`),
 	).toBe(true);
 	expect(watch).toContain("https://linear.app/changelog — Cycles and their pricing");
+	await enterBoardView(page);
 
 	const [project] = await openProjects(page);
 	if (!project || !watchId) throw new Error("missing the project or the entry");
@@ -1849,13 +1995,8 @@ test("Discovery: an idea with a URL and scores lands in its quadrant, Promote sh
 		}),
 	);
 	await reloadBoards(page);
-	if ((await page.getByTestId(BOARD_RAIL).getAttribute("aria-pressed")) !== "true")
-		await page.getByTestId(BOARD_RAIL).click();
-	const mode = boardTool(page).getByTestId("board-mode-toggle");
-	if ((await mode.getAttribute("data-active")) !== "true") await mode.click();
-	await expect(mode).toHaveAttribute("data-active", "true");
-	await boardTool(page).getByTestId("board-view-roadmap").click();
-	await boardTool(page).getByTestId("board-roadmap-view-discovery").click();
+	await enterBoardView(page);
+	await boardTool(page).getByTestId("board-view-discovery").click();
 	const diff = boardTool(page).getByTestId("board-watch-diff");
 	await expect(diff.locator('[data-kind="removed"]')).toContainText([
 		"Features: issues, projects",
@@ -1872,6 +2013,4 @@ test("Discovery: an idea with a URL and scores lands in its quadrant, Promote sh
 	await expect(peekIdea(page)).toHaveAttribute("data-idea-id", id);
 	await page.mouse.move(0, 0);
 	await shot(page, "board", "discovery");
-	await mode.click();
-	await expect(mode).not.toHaveAttribute("data-active", "true");
 });

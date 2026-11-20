@@ -32,6 +32,8 @@ function host(
 		openChat: noop,
 		openPanel: noop,
 		renderToolCall: () => null,
+		renderChat: () => null,
+		openView: () => {},
 		openFile: noop,
 		openWorkspace: () => {},
 		peek: () => {},

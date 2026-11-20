@@ -4,6 +4,7 @@ import {
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import type {
+	PanelChatSession,
 	PanelHost,
 	PanelHostScope,
 	PanelPeekEntry,
@@ -27,6 +28,7 @@ import {
 	supportsExtensionEvents,
 	supportsExtensionQuery,
 } from "../transport";
+import { leaveViewForCenter } from "./extensionViews";
 import { paletteNavigator } from "./paletteNavigation";
 
 /** A panel's `openWorkspace` target with its Peek entry already the store's. */
@@ -44,6 +46,7 @@ export interface PanelHostDeps {
 		title: string | undefined,
 	) => void;
 	readonly renderToolCall: (call: PanelToolCall) => ReactNode;
+	readonly renderChat: (chat: PanelChatSession) => ReactNode;
 	/** Enters the workspace when it is another one, then opens the file (at `line` when given). */
 	readonly openFile: (workspaceId: string, path: string, line: number | undefined) => void;
 	/** Reveals the Artifacts tool of the panel's workspace. */
@@ -56,10 +59,8 @@ export interface PanelHostDeps {
 	readonly subscribe: (listener: (push: unknown) => void) => () => void;
 	/** The extension is switched off now. */
 	readonly disabled: () => boolean;
-	/** This extension's layout preset that is the window's mode, else `null`. */
-	readonly layoutPreset: string | null;
-	readonly enterLayoutPreset: (preset: string) => void;
-	readonly exitLayoutPreset: () => void;
+	/** Enters one of this extension's views. */
+	readonly openView: (view: string) => void;
 	readonly scope: PanelHostScope;
 	readonly hostProtocol: number | null;
 	readonly hostApiVersion: number | undefined;
@@ -73,6 +74,7 @@ export type StatusItemHostDeps = Pick<
 	| "navigate"
 	| "locate"
 	| "openWorkspace"
+	| "openView"
 	| "subscribe"
 	| "disabled"
 	| "hostProtocol"
@@ -89,15 +91,20 @@ export const APP_HOST_LINKS: Pick<
 	"request" | "navigate" | "locate" | "openWorkspace" | "subscribe"
 > = {
 	request: (params) => getTransport().request("extension.query", params),
-	navigate: (workspace, sessionId) =>
-		void paletteNavigator.navigateToWorkspace(workspace, sessionId),
-	locate: (location) =>
+	navigate: (workspace, sessionId) => {
+		leaveViewForCenter();
+		void paletteNavigator.navigateToWorkspace(workspace, sessionId);
+	},
+	locate: (location) => {
+		leaveViewForCenter();
 		void paletteNavigator
 			.loadWorkspaceRow({ id: location.workspaceId, projectId: location.projectId })
 			.then((ok) => {
 				if (ok) useAppStore.getState().requestChatLocation(location);
-			}),
+			});
+	},
 	openWorkspace: ({ peek, reveal, ...target }) => {
+		if (target.sessionId || reveal) leaveViewForCenter();
 		if (peek) useAppStore.getState().requestPeek(target.workspaceId, peek);
 		if (reveal) useAppStore.getState().requestToolView(target.workspaceId, reveal);
 		void paletteNavigator.navigateToWorkspace(
@@ -217,6 +224,7 @@ export function createPanelHost(deps: PanelHostDeps): PanelHost {
 			deps.openPanel(panel, params, title);
 		},
 		renderToolCall: (call) => deps.renderToolCall(call),
+		renderChat: (chat) => deps.renderChat(chat),
 		openFile(workspaceId, path, line) {
 			deps.openFile(workspaceId, path, line);
 		},
@@ -229,12 +237,8 @@ export function createPanelHost(deps: PanelHostDeps): PanelHost {
 			if (peeked) deps.peek(peeked);
 		},
 		onEvent: extensionEvents(deps),
-		layoutPreset: deps.layoutPreset,
-		enterLayoutPreset(preset) {
-			deps.enterLayoutPreset(preset);
-		},
-		exitLayoutPreset() {
-			deps.exitLayoutPreset();
+		openView(view) {
+			deps.openView(view);
 		},
 		scope: deps.scope,
 		hostProtocol: deps.hostProtocol,
@@ -253,6 +257,9 @@ export function createStatusItemHost(deps: StatusItemHostDeps): StatusItemHost {
 			if (peeked) deps.peek?.(peeked);
 		},
 		onEvent: extensionEvents(deps),
+		openView(view) {
+			deps.openView(view);
+		},
 		scope: deps.scope,
 		hostProtocol: deps.hostProtocol,
 		hostApiVersion: deps.hostApiVersion,

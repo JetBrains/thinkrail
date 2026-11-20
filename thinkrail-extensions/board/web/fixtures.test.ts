@@ -1,4 +1,9 @@
-import type { PanelHost, PanelPeekEntry, PanelWorkspaceTarget } from "@thinkrail/extension-api/web";
+import type {
+	PanelChatSession,
+	PanelHost,
+	PanelPeekEntry,
+	PanelWorkspaceTarget,
+} from "@thinkrail/extension-api/web";
 import type { AttemptLive, BoardView, Card, Category } from "./api";
 import type { Initiative, RoadmapView, Rollup, Schedule, ScheduleEdge } from "./roadmapApi";
 
@@ -77,6 +82,8 @@ export interface FakeHost {
 	peeks: PanelPeekEntry[];
 	files: { workspaceId: string; path: string }[];
 	workspaces: PanelWorkspaceTarget[];
+	chats: PanelChatSession[];
+	views: string[];
 }
 
 export function fakeHost(answer: (method: string) => unknown = () => ({})): FakeHost {
@@ -84,6 +91,8 @@ export function fakeHost(answer: (method: string) => unknown = () => ({})): Fake
 	const peeks: PanelPeekEntry[] = [];
 	const files: { workspaceId: string; path: string }[] = [];
 	const workspaces: PanelWorkspaceTarget[] = [];
+	const chats: PanelChatSession[] = [];
+	const views: string[] = [];
 	const host: PanelHost = {
 		query: async (method, params) => {
 			queries.push({ method, params });
@@ -92,18 +101,20 @@ export function fakeHost(answer: (method: string) => unknown = () => ({})): Fake
 		openChat: () => {},
 		openPanel: () => {},
 		renderToolCall: () => null,
+		renderChat: (chat) => {
+			chats.push(chat);
+			return `chat:${chat.workspaceId}/${chat.sessionId}`;
+		},
 		openFile: (workspaceId, path) => files.push({ workspaceId, path }),
 		openWorkspace: (target) => workspaces.push(target),
 		peek: (entry) => peeks.push(entry),
 		onEvent: () => () => {},
-		layoutPreset: null,
-		enterLayoutPreset: () => {},
-		exitLayoutPreset: () => {},
+		openView: (view) => views.push(view),
 		scope: { workspaceId: "w0", projectId: "p1" },
 		hostProtocol: 130,
 		hostApiVersion: 1,
 	};
-	return { host, queries, peeks, files, workspaces };
+	return { host, queries, peeks, files, workspaces, chats, views };
 }
 
 export function scheduleOf(overrides: Partial<Schedule> = {}): Schedule {

@@ -502,6 +502,8 @@ describe("slice comparison", () => {
 			openChat: noop,
 			openPanel: noop,
 			renderToolCall: () => null,
+			renderChat: () => null,
+			openView: () => {},
 			openFile: noop,
 			openWorkspace: () => {},
 			peek: () => {},

@@ -15,8 +15,8 @@ test("a small card started from the board works with its last action shown, then
 	test.setTimeout(300_000);
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
-	await page.getByTestId("tool-rail-ext:board:board").click();
-	const board = page.getByTestId("board-tool");
+	await page.getByTestId("view-rail-board:board").click();
+	const board = page.getByTestId("board-main");
 	await expect(board).toBeVisible();
 
 	await board.getByTestId("board-new").click();
@@ -49,6 +49,7 @@ test("a small card started from the board works with its last action shown, then
 	});
 	await peek.getByTestId("board-start-submit").click();
 	await expect(peek.getByTestId("board-attempt")).toHaveCount(1, { timeout: 60_000 });
+	await page.getByTestId("tool-rail-projects").click();
 	await expect(worktreeRows(page)).toHaveCount(1);
 
 	await expect(tile).toHaveAttribute("data-column", "review", { timeout: 240_000 });

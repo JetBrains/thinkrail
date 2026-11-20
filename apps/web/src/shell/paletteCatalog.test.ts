@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { RiBarChartBoxLine } from "@remixicon/react";
 import { type NativePageZoomAction, PROTOCOL_VERSION, type Workspace } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
-import type { RegisteredLayoutPreset, RegisteredPanel } from "../extensions";
+import type { RegisteredPanel, RegisteredView } from "../extensions";
 import { type KeybindingId, keybindingShortcut, resolveKeybindings } from "../keybindings";
 import { availableSettings, type SettingsCatalogContext } from "../panels/settingsCatalog";
 import { settingsNavGroups } from "../panels/settingsNav";
@@ -102,8 +102,8 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 		tabActions: [],
 		extensionPanels: [],
 		extensionTools: [],
-		layoutModes: [],
-		activeLayoutMode: null,
+		views: [],
+		activeView: null,
 		actions: {
 			newWorkspace: noop,
 			newProjectlessChat: noop,
@@ -117,8 +117,8 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 			toggleRight: noop,
 			toggleBottom: noop,
 			showTool: noop,
-			enterLayoutMode: noop,
-			exitLayoutMode: noop,
+			enterView: noop,
+			exitView: noop,
 			openExtensionPanel: noop,
 			openExtensionPanelInProject: noop,
 			showFiles: noop,
@@ -410,83 +410,74 @@ describe("palette extension panel commands", () => {
 	});
 });
 
-describe("palette extension side tools and layout modes", () => {
-	const mode: RegisteredLayoutPreset = {
-		extension: "board",
-		preset: "board",
-		id: "board:board",
+describe("palette extension side tools and views", () => {
+	const view: RegisteredView = {
+		extension: "fake",
+		view: "wide",
+		id: "fake:wide",
 		declaration: {
-			title: "board.mode.title",
+			title: "board.boardView.title",
 			icon: RiBarChartBoxLine,
-			left: { visible: true, width: 0.6, groups: [] },
-			right: { visible: false, width: 0.28, groups: [] },
+			center: "main",
+			left: "nav",
 		},
 	};
 
 	test("shows an offered extension side tool like a built-in tool, in the active workspace", () => {
 		const shown: [string, string][] = [];
 		const catalog = deps({
-			extensionTools: [
-				{ id: "ext:board:board", title: "board.tool.title", icon: RiBarChartBoxLine },
-			],
+			extensionTools: [{ id: "ext:fake:tool", title: "board.nav.title", icon: RiBarChartBoxLine }],
 			actions: {
 				...deps().actions,
 				showTool: (workspaceId, tool) => shown.push([workspaceId, tool]),
 			},
 		});
-		const command = row("view.show.ext:board:board", catalog);
+		const command = row("view.show.ext:fake:tool", catalog);
 		expect(command).toMatchObject({ title: "Show Board", subtitle: "View" });
 		command?.run?.();
-		expect(shown).toEqual([["w1", "ext:board:board"]]);
+		expect(shown).toEqual([["w1", "ext:fake:tool"]]);
 		expect(
 			row(
-				"view.show.ext:board:board",
+				"view.show.ext:fake:tool",
 				deps({
 					activeWorkspace: null,
 					extensionTools: [
-						{ id: "ext:board:board", title: "board.tool.title", icon: RiBarChartBoxLine },
+						{ id: "ext:fake:tool", title: "board.nav.title", icon: RiBarChartBoxLine },
 					],
 				}),
 			),
 		).toBeUndefined();
 	});
 
-	test("offers Enter for a mode not active and Exit for the active one, even one this build lacks", () => {
-		const entered: RegisteredLayoutPreset[] = [];
+	test("offers Enter for a view not on and Exit for the one on, even one this build lacks", () => {
+		const entered: RegisteredView[] = [];
 		let exited = 0;
 		const actions = {
 			...deps().actions,
-			enterLayoutMode: (preset: RegisteredLayoutPreset) => entered.push(preset),
-			exitLayoutMode: () => {
+			enterView: (entry: RegisteredView) => entered.push(entry),
+			exitView: () => {
 				exited += 1;
 			},
 		};
-		const idle = deps({ layoutModes: [mode], actions });
-		expect(row("view.layoutMode.enter.board:board", idle)?.title).toBe("Enter Board mode");
-		expect(row("view.layoutMode.exit", idle)).toBeUndefined();
-		row("view.layoutMode.enter.board:board", idle)?.run?.();
-		expect(entered).toEqual([mode]);
+		const idle = deps({ views: [view], actions });
+		expect(row("view.extensionView.enter.fake:wide", idle)?.title).toBe("Enter Board view");
+		expect(row("view.extensionView.exit", idle)).toBeUndefined();
+		row("view.extensionView.enter.fake:wide", idle)?.run?.();
+		expect(entered).toEqual([view]);
 
-		const active = deps({
-			layoutModes: [mode],
-			activeLayoutMode: { id: "board:board", preset: mode },
-			actions,
-		});
-		expect(row("view.layoutMode.enter.board:board", active)).toBeUndefined();
-		expect(row("view.layoutMode.exit", active)?.title).toBe("Exit Board mode");
-		row("view.layoutMode.exit", active)?.run?.();
+		const active = deps({ views: [view], activeView: { id: "fake:wide", view }, actions });
+		expect(row("view.extensionView.enter.fake:wide", active)).toBeUndefined();
+		expect(row("view.extensionView.exit", active)?.title).toBe("Exit Board view");
+		row("view.extensionView.exit", active)?.run?.();
 		expect(exited).toBe(1);
 
 		const orphan = deps({
 			activeWorkspace: null,
-			activeLayoutMode: { id: "gone:wide", preset: undefined },
+			activeView: { id: "gone:wide", view: undefined },
 		});
-		expect(row("view.layoutMode.exit", orphan)?.title).toBe("Exit layout mode");
+		expect(row("view.extensionView.exit", orphan)?.title).toBe("Exit the view");
 		expect(
-			row(
-				"view.layoutMode.enter.board:board",
-				deps({ activeWorkspace: null, layoutModes: [mode] }),
-			),
+			row("view.extensionView.enter.fake:wide", deps({ activeWorkspace: null, views: [view] })),
 		).toBeUndefined();
 	});
 });

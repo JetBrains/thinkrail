@@ -436,8 +436,10 @@ dependency. This keeps test process drivers outside both launchers and the serve
     web half's workbench seams** shipped with the board too, each mounted or offered under the panels'
     openable rule: `sideTools` (singleton rail tools `ext:<name>:<id>` the frame places like Files),
     `statusItems` (topbar readouts), `containerSections` (an extension's facts in a container overview)
-    and `layoutPresets` (a side arrangement the window enters and leaves, restoring its frame), with
-    `PanelHost.peek` / `openWorkspace` / `onEvent` ([[submodule-web-shell]]). Install UX,
+    and `views` (the whole workbench for the extension: its panel as a center override, its side tools
+    on the left and at the bottom, Peek on the right, the replaced frame restored exactly), with
+    `PanelHost.peek` / `openWorkspace` / `onEvent`, `renderChat` (another workspace's live, answerable
+    chat inside a panel, with no workspace switch) and `openView` ([[submodule-web-shell]]). Install UX,
     marketplace, other setting types, a per-workspace on/off override and runtime-loaded third-party
     extensions remain explicit deferrals. Rejected: runtime-loaded
     bundles now (React singleton, versioned UI API, security story first), a logical extension inside

@@ -359,6 +359,97 @@ describe("board queries", () => {
 		]);
 	});
 
+	test("list the agents working, waiting or failed across the open projects, with their plan and last action", async () => {
+		const { t, board, query } = setup();
+		t.projects.push(project("p2", "Other"));
+		for (const [projectId, title] of [
+			["p1", "Working"],
+			["p1", "Finished"],
+			["p2", "Waiting"],
+			["p2", "Stopped"],
+		] as const) {
+			const card = board.createCard(projectId, { title }, "human");
+			await query("card.start", { cardId: card.id });
+		}
+		const lastAction = { tool: "edit", target: "src/a.ts", at: 5 };
+		const chat = (
+			sessionId: string,
+			state: "working" | "needs_you" | "finished" | "interrupted",
+			extra: Record<string, unknown> = {},
+		) => ({ sessionId, title: "", state, unread: false, plan: null, updatedAt: 1, ...extra });
+		t.facts.set(
+			"w1",
+			facts("w1", {
+				chats: [chat("s1", "working", { plan: { open: 2, total: 5 }, lastAction })],
+			}),
+		);
+		t.facts.set("w2", facts("w2", { chats: [chat("s2", "finished")] }));
+		t.facts.set("w3", facts("w3", { projectId: "p2", chats: [chat("s3", "needs_you")] }));
+		t.facts.set("w4", facts("w4", { projectId: "p2", chats: [chat("s4", "interrupted")] }));
+		const { agents } = await query<{
+			agents: {
+				projectName: string;
+				title: string;
+				state: string;
+				workspaceId: string;
+				sessionId: string;
+				startedAt: number;
+				plan: unknown;
+				lastAction?: unknown;
+			}[];
+		}>("agents.get", {});
+		expect(agents.map((agent) => [agent.projectName, agent.title, agent.state])).toEqual([
+			["ThinkRail", "Working", "working"],
+			["Other", "Waiting", "waiting"],
+			["Other", "Stopped", "failed"],
+		]);
+		expect(agents[0]).toMatchObject({
+			workspaceId: "w1",
+			sessionId: "s1",
+			plan: { open: 2, total: 5 },
+			lastAction,
+		});
+		expect(agents[0]?.startedAt).toBeGreaterThan(0);
+		expect(agents[1]).not.toHaveProperty("lastAction");
+	});
+
+	test("answer the activity of one project or all, newest first and bounded, naming each card", async () => {
+		const { t, query } = setup();
+		t.projects.push(project("p2", "Other"));
+		const one = await query<Card>("card.create", { projectId: "p1", title: "One" });
+		const two = await query<Card>("card.create", { projectId: "p2", title: "Two" });
+		await query("card.move", { cardId: one.id, column: "ready" });
+		await query("card.delete", { cardId: two.id });
+		const all = await query<{
+			entries: { projectName: string; cardId: string; title?: string; actor: string }[];
+		}>("activity.get", {});
+		expect(all.entries.map((entry) => [entry.projectName, entry.cardId, entry.title])).toEqual([
+			["Other", two.id, undefined],
+			["ThinkRail", one.id, "One"],
+			["Other", two.id, undefined],
+			["ThinkRail", one.id, "One"],
+		]);
+		expect(all.entries.every((entry) => entry.actor === "human")).toBe(true);
+		const own = await query<{ entries: { projectId: string }[] }>("activity.get", {
+			projectId: "p1",
+			limit: 1,
+		});
+		expect(own.entries.map((entry) => entry.projectId)).toEqual(["p1"]);
+		for (const limit of [0, 201, 1.5, "3"])
+			await expect(query("activity.get", { limit })).rejects.toThrow(
+				/limit must be a whole number|limit must be a number/,
+			);
+		await expect(query("activity.get", { projectId: "nope" })).rejects.toThrow("No open project");
+		const { projects } = await query<{ projects: { name: string; cards: number }[] }>(
+			"projects.list",
+			{},
+		);
+		expect(projects.map((entry) => [entry.name, entry.cards])).toEqual([
+			["ThinkRail", 1],
+			["Other", 0],
+		]);
+	});
+
 	test("switch presets by remapping every card's column from its category", async () => {
 		const { query } = setup();
 		await query("card.create", { projectId: "p1", title: "Ready", column: "ready" });
@@ -724,6 +815,8 @@ describe("the board descriptor", () => {
 		});
 		const queries = extension.queries?.(t.host) ?? {};
 		expect(Object.keys(queries).sort()).toEqual([
+			"activity.get",
+			"agents.get",
 			"autopilot.get",
 			"autopilot.ofContainer",
 			"board.get",
@@ -776,6 +869,7 @@ describe("the board descriptor", () => {
 			"project.create",
 			"project.delete",
 			"project.update",
+			"projects.list",
 			"roadmap.chat",
 			"roadmap.get",
 			"roadmap.publish",

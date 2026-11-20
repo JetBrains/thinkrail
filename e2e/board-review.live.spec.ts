@@ -13,8 +13,8 @@ test("Smart review on a small finished card gives every criterion a verdict with
 	test.setTimeout(600_000);
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
-	await page.getByTestId("tool-rail-ext:board:board").click();
-	const board = page.getByTestId("board-tool");
+	await page.getByTestId("view-rail-board:board").click();
+	const board = page.getByTestId("board-main");
 	await expect(board).toBeVisible();
 
 	await board.getByTestId("board-new").click();
@@ -33,6 +33,7 @@ test("Smart review on a small finished card gives every criterion a verdict with
 	await expect(peek.getByTestId("board-attempt")).toHaveCount(1, { timeout: 60_000 });
 	await expect(tile).toHaveAttribute("data-column", "review", { timeout: 300_000 });
 
+	await peek.getByTestId("board-card-tab-review").click();
 	const section = peek.getByTestId("board-review-section");
 	await section.getByTestId("board-review-run").click();
 	await expect(section.getByTestId("board-review-running")).toBeVisible();

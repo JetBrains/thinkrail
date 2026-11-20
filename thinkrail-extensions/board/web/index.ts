@@ -1,19 +1,49 @@
-import { RiFlag2Line, RiKanbanView2, RiLightbulbLine, RiStickyNoteLine } from "@remixicon/react";
+import {
+	RiCompass3Line,
+	RiFlag2Line,
+	RiKanbanView2,
+	RiLightbulbLine,
+	RiPulseLine,
+	RiStickyNoteLine,
+} from "@remixicon/react";
 import { defineWebExtension } from "@thinkrail/extension-api/web";
 import { BOARD_SHORTCUTS, CARD_COMMANDS } from "./keys";
 
 export default defineWebExtension({
 	name: "board",
 	title: "board.title",
-	sideTools: {
+	views: {
 		board: {
-			title: "board.tool.title",
+			title: "board.boardView.title",
 			icon: RiKanbanView2,
+			center: "main",
+			left: "nav",
+			bottom: "activity",
+			layout: { leftWidth: 0.16, bottomHeight: 0.26 },
+			peekEmpty: "board.boardView.peekEmpty",
+		},
+	},
+	sideTools: {
+		nav: {
+			title: "board.nav.title",
+			icon: RiCompass3Line,
 			defaultSide: "left",
-			load: () => import("./BoardTool"),
+			load: () => import("./BoardNav"),
+		},
+		activity: {
+			title: "board.feed.region",
+			icon: RiPulseLine,
+			defaultSide: "left",
+			load: () => import("./BoardActivity"),
 		},
 	},
 	panels: {
+		main: {
+			title: "board.boardView.title",
+			icon: RiKanbanView2,
+			scopes: ["session"],
+			load: () => import("./BoardMain"),
+		},
 		card: {
 			title: "board.card.panelTitle",
 			icon: RiStickyNoteLine,
@@ -38,21 +68,6 @@ export default defineWebExtension({
 	},
 	containerSections: {
 		initiative: { load: () => import("./ContainerAutopilot") },
-	},
-	layoutPresets: {
-		board: {
-			title: "board.mode.title",
-			icon: RiKanbanView2,
-			left: {
-				visible: true,
-				width: 0.6,
-				groups: [
-					{ id: "board-mode-projects", weight: 0.1, folded: true, tools: ["projects"] },
-					{ id: "board-mode-board", weight: 0.9, folded: false, tools: ["ext:board:board"] },
-				],
-			},
-			right: { visible: false, width: 0.28, groups: [] },
-		},
 	},
 	commands: CARD_COMMANDS,
 	shortcuts: BOARD_SHORTCUTS,

@@ -98,3 +98,12 @@ export function useAnyBoardChanged(host: Pick<PanelHost, "onEvent">, onChange: (
 	const changed = useEffectEvent(onChange);
 	useEffect(() => host.onEvent(BOARD_CHANGED, () => changed()), [host]);
 }
+
+/** Calls `onActivity` on every `board.activity` of any project: a bound chat's tool start. */
+export function useAnyBoardActivity(
+	host: Pick<PanelHost, "onEvent">,
+	onActivity: () => void,
+): void {
+	const fire = useEffectEvent(onActivity);
+	useEffect(() => host.onEvent(BOARD_ACTIVITY, () => fire()), [host]);
+}

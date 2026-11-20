@@ -34,8 +34,8 @@ test("Plan with agent decomposes an initiative into one linked group of cards in
 	await page.setViewportSize({ width: 1720, height: 1000 });
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
-	await page.getByTestId("tool-rail-ext:board:board").click();
-	const board = page.getByTestId("board-tool");
+	await page.getByTestId("view-rail-board:board").click();
+	const board = page.getByTestId("board-main");
 	await expect(board).toBeVisible();
 	await board.getByTestId("board-view-roadmap").click();
 
@@ -77,6 +77,8 @@ test("Plan with agent decomposes an initiative into one linked group of cards in
 	const ids = new Set(triage.map((card) => card.id));
 	expect(triage.some((card) => card.blocks.some((id) => ids.has(id)))).toBe(true);
 
+	await page.getByTestId("view-rail-board:board").click();
+	await expect(board).toBeVisible();
 	await board.getByTestId("board-view-board").click();
 	const lane = board.getByTestId("board-triage");
 	await expect(lane.getByTestId("board-triage-toggle")).toContainText("Triage ·");

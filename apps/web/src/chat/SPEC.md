@@ -746,10 +746,11 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   first enters the orchestrator chat's own workspace.
 - **Rendering outside the active workspace** — `ChatView` reads only its `{ workspaceId, sessionId }`
   props, the session's runtime and workspace-keyed state, never the active workspace or its layout, so the
-  shell may mount it beside another workspace's center: the Orchestrator tool renders a container's
-  orchestrator chat next to a member ([[submodule-web-shell]], *Orchestrator tool*), hydrating its runtime
-  through the placement-free `hydrateSessionRuntime` because chat reconciliation hydrates only chats placed
-  in the active workspace. Composer focus requests and completion acknowledgement already match on the
+  shell may mount it beside another workspace's center: the shell's `SessionChatView` does, for the
+  Orchestrator tool (a container's orchestrator chat next to a member, [[submodule-web-shell]],
+  *Orchestrator tool*) and for `PanelHost.renderChat` (a board card's attempt chat in Peek), hydrating its
+  runtime through the placement-free `hydrateSessionRuntime` because chat reconciliation hydrates only
+  chats placed in the active workspace. Composer focus requests and completion acknowledgement already match on the
   chat's own workspace and session, so no new seam was needed.
 - **Tool file previews** — `ChatTranscript` wraps its row list in [[module-resource-renderers]]'
   `ResourceScopeProvider` with the chat's `{ workspaceId, sessionId }`, memoized on the two ids (one provider

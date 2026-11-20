@@ -1,4 +1,5 @@
 import {
+	RiArrowGoBackLine as Back,
 	RiCircleLine as Circle,
 	RiCircleFill,
 	RiSearchLine,
@@ -6,7 +7,7 @@ import {
 } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import { IconButton } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import { LocalKeymapProvider } from "@thinkrail/ui/local-keys";
 import { useEffect, useState } from "react";
 import { useContinuations } from "../chat/continuations";
@@ -71,6 +72,7 @@ import {
 import { ExtensionOverlays } from "./ExtensionOverlays";
 import { ExtensionStatusItems } from "./ExtensionStatusItems";
 import { installEscapeLeavesField } from "./escapeLeavesField";
+import { exitExtensionView, useExtensionViewLifetime } from "./extensionViews";
 import { FindInFilesHost } from "./FindInFilesHost";
 import { installFocusRecovery } from "./focusRecovery";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
@@ -112,9 +114,31 @@ export function Shell() {
 	);
 }
 
+/** "Back to workbench" while the window is in an extension's view. */
+function ViewExitButton() {
+	const t = useT();
+	const active = useAppStore(
+		(state) =>
+			state.activeWorkspaceId !== null && state.localLayoutPreferences.layoutView !== undefined,
+	);
+	if (!active) return null;
+	return (
+		<Button
+			variant="outline"
+			size="m"
+			iconLeft={Back}
+			data-testid="view-exit"
+			onClick={exitExtensionView}
+		>
+			{t("workbench.view.exit")}
+		</Button>
+	);
+}
+
 function ShellLayout() {
 	const t = useT();
 	useLocalLayoutState();
+	useExtensionViewLifetime();
 	useAttentionNotifications();
 	useContinuations();
 	const status = useAppStore((s) => s.status);
@@ -302,6 +326,7 @@ function ShellLayout() {
 						onClick={() => useAppStore.getState().openSearch()}
 					/>
 					<ExtensionStatusItems />
+					<ViewExitButton />
 					<JbcentralQuotaTopbar />
 					<span
 						data-testid="connection-status"

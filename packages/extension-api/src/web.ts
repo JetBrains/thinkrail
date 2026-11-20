@@ -1,4 +1,3 @@
-import type { LayoutPresetSideRegion } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import type { ComponentType, ReactNode } from "react";
@@ -126,6 +125,12 @@ export interface PanelChatTarget {
 	at?: PanelChatAnchor | undefined;
 }
 
+/** A chat `PanelHost.renderChat` shows: one session of a workspace, which may be another than `scope`'s. */
+export interface PanelChatSession {
+	workspaceId: string;
+	sessionId: string;
+}
+
 /** A recorded tool call for `PanelHost.renderToolCall`; `result` has the chat's `{ content, details }` shape. */
 export interface PanelToolCall {
 	toolCallId: string;
@@ -174,6 +179,8 @@ export interface PanelHost {
 	openPanel(panel: string, params?: Readonly<Record<string, string>>, title?: string): void;
 	/** The chat's own renderer for the tool (edit → diff, bash → command and output), without chat chrome. */
 	renderToolCall(call: PanelToolCall): ReactNode;
+	/** The session's live, interactive chat (transcript, questions, composer), loaded on demand; no workspace switch. */
+	renderChat(chat: PanelChatSession): ReactNode;
 	/** Opens a workspace file in a center tab, at `line` when given; `path` is relative to the workspace. */
 	openFile(workspaceId: string, path: string, line?: number): void;
 	/** Reveals the Artifacts tool of `scope`'s workspace, where files an extension wrote there show; absent on a host without one. */
@@ -187,12 +194,8 @@ export interface PanelHost {
 	 * after the call arrive; none below the host's gate or while the extension is switched off.
 	 */
 	onEvent(type: string, listener: PanelEventListener): () => void;
-	/** The id of this extension's `layoutPresets` entry that is the window's layout mode now, else `null`; absent on a host without modes. */
-	readonly layoutPreset?: string | null;
-	/** Enters this extension's layout preset `preset`: the window's frame is kept to restore, then arranged by it. */
-	enterLayoutPreset?(preset: string): void;
-	/** Leaves this extension's layout mode, restoring the frame it replaced; nothing while none is active. */
-	exitLayoutPreset?(): void;
+	/** Enters this extension's view `view` (its `views` entry); nothing without a workspace or for an unknown view. */
+	openView(view: string): void;
 	readonly scope: PanelHostScope;
 	readonly hostProtocol: number | null;
 	readonly hostApiVersion: number | undefined;
@@ -204,7 +207,14 @@ export interface PanelHost {
  */
 export type StatusItemHost = Pick<
 	PanelHost,
-	"query" | "onEvent" | "openChat" | "openWorkspace" | "peek" | "hostProtocol" | "hostApiVersion"
+	| "query"
+	| "onEvent"
+	| "openChat"
+	| "openWorkspace"
+	| "peek"
+	| "openView"
+	| "hostProtocol"
+	| "hostApiVersion"
 > & { readonly scope: PanelHostScope | null };
 
 export interface StatusItemProps {
@@ -228,15 +238,24 @@ export interface ContainerSectionDeclaration {
 }
 
 /**
- * A layout mode: the side arrangement the shell enters and leaves, restoring the frame it replaced. It
- * places built-in tools and the extension's own side tools; the center and the bottom stay as they are.
+ * A view: the whole workbench given to the extension until the user goes back — its panel in place of the
+ * center, its side tools on the left and in the bottom panel, Peek open on the right. The shell keeps the
+ * workbench it replaced and restores it exactly.
  */
-export interface LayoutPresetDeclaration {
-	/** The mode's name, "Board mode"; the shell's Enter / Exit commands are worded from it. */
+export interface ViewDeclaration {
+	/** The view's name, "Board view"; the rail toggle and the Enter / Exit commands are worded from it. */
 	title: MessageKey;
 	icon: ComponentType<{ className?: string | undefined }>;
-	left: LayoutPresetSideRegion;
-	right: LayoutPresetSideRegion;
+	/** One of the extension's `panels`, shown in place of the workspace's center groups. */
+	center: string;
+	/** One of the extension's `sideTools`, in a pane of its own leading the left side. */
+	left?: string;
+	/** One of the extension's `sideTools`, in a pane of its own leading the bottom panel. */
+	bottom?: string;
+	/** The left side's width and the bottom panel's height, workbench-wide ratios. */
+	layout?: { leftWidth?: number; bottomHeight?: number };
+	/** What Peek says while it shows nothing. */
+	peekEmpty?: MessageKey;
 }
 
 export interface PanelProps {
@@ -295,7 +314,7 @@ export interface WebExtension {
 	sideTools?: Record<string, SideToolDeclaration>;
 	statusItems?: Record<string, StatusItemDeclaration>;
 	containerSections?: Record<string, ContainerSectionDeclaration>;
-	layoutPresets?: Record<string, LayoutPresetDeclaration>;
+	views?: Record<string, ViewDeclaration>;
 }
 
 export function defineWebExtension<T extends WebExtension>(extension: T): T {

@@ -38,15 +38,14 @@ function hostDeps(overrides: Partial<PanelHostDeps> = {}): PanelHostDeps {
 		locate: () => {},
 		openPanel: () => {},
 		renderToolCall: () => null,
+		renderChat: () => null,
 		openFile: () => {},
 		openArtifacts: () => {},
 		openWorkspace: () => {},
 		peek: () => {},
 		subscribe: () => () => {},
 		disabled: () => false,
-		layoutPreset: null,
-		enterLayoutPreset: () => {},
-		exitLayoutPreset: () => {},
+		openView: () => {},
 		scope: { workspaceId: "w1", projectId: "p1" },
 		hostProtocol: EXTENSION_QUERY_PROTOCOL_VERSION,
 		hostApiVersion: 3,
@@ -162,18 +161,15 @@ describe("PanelHost workspace, Peek and events", () => {
 	});
 });
 
-describe("PanelHost layout presets and the status item host", () => {
-	test("reports and enters or leaves only its own extension's layout preset", () => {
-		const enterLayoutPreset = mock((_preset: string) => {});
-		const exitLayoutPreset = mock(() => {});
-		const host = createPanelHost(
-			hostDeps({ layoutPreset: "board", enterLayoutPreset, exitLayoutPreset }),
-		);
-		expect(host.layoutPreset).toBe("board");
-		host.enterLayoutPreset?.("board");
-		host.exitLayoutPreset?.();
-		expect(enterLayoutPreset.mock.calls).toEqual([["board"]]);
-		expect(exitLayoutPreset).toHaveBeenCalledTimes(1);
+describe("PanelHost chats, views and the status item host", () => {
+	test("renders a session's chat through the shell and opens its own extension's view", () => {
+		const renderChat = mock((chat: { workspaceId: string; sessionId: string }) => chat.sessionId);
+		const openView = mock((_view: string) => {});
+		const host = createPanelHost(hostDeps({ renderChat, openView }));
+		expect(host.renderChat({ workspaceId: "w2", sessionId: "s2" })).toBe("s2");
+		host.openView("board");
+		expect(renderChat.mock.calls).toEqual([[{ workspaceId: "w2", sessionId: "s2" }]]);
+		expect(openView.mock.calls).toEqual([["board"]]);
 	});
 
 	test("a status item's host queries and listens like a panel's and peeks only into an active workspace", async () => {
@@ -191,6 +187,7 @@ describe("PanelHost layout presets and the status item host", () => {
 				return () => {};
 			},
 			disabled: () => false,
+			openView: () => {},
 			hostProtocol: EXTENSION_EVENT_PROTOCOL_VERSION,
 			hostApiVersion: 1,
 		};

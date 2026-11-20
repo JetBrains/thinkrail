@@ -12,6 +12,7 @@ import {
 	openableContributions,
 	useExtensionCatalog,
 } from "./extensionPanelHost";
+import { openOwnView } from "./extensionViews";
 
 const lazyItems = new WeakMap<
 	RegisteredStatusItem["declaration"],
@@ -64,6 +65,7 @@ export function useStatusItemHost(
 					? (entry) => useAppStore.getState().requestPeek(workspaceId, entry)
 					: null,
 				disabled: () => useAppStore.getState().disabledExtensions.includes(extension),
+				openView: (view) => openOwnView(extension, view),
 				scope: workspaceId && projectId ? { workspaceId, projectId } : null,
 				hostProtocol: protocolVersion,
 				hostApiVersion: apiVersion,

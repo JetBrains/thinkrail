@@ -1,12 +1,13 @@
-import { RiQuestionLine } from "@remixicon/react";
+import { RiKanbanView2, RiQuestionLine } from "@remixicon/react";
 import type { StatusItemProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { useState } from "react";
+import { BOARD_VIEW } from "./api";
 import { InboxRow, useInbox } from "./Inbox";
 
-/** The topbar's "Needs you · N" across every open project; a click lists the cards. Absent at zero. */
+/** The topbar's "Needs you · N" across every open project; a click lists the cards and opens Board view. Absent at zero. */
 export default function InboxStatus({ host }: StatusItemProps) {
 	const t = useT();
 	const items = useInbox(host);
@@ -37,6 +38,21 @@ export default function InboxStatus({ host }: StatusItemProps) {
 						{t("board.inbox.title", { n: items.length })}
 					</span>
 					<span className="tr-text-metadata text-text-subtle">{t("board.inbox.allProjects")}</span>
+					{host.scope ? (
+						<Button
+							variant="ghost"
+							size="s"
+							iconLeft={RiKanbanView2}
+							data-testid="board-inbox-open-board"
+							className="ml-auto"
+							onClick={() => {
+								host.openView(BOARD_VIEW);
+								setOpen(false);
+							}}
+						>
+							{t("board.inbox.openBoard")}
+						</Button>
+					) : null}
 				</span>
 				<ul className="flex max-h-360 flex-col gap-4 overflow-auto">
 					{items.map((item) => (

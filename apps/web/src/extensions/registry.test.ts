@@ -23,13 +23,13 @@ import { matchKeybinding, matchLocal, resolveKeybindings, SHORTCUT_CATALOG } fro
 import { isMessageKey } from "../lib";
 import {
 	enabledWebExtensions,
-	extensionLayoutPresets,
 	extensionPanels,
 	extensionSideTools,
 	extensionStatusItems,
-	findExtensionLayoutPreset,
+	extensionViews,
 	findExtensionPanel,
 	findExtensionSideTool,
+	findExtensionView,
 	registerWebExtensions,
 	webExtensionCommands,
 	webExtensions,
@@ -370,6 +370,7 @@ test("session insights declares its project-scoped Sessions panel, a per-session
 		"session-insights/sessions",
 		"session-insights/session",
 		"session-insights/compare",
+		"board/main",
 		"board/card",
 		"board/initiative",
 		"board/idea",
@@ -380,15 +381,18 @@ test("session insights declares its project-scoped Sessions panel, a per-session
 	}
 });
 
-test("the board declares its Board side tool at the left, a Peek card panel kept off the palette, and local move keys", async () => {
+test("the board declares its view's side tools, a center and Peek panels kept off the palette, and local move keys", async () => {
 	expect(extensionSideTools().map(({ id, extension, tool }) => [id, extension, tool])).toEqual([
-		["ext:board:board", "board", "board"],
+		["ext:board:nav", "board", "nav"],
+		["ext:board:activity", "board", "activity"],
 	]);
-	const tool = findExtensionSideTool("ext:board:board");
-	expect(tool?.declaration.defaultSide).toBe("left");
-	expect(isMessageKey(tool?.declaration.title ?? "")).toBe(true);
-	expect(findExtensionSideTool("ext:board:missing")).toBeUndefined();
-	expect(typeof (await tool?.declaration.load())?.default).toBe("function");
+	for (const id of ["ext:board:nav", "ext:board:activity"]) {
+		const tool = findExtensionSideTool(id);
+		expect(isMessageKey(tool?.declaration.title ?? "")).toBe(true);
+		expect(typeof (await tool?.declaration.load())?.default).toBe("function");
+	}
+	expect(findExtensionSideTool("ext:board:board")).toBeUndefined();
+	expect(findExtensionPanel("board", "main")?.declaration.scopes).toEqual(["session"]);
 	expect(findExtensionPanel("board", "card")?.declaration.scopes).toEqual(["session"]);
 	expect(findExtensionPanel("board", "initiative")?.declaration.scopes).toEqual(["session"]);
 	const rows = [...board.commands, ...board.shortcuts];
@@ -402,28 +406,24 @@ test("the board declares its Board side tool at the left, a Peek card panel kept
 	);
 });
 
-test("the board declares its Needs-you status item and Board mode, a wide left Board pane over a folded Projects", async () => {
+test("the board declares its Needs-you status item and Board view: its center panel, the nav on the left and the activity below", async () => {
 	expect(extensionStatusItems().map(({ extension, item }) => [extension, item])).toEqual([
 		["board", "inbox"],
 	]);
 	const [item] = extensionStatusItems();
 	expect(typeof (await item?.declaration.load())?.default).toBe("function");
-	expect(extensionLayoutPresets().map(({ id }) => id)).toEqual(["board:board"]);
-	const mode = findExtensionLayoutPreset("board:board")?.declaration;
-	expect(isMessageKey(mode?.title ?? "")).toBe(true);
-	expect(mode?.left.groups.map(({ tools, folded }) => [tools, folded])).toEqual([
-		[["projects"], true],
-		[["ext:board:board"], false],
-	]);
-	expect(mode?.left.width).toBeGreaterThanOrEqual(0.55);
-	expect(mode?.right.groups).toEqual([]);
-	expect(
-		[...(mode?.left.groups ?? []), ...(mode?.right.groups ?? [])]
-			.flatMap(({ tools }) => tools)
-			.every(isLayoutToolId),
-	).toBe(true);
-	expect(findExtensionLayoutPreset("board:missing")).toBeUndefined();
-	if (!mode) throw new Error("Board mode is not declared");
-	const fake: WebExtension = { name: "fake", layoutPresets: { wide: mode } };
-	expect(extensionLayoutPresets([fake]).map(({ id }) => id)).toEqual(["fake:wide"]);
+	expect(extensionViews().map(({ id }) => id)).toEqual(["board:board"]);
+	const view = findExtensionView("board:board")?.declaration;
+	expect(isMessageKey(view?.title ?? "")).toBe(true);
+	expect(isMessageKey(view?.peekEmpty ?? "")).toBe(true);
+	expect([view?.center, view?.left, view?.bottom]).toEqual(["main", "nav", "activity"]);
+	expect(findExtensionPanel("board", view?.center ?? "")).toBeDefined();
+	for (const tool of [view?.left, view?.bottom]) {
+		expect(isLayoutToolId(`ext:board:${tool}`)).toBe(true);
+		expect(findExtensionSideTool(`ext:board:${tool}`)).toBeDefined();
+	}
+	expect(findExtensionView("board:missing")).toBeUndefined();
+	if (!view) throw new Error("Board view is not declared");
+	const fake: WebExtension = { name: "fake", views: { wide: view } };
+	expect(extensionViews([fake]).map(({ id }) => id)).toEqual(["fake:wide"]);
 });

@@ -82,6 +82,7 @@ import type {
 	WorkbenchProps,
 } from "./workbenchShared";
 import {
+	CenterOverrideRegion,
 	ExtensionToolsContext,
 	findLayoutGroupTabs,
 	groupDomId,
@@ -100,6 +101,7 @@ import { SideStack } from "./workbenchSide";
 
 export type {
 	LayoutTabFocusRequest,
+	WorkbenchCenterOverride,
 	WorkbenchChromeShortcuts,
 	WorkbenchPeek,
 	WorkbenchProps,
@@ -134,7 +136,9 @@ export function Workbench({
 	onGestureCanceled,
 	chromeShortcuts,
 	leftRailFooter,
+	leftRailViews,
 	peek,
+	centerOverride,
 }: WorkbenchProps) {
 	const t = useT();
 	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -157,11 +161,14 @@ export function Workbench({
 	const attentionRef = useRef(attention);
 	const peekOpen = peek?.open === true;
 	const peekOpenRef = useRef(peekOpen);
+	const centerShown = centerOverride === undefined;
+	const centerShownRef = useRef(centerShown);
 	useInsertionEffect(() => {
 		documentRef.current = document;
 		attentionRef.current = attention;
 		workspaceRef.current = workspaceId;
 		peekOpenRef.current = peekOpen;
+		centerShownRef.current = centerShown;
 	});
 	const [localFocusRequest, setLocalFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
 	const dragStartEpoch = useRef(gestureContext);
@@ -699,13 +706,17 @@ export function Workbench({
 			: 10,
 	);
 	const focusableGroups = useMemo(
-		() => visibleFocusableGroups(document, peekOpen),
-		[document, peekOpen],
+		() => visibleFocusableGroups(document, peekOpen, centerShown),
+		[document, peekOpen, centerShown],
 	);
 	const readAttention = useCallback(() => attentionRef.current, []);
 	const focusAdjacentGroup = useCallback(
 		(delta: -1 | 1, fromGroupId?: string) => {
-			const groups = visibleFocusableGroups(documentRef.current, peekOpenRef.current);
+			const groups = visibleFocusableGroups(
+				documentRef.current,
+				peekOpenRef.current,
+				centerShownRef.current,
+			);
 			if (groups.length < 2) return;
 			const activeGroupId =
 				fromGroupId ??
@@ -820,7 +831,8 @@ export function Workbench({
 				maxSideGroups,
 				maxBottomGroups,
 				splitGeometry: box ? centerSplitGeometry(box) : undefined,
-				canFocusAdjacentGroup: visibleFocusableGroups(current, peekOpenRef.current).length > 1,
+				canFocusAdjacentGroup:
+					visibleFocusableGroups(current, peekOpenRef.current, centerShownRef.current).length > 1,
 				canRenameChat: onRenameChat !== undefined,
 				worktreePath,
 				chatFirstPrompts,
@@ -933,7 +945,11 @@ export function Workbench({
 			{...shared}
 		/>
 	);
-	const centerView = (
+	const centerView = centerOverride ? (
+		<main data-testid="center-tabs" className="h-full min-h-0 min-w-0">
+			<CenterOverrideRegion override={centerOverride} />
+		</main>
+	) : (
 		<main data-testid="center-tabs" className="h-full min-h-0 min-w-0">
 			<CenterNodeView
 				node={document.center}
@@ -1203,6 +1219,7 @@ export function Workbench({
 						region="left"
 						shared={shared}
 						attention={attention}
+						views={leftRailViews}
 						footer={leftRailFooter}
 					/>
 					<div ref={columnsRef} className="min-h-0 min-w-0 flex-1">

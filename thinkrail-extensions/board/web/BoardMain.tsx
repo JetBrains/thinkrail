@@ -12,18 +12,13 @@ import {
 import {
 	RiAddLine,
 	RiArrowDownSLine,
-	RiBarChartBoxLine,
 	RiCloseLine,
-	RiCollapseDiagonalLine,
-	RiExpandDiagonalLine,
+	RiFilterOffLine,
 	RiGithubLine,
-	RiKanbanView2,
-	RiListUnordered,
 	RiRefreshLine,
-	RiRoadMapLine,
 	RiSettings3Line,
 } from "@remixicon/react";
-import type { PanelHost, PanelProps } from "@thinkrail/extension-api/web";
+import type { PanelProps } from "@thinkrail/extension-api/web";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import {
@@ -41,6 +36,7 @@ import { type LocalKeys, useLocalKeys } from "@thinkrail/ui/local-keys";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, type ReactNode, useEffect, useState } from "react";
 import {
@@ -48,8 +44,6 @@ import {
 	adjacentColumn,
 	adoptCard,
 	attentionWarning,
-	BOARD_MODE,
-	type BoardLayout,
 	type BoardSettings,
 	type BoardView,
 	boardLayout,
@@ -84,27 +78,43 @@ import {
 	type WipCount,
 	workflowFor,
 } from "./api";
+import { useBoardProject } from "./boardProject";
+import {
+	type BoardSelection,
+	CENTER_VIEWS,
+	type CenterView,
+	clearFilters,
+	filterCards,
+	filtering,
+	selectCenterView,
+	useBoardSelection,
+} from "./boardState";
 import { CardList } from "./CardList";
 import { CardMeta, FIELD } from "./CardParts";
 import { type CardActions, CardTile } from "./CardTile";
+import { DiscoveryPane } from "./Discovery";
 import { InboxStrip, useInbox } from "./Inbox";
 import { InsightsPane } from "./Insights";
 import { CARD_COMMANDS, CARD_KEYS, CARDS_SCOPE } from "./keys";
 import {
+	CENTER_VIEW_LABELS,
 	columnTitle,
 	GITHUB_FILTER_LABELS,
 	GITHUB_PROBLEMS,
 	PRESET_LABELS,
+	QUEUE_LABELS,
 	startWarningText,
+	TYPE_LABELS,
 	WIP_LABELS,
 } from "./labels";
 import { InstallHint, ProposeForm } from "./OpenspecParts";
 import { BoardMoreMenu, PublishDialog } from "./PublishDialog";
 import { RoadmapPane } from "./Roadmap";
+import { loadRoadmap } from "./roadmapApi";
 import { type TriageActions, TriageLane } from "./Triage";
 import { useBoardActivity, useBoardChanged, useHostQuery } from "./useHostQuery";
 
-export type BoardMode = "board" | "list" | "roadmap" | "insights";
+export type CardsView = "board" | "list";
 
 /** The board's columns, Canceled only while it holds cards; Triage is its own lane (`TriageLane`). */
 export function shownColumns(view: Pick<BoardView, "columns" | "cards">): Column[] {
@@ -148,14 +158,12 @@ function ColumnDrop({
 	column,
 	count,
 	wip,
-	layout,
 	children,
 }: {
 	column: Column;
 	count: number;
 	/** A Review column's count against the Review limit. */
 	wip: WipCount | null;
-	layout: BoardLayout;
 	children: ReactNode;
 }) {
 	const t = useT();
@@ -167,10 +175,7 @@ function ColumnDrop({
 			data-column={column.id}
 			data-over={isOver || undefined}
 			aria-label={columnTitle(t, column.id)}
-			className={cn(
-				"flex min-h-0 flex-col gap-4 rounded-sm data-[over]:bg-primary-subtle data-[over]:ring-1 data-[over]:ring-inset data-[over]:ring-primary-soft",
-				layout === "columns" ? "w-208 shrink-0 p-4" : "shrink-0 p-4",
-			)}
+			className="flex min-h-0 w-208 shrink-0 flex-col gap-4 rounded-sm p-4 data-[over]:bg-primary-subtle data-[over]:ring-1 data-[over]:ring-inset data-[over]:ring-primary-soft"
 		>
 			<h3 className="flex items-center gap-4 px-4 tr-text-eyebrow text-text-muted">
 				<span className="truncate">{columnTitle(t, column.id)}</span>
@@ -191,7 +196,6 @@ function ColumnDrop({
 
 export function BoardColumns({
 	view,
-	layout,
 	actions,
 	triage,
 	starting,
@@ -199,7 +203,6 @@ export function BoardColumns({
 	onDragEnd,
 }: {
 	view: BoardView;
-	layout: BoardLayout;
 	actions: CardActions;
 	triage: TriageActions;
 	starting: string | null;
@@ -221,13 +224,8 @@ export function BoardColumns({
 				onDragEnd(event);
 			}}
 		>
-			<div
-				className={cn(
-					"min-h-0 flex-1 overflow-auto p-4",
-					layout === "columns" ? "flex gap-8" : "flex flex-col gap-8",
-				)}
-			>
-				<TriageLane view={view} layout={layout} actions={triage} />
+			<div className="flex min-h-0 flex-1 gap-8 overflow-auto p-4">
+				<TriageLane view={view} actions={triage} />
 				{shownColumns(view).map((column) => {
 					const cards = cardsIn(view, column.id);
 					return (
@@ -236,9 +234,8 @@ export function BoardColumns({
 							column={column}
 							count={cards.length}
 							wip={columnWip(view, column)}
-							layout={layout}
 						>
-							<ul className={cn("flex flex-col gap-4", layout === "columns" && "min-h-32")}>
+							<ul className="flex min-h-32 flex-col gap-4">
 								{cards.map((card) => (
 									<CardTile
 										key={card.id}
@@ -246,7 +243,6 @@ export function BoardColumns({
 										actions={actions}
 										starting={starting === card.id}
 										startWarning={startWarning?.cardId === card.id ? startWarning.text : null}
-										compact={layout === "stacked"}
 									/>
 								))}
 							</ul>
@@ -463,43 +459,6 @@ function BoardSettingsMenu({
 	);
 }
 
-function ModeToggle({
-	active,
-	compact,
-	onToggle,
-}: {
-	active: boolean;
-	compact: boolean;
-	onToggle: () => void;
-}) {
-	const t = useT();
-	const label = active ? t("board.mode.exit") : t("board.mode.enter");
-	if (compact)
-		return (
-			<IconButton
-				icon={active ? RiCollapseDiagonalLine : RiExpandDiagonalLine}
-				size="s"
-				label={label}
-				data-testid="board-mode-toggle"
-				data-active={active || undefined}
-				selected={active}
-				onClick={onToggle}
-			/>
-		);
-	return (
-		<Button
-			variant={active ? "soft-primary" : "ghost"}
-			size="s"
-			iconLeft={active ? RiCollapseDiagonalLine : RiExpandDiagonalLine}
-			data-testid="board-mode-toggle"
-			data-active={active || undefined}
-			onClick={onToggle}
-		>
-			{label}
-		</Button>
-	);
-}
-
 /** The board's GitHub source: show or hide the project's issues, which ones, and refresh them. */
 export function GithubMenu({
 	github,
@@ -610,16 +569,30 @@ export function GithubBanner({
 	);
 }
 
+function ViewSwitch({ view, onView }: { view: CenterView; onView: (view: CenterView) => void }) {
+	const t = useT();
+	return (
+		<span data-testid="board-view-switch" className="flex flex-wrap items-center gap-2">
+			{CENTER_VIEWS.map((candidate) => (
+				<ToggleSegment
+					key={candidate}
+					testid={`board-view-${candidate}`}
+					label={t(CENTER_VIEW_LABELS[candidate])}
+					active={view === candidate}
+					onClick={() => onView(candidate)}
+				/>
+			))}
+		</span>
+	);
+}
+
 function BoardHeader({
 	view,
-	compact,
-	mode,
-	boardMode,
-	onMode,
+	center,
+	onView,
 	onPreset,
 	onFollow,
 	onWipLimits,
-	onBoardMode,
 	onGithub,
 	onGithubFilter,
 	onGithubRefresh,
@@ -628,16 +601,11 @@ function BoardHeader({
 	onPropose,
 }: {
 	view: BoardView | null;
-	/** A narrow pane: the WIP figures stay in the column headers and the toggle is an icon. */
-	compact: boolean;
-	mode: BoardMode;
-	boardMode: boolean;
-	onMode: (mode: BoardMode) => void;
+	center: CenterView;
+	onView: (view: CenterView) => void;
 	onPreset: (preset: Preset) => void;
 	onFollow: (followSelection: boolean) => void;
 	onWipLimits: (limits: BoardSettings["wipLimits"]) => void;
-	/** Absent on a host without layout modes. */
-	onBoardMode: (() => void) | null;
 	onGithub: (enabled: boolean) => void;
 	onGithubFilter: (filter: GithubFilter) => void;
 	onGithubRefresh: () => void;
@@ -649,8 +617,8 @@ function BoardHeader({
 	return (
 		<div
 			role="toolbar"
-			aria-label={t("board.tool.title")}
-			className="flex min-h-panel-header-row shrink-0 flex-wrap items-center gap-4 border-border-default border-b px-8 py-2"
+			aria-label={t("board.title")}
+			className="flex min-h-panel-header-row shrink-0 flex-wrap items-center gap-8 border-border-default border-b bg-container-header-bg px-8 py-2"
 		>
 			<span
 				data-testid="board-project"
@@ -658,14 +626,12 @@ function BoardHeader({
 			>
 				{view?.projectName ?? ""}
 			</span>
+			<ViewSwitch view={center} onView={onView} />
 			{view ? (
 				<PresetMenu preset={view.settings.preset} presets={presetsFor(view)} onPreset={onPreset} />
 			) : null}
-			{view && !compact ? <WipChips view={view} /> : null}
+			{view ? <WipChips view={view} /> : null}
 			<span className="ml-auto flex items-center gap-2">
-				{onBoardMode ? (
-					<ModeToggle active={boardMode} compact={compact} onToggle={onBoardMode} />
-				) : null}
 				{view ? (
 					<GithubMenu
 						github={view.github}
@@ -678,42 +644,6 @@ function BoardHeader({
 					<BoardSettingsMenu settings={view.settings} onFollow={onFollow} onSave={onWipLimits} />
 				) : null}
 				<BoardMoreMenu onPublish={onPublish} />
-				<IconButton
-					icon={RiKanbanView2}
-					size="s"
-					label={t("board.view.board")}
-					data-testid="board-view-board"
-					aria-pressed={mode === "board"}
-					selected={mode === "board"}
-					onClick={() => onMode("board")}
-				/>
-				<IconButton
-					icon={RiListUnordered}
-					size="s"
-					label={t("board.view.list")}
-					data-testid="board-view-list"
-					aria-pressed={mode === "list"}
-					selected={mode === "list"}
-					onClick={() => onMode("list")}
-				/>
-				<IconButton
-					icon={RiRoadMapLine}
-					size="s"
-					label={t("board.view.roadmap")}
-					data-testid="board-view-roadmap"
-					aria-pressed={mode === "roadmap"}
-					selected={mode === "roadmap"}
-					onClick={() => onMode("roadmap")}
-				/>
-				<IconButton
-					icon={RiBarChartBoxLine}
-					size="s"
-					label={t("board.view.insights")}
-					data-testid="board-view-insights"
-					aria-pressed={mode === "insights"}
-					selected={mode === "insights"}
-					onClick={() => onMode("insights")}
-				/>
 				{view?.openspec?.present ? (
 					<Button
 						variant="outline"
@@ -740,6 +670,53 @@ function BoardHeader({
 	);
 }
 
+/** What the navigation narrows the cards to, each named, with Clear. */
+function FilterLine({
+	selection,
+	initiativeTitle,
+}: {
+	selection: BoardSelection;
+	initiativeTitle: string | null;
+}) {
+	const t = useT();
+	const { filters } = selection;
+	const names = [
+		...(selection.initiativeId
+			? [
+					initiativeTitle
+						? `${selection.initiativeId} · ${initiativeTitle}`
+						: selection.initiativeId,
+				]
+			: []),
+		...(selection.queue ? [t(QUEUE_LABELS[selection.queue])] : []),
+		...filters.types.map((type) => t(TYPE_LABELS[type])),
+		...filters.sizes,
+		...(filters.mine ? [t("board.nav.filter.mine")] : []),
+	];
+	return (
+		<div
+			data-testid="board-filters-active"
+			className="flex shrink-0 flex-wrap items-center gap-4 border-border-muted border-b px-8 py-2 tr-text-metadata text-text-muted"
+		>
+			<span>{t("board.nav.filtered")}</span>
+			{names.map((name) => (
+				<span key={name} className="rounded-xs bg-control-bg-hovered px-4 text-text-default">
+					{name}
+				</span>
+			))}
+			<Button
+				variant="ghost"
+				size="s"
+				iconLeft={RiFilterOffLine}
+				data-testid="board-filters-clear"
+				onClick={clearFilters}
+			>
+				{t("board.nav.clear")}
+			</Button>
+		</div>
+	);
+}
+
 function moveCommand(
 	keys: Pick<LocalKeys, "match">,
 	event: KeyboardEvent<HTMLElement>,
@@ -757,7 +734,7 @@ function errorMessage(t: Translator, error: unknown): string {
 export function BoardBody({
 	view,
 	mode,
-	layout,
+	filtered = false,
 	sort,
 	actions,
 	triage,
@@ -768,8 +745,9 @@ export function BoardBody({
 	onNew,
 }: {
 	view: BoardView;
-	mode: BoardMode;
-	layout: BoardLayout;
+	mode: CardsView;
+	/** The navigation narrows the cards: an empty board says no card matches. */
+	filtered?: boolean;
 	sort: ListSort;
 	actions: CardActions;
 	triage: TriageActions;
@@ -780,6 +758,16 @@ export function BoardBody({
 	onNew: () => void;
 }) {
 	const t = useT();
+	if (view.cards.length === 0 && filtered) {
+		return (
+			<div
+				data-testid="board-empty-filtered"
+				className="flex flex-1 items-center justify-center p-16 text-center tr-text-ui text-text-muted"
+			>
+				{t("board.emptyFiltered")}
+			</div>
+		);
+	}
 	if (view.cards.length === 0) {
 		return (
 			<div
@@ -799,7 +787,6 @@ export function BoardBody({
 	return (
 		<BoardColumns
 			view={view}
-			layout={layout}
 			actions={actions}
 			triage={triage}
 			starting={starting}
@@ -809,26 +796,20 @@ export function BoardBody({
 	);
 }
 
-/** Enters or leaves Board mode, on a host that has layout modes. */
-function boardModeToggle(host: PanelHost): (() => void) | null {
-	if (!host.enterLayoutPreset || !host.exitLayoutPreset) return null;
-	return () =>
-		host.layoutPreset === BOARD_MODE
-			? host.exitLayoutPreset?.()
-			: host.enterLayoutPreset?.(BOARD_MODE);
-}
-
-/** The Board side tool: the active workspace's project's board, adaptive to its pane's width. */
-export default function BoardTool({ host }: PanelProps) {
+/** Board view's center: the shown project's board as the picked view, the cards narrowed by the navigation. */
+export default function BoardMain({ host }: PanelProps) {
 	const t = useT();
-	const { workspaceId, projectId } = host.scope;
-	const board = useHostQuery(`${workspaceId}:${projectId}`, (signal) =>
-		loadBoard(host, projectId, signal),
-	);
+	const { projectId } = useBoardProject(host);
+	const selection = useBoardSelection();
+	const board = useHostQuery(`board:${projectId}`, (signal) => loadBoard(host, projectId, signal));
 	useBoardChanged(host, projectId, board.reload);
 	useBoardActivity(host, projectId, board.reload);
+	const roadmap = useHostQuery(selection.initiativeId ? `roadmap:${projectId}` : null, (signal) =>
+		loadRoadmap(host, projectId, signal),
+	);
+	useBoardChanged(host, selection.initiativeId ? projectId : null, roadmap.reload);
 	const inbox = useInbox(host);
-	const [mode, setMode] = useState<BoardMode>("board");
+	const center = selection.view;
 	const [confirmStart, setConfirmStart] = useState<string | null>(null);
 	const [sort, setSort] = useState<ListSort>("column");
 	const { node: root, width, attach } = useMeasuredRoot();
@@ -840,6 +821,11 @@ export default function BoardTool({ host }: PanelProps) {
 	const [focusCard, setFocusCard] = useState<{ id: string; column: string } | null>(null);
 	const keys = useLocalKeys(CARDS_SCOPE, CARD_COMMANDS);
 	const view = board.state.kind === "ready" ? board.state.value : null;
+	const initiatives = roadmap.state.kind === "ready" ? roadmap.state.value.initiatives : [];
+	const shown =
+		view && filtering(selection)
+			? { ...view, cards: filterCards(view.cards, selection, initiatives) }
+			: view;
 	useEffect(() => {
 		if (!focusCard || !root) return;
 		const selector = `[data-card-id="${CSS.escape(focusCard.id)}"][data-column="${CSS.escape(focusCard.column)}"] [data-testid="board-card-open"]`;
@@ -926,25 +912,24 @@ export default function BoardTool({ host }: PanelProps) {
 		});
 	const refreshIssues = () => void write(() => refreshGithub(host, projectId));
 	const layout = boardLayout(width);
+	const cardsShown = center === "board" || center === "list";
+	const onError = (error: unknown) => setNotice(errorMessage(t, error));
 	return (
 		<div
 			ref={attach}
-			data-testid="board-tool"
-			data-layout={layout}
-			data-mode={mode}
+			data-testid="board-main"
+			data-view={center}
+			data-project-id={projectId}
 			data-key-scope={CARDS_SCOPE}
 			className="flex h-full min-h-0 flex-col bg-container-sidebar-bg"
 		>
 			<BoardHeader
 				view={view}
-				compact={layout === "stacked"}
-				mode={mode}
-				boardMode={host.layoutPreset === BOARD_MODE}
-				onMode={setMode}
+				center={center}
+				onView={selectCenterView}
 				onPreset={(preset) => void write(() => setPreset(host, projectId, preset))}
 				onFollow={(follow) => void write(() => setFollowSelection(host, projectId, follow))}
 				onWipLimits={(limits) => void write(() => setWipLimits(host, projectId, limits))}
-				onBoardMode={boardModeToggle(host)}
 				onGithub={showGithub}
 				onGithubFilter={(filter) => void write(() => setGithub(host, projectId, { filter }))}
 				onGithubRefresh={refreshIssues}
@@ -960,7 +945,7 @@ export default function BoardTool({ host }: PanelProps) {
 					onClose={() => setPublishing(false)}
 				/>
 			) : null}
-			<InboxStrip host={host} items={inbox} compact={layout === "stacked"} />
+			<InboxStrip host={host} items={inbox} />
 			{view && view.github.error !== hiddenError ? (
 				<GithubBanner
 					github={view.github}
@@ -991,14 +976,27 @@ export default function BoardTool({ host }: PanelProps) {
 					/>
 				</div>
 			) : null}
-			{mode === "insights" ? (
-				<InsightsPane host={host} layout={layout} />
-			) : mode === "roadmap" ? (
+			{cardsShown && filtering(selection) ? (
+				<FilterLine
+					selection={selection}
+					initiativeTitle={
+						initiatives.find((initiative) => initiative.id === selection.initiativeId)?.title ??
+						null
+					}
+				/>
+			) : null}
+			{center === "insights" ? (
+				<InsightsPane host={host} projectId={projectId} layout={layout} />
+			) : center === "discovery" ? (
+				<DiscoveryPane host={host} projectId={projectId} layout={layout} onError={onError} />
+			) : center === "roadmap" || center === "graph" || center === "timeline" ? (
 				<RoadmapPane
 					host={host}
+					projectId={projectId}
+					kind={center}
 					layout={layout}
 					board={view}
-					onError={(error) => setNotice(errorMessage(t, error))}
+					onError={onError}
 				/>
 			) : board.state.kind === "loading" ? (
 				<LoadingRegion
@@ -1020,11 +1018,11 @@ export default function BoardTool({ host }: PanelProps) {
 						{t("board.retry")}
 					</Button>
 				</div>
-			) : (
+			) : shown ? (
 				<BoardBody
-					view={board.state.value}
-					mode={mode}
-					layout={layout}
+					view={shown}
+					mode={center}
+					filtered={filtering(selection)}
 					sort={sort}
 					actions={actions}
 					triage={triage}
@@ -1034,7 +1032,7 @@ export default function BoardTool({ host }: PanelProps) {
 					onDragEnd={onDragEnd}
 					onNew={() => setCreating(true)}
 				/>
-			)}
+			) : null}
 		</div>
 	);
 }

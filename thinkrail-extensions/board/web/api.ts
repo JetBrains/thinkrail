@@ -1,5 +1,5 @@
 import type { ChatState, ThinkingLevel } from "@thinkrail/contracts";
-import type { PanelHost, PanelPeekEntry } from "@thinkrail/extension-api/web";
+import type { PanelHost, PanelPeekEntry, StatusItemHost } from "@thinkrail/extension-api/web";
 
 type Querying = Pick<PanelHost, "query">;
 
@@ -27,8 +27,8 @@ export const BOARD_CHANGED = "board.changed";
 /** A bound chat's tool start: only cards' last actions moved, so tiles re-read and the inbox does not. */
 export const BOARD_ACTIVITY = "board.activity";
 export const CARD_PANEL = "card";
-/** The board's `layoutPresets` entry: Board mode. */
-export const BOARD_MODE = "board";
+/** The board's `views` entry: Board view. */
+export const BOARD_VIEW = "board";
 
 export type Verdict = "met" | "unmet" | "untested";
 export const VERDICTS: readonly Verdict[] = ["met", "unmet", "untested"];
@@ -385,6 +385,105 @@ export async function loadInbox(host: Querying, signal?: AbortSignal): Promise<I
 	return checked(await host.query("inbox", {}, signal), isInbox).items;
 }
 
+/** An open project's board at a glance, for Board view's project switcher. */
+export interface ProjectSummary {
+	projectId: string;
+	name: string;
+	cards: number;
+}
+
+/** A logged move of any open project's card, for the activity feed. */
+export interface ActivityEntry extends Transition {
+	projectId: string;
+	projectName: string;
+	/** Absent once the card is deleted. */
+	title?: string;
+}
+
+export type AgentState = "working" | "waiting" | "failed";
+
+/** An agent across the open projects: an active card's latest attempt whose chat works, waits or failed. */
+export interface AgentEntry {
+	projectId: string;
+	projectName: string;
+	cardId: string;
+	title: string;
+	workspaceId: string;
+	sessionId: string;
+	state: AgentState;
+	startedAt: number;
+	plan: { open: number; total: number } | null;
+	lastAction?: LastAction;
+}
+
+function isProjects(value: unknown): value is { projects: ProjectSummary[] } {
+	return (
+		isObject(value) &&
+		Array.isArray(value.projects) &&
+		value.projects.every(
+			(project) =>
+				isObject(project) &&
+				typeof project.projectId === "string" &&
+				typeof project.name === "string" &&
+				typeof project.cards === "number",
+		)
+	);
+}
+
+function isActivity(value: unknown): value is { entries: ActivityEntry[] } {
+	return (
+		isObject(value) &&
+		Array.isArray(value.entries) &&
+		value.entries.every(
+			(entry) =>
+				isObject(entry) &&
+				typeof entry.projectId === "string" &&
+				typeof entry.cardId === "string" &&
+				typeof entry.at === "number" &&
+				typeof entry.actor === "string",
+		)
+	);
+}
+
+const AGENT_STATES: readonly unknown[] = ["working", "waiting", "failed"];
+
+function isAgents(value: unknown): value is { agents: AgentEntry[] } {
+	return (
+		isObject(value) &&
+		Array.isArray(value.agents) &&
+		value.agents.every(
+			(agent) =>
+				isObject(agent) &&
+				typeof agent.projectId === "string" &&
+				typeof agent.cardId === "string" &&
+				typeof agent.workspaceId === "string" &&
+				typeof agent.sessionId === "string" &&
+				typeof agent.startedAt === "number" &&
+				AGENT_STATES.includes(agent.state),
+		)
+	);
+}
+
+export async function loadProjects(
+	host: Querying,
+	signal?: AbortSignal,
+): Promise<ProjectSummary[]> {
+	return checked(await host.query("projects.list", {}, signal), isProjects).projects;
+}
+
+/** The newest moves across the open projects, or of one. */
+export async function loadActivity(
+	host: Querying,
+	params: { projectId?: string; limit?: number },
+	signal?: AbortSignal,
+): Promise<ActivityEntry[]> {
+	return checked(await host.query("activity.get", params, signal), isActivity).entries;
+}
+
+export async function loadAgents(host: Querying, signal?: AbortSignal): Promise<AgentEntry[]> {
+	return checked(await host.query("agents.get", {}, signal), isAgents).agents;
+}
+
 export async function listModels(host: PanelHost, signal?: AbortSignal): Promise<HostModel[]> {
 	const value = await host.query("models.list", {}, signal);
 	return isObject(value) && Array.isArray(value.models) ? (value.models as HostModel[]) : [];
@@ -543,6 +642,34 @@ export function cardPeekEntry(
 		params: { projectId, cardId: card.id },
 		title: `${shownId(card)} · ${card.title}`,
 	};
+}
+
+/** The Peek entry of a card known only by its id (an activity line's, an agent's). */
+export function cardIdPeekEntry(projectId: string, cardId: string, title?: string): PanelPeekEntry {
+	return {
+		kind: "extension",
+		panel: CARD_PANEL,
+		params: { projectId, cardId },
+		title: title ? `${cardId} · ${title}` : cardId,
+	};
+}
+
+const AGENT_ORDER: Readonly<Record<AgentState, number>> = { waiting: 0, failed: 1, working: 2 };
+
+/** The agents list's order: those waiting for the human first, then the failed, then the working; oldest first within. */
+export function sortAgents(agents: readonly AgentEntry[]): AgentEntry[] {
+	return [...agents].sort(
+		(a, b) => AGENT_ORDER[a.state] - AGENT_ORDER[b.state] || a.startedAt - b.startedAt,
+	);
+}
+
+const DAY_MS = 24 * 60 * 60_000;
+
+/** How long an agent has been on its attempt: as the packet words a duration, in days past two. */
+export function elapsedText(startedAt: number, now: number): string {
+	const elapsed = Math.max(0, now - startedAt);
+	if (elapsed < 2 * DAY_MS) return durationText(elapsed);
+	return `${Math.floor(elapsed / DAY_MS)}d`;
 }
 
 /**
@@ -773,6 +900,24 @@ export function inboxTarget(
 	return live?.open
 		? { projectId: item.projectId, workspaceId: live.workspaceId, sessionId: live.sessionId }
 		: null;
+}
+
+/**
+ * An inbox row's Answer or Retry: the card in Peek, whose Chat tab answers the agent there — no workspace
+ * switch; on Project Home, where Peek shows nothing, the attempt's chat itself.
+ */
+export function answerInbox(
+	host: Pick<StatusItemHost, "peek" | "openChat" | "scope">,
+	item: InboxItem,
+): "peek" | "chat" | null {
+	if (host.scope) {
+		host.peek(cardPeekEntry(item.projectId, item.card));
+		return "peek";
+	}
+	const target = inboxTarget(item);
+	if (!target) return null;
+	host.openChat(target);
+	return "chat";
 }
 
 /** A limit of 0 is no limit; a count past a limit is over it. */

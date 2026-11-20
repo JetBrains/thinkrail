@@ -147,13 +147,17 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   lists the built-in, personal and trusted current-workspace roles with their model policies; global
   per-role switches block new launches without interrupting work already running, beside delegation
   defaults and workspace concurrency controls ([[submodule-web-panels]]).
-- **Board** — a board per project, as an extension. A card starts agent work in a new workspace; host
-  events (start, settle, merge) move it across a preset's columns while a human's move is a logged
-  override; each card badges its agent's live state and last action and opens in Peek with its details,
-  attempts and Start. A cross-project "Needs you" inbox, on the board and as a topbar counter, lists the
-  cards whose agent waits for an answer or failed; WIP limits flag what waits for the human and cap the
-  running agents; cards an agent files wait in Triage to be accepted as a whole; Board mode widens the
-  board and restores the layout on exit. Cards also come from the workspaces' task-specs (an unbound one
+- **Board** — a board per project, as an extension. **Board view** gives it the whole workbench and puts
+  the previous layout back exactly on exit: the project, its initiatives, queues and saved filters on the
+  left, the board (or its list, roadmap, graph, timeline, insights or discovery) in the center, the
+  selected card in Peek and what is happening — the moves and the running agents across projects — below.
+  A card starts agent work in a new workspace; host events (start, settle, merge) move it across a
+  preset's columns while a human's move is a logged override; each card badges its agent's live state and
+  last action and opens in Peek with its details, **its attempt's live chat, where the human answers the
+  agent without leaving the board**, its review and its activity. A cross-project "Needs you" inbox, on
+  the board and as a topbar counter, lists the cards whose agent waits for an answer or failed; WIP limits
+  flag what waits for the human and cap the running agents; cards an agent files wait in Triage to be
+  accepted as a whole. Cards also come from the workspaces' task-specs (an unbound one
   adopted as a card, its deferrals sent into Triage), the open GitHub issues through the user's `gh` (a
   started issue's PR says `Closes #N`; the board never edits an issue) and OpenSpec changes, proposed,
   applied and archived through the user's `openspec` CLI and skills (a Spec-driven preset; without the CLI

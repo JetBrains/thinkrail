@@ -2,9 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { LayoutAttention } from "../../lib";
+import type { AuxiliaryRailFooterItem } from "./AuxiliaryRail";
 import { LAYOUT_TOOLS, toolTab } from "./model";
 import type { LayoutToolId, WorkspaceLayoutDocument } from "./types";
-import { Workbench, type WorkbenchPeek } from "./Workbench";
+import { Workbench, type WorkbenchCenterOverride, type WorkbenchPeek } from "./Workbench";
 
 const layout: WorkspaceLayoutDocument = {
 	version: 2,
@@ -32,7 +33,14 @@ const attention: LayoutAttention = {
 
 const noop = () => {};
 
-function render(peek: WorkbenchPeek | undefined, document = layout): string {
+function render(
+	peek: WorkbenchPeek | undefined,
+	document = layout,
+	extra: {
+		centerOverride?: WorkbenchCenterOverride;
+		leftRailViews?: AuxiliaryRailFooterItem[];
+	} = {},
+): string {
 	return renderToStaticMarkup(
 		<TooltipProvider>
 			<Workbench
@@ -56,6 +64,7 @@ function render(peek: WorkbenchPeek | undefined, document = layout): string {
 				onNewChat={noop}
 				onNewTerminal={noop}
 				{...(peek ? { peek } : {})}
+				{...extra}
 			/>
 		</TooltipProvider>,
 	);
@@ -129,5 +138,50 @@ describe("the optional right rail", () => {
 		const html = render(undefined, allLeft(LAYOUT_TOOLS.filter((tool) => tool !== "files")));
 		expect(html).toContain('data-testid="right-layout-rail"');
 		expect(html).toContain('data-testid="tool-rail-files"');
+	});
+});
+
+describe("a center override", () => {
+	const withTabs: WorkspaceLayoutDocument = {
+		...layout,
+		center: {
+			kind: "group",
+			id: "center",
+			tabs: [{ kind: "file", id: "a.ts", name: "a.ts", path: "a.ts" }],
+		},
+	};
+	const override: WorkbenchCenterOverride = {
+		id: "view-center",
+		label: "Board view",
+		render: () => <span data-view-body="" />,
+	};
+
+	test("takes the center region's place while the document keeps its center groups", () => {
+		const html = render(peek(true), withTabs, { centerOverride: override });
+		expect(html).toMatch(
+			/data-testid="center-override" data-region="view-center" data-region-kind="center"/,
+		);
+		expect(html).toContain("data-view-body");
+		expect(html).not.toContain('data-testid="center-group"');
+		expect(html).toContain('data-region="peek" data-region-kind="peek" data-open="true"');
+		expect(withTabs.center).toEqual({
+			kind: "group",
+			id: "center",
+			tabs: [{ kind: "file", id: "a.ts", name: "a.ts", path: "a.ts" }],
+		});
+		const plain = render(peek(true), withTabs);
+		expect(plain).toContain('data-testid="center-group"');
+		expect(plain).not.toContain("center-override");
+	});
+
+	test("shows the views' toggles in the left rail after its tools", () => {
+		const html = render(undefined, layout, {
+			leftRailViews: [
+				{ key: "view:board", render: () => <button type="button" data-view-toggle="" /> },
+			],
+		});
+		expect(html.indexOf("data-view-toggle")).toBeGreaterThan(
+			html.indexOf('data-testid="tool-rail-projects"'),
+		);
 	});
 });

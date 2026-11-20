@@ -39,11 +39,10 @@ test("Analyze suggests an idea's value and effort, each with reasons", {
 	await page.setViewportSize({ width: 1720, height: 1000 });
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
-	await page.getByTestId("tool-rail-ext:board:board").click();
-	const board = page.getByTestId("board-tool");
+	await page.getByTestId("view-rail-board:board").click();
+	const board = page.getByTestId("board-main");
 	await expect(board).toBeVisible();
-	await board.getByTestId("board-view-roadmap").click();
-	await board.getByTestId("board-roadmap-view-discovery").click();
+	await board.getByTestId("board-view-discovery").click();
 
 	await board.getByTestId("board-idea-new").click();
 	await board.getByTestId("board-idea-new-title").fill("A CONTRIBUTING guide for new contributors");
@@ -77,6 +76,8 @@ test("Analyze suggests an idea's value and effort, each with reasons", {
 		)
 		.toBe(true);
 	const idea = (await ideas(page)).find((candidate) => candidate.id === id);
+	await page.getByTestId("view-rail-board:board").click();
+	await expect(board).toBeVisible();
 	for (const score of [idea?.value, idea?.effort]) {
 		expect(score?.suggested).toBe(true);
 		expect(score?.score).toBeGreaterThanOrEqual(1);

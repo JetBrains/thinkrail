@@ -99,7 +99,18 @@ export interface WorkbenchProps {
 	onGestureCanceled?: () => void;
 	chromeShortcuts?: WorkbenchChromeShortcuts;
 	leftRailFooter?: readonly AuxiliaryRailFooterItem[];
+	/** Toggles after the left rail's tools: the extensions' views. */
+	leftRailViews?: readonly AuxiliaryRailFooterItem[];
 	peek?: WorkbenchPeek;
+	/** Shown in place of the center groups, which stay in the document untouched (an extension's view). */
+	centerOverride?: WorkbenchCenterOverride;
+}
+
+export interface WorkbenchCenterOverride {
+	/** The center region's id while it shows, for the region ring. */
+	id: string;
+	label: string;
+	render: () => ReactNode;
 }
 
 export interface WorkbenchPeek {
@@ -503,6 +514,7 @@ export function navigationClockSnapshot(attention: LayoutAttention): string {
 export function visibleFocusableGroups(
 	document: WorkspaceLayoutDocument,
 	peekOpen = false,
+	centerShown = true,
 ): Array<{
 	location: LayoutGroupLocation;
 	tabs: LayoutTab[];
@@ -516,11 +528,13 @@ export function visibleFocusableGroups(
 					tabControlsRendered: !group.folded,
 				}))
 			: []),
-		...collectCenterGroups(document.center).map((group) => ({
-			location: { area: "center" as const, groupId: group.id },
-			tabs: group.tabs,
-			tabControlsRendered: true,
-		})),
+		...(centerShown
+			? collectCenterGroups(document.center).map((group) => ({
+					location: { area: "center" as const, groupId: group.id },
+					tabs: group.tabs,
+					tabControlsRendered: true,
+				}))
+			: []),
 		...(document.right.visible && !peekOpen
 			? document.right.groups.map((group) => ({
 					location: { area: "right" as const, groupId: group.id },
@@ -686,6 +700,26 @@ export const PeekRegion = memo(function PeekRegion({
 	);
 });
 PeekRegion.displayName = "PeekRegion";
+
+export const CenterOverrideRegion = memo(function CenterOverrideRegion({
+	override,
+}: {
+	override: WorkbenchCenterOverride;
+}) {
+	return (
+		<section
+			data-testid="center-override"
+			data-region={override.id}
+			data-region-kind="center"
+			tabIndex={-1}
+			aria-label={override.label}
+			className="relative isolate flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-container-content-bg outline-none"
+		>
+			{override.render()}
+		</section>
+	);
+});
+CenterOverrideRegion.displayName = "CenterOverrideRegion";
 
 export const GroupTabBody = memo(function GroupTabBody({
 	tab,

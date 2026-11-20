@@ -236,7 +236,7 @@ roster's catalog reads ([[submodule-web-panels]]).
   singleton tools, and restore targets for this frontend surface; `workspaceViewsByWorkspace` carries each
   workspace's resource placements, order, and preview identities; `layoutAttentionByWorkspace` carries its
   selection, last focus, and navigation clocks; and local preset/limit/Peek-width preferences
-  (`LocalLayoutPreferences`, `peekWidth` and the layout mode `layoutMode` (`LocalLayoutMode`) optional) sit
+  (`LocalLayoutPreferences`, `peekWidth` and the extension view `layoutView` (`LocalLayoutView`) optional) sit
   beside the frame.
   These are web-local types from `shell/layout`, not wire snapshots. `layoutDocumentsByWorkspace` is an
   identity-stable **derived projection cache** rebuilt only from frame + view for existing selectors/effects;

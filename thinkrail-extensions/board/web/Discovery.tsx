@@ -730,21 +730,22 @@ export function DiscoveryView({
 }
 
 /**
- * The Roadmap area's Discovery view: the board's `discovery.get`, re-read on `board.changed`; an idea
+ * Board view's Discovery: the board's `discovery.get`, re-read on `board.changed`; an idea
  * opens in Peek, "What changed?" opens the competitor-watch chat.
  */
 export function DiscoveryPane({
 	host,
+	projectId,
 	layout,
 	onError,
 }: {
 	host: PanelHost;
+	projectId: string;
 	layout: BoardLayout;
 	onError: (error: unknown) => void;
 }) {
 	const t = useT();
-	const { workspaceId, projectId } = host.scope;
-	const discovery = useHostQuery(`discovery:${workspaceId}:${projectId}`, (signal) =>
+	const discovery = useHostQuery(`discovery:${projectId}`, (signal) =>
 		loadDiscovery(host, projectId, signal),
 	);
 	useBoardChanged(host, projectId, discovery.reload);

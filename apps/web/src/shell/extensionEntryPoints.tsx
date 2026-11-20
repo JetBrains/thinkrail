@@ -1,7 +1,13 @@
 import { type Translator, t as translate, useT } from "@thinkrail/locales/react";
 import { useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { extensionSideTools, type RegisteredPanel, type RegisteredSideTool } from "../extensions";
+import {
+	extensionSideTools,
+	extensionViews,
+	type RegisteredPanel,
+	type RegisteredSideTool,
+	type RegisteredView,
+} from "../extensions";
 import { type ChatAction, type ChatActionTarget, chatDisplayName } from "../lib";
 import {
 	selectChatFirstPrompt,
@@ -19,6 +25,7 @@ import {
 	useExtensionCatalog,
 	useOpenableExtensionPanels,
 } from "./extensionPanelHost";
+import { toggleExtensionView, useActiveViewId, viewSideToolIds } from "./extensionViews";
 import { useKeybindingKeys } from "./keybindingState";
 import {
 	AuxiliaryRailActionButton,
@@ -143,6 +150,60 @@ export function useLeftRailFooter(): readonly AuxiliaryRailFooterItem[] {
 	return useMemo(() => railFooterItems(panels, placeable), [panels, placeable]);
 }
 
+function ViewRailButton({
+	view,
+	active,
+	control,
+}: {
+	view: RegisteredView;
+	active: boolean;
+	control: AuxiliaryRailControlProps;
+}) {
+	const t = useT();
+	return (
+		<AuxiliaryRailActionButton
+			region="left"
+			icon={view.declaration.icon}
+			label={t(view.declaration.title)}
+			testId={`view-rail-${view.id}`}
+			control={control}
+			pressed={active}
+			onClick={() => toggleExtensionView(view)}
+		/>
+	);
+}
+
+export function railViewItems(
+	views: readonly RegisteredView[],
+	activeId: string | null,
+): AuxiliaryRailFooterItem[] {
+	return views.map((view) => ({
+		key: `view:${view.id}`,
+		render: (control) => (
+			<ViewRailButton view={view} active={view.id === activeId} control={control} />
+		),
+	}));
+}
+
+/** The views the rail and the palette may offer: those whose extension is on and listed by the host. */
+export function useOpenableViews(): readonly RegisteredView[] {
+	const protocolVersion = useAppStore((state) => state.protocolVersion);
+	const disabled = useAppStore((state) => state.disabledExtensions);
+	const views = extensionViews();
+	const { read } = useExtensionCatalog(views.length > 0 && supportsExtensionQuery(protocolVersion));
+	return useMemo(
+		() => openableContributions({ disabled, protocolVersion, catalog: read, items: views }),
+		[disabled, protocolVersion, read, views],
+	);
+}
+
+/** One toggle per openable view after the left rail's tools, pressed while its view is on. */
+export function useLeftRailViews(): readonly AuxiliaryRailFooterItem[] {
+	const views = useOpenableViews();
+	const activeId = useActiveViewId();
+	return useMemo(() => railViewItems(views, activeId), [views, activeId]);
+}
+
 /** The layout's description of the extensions' side tools; only an openable one waits unplaced in its rail. */
 function layoutExtensionTools(
 	tools: readonly RegisteredSideTool[],
@@ -161,14 +222,22 @@ function layoutExtensionTools(
 	);
 }
 
-/** The side tools whose extension is on, on a host that serves it and — once read — lists it. */
+const VIEW_SIDE_TOOLS = viewSideToolIds();
+
+/**
+ * The side tools whose extension is on, on a host that serves it and — once read — lists it; a view's own
+ * tools live in their view and are offered nowhere else.
+ */
 export function useOpenableSideTools(): readonly RegisteredSideTool[] {
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
 	const disabled = useAppStore((state) => state.disabledExtensions);
 	const tools = extensionSideTools();
 	const { read } = useExtensionCatalog(tools.length > 0 && supportsExtensionQuery(protocolVersion));
 	return useMemo(
-		() => openableContributions({ disabled, protocolVersion, catalog: read, items: tools }),
+		() =>
+			openableContributions({ disabled, protocolVersion, catalog: read, items: tools }).filter(
+				(tool) => !VIEW_SIDE_TOOLS.has(tool.id),
+			),
 		[disabled, protocolVersion, read, tools],
 	);
 }

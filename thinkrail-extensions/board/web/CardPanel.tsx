@@ -43,6 +43,7 @@ import {
 	TaskSpecStatus,
 } from "./CardParts";
 import { CardRoadmap } from "./CardRoadmap";
+import { CardChat, type CardTab, CardTabBar, defaultCardTab } from "./CardTabs";
 import { ItemList, SavedInput, SavedTextarea, Section } from "./Fields";
 import { ACTOR_LABELS, columnTitle, TYPE_LABELS, WORKFLOW_LABELS } from "./labels";
 import { OpenspecSection } from "./OpenspecParts";
@@ -630,9 +631,6 @@ function CardDetails({
 			<Section title={t("board.attempts.title")}>
 				<Attempts host={host} projectId={projectId} card={card} />
 			</Section>
-			{card.virtual || card.attempts.length === 0 ? null : (
-				<SmartReviewSection host={host} projectId={projectId} card={card} onChanged={onReload} />
-			)}
 			{card.source.kind === "openspec" ? null : (
 				<StartSection
 					key={`${card.id}:${card.type}:${card.size ?? ""}`}
@@ -643,15 +641,76 @@ function CardDetails({
 					onStarted={onReload}
 				/>
 			)}
-			<Section title={t("board.activity.title")}>
-				<Activity transitions={detail.transitions} />
-			</Section>
 			{card.virtual ? null : <DeleteCard onDelete={onDelete} />}
 		</div>
 	);
 }
 
-/** A card in Peek: its details, attempts, the Start form and its activity. */
+/** A stored card's tabs — its details, its attempt's live chat, its smart review, its activity — opened on the one its state asks for when it loads. */
+function TabbedCard({
+	host,
+	detail,
+	onPatch,
+	onWrite,
+	onDelete,
+	onReload,
+}: {
+	host: PanelHost;
+	detail: CardDetail;
+	onPatch: (patch: CardPatch) => void;
+	onWrite: (run: () => Promise<unknown>) => void;
+	onDelete: () => void;
+	onReload: () => void;
+}) {
+	const t = useT();
+	const { card, projectId } = detail;
+	const [tab, setTab] = useState<CardTab>(() => defaultCardTab(card));
+	return (
+		<div data-testid="board-card-tabbed" data-tab={tab} className="flex min-h-0 flex-1 flex-col">
+			<CardTabBar tab={tab} onTab={setTab} />
+			{tab === "chat" ? (
+				<CardChat host={host} projectId={projectId} card={card} />
+			) : (
+				<div className="min-h-0 flex-1 overflow-auto">
+					{tab === "details" ? (
+						<CardDetails
+							host={host}
+							detail={detail}
+							onPatch={onPatch}
+							onWrite={onWrite}
+							onDelete={onDelete}
+							onReload={onReload}
+						/>
+					) : tab === "review" ? (
+						<div className="p-12">
+							{card.virtual || card.attempts.length === 0 ? (
+								<p
+									data-testid="board-card-review-none"
+									className="tr-text-metadata text-text-subtle"
+								>
+									{t("board.card.review.none")}
+								</p>
+							) : (
+								<SmartReviewSection
+									host={host}
+									projectId={projectId}
+									card={card}
+									onChanged={onReload}
+								/>
+							)}
+						</div>
+					) : (
+						<div className="p-12">
+							<Activity transitions={detail.transitions} />
+						</div>
+					)}
+				</div>
+			)}
+		</div>
+	);
+}
+
+/** A card in Peek, in tabs: its details (attempts and Start among them), its chat, its review and its activity. */
 export default function CardPanel({ host, params }: PanelProps) {
 	const t = useT();
 	const cardId = params.cardId ?? "";
@@ -686,7 +745,7 @@ export default function CardPanel({ host, params }: PanelProps) {
 		<div
 			data-testid="board-card-panel"
 			data-card-id={cardId}
-			className="h-full min-h-0 overflow-auto"
+			className="flex h-full min-h-0 flex-col"
 		>
 			{error ? (
 				<p role="alert" className="px-12 pt-8 tr-text-metadata text-feedback-error wrap-anywhere">
@@ -706,9 +765,11 @@ export default function CardPanel({ host, params }: PanelProps) {
 					</Button>
 				</div>
 			) : canAdopt(card.state.value.card) ? (
-				<TaskSpecCardDetails host={host} detail={card.state.value} onAdopted={card.reload} />
+				<div className="min-h-0 flex-1 overflow-auto">
+					<TaskSpecCardDetails host={host} detail={card.state.value} onAdopted={card.reload} />
+				</div>
 			) : (
-				<CardDetails
+				<TabbedCard
 					host={host}
 					detail={card.state.value}
 					onPatch={(patch) => void write(() => updateCard(host, currentId, patch, projectId ?? ""))}

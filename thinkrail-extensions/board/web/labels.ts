@@ -15,6 +15,8 @@ import type {
 	WipKey,
 	Workflow,
 } from "./api";
+import type { CenterView, Queue } from "./boardState";
+import type { CardTab } from "./CardTabs";
 import type { DiscoveryChat, EvidenceKind, IdeaStatus, Quadrant, ScoreKey } from "./discoveryApi";
 import type {
 	ForecastMiss,
@@ -100,6 +102,30 @@ export const BADGE_LABELS = {
 	finished: "board.badge.finished",
 	unread: "board.badge.unread",
 } as const satisfies Record<AgentBadge, MessageKey>;
+
+export const CENTER_VIEW_LABELS = {
+	board: "board.view.board",
+	list: "board.view.list",
+	roadmap: "board.view.roadmap",
+	graph: "board.view.graph",
+	timeline: "board.view.timeline",
+	insights: "board.view.insights",
+	discovery: "board.view.discovery",
+} as const satisfies Record<CenterView, MessageKey>;
+
+export const QUEUE_LABELS = {
+	needsYou: "board.nav.queue.needsYou",
+	triage: "board.nav.queue.triage",
+	review: "board.nav.queue.review",
+	failed: "board.nav.queue.failed",
+} as const satisfies Record<Queue, MessageKey>;
+
+export const CARD_TAB_LABELS = {
+	details: "board.card.tab.details",
+	chat: "board.card.tab.chat",
+	review: "board.card.tab.review",
+	activity: "board.card.tab.activity",
+} as const satisfies Record<CardTab, MessageKey>;
 
 export const ACTOR_LABELS = {
 	human: "board.actor.human",

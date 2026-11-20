@@ -1,6 +1,7 @@
 import {
 	isLayoutToolId,
 	type LayoutPreset,
+	type LayoutPresetBottomRegion,
 	type LayoutPresetSideRegion,
 } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
@@ -9,9 +10,9 @@ import { getStablePreferenceAdapter, type StablePreferenceAdapter } from "../../
 import { type LayoutAttention, randomId, sameLayoutAttention } from "../../lib";
 import {
 	DEFAULT_LOCAL_LAYOUT_PREFERENCES,
-	type LocalLayoutMode,
 	type LocalLayoutPreferences,
 	type LocalLayoutStatePayload,
+	type LocalLayoutView,
 	toast,
 	useAppStore,
 } from "../../store";
@@ -20,9 +21,9 @@ import {
 	adoptToolSelections,
 	applyProjectedLayoutDocument,
 	applyWorkbenchPreset,
-	applyWorkbenchSides,
+	arrangeWorkbenchView,
 	BUILTIN_LAYOUT_PRESETS,
-	captureWorkbenchPreset,
+	captureWorkbenchSides,
 	changedToolSelections,
 	DEFAULT_LAYOUT_PRESET_ID,
 	emptyWorkspaceView,
@@ -30,14 +31,16 @@ import {
 	instantiateWorkbenchFrame,
 	minimumBottomGroupLimit,
 	minimumSideGroupLimit,
+	type NormalizedLayoutState,
 	normalizePeekWidth,
 	normalizeWorkspaceView,
 	projectWorkspaceLayout,
 	reconcileAttention,
+	restoreWorkbenchSides,
 	sameWorkbenchFrameShape,
 	validateLayoutDocument,
 	type WorkbenchFrame,
-	type WorkbenchSides,
+	type WorkbenchViewArrangement,
 	type WorkspaceLayoutDocument,
 	type WorkspaceViewState,
 } from "../layout";
@@ -425,22 +428,19 @@ function frameGroupIds(frame: WorkbenchFrame): Set<string> {
 	return ids;
 }
 
-const MAX_MODE_GROUPS = 32;
-const MAX_MODE_ID = 200;
+const MAX_VIEW_GROUPS = 32;
+const MAX_VIEW_ID = 200;
+const BOTTOM_ALIGNMENTS: readonly LayoutPresetBottomRegion["alignment"][] = [
+	"center",
+	"center-left",
+	"center-right",
+	"full",
+];
 
-function parseModeSide(value: unknown): LayoutPresetSideRegion | undefined {
-	if (
-		!isRecord(value) ||
-		typeof value.visible !== "boolean" ||
-		typeof value.width !== "number" ||
-		!(value.width > 0 && value.width < 1) ||
-		!Array.isArray(value.groups) ||
-		value.groups.length > MAX_MODE_GROUPS
-	) {
-		return undefined;
-	}
+function parseViewGroups(value: unknown): LayoutPresetSideRegion["groups"] | undefined {
+	if (!Array.isArray(value) || value.length > MAX_VIEW_GROUPS) return undefined;
 	const groups: LayoutPresetSideRegion["groups"] = [];
-	for (const group of value.groups) {
+	for (const group of value) {
 		if (
 			!isRecord(group) ||
 			typeof group.id !== "string" ||
@@ -459,28 +459,73 @@ function parseModeSide(value: unknown): LayoutPresetSideRegion | undefined {
 			tools: [...group.tools],
 		});
 	}
-	return { visible: value.visible, width: value.width, groups };
+	return groups;
 }
 
-/** A malformed or partial mode is dropped on its own: the frame, views and other preferences stand. */
-function parseLayoutMode(value: unknown): LocalLayoutMode | undefined {
-	if (!isRecord(value) || typeof value.id !== "string" || value.id.length > MAX_MODE_ID) {
+function parseViewSide(value: unknown): LayoutPresetSideRegion | undefined {
+	if (
+		!isRecord(value) ||
+		typeof value.visible !== "boolean" ||
+		typeof value.width !== "number" ||
+		!(value.width > 0 && value.width < 1)
+	) {
 		return undefined;
 	}
-	const restore = isRecord(value.restore) ? value.restore : {};
-	const left = parseModeSide(restore.left);
-	const right = parseModeSide(restore.right);
-	if (!left || !right || left.width + right.width >= 1) return undefined;
-	const selected = isRecord(value.selected)
+	const groups = parseViewGroups(value.groups);
+	return groups ? { visible: value.visible, width: value.width, groups } : undefined;
+}
+
+function parseViewBottom(value: unknown): LayoutPresetBottomRegion | undefined {
+	if (
+		!isRecord(value) ||
+		typeof value.visible !== "boolean" ||
+		typeof value.height !== "number" ||
+		!(value.height > 0 && value.height < 1) ||
+		!BOTTOM_ALIGNMENTS.includes(value.alignment as LayoutPresetBottomRegion["alignment"])
+	) {
+		return undefined;
+	}
+	const groups = parseViewGroups(value.groups);
+	return groups
+		? {
+				visible: value.visible,
+				height: value.height,
+				alignment: value.alignment as LayoutPresetBottomRegion["alignment"],
+				groups,
+			}
+		: undefined;
+}
+
+/**
+ * A malformed or partial view is dropped on its own: the frame, views and other preferences stand. A former
+ * Board mode (`layoutMode`, which captured only the sides) becomes its view, `migrated`, with the frame's
+ * bottom as that mode left it: the shell re-enters the view over the restored frame.
+ */
+function parseLayoutView(
+	value: unknown,
+	legacy: unknown,
+	frame: WorkbenchFrame,
+): LocalLayoutView | undefined {
+	const migrated = !isRecord(value) && isRecord(legacy);
+	const source = migrated ? legacy : value;
+	if (!isRecord(source) || typeof source.id !== "string" || source.id.length > MAX_VIEW_ID) {
+		return undefined;
+	}
+	const restore = isRecord(source.restore) ? source.restore : {};
+	const left = parseViewSide(restore.left);
+	const right = parseViewSide(restore.right);
+	const bottom = migrated ? captureWorkbenchSides(frame).bottom : parseViewBottom(restore.bottom);
+	if (!left || !right || !bottom || left.width + right.width >= 1) return undefined;
+	const selected = isRecord(source.selected)
 		? Object.fromEntries(
-				Object.entries(value.selected).filter(
+				Object.entries(source.selected).filter(
 					(entry): entry is [string, string] => typeof entry[1] === "string",
 				),
 			)
 		: {};
 	const restoreTargets: WorkbenchFrame["toolRestoreTargets"] = {};
 	for (const [tool, target] of Object.entries(
-		isRecord(value.restoreTargets) ? value.restoreTargets : {},
+		isRecord(source.restoreTargets) ? source.restoreTargets : {},
 	)) {
 		if (
 			isLayoutToolId(tool) &&
@@ -497,10 +542,19 @@ function parseLayoutMode(value: unknown): LocalLayoutMode | undefined {
 			};
 		}
 	}
-	return { id: value.id, restore: { left, right }, restoreTargets, selected };
+	return {
+		id: source.id,
+		restore: { left, right, bottom },
+		restoreTargets,
+		selected,
+		...(migrated || source.migrated === true ? { migrated: true as const } : {}),
+	};
 }
 
-function parsePreferences(value: unknown): LocalLayoutPreferences | undefined {
+function parsePreferences(
+	value: unknown,
+	frame: WorkbenchFrame,
+): LocalLayoutPreferences | undefined {
 	if (!isRecord(value)) return undefined;
 	if (
 		typeof value.defaultPresetId !== "string" ||
@@ -514,13 +568,13 @@ function parsePreferences(value: unknown): LocalLayoutPreferences | undefined {
 		return undefined;
 	}
 	const peekWidth = normalizePeekWidth(value.peekWidth);
-	const layoutMode = parseLayoutMode(value.layoutMode);
+	const layoutView = parseLayoutView(value.layoutView, value.layoutMode, frame);
 	return {
 		defaultPresetId: value.defaultPresetId,
 		maxSideGroups: Number(value.maxSideGroups),
 		maxBottomGroups: Number(value.maxBottomGroups),
 		...(peekWidth === undefined ? {} : { peekWidth }),
-		...(layoutMode ? { layoutMode } : {}),
+		...(layoutView ? { layoutView } : {}),
 	};
 }
 
@@ -544,9 +598,9 @@ function decodeLocalLayout(raw: string): LocalLayoutStatePayload | undefined {
 		if (!isRecord(parsed.viewsByWorkspace) || !isRecord(parsed.attentionByWorkspace)) {
 			return undefined;
 		}
-		const preferences = parsePreferences(parsed.preferences);
-		if (!preferences) return undefined;
 		const frame = parsed.frame;
+		const preferences = parsePreferences(parsed.preferences, frame);
+		if (!preferences) return undefined;
 		const validGroupIds = frameGroupIds(frame);
 		const viewsByWorkspace: Record<string, WorkspaceViewState> = {};
 		const documentsByWorkspace: Record<string, WorkspaceLayoutDocument> = {};
@@ -782,8 +836,8 @@ export function ensureWorkspaceLayoutState(workspaceId: string): Promise<Workspa
 	return request;
 }
 
-function withoutLayoutMode(preferences: LocalLayoutPreferences): LocalLayoutPreferences {
-	const { layoutMode: _left, ...rest } = preferences;
+function withoutLayoutView(preferences: LocalLayoutPreferences): LocalLayoutPreferences {
+	const { layoutView: _left, ...rest } = preferences;
 	return rest;
 }
 
@@ -840,22 +894,14 @@ export function applyLayoutPresetLocally(preset: LayoutPreset): void {
 	installFrame(
 		next,
 		raisedLimits(
-			withoutLayoutMode(state.localLayoutPreferences),
+			withoutLayoutView(state.localLayoutPreferences),
 			minimumSideGroupLimit(preset),
 			minimumBottomGroupLimit(preset),
 		),
 	);
 }
 
-function sidesResult(sides: WorkbenchSides, options?: Parameters<typeof applyWorkbenchSides>[2]) {
-	const state = useAppStore.getState();
-	if (!state.workbenchFrame) throw new Error("The local workbench frame is not ready");
-	const next = applyWorkbenchSides(
-		{ frame: state.workbenchFrame, viewsByWorkspace: state.workspaceViewsByWorkspace },
-		sides,
-		options,
-	);
-	const limit = Math.max(1, sides.left.groups.length, sides.right.groups.length);
+function validatedFrame(next: NormalizedLayoutState): NormalizedLayoutState {
 	for (const view of Object.values(next.viewsByWorkspace)) {
 		const errors = validateLayoutDocument(projectWorkspaceLayout(next.frame, view), 32, 32);
 		if (errors.length > 0) throw new Error(errors.join(" "));
@@ -864,61 +910,77 @@ function sidesResult(sides: WorkbenchSides, options?: Parameters<typeof applyWor
 		const errors = validateLayoutDocument(emptyWorkspaceProjection(next.frame).document, 32, 32);
 		if (errors.length > 0) throw new Error(errors.join(" "));
 	}
-	return { next, limit };
+	return next;
 }
 
-/** The window's layout mode, or `null`. */
-export function currentLayoutMode(): LocalLayoutMode | null {
-	return useAppStore.getState().localLayoutPreferences.layoutMode ?? null;
+function currentFrameState(): NormalizedLayoutState {
+	const state = useAppStore.getState();
+	if (!state.workbenchFrame) throw new Error("The local workbench frame is not ready");
+	return { frame: state.workbenchFrame, viewsByWorkspace: state.workspaceViewsByWorkspace };
+}
+
+function restoredFrame(view: LocalLayoutView): NormalizedLayoutState {
+	return validatedFrame(
+		restoreWorkbenchSides(currentFrameState(), view.restore, view.restoreTargets),
+	);
+}
+
+/** The extension view this window is in, or `null`. */
+export function currentLayoutView(): LocalLayoutView | null {
+	return useAppStore.getState().localLayoutPreferences.layoutView ?? null;
 }
 
 /**
- * Enters layout mode `id`: captures the frame's sides (and the tool each side group shows) into this
- * window's preferences, then arranges the sides by `sides`. Another mode is left first; the same is a no-op.
+ * Enters view `id`: captures the frame's sides, bottom, restore targets and the tool each of their groups
+ * shows into this window's preferences, then arranges the view (`arrangeWorkbenchView`) as one frame
+ * commit. Another view is left first; the same one is a no-op — unless it was `migrated` from Board mode,
+ * whose sides are restored first and the view arranged over them.
  */
-export function enterLayoutModeLocally(id: string, sides: WorkbenchSides): void {
-	const active = currentLayoutMode();
-	if (active?.id === id) return;
-	if (active) exitLayoutModeLocally();
+export function enterLayoutViewLocally(id: string, arrangement: WorkbenchViewArrangement): void {
+	const active = currentLayoutView();
+	if (active?.id === id && !active.migrated) return;
 	const state = useAppStore.getState();
-	const frame = state.workbenchFrame;
-	if (!frame) throw new Error("The local workbench frame is not ready");
-	const captured = captureWorkbenchPreset(frame, id, id);
-	const sideGroupIds = new Set(
-		[...frame.left.groups, ...frame.right.groups].map((group) => group.id),
+	const base = active ? restoredFrame(active) : currentFrameState();
+	const captured = captureWorkbenchSides(base.frame);
+	const capturedGroupIds = new Set(
+		[...base.frame.left.groups, ...base.frame.right.groups, ...base.frame.bottom.groups].map(
+			(group) => group.id,
+		),
 	);
 	const attention = state.activeWorkspaceId
 		? state.layoutAttentionByWorkspace[state.activeWorkspaceId]
 		: undefined;
-	const selected = Object.fromEntries(
-		Object.entries(attention?.selectedByGroup ?? {}).filter(([groupId]) =>
-			sideGroupIds.has(groupId),
-		),
-	);
-	const { next, limit } = sidesResult(sides);
-	installFrame(next, {
-		...raisedLimits(state.localLayoutPreferences, limit, 1),
-		layoutMode: {
-			id,
-			restore: { left: captured.left, right: captured.right },
-			restoreTargets: { ...frame.toolRestoreTargets },
-			selected,
-		},
-	});
-}
-
-/** Leaves the layout mode: the captured sides come back by group id, with the tools they showed. */
-export function exitLayoutModeLocally(): void {
-	const active = currentLayoutMode();
-	if (!active) return;
-	const state = useAppStore.getState();
-	const { next, limit } = sidesResult(active.restore, {
-		keepGroupIds: true,
-		restoreTargets: active.restoreTargets,
-	});
+	const selected = active
+		? active.selected
+		: Object.fromEntries(
+				Object.entries(attention?.selectedByGroup ?? {}).filter(([groupId]) =>
+					capturedGroupIds.has(groupId),
+				),
+			);
+	const next = validatedFrame(arrangeWorkbenchView(base, arrangement));
 	installFrame(
 		next,
-		raisedLimits(withoutLayoutMode(state.localLayoutPreferences), limit, 1),
+		{
+			...withoutLayoutView(state.localLayoutPreferences),
+			layoutView: {
+				id,
+				restore: captured,
+				restoreTargets: { ...base.frame.toolRestoreTargets },
+				selected,
+			},
+		},
+		active ? active.selected : {},
+	);
+}
+
+/** Leaves the view: the captured sides and bottom come back by group id, with the tools they showed. */
+export function exitLayoutViewLocally(): void {
+	const active = currentLayoutView();
+	if (!active) return;
+	const state = useAppStore.getState();
+	installFrame(
+		restoredFrame(active),
+		withoutLayoutView(state.localLayoutPreferences),
 		active.selected,
 	);
 }

@@ -215,6 +215,7 @@ export function AuxiliaryRegionRail({
 	shared,
 	attention,
 	trailing,
+	views,
 	footer,
 	optional = false,
 }: {
@@ -222,6 +223,7 @@ export function AuxiliaryRegionRail({
 	shared: SharedGroupProps;
 	attention: LayoutAttention;
 	trailing?: ReactNode;
+	views?: readonly AuxiliaryRailFooterItem[] | undefined;
 	footer?: readonly AuxiliaryRailFooterItem[] | undefined;
 	optional?: boolean;
 }) {
@@ -292,6 +294,7 @@ export function AuxiliaryRegionRail({
 			<AuxiliaryRail
 				region={region}
 				entries={entries}
+				views={views}
 				footer={footer}
 				renderBoundary={renderBoundary}
 				trailing={

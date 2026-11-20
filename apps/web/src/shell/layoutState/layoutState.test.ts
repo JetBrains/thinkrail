@@ -17,11 +17,11 @@ import {
 	applyLayoutPresetLocally,
 	claimLayoutSurfaceId,
 	commitWorkspaceLayout,
-	currentLayoutMode,
+	currentLayoutView,
 	emptyWorkspaceProjection,
 	ensureWorkspaceLayoutState,
-	enterLayoutModeLocally,
-	exitLayoutModeLocally,
+	enterLayoutViewLocally,
+	exitLayoutViewLocally,
 	initializeLocalLayoutState,
 	localLayoutStorageKey,
 	resetLayoutStateForTests,
@@ -59,6 +59,13 @@ class MemoryStorage implements Storage {
 }
 
 const endpoint = "http://host.test";
+
+const BOARD_VIEW = {
+	left: "ext:board:nav" as const,
+	bottom: "ext:board:activity" as const,
+	leftWidth: 0.16,
+	bottomHeight: 0.26,
+};
 
 function resetStore(): void {
 	useAppStore.setState({
@@ -256,7 +263,7 @@ describe("frontend-local layout state", () => {
 		expect(useAppStore.getState().workbenchFrame?.left.width).toBe(0.31);
 	});
 
-	test("a layout mode survives reload and leaving it restores the frame and the tools its panes showed", async () => {
+	test("a view survives reload, keeps the workspace's center, and leaving it restores the exact frame", async () => {
 		const local = new MemoryStorage();
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
@@ -286,69 +293,67 @@ describe("frontend-local layout state", () => {
 			selectedByGroup: { ...attention.selectedByGroup, [rightTop.id]: files.id },
 		});
 		const frame = structuredClone(useAppStore.getState().workbenchFrame);
+		const views = structuredClone(useAppStore.getState().workspaceViewsByWorkspace);
+		const preferences = structuredClone(useAppStore.getState().localLayoutPreferences);
 		const center = document.center.id;
 
-		enterLayoutModeLocally("board:board", {
-			left: {
-				visible: true,
-				width: 0.6,
-				groups: [
-					{ id: "p", weight: 0.1, folded: true, tools: ["projects"] },
-					{ id: "b", weight: 0.9, folded: false, tools: ["ext:board:board"] },
-				],
-			},
-			right: { visible: false, width: 0.28, groups: [] },
-		});
-		const inMode = useAppStore.getState();
+		enterLayoutViewLocally("board:board", BOARD_VIEW);
+		const inView = useAppStore.getState();
 		expect(
-			inMode.workbenchFrame?.left.groups.map((group) => group.tools.map((tool) => tool.tool)),
-		).toEqual([["projects"], ["ext:board:board"]]);
-		expect(inMode.workbenchFrame?.right.groups).toEqual([]);
-		expect(inMode.layoutDocumentsByWorkspace.A?.center.id).toBe(center);
-		expect(currentLayoutMode()).toMatchObject({
+			inView.workbenchFrame?.left.groups.map((group) => [
+				group.folded,
+				group.tools.map((tool) => tool.tool),
+			]),
+		).toEqual([
+			[false, ["ext:board:nav"]],
+			[true, ["projects"]],
+		]);
+		expect(inView.workbenchFrame?.bottom.groups[0]?.tools.map((tool) => tool.tool)).toEqual([
+			"ext:board:activity",
+		]);
+		expect(inView.workbenchFrame?.center).toEqual(frame?.center);
+		expect(inView.workspaceViewsByWorkspace).toEqual(views);
+		expect(inView.layoutDocumentsByWorkspace.A?.center.id).toBe(center);
+		expect(inView.localLayoutPreferences.maxSideGroups).toBe(preferences.maxSideGroups);
+		expect(currentLayoutView()).toMatchObject({
 			id: "board:board",
 			selected: { [rightTop.id]: files.id },
 		});
+		enterLayoutViewLocally("board:board", BOARD_VIEW);
+		expect(useAppStore.getState().workbenchFrame).toBe(inView.workbenchFrame);
 
 		await reload();
-		expect(currentLayoutMode()?.id).toBe("board:board");
-		expect(useAppStore.getState().workbenchFrame?.left.width).toBe(0.6);
+		expect(currentLayoutView()?.id).toBe("board:board");
+		expect(useAppStore.getState().workbenchFrame?.left.width).toBe(0.16);
 
-		exitLayoutModeLocally();
+		exitLayoutViewLocally();
 		const after = useAppStore.getState();
 		expect(after.workbenchFrame).toEqual(frame);
-		expect(after.localLayoutPreferences.layoutMode).toBeUndefined();
+		expect(after.workspaceViewsByWorkspace).toEqual(views);
+		expect(after.localLayoutPreferences).toEqual(preferences);
 		expect(after.layoutAttentionByWorkspace.A?.selectedByGroup[rightTop.id]).toBe(files.id);
 		expect(
 			collectAllGroups(after.layoutDocumentsByWorkspace.A ?? document).flatMap((group) =>
 				group.tabs.filter((tab) => tab.kind === "file").map((tab) => tab.id),
 			),
 		).toEqual(["one.ts"]);
-		exitLayoutModeLocally();
+		exitLayoutViewLocally();
 		expect(useAppStore.getState().workbenchFrame).toEqual(frame);
 	});
 
-	test("a malformed layout mode is dropped alone, and applying a preset leaves the mode", async () => {
+	test("a malformed view is dropped alone, and applying a preset leaves the view", async () => {
 		const local = new MemoryStorage();
 		const session = new MemoryStorage();
 		session.setItem("thinkrail:layout-surface-id", "surface-a");
 		setLayoutStateStorageForTests({ local, session }, endpoint);
 		await ensureWorkspaceLayoutState("A");
-		const sides = {
-			left: {
-				visible: true,
-				width: 0.6,
-				groups: [{ id: "b", weight: 1, folded: false, tools: ["ext:board:board" as const] }],
-			},
-			right: { visible: false, width: 0.28, groups: [] },
-		};
-		enterLayoutModeLocally("board:board", sides);
+		enterLayoutViewLocally("board:board", BOARD_VIEW);
 		const balanced = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "balanced");
 		if (!balanced) throw new Error("missing Balanced");
 		applyLayoutPresetLocally(balanced);
-		expect(currentLayoutMode()).toBeNull();
+		expect(currentLayoutView()).toBeNull();
 
-		enterLayoutModeLocally("board:board", sides);
+		enterLayoutViewLocally("board:board", BOARD_VIEW);
 		const key = localLayoutStorageKey(endpoint, "surface-a");
 		const stored = JSON.parse(local.getItem(key) ?? "{}");
 		local.setItem(
@@ -357,7 +362,7 @@ describe("frontend-local layout state", () => {
 				...stored,
 				preferences: {
 					...stored.preferences,
-					layoutMode: { ...stored.preferences.layoutMode, restore: { left: "wide" } },
+					layoutView: { ...stored.preferences.layoutView, restore: { left: "wide" } },
 				},
 			}),
 		);
@@ -365,8 +370,83 @@ describe("frontend-local layout state", () => {
 		resetStore();
 		setLayoutStateStorageForTests({ local, session }, endpoint);
 		await initializeLocalLayoutState();
-		expect(currentLayoutMode()).toBeNull();
-		expect(useAppStore.getState().workbenchFrame?.left.width).toBe(0.6);
+		expect(currentLayoutView()).toBeNull();
+		expect(useAppStore.getState().workbenchFrame?.left.width).toBe(0.16);
+	});
+
+	test("a stored Board mode becomes Board view: re-entering it restores that mode's sides first", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		await ensureWorkspaceLayoutState("A");
+		useAppStore.setState({ activeWorkspaceId: "A" });
+		const original = structuredClone(useAppStore.getState().workbenchFrame);
+		if (!original) throw new Error("missing frame");
+		const key = localLayoutStorageKey(endpoint, "surface-a");
+		const stored = JSON.parse(local.getItem(key) ?? "{}");
+		const capture = (side: typeof original.left) => ({
+			visible: side.visible,
+			width: side.width,
+			groups: side.groups.map((group) => ({
+				id: group.id,
+				weight: group.weight,
+				folded: group.folded,
+				tools: group.tools.map((tool) => tool.tool),
+			})),
+		});
+		local.setItem(
+			key,
+			JSON.stringify({
+				...stored,
+				frame: {
+					...stored.frame,
+					left: {
+						visible: true,
+						width: 0.6,
+						groups: [
+							{
+								id: "board-mode-board",
+								weight: 1,
+								folded: false,
+								tools: [{ kind: "tool", id: "tool:board", name: "", tool: "ext:board:board" }],
+							},
+						],
+					},
+					right: { visible: false, width: 0.28, groups: [] },
+				},
+				preferences: {
+					...stored.preferences,
+					layoutMode: {
+						id: "board:board",
+						restore: { left: capture(original.left), right: capture(original.right) },
+						restoreTargets: original.toolRestoreTargets,
+						selected: {},
+					},
+				},
+			}),
+		);
+		resetLayoutStateForTests();
+		resetStore();
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		await initializeLocalLayoutState();
+		await ensureWorkspaceLayoutState("A");
+		useAppStore.setState({ activeWorkspaceId: "A" });
+		expect(currentLayoutView()).toMatchObject({ id: "board:board", migrated: true });
+		expect(currentLayoutView()?.restore.bottom.groups.map((group) => group.id)).toEqual(
+			original.bottom.groups.map((group) => group.id),
+		);
+
+		enterLayoutViewLocally("board:board", BOARD_VIEW);
+		const migrated = useAppStore.getState().workbenchFrame;
+		expect(currentLayoutView()?.migrated).toBeUndefined();
+		expect(migrated?.left.groups.flatMap((group) => group.tools.map((tool) => tool.tool))).toEqual([
+			"ext:board:nav",
+			"projects",
+		]);
+		expect(migrated?.right).toEqual(original.right);
+		exitLayoutViewLocally();
+		expect(useAppStore.getState().workbenchFrame).toEqual(original);
 	});
 
 	test("a pristine surface initializes a Balanced workspace locally without transport", async () => {

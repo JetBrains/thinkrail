@@ -7,10 +7,7 @@ import {
 import type { Workspace } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
-import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { type ReactNode, Suspense, useCallback, useEffect, useState } from "react";
-import { hydrateSessionRuntime } from "../chat/useChatTodos";
-import { preloadedLazy } from "../components/preloadedLazy";
+import type { ReactNode } from "react";
 import {
 	canJoinContainer,
 	selectContainerGroup,
@@ -22,10 +19,7 @@ import {
 	workspaceName,
 } from "../store";
 import { supportsContainers } from "../transport";
-
-const ChatView = preloadedLazy(() => import("../chat/ChatView"));
-
-const ORCHESTRATOR_RETRY_DELAY_MS = 4000;
+import { SessionChatView } from "./SessionChatView";
 
 function Notice({
 	state,
@@ -117,43 +111,12 @@ function OrchestratorChat({
 	orchestrator,
 	sessionId,
 	containerName,
-	landingChord,
 }: {
 	orchestrator: Workspace;
 	sessionId: string;
 	containerName: string;
-	landingChord: string;
 }) {
 	const t = useT();
-	const orchestratorId = orchestrator.id;
-	const available = useAppStore((state) => state.sessions[sessionId] !== undefined);
-	const status = useAppStore((state) => state.status);
-	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
-	const [stalled, setStalled] = useState(false);
-	useEffect(() => {
-		if (available || status !== "connected") return;
-		setStalled(false);
-		void hydrateSessionRuntime(orchestratorId, sessionId).catch(() => {});
-		const timer = setTimeout(() => setStalled(true), ORCHESTRATOR_RETRY_DELAY_MS);
-		return () => clearTimeout(timer);
-	}, [available, connectionGeneration, orchestratorId, sessionId, status]);
-	const openFile = useCallback(
-		(path: string) => {
-			const state = useAppStore.getState();
-			const target = selectWorkspaceById(state, orchestratorId);
-			if (!target) return;
-			state.activateWorkspace(target);
-			useAppStore.getState().requestPeek(orchestratorId, { kind: "file", path, sessionId });
-		},
-		[orchestratorId, sessionId],
-	);
-	const loading = (
-		<LoadingRegion
-			rows={8}
-			label={t("shell.workbench.restoring.chat")}
-			className="h-full overflow-hidden p-16"
-		/>
-	);
 	return (
 		<div
 			data-testid="orchestrator-tool"
@@ -181,46 +144,14 @@ function OrchestratorChat({
 				/>
 			</div>
 			<div className="min-h-0 flex-1">
-				{available ? (
-					<Suspense fallback={loading}>
-						<ChatView
-							key={sessionId}
-							sessionId={sessionId}
-							workspaceId={orchestratorId}
-							onOpenFile={openFile}
-							landingChord={landingChord}
-						/>
-					</Suspense>
-				) : stalled ? (
-					<div className="flex h-full flex-col items-center justify-center gap-8 text-text-muted">
-						<span className="tr-text-ui">{t("shell.workbench.chatRestoreSlow")}</span>
-						<Button
-							variant="outline"
-							size="m"
-							onClick={() => {
-								setStalled(false);
-								void hydrateSessionRuntime(orchestratorId, sessionId).catch(() => {});
-							}}
-						>
-							{t("common.retry")}
-						</Button>
-					</div>
-				) : (
-					loading
-				)}
+				<SessionChatView workspaceId={orchestrator.id} sessionId={sessionId} />
 			</div>
 		</div>
 	);
 }
 
 /** The Orchestrator tool: the active workspace's container orchestrator chat, pinned across member switches. */
-export function OrchestratorTool({
-	workspaceId,
-	landingChord,
-}: {
-	workspaceId: string;
-	landingChord: string;
-}) {
+export function OrchestratorTool({ workspaceId }: { workspaceId: string }) {
 	const t = useT();
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
 	const containerId = useAppStore((state) =>
@@ -254,7 +185,6 @@ export function OrchestratorTool({
 			orchestrator={orchestrator}
 			sessionId={sessionId}
 			containerName={container.name}
-			landingChord={landingChord}
 		/>
 	);
 }

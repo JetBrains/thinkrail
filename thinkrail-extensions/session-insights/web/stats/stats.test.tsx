@@ -555,6 +555,8 @@ describe("statistics queries", () => {
 		openChat: noop,
 		openPanel: noop,
 		renderToolCall: () => null,
+		renderChat: () => null,
+		openView: () => {},
 		openFile: noop,
 		openWorkspace: () => {},
 		peek: () => {},

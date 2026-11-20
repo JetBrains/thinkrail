@@ -15,7 +15,7 @@ The shell-owned, headless workbench engine: the normalized frontend-local frame 
 ## Boundary
 
 - **Owns:** web-local `WorkbenchFrame`/`WorkspaceViewState` types; frame-plus-view projection; pure topology, placement, attention, and policy operations; semantic minimum and independent group-limit checks; one-result drag previews; center/side/bottom renderers; alignment-owned nested composition and side-width projection; tab-strip overflow; ARIA tab/separator behavior; and the terminal visibility gate.
-- **Public surface (`index.ts`):** all current-layout types; workbench renderer/controller; the edge-chrome primitives (`AuxiliaryRail`, `AuxiliaryRailToolButton`, `AuxiliaryRailActionButton`, `AuxiliaryPaneHeader`, `AuxiliaryPaneHideButton`); pure mutations, projection, and validation helpers; the tab-action list (`tabActions`, `TabAction`), the injected chat actions' shape (`ChatTabAction`, `ChatTabActions`) and the `WorkbenchTabCommands` provider contract; built-in preset definitions plus instantiate/apply/capture operations, `applyWorkbenchSides` (a layout mode's sides, `WorkbenchSides`) and `frameMatchesPreset` (geometry equality ignoring generated ids, which Settings uses to mark the applied preset); attention fallback helpers; and unavailable-reason results. Callers inject resource renderers, the workspace worktree path for file-tab copy actions, the left rail's footer items (`leftRailFooter`, `AuxiliaryRailFooterItem`s), the chat tabs' extra actions (`chatActions`), the key caps of the chords that repeat a chrome control (`chromeShortcuts`), the optional Peek column (`peek`, `WorkbenchPeek`) and the extensions' side tools (`extensionTools`, a `LayoutToolCatalog`), and commit complete pure results rather than splicing arrays.
+- **Public surface (`index.ts`):** all current-layout types; workbench renderer/controller; the edge-chrome primitives (`AuxiliaryRail`, `AuxiliaryRailToolButton`, `AuxiliaryRailActionButton`, `AuxiliaryPaneHeader`, `AuxiliaryPaneHideButton`); pure mutations, projection, and validation helpers; the tab-action list (`tabActions`, `TabAction`), the injected chat actions' shape (`ChatTabAction`, `ChatTabActions`) and the `WorkbenchTabCommands` provider contract; built-in preset definitions plus instantiate/apply/capture operations, an extension view's `arrangeWorkbenchView` (`WorkbenchViewArrangement`), `captureWorkbenchSides` / `restoreWorkbenchSides` (`WorkbenchSides`) and `frameMatchesPreset` (geometry equality ignoring generated ids, which Settings uses to mark the applied preset); attention fallback helpers; and unavailable-reason results. Callers inject resource renderers, the workspace worktree path for file-tab copy actions, the left rail's footer items (`leftRailFooter`, `AuxiliaryRailFooterItem`s) and view toggles (`leftRailViews`, after its tools), the chat tabs' extra actions (`chatActions`), the key caps of the chords that repeat a chrome control (`chromeShortcuts`), the optional Peek column (`peek`, `WorkbenchPeek`), an optional center override (`centerOverride`, `WorkbenchCenterOverride`) and the extensions' side tools (`extensionTools`, a `LayoutToolCatalog`), and commit complete pure results rather than splicing arrays.
 - **External deps:** `@thinkrail/contracts` for the resource-free custom-preset DTO, the git diff-scope type and the layout tool id guards only; shell-neutral `lib` attention/id primitives plus `copyText` / `joinWorkspacePath` for file-tab copy actions; React; `@thinkrail/ui/*` (including `@thinkrail/ui/resizable`); `@dnd-kit/core`; the `keybindings` module's `LOCAL_KEY_DEFAULTS` for scopes `tabs` / `rails`, matched through `@thinkrail/ui/local-keys`' `useLocalKeys` (reading the shell-provided keymap context keeps the layout props-pure: never a chord's meaning, which the shell injects).
 - **Forbidden:** server/shared/pi imports; domain-resource lifetime; browser persistence or WS calls; feature-panel internals; a mutable third-party docking model; inline component styles; or non-semantic colour values.
 
@@ -387,15 +387,23 @@ rejects the tool, so Layout settings explains that instead of sending it. Built-
 names are display copy: `layoutPresetName` renders them through the locale catalog by preset id while the
 definition keeps its stable `name`; custom preset names are user data and render verbatim.
 
-A **layout mode's sides** apply through `applyWorkbenchSides(state, sides, options)`, not as a preset: it
-replaces only the left and right regions and keeps the center and the bottom node for node (ids, tabs,
-terminals), so no center resource moves and a round trip is exact. Placed tools keep their placement
-ids; a tool the sides place leaves a bottom tool group (a group left with no tool goes, the rest
-renormalized); a tool leaving the sides gets a restore target at its old group and index. Restoring a
-captured frame passes `keepGroupIds` (the captured group ids come back wherever the frame has none like
-them) and the captured `restoreTargets`, which replace the frame's for every tool left unplaced;
-already-normalized weights are kept as they are. Views are reconciled with `reconcileWorkspaceView`, so a
-terminal in a replaced side group rehomes like any removed group's ([[submodule-web-shell]] § Layout modes).
+An **extension view's arrangement** is no preset either. `arrangeWorkbenchView(state, arrangement)` puts
+each of the view's tools (`left`, `bottom`) in a new group leading its region at the given width or height
+(bottom alignment center + left beside a left tool) and keeps every group those regions held, **folded**,
+with its id, weight share, tools and terminals; a view's tool placed elsewhere leaves that group (a tool
+group left empty goes); the center, the right side and the restore targets stay as they are. So no
+workspace view references a vanished group and nothing is reconciled. `captureWorkbenchSides(frame)` keeps
+the left, right and bottom as resource-free preset regions, and `restoreWorkbenchSides(state, sides,
+restoreTargets)` puts them back — each group with its id (a fresh one only where the center took it),
+geometry, fold and tools, placed tools keeping their placement ids, the captured restore targets replacing
+the frame's for every tool left unplaced —, reconciling only a view that holds a resource in a group now
+gone (a terminal pane made inside the view). Entering then restoring gives the same frame back
+([[submodule-web-shell]] § Extension views).
+
+A **center override** (`centerOverride { id, label, render }`) renders in place of the center node tree: one
+`data-region-kind="center"` section (`center-override`) the region ring treats as the center, while the
+document's center groups stay as they are, unrendered; `visibleFocusableGroups` then lists no center
+group, so Ctrl+F6 skips them. It keys nothing, like Peek.
 
 Applying a preset creates one replacement frame, raises this surface's local side/bottom limits if required, and remaps all retained workspace views atomically. Center resources preserve visual order and distribute across destination leaves; terminals map into compatible slots; singleton tool placement ids survive where possible. Omitted tools receive deterministic restore targets, so a sparse preset cannot strand Projects or another tool; a tool whose default side is the right restores to the left when the preset's right side has no groups, so an empty right side stays empty. The local default preset is the target of the explicit Reset frame command; ordinary workspace switches retain the current frame. Default selection and limits persist locally, not in host settings.
 

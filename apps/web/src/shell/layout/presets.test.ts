@@ -1,24 +1,20 @@
 import { describe, expect, test } from "bun:test";
-import type { LayoutPresetSideRegion } from "@thinkrail/contracts";
 import { validateLayoutDocument } from "./model";
 import { collectWorkbenchCenterGroups, projectWorkspaceLayout } from "./normalized";
 import {
-	applyWorkbenchSides,
+	arrangeWorkbenchView,
 	BUILTIN_LAYOUT_PRESETS,
-	captureWorkbenchPreset,
+	captureWorkbenchSides,
 	instantiateWorkbenchFrame,
+	restoreWorkbenchSides,
+	type WorkbenchViewArrangement,
 } from "./presets";
 
-const BOARD_SIDES: { left: LayoutPresetSideRegion; right: LayoutPresetSideRegion } = {
-	left: {
-		visible: true,
-		width: 0.6,
-		groups: [
-			{ id: "board-projects", weight: 0.1, folded: true, tools: ["projects"] },
-			{ id: "board-board", weight: 0.9, folded: false, tools: ["ext:board:board"] },
-		],
-	},
-	right: { visible: false, width: 0.28, groups: [] },
+const BOARD_VIEW: WorkbenchViewArrangement = {
+	left: "ext:board:nav",
+	bottom: "ext:board:activity",
+	leftWidth: 0.16,
+	bottomHeight: 0.26,
 };
 
 function balanced() {
@@ -44,59 +40,58 @@ function balanced() {
 	return { frame, view, center: center.id, bottom: bottom.id };
 }
 
-describe("a layout mode's sides", () => {
-	test("replace the left and right while the center and the bottom keep their groups and tabs", () => {
+describe("an extension view's arrangement", () => {
+	test("leads the left and the bottom with the view's tools and folds what they held, the center untouched", () => {
 		const { frame, view, center, bottom } = balanced();
-		const next = applyWorkbenchSides({ frame, viewsByWorkspace: { A: view } }, BOARD_SIDES);
+		const next = arrangeWorkbenchView({ frame, viewsByWorkspace: { A: view } }, BOARD_VIEW);
 		expect(next.frame.center).toBe(frame.center);
 		expect(next.viewsByWorkspace.A).toBe(view);
-		expect(next.frame.bottom.groups.map((group) => group.id)).toEqual([bottom]);
 		expect(next.viewsByWorkspace.A?.groups[center]?.tabs.map((tab) => tab.id)).toEqual([
 			"chat-1",
 			"a.ts",
 		]);
-		expect(next.viewsByWorkspace.A?.groups[bottom]?.tabs.map((tab) => tab.id)).toEqual(["term"]);
 		expect(
-			next.frame.left.groups.map(({ folded, weight, tools }) => [
+			next.frame.left.groups.map(({ folded, tools }) => [folded, tools.map((tool) => tool.tool)]),
+		).toEqual([
+			[false, ["ext:board:nav"]],
+			[true, ["projects"]],
+		]);
+		expect(next.frame.left.groups[1]?.id).toBe(frame.left.groups[0]?.id);
+		expect(next.frame.left.groups[1]?.tools[0]).toBe(frame.left.groups[0]?.tools[0]);
+		expect(next.frame.left).toMatchObject({ visible: true, width: 0.16 });
+		expect(next.frame.left.groups.reduce((sum, group) => sum + group.weight, 0)).toBeCloseTo(1);
+		expect(
+			next.frame.bottom.groups.map(({ id, folded, tools }) => [
+				id === bottom,
 				folded,
-				weight,
 				tools.map((tool) => tool.tool),
 			]),
 		).toEqual([
-			[true, 0.1, ["projects"]],
-			[false, 0.9, ["ext:board:board"]],
+			[false, false, ["ext:board:activity"]],
+			[true, true, []],
 		]);
-		expect(next.frame.left.groups.map((group) => group.id)).not.toContain("board-board");
-		expect(next.frame.left.width).toBe(0.6);
-		expect(next.frame.right).toEqual({ visible: false, width: 0.28, groups: [] });
-		const [projects] = frame.left.groups[0]?.tools ?? [];
-		expect(next.frame.left.groups[0]?.tools[0]).toBe(projects);
-		const rightTop = frame.right.groups[0]?.id;
-		if (!rightTop) throw new Error("missing Balanced's right group");
-		expect(next.frame.toolRestoreTargets.files).toEqual({
-			region: "right",
-			groupId: rightTop,
-			index: 1,
+		expect(next.frame.bottom).toMatchObject({
+			visible: true,
+			height: 0.26,
+			alignment: "center-left",
 		});
-		expect(next.frame.toolRestoreTargets["ext:board:board"]).toBeUndefined();
-		expect(next.frame.toolRestoreTargets.projects).toBeUndefined();
+		expect(next.viewsByWorkspace.A?.groups[bottom]?.tabs.map((tab) => tab.id)).toEqual(["term"]);
+		expect(next.frame.right).toEqual(frame.right);
+		expect(next.frame.toolRestoreTargets).toEqual(frame.toolRestoreTargets);
 		const document = projectWorkspaceLayout(next.frame, next.viewsByWorkspace.A ?? view);
-		expect(validateLayoutDocument(document, 6, 3)).toEqual([]);
+		expect(validateLayoutDocument(document, 32, 32)).toEqual([]);
 	});
 
-	test("restoring the captured sides with their targets gives the exact frame back", () => {
+	test("restoring the captured sides and bottom with their targets gives the exact frame back", () => {
 		const { frame, view } = balanced();
-		const captured = captureWorkbenchPreset(frame, "board:board", "board:board");
-		const entered = applyWorkbenchSides({ frame, viewsByWorkspace: { A: view } }, BOARD_SIDES);
-		const left = applyWorkbenchSides(entered, captured, {
-			keepGroupIds: true,
-			restoreTargets: frame.toolRestoreTargets,
-		});
+		const captured = captureWorkbenchSides(frame);
+		const entered = arrangeWorkbenchView({ frame, viewsByWorkspace: { A: view } }, BOARD_VIEW);
+		const left = restoreWorkbenchSides(entered, captured, frame.toolRestoreTargets);
 		expect(left.frame).toEqual(frame);
 		expect(left.viewsByWorkspace.A).toBe(view);
 	});
 
-	test("rehome a terminal that sat in a replaced side group", () => {
+	test("restores a frame whose side held a terminal pane without moving the terminal", () => {
 		const { frame, view, bottom } = balanced();
 		const [leftGroup] = frame.left.groups;
 		if (!leftGroup) throw new Error("missing Balanced's left group");
@@ -118,47 +113,47 @@ describe("a layout mode's sides", () => {
 				},
 			},
 		};
-		const next = applyWorkbenchSides(
-			{ frame: terminalPane, viewsByWorkspace: { A: withTerminal } },
-			BOARD_SIDES,
+		const state = { frame: terminalPane, viewsByWorkspace: { A: withTerminal } };
+		const entered = arrangeWorkbenchView(state, BOARD_VIEW);
+		expect(entered.viewsByWorkspace.A).toBe(withTerminal);
+		expect(entered.frame.left.groups.find((group) => group.id === "left-terminals")?.folded).toBe(
+			true,
 		);
-		expect(next.viewsByWorkspace.A?.groups["left-terminals"]).toBeUndefined();
-		expect(next.viewsByWorkspace.A?.groups[bottom]?.tabs.map((tab) => tab.id).sort()).toEqual([
-			"side-term",
+		const restored = restoreWorkbenchSides(
+			entered,
+			captureWorkbenchSides(terminalPane),
+			terminalPane.toolRestoreTargets,
+		);
+		expect(restored.frame).toEqual(terminalPane);
+		expect(restored.viewsByWorkspace.A?.groups[bottom]?.tabs.map((tab) => tab.id)).toEqual([
 			"term",
 		]);
 	});
 
-	test("take a tool the sides place out of a bottom tool group, dropping a group left empty", () => {
+	test("takes a view's tool out of the group it sat in, dropping a tool group left empty", () => {
 		const { frame } = balanced();
-		const withBottomTool = {
+		const withNav = {
 			...frame,
-			right: { ...frame.right, groups: frame.right.groups.slice(1) },
-			bottom: {
-				...frame.bottom,
+			right: {
+				...frame.right,
 				groups: [
-					...frame.bottom.groups.map((group) => ({ ...group, weight: 0.5 })),
+					...frame.right.groups.map((group) => ({ ...group, weight: 0.4 })),
 					{
-						id: "bottom-tools",
-						weight: 0.5,
+						id: "right-nav",
+						weight: 0.2,
 						folded: false,
-						tools: frame.right.groups[0]?.tools.slice(0, 1) ?? [],
+						tools: [
+							{ kind: "tool" as const, id: "nav-tool", name: "", tool: "ext:board:nav" as const },
+						],
 					},
 				],
 			},
 		};
-		const placesSpecs = {
-			...BOARD_SIDES,
-			right: {
-				visible: true,
-				width: 0.2,
-				groups: [{ id: "r", weight: 1, folded: false, tools: ["specs" as const] }],
-			},
-		};
-		const next = applyWorkbenchSides({ frame: withBottomTool, viewsByWorkspace: {} }, placesSpecs);
-		expect(next.frame.bottom.groups.map(({ id, weight }) => [id, weight])).toEqual([
-			[frame.bottom.groups[0]?.id ?? "", 1],
-		]);
-		expect(next.frame.right.groups[0]?.tools.map((tool) => tool.tool)).toEqual(["specs"]);
+		const next = arrangeWorkbenchView({ frame: withNav, viewsByWorkspace: {} }, BOARD_VIEW);
+		expect(next.frame.right.groups.map((group) => group.id)).toEqual(
+			frame.right.groups.map((group) => group.id),
+		);
+		expect(next.frame.right.groups.reduce((sum, group) => sum + group.weight, 0)).toBeCloseTo(1);
+		expect(next.frame.left.groups[0]?.tools[0]?.id).toBe("nav-tool");
 	});
 });

@@ -2,7 +2,6 @@ import { useDraggable } from "@dnd-kit/core";
 import { RiInboxArchiveLine, RiPlayLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
-import { cn } from "@thinkrail/ui/utils";
 import type { KeyboardEvent } from "react";
 import { type Card, canAdopt, canApply, canStart } from "./api";
 import {
@@ -33,7 +32,6 @@ export function CardTile({
 	actions,
 	starting,
 	startWarning = null,
-	compact = false,
 }: {
 	card: Card;
 	actions: CardActions;
@@ -41,7 +39,6 @@ export function CardTile({
 	starting: boolean;
 	/** Start was pressed past a human-attention limit: the question to confirm. */
 	startWarning?: string | null;
-	compact?: boolean;
 }) {
 	const t = useT();
 	const adoptable = canAdopt(card);
@@ -55,10 +52,7 @@ export function CardTile({
 			data-source={card.source.kind}
 			data-virtual={card.virtual || undefined}
 			data-dragging={isDragging || undefined}
-			className={cn(
-				"group flex min-w-0 flex-col gap-4 rounded-sm border border-border-muted bg-container-elevated-bg p-8 hover:border-border-default data-[dragging]:opacity-60",
-				compact && "py-4",
-			)}
+			className="group flex min-w-0 flex-col gap-4 rounded-sm border border-border-muted bg-container-elevated-bg p-8 hover:border-border-default data-[dragging]:opacity-60"
 		>
 			<button
 				type="button"
@@ -71,9 +65,7 @@ export function CardTile({
 				onKeyDown={(event) => actions.keyDown(card, event)}
 			>
 				<CardMeta card={card} />
-				<span className={cn("tr-text-ui text-text-default", compact ? "truncate" : "line-clamp-3")}>
-					{card.title}
-				</span>
+				<span className="line-clamp-3 tr-text-ui text-text-default">{card.title}</span>
 				<InitiativeChip card={card} />
 				{card.openspec ? <OpenspecTileLines change={card.openspec} /> : null}
 				{adoptable ? (

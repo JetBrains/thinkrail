@@ -8,10 +8,10 @@ import visualize from "@thinkrail/ext-visualize/web";
 import type {
 	ContainerSectionDeclaration,
 	ExtensionCommand,
-	LayoutPresetDeclaration,
 	PanelDeclaration,
 	SideToolDeclaration,
 	StatusItemDeclaration,
+	ViewDeclaration,
 	WebExtension,
 } from "@thinkrail/extension-api/web";
 import { registerToolRenderer } from "../chat/toolRegistry";
@@ -72,7 +72,7 @@ export function webOnlyExtensions(
 			extension.sideTools === undefined &&
 			extension.statusItems === undefined &&
 			extension.containerSections === undefined &&
-			extension.layoutPresets === undefined;
+			extension.views === undefined;
 		return webOnly && !serverNames.has(extension.name) ? [{ ...extension, title }] : [];
 	});
 }
@@ -187,38 +187,34 @@ export function extensionContainerSections(
 	return extensions ? collectContainerSections(extensions) : registeredContainerSections;
 }
 
-export interface RegisteredLayoutPreset {
+export interface RegisteredView {
 	extension: string;
-	preset: string;
-	/** The mode's id in the window's preferences, `<extension>:<preset>`. */
+	view: string;
+	/** The view's id in the window's preferences, `<extension>:<view>`. */
 	id: string;
-	declaration: LayoutPresetDeclaration;
+	declaration: ViewDeclaration;
 }
 
-function collectLayoutPresets(
-	extensions: readonly WebExtension[],
-): readonly RegisteredLayoutPreset[] {
+function collectViews(extensions: readonly WebExtension[]): readonly RegisteredView[] {
 	return extensions.flatMap((extension) =>
-		Object.entries(extension.layoutPresets ?? {}).map(([preset, declaration]) => ({
+		Object.entries(extension.views ?? {}).map(([view, declaration]) => ({
 			extension: extension.name,
-			preset,
-			id: `${extension.name}:${preset}`,
+			view,
+			id: `${extension.name}:${view}`,
 			declaration,
 		})),
 	);
 }
 
-const registeredLayoutPresets = collectLayoutPresets(webExtensions);
+const registeredViews = collectViews(webExtensions);
 
-export function extensionLayoutPresets(
-	extensions?: readonly WebExtension[],
-): readonly RegisteredLayoutPreset[] {
-	return extensions ? collectLayoutPresets(extensions) : registeredLayoutPresets;
+export function extensionViews(extensions?: readonly WebExtension[]): readonly RegisteredView[] {
+	return extensions ? collectViews(extensions) : registeredViews;
 }
 
-export function findExtensionLayoutPreset(
+export function findExtensionView(
 	id: string,
 	extensions?: readonly WebExtension[],
-): RegisteredLayoutPreset | undefined {
-	return extensionLayoutPresets(extensions).find((candidate) => candidate.id === id);
+): RegisteredView | undefined {
+	return extensionViews(extensions).find((candidate) => candidate.id === id);
 }

@@ -52,12 +52,12 @@ declaration order as `RegisteredSideTool { extension, tool, id, declaration }`, 
 both ignore the switch, and an extension with side tools is never web-only. The shell turns them into the
 layout's tool catalog and the tools' bodies ([[submodule-web-shell]] § Extension side tools).
 
-**Status items** and **layout presets** read the same way: `extensionStatusItems()` lists every
+**Status items** and **views** read the same way: `extensionStatusItems()` lists every
 extension's `statusItems` as `RegisteredStatusItem { extension, item, declaration }`, which the topbar
-mounts ([[submodule-web-shell]] § Extension status items); `extensionLayoutPresets()` lists every
-`layoutPresets` entry as `RegisteredLayoutPreset { extension, preset, id, declaration }`, `id` being the
-mode's `<extension>:<preset>` in the window's preferences, and `findExtensionLayoutPreset(id)` looks one up
-([[submodule-web-shell]] § Layout modes). `extensionContainerSections()` lists every `containerSections`
+mounts ([[submodule-web-shell]] § Extension status items); `extensionViews()` lists every `views` entry as
+`RegisteredView { extension, view, id, declaration }`, `id` being the view's `<extension>:<view>` in the
+window's preferences, and `findExtensionView(id)` looks one up ([[submodule-web-shell]] § Extension
+views). `extensionContainerSections()` lists every `containerSections`
 entry as `RegisteredContainerSection { extension, section, declaration }`, which the container overview in
 Peek mounts ([[submodule-web-shell]] § Extension status items). They ignore the switch too, and an extension
 with any of them is never web-only.
@@ -69,8 +69,8 @@ with any of them is never web-only.
 `extensionPanels`,
 `findExtensionPanel`, the `RegisteredPanel` type, `extensionSideTools`, `findExtensionSideTool`, the
 `RegisteredSideTool` type, `extensionStatusItems`, the `RegisteredStatusItem` type, `extensionContainerSections`,
-the `RegisteredContainerSection` type, `extensionLayoutPresets`,
-`findExtensionLayoutPreset` and the `RegisteredLayoutPreset` type only. Imports reach public extension `./web` entries,
+the `RegisteredContainerSection` type, `extensionViews`, `findExtensionView` and the
+`RegisteredView` type only. Imports reach public extension `./web` entries,
 the web SDK contract, and chat's registration function; never `ChatView`, stores, transport, extension
 internals or server halves. The registry Map remains owned by chat, so this module creates no parallel
 state owner or runtime extension loader. `registerWebExtensions()` runs once at app bootstrap

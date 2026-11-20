@@ -1,5 +1,13 @@
 import type { ExtensionQuery, ThinkingLevel } from "@thinkrail/extension-api/server";
-import type { Board, CardInput, CardPatch, SettingsPatch, StartOptions } from "./board";
+import {
+	ACTIVITY_DEFAULT,
+	ACTIVITY_MAX,
+	type Board,
+	type CardInput,
+	type CardPatch,
+	type SettingsPatch,
+	type StartOptions,
+} from "./board";
 import { isIsoDate } from "./days";
 import {
 	type IdeaPatch,
@@ -379,6 +387,21 @@ export function boardQueries(board: Board): Readonly<Record<string, ExtensionQue
 		inbox: (raw) => {
 			params(raw);
 			return board.inbox();
+		},
+		"projects.list": (raw) => {
+			params(raw);
+			return board.projects();
+		},
+		"activity.get": (raw) => {
+			const p = params(raw);
+			const limit = optionalNumber(p, "limit") ?? ACTIVITY_DEFAULT;
+			if (!Number.isInteger(limit) || limit < 1 || limit > ACTIVITY_MAX)
+				throw new Error(`limit must be a whole number from 1 to ${ACTIVITY_MAX}.`);
+			return board.activity(boardOf(p), limit);
+		},
+		"agents.get": (raw) => {
+			params(raw);
+			return board.agents();
 		},
 		"card.get": (raw) => {
 			const p = params(raw);

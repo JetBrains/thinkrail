@@ -432,6 +432,8 @@ describe("SessionsPanel", () => {
 		openChat: noop,
 		openPanel: noop,
 		renderToolCall: () => null,
+		renderChat: () => null,
+		openView: () => {},
 		openFile: () => {},
 		openWorkspace: () => {},
 		peek: () => {},

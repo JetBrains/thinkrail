@@ -231,6 +231,39 @@ export interface CardDetail {
 	transitions: Transition[];
 }
 
+/** An open project's board at a glance, for the project switcher. */
+export interface ProjectSummary {
+	projectId: string;
+	name: string;
+	/** Its stored cards neither completed nor canceled. */
+	cards: number;
+}
+
+/** A logged move of any open project's card, for the activity feed. */
+export interface ActivityEntry extends Transition {
+	projectId: string;
+	projectName: string;
+	/** The card's title, absent once the card is deleted. */
+	title?: string;
+}
+
+/** An agent at work, waiting or failed: an active card's latest attempt whose chat says so. */
+export interface AgentEntry {
+	projectId: string;
+	projectName: string;
+	cardId: string;
+	title: string;
+	workspaceId: string;
+	sessionId: string;
+	state: "working" | "waiting" | "failed";
+	startedAt: number;
+	plan: { open: number; total: number } | null;
+	lastAction?: { tool: string; target?: string; at: number };
+}
+
+export const ACTIVITY_MAX = 200;
+export const ACTIVITY_DEFAULT = 50;
+
 export interface CardInput {
 	title: string;
 	/** An agent's card: the chat that filed it. */
@@ -386,6 +419,13 @@ export function attemptLive(
 }
 
 const latestChatState = (view: CardView): ChatState | undefined => view.live.at(-1)?.chat?.state;
+
+/** An agent's state for the agents list: an interrupted run counts as failed, as the card's badge does. */
+function agentState(state: ChatState | undefined): AgentEntry["state"] | null {
+	if (state === "working") return "working";
+	if (state === "needs_you") return "waiting";
+	return state === "failed" || state === "interrupted" ? "failed" : null;
+}
 
 /** Why a card's latest chat state puts it in the inbox: an interrupted run counts as failed, as its badge does. */
 function inboxReason(state: ChatState | undefined): InboxItem["reason"] | null {
@@ -1113,6 +1153,70 @@ export class Board {
 			}
 		}
 		return { items };
+	}
+
+	/** The open repository projects with their active card counts. */
+	projects(): { projects: ProjectSummary[] } {
+		return {
+			projects: this.repositories().map((project) => ({
+				projectId: project.id,
+				name: project.name,
+				cards: this.safeCards(project.id)?.cards.filter((card) => !finished(card)).length ?? 0,
+			})),
+		};
+	}
+
+	/** The newest `limit` transitions of one open project, or of every one, newest first. */
+	activity(projectId: string | undefined, limit: number): { entries: ActivityEntry[] } {
+		const projects = projectId ? [this.project(projectId)] : this.repositories();
+		const entries = projects.flatMap((project) => {
+			const titles = new Map(
+				(this.safeCards(project.id)?.cards ?? []).map((card) => [card.id, card.title]),
+			);
+			return this.store.transitions(project.id).map((transition): ActivityEntry => {
+				const title = titles.get(transition.cardId);
+				return {
+					...transition,
+					projectId: project.id,
+					projectName: project.name,
+					...(title === undefined ? {} : { title }),
+				};
+			});
+		});
+		return { entries: entries.sort((a, b) => b.at - a.at).slice(0, limit) };
+	}
+
+	/** Across the open projects: each active card whose latest attempt's agent works, waits or failed. */
+	async agents(): Promise<{ agents: AgentEntry[] }> {
+		const agents: AgentEntry[] = [];
+		for (const project of this.repositories()) {
+			const file = this.safeCards(project.id);
+			if (!file) continue;
+			const cards = file.cards
+				.filter((card) => !finished(card) && card.attempts.length > 0)
+				.sort(byRank);
+			const facts = await this.facts(cards);
+			for (const card of cards) {
+				const view = this.view(card, facts, file.cards);
+				const live = view.live.at(-1);
+				const attempt = card.attempts.at(-1);
+				const state = agentState(live?.chat?.state);
+				if (!live?.open || !live.chat || !attempt || !state) continue;
+				agents.push({
+					projectId: project.id,
+					projectName: project.name,
+					cardId: card.id,
+					title: card.title,
+					workspaceId: live.workspaceId,
+					sessionId: live.sessionId,
+					state,
+					startedAt: attempt.startedAt,
+					plan: live.plan,
+					...(live.chat.lastAction ? { lastAction: live.chat.lastAction } : {}),
+				});
+			}
+		}
+		return { agents };
 	}
 
 	private async detail(located: Located): Promise<CardDetail> {

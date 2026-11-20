@@ -8,7 +8,7 @@ import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
-import { type BoardLayout, type BoardView, type Card, type TriageGroup, triageGroups } from "./api";
+import { type BoardView, type Card, type TriageGroup, triageGroups } from "./api";
 import { CardMeta } from "./CardParts";
 
 export interface TriageActions {
@@ -126,11 +126,9 @@ function TriageGroupView({ group, actions }: { group: TriageGroup; actions: Tria
  */
 export function TriageLane({
 	view,
-	layout,
 	actions,
 }: {
 	view: Pick<BoardView, "cards">;
-	layout: BoardLayout;
 	actions: TriageActions;
 }) {
 	const t = useT();
@@ -146,7 +144,7 @@ export function TriageLane({
 			aria-label={t("board.column.triage")}
 			className={cn(
 				"flex min-h-0 shrink-0 flex-col gap-8 rounded-sm border border-border-muted border-dashed p-4",
-				layout === "columns" && expanded && "w-240 overflow-auto",
+				expanded && "w-240 overflow-auto",
 			)}
 		>
 			<Button

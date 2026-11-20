@@ -641,14 +641,21 @@ function windowLabel(t: Translator, weeks: InsightWindow): string {
 }
 
 /**
- * The Board tool's Insights view: the board's flow from its transition log (`insights.get`), re-read on
+ * Board view's Insights: the board's flow from its transition log (`insights.get`), re-read on
  * `board.changed` — WIP, throughput, cycle time, work item age, cumulative flow and where time goes.
  */
-export function InsightsPane({ host, layout }: { host: PanelHost; layout: BoardLayout }) {
+export function InsightsPane({
+	host,
+	projectId,
+	layout,
+}: {
+	host: PanelHost;
+	projectId: string;
+	layout: BoardLayout;
+}) {
 	const t = useT();
-	const { workspaceId, projectId } = host.scope;
 	const [weeks, setWeeks] = useState<InsightWindow>(12);
-	const insights = useHostQuery(`insights:${workspaceId}:${projectId}:${weeks}`, (signal) =>
+	const insights = useHostQuery(`insights:${projectId}:${weeks}`, (signal) =>
 		loadInsights(host, projectId, weeks, signal),
 	);
 	useBoardChanged(host, projectId, insights.reload);

@@ -1,5 +1,6 @@
 import type { ExtensionCatalogEntry, ExtensionLayoutToolId } from "@thinkrail/contracts";
 import type {
+	PanelChatSession,
 	PanelDeclaration,
 	PanelHost,
 	PanelProps,
@@ -9,12 +10,20 @@ import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { type ComponentType, type LazyExoticComponent, lazy, Suspense, useMemo } from "react";
+import {
+	type ComponentType,
+	type LazyExoticComponent,
+	lazy,
+	type ReactNode,
+	Suspense,
+	useMemo,
+} from "react";
 import { ToolCallPreview } from "../chat/ToolCallPreview";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import {
 	findExtensionPanel,
 	findExtensionSideTool,
+	findExtensionView,
 	type RegisteredPanel,
 	type RegisteredSideTool,
 } from "../extensions";
@@ -22,20 +31,16 @@ import { openFileAtLine, openFileInTab } from "../panels/openTabs";
 import { SettingsSection, selectWorkspaceById, useAppStore } from "../store";
 import { supportsExtensionQuery } from "../transport";
 import {
-	enterOwnLayoutPreset,
-	exitOwnLayoutPreset,
-	extensionLayoutMode,
-	useLayoutModeId,
-} from "./extensionLayoutModes";
-import {
 	APP_HOST_LINKS,
 	createPanelHost,
 	type ExtensionCatalogRead,
 	openExtensionPanel,
 	useExtensionCatalog,
 } from "./extensionPanelHost";
+import { leaveViewForCenter, openOwnView } from "./extensionViews";
 import type { LayoutExtensionTab } from "./layout";
 import { paletteNavigator } from "./paletteNavigation";
+import { SessionChatView } from "./SessionChatView";
 
 export type ExtensionPanelPlaceholderKind = "unsupported" | "missing" | "disabled" | "failed";
 
@@ -145,6 +150,11 @@ export function ExtensionPanelFrame({
 	);
 }
 
+/** `PanelHost.renderChat`: the session's live chat, hydrated on demand, in its own workspace. */
+export function renderPanelChat(chat: PanelChatSession): ReactNode {
+	return <SessionChatView workspaceId={chat.workspaceId} sessionId={chat.sessionId} />;
+}
+
 export function PanelToolCallView({ call }: { call: PanelToolCall }) {
 	return (
 		<ErrorBoundary
@@ -179,8 +189,6 @@ function useAppPanelHost({
 	apiVersion: number | undefined;
 	protocolVersion: number | null;
 }): PanelHost {
-	const modeId = useLayoutModeId();
-	const layoutPreset = extensionLayoutMode(modeId, extension);
 	return useMemo(
 		() =>
 			createPanelHost({
@@ -188,10 +196,14 @@ function useAppPanelHost({
 				extension,
 				openPanel: (id, params, title) => {
 					const target = findExtensionPanel(extension, id);
-					if (target) openExtensionPanel(workspaceId, target, params, title);
+					if (!target) return;
+					leaveViewForCenter();
+					openExtensionPanel(workspaceId, target, params, title);
 				},
 				renderToolCall: (call) => <PanelToolCallView call={call} />,
+				renderChat: renderPanelChat,
 				openFile: (target, path, line) => {
+					leaveViewForCenter();
 					const open = () =>
 						void (line === undefined
 							? openFileInTab(target, path, "keep")
@@ -210,14 +222,12 @@ function useAppPanelHost({
 				openArtifacts: () => useAppStore.getState().requestToolView(workspaceId, "artifacts"),
 				peek: (entry) => useAppStore.getState().requestPeek(workspaceId, entry),
 				disabled: () => useAppStore.getState().disabledExtensions.includes(extension),
-				layoutPreset,
-				enterLayoutPreset: (preset) => enterOwnLayoutPreset(extension, preset),
-				exitLayoutPreset: () => exitOwnLayoutPreset(extension),
+				openView: (view) => openOwnView(extension, view),
 				scope: { workspaceId, projectId },
 				hostProtocol: protocolVersion,
 				hostApiVersion: apiVersion,
 			}),
-		[apiVersion, extension, layoutPreset, projectId, protocolVersion, workspaceId],
+		[apiVersion, extension, projectId, protocolVersion, workspaceId],
 	);
 }
 
@@ -382,4 +392,70 @@ export function ExtensionPanelBody({
 		);
 	}
 	return <ExtensionPlaceholderBody state={state} onRetry={catalog.retry} />;
+}
+
+/** A view's center: its panel in the active workspace's scope, or the panels' placeholders. */
+export function ExtensionViewCenter({
+	workspaceId,
+	viewId,
+}: {
+	workspaceId: string;
+	viewId: string;
+}) {
+	const view = findExtensionView(viewId);
+	const panel = view ? findExtensionPanel(view.extension, view.declaration.center) : undefined;
+	const protocolVersion = useAppStore((state) => state.protocolVersion);
+	const disabled = useAppStore((state) => state.disabledExtensions);
+	const projectId = useAppStore(
+		(state) => selectWorkspaceById(state, workspaceId)?.projectId ?? null,
+	);
+	const catalog = useExtensionCatalog(
+		panel !== undefined && supportsExtensionQuery(protocolVersion),
+	);
+	const state = extensionPanelState({ panel, protocolVersion, disabled, catalog: catalog.read });
+	return (
+		<div data-testid="extension-view-center" data-view={viewId} className="h-full min-h-0">
+			{state.kind === "ready" && projectId !== null ? (
+				<LoadedViewCenter
+					workspaceId={workspaceId}
+					projectId={projectId}
+					panel={state.panel}
+					entry={state.entry}
+					protocolVersion={protocolVersion}
+				/>
+			) : (
+				<ExtensionPlaceholderBody state={state} onRetry={catalog.retry} />
+			)}
+		</div>
+	);
+}
+
+function LoadedViewCenter({
+	workspaceId,
+	projectId,
+	panel,
+	entry,
+	protocolVersion,
+}: {
+	workspaceId: string;
+	projectId: string;
+	panel: RegisteredPanel;
+	entry: ExtensionCatalogEntry;
+	protocolVersion: number | null;
+}) {
+	const host = useAppPanelHost({
+		extension: panel.extension,
+		workspaceId,
+		projectId,
+		apiVersion: entry.apiVersion,
+		protocolVersion,
+	});
+	return (
+		<ExtensionPanelFrame
+			declaration={panel.declaration}
+			host={host}
+			params={NO_PARAMS}
+			resetKeys={[panel.extension, panel.panel]}
+		/>
+	);
 }

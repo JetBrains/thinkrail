@@ -24,6 +24,7 @@ import { useAutoPlanSummary } from "../chat/useChatTodos";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { preloadedLazy } from "../components/preloadedLazy";
 import { QuietScrollArea } from "../components/QuietScrollArea";
+import { findExtensionView } from "../extensions";
 import { keybindingKeys, keybindingLabel, type ResolvedKeybindings } from "../keybindings";
 import {
 	type ChatAction,
@@ -82,13 +83,19 @@ import {
 	useDeletedChatPlacementReconciliation,
 	useWorkspaceChatCatalogReconciliation,
 } from "./chatReconciliation";
-import { ExtensionPanelBody, ExtensionSideToolBody } from "./ExtensionPanelBody";
+import {
+	ExtensionPanelBody,
+	ExtensionSideToolBody,
+	ExtensionViewCenter,
+} from "./ExtensionPanelBody";
 import {
 	useChatActions,
 	useChatTabActions,
 	useLayoutExtensionTools,
 	useLeftRailFooter,
+	useLeftRailViews,
 } from "./extensionEntryPoints";
+import { useActiveViewId } from "./extensionViews";
 import { useResolvedKeybindings } from "./keybindingState";
 import {
 	type BuiltinLayoutToolId,
@@ -103,6 +110,7 @@ import {
 	type LayoutToolId,
 	showingAuxiliaryKey,
 	Workbench,
+	type WorkbenchCenterOverride,
 	type WorkbenchChromeShortcuts,
 	type WorkbenchPeek,
 	type WorkspaceLayoutDocument,
@@ -448,6 +456,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const chatActions = useChatActions();
 	const chatTabActions = useChatTabActions(workspaceId, chatActions);
 	const railFooter = useLeftRailFooter();
+	const railViews = useLeftRailViews();
 	const extensionTools = useLayoutExtensionTools();
 	const requestRenameChat = useCallback(
 		(sessionId: string, titleInput: string, currentTitle: string) => {
@@ -681,15 +690,36 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const chatFirstPrompts = useAppStore(
 		useShallow((state) => selectUnnamedChatFirstPrompts(state, workspaceId)),
 	);
+	const activeViewId = useActiveViewId();
+	const activeView = activeViewId ? findExtensionView(activeViewId) : undefined;
 	const peekOpen = useAppStore((state) => selectPeekOpen(state, workspaceId));
-	const peekWidth = layoutPreferences.peekWidth ?? LAYOUT_LIMITS.defaultPeekWidth;
+	const peekWidth =
+		layoutPreferences.peekWidth ??
+		(activeViewId === null ? LAYOUT_LIMITS.defaultPeekWidth : LAYOUT_LIMITS.defaultViewPeekWidth);
 	const renderPeek = useCallback(
 		() => <PeekPane key={workspaceId} workspaceId={workspaceId} />,
 		[workspaceId],
 	);
 	const peek = useMemo<WorkbenchPeek>(
-		() => ({ open: peekOpen, width: peekWidth, onResize: resizePeek, render: renderPeek }),
-		[peekOpen, peekWidth, renderPeek],
+		() => ({
+			open: peekOpen || activeViewId !== null,
+			width: peekWidth,
+			onResize: resizePeek,
+			render: renderPeek,
+		}),
+		[activeViewId, peekOpen, peekWidth, renderPeek],
+	);
+	const viewLabel = activeView ? t(activeView.declaration.title) : t("workbench.view.fallback");
+	const centerOverride = useMemo<WorkbenchCenterOverride | undefined>(
+		() =>
+			activeViewId === null
+				? undefined
+				: {
+						id: "view-center",
+						label: viewLabel,
+						render: () => <ExtensionViewCenter workspaceId={workspaceId} viewId={activeViewId} />,
+					},
+		[activeViewId, viewLabel, workspaceId],
 	);
 	const rendered = document && attention ? { document, attention } : pendingProjection;
 
@@ -808,7 +838,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			) : (
 				<ReviewPanel key={workspaceId} workspaceId={workspaceId} failed={review.failed} />
 			),
-			orchestrator: <OrchestratorTool workspaceId={workspaceId} landingChord={landingChord} />,
+			orchestrator: <OrchestratorTool workspaceId={workspaceId} />,
 			plan: railPlanSessionId ? (
 				<ErrorBoundary
 					label={t("shell.workbench.panel.planRail")}
@@ -1046,6 +1076,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				registerTabCommands={registerTabCommands}
 				chromeShortcuts={chromeShortcuts}
 				leftRailFooter={railFooter}
+				leftRailViews={railViews}
 				renderTabBody={renderTabBody}
 				renderTabAdornment={renderTabAdornment}
 				renderToolBody={renderToolBody}
@@ -1146,6 +1177,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				}
 				onGestureCanceled={() => toast.info(t("shell.workbench.gestureCanceled"))}
 				peek={peek}
+				{...(centerOverride ? { centerOverride } : {})}
 			/>
 			{terminalClose.confirmation}
 		</div>

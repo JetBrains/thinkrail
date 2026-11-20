@@ -2,7 +2,6 @@ import { describe, expect, it, mock } from "bun:test";
 import {
 	defineWebExtension,
 	type GlobalOverlayProps,
-	type LayoutPresetDeclaration,
 	type PanelDeclaration,
 	type PanelHost,
 	type PanelPeekEntry,
@@ -12,6 +11,7 @@ import {
 	type StatusItemProps,
 	type ToolRegistrationOptions,
 	type ToolRenderProps,
+	type ViewDeclaration,
 	type WebExtension,
 } from "@thinkrail/extension-api/web";
 
@@ -179,28 +179,27 @@ describe("side tools and the panel host's workspace, Peek and event seams", () =
 		expect(listeners.size).toBe(0);
 	});
 
-	it("preserves status items without loading them, and layout presets as side regions", async () => {
+	it("preserves status items without loading them, and views naming their panel and side tools", async () => {
 		const Inbox = ({ host }: StatusItemProps) => host.scope?.projectId ?? null;
 		const load = mock(async () => ({ default: Inbox }));
 		const inbox: StatusItemDeclaration = { load };
-		const mode: LayoutPresetDeclaration = {
+		const view: ViewDeclaration = {
 			title: "common.retry",
 			icon: () => null,
-			left: {
-				visible: true,
-				width: 0.6,
-				groups: [{ id: "board", weight: 1, folded: false, tools: ["ext:board:board"] }],
-			},
-			right: { visible: false, width: 0.28, groups: [] },
+			center: "main",
+			left: "nav",
+			bottom: "activity",
+			layout: { leftWidth: 0.18, bottomHeight: 0.26 },
 		};
 		const extension = defineWebExtension({
 			name: "board",
 			statusItems: { inbox },
-			layoutPresets: { board: mode },
+			views: { board: view },
 		});
 
 		expect(extension.statusItems.inbox).toBe(inbox);
-		expect(extension.layoutPresets.board).toBe(mode);
+		expect(extension.views.board).toBe(view);
+		expect(extension.views.board).not.toHaveProperty("peekEmpty");
 		expect(extension).not.toHaveProperty("sideTools");
 		expect(load).not.toHaveBeenCalled();
 		expect((await extension.statusItems.inbox.load()).default).toBe(Inbox);

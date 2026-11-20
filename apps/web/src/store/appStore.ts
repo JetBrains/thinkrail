@@ -363,16 +363,18 @@ function availableEditorTabId(tabs: readonly EditorTab[], tab: EditorTab): strin
 
 export type TabIntent = "preview" | "keep";
 
-/** A layout mode this window is in: an extension's `layoutPresets` entry and the frame it replaced. */
-export interface LocalLayoutMode {
-	/** `<extension>:<preset>`. */
+/** The extension view this window is in (an extension's `views` entry) and the workbench it replaced. */
+export interface LocalLayoutView {
+	/** `<extension>:<view>`. */
 	id: string;
-	/** The replaced frame's sides, captured as a resource-free preset's regions. */
-	restore: Pick<LayoutPreset, "left" | "right">;
-	/** The replaced frame's restore targets of the tools it did not place. */
+	/** The replaced frame's sides and bottom, captured as a resource-free preset's regions. */
+	restore: Pick<LayoutPreset, "left" | "right" | "bottom">;
+	/** The replaced frame's restore targets. */
 	restoreTargets: WorkbenchFrame["toolRestoreTargets"];
-	/** The tool tab each captured side group showed, by group id. */
+	/** The tool tab each captured side or bottom group showed, by group id. */
 	selected: Record<string, string>;
+	/** Read from a former Board mode: the frame still has that mode's sides, and the view is arranged anew. */
+	migrated?: true;
 }
 
 export interface LocalLayoutPreferences {
@@ -380,7 +382,7 @@ export interface LocalLayoutPreferences {
 	maxSideGroups: number;
 	maxBottomGroups: number;
 	peekWidth?: number;
-	layoutMode?: LocalLayoutMode;
+	layoutView?: LocalLayoutView;
 }
 
 export const DEFAULT_LOCAL_LAYOUT_PREFERENCES: LocalLayoutPreferences = {

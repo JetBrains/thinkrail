@@ -24,9 +24,10 @@ its cards; its **autopilot** (§ Autopilot) is host policy that decides *when* a
 the orchestrator, never a model loop of its own. **Smart review** (§ Smart review) checks a card's change
 against its spec through the host's independent reviewer and writes a review packet. Eight skills
 (§ Skills) put the agent to work on the roadmap and discovery. There is no portable pi package, because
-every tool acts on host-owned state. The web half ([[submodule-ext-board-web]]) is the Board side tool
-with its views, the card, initiative and idea panels in Peek, the cross-project "Needs you" counter, an
-initiative's section of a container's overview and Board mode.
+every tool acts on host-owned state. The web half ([[submodule-ext-board-web]]) is **Board view** — the
+board taking the whole workbench: its navigation on the left, its views in the center, the card,
+initiative and idea panels in Peek (a card's attempt chat answerable there), what is happening below —,
+the cross-project "Needs you" counter and an initiative's section of a container's overview.
 
 The roadmap is board data: the board writes no spec itself, and the published snapshot (`ROADMAP.md`) is a
 file the user commits. What lands as a capability reaches `goal-and-requirements` through the
@@ -77,8 +78,9 @@ initiative-close skill's edit, made on the human's approval and shipped as a nor
     not running.
   - Enabled by default. Switching it off refuses its queries and actions, stops its host service and
     withholds its tools.
-- **`./web`**: `defineWebExtension({ name: "board", title, sideTools: { board }, panels: { card, initiative, idea },
-  statusItems: { inbox }, containerSections: { initiative }, layoutPresets: { board }, commands, shortcuts })`,
+- **`./web`**: `defineWebExtension({ name: "board", title, views: { board }, sideTools: { nav, activity },
+  panels: { main, card, initiative, idea }, statusItems: { inbox }, containerSections: { initiative },
+  commands, shortcuts })`,
   in the web registry. It never imports its `./server` half: it restates and checks the answers it reads,
   and reaches the host only through its `PanelHost` ([[submodule-ext-board-web]] § Boundary).
 
@@ -608,7 +610,8 @@ The contract they share:
   (non-empty, bounded text; enums; `YYYY-MM-DD` dates; bounded day counts; lists of at most 100), and answers
   JSON-serializable data. The web half restates the answers' shapes and checks them on arrival
   ([[submodule-ext-board-web]]).
-- **Families**: the board's (`board.get`, `inbox`, `card.*`, `triage.accept`, `settings.*`, `models.list`);
+- **Families**: the board's (`board.get`, `inbox`, `projects.list`, `activity.get`, `agents.get`, `card.*`,
+  `triage.accept`, `settings.*`, `models.list`);
   the sources' (`card.adopt`, `card.deferrals`, `github.*`, `openspec.*`, § Sources); smart review's
   (`card.review`, `card.packet`, `card.packetToPr`, § Smart review); the roadmap's (`roadmap.*`,
   `insights.get` with 1–52 weeks, 12 by default, `initiative.*`, `project.*`, `milestone.*` and the planning
@@ -629,7 +632,14 @@ The board's own reads and card writes:
   GitHub status and `openspec { present, cli, checking }` (Default has `openspec/`, the CLI's version or
   `null`). **`inbox`** lists the active cards across the open projects whose latest attempt is `needs_you`
   or `failed`; an `interrupted` run (a stop, a host restart) reads as `failed`, as the card's badge does,
-  since the card is stalled either way. **`card.get`** answers the card with its project and transitions; a
+  since the card is stalled either way. Board view's reads across the open projects: **`projects.list`**
+  (each open repository project with its stored cards neither completed nor canceled, for the project
+  switcher), **`activity.get { projectId?, limit? }`** (the transition log of one project or of all, newest
+  first, at most `limit` — 1–200, 50 by default —, each with its project and, while the card is stored, its
+  title) and **`agents.get`** (each active card whose latest attempt's chat is working, waiting —
+  `needs_you` — or failed, an interrupted run included, with its workspace, session, attempt start, plan
+  and last action); all three are re-read on `board.changed`, the agents also on `board.activity`.
+  **`card.get`** answers the card with its project and transitions; a
   virtual card answers itself with none, and one stored meanwhile (adopted, an issue started or edited)
   answers as the stored card. **`models.list`** is the host's `models()`, the models a new chat can use, for
   the Start form's picker.
@@ -740,9 +750,9 @@ tools when configured, session insights only if a tool for them exists:
 
 ## Web half
 
-The web half ([[submodule-ext-board-web]]) is presentation over these queries and nothing more: the Board
-side tool (Board, List, Roadmap with Discovery, Insights), the card, initiative and idea panels in Peek, the
-"Needs you" status item, the container section and Board mode. It holds no board state of its own — every
+The web half ([[submodule-ext-board-web]]) is presentation over these queries and nothing more: Board view
+(navigation; Board, List, Roadmap, Graph, Timeline, Insights and Discovery; activity and agents), the card,
+initiative and idea panels in Peek, the "Needs you" status item and the container section. It holds no board state of its own — every
 surface re-reads on `board.changed` (and, where a last action shows, `board.activity`) —, so the rules,
 refusals and limits above are the server's alone; where the UI shares a rule (Start's size workflow, the
 attention limits' warning) it mirrors the server's rather than deciding.
@@ -765,10 +775,10 @@ most of its host seams; each arrived in the slice that used it.
 - **Lifetime and events**: `hostService` runs `Board.listen` over `host.events` (§ Events) and
   `host.publish`es `board.changed` and `board.activity`; `sessionExtensions` adds the `board_*` tools and the
   orchestrator's prompt section; `skillPackages` stages the skills.
-- **Web**: one `sideTools` entry (the Board tool), three `panels` shown in Peek through `PanelHost.peek`, one
-  `statusItems` entry, one `containerSections` entry and one `layoutPresets` entry, all over `PanelHost`'s
-  (or the status item's) `query`, `onEvent`, `openChat`, `openFile`, `openWorkspace` and `peek`, plus the
-  layout-mode members for Board mode ([[submodule-ext-board-web]]).
+- **Web**: one `views` entry (Board view) over its `main` panel and the `nav` and `activity` side tools,
+  three `panels` shown in Peek through `PanelHost.peek`, one `statusItems` entry and one `containerSections`
+  entry, all over `PanelHost`'s (or the status item's) `query`, `onEvent`, `openChat`, `openFile`,
+  `openWorkspace`, `peek`, `openView` and `renderChat` (the card's Chat tab) ([[submodule-ext-board-web]]).
 
 ## Verification
 
@@ -777,8 +787,8 @@ Each section's behavior is covered where it lives; the lists below say where, no
 - **Server units** (`server/*.test.ts`, over the fake host `testHost.ts`):
   - the store (`store.test.ts`: round-trip, defaults, the move-aside, the newer-version refusal, the version-1
     cards file migrated on read), ids and prefixes, the presets, the rule table with its idempotence and
-    the kickoffs (`pure.test.ts`, `rules.test.ts`); the queries' validation, every card write, overlays, WIP
-    and the inbox, and the rules wired to the fake host's events (`board.test.ts`);
+    the kickoffs (`pure.test.ts`, `rules.test.ts`); the queries' validation, every card write, overlays, WIP,
+    the inbox and Board view's projects, activity and agents reads, and the rules wired to the fake host's events (`board.test.ts`);
   - the sources (`sources.test.ts`): task-specs bound and unbound, Adopt, deferrals and their parsing,
     GitHub through a fake `gh` (argv, the TTL, the filter, the kept error, storing on a write, `Closes #N`
     only when missing, its retry, queued with *Add to PR*) and size suggestions (strict parsing, a human's
@@ -819,7 +829,9 @@ Each section's behavior is covered where it lives; the lists below say where, no
   of e2e/SPEC.md): create, edit and Start a card (the kickoff captured without a model), drag and Alt+→ as
   overrides, List and Solo, the switch-off placeholder through a reload; a task-spec card adopted and its
   deferrals sent once; GitHub issues shown, stored by an edit and hidden; the inbox across two projects and
-  its topbar counter; Board mode entered and left with the layout unchanged; a WIP limit and Start's
+  its topbar counter and *Open board*; Board view on every region, left with the layout exactly as before
+(the rail toggle, the palette, *Back to workbench*), its navigation switching the project and narrowing to
+an initiative and a queue, and a waiting agent's question answered from its card's Chat tab in Peek; a WIP limit and Start's
   warning; Triage's Accept all; follow selection off and on; the roadmap (an initiative created, moved,
   given criteria, a card and *Plan with agent*), the step graph's pin, link, cycle refusal and unlink, the
   timeline, Insights' empty and seeded charts, Publish and *Close initiative*; OpenSpec's recorded fixture

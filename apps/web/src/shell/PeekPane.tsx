@@ -19,12 +19,14 @@ import {
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
 import { useMemo, useState } from "react";
+import { findExtensionView } from "../extensions";
 import { fileName } from "../lib";
 import { ContainerOverview } from "../panels/ContainerOverview";
 import { type PeekEntry, peekEntryIdentity, useAppStore } from "../store";
 import { PEEK_HOST } from "./AppResourceHost";
 import { ExtensionContainerSections } from "./ExtensionContainerSections";
 import { ExtensionPanelBody } from "./ExtensionPanelBody";
+import { useActiveViewId } from "./extensionViews";
 import { type LayoutExtensionTab, layoutTabName } from "./layout";
 import { hidePeekFrom, openPeekInTab, removePeekEntryFrom } from "./peekControl";
 
@@ -221,14 +223,25 @@ function PeekCrumbs({
 	);
 }
 
+/** Peek's column: the shown entry with its toolbar; with nothing peeked, an open view's placeholder, else nothing. */
 export function PeekPane({ workspaceId }: { workspaceId: string }) {
 	const t = useT();
+	const viewId = useActiveViewId();
 	const peek = useAppStore((state) => state.peekByWorkspace[workspaceId]);
 	const containers = useAppStore((state) => state.containers);
 	const [views, setViews] = useState<Readonly<Record<string, PeekView>>>({});
 	const [fullscreen, setFullscreen] = useState(false);
 	const entry = peek?.stack[peek.index];
-	if (!peek || !entry) return null;
+	if (!peek || !entry) {
+		return viewId === null ? null : (
+			<div
+				data-testid="peek-empty"
+				className="flex h-full min-h-0 items-center justify-center p-16 text-center tr-text-ui text-text-muted"
+			>
+				{t(findExtensionView(viewId)?.declaration.peekEmpty ?? "workbench.view.peekEmpty")}
+			</div>
+		);
+	}
 	const identity = peekEntryIdentity(entry);
 	const view = views[identity] ?? {};
 	const setView = (patch: PeekView) =>

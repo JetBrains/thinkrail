@@ -30,7 +30,6 @@ import { cn } from "@thinkrail/ui/utils";
 import { lazy, type ReactNode, Suspense, useState } from "react";
 import type { BoardLayout, BoardView } from "./api";
 import { FIELD } from "./CardParts";
-import { DiscoveryPane } from "./Discovery";
 import { HORIZON_HINTS, HORIZON_LABELS } from "./labels";
 import {
 	AgentDots,
@@ -62,7 +61,8 @@ import {
 } from "./roadmapApi";
 import { useBoardChanged, useHostQuery } from "./useHostQuery";
 
-export type RoadmapSubView = "horizons" | "timeline" | "goals" | "graph" | "discovery";
+/** Board view's roadmap views: the horizons (or Goals), the step graph and the timeline. */
+export type RoadmapKind = "roadmap" | "graph" | "timeline";
 
 const RoadmapFlow = lazy(() => import("./RoadmapFlow"));
 
@@ -501,29 +501,31 @@ export function GoalsView({ view, actions }: { view: RoadmapView; actions: Roadm
 }
 
 /**
- * The Board tool's Roadmap view: the board's `roadmap.get`, re-read on `board.changed`, as Now / Next /
- * Later, the timeline, Goals or the step graph (those two a lazy chunk), or Discovery's ideas and
- * watchlist (its own `discovery.get`); an initiative or an idea opens in Peek.
+ * Board view's roadmap views over the board's `roadmap.get`, re-read on `board.changed`: Now / Next / Later
+ * or Goals, the step graph and the timeline (those two a lazy chunk); an initiative opens in Peek.
  */
 export function RoadmapPane({
 	host,
+	projectId,
+	kind,
 	layout,
 	board,
 	onError,
 }: {
 	host: PanelHost;
+	projectId: string;
+	kind: RoadmapKind;
 	layout: BoardLayout;
-	/** The Board tool's own `board.get`: the step graph's card titles and states. */
+	/** Board view's own `board.get`: the step graph's card titles and states. */
 	board: BoardView | null;
 	onError: (error: unknown) => void;
 }) {
 	const t = useT();
-	const { workspaceId, projectId } = host.scope;
-	const roadmap = useHostQuery(`roadmap:${workspaceId}:${projectId}`, (signal) =>
+	const roadmap = useHostQuery(`roadmap:${projectId}`, (signal) =>
 		loadRoadmap(host, projectId, signal),
 	);
 	useBoardChanged(host, projectId, roadmap.reload);
-	const [sub, setSub] = useState<RoadmapSubView>("horizons");
+	const [goals, setGoals] = useState(false);
 	const [reviewing, setReviewing] = useState(false);
 	const write = (run: () => Promise<unknown>) =>
 		run().then(roadmap.reload, (error: unknown) => {
@@ -555,39 +557,26 @@ export function RoadmapPane({
 			}, onError)
 			.finally(() => setReviewing(false));
 	};
+	const shown = kind === "roadmap" ? (goals ? "goals" : "horizons") : kind;
 	return (
-		<div data-testid="board-roadmap" data-view={sub} className="flex min-h-0 flex-1 flex-col">
+		<div data-testid="board-roadmap" data-view={shown} className="flex min-h-0 flex-1 flex-col">
 			<div className="flex shrink-0 flex-wrap items-center gap-4 border-border-muted border-b px-8 py-2">
-				<ToggleSegment
-					testid="board-roadmap-view-horizons"
-					label={t("board.roadmap.view.horizons")}
-					active={sub === "horizons"}
-					onClick={() => setSub("horizons")}
-				/>
-				<ToggleSegment
-					testid="board-roadmap-view-timeline"
-					label={t("board.roadmap.view.timeline")}
-					active={sub === "timeline"}
-					onClick={() => setSub("timeline")}
-				/>
-				<ToggleSegment
-					testid="board-roadmap-view-goals"
-					label={t("board.roadmap.view.goals")}
-					active={sub === "goals"}
-					onClick={() => setSub("goals")}
-				/>
-				<ToggleSegment
-					testid="board-roadmap-view-graph"
-					label={t("board.roadmap.view.graph")}
-					active={sub === "graph"}
-					onClick={() => setSub("graph")}
-				/>
-				<ToggleSegment
-					testid="board-roadmap-view-discovery"
-					label={t("board.roadmap.view.discovery")}
-					active={sub === "discovery"}
-					onClick={() => setSub("discovery")}
-				/>
+				{kind === "roadmap" ? (
+					<>
+						<ToggleSegment
+							testid="board-roadmap-view-horizons"
+							label={t("board.roadmap.view.horizons")}
+							active={!goals}
+							onClick={() => setGoals(false)}
+						/>
+						<ToggleSegment
+							testid="board-roadmap-view-goals"
+							label={t("board.roadmap.view.goals")}
+							active={goals}
+							onClick={() => setGoals(true)}
+						/>
+					</>
+				) : null}
 				<Button
 					variant="ghost"
 					size="s"
@@ -600,9 +589,7 @@ export function RoadmapPane({
 					{t("board.roadmap.chat.review")}
 				</Button>
 			</div>
-			{sub === "discovery" ? (
-				<DiscoveryPane host={host} layout={layout} onError={onError} />
-			) : roadmap.state.kind === "loading" ? (
+			{roadmap.state.kind === "loading" ? (
 				<LoadingRegion
 					rows={6}
 					label={t("board.loading")}
@@ -622,9 +609,9 @@ export function RoadmapPane({
 						{t("board.retry")}
 					</Button>
 				</div>
-			) : sub === "horizons" ? (
+			) : shown === "horizons" ? (
 				<HorizonsView view={roadmap.state.value} layout={layout} actions={actions} />
-			) : sub === "goals" ? (
+			) : shown === "goals" ? (
 				<GoalsView view={roadmap.state.value} actions={actions} />
 			) : (
 				<Suspense
@@ -641,7 +628,7 @@ export function RoadmapPane({
 						host={host}
 						view={roadmap.state.value}
 						board={board}
-						kind={sub}
+						kind={shown}
 						layout={layout}
 						onError={onError}
 						onReload={roadmap.reload}

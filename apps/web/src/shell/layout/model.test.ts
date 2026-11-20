@@ -661,9 +661,9 @@ describe("workspace layout model", () => {
 	test("an extension's side tool waits unplaced at its default side only while offered, and reveals there", () => {
 		const icon = () => null;
 		const offered: LayoutToolCatalog = {
-			"ext:board:board": { titleKey: "board.tool.title", icon, defaultSide: "left", offered: true },
+			"ext:board:board": { titleKey: "board.nav.title", icon, defaultSide: "left", offered: true },
 			"ext:notes:list": { titleKey: "notes.missing", icon, defaultSide: "right", offered: true },
-			"ext:off:tool": { titleKey: "board.tool.title", icon, defaultSide: "left", offered: false },
+			"ext:off:tool": { titleKey: "board.nav.title", icon, defaultSide: "left", offered: false },
 		};
 		const document = baseDocument();
 		expect(unplacedTools(document)).not.toContain("ext:board:board");

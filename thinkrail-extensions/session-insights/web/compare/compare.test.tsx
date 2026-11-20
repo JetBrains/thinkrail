@@ -215,6 +215,8 @@ describe("the two-session diff", () => {
 			openChat: noop,
 			openPanel: noop,
 			renderToolCall: () => null,
+			renderChat: () => null,
+			openView: () => {},
 			openFile: noop,
 			openWorkspace: () => {},
 			peek: () => {},

@@ -53,7 +53,7 @@ import type {
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import type { Command, CommandShortcut } from "../commands";
-import type { RegisteredLayoutPreset, RegisteredPanel } from "../extensions";
+import type { RegisteredPanel, RegisteredView } from "../extensions";
 import {
 	DESKTOP_KEYS,
 	FOCUS_GROUP_BINDINGS,
@@ -116,10 +116,10 @@ export interface PaletteCatalogDeps {
 	readonly extensionPanels: readonly RegisteredPanel[];
 	/** The extensions' side tools a Show command may reveal: offered ones (their extension on and listed). */
 	readonly extensionTools: readonly PaletteExtensionTool[];
-	/** The extensions' layout presets an Enter command may apply. */
-	readonly layoutModes: readonly RegisteredLayoutPreset[];
-	/** The window's layout mode: its id and, when this build declares it, its preset. */
-	readonly activeLayoutMode: { id: string; preset: RegisteredLayoutPreset | undefined } | null;
+	/** The extensions' views an Enter command may open: openable ones. */
+	readonly views: readonly RegisteredView[];
+	/** The window's view: its id and, when this build declares it, its declaration. */
+	readonly activeView: { id: string; view: RegisteredView | undefined } | null;
 	readonly actions: PaletteCatalogActions;
 }
 
@@ -142,8 +142,8 @@ export interface PaletteCatalogActions {
 	readonly toggleRight: () => void;
 	readonly toggleBottom: () => void;
 	readonly showTool: (workspaceId: string, tool: PaletteTool | ExtensionLayoutToolId) => void;
-	readonly enterLayoutMode: (preset: RegisteredLayoutPreset) => void;
-	readonly exitLayoutMode: () => void;
+	readonly enterView: (view: RegisteredView) => void;
+	readonly exitView: () => void;
 	readonly openExtensionPanel: (workspaceId: string, panel: RegisteredPanel) => void;
 	readonly openExtensionPanelInProject: (projectId: string, panel: RegisteredPanel) => void;
 	readonly showFiles: (mode: "all" | "changed") => void;
@@ -369,32 +369,32 @@ function pageZoomCommands({ t, pageZoom }: PaletteCatalogDeps): Command[] {
 	];
 }
 
-function layoutModeCommands(deps: PaletteCatalogDeps): Command[] {
-	const { t, actions, activeLayoutMode } = deps;
+function extensionViewCommands(deps: PaletteCatalogDeps): Command[] {
+	const { t, actions, activeView } = deps;
 	const commands: Command[] = [];
-	if (activeLayoutMode) {
-		const { preset } = activeLayoutMode;
+	if (activeView) {
+		const { view } = activeView;
 		commands.push({
-			id: "view.layoutMode.exit",
-			title: t("commands.view.exitLayoutMode", {
-				mode: preset ? t(preset.declaration.title) : t("commands.view.layoutModeFallback"),
+			id: "view.extensionView.exit",
+			title: t("commands.view.exitView", {
+				view: view ? t(view.declaration.title) : t("workbench.view.fallback"),
 			}),
 			group: "view",
-			icon: preset?.declaration.icon ?? RiLayoutGridLine,
-			keywords: ["layout", "mode", "restore", "leave"],
-			run: actions.exitLayoutMode,
+			icon: view?.declaration.icon ?? RiLayoutGridLine,
+			keywords: ["view", "workbench", "back", "restore", "leave"],
+			run: actions.exitView,
 		});
 	}
 	if (!deps.activeWorkspace) return commands;
-	for (const preset of deps.layoutModes) {
-		if (preset.id === activeLayoutMode?.id) continue;
+	for (const view of deps.views) {
+		if (view.id === activeView?.id) continue;
 		commands.push({
-			id: `view.layoutMode.enter.${preset.id}`,
-			title: t("commands.view.enterLayoutMode", { mode: t(preset.declaration.title) }),
+			id: `view.extensionView.enter.${view.id}`,
+			title: t("commands.view.enterView", { view: t(view.declaration.title) }),
 			group: "view",
-			icon: preset.declaration.icon,
-			keywords: ["layout", "mode", "preset", preset.extension],
-			run: () => actions.enterLayoutMode(preset),
+			icon: view.declaration.icon,
+			keywords: ["view", "open", view.extension],
+			run: () => actions.enterView(view),
 		});
 	}
 	return commands;
@@ -450,7 +450,7 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 			});
 		}
 	}
-	commands.push(...layoutModeCommands(deps));
+	commands.push(...extensionViewCommands(deps));
 	const { contextProjectId } = deps;
 	const openPanel = activeWorkspace
 		? (panel: RegisteredPanel) => actions.openExtensionPanel(activeWorkspace.id, panel)

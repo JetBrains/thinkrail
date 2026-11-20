@@ -13,7 +13,7 @@ import {
 	type TaskSpecRef,
 	triageGroups,
 } from "./api";
-import { GithubBanner, GithubMenu } from "./BoardTool";
+import { GithubBanner, GithubMenu } from "./BoardMain";
 import { IssueLink, TaskSpecCardDetails, TaskSpecs } from "./CardPanel";
 import { type CardActions, CardTile } from "./CardTile";
 import { boardOf, cardOf, fakeHost, liveOf } from "./fixtures.test";

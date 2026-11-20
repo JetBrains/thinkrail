@@ -1,9 +1,9 @@
-import { RiQuestionLine, RiRefreshLine } from "@remixicon/react";
+import { RiExternalLinkLine, RiQuestionLine, RiRefreshLine } from "@remixicon/react";
 import type { StatusItemHost } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
-import { cardPeekEntry, type InboxItem, inboxTarget, loadInbox } from "./api";
+import { answerInbox, cardPeekEntry, type InboxItem, inboxTarget, loadInbox } from "./api";
 import { INBOX_REASON_LABELS } from "./labels";
 import { useAnyBoardChanged, useHostQuery } from "./useHostQuery";
 
@@ -30,6 +30,10 @@ export function InboxRow({
 	const target = inboxTarget(item);
 	const peek = () => {
 		host.peek(cardPeekEntry(item.projectId, card));
+		onAct?.();
+	};
+	const answer = () => {
+		answerInbox(host, item);
 		onAct?.();
 	};
 	return (
@@ -73,45 +77,42 @@ export function InboxRow({
 					{t(INBOX_REASON_LABELS[reason])}
 				</span>
 				{target ? (
-					<Button
-						variant={reason === "failed" ? "outline" : "soft-primary"}
-						size="s"
-						iconLeft={reason === "failed" ? RiRefreshLine : RiQuestionLine}
-						data-testid="board-inbox-answer"
-						onClick={() => {
-							host.openChat(target);
-							onAct?.();
-						}}
-					>
-						{reason === "failed" ? t("board.inbox.retry") : t("board.inbox.answer")}
-					</Button>
+					<>
+						<Button
+							variant={reason === "failed" ? "outline" : "soft-primary"}
+							size="s"
+							iconLeft={reason === "failed" ? RiRefreshLine : RiQuestionLine}
+							data-testid="board-inbox-answer"
+							onClick={answer}
+						>
+							{reason === "failed" ? t("board.inbox.retry") : t("board.inbox.answer")}
+						</Button>
+						<IconButton
+							icon={RiExternalLinkLine}
+							size="s"
+							label={t("board.inbox.openWorkspace")}
+							data-testid="board-inbox-workspace"
+							onClick={() => {
+								host.openChat(target);
+								onAct?.();
+							}}
+						/>
+					</>
 				) : null}
 			</span>
 		</li>
 	);
 }
 
-/** "Needs you" across every open project, above the board: chips when wide, a list when narrow. */
-export function InboxStrip({
-	host,
-	items,
-	compact,
-}: {
-	host: StatusItemHost;
-	items: readonly InboxItem[];
-	compact: boolean;
-}) {
+/** "Needs you" across every open project, above the board, as chips that wrap. */
+export function InboxStrip({ host, items }: { host: StatusItemHost; items: readonly InboxItem[] }) {
 	const t = useT();
 	if (items.length === 0) return null;
 	return (
 		<section
 			data-testid="board-inbox-strip"
-			data-compact={compact || undefined}
 			aria-label={t("board.inbox.label")}
-			className={cn(
-				"flex shrink-0 gap-8 border-border-muted border-b bg-feedback-warning-subtle px-8 py-4",
-				compact ? "flex-col" : "flex-wrap items-center",
-			)}
+			className="flex shrink-0 flex-wrap items-center gap-8 border-border-muted border-b bg-feedback-warning-subtle px-8 py-4"
 		>
 			<span className="flex shrink-0 items-center gap-8">
 				<span className="tr-text-emphasis text-feedback-warning">
@@ -119,13 +120,13 @@ export function InboxStrip({
 				</span>
 				<span className="tr-text-metadata text-text-subtle">{t("board.inbox.allProjects")}</span>
 			</span>
-			<ul className={cn("flex min-w-0 gap-4", compact ? "flex-col" : "flex-wrap items-center")}>
+			<ul className="flex min-w-0 flex-wrap items-center gap-4">
 				{items.map((item) => (
 					<InboxRow
 						key={`${item.projectId}:${item.card.id}`}
 						item={item}
 						host={host}
-						compact={compact}
+						compact={false}
 					/>
 				))}
 			</ul>
