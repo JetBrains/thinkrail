@@ -96,7 +96,7 @@ the tab badged with the Needs-you count; a tap lands in that chat (a row whose c
   switches, Enable for a skill awaiting confirmation and Reload; read-only phones see them locked)
   as full pages): it renders the
   [[module-chat-ui]] components unchanged (`messagesToRuntime` → `deriveRows` → `ChatTurnView` for the
-  transcript, the shared `Composer` with its slash commands from `session.getCommands`, the model/effort
+  transcript, the shared `Composer` with its slash commands from `session.getCommands` behind chat-ui's built-in `/compact`, `/name` and `/model` (`mergeNativeChatCommands`; `/compact` and `/name` run through `chat/chatDraft` as in the IDE, never as a prompt), the model/effort
   picker over `model.list` → `session.setModel` / `session.setThinkingLevel`, its current model and effort read from each
   `session.getMessages` summary, since `session.list` reports `model: null` for a chat not yet loaded on the host — on a phone the row above the
   field, `ModelSheet.tsx`: a full page with a back arrow (`sheet.tsx`'s `PageSheet`; no autofocus, so no keyboard) with the IDE's `EffortSlider` (levels from the catalog entry) that applies at once

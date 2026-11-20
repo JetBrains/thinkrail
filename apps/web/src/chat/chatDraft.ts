@@ -1,7 +1,8 @@
 import { withRestoredDraft } from "@thinkrail/chat-ui/attachments";
 import type { ComposerHandle } from "@thinkrail/chat-ui/Composer";
 import type { ImageContent, SessionQueueContent } from "@thinkrail/contracts";
-import { useAppStore } from "@/store";
+import { selectCompactionTurnIds, useAppStore } from "@/store";
+import { errorText, getTransport } from "@/transport";
 
 const PARAGRAPH = "\n\n";
 const nonBlank = (part: string): boolean => part.trim() !== "";
@@ -44,4 +45,34 @@ export function restoreQueueToDraft(
 	composer?.restoreAttachments(
 		restored.images.map((image, index) => ({ name: `queued-image-${index + 1}`, content: image })),
 	);
+}
+
+/** `/compact`: the queue goes back in the field first, and a failure lands in the transcript unless pi reported it. */
+export function compactChat(
+	sessionId: string,
+	instructions: string | undefined,
+	composer: ComposerHandle | null,
+): void {
+	const observedTurnIds = selectCompactionTurnIds(useAppStore.getState(), sessionId);
+	void getTransport()
+		.request("session.clearQueue", { sessionId, requireTextOnly: true })
+		.then((content) => {
+			restoreQueueToDraft(sessionId, content, composer);
+			return getTransport().request("session.compact", {
+				sessionId,
+				...(instructions ? { instructions } : {}),
+			});
+		})
+		.catch((error: unknown) =>
+			useAppStore
+				.getState()
+				.appendCompactionFailureUnlessObserved(sessionId, observedTurnIds, errorText(error)),
+		);
+}
+
+/** `/name`: renames the chat, a failure landing in the transcript. */
+export function renameChat(workspaceId: string, sessionId: string, title: string): void {
+	void getTransport()
+		.request("session.rename", { workspaceId, sessionId, title })
+		.catch((error: unknown) => useAppStore.getState().appendErrorTurn(sessionId, errorText(error)));
 }

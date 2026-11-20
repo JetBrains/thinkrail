@@ -146,6 +146,24 @@ test("a phone pairs by link, finds the project on the computer and reads its cha
 		).toBeInViewport();
 		await phone.evaluate(() => window.dispatchEvent(new Event("keyboardWillHide")));
 		await expect.poll(async () => (await composer.boundingBox())?.y ?? 0).toBe(restingBottom);
+
+		const input = phone.getByTestId("chat-input");
+		await input.fill("/");
+		const builtin = phone.locator('[data-testid="slash-command"][data-source="builtin"]');
+		await expect(builtin.filter({ hasText: "/compact" })).toHaveCount(1);
+		await expect(builtin.filter({ hasText: "/model" })).toHaveCount(1);
+		await input.fill("/model");
+		await phone.getByTestId("chat-send").click();
+		const sheet = phone.getByTestId("model-sheet");
+		await expect(sheet).toBeVisible();
+		await sheet.getByRole("button", { name: "Back" }).click();
+		await expect(sheet).toBeHidden();
+
+		await input.fill("a draft that survives back");
+		await phone.getByRole("button", { name: "Devices", exact: true }).click();
+		await phone.getByRole("button", { name: /^Default / }).click();
+		await expect(phone.getByTestId("chat-input")).toHaveCount(1);
+		await expect(phone.getByTestId("chat-input")).toHaveValue("a draft that survives back");
 	});
 });
 
