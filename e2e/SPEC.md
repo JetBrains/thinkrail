@@ -581,7 +581,8 @@ URL for the whole run, so a spec that sets its own repository settings names its
 `THINKRAIL_E2E_FAKE_REVIEWER=1`, which makes the dev launcher install a deterministic conformance reviewer
 (`setConformanceReviewRunner`, the host's one seam for it): it answers the spec-written
 `.thinkrail/context/e2e-reviewer.json` of the reviewed workspace as the reviewer's final text, which then
-runs through the real parse, the board's storage and the Review comments. Agent mode leaves it off.
+runs through the real parse, the board's storage and the Review comments. Agent mode leaves it off, and the
+binary and desktop lanes never install it, so the Smart review test carries `@dev-seam`, which those lanes skip.
 
 **Voice input** (`voice-input.spec.ts`) never reaches NVIDIA's servers or a microphone.
 - Every host gets `THINKRAIL_SPEECH_MANIFEST` pointing at the lane's `speech-fixture/manifest.json`, which

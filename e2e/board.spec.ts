@@ -1790,9 +1790,9 @@ test("an OpenSpec change is a card of the Spec-driven preset, read-only without 
 	}
 });
 
-test("Smart review checks a started card against its criteria, comments the unmet one in the workspace's Review, and adds its packet to the PR", async ({
-	page,
-}) => {
+test("Smart review checks a started card against its criteria, comments the unmet one in the workspace's Review, and adds its packet to the PR", {
+	tag: "@dev-seam",
+}, async ({ page }) => {
 	await openBoard(page);
 	await createCard(page, "Greet in French");
 	const panel = peekCard(page);
