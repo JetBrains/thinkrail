@@ -104,7 +104,7 @@ the tab badged with the Needs-you count; a tap lands in that chat (a row whose c
   models); a tap picks and closes, and the composer's `/model` opens it — send / steer / follow-up /
   interrupt through the same `session.*` methods as the IDE, tool-card answers through
   `session.respondToTool`). Every chat action reports its failure in one line above the field ("what failed: why"; `async.ts`'s `reasonOf` words a read-only or revoked refusal and a closed connection in the phone's locale instead of the host's English):
-  a message that did not go returns to the field ahead of anything typed since, with its images; a failed model or
+  the draft and its images are the store's `draft` / `promptImages`, as in the IDE, so back or a chat switch keeps them; a message that did not go returns to the field ahead of anything typed since, with its images; a failed model or
   effort change reverts only while it is still the shown choice; queue edits and stop run one at a time
   (`async.ts`'s `singleFlight`), and an interrupt sent while a stop is still in flight stays in the field. Extension cards are the IDE's own registry (`registerWebExtensions`), with the
   store's `hostState.awaitingToolCallId` so only the call the agent waits on accepts an answer. An extension
@@ -114,7 +114,7 @@ the tab badged with the Needs-you count; a tap lands in that chat (a row whose c
   and hidden at once. Text buttons in the transcript and the dock are `touch` tall. What the IDE shows around
   its transcript the phone shows too: **Try again** under a provider failure (sends the IDE's `Try again.`);
   the shared `QueueStrip` above the field from the store's queue, whose edit puts a queued message back in the
-  field (`queuedDraft.ts`) and remove drops it (`session.removeQueued`), and stop restores the queue to the
+  field (`chat/chatDraft`'s `restoreQueueToDraft`) and remove drops it (`session.removeQueued`), and stop restores the queue to the
   field (`session.abort` with `restoreQueue`); the shared `StreamIndicator` under the transcript while it runs;
   an extension's `notify` as a system/error row in the transcript, and a provider notice as the shared
   `ExtraUsageNotice` above the field.
@@ -139,7 +139,7 @@ the tab badged with the Needs-you count; a tap lands in that chat (a row whose c
   Capacitor WKWebView persists it on-device). Live status comes from the controller's `session.state` stream; lists are read on screen
   entry, and a workspace's chats re-read when a session appears or leaves in it.
 - **Allowed deps:** the sibling `store`, `transport`, `extensions`, `themes` barrels, `shell/chatReconciliation`, and the
-  chat hooks `chat/useTranscriptSync`, `chat/useSessionStats`, `chat/useModelCatalog`;
+  chat hooks `chat/useTranscriptSync`, `chat/useSessionStats`, `chat/useModelCatalog`, `chat/chatDraft`;
   `@thinkrail/remote-client` (the entire remote engine), `@thinkrail/chat-ui` (the chat renderers and composer —
   never a copy of them), `@thinkrail/contracts`, `@thinkrail/design-tokens` (palettes, semantic CSS,
   `applyPalette`), `@thinkrail/locales/react`, `@thinkrail/ui` primitives, Remix Icon, `@capacitor/app` and

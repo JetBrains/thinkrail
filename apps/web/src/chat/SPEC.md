@@ -2211,7 +2211,8 @@ Unknown custom messages retain their existing behavior.
   **`mcpServerCalls.ts`** (an MCP server's detail body and the chat's calls to it),
   **`useSessionStats.ts`** (generation/revision-fenced authoritative telemetry reads),
   **`useTranscriptSync.ts`** (successful-compaction + connection-generation canonical transcript
-  reconciliation), `SkillsDialog.tsx`, **`useProjectTrustSummary.ts`** (the trust-summary read the Skills
+  reconciliation), **`chatDraft.ts`** (putting queued or unsent messages back in a chat's stored draft ahead
+  of what was typed since — the one restore `ChatView` and the phone's chat share), `SkillsDialog.tsx`, **`useProjectTrustSummary.ts`** (the trust-summary read the Skills
   dialog shares with `panels/ProjectTrustNotice` and New Workspace; its pure derivation and copy live in the
   store-free `projectTrust.ts`), `TemplateEditorDialog.tsx`,
   `SubagentTranscriptDialog.tsx`, **`useModelPreferences.ts`** (pinned / recents / default pair:
