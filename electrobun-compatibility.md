@@ -54,6 +54,17 @@ product contract (it then guards upstream's behavior instead).
 - **Preload passed as source text.** Owner [[module-desktop]], `index.ts`. **Removal gate:** a
   `views://` preload URL loads as a script on Linux (Electrobun 1.18.1 injected it as code). Verify the
   Linux packaged preload smoke.
+- **Linux main window shown after its webview attaches.** Owner [[module-desktop]], `webviewFocus.ts`.
+  Electrobun 2.0.5 shows the window (`gtk_widget_show_all` + `gtk_window_present`) before attaching the
+  WebKitWebView and has no `gtk_widget_grab_focus`. On a real display (WebKitGTK 2.52.6, i3, 2026-11-20)
+  the window opened with `document.hasFocus()=false` and the first ↓ never reached the page, while
+  MiniBrowser on the same host got every key. Created hidden and shown after attach, it opened with
+  `hasFocus=true` and every key arrived. There is no webview focus API yet
+  ([electrobun#142](https://github.com/blackboardsh/electrobun/issues/142), open on 2026-11-20), so focus
+  lost mid-session is not restored. **Removal gate:** Electrobun focuses the webview when it attaches it,
+  or #142 ships a webview focus call. Verify on a Linux display, without the helper, that a fresh window
+  reports `hasFocus=true` and the first key (xdotool ↓) reaches the page; `webviewFocus.test.ts` goes with
+  the helper.
 - **Edge-triggered menu commands and Command-Q key state.** Owner [[module-desktop]], `repeatGate.ts`,
   `quitShortcut.ts`, `keyState.ts`. **Removal gate:** menu actions carry a key-repeat flag and their
   trigger (key or pointer). Verify `repeatGate.test.ts`, `quitShortcut.test.ts`, `keyState.test.ts`.
