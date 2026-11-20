@@ -31,7 +31,8 @@ subagent reads the same in the chat as in Finished.
   `mcpResourceId` names an MCP server's selection id (`mcp:<name>`) so the parent can fill its detail slot.
 - **Public surface:** `ResourcesButton`, `ResourcesAttention`, `ResourcesDock`, `ResourcesInspector`,
   `CommandLogView`, `ResultRow`, `ResultReceipt`, `ResultSource`, `ResourceTarget`, `newestResourceId`,
-  `mcpResourceId`.
+  `mcpResourceId`, `ResourceRow`, `ResourceActions`, `resourceId`, `resourceState`, `isLiveState`,
+  `toResources`, `sortLive`, `sortSettled`.
 - **Allowed external deps:** contracts, React, Remix icons, shared UI primitives and theme utilities,
   `@thinkrail/locales` (UI strings), and `lib` (the shared MCP state vocabulary). Time arrives as a `now` prop so formatting stays pure.
 - **Forbidden:** store/transport, server/portable extension packages, Pi value imports, process

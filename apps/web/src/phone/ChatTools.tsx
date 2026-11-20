@@ -1,15 +1,15 @@
 import { RiBookOpenLine, RiRefreshLine, RiShieldCheckLine } from "@remixicon/react";
-import { ResourcesButton } from "@thinkrail/chat-ui/resources/ResourcesButton";
 import {
 	isLiveState,
 	type ResourceActions,
 	ResourceRow,
+	ResourcesButton,
 	resourceId,
 	resourceState,
 	sortLive,
 	sortSettled,
 	toResources,
-} from "@thinkrail/chat-ui/resources/resourceRow";
+} from "@thinkrail/chat-ui/resources";
 import {
 	ALL_PLUGINS_GROUP,
 	groupSkills,
