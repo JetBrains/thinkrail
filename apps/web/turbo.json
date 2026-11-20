@@ -1,0 +1,16 @@
+{
+	"$schema": "https://turbo.build/schema.json",
+	"extends": ["//"],
+	"tasks": {
+		"typecheck": {
+			"inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/e2e/perf/**"]
+		},
+		"test": {
+			"inputs": [
+				"$TURBO_DEFAULT$",
+				"$TURBO_ROOT$/e2e/perf/**",
+				"$TURBO_ROOT$/thinkrail-extensions/*/web/**"
+			]
+		}
+	}
+}
