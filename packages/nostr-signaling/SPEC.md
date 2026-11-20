@@ -29,7 +29,11 @@ one envelope, ordering rule and relay list.
     publishes to all relays and resolves once one accepted; `ready` settles on the first live subscription
     (EOSE without a close — the pool reports a failed connection as EOSE then close) and rejects with
     `NostrUnreachableError` when none answers in time; a dropped subscription re-opens with backoff;
-    `connectedRelays()` for status. Key helpers `generateNostrSecret` / `nostrPublicKey`.
+    `connectedRelays()` for status. Key helpers `generateNostrSecret` / `nostrPublicKey`. Per-sender state
+    (conversation key, ordering, outbound seq) lives in `peerTable.ts`'s `createPeerTable`, capped at 256 peers
+    with the least recently used dropped: any key may write to a signal, so senders the host never accepted
+    must not accumulate. A dropped live peer only restarts its ordering, and the host's router admits 32
+    sessions, so a live handshake is evicted only by a flood that would also fill the router.
   - `relays.ts` — `DEFAULT_NOSTR_RELAYS` and `normalizeRelays` (distinct `wss://`, loopback `ws://` for
     tests only, capped).
   - `testing.ts` (`./testing` export) — `startTestNostrRelay`, a minimal in-process NIP-01 relay for tests
