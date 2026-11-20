@@ -64,6 +64,7 @@ function links(id: string): Record<string, string> {
 	const dir = linksOf(id);
 	return Object.fromEntries(
 		readdirSync(dir)
+			.sort()
 			.filter((name) => lstatSync(join(dir, name)).isSymbolicLink())
 			.map((name) => [name, readlinkSync(join(dir, name))]),
 	);
