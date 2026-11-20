@@ -102,8 +102,9 @@ unreachable (no route got ready — `RelayUnreachableError`), `host_silent` (the
 - A device session whose channel is not open 60 s after its first frame is closed, on the host and at the
   broker; a refused handshake ends its session at once. A device may send at most 16 MiB in one message
   (the WS frame cap), and a device that stops reading is cut off past 256 MiB queued, as a slow browser tab is.
-- The relay's TURN credentials are handed out before the host authorizes anyone, so they last 10 minutes and
-  each client address gets at most 10 a minute.
+- The relay's TURN credentials are handed out before the host authorizes anyone, so each client address gets
+  at most 10 a minute (they last 12 h: coturn re-checks expiry on every allocation refresh, so a short TTL
+  would cut a long relayed session).
 - Phone access is **off by default**; nothing listens until the user turns it on.
 
 ## Known gaps
