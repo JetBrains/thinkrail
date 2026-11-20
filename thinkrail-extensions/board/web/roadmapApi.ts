@@ -27,6 +27,11 @@ export interface InitiativeUpdate {
 	publishedAt?: number;
 }
 
+/** What holds autopilot back: a human-attention limit past, or a container without an orchestrator. */
+export type AutopilotPause =
+	| { kind: "review" | "needs_you"; count: number; limit: number }
+	| { kind: "orchestrator" };
+
 /** An initiative as `roadmap.get` answers it: stored fields, then its place in the tree and its members. */
 export interface Initiative {
 	id: string;
@@ -47,6 +52,9 @@ export interface Initiative {
 	proposedBy?: "agent";
 	/** When the human confirmed it done in an initiative-close chat. */
 	closedAt?: number;
+	/** The container Run made for it. */
+	containerId?: string;
+	autopilot?: { on: boolean; pausedReason?: AutopilotPause };
 	createdAt: number;
 	updatedAt: number;
 	depth: number;
@@ -644,4 +652,127 @@ export function parentOptions(
 /** The initiative's draft update, the one a save replaces and a publish stamps. */
 export function draftUpdate(initiative: Pick<Initiative, "updates">): InitiativeUpdate | undefined {
 	return initiative.updates.find((update) => update.publishedAt === undefined);
+}
+
+/** A chat the host can open: its project, workspace and session. */
+export interface ChatTarget {
+	projectId: string;
+	workspaceId: string;
+	sessionId: string;
+}
+
+/** An initiative's autopilot as `autopilot.get` answers it: on, paused (with why) or off, and its room. */
+export interface AutopilotView {
+	projectId: string;
+	initiativeId: string;
+	title: string;
+	on: boolean;
+	pausedReason: AutopilotPause | null;
+	container: {
+		id: string;
+		name: string;
+		members: number;
+		orchestrator: ChatTarget | null;
+	} | null;
+	running: number;
+	cap: number;
+	ready: { id: string; title: string; size?: CardSize; offered: boolean; stale: boolean }[];
+}
+
+/** What Run answers: the container, its orchestrator's chat, and the card it started. */
+export interface RunResult {
+	projectId: string;
+	initiativeId: string;
+	containerId: string;
+	orchestrator: ChatTarget;
+	started: { cardId: string; workspaceId: string; sessionId: string; kickoffError?: string } | null;
+}
+
+function isChatTarget(value: unknown): value is ChatTarget {
+	return (
+		isObject(value) &&
+		typeof value.projectId === "string" &&
+		typeof value.workspaceId === "string" &&
+		typeof value.sessionId === "string"
+	);
+}
+
+export function isAutopilotView(value: unknown): value is AutopilotView {
+	return (
+		isObject(value) &&
+		typeof value.projectId === "string" &&
+		typeof value.initiativeId === "string" &&
+		typeof value.on === "boolean" &&
+		(value.pausedReason === null || isObject(value.pausedReason)) &&
+		(value.container === null ||
+			(isObject(value.container) &&
+				typeof value.container.id === "string" &&
+				(value.container.orchestrator === null || isChatTarget(value.container.orchestrator)))) &&
+		typeof value.running === "number" &&
+		typeof value.cap === "number" &&
+		Array.isArray(value.ready)
+	);
+}
+
+function isRunResult(value: unknown): value is RunResult {
+	return (
+		isObject(value) &&
+		typeof value.containerId === "string" &&
+		isChatTarget(value.orchestrator) &&
+		(value.started === null || isObject(value.started))
+	);
+}
+
+export async function loadAutopilot(
+	host: Querying,
+	projectId: string,
+	initiativeId: string,
+	signal?: AbortSignal,
+): Promise<AutopilotView> {
+	const value = await host.query("autopilot.get", { projectId, initiativeId }, signal);
+	if (!isAutopilotView(value))
+		throw new BoardReplyError("The board's host replied in an unknown shape.");
+	return value;
+}
+
+/** The initiative a container runs, with its autopilot; `null` for a container no initiative ran. */
+export async function loadContainerAutopilot(
+	host: Querying,
+	containerId: string,
+	signal?: AbortSignal,
+): Promise<AutopilotView | null> {
+	const value = await host.query("autopilot.ofContainer", { containerId }, signal);
+	if (value === null) return null;
+	if (!isAutopilotView(value))
+		throw new BoardReplyError("The board's host replied in an unknown shape.");
+	return value;
+}
+
+/** Run initiative: its container made around the first ready card (or the one it has), its orchestrator briefed. */
+export async function runInitiative(
+	host: Querying,
+	projectId: string,
+	initiativeId: string,
+): Promise<RunResult> {
+	const value = await host.query("initiative.run", { projectId, initiativeId });
+	if (!isRunResult(value))
+		throw new BoardReplyError("The board's host replied in an unknown shape.");
+	return value;
+}
+
+export async function setAutopilot(
+	host: Querying,
+	projectId: string,
+	initiativeId: string,
+	on: boolean,
+): Promise<void> {
+	await host.query("initiative.autopilot", { projectId, initiativeId, on });
+}
+
+/** On, paused (a reason holds it back) or off, as the state line words it. */
+export function autopilotState(
+	view: Pick<AutopilotView, "on" | "pausedReason">,
+): "on" | "paused" | "off" {
+	if (!view.on) return "off";
+	return view.pausedReason ? "paused" : "on";
 }

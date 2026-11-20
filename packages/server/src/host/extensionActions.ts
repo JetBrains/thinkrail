@@ -2,6 +2,7 @@ import { lstatSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs
 import { join } from "node:path";
 import {
 	type Container,
+	type ContainerOrchestrator,
 	EXTENSION_MESSAGE_CUSTOM_TYPE,
 	type ExtensionMessageDetails,
 	type OpenPrResult,
@@ -25,7 +26,7 @@ import {
 } from "../agent";
 import { type AssistAsk, assistText } from "../assist";
 import { listContainers } from "../containers";
-import type { ExtensionHostActions } from "../extensions";
+import type { ExtensionContainer, ExtensionHostActions } from "../extensions";
 import { serverExtensions } from "../extensions";
 import { nonInteractiveGitEnv } from "../git";
 import { listProjects } from "../projects";
@@ -37,10 +38,13 @@ import {
 	isChatsContainer,
 	isChatWorkspace,
 	listAllWorkspaceRecords,
+	orchestratorChat,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
 import { awaitKickoff, startChatSession } from "./chatSession";
+import { createContainerOrchestrated, startContainerOrchestrator } from "./orchestrator";
 import { openWorkspacePr } from "./orchestratorTools";
+import { type ExtensionWake, wakeOrchestratorFromExtension } from "./orchestratorWakeups";
 import { runObservation } from "./runAnalytics";
 import { defaultBaseBranch, resolveModel } from "./workspaceTools";
 
@@ -51,6 +55,9 @@ export const MAX_ASSIST_TOKENS = 1_024;
 export const MAX_WORKSPACE_FILE_BYTES = 1024 * 1024;
 const MAX_WORKSPACE_PATH = 400;
 const DEFAULT_ASSIST_TOKENS = 256;
+export const MAX_WAKE_TEXT = 20_000;
+const WAKE_KIND = /^[a-z][a-z0-9-]{0,39}$/;
+const MAX_CONTAINER_MEMBERS = 100;
 
 const THINKING_LEVELS: readonly string[] = [
 	"off",
@@ -105,6 +112,32 @@ export interface ExtensionActionDeps {
 	) => Promise<BoundedRun>;
 	/** The one-shot assist path: the trimmed answer, `null` without a model or an answer. */
 	assist: (ask: AssistAsk) => Promise<string | null>;
+	/** `container.create`: two or more members get their orchestrator. */
+	createContainer: (params: { name?: string; workspaceIds: string[] }) => Container;
+	startOrchestrator: (containerId: string) => Promise<ContainerOrchestrator>;
+	orchestratorChat: (containerId: string) => Workspace | null;
+	/** Joins the running host's wake-up coalescing; `false` when the container has no orchestrator. */
+	wake: (containerId: string, wake: ExtensionWake) => boolean;
+}
+
+/** A container as extensions see it: the record with its orchestrator chat, once both are there. */
+export function extensionContainer(
+	container: Container,
+	chat: Workspace | null,
+): ExtensionContainer {
+	return {
+		id: container.id,
+		name: container.name,
+		workspaceIds: [...container.workspaceIds],
+		orchestrator:
+			chat && container.orchestratorSessionId
+				? {
+						projectId: chat.projectId,
+						workspaceId: chat.id,
+						sessionId: container.orchestratorSessionId,
+					}
+				: null,
+	};
 }
 
 async function chatWorkspace(sessionId: string): Promise<Workspace | null> {
@@ -164,6 +197,10 @@ export const liveActionDeps: ExtensionActionDeps = {
 	openPr: openWorkspacePr,
 	run: (argv, options) => runBounded(argv, { ...options, env: nonInteractiveGitEnv() }),
 	assist: assistText,
+	createContainer: createContainerOrchestrated,
+	startOrchestrator: (containerId) => startContainerOrchestrator(containerId),
+	orchestratorChat,
+	wake: wakeOrchestratorFromExtension,
 };
 
 function requiredText(value: unknown, what: string): string {
@@ -399,6 +436,63 @@ export function extensionActions(
 			if (signal.aborted) return null;
 			const text = await deps.assist({ prompt, maxTokens, signal });
 			return text === null ? null : { text };
+		},
+		async createContainer(params) {
+			admit();
+			const ids: unknown = params?.workspaceIds;
+			if (
+				!Array.isArray(ids) ||
+				ids.length === 0 ||
+				ids.length > MAX_CONTAINER_MEMBERS ||
+				!ids.every((id) => typeof id === "string" && id.trim() !== "")
+			)
+				throw new Error(
+					`Pass workspaceIds as a list of 1 to ${MAX_CONTAINER_MEMBERS} workspace ids.`,
+				);
+			const name = optionalText(params.name, "name");
+			const container = deps.createContainer({
+				...(name ? { name } : {}),
+				workspaceIds: ids.map((id: string) => id.trim()),
+			});
+			return extensionContainer(container, deps.orchestratorChat(container.id));
+		},
+		async startOrchestrator(params) {
+			admit();
+			const containerId = requiredText(params?.containerId, "containerId");
+			if (!deps.containers().some((container) => container.id === containerId))
+				throw new CodedError("CONTAINER_UNKNOWN", `Unknown container: ${containerId}`);
+			const started = await deps.startOrchestrator(containerId);
+			return {
+				containerId: started.container.id,
+				projectId: started.workspace.projectId,
+				workspaceId: started.workspace.id,
+				sessionId: started.sessionId,
+			};
+		},
+		async wakeOrchestrator(params) {
+			admit();
+			const containerId = requiredText(params?.containerId, "containerId");
+			const kind = typeof params.kind === "string" ? params.kind : "";
+			if (!WAKE_KIND.test(kind))
+				throw new Error(
+					"Pass a kind of 1 to 40 lowercase letters, digits or dashes, starting with a letter.",
+				);
+			const text = requiredText(params.text, "text");
+			if (text.length > MAX_WAKE_TEXT)
+				throw new Error(`The text is longer than ${MAX_WAKE_TEXT} characters.`);
+			const container = deps.containers().find((candidate) => candidate.id === containerId);
+			if (!container)
+				throw new CodedError("CONTAINER_UNKNOWN", `Unknown container: ${containerId}`);
+			const woken = deps.wake(containerId, {
+				extension,
+				extensionTitle: deps.title(extension),
+				kind,
+				text,
+			});
+			if (!woken)
+				throw new Error(
+					`The container ${container.name} has no orchestrator to wake; start it first.`,
+				);
 		},
 	};
 }

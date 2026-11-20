@@ -299,6 +299,32 @@ export interface ExtensionWrittenFile {
 	bytes: number;
 }
 
+/** A container as an extension sees it: its members, in order, and its orchestrator chat once one started. */
+export interface ExtensionContainer {
+	id: string;
+	name: string;
+	workspaceIds: readonly string[];
+	/** The orchestrator's chat (a chat without a project, in the Chats project) and its session. */
+	orchestrator: { projectId: string; workspaceId: string; sessionId: string } | null;
+}
+
+/** A container's orchestrator as `startOrchestrator` answers it. */
+export interface ExtensionStartedOrchestrator {
+	containerId: string;
+	projectId: string;
+	workspaceId: string;
+	sessionId: string;
+}
+
+/** An extension's update that wakes a container's orchestrator: its kind (`board-ready`) and its text. */
+export interface ExtensionWakeOrchestratorParams {
+	containerId: string;
+	/** 1–40 lowercase letters, digits or dashes; one card per kind is in flight. */
+	kind: string;
+	/** At most 20,000 characters; the card frames it as the extension's, never the human's. */
+	text: string;
+}
+
 /**
  * Named host writes, each refused (`EXTENSION_DISABLED`) while the extension is switched off. Queries
  * read; actions write through these, never through a shell or host internals.
@@ -340,6 +366,22 @@ export interface ExtensionHostActions {
 	 * services' `signal` aborts; `null` when no model is configured, it timed out or the answer was empty.
 	 */
 	assist(params: { prompt: string; maxTokens?: number }): Promise<{ text: string } | null>;
+	/**
+	 * A new container of these workspaces (the Projects tree's grouping, `container.create`): at least one,
+	 * none in another container; two or more get their orchestrator at once.
+	 */
+	createContainer(params: {
+		name?: string;
+		workspaceIds: readonly string[];
+	}): Promise<ExtensionContainer>;
+	/** The container's one orchestrator (`container.startOrchestrator`): started, seeded with no turn, or answered as it is. */
+	startOrchestrator(params: { containerId: string }): Promise<ExtensionStartedOrchestrator>;
+	/**
+	 * Wakes the container's orchestrator with the extension's update, starting its turn: coalesced and
+	 * queued like the host's member updates (the latest text of a kind in the window wins, and one card per
+	 * kind waits in its queue at most). Refused for an unknown container or one without an orchestrator.
+	 */
+	wakeOrchestrator(params: ExtensionWakeOrchestratorParams): Promise<void>;
 }
 
 export interface ExtensionHostServices {
@@ -359,6 +401,8 @@ export interface ExtensionHostServices {
 	publish(type: string, payload: unknown, scope?: ExtensionPublishScope): void;
 	/** An open workspace's host facts (review, diff, chats with their state and plan); `null` otherwise. */
 	workspaceFacts(workspaceId: string): Promise<ExtensionWorkspaceFacts | null>;
+	/** The host's containers with their members and orchestrators. */
+	containers(): readonly ExtensionContainer[];
 	/** An open workspace's task-specs, from its spec graph; `null` for a workspace that is not open. */
 	taskSpecs(workspaceId: string): Promise<readonly ExtensionTaskSpec[] | null>;
 	/**

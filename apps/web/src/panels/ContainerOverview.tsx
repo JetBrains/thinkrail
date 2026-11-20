@@ -12,7 +12,7 @@ import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { DiffStatBadge } from "@thinkrail/ui/diff-stat-badge";
 import { cn } from "@thinkrail/ui/utils";
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { QuietScrollArea } from "@/components/QuietScrollArea";
 import { RunningIcon } from "@/components/RunningIcon";
 import {
@@ -231,13 +231,18 @@ function StackLine({ line }: { line: ContainerStackLine }) {
 	);
 }
 
-/** A container at a glance in Peek: a card per member, the PR stack, and the add / open / remove actions. */
+/**
+ * A container at a glance in Peek: a card per member, the PR stack, the add / open / remove actions, and the
+ * extensions' sections the shell injects (the board's initiative and autopilot).
+ */
 export function ContainerOverview({
 	containerId,
 	workspaceId,
+	extensionSections,
 }: {
 	containerId: string;
 	workspaceId: string;
+	extensionSections?: ReactNode;
 }) {
 	const t = useT();
 	const containers = useAppStore((state) => state.containers);
@@ -295,6 +300,7 @@ export function ContainerOverview({
 			</div>
 			<QuietScrollArea data-focus-default className="min-h-0 flex-1" viewportClassName="p-12">
 				<div className="flex flex-col gap-12">
+					{extensionSections}
 					<ul
 						aria-label={t("containers.overview.members")}
 						data-focus-list={`container-overview:${container.id}`}

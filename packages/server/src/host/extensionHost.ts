@@ -19,6 +19,7 @@ import {
 	listSettledModels,
 	sessionCompletionOf,
 } from "../agent";
+import { listContainers } from "../containers";
 import type {
 	ExtensionArtifactsDir,
 	ExtensionChatFacts,
@@ -50,10 +51,11 @@ import {
 	isChatWorkspace,
 	listAllWorkspaceRecords,
 	listWorkspaceRecords,
+	orchestratorChat,
 	workspaceDiffStats,
 } from "../workspaces";
 import { historyHiddenCwd } from "./chats";
-import { extensionActions } from "./extensionActions";
+import { extensionActions, extensionContainer } from "./extensionActions";
 import { createExtensionEventHub } from "./extensionEvents";
 import { buildHistoryScope } from "./historyScope";
 import { lastActions } from "./lastActions";
@@ -407,6 +409,10 @@ export function extensionHostServices(name: string, signal: AbortSignal): Extens
 		events: extensionEvents.bus(name, signal),
 		publish: publishFor(name),
 		workspaceFacts,
+		containers: () =>
+			listContainers().map((container) =>
+				extensionContainer(container, orchestratorChat(container.id)),
+			),
 		taskSpecs,
 		specSection,
 		openspecTree,

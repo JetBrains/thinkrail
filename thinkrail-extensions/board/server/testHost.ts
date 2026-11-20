@@ -2,6 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
+	ExtensionContainer,
 	ExtensionCreateWorkspaceParams,
 	ExtensionHostEvents,
 	ExtensionHostEventType,
@@ -11,6 +12,7 @@ import type {
 	ExtensionRunResult,
 	ExtensionStartChatParams,
 	ExtensionTaskSpec,
+	ExtensionWakeOrchestratorParams,
 	ExtensionWorkspaceFacts,
 	ExtensionWriteWorkspaceFileParams,
 	GhSetupProblem,
@@ -50,6 +52,11 @@ export interface TestHost {
 	asks: string[];
 	assist: { answer: (prompt: string) => { text: string } | null };
 	gh: { problem: GhSetupProblem | null };
+	/** The host's containers, as `containers()` answers them; `createContainer` adds one. */
+	containers: ExtensionContainer[];
+	/** Every `startOrchestrator` and `wakeOrchestrator`, in order. */
+	orchestratorStarts: string[];
+	wakes: ExtensionWakeOrchestratorParams[];
 	emit<T extends ExtensionHostEventType>(type: T, payload: ExtensionHostEvents[T]): void;
 	listeners(): number;
 }
@@ -108,6 +115,9 @@ export function createTestHost(): TestHost {
 		asks: [],
 		assist: { answer: () => null },
 		gh: { problem: null },
+		containers: [],
+		orchestratorStarts: [],
+		wakes: [],
 	};
 	let next = 0;
 	const refused = async (): Promise<never> => {
@@ -121,7 +131,11 @@ export function createTestHost(): TestHost {
 			createWorkspace: async (params) => {
 				state.created.push(params);
 				next += 1;
-				return { workspaceId: `w${next}`, sessionId: `s${next}`, branch: `workspace-${next}` };
+				const workspaceId = `w${next}`;
+				const into = state.containers.find((container) => container.id === params.into);
+				if (params.into && !into) throw new Error(`Unknown container: ${params.into}`);
+				if (into) into.workspaceIds = [...into.workspaceIds, workspaceId];
+				return { workspaceId, sessionId: `s${next}`, branch: `workspace-${next}` };
 			},
 			startChat: async (params) => {
 				state.chats.push(params);
@@ -155,6 +169,32 @@ export function createTestHost(): TestHost {
 				state.asks.push(prompt);
 				return state.assist.answer(prompt);
 			},
+			createContainer: async ({ name, workspaceIds }) => {
+				const container: ExtensionContainer = {
+					id: `c${state.containers.length + 1}`,
+					name: name ?? workspaceIds[0] ?? "",
+					workspaceIds: [...workspaceIds],
+					orchestrator: null,
+				};
+				state.containers.push(container);
+				return container;
+			},
+			startOrchestrator: async ({ containerId }) => {
+				state.orchestratorStarts.push(containerId);
+				const container = state.containers.find((candidate) => candidate.id === containerId);
+				if (!container) throw new Error(`Unknown container: ${containerId}`);
+				container.orchestrator ??= {
+					projectId: "chats",
+					workspaceId: `chat-${containerId}`,
+					sessionId: `orch-${containerId}`,
+				};
+				return { containerId, ...container.orchestrator };
+			},
+			wakeOrchestrator: async (params) => {
+				const container = state.containers.find((candidate) => candidate.id === params.containerId);
+				if (!container?.orchestrator) throw new Error("no orchestrator to wake");
+				state.wakes.push(params);
+			},
 		},
 		events: {
 			subscribe(type, listener) {
@@ -166,6 +206,7 @@ export function createTestHost(): TestHost {
 		},
 		publish: (type, payload, scope) => state.published.push({ type, payload, scope }),
 		workspaceFacts: async (workspaceId) => state.facts.get(workspaceId) ?? null,
+		containers: () => state.containers,
 		taskSpecs: async (workspaceId) =>
 			state.facts.has(workspaceId) ? (state.taskSpecs.get(workspaceId) ?? []) : null,
 		specSection: async (workspaceId, specId, heading) =>

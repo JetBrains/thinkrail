@@ -29,13 +29,13 @@ function lazyItem(
 	return component;
 }
 
-/** The status items the topbar mounts: openable like a panel, and only once the host lists the extension. */
-export function mountedStatusItems(input: {
+/** The status items (or container sections) a host mounts: openable like a panel, and only once the host lists the extension. */
+export function mountedStatusItems<T extends { extension: string }>(input: {
 	disabled: readonly string[];
 	protocolVersion: number | null;
 	catalog: ExtensionCatalogRead;
-	items: readonly RegisteredStatusItem[];
-}): { item: RegisteredStatusItem; entry: ExtensionCatalogEntry }[] {
+	items: readonly T[];
+}): { item: T; entry: ExtensionCatalogEntry }[] {
 	const { catalog } = input;
 	if (!Array.isArray(catalog)) return [];
 	return openableContributions(input).flatMap((item) => {
@@ -44,7 +44,10 @@ export function mountedStatusItems(input: {
 	});
 }
 
-function useStatusItemHost(extension: string, apiVersion: number | undefined): StatusItemHost {
+export function useStatusItemHost(
+	extension: string,
+	apiVersion: number | undefined,
+): StatusItemHost {
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
 	const workspaceId = useAppStore((state) => state.activeWorkspaceId);
 	const projectId = useAppStore((state) =>

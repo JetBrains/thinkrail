@@ -92,6 +92,7 @@ describe("listExtensionCatalog", () => {
 					"board_idea_score",
 					"board_watchlist_get",
 					"board_watchlist_snapshot",
+					"board_card_start",
 				],
 				hasParentExtensions: true,
 				hasChildExtensions: false,

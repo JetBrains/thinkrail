@@ -43,6 +43,8 @@ export interface WakeCard {
 export interface WakeupDeps {
 	/** The container a workspace is a member of, if any. */
 	containerOf: (workspaceId: string) => Container | undefined;
+	/** The container by id, if it still exists. */
+	container: (containerId: string) => Container | undefined;
 	describe: (
 		container: Container,
 		workspaceId: string,
@@ -56,11 +58,25 @@ export interface WakeupDeps {
 	windowMs: number;
 }
 
+/** An extension's update for a container's orchestrator (the `wakeOrchestrator` host action). */
+export interface ExtensionWake {
+	extension: string;
+	extensionTitle: string;
+	/** The update's kind (`board-ready`): one card of each kind per extension and container is in flight. */
+	kind: string;
+	text: string;
+}
+
 interface PendingWake {
+	/** The member's workspace id, or `extension:<name>:<kind>:<containerId>`. */
+	key: string;
 	containerId: string;
-	workspaceId: string;
+	/** `null` for an extension's wake-up. */
+	workspaceId: string | null;
 	sessionIds: Set<string>;
 	reasons: Set<ContainerWakeReason>;
+	/** An extension's latest update in the window: it supersedes the earlier ones. */
+	extension: ExtensionWake | null;
 	timer: ReturnType<typeof setTimeout> | null;
 }
 
@@ -70,6 +86,11 @@ export interface OrchestratorWakeups {
 	onSessionEvent(sessionId: string, workspaceId: string, event: PiEvent): void;
 	onSessionState(record: SessionStateRecord): void;
 	onWorkspaceEvent(event: WorkspaceLifecycleEvent): void;
+	/**
+	 * An extension's update, coalesced and queued like a member's: the latest text in the window wins.
+	 * `false` when the container is unknown or has no orchestrator.
+	 */
+	onExtensionWake(containerId: string, wake: ExtensionWake): boolean;
 	/** Wake-ups gathering or being sent. */
 	busy(): boolean;
 	dispose(): void;
@@ -93,59 +114,81 @@ export function createOrchestratorWakeups(deps: WakeupDeps): OrchestratorWakeups
 		wake.timer = setTimeout(() => void fire(wake), deps.windowMs);
 	};
 
-	const stillQueued = (workspaceId: string, orchestrator: string): boolean => {
-		const last = lastSent.get(workspaceId);
+	const stillQueued = (key: string, orchestrator: string): boolean => {
+		const last = lastSent.get(key);
 		return !!last && last.sessionId === orchestrator && deps.isPending(orchestrator, last.details);
 	};
 
+	const targetOf = (wake: PendingWake): Container | undefined =>
+		wake.workspaceId === null
+			? deps.container(wake.containerId)
+			: deps.containerOf(wake.workspaceId);
+
+	async function cardOf(
+		wake: PendingWake,
+		container: Container,
+		orchestrator: string,
+	): Promise<WakeCard | null> {
+		if (wake.extension) return extensionWakeCard(container.id, wake.extension);
+		if (wake.workspaceId === null) return null;
+		const sessionIds = [...wake.sessionIds].filter((id) => id !== orchestrator);
+		return deps.describe(container, wake.workspaceId, sessionIds, [...wake.reasons]);
+	}
+
 	async function fire(wake: PendingWake): Promise<void> {
 		wake.timer = null;
-		const container = deps.containerOf(wake.workspaceId);
+		const container = targetOf(wake);
 		const orchestrator = container?.orchestratorSessionId;
 		if (!container || !orchestrator || container.id !== wake.containerId) {
-			pending.delete(wake.workspaceId);
+			pending.delete(wake.key);
 			return;
 		}
-		if (sending.has(wake.workspaceId) || stillQueued(wake.workspaceId, orchestrator)) {
+		if (sending.has(wake.key) || stillQueued(wake.key, orchestrator)) {
 			arm(wake);
 			return;
 		}
-		pending.delete(wake.workspaceId);
-		sending.add(wake.workspaceId);
+		pending.delete(wake.key);
+		sending.add(wake.key);
 		try {
-			const sessionIds = [...wake.sessionIds].filter((id) => id !== orchestrator);
-			const card = await deps.describe(container, wake.workspaceId, sessionIds, [...wake.reasons]);
+			const card = await cardOf(wake, container, orchestrator);
 			if (!card) return;
-			lastSent.set(wake.workspaceId, { sessionId: orchestrator, details: card.details });
+			lastSent.set(wake.key, { sessionId: orchestrator, details: card.details });
 			await deps.deliver(container, orchestrator, card);
 		} catch (error) {
 			log.warn(`the orchestrator of container ${container.id} was not woken`, error);
 		} finally {
-			sending.delete(wake.workspaceId);
+			sending.delete(wake.key);
 		}
+	}
+
+	function gather(key: string, containerId: string, workspaceId: string | null): PendingWake {
+		let gathering = pending.get(key);
+		if (gathering && gathering.containerId !== containerId) {
+			if (gathering.timer) clearTimeout(gathering.timer);
+			pending.delete(key);
+			gathering = undefined;
+		}
+		if (!gathering) {
+			gathering = {
+				key,
+				containerId,
+				workspaceId,
+				sessionIds: new Set(),
+				reasons: new Set(),
+				extension: null,
+				timer: null,
+			};
+			pending.set(key, gathering);
+			arm(gathering);
+		}
+		return gathering;
 	}
 
 	function wake(workspaceId: string, sessionId: string | null, reason: ContainerWakeReason): void {
 		const container = deps.containerOf(workspaceId);
 		const orchestrator = container?.orchestratorSessionId;
 		if (!container || !orchestrator || sessionId === orchestrator) return;
-		let gathering = pending.get(workspaceId);
-		if (gathering && gathering.containerId !== container.id) {
-			if (gathering.timer) clearTimeout(gathering.timer);
-			pending.delete(workspaceId);
-			gathering = undefined;
-		}
-		if (!gathering) {
-			gathering = {
-				containerId: container.id,
-				workspaceId,
-				sessionIds: new Set(),
-				reasons: new Set(),
-				timer: null,
-			};
-			pending.set(workspaceId, gathering);
-			arm(gathering);
-		}
+		const gathering = gather(workspaceId, container.id, workspaceId);
 		if (sessionId) gathering.sessionIds.add(sessionId);
 		gathering.reasons.add(reason);
 	}
@@ -175,6 +218,15 @@ export function createOrchestratorWakeups(deps: WakeupDeps): OrchestratorWakeups
 			reviews.set(workspace.id, next);
 			if (event.kind === "updated" && previous !== undefined && previous !== next)
 				wake(workspace.id, null, "review");
+		},
+		onExtensionWake(containerId, update) {
+			const container = deps.container(containerId);
+			if (!container?.orchestratorSessionId) return false;
+			const key = `extension:${update.extension}:${update.kind}:${containerId}`;
+			const gathering = gather(key, containerId, null);
+			gathering.reasons.add("extension");
+			gathering.extension = { ...update };
+			return true;
 		},
 		busy() {
 			return pending.size > 0 || sending.size > 0;
@@ -240,6 +292,26 @@ export function wakeText(input: {
 	}
 	lines.push("", WAKE_FOOTER);
 	return lines.join("\n");
+}
+
+/** An extension's card: its own words framed as host automation under its title, never the human's. */
+export function extensionWakeText(extensionTitle: string, text: string): string {
+	return [
+		`Update from the ThinkRail extension "${extensionTitle}" (host automation, not a message from the human):`,
+		"",
+		text,
+	].join("\n");
+}
+
+function extensionWakeCard(containerId: string, wake: ExtensionWake): WakeCard {
+	return {
+		text: extensionWakeText(wake.extensionTitle, wake.text),
+		details: {
+			containerId,
+			reasons: ["extension"],
+			source: { extension: wake.extension, extensionTitle: wake.extensionTitle, kind: wake.kind },
+		},
+	};
 }
 
 function openTodos(workspaceId: string, sessionId: string): number | null {
@@ -314,8 +386,21 @@ async function deliverWake(container: Container, sessionId: string, card: WakeCa
 export const liveWakeupDeps: WakeupDeps = {
 	containerOf: (workspaceId) =>
 		listContainers().find((container) => container.workspaceIds.includes(workspaceId)),
+	container: (containerId) => listContainers().find((container) => container.id === containerId),
 	describe: describeWake,
 	deliver: deliverWake,
 	isPending: isHostMessagePending,
 	windowMs: WAKE_WINDOW_MS,
 };
+
+let running: OrchestratorWakeups | null = null;
+
+/** Set by `server.ts` while it runs: the wake-ups an extension's `wakeOrchestrator` joins. */
+export function setRunningWakeups(wakeups: OrchestratorWakeups | null): void {
+	running = wakeups;
+}
+
+/** An extension's wake-up through the running host's coalescing; `false` with no host, container or orchestrator. */
+export function wakeOrchestratorFromExtension(containerId: string, wake: ExtensionWake): boolean {
+	return running?.onExtensionWake(containerId, wake) ?? false;
+}

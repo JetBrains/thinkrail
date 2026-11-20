@@ -5,7 +5,7 @@ status: draft
 title: Board extension
 parent: module-thinkrail-extensions
 depends-on: [module-extension-api]
-references: [task-board-core, task-project-board, task-openspec-board, submodule-server-extensions, submodule-server-host, module-contracts, submodule-web-shell, submodule-web-shell-layout, module-ext-session-insights, task-discovery, module-ext-web-access]
+references: [task-board-core, task-project-board, task-openspec-board, submodule-server-extensions, submodule-server-host, module-contracts, submodule-web-shell, submodule-web-shell-layout, module-ext-session-insights, task-discovery, module-ext-web-access, submodule-server-containers]
 ---
 
 ## Responsibility
@@ -19,12 +19,15 @@ project's **OpenSpec changes** (§ OpenSpec) with propose, apply and archive thr
 `openspec` CLI and skills. Above the cards sits a **roadmap** per board (§ Roadmap): initiatives, roadmap projects
 with milestones, and what is derived from the live work — rollups, a forecast, a suggested health and the
 step graph's schedule — and **flow insights** from the transition log. Before Shape sits **discovery**
-(§ Discovery): ideas with evidence and a value × effort score, and a competitor watchlist. Eight skills
+(§ Discovery): ideas with evidence and a value × effort score, and a competitor watchlist. An initiative
+**runs** in a container with an orchestrator, and its **autopilot** (§ Autopilot) has the host decide when a
+card may start while the orchestrator decides how. Eight skills
 (§ Skills) put the agent to work: five on the roadmap (shape, plan, report, review, close) and three on
 discovery (research, analyze, competitor watch). There is no portable pi package, because every tool acts
 on host-owned state. The web half is the Board side tool (with its Roadmap — Discovery included — and
 Insights views and *Publish roadmap snapshot…*), the card, the initiative and the idea in Peek, the
-cross-project "Needs you" inbox (above the board and as a topbar counter) and Board mode.
+cross-project "Needs you" inbox (above the board and as a topbar counter), the initiative's section of a
+container's overview and Board mode.
 
 ## Boundary
 
@@ -46,7 +49,8 @@ cross-project "Needs you" inbox (above the board and as a topbar counter) and Bo
   - Enabled by default. Switching it off refuses its queries and actions, stops its host service and
     withholds its tools.
 - **`./web`**: `defineWebExtension({ name: "board", title, sideTools: { board }, panels: { card, initiative, idea },
-  statusItems: { inbox }, layoutPresets: { board }, commands, shortcuts })`, in the web registry.
+  statusItems: { inbox }, containerSections: { initiative }, layoutPresets: { board }, commands, shortcuts })`,
+  in the web registry.
   - It imports `extension-api/web`, `contracts` types, `locales`, `ui`, React, `@dnd-kit/core` and, in the
     Roadmap view's lazy chunk alone, `@xyflow/react` (the catalog pin, 12.12.1), never its `./server` half: the wire shapes it reads are restated in `web/api.ts` (the roadmap's in
     `web/roadmapApi.ts`) and checked on arrival (an unknown shape is a `BoardReplyError`, a version skew), and
@@ -129,7 +133,8 @@ The model of `TASK-roadmap` (Linear's hierarchy), stored per board; everything d
 
 - **An initiative** is `{ id, parentId?, title, outcome, criteria[], horizon (now / next / later), rank,
   target? (ISO date), appetiteDays? (time only), specRefs[], health? { override?, note? }, updates[],
-  cardIds[], externalCards[], proposed?, proposedBy?, closedAt?, createdAt, updatedAt }`. `closedAt` is set
+  cardIds[], externalCards[], proposed?, proposedBy?, closedAt?, containerId?, autopilot? { on, pausedReason? },
+  createdAt, updatedAt }` (§ Autopilot for the last two). `closedAt` is set
   once, by the agent's `board_initiative_close` after the human confirmed it done in an initiative-close
   chat (a proposal can't close); a closed initiative stays on the roadmap, marked *Closed*. It nests (a top-level one is
   a goal; a parent can't move under its own subtree). It holds this board's cards listed in `cardIds`, the
@@ -230,6 +235,52 @@ nothing about it is derived from the live work. The human decides; the agent sug
   Default workspace, so its report lands in that workspace's artifacts (a container's chat in the
   container's shared ones).
 
+## Autopilot
+
+`TASK-autopilot` (workstream G): **the host decides *when*, the container's orchestrator decides *how***.
+The rules are pure (`autopilot.ts`); the host service (`autopilotService.ts`) applies them.
+
+- **Run initiative** (`initiative.run`, refused for a proposal or a closed initiative) gives the initiative a
+  **container**: its first ready card (the selection below, whatever the switch) starts through
+  `startCard` (logged `automation`, *started by Run initiative I-n*), then `actions.createContainer { name:
+  the initiative's title, workspaceIds: [that workspace] }`, stored as `containerId`, then
+  `actions.startOrchestrator` at once, even with one member, then a **`board-run`** wake-up
+  (`actions.wakeOrchestrator`) briefing it: the initiative's outcome and criteria, what started, the agents
+  running against the cap, whether autopilot is on, and how `board_card_start` works. An initiative that
+  has a container that still exists reuses it: no card starts, the orchestrator is started if missing and
+  briefed again. Nothing ready, the cap reached or a human-attention limit past refuses Run in words.
+- **Autopilot** (`initiative.autopilot { on }`) is per initiative and **off by default**; on needs the
+  container. `autopilot { on, pausedReason? }` is stored on the initiative.
+- **Selection** (`select`): the initiative's member cards (its board's and other boards') that are **ready**
+  (unstarted), **unblocked** (every `blocks` predecessor completed — or canceled, as the board's blocked
+  count reads it), **free** (no attempt with an open workspace, no start in flight) and **sized** (a
+  suggested size counts), by rank; the **limits** allow them while the board's running agents are under
+  `wipLimits.agents` (the concurrency cap; 0 is none) — at most the free slots — and **pause** them all while
+  Review, then Needs you, is past its limit (`count > limit`, 0 is none; Start's warning reads the same) or
+  the container has no orchestrator: `pausedReason { kind: review | needs_you, count, limit }` or `{ kind:
+  orchestrator }`.
+- **Re-evaluation.** While the host service runs and some initiative has autopilot on with a container,
+  every `board.changed` (writes, bound chats' state and review signatures, tool starts) and every
+  `container.updated` / `removed` asks for one evaluation after `AUTOPILOT_DEBOUNCE_MS` (2 s), one at a time.
+  It records a changed `pausedReason` (a write, so `board.changed`); a container that went away clears
+  `containerId` and switches autopilot off.
+- **Offers, no flood** (`planOffers`): a selected card is offered once in a **`board-ready`** wake-up listing
+  the cards offered now (id, title, size → workflow, whether its design waits for the human) and the room
+  left under the cap; offered and not started within `OFFER_RETRY_MS` (10 min) it is offered again once (a
+  timer arms the next due offer), then **flagged** *Orchestrator didn't start it* and never offered again
+  while it stays ready; a card that is no longer ready is forgotten. Offers live in memory (a restart offers
+  again). A failed wake-up keeps no offer, so the next evaluation tries again.
+- **Wake-ups go through the host's coalescing** (`wakeOrchestrator`, [[submodule-server-containers]] §
+  Wake-ups), one card per kind in flight; the board never sends a raw chat message to the orchestrator.
+- **`board_card_start`** (§ Agent tools) is how the orchestrator starts a card; M and L cards still start on
+  brainstorming, so their design waits for the human, and merging still needs the human's approval in chat.
+- **Human gates:** off by default, paused with its reason while a human-attention limit is past, the
+  brainstorm workflow, the merge approval, and the switch the human turns off at any time (offers
+  forgotten); every start is logged with actor `automation`.
+- **`AutopilotView`** (`autopilot.get`, `autopilot.ofContainer`): `{ projectId, initiativeId, title, on,
+  pausedReason` (computed now, `null` while off)`, container { id, name, members, orchestrator { projectId,
+  workspaceId, sessionId } | null } | null, running, cap, ready[{ id, title, size?, offered, stale }] }`.
+
 ## Presets
 
 Presets are pure (`presets.ts`). Triage and Canceled are hidden lanes in both. The first category a
@@ -254,7 +305,9 @@ The Spec-driven preset is offered by the switch only while the project's Default
 Rules are pure (`rules.ts`: `applyEvent(card, event, preset, at)`). An event concerns one attempt's
 workspace, and `null` means nothing changed, so **re-applying an event is a no-op**.
 
-- **Start → started**, in its workflow's column, from any category. The actor is `automation`.
+- **Start → started**, in its workflow's column, from any category. The actor is `automation`; the reason
+  says who started it (*an attempt started*, *started by Run initiative I-n*, *started by the orchestrator of
+  the container "…"*).
 - **`agent.settled` → review**, only from started and only for an attempt still open, when that
   chat's plan is done (`total > 0`, `open = 0`) or the workspace's diff is non-empty.
 - **A merged PR → completed** (actor `git`). It marks the attempt `merged`. A card already completed
@@ -462,8 +515,9 @@ Every query validates its params (lengths, enums, lists of at most 100) and answ
     another board listing it as an external card.
   - A brainstorm kickoff is prefixed `/skill:brainstorming `, exactly as the composer sends a picked
     skill, so pi expands it.
-  - It calls `actions.createWorkspace` and then records the attempt and applies Start. It answers the
-    card, the attempt and any `kickoffError`.
+  - It calls `actions.createWorkspace` — `into` the container of the initiative the card serves while
+    that container exists, so every start of a running initiative's card joins its container — and then
+    records the attempt and applies Start. It answers the card, the attempt and any `kickoffError`.
 - **`openspec.validate { cardId, projectId? }`** → `{ change, workspaceId, valid, errors, warnings, issues }`
   (refused without the CLI or for an archived change), **`openspec.archive { cardId, projectId? }`** →
   `{ cardId, workspaceId, sessionId, text }` (a stored card with an open attempt and a chat; refused without
@@ -503,6 +557,9 @@ The roadmap's queries (§ Roadmap) take the board's `projectId`; every write pub
   appetiteDays?, specRefs? }`**, **`initiative.update { projectId, initiativeId, …, parentId / target /
   appetiteDays: null clears, health { override?, note? } (null clears each), proposed: false accepts }`**,
   **`initiative.delete`**, **`initiative.move { projectId, initiativeId, horizon, rank? }`**.
+- **`initiative.run { projectId, initiativeId }`**, **`initiative.autopilot { projectId, initiativeId, on }`**,
+  **`autopilot.get { projectId, initiativeId }`** → `AutopilotView` and **`autopilot.ofContainer { containerId }`**
+  → the `AutopilotView` of the initiative the container runs, or `null`: § Autopilot.
 - **`initiative.addCards` / `initiative.removeCards { projectId, initiativeId, cardIds }`**: card ids name
   one card across boards, so another board's card becomes an external card.
 - **`initiative.updateDraft.save { projectId, initiativeId, text, health }`** and
@@ -743,6 +800,13 @@ writes and `board.changed`:
 - **Cards**: its member cards with column and live badge, other boards' labelled *From <project>*; the
   directly listed ones can be removed, and a picker adds a board card (`initiative.addCards` /
   `removeCards`);
+- **Run and autopilot** (`autopilot.get`, re-read with the panel): without a container *Run initiative*
+  (`initiative.run`, not for a proposal or a closed one, a returned `kickoffError` shown as the prompt not
+  sent) with its hint; with one *Open container* (the orchestrator's chat, `PanelHost.openChat`; without an
+  orchestrator Run again), *Container “…” · N workspaces* and the *Autopilot* switch (`initiative.autopilot`);
+  then the state line (`board-autopilot-state`: *Autopilot on*, *Paused: Review is over its limit (6/5)* —
+  Needs you, no orchestrator —, *Autopilot off*), *Agents n/cap* and the next ready cards, each marked
+  *Offered to the orchestrator* or *Orchestrator didn't start it*, a click peeking the card;
 - **Agent**: *Plan with agent*, *Shape with agent*, *Draft update*, *Roadmap review* and *Close initiative* —
   each a roadmap chat (`roadmap.chat`) opened with `PanelHost.openChat`; a returned `kickoffError` is shown as
   the prompt not sent; a closed initiative (*Closed*, also on its horizon card) keeps only *Draft update* and
@@ -750,6 +814,11 @@ writes and `board.changed`:
   (`initiative.updateDraft.publish`, stamping `publishedAt`) and *Edit* (its text and health →
   `initiative.updateDraft.save`);
 - *Delete initiative* behind a confirm.
+
+**The container's section** (`containerSections.initiative`, `ContainerAutopilot`) in the container overview
+in Peek: `autopilot.ofContainer`, re-read on any project's `board.changed`; nothing for a container no
+initiative runs, else *Initiative I-n · title* (peeking the initiative) and the same state line, agents and
+ready cards.
 
 **The Needs-you status item** (`statusItems.inbox`) is the inbox in the topbar: a `feedback-warning` chip
 *Needs you · N* over the same query and refreshes, absent at zero, whose popover lists the same rows (an
@@ -840,9 +909,26 @@ id, else the attempt of its workspace (located from its cwd).
   effort? { score, reasons }, horizon? { horizon, reason } }`** (suggestions; a human's score stays),
   **`board_watchlist_get { watchId? }`** (entries with the last snapshot's text) and
   **`board_watchlist_snapshot { watchId, text, artifactPath? }`** (answers the previous snapshot).
+- **`board_card_start { cardId, workflow?, note? }`**: in the orchestrator of a container that runs an
+  initiative (the caller's session is the container's orchestrator) or a chat of one of its member
+  workspaces. It refuses a chat in no container, a container that runs no initiative, a card of no initiative
+  that container runs, and a card that is not ready, blocked (naming its open blockers) or has an open
+  attempt — in words; a size is not required. It starts the card through `startCard` with `into` the
+  container, the workflow given or the size's, `Note from the orchestrator of the container "…":` and the
+  note appended to the kickoff, logged `automation` *started by the orchestrator of the container "…"*.
+- The tools that read a chat's board (`board_card_create`, `board_cards_list`, the roadmap's and discovery's)
+  take a container's orchestrator — whose home is no project — to the board of the initiative it runs, so it
+  files follow-ups into Triage.
 - `board_initiative_get` also lists the **deferrals** of its member cards' task-specs (`Deferrals` sections of
   their open workspaces' task-specs through `specSection`, parsed like `card.deferrals`), minus those whose
   title a card of the board already has, for the close skill to file.
+
+While the session is the orchestrator of a container that runs an initiative, the board's session extension
+adds the `thinkrail-board-autopilot` system-prompt section in `before_agent_start` (`autopilotRule`): the
+initiative, that `board-run` / `board-ready` updates are host automation, how `board_card_start` starts a
+card, that M and L cards wait for the human's design approval, and to file follow-ups into Triage. Core's
+orchestrator rule names no board tool; `board_card_start` carries no guideline of its own, so other chats'
+prompts stay as they were.
 
 Their guidelines say two things:
 
@@ -879,6 +965,16 @@ A capability's closing edit is a normal PR the user opens; the board writes no s
   - prefixes and ids, the presets, the rule table (idempotence included) and the kickoff text;
   - query validation, create / update / move / delete / accept / start, overlays, WIP and inbox;
   - the rules wired to a fake host's events and Triage-only creation by the tools;
+  - autopilot: the pure rules as tables (`autopilot.test.ts`: readiness by category, blocker category,
+    activity and size; the pause order and the limits at, past and without a limit; the free slots; the
+    selection; offers once, again once, then flagged, forgotten when no longer ready, no due time in the
+    past) and, through the queries and tools over the fake host's containers (`autopilotService.test.ts`),
+    Run making a container of the first ready card with its orchestrator and `board-run` brief (logged
+    `automation`), Run reusing a container and its refusals, the switch needing a container, `board-ready`
+    offers capped by the agents' room and deduplicated over the retry, the pause recorded and lifted, a gone
+    container switching autopilot off, a human's Start joining the container, `board_card_start`'s start
+    into the container with its note and its refusals (no container, no initiative, another initiative's
+    card, not ready, blocked, unknown), a member chat's start, and the orchestrator's prompt section;
   - the roadmap: the derivations each on their own (`rollups`, `throughput` with the day helpers, `forecast`'s
     determinism and not-enough-data, `health`'s rule table, `schedule` with pins, conflicts, milestones,
     cycles and per-initiative critical paths) and, through the queries (`roadmap.test.ts`), validation,
@@ -908,7 +1004,10 @@ A capability's closing edit is a normal PR the user opens; the board writes no s
     storing on edit / move / start, the kickoff, `Closes #N` appended only when missing, the PR body only,
     the retry); size suggestions (strict parsing, a human's size never overwritten, skipped without a
     model or switched off or for an agent's card, the debounce, issues' cards).
-- **Host-level**: `packages/server/src/host/extensionActions.test.ts` covers `startChat` (a repository
+- **Host-level**: `packages/server/src/host/extensionActions.test.ts` covers `createContainer`,
+  `startOrchestrator` and `wakeOrchestrator` (validated, refused while switched off or for an unknown
+  container, the wake handed to the host's coalescing under the extension's title) and
+  `orchestratorWakeups.test.ts` the extension wake-ups' coalescing; `extensionActions.test.ts` also covers `startChat` (a repository
   workspace only, the kickoff validated, refused while switched off, `kickoffError` passed on) and
   `writeWorkspaceFile` (written atomically with folders, refused: absolute, `..`, `.`, empty segments,
   `.git`, NUL, symlinks on the way, a folder target, past 1 MiB); `agent/extensions.test.ts` loads the board's
@@ -922,7 +1021,10 @@ A capability's closing edit is a normal PR the user opens; the board writes no s
   workspace-relative path, nothing outside the worktree, a bash command's cut start, the folders shortened,
   nothing for other tools) and the tracker (latest start only, dropped once disposed or deleted);
   `extensionEventsWire.test.ts` a project's close and reopen republishing its board, a rename not.
-- **Web** (`web/*.test.ts(x)`): the agent badge by overlay state, the working last action and its tile line,
+- **Web** (`web/*.test.ts(x)`): autopilot (`autopilot.test.tsx`: the state line on, paused by each reason and
+  off, the agents figure with and without a cap, offered and flagged ready cards, Run without a container
+  and Open container with the switch with one, none for a closed initiative, the queries Run, the switch and
+  the container read send, and the reply checks); the agent badge by overlay state, the working last action and its tile line,
   `selectCard` with follow selection off and on and `enterCard`, Start's offer and its defaults by size,
   the drop → `card.move` call, Alt+arrow steps, the list sort, the adaptive layout and the rendered tile,
   columns, list and empty board; the source badges, Adopt and Start by source, the task-spec panel's Open
@@ -996,6 +1098,16 @@ A capability's closing edit is a normal PR the user opens; the board writes no s
   *Quick wins* and its row in the list, *Promote* starting a chat whose kickoff (the `idea.promote` reply)
   starts `/skill:roadmap-shape` and carries the pitch; a competitor added to the watchlist and *What
   changed?* starting `/skill:competitor-watch` on it.
+- **No-agent e2e, autopilot** (`e2e/board.spec.ts`): an initiative of two Ready S cards in Peek, *Run
+  initiative* → its container in Projects with one member and the orchestrator, the first card in Building,
+  the second the next ready card; the switch on, a Review limit of 1 pausing it (*Paused: Review is over its
+  limit (2/1)*, recorded on the initiative over the wire), the switch on after a reload, and the container's
+  overview in Peek showing the initiative and the paused state.
+- **Live e2e, autopilot** (`e2e/board-autopilot.live.spec.ts`, `@agent`): an initiative of two linked S cards
+  set up over the wire, Run starting the first (logged *started by Run initiative I-1*), autopilot on, the
+  first card into Review by its agent, then moved to Done (the human's merge) → the second ready, the
+  orchestrator woken with `board-ready` and starting it with `board_card_start` into the container (logged
+  *started by the orchestrator of the container …*).
 - **Live e2e** (`e2e/board.live.spec.ts`, `@agent`, through `bun run e2e:full e2e/board.live.spec.ts`): an S
   card asking for a one-line README example, started from Peek; the tile's last-action line seen while
   the agent works (recorded by a `MutationObserver`, since it is transient); the card in Review with its
@@ -1014,7 +1126,7 @@ These land later:
   re-reads on its own writes, chat and review changes and workspace switches);
 - a task-spec committed to the branch shows in every unbound workspace that has it;
 - removing a "blocks" link from the tools;
-- an initiative's `into` (D / G);
+- autopilot's scheduling windows, budgets beyond time, and priority across initiatives;
 - the prototype's "What if you answered now?" toggle on the step graph (the schedule has no wait estimate);
 - a history of waits for the human (Insights counts only the open ones) and reopening a closed initiative
   (a new idea is shaped from the board through Discovery's Promote);

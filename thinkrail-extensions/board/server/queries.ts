@@ -476,6 +476,22 @@ export function boardQueries(board: Board): Readonly<Record<string, ExtensionQue
 				optionalNumber(p, "rank"),
 			);
 		},
+		"initiative.run": (raw) => {
+			const p = params(raw);
+			return board.runInitiative(projectId(p), initiativeId(p));
+		},
+		"initiative.autopilot": (raw) => {
+			const p = params(raw);
+			const on = optionalBoolean(p, "on");
+			if (on === undefined) throw new Error("Pass on: true or false.");
+			return board.setAutopilot(projectId(p), initiativeId(p), on);
+		},
+		"autopilot.get": (raw) => {
+			const p = params(raw);
+			return board.autopilotView(projectId(p), initiativeId(p));
+		},
+		"autopilot.ofContainer": (raw) =>
+			board.containerAutopilot(text(params(raw), "containerId", 200)),
 		"initiative.addCards": (raw) => {
 			const p = params(raw);
 			return roadmap.addCards(projectId(p), initiativeId(p), cardIds(p, "add"));

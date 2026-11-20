@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Project, WireModel, Workspace } from "@thinkrail/contracts";
+import type { Container, Project, WireModel, Workspace } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
 	type ExtensionActionDeps,
@@ -85,11 +85,38 @@ function setup(
 	}));
 	const assist = mock<ExtensionActionDeps["assist"]>(async () => "M");
 	const startChat = mock<ExtensionActionDeps["startChat"]>(async () => ({ sessionId: "s-chat" }));
+	const box: Container = {
+		id: "c1",
+		name: "Docs",
+		workspaceIds: [],
+		orchestratorSessionId: "o1",
+		createdAt: 0,
+		updatedAt: 0,
+	};
+	const orchestrator: Workspace = {
+		...chat,
+		id: "chat-orch",
+		orchestratorOf: "c1",
+		worktreePath: "/containers/c1",
+	};
+	const createContainer = mock<ExtensionActionDeps["createContainer"]>((params) => ({
+		id: "c-new",
+		name: params.name ?? "Feature",
+		workspaceIds: params.workspaceIds,
+		createdAt: 0,
+		updatedAt: 0,
+	}));
+	const startOrchestrator = mock<ExtensionActionDeps["startOrchestrator"]>(async () => ({
+		container: box,
+		workspace: orchestrator,
+		sessionId: "o1",
+	}));
+	const wake = mock<ExtensionActionDeps["wake"]>(() => true);
 	const deps: ExtensionActionDeps = {
 		isDisabled: (name) => disabled.has(name),
 		title: () => "Board",
 		projects: () => [repo, chats],
-		containers: () => [{ id: "c1", name: "Docs", workspaceIds: [], createdAt: 0, updatedAt: 0 }],
+		containers: () => [box],
 		workspaces: () => [feature, chat],
 		settledModels: async () => [model],
 		defaultBaseBranch: async () => "main",
@@ -103,6 +130,10 @@ function setup(
 		openPr,
 		run,
 		assist,
+		createContainer,
+		startOrchestrator,
+		orchestratorChat: (containerId) => (containerId === "c1" ? orchestrator : null),
+		wake,
 		...overrides,
 	};
 	return {
@@ -115,6 +146,9 @@ function setup(
 		run,
 		assist,
 		startChat,
+		createContainer,
+		startOrchestrator,
+		wake,
 	};
 }
 
@@ -129,7 +163,20 @@ async function codeOf(answer: Promise<unknown>): Promise<string | undefined> {
 
 describe("extension host actions", () => {
 	test("every action refuses while the extension is switched off, before any effect", async () => {
-		const { actions, disabled, create, send, abort, openPr, run, assist, startChat } = setup();
+		const {
+			actions,
+			disabled,
+			create,
+			send,
+			abort,
+			openPr,
+			run,
+			assist,
+			startChat,
+			createContainer,
+			startOrchestrator,
+			wake,
+		} = setup();
 		disabled.add("board");
 		const refusals = await Promise.all([
 			codeOf(actions.createWorkspace({ projectId: "p1", kickoff: { text: "go" } })),
@@ -140,18 +187,24 @@ describe("extension host actions", () => {
 			codeOf(actions.runInWorkspace({ workspaceId: "w1", argv: ["gh"], timeoutMs: 1_000 })),
 			codeOf(actions.assist({ prompt: "Size it" })),
 			codeOf(actions.writeWorkspaceFile({ workspaceId: "w1", path: "ROADMAP.md", content: "x" })),
+			codeOf(actions.createContainer({ workspaceIds: ["w1"] })),
+			codeOf(actions.startOrchestrator({ containerId: "c1" })),
+			codeOf(actions.wakeOrchestrator({ containerId: "c1", kind: "board-ready", text: "x" })),
 		]);
-		expect(refusals).toEqual([
-			"EXTENSION_DISABLED",
-			"EXTENSION_DISABLED",
-			"EXTENSION_DISABLED",
-			"EXTENSION_DISABLED",
-			"EXTENSION_DISABLED",
-			"EXTENSION_DISABLED",
-			"EXTENSION_DISABLED",
-			"EXTENSION_DISABLED",
-		]);
-		for (const effect of [create, startChat, send, abort, openPr, run, assist])
+		expect(new Set(refusals)).toEqual(new Set(["EXTENSION_DISABLED"]));
+		expect(refusals).toHaveLength(11);
+		for (const effect of [
+			create,
+			startChat,
+			send,
+			abort,
+			openPr,
+			run,
+			assist,
+			createContainer,
+			startOrchestrator,
+			wake,
+		])
 			expect(effect).not.toHaveBeenCalled();
 	});
 
@@ -293,6 +346,68 @@ describe("extension host actions", () => {
 		await expect(
 			detached.actions.sendToChat({ sessionId: "s1", text: "hi", mode: "steer" }),
 		).rejects.toThrow("could not be opened");
+	});
+
+	test("createContainer groups the workspaces through the host's create and answers it as extensions see it", async () => {
+		const { actions, createContainer } = setup();
+		expect(await actions.createContainer({ name: " Billing ", workspaceIds: [" w1 "] })).toEqual({
+			id: "c-new",
+			name: "Billing",
+			workspaceIds: ["w1"],
+			orchestrator: null,
+		});
+		expect(createContainer.mock.calls).toEqual([[{ name: "Billing", workspaceIds: ["w1"] }]]);
+		for (const workspaceIds of [[], [""], [3], "w1"])
+			await expect(
+				actions.createContainer({ workspaceIds: workspaceIds as unknown as string[] }),
+			).rejects.toThrow("Pass workspaceIds");
+		expect(createContainer).toHaveBeenCalledTimes(1);
+	});
+
+	test("startOrchestrator starts or answers a known container's orchestrator with its chat", async () => {
+		const { actions, startOrchestrator } = setup();
+		expect(await actions.startOrchestrator({ containerId: "c1" })).toEqual({
+			containerId: "c1",
+			projectId: "chats",
+			workspaceId: "chat-orch",
+			sessionId: "o1",
+		});
+		expect(await codeOf(actions.startOrchestrator({ containerId: "gone" }))).toBe(
+			"CONTAINER_UNKNOWN",
+		);
+		expect(startOrchestrator.mock.calls).toEqual([["c1"]]);
+	});
+
+	test("wakeOrchestrator hands the extension's update to the host's wake-ups under its title, validated", async () => {
+		const { actions, wake } = setup();
+		await actions.wakeOrchestrator({ containerId: "c1", kind: "board-ready", text: " TR-2 " });
+		expect(wake.mock.calls).toEqual([
+			["c1", { extension: "board", extensionTitle: "Board", kind: "board-ready", text: "TR-2" }],
+		]);
+		expect(
+			await codeOf(
+				actions.wakeOrchestrator({ containerId: "gone", kind: "board-ready", text: "x" }),
+			),
+		).toBe("CONTAINER_UNKNOWN");
+		for (const kind of ["", "Board", "board ready", "x".repeat(41)])
+			await expect(
+				actions.wakeOrchestrator({ containerId: "c1", kind, text: "x" }),
+			).rejects.toThrow("Pass a kind");
+		await expect(
+			actions.wakeOrchestrator({ containerId: "c1", kind: "board-ready", text: " " }),
+		).rejects.toThrow("non-empty text");
+		await expect(
+			actions.wakeOrchestrator({
+				containerId: "c1",
+				kind: "board-ready",
+				text: "x".repeat(20_001),
+			}),
+		).rejects.toThrow("longer than");
+		expect(wake).toHaveBeenCalledTimes(1);
+		const headless = setup({ wake: () => false });
+		await expect(
+			headless.actions.wakeOrchestrator({ containerId: "c1", kind: "board-ready", text: "x" }),
+		).rejects.toThrow("has no orchestrator");
 	});
 
 	test("stopChat aborts a running chat only", async () => {

@@ -38,6 +38,7 @@ function setup() {
 	const registered = new Map<string, Registered>();
 	createBoardTools(() => board)({
 		registerTool: (tool: Registered) => registered.set(tool.name, tool),
+		on: () => {},
 	} as unknown as ExtensionAPI);
 	const call = (name: string, params: unknown, cwd = "/worktrees/default") =>
 		(registered.get(name) as Registered).execute("call", params, undefined, undefined, {

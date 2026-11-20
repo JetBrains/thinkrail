@@ -11,6 +11,7 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	createOrchestratorWakeups,
+	extensionWakeText,
 	type WakeCard,
 	type WakeupDeps,
 	wakeText,
@@ -45,7 +46,8 @@ const member = (id: string, review?: Workspace["review"]) =>
 
 interface Delivered {
 	sessionId: string;
-	workspaceId: string;
+	workspaceId: string | undefined;
+	text: string;
 	sessionIds: readonly string[];
 	reasons: readonly ContainerWakeReason[];
 	details: ContainerWakeDetails;
@@ -64,6 +66,7 @@ function harness({ orchestrated = true } = {}) {
 	const pending = new Set<ContainerWakeDetails>();
 	const deps: WakeupDeps = {
 		containerOf: (workspaceId) => (box.workspaceIds.includes(workspaceId) ? box : undefined),
+		container: (containerId) => (containerId === box.id ? box : undefined),
 		describe: async (target, workspaceId, sessionIds, reasons): Promise<WakeCard> => ({
 			text: `update ${workspaceId}`,
 			details: {
@@ -75,10 +78,11 @@ function harness({ orchestrated = true } = {}) {
 			...{ sessionIds },
 		}),
 		deliver: async (_container, sessionId, card) => {
-			const { sessionIds } = card as WakeCard & { sessionIds: readonly string[] };
+			const { sessionIds = [] } = card as WakeCard & { sessionIds?: readonly string[] };
 			delivered.push({
 				sessionId,
 				workspaceId: card.details.workspaceId,
+				text: card.text,
 				sessionIds,
 				reasons: card.details.reasons,
 				details: card.details,
@@ -187,6 +191,59 @@ test("while a member's last card still waits in the orchestrator's queue, the ne
 	await settle();
 	expect(delivered.map((wake) => wake.workspaceId)).toEqual(["w1", "w2", "w1"]);
 	wakeups.dispose();
+});
+
+const ready = (text: string) => ({
+	extension: "board",
+	extensionTitle: "Board",
+	kind: "board-ready",
+	text,
+});
+
+test("an extension's updates coalesce like a member's: the latest text of a burst, one card per kind in flight", async () => {
+	const { wakeups, delivered, pending, settle } = harness();
+	expect(wakeups.onExtensionWake("c1", ready("TR-1"))).toBe(true);
+	expect(wakeups.onExtensionWake("c1", ready("TR-1, TR-2"))).toBe(true);
+	wakeups.onExtensionWake("c1", { ...ready("Run I-1"), kind: "board-run" });
+	wakeups.onSessionEvent("s1", "w1", settled);
+	await settle();
+	expect(delivered.map((wake) => [wake.workspaceId, wake.reasons, wake.text])).toEqual([
+		[undefined, ["extension"], extensionWakeText("Board", "TR-1, TR-2")],
+		[undefined, ["extension"], extensionWakeText("Board", "Run I-1")],
+		["w1", ["chat"], "update w1"],
+	]);
+	expect(delivered[0]?.details).toEqual({
+		containerId: "c1",
+		reasons: ["extension"],
+		source: { extension: "board", extensionTitle: "Board", kind: "board-ready" },
+	});
+	const queued = delivered[0]?.details;
+	if (!queued) throw new Error("no extension wake");
+	pending.add(queued);
+	wakeups.onExtensionWake("c1", ready("TR-3"));
+	await Bun.sleep(80);
+	expect(delivered).toHaveLength(3);
+	expect(wakeups.busy()).toBe(true);
+	pending.delete(queued);
+	await settle();
+	expect(delivered.map((wake) => wake.text).at(-1)).toBe(extensionWakeText("Board", "TR-3"));
+	wakeups.dispose();
+});
+
+test("an extension's update needs a known container with an orchestrator", async () => {
+	const own = harness();
+	expect(own.wakeups.onExtensionWake("c9", ready("TR-1"))).toBe(false);
+	expect(own.wakeups.busy()).toBe(false);
+	own.wakeups.dispose();
+	const headless = harness({ orchestrated: false });
+	expect(headless.wakeups.onExtensionWake("c1", ready("TR-1"))).toBe(false);
+	expect(headless.wakeups.busy()).toBe(false);
+	headless.wakeups.dispose();
+	expect(extensionWakeText("Board", "TR-1").split("\n")).toEqual([
+		'Update from the ThinkRail extension "Board" (host automation, not a message from the human):',
+		"",
+		"TR-1",
+	]);
 });
 
 test("the card names the member, each changed chat's state, plan and final message, and its PR", () => {

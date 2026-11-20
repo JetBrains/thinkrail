@@ -3,7 +3,7 @@ import { columnFor, placeInColumn } from "./presets";
 
 /** What the host reported about a workspace bound to one of the card's attempts. */
 export type BoardEvent =
-	| { kind: "started"; workspaceId: string; workflow: Workflow }
+	| { kind: "started"; workspaceId: string; workflow: Workflow; reason?: string }
 	| { kind: "settled"; workspaceId: string; planDone: boolean; diffNonEmpty: boolean }
 	| { kind: "merged"; workspaceId: string }
 	| { kind: "removed"; workspaceId: string };
@@ -53,7 +53,7 @@ export function applyEvent(
 				column: columnFor(preset, "started", event.workflow),
 			} as const;
 			if (samePlace(card, to) && !card.cancelPending) return null;
-			return moved(card, to, at, "automation", "an attempt started");
+			return moved(card, to, at, "automation", event.reason ?? "an attempt started");
 		}
 		case "settled": {
 			if (attempt.removedAt !== undefined || card.category !== "started") return null;

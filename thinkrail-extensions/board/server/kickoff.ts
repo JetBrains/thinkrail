@@ -5,6 +5,8 @@ export interface KickoffContext {
 	initiative?: Pick<Initiative, "id" | "title" | "outcome" | "criteria">;
 	project?: string;
 	milestone?: string;
+	/** The orchestrator's note for a card it starts (`board_card_start`), and who wrote it. */
+	note?: { from: string; text: string };
 }
 
 /** The skill M and L cards start with, sent the way the composer sends a picked skill. */
@@ -39,6 +41,8 @@ function contextLines(context: KickoffContext): string[] {
 		context.milestone ? `Milestone: ${context.milestone}` : "",
 	].filter(Boolean);
 	if (place.length > 0) lines.push(...(initiative ? [] : [""]), ...place);
+	const note = context.note?.text.trim();
+	if (context.note && note) lines.push("", `Note from ${context.note.from}:`, note);
 	return lines;
 }
 
@@ -333,4 +337,99 @@ export function discoveryKickoff(
 		);
 	}
 	return `/skill:${DISCOVERY_SKILLS[kind]} ${body.join("\n")}`;
+}
+
+/** The wake-up kinds the board sends a container's orchestrator. */
+export const WAKE_RUN = "board-run";
+export const WAKE_READY = "board-ready";
+
+/** A card as the autopilot texts list it. */
+export interface PilotLine {
+	id: string;
+	title: string;
+	size?: Card["size"];
+	type?: Card["type"];
+}
+
+function pilotLine(card: PilotLine): string {
+	const workflow = workflowFor({
+		type: card.type ?? "feature",
+		...(card.size ? { size: card.size } : {}),
+	});
+	const size = card.size ? `size ${card.size}` : "no size";
+	const design = workflow === "brainstorm" ? " (its design waits for the human's approval)" : "";
+	return `- ${card.id} "${card.title.trim()}" · ${size} → ${workflow}${design}`;
+}
+
+const START_HOW =
+	"Start a card with board_card_start { cardId, workflow?, note? }: it starts as a new workspace of this container on the card's kickoff, the size's workflow unless you pass one, your note appended. Only this container's initiative's ready, unblocked cards start.";
+
+/** The `board-run` wake-up: what the container is for, what started, and how autopilot works. */
+export function runBrief(input: {
+	initiative: Pick<Initiative, "id" | "title" | "outcome" | "criteria">;
+	boardName: string;
+	started: PilotLine | null;
+	autopilot: boolean;
+	running: number;
+	cap: number;
+}): string {
+	const { initiative } = input;
+	const lines = [
+		`This container runs initiative ${initiative.id} "${initiative.title.trim()}" of the ${input.boardName} board.`,
+	];
+	const outcome = initiative.outcome.trim();
+	if (outcome) lines.push("", `Outcome: ${outcome}`);
+	const criteria = initiative.criteria.map((item) => item.trim()).filter(Boolean);
+	if (criteria.length > 0) lines.push("Success criteria:", ...criteria.map((item) => `- ${item}`));
+	lines.push(
+		"",
+		input.started
+			? `Run started ${input.started.id} "${input.started.title.trim()}" as this container's first workspace.`
+			: "Run reused this container; nothing new was started.",
+		`Agents running on the board: ${input.running}${input.cap > 0 ? ` of ${input.cap}` : ""}.`,
+		"",
+		input.autopilot
+			? "Autopilot is on: the board wakes you with board-ready updates listing the cards it selected (ready, unblocked, sized, within the limits). Start them, or say in one line why you hold one back."
+			: "Autopilot is off: the human starts cards from the board, or asks you to start one.",
+		START_HOW,
+		"Review each member's result when it settles, file follow-up work with board_card_create (it lands in Triage for the human), and merge only after the human approves in this chat.",
+	);
+	return lines.join("\n");
+}
+
+/** The `board-ready` wake-up: the cards autopilot selected now, with the room the limits leave. */
+export function readyText(input: {
+	initiative: Pick<Initiative, "id" | "title">;
+	cards: readonly PilotLine[];
+	again: readonly string[];
+	running: number;
+	cap: number;
+	retryMinutes: number;
+}): string {
+	const room =
+		input.cap > 0
+			? `${input.running} of ${input.cap} agents run on the board, so up to ${Math.max(0, input.cap - input.running)} more may start now`
+			: `${input.running} agents run on the board, with no cap`;
+	const lines = [
+		`Autopilot of initiative ${input.initiative.id} "${input.initiative.title.trim()}": ${input.cards.length === 1 ? "this card is" : "these cards are"} ready to start (${room}):`,
+		...input.cards.map(pilotLine),
+	];
+	if (input.again.length > 0)
+		lines.push(`Offered again, not started yet: ${input.again.join(", ")}.`);
+	lines.push(
+		"",
+		START_HOW,
+		`A card not started within ${input.retryMinutes} minutes is offered once more, then flagged on the board as not started by you.`,
+	);
+	return lines.join("\n");
+}
+
+/** The orchestrator's system-prompt section while its container runs an initiative, fed by the board. */
+export function autopilotRule(initiatives: readonly Pick<Initiative, "id" | "title">[]): string {
+	const named = initiatives.map((initiative) => `${initiative.id} "${initiative.title.trim()}"`);
+	return [
+		`This container runs the board initiative${named.length === 1 ? "" : "s"} ${named.join(", ")}. Updates from the Board extension (board-run, board-ready) are host automation, not the human: a board-ready update lists the cards autopilot selected to start now.`,
+		`- ${START_HOW} M and L cards start with brainstorming, so their design waits for the human's approval.`,
+		"- File follow-ups with board_card_create (into Triage); never start cards the update did not list unless the human asks.",
+	].join("\n");
 }

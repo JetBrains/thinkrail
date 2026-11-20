@@ -1029,6 +1029,163 @@ test("the roadmap: an initiative made in Next is dragged to Now, edited in Peek 
 	await boardTool(page).getByTestId("board-mode-toggle").click();
 });
 
+/** Writes a board's initiatives file as a host restart would find it. */
+function seedInitiative(
+	projectId: string,
+	initiative: { id: string; title: string; outcome: string; criteria: string[]; cardIds: string[] },
+): void {
+	const dir = join(E2E_DATA_DIR, "extensions", "board", projectId);
+	mkdirSync(dir, { recursive: true });
+	writeFileSync(
+		join(dir, "initiatives.json"),
+		JSON.stringify({
+			version: 1,
+			nextNumber: 2,
+			nextUpdateNumber: 1,
+			initiatives: [
+				{
+					...initiative,
+					horizon: "now",
+					rank: 1,
+					specRefs: [],
+					updates: [],
+					externalCards: [],
+					createdAt: BASE_TS,
+					updatedAt: BASE_TS,
+				},
+			],
+		}),
+	);
+}
+
+/** The board's initiatives as `roadmap.get` answers them over the wire. */
+async function wireInitiatives(
+	page: Page,
+	projectId: string,
+): Promise<{ id: string; containerId?: string; autopilot?: unknown }[]> {
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	try {
+		const view = (await wire.request("extension.query", {
+			extension: "board",
+			method: "roadmap.get",
+			params: { projectId },
+		})) as { initiatives: { id: string; containerId?: string; autopilot?: unknown }[] };
+		return view.initiatives;
+	} finally {
+		wire.close();
+	}
+}
+
+test("Run initiative makes a container of its first ready card with an orchestrator, autopilot's switch persists, and Review past its limit pauses it", async ({
+	page,
+}) => {
+	test.setTimeout(120_000);
+	await page.setViewportSize({ width: 1720, height: 1000 });
+	await openFixtureProject(page);
+	const [project] = await openProjects(page);
+	if (!project) throw new Error("missing the fixture project");
+	seedBoard(project.id, "AP", [
+		{ id: "AP-1", title: "Pay page", category: "unstarted", column: "ready", rank: 1, size: "S" },
+		{
+			id: "AP-2",
+			title: "Saved cards",
+			category: "unstarted",
+			column: "ready",
+			rank: 2,
+			size: "S",
+		},
+		{ id: "AP-3", title: "Shipped one", category: "review", column: "review", rank: 3 },
+		{ id: "AP-4", title: "Shipped two", category: "review", column: "review", rank: 4 },
+	]);
+	seedInitiative(project.id, {
+		id: "I-1",
+		title: "Checkout",
+		outcome: "Buyers pay in one step",
+		criteria: ["One page"],
+		cardIds: ["AP-1", "AP-2"],
+	});
+	await reloadBoards(page);
+	await enterDefaultWorkspace(page);
+	await page.getByTestId(BOARD_RAIL).click();
+	await boardTool(page).getByTestId("board-view-roadmap").click();
+	await horizon(page, "now").getByTestId("board-initiative-open").click();
+	await expect(peekInitiative(page)).toHaveAttribute("data-initiative-id", "I-1");
+	const block = peekInitiative(page).getByTestId("board-initiative-autopilot");
+	await expect(block.getByTestId("board-autopilot-state")).toHaveAttribute("data-state", "off");
+	await expect(block.getByTestId("board-autopilot-ready")).toHaveCount(2);
+
+	await block.getByTestId("board-initiative-run").click();
+	await expect(block.getByTestId("board-initiative-open-container")).toBeVisible({
+		timeout: 30_000,
+	});
+	await expect(block.getByTestId("board-initiative-container")).toHaveText(
+		"Container “Checkout” · 1 workspace",
+	);
+	const group = page.getByTestId("container-group").filter({
+		has: page.getByTestId("container-name").getByText("Checkout", { exact: true }),
+	});
+	await expect(group.getByTestId("container-member-count")).toHaveText("1");
+	await expect(group.getByTestId("workspace-item")).toHaveCount(1);
+	await expect(group.getByTestId("container-orchestrator")).toBeVisible({ timeout: 30_000 });
+	await expect(block.getByTestId("board-autopilot-ready")).toHaveCount(1);
+	await expect(block.getByTestId("board-autopilot-ready")).toHaveAttribute("data-card-id", "AP-2");
+	expect((await wireInitiatives(page, project.id))[0]?.containerId).toBeTruthy();
+
+	const toggle = block.getByTestId("board-initiative-autopilot-switch");
+	await expect(toggle).toHaveAttribute("aria-checked", "false");
+	await toggle.click();
+	await expect(toggle).toHaveAttribute("aria-checked", "true");
+	await expect(block.getByTestId("board-autopilot-state")).toHaveAttribute("data-state", "on");
+
+	await boardTool(page).getByTestId("board-view-board").click();
+	await expect(card(page, "Pay page")).toHaveAttribute("data-column", "building");
+	await boardTool(page).getByTestId("board-settings").click();
+	await page.getByTestId("board-wip-limit-review").fill("1");
+	await page.getByTestId("board-wip-save").click();
+	await expect(block.getByTestId("board-autopilot-state")).toHaveAttribute("data-state", "paused");
+	await expect(block.getByTestId("board-autopilot-state")).toHaveText(
+		"Paused: Review is over its limit (2/1)",
+	);
+	await expect
+		.poll(async () => (await wireInitiatives(page, project.id))[0]?.autopilot, {
+			timeout: 15_000,
+		})
+		.toEqual({ on: true, pausedReason: { kind: "review", count: 2, limit: 1 } });
+
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
+	await expect(boardTool(page)).toBeVisible();
+	await boardTool(page).getByTestId("board-view-roadmap").click();
+	await horizon(page, "now").getByTestId("board-initiative-open").click();
+	const reloaded = peekInitiative(page).getByTestId("board-initiative-autopilot");
+	await expect(reloaded.getByTestId("board-initiative-autopilot-switch")).toHaveAttribute(
+		"aria-checked",
+		"true",
+	);
+	await expect(reloaded.getByTestId("board-autopilot-state")).toHaveAttribute(
+		"data-state",
+		"paused",
+	);
+
+	await page
+		.getByTestId("container-group")
+		.filter({ has: page.getByTestId("container-name").getByText("Checkout", { exact: true }) })
+		.getByTestId("container-item")
+		.click({ button: "right" });
+	await page.getByTestId("container-menu-overview").click();
+	const overview = page
+		.locator('[data-region-kind="peek"][data-open]')
+		.getByTestId("container-overview");
+	const section = overview.getByTestId("board-container-initiative");
+	await expect(section).toHaveAttribute("data-initiative-id", "I-1");
+	await expect(section).toContainText("I-1 · Checkout");
+	await expect(section.getByTestId("board-autopilot-state")).toHaveText(
+		"Paused: Review is over its limit (2/1)",
+	);
+	await expect(section.getByTestId("board-autopilot-agents")).toBeVisible();
+});
+
 function graphNode(page: Page, id: string): Locator {
 	return boardTool(page).locator(`.react-flow__node[data-id="${id}"]`);
 }

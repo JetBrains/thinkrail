@@ -926,6 +926,7 @@ test("extension.list reflects disabledExtensions written through settings.update
 				"board_idea_score",
 				"board_watchlist_get",
 				"board_watchlist_snapshot",
+				"board_card_start",
 			],
 			hasParentExtensions: true,
 			hasChildExtensions: false,

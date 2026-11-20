@@ -242,7 +242,11 @@ reports and vanishes instead of filling the topbar. Its `StatusItemHost` (`creat
 `extensionPanelHost.ts`) shares the panel host's query, event and chat-navigation code and the transport and
 navigator links both are built over (`APP_HOST_LINKS`); `scope` and `peek`
 follow the active workspace (`requestPeek` there), `null` / a no-op without one. The board's Needs-you
-counter is the first ([[module-ext-board]]).
+counter is the first ([[module-ext-board]]). `ExtensionContainerSections { containerId }` mounts the
+extensions' `containerSections` under the same rule (`mountedStatusItems`, `useStatusItemHost`,
+`reportId: "extension-container-section"`), each given the container's id; `PeekPane` injects it into
+`panels/ContainerOverview`'s `extensionSections` slot, so `panels` never reaches the extension registry
+(the board's initiative and autopilot are the first).
 
 ## Layout modes
 

@@ -865,11 +865,26 @@ test("container cards are read from their custom messages, and a malformed one i
 		kind: "orchestratorMessage",
 		details: message,
 	});
+	const extensionWake: ContainerWakeDetails = {
+		containerId: "c1",
+		reasons: ["extension"],
+		source: { extension: "board", extensionTitle: "Board", kind: "board-ready" },
+	};
+	expect(readContainerNote(custom(CONTAINER_WAKE_CUSTOM_TYPE, extensionWake))).toEqual({
+		kind: "wake",
+		details: extensionWake,
+	});
 	expect(opensChatRound(custom(CONTAINER_WAKE_CUSTOM_TYPE, wake))).toBe(true);
+	expect(opensChatRound(custom(CONTAINER_WAKE_CUSTOM_TYPE, extensionWake))).toBe(true);
 	expect(opensChatRound(custom(ORCHESTRATOR_MESSAGE_CUSTOM_TYPE, message))).toBe(true);
 	expect(opensChatRound(custom(CONTAINER_BRIEF_CUSTOM_TYPE, { containerId: "c1" }))).toBe(false);
 	for (const malformed of [
 		custom(CONTAINER_WAKE_CUSTOM_TYPE, { ...wake, reasons: "chat" }),
+		custom(CONTAINER_WAKE_CUSTOM_TYPE, { containerId: "c1", reasons: ["extension"] }),
+		custom(CONTAINER_WAKE_CUSTOM_TYPE, {
+			...extensionWake,
+			source: { extension: "board", kind: "board-ready" },
+		}),
 		custom(ORCHESTRATOR_MESSAGE_CUSTOM_TYPE, { ...message, text: 3 }),
 		{ ...custom(CONTAINER_BRIEF_CUSTOM_TYPE, { containerId: "c1" }), role: "user" },
 		null,

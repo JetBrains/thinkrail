@@ -2,6 +2,7 @@ export type {
 	ArtifactTool,
 	ExtensionArtifactsDir,
 	ExtensionChatFacts,
+	ExtensionContainer,
 	ExtensionHostActions,
 	ExtensionHostEventBus,
 	ExtensionHostEvents,

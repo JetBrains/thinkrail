@@ -420,8 +420,9 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   `container-wake`, `orchestrator-message`, `extension-message`), one turn kind carrying the
   `ContainerNote` and the content text, rendered by the props-driven `ContainerNoteCard` (`turns.tsx`,
   `data-testid="container-note-card"`, `data-note=<kind>`) as a foldable host card: the title says where
-  it came from — "Container summary", "Update from <workspace>", "From the orchestrator of “<container>”"
-  or "From the <title> extension" (with "· steer" for a steer) — and the body is Markdown
+  it came from — "Container summary", "Update from <workspace>", "Update from the <title> extension" (an
+  extension's wake-up, `details.source`), "From the orchestrator of “<container>”" or "From the <title>
+  extension" (with "· steer" for a steer) — and the body is Markdown
   (`containerNoteBody`, `rows.ts`: an orchestrator's or extension's own `details.text`, never the framing
   the agent reads; otherwise the host's text). A message starts unfolded, the brief and a wake-up folded.
   A wake-up and a message open a round (they start a turn); the brief does not.

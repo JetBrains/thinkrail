@@ -23,6 +23,7 @@ import { fileName } from "../lib";
 import { ContainerOverview } from "../panels/ContainerOverview";
 import { type PeekEntry, peekEntryIdentity, useAppStore } from "../store";
 import { PEEK_HOST } from "./AppResourceHost";
+import { ExtensionContainerSections } from "./ExtensionContainerSections";
 import { ExtensionPanelBody } from "./ExtensionPanelBody";
 import { type LayoutExtensionTab, layoutTabName } from "./layout";
 import { hidePeekFrom, openPeekInTab, removePeekEntryFrom } from "./peekControl";
@@ -149,7 +150,11 @@ function PeekEntryBody({
 	if (entry.kind === "container") {
 		return (
 			<div className={className}>
-				<ContainerOverview containerId={entry.containerId} workspaceId={workspaceId} />
+				<ContainerOverview
+					containerId={entry.containerId}
+					workspaceId={workspaceId}
+					extensionSections={<ExtensionContainerSections containerId={entry.containerId} />}
+				/>
 			</div>
 		);
 	}

@@ -19,6 +19,7 @@ import {
 	SCORE_MAX,
 	SCORE_MIN,
 	type WatchEntry,
+	WORKFLOWS,
 } from "./model";
 import type { RoadmapView } from "./roadmap";
 
@@ -60,6 +61,27 @@ const LinkParams = Type.Object({
 		description: "Ids of the cards it blocks (they cannot start before it is done).",
 	}),
 });
+
+const StartParams = Type.Object({
+	cardId: Type.String({
+		description: "The card to start, such as TR-12: one of the initiative this container runs.",
+	}),
+	workflow: Type.Optional(
+		literals(
+			WORKFLOWS,
+			"implement or brainstorm; by default the size's (S and bugs implement, M and L brainstorm first).",
+		),
+	),
+	note: Type.Optional(
+		Type.String({
+			description:
+				"Context for the card's agent, appended to its kickoff: what to watch for, which sibling to build on.",
+		}),
+	),
+});
+
+/** The orchestrator's system-prompt section while its container runs an initiative. */
+export const AUTOPILOT_SECTION = "thinkrail-board-autopilot";
 
 const NoteParams = Type.Object({
 	text: Type.String({ description: "A short progress note for the human, in one or two lines." }),
@@ -450,8 +472,9 @@ const trimmed = (items: readonly string[] | undefined) =>
 
 /**
  * The agent's `board_*` tools over the running board: read cards, file new ones (or a decomposition)
- * into Triage, link "blocks", note progress, and read or propose the roadmap's initiatives, projects and
- * draft updates. A chat knows its card through the attempt that started its workspace.
+ * into Triage, link "blocks", note progress, read or propose the roadmap's initiatives, projects and
+ * draft updates, and — for a container's orchestrator — start its initiative's cards, with the autopilot
+ * section in its prompt. A chat knows its card through the attempt that started its workspace.
  */
 export function createBoardTools(board: () => Board | undefined): ExtensionFactory {
 	const running = (): Board => {
@@ -460,6 +483,10 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 		return current;
 	};
 	return (pi: ExtensionAPI): void => {
+		pi.on("before_agent_start", (event, ctx) => {
+			const rule = board()?.orchestratorRule(ctx.sessionManager.getSessionId());
+			if (rule) event.systemPromptOptions.sections[AUTOPILOT_SECTION] = rule;
+		});
 		pi.registerTool({
 			name: "board_card_get",
 			label: "Board card",
@@ -487,7 +514,7 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 			parameters: ListParams,
 			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 				const current = running();
-				const project = current.projectOfCwd(ctx.cwd);
+				const project = current.projectOfChat(ctx.sessionManager.getSessionId(), ctx.cwd);
 				const cards = current.cards(project.id, params.status);
 				return result(
 					cards.length > 0
@@ -509,7 +536,7 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 			parameters: CreateParams,
 			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 				const current = running();
-				const project = current.projectOfCwd(ctx.cwd);
+				const project = current.projectOfChat(ctx.sessionManager.getSessionId(), ctx.cwd);
 				const title = params.title.trim();
 				if (!title) throw new Error("Pass a non-empty title.");
 				const sessionId = ctx.sessionManager.getSessionId();
@@ -569,7 +596,7 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 			parameters: InitiativeGetParams,
 			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 				const current = running();
-				const project = current.projectOfCwd(ctx.cwd);
+				const project = current.projectOfChat(ctx.sessionManager.getSessionId(), ctx.cwd);
 				let initiative: Initiative | undefined;
 				let boardId = project.id;
 				if (params.initiativeId) {
@@ -608,7 +635,7 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 			parameters: InitiativeDraftParams,
 			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 				const current = running();
-				const project = current.projectOfCwd(ctx.cwd);
+				const project = current.projectOfChat(ctx.sessionManager.getSessionId(), ctx.cwd);
 				const title = params.title.trim();
 				if (!title) throw new Error("Pass a non-empty title.");
 				const idea = params.ideaId?.trim()
@@ -643,7 +670,7 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 			parameters: ProjectCreateParams,
 			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 				const current = running();
-				const project = current.projectOfCwd(ctx.cwd);
+				const project = current.projectOfChat(ctx.sessionManager.getSessionId(), ctx.cwd);
 				const title = params.title.trim();
 				if (!title) throw new Error("Pass a non-empty title.");
 				const milestones = (params.milestones ?? []).map((milestone) => {
@@ -678,7 +705,7 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 			parameters: BatchParams,
 			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 				const current = running();
-				const project = current.projectOfCwd(ctx.cwd);
+				const project = current.projectOfChat(ctx.sessionManager.getSessionId(), ctx.cwd);
 				const sessionId = ctx.sessionManager.getSessionId();
 				const own = current.cardOfSession(sessionId, ctx.cwd)?.card;
 				const inputs = params.cards.map((card, index) => {
@@ -715,7 +742,7 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 			parameters: ActivityParams,
 			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 				const current = running();
-				const project = current.projectOfCwd(ctx.cwd);
+				const project = current.projectOfChat(ctx.sessionManager.getSessionId(), ctx.cwd);
 				const days = params.sinceDays ?? 7;
 				const { initiative, activity, titles } = current.roadmap.activity(
 					project.id,
@@ -735,7 +762,7 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 			parameters: MoveParams,
 			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 				const current = running();
-				const project = current.projectOfCwd(ctx.cwd);
+				const project = current.projectOfChat(ctx.sessionManager.getSessionId(), ctx.cwd);
 				const initiative = current.roadmap.moveInitiative(
 					project.id,
 					params.initiativeId.trim().toUpperCase(),
@@ -754,7 +781,7 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 			parameters: CloseParams,
 			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 				const current = running();
-				const project = current.projectOfCwd(ctx.cwd);
+				const project = current.projectOfChat(ctx.sessionManager.getSessionId(), ctx.cwd);
 				const initiative = current.roadmap.closeInitiative(
 					project.id,
 					params.initiativeId.trim().toUpperCase(),
@@ -772,7 +799,7 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 			parameters: UpdateDraftParams,
 			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 				const current = running();
-				const project = current.projectOfCwd(ctx.cwd);
+				const project = current.projectOfChat(ctx.sessionManager.getSessionId(), ctx.cwd);
 				const text = params.text.trim();
 				if (!text) throw new Error("Pass a non-empty text.");
 				const update = current.roadmap.saveDraft(
@@ -795,7 +822,7 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 			parameters: IdeasListParams,
 			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 				const current = running();
-				const project = current.projectOfCwd(ctx.cwd);
+				const project = current.projectOfChat(ctx.sessionManager.getSessionId(), ctx.cwd);
 				const view = current.discovery.get(project.id);
 				if (params.ideaId) {
 					const id = current.discovery.idea(project.id, params.ideaId).id;
@@ -822,7 +849,7 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 			parameters: IdeaCreateParams,
 			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 				const current = running();
-				const project = current.projectOfCwd(ctx.cwd);
+				const project = current.projectOfChat(ctx.sessionManager.getSessionId(), ctx.cwd);
 				const title = params.title.trim();
 				if (!title) throw new Error("Pass a non-empty title.");
 				const idea = current.discovery.createIdea(project.id, {
@@ -842,7 +869,7 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 			parameters: EvidenceParams,
 			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 				const current = running();
-				const project = current.projectOfCwd(ctx.cwd);
+				const project = current.projectOfChat(ctx.sessionManager.getSessionId(), ctx.cwd);
 				const artifact = params.kind === "artifact";
 				const workspaceId = artifact
 					? (current.host.sessionScope({ kind: "all" }).locate(ctx.cwd)?.workspaceId ?? undefined)
@@ -871,7 +898,7 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 			parameters: ScoreParams,
 			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 				const current = running();
-				const project = current.projectOfCwd(ctx.cwd);
+				const project = current.projectOfChat(ctx.sessionManager.getSessionId(), ctx.cwd);
 				const { idea, kept } = current.discovery.suggestScores(project.id, params.ideaId, {
 					...(params.value
 						? { value: { score: params.value.score, reasons: params.value.reasons } }
@@ -901,7 +928,7 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 			parameters: WatchGetParams,
 			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 				const current = running();
-				const project = current.projectOfCwd(ctx.cwd);
+				const project = current.projectOfChat(ctx.sessionManager.getSessionId(), ctx.cwd);
 				const entries = params.watchId
 					? [current.discovery.watchEntry(project.id, params.watchId)]
 					: current.discovery.get(project.id).watchlist;
@@ -923,7 +950,7 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 			parameters: SnapshotParams,
 			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 				const current = running();
-				const project = current.projectOfCwd(ctx.cwd);
+				const project = current.projectOfChat(ctx.sessionManager.getSessionId(), ctx.cwd);
 				const workspaceId = params.artifactPath
 					? (current.host.sessionScope({ kind: "all" }).locate(ctx.cwd)?.workspaceId ?? undefined)
 					: undefined;
@@ -939,6 +966,34 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 						? `Stored the snapshot of ${entry.id} (${entry.name}). The previous one, of ${isoDay(previous.at)}, to diff against:\n\n${previous.text}`
 						: `Stored the first snapshot of ${entry.id} (${entry.name}); there is no previous one to compare with.`,
 					{ entry, previous },
+				);
+			},
+		});
+		pi.registerTool({
+			name: "board_card_start",
+			label: "Start a board card",
+			description:
+				"Start a card of the initiative this container runs as a new workspace of this container, on the card's kickoff with your note appended. For a container's orchestrator (or a chat of one of its workspaces); only ready, unblocked cards of that initiative start.",
+			promptSnippet:
+				"board_card_start — start a card of this container's initiative as a new member workspace.",
+			parameters: StartParams,
+			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+				const started = await running().startForContainer(
+					ctx.sessionManager.getSessionId(),
+					ctx.cwd,
+					params.cardId.trim(),
+					{
+						...(params.workflow ? { workflow: params.workflow } : {}),
+						...(params.note ? { note: params.note } : {}),
+					},
+				);
+				const { card, attempt, container } = started;
+				const failed = started.kickoffError
+					? ` Its chat did not take the kickoff: ${started.kickoffError}`
+					: "";
+				return result(
+					`Started ${card.id} (${attempt.workflow}) as workspace ${attempt.workspaceId} of the container "${container.name}", chat ${attempt.sessionId}.${failed} You are woken when its chat settles.`,
+					card,
 				);
 			},
 		});

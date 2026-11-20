@@ -1,5 +1,6 @@
 export {
 	enabledWebExtensions,
+	extensionContainerSections,
 	extensionLayoutPresets,
 	extensionPanels,
 	extensionSideTools,
@@ -7,6 +8,7 @@ export {
 	findExtensionLayoutPreset,
 	findExtensionPanel,
 	findExtensionSideTool,
+	type RegisteredContainerSection,
 	type RegisteredLayoutPreset,
 	type RegisteredPanel,
 	type RegisteredSideTool,

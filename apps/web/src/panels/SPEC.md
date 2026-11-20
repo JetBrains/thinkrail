@@ -107,7 +107,8 @@ treatment.
   TODO steps, diff stats, PR number and state; the active member outlined) with Open (`openContainerMember`:
   carry the overview, then enter the member) and Remove from container; the **Pull request stack** lines
   (`main ← A ← B`, `#N` before a member with a PR) and the independent members; **Show orchestrator** and
-  **Add workspace…**. Open steps are the one value the store lacks: it sums `session.list`'s
+  **Add workspace…**; above the members, whatever the shell injects as `extensionSections` (the extensions'
+  container sections). Open steps are the one value the store lacks: it sums `session.list`'s
   `openTodos` per member, re-read when the connection or any member chat's run or completion changes. Collapse is per-browser view state
   (`collapsedContainerIds`, persisted by `projectExpansion` like project expansion, default expanded),
   and the active member's or orchestrator's container (with its project) is revealed. A standalone

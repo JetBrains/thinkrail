@@ -602,7 +602,17 @@ gate: [[module-contracts]].
   renamed over it — nothing can land outside the worktree, nothing is committed; `assist`
   bounds the prompt (non-empty, at most 20,000 characters) and `maxTokens` (a whole 1–1,024, 256 by
   default) and asks `assist`'s `assistText` — the cheap-model one-shot path through pi's runtime — with the
-  services' `signal`, answering `{ text }` or `null` (no model, a timeout, an abort, an empty answer).
+  services' `signal`, answering `{ text }` or `null` (no model, a timeout, an abort, an empty answer);
+  `createContainer` validates the member list (1–100 non-empty ids) and runs `orchestrator.ts`'s
+  `createContainerOrchestrated` (the containers' membership rules and coded refusals pass through), answering
+  the record as `extensionContainer` maps it (its orchestrator chat once there is one); `startOrchestrator`
+  refuses an unknown container (`CONTAINER_UNKNOWN`) and runs `startContainerOrchestrator`, answering the
+  orchestrator chat's project and workspace with its session; `wakeOrchestrator` validates the kind and text
+  and hands `{ extension, extensionTitle, kind, text }` to the running `orchestratorWakeups`
+  (`wakeOrchestratorFromExtension`), refusing an unknown container or one with no orchestrator, so an
+  extension's update is coalesced and queued like a member's ([[submodule-server-containers]] § Wake-ups).
+  The `containers()` fact is `listContainers` mapped by `extensionContainer` with each one's
+  `orchestratorChat`.
   **Extension events** are tapped inside the existing publisher callbacks, never through a second
   `setX`: `server.ts` emits `session.state` from the session-state publisher, `workspace.created|updated|
   removed` from the workspace-lifecycle tee (a review refresh arrives as `updated`), `agent.settled` from

@@ -605,7 +605,11 @@ function containerNoteTitle(t: Translator, note: ContainerNote): string {
 		case "brief":
 			return t("chat.turn.container.brief");
 		case "wake":
-			return t("chat.turn.container.wake", { workspace: note.details.workspaceName });
+			return note.details.source
+				? t("chat.turn.container.extensionWake", {
+						extension: note.details.source.extensionTitle,
+					})
+				: t("chat.turn.container.wake", { workspace: note.details.workspaceName ?? "" });
 		case "orchestratorMessage":
 			return note.details.mode === "steer"
 				? t("chat.turn.container.orchestratorSteer", { container: note.details.containerName })

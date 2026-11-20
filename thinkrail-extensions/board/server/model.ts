@@ -165,6 +165,20 @@ export interface InitiativeUpdate {
 	publishedAt?: number;
 }
 
+/**
+ * Why autopilot holds back on its own: a human-attention limit is past (`review`, `needs_you`, with the
+ * board's figures) or the initiative's container has no orchestrator to wake (`orchestrator`).
+ */
+export type AutopilotPause =
+	| { kind: "review" | "needs_you"; count: number; limit: number }
+	| { kind: "orchestrator" };
+
+/** An initiative's autopilot: off by default; `pausedReason` is what holds it back right now. */
+export interface Autopilot {
+	on: boolean;
+	pausedReason?: AutopilotPause;
+}
+
 export interface Initiative {
 	id: string;
 	/** The initiative it nests under; a top-level one is a goal. */
@@ -189,6 +203,9 @@ export interface Initiative {
 	proposedBy?: "agent";
 	/** When the human confirmed it done in an initiative-close chat. */
 	closedAt?: number;
+	/** The container Run made for it: its cards start into it, its orchestrator coordinates them. */
+	containerId?: string;
+	autopilot?: Autopilot;
 	createdAt: number;
 	updatedAt: number;
 }

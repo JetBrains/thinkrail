@@ -95,7 +95,7 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   through and may change with the chat (a renderer must tolerate their absence). Its DOM-typed members
   are the reason the package's `lib` includes `DOM`; the package still never touches the DOM.
 - `WebExtension` is `{ name, title?, description?, toolRenderers?, globalOverlay?, commands?, shortcuts?,
-  panels?, sideTools?, statusItems?, layoutPresets? }`.
+  panels?, sideTools?, statusItems?, containerSections?, layoutPresets? }`.
   Each tool-name entry carries a `renderer` and optional `ToolRegistrationOptions` under `options`;
   `toolRenderers` is optional because a web-only extension renders no tool. `title` / `description` are
   `MessageKey`s for the Settings row of an extension the server catalog lacks; `title` also names a
@@ -200,6 +200,11 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   `peek` shows nothing; there is no tab, file or tool-call rendering, since the topbar holds no
   workspace view. The precedent is `globalOverlay`'s mount; a component was preferred to a declarative
   count so an extension decides its own popover.
+- **Container sections are a container's facts in its overview**: a `containerSections` entry
+  (`ContainerSectionDeclaration { load }`) is a lazy `ComponentType<ContainerSectionProps { host, containerId
+  }>` the shell mounts at the top of a container's overview in Peek under the status items' rule (on,
+  served, listed; never a placeholder), with the status item's host; it renders nothing while it has
+  nothing to say about that container (the board's initiative and autopilot are its first consumer).
 - **Layout presets are modes**: a `layoutPresets` entry (`LayoutPresetDeclaration { title, icon, left,
   right }`) is a side arrangement — contracts' resource-free `LayoutPresetSideRegion`s placing built-in
   tools and the extension's own side tools — the window enters and leaves. Entering keeps the replaced
@@ -268,7 +273,9 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   and text, sorted, at most 2 MiB and 2,000 files in all — `truncated` once the cap stopped the read —, no
   symlink followed (the `openspec/` folder itself included), nothing outside `openspec/`; `null` without
   the folder, for a chat or a workspace that is not open — the board's OpenSpec reader) and `githubProblem()` (contracts' `GhSetupProblem`: why the user's own `gh` cannot run now,
-  `missing` or `unauthenticated`, else `null` — the host's `gh auth status` probe, no credentials).
+  `missing` or `unauthenticated`, else `null` — the host's `gh auth status` probe, no credentials) and
+  `containers()` (`ExtensionContainer { id, name, workspaceIds, orchestrator { projectId, workspaceId,
+  sessionId } | null }`: every container with its members and, once one started, its orchestrator chat).
   A service is added with the consumer that needs it.
 - **Queries read; actions write through named host actions.** `ExtensionHostServices.actions`
   (`ExtensionHostActions`) are the only writes an extension makes outside its own data folder and the
@@ -290,7 +297,15 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   content (`FILE_TOO_LARGE`); the board's Publish and its OpenSpec Apply are its consumers), and `assist({ prompt, maxTokens? })` → `{ text } | null` (a one-shot ask
   on the host's own assist model through pi — never a second runtime —, the prompt up to 20,000 characters,
   `maxTokens` 1–1,024 (256 by default), stopped once the services' `signal` aborts; `null` when no model is
-  configured, it timed out or the answer was empty, so a caller skips silently). Every action
+  configured, it timed out or the answer was empty, so a caller skips silently), and the container
+  actions the board's autopilot uses: `createContainer({ name?, workspaceIds })` → `ExtensionContainer`
+  (`container.create`'s rules: at least one member, none in another container; two or more get their
+  orchestrator), `startOrchestrator({ containerId })` → `ExtensionStartedOrchestrator { containerId,
+  projectId, workspaceId, sessionId }` (`container.startOrchestrator`: started, seeded with no turn, or
+  answered as it is) and `wakeOrchestrator(ExtensionWakeOrchestratorParams { containerId, kind, text })` (a
+  turn-starting `container-wake` from the extension — `kind` 1–40 lowercase letters, digits or dashes, the
+  text at most 20,000 characters — coalesced and queued like the host's member updates, one per kind in
+  flight; refused for an unknown container, `CONTAINER_UNKNOWN`, or one without an orchestrator). Every action
   is refused with `EXTENSION_DISABLED` while the extension is off.
 - **Host lifetime.** `ServerExtension.hostService?(host)` returns an `ExtensionHostService { stop? }`; the
   host starts it once its publishers are wired and whenever the extension is switched back on, and stops

@@ -11,6 +11,7 @@ import { cardId as formatCardId, parseCardId } from "./ids";
 import { type Insights, insights } from "./insights";
 import type { KickoffContext } from "./kickoff";
 import {
+	type Autopilot,
 	type Card,
 	type CardRef,
 	type CardSize,
@@ -654,6 +655,80 @@ export class Roadmap {
 		};
 		this.commit(projectId, { initiatives: this.replaceInitiative(file, next) });
 		return next;
+	}
+
+	/** Links the container Run made for an initiative, or (`null`) forgets a container that went away. */
+	setContainer(projectId: string, id: string, containerId: string | null): Initiative {
+		const { file, initiative } = this.initiative(projectId, id);
+		const next: Initiative = { ...initiative, updatedAt: this.host.now() };
+		if (containerId === null) delete next.containerId;
+		else next.containerId = containerId;
+		this.commit(projectId, { initiatives: this.replaceInitiative(file, next) });
+		return next;
+	}
+
+	/** Writes an initiative's autopilot switch and pause reason; an unchanged one writes nothing. */
+	setAutopilot(projectId: string, id: string, autopilot: Autopilot): Initiative {
+		const { file, initiative } = this.initiative(projectId, id);
+		if (JSON.stringify(initiative.autopilot ?? { on: false }) === JSON.stringify(autopilot))
+			return initiative;
+		const next: Initiative = { ...initiative, autopilot, updatedAt: this.host.now() };
+		this.commit(projectId, { initiatives: this.replaceInitiative(file, next) });
+		return next;
+	}
+
+	/** Every board's initiatives linked to a container. */
+	ofContainer(containerId: string): { projectId: string; initiative: Initiative }[] {
+		return this.store.projectIds().flatMap((projectId) => {
+			try {
+				return this.store
+					.initiatives(projectId)
+					.initiatives.filter((initiative) => initiative.containerId === containerId)
+					.map((initiative) => ({ projectId, initiative }));
+			} catch {
+				return [];
+			}
+		});
+	}
+
+	/** Every board's initiatives with autopilot on and a container. */
+	piloted(): { projectId: string; initiative: Initiative }[] {
+		return this.store.projectIds().flatMap((projectId) => {
+			try {
+				return this.store
+					.initiatives(projectId)
+					.initiatives.filter(
+						(initiative) => initiative.autopilot?.on && initiative.containerId !== undefined,
+					)
+					.map((initiative) => ({ projectId, initiative }));
+			} catch {
+				return [];
+			}
+		});
+	}
+
+	/** The cards an initiative holds, its own board's and other boards' (that still exist), as located cards. */
+	members(projectId: string, id: string): Located[] {
+		const { initiative } = this.initiative(projectId, id);
+		const data = this.data(projectId);
+		const held = initiativeCards(
+			initiative.id,
+			this.store.initiatives(projectId).initiatives,
+			data.projects,
+			data.cards,
+		);
+		const located: Located[] = [];
+		for (const cardId of [...held.local, ...held.external.map((ref) => ref.cardId)]) {
+			try {
+				located.push(this.host.locate(cardId));
+			} catch {}
+		}
+		return located;
+	}
+
+	/** The initiative by id on a board; throws for an unknown one. */
+	initiativeById(projectId: string, id: string): Initiative {
+		return this.initiative(projectId, id).initiative;
 	}
 
 	/** Marks an initiative closed, once the human confirmed it done; a closed one stays closed. */

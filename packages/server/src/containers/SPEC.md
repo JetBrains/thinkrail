@@ -129,6 +129,13 @@ event. Checks are not on the record, so they never trigger.
 - **Never.** No wake for the orchestrator's own session, for a container without an orchestrator, or
   for a workspace in no container; a member that left before the window closed is dropped. A failed
   delivery is logged. The orchestrator's session is attached first when it is only on disk.
+- **Extension-sourced wakes.** An extension's `wakeOrchestrator { containerId, kind, text }` host action
+  (the board's `board-run` and `board-ready`) is the same card: reason `extension`, no member, `source {
+  extension, extensionTitle, kind }`, its text the extension's own words framed as host automation under its
+  title (`extensionWakeText`). It goes through the same coalescing and queueing, keyed per extension, kind
+  and container (the latest text of a window wins), so an extension never sends the orchestrator a raw chat
+  message; a container that is unknown or has no orchestrator refuses the action. `server.ts` registers its
+  running wake-ups (`setRunningWakeups`) for the action to join.
 
 ## Container tools
 

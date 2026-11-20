@@ -2,6 +2,7 @@ import { userInfo } from "node:os";
 import type {
 	ChatState,
 	ExtensionChatFacts,
+	ExtensionContainer,
 	ExtensionHostProject,
 	ExtensionHostServices,
 	ExtensionTaskSpec,
@@ -11,6 +12,8 @@ import type {
 	ThinkingLevel,
 	Workspace,
 } from "@thinkrail/extension-api/server";
+import { type PilotCard, type PilotWip, select, type Unready, unready } from "./autopilot";
+import { Autopilot, type AutopilotView } from "./autopilotService";
 import { isoOfDay, today } from "./days";
 import { Discovery } from "./discovery";
 import {
@@ -28,6 +31,7 @@ import {
 } from "./github";
 import { allocatePrefix, cardId, parseCardId } from "./ids";
 import {
+	autopilotRule,
 	type DiscoveryChat,
 	discoveryKickoff,
 	kickoffText,
@@ -36,10 +40,13 @@ import {
 	openspecProposeKickoff,
 	type RoadmapChat,
 	roadmapKickoff,
+	runBrief,
+	WAKE_RUN,
 	workflowFor,
 } from "./kickoff";
 import {
 	type Attempt,
+	type AutopilotPause,
 	type BoardSettings,
 	type Card,
 	type CardOrigin,
@@ -246,6 +253,21 @@ export interface StartOptions {
 	model?: string;
 	thinkingLevel?: ThinkingLevel;
 	baseRef?: string;
+	/** The container the workspace joins; by default the card's initiative's, while it exists. */
+	into?: string;
+	/** A note appended to the kickoff, and who wrote it (the orchestrator's `board_card_start`). */
+	note?: { from: string; text: string };
+	/** Why the start is logged (actor `automation`): Run, the orchestrator, or by default a plain start. */
+	reason?: string;
+}
+
+/** What Run answers: the initiative's container, its orchestrator's chat, and the card it started. */
+export interface RunResult {
+	projectId: string;
+	initiativeId: string;
+	containerId: string;
+	orchestrator: { projectId: string; workspaceId: string; sessionId: string };
+	started: { cardId: string; workspaceId: string; sessionId: string; kickoffError?: string } | null;
 }
 
 export interface SettingsPatch {
@@ -283,6 +305,10 @@ export interface BoardOptions {
 	issueTtlMs?: number;
 	/** How often a running chat's tool starts re-publish its board, at most. */
 	actionRefreshMs?: number;
+	/** How long board changes gather before autopilot looks again. */
+	autopilotDelayMs?: number;
+	/** How long an offered card may stay unstarted before it is offered again. */
+	offerRetryMs?: number;
 }
 
 export interface Located {
@@ -472,6 +498,38 @@ function throttled(
 	};
 }
 
+/** Why Run (or a start) waits for the human: the attention limit that is past, worded. */
+function pauseRefusal(pause: AutopilotPause, initiativeId: string): string {
+	switch (pause.kind) {
+		case "review":
+			return `Review is over its limit (${pause.count}/${pause.limit}): finish reviews before running ${initiativeId}.`;
+		case "needs_you":
+			return `Needs you is over its limit (${pause.count}/${pause.limit}): answer the waiting chats before running ${initiativeId}.`;
+		case "orchestrator":
+			return `${initiativeId}'s container has no orchestrator.`;
+	}
+}
+
+function nothingToRun(initiativeId: string, cards: readonly PilotCard[], ready: number): string {
+	if (cards.length === 0) return `${initiativeId} has no cards yet: plan it into cards first.`;
+	if (ready > 0)
+		return `The board runs as many agents as its limit allows: wait for one to finish before running ${initiativeId}.`;
+	return `No card of ${initiativeId} is ready to start: a ready card is in Ready, has a size, no blocker left and no open attempt.`;
+}
+
+function unreadyRefusal(cardId: string, reason: Unready): string {
+	switch (reason.kind) {
+		case "category":
+			return `${cardId} is not ready to start: it is ${reason.category}, and only a card in Ready (unstarted) starts.`;
+		case "blocked":
+			return `${cardId} is blocked by ${reason.by.map((blocker) => `${blocker.id} (${blocker.category})`).join(", ")}: it starts once those are done.`;
+		case "active":
+			return `${cardId} already has an open attempt.`;
+		case "unsized":
+			return `${cardId} has no size.`;
+	}
+}
+
 /** One board service per data folder: the store, the rules over host events and the queries' reads. */
 export class Board {
 	readonly host: ExtensionHostServices;
@@ -494,6 +552,7 @@ export class Board {
 	private readonly openspec: OpenspecReader;
 	/** Each project's Default workspace's changes as the last read saw them, by name: what a write stores. */
 	private readonly openspecSeen = new Map<string, Map<string, OpenspecChange>>();
+	readonly autopilot: Autopilot;
 
 	constructor(host: ExtensionHostServices, options: BoardOptions = {}) {
 		this.host = host;
@@ -538,6 +597,19 @@ export class Board {
 			project: (projectId) => this.project(projectId),
 			changed: (projectId) => this.changed(projectId),
 		});
+		this.autopilot = new Autopilot(
+			{
+				host,
+				roadmap: this.roadmap,
+				now: this.now,
+				inputs: (projectId, initiative) => this.pilotInputs(projectId, initiative),
+				changed: (projectId) => this.changed(projectId),
+			},
+			{
+				...(options.autopilotDelayMs !== undefined ? { delayMs: options.autopilotDelayMs } : {}),
+				...(options.offerRetryMs !== undefined ? { retryMs: options.offerRetryMs } : {}),
+			},
+		);
 	}
 
 	private repositories(): ExtensionHostProject[] {
@@ -1706,12 +1778,17 @@ export class Board {
 				);
 		}
 		const workflow = change !== null ? "implement" : (options.workflow ?? workflowFor(card));
-		const context = this.roadmap.kickoffContext(owner, card);
+		const context = {
+			...this.roadmap.kickoffContext(owner, card),
+			...(options.note ? { note: options.note } : {}),
+		};
+		const into = options.into ?? this.initiativeContainer(owner, card);
 		this.starting.add(card.id);
 		try {
 			const created = await this.host.actions.createWorkspace({
 				projectId: owner,
 				...(options.baseRef ? { baseRef: options.baseRef } : {}),
+				...(into ? { into } : {}),
 				kickoff: {
 					text:
 						change !== null
@@ -1744,7 +1821,12 @@ export class Board {
 			};
 			const result = applyEvent(
 				withAttempt,
-				{ kind: "started", workspaceId: attempt.workspaceId, workflow },
+				{
+					kind: "started",
+					workspaceId: attempt.workspaceId,
+					workflow,
+					...(options.reason ? { reason: options.reason } : {}),
+				},
 				this.store.settings(owner).preset,
 				at,
 			);
@@ -1769,6 +1851,218 @@ export class Board {
 		} finally {
 			this.starting.delete(card.id);
 		}
+	}
+
+	/** The container of the initiative a card serves, while that container exists. */
+	private initiativeContainer(projectId: string, card: Card): string | undefined {
+		const containerId = this.roadmap.initiativeOfCard(projectId, card)?.initiative.containerId;
+		if (!containerId) return undefined;
+		return this.host.containers().some((container) => container.id === containerId)
+			? containerId
+			: undefined;
+	}
+
+	/** An initiative's cards as autopilot's selection reads them, and its board's WIP. */
+	async pilotInputs(
+		projectId: string,
+		initiative: Initiative,
+	): Promise<{ cards: PilotCard[]; wip: PilotWip }> {
+		const cards = this.store.cards(projectId)?.cards ?? [];
+		const members = this.roadmap.members(projectId, initiative.id);
+		const facts = await this.facts([
+			...cards,
+			...members.filter((member) => member.projectId !== projectId).map((member) => member.card),
+		]);
+		const wip = wipOf(
+			cards.map((card) => this.view(card, facts, cards)),
+			this.store.settings(projectId).wipLimits,
+		);
+		return {
+			wip,
+			cards: members.map(({ file, card }) => ({
+				id: card.id,
+				title: card.title,
+				category: card.category,
+				...(card.size ? { size: card.size } : {}),
+				type: card.type,
+				rank: card.rank,
+				active: this.starting.has(card.id) || openAttemptOf(card, facts) !== undefined,
+				blockers: file.cards
+					.filter((other) => other.blocks.includes(card.id))
+					.map((other) => ({ id: other.id, category: other.category })),
+			})),
+		};
+	}
+
+	/**
+	 * Run initiative: the initiative's container — made around its first ready card, started like Start
+	 * (logged `automation`), or the one it has —, its orchestrator started and woken with a `board-run`
+	 * brief of the initiative's outcome, criteria and autopilot.
+	 */
+	async runInitiative(projectId: string, initiativeId: string): Promise<RunResult> {
+		const project = this.project(projectId);
+		const initiative = this.roadmap.initiativeById(projectId, initiativeId);
+		if (initiative.proposed)
+			throw new Error(`${initiative.id} is a proposal; accept it before running it.`);
+		if (initiative.closedAt !== undefined) throw new Error(`${initiative.id} is closed.`);
+		const existing = initiative.containerId
+			? this.host.containers().find((container) => container.id === initiative.containerId)
+			: undefined;
+		const { cards, wip } = await this.pilotInputs(projectId, initiative);
+		let containerId = existing?.id;
+		let started: RunResult["started"] = null;
+		let first: PilotCard | undefined;
+		if (!containerId) {
+			const selection = select(cards, wip, { orchestrator: true });
+			if (selection.pause) throw new Error(pauseRefusal(selection.pause, initiative.id));
+			first = selection.selected[0];
+			if (!first) throw new Error(nothingToRun(initiative.id, cards, selection.ready.length));
+			const result = await this.startCard(first.id, {
+				reason: `started by Run initiative ${initiative.id}`,
+			});
+			started = {
+				cardId: result.card.id,
+				workspaceId: result.attempt.workspaceId,
+				sessionId: result.attempt.sessionId,
+				...(result.kickoffError ? { kickoffError: result.kickoffError } : {}),
+			};
+			const container = await this.host.actions.createContainer({
+				name: initiative.title,
+				workspaceIds: [result.attempt.workspaceId],
+			});
+			containerId = container.id;
+			this.roadmap.setContainer(projectId, initiative.id, container.id);
+		}
+		const orchestrator = await this.host.actions.startOrchestrator({ containerId });
+		const latest = this.roadmap.initiativeById(projectId, initiative.id);
+		await this.host.actions.wakeOrchestrator({
+			containerId,
+			kind: WAKE_RUN,
+			text: runBrief({
+				initiative: latest,
+				boardName: project.name,
+				started: first ?? null,
+				autopilot: latest.autopilot?.on === true,
+				running: wip.agents.count + (first ? 1 : 0),
+				cap: wip.agents.limit,
+			}),
+		});
+		this.autopilot.schedule();
+		return {
+			projectId,
+			initiativeId: initiative.id,
+			containerId,
+			orchestrator: {
+				projectId: orchestrator.projectId,
+				workspaceId: orchestrator.workspaceId,
+				sessionId: orchestrator.sessionId,
+			},
+			started,
+		};
+	}
+
+	/** The autopilot switch: on needs the initiative's container; off forgets its offers. */
+	setAutopilot(projectId: string, initiativeId: string, on: boolean): Initiative {
+		this.project(projectId);
+		const initiative = this.roadmap.initiativeById(projectId, initiativeId);
+		if (on && !initiative.containerId)
+			throw new Error(
+				`Run ${initiative.id} first: autopilot wakes the orchestrator of its container.`,
+			);
+		const next = this.roadmap.setAutopilot(
+			projectId,
+			initiative.id,
+			on ? { ...initiative.autopilot, on: true } : { on: false },
+		);
+		if (!on) this.autopilot.forget(projectId, initiative.id);
+		this.autopilot.schedule();
+		return next;
+	}
+
+	/** `autopilot.get`: an initiative's autopilot now — on, paused with why, or off — and its room. */
+	async autopilotView(projectId: string, initiativeId: string): Promise<AutopilotView> {
+		this.project(projectId);
+		return this.autopilot.view(projectId, this.roadmap.initiativeById(projectId, initiativeId));
+	}
+
+	/** The initiative a container runs, with its autopilot; `null` for a container no initiative ran. */
+	async containerAutopilot(containerId: string): Promise<AutopilotView | null> {
+		const [linked] = this.roadmap.ofContainer(containerId);
+		return linked ? this.autopilot.view(linked.projectId, linked.initiative) : null;
+	}
+
+	/** The container a chat works in: the one it orchestrates, else the one its workspace is a member of. */
+	callerContainer(sessionId: string, cwd: string): ExtensionContainer | null {
+		const containers = this.host.containers();
+		const own = containers.find((container) => container.orchestrator?.sessionId === sessionId);
+		if (own) return own;
+		const workspaceId = this.host.sessionScope({ kind: "all" }).locate(cwd)?.workspaceId;
+		return (
+			(workspaceId
+				? containers.find((container) => container.workspaceIds.includes(workspaceId))
+				: undefined) ?? null
+		);
+	}
+
+	/** The orchestrator's system-prompt section while its container runs an initiative; `null` otherwise. */
+	orchestratorRule(sessionId: string): string | null {
+		const container = this.host
+			.containers()
+			.find((candidate) => candidate.orchestrator?.sessionId === sessionId);
+		const linked = container ? this.roadmap.ofContainer(container.id) : [];
+		return linked.length > 0 ? autopilotRule(linked.map((entry) => entry.initiative)) : null;
+	}
+
+	/**
+	 * `board_card_start`: a ready, unblocked card of an initiative the caller's container runs, started into
+	 * that container like Start, the note appended to its kickoff and the start logged `automation`.
+	 */
+	async startForContainer(
+		sessionId: string,
+		cwd: string,
+		id: string,
+		options: { workflow?: Workflow; note?: string },
+	): Promise<{
+		card: Card;
+		attempt: Attempt;
+		kickoffError?: string;
+		container: ExtensionContainer;
+	}> {
+		const container = this.callerContainer(sessionId, cwd);
+		if (!container)
+			throw new Error(
+				"board_card_start starts cards from a container's orchestrator (or a chat of one of its workspaces); this chat is in no container.",
+			);
+		const linked = this.roadmap.ofContainer(container.id);
+		if (linked.length === 0)
+			throw new Error(
+				`The container "${container.name}" runs no initiative: Run one from the board's initiative panel first.`,
+			);
+		const card = this.locate(id).card;
+		const owner = linked.find(({ projectId, initiative }) =>
+			this.roadmap.members(projectId, initiative.id).some((member) => member.card.id === card.id),
+		);
+		if (!owner) {
+			const names = linked
+				.map(({ initiative }) => `${initiative.id} "${initiative.title}"`)
+				.join(", ");
+			throw new Error(
+				`${card.id} is not a card of ${names}, which the container "${container.name}" runs; board_card_start starts only that initiative's cards.`,
+			);
+		}
+		const { cards } = await this.pilotInputs(owner.projectId, owner.initiative);
+		const pilot = cards.find((candidate) => candidate.id === card.id);
+		const reason = pilot ? unready(pilot, { sized: false }) : null;
+		if (reason) throw new Error(unreadyRefusal(card.id, reason));
+		const note = options.note?.trim();
+		const from = `the orchestrator of the container "${container.name}"`;
+		const result = await this.startCard(card.id, {
+			...(options.workflow ? { workflow: options.workflow } : {}),
+			...(note ? { note: { from, text: note } } : {}),
+			into: container.id,
+			reason: `started by ${from}`,
+		});
+		return { ...result, container };
 	}
 
 	/** A change card's action target: its stored card (`openspec:<name>` names one once stored) and its change. */
@@ -1890,6 +2184,21 @@ export class Board {
 		if (!github.enabled) throw new Error("GitHub issues are off on this board.");
 		await this.issues.refresh(projectId, this.defaultWorkspace(project), github.filter);
 		return this.githubStatus(projectId, github);
+	}
+
+	/**
+	 * A chat's board: its workspace's project, else — for a container's orchestrator, whose home is no
+	 * project — the board of the initiative its container runs.
+	 */
+	projectOfChat(sessionId: string, cwd: string): ExtensionHostProject {
+		try {
+			return this.projectOfCwd(cwd);
+		} catch (error) {
+			const container = this.callerContainer(sessionId, cwd);
+			const [linked] = container ? this.roadmap.ofContainer(container.id) : [];
+			if (!linked) throw error;
+			return this.project(linked.projectId);
+		}
 	}
 
 	/** The open repository project holding a session cwd. */
@@ -2015,13 +2324,14 @@ export class Board {
 			.catch((error) => this.host.log.warn("a board rule failed", error));
 	}
 
-	/** Resolves once every event, size suggestion and issue fetch received so far has settled. */
+	/** Resolves once every event, size suggestion, issue fetch and autopilot pass so far has settled. */
 	async idle(): Promise<void> {
 		await this.chain;
 		await this.sizes.idle();
 		await this.issues.idle();
 		await this.openspec.idle();
 		await this.chain;
+		await this.autopilot.idle();
 	}
 
 	private applyBound(workspaceId: string, event: BoardEvent): void {
@@ -2120,14 +2430,19 @@ export class Board {
 
 	private changed(projectId: string): void {
 		this.host.publish(BOARD_CHANGED, { projectId }, { projectId });
+		this.autopilot.schedule();
 	}
 
 	/** Subscribes the rules to the host's events; returns the unsubscribe. */
 	listen(): () => void {
 		const { events } = this.host;
 		const actions = throttled((projectId) => this.changed(projectId), this.actionRefreshMs);
+		this.autopilot.start();
 		const unsubscribes = [
 			actions.stop,
+			() => this.autopilot.stop(),
+			events.subscribe("container.updated", () => this.autopilot.schedule()),
+			events.subscribe("container.removed", () => this.autopilot.schedule()),
 			events.subscribe("agent.tool", ({ workspaceId }) => {
 				const projectId = this.shownIn(workspaceId);
 				if (projectId) actions.hit(projectId);

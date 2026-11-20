@@ -57,8 +57,10 @@ extension's `statusItems` as `RegisteredStatusItem { extension, item, declaratio
 mounts ([[submodule-web-shell]] § Extension status items); `extensionLayoutPresets()` lists every
 `layoutPresets` entry as `RegisteredLayoutPreset { extension, preset, id, declaration }`, `id` being the
 mode's `<extension>:<preset>` in the window's preferences, and `findExtensionLayoutPreset(id)` looks one up
-([[submodule-web-shell]] § Layout modes). They ignore the switch too, and an extension with either is never
-web-only.
+([[submodule-web-shell]] § Layout modes). `extensionContainerSections()` lists every `containerSections`
+entry as `RegisteredContainerSection { extension, section, declaration }`, which the container overview in
+Peek mounts ([[submodule-web-shell]] § Extension status items). They ignore the switch too, and an extension
+with any of them is never web-only.
 
 ## Boundary
 
@@ -66,7 +68,8 @@ web-only.
 `webExtensionCommands` (with its `WebExtensionCommands` type), `webOnlyExtensions`, `webExtensionTitle`,
 `extensionPanels`,
 `findExtensionPanel`, the `RegisteredPanel` type, `extensionSideTools`, `findExtensionSideTool`, the
-`RegisteredSideTool` type, `extensionStatusItems`, the `RegisteredStatusItem` type, `extensionLayoutPresets`,
+`RegisteredSideTool` type, `extensionStatusItems`, the `RegisteredStatusItem` type, `extensionContainerSections`,
+the `RegisteredContainerSection` type, `extensionLayoutPresets`,
 `findExtensionLayoutPreset` and the `RegisteredLayoutPreset` type only. Imports reach public extension `./web` entries,
 the web SDK contract, and chat's registration function; never `ChatView`, stores, transport, extension
 internals or server halves. The registry Map remains owned by chat, so this module creates no parallel

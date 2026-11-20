@@ -13,6 +13,8 @@ import type { ExtensionLog } from "@thinkrail/extension-api/server";
 import { isIsoDate } from "./days";
 import {
 	type Attempt,
+	type Autopilot,
+	type AutopilotPause,
 	type BoardSettings,
 	CARD_SIZES,
 	CARD_TYPES,
@@ -263,9 +265,32 @@ export function readInitiative(raw: unknown): Initiative | null {
 		...(typeof raw.closedAt === "number" && Number.isFinite(raw.closedAt)
 			? { closedAt: raw.closedAt }
 			: {}),
+		...(typeof raw.containerId === "string" && raw.containerId
+			? { containerId: raw.containerId }
+			: {}),
+		...(isRecord(raw.autopilot) && typeof raw.autopilot.on === "boolean"
+			? { autopilot: readAutopilot(raw.autopilot) }
+			: {}),
 		createdAt: finite(raw.createdAt, 0),
 		updatedAt: finite(raw.updatedAt, 0),
 	};
+}
+
+function readPause(raw: unknown): AutopilotPause | undefined {
+	if (!isRecord(raw)) return undefined;
+	if (raw.kind === "orchestrator") return { kind: "orchestrator" };
+	if (
+		(raw.kind === "review" || raw.kind === "needs_you") &&
+		typeof raw.count === "number" &&
+		typeof raw.limit === "number"
+	)
+		return { kind: raw.kind, count: raw.count, limit: raw.limit };
+	return undefined;
+}
+
+function readAutopilot(raw: Record<string, unknown>): Autopilot {
+	const pausedReason = readPause(raw.pausedReason);
+	return { on: raw.on === true, ...(pausedReason ? { pausedReason } : {}) };
 }
 
 function readMilestone(raw: unknown): Milestone | null {

@@ -8,17 +8,21 @@ import {
 	RiDiscussLine,
 	RiEditLine,
 	RiListCheck3,
+	RiPlayLine,
 	RiQuillPenLine,
 	RiSendPlaneLine,
 	RiShapesLine,
+	RiStackLine,
 } from "@remixicon/react";
 import type { PanelHost, PanelProps } from "@thinkrail/extension-api/web";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { Switch } from "@thinkrail/ui/switch";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useId, useState } from "react";
+import { AutopilotFacts } from "./AutopilotParts";
 import {
 	agentBadge,
 	type BoardView,
@@ -49,6 +53,7 @@ import {
 } from "./labels";
 import { ClosedChip, HealthChip, HorizonChip, ProgressLegend, StackBar } from "./RoadmapParts";
 import {
+	type AutopilotView,
 	acceptInitiative,
 	addInitiativeCards,
 	appetiteUsed,
@@ -64,6 +69,7 @@ import {
 	HORIZONS,
 	type Initiative,
 	type InitiativePatch,
+	loadAutopilot,
 	loadRoadmap,
 	type Milestone,
 	openRoadmapChat,
@@ -74,7 +80,9 @@ import {
 	type RoadmapView,
 	removeInitiativeCards,
 	renameRoadmapProject,
+	runInitiative,
 	saveDraftUpdate,
+	setAutopilot,
 	updateInitiative,
 	updateMilestone,
 } from "./roadmapApi";
@@ -778,6 +786,108 @@ function AgentActions({
 	);
 }
 
+/**
+ * Run initiative (no container yet) or Open container, the autopilot switch and its state line, the running
+ * agents against the cap and the next ready cards.
+ */
+function AutopilotBlock({
+	host,
+	projectId,
+	initiative,
+	view,
+	onChanged,
+	onError,
+	onPeekCard,
+}: {
+	host: PanelHost;
+	projectId: string;
+	initiative: Initiative;
+	view: AutopilotView;
+	onChanged: () => void;
+	onError: (message: string) => void;
+	onPeekCard: (cardId: string) => void;
+}) {
+	const t = useT();
+	const [busy, setBusy] = useState<"run" | "switch" | null>(null);
+	const run = () => {
+		setBusy("run");
+		runInitiative(host, projectId, initiative.id)
+			.then(
+				(result) => {
+					if (result.started?.kickoffError)
+						onError(t("board.roadmap.chat.notSent", { error: result.started.kickoffError }));
+				},
+				(error: unknown) => onError(errorText(t, error)),
+			)
+			.finally(() => {
+				setBusy(null);
+				onChanged();
+			});
+	};
+	const orchestrator = view.container?.orchestrator;
+	return (
+		<div data-testid="board-initiative-autopilot" className="flex flex-col gap-8">
+			{view.container ? (
+				<span className="flex flex-wrap items-center gap-8">
+					<Button
+						variant="outline"
+						size="s"
+						iconLeft={RiStackLine}
+						loading={busy === "run"}
+						data-testid="board-initiative-open-container"
+						onClick={() => (orchestrator ? host.openChat(orchestrator) : run())}
+					>
+						{t("board.autopilot.openContainer")}
+					</Button>
+					<span
+						data-testid="board-initiative-container"
+						className="tr-text-metadata text-text-muted"
+					>
+						{t("board.autopilot.container", {
+							name: view.container.name,
+							count: view.container.members,
+						})}
+					</span>
+					<span className="flex-1" />
+					<span className="flex items-center gap-4 tr-text-ui text-text-default">
+						{t("board.autopilot.switch")}
+						<Switch
+							checked={view.on}
+							label={t("board.autopilot.switch")}
+							testId="board-initiative-autopilot-switch"
+							disabled={busy !== null}
+							onCheckedChange={(on) => {
+								setBusy("switch");
+								setAutopilot(host, projectId, initiative.id, on)
+									.catch((error: unknown) => onError(errorText(t, error)))
+									.finally(() => {
+										setBusy(null);
+										onChanged();
+									});
+							}}
+						/>
+					</span>
+				</span>
+			) : initiative.closedAt === undefined && !initiative.proposed ? (
+				<span className="flex flex-col items-start gap-4">
+					<Button
+						variant="soft-primary"
+						size="s"
+						iconLeft={RiPlayLine}
+						loading={busy === "run"}
+						data-testid="board-initiative-run"
+						onClick={run}
+					>
+						{t("board.autopilot.run")}
+					</Button>
+					<span className="tr-text-metadata text-text-subtle">{t("board.autopilot.runHint")}</span>
+				</span>
+			) : null}
+			<AutopilotFacts view={view} onCard={onPeekCard} />
+		</div>
+	);
+}
+
 function errorText(t: Translator, error: unknown): string {
 	return error instanceof Error && error.message ? error.message : t("board.error.unknown");
 }
@@ -904,6 +1014,8 @@ export function InitiativeDetails({
 	view,
 	board,
 	initiative,
+	autopilot = null,
+	onAutopilotChanged = () => {},
 	write,
 	onError,
 	onDeleted,
@@ -912,6 +1024,9 @@ export function InitiativeDetails({
 	view: RoadmapView;
 	board: BoardView | null;
 	initiative: Initiative;
+	/** `autopilot.get`'s answer; the block waits without it. */
+	autopilot?: AutopilotView | null;
+	onAutopilotChanged?: () => void;
 	write: Write;
 	onError: (message: string) => void;
 	onDeleted: () => void;
@@ -985,6 +1100,22 @@ export function InitiativeDetails({
 			<Section title={t("board.roadmap.health.title")}>
 				<HealthBlock view={view} initiative={initiative} onPatch={patch} />
 			</Section>
+			{autopilot ? (
+				<Section title={t("board.autopilot.title")} testId="board-initiative-run-section">
+					<AutopilotBlock
+						host={host}
+						projectId={projectId}
+						initiative={initiative}
+						view={autopilot}
+						onChanged={onAutopilotChanged}
+						onError={onError}
+						onPeekCard={(cardId) => {
+							const found = board?.cards.find((candidate) => candidate.id === cardId);
+							if (found) host.peek(cardPeekEntry(projectId, found));
+						}}
+					/>
+				</Section>
+			) : null}
 			<Section title={t("board.roadmap.agentsTitle")}>
 				<AgentsNow host={host} board={board} initiative={initiative} />
 			</Section>
@@ -1060,9 +1191,13 @@ export default function InitiativePanel({ host, params }: PanelProps) {
 		loadRoadmap(host, projectId, signal),
 	);
 	const board = useHostQuery(`board:${projectId}`, (signal) => loadBoard(host, projectId, signal));
+	const autopilot = useHostQuery(`autopilot:${projectId}:${initiativeId}`, (signal) =>
+		loadAutopilot(host, projectId, initiativeId, signal),
+	);
 	useBoardChanged(host, projectId, () => {
 		roadmap.reload();
 		board.reload();
+		autopilot.reload();
 	});
 	const write: Write = (run) =>
 		void run().then(
@@ -1070,6 +1205,7 @@ export default function InitiativePanel({ host, params }: PanelProps) {
 				setError(null);
 				roadmap.reload();
 				board.reload();
+				autopilot.reload();
 			},
 			(failure: unknown) => {
 				setError(errorText(t, failure));
@@ -1108,6 +1244,8 @@ export default function InitiativePanel({ host, params }: PanelProps) {
 					view={view}
 					board={board.state.kind === "ready" ? board.state.value : null}
 					initiative={initiative}
+					autopilot={autopilot.state.kind === "ready" ? autopilot.state.value : null}
+					onAutopilotChanged={autopilot.reload}
 					write={write}
 					onError={setError}
 					onDeleted={() => setDeleted(true)}

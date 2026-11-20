@@ -233,7 +233,11 @@ import { lastActions } from "./lastActions";
 import { trackLoginOutcome } from "./loginAnalytics";
 import { disposeContainerOrchestrator, orchestratorHomeOf } from "./orchestrator";
 import { orchestratorToolsHost } from "./orchestratorTools";
-import { createOrchestratorWakeups, liveWakeupDeps } from "./orchestratorWakeups";
+import {
+	createOrchestratorWakeups,
+	liveWakeupDeps,
+	setRunningWakeups,
+} from "./orchestratorWakeups";
 import {
 	additionalCapture,
 	applyAdditionalAnalyticsSettings,
@@ -1005,6 +1009,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 
 	const wakeups = createOrchestratorWakeups(liveWakeupDeps);
 	wakeups.seed(listAllWorkspaceRecords());
+	setRunningWakeups(wakeups);
 	const publishWorkspaceEvent = (event: WorkspaceLifecycleEvent) => {
 		const channel =
 			event.kind === "created"
@@ -1336,6 +1341,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		setupObservation.clear();
 		runObservation.reset();
 		taskObservation.clear();
+		setRunningWakeups(null);
 		wakeups.dispose();
 		void extensionServices.stop();
 		observeLoggedErrors(null);

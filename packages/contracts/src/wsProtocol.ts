@@ -390,15 +390,28 @@ export interface ContainerBriefDetails {
 
 export const CONTAINER_WAKE_CUSTOM_TYPE = "container-wake";
 
-/** What changed in a member: one of its chats settled, started needing the human or failed (`chat`), or its PR's state (`review`). */
-export type ContainerWakeReason = "chat" | "review";
+/**
+ * What woke the orchestrator: one of a member's chats settled, started needing the human or failed
+ * (`chat`), a member's PR changed state (`review`), or an extension sent an update (`extension`).
+ */
+export type ContainerWakeReason = "chat" | "review" | "extension";
 
-/** The host's card that wakes an orchestrator (starts its turn) about one member workspace. */
+/** The extension behind a wake-up: its descriptor `name`, its Settings title and the update's kind (`board-ready`). */
+export interface ContainerWakeSource {
+	extension: string;
+	extensionTitle: string;
+	kind: string;
+}
+
+/** The host's card that wakes an orchestrator (starts its turn): about one member workspace, or an extension's update. */
 export interface ContainerWakeDetails {
 	containerId: string;
-	workspaceId: string;
-	workspaceName: string;
+	/** The member it is about; absent on an extension's wake-up. */
+	workspaceId?: string;
+	workspaceName?: string;
 	reasons: ContainerWakeReason[];
+	/** An extension's wake-up (reason `extension`). */
+	source?: ContainerWakeSource;
 }
 
 export const ORCHESTRATOR_MESSAGE_CUSTOM_TYPE = "orchestrator-message";
@@ -448,8 +461,14 @@ export function readContainerNote(message: unknown): ContainerNote | null {
 		return { kind: "brief", details: details as unknown as ContainerBriefDetails };
 	if (
 		m.customType === CONTAINER_WAKE_CUSTOM_TYPE &&
-		isStringRecord(details, ["containerId", "workspaceId", "workspaceName"]) &&
-		Array.isArray((details as { reasons?: unknown }).reasons)
+		isStringRecord(details, ["containerId"]) &&
+		Array.isArray((details as { reasons?: unknown }).reasons) &&
+		(isStringRecord(details, ["workspaceId", "workspaceName"]) ||
+			isStringRecord((details as { source?: unknown }).source, [
+				"extension",
+				"extensionTitle",
+				"kind",
+			]))
 	)
 		return { kind: "wake", details: details as unknown as ContainerWakeDetails };
 	if (

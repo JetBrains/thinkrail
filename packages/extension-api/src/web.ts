@@ -214,6 +214,17 @@ export interface StatusItemDeclaration {
 	load: () => Promise<{ default: ComponentType<StatusItemProps> }>;
 }
 
+export interface ContainerSectionProps {
+	/** A status item's host: its `scope` is the active workspace, whose Peek shows the container. */
+	host: StatusItemHost;
+	containerId: string;
+}
+
+/** A section of a container's overview in Peek: the extension's facts about that container; it renders nothing while it has none. */
+export interface ContainerSectionDeclaration {
+	load: () => Promise<{ default: ComponentType<ContainerSectionProps> }>;
+}
+
 /**
  * A layout mode: the side arrangement the shell enters and leaves, restoring the frame it replaced. It
  * places built-in tools and the extension's own side tools; the center and the bottom stay as they are.
@@ -281,6 +292,7 @@ export interface WebExtension {
 	panels?: Record<string, PanelDeclaration>;
 	sideTools?: Record<string, SideToolDeclaration>;
 	statusItems?: Record<string, StatusItemDeclaration>;
+	containerSections?: Record<string, ContainerSectionDeclaration>;
 	layoutPresets?: Record<string, LayoutPresetDeclaration>;
 }
 

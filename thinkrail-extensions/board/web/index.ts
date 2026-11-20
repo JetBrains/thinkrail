@@ -36,6 +36,9 @@ export default defineWebExtension({
 	statusItems: {
 		inbox: { load: () => import("./InboxStatus") },
 	},
+	containerSections: {
+		initiative: { load: () => import("./ContainerAutopilot") },
+	},
 	layoutPresets: {
 		board: {
 			title: "board.mode.title",

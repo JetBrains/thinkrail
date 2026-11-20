@@ -604,6 +604,7 @@ describe("board tools", () => {
 		const registered = new Map<string, Registered>();
 		const pi = {
 			registerTool: (tool: Registered) => registered.set(tool.name, tool),
+			on: () => {},
 		} as unknown as ExtensionAPI;
 		createBoardTools(() => board)(pi);
 		return {
@@ -644,6 +645,7 @@ describe("board tools", () => {
 			"board_idea_score",
 			"board_watchlist_get",
 			"board_watchlist_snapshot",
+			"board_card_start",
 		]);
 
 		const own = await call("board_card_get", {}, "s1");
@@ -693,6 +695,7 @@ describe("board tools", () => {
 		const registered = new Map<string, Registered>();
 		createBoardTools(() => undefined)({
 			registerTool: (tool: Registered) => registered.set(tool.name, tool),
+			on: () => {},
 		} as unknown as ExtensionAPI);
 		await expect(
 			registered.get("board_cards_list")?.execute("c", {}, undefined, undefined, { cwd: "/" }),
@@ -713,6 +716,8 @@ describe("the board descriptor", () => {
 		});
 		const queries = extension.queries?.(t.host) ?? {};
 		expect(Object.keys(queries).sort()).toEqual([
+			"autopilot.get",
+			"autopilot.ofContainer",
 			"board.get",
 			"card.adopt",
 			"card.assignProject",
@@ -740,10 +745,12 @@ describe("the board descriptor", () => {
 			"idea.update",
 			"inbox",
 			"initiative.addCards",
+			"initiative.autopilot",
 			"initiative.create",
 			"initiative.delete",
 			"initiative.move",
 			"initiative.removeCards",
+			"initiative.run",
 			"initiative.update",
 			"initiative.updateDraft.publish",
 			"initiative.updateDraft.save",
@@ -769,13 +776,16 @@ describe("the board descriptor", () => {
 			"watchlist.update",
 		]);
 		const service = extension.hostService?.(t.host);
-		expect(t.listeners()).toBe(7);
+		expect(t.listeners()).toBe(9);
 		await (queries["card.create"] as ExtensionQuery)({ projectId: "p1", title: "Shared" });
 		const registered: string[] = [];
-		const pi = { registerTool: (tool: { name: string }) => registered.push(tool.name) };
+		const pi = {
+			registerTool: (tool: { name: string }) => registered.push(tool.name),
+			on: () => {},
+		};
 		for (const factory of extension.sessionExtensions?.() ?? [])
 			await factory(pi as unknown as ExtensionAPI);
-		expect(registered).toHaveLength(19);
+		expect(registered).toHaveLength(20);
 		await service?.stop?.();
 		expect(t.listeners()).toBe(0);
 	});
@@ -785,7 +795,7 @@ describe("the board descriptor", () => {
 		hosts.push(t);
 		const first = new AbortController();
 		const service = extension.hostService?.({ ...t.host, signal: first.signal });
-		expect(t.listeners()).toBe(7);
+		expect(t.listeners()).toBe(9);
 		await service?.stop?.();
 		first.abort();
 		const subscribed: string[] = [];
@@ -803,6 +813,8 @@ describe("the board descriptor", () => {
 		expect(subscribed.sort()).toEqual([
 			"agent.settled",
 			"agent.tool",
+			"container.removed",
+			"container.updated",
 			"project.closed",
 			"project.opened",
 			"session.state",

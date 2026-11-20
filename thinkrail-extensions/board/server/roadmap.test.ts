@@ -697,6 +697,7 @@ describe("the kickoff and the roadmap tools", () => {
 		const registered = new Map<string, Registered>();
 		createBoardTools(() => board)({
 			registerTool: (tool: Registered) => registered.set(tool.name, tool),
+			on: () => {},
 		} as unknown as ExtensionAPI);
 		return (name: string, params: unknown, sessionId = "s1", cwd = "/worktrees/w1") =>
 			(registered.get(name) as Registered).execute("call", params, undefined, undefined, {

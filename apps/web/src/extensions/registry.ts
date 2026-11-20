@@ -6,6 +6,7 @@ import nextSteps from "@thinkrail/ext-next-steps/web";
 import sessionInsights from "@thinkrail/ext-session-insights/web";
 import visualize from "@thinkrail/ext-visualize/web";
 import type {
+	ContainerSectionDeclaration,
 	ExtensionCommand,
 	LayoutPresetDeclaration,
 	PanelDeclaration,
@@ -70,6 +71,7 @@ export function webOnlyExtensions(
 			extension.panels === undefined &&
 			extension.sideTools === undefined &&
 			extension.statusItems === undefined &&
+			extension.containerSections === undefined &&
 			extension.layoutPresets === undefined;
 		return webOnly && !serverNames.has(extension.name) ? [{ ...extension, title }] : [];
 	});
@@ -157,6 +159,32 @@ export function extensionStatusItems(
 	extensions?: readonly WebExtension[],
 ): readonly RegisteredStatusItem[] {
 	return extensions ? collectStatusItems(extensions) : registeredStatusItems;
+}
+
+export interface RegisteredContainerSection {
+	extension: string;
+	section: string;
+	declaration: ContainerSectionDeclaration;
+}
+
+function collectContainerSections(
+	extensions: readonly WebExtension[],
+): readonly RegisteredContainerSection[] {
+	return extensions.flatMap((extension) =>
+		Object.entries(extension.containerSections ?? {}).map(([section, declaration]) => ({
+			extension: extension.name,
+			section,
+			declaration,
+		})),
+	);
+}
+
+const registeredContainerSections = collectContainerSections(webExtensions);
+
+export function extensionContainerSections(
+	extensions?: readonly WebExtension[],
+): readonly RegisteredContainerSection[] {
+	return extensions ? collectContainerSections(extensions) : registeredContainerSections;
 }
 
 export interface RegisteredLayoutPreset {

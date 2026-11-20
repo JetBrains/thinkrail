@@ -1314,8 +1314,11 @@ client talking to an older host sends none of it and holds no containers.
   `ContainerBriefDetails { containerId }`), a summary of the members that only adds context. Removing the
   container deletes it like a chat; deleting it alone clears `orchestratorSessionId`.
 - **Container cards** — two more custom messages, both starting a turn: **`container-wake`**
-  (`CONTAINER_WAKE_CUSTOM_TYPE`, `ContainerWakeDetails { containerId, workspaceId, workspaceName, reasons:
-  ("chat" | "review")[] }`), the host's update about one member in the orchestrator's chat, and
+  (`CONTAINER_WAKE_CUSTOM_TYPE`, `ContainerWakeDetails { containerId, workspaceId?, workspaceName?, reasons:
+  ("chat" | "review" | "extension")[], source? }`), the host's update in the orchestrator's chat about one
+  member (its workspace named) or from an extension (`source: ContainerWakeSource { extension,
+  extensionTitle, kind }`, reason `extension`, no member; read only with both its workspace fields or its
+  source), and
   **`orchestrator-message`** (`ORCHESTRATOR_MESSAGE_CUSTOM_TYPE`, `OrchestratorMessageDetails { containerId,
   containerName, orchestratorSessionId, mode: "follow_up" | "steer", text }`), an orchestrator's
   `message_chat` in a member chat — its provenance, never a user message; `text` is the orchestrator's own
