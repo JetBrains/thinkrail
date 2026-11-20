@@ -97,7 +97,13 @@ unreachable (no route got ready — `RelayUnreachableError`), `host_silent` (the
 - The relay and Nostr relays see routing metadata only; every secret is either never sent (the token) or
   bound to a fresh challenge. A compromised relay can deny service, nothing else.
 - Each Nostr attempt uses a fresh phone key, so relays cannot link one phone's attempts.
-- The host re-reads a device's access on every request; revoking closes its live channels at once.
+- The host re-reads a device's access on every request; revoking closes its live channels at once, and a
+  channel that opens for a device revoked mid-handshake is closed before it hears anything.
+- A device session whose channel is not open 60 s after its first frame is closed, on the host and at the
+  broker; a refused handshake ends its session at once. A device may send at most 16 MiB in one message
+  (the WS frame cap), and a device that stops reading is cut off past 256 MiB queued, as a slow browser tab is.
+- The relay's TURN credentials are handed out before the host authorizes anyone, so they last 10 minutes and
+  each client address gets at most 10 a minute.
 - Phone access is **off by default**; nothing listens until the user turns it on.
 
 ## Known gaps
