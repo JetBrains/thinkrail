@@ -623,7 +623,10 @@ test("inside a scope a local key conflicts with its neighbours only: Replace, a 
 	await expect(chord(page, "transcript.down").locator("kbd")).toHaveText(["J"]);
 
 	await recordLocal(page, "trees.search", "g");
-	await expect(message(page, "trees.search")).toHaveCount(0);
+	await expect(message(page, "trees.search")).toHaveAttribute("data-kind", "note");
+	await expect(message(page, "trees.search")).toContainText(
+		"G also acts in the chat transcript and a file you read — different elements, so no conflict",
+	);
 	await expect(chord(page, "trees.search").locator("kbd")).toHaveText(["G"]);
 	await closeSettings(page);
 

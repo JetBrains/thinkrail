@@ -233,6 +233,52 @@ test("Monaco and xterm take one label each, and their label only focuses the wid
 	await expect.poll(focused).toBe("xterm");
 });
 
+test("labels reveal hover-only buttons: a tab's × label closes that tab and focus lands on its neighbour", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await revealWorkbenchTool(page, "files");
+	const tree = page.getByRole("tree", { name: "Files" });
+	for (const name of ["README.md", "notes.txt"]) {
+		await tree
+			.getByTestId("file-node")
+			.filter({ hasText: new RegExp(`^${name.replace(".", "\\.")}`) })
+			.dblclick();
+	}
+	const tabs = page.locator('[data-testid="editor-tab"][data-kind="file"]');
+	await expect(tabs).toHaveCount(2);
+	const readmeTab = tabs.filter({ hasText: "README.md" });
+	const close = readmeTab.getByTestId("editor-tab-close");
+	const opacity = () => close.evaluate((element) => getComputedStyle(element).opacity);
+	await page.mouse.move(5, 700);
+	await page.getByTestId("open-search").focus();
+	await settle(page);
+	expect(await opacity()).toBe("0");
+	expect(
+		await close.evaluate((element) => element.checkVisibility({ opacityProperty: true })),
+	).toBe(false);
+
+	await page.keyboard.press("f");
+	await expect(overlay(page)).toBeVisible();
+	expect(await opacity()).toBe("1");
+	expect(await close.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("dashed");
+	const closeLabel = await labelFor(page, close);
+	await typeLabel(page, closeLabel);
+	await expect(overlay(page)).toHaveCount(0);
+	await expect(readmeTab).toHaveCount(0);
+	await expect(tabs).toHaveCount(1);
+	await expect
+		.poll(() => page.evaluate(() => document.activeElement?.getAttribute("role")))
+		.toBe("tab");
+	expect(
+		await tabs
+			.first()
+			.getByTestId("editor-tab-close")
+			.evaluate((element) => getComputedStyle(element).opacity),
+	).toBe("0");
+});
+
 test("with a dialog open only its controls are labelled, and Escape leaves the dialog open", async ({
 	page,
 }) => {

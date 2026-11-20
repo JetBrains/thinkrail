@@ -104,7 +104,8 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   - **`usePreloadResourceView()`** — a stable `(resource) => void` that resolves the view renderer for the
     environment's phone class, loads its implementation and runs the module's optional `warm`; it needs both
     providers;
-  - the lazy `RendererView` mount and **`GuardedRendererDiff`**, the one diff mount: the expensive-diff notice
+  - the lazy `RendererView` mount (its `focusHome` makes the view its tab's focus home, *Reading keys*)
+    and **`GuardedRendererDiff`**, the one diff mount: the expensive-diff notice
     (`diff-too-large` / **Show diff anyway**, per mount, with a caller action slot) until opted in, then the
     lazy diff renderer, virtualized above `VIRTUALIZED_DIFF_LINES` of the caller's `lineCount`
     (`surfaceLineCount`);
@@ -1004,3 +1005,43 @@ Enter, the arrows, Shift+arrows, Home/End, PgUp/PgDn, Tab and Esc stay locked. M
 - **Monaco** Shift+Mod+M with an empty selection comments the caret line (`commentLines`): a second,
   keybinding-only action holds `!editorHasSelection`, so the context menu still offers commenting only on
   a selection.
+
+## Reading keys
+
+A file a reader opens in a tab reads from the keyboard (user, 2026-11-20). `RendererView`'s `focusHome`
+(only the app's file tab sets it) puts `ResourceEnvironment.focusHome` under the view; there, and only
+there, the views' scrollers become reading surfaces — embedded previews (chat cards, the palette, the
+questionnaire) keep their Tab order and never compete for a region's landing.
+
+- **One handler** (`support/readingSurface.ts`): `useReadingSurface({ label, sideways })` returns
+  `role="document"`, its `aria-label`, `tabIndex=0`, `data-focus-default`, `data-key-scope="reader"` and a
+  key handler that acts only on the surface itself (an inner control keeps its keys) through
+  `@thinkrail/ui/reading` ([[module-ui]]): `readingCommand` (↑/↓ and the j/k twins a line of
+  `READING_LINE` 40 px, Space/PgDn and Shift+Space/PgUp a page of `readingPage` — the viewport less a
+  line — g/Home and Shift+G/End the ends, ←/→ and h/l sideways where `sideways`) applied by
+  `scrollReading`. Letters are the shared, rebindable twins (`arrows.*`, `reading.top`/`reading.bottom`)
+  matched through `useReaderKeys()` in scope `reader`, which the app resolves (it includes `arrows` and
+  `reading`, [[submodule-web-keybindings]]). The ring is `focus-visible:focus-ring-inset`. Used by JSON,
+  notebook, PDF (the pages scroller), CSV (on `TableVirtuoso`'s own scroller, which forwards the props, with
+  `sideways`) and the Markdown preview without review.
+- **Markdown with review** keeps its block cursor proxy as the Tab stop (`CursorProxy`'s `focusDefault`
+  under a focus home) inside a `reader`-scoped scroller. Plain ↑/↓/j/k scroll before they step, as in the
+  chat transcript: a block taller than the rest of the view scrolls a line at a time until its far edge
+  shows (`scrollBeforeStep`), then the cursor moves to the next block, revealed minimally
+  (`stepRevealDelta`); a cursor block wholly off screen re-anchors to the first or last visible one. Page
+  keys scroll and keep the cursor while its block shows, else move it to the first visible block; g/G and
+  Home/End scroll to the ends with the cursor on the first or last block. Shift extends, Enter and
+  Shift+Mod+M comment and Esc clears a range exactly as before (*Keyboard review surfaces*).
+- **Read-only Monaco** (`MonacoEditor`, `readCode`): while the editor is read-only and its text has
+  focus (`hasTextFocus`, so the find widget and a focused hover keep every key), ↑/↓ and j/k scroll the
+  view one code line and move the caret with it (the caret moves first, then the scroll is set: Monaco's
+  cursor reveal would undo an earlier scroll), Space/Shift+Space page (`cursorPageDown`/`Up`), g/G and
+  Home/End go to the file's ends (`cursorTop`/`Bottom`), h/l move the caret like ←/→; PgUp/PgDn and ←/→
+  stay Monaco's. The press is consumed before Monaco types it, so no "Cannot edit" message. The container
+  carries `data-key-scope="reader"` and, while the read-only text has focus, `data-text-entry="false"`: the
+  app's text-entry rule then lets plain keys through (hint mode's `F`), and its Esc ladder takes Esc back to
+  the Files tree ([[submodule-web-shell]]). An editable editor keeps typing every letter.
+- **HTML** has no reading handler: a sandboxed frame owns its keys once focused, so under a focus home
+  the frame itself is the `data-focus-default` target (`tabIndex=0`) and scrolls natively with the arrows,
+  Space and PgUp/PgDn; j/k, g/G and Esc cannot reach the host from inside it (F6 or Mod+Shift+E leave).
+  Images, SVG and LFS/binary cards have no reading surface (regions keep their own keys).

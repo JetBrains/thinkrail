@@ -507,13 +507,18 @@ export function useLayoutIntentProcessing(
 							: shouldAdvanceAcceptedNavigation(attention, requestNavigation),
 					);
 				}
-				if (layoutIntent.kind !== "reveal-tool" || layoutIntent.focus !== false) {
+				const openFocus = layoutIntent.kind === "open" ? layoutIntent.focus : undefined;
+				if (
+					(layoutIntent.kind !== "reveal-tool" || layoutIntent.focus !== false) &&
+					openFocus !== "none"
+				) {
 					requestFocus({
 						workspaceId,
 						key: layoutIntent.id,
 						location,
 						...(result.focusTabId ? { tabId: result.focusTabId } : {}),
 						...(result.focusOnlyIfLost ? { onlyIfFocusLost: true } : {}),
+						...(openFocus === "content" ? { content: true } : {}),
 					});
 				}
 			}

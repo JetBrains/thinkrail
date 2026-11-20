@@ -411,6 +411,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							icon={favorite ? StarFill : StarLine}
 							size="s"
 							data-testid="model-favorite-toggle"
+							data-hint-reveal
 							data-favorite={favorite}
 							label={
 								favorite

@@ -193,18 +193,31 @@ describe("transcriptKeyAction", () => {
 	const key = (init: Partial<KeyboardEvent> & { key: string }) =>
 		transcriptKeyAction(press(init), keys);
 
-	test("reads arrows and their h/j/k/l twins as tree moves", () => {
-		expect(key({ key: "ArrowDown" })).toEqual({ kind: "move", key: "ArrowDown" });
-		expect(key({ key: "j" })).toEqual({ kind: "move", key: "ArrowDown" });
-		expect(key({ key: "k" })).toEqual({ kind: "move", key: "ArrowUp" });
+	test("reads ↑/↓ and j/k as reading a line, ←/→ and h/l as tree moves", () => {
+		expect(key({ key: "ArrowDown" })).toEqual({ kind: "line", direction: 1 });
+		expect(key({ key: "j" })).toEqual({ kind: "line", direction: 1 });
+		expect(key({ key: "k" })).toEqual({ kind: "line", direction: -1 });
+		expect(key({ key: "ArrowUp" })).toEqual({ kind: "line", direction: -1 });
 		expect(key({ key: "h" })).toEqual({ kind: "move", key: "ArrowLeft" });
 		expect(key({ key: "l" })).toEqual({ kind: "move", key: "ArrowRight" });
-		expect(key({ key: "Home" })).toEqual({ kind: "move", key: "Home" });
+		expect(key({ key: "ArrowRight" })).toEqual({ kind: "move", key: "ArrowRight" });
+	});
+
+	test("goes to the ends with Home/End and g/G", () => {
+		expect(key({ key: "Home" })).toEqual({ kind: "edge", direction: -1 });
+		expect(key({ key: "End" })).toEqual({ kind: "edge", direction: 1 });
+		expect(key({ key: "g" })).toEqual({ kind: "edge", direction: -1 });
+		expect(key({ key: "G", code: "KeyG", shiftKey: true })).toEqual({ kind: "edge", direction: 1 });
 	});
 
 	test("names the page, item and exit keys", () => {
 		expect(key({ key: "PageDown" })).toEqual({ kind: "page", direction: 1 });
 		expect(key({ key: "PageUp" })).toEqual({ kind: "page", direction: -1 });
+		expect(key({ key: " ", code: "Space" })).toEqual({ kind: "page", direction: 1 });
+		expect(key({ key: " ", code: "Space", shiftKey: true })).toEqual({
+			kind: "page",
+			direction: -1,
+		});
 		expect(key({ key: "Enter" })).toEqual({ kind: "toggle" });
 		expect(key({ key: "c" })).toEqual({ kind: "copy" });
 		expect(key({ key: "o" })).toEqual({ kind: "open" });
@@ -217,8 +230,8 @@ describe("transcriptKeyAction", () => {
 		const parked = (init: Partial<KeyboardEvent> & { key: string }) =>
 			transcriptKeyAction(press(init), keys, true);
 		expect(parked({ key: "Escape" })).toBeNull();
-		expect(parked({ key: "ArrowDown" })).toEqual({ kind: "move", key: "ArrowDown" });
-		expect(parked({ key: "j" })).toEqual({ kind: "move", key: "ArrowDown" });
+		expect(parked({ key: "ArrowDown" })).toEqual({ kind: "line", direction: 1 });
+		expect(parked({ key: "j" })).toEqual({ kind: "line", direction: 1 });
 	});
 
 	test("while a question waits, Esc on the parked feed or an item goes to the question", () => {
@@ -227,14 +240,14 @@ describe("transcriptKeyAction", () => {
 		expect(waiting({ key: "Escape" }, true)).toEqual({ kind: "question" });
 		expect(waiting({ key: "Escape" }, false)).toEqual({ kind: "question" });
 		expect(waiting({ key: "Escape", shiftKey: true }, false)).toBeNull();
-		expect(waiting({ key: "ArrowDown" }, true)).toEqual({ kind: "move", key: "ArrowDown" });
+		expect(waiting({ key: "ArrowDown" }, true)).toEqual({ kind: "line", direction: 1 });
 		expect(waiting({ key: "Enter" }, false)).toEqual({ kind: "toggle" });
 	});
 
 	test("matches letters by physical key: a Russian layout's С copies and О opens", () => {
 		expect(key({ key: "с", code: "KeyC" })).toEqual({ kind: "copy" });
 		expect(key({ key: "щ", code: "KeyO" })).toEqual({ kind: "open" });
-		expect(key({ key: "о", code: "KeyJ" })).toEqual({ kind: "move", key: "ArrowDown" });
+		expect(key({ key: "о", code: "KeyJ" })).toEqual({ kind: "line", direction: 1 });
 		expect(key({ key: "c", code: "KeyX" })).toBeNull();
 	});
 
@@ -265,8 +278,8 @@ describe("transcriptKeyAction", () => {
 		expect(transcriptKeyAction(press({ key: "c" }), rebound)).toBeNull();
 		expect(transcriptKeyAction(press({ key: "j" }), rebound)).toBeNull();
 		expect(transcriptKeyAction(press({ key: "ArrowDown" }), rebound)).toEqual({
-			kind: "move",
-			key: "ArrowDown",
+			kind: "line",
+			direction: 1,
 		});
 	});
 });

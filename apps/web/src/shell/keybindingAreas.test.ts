@@ -102,7 +102,7 @@ describe("keybindingAreas", () => {
 		const { areas } = areasFor();
 		const general = areas.find((area) => area.id === "general");
 		const runs = scopeRuns(general?.entries ?? []);
-		expect(runs.map((run) => run.scope)).toEqual([null, "arrows"]);
+		expect(runs.map((run) => run.scope)).toEqual([null, "arrows", "reading"]);
 		expect(runs.flatMap((run) => ids(run.entries))).toEqual(ids(general?.entries ?? []));
 	});
 });

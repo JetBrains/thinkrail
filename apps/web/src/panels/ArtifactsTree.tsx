@@ -20,6 +20,7 @@ import {
 	artifactTimeLabel,
 } from "./artifactsModel";
 import { renameEntry } from "./fileTreeActions";
+import { type OpenTabOptions, treeOpenFocus } from "./openTabs";
 import { TreeRow } from "./TreeRow";
 import { treeRowControlProps } from "./treeNavigation";
 import { useInlineRename } from "./workspaceActions";
@@ -230,7 +231,8 @@ export function ArtifactFileRow({
 	});
 	const Icon = artifactIcon(row);
 	const restore = () => void restoreDeletedArtifact(workspaceId, artifact);
-	const open = (intent: "preview" | "keep") => void openArtifact(workspaceId, artifact, intent);
+	const open = (intent: "preview" | "keep", options?: OpenTabOptions) =>
+		void openArtifact(workspaceId, artifact, intent, options);
 	return (
 		<li
 			role="none"
@@ -285,7 +287,7 @@ export function ArtifactFileRow({
 								highlight="wrapper"
 								label={node.name}
 								labelClassName={deleted ? "text-text-subtle line-through" : undefined}
-								onClick={firstClickOnly(() => open("preview"))}
+								onClick={firstClickOnly((event) => open("preview", treeOpenFocus(event)))}
 								onDoubleClick={() => open("keep")}
 								onKeyDown={onRowKeyDown}
 								trailing={

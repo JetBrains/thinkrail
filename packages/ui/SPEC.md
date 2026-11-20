@@ -24,7 +24,16 @@ or typed key, exact modifiers, `Mod` = ⌘ on Apple and Ctrl elsewhere, no Alt c
 Apple — the app's keybinding matcher delegates to it, so the two cannot drift), `chordCaps`, `keyCap`,
 `codeLabel` (a code's US label), `ariaKeyShortcuts(chords, platform)` (one platform's modifier names, never
 Meta and Control both; the numpad Enter reads `Enter`, so a pair announces once), `isTypingChord`, `ARROW_TWIN_COMMANDS` (`arrows.left/down/up/right`, H/J/K/L
-by `code`, in shared scope `ARROW_TWINS_SCOPE`) and `twinArrow(id)` (the arrow a matched twin stands for). `./local-keys` is the seam an element matches its
+by `code`, in shared scope `ARROW_TWINS_SCOPE`) and `twinArrow(id)` (the arrow a matched twin stands for). `./reading` is the
+one definition of reading keys, shared by the chat transcript and the resource renderers' reading
+surfaces: `READING_COMMANDS` (`reading.top` G and `reading.bottom` Shift+G by `code`, shared scope
+`READING_SCOPE`), `readingCommand(event, keys, local?)` (a line, a page, an end or a step sideways from
+the arrows and their twins, Space/Shift+Space, PgUp/PgDn, Home/End and g/G; modified, shifted and composing
+presses pass), `READING_LINE` (40 px) and `readingPage` (the viewport less a line), the pure
+scroll-before-step geometry — `scrollBeforeStep` (scroll a line, clamped to the item's far edge, until
+that edge shows; then 0 and the cursor steps) and `stepRevealDelta` (the least scroll showing a stepped-to
+item: all of it when it fits, else its near edge plus a line) over `ReadingSpan`s, `spansOverlap` — and
+`readingScrollTarget` / `scrollReading` for a plain scroller. `./local-keys` is the seam an element matches its
 rebindable local keys through, whoever renders it (the app, resource renderers, an extension card):
 `useLocalKeys(scope, defaults)` returns `{ match(event, { ignoreShift, textEntry }), caps(id), label(id),
 aria(...ids) }` (`label` joins the caps the platform's way, `""` when unbound; `aria` lists every chord of

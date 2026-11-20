@@ -8,6 +8,7 @@ import { openArtifact } from "./artifactActions";
 import { ArtifactEntryMenu, type RequestRemoval } from "./artifactRowParts";
 import { artifactTimeLabel, type OutputEntry } from "./artifactsModel";
 import { renameEntry } from "./fileTreeActions";
+import { type OpenTabOptions, treeOpenFocus } from "./openTabs";
 import { useTreeItem } from "./treeNavigation";
 import { useInlineRename } from "./workspaceActions";
 
@@ -64,7 +65,8 @@ function OutputFileRow({
 		openKept: true,
 	});
 	const Icon = outputFileIcon(artifact.path);
-	const open = (intent: "preview" | "keep") => void openArtifact(workspaceId, artifact, intent);
+	const open = (intent: "preview" | "keep", options?: OpenTabOptions) =>
+		void openArtifact(workspaceId, artifact, intent, options);
 	const inside = artifact.path.startsWith(`${dir}/`)
 		? artifact.path.slice(dir.length + 1)
 		: artifact.path;
@@ -113,7 +115,7 @@ function OutputFileRow({
 								{...treeItem}
 								data-testid="artifact-open"
 								data-focus-row-primary
-								onClick={firstClickOnly(() => open("preview"))}
+								onClick={firstClickOnly((event) => open("preview", treeOpenFocus(event)))}
 								onDoubleClick={() => open("keep")}
 								onKeyDown={onRowKeyDown}
 								className="flex h-full min-w-0 flex-1 items-center gap-8 text-left focus-visible:focus-ring-inset"

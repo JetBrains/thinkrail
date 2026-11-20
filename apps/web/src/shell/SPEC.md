@@ -124,6 +124,17 @@ the layout engine; New terminal remains the only creation action, and the layout
 (into a terminal pane, or into a new pane below a tool pane) — the shell injects no side-menu actions. The
 workbench receives workspace identity explicitly to fence pending drag/focus work without remounting.
 
+**Where focus goes on an open** (user, 2026-11-20; VS Code's rule). An open asks the layout to focus
+the opened tab's button by default. A keyboard open from a tree — Enter on a row (its click has
+`detail === 0`) or Mod+Enter — and a search-palette file pick open with `focus: "content"`
+(`panels`' `KEYBOARD_OPEN` / `treeOpenFocus`, through `openFileInTab`'s options, `LayoutOpenOptions.focus`
+and the `open` intent into a content focus request, [[submodule-web-shell-layout]]): focus lands on
+the tab's `[data-focus-default]` target once it renders — a reading surface, the Markdown block cursor or
+the read-only editor ([[module-resource-renderers]]). A pointer click from a tree opens with
+`focus: "none"`, so focus stays on the row; a double click keeps today's tab-button focus. The trees
+that share it: Files, Specs and Artifacts (their Outputs too); Changes opens diffs and keeps the
+tab-button focus.
+
 Resource opens route to that workspace's last-focused surviving center group. Reopening a canonical resource selects its local placement rather than duplicating it. Resource close does not remove the frame group when it becomes empty. Explicit split/add/remove/merge commands own topology; group removal deterministically rehomes resources from every locally retained workspace view before one state commit. Applying a preset follows the same all-views rule. Moving a singleton tool or resizing/folding/showing a region changes the one frame; moving a file/chat/diff/document/terminal among existing groups changes only the active workspace view. Pointer/resize drafts stay runtime-local and publish one local transition on completion.
 
 The layout persistence boundary is `layoutState`, not the store. Browsers qualify state by backend endpoint and frontend-surface identity; native windows use the injected stable string adapter's profile/window scope with a fixed key independent of the host's dynamic port. Both paths persist and decode the same bounded document. State is schema-validated on load and restored on reload or supported window-session restoration. Simultaneous windows do not observe each other's storage writes. A surface with no valid local document starts from the Balanced frame; old host snapshots and old browser attention keys are never read.
@@ -548,7 +559,17 @@ auxiliary rail, which sits outside every region and carries `data-esc-ladder` in
 bottom tool rails; their F6 ring is unchanged). The center's own tab
 strip and actions climb too, into the tab's content (unconfirmed with the user, the recommended answer);
 the center root and anything inside its tabpanel never do, so the parked feed's and an editor's Esc stay
-theirs. The terminal and Monaco keep their Esc; from there F6 or Mod+L.
+theirs. The terminal and an editable Monaco keep their Esc; from there F6 or Mod+L.
+
+**Esc in a file returns to the Files tree** (user, 2026-11-20). The same listener's third step
+(`leavesFile`): a bare Esc no owner took (not `defaultPrevented`, no claim, no layer) whose target is
+inside a file tab (`FilePane`'s `[data-file-pane]`) and is a non-text element — a reading surface, the
+Markdown block cursor, the toolbar — or the text of a read-only editor (`[data-text-entry="false"]`,
+[[module-resource-renderers]]) runs `showFiles("all", { activeRow: true })`: Files in All mode, focus on
+the active file's row (`aria-current`) rather than the row last focused there, so Esc and Enter toggle
+file ↔ row. Element-level steps still win because they prevent first: a Markdown range clears, a review
+composer cancels, Monaco closes its find widget or message. A text field in the file leaves to its
+region as above.
 
 **The main area** is the last center group focus entered (the region tracker records it), else the
 first shown center group in ring order, else Project Home's main pane (`[data-main-area]`, which is no

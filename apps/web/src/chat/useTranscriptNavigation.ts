@@ -1,6 +1,13 @@
 import { focusAndReveal, TABBABLE_SELECTOR } from "@thinkrail/ui/focus";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { type LocalKeys, useLocalKeys } from "@thinkrail/ui/local-keys";
+import {
+	type ReadingDirection,
+	type ReadingSpan,
+	scrollBeforeStep,
+	spansOverlap,
+	stepRevealDelta,
+} from "@thinkrail/ui/reading";
 import { useEffect, useInsertionEffect, useState } from "react";
 import { LOCAL_KEY_DEFAULTS } from "@/keybindings";
 import { copyText, resolveTreeMove } from "@/lib";
@@ -26,6 +33,8 @@ export interface TranscriptNavigationOptions {
 	revealRow: ChatScroll["revealRow"];
 	revealElement: ChatScroll["revealElement"];
 	leaveFollow: ChatScroll["leaveFollow"];
+	scrollBy: ChatScroll["keyboardScrollBy"];
+	scrollPage: ChatScroll["scrollPage"];
 	scrollToLatest: () => void;
 	focusComposer: () => void;
 	waitingQuestion: () => HTMLElement | null;
@@ -87,9 +96,7 @@ function viewportBounds(scroller: HTMLElement, inset: number): { top: number; bo
 }
 
 function intersects(element: HTMLElement, scroller: HTMLElement): boolean {
-	const rect = element.getBoundingClientRect();
-	const viewport = viewportBounds(scroller, 0);
-	return rect.bottom > viewport.top + 1 && rect.top < viewport.bottom - 1;
+	return spansOverlap(element.getBoundingClientRect(), viewportBounds(scroller, 0));
 }
 
 function sticksOut(element: HTMLElement, scroller: HTMLElement, inset: number): boolean {
@@ -278,20 +285,116 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 		else moveTo(list, at, "center");
 	};
 
-	const pageTarget = (list: TranscriptNavItem[], index: number, direction: -1 | 1): number => {
-		const fallback = Math.max(0, Math.min(list.length - 1, index + direction));
-		const origin = element(list[index]?.id ?? "")?.getBoundingClientRect().top;
-		if (origin === undefined || !scroller) return fallback;
-		let best = fallback;
-		for (let at = index + direction; at >= 0 && at < list.length; at += direction) {
-			const candidate = element(list[at]?.id ?? "");
-			if (!candidate) break;
-			if ((candidate.getBoundingClientRect().top - origin) * direction > scroller.clientHeight) {
-				break;
-			}
-			best = at;
+	const insetOf = (target: HTMLElement) => {
+		const owner = ownerOf(target);
+		return owner && nested(owner) ? ACTIVITY_BREADCRUMB_HEIGHT : 0;
+	};
+
+	const ownSpan = (target: HTMLElement, next: HTMLElement | null): ReadingSpan => {
+		const rect = target.getBoundingClientRect();
+		const bottom =
+			next && next !== target && target.contains(next)
+				? next.getBoundingClientRect().top
+				: rect.bottom;
+		return { top: rect.top, bottom: Math.max(rect.top, bottom) };
+	};
+
+	const spanAt = (list: TranscriptNavItem[], index: number, target: HTMLElement) =>
+		ownSpan(target, element(list[index + 1]?.id ?? ""));
+
+	const visibleEnd = (list: TranscriptNavItem[], direction: ReadingDirection) => {
+		if (!scroller) return null;
+		const view = scroller;
+		const mounted = new Map(
+			Array.from(view.querySelectorAll<HTMLElement>(ITEM), (target) => [
+				target.dataset.transcriptItem ?? "",
+				target,
+			]),
+		);
+		const shown = list.flatMap((item, index) => {
+			const target = mounted.get(item.id);
+			if (!target) return [];
+			const span = ownSpan(target, mounted.get(list[index + 1]?.id ?? "") ?? null);
+			return spansOverlap(span, viewportBounds(view, insetOf(target))) ? [{ index, target }] : [];
+		});
+		return (direction > 0 ? shown[0] : shown.at(-1)) ?? null;
+	};
+
+	const land = (list: TranscriptNavItem[], index: number, target: HTMLElement) => {
+		const item = list[index];
+		if (!item) return;
+		setCursor(item.id, index);
+		target.focus({ preventScroll: true });
+	};
+
+	const step = (list: TranscriptNavItem[], index: number, direction: ReadingDirection) => {
+		const next = list[index];
+		if (!next || !scroller || !options) return;
+		const target = element(next.id);
+		if (!target) {
+			moveTo(list, index, direction < 0 ? "start" : "end");
+			return;
 		}
-		return best;
+		const delta = stepRevealDelta(
+			viewportBounds(scroller, insetOf(target)),
+			spanAt(list, index, target),
+		);
+		if (delta !== 0) options.scrollBy(delta);
+		else if (keyboardLeavesFollow(next, latestRowIds(), "focus")) options.leaveFollow();
+		land(list, index, target);
+	};
+
+	const readLine = (
+		list: TranscriptNavItem[],
+		index: number,
+		itemElement: HTMLElement,
+		direction: ReadingDirection,
+	) => {
+		if (!scroller || !options) return;
+		const view = viewportBounds(scroller, insetOf(itemElement));
+		const span = spanAt(list, index, itemElement);
+		if (!spansOverlap(span, view)) {
+			const shown = visibleEnd(list, direction);
+			if (shown) {
+				land(list, shown.index, shown.target);
+				return;
+			}
+		}
+		const delta = scrollBeforeStep(view, span, direction);
+		const before = scroller.scrollTop;
+		if (delta !== 0) options.scrollBy(delta);
+		if (scroller.scrollTop === before) step(list, index + direction, direction);
+	};
+
+	const page = (
+		list: TranscriptNavItem[],
+		direction: ReadingDirection,
+		from: HTMLElement | null,
+	) => {
+		if (!scroller || !options) return;
+		options.scrollPage(direction);
+		if (!from) return;
+		const index = list.findIndex((item) => item.id === from.dataset.transcriptItem);
+		const view = viewportBounds(scroller, insetOf(from));
+		if (index >= 0 && spansOverlap(spanAt(list, index, from), view)) return;
+		const shown = visibleEnd(list, 1);
+		if (shown) land(list, shown.index, shown.target);
+	};
+
+	const edge = (list: TranscriptNavItem[], direction: ReadingDirection) => {
+		const index = direction < 0 ? 0 : list.length - 1;
+		const target = list[index];
+		if (!target || !scroller || !options) return;
+		setCursor(target.id, index);
+		if (target.id === target.rowId && latestRowIds().includes(target.rowId)) {
+			options.scrollToLatest();
+		} else {
+			const { scrollTop, scrollHeight, clientHeight } = scroller;
+			options.scrollBy(direction < 0 ? -scrollTop : scrollHeight - clientHeight - scrollTop);
+		}
+		const mounted = element(target.id);
+		if (mounted) mounted.focus({ preventScroll: true });
+		else whenMounted(target.id);
 	};
 
 	const copy = (item: TranscriptNavItem) => {
@@ -348,11 +451,15 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 				}
 				return;
 			}
-			case "page": {
-				const target = pageTarget(list, index, action.direction);
-				if (target !== index) moveTo(list, target, action.direction < 0 ? "start" : "end");
+			case "line":
+				readLine(list, index, itemElement, action.direction);
 				return;
-			}
+			case "page":
+				page(list, action.direction, itemElement);
+				return;
+			case "edge":
+				edge(list, action.direction);
+				return;
 			case "toggle":
 				toggleItem(item, itemElement);
 				return;
@@ -421,6 +528,12 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 		} else if (action.kind === "leave") {
 			cancel();
 			options?.focusComposer();
+		} else if (parked && action.kind === "page") {
+			cancel();
+			page(items(), action.direction, null);
+		} else if (parked && action.kind === "edge") {
+			cancel();
+			edge(items(), action.direction);
 		} else if (parked) revealCursor();
 		else {
 			cancel();

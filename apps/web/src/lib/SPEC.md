@@ -148,8 +148,10 @@ not this module; the theme-aware highlighter remains app-local.
   `readLayoutSelection`, `readLayoutNavigationClock`, `sameLayoutAttention`, `nullProto`, the `LayoutAttention`
   type, and the keyboard gate shared by the shell's chords and the panels' plain-letter review
   shortcuts: `MODAL_LAYER_SELECTOR` + `hasLayer` (an open modal/dialog/alertdialog owns the keyboard)
-  and `isTextEntryTarget` (inputs, textareas, selects and contenteditable keep their letters) —
-  duck-typed on the target so it holds in DOM-less tests.
+  and `isTextEntryTarget` (inputs, textareas, selects, contenteditable, Monaco and xterm keep their
+  letters — except inside `READ_ONLY_TEXT_SELECTOR`, `[data-text-entry="false"]`, which a read-only
+  editor sets while its text has focus, so reading keys and hint mode's `F` reach it) — duck-typed on
+  the target so it holds in DOM-less tests.
 - **Allowed deps:** React (the viewport subscription hook only); `@thinkrail/locales` (the relative-time,
   compact-age and MCP state labels, resolved in the active locale at call time);
   `@thinkrail/contracts` (types only for canonical messages, `McpServerState`, and the `GitDiffScope` the

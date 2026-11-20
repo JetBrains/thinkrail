@@ -392,6 +392,7 @@ function ItemBlock({
 								variant="primary"
 								size="m"
 								data-testid="plan-start-review"
+								data-hint-reveal
 								disabled={startDisabled}
 								tooltip={startDisabled ? t("plan.item.reviewBusy") : undefined}
 								onClick={() => onStartReview(item.id)}

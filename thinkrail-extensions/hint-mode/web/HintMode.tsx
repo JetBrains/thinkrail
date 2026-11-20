@@ -23,6 +23,7 @@ interface HintSession {
 }
 
 const LABEL_OFFSET = { left: 4, top: 6, edge: 2 };
+const REVEAL_ATTRIBUTE = "data-hint-mode";
 
 function createSessionStore() {
 	let session: HintSession | null = null;
@@ -111,13 +112,19 @@ export function HintMode(props: GlobalOverlayProps) {
 			clips: clipsOverflow,
 			viewport: { width: window.innerWidth, height: window.innerHeight },
 		});
+		const root = document.documentElement;
 		const exit = () => {
+			root.removeAttribute(REVEAL_ATTRIBUTE);
 			store.set(null);
 			host.current.claimKeyboard(false);
 		};
 		const start = () => {
+			root.setAttribute(REVEAL_ATTRIBUTE, "");
 			const { targets, boxes } = collectTargets<HTMLElement>(host.current.activeLayer(), env());
-			if (targets.length === 0) return;
+			if (targets.length === 0) {
+				root.removeAttribute(REVEAL_ATTRIBUTE);
+				return;
+			}
 			host.current.claimKeyboard(true);
 			store.set({ targets, boxes, labels: hintLabels(targets.length), typed: "" });
 		};

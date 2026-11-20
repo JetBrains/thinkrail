@@ -363,6 +363,7 @@ export function focusRegionOfKind(kind: RegionKind): void {
 export function focusToolBody(
 	tool: LayoutToolId,
 	ready: (body: HTMLElement) => boolean = () => true,
+	prefer?: string,
 ): void {
 	let patience = BUSY_FRAME_BUDGET;
 	focusWhenSettled(() => {
@@ -371,7 +372,8 @@ export function focusToolBody(
 		);
 		if (!body || !isShown(body) || !ready(body)) return null;
 		if (body.querySelector(BUSY_SELECTOR) && patience-- > 0) return null;
-		return focusInsideTarget(body);
+		const preferred = prefer ? firstFocusableIn(body, prefer) : null;
+		return preferred ?? focusInsideTarget(body);
 	});
 }
 

@@ -82,13 +82,19 @@ export function focusProjects(toggleProjectsHome: () => void): void {
 	focusRegionOfKind("home");
 }
 
-export function showFiles(mode: "all" | "changed"): void {
+const ACTIVE_FILE_ROW = '[role="treeitem"][aria-current="true"]';
+
+export function showFiles(mode: "all" | "changed", { activeRow = false } = {}): void {
 	const state = useAppStore.getState();
 	const workspaceId = state.activeWorkspaceId;
 	if (!workspaceId) return;
 	state.setFilesMode(mode);
 	state.requestToolView(workspaceId, "files");
-	focusToolBody("files", (body) => body.querySelector(`[data-files-mode="${mode}"]`) !== null);
+	focusToolBody(
+		"files",
+		(body) => body.querySelector(`[data-files-mode="${mode}"]`) !== null,
+		activeRow ? ACTIVE_FILE_ROW : undefined,
+	);
 }
 
 export function focusTerminal(): void {

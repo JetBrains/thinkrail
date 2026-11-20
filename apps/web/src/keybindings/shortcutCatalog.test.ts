@@ -56,19 +56,20 @@ describe("the shortcut catalog", () => {
 		expect(labels(rows, "rails.moveLeft")).toEqual(["Alt+Shift+←"]);
 	});
 
-	test("every app local command has a titled row, and every direction row one arrow twin", () => {
+	test("every app local command has a titled row, and every direction or end row one letter twin", () => {
 		const local = new Set(SHORTCUT_CATALOG.flatMap((entry) => entry.local ?? []));
 		expect(APP_LOCAL_COMMANDS.filter(({ id }) => !local.has(id)).map(({ id }) => id)).toEqual([]);
 		const resolved = resolveKeybindings({ platform: LINUX });
 		const twins = SHORTCUT_CATALOG.flatMap((entry) => (entry.twin ? [entry] : []));
 		expect(twins.length).toBeGreaterThan(0);
 		for (const entry of twins) {
-			expect([
+			const scope = resolved.byId.get(entry.twin?.command ?? "")?.scope ?? "";
+			expect([entry.id, entry.keys?.length, ["arrows", "reading"].includes(scope)]).toEqual([
 				entry.id,
-				entry.keys?.length,
-				resolved.byId.get(entry.twin?.command ?? "")?.scope,
-			]).toEqual([entry.id, 1, "arrows"]);
-			expect(entry.scope && actsIn(resolved, "arrows").includes(entry.scope)).toBe(true);
+				1,
+				true,
+			]);
+			expect(entry.scope && actsIn(resolved, scope).includes(entry.scope)).toBe(true);
 		}
 	});
 
@@ -210,7 +211,12 @@ describe("the shortcut catalog", () => {
 		const rows = rowsFor(false, LINUX);
 		expect(labels(rows, "transcript.up")).toEqual(["↑", "K"]);
 		expect(labels(rows, "transcript.expand")).toEqual(["→", "L"]);
-		expect(labels(rows, "transcript.page")).toEqual(["PgUp", "PgDn"]);
+		expect(labels(rows, "transcript.page")).toEqual(["PgUp", "PgDn", "Space", "Shift+Space"]);
+		expect(labels(rows, "transcript.first")).toEqual(["Home", "G"]);
+		expect(labels(rows, "transcript.last")).toEqual(["End", "Shift+G"]);
+		expect(labels(rows, "reader.down")).toEqual(["↓", "J"]);
+		expect(labels(rows, "reader.bottom")).toEqual(["End", "Shift+G"]);
+		expect(labels(rows, "reader.back")).toEqual(["Esc"]);
 		expect(labels(rows, "tabs.previous")).toEqual(["←", "H"]);
 		expect(labels(rows, "tabs.next")).toEqual(["→", "L"]);
 		expect(labels(rows, "composer.enterTranscript")).toEqual(["Ctrl+↑"]);

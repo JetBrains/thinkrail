@@ -293,6 +293,18 @@
 	}
 }
 
+/* Hint mode (thinkrail-extensions/hint-mode SPEC): hover-only controls show while its labels do. */
+html[data-hint-mode] [data-hint-reveal] {
+	opacity: 1;
+	visibility: visible;
+	transition: none;
+	outline: 1px dashed var(--color-primary);
+	outline-offset: -1px;
+}
+html[data-hint-mode] [data-hint-reveal="inline-flex"] {
+	display: inline-flex;
+}
+
 [data-setting-flash] {
 	animation: setting-flash 1.6s ease-out forwards;
 }
