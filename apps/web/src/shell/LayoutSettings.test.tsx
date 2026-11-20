@@ -55,7 +55,6 @@ test("Advanced is a disclosure; the outline position is a cheap choice in Docume
 	expect(choice).toContain('role="listbox"');
 	expect(choice).toContain('data-cost="cheap"');
 	expect(markup).toContain('data-setting-id="markdown-outline"');
-	expect(markup).not.toContain("artifacts-smart-toggle");
 });
 
 test("a custom preset's row offers Rename and Delete… as sides; built-ins can't be asked to delete", () => {

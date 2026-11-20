@@ -97,9 +97,7 @@ export type ClientPreferenceKey = keyof typeof CLIENT_DEFAULTS;
 
 function resetClientPreference(key: ClientPreferenceKey): void {
 	const state = useAppStore.getState();
-	if (key === "artifactsSmart") state.setArtifactsSmart(CLIENT_DEFAULTS.artifactsSmart);
-	else if (key === "doubleShiftSearch")
-		state.setDoubleShiftSearch(CLIENT_DEFAULTS.doubleShiftSearch);
+	if (key === "doubleShiftSearch") state.setDoubleShiftSearch(CLIENT_DEFAULTS.doubleShiftSearch);
 	else if (key === "markdownOutlineSide") {
 		state.setMarkdownOutlineSide(CLIENT_DEFAULTS.markdownOutlineSide);
 	} else state.setChatMessageOrder(CLIENT_DEFAULTS.chatMessageOrder);

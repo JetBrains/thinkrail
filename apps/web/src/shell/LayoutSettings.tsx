@@ -6,7 +6,6 @@ import {
 	RiLayoutRightLine,
 } from "@remixicon/react";
 import {
-	ARTIFACT_ROLES_PROTOCOL_VERSION,
 	ARTIFACTS_PROTOCOL_VERSION,
 	LAYOUT_PLAN_PRESET_PROTOCOL_VERSION,
 	type LayoutPreset,
@@ -17,7 +16,6 @@ import { t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
-import { Switch } from "@thinkrail/ui/switch";
 import { cn } from "@thinkrail/ui/utils";
 import { useRef, useState } from "react";
 import { randomId } from "../lib";
@@ -669,29 +667,6 @@ function PresetsGroup() {
 	);
 }
 
-function ArtifactsGroup() {
-	const t = useT();
-	const smart = useAppStore((state) => state.artifactsSmart);
-	const reset = useClientPreferenceReset("artifactsSmart");
-	return (
-		<SettingsGroup title={t("workbench.layoutSettings.artifacts")} scope="device">
-			<SettingsRow
-				{...settingProps(t, SETTING.smartView)}
-				control={
-					<Switch
-						checked={smart}
-						label={t(SETTING.smartView.label)}
-						testId="artifacts-smart-toggle"
-						tabIndex={0}
-						onCheckedChange={(next) => useAppStore.getState().setArtifactsSmart(next)}
-					/>
-				}
-				reset={reset}
-			/>
-		</SettingsGroup>
-	);
-}
-
 function DocumentsGroup() {
 	const t = useT();
 	const side = useAppStore((state) => state.markdownOutlineSide);
@@ -722,8 +697,6 @@ function DocumentsGroup() {
 
 export function LayoutSettings() {
 	const t = useT();
-	const protocolVersion = useAppStore((state) => state.protocolVersion);
-	const artifacts = protocolVersion !== null && protocolVersion >= ARTIFACT_ROLES_PROTOCOL_VERSION;
 	return (
 		<SettingsPage
 			testId="settings-layout"
@@ -731,7 +704,6 @@ export function LayoutSettings() {
 			description={t("workbench.layoutSettings.description")}
 		>
 			<PresetsGroup key="presets" />
-			{artifacts ? <ArtifactsGroup key="artifacts" /> : null}
 			<DocumentsGroup key="documents" />
 		</SettingsPage>
 	);
