@@ -1,3 +1,4 @@
+import type { ArtifactsRoundFilter } from "@thinkrail/chat-ui/rows";
 import {
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	ARTIFACT_OUTPUTS_PROTOCOL_VERSION,
@@ -1326,8 +1327,6 @@ export function selectArtifactsView(state: {
 	if (view === "smart") return smart ? view : fallback;
 	return view;
 }
-
-export type ArtifactsRoundFilter = "published" | "results" | "all";
 
 export function selectArtifactsRoundFilter(state: {
 	artifactsView: ArtifactsView | null;
