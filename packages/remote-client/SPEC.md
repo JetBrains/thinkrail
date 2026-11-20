@@ -75,7 +75,10 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
     `remote.deviceAccess` push says `read`) and how its connection stands (`connected`, `connecting`, or
     `unreachable` with the last failure — recorded from its own `onOpenChange` / `onRetryFailed` / `onLost`, so
     the app keeps no failure state of its own). `snapshot()` is all of it as one immutable value, replaced on
-    every notify, for `useSyncExternalStore`. `clientFor` stays null until a host's channel first opened. `connect`
+    every notify, for `useSyncExternalStore`. `clientFor` stays null until a host's channel first opened. Every
+    open, a reconnect included, re-reads `session.stateList` and replaces the host's sessions with it (what a
+    `session.state` / `session.deleted` push said about a session since the read was asked wins), so a session that
+    ended while the channel was down does not linger; `session.deleted` removes one. `connect`
     tracks a saved host at once (its connection retries on its own); for a tracked host it retries now and, when
     its channel is down, reads `connecting` again until that attempt lands or fails. `pair` tracks the connection
     that paired, so pairing is one handshake. `disconnect` closes and drops one host; a dropped connection's

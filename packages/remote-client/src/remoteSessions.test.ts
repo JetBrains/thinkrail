@@ -28,7 +28,10 @@ const rec = (sessionId: string): SessionStateRecord => ({
 });
 
 function fakeConnection(host: SavedHost, seed: SessionStateRecord[]) {
+	let listed = seed;
+	let listing: ((records: SessionStateRecord[]) => void) | null = null;
 	let onState: (data: unknown) => void = () => {};
+	let onDeleted: (data: unknown) => void = () => {};
 	let onAccess: (data: unknown) => void = () => {};
 	let closed = false;
 	let events: ConnectionEvents = {};
@@ -36,10 +39,15 @@ function fakeConnection(host: SavedHost, seed: SessionStateRecord[]) {
 	const client: DeviceWireClient = {
 		attach: () => {},
 		request<T>(method: string): Promise<T> {
-			return Promise.resolve((method === "session.stateList" ? seed : null) as T);
+			if (method !== "session.stateList") return Promise.resolve(null as T);
+			if (listing === null) return Promise.resolve(listed as T);
+			return new Promise<T>((resolve) => {
+				listing = (records) => resolve(records as T);
+			});
 		},
 		subscribe: (channel, handler) => {
 			if (channel === WS_CHANNELS.sessionState) onState = handler;
+			if (channel === WS_CHANNELS.sessionDeleted) onDeleted = handler;
 			if (channel === WS_CHANNELS.remoteDeviceAccess) onAccess = handler;
 			return () => {};
 		},
@@ -72,6 +80,16 @@ function fakeConnection(host: SavedHost, seed: SessionStateRecord[]) {
 		failRetry: (error: unknown) => events.onRetryFailed?.(error),
 		lose: (error: RemoteConnectError) => events.onLost?.(error),
 		pushState: (record: SessionStateRecord) => onState(record),
+		pushDeleted: (sessionId: string) => onDeleted({ workspaceId: "ws", sessionId }),
+		/** What the host lists from now on. */
+		list: (records: SessionStateRecord[]) => {
+			listed = records;
+		},
+		/** Holds the next lists until `answerList`, so a push can land while one is asked. */
+		holdList: () => {
+			listing = () => {};
+		},
+		answerList: (records: SessionStateRecord[]) => listing?.(records),
 		pushAccess: (access: string) => onAccess({ access }),
 		isClosed: () => closed,
 	};
@@ -383,4 +401,48 @@ test("a controller stopped and connected again works (a remounted app), and a pa
 	controller.connect(laptop);
 	fake.setOpen(true);
 	expect(controller.clientFor("K1")).toBe(fake.connection.client);
+});
+
+const ids = (controller: ReturnType<typeof createRemoteSessions>): string[] =>
+	controller
+		.snapshot()
+		.items.map((item) => item.record.sessionId)
+		.sort();
+
+test("a reconnect re-reads the host's list in place of the old one, so a session ended meanwhile goes", async () => {
+	const fake = fakeConnection(laptop, [rec("s1"), rec("s2")]);
+	const controller = await connected(fake);
+	expect(ids(controller)).toEqual(["s1", "s2"]);
+	fake.setOpen(false);
+	fake.list([rec("s2"), rec("s3")]);
+	fake.setOpen(true);
+	await flush();
+	expect(ids(controller)).toEqual(["s2", "s3"]);
+});
+
+test("a push that lands while the list is read wins over the list", async () => {
+	const fake = fakeConnection(laptop, [rec("s1"), rec("s2")]);
+	const controller = await connected(fake);
+	fake.setOpen(false);
+	fake.holdList();
+	fake.setOpen(true);
+	fake.pushDeleted("s1");
+	const running = { ...rec("s4"), state: { ...idle, execution: "running" as const } };
+	fake.pushState(running);
+	fake.answerList([rec("s1"), rec("s2"), rec("s4")]);
+	await flush();
+	expect(ids(controller)).toEqual(["s2", "s4"]);
+	expect(controller.snapshot().items.find((item) => item.record.sessionId === "s4")?.record).toBe(
+		running,
+	);
+});
+
+test("a deleted session leaves the list", async () => {
+	const fake = fakeConnection(laptop, [rec("s1"), rec("s2")]);
+	const controller = await connected(fake);
+	let notes = 0;
+	controller.subscribe(() => notes++);
+	fake.pushDeleted("s1");
+	expect(ids(controller)).toEqual(["s2"]);
+	expect(notes).toBe(1);
 });
