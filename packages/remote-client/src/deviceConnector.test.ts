@@ -423,3 +423,18 @@ test("reconnectNow on a healthy connection changes nothing", async () => {
 	expect(peers).toHaveLength(1);
 	connection.close();
 });
+
+test("a routes push replaces the routes the connection reports, so a host saved from it keeps them", async () => {
+	const { connection, channel } = await live();
+	expect(connection.relayUrls).toEqual(["ws://host:1"]);
+	const nostr = { publicKey: "a".repeat(64), relays: ["wss://relay.example"] };
+	channel?.emit("message", {
+		data: JSON.stringify({
+			channel: "remote.hostRoutes",
+			data: { signalingUrls: ["ws://moved:2"], nostr },
+		}),
+	});
+	expect(connection.relayUrls).toEqual(["ws://moved:2"]);
+	expect(connection.nostr).toEqual(nostr);
+	connection.close();
+});
