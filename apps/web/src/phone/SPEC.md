@@ -205,7 +205,9 @@ The native shell's background is the Dark palette's `background`, read from the 
 `capacitor.config.ts`, so first paint matches. The keyboard overlays the web view (`Keyboard.resize: none`):
 `keyboardInset.ts` mirrors the plugin's `keyboardWillShow`/`keyboardWillHide` into `--keyboard-height`, and
 `phone.css` gives up `#root`'s height by it (less the footers' own safe-area padding) with a transition, so the
-composer rises with the keyboard. `native` resized the web view only after the keyboard's animation plus 0.2s
+composer rises with the keyboard. That is iOS (and the browser) only: Android resizes the web view for the keyboard
+itself (`adjustResize`, kept in full screen by `resizeOnFullScreen`), so `followsKeyboard` leaves the inset at 0
+there instead of lifting the field twice. `native` resized the web view only after the keyboard's animation plus 0.2s
 (the plugin's own delay), so the keyboard covered the composer and the screen jumped half a second later; letting
 iOS scroll the page instead left the header off-screen once the keyboard closed. The chat keeps its last line in
 view while its scroller or its content is resized (`stickToBottom.ts`) — the keyboard, the composer, a new row, a
