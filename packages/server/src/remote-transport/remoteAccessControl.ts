@@ -114,6 +114,13 @@ export function createRemoteAccessControl(
 	};
 
 	const track = (device: PairedDevice, channel: RemoteChannel, protocolVersion: number): void => {
+		const current = running
+			? loadDevices(options.dataDir).find((d) => d.id === device.id)
+			: undefined;
+		if (!current) {
+			channel.close();
+			return;
+		}
 		const open = channels.get(device.id) ?? new Set<RemoteChannel>();
 		open.add(channel);
 		channels.set(device.id, open);
@@ -122,7 +129,7 @@ export function createRemoteAccessControl(
 			if (open.size === 0 && channels.get(device.id) === open) channels.delete(device.id);
 			changed();
 		});
-		options.onPaired({ ...device, access: accessOf(device) }, channel, protocolVersion);
+		options.onPaired({ ...current, access: accessOf(current) }, channel, protocolVersion);
 		changed();
 	};
 
