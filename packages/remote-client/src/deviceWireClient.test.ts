@@ -182,3 +182,24 @@ describe("aborting a request", () => {
 		expect(io.sent.length).toBe(sentBefore);
 	});
 });
+
+describe("open state", () => {
+	test("reports a channel attaching, closing or being let go of, and coming back; never close()", () => {
+		const client = createDeviceWireClient();
+		const seen: boolean[] = [];
+		client.onOpenChange((open) => seen.push(open));
+		expect(client.open).toBe(false);
+		const first = fakeChannel();
+		client.attach(first.channel);
+		expect(client.open).toBe(true);
+		first.drop();
+		expect(client.open).toBe(false);
+		const second = fakeChannel();
+		client.attach(second.channel);
+		client.detach();
+		client.detach();
+		client.attach(fakeChannel().channel);
+		client.close();
+		expect(seen).toEqual([true, false, true, false, true]);
+	});
+});

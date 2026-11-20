@@ -124,7 +124,8 @@ the tab badged with the Needs-you count; a tap lands in that chat (a row whose c
   queued or running (a failed read keeps the transcript on screen under the reason and retries while the run was live); back returns to the chat as left. Diagrams (fenced mermaid and visualize) render inline
   with the shared fullscreen pan/zoom view; changed-file lists are text only, since the phone opens no files. The
   transcript streams token by token from the store (`hydrateStandaloneChat` loads it without a workbench
-  placement, `useTranscriptSync` repairs it after a reconnect, `useSessionStats` refreshes the usage line);
+  placement, `useTranscriptSync` repairs it after a reconnect — the mounted computer's channel going down and coming back
+  moves the store to `connecting` and then `connected` with a new generation, as the WS socket does — `useSessionStats` refreshes the usage line);
   `main.tsx` registers the built-in tool cards and the IDE's extensions and mounts the `TooltipProvider` the
   composer needs;
   `layout.tsx` (`Screen` frame and `ScreenHeader`, `ListRow`, loading/failed/empty states — a screen waits on `Loader`, the shared `RunningIcon` R mark at 56px over "Loading…"; a level of the tree waits on, or says it is empty in, an inline line at its depth; a screen with nothing to list shows `EmptyState` — an icon tile, a title, why, and the buttons that fix it, never "go to Settings"), `status.ts` (row marks from

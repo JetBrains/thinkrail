@@ -231,6 +231,7 @@ function openRemote(params: OpenParams): { connection: RemoteConnection; paired:
 					pc?.close();
 				} catch {}
 				if (settled) {
+					client.detach();
 					if (!closed) loop.dropped();
 				} else {
 					reject(error);

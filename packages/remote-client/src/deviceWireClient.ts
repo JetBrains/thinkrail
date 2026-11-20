@@ -19,6 +19,12 @@ export class RemoteRequestError extends Error {
 export interface DeviceWireClient {
 	/** Points the client at a (new) channel and replays any in-flight requests onto it. */
 	attach(channel: DeviceChannel): void;
+	/** Lets go of a channel whose peer died without closing it; requests wait for the next `attach`. */
+	detach(): void;
+	/** True while a channel is attached. */
+	readonly open: boolean;
+	/** Hears a channel attach (`true`) and go away until the next one (`false`); not `close`. */
+	onOpenChange(listener: (open: boolean) => void): () => void;
 	/**
 	 * Issues a wire request; resolves with the host's result (or rejects on error). Survives a reconnect. An
 	 * aborted `signal` rejects it with the signal's reason and forgets it, so it is never replayed.
@@ -57,6 +63,15 @@ export function createDeviceWireClient(): DeviceWireClient {
 	const pending = new Map<string, Pending>();
 	const subscribers = new Map<string, Set<(data: unknown) => void>>();
 	const sticky = new Map<string, unknown>();
+	const openListeners = new Set<(open: boolean) => void>();
+	const announce = (open: boolean): void => {
+		for (const listener of openListeners) listener(open);
+	};
+	const release = (): void => {
+		if (channel === null) return;
+		channel = null;
+		if (!closed) announce(false);
+	};
 	let acks: string[] = [];
 	const ack = (id: string): void => {
 		acks.push(id);
@@ -101,13 +116,23 @@ export function createDeviceWireClient(): DeviceWireClient {
 	return {
 		attach(next) {
 			if (closed) return;
+			const wasOpen = channel !== null;
 			channel = next;
 			next.onMessage(onMessage);
 			next.onClose(() => {
-				if (channel === next) channel = null; // pending wait for the next attach
+				if (channel === next) release();
 			});
 			next.send(JSON.stringify({ resume: [...pending.keys()] }));
 			for (const entry of pending.values()) next.send(entry.frame);
+			if (!wasOpen) announce(true);
+		},
+		detach: release,
+		get open() {
+			return channel !== null;
+		},
+		onOpenChange(listener) {
+			openListeners.add(listener);
+			return () => void openListeners.delete(listener);
 		},
 		request(method, params, options = {}) {
 			const { signal } = options;
@@ -157,6 +182,7 @@ export function createDeviceWireClient(): DeviceWireClient {
 			for (const entry of pending.values())
 				entry.reject(new RemoteRequestError("remote session closed"));
 			pending.clear();
+			openListeners.clear();
 			channel?.close();
 			channel = null;
 		},

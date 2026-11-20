@@ -1109,6 +1109,8 @@ interface AppState {
 	installMcpList: (read: McpRead, result: McpListResult) => void;
 	applyMcpStatus: (snapshot: McpStatusSnapshot) => void;
 	status: ConnectionStatus;
+	/** The remote host this app is mounted on (`mountRemoteSession`); null on the local host. */
+	remoteHostKey: string | null;
 	connectionGeneration: number;
 	welcomeGeneration: number;
 	protocolVersion: number | null;
@@ -1279,6 +1281,8 @@ interface AppState {
 	customLayoutPresets: LayoutPreset[];
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
+	/** Marks the store as mounted on a remote host, with its channel open (`connected`) or on its way. */
+	enterRemoteHost: (hostKey: string, open: boolean) => void;
 	resetHostState: () => void;
 	setOnboardingWizard: (gate: OnboardingWizardGate) => void;
 	installWelcomeSnapshot: (
@@ -2548,6 +2552,7 @@ function nextTerminalTitle(list: TerminalTab[]): string {
 type HostState = Pick<
 	AppState,
 	| "status"
+	| "remoteHostKey"
 	| "protocolVersion"
 	| "welcomeProtocolVersion"
 	| "hostPlatform"
@@ -2628,9 +2633,32 @@ type HostState = Pick<
 	| "mcpByWorkspace"
 >;
 
+/** A connection transition: a fresh `connected` opens a new generation and awaits its welcome. */
+function statusPatch(
+	state: AppState,
+	status: ConnectionStatus,
+): Pick<
+	AppState,
+	| "status"
+	| "protocolVersion"
+	| "resourceSnapshots"
+	| "connectionGeneration"
+	| "sessionStateSnapshotInstalled"
+> {
+	return {
+		status,
+		protocolVersion: null,
+		resourceSnapshots: staleChatResources(state.resourceSnapshots),
+		connectionGeneration:
+			status === "connected" ? state.connectionGeneration + 1 : state.connectionGeneration,
+		sessionStateSnapshotInstalled: false,
+	};
+}
+
 function initialHostState(): HostState {
 	return {
 		status: "connecting",
+		remoteHostKey: null,
 		protocolVersion: null,
 		welcomeProtocolVersion: null,
 		hostPlatform: null,
@@ -2952,14 +2980,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 		})),
 	setOnboardingWizard: (onboardingWizard) => set({ onboardingWizard }),
 	resetHostState: () => set({ ...initialHostState(), ...configPatch(DEFAULT_CONFIG) }),
-	setStatus: (status) =>
+	setStatus: (status) => set((state) => statusPatch(state, status)),
+	enterRemoteHost: (hostKey, open) =>
 		set((state) => ({
-			status,
-			protocolVersion: null,
-			resourceSnapshots: staleChatResources(state.resourceSnapshots),
-			connectionGeneration:
-				status === "connected" ? state.connectionGeneration + 1 : state.connectionGeneration,
-			sessionStateSnapshotInstalled: false,
+			remoteHostKey: hostKey,
+			...statusPatch(state, open ? "connected" : "connecting"),
 		})),
 	installWelcomeSnapshot: (
 		protocolVersion,

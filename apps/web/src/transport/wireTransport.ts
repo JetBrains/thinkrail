@@ -602,16 +602,31 @@ export function getTransport(): Transport {
 /**
  * Switches the app onto a remote host reached over a WebRTC DataChannel (a project opened by link). It
  * installs a `RemoteTransport` as the active transport and runs the same channel→store wiring as the local
- * WS; the host sends its `serverWelcome` over the bridge on connect, so the store bootstraps normally. Byte
- * URLs (`/files`, `/blob`) are unavailable until that tunnel lands. Replaces the current transport: the previous
- * one is closed and the store's host state reset, so two hosts never mix.
+ * WS; the host sends its `serverWelcome` over the bridge on connect, so the store bootstraps normally. The
+ * channel going down and coming back moves the store's status like the WS transport's (`connecting`, then
+ * `connected` with a new generation, so every connection-scoped read reconciles). Byte URLs (`/files`,
+ * `/blob`) are unavailable until that tunnel lands. Replaces the current transport: the previous one is closed
+ * and the store's host state reset, so two hosts never mix. `onClose` runs when this transport is replaced —
+ * the IDE closes the connection it owns there.
  */
-export function mountRemoteSession(client: DeviceWireClient, hostKey: string): Transport {
+export function mountRemoteSession(
+	client: DeviceWireClient,
+	hostKey: string,
+	options: { onClose?: () => void } = {},
+): Transport {
 	const piEvents = createPiEventBatcher((payloads) =>
 		useAppStore.getState().handlePiEvents(payloads),
 	);
-	const remote = new RemoteTransport(client, hostKey);
-	installTransport(remote, piEvents, () => useAppStore.getState().setStatus("connected"));
+	const remote = new RemoteTransport(client, hostKey, {
+		onStatus: (status) => {
+			piEvents.flush();
+			useAppStore.getState().setStatus(status);
+		},
+		...(options.onClose ? { onClose: options.onClose } : {}),
+	});
+	installTransport(remote, piEvents, () =>
+		useAppStore.getState().enterRemoteHost(hostKey, client.open),
+	);
 	return remote;
 }
 

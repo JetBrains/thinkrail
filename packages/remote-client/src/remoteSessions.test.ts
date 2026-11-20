@@ -38,6 +38,9 @@ function fakeConnection(host: SavedHost, seed: SessionStateRecord[]) {
 	let reconnects = 0;
 	const client: DeviceWireClient = {
 		attach: () => {},
+		detach: () => {},
+		open: true,
+		onOpenChange: () => () => {},
 		request<T>(method: string): Promise<T> {
 			if (method !== "session.stateList") return Promise.resolve(null as T);
 			if (listing === null) return Promise.resolve(listed as T);
