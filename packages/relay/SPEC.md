@@ -32,7 +32,8 @@ See [[submodule-server-remote-transport]] (the host side of the same handshake) 
     the broker's `challenge` nonce with an Ed25519 signature over `registerTranscript` (`prove`) before it is
     addressable, so no one can take over or knock off another host's address; a valid re-registration
     replaces the previous connection. A device `connect`s to a key; the broker opens a per-session pipe
-    (capped per host) and relays `frame`s both ways, multiplexed so one host serves many devices, attaching
+    (capped per host) and relays `frame`s both ways, multiplexed so one host serves many devices (a host's `frame` or `close` reaches
+    only a session it owns), attaching
     `iceFor()` TURN credentials to the device's `ready` only: one side's relay candidate crosses any NAT
     (TURN permissions are per IP), and the host's WebRTC stack would stall on an unreachable TURN. Disconnects close the affected sessions and
     notify the peer. Socket I/O is abstracted (`BrokerSocket`) so the core is unit-tested without a network.

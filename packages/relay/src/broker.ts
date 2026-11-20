@@ -170,11 +170,17 @@ export function createBroker(deps: BrokerDeps = {}): Broker {
 		}
 
 		if (conn.state.role === "host") {
-			if (message.t === "frame" && message.session !== undefined) {
-				const session = sessions.get(message.session);
+			if (message.t !== "frame" && message.t !== "close") return;
+			const owned =
+				message.session !== undefined && sessions.get(message.session)?.hostId === connId
+					? message.session
+					: undefined;
+			if (owned === undefined) return;
+			if (message.t === "frame") {
+				const session = sessions.get(owned);
 				if (session) conns.get(session.deviceId)?.socket.send({ t: "frame", data: message.data });
-			} else if (message.t === "close" && message.session !== undefined) {
-				const session = removeSession(message.session);
+			} else {
+				const session = removeSession(owned);
 				if (session) {
 					const device = conns.get(session.deviceId);
 					if (device) {
