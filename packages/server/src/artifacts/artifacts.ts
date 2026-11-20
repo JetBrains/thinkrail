@@ -356,7 +356,13 @@ export function checkArtifactFile(path: string, cwd: string): string {
 		if (skippedName(name, !last)) throw new Error(`Artifacts does not list what is in \`${name}\``);
 		if (last ? !entry.isFile() : !entry.isDirectory()) throw new Error("not a regular file");
 	}
-	return rel;
+	const scan = scanContext(root);
+	if (scan.files.has(rel)) return rel;
+	throw new Error(
+		scan.complete
+			? "Artifacts does not list it"
+			: `the artifacts folder holds more than ${MAX_ARTIFACT_SCAN_ENTRIES} entries, and Artifacts lists only what its walk reaches first`,
+	);
 }
 
 function scanContext(root: string): { files: Map<string, ScannedFile>; complete: boolean } {

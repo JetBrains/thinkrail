@@ -26,7 +26,8 @@ Settings → Extensions & skills; while it is off, Artifacts opens on Smart inst
   `extension-api/server`, `typebox`, pi types.
 - The tool takes worktree-relative, artifacts-relative or absolute paths (`@`, `./`, `file://`
   tolerated). Each must pass `workspaceFiles.checkArtifact` — the artifact index's own rule (normalized
-  containment, no links, no skipped `dist`/`node_modules`-style folders), not merely the workspace file
+  containment, no links, no skipped `dist`/`node_modules`-style folders, within the walk's entry bound),
+  not merely the workspace file
   check, because a file the index never lists would be "published" yet absent from Outputs. Otherwise the
   **whole call fails**, naming every refused path and why, and telling the agent to save it in the artifacts
   folder — a half-published set would leave the agent unsure what the user sees. `details.files` holds the

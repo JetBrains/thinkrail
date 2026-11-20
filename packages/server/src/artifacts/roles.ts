@@ -43,8 +43,8 @@ export function artifactRole(
 	pathInArtifacts: string,
 	signals: ArtifactSignals,
 ): { role: ArtifactRole; reason: ArtifactRoleReason } {
-	if (signals.published) return { role: "result", reason: "published" };
 	if (signals.picked) return { role: "result", reason: "picked" };
+	if (signals.published) return { role: "result", reason: "published" };
 	if (signals.presented) return { role: "result", reason: signals.presented };
 	const segments = pathInArtifacts.split("/");
 	const name = segments.pop() ?? "";

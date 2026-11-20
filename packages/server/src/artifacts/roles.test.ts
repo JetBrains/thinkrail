@@ -1,8 +1,12 @@
 import { expect, test } from "bun:test";
 import { artifactRole, replyPathCandidates } from "./roles";
 
-test("a signal decides first: what the agent published, the user's pick, then what it showed or linked", () => {
+test("a signal decides first: the user's pick, what the agent published, then what it showed or linked", () => {
 	expect(artifactRole("_work/a.html", { published: true, picked: true })).toEqual({
+		role: "result",
+		reason: "picked",
+	});
+	expect(artifactRole("_work/a.html", { published: true, presented: "shown" })).toEqual({
 		role: "result",
 		reason: "published",
 	});

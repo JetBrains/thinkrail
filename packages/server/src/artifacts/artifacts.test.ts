@@ -647,6 +647,17 @@ test("a file passes the artifact check exactly when the index would list it, nam
 	expect(listed).toEqual(new Set([inside, `${CONTEXT}/real.md`]));
 });
 
+test("a file the index's bounded walk never reaches fails the artifact check, as it is never listed", async () => {
+	for (let index = 0; index < 5_000; index++) write(`${CONTEXT}/asset-${index}.png`, "png");
+	write(`${CONTEXT}/reports/r.md`, "r");
+	expect(() => checkArtifactFile(`${CONTEXT}/reports/r.md`, root)).toThrow(
+		"more than 5000 entries",
+	);
+	await reconcileArtifacts("w1");
+	const listed = new Set((await listArtifacts("w1")).artifacts.map((entry) => entry.path));
+	expect(listed.has(`${CONTEXT}/reports/r.md`)).toBe(false);
+});
+
 test("a published file is a flagged result that keeps the flag across a move", async () => {
 	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
 	write(`${CONTEXT}/mockups/a.html`, "a");

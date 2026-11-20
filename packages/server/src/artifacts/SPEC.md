@@ -60,9 +60,10 @@ copy. Unlike ignored outputs elsewhere, which do list `dist/`, a build inside th
 scaffolding, not something the agent produced for the user. It also skips the `fs` delete claims
 (`DELETE_CLAIM_PREFIX`), which are the user's own trash in flight, not a rename. **`checkArtifactFile(path,
 cwd)`** states the same rule for one path — normalized containment in the artifacts folder, real folders,
-no link on the way, no skipped folder or claim — and returns the name the walk would list it under; the
-outputs extension publishes only what it accepts ([[module-ext-outputs]]), so a published file is never
-one Outputs silently drops. A worktree root that is
+no link on the way, no skipped folder or claim, each refused with its own reason — and then confirms it
+against the bounded walk itself, so a file past the 5 000-entry bound is refused too; it returns the name
+the walk lists it under. The outputs extension publishes only what it accepts ([[module-ext-outputs]]),
+so a published file is never one Outputs silently drops. A worktree root that is
 not there (an unmounted drive, a moved project folder) is an incomplete scan, so its rows stay live until it
 returns. A new path gains a record
 and a link; a changed size/mtime updates the record (and its writer when known); an inode change relinks;
@@ -136,10 +137,12 @@ Every listed artifact carries a **role**, `result` or `working`, and the **reaso
 the list is served (`roles.ts`, never stored, so a rule change needs no migration). One host answer
 serves the Smart view, the chat divider and any other consumer.
 
-1. **Signals decide.** `published` — the agent declared it a deliverable (`present_files`,
-   [[module-ext-outputs]]); the wire also carries it as the flag `published: true`, because the Outputs
-   view lists exactly these and a picked file's reason would hide it. `picked` — the person chose it
-   among a tool's previews. `shown` — a successful tool call put it in front of them. The host maps the
+1. **Signals decide**, in this order. `picked` — the person chose it among a tool's previews; it ranks
+   first because Smart's ★ picked badge reads the reason, and publishing the chosen mockup must not erase
+   which one the person chose. `published` — the agent declared it a deliverable (`present_files`,
+   [[module-ext-outputs]]); the wire also carries it as the flag `published: true`, which the Outputs
+   view reads, so a picked reason never hides it there. `shown` — a successful tool call put it in front
+   of them. The host maps the
    declarations extensions make through `artifactTools` ([[submodule-server-extensions]]) into the
    `presented` / `picked` / `published` paths of a `tool_execution_end` event, marked after that event's
    reconcile so a file written just before is already a record. `linked` — the round's last assistant message names it, read when the next
