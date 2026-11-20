@@ -1491,8 +1491,10 @@ a project picker, the prompt hero, and the reused
   `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) is one `SettingsPage` of rows, not cards, in up
   to six groups. Its description carries the page's only statement about chats — "Changes apply to open
   chats when their current turn ends."; there is no dynamic notice about which chats are pending.
-  **Packages** is the **Install an extension or pi package** row (`packages-install`, with **Browse the pi
-  package gallery** as a side). **Built into ThinkRail** is the host-registry catalog, read from the store's
+  **Packages** is the **Install an extension or pi package** row (`packages-install`, with two
+  sides from `GalleryLinks`: **Browse ThinkRail extensions** (`extensions-gallery-link`, the website's
+  showcase, only when the host supports installed extensions) first, then **Browse the pi package
+  gallery**; the install dialog's form repeats both in that order). **Built into ThinkRail** is the host-registry catalog, read from the store's
   `extensionCatalog` (`selectBuiltinExtensions`: every row of an older host, `kind: "builtin"` from v128) —
   `transport`'s `refreshExtensionCatalog` re-lists on each mount and each welcome while the page is open, so
   an older host or a page opened while disconnected still lands its rows, and a failure shows **Retry**,

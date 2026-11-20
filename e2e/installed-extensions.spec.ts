@@ -1,6 +1,6 @@
 import { existsSync, realpathSync } from "node:fs";
 import { join } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import type { ToolCall } from "@thinkrail/contracts";
 import {
 	closeSettings,
@@ -85,8 +85,15 @@ test("the palette sample installs from its folder through the dialog and lists w
 	test.setTimeout(120_000);
 	await openAppFresh(page);
 	const section = await openExtensionsSettings(page);
+	const galleryLinks = (scope: Locator) =>
+		scope
+			.locator('[data-testid$="-gallery-link"]')
+			.evaluateAll((links) => links.map((link) => link.getAttribute("href")));
+	const galleries = ["https://thinkrail.ai/extensions/", "https://pi.dev/packages"];
+	expect(await galleryLinks(section)).toEqual(galleries);
 	await section.getByTestId("packages-install").click();
 	const dialog = page.getByTestId("install-package-dialog");
+	expect(await galleryLinks(dialog)).toEqual(galleries);
 	await dialog.getByTestId("install-package-source").fill(PALETTE_DIR);
 	await expect(dialog.getByTestId("install-package-echo")).toContainText("local folder or file");
 	await dialog.getByTestId("install-package-submit").click();

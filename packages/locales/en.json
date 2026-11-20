@@ -2157,6 +2157,7 @@
 	"settings.extensions.descriptionBundledOnly": "The ThinkRail extensions this host gives the agent. Turning one off removes its tools and skills from new chats and from open chats once their current turn ends; past results still render.",
 	"settings.extensions.empty": "This host has no ThinkRail extensions registered.",
 	"settings.extensions.enable": "Enable {{title}}",
+	"settings.extensions.gallery": "Browse ThinkRail extensions",
 	"settings.extensions.group.builtin": "pi built-in",
 	"settings.extensions.group.builtinDescription": "Part of the pi engine ThinkRail ships; switched through ±builtin entries in {{path}}.",
 	"settings.extensions.group.bundled": "Built into ThinkRail",

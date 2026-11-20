@@ -67,6 +67,7 @@ function render(
 	catalog: PiPackagesCatalog | null,
 	step: InstallStep = { kind: "form" },
 	source = "",
+	extensionsSupported = true,
 ) {
 	return renderToStaticMarkup(
 		<TooltipProvider>
@@ -76,6 +77,7 @@ function render(
 				scope="user"
 				catalog={catalog}
 				workspaceId={workspaceId}
+				extensionsSupported={extensionsSupported}
 				onSourceChange={() => {}}
 				onScopeChange={() => {}}
 				onSubmit={() => {}}
@@ -97,7 +99,14 @@ test("the form offers both scopes with a trusted workspace and shows the setting
 	expect(markup).not.toContain("install-package-notice");
 	expect(markup).toContain('data-testid="install-package-source-help"');
 	expect(markup).toContain('aria-label="What can I paste here?"');
-	expect(markup).toContain('data-testid="packages-gallery-link"');
+	expect(markup.indexOf('data-testid="extensions-gallery-link"')).toBeGreaterThan(-1);
+	expect(markup.indexOf('data-testid="extensions-gallery-link"')).toBeLessThan(
+		markup.indexOf('data-testid="packages-gallery-link"'),
+	);
+	expect(markup).toContain('href="https://thinkrail.ai/extensions/"');
+	const older = render("w1", CATALOG, { kind: "form" }, "", false);
+	expect(older).toContain('data-testid="packages-gallery-link"');
+	expect(older).not.toContain("extensions-gallery-link");
 	expect(markup).toMatch(/data-testid="install-package-submit"[^>]*disabled/);
 	const typed = render("w1", CATALOG, { kind: "form" }, "npm:@acme/pi-jira@1.4.2");
 	expect(typed).toContain('data-testid="install-package-echo"');
@@ -235,6 +244,7 @@ test("a pasted `pi install -l …` line selects the repository scope when it is 
 						projectSettingsPath: "/repo/.pi/settings.json",
 					}}
 					workspaceId="w1"
+					extensionsSupported
 					onSourceChange={() => {}}
 					onScopeChange={() => {}}
 					onSubmit={() => {}}
