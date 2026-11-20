@@ -258,28 +258,40 @@ The rules are pure (`autopilot.ts`); the host service (`autopilotService.ts`) ap
   (unstarted), **unblocked** (every `blocks` predecessor completed — or canceled, as the board's blocked
   count reads it), **free** (no attempt with an open workspace, no start in flight) and **sized** (a
   suggested size counts), by rank; the **limits** allow them while the board's running agents are under
-  `wipLimits.agents` (the concurrency cap; 0 is none) — at most the free slots — and **pause** them all while
+  `wipLimits.agents` (the concurrency cap; 0 is none) — at most the free slots, which a flagged card (below)
+  does not take, so the next ready card gets it — and **pause** them all while
   Review, then Needs you, is past its limit (`count > limit`, 0 is none; Start's warning reads the same) or
   the container has no orchestrator: `pausedReason { kind: review | needs_you, count, limit }` or `{ kind:
   orchestrator }`.
 - **Re-evaluation.** While the host service runs and some initiative has autopilot on with a container,
-  every `board.changed` (writes, bound chats' state and review signatures, tool starts) and every
-  `container.updated` / `removed` asks for one evaluation after `AUTOPILOT_DEBOUNCE_MS` (2 s), one at a time.
-  It records a changed `pausedReason` (a write, so `board.changed`); a container that went away clears
-  `containerId` and switches autopilot off.
-- **Offers, no flood** (`planOffers`): a selected card is offered once in a **`board-ready`** wake-up listing
-  the cards offered now (id, title, size → workflow, whether its design waits for the human) and the room
-  left under the cap; offered and not started within `OFFER_RETRY_MS` (10 min) it is offered again once (a
-  timer arms the next due offer), then **flagged** *Orchestrator didn't start it* and never offered again
-  while it stays ready; a card that is no longer ready is forgotten. Offers live in memory (a restart offers
-  again). A failed wake-up keeps no offer, so the next evaluation tries again.
+  every `board.changed` (writes, bound chats' state and review signatures — not tool starts, which are
+  `board.activity`, § Rules) and every `container.updated` / `removed` asks for an evaluation after
+  `AUTOPILOT_DEBOUNCE_MS` (2 s), one at a time: the first request arms the timer and later ones join it, so
+  changes that keep coming evaluate at most every 2 s. An initiative is acted on as stored once its inputs
+  arrived: switched off (or onto another container) meanwhile, it records, offers and wakes nothing. It
+  records a changed `pausedReason` keeping the stored switch (`setAutopilotPause`, never switching it on; a
+  write, so `board.changed`); a container that went away clears `containerId` and switches autopilot off.
+- **Offers, no flood** (`planOffers`): a selected card is offered once in a **`board-ready`** wake-up; offered
+  and not started within `OFFER_RETRY_MS` (10 min) it is offered again once (a timer arms the next due
+  offer), then **flagged** *Orchestrator didn't start it* and never offered again while it stays ready; a
+  card that is no longer ready is forgotten. Since the host keeps only the latest text of a kind, each
+  `board-ready` lists **every outstanding offer** (offered, still selected, not flagged), each marked *new* or
+  *offered before, not started yet* (id, title, size → workflow, whether its design waits for the human),
+  with the room left under the cap, and says it replaces the earlier ones. Offers live in memory (a restart
+  offers again). A failed wake-up keeps no offer, so the next evaluation tries again.
+- **Withdrawal.** A pause (as an evaluation finds it) or the switch turned off withdraws the outstanding
+  offers with a superseding `board-ready` (`withdrawText`): autopilot is paused (with its reason) or off, the
+  cards withdrawn, start nothing unless the human asks. A pause forgets the offers but the flagged ones, so
+  resuming offers them anew; with nothing outstanding (or no orchestrator) nobody is woken.
 - **Wake-ups go through the host's coalescing** (`wakeOrchestrator`, [[submodule-server-containers]] §
   Wake-ups), one card per kind in flight; the board never sends a raw chat message to the orchestrator.
 - **`board_card_start`** (§ Agent tools) is how the orchestrator starts a card; M and L cards still start on
   brainstorming, so their design waits for the human, and merging still needs the human's approval in chat.
+  On its own (no human message since its last reply) the orchestrator's start is refused while the
+  initiative's autopilot is off or paused, or the board's running agents are at `wipLimits.agents`.
 - **Human gates:** off by default, paused with its reason while a human-attention limit is past, the
   brainstorm workflow, the merge approval, and the switch the human turns off at any time (offers
-  forgotten); every start is logged with actor `automation`.
+  forgotten and withdrawn); every start is logged with actor `automation`.
 - **`AutopilotView`** (`autopilot.get`, `autopilot.ofContainer`): `{ projectId, initiativeId, title, on,
   pausedReason` (computed now, `null` while off)`, container { id, name, members, orchestrator { projectId,
   workspaceId, sessionId } | null } | null, running, cap, ready[{ id, title, size?, offered, stale }] }`.
@@ -309,13 +321,16 @@ approves nothing, moves no card, and the human still merges.
   card's description, else its title), what (the latest attempt's chat's plan summary and steps through the host's
   `planSummary` fact), how it was verified (the steps' verifications), conformance (the stored review with its
   tally), time (from the log: in started is the agent, in review is waiting for review) and the diff, with its
-  markdown (`renderPacket`: deterministic, the same inputs write the same bytes). It works once the workspace is
-  gone, without its plan and diff.
+  markdown (`renderPacket`: deterministic, the same inputs write the same bytes; `<!--` and `-->` in the
+  agents' free text become `&lt;!--` and `--&gt;`, `neutralizeComments`, so no summary reads as a marker). It
+  works once the workspace is gone, without its plan and diff.
 - **`card.packetToPr { cardId }`** upserts the markdown as the `## Review packet` section of the latest attempt's
   pull request through the user's `gh` (`gh pr view <n> --json body`, then `gh pr edit <n> --body-file`), the
   `Closes #N` pattern: only the text between `<!-- thinkrail:review-packet -->` and
   `<!-- /thinkrail:review-packet -->` changes (`upsertPacket`, the last complete pair; appended once otherwise),
-  and an unchanged body is not edited (`updated: false`). Refused without a pull request.
+  and an unchanged body is not edited (`updated: false`). Refused without a pull request. Every read-modify-write
+  of a workspace's PR body — this and the `Closes #N` check (§ Sources) — runs through one queue per workspace
+  (`editPrBody`), so neither edit drops the other's.
 - Deferred: the spec-drift check, risk-tier routing and the whole-mission review.
 
 ## Presets
@@ -365,12 +380,15 @@ The host service (`Board.listen`) subscribes to `agent.settled`, `workspace.upda
 - Every write publishes **`board.changed { projectId }`**, and so does a bound (or watched, § Sources)
   chat's `session.state` or workspace's review when its signature changes. The web side re-reads the
   board.
-- A bound (or watched) chat's tool start (`agent.tool`) publishes it too, **throttled per project**: at
-  once, then at most once per `ACTION_REFRESH_MS` (2 s) while starts keep coming, the last one included, so
-  a card's last action follows the agent without a re-read per tool. Stopping the service drops the timers.
+- A bound (or watched) chat's tool start (`agent.tool`) publishes **`board.activity { projectId }`** instead,
+  **throttled per project**: at once, then at most once per `ACTION_REFRESH_MS` (2 s) while starts keep
+  coming, the last one included, so a card's last action follows the agent without a re-read per tool. It
+  changes no state: the inbox does not re-read on it and autopilot does not evaluate. Stopping the service
+  drops the timers.
 - A project opening or closing (`project.opened` / `project.closed`) publishes it for that project, so the
   inbox, which lists the open projects' cards, re-reads.
-- A GitHub issue's card's open pull request gets its `Closes #N` check on that chain (§ Sources).
+- A GitHub issue's card's open pull request gets its `Closes #N` check on that chain (§ Sources), its body
+  edit queued per workspace with *Add to PR*'s (§ Smart review).
 
 ## Live overlay
 
@@ -629,7 +647,7 @@ The roadmap's queries (§ Roadmap) take the board's `projectId`; every write pub
 **The Board side tool** is `ext:board:board` (title *Board*, `RiKanbanView2`, default side left): it waits
 as a dimmed left-rail entry until opened, then lives in its own pane like Files. Its scope is the active
 workspace's project; it re-reads `board.get` when that workspace changes, after each of its own writes and
-on every `board.changed` for that project (`PanelHost.onEvent`), keeping the last board shown while a
+on every `board.changed` and `board.activity` for that project (`PanelHost.onEvent`), keeping the last board shown while a
 re-read is in flight. Loading, empty (*No cards yet — create one or ask the agent to break work down*) and
 error (with *Retry*) states replace the body; a failed write shows a dismissible notice.
 
@@ -648,7 +666,7 @@ error (with *Retry*) states replace the body; a failed write shows a dismissible
   *Refresh issues* and *Dismiss* (until the error changes); the board and the last good issues stay.
 - **Inbox** ("Needs you · N · All projects"): under the header, the `inbox` query's cards of every open
   project, re-read on any project's `board.changed` (which the host service also publishes when a bound
-  chat's state flips and when a project opens or closes). A row names the project, the card id and title (a click peeks the card), the reason
+  chat's state flips and when a project opens or closes), never on `board.activity`. A row names the project, the card id and title (a click peeks the card), the reason
   (*Question pending* / *Failed*, from the latest attempt's chat state) and *Answer* or *Retry*, both opening
   that attempt's chat (`PanelHost.openChat`) — Retry sends nothing. Chips that wrap when wide, a list when
   stacked; absent while nobody waits.
@@ -818,7 +836,7 @@ count). No chart library.
 
 **The initiative in Peek** is the `initiative` panel (scope `session`, params `{ projectId, initiativeId }`,
 the crumb `<id> · <title>`). It reads `roadmap.get` and `board.get` for that board and re-reads both on its
-writes and `board.changed`:
+writes and `board.changed` (`board.get` also on `board.activity`, for *Agents now*'s last action):
 
 - the id, horizon, health and *Proposed* (with *Accept* / *Discard*), the title, then the horizon, target
   date and appetite days (empty clears) and the parent (any initiative outside its subtree, or none), the
@@ -871,7 +889,7 @@ there. The center and the bottom keep the chat and the terminals, and leaving re
 
 **The card in Peek** is the `card` panel (scope `session`: it opens only from the board, with params
 `{ projectId, cardId }`, the crumb named `<id> · <title>`). It reads `card.get` and re-reads on
-`board.changed`:
+`board.changed` and `board.activity`:
 
 - the title (saved on Enter or blur), an issue's card's link (*Issue #N on GitHub*, saying an unstored one
   is kept by an edit or Start), type, size — a suggested size gets *Confirm size*, which re-saves it so it
@@ -965,7 +983,10 @@ id, else the attempt of its workspace (located from its cwd).
   initiative (the caller's session is the container's orchestrator) or a chat of one of its member
   workspaces. It refuses a chat in no container, a container that runs no initiative, a card of no initiative
   that container runs, and a card that is not ready, blocked (naming its open blockers) or has an open
-  attempt — in words; a size is not required. It starts the card through `startCard` with `into` the
+  attempt — in words; a size is not required. The orchestrator on its own — its turn answers no message of
+  the human (`answersHuman`: only host updates such as a `board-ready` since its last reply) — is refused
+  too while the initiative's autopilot is off, paused (as now) or the board runs `wipLimits.agents` agents.
+  It starts the card through `startCard` with `into` the
   container, the workflow given or the size's, `Note from the orchestrator of the container "…":` and the
   note appended to the kickoff, logged `automation` *started by the orchestrator of the container "…"*.
 - The tools that read a chat's board (`board_card_create`, `board_cards_list`, the roadmap's and discovery's)
@@ -977,8 +998,8 @@ id, else the attempt of its workspace (located from its cwd).
 
 While the session is the orchestrator of a container that runs an initiative, the board's session extension
 adds the `thinkrail-board-autopilot` system-prompt section in `before_agent_start` (`autopilotRule`): the
-initiative, that `board-run` / `board-ready` updates are host automation, how `board_card_start` starts a
-card, that M and L cards wait for the human's design approval, and to file follow-ups into Triage. Core's
+initiative, that `board-run` / `board-ready` updates are host automation (the latest `board-ready`
+replacing the earlier, one withdrawing them while paused or off), how `board_card_start` starts a card, that M and L cards wait for the human's design approval, and to file follow-ups into Triage. Core's
 orchestrator rule names no board tool; `board_card_start` carries no guideline of its own, so other chats'
 prompts stay as they were.
 
@@ -1020,13 +1041,18 @@ A capability's closing edit is a normal PR the user opens; the board writes no s
   - autopilot: the pure rules as tables (`autopilot.test.ts`: readiness by category, blocker category,
     activity and size; the pause order and the limits at, past and without a limit; the free slots; the
     selection; offers once, again once, then flagged, forgotten when no longer ready, no due time in the
-    past) and, through the queries and tools over the fake host's containers (`autopilotService.test.ts`),
+    past; the outstanding offers; a flagged card's slot going to the next ready card) and, through the
+    queries and tools over the fake host's containers (`autopilotService.test.ts`),
     Run making a container of the first ready card with its orchestrator and `board-run` brief (logged
     `automation`), Run reusing a container and its refusals, the switch needing a container, `board-ready`
-    offers capped by the agents' room and deduplicated over the retry, the pause recorded and lifted, a gone
+    offers capped by the agents' room and deduplicated over the retry, each listing every outstanding
+    offer, the pause recorded and lifted, the withdrawal on a pause and on the switch turned off, a
+    switch-off while an evaluation reads its inputs or wakes (nothing recorded, offered or woken), the
+    debounce evaluating under load and not on tool starts, a gone
     container switching autopilot off, a human's Start joining the container, `board_card_start`'s start
     into the container with its note and its refusals (no container, no initiative, another initiative's
-    card, not ready, blocked, unknown), a member chat's start, and the orchestrator's prompt section;
+    card, not ready, blocked, unknown; on its own: autopilot off, paused, the agents' limit), `answersHuman`,
+    a member chat's start, and the orchestrator's prompt section;
   - the roadmap: the derivations each on their own (`rollups`, `throughput` with the day helpers, `forecast`'s
     determinism and not-enough-data, `health`'s rule table, `schedule` with pins, conflicts, milestones,
     cycles and per-initiative critical paths) and, through the queries (`roadmap.test.ts`), validation,
@@ -1046,7 +1072,7 @@ A capability's closing edit is a normal PR the user opens; the board writes no s
     and through the queries over the fake host `card.review` (running, refused twice, the verdicts stored, one
     comment for the unmet line under *Smart review*, not again on a re-run, its refusals, a failure kept on the
     card), `card.packet` from the plan fact and `card.packetToPr` through a fake `gh` (one edit, then none; refused
-    without a PR; a gh failure passed on);
+    without a PR; a gh failure passed on), a summary carrying the markers neutralized;
   - `index.test.ts`: `skillPackages` resolves to the eight skills (names matching their folders, *Use when*
     descriptions), every roadmap and discovery chat names one, and each names only registered `board_*` tools
     and web-access's (as its SPEC names them), the spec graph's and `ask_user_question`;
@@ -1061,7 +1087,7 @@ A capability's closing edit is a normal PR the user opens; the board writes no s
     refused writes, watched chats, deferrals sent once and their parsing; GitHub through a fake `gh`
     (argv, the Default workspace, the TTL, Refresh, the filter, the error kept beside the last issues,
     storing on edit / move / start, the kickoff, `Closes #N` appended only when missing, the PR body only,
-    the retry); size suggestions (strict parsing, a human's size never overwritten, skipped without a
+    the retry, queued with a concurrent *Add to PR*); size suggestions (strict parsing, a human's size never overwritten, skipped without a
     model or switched off or for an agent's card, the debounce, issues' cards).
 - **Host-level, smart review**: `extensionActions.test.ts` covers `reviewConformance` (under the latest chat or
   the named one, with the services' signal; refused while switched off, for a chat workspace, bad requirements or

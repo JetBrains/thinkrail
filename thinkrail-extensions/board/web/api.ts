@@ -24,6 +24,8 @@ export const WORKFLOWS: readonly Workflow[] = ["implement", "brainstorm"];
 export const PRESETS: readonly Preset[] = ["agentic-kanban", "solo", "spec-driven"];
 export const GITHUB_FILTERS: readonly GithubFilter[] = ["open", "mine"];
 export const BOARD_CHANGED = "board.changed";
+/** A bound chat's tool start: only cards' last actions moved, so tiles re-read and the inbox does not. */
+export const BOARD_ACTIVITY = "board.activity";
 export const CARD_PANEL = "card";
 /** The board's `layoutPresets` entry: Board mode. */
 export const BOARD_MODE = "board";

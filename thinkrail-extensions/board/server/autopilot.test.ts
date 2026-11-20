@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+	flagged,
 	freeSlots,
 	OFFER_RETRY_MS,
 	type Offer,
@@ -163,6 +164,7 @@ describe("autopilot offers", () => {
 			offer: ["TR-1"],
 			stale: [],
 			offers: offers([["TR-1", { at, times: 1 }]]),
+			outstanding: ["TR-1"],
 			dueAt: at + OFFER_RETRY_MS,
 		});
 		const waiting = planOffers(["TR-1"], ["TR-1"], first.offers, at + OFFER_RETRY_MS - 1);
@@ -171,16 +173,17 @@ describe("autopilot offers", () => {
 		const again = planOffers(["TR-1"], ["TR-1"], first.offers, at + OFFER_RETRY_MS);
 		expect(again.offer).toEqual(["TR-1"]);
 		expect(again.offers.get("TR-1")).toEqual({ at: at + OFFER_RETRY_MS, times: 2 });
-		const flagged = planOffers(["TR-1"], ["TR-1"], again.offers, at + 2 * OFFER_RETRY_MS);
-		expect(flagged).toEqual({
+		const flaggedPlan = planOffers(["TR-1"], ["TR-1"], again.offers, at + 2 * OFFER_RETRY_MS);
+		expect(flaggedPlan).toEqual({
 			offer: [],
 			stale: ["TR-1"],
 			offers: again.offers,
+			outstanding: [],
 			dueAt: null,
 		});
-		expect(planOffers(["TR-1"], ["TR-1"], flagged.offers, at + 9 * OFFER_RETRY_MS).offer).toEqual(
-			[],
-		);
+		expect(
+			planOffers(["TR-1"], ["TR-1"], flaggedPlan.offers, at + 9 * OFFER_RETRY_MS).offer,
+		).toEqual([]);
 	});
 
 	test("a card no longer ready is forgotten, one held back by the limits keeps its offer", () => {
@@ -200,7 +203,7 @@ describe("autopilot offers", () => {
 	test("an offer past due while held back sets no due time in the past", () => {
 		const previous = offers([["TR-1", { at, times: 1 }]]);
 		const plan = planOffers([], ["TR-1"], previous, at + 2 * OFFER_RETRY_MS);
-		expect(plan).toEqual({ offer: [], stale: [], offers: previous, dueAt: null });
+		expect(plan).toEqual({ offer: [], stale: [], offers: previous, outstanding: [], dueAt: null });
 	});
 
 	test("new cards are offered beside ones still waiting, and the retry is a parameter", () => {
@@ -213,5 +216,63 @@ describe("autopilot offers", () => {
 		expect(plan.offers.get("TR-1")).toEqual({ at: at + 10, times: 2 });
 		expect(plan.offers.get("TR-2")).toEqual({ at: at + 10, times: 1 });
 		expect(plan.dueAt).toBe(at + 20);
+	});
+
+	test("every offer still selected and not flagged is outstanding, by rank, the waiting ones included", () => {
+		const previous = offers([
+			["TR-3", { at, times: 1 }],
+			["TR-1", { at, times: 1 }],
+			["TR-4", { at, times: 2 }],
+		]);
+		const plan = planOffers(
+			["TR-1", "TR-2", "TR-3"],
+			["TR-1", "TR-2", "TR-3", "TR-4"],
+			previous,
+			at + OFFER_RETRY_MS,
+		);
+		expect(plan.offer).toEqual(["TR-1", "TR-2", "TR-3"]);
+		expect(plan.stale).toEqual(["TR-4"]);
+		expect(plan.outstanding).toEqual(["TR-1", "TR-2", "TR-3"]);
+		const later = planOffers(
+			["TR-1", "TR-5"],
+			["TR-1", "TR-5"],
+			plan.offers,
+			at + OFFER_RETRY_MS + 1,
+		);
+		expect(later.offer).toEqual(["TR-5"]);
+		expect(later.outstanding).toEqual(["TR-1", "TR-5"]);
+	});
+
+	test("a flagged card takes no free slot, so the next ready card is offered in its place", () => {
+		const cards = [card("A", { rank: 1 }), card("D", { rank: 2 })];
+		const room = wip({ agents: [2, 3] });
+		let previous = new Map<string, Offer>();
+		const steps: { selected: string[]; offer: string[]; stale: string[] }[] = [];
+		for (let step = 0; step < 4; step += 1) {
+			const now = at + step * OFFER_RETRY_MS;
+			const selection = select(cards, room, {
+				orchestrator: true,
+				held: flagged(previous, now),
+			});
+			const plan = planOffers(
+				selection.selected.map((entry) => entry.id),
+				selection.ready.map((entry) => entry.id),
+				previous,
+				now,
+			);
+			previous = plan.offers;
+			steps.push({
+				selected: selection.selected.map((entry) => entry.id),
+				offer: plan.offer,
+				stale: plan.stale,
+			});
+		}
+		expect(steps).toEqual([
+			{ selected: ["A"], offer: ["A"], stale: [] },
+			{ selected: ["A"], offer: ["A"], stale: [] },
+			{ selected: ["D"], offer: ["D"], stale: ["A"] },
+			{ selected: ["D"], offer: ["D"], stale: ["A"] },
+		]);
+		expect(flagged(previous, at + 3 * OFFER_RETRY_MS)).toEqual(new Set(["A"]));
 	});
 });

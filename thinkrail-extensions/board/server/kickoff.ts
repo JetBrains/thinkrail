@@ -1,4 +1,12 @@
-import type { Card, Evidence, Idea, Initiative, WatchEntry, Workflow } from "./model";
+import type {
+	AutopilotPause,
+	Card,
+	Evidence,
+	Idea,
+	Initiative,
+	WatchEntry,
+	Workflow,
+} from "./model";
 
 /** What a card's kickoff says about why it exists: its initiative and its project and milestone. */
 export interface KickoffContext {
@@ -397,11 +405,13 @@ export function runBrief(input: {
 	return lines.join("\n");
 }
 
-/** The `board-ready` wake-up: the cards autopilot selected now, with the room the limits leave. */
+/**
+ * The `board-ready` wake-up: every card autopilot offers now — the new ones and those offered before and
+ * not started yet — with the room the limits leave. Each one replaces the last, so the latest lists them all.
+ */
 export function readyText(input: {
 	initiative: Pick<Initiative, "id" | "title">;
-	cards: readonly PilotLine[];
-	again: readonly string[];
+	cards: readonly (PilotLine & { fresh: boolean })[];
 	running: number;
 	cap: number;
 	retryMinutes: number;
@@ -412,23 +422,50 @@ export function readyText(input: {
 			: `${input.running} agents run on the board, with no cap`;
 	const lines = [
 		`Autopilot of initiative ${input.initiative.id} "${input.initiative.title.trim()}": ${input.cards.length === 1 ? "this card is" : "these cards are"} ready to start (${room}):`,
-		...input.cards.map(pilotLine),
-	];
-	if (input.again.length > 0)
-		lines.push(`Offered again, not started yet: ${input.again.join(", ")}.`);
-	lines.push(
+		...input.cards.map(
+			(card) => `${pilotLine(card)} · ${card.fresh ? "new" : "offered before, not started yet"}`,
+		),
+		"This list replaces every earlier board-ready update: it names all the cards autopilot offers now.",
 		"",
 		START_HOW,
 		`A card not started within ${input.retryMinutes} minutes is offered once more, then flagged on the board as not started by you.`,
-	);
+	];
 	return lines.join("\n");
+}
+
+/** A pause reason in words: the limit that is past, or the missing orchestrator. */
+export function pauseLine(pause: AutopilotPause): string {
+	switch (pause.kind) {
+		case "review":
+			return `Review is over its limit (${pause.count}/${pause.limit})`;
+		case "needs_you":
+			return `Needs you is over its limit (${pause.count}/${pause.limit})`;
+		case "orchestrator":
+			return "the container has no orchestrator";
+	}
+}
+
+/** The `board-ready` wake-up that withdraws the offers: autopilot is off, or paused with its reason. */
+export function withdrawText(input: {
+	initiative: Pick<Initiative, "id" | "title">;
+	withdrawn: readonly string[];
+	pause: AutopilotPause | null;
+}): string {
+	const name = `Autopilot of initiative ${input.initiative.id} "${input.initiative.title.trim()}"`;
+	return [
+		input.pause
+			? `${name} is paused: ${pauseLine(input.pause)}.`
+			: `${name} is off: the human switched it off.`,
+		`It withdraws the cards it offered (${input.withdrawn.join(", ")}): start nothing unless the human asks you to in this chat.${input.pause ? " A new board-ready update lists the cards once it resumes." : ""}`,
+		"This replaces every earlier board-ready update.",
+	].join("\n");
 }
 
 /** The orchestrator's system-prompt section while its container runs an initiative, fed by the board. */
 export function autopilotRule(initiatives: readonly Pick<Initiative, "id" | "title">[]): string {
 	const named = initiatives.map((initiative) => `${initiative.id} "${initiative.title.trim()}"`);
 	return [
-		`This container runs the board initiative${named.length === 1 ? "" : "s"} ${named.join(", ")}. Updates from the Board extension (board-run, board-ready) are host automation, not the human: a board-ready update lists the cards autopilot selected to start now.`,
+		`This container runs the board initiative${named.length === 1 ? "" : "s"} ${named.join(", ")}. Updates from the Board extension (board-run, board-ready) are host automation, not the human: a board-ready update lists the cards autopilot selected to start now, the latest replacing the earlier ones, and one withdraws them while autopilot is paused or off.`,
 		`- ${START_HOW} M and L cards start with brainstorming, so their design waits for the human's approval.`,
 		"- File follow-ups with board_card_create (into Triage); never start cards the update did not list unless the human asks.",
 	].join("\n");

@@ -89,25 +89,29 @@ export function freeSlots(agents: PilotCount): number {
 export interface Selection {
 	/** Every ready card, by rank, whatever the limits. */
 	ready: PilotCard[];
-	/** The ready cards the limits allow now: none while paused, at most the free agent slots. */
+	/** The ready cards the limits allow now, held-back ones aside: none while paused, at most the free agent slots. */
 	selected: PilotCard[];
 	pause: AutopilotPause | null;
 	running: number;
 	cap: number;
 }
 
-/** The host decides *when*: which of the initiative's cards may start now. */
+/**
+ * The host decides *when*: which of the initiative's cards may start now. The `held` cards (flagged: the
+ * orchestrator didn't start them) take no slot, so the next ready cards get it.
+ */
 export function select(
 	cards: readonly PilotCard[],
 	wip: PilotWip,
-	{ orchestrator }: { orchestrator: boolean },
+	{ orchestrator, held = new Set() }: { orchestrator: boolean; held?: ReadonlySet<string> },
 ): Selection {
 	const ready = readyCards(cards);
 	const pause = pauseOf(wip, orchestrator);
 	const slots = pause ? 0 : freeSlots(wip.agents);
+	const candidates = ready.filter((card) => !held.has(card.id));
 	return {
 		ready,
-		selected: ready.slice(0, Number.isFinite(slots) ? slots : ready.length),
+		selected: candidates.slice(0, Number.isFinite(slots) ? slots : candidates.length),
 		pause,
 		running: wip.agents.count,
 		cap: wip.agents.limit,
@@ -127,8 +131,24 @@ export interface OfferPlan {
 	stale: string[];
 	/** The offers to keep: a card that is no longer ready is forgotten. */
 	offers: Map<string, Offer>;
+	/** Every offer the orchestrator may act on now, by rank: offered, still selected and not flagged. */
+	outstanding: string[];
 	/** When an offer next falls due (a re-offer or a flag), after `now`; else `null`. */
 	dueAt: number | null;
+}
+
+const flaggedAt = (offer: Offer, now: number, retryMs: number) =>
+	offer.times === 2 && now >= offer.at + retryMs;
+
+/** The offered cards the orchestrator didn't start: offered twice, the second time `retryMs` ago or more. */
+export function flagged(
+	offers: ReadonlyMap<string, Offer>,
+	now: number,
+	retryMs: number = OFFER_RETRY_MS,
+): Set<string> {
+	return new Set(
+		[...offers].filter(([, offer]) => flaggedAt(offer, now, retryMs)).map(([id]) => id),
+	);
 }
 
 /** No flood: each selected card is offered once, again once after `retryMs`, then flagged. */
@@ -157,8 +177,9 @@ export function planOffers(
 	let dueAt: number | null = null;
 	for (const [id, last] of offers) {
 		const due = last.at + retryMs;
-		if (last.times === 2 && now >= due) stale.push(id);
+		if (flaggedAt(last, now, retryMs)) stale.push(id);
 		else if (due > now) dueAt = dueAt === null ? due : Math.min(dueAt, due);
 	}
-	return { offer, stale, offers, dueAt };
+	const outstanding = selected.filter((id) => offers.has(id) && !stale.includes(id));
+	return { offer, stale, offers, outstanding, dueAt };
 }

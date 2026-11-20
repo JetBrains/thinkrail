@@ -47,8 +47,13 @@ export interface TestHost {
 	sent: { sessionId: string; text: string; mode: string }[];
 	/** Every `runInWorkspace`, in order. */
 	runs: { workspaceId: string; argv: string[] }[];
-	/** Answers a `runInWorkspace` (the fake `gh`); by default a failed run. */
-	run: { answer: (argv: readonly string[], workspaceId: string) => ExtensionRunResult };
+	/** Answers a `runInWorkspace` (the fake `gh`), at once or later; by default a failed run. */
+	run: {
+		answer: (
+			argv: readonly string[],
+			workspaceId: string,
+		) => ExtensionRunResult | Promise<ExtensionRunResult>;
+	};
 	/** Every `writeWorkspaceFile`, in order; a path in `refusePaths` is refused like the host would. */
 	writes: ExtensionWriteWorkspaceFileParams[];
 	refusePaths: Set<string>;

@@ -1,6 +1,6 @@
 import type { PanelHost } from "@thinkrail/extension-api/web";
 import { useCallback, useEffect, useEffectEvent, useState } from "react";
-import { BOARD_CHANGED } from "./api";
+import { BOARD_ACTIVITY, BOARD_CHANGED } from "./api";
 
 export type Loaded<T> =
 	| { kind: "loading" }
@@ -59,20 +59,38 @@ export function useHostQuery<T>(
 	return { state: { kind: "loading" }, reload };
 }
 
+function useProjectEvent(
+	host: Pick<PanelHost, "onEvent">,
+	type: string,
+	projectId: string | null,
+	onEvent: () => void,
+): void {
+	const fire = useEffectEvent(onEvent);
+	useEffect(() => {
+		if (projectId === null) return;
+		return host.onEvent(type, (payload) => {
+			const event = typeof payload === "object" && payload !== null ? payload : {};
+			if ((event as { projectId?: unknown }).projectId === projectId) fire();
+		});
+	}, [host, type, projectId]);
+}
+
 /** Calls `onChange` on every `board.changed` the server half publishes for `projectId`. */
 export function useBoardChanged(
 	host: Pick<PanelHost, "onEvent">,
 	projectId: string | null,
 	onChange: () => void,
 ): void {
-	const changed = useEffectEvent(onChange);
-	useEffect(() => {
-		if (projectId === null) return;
-		return host.onEvent(BOARD_CHANGED, (payload) => {
-			const event = typeof payload === "object" && payload !== null ? payload : {};
-			if ((event as { projectId?: unknown }).projectId === projectId) changed();
-		});
-	}, [host, projectId]);
+	useProjectEvent(host, BOARD_CHANGED, projectId, onChange);
+}
+
+/** Calls `onActivity` on every `board.activity` of `projectId`: a bound chat's tool start, for the last action. */
+export function useBoardActivity(
+	host: Pick<PanelHost, "onEvent">,
+	projectId: string | null,
+	onActivity: () => void,
+): void {
+	useProjectEvent(host, BOARD_ACTIVITY, projectId, onActivity);
 }
 
 /** Calls `onChange` on every `board.changed` of any project: a write, or a bound chat's state or PR. */

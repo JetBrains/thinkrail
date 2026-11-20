@@ -86,7 +86,7 @@ import {
 	updateInitiative,
 	updateMilestone,
 } from "./roadmapApi";
-import { useBoardChanged, useHostQuery } from "./useHostQuery";
+import { useBoardActivity, useBoardChanged, useHostQuery } from "./useHostQuery";
 
 type Write = (run: () => Promise<unknown>) => void;
 
@@ -1199,6 +1199,7 @@ export default function InitiativePanel({ host, params }: PanelProps) {
 		board.reload();
 		autopilot.reload();
 	});
+	useBoardActivity(host, projectId, board.reload);
 	const write: Write = (run) =>
 		void run().then(
 			() => {

@@ -9,6 +9,7 @@ import { Board, type BoardView, type CardDetail } from "./board";
 import { closesIssue, issueListArgv, parseIssues, withCloses } from "./github";
 import type { Card } from "./model";
 import { boardQueries } from "./queries";
+import { PACKET_START } from "./review";
 import { parseSize, wantsSize } from "./sizing";
 import { parseDeferrals } from "./taskSpecs";
 import { createTestHost, facts, project, ran, type TestHost } from "./testHost";
@@ -545,6 +546,39 @@ describe("the GitHub source", () => {
 		await board.idle();
 		expect(board.find("TR-1").category).toBe("completed");
 		service();
+	});
+
+	test("Add to PR and the Closes check edit the PR's body one at a time, so neither drops the other's", async () => {
+		const { t, board, query } = setup();
+		const gh = fakeGh(t);
+		await query("github.set", { projectId: "p1", enabled: true });
+		await board.idle();
+		const { card } = await query<{ card: Card }>("card.start", { cardId: "#8", projectId: "p1" });
+		const workspaceId = card.attempts[0]?.workspaceId ?? "";
+		const review = { kind: "pull-request", number: 31, state: "open" } as const;
+		t.facts.set(workspaceId, facts(workspaceId, { review }));
+		const issues = t.run.answer;
+		t.run.answer = async (argv, at) => {
+			if (argv[1] === "pr" && argv[2] === "view") {
+				const body = gh.prBody.value;
+				await Bun.sleep(10);
+				return ran(JSON.stringify({ body }));
+			}
+			if (argv[1] === "pr" && argv[2] === "edit") {
+				gh.prBody.value = readFileSync(argv[argv.indexOf("--body-file") + 1] ?? "", "utf8");
+				return ran("");
+			}
+			return issues(argv, at);
+		};
+		const stop = board.listen();
+		const packet = query("card.packetToPr", { cardId: card.id });
+		t.emit("workspace.updated", { id: workspaceId, review } as never);
+		await packet;
+		await board.idle();
+		expect(gh.prBody.value).toContain("Closes #8");
+		expect(gh.prBody.value).toContain(PACKET_START);
+		expect(board.find(card.id).attempts[0]?.closesLinked).toBe(31);
+		stop();
 	});
 
 	test("a failed Closes check is retried later, not on every refresh", async () => {

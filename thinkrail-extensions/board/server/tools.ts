@@ -1,5 +1,5 @@
 import { isAbsolute, relative } from "node:path";
-import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionFactory, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import type { Activity } from "./activity";
 import type { Board, CardDeferrals } from "./board";
@@ -82,6 +82,24 @@ const StartParams = Type.Object({
 
 /** The orchestrator's system-prompt section while its container runs an initiative. */
 export const AUTOPILOT_SECTION = "thinkrail-board-autopilot";
+
+/**
+ * Whether the chat's current turn answers the human: the latest messages it acts on (those after its last
+ * reply) include one the human wrote, not only host updates such as a `board-ready` wake-up.
+ */
+export function answersHuman(branch: readonly SessionEntry[]): boolean {
+	let prompted = false;
+	for (let index = branch.length - 1; index >= 0; index -= 1) {
+		const entry = branch[index];
+		if (entry?.type === "custom_message") prompted = true;
+		else if (entry?.type === "message") {
+			const { role } = entry.message;
+			if (role === "user") return true;
+			if (role === "assistant" && prompted) return false;
+		}
+	}
+	return false;
+}
 
 const NoteParams = Type.Object({
 	text: Type.String({ description: "A short progress note for the human, in one or two lines." }),
@@ -973,7 +991,7 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 			name: "board_card_start",
 			label: "Start a board card",
 			description:
-				"Start a card of the initiative this container runs as a new workspace of this container, on the card's kickoff with your note appended. For a container's orchestrator (or a chat of one of its workspaces); only ready, unblocked cards of that initiative start.",
+				"Start a card of the initiative this container runs as a new workspace of this container, on the card's kickoff with your note appended. For a container's orchestrator (or a chat of one of its workspaces); only ready, unblocked cards of that initiative start. Unless the human asked for it, the orchestrator's start also needs the initiative's autopilot on and not paused, and an agent slot under the board's limit.",
 			promptSnippet:
 				"board_card_start — start a card of this container's initiative as a new member workspace.",
 			parameters: StartParams,
@@ -985,6 +1003,7 @@ export function createBoardTools(board: () => Board | undefined): ExtensionFacto
 					{
 						...(params.workflow ? { workflow: params.workflow } : {}),
 						...(params.note ? { note: params.note } : {}),
+						automated: !answersHuman(ctx.sessionManager.getBranch()),
 					},
 				);
 				const { card, attempt, container } = started;

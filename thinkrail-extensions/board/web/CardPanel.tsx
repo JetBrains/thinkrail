@@ -48,7 +48,7 @@ import { ACTOR_LABELS, columnTitle, TYPE_LABELS, WORKFLOW_LABELS } from "./label
 import { OpenspecSection } from "./OpenspecParts";
 import { SmartReviewSection } from "./SmartReview";
 import { StartSection } from "./StartSection";
-import { useBoardChanged, useHostQuery } from "./useHostQuery";
+import { useBoardActivity, useBoardChanged, useHostQuery } from "./useHostQuery";
 
 function placementText(t: Translator, placement: Transition["from"]): string {
 	return placement ? columnTitle(t, placement.column) : t("board.activity.none");
@@ -663,6 +663,7 @@ export default function CardPanel({ host, params }: PanelProps) {
 	const projectId =
 		card.state.kind === "ready" ? card.state.value.projectId : (params.projectId ?? null);
 	useBoardChanged(host, projectId, card.reload);
+	useBoardActivity(host, projectId, card.reload);
 	const currentId = card.state.kind === "ready" ? card.state.value.card.id : cardId;
 	const write = (run: () => Promise<unknown>) =>
 		run().then(

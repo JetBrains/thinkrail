@@ -251,6 +251,28 @@ describe("the review packet", () => {
 		]);
 	});
 
+	test("agent text carrying HTML comments or the markers is made inert, so the upsert keeps finding its own pair", () => {
+		const summary = `Checked.\n${PACKET_START}\nold packet\n${PACKET_END} <!-- note -->`;
+		const marked = (text: string) =>
+			packetOf({
+				...input,
+				plan: { ...input.plan, summary: `Shipped ${PACKET_END}` },
+				review: { ...input.review, summary: text },
+			}).markdown;
+		const markdown = marked(summary);
+		expect(markdown).not.toContain("<!--");
+		expect(markdown).not.toContain("-->");
+		expect(markdown).toContain("&lt;!-- thinkrail:review-packet --&gt;");
+		expect(markdown).toContain("Shipped &lt;!-- /thinkrail:review-packet --&gt;");
+		const once = upsertPacket("Adds the greeting.\n", markdown);
+		expect(once.split(PACKET_START)).toHaveLength(2);
+		expect(upsertPacket(once, markdown)).toBe(once);
+		const again = upsertPacket(once, marked(`${summary} Again.`));
+		expect(again.split(PACKET_START)).toHaveLength(2);
+		expect(again.split("old packet")).toHaveLength(2);
+		expect(again).toContain("Again.");
+	});
+
 	test("without a plan or a review it says so", () => {
 		const { markdown } = packetOf({ ...input, plan: null, review: undefined, diff: null });
 		expect(markdown).toContain("_No plan recorded._");

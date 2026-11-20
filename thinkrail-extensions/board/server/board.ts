@@ -12,7 +12,7 @@ import type {
 	ThinkingLevel,
 	Workspace,
 } from "@thinkrail/extension-api/server";
-import { type PilotCard, type PilotWip, select, type Unready, unready } from "./autopilot";
+import { type PilotCard, type PilotWip, pauseOf, select, type Unready, unready } from "./autopilot";
 import { Autopilot, type AutopilotView } from "./autopilotService";
 import { isoOfDay, today } from "./days";
 import { Discovery } from "./discovery";
@@ -38,6 +38,7 @@ import {
 	openspecApplyKickoff,
 	openspecArchiveMessage,
 	openspecProposeKickoff,
+	pauseLine,
 	type RoadmapChat,
 	roadmapKickoff,
 	runBrief,
@@ -125,6 +126,8 @@ import {
 } from "./taskSpecs";
 
 export const BOARD_CHANGED = "board.changed";
+/** A bound chat's tool start: only a card's last action changed, so a tile re-reads and nothing else. */
+export const BOARD_ACTIVITY = "board.activity";
 /** At most this many requirements go to one smart review (the host's own limit). */
 const REVIEW_REQUIREMENTS_MAX = 200;
 
@@ -549,6 +552,23 @@ function unreadyRefusal(cardId: string, reason: Unready): string {
 	}
 }
 
+/**
+ * Why the orchestrator may not start a card on its own: the initiative's autopilot is off or paused, or
+ * the board runs as many agents as its limit; `null` when it may.
+ */
+function autopilotRefusal(initiative: Initiative, wip: PilotWip, cardId: string): string | null {
+	const name = `${initiative.id} "${initiative.title.trim()}"`;
+	if (initiative.autopilot?.on !== true)
+		return `Autopilot of ${name} is off, so the board starts nothing on its own: start ${cardId} only when the human asks you to in this chat.`;
+	const pause = pauseOf(wip, true);
+	if (pause)
+		return `Autopilot of ${name} is paused: ${pauseLine(pause)}. Start nothing until it resumes, unless the human asks you to in this chat.`;
+	const { count, limit } = wip.agents;
+	if (limit > 0 && count >= limit)
+		return `The board already runs ${count} of ${limit} agents, its limit: ${cardId} may start once one of them finishes.`;
+	return null;
+}
+
 /** One board service per data folder: the store, the rules over host events and the queries' reads. */
 export class Board {
 	readonly host: ExtensionHostServices;
@@ -574,6 +594,8 @@ export class Board {
 	/** Smart reviews running now, by card id, and the last failure of each card's. */
 	private readonly reviewing = new Map<string, Promise<void>>();
 	private readonly reviewFailures = new Map<string, string>();
+	/** Each workspace's PR-description edits in flight, chained: one read-modify-write of a body at a time. */
+	private readonly prBodies = new Map<string, Promise<unknown>>();
 	readonly autopilot: Autopilot;
 
 	constructor(host: ExtensionHostServices, options: BoardOptions = {}) {
@@ -1986,8 +2008,8 @@ export class Board {
 		};
 	}
 
-	/** The autopilot switch: on needs the initiative's container; off forgets its offers. */
-	setAutopilot(projectId: string, initiativeId: string, on: boolean): Initiative {
+	/** The autopilot switch: on needs the initiative's container; off forgets its offers and withdraws them. */
+	async setAutopilot(projectId: string, initiativeId: string, on: boolean): Promise<Initiative> {
 		this.project(projectId);
 		const initiative = this.roadmap.initiativeById(projectId, initiativeId);
 		if (on && !initiative.containerId)
@@ -1999,8 +2021,8 @@ export class Board {
 			initiative.id,
 			on ? { ...initiative.autopilot, on: true } : { on: false },
 		);
-		if (!on) this.autopilot.forget(projectId, initiative.id);
 		this.autopilot.schedule();
+		if (!on) await this.autopilot.switchedOff(projectId, next);
 		return next;
 	}
 
@@ -2040,13 +2062,15 @@ export class Board {
 
 	/**
 	 * `board_card_start`: a ready, unblocked card of an initiative the caller's container runs, started into
-	 * that container like Start, the note appended to its kickoff and the start logged `automation`.
+	 * that container like Start, the note appended to its kickoff and the start logged `automation`. The
+	 * orchestrator acting on its own (`automated`: no human asked in its chat) also needs the initiative's
+	 * autopilot on, not paused, and an agent slot under the board's limit.
 	 */
 	async startForContainer(
 		sessionId: string,
 		cwd: string,
 		id: string,
-		options: { workflow?: Workflow; note?: string },
+		options: { workflow?: Workflow; note?: string; automated?: boolean },
 	): Promise<{
 		card: Card;
 		attempt: Attempt;
@@ -2075,10 +2099,18 @@ export class Board {
 				`${card.id} is not a card of ${names}, which the container "${container.name}" runs; board_card_start starts only that initiative's cards.`,
 			);
 		}
-		const { cards } = await this.pilotInputs(owner.projectId, owner.initiative);
+		const { cards, wip } = await this.pilotInputs(owner.projectId, owner.initiative);
 		const pilot = cards.find((candidate) => candidate.id === card.id);
 		const reason = pilot ? unready(pilot, { sized: false }) : null;
 		if (reason) throw new Error(unreadyRefusal(card.id, reason));
+		if (options.automated && container.orchestrator?.sessionId === sessionId) {
+			const refusal = autopilotRefusal(
+				this.roadmap.initiativeById(owner.projectId, owner.initiative.id),
+				wip,
+				card.id,
+			);
+			if (refusal) throw new Error(refusal);
+		}
 		const note = options.note?.trim();
 		const from = `the orchestrator of the container "${container.name}"`;
 		const result = await this.startCard(card.id, {
@@ -2288,21 +2320,39 @@ export class Board {
 				argv,
 				timeoutMs: GH_TIMEOUT_MS,
 			});
-		const viewed = await run(["gh", "pr", "view", String(pr.number), "--json", "body"]);
-		if (!viewed.ok) throw new Error(runError(viewed, "gh pr view"));
-		const body = parsePrBody(viewed.out);
-		if (body === null) throw new Error("gh pr view answered no description.");
-		const next = upsertPacket(body, markdown);
 		const answer = { cardId: card.id, pr: pr.number, ...(pr.url ? { url: pr.url } : {}) };
-		if (next === body) return { ...answer, updated: false };
-		const path = this.store.writeScratch(projectId, `pr-${pr.number}-packet.md`, next);
-		try {
-			const edited = await run(["gh", "pr", "edit", String(pr.number), "--body-file", path]);
-			if (!edited.ok) throw new Error(runError(edited, "gh pr edit"));
-		} finally {
-			this.store.removeScratch(path);
-		}
-		return { ...answer, updated: true };
+		const updated = await this.editPrBody(attempt.workspaceId, async () => {
+			const viewed = await run(["gh", "pr", "view", String(pr.number), "--json", "body"]);
+			if (!viewed.ok) throw new Error(runError(viewed, "gh pr view"));
+			const body = parsePrBody(viewed.out);
+			if (body === null) throw new Error("gh pr view answered no description.");
+			const next = upsertPacket(body, markdown);
+			if (next === body) return false;
+			const path = this.store.writeScratch(projectId, `pr-${pr.number}-packet.md`, next);
+			try {
+				const edited = await run(["gh", "pr", "edit", String(pr.number), "--body-file", path]);
+				if (!edited.ok) throw new Error(runError(edited, "gh pr edit"));
+			} finally {
+				this.store.removeScratch(path);
+			}
+			return true;
+		});
+		return { ...answer, updated };
+	}
+
+	/**
+	 * Runs one read-modify-write of a workspace's PR description after the ones before it (the review
+	 * packet, `Closes #N`), so neither edit is lost to the other.
+	 */
+	private editPrBody<T>(workspaceId: string, edit: () => Promise<T>): Promise<T> {
+		const previous = this.prBodies.get(workspaceId) ?? Promise.resolve();
+		const result = previous.then(edit);
+		const settled = result.catch(() => undefined);
+		this.prBodies.set(workspaceId, settled);
+		void settled.then(() => {
+			if (this.prBodies.get(workspaceId) === settled) this.prBodies.delete(workspaceId);
+		});
+		return result;
 	}
 
 	private async changeForAction(
@@ -2625,11 +2675,12 @@ export class Board {
 			this.linkRetry.set(key, this.now() + LINK_RETRY_MS);
 			this.host.log.warn(`linking PR #${pr} to issue #${source.number} failed: ${message}`);
 		};
-		const viewed = await run(["gh", "pr", "view", String(pr), "--json", "body"]);
-		if (!viewed.ok) return failed(runError(viewed, "gh pr view"));
-		const body = parsePrBody(viewed.out);
-		if (body === null) return failed("gh pr view answered no body");
-		if (!closesIssue(body, source.number)) {
+		const problem = await this.editPrBody(workspaceId, async (): Promise<string | null> => {
+			const viewed = await run(["gh", "pr", "view", String(pr), "--json", "body"]);
+			if (!viewed.ok) return runError(viewed, "gh pr view");
+			const body = parsePrBody(viewed.out);
+			if (body === null) return "gh pr view answered no body";
+			if (closesIssue(body, source.number)) return null;
 			const path = this.store.writeScratch(
 				bound.projectId,
 				`pr-${pr}-body.md`,
@@ -2637,11 +2688,12 @@ export class Board {
 			);
 			try {
 				const edited = await run(["gh", "pr", "edit", String(pr), "--body-file", path]);
-				if (!edited.ok) return failed(runError(edited, "gh pr edit"));
+				return edited.ok ? null : runError(edited, "gh pr edit");
 			} finally {
 				this.store.removeScratch(path);
 			}
-		}
+		});
+		if (problem !== null) return failed(problem);
 		this.linkRetry.delete(key);
 		const latest = this.cardHolding(bound.projectId, workspaceId);
 		if (!latest) return;
@@ -2676,7 +2728,10 @@ export class Board {
 	/** Subscribes the rules to the host's events; returns the unsubscribe. */
 	listen(): () => void {
 		const { events } = this.host;
-		const actions = throttled((projectId) => this.changed(projectId), this.actionRefreshMs);
+		const actions = throttled(
+			(projectId) => this.host.publish(BOARD_ACTIVITY, { projectId }, { projectId }),
+			this.actionRefreshMs,
+		);
 		this.autopilot.start();
 		const unsubscribes = [
 			actions.stop,

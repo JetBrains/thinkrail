@@ -102,7 +102,7 @@ import { InstallHint, ProposeForm } from "./OpenspecParts";
 import { BoardMoreMenu, PublishDialog } from "./PublishDialog";
 import { RoadmapPane } from "./Roadmap";
 import { type TriageActions, TriageLane } from "./Triage";
-import { useBoardChanged, useHostQuery } from "./useHostQuery";
+import { useBoardActivity, useBoardChanged, useHostQuery } from "./useHostQuery";
 
 export type BoardMode = "board" | "list" | "roadmap" | "insights";
 
@@ -826,6 +826,7 @@ export default function BoardTool({ host }: PanelProps) {
 		loadBoard(host, projectId, signal),
 	);
 	useBoardChanged(host, projectId, board.reload);
+	useBoardActivity(host, projectId, board.reload);
 	const inbox = useInbox(host);
 	const [mode, setMode] = useState<BoardMode>("board");
 	const [confirmStart, setConfirmStart] = useState<string | null>(null);

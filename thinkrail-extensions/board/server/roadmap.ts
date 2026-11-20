@@ -12,6 +12,7 @@ import { type Insights, insights } from "./insights";
 import type { KickoffContext } from "./kickoff";
 import {
 	type Autopilot,
+	type AutopilotPause,
 	type Card,
 	type CardRef,
 	type CardSize,
@@ -675,6 +676,16 @@ export class Roadmap {
 		const next: Initiative = { ...initiative, autopilot, updatedAt: this.host.now() };
 		this.commit(projectId, { initiatives: this.replaceInitiative(file, next) });
 		return next;
+	}
+
+	/** Records what holds an initiative's autopilot back, keeping its stored switch: nothing while it is off. */
+	setAutopilotPause(projectId: string, id: string, pause: AutopilotPause | null): Initiative {
+		const { initiative } = this.initiative(projectId, id);
+		if (initiative.autopilot?.on !== true) return initiative;
+		return this.setAutopilot(projectId, id, {
+			on: true,
+			...(pause ? { pausedReason: pause } : {}),
+		});
 	}
 
 	/** Every board's initiatives linked to a container. */

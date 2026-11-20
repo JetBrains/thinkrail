@@ -534,29 +534,37 @@ describe("board rules over host events", () => {
 		expect(t.listeners()).toBe(0);
 	});
 
-	test("republish a bound chat's tool starts at most once per window, the last one included", async () => {
+	test("publish a bound chat's tool starts as board.activity at most once per window, the last one included, never as a change", async () => {
 		const t = createTestHost();
 		hosts.push(t);
 		const board = new Board(t.host, { owner: "dana", sizeDelayMs: 0, actionRefreshMs: 40 });
 		const stop = board.listen();
 		const card = board.createCard("p1", { title: "Card" }, "human");
 		await boardQueries(board)["card.start"]?.({ cardId: card.id });
-		const changes = () => t.published.filter((entry) => entry.type === "board.changed").length;
-		const before = changes();
+		await board.idle();
+		const count = (type: string) => t.published.filter((entry) => entry.type === type).length;
+		const changes = count("board.changed");
+		const activity = () => count("board.activity");
 		t.emit("agent.tool", { workspaceId: "w1", sessionId: "s1" });
 		t.emit("agent.tool", { workspaceId: "w1", sessionId: "s1" });
 		t.emit("agent.tool", { workspaceId: "w1", sessionId: "s1" });
 		t.emit("agent.tool", { workspaceId: "elsewhere", sessionId: "x" });
-		expect(changes() - before).toBe(1);
+		expect(activity()).toBe(1);
+		expect(t.published.at(-1)).toEqual({
+			type: "board.activity",
+			payload: { projectId: "p1" },
+			scope: { projectId: "p1" },
+		});
 		await Bun.sleep(60);
-		expect(changes() - before).toBe(2);
+		expect(activity()).toBe(2);
 		await Bun.sleep(60);
-		expect(changes() - before).toBe(2);
+		expect(activity()).toBe(2);
 		t.emit("agent.tool", { workspaceId: "w1", sessionId: "s1" });
 		stop();
 		t.emit("agent.tool", { workspaceId: "w1", sessionId: "s1" });
 		await Bun.sleep(60);
-		expect(changes() - before).toBe(3);
+		expect(activity()).toBe(3);
+		expect(count("board.changed")).toBe(changes);
 	});
 
 	test("republish a project's board when the project opens or closes, for the inbox", async () => {

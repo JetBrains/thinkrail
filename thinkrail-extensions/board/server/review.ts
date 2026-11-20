@@ -208,7 +208,18 @@ export function duration(ms: number): string {
 	return rest === 0 ? `${hours}h` : `${hours}h ${String(rest).padStart(2, "0")}m`;
 }
 
-/** The packet's markdown: deterministic — the same inputs write the same bytes. */
+/**
+ * HTML comment delimiters in free text made inert (`&lt;!--`, `--&gt;`), so no text in the packet reads
+ * as — or hides — the section's markers.
+ */
+export function neutralizeComments(text: string): string {
+	return text.replace(/<!--/g, "&lt;!--").replace(/-->/g, "--&gt;");
+}
+
+/**
+ * The packet's markdown: deterministic — the same inputs write the same bytes. The agents' free text in it
+ * carries no HTML comment (`neutralizeComments`).
+ */
 export function renderPacket(packet: Omit<Packet, "markdown">): string {
 	const lines: string[] = [
 		"## Review packet",
@@ -265,7 +276,7 @@ export function renderPacket(packet: Omit<Packet, "markdown">): string {
 		"",
 		"_The smart review is advisory: it approves nothing, and a human merges._",
 	);
-	return lines.join("\n");
+	return neutralizeComments(lines.join("\n"));
 }
 
 export function packetOf(input: {
