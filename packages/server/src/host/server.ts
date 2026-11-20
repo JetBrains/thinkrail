@@ -36,6 +36,7 @@ import {
 	WORKSPACE_VIEW_ROUTE,
 	WS_CHANNELS,
 	WS_MAX_FRAME_BYTES,
+	WS_OUTBOUND_BUFFER_LIMIT_BYTES,
 } from "@thinkrail/contracts";
 import { CodedError, errorCodeOf } from "@thinkrail/shared/codedError";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
@@ -345,7 +346,6 @@ interface SocketData {
 }
 
 const CLIENT_REPLAY_RETENTION_MS = 60_000;
-const WS_OUTBOUND_BUFFER_LIMIT_BYTES = 256 * 1024 * 1024;
 const RECENT_FOLDER_CHECK_BUDGET_MS = 250;
 
 const log = logger("host");

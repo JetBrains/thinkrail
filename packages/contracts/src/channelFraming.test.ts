@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { CHANNEL_CHUNK_BYTES, chunkFrames, createChannelAssembler } from "./channelFraming";
+import {
+	CHANNEL_CHUNK_BYTES,
+	ChannelMessageTooLargeError,
+	chunkFrames,
+	createChannelAssembler,
+} from "./channelFraming";
 
 const encode = (text: string) => new TextEncoder().encode(text);
 const decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
@@ -20,4 +25,15 @@ test("a large message splits into bounded chunks and reassembles byte-exact, mul
 	expect(results.slice(0, -1).every((result) => result === null)).toBe(true);
 	expect(decode(results.at(-1) as Uint8Array)).toBe(text);
 	expect(assemble(encode('{"next":true}'))).toEqual(encode('{"next":true}'));
+});
+
+test("a reassembled message past the cap throws instead of growing", () => {
+	const frames = chunkFrames(new Uint8Array(CHANNEL_CHUNK_BYTES * 3)) ?? [];
+	const assemble = createChannelAssembler(CHANNEL_CHUNK_BYTES * 2);
+	expect(assemble(frames[0] as Uint8Array)).toBeNull();
+	expect(assemble(frames[1] as Uint8Array)).toBeNull();
+	expect(() => assemble(frames[2] as Uint8Array)).toThrow(ChannelMessageTooLargeError);
+	expect(() => createChannelAssembler(4)(encode('{"id":1}'))).toThrow(ChannelMessageTooLargeError);
+	const exact = createChannelAssembler(CHANNEL_CHUNK_BYTES * 3);
+	expect(frames.map(exact).at(-1)?.length).toBe(CHANNEL_CHUNK_BYTES * 3);
 });

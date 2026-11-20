@@ -1686,6 +1686,8 @@ export type WsClientMessage = WsRequest | WsAck | WsResume;
 
 export const WS_MAX_FRAME_BYTES = 16 * 1024 * 1024;
 
+export const WS_OUTBOUND_BUFFER_LIMIT_BYTES = 256 * 1024 * 1024;
+
 export type WsErrorCode =
 	| "UNKNOWN_COMMIT"
 	| "PUSH_AUTH_FAILED"

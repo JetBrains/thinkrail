@@ -34,7 +34,12 @@ broker (the host's own for Wi‑Fi/Tailscale, or a hosted one) and public Nostr 
     the device's fresh `nonce`; an accepted step returns it with the challenge.
   - `channel.ts` — `RemoteChannel`, the byte-channel interface the wire protocol runs over.
   - `weriftRemoteChannel.ts` — `toRemoteChannel`, adapting a werift `RTCDataChannel` to `RemoteChannel`;
-    every send and receive goes through contracts' channel framing, so a large result is chunked.
+    every send and receive goes through contracts' channel framing, so a large result is chunked. A device
+    message reassembling past `WS_MAX_FRAME_BYTES` closes the channel, as an over-cap frame closes a WS. A
+    send while more than `WS_OUTBOUND_BUFFER_LIMIT_BYTES` is still queued toward the device drops the frame
+    and closes the channel at once, warning with `RemoteChannelSlowConsumerError`
+    (`REMOTE_CHANNEL_SLOW_CONSUMER`). Unlike the WS, it does not wait for a drain: the device re-dials within
+    the host's replay retention and `resume`s its unresolved ids, so the queued bytes are worth nothing.
     werift (pure TS) is **validated under Bun** (offer/answer, ICE, DataChannel, byte transfer via a
     loopback test), so the host needs no native WebRTC binding.
   - `localRelay.ts` — `startLocalRelay`, the signaling relay run **inside the host** when no external relay

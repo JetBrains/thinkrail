@@ -4,7 +4,8 @@
  * into binary chunk frames: `[0x00, more]` + up to `CHANNEL_CHUNK_BYTES` bytes, `more` = 1 on every chunk
  * but the last. A wire message is JSON and starts with `{`, so the leading zero byte is unambiguous. The
  * channel is ordered and reliable, and a sender emits one message's chunks back to back, so the receiver
- * needs no ids: it concatenates until the last chunk.
+ * needs no ids: it concatenates until the last chunk. A receiver given `maxBytes` refuses a reassembled
+ * message past it, so a peer cannot grow one without bound.
  */
 export const CHANNEL_CHUNK_BYTES = 16 * 1024;
 
@@ -25,20 +26,44 @@ export function chunkFrames(message: Uint8Array): Uint8Array<ArrayBuffer>[] | nu
 	return frames;
 }
 
-/** Reassembles received frames: returns a whole wire message, or `null` while a chunked one is incomplete. */
-export function createChannelAssembler(): (frame: Uint8Array) => Uint8Array | null {
+export class ChannelMessageTooLargeError extends Error {
+	readonly code = "CHANNEL_MESSAGE_TOO_LARGE";
+
+	constructor(maxBytes: number) {
+		super(`a channel message exceeded ${maxBytes} bytes`);
+		this.name = "ChannelMessageTooLargeError";
+	}
+}
+
+/**
+ * Reassembles received frames: returns a whole wire message, or `null` while a chunked one is incomplete.
+ * Throws `ChannelMessageTooLargeError` once a message passes `maxBytes`; the channel is then unusable.
+ */
+export function createChannelAssembler(
+	maxBytes = Number.POSITIVE_INFINITY,
+): (frame: Uint8Array) => Uint8Array | null {
 	let parts: Uint8Array[] = [];
+	let size = 0;
 	return (frame) => {
-		if (frame[0] !== CHUNK_MARK) return frame;
-		parts.push(frame.subarray(2));
+		const chunked = frame[0] === CHUNK_MARK;
+		const part = chunked ? frame.subarray(2) : frame;
+		if (size + part.length > maxBytes) {
+			parts = [];
+			size = 0;
+			throw new ChannelMessageTooLargeError(maxBytes);
+		}
+		if (!chunked) return frame;
+		parts.push(part);
+		size += part.length;
 		if (frame[1] === 1) return null;
-		const whole = new Uint8Array(parts.reduce((total, part) => total + part.length, 0));
+		const whole = new Uint8Array(size);
 		let offset = 0;
-		for (const part of parts) {
-			whole.set(part, offset);
-			offset += part.length;
+		for (const piece of parts) {
+			whole.set(piece, offset);
+			offset += piece.length;
 		}
 		parts = [];
+		size = 0;
 		return whole;
 	};
 }
