@@ -19,6 +19,7 @@ import {
 } from "@thinkrail/contracts";
 import { hostRejection, isTerminalConnectError, RemoteConnectError } from "./connectError";
 import { toDeviceChannel } from "./deviceChannel";
+import { deviceKey } from "./deviceKey";
 import { createDeviceWireClient, type DeviceWireClient } from "./deviceWireClient";
 import { createReconnectLoop } from "./reconnectLoop";
 import { RelayUnreachableError } from "./relayPicker";
@@ -58,7 +59,6 @@ export interface RemoteConnection {
 	close(): void;
 }
 
-const DEVICE_KEY_STORAGE = "thinkrail.remote.deviceKey";
 /**
  * How long one attempt may take from its start to an open data channel. Past it the attempt fails instead of
  * leaving the app on "Connecting…": as `relay_unreachable` when no signaling route got ready, `host_silent`
@@ -143,40 +143,6 @@ async function hostSigned(
 	}
 }
 
-interface DeviceKey {
-	privateKey: CryptoKey;
-	publicKeyRaw: string;
-}
-
-/** A stable per-browser Ed25519 identity, so a reconnect re-authorizes as the same (already-paired) device. */
-async function loadOrCreateDeviceKey(): Promise<DeviceKey> {
-	const stored = localStorage.getItem(DEVICE_KEY_STORAGE);
-	if (stored) {
-		try {
-			const parsed = JSON.parse(stored) as { privateJwk: JsonWebKey; publicKeyRaw: string };
-			const privateKey = await crypto.subtle.importKey(
-				"jwk",
-				parsed.privateJwk,
-				{ name: "Ed25519" },
-				true,
-				["sign"],
-			);
-			return { privateKey, publicKeyRaw: parsed.publicKeyRaw };
-		} catch {
-			// fall through and regenerate
-		}
-	}
-	const keyPair = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, [
-		"sign",
-		"verify",
-	])) as CryptoKeyPair;
-	const privateJwk = await crypto.subtle.exportKey("jwk", keyPair.privateKey);
-	const publicKeyRaw = (await crypto.subtle.exportKey("jwk", keyPair.publicKey)).x;
-	if (!publicKeyRaw) throw new Error("could not derive the device key");
-	localStorage.setItem(DEVICE_KEY_STORAGE, JSON.stringify({ privateJwk, publicKeyRaw }));
-	return { privateKey: keyPair.privateKey, publicKeyRaw };
-}
-
 interface OpenParams {
 	relayUrls: readonly string[];
 	nostr?: PairingNostrRoute | undefined;
@@ -197,7 +163,7 @@ interface OpenParams {
  */
 function openRemote(params: OpenParams): { connection: RemoteConnection; paired: Promise<void> } {
 	const { events } = params;
-	const keyReady = loadOrCreateDeviceKey();
+	const keyReady = deviceKey();
 	const tokenIdReady = params.token !== undefined ? tokenIdOf(params.token) : undefined;
 	const client = createDeviceWireClient();
 

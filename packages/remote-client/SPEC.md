@@ -13,7 +13,7 @@ The browser/device half of remote "open a project (or its sessions) by link": th
 client over it, the pairing/reconnect connector, the locally-stored paired-host registry, and the multi-host
 session aggregator. Used by both shells of `apps/web`: the IDE (open a remote project in the full UI) and the phone
 shell (the lightweight "sessions on your phone" client that `apps/mobile` wraps). Framework-agnostic:
-uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `localStorage`), no UI.
+uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `indexedDB`, `localStorage`), no UI.
 
 ## Boundary
 
@@ -27,7 +27,7 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
     the snapshot pushes `server.welcome` and `remote.hostRoutes` are kept and replayed to a later subscriber,
     because the host sends them once as the channel opens — before any screen subscribes).
   - `deviceConnector.ts` — `connectRemoteProject` (first pairing, link + token) and `connectSavedHost`
-    (token-less `resume`), sharing one WebRTC + auto-reconnect machinery; persistent device key. A connection's
+    (token-less `resume`), sharing one WebRTC + auto-reconnect machinery. A connection's
     `ConnectionEvents` (`onLost`, `onOpenChange`, `onRetryFailed`, `onRoutes`) are given when it is created, so
     none is missed or replayed. `connectSavedHost` returns at once and its reconnect loop makes every attempt,
     the first included: a host not reachable yet is retried like a dropped one. Pairing makes its own first
@@ -62,6 +62,12 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
     dial — the connection's `relayUrls` / `nostr` read them live, so a host saved from a pairing that heard a push
     before it was tracked keeps the pushed routes — and reaches `onRoutes`, so a phone paired before a route existed (Nostr) or before the computer's
     address changed follows the computer without a new QR.
+  - `deviceKey.ts` — the persistent device identity: a non-extractable Ed25519 `CryptoKey` held in IndexedDB
+    (structured clone, so the private key never exists as bytes the page can read), with its public key string. A
+    key from before (an extractable JWK in `localStorage`) is imported non-extractable, kept, and its JWK deleted.
+    The load is one promise per page, so connections opening together share one key; the store is swappable
+    (`setDeviceKeyStore`, for tests). A store that cannot be read gives a key for that session only and never
+    overwrites the stored one.
   - `reconnectLoop.ts` — `createReconnectLoop`: one attempt at a time, doubling capped backoff reset on
     success, `now()` to retry at once, a terminal failure ending it (`isTerminalConnectError`); a drop reported
     while an attempt is still settling is retried rather than left open, and `stop()` silences a late result.
