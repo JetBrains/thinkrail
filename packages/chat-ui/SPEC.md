@@ -26,7 +26,7 @@ streaming model — is recorded once in [[submodule-web-chat]] (`apps/web/src/ch
 ## Public surface
 
 Per-file subpaths, `@thinkrail/chat-ui/<path>` (e.g. `/turns`, `/rows`, `/hydrate`, `/Composer`,
-`/toolRegistry`, `/tools/register`), plus three barrels: `/lib`, `/prompt`, `/resources`. No root barrel —
+`/toolRegistry`, `/tools/register`), plus three barrels: `/lib`, `/prompt`, `/resources`, the only way into those directories. No root barrel —
 `Markdown` pulls `react-markdown`, and a lazy chat chunk must not drag it into the shell (the code-splitting
 exception of [[architecture]]). Importing `/tools/register` registers the built-in tool cards (a side
 effect each host runs once).
