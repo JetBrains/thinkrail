@@ -9,11 +9,11 @@ import {
 } from "@thinkrail/contracts";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import type { DeviceWireClient, RemoteSessionItem } from "@thinkrail/remote-client";
-import { Button, IconButton } from "@thinkrail/ui/button";
+import { IconButton } from "@thinkrail/ui/button";
 import { useLayoutEffect, useRef, useState } from "react";
 import { useNow } from "../components/useNow";
 import { reasonOf, singleFlight } from "./async";
-import { ListRow, LoadedList, Loader, Notice, Screen } from "./layout";
+import { Failed, ListRow, LoadedList, Loader, Notice, Screen } from "./layout";
 import { workspaceName } from "./ProjectTree";
 import { statusOf } from "./status";
 import { type Loaded, useHostRequest } from "./useHostRequest";
@@ -155,20 +155,14 @@ export function WorkspaceOpener({
 	return (
 		<Screen title={workspaceName(t, workspace)} back={{ label: backLabel, onBack }}>
 			{failure ? (
-				<div className="flex flex-col items-center gap-8 pb-40">
-					<Notice text={t("mobile.workspace.newChatFailed", { reason: failure })} alert />
-					<Button
-						variant="outline"
-						className="h-touch rounded-md"
-						data-testid="workspace-open-retry"
-						onClick={() => {
-							setFailure(null);
-							setAttempt((count) => count + 1);
-						}}
-					>
-						{t("common.retry")}
-					</Button>
-				</div>
+				<Failed
+					text={t("mobile.workspace.newChatFailed", { reason: failure })}
+					retryTestId="workspace-open-retry"
+					onRetry={() => {
+						setFailure(null);
+						setAttempt((count) => count + 1);
+					}}
+				/>
 			) : chats.kind === "failed" ? (
 				<Notice text={t("mobile.list.failed", { reason: chats.reason })} alert />
 			) : empty ? (
