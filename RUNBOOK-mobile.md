@@ -46,6 +46,8 @@ idempotently registers the `thinkrail://` link, allows cleartext traffic (the LA
 which Android blocks by default), adds the camera permission and installs the launcher icons. In Android
 Studio wait for the Gradle sync, pick your phone and press **Run** (▶). No developer account is needed and the
 install does not expire. After a UI change: `bun run --cwd apps/mobile android:sync`, then ▶ again.
+Check once on the phone that the composer sits right above the keyboard with no gap: Android resizes the web
+view for the keyboard itself, so the shell adds no keyboard padding there (see `apps/web/src/phone/SPEC.md`).
 
 ## 3. Start the host with remote access on the laptop
 ```bash

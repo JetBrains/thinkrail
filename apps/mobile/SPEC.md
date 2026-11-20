@@ -18,7 +18,8 @@ TypeScript that ships in the web view: `capacitor.config.ts` points the native s
 - **Owns:** `capacitor.config.ts` (app id and name, `webDir: ../web/dist-phone`, the Dark palette's
   `background` read from the manifest so first paint matches, `ios.contentInset: never` and
   `ios.scrollEnabled: false` so only a screen's own list scrolls, `Keyboard.resize: none` so the keyboard
-  overlays the web view and the phone shell gives up its height in step with it (see [[submodule-web-phone]]), and `server.androidScheme: http`);
+  overlays the web view on iOS and the phone shell gives up its height in step with it, while Android resizes the
+  web view itself (`resizeOnFullScreen: true`) and the shell leaves its inset alone (see [[submodule-web-phone]]), and `server.androidScheme: http`);
   `scripts/ios-setup.ts`, `scripts/android-setup.ts`; the native plugin set in `package.json` (`@capacitor/app`,
   `@capacitor/barcode-scanner`, `@capacitor/keyboard`, pinned once in the root catalog with the web shell that
   imports their JavaScript).
