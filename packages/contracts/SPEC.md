@@ -81,6 +81,9 @@ the palette ranks with — kept here so host-side search can rank with the same 
   platform caps one DataChannel message (WebKit: 64 KiB) while a wire result such as a transcript is
   megabytes. A message above 16 KiB travels as `[0x00, more]`-prefixed binary chunks (a wire message is JSON,
   so it never starts with `0x00`); the ordered, reliable channel and back-to-back sends need no chunk ids.
+  `createChannelAssembler(maxBytes)` throws `ChannelMessageTooLargeError` once a message passes `maxBytes`:
+  the host passes `WS_MAX_FRAME_BYTES`, the same cap a WS frame has, and closes the channel; the device
+  passes none, as a browser takes any size of host frame.
 - **ICE (`iceServers.ts`):** `PUBLIC_STUN_URLS`, the public STUN servers both remote peers gather through,
   so a phone off the host's network can connect peer-to-peer without a ThinkRail server; `IceServer`,
   `parseIceServers` (bounded, `stun:`/`turn:` schemes only) for the TURN credentials a relay attaches to the
@@ -201,7 +204,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   switcher and the mobile lists share) from `piProtocol` (`isTranscriptMessageRole` is the one definition of which roles a transcript carries: the host filters
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `wsProtocol`
-  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, `WS_MAX_FRAME_BYTES`, and
+  (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, `WS_MAX_FRAME_BYTES`,
+  `WS_OUTBOUND_BUFFER_LIMIT_BYTES`, and
   feature-introduction versions).
 - **Allowed deps:** none at runtime. **Type-only** devDeps on `@earendil-works/pi-ai` +
   `@earendil-works/pi-agent-core`, imported **from their package roots** (type-only → erased at build).
@@ -1241,7 +1245,9 @@ usually wants the path. The desktop's clipboard read and the web's decision to c
   host's `maxPayloadLength` and the size above which `WsTransport.request` refuses to send. A frame over it
   would close the socket and be replayed on every reconnect, so a message's `REQUEST_IMAGE_BASE64_BUDGET`
   (12 MiB) stays under it with room for the text. It equals Bun's default, which every earlier host
-  already enforced, so it needs no protocol bump.
+  already enforced, so it needs no protocol bump. **`WS_OUTBOUND_BUFFER_LIMIT_BYTES`** (256 MiB) is the
+  host's outbound buffer limit per client, for a WS and a paired device's data channel alike
+  ([[submodule-server-host]] owns why).
 
 ## Chat Resources
 
