@@ -162,10 +162,10 @@ type HotkeyRoute =
 	| { readonly kind: "history" };
 
 function suggestionHotkey(
-	event: GlobalHotkeyEvent,
+	event: GlobalHotkeyEvent & Pick<KeyboardEvent, "keyCode">,
 	context: HotkeyContext,
 ): SuggestionKeyAction | null {
-	if (event.isComposing || context.modalOpen || context.inTerminal || context.inCodeEditor) {
+	if (isImeComposing(event) || context.modalOpen || context.inTerminal || context.inCodeEditor) {
 		return null;
 	}
 	const action = suggestionKeyAction(matchKeybinding(context.keybindings, event));

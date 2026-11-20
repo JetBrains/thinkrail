@@ -12,6 +12,7 @@ const key = (
 		altKey: boolean;
 		shiftKey: boolean;
 		isComposing: boolean;
+		keyCode: number;
 	}> = {},
 ) => ({
 	code,
@@ -550,6 +551,16 @@ describe("routing a press", () => {
 			}
 			expect(
 				routeHotkey(altDigit(1, { isComposing: true }), all, at("browser", defaults, shown)),
+			).toBeNull();
+			expect(
+				routeHotkey(altDigit(1, { keyCode: 229 }), all, at("browser", defaults, shown)),
+			).toBeNull();
+			expect(
+				routeHotkey(
+					altDigit(1, { shiftKey: true, keyCode: 229 }),
+					all,
+					at("browser", defaults, shown),
+				),
 			).toBeNull();
 		});
 
