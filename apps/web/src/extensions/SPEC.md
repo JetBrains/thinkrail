@@ -13,7 +13,7 @@ references: [submodule-web-chat, submodule-web-shell, module-thinkrail-extension
 The static composition point for web extensions. `registry.ts` owns their ordered list.
 `registerWebExtensions()` runs once at app bootstrap (`main.tsx`), not from `ChatView`: interaction state
 and the plan/review glances are derived from the registry's `interactive` registrations, so it must be
-complete before any lazy view reads a transcript. The app-local registrations (`chat/tools/register`) arrive
+complete before any lazy view reads a transcript. The built-in card registrations (`@thinkrail/chat-ui/tools/register`) arrive
 later with `ChatView`'s lazy chunk and name other tools. Each descriptor's tool entries feed the existing
 chat registry in order, preserving its last-registration-wins behavior and fallback renderer.
 Re-registering the same list replaces entries rather than accumulating them.

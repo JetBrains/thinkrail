@@ -172,7 +172,7 @@ describe("markdown prose systems", () => {
 		const perElementType =
 			/\[&[^\]]*\]:(?:text-(?!primary|muted|hint|text|balance|pretty|left|center|right)|font-|leading-|tracking-)/g;
 		for (const [label, src] of [
-			["chat/Markdown.tsx", chat],
+			["chat-ui/src/Markdown.tsx", chat],
 			["resource-renderers/support/MarkdownPreview.tsx", preview],
 		] as const)
 			expect(

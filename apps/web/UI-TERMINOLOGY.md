@@ -209,8 +209,8 @@ The agent conversation, rendered inside a Chat tab in the Center Tabbed Area.
 - **Position:** Slim top bar of the Chat View.
 - **Children / slots:**
   - **Status Entries** — inline muted `statusEntries` text (extension status).
-  - **Session Stats Bar** — `chat/SessionStatsBar.tsx` → `SessionStatsBar` (token/cost stats).
-  - **Resources Trigger** — `chat/resources/ResourcesButton.tsx` → `ResourcesButton`
+  - **Session Stats Bar** — `chat-ui/src/SessionStatsBar.tsx` → `SessionStatsBar` (token/cost stats).
+  - **Resources Trigger** — `chat-ui/src/resources/ResourcesButton.tsx` → `ResourcesButton`
     (`data-testid="resources-trigger"`); the active-resource count — live work plus connected/starting MCP
     servers (or `—` while the count is not authoritative) — breathing while work runs; toggles the
     **Resources Inspector**. Beside it, the **MCP Attention Marker** (`ResourcesAttention`,
@@ -222,7 +222,7 @@ The agent conversation, rendered inside a Chat tab in the Center Tabbed Area.
 ## Resources
 
 The current chat's background commands and subagents, rendered through one row grammar on three
-surfaces owned by `chat/resources/`.
+surfaces owned by `chat-ui/src/resources/`.
 
 | Canonical name | Implementation | `data-testid` | Responsibility |
 |---|---|---|---|
@@ -234,13 +234,13 @@ surfaces owned by `chat/resources/`.
 | Command Log View | `resources/CommandLogView.tsx` → `CommandLogView` | `command-log-output` / `command-log-unavailable` | Bounded plain-text output; the inspector's detail body for a command |
 | Subagent Transcript Pane | `chat/SubagentTranscriptDialog.tsx` → `SubagentTranscriptPane` | `subagent-transcript` | Read-only child transcript; the inspector's detail body for a subagent (and the body of the Subagent Transcript Dialog) |
 | Stop-All Action | roster header in the inspector | `resources-stop-all` → `resources-stop-all-confirm` | Stops this chat's active subagents after a confirmation naming the count |
-| Still-Running Chip | `TurnDivider` in `chat/turns.tsx` | `turn-divider-running` | "N still running" on the latest turn divider; opens the inspector |
+| Still-Running Chip | `TurnDivider` in `chat-ui/src/turns.tsx` | `turn-divider-running` | "N still running" on the latest turn divider; opens the inspector |
 
 ## Message List
 
 - **Canonical name:** Message List (a.k.a. Transcript).
 - **Implementation:** a `react-virtuoso` `Virtuoso` in `ChatView`, rendering **derived rows** via
-  `chat/rows.ts` (`deriveRows`) dispatched by `chat/turns.tsx` → `ChatTurnView`.
+  `chat-ui/src/rows.ts` (`deriveRows`) dispatched by `chat-ui/src/turns.tsx` → `ChatTurnView`.
 - **Parent:** Chat View.
 - **Position:** Scrolling middle region between header and composer.
 - **Responsibility:** render pi turns as folded rows with progressive disclosure.
@@ -250,36 +250,36 @@ is pi's message-level unit; a **Row** (`ChatRow`) is the derived render unit (fo
 boundaries); every rendered message element carries `data-testid="chat-message"` with a `data-role`. Use
 **Row** for render units and **Turn** for pi messages; "Message" is the generic surface term.
 
-Row / message renderers (all in `chat/turns.tsx` unless noted):
+Row / message renderers (all in `chat-ui/src/turns.tsx` unless noted):
 
 | Canonical name | Implementation | `data-testid` | Row kind | Responsibility |
 |---|---|---|---|---|
 | Turn Dispatcher | `ChatTurnView` | — | — | Dispatches a derived row to its renderer |
 | User Message | `UserTurn` | `chat-message` (`data-role="user"`) | `user` | A user prompt bubble |
-| Assistant Markdown | `chat/Markdown.tsx` → `Markdown` | — | `markdown` | Assistant text (GFM + Pierre highlighting) |
+| Assistant Markdown | `chat-ui/src/Markdown.tsx` → `Markdown` | — | `markdown` | Assistant text (GFM + Pierre highlighting) |
 | System Notice | `SystemTurn` | `chat-message` | `system` | Web-local system notice |
 | Error Turn | `ErrorTurn` | `chat-message` | `error` | Persistent tinted failure notice (never folded) |
 | Retry Indicator | `RetryIndicator` | `retry-indicator` | `retry` | Retry countdown (turn / summarization) |
-| Tool Card | `chat/ToolCard.tsx` → `ToolCard` | `tool-card` (`-toggle`) | `tool` | A primary tool call (collapsible frame) |
-| Activity Group | `chat/ActivityGroup.tsx` → `ActivityGroup` | — | `activity` | Folded run of routine steps ("N steps · …") |
-| Ext-UI Prompt | `chat/ExtUiPrompt.tsx` → `ExtUiPrompt` | `ext-ui-prompt` | — | An extension's in-chat question (`pi.extensionUi` dialog): on its tool's card, else docked above the composer |
+| Tool Card | `chat-ui/src/ToolCard.tsx` → `ToolCard` | `tool-card` (`-toggle`) | `tool` | A primary tool call (collapsible frame) |
+| Activity Group | `chat-ui/src/ActivityGroup.tsx` → `ActivityGroup` | — | `activity` | Folded run of routine steps ("N steps · …") |
+| Ext-UI Prompt | `chat-ui/src/ExtUiPrompt.tsx` → `ExtUiPrompt` | `ext-ui-prompt` | — | An extension's in-chat question (`pi.extensionUi` dialog): on its tool's card, else docked above the composer |
 | Turn Divider | `TurnDivider` | `turn-divider` / `turn-divider-<id>` | `divider` | Round-end summary + artifact chips |
 | — Artifact Chip | `ArtifactChip` | `turn-divider-specs` / `turn-divider-files` | — | "N specs" / "N files changed" deep-link/disclosure; with a host turn receipt the files chip reads `N files changed · +a −r` |
 | — Artifact List | `ArtifactList` | `<testid>-list` / `-list-item` | — | Expanded per-path list (per-file `+/−` from the receipt) |
 | — Review-Turn Chip | inline in `TurnDivider` | `turn-divider-review` | — | "Review turn": opens the Changes Review Tab at the turn's scope (receipt only) |
-| Stream Indicator | `chat/StreamIndicator.tsx` → `StreamIndicator` | `stream-indicator` | — | Live streaming status: the Working Badge + phase label ("Thinking…", "Running bash…") |
+| Stream Indicator | `chat-ui/src/StreamIndicator.tsx` → `StreamIndicator` | `stream-indicator` | — | Live streaming status: the Working Badge + phase label ("Thinking…", "Running bash…") |
 
 ## Tool Call
 
 - **Canonical name:** Tool Card (the frame); Tool Renderer (the body).
-- **Implementation:** `chat/ToolCard.tsx` → `ToolCard` (the collapsible frame), bodies registered via
-  `chat/toolRegistry.tsx` → `registerToolRenderer`. Unregistered tools fall back to
+- **Implementation:** `chat-ui/src/ToolCard.tsx` → `ToolCard` (the collapsible frame), bodies registered via
+  `chat-ui/src/toolRegistry.tsx` → `registerToolRenderer`. Unregistered tools fall back to
   `DefaultToolRenderer`.
 - **Parent:** Message List (a `tool` row), or an Activity Group step row (routine tools).
 - **Responsibility:** render one tool call; "card" chrome uses `ToolCard`, "bare" chrome owns its own
   frame.
 
-Built-in tool renderers (in `chat/tools/` unless noted):
+Built-in tool renderers (in `chat-ui/src/tools/` unless noted):
 
 | Canonical name | Implementation | Prominence | Responsibility |
 |---|---|---|---|
@@ -295,7 +295,7 @@ Built-in tool renderers (in `chat/tools/` unless noted):
 ## Composer
 
 - **Canonical name:** Composer.
-- **Implementation:** `chat/Composer.tsx` → `Composer`.
+- **Implementation:** `chat-ui/src/Composer.tsx` → `Composer`.
 - **Parent:** Chat View.
 - **Position:** Bottom of the Chat View.
 - **Responsibility:** the prompt input + send/steer/followUp/abort, `@`-mentions, `/` slash commands,
@@ -305,7 +305,7 @@ Children / associated surfaces:
 
 | Canonical name | Implementation | `data-testid` | Responsibility |
 |---|---|---|---|
-| Model-Effort Picker | `chat/ModelEffortPicker.tsx` → `ModelEffortPicker` | `model-selector` (trigger), `model-option`, `thinking-option` | The one model · effort pill (+ Refresh catalog); also mounted by New Workspace and Settings › Models |
+| Model-Effort Picker | `chat-ui/src/ModelEffortPicker.tsx` → `ModelEffortPicker` | `model-selector` (trigger), `model-option`, `thinking-option` | The one model · effort pill (+ Refresh catalog); also mounted by New Workspace and Settings › Models |
 | Slash-Command Menu | `chat/SlashCommandCompletion.tsx` → `SlashCommandMenu` | `slash-templates-empty` (footer) | `/` command + template completion |
 | Send Button | inline (`ArrowUp` / `Square` abort) | — | Send / steer / follow-up / abort |
 | History-Open Button | inline (`History` icon) | `history-open` | Opens the History Overlay |
