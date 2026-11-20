@@ -128,7 +128,8 @@ broker (the host's own for Wi‑Fi/Tailscale, or a hosted one) and public Nostr 
     `mayRequest(deviceId, method)` re-reads the registry on every call — `allowed`, `readOnly` or `revoked` —
     so a change on the computer applies to the next request without reconnecting; `state().relay` reports the built-in relay's port and public
     check, or the configured URL, for Settings' network check. `onPaired` hands the host the device with its
-    resolved access. `onStatus` hears the whole `state()` whenever it changes, coalesced over 100 ms and
+    resolved access, read from the registry as the channel opens: a device revoked while its handshake was in
+    flight, or a channel opening after access went off, is closed instead, so it never gets the welcome. `onStatus` hears the whole `state()` whenever it changes, coalesced over 100 ms and
     deduplicated against the last one heard: switch, restore, revoke, rename, access change and a device
     channel opening or closing announce themselves; the relay's addresses and public check and the Nostr
     live count are read rather than announced, so while on the control also samples every 2 s (and once when

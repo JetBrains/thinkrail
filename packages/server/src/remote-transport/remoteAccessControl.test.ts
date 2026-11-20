@@ -167,6 +167,39 @@ test("a device shows connected while it has a live channel, and revoking closes 
 	}
 });
 
+test("a channel opening for a device revoked mid-handshake, or after access went off, is closed unseen", () => {
+	const paired: string[] = [];
+	const f = fixture({ onPaired: (device) => paired.push(device.id) });
+	try {
+		const phone: PairedDevice = { id: "d1", label: "Phone", publicKey: "P1", pairedAt: 1 };
+		addDevice(phone, f.dir);
+		addDevice({ id: "d2", label: "Tablet", publicKey: "P2", pairedAt: 2 }, f.dir);
+		f.control.setEnabled(true, { persist: false });
+		const onPaired = f.started[0]?.onPaired;
+		f.control.revokeDevice("d1");
+		const revoked = fakeChannel();
+		let revokedClosed = false;
+		revoked.onClose(() => {
+			revokedClosed = true;
+		});
+		onPaired?.(phone, revoked, PROTOCOL_VERSION);
+		expect(revokedClosed).toBe(true);
+
+		f.control.setEnabled(false, { persist: false });
+		const late = fakeChannel();
+		let lateClosed = false;
+		late.onClose(() => {
+			lateClosed = true;
+		});
+		onPaired?.({ id: "d2", label: "Tablet", publicKey: "P2", pairedAt: 2 }, late, PROTOCOL_VERSION);
+		expect(lateClosed).toBe(true);
+		expect(paired).toEqual([]);
+		expect(f.control.state().devices.map((d) => d.connected)).toEqual([false]);
+	} finally {
+		f.cleanup();
+	}
+});
+
 test("a closed channel leaves the device paired but no longer connected", () => {
 	const f = fixture();
 	try {
