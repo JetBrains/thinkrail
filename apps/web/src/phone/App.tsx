@@ -17,6 +17,7 @@ import { deviceLabel } from "./deviceLabel";
 import { localStore } from "./deviceStore";
 import { failureOf, type HostFailure, type HostStatus, hostStatusOf } from "./hostStatus";
 import { useRemoteSessions } from "./hostView";
+import { launchLinkToPair, markPairLinkHandled } from "./launchLink";
 import { NewWorktreeScreen } from "./NewWorktreeScreen";
 import {
 	leaveHost,
@@ -138,17 +139,24 @@ export function App() {
 	}, [controller, registry]);
 
 	useEffect(() => {
-		const onLink = (url: string | undefined): void => {
-			if (isPairLink(url)) void pairWith(url.trim());
+		const pairLink = (link: string): void => {
+			markPairLinkHandled(localStore, link);
+			void pairWith(link);
 		};
 		void CapApp.getLaunchUrl()
-			.then((launch) => onLink(launch?.url))
+			.then((launch) => {
+				const savedHostKeys = registry.list().map((host) => host.hostKey);
+				const link = launchLinkToPair(launch?.url, localStore, savedHostKeys);
+				if (link) pairLink(link);
+			})
 			.catch(() => {});
-		const deepLink = CapApp.addListener("appUrlOpen", (event) => onLink(event.url));
+		const deepLink = CapApp.addListener("appUrlOpen", (event) => {
+			if (isPairLink(event.url)) pairLink(event.url.trim());
+		});
 		return () => {
 			void deepLink.then((handle) => handle.remove());
 		};
-	}, [pairWith]);
+	}, [pairWith, registry]);
 
 	const back = useCallback((): boolean => {
 		if (stack.length === 0) return false;
