@@ -109,7 +109,8 @@ broker (the host's own for Wi‑Fi/Tailscale, or a hosted one) and public Nostr 
     ends). Frames created before this run started (less 2s of clock skew) are ignored: a relay replaying the
     last minute to a restarted host would otherwise open a fresh handshake for a phone's live attempt and
     answer it a second `challenge` and a `rejected`.
-  - `remoteAccess.ts` — `startRemoteAccess`, the composition root: loads identity, connects to the broker
+  - `remoteAccess.ts` — `startRemoteAccess`, the composition root: loads identity (it and the device
+    registry under `dataDir`, which the control passes through, so an override reaches every read), connects to the broker
     and, given `nostrRelays`, to Nostr, both feeding one session factory; runs each device's handshake +
     WebRTC, and mints one-time pairing links (`issueLink`) carrying every `advertised` relay address
     (default: the connect URL), the Nostr route (key + relays) and the computer's name, with their expiry.
