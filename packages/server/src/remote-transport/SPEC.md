@@ -84,19 +84,25 @@ broker (the host's own for Wi‑Fi/Tailscale, or a hosted one) and public Nostr 
     after `accepted` starts the peer. It signs the offer with the host identity key over
     `offerTranscript(nonce, challenge, sdp)` and accepts only an answer the paired device key signed over
     `answerTranscript(challenge, sdp)` — a spliced answer rejects and closes the session — then hands out the
-    open `RemoteChannel` with its `PairedDevice`. An end-to-end in-process test drives a real werift device
+    open `RemoteChannel` with its `PairedDevice`. Every terminal step closes the session and tells its owner
+    (`onClose`): a rejected handshake, a spliced answer, an unreadable frame, a peer that fails to start or to
+    apply the answer (each answered `rejected` first; the failure is logged, never thrown, so a werift fault
+    cannot reach `unhandledRejection` and take the host down), and the signaling deadline — 60s from the
+    first frame to an open channel (`SIGNALING_WINDOW_MS`, the same window on every route), after which an
+    unopened session is closed silently and the device re-dials. A refused ICE candidate is only logged. An end-to-end in-process test drives a real werift device
     through the handshake + signed SDPs + WebRTC to a byte-moving channel.
   - `hostBrokerClient.ts` — `createHostBrokerClient` (and the `connectHostBroker` WebSocket wrapper): the
     host's outbound broker client. It registers by public key and answers the relay's challenge with a
     signature, maps each brokered session to a `HostSession`, and relays
-    signaling payloads in and out, speaking the shared broker protocol from `contracts` rather than importing
+    signaling payloads in and out; a session that ends itself is dropped and the broker told
+    `{ t: "close", session }`, so neither end holds a dead pipe. It speaks the shared broker protocol from `contracts` rather than importing
     the relay service. `connectHostBroker` reconnects with capped exponential backoff and re-registers when
     the relay restarts or the network drops; a dropped connection closes the sessions it brokered (their
     devices re-dial). A test runs it against a real relay over loopback.
   - `nostrHostSignaling.ts` — `connectNostrHost`, the host on its Nostr key (the identity's `nostrSecret`)
     across the given relays, and `createNostrHostRouter`, its pure core: with no broker to open sessions, a
     device's per-attempt Nostr key names its `HostSession` (fed the same parsed frames, the unparseable ones
-    to `receiveUnreadable`). Each session is dropped after a 60s signaling window — closed if its channel never
+    to `receiveUnreadable`). Each session is dropped after its `SIGNALING_WINDOW_MS` window — closed if its channel never
     opened (`HostSession.opened`), only forgotten if it did — and bounded: 32 live sessions (an unknown sender
     past it is ignored and times out) and 64 frames each (past it the sender stays blocked until its window
     ends). Frames created before this run started (less 2s of clock skew) are ignored: a relay replaying the

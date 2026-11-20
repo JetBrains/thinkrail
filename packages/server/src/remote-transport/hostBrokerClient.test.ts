@@ -19,6 +19,7 @@ function fixture() {
 		received: DeviceMessage[];
 		unreadable: number;
 		closed: boolean;
+		end: () => void;
 	}[] = [];
 	const client = createHostBrokerClient({
 		hostKey: "HOSTKEY",
@@ -30,8 +31,10 @@ function fixture() {
 				received: [] as DeviceMessage[],
 				unreadable: 0,
 				closed: false,
+				end: () => {},
 			};
 			opened.push(record);
+			let onClose = (): void => {};
 			const session: HostSession = {
 				receive: (message) => void record.received.push(message),
 				receiveUnreadable: () => {
@@ -39,10 +42,15 @@ function fixture() {
 				},
 				onChannel: () => {},
 				opened: false,
+				onClose: (handler) => {
+					onClose = handler;
+				},
 				close: () => {
 					record.closed = true;
+					onClose();
 				},
 			};
+			record.end = () => onClose();
 			return session;
 		},
 	});
@@ -108,6 +116,23 @@ test("close ends the session; unknown sessions and malformed frames are ignored"
 	client.receive(JSON.stringify({ t: "close", session: "S1" }));
 	expect(opened[0]?.closed).toBe(true);
 	expect(client.sessionCount).toBe(0);
+});
+
+test("a session that ends itself is dropped and the broker is told to close it", () => {
+	const { client, outbound, opened } = fixture();
+	client.receive(JSON.stringify({ t: "open", session: "S1" }));
+	opened[0]?.end();
+	expect(client.sessionCount).toBe(0);
+	expect(outbound.at(-1)).toEqual({ t: "close", session: "S1" });
+});
+
+test("a session the broker closed is not echoed back as a close", () => {
+	const { client, outbound } = fixture();
+	client.receive(JSON.stringify({ t: "open", session: "S1" }));
+	const sent = outbound.length;
+	client.receive(JSON.stringify({ t: "close", session: "S1" }));
+	client.detach();
+	expect(outbound.length).toBe(sent);
 });
 
 test("a dropped broker connection closes its sessions, and a reattach registers again", () => {
