@@ -19,7 +19,7 @@ Transport decision (fixed): **WebRTC DataChannels + self-hosted coturn**. The ch
 traversal is ICE/STUN with coturn as the ciphertext-only relay fallback, so the crypto for the data path is
 the protocol's, not hand-rolled. Signaling has two interchangeable carriers for the same frames: a relay
 broker (the host's own for Wi‑Fi/Tailscale, or a hosted one) and public Nostr relays
-([[module-nostr-signaling]]) for a phone on any other network with no ThinkRail server. Host-side WebRTC is expected to use a **pure-TS** implementation
+([[module-nostr-signaling]]) for a phone on any other network with no ThinkRail server. Host-side WebRTC uses a **pure-TS** implementation
 (`werift`) to stay Bun- and compiled-binary-safe; native bindings would need binary-seam handling.
 
 ## Boundary
@@ -151,9 +151,9 @@ broker (the host's own for Wi‑Fi/Tailscale, or a hosted one) and public Nostr 
 - **Allowed deps:** `remote` (types + the injected pairing primitives), `contracts` (the shared broker and signaling
   frames and public STUN servers), `@thinkrail/relay` (only `startBroker`, for the local relay),
   `@thinkrail/nostr-signaling` (the Nostr carrier and its default relays), `werift` (host-side WebRTC),
-  `node:crypto`, `node:os`; later the `host` wire protocol behind
-  `RemoteChannel`. Never the browser.
-- **Forbidden:** importing `host` today, browser bundling, hand-rolled transport crypto.
+  `log` (diagnostics), `node:crypto`, `node:os`. The `host` wire protocol reaches it only injected, as
+  `bridgeRemoteWire`'s `dispatch`. Never the browser.
+- **Forbidden:** importing `host`, browser bundling, hand-rolled transport crypto.
 
 ## Invariants
 
@@ -169,7 +169,9 @@ broker (the host's own for Wi‑Fi/Tailscale, or a hosted one) and public Nostr 
   or sit in the middle of the DTLS channel. It can only refuse service.
 - Device frames are always validated by `parseDeviceMessage`; the host never trusts raw signaling input.
 - The pure core (protocol + handshake) carries no network or WebRTC dependency and is unit-tested in full;
-  the WebRTC adapter and the signaling server are separate, later slices.
+  the WebRTC adapter (`hostPeer.ts`, `weriftRemoteChannel.ts`) and the signaling carriers (the broker
+  client, Nostr) sit behind `HostPeer`, `RemoteChannel` and the session factory, so the orchestration is
+  tested with fakes and each adapter by its own loopback test.
 
 ## Not yet here (next slices)
 

@@ -12,8 +12,8 @@ title: remote — identity, pairing, device registry
 The transport-agnostic core of remote "add project by QR" access: the host's long-term identity, the
 one-time pairing tokens a QR carries (the `thinkrail://pair` URI format itself is `contracts`'), verification of a device's
 proof-of-key, and the persisted registry of paired devices. It owns *who may connect and how a connection
-is authorized*, never *how bytes travel* — the signaling/relay transport (WebRTC + coturn) and its wiring
-into the WS surface are a later phase and a separate module.
+is authorized*, never *how bytes travel* — the signaling carriers, the WebRTC data path and their wiring
+into the host's wire protocol live in the sibling [[submodule-server-remote-transport]].
 
 See the home-directory plan `thinkrail-remote-project-qr-spec.md` for the product rationale and roadmap.
 
