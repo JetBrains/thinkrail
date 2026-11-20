@@ -89,7 +89,7 @@ the tab badged with the Needs-you count; a tap lands in that chat (a row whose c
   `SessionUsage.tsx` over chat-ui's `contextPart` / `usageParts` from `session.getStats`, read with every
   transcript refresh and after a model change: a slim `<meter>` of the context used with its percent of the
   window, since the phone font lacks the IDE's ▰ / ▱, then the billed parts, on one line; a tap opens the toolbar's
-  buttons under it — `ChatTools.tsx`'s **Resources** (`session.resources`, refreshed on `session.resourcesChanged`,
+  buttons under it (before the stats arrive the strip is those buttons, so they never wait on a read) — `ChatTools.tsx`'s **Resources** (`session.resources`, refreshed on `session.resourcesChanged`,
   as chat-ui's `ResourceRow`s, live first; a subagent opens its transcript, Stop only with write access, pending until the host answers and its failure on
   the row) and
   **Skills** (`skills.state`, grouped by chat-ui's `groupSkills` with the IDE dialog's group / All plugins / per-skill

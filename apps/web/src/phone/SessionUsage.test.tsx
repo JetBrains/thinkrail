@@ -32,12 +32,12 @@ test("the strip is one line with the context meter and every usage part; open, i
 	expect(open).not.toContain(">Cumulative usage");
 });
 
-test("no stats yet means no strip", () => {
-	expect(
-		renderToStaticMarkup(
-			<UsageBar stats={null} open={false} onToggle={() => {}}>
-				{tools}
-			</UsageBar>,
-		),
-	).toBe("");
+test("before the stats arrive the strip shows the toolbar's buttons themselves, with no usage line", () => {
+	const html = renderToStaticMarkup(
+		<UsageBar stats={null} open={false} onToggle={() => {}}>
+			{tools}
+		</UsageBar>,
+	);
+	expect(html).toContain("Resources");
+	expect(html).not.toContain('data-testid="session-stats"');
 });
