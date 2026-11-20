@@ -65,6 +65,7 @@ export {
 	type FramedResourcePreviewProps,
 } from "./support/FramedResourcePreview";
 export { GuardedRendererDiff } from "./support/GuardedRendererDiff";
+export { type OutputFileLabel, outputFileIcon, outputFileLabel } from "./support/outputFile";
 export { surfaceLineCount, VIRTUALIZED_DIFF_LINES } from "./support/largeDiff";
 export { type RendererLayout, RendererToggles } from "./support/RendererToggles";
 export {

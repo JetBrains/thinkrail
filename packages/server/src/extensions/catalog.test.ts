@@ -46,6 +46,14 @@ describe("listExtensionCatalog", () => {
 				tools: ["suggest_next_steps"],
 				hasChildExtensions: false,
 			},
+			{
+				name: "outputs",
+				title: "Outputs",
+				description: expect.any(String),
+				enabled: true,
+				tools: ["present_files"],
+				hasChildExtensions: false,
+			},
 		]);
 		const [visualize, ask] = await listExtensionCatalog(new Set(["visualize", "retired"]));
 		expect(visualize?.enabled).toBe(false);
