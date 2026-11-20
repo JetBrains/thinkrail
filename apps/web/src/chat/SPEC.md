@@ -1330,7 +1330,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   last. The sort is display-only and per group — provider order, Pinned, Recent and the Default row
   keep their own order, the catalog itself is never reordered, and a search still ranks rows by score
   (ties fall back to this order). Headers, counts and rows are matched by the pickers' own cmdk `filter`
-  (`chat-ui/src/pickerGroups.ts`, a port of cmdk's default scorer), so a header matches when any of its models
+  (`chat-ui/src/pickerGroups.ts`, a port of cmdk's default scorer, over each row's `modelKeywords` — the phone's model
+  sheet searches with the same pair), so a header matches when any of its models
   does and its count equals the rows it reveals. With no query and no models the list reads "No models to
   show. Connect a provider, or show hidden models in Settings → Models → Visible models."; "No models
   found." appears only for a query. Hidden models never reach either picker: callers pass `store`'s

@@ -70,6 +70,7 @@ import {
 	type GroupExpansion,
 	groupRowValue,
 	initialGroupExpansion,
+	modelKeywords,
 	NO_MODELS_HINT,
 	type PickerGroup,
 	PROVIDER_GROUP,
@@ -116,12 +117,8 @@ export interface ModelEffortPickerProps {
 
 const FIT_PADDING = 8;
 
-function rowKeywords(model: WireModel): string[] {
-	return [model.name, model.id, model.provider, ...model.thinkingLevels];
-}
-
 function groupRow(model: WireModel) {
-	return { value: rowValue("all", model), keywords: rowKeywords(model) };
+	return { value: rowValue("all", model), keywords: modelKeywords(model) };
 }
 
 function hasKindGlyph(model: WireModel): boolean {
@@ -403,7 +400,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 				<CommandItem
 					key={rowValue(section, model)}
 					value={rowValue(section, model)}
-					keywords={rowKeywords(model)}
+					keywords={modelKeywords(model)}
 					data-testid="model-option"
 					data-model-id={model.id}
 					data-provider={model.provider}
