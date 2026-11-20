@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { longMarkdown } from "../../../e2e/perf/longMarkdown";
 import { CONTENT_WIDTH_BREAKOUT } from "./contentWidth";
 import { BlockMarkdown, fenceLanguage, Markdown } from "./Markdown";
-import { MARKDOWN_EDGE_FIXTURES } from "./markdownFixtures.test";
+import { longMarkdown, MARKDOWN_EDGE_FIXTURES } from "./markdownFixtures.test";
 
 function withoutCarriageReturns(html: string) {
 	return html.replaceAll("\r", "");
