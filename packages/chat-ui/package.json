@@ -115,6 +115,7 @@
 		"@types/bun": "catalog:",
 		"@types/react": "catalog:",
 		"@types/react-dom": "catalog:",
+		"linkedom": "catalog:",
 		"typescript": "catalog:"
 	}
 }
