@@ -18,7 +18,7 @@ full ThinkRail IDE.
 read-only access — spans every paired computer through `remote-client`'s `remoteSessions` and per-screen wire
 reads. A chat is the web client's own: `storeHost.ts` mounts the web store and transport on that chat's
 computer (`mountRemoteSession`, which resets the previous computer's state), and the chat reads its transcript,
-queue, dialogs, notices, model and stats from the store's event reducer, exactly as the IDE does. No file tree, diffs, terminals, layout, or settings. No cloud account: the device pairs each host by its
+queue, dialogs, notices, model and stats from the store's event reducer, exactly as the IDE does. No file tree, diffs, terminals, layout, or IDE settings — its Settings tab holds only the paired devices and this phone's own theme and language. No cloud account: the device pairs each host by its
 `thinkrail://pair` link and remembers it locally.
 
 **Reaching a computer (no server deployed).** `thinkrail --remote` runs its own relay and its link lists the
@@ -158,7 +158,7 @@ spacing and button adoption guards skip `src/phone/` while the colour and typogr
 four mobile layout roles: `touch` (44px, the minimum tap target, `h-touch` / `min-h-touch`),
 `safe-top` / `safe-bottom` (the iOS safe-area insets), and `chat-gutter` (16px, the role
 [[module-chat-ui]] asks every host to define). Text comes from `mobile.*` keys in
-`packages/locales/en.json` (the i18n gate scans `apps/mobile/src`).
+`packages/locales/en.json` (the i18n gate scans `apps/web/src`, the phone shell included).
 
 A screen stands on the IDE surface it replaces: the tab roots and the computer's tree on `container-sidebar-bg` (the IDE's
 sidebar), the chat and every other screen on `container-workspace-bg`; `Screen`'s `surface` picks it.
@@ -225,8 +225,8 @@ only a screen's own list does, so the header and tab bar cannot be dragged off w
 
 ## Not yet here
 
-- Adding a project (open / create / clone need the computer's folders), picking the new worktree's base branch,
-  opening an existing worktree, and the Settled shelf.
+- Adding a project (open / create / clone need the computer's folders), opening an existing worktree, and the
+  Settled shelf.
 - Code highlighting (no `CodeHighlighterProvider` yet — code renders plain), an extension's status line and
   widgets (`setStatus` / `setWidget`), templates and `@` mentions in the composer, picker favorites, the
   Resources dock, and push notifications (a content-less "wake" push would need a
