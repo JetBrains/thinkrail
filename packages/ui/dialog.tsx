@@ -2,7 +2,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { RiCloseLine as X } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import type * as React from "react";
-import { useSyncExternalStore } from "react";
+import { useRef, useSyncExternalStore } from "react";
 import { IconButton } from "./button";
 import { yieldEscapeToIme } from "./keyboard";
 import { isToastPress } from "./toast";
@@ -61,15 +61,70 @@ function keepOpenOnToast<E extends Event>(handler: ((event: E) => void) | undefi
 	};
 }
 
+function useDialogFocusReturn({
+	onOpenAutoFocus,
+	onCloseAutoFocus,
+	onFocusCapture,
+}: Pick<
+	React.ComponentProps<typeof DialogPrimitive.Content>,
+	"onOpenAutoFocus" | "onCloseAutoFocus" | "onFocusCapture"
+>) {
+	const opened = useRef<{ content: EventTarget | null; opener: HTMLElement | null } | null>(null);
+	const remember = (content: EventTarget | null, target: EventTarget | null) => {
+		if (opened.current?.content === content) return;
+		opened.current = {
+			content,
+			opener:
+				target instanceof HTMLElement &&
+				target !== document.body &&
+				target !== document.documentElement
+					? target
+					: null,
+		};
+	};
+	return {
+		onOpenAutoFocus(event: Event) {
+			remember(event.target, document.activeElement);
+			onOpenAutoFocus?.(event);
+		},
+		onFocusCapture(event: React.FocusEvent<HTMLDivElement>) {
+			remember(event.currentTarget, event.relatedTarget);
+			onFocusCapture?.(event);
+		},
+		onCloseAutoFocus(event: Event) {
+			onCloseAutoFocus?.(event);
+			const record = opened.current;
+			if (record?.content !== event.target) return;
+			opened.current = null;
+			const target = record.opener;
+			if (event.defaultPrevented || !target?.isConnected) return;
+			const active = document.activeElement;
+			if (
+				active &&
+				active !== document.body &&
+				active !== document.documentElement &&
+				!(event.target instanceof Node && event.target.contains(active))
+			)
+				return;
+			target.focus({ preventScroll: true });
+			if (document.activeElement === target) event.preventDefault();
+		},
+	};
+}
+
 function DialogContent({
 	className,
 	children,
 	hideClose = false,
 	onEscapeKeyDown,
 	onInteractOutside,
+	onOpenAutoFocus,
+	onCloseAutoFocus,
+	onFocusCapture,
 	...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & { hideClose?: boolean }) {
 	const t = useT();
+	const focusReturn = useDialogFocusReturn({ onOpenAutoFocus, onCloseAutoFocus, onFocusCapture });
 	return (
 		<DialogPrimitive.Portal>
 			<DialogOverlay />
@@ -80,6 +135,7 @@ function DialogContent({
 				)}
 				onEscapeKeyDown={yieldEscapeToIme(onEscapeKeyDown)}
 				onInteractOutside={keepOpenOnToast(onInteractOutside)}
+				{...focusReturn}
 				{...props}
 			>
 				{children}
@@ -97,8 +153,12 @@ function DialogPanel({
 	className,
 	onEscapeKeyDown,
 	onInteractOutside,
+	onOpenAutoFocus,
+	onCloseAutoFocus,
+	onFocusCapture,
 	...props
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
+	const focusReturn = useDialogFocusReturn({ onOpenAutoFocus, onCloseAutoFocus, onFocusCapture });
 	return (
 		<DialogPrimitive.Content
 			className={cn(
@@ -107,6 +167,7 @@ function DialogPanel({
 			)}
 			onEscapeKeyDown={yieldEscapeToIme(onEscapeKeyDown)}
 			onInteractOutside={keepOpenOnToast(onInteractOutside)}
+			{...focusReturn}
 			{...props}
 		/>
 	);
