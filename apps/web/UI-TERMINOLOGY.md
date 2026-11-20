@@ -500,7 +500,7 @@ are the Top Bar's Connection Status and the Chat Header's Session Stats Bar.
 | Models | `panels/ModelsSettings.tsx` → `ModelsSettings` | Chat and review models, the GPT context window, prompt cache, visible models |
 | Providers | `panels/ProvidersSettings.tsx` → `ProvidersSettings` | In-app provider auth, JetBrains AI (`panels/JetBrainsAiCard.tsx` → `JetBrainsAiSettings`), custom servers |
 | Subagents | `panels/SubagentsSettings.tsx` → `SubagentsSettings` | Global subagent settings and this workspace's override |
-| Extensions & skills | `panels/ExtensionsSettings.tsx` → `ExtensionsSettings` | Built-in extensions, skills from other agents, pi packages and built-ins |
+| Extensions & skills | `panels/ExtensionsSettings.tsx` → `ExtensionsSettings` | Built-in and installed ThinkRail extensions, Browse of the community catalog, skills from other agents, pi packages and built-ins |
 | MCP servers | `panels/McpSettings.tsx` → `McpSettings` (+ `panels/McpServerDialogs.tsx`) | User and project MCP servers (`mcp-server-row`, `mcp-add-dialog`, `mcp-approve-dialog`); user servers also without a workspace |
 | Prompt templates | `panels/TemplatesSettings.tsx` → `TemplatesSettings` | Project / global prompt templates (`template-row`, `template-starters`) |
 | Environment | `panels/EnvironmentSettings.tsx` → `EnvironmentSettings` | The pi config folder and host environment variables (Save / Discard) |

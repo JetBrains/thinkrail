@@ -6,6 +6,7 @@ title: ThinkRail extensions (thinkrail-extensions/)
 parent: architecture
 depends-on: [module-pi-extensions, module-contracts]
 tags: [extensions, ui-sdk]
+references: [module-extension-api, module-extension-sdk, module-extension-examples, submodule-web-extensions, submodule-server-extensions-installed, submodule-server-extension-catalog, submodule-web-panels]
 ---
 
 ## Responsibility
@@ -16,7 +17,8 @@ third-party pi package — with its ThinkRail-specific halves: what the host bun
 the web client presents the capability's tools. The host composes extensions from **one registry file per
 side**. A user sees the server registry in Settings → Extensions & skills — plus the web-only entries below — and can
 switch each extension off (a host-level setting keyed on the descriptor `name`; the extension declares
-nothing for it); how a user would install or discover a new extension is deliberately not designed.
+nothing for it). Extensions authored outside this repository are installed and loaded at runtime under the
+contract in § Installed extensions; everything else in this spec describes the built-in extensions.
 
 A **web-only extension** has no pi capability and no `./server` (hint mode, [[module-ext-hint-mode]]). The
 server catalog cannot list it, so Settings → Extensions & skills also lists every web registry entry that declares a
@@ -33,9 +35,9 @@ the two registry files below ([[submodule-server-extensions]], [[submodule-web-e
 settings** exist for booleans: a descriptor declares `settings`, Settings → Extensions & skills shows each as a nested
 switch under its extension (copy from locale keys; disabled while the extension is off; hidden for an older
 host), the value lives in `AppConfig.extensionSettings`, and a change reloads open chats when their current
-turn ends — ask-user-question's `richPreviews` was the first consumer. Install UX, marketplace, other setting
-types, a per-workspace on/off override, extension-contributed wire methods, panels and store contributions
-are explicit deferrals, not gaps. The on/off switch covers everything an
+turn ends — ask-user-question's `richPreviews` was the first consumer. Other setting types, a per-workspace
+on/off override, extension-contributed wire methods, panels and store contributions are explicit deferrals,
+not gaps. The on/off switch covers everything an
 extension contributes — its factories, its tools in live sessions, and the skills of its `skillPackages`
 — the way removing a package in pi drops its extensions and skills together.
 
@@ -144,7 +146,9 @@ What a `./web` half may import:
 - **Source halves:** inside every extension, `web/**` and `server/**` never import each other, including
   by relative path.
 - **Public subpaths:** `apps/web` may import only `@thinkrail/ext-*/web`; `packages/server` only
-  `@thinkrail/ext-*/server`.
+  `@thinkrail/ext-*/server`. `@thinkrail/extension-api/installed` is imported only by the two
+  installed-extension runtimes (`apps/web/src/extensions`, `packages/server/src/extensions/installed`),
+  never by an extension half.
 - Edges: `extension-api → contracts`; `ui → contracts`; `resource-renderers → contracts, ui`;
   `ext-*/web → ui, extension-api, resource-renderers, contracts` plus **type-only** imports of its own pi
   package (the argument/result shapes belong to the package; the existing browser rule still rejects a
@@ -170,6 +174,205 @@ the same tool names; the web half follows when its renderers' dependencies are i
 without types the repo's strict `tsc` accepts (raw `.ts` that fails it, or untyped compiled JavaScript) is
 imported through a declaration-paired JavaScript re-export (`piWebAccess.js` + `.d.ts`): bundlers and Bun
 follow the `.js`, `tsc` stops at the declaration.
+
+## Installed extensions
+
+The contract for an extension authored outside this repository. It adds no capability: an installed
+extension contributes what a built-in one can through the tool path (agent tools, skills, boolean
+settings, interactive tools, artifact tools, tool cards with their registration options such as composer
+suggestions). The web shell's contributions — a `globalOverlay`, `commands`, `shortcuts` and a web-only
+Settings row — stay built-in only: an installed web half contributes its tool renderers and nothing else
+([[submodule-web-extensions]]). The **ThinkRail extension is the unit**; a pi package is an optional dependency its
+server half composes, because a UI-only extension has none and the agent backend may change.
+
+**Where it is built**
+
+- Host runtime (`extensions.json`, install root, loader, status file, web-half URLs):
+  [[submodule-server-extensions-installed]]; web runtime (shared modules, loader, tool registry):
+  [[submodule-web-extensions]].
+- Settings → Extensions & skills rows, the install dialog and Browse: [[submodule-web-panels]]; the catalog read
+  behind Browse: [[submodule-server-extension-catalog]].
+- The agent's `making-thinkrail-extensions` skill: [[submodule-server-extensions-installed]] § Decisions,
+  "The agent's path in".
+
+**Decisions and their reasons**
+
+- **Installing is the consent.** The UI half loads once the extension is installed, with no extra prompt
+  and no isolation: the server half can already run anything on the machine, so a second gate adds a
+  prompt, not protection. Scope is **global only** — a repository cannot bring an extension into a
+  teammate's app.
+- **One install flow, one list.** The existing Install package dialog and Installed list hold extensions
+  and plain pi packages side by side; the fetched `package.json` decides the kind. A `thinkrail` manifest
+  wins over a `pi` manifest in the same package: it is declared in ThinkRail's file, never in pi's
+  settings, so its pi resources reach sessions only through its server half — one registration per tool.
+- **All-or-nothing versioning.** An extension built for an API the host does not support stays installed
+  and is not loaded; its row says why. Nothing of it runs, in either direction (too new or too old).
+- **Contributions are stated in code**, by the same descriptors built-ins export. Rejected: declaring
+  them in the manifest (a second contract beside the built-ins').
+- **Text is the author's own, untranslated** (translations: issue #1423). A declared setting therefore
+  carries its own `title` and `description`.
+- **The agent may install what it writes**, by editing the declarations file, as it edits `mcp.json`,
+  with no confirmation click: the user asked for it.
+
+**Manifest** — in the package's `package.json`; the npm package `name` is the extension's identity (the
+key for the on/off switch and its settings) and must not equal a built-in's `name`.
+
+```json
+{
+  "keywords": ["thinkrail-extension"],
+  "thinkrail": {
+    "api": "1.0",
+    "server": "./server/index.ts",
+    "web": "./dist/web.js",
+    "styles": "./dist/web.css",
+    "title": "Weather"
+  }
+}
+```
+
+- `api` is `major.minor`. The host loads an extension whose major equals its own and whose minor is not
+  newer. At least one of `server` / `web`; `styles` only with `web`; every path is relative and stays
+  inside the package, with no `..` segment. `title` falls back to the package name; description, author
+  and version are the package's own fields. An `image` is still valid but unused (§ Catalog); the SDK
+  build warns about it.
+- `server` is a TypeScript (or JavaScript) module whose default export is a `defineServerExtension`
+  descriptor whose `name` is the package name, else the row fails. `web` is a pre-built ESM file (`.js` /
+  `.mjs`) whose default export is a `defineWebExtension` descriptor, registered under the package name:
+  the host never bundles. `styles` is a `.css` file; the fixed suffixes let the host serve both with a
+  fixed content type.
+- **One reader, guarded copies.** The reader, `EXTENSION_API_VERSION`, the host object's name and the
+  shared-specifier list live in `@thinkrail/extension-api/installed` ([[module-extension-api]] owns the
+  exact rules), never in `./web`, which an installed web half receives as extension API. The SDK's build
+  and the website, which may not import it at runtime, keep copies that run its table of manifest cases
+  in their tests; only the SDK is stricter, in one rule (below).
+
+**Server half**
+
+- Sources are declared in `<data dir>/extensions.json` as `{ "extensions": ["<source>", …] }` in pi's
+  source syntax (`npm:name`, a git URL, an absolute folder). The host watches the file and reconciles:
+  installs what is missing, loads, and publishes the result.
+- Packages install under `<data dir>/extensions/` with pi's installer pointed at that root, so the pi
+  config folder never holds them and pi's own loader never sees them. **Each installed version has its
+  own folder**: Bun keeps the first evaluation of an extension's plain-JavaScript dependencies, and its
+  folder listings, for the life of the process. A folder source is loaded in place.
+- **pi and typebox are kept out of an extension's `node_modules`.** A copy there is what a
+  plain-JavaScript dependency of the extension binds to instead of the host's. A folder source's own
+  `node_modules` is never pruned; that matters only when the extension has such a dependency
+  ([[submodule-server-extensions-installed]] § Known limitations).
+- The descriptor is imported through pi's public loader by a host-written shim, so the extension's pi
+  imports are the host's single instance in every launcher ([[pi-compatibility]] registers the seam;
+  [[submodule-server-extensions-installed]] owns the mechanism); every load also checks that the shim's
+  `createAgentSession` and `Type` are the host's own. The version check runs before any extension code.
+- The server registry is a runtime list — built-ins first, then installed — and the existing composition
+  is reused: named inline factories, per-session services, interactive tools, owner-scoped skill roots
+  resolved from the installed entry, the on/off switch, boolean settings.
+  A change reaches open chats when their current turn ends.
+- **Host-owned tools always win.** An installed extension is composed after every host-owned factory —
+  the built-in extensions, the host's own tools, its session tools and its MCP and tool-search slots —
+  so a tool, command or flag name it shares with any of them stays the host's; a user's pi package,
+  which pi loads before every inline extension, likewise keeps a tool name it shares with an installed
+  extension, and each keeps its other tools ([[submodule-server-extensions]]). Settings and the status
+  file list an installed extension's tool only when no built-in or static host tool has its name; such
+  a name is listed as `shadowed` in the status file instead.
+- A load failure (syntax error, throwing top level, missing dependency) is a row state, never a host
+  failure. Extensions load individually.
+
+**Web half**
+
+- At bootstrap the app exposes its own modules on one frozen object,
+  `globalThis.__thinkrailExtensionHost = { api, modules }`, keyed by the specifier an author imports:
+  `react`, `react/jsx-runtime`, `react-dom`, `@thinkrail/extension-sdk/web`,
+  `@thinkrail/extension-sdk/resources`, `@thinkrail/extension-sdk/ui/button`, `…/ui/theme` and
+  `…/ui/utils`. **Extension API v1 is an allow-list of names, not of modules**: each specifier's value
+  holds only the export names `SHARED_MODULE_EXPORTS` in `@thinkrail/extension-api/installed` lists
+  ([[module-extension-api]]) — the one canonical list the app's host object and the SDK both read — so
+  nothing the app's packages happen to export becomes a promise by being exported. What it holds:
+  - `react`, `react/jsx-runtime`, `react-dom`: the stable public React 19 API as the app's production
+    build exports it — internals (`__*`), `unstable_*` / experimental names, the deprecated `react-dom`
+    `useFormState` (now `useActionState`) and every `react-dom` subpath (`client`, `server`) left out.
+  - `./web`: `defineWebExtension`, `strArg`, `numArg`, `resultText` (plus the tool-card types).
+  - `./resources`: `ResourcePreview`, `FramedResourcePreview`, `useResourceScope`,
+    `useOptionalResourceHost`.
+  - `./ui/button`: `Button`, `IconButton`, `withIconClass`; `./ui/theme`: `onThemeSwap`; `./ui/utils`: `cn`.
+
+  Chosen from what the sample and the built-in cards actually import; when in doubt a name was left
+  out, because adding one is an API minor and removing one an API major. Dropped from the first draft:
+  `ui/dialog`, `ui/textarea`, `ui/keyboard`, `ui/attention-line` and `ui/fonts` (a card draws its own
+  markup; they can return as minors once an outside author needs them), `languageFromPath` (a
+  highlighter's language map with no highlighter in the set), and `parseToolResultContent` /
+  `toolValueText` (they promise the wire image shape, and images are rendered by the host's common
+  result layer, never by a card). Rejected: the whole UI kit (every primitive becomes a promise) and
+  self-contained cards (no app components, a second contract).
+- An extension's bundle contains none of those modules: the SDK's build resolves each shared specifier,
+  including imports made from inside the extension's own `node_modules`, to a generated module that reads
+  the host object, checks the API major and re-exports the names in a manifest of export names.
+- **An extension's stylesheet uses its own Tailwind prefix** and is built against a theme file the SDK
+  ships, so it emits only its own utilities and they point at the app's runtime variables. Unprefixed, a
+  sheet loaded after the app's reorders the app's own utilities.
+- The host serves each web half at a versioned URL on its own origin
+  (`/extensions/<name>/<version>-<hash of the files' stats>/<file>`, listed in `extension.list`); the app imports it by absolute URL
+  and links its stylesheet. Web halves installed at start load before the first render, with a bounded
+  wait; later ones register through the subscribable tool registry ([[submodule-web-extensions]]).
+- Every tool renderer, built-in or installed, sits in its own error boundary that falls back to the
+  default renderer for that row. Removing an extension unregisters its renderers; switching it off does
+  not, so past transcripts keep their cards. A contested tool name renders as the server runs it: a
+  built-in keeps it over an installed extension, and between installed ones the extension listed first
+  keeps it (pi gives a tool name to its first registration), whichever bundle finishes loading first.
+  The web client applies that order among the bundles currently registered: while the first-listed one
+  is loading or has failed, the next one's card is drawn — an accepted window
+  ([[submodule-web-extensions]]).
+- **What v1 promises beyond the module list:** the components' props and variants, the `TooltipProvider`
+  at the app root, the locale store behind `useT`, portals to `<body>`, `html[data-theme]`, the semantic
+  colour variables and utility names, the spacing and radius scales, the typography classes, Tailwind's
+  major and layer order, and the React major. Breaking any of them is API v2.
+
+**SDK** — one published package, `@thinkrail/extension-sdk` ([[module-extension-sdk]]), versioned with the
+extension API (its `major.minor` is the API, so an extension depends on `~<major.minor>.0`) and released
+like the portable pi packages (Decision 20): `./server` (the server contract of [[module-extension-api]]),
+`./web` (the installed-extension contract: a `WebExtension` of only `name` and `toolRenderers`, none of
+the built-in-only fields), `./ui/button`, `./ui/theme`, `./ui/utils` and `./resources` (type declarations
+for the shared set), the build command `thinkrail-extension build --prefix <x>` (the prefix every
+utility in the extension's stylesheet carries), the manifest of shared export names and the theme file.
+Its build accepts only an `api` equal to its own version, since a bundle can only rely on the export
+names its SDK knew. Each API version's surface — the allow-list and the SDK's declarations — is a
+committed snapshot a test holds the code to: a removal or change needs a new major, an addition a new
+minor and its own snapshot. It imports no pi value at runtime. The in-repo `extension-api`, `ui` and
+`resource-renderers` packages stay private; samples built with it live in `extension-examples/`
+([[module-extension-examples]]).
+
+**Catalog** — one file, `thinkrail.ai/extensions/catalog.json`, lists every npm package carrying the
+`thinkrail-extension` keyword whose latest `package.json` has a valid manifest. An extension distributed
+by git URL or folder installs but is not listed. The app's Browse reads this file; the website that
+builds and publishes it ships separately.
+
+```json
+{
+  "schema": 1,
+  "generatedAt": "2026-01-01T00:00:00.000Z",
+  "extensions": [
+    {
+      "name": "thinkrail-ext-weather",
+      "version": "1.2.0",
+      "title": "Weather",
+      "description": "Forecasts in chat.",
+      "author": "Jane Doe",
+      "api": "1.0",
+      "halves": ["server", "web"],
+      "install": "npm:thinkrail-ext-weather",
+      "npm": "https://www.npmjs.com/package/thinkrail-ext-weather",
+      "repository": "https://github.com/jane/thinkrail-ext-weather",
+      "publishedAt": "2026-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+`title`, `author` and `repository` are optional. A listing shows which halves exist, not tool names:
+those live in code a catalog cannot run. **No preview images:** a manifest may carry `image`, but nothing
+fetches or shows it — an author-chosen URL would expose the address of every user who opened Browse —
+so the host accepts and ignores an `image` in the file. The app's Browse gets the file through the host,
+never from the browser, and offers Install only for a listing whose `api` this app can load; an
+incompatible listing is marked and cannot be installed from Browse.
 
 ## Members
 

@@ -41,7 +41,12 @@ they are *generators*: they use `node:fs` and `node:path`, which must never reac
 
 `designSources.ts` owns the shared adoption-guard and compiler-census source scan: app source, `packages/ui`, and every
 `thinkrail-extensions/*/web` source tree, excluding tests, generated output, and installed dependencies.
-The same SDK/extension roots are explicit Tailwind `@source` directives in the app stylesheet. Extension
+The same SDK/extension roots are explicit Tailwind `@source` directives in the app stylesheet, which turns
+automatic source detection off (`@import "tailwindcss" source(none)`) and scans `src/` and `index.html`
+explicitly, excluding `src/extensions/fixtures`: automatic detection scans every non-ignored file under
+`apps/web` — stray build folders, `public/`, docs — so a staged installed-extension bundle would leak its
+classes into the app sheet and hide its own missing stylesheet. Installed extensions ship their own
+prefixed sheet and are never app sources. Extension
 sources name recursive file globs: a wildcard directory ending in `*/web` alone does not discover the
 nested files, silently dropping extension-only classes such as fullscreen zoom. The browser zoom probe
 checks rendered dimensions, not just the zoom label, to pin actual CSS generation. Each token `*:check`

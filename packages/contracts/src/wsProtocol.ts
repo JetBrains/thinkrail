@@ -13,6 +13,7 @@ import type {
 	DiffStats,
 	EditorInfo,
 	ExistingWorktreeCandidate,
+	ExtensionBrowseResult,
 	ExtensionCatalogEntry,
 	FileNode,
 	GitCommit,
@@ -42,9 +43,9 @@ import type {
 	MergePrResult,
 	OpenBranchReview,
 	OpenPrResult,
+	PackageInstallResult,
 	PiPackageResourceType,
 	PiPackageScope,
-	PiPackageSummary,
 	PiPackagesCatalog,
 	PrBodySource,
 	Project,
@@ -144,7 +145,9 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 127;
+export const PROTOCOL_VERSION = 129;
+export const EXTENSION_BROWSE_PROTOCOL_VERSION = 129;
+export const INSTALLED_EXTENSIONS_PROTOCOL_VERSION = 128;
 export const SUBAGENT_CATALOG_PROTOCOL_VERSION = 127;
 export const SERVER_FALLBACK_PROTOCOL_VERSION = 126;
 export const MCP_USER_SERVERS_PROTOCOL_VERSION = 125;
@@ -502,6 +505,10 @@ export const WS_METHODS = {
 	packagesCheckUpdates: "packages.checkUpdates",
 	packagesSetResourceEnabled: "packages.setResourceEnabled",
 	packagesReveal: "packages.reveal",
+	extensionsRemove: "extensions.remove",
+	extensionsUpdate: "extensions.update",
+	extensionsCheckUpdates: "extensions.checkUpdates",
+	extensionsBrowse: "extensions.browse",
 	localesList: "locales.list",
 	localesReveal: "locales.reveal",
 	themesList: "themes.list",
@@ -649,6 +656,7 @@ export const WS_CHANNELS = {
 	localesChanged: "locales.changed",
 	themesChanged: "themes.changed",
 	packagesChanged: "packages.changed",
+	extensionsChanged: "extensions.changed",
 	fontsChanged: "fonts.changed",
 	speechChanged: "speech.changed",
 } as const;
@@ -1274,7 +1282,7 @@ export interface WsMethodMap {
 	"packages.list": { params: { workspaceId?: string; force?: boolean }; result: PiPackagesCatalog };
 	"packages.install": {
 		params: { source: string; scope: PiPackageScope; workspaceId?: string };
-		result: PiPackageSummary;
+		result: PackageInstallResult;
 	};
 	"packages.remove": {
 		params: { source: string; scope: PiPackageScope; workspaceId?: string };
@@ -1299,6 +1307,10 @@ export interface WsMethodMap {
 		result: Ack;
 	};
 	"packages.reveal": { params: { path: string; workspaceId?: string }; result: Ack };
+	"extensions.remove": { params: { source: string }; result: Ack };
+	"extensions.update": { params: { source: string }; result: Ack };
+	"extensions.checkUpdates": { params: { force?: boolean }; result: { source: string }[] };
+	"extensions.browse": { params: { force?: boolean }; result: ExtensionBrowseResult };
 	"locales.list": { params: Record<string, never>; result: LocalLocalesSnapshot };
 	"locales.reveal": { params: Record<string, never>; result: Ack };
 	"themes.list": { params: Record<string, never>; result: UserThemesSnapshot };
@@ -1670,6 +1682,12 @@ export type WsErrorCode =
 	| "PACKAGE_REMOVE_FAILED"
 	| "PACKAGE_UPDATE_FAILED"
 	| "PACKAGE_SETTINGS_WRITE_FAILED"
+	| "EXTENSION_SCOPE_UNSUPPORTED"
+	| "EXTENSION_UNKNOWN"
+	| "EXTENSIONS_FILE_INVALID"
+	| "EXTENSION_CATALOG_OFFLINE"
+	| "EXTENSION_CATALOG_UNREACHABLE"
+	| "EXTENSION_CATALOG_INVALID"
 	| "CACHE_WARMING_WRITE_FAILED"
 	| "REQUEST_REPLAY_OVERFLOW"
 	| "INSTALLED_FONTS_UNAVAILABLE"

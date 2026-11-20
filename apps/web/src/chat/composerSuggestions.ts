@@ -1,8 +1,10 @@
 import type { AssistantMessage } from "@thinkrail/contracts";
 import {
 	carriesComposerSuggestions,
+	currentToolRegistry,
 	isInteractiveTool,
 	readComposerSuggestions,
+	type ToolRegistry,
 } from "./toolRegistry";
 import type { ChatTurn, ToolResultState } from "./types";
 
@@ -18,11 +20,12 @@ const NONE: readonly string[] = [];
 export function endingSuggestionsCall(
 	message: AssistantMessage,
 	toolResults: Readonly<Record<string, ToolResultState>>,
+	registry: ToolRegistry = currentToolRegistry(),
 ): { name: string; args: Record<string, unknown>; raw: unknown } | null {
 	const calls = message.content.filter((block) => block.type === "toolCall");
 	const call = calls.at(-1);
-	if (!call || calls.some((block) => isInteractiveTool(block.name))) return null;
-	if (!carriesComposerSuggestions(call.name)) return null;
+	if (!call || calls.some((block) => isInteractiveTool(block.name, registry))) return null;
+	if (!carriesComposerSuggestions(call.name, registry)) return null;
 	const result = toolResults[call.id];
 	if (result?.status !== "done") return null;
 	return { name: call.name, args: call.arguments ?? {}, raw: result.raw };
@@ -31,6 +34,7 @@ export function endingSuggestionsCall(
 export function deriveComposerSuggestions(
 	source: ComposerSuggestionsSource | undefined,
 	disabledExtensions: readonly string[] = [],
+	registry: ToolRegistry = currentToolRegistry(),
 ): readonly string[] {
 	if (!source || source.isStreaming) return NONE;
 	if (source.queue.steering.length > 0 || source.queue.followUp.length > 0) return NONE;
@@ -43,7 +47,10 @@ export function deriveComposerSuggestions(
 		}
 	}
 	if (last?.kind !== "assistant" || last.streaming) return NONE;
-	const ending = endingSuggestionsCall(last.message, source.toolResults);
+	const ending = endingSuggestionsCall(last.message, source.toolResults, registry);
 	if (!ending) return NONE;
-	return readComposerSuggestions(ending.name, ending.args, ending.raw, disabledExtensions) ?? NONE;
+	return (
+		readComposerSuggestions(ending.name, ending.args, ending.raw, disabledExtensions, registry) ??
+		NONE
+	);
 }

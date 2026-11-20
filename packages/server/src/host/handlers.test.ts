@@ -858,6 +858,7 @@ test("extension.list reflects disabledExtensions written through settings.update
 			enabled: true,
 			tools: ["visualize"],
 			hasChildExtensions: false,
+			kind: "builtin",
 		},
 		{
 			name: "ask-user-question",
@@ -867,6 +868,7 @@ test("extension.list reflects disabledExtensions written through settings.update
 			tools: ["ask_user_question"],
 			hasChildExtensions: false,
 			settings: [{ key: "richPreviews", default: true }],
+			kind: "builtin",
 		},
 		{
 			name: "web-access",
@@ -875,6 +877,7 @@ test("extension.list reflects disabledExtensions written through settings.update
 			enabled: true,
 			tools: ["web_search", "source_check", "fetch_content", "get_search_content", "web_enable"],
 			hasChildExtensions: true,
+			kind: "builtin",
 		},
 		{
 			name: "next-steps",
@@ -883,6 +886,7 @@ test("extension.list reflects disabledExtensions written through settings.update
 			enabled: true,
 			tools: ["suggest_next_steps"],
 			hasChildExtensions: false,
+			kind: "builtin",
 		},
 	]);
 	await handleRequest(

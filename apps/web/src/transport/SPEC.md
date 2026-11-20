@@ -210,7 +210,12 @@ The browser never scrubs or holds a vendor client: the host is the only sanitize
   `shell` ignores stored overrides below it — and `updateKeybindings(map)` is the one write: it resolves
   `false` without sending to an older host (which would reject the unknown key), else sends the whole map as
   one `settings.update { keybindings }` and resolves `true` once accepted, the store converging on the
-  `settings.changed` broadcast (no optimistic write); a host refusal rejects (`KEYBINDINGS_INVALID`). `openSpeechSocket()`
+  `settings.changed` broadcast (no optimistic write); a host refusal rejects (`KEYBINDINGS_INVALID`).
+  `refreshExtensionCatalog(connectionGeneration?)` is the one `extension.list` path: every welcome from a
+  host at `INSTALLED_EXTENSIONS_PROTOCOL_VERSION` (v128) or newer, every `extensions.changed` push, and each
+  mount of the Extensions page (any host from v82, as before) call it; the latest request wins and only a
+  response for the current connection generation installs the store's `extensionCatalog` (a failure
+  installs `failed`). An older host is never asked at welcome, so its traffic is unchanged. `openSpeechSocket()`
   opens the dictation side socket (`/speech?protocol=`) on the same endpoint for [[submodule-web-speech]].
   It carries binary audio and never a request. `server.welcome`'s `speech` seed and every `speech.changed`
   push install the store's `speech` status whole; `supportsSpeech` (v107) gates the same way.

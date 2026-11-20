@@ -20,6 +20,7 @@ import {
 	E2E_CENTRAL_STATE,
 	E2E_DATA_DIR,
 	E2E_EDITOR_LOG,
+	E2E_EXTENSION_CATALOG_URL,
 	E2E_FAKE_BIN_DIR,
 	E2E_HOME_DIR,
 	E2E_INSTALLED_FONTS,
@@ -46,7 +47,7 @@ if (executableOnPath(hostPath, "pi")) throw new Error("e2e host PATH must not co
 const hostCommand =
 	process.env.THINKRAIL_E2E_SKIP_BUILD === "1"
 		? `${JSON.stringify(bunExecutable)} packages/server/src/dev.ts`
-		: `${JSON.stringify(bunExecutable)} run build:web && ${JSON.stringify(bunExecutable)} packages/server/src/dev.ts`;
+		: `${JSON.stringify(bunExecutable)} run build:e2e && ${JSON.stringify(bunExecutable)} packages/server/src/dev.ts`;
 export default defineConfig({
 	testDir: ".",
 	// The headless workflow-test suite has its own config (e2e/playwright.workflows.config.ts) — no browser,
@@ -95,6 +96,8 @@ export default defineConfig({
 			// control *file* (seeded to the git fixture in globalSetup); a test can rewrite it to hand the
 			// picker a different folder (e.g. a non-git one) without restarting the shared host.
 			THINKRAIL_PICK_DIR: E2E_PICK_DIR_POINTER,
+			// Browse reads a lane-local catalog file instead of thinkrail.ai; a test writes or deletes it.
+			THINKRAIL_EXTENSION_CATALOG_URL: E2E_EXTENSION_CATALOG_URL,
 			// The host's installed-font list, read from this file per request instead of the OS font service.
 			THINKRAIL_INSTALLED_FONTS: E2E_INSTALLED_FONTS,
 			// Voice input installs from a local fake engine and tiny model, never NVIDIA's servers —

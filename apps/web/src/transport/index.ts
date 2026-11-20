@@ -26,6 +26,7 @@ export {
 	getTransport,
 	initTransport,
 	loadInAppSurvey,
+	refreshExtensionCatalog,
 	respondToTool,
 	runHostUpdate,
 	supportsChangeMutations,

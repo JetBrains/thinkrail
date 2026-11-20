@@ -8,8 +8,11 @@ import {
 	CHATS_PROTOCOL_VERSION,
 	canMarkCompletionUnread,
 	DEFAULT_WORKSPACE_NAME,
+	EXTENSION_BROWSE_PROTOCOL_VERSION,
+	type ExtensionCatalogEntry,
 	firstPromptOfTexts,
 	type GitDiffScope,
+	INSTALLED_EXTENSIONS_PROTOCOL_VERSION,
 	isLiveResource,
 	isSessionWorking,
 	MCP_PROTOCOL_VERSION,
@@ -68,6 +71,7 @@ import type {
 	ClosedChat,
 	ComposerFocusRequest,
 	EditorTab,
+	ExtensionCatalogRead,
 	FilesTreeView,
 	MarkedUnread,
 	PendingMarkUnread,
@@ -193,6 +197,58 @@ export function selectOnboardingActive(
 ): boolean {
 	if (state.onboardingWizard === "shown") return !hasRepoProject(state.projects);
 	return state.onboardingWizard === "pending" && selectOnboardingEligible(state);
+}
+
+export function selectSupportsInstalledExtensions(state: ProtocolState): boolean {
+	return (
+		state.protocolVersion !== null && state.protocolVersion >= INSTALLED_EXTENSIONS_PROTOCOL_VERSION
+	);
+}
+
+export function selectSupportsExtensionBrowse(state: ProtocolState): boolean {
+	return (
+		state.protocolVersion !== null && state.protocolVersion >= EXTENSION_BROWSE_PROTOCOL_VERSION
+	);
+}
+
+/** The Built into ThinkRail group: every entry an older host lists, and `kind: "builtin"` from v128. */
+export function selectBuiltinExtensions(catalog: ExtensionCatalogRead): ExtensionCatalogRead {
+	return Array.isArray(catalog) ? catalog.filter((entry) => entry.kind !== "installed") : catalog;
+}
+
+/** Installed extensions in the host's declaration order; none while the list is not in. */
+export function selectInstalledExtensions(catalog: ExtensionCatalogRead): ExtensionCatalogEntry[] {
+	return Array.isArray(catalog) ? catalog.filter((entry) => entry.kind === "installed") : [];
+}
+
+export interface InstalledWebHalf {
+	name: string;
+	url: string;
+	styles?: string;
+}
+
+/**
+ * The web halves this window should have loaded, in host order — switched-off ones too, so past
+ * transcripts keep their cards. `null` while unknown (disconnected, or the list not in yet); an older host
+ * has none, so a reconnect to it unloads every one.
+ */
+export function selectInstalledWebHalves(
+	state: ProtocolState & { extensionCatalog: ExtensionCatalogRead },
+): InstalledWebHalf[] | null {
+	if (state.protocolVersion === null) return null;
+	if (!selectSupportsInstalledExtensions(state)) return [];
+	if (!Array.isArray(state.extensionCatalog)) return null;
+	return state.extensionCatalog.flatMap((entry) =>
+		entry.kind === "installed" && entry.web
+			? [
+					{
+						name: entry.name,
+						url: entry.web.url,
+						...(entry.web.styles ? { styles: entry.web.styles } : {}),
+					},
+				]
+			: [],
+	);
 }
 
 export function selectSupportsMcp(state: ProtocolState): boolean {

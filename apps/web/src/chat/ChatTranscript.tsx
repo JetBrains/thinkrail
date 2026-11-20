@@ -65,9 +65,10 @@ import {
 	stabilizeRows,
 } from "./rows";
 import { type StreamStatus, StreamStatusSlot, streamStatus } from "./StreamIndicator";
+import { ToolRendererBoundary } from "./ToolRendererBoundary";
 import { TranscriptItem, TranscriptNavigationContext } from "./TranscriptItem";
 import { useToolInteraction } from "./toolInteraction";
-import { getToolRenderer } from "./toolRegistry";
+import { DefaultToolRenderer, useToolRegistry, useToolRenderer } from "./toolRegistry";
 import { newestContentRowId } from "./transcriptNavigation";
 import { ChatTurnView, type DividerReveal } from "./turns";
 import { type ChatReadingPosition, useChatScroll } from "./useChatScroll";
@@ -318,6 +319,7 @@ const ChatTranscript = forwardRef<
 		() => sessionRoundArtifacts(artifactsSnapshot, sessionId, smartArtifacts),
 		[artifactsSnapshot, sessionId, smartArtifacts],
 	);
+	const toolRegistry = useToolRegistry();
 	const derivedRows = useMemo(
 		() =>
 			deriveRows(
@@ -328,8 +330,18 @@ const ChatTranscript = forwardRef<
 				agentTurns,
 				workspaceRoot,
 				roundArtifacts,
+				toolRegistry,
 			),
-		[turns, toolResults, isStreaming, isSpec, agentTurns, workspaceRoot, roundArtifacts],
+		[
+			turns,
+			toolResults,
+			isStreaming,
+			isSpec,
+			agentTurns,
+			workspaceRoot,
+			roundArtifacts,
+			toolRegistry,
+		],
 	);
 	// Keep the stabilized rows in state (never a ref written during render): a render-written ref both
 	// violates apps/web/SPEC.md and makes the React Compiler skip memoizing this component.
@@ -353,16 +365,16 @@ const ChatTranscript = forwardRef<
 		setRowHeightEstimateCache({ messageOrder: chatMessageOrder, heights: new Map() });
 	}
 	const rowHeightEstimates = useMemo(
-		() => estimateChatRowHeights(rows, rowHeightEstimateCache.heights),
-		[rows, rowHeightEstimateCache],
+		() => estimateChatRowHeights(rows, rowHeightEstimateCache.heights, toolRegistry),
+		[rows, rowHeightEstimateCache, toolRegistry],
 	);
 	const visibleAnchorRowId = useRef<string | null>(null);
 	const virtualRows = useVirtualRows(rows, chatMessageOrder, visibleAnchorRowId);
 	const firstItemIndex = virtualRows.firstItemIndex;
 
 	const messageActions = useMemo(
-		() => deriveMessageActions(chronologicalRows, isStreaming),
-		[chronologicalRows, isStreaming],
+		() => deriveMessageActions(chronologicalRows, isStreaming, toolRegistry),
+		[chronologicalRows, isStreaming, toolRegistry],
 	);
 
 	const currentStreamStatus = useMemo<StreamStatus | null>(
@@ -659,17 +671,29 @@ const ChatTranscript = forwardRef<
 		anchorToolCallId !== undefined && rowsHaveToolCall(chronologicalRows, anchorToolCallId);
 
 	const interactionStates = useMemo(
-		() => deriveInteractionStates(runtime.turns, runtime.toolResponses, runtime.toolResults),
-		[runtime.turns, runtime.toolResponses, runtime.toolResults],
+		() =>
+			deriveInteractionStates(
+				runtime.turns,
+				runtime.toolResponses,
+				runtime.toolResults,
+				toolRegistry,
+			),
+		[runtime.turns, runtime.toolResponses, runtime.toolResults, toolRegistry],
 	);
 	const awaitingToolCallId = awaitingToolCallIdOf(runtime.hostState);
 	const dockedCall = useMemo(
 		() =>
 			dockedInteraction(
-				latestPendingInteraction(runtime.turns, runtime.toolResults, interactionStates),
+				latestPendingInteraction(
+					runtime.turns,
+					runtime.toolResults,
+					interactionStates,
+					toolRegistry,
+				),
 				awaitingToolCallId,
+				toolRegistry,
 			),
-		[runtime.turns, runtime.toolResults, interactionStates, awaitingToolCallId],
+		[runtime.turns, runtime.toolResults, interactionStates, awaitingToolCallId, toolRegistry],
 	);
 	const dockedToolCallId = dockedCall?.toolCallId;
 	useLayoutEffect(() => {
@@ -953,10 +977,24 @@ function DockedTool({
 	workspaceRoot: string | undefined;
 	onOpenFile: ((path: string) => void) | undefined;
 }) {
-	const Renderer = getToolRenderer(call.toolName);
+	const Renderer = useToolRenderer(call.toolName);
 	const interaction = useToolInteraction(call.toolCallId, call.toolName, "dock");
 	const props: ToolRenderProps = { ...call, workspaceRoot, onOpenFile, interaction };
-	return <Renderer {...props} />;
+	return (
+		<ToolRendererBoundary
+			renderer={Renderer}
+			toolCallId={call.toolCallId}
+			status={call.status}
+			streaming={call.streaming}
+			fallback={
+				<div data-testid="tool-renderer-fallback">
+					<DefaultToolRenderer {...props} />
+				</div>
+			}
+		>
+			<Renderer {...props} />
+		</ToolRendererBoundary>
+	);
 }
 
 export default ChatTranscript;

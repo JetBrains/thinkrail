@@ -5,6 +5,7 @@ import {
 	createSyntheticSourceInfo,
 	DefaultPackageManager,
 	DefaultResourceLoader,
+	type ExtensionAPI,
 	type ExtensionFactory,
 	getAgentDir,
 	type InlineExtension,
@@ -27,6 +28,7 @@ import {
 	omitDisabledRegistryExtensions,
 	preferRegistryTools,
 	registryInlineExtensions,
+	type ServerExtensionEntry,
 	STAGED_HOST_SKILLS_ROUTE,
 	serverExtensions,
 } from "../extensions";
@@ -121,21 +123,20 @@ function relabelAliasProvenance(skill: Skill, sources: CompatibilitySkillSource[
 	};
 }
 
-let devExtensionSkillRoots: ReadonlyMap<string, readonly string[]> | undefined;
-function extensionSkillRootsByName(): ReadonlyMap<string, readonly string[]> {
+const devExtensionSkillRoots = new WeakMap<ServerExtensionEntry, readonly string[]>();
+function skillRootsOf(entry: ServerExtensionEntry): readonly string[] {
 	const skillsDir = bundled?.skillsDir;
-	if (skillsDir !== undefined) {
-		return new Map(
-			serverExtensions.map((entry) => [
-				entry.extension.name,
-				extensionSkillRoots(entry, skillsDir),
-			]),
-		);
+	if (skillsDir !== undefined) return extensionSkillRoots(entry, skillsDir);
+	let roots = devExtensionSkillRoots.get(entry);
+	if (!roots) {
+		roots = extensionSkillRoots(entry);
+		devExtensionSkillRoots.set(entry, roots);
 	}
-	devExtensionSkillRoots ??= new Map(
-		serverExtensions.map((entry) => [entry.extension.name, extensionSkillRoots(entry)]),
-	);
-	return devExtensionSkillRoots;
+	return roots;
+}
+
+function extensionSkillRootsByName(): ReadonlyMap<string, readonly string[]> {
+	return new Map(serverExtensions().map((entry) => [entry.extension.name, skillRootsOf(entry)]));
 }
 
 function extensionSkillPaths(include: (name: string) => boolean): string[] {
@@ -419,6 +420,20 @@ export function childExtensionFactories(workspaceId: string): InlineExtension[] 
 	];
 }
 
+interface LoaderInputs {
+	cwd: string;
+	settingsManager: SettingsManager;
+	getAdmission: () => SkillAdmissionContext;
+	excludedExtensionPaths: readonly string[];
+	extraFactories: InlineExtension[];
+	session: HostSessionServices | undefined;
+}
+
+/**
+ * pi copies a loader's inline factories at construction, so a change of the registry (an installed
+ * extension loaded or removed) is applied by building a fresh loader at the next reload, behind one
+ * stable `ResourceLoader` the session keeps.
+ */
 export async function buildResourceLoader(
 	cwd: string,
 	settingsManager: SettingsManager,
@@ -427,32 +442,146 @@ export async function buildResourceLoader(
 	extraFactories: InlineExtension[] = [],
 	session?: HostSessionServices,
 ): Promise<ResourceLoader> {
+	const inputs: LoaderInputs = {
+		cwd,
+		settingsManager,
+		getAdmission,
+		excludedExtensionPaths,
+		extraFactories,
+		session,
+	};
+	let registry = serverExtensions();
+	let inner: ResourceLoader | undefined;
+	const current = (): ResourceLoader => {
+		if (!inner) throw new Error("the resource loader has not loaded yet");
+		return inner;
+	};
+	const loader: ResourceLoader = {
+		getExtensions: () => current().getExtensions(),
+		getSkills: () => current().getSkills(),
+		getPrompts: () => current().getPrompts(),
+		getThemes: () => current().getThemes(),
+		getAgentsFiles: () => current().getAgentsFiles(),
+		getSystemPrompt: () => current().getSystemPrompt(),
+		getSystemPromptSource: () => current().getSystemPromptSource(),
+		getAppendSystemPrompt: () => current().getAppendSystemPrompt(),
+		getAppendSystemPromptSources: () => current().getAppendSystemPromptSources(),
+		extendResources: (paths) => current().extendResources(paths),
+		reload: async (options) => {
+			const latest = serverExtensions();
+			if (!inner || latest !== registry) {
+				registry = latest;
+				inner = createRegistryLoader(registry, loader, inputs);
+			}
+			await inner.reload(options);
+		},
+	};
+	await loader.reload();
+	return loader;
+}
+
+const REGISTRARS: Readonly<Record<string, string>> = {
+	registerTool: "tool",
+	registerCommand: "command",
+	registerFlag: "flag",
+};
+
+function registrationKey(method: string, args: readonly unknown[]): string | undefined {
+	const [first] = args;
+	const name = method === "registerTool" ? (first as { name?: unknown } | null)?.name : first;
+	return typeof name === "string" ? `${REGISTRARS[method]}:${name}` : undefined;
+}
+
+/** `pi` with every tool, command and flag registration passed through `admit` first. */
+function registrationView(pi: ExtensionAPI, admit: (key: string) => boolean): ExtensionAPI {
+	return new Proxy(pi, {
+		get: (target, key) => {
+			const value = Reflect.get(target, key);
+			if (typeof key !== "string" || !(key in REGISTRARS) || typeof value !== "function")
+				return value;
+			return (...args: unknown[]) => {
+				const claim = registrationKey(key, args);
+				if (claim !== undefined && !admit(claim)) return;
+				return Reflect.apply(value, target, args);
+			};
+		},
+	});
+}
+
+/** Names the host's `builtin:` slots register in a load, refused to installed extensions. */
+function builtinSlotClaims(): {
+	record: (inline: InlineExtension) => InlineExtension;
+	refuse: (inline: InlineExtension) => InlineExtension;
+	reset: () => void;
+} {
+	const claimed = new Set<string>();
+	const wrap = (inline: InlineExtension, admit: (key: string) => boolean): InlineExtension => {
+		if (typeof inline === "function") return inline;
+		return { ...inline, factory: (pi) => inline.factory(registrationView(pi, admit)) };
+	};
+	return {
+		record: (inline) =>
+			typeof inline !== "function" && inline.builtin
+				? wrap(inline, (key) => {
+						claimed.add(key);
+						return true;
+					})
+				: inline,
+		refuse: (inline) => wrap(inline, (key) => !claimed.has(key)),
+		reset: () => claimed.clear(),
+	};
+}
+
+/** The host's own static inline factories, composed into every parent session after the built-ins. */
+export const HOST_INLINE_FACTORIES: readonly ExtensionFactory[] = [
+	headlessSearchPolicy,
+	reviewToolExtension,
+	requestReviewExtension,
+	setTitleExtension,
+	continueInWorkspaceExtension,
+	workspaceToolsExtension,
+	oversizedImageGuard,
+	artifactsGuard,
+	skillCatalog,
+	skillCarryover,
+];
+
+function createRegistryLoader(
+	registry: readonly ServerExtensionEntry[],
+	owner: ResourceLoader,
+	{
+		cwd,
+		settingsManager,
+		getAdmission,
+		excludedExtensionPaths,
+		extraFactories,
+		session,
+	}: LoaderInputs,
+): ResourceLoader {
 	let disabledAtReload = disabledExtensions();
 	const isDisabledAtReload = (name: string): boolean => disabledAtReload.has(name);
 	let settingsAtReload = extensionSettings();
 	const settingAtReload = (extension: string, key: string): boolean | undefined =>
 		settingsAtReload[extension]?.[key];
-	const sharedFactories: InlineExtension[] = [
-		...registryInlineExtensions(
+	const registryFactories = (installed: boolean): InlineExtension[] =>
+		registryInlineExtensions(
 			"extensions",
 			isDisabledAtReload,
-			serverExtensions,
+			registry.filter((entry) => (entry.installed !== undefined) === installed),
 			session,
 			settingAtReload,
-		),
-		headlessSearchPolicy,
-		reviewToolExtension,
-		requestReviewExtension,
-		setTitleExtension,
-		continueInWorkspaceExtension,
-		workspaceToolsExtension,
-		oversizedImageGuard,
-		artifactsGuard,
-		skillCatalog,
-		skillCarryover,
+		);
+	const slots = builtinSlotClaims();
+	const hostFactories: InlineExtension[] = [
+		...(bundled?.factories ?? []),
+		...registryFactories(false),
+		...HOST_INLINE_FACTORIES,
 		...extraFactories,
 	];
-	const extensionFactories = bundled ? [...bundled.factories, ...sharedFactories] : sharedFactories;
+	const extensionFactories = [
+		...hostFactories.map(slots.record),
+		...registryFactories(true).map(slots.refuse),
+	];
 	const { refreshSkillPaths, ...skillInputs } = resolveSkillInputs(
 		cwd,
 		getAdmission,
@@ -468,7 +597,10 @@ export async function buildResourceLoader(
 		extensionsOverride: (result: LoadExtensionsResult) => {
 			recordProviderOwners(result);
 			recordLoadedExtensions(result);
-			return preferRegistryTools(omitDisabledRegistryExtensions(result, isDisabledAtReload));
+			return preferRegistryTools(
+				omitDisabledRegistryExtensions(result, isDisabledAtReload, registry),
+				registry,
+			);
 		},
 	};
 	const devExtensionPaths = bundled ? [] : resolveDevPaths().extensionPaths;
@@ -478,12 +610,13 @@ export async function buildResourceLoader(
 		settingsManager,
 		builtinExtensions: builtinExtensionNames(extensionFactories),
 	});
-	const applyCurrentPolicy = (loader: ResourceLoader): void => {
+	const applyCurrentPolicy = (): void => {
+		slots.reset();
 		settingsManager.setProjectTrusted(getAdmission().piResourceTrusted);
 		disabledAtReload = disabledExtensions();
 		settingsAtReload = extensionSettings();
 		refreshSkillPaths(disabledAtReload);
-		loaderPolicies.set(loader, loaderPolicyKey(settingsAtReload));
+		loaderPolicies.set(owner, loaderPolicyKey(settingsAtReload));
 	};
 	// pi's reload installs a declared package that is missing; the packages layer learns of it here.
 	const noticingInstalls = async (reload: () => Promise<void>): Promise<void> => {
@@ -502,10 +635,9 @@ export async function buildResourceLoader(
 		});
 		const reloadTrusted = loader.reload.bind(loader);
 		loader.reload = async (options) => {
-			applyCurrentPolicy(loader);
+			applyCurrentPolicy();
 			await noticingInstalls(() => reloadTrusted(options));
 		};
-		await loader.reload();
 		return loader;
 	}
 
@@ -543,14 +675,13 @@ export async function buildResourceLoader(
 	});
 	const reloadResolved = loader.reload.bind(loader);
 	loader.reload = async (options) => {
-		applyCurrentPolicy(loader);
+		applyCurrentPolicy();
 		await noticingInstalls(async () => {
 			await resolveExtensionPaths();
 			await reloadResolved(options);
 		});
 		relabelDiscoveredExtensions(loader, discoveredMetadata);
 	};
-	await loader.reload();
 	return loader;
 }
 

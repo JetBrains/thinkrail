@@ -1,4 +1,5 @@
 import {
+	type ExtensionCatalogEntry,
 	MATCH_TIER,
 	type MatchField,
 	type MatchRange,
@@ -58,6 +59,39 @@ export function settingsSearchEntries(
 		),
 		...injected.filter((entry) => sections.has(entry.section)),
 	];
+}
+
+/** The jump target of an installed extension's row and of one of its settings. */
+export function installedExtensionSettingId(name: string, key?: string): string {
+	return key === undefined ? `installed-extension-${name}` : `extension-setting-${name}-${key}`;
+}
+
+/** Installed extensions and the settings they declare, in their own words, for the dialog to inject. */
+export function installedExtensionSearchEntries(
+	entries: readonly ExtensionCatalogEntry[],
+	settingsSupported: boolean,
+): SettingsSearchEntry[] {
+	return entries.flatMap((entry) => [
+		{
+			id: installedExtensionSettingId(entry.name),
+			section: SettingsSection.Extensions,
+			label: entry.title,
+			...(entry.description ? { description: entry.description } : {}),
+			keywords: [entry.name],
+		},
+		...((entry.state ?? "loaded") === "loaded" && settingsSupported
+			? (entry.settings ?? [])
+			: []
+		).map(
+			(setting): SettingsSearchEntry => ({
+				id: installedExtensionSettingId(entry.name, setting.key),
+				section: SettingsSection.Extensions,
+				label: setting.title ?? setting.key,
+				...(setting.description ? { description: setting.description } : {}),
+				keywords: [entry.title, entry.name],
+			}),
+		),
+	]);
 }
 
 function fieldsOf(entry: SettingsSearchEntry, sectionLabel: string): MatchField[] {

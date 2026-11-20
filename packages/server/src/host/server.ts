@@ -14,10 +14,12 @@ import type {
 import {
 	ARTIFACTS_PROTOCOL_VERSION,
 	CONTINUATION_PROTOCOL_VERSION,
+	EXTENSION_ASSETS_ROUTE,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
 	GITHUB_STAR_PROTOCOL_VERSION,
 	IMAGES_ROUTE,
+	INSTALLED_EXTENSIONS_PROTOCOL_VERSION,
 	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	PI_PACKAGES_PROTOCOL_VERSION,
@@ -42,6 +44,8 @@ import {
 	disposeAllSessions,
 	getSessionAttribution,
 	getSessionWorkspaceId,
+	HOST_BUILTIN_EXTENSION_NAMES,
+	HOST_INLINE_FACTORIES,
 	handlePiSettingsFileChanged,
 	handleProjectPiSettingsChanged,
 	initializeSessionStates,
@@ -49,6 +53,7 @@ import {
 	liveSessionIdsOf,
 	mayHoldProjectSkills,
 	mcpPolicyOf,
+	piNpmCommand,
 	piTrustsProjectPath,
 	primeProjectPiSettings,
 	primeUserPiSettings,
@@ -56,6 +61,7 @@ import {
 	reconcileMcpSessions,
 	refreshAgentReviewTool,
 	refreshExtensionTools,
+	refreshInstalledExtensions,
 	refreshSkillAdmission,
 	refreshSubagentConcurrency,
 	refreshSubagentTools,
@@ -115,7 +121,7 @@ import {
 	stopJbcentralRuntime,
 } from "../auth";
 import { forgetOpenBranchReview } from "../branch-review";
-import { artifactTools } from "../extensions";
+import { artifactTools, installedExtensions, startInstalledExtensions } from "../extensions";
 import {
 	configureSurveySource,
 	redeliverInvitation,
@@ -129,7 +135,7 @@ import { ignoredPaths } from "../git";
 import { forgetImageSession, resetImages, serveImage, setImageSource } from "../images";
 import { watchLocalLocales } from "../locales";
 import { logger, observeLoggedErrors } from "../log";
-import { loadWorkspaces } from "../persistence";
+import { dataDir, loadWorkspaces } from "../persistence";
 import {
 	getProjects,
 	grantProjectMcpTool,
@@ -196,6 +202,7 @@ import {
 import { createArtifactEventMapper } from "./artifactEvents";
 import { seesChats } from "./chats";
 import { continueToolHost, observeContinuation, setContinuationPublisher } from "./continuations";
+import { serveExtensionAsset } from "./extensionRoutes";
 import {
 	BLOB_PREFIX,
 	FILES_PREFIX,
@@ -364,6 +371,7 @@ function sameHostUpdateRelease(
 
 export async function createServer(options: CreateServerOptions = {}): Promise<RunningServer> {
 	applyGitCeiling();
+	process.env.THINKRAIL_DATA_DIR = dataDir();
 	try {
 		ensureChatsContainer();
 	} catch (error) {
@@ -488,6 +496,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			if (url.pathname.startsWith(USER_FONTS_ROUTE)) {
 				return serveUserFonts(req, url.pathname);
 			}
+			if (url.pathname.startsWith(EXTENSION_ASSETS_ROUTE)) {
+				return serveExtensionAsset(req, url.pathname);
+			}
 			if (url.pathname.startsWith(WORKSPACE_VIEW_ROUTE)) {
 				return serveWorktreeView(req.method, url);
 			}
@@ -552,6 +563,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					ws.subscribe(WS_CHANNELS.themesChanged);
 				if (ws.data.protocolVersion >= PI_PACKAGES_PROTOCOL_VERSION)
 					ws.subscribe(WS_CHANNELS.packagesChanged);
+				if (ws.data.protocolVersion >= INSTALLED_EXTENSIONS_PROTOCOL_VERSION)
+					ws.subscribe(WS_CHANNELS.extensionsChanged);
 				if (ws.data.protocolVersion >= FONTS_PROTOCOL_VERSION)
 					ws.subscribe(WS_CHANNELS.fontsChanged);
 				const speech = ws.data.protocolVersion >= SPEECH_PROTOCOL_VERSION;
@@ -1017,6 +1030,16 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	for (const workspace of listAllWorkspaceRecords()) primeProjectPiSettings(workspace.worktreePath);
 	setPiPackagesPublisher(() => publishScoped(WS_CHANNELS.packagesChanged, {}));
 	const stopUserMcpWatch = watchUserMcpConfig({ onSettingsChanged: handlePiSettingsFileChanged });
+	const stopInstalledExtensions = startInstalledExtensions({
+		dataDir: dataDir(),
+		npmCommand: piNpmCommand,
+		hostExtensionNames: HOST_BUILTIN_EXTENSION_NAMES,
+		hostToolFactories: HOST_INLINE_FACTORIES,
+		onChange: () => {
+			refreshInstalledExtensions();
+			publishScoped(WS_CHANNELS.extensionsChanged, {});
+		},
+	});
 	const nudge = (channel: WsChannel) => () => publishScoped(channel, {});
 	const stopLocalesWatch = watchLocalLocales({ onChange: nudge(WS_CHANNELS.localesChanged) });
 	const stopThemesWatch = watchUserThemes({ onChange: nudge(WS_CHANNELS.themesChanged) });
@@ -1227,6 +1250,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	initializeAnalytics({
 		...(appVersion ? { appVersion } : {}),
 		...(analytics ?? {}),
+		foreignFrameRoots: () => installedExtensions()?.codeRoots() ?? [join(dataDir(), "extensions")],
 		additionalEnabled: initialAdditionalAnalyticsEnabled(initialConfig),
 	});
 	configureSurveySource(surveyEndpoint());
@@ -1262,6 +1286,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		stopJbcentralRuntime();
 		stopAllWatches();
 		stopUserMcpWatch();
+		stopInstalledExtensions();
 		stopLocalesWatch();
 		stopThemesWatch();
 		stopFontsWatch();

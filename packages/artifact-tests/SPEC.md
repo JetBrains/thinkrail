@@ -5,7 +5,7 @@ status: active
 title: Native artifact test harnesses
 parent: architecture
 depends-on: [module-cli, module-server, module-shared]
-references: [module-desktop, module-browser-e2e, module-ci-release, module-ext-visualize, module-ext-ask-user-question]
+references: [module-desktop, module-browser-e2e, module-ci-release, module-ext-visualize, module-ext-ask-user-question, submodule-server-extensions-installed, pi-compatibility]
 tags: [testing, artifacts, public-surface-checked]
 ---
 
@@ -54,7 +54,15 @@ so the probe asserts the strict mermaid parse error reaches the transcript as an
 probe; [[module-ext-visualize]]), and on a second prompt calls `ask_user_question`, so the probe sees the
 session block with `needsInput.kind === "tool-response"`, answers through `session.respondToTool`, and reads
 the answer back as the call's non-error tool result (the registry's per-session composition and the host
-mailbox inside the artifact; [[module-ext-ask-user-question]]) — start pi's bundled MCP engine in a real chat (a written-out
+mailbox inside the artifact; [[module-ext-ask-user-question]]), and on a third calls the tool of an
+**installed ThinkRail extension** — a folder source declared in the custom host's `extensions.json`, with
+no `node_modules`, so each of its `@earendil-works/pi-coding-agent` and `typebox` imports can only resolve
+through pi's extension resolution. The probe waits for its `extension.list` row to be `installed` /
+`loaded` (the host's loader fails any load whose shim `createAgentSession` or `Type` is not the host's own
+member — members, because jiti hands namespaces over as Proxies), fetches its web half and stylesheet
+from `/extensions/…` (content type, `nosniff`, bytes), and reads the tool result, which reports
+`ctx.sessionManager instanceof SessionManager` against the extension's own import; the seam is
+registered in [[pi-compatibility]] — start pi's bundled MCP engine in a real chat (a written-out
 stdio fixture must report *connected · 1 tool* and an in-probe HTTP server that answers 401 with
 protected-resource metadata *needs sign-in*, read back through `mcp.list`, which proves the lazily imported
 MCP runtime executes inside the artifact), reach an OAuth URL without a provider turn, verify health/UI

@@ -1,0 +1,275 @@
+import { afterEach, describe, expect, it } from "bun:test";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import {
+	builtinServerExtensions,
+	extensionSkillRoots,
+	installedExtensions,
+	interactiveTools,
+	listExtensionCatalog,
+	registryExtensionName,
+	registryInlineExtensions,
+	resolveExtensionSkillRoots,
+	serverExtensions,
+	startInstalledExtensions,
+} from "./index";
+import { tempDir, writeExtension } from "./installed/testFixtures";
+
+const SESSION_DESCRIPTOR = `import { Type } from "typebox";
+export default {
+	name: "session-ext",
+	description: "From the descriptor",
+	extensions: [],
+	interactiveTools: { ask_later: {} },
+	settings: { loud: { type: "boolean", default: false, title: "Loud", description: "Shout" } },
+	skillPackages: ["session-skills"],
+	sessionExtensions: (session) => [
+		(pi) => {
+			pi.registerTool({
+				name: session.setting("loud") ? "loud_tool" : "quiet_tool",
+				label: "x",
+				description: "x",
+				parameters: Type.Object({}),
+				async execute() {
+					return { content: [], details: {} };
+				},
+			});
+		},
+	],
+};
+`;
+
+const SHADOWING_DESCRIPTOR = `import { Type } from "typebox";
+const tool = (name) => ({
+	name,
+	label: "x",
+	description: "x",
+	parameters: Type.Object({}),
+	async execute() {
+		return { content: [], details: {} };
+	},
+});
+export default {
+	name: "shadow-ext",
+	extensions: [
+		(pi) => {
+			pi.registerTool(tool("visualize"));
+			pi.registerTool(tool("own_tool"));
+			pi.registerTool(tool("host_tool"));
+		},
+	],
+};
+`;
+
+let stop: (() => void) | undefined;
+let root: string | undefined;
+
+afterEach(() => {
+	stop?.();
+	stop = undefined;
+	if (root) rmSync(root, { recursive: true, force: true });
+	root = undefined;
+});
+
+async function installed(): Promise<{ folder: string; failed: string; dataDir: string }> {
+	root = tempDir();
+	const dataDir = join(root, "data");
+	mkdirSync(dataDir);
+	const folder = writeExtension(join(root, "session-ext"), {
+		name: "session-ext",
+		web: "dist/web.js",
+		manifest: { title: "Session extension" },
+		files: { "server/index.ts": SESSION_DESCRIPTOR },
+	});
+	const skills = join(folder, "node_modules", "session-skills");
+	mkdirSync(join(skills, "skills", "demo"), { recursive: true });
+	writeFileSync(
+		join(skills, "package.json"),
+		JSON.stringify({ name: "session-skills", pi: { skills: ["./skills"] } }),
+	);
+	const failed = writeExtension(join(root, "broken"), {
+		name: "broken-ext",
+		files: { "server/index.ts": 'throw new Error("boom");\n' },
+	});
+	const reserved = writeExtension(join(root, "reserved"), { name: "visualize" });
+	writeFileSync(
+		join(dataDir, "extensions.json"),
+		JSON.stringify({ extensions: [folder, failed, reserved] }),
+	);
+	stop = startInstalledExtensions({ dataDir, onChange: () => {} });
+	await installedExtensions()?.reconcile();
+	return { folder, failed, dataDir };
+}
+
+describe("the runtime registry", () => {
+	it("is the built-ins alone without installed extensions", () => {
+		expect(serverExtensions()).toBe(builtinServerExtensions);
+	});
+
+	it("lists built-ins first, then the loaded installed extensions, as a stable array", async () => {
+		const { folder } = await installed();
+		const entries = serverExtensions();
+		expect(entries.map((entry) => entry.extension.name)).toEqual([
+			"visualize",
+			"ask-user-question",
+			"web-access",
+			"next-steps",
+			"session-ext",
+		]);
+		expect(serverExtensions()).toBe(entries);
+		expect(entries.at(-1)?.specifier).toBe(join(folder, "server", "index.ts"));
+		stop?.();
+		stop = undefined;
+		expect(serverExtensions()).toBe(builtinServerExtensions);
+	});
+
+	it("writes the status file with the tool names the catalog lists", async () => {
+		const { folder, failed, dataDir } = await installed();
+		const status = JSON.parse(readFileSync(join(dataDir, "extensions", "status.json"), "utf8"));
+		expect(status.extensions.map((entry: { source: string }) => entry.source)).toEqual([
+			folder,
+			failed,
+			expect.stringContaining("reserved"),
+		]);
+		expect(status.extensions[0]).toMatchObject({ state: "loaded", tools: ["quiet_tool"] });
+		expect(status.extensions[1]).toMatchObject({ state: "failed" });
+	});
+
+	it("reports installed rows with their kind, state, source, copy and web half", async () => {
+		const { folder, failed } = await installed();
+		const catalog = await listExtensionCatalog(new Set(["session-ext"]));
+		const builtins = builtinServerExtensions.length;
+		expect(catalog.slice(0, builtins).map((entry) => entry.kind)).toEqual(
+			builtinServerExtensions.map(() => "builtin"),
+		);
+		const [loaded, broken, reserved] = catalog.slice(builtins);
+		expect(loaded).toEqual({
+			name: "session-ext",
+			title: "Session extension",
+			description: "A fixture extension",
+			enabled: false,
+			tools: ["quiet_tool"],
+			hasChildExtensions: false,
+			settings: [{ key: "loud", default: false, title: "Loud", description: "Shout" }],
+			kind: "installed",
+			source: folder,
+			version: "1.0.0",
+			state: "loaded",
+			web: {
+				url: expect.stringMatching(
+					/^\/extensions\/session-ext\/1\.0\.0-[0-9a-f]{12}\/dist\/web\.js$/,
+				),
+			},
+			api: "1.0",
+		});
+		expect(broken).toMatchObject({
+			name: "broken-ext",
+			enabled: true,
+			tools: [],
+			kind: "installed",
+			source: failed,
+			state: "failed",
+			error: expect.stringContaining("boom"),
+		});
+		expect(broken).not.toHaveProperty("web");
+		expect(reserved).toMatchObject({ state: "failed", error: expect.stringContaining("built-in") });
+	});
+
+	it("composes an installed extension like a built-in: inline name, switch, settings, interactive tools", async () => {
+		await installed();
+		const host = {
+			expectToolResponse: () => {},
+			awaitToolResponse: () => Promise.resolve({ kind: "deferred" as const }),
+			workspaceFiles: {
+				check: async () => {},
+				ensureArtifactsDir: async () => {},
+				scratchDir: "",
+				artifactsDir: "",
+			},
+		};
+		const tools: string[] = [];
+		const pi = {
+			registerTool: (tool: { name: string }) => tools.push(tool.name),
+		} as unknown as ExtensionAPI;
+		const inline = registryInlineExtensions(
+			"extensions",
+			(name) => name === "web-access",
+			undefined,
+			host,
+			(extension, key) => (extension === "session-ext" && key === "loud" ? true : undefined),
+		);
+		const own = inline.find(
+			(entry) => typeof entry !== "function" && entry.name === "ext:session-ext",
+		);
+		if (!own || typeof own === "function") throw new Error("session-ext is not composed");
+		await own.factory(pi);
+		expect(tools).toEqual(["loud_tool"]);
+		expect(registryExtensionName("<inline:ext:session-ext>")).toBe("session-ext");
+		expect(registryExtensionName("<inline:session-ext>")).toBeUndefined();
+		expect(interactiveTools(() => false).has("ask_later")).toBe(true);
+		expect(interactiveTools((name) => name === "session-ext").has("ask_later")).toBe(false);
+		const off = registryInlineExtensions(
+			"extensions",
+			(name) => name === "session-ext",
+			undefined,
+			host,
+		);
+		const disabled = off.find(
+			(entry) => typeof entry !== "function" && entry.name === "ext:session-ext",
+		);
+		if (!disabled || typeof disabled === "function") throw new Error("session-ext is not composed");
+		tools.length = 0;
+		await disabled.factory(pi);
+		expect(tools).toEqual([]);
+	});
+
+	it("lists only the tools an installed extension owns, and the host-owned ones as shadowed", async () => {
+		root = tempDir();
+		const dataDir = join(root, "data");
+		mkdirSync(dataDir);
+		const folder = writeExtension(join(root, "shadow-ext"), {
+			name: "shadow-ext",
+			files: { "server/index.ts": SHADOWING_DESCRIPTOR },
+		});
+		writeFileSync(join(dataDir, "extensions.json"), JSON.stringify({ extensions: [folder] }));
+		const hostTool = (pi: ExtensionAPI) =>
+			pi.registerTool({ name: "host_tool" } as Parameters<ExtensionAPI["registerTool"]>[0]);
+		stop = startInstalledExtensions({ dataDir, onChange: () => {}, hostToolFactories: [hostTool] });
+		await installedExtensions()?.reconcile();
+		const status = JSON.parse(readFileSync(join(dataDir, "extensions", "status.json"), "utf8"));
+		expect(status.extensions).toEqual([
+			expect.objectContaining({
+				state: "loaded",
+				tools: ["own_tool"],
+				shadowed: ["visualize", "host_tool"],
+			}),
+		]);
+		const row = (await listExtensionCatalog(new Set())).at(-1);
+		expect(row).toMatchObject({ name: "shadow-ext", tools: ["own_tool"] });
+		stop?.();
+		stop = undefined;
+	});
+
+	it("refuses a package named after one of the host's own inline extensions", async () => {
+		root = tempDir();
+		const dataDir = join(root, "data");
+		mkdirSync(dataDir);
+		const mcp = writeExtension(join(root, "mcp"), { name: "mcp" });
+		writeFileSync(join(dataDir, "extensions.json"), JSON.stringify({ extensions: [mcp] }));
+		stop = startInstalledExtensions({ dataDir, onChange: () => {}, hostExtensionNames: ["mcp"] });
+		await installedExtensions()?.reconcile();
+		expect(installedExtensions()?.records()).toEqual([
+			expect.objectContaining({ state: "failed", error: expect.stringContaining("built-in") }),
+		]);
+	});
+
+	it("resolves an installed extension's skill roots from its own entry, never a staged folder", async () => {
+		const { folder } = await installed();
+		const entry = serverExtensions().at(-1);
+		if (!entry) throw new Error("no installed entry");
+		const roots = [join(folder, "node_modules", "session-skills", "skills")];
+		expect(resolveExtensionSkillRoots(entry)).toEqual(roots);
+		expect(extensionSkillRoots(entry, "/staged/skills")).toEqual(roots);
+	});
+});

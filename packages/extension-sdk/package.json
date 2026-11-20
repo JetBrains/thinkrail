@@ -1,0 +1,111 @@
+{
+	"name": "@thinkrail/extension-sdk",
+	"version": "0.0.0",
+	"description": "Build ThinkRail extensions: the server and web contracts, type declarations for the UI the app shares with extensions, and the `thinkrail-extension build` command.",
+	"license": "Apache-2.0",
+	"type": "module",
+	"keywords": [
+		"thinkrail",
+		"thinkrail-extension-sdk",
+		"pi",
+		"extension",
+		"sdk"
+	],
+	"homepage": "https://thinkrail.ai/",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/JetBrains/thinkrail.git",
+		"directory": "packages/extension-sdk"
+	},
+	"bugs": "https://github.com/JetBrains/thinkrail/issues",
+	"author": "ThinkRail",
+	"engines": {
+		"node": ">=22.19"
+	},
+	"bin": {
+		"thinkrail-extension": "./bin/thinkrail-extension.js"
+	},
+	"files": [
+		"bin",
+		"dist",
+		"assets",
+		"README.md",
+		"LICENSE"
+	],
+	"exports": {
+		"./server": {
+			"types": "./dist/server.d.ts",
+			"default": "./dist/server.js"
+		},
+		"./web": {
+			"types": "./dist/types/web.d.ts",
+			"default": "./dist/host/web.js"
+		},
+		"./resources": {
+			"types": "./dist/types/resources.d.ts",
+			"default": "./dist/host/resources.js"
+		},
+		"./ui/button": {
+			"types": "./dist/types/ui/button.d.ts",
+			"default": "./dist/host/ui/button.js"
+		},
+		"./ui/theme": {
+			"types": "./dist/types/ui/theme.d.ts",
+			"default": "./dist/host/ui/theme.js"
+		},
+		"./ui/utils": {
+			"types": "./dist/types/ui/utils.d.ts",
+			"default": "./dist/host/ui/utils.js"
+		},
+		"./shared-modules.json": "./assets/shared-modules.json",
+		"./theme.css": "./assets/thinkrail-theme.css",
+		"./package.json": "./package.json"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"scripts": {
+		"api:snapshot": "bun tools/apiSnapshot.ts",
+		"build": "bun tools/build.ts",
+		"generate": "NODE_ENV=production bun tools/generate.ts",
+		"prepack": "bun tools/build.ts",
+		"test": "bun test",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@tailwindcss/node": "catalog:",
+		"@tailwindcss/oxide": "catalog:",
+		"rolldown": "1.2.15",
+		"tailwindcss": "catalog:"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*",
+		"@types/react": "^19.3.0",
+		"@types/react-dom": "^19.3.0"
+	},
+	"peerDependenciesMeta": {
+		"@earendil-works/pi-coding-agent": {
+			"optional": true
+		},
+		"@types/react": {
+			"optional": true
+		},
+		"@types/react-dom": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "catalog:",
+		"@thinkrail/extension-api": "workspace:*",
+		"@thinkrail/resource-renderers": "workspace:*",
+		"@thinkrail/ui": "workspace:*",
+		"@types/bun": "catalog:",
+		"@types/react": "catalog:",
+		"@types/react-dom": "catalog:",
+		"react": "catalog:",
+		"react-dom": "catalog:",
+		"rolldown-plugin-dts": "0.30.2",
+		"typescript": "catalog:"
+	}
+}

@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ModelsRefreshOptions, ModelsRefreshResult } from "@earendil-works/pi-ai";
 import { SettingsManager } from "@earendil-works/pi-coding-agent";
+import { InstalledExtensions } from "../extensions";
 import { observeLoggedErrors } from "../log";
 import { buildResourceLoader } from "./extensions";
 import { packageSourceIdentity, setDisabledPackagesResolver } from "./packages";
@@ -352,6 +353,38 @@ test("a hung user extension cannot hold the generation, and none of the pass reg
 			jest.useRealTimers();
 			delete hooks.__thinkrailHungExtensionStarted;
 		}
+	});
+});
+
+test("an installed server half that never settles holds a runtime generation only until its load timeout", async () => {
+	await inAgentDir(async ({ root }) => {
+		const folder = join(root, "hung-ext");
+		mkdirSync(join(folder, "server"), { recursive: true });
+		writeFileSync(
+			join(folder, "package.json"),
+			JSON.stringify({
+				name: "hung-ext",
+				version: "1.0.0",
+				type: "module",
+				thinkrail: { api: "1.0", server: "server/index.ts" },
+			}),
+		);
+		writeFileSync(join(folder, "server", "index.ts"), "await new Promise(() => {});\n");
+		const dataDir = join(root, "data");
+		mkdirSync(dataDir, { recursive: true });
+		writeFileSync(join(dataDir, "extensions.json"), JSON.stringify({ extensions: [folder] }));
+		const installed = new InstalledExtensions({
+			dataDir,
+			reservedNames: () => [],
+			skillRoots: () => [],
+			loadTimeoutMs: 300,
+		});
+		const pass = installed.reconcile();
+		await Bun.sleep(50);
+		const generation = await preparedGeneration();
+		expect(generation.runtime).toBeDefined();
+		await pass;
+		expect(installed.records()[0]).toMatchObject({ name: "hung-ext", state: "failed" });
 	});
 });
 

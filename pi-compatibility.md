@@ -4,7 +4,7 @@ type: architecture-design
 status: draft
 title: Pi compatibility — host adaptations and upgrade removal gates
 parent: architecture
-references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat, module-pi-subagents, module-pi-background-commands, module-pi-delegation]
+references: [submodule-server-agent, submodule-server-agent-mcp, submodule-server-extensions-installed, module-artifact-tests, submodule-server-history, submodule-server-templates, module-cli, module-desktop, submodule-web-chat, module-pi-subagents, module-pi-background-commands, module-pi-delegation]
 tags: [pi, compatibility]
 ---
 
@@ -58,6 +58,16 @@ with this evidence:
   is gone, and `/import` of such a session no longer leaves a stray copy. The SSE patch applies at the same
   offsets. 1.5.2 adds four catalogue entries (`radius/claude-fable-5-2`, `meta/muse-ember-1.0`,
   `opencode/minimax-m3.1-flash-free`, `openrouter/nex-agi/nex-n2.6`) on top of the 1.5.1 delta below.
+- The two installed-extension entries (written against 1.5.0) were re-checked on 1.5.2 when that branch
+  merged: `discoverAndLoadExtensions` is still public and still calls the uncached `loadExtensions`;
+  `loadExtensionModule` still builds a `moduleCache: false` jiti with the same three resolution branches
+  (alias map for the `.js` dist in a source run, virtual modules in embedded builds) and calls the default
+  export during load; the only change is that it imports `canonicalizePath(extensionPath)` (the realpath),
+  which the shim, loaded by an absolute path and keyed per load, does not depend on. No public module
+  loader or `VIRTUAL_MODULES` export exists, so the shim's gate is not met. `DefaultPackageManager`'s
+  `install` / `getInstalledPath` / `checkForAvailableUpdates` and the `--legacy-peer-deps` arguments are
+  unchanged (updates now also emit a `result` progress event, unused), `DefaultResourceLoader` still copies
+  `extensionFactories` at construction, and `parseGitUrl` reads the same prefixes.
 - The bundled chat catalogue changes from 1,592 to 1,639 provider/model pairs in 1.5.1: 66 added (Claude Fable 5.2
   on Anthropic, Bedrock, OpenRouter, Vercel and OpenCode; Kimi K3.1 Pro; Gemini 4 Argon, GPT-6.1 Terra and
   Mistral Large 4 on Radius; the `qwen-token-plan-individual-cn` provider) and 19 removed (older
@@ -227,18 +237,27 @@ restart and toggle-reload regressions on upgrades.
   test catches that. If only the "behavior the patch keeps" group fails, pi changed that behavior: decide
   whether to follow it before porting anything.
 - **Registry tool precedence** — [[submodule-server-extensions]], `preferRegistryTools` in the session
-  loader's `extensionsOverride`. It relies on three pi facts:
+  loader's `extensionsOverride`, and the composition order around it. It relies on three pi facts:
   - pi keeps every extension and gives a tool name to its first registration
     (`ExtensionRunner.getAllRegisteredTools`);
   - path extensions (user packages) load before inline factories;
   - tool conflicts are reported only between extensions, before the override runs.
 
-  The override moves a ThinkRail registry extension ahead of the first user package registering one of
-  its tool names, so a same-name package such as rpiv's `ask_user_question` cannot take over the card,
-  mailbox and repair that key on the name. Remove it when pi offers an inline-extension precedence or
-  replace option. Re-verify the three facts in the installed dist, and run the collision tests in
+  The override moves a **built-in** registry extension ahead of the first user package registering one
+  of its tool names (with the built-ins between them, keeping their order), so a same-name package such as rpiv's `ask_user_question` cannot take over the card,
+  mailbox and repair that key on the name. An installed extension is never promoted: it is composed
+  after every host-owned inline factory, so by the first fact any host tool (a built-in's, a host
+  factory's, a session extra's, an MCP tool of the `builtin:mcp` path) beats it, and by the second a
+  user's pi package beats it on a shared tool name — the pi package's tool wins, both extensions' other
+  tools stay. A fourth fact closes the gap order cannot: pi drops a **replaceable `builtin:` slot** when
+  any non-replaceable extension registers one of its names (`omitReplacedExtensions`), and loads the
+  slots before every inline factory; the session loader records the names the host's slots (`mcp`,
+  `tool-search`) register and refuses those registrations to an installed extension, so
+  `tool_search` and `/mcp` stay the host's. Remove it when pi offers an inline-extension precedence or
+  replace option. Re-verify the four facts in the installed dist, and run the collision tests in
   `agentSessionManager.test.ts` (same-name questionnaire before and after reload, and a chat created with
-  ours off that re-enables it over the package) on every upgrade.
+  ours off that re-enables it over the package) and `agent/extensions.test.ts` (an installed extension
+  registering every class of host name) on every upgrade.
 - **Provider-registration provenance** — [[submodule-server-agent]], `recordProviderOwners` in the
   session loader's `extensionsOverride` ([[module-pi-delegation]] decision #32). Pi keeps no
   provider-to-extension provenance: `LoadExtensionsResult.runtime.pendingProviderRegistrations` /
@@ -281,6 +300,52 @@ restart and toggle-reload regressions on upgrades.
   and the image-resize override bridge resources a single-file artifact cannot discover or load.
   Replace each only when pi supplies an equivalent artifact seam; run `check:seams` and the relevant
   binary/desktop artifact probes, including extension value imports and images.
+- **Runtime extension descriptor shim** — [[submodule-server-extensions-installed]], `installed/loader.ts`.
+  An installed ThinkRail extension's server entry must import the host's single pi and typebox in every
+  launcher, but pi exports no "load a module with extension resolution" API. The host writes a shim that
+  evaluates the entry with the jiti instance pi's loader gives a module as `require` (stock jiti
+  `evalModule(source, { filename, async: true, forceTranspile: true })`, so a JavaScript entry is
+  transformed and resolved like a `.ts` one instead of native-imported), imports `createAgentSession` /
+  `Type` for its identity guard, and loads it with
+  the public `discoverAndLoadExtensions([shim], empty, empty)`, the descriptor coming back through a
+  per-load key on a `Symbol.for` global map. It relies on four pi facts:
+  - pi's extension loader applies its module resolution — the alias map in a source run (pi's own
+    `loader.js` is `.js`, so dev takes the alias branch), the virtual-module map in the compiled binary
+    and the desktop bundle — to every module the entry imports (stock jiti `virtualModules`/`alias`,
+    reached through `loadExtensionModule`);
+  - `discoverAndLoadExtensions` → `loadExtensions` stays uncached (never pi's process-wide factory cache)
+    and loads an explicit file path, so an edited entry reloads on the same path; building a
+    `DefaultResourceLoader` for it instead would be cached and would clear pi's cache for every session
+    loader of another cwd;
+  - pi still calls the default-export factory during load;
+  - with `JITI_TRY_NATIVE=false` and `JITI_REBUILD_FS_CACHE=1` around the load (the pair `piRuntime.ts`
+    forces, now one serialized `withForcedJitiTransform`, which also sets `JITI_FS_CACHE=false`: a forced
+    rebuild never reads that cache) a `.ts` dependency of the extension is
+    transformed and mapped; without it a `.ts` dependency reaching pi could bind to a copy in the
+    extension's `node_modules`. Plain-JavaScript dependencies are native-imported by Bun either way,
+    which is why the installer prunes `@earendil-works/*` and `typebox` from an install.
+  Every load checks member identity (`===` on `createAgentSession` and `Type`; jiti hands a namespace
+  over as a Proxy, so namespaces are never compared) and fails the extension otherwise.
+  **Removal gate:** pi exports a public module loader with its extension resolution (a
+  `createExtensionModuleLoader()` / `importExtensionModule(path)` on the package root, or its
+  `VIRTUAL_MODULES`); then drop the shim and the global map. **Re-check on every bump:** the artifact
+  probe that loads a fixture extension in the compiled binary and the desktop runtime
+  ([[module-artifact-tests]]), and `extensions/installed/loader.test.ts`.
+- **Installed extensions on pi's installer and loader** — [[submodule-server-extensions-installed]],
+  [[submodule-server-agent]]. Three more pi facts the installed-extension runtime builds on:
+  - `DefaultPackageManager.install(source)` at user scope writes only under its `agentDir`
+    (`npm/node_modules/<name>`, `git/<host>/<path>`), needs no persisted declaration
+    (`SettingsManager.inMemory({ npmCommand })`, the user's pi `npmCommand` carried over), and `getInstalledPath(source, "user")` names the package root; its
+    npm arguments omit peers (`--legacy-peer-deps`, bun/pnpm equivalents). `checkForAvailableUpdates()`
+    reads the declarations from the in-memory settings it is given. **Gate:** none needed while these
+    stay public; re-verify the layout on a bump.
+  - `DefaultResourceLoader` copies `extensionFactories` at construction and offers no way to change
+    them, so a change of the runtime registry is applied by building a fresh inner loader at the next
+    reload behind the one `ResourceLoader` a session keeps (`buildResourceLoader`). **Gate:** a loader
+    option read on every reload, or a setter. Run `agent/extensions.test.ts` ("rebuilds behind the same
+    loader…").
+  - pi's `parseGitUrl` reads only `git:` and `https?|ssh|git://` as git; everything else, `file://`
+    included, is a path. `extensions.json` follows the same rule (`extensionSourceKind`).
 - **Account-scoped model availability** — [[submodule-server-agent]], `modelAvailability.ts`. Pi's
   `openai` provider lists its whole API catalog under Sign in with ChatGPT (its `filterAllModels` drops
   only classifiers), so the host keeps the ids in pi's `openai-codex` catalog; Central proxies advertise

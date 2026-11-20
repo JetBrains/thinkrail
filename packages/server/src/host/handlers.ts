@@ -291,6 +291,12 @@ import {
 	seesChats,
 } from "./chats";
 import { continuationStatus, startContinuation } from "./continuations";
+import {
+	extensionsBrowse,
+	extensionsCheckUpdates,
+	extensionsRemove,
+	extensionsUpdate,
+} from "./extensions";
 import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { provisionInitialTerminal } from "./initialTerminal";
@@ -1239,6 +1245,10 @@ const handlers: WsHandlers = {
 	"packages.checkUpdates": (p) => packagesCheckUpdates(p),
 	"packages.setResourceEnabled": (p) => packagesSetResourceEnabled(p),
 	"packages.reveal": (p) => packagesReveal(p),
+	"extensions.remove": (p) => extensionsRemove(p),
+	"extensions.update": (p) => extensionsUpdate(p),
+	"extensions.checkUpdates": (p) => extensionsCheckUpdates(p),
+	"extensions.browse": (p) => extensionsBrowse(p),
 	"locales.list": () => readLocalLocales(),
 	"locales.reveal": () => revealDataFolder(localesDir()),
 	"themes.list": () => readUserThemes(),

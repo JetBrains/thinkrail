@@ -22,6 +22,8 @@ export interface ExtensionSessionServices {
 export interface ExtensionBooleanSetting {
 	type: "boolean";
 	default: boolean;
+	title?: string;
+	description?: string;
 }
 
 export type ExtensionSetting = ExtensionBooleanSetting;

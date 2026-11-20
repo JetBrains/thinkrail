@@ -566,6 +566,29 @@ keeps the gh-less behaviour; `THINKRAIL_GH_OFFLINE` still keeps `pr.open` on the
 deletes the scenario and log and unsets the ssh config. The host caches repository merge settings per origin
 URL for the whole run, so a spec that sets its own repository settings names its own repository.
 
+**Installed extensions** (`installed-extensions.spec.ts`, `extension-browse.spec.ts`) run the real published
+sample, `extension-examples/palette`, never npm or thinkrail.ai.
+- **Built before the host.** `bun run build:e2e` builds the web app and the sample (the SDK first, through
+  turbo's `^build`); `run.ts` runs `build:extension-fixtures` instead when `THINKRAIL_E2E_SKIP_BUILD` says
+  the web is already built (CI builds only the web), `run-full.ts` and the agent plan use `build:e2e`, and the
+  binary and desktop runners build the fixtures before Playwright. Turbo caches it, so a repeat costs about
+  a second.
+- **Folder installs.** The sample installs from its repository folder (loaded in place, never modified);
+  failure-path fixtures (`fixtures/extensions/{incompatible,broken-server,throwing-card}`: an API 2.0
+  manifest whose server half would leave a marker file, a server half that throws at load, and a UI-only
+  extension with a throwing and a working card) are copied into the lane's `extension-fixtures/` per test.
+  `fixtures/installedExtensions.ts` declares them by writing the lane's `extensions.json` — the agent
+  skill's path — and polls `extension.list` until the host reconciled; the dialog specs use the real
+  Install package dialog. `resetState()` empties a non-empty `extensions.json`, and the specs' `afterEach`
+  also clears the palette's switch and setting, so no installed extension outlives its test.
+- **The catalog is a lane file.** Every host gets `THINKRAIL_EXTENSION_CATALOG_URL` = the lane's
+  `extension-catalog.json` as a `file:` URL, read even though the suite's hosts run with `PI_OFFLINE`. A spec
+  writes the file (or deletes it — the unreachable state) and forces one `extensions.browse` read, so the
+  host's cached copy matches before the page asks. Install from Browse confirms `npm:<name>` and, offline,
+  ends at the dialog's failure step; the install itself is proven by the folder specs.
+- **Live.** `extension-palette.live.spec.ts` (`@agent`) declares the sample before the chat exists (a reset
+  empties `extensions.json`), asks the agent for a `color_palette` call and asserts the rendered swatches.
+
 **Voice input** (`voice-input.spec.ts`) never reaches NVIDIA's servers or a microphone.
 - Every host gets `THINKRAIL_SPEECH_MANIFEST` pointing at the lane's `speech-fixture/manifest.json`, which
   global setup writes (`fixtures/speech.ts`):

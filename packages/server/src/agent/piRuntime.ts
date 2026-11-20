@@ -6,6 +6,7 @@ import {
 	type LoadExtensionsResult,
 	ModelRuntime,
 } from "@earendil-works/pi-coding-agent";
+import { EXTENSION_LOAD_TIMEOUT_MS, withForcedJitiTransform } from "../extensions";
 import { logger } from "../log";
 import { accountAvailableModels, type ModelAvailabilityRuntime } from "./modelAvailability";
 import { advancePiExtensionCache, createPiSettings, piResourcePathKey } from "./packages";
@@ -141,13 +142,8 @@ async function createRuntimeWithExtensions(
 			},
 		]),
 	);
-	const priorJitiRebuild = process.env.JITI_REBUILD_FS_CACHE;
-	const priorJitiTryNative = process.env.JITI_TRY_NATIVE;
-	process.env.JITI_REBUILD_FS_CACHE = "1";
-	process.env.JITI_TRY_NATIVE = "false";
-	let services: Awaited<ReturnType<typeof createAgentSessionServices>>;
-	try {
-		services = await createAgentSessionServices({
+	const services = await withForcedJitiTransform(() =>
+		createAgentSessionServices({
 			cwd: getAgentDir(),
 			settingsManager: createPiSettings(getAgentDir(), getAgentDir(), { packages: "none" }),
 			modelRuntime: runtime,
@@ -159,13 +155,8 @@ async function createRuntimeWithExtensions(
 				noThemes: true,
 				noContextFiles: true,
 			},
-		});
-	} finally {
-		if (priorJitiRebuild === undefined) delete process.env.JITI_REBUILD_FS_CACHE;
-		else process.env.JITI_REBUILD_FS_CACHE = priorJitiRebuild;
-		if (priorJitiTryNative === undefined) delete process.env.JITI_TRY_NATIVE;
-		else process.env.JITI_TRY_NATIVE = priorJitiTryNative;
-	}
+		}),
+	);
 	const extensionErrors = services.resourceLoader.getExtensions().errors;
 	if (
 		extensionErrors.length > 0 ||
@@ -201,8 +192,6 @@ async function createRuntimeWithExtensions(
 		extensionProviderIds,
 	};
 }
-
-const USER_EXTENSION_LOAD_TIMEOUT_MS = 10_000;
 
 function settleWithin<T>(task: Promise<T>, ms: number): Promise<T | undefined> {
 	return new Promise((settle, fail) => {
@@ -255,17 +244,17 @@ async function registerUserExtensionProviders(
 	runtime: ModelRuntime,
 	excludedPaths: readonly string[],
 ): Promise<ReadonlySet<string>> {
-	const deadline = Date.now() + USER_EXTENSION_LOAD_TIMEOUT_MS;
+	const deadline = Date.now() + EXTENSION_LOAD_TIMEOUT_MS;
 	let loaded: LoadExtensionsResult | undefined;
 	try {
-		loaded = await settleWithin(loadUserExtensions(excludedPaths), USER_EXTENSION_LOAD_TIMEOUT_MS);
+		loaded = await settleWithin(loadUserExtensions(excludedPaths), EXTENSION_LOAD_TIMEOUT_MS);
 	} catch (error) {
 		log.warn("user extensions could not be loaded for the model catalog", error);
 		return new Set();
 	}
 	if (!loaded) {
 		log.warn(
-			`user extension loading exceeded ${USER_EXTENSION_LOAD_TIMEOUT_MS}ms; their providers join the catalog when a chat loads them`,
+			`user extension loading exceeded ${EXTENSION_LOAD_TIMEOUT_MS}ms; their providers join the catalog when a chat loads them`,
 		);
 		return new Set();
 	}

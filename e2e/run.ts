@@ -187,12 +187,21 @@ async function main(): Promise<number> {
 			listDir,
 		);
 		testListArgs.catch(() => {});
-		if (!playwrightArgs.includes("--list") && process.env.THINKRAIL_E2E_SKIP_BUILD !== "1") {
+		if (!playwrightArgs.includes("--list")) {
+			const webReady = process.env.THINKRAIL_E2E_SKIP_BUILD === "1";
 			const buildStartedAt = performance.now();
-			console.log("E2E: building web once before host startup");
-			const buildCode = await run([bun, "run", "build:web"]);
+			console.log(
+				webReady
+					? "E2E: building the extension fixtures before host startup"
+					: "E2E: building web and extension fixtures once before host startup",
+			);
+			const buildCode = await run([
+				bun,
+				"run",
+				webReady ? "build:extension-fixtures" : "build:e2e",
+			]);
 			if (buildCode !== 0) return buildCode;
-			console.log(`E2E: web build ready in ${elapsed(buildStartedAt)}`);
+			console.log(`E2E: build ready in ${elapsed(buildStartedAt)}`);
 		}
 
 		return shardCount === 1

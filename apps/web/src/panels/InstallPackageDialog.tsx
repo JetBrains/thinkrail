@@ -1,7 +1,8 @@
 import { RiInformationLine } from "@remixicon/react";
 import {
+	type ExtensionCatalogEntry,
+	type PackageInstallResult,
 	type PiPackageScope,
-	type PiPackageSummary,
 	type PiPackagesCatalog,
 	parsePiPackageInput,
 	type WsErrorCode,
@@ -22,7 +23,7 @@ import { cn } from "@thinkrail/ui/utils";
 import { Fragment, useId, useState } from "react";
 import { SettingsChoice, SettingsNotice } from "@/settingsKit";
 import { errorText, RequestTimeoutError, wsErrorCode } from "@/transport";
-import { CHIP_CLASS, GalleryLink, packageChips } from "./PiPackagesSettings";
+import { CHIP_CLASS, GalleryLinks, packageChips } from "./PiPackagesSettings";
 
 const INPUT_CLASS =
 	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default placeholder:text-text-muted focus-visible:border-control-border-active focus-visible:focus-ring disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text";
@@ -62,11 +63,29 @@ export function sourceDisplayName(raw: string): string {
 	return last ?? source;
 }
 
+/** What Browse knows about a listing when it opens the dialog at its confirm step. */
+export interface InstallPreset {
+	source: string;
+	title: string;
+	version?: string | undefined;
+	author?: string | undefined;
+	description?: string | undefined;
+}
+
 export type InstallStep =
 	| { kind: "form" }
+	| { kind: "confirm"; preset: InstallPreset }
 	| { kind: "installing"; name: string }
-	| { kind: "installed"; summary: PiPackageSummary }
+	| { kind: "installed"; summary: PackageInstallResult }
+	| { kind: "scopeUnsupported"; name: string }
 	| { kind: "failed"; name: string; message: string; outcome: InstallFailureOutcome };
+
+/** The extension a result installed, when the host says it installed one. */
+export function installedExtension(
+	result: PackageInstallResult,
+): ExtensionCatalogEntry | undefined {
+	return result.installed === "extension" ? result.extension : undefined;
+}
 
 /** What the failure says about the settings: nothing changed, or the install may have landed anyway. */
 export type InstallFailureOutcome = "nothingAdded" | "unknown" | "timedOut";
@@ -101,16 +120,104 @@ export function installStepHeader(
 				title: t("settings.packages.installDialog.installingTitle", { name: step.name }),
 				description: t("settings.packages.installDialog.installingDescription"),
 			};
-		case "installed":
+		case "confirm":
 			return {
-				title: step.summary.version
-					? `${t("settings.packages.installDialog.installedTitle", { name: step.summary.name })} · ${step.summary.version}`
-					: t("settings.packages.installDialog.installedTitle", { name: step.summary.name }),
-				...(step.summary.description ? { description: step.summary.description } : {}),
+				title: t("settings.packages.installDialog.confirmTitle", { name: step.preset.title }),
+				description: [
+					t("settings.packages.installDialog.confirmFrom"),
+					step.preset.version,
+					step.preset.author,
+				]
+					.filter((part): part is string => Boolean(part))
+					.join(" · "),
+			};
+		case "installed": {
+			const extension = installedExtension(step.summary);
+			const name = extension?.title ?? step.summary.name;
+			const version = extension?.version ?? step.summary.version;
+			const description = extension?.description ?? step.summary.description;
+			return {
+				title: version
+					? `${t("settings.packages.installDialog.installedTitle", { name })} · ${version}`
+					: t("settings.packages.installDialog.installedTitle", { name }),
+				...(description ? { description } : {}),
+			};
+		}
+		case "scopeUnsupported":
+			return {
+				title: t("settings.packages.installDialog.scopeUnsupportedTitle", { name: step.name }),
 			};
 		case "failed":
 			return { title: t("settings.packages.installDialog.failedTitle", { name: step.name }) };
 	}
+}
+
+function InstalledResult({ summary }: { summary: PackageInstallResult }) {
+	const t = useT();
+	const extension = installedExtension(summary);
+	const isExtension = summary.installed === "extension";
+	const chips = isExtension
+		? (extension?.tools ?? [])
+		: [
+				...packageChips(summary.resources),
+				...summary.resources
+					.filter((r) => r.type === "skills")
+					.map((r) => t("settings.packages.skillChip", { name: r.displayName })),
+				...summary.resources
+					.filter((r) => r.type === "prompts")
+					.map((r) => `/${r.displayName.replace(/\.md$/, "")}`),
+			];
+	return (
+		<div className="flex flex-col gap-12">
+			<span
+				data-testid="install-package-kind"
+				data-kind={isExtension ? "extension" : "package"}
+				className="tr-text-ui text-text-default"
+			>
+				{t(
+					isExtension
+						? "settings.packages.installDialog.kind.extension"
+						: "settings.packages.installDialog.kind.package",
+				)}
+			</span>
+			<span className="flex flex-wrap gap-4" data-testid="install-package-chips">
+				{chips.map((chip) => (
+					<code key={chip} className={cn("tr-code-text-small", CHIP_CLASS)}>
+						{chip}
+					</code>
+				))}
+				{extension?.web ? (
+					<span data-testid="install-package-cards" className={cn("tr-text-metadata", CHIP_CLASS)}>
+						{t("settings.installedExtensions.chatCards")}
+					</span>
+				) : null}
+			</span>
+			{extension?.settings?.length ? (
+				<div data-testid="install-package-settings" className="flex flex-col gap-8">
+					{extension.settings.map((setting) => (
+						<div
+							key={setting.key}
+							className="flex flex-col gap-2 border-border-default border-l-2 pl-12"
+						>
+							<span className="tr-text-ui text-text-default">{setting.title ?? setting.key}</span>
+							{setting.description ? (
+								<span className="tr-text-metadata text-text-muted">{setting.description}</span>
+							) : null}
+						</div>
+					))}
+				</div>
+			) : null}
+			<span className="tr-text-metadata text-text-muted" data-testid="install-package-applies">
+				{t(
+					isExtension
+						? "settings.packages.installDialog.installedExtension"
+						: summary.scope === "project"
+							? "settings.packages.installDialog.installedOnProject"
+							: "settings.packages.installDialog.installedOnUser",
+				)}
+			</span>
+		</div>
+	);
 }
 
 export interface InstallPackageBodyProps {
@@ -119,12 +226,14 @@ export interface InstallPackageBodyProps {
 	scope: PiPackageScope;
 	catalog: PiPackagesCatalog | null;
 	workspaceId: string | null;
+	extensionsSupported: boolean;
 	onSourceChange: (source: string) => void;
 	onScopeChange: (scope: PiPackageScope) => void;
 	onSubmit: () => void;
 	onCancel: () => void;
 	onBack: () => void;
 	onDone: () => void;
+	onInstallGlobally: () => void;
 }
 
 /** The dialog's content, props-driven so each step renders without a portal. */
@@ -166,12 +275,14 @@ export function InstallPackageBody({
 	scope,
 	catalog,
 	workspaceId,
+	extensionsSupported,
 	onSourceChange,
 	onScopeChange,
 	onSubmit,
 	onCancel,
 	onBack,
 	onDone,
+	onInstallGlobally,
 }: InstallPackageBodyProps) {
 	const t = useT();
 	const sourceInputId = useId();
@@ -228,7 +339,9 @@ export function InstallPackageBody({
 								</span>
 							) : null}
 						</div>
-						<GalleryLink />
+						<div className="flex flex-wrap gap-x-12 gap-y-4">
+							<GalleryLinks extensions={extensionsSupported} />
+						</div>
 						<div className="flex flex-col gap-4">
 							<span className="tr-text-ui text-text-default">
 								{t("settings.packages.installDialog.scopeLabel")}
@@ -289,38 +402,55 @@ export function InstallPackageBody({
 					<div className="h-full w-2/5 rounded-full bg-primary motion-safe:animate-working" />
 				</div>
 			) : null}
-			{step.kind === "installed" ? (
+			{step.kind === "confirm" ? (
 				<>
 					<div className="flex flex-col gap-12">
-						<span className="flex flex-wrap gap-4" data-testid="install-package-chips">
-							{[
-								...packageChips(step.summary.resources),
-								...step.summary.resources
-									.filter((r) => r.type === "skills")
-									.map((r) => t("settings.packages.skillChip", { name: r.displayName })),
-								...step.summary.resources
-									.filter((r) => r.type === "prompts")
-									.map((r) => `/${r.displayName.replace(/\.md$/, "")}`),
-							].map((chip) => (
-								<code key={chip} className={cn("tr-code-text-small", CHIP_CLASS)}>
-									{chip}
-								</code>
-							))}
-						</span>
-						<span
-							className="tr-text-metadata text-text-muted"
-							data-testid="install-package-applies"
+						{step.preset.description ? (
+							<span className="tr-text-ui text-text-default">{step.preset.description}</span>
+						) : null}
+						<code
+							data-testid="install-package-confirm-source"
+							className="rounded-sm bg-control-bg px-8 py-4 tr-code-text-small text-text-default break-all"
 						>
-							{t(
-								step.summary.scope === "project"
-									? "settings.packages.installDialog.installedOnProject"
-									: "settings.packages.installDialog.installedOnUser",
-							)}
+							{step.preset.source}
+						</code>
+						<span className="tr-text-metadata text-text-muted">
+							{t("settings.packages.installDialog.confirmTrust")}
 						</span>
 					</div>
 					<DialogFooter>
+						<Button variant="outline" onClick={onCancel}>
+							{t("common.cancel")}
+						</Button>
+						<Button data-testid="install-package-confirm" onClick={onSubmit}>
+							{t("settings.packages.installDialog.confirm")}
+						</Button>
+					</DialogFooter>
+				</>
+			) : null}
+			{step.kind === "installed" ? (
+				<>
+					<InstalledResult summary={step.summary} />
+					<DialogFooter>
 						<Button data-testid="install-package-done" onClick={onDone}>
 							{t("common.done")}
+						</Button>
+					</DialogFooter>
+				</>
+			) : null}
+			{step.kind === "scopeUnsupported" ? (
+				<>
+					<SettingsNotice variant="info" testId="install-package-scope-unsupported">
+						<span className="break-words">
+							{t("settings.packages.installDialog.scopeUnsupported")}
+						</span>
+					</SettingsNotice>
+					<DialogFooter>
+						<Button variant="outline" data-testid="install-package-back" onClick={onBack}>
+							{t("common.back")}
+						</Button>
+						<Button data-testid="install-package-install-globally" onClick={onInstallGlobally}>
+							{t("settings.packages.installDialog.installGlobally")}
 						</Button>
 					</DialogFooter>
 				</>
@@ -359,7 +489,10 @@ export interface InstallPackageDialogProps {
 	catalog: PiPackagesCatalog | null;
 	/** `null` when no workspace is active: the repository scope is then unavailable. */
 	workspaceId: string | null;
-	install: (request: { source: string; scope: PiPackageScope }) => Promise<PiPackageSummary>;
+	install: (request: { source: string; scope: PiPackageScope }) => Promise<PackageInstallResult>;
+	/** Opens at the confirm step for this source, installing globally; read when the dialog mounts. */
+	preset?: InstallPreset | null | undefined;
+	extensionsSupported: boolean;
 }
 
 export function InstallPackageDialog({
@@ -368,11 +501,15 @@ export function InstallPackageDialog({
 	catalog,
 	workspaceId,
 	install,
+	preset,
+	extensionsSupported,
 }: InstallPackageDialogProps) {
 	const t = useT();
-	const [source, setSource] = useState("");
+	const [source, setSource] = useState(preset?.source ?? "");
 	const [scope, setScope] = useState<PiPackageScope>("user");
-	const [step, setStep] = useState<InstallStep>({ kind: "form" });
+	const [step, setStep] = useState<InstallStep>(
+		preset ? { kind: "confirm", preset } : { kind: "form" },
+	);
 
 	const projectAvailable = workspaceId !== null && catalog?.projectTrusted === true;
 	const effectiveScope: PiPackageScope = projectAvailable ? scope : "user";
@@ -389,19 +526,25 @@ export function InstallPackageDialog({
 		}
 	};
 
-	const submit = async () => {
+	const submit = async (requested: PiPackageScope = effectiveScope) => {
 		if (!trimmed) return;
-		setStep({ kind: "installing", name });
+		const label = preset && source.trim() === preset.source ? preset.title : name;
+		const target = step.kind === "confirm" || step.kind === "scopeUnsupported" ? "user" : requested;
+		setStep({ kind: "installing", name: label });
 		try {
-			const summary = await install({ source: source.trim(), scope: effectiveScope });
+			const summary = await install({ source: source.trim(), scope: target });
 			setStep({ kind: "installed", summary });
 		} catch (error) {
+			if (wsErrorCode(error) === "EXTENSION_SCOPE_UNSUPPORTED") {
+				setStep({ kind: "scopeUnsupported", name: label });
+				return;
+			}
 			const outcome = installFailureOutcome(error);
 			const message =
 				outcome === "timedOut"
 					? t("settings.packages.installDialog.timedOut")
 					: errorText(error, t("settings.packages.actionFailed"));
-			setStep({ kind: "failed", name, message, outcome });
+			setStep({ kind: "failed", name: label, message, outcome });
 		}
 	};
 
@@ -418,6 +561,7 @@ export function InstallPackageDialog({
 					scope={scope}
 					catalog={catalog}
 					workspaceId={workspaceId}
+					extensionsSupported={extensionsSupported}
 					onSourceChange={(next) => {
 						setSource(next);
 						if (parsePiPackageInput(next).local) setScope("project");
@@ -427,6 +571,10 @@ export function InstallPackageDialog({
 					onCancel={() => close(false)}
 					onBack={() => setStep({ kind: "form" })}
 					onDone={() => close(false)}
+					onInstallGlobally={() => {
+						setScope("user");
+						void submit("user");
+					}}
 				/>
 			</DialogContent>
 		</Dialog>

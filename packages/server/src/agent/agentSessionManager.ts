@@ -889,7 +889,7 @@ function enabledExtensionMissing(session: AgentSession, disabled: ReadonlySet<st
 			(path) => registryExtensionName(path),
 		),
 	);
-	return serverExtensions.some(
+	return serverExtensions().some(
 		({ extension }) =>
 			(extension.extensions.length > 0 || extension.sessionExtensions !== undefined) &&
 			!disabled.has(extension.name) &&
