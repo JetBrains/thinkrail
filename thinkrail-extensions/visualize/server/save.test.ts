@@ -52,6 +52,7 @@ test("the server half saves diagrams into the workspace's artifacts folder", asy
 		setting: () => false,
 		workspaceFiles: {
 			check: async () => {},
+			checkArtifact: async (path) => path,
 			scratchDir: ".thinkrail/context/mockups/",
 			artifactsDir: ".thinkrail/context/",
 			ensureArtifactsDir: async (dir) => {

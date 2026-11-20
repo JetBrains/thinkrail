@@ -102,6 +102,7 @@ import {
 	track,
 } from "../analytics";
 import {
+	checkArtifactFile,
 	noteArtifactPathsChanged,
 	observeArtifactSessionEvent,
 	setArtifactsPublisher,
@@ -115,7 +116,7 @@ import {
 	stopJbcentralRuntime,
 } from "../auth";
 import { forgetOpenBranchReview } from "../branch-review";
-import { artifactTools } from "../extensions";
+import { artifactTools, setArtifactFileCheck } from "../extensions";
 import {
 	configureSurveySource,
 	redeliverInvitation,
@@ -931,6 +932,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setSpecsEnabledResolver((workspaceId) => !isChatWorkspaceId(workspaceId));
 
 	setDisabledExtensionsResolver(() => new Set(getConfig().disabledExtensions));
+	setArtifactFileCheck(checkArtifactFile);
 	setExtensionSettingsResolver(() => getConfig().extensionSettings ?? {});
 
 	setProjectPublisher((project) => {

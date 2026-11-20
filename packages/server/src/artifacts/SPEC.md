@@ -26,7 +26,7 @@ client the same answer.
   writers and run window.
 - **Public surface (barrel):** `listArtifacts`, `reconcileArtifacts`, `restoreArtifact`, `discardArtifact`,
   `withUserRemoval`, `prepareArtifactsDestination`, `observeArtifactSessionEvent`, `ArtifactSessionEvent`,
-  `noteArtifactPathsChanged`, `setArtifactsPublisher`, `removeWorkspaceArtifacts`.
+  `noteArtifactPathsChanged`, `setArtifactsPublisher`, `removeWorkspaceArtifacts`, `checkArtifactFile`.
 - **Allowed deps:** `persistence` (`dataDir`, workspace records), `git` (`gitAsync` for the ignored-root
   listing), `trash` (a discarded kept copy goes to the OS trash), `log`; `contracts`, `shared/paths`,
   `shared/artifactsDir`, `shared/codedError`; Node `fs`/`path`/`crypto`.
@@ -58,7 +58,11 @@ app's `node_modules` neither floods the list nor exhausts the bound) and build-o
 hashed assets on every run, and each old hash would otherwise stay forever as a "deleted" row with a kept
 copy. Unlike ignored outputs elsewhere, which do list `dist/`, a build inside the artifacts folder is
 scaffolding, not something the agent produced for the user. It also skips the `fs` delete claims
-(`DELETE_CLAIM_PREFIX`), which are the user's own trash in flight, not a rename. A worktree root that is
+(`DELETE_CLAIM_PREFIX`), which are the user's own trash in flight, not a rename. **`checkArtifactFile(path,
+cwd)`** states the same rule for one path — normalized containment in the artifacts folder, real folders,
+no link on the way, no skipped folder or claim — and returns the name the walk would list it under; the
+outputs extension publishes only what it accepts ([[module-ext-outputs]]), so a published file is never
+one Outputs silently drops. A worktree root that is
 not there (an unmounted drive, a moved project folder) is an incomplete scan, so its rows stay live until it
 returns. A new path gains a record
 and a link; a changed size/mtime updates the record (and its writer when known); an inode change relinks;

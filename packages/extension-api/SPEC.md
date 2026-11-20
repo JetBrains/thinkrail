@@ -139,7 +139,9 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   per-session state the host owns: the host calls it once per parent session with that session's
   services: `setting(key)` (the extension's own declared setting, read inside a factory body so a pi
   reload sees a changed value), `workspaceFiles` (`check(path, cwd)` — the host's rule for which workspace
-  files the UI may show — `scratchDir`, the gitignored directory for mockups, and `artifactsDir`, the
+  files the UI may show — `checkArtifact(path, cwd)` — the artifact index's own rule for which files the
+  Artifacts tool lists, resolving to the worktree-relative name it lists the file under or rejecting with
+  why not — `scratchDir`, the gitignored directory for mockups, and `artifactsDir`, the
   gitignored folder the Artifacts tool shows, where an extension saves what it produces for the user;
   both are worktree-relative with a trailing `/`, and empty where there is no workspace — and
   `ensureArtifactsDir(cwd)`, which an extension calls before writing there: it recreates the folder with

@@ -55,6 +55,7 @@ describe("defineServerExtension", () => {
 			setting: () => false,
 			workspaceFiles: {
 				check: async () => {},
+				checkArtifact: async (path) => path,
 				ensureArtifactsDir: async () => {},
 				scratchDir: "",
 				artifactsDir: "",

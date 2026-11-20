@@ -27,8 +27,18 @@ export async function checkWorkspaceFile(path: string, cwd: string): Promise<voi
 	}
 }
 
+let artifactFileCheck: ((path: string, cwd: string) => string) | null = null;
+
+export function setArtifactFileCheck(check: ((path: string, cwd: string) => string) | null): void {
+	artifactFileCheck = check;
+}
+
 export const workspaceFiles: WorkspaceFiles = {
 	check: checkWorkspaceFile,
+	checkArtifact: async (path, cwd) => {
+		if (!artifactFileCheck) throw new Error("this host keeps no artifact index");
+		return artifactFileCheck(path, cwd);
+	},
 	ensureArtifactsDir: async (cwd) => {
 		seedArtifactsDir(resolve(cwd));
 	},

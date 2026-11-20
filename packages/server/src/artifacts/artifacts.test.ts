@@ -19,6 +19,7 @@ import { basename, join } from "node:path";
 import { setTrashImplementationForTests } from "../trash";
 import {
 	artifactsStoreRoot,
+	checkArtifactFile,
 	discardArtifact,
 	isArtifactPath,
 	isSameFile,
@@ -609,6 +610,41 @@ test("what a tool showed and what the user picked become results; working files 
 		role: "working",
 		reason: "working-folder",
 	});
+});
+
+test("a file passes the artifact check exactly when the index would list it, named as the index names it", async () => {
+	write(`${CONTEXT}/mockups/a.html`, "a");
+	write(`${CONTEXT}/mockups/dist/index.html`, "built");
+	write(`${CONTEXT}/app/node_modules/x/index.js`, "dep");
+	write(`${CONTEXT}/real.md`, "real");
+	write("README.md", "readme");
+	symlinkSync(join(root, CONTEXT, "real.md"), join(root, CONTEXT, "alias.md"));
+	symlinkSync(join(root, CONTEXT, "mockups"), join(root, CONTEXT, "mockups-link"));
+	const inside = `${CONTEXT}/mockups/a.html`;
+	expect(checkArtifactFile(inside, root)).toBe(inside);
+	expect(checkArtifactFile(`./${CONTEXT}/x/../mockups/a.html`, root)).toBe(inside);
+	expect(checkArtifactFile(join(root, inside), root)).toBe(inside);
+	const refusal = (path: string) => {
+		try {
+			checkArtifactFile(path, root);
+			return "";
+		} catch (error) {
+			return (error as Error).message;
+		}
+	};
+	expect(refusal(`${CONTEXT}/../../README.md`)).toContain("not inside");
+	expect(refusal("README.md")).toContain("not inside");
+	expect(refusal(`${CONTEXT}/.gitignore`)).toContain("not inside");
+	expect(refusal(`${CONTEXT}/mockups/dist/index.html`)).toContain("`dist`");
+	expect(refusal(`${CONTEXT}/app/node_modules/x/index.js`)).toContain("`node_modules`");
+	expect(refusal(`${CONTEXT}/alias.md`)).toContain("link");
+	expect(refusal(`${CONTEXT}/mockups-link/a.html`)).toContain("link");
+	expect(refusal(`${CONTEXT}/missing.md`)).toBe("no such file");
+	expect(refusal(`${CONTEXT}/mockups`)).toBe("not a regular file");
+
+	await reconcileArtifacts("w1");
+	const listed = new Set((await listArtifacts("w1")).artifacts.map((entry) => entry.path));
+	expect(listed).toEqual(new Set([inside, `${CONTEXT}/real.md`]));
 });
 
 test("a published file is a flagged result that keeps the flag across a move", async () => {

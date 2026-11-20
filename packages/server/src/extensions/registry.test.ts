@@ -49,6 +49,7 @@ describe("server extension registry", () => {
 				awaitToolResponse: () => Promise.resolve({ kind: "deferred" as const }),
 				workspaceFiles: {
 					check: async () => {},
+					checkArtifact: async (path) => path,
 					ensureArtifactsDir: async () => {},
 					scratchDir: "",
 					artifactsDir: "",

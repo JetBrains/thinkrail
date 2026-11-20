@@ -3,7 +3,12 @@ import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
-import { checkWorkspaceFile, MOCKUP_DIR, workspaceFiles } from "./workspaceFiles";
+import {
+	checkWorkspaceFile,
+	MOCKUP_DIR,
+	setArtifactFileCheck,
+	workspaceFiles,
+} from "./workspaceFiles";
 
 describe("workspace file checks shared by extension server halves", () => {
 	test("accepts workspace files and rejects missing, directory, and escaping paths", async () => {
@@ -44,5 +49,17 @@ describe("workspace file checks shared by extension server halves", () => {
 		expect(workspaceFiles.scratchDir).toBe(".thinkrail/context/mockups/");
 		expect(MOCKUP_DIR.startsWith(`${WORKSPACE_CONTEXT_DIR}/`)).toBe(true);
 		expect(workspaceFiles.check).toBe(checkWorkspaceFile);
+	});
+
+	test("the artifact check is the host's index rule, refused until the host provides it", async () => {
+		setArtifactFileCheck(null);
+		await expect(workspaceFiles.checkArtifact("a.md", "/w")).rejects.toThrow("no artifact index");
+		setArtifactFileCheck((path, cwd) => {
+			if (path === "dist/x.html") throw new Error("Artifacts does not list what is in `dist`");
+			return `${cwd}:${path}`;
+		});
+		await expect(workspaceFiles.checkArtifact("a.md", "/w")).resolves.toBe("/w:a.md");
+		await expect(workspaceFiles.checkArtifact("dist/x.html", "/w")).rejects.toThrow("`dist`");
+		setArtifactFileCheck(null);
 	});
 });

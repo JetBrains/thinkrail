@@ -25,10 +25,12 @@ Settings → Extensions & skills; while it is off, Artifacts opens on Smart inst
   artifact index as the stored `published` signal ([[submodule-server-artifacts]]). Imports:
   `extension-api/server`, `typebox`, pi types.
 - The tool takes worktree-relative, artifacts-relative or absolute paths (`@`, `./`, `file://`
-  tolerated). Each must pass the host's `workspaceFiles.check` and lie inside `workspaceFiles.artifactsDir`;
-  otherwise the **whole call fails**, naming every refused path and telling the agent to save it there
-  first — a half-published set would leave the agent unsure what the user sees. `details.files` holds the
-  accepted worktree-relative paths, deduplicated.
+  tolerated). Each must pass `workspaceFiles.checkArtifact` — the artifact index's own rule (normalized
+  containment, no links, no skipped `dist`/`node_modules`-style folders), not merely the workspace file
+  check, because a file the index never lists would be "published" yet absent from Outputs. Otherwise the
+  **whole call fails**, naming every refused path and why, and telling the agent to save it in the artifacts
+  folder — a half-published set would leave the agent unsure what the user sees. `details.files` holds the
+  names the index lists them under, deduplicated.
 - `./web` registers `present_files` with `chrome: "bare"`: one card per published file (type icon,
   display name, type) opening it through `onOpenFile`; running and error states are its own. The name/type
   rule and icon come from `@thinkrail/resource-renderers` (`outputFileLabel`, `outputFileIcon`) so the

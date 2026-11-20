@@ -327,12 +327,36 @@ function contextFolder(root: string): "real" | "missing" | "foreign" {
 	return "real";
 }
 
-function skippedEntry(entry: Dirent): boolean {
+function skippedName(name: string, directory: boolean): boolean {
 	return (
-		entry.name.startsWith(DELETE_CLAIM_PREFIX) ||
-		(entry.isDirectory() &&
-			(DEPENDENCY_AND_CACHE_DIRS.has(entry.name) || BUILD_DIRS.has(entry.name)))
+		name.startsWith(DELETE_CLAIM_PREFIX) ||
+		(directory && (DEPENDENCY_AND_CACHE_DIRS.has(name) || BUILD_DIRS.has(name)))
 	);
+}
+
+function skippedEntry(entry: Dirent): boolean {
+	return skippedName(entry.name, entry.isDirectory());
+}
+
+export function checkArtifactFile(path: string, cwd: string): string {
+	const root = resolve(cwd);
+	const abs = resolve(root, path);
+	const rel = isInside(root, abs) ? relative(root, abs).split(sep).join("/") : "";
+	if (!isArtifactPath(rel)) throw new Error(`it is not inside \`${CONTEXT_PREFIX}\``);
+	if (contextFolder(root) !== "real") throw new Error(`\`${CONTEXT_PREFIX}\` is not a real folder`);
+	const names = rel.slice(CONTEXT_PREFIX.length).split("/");
+	let at = WORKSPACE_CONTEXT_DIR;
+	for (const [index, name] of names.entries()) {
+		at = `${at}/${name}`;
+		const entry = lstatSync(join(root, at), { throwIfNoEntry: false });
+		if (!entry) throw new Error("no such file");
+		if (entry.isSymbolicLink())
+			throw new Error("it is a link, and Artifacts lists only real files");
+		const last = index === names.length - 1;
+		if (skippedName(name, !last)) throw new Error(`Artifacts does not list what is in \`${name}\``);
+		if (last ? !entry.isFile() : !entry.isDirectory()) throw new Error("not a regular file");
+	}
+	return rel;
 }
 
 function scanContext(root: string): { files: Map<string, ScannedFile>; complete: boolean } {

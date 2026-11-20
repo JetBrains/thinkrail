@@ -1,4 +1,4 @@
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { isAbsolute } from "node:path";
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import type { WorkspaceFiles } from "@thinkrail/extension-api/server";
 import { type Static, Type } from "typebox";
@@ -32,17 +32,13 @@ function promptGuidelines(artifactsDir: string): string[] {
 	];
 }
 
-function posix(path: string): string {
-	return sep === "/" ? path : path.split(sep).join("/");
-}
-
-function candidates(raw: string, cwd: string, artifactsDir: string): string[] {
+function candidates(raw: string, artifactsDir: string): string[] {
 	let path = raw.trim();
 	if (path.startsWith("file://")) path = path.slice("file://".length);
 	if (path.startsWith("@")) path = path.slice(1);
-	if (isAbsolute(path)) return [posix(relative(cwd, path))];
-	path = posix(path).replace(/^(?:\.\/)+/, "");
-	return path.startsWith(artifactsDir) ? [path] : [path, `${artifactsDir}${path}`];
+	if (isAbsolute(path)) return [path];
+	const relative = path.replace(/^(?:\.[/\\])+/, "");
+	return relative.startsWith(artifactsDir) ? [path] : [path, `${artifactsDir}${relative}`];
 }
 
 function errorMessage(error: unknown): string {
@@ -54,17 +50,24 @@ async function resolvePublished(
 	cwd: string,
 	files: WorkspaceFiles,
 ): Promise<{ path: string } | { error: string }> {
-	let error = `it is not inside \`${files.artifactsDir}\``;
-	for (const path of candidates(raw, cwd, files.artifactsDir)) {
-		if (!path.startsWith(files.artifactsDir)) continue;
+	const tried = candidates(raw, files.artifactsDir);
+	const errors: string[] = [];
+	for (const candidate of tried) {
 		try {
-			await files.check(path, cwd);
-			return { path };
+			return { path: await files.checkArtifact(candidate, cwd) };
 		} catch (cause) {
-			error = errorMessage(cause);
+			errors.push(errorMessage(cause));
 		}
 	}
-	return { error };
+	const [asGiven, inArtifacts] = tried;
+	const elsewhere =
+		inArtifacts !== undefined &&
+		asGiven !== undefined &&
+		(await files.check(asGiven, cwd).then(
+			() => true,
+			() => false,
+		));
+	return { error: (elsewhere ? errors[0] : errors.at(-1)) ?? "it cannot be published" };
 }
 
 export async function publishFiles(
@@ -75,7 +78,7 @@ export async function publishFiles(
 	const published = new Set<string>();
 	const refused: string[] = [];
 	for (const raw of filepaths) {
-		const outcome = await resolvePublished(raw, resolve(cwd), files);
+		const outcome = await resolvePublished(raw, cwd, files);
 		if ("path" in outcome) published.add(outcome.path);
 		else refused.push(`- ${raw}: ${outcome.error}`);
 	}

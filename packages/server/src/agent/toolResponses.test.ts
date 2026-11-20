@@ -76,6 +76,7 @@ function composeAsk(waiters: ToolResponseWaiters): {
 			...services,
 			workspaceFiles: {
 				check: async () => {},
+				checkArtifact: async (path) => path,
 				ensureArtifactsDir: async () => {},
 				scratchDir: "",
 				artifactsDir: "",
