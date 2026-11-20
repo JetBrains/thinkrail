@@ -197,6 +197,21 @@ test("a closed session frees its slot under the host's session cap", () => {
 	expect(broker.sessionCount).toBe(0);
 });
 
+test("a host can neither write into nor close another host's session", () => {
+	const { broker, device } = fixture();
+	const other = spy();
+	broker.connect("other", other);
+	register(broker, "host", "K");
+	register(broker, "other", "O");
+	broker.receive("device", JSON.stringify({ t: "connect", hostKey: "K" }));
+
+	broker.receive("other", JSON.stringify({ t: "frame", session: "S1", data: "spliced" }));
+	broker.receive("other", JSON.stringify({ t: "close", session: "S1" }));
+	expect(device.sent).toEqual([{ t: "ready" }]);
+	expect(device.closed).toBe(false);
+	expect(broker.sessionCount).toBe(1);
+});
+
 test("verifyEd25519 checks a real host signature over the register transcript", () => {
 	const { publicKey, privateKey } = generateKeyPairSync("ed25519");
 	const hostKey = (publicKey.export({ format: "jwk" }) as { x: string }).x;
