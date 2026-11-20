@@ -878,7 +878,8 @@ host's `artifacts.list` snapshot), **`artifactsTickByWorkspace`** (`noteArtifact
 app-wide **`artifactsShowIgnored`** toggle and **`artifactsView`** (`setArtifactsView`, `"outputs" |
 "smart" | "list" | "tree"`, `null` until the user picks one); the seen watermarks, the open folders (Smart's
 group and chip ids included), the toggle and the view hydrate from per-client preferences
-(`hydrateArtifactsPreferences`). **`selectArtifactsView`** resolves the view the panel shows (an explicit
+(`hydrateArtifactsPreferences`) and so survive a host switch: they are this device's preferences, and a
+reset would write the empty value back over them. **`selectArtifactsView`** resolves the view the panel shows (an explicit
 choice while it is offered, else Outputs when **`selectArtifactOutputsOffered`** — host v128 and the
 `outputs` extension, `OUTPUTS_EXTENSION`, not in `disabledExtensions` — else Smart when
 **`supportsArtifactRoles`** holds, else List), and **`selectArtifactsRoundFilter`** maps it to what the

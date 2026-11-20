@@ -2724,8 +2724,6 @@ type HostState = Pick<
 	| "specsByWorkspace"
 	| "artifactsByWorkspace"
 	| "artifactsTickByWorkspace"
-	| "artifactsSeenByWorkspace"
-	| "artifactsTreeExpandedByWorkspace"
 	| "reviewsByWorkspace"
 	| "reviewFocusRequest"
 	| "fileClipboard"
@@ -2836,8 +2834,6 @@ function initialHostState(): HostState {
 		specsByWorkspace: {},
 		artifactsByWorkspace: {},
 		artifactsTickByWorkspace: {},
-		artifactsSeenByWorkspace: {},
-		artifactsTreeExpandedByWorkspace: {},
 		reviewsByWorkspace: {},
 		reviewFocusRequest: null,
 		fileClipboard: null,
@@ -2882,6 +2878,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	packagesVersion: 0,
 	artifactsShowIgnored: true,
 	artifactsView: null,
+	artifactsSeenByWorkspace: {},
+	artifactsTreeExpandedByWorkspace: {},
 	changesView: "tree",
 	filesMode: "all",
 	changesLayout: "stacked",
