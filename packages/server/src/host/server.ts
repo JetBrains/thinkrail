@@ -160,6 +160,7 @@ import {
 	bridgeRemoteWire,
 	createRemoteAccessControl,
 	type RemoteAccessControl,
+	type RemoteAccessControlOptions,
 	type RemoteWireBridge,
 } from "../remote-transport";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
@@ -289,7 +290,11 @@ export interface CreateServerOptions {
 	 * over a signaling relay — `relayUrl` when given, else one the host runs itself, reachable at this
 	 * machine's Wi‑Fi/LAN and Tailscale addresses. Without it, access follows the Settings switch.
 	 */
-	remote?: { relayUrl?: string | undefined };
+	remote?: {
+		relayUrl?: string | undefined;
+		/** Starts the pairing side in place of the real one; injected in tests. */
+		startAccess?: RemoteAccessControlOptions["startAccess"];
+	};
 	staticDir?: string;
 	projectPath?: string;
 	appVersion?: string;
@@ -755,22 +760,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		};
 	};
 
-	// Remote (WebRTC) clients are not Bun sockets, so they can't join Bun's native pub/sub. Wrapping
-	// `server.publish` once mirrors every broadcast — already framed as `{ channel, data }` — to each live
-	// remote bridge, with no cost when no device is paired. Targeted `ws.send`s stay host-local by design.
 	const remoteBridges = new Set<RemoteWireBridge>();
-	const nativePublish = server.publish.bind(server);
-	const forwardingPublish: typeof server.publish = (topic, data, compress) => {
-		const status = nativePublish(topic, data, compress);
-		if (typeof data === "string") for (const bridge of remoteBridges) bridge.pushFramed(data);
-		return status;
-	};
-	server.publish = forwardingPublish;
 
 	const deviceBridges = new Map<string, Set<RemoteWireBridge>>();
 	const remoteClients = new Set<string>();
 	const remoteAccess: RemoteAccessControl = createRemoteAccessControl({
 		...(remote?.relayUrl ? { relayUrl: remote.relayUrl } : {}),
+		...(remote?.startAccess ? { startAccess: remote.startAccess } : {}),
 		hostName: computerName(),
 		onPaired: (device, channel) => {
 			const clientKey = `remote:${device.id}`;
@@ -834,15 +830,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				bridge.push(WS_CHANNELS.remoteDeviceAccess, { access });
 			}
 		},
-		// Local sockets only: phone access is managed on this computer, so the status never reaches a device.
 		onStatus: (state) =>
-			nativePublish(
-				WS_CHANNELS.remoteStatusChanged,
-				JSON.stringify({
-					channel: WS_CHANNELS.remoteStatusChanged,
-					data: remoteAccessStatus(state),
-				}),
-			),
+			publishScoped(WS_CHANNELS.remoteStatusChanged, remoteAccessStatus(state), {
+				belowProtocol: REMOTE_ACCESS_PROTOCOL_VERSION,
+				localOnly: true,
+			}),
 	});
 	try {
 		if (remote) remoteAccess.setEnabled(true, { persist: false });
@@ -871,11 +863,16 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	type PushSocket = Bun.ServerWebSocket<SocketData>;
 	const fanOut = (
 		channel: string,
-		admits: (socket: PushSocket) => boolean,
+		admits: (protocolVersion: number) => boolean,
+		frame: string,
 		deliver: (socket: PushSocket) => void,
+		toDevices = true,
 	): void => {
 		for (const socket of sockets.values()) {
-			if (socket.isSubscribed(channel) && admits(socket)) deliver(socket);
+			if (socket.isSubscribed(channel) && admits(socket.data.protocolVersion)) deliver(socket);
+		}
+		if (toDevices && remoteBridges.size > 0 && admits(PROTOCOL_VERSION)) {
+			for (const bridge of remoteBridges) bridge.pushFramed(frame);
 		}
 	};
 
@@ -890,25 +887,34 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		workspaceId?: string;
 		projectId?: string;
 		belowProtocol?: number;
-	}): ((socket: PushSocket) => boolean) => {
+	}): ((protocolVersion: number) => boolean) => {
 		const aboutChats =
 			(scope.workspaceId !== undefined && isChatWorkspaceId(scope.workspaceId)) ||
 			(scope.projectId !== undefined && isChatsContainerId(scope.projectId));
 		const floor = scope.belowProtocol ?? 0;
-		return ({ data: { protocolVersion } }) =>
+		return (protocolVersion) =>
 			protocolVersion >= floor && (!aboutChats || seesChats(protocolVersion));
 	};
 
 	const publishScoped = (
 		channel: string,
 		data: unknown,
-		scope: { workspaceId?: string; projectId?: string; belowProtocol?: number } = {},
+		scope: {
+			workspaceId?: string;
+			projectId?: string;
+			belowProtocol?: number;
+			/** This computer's sockets only, never a paired device (phone access is managed here). */
+			localOnly?: boolean;
+		} = {},
 		afterSession?: string,
 	) => {
+		const frame = JSON.stringify({ channel, data });
 		fanOut(
 			channel,
 			admitsScope(scope),
-			pushTo(channel, JSON.stringify({ channel, data }), afterSession),
+			frame,
+			pushTo(channel, frame, afterSession),
+			scope.localOnly !== true,
 		);
 	};
 
@@ -1338,7 +1344,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			taskObservation.toolStarted(workspaceId, payload.sessionId, payload.event);
 		}
 		const frame = JSON.stringify({ channel: WS_CHANNELS.piEvent, data: payload });
-		fanOut(WS_CHANNELS.piEvent, admitsScope({ workspaceId }), (socket) => {
+		fanOut(WS_CHANNELS.piEvent, admitsScope({ workspaceId }), frame, (socket) => {
 			if (socket.data.held) socket.data.held.deliver(payload, frame);
 			else pushTo(WS_CHANNELS.piEvent, frame)(socket);
 		});
@@ -1356,16 +1362,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setExtUiPublisher((request, audience) => {
 		const workspaceId = getSessionAttribution(request.sessionId);
 		const aboutChat = workspaceId !== undefined && isChatWorkspaceId(workspaceId);
+		const frame = JSON.stringify({ channel: WS_CHANNELS.piExtensionUi, data: request });
 		fanOut(
 			WS_CHANNELS.piExtensionUi,
-			({ data: { protocolVersion } }) =>
+			(protocolVersion) =>
 				(!audience || protocolVersion < audience.belowProtocol) &&
 				(!aboutChat || seesChats(protocolVersion)),
-			pushTo(
-				WS_CHANNELS.piExtensionUi,
-				JSON.stringify({ channel: WS_CHANNELS.piExtensionUi, data: request }),
-				request.sessionId,
-			),
+			frame,
+			pushTo(WS_CHANNELS.piExtensionUi, frame, request.sessionId),
 		);
 	});
 

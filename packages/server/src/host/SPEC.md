@@ -1138,7 +1138,7 @@ enabled/confirmed choice before entering analytics attribution.
     (`agent_settled` included) and leave the tab streaming forever while it kept talking to the host.
     `publishScoped` and
     `pi.extensionUi`'s audience filter share one `fanOut` loop: subscription, then the socket filter,
-    then `sendOrQuarantine`. A test rejects any `.publish(` call in the server source. Addressed sends
+    then `sendOrQuarantine`; each paired device's wire bridge gets the same frame unless the scope is `localOnly`. A test rejects any `.publish(` call in the server source. Addressed sends
     (search results, MCP login, feedback asks) use the same rule. The terminal publisher keeps its
     own latch and treats a quarantined socket as unavailable.
 - **A backpressured socket gets stream snapshots conflated, not dropped (#1179).**

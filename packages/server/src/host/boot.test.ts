@@ -25,6 +25,9 @@ import {
 } from "../analytics";
 import { resetJbcentralStateForTests } from "../auth";
 import { logger } from "../log";
+import type { PairedDevice } from "../remote";
+import type { RemoteChannel } from "../remote-transport/channel";
+import type { RemoteAccess, RemoteAccessOptions } from "../remote-transport/remoteAccess";
 import { resetConfigCache, updateConfig } from "../settings";
 import { type BootedHost, bootHost } from "./boot";
 import { handleRequest } from "./handlers";
@@ -516,6 +519,58 @@ test("boot keeps the remote access handle so the launcher can mint a pairing lin
 	});
 
 	expect(b.server.remote.issueLink("default").link).toStartWith("thinkrail://pair?");
+});
+
+test("a paired device's channel hears the host's broadcasts beside the local sockets", async () => {
+	let pair: RemoteAccessOptions["onPaired"] | undefined;
+	const startAccess = (options: RemoteAccessOptions): RemoteAccess => {
+		pair = options.onPaired;
+		return {
+			identity: {
+				publicKey: "K",
+				fingerprint: "f",
+				sign: () => new Uint8Array(),
+				nostrSecret: new Uint8Array(32),
+			},
+			addresses: [],
+			nostr: null,
+			routes: () => ({ signalingUrls: [options.relayUrl] }),
+			issueLink: () => ({ link: "thinkrail://pair?v=1", expiresAt: 5 }),
+			stop: () => {},
+		};
+	};
+	const b = await boot({
+		port: grabFreePort(),
+		host: "localhost",
+		portMode: "exact",
+		remote: { relayUrl: "ws://127.0.0.1:1", startAccess },
+	});
+	const decoder = new TextDecoder();
+	const pushed: { channel?: string }[] = [];
+	const channel: RemoteChannel = {
+		open: true,
+		send: (data) => pushed.push(JSON.parse(decoder.decode(data))),
+		onMessage: () => {},
+		onClose: () => {},
+		close: () => {},
+	};
+	const device: PairedDevice = { id: "phone", label: "Phone", publicKey: "P", pairedAt: 1 };
+	pair?.(device, channel);
+	expect(pushed.map((frame) => frame.channel)).toContain(WS_CHANNELS.serverWelcome);
+
+	const local = await collectSocket(b.port, "broadcast-local");
+	local.socket.send(
+		JSON.stringify({
+			id: "update",
+			method: "settings.update",
+			params: { config: { extensionSettings: { "remote-broadcast": { on: true } } } },
+		}),
+	);
+	await local.waitForFrame((frame) => frame.channel === WS_CHANNELS.settingsChanged);
+	expect(pushed.map((frame) => frame.channel)).toContain(WS_CHANNELS.settingsChanged);
+	await local.waitForFrame((frame) => frame.channel === WS_CHANNELS.remoteStatusChanged);
+	expect(pushed.map((frame) => frame.channel)).not.toContain(WS_CHANNELS.remoteStatusChanged);
+	local.socket.close();
 });
 
 test("stop() releases the port", async () => {
