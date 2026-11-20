@@ -127,7 +127,7 @@ the tab badged with the Needs-you count; a tap lands in that chat (a row whose c
   placement, `useTranscriptSync` repairs it after a reconnect — the mounted computer's channel going down and coming back
   moves the store to `connecting` and then `connected` with a new generation, as the WS socket does — `useSessionStats` refreshes the usage line);
   `main.tsx` registers the built-in tool cards and the IDE's extensions and mounts the `TooltipProvider` the
-  composer needs;
+  composer needs and the IDE's `panels/Toaster`, so a shared hook's toast (a transcript refresh that failed) shows;
   `layout.tsx` (`Screen` frame and `ScreenHeader`, `ListRow`, loading/failed/empty states — a screen waits on `Loader`, the shared `RunningIcon` R mark at 56px over "Loading…"; a level of the tree waits on, or says it is empty in, an inline line at its depth; a screen with nothing to list shows `EmptyState` — an icon tile, a title, why, and the buttons that fix it, never "go to Settings"), `status.ts` (row marks from
   contracts' `sessionAttention`: the shared `RunningIcon` replaces the row glyph while a session in scope
   runs, the shared `AttentionDot` shows while one needs input or has an unread result — the IDE tree's
@@ -139,7 +139,7 @@ the tab badged with the Needs-you count; a tap lands in that chat (a row whose c
   Capacitor WKWebView persists it on-device). Live status comes from the controller's `session.state` stream; lists are read on screen
   entry, and a workspace's chats re-read when a session appears or leaves in it.
 - **Allowed deps:** the sibling `store`, `transport`, `extensions`, `themes` barrels, `shell/chatReconciliation`, and the
-  chat hooks `chat/useTranscriptSync`, `chat/useSessionStats`, `chat/useModelCatalog`, `chat/chatDraft`;
+  chat hooks `chat/useTranscriptSync`, `chat/useSessionStats`, `chat/useModelCatalog`, `chat/chatDraft`, `panels/Toaster` (per-file);
   `@thinkrail/remote-client` (the entire remote engine), `@thinkrail/chat-ui` (the chat renderers and composer —
   never a copy of them), `@thinkrail/contracts`, `@thinkrail/design-tokens` (palettes, semantic CSS,
   `applyPalette`), `@thinkrail/locales/react`, `@thinkrail/ui` primitives, Remix Icon, `@capacitor/app` and
