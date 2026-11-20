@@ -88,7 +88,7 @@ import {
 } from "./resources";
 import { SkillsDialog } from "./SkillsDialog";
 import { SubagentTranscriptDialog, SubagentTranscriptPane } from "./SubagentTranscriptDialog";
-import { SuggestionChips } from "./SuggestionChips";
+import { SuggestionChips, type SuggestionShortcut } from "./SuggestionChips";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { useChatResources, useCommandLog } from "./useChatResources";
 import { useModelCatalog } from "./useModelCatalog";
@@ -112,11 +112,13 @@ export default function ChatView({
 	workspaceId,
 	onOpenFile,
 	landingChord,
+	suggestionShortcuts,
 }: {
 	sessionId: string;
 	workspaceId: string;
 	onOpenFile?: ((path: string) => void) | undefined;
 	landingChord: string;
+	suggestionShortcuts: readonly SuggestionShortcut[];
 }) {
 	const t = useT();
 	const sessionExists = useAppStore((s) => s.sessions[sessionId] !== undefined);
@@ -1030,10 +1032,12 @@ export default function ChatView({
 				/>
 			) : null}
 			<SuggestionChips
+				sessionId={sessionId}
 				suggestions={suggestions}
 				onSend={sendSuggestion}
 				onEdit={editSuggestion}
-				shortcutScope={chatRoot}
+				shortcuts={suggestionShortcuts}
+				chatRoot={chatRoot}
 			/>
 			<div className="relative shrink-0">
 				<HistoryOverlay

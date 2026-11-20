@@ -25,7 +25,8 @@ binding does.
 
 ## Boundary
 
-- **Public surface:** `KeybindingId`, `KeyChord`, `KEYBINDINGS`, `FOCUS_GROUP_BINDINGS`, `parseChord`,
+- **Public surface:** `KeybindingId`, `KeyChord`, `KEYBINDINGS`, `FOCUS_GROUP_BINDINGS`,
+  `SuggestionKeybindingId`, `parseChord`,
   `formatChord`, `chordFromEvent`, `RecordedChord`, `isPlainChord`, `isLockedPrimitive`,
   `isBrowserReservedChord`, `isDesktopNativeChord`, `keybindingList`, `KeybindingList`,
   `KeybindingEntry`, `ExtensionShortcutSet`, `ChordHolder`, `chordHolders`, `assignChord`,
@@ -34,7 +35,8 @@ binding does.
   `LOCAL_KEY_DEFAULTS`, `SUGGESTION_KEYS`, `APP_LOCAL_SET`, `LocalCommandSet`, `matchLocal`, `localUses`, `globalHolder`,
   `actsIn`, `resolveKeybindings`, `ResolvedKeybindings`, `ResolvedCommand`, `ResolvedChord`,
   `KeybindingConflict`, `ExtensionCommandSet`, `matchKeybinding`, `pressesChord`, `keybindingShortcut`,
-  `keybindingShortcuts`, `keybindingKeys`, `keybindingLabel`, `keybindingLabels`, `SHORTCUT_CATALOG`,
+  `keybindingShortcuts`, `keybindingKeys`, `keybindingLabel`, `keybindingLabels`, `keybindingAria`,
+  `SHORTCUT_CATALOG`,
   `SHORTCUT_SURFACES`, `SHORTCUT_SURFACE_TITLES`, `ShortcutSurface`, `ShortcutRow`,
   `ShortcutConflictView`, `shortcutRows`, `shortcutKeyCaps`, `DESKTOP_KEYS`.
 - **Allowed deps:** `contracts` (the shared chord shape check `isKeybindingChord`, `isModifierKeyCode`,
@@ -52,7 +54,8 @@ binding does.
   `workspace.new`, `files.findInFiles`, `chat.history`, `region.next`, `focus.composer`, `view.changes`,
   `focus.group1`…, and the active-tab commands `tab.close`, `group.splitRight`,
   `tab.moveToPreviousGroup` / `tab.moveToNextGroup`, which are also the workbench's tab-action ids);
-  `search.open` has no palette row, and `view.files` is shown by the older `view.show.files` row.
+  `search.open` and the chip chords `suggestions.send1…9` / `suggestions.edit1…9` have no palette row, and
+  `view.files` is shown by the older `view.show.files` row.
 - **Tab chords** (VS Code's keymap; [[submodule-web-shell]], *Global chords*, owns what they do):
   `tab.close` is `Mod+W` (display-only) and `Mod+Alt+W`, `group.splitRight` is `Mod+\` (`Backslash`),
   and the group moves are `⌃⌘←` / `⌃⌘→` on Apple and `Ctrl+Alt+←` / `Ctrl+Alt+→` elsewhere (`Mod+Alt`
@@ -62,7 +65,16 @@ binding does.
   `focus.group1…9` `Mod+1…9` (`FOCUS_GROUP_BINDINGS` lists them in group order), `shortcuts.open`
   `Mod+?` (the cheatsheet, [[submodule-web-shell]]), `focus.terminal`
   `` Ctrl+` ``, `view.files` `Mod+Shift+E`, `view.changes` `Mod+Shift+G` ([[submodule-web-shell]],
-  *Global chords*, owns what they do). The digits are `Digit0`…`Digit9`: `Numpad0` never matches `focus.projects`, so `Mod+Numpad0` keeps
+  *Global chords*, owns what they do).
+- **Next-step chip chords:** `suggestions.send1…9` `Alt+1…9` and `suggestions.edit1…9` `Shift+Alt+1…9`
+  (`SUGGESTION_KEYS` lists both in chip order) send or edit a chat's suggestion chip from anywhere but the
+  terminal, the code editor, a dialog and hint mode ([[submodule-web-chat]], *Composer suggestions*;
+  [[submodule-web-shell]] routes them). On every platform, Option included: the binder consumes the press
+  only while the target chat shows that chip, and a layout that types a needed character with Option
+  rebinds. Unconfirmed: Windows' Alt+Shift input-language hotkey is assumed not to fire while a digit is
+  pressed with it. Until 2026-11-20 they were local commands of a shared scope `suggestions` that
+  `composer` and `transcript` included, so they acted only there; as global commands they keep their ids
+  (a saved rebind survives) but, like every global command, can no longer hold a plain chord. The digits are `Digit0`…`Digit9`: `Numpad0` never matches `focus.projects`, so `Mod+Numpad0` keeps
   resetting desktop page zoom while `Mod+0` moves focus. `` Ctrl+` `` is `Backquote` with literal Control
   on every platform, like `Ctrl+R` (`` ⌃` `` on a Mac, where `` Cmd+` `` stays the system's window cycling).
 - **A chord matches on physical `KeyboardEvent.code`**, never the layout-dependent `key`; `key` is only
@@ -75,7 +87,8 @@ binding does.
   (`platformFamily`, the same rule as `hasPlatformModifier`), `ctrl` is literal Control on every platform
   (`Ctrl+R` is ⌃R on a Mac), and a modifier the chord does not name must be up. Tolerating a modifier
   means listing a second chord — `workspace.new` is `Mod+N` and `Mod+Alt+N`. Alt belongs only to that
-  alias, `tab.close`'s `Mod+Alt+W` and the non-Apple group moves (a tested list). **Off Apple, no Alt
+  alias, `tab.close`'s `Mod+Alt+W`, the non-Apple group moves and the next-step chip chords (a tested
+  list). **Off Apple, no Alt
   chord matches while AltGraph is held** (`getModifierState("AltGraph")`): Windows reports AltGr as
   Ctrl+Alt, so a layout's AltGr character must never fire `Mod+Alt+N`, `Mod+Alt+W` or a group move. On a
   Mac the guard does not apply — Firefox reports Option as AltGraph, and `Mod` is ⌘, so there is no AltGr
@@ -98,7 +111,8 @@ binding does.
   one whose every chord lost, shows nothing (`undefined`, no caps, an empty label).
 - **Labels** for tooltips and prose (`⌘K`, `Ctrl+K`, `⌥⌘N`, `Ctrl+Alt+N`) come from `keybindingLabel`
   (the shown chord) and `keybindingLabels` (every active chord, in the command's order), joining
-  `shortcutKeys`'s caps, so chrome that names a chord never spells it by hand.
+  `shortcutKeys`'s caps, so chrome that names a chord never spells it by hand; `keybindingAria(resolved,
+  ...ids)` is the `aria-keyshortcuts` value of the commands' active chords (the next-step chips').
 - **IME:** the binder ignores every app chord while `event.isComposing`, and every extension command
   while composing or on the 229 sentinel (`isImeComposing`, hint mode's former rule), so an input method
   keeps its keys; only `Ctrl+R`'s reload guard still swallows the key.
@@ -178,14 +192,6 @@ binding does.
   `rails`, `trees`, `review.surface`, `transcript` and the three Settings scopes include it, so one rebind
   applies in every element.
   A scope another includes is not an element of its own: it never appears in the `local` map.
-- **Shared scope `suggestions`.** The chat's composer-suggestion keys (`suggestions.send1…9`, `Alt+1…9`,
-  and `suggestions.edit1…9`, `Shift+Alt+1…9`; `SUGGESTION_KEYS` lists both in chip order) are declared
-  once in scope `suggestions`, which
-  `composer` and `transcript` include: the chips act anywhere in the chat's input or conversation, and a
-  conflict inside either element is ranked there ([[submodule-web-chat]], *Composer suggestions*). On
-  every platform, Option included: the chat consumes the press only while that chip is shown, and a
-  layout that types a needed character with Option rebinds. Unconfirmed: Windows' Alt+Shift input-language
-  hotkey is assumed not to fire while a digit is pressed with it.
 - **Settings scopes** ([[submodule-web-settingskit]]): `settings.nav` on the section tablist
   (`settings.nav.search`, S and `/`; no other letter, so F stays hint mode's), `settings` on the content
   pane (`settings.reset`, Delete resets the focused row) and `settings.list` on each list inside it

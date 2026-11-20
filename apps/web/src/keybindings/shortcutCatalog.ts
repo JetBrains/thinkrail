@@ -2,8 +2,13 @@ import type { MessageKey } from "@thinkrail/locales";
 import { keyCap } from "@thinkrail/ui/keyboard";
 import { type CommandShortcut, shortcutKeys } from "../commands";
 import { platformFamily } from "../lib";
-import { displayShortcut, FOCUS_GROUP_BINDINGS, type KeybindingId, keysLabel } from "./keybindings";
-import { SUGGESTION_KEYS } from "./localKeys";
+import {
+	displayShortcut,
+	FOCUS_GROUP_BINDINGS,
+	type KeybindingId,
+	keysLabel,
+	SUGGESTION_KEYS,
+} from "./keybindings";
 import {
 	keybindingShortcut,
 	keybindingShortcuts,
@@ -180,6 +185,20 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 		surface: "general",
 		bindings: FOCUS_GROUP_BINDINGS,
 		bindingTitle: "commands.focus.group",
+	},
+	{
+		id: "suggestions.send",
+		title: "shortcuts.suggestions.send",
+		surface: "general",
+		bindings: SUGGESTION_KEYS.send,
+		bindingTitle: "shortcuts.suggestions.sendOne",
+	},
+	{
+		id: "suggestions.edit",
+		title: "shortcuts.suggestions.edit",
+		surface: "general",
+		bindings: SUGGESTION_KEYS.edit,
+		bindingTitle: "shortcuts.suggestions.editOne",
 	},
 	{
 		id: "dictation",
@@ -667,22 +686,6 @@ export const SHORTCUT_CATALOG: readonly ShortcutCatalogEntry[] = [
 			title: "shortcuts.composer.scrollTranscript",
 			surface: "composer",
 			keys: [PAGE_UP, PAGE_DOWN],
-		},
-	]),
-	...inScope("suggestions", [
-		{
-			id: "suggestions.send",
-			title: "shortcuts.suggestions.send",
-			surface: "composer",
-			local: SUGGESTION_KEYS.send,
-			bindingTitle: "shortcuts.suggestions.sendOne",
-		},
-		{
-			id: "suggestions.edit",
-			title: "shortcuts.suggestions.edit",
-			surface: "composer",
-			local: SUGGESTION_KEYS.edit,
-			bindingTitle: "shortcuts.suggestions.editOne",
 		},
 	]),
 	...inScope("transcript", [

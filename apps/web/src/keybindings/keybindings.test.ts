@@ -68,10 +68,11 @@ describe.each(Object.entries(PLATFORMS))("keybindings on %s", (family, platform)
 		expect(match(press("KeyN", { ...mod, shiftKey: true, altKey: true }), platform)).toBeNull();
 	});
 
-	test("Mod+K rejects Shift and Alt, and Alt belongs only to the listed aliases and tab moves", () => {
+	test("Mod+K rejects Shift and Alt, and Alt belongs only to the listed aliases, tab moves and chip keys", () => {
 		const altBindings = entries
 			.filter(([, chords]) => chords.some((chord: Chord) => chord.alt === true))
 			.map(([id]) => id)
+			.filter((id) => !id.startsWith("suggestions."))
 			.sort();
 		expect(altBindings).toEqual([
 			"tab.close",
@@ -79,6 +80,18 @@ describe.each(Object.entries(PLATFORMS))("keybindings on %s", (family, platform)
 			"tab.moveToPreviousGroup",
 			"workspace.new",
 		]);
+		const chipKeys = entries.filter(([id]) => id.startsWith("suggestions."));
+		expect(chipKeys).toHaveLength(18);
+		expect(
+			chipKeys.every(([, chords]) =>
+				chords.every((chord: Chord) => chord.alt === true && !chord.mod && !chord.ctrl),
+			),
+		).toBe(true);
+		expect(match(press("Digit1", { altKey: true }), platform)).toBe("suggestions.send1");
+		expect(match(press("Digit9", { altKey: true, shiftKey: true }), platform)).toBe(
+			"suggestions.edit9",
+		);
+		expect(match(press("Digit1", { ...mod, altKey: true }), platform)).toBeNull();
 		expect(match(press("KeyK", { ...mod, shiftKey: true }), platform)).toBeNull();
 		expect(match(press("KeyK", { ...mod, altKey: true }), platform)).toBeNull();
 		expect(match(press("KeyB", { ...mod, altKey: true }), platform)).toBeNull();
@@ -121,6 +134,9 @@ describe.each(Object.entries(PLATFORMS))("keybindings on %s", (family, platform)
 			family === "apple" ? "tab.close" : null,
 		);
 		expect(match(withAltGraph(press("KeyB", mod)), platform)).toBe("view.toggleLeft");
+		expect(match(withAltGraph(press("Digit1", { altKey: true })), platform)).toBe(
+			family === "apple" ? "suggestions.send1" : null,
+		);
 	});
 
 	test("region, focus and tool chords match on their physical keys", () => {

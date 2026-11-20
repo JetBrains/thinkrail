@@ -43,7 +43,10 @@ control, focused with `preventScroll`), shared by the app's focus recovery and r
 resource renderers' reveal of a comment card, and `focusAndReveal(element)` — focus with `preventScroll`,
 then scroll only the nearest vertically scrolling ancestor just enough (`revealDelta`, the outline
 included) to show it, never `scrollIntoView`'s every ancestor — which the ask card, the chat and the
-shell's Esc landing use for a waiting question's controls (`scrollsVertically` is its scroller test); `./theme` exposes
+shell's Esc landing use for a waiting question's controls (`scrollsVertically` is its scroller test) —
+and its horizontal companion `revealHorizontally(element)` (no focus; the nearest ancestor that
+`scrollsHorizontally`, same `revealDelta` along the x axis), which keeps the ask card's selected question tab
+in view inside its strip; `./theme` exposes
 only `onThemeSwap`, a DOM MutationObserver subscription to the completed `data-theme` signal, with
 explicit cleanup. It knows nothing about the theme catalog or preferences. `./fonts` is the same seam for
 the font settings: `onFontsChange` / `fontsRevision` over the `data-fonts` signal, `resolveFont(className)`

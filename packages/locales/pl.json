@@ -2462,7 +2462,7 @@
 	"tools.ask.composing": "Agent przygotowuje pytania…",
 	"tools.ask.editNoteLabel": "Edytuj notatkę do {{option}}",
 	"tools.ask.excludeCustom": "Wyklucz własną odpowiedź",
-	"tools.ask.hintQuestions": "· ←→ pytania",
+	"tools.ask.hintQuestions": "· ←→ pytania, potem Wyślij",
 	"tools.ask.hintSkip": "· {{key}} pomiń",
 	"tools.ask.includeCustom": "Uwzględnij własną odpowiedź",
 	"tools.ask.needsChoice": "Najpierw wybierz opcję",

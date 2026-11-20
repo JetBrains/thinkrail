@@ -157,10 +157,10 @@ describe("the shortcut catalog", () => {
 		expect(labels(rowsFor(false, MAC), "suggestions.send")).toEqual(["⌥1–9"]);
 		const rebound = rowsFor(false, LINUX, { overrides: { "suggestions.send2": ["Alt+KeyQ"] } });
 		expect(labels(rebound, "suggestions.send")?.slice(0, 3)).toEqual(["Alt+1", "Alt+Q", "Alt+3"]);
-		expect(actsIn(resolveKeybindings({ platform: LINUX }), "suggestions")).toEqual([
-			"transcript",
-			"composer",
-		]);
+		expect(rowsFor(false, LINUX).find(({ id }) => id === "suggestions.send")?.surface).toBe(
+			"general",
+		);
+		expect(actsIn(resolveKeybindings({ platform: LINUX }), "suggestions")).toEqual([]);
 	});
 
 	test("carries a losing chord as a conflict with its winner, not as an active chord", () => {

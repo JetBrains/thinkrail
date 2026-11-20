@@ -2311,7 +2311,7 @@
 	"tools.ask.hintEnterToggle": "· Enter 切り替え",
 	"tools.ask.hintMove": "↑↓ 移動",
 	"tools.ask.hintPreviewScroll": "· PgUp/PgDn プレビュー",
-	"tools.ask.hintQuestions": "· ←→ 質問",
+	"tools.ask.hintQuestions": "· ←→ 質問、最後に送信",
 	"tools.ask.hintSkip": "· {{key}} スキップ",
 	"tools.ask.hintSpaceNote": "· Space メモ",
 	"tools.ask.hintSubmit": "· {{key}} 送信",
