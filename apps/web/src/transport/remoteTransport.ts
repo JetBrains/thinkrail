@@ -2,7 +2,14 @@ import type { WsErrorCode, WsMethodName, WsParams, WsResult } from "@thinkrail/c
 import { t } from "@thinkrail/locales/react";
 import { type DeviceWireClient, RemoteRequestError } from "@thinkrail/remote-client";
 import { RequestError, RequestTimeoutError } from "./requestError";
-import type { RequestOptions, Transport } from "./transport";
+import type { ConnectionStatus, RequestOptions, Transport } from "./transport";
+
+export interface RemoteTransportOptions {
+	/** Hears the channel go down (`connecting`) and come back (`connected`), as the WS transport reports. */
+	onStatus?: (status: ConnectionStatus) => void;
+	/** Runs once on `close`: the transport that owns its connection closes it here. */
+	onClose?: () => void;
+}
 
 /**
  * A `Transport` backed by a remote host's WebRTC DataChannel (via `DeviceWireClient`). Requests and channel
@@ -18,11 +25,18 @@ export class RemoteTransport implements Transport {
 	private readonly hostKey: string;
 	private readonly unsubscribes = new Set<() => void>();
 	private readonly inFlight = new Set<AbortController>();
+	private readonly onClose: (() => void) | undefined;
 	private closed = false;
 
-	constructor(client: DeviceWireClient, hostKey: string) {
+	constructor(client: DeviceWireClient, hostKey: string, options: RemoteTransportOptions = {}) {
 		this.client = client;
 		this.hostKey = hostKey;
+		this.onClose = options.onClose;
+		const { onStatus } = options;
+		if (onStatus)
+			this.unsubscribes.add(
+				client.onOpenChange((open) => onStatus(open ? "connected" : "connecting")),
+			);
 	}
 
 	request<M extends WsMethodName>(
@@ -73,11 +87,13 @@ export class RemoteTransport implements Transport {
 	}
 
 	close(): void {
+		if (this.closed) return;
 		this.closed = true;
 		for (const inFlight of this.inFlight)
 			inFlight.abort(new Error(t("app.transport.requestFailed")));
 		this.inFlight.clear();
 		for (const unsubscribe of this.unsubscribes) unsubscribe();
 		this.unsubscribes.clear();
+		this.onClose?.();
 	}
 }

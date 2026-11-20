@@ -5,6 +5,9 @@ import { RequestTimeoutError, wsErrorCode } from "./requestError";
 
 const clientAnswering = (answer: () => Promise<unknown>): DeviceWireClient => ({
 	attach: () => {},
+	detach: () => {},
+	open: true,
+	onOpenChange: () => () => {},
 	request: <T>() => answer() as Promise<T>,
 	subscribe: () => () => {},
 	close: () => {},
@@ -17,6 +20,9 @@ function holdingClient(): { client: DeviceWireClient; held: () => number } {
 		held: () => held,
 		client: {
 			attach: () => {},
+			detach: () => {},
+			open: true,
+			onOpenChange: () => () => {},
 			request: <T>(_method: string, _params?: unknown, options?: { signal?: AbortSignal }) =>
 				new Promise<T>((_, reject) => {
 					held += 1;
@@ -80,4 +86,12 @@ test("close rejects what is in flight and refuses new requests", async () => {
 	expect(held()).toBe(0);
 	await expect(transport.request("project.list", {})).rejects.toBeInstanceOf(Error);
 	expect(held()).toBe(0);
+});
+
+test("close closes what the transport owns, once", () => {
+	let closed = 0;
+	const transport = new RemoteTransport(holdingClient().client, "K1", { onClose: () => closed++ });
+	transport.close();
+	transport.close();
+	expect(closed).toBe(1);
 });

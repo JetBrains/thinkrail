@@ -92,12 +92,16 @@ roster's catalog reads ([[submodule-web-panels]]).
   **`welcomeProtocolVersion`** keeps the last installed welcome's protocol across a reconnect (in memory
   only, and host-scoped: a host switch resets it), for the one capability that must outlive a blip: **`selectHostSearchAvailable`** (the search
   palette keeps its host scopes and rows) beside **`selectHostReachable`** (connected and this
-  connection's welcome — when a host search request may go out).
+  connection's welcome — when a host search request may go out). **`remoteHostKey`** (host-scoped) names the
+  remote host the app is mounted on, null on this computer's own; **`enterRemoteHost(hostKey, open)`** sets
+  it with the matching status transition in one write, and **`selectSupportsRemoteAccess`** (protocol gate +
+  local host only) is the one gate for phone access, which a remote host refuses to a device.
   **`resetHostState()`** returns every host-scoped slice (`initialHostState()`: domain state, the
   workspace-keyed views and requests, host config to defaults) to its initial value when the transport moves
   to another host; monotonic counters (`connectionGeneration`, `welcomeGeneration`, provider and revision
   versions), the workbench frame and client preferences survive, so a reply from the previous host still
-  fails its generation guard.
+  fails its generation guard. `hostScope.test.ts` classifies every data key as host-scoped (reset) or
+  client-scoped (an explicit list), so a new field cannot skip the decision.
   **`installWelcomeSnapshot(protocolVersion, projects, recentProjects,
   config?, hostPlatform?, hostUpdate?, hostAppVersion?, speech?)`** installs protocol + both sorted project views + optional config,
   host platform, optional host-update lifecycle snapshot, the voice-input **`speech`** status (`null` from a

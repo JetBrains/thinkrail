@@ -52,7 +52,11 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   **`backendKey()`** is the host's identity for frontend-local storage keys (the WS `httpBase()`, so existing
   keys keep their spelling; `remote:<hostKey>` for a remote host, whose `httpBase()` is empty) and
   **`close()`** ends a transport for good — no reconnect, no further pushes, pending requests rejected;
-  **one host at a time**: installing a transport (`initTransport`, `mountRemoteSession(client, hostKey)`)
+  **one host at a time**: installing a transport (`initTransport`, `mountRemoteSession(client, hostKey,
+  { onClose })` — the remote channel's `onOpenChange` drives `setStatus` like the WS socket: down is
+  `connecting`, back is `connected` with a new generation, so connection-scoped reads reconcile after the gap;
+  the store enters the host with `enterRemoteHost`, and `onClose` lets the IDE's transport own and close its
+  connection)
   disposes the previous one's channel wiring and event batcher, closes it, and runs `hostReset.ts`'s
   `resetHost` — the store's `resetHostState()` with `isHostResetting()` true, so persistence adapters do not
   write the emptied state under either host's key, then every `onHostReset` listener, which re-reads its

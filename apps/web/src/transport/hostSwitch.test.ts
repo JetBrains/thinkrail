@@ -9,13 +9,26 @@ interface FakeHost {
 	client: DeviceWireClient;
 	push(channel: string, data: unknown): void;
 	subscriberCount(): number;
+	setOpen(open: boolean): void;
 }
 
 function fakeHost(): FakeHost {
 	const handlers = new Map<string, Set<(data: unknown) => void>>();
+	const openListeners = new Set<(open: boolean) => void>();
+	let open = true;
 	return {
 		client: {
 			attach() {},
+			detach() {},
+			get open() {
+				return open;
+			},
+			onOpenChange(listener) {
+				openListeners.add(listener);
+				return () => {
+					openListeners.delete(listener);
+				};
+			},
 			request: () => new Promise(() => {}),
 			subscribe(channel, handler) {
 				let set = handlers.get(channel);
@@ -36,7 +49,11 @@ function fakeHost(): FakeHost {
 		subscriberCount() {
 			let count = 0;
 			for (const set of handlers.values()) count += set.size;
-			return count;
+			return count + openListeners.size;
+		},
+		setOpen(next) {
+			open = next;
+			for (const listener of openListeners) listener(next);
 		},
 	};
 }
@@ -109,4 +126,39 @@ test("a welcome the device client replays on subscribe survives the mount", () =
 	mountRemoteSession(replaying, "host-e");
 	expect(useAppStore.getState().protocolVersion).toBe(1);
 	expect(useAppStore.getState().projects.map((p) => p.id)).toEqual(["replayed"]);
+});
+
+test("a remote channel going down and coming back reconnects the store like the WS transport", () => {
+	const host = fakeHost();
+	mountRemoteSession(host.client, "host-f");
+	host.push(WS_CHANNELS.serverWelcome, welcome([project("f")]));
+	expect(useAppStore.getState().status).toBe("connected");
+	expect(useAppStore.getState().remoteHostKey).toBe("host-f");
+	const generation = useAppStore.getState().connectionGeneration;
+
+	host.setOpen(false);
+	expect(useAppStore.getState().status).toBe("connecting");
+	expect(useAppStore.getState().connectionGeneration).toBe(generation);
+
+	host.setOpen(true);
+	expect(useAppStore.getState().status).toBe("connected");
+	expect(useAppStore.getState().connectionGeneration).toBe(generation + 1);
+	host.push(WS_CHANNELS.serverWelcome, welcome([project("f")]));
+	expect(useAppStore.getState().protocolVersion).toBe(1);
+});
+
+test("a host mounted while its channel is down reads connecting, and a replaced one is closed and unheard", () => {
+	const host = fakeHost();
+	host.setOpen(false);
+	let closed = 0;
+	mountRemoteSession(host.client, "host-g", { onClose: () => closed++ });
+	expect(useAppStore.getState().status).toBe("connecting");
+
+	mountRemoteSession(fakeHost().client, "host-h");
+	expect(closed).toBe(1);
+	expect(host.subscriberCount()).toBe(0);
+	const generation = useAppStore.getState().connectionGeneration;
+	host.setOpen(true);
+	expect(useAppStore.getState().connectionGeneration).toBe(generation);
+	expect(useAppStore.getState().remoteHostKey).toBe("host-h");
 });
