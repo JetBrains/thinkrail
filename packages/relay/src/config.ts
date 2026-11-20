@@ -28,6 +28,9 @@ export const DEFAULT_LIMITS: RelayLimits = {
 	maxSessionsPerHost: 64,
 };
 
+export const DEFAULT_TURN_TTL_SECONDS = 10 * 60;
+export const DEFAULT_TURN_ISSUES_PER_MINUTE = 10;
+
 function positiveInt(value: string | undefined, fallback: number, name: string): number {
 	if (value === undefined || value === "") return fallback;
 	const parsed = Number(value);
@@ -73,7 +76,16 @@ export function configFromEnv(env: Record<string, string | undefined>): RelayCon
 				? {
 						urls: turnUrls,
 						secret: turnSecret,
-						ttlSeconds: positiveInt(env.TURN_TTL_SECONDS, 12 * 3600, "TURN_TTL_SECONDS"),
+						ttlSeconds: positiveInt(
+							env.TURN_TTL_SECONDS,
+							DEFAULT_TURN_TTL_SECONDS,
+							"TURN_TTL_SECONDS",
+						),
+						issuesPerMinute: positiveInt(
+							env.TURN_ISSUES_PER_MINUTE,
+							DEFAULT_TURN_ISSUES_PER_MINUTE,
+							"TURN_ISSUES_PER_MINUTE",
+						),
 					}
 				: null,
 	};

@@ -63,7 +63,7 @@ export function startBroker(options: StartBrokerOptions = {}): RunningBroker {
 					send: (message) => void ws.send(encodeBrokerFrame(message)),
 					close: () => ws.close(),
 				};
-				broker.connect(ws.data.id, socket);
+				broker.connect(ws.data.id, socket, ws.data.address);
 				ws.data.pending = setTimeout(() => {
 					if (broker.isPending(ws.data.id)) ws.close(POLICY_VIOLATION, "register timeout");
 				}, limits.pendingTimeoutMs);
