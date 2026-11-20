@@ -100,6 +100,7 @@
 			"includes": [
 				"apps/web/**",
 				"apps/website/**",
+				"packages/chat-ui/**",
 				"packages/resource-renderers/**",
 				"packages/ui/**",
 				"thinkrail-extensions/*/web/**"
