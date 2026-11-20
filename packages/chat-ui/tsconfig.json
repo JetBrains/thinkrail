@@ -6,6 +6,5 @@
 		"lib": ["ES2023", "DOM", "DOM.Iterable"],
 		"types": ["bun"]
 	},
-	"include": ["src"],
-	"exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
+	"include": ["src"]
 }
