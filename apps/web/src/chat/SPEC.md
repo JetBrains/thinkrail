@@ -356,8 +356,9 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
 - A third chip, **“N artifacts”**, lists what the round left in the artifacts folder — which the git receipt
   below cannot see, the folder being ignored. `ChatTranscript` hands `deriveRows` this chat's
   `sessionRoundArtifacts`: the live artifacts whose host **round markers** ([[submodule-server-artifacts]])
-  include one of this chat's rounds, results only while the Smart view is on and the host is v124+, every
-  artifact file otherwise. A round keeps those whose marker falls in its window — the same
+  include one of this chat's rounds, filtered to what the Artifacts view in use shows
+  (`selectArtifactsRoundFilter`): the published files under Outputs, the results under Smart, every
+  artifact file under List and Tree — so the chip and the panel never disagree. A round keeps those whose marker falls in its window — the same
   opener-to-next-opener rule as the receipts below; the host stamps a round with the delivered prompt's own
   timestamp, so a follow-up queued into a running agent gets its own round — and a later round that touches
   a file again lists it too without taking it from the earlier one. Rows are named by their path inside the artifacts folder; the chip reveals the

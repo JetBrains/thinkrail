@@ -11,12 +11,14 @@ import {
 	artifactsWatermark,
 	hostLacksArtifacts,
 	selectActiveFilePath,
-	selectArtifactsSmartOffered,
+	selectArtifactOutputsOffered,
 	selectArtifactsView,
+	supportsArtifactRoles,
 	supportsArtifacts,
 	useAppStore,
 } from "../store";
 import { getTransport } from "../transport";
+import { ArtifactsOutputs, EmptyOutputs } from "./ArtifactsOutputs";
 import { ArtifactsSmart, SMART_UNATTACHED, smartGroupId } from "./ArtifactsSmart";
 import { ArtifactsToolbar } from "./ArtifactsToolbar";
 import { ArtifactTreeRows } from "./ArtifactsTree";
@@ -39,6 +41,7 @@ import {
 	artifactTimeLabel,
 	artifactTree,
 	type OutputRow,
+	outputEntries,
 	smartGroups,
 } from "./artifactsModel";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -74,7 +77,8 @@ export function ArtifactsPanel({
 		(s) => supportsArtifacts(s.protocolVersion) && s.fileClipboard !== null,
 	);
 	const view = useAppStore(selectArtifactsView);
-	const smartOffered = useAppStore(selectArtifactsSmartOffered);
+	const outputsOffered = useAppStore(selectArtifactOutputsOffered);
+	const smartOffered = useAppStore((s) => supportsArtifactRoles(s.protocolVersion));
 	const expandedPaths = useAppStore((s) => s.artifactsTreeExpandedByWorkspace[workspaceId]);
 	const activePath = useAppStore((s) => selectActiveFilePath(s, workspaceId));
 	const [allChats, setAllChats] = useState(false);
@@ -108,6 +112,10 @@ export function ArtifactsPanel({
 		() => (view === "smart" && rows ? smartGroups(rows.artifacts) : null),
 		[view, rows],
 	);
+	const outputs = useMemo(
+		() => (view === "outputs" && rows ? outputEntries(rows.artifacts) : null),
+		[view, rows],
+	);
 	const expanded = useMemo(() => new Set(expandedPaths), [expandedPaths]);
 	const canCollapse = smart
 		? smart.groups.some((group) => expanded.has(smartGroupId(group.folder))) ||
@@ -135,11 +143,14 @@ export function ArtifactsPanel({
 				chatFilterDisabled={mentionTarget === null}
 				onAllChats={setAllChats}
 				views={[
-					{ id: "list", label: t("panels.artifacts.viewList") },
-					{ id: "tree", label: t("panels.artifacts.viewTree") },
+					...(outputsOffered
+						? [{ id: "outputs" as const, label: t("panels.artifacts.viewOutputs") }]
+						: []),
 					...(smartOffered
 						? [{ id: "smart" as const, label: t("panels.artifacts.viewSmart") }]
 						: []),
+					{ id: "list", label: t("panels.artifacts.viewList") },
+					{ id: "tree", label: t("panels.artifacts.viewTree") },
 				]}
 				view={view}
 				onView={(next) => useAppStore.getState().setArtifactsView(next)}
@@ -185,7 +196,31 @@ export function ArtifactsPanel({
 					</>
 				) : (
 					<div className="flex flex-col gap-8 motion-safe:animate-reveal">
-						{rows.artifacts.length > 0 ? (
+						{outputs && snapshot && rows.artifacts.length > 0 ? (
+							outputs.length > 0 ? (
+								<Section
+									testid="artifacts-section"
+									focusList="artifacts"
+									title={t("panels.artifacts.sectionPublished")}
+									strong
+									label={t("panels.artifacts.artifactsTree")}
+									onOpenKept={openArtifactKept}
+								>
+									<ArtifactsOutputs
+										entries={outputs}
+										dir={snapshot.dir}
+										workspaceId={workspaceId}
+										activePath={activePath}
+										onRemove={requestRemoval}
+									/>
+								</Section>
+							) : (
+								<EmptyOutputs
+									files={rows.artifacts.length}
+									onShowAll={() => useAppStore.getState().setArtifactsView("list")}
+								/>
+							)
+						) : rows.artifacts.length > 0 ? (
 							<Section
 								testid="artifacts-section"
 								focusList="artifacts"
@@ -238,7 +273,7 @@ export function ArtifactsPanel({
 								title={t("panels.artifacts.sectionOutputs")}
 								label={t("panels.artifacts.outputsTree")}
 								count={rows.outputs.length}
-								focusDefault={rows.artifacts.length === 0}
+								focusDefault={rows.artifacts.length === 0 || outputs?.length === 0}
 								onOpenKept={openKept}
 							>
 								{rows.outputs.map((row) => (
@@ -309,6 +344,7 @@ function Section({
 	title,
 	label,
 	count,
+	strong = false,
 	focusDefault = true,
 	onOpenKept,
 	children,
@@ -317,16 +353,22 @@ function Section({
 	focusList: string;
 	title: string;
 	label: string;
-	count: number;
+	count?: number;
+	strong?: boolean;
 	focusDefault?: boolean;
 	onOpenKept: (path: string) => void;
 	children: ReactNode;
 }) {
 	return (
 		<section data-testid={testid} className="flex flex-col">
-			<h3 className="flex items-center justify-between px-4 pb-4 text-text-subtle tr-text-metadata">
+			<h3
+				className={cn(
+					"flex items-center justify-between px-4",
+					strong ? "pb-8 text-text-default tr-text-ui" : "pb-4 text-text-subtle tr-text-metadata",
+				)}
+			>
 				<span>{title}</span>
-				<span>{count}</span>
+				{count === undefined ? null : <span>{count}</span>}
 			</h3>
 			<Tree
 				label={label}

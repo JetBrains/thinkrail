@@ -14,6 +14,10 @@ const tools = new Map<string, ArtifactTool>([
 				typeof details === "object" && details !== null && "chosen" in details
 					? [String(details.chosen)]
 					: [],
+			published: (_args, details) =>
+				typeof details === "object" && details !== null && "files" in details
+					? [String(details.files)]
+					: [],
 		},
 	],
 	[
@@ -43,7 +47,7 @@ test("a declared tool's paths travel from its start to a successful end", () => 
 			type: "tool_execution_end",
 			toolCallId: "c1",
 			toolName: "show",
-			result: { content: [], details: { chosen: "b.html" } },
+			result: { content: [], details: { chosen: "b.html", files: "c.md" } },
 			isError: false,
 		}),
 	).toEqual({
@@ -52,6 +56,7 @@ test("a declared tool's paths travel from its start to a successful end", () => 
 		toolName: "show",
 		presented: ["a.html"],
 		picked: ["b.html"],
+		published: ["c.md"],
 	});
 });
 

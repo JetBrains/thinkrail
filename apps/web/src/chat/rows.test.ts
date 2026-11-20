@@ -730,10 +730,20 @@ test("a round's artifacts are the ones a run of this chat created or changed wit
 				changedAt: 1,
 				firstSeenAt: 1,
 				role: "result",
+				published: true,
 				rounds: [
 					{ sessionId: "s1", startedAt: 1_500 },
 					{ sessionId: "s1", startedAt: 20_500 },
 				],
+			},
+			{
+				path: ".thinkrail/context/mockups/b.html",
+				state: "live",
+				size: 1,
+				changedAt: 1,
+				firstSeenAt: 1,
+				role: "result",
+				rounds: [{ sessionId: "s1", startedAt: 1_700 }],
 			},
 			{
 				path: ".thinkrail/context/mockups/_scratch/a.png",
@@ -772,17 +782,21 @@ test("a round's artifacts are the ones a run of this chat created or changed wit
 		user("u3", 20_000),
 		assistantWithPaths("a3", [], 22_000),
 	];
-	const results = sessionRoundArtifacts(snapshot, "s1", true);
-	expect(turnDivider(turns, 1, undefined, [], undefined, results)?.artifacts).toEqual([
+	const published = sessionRoundArtifacts(snapshot, "s1", "published");
+	expect(turnDivider(turns, 1, undefined, [], undefined, published)?.artifacts).toEqual([
 		{ path: ".thinkrail/context/mockups/a.html", label: "mockups/a.html" },
 	]);
-	expect(turnDivider(turns, 3, undefined, [], undefined, results)?.artifacts).toEqual([]);
-	expect(turnDivider(turns, 5, undefined, [], undefined, results)?.artifacts).toHaveLength(1);
-	const everything = sessionRoundArtifacts(snapshot, "s1", false);
+	expect(turnDivider(turns, 3, undefined, [], undefined, published)?.artifacts).toEqual([]);
+	expect(turnDivider(turns, 5, undefined, [], undefined, published)?.artifacts).toHaveLength(1);
+	const results = sessionRoundArtifacts(snapshot, "s1", "results");
+	expect(
+		turnDivider(turns, 1, undefined, [], undefined, results)?.artifacts.map((a) => a.label),
+	).toEqual(["mockups/a.html", "mockups/b.html"]);
+	const everything = sessionRoundArtifacts(snapshot, "s1", "all");
 	expect(
 		turnDivider(turns, 1, undefined, [], undefined, everything)?.artifacts.map((a) => a.label),
-	).toEqual(["mockups/_scratch/a.png", "mockups/a.html"]);
-	expect(sessionRoundArtifacts(undefined, "s1", true)).toEqual([]);
+	).toEqual(["mockups/_scratch/a.png", "mockups/a.html", "mockups/b.html"]);
+	expect(sessionRoundArtifacts(undefined, "s1", "results")).toEqual([]);
 });
 
 describe("stabilizeRows identity", () => {

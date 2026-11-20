@@ -25,4 +25,9 @@ export {
 	STAGED_HOST_SKILLS_ROUTE,
 	stagedExtensionSkillRoute,
 } from "./skills";
-export { checkWorkspaceFile, MOCKUP_DIR, workspaceFiles } from "./workspaceFiles";
+export {
+	checkWorkspaceFile,
+	MOCKUP_DIR,
+	setArtifactFileCheck,
+	workspaceFiles,
+} from "./workspaceFiles";

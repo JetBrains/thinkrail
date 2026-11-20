@@ -1,6 +1,5 @@
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
-	ARTIFACT_ROLES_PROTOCOL_VERSION,
 	CACHE_WARMING_SETTINGS_PROTOCOL_VERSION,
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	CUSTOM_ENDPOINTS_PROTOCOL_VERSION,
@@ -482,14 +481,6 @@ export const SETTING = {
 		label: "workbench.layoutSettings.groupLimits",
 		description: "workbench.layoutSettings.groupLimitsDescription",
 		keywords: ["left", "right", "bottom", "groups"],
-	},
-	smartView: {
-		id: "smart-view",
-		section: SettingsSection.Layout,
-		label: "settings.artifacts.smart",
-		description: "settings.artifacts.smartHint",
-		keywords: ["artifacts", "list", "tree"],
-		requiresProtocolVersion: ARTIFACT_ROLES_PROTOCOL_VERSION,
 	},
 	markdownOutline: {
 		id: "markdown-outline",

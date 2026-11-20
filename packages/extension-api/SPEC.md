@@ -48,8 +48,9 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
     `terminate: true`) when `awaitToolResponse` resolves `deferred`. It is the one shape both sides read
     (`contracts`: `isToolResponsePending`); a tool must not use it for a real result.
 - **Artifact tools.** `ServerExtension.artifactTools?: Record<toolName, ArtifactTool>` tells the host which
-  files a successful call put in front of the person (`presented(args, details)`) and which of them the
-  person chose (`picked(args, details)`), as raw path strings the host resolves. The host feeds them to
+  files a successful call put in front of the person (`presented(args, details)`), which of them the
+  person chose (`picked(args, details)`) and which the agent published as its deliverables
+  (`published(args, details)`, [[module-ext-outputs]]), as raw path strings the host resolves. The host feeds them to
   its artifact index and never learns a tool's argument shape itself; a failed call counts for nothing.
 - `ToolRegistrationOptions.composerSuggestions` (`ComposerSuggestionsReader`, `(args, result) =>
   readonly string[]`) marks a tool whose call carries **next messages for the user**. The reader is pure:
@@ -138,7 +139,9 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   per-session state the host owns: the host calls it once per parent session with that session's
   services: `setting(key)` (the extension's own declared setting, read inside a factory body so a pi
   reload sees a changed value), `workspaceFiles` (`check(path, cwd)` — the host's rule for which workspace
-  files the UI may show — `scratchDir`, the gitignored directory for mockups, and `artifactsDir`, the
+  files the UI may show — `checkArtifacts(paths, cwd)` — the artifact index's own rule for which files the
+  Artifacts tool lists, answering each path in order with the worktree-relative name it lists the file
+  under or why not (`ArtifactCheck`), one batch so the host walks the folder once — `scratchDir`, the gitignored directory for mockups, and `artifactsDir`, the
   gitignored folder the Artifacts tool shows, where an extension saves what it produces for the user;
   both are worktree-relative with a trailing `/`, and empty where there is no workspace — and
   `ensureArtifactsDir(cwd)`, which an extension calls before writing there: it recreates the folder with

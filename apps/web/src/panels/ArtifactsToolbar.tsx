@@ -1,4 +1,5 @@
 import {
+	RiArrowDownSLine,
 	RiCheckLine,
 	RiClipboardLine,
 	RiCollapseVerticalLine,
@@ -7,14 +8,13 @@ import {
 	RiMoreLine,
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { IconButton } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuRadioGroup,
 	DropdownMenuRadioItem,
-	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
@@ -22,7 +22,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import type { ArtifactsView } from "../store";
 import { HeaderIconButton } from "./HeaderIconButton";
 
-export type ToolbarFold = 0 | 1 | 2;
+export type ToolbarFold = 0 | 1;
 
 export function nextToolbarFold(
 	fold: ToolbarFold,
@@ -30,9 +30,8 @@ export function nextToolbarFold(
 	available: number,
 	neededToUnfold: number | undefined,
 ): ToolbarFold {
-	if (overflowing) return fold < 2 ? ((fold + 1) as ToolbarFold) : fold;
-	if (fold > 0 && neededToUnfold !== undefined && available >= neededToUnfold)
-		return (fold - 1) as ToolbarFold;
+	if (overflowing) return 1;
+	if (fold > 0 && neededToUnfold !== undefined && available >= neededToUnfold) return 0;
 	return fold;
 }
 
@@ -40,7 +39,7 @@ function useToolbarFold(contentKey: string) {
 	const toolbarRef = useRef<HTMLDivElement>(null);
 	const contentRef = useRef<HTMLDivElement>(null);
 	const foldRef = useRef<ToolbarFold>(0);
-	const needed = useRef<number[]>([]);
+	const needed = useRef<number | undefined>(undefined);
 	const keyRef = useRef(contentKey);
 	const [fold, setFold] = useState<ToolbarFold>(0);
 
@@ -50,7 +49,7 @@ function useToolbarFold(contentKey: string) {
 		if (!toolbar || !content) return;
 		if (keyRef.current !== contentKey) {
 			keyRef.current = contentKey;
-			needed.current = [];
+			needed.current = undefined;
 			if (foldRef.current !== 0) {
 				foldRef.current = 0;
 				setFold(0);
@@ -63,14 +62,9 @@ function useToolbarFold(contentKey: string) {
 				toolbar.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
 			const width = content.scrollWidth;
 			const current = foldRef.current;
-			const next = nextToolbarFold(
-				current,
-				width > available,
-				available,
-				needed.current[current - 1],
-			);
+			const next = nextToolbarFold(current, width > available, available, needed.current);
 			if (next === current) return;
-			if (next > current) needed.current[current] = width;
+			if (next > current) needed.current = width;
 			foldRef.current = next;
 			setFold(next);
 		};
@@ -86,6 +80,55 @@ function useToolbarFold(contentKey: string) {
 export interface ToolbarView {
 	id: ArtifactsView;
 	label: string;
+}
+
+function ViewMenu({
+	views,
+	view,
+	onView,
+}: {
+	views: readonly ToolbarView[];
+	view: ArtifactsView;
+	onView: (view: ArtifactsView) => void;
+}) {
+	const t = useT();
+	const [open, setOpen] = useState(false);
+	const label = views.find((item) => item.id === view)?.label ?? "";
+	return (
+		<DropdownMenu open={open} onOpenChange={setOpen}>
+			<DropdownMenuTrigger asChild>
+				<Button
+					variant="ghost"
+					size="m"
+					iconRight={RiArrowDownSLine}
+					data-testid="artifacts-view"
+					data-view={view}
+					data-open={open}
+					aria-label={t("panels.artifacts.viewMenu", { view: label })}
+					className="shrink-0"
+				>
+					{label}
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end" data-testid="artifacts-view-menu">
+				<DropdownMenuRadioGroup value={view}>
+					{views.map((item) => (
+						<DropdownMenuRadioItem
+							key={item.id}
+							value={item.id}
+							data-testid={`artifacts-view-${item.id}`}
+							data-active={view === item.id}
+							className="justify-between"
+							onSelect={() => onView(item.id)}
+						>
+							<span>{item.label}</span>
+							{view === item.id ? <RiCheckLine className="text-primary" /> : null}
+						</DropdownMenuRadioItem>
+					))}
+				</DropdownMenuRadioGroup>
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
 }
 
 export function ArtifactsToolbar({
@@ -115,7 +158,9 @@ export function ArtifactsToolbar({
 }) {
 	const t = useT();
 	const { toolbarRef, contentRef, fold } = useToolbarFold(
-		[views.map((item) => item.id).join(","), canCollapse, showIgnored, onPaste !== null].join(":"),
+		[view, views.map((item) => item.id).join(","), canCollapse, showIgnored, onPaste !== null].join(
+			":",
+		),
 	);
 	const ignoredLabel = showIgnored
 		? t("panels.artifacts.hideIgnored")
@@ -143,17 +188,7 @@ export function ArtifactsToolbar({
 					onClick={() => onAllChats(false)}
 				/>
 				<div className="ml-auto flex shrink-0 items-center gap-4">
-					{fold < 2
-						? views.map((item) => (
-								<ToggleSegment
-									key={item.id}
-									testid={`artifacts-view-${item.id}`}
-									label={item.label}
-									active={view === item.id}
-									onClick={() => onView(item.id)}
-								/>
-							))
-						: null}
+					<ViewMenu views={views} view={view} onView={onView} />
 					{fold === 0 && canCollapse ? (
 						<HeaderIconButton
 							testid="artifacts-collapse-all"
@@ -179,7 +214,7 @@ export function ArtifactsToolbar({
 							onClick={onPaste}
 						/>
 					) : null}
-					{fold > 0 ? (
+					{fold > 0 && (canCollapse || showIgnored !== null || onPaste) ? (
 						<DropdownMenu>
 							<DropdownMenuTrigger asChild>
 								<IconButton
@@ -193,27 +228,6 @@ export function ArtifactsToolbar({
 								/>
 							</DropdownMenuTrigger>
 							<DropdownMenuContent align="end" data-testid="artifacts-more-menu">
-								{fold === 2 ? (
-									<>
-										<DropdownMenuRadioGroup value={view}>
-											{views.map((item) => (
-												<DropdownMenuRadioItem
-													key={item.id}
-													value={item.id}
-													data-testid={`artifacts-more-view-${item.id}`}
-													className="justify-between"
-													onSelect={() => onView(item.id)}
-												>
-													<span>{item.label}</span>
-													{view === item.id ? <RiCheckLine className="text-primary" /> : null}
-												</DropdownMenuRadioItem>
-											))}
-										</DropdownMenuRadioGroup>
-										{canCollapse || showIgnored !== null || onPaste ? (
-											<DropdownMenuSeparator />
-										) : null}
-									</>
-								) : null}
 								{canCollapse ? (
 									<DropdownMenuItem
 										data-testid="artifacts-more-collapse-all"

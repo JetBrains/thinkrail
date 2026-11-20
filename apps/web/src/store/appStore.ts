@@ -182,13 +182,12 @@ export interface FileClipboard {
 	cut?: true;
 }
 
-export type ArtifactsView = "list" | "tree" | "smart";
+export type ArtifactsView = "outputs" | "smart" | "list" | "tree";
 
 export interface ArtifactsPreferences {
 	seen: Record<string, number>;
 	showIgnored: boolean;
 	view: ArtifactsView | null;
-	smart: boolean;
 	treeExpanded: Record<string, readonly string[]>;
 }
 export interface ChatTab {
@@ -472,11 +471,9 @@ export const RETIRED_SETTINGS_SECTIONS: Readonly<
 };
 
 export const CLIENT_PREFERENCE_DEFAULTS = {
-	artifactsSmart: true,
 	doubleShiftSearch: true,
 	markdownOutlineSide: "right",
 } as const satisfies {
-	artifactsSmart: boolean;
 	doubleShiftSearch: boolean;
 	markdownOutlineSide: MarkdownOutlineSide;
 };
@@ -1195,7 +1192,6 @@ interface AppState {
 	artifactsSeenByWorkspace: Record<string, number>;
 	artifactsShowIgnored: boolean;
 	artifactsView: ArtifactsView | null;
-	artifactsSmart: boolean;
 	artifactsTreeExpandedByWorkspace: Record<string, readonly string[]>;
 	reviewsByWorkspace: Record<string, ReviewSnapshot>;
 	reviewFocusRequest: {
@@ -1633,7 +1629,6 @@ interface AppState {
 	markArtifactsSeen: (workspaceId: string, watermark: number) => void;
 	setArtifactsShowIgnored: (show: boolean) => void;
 	setArtifactsView: (view: ArtifactsView) => void;
-	setArtifactsSmart: (enabled: boolean) => void;
 	setArtifactsTreeExpanded: (
 		workspaceId: string,
 		paths: readonly string[],
@@ -2617,7 +2612,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 	artifactsSeenByWorkspace: {},
 	artifactsShowIgnored: true,
 	artifactsView: null,
-	artifactsSmart: CLIENT_PREFERENCE_DEFAULTS.artifactsSmart,
 	artifactsTreeExpandedByWorkspace: {},
 	reviewsByWorkspace: {},
 	reviewFocusRequest: null,
@@ -5101,7 +5095,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 		),
 	setArtifactsShowIgnored: (artifactsShowIgnored) => set({ artifactsShowIgnored }),
 	setArtifactsView: (artifactsView) => set({ artifactsView }),
-	setArtifactsSmart: (artifactsSmart) => set({ artifactsSmart }),
 	setArtifactsTreeExpanded: (workspaceId, paths, expanded) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};
@@ -5127,12 +5120,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 					}
 				: {},
 		),
-	hydrateArtifactsPreferences: ({ seen, showIgnored, view, smart, treeExpanded }) =>
+	hydrateArtifactsPreferences: ({ seen, showIgnored, view, treeExpanded }) =>
 		set((s) => ({
 			artifactsSeenByWorkspace: { ...seen, ...s.artifactsSeenByWorkspace },
 			artifactsShowIgnored: showIgnored,
 			artifactsView: view,
-			artifactsSmart: smart,
 			artifactsTreeExpandedByWorkspace: {
 				...treeExpanded,
 				...s.artifactsTreeExpandedByWorkspace,

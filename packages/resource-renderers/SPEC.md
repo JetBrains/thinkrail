@@ -75,6 +75,11 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   stop; nothing without a host and a workspace scope. It is the one
   framed preview of visualize's file card and the questionnaire's previews ([[module-ext-visualize]],
   [[module-ext-ask-user-question]]) — lifted from visualize when the second consumer arrived;
+- **`outputFileLabel(path)`** (`OutputFileLabel`: `{ name, type }`) and **`outputFileIcon(path)`** — how a
+  published file reads in a list: a known type (MD, HTML, PDF, SVG, the common images, CSV, JSON) drops
+  its extension, reads `_` as a space and names its type; anything else keeps its whole name and has no
+  type (the caller shows "File", `resources.outputFile.type`). Here because both the Artifacts Outputs
+  rows and the outputs extension's chat cards ([[module-ext-outputs]]) draw it;
 - **`ResourceReveal`** and **`SOURCE_RENDERER_ID`** (`thinkrail/code`) — the open-at-a-line contract: a
   text view that receives `ResourceViewProps.reveal` (`{ line, column?, length?, tick }`) scrolls that line
   into view and marks it (the Pierre file view through its virtualizer's `revealLine`, retried over a few

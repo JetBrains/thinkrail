@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import askUserQuestion from "@thinkrail/ext-ask-user-question/web";
 import hintMode from "@thinkrail/ext-hint-mode/web";
 import nextSteps from "@thinkrail/ext-next-steps/web";
+import outputs from "@thinkrail/ext-outputs/web";
 import visualize, { MermaidView } from "@thinkrail/ext-visualize/web";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import { EN } from "@thinkrail/locales";
@@ -35,7 +36,7 @@ const props: ToolRenderProps = {
 };
 
 test("the ordered web registry composes the public visualize descriptor without replacing fallback", () => {
-	expect(webExtensions).toEqual([visualize, askUserQuestion, hintMode, nextSteps]);
+	expect(webExtensions).toEqual([visualize, askUserQuestion, hintMode, nextSteps, outputs]);
 	expect(typeof MermaidView).toBe("function");
 	for (let i = 0; i < 2; i++) {
 		registerWebExtensions();
@@ -92,8 +93,18 @@ test("hint mode is a web-only extension: no tool renderers, a global overlay, ti
 });
 
 test("the switch decides which global contributions mount; tool renderers stay regardless", () => {
-	expect(enabledWebExtensions([])).toEqual([visualize, askUserQuestion, hintMode, nextSteps]);
-	expect(enabledWebExtensions(["hint-mode", "visualize"])).toEqual([askUserQuestion, nextSteps]);
+	expect(enabledWebExtensions([])).toEqual([
+		visualize,
+		askUserQuestion,
+		hintMode,
+		nextSteps,
+		outputs,
+	]);
+	expect(enabledWebExtensions(["hint-mode", "visualize"])).toEqual([
+		askUserQuestion,
+		nextSteps,
+		outputs,
+	]);
 	registerWebExtensions();
 	expect(getToolRenderer("visualize")).toBe(visualize.toolRenderers.visualize.renderer);
 });

@@ -34,7 +34,9 @@ list for registry extensions.
   `checkWorkspaceFile` + `MOCKUP_DIR` (`contracts`' `WORKSPACE_MOCKUP_DIR` with a trailing slash, the one
   name the UI also uses to run mockup scripts): a path must be relative, stay inside the session cwd lexically and
   after resolving links, name a regular file and stay out of `.git`, the paths the host's `fs.readFile`
-  then serves; `extension-api` stays contract-only, so the check lives here, not in the SDK; plus
+  then serves; `extension-api` stays contract-only, so the check lives here, not in the SDK; its
+  `checkArtifacts` delegates to the artifact index's batch rule, which `host` installs with
+  `setArtifactFileCheck` because this module may not reach `artifacts` (it rejects until then); plus
   `ensureArtifactsDir`, which is `shared`'s `seedArtifactsDir` on the session cwd), `omitDisabledRegistryExtensions(result, isDisabled)` (drops a disabled
   extension's `<inline:…>` entries from a pi `LoadExtensionsResult`, for the parent loader's
   `extensionsOverride`, so a disabled extension is absent rather than present-and-empty),
@@ -66,7 +68,7 @@ list for registry extensions.
 - **Public surface (barrel):** `serverExtensions`, `ServerExtensionEntry`, `registryInlineExtensions`,
   `RegistryExtensionKind`, `ExtensionDisabled`, `omitDisabledRegistryExtensions`, `preferRegistryTools`,
   `registryExtensionName`, `extensionSessionServices`, `HostSessionServices`, `ExtensionSettingValue`,
-  `checkWorkspaceFile`, `workspaceFiles`, `MOCKUP_DIR`,
+  `checkWorkspaceFile`, `workspaceFiles`, `setArtifactFileCheck`, `MOCKUP_DIR`,
   `listExtensionCatalog`,
   `resolveExtensionSkillRoots`, `STAGED_HOST_SKILLS_ROUTE`, `stagedExtensionSkillRoute`,
   `extensionSkillRoots`, `interactiveTools`, `InteractiveTools`, `artifactTools`, `ArtifactTools`,

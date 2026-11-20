@@ -26,7 +26,7 @@ client the same answer.
   writers and run window.
 - **Public surface (barrel):** `listArtifacts`, `reconcileArtifacts`, `restoreArtifact`, `discardArtifact`,
   `withUserRemoval`, `prepareArtifactsDestination`, `observeArtifactSessionEvent`, `ArtifactSessionEvent`,
-  `noteArtifactPathsChanged`, `setArtifactsPublisher`, `removeWorkspaceArtifacts`.
+  `noteArtifactPathsChanged`, `setArtifactsPublisher`, `removeWorkspaceArtifacts`, `checkArtifactFiles`, `ArtifactFileCheck`.
 - **Allowed deps:** `persistence` (`dataDir`, workspace records), `git` (`gitAsync` for the ignored-root
   listing), `trash` (a discarded kept copy goes to the OS trash), `log`; `contracts`, `shared/paths`,
   `shared/artifactsDir`, `shared/codedError`; Node `fs`/`path`/`crypto`.
@@ -58,7 +58,13 @@ app's `node_modules` neither floods the list nor exhausts the bound) and build-o
 hashed assets on every run, and each old hash would otherwise stay forever as a "deleted" row with a kept
 copy. Unlike ignored outputs elsewhere, which do list `dist/`, a build inside the artifacts folder is
 scaffolding, not something the agent produced for the user. It also skips the `fs` delete claims
-(`DELETE_CLAIM_PREFIX`), which are the user's own trash in flight, not a rename. A worktree root that is
+(`DELETE_CLAIM_PREFIX`), which are the user's own trash in flight, not a rename. **`checkArtifactFiles(paths,
+cwd)`** states the same rule for a batch of paths — normalized containment in the artifacts folder, real
+folders, no link on the way, no skipped folder or claim, each refused with its own reason — and then
+confirms the survivors against **one** run of the bounded walk, so a file past the 5 000-entry bound is
+refused too; each answer is the name the walk lists the file under or the reason. It is a batch because
+the walk is synchronous: one walk per path made a 1 000-path publish block the host for 11 s. The outputs extension publishes only what it accepts ([[module-ext-outputs]]),
+so a published file is never one Outputs silently drops. A worktree root that is
 not there (an unmounted drive, a moved project folder) is an incomplete scan, so its rows stay live until it
 returns. A new path gains a record
 and a link; a changed size/mtime updates the record (and its writer when known); an inode change relinks;
@@ -132,23 +138,28 @@ Every listed artifact carries a **role**, `result` or `working`, and the **reaso
 the list is served (`roles.ts`, never stored, so a rule change needs no migration). One host answer
 serves the Smart view, the chat divider and any other consumer.
 
-1. **Signals first.** `picked` — the person chose it among a tool's previews. `shown` — a successful tool
-   call put it in front of them: the host maps the declarations extensions make through
-   `artifactTools` ([[submodule-server-extensions]]) into the `presented` / `picked` paths of a
-   `tool_execution_end` event. `linked` — the round's last assistant message names it, read when the next
+1. **Signals decide**, in this order. `picked` — the person chose it among a tool's previews; it ranks
+   first because Smart's ★ picked badge reads the reason, and publishing the chosen mockup must not erase
+   which one the person chose. `published` — the agent declared it a deliverable (`present_files`,
+   [[module-ext-outputs]]); the wire also carries it as the flag `published: true`, which the Outputs
+   view reads, so a picked reason never hides it there. `shown` — a successful tool call put it in front
+   of them. The host maps the
+   declarations extensions make through `artifactTools` ([[submodule-server-extensions]]) into the
+   `presented` / `picked` / `published` paths of a `tool_execution_end` event, marked after that event's
+   reconcile so a file written just before is already a record. `linked` — the round's last assistant message names it, read when the next
 round starts or the run settles (a message without
 text, a tool-call-only turn or a stop, clears the earlier one) (a markdown link,
    a code span or a bare path; worktree-relative, artifacts-relative or absolute; only paths that are
    live records count); the host passes each assistant message as `assistant_message` and the index
    reads the last one at settle. Signals are stored on the record, survive a move and a re-created
    path, and are recorded from now on — older artifacts have none (no backfill).
-2. **Path rules** for the rest, from the agent sessions of 16 real worktrees (2 877 files: these rules
-   marked 2 409 as working with 5 ever shown): a `_*` or dot folder or a helper folder name (`tools`,
-   `scripts`, `bin`, `build`, `data`, `extract`, `check`, `raw`, `src`, `js`, `css`, `fonts`, `images`,
-   `frames`, `previews`, `comments`, `batch_*`, `notes*`) → `working-folder`; a script extension →
-   `script`; a data extension or none → `data`; `.md`/`.html`/`.pdf`/`.svg` → a `document` result (it may
-   be a subagent's brief — the price of not missing notes the agent only named as a folder); anything
-   else never shown (images, mostly check renders) → `unshown`.
+2. **Everything else is working**, its reason from the path: a `_*` or dot folder or a helper folder name
+   (`tools`, `scripts`, `bin`, `build`, `data`, `extract`, `check`, `raw`, `src`, `js`, `css`, `fonts`,
+   `images`, `frames`, `previews`, `comments`, `batch_*`, `notes*`) → `working-folder`; a script extension →
+   `script`; a data extension or none → `data`; anything else → `unshown`. *Post-mortem:* an earlier rule
+   made every `.md`/`.html`/`.pdf`/`.svg` outside those folders a `document` result so notes the agent only
+   named as a folder were not missed; on the user's 16 real worktrees it produced 306 of 375 results — a
+   mockup run's drafts and partial pages — and was removed when explicit publishing arrived.
 
 No model classifies: on the data above the deterministic answer was good enough, and a model step would
 add cost and latency.
