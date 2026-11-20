@@ -142,9 +142,6 @@ export function createTestHost(): TestHost {
 		plans: new Map(),
 	};
 	let next = 0;
-	const refused = async (): Promise<never> => {
-		throw new Error("not in this test");
-	};
 	const host: ExtensionHostServices = {
 		dataDir: join(root, "extensions", "board"),
 		log: { info: () => {}, warn: (message) => state.warnings.push(message) },
@@ -171,8 +168,6 @@ export function createTestHost(): TestHost {
 			sendToChat: async (params) => {
 				state.sent.push(params);
 			},
-			stopChat: refused,
-			openPr: refused,
 			runInWorkspace: async ({ workspaceId, argv }) => {
 				state.runs.push({ workspaceId, argv: [...argv] });
 				return state.run.answer(argv, workspaceId);

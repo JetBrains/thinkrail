@@ -5,7 +5,6 @@ import {
 	type ContainerOrchestrator,
 	EXTENSION_MESSAGE_CUSTOM_TYPE,
 	type ExtensionMessageDetails,
-	type OpenPrResult,
 	type Project,
 	type ThinkingLevel,
 	type WireModel,
@@ -13,12 +12,9 @@ import {
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
-	abortSession,
 	ensureSessionAttached,
 	getSessionWorkspaceId,
 	type HostMessageDelivery,
-	hasSession,
-	isSessionStreaming,
 	listSessions,
 	listSettledModels,
 	promptSession,
@@ -51,7 +47,6 @@ import { ackSend } from "./ackSend";
 import { awaitKickoff, startChatSession } from "./chatSession";
 import { fileExtensionComments, runConformanceReview } from "./conformanceReview";
 import { createContainerOrchestrated, startContainerOrchestrator } from "./orchestrator";
-import { openWorkspacePr } from "./orchestratorTools";
 import { type ExtensionWake, wakeOrchestratorFromExtension } from "./orchestratorWakeups";
 import { runObservation } from "./runAnalytics";
 import { defaultBaseBranch, resolveModel } from "./workspaceTools";
@@ -119,12 +114,6 @@ export interface ExtensionActionDeps {
 		details: ExtensionMessageDetails,
 		deliverAs: HostMessageDelivery,
 	) => Promise<void>;
-	streaming: (sessionId: string) => boolean;
-	abort: (sessionId: string) => Promise<void>;
-	openPr: (
-		workspace: Workspace,
-		params: { title?: string; body?: string; draft?: boolean },
-	) => Promise<OpenPrResult & { branch: string }>;
 	run: (
 		argv: string[],
 		options: { timeoutMs: number; cwd: string; signal: AbortSignal },
@@ -225,11 +214,6 @@ export const liveActionDeps: ExtensionActionDeps = {
 			),
 			MESSAGE_ACK_MS,
 		),
-	streaming: (sessionId) => hasSession(sessionId) && isSessionStreaming(sessionId),
-	abort: async (sessionId) => {
-		await abortSession(sessionId);
-	},
-	openPr: openWorkspacePr,
 	run: (argv, options) => runBounded(argv, { ...options, env: nonInteractiveGitEnv() }),
 	assist: assistText,
 	createContainer: createContainerOrchestrated,
@@ -472,22 +456,6 @@ export function extensionActions(
 				details,
 				params.mode === "steer" ? "steer" : "followUp",
 			);
-		},
-		async stopChat(params) {
-			admit();
-			if (!deps.streaming(params.sessionId)) return { stopped: false };
-			await deps.abort(params.sessionId);
-			return { stopped: true };
-		},
-		async openPr(params) {
-			admit();
-			const workspace = repositoryWorkspace(params.workspaceId, "open a PR from");
-			const { branch: _branch, ...result } = await deps.openPr(workspace, {
-				...(params.title !== undefined ? { title: params.title } : {}),
-				...(params.body !== undefined ? { body: params.body } : {}),
-				...(params.draft ? { draft: true } : {}),
-			});
-			return result;
 		},
 		async runInWorkspace(params) {
 			admit();

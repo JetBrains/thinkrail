@@ -37,19 +37,22 @@ settings** exist for booleans: a descriptor declares `settings`, Settings → Ex
 switch under its extension (copy from locale keys; disabled while the extension is off; hidden for an older
 host), the value lives in `AppConfig.extensionSettings`, and a change reloads open chats when their current
 turn ends — ask-user-question's `richPreviews` was the first consumer. **Queries and panels**
-exist too, with session insights ([[module-ext-session-insights]]) as their first consumer, and **side
-tools** — an extension's singleton rail tool —, **status items** (topbar readouts) and **layout presets**
-(a mode the window enters and leaves) with the board ([[module-ext-board]]). Install UX,
-marketplace, other setting types, a per-workspace on/off override and store contributions are explicit
-deferrals, not gaps. The on/off switch covers everything an
-extension contributes — its factories, its tools in live sessions, the skills of its `skillPackages`,
-its queries and host actions (refused while off), its host service (stopped while off, its events
-dropped) and its panels and side tools (a placeholder while off, the layout kept) — the way removing a package in
-pi drops its extensions and skills together.
+exist too, with session insights ([[module-ext-session-insights]]) as their first consumer. **Host
+actions** and a **host service** with host events, and the web half's **side tools** (singleton rail
+tools), **status items** (topbar readouts), **container sections** (facts in a container's overview) and
+**layout presets** (a mode the window enters and leaves) arrived with the board ([[module-ext-board]]).
+Install UX, marketplace, other setting types, a per-workspace on/off override and store contributions
+(an extension adding state to the web store) are explicit deferrals, not gaps. The on/off switch covers
+everything an extension contributes — its factories, its tools in live sessions, the skills of its
+`skillPackages`, its queries and host actions (refused while off), its host service (stopped while off,
+its events dropped), its panels and side tools (a placeholder while off, the layout kept), its status
+items and container sections (unmounted while off) and its layout presets (not offered while off; an
+active mode can still be left) — the way removing a package in pi drops its extensions and skills
+together.
 
 ## Shape — two entrypoints, no root barrel
 
-- `./server` — default export `defineServerExtension({ name, title?, description?, extensions, sessionExtensions?, interactiveTools?, settings?, childExtensions?, skillPackages?, supersedesPackages?, apiVersion?, queries?, hostService? })`
+- `./server` — default export `defineServerExtension({ name, title?, description?, extensions, sessionExtensions?, interactiveTools?, artifactTools?, settings?, childExtensions?, skillPackages?, supersedesPackages?, apiVersion?, queries?, hostService? })`
   (`title` / `description` are Settings display copy; `supersedesPackages` names vanilla pi packages the
   extension replaces, whose user-installed extensions the host leaves out of its sessions while the
   extension is on — a switch reloads the open chats that load such a package once their turn ends, and
@@ -73,17 +76,19 @@ pi drops its extensions and skills together.
   the table's `signal`: switching the extension off aborts it and drops the table, so its background
   work stops at its next yield and its memory is released.
   **Queries read; actions write through named host actions:** anything an extension changes outside its
-  data folder and the Artifacts goes through `host.actions` — create a workspace with a kickoff, message or
-  stop a chat, open a PR, run one program by argv in a worktree, write one text file at a relative path
-  inside a worktree, ask the host's assist model once — each refused while the extension is off. `hostService(host)` is the host-lifetime half: started once the host's publishers are wired,
-  stopped and restarted with the extension's switch and stopped with the host (each run gets its own
-  `signal`, aborted once it stopped); it listens through
-  `host.events` (session state, workspace created / updated / removed, `agent.settled`, container changes)
-  and talks to its web half through `host.publish` → `extension.event`, filtered by extension on the web
-  side ([[module-contracts]]).
+  data folder and the Artifacts goes through `host.actions` — start a workspace or a chat with a kickoff,
+  message a chat, run one program by argv or write one text file in a worktree, ask the
+  host's assist model once, create a container and start or wake its orchestrator, run the independent
+  conformance reviewer and file Review comments — each refused while the extension is off (the list and
+  each action's rules: [[module-extension-api]]). `hostService(host)` is the host-lifetime half: started
+  once the host's publishers are wired, stopped and restarted with the extension's switch and stopped with
+  the host (each run gets its own `signal`, aborted once it stopped); it listens through `host.events`
+  (session state, the workspace lifecycle, `agent.settled` and tool starts, projects opening and closing,
+  container changes) and talks to its web half through `host.publish` → `extension.event`, filtered by
+  extension on the web side ([[module-contracts]]).
   Server-only; may value-import pi.
 - `./web` — default export `defineWebExtension({ name, title?, description?, toolRenderers?, globalOverlay?,
-  commands?, shortcuts?, panels?, sideTools? })`: `toolRenderers` keyed by tool name; `title` / `description` locale
+  commands?, shortcuts?, panels?, sideTools?, statusItems?, containerSections?, layoutPresets? })`: `toolRenderers` keyed by tool name; `title` / `description` locale
   keys for a web-only Settings row; `globalOverlay` a component the host mounts once in `Shell` while the
   extension is enabled, handed host helpers as props (`isTextEntry`, `activeLayer`, `platform`, the command
   channel) because the half cannot import the app; `commands` the rebindable keybindings, global or — with
@@ -102,8 +107,12 @@ pi drops its extensions and skills together.
   singleton rail tool `ext:<name>:<id>`, placed, moved and carried by presets like Files, whose body is a
   `PanelProps` component scoped to the active workspace and its project. A panel or side tool receives
   `PanelProps { host, params }` and reaches the host only through that `PanelHost` — queries, chats, panels,
-  files, `openWorkspace`, `peek` (its own panels, or files, in Peek) and `onEvent` (its server half's
-  `extension.event`s) —, never the store or transport. **Plus named exports** for
+  files, `openWorkspace`, `peek` (its own panels, or files, in Peek), `onEvent` (its server half's
+  `extension.event`s) and the window's layout mode —, never the store or transport. `statusItems` (lazy
+  topbar readouts), `containerSections` (lazy sections of a container's overview in Peek) and
+  `layoutPresets` (side arrangements the window enters and leaves) mount or are offered only while the
+  extension is openable and show no placeholder; the first two get a narrower host, since they hold no
+  workspace view ([[module-extension-api]], [[submodule-web-shell]]). **Plus named exports** for
   components the host uses directly (visualize exports `MermaidView` for fenced mermaid in chat
   markdown). Browser-only; never value-imports pi; heavy renderers and panels stay lazy.
 
@@ -113,8 +122,8 @@ host needs for a capability's lifecycle is declared on the descriptor (`interact
 never imports an extension outside its two registry files and an extension can be deleted without touching
 the core.
 
-Future capabilities are added to these objects when a real consumer needs them, the way settings, queries
-and panels were.
+Future capabilities are added to these objects when a real consumer needs them, the way settings, queries,
+panels, host actions and the workbench seams were.
 
 **The property fixed now so later extensions never force a rewrite — runtime/lifecycle ownership:**
 separate server and browser entrypoints; no imports of host internals; host-owned scoped state
@@ -127,16 +136,13 @@ explicit per-session seam. The descriptor itself stays static.
 
 What a `./web` half may import:
 
-- `@thinkrail/extension-api` ([[module-extension-api]]) — types and `define*` helpers only, no React
-  components. `./web`: `ToolRenderProps`, `ToolRenderer`, `ToolRegistrationOptions`, `ToolStatus`,
-  `WebExtension`, `GlobalOverlayProps`, `ExtensionCommand`, `ExtensionChord`, `ExtensionShortcut`,
-  `ExtensionShortcutKey`, `defineWebExtension`, the panel contract (`PanelDeclaration` with its
-  `PanelChatAction` and `PanelRail` entry points, `PanelProps`, `PanelHost` — `query`, `openChat` with an optional anchor, `openPanel`, `renderToolCall`, `openFile`,
-  `openArtifacts`, `openWorkspace`, `peek`, `onEvent` —, `PanelChatTarget`, `PanelChatAnchor`, `PanelToolCall`, `PanelHostScope`,
-  `PanelScope`, `PanelWorkspaceTarget`, `PanelPeekEntry`, `PanelEventListener`), `SideToolDeclaration`, and the pure renderer helpers (`toolHelpers`, `toolResultContent`). `./server`:
-  `ServerExtension`, `defineServerExtension`, `ExtensionHostServices` with its value types (actions,
-  events, facts), `ExtensionHostService`, and the contracts types those carry, re-exported. Its own
-  package because server pi types would
+- `@thinkrail/extension-api` ([[module-extension-api]], which lists every export) — types and `define*`
+  helpers only, no React components. `./web`: the tool-renderer, overlay, command and shortcut contracts,
+  the panel contract with `PanelHost`, the side-tool, status-item, container-section and layout-preset
+  declarations, `defineWebExtension`, and the pure renderer helpers (`toolHelpers`, `toolResultContent`).
+  `./server`: `ServerExtension`, `defineServerExtension`, `ExtensionHostServices` with its value types
+  (facts, actions, events), `ExtensionHostService`, and the contracts types those carry, re-exported. Its
+  own package because server pi types would
   contaminate the wire boundary in `contracts`, and the server contract in `ui` would give the host a
   presentation dependency.
 - `@thinkrail/ui` ([[module-ui]]) — the owned shadcn/Radix primitives moved whole, `cn`, the
@@ -218,7 +224,8 @@ the default tool renderer until step 2 — never visualize, whose renderer exist
 
 **A new feature extension** — a capability with no predecessor to migrate — ships as visible slices
 instead, each shippable on its own; an SDK addition it needs lands in the same slice as its first consumer,
-never ahead of it (session insights: queries, panels and host services arrived with its session list).
+never ahead of it (session insights: queries, panels and host services arrived with its session list; the
+board: host actions, its host service and events, and each workbench seam with the slice that used it).
 
 **Wrapping a third-party pi package** has no step 1 (nothing of ours to publish). Its server half lands
 alone, composing the package unchanged plus any ThinkRail policy, while app-local renderers keep rendering
@@ -236,5 +243,5 @@ follow the `.js`, `tsc` stops at the declaration.
 | `hint-mode` | none (web-only) | shipped; on by default. A `globalOverlay` that labels everything clickable on F (outside text entry) or Mod+; and presses a typed label; its `shortcuts` join the cheatsheet while enabled. [[module-ext-hint-mode]]. |
 | `web-access` | third-party `pi-web-access` | shipped (server half). `./server` composes the package unchanged for parents and children (the host keeps its headless-search policy, which must outlive the switch) and ships its own `librarian` skill (upstream dropped it; `skillPackages` names the extension's own package); the first extension with skills. Renderers stay app-local (`apps/web/src/chat/tools/web`) until `Markdown`, `Collapsible` and `ToolFileLink` join the SDK. [[module-ext-web-access]]. |
 | `next-steps` | `@thinkrail/pi-next-steps` | shipped; the first `composerSuggestions` consumer. `./server` composes the portable package for parents only, appending ThinkRail's yes/no-vs-decision rule to its guidelines (its terminal row stays off because ThinkRail binds pi as `"rpc"`); `./web` registers the routine row plus the reader whose output the chat shows as chips above the composer. [[module-ext-next-steps]]. |
-| `board` | none (every tool acts on host-owned state) | shipped: a board per project in its `dataDir` (cards, settings, transition log), preset columns over fixed categories, rules over host events in its `hostService`, the board queries (with `models.list` for the Start form) and the `board_*` agent tools; its sources are the project's workspaces' task-specs (attached to a bound card, an unbound one's shown as a card to Adopt, its Deferrals sent into Triage) and, when switched on, the open GitHub issues through the user's `gh` (a PR's `Closes #N` kept, never an issue edited), and the host's assist model suggests a human's card's size; enabled by default. `./web` is the first `sideTools` consumer — the Board side tool `ext:board:board`, columns when wide and one stacked list when narrow, cards with the agent's live badge and last action dragged across columns — and its `card` panel opens in Peek through `PanelHost.peek`, refreshed by `onEvent("board.changed")`. It is also the first `statusItems` consumer (the cross-project "Needs you · N" topbar counter over the `inbox` query) and the first `layoutPresets` consumer (Board mode). Its Roadmap view's step graph and timeline are a lazy chunk with `@xyflow/react`. Its card keys are local `commands` in `board.cards`. [[module-ext-board]]. |
+| `board` | none (every tool acts on host-owned state) | shipped; enabled by default. `./server` keeps a board per project in its `dataDir` (cards, the transition log, the roadmap, discovery), moves cards by pure rules over host events in its `hostService` (which also runs autopilot), and answers the board, roadmap, discovery, autopilot and smart-review queries over host facts and named host actions — its sources (task-specs, GitHub issues through the user's `gh`, OpenSpec changes through the user's `openspec`) included; `sessionExtensions` adds the `board_*` tools, and `skillPackages` names the package itself for its eight skills. `./web` is the first consumer of `sideTools` (the Board tool `ext:board:board`), `statusItems` (the cross-project "Needs you · N" counter), `containerSections` (an initiative's autopilot in a container's overview), `layoutPresets` (Board mode) and `PanelHost.peek` / `openWorkspace` / `onEvent` (its card, initiative and idea panels in Peek, refreshed by `board.changed`). Its Roadmap view's step graph and timeline are a lazy chunk with `@xyflow/react`. Its card keys are local `commands` in `board.cards`. [[module-ext-board]]; its UI [[submodule-ext-board-web]]. |
 | `session-insights` | `@thinkrail/pi-session-insights` (the library; its vanilla `/insights` entry is never composed) | shipped (S1–S11): the first query and panel consumer. `./server` answers the list, a session's analysis (trace, details, turns, timelines, subagents, errors, context, cost, files), the statistics across sessions (findings, usage, hotspots, action sequences, slice comparison), the step alignment of two sessions, search, the user's labels and notes (in its `dataDir`) and exports into the asking workspace's Artifacts (HTML, Chrome trace, e2e fixture) over host-injected services; `./web` is the Session insights list with its day view, statistics and search, a per-session analysis panel and a two-session comparison panel (its process map is a lazy chunk with `@xyflow/react` and `@dagrejs/dagre`). No tools and no skills, so its switch refuses its queries and placeholders its panel. Its keys are local `commands` in the scope `session-insights.panel`, rebindable in Settings → Keyboard. It supersedes the package itself (`supersedesPackages`): a user who installed the vanilla `/insights` command for pi gets it in pi, not in ThinkRail sessions, where it would read with vanilla locators. [[module-ext-session-insights]]. |

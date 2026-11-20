@@ -13,8 +13,9 @@ tags: [wire]
 
 The browser↔host wire spine: the single source of truth for the protocol. Types plus a small
 dependency-free runtime: the WS method/channel constants, protocol/feature versions, the small config
-default, narrow cross-ring guards, the quit-confirmation rule both clients drive, and the search matcher
-the palette ranks with — kept here so host-side search can rank with the same copy. The one package
+default, narrow cross-ring guards, the quit-confirmation rule both clients drive, the search matcher
+the palette ranks with — kept here so host-side search can rank with the same copy — and the session-state
+readings `isSessionWorking` / `chatState`, one vocabulary for the host and the UI. The one package
 `apps/web` may depend on—which is what lets the UI ship independently of the host.
 
 ## Boundary

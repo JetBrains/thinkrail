@@ -4,7 +4,7 @@ type: submodule-design
 status: draft
 title: Board OpenSpec reader
 parent: module-ext-board
-references: [task-openspec-board, module-extension-api]
+references: [module-extension-api]
 ---
 
 ## Responsibility

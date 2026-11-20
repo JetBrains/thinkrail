@@ -104,8 +104,8 @@ export function recordOpenedReview(
 	);
 }
 
-/** `open_pr` and an extension's `openPr` action: push and open (or update) the PR, its review recorded. */
-export async function openWorkspacePr(
+/** `open_pr`: push and open (or update) the PR, its review recorded. */
+async function openWorkspacePr(
 	workspace: Workspace,
 	params: { title?: string; body?: string; draft?: boolean },
 ): Promise<OpenPrResult & { branch: string }> {

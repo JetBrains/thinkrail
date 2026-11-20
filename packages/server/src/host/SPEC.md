@@ -591,10 +591,9 @@ gate: [[module-contracts]].
   `sendToChat` finds the chat's workspace (its live
   attribution, else the workspace whose chats list it), attaches it and sends an **`extension-message`**
   host message (`ExtensionMessageDetails` under the descriptor's title, the content saying it is not the
-  human) through the `message_chat` path (`ackSend` + `runObservation.send(…, "internal")`); `stopChat`
-  aborts a streaming chat only; `openPr` is `open_pr`'s `openWorkspacePr` (`pr.openPr` + the review
-  recorded on the workspace) for a repository workspace; `runInWorkspace` runs `argv` (a non-empty string
-  list, never a shell string) with `subprocess`' `runBounded` in a repository workspace's worktree under
+  human) through the `message_chat` path (`ackSend` + `runObservation.send(…, "internal")`);
+  `runInWorkspace` runs `argv` (a non-empty string list, never a shell string) with `subprocess`'
+  `runBounded` in a repository workspace's worktree under
   the non-interactive git env, its budget capped at ten minutes, stopped once the extension's services
   `signal` aborts (a switch-off or the host stopping), and answers `{ ok, out, err, timedOut }`;
   `writeWorkspaceFile` takes a repository workspace, normalizes the path (`workspaceFilePath`: `\` read as

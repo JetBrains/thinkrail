@@ -6,7 +6,6 @@ import type {
 	GhSetupProblem,
 	HistoryScope,
 	OpenBranchReview,
-	OpenPrResult,
 	SessionCompletion,
 	SessionStateRecord,
 	ThinkingLevel,
@@ -18,7 +17,6 @@ export type {
 	ChatState,
 	Container,
 	GhSetupProblem,
-	OpenPrResult,
 	SessionStateRecord,
 	ThinkingLevel,
 	Workspace,
@@ -410,15 +408,6 @@ export interface ExtensionHostActions {
 		text: string;
 		mode: "follow_up" | "steer";
 	}): Promise<void>;
-	/** Stops a chat's running turn; `stopped: false` when it was not running. */
-	stopChat(params: { sessionId: string }): Promise<{ stopped: boolean }>;
-	/** Pushes the workspace's branch and opens (or updates) its PR, like the Open PR button. */
-	openPr(params: {
-		workspaceId: string;
-		title?: string;
-		body?: string;
-		draft?: boolean;
-	}): Promise<OpenPrResult>;
 	/** Runs one program with `argv` (never a shell string) in the worktree of a repository workspace. */
 	runInWorkspace(params: {
 		workspaceId: string;

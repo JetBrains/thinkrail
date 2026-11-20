@@ -68,13 +68,6 @@ function setup(
 		sessionId: "s-new",
 	}));
 	const send = mock<ExtensionActionDeps["send"]>(async () => {});
-	const abort = mock<ExtensionActionDeps["abort"]>(async () => {});
-	const openPr = mock<ExtensionActionDeps["openPr"]>(async () => ({
-		action: "created",
-		dirtyFiles: 0,
-		branch: "feature",
-		url: "https://example.test/1",
-	}));
 	const run = mock<ExtensionActionDeps["run"]>(async () => ({
 		ok: true,
 		out: "listed",
@@ -144,9 +137,6 @@ function setup(
 		chatWorkspace: async (sessionId) => (sessionId === "s1" ? feature : null),
 		attach,
 		send,
-		streaming: (sessionId) => sessionId === "running",
-		abort,
-		openPr,
 		run,
 		assist,
 		createContainer,
@@ -163,8 +153,6 @@ function setup(
 		disabled,
 		create,
 		send,
-		abort,
-		openPr,
 		run,
 		assist,
 		startChat,
@@ -193,8 +181,6 @@ describe("extension host actions", () => {
 			disabled,
 			create,
 			send,
-			abort,
-			openPr,
 			run,
 			assist,
 			startChat,
@@ -209,8 +195,6 @@ describe("extension host actions", () => {
 			codeOf(actions.createWorkspace({ projectId: "p1", kickoff: { text: "go" } })),
 			codeOf(actions.startChat({ workspaceId: "w1", kickoff: { text: "go" } })),
 			codeOf(actions.sendToChat({ sessionId: "s1", text: "hi", mode: "follow_up" })),
-			codeOf(actions.stopChat({ sessionId: "running" })),
-			codeOf(actions.openPr({ workspaceId: "w1" })),
 			codeOf(actions.runInWorkspace({ workspaceId: "w1", argv: ["gh"], timeoutMs: 1_000 })),
 			codeOf(actions.assist({ prompt: "Size it" })),
 			codeOf(actions.writeWorkspaceFile({ workspaceId: "w1", path: "ROADMAP.md", content: "x" })),
@@ -232,13 +216,11 @@ describe("extension host actions", () => {
 			),
 		]);
 		expect(new Set(refusals)).toEqual(new Set(["EXTENSION_DISABLED"]));
-		expect(refusals).toHaveLength(13);
+		expect(refusals).toHaveLength(11);
 		for (const effect of [
 			create,
 			startChat,
 			send,
-			abort,
-			openPr,
 			run,
 			assist,
 			createContainer,
@@ -450,25 +432,6 @@ describe("extension host actions", () => {
 		await expect(
 			headless.actions.wakeOrchestrator({ containerId: "c1", kind: "board-ready", text: "x" }),
 		).rejects.toThrow("has no orchestrator");
-	});
-
-	test("stopChat aborts a running chat only", async () => {
-		const { actions, abort } = setup();
-		expect(await actions.stopChat({ sessionId: "idle" })).toEqual({ stopped: false });
-		expect(await actions.stopChat({ sessionId: "running" })).toEqual({ stopped: true });
-		expect(abort.mock.calls).toEqual([["running"]]);
-	});
-
-	test("openPr opens a repository workspace's PR through the shared helper and refuses a chat", async () => {
-		const { actions, openPr } = setup();
-		expect(await actions.openPr({ workspaceId: "w1", title: "Card", draft: true })).toEqual({
-			action: "created",
-			dirtyFiles: 0,
-			url: "https://example.test/1",
-		});
-		expect(openPr.mock.calls).toEqual([[feature, { title: "Card", draft: true }]]);
-		await expect(actions.openPr({ workspaceId: "chat-1" })).rejects.toThrow("no worktree");
-		await expect(actions.openPr({ workspaceId: "nope" })).rejects.toThrow("Unknown workspace");
 	});
 
 	test("runInWorkspace runs argv in the worktree, never a shell string or a chat folder, under a capped budget", async () => {

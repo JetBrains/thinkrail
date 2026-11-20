@@ -23,7 +23,8 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   (`PanelDeclaration`, `PanelChatAction`, `PanelRail`, `PanelProps`, `PanelHost`, `PanelChatTarget`,
   `PanelChatAnchor`, `PanelToolCall`, `PanelHostScope`, `PanelScope`, `PanelWorkspaceTarget`, `PanelPeekEntry`,
   `PanelEventListener`), the side-tool contract (`SideToolDeclaration`), the status-item contract
-  (`StatusItemDeclaration`, `StatusItemProps`, `StatusItemHost`), the layout-preset contract
+  (`StatusItemDeclaration`, `StatusItemProps`, `StatusItemHost`), the container-section contract
+  (`ContainerSectionDeclaration`, `ContainerSectionProps`), the layout-preset contract
   (`LayoutPresetDeclaration`), and the pure argument/result readers
   from `toolHelpers` and `toolResultContent`.
 - **Images are references.** `parseToolResultContent(result).images` returns `contracts`' `WireImage`s,
@@ -224,8 +225,8 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   the same capability), plus optional `apiVersion`, `queries` and `hostService`. Its identity
   helper preserves factories, order and optional-field absence; loading and skill resolution remain host
   responsibilities. It re-exports, as types, the contracts shapes its services carry (`SessionStateRecord`,
-  `Workspace`, `Container`, `ChatState`, `ThinkingLevel`, `OpenPrResult`, `BranchReviewState`,
-  `GhSetupProblem`), because an extension's `server/**` imports only this SDK.
+  `Workspace`, `Container`, `ChatState`, `ThinkingLevel`, `BranchReviewState`, `GhSetupProblem`), because
+  an extension's `server/**` imports only this SDK.
 - `queries(host: ExtensionHostServices)` returns `ExtensionQuery` methods by name — queries (reads, and
   writes only to the extension's own data folder or the workspace's Artifacts); the contract
   is in [[module-thinkrail-extensions]] § Shape. **A table lives while its extension is on**: `signal`
@@ -290,8 +291,7 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   sessionId, kickoffError? }` (a new chat in an open workspace of a repository project, its first prompt the
   kickoff as internal work — a New chat with a prompt; `kickoffError` when the chat started but the prompt was
   not taken, e.g. no model), `sendToChat({ sessionId, text, mode })` (a follow-up or steer the transcript shows as the
-  extension's message under its title), `stopChat({ sessionId })` → `{ stopped }`, `openPr({ workspaceId,
-  title?, body?, draft? })` → `OpenPrResult`, and `runInWorkspace({ workspaceId, argv, timeoutMs })` →
+  extension's message under its title), `runInWorkspace({ workspaceId, argv, timeoutMs })` →
   `{ ok, out, err, timedOut }` (one program by `argv` in a repository workspace's worktree, stopped once
   those services' `signal` aborts), `writeWorkspaceFile({ workspaceId, path, content })` →
   `ExtensionWrittenFile { workspaceId, path, bytes }` (`ExtensionWriteWorkspaceFileParams`: one UTF-8 text
@@ -354,7 +354,7 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   - `awaitToolResponse(toolCallId, signal)` resolves a `ToolResponse`: `{kind: "response", value}`,
     `{kind: "deferred"}` or `{kind: "abandoned"}`.
 - The root is browser-safe and exposes only the web contract; it never re-exports the server half.
-- Workspace dependencies are `contracts` (types, now also `HistoryScope`, `SessionCompletion`,
+- Workspace dependencies are `contracts` (types, including `HistoryScope`, `SessionCompletion`,
   `Workspace` and the event, action and facts shapes for the host services) and, type-only, `@thinkrail/locales`' `MessageKey` and
   `@thinkrail/locales/react`'s `Translator`.
   React and pi are type-only contract dependencies; there are no React components, registry, DOM access,

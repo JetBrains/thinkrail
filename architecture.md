@@ -21,9 +21,10 @@ dials it over the network; a phone reaches the selected host over Tailscale.
 - **Engine host** (`packages/server` + `packages/shared`, launched by `apps/cli` or `apps/desktop`
   in local-host mode): owns `pi`, session state, persistence, and serves the wire endpoint. It bundles pi extensions
   (`pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`) and the ThinkRail extensions from its server
-  registry (`visualize`, `ask-user-question`, `web-access`) into every session; `session-insights` adds no
-  session factories, only queries over pi's session files (reads, and writes only to the extension's
-  own data folder or the workspace's Artifacts).
+  registry (`visualize`, `ask-user-question`, `web-access`, `next-steps`, `board`'s tools) into every
+  session, and runs their host services (the board's); `session-insights` adds no session factories, only
+  queries over pi's session files (reads, and writes only to the extension's own data folder or the
+  workspace's Artifacts).
 - **The wire** (`packages/contracts`): the typed, versioned protocol — the only coupling between client
   and host.
 - **UI client** (`apps/web`): a mobile-first React client, transport-driven and endpoint-configurable,
@@ -58,8 +59,8 @@ pi-extensions/*     portable pi packages published to npm as @thinkrail/pi-<name
                     session-insights is a library plus a vanilla /insights command, publish-ready and
                     awaiting its first (human) release
 thinkrail-extensions/*  ThinkRail extensions: a pi capability + ./server and ./web halves, composed by one
-                    registry file per side (Decision 21; visualize, ask-user-question, web-access and
-                    session-insights and board shipped) ── depends on ─▶ pi-extensions/*,
+                    registry file per side (Decision 21; visualize, ask-user-question, hint-mode,
+                    web-access, next-steps, session-insights and board shipped) ── depends on ─▶ pi-extensions/*,
                     packages/extension-api, packages/ui, packages/locales (web half)
 packages/extension-api  types + define* helpers for extension halves ── depends on ─▶ packages/contracts, packages/locales (types)
 packages/ui         owned shadcn/Radix primitives + cn + onThemeSwap ── may depend on ─▶ packages/contracts, packages/locales
@@ -144,7 +145,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
    folder is the home, so every no-git rule above holds for it; it coordinates and never implements —
    pi's file tools are refused in member code. It alone may message, stop, add, remove and open PRs for
    other workspaces, only its own container's, and merges only after the human approves on an in-chat
-   card; the host wakes it when a member's chat settles, needs the human or fails, or its PR changes.
+   card; the host wakes it when a member's chat settles, needs the human or fails, or its PR changes, and
+   an extension may wake it only through the same coalesced host card (the board's autopilot: the host
+   decides *when* a card may start, the orchestrator *how*).
 7. **Auth is external.** Tailscale ACLs / device identity are the auth; the app carries an `owner` field,
    not a login UI. The host sends no CORS headers, and its one HTTP write route (`PUT /fonts/<file>`)
    requires a non-simple request header, so a website the user visits cannot write through it
@@ -387,8 +390,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
     as named inline factories; skill packages named by specifier and resolved from the extension, not the
     host) and a `./web` half (tool renderers keyed by tool name, plus named exports the host uses
     directly). The halves never import each other or host internals; host-owned scoped state reaches an
-    extension only through explicit seams — the one property fixed now so later extensions (wire
-    methods, panels) extend the `define*` objects instead of replacing them. Composition is static: a
+    extension only through explicit seams — the one property fixed from the start, so each later
+    contribution (settings, queries, panels, host actions, workbench seams) extended the `define*` objects
+    instead of replacing them. Composition is static: a
     server registry (`packages/server/src/extensions/registry.ts`) whose static imports carry factories
     into every launcher without generated factory lists (the packagers' generated lists now cover only
     the pi packages not yet wrapped as extensions), and a web registry
@@ -423,10 +427,17 @@ dependency. This keeps test process drivers outside both launchers and the serve
     off, missing or the host too old. The server never
     lists panels — the web registry is their one authority. **Queries read; actions write through named
     host actions** (shipped with the board): outside its data folder and the Artifacts an extension
-    writes only through `ExtensionHostServices.actions` — create a workspace with a kickoff, message or
-    stop a chat, open a PR, run argv in a worktree — each refused while it is off, and a host-lifetime
-    `hostService(host)` hears host events tapped inside the existing publishers and pushes
-    `extension.event` to its web half behind its own protocol gate. Install UX,
+    changes things only through `ExtensionHostServices.actions` — start a workspace or a chat with a
+    kickoff, message a chat, run one program by argv or write one text file in a worktree, ask the
+    assist model once, create a container and start or wake its orchestrator, run the
+    independent conformance reviewer and file its Review comments — each refused while it is off
+    ([[module-extension-api]]); a host-lifetime `hostService(host)` hears host events tapped inside the
+    existing publishers and pushes `extension.event` to its web half behind its own protocol gate. **The
+    web half's workbench seams** shipped with the board too, each mounted or offered under the panels'
+    openable rule: `sideTools` (singleton rail tools `ext:<name>:<id>` the frame places like Files),
+    `statusItems` (topbar readouts), `containerSections` (an extension's facts in a container overview)
+    and `layoutPresets` (a side arrangement the window enters and leaves, restoring its frame), with
+    `PanelHost.peek` / `openWorkspace` / `onEvent` ([[submodule-web-shell]]). Install UX,
     marketplace, other setting types, a per-workspace on/off override and runtime-loaded third-party
     extensions remain explicit deferrals. Rejected: runtime-loaded
     bundles now (React singleton, versioned UI API, security story first), a logical extension inside

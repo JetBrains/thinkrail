@@ -16,7 +16,9 @@ terminal and stays isolated, reviewable, and grounded in specs: building with ag
 control.
 
 This document describes the product as it is and why it exists, and changes with it: a capability that
-lands is added here, a decision that changes is rewritten here. It holds no versions or roadmap.
+lands is added here, a decision that changes is rewritten here. It holds no versions or roadmap: a project's
+plan lives on its board ([[module-ext-board]]) — board data, never a spec — and a published `ROADMAP.md`
+snapshot is a plain file the user commits.
 
 ## Problem
 
@@ -76,10 +78,15 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   [[module-cli]]).
 - **Projects → workspaces** — a git repo is a project; a workspace is a git worktree, plus the built-in
   Default workspace (the project folder itself) and existing worktrees attached in place
-  ([[submodule-server-workspaces]]); a container groups workspaces, from one project or several, under
-  an orchestrator chat that coordinates them, pinned beside whichever member is open, with an overview
-  of the members and their pull request stack ([[submodule-server-containers]], [[submodule-web-shell]]). A Git repository URL can be cloned into a chosen new host folder and
+  ([[submodule-server-workspaces]]). A Git repository URL can be cloned into a chosen new host folder and
   opened as a project, with optional shallow history and cancellation ([[submodule-server-projects]]).
+- **Containers** — a container groups related workspaces, from one project or several (a PR stack, one
+  change across repositories), under an orchestrator chat that coordinates their agents: it messages and
+  stops their chats, adds and removes members and opens their PRs, merges only after the human approves in
+  chat, and never edits member code itself; the host wakes it when a member's chat settles, needs the human
+  or fails, or its PR changes. The orchestrator can be pinned beside whichever member is open, and an
+  overview in Peek shows the members and their pull request stack ([[submodule-server-containers]],
+  [[submodule-web-shell]]).
 - **Voice input** — local dictation into every text field, extensions' included and with no work on
   their part (the code editor and the terminal excepted), through a mic on the focused field or ⌘⇧Space /
   Ctrl+Shift+Space. Text lands at the cursor and is never auto-sent. NVIDIA's Nemotron streaming model runs on the host after
@@ -99,8 +106,9 @@ What ThinkRail does, at product level; the linked spec owns the detail.
 - **Workbench** — a splittable layout of files, diffs, documents, chats, and terminals with movable side
   and bottom tool panels, kept local to each window ([[submodule-web-shell-layout]]); the right tool side is
   optional (a Left tools preset keeps every tool on the left). A contextual Peek pane on the right shows
-  the files, diffs, artifacts and previews opened from chat and from question and visualize cards, with
-  history, pin and open-in-tab, and hides itself on Esc or a new turn ([[submodule-web-shell]]). The region that holds
+  the files, diffs, artifacts and previews opened from chat and from question and visualize cards, a
+  container's overview and extensions' panels (the board's cards), with history, pin and open-in-tab, and
+  hides itself on Esc or a new turn ([[submodule-web-shell]]). The region that holds
   the keyboard carries an accent line, a keyboard move briefly frames the region it lands in, and
   VS Code-style chords move between regions, into the chat input, Projects, Files and the terminal, from
   one keybinding table that the palette also shows ([[submodule-web-keybindings]]). The user rebinds those
@@ -139,33 +147,35 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   lists the built-in, personal and trusted current-workspace roles with their model policies; global
   per-role switches block new launches without interrupting work already running, beside delegation
   defaults and workspace concurrency controls ([[submodule-web-panels]]).
-- **Board** — a project board extension: cards start agent work in new workspaces, host events
-  (start, settle, merge) move them across preset columns while a human's move is a logged override, each
-  card badges its agent's live state, and a card opens in Peek with its details, attempts and Start.
-  A cross-project "Needs you" inbox (above the board and as a topbar counter) lists the cards waiting
-  for an answer or failed, WIP limits watch human attention, agent-filed cards wait in Triage to be
-  accepted as a whole, and Board mode widens the board and restores the previous layout on exit. The
-  workspaces' task-specs show on their cards (an unbound one's as a card to adopt, its deferrals sent
-  into Triage), the open GitHub issues show through the user's own `gh` (Start asks for `Closes #N`; the
-  board never edits an issue), OpenSpec changes show as cards with propose / apply / archive through the
-  user's own `openspec` CLI and skills (a Spec-driven preset, read-only parsing without the CLI), the
-  host's model suggests a card's size until the human sets one, and above
-  the cards sits a roadmap of initiatives (Now / Next / Later, Goals) with suggested health and a forecast
-  from the live work, a step graph with the critical path and a timeline with the forecast, flow insights
-  (WIP, throughput, cycle time, work item age, cumulative flow, agent vs human-wait time), agent skills
-  that shape, plan, report on, review and close initiatives, and a published roadmap snapshot file for a
-  PR. *Run initiative* gives an initiative a container whose orchestrator coordinates its cards, and its
-  autopilot (off by default) has the host pick which ready, unblocked, sized cards may start within the
-  WIP limits — pausing itself with a visible reason while human attention is over its limit — and wake the
-  orchestrator, which starts them into the container; every start is logged. Smart review checks a card's
-  change against its spec — its acceptance criteria, its task-spec's Product section and its OpenSpec
-  requirements — through the host's independent reviewer (met / unmet / untested with file:line evidence and
-  tests, advisory only), turns each unmet item into a Review comment, and writes a review packet (why, what, how
-  it was verified, conformance, time) the human can add to the PR through their own `gh`. Before Shape sits discovery: ideas with evidence (cited research reports in the artifacts, links,
+- **Board** — a board per project, as an extension. A card starts agent work in a new workspace; host
+  events (start, settle, merge) move it across a preset's columns while a human's move is a logged
+  override; each card badges its agent's live state and last action and opens in Peek with its details,
+  attempts and Start. A cross-project "Needs you" inbox, on the board and as a topbar counter, lists the
+  cards whose agent waits for an answer or failed; WIP limits flag what waits for the human and cap the
+  running agents; cards an agent files wait in Triage to be accepted as a whole; Board mode widens the
+  board and restores the layout on exit. Cards also come from the workspaces' task-specs (an unbound one
+  adopted as a card, its deferrals sent into Triage), the open GitHub issues through the user's `gh` (a
+  started issue's PR says `Closes #N`; the board never edits an issue) and OpenSpec changes, proposed,
+  applied and archived through the user's `openspec` CLI and skills (a Spec-driven preset; without the CLI
+  the board parses the files itself). The host's model suggests a card's size until the human sets one.
+  Smart review checks a card's change against its acceptance criteria, its task-spec's Product section and
+  its OpenSpec requirements through the host's independent reviewer — met, unmet or untested with
+  file:line evidence and tests, advisory only —, files each unmet item as a Review comment, and writes a
+  review packet (why, what, how it was verified, conformance, time) the human can add to the PR through
+  their own `gh` ([[module-ext-board]]).
+- **Roadmap** — above a board's cards: initiatives by horizon (Now / Next / Later) and by goal, each with
+  progress, a suggested health and a forecast from the live work; a step graph with the critical path and
+  a timeline with the forecast; flow insights (WIP, throughput, cycle time, work item age, cumulative flow,
+  agent time vs time waiting for the human); agent skills that shape, plan, report on, review and close
+  initiatives; and a roadmap snapshot (`ROADMAP.md`) written into the project for the user to commit.
+  Before shaping comes discovery: ideas with evidence (cited research reports in the artifacts, links,
   notes) that the agent researches and scores for value × effort against the goal spec and the signals it
-  can reach, on a matrix where the human confirms the scores and promotes an idea through Shape, and a
-  competitor watchlist whose "What changed?" diffs each snapshot against the last, on demand only
-  ([[module-ext-board]]).
+  can reach, on a matrix where the human confirms the scores and promotes an idea into an initiative, beside
+  a competitor watchlist whose *What changed?* diffs each snapshot against the last, on demand only.
+  *Run initiative* runs an initiative's cards in a container whose orchestrator starts them; its
+  autopilot, off by default, has the host choose the ready, unblocked, sized cards that may start within
+  the WIP limits — pausing, with the reason shown, while human attention is over its limit — and offer them
+  to the orchestrator; every start is logged ([[module-ext-board]]).
 - **Workspaces from chat** — on request ("in a side workspace"), the agent starts ordinary workspaces
   with their own chats in any open project and checks their chats', PRs', and diffs' status; the agent,
   not the host, decides what to do with them ([[submodule-server-agent]], [[submodule-server-host]]).

@@ -93,8 +93,6 @@ describe("defineServerExtension", () => {
 				createWorkspace: refused,
 				startChat: refused,
 				sendToChat: refused,
-				stopChat: refused,
-				openPr: refused,
 				runInWorkspace: refused,
 				writeWorkspaceFile: refused,
 				assist: refused,

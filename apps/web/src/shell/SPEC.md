@@ -242,7 +242,7 @@ reports and vanishes instead of filling the topbar. Its `StatusItemHost` (`creat
 `extensionPanelHost.ts`) shares the panel host's query, event and chat-navigation code and the transport and
 navigator links both are built over (`APP_HOST_LINKS`); `scope` and `peek`
 follow the active workspace (`requestPeek` there), `null` / a no-op without one. The board's Needs-you
-counter is the first ([[module-ext-board]]). `ExtensionContainerSections { containerId }` mounts the
+counter is the first ([[submodule-ext-board-web]]). `ExtensionContainerSections { containerId }` mounts the
 extensions' `containerSections` under the same rule (`mountedStatusItems`, `useStatusItemHost`,
 `reportId: "extension-container-section"`), each given the container's id; `PeekPane` injects it into
 `panels/ContainerOverview`'s `extensionSections` slot, so `panels` never reaches the extension registry
@@ -303,7 +303,7 @@ the Workbench its `peek` prop (open, the `peekWidth` preference, its pointer-up 
 
   - **an extension's own panel** — `PanelHost.peek` ([[module-extension-api]]) pushes an `extension` entry
     (with the crumb `name` the panel gave) in the panel's workspace; the board's card is the first
-    ([[module-ext-board]]).
+    ([[submodule-ext-board-web]]).
 - **`PeekPane`** (keyed by workspace) is a toolbar — Back / Forward, a crumb per stack entry (click shows
   it, × removes it), Pin, Open in tab, Full screen, Close — over the current entry. A file or comparison
   renders `ResourcePreview` (full chrome, renderer/layout/view state kept per entry while the pane lives)
@@ -338,8 +338,8 @@ the Workbench its `peek` prop (open, the `peekWidth` preference, its pointer-up 
 
 ## Orchestrator tool
 
-A container's orchestrator chat stays visible while the user moves between its members (user decision,
-`TASK-workspace-containers`). It is the built-in singleton tool `orchestrator` ([[submodule-web-shell-layout]]):
+A container's orchestrator chat stays visible while the user moves between its members (user decision).
+It is the built-in singleton tool `orchestrator` ([[submodule-web-shell-layout]]):
 frame-level like Projects, so a workspace switch keeps its pane, and its body — `OrchestratorTool`, never
 keyed by workspace — renders the **active workspace's container's** orchestrator `ChatView`, keyed by the
 orchestrator session. Switching between members of one container therefore keeps the very same ChatView
@@ -366,8 +366,8 @@ mounted (draft, scroll, dock); another container's orchestrator remounts it.
   was in last when another workspace is active — so the first open places it in a new left pane below
   Projects; with no member shown it falls back to opening the orchestrator chat as the workspace. The
   palette's Show Orchestrator is the generic `view.show.orchestrator`.
-- **Rejected:** opening the orchestrator as the active workspace plus a toggle back (the fallback the task
-  allowed) — the center would lose the member's chat, which is what the user wants beside it; and a pane
+- **Rejected:** opening the orchestrator as the active workspace plus a toggle back (the considered
+  fallback) — the center would lose the member's chat, which is what the user wants beside it; and a pane
   outside the frame like Peek — a frame tool already survives switches, docks, folds and rides presets.
 
 ## Layout settings
