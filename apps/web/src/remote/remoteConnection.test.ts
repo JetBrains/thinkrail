@@ -15,6 +15,7 @@ function connection(): RemoteConnection {
 		hostKey: "KEY",
 		relayUrl: "ws://relay:1",
 		relayUrls: ["ws://relay:1"],
+		nostr: undefined,
 		reconnectNow: () => {},
 		close: () => {},
 	};

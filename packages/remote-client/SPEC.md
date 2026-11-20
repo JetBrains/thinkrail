@@ -59,7 +59,8 @@ uses only platform APIs (`WebSocket`, `RTCPeerConnection`, `crypto.subtle`, `loc
     listeners. The retry schedule is `reconnectLoop.ts`; `onOpenChange` reports the channel opening, going down
     and coming back, `onRetryFailed` each failed attempt meanwhile (so the app shows why), `reconnectNow` skips the wait and first drops a channel that looks open while its
     peer is not `connected` or the channel is not `open` (a phone woken from suspension). The host's `remote.hostRoutes` push replaces the routes later attempts
-    dial and reaches `onRoutes`, so a phone paired before a route existed (Nostr) or before the computer's
+    dial — the connection's `relayUrls` / `nostr` read them live, so a host saved from a pairing that heard a push
+    before it was tracked keeps the pushed routes — and reaches `onRoutes`, so a phone paired before a route existed (Nostr) or before the computer's
     address changed follows the computer without a new QR.
   - `reconnectLoop.ts` — `createReconnectLoop`: one attempt at a time, doubling capped backoff reset on
     success, `now()` to retry at once, a terminal failure ending it (`isTerminalConnectError`); a drop reported

@@ -60,6 +60,7 @@ function fakeConnection(host: SavedHost, seed: SessionStateRecord[]) {
 		hostKey: host.hostKey,
 		relayUrl: host.relayUrl,
 		relayUrls: [host.relayUrl],
+		nostr: undefined,
 		reconnectNow: () => {
 			reconnects++;
 		},

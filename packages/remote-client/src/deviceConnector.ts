@@ -44,10 +44,13 @@ export interface RemoteConnection {
 	hostKey: string;
 	/** The relay address that answered last; empty when the host was reached over Nostr. */
 	readonly relayUrl: string;
-	/** Every address the host advertised, kept so a later reconnect can take whichever route works then. */
-	relayUrls: readonly string[];
-	/** The host's Nostr route from the pairing link, for a reconnect from any network. */
-	nostr?: PairingNostrRoute;
+	/**
+	 * Every address the host advertises — from the link, then its latest `remote.hostRoutes` push — so a later
+	 * reconnect can take whichever route works then.
+	 */
+	readonly relayUrls: readonly string[];
+	/** The host's Nostr route (the link's, then its latest push), for a reconnect from any network. */
+	readonly nostr: PairingNostrRoute | undefined;
 	/** The computer's name from the pairing link, when it sent one. */
 	hostName?: string;
 	/** Attempts now instead of after the backoff (the app came to the foreground, the network changed). */
@@ -438,8 +441,12 @@ function openRemote(params: OpenParams): { connection: RemoteConnection; paired:
 		get relayUrl() {
 			return relayUrl;
 		},
-		relayUrls: params.relayUrls,
-		...(params.nostr ? { nostr: params.nostr } : {}),
+		get relayUrls() {
+			return routes.relayUrls;
+		},
+		get nostr() {
+			return routes.nostr;
+		},
 		...(params.hostName ? { hostName: params.hostName } : {}),
 		reconnectNow: () => {
 			current?.probe();
