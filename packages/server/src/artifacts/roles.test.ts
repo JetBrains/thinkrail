@@ -1,7 +1,11 @@
 import { expect, test } from "bun:test";
 import { artifactRole, replyPathCandidates } from "./roles";
 
-test("a signal decides first: the user's pick, then what the agent showed or linked", () => {
+test("a signal decides first: what the agent published, the user's pick, then what it showed or linked", () => {
+	expect(artifactRole("_work/a.html", { published: true, picked: true })).toEqual({
+		role: "result",
+		reason: "published",
+	});
 	expect(artifactRole("_scratch/a.png", { picked: true })).toEqual({
 		role: "result",
 		reason: "picked",
@@ -16,7 +20,7 @@ test("a signal decides first: the user's pick, then what the agent showed or lin
 	});
 });
 
-test("without a signal, working folders, scripts and data are working files and documents are results", () => {
+test("without a signal every file is a working file, whatever its kind", () => {
 	const role = (path: string) => artifactRole(path, {}).reason;
 	expect(role("mockups/features/_scratch/w1/v1.png")).toBe("working-folder");
 	expect(role("gallery/.cache/x.md")).toBe("working-folder");
@@ -26,10 +30,10 @@ test("without a signal, working folders, scripts and data are working files and 
 	expect(role("mockups/features/12-inbox/rules.mjs")).toBe("script");
 	expect(role("pr-triage/pr-1214.json")).toBe("data");
 	expect(role("pr-triage/README")).toBe("data");
-	expect(role("research_notes/topic/summary.md")).toBe("document");
-	expect(role("mockups/session-analytics/index.html")).toBe("document");
+	expect(role("research_notes/topic/summary.md")).toBe("unshown");
+	expect(role("mockups/session-analytics/index.html")).toBe("unshown");
 	expect(role("screenshots/after.png")).toBe("unshown");
-	expect(artifactRole("reports/r.md", {}).role).toBe("result");
+	expect(artifactRole("reports/r.md", {}).role).toBe("working");
 	expect(artifactRole("screenshots/after.png", {}).role).toBe("working");
 });
 

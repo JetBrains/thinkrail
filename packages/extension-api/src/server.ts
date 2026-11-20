@@ -33,6 +33,7 @@ export interface InteractiveTool {
 export interface ArtifactTool {
 	presented?: (args: unknown, details: unknown) => readonly string[];
 	picked?: (args: unknown, details: unknown) => readonly string[];
+	published?: (args: unknown, details: unknown) => readonly string[];
 }
 
 export interface ServerExtension {

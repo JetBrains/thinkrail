@@ -337,10 +337,10 @@ export type WorkspaceArtifactState = "live" | "deleted";
 export type ArtifactRole = "result" | "working";
 
 export type ArtifactRoleReason =
+	| "published"
 	| "picked"
 	| "shown"
 	| "linked"
-	| "document"
 	| "working-folder"
 	| "script"
 	| "data"
@@ -360,6 +360,7 @@ export interface WorkspaceArtifact {
 	sessionId?: string;
 	role?: ArtifactRole;
 	reason?: ArtifactRoleReason;
+	published?: true;
 	rounds?: ArtifactRound[];
 }
 

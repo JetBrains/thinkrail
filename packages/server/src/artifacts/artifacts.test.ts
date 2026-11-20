@@ -611,6 +611,34 @@ test("what a tool showed and what the user picked become results; working files 
 	});
 });
 
+test("a published file is a flagged result that keeps the flag across a move", async () => {
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
+	write(`${CONTEXT}/mockups/a.html`, "a");
+	write(`${CONTEXT}/mockups/helper.html`, "h");
+	await observeArtifactSessionEvent("w1", "s1", {
+		type: "tool_execution_end",
+		toolCallId: "present-1",
+		toolName: "present_files",
+		published: [`${CONTEXT}/mockups/a.html`, "src/app.ts"],
+	});
+	let rows = await byPath();
+	expect(rows.get(`${CONTEXT}/mockups/a.html`)).toMatchObject({
+		role: "result",
+		reason: "published",
+		published: true,
+	});
+	expect(rows.get(`${CONTEXT}/mockups/helper.html`)).toMatchObject({
+		role: "working",
+		reason: "unshown",
+	});
+	expect(rows.get(`${CONTEXT}/mockups/helper.html`)?.published).toBeUndefined();
+
+	renameSync(join(root, `${CONTEXT}/mockups/a.html`), join(root, `${CONTEXT}/mockups/b.html`));
+	await observeArtifactSessionEvent("w1", "s1", { type: "agent_settled" });
+	rows = await byPath();
+	expect(rows.get(`${CONTEXT}/mockups/b.html`)).toMatchObject({ published: true });
+});
+
 test("paths linked in the run's last reply become results, not those of earlier messages", async () => {
 	await observeArtifactSessionEvent("w1", "s1", { type: "agent_start" });
 	write(`${CONTEXT}/reports/r.json`, "{}");

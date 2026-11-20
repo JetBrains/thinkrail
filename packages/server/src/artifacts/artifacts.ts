@@ -76,6 +76,7 @@ interface ArtifactRecord {
 	keptCopy?: true;
 	presented?: Presented;
 	picked?: true;
+	published?: true;
 	rounds?: ArtifactRound[];
 }
 
@@ -120,6 +121,7 @@ export type ArtifactSessionEvent =
 			toolName: string;
 			presented?: readonly string[];
 			picked?: readonly string[];
+			published?: readonly string[];
 	  };
 
 const states = new Map<string, WorkspaceArtifacts>();
@@ -198,6 +200,7 @@ function parseArtifact(value: unknown): ArtifactRecord | null {
 			? { presented: value.presented }
 			: {}),
 		...(value.picked === true ? { picked: true as const } : {}),
+		...(value.published === true ? { published: true as const } : {}),
 		...parseRounds(value.rounds),
 	};
 }
@@ -541,6 +544,7 @@ function reconcile(workspace: Workspace): boolean {
 			firstSeenAt: prior?.firstSeenAt ?? Date.now(),
 			...(prior?.presented ? { presented: prior.presented } : {}),
 			...(prior?.picked ? { picked: prior.picked } : {}),
+			...(prior?.published ? { published: prior.published } : {}),
 			...(prior?.rounds ? { rounds: prior.rounds } : {}),
 		};
 		const runWriter = writerOf(workspaceId, file.path);
@@ -625,6 +629,7 @@ function toWire(record: ArtifactRecord): WorkspaceArtifact {
 		...(record.sessionId ? { sessionId: record.sessionId } : {}),
 		role,
 		reason,
+		...(record.published ? { published: true as const } : {}),
 		...(record.rounds ? { rounds: record.rounds } : {}),
 	};
 }
@@ -935,6 +940,12 @@ const markPicked = (record: ArtifactRecord) => {
 	return true;
 };
 
+const markPublished = (record: ArtifactRecord) => {
+	if (record.published) return false;
+	record.published = true;
+	return true;
+};
+
 function markReply(workspace: Workspace, sessionId: string): boolean {
 	const reply = replies.get(workspace.id)?.get(sessionId);
 	forgetSession(replies, workspace.id, sessionId);
@@ -1012,7 +1023,12 @@ export async function observeArtifactSessionEvent(
 				markShown,
 			);
 			const picked = markRecords(workspace, toolArtifactPaths(workspace, event.picked), markPicked);
-			if (shown || picked) {
+			const published = markRecords(
+				workspace,
+				toolArtifactPaths(workspace, event.published),
+				markPublished,
+			);
+			if (shown || picked || published) {
 				save(workspaceId, load(workspaceId));
 				changed = true;
 			}
