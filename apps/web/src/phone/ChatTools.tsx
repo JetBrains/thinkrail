@@ -10,13 +10,9 @@ import {
 	sortSettled,
 	toResources,
 } from "@thinkrail/chat-ui/resources";
+import { groupSkills, isLeadingSkillGroup, type SkillGroup } from "@thinkrail/chat-ui/skillGroups";
 import {
 	ALL_PLUGINS_GROUP,
-	groupSkills,
-	isLeadingSkillGroup,
-	type SkillGroup,
-} from "@thinkrail/chat-ui/skillGroups";
-import {
 	isSkillGroupEnabled,
 	type Project,
 	type SessionResources,

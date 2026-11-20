@@ -1,4 +1,9 @@
-import { isSkillGroupEnabled, type Project, type SkillDecision } from "@thinkrail/contracts";
+import {
+	ALL_PLUGINS_GROUP,
+	isSkillGroupEnabled,
+	type Project,
+	type SkillDecision,
+} from "@thinkrail/contracts";
 
 export type { SkillDecision };
 
@@ -56,7 +61,7 @@ export function decideSkill(skill: SkillFacts, ctx: SkillAdmissionContext): Skil
 	if (override === "off") return "disabled";
 	if (override === "on") return "load";
 	if (!isSkillGroupEnabled(ctx, skill.group, ctx.otherAgentSkills)) return "disabled";
-	if (skill.isPlugin && !isSkillGroupEnabled(ctx, "@plugins", ctx.otherAgentSkills))
+	if (skill.isPlugin && !isSkillGroupEnabled(ctx, ALL_PLUGINS_GROUP, ctx.otherAgentSkills))
 		return "disabled";
 	if (ctx.disabled.includes(skill.name)) return "disabled";
 	return "load";
@@ -67,7 +72,7 @@ export function sourceMayLoad(
 	ctx: SkillAdmissionContext,
 ): boolean {
 	if (!isSkillGroupEnabled(ctx, source.group, ctx.otherAgentSkills)) return false;
-	return !source.isPlugin || isSkillGroupEnabled(ctx, "@plugins", ctx.otherAgentSkills);
+	return !source.isPlugin || isSkillGroupEnabled(ctx, ALL_PLUGINS_GROUP, ctx.otherAgentSkills);
 }
 
 export function isSkillLoaded(skill: SkillFacts, ctx: SkillAdmissionContext): boolean {
