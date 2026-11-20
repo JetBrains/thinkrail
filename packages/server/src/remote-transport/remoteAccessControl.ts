@@ -68,7 +68,7 @@ export interface RemoteAccessControl {
 	revokeDevice(deviceId: string): RemoteAccessState;
 	renameDevice(deviceId: string, label: string): RemoteAccessState;
 	setDeviceAccess(deviceId: string, access: RemoteDeviceAccess): RemoteAccessState;
-	/** Whether the device may make this request under its access as stored now — read on every request, so a change applies at once. */
+	/** Whether the device may make this request under its access as stored now — read on every request, so a change applies at once; nothing while access is off. */
 	mayRequest(deviceId: string, method: string): "allowed" | "readOnly" | "revoked";
 	/** Brings access back up at startup when the user left it on. */
 	restore(): RemoteAccessState;
@@ -82,7 +82,7 @@ const STATUS_SAMPLE_MS = 2_000;
 /**
  * Owns the lifecycle of remote access so it can be switched at runtime from Settings rather than only by a
  * launch flag: starting brings up the relay (the host's own unless one is configured) and the broker
- * connection, stopping tears both down, which closes every live device channel with them.
+ * connection; stopping closes every live device channel, then tears both down.
  */
 export function createRemoteAccessControl(
 	options: RemoteAccessControlOptions,
@@ -144,11 +144,21 @@ export function createRemoteAccessControl(
 		}
 	};
 
+	const closeChannels = (deviceId?: string): void => {
+		const open = deviceId === undefined ? [...channels.values()] : [channels.get(deviceId)];
+		for (const channel of open.flatMap((set) => [...(set ?? [])])) channel.close();
+		if (deviceId === undefined) channels.clear();
+		else channels.delete(deviceId);
+	};
+
 	const halt = (): void => {
 		if (!running) return;
-		running.access.stop();
-		running.relay?.stop();
+		const { access, relay } = running;
 		running = null;
+		// A channel the signaling route already let go of (Nostr, once open) would outlive the stop.
+		closeChannels();
+		access.stop();
+		relay?.stop();
 		clearInterval(sampler);
 		sampler = undefined;
 	};
@@ -195,8 +205,7 @@ export function createRemoteAccessControl(
 		revokeDevice(deviceId) {
 			revokeDevice(deviceId, options.dataDir);
 			// The registry alone only stops the next resume; a live connection must close too.
-			for (const channel of channels.get(deviceId) ?? []) channel.close();
-			channels.delete(deviceId);
+			closeChannels(deviceId);
 			changed();
 			return state();
 		},
@@ -212,6 +221,7 @@ export function createRemoteAccessControl(
 			return state();
 		},
 		mayRequest(deviceId, method) {
+			if (!running) return "revoked";
 			const device = loadDevices(options.dataDir).find((d) => d.id === deviceId);
 			if (!device) return "revoked";
 			return deviceMayRequest(accessOf(device), method) ? "allowed" : "readOnly";

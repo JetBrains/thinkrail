@@ -181,11 +181,41 @@ test("a closed channel leaves the device paired but no longer connected", () => 
 	}
 });
 
+test("turning access off closes every live channel, whichever route it came by, and refuses what was in flight", () => {
+	const f = fixture();
+	try {
+		const phone: PairedDevice = { id: "d1", label: "Phone", publicKey: "P1", pairedAt: 1 };
+		const tablet: PairedDevice = { id: "d2", label: "Tablet", publicKey: "P2", pairedAt: 2 };
+		addDevice(phone, f.dir);
+		addDevice(tablet, f.dir);
+		f.control.setEnabled(true, { persist: false });
+		const closed: string[] = [];
+		for (const [device, name] of [
+			[phone, "phone-relay"],
+			[phone, "phone-nostr"],
+			[tablet, "tablet"],
+		] as const) {
+			const channel = fakeChannel();
+			channel.onClose(() => closed.push(name));
+			f.started[0]?.onPaired?.(device, channel);
+		}
+		expect(f.control.mayRequest("d1", "session.prompt")).toBe("allowed");
+
+		f.control.setEnabled(false, { persist: false });
+		expect(closed.sort()).toEqual(["phone-nostr", "phone-relay", "tablet"]);
+		expect(f.control.state().devices.map((d) => d.connected)).toEqual([false, false]);
+		expect(f.control.mayRequest("d1", "session.getMessages")).toBe("revoked");
+	} finally {
+		f.cleanup();
+	}
+});
+
 test("a device made read-only may only read from then on, its channels hear of it, and a revoked one may do nothing", () => {
 	const changes: string[] = [];
 	const f = fixture({ onAccessChanged: (id, access) => changes.push(`${id}:${access}`) });
 	try {
 		addDevice({ id: "d1", label: "Phone", publicKey: "P1", pairedAt: 1 }, f.dir);
+		f.control.setEnabled(true, { persist: false });
 		expect(f.control.mayRequest("d1", "session.prompt")).toBe("allowed");
 		f.control.setDeviceAccess("d1", "read");
 		expect(changes).toEqual(["d1:read"]);
