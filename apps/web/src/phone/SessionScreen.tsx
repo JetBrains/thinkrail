@@ -15,6 +15,12 @@ import {
 import type { ModelEffortPickerHandle, ModelSelection } from "@thinkrail/chat-ui/ModelEffortPicker";
 import { deriveMessageActions } from "@thinkrail/chat-ui/messageActions";
 import type { ModelPreferences } from "@thinkrail/chat-ui/modelPreferences";
+import {
+	compactSubmissionError,
+	mergeNativeChatCommands,
+	parseNativeChatCommand,
+	prepareNameChatCommand,
+} from "@thinkrail/chat-ui/nativeCommands";
 import { usePendingExtUi } from "@thinkrail/chat-ui/pendingExtUi";
 import type { PromptImagesOwner } from "@thinkrail/chat-ui/promptImages";
 import { QueueStrip } from "@thinkrail/chat-ui/QueueStrip";
@@ -36,12 +42,17 @@ import type { RemoteSessionItem, RemoteSessionsController } from "@thinkrail/rem
 import { IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { restoreQueueToDraft, restoreTextToDraft } from "../chat/chatDraft";
+import {
+	compactChat,
+	renameChat,
+	restoreQueueToDraft,
+	restoreTextToDraft,
+} from "../chat/chatDraft";
 import { useModelCatalog } from "../chat/useModelCatalog";
 import { useSessionStats } from "../chat/useSessionStats";
 import { useTranscriptSync } from "../chat/useTranscriptSync";
 import { hydrateStandaloneChat } from "../shell/chatReconciliation";
-import { EMPTY_RUNTIME, useAppStore } from "../store";
+import { EMPTY_RUNTIME, selectCanRenameChat, useAppStore } from "../store";
 import { getTransport, respondToTool } from "../transport";
 import { reasonOf, singleFlight } from "./async";
 import { ResourcesTool, SkillsTool } from "./ChatTools";
@@ -141,6 +152,7 @@ export function SessionScreen({
 		}),
 		[promptImages, sessionId],
 	);
+	const canRenameChat = useAppStore(selectCanRenameChat);
 	const [failure, setFailure] = useState<string | null>(() =>
 		session.unsent ? t("mobile.session.sendFailed", { reason: session.unsent.reason }) : null,
 	);
@@ -161,7 +173,11 @@ export function SessionScreen({
 	const queue = runtime?.queue ?? EMPTY_RUNTIME.queue;
 	const notice = runtime?.notice ?? null;
 	const stats = runtime?.stats ?? null;
-	const commands = runtime?.commands ?? EMPTY_RUNTIME.commands;
+	const hostCommands = runtime?.commands ?? EMPTY_RUNTIME.commands;
+	const commands = useMemo(
+		() => mergeNativeChatCommands(t, hostCommands, canRenameChat),
+		[t, hostCommands, canRenameChat],
+	);
 	const hasRuntime = runtime !== undefined;
 	const unsentRestored = useRef(false);
 
@@ -343,6 +359,24 @@ export function SessionScreen({
 		behavior: SubmitBehavior,
 	): ComposerSubmitDisposition => {
 		if (!ready) return { accepted: false, reason: t("mobile.session.offline") };
+		const nativeCommand = parseNativeChatCommand(text, canRenameChat);
+		if (nativeCommand?.kind === "compact") {
+			const submissionError = compactSubmissionError(
+				attachments.length > 0,
+				queue.hasImages === true,
+			);
+			if (submissionError) return { accepted: false, reason: submissionError };
+			setFailure(null);
+			compactChat(sessionId, nativeCommand.instructions, composerRef.current);
+			return { accepted: true };
+		}
+		if (nativeCommand?.kind === "name") {
+			const prepared = prepareNameChatCommand(nativeCommand.title, attachments.length > 0);
+			if ("reason" in prepared) return { accepted: false, reason: prepared.reason };
+			setFailure(null);
+			renameChat(workspaceId, sessionId, prepared.title);
+			return { accepted: true };
+		}
 		if (behavior !== "interrupt") {
 			send(text, attachments, behavior);
 			return { accepted: true };

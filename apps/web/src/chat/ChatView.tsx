@@ -80,7 +80,6 @@ import {
 	selectCanRenameChat,
 	selectCatalogModel,
 	selectChatPersisted,
-	selectCompactionTurnIds,
 	selectComposerFocusRequested,
 	selectPickerModels,
 	selectQuestionMayClaimFocus,
@@ -105,7 +104,12 @@ import {
 import { ChatHeader, chatHeaderLinks } from "./ChatHeader";
 import { type ChatPaneSlot, ChatPaneSplit } from "./ChatPaneSplit";
 import ChatTranscript, { type ChatTranscriptHandle } from "./ChatTranscript";
-import { restoreTextToDraft as restoreChatText, restoreQueueToDraft } from "./chatDraft";
+import {
+	compactChat,
+	renameChat,
+	restoreTextToDraft as restoreChatText,
+	restoreQueueToDraft,
+} from "./chatDraft";
 import { DEFAULT_DOCK_FOLD, type DockFold, dockCollapsed, withDockCollapsed } from "./dockFold";
 import { HistoryOverlay } from "./HistoryOverlay";
 import { McpServerDetail } from "./McpServerDetail";
@@ -629,36 +633,6 @@ export default function ChatView({
 	const restoreQueueContentToDraft = (content: SessionQueueContent): void =>
 		restoreQueueToDraft(sessionId, content, composerRef.current);
 
-	const drainQueueToDraft = async (): Promise<void> => {
-		const content = await getTransport().request("session.clearQueue", {
-			sessionId,
-			requireTextOnly: true,
-		});
-		restoreQueueContentToDraft(content);
-	};
-
-	const performCompact = (instructions?: string) => {
-		const observedTurnIds = selectCompactionTurnIds(useAppStore.getState(), sessionId);
-		void drainQueueToDraft()
-			.then(() =>
-				getTransport().request("session.compact", {
-					sessionId,
-					...(instructions ? { instructions } : {}),
-				}),
-			)
-			.catch((err) =>
-				useAppStore
-					.getState()
-					.appendCompactionFailureUnlessObserved(sessionId, observedTurnIds, errorText(err)),
-			);
-	};
-
-	const performRename = (title: string) => {
-		void getTransport()
-			.request("session.rename", { workspaceId, sessionId, title })
-			.catch((err) => useAppStore.getState().appendErrorTurn(sessionId, errorText(err)));
-	};
-
 	const performSend = (
 		text: string,
 		attachments: ChatAttachment[],
@@ -736,7 +710,7 @@ export default function ChatView({
 				files.length > 0,
 			);
 			if (submissionError) return { accepted: false, reason: submissionError };
-			performCompact(nativeCommand.instructions);
+			compactChat(sessionId, nativeCommand.instructions, composerRef.current);
 			return { accepted: true };
 		}
 		if (nativeCommand?.kind === "name") {
@@ -746,7 +720,7 @@ export default function ChatView({
 				files.length > 0,
 			);
 			if ("reason" in prepared) return { accepted: false, reason: prepared.reason };
-			performRename(prepared.title);
+			renameChat(workspaceId, sessionId, prepared.title);
 			return { accepted: true };
 		}
 		if (files.length > 0) return sendWithFiles(text, attachments, behavior, files, upload);
