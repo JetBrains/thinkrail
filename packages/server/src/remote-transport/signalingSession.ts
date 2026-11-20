@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
-import type { DeviceMessage, HostMessage, RejectCode } from "@thinkrail/contracts";
+import {
+	type DeviceMessage,
+	type HostMessage,
+	PROTOCOL_VERSION,
+	type RejectCode,
+} from "@thinkrail/contracts";
 import type { PairedDevice, PairingProof, PairingRequest } from "../remote";
 
 export interface HandshakeDeps {
@@ -23,6 +28,8 @@ export interface AuthorizedDevice {
 	nonce: string;
 	/** This attempt's challenge, which the device's signed answer is bound to. */
 	challenge: string;
+	/** The wire protocol the device speaks; the host's own when it declared none. */
+	protocolVersion: number;
 }
 
 export interface HandshakeStep {
@@ -40,6 +47,7 @@ type State =
 			label: string;
 			challenge: string;
 			nonce: string;
+			protocolVersion: number;
 			projectRef: string;
 			/** The QR token of a first pairing, whose HMAC the proof must carry. */
 			token?: string;
@@ -77,6 +85,7 @@ export function createHostHandshake(deps: HandshakeDeps): HostHandshake {
 						label: message.label,
 						challenge,
 						nonce: message.nonce,
+						protocolVersion: message.protocolVersion ?? PROTOCOL_VERSION,
 						projectRef: request.projectRef,
 						token: request.token,
 					};
@@ -93,6 +102,7 @@ export function createHostHandshake(deps: HandshakeDeps): HostHandshake {
 						label: known.label,
 						challenge,
 						nonce: message.nonce,
+						protocolVersion: message.protocolVersion ?? PROTOCOL_VERSION,
 						projectRef: "",
 						deviceId: known.id,
 					};
@@ -135,6 +145,7 @@ export function createHostHandshake(deps: HandshakeDeps): HostHandshake {
 				projectRef: state.projectRef,
 				nonce: state.nonce,
 				challenge: state.challenge,
+				protocolVersion: state.protocolVersion,
 			};
 			state = { phase: "closed" };
 			return { send: { kind: "accepted" }, authorized, done: true };

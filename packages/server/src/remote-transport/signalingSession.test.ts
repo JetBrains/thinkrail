@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { PROTOCOL_VERSION } from "@thinkrail/contracts";
 import type { PairedDevice } from "../remote";
 import { createHostHandshake, type HandshakeDeps } from "./signalingSession";
 
@@ -51,8 +52,23 @@ test("happy path: hello → challenge, valid proof → accepted + authorized + d
 		projectRef: "proj",
 		nonce: "NONCE",
 		challenge: "CHALLENGE",
+		protocolVersion: PROTOCOL_VERSION,
 	});
 	expect(registered).toHaveLength(1);
+});
+
+test("the authorized device carries the protocol version its hello or resume declared", () => {
+	const paired = createHostHandshake(deps().deps);
+	paired.handle({ ...hello, protocolVersion: 120 });
+	expect(
+		paired.handle({ kind: "proof", signature: "valid", mac: goodMac }).authorized?.protocolVersion,
+	).toBe(120);
+
+	const resumed = createHostHandshake(deps().deps);
+	resumed.handle({ kind: "resume", devicePublicKey: "KNOWNKEY", nonce: "N", protocolVersion: 121 });
+	expect(resumed.handle({ kind: "proof", signature: "valid" }).authorized?.protocolVersion).toBe(
+		121,
+	);
 });
 
 test("an invalid or expired token is rejected before any challenge", () => {

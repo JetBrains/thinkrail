@@ -7,6 +7,7 @@ import {
 	isPairingChallenge,
 	offerTranscript,
 	type PairingNostrRoute,
+	PROTOCOL_VERSION,
 	pairingMacInput,
 	parseHostMessage,
 	parsePairingUri,
@@ -233,8 +234,14 @@ function openRemote(params: OpenParams): { connection: RemoteConnection; paired:
 							devicePublicKey: key.publicKeyRaw,
 							label: params.label,
 							nonce,
+							protocolVersion: PROTOCOL_VERSION,
 						}
-					: { kind: "resume", devicePublicKey: key.publicKeyRaw, nonce };
+					: {
+							kind: "resume",
+							devicePublicKey: key.publicKeyRaw,
+							nonce,
+							protocolVersion: PROTOCOL_VERSION,
+						};
 			let pipe: SignalingPipe | null = null;
 			let pc: RTCPeerConnection | null = null;
 			let channel: RTCDataChannel | null = null;

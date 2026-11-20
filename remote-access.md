@@ -57,8 +57,10 @@ each step's mechanics and invariants live in the module spec it links.
 
 1. **Route race.** The phone opens every relay address and the Nostr route at once. A relay that answers
    within 1.5 s wins (it is the host on a shared network); otherwise the first live Nostr route does.
-2. **Handshake.** `resume` (device key + nonce) → `challenge` → `proof` → `accepted`. No SDP is exchanged
-   before `accepted`; an unknown key gets `rejected unknown_device`.
+2. **Handshake.** `resume` (device key + nonce + the app's wire protocol version) → `challenge` → `proof` →
+   `accepted`. No SDP is exchanged before `accepted`; an unknown key gets `rejected unknown_device`. The host
+   serves the phone as the protocol version it declared (its own when the app sends none), as it does a
+   browser tab's `?protocol=`.
 3. **Signed SDP.** The host offers, signing the offer over the phone's nonce and the challenge; the phone
    checks it against the host key it paired with and answers, signing over the challenge. A relay that
    splices either side breaks a signature and the attempt ends `identity_mismatch`.

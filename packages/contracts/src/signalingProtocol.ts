@@ -5,11 +5,20 @@ const MAX_FIELD = 8192;
  * Frames a device sends over the signaling channel (untrusted on the host — validated by `parseDeviceMessage`).
  * The relay carries them, so none is a bearer secret: `hello` names the QR token only by its hash
  * (`pairingTokenId`), the token itself proves itself as an HMAC in `proof`, and the answer is signed by the
- * device key so a relay cannot splice in its own WebRTC endpoint. See `pairingAuth.ts`.
+ * device key so a relay cannot splice in its own WebRTC endpoint. See `pairingAuth.ts`. `hello` and `resume`
+ * carry the device's wire `protocolVersion` (the WS's `?protocol=`); a device that sends none is served as the
+ * host's own version.
  */
 export type DeviceMessage =
-	| { kind: "hello"; tokenId: string; devicePublicKey: string; label: string; nonce: string }
-	| { kind: "resume"; devicePublicKey: string; nonce: string }
+	| {
+			kind: "hello";
+			tokenId: string;
+			devicePublicKey: string;
+			label: string;
+			nonce: string;
+			protocolVersion?: number;
+	  }
+	| { kind: "resume"; devicePublicKey: string; nonce: string; protocolVersion?: number }
 	| { kind: "proof"; signature: string; mac?: string }
 	| { kind: "answer"; sdp: string; signature: string }
 	| { kind: "candidate"; candidate: string }
@@ -46,6 +55,12 @@ function field(value: unknown): value is string {
 	return typeof value === "string" && value.length > 0 && value.length <= MAX_FIELD;
 }
 
+function protocolVersion(value: unknown): { protocolVersion?: number } {
+	return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+		? { protocolVersion: value }
+		: {};
+}
+
 function label(value: unknown): string | null {
 	if (typeof value !== "string") return null;
 	const trimmed = value.trim().slice(0, MAX_LABEL);
@@ -79,12 +94,18 @@ export function parseDeviceMessage(raw: string): DeviceMessage | null {
 						devicePublicKey: message.devicePublicKey,
 						label: trimmed,
 						nonce: message.nonce,
+						...protocolVersion(message.protocolVersion),
 					}
 				: null;
 		}
 		case "resume":
 			return field(message.devicePublicKey) && field(message.nonce)
-				? { kind: "resume", devicePublicKey: message.devicePublicKey, nonce: message.nonce }
+				? {
+						kind: "resume",
+						devicePublicKey: message.devicePublicKey,
+						nonce: message.nonce,
+						...protocolVersion(message.protocolVersion),
+					}
 				: null;
 		case "proof":
 			if (!field(message.signature)) return null;

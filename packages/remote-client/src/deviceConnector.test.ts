@@ -6,6 +6,7 @@ import {
 	encodeHostMessage,
 	type HostMessage,
 	offerTranscript,
+	PROTOCOL_VERSION,
 	parseClientMessage,
 	parseDeviceMessage,
 	proofTranscript,
@@ -72,6 +73,8 @@ class FakeSocket extends Emitter {
 	private nonce = "";
 	private devicePublicKey = "";
 	validProofs = 0;
+	/** Each hello/resume as `kind:protocolVersion`. */
+	readonly initiated: string[] = [];
 	readonly url: string;
 	constructor(url: string) {
 		super();
@@ -91,8 +94,11 @@ class FakeSocket extends Emitter {
 	send(raw: string): void {
 		const frame = parseClientMessage(raw);
 		if (frame?.t === "connect" && hostMode !== "silent") this.reply({ t: "ready" });
-		if (frame?.t !== "frame" || hostMode !== "handshake") return;
+		if (frame?.t !== "frame") return;
 		const message = parseDeviceMessage(frame.data);
+		if (message?.kind === "resume" || message?.kind === "hello")
+			this.initiated.push(`${message.kind}:${message.protocolVersion}`);
+		if (hostMode !== "handshake") return;
 		if (message?.kind === "resume" || message?.kind === "hello") {
 			this.nonce = message.nonce;
 			this.devicePublicKey = message.devicePublicKey;
@@ -227,6 +233,7 @@ test("a saved host returns at once and its loop makes the first attempt", async 
 	const { connection, opens } = watched();
 	await settle(() => peers[0]?.answered === true);
 	expect(sockets[0]?.validProofs).toBe(1);
+	expect(sockets[0]?.initiated).toEqual([`resume:${PROTOCOL_VERSION}`]);
 	expect(opens).toEqual([]);
 	peers[0]?.openChannel();
 	await settle(() => opens.length > 0);
@@ -285,6 +292,7 @@ test("a pairing whose first attempt fails rejects and is not retried", async () 
 		(error: unknown) => error,
 	);
 	await settle(() => peers.length > 0);
+	expect(sockets[0]?.initiated).toEqual([`hello:${PROTOCOL_VERSION}`]);
 	jest.advanceTimersByTime(CONNECT_TIMEOUT_MS);
 	expect(codeOf(await outcome)).toBe("host_silent");
 	jest.advanceTimersByTime(60_000);

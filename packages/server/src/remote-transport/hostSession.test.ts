@@ -228,15 +228,15 @@ test("an unreadable frame tells an older app to update and ends the session", ()
 	expect(sent).toHaveLength(1);
 });
 
-test("the opened channel is handed out with the authorized device", () => {
+test("the opened channel is handed out with the authorized device and the protocol it declared", () => {
 	const { peer, emitChannel } = fakePeer();
 	const s = session(peer);
-	const handed: PairedDevice[] = [];
-	s.onChannel((_channel, device) => {
-		handed.push(device);
+	const handed: string[] = [];
+	s.onChannel((_channel, device, protocolVersion) => {
+		handed.push(`${device.id}:${protocolVersion}`);
 	});
-	s.receive(hello);
+	s.receive({ ...hello, protocolVersion: 120 });
 	s.receive(proof);
 	emitChannel(channelStub);
-	expect(handed.map((d) => d.id)).toEqual(["dev-1"]);
+	expect(handed).toEqual(["dev-1:120"]);
 });

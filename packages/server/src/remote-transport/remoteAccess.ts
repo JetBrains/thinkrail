@@ -50,7 +50,7 @@ export interface RemoteAccessOptions {
 	/** The computer's name, shown on the paired device. */
 	hostName?: string;
 	identity?: HostIdentity;
-	onPaired?: (device: PairedDevice, channel: RemoteChannel) => void;
+	onPaired?: (device: PairedDevice, channel: RemoteChannel, protocolVersion: number) => void;
 	/** Broker connector; defaults to a real WebSocket. Injected in tests. */
 	connect?: (url: string, deps: HostBrokerDeps) => BrokerConnection;
 	/** Public Nostr relays to also listen on, so a phone on any network can reach this host; none turns it off. */
@@ -87,7 +87,9 @@ export function startRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
 			sign: identity.sign,
 			verify: verifySignature,
 		});
-		session.onChannel((channel, device) => options.onPaired?.(device, channel));
+		session.onChannel((channel, device, protocolVersion) =>
+			options.onPaired?.(device, channel, protocolVersion),
+		);
 		return session;
 	};
 	const client = connect(options.relayUrl, {

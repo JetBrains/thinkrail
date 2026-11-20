@@ -31,7 +31,8 @@ broker (the host's own for Wi‑Fi/Tailscale, or a hosted one) and public Nostr 
     SDP/ICE exchange. `hello` names the QR token by its id and a first pairing's `proof` must carry the
     token HMAC. A **`resume`** frame re-authorizes an already-paired device by its registered key
     (`findDevice`) with no token — the path a reconnect takes, since the QR token is one-time. Both carry
-    the device's fresh `nonce`; an accepted step returns it with the challenge.
+    the device's fresh `nonce` and its wire `protocolVersion` (the host's own when absent); an accepted step
+    returns both with the challenge, and the session hands the version to `onPaired` with the channel.
   - `channel.ts` — `RemoteChannel`, the byte-channel interface the wire protocol runs over.
   - `weriftRemoteChannel.ts` — `toRemoteChannel`, adapting a werift `RTCDataChannel` to `RemoteChannel`;
     every send and receive goes through contracts' channel framing, so a large result is chunked. A device
