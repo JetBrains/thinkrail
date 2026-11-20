@@ -902,7 +902,7 @@ the session-event tee maps pi events through `createArtifactEventMapper` (`host/
 args), every assistant `message_end` as `assistant_message` (its text, empty for a tool-call-only turn),
 every `message_end` that `opensChatRound` (contracts) says opens a chat round as `round_start` (its
 timestamp: queued and steered ones included),
-and `tool_execution_end` with the `presented` / `picked` paths that the enabled extensions'
+and `tool_execution_end` with the `presented` / `picked` / `published` paths that the enabled extensions'
 `artifactTools` declarations ([[submodule-server-extensions]]) read from the call's args and result
 `details` — only for a successful call, a throwing declaration logged and skipped; a call's args are
 held per session and call id, since providers may reuse ids across chats — so the host names no tool; an `agent_start` also

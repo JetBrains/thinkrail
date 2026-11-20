@@ -86,12 +86,14 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   Trash as a whole, and continued in a real workspace when it turns into work — the agent's summary
   becomes the new chat's first message ([[submodule-server-workspaces]]).
 - **Artifacts** — what the agent produces for the user (task-specs, mockups, diagrams, screenshots,
-  reports) lives in the workspace's git-ignored artifacts folder and is shown in the Artifacts tool,
-  newest first, as a folder tree, or as what the agent made for the user (Smart: the results it showed,
-  linked or the user picked, their working files folded under them), with the chat that wrote it, beside
-  the ignored outputs its runs leave; each chat round lists the artifacts it made; nothing there
-  disappears unless the user removes it — a file deleted behind their back stays
-  restorable from a kept copy, and the agent is steered away from temporary folders ([[submodule-server-artifacts]], [[submodule-web-panels]]).
+  reports) lives in the workspace's git-ignored artifacts folder and is shown in the Artifacts tool:
+  by default as **Outputs**, the flat list of the finished files the agent published for the user (its
+  `present_files` tool, also shown as file cards in chat — [[module-ext-outputs]]), and on request as
+  Smart (the results it showed, published, linked or the user picked, their working files folded under
+  them), a newest-first list or a folder tree, with the chat that wrote each file, beside the ignored outputs its
+  runs leave; each chat round lists the artifacts it made; nothing there disappears unless the user
+  removes it — a file deleted behind their back stays restorable from a kept copy, and the agent is
+  steered away from temporary folders ([[submodule-server-artifacts]], [[submodule-web-panels]]).
 - **Workbench** — a splittable layout of files, diffs, documents, chats, and terminals with movable side
   and bottom tool panels, kept local to each window ([[submodule-web-shell-layout]]). The region that holds
   the keyboard carries an accent line, a keyboard move briefly frames the region it lands in, and

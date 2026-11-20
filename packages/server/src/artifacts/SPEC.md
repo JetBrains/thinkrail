@@ -132,23 +132,26 @@ Every listed artifact carries a **role**, `result` or `working`, and the **reaso
 the list is served (`roles.ts`, never stored, so a rule change needs no migration). One host answer
 serves the Smart view, the chat divider and any other consumer.
 
-1. **Signals first.** `picked` — the person chose it among a tool's previews. `shown` — a successful tool
-   call put it in front of them: the host maps the declarations extensions make through
-   `artifactTools` ([[submodule-server-extensions]]) into the `presented` / `picked` paths of a
-   `tool_execution_end` event. `linked` — the round's last assistant message names it, read when the next
+1. **Signals decide.** `published` — the agent declared it a deliverable (`present_files`,
+   [[module-ext-outputs]]); the wire also carries it as the flag `published: true`, because the Outputs
+   view lists exactly these and a picked file's reason would hide it. `picked` — the person chose it
+   among a tool's previews. `shown` — a successful tool call put it in front of them. The host maps the
+   declarations extensions make through `artifactTools` ([[submodule-server-extensions]]) into the
+   `presented` / `picked` / `published` paths of a `tool_execution_end` event, marked after that event's
+   reconcile so a file written just before is already a record. `linked` — the round's last assistant message names it, read when the next
 round starts or the run settles (a message without
 text, a tool-call-only turn or a stop, clears the earlier one) (a markdown link,
    a code span or a bare path; worktree-relative, artifacts-relative or absolute; only paths that are
    live records count); the host passes each assistant message as `assistant_message` and the index
    reads the last one at settle. Signals are stored on the record, survive a move and a re-created
    path, and are recorded from now on — older artifacts have none (no backfill).
-2. **Path rules** for the rest, from the agent sessions of 16 real worktrees (2 877 files: these rules
-   marked 2 409 as working with 5 ever shown): a `_*` or dot folder or a helper folder name (`tools`,
-   `scripts`, `bin`, `build`, `data`, `extract`, `check`, `raw`, `src`, `js`, `css`, `fonts`, `images`,
-   `frames`, `previews`, `comments`, `batch_*`, `notes*`) → `working-folder`; a script extension →
-   `script`; a data extension or none → `data`; `.md`/`.html`/`.pdf`/`.svg` → a `document` result (it may
-   be a subagent's brief — the price of not missing notes the agent only named as a folder); anything
-   else never shown (images, mostly check renders) → `unshown`.
+2. **Everything else is working**, its reason from the path: a `_*` or dot folder or a helper folder name
+   (`tools`, `scripts`, `bin`, `build`, `data`, `extract`, `check`, `raw`, `src`, `js`, `css`, `fonts`,
+   `images`, `frames`, `previews`, `comments`, `batch_*`, `notes*`) → `working-folder`; a script extension →
+   `script`; a data extension or none → `data`; anything else → `unshown`. *Post-mortem:* an earlier rule
+   made every `.md`/`.html`/`.pdf`/`.svg` outside those folders a `document` result so notes the agent only
+   named as a folder were not missed; on the user's 16 real worktrees it produced 306 of 375 results — a
+   mockup run's drafts and partial pages — and was removed when explicit publishing arrived.
 
 No model classifies: on the data above the deterministic answer was good enough, and a model step would
 add cost and latency.

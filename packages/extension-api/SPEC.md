@@ -48,8 +48,9 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
     `terminate: true`) when `awaitToolResponse` resolves `deferred`. It is the one shape both sides read
     (`contracts`: `isToolResponsePending`); a tool must not use it for a real result.
 - **Artifact tools.** `ServerExtension.artifactTools?: Record<toolName, ArtifactTool>` tells the host which
-  files a successful call put in front of the person (`presented(args, details)`) and which of them the
-  person chose (`picked(args, details)`), as raw path strings the host resolves. The host feeds them to
+  files a successful call put in front of the person (`presented(args, details)`), which of them the
+  person chose (`picked(args, details)`) and which the agent published as its deliverables
+  (`published(args, details)`, [[module-ext-outputs]]), as raw path strings the host resolves. The host feeds them to
   its artifact index and never learns a tool's argument shape itself; a failed call counts for nothing.
 - `ToolRegistrationOptions.composerSuggestions` (`ComposerSuggestionsReader`, `(args, result) =>
   readonly string[]`) marks a tool whose call carries **next messages for the user**. The reader is pure:

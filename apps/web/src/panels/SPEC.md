@@ -748,8 +748,8 @@ a project picker, the prompt hero, and the reused
   Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
   and it is the home for further integrations. Below `md` the same list is a horizontal scrolling strip without group labels. The
   Feedback tab (`settings-nav-feedback`, “Share feedback”) belongs to that list at
-  every width, pinned to the rail's bottom at `md`+. There is no Artifacts section: its one switch, Smart
-  view, is a Layout group. The pure nav data — groups, protocol and
+  every width, pinned to the rail's bottom at `md`+. There is no Artifacts section (its one switch, Smart
+  view, moved to Layout and was later removed for the Artifacts view dropdown). The pure nav data — groups, protocol and
   injected-content gating, and resolving a requested section to an available one (a retired id opens where
   its settings moved — the store's `RETIRED_SETTINGS_SECTIONS`: `artifacts` → Layout, `line-width` → Text &
   fonts, `review` → Models; a gated one falls back to Appearance) — lives in `panels/settingsNav.ts`,
@@ -1251,11 +1251,10 @@ a project picker, the prompt hero, and the reused
   (`layout-reset-default`) goes through the same confirm. **Advanced** (a `SettingsDisclosure`) holds the
   independent side and bottom group limits (1–32, each with Reset). Custom capture/rename/delete update the
   host-synchronized catalog and converge through `settings.changed`; the default and the limits are
-  window-local. **Artifacts** (from `ARTIFACT_ROLES_PROTOCOL_VERSION`, This computer) holds **Smart view**
-  (`artifacts-smart-toggle`), which was the retired Artifacts section's one switch; **Documents** (This
-  computer) holds the **Markdown outline position** (Left / Right, a cheap choice,
-  `markdown-outline-side-control`, moved from Appearance), applied at once with no host round trip. Each
-  has Reset to its client default. With an active workspace, Apply and Reset ask shell to replace this
+  window-local. **Documents** (This computer) holds the **Markdown outline position** (Left / Right, a
+  cheap choice, `markdown-outline-side-control`, moved from Appearance), applied at once with no host round
+  trip, with Reset to its client default. The **Smart view** switch that the retired Artifacts section
+  passed to Layout is gone: the Artifacts view dropdown remembers the choice and offers every view. With an active workspace, Apply and Reset ask shell to replace this
   window's frame and atomically preserve/reflow open
   resource identities in every retained workspace view; the optional **shell-owned injected Update section**
   (its page is [[submodule-web-updates]]'s; the Settings shell includes its row only when content is
@@ -2471,14 +2470,25 @@ own section. The kebab menu (`plan-menu`, a
   tick per agent edit would re-list for nothing). The panel is two sections: **Artifacts**
   (files under `.thinkrail/context/`) and **Other agent files · ignored** (one row per ignored output,
   newest first, a folder lazily expandable through `fs.readDir`, with its file count), hidden by the
-  header's eye toggle. Artifacts shows as a **List**, a **Tree** or **Smart** (`List | Tree | Smart` segments
-  on the toolbar's right; `selectArtifactsView` resolves the per-client `artifactsView`: the user's explicit
-  choice, else Smart while the Settings switch `artifactsSmart` (on by default) is on and the host serves
-  roles (v124), else List; Smart is never offered otherwise). The toolbar (`ArtifactsToolbar`, which takes
-  the views it offers) stays one row at any sidebar width: when its content overflows it folds the
-  secondary actions (Collapse all, the ignored toggle, Paste) into a **More** menu, then the view segments
-  too, and unfolds once the width it needed is back (measured with a `ResizeObserver`, refolded from
-  scratch when the set of actions changes) — a fixed breakpoint cannot, because the actions come and go.
+  header's eye toggle. Artifacts shows as **Outputs**, **Smart**, a **List** or a **Tree**, picked from one
+  dropdown on the toolbar's right (four views outgrew segments); `selectArtifactsView` resolves the
+  per-client `artifactsView`: the user's explicit choice while it is offered, else Outputs while it is
+  offered (host v128 and the `outputs` extension not switched off, `selectArtifactOutputsOffered`), else
+  Smart (host v124), else List. A stored Outputs choice survives the extension being off and returns
+  with it. The toolbar (`ArtifactsToolbar`, which takes the views it offers) stays one row at any sidebar
+  width: when its content overflows it folds the secondary actions (Collapse all, the ignored toggle,
+  Paste) into a **More** menu — the dropdown itself never folds — and unfolds once the width it needed is
+  back (measured with a `ResizeObserver`, refolded from scratch when the actions or the current view
+  change) — a fixed breakpoint cannot, because the actions come and go.
+  **Outputs** answers *what did the agent hand me*, the literal shape of Claude's Outputs list: the live
+  artifacts the host flags `published` ([[module-ext-outputs]]), one flat list newest first, no folders,
+  counts or marks; a row is a 16px type icon, the display name and the type (`outputFileLabel`: a known
+  type drops its extension and reads `_` as a space, anything else keeps its name and reads "File"), the
+  folder appearing only when that name and type repeat (`artifactsModel.outputEntries`); the name is muted
+  until hovered or open. The heading "Outputs" is the panel's stronger section title, without a count.
+  Rows keep the shared menu, open gestures, inline rename, hover title (path and change time) and focus
+  markup; a deleted output leaves the list (List and Tree keep it with Restore). With none published it
+  reads "No outputs yet" and offers **Show all N files**, which switches to List.
   List answers *what is
   new*: newest first, a two-line row — the name, then the folder inside the artifacts folder — or
   `Task spec · <status>` joined from the spec snapshot by path — and a chip naming the writing chat that
@@ -2498,8 +2508,9 @@ own section. The kebab menu (`plan-menu`, a
   that reshapes the chain keeps it open. Collapse all shows while a shown top-level folder is open. The
   exact change time is a file row's hover title in both views, and the file open in the center
   (`selectActiveFilePath`) is highlighted in both. A List row the host marks `deleted` reads "Deleted, not
-  by you" with Restore. **Smart** answers *what did the agent make for me*: `artifactsModel.smartGroups`
-  arranges the host's roles ([[submodule-server-artifacts]]) — results grouped by their folder, nested under
+  by you" with Restore. **Smart** answers *what did the agent make for me*, from the implicit signals too:
+  `artifactsModel.smartGroups` arranges the host's roles ([[submodule-server-artifacts]]) — published,
+  picked, shown or linked; an unmarked document is a working file — — results grouped by their folder, nested under
   the nearest folder that holds results itself (sibling groups with no common result folder share one
   for their top folder), collapsed and newest first, each group row reading "N results · M groups"; a
   working file folds under the nearest group as one soft-primary **"N working files"** chip (the chat
