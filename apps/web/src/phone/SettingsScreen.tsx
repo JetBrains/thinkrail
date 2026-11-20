@@ -3,16 +3,14 @@ import { BUNDLED_LOCALES, languageName, resolveLocale, SYSTEM_LOCALE } from "@th
 import { useT } from "@thinkrail/locales/react";
 import type { SavedHost } from "@thinkrail/remote-client";
 import { Button } from "@thinkrail/ui/button";
-import {
-	SegmentedControl,
-	type SegmentedControlOption,
-	SettingsGroup,
-	SettingsPageContainer,
-	SettingsRadioCards,
-	type SettingsRadioChoice,
-	SettingsRow,
-} from "@thinkrail/ui/settings";
 import { type ReactNode, useState } from "react";
+import {
+	SettingsChoice,
+	type SettingsChoiceOption,
+	SettingsGroup,
+	SettingsPage,
+	SettingsRow,
+} from "../settingsKit";
 import type { PairState } from "./App";
 import { failureText, type HostStatus } from "./hostStatus";
 import { Screen } from "./layout";
@@ -43,17 +41,17 @@ export function SettingsScreen({
 	footer: ReactNode;
 }) {
 	const t = useT();
-	const themeOptions: SegmentedControlOption<ThemeChoice>[] = [
+	const themeOptions: SettingsChoiceOption<ThemeChoice>[] = [
 		{ id: "system", label: t("settings.appearance.mode.system"), testId: "theme-mode-system" },
 		{ id: "light", label: t("settings.appearance.mode.light"), testId: "theme-mode-light" },
 		{ id: "dark", label: t("settings.appearance.mode.dark"), testId: "theme-mode-dark" },
 	];
-	const contrastOptions: SegmentedControlOption<ContrastChoice>[] = [
+	const contrastOptions: SettingsChoiceOption<ContrastChoice>[] = [
 		{ id: "normal", label: t("common.default"), testId: "contrast-default" },
 		{ id: "high", label: t("settings.appearance.contrast.high"), testId: "contrast-high" },
 	];
 	const systemTag = resolveLocale(SYSTEM_LOCALE, BUNDLED_LOCALES, navigator.languages);
-	const languages: SettingsRadioChoice<string>[] = [
+	const languages: SettingsChoiceOption<string>[] = [
 		{
 			id: SYSTEM_LOCALE,
 			label: t("settings.language.system.label"),
@@ -65,7 +63,7 @@ export function SettingsScreen({
 		...BUNDLED_LOCALES.map((tag) => ({ tag, name: languageName(tag) }))
 			.sort((a, b) => a.name.localeCompare(b.name))
 			.map(
-				({ tag, name }): SettingsRadioChoice<string> => ({
+				({ tag, name }): SettingsChoiceOption<string> => ({
 					id: tag,
 					label: name,
 					description: tag,
@@ -81,7 +79,7 @@ export function SettingsScreen({
 					<span className="text-primary tr-brand-hero">{BRAND}</span>
 					<span className="text-text-muted tr-text-ui">{t("mobile.welcome.tagline")}</span>
 				</section>
-				<SettingsPageContainer testId="mobile-settings">
+				<SettingsPage testId="mobile-settings">
 					<SettingsGroup title={t("mobile.devices.title")}>
 						{hosts.map((host) => (
 							<ComputerRow
@@ -100,24 +98,24 @@ export function SettingsScreen({
 						<SettingsRow
 							label={t("settings.appearance.themeMode")}
 							control={
-								<SegmentedControl
-									name="theme-mode"
+								<SettingsChoice
 									label={t("settings.appearance.themeMode")}
 									options={themeOptions}
 									value={preferences.theme}
 									onSelect={(theme) => onChange({ ...preferences, theme })}
+									testId="theme-mode-control"
 								/>
 							}
 						/>
 						<SettingsRow
 							label={t("settings.appearance.contrastLevel")}
 							control={
-								<SegmentedControl
-									name="contrast"
+								<SettingsChoice
 									label={t("settings.appearance.contrastLevel")}
 									options={contrastOptions}
 									value={preferences.contrast}
 									onSelect={(contrast) => onChange({ ...preferences, contrast })}
+									testId="contrast-level-control"
 								/>
 							}
 						/>
@@ -126,19 +124,20 @@ export function SettingsScreen({
 						title={t("settings.language.title")}
 						description={t("settings.language.description")}
 					>
-						<SettingsRadioCards
-							name="ui-language"
+						<SettingsChoice
 							label={t("settings.language.title")}
-							choices={languages}
+							layout="list"
+							options={languages}
 							value={
 								languages.some((choice) => choice.id === preferences.locale)
 									? preferences.locale
 									: SYSTEM_LOCALE
 							}
 							onSelect={(locale) => onChange({ ...preferences, locale })}
+							testId="language-choice"
 						/>
 					</SettingsGroup>
-				</SettingsPageContainer>
+				</SettingsPage>
 			</div>
 		</Screen>
 	);

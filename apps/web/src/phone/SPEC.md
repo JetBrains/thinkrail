@@ -139,7 +139,7 @@ the tab badged with the Needs-you count; a tap lands in that chat (a row whose c
   Capacitor WKWebView persists it on-device). Live status comes from the controller's `session.state` stream; lists are read on screen
   entry, and a workspace's chats re-read when a session appears or leaves in it.
 - **Allowed deps:** the sibling `store`, `transport`, `extensions`, `themes` barrels, `shell/chatReconciliation`, and the
-  chat hooks `chat/useTranscriptSync`, `chat/useSessionStats`, `chat/useModelCatalog`, `chat/chatDraft`, `panels/Toaster` (per-file);
+  chat hooks `chat/useTranscriptSync`, `chat/useSessionStats`, `chat/useModelCatalog`, `chat/chatDraft`, `panels/Toaster` (per-file), `settingsKit` (the Settings tab's blocks);
   `@thinkrail/remote-client` (the entire remote engine), `@thinkrail/chat-ui` (the chat renderers and composer —
   never a copy of them), `@thinkrail/contracts`, `@thinkrail/design-tokens` (palettes, semantic CSS,
   `applyPalette`), `@thinkrail/locales/react`, `@thinkrail/ui` primitives, Remix Icon, `@capacitor/app` and
@@ -183,7 +183,7 @@ first-run `PairForm` uses. While a scanned or pasted link pairs, the whole scree
 `PairingSplash` — the R mark large and the computer's name from the link — over the welcome or the tabs, and it
 stays until that computer's `project.list` has answered (`prefetchHostRequest` fills the read's cache, capped at
 6s), so the tree opens filled instead of on a loader; a failure returns to the form with its reason. `SettingsScreen.tsx` opens with the brand card, then the phone's own settings: the IDE Settings rows that apply to a device, rendered
-with the shared `@thinkrail/ui/settings` primitives and the IDE's strings — **Theme mode**
+with the IDE Settings dialog's own `settingsKit` blocks (`SettingsPage` without a title, `SettingsGroup`, `SettingsRow`, `SettingsChoice`) and the IDE's strings — **Theme mode**
 (System / Light / Dark), **Contrast level** (Default / High) and **Language** (System or a bundled locale,
 named by `languageName`). They are device preferences (`preferences.ts`, one JSON entry in the
 `localStorage` store), never written to a host: a phone can pair several computers, and the IDE's own

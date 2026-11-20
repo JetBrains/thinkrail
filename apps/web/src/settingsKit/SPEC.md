@@ -13,8 +13,10 @@ tags: [ui, keyboard, settings, public-surface-checked]
 
 The one home of every Settings building block — page, group, row with Changed/Reset, line, notice,
 choice, slider, number field, disclosure, list row, draft — and of the keyboard engine that walks a
-section as a tree of rows with the arrows. Every Settings contributor imports it: `panels` (the dialog and its sections), `shell` (Layout
-and Keyboard) and `updates`. It knows nothing about which settings exist or how they are stored: rows take
+section as a tree of rows with the arrows. Every Settings contributor imports it: `panels` (the dialog and
+its sections), `shell` (Layout and Keyboard), `updates` and the phone shell's Settings tab (`phone`, whose
+page has no title of its own since its screen header names it). It knows nothing about which settings
+exist or how they are stored: rows take
 their label and id from `panels/settingsCatalog`, and resets from `panels/settingDefaults`.
 
 ## Boundary
