@@ -93,6 +93,11 @@ export interface SearchRow {
 	keywords: readonly string[];
 }
 
+/** The words a model row is searched by: its name, id, provider and effort levels. */
+export function modelKeywords(model: WireModel): string[] {
+	return [model.name, model.id, model.provider, ...model.thinkingLevels];
+}
+
 export function rowValue(section: string, model: ModelRef): string {
 	return `${section}:${modelKey(model)}`;
 }

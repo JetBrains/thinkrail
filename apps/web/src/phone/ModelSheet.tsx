@@ -40,7 +40,7 @@ export const ModelSheet = forwardRef<ModelEffortPickerHandle, ModelSheetProps>(f
 	};
 	useImperativeHandle(handle, () => ({ open: show }));
 
-	const sections = modelSections(models, current, query);
+	const sections = modelSections(t, models, current, query);
 	/** The catalog entry carries the model's effort levels even when the chat's own copy lags. */
 	const effortModel = models.find((model) => sameModel(model, current)) ?? current;
 	const levels = effortModel?.thinkingLevels ?? [];

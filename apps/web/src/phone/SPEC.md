@@ -100,7 +100,7 @@ the tab badged with the Needs-you count; a tap lands in that chat (a row whose c
   picker over `model.list` → `session.setModel` / `session.setThinkingLevel`, its current model and effort read from each
   `session.getMessages` summary, since `session.list` reports `model: null` for a chat not yet loaded on the host — on a phone the row above the
   field, `ModelSheet.tsx`: a full page with a back arrow (`sheet.tsx`'s `PageSheet`; no autofocus, so no keyboard) with the IDE's `EffortSlider` (levels from the catalog entry) that applies at once
-  over models grouped by provider (`modelSections.ts`, current provider first, a search field only past 8
+  over models grouped by provider (`modelSections.ts`: chat-ui's `groupByProvider` narrowed by the IDE picker's `searchScore` over `modelKeywords`, with only the current provider moved first; a search field only past 8
   models); a tap picks and closes, and the composer's `/model` opens it — send / steer / follow-up /
   interrupt through the same `session.*` methods as the IDE, tool-card answers through
   `session.respondToTool`). Every chat action reports its failure in one line above the field ("what failed: why"; `async.ts`'s `reasonOf` words a read-only or revoked refusal and a closed connection in the phone's locale instead of the host's English):
