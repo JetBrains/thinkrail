@@ -3,6 +3,7 @@ import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { registerWebExtensions } from "../extensions";
+import { Toaster } from "../panels/Toaster";
 import { App } from "./App";
 import { followKeyboard } from "./keyboardInset";
 import "./phone.css";
@@ -16,6 +17,7 @@ if (root)
 		<StrictMode>
 			<TooltipProvider delayDuration={250} skipDelayDuration={400}>
 				<App />
+				<Toaster viewportClassName="mb-safe-bottom" />
 			</TooltipProvider>
 		</StrictMode>,
 	);

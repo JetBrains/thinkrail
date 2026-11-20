@@ -2151,7 +2151,7 @@ own section. The kebab menu (`plan-menu`, a
   once its workspace is active, it focuses an already-open tab, `reopenChat`s a live-but-closed one, or
   fetches + hydrates a disk-only one — the reopen flow's two cases above, plus a third case for an
   already-open tab — leaving `ChatView` to consume the request for the scroll + flash (`chat/SPEC.md`'s
-  Jump-to-message bullet). **`Toaster`** is the app-wide toast host the shell mounts once: it subscribes to `store.toasts` and
+  Jump-to-message bullet). **`Toaster`** is the app-wide toast host the shell mounts once (and the phone shell once, above its home indicator): it subscribes to `store.toasts` and
   renders each via the `@thinkrail/ui/toast` primitives, letting Radix own the auto-timeout + swipe/hover-pause
   and routing every close back through `store.dismissToast` (so the store stays the single source of truth).
   Errors persist until dismissed; success/info time out. The **integration piece** — the primitives stay
