@@ -13,7 +13,8 @@ export interface BrokerSocket {
 }
 
 export interface Broker {
-	connect(connId: string, socket: BrokerSocket): void;
+	/** `address` is the client's, for per-address limits; it never leaves the broker. */
+	connect(connId: string, socket: BrokerSocket, address?: string): void;
 	receive(connId: string, raw: string): void;
 	disconnect(connId: string): void;
 	/** True while a connection has neither registered as a host nor connected as a device. */
@@ -31,6 +32,7 @@ type ConnState =
 interface Conn {
 	socket: BrokerSocket;
 	state: ConnState;
+	address: string;
 }
 
 interface Session {
@@ -43,8 +45,8 @@ export interface BrokerDeps {
 	newNonce?: () => string;
 	/** Checks a host's Ed25519 signature against the raw (base64url) public key it registers. */
 	verifyHost?: (hostKey: string, data: Uint8Array, signature: string) => boolean;
-	/** TURN credentials for a connecting device only; none when the relay runs no TURN. */
-	iceFor?: () => IceServer[];
+	/** TURN credentials for a connecting device only, by its client address; none when the relay runs no TURN or the address is over its rate. */
+	iceFor?: (address: string) => IceServer[] | undefined;
 	maxSessionsPerHost?: number;
 }
 
@@ -137,7 +139,7 @@ export function createBroker(deps: BrokerDeps = {}): Broker {
 					return;
 				}
 				const session = newSessionId();
-				const ice = deps.iceFor?.();
+				const ice = deps.iceFor?.(conn.address);
 				addSession(session, { hostId, deviceId: connId });
 				conn.state = { role: "device", session };
 				conn.socket.send(ice ? { t: "ready", ice } : { t: "ready" });
@@ -211,8 +213,8 @@ export function createBroker(deps: BrokerDeps = {}): Broker {
 	};
 
 	return {
-		connect(connId, socket) {
-			conns.set(connId, { socket, state: { role: "new" } });
+		connect(connId, socket, address = "") {
+			conns.set(connId, { socket, state: { role: "new" }, address });
 		},
 		receive(connId, raw) {
 			const conn = conns.get(connId);

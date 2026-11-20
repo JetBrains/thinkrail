@@ -1,13 +1,13 @@
 import { createBroker } from "./broker";
 import { configFromEnv } from "./config";
 import { startBroker } from "./server";
-import { turnCredentials } from "./turnCredentials";
+import { turnIssuer } from "./turnCredentials";
 
 const config = configFromEnv(process.env);
 const { turn } = config;
 const broker = createBroker({
 	maxSessionsPerHost: config.limits.maxSessionsPerHost,
-	...(turn ? { iceFor: () => [turnCredentials(turn)] } : {}),
+	...(turn ? { iceFor: turnIssuer(turn) } : {}),
 });
 const running = startBroker({
 	port: config.port,

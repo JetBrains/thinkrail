@@ -160,13 +160,28 @@ test("a host that re-registers with a valid proof replaces its previous connecti
 	expect(broker.hostCount).toBe(1);
 });
 
-test("the relay's TURN credentials go to the connecting device only", () => {
+test("the relay's TURN credentials go to the connecting device only, asked for by its address", () => {
 	const ice = [{ urls: ["turn:turn.example:3478"], username: "u", credential: "c" }];
-	const { broker, host, device } = fixture({ iceFor: () => ice });
+	const asked: string[] = [];
+	const broker = newBroker({
+		iceFor: (address) => {
+			asked.push(address);
+			return address === "198.51.100.7" ? ice : undefined;
+		},
+	});
+	const host = spy();
+	const device = spy();
+	const throttled = spy();
+	broker.connect("host", host, "203.0.113.1");
+	broker.connect("device", device, "198.51.100.7");
+	broker.connect("throttled", throttled, "198.51.100.8");
 	register(broker, "host", "K");
 	broker.receive("device", JSON.stringify({ t: "connect", hostKey: "K" }));
+	broker.receive("throttled", JSON.stringify({ t: "connect", hostKey: "K" }));
 	expect(device.sent).toEqual([{ t: "ready", ice }]);
-	expect(host.sent.at(-1)).toEqual({ t: "open", session: "S1" });
+	expect(throttled.sent).toEqual([{ t: "ready" }]);
+	expect(asked).toEqual(["198.51.100.7", "198.51.100.8"]);
+	expect(host.sent.at(-1)).toEqual({ t: "open", session: "S2" });
 });
 
 test("a host at its session cap turns further devices away", () => {
