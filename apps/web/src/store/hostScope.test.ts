@@ -25,6 +25,8 @@ const CLIENT_SCOPED: readonly (keyof AppState & string)[] = [
 	"hiddenModels",
 	"artifactsShowIgnored",
 	"artifactsView",
+	"artifactsSeenByWorkspace",
+	"artifactsTreeExpandedByWorkspace",
 	"changesView",
 	"changesLayout",
 	"filesMode",
