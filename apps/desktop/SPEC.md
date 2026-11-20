@@ -111,7 +111,14 @@ another.
    `{ backendProfileId: "local", windowId: "main" }`. The route is appended to the fresh origin; the
    preference map is serialized as data and prepended to the preload source so the web client can hydrate
    before React mounts despite the changing port. Open one normal native `BrowserWindow` with the system
-   renderer.
+   renderer. On Linux it is created hidden and shown right after its constructor attaches the webview
+   (`webviewFocus.ts`): Electrobun 2.0.5 shows a visible window before attaching the WebKitWebView and
+   never focuses it, and GTK 3 picks a window's initial focus widget only when the window is first shown,
+   so without this the page holds no keyboard focus until Tab or a click, and the first arrow or Tab only
+   moves GTK focus into the webview. The window still appears at creation and the splash hand-off is unchanged; the hidden
+   and neutral modes never show it. macOS and Windows keep Electrobun's show-at-creation, as nothing
+   reproduced there. Electrobun has no webview focus call, so GTK focus lost mid-session is not restored
+   ([[electrobun-compatibility]]).
 
 The runtime bundle is built with `--outdir` + `--entry-naming` (Bun refuses external maps with
 `--outfile`). Only in a credentialed release build (`THINKRAIL_SOURCEMAPS_RELEASE`, [[module-ci-release]])
