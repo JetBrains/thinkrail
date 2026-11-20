@@ -28,6 +28,7 @@ function fakeSessions() {
 			receive: (m) => void record.received.push(m),
 			receiveUnreadable: () => void log.push(`unreadable:${id}`),
 			onChannel: () => {},
+			onClose: () => {},
 			get opened() {
 				return record.opened;
 			},

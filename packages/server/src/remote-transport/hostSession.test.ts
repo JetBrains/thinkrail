@@ -7,14 +7,17 @@ import type { HostPeer, HostPeerSignal } from "./hostPeer";
 import { createHostSession, type HostSessionDeps, OUTDATED_APP_REASON } from "./hostSession";
 import { createHostHandshake } from "./signalingSession";
 
-function fakePeer() {
+function fakePeer(fail: { start?: boolean; answer?: boolean; candidate?: boolean } = {}) {
 	const calls = { start: 0, closed: 0, answers: [] as string[], candidates: [] as string[] };
 	let signal: (s: HostPeerSignal) => void = () => {};
 	let channel: (c: RemoteChannel) => void = () => {};
+	const failure = async (): Promise<void> => {
+		throw new Error("werift failed");
+	};
 	const peer: HostPeer = {
-		start: async () => void calls.start++,
-		acceptAnswer: async (sdp) => void calls.answers.push(sdp),
-		addCandidate: async (c) => void calls.candidates.push(c),
+		start: fail.start ? failure : async () => void calls.start++,
+		acceptAnswer: fail.answer ? failure : async (sdp) => void calls.answers.push(sdp),
+		addCandidate: fail.candidate ? failure : async (c) => void calls.candidates.push(c),
 		onLocalSignal: (h) => {
 			signal = h;
 		},
@@ -66,14 +69,23 @@ const hello = {
 } as const;
 const proof = { kind: "proof", signature: "valid", mac: "mac" } as const;
 
-function session(peer: HostPeer, sent: HostMessage[] = []) {
+function session(peer: HostPeer, sent: HostMessage[] = [], signalingWindowMs?: number) {
 	return createHostSession({
 		handshake: handshake().hs,
 		peer,
 		send: (m) => sent.push(m),
 		...fakeCrypto,
+		...(signalingWindowMs === undefined ? {} : { signalingWindowMs }),
 	});
 }
+
+const channelStub: RemoteChannel = {
+	open: true,
+	send: () => {},
+	onMessage: () => {},
+	onClose: () => {},
+	close: () => {},
+};
 
 test("does not start negotiation until the device is authorized", () => {
 	const { peer, calls } = fakePeer();
@@ -87,6 +99,71 @@ test("does not start negotiation until the device is authorized", () => {
 	s.receive({ kind: "proof", signature: "forged", mac: "mac" });
 	expect(sent.at(-1)?.kind).toBe("rejected");
 	expect(calls.start).toBe(0);
+	expect(calls.closed).toBe(1);
+});
+
+test("a terminal step closes the session once and tells its owner", () => {
+	const { peer, calls } = fakePeer();
+	const s = session(peer);
+	let ended = 0;
+	s.onClose(() => void ended++);
+	s.receive({ kind: "proof", signature: "valid" });
+	s.close();
+	expect(calls.closed).toBe(1);
+	expect(ended).toBe(1);
+});
+
+test("a session whose channel never opens is closed at its signaling deadline", async () => {
+	const { peer, calls } = fakePeer();
+	const s = session(peer, [], 20);
+	const ended = new Promise<void>((resolve) => s.onClose(resolve));
+	s.receive(hello);
+	await ended;
+	expect(calls.closed).toBe(1);
+});
+
+test("an opened channel outlives the signaling deadline", async () => {
+	const { peer, calls, emitChannel } = fakePeer();
+	const s = session(peer, [], 20);
+	s.receive(hello);
+	s.receive(proof);
+	emitChannel(channelStub);
+	await Bun.sleep(40);
+	expect(s.opened).toBe(true);
+	expect(calls.closed).toBe(0);
+});
+
+test("a peer that fails to start rejects the device and closes instead of escaping as a rejection", async () => {
+	const { peer, calls } = fakePeer({ start: true });
+	const sent: HostMessage[] = [];
+	const s = session(peer, sent);
+	const ended = new Promise<void>((resolve) => s.onClose(resolve));
+	s.receive(hello);
+	s.receive(proof);
+	await ended;
+	expect(sent.at(-1)).toMatchObject({ kind: "rejected", code: "denied" });
+	expect(calls.closed).toBe(1);
+});
+
+test("an answer the peer cannot apply closes the session; a refused candidate does not", async () => {
+	const candidate = fakePeer({ candidate: true });
+	const kept = session(candidate.peer);
+	kept.receive(hello);
+	kept.receive(proof);
+	kept.receive({ kind: "candidate", candidate: "bad" });
+	await Bun.sleep(0);
+	expect(candidate.calls.closed).toBe(0);
+
+	const answer = fakePeer({ answer: true });
+	const sent: HostMessage[] = [];
+	const s = session(answer.peer, sent);
+	const ended = new Promise<void>((resolve) => s.onClose(resolve));
+	s.receive(hello);
+	s.receive(proof);
+	const signature = deviceSignature("KEY", answerTranscript("CHALLENGE", "ANSWER"));
+	s.receive({ kind: "answer", sdp: "ANSWER", signature });
+	await ended;
+	expect(sent.at(-1)?.kind).toBe("rejected");
 });
 
 test("after acceptance it starts the peer and sends a host-signed offer bound to nonce and challenge", () => {
@@ -160,12 +237,6 @@ test("the opened channel is handed out with the authorized device", () => {
 	});
 	s.receive(hello);
 	s.receive(proof);
-	emitChannel({
-		open: true,
-		send: () => {},
-		onMessage: () => {},
-		onClose: () => {},
-		close: () => {},
-	});
+	emitChannel(channelStub);
 	expect(handed.map((d) => d.id)).toEqual(["dev-1"]);
 });

@@ -42,8 +42,9 @@ export function createHostBrokerClient(deps: HostBrokerDeps): HostBrokerClient {
 	let registered = false;
 	const send = (frame: ClientToBroker): void => socket?.send(encodeBrokerFrame(frame));
 	const closeSessions = (): void => {
-		for (const session of sessions.values()) session.close();
+		const open = [...sessions.values()];
 		sessions.clear();
+		for (const session of open) session.close();
 	};
 
 	return {
@@ -66,7 +67,13 @@ export function createHostBrokerClient(deps: HostBrokerDeps): HostBrokerClient {
 				const sessionId = message.session;
 				const toDevice = (hostMessage: HostMessage): void =>
 					send({ t: "frame", session: sessionId, data: encodeHostMessage(hostMessage) });
-				sessions.set(sessionId, deps.openSession(sessionId, toDevice));
+				const session = deps.openSession(sessionId, toDevice);
+				sessions.set(sessionId, session);
+				session.onClose(() => {
+					if (sessions.get(sessionId) !== session) return;
+					sessions.delete(sessionId);
+					send({ t: "close", session: sessionId });
+				});
 			} else if (message.t === "frame" && message.session !== undefined) {
 				const session = sessions.get(message.session);
 				if (!session) return;
@@ -74,8 +81,9 @@ export function createHostBrokerClient(deps: HostBrokerDeps): HostBrokerClient {
 				if (device) session.receive(device);
 				else session.receiveUnreadable();
 			} else if (message.t === "close" && message.session !== undefined) {
-				sessions.get(message.session)?.close();
+				const session = sessions.get(message.session);
 				sessions.delete(message.session);
+				session?.close();
 			}
 		},
 		detach() {

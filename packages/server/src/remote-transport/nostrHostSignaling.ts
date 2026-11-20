@@ -1,9 +1,8 @@
 import { encodeHostMessage, parseDeviceMessage } from "@thinkrail/contracts";
 import { type NostrSignal, normalizeRelays, openNostrSignal } from "@thinkrail/nostr-signaling";
 import type { HostBrokerDeps } from "./hostBrokerClient";
-import type { HostSession } from "./hostSession";
+import { type HostSession, SIGNALING_WINDOW_MS } from "./hostSession";
 
-const SESSION_TTL_MS = 60_000;
 const START_SKEW_SECONDS = 2;
 const SWEEP_MS = 15_000;
 const MAX_SESSIONS = 32;
@@ -65,7 +64,7 @@ export function createNostrHostRouter(deps: NostrHostRouterDeps): NostrHostRoute
 			else entry.session.receiveUnreadable();
 		},
 		sweep() {
-			const cutoff = now() - SESSION_TTL_MS;
+			const cutoff = now() - SIGNALING_WINDOW_MS;
 			for (const [peer, entry] of sessions) {
 				if (entry.startedAt <= cutoff) drop(peer, !entry.session.opened);
 			}
