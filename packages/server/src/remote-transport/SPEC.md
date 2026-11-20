@@ -106,7 +106,8 @@ broker (the host's own for Wi‑Fi/Tailscale, or a hosted one) and public Nostr 
   - `remoteAccessControl.ts` — `createRemoteAccessControl`, the runtime switch the host owns: `setEnabled`
     starts the relay (the host's own via `startLocalRelay` unless a `relayUrl` is configured) plus
     `startRemoteAccess` with the Nostr route on (`DEFAULT_NOSTR_RELAYS` unless `nostrRelays` is given; `[]`
-    turns it off), and stopping tears both down, which closes every live device channel; the choice
+    turns it off), and stopping closes every live device channel itself — a Nostr session the router let go of once
+    it opened would outlive the relay — then tears both down, and `mayRequest` refuses everything while off; the choice
     persists through the `remote` module's setting (`restore` brings it back at startup) unless the caller
     passes `persist: false` for a one-run `--remote`. `issueLink` refuses while off; `routes()` is null while off. It owns the live device
     channels, so `state()` marks each paired device `connected` and `revokeDevice` drops the registry entry and
