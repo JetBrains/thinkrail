@@ -1396,7 +1396,8 @@ a project picker, the prompt hero, and the reused
   works or that it expired, Copy link) in Settings' row and the quick panel's stacked layout.
   `PhoneAccessView` and shell's `PhoneAccessPanel` are props-only halves taking the hook's `PhoneAccess` whole.
   **One status source:** `useRemoteAccessStatus` (in `usePhoneAccess.ts`) is the status the topbar icon, its
-  quick panel and Settings all render — one `remote.statusChanged` subscription per transport, one
+  quick panel and Settings all render, followed only when `selectSupportsRemoteAccess` (this computer's own
+  host) and dropped on every host reset — one `remote.statusChanged` subscription per transport, one
   `remote.status` read per connection generation, and every change's reply, last arrival wins (one ordered
   socket, each reply and push computed when sent, so no ordering gate). `foldRemoteStatus` is the one place a
   newly paired phone is noticed — a device absent from the previous status on the same connection — and the

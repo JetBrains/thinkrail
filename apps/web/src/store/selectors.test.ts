@@ -4,6 +4,7 @@ import {
 	ARTIFACT_ROLES_PROTOCOL_VERSION,
 	MODEL_PICKER_PROTOCOL_VERSION,
 	type Project,
+	REMOTE_ACCESS_PROTOCOL_VERSION,
 	SEARCH_PROTOCOL_VERSION,
 	type SessionState,
 	type SessionStateRecord,
@@ -61,6 +62,7 @@ import {
 	selectWorkspaceNeedsAttention,
 	selectWorkspaceReadAction,
 	specPathMatcher,
+	selectSupportsRemoteAccess as supportsRemoteAccess,
 	workspaceName,
 } from "./selectors";
 
@@ -1121,5 +1123,17 @@ describe("the Artifacts view", () => {
 			"results",
 		);
 		expect(selectArtifactsRoundFilter(at(ARTIFACT_OUTPUTS_PROTOCOL_VERSION, "list"))).toBe("all");
+	});
+});
+
+describe("selectSupportsRemoteAccess", () => {
+	test("offers phone access only on this computer's own host that speaks remote.*", () => {
+		const local = { remoteHostKey: null, protocolVersion: REMOTE_ACCESS_PROTOCOL_VERSION };
+		expect(supportsRemoteAccess(local)).toBe(true);
+		expect(
+			supportsRemoteAccess({ ...local, protocolVersion: REMOTE_ACCESS_PROTOCOL_VERSION - 1 }),
+		).toBe(false);
+		expect(supportsRemoteAccess({ ...local, protocolVersion: null })).toBe(false);
+		expect(supportsRemoteAccess({ ...local, remoteHostKey: "K1" })).toBe(false);
 	});
 });

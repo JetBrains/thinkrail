@@ -5,7 +5,6 @@ import {
 	RiRefreshLine,
 	RiSmartphoneLine,
 } from "@remixicon/react";
-import { REMOTE_ACCESS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
@@ -14,7 +13,7 @@ import { useId, useState } from "react";
 import { PhonePairingCode } from "../panels/PhonePairingCode";
 import { type PhoneRoute, phoneHasNoRoute, phoneReach } from "../panels/phoneAccessState";
 import { type PhoneAccess, usePhoneAccess, useRemoteAccessStatus } from "../panels/usePhoneAccess";
-import { SettingsSection, useAppStore } from "../store";
+import { SettingsSection, selectSupportsRemoteAccess, useAppStore } from "../store";
 
 const ROUTE_NAME = {
 	lan: "shell.phone.routeLan",
@@ -254,12 +253,11 @@ function PhoneAccessPopoverBody({
 /**
  * The topbar's phone-access shortcut: a QR icon (tinted while access is on) opening a quick panel to switch
  * the relay on or off without `--remote`, show a pairing QR at once, and disconnect paired phones. Renders
- * only against a host that speaks `remote.*`.
+ * only against this computer's own host when it speaks `remote.*`.
  */
 export function PhoneAccessTopbar() {
 	const t = useT();
-	const protocolVersion = useAppStore((state) => state.protocolVersion);
-	const supported = protocolVersion !== null && protocolVersion >= REMOTE_ACCESS_PROTOCOL_VERSION;
+	const supported = useAppStore(selectSupportsRemoteAccess);
 	const enabled = useRemoteAccessStatus().status?.enabled === true;
 	const [open, setOpen] = useState(false);
 	const headingId = useId();

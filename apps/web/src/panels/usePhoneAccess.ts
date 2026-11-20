@@ -1,5 +1,4 @@
 import {
-	REMOTE_ACCESS_PROTOCOL_VERSION,
 	type RemoteAccessStatus,
 	type RemoteDeviceAccess,
 	WS_CHANNELS,
@@ -9,8 +8,8 @@ import { t as translate, useT } from "@thinkrail/locales/react";
 import QRCode from "qrcode";
 import { useCallback, useEffect, useReducer, useState, useSyncExternalStore } from "react";
 import { copyText } from "@/lib";
-import { toast, useAppStore } from "@/store";
-import { getTransport } from "@/transport";
+import { selectSupportsRemoteAccess, toast, useAppStore } from "@/store";
+import { getTransport, onHostReset } from "@/transport";
 import {
 	foldRemoteStatus,
 	initialPhoneAccess,
@@ -96,6 +95,12 @@ function follow(generation: number): void {
 	readStatus();
 }
 
+onHostReset(() => {
+	followed = null;
+	readGeneration = null;
+	install(initialRemoteStatus);
+});
+
 function listen(listener: () => void): () => void {
 	listeners.add(listener);
 	return () => listeners.delete(listener);
@@ -106,10 +111,7 @@ function listen(listener: () => void): () => void {
  * connection, then kept current by the host's `remote.statusChanged` push and every change's reply.
  */
 export function useRemoteAccessStatus(): RemoteStatusSource {
-	const supported = useAppStore(
-		(state) =>
-			state.protocolVersion !== null && state.protocolVersion >= REMOTE_ACCESS_PROTOCOL_VERSION,
-	);
+	const supported = useAppStore(selectSupportsRemoteAccess);
 	const connected = useAppStore((state) => state.status === "connected");
 	const generation = useAppStore((state) => state.connectionGeneration);
 	useEffect(() => {
