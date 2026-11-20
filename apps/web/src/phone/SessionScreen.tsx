@@ -163,9 +163,8 @@ export function SessionScreen({
 	);
 	const [queueFlight] = useState(() => singleFlight());
 	const [abortFlight] = useState(() => singleFlight());
-	const bottom = useRef<HTMLDivElement>(null);
 	const scroller = useRef<HTMLDivElement>(null);
-	useStickToBottom(scroller);
+	const followEnd = useStickToBottom(scroller);
 	const composerRef = useRef<ComposerHandle>(null);
 	const isStreaming = runtime?.isStreaming ?? false;
 	const model = runtime?.model ?? session.model;
@@ -298,10 +297,6 @@ export function SessionScreen({
 		[ready, readOnly, sessionId, onOpenSubagent, hostProtocol],
 	);
 
-	useEffect(() => {
-		if (rows.length) bottom.current?.scrollIntoView({ block: "end" });
-	}, [rows.length]);
-
 	const send = (
 		text: string,
 		attachments: ChatAttachment[],
@@ -310,6 +305,7 @@ export function SessionScreen({
 		setFailure(null);
 		if (behavior === "send" && (text || attachments.length > 0)) {
 			useAppStore.getState().appendUserMessage(sessionId, text, attachments);
+			followEnd();
 		}
 		const images = attachments.map((attachment) => attachment.content);
 		const method =
@@ -603,7 +599,6 @@ export function SessionScreen({
 								))
 							)}
 							{status_ ? <StreamIndicator status={status_} /> : null}
-							<div ref={bottom} />
 						</div>
 					</Screen>
 				</InteractionStatesContext.Provider>
