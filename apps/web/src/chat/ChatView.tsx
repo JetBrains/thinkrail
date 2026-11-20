@@ -101,6 +101,7 @@ import {
 } from "@/transport";
 import { ChatHeader } from "./ChatHeader";
 import ChatTranscript, { type ChatTranscriptHandle } from "./ChatTranscript";
+import { restoreTextToDraft as restoreChatText, restoreQueueToDraft } from "./chatDraft";
 import { DEFAULT_DOCK_FOLD, type DockFold, dockCollapsed, withDockCollapsed } from "./dockFold";
 import { HistoryOverlay } from "./HistoryOverlay";
 import { McpServerDetail } from "./McpServerDetail";
@@ -604,23 +605,11 @@ export default function ChatView({
 
 	const readDraft = () => useAppStore.getState().sessions[sessionId]?.draft ?? "";
 
-	const restoreTextToDraft = (text: string) => {
-		if (!text.trim()) return;
-		useAppStore.getState().setChatDraft(sessionId, withRestoredDraft(text, readDraft()));
-		composerRef.current?.refocus();
-	};
+	const restoreTextToDraft = (text: string) =>
+		restoreChatText(sessionId, text, composerRef.current);
 
-	const restoreQueueContentToDraft = (content: SessionQueueContent): void => {
-		const messages = [...content.steering, ...content.followUp];
-		restoreTextToDraft(messages.map((message) => message.text).join("\n\n"));
-		const images = messages.flatMap((message) => message.images ?? []);
-		composerRef.current?.restoreAttachments(
-			images.map((image, index) => ({
-				name: `queued-image-${index + 1}`,
-				content: image,
-			})),
-		);
-	};
+	const restoreQueueContentToDraft = (content: SessionQueueContent): void =>
+		restoreQueueToDraft(sessionId, content, composerRef.current);
 
 	const drainQueueToDraft = async (): Promise<void> => {
 		const content = await getTransport().request("session.clearQueue", {

@@ -16,6 +16,7 @@ import type { ModelEffortPickerHandle, ModelSelection } from "@thinkrail/chat-ui
 import { deriveMessageActions } from "@thinkrail/chat-ui/messageActions";
 import type { ModelPreferences } from "@thinkrail/chat-ui/modelPreferences";
 import { usePendingExtUi } from "@thinkrail/chat-ui/pendingExtUi";
+import type { PromptImagesOwner } from "@thinkrail/chat-ui/promptImages";
 import { QueueStrip } from "@thinkrail/chat-ui/QueueStrip";
 import { deriveRows, rowsHaveToolCall } from "@thinkrail/chat-ui/rows";
 import { StreamIndicator, streamStatus } from "@thinkrail/chat-ui/StreamIndicator";
@@ -35,6 +36,7 @@ import type { RemoteSessionItem, RemoteSessionsController } from "@thinkrail/rem
 import { IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { restoreQueueToDraft, restoreTextToDraft } from "../chat/chatDraft";
 import { useModelCatalog } from "../chat/useModelCatalog";
 import { useSessionStats } from "../chat/useSessionStats";
 import { useTranscriptSync } from "../chat/useTranscriptSync";
@@ -47,7 +49,6 @@ import { chatAccess } from "./chatAccess";
 import { useHostClient, useHostWelcome } from "./hostView";
 import { Loader, Notice, Screen } from "./layout";
 import { ModelSheet } from "./ModelSheet";
-import { draftWith, queuedDraft } from "./queuedDraft";
 import { UsageBar } from "./SessionUsage";
 import { useStickToBottom } from "./stickToBottom";
 import { useStoreHost } from "./storeHost";
@@ -129,7 +130,17 @@ export function SessionScreen({
 	const connectionGeneration = useAppStore((s) => s.connectionGeneration);
 	const hostProtocol = useAppStore((s) => s.protocolVersion) ?? undefined;
 	const [loadError, setLoadError] = useState<string | null>(null);
-	const [draft, setDraft] = useState(session.unsent?.text ?? "");
+	const draft = runtime?.draft ?? "";
+	const promptImages = runtime?.promptImages ?? EMPTY_RUNTIME.promptImages;
+	const imageOwner = useMemo<PromptImagesOwner>(
+		() => ({
+			state: promptImages,
+			read: () =>
+				useAppStore.getState().sessions[sessionId]?.promptImages ?? EMPTY_RUNTIME.promptImages,
+			update: (change) => useAppStore.getState().updateChatPromptImages(sessionId, change),
+		}),
+		[promptImages, sessionId],
+	);
 	const [failure, setFailure] = useState<string | null>(() =>
 		session.unsent ? t("mobile.session.sendFailed", { reason: session.unsent.reason }) : null,
 	);
@@ -152,6 +163,7 @@ export function SessionScreen({
 	const stats = runtime?.stats ?? null;
 	const commands = runtime?.commands ?? EMPTY_RUNTIME.commands;
 	const hasRuntime = runtime !== undefined;
+	const unsentRestored = useRef(false);
 
 	useEffect(() => {
 		if (!ready || hasRuntime) return;
@@ -169,6 +181,12 @@ export function SessionScreen({
 			cancelled = true;
 		};
 	}, [ready, hasRuntime, workspaceId, sessionId, t]);
+	const unsentText = session.unsent?.text;
+	useEffect(() => {
+		if (!hasRuntime || unsentText === undefined || unsentRestored.current) return;
+		unsentRestored.current = true;
+		restoreTextToDraft(sessionId, unsentText, null);
+	}, [hasRuntime, unsentText, sessionId]);
 	useTranscriptSync({
 		workspaceId,
 		sessionId,
@@ -292,17 +310,8 @@ export function SessionScreen({
 			});
 	};
 
-	const restoreQueued = (content: SessionQueueContent): void => {
-		const restored = queuedDraft(content);
-		setDraft((current) => draftWith(restored.text, current));
-		composerRef.current?.restoreAttachments(
-			restored.images.map((image, index) => ({
-				name: `queued-image-${index + 1}`,
-				content: image,
-			})),
-		);
-		composerRef.current?.refocus();
-	};
+	const restoreQueued = (content: SessionQueueContent): void =>
+		restoreQueueToDraft(sessionId, content, composerRef.current);
 
 	const restoreUnsent = (text: string, attachments: ChatAttachment[]): void =>
 		restoreQueued({
@@ -505,32 +514,35 @@ export function SessionScreen({
 											onSelectLevel={onSelectThinking}
 										/>
 									</div>
-									<Composer
-										ref={composerRef}
-										value={draft}
-										onChange={setDraft}
-										isStreaming={isStreaming}
-										awaitingResponse={awaitingToolCallId != null}
-										growthLimit="compact"
-										divider={false}
-										commands={commands}
-										templatePending={false}
-										mentionCandidates={[]}
-										recentPrompts={NO_PROMPTS}
-										models={catalog}
-										modelsRefreshing={modelsRefreshing}
-										onRefreshModels={() => {}}
-										currentModel={model}
-										thinkingLevel={thinkingLevel}
-										modelPreferences={PHONE_MODEL_PREFERENCES}
-										onMentionQuery={() => {}}
-										onSlashActive={() => {}}
-										onSelectModel={onSelectModel}
-										onSelectThinking={onSelectThinking}
-										externalModelPicker={externalPicker}
-										onSubmit={onSubmit}
-										onAbort={onAbort}
-									/>
+									{hasRuntime ? (
+										<Composer
+											ref={composerRef}
+											value={draft}
+											onChange={(text) => useAppStore.getState().setChatDraft(sessionId, text)}
+											imageOwner={imageOwner}
+											isStreaming={isStreaming}
+											awaitingResponse={awaitingToolCallId != null}
+											growthLimit="compact"
+											divider={false}
+											commands={commands}
+											templatePending={false}
+											mentionCandidates={[]}
+											recentPrompts={NO_PROMPTS}
+											models={catalog}
+											modelsRefreshing={modelsRefreshing}
+											onRefreshModels={() => {}}
+											currentModel={model}
+											thinkingLevel={thinkingLevel}
+											modelPreferences={PHONE_MODEL_PREFERENCES}
+											onMentionQuery={() => {}}
+											onSlashActive={() => {}}
+											onSelectModel={onSelectModel}
+											onSelectThinking={onSelectThinking}
+											externalModelPicker={externalPicker}
+											onSubmit={onSubmit}
+											onAbort={onAbort}
+										/>
+									) : null}
 								</footer>
 							)
 						}
