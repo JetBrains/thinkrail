@@ -659,7 +659,7 @@ empty by default); while the prompt is non-empty (worktree mode), a secondary hi
 and branch from the request. The rest stays compact: the base-branch combobox (`git.listBranches`,
 degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is filtered so no stray `origin`),
 a project picker, the prompt hero, and the reused
-  `chat/ModelEffortPicker` in **pre-session** mode. It opens **following the host default**: the pill reads
+  `@thinkrail/chat-ui/ModelEffortPicker` in **pre-session** mode. It opens **following the host default**: the pill reads
   `Default · ‹model› · ‹level›` from the host's `model.default` result (the saved default when available or
   the host's preferred available model) and the popover's Default row is checked. Any explicit pick (model, level, or
   both) flips the dialog to an **explicit pair**; the Default row — and the unavailable-model reconcile below
@@ -1467,7 +1467,7 @@ a project picker, the prompt hero, and the reused
   **Prompt cache** and **Visible models**.
 
   **Chat model** (`default-model-row`) and **Review model** (`review-model-row`) are the chat's own
-  **`chat/ModelEffortPicker`** — model and effort in one control, the same picker as the chat (user,
+  **`@thinkrail/chat-ui/ModelEffortPicker`** — model and effort in one control, the same picker as the chat (user,
   2026-11-17) — with `canSetDefault={false}`, `tabIndex={0}` and `fitContainer` (the popover stays inside
   the dialog's clipped root). The chat row re-reads `model.default` on open, whenever the live catalog or
   the saved pair changes, and after every save; the host's resolved pair (with the first-available fallback
@@ -2420,7 +2420,7 @@ own section. The kebab menu (`plan-menu`, a
   elements only). Preview anchoring is **exact**: `sourceLines.ts` (adopted from
   inline-edit) stamps elements with remark source positions in RAW-file coordinates
   (`sourceLineRehype` tuple-form takes each segment's offset — segments re-parse from line 1; via
-  `chat/Markdown`'s `rehypePlugins` prop) and the composer resolves selections through the stamps (a
+  `@thinkrail/chat-ui/Markdown`'s `rehypePlugins` prop) and the composer resolves selections through the stamps (a
   boundary-only end block is replaced by its previous stamped sibling), falling back to
   `previewAnchor`'s phrase search for unstamped content. The sidebar remains the full-detail surface. **Review presence is self-announcing and
   PER-FILE**: a center resource tab (file or diff) whose path is still in review wears a `Review` flag with

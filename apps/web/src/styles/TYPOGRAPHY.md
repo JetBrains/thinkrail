@@ -180,7 +180,7 @@ naming its own type. Two exist:
 
 | | `chat` (`.tr-prose-chat`) | `doc` (`.tr-prose-doc`) |
 |---|---|---|
-| mounted by | `chat/Markdown.tsx` | `resource-renderers/support/MarkdownPreview.tsx` |
+| mounted by | `chat-ui/src/Markdown.tsx` | `resource-renderers/support/MarkdownPreview.tsx` |
 | body, blockquote, lists | 14 / 370 / 1.45 | 14 / 370 / 1.45 |
 | h1 | 18 / 600 | **24 / 600** |
 | h2 | 14 / 600 | **20 / 600** |
@@ -211,7 +211,7 @@ definitions of their own.
 and colour inherit from the enclosing element, so bold in a heading keeps the heading's size and bold in
 a cell keeps the table's.
 
-A "prose skin" at a call site carries only spacing, measure and chrome (`chat/Markdown.tsx` = bubble
+A "prose skin" at a call site carries only spacing, measure and chrome (`chat-ui/src/Markdown.tsx` = bubble
 rhythm, `resource-renderers/support/MarkdownPreview.tsx` = document rhythm, heading rules, table chrome). Never add a
 typography class or value to a skin; change `proseSystems` instead. Adding a third surface means adding a
 JSON entry — the generator, the naming and the guards all follow.

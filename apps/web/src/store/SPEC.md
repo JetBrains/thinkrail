@@ -370,7 +370,7 @@ roster's catalog reads ([[submodule-web-panels]]).
   as a new message) while *keeping it in the session file*, so the reducer drops the superseded failed
   assistant turn (`removeSupersededAssistant`, the same rule as the overflow-compaction path) —
   otherwise the client renders the reply twice (frozen failed partial + retried copy). Hydration applies
-  the same presentation rule to the persisted copy (`chat/hydrate.ts` hides retried attempts — an
+  the same presentation rule to the persisted copy ([[module-chat-ui]]'s `hydrate.ts` hides retried attempts — an
   errored assistant followed by another assistant message), so live and reloaded clients agree.
   - **Normalized session state** (`sessionStateByWorkspace`) is the full host-authored state record per
     workspace/session. Snapshot hydration replaces the map only on a complete current-generation read;

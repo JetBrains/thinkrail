@@ -55,7 +55,7 @@ vocabulary of the two search surfaces, and the shared loading-skeleton primitive
 - **`MatchHighlight.tsx`** — `highlightRanges(text, ranges)`: the text with its ascending, disjoint
   `[start, end)` match ranges wrapped in `<mark>`, the one rendering of a matcher's or `git grep`'s ranges.
 - **Also governs (implementation in `@thinkrail/ui/attention-dot` and `@thinkrail/ui/running-icon`,
-  [[module-ui]], so the web app and `apps/mobile` show the same status marks):** `AttentionDot` and
+  [[module-ui]], so the IDE and the phone shell show the same status marks):** `AttentionDot` and
   `RunningIcon`; their design and invariants live in the ui spec's *Status marks*.
 - **Also governs (implementation in `@thinkrail/ui/skeleton`, [[module-ui]], so the app and
   [[module-resource-renderers]] share it):** `SkeletonRows`, the one pulsing-rows placeholder every loading surface
@@ -104,11 +104,11 @@ third thing, never bare text, never nothing:
 2. **`Loader2` spinner (usually beside a short label) — for an *in-flight action or transient state* pinned
    to its control**: a single button, one menu item, one icon — never a whole region. Reference sites:
    the "New chat"/"Creating…" button states, `shell/WorkspaceChatHistory.tsx`'s history icon,
-   `chat/ActivityGroup.tsx`/`chat/ToolCard.tsx` step icons, `panels/ProjectTree.tsx`'s "Creating worktree…"
+   `chat-ui/src/ActivityGroup.tsx`/`chat-ui/src/ToolCard.tsx` step icons, `panels/ProjectTree.tsx`'s "Creating worktree…"
    pending row. On a shared button this tier is `loading` (icon-sized spinner in the icon's place). A
    narrower named sub-idiom of this tier: **`RefreshCw` spinning in place** (icon unchanged, just rotating;
    a shared button spells it `loading spinIcon`) for a manual "Refresh" action on a control whose surrounding content stays visible and
-   valid while the refresh runs (`chat/ModelEffortPicker.tsx`, `panels/GithubSettings.tsx`,
+   valid while the refresh runs (`chat-ui/src/ModelEffortPicker.tsx`, `panels/GithubSettings.tsx`,
    `panels/ProvidersSettings.tsx`, `panels/BranchPicker.tsx`) — swapping to a generic spinner there would
    discard the "this still works, just refreshing" signal the in-place spin gives for free. Under reduced
    motion a rotation cannot carry the signal, so `spinIcon` shows the static spinner glyph instead.
@@ -162,7 +162,7 @@ Beyond picking the right tier:
   skeleton-then-pop for this reason). `chat/ChatView.tsx`
   skips it for a sharper reason: a non-`none` `transform` on an ancestor — including mid-animation, before
   the keyframe settles at `none` — establishes a new containing block, which broke the sticky positioning
-  of `chat/activityBreadcrumbs.tsx`'s breadcrumb bar nested inside it (`e2e/activity-breadcrumbs.spec.ts`
+  of `chat-ui/src/activityBreadcrumbs.tsx`'s breadcrumb bar nested inside it (`e2e/activity-breadcrumbs.spec.ts`
   caught this in review). Anything with a `position: sticky`/`fixed` descendant is disqualified from this
   transform-based reveal outright, no exception list needed — check for one before adding it.
 
