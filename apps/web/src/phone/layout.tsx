@@ -169,21 +169,40 @@ export function LoadedList<T>({
 }) {
 	const t = useT();
 	if (loaded.kind === "loading") return loading ?? <Loader text={t("mobile.list.loading")} />;
-	if (loaded.kind === "failed") {
-		const { retry } = loaded;
+	if (loaded.kind === "failed")
 		return (
-			<div className="flex flex-col items-center">
-				<Notice text={t("mobile.list.failed", { reason: loaded.reason })} alert />
-				{retry ? (
-					<Button variant="outline" className="-mt-24 mb-24 h-touch rounded-md" onClick={retry}>
-						{t("common.retry")}
-					</Button>
-				) : null}
-			</div>
+			<Failed text={t("mobile.list.failed", { reason: loaded.reason })} onRetry={loaded.retry} />
 		);
-	}
 	if (loaded.value.length === 0) return typeof empty === "string" ? <Notice text={empty} /> : empty;
 	return <ul className="m-0 list-none p-0">{children(loaded.value)}</ul>;
+}
+
+/** A failure in place of a screen's content: why, and **Retry** when trying again can help. */
+export function Failed({
+	text,
+	onRetry,
+	retryTestId,
+}: {
+	text: string;
+	onRetry?: (() => void) | undefined;
+	retryTestId?: string;
+}) {
+	const t = useT();
+	return (
+		<div className="flex flex-col items-center">
+			<Notice text={text} alert />
+			{onRetry ? (
+				<Button
+					variant="outline"
+					className="-mt-24 mb-24 h-touch rounded-md"
+					data-testid={retryTestId}
+					onClick={onRetry}
+				>
+					{t("common.retry")}
+				</Button>
+			) : null}
+		</div>
+	);
 }
 
 /** The full-screen wait: the IDE's animated R mark, large, over a caption. */

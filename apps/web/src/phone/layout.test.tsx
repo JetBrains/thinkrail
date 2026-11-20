@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { LoadedList } from "./layout";
+import { Failed, LoadedList } from "./layout";
 
 test("a failed read says why and offers Retry, so the screen is never stuck on the error", () => {
 	const html = renderToStaticMarkup(
@@ -10,4 +10,13 @@ test("a failed read says why and offers Retry, so the screen is never stuck on t
 	);
 	expect(html).toContain("timeout");
 	expect(html).toContain("Retry");
+});
+
+test("a failure that trying again can fix offers Retry under why, and one that cannot shows only why", () => {
+	const retryable = renderToStaticMarkup(
+		<Failed text="chat did not load" onRetry={() => {}} retryTestId="chat-load-retry" />,
+	);
+	expect(retryable).toContain("chat did not load");
+	expect(retryable).toContain('data-testid="chat-load-retry"');
+	expect(renderToStaticMarkup(<Failed text="chat did not load" />)).not.toContain("Retry");
 });

@@ -58,7 +58,7 @@ import { reasonOf, singleFlight } from "./async";
 import { ResourcesTool, SkillsTool } from "./ChatTools";
 import { chatAccess } from "./chatAccess";
 import { useHostClient, useHostWelcome } from "./hostView";
-import { Loader, Notice, Screen } from "./layout";
+import { Failed, Loader, Notice, Screen } from "./layout";
 import { ModelSheet } from "./ModelSheet";
 import { UsageBar } from "./SessionUsage";
 import { useStickToBottom } from "./stickToBottom";
@@ -141,6 +141,7 @@ export function SessionScreen({
 	const connectionGeneration = useAppStore((s) => s.connectionGeneration);
 	const hostProtocol = useAppStore((s) => s.protocolVersion) ?? undefined;
 	const [loadError, setLoadError] = useState<string | null>(null);
+	const [loadAttempt, setLoadAttempt] = useState(0);
 	const draft = runtime?.draft ?? "";
 	const promptImages = runtime?.promptImages ?? EMPTY_RUNTIME.promptImages;
 	const imageOwner = useMemo<PromptImagesOwner>(
@@ -195,7 +196,7 @@ export function SessionScreen({
 		return () => {
 			cancelled = true;
 		};
-	}, [ready, hasRuntime, workspaceId, sessionId, t]);
+	}, [ready, hasRuntime, workspaceId, sessionId, t, loadAttempt]);
 	const unsentText = session.unsent?.text;
 	useEffect(() => {
 		if (!hasRuntime || unsentText === undefined || unsentRestored.current) return;
@@ -581,7 +582,11 @@ export function SessionScreen({
 							className={cn("@container flex flex-col gap-8 px-chat-gutter py-16", TOUCH_BUTTONS)}
 						>
 							{loadError ? (
-								<Notice text={t("mobile.list.failed", { reason: loadError })} alert />
+								<Failed
+									text={t("mobile.list.failed", { reason: loadError })}
+									retryTestId="chat-load-retry"
+									onRetry={() => setLoadAttempt((count) => count + 1)}
+								/>
 							) : runtime === undefined ? (
 								<Loader text={t("mobile.session.loading")} />
 							) : rows.length === 0 ? (

@@ -78,7 +78,7 @@ the tab badged with the Needs-you count; a tap lands in that chat (a row whose c
   ThinkRail" for an external folder). Rows update from the host's pushes; a row's ⋯ spins and takes no second action while one runs; a failure shows in
   a dismissible banner at the top of the tree; a tapped workspace always lands in a chat, as the IDE does (`WorkspaceScreen.tsx`'s `WorkspaceOpener`):
   the newest chat the host holds `live`, else the newest from history (`session.getMessages` attaches a disk
-  session, the same reopen the IDE does), else a new one via `session.create` (a failure says why with **Retry**); back returns to the screen it came from, and an
+  session, the same reopen the IDE does), else a new one via `session.create` (a failure says why with **Retry**, as does a chat whose transcript failed to load — `layout.tsx`'s `Failed`); back returns to the screen it came from, and an
   answer arriving after back no longer navigates. When
   the workspace has more than one chat the chat header shows a history button opening `ChatHistoryScreen`:
   **Open** chats, then **Recent** (closed) ones, each newest first, the current one marked, **+** to start a
