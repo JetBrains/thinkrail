@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Composer } from "./Composer";
+import type { ModelEffortPickerHandle } from "./ModelEffortPicker";
 import type { ModelPreferences } from "./modelPreferences";
 
 const preferences: ModelPreferences = {
@@ -15,10 +16,7 @@ const preferences: ModelPreferences = {
 	setDefault: () => {},
 };
 
-function render(
-	externalModelPicker?: { open: (query: string) => void },
-	divider?: boolean,
-): string {
+function render(externalModelPicker?: ModelEffortPickerHandle, divider?: boolean): string {
 	return renderToStaticMarkup(
 		<TooltipProvider>
 			<Composer
