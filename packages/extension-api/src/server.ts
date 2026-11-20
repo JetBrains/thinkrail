@@ -325,6 +325,76 @@ export interface ExtensionWakeOrchestratorParams {
 	text: string;
 }
 
+/** One requirement an independent reviewer checks a workspace's change against; `id` is the caller's own. */
+export interface ExtensionConformanceRequirement {
+	id: string;
+	text: string;
+	/** Scenarios that make the requirement concrete (an OpenSpec requirement's `WHEN` / `THEN`). */
+	scenarios?: readonly string[];
+}
+
+export interface ExtensionReviewConformanceParams {
+	workspaceId: string;
+	/** The chat the hidden reviewer runs under; by default the workspace's latest chat. */
+	sessionId?: string;
+	requirements: readonly ExtensionConformanceRequirement[];
+	/** Why the change exists (the goal, the outcome), for the reviewer; may be empty. */
+	context: string;
+}
+
+export type ExtensionConformanceVerdict = "met" | "unmet" | "untested";
+
+/** Where the reviewer saw a requirement met or missed: a worktree-relative path, a line of it, and why. */
+export interface ExtensionConformanceEvidence {
+	path: string;
+	line?: number;
+	note: string;
+}
+
+export interface ExtensionConformanceItem {
+	id: string;
+	verdict: ExtensionConformanceVerdict;
+	evidence: ExtensionConformanceEvidence[];
+	/** The tests that cover it (paths or test names), empty when none does. */
+	tests: string[];
+}
+
+/** The reviewer's advisory verdict: one item per requirement, in the requirements' order. */
+export interface ExtensionConformanceResult {
+	items: ExtensionConformanceItem[];
+	summary: string;
+}
+
+/** An anchored remark on a workspace's diff, filed in its Review as authored by the extension. */
+export interface ExtensionReviewCommentInput {
+	path: string;
+	line: number;
+	side: "worktree" | "base";
+	text: string;
+}
+
+/** A filed remark: `anchored` false when its line did not resolve and it became a review-level remark. */
+export interface ExtensionAddedReviewComment {
+	id: string;
+	path: string;
+	line: number;
+	anchored: boolean;
+}
+
+/** One step of a chat's TODO plan as the agent wrote it: its title, status and completion notes. */
+export interface ExtensionPlanStep {
+	title: string;
+	status: "pending" | "in_progress" | "done";
+	summary?: string;
+	verification?: string;
+}
+
+/** A chat's stored TODO plan, loose and grouped steps in order, with the plan's completion summary. */
+export interface ExtensionPlanSummary {
+	summary: string | null;
+	steps: ExtensionPlanStep[];
+}
+
 /**
  * Named host writes, each refused (`EXTENSION_DISABLED`) while the extension is switched off. Queries
  * read; actions write through these, never through a shell or host internals.
@@ -382,6 +452,22 @@ export interface ExtensionHostActions {
 	 * kind waits in its queue at most). Refused for an unknown container or one without an orchestrator.
 	 */
 	wakeOrchestrator(params: ExtensionWakeOrchestratorParams): Promise<void>;
+	/**
+	 * An independent, read-only check of a repository workspace's change against `requirements`: plan
+	 * review's hidden reviewer subagent, on its model, under the workspace's chat. Advisory only — it edits
+	 * nothing and approves nothing. One at a time per workspace; stopped once the services' `signal` aborts.
+	 */
+	reviewConformance(params: ExtensionReviewConformanceParams): Promise<ExtensionConformanceResult>;
+	/**
+	 * Files anchored remarks on a repository workspace's diff in its Review, authored by the extension
+	 * (an agent remark with the extension's label) — never a human's, never an approval.
+	 */
+	addReviewComments(params: {
+		workspaceId: string;
+		comments: readonly ExtensionReviewCommentInput[];
+		/** The author name the Review shows ("Smart review"), at most 40 characters; the extension's title by default. */
+		author?: string;
+	}): Promise<{ comments: ExtensionAddedReviewComment[] }>;
 }
 
 export interface ExtensionHostServices {
@@ -412,6 +498,11 @@ export interface ExtensionHostServices {
 	openspecTree(workspaceId: string): Promise<ExtensionOpenspecTree | null>;
 	/** The text of one named section (`Deferrals`) of a spec of an open workspace; `null` without either. */
 	specSection(workspaceId: string, specId: string, heading: string): Promise<string | null>;
+	/**
+	 * A chat's stored TODO plan — its steps' titles, statuses, summaries and verifications and the plan's
+	 * summary; `null` for a workspace that is not open or an invalid session id.
+	 */
+	planSummary(workspaceId: string, sessionId: string): Promise<ExtensionPlanSummary | null>;
 	/** Why the user's GitHub CLI (`gh`) cannot run now (`missing`, `unauthenticated`), else `null`. */
 	githubProblem(): Promise<GhSetupProblem | null>;
 	sessionsRoot(): string;

@@ -59,8 +59,10 @@ describe("PanelHost workspace, Peek and events", () => {
 		const openWorkspace = mock((_target: unknown) => {});
 		const host = createPanelHost(hostDeps({ openWorkspace }));
 		host.openWorkspace({ workspaceId: "w2", projectId: "p1", sessionId: "s2" });
+		host.openWorkspace({ workspaceId: "w3", projectId: "p1", reveal: "review" });
 		expect(openWorkspace.mock.calls).toEqual([
 			[{ workspaceId: "w2", projectId: "p1", sessionId: "s2" }],
+			[{ workspaceId: "w3", projectId: "p1", reveal: "review" }],
 		]);
 	});
 

@@ -20,8 +20,8 @@ import {
 	pressPlatformShortcut,
 	worktreeRows,
 } from "./fixtures/app";
-import { git } from "./fixtures/git";
-import { ghCalls, writeGhScenario } from "./fixtures/github";
+import { git, gitAs } from "./fixtures/git";
+import { ghCalls, githubOrigin, readGhScenario, writeGhScenario } from "./fixtures/github";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO, E2E_PICK_DIR_POINTER } from "./fixtures/paths";
 import { shot } from "./fixtures/screenshots";
 import { seedWorkspaceSession } from "./fixtures/sessions";
@@ -1619,6 +1619,123 @@ test("an OpenSpec change is a card of the Spec-driven preset, read-only without 
 		await expect(applied.getByTestId("board-openspec-tasks")).toContainText("3/7 tasks");
 	} finally {
 		rmSync(tree, { recursive: true, force: true });
+	}
+});
+
+test("Smart review checks a started card against its criteria, comments the unmet one in the workspace's Review, and adds its packet to the PR", async ({
+	page,
+}) => {
+	await openBoard(page);
+	await createCard(page, "Greet in French");
+	const panel = peekCard(page);
+	for (const [index, criterion] of ["Greets in French", "Says goodbye"].entries()) {
+		await panel.getByTestId("board-card-acceptance-add").fill(criterion);
+		await panel.getByTestId("board-card-acceptance-add").press("Enter");
+		await expect(panel.getByTestId("board-card-acceptance-item")).toHaveCount(index + 1);
+	}
+	await panel.getByTestId("board-start-submit").click();
+	await expect(panel.getByTestId("board-attempt")).toHaveCount(1, { timeout: 30_000 });
+
+	const [project] = await openProjects(page);
+	if (!project) throw new Error("no open project");
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	const workspaces = await wire.request("workspace.list", { projectId: project.id });
+	const attempt = workspaces.find((workspace) => workspace.kind !== "default");
+	const worktree = attempt?.worktreePath ?? "";
+	if (!attempt || !worktree) throw new Error("the card's workspace is missing");
+	writeFileSync(
+		join(worktree, "greet.ts"),
+		'export const hello = "bonjour";\nexport const bye = "";\n',
+	);
+	gitAs(worktree, "add", "greet.ts");
+	gitAs(worktree, "commit", "-q", "-m", "feat: greet in French");
+	mkdirSync(join(worktree, ".thinkrail", "context"), { recursive: true });
+	writeFileSync(
+		join(worktree, ".thinkrail", "context", "e2e-reviewer.json"),
+		[
+			"Checked both criteria.",
+			"```json",
+			JSON.stringify({
+				summary: "The greeting is French; the goodbye is missing.",
+				items: [
+					{
+						id: "ac-1",
+						verdict: "met",
+						evidence: [{ path: "greet.ts", line: 1, note: "bonjour" }],
+						tests: [],
+					},
+					{
+						id: "ac-2",
+						verdict: "unmet",
+						evidence: [{ path: "greet.ts", line: 2, note: "bye is empty" }],
+						tests: [],
+					},
+				],
+			}),
+			"```",
+		].join("\n"),
+	);
+	const origin = githubOrigin(worktree);
+	try {
+		const branch = gitAs(worktree, "rev-parse", "--abbrev-ref", "HEAD");
+		gitAs(worktree, "push", "-q", "--set-upstream", "origin", branch);
+		writeGhScenario({
+			prs: [{ number: 128, headRefName: branch, state: "OPEN", body: "Adds the greeting." }],
+		});
+		await wire.request("workspace.openReview", { workspaceId: attempt.id, allowCached: false });
+		const section = panel.getByTestId("board-review-section");
+		await expect(section.getByTestId("board-packet-to-pr")).toBeEnabled({ timeout: 30_000 });
+
+		await section.getByTestId("board-review-run").click();
+		const rows = section.getByTestId("board-review-item");
+		await expect(rows).toHaveCount(2, { timeout: 30_000 });
+		await expect(rows.nth(0)).toHaveAttribute("data-verdict", "met");
+		await expect(rows.nth(1)).toHaveAttribute("data-verdict", "unmet");
+		await expect(rows.nth(1).getByTestId("board-review-evidence")).toHaveText("greet.ts:2");
+		await expect(section.getByTestId("board-review-tally")).toHaveText("1/2 met");
+		await expect(card(page, "Greet in French").getByTestId("board-conformance")).toHaveText(
+			"1/2 met",
+		);
+		await expect(section.getByTestId("board-packet")).toContainText("Goal: Greet in French");
+		for (const toast of await page.getByTestId("toast").all())
+			await toast.getByRole("button").last().click();
+		await page.mouse.move(0, 0);
+		await shot(page, "board", "smart-review");
+
+		await section.getByTestId("board-packet-to-pr").click();
+		await expect(section.getByTestId("board-packet-outcome")).toHaveText(
+			"Added the review packet to PR #128.",
+		);
+		const body = readGhScenario().prs[0]?.body ?? "";
+		expect(
+			body.startsWith("Adds the greeting.\n\n<!-- thinkrail:review-packet -->\n## Review packet"),
+		).toBe(true);
+		expect(body).toContain("| Says goodbye | ❌ unmet | `greet.ts:2` bye is empty | — |");
+		expect(body.endsWith("<!-- /thinkrail:review-packet -->\n")).toBe(true);
+		await section.getByTestId("board-packet-to-pr").click();
+		await expect(section.getByTestId("board-packet-outcome")).toHaveText(
+			"PR #128 already carries this review packet.",
+		);
+		expect(ghCalls().filter((argv) => argv[0] === "pr" && argv[1] === "edit")).toHaveLength(1);
+
+		await section.getByTestId("board-review-comments").click();
+		await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
+		const file = page
+			.getByTestId("review-panel")
+			.getByTestId("review-file-section")
+			.filter({ has: page.getByTestId("review-file-row").filter({ hasText: "greet.ts" }) });
+		await expect(file.getByTestId("review-file-row")).toContainText("1 draft");
+		for (const toast of await page.getByTestId("toast").all())
+			await toast.getByRole("button").last().click();
+		if ((await file.getAttribute("data-expanded")) !== "true")
+			await file.getByTestId("review-file-row").click();
+		const comment = file.getByTestId("review-comment");
+		await expect(comment).toHaveCount(1);
+		await expect(comment).toContainText("Unmet requirement: Says goodbye");
+		await expect(comment.getByTestId("review-comment-agent")).toHaveText("Smart review");
+	} finally {
+		wire.close();
+		origin.dispose();
 	}
 });
 

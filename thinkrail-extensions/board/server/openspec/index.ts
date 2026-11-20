@@ -3,6 +3,7 @@ export {
 	type ArtifactStatus,
 	type DeltaCount,
 	type DeltaRequirement,
+	type DeltaScenario,
 	type OpenspecChange,
 	parseOpenspec,
 	SPEC_DRIVEN,

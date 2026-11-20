@@ -13,6 +13,7 @@ import type { ExtensionLog } from "@thinkrail/extension-api/server";
 import { isIsoDate } from "./days";
 import {
 	type Attempt,
+	type AttemptReview,
 	type Autopilot,
 	type AutopilotPause,
 	type BoardSettings,
@@ -35,10 +36,14 @@ import {
 	type InitiativeUpdate,
 	type Milestone,
 	PRESETS,
+	REQUIREMENT_SOURCES,
+	type ReviewEvidence,
+	type ReviewItem,
 	type RoadmapProject,
 	SCORE_MAX,
 	SCORE_MIN,
 	type Transition,
+	VERDICTS,
 	type WatchEntry,
 	type WatchSnapshot,
 	WORKFLOWS,
@@ -115,6 +120,43 @@ const positive = (value: unknown): value is number =>
 const isoDate = (value: unknown): value is string => typeof value === "string" && isIsoDate(value);
 const counter = (value: unknown) => Math.max(1, Math.trunc(finite(value, 1)));
 
+function readReviewEvidence(raw: unknown): ReviewEvidence | null {
+	if (!isRecord(raw) || typeof raw.path !== "string" || !raw.path) return null;
+	return {
+		path: raw.path,
+		...(positive(raw.line) && Number.isInteger(raw.line) ? { line: raw.line } : {}),
+		note: typeof raw.note === "string" ? raw.note : "",
+	};
+}
+
+function readReviewItem(raw: unknown): ReviewItem | null {
+	if (!isRecord(raw) || typeof raw.id !== "string" || typeof raw.text !== "string") return null;
+	if (!oneOf(VERDICTS, raw.verdict) || !oneOf(REQUIREMENT_SOURCES, raw.source)) return null;
+	const scenarios = strings(raw.scenarios);
+	return {
+		id: raw.id,
+		source: raw.source,
+		text: raw.text,
+		...(scenarios.length > 0 ? { scenarios } : {}),
+		verdict: raw.verdict,
+		evidence: Array.isArray(raw.evidence)
+			? raw.evidence.flatMap((entry) => readReviewEvidence(entry) ?? [])
+			: [],
+		tests: strings(raw.tests),
+		...(typeof raw.commentId === "string" ? { commentId: raw.commentId } : {}),
+	};
+}
+
+/** A stored smart review; one without its time or items is dropped, and so are unreadable items. */
+function readReview(raw: unknown): AttemptReview | null {
+	if (!isRecord(raw) || typeof raw.at !== "number" || !Array.isArray(raw.items)) return null;
+	return {
+		at: raw.at,
+		items: raw.items.flatMap((item) => readReviewItem(item) ?? []),
+		summary: typeof raw.summary === "string" ? raw.summary : "",
+	};
+}
+
 function readAttempt(raw: unknown): Attempt | null {
 	if (!isRecord(raw)) return null;
 	const { workspaceId, sessionId, workflow } = raw;
@@ -127,6 +169,7 @@ function readAttempt(raw: unknown): Attempt | null {
 					: [],
 			)
 		: [];
+	const review = readReview(raw.review);
 	return {
 		workspaceId,
 		sessionId,
@@ -136,6 +179,7 @@ function readAttempt(raw: unknown): Attempt | null {
 		...(raw.merged === true ? { merged: true as const } : {}),
 		...(typeof raw.removedAt === "number" ? { removedAt: raw.removedAt } : {}),
 		...(typeof raw.closesLinked === "number" ? { closesLinked: raw.closesLinked } : {}),
+		...(review ? { review } : {}),
 	};
 }
 

@@ -26,7 +26,14 @@ import {
 } from "../agent";
 import { type AssistAsk, assistText } from "../assist";
 import { listContainers } from "../containers";
-import type { ExtensionContainer, ExtensionHostActions } from "../extensions";
+import type {
+	ExtensionAddedReviewComment,
+	ExtensionConformanceRequirement,
+	ExtensionConformanceResult,
+	ExtensionContainer,
+	ExtensionHostActions,
+	ExtensionReviewCommentInput,
+} from "../extensions";
 import { serverExtensions } from "../extensions";
 import { nonInteractiveGitEnv } from "../git";
 import { listProjects } from "../projects";
@@ -42,6 +49,7 @@ import {
 } from "../workspaces";
 import { ackSend } from "./ackSend";
 import { awaitKickoff, startChatSession } from "./chatSession";
+import { fileExtensionComments, runConformanceReview } from "./conformanceReview";
 import { createContainerOrchestrated, startContainerOrchestrator } from "./orchestrator";
 import { openWorkspacePr } from "./orchestratorTools";
 import { type ExtensionWake, wakeOrchestratorFromExtension } from "./orchestratorWakeups";
@@ -58,6 +66,17 @@ const DEFAULT_ASSIST_TOKENS = 256;
 export const MAX_WAKE_TEXT = 20_000;
 const WAKE_KIND = /^[a-z][a-z0-9-]{0,39}$/;
 const MAX_CONTAINER_MEMBERS = 100;
+export const MAX_REQUIREMENTS = 200;
+const MAX_REQUIREMENT_ID = 200;
+const MAX_REQUIREMENT_TEXT = 4_000;
+const MAX_SCENARIOS = 20;
+const MAX_REVIEW_CONTEXT = 20_000;
+export const MAX_REVIEW_COMMENTS = 100;
+const MAX_COMMENT_TEXT = 4_000;
+const MAX_AUTHOR = 40;
+
+/** Workspaces a conformance review runs for now: one at a time each, whichever extension asked. */
+const reviewingConformance = new Set<string>();
 
 const THINKING_LEVELS: readonly string[] = [
 	"off",
@@ -118,6 +137,22 @@ export interface ExtensionActionDeps {
 	orchestratorChat: (containerId: string) => Workspace | null;
 	/** Joins the running host's wake-up coalescing; `false` when the container has no orchestrator. */
 	wake: (containerId: string, wake: ExtensionWake) => boolean;
+	/** The workspace's most recently updated chat, `null` without one. */
+	latestChat: (workspace: Workspace) => Promise<string | null>;
+	/** Plan review's hidden reviewer child with the conformance role, under a live chat. */
+	reviewConformance: (input: {
+		workspace: Workspace;
+		sessionId: string;
+		requirements: ExtensionConformanceRequirement[];
+		context: string;
+		signal: AbortSignal;
+	}) => Promise<ExtensionConformanceResult>;
+	/** Files the remarks in the workspace's Review as agent comments under `author`, all or nothing. */
+	addReviewComments: (
+		workspaceId: string,
+		author: string,
+		comments: ExtensionReviewCommentInput[],
+	) => Promise<ExtensionAddedReviewComment[]>;
 }
 
 /** A container as extensions see it: the record with its orchestrator chat, once both are there. */
@@ -201,6 +236,26 @@ export const liveActionDeps: ExtensionActionDeps = {
 	startOrchestrator: (containerId) => startContainerOrchestrator(containerId),
 	orchestratorChat,
 	wake: wakeOrchestratorFromExtension,
+	latestChat: async (workspace) => {
+		const chats = await listSessions(workspace.id, workspace.worktreePath).catch(() => []);
+		return (
+			chats.reduce<{ sessionId: string; updatedAt: number } | null>(
+				(latest, chat) => (!latest || chat.updatedAt > latest.updatedAt ? chat : latest),
+				null,
+			)?.sessionId ?? null
+		);
+	},
+	reviewConformance: ({ workspace, sessionId, requirements, context, signal }) =>
+		runConformanceReview({
+			workspaceId: workspace.id,
+			sessionId,
+			worktreePath: workspace.worktreePath,
+			baseBranch: workspace.baseBranch,
+			requirements,
+			context,
+			signal,
+		}),
+	addReviewComments: fileExtensionComments,
 };
 
 function requiredText(value: unknown, what: string): string {
@@ -263,6 +318,53 @@ export function writeWorktreeFile(worktree: string, path: string, content: strin
 		throw error;
 	}
 	return Buffer.byteLength(content, "utf8");
+}
+
+function boundedText(value: unknown, what: string, max: number): string {
+	const text = requiredText(value, what);
+	if (text.length > max) throw new Error(`The ${what} is longer than ${max} characters.`);
+	return text;
+}
+
+/** The requirements a conformance review checks: 1–200, unique ids, bounded text and scenarios. */
+export function conformanceRequirements(value: unknown): ExtensionConformanceRequirement[] {
+	if (!Array.isArray(value) || value.length === 0 || value.length > MAX_REQUIREMENTS)
+		throw new Error(`Pass requirements as a list of 1 to ${MAX_REQUIREMENTS}.`);
+	const seen = new Set<string>();
+	return value.map((raw: unknown) => {
+		const entry = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
+		const id = boundedText(entry.id, "requirement id", MAX_REQUIREMENT_ID);
+		if (seen.has(id)) throw new Error(`The requirement id ${id} is listed twice.`);
+		seen.add(id);
+		const text = boundedText(entry.text, "requirement text", MAX_REQUIREMENT_TEXT);
+		const scenarios: unknown = entry.scenarios;
+		if (scenarios === undefined) return { id, text };
+		if (!Array.isArray(scenarios) || scenarios.length > MAX_SCENARIOS)
+			throw new Error(`Pass a requirement's scenarios as a list of at most ${MAX_SCENARIOS}.`);
+		return {
+			id,
+			text,
+			scenarios: scenarios.map((scenario: unknown) =>
+				boundedText(scenario, "scenario", MAX_REQUIREMENT_TEXT),
+			),
+		};
+	});
+}
+
+/** Anchored remarks an extension files: 1–100, a relative path, a positive line, a side and text. */
+export function reviewCommentInputs(value: unknown): ExtensionReviewCommentInput[] {
+	if (!Array.isArray(value) || value.length === 0 || value.length > MAX_REVIEW_COMMENTS)
+		throw new Error(`Pass comments as a list of 1 to ${MAX_REVIEW_COMMENTS}.`);
+	return value.map((raw: unknown) => {
+		const entry = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
+		const path = workspaceFilePath(entry.path);
+		const { line, side } = entry;
+		if (typeof line !== "number" || !Number.isInteger(line) || line < 1)
+			throw new Error("Pass each comment's line as a whole number from 1.");
+		if (side !== "worktree" && side !== "base")
+			throw new Error("Pass each comment's side as worktree or base.");
+		return { path, line, side, text: boundedText(entry.text, "comment text", MAX_COMMENT_TEXT) };
+	});
 }
 
 export function extensionMessageContent(title: string, text: string): string {
@@ -493,6 +595,46 @@ export function extensionActions(
 				throw new Error(
 					`The container ${container.name} has no orchestrator to wake; start it first.`,
 				);
+		},
+		async reviewConformance(params) {
+			admit();
+			const workspace = repositoryWorkspace(params?.workspaceId, "review");
+			const requirements = conformanceRequirements(params.requirements);
+			if (params.context !== undefined && typeof params.context !== "string")
+				throw new Error("Pass the context as text.");
+			const context = (params.context ?? "").trim();
+			if (context.length > MAX_REVIEW_CONTEXT)
+				throw new Error(`The context is longer than ${MAX_REVIEW_CONTEXT} characters.`);
+			const requested = optionalText(params.sessionId, "sessionId");
+			if (reviewingConformance.has(workspace.id))
+				throw new Error(`A conformance review is already running for ${workspace.name}.`);
+			reviewingConformance.add(workspace.id);
+			try {
+				const sessionId = requested ?? (await deps.latestChat(workspace));
+				if (!sessionId) throw new Error(`${workspace.name} has no chat to run the reviewer under.`);
+				if (!(await deps.attach(sessionId, workspace)))
+					throw new Error(`The chat ${sessionId} could not be opened.`);
+				if (signal.aborted) throw new Error(`The ${extension} extension was switched off.`);
+				return await deps.reviewConformance({
+					workspace,
+					sessionId,
+					requirements,
+					context,
+					signal,
+				});
+			} finally {
+				reviewingConformance.delete(workspace.id);
+			}
+		},
+		async addReviewComments(params) {
+			admit();
+			const workspace = repositoryWorkspace(params?.workspaceId, "comment on");
+			const comments = reviewCommentInputs(params.comments);
+			const author =
+				params.author === undefined
+					? deps.title(extension)
+					: boundedText(params.author, "author", MAX_AUTHOR);
+			return { comments: await deps.addReviewComments(workspace.id, author, comments) };
 		},
 	};
 }

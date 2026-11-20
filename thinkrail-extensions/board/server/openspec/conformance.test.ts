@@ -109,6 +109,50 @@ describe.each(CASES)("conformance: %s", (name) => {
 		}
 	});
 
+	test("added and modified requirements carry `openspec show`'s statement and scenarios", () => {
+		for (const change of changes.filter(
+			(candidate) => !candidate.archived && candidate.deltas.length > 0,
+		)) {
+			const shown = JSON.parse(recorded(name, join("show", `${change.name}.json`))) as {
+				deltas: {
+					spec: string;
+					operation: string;
+					requirements?: {
+						name: string;
+						text: string;
+						scenarios: { name: string; rawText: string }[];
+					}[];
+				}[];
+			};
+			const expected = shown.deltas
+				.filter((delta) => delta.operation === "ADDED" || delta.operation === "MODIFIED")
+				.flatMap((delta) =>
+					(delta.requirements ?? []).map((requirement) => ({
+						capability: delta.spec,
+						name: requirement.name,
+						text: requirement.text,
+						scenarios: requirement.scenarios.map((scenario) => ({
+							name: scenario.name,
+							text: scenario.rawText,
+						})),
+					})),
+				);
+			const parsed = change.requirements
+				.filter((entry) => entry.operation === "ADDED" || entry.operation === "MODIFIED")
+				.map((entry) => ({
+					capability: entry.capability,
+					name: entry.name,
+					text: entry.text,
+					scenarios: entry.scenarios ?? [],
+				}));
+			const key = (entry: { capability: string; name: string }) =>
+				`${entry.capability}/${entry.name}`;
+			expect([...parsed].sort((a, b) => (key(a) < key(b) ? -1 : 1))).toEqual(
+				[...expected].sort((a, b) => (key(a) < key(b) ? -1 : 1)),
+			);
+		}
+	});
+
 	test("the CLI's answers laid over the parse change nothing the parse already had right", () => {
 		const merged = withCli(changes, { list: list ?? [], status: status ?? [] });
 		expect(merged.map((change) => [change.name, change.tasks, change.artifacts.length])).toEqual(

@@ -319,6 +319,8 @@ export interface AddCommentInput {
 	body: string;
 	scope?: GitDiffScope;
 	author?: "user" | "agent";
+	/** Shown as the agent remark's author; ignored on a human's. */
+	authorLabel?: string;
 	origin?: { todoId: string; reviewedSha: string; sessionId: string };
 }
 
@@ -379,6 +381,9 @@ export async function addComment(input: AddCommentInput): Promise<ReviewComment>
 			status: "draft",
 			anchorState: "anchored",
 			...(input.author === "agent" ? { author: "agent" as const } : {}),
+			...(input.author === "agent" && input.authorLabel?.trim()
+				? { authorLabel: input.authorLabel.trim() }
+				: {}),
 			...(input.origin ? { origin: input.origin } : {}),
 			createdAt: Date.now(),
 		};

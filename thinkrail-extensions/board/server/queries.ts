@@ -408,6 +408,9 @@ export function boardQueries(board: Board): Readonly<Record<string, ExtensionQue
 			return board.startCard(cardId(p), startOptions(p), boardOf(p));
 		},
 		"card.adopt": (raw) => board.adoptTaskSpec(cardId(params(raw))),
+		"card.review": (raw) => board.reviewCard(cardId(params(raw))),
+		"card.packet": (raw) => board.packet(cardId(params(raw))),
+		"card.packetToPr": (raw) => board.packetToPr(cardId(params(raw))),
 		"card.deferrals": (raw) => {
 			const p = params(raw);
 			return board.sendDeferrals(cardId(p), text(p, "specId", CARD_ID_MAX));

@@ -380,6 +380,9 @@ gate: [[module-contracts]].
   manual sends are rejected. `isItemUnderActiveReview(sessionId, id)` surfaces both that latch and
   `planReviewQueue`'s active set to any caller that needs to know whether a review is in flight for
   an item.
+  **`reviewConformance` / `addReviewComments` + `host/conformanceReview.ts`** reuse the same child for an
+  extension's conformance check and file its remarks as labelled agent comments
+  ([[submodule-server-host-plan-review]] § Conformance review).
   **`todo.startReview` / `todo.reviewAll` + `host/requestReview.ts`** compose the agent reviewer. A plan
   step is reviewed by a **hidden, ephemeral delegation child** of the plan session (`agent`'s
   `runReviewSubagent`) carrying OUR reviewer role — `host/reviewerRole.ts` owns the system prompt, the
@@ -1080,7 +1083,9 @@ workspace or chat record is gone.
 enabled/confirmed choice before entering analytics attribution.
 
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
-  `BootHostOptions`, `BootedHost`, `BuildKind`, `reportDesktopError`.
+  `BootHostOptions`, `BootedHost`, `BuildKind`, `reportDesktopError`, `setConformanceReviewRunner`.
+- **The e2e reviewer seam:** `setConformanceReviewRunner` is the dev launcher's deterministic conformance
+  reviewer under `THINKRAIL_E2E_FAKE_REVIEWER` (see [[submodule-server-host-plan-review]]).
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
   `boot.ts`; `codedError`; `paths` — the scratch-dir convention `chat.inspect` leaves uncounted); `persistence` (`dataDir` — where `crashLog.ts` writes,
   and the extension host's data and worktree roots); `@earendil-works/pi-coding-agent` (`getAgentDir`, the extension host's

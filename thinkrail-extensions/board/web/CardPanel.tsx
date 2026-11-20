@@ -46,6 +46,7 @@ import { CardRoadmap } from "./CardRoadmap";
 import { ItemList, SavedInput, SavedTextarea, Section } from "./Fields";
 import { ACTOR_LABELS, columnTitle, TYPE_LABELS, WORKFLOW_LABELS } from "./labels";
 import { OpenspecSection } from "./OpenspecParts";
+import { SmartReviewSection } from "./SmartReview";
 import { StartSection } from "./StartSection";
 import { useBoardChanged, useHostQuery } from "./useHostQuery";
 
@@ -629,6 +630,9 @@ function CardDetails({
 			<Section title={t("board.attempts.title")}>
 				<Attempts host={host} projectId={projectId} card={card} />
 			</Section>
+			{card.virtual || card.attempts.length === 0 ? null : (
+				<SmartReviewSection host={host} projectId={projectId} card={card} onChanged={onReload} />
+			)}
 			{card.source.kind === "openspec" ? null : (
 				<StartSection
 					key={`${card.id}:${card.type}:${card.size ?? ""}`}

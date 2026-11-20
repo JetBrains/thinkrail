@@ -260,12 +260,14 @@ export async function runReviewSubagent(
 		tools: string[];
 		model?: { provider: string; id: string };
 		thinkingLevel?: ThinkingLevel;
+		/** Who asked and in which role; plan review's by default. */
+		info?: { createdBy: string; roleName: string };
 	},
 	signal?: AbortSignal,
 ): Promise<ReviewSubagentRun> {
 	const child = await delegationServiceFor(workspaceId).createChild({
 		parent: parentSessionId,
-		info: { createdBy: "tool:request_review", roleName: "plan-reviewer" },
+		info: role.info ?? { createdBy: "tool:request_review", roleName: "plan-reviewer" },
 		visibility: "hidden",
 		session: {
 			systemPrompt: role.systemPrompt,

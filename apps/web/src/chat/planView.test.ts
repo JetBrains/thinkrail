@@ -439,6 +439,7 @@ test("itemOpenFindings: counts open agent comments anchored in the item's change
 			c({ author: "agent", status: "resolved", path: "src/a.ts" }), // settled
 			c({ author: "agent", status: "draft", path: "other.ts" }), // another change set
 			c({ status: "draft", path: "src/a.ts" }), // the user's own draft
+			{ ...c({ author: "agent", status: "draft", path: "src/a.ts" }), authorLabel: "Smart review" }, // another reviewer's
 		]),
 	).toBe(2);
 	expect(itemOpenFindings(flagged, undefined)).toBe(0);

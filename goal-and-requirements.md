@@ -157,7 +157,11 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   PR. *Run initiative* gives an initiative a container whose orchestrator coordinates its cards, and its
   autopilot (off by default) has the host pick which ready, unblocked, sized cards may start within the
   WIP limits — pausing itself with a visible reason while human attention is over its limit — and wake the
-  orchestrator, which starts them into the container; every start is logged. Before Shape sits discovery: ideas with evidence (cited research reports in the artifacts, links,
+  orchestrator, which starts them into the container; every start is logged. Smart review checks a card's
+  change against its spec — its acceptance criteria, its task-spec's Product section and its OpenSpec
+  requirements — through the host's independent reviewer (met / unmet / untested with file:line evidence and
+  tests, advisory only), turns each unmet item into a Review comment, and writes a review packet (why, what, how
+  it was verified, conformance, time) the human can add to the PR through their own `gh`. Before Shape sits discovery: ideas with evidence (cited research reports in the artifacts, links,
   notes) that the agent researches and scores for value × effort against the goal spec and the signals it
   can reach, on a matrix where the human confirms the scores and promotes an idea through Shape, and a
   competitor watchlist whose "What changed?" diffs each snapshot against the last, on demand only

@@ -37,10 +37,19 @@ export interface DeltaCount {
 	renamed: number;
 }
 
+/** A requirement's scenario as its delta writes it: the `#### Scenario:` name and its lines. */
+export interface DeltaScenario {
+	name: string;
+	text: string;
+}
+
 export interface DeltaRequirement {
 	capability: string;
 	operation: DeltaOperation;
 	name: string;
+	/** An added or modified requirement's statement, before its first scenario. */
+	text?: string;
+	scenarios?: DeltaScenario[];
 }
 
 export interface TaskLine {
@@ -412,23 +421,48 @@ function fenceMask(lines: readonly string[]): boolean[] {
 const REQUIREMENT = /^###\s*Requirement:\s*(.+)\s*$/i;
 const closing = (title: string) => title.replace(/[ \t]+#+[ \t]*$/, "").trim();
 
-/** A delta spec's requirements by operation, read the way OpenSpec's `parseDeltaSpec` reads them. */
-export function deltaRequirements(
-	text: string,
-): { operation: DeltaOperation; name: string }[] | null {
+const SCENARIO = /^####\s*Scenario:\s*(.+)\s*$/i;
+
+type FoundRequirement = Omit<DeltaRequirement, "capability">;
+
+/**
+ * A delta spec's requirements by operation, read the way OpenSpec's `parseDeltaSpec` reads them; an added
+ * or modified one carries its statement and its scenarios, as `openspec show --json` reports them.
+ */
+export function deltaRequirements(text: string): FoundRequirement[] | null {
 	const lines = text
 		.replace(/^\uFEFF/, "")
 		.replace(/\r\n?/g, "\n")
 		.split("\n");
 	const mask = fenceMask(lines);
-	const found: { operation: DeltaOperation; name: string }[] = [];
+	const found: FoundRequirement[] = [];
 	let section: DeltaOperation | null = null;
 	let any = false;
 	let pending: string | null = null;
+	let body: {
+		requirement: FoundRequirement;
+		lines: string[];
+		scenarios: { name: string; lines: string[] }[];
+	} | null = null;
+	const close = () => {
+		if (!body) return;
+		const statement = body.lines.join("\n").trim();
+		if (statement) body.requirement.text = statement;
+		if (body.scenarios.length > 0)
+			body.requirement.scenarios = body.scenarios.map((scenario) => ({
+				name: scenario.name,
+				text: scenario.lines.join("\n").trim(),
+			}));
+		body = null;
+	};
 	lines.forEach((line, index) => {
-		if (mask[index]) return;
+		if (mask[index]) {
+			(body?.scenarios.at(-1)?.lines ?? body?.lines)?.push(line);
+			return;
+		}
 		const heading = /^(##)\s+(.+)$/.exec(line);
 		if (heading) {
+			close();
 			const title = closing(heading[2] ?? "").toLowerCase();
 			section =
 				DELTA_OPERATIONS.find((operation) => `${operation.toLowerCase()} requirements` === title) ??
@@ -450,13 +484,24 @@ export function deltaRequirements(
 			return;
 		}
 		if (header) {
-			found.push({ operation: section, name: closing(header[1] ?? "") });
+			close();
+			const requirement: FoundRequirement = { operation: section, name: closing(header[1] ?? "") };
+			found.push(requirement);
+			if (section !== "REMOVED") body = { requirement, lines: [], scenarios: [] };
+			return;
+		}
+		if (body) {
+			const scenario = SCENARIO.exec(line);
+			if (scenario) body.scenarios.push({ name: closing(scenario[1] ?? ""), lines: [] });
+			else if (/^#{1,3}\s/.test(line)) close();
+			else (body.scenarios.at(-1)?.lines ?? body.lines).push(line);
 			return;
 		}
 		const bullet =
 			section === "REMOVED" ? /^\s*[-*+]\s*`?###\s*Requirement:\s*(.+?)`?\s*$/.exec(line) : null;
 		if (bullet) found.push({ operation: "REMOVED", name: closing(bullet[1] ?? "") });
 	});
+	close();
 	return any ? found : null;
 }
 

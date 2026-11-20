@@ -2,6 +2,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
+	ExtensionConformanceResult,
 	ExtensionContainer,
 	ExtensionCreateWorkspaceParams,
 	ExtensionHostEvents,
@@ -9,6 +10,9 @@ import type {
 	ExtensionHostProject,
 	ExtensionHostServices,
 	ExtensionOpenspecTree,
+	ExtensionPlanSummary,
+	ExtensionReviewCommentInput,
+	ExtensionReviewConformanceParams,
 	ExtensionRunResult,
 	ExtensionStartChatParams,
 	ExtensionTaskSpec,
@@ -57,6 +61,15 @@ export interface TestHost {
 	/** Every `startOrchestrator` and `wakeOrchestrator`, in order. */
 	orchestratorStarts: string[];
 	wakes: ExtensionWakeOrchestratorParams[];
+	/** Every `reviewConformance`, in order, and how the fake reviewer answers it. */
+	reviews: ExtensionReviewConformanceParams[];
+	reviewer: {
+		answer: (params: ExtensionReviewConformanceParams) => Promise<ExtensionConformanceResult>;
+	};
+	/** Every `addReviewComments`, in order. */
+	comments: { workspaceId: string; author?: string; comments: ExtensionReviewCommentInput[] }[];
+	/** `workspaceId:sessionId` → the chat's plan, for `planSummary`. */
+	plans: Map<string, ExtensionPlanSummary>;
 	emit<T extends ExtensionHostEventType>(type: T, payload: ExtensionHostEvents[T]): void;
 	listeners(): number;
 }
@@ -118,6 +131,10 @@ export function createTestHost(): TestHost {
 		containers: [],
 		orchestratorStarts: [],
 		wakes: [],
+		reviews: [],
+		reviewer: { answer: async () => ({ items: [], summary: "" }) },
+		comments: [],
+		plans: new Map(),
 	};
 	let next = 0;
 	const refused = async (): Promise<never> => {
@@ -195,6 +212,26 @@ export function createTestHost(): TestHost {
 				if (!container?.orchestrator) throw new Error("no orchestrator to wake");
 				state.wakes.push(params);
 			},
+			reviewConformance: async (params) => {
+				state.reviews.push(params);
+				return state.reviewer.answer(params);
+			},
+			addReviewComments: async ({ workspaceId, author, comments }) => {
+				state.comments.push({
+					workspaceId,
+					...(author !== undefined ? { author } : {}),
+					comments: [...comments],
+				});
+				const offset = state.comments.reduce((sum, call) => sum + call.comments.length, 0);
+				return {
+					comments: comments.map((comment, index) => ({
+						id: `rc_${offset - comments.length + index + 1}`,
+						path: comment.path,
+						line: comment.line,
+						anchored: true,
+					})),
+				};
+			},
 		},
 		events: {
 			subscribe(type, listener) {
@@ -212,6 +249,10 @@ export function createTestHost(): TestHost {
 		specSection: async (workspaceId, specId, heading) =>
 			state.sections.get(`${workspaceId}:${specId}:${heading}`) ?? null,
 		openspecTree: async (workspaceId) => state.openspec.get(workspaceId) ?? null,
+		planSummary: async (workspaceId, sessionId) =>
+			state.facts.has(workspaceId)
+				? (state.plans.get(`${workspaceId}:${sessionId}`) ?? { summary: null, steps: [] })
+				: null,
 		githubProblem: async () => state.gh.problem,
 		sessionsRoot: () => join(root, "sessions"),
 		sessionScope: () => ({

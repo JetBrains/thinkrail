@@ -28,6 +28,7 @@ import type {
 	ExtensionMessageAnchor,
 	ExtensionModel,
 	ExtensionOpenspecTree,
+	ExtensionPlanSummary,
 	ExtensionPublishScope,
 	ExtensionSessionPlacement,
 	ExtensionSessionView,
@@ -45,7 +46,7 @@ import { dataDir } from "../persistence";
 import { listProjects } from "../projects";
 import { getConfig } from "../settings";
 import { workspaceSpecSection, workspaceTaskSpecs } from "../spec";
-import { todoCounts } from "../todos";
+import { planSummary as storedPlanSummary, todoCounts } from "../todos";
 import { listTurns } from "../turns";
 import {
 	isChatWorkspace,
@@ -400,6 +401,21 @@ export async function specSection(
 	return workspaceSpecSection(workspace.id, workspace.worktreePath, specId, heading);
 }
 
+/** A chat's stored TODO plan of an open workspace; `null` when it is not open or the id is no session id. */
+export async function planSummary(
+	workspaceId: string,
+	sessionId: string,
+): Promise<ExtensionPlanSummary | null> {
+	if (typeof sessionId !== "string" || !isPiSessionId(sessionId)) return null;
+	const workspace = listAllWorkspaceRecords().find((candidate) => candidate.id === workspaceId);
+	if (!workspace) return null;
+	try {
+		return storedPlanSummary({ workspaceId: workspace.id, sessionId });
+	} catch {
+		return null;
+	}
+}
+
 export function extensionHostServices(name: string, signal: AbortSignal): ExtensionHostServices {
 	return {
 		dataDir: join(dataDir(), "extensions", name),
@@ -416,6 +432,7 @@ export function extensionHostServices(name: string, signal: AbortSignal): Extens
 		taskSpecs,
 		specSection,
 		openspecTree,
+		planSummary,
 		githubProblem: ghSetupProblem,
 		sessionsRoot,
 		sessionScope,

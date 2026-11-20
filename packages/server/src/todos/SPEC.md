@@ -342,7 +342,9 @@ before the already-enqueued replacement pass has reconciled the current plan.
   any status but `done`, loose + grouped—the `SessionSummary.openTodos` decoration the host's
   `session.list` handler attaches for client history/status presentation; a session with no todo file counts
   0), `todoCounts({workspaceId, sessionId}) → { open, total }` (the same count beside the plan's item count,
-  for an extension's `workspaceFacts`),
+  for an extension's `workspaceFacts`), `planSummary({workspaceId, sessionId}) → { summary, steps[{ title,
+  status, summary?, verification? }] }` (the stored plan as the agent wrote it, no git and no decoration — the
+  extensions' `planSummary` fact behind the board's review packet),
   `addTodo(...) → TodoItem` (validates a non-empty title; tags `origin: "user"`),
   `updateTodo(...) → TodoItem` (throws on unknown id → a `{ ok:false }` WS response),
   `approveTodoReview(...)` / `requestTodoFix(...) → { pkg, previous }` / `rollbackTodoFix(...)` + the

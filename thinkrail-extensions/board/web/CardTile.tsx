@@ -14,6 +14,7 @@ import {
 	TaskSpecStatus,
 } from "./CardParts";
 import { OpenspecTileLines } from "./OpenspecParts";
+import { ConformanceChip } from "./SmartReview";
 
 export interface CardActions {
 	open: (card: Card) => void;
@@ -83,6 +84,7 @@ export function CardTile({
 					<TaskSpecLine specs={card.taskSpecs} />
 				)}
 				<LiveLine card={card} />
+				<ConformanceChip card={card} />
 				{card.blockedBy.length > 0 ? (
 					<span className="tr-text-metadata text-feedback-warning">
 						{t("board.card.blockedBy", { ids: card.blockedBy.join(", ") })}

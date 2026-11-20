@@ -46,6 +46,7 @@ import {
 } from "./kickoff";
 import {
 	type Attempt,
+	type AttemptReview,
 	type AutopilotPause,
 	type BoardSettings,
 	type Card,
@@ -84,6 +85,18 @@ import {
 	STAGE_CATEGORIES,
 } from "./openspecCards";
 import { type ColumnDef, columnFor, columnOfCard, columnsOf, placeInColumn } from "./presets";
+import {
+	assembleRequirements,
+	type Packet,
+	PRODUCT_HEADING,
+	packetOf,
+	type Requirement,
+	reviewItems,
+	SMART_REVIEW_AUTHOR,
+	timeSplit,
+	unmetComments,
+	upsertPacket,
+} from "./review";
 import { Roadmap } from "./roadmap";
 import { applyEvent, type BoardEvent, moveByHand } from "./rules";
 import { wouldCycle } from "./schedule";
@@ -112,6 +125,8 @@ import {
 } from "./taskSpecs";
 
 export const BOARD_CHANGED = "board.changed";
+/** At most this many requirements go to one smart review (the host's own limit). */
+const REVIEW_REQUIREMENTS_MAX = 200;
 
 export interface AttemptLive {
 	workspaceId: string;
@@ -151,6 +166,10 @@ export type CardView = Card & {
 	/** An OpenSpec change's card: the change as its attempt's workspace (else Default) has it. */
 	openspec?: OpenspecOverlay;
 	virtual?: true;
+	/** A smart review of its latest attempt is running now. */
+	reviewing?: true;
+	/** Why its last smart review failed, until the next one starts (kept in memory). */
+	reviewError?: string;
 };
 
 /** A card's task-spec's deferrals the board has no card for yet. */
@@ -552,6 +571,9 @@ export class Board {
 	private readonly openspec: OpenspecReader;
 	/** Each project's Default workspace's changes as the last read saw them, by name: what a write stores. */
 	private readonly openspecSeen = new Map<string, Map<string, OpenspecChange>>();
+	/** Smart reviews running now, by card id, and the last failure of each card's. */
+	private readonly reviewing = new Map<string, Promise<void>>();
+	private readonly reviewFailures = new Map<string, string>();
 	readonly autopilot: Autopilot;
 
 	constructor(host: ExtensionHostServices, options: BoardOptions = {}) {
@@ -778,8 +800,11 @@ export class Board {
 		served: ReadonlyMap<string, { projectId: string; initiative: Initiative }> = new Map(),
 	): CardView {
 		const initiative = served.get(card.id);
+		const reviewError = this.reviewFailures.get(card.id);
 		return {
 			...card,
+			...(this.reviewing.has(card.id) ? { reviewing: true as const } : {}),
+			...(reviewError ? { reviewError } : {}),
 			live: card.attempts.map((attempt) =>
 				attemptLive(attempt, facts.get(attempt.workspaceId) ?? null),
 			),
@@ -2066,6 +2091,220 @@ export class Board {
 	}
 
 	/** A change card's action target: its stored card (`openspec:<name>` names one once stored) and its change. */
+	/** A stored card's latest attempt and its workspace's facts (`null` once it is gone). */
+	private async latestAttempt(
+		id: string,
+	): Promise<{ located: Located; attempt: Attempt; facts: ExtensionWorkspaceFacts | null }> {
+		const located = this.locate(id);
+		const attempt = located.card.attempts.at(-1);
+		if (!attempt) throw new Error(`${located.card.id} has no attempt yet; start it first.`);
+		const facts =
+			attempt.removedAt === undefined
+				? await this.host.workspaceFacts(attempt.workspaceId).catch(() => null)
+				: null;
+		return { located, attempt, facts };
+	}
+
+	/** What a card asks for: its criteria, its workspace's task-specs' Product bullets, its change's deltas. */
+	private async requirementsOf(
+		located: Located,
+		attempt: Attempt,
+		facts: ExtensionWorkspaceFacts,
+	): Promise<Requirement[]> {
+		const { card, projectId } = located;
+		const specs = ((await this.host.taskSpecs(attempt.workspaceId).catch(() => null)) ?? []).filter(
+			(spec) => spec.status !== "deprecated",
+		);
+		const products = await Promise.all(
+			specs.map(async (spec) => ({
+				specId: spec.id,
+				section:
+					(await this.host
+						.specSection(attempt.workspaceId, spec.id, PRODUCT_HEADING)
+						.catch(() => null)) ?? "",
+			})),
+		);
+		const found =
+			card.source.kind === "openspec"
+				? await this.changeOf(
+						this.openspecReads(this.project(projectId)),
+						card,
+						new Map([[attempt.workspaceId, facts]]),
+					)
+				: null;
+		return assembleRequirements({
+			acceptance: card.acceptance,
+			products: products.filter((product) => product.section.trim()),
+			openspec: found?.change.requirements ?? [],
+		}).slice(0, REVIEW_REQUIREMENTS_MAX);
+	}
+
+	private servedBy(projectId: string, card: Card): Packet["why"]["initiative"] {
+		const served = this.roadmap.initiativesOf(projectId, [card]).get(card.id)?.initiative;
+		return served ? { id: served.id, title: served.title, outcome: served.outcome } : undefined;
+	}
+
+	/**
+	 * Starts a smart review of the card's latest attempt and answers at once: plan review's independent
+	 * reviewer checks the workspace's change against the card's requirements, the verdicts land on the
+	 * attempt (`review`), each unmet item with a line becomes a Review comment, and `board.changed` says so.
+	 * The card reads `reviewing` meanwhile and `reviewError` after a failure.
+	 */
+	async reviewCard(id: string): Promise<{ cardId: string; requirements: number }> {
+		const { located, attempt, facts } = await this.latestAttempt(id);
+		const { card, projectId } = located;
+		if (!facts) throw new Error(`${card.id}'s latest workspace is not open.`);
+		if (this.reviewing.has(card.id)) throw new Error(`${card.id} is being reviewed already.`);
+		const requirements = await this.requirementsOf(located, attempt, facts);
+		if (requirements.length === 0)
+			throw new Error(`${card.id} has nothing to check yet: add acceptance criteria first.`);
+		if (this.reviewing.has(card.id)) throw new Error(`${card.id} is being reviewed already.`);
+		this.reviewFailures.delete(card.id);
+		const run = this.runReview(located, attempt, requirements)
+			.catch((error: unknown) => {
+				const message = error instanceof Error ? error.message : String(error);
+				this.reviewFailures.set(card.id, message);
+				this.host.log.warn(`the smart review of ${card.id} failed: ${message}`);
+			})
+			.finally(() => {
+				this.reviewing.delete(card.id);
+				this.changed(projectId);
+			});
+		this.reviewing.set(card.id, run);
+		this.changed(projectId);
+		return { cardId: card.id, requirements: requirements.length };
+	}
+
+	private async runReview(
+		located: Located,
+		attempt: Attempt,
+		requirements: readonly Requirement[],
+	): Promise<void> {
+		const { card, projectId } = located;
+		const initiative = this.servedBy(projectId, card);
+		const context = [
+			`Card ${card.id}: ${card.title}`,
+			card.description.trim(),
+			initiative
+				? `It serves initiative ${initiative.id}: ${initiative.title} — ${initiative.outcome}`
+				: "",
+		]
+			.filter(Boolean)
+			.join("\n\n");
+		const result = await this.host.actions.reviewConformance({
+			workspaceId: attempt.workspaceId,
+			...(attempt.sessionId ? { sessionId: attempt.sessionId } : {}),
+			requirements: requirements.map(({ id, text, scenarios }) => ({
+				id,
+				text,
+				...(scenarios ? { scenarios } : {}),
+			})),
+			context,
+		});
+		const previous = new Map(
+			(attempt.review?.items ?? []).flatMap((item) =>
+				item.verdict === "unmet" && item.commentId ? [[item.id, item.commentId] as const] : [],
+			),
+		);
+		const items = reviewItems(requirements, result);
+		const wanted = unmetComments(items).filter((entry) => !previous.has(entry.itemId));
+		const filed = new Map(previous);
+		if (wanted.length > 0) {
+			const { comments } = await this.host.actions.addReviewComments({
+				workspaceId: attempt.workspaceId,
+				author: SMART_REVIEW_AUTHOR,
+				comments: wanted.map((entry) => entry.comment),
+			});
+			comments.forEach((comment, index) => {
+				const itemId = wanted[index]?.itemId;
+				if (itemId) filed.set(itemId, comment.id);
+			});
+		}
+		const review: AttemptReview = {
+			at: this.now(),
+			summary: result.summary,
+			items: items.map((item) => {
+				const commentId = item.verdict === "unmet" ? filed.get(item.id) : undefined;
+				return commentId ? { ...item, commentId } : item;
+			}),
+		};
+		const latest = this.locate(card.id);
+		this.write(
+			projectId,
+			this.replace(latest.file, {
+				...latest.card,
+				attempts: latest.card.attempts.map((candidate) =>
+					candidate.workspaceId === attempt.workspaceId ? { ...candidate, review } : candidate,
+				),
+			}),
+			[],
+		);
+	}
+
+	/**
+	 * The card's review packet from host facts: why (the initiative's outcome, the card's goal), what (the
+	 * latest attempt's plan steps), how it was verified (their verifications), how it conforms (the stored
+	 * review), the time split from the log and the diff.
+	 */
+	async packet(id: string): Promise<Packet> {
+		const { located, attempt, facts } = await this.latestAttempt(id);
+		const { card, projectId } = located;
+		const sessionId = attemptChat(attempt, facts)?.sessionId ?? attempt.sessionId;
+		const plan =
+			facts && sessionId
+				? await this.host.planSummary(attempt.workspaceId, sessionId).catch(() => null)
+				: null;
+		const initiative = this.servedBy(projectId, card);
+		return packetOf({
+			card,
+			...(initiative ? { initiative } : {}),
+			plan,
+			review: attempt.review,
+			diff: facts?.diff ?? null,
+			time: timeSplit(
+				this.store.transitions(projectId).filter((entry) => entry.cardId === card.id),
+				this.now(),
+			),
+		});
+	}
+
+	/**
+	 * Upserts the packet as the `## Review packet` section of the latest attempt's PR description through
+	 * the user's `gh` — between its markers only, nothing else of the body, and no edit when it is already
+	 * there. Refused without a pull request.
+	 */
+	async packetToPr(
+		id: string,
+	): Promise<{ cardId: string; pr: number; url?: string; updated: boolean }> {
+		const { located, attempt, facts } = await this.latestAttempt(id);
+		const { card, projectId } = located;
+		const pr = facts?.review;
+		if (pr?.kind !== "pull-request")
+			throw new Error(`${card.id}'s workspace has no pull request; open one first.`);
+		const { markdown } = await this.packet(card.id);
+		const run = (argv: string[]) =>
+			this.host.actions.runInWorkspace({
+				workspaceId: attempt.workspaceId,
+				argv,
+				timeoutMs: GH_TIMEOUT_MS,
+			});
+		const viewed = await run(["gh", "pr", "view", String(pr.number), "--json", "body"]);
+		if (!viewed.ok) throw new Error(runError(viewed, "gh pr view"));
+		const body = parsePrBody(viewed.out);
+		if (body === null) throw new Error("gh pr view answered no description.");
+		const next = upsertPacket(body, markdown);
+		const answer = { cardId: card.id, pr: pr.number, ...(pr.url ? { url: pr.url } : {}) };
+		if (next === body) return { ...answer, updated: false };
+		const path = this.store.writeScratch(projectId, `pr-${pr.number}-packet.md`, next);
+		try {
+			const edited = await run(["gh", "pr", "edit", String(pr.number), "--body-file", path]);
+			if (!edited.ok) throw new Error(runError(edited, "gh pr edit"));
+		} finally {
+			this.store.removeScratch(path);
+		}
+		return { ...answer, updated: true };
+	}
+
 	private async changeForAction(
 		id: string,
 		projectId?: string,
@@ -2324,8 +2563,9 @@ export class Board {
 			.catch((error) => this.host.log.warn("a board rule failed", error));
 	}
 
-	/** Resolves once every event, size suggestion, issue fetch and autopilot pass so far has settled. */
+	/** Resolves once every event, size suggestion, issue fetch, smart review and autopilot pass so far has settled. */
 	async idle(): Promise<void> {
+		await Promise.all(this.reviewing.values());
 		await this.chain;
 		await this.sizes.idle();
 		await this.issues.idle();

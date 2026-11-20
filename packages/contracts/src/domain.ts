@@ -2365,6 +2365,8 @@ export interface ReviewComment {
 	sessionId?: string;
 	/** Who authored the remark — the human (default, absent) or the plan's reviewer agent. */
 	author?: "user" | "agent";
+	/** A display name for an `agent` remark's author ("Smart review"); never a human, never an approval. */
+	authorLabel?: string;
 	/** Provenance of an agent finding: the plan step (in its session) and the newest reviewed commit sha. */
 	origin?: { todoId: string; reviewedSha: string; sessionId: string };
 	/** Server-derived for the client, never persisted: the reviewed code was overwritten after review. */

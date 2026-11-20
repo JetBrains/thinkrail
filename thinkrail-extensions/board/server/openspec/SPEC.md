@@ -19,7 +19,7 @@ board maps a change's stage onto its categories.
 - **Public surface** (`index.ts`), what the board uses: `parseOpenspec`, `stageOf`, `SPEC_DRIVEN`,
   `OPENSPEC_ARGV`, `OPENSPEC_TIMEOUT_MS`, `OpenspecReader`, `PROBE_RETRY_MS`, `parseYaml`,
   `upsertTopLevelKey` and the types `OpenspecChange`, `OpenspecSnapshot`, `ArtifactStatus`, `DeltaCount`,
-  `DeltaRequirement`, `Stage`, `Validation`. The files behind it — `parse.ts` (the tree), `cli.ts` (argv and
+  `DeltaRequirement`, `DeltaScenario`, `Stage`, `Validation`. The files behind it — `parse.ts` (the tree), `cli.ts` (argv and
   the `--json` readers, `withCli`), `reader.ts` (the CLI or the parse, per workspace), `yaml.ts` — are this
   module's own; its tests import them directly.
   `fixtureTree.ts` is a test helper over `fixtures/`, never imported by the board's runtime.
@@ -38,7 +38,9 @@ board maps a change's stage onto its categories.
   only `x`/`X` done; the tracked file is the artifact `apply.tracks` names, else `tasks`, else a top-level
   `tasks.md`. Deltas come from `specs/<capability>/spec.md` files only (fences masked, comments not, as
   `parseDeltaSpec` does); a change whose specs carry no delta section has none — `show`'s fallback to the
-  proposal's prose is not read.
+  proposal's prose is not read. An added or modified requirement carries its statement (before its first
+  `#### Scenario:`) and its scenarios' names and lines, as `show --json` reports `text` and `rawText` — held to
+  the recorded answers — for the board's smart review.
 - **Schemas:** the change's `.openspec.yaml`, else `config.yaml`, else `spec-driven`; a project schema
   (`openspec/schemas/<name>/schema.yaml`, which may override `spec-driven`) is parsed, a user-folder one is
   not visible and reads as unknown — the change keeps its tasks (from `tasks.md`, as `list` does) and shows

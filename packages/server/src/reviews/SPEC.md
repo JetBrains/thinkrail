@@ -70,7 +70,10 @@ re-anchoring, and package rendering.
 - **`ReviewComment`**: `kind` inline/diff/file/review; `status` draft → sent → resolved (or
   dismissed); **`author`** — the human (default, absent) or `"agent"`: the plan's reviewer agent files
   findings through the same `addComment` (worktree-side anchors), badged in the panel and picked up by
-  the same send machinery (the TODO fix package rides `buildSendPackage`, see [[submodule-server-todos]]
+  the same send machinery; an agent remark may carry **`authorLabel`**, a display name only (an extension's
+  conformance reviewer: *Smart review*, through the host's `addReviewComments`), shown in place of *ThinkRail* —
+  it is never a human author, never counts as an approval, and a labelled remark without `origin` is no plan
+  step's finding (the client's path fallback skips it); a human's comment drops the label (the TODO fix package rides `buildSendPackage`, see [[submodule-server-todos]]
   §agent reviewer). The wire (`review.commentUpdate`) may only land the terminal manual outcomes
   (resolved/dismissed, from draft or sent); `draft`↔`sent` moves are owned exclusively by the send
   path (`markCommentsSent`/`rollbackSend`) — a client that could un-send a comment could rewrite or

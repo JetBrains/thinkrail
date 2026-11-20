@@ -97,8 +97,9 @@ export const APP_HOST_LINKS: Pick<
 			.then((ok) => {
 				if (ok) useAppStore.getState().requestChatLocation(location);
 			}),
-	openWorkspace: ({ peek, ...target }) => {
+	openWorkspace: ({ peek, reveal, ...target }) => {
 		if (peek) useAppStore.getState().requestPeek(target.workspaceId, peek);
+		if (reveal) useAppStore.getState().requestToolView(target.workspaceId, reveal);
 		void paletteNavigator.navigateToWorkspace(
 			{ id: target.workspaceId, projectId: target.projectId },
 			target.sessionId,

@@ -1824,7 +1824,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `reviewChangesRequested` + `itemOpenFindings` (the changes_requested warning marking: the flag and
   the count of the reviewer's open comments — matched by the finding's `origin` provenance
   (todoId + optional sessionId) when stamped, falling back to the change-set path join only for
-  provenance-less comments, so two steps touching one file don't count each other's findings; the
+  provenance-less, unlabelled comments, so two steps touching one file don't count each other's findings
+  and an extension reviewer's labelled remark (`authorLabel`, the board's Smart review) is no step's; the
   Review tab is the truth), and
   `planCompletionSummary` (the agent's plan-level note gated on "everything done", so a re-opened plan
   never leaks a stale all-done note into ungated outputs — it feeds the markdown export; the plan page also

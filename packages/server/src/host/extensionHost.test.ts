@@ -520,6 +520,50 @@ describe("extensionHostServices", () => {
 		}
 	});
 
+	test("reads a chat's stored plan: steps with their notes and the plan's summary, none for an unknown workspace or id", async () => {
+		const host = extensionHostServices("board", SIGNAL);
+		const sessionId = "019a0000-0000-7000-8000-000000000001";
+		mkdirSync(join(repo, ".thinkrail", "context", "todos"), { recursive: true });
+		const step = (title: string, status: string, extra: Record<string, string> = {}) => ({
+			id: title,
+			title,
+			status,
+			origin: "agent",
+			createdAt: "2026-01-01T00:00:00Z",
+			updatedAt: "2026-01-01T00:00:00Z",
+			...extra,
+		});
+		writeFileSync(
+			join(repo, ".thinkrail", "context", "todos", `${sessionId}.json`),
+			JSON.stringify({
+				version: 6,
+				summary: "Greeting shipped.",
+				todos: [
+					step("Write the greeting", "done", { summary: "Added hi", verification: "bun test" }),
+				],
+				groups: [{ id: "g", title: "Polish", todos: [step("Tidy", "pending")] }],
+			}),
+		);
+		try {
+			expect(await host.planSummary("w1", sessionId)).toEqual({
+				summary: "Greeting shipped.",
+				steps: [
+					{ title: "Tidy", status: "pending" },
+					{
+						title: "Write the greeting",
+						status: "done",
+						summary: "Added hi",
+						verification: "bun test",
+					},
+				],
+			});
+			expect(await host.planSummary("w1", "../escape")).toBeNull();
+			expect(await host.planSummary("nope", sessionId)).toBeNull();
+		} finally {
+			rmSync(join(repo, ".thinkrail"), { recursive: true, force: true });
+		}
+	});
+
 	test("reads an open workspace's openspec/ tree, none for a chat or a workspace not open", async () => {
 		const host = extensionHostServices("board", SIGNAL);
 		mkdirSync(join(repo, "openspec", "changes", "add-x"), { recursive: true });

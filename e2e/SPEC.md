@@ -570,11 +570,18 @@ receive-pack from a local bare repo, so pushes, fetches, and remote-branch delet
 `insteadOf` rewrite cannot stand in: `get-url` expands it, and the host's review lookup would then see a
 local path and never find a PR. The lane's fake **`gh`** (`fixtures/fakeGh.ts`, launched by a generated
 fake-bin shim under the runner's bun, since the host PATH has none) answers `pr list|view`, `repo view` and
-`issue list` (the board's GitHub source) from a test-written scenario file, applies `pr ready|merge|reopen` to it, and logs every argv so a spec
+`issue list` (the board's GitHub source) from a test-written scenario file, applies `pr ready|merge|reopen`
+and `pr edit --body-file` (a PR's `body`, the board's review packet) to it, and logs every argv so a spec
 asserts the exact mutations. Without a scenario it fails like an unauthenticated gh, so every other spec
 keeps the gh-less behaviour; `THINKRAIL_GH_OFFLINE` still keeps `pr.open` on the compare hand-off. The reset
 deletes the scenario and log and unsets the ssh config. The host caches repository merge settings per origin
 URL for the whole run, so a spec that sets its own repository settings names its own repository.
+
+**The board's Smart review** needs a reviewer verdict without a model. No-agent hosts get
+`THINKRAIL_E2E_FAKE_REVIEWER=1`, which makes the dev launcher install a deterministic conformance reviewer
+(`setConformanceReviewRunner`, the host's one seam for it): it answers the spec-written
+`.thinkrail/context/e2e-reviewer.json` of the reviewed workspace as the reviewer's final text, which then
+runs through the real parse, the board's storage and the Review comments. Agent mode leaves it off.
 
 **Voice input** (`voice-input.spec.ts`) never reaches NVIDIA's servers or a microphone.
 - Every host gets `THINKRAIL_SPEECH_MANIFEST` pointing at the lane's `speech-fixture/manifest.json`, which

@@ -169,9 +169,10 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   optional so a panel offers the action only on a host that has one. `scope` is the workspace whose view
   holds the tab. `hostProtocol` and `hostApiVersion` (the server half's declared `apiVersion`) let a
   panel degrade against an older host or server half. `openWorkspace(target)` (`PanelWorkspaceTarget {
-  workspaceId, projectId, sessionId?, peek? }`) switches to that workspace, on one of its chats when given — every
+  workspaceId, projectId, sessionId?, peek?, reveal? }`) switches to that workspace, on one of its chats when given — every
   panel and side tool follows the switch — and shows `peek` (a `PanelPeekEntry`, `peek`'s rules) in that
-  workspace's Peek, since Peek belongs to one workspace. `peek(entry)` (`PanelPeekEntry`) shows an entry in `scope`'s
+  workspace's Peek, since Peek belongs to one workspace; `reveal: "review"` also reveals that workspace's Review
+  tool (the board's *Open review comments*), the one built-in tool a panel may name. `peek(entry)` (`PanelPeekEntry`) shows an entry in `scope`'s
   workspace's Peek: a panel of the caller's **own** extension (`{ kind: "extension", panel, params?, title? }`,
   `title` naming its crumb; an undeclared panel is ignored) or a workspace-relative `file` (at `line`) or
   `compare` pair. `onEvent(type, listener)` (`PanelEventListener`) hears the extension's own
@@ -268,7 +269,10 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   or `null`, the worktree-relative `path` —, none for a chat, `null` for a workspace that is not open) and
   `specSection(workspaceId, specId, heading)` (the text of one named section of a spec of that graph, its
   subsections included, `null` without the spec or the section — a spec-graph read, never a general file
-  read) and `openspecTree(workspaceId)` (`ExtensionOpenspecTree { files: ExtensionTextFile[], truncated? }`:
+  read) and `planSummary(workspaceId, sessionId)` (`ExtensionPlanSummary { summary, steps[{ title, status,
+  summary?, verification? }] }`: a chat's stored TODO plan as the agent wrote it, loose and grouped steps in
+  order, and the plan's completion summary — host facts for the board's review packet; `null` for a workspace
+  that is not open or a session id that is none) and `openspecTree(workspaceId)` (`ExtensionOpenspecTree { files: ExtensionTextFile[], truncated? }`:
   an open repository workspace's `openspec/**` `.md`, `.yaml` and `.yml` files as worktree-relative paths
   and text, sorted, at most 2 MiB and 2,000 files in all — `truncated` once the cap stopped the read —, no
   symlink followed (the `openspec/` folder itself included), nothing outside `openspec/`; `null` without
@@ -305,7 +309,18 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   answered as it is) and `wakeOrchestrator(ExtensionWakeOrchestratorParams { containerId, kind, text })` (a
   turn-starting `container-wake` from the extension — `kind` 1–40 lowercase letters, digits or dashes, the
   text at most 20,000 characters — coalesced and queued like the host's member updates, one per kind in
-  flight; refused for an unknown container, `CONTAINER_UNKNOWN`, or one without an orchestrator). Every action
+  flight; refused for an unknown container, `CONTAINER_UNKNOWN`, or one without an orchestrator), and the smart-review pair:
+  `reviewConformance(ExtensionReviewConformanceParams { workspaceId, sessionId?, requirements[{ id, text,
+  scenarios? }], context })` → `ExtensionConformanceResult { items[{ id, verdict: met | unmet | untested,
+  evidence[{ path, line?, note }], tests[] }], summary }` (an independent, read-only check of a repository
+  workspace's change against the requirements — plan review's hidden reviewer subagent on the reviewer model,
+  under the named chat or the workspace's latest, never editing anything and approving nothing; 1–200 requirements
+  with unique ids, the context at most 20,000 characters; one at a time per workspace; stopped once the services'
+  `signal` aborts; the reviewer's verdict validated, one item per requirement in their order) and
+  `addReviewComments({ workspaceId, comments[{ path, line, side, text }], author? })` → `{ comments[{ id, path,
+  line, anchored }] }` (1–100 remarks filed in the workspace's Review as agent comments labelled `author` — at
+  most 40 characters, the extension's title by default —, all or nothing; a line that does not resolve becomes a
+  review-level remark naming it, `anchored: false`). Every action
   is refused with `EXTENSION_DISABLED` while the extension is off.
 - **Host lifetime.** `ServerExtension.hostService?(host)` returns an `ExtensionHostService { stop? }`; the
   host starts it once its publishers are wired and whenever the extension is switched back on, and stops

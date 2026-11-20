@@ -147,6 +147,8 @@ export interface PanelWorkspaceTarget {
 	sessionId?: string | undefined;
 	/** Shown in the target workspace's Peek, as `PanelHost.peek` shows one in `scope`'s. */
 	peek?: PanelPeekEntry | undefined;
+	/** A built-in tool of the target workspace to reveal: its Review (the comments on its diff). */
+	reveal?: "review" | undefined;
 }
 
 /** What `PanelHost.peek` shows in Peek: a panel of the caller's own extension, or a file or two of `scope`'s workspace. */

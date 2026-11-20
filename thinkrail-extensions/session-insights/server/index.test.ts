@@ -255,6 +255,8 @@ function fakeHost(
 				createContainer: noActions,
 				startOrchestrator: noActions,
 				wakeOrchestrator: noActions,
+				reviewConformance: noActions,
+				addReviewComments: noActions,
 			},
 			events: { subscribe: () => () => {} },
 			publish: () => {},
@@ -263,6 +265,7 @@ function fakeHost(
 			taskSpecs: async () => null,
 			specSection: async () => null,
 			openspecTree: async () => null,
+			planSummary: async () => null,
 			githubProblem: async () => null,
 			sessionsRoot: () => {
 				fake.sessionsRootReads += 1;
@@ -438,6 +441,8 @@ describe("session-insights server descriptor", () => {
 				createContainer: refuse,
 				startOrchestrator: refuse,
 				wakeOrchestrator: refuse,
+				reviewConformance: refuse,
+				addReviewComments: refuse,
 			},
 			events: { subscribe: refuse },
 			publish: refuse,
@@ -446,6 +451,7 @@ describe("session-insights server descriptor", () => {
 			taskSpecs: refuse,
 			specSection: refuse,
 			openspecTree: refuse,
+			planSummary: refuse,
 			githubProblem: refuse,
 			sessionsRoot: refuse,
 			sessionScope: refuse,

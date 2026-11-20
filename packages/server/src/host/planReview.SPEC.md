@@ -16,7 +16,8 @@ state: the item's review record, findings in the Review tab, and — when the fi
 request delivered to the worker chat.
 
 Files: `requestReview.ts` (the flow), `reviewerRole.ts` (the reviewer's prompt + output contract),
-`planReviewQueue.ts` (per-plan serialization + per-item claim).
+`planReviewQueue.ts` (per-plan serialization + per-item claim), and `conformanceReview.ts` — the same reviewer
+child reused for extensions' conformance review (§ Conformance review).
 
 ## Why a subagent and not a chat
 
@@ -174,11 +175,40 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   request racing a button review of a different step — from opening two provider streams at once; the
   per-item claim keeps two verdicts from racing onto one record.
 
+## Conformance review
+
+Extensions ask for an independent check of a workspace's change against their requirements through the named
+host action `reviewConformance` ([[module-extension-api]]; the board's Smart review). It reuses this module's
+delegation path rather than a second reviewer: the same hidden child (`runReviewSubagent`, `role.info` naming it
+`conformance-reviewer`), the same `REVIEWER_TOOLS` (read-only on the worktree — `bash` for git and cheap checks,
+the spec tools), the same model and effort (`reviewerChoice`, shared with `runReview`), under a live chat of the
+workspace (the named one or its latest, attached when it is not live). Only the role differs:
+`CONFORMANCE_SYSTEM_PROMPT` asks for `met` / `unmet` / `untested` per requirement with file:line evidence from the
+diff against the base and the covering tests, never an edit, advisory only; the result is a fenced JSON block, not
+a tool — the same choice as the plan verdict, so completion stays the promise's resolution.
+
+- **Model output is untrusted** here too: `parseConformance` reads the last fenced block and requires exactly one
+  well-formed item per requirement (unknown ids dropped, a repeated one or a missing one rejected, a line a
+  positive integer, paths `/`-normalized), in the requirements' order; anything else fails the run. An absolute
+  evidence path inside the worktree is read as its relative path; one outside it stays as written, and the
+  board never anchors a comment on it.
+- **One at a time per workspace**, whichever extension asked (`extensionActions`' claim, freed on every exit);
+  the services' `signal` reaches the child, so switching the extension off stops the run.
+- **Comments** (`addReviewComments` → `fileExtensionComments`) are agent remarks with the extension's label
+  (`authorLabel`), filed all or nothing under `withReviewLock`, an unresolvable line falling back to a
+  review-level remark — `fileFinding`'s rule. They carry no `origin`, so no plan step counts them as its findings.
+- **The e2e seam** is `setConformanceReviewRunner`: the dev launcher installs a deterministic runner under
+  `THINKRAIL_E2E_FAKE_REVIEWER` that answers a spec-written file as the child's final text, so the no-agent suite
+  exercises the parse, the board and the comments without a model (e2e/SPEC.md). Unit tests inject the runner
+  through `runConformanceReview`'s last parameter, as plan review's do.
+
 ## Boundary
 
 - **Owns / public surface:** `startPlanReview(workspaceId, sessionId, itemId, runSubagent?)`,
   `maybeAutoReReview(workspaceId, sessionId)`, `installRequestReviewSeam()`,
-  `setReviewFailedPublisher(fn)`, and the pure `parseVerdict` / `composeText`; `planReviewQueue`'s `enqueuePlanReview` / `onPlanChain` / `claimItemReview` /
+  `setReviewFailedPublisher(fn)`, `reviewerChoice()`, the pure `parseVerdict` / `composeText`; `conformanceReview`'s
+`runConformanceReview` / `parseConformance` / `conformanceTask` / `fileExtensionComments` /
+`setConformanceReviewRunner`; `planReviewQueue`'s `enqueuePlanReview` / `onPlanChain` / `claimItemReview` /
   `releaseItemReview` / `itemReviewActive` / `planReviewRunning`.
 - **Allowed deps:** `agent` (`runReviewSubagent`, `sendReviewFixToSession`, `getSessionWorkspaceId`,
   `notifyExtUi`), `todos`, `reviews`, `settings`, and host siblings `ackSend` / `reviewLock` /

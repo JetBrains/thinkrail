@@ -105,7 +105,9 @@ list for registry extensions.
   `ExtensionLog`, `ExtensionQuery`, `ExtensionHostActions`, `ExtensionHostEvents`, `ExtensionHostEventType`,
   `ExtensionHostEventBus`, `ExtensionPublishScope`, `ExtensionWorkspaceFacts`, `ExtensionChatFacts`,
   `ExtensionTaskSpec`, `ExtensionOpenspecTree`, `ExtensionTextFile`, `ExtensionHostService`,
-  `ExtensionContainer`.
+  `ExtensionContainer`, `ExtensionPlanSummary`, `ExtensionConformanceRequirement`,
+  `ExtensionConformanceItem`, `ExtensionConformanceResult`, `ExtensionReviewCommentInput`,
+  `ExtensionAddedReviewComment`.
 - **Session-seam types:** `ExtensionSessionServices`, `InteractiveTool` and `ToolResponse` are re-exported
   from `extension-api/server` so that `agent` can type the services it builds through this barrel.
 - **Query-seam types:** `ExtensionHostServices` and its value types (`ExtensionSessionView`,
@@ -114,7 +116,8 @@ list for registry extensions.
   `ExtensionArtifactsDir`, `ExtensionLog`, `ExtensionQuery`, and the action, event and facts types —
   `ExtensionHostActions`, `ExtensionHostEvents`, `ExtensionHostEventType`, `ExtensionHostEventBus`,
   `ExtensionPublishScope`, `ExtensionWorkspaceFacts`, `ExtensionChatFacts`, `ExtensionTaskSpec`,
-  `ExtensionOpenspecTree`, `ExtensionTextFile`, `ExtensionHostService`, `ExtensionContainer`) are re-exported the same way, beside `ExtensionHostServicesFor`, so `host` builds each extension's services
+  `ExtensionOpenspecTree`, `ExtensionTextFile`, `ExtensionHostService`, `ExtensionContainer`, `ExtensionPlanSummary`,
+  and the conformance-review and review-comment shapes `host` validates) are re-exported the same way, beside `ExtensionHostServicesFor`, so `host` builds each extension's services
   through this barrel. This module never builds them: the
   services arrive as a parameter, so there is no edge to `projects`, `workspaces` or `agent`.
 - **Interactive tools (`interactive.ts`):** `interactiveTools(isDisabled)` folds the enabled registry

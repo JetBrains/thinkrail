@@ -28,6 +28,36 @@ export const CARD_PANEL = "card";
 /** The board's `layoutPresets` entry: Board mode. */
 export const BOARD_MODE = "board";
 
+export type Verdict = "met" | "unmet" | "untested";
+export const VERDICTS: readonly Verdict[] = ["met", "unmet", "untested"];
+
+/** Where the reviewer saw a requirement met or missed: a worktree-relative path, a line, and why. */
+export interface ReviewEvidence {
+	path: string;
+	line?: number;
+	note: string;
+}
+
+/** One requirement of a smart review with the reviewer's advisory verdict. */
+export interface ReviewItem {
+	id: string;
+	source: "criterion" | "task-spec" | "openspec";
+	text: string;
+	scenarios?: string[];
+	verdict: Verdict;
+	evidence: ReviewEvidence[];
+	tests: string[];
+	/** The Review comment an unmet item became. */
+	commentId?: string;
+}
+
+/** An attempt's latest smart review. */
+export interface AttemptReview {
+	at: number;
+	items: ReviewItem[];
+	summary: string;
+}
+
 export interface Attempt {
 	workspaceId: string;
 	sessionId: string;
@@ -36,6 +66,8 @@ export interface Attempt {
 	notes: { text: string; at: number }[];
 	merged?: true;
 	removedAt?: number;
+	/** Absent from an older host. */
+	review?: AttemptReview;
 }
 
 /** A chat's most recent tool start, a host fact: the tool and a short target (a path, a command's start). */
@@ -163,6 +195,10 @@ export interface Card {
 	openspec?: OpenspecOverlay;
 	/** A source's item the board has not stored: an unbound workspace's task-spec, an untouched issue. */
 	virtual?: true;
+	/** A smart review of its latest attempt is running. */
+	reviewing?: true;
+	/** Why its last smart review failed. */
+	reviewError?: string;
 }
 
 export interface ServedInitiative {
@@ -801,4 +837,114 @@ export function openTaskSpec(
 	}
 	host.openFile(spec.workspaceId, spec.path);
 	return "file";
+}
+
+export interface Tally {
+	met: number;
+	unmet: number;
+	untested: number;
+	total: number;
+}
+
+/** A card's review packet, as `card.packet` answers it. */
+export interface Packet {
+	cardId: string;
+	title: string;
+	why: { goal: string; initiative?: { id: string; title: string; outcome: string } };
+	what: { summary: string | null; steps: { title: string; status: string; summary?: string }[] };
+	verified: { title: string; verification: string }[];
+	conformance: (AttemptReview & { tally: Tally }) | null;
+	time: { agentMs: number; waitingMs: number };
+	diff: { added: number; removed: number } | null;
+	markdown: string;
+}
+
+/** The latest attempt's smart review, if it has one. */
+export function latestReview(card: Pick<Card, "attempts">): AttemptReview | undefined {
+	return card.attempts.at(-1)?.review;
+}
+
+export function tallyOf(review: Pick<AttemptReview, "items">): Tally {
+	const count = (verdict: Verdict) =>
+		review.items.filter((item) => item.verdict === verdict).length;
+	return {
+		met: count("met"),
+		unmet: count("unmet"),
+		untested: count("untested"),
+		total: review.items.length,
+	};
+}
+
+/** Smart review needs a stored card whose latest attempt's workspace is open. */
+export function canReview(card: Pick<Card, "attempts" | "live" | "virtual">): boolean {
+	return !card.virtual && card.attempts.length > 0 && !!card.live.at(-1)?.open;
+}
+
+/** Add to PR needs the latest attempt's pull request. */
+export function packetPr(card: Pick<Card, "live">): number | null {
+	const pr = card.live.at(-1)?.pr;
+	return pr?.kind === "pull-request" ? pr.number : null;
+}
+
+/** Starts a smart review; its verdicts land on the card with the next `board.changed`. */
+export async function reviewCard(host: Pick<PanelHost, "query">, cardId: string): Promise<void> {
+	await host.query("card.review", { cardId });
+}
+
+function isPacket(value: unknown): value is Packet {
+	return (
+		isObject(value) &&
+		typeof value.cardId === "string" &&
+		typeof value.markdown === "string" &&
+		isObject(value.why) &&
+		isObject(value.what) &&
+		Array.isArray(value.verified) &&
+		isObject(value.time)
+	);
+}
+
+export async function loadPacket(
+	host: Pick<PanelHost, "query">,
+	cardId: string,
+	signal?: AbortSignal,
+): Promise<Packet> {
+	return checked(await host.query("card.packet", { cardId }, signal), isPacket);
+}
+
+/** Upserts the packet's section in the attempt's PR description; `updated: false` when it was there. */
+export async function packetToPr(
+	host: Pick<PanelHost, "query">,
+	cardId: string,
+): Promise<{ pr: number; updated: boolean }> {
+	const value = await host.query("card.packetToPr", { cardId });
+	if (!isObject(value) || typeof value.pr !== "number" || typeof value.updated !== "boolean")
+		throw new BoardReplyError("The board's host replied in an unknown shape.");
+	return { pr: value.pr, updated: value.updated };
+}
+
+/** Where evidence opens: Peek at its line in this workspace, else a tab in its own workspace. */
+export function openEvidence(
+	host: Pick<PanelHost, "peek" | "openFile" | "scope">,
+	workspaceId: string,
+	evidence: Pick<ReviewEvidence, "path" | "line">,
+): "peek" | "file" {
+	if (workspaceId === host.scope.workspaceId) {
+		host.peek({
+			kind: "file",
+			path: evidence.path,
+			...(evidence.line ? { line: evidence.line } : {}),
+		});
+		return "peek";
+	}
+	host.openFile(workspaceId, evidence.path, evidence.line);
+	return "file";
+}
+
+/** A duration as the packet says it: `35m`, `2h 05m`. */
+export function durationText(ms: number): string {
+	const minutes = Math.round(ms / 60_000);
+	if (minutes < 60) return `${minutes}m`;
+	const hours = Math.floor(minutes / 60);
+	const rest = minutes % 60;
+	return rest === 0 ? `${hours}h` : `${hours}h ${String(rest).padStart(2, "0")}m`;
 }

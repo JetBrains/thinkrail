@@ -79,9 +79,36 @@ test("deltaRequirements: fenced headers are skipped, sections fold case, REMOVED
 			].join("\n"),
 		),
 	).toEqual([
-		{ operation: "ADDED", name: "One" },
+		{ operation: "ADDED", name: "One", text: "```\n### Requirement: Fenced\n```" },
 		{ operation: "REMOVED", name: "Gone" },
 		{ operation: "RENAMED", name: "Old → New" },
+	]);
+	expect(
+		deltaRequirements(
+			[
+				"## MODIFIED Requirements",
+				"### Requirement: Login",
+				"The system SHALL log in.",
+				"",
+				"#### Scenario: a match",
+				"- **WHEN** it matches",
+				"- **THEN** a session starts",
+				"#### Scenario: no match",
+				"- **WHEN** it does not",
+				"### Requirement: Bare",
+			].join("\n"),
+		),
+	).toEqual([
+		{
+			operation: "MODIFIED",
+			name: "Login",
+			text: "The system SHALL log in.",
+			scenarios: [
+				{ name: "a match", text: "- **WHEN** it matches\n- **THEN** a session starts" },
+				{ name: "no match", text: "- **WHEN** it does not" },
+			],
+		},
+		{ operation: "MODIFIED", name: "Bare" },
 	]);
 	expect(deltaRequirements("# A full spec\n## Requirements\n### Requirement: X\n")).toBeNull();
 });

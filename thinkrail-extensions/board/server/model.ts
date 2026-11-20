@@ -42,6 +42,39 @@ export interface AttemptNote {
 	at: number;
 }
 
+export const VERDICTS = ["met", "unmet", "untested"] as const;
+export type Verdict = (typeof VERDICTS)[number];
+
+export const REQUIREMENT_SOURCES = ["criterion", "task-spec", "openspec"] as const;
+export type RequirementSource = (typeof REQUIREMENT_SOURCES)[number];
+
+/** Where the reviewer saw a requirement met or missed: a worktree-relative path, a line, and why. */
+export interface ReviewEvidence {
+	path: string;
+	line?: number;
+	note: string;
+}
+
+/** One requirement of a smart review with the reviewer's advisory verdict. */
+export interface ReviewItem {
+	id: string;
+	source: RequirementSource;
+	text: string;
+	scenarios?: string[];
+	verdict: Verdict;
+	evidence: ReviewEvidence[];
+	tests: string[];
+	/** The Review comment an unmet item became, on its first evidence line. */
+	commentId?: string;
+}
+
+/** An attempt's latest smart review: when it ran, each requirement's verdict and the reviewer's summary. */
+export interface AttemptReview {
+	at: number;
+	items: ReviewItem[];
+	summary: string;
+}
+
 export interface Attempt {
 	workspaceId: string;
 	sessionId: string;
@@ -54,6 +87,8 @@ export interface Attempt {
 	removedAt?: number;
 	/** The PR whose description was seen to carry the card's issue's `Closes #N`. */
 	closesLinked?: number;
+	/** The latest smart review of the attempt's change. */
+	review?: AttemptReview;
 }
 
 export interface Card {

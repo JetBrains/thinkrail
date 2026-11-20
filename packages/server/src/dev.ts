@@ -1,8 +1,11 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { Provider } from "@earendil-works/pi-ai";
 import type { OAuthCredentials, OAuthLoginCallbacks } from "@earendil-works/pi-ai/oauth";
 import { parsePort } from "@thinkrail/shared/freePort";
 import { configurePiRuntimeGenerationInitializer } from "./agent";
-import { bootHost } from "./host";
+import { bootHost, setConformanceReviewRunner } from "./host";
+import { listAllWorkspaceRecords } from "./workspaces";
 
 if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 	const fakeOauth = {
@@ -88,6 +91,21 @@ if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 	configurePiRuntimeGenerationInitializer((runtime) => {
 		runtime.registerProvider("e2e-oauth", { oauth: fakeOauth });
 		runtime.registerNativeProvider(fakeApiKeyProvider);
+	});
+}
+
+if (process.env.THINKRAIL_E2E_FAKE_REVIEWER === "1") {
+	setConformanceReviewRunner(async (workspaceId) => {
+		const workspace = listAllWorkspaceRecords().find((candidate) => candidate.id === workspaceId);
+		const finalText = workspace
+			? await readFile(
+					join(workspace.worktreePath, ".thinkrail", "context", "e2e-reviewer.json"),
+					"utf8",
+				).catch(() => undefined)
+			: undefined;
+		return finalText === undefined
+			? { childSessionId: "e2e-reviewer", status: "error" }
+			: { childSessionId: "e2e-reviewer", status: "completed", finalText };
 	});
 }
 

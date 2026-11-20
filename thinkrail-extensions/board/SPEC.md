@@ -5,7 +5,7 @@ status: draft
 title: Board extension
 parent: module-thinkrail-extensions
 depends-on: [module-extension-api]
-references: [task-board-core, task-project-board, task-openspec-board, submodule-server-extensions, submodule-server-host, module-contracts, submodule-web-shell, submodule-web-shell-layout, module-ext-session-insights, task-discovery, module-ext-web-access, submodule-server-containers]
+references: [task-board-core, task-project-board, task-openspec-board, submodule-server-extensions, submodule-server-host, module-contracts, submodule-web-shell, submodule-web-shell-layout, module-ext-session-insights, task-discovery, module-ext-web-access, submodule-server-containers, task-smart-review, submodule-server-host-plan-review, submodule-server-reviews]
 ---
 
 ## Responsibility
@@ -21,7 +21,8 @@ with milestones, and what is derived from the live work — rollups, a forecast,
 step graph's schedule — and **flow insights** from the transition log. Before Shape sits **discovery**
 (§ Discovery): ideas with evidence and a value × effort score, and a competitor watchlist. An initiative
 **runs** in a container with an orchestrator, and its **autopilot** (§ Autopilot) has the host decide when a
-card may start while the orchestrator decides how. Eight skills
+card may start while the orchestrator decides how. **Smart review** (§ Smart review) checks a card's change
+against its spec through the host's independent reviewer and writes a review packet. Eight skills
 (§ Skills) put the agent to work: five on the roadmap (shape, plan, report, review, close) and three on
 discovery (research, analyze, competitor watch). There is no portable pi package, because every tool acts
 on host-owned state. The web half is the Board side tool (with its Roadmap — Discovery included — and
@@ -84,8 +85,8 @@ Write rules:
 - The host runs one board per process, so the store is the single writer. It keeps what it read in
   memory.
 - A project id must be a plain folder name.
-- The only other file is a PR body written for `gh pr edit --body-file` (`pr-<n>-body.md`), removed once
-  gh ran.
+- The only other files are PR bodies written for `gh pr edit --body-file` (`pr-<n>-body.md` for `Closes #N`,
+  `pr-<n>-packet.md` for the review packet), removed once gh ran.
 
 Failure handling:
 
@@ -117,9 +118,11 @@ Failure handling:
 - `category` and `column`, `ownerHuman` (the local user) and `createdBy` (human / agent);
 - `origin? { sessionId?, cardId? }`: on an agent's card the chat that filed it and the card that chat works
   on, by which Triage groups a decomposition; on a human's deferrals the card alone;
-- `attempts[] { workspaceId, sessionId, workflow, startedAt, notes[], merged?, removedAt?, closesLinked? }`
+- `attempts[] { workspaceId, sessionId, workflow, startedAt, notes[], merged?, removedAt?, closesLinked?, review? }`
   — an adopted workspace without a chat has `sessionId: ""` and follows the workspace's latest chat;
-  `closesLinked` is the PR seen to carry the issue's `Closes #N`;
+  `closesLinked` is the PR seen to carry the issue's `Closes #N`; `review` is the latest smart review
+  (§ Smart review), `{ at, summary, items[{ id, source, text, scenarios?, verdict, evidence[{ path, line?, note }],
+  tests[], commentId? }] }`, an unreadable item dropped;
 - `cancelPending?`, the question "cancel?" after an unmerged workspace went away;
 - the roadmap's `roadmapProjectId?` (a roadmap project `P-n` of its board; `projectId` is always a ThinkRail
   project, on a card, in `card.assignProject` and in the tools alike), `milestoneId?` (one of that project's),
@@ -280,6 +283,40 @@ The rules are pure (`autopilot.ts`); the host service (`autopilotService.ts`) ap
 - **`AutopilotView`** (`autopilot.get`, `autopilot.ofContainer`): `{ projectId, initiativeId, title, on,
   pausedReason` (computed now, `null` while off)`, container { id, name, members, orchestrator { projectId,
   workspaceId, sessionId } | null } | null, running, cap, ready[{ id, title, size?, offered, stale }] }`.
+
+## Smart review
+
+`TASK-smart-review` (workstream H): spec conformance and a review packet. The verdict is **advisory**: it
+approves nothing, moves no card, and the human still merges.
+
+- **Requirements** (`review.ts`, pure, `assembleRequirements`), in order and with ids stable for the same card,
+  spec and change: the card's acceptance criteria (`ac-1`…); the top-level bullets of the `## Product` section of
+  each task-spec of the latest attempt's workspace (the host's `specSection` fact, read with `parseDeferrals`'
+  rules; a deprecated spec left out; `spec-<id>-1`…); for an OpenSpec card every requirement of its change's deltas
+  where the card reads the change, with its statement and scenarios (`os-<capability>-<name>`; a removed one asks
+  that nothing still relies on it). At most 200 go to one review; none refuses (*add acceptance criteria*).
+- **`card.review { cardId }`** (a stored card whose latest attempt's workspace is open, one at a time per card)
+  answers `{ cardId, requirements }` at once and runs behind it, since a review outlasts a query: the host's
+  `actions.reviewConformance` (plan review's hidden reviewer, [[submodule-server-host-plan-review]]) under the
+  attempt's chat with the requirements and the card's context (id, title, description, initiative); the verdicts
+  joined to the requirements (one the reviewer skipped reads `untested`) are stored as the attempt's `review`; each
+  **unmet** item whose evidence names a line becomes one Review comment on that line through
+  `actions.addReviewComments` (author *Smart review*), its id kept as `commentId` — an unmet item without a line
+  stays a note in the packet, and an item still unmet with a comment from the last review is not commented again.
+  The card reads `reviewing` meanwhile and `reviewError` (in memory) after a failure; each start and end publishes
+  `board.changed`.
+- **`card.packet { cardId }`** → the **packet** (`packetOf`): why (the initiative's id, title and outcome; the
+  card's description, else its title), what (the latest attempt's chat's plan summary and steps through the host's
+  `planSummary` fact), how it was verified (the steps' verifications), conformance (the stored review with its
+  tally), time (from the log: in started is the agent, in review is waiting for review) and the diff, with its
+  markdown (`renderPacket`: deterministic, the same inputs write the same bytes). It works once the workspace is
+  gone, without its plan and diff.
+- **`card.packetToPr { cardId }`** upserts the markdown as the `## Review packet` section of the latest attempt's
+  pull request through the user's `gh` (`gh pr view <n> --json body`, then `gh pr edit <n> --body-file`), the
+  `Closes #N` pattern: only the text between `<!-- thinkrail:review-packet -->` and
+  `<!-- /thinkrail:review-packet -->` changes (`upsertPacket`, the last complete pair; appended once otherwise),
+  and an unchanged body is not edited (`updated: false`). Refused without a pull request.
+- Deferred: the spec-drift check, risk-tier routing and the whole-mission review.
 
 ## Presets
 
@@ -524,6 +561,8 @@ Every query validates its params (lengths, enums, lists of at most 100) and answ
   the CLI) and **`openspec.propose { projectId, description }`** → `{ projectId, workspaceId, sessionId,
   kickoff, kickoffError? }`: see § OpenSpec. An `openspec:<change>` id needs the `projectId`, as `#N` does;
   `card.get`, `card.update`, `card.move` and `card.start` take it, `card.delete` refuses it.
+- **`card.review { cardId }`** → `{ cardId, requirements }`, **`card.packet { cardId }`** → the packet and
+  **`card.packetToPr { cardId }`** → `{ cardId, pr, url?, updated }`: see § Smart review.
 - **`card.adopt { cardId }`**, **`card.deferrals { cardId, specId }`** → `{ created, skipped }`,
   **`github.set`** → `{ settings, problem }` and **`github.refresh`**: see § Sources.
 - **`settings.get` / `settings.update { projectId, preset?, wipLimits?, followSelection? }`**.
@@ -871,7 +910,20 @@ there. The center and the bottom keep the chat and the terminals, and leaving re
   workspace** (`openspec.archive`, while an attempt's chat is open); without the CLI Validate and Archive are
   disabled beside the install hint, and the archive-timing decision is stated under them.
 
-Its UI text is `board.*` keys, the roadmap's `board.roadmap.*`, discovery's `board.discovery.*`.
+- **Smart review** (`SmartReviewSection`, `web/SmartReview.tsx`, below the attempts of a stored card with one):
+  the advisory hint, *Smart review* / *Review again* (`card.review`; disabled without an open latest attempt and
+  while `reviewing`, which shows *Reviewing…*), a failure (`reviewError` or the refusal), then the **conformance
+  table** — each requirement with its source, its verdict chip (`feedback-success` met, `feedback-error` unmet,
+  `feedback-warning` untested), its evidence (`path:line` opening the file at its line: Peek when the attempt's
+  workspace is the panel's, else `openFile` in its own; `openEvidence`) with notes, and its tests —, the tally and
+  the summary; *Open review comments* while an item has a comment and the workspace is open
+  (`openWorkspace { reveal: "review" }`, that workspace's Review); and the **packet** (`card.packet`, re-read per
+  review): why, what, how it was verified and time, with *Add to PR* (`card.packetToPr`, disabled without the
+  attempt's pull request) reporting *Added…* or *already carries…*. A reviewed tile shows its chip (`7/8 met`,
+  `ConformanceChip`), toned by its worst verdict.
+
+Its UI text is `board.*` keys, the roadmap's `board.roadmap.*`, discovery's `board.discovery.*`, smart review's
+`board.review.*`.
 
 ## Agent tools
 
@@ -988,6 +1040,13 @@ A capability's closing edit is a normal PR the user opens; the board writes no s
   - `insights.test.ts` (WIP and the flow replayed per day, throughput, cycle-time percentiles and the SLE,
     work item age, the time split with open waits, the empty window) with `activity.ts`'s window, and
     `snapshot.test.ts` (the markdown and its determinism);
+  - smart review (`review.test.ts`): the requirement assembly (criteria, Product bullets, deltas with their
+    scenarios, a recorded change's), comments for unmet items with a line only, the verdict join, the time split,
+    the packet's markdown and its determinism, the PR body upsert's idempotency (an unclosed marker left alone),
+    and through the queries over the fake host `card.review` (running, refused twice, the verdicts stored, one
+    comment for the unmet line under *Smart review*, not again on a re-run, its refusals, a failure kept on the
+    card), `card.packet` from the plan fact and `card.packetToPr` through a fake `gh` (one edit, then none; refused
+    without a PR; a gh failure passed on);
   - `index.test.ts`: `skillPackages` resolves to the eight skills (names matching their folders, *Use when*
     descriptions), every roadmap and discovery chat names one, and each names only registered `board_*` tools
     and web-access's (as its SPEC names them), the spec graph's and `ask_user_question`;
@@ -1004,6 +1063,13 @@ A capability's closing edit is a normal PR the user opens; the board writes no s
     storing on edit / move / start, the kickoff, `Closes #N` appended only when missing, the PR body only,
     the retry); size suggestions (strict parsing, a human's size never overwritten, skipped without a
     model or switched off or for an agent's card, the debounce, issues' cards).
+- **Host-level, smart review**: `extensionActions.test.ts` covers `reviewConformance` (under the latest chat or
+  the named one, with the services' signal; refused while switched off, for a chat workspace, bad requirements or
+  no chat; one at a time per workspace, freed on failure; refused once the signal aborted) and
+  `addReviewComments` (the author, the extension's title by default, validated remarks);
+  `conformanceReview.test.ts` the verdict parse (strict, ordered, unknown ids dropped), the task, the run on plan
+  review's reviewer child with the conformance role and the reviewer model, and labelled comments falling back to
+  review-level when a line does not resolve; `extensionHost.test.ts` the `planSummary` fact.
 - **Host-level**: `packages/server/src/host/extensionActions.test.ts` covers `createContainer`,
   `startOrchestrator` and `wakeOrchestrator` (validated, refused while switched off or for an unknown
   container, the wake handed to the host's coalescing under the extension's title) and
@@ -1021,6 +1087,10 @@ A capability's closing edit is a normal PR the user opens; the board writes no s
   workspace-relative path, nothing outside the worktree, a bash command's cut start, the folders shortened,
   nothing for other tools) and the tracker (latest start only, dropped once disposed or deleted);
   `extensionEventsWire.test.ts` a project's close and reopen republishing its board, a rename not.
+- **Web, smart review** (`web/smartReview.test.tsx`): the tally, Smart review's and Add to PR's availability,
+  the evidence's Peek and tab targets, the three queries and the packet's reply check, the tile's chip by worst
+  verdict, the section (table, chips, evidence, tests, comments link, disabled Add to PR), running, failed and
+  unavailable.
 - **Web** (`web/*.test.ts(x)`): autopilot (`autopilot.test.tsx`: the state line on, paused by each reason and
   off, the agents figure with and without a cap, offered and flagged ready cards, Run without a container
   and Open container with the switch with one, none for a closed initiative, the queries Run, the switch and
@@ -1098,6 +1168,11 @@ A capability's closing edit is a normal PR the user opens; the board writes no s
   *Quick wins* and its row in the list, *Promote* starting a chat whose kickoff (the `idea.promote` reply)
   starts `/skill:roadmap-shape` and carries the pitch; a competitor added to the watchlist and *What
   changed?* starting `/skill:competitor-watch` on it.
+- **No-agent e2e, smart review** (`e2e/board.spec.ts`, the deterministic reviewer seam of e2e/SPEC.md): a card
+  with two criteria started, a committed file and a pushed branch with the fake `gh`'s PR, *Smart review* → the
+  table met / unmet with its evidence, the tile's *1/2 met*, the packet; *Add to PR* writing one marked section
+  after the PR's description (one `gh pr edit`, then *already carries*); *Open review comments* entering
+  `workspace-1` with the unmet line's comment under *Smart review* in its Review.
 - **No-agent e2e, autopilot** (`e2e/board.spec.ts`): an initiative of two Ready S cards in Peek, *Run
   initiative* → its container in Projects with one member and the orchestrator, the first card in Building,
   the second the next ready card; the switch on, a Review limit of 1 pausing it (*Paused: Review is over its
@@ -1114,6 +1189,8 @@ A capability's closing edit is a normal PR the user opens; the board writes no s
   diff, the badge finished and the line gone. `e2e/board-roadmap.live.spec.ts` (`@agent`): *Plan with
   agent* on an initiative with an outcome and two criteria → at least two cards in Triage from one chat
   (one group), at least one `blocks` link among them, read from `board.get` over the wire.
+  `e2e/board-review.live.spec.ts` (`@agent`): a small S card with two criteria finished by its agent into Review,
+  then *Smart review* with the real reviewer → a verdict per criterion, the tile's chip and the packet.
   `e2e/board-discovery.live.spec.ts` (`@agent`): *Analyze* on an idea with a pitch and a quoted evidence →
   the idea suggested a value and an effort, each with reasons, read from `discovery.get`.
 
@@ -1133,6 +1210,8 @@ These land later:
 - another board's write does not publish the boards whose initiatives list its cards as external;
 - discovery: a scheduled watch, automatic signal ingestion (issues, analytics, session insights), and a
   session-insights tool for the agent (the analyze skill uses one only if it exists);
+- smart review: the spec-drift check, risk tiers and routing, the whole-mission review across a container, and
+  screenshots in the packet's verification (the plan fact carries none);
 - OpenSpec: the unified spec graph (O3), multi-repo "stores", carrying a change's non-text files on Apply,
   a CLI installed meanwhile noticed before the probe's TTL, and file events (the board re-reads on chats'
   activity and its own writes, not on a file changing).

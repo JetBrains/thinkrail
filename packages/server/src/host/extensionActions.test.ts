@@ -112,6 +112,25 @@ function setup(
 		sessionId: "o1",
 	}));
 	const wake = mock<ExtensionActionDeps["wake"]>(() => true);
+	const reviewConformance = mock<ExtensionActionDeps["reviewConformance"]>(async (input) => ({
+		items: input.requirements.map((requirement) => ({
+			id: requirement.id,
+			verdict: "met" as const,
+			evidence: [],
+			tests: [],
+		})),
+		summary: "conforms",
+	}));
+	const addReviewComments = mock<ExtensionActionDeps["addReviewComments"]>(
+		async (_workspaceId, _author, comments) =>
+			comments.map((comment, index) => ({
+				id: `rc_${index}`,
+				path: comment.path,
+				line: comment.line,
+				anchored: true,
+			})),
+	);
+	const attach = mock<ExtensionActionDeps["attach"]>(async () => true);
 	const deps: ExtensionActionDeps = {
 		isDisabled: (name) => disabled.has(name),
 		title: () => "Board",
@@ -123,7 +142,7 @@ function setup(
 		create,
 		startChat,
 		chatWorkspace: async (sessionId) => (sessionId === "s1" ? feature : null),
-		attach: async () => true,
+		attach,
 		send,
 		streaming: (sessionId) => sessionId === "running",
 		abort,
@@ -134,6 +153,9 @@ function setup(
 		startOrchestrator,
 		orchestratorChat: (containerId) => (containerId === "c1" ? orchestrator : null),
 		wake,
+		latestChat: async (workspace) => (workspace.id === "w1" ? "s-latest" : null),
+		reviewConformance,
+		addReviewComments,
 		...overrides,
 	};
 	return {
@@ -149,6 +171,9 @@ function setup(
 		createContainer,
 		startOrchestrator,
 		wake,
+		reviewConformance,
+		addReviewComments,
+		attach,
 	};
 }
 
@@ -176,6 +201,8 @@ describe("extension host actions", () => {
 			createContainer,
 			startOrchestrator,
 			wake,
+			reviewConformance,
+			addReviewComments,
 		} = setup();
 		disabled.add("board");
 		const refusals = await Promise.all([
@@ -190,9 +217,22 @@ describe("extension host actions", () => {
 			codeOf(actions.createContainer({ workspaceIds: ["w1"] })),
 			codeOf(actions.startOrchestrator({ containerId: "c1" })),
 			codeOf(actions.wakeOrchestrator({ containerId: "c1", kind: "board-ready", text: "x" })),
+			codeOf(
+				actions.reviewConformance({
+					workspaceId: "w1",
+					requirements: [{ id: "ac-1", text: "x" }],
+					context: "",
+				}),
+			),
+			codeOf(
+				actions.addReviewComments({
+					workspaceId: "w1",
+					comments: [{ path: "a.ts", line: 1, side: "worktree", text: "x" }],
+				}),
+			),
 		]);
 		expect(new Set(refusals)).toEqual(new Set(["EXTENSION_DISABLED"]));
-		expect(refusals).toHaveLength(11);
+		expect(refusals).toHaveLength(13);
 		for (const effect of [
 			create,
 			startChat,
@@ -204,6 +244,8 @@ describe("extension host actions", () => {
 			createContainer,
 			startOrchestrator,
 			wake,
+			reviewConformance,
+			addReviewComments,
 		])
 			expect(effect).not.toHaveBeenCalled();
 	});
@@ -590,5 +632,147 @@ describe("extension host actions", () => {
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
+	});
+});
+
+describe("conformance review and review comments", () => {
+	const requirements = [
+		{ id: "ac-1", text: "Greets in French" },
+		{ id: "os-auth", text: "TOTP enrollment", scenarios: ["WHEN a user scans THEN it enrolls"] },
+	];
+
+	test("reviewConformance runs the reviewer under the workspace's latest chat, with the services' signal", async () => {
+		const controller = new AbortController();
+		const { actions, reviewConformance, attach } = setup({}, controller.signal);
+		const result = await actions.reviewConformance({
+			workspaceId: "w1",
+			requirements,
+			context: "  Why: greet users  ",
+		});
+		expect(result.items.map((item) => item.id)).toEqual(["ac-1", "os-auth"]);
+		expect(attach).toHaveBeenCalledWith("s-latest", feature);
+		const [input] = reviewConformance.mock.calls[0] ?? [];
+		expect(input?.workspace).toBe(feature);
+		expect(input?.sessionId).toBe("s-latest");
+		expect(input?.context).toBe("Why: greet users");
+		expect(input?.requirements).toEqual(requirements);
+		expect(input?.signal).toBe(controller.signal);
+		await actions.reviewConformance({
+			workspaceId: "w1",
+			sessionId: "s1",
+			requirements,
+			context: "",
+		});
+		expect(reviewConformance.mock.calls[1]?.[0].sessionId).toBe("s1");
+	});
+
+	test("reviewConformance refuses bad requests before any run", async () => {
+		const { actions, reviewConformance } = setup({ latestChat: async () => null });
+		const refused = (params: Parameters<typeof actions.reviewConformance>[0]) =>
+			expect(actions.reviewConformance(params)).rejects.toThrow();
+		await refused({ workspaceId: "nope", requirements, context: "" });
+		await refused({ workspaceId: "chat-1", requirements, context: "" });
+		await refused({ workspaceId: "w1", requirements: [], context: "" });
+		await refused({
+			workspaceId: "w1",
+			requirements: [
+				{ id: "a", text: "x" },
+				{ id: "a", text: "y" },
+			],
+			context: "",
+		});
+		await refused({ workspaceId: "w1", requirements: [{ id: "a", text: " " }], context: "" });
+		await refused({
+			workspaceId: "w1",
+			requirements: [{ id: "a", text: "x", scenarios: ["" as string] }],
+			context: "",
+		});
+		await expect(
+			actions.reviewConformance({ workspaceId: "w1", requirements, context: "" }),
+		).rejects.toThrow("has no chat");
+		expect(reviewConformance).not.toHaveBeenCalled();
+		const unattached = setup({ attach: async () => false });
+		await expect(
+			unattached.actions.reviewConformance({ workspaceId: "w1", requirements, context: "" }),
+		).rejects.toThrow("could not be opened");
+		expect(unattached.reviewConformance).not.toHaveBeenCalled();
+	});
+
+	test("reviewConformance runs one at a time per workspace and frees the slot when it ends", async () => {
+		let release: () => void = () => {};
+		const held = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const { actions, reviewConformance } = setup({
+			reviewConformance: async () => {
+				await held;
+				return { items: [], summary: "" };
+			},
+		});
+		const first = actions.reviewConformance({ workspaceId: "w1", requirements, context: "" });
+		await expect(
+			actions.reviewConformance({ workspaceId: "w1", requirements, context: "" }),
+		).rejects.toThrow("already running");
+		release();
+		await first;
+		await actions.reviewConformance({ workspaceId: "w1", requirements, context: "" });
+		expect(reviewConformance).not.toHaveBeenCalled();
+		const failing = setup({
+			reviewConformance: async () => {
+				throw new Error("reviewer died");
+			},
+		});
+		await expect(
+			failing.actions.reviewConformance({ workspaceId: "w1", requirements, context: "" }),
+		).rejects.toThrow("reviewer died");
+		await expect(
+			failing.actions.reviewConformance({ workspaceId: "w1", requirements, context: "" }),
+		).rejects.toThrow("reviewer died");
+	});
+
+	test("reviewConformance refuses once the services' signal aborted", async () => {
+		const controller = new AbortController();
+		controller.abort();
+		const { actions, reviewConformance } = setup({}, controller.signal);
+		await expect(
+			actions.reviewConformance({ workspaceId: "w1", requirements, context: "" }),
+		).rejects.toThrow("switched off");
+		expect(reviewConformance).not.toHaveBeenCalled();
+	});
+
+	test("addReviewComments files under the given author, else the extension's title, and validates each remark", async () => {
+		const { actions, addReviewComments } = setup();
+		const comments = [
+			{ path: " src\\greet.ts ", line: 3, side: "worktree" as const, text: " Unmet " },
+		];
+		expect(
+			await actions.addReviewComments({ workspaceId: "w1", comments, author: "Smart review" }),
+		).toEqual({
+			comments: [{ id: "rc_0", path: "src/greet.ts", line: 3, anchored: true }],
+		});
+		expect(addReviewComments).toHaveBeenCalledWith("w1", "Smart review", [
+			{ path: "src/greet.ts", line: 3, side: "worktree", text: "Unmet" },
+		]);
+		await actions.addReviewComments({ workspaceId: "w1", comments });
+		expect(addReviewComments.mock.calls[1]?.[1]).toBe("Board");
+		const bad = (entry: Record<string, unknown>) =>
+			expect(
+				actions.addReviewComments({
+					workspaceId: "w1",
+					comments: [{ path: "a.ts", line: 1, side: "worktree", text: "x", ...entry } as never],
+				}),
+			).rejects.toThrow();
+		await bad({ path: "../escape.ts" });
+		await bad({ path: "/abs.ts" });
+		await bad({ line: 0 });
+		await bad({ line: 1.5 });
+		await bad({ side: "left" });
+		await bad({ text: "" });
+		await expect(actions.addReviewComments({ workspaceId: "w1", comments: [] })).rejects.toThrow();
+		await expect(
+			actions.addReviewComments({ workspaceId: "w1", comments, author: "x".repeat(41) }),
+		).rejects.toThrow();
+		await expect(actions.addReviewComments({ workspaceId: "chat-1", comments })).rejects.toThrow();
+		expect(addReviewComments).toHaveBeenCalledTimes(2);
 	});
 });

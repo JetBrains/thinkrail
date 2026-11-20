@@ -7,6 +7,8 @@ export type FakePrState = "OPEN" | "CLOSED" | "MERGED";
 export interface FakePr {
 	number: number;
 	headRefName: string;
+	/** The description; `pr edit --body-file` replaces it. */
+	body?: string;
 	baseRefName?: string;
 	state: FakePrState;
 	isDraft?: boolean;
@@ -85,6 +87,7 @@ function main(): void {
 		mergedAt: null,
 		closedAt: null,
 		createdAt: "2026-01-01T00:00:00Z",
+		body: "",
 		...pr,
 	});
 	const find = (selector: string | undefined) =>
@@ -165,6 +168,14 @@ function main(): void {
 			const pr = find(selector);
 			pr.state = "OPEN";
 			pr.closedAt = null;
+			save();
+			return;
+		}
+		case "edit": {
+			const pr = find(selector);
+			const file = flag("--body-file");
+			if (!file) fail(`fake gh: unsupported command ${argv.join(" ")}`);
+			pr.body = readFileSync(file, "utf8");
 			save();
 			return;
 		}
