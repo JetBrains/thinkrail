@@ -25,6 +25,7 @@ import {
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	type Project,
 	partitionWorkspaces,
+	REMOTE_ACCESS_PROTOCOL_VERSION,
 	RESOURCE_HISTORY_PROTOCOL_VERSION,
 	type ResourceKind,
 	type ResourceRecord,
@@ -154,6 +155,20 @@ export function selectHostSearchAvailable(state: {
 }): boolean {
 	return (
 		state.welcomeProtocolVersion !== null && state.welcomeProtocolVersion >= SEARCH_PROTOCOL_VERSION
+	);
+}
+
+/**
+ * Phone access (`remote.*`) is offered only for this computer's own host: a remote host refuses it to a
+ * device (`REMOTE_ACCESS_LOCAL_ONLY`), and one older than the protocol serves none.
+ */
+export function selectSupportsRemoteAccess(
+	state: ProtocolState & { remoteHostKey: string | null },
+): boolean {
+	return (
+		state.remoteHostKey === null &&
+		state.protocolVersion !== null &&
+		state.protocolVersion >= REMOTE_ACCESS_PROTOCOL_VERSION
 	);
 }
 
