@@ -27,7 +27,7 @@ const session: ExtensionSessionServices = {
 			checked.push({ path, cwd });
 			if (path === "missing.html") throw new Error("no such file");
 		},
-		checkArtifact: async (path) => path,
+		checkArtifacts: async (paths) => paths.map((path) => ({ path })),
 		scratchDir: ".thinkrail/context/mockups/",
 		artifactsDir: "",
 		ensureArtifactsDir: async () => {},

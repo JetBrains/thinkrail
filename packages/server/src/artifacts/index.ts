@@ -1,6 +1,7 @@
 export {
+	type ArtifactFileCheck,
 	type ArtifactSessionEvent,
-	checkArtifactFile,
+	checkArtifactFiles,
 	discardArtifact,
 	listArtifacts,
 	noteArtifactPathsChanged,

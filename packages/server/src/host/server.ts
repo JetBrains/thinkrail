@@ -102,7 +102,7 @@ import {
 	track,
 } from "../analytics";
 import {
-	checkArtifactFile,
+	checkArtifactFiles,
 	noteArtifactPathsChanged,
 	observeArtifactSessionEvent,
 	setArtifactsPublisher,
@@ -932,7 +932,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setSpecsEnabledResolver((workspaceId) => !isChatWorkspaceId(workspaceId));
 
 	setDisabledExtensionsResolver(() => new Set(getConfig().disabledExtensions));
-	setArtifactFileCheck(checkArtifactFile);
+	setArtifactFileCheck(checkArtifactFiles);
 	setExtensionSettingsResolver(() => getConfig().extensionSettings ?? {});
 
 	setProjectPublisher((project) => {

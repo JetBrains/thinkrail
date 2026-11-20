@@ -35,7 +35,7 @@ list for registry extensions.
   name the UI also uses to run mockup scripts): a path must be relative, stay inside the session cwd lexically and
   after resolving links, name a regular file and stay out of `.git`, the paths the host's `fs.readFile`
   then serves; `extension-api` stays contract-only, so the check lives here, not in the SDK; its
-  `checkArtifact` delegates to the artifact index's rule, which `host` installs with
+  `checkArtifacts` delegates to the artifact index's batch rule, which `host` installs with
   `setArtifactFileCheck` because this module may not reach `artifacts` (it rejects until then); plus
   `ensureArtifactsDir`, which is `shared`'s `seedArtifactsDir` on the session cwd), `omitDisabledRegistryExtensions(result, isDisabled)` (drops a disabled
   extension's `<inline:…>` entries from a pi `LoadExtensionsResult`, for the parent loader's

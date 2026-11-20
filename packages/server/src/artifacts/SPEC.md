@@ -26,7 +26,7 @@ client the same answer.
   writers and run window.
 - **Public surface (barrel):** `listArtifacts`, `reconcileArtifacts`, `restoreArtifact`, `discardArtifact`,
   `withUserRemoval`, `prepareArtifactsDestination`, `observeArtifactSessionEvent`, `ArtifactSessionEvent`,
-  `noteArtifactPathsChanged`, `setArtifactsPublisher`, `removeWorkspaceArtifacts`, `checkArtifactFile`.
+  `noteArtifactPathsChanged`, `setArtifactsPublisher`, `removeWorkspaceArtifacts`, `checkArtifactFiles`, `ArtifactFileCheck`.
 - **Allowed deps:** `persistence` (`dataDir`, workspace records), `git` (`gitAsync` for the ignored-root
   listing), `trash` (a discarded kept copy goes to the OS trash), `log`; `contracts`, `shared/paths`,
   `shared/artifactsDir`, `shared/codedError`; Node `fs`/`path`/`crypto`.
@@ -58,11 +58,12 @@ app's `node_modules` neither floods the list nor exhausts the bound) and build-o
 hashed assets on every run, and each old hash would otherwise stay forever as a "deleted" row with a kept
 copy. Unlike ignored outputs elsewhere, which do list `dist/`, a build inside the artifacts folder is
 scaffolding, not something the agent produced for the user. It also skips the `fs` delete claims
-(`DELETE_CLAIM_PREFIX`), which are the user's own trash in flight, not a rename. **`checkArtifactFile(path,
-cwd)`** states the same rule for one path — normalized containment in the artifacts folder, real folders,
-no link on the way, no skipped folder or claim, each refused with its own reason — and then confirms it
-against the bounded walk itself, so a file past the 5 000-entry bound is refused too; it returns the name
-the walk lists it under. The outputs extension publishes only what it accepts ([[module-ext-outputs]]),
+(`DELETE_CLAIM_PREFIX`), which are the user's own trash in flight, not a rename. **`checkArtifactFiles(paths,
+cwd)`** states the same rule for a batch of paths — normalized containment in the artifacts folder, real
+folders, no link on the way, no skipped folder or claim, each refused with its own reason — and then
+confirms the survivors against **one** run of the bounded walk, so a file past the 5 000-entry bound is
+refused too; each answer is the name the walk lists the file under or the reason. It is a batch because
+the walk is synchronous: one walk per path made a 1 000-path publish block the host for 11 s. The outputs extension publishes only what it accepts ([[module-ext-outputs]]),
 so a published file is never one Outputs silently drops. A worktree root that is
 not there (an unmounted drive, a moved project folder) is an incomplete scan, so its rows stay live until it
 returns. A new path gains a record

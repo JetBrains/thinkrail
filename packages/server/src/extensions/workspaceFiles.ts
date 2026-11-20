@@ -1,7 +1,7 @@
 import { realpath, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { WORKSPACE_MOCKUP_DIR } from "@thinkrail/contracts";
-import type { WorkspaceFiles } from "@thinkrail/extension-api/server";
+import type { ArtifactCheck, WorkspaceFiles } from "@thinkrail/extension-api/server";
 import { seedArtifactsDir } from "@thinkrail/shared/artifactsDir";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 
@@ -27,17 +27,19 @@ export async function checkWorkspaceFile(path: string, cwd: string): Promise<voi
 	}
 }
 
-let artifactFileCheck: ((path: string, cwd: string) => string) | null = null;
+type ArtifactFilesCheck = (paths: readonly string[], cwd: string) => ArtifactCheck[];
 
-export function setArtifactFileCheck(check: ((path: string, cwd: string) => string) | null): void {
-	artifactFileCheck = check;
+let artifactFilesCheck: ArtifactFilesCheck | null = null;
+
+export function setArtifactFileCheck(check: ArtifactFilesCheck | null): void {
+	artifactFilesCheck = check;
 }
 
 export const workspaceFiles: WorkspaceFiles = {
 	check: checkWorkspaceFile,
-	checkArtifact: async (path, cwd) => {
-		if (!artifactFileCheck) throw new Error("this host keeps no artifact index");
-		return artifactFileCheck(path, cwd);
+	checkArtifacts: async (paths, cwd) => {
+		if (!artifactFilesCheck) throw new Error("this host keeps no artifact index");
+		return artifactFilesCheck(paths, cwd);
 	},
 	ensureArtifactsDir: async (cwd) => {
 		seedArtifactsDir(resolve(cwd));

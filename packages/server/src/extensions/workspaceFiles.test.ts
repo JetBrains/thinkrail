@@ -53,13 +53,20 @@ describe("workspace file checks shared by extension server halves", () => {
 
 	test("the artifact check is the host's index rule, refused until the host provides it", async () => {
 		setArtifactFileCheck(null);
-		await expect(workspaceFiles.checkArtifact("a.md", "/w")).rejects.toThrow("no artifact index");
-		setArtifactFileCheck((path, cwd) => {
-			if (path === "dist/x.html") throw new Error("Artifacts does not list what is in `dist`");
-			return `${cwd}:${path}`;
-		});
-		await expect(workspaceFiles.checkArtifact("a.md", "/w")).resolves.toBe("/w:a.md");
-		await expect(workspaceFiles.checkArtifact("dist/x.html", "/w")).rejects.toThrow("`dist`");
+		await expect(workspaceFiles.checkArtifacts(["a.md"], "/w")).rejects.toThrow(
+			"no artifact index",
+		);
+		setArtifactFileCheck((paths, cwd) =>
+			paths.map((path) =>
+				path === "dist/x.html"
+					? { error: "Artifacts does not list what is in `dist`" }
+					: { path: `${cwd}:${path}` },
+			),
+		);
+		await expect(workspaceFiles.checkArtifacts(["a.md", "dist/x.html"], "/w")).resolves.toEqual([
+			{ path: "/w:a.md" },
+			{ error: "Artifacts does not list what is in `dist`" },
+		]);
 		setArtifactFileCheck(null);
 	});
 });

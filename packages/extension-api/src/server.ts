@@ -5,9 +5,11 @@ export type ToolResponse =
 	| { kind: "deferred" }
 	| { kind: "abandoned" };
 
+export type ArtifactCheck = { path: string } | { error: string };
+
 export interface WorkspaceFiles {
 	check(path: string, cwd: string): Promise<void>;
-	checkArtifact(path: string, cwd: string): Promise<string>;
+	checkArtifacts(paths: readonly string[], cwd: string): Promise<ArtifactCheck[]>;
 	ensureArtifactsDir(cwd: string): Promise<void>;
 	scratchDir: string;
 	artifactsDir: string;

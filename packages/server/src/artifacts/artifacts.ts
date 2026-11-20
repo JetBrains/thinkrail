@@ -338,30 +338,41 @@ function skippedEntry(entry: Dirent): boolean {
 	return skippedName(entry.name, entry.isDirectory());
 }
 
-export function checkArtifactFile(path: string, cwd: string): string {
-	const root = resolve(cwd);
-	const abs = resolve(root, path);
-	const rel = isInside(root, abs) ? relative(root, abs).split(sep).join("/") : "";
-	if (!isArtifactPath(rel)) throw new Error(`it is not inside \`${CONTEXT_PREFIX}\``);
-	if (contextFolder(root) !== "real") throw new Error(`\`${CONTEXT_PREFIX}\` is not a real folder`);
+export type ArtifactFileCheck = { path: string } | { error: string };
+
+function artifactPathProblem(root: string, rel: string): string | null {
+	if (!isArtifactPath(rel)) return `it is not inside \`${CONTEXT_PREFIX}\``;
 	const names = rel.slice(CONTEXT_PREFIX.length).split("/");
 	let at = WORKSPACE_CONTEXT_DIR;
 	for (const [index, name] of names.entries()) {
 		at = `${at}/${name}`;
 		const entry = lstatSync(join(root, at), { throwIfNoEntry: false });
-		if (!entry) throw new Error("no such file");
-		if (entry.isSymbolicLink())
-			throw new Error("it is a link, and Artifacts lists only real files");
+		if (!entry) return "no such file";
+		if (entry.isSymbolicLink()) return "it is a link, and Artifacts lists only real files";
 		const last = index === names.length - 1;
-		if (skippedName(name, !last)) throw new Error(`Artifacts does not list what is in \`${name}\``);
-		if (last ? !entry.isFile() : !entry.isDirectory()) throw new Error("not a regular file");
+		if (skippedName(name, !last)) return `Artifacts does not list what is in \`${name}\``;
+		if (last ? !entry.isFile() : !entry.isDirectory()) return "not a regular file";
 	}
+	return null;
+}
+
+export function checkArtifactFiles(paths: readonly string[], cwd: string): ArtifactFileCheck[] {
+	const root = resolve(cwd);
+	const real = contextFolder(root) === "real";
+	const checks = paths.map((path): ArtifactFileCheck => {
+		const abs = resolve(root, path);
+		const rel = isInside(root, abs) ? relative(root, abs).split(sep).join("/") : "";
+		const problem = artifactPathProblem(root, rel);
+		if (problem) return { error: problem };
+		return real ? { path: rel } : { error: `\`${CONTEXT_PREFIX}\` is not a real folder` };
+	});
+	if (!checks.some((check) => "path" in check)) return checks;
 	const scan = scanContext(root);
-	if (scan.files.has(rel)) return rel;
-	throw new Error(
-		scan.complete
-			? "Artifacts does not list it"
-			: `the artifacts folder holds more than ${MAX_ARTIFACT_SCAN_ENTRIES} entries, and Artifacts lists only what its walk reaches first`,
+	const unreached = scan.complete
+		? "Artifacts does not list it"
+		: `the artifacts folder holds more than ${MAX_ARTIFACT_SCAN_ENTRIES} entries, and Artifacts lists only what its walk reaches first`;
+	return checks.map((check) =>
+		"path" in check && !scan.files.has(check.path) ? { error: unreached } : check,
 	);
 }
 

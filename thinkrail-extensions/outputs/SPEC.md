@@ -25,10 +25,12 @@ Settings → Extensions & skills; while it is off, Artifacts opens on Smart inst
   artifact index as the stored `published` signal ([[submodule-server-artifacts]]). Imports:
   `extension-api/server`, `typebox`, pi types.
 - The tool takes worktree-relative, artifacts-relative or absolute paths (`@`, `./`, `file://`
-  tolerated). Each must pass `workspaceFiles.checkArtifact` — the artifact index's own rule (normalized
-  containment, no links, no skipped `dist`/`node_modules`-style folders, within the walk's entry bound),
-  not merely the workspace file
-  check, because a file the index never lists would be "published" yet absent from Outputs. Otherwise the
+  tolerated). The call's candidate paths (as given, and artifacts-relative) go to
+  `workspaceFiles.checkArtifacts` **in one batch** — the artifact index's own rule (normalized containment,
+  no links, no skipped `dist`/`node_modules`-style folders, within the walk's entry bound), not merely the
+  workspace file check, because a file the index never lists would be "published" yet absent from
+  Outputs; one batch means one bounded walk per call, not one per path, which blocked the host's event
+  loop for seconds on a large folder. Every path must pass. Otherwise the
   **whole call fails**, naming every refused path and why, and telling the agent to save it in the artifacts
   folder — a half-published set would leave the agent unsure what the user sees. `details.files` holds the
   names the index lists them under, deduplicated.

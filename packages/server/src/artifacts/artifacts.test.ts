@@ -19,7 +19,7 @@ import { basename, join } from "node:path";
 import { setTrashImplementationForTests } from "../trash";
 import {
 	artifactsStoreRoot,
-	checkArtifactFile,
+	checkArtifactFiles,
 	discardArtifact,
 	isArtifactPath,
 	isSameFile,
@@ -621,26 +621,35 @@ test("a file passes the artifact check exactly when the index would list it, nam
 	symlinkSync(join(root, CONTEXT, "real.md"), join(root, CONTEXT, "alias.md"));
 	symlinkSync(join(root, CONTEXT, "mockups"), join(root, CONTEXT, "mockups-link"));
 	const inside = `${CONTEXT}/mockups/a.html`;
-	expect(checkArtifactFile(inside, root)).toBe(inside);
-	expect(checkArtifactFile(`./${CONTEXT}/x/../mockups/a.html`, root)).toBe(inside);
-	expect(checkArtifactFile(join(root, inside), root)).toBe(inside);
-	const refusal = (path: string) => {
-		try {
-			checkArtifactFile(path, root);
-			return "";
-		} catch (error) {
-			return (error as Error).message;
-		}
-	};
-	expect(refusal(`${CONTEXT}/../../README.md`)).toContain("not inside");
-	expect(refusal("README.md")).toContain("not inside");
-	expect(refusal(`${CONTEXT}/.gitignore`)).toContain("not inside");
-	expect(refusal(`${CONTEXT}/mockups/dist/index.html`)).toContain("`dist`");
-	expect(refusal(`${CONTEXT}/app/node_modules/x/index.js`)).toContain("`node_modules`");
-	expect(refusal(`${CONTEXT}/alias.md`)).toContain("link");
-	expect(refusal(`${CONTEXT}/mockups-link/a.html`)).toContain("link");
-	expect(refusal(`${CONTEXT}/missing.md`)).toBe("no such file");
-	expect(refusal(`${CONTEXT}/mockups`)).toBe("not a regular file");
+	expect(
+		checkArtifactFiles(
+			[inside, `./${CONTEXT}/x/../mockups/a.html`, join(root, inside), `${CONTEXT}/real.md`],
+			root,
+		),
+	).toEqual([{ path: inside }, { path: inside }, { path: inside }, { path: `${CONTEXT}/real.md` }]);
+	const refusals = checkArtifactFiles(
+		[
+			`${CONTEXT}/../../README.md`,
+			"README.md",
+			`${CONTEXT}/.gitignore`,
+			`${CONTEXT}/mockups/dist/index.html`,
+			`${CONTEXT}/app/node_modules/x/index.js`,
+			`${CONTEXT}/alias.md`,
+			`${CONTEXT}/mockups-link/a.html`,
+			`${CONTEXT}/missing.md`,
+			`${CONTEXT}/mockups`,
+		],
+		root,
+	).map((check) => ("error" in check ? check.error : ""));
+	expect(refusals[0]).toContain("not inside");
+	expect(refusals[1]).toContain("not inside");
+	expect(refusals[2]).toContain("not inside");
+	expect(refusals[3]).toContain("`dist`");
+	expect(refusals[4]).toContain("`node_modules`");
+	expect(refusals[5]).toContain("link");
+	expect(refusals[6]).toContain("link");
+	expect(refusals[7]).toBe("no such file");
+	expect(refusals[8]).toBe("not a regular file");
 
 	await reconcileArtifacts("w1");
 	const listed = new Set((await listArtifacts("w1")).artifacts.map((entry) => entry.path));
@@ -650,9 +659,8 @@ test("a file passes the artifact check exactly when the index would list it, nam
 test("a file the index's bounded walk never reaches fails the artifact check, as it is never listed", async () => {
 	for (let index = 0; index < 5_000; index++) write(`${CONTEXT}/asset-${index}.png`, "png");
 	write(`${CONTEXT}/reports/r.md`, "r");
-	expect(() => checkArtifactFile(`${CONTEXT}/reports/r.md`, root)).toThrow(
-		"more than 5000 entries",
-	);
+	const [report] = checkArtifactFiles([`${CONTEXT}/reports/r.md`], root);
+	expect(report && "error" in report ? report.error : "").toContain("more than 5000 entries");
 	await reconcileArtifacts("w1");
 	const listed = new Set((await listArtifacts("w1")).artifacts.map((entry) => entry.path));
 	expect(listed.has(`${CONTEXT}/reports/r.md`)).toBe(false);

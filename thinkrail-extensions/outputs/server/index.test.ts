@@ -8,6 +8,7 @@ import outputs from "./index";
 import { createPresentFilesExtension, publishedPaths, publishFiles } from "./presentFiles";
 
 let root: string;
+let artifactChecks = 0;
 
 async function check(path: string, cwd: string): Promise<void> {
 	if (path.startsWith("/") || path.startsWith("..")) throw new Error("outside the workspace");
@@ -18,14 +19,21 @@ async function check(path: string, cwd: string): Promise<void> {
 
 const files: WorkspaceFiles = {
 	check,
-	async checkArtifact(path, cwd) {
-		const rel = relative(cwd, resolve(cwd, path)).split(sep).join("/");
-		if (!rel.startsWith(".thinkrail/context/"))
-			throw new Error("it is not inside the artifacts folder");
-		if (rel.split("/").includes("dist"))
-			throw new Error("Artifacts does not list what is in `dist`");
-		await check(rel, cwd);
-		return rel;
+	async checkArtifacts(paths, cwd) {
+		artifactChecks += 1;
+		return Promise.all(
+			paths.map(async (path) => {
+				const rel = relative(cwd, resolve(cwd, path)).split(sep).join("/");
+				if (!rel.startsWith(".thinkrail/context/"))
+					return { error: "it is not inside the artifacts folder" };
+				if (rel.split("/").includes("dist"))
+					return { error: "Artifacts does not list what is in `dist`" };
+				return check(rel, cwd).then(
+					() => ({ path: rel }),
+					(error: Error) => ({ error: error.message }),
+				);
+			}),
+		);
 	},
 	ensureArtifactsDir: async () => {},
 	scratchDir: ".thinkrail/context/mockups/",
@@ -33,6 +41,7 @@ const files: WorkspaceFiles = {
 };
 
 beforeEach(() => {
+	artifactChecks = 0;
 	root = mkdtempSync(join(tmpdir(), "ext-outputs-"));
 	mkdirSync(join(root, ".thinkrail/context/mockups"), { recursive: true });
 	writeFileSync(join(root, ".thinkrail/context/report.md"), "# r");
@@ -61,6 +70,7 @@ test("a file inside the artifacts folder is published by any path form, each onc
 		".thinkrail/context/report.md",
 		".thinkrail/context/mockups/checkout.html",
 	]);
+	expect(artifactChecks).toBe(1);
 });
 
 test("a path the host cannot list publishes nothing, and each refusal says why", async () => {

@@ -41,33 +41,15 @@ function candidates(raw: string, artifactsDir: string): string[] {
 	return relative.startsWith(artifactsDir) ? [path] : [path, `${artifactsDir}${relative}`];
 }
 
-function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
-}
-
-async function resolvePublished(
-	raw: string,
+async function existsInWorkspace(
+	path: string,
 	cwd: string,
 	files: WorkspaceFiles,
-): Promise<{ path: string } | { error: string }> {
-	const tried = candidates(raw, files.artifactsDir);
-	const errors: string[] = [];
-	for (const candidate of tried) {
-		try {
-			return { path: await files.checkArtifact(candidate, cwd) };
-		} catch (cause) {
-			errors.push(errorMessage(cause));
-		}
-	}
-	const [asGiven, inArtifacts] = tried;
-	const elsewhere =
-		inArtifacts !== undefined &&
-		asGiven !== undefined &&
-		(await files.check(asGiven, cwd).then(
-			() => true,
-			() => false,
-		));
-	return { error: (elsewhere ? errors[0] : errors.at(-1)) ?? "it cannot be published" };
+): Promise<boolean> {
+	return files.check(path, cwd).then(
+		() => true,
+		() => false,
+	);
 }
 
 export async function publishFiles(
@@ -75,12 +57,28 @@ export async function publishFiles(
 	cwd: string,
 	files: WorkspaceFiles,
 ): Promise<PresentFilesDetails> {
+	const tried = filepaths.map((raw) => candidates(raw, files.artifactsDir));
+	const checks = await files.checkArtifacts(tried.flat(), cwd);
 	const published = new Set<string>();
 	const refused: string[] = [];
-	for (const raw of filepaths) {
-		const outcome = await resolvePublished(raw, cwd, files);
-		if ("path" in outcome) published.add(outcome.path);
-		else refused.push(`- ${raw}: ${outcome.error}`);
+	let at = 0;
+	for (const [index, paths] of tried.entries()) {
+		const results = checks.slice(at, at + paths.length);
+		at += paths.length;
+		const accepted = results.find((check): check is { path: string } => "path" in check);
+		if (accepted) {
+			published.add(accepted.path);
+			continue;
+		}
+		const errors = results.map((check) => ("error" in check ? check.error : ""));
+		const [asGiven, inArtifacts] = paths;
+		const elsewhere =
+			inArtifacts !== undefined &&
+			asGiven !== undefined &&
+			(await existsInWorkspace(asGiven, cwd, files));
+		refused.push(
+			`- ${filepaths[index]}: ${(elsewhere ? errors[0] : errors.at(-1)) || "it cannot be published"}`,
+		);
 	}
 	if (refused.length) {
 		throw new Error(
