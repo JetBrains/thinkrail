@@ -18,6 +18,7 @@ import {
 	connectRemoteProject,
 	connectSavedHost,
 } from "./deviceConnector";
+import { type DeviceKey, setDeviceKeyStore } from "./deviceKey";
 import { BROKER_READY_TIMEOUT_MS } from "./signalingRoute";
 
 type Listener = (event: unknown) => void;
@@ -186,6 +187,11 @@ beforeEach(async () => {
 	])) as CryptoKeyPair;
 	hostPrivateKey = pair.privateKey;
 	hostKey = b64url(await crypto.subtle.exportKey("raw", pair.publicKey));
+	let held: DeviceKey | null = null;
+	setDeviceKeyStore({
+		load: async () => held,
+		keep: async (key) => (held ??= key),
+	});
 	const store = new Map<string, string>();
 	Object.assign(globalThis, {
 		WebSocket: FakeSocket,
