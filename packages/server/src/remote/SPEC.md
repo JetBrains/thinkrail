@@ -31,8 +31,9 @@ See the home-directory plan `thinkrail-remote-project-qr-spec.md` for the produc
     (`createPairingTokens`), keyed by `pairingTokenId` (base64url SHA-256 of the token), because the relay
     carries `hello` and must never see the token itself. A leaked QR cannot be replayed and nothing survives a
     restart.
-  - `pairing.ts` — `newChallenge()`, `verifyPairingProof()` (a device signs the host challenge to prove it
-    holds its key), `pairingTokenId()`, and `pairingMac` / `verifyPairingMac` — the HMAC-SHA256 under the QR
+  - `pairing.ts` — `newChallenge()`, `verifyPairingProof(hostPublicKey, proof)` (a device signs
+    `proofTranscript(hostPublicKey, challenge)` to prove it holds its key — bound to this host and
+    domain-separated from the SDP signatures, so a relay-chosen challenge yields nothing reusable), `pairingTokenId()`, and `pairingMac` / `verifyPairingMac` — the HMAC-SHA256 under the QR
     token over `pairingMacInput(devicePublicKey, challenge)` that proves a first-pairing device read the QR
     and binds that to its own key, so a relay that saw the `hello` cannot pair a key of its own.
   - `accessSetting.ts` — whether the user left phone access on (`remote-access.json`, `0600`); off when

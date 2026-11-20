@@ -8,6 +8,7 @@ import {
 	offerTranscript,
 	parseClientMessage,
 	parseDeviceMessage,
+	proofTranscript,
 } from "@thinkrail/contracts";
 import { RemoteConnectError } from "./connectError";
 import {
@@ -39,6 +40,9 @@ type HostMode = "silent" | "ready" | "handshake";
 let hostMode: HostMode = "handshake";
 let hostPrivateKey: CryptoKey;
 let hostKey = "";
+const CHALLENGE = "Y2hhbGxlbmdlLWNoYWxsZW5nZS1jaGFsbGVuZ2UtMzI";
+const SECOND_CHALLENGE = "c2Vjb25kLXNlY29uZC1zZWNvbmQtc2Vjb25kLXNlY28";
+let challengeSent = CHALLENGE;
 const sockets: FakeSocket[] = [];
 const peers: FakePeer[] = [];
 
@@ -48,9 +52,26 @@ const b64url = (bytes: ArrayBuffer): string =>
 		.replace(/\//g, "_")
 		.replace(/=+$/, "");
 
+const fromB64url = (value: string): Uint8Array<ArrayBuffer> =>
+	Uint8Array.from(atob(value.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+
+async function verifiedProof(devicePublicKey: string, signature: string): Promise<boolean> {
+	const key = await crypto.subtle.importKey("raw", fromB64url(devicePublicKey), "Ed25519", false, [
+		"verify",
+	]);
+	return crypto.subtle.verify(
+		"Ed25519",
+		key,
+		fromB64url(signature),
+		proofTranscript(hostKey, CHALLENGE),
+	);
+}
+
 class FakeSocket extends Emitter {
 	closed = false;
 	private nonce = "";
+	private devicePublicKey = "";
+	validProofs = 0;
 	readonly url: string;
 	constructor(url: string) {
 		super();
@@ -74,14 +95,18 @@ class FakeSocket extends Emitter {
 		const message = parseDeviceMessage(frame.data);
 		if (message?.kind === "resume" || message?.kind === "hello") {
 			this.nonce = message.nonce;
-			this.host({ kind: "challenge", challenge: "Y2hhbGxlbmdl" });
+			this.devicePublicKey = message.devicePublicKey;
+			this.host({ kind: "challenge", challenge: challengeSent });
 		} else if (message?.kind === "proof") {
 			this.proofs += 1;
+			void verifiedProof(this.devicePublicKey, message.signature).then((valid) => {
+				if (valid) this.validProofs += 1;
+			});
 			void crypto.subtle
 				.sign(
 					{ name: "Ed25519" },
 					hostPrivateKey,
-					offerTranscript(this.nonce, "Y2hhbGxlbmdl", "offer-sdp"),
+					offerTranscript(this.nonce, CHALLENGE, "offer-sdp"),
 				)
 				.then((signature) =>
 					this.host({ kind: "offer", sdp: "offer-sdp", signature: b64url(signature) }),
@@ -148,6 +173,7 @@ beforeEach(async () => {
 	sockets.length = 0;
 	peers.length = 0;
 	hostMode = "handshake";
+	challengeSent = CHALLENGE;
 	const pair = (await crypto.subtle.generateKey({ name: "Ed25519" }, true, [
 		"sign",
 		"verify",
@@ -200,6 +226,7 @@ const codeOf = (error: unknown): string | undefined =>
 test("a saved host returns at once and its loop makes the first attempt", async () => {
 	const { connection, opens } = watched();
 	await settle(() => peers[0]?.answered === true);
+	expect(sockets[0]?.validProofs).toBe(1);
 	expect(opens).toEqual([]);
 	peers[0]?.openChannel();
 	await settle(() => opens.length > 0);
@@ -278,6 +305,15 @@ test("a refusal no retry fixes ends a saved host's loop through onLost", async (
 	connection.close();
 });
 
+test("a challenge that is not 32 random bytes is never signed", async () => {
+	challengeSent = btoa("thinkrail/answer/v1\nC1\nv=0").replace(/=+$/, "");
+	const { connection, lost, misses } = watched();
+	await settle(() => lost.length + misses.length > 0);
+	expect([...lost, ...misses].map(codeOf)).toContain("identity_mismatch");
+	expect(sockets[0]?.proofs).toBe(0);
+	connection.close();
+});
+
 async function live() {
 	const watch = watched();
 	await settle(() => peers[0]?.answered === true);
@@ -324,7 +360,7 @@ test("reconnectNow during an in-flight attempt does not start a second one", asy
 
 test("host frames after the channel opened never tear the live connection down", async () => {
 	const { connection, opens } = await live();
-	sockets[0]?.host({ kind: "challenge", challenge: "c2Vjb25k" });
+	sockets[0]?.host({ kind: "challenge", challenge: SECOND_CHALLENGE });
 	sockets[0]?.host({ kind: "rejected", reason: "denied", code: "denied" });
 	await settle();
 	expect(opens).toEqual([]);
@@ -336,7 +372,7 @@ test("host frames after the channel opened never tear the live connection down",
 test("a second challenge mid-handshake is not answered again", async () => {
 	const { connection } = watched();
 	await settle(() => sockets[0]?.proofs === 1);
-	sockets[0]?.host({ kind: "challenge", challenge: "c2Vjb25k" });
+	sockets[0]?.host({ kind: "challenge", challenge: SECOND_CHALLENGE });
 	await settle(() => peers[0]?.answered === true);
 	await settle();
 	expect(sockets[0]?.proofs).toBe(1);

@@ -74,7 +74,7 @@ export function startRemoteAccess(options: RemoteAccessOptions): RemoteAccess {
 		const handshake = createHostHandshake({
 			newChallenge,
 			consumeToken: (tokenId) => tokens.consume(tokenId),
-			verifyProof: verifyPairingProof,
+			verifyProof: (proof) => verifyPairingProof(identity.publicKey, proof),
 			verifyMac: verifyPairingMac,
 			registerDevice: (device) => void addDevice(device),
 			findDevice: (key) => findDeviceByKey(key),

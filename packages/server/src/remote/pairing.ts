@@ -1,10 +1,10 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { pairingMacInput } from "@thinkrail/contracts";
+import { PAIRING_CHALLENGE_BYTES, pairingMacInput, proofTranscript } from "@thinkrail/contracts";
 import { verifySignature } from "./identity";
 
 /** A fresh random challenge the host issues; the device must sign it to prove it holds its key. */
 export function newChallenge(): string {
-	return randomBytes(32).toString("base64url");
+	return randomBytes(PAIRING_CHALLENGE_BYTES).toString("base64url");
 }
 
 /** The public name of a QR token — base64url(SHA-256(token)) — the only form of it the relay ever sees. */
@@ -17,15 +17,15 @@ export interface PairingProof {
 	devicePublicKey: string;
 	/** base64url challenge the host issued for this attempt. */
 	challenge: string;
-	/** base64url device signature over the challenge bytes. */
+	/** base64url device signature over `proofTranscript(hostPublicKey, challenge)`. */
 	signature: string;
 }
 
-/** Verifies a device's proof-of-key over the host-issued challenge. */
-export function verifyPairingProof(proof: PairingProof): boolean {
+/** Verifies a device's proof-of-key over this host's challenge to it. */
+export function verifyPairingProof(hostPublicKey: string, proof: PairingProof): boolean {
 	return verifySignature(
 		proof.devicePublicKey,
-		Buffer.from(proof.challenge, "base64url"),
+		proofTranscript(hostPublicKey, proof.challenge),
 		Buffer.from(proof.signature, "base64url"),
 	);
 }

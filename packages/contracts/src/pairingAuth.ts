@@ -18,6 +18,21 @@ export function registerTranscript(nonce: string): Uint8Array<ArrayBuffer> {
 	return transcript("register", nonce);
 }
 
+/** The byte length of a host challenge; a device signs nothing else as one. */
+export const PAIRING_CHALLENGE_BYTES = 32;
+
+const CHALLENGE_SHAPE = /^[A-Za-z0-9_-]{43}$/;
+
+/** Whether a challenge is the unpadded base64url of exactly `PAIRING_CHALLENGE_BYTES` random bytes. */
+export function isPairingChallenge(value: string): boolean {
+	return CHALLENGE_SHAPE.test(value);
+}
+
+/** What the device signs to prove it holds its key, bound to the host it dials and that host's challenge. */
+export function proofTranscript(hostPublicKey: string, challenge: string): Uint8Array<ArrayBuffer> {
+	return transcript("proof", hostPublicKey, challenge);
+}
+
 /** What the host signs over its WebRTC offer, bound to the device's fresh nonce and the host's challenge. */
 export function offerTranscript(
 	nonce: string,

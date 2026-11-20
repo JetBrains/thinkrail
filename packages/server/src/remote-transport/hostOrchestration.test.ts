@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { HostMessage } from "@thinkrail/contracts";
-import { answerTranscript, offerTranscript } from "@thinkrail/contracts";
+import { answerTranscript, offerTranscript, proofTranscript } from "@thinkrail/contracts";
 import {
 	addDevice,
 	createPairingTokens,
@@ -52,7 +52,7 @@ test("host orchestration pairs a device over the handshake and opens a working W
 			handshake: createHostHandshake({
 				newChallenge,
 				consumeToken: (id) => tokens.consume(id),
-				verifyProof: verifyPairingProof,
+				verifyProof: (proof) => verifyPairingProof(hostPublicKey, proof),
 				verifyMac: verifyPairingMac,
 				registerDevice: (d) => addDevice(d, dir),
 				findDevice: (key) => loadDevices(dir).find((d) => d.publicKey === key) ?? null,
@@ -78,7 +78,7 @@ test("host orchestration pairs a device over the handshake and opens a working W
 				challenge = message.challenge;
 				const signature = edSign(
 					null,
-					Buffer.from(message.challenge, "base64url"),
+					proofTranscript(hostPublicKey, message.challenge),
 					privateKey,
 				).toString("base64url");
 				const mac = pairingMac(token, devicePublicKey, challenge);
