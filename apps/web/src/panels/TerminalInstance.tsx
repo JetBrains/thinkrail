@@ -15,6 +15,7 @@ import "@xterm/xterm/css/xterm.css";
 import { i18n, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { type ResolvedFont, resolveFont, watchFont } from "@thinkrail/ui/fonts";
+import { hasPlatformModifier, isApplePlatform } from "@thinkrail/ui/keyboard";
 import { onThemeSwap } from "@thinkrail/ui/theme";
 import { type QuietScrollEdges, QuietScrollFrame } from "@/components/QuietScrollArea";
 import { copyText, cssColorToHex, platformFamily } from "@/lib";
@@ -24,6 +25,7 @@ import { createPtySizeSync, runAfterTerminalRelayout } from "./ptySizeSync";
 import { stripAnsiDim, terminalContrastFloor } from "./terminalContrast";
 import { createTerminalImeBridge } from "./terminalImeBridge";
 import { terminalKeyDecision } from "./terminalKeys";
+import { createTerminalLinkProvider } from "./terminalLinks";
 import { createTerminalPrebindBuffer } from "./terminalPrebindBuffer";
 
 const RESIZE_DEBOUNCE_MS = 60;
@@ -94,6 +96,19 @@ function tryLoad(fn: () => void): void {
 	} catch {}
 }
 
+function showLinkHint(element: HTMLElement | undefined, visible: boolean): void {
+	if (!element) return;
+	if (!visible) {
+		element.removeAttribute("title");
+		return;
+	}
+	element.title = i18n.t(
+		isApplePlatform()
+			? "panels.terminalInstance.linkHintApple"
+			: "panels.terminalInstance.linkHintOther",
+	);
+}
+
 interface Props {
 	tabKey: string;
 	workspaceId: string;
@@ -151,6 +166,14 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		tryLoad(() => term.loadAddon(webFonts));
 		termRef.current = term;
 		term.open(host);
+		const linkProvider = term.registerLinkProvider(
+			createTerminalLinkProvider({
+				buffer: () => term.buffer.active,
+				open: (url) => window.open(url, "_blank", "noopener,noreferrer"),
+				isActivation: (event) => hasPlatformModifier(event),
+				showHint: (visible) => showLinkHint(term.element, visible),
+			}),
+		);
 		// WebKit feeds the macOS Korean IME to xterm as insertText + insertReplacementText (upstream #5704) — see panels/SPEC.md.
 		const imeBridge = createTerminalImeBridge((data) => term.input(data, true));
 		const onImeInput = (event: Event): void => {
@@ -394,6 +417,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 			onViewportScroll.dispose();
 			onBufferWrite.dispose();
 			onTerminalResize.dispose();
+			linkProvider.dispose();
 			unsubscribe();
 			unsubscribeExit();
 			unsubscribeDetached();

@@ -1,4 +1,4 @@
-import { expect, test, type WebSocketRoute } from "@playwright/test";
+import { expect, type Page, test, type WebSocketRoute } from "@playwright/test";
 import { INITIAL_TERMINAL_TAB_KEY } from "@thinkrail/contracts";
 import {
 	activeWorktreeRow,
@@ -967,4 +967,62 @@ test("a shell that dies during a reclaim is not presented as alive", async ({ pa
 	await expect(visibleTerminal(page)).toHaveAttribute("data-exited", "true", { timeout: 20_000 });
 
 	await page2.close();
+});
+
+async function terminalTextPoint(page: Page, text: string): Promise<{ x: number; y: number }> {
+	await expect(visibleTerminalScreen(page)).toContainText(text);
+	const point = await visibleTerminalScreen(page).evaluate((rows, needle) => {
+		for (const row of Array.from(rows.children)) {
+			const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+			const nodes: Text[] = [];
+			for (let node = walker.nextNode(); node; node = walker.nextNode()) nodes.push(node as Text);
+			const content = nodes
+				.map((node) => node.data)
+				.join("")
+				.replace(/\u00a0/g, " ");
+			let offset = content.indexOf(needle);
+			if (offset === -1) continue;
+			for (const node of nodes) {
+				if (offset < node.data.length) {
+					const range = document.createRange();
+					range.setStart(node, offset);
+					range.setEnd(node, offset + 1);
+					const rect = range.getBoundingClientRect();
+					return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+				}
+				offset -= node.data.length;
+			}
+		}
+		return null;
+	}, text);
+	if (!point) throw new Error(`No terminal row shows ${text}`);
+	return point;
+}
+
+test("Mod+click opens a printed URL; a plain click does not", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	await page.evaluate(() => {
+		const opened: string[] = [];
+		Object.assign(window, { trOpened: opened });
+		window.open = (url?: string | URL) => {
+			opened.push(String(url));
+			return null;
+		};
+	});
+	const opened = () => page.evaluate(() => (window as unknown as { trOpened: string[] }).trOpened);
+
+	// printf assembles the URL so the echoed command line never shows it.
+	await runInTerminal(page, "printf 'TR_URL %s://%s/%s.\\n' https example.com docs");
+	const point = await terminalTextPoint(page, "https://example.com/docs");
+	await page.mouse.move(point.x, point.y);
+	await expect(visibleTerminal(page).locator(".xterm-screen")).toHaveClass(/xterm-cursor-pointer/);
+	await expect(visibleTerminal(page).locator(".xterm")).toHaveAttribute("title", /click to open/);
+
+	await page.mouse.click(point.x, point.y);
+	await page.keyboard.down("ControlOrMeta");
+	await page.mouse.click(point.x, point.y);
+	await page.keyboard.up("ControlOrMeta");
+	await expect.poll(opened).toEqual(["https://example.com/docs"]);
 });
