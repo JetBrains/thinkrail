@@ -1,0 +1,10 @@
+{
+	"id": "add-webhook-retries",
+	"title": "Retry failed webhook deliveries with backoff",
+	"deltaCount": 0,
+	"deltas": [],
+	"root": {
+		"path": "<root>",
+		"source": "nearest"
+	}
+}

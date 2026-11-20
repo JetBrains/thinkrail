@@ -13,8 +13,9 @@ tags: [wire]
 
 The browser↔host wire spine: the single source of truth for the protocol. Types plus a small
 dependency-free runtime: the WS method/channel constants, protocol/feature versions, the small config
-default, narrow cross-ring guards, the quit-confirmation rule both clients drive, and the search matcher
-the palette ranks with — kept here so host-side search can rank with the same copy. The one package
+default, narrow cross-ring guards, the quit-confirmation rule both clients drive, the search matcher
+the palette ranks with — kept here so host-side search can rank with the same copy — and the session-state
+readings `isSessionWorking` / `chatState`, one vocabulary for the host and the UI. The one package
 `apps/web` may depend on—which is what lets the UI ship independently of the host.
 
 ## Boundary
@@ -60,7 +61,8 @@ the palette ranks with — kept here so host-side search can rank with the same 
   not be read, a failure analytics tells apart from a lost connection while the font picker offers Retry for
   either; the two `extension.query` refusals **`EXTENSION_DISABLED`** (the user switched the extension
   off — its panel shows the off placeholder) and **`UNKNOWN_EXTENSION_QUERY`** (no such extension or method
-  on this host, or a malformed request); and the closed `SPEECH_ERROR_CODES` (§ Voice input), each naming
+  on this host, or a malformed request); the five container refusals (§ Containers); and the closed
+  `SPEECH_ERROR_CODES` (§ Voice input), each naming
   a voice state the UI words differently), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it or Error Tracking must tell it apart (it never sees `message`). Two codes exist for the latter:
@@ -152,9 +154,11 @@ the palette ranks with — kept here so host-side search can rank with the same 
   sides agree here rather than each re-deriving `startsWith`) + **`isRetriedAttempt(messages, index)`**
   (the one shared reading of pi's persisted-but-superseded auto-retry attempts — the client's hydration
   hides their turns, the host's history indexer skips their text; both consume the index slot so jump
-  anchors stay aligned) from `domain`; **`isTranscriptMessageRole(role)`**
-  and **`isSessionWorking(state)`** (running or idle on background work — the one working test every
-  badge and glance uses) from `piProtocol` (`isTranscriptMessageRole` is the one definition of which roles a transcript carries: the host filters
+  anchors stay aligned) from `domain`; **`isTranscriptMessageRole(role)`**,
+  **`isSessionWorking(state)`** (running or idle on background work — the one working test every
+  badge and glance uses) and **`chatState(state)`** (`ChatState`, the one chat-state reading:
+  needs-you, then working, then the latest completion's outcome, else idle; unread is not a state —
+  callers combine `completionUnread` explicitly) from `piProtocol` (`isTranscriptMessageRole` is the one definition of which roles a transcript carries: the host filters
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `wsProtocol`
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, `WS_MAX_FRAME_BYTES`, and
@@ -782,10 +786,20 @@ optional `model` and `thinking`, disabled entries included, never a prompt body 
   **layout preset DTO** — portable **`LayoutPreset`**, the bounded resource-free frame grammar synchronized
   in `AppConfig.customLayoutPresets`: center topology, left/right/bottom group geometry, visibility/folds,
   bottom alignment, and singleton tools (`plan`, the TODO List, is accepted from
-  `LAYOUT_PLAN_PRESET_PROTOCOL_VERSION` = v94, `artifacts` from `ARTIFACTS_PROTOCOL_VERSION` = v121), but no workspace, file, diff, chat, document, terminal, preview,
+  `LAYOUT_PLAN_PRESET_PROTOCOL_VERSION` = v94, `artifacts` from `ARTIFACTS_PROTOCOL_VERSION` = v121,
+  `orchestrator`, the pinned container orchestrator chat, from `CONTAINER_PROTOCOL_VERSION` = v129, and an
+  extension's side tool from `EXTENSION_EVENT_PROTOCOL_VERSION` = v130, the release of the extension events
+  its first consumer, the board, needs), but no workspace, file, diff, chat, document, terminal, preview,
   attention, or current/default-selection identity. Every current-layout type—including the projected
   `WorkspaceLayoutDocument`, `WorkbenchFrame`, and `WorkspaceViewState`—is web-local and deliberately absent
-  from contracts. There is no current-layout method or push channel.
+  from contracts. There is no current-layout method or push channel. **`LayoutToolId`** is
+  `BuiltinLayoutToolId` (`BUILTIN_LAYOUT_TOOL_IDS`) or **`ExtensionLayoutToolId`**,
+  `ext:<extension>:<tool>` — the singleton side tool an extension's web half declares — whose parts are
+  each 1–64 lowercase letters, digits or dashes, starting with a letter or digit. The guards
+  `isBuiltinLayoutToolId`, `isExtensionLayoutToolId`, `parseExtensionLayoutToolId` and `isLayoutToolId`
+  are the one bounded validation the host's preset validator and the web's local-layout decoder share;
+  `extensionLayoutToolId(extension, tool)` builds one. Which extension tools exist is the web registry's,
+  never the wire's.
 - **nativeClient.ts** — type-only optional native-client capabilities outside the host wire. The desktop
   update bridge exposes a monotonic state snapshot, prompt check/download/install actions, failed-operation
   identity, and state subscription without exposing feed selection. Available, byte-transfer, preparation,
@@ -1248,8 +1262,9 @@ transcripts written before it, which keep the old round rules). The guards do no
 shared `completionDelivery(details)` reader returns the marker or `undefined`, so an unknown value
 reads as absent everywhere. **`opensChatRound(message)`** is the message-level twin of the chat's
 turn-level `opensRound` ([[submodule-web-chat]]): a user prompt other than a control message, a
-`todo-review-fix`, a continuation request, a handoff, or a completion not delivered as `run`. The host
-uses it to cut artifact round markers where the chat cuts rounds; a web test pins the two together. The conversation may render that historical notice,
+`todo-review-fix`, a continuation request, a handoff, a container wake-up or orchestrator message (not
+the brief), or a completion not delivered as `run`. The host uses it to cut artifact round markers where
+the chat cuts rounds; a web test pins the two together. The conversation may render that historical notice,
 but must never infer current resource authority from it; logs and controls still use scoped reads.
 
 Every read/control validates workspace membership and parent lineage, not merely a syntactically
@@ -1279,6 +1294,74 @@ the pi-level resource grant. A client talking to an older host sends neither.
   resources (`Project.piResourceTrust` — settings and extensions run code). Without it a grant sets the
   alias trust only, so a surface that does not name what pi-level trust loads (an older client) never
   enables it; `trusted: false` revokes both.
+
+## Containers
+
+`CONTAINER_PROTOCOL_VERSION` (129) gates the container wire, `container.startOrchestrator` included; a
+client talking to an older host sends none of it and holds no containers.
+
+- **`Container`** (`domain`) — `{ id, name, workspaceIds, orchestratorSessionId?, createdAt, updatedAt }`:
+  a host-owned group of workspaces, possibly of several projects, in member order. Each member stays one
+  `Workspace` (one worktree) and belongs to at most one container; a project's Default workspace and a
+  chat without a project never belong to one. A workspace in no container has no record. The home
+  folder's path stays host-side.
+- **Orchestrator** — a `kind: "chat"` workspace in the Chats project with **`Workspace.orchestratorOf`**
+  naming its container (its folder is the home, so its `worktreePath` is the one home path a client sees);
+  `orchestratorSessionId` is its session. Created by **`container.startOrchestrator`** (`{ containerId,
+  model?, thinkingLevel? }` → **`ContainerOrchestrator { container, workspace, sessionId }`**; joins a start
+  in flight, answers an existing orchestrator as it is) and by the host itself when `container.create`
+  has two or more members or `container.addWorkspace` brings it to two. It starts with no turn: its first
+  entry is the **`container-brief`** custom message (`CONTAINER_BRIEF_CUSTOM_TYPE`,
+  `ContainerBriefDetails { containerId }`), a summary of the members that only adds context. Removing the
+  container deletes it like a chat; deleting it alone clears `orchestratorSessionId`.
+- **Container cards** — two more custom messages, both starting a turn: **`container-wake`**
+  (`CONTAINER_WAKE_CUSTOM_TYPE`, `ContainerWakeDetails { containerId, workspaceId?, workspaceName?, reasons:
+  ("chat" | "review" | "extension")[], source? }`), the host's update in the orchestrator's chat about one
+  member (its workspace named) or from an extension (`source: ContainerWakeSource { extension,
+  extensionTitle, kind }`, reason `extension`, no member; read only with both its workspace fields or its
+  source), and
+  **`orchestrator-message`** (`ORCHESTRATOR_MESSAGE_CUSTOM_TYPE`, `OrchestratorMessageDetails { containerId,
+  containerName, orchestratorSessionId, mode: "follow_up" | "steer", text }`), an orchestrator's
+  `message_chat` in a member chat — its provenance, never a user message; `text` is the orchestrator's own
+  words, the `content` frames them for the member's agent. **`readContainerNote(message)`** reads any of
+  the three, and an extension's message (§ Extension events), into `ContainerNote` (`brief` | `wake` |
+  `orchestratorMessage` | `extensionMessage`), `null` for anything else or a malformed one, and
+  `opensChatRound` opens a round at a wake-up or a message, not at the brief. No method or protocol gate:
+  an older client shows none of them.
+- **`Workspace.startedBy`** (`WorkspaceStartedBy { sessionId, containerId? }`) — on a workspace an agent's
+  `start_workspace` created: the calling session, plus its container when that session is an orchestrator.
+- Methods: **`container.list`** (→ `Container[]`) / **`container.create`** (`{ name?, workspaceIds }` →
+  `Container`; at least one member, the name defaulting to the first member's) / **`container.rename`**
+  (`{ containerId, name }`) / **`container.addWorkspace`** and **`container.removeWorkspace`**
+  (`{ containerId, workspaceId }`; removal answers `null` when it dissolved the container — the
+  workspace becomes standalone either way) / **`container.remove`** (`{ containerId }` → `Ack`; dissolves
+  the record only, members are untouched — archiving them is `workspace.remove`). Archiving or removing a
+  workspace makes it leave its container; a container left without members is removed.
+  **`workspace.startCreate`** takes **`into?: containerId`** at the same gate: the new workspace joins that
+  container as its creation hands it over, before `workspace.creationRemoved`, so a client never sends a
+  second request that a closed window could lose (an unknown container is `CONTAINER_UNKNOWN` up front).
+- Channels: **`container.updated`** (the full `Container` snapshot after every create and change —
+  idempotent under last-value replay) and **`container.removed`** (`ContainerRemoved { id }`), broadcast to
+  sockets at the gate only.
+- Refusals: `CONTAINER_UNKNOWN` (the client drops its stale record), `CONTAINER_EMPTY`,
+  `CONTAINER_MEMBER_TAKEN` (already in another container), `CONTAINER_MEMBER_REFUSED` (a Default
+  workspace or a chat) and `CONTAINERS_STORE_UNAVAILABLE` (a newer host's `containers.json`, read-only here).
+
+## Extension events
+
+`EXTENSION_EVENT_PROTOCOL_VERSION` (130) gates the **`extension.event`** channel
+(**`ExtensionEventPush { extension, type, payload }`**): what a host-registry extension's server half
+`publish`es for its web half, broadcast to the sockets at the gate that may see the push's workspace or
+project. The payload is the extension's own (versioned by its `apiVersion`); the web side filters by
+`extension` and never replays the channel's latest push to a late subscriber (the web transport lists it
+as non-replayable), so the channel carries invalidations, not state. An older client subscribes to
+nothing.
+
+- **`extension-message`** (`EXTENSION_MESSAGE_CUSTOM_TYPE`, `ExtensionMessageDetails { extension,
+  extensionTitle, mode: "follow_up" | "steer", text }`) — an extension's `sendToChat` host action in a
+  chat, starting a turn: its provenance, never a user message, shown under the extension's title; `text`
+  is the extension's own words, the `content` frames them for the agent. It reads as a `ContainerNote`
+  (`extensionMessage`), with no gate of its own.
 
 ## MCP servers
 
@@ -1515,7 +1598,8 @@ pending dialog its exact replayable request), nullable latest `completion` (stab
 `backgroundWork` flag (the session still owns running background commands or subagents), and the
 owner-global `completionUnread` receipt projection (held false while an idle session has background work).
 `isSessionWorking` is the one *working* test: `execution` running or `backgroundWork`; an older host omits
-the flag, which reads as false. `SessionStateRecord` adds session/workspace/project
+the flag, which reads as false. `chatState` builds on it for the one vocabulary the host's
+`workspace_status` and the web's attention share (`cancelled` reads as `interrupted`). `SessionStateRecord` adds session/workspace/project
 attribution plus the chat's `title` and `firstPrompt`; `SessionSummary.state` carries the exact attached
 session's state.
 

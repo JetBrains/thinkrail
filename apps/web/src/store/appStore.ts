@@ -3,6 +3,7 @@ import type {
 	AppSurvey,
 	ChatContinuation,
 	ComposerGrowthLimit,
+	Container,
 	ExtUiRequest,
 	FontChoice,
 	GitDiffScope,
@@ -72,6 +73,7 @@ import {
 	type KeybindingOverrides,
 	normalizeFontSettings,
 	normalizeThemePreference,
+	readContainerNote,
 	readToolResponseMessage,
 	sameModel,
 } from "@thinkrail/contracts";
@@ -99,6 +101,7 @@ import {
 	matchesSkillInvocationCommand,
 	nullProto,
 	parseSkillInvocation,
+	projectRelativePath,
 	randomId,
 	randomUuid,
 	readLayoutNavigationClock,
@@ -130,6 +133,19 @@ import {
 	type McpWorkspaceProjection,
 	withoutMcpSession,
 } from "./mcp";
+import {
+	carryPeekEntry,
+	followPeekEntry,
+	hidePeek,
+	type PeekEntry,
+	type PeekState,
+	peeksAfterTurns,
+	peeksWithoutContainers,
+	peeksWithoutExtensions,
+	pushPeekEntry,
+	removePeekEntry,
+	showPeekIndex,
+} from "./peek";
 import { newPromptImagesState, type PromptImagesState } from "./promptImageState";
 import {
 	artifactsWatermark,
@@ -146,6 +162,7 @@ import {
 	selectFilesTreeView,
 	selectLayoutIdentityPlacement,
 	selectLayoutResourcePlacement,
+	selectPeekOpen,
 	selectRepoProjects,
 	selectSupportsMcp,
 	selectWorkspaceById,
@@ -346,10 +363,26 @@ function availableEditorTabId(tabs: readonly EditorTab[], tab: EditorTab): strin
 
 export type TabIntent = "preview" | "keep";
 
+/** The extension view this window is in (an extension's `views` entry) and the workbench it replaced. */
+export interface LocalLayoutView {
+	/** `<extension>:<view>`. */
+	id: string;
+	/** The replaced frame's sides and bottom, captured as a resource-free preset's regions. */
+	restore: Pick<LayoutPreset, "left" | "right" | "bottom">;
+	/** The replaced frame's restore targets. */
+	restoreTargets: WorkbenchFrame["toolRestoreTargets"];
+	/** The tool tab each captured side or bottom group showed, by group id. */
+	selected: Record<string, string>;
+	/** Read from a former Board mode: the frame still has that mode's sides, and the view is arranged anew. */
+	migrated?: true;
+}
+
 export interface LocalLayoutPreferences {
 	defaultPresetId: string;
 	maxSideGroups: number;
 	maxBottomGroups: number;
+	peekWidth?: number;
+	layoutView?: LocalLayoutView;
 }
 
 export const DEFAULT_LOCAL_LAYOUT_PREFERENCES: LocalLayoutPreferences = {
@@ -437,7 +470,7 @@ export type LayoutIntent =
 	  }
 	| { id: string; kind: "close-terminal"; workspaceId: string; tabKey: string }
 	| { id: string; kind: "select-terminal"; workspaceId: string; tabKey: string }
-	| { id: string; kind: "toggle-side"; workspaceId: string; side: "left" | "right" }
+	| { id: string; kind: "toggle-side" | "show-side"; workspaceId: string; side: "left" | "right" }
 	| { id: string; kind: "toggle-bottom"; workspaceId: string };
 export type LayoutIntentInput = LayoutIntent extends infer Intent
 	? Intent extends { id: string }
@@ -497,6 +530,12 @@ export interface CreationChatHandoff {
 	kickoffError?: string;
 	sentPrompt?: { text: string; attachments: ChatAttachment[] };
 }
+
+/** The one container dialog this window shows, wherever it was asked for (tree, topbar, palette). */
+export type ContainerDialogRequest =
+	| { kind: "addWorkspace"; containerId: string }
+	| { kind: "group"; workspaceId: string }
+	| { kind: "remove"; containerId: string };
 
 export interface WorkspaceRetryDraft {
 	projectId: string;
@@ -914,6 +953,22 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 					],
 				};
 			}
+			const note = readContainerNote(event.message);
+			if (note && event.message.role === "custom") {
+				return {
+					...rt,
+					turns: [
+						...rt.turns,
+						{
+							kind: "containerNote",
+							id: randomUuid(),
+							note,
+							text: customMessageText(event.message.content),
+							timestamp: event.message.timestamp,
+						},
+					],
+				};
+			}
 			if (event.message.role !== "assistant" || !rt.currentAssistantId) return rt;
 			const id = rt.currentAssistantId;
 			const turn: ChatTurn = { kind: "assistant", id, message: event.message, streaming: false };
@@ -1156,6 +1211,7 @@ interface AppState {
 	layoutAttentionByWorkspace: Record<string, LayoutAttention>;
 	layoutProjectionEpoch: number;
 	layoutIntents: LayoutIntent[];
+	peekByWorkspace: Record<string, PeekState>;
 	tabsByWorkspace: Record<string, EditorTab[]>;
 	activeTabByWorkspace: Record<string, string | null>;
 	previewTabByWorkspace: Record<string, string>;
@@ -1163,6 +1219,9 @@ interface AppState {
 	closedChatsByWorkspace: Record<string, ClosedChat[]>;
 	chatStartsByWorkspace: Record<string, number>;
 	workspaceCreations: Record<string, WorkspaceCreation>;
+	containers: Record<string, Container>;
+	collapsedContainerIds: Record<string, true>;
+	containerDialog: ContainerDialogRequest | null;
 	activeCreationId: string | null;
 	creationChatToOpen: CreationChatHandoff | null;
 	sentCreationPrompts: Record<string, { text: string; attachments: ChatAttachment[] }>;
@@ -1503,6 +1562,14 @@ interface AppState {
 	beginChatStart: (workspaceId: string) => void;
 	endChatStart: (workspaceId: string) => void;
 	setWorkspaceCreations: (creations: WorkspaceCreation[]) => void;
+	installContainers: (containers: readonly Container[]) => void;
+	applyContainerUpdated: (container: Container) => void;
+	applyContainerRemoved: (containerId: string) => void;
+	toggleContainerCollapsed: (containerId: string) => void;
+	expandContainer: (containerId: string) => void;
+	hydrateCollapsedContainers: (containerIds: readonly string[]) => void;
+	openContainerDialog: (request: ContainerDialogRequest) => void;
+	closeContainerDialog: () => void;
 	applyWorkspaceCreation: (
 		creation: WorkspaceCreation,
 		sentPrompt?: { text: string; attachments: ChatAttachment[] },
@@ -1632,6 +1699,16 @@ interface AppState {
 	setMarkdownOutlineSide: (side: MarkdownOutlineSide) => void;
 	applyConfig: (config: AppConfig) => void;
 	requestToolView: (workspaceId: string, tool: LayoutToolId) => void;
+	requestPeek: (workspaceId: string, entry: PeekEntry) => void;
+	followPeek: (workspaceId: string, from: PeekEntry, entry: PeekEntry) => void;
+	peekBack: (workspaceId: string) => void;
+	peekForward: (workspaceId: string) => void;
+	showPeekEntry: (workspaceId: string, index: number) => void;
+	closePeek: (workspaceId: string) => void;
+	closePeekEntry: (workspaceId: string, index: number) => void;
+	pinPeek: (workspaceId: string, pinned: boolean) => void;
+	carryPeek: (fromWorkspaceId: string, toWorkspaceId: string) => void;
+	toggleRightSide: (workspaceId: string) => void;
 	requestChangesView: (workspaceId: string, path: string | null, scope?: GitDiffScope) => void;
 	revealChanges: (workspaceId: string) => void;
 	clearChangesRequest: () => void;
@@ -1928,6 +2005,45 @@ function patchFilesTreeView(
 function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
 	const { [key]: _dropped, ...rest } = record;
 	return rest;
+}
+
+function configStatePatch(state: Pick<AppState, "peekByWorkspace">, config: AppConfig) {
+	const patch = configPatch(config);
+	return {
+		...patch,
+		peekByWorkspace: peeksWithoutExtensions(state.peekByWorkspace, patch.disabledExtensions),
+	};
+}
+
+function patchPeek(
+	state: Pick<AppState, "peekByWorkspace" | "removedWorkspaceIds">,
+	workspaceId: string,
+	update: (peek: PeekState | undefined) => PeekState | undefined,
+): Pick<AppState, "peekByWorkspace"> | Record<string, never> {
+	if (state.removedWorkspaceIds[workspaceId]) return {};
+	const current = state.peekByWorkspace[workspaceId];
+	const next = update(current);
+	if (next === current) return {};
+	return {
+		peekByWorkspace: next
+			? { ...state.peekByWorkspace, [workspaceId]: next }
+			: omitKey(state.peekByWorkspace, workspaceId),
+	};
+}
+
+function canonicalPeekEntry(
+	state: Pick<AppState, "activeWorkspaceId" | "workspaces">,
+	workspaceId: string,
+	entry: PeekEntry,
+): PeekEntry {
+	if (entry.kind === "extension" || entry.kind === "container") return entry;
+	const root = selectWorkspaceById(state, workspaceId)?.worktreePath;
+	if (entry.kind === "file") return { ...entry, path: projectRelativePath(entry.path, root) };
+	return {
+		...entry,
+		before: projectRelativePath(entry.before, root),
+		after: projectRelativePath(entry.after, root),
+	};
 }
 
 function appendLayoutIntent(intents: LayoutIntent[], input: LayoutIntentInput): LayoutIntent[] {
@@ -2591,6 +2707,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	layoutAttentionByWorkspace: {},
 	layoutProjectionEpoch: 0,
 	layoutIntents: [],
+	peekByWorkspace: {},
 	tabsByWorkspace: {},
 	activeTabByWorkspace: {},
 	previewTabByWorkspace: {},
@@ -2598,6 +2715,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 	closedChatsByWorkspace: {},
 	chatStartsByWorkspace: {},
 	workspaceCreations: {},
+	containers: {},
+	collapsedContainerIds: nullProto<Record<string, true>>(),
+	containerDialog: null,
 	activeCreationId: null,
 	creationChatToOpen: null,
 	sentCreationPrompts: {},
@@ -2910,7 +3030,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				hostUpdate: hostUpdate ?? null,
 				hostAppVersion: hostAppVersion ?? null,
 				speech: speech ?? null,
-				...(config ? configPatch(config) : {}),
+				...(config ? configStatePatch(state, config) : {}),
 				...reconcileProjectNavigation(state, openProjects),
 				...pruneExpandedProjects(state, openProjects),
 				welcomeGeneration: state.welcomeGeneration + 1,
@@ -3794,6 +3914,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				layoutDocumentsByWorkspace: omitKey(s.layoutDocumentsByWorkspace, workspaceId),
 				layoutAttentionByWorkspace: omitKey(s.layoutAttentionByWorkspace, workspaceId),
 				layoutIntents: s.layoutIntents.filter((intent) => intent.workspaceId !== workspaceId),
+				peekByWorkspace: omitKey(s.peekByWorkspace, workspaceId),
 				tabsByWorkspace: omitKey(s.tabsByWorkspace, workspaceId),
 				activeTabByWorkspace: omitKey(s.activeTabByWorkspace, workspaceId),
 				previewTabByWorkspace: omitKey(s.previewTabByWorkspace, workspaceId),
@@ -3993,6 +4114,49 @@ export const useAppStore = create<AppState>((set, get) => ({
 		if (finished) get().activateWorkspace(finished);
 		else get().selectProject(lostActive.projectId);
 	},
+	installContainers: (containers) =>
+		set((state) => {
+			const held = Object.fromEntries(containers.map((container) => [container.id, container]));
+			return {
+				containers: held,
+				peekByWorkspace: peeksWithoutContainers(state.peekByWorkspace, (id) => !held[id]),
+			};
+		}),
+	applyContainerUpdated: (container) =>
+		set((state) => ({ containers: { ...state.containers, [container.id]: container } })),
+	applyContainerRemoved: (containerId) =>
+		set((state) =>
+			state.containers[containerId]
+				? {
+						containers: omitKey(state.containers, containerId),
+						peekByWorkspace: peeksWithoutContainers(
+							state.peekByWorkspace,
+							(id) => id === containerId,
+						),
+						...(state.collapsedContainerIds[containerId]
+							? { collapsedContainerIds: omitKey(state.collapsedContainerIds, containerId) }
+							: {}),
+					}
+				: {},
+		),
+	toggleContainerCollapsed: (containerId) =>
+		set((state) => ({
+			collapsedContainerIds: state.collapsedContainerIds[containerId]
+				? omitKey(state.collapsedContainerIds, containerId)
+				: withExpandedProject(state.collapsedContainerIds, containerId),
+		})),
+	expandContainer: (containerId) =>
+		set((state) =>
+			state.collapsedContainerIds[containerId]
+				? { collapsedContainerIds: omitKey(state.collapsedContainerIds, containerId) }
+				: {},
+		),
+	hydrateCollapsedContainers: (containerIds) =>
+		set(() => ({
+			collapsedContainerIds: Object.fromEntries(containerIds.map((id) => [id, true as const])),
+		})),
+	openContainerDialog: (containerDialog) => set({ containerDialog }),
+	closeContainerDialog: () => set({ containerDialog: null }),
 	applyWorkspaceCreation: (creation, sentPrompt) => {
 		const previous = get().workspaceCreations[creation.id];
 		set((state) => ({
@@ -4245,6 +4409,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 				sessionStateByWorkspace,
 				sessions,
 				extUiOrphans,
+				peekByWorkspace: peeksAfterTurns(
+					s.peekByWorkspace,
+					(workspaceId, sessionId) => s.sessionStateByWorkspace[workspaceId]?.[sessionId]?.state,
+					(workspaceId, sessionId) => sessionStateByWorkspace[workspaceId]?.[sessionId]?.state,
+				),
 				sessionStateClock: s.sessionStateClock + 1,
 				sessionStateSnapshotInstalled: true,
 			};
@@ -4281,12 +4450,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 				};
 			}
 			const sessionStateClock = s.sessionStateClock + 1;
+			const peekByWorkspace = peeksAfterTurns(
+				s.peekByWorkspace,
+				(workspaceId, sessionId) => s.sessionStateByWorkspace[workspaceId]?.[sessionId]?.state,
+				(workspaceId, sessionId) =>
+					workspaceId === record.workspaceId && sessionId === record.sessionId
+						? record.state
+						: s.sessionStateByWorkspace[workspaceId]?.[sessionId]?.state,
+			);
 			return {
 				sessionStateClock,
 				sessionStateByWorkspace: {
 					...s.sessionStateByWorkspace,
 					[record.workspaceId]: { ...workspaceStates, [record.sessionId]: record },
 				},
+				...(peekByWorkspace !== s.peekByWorkspace ? { peekByWorkspace } : {}),
 				...(orphansChanged ? { extUiOrphans } : {}),
 				...(runtime
 					? {
@@ -4951,7 +5129,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	setChatMessageOrder: (chatMessageOrder) => set({ chatMessageOrder }),
 	setMarkdownOutlineVisible: (markdownOutlineVisible) => set({ markdownOutlineVisible }),
 	setMarkdownOutlineSide: (markdownOutlineSide) => set({ markdownOutlineSide }),
-	applyConfig: (config) => set(configPatch(config)),
+	applyConfig: (config) => set((state) => configStatePatch(state, config)),
 	requestToolView: (workspaceId, tool) =>
 		set((state) =>
 			state.removedWorkspaceIds[workspaceId]
@@ -4964,6 +5142,60 @@ export const useAppStore = create<AppState>((set, get) => ({
 						}),
 					},
 		),
+	requestPeek: (workspaceId, entry) =>
+		set((state) =>
+			patchPeek(state, workspaceId, (peek) =>
+				pushPeekEntry(peek, canonicalPeekEntry(state, workspaceId, entry)),
+			),
+		),
+	followPeek: (workspaceId, from, entry) =>
+		set((state) =>
+			patchPeek(state, workspaceId, (peek) =>
+				followPeekEntry(
+					peek,
+					canonicalPeekEntry(state, workspaceId, from),
+					canonicalPeekEntry(state, workspaceId, entry),
+				),
+			),
+		),
+	peekBack: (workspaceId) =>
+		set((state) =>
+			patchPeek(state, workspaceId, (peek) => showPeekIndex(peek, (peek?.index ?? 0) - 1)),
+		),
+	peekForward: (workspaceId) =>
+		set((state) =>
+			patchPeek(state, workspaceId, (peek) => showPeekIndex(peek, (peek?.index ?? 0) + 1)),
+		),
+	showPeekEntry: (workspaceId, index) =>
+		set((state) => patchPeek(state, workspaceId, (peek) => showPeekIndex(peek, index))),
+	closePeek: (workspaceId) => set((state) => patchPeek(state, workspaceId, hidePeek)),
+	closePeekEntry: (workspaceId, index) =>
+		set((state) => patchPeek(state, workspaceId, (peek) => removePeekEntry(peek, index))),
+	carryPeek: (fromWorkspaceId, toWorkspaceId) =>
+		set((state) =>
+			patchPeek(state, toWorkspaceId, (peek) =>
+				carryPeekEntry(state.peekByWorkspace[fromWorkspaceId], peek),
+			),
+		),
+	pinPeek: (workspaceId, pinned) =>
+		set((state) =>
+			patchPeek(state, workspaceId, (peek) =>
+				peek?.open && peek.pinned !== pinned ? { ...peek, pinned } : peek,
+			),
+		),
+	toggleRightSide: (workspaceId) =>
+		set((state) => {
+			if (state.removedWorkspaceIds[workspaceId]) return {};
+			const peekOpen = selectPeekOpen(state, workspaceId);
+			return {
+				...(peekOpen ? patchPeek(state, workspaceId, hidePeek) : {}),
+				layoutIntents: appendLayoutIntent(state.layoutIntents, {
+					kind: peekOpen ? "show-side" : "toggle-side",
+					workspaceId,
+					side: "right",
+				}),
+			};
+		}),
 	requestChangesView: (workspaceId, path, scope) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};

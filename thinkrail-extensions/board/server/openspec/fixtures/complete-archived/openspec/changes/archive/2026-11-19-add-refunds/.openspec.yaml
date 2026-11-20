@@ -1,0 +1,6 @@
+schema: spec-driven
+created: 2026-11-19
+goal: Partial refunds
+x-thinkrail:
+  card: PA-3
+  workspace: ws-refunds

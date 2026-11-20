@@ -1,0 +1,16 @@
+{
+	"changes": [
+		{
+			"name": "add-2fa-login",
+			"completedTasks": 0,
+			"totalTasks": 7,
+			"lastModified": "2026-11-19T21:17:47.585Z",
+			"status": "in-progress",
+			"archived": false
+		}
+	],
+	"root": {
+		"path": "<root>",
+		"source": "nearest"
+	}
+}

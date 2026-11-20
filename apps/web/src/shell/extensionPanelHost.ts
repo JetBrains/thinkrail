@@ -1,12 +1,38 @@
-import type { ExtensionCatalogEntry, ExtensionQueryParams } from "@thinkrail/contracts";
-import type { PanelHost, PanelHostScope, PanelToolCall } from "@thinkrail/extension-api/web";
+import {
+	type ExtensionCatalogEntry,
+	type ExtensionQueryParams,
+	WS_CHANNELS,
+} from "@thinkrail/contracts";
+import type {
+	PanelChatSession,
+	PanelHost,
+	PanelHostScope,
+	PanelPeekEntry,
+	PanelToolCall,
+	PanelWorkspaceTarget,
+	StatusItemHost,
+} from "@thinkrail/extension-api/web";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { extensionPanels, type RegisteredPanel } from "../extensions";
+import { extensionPanels, findExtensionPanel, type RegisteredPanel } from "../extensions";
 import { extensionParamsKey, tupleKey } from "../lib";
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
-import { type ChatLocationRequest, selectContextRepoProject, useAppStore } from "../store";
-import { getTransport, RequestError, supportsExtensionQuery } from "../transport";
+import {
+	type ChatLocationRequest,
+	type PeekEntry,
+	selectContextRepoProject,
+	useAppStore,
+} from "../store";
+import {
+	getTransport,
+	RequestError,
+	supportsExtensionEvents,
+	supportsExtensionQuery,
+} from "../transport";
+import { leaveViewForCenter } from "./extensionViews";
 import { paletteNavigator } from "./paletteNavigation";
+
+/** A panel's `openWorkspace` target with its Peek entry already the store's. */
+export type HostWorkspaceTarget = Omit<PanelWorkspaceTarget, "peek"> & { peek?: PeekEntry };
 
 export interface PanelHostDeps {
 	readonly extension: string;
@@ -20,65 +46,219 @@ export interface PanelHostDeps {
 		title: string | undefined,
 	) => void;
 	readonly renderToolCall: (call: PanelToolCall) => ReactNode;
+	readonly renderChat: (chat: PanelChatSession) => ReactNode;
 	/** Enters the workspace when it is another one, then opens the file (at `line` when given). */
 	readonly openFile: (workspaceId: string, path: string, line: number | undefined) => void;
 	/** Reveals the Artifacts tool of the panel's workspace. */
 	readonly openArtifacts: () => void;
+	/** Enters the workspace (on its chat when given) and shows `peek` in that workspace's Peek. */
+	readonly openWorkspace: (target: HostWorkspaceTarget) => void;
+	/** Shows a Peek entry in the panel's workspace. */
+	readonly peek: (entry: PeekEntry) => void;
+	/** Listens to the `extension.event` channel, which never replays its last push. */
+	readonly subscribe: (listener: (push: unknown) => void) => () => void;
+	/** The extension is switched off now. */
+	readonly disabled: () => boolean;
+	/** Enters one of this extension's views. */
+	readonly openView: (view: string) => void;
 	readonly scope: PanelHostScope;
 	readonly hostProtocol: number | null;
 	readonly hostApiVersion: number | undefined;
 }
 
+/** What a status item's host is built over: a panel host's query, events and navigation, no tab or file. */
+export type StatusItemHostDeps = Pick<
+	PanelHostDeps,
+	| "extension"
+	| "request"
+	| "navigate"
+	| "locate"
+	| "openWorkspace"
+	| "openView"
+	| "subscribe"
+	| "disabled"
+	| "hostProtocol"
+	| "hostApiVersion"
+> & {
+	/** Shows a Peek entry in the active workspace; absent without one. */
+	readonly peek: ((entry: PeekEntry) => void) | null;
+	readonly scope: PanelHostScope | null;
+};
+
+/** The app's transport and navigation every extension host (a panel's, a status item's) is built over. */
+export const APP_HOST_LINKS: Pick<
+	PanelHostDeps,
+	"request" | "navigate" | "locate" | "openWorkspace" | "subscribe"
+> = {
+	request: (params) => getTransport().request("extension.query", params),
+	navigate: (workspace, sessionId) => {
+		leaveViewForCenter();
+		void paletteNavigator.navigateToWorkspace(workspace, sessionId);
+	},
+	locate: (location) => {
+		leaveViewForCenter();
+		void paletteNavigator
+			.loadWorkspaceRow({ id: location.workspaceId, projectId: location.projectId })
+			.then((ok) => {
+				if (ok) useAppStore.getState().requestChatLocation(location);
+			});
+	},
+	openWorkspace: ({ peek, reveal, ...target }) => {
+		if (target.sessionId || reveal) leaveViewForCenter();
+		if (peek) useAppStore.getState().requestPeek(target.workspaceId, peek);
+		if (reveal) useAppStore.getState().requestToolView(target.workspaceId, reveal);
+		void paletteNavigator.navigateToWorkspace(
+			{ id: target.workspaceId, projectId: target.projectId },
+			target.sessionId,
+		);
+	},
+	subscribe: (listener) => getTransport().subscribe(WS_CHANNELS.extensionEvent, listener),
+};
+
 function abortReason(signal: AbortSignal): unknown {
 	return signal.reason ?? new DOMException("The extension query was aborted", "AbortError");
 }
 
+/** The store's Peek entry for a panel's `peek`: an extension entry only for the caller's own, declared panel. */
+export function panelPeekEntry(extension: string, entry: PanelPeekEntry): PeekEntry | null {
+	switch (entry.kind) {
+		case "extension": {
+			const target = findExtensionPanel(extension, entry.panel);
+			if (!target) return null;
+			return {
+				kind: "extension",
+				extension,
+				panel: entry.panel,
+				params: { ...entry.params },
+				titleKey: target.declaration.title,
+				...(entry.title ? { name: entry.title } : {}),
+			};
+		}
+		case "file":
+			return {
+				kind: "file",
+				path: entry.path,
+				...(entry.line === undefined ? {} : { line: entry.line }),
+			};
+		case "compare":
+			return { kind: "compare", before: entry.before, after: entry.after };
+	}
+}
+
+function eventPush(push: unknown): { extension: unknown; type: unknown; payload: unknown } | null {
+	return typeof push === "object" && push !== null
+		? (push as { extension: unknown; type: unknown; payload: unknown })
+		: null;
+}
+
+type QueryDeps = Pick<PanelHostDeps, "extension" | "request" | "hostProtocol">;
+
+function extensionQuery(deps: QueryDeps): PanelHost["query"] {
+	return (method, params, signal) => {
+		if (signal?.aborted) return Promise.reject(abortReason(signal));
+		if (!supportsExtensionQuery(deps.hostProtocol)) {
+			return Promise.reject(
+				new RequestError("UNKNOWN_EXTENSION_QUERY", "The host predates extension queries"),
+			);
+		}
+		const sent = deps.request({
+			extension: deps.extension,
+			method,
+			...(params === undefined ? {} : { params }),
+		});
+		if (!signal) return sent;
+		return new Promise((resolve, reject) => {
+			const abort = () => reject(abortReason(signal));
+			signal.addEventListener("abort", abort, { once: true });
+			void sent.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+		});
+	};
+}
+
+type EventDeps = Pick<PanelHostDeps, "extension" | "subscribe" | "disabled" | "hostProtocol">;
+
+function extensionEvents(deps: EventDeps): PanelHost["onEvent"] {
+	return (type, listener) => {
+		if (!supportsExtensionEvents(deps.hostProtocol)) return () => {};
+		return deps.subscribe((raw) => {
+			const push = eventPush(raw);
+			if (push?.extension !== deps.extension || push.type !== type || deps.disabled()) return;
+			listener(push.payload);
+		});
+	};
+}
+
+function openWorkspaceVia(
+	deps: Pick<PanelHostDeps, "extension" | "openWorkspace">,
+): PanelHost["openWorkspace"] {
+	return ({ peek, ...target }) => {
+		const peeked = peek ? panelPeekEntry(deps.extension, peek) : null;
+		deps.openWorkspace(peeked ? { ...target, peek: peeked } : target);
+	};
+}
+
+function openChatVia(deps: Pick<PanelHostDeps, "navigate" | "locate">): PanelHost["openChat"] {
+	return (target) => {
+		const { at } = target;
+		if (!at) {
+			deps.navigate({ id: target.workspaceId, projectId: target.projectId }, target.sessionId);
+			return;
+		}
+		deps.locate({
+			workspaceId: target.workspaceId,
+			projectId: target.projectId,
+			sessionId: target.sessionId,
+			messageIndex: at.messageIndex,
+			anchorText: at.anchorText,
+			...(at.toolCallId ? { toolCallId: at.toolCallId } : {}),
+			...(at.approximate ? { approximate: true } : {}),
+		});
+	};
+}
+
 export function createPanelHost(deps: PanelHostDeps): PanelHost {
 	return {
-		query(method, params, signal) {
-			if (signal?.aborted) return Promise.reject(abortReason(signal));
-			if (!supportsExtensionQuery(deps.hostProtocol)) {
-				return Promise.reject(
-					new RequestError("UNKNOWN_EXTENSION_QUERY", "The host predates extension queries"),
-				);
-			}
-			const sent = deps.request({
-				extension: deps.extension,
-				method,
-				...(params === undefined ? {} : { params }),
-			});
-			if (!signal) return sent;
-			return new Promise((resolve, reject) => {
-				const abort = () => reject(abortReason(signal));
-				signal.addEventListener("abort", abort, { once: true });
-				void sent.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
-			});
-		},
-		openChat(target) {
-			const { at } = target;
-			if (!at) {
-				deps.navigate({ id: target.workspaceId, projectId: target.projectId }, target.sessionId);
-				return;
-			}
-			deps.locate({
-				workspaceId: target.workspaceId,
-				projectId: target.projectId,
-				sessionId: target.sessionId,
-				messageIndex: at.messageIndex,
-				anchorText: at.anchorText,
-				...(at.toolCallId ? { toolCallId: at.toolCallId } : {}),
-				...(at.approximate ? { approximate: true } : {}),
-			});
-		},
+		query: extensionQuery(deps),
+		openChat: openChatVia(deps),
 		openPanel(panel, params = {}, title) {
 			deps.openPanel(panel, params, title);
 		},
 		renderToolCall: (call) => deps.renderToolCall(call),
+		renderChat: (chat) => deps.renderChat(chat),
 		openFile(workspaceId, path, line) {
 			deps.openFile(workspaceId, path, line);
 		},
 		openArtifacts() {
 			deps.openArtifacts();
+		},
+		openWorkspace: openWorkspaceVia(deps),
+		peek(entry) {
+			const peeked = panelPeekEntry(deps.extension, entry);
+			if (peeked) deps.peek(peeked);
+		},
+		onEvent: extensionEvents(deps),
+		openView(view) {
+			deps.openView(view);
+		},
+		scope: deps.scope,
+		hostProtocol: deps.hostProtocol,
+		hostApiVersion: deps.hostApiVersion,
+	};
+}
+
+/** A status item's host: the panel host's query and event rules, navigation, and Peek in the active workspace. */
+export function createStatusItemHost(deps: StatusItemHostDeps): StatusItemHost {
+	return {
+		query: extensionQuery(deps),
+		openChat: openChatVia(deps),
+		openWorkspace: openWorkspaceVia(deps),
+		peek(entry) {
+			const peeked = panelPeekEntry(deps.extension, entry);
+			if (peeked) deps.peek?.(peeked);
+		},
+		onEvent: extensionEvents(deps),
+		openView(view) {
+			deps.openView(view);
 		},
 		scope: deps.scope,
 		hostProtocol: deps.hostProtocol,
@@ -166,13 +346,23 @@ export function openableExtensionPanels(input: {
 	catalog: ExtensionCatalogRead;
 	panels?: readonly RegisteredPanel[];
 }): readonly RegisteredPanel[] {
+	return openableContributions({ ...input, items: input.panels ?? extensionPanels() });
+}
+
+/** `openableExtensionPanels`' rule for any extension contribution: a panel, a side tool. */
+export function openableContributions<T extends { extension: string }>(input: {
+	disabled: readonly string[];
+	protocolVersion: number | null;
+	catalog: ExtensionCatalogRead;
+	items: readonly T[];
+}): readonly T[] {
 	if (!supportsExtensionQuery(input.protocolVersion)) return [];
 	const listed = Array.isArray(input.catalog)
 		? new Set(input.catalog.map((entry) => entry.name))
 		: null;
-	return (input.panels ?? extensionPanels()).filter(
-		(panel) =>
-			!input.disabled.includes(panel.extension) && (listed === null || listed.has(panel.extension)),
+	return input.items.filter(
+		(item) =>
+			!input.disabled.includes(item.extension) && (listed === null || listed.has(item.extension)),
 	);
 }
 
@@ -229,9 +419,15 @@ export async function openExtensionPanelInProject(
 	if (workspace) openExtensionPanel(workspace.id, panel);
 }
 
-export function openExtensionPanel(
+export interface ExtensionPanelTarget {
+	readonly extension: string;
+	readonly panel: string;
+	readonly titleKey: string;
+}
+
+export function openExtensionTab(
 	workspaceId: string,
-	panel: RegisteredPanel,
+	target: ExtensionPanelTarget,
 	params: Readonly<Record<string, string>> = {},
 	title = "",
 ): void {
@@ -240,15 +436,29 @@ export function openExtensionPanel(
 		id: tupleKey(
 			"extension",
 			workspaceId,
-			panel.extension,
-			panel.panel,
+			target.extension,
+			target.panel,
 			extensionParamsKey(params),
 		),
 		workspaceId,
 		name: title,
-		extension: panel.extension,
-		panel: panel.panel,
-		titleKey: panel.declaration.title,
+		extension: target.extension,
+		panel: target.panel,
+		titleKey: target.titleKey,
 		params: { ...params },
 	});
+}
+
+export function openExtensionPanel(
+	workspaceId: string,
+	panel: RegisteredPanel,
+	params: Readonly<Record<string, string>> = {},
+	title = "",
+): void {
+	openExtensionTab(
+		workspaceId,
+		{ extension: panel.extension, panel: panel.panel, titleKey: panel.declaration.title },
+		params,
+		title,
+	);
 }

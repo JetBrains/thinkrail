@@ -2,6 +2,8 @@ import type {
 	Ack,
 	AppConfig,
 	ChatContinuation,
+	Container,
+	ContainerRemoved,
 	ExtUiRequest,
 	HostUpdateNotice,
 	KeybindingOverrides,
@@ -27,6 +29,8 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
+	CONTAINER_PROTOCOL_VERSION,
+	EXTENSION_EVENT_PROTOCOL_VERSION,
 	EXTENSION_QUERY_PROTOCOL_VERSION,
 	EXTENSION_SETTINGS_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
@@ -80,6 +84,14 @@ export function updateKeybindings(keybindings: KeybindingOverrides): Promise<boo
 
 export function supportsExtensionQuery(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= EXTENSION_QUERY_PROTOCOL_VERSION;
+}
+
+export function supportsExtensionEvents(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= EXTENSION_EVENT_PROTOCOL_VERSION;
+}
+
+export function supportsContainers(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= CONTAINER_PROTOCOL_VERSION;
 }
 
 export function supportsPiPackages(protocolVersion: number | null): boolean {
@@ -265,6 +277,22 @@ function refreshUserFonts(connectionGeneration: number): void {
 	);
 }
 
+export function refreshContainers(connectionGeneration: number): Promise<void> {
+	const store = useAppStore.getState();
+	if (!supportsContainers(store.protocolVersion)) {
+		store.installContainers([]);
+		return Promise.resolve();
+	}
+	return getTransport()
+		.request("container.list", {})
+		.then((containers) => {
+			const current = useAppStore.getState();
+			if (isConnectedGeneration(current, connectionGeneration))
+				current.installContainers(containers);
+		})
+		.catch(() => {});
+}
+
 function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
 	const snapshot = useAppStore.getState();
 	const openProjectIds = new Set(snapshot.projects.map((project) => project.id));
@@ -381,6 +409,7 @@ export function initTransport(): WsTransport {
 			);
 		const connectionGeneration = useAppStore.getState().connectionGeneration;
 		refreshLoadedWorkspaceLists(connectionGeneration);
+		void refreshContainers(connectionGeneration);
 		refreshLocalLocales(connectionGeneration);
 		refreshUserThemes(connectionGeneration);
 		refreshUserFonts(connectionGeneration);
@@ -524,6 +553,14 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.workspaceUpdated, (data) => {
 		useAppStore.getState().updateWorkspace(data as Workspace);
+	});
+
+	transport.subscribe(WS_CHANNELS.containerUpdated, (data) => {
+		useAppStore.getState().applyContainerUpdated(data as Container);
+	});
+
+	transport.subscribe(WS_CHANNELS.containerRemoved, (data) => {
+		useAppStore.getState().applyContainerRemoved((data as ContainerRemoved).id);
 	});
 
 	transport.subscribe(WS_CHANNELS.chatContinuation, (data) => {

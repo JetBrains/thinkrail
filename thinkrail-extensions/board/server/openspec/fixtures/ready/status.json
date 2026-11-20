@@ -1,0 +1,87 @@
+{
+	"changes": [
+		{
+			"changeName": "add-2fa-login",
+			"schemaName": "spec-driven",
+			"planningHome": {
+				"kind": "repo",
+				"root": "<root>",
+				"changesDir": "<root>/openspec/changes",
+				"defaultSchema": "spec-driven"
+			},
+			"changeRoot": "<root>/openspec/changes/add-2fa-login",
+			"artifactPaths": {
+				"proposal": {
+					"outputPath": "proposal.md",
+					"resolvedOutputPath": "<root>/openspec/changes/add-2fa-login/proposal.md",
+					"existingOutputPaths": ["<root>/openspec/changes/add-2fa-login/proposal.md"]
+				},
+				"specs": {
+					"outputPath": "specs/**/*.md",
+					"resolvedOutputPath": "<root>/openspec/changes/add-2fa-login/specs/**/*.md",
+					"existingOutputPaths": [
+						"<root>/openspec/changes/add-2fa-login/specs/audit-log/spec.md",
+						"<root>/openspec/changes/add-2fa-login/specs/auth/spec.md"
+					]
+				},
+				"design": {
+					"outputPath": "design.md",
+					"resolvedOutputPath": "<root>/openspec/changes/add-2fa-login/design.md",
+					"existingOutputPaths": ["<root>/openspec/changes/add-2fa-login/design.md"]
+				},
+				"tasks": {
+					"outputPath": "tasks.md",
+					"resolvedOutputPath": "<root>/openspec/changes/add-2fa-login/tasks.md",
+					"existingOutputPaths": ["<root>/openspec/changes/add-2fa-login/tasks.md"]
+				}
+			},
+			"isPlanningComplete": true,
+			"isComplete": true,
+			"applyRequires": ["tasks"],
+			"nextSteps": [
+				"All planning artifacts are complete. Run openspec instructions apply --change \"add-2fa-login\" --json to inspect implementation progress."
+			],
+			"actionContext": {
+				"mode": "repo-local",
+				"sourceOfTruth": "repo",
+				"planningArtifacts": ["proposal", "specs", "design", "tasks"],
+				"linkedContext": [],
+				"allowedEditRoots": ["<root>"],
+				"requiresAffectedAreaSelection": false,
+				"constraints": [
+					"Repo-local change artifacts and implementation edits are scoped to this project."
+				]
+			},
+			"artifacts": [
+				{
+					"id": "proposal",
+					"outputPath": "proposal.md",
+					"status": "done",
+					"requires": []
+				},
+				{
+					"id": "specs",
+					"outputPath": "specs/**/*.md",
+					"status": "done",
+					"requires": ["proposal"]
+				},
+				{
+					"id": "design",
+					"outputPath": "design.md",
+					"status": "done",
+					"requires": ["proposal"]
+				},
+				{
+					"id": "tasks",
+					"outputPath": "tasks.md",
+					"status": "done",
+					"requires": ["specs", "design"]
+				}
+			]
+		}
+	],
+	"root": {
+		"path": "<root>",
+		"source": "nearest"
+	}
+}

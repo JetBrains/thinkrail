@@ -30,7 +30,9 @@ import {
 	type LayoutOperationResult,
 	type LayoutTabFocusRequest,
 	type LayoutTerminalTab,
+	type LayoutToolCatalog,
 	moveTabToGroup,
+	NO_EXTENSION_TOOLS,
 	openCenterTab,
 	primaryCenterGroupId,
 	reconcileAttention,
@@ -207,6 +209,7 @@ export function useLayoutIntentProcessing(
 	commit: (document: WorkspaceLayoutDocument, attention?: LayoutAttention) => void,
 	changeAttention: (next: LayoutAttention) => void,
 	requestFocus: (request: LayoutTabFocusRequest) => void,
+	extensionTools: LayoutToolCatalog = NO_EXTENSION_TOOLS,
 ): void {
 	const document = useAppStore((state) => state.layoutDocumentsByWorkspace[workspaceId]);
 	const attention = useAppStore((state) => state.layoutAttentionByWorkspace[workspaceId]);
@@ -403,7 +406,13 @@ export function useLayoutIntentProcessing(
 				break;
 			}
 			case "reveal-tool": {
-				const revealed = revealTool(document, layoutIntent.tool, maxSideGroups, maxBottomGroups);
+				const revealed = revealTool(
+					document,
+					layoutIntent.tool,
+					maxSideGroups,
+					maxBottomGroups,
+					extensionTools,
+				);
 				if (!isLayoutUnavailable(revealed)) result = revealed;
 				break;
 			}
@@ -465,13 +474,21 @@ export function useLayoutIntentProcessing(
 				break;
 			}
 			case "toggle-side":
+			case "show-side":
 				if (
+					layoutIntent.kind === "toggle-side" &&
 					document[layoutIntent.side].visible &&
 					document[layoutIntent.side].groups.some((group) => !group.folded)
 				) {
 					result = hideSide(document, layoutIntent.side, attention);
 				} else {
-					const shown = showSide(document, layoutIntent.side, maxSideGroups, attention);
+					const shown = showSide(
+						document,
+						layoutIntent.side,
+						maxSideGroups,
+						attention,
+						extensionTools,
+					);
 					if (!isLayoutUnavailable(shown)) result = shown;
 				}
 				break;
@@ -479,7 +496,13 @@ export function useLayoutIntentProcessing(
 				if (document.bottom.visible && document.bottom.groups.some((group) => !group.folded)) {
 					result = hideBottom(document, attention);
 				} else {
-					const shown = showBottom(document, maxSideGroups, maxBottomGroups, attention);
+					const shown = showBottom(
+						document,
+						maxSideGroups,
+						maxBottomGroups,
+						attention,
+						extensionTools,
+					);
 					if (!isLayoutUnavailable(shown)) result = shown;
 				}
 				break;
@@ -535,6 +558,7 @@ export function useLayoutIntentProcessing(
 		changeAttention,
 		commit,
 		document,
+		extensionTools,
 		layoutIntent,
 		maxBottomGroups,
 		maxSideGroups,

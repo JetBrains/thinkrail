@@ -17,6 +17,7 @@ import {
 } from "@remixicon/react";
 import type {
 	ChatHandoffDetails,
+	ContainerNote,
 	ContinueInWorkspaceRequestDetails,
 	GitDiffScope,
 	ReviewFixDetails,
@@ -57,7 +58,7 @@ import { useFold, useSelection } from "./foldState";
 import { Markdown } from "./Markdown";
 import { ReviewPackageComments } from "./ReviewPackageComments";
 import { parseReviewPackage, reviewFixCommentsToItems, reviewPackageLabel } from "./reviewPackage";
-import { type ChatRow, LARGE_USER_MESSAGE, type TurnDividerData } from "./rows";
+import { type ChatRow, containerNoteBody, LARGE_USER_MESSAGE, type TurnDividerData } from "./rows";
 import { formatElapsed, formatTokens } from "./SessionStatsBar";
 import { ToolCard } from "./ToolCard";
 import { ToolRendererBody } from "./ToolRendererBody";
@@ -164,6 +165,8 @@ function ChatTurnViewImpl({
 			return <ContinuationRequestCard details={row.details} />;
 		case "handoff":
 			return <HandoffCard details={row.details} />;
+		case "containerNote":
+			return <ContainerNoteCard id={row.id} note={row.note} text={row.text} />;
 		case "tool":
 			return <ToolRow row={row} workspaceRoot={workspaceRoot} onOpenFile={onOpenFile} />;
 		case "activity":
@@ -593,6 +596,72 @@ function HandoffCard({ details }: { details: ChatHandoffDetails }) {
 			>
 				{t("chat.turn.handoff.open")}
 			</Button>
+		</div>
+	);
+}
+
+function containerNoteTitle(t: Translator, note: ContainerNote): string {
+	switch (note.kind) {
+		case "brief":
+			return t("chat.turn.container.brief");
+		case "wake":
+			return note.details.source
+				? t("chat.turn.container.extensionWake", {
+						extension: note.details.source.extensionTitle,
+					})
+				: t("chat.turn.container.wake", { workspace: note.details.workspaceName ?? "" });
+		case "orchestratorMessage":
+			return note.details.mode === "steer"
+				? t("chat.turn.container.orchestratorSteer", { container: note.details.containerName })
+				: t("chat.turn.container.orchestrator", { container: note.details.containerName });
+		case "extensionMessage":
+			return note.details.mode === "steer"
+				? t("chat.turn.container.extensionSteer", { extension: note.details.extensionTitle })
+				: t("chat.turn.container.extension", { extension: note.details.extensionTitle });
+	}
+}
+
+function ContainerNoteCard({ id, note, text }: { id: string; note: ContainerNote; text: string }) {
+	const t = useT();
+	const [expanded, toggle, toggleRef] = useFold(
+		`${id}:container-note`,
+		note.kind === "orchestratorMessage" || note.kind === "extensionMessage",
+	);
+	return (
+		<div
+			data-testid="container-note-card"
+			data-note={note.kind}
+			data-chat-fold-root
+			data-expanded={expanded}
+			className="max-w-[85%] overflow-hidden rounded-lg border border-bubble-user-border bg-clip-padding bg-bubble-user-bg"
+		>
+			<button
+				ref={toggleRef}
+				type="button"
+				data-testid="container-note-toggle"
+				data-chat-item-toggle
+				aria-expanded={expanded}
+				onClick={toggle}
+				className="flex w-full items-center gap-4 px-12 py-8 text-left transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring-inset"
+			>
+				<Stack className="size-14 shrink-0 text-text-muted" aria-hidden="true" />
+				<span className="min-w-0 flex-1 truncate tr-text-ui text-text-default">
+					{containerNoteTitle(t, note)}
+				</span>
+				{expanded ? (
+					<ChevronDown className="size-16 shrink-0 text-text-muted" aria-hidden="true" />
+				) : (
+					<ChevronRight className="size-16 shrink-0 text-text-muted" aria-hidden="true" />
+				)}
+			</button>
+			{expanded ? (
+				<div
+					data-testid="container-note-body"
+					className="border-bubble-user-border border-t px-12 py-8 tr-text-reading text-text-default [&>div>*:last-child]:mb-0"
+				>
+					<Markdown text={containerNoteBody(note, text)} />
+				</div>
+			) : null}
 		</div>
 	);
 }

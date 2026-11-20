@@ -130,6 +130,9 @@ export default defineConfig({
 			// Register a deterministic fake OAuth provider (`e2e-oauth`) so the in-app login flow is drivable
 			// end-to-end without a real provider/browser (see packages/server/src/dev.ts).
 			THINKRAIL_E2E_FAKE_OAUTH: centralMode ? "0" : "1",
+			// A deterministic conformance reviewer (the board's Smart review) reads its verdict from the
+			// workspace's `.thinkrail/context/e2e-reviewer.json` (see packages/server/src/dev.ts).
+			THINKRAIL_E2E_FAKE_REVIEWER: centralMode ? "0" : "1",
 			CI: "1",
 		},
 	},

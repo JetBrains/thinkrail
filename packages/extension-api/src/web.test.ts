@@ -3,9 +3,15 @@ import {
 	defineWebExtension,
 	type GlobalOverlayProps,
 	type PanelDeclaration,
+	type PanelHost,
+	type PanelPeekEntry,
 	type PanelProps,
+	type SideToolDeclaration,
+	type StatusItemDeclaration,
+	type StatusItemProps,
 	type ToolRegistrationOptions,
 	type ToolRenderProps,
+	type ViewDeclaration,
 	type WebExtension,
 } from "@thinkrail/extension-api/web";
 
@@ -127,6 +133,76 @@ describe("defineWebExtension", () => {
 		expect(params).not.toHaveBeenCalled();
 		expect(extension.panels.chat.chatAction.params(chat)).toEqual({ sessionId: "s" });
 		expect(extension.panels.list).not.toHaveProperty("chatAction");
+	});
+});
+
+describe("side tools and the panel host's workspace, Peek and event seams", () => {
+	it("preserves side tool declarations without loading their bodies", async () => {
+		const Board = ({ host }: PanelProps) => host.scope.projectId;
+		const load = mock(async () => ({ default: Board }));
+		const board: SideToolDeclaration = {
+			title: "common.retry",
+			icon: () => null,
+			defaultSide: "left",
+			load,
+		};
+		const extension = defineWebExtension({ name: "board", sideTools: { board } });
+
+		expect(extension.sideTools.board).toBe(board);
+		expect(extension).not.toHaveProperty("panels");
+		expect(load).not.toHaveBeenCalled();
+		expect((await extension.sideTools.board.load()).default).toBe(Board);
+	});
+
+	it("types openWorkspace, peek entries and onEvent's unsubscribe for a panel", () => {
+		const peeked: PanelPeekEntry[] = [];
+		const opened: unknown[] = [];
+		const listeners = new Set<(payload: unknown) => void>();
+		const host: Pick<PanelHost, "openWorkspace" | "peek" | "onEvent"> = {
+			openWorkspace: (target) => opened.push(target),
+			peek: (entry) => peeked.push(entry),
+			onEvent: (_type, listener) => {
+				listeners.add(listener);
+				return () => listeners.delete(listener);
+			},
+		};
+		host.openWorkspace({ workspaceId: "w", projectId: "p", sessionId: "s" });
+		host.peek({ kind: "extension", panel: "card", params: { cardId: "TR-1" }, title: "TR-1" });
+		host.peek({ kind: "file", path: "src/a.ts", line: 3 });
+		host.peek({ kind: "compare", before: "a.md", after: "b.md" });
+		const unsubscribe = host.onEvent("board.changed", () => {});
+
+		expect(opened).toEqual([{ workspaceId: "w", projectId: "p", sessionId: "s" }]);
+		expect(peeked.map((entry) => entry.kind)).toEqual(["extension", "file", "compare"]);
+		expect(listeners.size).toBe(1);
+		unsubscribe();
+		expect(listeners.size).toBe(0);
+	});
+
+	it("preserves status items without loading them, and views naming their panel and side tools", async () => {
+		const Inbox = ({ host }: StatusItemProps) => host.scope?.projectId ?? null;
+		const load = mock(async () => ({ default: Inbox }));
+		const inbox: StatusItemDeclaration = { load };
+		const view: ViewDeclaration = {
+			title: "common.retry",
+			icon: () => null,
+			center: "main",
+			left: "nav",
+			bottom: "activity",
+			layout: { leftWidth: 0.18, bottomHeight: 0.26 },
+		};
+		const extension = defineWebExtension({
+			name: "board",
+			statusItems: { inbox },
+			views: { board: view },
+		});
+
+		expect(extension.statusItems.inbox).toBe(inbox);
+		expect(extension.views.board).toBe(view);
+		expect(extension.views.board).not.toHaveProperty("peekEmpty");
+		expect(extension).not.toHaveProperty("sideTools");
+		expect(load).not.toHaveBeenCalled();
+		expect((await extension.statusItems.inbox.load()).default).toBe(Inbox);
 	});
 });
 

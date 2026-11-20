@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
+import { isLayoutToolId } from "@thinkrail/contracts";
 import askUserQuestion from "@thinkrail/ext-ask-user-question/web";
+import board from "@thinkrail/ext-board/web";
 import hintMode from "@thinkrail/ext-hint-mode/web";
 import nextSteps from "@thinkrail/ext-next-steps/web";
 import sessionInsights from "@thinkrail/ext-session-insights/web";
@@ -22,7 +24,12 @@ import { isMessageKey } from "../lib";
 import {
 	enabledWebExtensions,
 	extensionPanels,
+	extensionSideTools,
+	extensionStatusItems,
+	extensionViews,
 	findExtensionPanel,
+	findExtensionSideTool,
+	findExtensionView,
 	registerWebExtensions,
 	webExtensionCommands,
 	webExtensions,
@@ -39,7 +46,14 @@ const props: ToolRenderProps = {
 };
 
 test("the ordered web registry composes the public visualize descriptor without replacing fallback", () => {
-	expect(webExtensions).toEqual([visualize, askUserQuestion, hintMode, nextSteps, sessionInsights]);
+	expect(webExtensions).toEqual([
+		visualize,
+		askUserQuestion,
+		hintMode,
+		nextSteps,
+		sessionInsights,
+		board,
+	]);
 	expect(typeof MermaidView).toBe("function");
 	for (let i = 0; i < 2; i++) {
 		registerWebExtensions();
@@ -102,8 +116,9 @@ test("the switch decides which global contributions mount; tool renderers stay r
 		hintMode,
 		nextSteps,
 		sessionInsights,
+		board,
 	]);
-	expect(enabledWebExtensions(["hint-mode", "visualize"])).toEqual([
+	expect(enabledWebExtensions(["hint-mode", "visualize", "board"])).toEqual([
 		askUserQuestion,
 		nextSteps,
 		sessionInsights,
@@ -126,11 +141,13 @@ test("commands are listed for every extension in registry order, the switched-of
 		{ extension: "ask-user-question", enabled: true, commands: askUserQuestion.commands },
 		{ extension: "hint-mode", enabled: true, commands: hintMode.commands },
 		{ extension: "session-insights", enabled: true, commands: sessionInsights.commands },
+		{ extension: "board", enabled: true, commands: board.commands },
 	]);
 	expect(webExtensionCommands(["hint-mode"])).toEqual([
 		{ extension: "ask-user-question", enabled: true, commands: askUserQuestion.commands },
 		{ extension: "hint-mode", enabled: false, commands: hintMode.commands },
 		{ extension: "session-insights", enabled: true, commands: sessionInsights.commands },
+		{ extension: "board", enabled: true, commands: board.commands },
 	]);
 });
 
@@ -353,9 +370,60 @@ test("session insights declares its project-scoped Sessions panel, a per-session
 		"session-insights/sessions",
 		"session-insights/session",
 		"session-insights/compare",
+		"board/main",
+		"board/card",
+		"board/initiative",
+		"board/idea",
 	]);
 	for (const declaration of [registered?.declaration, session?.declaration, compare?.declaration]) {
 		const loaded = await declaration?.load();
 		expect(typeof loaded?.default).toBe("function");
 	}
+});
+
+test("the board declares its view's side tools, a center and Peek panels kept off the palette, and local move keys", async () => {
+	expect(extensionSideTools().map(({ id, extension, tool }) => [id, extension, tool])).toEqual([
+		["ext:board:nav", "board", "nav"],
+		["ext:board:activity", "board", "activity"],
+	]);
+	for (const id of ["ext:board:nav", "ext:board:activity"]) {
+		const tool = findExtensionSideTool(id);
+		expect(isMessageKey(tool?.declaration.title ?? "")).toBe(true);
+		expect(typeof (await tool?.declaration.load())?.default).toBe("function");
+	}
+	expect(findExtensionSideTool("ext:board:board")).toBeUndefined();
+	expect(findExtensionPanel("board", "main")?.declaration.scopes).toEqual(["session"]);
+	expect(findExtensionPanel("board", "card")?.declaration.scopes).toEqual(["session"]);
+	expect(findExtensionPanel("board", "initiative")?.declaration.scopes).toEqual(["session"]);
+	const rows = [...board.commands, ...board.shortcuts];
+	expect(rows.every((row) => Object.hasOwn(EN, row.title))).toBe(true);
+	expect(board.commands.map(({ id, scope }) => [id, scope])).toEqual([
+		["board.moveLeft", "board.cards"],
+		["board.moveRight", "board.cards"],
+	]);
+	expect(webOnlyExtensions(new Set())).not.toContainEqual(
+		expect.objectContaining({ name: "board" }),
+	);
+});
+
+test("the board declares its Needs-you status item and Board view: its center panel, the nav on the left and the activity below", async () => {
+	expect(extensionStatusItems().map(({ extension, item }) => [extension, item])).toEqual([
+		["board", "inbox"],
+	]);
+	const [item] = extensionStatusItems();
+	expect(typeof (await item?.declaration.load())?.default).toBe("function");
+	expect(extensionViews().map(({ id }) => id)).toEqual(["board:board"]);
+	const view = findExtensionView("board:board")?.declaration;
+	expect(isMessageKey(view?.title ?? "")).toBe(true);
+	expect(isMessageKey(view?.peekEmpty ?? "")).toBe(true);
+	expect([view?.center, view?.left, view?.bottom]).toEqual(["main", "nav", "activity"]);
+	expect(findExtensionPanel("board", view?.center ?? "")).toBeDefined();
+	for (const tool of [view?.left, view?.bottom]) {
+		expect(isLayoutToolId(`ext:board:${tool}`)).toBe(true);
+		expect(findExtensionSideTool(`ext:board:${tool}`)).toBeDefined();
+	}
+	expect(findExtensionView("board:missing")).toBeUndefined();
+	if (!view) throw new Error("Board view is not declared");
+	const fake: WebExtension = { name: "fake", views: { wide: view } };
+	expect(extensionViews([fake]).map(({ id }) => id)).toEqual(["fake:wide"]);
 });

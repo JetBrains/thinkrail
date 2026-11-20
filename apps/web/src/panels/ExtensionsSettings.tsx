@@ -29,6 +29,7 @@ import { SETTING, settingProps } from "./settingsCatalog";
 import { UPDATE_CHECK_KEY, usePiPackages } from "./usePiPackages";
 
 const BUNDLED_DESCRIPTIONS: Readonly<Record<string, MessageKey>> = {
+	board: "settings.extensions.board.description",
 	"next-steps": "settings.extensions.next-steps.description",
 	"session-insights": "settings.extensions.session-insights.description",
 	visualize: "settings.extensions.visualize.description",

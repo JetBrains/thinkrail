@@ -1,4 +1,4 @@
-import "@xyflow/react/dist/base.css";
+import "./processMap.css";
 import { localeOf, useT } from "@thinkrail/locales/react";
 import type {
 	ActivityNode,

@@ -1,0 +1,38 @@
+{
+	"id": "rate-limit-login",
+	"title": "Rate-limit login attempts per IP",
+	"deltaCount": 1,
+	"deltas": [
+		{
+			"spec": "rate-limits",
+			"operation": "ADDED",
+			"description": "Add requirement: The system SHALL refuse more than ten login attempts per minute from one IP address.",
+			"requirement": {
+				"name": "Login throttle",
+				"text": "The system SHALL refuse more than ten login attempts per minute from one IP address.",
+				"scenarios": [
+					{
+						"name": "an address sends an",
+						"rawText": "- **WHEN** an address sends an eleventh attempt within a minute\n- **THEN** the attempt is refused with a retry time"
+					}
+				]
+			},
+			"requirements": [
+				{
+					"name": "Login throttle",
+					"text": "The system SHALL refuse more than ten login attempts per minute from one IP address.",
+					"scenarios": [
+						{
+							"name": "an address sends an",
+							"rawText": "- **WHEN** an address sends an eleventh attempt within a minute\n- **THEN** the attempt is refused with a retry time"
+						}
+					]
+				}
+			]
+		}
+	],
+	"root": {
+		"path": "<root>",
+		"source": "nearest"
+	}
+}

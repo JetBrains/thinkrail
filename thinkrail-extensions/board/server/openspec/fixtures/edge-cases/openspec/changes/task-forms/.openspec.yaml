@@ -1,0 +1,6 @@
+schema: spec-driven
+created: 2026-11-19
+goal: Every checkbox form OpenSpec counts
+x-thinkrail:
+  card: TR-7
+  workspace: ws-forms

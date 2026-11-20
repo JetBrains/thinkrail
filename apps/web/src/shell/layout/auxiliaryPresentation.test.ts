@@ -5,6 +5,7 @@ import {
 	isToolShowing,
 	isUnplacedRailEntry,
 	projectAuxiliaryRail,
+	projectWorkbenchColumns,
 	projectWorkbenchRatio,
 	resizeVisibleAuxiliaryGroups,
 	restoreWorkbenchRatio,
@@ -90,6 +91,56 @@ test("rail extents do not reinterpret saved workbench-wide dimensions", () => {
 	expect(restoreWorkbenchRatio(250 / 920, 1000, 920)).toBeCloseTo(0.25);
 	expect(projectWorkbenchRatio(0.3, 800, 768)).toBeCloseTo(240 / 768);
 	expect(restoreWorkbenchRatio(240 / 768, 800, 768)).toBeCloseTo(0.3);
+});
+
+test("a closed or absent Peek leaves the side columns exactly as before", () => {
+	const layout = document();
+	const sides = { workbenchWidth: 1400, columnsWidth: 1320 };
+	const absent = projectWorkbenchColumns({ document: layout, peek: undefined, ...sides });
+	const closed = projectWorkbenchColumns({
+		document: layout,
+		peek: { open: false, width: 0.4 },
+		...sides,
+	});
+	expect(closed).toEqual(absent);
+	expect(absent).toMatchObject({ leftVisible: true, rightVisible: true, peekOpen: false, peek: 0 });
+	expect(absent.left).toBeCloseTo((0.2 * 1400 * 100) / 1320);
+	expect(absent.right).toBeCloseTo((0.25 * 1400 * 100) / 1320);
+});
+
+test("an open Peek folds the right side at render without touching the document", () => {
+	const layout = document();
+	const columns = projectWorkbenchColumns({
+		document: layout,
+		peek: { open: true, width: 0.4 },
+		workbenchWidth: 1400,
+		columnsWidth: 1360,
+	});
+	expect(columns).toMatchObject({ rightVisible: false, right: 0, peekOpen: true });
+	expect(columns.peek).toBeCloseTo((0.4 * 1400 * 100) / 1360);
+	expect(layout.right.visible).toBe(true);
+});
+
+test("Peek's width keeps the center at its minimum and Peek at its own", () => {
+	const layout = document();
+	const wide = projectWorkbenchColumns({
+		document: layout,
+		peek: { open: true, width: 0.9 },
+		workbenchWidth: 1400,
+		columnsWidth: 1360,
+	});
+	const centerPercent = (320 / 1360) * 100;
+	expect(wide.centerMinimum).toBeCloseTo(centerPercent);
+	expect(wide.peek).toBeCloseTo(wide.peekMaximum);
+	expect(100 - wide.left - wide.peek).toBeCloseTo(centerPercent);
+	const narrow = projectWorkbenchColumns({
+		document: layout,
+		peek: { open: true, width: 0.01 },
+		workbenchWidth: 1400,
+		columnsWidth: 1360,
+	});
+	expect(narrow.peek).toBeCloseTo((240 / 1360) * 100);
+	expect(narrow.peekMinimum).toBeCloseTo((240 / 1360) * 100);
 });
 
 test("rail entries keep each pane's terminals together and tools in their own pane", () => {

@@ -16,8 +16,10 @@ import {
 	hideBottom,
 	hideSide,
 	isLayoutUnavailable,
+	LAYOUT_TOOLS,
 	type LayoutOperationResult,
 	layoutTabName,
+	layoutToolDefaultSide,
 	moveTabToGroup,
 	openCenterTab,
 	reconcileAttention,
@@ -50,6 +52,7 @@ import type {
 	LayoutExtensionTab,
 	LayoutFileTab,
 	LayoutTerminalTab,
+	LayoutToolCatalog,
 	WorkspaceLayoutDocument,
 } from "./types";
 
@@ -649,10 +652,70 @@ describe("workspace layout model", () => {
 		expect(unplacedTools(document)).toContain("projects");
 		expect(unplacedToolsForRegion(document, "right")).toContain("files");
 		expect(unplacedToolsForRegion(document, "right")).not.toContain("projects");
-		expect(unplacedToolsForRegion(document, "left")).toEqual(["projects"]);
+		expect(unplacedToolsForRegion(document, "left")).toEqual(["projects", "orchestrator"]);
 
 		const placedAgain = mutation(revealTool(document, "files", 6)).document;
 		expect(unplacedToolsForRegion(placedAgain, "right")).not.toContain("files");
+	});
+
+	test("an extension's side tool waits unplaced at its default side only while offered, and reveals there", () => {
+		const icon = () => null;
+		const offered: LayoutToolCatalog = {
+			"ext:board:board": { titleKey: "board.nav.title", icon, defaultSide: "left", offered: true },
+			"ext:notes:list": { titleKey: "notes.missing", icon, defaultSide: "right", offered: true },
+			"ext:off:tool": { titleKey: "board.nav.title", icon, defaultSide: "left", offered: false },
+		};
+		const document = baseDocument();
+		expect(unplacedTools(document)).not.toContain("ext:board:board");
+		expect(unplacedToolsForRegion(document, "left", offered)).toEqual([
+			"orchestrator",
+			"ext:board:board",
+		]);
+		expect(unplacedToolsForRegion(document, "right", offered)).toContain("ext:notes:list");
+		expect(unplacedTools(document, offered)).not.toContain("ext:off:tool");
+
+		const revealed = mutation(revealTool(document, "ext:notes:list", 6, 3, offered)).document;
+		expect(revealed.right.groups.map((group) => group.tabs.map((tab) => tab.id))).toEqual([
+			["tool:files"],
+			["tool:ext:notes:list"],
+		]);
+		const closed = closeLayoutTab(revealed, "tool:ext:notes:list").document;
+		expect(closed.toolRestoreTargets["ext:notes:list"]).toMatchObject({ region: "right" });
+		expect(validateLayoutDocument(revealed, 6)).toEqual([]);
+
+		const t = currentTranslator();
+		expect(layoutTabName(t, toolTab("ext:board:board"), undefined, offered)).toBe("Board");
+		expect(layoutTabName(t, toolTab("ext:notes:list"), undefined, offered)).toBe("list");
+		expect(layoutTabName(t, toolTab("ext:gone:tool"))).toBe("tool");
+		expect(layoutToolDefaultSide("ext:gone:tool")).toBe("left");
+	});
+
+	test("an empty side shows only a tool that restores there, and is otherwise unavailable", () => {
+		const allLeft: WorkspaceLayoutDocument = {
+			...baseDocument(),
+			left: {
+				visible: true,
+				width: 0.24,
+				groups: [
+					{
+						id: "left-a",
+						weight: 1,
+						folded: false,
+						tabs: LAYOUT_TOOLS.map((tool) => toolTab(tool)),
+					},
+				],
+			},
+			right: { visible: false, width: 0.28, groups: [] },
+		};
+		expect(isLayoutUnavailable(showSide(allLeft, "right", 6))).toBe(true);
+		const removed = closeLayoutTab(allLeft, "tool:files").document;
+		expect(canShowSide(removed, "right")).toBe(false);
+		expect(isLayoutUnavailable(showSide(removed, "right", 6))).toBe(true);
+
+		const unrecorded = { ...removed, toolRestoreTargets: {} };
+		expect(canShowSide(unrecorded, "right")).toBe(true);
+		const shown = mutation(showSide(unrecorded, "right", 6)).document;
+		expect(findTabLocation(shown, "tool:files")?.area).toBe("right");
 	});
 
 	test("records singleton restore targets and reveals closed tools unfolded in place", () => {

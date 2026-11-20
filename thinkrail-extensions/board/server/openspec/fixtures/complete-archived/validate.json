@@ -1,0 +1,42 @@
+{
+	"items": [
+		{
+			"id": "billing",
+			"type": "spec",
+			"valid": true,
+			"issues": [],
+			"durationMs": 9
+		},
+		{
+			"id": "rate-limit-login",
+			"type": "change",
+			"valid": true,
+			"issues": [],
+			"durationMs": 32
+		}
+	],
+	"summary": {
+		"totals": {
+			"items": 2,
+			"passed": 2,
+			"failed": 0
+		},
+		"byType": {
+			"change": {
+				"items": 1,
+				"passed": 1,
+				"failed": 0
+			},
+			"spec": {
+				"items": 1,
+				"passed": 1,
+				"failed": 0
+			}
+		}
+	},
+	"version": "1.0",
+	"root": {
+		"path": "<root>",
+		"source": "nearest"
+	}
+}

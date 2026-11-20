@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { join, normalize } from "node:path";
 import type {
+	ContainerRemoved,
 	HostPlatform,
 	HostUpdateNotice,
 	ServerWelcome,
@@ -13,7 +14,9 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	ARTIFACTS_PROTOCOL_VERSION,
+	CONTAINER_PROTOCOL_VERSION,
 	CONTINUATION_PROTOCOL_VERSION,
+	EXTENSION_EVENT_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
 	GITHUB_STAR_PROTOCOL_VERSION,
@@ -72,6 +75,8 @@ import {
 	setMcpToolGrantWriter,
 	setModelListingPublisher,
 	setModelsFilePublisher,
+	setOrchestratorHomeResolver,
+	setOrchestratorToolsHost,
 	setPiPackagesPublisher,
 	setRequestReviewHandler,
 	setReviewCommentHandler,
@@ -115,7 +120,8 @@ import {
 	stopJbcentralRuntime,
 } from "../auth";
 import { forgetOpenBranchReview } from "../branch-review";
-import { artifactTools } from "../extensions";
+import { setContainerDissolveHook, setContainerPublisher } from "../containers";
+import { artifactTools, runExtensionHostServices } from "../extensions";
 import {
 	configureSurveySource,
 	redeliverInvitation,
@@ -195,7 +201,14 @@ import {
 } from "../workspaces";
 import { createArtifactEventMapper } from "./artifactEvents";
 import { seesChats } from "./chats";
+import { observeWorkspaceForContainers } from "./containers";
 import { continueToolHost, observeContinuation, setContinuationPublisher } from "./continuations";
+import {
+	extensionEvents,
+	extensionHostServices,
+	isExtensionDisabled,
+	setExtensionEventPublisher,
+} from "./extensionHost";
 import {
 	BLOB_PREFIX,
 	FILES_PREFIX,
@@ -216,7 +229,15 @@ import {
 import { HeldSnapshots, terminalsMayResume } from "./heldSnapshots";
 import { initializeHostRuntime } from "./hostRuntime";
 import { provisionInitialTerminal } from "./initialTerminal";
+import { lastActions } from "./lastActions";
 import { trackLoginOutcome } from "./loginAnalytics";
+import { disposeContainerOrchestrator, orchestratorHomeOf } from "./orchestrator";
+import { orchestratorToolsHost } from "./orchestratorTools";
+import {
+	createOrchestratorWakeups,
+	liveWakeupDeps,
+	setRunningWakeups,
+} from "./orchestratorWakeups";
 import {
 	additionalCapture,
 	applyAdditionalAnalyticsSettings,
@@ -541,6 +562,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				}
 				if (ws.data.protocolVersion >= CONTINUATION_PROTOCOL_VERSION)
 					ws.subscribe(WS_CHANNELS.chatContinuation);
+				if (ws.data.protocolVersion >= CONTAINER_PROTOCOL_VERSION) {
+					ws.subscribe(WS_CHANNELS.containerUpdated);
+					ws.subscribe(WS_CHANNELS.containerRemoved);
+				}
+				if (ws.data.protocolVersion >= EXTENSION_EVENT_PROTOCOL_VERSION)
+					ws.subscribe(WS_CHANNELS.extensionEvent);
 				ws.subscribe(WS_CHANNELS.settingsChanged);
 				if (hostUpdate) ws.subscribe(WS_CHANNELS.hostUpdateAvailable);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
@@ -930,11 +957,23 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		(workspaceId) => !isChatWorkspaceId(workspaceId) && getConfig().agentReviewEnabled !== false,
 	);
 	setSpecsEnabledResolver((workspaceId) => !isChatWorkspaceId(workspaceId));
+	setOrchestratorHomeResolver(orchestratorHomeOf);
 
 	setDisabledExtensionsResolver(() => new Set(getConfig().disabledExtensions));
 	setExtensionSettingsResolver(() => getConfig().extensionSettings ?? {});
 
+	const openProjectIds = new Set(
+		getProjects()
+			.filter((project) => project.closed !== true)
+			.map((project) => project.id),
+	);
 	setProjectPublisher((project) => {
+		const open = project.closed !== true;
+		if (open !== openProjectIds.has(project.id)) {
+			if (open) openProjectIds.add(project.id);
+			else openProjectIds.delete(project.id);
+			extensionEvents.emit(open ? "project.opened" : "project.closed", { projectId: project.id });
+		}
 		const capture = additionalCapture();
 		if (capture) {
 			try {
@@ -968,6 +1007,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		publishScoped(channel, event.kind === "changed" ? event.creation : event.removed);
 	});
 
+	const wakeups = createOrchestratorWakeups(liveWakeupDeps);
+	wakeups.seed(listAllWorkspaceRecords());
+	setRunningWakeups(wakeups);
 	const publishWorkspaceEvent = (event: WorkspaceLifecycleEvent) => {
 		const channel =
 			event.kind === "created"
@@ -980,8 +1022,25 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		const workspaceId = event.kind === "removed" ? event.id : event.workspace.id;
 		const projectId = event.kind === "removed" ? event.projectId : event.workspace.projectId;
 		publishScoped(channel, data, { workspaceId, projectId });
+		observeWorkspaceForContainers(event);
+		wakeups.onWorkspaceEvent(event);
+		if (event.kind === "removed")
+			extensionEvents.emit("workspace.removed", { projectId: event.projectId, id: event.id });
+		else extensionEvents.emit(`workspace.${event.kind}`, event.workspace);
 	};
 	setWorkspacePublisher(publishWorkspaceEvent);
+	setContainerDissolveHook(disposeContainerOrchestrator);
+	const containerAudience = { belowProtocol: CONTAINER_PROTOCOL_VERSION };
+	setContainerPublisher((event) => {
+		if (event.kind === "updated") {
+			publishScoped(WS_CHANNELS.containerUpdated, event.container, containerAudience);
+			extensionEvents.emit("container.updated", event.container);
+		} else {
+			const removed: ContainerRemoved = { id: event.id };
+			publishScoped(WS_CHANNELS.containerRemoved, removed, containerAudience);
+			extensionEvents.emit("container.removed", removed);
+		}
+	});
 	setChatPublishers({
 		project: (project) =>
 			publishScoped(WS_CHANNELS.projectUpdated, project, { projectId: project.id }),
@@ -1065,8 +1124,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}),
 	);
 	setWorkspaceToolsHost(workspaceToolsHost);
+	setOrchestratorToolsHost(orchestratorToolsHost);
 	reconcilePendingReviewsOnBoot();
 
+	const extensionServices = runExtensionHostServices({
+		isDisabled: isExtensionDisabled,
+		services: extensionHostServices,
+	});
 	setSettingsPublisher((config, appliedUpdate) => {
 		publishScoped(WS_CHANNELS.settingsChanged, config);
 		if (applyAdditionalAnalyticsSettings(config, appliedUpdate)) {
@@ -1100,6 +1164,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		) {
 			publishPiPackagesChanged();
 		}
+		if (appliedUpdate.disabledExtensions !== undefined) extensionServices.sync();
 		if (appliedUpdate.otherAgentSkills !== undefined) void refreshSkillAdmission();
 	});
 
@@ -1109,16 +1174,19 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 
 	setSessionStatePublisher((record: SessionStateRecord) => {
 		stampSessionActivity(record);
+		wakeups.onSessionState(record);
 		publishScoped(
 			WS_CHANNELS.sessionState,
 			record,
 			{ workspaceId: record.workspaceId },
 			record.sessionId,
 		);
+		extensionEvents.emit("session.state", record);
 	});
 
 	setSessionDeletedPublisher((payload: SessionDeletedPayload) => {
 		forgetImageSession(payload.sessionId);
+		lastActions.forget(payload.sessionId);
 		runObservation.forget(payload.sessionId);
 		taskObservation.forget(payload.sessionId);
 		for (const socket of sockets.values()) socket.data.held?.forgetSession(payload.sessionId);
@@ -1168,6 +1236,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setSessionPublisher((payload, workspaceId) => {
 		runObservation.observe(payload.sessionId, payload.event);
 		observeContinuation(payload.sessionId, payload.event);
+		wakeups.onSessionEvent(payload.sessionId, workspaceId, payload.event);
 		void turnTracker.observe(payload.sessionId, payload.event);
 		const artifactEvent = artifactSessionEvent(payload.sessionId, payload.event);
 		if (artifactEvent) {
@@ -1178,7 +1247,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 		if (payload.event.type === "tool_execution_start") {
 			taskObservation.toolStarted(workspaceId, payload.sessionId, payload.event);
+			lastActions.note(workspaceId, payload.sessionId, payload.event);
+			extensionEvents.emit("agent.tool", { workspaceId, sessionId: payload.sessionId });
 		}
+		if (payload.event.type === "agent_settled")
+			extensionEvents.emit("agent.settled", { workspaceId, sessionId: payload.sessionId });
 		const frame = JSON.stringify({ channel: WS_CHANNELS.piEvent, data: payload });
 		fanOut(WS_CHANNELS.piEvent, admitsScope({ workspaceId }), (socket) => {
 			if (socket.data.held) socket.data.held.deliver(payload, frame);
@@ -1229,6 +1302,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setLogoutPublisher(publishProviderChanged);
 	setModelsFilePublisher(publishProviderChanged);
 	setModelListingPublisher(publishProviderChanged);
+	setExtensionEventPublisher((push, scope) =>
+		publishScoped(WS_CHANNELS.extensionEvent, push, {
+			...scope,
+			belowProtocol: EXTENSION_EVENT_PROTOCOL_VERSION,
+		}),
+	);
+	extensionServices.sync();
 
 	const initialConfig = getConfig();
 	initializeAnalytics({
@@ -1261,6 +1341,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		setupObservation.clear();
 		runObservation.reset();
 		taskObservation.clear();
+		setRunningWakeups(null);
+		wakeups.dispose();
+		void extensionServices.stop();
 		observeLoggedErrors(null);
 		void shutdownAnalytics();
 		stopHostUpdateChecks();
@@ -1293,6 +1376,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				settleSessionsForShutdown(),
 				shutdownAnalytics(),
 				stopWorkspaceCreations(),
+				extensionServices.stop(),
 			]);
 			await turnTracker.drain();
 			await settleCredentialWritesForShutdown();
@@ -1343,6 +1427,10 @@ function restoreSeamDefaults(): void {
 	setProjectPublisher(null);
 	setTerminalTabsPublisher(() => {});
 	setWorkspacePublisher(null);
+	setContainerPublisher(null);
+	setContainerDissolveHook(null);
+	setOrchestratorHomeResolver(null);
+	setOrchestratorToolsHost(null);
 	setWorkspaceCreationPublisher(null);
 	setWorkspaceCreationHandoff(null);
 	setProjectPathGuard(null);
@@ -1376,6 +1464,7 @@ function restoreSeamDefaults(): void {
 	setLogoutPublisher(() => {});
 	setModelsFilePublisher(null);
 	setModelListingPublisher(null);
+	setExtensionEventPublisher(null);
 }
 
 async function serveStatic(pathname: string, staticDir: string): Promise<Response> {

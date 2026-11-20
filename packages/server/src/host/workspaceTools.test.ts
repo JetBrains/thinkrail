@@ -9,12 +9,12 @@ import type {
 	WireModel,
 	Workspace,
 	WorkspaceKickoff,
+	WorkspaceStartedBy,
 } from "@thinkrail/contracts";
 import { WorkspaceCreationStopped } from "../workspaces";
 import {
 	type ChatReport,
 	chatName,
-	chatStateLabel,
 	clampFinalMessage,
 	composePrompt,
 	matchWorkspaces,
@@ -117,32 +117,6 @@ const state = (patch: Partial<SessionState>): SessionState => ({
 	...patch,
 });
 
-test("chatStateLabel maps session state to the agent-facing vocabulary", () => {
-	expect(chatStateLabel(undefined)).toBe("idle");
-	expect(chatStateLabel(state({}))).toBe("idle");
-	expect(chatStateLabel(state({ execution: "running" }))).toBe("working");
-	expect(chatStateLabel(state({ backgroundWork: true }))).toBe("working");
-	expect(
-		chatStateLabel(
-			state({
-				execution: "running",
-				needsInput: { interactionId: "i1", kind: "tool-response", toolCallId: "t1" },
-			}),
-		),
-	).toBe("needs_you");
-	expect(chatStateLabel(state({ completion: { completionId: "c", outcome: "succeeded" } }))).toBe(
-		"finished",
-	);
-	expect(
-		chatStateLabel(
-			state({ completion: { completionId: "c", outcome: "failed", failure: "error" } }),
-		),
-	).toBe("failed");
-	expect(chatStateLabel(state({ completion: { completionId: "c", outcome: "cancelled" } }))).toBe(
-		"interrupted",
-	);
-});
-
 test("clampFinalMessage keeps the tail of a long final message", () => {
 	expect(clampFinalMessage("short", 10)).toBe("short");
 	expect(clampFinalMessage("0123456789abc", 4)).toBe("…9abc");
@@ -168,6 +142,7 @@ test("chatName prefers the chat's title, then its first prompt", () => {
 function startDeps(overrides: Partial<StartWorkspaceDeps> = {}) {
 	const calls: string[] = [];
 	const kickoffs: WorkspaceKickoff[] = [];
+	const starters: WorkspaceStartedBy[] = [];
 	const caller = { id: "w1", projectId: "p1", worktreePath: dir } as Workspace;
 	const child = {
 		id: "w9",
@@ -186,20 +161,21 @@ function startDeps(overrides: Partial<StartWorkspaceDeps> = {}) {
 			calls.push(`defaultBase ${projectId}${signal ? " signal" : ""}`);
 			return "origin/main";
 		},
-		create: async (projectId, baseRef, kickoff, signal) => {
+		create: async (projectId, baseRef, kickoff, startedBy, signal) => {
 			calls.push(`create ${projectId} ${baseRef}${signal ? " signal" : ""}`);
 			kickoffs.push(kickoff);
+			starters.push(startedBy);
 			return { workspace: child, sessionId: "s9", model, thinkingLevel: "high" };
 		},
 		...overrides,
 	};
-	return { deps, calls, kickoffs, child };
+	return { deps, calls, kickoffs, starters, child };
 }
 
 test("startWorkspace creates in the named project from its default base and hands the new chat its prompt", async () => {
 	writeFileSync(join(dir, "spec.md"), "# spec");
 	writeFileSync(join(dir, "shot.png"), "png");
-	const { deps, calls, kickoffs } = startDeps();
+	const { deps, calls, kickoffs, starters } = startDeps();
 	const started = await startWorkspace(
 		"s1",
 		{
@@ -213,6 +189,7 @@ test("startWorkspace creates in the named project from its default base and hand
 		new AbortController().signal,
 	);
 	expect(calls).toEqual(["defaultBase p2 signal", "create p2 origin/main signal"]);
+	expect(starters).toEqual([{ sessionId: "s1" }]);
 	expect(kickoffs).toEqual([
 		{
 			text: `Do X\n\nAttached files:\n- ${join(dir, "spec.md")}`,
@@ -261,6 +238,20 @@ test("startWorkspace from a chat without a project needs a named repository and 
 	await startWorkspace("s1", { prompt: "x", project: "backend" }, named.deps);
 	expect(named.calls).toEqual(["defaultBase p2", "create p2 origin/main"]);
 	expect(named.kickoffs).toEqual([{ text: "x" }]);
+	expect(named.starters).toEqual([{ sessionId: "s1" }]);
+});
+
+test("startWorkspace from a container's orchestrator records the container beside the calling chat", async () => {
+	const caller = {
+		id: "chat-o",
+		projectId: "c1",
+		kind: "chat",
+		worktreePath: dir,
+		orchestratorOf: "box-1",
+	} as Workspace;
+	const { deps, starters } = startDeps({ callerWorkspace: () => caller });
+	await startWorkspace("s-orch", { prompt: "x", project: "backend" }, deps);
+	expect(starters).toEqual([{ sessionId: "s-orch", containerId: "box-1" }]);
 });
 
 test("startWorkspace names a created workspace, and its chat, when the chat fails", async () => {
@@ -353,6 +344,7 @@ function statusDeps(overrides: Partial<WorkspaceStatusDeps> = {}) {
 		callerWorkspace: () => workspaces[0] as Workspace,
 		openProjects: () => [chats, repo],
 		allWorkspaces: () => workspaces,
+		containers: () => [],
 		projectWorkspaces: async (projectId) => workspaces.filter((w) => w.projectId === projectId),
 		withDiffStats: async (workspace) => workspace,
 		chatReports: async (workspace, withFinal) => {
@@ -385,5 +377,32 @@ test("workspace_status by name reads final messages, never matches a chat withou
 			"## main — main (id w1, project ThinkRail, default)\nbase origin/main · no PR · diff +1 -2\nchats unreadable: transcripts unreadable",
 			'## fix-login — fix-login (id w2, project ThinkRail)\nbase origin/main · PR #7 open https://pr/7 · diff unknown\n- chat "Fix it" (s2): working\n  final message: none yet\n- chat unnamed (s3): finished\n  final message:\n    Done.\n    Opened PR #7.',
 		].join("\n\n"),
+	);
+});
+
+test("workspace_status from an orchestrator without arguments reports its container's members", async () => {
+	const orchestrator = {
+		id: "chat-o",
+		projectId: "c1",
+		name: "Orchestrator",
+		branch: "",
+		baseBranch: "",
+		kind: "chat",
+		orchestratorOf: "box",
+	} as Workspace;
+	const { deps } = statusDeps({
+		callerWorkspace: () => orchestrator,
+		containers: () => [
+			{ id: "box", name: "Docs", workspaceIds: ["w2", "gone"], createdAt: 1, updatedAt: 1 },
+		],
+	});
+	expect(await workspaceStatus("s9", {}, deps)).toBe(
+		[
+			"# Container Docs: 1 member workspace(s)",
+			'## fix-login — fix-login (id w2, project ThinkRail)\nbase origin/main · PR #7 open https://pr/7 · diff unknown\n- chat "Fix it" (s2): working\n- chat unnamed (s3): finished',
+		].join("\n\n"),
+	);
+	expect(await workspaceStatus("s9", { project: "thinkrail" }, deps)).toStartWith(
+		"# ThinkRail: 2 workspace(s)",
 	);
 });

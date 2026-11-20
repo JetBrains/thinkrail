@@ -23,7 +23,11 @@ import {
 	readLayoutSelection,
 	tupleKey,
 } from "../../lib";
-import { projectWorkbenchRatio, restoreWorkbenchRatio } from "./auxiliaryPresentation";
+import {
+	projectWorkbenchColumns,
+	projectWorkbenchRatio,
+	restoreWorkbenchRatio,
+} from "./auxiliaryPresentation";
 import {
 	canCreateAuxiliaryGroup,
 	canJoinAuxiliaryGroup,
@@ -47,6 +51,8 @@ import {
 	type LayoutSide,
 	layoutTabName,
 	moveTabToGroup,
+	NO_EXTENSION_TOOLS,
+	normalizePeekWidth,
 	reconcileAttention,
 	resizeBottomRegion,
 	resizeSideRegion,
@@ -76,8 +82,11 @@ import type {
 	WorkbenchProps,
 } from "./workbenchShared";
 import {
+	CenterOverrideRegion,
+	ExtensionToolsContext,
 	findLayoutGroupTabs,
 	groupDomId,
+	PeekRegion,
 	tabDomId,
 	useCommittedSizes,
 	useElementSize,
@@ -92,7 +101,9 @@ import { SideStack } from "./workbenchSide";
 
 export type {
 	LayoutTabFocusRequest,
+	WorkbenchCenterOverride,
 	WorkbenchChromeShortcuts,
+	WorkbenchPeek,
 	WorkbenchProps,
 } from "./workbenchShared";
 
@@ -119,11 +130,15 @@ export function Workbench({
 	onRenameChat,
 	chatFirstPrompts,
 	chatActions,
+	extensionTools = NO_EXTENSION_TOOLS,
 	onNewChat,
 	onNewTerminal,
 	onGestureCanceled,
 	chromeShortcuts,
 	leftRailFooter,
+	leftRailViews,
+	peek,
+	centerOverride,
 }: WorkbenchProps) {
 	const t = useT();
 	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -144,10 +159,16 @@ export function Workbench({
 	} | null>(null);
 	const documentRef = useRef(document);
 	const attentionRef = useRef(attention);
+	const peekOpen = peek?.open === true;
+	const peekOpenRef = useRef(peekOpen);
+	const centerShown = centerOverride === undefined;
+	const centerShownRef = useRef(centerShown);
 	useInsertionEffect(() => {
 		documentRef.current = document;
 		attentionRef.current = attention;
 		workspaceRef.current = workspaceId;
+		peekOpenRef.current = peekOpen;
+		centerShownRef.current = centerShown;
 	});
 	const [localFocusRequest, setLocalFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
 	const dragStartEpoch = useRef(gestureContext);
@@ -447,14 +468,17 @@ export function Workbench({
 		apply(result);
 	};
 
-	const leftVisible = document.left.visible && document.left.groups.some((group) => !group.folded);
-	const rightVisible =
-		document.right.visible && document.right.groups.some((group) => !group.folded);
-	const visibleSideMinimums = (leftVisible ? 8 : 0) + (rightVisible ? 8 : 0);
-	const centerMinimumPercent = Math.min(
-		Math.max(10, 100 - visibleSideMinimums),
-		columnsWidth > 0 ? (LAYOUT_LIMITS.minCenterWidth / columnsWidth) * 100 : 10,
-	);
+	const peekWidth = peek?.width;
+	const columns = projectWorkbenchColumns({
+		document,
+		peek: peekWidth === undefined ? undefined : { open: peekOpen, width: peekWidth },
+		workbenchWidth,
+		columnsWidth,
+	});
+	const { leftVisible, rightVisible } = columns;
+	const centerMinimumPercent = columns.centerMinimum;
+	const peekPresent = peek !== undefined;
+	const peekCurrent = columns.peek;
 	const leftOwnsBottomCorner =
 		leftVisible &&
 		document.bottom.alignment !== "center-left" &&
@@ -465,37 +489,36 @@ export function Workbench({
 		document.bottom.alignment !== "full";
 	const leftInAlignedRow = leftVisible && !leftOwnsBottomCorner;
 	const rightInAlignedRow = rightVisible && !rightOwnsBottomCorner;
-	const desiredLeft = leftVisible
-		? projectWorkbenchRatio(document.left.width, workbenchWidth, columnsWidth) * 100
-		: 0;
-	const desiredRight = rightVisible
-		? projectWorkbenchRatio(document.right.width, workbenchWidth, columnsWidth) * 100
-		: 0;
-	const sideCompression = Math.min(1, 90 / Math.max(Number.EPSILON, desiredLeft + desiredRight));
-	const globalLeftCurrent = desiredLeft * sideCompression;
-	const globalRightCurrent = desiredRight * sideCompression;
+	const globalLeftCurrent = columns.left;
+	const globalRightCurrent = columns.right;
 	const alignedWidthCurrent =
 		100 -
 		(leftOwnsBottomCorner ? globalLeftCurrent : 0) -
-		(rightOwnsBottomCorner ? globalRightCurrent : 0);
+		(rightOwnsBottomCorner ? globalRightCurrent : 0) -
+		peekCurrent;
 	const outerCurrent = useMemo(
 		() => [
 			...(leftOwnsBottomCorner ? [globalLeftCurrent] : []),
 			alignedWidthCurrent,
 			...(rightOwnsBottomCorner ? [globalRightCurrent] : []),
+			...(peekPresent ? [peekCurrent] : []),
 		],
 		[
 			alignedWidthCurrent,
 			globalLeftCurrent,
 			globalRightCurrent,
 			leftOwnsBottomCorner,
+			peekCurrent,
+			peekPresent,
 			rightOwnsBottomCorner,
 		],
 	);
+	const rightOuterIndex = outerCurrent.length - (peekPresent ? 2 : 1);
 	const outerTopology = tupleKey(
 		"outer-workbench",
 		String(leftOwnsBottomCorner),
 		String(rightOwnsBottomCorner),
+		String(peekOpen),
 		String(projectionEpoch),
 	);
 	const [alignedProjection, setAlignedProjection] = useState({
@@ -531,7 +554,19 @@ export function Workbench({
 		[apply, document, onCommit, workbenchWidth, columnsWidth],
 	);
 	const outerSettled = useTopologySettled(
-		tupleKey(String(leftOwnsBottomCorner), String(rightOwnsBottomCorner)),
+		tupleKey(String(leftOwnsBottomCorner), String(rightOwnsBottomCorner), String(peekOpen)),
+	);
+	const peekMinimum = outerSettled ? columns.peekMinimum : 0;
+	const peekMaximum = outerSettled ? (peekOpen ? columns.peekMaximum : 0) : 100;
+	const onPeekResize = peek?.onResize;
+	const commitPeekSize = useCallback(
+		(size: number) => {
+			const width = normalizePeekWidth(
+				restoreWorkbenchRatio(size / 100, workbenchWidth, columnsWidth),
+			);
+			if (width !== undefined) onPeekResize?.(width);
+		},
+		[columnsWidth, onPeekResize, workbenchWidth],
 	);
 	const alignedColumnMinimum = outerSettled
 		? Math.min(100, centerMinimumPercent + (leftInAlignedRow ? 8 : 0) + (rightInAlignedRow ? 8 : 0))
@@ -548,8 +583,9 @@ export function Workbench({
 				commitSideSizes([["left", sizes[0] ?? globalLeftCurrent]]);
 			}
 			if (side === "right" && rightOwnsBottomCorner) {
-				commitSideSizes([["right", sizes.at(-1) ?? globalRightCurrent]]);
+				commitSideSizes([["right", sizes[rightOuterIndex] ?? globalRightCurrent]]);
 			}
+			if (side === "peek" && peekOpen) commitPeekSize(sizes.at(-1) ?? peekCurrent);
 		},
 		onGestureCanceled,
 	);
@@ -614,6 +650,7 @@ export function Workbench({
 	);
 	const outerLeftResize = bindSideResize("left", outerResize);
 	const outerRightResize = bindSideResize("right", outerResize);
+	const outerPeekResize = bindSideResize("peek", outerResize);
 	const alignedLeftResize = bindSideResize("left", alignedRowResize);
 	const alignedRightResize = bindSideResize("right", alignedRowResize);
 	const bottomVisible =
@@ -668,11 +705,18 @@ export function Workbench({
 					100
 			: 10,
 	);
-	const focusableGroups = useMemo(() => visibleFocusableGroups(document), [document]);
+	const focusableGroups = useMemo(
+		() => visibleFocusableGroups(document, peekOpen, centerShown),
+		[document, peekOpen, centerShown],
+	);
 	const readAttention = useCallback(() => attentionRef.current, []);
 	const focusAdjacentGroup = useCallback(
 		(delta: -1 | 1, fromGroupId?: string) => {
-			const groups = visibleFocusableGroups(documentRef.current);
+			const groups = visibleFocusableGroups(
+				documentRef.current,
+				peekOpenRef.current,
+				centerShownRef.current,
+			);
 			if (groups.length < 2) return;
 			const activeGroupId =
 				fromGroupId ??
@@ -747,10 +791,16 @@ export function Workbench({
 	);
 	const revealMissingTool = useCallback(
 		(tool: LayoutToolId) => {
-			const result = revealTool(documentRef.current, tool, maxSideGroups, maxBottomGroups);
+			const result = revealTool(
+				documentRef.current,
+				tool,
+				maxSideGroups,
+				maxBottomGroups,
+				extensionTools,
+			);
 			if (!isLayoutUnavailable(result)) apply(result);
 		},
-		[apply, maxBottomGroups, maxSideGroups],
+		[apply, extensionTools, maxBottomGroups, maxSideGroups],
 	);
 	const renameEditors = useRef(new Map<string, (name: string) => void>());
 	const registerChatRename = useCallback<RegisterChatRename>((tabId, begin) => {
@@ -781,15 +831,26 @@ export function Workbench({
 				maxSideGroups,
 				maxBottomGroups,
 				splitGeometry: box ? centerSplitGeometry(box) : undefined,
-				canFocusAdjacentGroup: visibleFocusableGroups(current).length > 1,
+				canFocusAdjacentGroup:
+					visibleFocusableGroups(current, peekOpenRef.current, centerShownRef.current).length > 1,
 				canRenameChat: onRenameChat !== undefined,
 				worktreePath,
 				chatFirstPrompts,
 				chatActions,
+				extensionTools,
 			});
 			return { tab, location, actions };
 		},
-		[chatActions, chatFirstPrompts, maxBottomGroups, maxSideGroups, onRenameChat, t, worktreePath],
+		[
+			chatActions,
+			chatFirstPrompts,
+			extensionTools,
+			maxBottomGroups,
+			maxSideGroups,
+			onRenameChat,
+			t,
+			worktreePath,
+		],
 	);
 	useEffect(
 		() =>
@@ -884,7 +945,11 @@ export function Workbench({
 			{...shared}
 		/>
 	);
-	const centerView = (
+	const centerView = centerOverride ? (
+		<main data-testid="center-tabs" className="h-full min-h-0 min-w-0">
+			<CenterOverrideRegion override={centerOverride} />
+		</main>
+	) : (
 		<main data-testid="center-tabs" className="h-full min-h-0 min-w-0">
 			<CenterNodeView
 				node={document.center}
@@ -1092,7 +1157,7 @@ export function Workbench({
 					<ResizablePanel
 						id="layout-right"
 						order={3}
-						defaultSize={outerCurrent[outerCurrent.length - 1]}
+						defaultSize={outerCurrent[rightOuterIndex]}
 						minSize={8}
 						collapsedSize={0}
 						collapsible
@@ -1101,51 +1166,80 @@ export function Workbench({
 					</ResizablePanel>
 				</>
 			) : null}
+			{peek ? (
+				<>
+					{peekOpen ? (
+						<ResizableHandle
+							direction="horizontal"
+							data-testid="resize-peek"
+							onDragging={outerPeekResize.onDragging}
+							onKeyDownCapture={outerPeekResize.onKeyboard}
+							onKeyUpCapture={outerPeekResize.onKeyboardEnd}
+						/>
+					) : null}
+					<ResizablePanel
+						id="layout-peek"
+						order={4}
+						defaultSize={peekCurrent}
+						minSize={peekMinimum}
+						maxSize={peekMaximum}
+					>
+						<PeekRegion open={peekOpen} render={peek.render} />
+					</ResizablePanel>
+				</>
+			) : null}
 		</ResizablePanelGroup>
 	);
 
 	return (
-		<DndContext
-			sensors={sensors}
-			collisionDetection={workbenchCollisionDetection}
-			measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
-			onDragStart={handleDragStart}
-			onDragCancel={() => setDraggingTab(null)}
-			onDragEnd={handleDragEnd}
-		>
-			<div
-				ref={workbenchRef}
-				data-testid="workbench"
-				className="flex h-full min-h-0 min-w-0 overflow-hidden"
-				onPointerDownCapture={() => {
-					tabSelectionEpoch.current += 1;
-				}}
-				onKeyDownCapture={(event) => {
-					if (!event.ctrlKey || event.altKey || event.metaKey || event.key !== "F6") return;
-					event.preventDefault();
-					event.stopPropagation();
-					focusAdjacentGroup(event.shiftKey ? -1 : 1);
-				}}
+		<ExtensionToolsContext value={extensionTools}>
+			<DndContext
+				sensors={sensors}
+				collisionDetection={workbenchCollisionDetection}
+				measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+				onDragStart={handleDragStart}
+				onDragCancel={() => setDraggingTab(null)}
+				onDragEnd={handleDragEnd}
 			>
-				<AuxiliaryRegionRail
-					region="left"
-					shared={shared}
-					attention={attention}
-					footer={leftRailFooter}
-				/>
-				<div ref={columnsRef} className="min-h-0 min-w-0 flex-1">
-					{workbenchColumns}
-				</div>
-				<AuxiliaryRegionRail region="right" shared={shared} attention={attention} />
-			</div>
-			<DragOverlay dropAnimation={null}>
-				{draggingTab ? (
-					<div className="flex max-w-224 items-center gap-4 rounded-sm border border-primary bg-container-elevated-bg px-8 py-4 tr-text-ui text-text-default shadow-lg">
-						{tabIcon(draggingTab)}
-						<span className="truncate">{layoutTabName(t, draggingTab, chatFirstPrompts)}</span>
+				<div
+					ref={workbenchRef}
+					data-testid="workbench"
+					className="flex h-full min-h-0 min-w-0 overflow-hidden"
+					onPointerDownCapture={() => {
+						tabSelectionEpoch.current += 1;
+					}}
+					onKeyDownCapture={(event) => {
+						if (!event.ctrlKey || event.altKey || event.metaKey || event.key !== "F6") return;
+						event.preventDefault();
+						event.stopPropagation();
+						focusAdjacentGroup(event.shiftKey ? -1 : 1);
+					}}
+				>
+					<AuxiliaryRegionRail
+						region="left"
+						shared={shared}
+						attention={attention}
+						views={leftRailViews}
+						footer={leftRailFooter}
+					/>
+					<div ref={columnsRef} className="min-h-0 min-w-0 flex-1">
+						{workbenchColumns}
 					</div>
-				) : null}
-			</DragOverlay>
-		</DndContext>
+					{peekOpen ? null : (
+						<AuxiliaryRegionRail region="right" shared={shared} attention={attention} optional />
+					)}
+				</div>
+				<DragOverlay dropAnimation={null}>
+					{draggingTab ? (
+						<div className="flex max-w-224 items-center gap-4 rounded-sm border border-primary bg-container-elevated-bg px-8 py-4 tr-text-ui text-text-default shadow-lg">
+							{tabIcon(draggingTab, false, undefined, extensionTools)}
+							<span className="truncate">
+								{layoutTabName(t, draggingTab, chatFirstPrompts, extensionTools)}
+							</span>
+						</div>
+					) : null}
+				</DragOverlay>
+			</DndContext>
+		</ExtensionToolsContext>
 	);
 }

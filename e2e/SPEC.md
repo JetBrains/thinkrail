@@ -19,10 +19,12 @@ explicit, authenticated, on-demand runs.
 ## Execution model
 
 Per-test isolation is `resetState()` in `fixtures/app.ts`: it clears the host's `projects.json`,
-`workspaces.json`, every chat in `chats.json` and the `chats/` folders, turns, reviews, artifact indexes and
-kept copies, worktrees and pi
+`workspaces.json`, `containers.json` and the container homes, every chat in `chats.json` and the `chats/` folders, turns, reviews, artifact indexes and
+kept copies, worktrees, the board extension's boards (`extensions/board/`) and pi
 sessions, and resets the fixture repository, so a chat without a project created by one test never
-reaches the next. The Chats container the host ensured at boot is kept (an empty `chats/` root and the
+reaches the next. A board test that needs cards in a state the UI cannot reach without an agent (an
+attempt on a seeded chat, an agent's Triage cards) writes the project's `cards.json` and then switches the
+extension off and on, which rebuilds the board over the files, since a running board keeps what it read. The Chats container the host ensured at boot is kept (an empty `chats/` root and the
 record), because a fresh install always has it: a cold start in a test is the cold start a user gets.
 
 `bun run e2e` is the complete no-agent gate. It builds the web bundle once and runs machine-adaptive,
@@ -199,10 +201,18 @@ so an active placement motion restores the latest edge; on slow runners the rest
 mousedown and mouseup, or puts a preview iframe under the pointer, and the click is lost while the action
 reports success. Settling cannot stop a motion that later growth starts, so the probe first waits for the
 control's own content (a preview's frames or notice), and a click after a dialog waits for it to hide.
-`visualize.spec.ts` and `tool-file-links.spec.ts` click every transcript control this way: a file card's
+`visualize.spec.ts`, `tool-file-links.spec.ts` and `peek.spec.ts` click every transcript control this way: a file card's
 fixed-height preview is taller than the transcript beside the default bottom terminal, so its toolbar
 sits above the fold at the latest edge, and each tool-step expansion moves the edge a following chat then
 animates to.
+`peek.spec.ts` pins Peek on seeded chats: a tool file link, an assistant link, a questionnaire preview's
+frame action (the option pane then following the cursor without growing the stack) and a visualize card's
+action and links open it instead of a tab; Back/Forward, re-peeking selecting, Open in tab promoting to a
+kept tab, the right tool side folding and restoring, `Mod+J` closing it (pinned too) for the right tools
+with its stack kept, the width surviving a reload, a click dispatched over a
+focused composer leaving it focused, and Esc closing it after the composer's own Esc but never while
+pinned. `tool-file-links.spec.ts` and `keyboard-chat.spec.ts` assert Peek where they asserted the preview
+tab, by user decision.
 Entering a workspace auto-opens its latest chat, and a pending questionnaire there claims focus and reveal
 at once. Workbench shortcuts pressed afterwards are user input, and the card yields to them. Questionnaire
 attention coverage therefore closes and reopens the chat after arranging the workbench.
@@ -451,7 +461,7 @@ composer onto the newest message and Esc back with the draft and caret intact (a
 takes the caret to its start), ↑/↓ with k/j and Home/End, →/← and l/h expanding an Activity and walking
 its nested Thinking and tool steps, a keyboard expand of the newest Activity in a chat shortened by the
 bottom Terminal and focus entering an on-screen step of it leaving follow without scrolling the focused
-header or step away, C (clipboard), O (a preview tab) and the Shift+F10 item menu, Tab
+header or step away, C (clipboard), O (Peek, the item keeping focus) and the Shift+F10 item menu, Tab
 walking only the focused item's controls then leaving, PgUp/PgDn from the composer paging the transcript
 with focus kept, Latest from the keyboard and a history jump landing on the message, focus parked on the
 feed when a wheel scroll unmounts the focused row and the next key bringing it back, newest-first order,
@@ -559,12 +569,20 @@ shortlist — it reveals the provider groups (`revealModelGroups`) and asserts o
 receive-pack from a local bare repo, so pushes, fetches, and remote-branch deletion run for real. An
 `insteadOf` rewrite cannot stand in: `get-url` expands it, and the host's review lookup would then see a
 local path and never find a PR. The lane's fake **`gh`** (`fixtures/fakeGh.ts`, launched by a generated
-fake-bin shim under the runner's bun, since the host PATH has none) answers `pr list|view` and `repo view`
-from a test-written scenario file, applies `pr ready|merge|reopen` to it, and logs every argv so a spec
+fake-bin shim under the runner's bun, since the host PATH has none) answers `pr list|view`, `repo view` and
+`issue list` (the board's GitHub source) from a test-written scenario file, applies `pr ready|merge|reopen`
+and `pr edit --body-file` (a PR's `body`, the board's review packet) to it, and logs every argv so a spec
 asserts the exact mutations. Without a scenario it fails like an unauthenticated gh, so every other spec
 keeps the gh-less behaviour; `THINKRAIL_GH_OFFLINE` still keeps `pr.open` on the compare hand-off. The reset
 deletes the scenario and log and unsets the ssh config. The host caches repository merge settings per origin
 URL for the whole run, so a spec that sets its own repository settings names its own repository.
+
+**The board's Smart review** needs a reviewer verdict without a model. No-agent hosts get
+`THINKRAIL_E2E_FAKE_REVIEWER=1`, which makes the dev launcher install a deterministic conformance reviewer
+(`setConformanceReviewRunner`, the host's one seam for it): it answers the spec-written
+`.thinkrail/context/e2e-reviewer.json` of the reviewed workspace as the reviewer's final text, which then
+runs through the real parse, the board's storage and the Review comments. Agent mode leaves it off, and the
+binary and desktop lanes never install it, so the Smart review test carries `@dev-seam`, which those lanes skip.
 
 **Voice input** (`voice-input.spec.ts`) never reaches NVIDIA's servers or a microphone.
 - Every host gets `THINKRAIL_SPEECH_MANIFEST` pointing at the lane's `speech-fixture/manifest.json`, which

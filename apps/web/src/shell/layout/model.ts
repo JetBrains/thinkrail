@@ -1,3 +1,4 @@
+import { isBuiltinLayoutToolId, parseExtensionLayoutToolId } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { currentTranslator, type Translator, t } from "@thinkrail/locales/react";
 import {
@@ -16,6 +17,8 @@ import {
 	terminalName,
 } from "../../lib";
 import type {
+	BuiltinLayoutToolId,
+	ExtensionLayoutToolId,
 	LayoutAuxiliaryRegion,
 	LayoutBottomAlignment,
 	LayoutBottomRegion,
@@ -27,6 +30,7 @@ import type {
 	LayoutSideRegion,
 	LayoutSideTab,
 	LayoutTab,
+	LayoutToolCatalog,
 	LayoutToolId,
 	LayoutToolTab,
 	WorkspaceLayoutDocument,
@@ -45,7 +49,17 @@ export const LAYOUT_LIMITS = {
 	auxiliaryHeaderHeight: 32,
 	initialBottomHeight: 0.3,
 	maxBottomHeight: 0.7,
+	minPeekWidth: 240,
+	defaultPeekWidth: 0.4,
+	defaultViewPeekWidth: 0.3,
+	minPeekRatio: 0.1,
+	maxPeekRatio: 0.9,
 } as const;
+
+export function normalizePeekWidth(value: unknown): number | undefined {
+	if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+	return Math.min(LAYOUT_LIMITS.maxPeekRatio, Math.max(LAYOUT_LIMITS.minPeekRatio, value));
+}
 
 export type LayoutSide = "left" | "right";
 export type LayoutAuxiliary = LayoutAuxiliaryRegion;
@@ -77,31 +91,34 @@ export function createLayoutId(prefix: string): string {
 	return randomId(prefix);
 }
 
-export const LAYOUT_TOOLS: readonly LayoutToolId[] = [
+export const LAYOUT_TOOLS: readonly BuiltinLayoutToolId[] = [
 	"projects",
 	"specs",
 	"files",
 	"review",
 	"plan",
 	"artifacts",
+	"orchestrator",
 ];
 
-export const LAYOUT_TOOL_DEFAULT_SIDES: Record<LayoutToolId, LayoutSide> = {
+export const LAYOUT_TOOL_DEFAULT_SIDES: Record<BuiltinLayoutToolId, LayoutSide> = {
 	projects: "left",
 	specs: "right",
 	files: "right",
 	review: "right",
 	plan: "right",
 	artifacts: "right",
+	orchestrator: "left",
 };
 
-const LAYOUT_TOOL_NAMES: Record<LayoutToolId, string> = {
+const LAYOUT_TOOL_NAMES: Record<BuiltinLayoutToolId, string> = {
 	projects: "Projects",
 	specs: "Specs",
 	files: "Files",
 	review: "Review",
 	plan: "TODO List",
 	artifacts: "Artifacts",
+	orchestrator: "Orchestrator",
 };
 
 const LAYOUT_TOOL_NAME_KEYS = {
@@ -111,20 +128,54 @@ const LAYOUT_TOOL_NAME_KEYS = {
 	review: "workbench.tool.review",
 	plan: "workbench.tool.plan",
 	artifacts: "workbench.tool.artifacts",
-} as const satisfies Record<LayoutToolId, MessageKey>;
+	orchestrator: "workbench.tool.orchestrator",
+} as const satisfies Record<BuiltinLayoutToolId, MessageKey>;
 
 export type ChatFirstPrompts = Readonly<Record<string, string>>;
 
 const NO_FIRST_PROMPTS: ChatFirstPrompts = {};
 
+export const NO_EXTENSION_TOOLS: LayoutToolCatalog = {};
+
+/** The singleton tools that exist: the built-ins, then the offered extension tools in catalog order. */
+export function layoutTools(
+	tools: LayoutToolCatalog = NO_EXTENSION_TOOLS,
+): readonly LayoutToolId[] {
+	const offered = (Object.keys(tools) as ExtensionLayoutToolId[]).filter(
+		(tool) => tools[tool]?.offered,
+	);
+	return offered.length === 0 ? LAYOUT_TOOLS : [...LAYOUT_TOOLS, ...offered];
+}
+
+export function layoutToolDefaultSide(
+	tool: LayoutToolId,
+	tools: LayoutToolCatalog = NO_EXTENSION_TOOLS,
+): LayoutSide {
+	return isBuiltinLayoutToolId(tool)
+		? LAYOUT_TOOL_DEFAULT_SIDES[tool]
+		: (tools[tool]?.defaultSide ?? "left");
+}
+
+function layoutToolName(
+	t: Translator,
+	tool: LayoutToolId,
+	tools: LayoutToolCatalog = NO_EXTENSION_TOOLS,
+): string {
+	if (isBuiltinLayoutToolId(tool)) return t(LAYOUT_TOOL_NAME_KEYS[tool]);
+	const titleKey = tools[tool]?.titleKey;
+	if (titleKey !== undefined && isMessageKey(titleKey)) return t(titleKey);
+	return parseExtensionLayoutToolId(tool)?.tool ?? tool;
+}
+
 export function layoutTabName(
 	t: Translator,
 	tab: LayoutTab,
 	chatFirstPrompts: ChatFirstPrompts = NO_FIRST_PROMPTS,
+	tools: LayoutToolCatalog = NO_EXTENSION_TOOLS,
 ): string {
 	switch (tab.kind) {
 		case "tool":
-			return t(LAYOUT_TOOL_NAME_KEYS[tab.tool]);
+			return layoutToolName(t, tab.tool, tools);
 		case "chat":
 			return chatDisplayName(t, tab.name, chatFirstPrompts[tab.sessionId]);
 		case "terminal":
@@ -143,7 +194,10 @@ export function layoutTabName(
 }
 
 export function toolTab(tool: LayoutToolId): LayoutToolTab {
-	return { kind: "tool", id: `tool:${tool}`, name: LAYOUT_TOOL_NAMES[tool], tool };
+	const name = isBuiltinLayoutToolId(tool)
+		? LAYOUT_TOOL_NAMES[tool]
+		: (parseExtensionLayoutToolId(tool)?.tool ?? tool);
+	return { kind: "tool", id: `tool:${tool}`, name, tool };
 }
 
 export function collectCenterGroups(node: LayoutCenterNode): LayoutCenterGroup[] {
@@ -471,17 +525,21 @@ export function findPlacedResource(
 	);
 }
 
-export function unplacedTools(document: WorkspaceLayoutDocument): readonly LayoutToolId[] {
-	return LAYOUT_TOOLS.filter((tool) => findPlacedResource(document, toolTab(tool)) === null);
+export function unplacedTools(
+	document: WorkspaceLayoutDocument,
+	tools: LayoutToolCatalog = NO_EXTENSION_TOOLS,
+): readonly LayoutToolId[] {
+	return layoutTools(tools).filter((tool) => findPlacedResource(document, toolTab(tool)) === null);
 }
 
 export function unplacedToolsForRegion(
 	document: WorkspaceLayoutDocument,
 	region: LayoutAuxiliaryRegion,
+	tools: LayoutToolCatalog = NO_EXTENSION_TOOLS,
 ): readonly LayoutToolId[] {
-	return unplacedTools(document).filter(
+	return unplacedTools(document, tools).filter(
 		(tool) =>
-			(document.toolRestoreTargets[tool]?.region ?? LAYOUT_TOOL_DEFAULT_SIDES[tool]) === region,
+			(document.toolRestoreTargets[tool]?.region ?? layoutToolDefaultSide(tool, tools)) === region,
 	);
 }
 
@@ -604,10 +662,11 @@ export function describeLayoutGroup(
 	t: Translator,
 	tabs: readonly LayoutTab[],
 	chatFirstPrompts: ChatFirstPrompts = NO_FIRST_PROMPTS,
+	tools: LayoutToolCatalog = NO_EXTENSION_TOOLS,
 	limit = 3,
 ): string {
 	if (tabs.length === 0) return t("workbench.layout.emptyGroupSummary");
-	const names = tabs.slice(0, limit).map((tab) => layoutTabName(t, tab, chatFirstPrompts));
+	const names = tabs.slice(0, limit).map((tab) => layoutTabName(t, tab, chatFirstPrompts, tools));
 	const rest = tabs.length - names.length;
 	const list = names.join(", ");
 	return rest > 0
@@ -907,8 +966,6 @@ export function setBottomVisibility(
 	return { ...document, bottom: { ...document.bottom, visible: nextVisible } };
 }
 
-const TOOL_RESTORE_ORDER = LAYOUT_TOOLS;
-
 export function hideSide(
 	document: WorkspaceLayoutDocument,
 	side: LayoutSide,
@@ -944,8 +1001,14 @@ export function hideBottom(
 	};
 }
 
-export function canShowSide(document: WorkspaceLayoutDocument, side: LayoutSide): boolean {
-	return document[side].groups.length > 0 || unplacedToolsForRegion(document, side).length > 0;
+export function canShowSide(
+	document: WorkspaceLayoutDocument,
+	side: LayoutSide,
+	tools: LayoutToolCatalog = NO_EXTENSION_TOOLS,
+): boolean {
+	return (
+		document[side].groups.length > 0 || unplacedToolsForRegion(document, side, tools).length > 0
+	);
 }
 
 function focusUnfoldedGroup(
@@ -968,6 +1031,7 @@ export function showBottom(
 	maxSideGroups: number,
 	maxBottomGroups: number,
 	attention?: LayoutAttention,
+	tools: LayoutToolCatalog = NO_EXTENSION_TOOLS,
 ): LayoutOperationResult {
 	const populated = document.bottom.groups.some((group) => group.tabs.length > 0);
 	if (populated) {
@@ -980,12 +1044,12 @@ export function showBottom(
 		if (!group) return { document: shown };
 		return focusUnfoldedGroup(shown, "bottom", group, attention);
 	}
-	const tool = TOOL_RESTORE_ORDER.find(
+	const tool = layoutTools(tools).find(
 		(candidate) =>
 			document.toolRestoreTargets[candidate]?.region === "bottom" &&
 			!findPlacedResource(document, toolTab(candidate)),
 	);
-	if (tool) return revealTool(document, tool, maxSideGroups, maxBottomGroups);
+	if (tool) return revealTool(document, tool, maxSideGroups, maxBottomGroups, tools);
 	if (document.bottom.groups.length > 0) {
 		const shown = setBottomVisibility(document, true);
 		const preferredId = attention?.lastFocusedSideGroupId.bottom;
@@ -1014,6 +1078,7 @@ export function showSide(
 	side: LayoutSide,
 	maxSideGroups: number,
 	attention?: LayoutAttention,
+	tools: LayoutToolCatalog = NO_EXTENSION_TOOLS,
 ): LayoutOperationResult {
 	if (document[side].groups.length > 0) {
 		const shown = setSideVisibility(document, side, true);
@@ -1024,33 +1089,26 @@ export function showSide(
 		const selectedId = attention ? readLayoutSelection(attention, group.id) : undefined;
 		const tab = group.tabs.find((candidate) => candidate.id === selectedId) ?? group.tabs[0];
 		if (!tab) {
-			const restore =
-				TOOL_RESTORE_ORDER.find(
-					(candidate) =>
-						document.toolRestoreTargets[candidate]?.region === side &&
-						!findPlacedResource(document, toolTab(candidate)),
-				) ??
-				TOOL_RESTORE_ORDER.find(
-					(candidate) =>
-						LAYOUT_TOOL_DEFAULT_SIDES[candidate] === side &&
-						!findPlacedResource(document, toolTab(candidate)),
-				);
-			if (restore) return revealTool(shown, restore, maxSideGroups);
+			const restore = restorableSideTool(document, side, tools);
+			if (restore) return revealTool(shown, restore, maxSideGroups, undefined, tools);
 		}
 		return focusUnfoldedGroup(shown, side, group, attention);
 	}
-	const tool =
-		TOOL_RESTORE_ORDER.find(
-			(candidate) =>
-				document.toolRestoreTargets[candidate]?.region === side &&
-				!findPlacedResource(document, toolTab(candidate)),
-		) ??
-		TOOL_RESTORE_ORDER.find(
-			(candidate) =>
-				LAYOUT_TOOL_DEFAULT_SIDES[candidate] === side &&
-				!findPlacedResource(document, toolTab(candidate)),
-		);
-	return tool ? revealTool(document, tool, maxSideGroups) : { document };
+	const tool = restorableSideTool(document, side, tools);
+	return tool
+		? revealTool(document, tool, maxSideGroups, undefined, tools)
+		: { reason: t("workbench.layout.sideEmpty") };
+}
+
+function restorableSideTool(
+	document: WorkspaceLayoutDocument,
+	side: LayoutSide,
+	tools: LayoutToolCatalog,
+): LayoutToolId | undefined {
+	const candidates = unplacedToolsForRegion(document, side, tools);
+	return (
+		candidates.find((tool) => document.toolRestoreTargets[tool]?.region === side) ?? candidates[0]
+	);
 }
 
 export function revealPlacedTab(
@@ -1088,6 +1146,7 @@ export function revealTool(
 	tool: LayoutToolId,
 	maxSideGroups: number,
 	maxBottomGroups = 3,
+	tools: LayoutToolCatalog = NO_EXTENSION_TOOLS,
 ): LayoutOperationResult {
 	const requestedTab = withAvailablePlacementId(document, toolTab(tool));
 	const placedTab = resolvePlacedResource(document, requestedTab).placed;
@@ -1096,7 +1155,7 @@ export function revealTool(
 		return revealPlacedTab(document, placedTab.id) ?? { document };
 	}
 	const restore = document.toolRestoreTargets[tool];
-	const region: LayoutAuxiliaryRegion = restore?.region ?? LAYOUT_TOOL_DEFAULT_SIDES[tool];
+	const region: LayoutAuxiliaryRegion = restore?.region ?? layoutToolDefaultSide(tool, tools);
 	const groups = document[region].groups;
 	const restoreGroup = restore?.groupId
 		? groups.find((group) => group.id === restore.groupId)

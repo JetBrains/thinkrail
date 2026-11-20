@@ -15,8 +15,8 @@ The shell-owned, headless workbench engine: the normalized frontend-local frame 
 ## Boundary
 
 - **Owns:** web-local `WorkbenchFrame`/`WorkspaceViewState` types; frame-plus-view projection; pure topology, placement, attention, and policy operations; semantic minimum and independent group-limit checks; one-result drag previews; center/side/bottom renderers; alignment-owned nested composition and side-width projection; tab-strip overflow; ARIA tab/separator behavior; and the terminal visibility gate.
-- **Public surface (`index.ts`):** all current-layout types; workbench renderer/controller; the edge-chrome primitives (`AuxiliaryRail`, `AuxiliaryRailToolButton`, `AuxiliaryRailActionButton`, `AuxiliaryPaneHeader`, `AuxiliaryPaneHideButton`); pure mutations, projection, and validation helpers; the tab-action list (`tabActions`, `TabAction`), the injected chat actions' shape (`ChatTabAction`, `ChatTabActions`) and the `WorkbenchTabCommands` provider contract; built-in preset definitions plus instantiate/apply/capture operations and `frameMatchesPreset` (geometry equality ignoring generated ids, which Settings uses to mark the applied preset); attention fallback helpers; and unavailable-reason results. Callers inject resource renderers, the workspace worktree path for file-tab copy actions, the left rail's footer items (`leftRailFooter`, `AuxiliaryRailFooterItem`s), the chat tabs' extra actions (`chatActions`) and the key caps of the chords that repeat a chrome control (`chromeShortcuts`), and commit complete pure results rather than splicing arrays.
-- **External deps:** `@thinkrail/contracts` for the resource-free custom-preset DTO and git diff-scope type only; shell-neutral `lib` attention/id primitives plus `copyText` / `joinWorkspacePath` for file-tab copy actions; React; `@thinkrail/ui/*` (including `@thinkrail/ui/resizable`); `@dnd-kit/core`; the `keybindings` module's `LOCAL_KEY_DEFAULTS` for scopes `tabs` / `rails`, matched through `@thinkrail/ui/local-keys`' `useLocalKeys` (reading the shell-provided keymap context keeps the layout props-pure: never a chord's meaning, which the shell injects).
+- **Public surface (`index.ts`):** all current-layout types; workbench renderer/controller; the edge-chrome primitives (`AuxiliaryRail`, `AuxiliaryRailToolButton`, `AuxiliaryRailActionButton`, `AuxiliaryPaneHeader`, `AuxiliaryPaneHideButton`); pure mutations, projection, and validation helpers; the tab-action list (`tabActions`, `TabAction`), the injected chat actions' shape (`ChatTabAction`, `ChatTabActions`) and the `WorkbenchTabCommands` provider contract; built-in preset definitions plus instantiate/apply/capture operations, an extension view's `arrangeWorkbenchView` (`WorkbenchViewArrangement`), `captureWorkbenchSides` / `restoreWorkbenchSides` (`WorkbenchSides`) and `frameMatchesPreset` (geometry equality ignoring generated ids, which Settings uses to mark the applied preset); attention fallback helpers; and unavailable-reason results. Callers inject resource renderers, the workspace worktree path for file-tab copy actions, the left rail's footer items (`leftRailFooter`, `AuxiliaryRailFooterItem`s) and view toggles (`leftRailViews`, after its tools), the chat tabs' extra actions (`chatActions`), the key caps of the chords that repeat a chrome control (`chromeShortcuts`), the optional Peek column (`peek`, `WorkbenchPeek`), an optional center override (`centerOverride`, `WorkbenchCenterOverride`) and the extensions' side tools (`extensionTools`, a `LayoutToolCatalog`), and commit complete pure results rather than splicing arrays.
+- **External deps:** `@thinkrail/contracts` for the resource-free custom-preset DTO, the git diff-scope type and the layout tool id guards only; shell-neutral `lib` attention/id primitives plus `copyText` / `joinWorkspacePath` for file-tab copy actions; React; `@thinkrail/ui/*` (including `@thinkrail/ui/resizable`); `@dnd-kit/core`; the `keybindings` module's `LOCAL_KEY_DEFAULTS` for scopes `tabs` / `rails`, matched through `@thinkrail/ui/local-keys`' `useLocalKeys` (reading the shell-provided keymap context keeps the layout props-pure: never a chord's meaning, which the shell injects).
 - **Forbidden:** server/shared/pi imports; domain-resource lifetime; browser persistence or WS calls; feature-panel internals; a mutable third-party docking model; inline component styles; or non-semantic colour values.
 
 ## State contract
@@ -141,8 +141,13 @@ decides how loud it reads, never a per-theme selector in the component.
 ## Layout grammar
 
 - **Center:** a recursive horizontal/vertical binary tree, maximum four leaves. A split replaces one leaf with equal halves. User creation/resize requires each child to remain at least 320 px wide and 180 px high. Empty leaves are valid frame slots and render the shell-provided empty surface. Remove/Merge promotes a sibling and rehomes every affected workspace's tabs deterministically.
-- **Auxiliary eligibility:** Projects, Specs, Files, and Review are singleton auxiliary-only tools owned by the frame; terminals are workspace resources and may occupy center or any auxiliary region. Hiding a singleton preserves its restore target. View/deep-link reveal restores or unfolds it in frame-local position and focuses the requested item in current workspace attention.
-- **Left/right:** ordered vertical frame stacks beside persistent full-height tool rails. Dragging an outer separator through its minimum hides that side and retains the last expanded width. Broad upper/lower body targets create adjacent groups; the rail's cluster-boundary zones offer the same commands for folded or hidden panes. Expanded bodies have a 120 px normal minimum; folded groups occupy no interior body space and retain their expanded weights, with restoration on the edge rail. An empty frame group remains available across workspaces until explicit removal and renders a named
+- **Auxiliary eligibility:** Projects, Specs, Files, Review, TODO List, Artifacts, and Orchestrator are singleton auxiliary-only tools owned by the frame, and so is every **extension side tool** (*Extension tools* below); terminals are workspace resources and may occupy center or any auxiliary region. Hiding a singleton preserves its restore target. View/deep-link reveal restores or unfolds it in frame-local position and focuses the requested item in current workspace attention.
+- **Left/right:** ordered vertical frame stacks beside full-height tool rails. The left rail is
+  persistent; the right side is optional: its rail renders only while it has an entry (a group, or an
+  unplaced tool restoring there — `canShowSide`) or a tool/terminal drag can create a pane there (the
+  hidden-side target), so an empty right side takes no width. Showing or toggling a side with nothing to
+  show is unavailable ("This side has no panes or tools to show."), and showing a side restores only a
+  tool whose restore target (else default side) is that side. Dragging an outer separator through its minimum hides that side and retains the last expanded width. Broad upper/lower body targets create adjacent groups; the rail's cluster-boundary zones offer the same commands for folded or hidden panes. Expanded bodies have a 120 px normal minimum; folded groups occupy no interior body space and retain their expanded weights, with restoration on the edge rail. An empty frame group remains available across workspaces until explicit removal and renders a named
   Add/Reveal surface rather than disappearing; a region with groups may stay hidden.
 - **Bottom:** ordered left-to-right frame groups resize on vertical separators. Folded groups retain only
   their edge-rail controls, not an interior vertical strip. A persistent bottom tool rail spans the column
@@ -159,6 +164,15 @@ decides how loud it reads, never a per-theme selector in the component.
   frame slot remains available across workspaces until explicit removal and renders terminal creation/reveal
   affordances.
 - **Limits:** left/right share a local setting defaulting to six groups per side; bottom has an independent local setting defaulting to three. Both accept 1–32, with closed hard safety bounds enforced even for untrusted local state or shared presets. Existing overages survive; creation is unavailable until below the configured limit, while reorder/join/reducing moves remain legal. Stable-id uniqueness, one canonical resource placement per workspace view, normalized geometry, and the final-center-leaf invariant are enforced by every mutation.
+- **Peek:** the optional props-only `peek` (`{ open, width, onResize, render }`) is one full-height column,
+  the last child of the outer columns group (`layout-peek`, order 4), left of where the right rail sits. It
+  is not a frame region: `width` is a workbench-wide ratio the caller persists (`normalizePeekWidth` bounds
+  it), committed through `onResize` on pointer-up like a side width. While `open`, the right side folds at
+  render (`rightVisible &&= !open`, `projectWorkbenchColumns`) and its rail is not rendered; the frame is
+  never written, so closing Peek restores the right side exactly. Peek's share compresses with the sides,
+  stops at `LAYOUT_LIMITS.minPeekWidth` (240 px) and leaves the center its 320 px minimum. Closed, the
+  panel stays in the group at size 0 (max 0) with no handle and its region is hidden with CSS, so the
+  body keeps its DOM and state.
 - **Small viewports:** restoring onto less space may compress below operation minimums locally. Content scrolls/clips; bottom alignment projects from actual compressed side spans, while frame topology, alignment choice, and ratios are never rewritten merely because this viewport is narrow.
 
 Ordinary opens target the active workspace's last-focused surviving center group. Reopening a canonical resource selects its existing local placement rather than duplicating it and refreshes non-identity metadata in place. Each center group has one workspace-local preview slot: preview replaces in place, keep promotes one-way, and navigation clocks are group-local. A passive restore may select its first result without incrementing the user-navigation clock. A user open advances its clock at request time and carries that stamp through acceptance rather than counting twice; reselecting the active center tab also advances once so it defeats older deferred work. Incidental DOM focus changes update last-focus routing but not navigation.
@@ -169,7 +183,7 @@ Async completion reroutes from a removed group to current last focus and advance
 
 Every `ResizablePanelGroup` the engine renders (outer columns, aligned row, bottom column, side and
 bottom stacks, center splits) has a structural key only; the projection epoch, side visibility, bottom
-visibility, folds, and alignment never key a group. A region that appears or disappears adds or removes its
+visibility, folds, alignment and Peek never key a group. A region that appears or disappears adds or removes its
 `ResizablePanel` in place with a stable `id` and `order`, and the bottom column is one always-mounted
 vertical group whose bottom panel is conditional, so the top row never changes parent. Resource bodies,
 tool panes, terminals, and the chat transcript therefore keep their DOM and component state while a
@@ -185,8 +199,34 @@ which a group's membership changes and applied in the synchronous follow-up comm
 react-resizable-panels re-evaluates a panel's constraints in that panel's layout effect against the
 group's not-yet-recalculated layout, and letting a constraint and a sibling panel change in the same
 commit makes it index a stale layout and throw. The enforcement effect keys on that settled flag so the
-committed sizes are re-applied once the real constraints are live. A gesture's rollback (`restore`)
+committed sizes are re-applied once the real constraints are live. The outer group's settle key includes
+Peek's open state, and on that commit Peek's own minimum and maximum relax (0 / 100) with the rest. A gesture's rollback (`restore`)
 likewise refuses to write a layout whose length no longer matches the group.
+
+## Extension tools
+
+A `LayoutToolId` is a built-in (`BuiltinLayoutToolId`) or an extension's side tool
+`ext:<extension>:<tool>` ([[module-contracts]]). The built-in maps (`LAYOUT_TOOLS`,
+`LAYOUT_TOOL_DEFAULT_SIDES`, names, icons, the shell's tool bodies) stay exhaustive over the built-ins only;
+an extension tool is resolved by lookup in the **`LayoutToolCatalog`** the shell injects
+(`LayoutExtensionTool { titleKey, icon, defaultSide, offered }`) — the layout never reads the extension
+registry. The Workbench hands its `extensionTools` prop down through `ExtensionToolsContext` to every name
+and icon it draws (`layoutTabName`'s and `tabIcon`'s optional catalog argument), and passes it to the pure
+functions that need to know which tools exist or where one restores: `layoutTools`, `unplacedTools`,
+`unplacedToolsForRegion`, `canShowSide`, `showSide`, `showBottom`, `revealTool`, `projectAuxiliaryRail`,
+`activateAuxiliaryRailEntry`, `describeLayoutGroup` and `tabActions` (each defaults to no extension tools).
+
+- **Unplaced** — only an `offered` tool waits as a dimmed entry in the trailing cluster of its restore
+  target's region, else its `defaultSide` (`layoutToolDefaultSide`; `"left"` for one the catalog lacks),
+  after the built-ins, and only it is offered by Show menus and side restores. Its first reveal opens a new
+  pane at the end of that region, as the Orchestrator's does; afterwards it carries a restore target like
+  any tool.
+- **Placed** — a placed extension tool stays where it is whether or not it is offered; its name is its
+  `titleKey` translated when that is a key of this build, else the id's tool part, its icon the declared one
+  (no Fill variant), else the generic layout icon. What its body shows — the tool or a placeholder — is the
+  shell's.
+- **Presets** place extension tools like built-ins; instantiation computes restore targets for the
+  built-ins only, so an extension tool a preset omits falls back to its default side.
 
 ## Arrangement and accessibility
 
@@ -227,7 +267,9 @@ Pointer is never the sole arrangement path. Keyboard controls, shadcn menus (ope
 
 **Regions.** Every rendered group section is a keyboard region: it carries `data-region` (its group id)
 and `data-region-kind` (`left` | `center` | `right` | `bottom`), beside the shell's top bar (`topbar`)
-and Project Home projects pane (`home`). The shell's tracker marks the one holding focus
+and Project Home projects pane (`home`); the open Peek column is one more (`data-region="peek"`, kind
+`peek`, after the right side in the ring) — a `tabIndex=-1` section, never a dialog, so no modal-layer
+check counts it, and the shell's tab commands find no tab in it. The shell's tracker marks the one holding focus
 `data-region-active` (its accent line) and flashes a frame on a region a keyboard move enters
 ([[submodule-web-shell]], *Global chords*; [COLOR.md](../../styles/COLOR.md), *Active region*); a region
 root is positioned and isolates its stacking, so both stay inside it, under portals and resize handles. Folded groups and hidden sides render no section and are no region. `F6` and the focus chords land in a
@@ -318,23 +360,52 @@ focus to the tab. The strip's and rail's roving handlers ignore both keys.
 
 ## Presets and local persistence
 
-Balanced, Focus, and Review are web-owned resource-free frame definitions with a below-center bottom slot:
-Balanced and Review show it; Focus hides it. Balanced and Focus start with one center group; Review provides
+Balanced, Focus, Review, and Left tools are web-owned resource-free frame definitions with a below-center
+bottom slot: Balanced, Review, and Left tools show it; Focus hides it. **Left tools** puts its tools on the
+left — Projects; Specs, Files and Artifacts; TODO List and Review — and leaves the right side hidden and
+empty (it keeps a width for when a pane lands there), so the right edge is free for Peek; it is not the
+default, which stays Balanced. Balanced and Focus start with one center group; Review provides
 its deliberate vertical pair. Balanced's lower right group opens on the TODO List with Review beside it: on a
 fresh workspace the plan is what there is to look at, while review comments only exist once there is a diff.
 Artifacts sits with the reference tools — after Specs and Files in Balanced's upper right group and
 Review's lower reference group, and last in Focus's one group; it is appended to `LAYOUT_TOOLS` so every existing tool keeps its default
-restore index, and a saved frame from before it shows it as an unplaced entry until placed. Custom presets use the same grammar and capture geometry,
+restore index, and a saved frame from before it shows it as an unplaced entry until placed. **Orchestrator**
+(the pinned container orchestrator chat, [[submodule-web-shell]] *Orchestrator tool*) is appended after it,
+defaults to the **left** side and is placed by **no** built-in preset: most workspaces are in no container, so
+it waits as a dimmed unplaced left-rail entry, and its first reveal opens a new left pane below Projects (its
+restore target names no group). The left keeps it clear of Peek, which folds the right side while open — the
+container overview Peek and the orchestrator show side by side. A frame that records its restore target or
+placement is rejected by an older build's local decoder, which falls back to Balanced, as Artifacts' was. Custom presets use the same grammar and capture geometry,
 topology, tools, folds, and empty structural slots, never workspace resources or terminal count. Preset node
 ids are template-local labels: instantiation mints frontend-local frame ids and returns the old→new group map
 used to rehome every workspace view. Only custom definitions cross the wire through settings; a set that
 places the TODO List (`plan`) is saved only to a host at `LAYOUT_PLAN_PRESET_PROTOCOL_VERSION` or newer, and one
-that places Artifacts only to a host at `ARTIFACTS_PROTOCOL_VERSION` or newer — an older host's validator
+that places Artifacts only to a host at `ARTIFACTS_PROTOCOL_VERSION` or newer, one that places the
+Orchestrator only to a host at `CONTAINER_PROTOCOL_VERSION` or newer, and one that places an extension
+tool only to a host at `EXTENSION_EVENT_PROTOCOL_VERSION` or newer — an older host's validator
 rejects the tool, so Layout settings explains that instead of sending it. Built-in preset
 names are display copy: `layoutPresetName` renders them through the locale catalog by preset id while the
 definition keeps its stable `name`; custom preset names are user data and render verbatim.
 
-Applying a preset creates one replacement frame, raises this surface's local side/bottom limits if required, and remaps all retained workspace views atomically. Center resources preserve visual order and distribute across destination leaves; terminals map into compatible slots; singleton tool placement ids survive where possible. Omitted tools receive deterministic restore targets, so a sparse preset cannot strand Projects or another tool. The local default preset is the target of the explicit Reset frame command; ordinary workspace switches retain the current frame. Default selection and limits persist locally, not in host settings.
+An **extension view's arrangement** is no preset either. `arrangeWorkbenchView(state, arrangement)` puts
+each of the view's tools (`left`, `bottom`) in a new group leading its region at the given width or height
+(bottom alignment center + left beside a left tool) and keeps every group those regions held, **folded**,
+with its id, weight share, tools and terminals; a view's tool placed elsewhere leaves that group (a tool
+group left empty goes); the center, the right side and the restore targets stay as they are. So no
+workspace view references a vanished group and nothing is reconciled. `captureWorkbenchSides(frame)` keeps
+the left, right and bottom as resource-free preset regions, and `restoreWorkbenchSides(state, sides,
+restoreTargets)` puts them back — each group with its id (a fresh one only where the center took it),
+geometry, fold and tools, placed tools keeping their placement ids, the captured restore targets replacing
+the frame's for every tool left unplaced —, reconciling only a view that holds a resource in a group now
+gone (a terminal pane made inside the view). Entering then restoring gives the same frame back
+([[submodule-web-shell]] § Extension views).
+
+A **center override** (`centerOverride { id, label, render }`) renders in place of the center node tree: one
+`data-region-kind="center"` section (`center-override`) the region ring treats as the center, while the
+document's center groups stay as they are, unrendered; `visibleFocusableGroups` then lists no center
+group, so Ctrl+F6 skips them. It keys nothing, like Peek.
+
+Applying a preset creates one replacement frame, raises this surface's local side/bottom limits if required, and remaps all retained workspace views atomically. Center resources preserve visual order and distribute across destination leaves; terminals map into compatible slots; singleton tool placement ids survive where possible. Omitted tools receive deterministic restore targets, so a sparse preset cannot strand Projects or another tool; a tool whose default side is the right restores to the left when the preset's right side has no groups, so an empty right side stays empty. The local default preset is the target of the explicit Reset frame command; ordinary workspace switches retain the current frame. Default selection and limits persist locally, not in host settings.
 
 `layoutState` validates and persists the normalized frame/views/attention document under browser endpoint + frontend-surface identity or the native stable adapter's profile/window scope. Reload and supported session restoration reuse it; simultaneous windows never consume each other's storage events. Persistence contains references only. Failure leaves live state intact; unknown schema falls back to the Balanced safe frame.
 
@@ -351,10 +422,10 @@ The singular `attention` object is not threaded into leaves. Only the region wra
 - A resize or drag gesture mutates only root-local projection state; because document, attention, and the shared callbacks are all unchanged, the memoized group subtree does not re-render and no feature body re-renders during the gesture. The pointer-up commit that actually changes the document is the only re-render.
 - A selection or focus change in one group re-renders that group's chrome only; sibling groups keep their `selectedId` and skip. Every mounted tab body sits behind the memoized `GroupTabBody` boundary keyed by selected-tab identity and depending only on the stable body renderers, so a body re-renders only when its own selected tab changes — never because a sibling, a resize, or a drag re-rendered. The shell host keeps that true for editor-tab cache writes too: a file/diff/changes body resolves its own cache tab inside the body (`EditorResourceBody`), never through the renderer's closure, so a review tab's keystroke-rate writes re-render that body alone (`e2e/perf/editorTabIsolation.perf.ts`).
 
-The memoization assumes the injected render callbacks are referentially stable: the shell host passes `renderTabBody`/`renderToolBody`/`renderTabAdornment`/`renderEmptyCenter`/`renderCenterActions` as memoized identities, so a parent re-render (such as an attention change) does not break a sibling group's chrome memo by prop identity alone. `chatFirstPrompts` is a shallow-stable record (the shell selects it with `useShallow`), so it changes identity only when an unnamed chat's label changes.
+The memoization assumes the injected render callbacks are referentially stable: the shell host passes `renderTabBody`/`renderToolBody`/`renderTabAdornment`/`renderEmptyCenter`/`renderCenterActions` and `peek.render` as memoized identities, so a parent re-render (such as an attention change) does not break a sibling group's chrome memo by prop identity alone. `chatFirstPrompts` is a shallow-stable record (the shell selects it with `useShallow`), so it changes identity only when an unnamed chat's label changes.
 
 `e2e/perf/layoutIsolation.perf.ts` pins both guarantees against the render profiler.
 
 ## Internal module structure
 
-The renderer is one submodule behind `index.ts`; its files are internal and import each other directly. `workbenchShared` holds the public prop contracts (`WorkbenchProps`, `SharedGroupProps`, `LayoutTabFocusRequest`), the drag-and-drop primitives, the resize/size/overflow/settle hooks, the DOM-id helpers (group, tab, rail group, rail control), and the shared leaf primitives (`DropZone`, `CenterSplitTarget`, `PanelWithHandle`, `GroupTabBody`). `workbenchTabs` owns the tab strip and tab (including a tab's rail mode); `workbenchCenter`, `workbenchSide` (also the `AuxiliaryGroupHeader` both edge families share), and `workbenchBottom` own their region view families; `workbenchRails` owns the region rail and its droppable entry button; `tabActions` owns the pure tab-command list, its target rule and executor; `tabIcon` is the one Line/Fill icon resolver, shared with the shell's Project Home; `Workbench` is the root that composes them and owns state. The rail is the one leaf that renders from `attention` (its entries' selected state), so the root passes it the overlay explicitly like a stack, while its activation runs through `onApply` and the shared `onUserNavigation`. `index.ts` re-exports the component, its public types, and the rail/pane-header primitives Project Home composes.
+The renderer is one submodule behind `index.ts`; its files are internal and import each other directly. `workbenchShared` holds the public prop contracts (`WorkbenchProps`, `WorkbenchPeek`, `SharedGroupProps`, `LayoutTabFocusRequest`), the `ExtensionToolsContext` the root provides, the drag-and-drop primitives, the resize/size/overflow/settle hooks, the DOM-id helpers (group, tab, rail group, rail control), and the shared leaf primitives (`DropZone`, `CenterSplitTarget`, `PanelWithHandle`, `GroupTabBody`, the memoized `PeekRegion`). `workbenchTabs` owns the tab strip and tab (including a tab's rail mode); `workbenchCenter`, `workbenchSide` (also the `AuxiliaryGroupHeader` both edge families share), and `workbenchBottom` own their region view families; `workbenchRails` owns the region rail and its droppable entry button; `tabActions` owns the pure tab-command list, its target rule and executor; `tabIcon` is the one Line/Fill icon resolver, shared with the shell's Project Home; `Workbench` is the root that composes them and owns state. The rail is the one leaf that renders from `attention` (its entries' selected state), so the root passes it the overlay explicitly like a stack, while its activation runs through `onApply` and the shared `onUserNavigation`. `index.ts` re-exports the component, its public types, and the rail/pane-header primitives Project Home composes.

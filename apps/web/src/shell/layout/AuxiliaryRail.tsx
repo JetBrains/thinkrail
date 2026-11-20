@@ -105,6 +105,7 @@ export function AuxiliaryRailActionButton({
 	shortcut,
 	testId,
 	control,
+	pressed,
 	onClick,
 }: {
 	region: LayoutAuxiliaryRegion;
@@ -113,17 +114,20 @@ export function AuxiliaryRailActionButton({
 	shortcut?: readonly string[] | undefined;
 	testId: string;
 	control: AuxiliaryRailControlProps;
+	/** A toggle's state: the entry looks and reads pressed while it is on. */
+	pressed?: boolean | undefined;
 	onClick: () => void;
 }) {
 	return (
-		<div className={railEntryFrameClass(region)}>
+		<div data-active={pressed} className={railEntryFrameClass(region)}>
 			<IconTooltip label={label} shortcut={shortcut} side={railTooltipSide(region)}>
 				<button
 					type="button"
 					data-testid={testId}
 					data-rail-action=""
 					aria-label={label}
-					{...railEntryButtonProps(false)}
+					aria-pressed={pressed}
+					{...railEntryButtonProps(pressed === true)}
 					{...control}
 					onClick={onClick}
 					className={RAIL_ENTRY_BUTTON_CLASS}
@@ -141,6 +145,7 @@ export function AuxiliaryRail({
 	renderEntry,
 	renderBoundary,
 	trailing,
+	views,
 	footer,
 }: {
 	region: LayoutAuxiliaryRegion;
@@ -148,19 +153,22 @@ export function AuxiliaryRail({
 	renderEntry: (entry: AuxiliaryRailEntry, control: AuxiliaryRailControlProps) => ReactNode;
 	renderBoundary?: (paneIndex: number) => ReactNode;
 	trailing?: ReactNode;
+	/** Toggles after the tools' clusters, behind a hairline: the extensions' views. */
+	views?: readonly AuxiliaryRailFooterItem[] | undefined;
 	footer?: readonly AuxiliaryRailFooterItem[] | undefined;
 }) {
 	const t = useT();
 	const keys = useLocalKeys("rails", LOCAL_KEY_DEFAULTS.rails);
 	const root = useRef<HTMLDivElement>(null);
 	const [focused, setFocused] = useState<string | null>(null);
+	const viewItems = views ?? [];
 	const footerItems = footer ?? [];
+	const items = [...viewItems, ...footerItems];
 	const activeKey =
-		entries.some((entry) => entry.key === focused) ||
-		footerItems.some((item) => item.key === focused)
+		entries.some((entry) => entry.key === focused) || items.some((item) => item.key === focused)
 			? focused
 			: ((entries.find((entry) => entry.selected && entry.expanded) ?? entries[0])?.key ??
-				footerItems[0]?.key);
+				items[0]?.key);
 	const horizontal = region === "bottom";
 	const clusters = clusterAuxiliaryRail(entries);
 	const paneCount = clusters.filter((cluster) => cluster.groupId !== null).length;
@@ -247,6 +255,27 @@ export function AuxiliaryRail({
 				</Fragment>
 			))}
 			{paneCount === 0 ? boundary(0) : null}
+			{viewItems.length > 0 ? (
+				<>
+					{clusters.length > 0 ? (
+						<hr
+							aria-orientation={horizontal ? "vertical" : "horizontal"}
+							className={cn(
+								"shrink-0 border-0 bg-border-muted",
+								horizontal ? "mx-2 h-20 w-px" : "my-2 h-px w-20",
+							)}
+						/>
+					) : null}
+					{viewItems.map((item) => (
+						<Fragment key={item.key}>
+							{item.render({
+								tabIndex: item.key === activeKey ? 0 : -1,
+								onFocus: () => setFocused(item.key),
+							})}
+						</Fragment>
+					))}
+				</>
+			) : null}
 			{trailing}
 			{footerItems.length > 0 ? (
 				<div

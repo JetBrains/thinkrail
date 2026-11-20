@@ -29,6 +29,7 @@ import {
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutTab,
+	LayoutToolCatalog,
 	LayoutToolId,
 	WorkspaceLayoutDocument,
 } from "./types";
@@ -92,6 +93,7 @@ export interface TabActionContext {
 	readonly worktreePath: string;
 	readonly chatFirstPrompts?: ChatFirstPrompts | undefined;
 	readonly chatActions?: ChatTabActions | undefined;
+	readonly extensionTools?: LayoutToolCatalog | undefined;
 }
 
 export interface TabActionHandlers {
@@ -371,7 +373,7 @@ function moveActions(t: Translator, context: TabActionContext): TabAction[] {
 				: tab.kind === "tool";
 		if (!allowed) continue;
 		const label = t(MOVE_TO_PANE_LABELS[target.area], {
-			group: describeLayoutGroup(t, group.tabs, chatFirstPrompts),
+			group: describeLayoutGroup(t, group.tabs, chatFirstPrompts, context.extensionTools),
 		});
 		const separate = target.area !== "center" && !canJoinAuxiliaryGroup(group, tab);
 		actions.push({
@@ -447,15 +449,17 @@ function newGroupActions(t: Translator, context: TabActionContext): TabAction[] 
 }
 
 function groupActions(t: Translator, context: TabActionContext): TabAction[] {
-	const { document, tab, location } = context;
+	const { document, tab, location, extensionTools } = context;
 	const actions: TabAction[] = [];
 	if (location.area !== "center") {
-		for (const tool of unplacedTools(document)) {
+		for (const tool of unplacedTools(document, extensionTools)) {
 			actions.push({
 				id: `tab.showTool.${tool}`,
 				section: "tools",
 				surface: "menu",
-				label: t("workbench.tab.showTool", { name: layoutTabName(t, toolTab(tool)) }),
+				label: t("workbench.tab.showTool", {
+					name: layoutTabName(t, toolTab(tool), undefined, extensionTools),
+				}),
 				effect: { kind: "revealTool", tool },
 			});
 		}

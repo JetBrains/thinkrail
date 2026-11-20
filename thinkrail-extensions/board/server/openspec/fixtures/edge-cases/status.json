@@ -1,0 +1,317 @@
+{
+	"changes": [
+		{
+			"changeName": "custom-flow",
+			"schemaName": "research-first",
+			"planningHome": {
+				"kind": "repo",
+				"root": "<root>",
+				"changesDir": "<root>/openspec/changes",
+				"defaultSchema": "spec-driven"
+			},
+			"changeRoot": "<root>/openspec/changes/custom-flow",
+			"artifactPaths": {
+				"research": {
+					"outputPath": "research.md",
+					"resolvedOutputPath": "<root>/openspec/changes/custom-flow/research.md",
+					"existingOutputPaths": ["<root>/openspec/changes/custom-flow/research.md"]
+				},
+				"plan": {
+					"outputPath": "plan.md",
+					"resolvedOutputPath": "<root>/openspec/changes/custom-flow/plan.md",
+					"existingOutputPaths": []
+				},
+				"tasks": {
+					"outputPath": "tasks/*.md",
+					"resolvedOutputPath": "<root>/openspec/changes/custom-flow/tasks/*.md",
+					"existingOutputPaths": [
+						"<root>/openspec/changes/custom-flow/tasks/backend.md",
+						"<root>/openspec/changes/custom-flow/tasks/frontend.md"
+					]
+				}
+			},
+			"isPlanningComplete": false,
+			"isComplete": false,
+			"applyRequires": ["tasks"],
+			"nextSteps": [
+				"Run openspec instructions plan --change \"custom-flow\" --json before writing that artifact."
+			],
+			"actionContext": {
+				"mode": "repo-local",
+				"sourceOfTruth": "repo",
+				"planningArtifacts": ["research", "plan", "tasks"],
+				"linkedContext": [],
+				"allowedEditRoots": ["<root>"],
+				"requiresAffectedAreaSelection": false,
+				"constraints": [
+					"Repo-local change artifacts and implementation edits are scoped to this project."
+				]
+			},
+			"artifacts": [
+				{
+					"id": "research",
+					"outputPath": "research.md",
+					"status": "done",
+					"requires": []
+				},
+				{
+					"id": "plan",
+					"outputPath": "plan.md",
+					"status": "ready",
+					"requires": ["research"]
+				},
+				{
+					"id": "tasks",
+					"outputPath": "tasks/*.md",
+					"status": "done",
+					"requires": ["plan"]
+				}
+			]
+		},
+		{
+			"changeName": "metadata-only",
+			"schemaName": "spec-driven",
+			"planningHome": {
+				"kind": "repo",
+				"root": "<root>",
+				"changesDir": "<root>/openspec/changes",
+				"defaultSchema": "spec-driven"
+			},
+			"changeRoot": "<root>/openspec/changes/metadata-only",
+			"artifactPaths": {
+				"proposal": {
+					"outputPath": "proposal.md",
+					"resolvedOutputPath": "<root>/openspec/changes/metadata-only/proposal.md",
+					"existingOutputPaths": []
+				},
+				"specs": {
+					"outputPath": "specs/**/*.md",
+					"resolvedOutputPath": "<root>/openspec/changes/metadata-only/specs/**/*.md",
+					"existingOutputPaths": []
+				},
+				"design": {
+					"outputPath": "design.md",
+					"resolvedOutputPath": "<root>/openspec/changes/metadata-only/design.md",
+					"existingOutputPaths": []
+				},
+				"tasks": {
+					"outputPath": "tasks.md",
+					"resolvedOutputPath": "<root>/openspec/changes/metadata-only/tasks.md",
+					"existingOutputPaths": []
+				}
+			},
+			"isPlanningComplete": false,
+			"isComplete": false,
+			"applyRequires": ["tasks"],
+			"nextSteps": [
+				"Run openspec instructions proposal --change \"metadata-only\" --json before writing that artifact."
+			],
+			"actionContext": {
+				"mode": "repo-local",
+				"sourceOfTruth": "repo",
+				"planningArtifacts": ["proposal", "specs", "design", "tasks"],
+				"linkedContext": [],
+				"allowedEditRoots": ["<root>"],
+				"requiresAffectedAreaSelection": false,
+				"constraints": [
+					"Repo-local change artifacts and implementation edits are scoped to this project."
+				]
+			},
+			"artifacts": [
+				{
+					"id": "proposal",
+					"outputPath": "proposal.md",
+					"status": "ready",
+					"requires": []
+				},
+				{
+					"id": "specs",
+					"outputPath": "specs/**/*.md",
+					"status": "blocked",
+					"requires": ["proposal"],
+					"missingDeps": ["proposal"]
+				},
+				{
+					"id": "design",
+					"outputPath": "design.md",
+					"status": "blocked",
+					"requires": ["proposal"],
+					"missingDeps": ["proposal"]
+				},
+				{
+					"id": "tasks",
+					"outputPath": "tasks.md",
+					"status": "blocked",
+					"requires": ["specs", "design"],
+					"missingDeps": ["specs", "design"]
+				}
+			]
+		},
+		{
+			"changeName": "mystery-schema",
+			"status": [
+				{
+					"severity": "error",
+					"code": "change_error",
+					"message": "Unknown schema 'no-such-schema'. Available: research-first, spec-driven"
+				}
+			]
+		},
+		{
+			"changeName": "skip-specs",
+			"schemaName": "spec-driven",
+			"planningHome": {
+				"kind": "repo",
+				"root": "<root>",
+				"changesDir": "<root>/openspec/changes",
+				"defaultSchema": "spec-driven"
+			},
+			"changeRoot": "<root>/openspec/changes/skip-specs",
+			"artifactPaths": {
+				"proposal": {
+					"outputPath": "proposal.md",
+					"resolvedOutputPath": "<root>/openspec/changes/skip-specs/proposal.md",
+					"existingOutputPaths": ["<root>/openspec/changes/skip-specs/proposal.md"]
+				},
+				"specs": {
+					"outputPath": "specs/**/*.md",
+					"resolvedOutputPath": "<root>/openspec/changes/skip-specs/specs/**/*.md",
+					"existingOutputPaths": []
+				},
+				"design": {
+					"outputPath": "design.md",
+					"resolvedOutputPath": "<root>/openspec/changes/skip-specs/design.md",
+					"existingOutputPaths": ["<root>/openspec/changes/skip-specs/design.md"]
+				},
+				"tasks": {
+					"outputPath": "tasks.md",
+					"resolvedOutputPath": "<root>/openspec/changes/skip-specs/tasks.md",
+					"existingOutputPaths": ["<root>/openspec/changes/skip-specs/tasks.md"]
+				}
+			},
+			"isPlanningComplete": true,
+			"isComplete": true,
+			"applyRequires": ["tasks"],
+			"nextSteps": [
+				"All planning artifacts are complete. Run openspec instructions apply --change \"skip-specs\" --json to inspect implementation progress."
+			],
+			"actionContext": {
+				"mode": "repo-local",
+				"sourceOfTruth": "repo",
+				"planningArtifacts": ["proposal", "specs", "design", "tasks"],
+				"linkedContext": [],
+				"allowedEditRoots": ["<root>"],
+				"requiresAffectedAreaSelection": false,
+				"constraints": [
+					"Repo-local change artifacts and implementation edits are scoped to this project."
+				]
+			},
+			"artifacts": [
+				{
+					"id": "proposal",
+					"outputPath": "proposal.md",
+					"status": "done",
+					"requires": []
+				},
+				{
+					"id": "specs",
+					"outputPath": "specs/**/*.md",
+					"status": "skipped",
+					"requires": ["proposal"]
+				},
+				{
+					"id": "design",
+					"outputPath": "design.md",
+					"status": "done",
+					"requires": ["proposal"]
+				},
+				{
+					"id": "tasks",
+					"outputPath": "tasks.md",
+					"status": "done",
+					"requires": ["specs", "design"]
+				}
+			]
+		},
+		{
+			"changeName": "task-forms",
+			"schemaName": "spec-driven",
+			"planningHome": {
+				"kind": "repo",
+				"root": "<root>",
+				"changesDir": "<root>/openspec/changes",
+				"defaultSchema": "spec-driven"
+			},
+			"changeRoot": "<root>/openspec/changes/task-forms",
+			"artifactPaths": {
+				"proposal": {
+					"outputPath": "proposal.md",
+					"resolvedOutputPath": "<root>/openspec/changes/task-forms/proposal.md",
+					"existingOutputPaths": ["<root>/openspec/changes/task-forms/proposal.md"]
+				},
+				"specs": {
+					"outputPath": "specs/**/*.md",
+					"resolvedOutputPath": "<root>/openspec/changes/task-forms/specs/**/*.md",
+					"existingOutputPaths": ["<root>/openspec/changes/task-forms/specs/identity/sso/spec.md"]
+				},
+				"design": {
+					"outputPath": "design.md",
+					"resolvedOutputPath": "<root>/openspec/changes/task-forms/design.md",
+					"existingOutputPaths": ["<root>/openspec/changes/task-forms/design.md"]
+				},
+				"tasks": {
+					"outputPath": "tasks.md",
+					"resolvedOutputPath": "<root>/openspec/changes/task-forms/tasks.md",
+					"existingOutputPaths": ["<root>/openspec/changes/task-forms/tasks.md"]
+				}
+			},
+			"isPlanningComplete": true,
+			"isComplete": true,
+			"applyRequires": ["tasks"],
+			"nextSteps": [
+				"All planning artifacts are complete. Run openspec instructions apply --change \"task-forms\" --json to inspect implementation progress."
+			],
+			"actionContext": {
+				"mode": "repo-local",
+				"sourceOfTruth": "repo",
+				"planningArtifacts": ["proposal", "specs", "design", "tasks"],
+				"linkedContext": [],
+				"allowedEditRoots": ["<root>"],
+				"requiresAffectedAreaSelection": false,
+				"constraints": [
+					"Repo-local change artifacts and implementation edits are scoped to this project."
+				]
+			},
+			"artifacts": [
+				{
+					"id": "proposal",
+					"outputPath": "proposal.md",
+					"status": "done",
+					"requires": []
+				},
+				{
+					"id": "specs",
+					"outputPath": "specs/**/*.md",
+					"status": "done",
+					"requires": ["proposal"]
+				},
+				{
+					"id": "design",
+					"outputPath": "design.md",
+					"status": "done",
+					"requires": ["proposal"]
+				},
+				{
+					"id": "tasks",
+					"outputPath": "tasks.md",
+					"status": "done",
+					"requires": ["specs", "design"]
+				}
+			]
+		}
+	],
+	"root": {
+		"path": "<root>",
+		"source": "nearest"
+	}
+}

@@ -23,7 +23,16 @@ import { type LocalKeys, useLocalKeys } from "@thinkrail/ui/local-keys";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
-import { Fragment, memo, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import {
+	Fragment,
+	memo,
+	type ReactNode,
+	useCallback,
+	useContext,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { LOCAL_KEY_DEFAULTS } from "../../keybindings";
 import { chatLabel, DOUBLE_CLICK_SETTLE_MS, type LayoutAttention, tupleKey } from "../../lib";
 import {
@@ -59,6 +68,7 @@ import type { DragData, DropTarget, RegisterChatRename, WorkbenchProps } from ".
 import {
 	canInsertDraggedTab,
 	DropZone,
+	ExtensionToolsContext,
 	findLayoutGroupTabs,
 	groupPanelId,
 	navigationClockSnapshot,
@@ -156,6 +166,7 @@ export const TabStrip = memo(function TabStrip({
 	worktreePath,
 }: TabStripProps) {
 	const t = useT();
+	const tools = useContext(ExtensionToolsContext);
 	const keys = useLocalKeys("tabs", LOCAL_KEY_DEFAULTS.tabs);
 	const scroller = useRef<HTMLDivElement>(null);
 	const scrollOverflow = useHorizontalOverflow(scroller);
@@ -366,15 +377,17 @@ export const TabStrip = memo(function TabStrip({
 									<CommandItem
 										key={tab.id}
 										value={tab.id}
-										keywords={tabSearchKeywords(t, tab, chatFirstPrompts)}
+										keywords={tabSearchKeywords(t, tab, chatFirstPrompts, tools)}
 										onSelect={() => {
 											overflowFocusTarget.current = tab.id;
 											selectTab(tab.id);
 											setOverflowOpen(false);
 										}}
 									>
-										{tabIcon(tab)}
-										<span className="truncate">{layoutTabName(t, tab, chatFirstPrompts)}</span>
+										{tabIcon(tab, false, undefined, tools)}
+										<span className="truncate">
+											{layoutTabName(t, tab, chatFirstPrompts, tools)}
+										</span>
 									</CommandItem>
 								))}
 							</CommandList>
@@ -460,6 +473,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 	onKeyDown,
 }: WorkbenchTabProps) {
 	const t = useT();
+	const tools = useContext(ExtensionToolsContext);
 	const keys = useLocalKeys(
 		rail ? "rails" : "tabs",
 		rail ? LOCAL_KEY_DEFAULTS.rails : LOCAL_KEY_DEFAULTS.tabs,
@@ -591,7 +605,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 		data: { target: { kind: "insert", location, index: afterIndex } satisfies DropTarget },
 		disabled: !acceptsAfter,
 	});
-	const name = layoutTabName(t, tab, chatFirstPrompts);
+	const name = layoutTabName(t, tab, chatFirstPrompts, tools);
 	const chatTitle =
 		tab.kind === "chat" ? chatLabel(t, tab.name, chatFirstPrompts?.[tab.sessionId]) : undefined;
 	const focusTab = (keep: boolean) => {
@@ -630,7 +644,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 						)
 			}
 		>
-			{rail ? tabIcon(tab, active, RAIL_ICON) : tabIcon(tab, active)}
+			{tabIcon(tab, active, rail ? RAIL_ICON : undefined, tools)}
 			{rail ? null : <span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>}
 			{rail ? (
 				<span
@@ -786,7 +800,10 @@ function TabMenuItems({
 	handlers: TabActionHandlers;
 }) {
 	const t = useT();
-	const actions = tabActions(t, context).filter((action) => action.surface !== "palette");
+	const extensionTools = useContext(ExtensionToolsContext);
+	const actions = tabActions(t, { ...context, extensionTools }).filter(
+		(action) => action.surface !== "palette",
+	);
 	return actions.map((action, index) => (
 		<Fragment key={action.id}>
 			{index > 0 && actions[index - 1]?.section !== action.section ? (

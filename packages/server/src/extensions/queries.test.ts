@@ -4,17 +4,44 @@ import { errorCodeOf } from "@thinkrail/shared/codedError";
 import { createExtensionQueries } from "./queries";
 import type { ServerExtensionEntry } from "./registry";
 
+const refused = async (): Promise<never> => {
+	throw new Error("no host actions in this test");
+};
+
 function services(name: string, signal: AbortSignal): ExtensionHostServices {
 	return {
 		dataDir: `/data/extensions/${name}`,
 		log: { info: () => {}, warn: () => {} },
 		signal,
+		actions: {
+			createWorkspace: refused,
+			startChat: refused,
+			sendToChat: refused,
+			runInWorkspace: refused,
+			writeWorkspaceFile: refused,
+			assist: refused,
+			createContainer: refused,
+			startOrchestrator: refused,
+			wakeOrchestrator: refused,
+			reviewConformance: refused,
+			addReviewComments: refused,
+		},
+		events: { subscribe: () => () => {} },
+		publish: () => {},
+		workspaceFacts: async () => null,
+		containers: () => [],
+		taskSpecs: async () => null,
+		specSection: async () => null,
+		openspecTree: async () => null,
+		planSummary: async () => null,
+		githubProblem: async () => null,
 		sessionsRoot: () => "/agent/sessions",
 		sessionScope: () => ({ projects: [], locate: () => null }),
 		childTranscriptDirs: async () => [],
 		sessionStatus: () => ({ live: false, completion: null }),
 		messageAnchor: async () => null,
 		contextWindow: async () => null,
+		models: async () => [],
 		turnReceipts: async () => [],
 		turnTree: async () => null,
 		ensureArtifactsDir: async () => null,

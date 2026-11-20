@@ -31,7 +31,9 @@ treatment.
 - **Owns:** `ChatsSection` + `chatActions.ts` — the **Chats without a project** home. The section tops the
   Projects panel whenever the host speaks `CHATS_PROTOCOL_VERSION` (the host ensures the container at boot;
   an empty section reads "Chats without a project appear here", and the container never counts as a
-  project — not for the first-run wizard either): one row per `kind: "chat"` workspace, newest activity first, labelled by
+  project — not for the first-run wizard either): one row per `kind: "chat"` workspace but a container's
+  orchestrator (`selectStandaloneChats`; it shows under its container while that container is loaded,
+  else here as a chat), newest activity first, labelled by
   `lib`'s `chatLabel` over the host's `SessionStateRecord.title` and the conversation's first prompt
   (`selectChatWorkspaceFirstPrompt`) — an unnamed chat reads as its first prompt, with `data-title-source`
   and the full first line as tooltip, else "Chat" — with the shared attention dot / running icon, the
@@ -80,6 +82,52 @@ treatment.
   label and its current value. A first chat loads the container's list through
   `loadProjectWorkspaces` instead of seeding it, so the Chats section never shows a partial list. A chat row reads "Continued in <project>" from the record's
   `continuedTo`.
+- **Owns:** containers in Projects (`ContainerRows.tsx`, `ContainerDialogs.tsx`, `ContainerOverview.tsx`, `containerActions.ts`;
+  v129, `canUseContainers`). Placement is one selector, `selectContainerTree`: a container whose shown
+  members all belong to one project nests in that project after its Default row (a container row at
+  level 2, its rows at level 3, indented by its list), one spanning several gets the **Containers**
+  section between Chats and Projects (its own `Tree`, `focusList="containers"`, container rows at level 1,
+  members labelled `project · branch`). Members leave the project's flat rows
+  (`selectStandalonePartition`, the same partition minus members) and render as ordinary `WorkspaceRow`s —
+  name, branch, state, menu — with a settled member keeping its slim row and reason chip in place. A
+  member a loaded list cannot resolve is not shown, so `ProjectTree` loads every open project's list while
+  one is missing (without diff stats for a collapsed project); a container with no shown member is not drawn. The container row is a treeitem that
+  toggles (`toggles`, click, →/←): chevron, Stack glyph (Fill while the active workspace is a member or its
+  orchestrator), name, member count, a hover `+`, and — collapsed — the members' and orchestrator's rolled-up
+  attention dot / running badge (`selectContainerNeedsAttention` / `selectContainerIsRunning`). Its context
+  menu (right-click, Shift+F10, long press) holds **Overview**, **Add workspace…**, **Rename** (inline, the shared
+  `useInlineRename`, `container.rename`; F2) and **Remove container…** (Delete); a double-click on its name
+  opens the overview too. The **Orchestrator** row
+  (the chat whose `orchestratorOf` names the container, Sparkling glyph, its attention and working state)
+  comes first under an expanded container and pins that chat beside a member (`openOrchestrator`: the
+  shell's Orchestrator tool revealed in the active member, else in the member entered last; the orchestrator
+  chat itself only when no member is shown). **`ContainerOverview`** is the container's Peek body
+  ([[submodule-web-shell]], *Peek*), live from the store through `selectContainerOverview`: a card per member
+  (`project · workspace`, branch, `from <base>` or `stacked on <member>`, its most urgent chat state, open
+  TODO steps, diff stats, PR number and state; the active member outlined) with Open (`openContainerMember`:
+  carry the overview, then enter the member) and Remove from container; the **Pull request stack** lines
+  (`main ← A ← B`, `#N` before a member with a PR) and the independent members; **Show orchestrator** and
+  **Add workspace…**; above the members, whatever the shell injects as `extensionSections` (the extensions'
+  container sections). Open steps are the one value the store lacks: it sums `session.list`'s
+  `openTodos` per member, re-read when the connection or any member chat's run or completion changes. Collapse is per-browser view state
+  (`collapsedContainerIds`, persisted by `projectExpansion` like project expansion, default expanded),
+  and the active member's or orchestrator's container (with its project) is revealed. A standalone
+  worktree row's menu adds **Group into a container…**; a member's adds **Remove from container**
+  (`container.removeWorkspace`). `ContainerDialogs`, mounted once by the shell, renders the store's
+  `containerDialog` request from the tree, the topbar or the palette and closes when its container or
+  workspace is gone: **Add workspace** offers a new branch from a base of the container's project (the
+  active member's, else the first's), a stack on a member's branch (that member's project, its branch as
+  base), a new branch in another project, or attaching a standalone workspace (`selectAttachableWorkspaces`:
+  never a Default workspace, a chat or another container's member — the host's refusals), with an optional
+  first message; **Group into a container** picks the second member and an optional name
+  (`container.create`, whose second member makes the host start the orchestrator). New members go through
+  the background creation flow with `workspace.startCreate { into }`: the host joins the workspace as it
+  hands it over, so the join survives this window closing, retries keep it, and no second request can be
+  lost; the creation view and chat handoff are the ordinary ones. **Remove container** lists the shown
+  members: a merged one says it will be archived, every other one chooses Keep as standalone workspace
+  (default) or Archive, and the note says the orchestrator chat is deleted and shared artifacts go to the
+  Trash; confirming archives the chosen ones through `workspace.remove`, then sends `container.remove`
+  (a failed archive keeps the container). A `CONTAINER_UNKNOWN` refusal drops the stale record.
 - **Owns:** `ProjectTree`. Each top-level project row is a compact IDE-tree row at the shared `--panel-row-height` (`web-spacing`):
   **always-visible chevron** + folder/name + a collapsed-only plain workspace count + an **always-visible Create
   workspace `+` in a fixed right-edge column**. That `+` is the **same control as the Projects-header Add
@@ -2866,9 +2914,10 @@ menu has closed, because a closing menu returns focus to its row; disabled
   `TreeItemScopeContext`) (`aria-level`, `aria-expanded` on expandables,
   `aria-current` for the selected row) under `li role=none`; the tree is a `div role=tree` and every
   list inside it is `role=none`, so the hierarchy is the explicit `aria-level` (VS Code's flat-tree
-  markup) rather than nested `group`s, which Biome's semantic-element rules reject on lists. Chats and
-  Projects are two trees (Projects: project → workspaces and creations → the Settled header as an
-  expandable item → settled rows and *Show more*); so are Artifacts (List: flat, the name is the
+  markup) rather than nested `group`s, which Biome's semantic-element rules reject on lists. Chats,
+  Containers and Projects are separate trees (Projects: project → workspaces, containers and creations →
+  a container's orchestrator and members, and the Settled header as an expandable item → settled rows
+  and *Show more*); so are Artifacts (List: flat, the name is the
   treeitem; Tree: a folder row is its own toggle) and Other agent files (an output folder is its own
   toggle), their headings outside the trees. No tree is
   virtualized, so the model is DOM-driven: the visible rows are the tree's treeitems in DOM order, parent and first child come from `aria-level`
@@ -2882,8 +2931,8 @@ menu has closed, because a closing menu returns focus to its row; disabled
     leaves the DOM, because rows load per directory and per project asynchronously. Only the current row
     carries `data-focus-default`, so F6, `Mod+0` and `Mod+Shift+E/G` land on it ([[submodule-web-shell]]
     prefers the innermost default; its focusable test counts `tabIndex=-1` buttons, so without the marker
-    landing took the first row). Of Chats and Projects only the tree holding the active workspace marks
-    its default (Projects when none is active); of the Artifacts tool's, Artifacts when it has rows, else
+    landing took the first row). Of Chats, Containers and Projects only the tree holding the active
+    workspace (or its container's orchestrator) marks its default (Projects when none is active); of the Artifacts tool's, Artifacts when it has rows, else
     Other agent files.
   - **Keys** are the tree's own, not global chords: ↑/↓ and the arrow twins (`j`/`k` by default),
     Home/End; → / `l` expands, else enters the first child; ← / `h` collapses, else goes to the parent. The
@@ -2918,8 +2967,9 @@ menu has closed, because a closing menu returns focus to its row; disabled
     (context-menu rows through `openContextMenuFromKeyboard`, dropdown rows through `isContextMenuKey`,
     after which the menu returns focus to the row); **Delete** opens the menu's own confirmation (file,
     Remove workspace except on Default, Delete chat — a pending deletion retries directly —, Close project,
+    Remove container,
     an artifact's or ignored output's Delete — a deleted artifact discards its kept copy; nothing on Changes
-    and Specs rows); **F2** renames a project, managed workspace or artifact where the
+    and Specs rows); **F2** renames a project, container, managed workspace or artifact where the
     menu offers Rename (chats and ignored outputs have no rename). A pending chat stays
     focusable (`aria-disabled`) so its Retry is reachable; a deleted artifact's name is enabled, since opening
     it restores it.

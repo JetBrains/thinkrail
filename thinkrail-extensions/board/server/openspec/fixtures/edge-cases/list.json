@@ -1,0 +1,48 @@
+{
+	"changes": [
+		{
+			"name": "custom-flow",
+			"completedTasks": 1,
+			"totalTasks": 3,
+			"lastModified": "2026-11-19T21:17:55.165Z",
+			"status": "in-progress",
+			"archived": false
+		},
+		{
+			"name": "metadata-only",
+			"completedTasks": 0,
+			"totalTasks": 0,
+			"lastModified": "2026-11-19T21:17:54.638Z",
+			"status": "no-tasks",
+			"archived": false
+		},
+		{
+			"name": "mystery-schema",
+			"completedTasks": 1,
+			"totalTasks": 2,
+			"lastModified": "2026-11-19T21:17:55.165Z",
+			"status": "in-progress",
+			"archived": false
+		},
+		{
+			"name": "skip-specs",
+			"completedTasks": 0,
+			"totalTasks": 1,
+			"lastModified": "2026-11-19T21:17:54.903Z",
+			"status": "in-progress",
+			"archived": false
+		},
+		{
+			"name": "task-forms",
+			"completedTasks": 5,
+			"totalTasks": 11,
+			"lastModified": "2026-11-19T21:17:55.165Z",
+			"status": "in-progress",
+			"archived": false
+		}
+	],
+	"root": {
+		"path": "<root>",
+		"source": "nearest"
+	}
+}

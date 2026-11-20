@@ -1,5 +1,5 @@
 import { parseToolResultContent } from "@thinkrail/extension-api/web";
-import { type ChatRow, LARGE_USER_MESSAGE } from "./rows";
+import { type ChatRow, containerNoteBody, LARGE_USER_MESSAGE } from "./rows";
 import { isInteractiveTool, resolveProminence } from "./toolRegistry";
 
 const MAX_ESTIMATED_HEIGHT = 20_000;
@@ -162,6 +162,10 @@ export function estimateChatRowHeight(row: ChatRow): number {
 			return 72;
 		case "handoff":
 			return clampHeight(56 + wrappedLines(row.details.summary) * PROSE_LINE_HEIGHT);
+		case "containerNote":
+			return clampHeight(
+				40 + wrappedLines(containerNoteBody(row.note, row.text)) * PROSE_LINE_HEIGHT,
+			);
 		case "tool":
 			return estimateToolHeight(row);
 		case "activity":

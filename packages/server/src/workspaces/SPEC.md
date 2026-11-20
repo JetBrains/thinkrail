@@ -35,6 +35,12 @@ and chat records: `ensureChatsContainer`, `createChatRecord`, `chatWorkspaces`, 
 it survives compaction of the transcript card), `dropChatRecord`, an in-memory chat-id cache for the
 host's per-event push scoping (`isChatWorkspaceId` / `isChatsContainerId` — only this process writes the
 store), and the refusal helpers (`assertNotChatsContainer`, `assertNotChatWorkspace`) the doors below use.
+A **container's orchestrator** is the one chat record not in its own dated folder:
+`createOrchestratorChatRecord(containerId, home, name)` records a chat whose `worktreePath` is the
+container's existing home and whose `orchestratorOf` names the container (one per container, one chat per
+folder; its `name` is the host's `Orchestrator · <container>`), and `orchestratorChat(containerId)` finds
+it ([[submodule-server-containers]]). Every chat rule above holds for it unchanged; its folder is the
+container's to retire, so the chat delete trashes no folder outside the chats root.
 The session, the terminal and the teardown are composed in `host` (`host/chats.ts`): a chat owns exactly
 one top-level session, a second one is a new chat, and deleting trashes the transcripts file by file, the
 delegated conversations and then the folder (`trash` is not this module's dependency). Refused here: `renameWorkspace`, settle /
@@ -112,10 +118,14 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   after its git subprocess)),
   **background creation** (`creations.ts` over the `creationRecords.ts` store; issue #874 — a sync
   `worktree add` of a large monorepo froze the host's only event loop for the whole checkout and outlived the
-  client's 60s request): `startWorkspaceCreation(projectId, { name?, baseRef?, kickoff?, origin? })` plans the
+  client's 60s request): `startWorkspaceCreation(projectId, { name?, baseRef?, kickoff?, origin?, startedBy?, into? })` plans the
   branch and path synchronously, persists a record in `workspace-creations.json` (`state: running`, `phase:
-  preparing`, the full kickoff incl. images, and a host-only `origin: "agent"` for an agent's `start_workspace`,
-  which never reaches the wire view) and returns its `WorkspaceCreation` view before any git runs. The job then
+  preparing`, the full kickoff incl. images, and for an agent's `start_workspace` a host-only `origin: "agent"`
+  plus `startedBy`, neither in the wire view) and returns its `WorkspaceCreation` view before any git runs.
+  `startedBy` (`{ sessionId, containerId? }`: the calling chat, and its container when that chat is an
+  orchestrator) is copied onto the registered `Workspace` and kept on the record, so a Retry keeps it; so is
+  the host-only `into` (a container id from `workspace.startCreate`), which the record hands to the injected
+  handoff — this module never reads a container. The job then
   (1) fetches a missing remote base, resolves the OID, and runs `worktree add --no-checkout` through `gitAsync`
   (no file writes, so it is quick), (2) moves to `phase: checking-out` and runs `git checkout --progress
   --no-recurse-submodules -f <branch> --` in the new worktree — the split exists because git reports checkout
@@ -398,6 +408,10 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   `removed` carries `{ projectId, id }`) and the host maps `kind` → `workspace.*` channel. This makes the
   module the **single source of workspace lifecycle pushes** (the naming handler never pushes — rename
   self-publishes), so registry membership stays shared domain state across every client (architecture #9).
+  The same events carry container membership without this module knowing containers exist: the host
+  routes every `removed` to [[submodule-server-containers]], so an archived or removed workspace leaves its
+  container (which goes once empty), and every `updated` relinks the member's container home after a branch
+  move.
   Creations publish the same way through `setWorkspaceCreationPublisher` (`WorkspaceCreationEvent`:
   `changed` with the `WorkspaceCreation` view, `removed` with `WorkspaceCreationRemoved`); the host owns the
   handoff that turns a finished creation into a terminal and a chat, so this module never reaches `agent`.
@@ -417,7 +431,8 @@ registered under the chats root is neither offered by `listExistingWorktrees` no
   `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`,
   `chatsRoot`, `isUnderChatsRoot`, `isChatsContainer`, `isChatWorkspace`,
   `isChatsContainerId`, `isChatWorkspaceId`, `resetChatIdCache`, `ensureChatsContainer`,
-  `createChatRecord`, `chatWorkspaces`, `getChatWorkspace`, `markChatDeletionPending`,
+  `createChatRecord`, `createOrchestratorChatRecord`, `orchestratorChat`, `chatWorkspaces`,
+  `getChatWorkspace`, `markChatDeletionPending`,
   `recordChatContinuation`, `dropChatRecord`, `setChatPublishers`, `assertNotChatsContainer`,
   `assertNotChatWorkspace`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;

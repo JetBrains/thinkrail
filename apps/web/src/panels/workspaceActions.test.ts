@@ -11,6 +11,7 @@ import {
 	canRenameWorkspace,
 	canSettleWorkspace,
 	createRenameController,
+	loadProjectWorkspaces,
 	moveProject,
 	workspaceRenameValue,
 } from "./workspaceActions";
@@ -160,4 +161,25 @@ test("a replayed move reply never reopens a project the host's newer snapshot cl
 	const state = useAppStore.getState();
 	expect(state.projects.map((candidate) => candidate.id)).toEqual(["p2"]);
 	expect(state.recentProjects.find((candidate) => candidate.id === "p1")?.closed).toBe(true);
+});
+
+test("a list load asks for diff stats unless its caller opts out", async () => {
+	const requests: [string, unknown][] = [];
+	const transport = {
+		request: (method: string, params: unknown) => {
+			requests.push([method, params]);
+			return Promise.resolve([managed]);
+		},
+	} as unknown as ReturnType<typeof wireTransport.getTransport>;
+	const spy = spyOn(wireTransport, "getTransport").mockReturnValue(transport);
+	restoreTransport = () => spy.mockRestore();
+
+	await loadProjectWorkspaces("p1");
+	await loadProjectWorkspaces("p1", { includeDiffStats: false });
+
+	expect(requests).toEqual([
+		["workspace.list", { projectId: "p1" }],
+		["workspace.list", { projectId: "p1", includeDiffStats: false }],
+	]);
+	expect(useAppStore.getState().workspaces.p1?.map((workspace) => workspace.id)).toEqual(["w1"]);
 });

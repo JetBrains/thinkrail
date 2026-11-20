@@ -23,6 +23,8 @@ export * from "./types";
 export {
 	type LayoutTabFocusRequest,
 	Workbench,
+	type WorkbenchCenterOverride,
 	type WorkbenchChromeShortcuts,
+	type WorkbenchPeek,
 	type WorkbenchProps,
 } from "./Workbench";

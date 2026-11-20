@@ -1,0 +1,41 @@
+{
+	"items": [
+		{
+			"id": "add-webhook-retries",
+			"type": "change",
+			"valid": false,
+			"issues": [
+				{
+					"level": "ERROR",
+					"path": "file",
+					"message": "Change must have at least one delta. No deltas found. Ensure your change has a specs/ directory with capability folders (e.g. specs/http-server/spec.md) containing .md files that use delta headers (## ADDED/MODIFIED/REMOVED/RENAMED Requirements) and that each requirement includes at least one \"#### Scenario:\" block. If this change intentionally modifies no specs (pure refactor, tooling, docs), set \"skip_specs: true\" in the change's .openspec.yaml instead. Tip: run \"openspec change show <change-id> --json --deltas-only\" to inspect parsed deltas."
+				}
+			],
+			"durationMs": 22
+		}
+	],
+	"summary": {
+		"totals": {
+			"items": 1,
+			"passed": 0,
+			"failed": 1
+		},
+		"byType": {
+			"change": {
+				"items": 1,
+				"passed": 0,
+				"failed": 1
+			},
+			"spec": {
+				"items": 0,
+				"passed": 0,
+				"failed": 0
+			}
+		}
+	},
+	"version": "1.0",
+	"root": {
+		"path": "<root>",
+		"source": "nearest"
+	}
+}

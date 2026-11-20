@@ -1,13 +1,15 @@
 import { readFileSync, statSync } from "node:fs";
 import { extname, isAbsolute, resolve } from "node:path";
-import type {
-	ImageContent,
-	Project,
-	SessionState,
-	SessionSummary,
-	WireModel,
-	Workspace,
-	WorkspaceKickoff,
+import {
+	type Container,
+	chatState,
+	type ImageContent,
+	type Project,
+	type SessionSummary,
+	type WireModel,
+	type Workspace,
+	type WorkspaceKickoff,
+	type WorkspaceStartedBy,
 } from "@thinkrail/contracts";
 import {
 	getSessionWorkspaceId,
@@ -19,6 +21,7 @@ import {
 	type WorkspaceStatusParams,
 	type WorkspaceToolsHost,
 } from "../agent";
+import { listContainers } from "../containers";
 import { listBranches, prefetchBranch } from "../git";
 import { logger } from "../log";
 import { listProjects } from "../projects";
@@ -150,7 +153,7 @@ export function composePrompt(prompt: string, files: readonly string[]): string 
 	return `${prompt}\n\nAttached files:\n${files.map((file) => `- ${file}`).join("\n")}`;
 }
 
-async function defaultBaseBranch(projectId: string, signal?: AbortSignal): Promise<string> {
+export async function defaultBaseBranch(projectId: string, signal?: AbortSignal): Promise<string> {
 	const { defaultBranch } = await listBranches(projectId);
 	try {
 		const { moved } = await prefetchBranch(projectId, defaultBranch, signal);
@@ -170,6 +173,7 @@ export interface StartWorkspaceDeps {
 		projectId: string,
 		baseRef: string,
 		kickoff: WorkspaceKickoff,
+		startedBy: WorkspaceStartedBy,
 		signal?: AbortSignal,
 	) => Promise<HandedOff>;
 }
@@ -179,11 +183,29 @@ const liveStartDeps: StartWorkspaceDeps = {
 	openProjects: listProjects,
 	settledModels: listSettledModels,
 	defaultBaseBranch,
-	create: (projectId, baseRef, kickoff, signal) =>
-		createWorkspaceWithChat(projectId, { baseRef, kickoff, origin: "agent" }, signal),
+	create: (projectId, baseRef, kickoff, startedBy, signal) =>
+		createWorkspaceWithChat(projectId, { baseRef, kickoff, origin: "agent", startedBy }, signal),
 };
 
 const NOTHING_CREATED = "Stopped; no workspace was created.";
+
+/** `start_workspace` whose new workspace is handed to `join` as soon as it exists, before the tool returns. */
+export function startWorkspaceJoining(
+	callerSessionId: string,
+	params: StartWorkspaceParams,
+	join: (workspace: Workspace) => void,
+	signal?: AbortSignal,
+): Promise<StartedWorkspace> {
+	const deps: StartWorkspaceDeps = {
+		...liveStartDeps,
+		create: async (...args) => {
+			const handed = await liveStartDeps.create(...args);
+			join(handed.workspace);
+			return handed;
+		},
+	};
+	return startWorkspace(callerSessionId, params, deps, signal);
+}
 
 export async function startWorkspace(
 	callerSessionId: string,
@@ -207,9 +229,13 @@ export async function startWorkspace(
 		...(model ? { model } : {}),
 		...(params.effort ? { thinkingLevel: params.effort } : {}),
 	};
+	const startedBy: WorkspaceStartedBy = {
+		sessionId: callerSessionId,
+		...(caller.orchestratorOf ? { containerId: caller.orchestratorOf } : {}),
+	};
 	let handed: HandedOff;
 	try {
-		handed = await deps.create(project.id, baseRef, kickoff, signal);
+		handed = await deps.create(project.id, baseRef, kickoff, startedBy, signal);
 	} catch (error) {
 		if (error instanceof WorkspaceCreationStopped) throw new Error(NOTHING_CREATED);
 		throw error;
@@ -236,23 +262,6 @@ export async function startWorkspace(
 	};
 }
 
-export function chatStateLabel(state: SessionState | undefined): string {
-	if (!state) return "idle";
-	if (state.needsInput) return "needs_you";
-	if (state.execution === "running" || state.backgroundWork) return "working";
-	switch (state.completion?.outcome) {
-		case "succeeded":
-			return "finished";
-		case "failed":
-			return "failed";
-		case "interrupted":
-		case "cancelled":
-			return "interrupted";
-		default:
-			return "idle";
-	}
-}
-
 export function clampFinalMessage(text: string, limit = FINAL_MESSAGE_LIMIT): string {
 	return text.length <= limit ? text : `…${text.slice(text.length - limit)}`;
 }
@@ -263,7 +272,7 @@ export function chatName(summary: Pick<SessionSummary, "title" | "firstPrompt">)
 	return summary.firstPrompt ? `unnamed, first prompt "${summary.firstPrompt}"` : "unnamed";
 }
 
-function prLine(workspace: Workspace): string {
+export function prLine(workspace: Workspace): string {
 	const review = workspace.review;
 	if (!review) return "no PR";
 	const label = review.kind === "merge-request" ? "MR" : "PR";
@@ -314,7 +323,7 @@ function renderWorkspace(
 	for (const { summary, finalMessage } of chats) {
 		const self = summary.sessionId === callerSessionId ? ", this chat" : "";
 		lines.push(
-			`- chat ${chatName(summary)} (${summary.sessionId}${self}): ${chatStateLabel(summary.state)}`,
+			`- chat ${chatName(summary)} (${summary.sessionId}${self}): ${chatState(summary.state)}`,
 		);
 		if (finalMessage === undefined) continue;
 		lines.push(
@@ -362,6 +371,7 @@ export interface WorkspaceStatusDeps {
 	callerWorkspace: (sessionId: string) => Workspace;
 	openProjects: () => Project[];
 	allWorkspaces: () => Workspace[];
+	containers: () => Container[];
 	projectWorkspaces: (projectId: string) => Promise<Workspace[]>;
 	withDiffStats: (workspace: Workspace) => Promise<Workspace>;
 	chatReports: (workspace: Workspace, withFinal: boolean) => Promise<ChatReport[]>;
@@ -371,6 +381,7 @@ const liveStatusDeps: WorkspaceStatusDeps = {
 	callerWorkspace,
 	openProjects: listProjects,
 	allWorkspaces: listAllWorkspaceRecords,
+	containers: listContainers,
 	projectWorkspaces: (projectId) => listWorkspaces(projectId, { includeDiffStats: true }),
 	withDiffStats,
 	chatReports,
@@ -403,6 +414,21 @@ export async function workspaceStatus(
 		);
 		if (missing.length > 0) reports.unshift(`No workspace matches: ${missing.join(", ")}.`);
 		return reports.join("\n\n");
+	}
+
+	const container = params.project?.trim()
+		? undefined
+		: deps.containers().find((candidate) => candidate.id === caller.orchestratorOf);
+	if (container) {
+		const records = new Map(deps.allWorkspaces().map((workspace) => [workspace.id, workspace]));
+		const members = container.workspaceIds.flatMap((id) => records.get(id) ?? []);
+		const reports = await Promise.all(
+			members.map(async (workspace) => report(await deps.withDiffStats(workspace), false)),
+		);
+		return [
+			`# Container ${container.name}: ${members.length} member workspace(s)`,
+			...reports,
+		].join("\n\n");
 	}
 
 	const project = resolveProject(params.project, ownProjectId(caller), open);

@@ -280,7 +280,7 @@ gate: [[module-contracts]].
   model list and Pi thinking clamp; `model.default` and chat creation share that resolver.
   `chatSession.ts#startChatSession` is the one `createSession` call: `session.create`, the review chat,
   Continue in workspace, the creation hand-off's kickoff chat (the New Workspace dialog's and an agent's
-  `start_workspace`), and a chat without a project — `chat.create` and recovery through `session.create`,
+  `start_workspace`), an extension's `startChat`, and a chat without a project — `chat.create` and recovery through `session.create`,
   inside its per-chat claim, whose `assertClaimed` refuses a chat being deleted before, around and after
   the agent's barrier — all start their chat through it, so no path can diverge on the scratch folder, the
   resolver, the explicit model and effort, or `chat_started`. Its one bookkeeping is `noteNewChat` (recent
@@ -380,6 +380,9 @@ gate: [[module-contracts]].
   manual sends are rejected. `isItemUnderActiveReview(sessionId, id)` surfaces both that latch and
   `planReviewQueue`'s active set to any caller that needs to know whether a review is in flight for
   an item.
+  **`reviewConformance` / `addReviewComments` + `host/conformanceReview.ts`** reuse the same child for an
+  extension's conformance check and file its remarks as labelled agent comments
+  ([[submodule-server-host-plan-review]] § Conformance review).
   **`todo.startReview` / `todo.reviewAll` + `host/requestReview.ts`** compose the agent reviewer. A plan
   step is reviewed by a **hidden, ephemeral delegation child** of the plan session (`agent`'s
   `runReviewSubagent`) carrying OUR reviewer role — `host/reviewerRole.ts` owns the system prompt, the
@@ -544,14 +547,88 @@ gate: [[module-contracts]].
   same display projection `session.getMessages` sends, or its nearest shown ancestor — so the chat jump
   never needs a second copy of that pi mirror; `contextWindow(provider, model)` reads the active pi
   runtime's `getModel(...).contextWindow` (catalog plus `models.json` overrides and custom endpoints),
-  `null` when the runtime has no such model or fails; `turnReceipts(sessionId)` gathers that session's
+  `null` when the runtime has no such model or fails; `models()` is `listSettledModels` — the models a
+  new chat can use, the New Workspace dialog's picker — as `ExtensionModel`s (`provider/id`, the catalog
+  name, the provider and its thinking levels), the ids `createWorkspace`'s `resolveModel` accepts;
+  `turnReceipts(sessionId)` gathers that session's
   `turns` receipts across the registered workspaces (`listTurns`), oldest first, paths as git reported
   them; `turnTree(sessionId, startedAt, limits)` finds that receipt and reads its `headTree` from the
   workspace's repository (`git ls-tree -r --long`, regular files only — no links or submodules —, then
   each blob), answering `tooLarge` past the file or byte limit before reading any blob and `null` when the
   receipt, the workspace or the objects are gone; `ensureArtifactsDir(workspaceId)` seeds a registered
   workspace's `.thinkrail/context/` with `seedArtifactsDir` (as `workspaceFiles.ensureArtifactsDir` does)
-  and answers it absolute and worktree-relative, `null` for an unknown workspace;
+  and answers it absolute and worktree-relative, `null` for an unknown workspace; `workspaceFacts(id)`
+  joins a registered workspace's record (its cached `review`), `workspaceDiffStats` (`null` for a chat or a
+  failed git read) and `listSessions` — each chat's state through contracts' `chatState`, its
+  `completionUnread`, `todos`' `todoCounts` (`null` for a chat without a plan) and its `lastAction` —, `null`
+  for an unknown workspace. **The last action is a host fact, not a parsed transcript**: `lastActions.ts`
+  records each session's most recent `tool_execution_start` from inside the session publisher's callback
+  (no second publisher) — the tool name and `lastActionTarget`'s short target: a `read` / `edit` / `write`
+  path resolved against the workspace's worktree and shown worktree-relative, omitted when it leaves the
+  worktree (`..`, another folder, `~`); a `bash` command's first 60 characters on one line with the
+  worktree (whole-path matches only) and the home folder shortened; nothing for any other tool. It lives in
+  memory only: `session.deleted` forgets it and a session `agent` no longer holds (`hasSession`, disposed)
+  is dropped instead of reported; `taskSpecs(id)` is `spec`'s `workspaceTaskSpecs` over a registered workspace's worktree (none
+  for a chat, `null` for an unknown workspace) and `specSection(id, specId, heading)` its
+  `workspaceSpecSection` (`null` for a chat or an unknown workspace); `openspecTree(id)` is
+  `openspecTree.ts`'s `readOpenspecTree` over a registered repository workspace's worktree (`null` for a chat
+  or an unknown workspace): it `lstat`s `openspec/` (a symlink there reads as none) and walks it sorted,
+  skipping every symlink and `.git`, taking only regular `.md` / `.yaml` / `.yml` files up to 16 folders deep,
+  and stops at 2 MiB or 2,000 files with `truncated`; `githubProblem()` is `github`'s
+  `ghSetupProblem` (`null` under `THINKRAIL_GH_OFFLINE`, which is what lets e2e reach the lane's fake `gh`).
+  **Extension writes are named host actions** (`extensionActions.ts`, deps injected so it is
+  unit-tested without worktrees or sessions), each refused with `EXTENSION_DISABLED` while the extension is
+  off: `createWorkspace` validates like `start_workspace` before anything exists (an open repository
+  project, a non-empty kickoff, a known container for `into`, the thinking level, the model through
+  `resolveModel` over the settled models, the base defaulting to `defaultBaseBranch`'s fetched default
+  branch) and runs `createWorkspaceWithChat` with `origin: "extension"` — internal like an agent's start,
+  no recent-model pick, no `message_sent` —, failing only when no chat was created and otherwise answering
+  the hand-off's `kickoffError` beside the ids; `startChat` takes a registered workspace of a repository
+  project (never a chat without one), validates the kickoff like `createWorkspace` (text, thinking level,
+  model), opens a chat there with `startChatSession` (no recent-model pick) and sends the kickoff as internal
+  work (`ackSend` + `runObservation.send(…, "internal")`), answering once pi's preflight took it or with the
+  send's failure as `kickoffError` — `chatSession.ts`'s `awaitKickoff`, which the creation hand-off shares;
+  `sendToChat` finds the chat's workspace (its live
+  attribution, else the workspace whose chats list it), attaches it and sends an **`extension-message`**
+  host message (`ExtensionMessageDetails` under the descriptor's title, the content saying it is not the
+  human) through the `message_chat` path (`ackSend` + `runObservation.send(…, "internal")`);
+  `runInWorkspace` runs `argv` (a non-empty string list, never a shell string) with `subprocess`'
+  `runBounded` in a repository workspace's worktree under
+  the non-interactive git env, its budget capped at ten minutes, stopped once the extension's services
+  `signal` aborts (a switch-off or the host stopping), and answers `{ ok, out, err, timedOut }`;
+  `writeWorkspaceFile` takes a repository workspace, normalizes the path (`workspaceFilePath`: `\` read as
+  `/`; refused when absolute — `/…`, a drive letter or a UNC path —, holding a NUL, `.`, `..` or an empty
+  segment, any `.git` segment, or past 400 characters), refuses content past 1 MiB (`FILE_TOO_LARGE`) and
+  writes it with `writeWorktreeFile`: each folder on the way `lstat`ed (created when missing, refused when a
+  symlink or not a folder), the target refused unless absent or a regular file, then a temp file beside it
+  renamed over it — nothing can land outside the worktree, nothing is committed; `assist`
+  bounds the prompt (non-empty, at most 20,000 characters) and `maxTokens` (a whole 1–1,024, 256 by
+  default) and asks `assist`'s `assistText` — the cheap-model one-shot path through pi's runtime — with the
+  services' `signal`, answering `{ text }` or `null` (no model, a timeout, an abort, an empty answer);
+  `createContainer` validates the member list (1–100 non-empty ids) and runs `orchestrator.ts`'s
+  `createContainerOrchestrated` (the containers' membership rules and coded refusals pass through), answering
+  the record as `extensionContainer` maps it (its orchestrator chat once there is one); `startOrchestrator`
+  refuses an unknown container (`CONTAINER_UNKNOWN`) and runs `startContainerOrchestrator`, answering the
+  orchestrator chat's project and workspace with its session; `wakeOrchestrator` validates the kind and text
+  and hands `{ extension, extensionTitle, kind, text }` to the running `orchestratorWakeups`
+  (`wakeOrchestratorFromExtension`), refusing an unknown container or one with no orchestrator, so an
+  extension's update is coalesced and queued like a member's ([[submodule-server-containers]] § Wake-ups).
+  The `containers()` fact is `listContainers` mapped by `extensionContainer` with each one's
+  `orchestratorChat`.
+  **Extension events** are tapped inside the existing publisher callbacks, never through a second
+  `setX`: `server.ts` emits `session.state` from the session-state publisher, `workspace.created|updated|
+  removed` from the workspace-lifecycle tee (a review refresh arrives as `updated`), `agent.settled` from
+  the session publisher at pi's `agent_settled` and `agent.tool` there at `tool_execution_start` (after
+  recording the last action), `project.opened|closed` from the projects publisher when a project's
+  `closed` flag flips against the open set it seeded at boot (a rename or a trust change emits nothing),
+  and `container.updated|removed` from the container publisher into one hub (`extensionEvents.ts`) that hands each enabled extension's listener its own copy
+  and logs, never rethrows, a listener's throw or rejection. `publish` validates the type and drops the
+  push while the extension is off or no server runs; `server.ts` sends it as `extension.event` through
+  `publishScoped` to sockets at `EXTENSION_EVENT_PROTOCOL_VERSION`, which alone subscribe to the channel.
+  `createServer` runs the registry's host services with `runExtensionHostServices` — started after the
+  publishers are wired, re-synced when a settings update carries `disabledExtensions`, stopped in `stop()`
+  and awaited in `shutdown()` — and each run's bus (`extensionEvents.bus(name, signal)`) drops that run's
+  subscriptions once its signal aborts, never a restarted run's;
   **Review marks are memory-plus-disk, and only the disk half survives a restart.** The serial chain and
   the per-item latches are in-memory; `pending` marks are a disk sidecar. `createServer` calls
   **`reconcilePendingReviewsOnBoot`** once, before the server accepts connections: it walks every project's
@@ -617,16 +694,24 @@ gate: [[module-contracts]].
       regardless: the start completes and reports it.
     - An agent's spawn is not the user's explicit setup operation, so it records no `worktree_create`
       setup action ([[submodule-server-analytics]]); its chat still reports `chat_started`.
-    - `origin: "agent"` (persisted on the creation record, so a hand-off replayed after a restart keeps
-      it) makes the hand-off send through `ackSend` + `runObservation.send(…, "internal")` rather than
+    - The creation carries `startedBy { sessionId, containerId? }` — the calling session, and its
+      container when the caller's chat is an orchestrator (`orchestratorOf`) — which `workspaces` records
+      on the new `Workspace`.
+    - `origin: "agent"` — or `"extension"`, an extension's `createWorkspace` action — (persisted on the
+      creation record, so a hand-off replayed after a restart keeps it) makes the hand-off send through `ackSend` + `runObservation.send(…, "internal")` rather than
       `sendUserMessage`, and start the chat without the recent-model pick: an agent-sent prompt is not a
       user `message_sent`, never claims the feedback invitation, and its model is not the user's choice.
-    - Status reuses existing state only: `listSessions` state (labelled working / needs_you / finished /
-      failed / interrupted / idle), the cached `Workspace.review` (no new PR refresh), and diff stats.
+    - Status reuses existing state only: `listSessions` state (labelled by contracts' `chatState` —
+      working / needs_you / finished / failed / interrupted / idle), the cached `Workspace.review` (no
+      new PR refresh), and diff stats. From an orchestrator, a call without `project` or `workspaces`
+      reports its container's members (the compact form, like a project overview).
+    - `startWorkspaceJoining` is the same start with a `join(workspace)` hook run as soon as the creation
+      hands the new workspace over — `add_workspace`'s way into a container.
       Start and status take their reads and effects as injected deps, so both are unit-tested without
       projects, worktrees or sessions.
-  - The **workspace-archive teardown** — the other composition of `agent` + `terminal` + `workspaces` only
-    the host may make. `workspace.remove` **rejects a `kind: "default"` workspace loudly, before any
+  - The **workspace-archive teardown** (`workspaceArchive.ts`, `archiveWorkspace(id)`, shared by
+    `workspace.remove` and an orchestrator's `remove_workspace { archive }`) — the other composition of
+    `agent` + `terminal` + `workspaces` only the host may make. `workspace.remove` **rejects a `kind: "default"` workspace loudly, before any
     side-effect** (the record's `worktreePath` is the project folder — the reclaim's `rm -rf` fallback
     must never see it; the UI hides Remove, this guard is for buggy/rogue clients). Otherwise it
     reaps *everything* rooted in the worktree (for a user-owned `kind: "external"` one, everything except
@@ -707,7 +792,10 @@ gate: [[module-contracts]].
   `dismissCreation` front `workspaces`' creation job, and `createServer` marks leftover running creations
   `interrupted` before it serves, installs the creation publisher (`workspace.creationChanged` /
   `workspace.creationRemoved`, subscribed only by v104+ sockets) and the **handoff**
-  `workspaceCreationHandoff` (then replays any handoff a crash cut short): when a checkout finishes it provisions the initial terminal and, when the create
+  `workspaceCreationHandoff` (then replays any handoff a crash cut short): when a checkout finishes it first joins
+  the container a `startCreate { into }` named (`addContainerWorkspaceOrchestrated`, so the second member
+  starts the orchestrator; a container gone meanwhile is logged and the workspace stays standalone — the
+  start refused an unknown one with `CONTAINER_UNKNOWN`), then provisions the initial terminal and, when the create
   carried a kickoff, waits for the workspace watcher (`ensureWatch`, the readiness the browser's own chat start
   awaits) and starts the chat through `startChatSession` (the kickoff's model/effort, else the saved defaults)
   and sends its text/images through `sendUserMessage` under the `clientKey` that started (or last retried) the
@@ -845,9 +933,10 @@ gate: [[module-contracts]].
   ([[submodule-server-search]]); the settled lifecycle, turn snapshots, plan artifacts, the plan's
   unattributed-change and adopted-commit reads, head recording and the setup funnel's `project_present`
   skip chats; and
-  `applyGitCeiling()` merges `<dataDir>/chats` into `GIT_CEILING_DIRECTORIES` before the server exists
-  (the root created first), so git, `gh`, PTYs and pi's bash inherit a ceiling that stops any walk up
-  out of a chat folder into a repository that happens to enclose the data dir. The container is ensured
+  `applyGitCeiling()` merges `<dataDir>/chats` and `<dataDir>/containers` into `GIT_CEILING_DIRECTORIES`
+  before the server exists (each root created first — git drops a ceiling it cannot resolve), so git, `gh`,
+  PTYs and pi's bash inherit a ceiling that stops any walk up out of a chat folder or a container home
+  into a repository that happens to enclose the data dir. The container is ensured
   at boot. **Older clients:** one visibility policy, `seesChats(protocolVersion)` (`chats.ts`), decides
   what a socket below `CHATS_PROTOCOL_VERSION` may learn — nothing of the container, its chats or their
   sessions. Its welcome, `project.list` and `session.stateList` omit them; `workspace.list` of the
@@ -908,6 +997,49 @@ gate: [[module-contracts]].
   scoped `chat.continuation` push (sockets ≥ `CONTINUATION_PROTOCOL_VERSION`, and only those that see
   chats); `chat.continuationStatus` answers a client that missed the pushes (a reload, a reconnect). Only
   the initiating client navigates — a web-side rule.
+- **Containers (`containers.ts`):** `container.list` / `create` / `rename` / `addWorkspace` /
+  `removeWorkspace` / `remove` are thin handlers over [[submodule-server-containers]], which enforces the
+  membership rules and their codes. `createServer` installs `setContainerPublisher`, publishing the full
+  record on `container.updated` and `{ id }` on `container.removed` to sockets at or above
+  `CONTAINER_PROTOCOL_VERSION` (the only ones subscribed to them); the welcome is unchanged and a client
+  hydrates with `container.list`. The workspace lifecycle publisher hands every event to
+  `observeWorkspaceForContainers` after its own push, so a `workspace.remove` (or any other removal) makes
+  the workspace leave its container — a container left empty goes — and a member's `updated` relinks its
+  container's home; the module never learns of workspaces any other way. `container.remove` dissolves the
+  record only: per-member archive choices are the client's, through `workspace.remove`.
+- **Container orchestrator (`orchestrator.ts`):** composes [[submodule-server-containers]] (the link,
+  `prepareContainerHome`), `workspaces` (`createOrchestratorChatRecord`, `orchestratorChat`), `chats.ts`
+  (the start claim, `recoverChatSession`, `deleteChat`) and `agent`. `container.create` /
+  `container.addWorkspace` go through `createContainerOrchestrated` / `addContainerWorkspaceOrchestrated`,
+  which start an orchestrator in the background (failure logged) when a create has two or more members or
+  an add brings the container from fewer than two to two, and it has none. `startContainerOrchestrator`
+  (`container.startOrchestrator`) is single-flight per container: it reuses the existing orchestrator
+  chat (adopting its linked, else first, session; one with no session recovers a session) or creates the
+  chat in the synced home through the chat start claim with the initial terminal, then seeds a *new*
+  session — `renameSession` to `orchestratorName` (`Orchestrator · <container>`, clamped to the title
+  limit), the `container-brief` card through `appendHostMessageToSession` (members with project, branch,
+  `prLine`, chats and `chatState`; no turn) — and writes the link last; a container gone by then deletes
+  the chat it made. `session.create` on an orchestrator chat recovers through
+  `recoverOrchestratorSession`, so a recovered session is seeded and linked too. `createServer` installs
+  `disposeContainerOrchestrator` as the containers dissolve hook (it awaits a start in flight, then
+  `deleteChat`s the orchestrator) and `orchestratorHomeOf` as the agent's orchestrator resolver (a chat
+  with `orchestratorOf` → its folder, answered from the in-memory chat ids first). Deleting an
+  orchestrator chat clears its container's link (`forgetContainerOrchestrator`), and `historyHiddenCwd`
+  hides orchestrator homes, like chat folders, from clients that do not see chats.
+- **Container tools (`orchestratorTools.ts`):** the `setOrchestratorToolsHost` side of the orchestrator's
+  `message_chat` / `stop_chat` / `add_workspace` / `remove_workspace` / `open_pr` / `merge_pr`
+  ([[submodule-server-containers]] owns the rules): composes `agent` (attach, `sendHostMessageToSession`
+  with its lane, `abortSession`), `containers`, `pr` (`openPr`, `mergePr`), `workspaces` and this module's
+  start, archive and review lookup. Every read and effect is an injected dep, so scope refusals, the
+  provenance card, stacking, attach, the archive refusal and the merge gate are unit-tested without
+  sessions. `message_chat` is an `ackSend`-wrapped internal send with a 3 s window. `recordOpenedReview`
+  is the one place an open's reported review becomes `Workspace.review` (`pr.open` uses it too).
+- **Wake-ups (`orchestratorWakeups.ts`):** `createServer` builds one `createOrchestratorWakeups` over live
+  deps, seeds it with every workspace record, and feeds it each `pi.event` (its workspace beside it), each
+  `session.state` record and each workspace lifecycle event after the containers observer; `stop`
+  disposes it. The triggers, the card and the coalescing are [[submodule-server-containers]]'s; delivery
+  attaches the orchestrator's session when needed and sends through `ackSend` + `runObservation`
+  `internal`.
 - **Search composition (`search.ts`):** `search.query` / `search.preview` / `search.text` go to one lazily
   created `SearchService` ([[submodule-server-search]]) fed with `listProjects`, `listAllWorkspaceRecords`, the
   history index's `sessions()`, `specSnapshot` and `listStoredPlans`, plus `listWorkspaces` (without diff
@@ -950,7 +1082,9 @@ workspace or chat record is gone.
 enabled/confirmed choice before entering analytics attribution.
 
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
-  `BootHostOptions`, `BootedHost`, `BuildKind`, `reportDesktopError`.
+  `BootHostOptions`, `BootedHost`, `BuildKind`, `reportDesktopError`, `setConformanceReviewRunner`.
+- **The e2e reviewer seam:** `setConformanceReviewRunner` is the dev launcher's deterministic conformance
+  reviewer under `THINKRAIL_E2E_FAKE_REVIEWER` (see [[submodule-server-host-plan-review]]).
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
   `boot.ts`; `codedError`; `paths` — the scratch-dir convention `chat.inspect` leaves uncounted); `persistence` (`dataDir` — where `crashLog.ts` writes,
   and the extension host's data and worktree roots); `@earendil-works/pi-coding-agent` (`getAgentDir`, the extension host's
@@ -1021,6 +1155,7 @@ enabled/confirmed choice before entering analytics attribution.
   the `projects` module's injected publisher) + the workspace lifecycle trio
   (`workspace.created`/`updated`/`removed`, published from the `workspaces` module's injected publisher) +
   the creation pair (`workspace.creationChanged`/`creationRemoved`, from its creation publisher) +
+  the container pair (`container.updated`/`removed`, from `containers`' publisher) +
   **`session.deleted`** (published from the agent module's injected publisher) + **`provider.changed`**
   (published from auth's Central/runtime invalidation seam and on a successful provider login) + **`host.updateAvailable`** (published for each
   retained CLI-update lifecycle replacement) use push channels. Every

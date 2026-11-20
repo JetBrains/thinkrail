@@ -1,0 +1,756 @@
+import {
+	appendFileSync,
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
+import { join } from "node:path";
+import type { ExtensionLog } from "@thinkrail/extension-api/server";
+import { isIsoDate } from "./days";
+import {
+	type Attempt,
+	type AttemptReview,
+	type Autopilot,
+	type AutopilotPause,
+	type BoardSettings,
+	CARD_SIZES,
+	CARD_TYPES,
+	CATEGORIES,
+	type Card,
+	type CardRef,
+	type CardSource,
+	DEFAULT_SETTINGS,
+	EVIDENCE_KINDS,
+	type Evidence,
+	GITHUB_FILTERS,
+	HEALTHS,
+	HORIZONS,
+	IDEA_STATUSES,
+	type Idea,
+	type IdeaScore,
+	type Initiative,
+	type InitiativeUpdate,
+	type Milestone,
+	PRESETS,
+	REQUIREMENT_SOURCES,
+	type ReviewEvidence,
+	type ReviewItem,
+	type RoadmapProject,
+	SCORE_MAX,
+	SCORE_MIN,
+	type Transition,
+	VERDICTS,
+	type WatchEntry,
+	type WatchSnapshot,
+	WORKFLOWS,
+} from "./model";
+
+export const STORE_VERSION = 1;
+/**
+ * `cards.json`'s version: 2 renamed a card's roadmap project from `projectId` to `roadmapProjectId`, so
+ * `projectId` always names a ThinkRail project; a version-1 file is read with the old name and written as 2.
+ */
+export const CARDS_VERSION = 2;
+const CARDS = "cards.json";
+const SETTINGS = "settings.json";
+const TRANSITIONS = "transitions.jsonl";
+const INITIATIVES = "initiatives.json";
+const PROJECTS = "projects.json";
+const IDEAS = "ideas.json";
+const WATCHLIST = "watchlist.json";
+const PROJECT_DIR = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
+
+export interface CardsFile {
+	version: typeof CARDS_VERSION;
+	prefix: string;
+	nextNumber: number;
+	cards: Card[];
+}
+
+export interface InitiativesFile {
+	version: typeof STORE_VERSION;
+	nextNumber: number;
+	nextUpdateNumber: number;
+	initiatives: Initiative[];
+}
+
+export interface ProjectsFile {
+	version: typeof STORE_VERSION;
+	nextNumber: number;
+	nextMilestoneNumber: number;
+	projects: RoadmapProject[];
+}
+
+export interface IdeasFile {
+	version: typeof STORE_VERSION;
+	nextNumber: number;
+	nextEvidenceNumber: number;
+	ideas: Idea[];
+}
+
+export interface WatchlistFile {
+	version: typeof STORE_VERSION;
+	nextNumber: number;
+	entries: WatchEntry[];
+}
+
+/** A board file written by a newer ThinkRail: read nothing, write nothing, rather than lose its data. */
+export class NewerBoardStoreError extends Error {
+	constructor(path: string) {
+		super(`${path} was written by a newer ThinkRail; update ThinkRail to use this board.`);
+	}
+}
+
+type Raw = Record<string, unknown>;
+
+const isRecord = (value: unknown): value is Raw =>
+	typeof value === "object" && value !== null && !Array.isArray(value);
+const oneOf = <T extends string>(values: readonly T[], value: unknown): value is T =>
+	typeof value === "string" && (values as readonly string[]).includes(value);
+const strings = (value: unknown): string[] =>
+	Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+const finite = (value: unknown, fallback: number): number =>
+	typeof value === "number" && Number.isFinite(value) ? value : fallback;
+const positive = (value: unknown): value is number =>
+	typeof value === "number" && Number.isFinite(value) && value > 0;
+const isoDate = (value: unknown): value is string => typeof value === "string" && isIsoDate(value);
+const counter = (value: unknown) => Math.max(1, Math.trunc(finite(value, 1)));
+
+function readReviewEvidence(raw: unknown): ReviewEvidence | null {
+	if (!isRecord(raw) || typeof raw.path !== "string" || !raw.path) return null;
+	return {
+		path: raw.path,
+		...(positive(raw.line) && Number.isInteger(raw.line) ? { line: raw.line } : {}),
+		note: typeof raw.note === "string" ? raw.note : "",
+	};
+}
+
+function readReviewItem(raw: unknown): ReviewItem | null {
+	if (!isRecord(raw) || typeof raw.id !== "string" || typeof raw.text !== "string") return null;
+	if (!oneOf(VERDICTS, raw.verdict) || !oneOf(REQUIREMENT_SOURCES, raw.source)) return null;
+	const scenarios = strings(raw.scenarios);
+	return {
+		id: raw.id,
+		source: raw.source,
+		text: raw.text,
+		...(scenarios.length > 0 ? { scenarios } : {}),
+		verdict: raw.verdict,
+		evidence: Array.isArray(raw.evidence)
+			? raw.evidence.flatMap((entry) => readReviewEvidence(entry) ?? [])
+			: [],
+		tests: strings(raw.tests),
+		...(typeof raw.commentId === "string" ? { commentId: raw.commentId } : {}),
+	};
+}
+
+/** A stored smart review; one without its time or items is dropped, and so are unreadable items. */
+function readReview(raw: unknown): AttemptReview | null {
+	if (!isRecord(raw) || typeof raw.at !== "number" || !Array.isArray(raw.items)) return null;
+	return {
+		at: raw.at,
+		items: raw.items.flatMap((item) => readReviewItem(item) ?? []),
+		summary: typeof raw.summary === "string" ? raw.summary : "",
+	};
+}
+
+function readAttempt(raw: unknown): Attempt | null {
+	if (!isRecord(raw)) return null;
+	const { workspaceId, sessionId, workflow } = raw;
+	if (typeof workspaceId !== "string" || typeof sessionId !== "string") return null;
+	if (!oneOf(WORKFLOWS, workflow)) return null;
+	const notes = Array.isArray(raw.notes)
+		? raw.notes.flatMap((note) =>
+				isRecord(note) && typeof note.text === "string"
+					? [{ text: note.text, at: finite(note.at, 0) }]
+					: [],
+			)
+		: [];
+	const review = readReview(raw.review);
+	return {
+		workspaceId,
+		sessionId,
+		workflow,
+		startedAt: finite(raw.startedAt, 0),
+		notes,
+		...(raw.merged === true ? { merged: true as const } : {}),
+		...(typeof raw.removedAt === "number" ? { removedAt: raw.removedAt } : {}),
+		...(typeof raw.closesLinked === "number" ? { closesLinked: raw.closesLinked } : {}),
+		...(review ? { review } : {}),
+	};
+}
+
+/** A stored source; one missing what locates it reads as the card's own. */
+function readSource(raw: unknown, id: string): CardSource {
+	const source = isRecord(raw) ? raw : {};
+	const ref = typeof source.ref === "string" ? source.ref : id;
+	if (
+		source.kind === "task-spec" &&
+		typeof source.workspaceId === "string" &&
+		typeof source.path === "string"
+	)
+		return { kind: "task-spec", ref, workspaceId: source.workspaceId, path: source.path };
+	if (
+		source.kind === "github" &&
+		typeof source.number === "number" &&
+		Number.isSafeInteger(source.number) &&
+		typeof source.url === "string"
+	)
+		return { kind: "github", ref, number: source.number, url: source.url };
+	if (source.kind === "openspec" && typeof source.change === "string" && source.change)
+		return { kind: "openspec", ref, change: source.change };
+	return { kind: "native", ref: source.kind === "native" ? ref : id };
+}
+
+/**
+ * A stored card, defaults filled in; `null` when it lacks what identifies or places it. A card of a
+ * version-1 file names its roadmap project `projectId`.
+ */
+export function readCard(raw: unknown, version: number = CARDS_VERSION): Card | null {
+	if (!isRecord(raw)) return null;
+	const { id, title, category, column } = raw;
+	if (typeof id !== "string" || typeof title !== "string" || typeof column !== "string")
+		return null;
+	if (!oneOf(CATEGORIES, category)) return null;
+	const pending = isRecord(raw.cancelPending) ? raw.cancelPending : null;
+	const origin = isRecord(raw.origin) ? raw.origin : null;
+	const roadmapProject = version < 2 ? raw.projectId : raw.roadmapProjectId;
+	return {
+		id,
+		source: readSource(raw.source, id),
+		title,
+		description: typeof raw.description === "string" ? raw.description : "",
+		acceptance: strings(raw.acceptance),
+		type: oneOf(CARD_TYPES, raw.type) ? raw.type : "feature",
+		...(oneOf(CARD_SIZES, raw.size) ? { size: raw.size } : {}),
+		...(raw.sizeSuggested === true ? { sizeSuggested: true } : {}),
+		labels: strings(raw.labels),
+		blocks: strings(raw.blocks),
+		specRefs: strings(raw.specRefs),
+		rank: finite(raw.rank, 0),
+		category,
+		column,
+		ownerHuman: typeof raw.ownerHuman === "string" ? raw.ownerHuman : "",
+		attempts: Array.isArray(raw.attempts)
+			? raw.attempts.flatMap((attempt) => readAttempt(attempt) ?? [])
+			: [],
+		createdBy: raw.createdBy === "agent" ? "agent" : "human",
+		...(origin && (typeof origin.sessionId === "string" || typeof origin.cardId === "string")
+			? {
+					origin: {
+						...(typeof origin.sessionId === "string" ? { sessionId: origin.sessionId } : {}),
+						...(typeof origin.cardId === "string" ? { cardId: origin.cardId } : {}),
+					},
+				}
+			: {}),
+		createdAt: finite(raw.createdAt, 0),
+		updatedAt: finite(raw.updatedAt, 0),
+		...(pending && typeof pending.workspaceId === "string"
+			? { cancelPending: { workspaceId: pending.workspaceId, at: finite(pending.at, 0) } }
+			: {}),
+		...(typeof roadmapProject === "string" ? { roadmapProjectId: roadmapProject } : {}),
+		...(typeof roadmapProject === "string" && typeof raw.milestoneId === "string"
+			? { milestoneId: raw.milestoneId }
+			: {}),
+		...(isoDate(raw.pinnedStart) ? { pinnedStart: raw.pinnedStart } : {}),
+		...(positive(raw.estimateDays) ? { estimateDays: raw.estimateDays } : {}),
+	};
+}
+
+function readUpdate(raw: unknown): InitiativeUpdate | null {
+	if (!isRecord(raw) || typeof raw.id !== "string" || typeof raw.text !== "string") return null;
+	return {
+		id: raw.id,
+		at: finite(raw.at, 0),
+		text: raw.text,
+		health: oneOf(HEALTHS, raw.health) ? raw.health : "on_track",
+		...(typeof raw.publishedAt === "number" ? { publishedAt: raw.publishedAt } : {}),
+	};
+}
+
+function readCardRef(raw: unknown): CardRef | null {
+	return isRecord(raw) && typeof raw.projectId === "string" && typeof raw.cardId === "string"
+		? { projectId: raw.projectId, cardId: raw.cardId }
+		: null;
+}
+
+/** A stored initiative, defaults filled in; `null` without an id or a title. */
+export function readInitiative(raw: unknown): Initiative | null {
+	if (!isRecord(raw) || typeof raw.id !== "string" || typeof raw.title !== "string") return null;
+	const health = isRecord(raw.health) ? raw.health : null;
+	const override = health && oneOf(HEALTHS, health.override) ? health.override : undefined;
+	const note = health && typeof health.note === "string" ? health.note : undefined;
+	return {
+		id: raw.id,
+		...(typeof raw.parentId === "string" ? { parentId: raw.parentId } : {}),
+		title: raw.title,
+		outcome: typeof raw.outcome === "string" ? raw.outcome : "",
+		criteria: strings(raw.criteria),
+		horizon: oneOf(HORIZONS, raw.horizon) ? raw.horizon : "later",
+		rank: finite(raw.rank, 0),
+		...(isoDate(raw.target) ? { target: raw.target } : {}),
+		...(positive(raw.appetiteDays) ? { appetiteDays: raw.appetiteDays } : {}),
+		specRefs: strings(raw.specRefs),
+		...(override || note
+			? { health: { ...(override ? { override } : {}), ...(note ? { note } : {}) } }
+			: {}),
+		updates: Array.isArray(raw.updates)
+			? raw.updates.flatMap((update) => readUpdate(update) ?? [])
+			: [],
+		cardIds: strings(raw.cardIds),
+		externalCards: Array.isArray(raw.externalCards)
+			? raw.externalCards.flatMap((ref) => readCardRef(ref) ?? [])
+			: [],
+		...(raw.proposed === true ? { proposed: true as const } : {}),
+		...(raw.proposedBy === "agent" ? { proposedBy: "agent" as const } : {}),
+		...(typeof raw.closedAt === "number" && Number.isFinite(raw.closedAt)
+			? { closedAt: raw.closedAt }
+			: {}),
+		...(typeof raw.containerId === "string" && raw.containerId
+			? { containerId: raw.containerId }
+			: {}),
+		...(isRecord(raw.autopilot) && typeof raw.autopilot.on === "boolean"
+			? { autopilot: readAutopilot(raw.autopilot) }
+			: {}),
+		createdAt: finite(raw.createdAt, 0),
+		updatedAt: finite(raw.updatedAt, 0),
+	};
+}
+
+function readPause(raw: unknown): AutopilotPause | undefined {
+	if (!isRecord(raw)) return undefined;
+	if (raw.kind === "orchestrator") return { kind: "orchestrator" };
+	if (
+		(raw.kind === "review" || raw.kind === "needs_you") &&
+		typeof raw.count === "number" &&
+		typeof raw.limit === "number"
+	)
+		return { kind: raw.kind, count: raw.count, limit: raw.limit };
+	return undefined;
+}
+
+function readAutopilot(raw: Record<string, unknown>): Autopilot {
+	const pausedReason = readPause(raw.pausedReason);
+	return { on: raw.on === true, ...(pausedReason ? { pausedReason } : {}) };
+}
+
+function readMilestone(raw: unknown): Milestone | null {
+	if (!isRecord(raw) || typeof raw.id !== "string" || typeof raw.title !== "string") return null;
+	return { id: raw.id, title: raw.title, ...(isoDate(raw.target) ? { target: raw.target } : {}) };
+}
+
+/** A stored roadmap project, defaults filled in; `null` without an id or a title. */
+export function readRoadmapProject(raw: unknown): RoadmapProject | null {
+	if (!isRecord(raw) || typeof raw.id !== "string" || typeof raw.title !== "string") return null;
+	return {
+		id: raw.id,
+		...(typeof raw.initiativeId === "string" ? { initiativeId: raw.initiativeId } : {}),
+		title: raw.title,
+		milestones: Array.isArray(raw.milestones)
+			? raw.milestones.flatMap((milestone) => readMilestone(milestone) ?? [])
+			: [],
+		...(raw.proposed === true ? { proposed: true as const } : {}),
+		...(raw.proposedBy === "agent" ? { proposedBy: "agent" as const } : {}),
+		createdAt: finite(raw.createdAt, 0),
+		updatedAt: finite(raw.updatedAt, 0),
+	};
+}
+
+function readEvidence(raw: unknown): Evidence | null {
+	if (!isRecord(raw) || typeof raw.id !== "string" || typeof raw.ref !== "string") return null;
+	if (!oneOf(EVIDENCE_KINDS, raw.kind)) return null;
+	return {
+		id: raw.id,
+		kind: raw.kind,
+		ref: raw.ref,
+		...(typeof raw.quote === "string" && raw.quote ? { quote: raw.quote } : {}),
+		...(typeof raw.workspaceId === "string" ? { workspaceId: raw.workspaceId } : {}),
+		addedBy: raw.addedBy === "agent" ? "agent" : "human",
+		at: finite(raw.at, 0),
+	};
+}
+
+function readScore(raw: unknown): IdeaScore | undefined {
+	if (!isRecord(raw)) return undefined;
+	const { score } = raw;
+	if (
+		typeof score !== "number" ||
+		!Number.isInteger(score) ||
+		score < SCORE_MIN ||
+		score > SCORE_MAX
+	)
+		return undefined;
+	return { score, reasons: strings(raw.reasons), suggested: raw.suggested === true };
+}
+
+/** A stored idea, defaults filled in; `null` without an id or a title. A malformed score is dropped. */
+export function readIdea(raw: unknown): Idea | null {
+	if (!isRecord(raw) || typeof raw.id !== "string" || typeof raw.title !== "string") return null;
+	const value = readScore(raw.value);
+	const effort = readScore(raw.effort);
+	const horizon = isRecord(raw.horizonSuggestion) ? raw.horizonSuggestion : null;
+	return {
+		id: raw.id,
+		title: raw.title,
+		pitch: typeof raw.pitch === "string" ? raw.pitch : "",
+		evidence: Array.isArray(raw.evidence)
+			? raw.evidence.flatMap((evidence) => readEvidence(evidence) ?? [])
+			: [],
+		...(value ? { value } : {}),
+		...(effort ? { effort } : {}),
+		...(horizon && oneOf(HORIZONS, horizon.horizon)
+			? {
+					horizonSuggestion: {
+						horizon: horizon.horizon,
+						reason: typeof horizon.reason === "string" ? horizon.reason : "",
+					},
+				}
+			: {}),
+		status: oneOf(IDEA_STATUSES, raw.status) ? raw.status : "new",
+		...(typeof raw.initiativeId === "string" ? { initiativeId: raw.initiativeId } : {}),
+		createdAt: finite(raw.createdAt, 0),
+		updatedAt: finite(raw.updatedAt, 0),
+	};
+}
+
+function readSnapshot(raw: unknown): WatchSnapshot | undefined {
+	if (!isRecord(raw) || typeof raw.text !== "string") return undefined;
+	return {
+		at: finite(raw.at, 0),
+		text: raw.text,
+		...(typeof raw.artifactPath === "string" ? { artifactPath: raw.artifactPath } : {}),
+		...(typeof raw.workspaceId === "string" ? { workspaceId: raw.workspaceId } : {}),
+	};
+}
+
+/** A stored watchlist entry, defaults filled in; `null` without an id or a name. */
+export function readWatchEntry(raw: unknown): WatchEntry | null {
+	if (!isRecord(raw) || typeof raw.id !== "string" || typeof raw.name !== "string") return null;
+	const snapshot = readSnapshot(raw.snapshot);
+	const previous = snapshot ? readSnapshot(raw.previous) : undefined;
+	return {
+		id: raw.id,
+		name: raw.name,
+		urls: strings(raw.urls),
+		notes: typeof raw.notes === "string" ? raw.notes : "",
+		...(snapshot ? { snapshot } : {}),
+		...(previous ? { previous } : {}),
+		createdAt: finite(raw.createdAt, 0),
+		updatedAt: finite(raw.updatedAt, 0),
+	};
+}
+
+function readSettings(raw: Raw): BoardSettings {
+	const limits = isRecord(raw.wipLimits) ? raw.wipLimits : {};
+	const limit = (key: keyof BoardSettings["wipLimits"]) => {
+		const value = limits[key];
+		return typeof value === "number" && Number.isInteger(value) && value >= 0
+			? value
+			: DEFAULT_SETTINGS.wipLimits[key];
+	};
+	const github = isRecord(raw.github) ? raw.github : {};
+	return {
+		preset: oneOf(PRESETS, raw.preset) ? raw.preset : DEFAULT_SETTINGS.preset,
+		wipLimits: { needsYou: limit("needsYou"), review: limit("review"), agents: limit("agents") },
+		followSelection: raw.followSelection === true,
+		github: {
+			enabled: github.enabled === true,
+			filter: oneOf(GITHUB_FILTERS, github.filter) ? github.filter : DEFAULT_SETTINGS.github.filter,
+		},
+		snapshotPath:
+			typeof raw.snapshotPath === "string" && raw.snapshotPath.trim()
+				? raw.snapshotPath
+				: DEFAULT_SETTINGS.snapshotPath,
+	};
+}
+
+function writeAtomic(path: string, value: unknown): void {
+	const temporary = `${path}.${process.pid}-${Date.now()}.tmp`;
+	writeFileSync(temporary, `${JSON.stringify(value, null, "\t")}\n`);
+	renameSync(temporary, path);
+}
+
+/**
+ * The board's files under the extension's data folder, one folder per project. The host runs one board
+ * per process, so this is the single writer and keeps what it read in memory.
+ */
+export class BoardStore {
+	private readonly cardsByProject = new Map<string, CardsFile | null>();
+	private readonly settingsByProject = new Map<string, BoardSettings>();
+	private readonly initiativesByProject = new Map<string, InitiativesFile>();
+	private readonly projectsByProject = new Map<string, ProjectsFile>();
+	private readonly ideasByProject = new Map<string, IdeasFile>();
+	private readonly watchlistByProject = new Map<string, WatchlistFile>();
+	private readonly root: string;
+	private readonly log: ExtensionLog;
+	private readonly now: () => number;
+
+	constructor(root: string, log: ExtensionLog, now: () => number = Date.now) {
+		this.root = root;
+		this.log = log;
+		this.now = now;
+	}
+
+	private dir(projectId: string): string {
+		if (!PROJECT_DIR.test(projectId)) throw new Error(`Not a project id: ${projectId}`);
+		return join(this.root, projectId);
+	}
+
+	/** The projects with a board (cards or initiatives) on disk. */
+	projectIds(): string[] {
+		try {
+			return readdirSync(this.root, { withFileTypes: true })
+				.filter((entry) => entry.isDirectory() && PROJECT_DIR.test(entry.name))
+				.filter((entry) =>
+					[CARDS, INITIATIVES].some((name) => existsSync(join(this.root, entry.name, name))),
+				)
+				.map((entry) => entry.name);
+		} catch {
+			return [];
+		}
+	}
+
+	/** A file of version 1 to `current`, else `null` (moved aside when unreadable); a newer one throws. */
+	private readVersioned(path: string, current: number = STORE_VERSION): Raw | null {
+		let text: string;
+		try {
+			text = readFileSync(path, "utf8");
+		} catch {
+			return null;
+		}
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(text);
+		} catch {
+			parsed = undefined;
+		}
+		if (isRecord(parsed) && typeof parsed.version === "number" && parsed.version > current)
+			throw new NewerBoardStoreError(path);
+		if (
+			isRecord(parsed) &&
+			typeof parsed.version === "number" &&
+			Number.isInteger(parsed.version) &&
+			parsed.version >= 1
+		)
+			return parsed;
+		this.quarantine(path);
+		return null;
+	}
+
+	private quarantine(path: string): void {
+		const aside = `${path}.corrupt-${this.now()}`;
+		try {
+			renameSync(path, aside);
+			this.log.warn(`unreadable board file moved aside to ${aside}`);
+		} catch (error) {
+			this.log.warn(`unreadable board file ${path} could not be moved aside`, error);
+		}
+	}
+
+	/** `null` for a project without a board yet (or whose unreadable file was just moved aside). */
+	cards(projectId: string): CardsFile | null {
+		if (this.cardsByProject.has(projectId)) return this.cardsByProject.get(projectId) ?? null;
+		const path = join(this.dir(projectId), CARDS);
+		const raw = this.readVersioned(path, CARDS_VERSION);
+		let file: CardsFile | null = null;
+		if (raw && typeof raw.prefix === "string" && Array.isArray(raw.cards)) {
+			const version = finite(raw.version, CARDS_VERSION);
+			const cards = raw.cards.flatMap((card) => readCard(card, version) ?? []);
+			if (cards.length !== raw.cards.length)
+				this.log.warn(`dropped ${raw.cards.length - cards.length} unreadable card(s) of ${path}`);
+			file = {
+				version: CARDS_VERSION,
+				prefix: raw.prefix,
+				nextNumber: counter(raw.nextNumber),
+				cards,
+			};
+		} else if (raw) this.quarantine(path);
+		this.cardsByProject.set(projectId, file);
+		return file;
+	}
+
+	saveCards(projectId: string, file: CardsFile): void {
+		const dir = this.dir(projectId);
+		mkdirSync(dir, { recursive: true });
+		writeAtomic(join(dir, CARDS), file);
+		this.cardsByProject.set(projectId, file);
+	}
+
+	settings(projectId: string): BoardSettings {
+		const cached = this.settingsByProject.get(projectId);
+		if (cached) return cached;
+		const raw = this.readVersioned(join(this.dir(projectId), SETTINGS));
+		const settings = raw ? readSettings(raw) : DEFAULT_SETTINGS;
+		this.settingsByProject.set(projectId, settings);
+		return settings;
+	}
+
+	saveSettings(projectId: string, settings: BoardSettings): void {
+		const dir = this.dir(projectId);
+		mkdirSync(dir, { recursive: true });
+		writeAtomic(join(dir, SETTINGS), { version: STORE_VERSION, ...settings });
+		this.settingsByProject.set(projectId, settings);
+	}
+
+	/** The project's initiatives; none until the first is created (or once an unreadable file moved aside). */
+	initiatives(projectId: string): InitiativesFile {
+		const cached = this.initiativesByProject.get(projectId);
+		if (cached) return cached;
+		const path = join(this.dir(projectId), INITIATIVES);
+		const raw = this.readVersioned(path);
+		if (raw && !Array.isArray(raw.initiatives)) this.quarantine(path);
+		const list = raw && Array.isArray(raw.initiatives) ? raw.initiatives : [];
+		const initiatives = list.flatMap((initiative) => readInitiative(initiative) ?? []);
+		if (initiatives.length !== list.length)
+			this.log.warn(
+				`dropped ${list.length - initiatives.length} unreadable initiative(s) of ${path}`,
+			);
+		const file: InitiativesFile = {
+			version: STORE_VERSION,
+			nextNumber: counter(raw?.nextNumber),
+			nextUpdateNumber: counter(raw?.nextUpdateNumber),
+			initiatives,
+		};
+		this.initiativesByProject.set(projectId, file);
+		return file;
+	}
+
+	saveInitiatives(projectId: string, file: InitiativesFile): void {
+		const dir = this.dir(projectId);
+		mkdirSync(dir, { recursive: true });
+		writeAtomic(join(dir, INITIATIVES), file);
+		this.initiativesByProject.set(projectId, file);
+	}
+
+	/** The project's roadmap projects and their milestones. */
+	roadmapProjects(projectId: string): ProjectsFile {
+		const cached = this.projectsByProject.get(projectId);
+		if (cached) return cached;
+		const path = join(this.dir(projectId), PROJECTS);
+		const raw = this.readVersioned(path);
+		if (raw && !Array.isArray(raw.projects)) this.quarantine(path);
+		const list = raw && Array.isArray(raw.projects) ? raw.projects : [];
+		const projects = list.flatMap((project) => readRoadmapProject(project) ?? []);
+		if (projects.length !== list.length)
+			this.log.warn(`dropped ${list.length - projects.length} unreadable project(s) of ${path}`);
+		const file: ProjectsFile = {
+			version: STORE_VERSION,
+			nextNumber: counter(raw?.nextNumber),
+			nextMilestoneNumber: counter(raw?.nextMilestoneNumber),
+			projects,
+		};
+		this.projectsByProject.set(projectId, file);
+		return file;
+	}
+
+	saveRoadmapProjects(projectId: string, file: ProjectsFile): void {
+		const dir = this.dir(projectId);
+		mkdirSync(dir, { recursive: true });
+		writeAtomic(join(dir, PROJECTS), file);
+		this.projectsByProject.set(projectId, file);
+	}
+
+	/** The project's discovery ideas; none until the first is created. */
+	ideas(projectId: string): IdeasFile {
+		const cached = this.ideasByProject.get(projectId);
+		if (cached) return cached;
+		const path = join(this.dir(projectId), IDEAS);
+		const raw = this.readVersioned(path);
+		if (raw && !Array.isArray(raw.ideas)) this.quarantine(path);
+		const list = raw && Array.isArray(raw.ideas) ? raw.ideas : [];
+		const ideas = list.flatMap((idea) => readIdea(idea) ?? []);
+		if (ideas.length !== list.length)
+			this.log.warn(`dropped ${list.length - ideas.length} unreadable idea(s) of ${path}`);
+		const file: IdeasFile = {
+			version: STORE_VERSION,
+			nextNumber: counter(raw?.nextNumber),
+			nextEvidenceNumber: counter(raw?.nextEvidenceNumber),
+			ideas,
+		};
+		this.ideasByProject.set(projectId, file);
+		return file;
+	}
+
+	saveIdeas(projectId: string, file: IdeasFile): void {
+		const dir = this.dir(projectId);
+		mkdirSync(dir, { recursive: true });
+		writeAtomic(join(dir, IDEAS), file);
+		this.ideasByProject.set(projectId, file);
+	}
+
+	/** The project's competitor watchlist. */
+	watchlist(projectId: string): WatchlistFile {
+		const cached = this.watchlistByProject.get(projectId);
+		if (cached) return cached;
+		const path = join(this.dir(projectId), WATCHLIST);
+		const raw = this.readVersioned(path);
+		if (raw && !Array.isArray(raw.entries)) this.quarantine(path);
+		const list = raw && Array.isArray(raw.entries) ? raw.entries : [];
+		const entries = list.flatMap((entry) => readWatchEntry(entry) ?? []);
+		if (entries.length !== list.length)
+			this.log.warn(
+				`dropped ${list.length - entries.length} unreadable watchlist entries of ${path}`,
+			);
+		const file: WatchlistFile = {
+			version: STORE_VERSION,
+			nextNumber: counter(raw?.nextNumber),
+			entries,
+		};
+		this.watchlistByProject.set(projectId, file);
+		return file;
+	}
+
+	saveWatchlist(projectId: string, file: WatchlistFile): void {
+		const dir = this.dir(projectId);
+		mkdirSync(dir, { recursive: true });
+		writeAtomic(join(dir, WATCHLIST), file);
+		this.watchlistByProject.set(projectId, file);
+	}
+
+	appendTransitions(projectId: string, transitions: readonly Transition[]): void {
+		if (transitions.length === 0) return;
+		const dir = this.dir(projectId);
+		mkdirSync(dir, { recursive: true });
+		appendFileSync(
+			join(dir, TRANSITIONS),
+			transitions.map((transition) => `${JSON.stringify(transition)}\n`).join(""),
+		);
+	}
+
+	/** Writes a short-lived file into the project's folder (a PR body `gh` reads); returns its path. */
+	writeScratch(projectId: string, name: string, text: string): string {
+		const dir = this.dir(projectId);
+		mkdirSync(dir, { recursive: true });
+		const path = join(dir, name);
+		writeFileSync(path, text);
+		return path;
+	}
+
+	removeScratch(path: string): void {
+		rmSync(path, { force: true });
+	}
+
+	/** The project's transition log, oldest first; a line that does not parse is skipped. */
+	transitions(projectId: string): Transition[] {
+		let text: string;
+		try {
+			text = readFileSync(join(this.dir(projectId), TRANSITIONS), "utf8");
+		} catch {
+			return [];
+		}
+		return text.split("\n").flatMap((line) => {
+			if (!line.trim()) return [];
+			try {
+				const parsed: unknown = JSON.parse(line);
+				return isRecord(parsed) && typeof parsed.cardId === "string"
+					? [parsed as unknown as Transition]
+					: [];
+			} catch {
+				return [];
+			}
+		});
+	}
+}

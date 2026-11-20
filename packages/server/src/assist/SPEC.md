@@ -15,7 +15,7 @@ task service." Each task owns its prompt, output parsing/guards, and graceful-de
 blocks or crashes its caller. The current task drafts a completed plan's summary when the agent wrote
 none. Naming chats and workspaces is **not** an assist task: the main agent names them through
 `set_title` (see [[submodule-server-agent]]), because every helper-model naming scheme produced names
-users wanted to fix. PR descriptions are the second task. The tasks are a **library
+users wanted to fix. PR descriptions are the second task; an extension's own ask is the third. The tasks are a **library
 surface** — no wire method; consumers are host-side flows.
 
 ## Boundary
@@ -38,8 +38,13 @@ surface** — no wire method; consumers are host-side flows.
     best-effort terms. With a `template` the draft keeps the template's headings and checklist and fills
     their bodies; `toPrDescription(raw)` is the output guard (strip a code fence, clamp length, `null` when
     empty).
+  - `assistText({ prompt, maxTokens, signal? })` → an extension's own ask (the host's `assist` action,
+    [[module-extension-api]]): the caller's prompt, no system prompt, on the same cheap-model path,
+    time-boxed at 30 s and aborted with `signal`; the trimmed answer or `null` on the same best-effort
+    terms. The caller (the action) bounds the prompt and `maxTokens`; the extension parses the answer.
 - **Public surface (barrel):** `setOneShotRunner`, `suggestPlanSummary`, `toPlanSummary`,
-  `suggestPrDescription`, `toPrDescription`, `OneShotRunner`, `PlanSummaryStep`, `PrDescriptionInput`.
+  `suggestPrDescription`, `toPrDescription`, `assistText`, `OneShotRunner`, `PlanSummaryStep`,
+  `PrDescriptionInput`, `AssistAsk`.
 - **Allowed deps:** `agent` (the `completeOnce`/`OneShotRequest`/`OneShotResult` primitive, via its
   barrel); Node.
 - **Forbidden:** `host`; **`@earendil-works/pi-ai` / `pi-coding-agent` directly** (model access + dispatch

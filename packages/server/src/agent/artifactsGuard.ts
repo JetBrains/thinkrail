@@ -14,12 +14,12 @@ export const ARTIFACTS_RULE = [
 	"- Keep scratch work — scripts, intermediate renders, downloaded or generated data — in a `_`-prefixed folder next to the result it serves (for example `_work/`).",
 ].join("\n");
 
-function inside(root: string, path: string): boolean {
+export function inside(root: string, path: string): boolean {
 	const rel = relative(root, path);
 	return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
 }
 
-function realish(path: string): string {
+export function realish(path: string): string {
 	const missing: string[] = [];
 	let cursor = path;
 	while (!lstatSync(cursor, { throwIfNoEntry: false })) {
@@ -35,7 +35,7 @@ function realish(path: string): string {
 	}
 }
 
-function toolTarget(path: string, cwd: string): string {
+export function toolTarget(path: string, cwd: string): string {
 	const bare = path.startsWith("@") ? path.slice(1) : path;
 	if (bare === "~") return homedir();
 	if (bare.startsWith("~/")) return join(homedir(), bare.slice(2));

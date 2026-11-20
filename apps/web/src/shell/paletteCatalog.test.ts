@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { RiBarChartBoxLine } from "@remixicon/react";
 import { type NativePageZoomAction, PROTOCOL_VERSION, type Workspace } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
-import type { RegisteredPanel } from "../extensions";
+import type { RegisteredPanel, RegisteredView } from "../extensions";
 import { type KeybindingId, keybindingShortcut, resolveKeybindings } from "../keybindings";
 import { availableSettings, type SettingsCatalogContext } from "../panels/settingsCatalog";
 import { settingsNavGroups } from "../panels/settingsNav";
@@ -95,10 +95,15 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 		canSettle: true,
 		settled: false,
 		settleBlocked: false,
+		containerId: null,
+		canGroup: false,
 		settingsGroups: [],
 		settingEntries: [],
 		tabActions: [],
 		extensionPanels: [],
+		extensionTools: [],
+		views: [],
+		activeView: null,
 		actions: {
 			newWorkspace: noop,
 			newProjectlessChat: noop,
@@ -112,6 +117,8 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 			toggleRight: noop,
 			toggleBottom: noop,
 			showTool: noop,
+			enterView: noop,
+			exitView: noop,
 			openExtensionPanel: noop,
 			openExtensionPanelInProject: noop,
 			showFiles: noop,
@@ -132,6 +139,8 @@ function deps(overrides: Partial<PaletteCatalogDeps> = {}): PaletteCatalogDeps {
 			openSettings: noop,
 			openShortcuts: noop,
 			runTabAction: noop,
+			openContainerDialog: noop,
+			openContainerOverview: noop,
 		},
 		...overrides,
 	};
@@ -401,6 +410,78 @@ describe("palette extension panel commands", () => {
 	});
 });
 
+describe("palette extension side tools and views", () => {
+	const view: RegisteredView = {
+		extension: "fake",
+		view: "wide",
+		id: "fake:wide",
+		declaration: {
+			title: "board.boardView.title",
+			icon: RiBarChartBoxLine,
+			center: "main",
+			left: "nav",
+		},
+	};
+
+	test("shows an offered extension side tool like a built-in tool, in the active workspace", () => {
+		const shown: [string, string][] = [];
+		const catalog = deps({
+			extensionTools: [{ id: "ext:fake:tool", title: "board.nav.title", icon: RiBarChartBoxLine }],
+			actions: {
+				...deps().actions,
+				showTool: (workspaceId, tool) => shown.push([workspaceId, tool]),
+			},
+		});
+		const command = row("view.show.ext:fake:tool", catalog);
+		expect(command).toMatchObject({ title: "Show Board", subtitle: "View" });
+		command?.run?.();
+		expect(shown).toEqual([["w1", "ext:fake:tool"]]);
+		expect(
+			row(
+				"view.show.ext:fake:tool",
+				deps({
+					activeWorkspace: null,
+					extensionTools: [
+						{ id: "ext:fake:tool", title: "board.nav.title", icon: RiBarChartBoxLine },
+					],
+				}),
+			),
+		).toBeUndefined();
+	});
+
+	test("offers Enter for a view not on and Exit for the one on, even one this build lacks", () => {
+		const entered: RegisteredView[] = [];
+		let exited = 0;
+		const actions = {
+			...deps().actions,
+			enterView: (entry: RegisteredView) => entered.push(entry),
+			exitView: () => {
+				exited += 1;
+			},
+		};
+		const idle = deps({ views: [view], actions });
+		expect(row("view.extensionView.enter.fake:wide", idle)?.title).toBe("Enter Board view");
+		expect(row("view.extensionView.exit", idle)).toBeUndefined();
+		row("view.extensionView.enter.fake:wide", idle)?.run?.();
+		expect(entered).toEqual([view]);
+
+		const active = deps({ views: [view], activeView: { id: "fake:wide", view }, actions });
+		expect(row("view.extensionView.enter.fake:wide", active)).toBeUndefined();
+		expect(row("view.extensionView.exit", active)?.title).toBe("Exit Board view");
+		row("view.extensionView.exit", active)?.run?.();
+		expect(exited).toBe(1);
+
+		const orphan = deps({
+			activeWorkspace: null,
+			activeView: { id: "gone:wide", view: undefined },
+		});
+		expect(row("view.extensionView.exit", orphan)?.title).toBe("Exit the view");
+		expect(
+			row("view.extensionView.enter.fake:wide", deps({ activeWorkspace: null, views: [view] })),
+		).toBeUndefined();
+	});
+});
+
 describe("palette page zoom commands", () => {
 	const zoomRows = ["view.zoomIn", "view.zoomOut", "view.zoomReset"] as const;
 
@@ -529,5 +610,42 @@ describe("palette Settings rows", () => {
 		expect(settingsRows({ hostPlatform: "win32" }).map((item) => item.id)).toContain(
 			"setting:windows-shell",
 		);
+	});
+});
+
+describe("palette container commands", () => {
+	test("a standalone workspace offers Group into a container only where it can join one", () => {
+		expect(row("container.group", deps())).toBeUndefined();
+		const opened: unknown[] = [];
+		const grouping = deps({
+			canGroup: true,
+			actions: { ...deps().actions, openContainerDialog: (request) => opened.push(request) },
+		});
+		row("container.group", grouping)?.run?.();
+		expect(opened).toEqual([{ kind: "group", workspaceId: workspace.id }]);
+		expect(row("container.addWorkspace", grouping)).toBeUndefined();
+	});
+
+	test("a member's container offers its overview, Add workspace and Remove container, never Group", () => {
+		const opened: unknown[] = [];
+		const member = deps({
+			containerId: "c1",
+			canGroup: true,
+			actions: {
+				...deps().actions,
+				openContainerDialog: (request) => opened.push(request),
+				openContainerOverview: (containerId) => opened.push({ overview: containerId }),
+			},
+		});
+		expect(row("container.group", member)).toBeUndefined();
+		row("container.overview", member)?.run?.();
+		row("container.addWorkspace", member)?.run?.();
+		row("container.remove", member)?.run?.();
+		expect(opened).toEqual([
+			{ overview: "c1" },
+			{ kind: "addWorkspace", containerId: "c1" },
+			{ kind: "remove", containerId: "c1" },
+		]);
+		expect(row("container.overview", deps())).toBeUndefined();
 	});
 });

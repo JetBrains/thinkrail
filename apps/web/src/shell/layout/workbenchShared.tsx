@@ -1,11 +1,12 @@
 import { type CollisionDetection, pointerWithin, useDroppable } from "@dnd-kit/core";
-import type { Translator } from "@thinkrail/locales/react";
+import { type Translator, useT } from "@thinkrail/locales/react";
 import {
 	type ImperativePanelGroupHandle,
 	ResizableHandle,
 	ResizablePanel,
 } from "@thinkrail/ui/resizable";
 import {
+	createContext,
 	memo,
 	type ReactNode,
 	useCallback,
@@ -38,9 +39,13 @@ import type {
 	LayoutCenterTab,
 	LayoutSideTab,
 	LayoutTab,
+	LayoutToolCatalog,
 	LayoutToolId,
 	WorkspaceLayoutDocument,
 } from "./types";
+
+/** The shell's extension side tools, which every tool name and icon inside the Workbench reads. */
+export const ExtensionToolsContext = createContext<LayoutToolCatalog>({});
 
 export interface LayoutTabFocusRequest {
 	workspaceId: string;
@@ -83,6 +88,8 @@ export interface WorkbenchProps {
 	onRenameChat?: (sessionId: string, titleInput: string, currentTitle: string) => void;
 	chatFirstPrompts?: ChatFirstPrompts;
 	chatActions?: ChatTabActions;
+	/** The extensions' side tools: names, icons, default sides and whether each is offered. */
+	extensionTools?: LayoutToolCatalog;
 	onNewChat: (groupId: string) => void;
 	onNewTerminal: (
 		groupId: string,
@@ -92,6 +99,25 @@ export interface WorkbenchProps {
 	onGestureCanceled?: () => void;
 	chromeShortcuts?: WorkbenchChromeShortcuts;
 	leftRailFooter?: readonly AuxiliaryRailFooterItem[];
+	/** Toggles after the left rail's tools: the extensions' views. */
+	leftRailViews?: readonly AuxiliaryRailFooterItem[];
+	peek?: WorkbenchPeek;
+	/** Shown in place of the center groups, which stay in the document untouched (an extension's view). */
+	centerOverride?: WorkbenchCenterOverride;
+}
+
+export interface WorkbenchCenterOverride {
+	/** The center region's id while it shows, for the region ring. */
+	id: string;
+	label: string;
+	render: () => ReactNode;
+}
+
+export interface WorkbenchPeek {
+	open: boolean;
+	width: number;
+	onResize: (width: number) => void;
+	render: () => ReactNode;
 }
 
 export interface WorkbenchChromeShortcuts {
@@ -288,8 +314,8 @@ export function useCommittedSizes(
 }
 
 export function useSideResizeBinder() {
-	const activeSide = useRef<LayoutSide | null>(null);
-	const bind = (side: LayoutSide, resize: ReturnType<typeof useCommittedSizes>) => ({
+	const activeSide = useRef<LayoutSide | "peek" | null>(null);
+	const bind = (side: LayoutSide | "peek", resize: ReturnType<typeof useCommittedSizes>) => ({
 		onDragging: (active: boolean) => {
 			if (active) activeSide.current = side;
 			resize.onDragging(active);
@@ -379,8 +405,9 @@ export function tabSearchKeywords(
 	t: Translator,
 	tab: LayoutTab,
 	chatFirstPrompts: ChatFirstPrompts | undefined,
+	tools?: LayoutToolCatalog,
 ): string[] {
-	const name = layoutTabName(t, tab, chatFirstPrompts);
+	const name = layoutTabName(t, tab, chatFirstPrompts, tools);
 	switch (tab.kind) {
 		case "file":
 		case "diff":
@@ -484,7 +511,11 @@ export function navigationClockSnapshot(attention: LayoutAttention): string {
 	);
 }
 
-export function visibleFocusableGroups(document: WorkspaceLayoutDocument): Array<{
+export function visibleFocusableGroups(
+	document: WorkspaceLayoutDocument,
+	peekOpen = false,
+	centerShown = true,
+): Array<{
 	location: LayoutGroupLocation;
 	tabs: LayoutTab[];
 	tabControlsRendered: boolean;
@@ -497,12 +528,14 @@ export function visibleFocusableGroups(document: WorkspaceLayoutDocument): Array
 					tabControlsRendered: !group.folded,
 				}))
 			: []),
-		...collectCenterGroups(document.center).map((group) => ({
-			location: { area: "center" as const, groupId: group.id },
-			tabs: group.tabs,
-			tabControlsRendered: true,
-		})),
-		...(document.right.visible
+		...(centerShown
+			? collectCenterGroups(document.center).map((group) => ({
+					location: { area: "center" as const, groupId: group.id },
+					tabs: group.tabs,
+					tabControlsRendered: true,
+				}))
+			: []),
+		...(document.right.visible && !peekOpen
 			? document.right.groups.map((group) => ({
 					location: { area: "right" as const, groupId: group.id },
 					tabs: group.tabs,
@@ -643,6 +676,50 @@ export interface SharedGroupProps {
 	canFocusAdjacentGroup: boolean;
 	chromeShortcuts: WorkbenchChromeShortcuts | undefined;
 }
+
+export const PeekRegion = memo(function PeekRegion({
+	open,
+	render,
+}: {
+	open: boolean;
+	render: WorkbenchPeek["render"];
+}) {
+	const t = useT();
+	return (
+		<section
+			data-testid="peek"
+			data-region="peek"
+			data-region-kind="peek"
+			data-open={open || undefined}
+			tabIndex={-1}
+			aria-label={t("peek.region")}
+			className={`h-full min-h-0 min-w-0 flex-col overflow-hidden bg-container-content-bg outline-none ${open ? "flex" : "hidden"}`}
+		>
+			{render()}
+		</section>
+	);
+});
+PeekRegion.displayName = "PeekRegion";
+
+export const CenterOverrideRegion = memo(function CenterOverrideRegion({
+	override,
+}: {
+	override: WorkbenchCenterOverride;
+}) {
+	return (
+		<section
+			data-testid="center-override"
+			data-region={override.id}
+			data-region-kind="center"
+			tabIndex={-1}
+			aria-label={override.label}
+			className="relative isolate flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-container-content-bg outline-none"
+		>
+			{override.render()}
+		</section>
+	);
+});
+CenterOverrideRegion.displayName = "CenterOverrideRegion";
 
 export const GroupTabBody = memo(function GroupTabBody({
 	tab,

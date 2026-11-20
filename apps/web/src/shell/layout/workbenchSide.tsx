@@ -11,7 +11,7 @@ import {
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { type ImperativePanelGroupHandle, ResizablePanelGroup } from "@thinkrail/ui/resizable";
-import { memo, type ReactNode, useMemo, useRef } from "react";
+import { memo, type ReactNode, useContext, useMemo, useRef } from "react";
 import { type LayoutAttention, readLayoutSelection, tupleKey } from "../../lib";
 import { AuxiliaryPaneHeader, AuxiliaryPaneHideButton } from "./AuxiliaryPaneHeader";
 import { resizeVisibleAuxiliaryGroups, visibleAuxiliaryGroups } from "./auxiliaryPresentation";
@@ -40,6 +40,7 @@ import type {
 import type { DropTarget, SharedGroupProps, WorkbenchProps } from "./workbenchShared";
 import {
 	DropZone,
+	ExtensionToolsContext,
 	GroupTabBody,
 	groupDomId,
 	groupPanelId,
@@ -96,6 +97,7 @@ export const SideGroupView = memo(function SideGroupView({
 	onFold: () => void;
 }) {
 	const t = useT();
+	const tools = useContext(ExtensionToolsContext);
 	const location: LayoutGroupLocation = { area: side, groupId: group.id };
 	const selected = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
 	const draggedSideTab =
@@ -144,7 +146,7 @@ export const SideGroupView = memo(function SideGroupView({
 			id={groupDomId(location)}
 			tabIndex={-1}
 			aria-label={t(PANE_LABELS[side], {
-				name: selected ? layoutTabName(t, selected) : t("workbench.pane.tools"),
+				name: selected ? layoutTabName(t, selected, undefined, tools) : t("workbench.pane.tools"),
 			})}
 			data-testid={
 				group.tabs.some((tab) => tab.kind === "tool" && tab.tool === "specs")
@@ -212,7 +214,8 @@ export function SideGroupMenu({
 	onRevealTool: (tool: LayoutToolId) => void;
 }) {
 	const t = useT();
-	const missing = unplacedToolsForRegion(document, side);
+	const tools = useContext(ExtensionToolsContext);
+	const missing = unplacedToolsForRegion(document, side, tools);
 	const toolPane = group.tabs.some((tab) => tab.kind === "tool");
 	const paneBelowAvailable = !toolPane || document[side].groups.length < limit;
 	const newTerminalPaneLabel =
@@ -254,7 +257,9 @@ export function SideGroupMenu({
 						data-testid={`show-tool-${tool}`}
 						onSelect={() => onRevealTool(tool)}
 					>
-						{t("workbench.tab.showTool", { name: layoutTabName(t, toolTab(tool)) })}
+						{t("workbench.tab.showTool", {
+							name: layoutTabName(t, toolTab(tool), undefined, tools),
+						})}
 					</DropdownMenuItem>
 				))}
 			</DropdownMenuContent>
@@ -278,6 +283,7 @@ export function AuxiliaryGroupHeader({
 	trailing?: ReactNode;
 }) {
 	const t = useT();
+	const tools = useContext(ExtensionToolsContext);
 	const location: LayoutGroupLocation = { area: region, groupId: group.id };
 	const terminals = group.tabs.filter((tab): tab is LayoutTerminalTab => tab.kind === "terminal");
 	const dropEnabled =
@@ -364,7 +370,7 @@ export function AuxiliaryGroupHeader({
 			ref={setNodeRef}
 			title={
 				selected
-					? layoutTabName(t, selected)
+					? layoutTabName(t, selected, undefined, tools)
 					: region === "bottom"
 						? t("workbench.rail.terminal")
 						: t("workbench.pane.tools")

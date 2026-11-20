@@ -41,6 +41,15 @@ describe("region ring order", () => {
 		]);
 	});
 
+	test("visits Peek after the center and the right side, before the bottom", () => {
+		const shuffled = [
+			region("bottom", "bottom", 700, 300),
+			region("peek", "peek", 40, 1100),
+			region("center", "center", 40, 300),
+		];
+		expect(names(orderRegions(shuffled))).toEqual(["center", "peek", "bottom"]);
+	});
+
 	test("keeps center groups in document order, the order Ctrl+F6 walks", () => {
 		const nested = [
 			region("first", "center", 40, 300),

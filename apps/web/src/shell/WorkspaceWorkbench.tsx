@@ -3,6 +3,7 @@ import {
 	RiChatNewLine as MessageSquarePlus,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
+import { isBuiltinLayoutToolId } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { t, useT } from "@thinkrail/locales/react";
 import { Button, IconButton } from "@thinkrail/ui/button";
@@ -23,6 +24,7 @@ import { useAutoPlanSummary } from "../chat/useChatTodos";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { preloadedLazy } from "../components/preloadedLazy";
 import { QuietScrollArea } from "../components/QuietScrollArea";
+import { findExtensionView } from "../extensions";
 import { keybindingKeys, keybindingLabel, type ResolvedKeybindings } from "../keybindings";
 import {
 	type ChatAction,
@@ -35,7 +37,7 @@ import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FilesPanel } from "../panels/FilesPanel";
 import { startChatInTab } from "../panels/openChat";
-import { fileComparisonTab, openFileInTab } from "../panels/openTabs";
+import { fileComparisonTab } from "../panels/openTabs";
 import { ProjectTree } from "../panels/ProjectTree";
 import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
 import { reviewFlagForPaths, reviewFlags, tabReviewPaths } from "../panels/reviewModel";
@@ -61,6 +63,7 @@ import {
 	selectChatWorkspaceTitle,
 	selectContextProject,
 	selectDiffTabTargetRef,
+	selectPeekOpen,
 	selectRailPlanSessionId,
 	selectReviewDraftCount,
 	selectUnnamedChatFirstPrompts,
@@ -80,21 +83,36 @@ import {
 	useDeletedChatPlacementReconciliation,
 	useWorkspaceChatCatalogReconciliation,
 } from "./chatReconciliation";
-import { ExtensionPanelBody } from "./ExtensionPanelBody";
-import { useChatActions, useChatTabActions, useLeftRailFooter } from "./extensionEntryPoints";
+import {
+	ExtensionPanelBody,
+	ExtensionSideToolBody,
+	ExtensionViewCenter,
+} from "./ExtensionPanelBody";
+import {
+	useChatActions,
+	useChatTabActions,
+	useLayoutExtensionTools,
+	useLeftRailFooter,
+	useLeftRailViews,
+} from "./extensionEntryPoints";
+import { useActiveViewId } from "./extensionViews";
 import { useResolvedKeybindings } from "./keybindingState";
 import {
+	type BuiltinLayoutToolId,
 	collectAllGroups,
 	findPlacedResource,
 	findTabLocation,
 	isToolShowing,
+	LAYOUT_LIMITS,
 	type LayoutCenterTab,
 	type LayoutTab,
 	type LayoutTabFocusRequest,
 	type LayoutToolId,
 	showingAuxiliaryKey,
 	Workbench,
+	type WorkbenchCenterOverride,
 	type WorkbenchChromeShortcuts,
+	type WorkbenchPeek,
 	type WorkspaceLayoutDocument,
 } from "./layout";
 import { toLayoutTab, useLayoutIntentProcessing } from "./layoutIntents";
@@ -106,6 +124,8 @@ import {
 	workspaceProjectionReference,
 } from "./layoutState";
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
+import { OrchestratorTool } from "./OrchestratorTool";
+import { PeekPane } from "./PeekPane";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { hasNativeShortcuts } from "./useAppShortcuts";
 import { useIdleEditorPreload } from "./useIdleEditorPreload";
@@ -230,12 +250,17 @@ function ChatResourceBody({
 }: {
 	workspaceId: string;
 	tab: Extract<LayoutCenterTab, { kind: "chat" }>;
-	onOpenFile: (path: string) => void;
+	onOpenFile: (sessionId: string, path: string) => void;
 	landingChord: string;
 	chatActions: readonly ChatAction[];
 }) {
 	const t = useT();
 	const available = useAppStore((state) => state.sessions[tab.sessionId] !== undefined);
+	const sessionId = tab.sessionId;
+	const openFile = useCallback(
+		(path: string) => onOpenFile(sessionId, path),
+		[onOpenFile, sessionId],
+	);
 	const [stalled, setStalled] = useState(false);
 	useEffect(() => {
 		if (available) return;
@@ -254,7 +279,7 @@ function ChatResourceBody({
 					<ChatView
 						sessionId={tab.sessionId}
 						workspaceId={workspaceId}
-						onOpenFile={onOpenFile}
+						onOpenFile={openFile}
 						landingChord={landingChord}
 						chatActions={chatActions}
 					/>
@@ -369,6 +394,12 @@ function workbenchChromeShortcuts(keybindings: ResolvedKeybindings): WorkbenchCh
 	};
 }
 
+function resizePeek(peekWidth: number): void {
+	const state = useAppStore.getState();
+	if (state.localLayoutPreferences.peekWidth === peekWidth) return;
+	state.setLocalLayoutPreferences({ ...state.localLayoutPreferences, peekWidth });
+}
+
 export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const t = useT();
 	const status = useAppStore((state) => state.status);
@@ -425,6 +456,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const chatActions = useChatActions();
 	const chatTabActions = useChatTabActions(workspaceId, chatActions);
 	const railFooter = useLeftRailFooter();
+	const railViews = useLeftRailViews();
+	const extensionTools = useLayoutExtensionTools();
 	const requestRenameChat = useCallback(
 		(sessionId: string, titleInput: string, currentTitle: string) => {
 			const prepared = prepareChatTitle(titleInput);
@@ -452,8 +485,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			: { reviewShowing: false, showingKey: "" };
 	}, [workspaceId]);
 	const openToolFile = useCallback(
-		(path: string) => {
-			void openFileInTab(workspaceId, path, "preview");
+		(sessionId: string, path: string) => {
+			useAppStore.getState().requestPeek(workspaceId, { kind: "file", path, sessionId });
 		},
 		[workspaceId],
 	);
@@ -525,7 +558,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	useLegacySelectionAdapter(workspaceId, activeReviewedPath, readActiveReviewedPath, readAuxiliary);
 	useDeletedChatPlacementReconciliation(workspaceId);
 	useTerminalReservation(workspaceId);
-	useLayoutIntentProcessing(workspaceId, commit, changeAttention, setFocusRequest);
+	useLayoutIntentProcessing(workspaceId, commit, changeAttention, setFocusRequest, extensionTools);
 	useWorkspaceChatCatalogReconciliation(workspaceId, commit);
 	const { terminals } = useTerminalPlacementReconciliation(workspaceId, commit);
 	useChatLocationReconciliation(workspaceId, changeAttention);
@@ -657,6 +690,37 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const chatFirstPrompts = useAppStore(
 		useShallow((state) => selectUnnamedChatFirstPrompts(state, workspaceId)),
 	);
+	const activeViewId = useActiveViewId();
+	const activeView = activeViewId ? findExtensionView(activeViewId) : undefined;
+	const peekOpen = useAppStore((state) => selectPeekOpen(state, workspaceId));
+	const peekWidth =
+		layoutPreferences.peekWidth ??
+		(activeViewId === null ? LAYOUT_LIMITS.defaultPeekWidth : LAYOUT_LIMITS.defaultViewPeekWidth);
+	const renderPeek = useCallback(
+		() => <PeekPane key={workspaceId} workspaceId={workspaceId} />,
+		[workspaceId],
+	);
+	const peek = useMemo<WorkbenchPeek>(
+		() => ({
+			open: peekOpen || activeViewId !== null,
+			width: peekWidth,
+			onResize: resizePeek,
+			render: renderPeek,
+		}),
+		[activeViewId, peekOpen, peekWidth, renderPeek],
+	);
+	const viewLabel = activeView ? t(activeView.declaration.title) : t("workbench.view.fallback");
+	const centerOverride = useMemo<WorkbenchCenterOverride | undefined>(
+		() =>
+			activeViewId === null
+				? undefined
+				: {
+						id: "view-center",
+						label: viewLabel,
+						render: () => <ExtensionViewCenter workspaceId={workspaceId} viewId={activeViewId} />,
+					},
+		[activeViewId, viewLabel, workspaceId],
+	);
 	const rendered = document && attention ? { document, attention } : pendingProjection;
 
 	const renderResourceBody = useCallback(
@@ -737,8 +801,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[renderResourceBody, workspaceId],
 	);
 
-	const toolBodies = useMemo<Record<LayoutToolId, ReactNode>>(() => {
-		const bodies: Record<LayoutToolId, ReactNode> = {
+	const toolBodies = useMemo<Record<BuiltinLayoutToolId, ReactNode>>(() => {
+		const bodies: Record<BuiltinLayoutToolId, ReactNode> = {
 			projects: (
 				<QuietScrollArea
 					data-testid="left-nav"
@@ -774,6 +838,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			) : (
 				<ReviewPanel key={workspaceId} workspaceId={workspaceId} failed={review.failed} />
 			),
+			orchestrator: <OrchestratorTool workspaceId={workspaceId} />,
 			plan: railPlanSessionId ? (
 				<ErrorBoundary
 					label={t("shell.workbench.panel.planRail")}
@@ -793,7 +858,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				</div>
 			),
 		};
-		for (const tool of Object.keys(bodies) as LayoutToolId[]) {
+		for (const tool of Object.keys(bodies) as BuiltinLayoutToolId[]) {
 			bodies[tool] = (
 				<ErrorBoundary
 					label={t("shell.workbench.panel.tool", { tool })}
@@ -811,6 +876,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		chatActions,
 		isChat,
 		keybindings,
+		landingChord,
 		nativeShortcuts,
 		railPlanSessionId,
 		review.failed,
@@ -819,7 +885,15 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		t,
 		workspaceId,
 	]);
-	const renderToolBody = useCallback((tool: LayoutToolId) => toolBodies[tool], [toolBodies]);
+	const renderToolBody = useCallback(
+		(tool: LayoutToolId) =>
+			isBuiltinLayoutToolId(tool) ? (
+				toolBodies[tool]
+			) : (
+				<ExtensionSideToolBody workspaceId={workspaceId} toolId={tool} />
+			),
+		[toolBodies, workspaceId],
+	);
 
 	const isDefault = workspace != null && isDefaultWorkspace(workspace);
 	const isExternal = workspace != null && isExternalWorkspace(workspace);
@@ -1002,6 +1076,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				registerTabCommands={registerTabCommands}
 				chromeShortcuts={chromeShortcuts}
 				leftRailFooter={railFooter}
+				leftRailViews={railViews}
 				renderTabBody={renderTabBody}
 				renderTabAdornment={renderTabAdornment}
 				renderToolBody={renderToolBody}
@@ -1014,6 +1089,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
 				chatFirstPrompts={chatFirstPrompts}
 				{...(chatTabActions ? { chatActions: chatTabActions } : {})}
+				extensionTools={extensionTools}
 				onRequestClose={(tab, prepare) => {
 					if (tab.kind === "terminal") {
 						const close = () => {
@@ -1100,6 +1176,8 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						)
 				}
 				onGestureCanceled={() => toast.info(t("shell.workbench.gestureCanceled"))}
+				peek={peek}
+				{...(centerOverride ? { centerOverride } : {})}
 			/>
 			{terminalClose.confirmation}
 		</div>

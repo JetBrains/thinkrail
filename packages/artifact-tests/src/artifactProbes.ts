@@ -312,6 +312,7 @@ async function assertAskUserQuestionRoundTrip(
 interface QueryProbeContext {
 	readonly socket: WebSocket;
 	readonly sessionId: string;
+	readonly projectId: string;
 }
 
 async function assertSessionInsightsListsTheChat({
@@ -353,8 +354,58 @@ async function assertSessionInsightsListsTheChat({
 	}
 }
 
+function boardQuery(socket: WebSocket, method: string, params: unknown): Promise<unknown> {
+	return within(
+		rpc(socket, "extension.query", { extension: "board", method, params }),
+		10_000,
+		`board ${method}`,
+	);
+}
+
+async function assertBoardKeepsACard({
+	socket,
+	sessionId,
+	projectId,
+}: QueryProbeContext): Promise<void> {
+	const created = (await boardQuery(socket, "card.create", {
+		projectId,
+		title: "Artifact board probe",
+	})) as { id?: unknown };
+	assert(
+		typeof created.id === "string",
+		`card.create answered without an id: ${JSON.stringify(created)}`,
+	);
+	const view = (await boardQuery(socket, "board.get", { projectId })) as {
+		columns?: unknown;
+		cards?: { id?: unknown }[];
+	};
+	assert(
+		Array.isArray(view.columns) && view.columns.length > 0,
+		`board.get answered without columns: ${JSON.stringify(view)}`,
+	);
+	assert(
+		view.cards?.some((card) => card.id === created.id),
+		`board.get does not list the created card ${String(created.id)}`,
+	);
+	const inbox = (await boardQuery(socket, "inbox", {})) as { items?: unknown };
+	assert(
+		Array.isArray(inbox.items),
+		`board inbox answered without items: ${JSON.stringify(inbox)}`,
+	);
+	const commands = (await within(
+		rpc(socket, "session.getCommands", { sessionId }),
+		10_000,
+		"session.getCommands",
+	)) as { name?: string }[];
+	assert(
+		commands.some((entry) => entry.name === "skill:roadmap-plan"),
+		"the board's staged skills are missing from the session",
+	);
+}
+
 const QUERY_PROBES: Readonly<Record<string, (context: QueryProbeContext) => Promise<void>>> = {
 	"session-insights": assertSessionInsightsListsTheChat,
+	board: assertBoardKeepsACard,
 };
 
 async function assertRegistryExtensionsLoad(context: QueryProbeContext): Promise<void> {
@@ -695,7 +746,11 @@ export default function syntheticExternalExtension(pi) {
 		);
 		await assertStrictVisualizeValidation(socket, workspace.id, created.sessionId);
 		await assertAskUserQuestionRoundTrip(socket, workspace.id, created.sessionId);
-		await assertRegistryExtensionsLoad({ socket, sessionId: created.sessionId });
+		await assertRegistryExtensionsLoad({
+			socket,
+			sessionId: created.sessionId,
+			projectId: project.id,
+		});
 		await within(
 			rpc(socket, "session.dispose", { sessionId: created.sessionId }),
 			10_000,

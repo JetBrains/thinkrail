@@ -361,7 +361,7 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   opener-to-next-opener rule as the receipts below; the host stamps a round with the delivered prompt's own
   timestamp, so a follow-up queued into a running agent gets its own round — and a later round that touches
   a file again lists it too without taking it from the earlier one. Rows are named by their path inside the artifacts folder; the chip reveals the
-  Artifacts tool and opens a file through the transcript's `onOpenFile`.
+  Artifacts tool and opens a file through the transcript's `onOpenFile` (into Peek).
 - The chips are a **switch, not independent folds**: at most one list is open, choosing another
   side replaces it, and re-choosing the open one clears the selection. That invariant is *structural* — the
   divider stores the **selected key** (`useSelection`, one entry per divider row), so no state exists in
@@ -416,6 +416,16 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   again and followed on the connection that overtook it), and a failure is told once. A Retry from the
   card (`requestContinuation`) registers the new operation as initiated, so this client follows it like
   the original gesture.
+- `containerNote` — the host cards (`readContainerNote` in contracts: `container-brief`,
+  `container-wake`, `orchestrator-message`, `extension-message`), one turn kind carrying the
+  `ContainerNote` and the content text, rendered by the props-driven `ContainerNoteCard` (`turns.tsx`,
+  `data-testid="container-note-card"`, `data-note=<kind>`) as a foldable host card: the title says where
+  it came from — "Container summary", "Update from <workspace>", "Update from the <title> extension" (an
+  extension's wake-up, `details.source`), "From the orchestrator of “<container>”" or "From the <title>
+  extension" (with "· steer" for a steer) — and the body is Markdown
+  (`containerNoteBody`, `rows.ts`: an orchestrator's or extension's own `details.text`, never the framing
+  the agent reads; otherwise the host's text). A message starts unfolded, the brief and a wake-up folded.
+  A wake-up and a message open a round (they start a turn); the brief does not.
 
 Row/step ids are stable across streaming snapshots (the outer run's first atomic-step id, each thinking
 block's message-anchored index, and each tool's own id — pi appends, never reorders), so fold state survives
@@ -492,13 +502,14 @@ content and their own controls, which a treeitem's name would flatten and its ro
 - **Item actions.** C copies the message source, a thought's text or a tool call's result text (nothing
   for an Activity group, a running tool or a skill/review card) with a "Copied" toast; O opens the path of
   `read`/`edit`/`write` and the single-spec tools (`spec_create`/`spec_get`/`spec_update`) through the same
-  `onOpenFile` preview open a click uses; Shift+F10 / Menu opens a keyboard-anchored `DropdownMenu` with
-  the applicable Expand/Collapse, Copy, Open file, and focus returns to the item. A context menu was
-  rejected: it would take native right-click copy. Esc returns to the composer through `refocus()`, draft
+  `onOpenFile` a click uses — into Peek, focus staying on the item; Shift+F10 / Menu opens a
+  keyboard-anchored `DropdownMenu` with the applicable Expand/Collapse, Copy, Open file, and focus returns
+  to the item. A context menu was rejected: it would take native right-click copy. Esc returns to the composer through `refocus()`, draft
   and caret intact. **Esc on the parked feed does nothing** (user, 2026-11-16) — not even
   `preventDefault`, so no other listener reacts — and only an item's Esc returns: an extra Esc after
-  leaving the composer never throws the reader back into the field; `Mod+L` returns. **While a docked
-  question waits**, Esc on the feed or an item goes to its `[data-focus-claim]` instead, revealed
+  leaving the composer never throws the reader back into the field; `Mod+L` returns. The one listener
+  that does react is Peek's: with Peek open (and unpinned) that Esc closes it ([[submodule-web-shell]],
+  *Peek*). **While a docked question waits**, Esc on the feed or an item goes to its `[data-focus-claim]` instead, revealed
   (`focusAndReveal`; unconfirmed with the user, the recommended answer): the question is the chat's focus
   home. The controller learns of it through the `waitingQuestion()` option `ChatView` passes down (the
   dock's claim, else `null`), and `transcriptKeyAction` turns Esc into `question` when one waits.
@@ -729,8 +740,18 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   primitive offers that action only for a non-empty relative path or an absolute path contained by
   `workspaceRoot`; URLs, escaping relatives, and foreign absolute paths remain selectable text. Renderers
   source candidates only from explicit tool args/details — never regex guesses over Bash output, code, or
-  prose. A standalone renderer has no callback and therefore stays inert. The callback's preview-slot
-  semantics belong to [[submodule-web-panels]].
+  prose. A standalone renderer has no callback and therefore stays inert. The shell's callback peeks the
+  file under this chat (user decision: chat links open in Peek, no longer the preview tab;
+  [[submodule-web-shell]], *Peek*); opening it moves no focus. The shell's Orchestrator tool passes one that
+  first enters the orchestrator chat's own workspace.
+- **Rendering outside the active workspace** — `ChatView` reads only its `{ workspaceId, sessionId }`
+  props, the session's runtime and workspace-keyed state, never the active workspace or its layout, so the
+  shell may mount it beside another workspace's center: the shell's `SessionChatView` does, for the
+  Orchestrator tool (a container's orchestrator chat next to a member, [[submodule-web-shell]],
+  *Orchestrator tool*) and for `PanelHost.renderChat` (a board card's attempt chat in Peek), hydrating its
+  runtime through the placement-free `hydrateSessionRuntime` because chat reconciliation hydrates only
+  chats placed in the active workspace. Composer focus requests and completion acknowledgement already match on the
+  chat's own workspace and session, so no new seam was needed.
 - **Tool file previews** — `ChatTranscript` wraps its row list in [[module-resource-renderers]]'
   `ResourceScopeProvider` with the chat's `{ workspaceId, sessionId }`, memoized on the two ids (one provider
   above the list, like the fold geometry). A tool card can then render
@@ -846,7 +867,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `ask-user-answers`) indexes into `toolResponses` (never a turn — the interactive tool's card is its
   rendering); `subagent-completion` **becomes its own `subagentCompletion` turn** (the result
   row is transcript-positioned, so it maps its message index too); `todo-review-fix` **becomes its own
-  `reviewFix` turn** (same positioning); unknown customTypes are ignored. No
+  `reviewFix` turn** (same positioning), a container card its `containerNote` turn; unknown customTypes
+  are ignored. No
   store/transport/highlighter.
 - **Composer focus on arrival** (`composerFocusRequest`, see `store/SPEC.md`): `ChatView` subscribes to
   `selectComposerFocusRequested` for its own chat. When it holds, the view serves the request
@@ -1803,7 +1825,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `reviewChangesRequested` + `itemOpenFindings` (the changes_requested warning marking: the flag and
   the count of the reviewer's open comments — matched by the finding's `origin` provenance
   (todoId + optional sessionId) when stamped, falling back to the change-set path join only for
-  provenance-less comments, so two steps touching one file don't count each other's findings; the
+  provenance-less, unlabelled comments, so two steps touching one file don't count each other's findings
+  and an extension reviewer's labelled remark (`authorLabel`, the board's Smart review) is no step's; the
   Review tab is the truth), and
   `planCompletionSummary` (the agent's plan-level note gated on "everything done", so a re-opened plan
   never leaks a stale all-done note into ungated outputs — it feeds the markdown export; the plan page also

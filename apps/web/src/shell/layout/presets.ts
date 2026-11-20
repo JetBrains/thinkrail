@@ -1,4 +1,5 @@
 import type {
+	BuiltinLayoutToolId,
 	LayoutPreset,
 	LayoutPresetBottomRegion,
 	LayoutPresetCenterNode,
@@ -20,9 +21,11 @@ import {
 	collectWorkbenchCenterGroups,
 	type NormalizedLayoutState,
 	projectWorkspaceLayout,
+	reconcileWorkspaceView,
 	type WorkbenchAuxiliaryGroup,
 	type WorkbenchCenterNode,
 	type WorkbenchFrame,
+	type WorkbenchSideFrame,
 	type WorkspaceGroupView,
 	type WorkspaceViewState,
 } from "./normalized";
@@ -105,12 +108,25 @@ export const BUILTIN_LAYOUT_PRESETS: readonly LayoutPreset[] = [
 		]),
 		bottom: bottom(true, [{ id: "review-bottom", tools: [] }]),
 	},
+	{
+		id: "left-tools",
+		name: "Left tools",
+		center: group("left-tools-primary"),
+		left: side(true, 0.24, [
+			{ id: "left-tools-projects", tools: ["projects"] },
+			{ id: "left-tools-reference", tools: ["specs", "files", "artifacts"], weight: 1.25 },
+			{ id: "left-tools-work", tools: ["plan", "review"] },
+		]),
+		right: side(false, 0.28, []),
+		bottom: bottom(true, [{ id: "left-tools-bottom", tools: [] }]),
+	},
 ] as const;
 
 const BUILTIN_PRESET_NAME_KEYS: Readonly<Record<string, MessageKey>> = {
 	balanced: "workbench.preset.balanced",
 	focus: "workbench.preset.focus",
 	review: "workbench.preset.review",
+	"left-tools": "workbench.preset.leftTools",
 };
 
 export function layoutPresetName(t: Translator, preset: LayoutPreset): string {
@@ -120,9 +136,9 @@ export function layoutPresetName(t: Translator, preset: LayoutPreset): string {
 	return key ? t(key) : preset.name;
 }
 
-export function presetPlacesTool(preset: LayoutPreset, tool: LayoutToolId): boolean {
-	return [preset.left, preset.right, preset.bottom].some((region) =>
-		region.groups.some((group) => group.tools.includes(tool)),
+export function presetTools(preset: LayoutPreset): LayoutToolId[] {
+	return [preset.left, preset.right, preset.bottom].flatMap((region) =>
+		region.groups.flatMap((group) => group.tools),
 	);
 }
 
@@ -146,14 +162,9 @@ export function resolveLayoutPreset(
 	return resolved;
 }
 
-function defaultRestoreTarget(tool: LayoutToolId) {
+function presetRestoreSide(preset: LayoutPreset, tool: BuiltinLayoutToolId) {
 	const side = LAYOUT_TOOL_DEFAULT_SIDES[tool];
-	return {
-		region: side,
-		index: LAYOUT_TOOLS.filter(
-			(candidate) => LAYOUT_TOOL_DEFAULT_SIDES[candidate] === side,
-		).indexOf(tool),
-	};
+	return side === "right" && preset.right.groups.length === 0 ? "left" : side;
 }
 
 function restoreTargetsForPreset(preset: LayoutPreset): WorkbenchFrame["toolRestoreTargets"] {
@@ -163,10 +174,13 @@ function restoreTargetsForPreset(preset: LayoutPreset): WorkbenchFrame["toolRest
 		),
 	);
 	return Object.fromEntries(
-		LAYOUT_TOOLS.filter((tool) => !placed.has(tool)).map((tool) => [
-			tool,
-			defaultRestoreTarget(tool),
-		]),
+		LAYOUT_TOOLS.filter((tool) => !placed.has(tool)).map((tool) => {
+			const region = presetRestoreSide(preset, tool);
+			const index = LAYOUT_TOOLS.filter(
+				(candidate) => presetRestoreSide(preset, candidate) === region,
+			).indexOf(tool);
+			return [tool, { region, index }];
+		}),
 	);
 }
 
@@ -354,6 +368,207 @@ export function applyWorkbenchPreset(
 			]),
 		),
 	};
+}
+
+/** A captured workbench's regions around the center: the left, right and bottom of a resource-free preset. */
+export type WorkbenchSides = Pick<LayoutPreset, "left" | "right" | "bottom">;
+
+/** A view's arrangement: its own tools, each leading a pane of the left side or of the bottom. */
+export interface WorkbenchViewArrangement {
+	left?: LayoutToolId | undefined;
+	bottom?: LayoutToolId | undefined;
+	leftWidth: number;
+	bottomHeight: number;
+}
+
+const VIEW_GROUP_WEIGHT = 0.7;
+
+function centerNodeIds(node: WorkbenchCenterNode): string[] {
+	return node.kind === "group"
+		? [node.id]
+		: [node.id, ...centerNodeIds(node.children[0]), ...centerNodeIds(node.children[1])];
+}
+
+function renormalized(groups: WorkbenchAuxiliaryGroup[]): WorkbenchAuxiliaryGroup[] {
+	const total = groups.reduce((sum, group) => sum + group.weight, 0);
+	return total > 0 ? groups.map((group) => ({ ...group, weight: group.weight / total })) : groups;
+}
+
+function frameToolTabs(frame: WorkbenchFrame): Map<LayoutToolId, LayoutToolTab> {
+	const tools = new Map<LayoutToolId, LayoutToolTab>();
+	for (const region of [frame.left, frame.right, frame.bottom]) {
+		for (const group of region.groups) {
+			for (const tool of group.tools) tools.set(tool.tool, tool);
+		}
+	}
+	return tools;
+}
+
+function frameGroupIdSet(frame: WorkbenchFrame): Set<string> {
+	return new Set([
+		...collectWorkbenchCenterGroups(frame.center).map((group) => group.id),
+		...[frame.left, frame.right, frame.bottom].flatMap((region) =>
+			region.groups.map((group) => group.id),
+		),
+	]);
+}
+
+function reconciledViews(
+	state: NormalizedLayoutState,
+	next: WorkbenchFrame,
+): Record<string, WorkspaceViewState> {
+	const kept = frameGroupIdSet(next);
+	return Object.fromEntries(
+		Object.entries(state.viewsByWorkspace).map(([workspaceId, view]) => [
+			workspaceId,
+			Object.keys(view.groups).every((id) => kept.has(id))
+				? view
+				: reconcileWorkspaceView(state.frame, next, view),
+		]),
+	);
+}
+
+export function captureWorkbenchSides(frame: WorkbenchFrame): WorkbenchSides {
+	const { left, right, bottom } = captureWorkbenchPreset(frame, "sides", "sides");
+	return { left, right, bottom };
+}
+
+/**
+ * Enters a view: its tools lead the left side and the bottom in panes of their own, and every group those
+ * regions held stays where it was, folded, with its id, tools and terminals — so no workspace resource
+ * moves and the center is untouched. A view's tool placed elsewhere leaves that group (a tool group left
+ * empty goes). The right side and the restore targets stay as they are.
+ */
+export function arrangeWorkbenchView(
+	state: NormalizedLayoutState,
+	view: WorkbenchViewArrangement,
+): NormalizedLayoutState {
+	const { frame } = state;
+	const placed = new Set([view.left, view.bottom].filter((tool) => tool !== undefined));
+	const existingTools = frameToolTabs(frame);
+	const strip = (groups: readonly WorkbenchAuxiliaryGroup[]) =>
+		groups.flatMap((group) => {
+			const tools = group.tools.filter((tool) => !placed.has(tool.tool));
+			if (tools.length === group.tools.length) return [group];
+			return tools.length === 0 ? [] : [{ ...group, tools }];
+		});
+	const left = strip(frame.left.groups);
+	const right = strip(frame.right.groups);
+	const bottom = strip(frame.bottom.groups);
+	const claimedIds = new Set([
+		...workspaceResourcePlacementIds(state.viewsByWorkspace),
+		...[...left, ...right, ...bottom].flatMap((group) => group.tools.map((tool) => tool.id)),
+	]);
+	const takenGroupIds = frameGroupIdSet(frame);
+	const lead = (
+		tool: LayoutToolId,
+		prefix: string,
+		rest: readonly WorkbenchAuxiliaryGroup[],
+	): WorkbenchAuxiliaryGroup[] => {
+		let id = createLayoutId(prefix);
+		while (takenGroupIds.has(id)) id = createLayoutId(prefix);
+		takenGroupIds.add(id);
+		const leading: WorkbenchAuxiliaryGroup = {
+			id,
+			weight: rest.length === 0 ? 1 : VIEW_GROUP_WEIGHT,
+			folded: false,
+			tools: [claimToolPlacementId(existingTools.get(tool) ?? toolTab(tool), claimedIds)],
+		};
+		const restTotal = rest.reduce((sum, group) => sum + group.weight, 0);
+		return [
+			leading,
+			...rest.map((group) => ({
+				...group,
+				folded: true,
+				weight: restTotal > 0 ? (group.weight / restTotal) * (1 - VIEW_GROUP_WEIGHT) : group.weight,
+			})),
+		];
+	};
+	const toolRestoreTargets = { ...frame.toolRestoreTargets };
+	for (const tool of placed) delete toolRestoreTargets[tool];
+	const next: WorkbenchFrame = {
+		...frame,
+		left: view.left
+			? { visible: true, width: view.leftWidth, groups: lead(view.left, "left-group", left) }
+			: { ...frame.left, groups: renormalized(left) },
+		right: { ...frame.right, groups: renormalized(right) },
+		bottom: view.bottom
+			? {
+					visible: true,
+					height: view.bottomHeight,
+					alignment: view.left ? "center-left" : frame.bottom.alignment,
+					groups: lead(view.bottom, "bottom-group", bottom),
+				}
+			: { ...frame.bottom, groups: renormalized(bottom) },
+		toolRestoreTargets,
+	};
+	return { frame: next, viewsByWorkspace: reconciledViews(state, next) };
+}
+
+/**
+ * Restores captured sides and bottom: each captured group comes back with its id (a fresh one only where
+ * the center took it), geometry, fold and tools, placed tools keeping their placement ids; `restoreTargets`
+ * replace the frame's for every tool left unplaced. The center is untouched, and only a view holding a
+ * resource in a group that is gone now is reconciled, so restoring the frame a view replaced is exact.
+ */
+export function restoreWorkbenchSides(
+	state: NormalizedLayoutState,
+	sides: WorkbenchSides,
+	restoreTargets: WorkbenchFrame["toolRestoreTargets"],
+): NormalizedLayoutState {
+	const { frame } = state;
+	const existingTools = frameToolTabs(frame);
+	const claimedIds = new Set(workspaceResourcePlacementIds(state.viewsByWorkspace));
+	const resolveTool = (tool: LayoutToolId): LayoutToolTab =>
+		claimToolPlacementId(existingTools.get(tool) ?? toolTab(tool), claimedIds);
+	const takenGroupIds = new Set(centerNodeIds(frame.center));
+	const groups = (
+		captured: LayoutPresetSideRegion["groups"],
+		prefix: string,
+	): WorkbenchAuxiliaryGroup[] =>
+		captured.map((group) => {
+			let id = group.id;
+			while (takenGroupIds.has(id)) id = createLayoutId(prefix);
+			takenGroupIds.add(id);
+			return {
+				id,
+				weight: group.weight,
+				folded: group.folded,
+				tools: group.tools.map(resolveTool),
+			};
+		});
+	const side = (region: LayoutPresetSideRegion, prefix: string): WorkbenchSideFrame => {
+		const restored = groups(region.groups, prefix);
+		return {
+			visible: region.visible && restored.length > 0,
+			width: region.width,
+			groups: restored,
+		};
+	};
+	const left = side(sides.left, "left-group");
+	const right = side(sides.right, "right-group");
+	const bottomGroups = groups(sides.bottom.groups, "bottom-group");
+	const placed = new Set(
+		[...left.groups, ...right.groups, ...bottomGroups].flatMap((group) =>
+			group.tools.map((tool) => tool.tool),
+		),
+	);
+	const toolRestoreTargets: WorkbenchFrame["toolRestoreTargets"] = { ...restoreTargets };
+	for (const tool of placed) delete toolRestoreTargets[tool];
+	const next: WorkbenchFrame = {
+		version: 1,
+		center: frame.center,
+		left,
+		right,
+		bottom: {
+			visible: sides.bottom.visible,
+			height: sides.bottom.height,
+			alignment: sides.bottom.alignment,
+			groups: bottomGroups,
+		},
+		toolRestoreTargets,
+	};
+	return { frame: next, viewsByWorkspace: reconciledViews(state, next) };
 }
 
 export function captureWorkbenchPreset(

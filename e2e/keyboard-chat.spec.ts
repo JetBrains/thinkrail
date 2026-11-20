@@ -231,7 +231,9 @@ test("→ expands an activity group and walks into nested steps, ← climbs back
 	}
 });
 
-test("C copies, O opens a preview tab and Shift+F10 opens the item menu", async ({ page }) => {
+test("C copies, O opens Peek instead of a preview tab, by decision, and Shift+F10 opens the item menu", async ({
+	page,
+}) => {
 	await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
 	const session = await openToolChat(page);
 	try {
@@ -266,10 +268,11 @@ test("C copies, O opens a preview tab and Shift+F10 opens the item menu", async 
 		await expect(step).toBeFocused();
 
 		await page.keyboard.press("o");
-		const fileTab = page.locator('[data-testid="editor-tab"][data-kind="file"]');
-		await expect(fileTab).toHaveCount(1);
-		await expect(fileTab).toContainText("README.md");
-		await expect(fileTab).toHaveAttribute("data-preview", "true");
+		await expect(
+			page.locator('[data-region-kind="peek"][data-open]').getByTestId("peek-crumb"),
+		).toHaveText(["README.md"]);
+		await expect(page.locator('[data-testid="editor-tab"][data-kind="file"]')).toHaveCount(0);
+		await expect(step).toBeFocused();
 	} finally {
 		rmSync(session.path, { force: true });
 	}
@@ -710,6 +713,7 @@ test("h/l walk a tab strip and j/k a side rail like their arrows", async ({ page
 		await page.keyboard.press("l");
 		await page.keyboard.press("l");
 		await page.keyboard.press("o");
+		await page.getByTestId("peek-open-tab").click();
 		const fileTab = page.getByRole("tab", { name: /README\.md/ });
 		await expect(fileTab).toHaveAttribute("aria-selected", "true");
 		await fileTab.focus();

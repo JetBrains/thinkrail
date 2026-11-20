@@ -149,7 +149,9 @@ export function reviewChangesRequested(item: TodoItem): boolean {
 
 export function itemOpenFindings(
 	item: TodoItem,
-	comments: Pick<ReviewComment, "author" | "status" | "anchor" | "origin">[] | undefined,
+	comments:
+		| Pick<ReviewComment, "author" | "authorLabel" | "status" | "anchor" | "origin">[]
+		| undefined,
 	sessionId?: string,
 ): number {
 	if (!comments || comments.length === 0) return 0;
@@ -162,6 +164,7 @@ export function itemOpenFindings(
 		if (c.origin) {
 			return c.origin.todoId === item.id && (!sessionId || c.origin.sessionId === sessionId);
 		}
+		if (c.authorLabel) return false;
 		return paths !== null && c.anchor?.path !== undefined && paths.has(c.anchor.path);
 	}).length;
 }

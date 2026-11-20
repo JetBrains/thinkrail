@@ -1,11 +1,17 @@
+import { type ExtensionLayoutToolId, extensionLayoutToolId } from "@thinkrail/contracts";
 import askUserQuestion from "@thinkrail/ext-ask-user-question/web";
+import board from "@thinkrail/ext-board/web";
 import hintMode from "@thinkrail/ext-hint-mode/web";
 import nextSteps from "@thinkrail/ext-next-steps/web";
 import sessionInsights from "@thinkrail/ext-session-insights/web";
 import visualize from "@thinkrail/ext-visualize/web";
 import type {
+	ContainerSectionDeclaration,
 	ExtensionCommand,
 	PanelDeclaration,
+	SideToolDeclaration,
+	StatusItemDeclaration,
+	ViewDeclaration,
 	WebExtension,
 } from "@thinkrail/extension-api/web";
 import { registerToolRenderer } from "../chat/toolRegistry";
@@ -16,6 +22,7 @@ export const webExtensions: readonly WebExtension[] = [
 	hintMode,
 	nextSteps,
 	sessionInsights,
+	board,
 ];
 
 export interface RegisteredPanel {
@@ -61,7 +68,11 @@ export function webOnlyExtensions(
 		const webOnly =
 			title !== undefined &&
 			extension.toolRenderers === undefined &&
-			extension.panels === undefined;
+			extension.panels === undefined &&
+			extension.sideTools === undefined &&
+			extension.statusItems === undefined &&
+			extension.containerSections === undefined &&
+			extension.views === undefined;
 		return webOnly && !serverNames.has(extension.name) ? [{ ...extension, title }] : [];
 	});
 }
@@ -90,4 +101,120 @@ export function findExtensionPanel(
 	return extensionPanels(extensions).find(
 		(candidate) => candidate.extension === extension && candidate.panel === panel,
 	);
+}
+
+export interface RegisteredSideTool {
+	extension: string;
+	tool: string;
+	/** The layout's singleton tool id, `ext:<extension>:<tool>`. */
+	id: ExtensionLayoutToolId;
+	declaration: SideToolDeclaration;
+}
+
+function collectSideTools(extensions: readonly WebExtension[]): readonly RegisteredSideTool[] {
+	return extensions.flatMap((extension) =>
+		Object.entries(extension.sideTools ?? {}).map(([tool, declaration]) => ({
+			extension: extension.name,
+			tool,
+			id: extensionLayoutToolId(extension.name, tool),
+			declaration,
+		})),
+	);
+}
+
+const registeredSideTools = collectSideTools(webExtensions);
+
+export function extensionSideTools(
+	extensions?: readonly WebExtension[],
+): readonly RegisteredSideTool[] {
+	return extensions ? collectSideTools(extensions) : registeredSideTools;
+}
+
+export function findExtensionSideTool(
+	id: string,
+	extensions?: readonly WebExtension[],
+): RegisteredSideTool | undefined {
+	return extensionSideTools(extensions).find((candidate) => candidate.id === id);
+}
+
+export interface RegisteredStatusItem {
+	extension: string;
+	item: string;
+	declaration: StatusItemDeclaration;
+}
+
+function collectStatusItems(extensions: readonly WebExtension[]): readonly RegisteredStatusItem[] {
+	return extensions.flatMap((extension) =>
+		Object.entries(extension.statusItems ?? {}).map(([item, declaration]) => ({
+			extension: extension.name,
+			item,
+			declaration,
+		})),
+	);
+}
+
+const registeredStatusItems = collectStatusItems(webExtensions);
+
+export function extensionStatusItems(
+	extensions?: readonly WebExtension[],
+): readonly RegisteredStatusItem[] {
+	return extensions ? collectStatusItems(extensions) : registeredStatusItems;
+}
+
+export interface RegisteredContainerSection {
+	extension: string;
+	section: string;
+	declaration: ContainerSectionDeclaration;
+}
+
+function collectContainerSections(
+	extensions: readonly WebExtension[],
+): readonly RegisteredContainerSection[] {
+	return extensions.flatMap((extension) =>
+		Object.entries(extension.containerSections ?? {}).map(([section, declaration]) => ({
+			extension: extension.name,
+			section,
+			declaration,
+		})),
+	);
+}
+
+const registeredContainerSections = collectContainerSections(webExtensions);
+
+export function extensionContainerSections(
+	extensions?: readonly WebExtension[],
+): readonly RegisteredContainerSection[] {
+	return extensions ? collectContainerSections(extensions) : registeredContainerSections;
+}
+
+export interface RegisteredView {
+	extension: string;
+	view: string;
+	/** The view's id in the window's preferences, `<extension>:<view>`. */
+	id: string;
+	declaration: ViewDeclaration;
+}
+
+function collectViews(extensions: readonly WebExtension[]): readonly RegisteredView[] {
+	return extensions.flatMap((extension) =>
+		Object.entries(extension.views ?? {}).map(([view, declaration]) => ({
+			extension: extension.name,
+			view,
+			id: `${extension.name}:${view}`,
+			declaration,
+		})),
+	);
+}
+
+const registeredViews = collectViews(webExtensions);
+
+export function extensionViews(extensions?: readonly WebExtension[]): readonly RegisteredView[] {
+	return extensions ? collectViews(extensions) : registeredViews;
+}
+
+export function findExtensionView(
+	id: string,
+	extensions?: readonly WebExtension[],
+): RegisteredView | undefined {
+	return extensionViews(extensions).find((candidate) => candidate.id === id);
 }

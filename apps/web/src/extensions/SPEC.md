@@ -4,7 +4,7 @@ type: submodule-design
 status: draft
 title: Web extension composition registry
 parent: module-web
-depends-on: [module-extension-api, module-ext-visualize, module-ext-ask-user-question, module-ext-hint-mode, module-ext-session-insights]
+depends-on: [module-extension-api, module-ext-visualize, module-ext-ask-user-question, module-ext-hint-mode, module-ext-session-insights, module-ext-board]
 references: [submodule-web-chat, submodule-web-shell, module-thinkrail-extensions]
 ---
 
@@ -46,12 +46,31 @@ unsupported panel shows and which panels its entry points offer (`openableExtens
 therefore reaches the resolver through `webExtensionCommands` like any other; the tests pin that every
 such command is the extension's own and unscoped.
 
+**Side tools** read the same way: `extensionSideTools()` lists every extension's `sideTools` in registry and
+declaration order as `RegisteredSideTool { extension, tool, id, declaration }`, `id` being the layout tool
+`ext:<extension>:<tool>` (contracts' `extensionLayoutToolId`), and `findExtensionSideTool(id)` looks one up;
+both ignore the switch, and an extension with side tools is never web-only. The shell turns them into the
+layout's tool catalog and the tools' bodies ([[submodule-web-shell]] § Extension side tools).
+
+**Status items** and **views** read the same way: `extensionStatusItems()` lists every
+extension's `statusItems` as `RegisteredStatusItem { extension, item, declaration }`, which the topbar
+mounts ([[submodule-web-shell]] § Extension status items); `extensionViews()` lists every `views` entry as
+`RegisteredView { extension, view, id, declaration }`, `id` being the view's `<extension>:<view>` in the
+window's preferences, and `findExtensionView(id)` looks one up ([[submodule-web-shell]] § Extension
+views). `extensionContainerSections()` lists every `containerSections`
+entry as `RegisteredContainerSection { extension, section, declaration }`, which the container overview in
+Peek mounts ([[submodule-web-shell]] § Extension status items). They ignore the switch too, and an extension
+with any of them is never web-only.
+
 ## Boundary
 
 `index.ts` exports `webExtensions`, `registerWebExtensions`, `enabledWebExtensions`,
 `webExtensionCommands` (with its `WebExtensionCommands` type), `webOnlyExtensions`, `webExtensionTitle`,
 `extensionPanels`,
-`findExtensionPanel` and the `RegisteredPanel` type only. Imports reach public extension `./web` entries,
+`findExtensionPanel`, the `RegisteredPanel` type, `extensionSideTools`, `findExtensionSideTool`, the
+`RegisteredSideTool` type, `extensionStatusItems`, the `RegisteredStatusItem` type, `extensionContainerSections`,
+the `RegisteredContainerSection` type, `extensionViews`, `findExtensionView` and the
+`RegisteredView` type only. Imports reach public extension `./web` entries,
 the web SDK contract, and chat's registration function; never `ChatView`, stores, transport, extension
 internals or server halves. The registry Map remains owned by chat, so this module creates no parallel
 state owner or runtime extension loader. `registerWebExtensions()` runs once at app bootstrap

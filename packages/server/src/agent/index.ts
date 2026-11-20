@@ -86,6 +86,19 @@ export {
 export { piDefaultModelRef, preferredDefaultModel } from "./modelDefaults";
 export { setModelsFilePublisher } from "./modelsFile";
 export * from "./oneshot";
+export { setOrchestratorHomeResolver } from "./orchestratorPolicy";
+export {
+	type AddWorkspaceParams,
+	type MergeApproval,
+	type MergePrToolParams,
+	type MergeVerdict,
+	type MessageChatParams,
+	type OpenPrToolParams,
+	type OrchestratorToolsHost,
+	type RemoveWorkspaceParams,
+	type StopChatParams,
+	setOrchestratorToolsHost,
+} from "./orchestratorTools";
 export {
 	handlePiSettingsFileChanged,
 	handleProjectPiSettingsChanged,

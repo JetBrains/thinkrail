@@ -17,7 +17,7 @@ import {
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { type ImperativePanelGroupHandle, ResizablePanelGroup } from "@thinkrail/ui/resizable";
-import { memo, type ReactNode, useMemo, useRef } from "react";
+import { memo, type ReactNode, useContext, useMemo, useRef } from "react";
 import { type LayoutAttention, readLayoutSelection, tupleKey } from "../../lib";
 import { resizeVisibleAuxiliaryGroups, visibleAuxiliaryGroups } from "./auxiliaryPresentation";
 import {
@@ -33,6 +33,7 @@ import type { LayoutBottomAlignment, LayoutBottomGroup, WorkspaceLayoutDocument 
 import type { DropTarget, SharedGroupProps, WorkbenchProps } from "./workbenchShared";
 import {
 	DropZone,
+	ExtensionToolsContext,
 	GroupTabBody,
 	groupDomId,
 	groupPanelId,
@@ -172,7 +173,8 @@ export const BottomGroupView = memo(function BottomGroupView({
 	const t = useT();
 	const location: LayoutGroupLocation = { area: "bottom", groupId: group.id };
 	const selected = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
-	const selectedName = selected ? layoutTabName(t, selected) : undefined;
+	const tools = useContext(ExtensionToolsContext);
+	const selectedName = selected ? layoutTabName(t, selected, undefined, tools) : undefined;
 	return (
 		<section
 			id={groupDomId(location)}

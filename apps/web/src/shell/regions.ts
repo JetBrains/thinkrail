@@ -2,7 +2,7 @@ import { TABBABLE_SELECTOR } from "@thinkrail/ui/focus";
 import { hasLayer, MODAL_LAYER_SELECTOR } from "../lib";
 import type { LayoutToolId } from "./layout";
 
-export type RegionKind = "topbar" | "home" | "left" | "center" | "right" | "bottom";
+export type RegionKind = "topbar" | "home" | "left" | "center" | "right" | "peek" | "bottom";
 
 const RING_RANK: Record<RegionKind, number> = {
 	topbar: 0,
@@ -10,7 +10,8 @@ const RING_RANK: Record<RegionKind, number> = {
 	left: 2,
 	center: 3,
 	right: 4,
-	bottom: 5,
+	peek: 5,
+	bottom: 6,
 };
 
 interface RegionBox {
@@ -156,6 +157,7 @@ const WORKBENCH_REGION_KINDS: ReadonlySet<string> = new Set<RegionKind>([
 	"left",
 	"center",
 	"right",
+	"peek",
 	"bottom",
 ]);
 

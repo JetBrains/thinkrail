@@ -35,8 +35,8 @@ import {
 	selectChatsContainer,
 	selectChatWorkspaceFirstPrompt,
 	selectChatWorkspaceSession,
-	selectChatWorkspaces,
 	selectChatWorkspaceTitle,
+	selectStandaloneChats,
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
 	selectWorkspaceReadAction,
@@ -81,7 +81,7 @@ export function ChatsSection({
 	const t = useT();
 	const container = useAppStore(selectChatsContainer);
 	const supported = useAppStore((s) => supportsProjectlessChats(s.protocolVersion));
-	const chats = useAppStore(useShallow(selectChatWorkspaces));
+	const chats = useAppStore(useShallow(selectStandaloneChats));
 	const loaded = useAppStore((s) => (container ? s.workspaces[container.id] !== undefined : false));
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);

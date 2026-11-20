@@ -9,7 +9,7 @@ import { useT } from "@thinkrail/locales/react";
 import { useLocalKeys } from "@thinkrail/ui/local-keys";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
-import type { ReactNode } from "react";
+import { type ReactNode, useContext } from "react";
 import { LOCAL_KEY_DEFAULTS } from "../../keybindings";
 import { type LayoutAttention, tupleKey } from "../../lib";
 import {
@@ -42,7 +42,13 @@ import {
 import { tabIcon } from "./tabIcon";
 import type { LayoutAuxiliaryRegion } from "./types";
 import type { DropTarget, SharedGroupProps } from "./workbenchShared";
-import { DropZone, groupPanelId, railControlId, railGroupDomId } from "./workbenchShared";
+import {
+	DropZone,
+	ExtensionToolsContext,
+	groupPanelId,
+	railControlId,
+	railGroupDomId,
+} from "./workbenchShared";
 import { WorkbenchTab } from "./workbenchTabs";
 
 const EMPTY_GROUP_LABELS = {
@@ -82,6 +88,7 @@ export function AuxiliaryRailButton({
 	onActivate: () => void;
 }) {
 	const t = useT();
+	const tools = useContext(ExtensionToolsContext);
 	const unplaced = isUnplacedRailEntry(entry);
 	const group =
 		entry.groupId && !unplaced
@@ -111,7 +118,7 @@ export function AuxiliaryRailButton({
 				: undefined;
 	const name =
 		entry.kind === "tool"
-			? layoutTabName(t, toolTab(entry.tool))
+			? layoutTabName(t, toolTab(entry.tool), undefined, tools)
 			: entry.kind === "terminals"
 				? t("workbench.rail.terminalGroup", { position: ordinal, count: entry.tabs.length })
 				: entry.region === "bottom"
@@ -166,7 +173,7 @@ export function AuxiliaryRailButton({
 					)}
 				>
 					{entry.kind === "tool" ? (
-						tabIcon(toolTab(entry.tool), active, RAIL_ICON)
+						tabIcon(toolTab(entry.tool), active, RAIL_ICON, tools)
 					) : entry.kind === "terminals" || entry.region === "bottom" ? (
 						active ? (
 							<RiTerminalBoxFill className={RAIL_ICON} />
@@ -208,17 +215,22 @@ export function AuxiliaryRegionRail({
 	shared,
 	attention,
 	trailing,
+	views,
 	footer,
+	optional = false,
 }: {
 	region: LayoutAuxiliaryRegion;
 	shared: SharedGroupProps;
 	attention: LayoutAttention;
 	trailing?: ReactNode;
+	views?: readonly AuxiliaryRailFooterItem[] | undefined;
 	footer?: readonly AuxiliaryRailFooterItem[] | undefined;
+	optional?: boolean;
 }) {
 	const t = useT();
 	const keys = useLocalKeys("rails", LOCAL_KEY_DEFAULTS.rails);
-	const entries = projectAuxiliaryRail(shared.document, attention, region);
+	const tools = useContext(ExtensionToolsContext);
+	const entries = projectAuxiliaryRail(shared.document, attention, region, tools);
 	const groups = shared.document[region].groups;
 	const draggedAuxiliary =
 		shared.draggingTab?.kind === "tool" || shared.draggingTab?.kind === "terminal"
@@ -233,6 +245,7 @@ export function AuxiliaryRegionRail({
 			entry,
 			shared.maxSideGroups,
 			shared.maxBottomGroups,
+			tools,
 		);
 		if (!isLayoutUnavailable(result)) shared.onApply(result);
 	};
@@ -248,6 +261,7 @@ export function AuxiliaryRegionRail({
 		shared.draggingTab &&
 		(shared.draggingTab.kind === "tool" || shared.draggingTab.kind === "terminal") &&
 		canCreateAuxiliaryGroup(shared.document, region, shared.draggingTab, shared.maxSideGroups);
+	if (optional && entries.length === 0 && !hiddenSideDrop) return null;
 	const limit = region === "bottom" ? shared.maxBottomGroups : shared.maxSideGroups;
 	const soleGroupIndex = draggedAuxiliary
 		? groups.findIndex(
@@ -280,6 +294,7 @@ export function AuxiliaryRegionRail({
 			<AuxiliaryRail
 				region={region}
 				entries={entries}
+				views={views}
 				footer={footer}
 				renderBoundary={renderBoundary}
 				trailing={

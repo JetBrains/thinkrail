@@ -821,6 +821,24 @@ re-opened transcripts provider-valid.
     command's writes cannot be gated; the rule asks for them. The path is resolved the way pi's tools do it
     (leading `@` dropped, `~` expanded, relative to `ctx.cwd`). One of `buildResourceLoader`'s shared
     factories and of the delegated-child base set.
+  - `orchestratorPolicy(workspaceId, { rule? })` — a container orchestrator's role, fed rather than
+    assembled ([[submodule-server-containers]]). A host-injected `setOrchestratorHomeResolver` (no `agent`
+    → containers/workspaces edge; a throwing resolver means "not an orchestrator") answers the home of the
+    container a workspace's chat orchestrates. For such a session a `before_agent_start` section
+    (`thinkrail-orchestrator`) states the policy — coordinate only; read members through `workspaces/`;
+    write only shared artifacts under `.thinkrail/context/`; never edit member code, delegate it to the
+    member's chat; merge only after the human's explicit approval in this chat — and a `tool_call` hook
+    blocks pi's `write` and `edit` (the session's only path-taking file writers: a chat has no spec tools,
+    and plans land in its own `.thinkrail/context/`) whose target is lexically under the home's
+    `workspaces/` or whose real path (nearest existing ancestor `realpath`ed, so a link the agent made
+    elsewhere counts) lies inside a linked member worktree, with a reason naming the path and the member's
+    chat. Bash cannot be guarded; the rule asks. Per parent session through the manager's extra
+    factories; children get the guard alone (`rule: false`) through the base set, since a subagent writes
+    files in the same folder but is no orchestrator. The rule also names the container tools and when to
+    use them (delegate with `message_chat`, prefer follow-up over steer, stack with `add_workspace`'s
+    `base`, merge only through `merge_pr`'s card) and says a host wake-up is not the human's message: act
+    only when it changes what the container needs, otherwise acknowledge it in one line, never poll.
+    `isOrchestratorWorkspace(workspaceId)` is the same resolver as a predicate, for `orchestratorTools`.
   - `imageGuard` — the oversized-image guard: an inline extension (`oversizedImageGuard`, one of
     `buildResourceLoader`'s shared factories and the whole delegated-child base set) hooked on pi's
     **`context` event** (fired before every LLM
@@ -1116,19 +1134,41 @@ re-opened transcripts provider-valid.
       accepted (pi's preflight in the host's creation hand-off), and never waits for the child's turn to
       finish. It hands pi's abort signal to the host's `start`, because pi awaits a running tool and reports
       Stop only through that signal: without it, Stop would wait out the base fetch and the checkout and
-      still spawn the workspace.
+      still spawn the workspace. The host records the calling session on the new workspace
+      (`Workspace.startedBy`, with the container when the caller is its orchestrator).
     - **`workspace_status { project?, workspaces? }`** reports chat states, PR state, diff stats and
       (for named workspaces) each chat's final message. The report is bounded like pi's own tools
       (`truncateHead` at pi's default line and byte limits) with a footer saying the later workspaces and
       older chats were cut: a default workspace with dozens of chats would otherwise return their final
       messages in one unbounded result. A named lookup lists its misses first, so a cut never hides them.
-    `project` defaults to the chat's own project. In a chat without a project it is required, and the
-    host enforces that.
+    `project` defaults to the chat's own project — in a container's orchestrator, `workspace_status` without
+    `project` or `workspaces` reports the container's members instead. In any other chat without a project it
+    is required, and the host enforces that.
     Both delegate to a host seam, `setWorkspaceToolsHost({ start, status })`, because they compose
     `agent` + `projects` + `workspaces` + `git`. Their `promptGuidelines` make the agent **always** act on
     side/separate/parallel-workspace cues, but only *suggest* splitting work the user did not ask to
     parallelize. Nothing else is built in by design: no waiting primitive (the agent decides how and whether
-    to wait), no steering, stopping, archiving or merging of another workspace, and no cap or confirmation.
+    to wait), no steering, stopping, archiving or merging of another workspace, and no cap or confirmation —
+    with one scoped exception, the **container tools** below, which only a container's orchestrator has and
+    which act only inside its own container.
+    The **container tools** (`orchestratorTools.ts`) — `message_chat { workspace, session?, text, mode? }`,
+    `stop_chat { workspace, session? }`, `add_workspace { prompt?, project?, base?, model?, effort?,
+    attachments?, attach? }`, `remove_workspace { workspace, archive? }`, `open_pr { workspace, title?, body?,
+    draft? }` and `merge_pr { workspace, method? }` — are registered by the per-parent-session
+    `orchestratorTools(workspaceId)` factory only when the orchestrator resolver answers a home for the
+    session's workspace (the chat record carries `orchestratorOf` before its first session starts), so no
+    other chat, and no subagent child (the factory is not in the child base set), ever sees them. Each
+    delegates to a host seam, `setOrchestratorToolsHost`, which resolves the caller's container and refuses
+    every workspace or chat outside it with a tool error ([[submodule-server-containers]]). **`merge_pr` is
+    gated on the human:** before the host merges anything it calls the tool's `approve(question)`, which
+    asks through the same in-chat ExtUi `select` the MCP data-changing confirmation uses
+    (`selectForToolCall`, anchored on the call with its arguments, options `Don't merge` / `Merge`, a
+    15-minute timeout and pi's abort signal). Only the human's `Merge` through `extui.respond` is
+    `approved`; `Don't merge` is `denied`; a timeout, Stop, a chat message (which cancels pending dialogs),
+    or a session without a UI is `unanswered`, and the host merges nothing for either. No agent can answer
+    the card: it is not a tool result and no tool reaches `resolveExtUi`. The interactive-tool mailbox
+    (`awaitToolResponse`) was not reused: its answer ends the turn and arrives as the next message, which
+    the agent could fake or misread, while the card keeps the decision inside the call.
     `readFinalAssistantTexts(workspaceId, cwd, sessionIds)` serves the status final messages. For a live
     entry it reads the entry's messages. Otherwise it lists the workspace's transcripts **once** and opens
     each match read-only, never through `attachDiskSession`, so a status check neither loads nor announces
@@ -1175,10 +1215,10 @@ re-opened transcripts provider-valid.
     [[submodule-server-extensions]]; today `web-access`'s `pi-web-access`) — deliberately not the parent's
     full set
     (rationale + the listed-children carve-out: core decision #25). **Every** child, opted in or not,
-    also loads the core's base set (`childBaseExtensionFactories`, same decision): `oversizedImageGuard`,
+    also loads the core's base set (`childBaseExtensionFactories(workspaceId)`, same decision): `oversizedImageGuard`,
     since a child's `read` returns raw images under the shared settings (see the `buildSessionSettings`
-    bullet), `artifactsGuard`, since a child writes files like its parent, and `skillCarryover`, since
-    children auto-compact under those settings too.
+    bullet), `artifactsGuard`, since a child writes files like its parent, `skillCarryover`, since
+    children auto-compact under those settings too, and the orchestrator guard (see `orchestratorPolicy`).
     A child on an extension-registered provider's model also loads that provider's **owning
     extension** (core decision #32: such a provider may serve only sessions its extension observed):
     `liveParentContext.providerExtensionPaths(provider)` answers from a process-wide owner map that
@@ -1557,8 +1597,10 @@ works after ThinkRail asked (the request card); the host side refuses every call
 binding, which also keeps delegation children out. `clampHandoffSummary` bounds the summary to
 `CHAT_HANDOFF_SUMMARY_MAX_LENGTH`. `sendHostMessageToSession(sessionId, customType, content, details)` is
 the one way the host authors a message the agent answers: a `display: true` custom message delivered as a
-follow-up with `triggerTurn`, queued behind a running turn and never a steer — the review-fix request
-rides it too. Until pi delivers it (its `message_start`, matched by the `details` object pi carries through)
+follow-up with `triggerTurn`, queued behind a running turn — the review-fix request, the continuation
+request and a container's wake-up ride it too. Only an orchestrator's `message_chat` passes
+`deliverAs: "steer"`, which lands at the running turn's next steering point; a steer card is kept
+pending and re-queued in its own lane exactly like a follow-up one. Until pi delivers it (its `message_start`, matched by the `details` object pi carries through)
 the entry keeps it as pending, and `isHostMessagePending(sessionId, details)` says so. Pi's `clearQueue()`
 also drops a queued custom message, which no text lane shows, so a queue edit (`removeQueuedSession`) or
 a drain into the composer (`clearQueueSession`) queues every pending one again while the run lasts — a
@@ -1567,6 +1609,10 @@ place among the kept follow-ups — and any other clear (Stop, disposal, shutdow
 outlast, drops it and calls the sender's `onDropped`. Like a text keeper, a host message pi already took
 for a turn still preparing (a pre-turn compaction) is queued once more by an edit in that window; a
 second continuation call joins the first, so the repeat costs one turn, nothing else.
+`appendHostMessageToSession` is its context-only sibling (the orchestrator's `container-brief`): the same
+`display: true` card sent with `triggerTurn: false`, which pi appends at once when idle and after the
+running turn otherwise, so it starts no turn and is never pending. Like any entry before the first
+user or assistant message, it reaches disk with the conversation's first message.
 
 ## Session titles
 

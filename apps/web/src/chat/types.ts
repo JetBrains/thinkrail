@@ -2,6 +2,7 @@ import type {
 	AssistantMessage,
 	BackgroundCommandCompletionDetails,
 	ChatHandoffDetails,
+	ContainerNote,
 	ContinueInWorkspaceRequestDetails,
 	ExtUiRequest,
 	ImageContent,
@@ -57,6 +58,7 @@ export type ChatTurn =
 			timestamp: number;
 	  }
 	| { kind: "handoff"; id: string; details: ChatHandoffDetails; timestamp: number }
+	| { kind: "containerNote"; id: string; note: ContainerNote; text: string; timestamp: number }
 	| {
 			kind: "retry";
 			id: string;

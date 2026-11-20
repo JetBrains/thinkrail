@@ -1,0 +1,94 @@
+{
+	"items": [
+		{
+			"id": "custom-flow",
+			"type": "change",
+			"valid": true,
+			"issues": [
+				{
+					"level": "INFO",
+					"path": "file",
+					"message": "skip_specs is set in .openspec.yaml: change declares no spec-level behavior changes, zero deltas accepted"
+				}
+			],
+			"durationMs": 56
+		},
+		{
+			"id": "identity/sso",
+			"type": "spec",
+			"valid": true,
+			"issues": [],
+			"durationMs": 8
+		},
+		{
+			"id": "metadata-only",
+			"type": "change",
+			"valid": false,
+			"issues": [
+				{
+					"level": "ERROR",
+					"path": "file",
+					"message": "Change must have at least one delta. No deltas found. Ensure your change has a specs/ directory with capability folders (e.g. specs/http-server/spec.md) containing .md files that use delta headers (## ADDED/MODIFIED/REMOVED/RENAMED Requirements) and that each requirement includes at least one \"#### Scenario:\" block. If this change intentionally modifies no specs (pure refactor, tooling, docs), set \"skip_specs: true\" in the change's .openspec.yaml instead. Tip: run \"openspec change show <change-id> --json --deltas-only\" to inspect parsed deltas."
+				}
+			],
+			"durationMs": 40
+		},
+		{
+			"id": "mystery-schema",
+			"type": "change",
+			"valid": false,
+			"issues": [
+				{
+					"level": "ERROR",
+					"path": "file",
+					"message": "Change must have at least one delta. No deltas found. Ensure your change has a specs/ directory with capability folders (e.g. specs/http-server/spec.md) containing .md files that use delta headers (## ADDED/MODIFIED/REMOVED/RENAMED Requirements) and that each requirement includes at least one \"#### Scenario:\" block. If this change intentionally modifies no specs (pure refactor, tooling, docs), set \"skip_specs: true\" in the change's .openspec.yaml instead. Tip: run \"openspec change show <change-id> --json --deltas-only\" to inspect parsed deltas."
+				}
+			],
+			"durationMs": 41
+		},
+		{
+			"id": "skip-specs",
+			"type": "change",
+			"valid": true,
+			"issues": [
+				{
+					"level": "INFO",
+					"path": "file",
+					"message": "skip_specs is set in .openspec.yaml: change declares no spec-level behavior changes, zero deltas accepted"
+				}
+			],
+			"durationMs": 47
+		},
+		{
+			"id": "task-forms",
+			"type": "change",
+			"valid": true,
+			"issues": [],
+			"durationMs": 65
+		}
+	],
+	"summary": {
+		"totals": {
+			"items": 6,
+			"passed": 4,
+			"failed": 2
+		},
+		"byType": {
+			"change": {
+				"items": 5,
+				"passed": 3,
+				"failed": 2
+			},
+			"spec": {
+				"items": 1,
+				"passed": 1,
+				"failed": 0
+			}
+		}
+	},
+	"version": "1.0",
+	"root": {
+		"path": "<root>",
+		"source": "nearest"
+	}
+}

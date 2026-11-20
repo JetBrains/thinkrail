@@ -3,6 +3,7 @@ import type {
 	ReviewComment,
 	ReviewFailedPayload,
 	ReviewFixComment,
+	ThinkingLevel,
 } from "@thinkrail/contracts";
 import { isPlanReviewResult } from "@thinkrail/contracts";
 import type { Todo } from "pi-todos/core";
@@ -459,6 +460,28 @@ async function recordVerdict(
 
 export type ReviewRunner = typeof runReviewSubagent;
 
+/** The reviewer child's model and effort, shared by plan review and the extensions' conformance review. */
+export async function reviewerChoice(): Promise<{
+	model?: { provider: string; id: string };
+	thinkingLevel: ThinkingLevel;
+}> {
+	const cfg = getConfig();
+	// Pinned reviewer model + effort, else the host's new-chat defaults — never the worker's silently
+	// inherited model or effort. `thinkingLevel` is passed unconditionally so pi-delegation cannot fall
+	// back to the parent worker's effort when reviewEffort is unset. See planReview.SPEC.md.
+	if (cfg.reviewModel && cfg.reviewEffort)
+		return {
+			model: { provider: cfg.reviewModel.provider, id: cfg.reviewModel.id },
+			thinkingLevel: cfg.reviewEffort,
+		};
+	const def = await resolveNewChatModel({});
+	const model = cfg.reviewModel ?? def.model;
+	return {
+		...(model ? { model: { provider: model.provider, id: model.id } } : {}),
+		thinkingLevel: cfg.reviewEffort ?? def.thinkingLevel,
+	};
+}
+
 async function runReview(
 	params: ReviewParams,
 	pkg: string,
@@ -467,23 +490,11 @@ async function runReview(
 	signal: AbortSignal | undefined,
 	runSubagent: ReviewRunner,
 ): Promise<PlanReviewResult> {
-	const cfg = getConfig();
-	// Pinned reviewer model + effort, else the host's new-chat defaults — never the worker's silently
-	// inherited model or effort. `thinkingLevel` is passed unconditionally so pi-delegation cannot fall
-	// back to the parent worker's effort when reviewEffort is unset. See planReview.SPEC.md.
-	const def = await resolveNewChatModel({});
-	const model = cfg.reviewModel ?? def.model;
-	const thinkingLevel = cfg.reviewEffort ?? def.thinkingLevel;
 	const run = await runSubagent(
 		params.workspaceId,
 		params.sessionId,
 		`${pkg}\n\n${REVIEWER_OUTPUT_CONTRACT}`,
-		{
-			systemPrompt: REVIEWER_SYSTEM_PROMPT,
-			tools: REVIEWER_TOOLS,
-			...(model ? { model: { provider: model.provider, id: model.id } } : {}),
-			thinkingLevel,
-		},
+		{ systemPrompt: REVIEWER_SYSTEM_PROMPT, tools: REVIEWER_TOOLS, ...(await reviewerChoice()) },
 		signal,
 	);
 	if (run.status !== "completed") {

@@ -802,6 +802,50 @@ describe("registry extensions", () => {
 		}
 	});
 
+	it("loads the board's roadmap and discovery skills and drops them while the board is off", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-board-skills-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		let disabled = new Set<string>();
+		setDisabledExtensionsResolver(() => disabled);
+		const roadmap = [
+			"competitor-watch",
+			"discovery-analyze",
+			"discovery-research",
+			"initiative-close",
+			"roadmap-plan",
+			"roadmap-report",
+			"roadmap-review",
+			"roadmap-shape",
+		];
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
+			const skills = () => loader.getSkills().skills.map((skill) => skill.name);
+			const commands = async () =>
+				(await listSkillCommands(project, ctx(true))).map((command) => command.name);
+			expect(skills()).toEqual(expect.arrayContaining(roadmap));
+			expect(await commands()).toEqual(
+				expect.arrayContaining(roadmap.map((name) => `skill:${name}`)),
+			);
+
+			disabled = new Set(["board"]);
+			await loader.reload();
+			for (const name of roadmap) expect(skills()).not.toContain(name);
+			expect(skills()).toContain("librarian");
+			expect(await commands()).not.toContain("skill:roadmap-plan");
+		} finally {
+			setDisabledExtensionsResolver(() => new Set());
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("lets a personal skill of the same name through while the extension that shadows it is off", async () => {
 		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-shadow-"));
 		const project = join(root, "project");
@@ -982,12 +1026,11 @@ describe("registry extensions", () => {
 		}
 	});
 
-	it("guards every child's images, artifacts and compacted skills from the tool-free base set, and offers the skill catalog only to opted-in children", () => {
-		expect(childBaseExtensionFactories()).toEqual([
-			oversizedImageGuard,
-			artifactsGuard,
-			skillCarryover,
-		]);
+	it("guards every child's images, artifacts, compacted skills and orchestrator edits from the tool-free base set, and offers the skill catalog only to opted-in children", () => {
+		const base = childBaseExtensionFactories("w1");
+		expect(base.slice(0, 3)).toEqual([oversizedImageGuard, artifactsGuard, skillCarryover]);
+		expect(base).toHaveLength(4);
+		expect(typeof base[3]).toBe("function");
 		expect(childExtensionFactories("w1")).not.toContain(oversizedImageGuard);
 		expect(childExtensionFactories("w1")).not.toContain(skillCarryover);
 		expect(childExtensionFactories("w1")).toContain(skillCatalog);

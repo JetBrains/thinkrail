@@ -418,7 +418,7 @@ function CommentRow({
 								title={t("review.panel.agentFiled")}
 								className="flex items-center gap-2 tr-text-eyebrow text-text-subtle"
 							>
-								<Bot className="size-12" /> ThinkRail
+								<Bot className="size-12" /> {comment.authorLabel ?? "ThinkRail"}
 							</span>
 						)}
 						{ref && <span className="tr-code-text text-text-subtle">{ref}</span>}

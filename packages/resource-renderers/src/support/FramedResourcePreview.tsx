@@ -1,4 +1,8 @@
-import { RiFullscreenLine as Fullscreen, RiArrowRightUpLine as OpenTab } from "@remixicon/react";
+import {
+	RiFullscreenLine as Fullscreen,
+	RiArrowRightUpLine as OpenTab,
+	RiLayoutRightLine as Peek,
+} from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import { IconButton } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
@@ -17,6 +21,31 @@ export interface FramedResourcePreviewProps {
 	frameFocus?: FrameFocus | undefined;
 	testIdPrefix: string;
 	onFullscreen?: (() => void) | undefined;
+	onPeeked?: (() => void) | undefined;
+}
+
+export function PeekAction({
+	path,
+	before,
+	testIdPrefix,
+	onPeeked,
+}: Pick<FramedResourcePreviewProps, "path" | "before" | "testIdPrefix" | "onPeeked">) {
+	const t = useT();
+	const host = useOptionalResourceHost();
+	const scope = useResourceScope();
+	if (!host?.peek || !scope) return null;
+	return (
+		<IconButton
+			icon={Peek}
+			label={t(before === undefined ? "viewer.preview.peek" : "viewer.preview.peekDiff")}
+			data-testid={`${testIdPrefix}-peek`}
+			tabIndex={0}
+			onClick={() => {
+				host.peek?.(scope.workspaceId, { path, before }, { sessionId: scope.sessionId });
+				onPeeked?.();
+			}}
+		/>
+	);
 }
 
 export function FramedResourcePreview({
@@ -28,6 +57,7 @@ export function FramedResourcePreview({
 	frameFocus,
 	testIdPrefix,
 	onFullscreen,
+	onPeeked,
 }: FramedResourcePreviewProps) {
 	const t = useT();
 	const host = useOptionalResourceHost();
@@ -67,6 +97,12 @@ export function FramedResourcePreview({
 				className={cn("rounded-sm border border-border-default", frameClassName)}
 				actions={
 					<>
+						<PeekAction
+							path={path}
+							before={before}
+							testIdPrefix={testIdPrefix}
+							onPeeked={onPeeked}
+						/>
 						{openTabAction}
 						<IconButton
 							icon={Fullscreen}

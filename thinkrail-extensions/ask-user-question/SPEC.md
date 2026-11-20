@@ -70,7 +70,8 @@ client of that contract ([[module-extension-api]]) and is deletable without a co
   `@thinkrail/ui` (`attention-line`, `button`, `dialog`, `dropdown-menu`, `focus`, `keyboard`, `keycaps`,
   `local-keys`, `textarea`, `utils`),
   `@thinkrail/resource-renderers` (`useOptionalResourceHost` for the host's Markdown — mermaid included —,
-  `FramedResourcePreview` + `useResourceScope` for file previews, and `ResourcePreview` + `HtmlViewportSwitch`
+  `FramedResourcePreview` + `useResourceScope` for file previews and the host's optional `peek` with
+  `ResourcePeekTarget` for the option pane's Peek follow, and `ResourcePreview` + `HtmlViewportSwitch`
   for the compare overlay), `@thinkrail/locales` (types) and `/react`, React and Remix Icon. It never imports
   the visualize extension: previews keep working with visualize switched off.
 - It never reaches app or host internals. Everything it needs from the chat arrives in
@@ -164,9 +165,13 @@ Registered `"bare"`: the card owns its full-width frame and never folds. Behavio
   only) sit beside the options in one fixed 380 px pane (options 2/5, pane 3/5 when the card is at least
   `@2xl` wide — a container query, since the chat column decides; stacked below that) showing the preview
   of the option under the cursor (on Other or the button, the picked option's): markdown (mermaid renders), or a workspace file or
-  before → after diff through `FramedResourcePreview` in its compact chrome — Open in tab and Full screen
-  only. On a question with option previews every full-screen button of the page opens the **compare
-  overlay** below instead of the one-file dialog: the frame's own button on a file preview, a button in the
+  before → after diff through `FramedResourcePreview` in its compact chrome — Peek (where the host has
+  one), Open in tab and Full screen only. Peek opens only on that explicit action, never on a cursor move;
+  once the option pane's own Peek was pressed, moving the cursor to another option with a file preview
+  re-points Peek at it through the host's `peek` `follow` (replacing that entry, never pushing one per
+  move, and doing nothing once the user closed Peek or showed something else there); an option without a
+  file preview leaves Peek where it is. The question preview's Peek does not follow. On a question with
+  option previews every full-screen button of the page opens the **compare overlay** below instead of the one-file dialog: the frame's own button on a file preview, a button in the
   label row on a markdown preview or an option without one, and the question preview's (on Current).
   Without option previews the question preview keeps the one-file dialog, with width presets and
   Split/Inline. An option without a preview says "No preview for this

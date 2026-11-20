@@ -9,6 +9,7 @@ import type {
 	Workspace,
 	WorkspaceCreation,
 	WorkspaceKickoff,
+	WorkspaceStartedBy,
 	WsErrorCode,
 } from "@thinkrail/contracts";
 import { CodedError, errorCodeOf } from "@thinkrail/shared/codedError";
@@ -66,6 +67,7 @@ export type CreationHandoff = (
 	workspace: Workspace,
 	kickoff: WorkspaceKickoff | undefined,
 	origin: CreationOrigin | undefined,
+	into?: string,
 ) => Promise<HandoffOutcome>;
 
 export interface HandedOff extends HandoffOutcome {
@@ -467,12 +469,12 @@ async function discard(record: WorkspaceCreationRecord): Promise<void> {
 
 async function handOff(
 	workspace: Workspace,
-	record: Pick<WorkspaceCreationRecord, "kickoff" | "origin">,
+	record: Pick<WorkspaceCreationRecord, "kickoff" | "origin" | "into">,
 ): Promise<HandedOff> {
 	let outcome: HandoffOutcome = {};
 	if (handoff) {
 		try {
-			outcome = await handoff(workspace, record.kickoff, record.origin);
+			outcome = await handoff(workspace, record.kickoff, record.origin, record.into);
 		} catch (err) {
 			outcome = { kickoffError: err instanceof Error ? err.message : String(err) };
 		}
@@ -500,14 +502,18 @@ function run(id: string): void {
 	running.set(id, { abort, done });
 }
 
+export interface WorkspaceCreationOptions {
+	name?: string;
+	baseRef?: string;
+	kickoff?: WorkspaceKickoff;
+	origin?: CreationOrigin;
+	startedBy?: WorkspaceStartedBy;
+	into?: string;
+}
+
 export function startWorkspaceCreation(
 	projectId: string,
-	opts: {
-		name?: string;
-		baseRef?: string;
-		kickoff?: WorkspaceKickoff;
-		origin?: CreationOrigin;
-	} = {},
+	opts: WorkspaceCreationOptions = {},
 ): WorkspaceCreation {
 	const plan = planManagedWorkspace(projectId, opts.name, opts.baseRef);
 	const record: WorkspaceCreationRecord = {
@@ -523,6 +529,8 @@ export function startWorkspaceCreation(
 		...(plan.renamed ? { renamed: true as const } : {}),
 		...(opts.kickoff ? { kickoff: opts.kickoff } : {}),
 		...(opts.origin ? { origin: opts.origin } : {}),
+		...(opts.startedBy ? { startedBy: opts.startedBy } : {}),
+		...(opts.into ? { into: opts.into } : {}),
 	};
 	addCreation(record);
 	run(record.id);
@@ -552,7 +560,7 @@ export class WorkspaceCreationStopped extends Error {}
 
 export async function createWorkspaceWithChat(
 	projectId: string,
-	opts: { name?: string; baseRef?: string; kickoff?: WorkspaceKickoff; origin?: CreationOrigin },
+	opts: WorkspaceCreationOptions,
 	signal?: AbortSignal,
 ): Promise<HandedOff> {
 	const creation = startWorkspaceCreation(projectId, opts);

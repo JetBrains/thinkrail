@@ -5,7 +5,7 @@ import type { FakeGhScenario } from "./fakeGh";
 import { gitAs } from "./git";
 import { E2E_FAKE_BIN_DIR, E2E_GH_LOG, E2E_GH_SCENARIO } from "./paths";
 
-export type { FakeGhScenario, FakePr } from "./fakeGh";
+export type { FakeGhScenario, FakeIssue, FakePr } from "./fakeGh";
 
 function shellQuote(value: string): string {
 	return `'${value.replaceAll("'", `'\\''`)}'`;

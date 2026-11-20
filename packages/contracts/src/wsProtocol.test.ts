@@ -24,8 +24,12 @@ import {
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	CHATS_PROTOCOL_VERSION,
 	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
+	CONTAINER_BRIEF_CUSTOM_TYPE,
+	CONTAINER_PROTOCOL_VERSION,
+	CONTAINER_WAKE_CUSTOM_TYPE,
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	CONTINUATION_PROTOCOL_VERSION,
+	type ContainerWakeDetails,
 	CUSTOM_ENDPOINT_ID_PREFIX,
 	CUSTOM_ENDPOINTS_PROTOCOL_VERSION,
 	CUSTOM_MODEL_CONTEXT_PROTOCOL_VERSION,
@@ -36,8 +40,12 @@ import {
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
 	EXTENSION_EDITOR_TEXT_PROTOCOL_VERSION,
+	EXTENSION_EVENT_PROTOCOL_VERSION,
+	EXTENSION_MESSAGE_CUSTOM_TYPE,
 	EXTENSION_QUERY_PROTOCOL_VERSION,
 	EXTENSION_SETTINGS_PROTOCOL_VERSION,
+	type ExtensionEventPush,
+	type ExtensionMessageDetails,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
 	FS_MUTATIONS_PROTOCOL_VERSION,
@@ -62,7 +70,10 @@ import {
 	modelContextWindowLimits,
 	normalizeSessionTitle,
 	ONBOARDING_PROTOCOL_VERSION,
+	ORCHESTRATOR_MESSAGE_CUSTOM_TYPE,
+	type OrchestratorMessageDetails,
 	OTHER_AGENT_SKILLS_PROTOCOL_VERSION,
+	opensChatRound,
 	PI_PACKAGES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
@@ -77,6 +88,7 @@ import {
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
+	readContainerNote,
 	readToolResponseMessage,
 	SEARCH_PROTOCOL_VERSION,
 	SERVER_FALLBACK_PROTOCOL_VERSION,
@@ -777,6 +789,137 @@ test("extension queries are pinned to v128 with their two refusal codes", () => 
 	expect(WS_METHODS.extensionQuery).toBe("extension.query");
 	const refusals: WsErrorCode[] = ["EXTENSION_DISABLED", "UNKNOWN_EXTENSION_QUERY"];
 	expect(refusals).toHaveLength(2);
+});
+
+test("containers are pinned to v129 with their methods, channels and refusal codes", () => {
+	expect(CONTAINER_PROTOCOL_VERSION).toBe(129);
+	expect(CONTAINER_PROTOCOL_VERSION).toBeGreaterThan(EXTENSION_QUERY_PROTOCOL_VERSION);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CONTAINER_PROTOCOL_VERSION);
+	expect([
+		WS_METHODS.containerList,
+		WS_METHODS.containerCreate,
+		WS_METHODS.containerRename,
+		WS_METHODS.containerAddWorkspace,
+		WS_METHODS.containerRemoveWorkspace,
+		WS_METHODS.containerRemove,
+		WS_METHODS.containerStartOrchestrator,
+	]).toEqual([
+		"container.list",
+		"container.create",
+		"container.rename",
+		"container.addWorkspace",
+		"container.removeWorkspace",
+		"container.remove",
+		"container.startOrchestrator",
+	]);
+	expect(CONTAINER_BRIEF_CUSTOM_TYPE).toBe("container-brief");
+	expect([WS_CHANNELS.containerUpdated, WS_CHANNELS.containerRemoved]).toEqual([
+		"container.updated",
+		"container.removed",
+	]);
+	const refusals: WsErrorCode[] = [
+		"CONTAINER_UNKNOWN",
+		"CONTAINER_EMPTY",
+		"CONTAINER_MEMBER_TAKEN",
+		"CONTAINER_MEMBER_REFUSED",
+		"CONTAINERS_STORE_UNAVAILABLE",
+	];
+	expect(refusals).toHaveLength(5);
+});
+
+test("container cards are read from their custom messages, and a malformed one is no card", () => {
+	const custom = (customType: string, details: unknown) => ({
+		role: "custom",
+		customType,
+		content: "text",
+		display: true,
+		details,
+		timestamp: 1,
+	});
+	const wake: ContainerWakeDetails = {
+		containerId: "c1",
+		workspaceId: "w1",
+		workspaceName: "board",
+		reasons: ["chat"],
+	};
+	const message: OrchestratorMessageDetails = {
+		containerId: "c1",
+		containerName: "Docs",
+		orchestratorSessionId: "o1",
+		mode: "steer",
+		text: "Rebase",
+	};
+	expect([CONTAINER_WAKE_CUSTOM_TYPE, ORCHESTRATOR_MESSAGE_CUSTOM_TYPE]).toEqual([
+		"container-wake",
+		"orchestrator-message",
+	]);
+	expect(readContainerNote(custom(CONTAINER_BRIEF_CUSTOM_TYPE, { containerId: "c1" }))).toEqual({
+		kind: "brief",
+		details: { containerId: "c1" },
+	});
+	expect(readContainerNote(custom(CONTAINER_WAKE_CUSTOM_TYPE, wake))).toEqual({
+		kind: "wake",
+		details: wake,
+	});
+	expect(readContainerNote(custom(ORCHESTRATOR_MESSAGE_CUSTOM_TYPE, message))).toEqual({
+		kind: "orchestratorMessage",
+		details: message,
+	});
+	const extensionWake: ContainerWakeDetails = {
+		containerId: "c1",
+		reasons: ["extension"],
+		source: { extension: "board", extensionTitle: "Board", kind: "board-ready" },
+	};
+	expect(readContainerNote(custom(CONTAINER_WAKE_CUSTOM_TYPE, extensionWake))).toEqual({
+		kind: "wake",
+		details: extensionWake,
+	});
+	expect(opensChatRound(custom(CONTAINER_WAKE_CUSTOM_TYPE, wake))).toBe(true);
+	expect(opensChatRound(custom(CONTAINER_WAKE_CUSTOM_TYPE, extensionWake))).toBe(true);
+	expect(opensChatRound(custom(ORCHESTRATOR_MESSAGE_CUSTOM_TYPE, message))).toBe(true);
+	expect(opensChatRound(custom(CONTAINER_BRIEF_CUSTOM_TYPE, { containerId: "c1" }))).toBe(false);
+	for (const malformed of [
+		custom(CONTAINER_WAKE_CUSTOM_TYPE, { ...wake, reasons: "chat" }),
+		custom(CONTAINER_WAKE_CUSTOM_TYPE, { containerId: "c1", reasons: ["extension"] }),
+		custom(CONTAINER_WAKE_CUSTOM_TYPE, {
+			...extensionWake,
+			source: { extension: "board", kind: "board-ready" },
+		}),
+		custom(ORCHESTRATOR_MESSAGE_CUSTOM_TYPE, { ...message, text: 3 }),
+		{ ...custom(CONTAINER_BRIEF_CUSTOM_TYPE, { containerId: "c1" }), role: "user" },
+		null,
+	])
+		expect(readContainerNote(malformed)).toBeNull();
+});
+
+test("extension events are pinned to v130 on their own channel, after containers", () => {
+	expect(EXTENSION_EVENT_PROTOCOL_VERSION).toBe(130);
+	expect(EXTENSION_EVENT_PROTOCOL_VERSION).toBeGreaterThan(CONTAINER_PROTOCOL_VERSION);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXTENSION_EVENT_PROTOCOL_VERSION);
+	expect(WS_CHANNELS.extensionEvent).toBe("extension.event");
+	const push: ExtensionEventPush = { extension: "board", type: "board.changed", payload: {} };
+	expect(Object.keys(push)).toEqual(["extension", "type", "payload"]);
+});
+
+test("an extension's chat message reads as a host card with the extension's title", () => {
+	const custom = (details: unknown) => ({
+		role: "custom",
+		customType: EXTENSION_MESSAGE_CUSTOM_TYPE,
+		content: "framed",
+		display: true,
+		details,
+		timestamp: 1,
+	});
+	const details: ExtensionMessageDetails = {
+		extension: "board",
+		extensionTitle: "Board",
+		mode: "follow_up",
+		text: "Card TR-1 changed",
+	};
+	expect(EXTENSION_MESSAGE_CUSTOM_TYPE).toBe("extension-message");
+	expect(readContainerNote(custom(details))).toEqual({ kind: "extensionMessage", details });
+	expect(opensChatRound(custom(details))).toBe(true);
+	expect(readContainerNote(custom({ ...details, extensionTitle: 1 }))).toBeNull();
 });
 
 test("ask_user_question discuss answers are pinned to v105, after background workspace creation", () => {

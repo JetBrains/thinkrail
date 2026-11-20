@@ -27,8 +27,11 @@ export function goToProjectHome(projectId: string): void {
 	void loadProjectWorkspaces(projectId).catch(() => {});
 }
 
-export async function loadProjectWorkspaces(projectId: string): Promise<Workspace[]> {
-	const rows = await getTransport().request("workspace.list", { projectId });
+export async function loadProjectWorkspaces(
+	projectId: string,
+	options: { includeDiffStats?: boolean } = {},
+): Promise<Workspace[]> {
+	const rows = await getTransport().request("workspace.list", { projectId, ...options });
 	const store = useAppStore.getState();
 	store.setWorkspaces(projectId, rows);
 	if (store.selectedProjectId === projectId) {

@@ -61,12 +61,23 @@ export interface ResourceOpenInBrowserProps {
 	path: string;
 }
 
+export interface ResourcePeekTarget {
+	path: string;
+	before?: string | undefined;
+}
+
+export interface ResourcePeekOptions {
+	sessionId?: string | undefined;
+	follow?: ResourcePeekTarget | undefined;
+}
+
 export interface ResourceHost {
 	markdown: ResourceMarkdown;
 	code: ResourceCodeHost;
 	bytesUrl(workspaceId: string, path: string, oid?: string | null): string;
 	openFile(workspaceId: string, path: string, options?: { keep?: boolean }): void;
 	openComparison(workspaceId: string, before: string, path: string): void;
+	peek?(workspaceId: string, target: ResourcePeekTarget, options?: ResourcePeekOptions): void;
 	readFile(
 		workspaceId: string,
 		path: string,

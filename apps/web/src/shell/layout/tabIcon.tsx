@@ -18,6 +18,8 @@ import {
 	RiListCheck3,
 	RiShapesFill,
 	RiShapesLine,
+	RiSparkling2Fill,
+	RiSparkling2Line,
 	RiTaskFill,
 	RiTaskLine,
 	RiTerminalBoxFill,
@@ -25,9 +27,16 @@ import {
 } from "@remixicon/react";
 import type { ReactNode } from "react";
 import { CustomIcon } from "../../components/CustomIcon";
-import type { LayoutTab } from "./types";
+import type { LayoutTab, LayoutToolCatalog } from "./types";
 
-export function tabIcon(tab: LayoutTab, active = false, cls = "size-14 shrink-0"): ReactNode {
+const NO_TOOLS: LayoutToolCatalog = {};
+
+export function tabIcon(
+	tab: LayoutTab,
+	active = false,
+	cls = "size-14 shrink-0",
+	tools: LayoutToolCatalog = NO_TOOLS,
+): ReactNode {
 	switch (tab.kind) {
 		case "file":
 			return active ? <RiFileFill className={cls} /> : <RiFileLine className={cls} />;
@@ -61,8 +70,17 @@ export function tabIcon(tab: LayoutTab, active = false, cls = "size-14 shrink-0"
 					return active ? <RiTaskFill className={cls} /> : <RiTaskLine className={cls} />;
 				case "artifacts":
 					return active ? <RiShapesFill className={cls} /> : <RiShapesLine className={cls} />;
-				default:
+				case "orchestrator":
+					return active ? (
+						<RiSparkling2Fill className={cls} />
+					) : (
+						<RiSparkling2Line className={cls} />
+					);
+				default: {
+					const Icon = tools[tab.tool]?.icon;
+					if (Icon) return <Icon className={cls} />;
 					return active ? <RiLayout2Fill className={cls} /> : <RiLayout2Line className={cls} />;
+				}
 			}
 	}
 }

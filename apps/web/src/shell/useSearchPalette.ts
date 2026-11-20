@@ -1,9 +1,11 @@
 import { t as globalT, useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { findExtensionView } from "../extensions";
 import { openFindInFiles } from "../findInFiles";
 import { chatDisplayName, copyText } from "../lib";
 import { canStartProjectlessChat, startProjectlessChat } from "../panels/chatActions";
+import { openContainerOverview } from "../panels/containerActions";
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
 import { startChatInTab } from "../panels/openChat";
 import { openFileInTab } from "../panels/openTabs";
@@ -32,10 +34,12 @@ import {
 	waitingItems,
 } from "../search";
 import {
+	canJoinContainer,
 	isChatsContainer,
 	isChatWorkspace,
 	isDefaultWorkspace,
 	type SettingsSection,
+	selectActiveContainerId,
 	selectActiveWorkspace,
 	selectChatWorkspaceFirstPrompt,
 	selectChatWorkspaceTitle,
@@ -56,7 +60,7 @@ import {
 	useAppStore,
 	workspaceName,
 } from "../store";
-import { errorText, getTransport, supportsTextSearch } from "../transport";
+import { errorText, getTransport, supportsContainers, supportsTextSearch } from "../transport";
 import {
 	focusCenterGroup,
 	focusChatComposer,
@@ -68,11 +72,13 @@ import {
 	toggleLeftSide,
 	toggleRightSide,
 } from "./chordActions";
+import { useOpenableSideTools, useOpenableViews } from "./extensionEntryPoints";
 import {
 	openExtensionPanel,
 	openExtensionPanelInProject,
 	useOpenableExtensionPanels,
 } from "./extensionPanelHost";
+import { enterExtensionView, exitExtensionView, useActiveViewId } from "./extensionViews";
 import { useResolvedKeybindings } from "./keybindingState";
 import { collectCenterGroups } from "./layout";
 import { readNativePageZoomBridge } from "./nativePageZoom";
@@ -165,6 +171,11 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	const settleBlocked = useAppStore(
 		(s) => s.activeWorkspaceId !== null && selectWorkspaceSettleBlocked(s, s.activeWorkspaceId),
 	);
+	const containerId = useAppStore(selectActiveContainerId);
+	const canGroup =
+		supportsContainers(protocolVersion) &&
+		activeWorkspace !== null &&
+		canJoinContainer(activeWorkspace);
 	useWorkspaceBackfill();
 	const firstPrompts = useAppStore(useShallow(selectRecordFirstPrompts));
 	const settingsGroups = useMemo(
@@ -182,6 +193,18 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	const [pageZoom] = useState(readNativePageZoomBridge);
 	const [tabActions] = useState(activeTabActions);
 	const openablePanels = useOpenableExtensionPanels();
+	const openableTools = useOpenableSideTools();
+	const extensionTools = useMemo(
+		() =>
+			openableTools.map(({ id, declaration }) => ({
+				id,
+				title: declaration.title,
+				icon: declaration.icon,
+			})),
+		[openableTools],
+	);
+	const views = useOpenableViews();
+	const activeViewId = useActiveViewId();
 
 	const online = useAppStore(selectHostReachable);
 	const hostSearch = useAppStore(selectHostSearchAvailable);
@@ -277,10 +300,15 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			canSettle: activeWorkspace !== null && canSettleWorkspace(protocolVersion, activeWorkspace),
 			settled,
 			settleBlocked,
+			containerId,
+			canGroup,
 			settingsGroups,
 			settingEntries,
 			tabActions,
 			extensionPanels: openablePanels,
+			extensionTools,
+			views,
+			activeView: activeViewId ? { id: activeViewId, view: findExtensionView(activeViewId) } : null,
 			actions: {
 				newWorkspace: options.openNewWorkspace,
 				newProjectlessChat: () => void startProjectlessChat(),
@@ -295,6 +323,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 				toggleRight: toggleRightSide,
 				toggleBottom: toggleBottomPanel,
 				showTool: (workspaceId, tool) => store().requestToolView(workspaceId, tool),
+				enterView: enterExtensionView,
+				exitView: exitExtensionView,
 				openExtensionPanel,
 				openExtensionPanelInProject: (projectId, panel) =>
 					void openExtensionPanelInProject(projectId, panel),
@@ -317,6 +347,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 					store().openSettings(section, settingId),
 				openShortcuts: () => store().openShortcuts(),
 				runTabAction: runActiveTabAction,
+				openContainerDialog: (request) => store().openContainerDialog(request),
+				openContainerOverview,
 			},
 		};
 		const workItems = buildWorkItems({
@@ -363,11 +395,16 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		protocolVersion,
 		settled,
 		settleBlocked,
+		containerId,
+		canGroup,
 		nativeShortcuts,
 		keybindings,
 		pageZoom,
 		tabActions,
 		openablePanels,
+		extensionTools,
+		views,
+		activeViewId,
 		options,
 		contextProject,
 		contextRepoProject,

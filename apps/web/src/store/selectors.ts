@@ -6,7 +6,10 @@ import {
 	BROWSER_VIEW_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	CHATS_PROTOCOL_VERSION,
+	type ChatState,
+	type Container,
 	canMarkCompletionUnread,
+	chatState,
 	DEFAULT_WORKSPACE_NAME,
 	firstPromptOfTexts,
 	type GitDiffScope,
@@ -81,6 +84,21 @@ import {
 	type ChatResourceState,
 	finishedChain,
 } from "./chatResources";
+import type { PeekEntry, PeekState } from "./peek";
+
+interface PeekSlice {
+	peekByWorkspace: Record<string, PeekState>;
+}
+
+export function selectPeekEntry(state: PeekSlice, workspaceId: string): PeekEntry | undefined {
+	const peek = state.peekByWorkspace[workspaceId];
+	return peek?.stack[peek.index];
+}
+
+export function selectPeekOpen(state: PeekSlice, workspaceId: string): boolean {
+	const peek = state.peekByWorkspace[workspaceId];
+	return peek?.open === true && peek.stack.length > 0;
+}
 
 export function selectLoginBusy(state: {
 	activeLogin: LoginState | null;
@@ -596,11 +614,10 @@ export function selectCompletionMarkedUnread(
 export type SessionAttention = "needs-input" | "error" | "unread" | "running";
 
 export function getSessionAttention(state: SessionState): SessionAttention | null {
-	if (state.needsInput !== null) return "needs-input";
-	if (state.completionUnread && state.completion?.outcome === "failed") return "error";
-	if (state.completionUnread) return "unread";
-	if (isSessionWorking(state)) return "running";
-	return null;
+	const chat = chatState(state);
+	if (chat === "needs_you") return "needs-input";
+	if (state.completionUnread) return chat === "failed" ? "error" : "unread";
+	return chat === "working" ? "running" : null;
 }
 
 export function selectWorkspaceIsRunning(
@@ -944,6 +961,350 @@ export function selectChatWorkspaceTitle(
 		if (record.title) return record.title;
 	}
 	return null;
+}
+
+interface ContainersState {
+	containers: Record<string, Container>;
+}
+
+/**
+ * A chat without a project that orchestrates a loaded container: it shows under that container. Once
+ * the container is gone or unread, the chat is an ordinary chat again.
+ */
+export function isOrchestratorChat(
+	state: ContainersState,
+	workspace: Pick<Workspace, "orchestratorOf">,
+): boolean {
+	return workspace.orchestratorOf !== undefined && !!state.containers[workspace.orchestratorOf];
+}
+
+/** The chats the Chats section lists: every chat without a project but the loaded containers' orchestrators. */
+export function selectStandaloneChats(
+	state: ContainersState & Pick<ProjectContextState, "projects" | "workspaces">,
+): Workspace[] {
+	return selectChatWorkspaces(state).filter((chat) => !isOrchestratorChat(state, chat));
+}
+
+/** The host's containers in creation order (id breaks ties). */
+export function selectContainers(state: ContainersState): Container[] {
+	return Object.values(state.containers).sort(
+		(a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+	);
+}
+
+/** The container a workspace belongs to; `null` for a standalone workspace. */
+export function selectContainerOfWorkspace(
+	state: ContainersState,
+	workspaceId: string,
+): Container | null {
+	return (
+		Object.values(state.containers).find((container) =>
+			container.workspaceIds.includes(workspaceId),
+		) ?? null
+	);
+}
+
+/** A workspace that may join a container: a managed or attached worktree, never a Default workspace or a chat. */
+export function canJoinContainer(workspace: Pick<Workspace, "kind">): boolean {
+	return !isDefaultWorkspace(workspace) && !isChatWorkspace(workspace);
+}
+
+export interface ContainerGroup {
+	container: Container;
+	/** The members a loaded workspace list resolves, in member order. */
+	members: Workspace[];
+	orchestrator: Workspace | null;
+	/** The one project every shown member belongs to; `null` when they span several. */
+	projectId: string | null;
+}
+
+export interface ContainerTree {
+	/** Containers whose members span several projects: the Projects tree's own Containers section. */
+	crossProject: ContainerGroup[];
+	/** Single-project containers, nested inside their project. */
+	byProject: Record<string, ContainerGroup[]>;
+	/** Every member id, so no member is also a flat row of its project. */
+	memberIds: ReadonlySet<string>;
+	/** Some member is in a project whose workspace list this window has not loaded. */
+	unresolved: boolean;
+}
+
+type ContainerTreeState = ContainersState & Pick<ProjectContextState, "projects" | "workspaces">;
+
+function containerGroup(
+	container: Container,
+	byId: ReadonlyMap<string, Workspace>,
+	orchestrators: readonly Workspace[],
+): ContainerGroup {
+	const members = container.workspaceIds.flatMap((id) => byId.get(id) ?? []);
+	const projects = new Set(members.map((member) => member.projectId));
+	return {
+		container,
+		members,
+		orchestrator: orchestrators.find((chat) => chat.orchestratorOf === container.id) ?? null,
+		projectId: projects.size === 1 ? (members[0]?.projectId ?? null) : null,
+	};
+}
+
+function workspacesById(state: Pick<ProjectContextState, "workspaces">): Map<string, Workspace> {
+	const byId = new Map<string, Workspace>();
+	for (const rows of Object.values(state.workspaces)) {
+		for (const workspace of rows) byId.set(workspace.id, workspace);
+	}
+	return byId;
+}
+
+/** Where the Projects tree places each container: inside its one project, or in the Containers section. */
+export function selectContainerTree(state: ContainerTreeState): ContainerTree {
+	const byId = workspacesById(state);
+	const orchestrators = selectChatWorkspaces(state).filter((chat) =>
+		isOrchestratorChat(state, chat),
+	);
+	const crossProject: ContainerGroup[] = [];
+	const byProject: Record<string, ContainerGroup[]> = {};
+	const memberIds = new Set<string>();
+	let unresolved = false;
+	for (const container of selectContainers(state)) {
+		for (const id of container.workspaceIds) {
+			memberIds.add(id);
+			if (!byId.has(id)) unresolved = true;
+		}
+		const group = containerGroup(container, byId, orchestrators);
+		if (group.members.length === 0) continue;
+		if (group.projectId === null) crossProject.push(group);
+		else byProject[group.projectId] = [...(byProject[group.projectId] ?? []), group];
+	}
+	return { crossProject, byProject, memberIds, unresolved };
+}
+
+/** One container with its resolved members and orchestrator; `null` once the container is gone. */
+export function selectContainerGroup(
+	state: ContainerTreeState,
+	containerId: string,
+): ContainerGroup | null {
+	const container = state.containers[containerId];
+	if (!container) return null;
+	return containerGroup(
+		container,
+		workspacesById(state),
+		selectChatWorkspaces(state).filter((chat) => isOrchestratorChat(state, chat)),
+	);
+}
+
+/** The container a workspace belongs to, as a member or as its orchestrator chat. */
+export function selectWorkspaceContainerId(
+	state: ContainersState,
+	workspace: Pick<Workspace, "id" | "orchestratorOf">,
+): string | null {
+	if (workspace.orchestratorOf && state.containers[workspace.orchestratorOf])
+		return workspace.orchestratorOf;
+	return selectContainerOfWorkspace(state, workspace.id)?.id ?? null;
+}
+
+export function selectActiveContainerId(
+	state: ContainersState & ActiveWorkspaceState,
+): string | null {
+	const active = selectActiveWorkspace(state);
+	return active ? selectWorkspaceContainerId(state, active) : null;
+}
+
+/** The chat that orchestrates the container; `null` before the host starts one or the Chats list loads. */
+export function selectContainerOrchestrator(
+	state: Pick<ProjectContextState, "projects" | "workspaces">,
+	containerId: string,
+): Workspace | null {
+	const chats = selectChatsContainer(state);
+	if (!chats) return null;
+	return state.workspaces[chats.id]?.find((chat) => chat.orchestratorOf === containerId) ?? null;
+}
+
+/** The member the user was in last (`workspaceSelectionHistory`), else the first; `null` with none shown. */
+export function selectLastContainerMember(
+	state: { workspaceSelectionHistory: readonly string[] },
+	group: ContainerGroup,
+): Workspace | null {
+	for (const id of state.workspaceSelectionHistory) {
+		const member = group.members.find((candidate) => candidate.id === id);
+		if (member) return member;
+	}
+	return group.members[0] ?? null;
+}
+
+/** A base or branch name as the stack line shows it: the remote's `origin/` dropped. */
+export function stackBranchName(branch: string): string {
+	return branch.replace(/^origin\//, "");
+}
+
+export interface ContainerStackLine {
+	/** What the line starts from: its first member's base, or the member it forks from. */
+	base: string;
+	members: Workspace[];
+}
+
+export interface ContainerStacks {
+	/** Each stacked member's parent, by id: the member of its project whose branch is its base. */
+	stackedOn: ReadonlyMap<string, Workspace>;
+	/** One line per stack (`main ← A ← B`), a fork continuing on its own line from the member it forks. */
+	lines: ContainerStackLine[];
+	/** Members based on no member that no member is based on. */
+	independent: Workspace[];
+}
+
+/** The PR stacks among a container's members, from each member's base branch; member order breaks ties. */
+export function containerStacks(members: readonly Workspace[]): ContainerStacks {
+	const branchKey = (projectId: string, branch: string) => `${projectId}\u0000${branch}`;
+	const byBranch = new Map<string, Workspace>();
+	for (const member of members) {
+		if (member.branch) byBranch.set(branchKey(member.projectId, member.branch), member);
+	}
+	const parent = new Map<string, Workspace>();
+	for (const member of members) {
+		const base = byBranch.get(branchKey(member.projectId, stackBranchName(member.baseBranch)));
+		if (base && base.id !== member.id) parent.set(member.id, base);
+	}
+	for (const member of members) {
+		const seen = new Set<string>([member.id]);
+		for (
+			let next: Workspace | undefined = parent.get(member.id);
+			next;
+			next = parent.get(next.id)
+		) {
+			if (next.id === member.id) {
+				parent.delete(member.id);
+				break;
+			}
+			if (seen.has(next.id)) break;
+			seen.add(next.id);
+		}
+	}
+	const children = new Map<string, Workspace[]>();
+	for (const member of members) {
+		const above = parent.get(member.id);
+		if (above) children.set(above.id, [...(children.get(above.id) ?? []), member]);
+	}
+	const lines: ContainerStackLine[] = [];
+	const independent: Workspace[] = [];
+	const walk = (base: string, first: Workspace) => {
+		const line: ContainerStackLine = { base, members: [first] };
+		lines.push(line);
+		const forks: Workspace[] = [];
+		for (let current: Workspace | undefined = first; current; ) {
+			const below: Workspace[] = children.get(current.id) ?? [];
+			const [next, ...others] = below;
+			forks.push(...others);
+			if (next) line.members.push(next);
+			current = next;
+		}
+		for (const fork of forks) {
+			walk(stackBranchName(parent.get(fork.id)?.branch ?? fork.baseBranch), fork);
+		}
+	};
+	for (const member of members) {
+		if (parent.has(member.id)) continue;
+		if (children.has(member.id)) walk(stackBranchName(member.baseBranch), member);
+		else independent.push(member);
+	}
+	return { stackedOn: parent, lines, independent };
+}
+
+const CHAT_STATE_URGENCY: readonly ChatState[] = [
+	"needs_you",
+	"working",
+	"failed",
+	"interrupted",
+	"finished",
+	"idle",
+];
+
+/** A workspace's most urgent chat state across its chats (`chatState` per chat). */
+export function selectWorkspaceChatState(
+	state: SessionStateProjection,
+	workspaceId: string,
+): ChatState {
+	let best = CHAT_STATE_URGENCY.length - 1;
+	for (const record of Object.values(state.sessionStateByWorkspace[workspaceId] ?? {})) {
+		best = Math.min(best, CHAT_STATE_URGENCY.indexOf(chatState(record.state)));
+	}
+	return CHAT_STATE_URGENCY[best] ?? "idle";
+}
+
+export interface ContainerMemberOverview {
+	workspace: Workspace;
+	projectName: string;
+	/** The member it is stacked on; `null` when it starts from its project's base. */
+	stackedOn: Workspace | null;
+	chat: ChatState;
+}
+
+export interface ContainerOverview {
+	group: ContainerGroup;
+	members: ContainerMemberOverview[];
+	stacks: ContainerStacks;
+}
+
+/** One container's overview: each member's project, stack parent and chat state, and the PR stack lines. */
+export function selectContainerOverview(
+	state: ContainerTreeState & SessionStateProjection,
+	containerId: string,
+): ContainerOverview | null {
+	const group = selectContainerGroup(state, containerId);
+	if (!group) return null;
+	const stacks = containerStacks(group.members);
+	return {
+		group,
+		stacks,
+		members: group.members.map((workspace) => ({
+			workspace,
+			projectName: state.projects.find((project) => project.id === workspace.projectId)?.name ?? "",
+			stackedOn: stacks.stackedOn.get(workspace.id) ?? null,
+			chat: selectWorkspaceChatState(state, workspace.id),
+		})),
+	};
+}
+
+/** A project's partition without its container members, which render inside their container. */
+export function selectStandalonePartition(
+	state: PartitionState & ContainersState & { workspaces: Record<string, Workspace[]> },
+	projectId: string,
+	now: number,
+): WorkspacePartition {
+	const partition = selectWorkspacePartition(state, projectId, now);
+	const members = new Set(Object.values(state.containers).flatMap((c) => c.workspaceIds));
+	if (members.size === 0) return partition;
+	return {
+		live: partition.live.filter((workspace) => !members.has(workspace.id)),
+		settled: partition.settled.filter((row) => !members.has(row.workspace.id)),
+	};
+}
+
+function groupWorkspaceIds(group: ContainerGroup): string[] {
+	const ids = group.members.map((member) => member.id);
+	return group.orchestrator ? [...ids, group.orchestrator.id] : ids;
+}
+
+/** A collapsed container's roll-up: any member or its orchestrator needs the human. */
+export function selectContainerNeedsAttention(
+	state: SessionStateProjection,
+	group: ContainerGroup,
+): boolean {
+	return groupWorkspaceIds(group).some((id) => selectWorkspaceNeedsAttention(state, id));
+}
+
+export function selectContainerIsRunning(
+	state: SessionStateProjection,
+	group: ContainerGroup,
+): boolean {
+	return groupWorkspaceIds(group).some((id) => selectWorkspaceIsRunning(state, id));
+}
+
+/** Standalone workspaces of the open repositories that may join a container, in project order then newest. */
+export function selectAttachableWorkspaces(state: ContainerTreeState): Workspace[] {
+	const members = new Set(Object.values(state.containers).flatMap((c) => c.workspaceIds));
+	return selectRepoProjects(state).flatMap((project) =>
+		(state.workspaces[project.id] ?? [])
+			.filter((workspace) => canJoinContainer(workspace) && !members.has(workspace.id))
+			.toReversed(),
+	);
 }
 
 export function selectActiveWorkspace(state: ActiveWorkspaceState): Workspace | null {

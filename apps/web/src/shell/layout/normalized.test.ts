@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { currentTranslator } from "@thinkrail/locales/react";
-import { closeLayoutTab, removeLayoutGroup, toolTab } from "./model";
+import { closeLayoutTab, removeLayoutGroup, revealTool, toolTab } from "./model";
 import {
 	applyProjectedLayoutDocument,
 	projectWorkspaceLayout,
@@ -171,6 +171,74 @@ describe("normalized workbench layout", () => {
 		expect(second.center.id).not.toBe(first.center.id);
 		expect(captureWorkbenchPreset(first, "custom", "Custom").bottom.groups).toHaveLength(1);
 		expect(captureWorkbenchPreset(first, "custom", "Custom").bottom.groups[0]?.tools).toEqual([]);
+	});
+
+	test("no built-in preset places the orchestrator, and revealing it opens a left pane below Projects", () => {
+		for (const preset of BUILTIN_LAYOUT_PRESETS) {
+			const frame = instantiateWorkbenchFrame(preset);
+			const placed = [...frame.left.groups, ...frame.right.groups, ...frame.bottom.groups].flatMap(
+				(group) => group.tools.map((tool) => tool.tool),
+			);
+			expect(placed).not.toContain("orchestrator");
+			expect(frame.toolRestoreTargets.orchestrator?.region).toBe("left");
+		}
+		const balanced = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "balanced");
+		if (!balanced) throw new Error("missing Balanced preset");
+		const projected = projectWorkspaceLayout(instantiateWorkbenchFrame(balanced), { groups: {} });
+		const revealed = revealTool(projected, "orchestrator", 6);
+		if ("reason" in revealed) throw new Error(revealed.reason);
+		expect(
+			revealed.document.left.groups.map((group) =>
+				group.tabs.map((tab) => (tab.kind === "tool" ? tab.tool : tab.kind)),
+			),
+		).toEqual([["projects"], ["orchestrator"]]);
+		expect(revealed.document.left.visible).toBe(true);
+	});
+
+	test("Left tools puts its tools in three left groups, the orchestrator nowhere, and leaves the right side hidden and empty", () => {
+		const leftTools = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "left-tools");
+		if (!leftTools) throw new Error("missing Left tools preset");
+		const frame = instantiateWorkbenchFrame(leftTools);
+
+		expect(frame.left.groups.map((group) => group.tools.map((tool) => tool.tool))).toEqual([
+			["projects"],
+			["specs", "files", "artifacts"],
+			["plan", "review"],
+		]);
+		expect(frame.left.visible).toBe(true);
+		expect(frame.right).toMatchObject({ visible: false, groups: [] });
+		expect(frame.left.width + frame.right.width).toBeLessThan(1);
+		expect(frame.toolRestoreTargets).toEqual({ orchestrator: { region: "left", index: 6 } });
+		expect(frameMatchesPreset(frame, leftTools)).toBe(true);
+		const captured = captureWorkbenchPreset(frame, "copy", "Copy");
+		expect(captured.right).toEqual({ visible: false, width: leftTools.right.width, groups: [] });
+		expect(frameMatchesPreset(instantiateWorkbenchFrame(captured), leftTools)).toBe(true);
+		expect(BUILTIN_LAYOUT_PRESETS[0]?.id).toBe("balanced");
+	});
+
+	test("a preset with an empty right side restores its omitted tools to the left", () => {
+		const leftTools = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "left-tools");
+		const focus = BUILTIN_LAYOUT_PRESETS.find((preset) => preset.id === "focus");
+		if (!leftTools || !focus) throw new Error("missing built-in presets");
+		const sparse = {
+			...leftTools,
+			left: {
+				...leftTools.left,
+				groups: leftTools.left.groups.map((group) => ({
+					...group,
+					tools: group.tools.filter((tool) => tool !== "files" && tool !== "plan"),
+				})),
+			},
+		};
+		expect(instantiateWorkbenchFrame(sparse).toolRestoreTargets).toEqual({
+			files: { region: "left", index: 2 },
+			plan: { region: "left", index: 4 },
+			orchestrator: { region: "left", index: 6 },
+		});
+		expect(instantiateWorkbenchFrame(focus).toolRestoreTargets).toEqual({
+			plan: { region: "right", index: 3 },
+			orchestrator: { region: "left", index: 1 },
+		});
 	});
 
 	test("preset tools are reminted when any workspace resource owns their placement id", () => {

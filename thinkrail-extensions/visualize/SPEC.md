@@ -72,7 +72,9 @@ Diagrams, comparison options and recommended choices preserve the existing chat 
 completed `type: "file"` call renders `FileCard`: the title, the `before → path` links (through
 `onOpenFile`), and [[module-resource-renderers]]' `FramedResourcePreview` for the path and `before` — the
 same renderers, diff and review comments as diff review. The card frame is a fixed 480px box (Monaco and
-bounded diffs need a height) whose toolbar adds **Open in tab** (`host.openFile` keep, or
+bounded diffs need a height) whose toolbar adds **Peek** (`host.peek`, when the host has one: the file or
+the before/after into the app's Peek pane, like the card's links, which reach it through `onOpenFile`),
+**Open in tab** (`host.openFile` keep, or
 `host.openComparison` for a before/after) and **Full screen** (a dialog rendering the same preview with
 Split/Inline; renderer choice and view state, such as the HTML preview width, are shared with the card).
 The frame and its actions live in the SDK because the questionnaire's previews use the same one. A card always shows the file's

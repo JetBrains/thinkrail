@@ -1,0 +1,24 @@
+{
+	"changes": [
+		{
+			"name": "2026-11-19-add-refunds",
+			"completedTasks": 2,
+			"totalTasks": 2,
+			"lastModified": "2026-11-19T21:17:50.821Z",
+			"status": "complete",
+			"archived": true
+		},
+		{
+			"name": "rate-limit-login",
+			"completedTasks": 2,
+			"totalTasks": 2,
+			"lastModified": "2026-11-19T21:17:51.367Z",
+			"status": "complete",
+			"archived": false
+		}
+	],
+	"root": {
+		"path": "<root>",
+		"source": "nearest"
+	}
+}

@@ -7,6 +7,8 @@ export type FakePrState = "OPEN" | "CLOSED" | "MERGED";
 export interface FakePr {
 	number: number;
 	headRefName: string;
+	/** The description; `pr edit --body-file` replaces it. */
+	body?: string;
 	baseRefName?: string;
 	state: FakePrState;
 	isDraft?: boolean;
@@ -23,7 +25,18 @@ export interface FakePr {
 	headOwner?: string;
 }
 
+export interface FakeIssue {
+	number: number;
+	title: string;
+	body?: string;
+	labels?: { name: string }[];
+	assignees?: { login: string }[];
+	state?: "OPEN" | "CLOSED";
+	updatedAt?: string;
+}
+
 export interface FakeGhScenario {
+	issues?: FakeIssue[];
 	repo?: {
 		mergeCommitAllowed?: boolean;
 		squashMergeAllowed?: boolean;
@@ -74,6 +87,7 @@ function main(): void {
 		mergedAt: null,
 		closedAt: null,
 		createdAt: "2026-01-01T00:00:00Z",
+		body: "",
 		...pr,
 	});
 	const find = (selector: string | undefined) =>
@@ -91,6 +105,25 @@ function main(): void {
 			...scenario.repo,
 		};
 		process.stdout.write(`${JSON.stringify(project(repo))}\n`);
+		return;
+	}
+	if (group === "issue" && command === "list") {
+		const state = (flag("--state") ?? "open").toUpperCase();
+		const limit = Number(flag("--limit") ?? "30");
+		const rows = (scenario.issues ?? [])
+			.filter((issue) => state === "ALL" || (issue.state ?? "OPEN") === state)
+			.slice(0, limit)
+			.map((issue) =>
+				project({
+					body: "",
+					labels: [],
+					assignees: [],
+					updatedAt: "2026-01-01T00:00:00Z",
+					url: `https://github.com/${slug}/issues/${issue.number}`,
+					...issue,
+				}),
+			);
+		process.stdout.write(`${JSON.stringify(rows)}\n`);
 		return;
 	}
 	if (group !== "pr") fail(`fake gh: unsupported command ${argv.join(" ")}`);
@@ -135,6 +168,14 @@ function main(): void {
 			const pr = find(selector);
 			pr.state = "OPEN";
 			pr.closedAt = null;
+			save();
+			return;
+		}
+		case "edit": {
+			const pr = find(selector);
+			const file = flag("--body-file");
+			if (!file) fail(`fake gh: unsupported command ${argv.join(" ")}`);
+			pr.body = readFileSync(file, "utf8");
 			save();
 			return;
 		}

@@ -14,7 +14,7 @@ The responsive composition root: top-level app chrome, active-project/workspace 
 
 ## Boundary
 
-- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-project/workspace routing; single Settings, analytics-consent, survey-invitation, survey-window, attention-notification permission-preface, and Toaster mounts plus the keyboard-opened Create workspace dialog, the `Mod+K` / double-Shift search palette host, the `Mod+Shift+F` Find in Files host and the `Mod+?` keyboard-shortcuts dialog (and the once-mounted attention-notification observer from [[submodule-web-notifications]]); the enabled web extensions' global overlays (`ExtensionOverlays`, *Global chords*); theme application and global shortcuts; focus recovery (*Focus recovery*) and the Esc that leaves a text field, then climbs to the main area (*Esc leaves a text field*, *Esc climbs to the main area*); the command catalog the palette runs ([[submodule-web-commands]], [[submodule-web-search]]); the injected Layout, Keyboard and optional application Update settings sections; and integration of the workbench engine with store, persistence, panels, transport-backed domain state, and error boundaries.
+- **Owns:** `Shell` as the one composition root; topbar and persistent location context; active-project/workspace routing; single Settings, analytics-consent, survey-invitation, survey-window, attention-notification permission-preface, and Toaster mounts plus the keyboard-opened Create workspace dialog, the `Mod+K` / double-Shift search palette host, the `Mod+Shift+F` Find in Files host and the `Mod+?` keyboard-shortcuts dialog (and the once-mounted attention-notification observer from [[submodule-web-notifications]]); the enabled web extensions' global overlays (`ExtensionOverlays`, *Global chords*) and topbar status items (`ExtensionStatusItems`, *Extension status items*); the window's extension view (*Extension views*); theme application and global shortcuts; focus recovery (*Focus recovery*) and the Esc that leaves a text field, then climbs to the main area (*Esc leaves a text field*, *Esc climbs to the main area*); the Peek pane (*Peek*); the Orchestrator tool body (*Orchestrator tool*); the command catalog the palette runs ([[submodule-web-commands]], [[submodule-web-search]]); the injected Layout, Keyboard and optional application Update settings sections; and integration of the workbench engine with store, persistence, panels, transport-backed domain state, and error boundaries.
 - **Public surface:** `Shell`.
 - **Allowed deps:** child layout modules; `updates`; `settingsKit` (the Layout and Keyboard sections' blocks, and `SETTING_ATTR`, by which `chordActions` and `useAppShortcuts` find the Settings layer); `search` + `commands` (the palette and the command contract it composes for it); `keybindings` (the chord table and resolver `useGlobalHotkeys` matches through and the palette's shortcuts read, and the shortcut catalog the cheatsheet renders); `findInFiles` (the window `FindInFilesHost` composes); `extensions` (the enabled extensions whose overlays and shortcut rows it mounts, every extension's commands it resolves, and the panel list) and `@thinkrail/extension-api/web` (panel types); `panels`; `chat` app-integration hydration/rendering; `store`, `transport`, contracts (types, wire constants, and the shared `createQuitConfirmation` rule), `@thinkrail/ui/*`, `@thinkrail/locales` (UI strings), `i18n` (`useLocaleSync`, mounted once), `components/ErrorBoundary`, `components/QuietScrollArea`, `constants`, `lib`, `themes`, and `clientPreferences` (`markdownOutlinePreference` persists the store's Markdown outline visibility and side per client, through the same adapter `layoutState` uses).
 - **Forbidden:** server/shared/pi imports; being imported by panels/store/transport; putting arrangement knowledge into a feature panel; or sending current frame/view state through transport.
@@ -79,7 +79,8 @@ for Project Home), the branch status from `useBranchStatus`, and the callback th
 New workspace dialog. No selected project
 leaves the logo alone.
 
-Immediately before host connection status, the topbar conditionally renders the **JetBrains recurring-quota
+Right after Search, the action cluster mounts the extensions' status items (*Extension status items*),
+so they sit before every status readout. Immediately before host connection status, the topbar conditionally renders the **JetBrains recurring-quota
 readout** (protocol v59): a neutral Coins icon + locale-formatted `remaining / total credits`. It exists only
 when the synchronized setting is enabled and the host reports healthy Central; zero has no warning policy.
 Loaded/loading are non-button content with a freshness tooltip. First failure is `Quota unavailable · Retry`;
@@ -153,12 +154,24 @@ tool call, approximate) — the same jump the history search uses; `openPanel` l
 panel up in the registry and opens its tab in this workspace's view, named with the given title (tab
 `name`, which wins over the title key); `renderToolCall` renders `chat/ToolCallPreview` — the tool's
 registered renderer, no card, fold or interaction — inside its own `ErrorBoundary`
-(`reportId: "extension-panel-tool-call"`); `openFile` opens the workspace-relative path through
+(`reportId: "extension-panel-tool-call"`); `renderChat` renders `SessionChatView` (`renderPanelChat`): the
+session's `ChatView`, its runtime hydrated on demand, inside its own `ErrorBoundary` (`reportId:
+"session-chat"`), with no workspace switch (*Orchestrator tool*, the same component); `openView` enters
+the extension's own view (*Extension views*); `openFile` opens the workspace-relative path through
 `panels/openTabs` (`openFileAtLine` with a line, else `openFileInTab`, both as a kept tab), first entering
 the target workspace through the navigator when it is not the panel's own; `openArtifacts` asks the store
 to reveal this workspace's Artifacts tool (`requestToolView(workspaceId, "artifacts")`); and
 `hostApiVersion` comes from the extension's catalog entry, read once per connection generation (a failed
-read is forgotten, so *Retry* asks again). A panel therefore never reaches the store or transport itself.
+read is forgotten, so *Retry* asks again). `openWorkspace` enters the target workspace through the
+navigator (on its chat when given), its `peek` entry turned like `peek`'s and `requestPeek`ed in that target
+workspace first (Peek is per workspace, so a board card followed into its attempt's workspace shows there); `peek` turns a `PanelPeekEntry` into the store's Peek entry
+(`panelPeekEntry`: an `extension` entry only for a panel the caller's own extension declares, with its
+title key and the given crumb `name`; `file` and `compare` as they are) and `requestPeek`s it in the
+panel's workspace; `onEvent` subscribes to transport's `extension.event` channel — which never replays its
+last push — and hands on only that extension's pushes of the type, nothing below
+`supportsExtensionEvents` (v130) and nothing while the extension is in `disabledExtensions`. `openChat`,
+`openFile`, `openPanel` and `openWorkspace` with a chat or a reveal leave an active view first (*Extension
+views*). A panel therefore never reaches the store or transport itself.
 
 **Which panels an entry point offers is one rule**, `openableExtensionPanels` (`extensionPanelHost.ts`;
 `useOpenableExtensionPanels()` reads it from the store and the host's catalog): a panel is openable
@@ -201,6 +214,191 @@ and `rail`, and nothing here names an extension):
   (`railCommandPanel`) to that panel instead of the overlay — only while the panel is openable and no
   modal is open, else the press is left alone — so the command lists, rebinds and shows under the
   extension's own area like any other ([[submodule-web-keybindings]]).
+
+## Extension side tools
+
+An extension's `sideTools` are singleton tools of the frame ([[submodule-web-shell-layout]]), id
+`ext:<extension>:<tool>`; the layout knows them only through the **`extensionTools`** catalog the shell
+injects into the Workbench and `useLayoutIntentProcessing` (`useLayoutExtensionTools`,
+`extensionEntryPoints.tsx`: each registered tool's title key, icon, `defaultSide` and `offered` — the
+panels' openable rule, `openableContributions`, so a switched-off, missing or too-old extension's tool waits
+in no rail). `WorkspaceWorkbench.renderToolBody` renders an extension tool as `ExtensionSideToolBody`
+(`ExtensionPanelBody.tsx`): the panels' placeholder state machine (`extensionPanelState` — missing, unsupported, disabled with *Open Settings*,
+catalog failed with *Retry*, loading), else the lazy body in the panels' own `ErrorBoundary` (`ExtensionPanelFrame`) with a `PanelHost` scoped to
+the **active** workspace and its project, built by the same `useAppPanelHost` as a panel tab's. The pane is frame-level, so
+a workspace switch keeps it mounted and hands it a new host. A placed tool whose extension is off or gone
+keeps its place and shows the placeholder — the frame is never reset. Layout settings refuses to save a
+custom preset placing an extension tool to a host below `EXTENSION_EVENT_PROTOCOL_VERSION` (v130), whose
+validator would reject the id. The palette lists `view.show.<tool id>` (*Show <tool>*) for every offered
+extension tool while a workspace is active, like the built-in tools' `view.show.<tool>`, through the same
+`requestToolView` (`useOpenableSideTools`, the rule the catalog's `offered` reads, which leaves out the
+tools a view places — *Extension views*).
+
+## Extension status items
+
+`ExtensionStatusItems` (mounted once inside `topbar-actions`, after Search and before the quota readout and
+connection status; `topbarChrome.test.ts` pins the place) renders every web extension's `statusItems`
+([[module-extension-api]]) that `mountedStatusItems` admits: the panels' openable rule
+(`openableContributions`: not in `disabledExtensions`, `supportsExtensionQuery`) **and** a read catalog that
+lists the extension — while the catalog loads or failed nothing mounts, since a readout has no placeholder
+to show. Each lazy-loads (one `React.lazy` per declaration) under `Suspense` with no fallback, inside an
+`ErrorBoundary` (`reportId: "extension-status-item"`) whose fallback is nothing, so a crashing readout
+reports and vanishes instead of filling the topbar. Its `StatusItemHost` (`createStatusItemHost`,
+`extensionPanelHost.ts`) shares the panel host's query, event and chat-navigation code and the transport and
+navigator links both are built over (`APP_HOST_LINKS`); `scope` and `peek`
+follow the active workspace (`requestPeek` there), `null` / a no-op without one. The board's Needs-you
+counter is the first ([[submodule-ext-board-web]]). `ExtensionContainerSections { containerId }` mounts the
+extensions' `containerSections` under the same rule (`mountedStatusItems`, `useStatusItemHost`,
+`reportId: "extension-container-section"`), each given the container's id; `PeekPane` injects it into
+`panels/ContainerOverview`'s `extensionSections` slot, so `panels` never reaches the extension registry
+(the board's initiative and autopilot are the first).
+
+## Extension views
+
+An extension's `views` entry ([[module-extension-api]]) is a **view**: the whole workbench given to it —
+its `center` panel in the center, its `left` / `bottom` side tools each leading a pane, Peek open on the
+right — until the user goes back. Board view is the first. The window has at most one, kept as the local
+preference `layoutView` ([[submodule-web-shell-layout-state]]), never in the frame; switching workspace
+keeps it.
+
+- **Entering** (`extensionViews.enterExtensionView`, with a workspace active) captures the frame's sides
+  and bottom (`captureWorkbenchSides`), its restore targets and the tools their groups show, then arranges
+  the view (`arrangeWorkbenchView`, [[submodule-web-shell-layout]]): the view's tools lead the left and the
+  bottom, every group those regions held stays — folded, same id, same tools and terminals — and the bottom
+  aligns center + left. The center and the right side are untouched. Entering another view restores the
+  current one's frame first; entering the active one does nothing.
+- **The center override.** While a view is active `WorkspaceWorkbench` hands the Workbench a
+  `centerOverride` (region id `view-center`, kind `center`) rendering `ExtensionViewCenter` — the view's
+  panel under the panels' placeholder state machine and host (`useAppPanelHost`, the active workspace's
+  scope) —, so the workspace's center groups stay in the document, hidden, and come back as they were.
+  F6 lands in the override as the center region; Ctrl+F6 visits no center group. Peek is open whatever it
+  holds (`peek.open` is true), saying the view's `peekEmpty` (`peek-empty`) while empty, which folds the
+  right side at render as Peek always does; its width is the `peekWidth` preference, else 0.3 in a view.
+- **A center open leaves the view**, since the view hides the center: the host seams that show something
+  there — `openChat`, `openFile`, `openPanel`, and `openWorkspace` with a chat or a tool to reveal —
+  call `leaveViewForCenter` first; any other center open the user asks for in the active workspace (the
+  palette, a chord, a chat link) advances that workspace's center navigation clock, on which
+  `useExtensionViewLifetime` leaves the view. A workspace switch alone keeps it.
+- **Leaving** restores the captured sides and bottom by group id (`restoreWorkbenchSides`), their restore
+  targets and the tools they showed, so the frame is exactly the one entered from; changes made to those
+  regions inside the view go with it. Applying a preset or Reset from Layout settings drops the view
+  without restoring (the applied preset wins).
+- **Entry points**: one rail toggle per openable view after the left rail's tools (`useLeftRailViews`,
+  `view-rail-<extension>:<view>`, pressed while its view is on); the palette's
+  `view.extensionView.enter.<extension>:<view>` (*Enter Board view*) for the openable views while a
+  workspace is active (`useOpenableViews`) and `view.extensionView.exit` (*Exit Board view*) whenever one
+  is on — even one whose extension is off or gone (*Exit the view*); *Back to workbench* (`view-exit`) in
+  the topbar's actions while a view is on in a workspace; and `PanelHost.openView` /
+  `StatusItemHost.openView` for the extension's own (the board counter's *Open board*). A view's side
+  tools are never offered on their own (`viewSideToolIds`: no unplaced rail entry, no *Show* command). A
+  failure is a toast and leaves the frame.
+- **Migration.** A window stored in the former Board mode (`layoutMode`) reads as Board view, `migrated`;
+  once the frame is ready `useExtensionViewLifetime` re-enters it — restoring that mode's sides, then
+  arranging the view —, or leaves it when the view is gone.
+
+## Peek
+
+Peek is one contextual pane at the workbench's right edge, outside the tool groups: it shows whatever was
+peeked and is absent otherwise — except in an extension's view, which keeps it open on its placeholder
+(*Extension views*). Its state is the store's runtime `peekByWorkspace` slice
+([[submodule-web-store]]), never the frame — a frame field would reset every surface on a rollback through
+the strict local-layout decoders, and the layout keeps resources out of the frame. `WorkspaceWorkbench` hands
+the Workbench its `peek` prop (open, the `peekWidth` preference, its pointer-up commit, and a render of
+`PeekPane`); the column, its width and the right-side fold are [[submodule-web-shell-layout]]'s.
+
+- **Openers** call `requestPeek(workspaceId, entry)`: it pushes the entry, or selects the one with the same
+  resource identity, emits no layout intent and moves no focus — opening Peek never takes the composer's
+  keyboard. An entry names its opener chat (`sessionId`), which routes review sends and drives auto-hide.
+  The openers today:
+  - **chat file navigation** — `WorkspaceWorkbench.openToolFile`, the `onOpenFile` every `ChatView`
+    gets (`ChatResourceBody` binds its chat's `sessionId`): tool-card file links, assistant Markdown
+    links, the round's artifact chips, visualize's file links and the transcript's `O` all peek a file
+    under that chat (user decision; they opened the preview tab before). A modifier click keeps no
+    tab-opening variant — no chat link had one, and Peek's Open in tab is the way to a tab;
+  - **framed previews** — the app `HOST`'s `peek` (a `ResourceHost.peek`, [[module-resource-renderers]])
+    turns `FramedResourcePreview`'s Peek action into a `file` or `compare` entry under the frame's scope
+    session, and its `follow` option into the store's `followPeek`, which lets the questionnaire's
+    option pane keep Peek on the option under its cursor without growing the stack
+    ([[module-ext-ask-user-question]]).
+
+  - **the container overview** — a `container` entry (`containerId`, no opener chat) from the topbar
+    Container menu's **Overview**, the container row's menu and double-click, and the palette's
+    `container.overview`, through `panels/containerActions.openContainerOverview` (the active
+    workspace's Peek; on Project Home it first enters the container's last member). `PeekPane` renders
+    `panels/ContainerOverview` for it and offers no Open in tab (no tab kind holds it). Entering a member
+    from a card (`openContainerMember`) first `carryPeek`s the shown overview — with its pin — onto that
+    member's Peek, so a pinned overview stays up across the switch even though Peek is per workspace; the
+    entry leaves every stack when its container is removed.
+
+  - **an extension's own panel** — `PanelHost.peek` ([[module-extension-api]]) pushes an `extension` entry
+    (with the crumb `name` the panel gave) in the panel's workspace; the board's card is the first
+    ([[submodule-ext-board-web]]).
+- **`PeekPane`** (keyed by workspace) is a toolbar — Back / Forward, a crumb per stack entry (click shows
+  it, × removes it), Pin, Open in tab, Full screen, Close — over the current entry. A file or comparison
+  renders `ResourcePreview` (full chrome, renderer/layout/view state kept per entry while the pane lives)
+  under `ResourceScopeProvider { workspaceId, sessionId }` and `AppResourceHost`'s **`PEEK_HOST`**: `HOST`
+  without `peek` (nothing in Peek offers to peek itself) and with an `openFile` that pushes onto the stack
+  under the same opener, so a document's own links stay in Peek while an explicit keep still opens a tab. A read failure (a deleted file) shows the renderer's
+  failure state with a Remove action. An extension entry renders `ExtensionPanelBody` with an extension
+  tab built from the entry, so it gets the same placeholder state machine and `createPanelHost`. Full
+  screen is a dialog over the same entry body and view state, as `FramedResourcePreview`'s is.
+- **Open in tab** (`peekControl.openPeekInTab`) promotes the current entry: it leaves the stack and opens
+  as a kept tab — `openFileInTab` / `openFileAtLine`, `openFileComparisonInTab`, or
+  `extensionPanelHost.openExtensionTab` (the path `PanelHost.openPanel` takes). It is a shell function
+  because the store may not reach `panels` or transport.
+- **Hiding.** Close, Esc, Open in tab on the last entry and removing the last entry hide Peek; Close and
+  Esc keep the stack (the next request reopens onto it) and unpin. When focus was inside Peek it returns
+  to the region active before it (`focusPreviousRegion`), else the first center group. Auto-hide —
+  ignored while pinned — is Esc, the opener chat starting a new turn (its host `runId` changes to a new
+  non-null value, or its `needsInput` clears: the continuation after a previewed question is answered),
+  and an extension being switched off (its entries leave the stack); the last two are store folds. Peek
+  never hides on a pointer press in the chat.
+- **`Mod+J` over an open Peek** (pinned or not — an explicit command) closes Peek and shows the right tool
+  side: Peek folds that side, so the user asking for the right edge gets the tools back. The store's
+  `toggleRightSide` closes Peek (keeping its stack, as Close does) and enqueues `show-side` for the right
+  in one write, after `leavePeek` moved focus out of a Peek that held it; with an empty right side the show
+  is unavailable and only Peek closes. With Peek closed `Mod+J` is the plain right-side toggle.
+- **Esc** is `peekControl.installPeekEscape`, a window bubble `keydown` listener installed from `Shell`
+  right after `escapeLeavesField` (so it runs after it): a bare Esc nobody prevented, outside a dialog or
+  open menu, Monaco and xterm, with no IME composition or keyboard claim, closes the active workspace's
+  open, unpinned Peek and prevents the default. An Esc in the composer therefore first leaves the field;
+  the next one, on the parked feed, closes Peek. An Esc on Peek's own controls closes it too: the climb to
+  the main area (*Esc climbs to the main area*) leaves Peek's region to this listener.
+
+## Orchestrator tool
+
+A container's orchestrator chat stays visible while the user moves between its members (user decision).
+It is the built-in singleton tool `orchestrator` ([[submodule-web-shell-layout]]):
+frame-level like Projects, so a workspace switch keeps its pane, and its body — `OrchestratorTool`, never
+keyed by workspace — renders the **active workspace's container's** orchestrator `ChatView`, keyed by the
+orchestrator session. Switching between members of one container therefore keeps the very same ChatView
+mounted (draft, scroll, dock); another container's orchestrator remounts it.
+
+- **Rendering a foreign chat.** `SessionChatView` (shared with `PanelHost.renderChat`, *Extension panels*)
+  mounts `ChatView` keyed by its own `{ workspaceId, sessionId }`; the tool passes the orchestrator chat's
+  workspace (the container home) and session (`Container.orchestratorSessionId`, the chat
+  `selectContainerOrchestrator` resolves) — no new chat seam. Chat reconciliation only hydrates chats
+  placed in the active workspace, so `SessionChatView` hydrates the runtime itself with `chat`'s
+  placement-free `hydrateSessionRuntime` (the plan page's path) while connected without one, showing the
+  chat skeleton and, after the same stall window, a Retry. Live events need nothing more:
+  pi events reach every held runtime whatever workspace is active. A file link in it enters the orchestrator
+  workspace and peeks the file there (the path is relative to the container home — the precedent is
+  `PanelHost.openFile`, which enters its target workspace first).
+- **States** (`data-state` on `orchestrator-tool`): `chat`, under a strip naming the container with
+  **Open as workspace** (activates the orchestrator chat itself, the way to the container's shared
+  artifacts); `center` while the orchestrator chat *is* the active workspace — no second ChatView of one
+  session, just **Back to <member>** (`selectLastContainerMember`: the member entered last, else the first);
+  `missing` when the container has no orchestrator yet (it starts with the second member); `standalone` —
+  "This workspace isn't in a container" with **Group into a container…** where the workspace can join one.
+- **Placement.** No built-in preset places it, so the left rail shows it as an unplaced entry until used.
+  The container menu's and the Projects row's **Orchestrator** (`panels/containerActions.openOrchestrator`)
+  call `requestToolView(member, "orchestrator")` for the active member — or first enter the member the user
+  was in last when another workspace is active — so the first open places it in a new left pane below
+  Projects; with no member shown it falls back to opening the orchestrator chat as the workspace. The
+  palette's Show Orchestrator is the generic `view.show.orchestrator`.
+- **Rejected:** opening the orchestrator as the active workspace plus a toggle back (the considered
+  fallback) — the center would lose the member's chat, which is what the user wants beside it; and a pane
+  outside the frame like Peek — a frame tool already survives switches, docks, folds and rides presets.
 
 ## Layout settings
 
@@ -280,10 +478,11 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
 
 - `Ctrl+R` opens chat history for the locally selected chat, or the workspace's most-recent chat fallback; the literal `Ctrl+R` acts even during IME composition (it would reload the browser), while a chord the user rebinds history to waits composition out like every other chord;
 - `Mod+B` toggles the left side, restoring local group/tab attention or an eligible singleton tool;
-- `Mod+J` does the same for the right side;
+- `Mod+J` does the same for the right side; over an open Peek it closes Peek and shows the right side
+  instead (*Peek*);
 - `Mod+Shift+J` toggles bottom, restoring local bottom attention, a bottom-targeted singleton, or the terminal creation surface;
 - `Mod+N`, and its alias `Mod+Alt+N`, open `NewWorkspaceDialog` for the context project (the active workspace's project, else the selected project). The shell owns this one keyboard-opened instance as local state — it is not store state and not the `ProjectTree`/`WelcomePanel` instances, which keep their own return-focus and prompt-seeding semantics. `Mod+N` is the canonical chord and the one shortcut chrome advertises first; the alias exists because browsers reserve Cmd/Ctrl+N for a new window and never deliver it to the page, while the desktop webview does.
-- `Mod+K`, double Shift and the topbar search button open the search palette ([[submodule-web-search]]). `SearchPaletteHost` mounts it only while `searchOpen` is true and composes what it runs: `paletteCatalog.ts` builds the command list for the current context (a command exists only where it applies; every chord-bound action shows its shortcut and runs the very function its chord runs — the side/bottom toggles and history open live in `chordActions.ts`, which `useGlobalHotkeys` binds too), one row per Settings section, each opening its section, and one `setting:<entryId>` row per individual setting — the entries Settings search offers in this context (`panels/settingsCatalog`'s `availableSettings` over the same nav groups and `useSettingsCatalogContext`), titled with the setting and "Settings › <section>" — which opens Settings on it (`openSettings(section, id)`, a search jump: focus and flash). The palette never flips a setting in place, and it adds no per-shortcut rows: it already lists the commands. `SearchPaletteHost` supplies `renderFilePreview` — a `ResourcePreview` from `@thinkrail/resource-renderers` keyed by workspace + path, with a section's heading line as its `reveal`, under `AppResourceHost`'s **`PALETTE_PREVIEW_HOST`** (built once beside the app's `HOST`): its `readFile` and `bytesUrl` carry the palette's `maxBytes` (`FILE_TOO_LARGE` becomes the "too large to preview" message), it refuses a read while the host is unreachable, and its change subscription stays silent until this connection's welcome and then refreshes once — so the palette's file and spec previews are the preview tab's renderer, bounded. The host search context names the active workspace and the context project; the host resolves the root (Project Home searches the project's Default folder). `useSearchPalette` turns store state into the props-driven palette's items: work items from `buildWorkItems` over the normalized session snapshot, so chats in workspaces this client never opened appear, named by their state record's title; **Waiting for you** is those chats that need the user (`waitingItems`); the context project and active workspace are ranking boosts. The palette's Start work row and `Mod+↵` call `PaletteStart.openDialog(text)`, which opens the keyboard-owned `NewWorkspaceDialog` instance (the `Mod+N` one) with the text as `initialPrompt` — or, when that dialog or the store's Edit & retry dialog is already open (an attention notification can open the palette over it), keeps it as it is, its draft and any creation in flight untouched, and returns `false` so the palette returns focus to it; the palette's New workspace row keeps an open dialog the same way, but does not hand focus back to it. The dialog is the only start path, so the palette never creates a workspace or sends a prompt itself. The `#` scope's Ask the agent row and `Alt+↵` call `PaletteAsk.ask(text)` instead, which starts a new chat (`startChatInTab`) in the active workspace — on Project Home in the context project's Default, entered through `enterDefaultWorkspace` under a `paletteNavigator.beginPick()` guard like Work in project folder, so a later pick or navigation while the list loads keeps the user where they went and drops the ask — with the question and the spec-citing note as its first prompt.
+- `Mod+K`, double Shift and the topbar search button open the search palette ([[submodule-web-search]]). `SearchPaletteHost` mounts it only while `searchOpen` is true and composes what it runs: `paletteCatalog.ts` builds the command list for the current context (a command exists only where it applies — the container commands, for instance: **Group into a container…** for a standalone worktree on a v129 host, **Open this container's overview** (Peek) / **Add a workspace to this container…** / **Remove this container…** while a member or its orchestrator is active, each opening the store's `containerDialog` that the once-mounted `panels/ContainerDialogs` renders; every chord-bound action shows its shortcut and runs the very function its chord runs — the side/bottom toggles and history open live in `chordActions.ts`, which `useGlobalHotkeys` binds too), one row per Settings section, each opening its section, and one `setting:<entryId>` row per individual setting — the entries Settings search offers in this context (`panels/settingsCatalog`'s `availableSettings` over the same nav groups and `useSettingsCatalogContext`), titled with the setting and "Settings › <section>" — which opens Settings on it (`openSettings(section, id)`, a search jump: focus and flash). The palette never flips a setting in place, and it adds no per-shortcut rows: it already lists the commands. `SearchPaletteHost` supplies `renderFilePreview` — a `ResourcePreview` from `@thinkrail/resource-renderers` keyed by workspace + path, with a section's heading line as its `reveal`, under `AppResourceHost`'s **`PALETTE_PREVIEW_HOST`** (built once beside the app's `HOST`): its `readFile` and `bytesUrl` carry the palette's `maxBytes` (`FILE_TOO_LARGE` becomes the "too large to preview" message), it refuses a read while the host is unreachable, and its change subscription stays silent until this connection's welcome and then refreshes once — so the palette's file and spec previews are the preview tab's renderer, bounded. The host search context names the active workspace and the context project; the host resolves the root (Project Home searches the project's Default folder). `useSearchPalette` turns store state into the props-driven palette's items: work items from `buildWorkItems` over the normalized session snapshot, so chats in workspaces this client never opened appear, named by their state record's title; **Waiting for you** is those chats that need the user (`waitingItems`); the context project and active workspace are ranking boosts. The palette's Start work row and `Mod+↵` call `PaletteStart.openDialog(text)`, which opens the keyboard-owned `NewWorkspaceDialog` instance (the `Mod+N` one) with the text as `initialPrompt` — or, when that dialog or the store's Edit & retry dialog is already open (an attention notification can open the palette over it), keeps it as it is, its draft and any creation in flight untouched, and returns `false` so the palette returns focus to it; the palette's New workspace row keeps an open dialog the same way, but does not hand focus back to it. The dialog is the only start path, so the palette never creates a workspace or sends a prompt itself. The `#` scope's Ask the agent row and `Alt+↵` call `PaletteAsk.ask(text)` instead, which starts a new chat (`startChatInTab`) in the active workspace — on Project Home in the context project's Default, entered through `enterDefaultWorkspace` under a `paletteNavigator.beginPick()` guard like Work in project folder, so a later pick or navigation while the list loads keeps the user where they went and drops the ask — with the question and the spec-citing note as its first prompt.
 - While the palette is open, `paletteBackfill.ts` makes collapsed projects' workspaces searchable: it lists, without diff stats, each open project whose workspace list this client never loaded or that lacks a workspace the snapshot reports (a peer created it while this client was away), and merges the reply in the host's order without replacing rows already held, so no worktree is diffed for it. It asks nothing while disconnected or before the welcome, keeps four requests in flight across openings, drops a reply from an earlier connection, and re-reads its queue when the connection, the welcome, the open projects or the reported workspaces change. No palette request names a chat; against an older host an unvisited chat reads as its first prompt.
 - A pick navigates through `activateWorkspaceFromRoute` / `selectProject`. A chat whose workspace row is missing first loads its project's list (`paletteNavigation.ts`, the same merge) and opens only if it is still the latest pick — a project pick counts — and no navigation happened meanwhile: a change of the active workspace, the selected project or a counted tab switch (the navigation tick) drops it even when it comes back (A → B → A), because the pick watches for the change (the store's `isNavigationChange`) as route restore and `chat`'s `openWorkspace` do; a tab an earlier route target opens on its own does not count. It opens only if the workspace is in that list — a stale hit or a failed list tells the user why instead of activating an id no row backs, and a chat whose deletion did not finish (`deletionPending`, held or just loaded) is refused the same way, as its sidebar row is disabled. A workspace or chat row that opened then calls `requestComposerFocus`, so the attended chat's input takes focus — for a chat row, only that chat's input. A destination showing a non-chat tab keeps its tab and focus, and the workbench drops the request then, so no chat can take it later. Host hits, project rows, the sidebar and the topbar switcher send no request: a file, spec or plan hit wants its own surface, and the sidebar keeps keyboard focus on its row. **Work in project folder** hands the same guard (`beginPick`) to `enterDefaultWorkspace` as its `stillWanted`, so a late `workspace.list` reply does not pull the user back to the Default workspace. A host hit opens through `openHostHit.ts` — a file as a tab, a spec in the Specs tool, a section there scrolled to its heading line (`requestSpecView` with the line), a transcript at its message, a plan with its chat and the Plan tool — each only after the navigator resolved `true`.
 - Open state lives in [[submodule-web-store]] (`searchOpen` + `openSearch` / `closeSearch`) so an aggregate attention notification from [[submodule-web-notifications]] can open the palette; the host keys it on `searchSession`, so that click resets an already-open palette to its Waiting view. It opens over the first-run wizard as the topbar Settings button does, and its project commands end the wizard the way the wizard's own project cards do. The open palette is the topmost chord layer and owns its keys (`Mod+K` and double Shift close it, Escape in its own order), so the global `Mod+K` is suppressed behind it like behind any modal; plain `Ctrl+R` is swallowed, not acted upon, while it is open (it reloads browsers on Windows/Linux). The global chord accepts neither Shift nor Alt and keeps winning over Monaco's `⌘K` chord prefix.
@@ -418,7 +617,7 @@ transition. ChatView's `/name` command is the independent keyboard entry point t
   synchronously already counts as a key. The frame shows 1.5 s (≈1 s held, a 0.5 s fade) or 1 s under
   `prefers-reduced-motion`, a newer flash replaces it, and the region losing the active mark drops it.
   `F6` / `Shift+F6` walk the ring of shown regions — top bar, Project Home pane, left groups top to
-  bottom, center groups in `Ctrl+F6` order, right groups top to bottom, bottom groups left to right —
+  bottom, center groups in `Ctrl+F6` order, right groups top to bottom, Peek, bottom groups left to right —
   from the active region, in two beats (`regionKeyAction`): with no frame showing and focus inside the
   active region, a press only flashes that region, showing where the keyboard is; a press while the frame
   shows moves and flashes the destination, so a run of presses walks the ring. Focus on `<body>` or
@@ -576,7 +775,7 @@ renames, the palette, Find in Files, the history overlay, the review composer an
 card's note, Other and Discuss fields, the plan page's Add task field, and a running dictation (the first Esc
 stops it, from a `document` bubble listener that always precedes this `window` one; [[submodule-web-speech]])
 prevent in their own handlers. A
-new owner of Esc must call `preventDefault` too.
+new owner of Esc must call `preventDefault` too. Peek's Esc (*Peek*) is the one listener after this one.
 
 **Landing** is markup, like focus recovery: inside the field's region (`[data-region]`), the first
 rendered, focusable `[data-focus-claim]` — a waiting question's current option, revealed in its scroller
@@ -604,7 +803,8 @@ auxiliary rail, which sits outside every region and carries `data-esc-ladder` in
 bottom tool rails; their F6 ring is unchanged). The center's own tab
 strip and actions climb too, into the tab's content (unconfirmed with the user, the recommended answer);
 the center root and anything inside its tabpanel never do, so the parked feed's and an editor's Esc stay
-theirs. The terminal and Monaco keep their Esc; from there F6 or Mod+L.
+theirs. Peek's region never climbs either: Esc there is Peek's own (*Peek*). The terminal and Monaco keep
+their Esc; from there F6 or Mod+L.
 
 **The main area** is the last center group focus entered (the region tracker records it), else the
 first shown center group in ring order, else Project Home's main pane (`[data-main-area]`, which is no

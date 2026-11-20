@@ -21,7 +21,12 @@ function fakeHost(rendered: PanelToolCall[] = []): PanelHost {
 			rendered.push(call);
 			return <div data-testid="host-rendered">{call.toolName}</div>;
 		},
+		renderChat: () => null,
+		openView: () => {},
 		openFile: () => {},
+		openWorkspace: () => {},
+		peek: () => {},
+		onEvent: () => () => {},
 		scope: { workspaceId: "w1", projectId: "p1" },
 		hostProtocol: 128,
 		hostApiVersion: 10,

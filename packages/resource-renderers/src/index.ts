@@ -9,6 +9,8 @@ export {
 	type ResourceMarkdown,
 	type ResourceMarkdownProps,
 	type ResourceOpenInBrowserProps,
+	type ResourcePeekOptions,
+	type ResourcePeekTarget,
 	type ResourcePreferences,
 	ResourcePreferencesProvider,
 	type ResourceReviewSendProps,

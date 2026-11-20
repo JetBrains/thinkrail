@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import {
+	assistText,
 	type OneShotRunner,
 	setOneShotRunner,
 	suggestPlanSummary,
@@ -152,4 +153,36 @@ test("suggestPrDescription is best-effort: nothing to describe, a throw, or empt
 	expect(calls).toBe(1);
 	expect(toPrDescription("```\n\n```")).toBeNull();
 	expect(toPrDescription("  ## Summary\n\nDone. ")).toBe("## Summary\n\nDone.");
+});
+
+test("assistText sends the caller's prompt to the cheap runner, bounded, and answers its trimmed text", async () => {
+	let seen: Parameters<OneShotRunner>[0] | null = null;
+	fakeRunner(async (req) => {
+		seen = req;
+		return { text: "  M \n", model: { provider: "p", id: "m" } };
+	});
+	const controller = new AbortController();
+	expect(await assistText({ prompt: "Size it", maxTokens: 16, signal: controller.signal })).toBe(
+		"M",
+	);
+	expect(seen).toMatchObject({ prompt: "Size it", tier: "cheap", maxTokens: 16 });
+	expect(seen).not.toHaveProperty("system");
+	expect((seen as { signal?: AbortSignal } | null)?.signal).toBeInstanceOf(AbortSignal);
+});
+
+test("assistText is best-effort: no model, an abort or an empty answer is null", async () => {
+	fakeRunner(async () => {
+		throw new Error("no-model");
+	});
+	expect(await assistText({ prompt: "x", maxTokens: 8 })).toBeNull();
+	fakeRunner(async (req) => {
+		await new Promise((_, reject) => req.signal?.addEventListener("abort", reject));
+		return { text: "S", model: { provider: "p", id: "m" } };
+	});
+	const controller = new AbortController();
+	const pending = assistText({ prompt: "x", maxTokens: 8, signal: controller.signal });
+	controller.abort();
+	expect(await pending).toBeNull();
+	fakeRunner(async () => ({ text: "  ", model: { provider: "p", id: "m" } }));
+	expect(await assistText({ prompt: "x", maxTokens: 8 })).toBeNull();
 });

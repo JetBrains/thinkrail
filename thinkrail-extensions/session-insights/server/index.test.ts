@@ -228,6 +228,9 @@ function fakeHost(
 		signal?: AbortSignal;
 	} = {},
 ): FakeHost {
+	const noActions = async (): Promise<never> => {
+		throw new Error("session insights takes no host actions");
+	};
 	const sessions = join(root, name, "sessions");
 	mkdirSync(sessions, { recursive: true });
 	const fake: FakeHost = {
@@ -240,6 +243,28 @@ function fakeHost(
 				warn: (message, error) => fake.warnings.push({ message, error }),
 			},
 			signal: overrides.signal ?? new AbortController().signal,
+			actions: {
+				createWorkspace: noActions,
+				startChat: noActions,
+				sendToChat: noActions,
+				runInWorkspace: noActions,
+				writeWorkspaceFile: noActions,
+				assist: noActions,
+				createContainer: noActions,
+				startOrchestrator: noActions,
+				wakeOrchestrator: noActions,
+				reviewConformance: noActions,
+				addReviewComments: noActions,
+			},
+			events: { subscribe: () => () => {} },
+			publish: () => {},
+			workspaceFacts: async () => null,
+			containers: () => [],
+			taskSpecs: async () => null,
+			specSection: async () => null,
+			openspecTree: async () => null,
+			planSummary: async () => null,
+			githubProblem: async () => null,
 			sessionsRoot: () => {
 				fake.sessionsRootReads += 1;
 				return sessions;
@@ -260,6 +285,7 @@ function fakeHost(
 				overrides.status?.[sessionId] ?? { live: false, completion: null },
 			messageAnchor: overrides.messageAnchor ?? (async () => null),
 			contextWindow: overrides.contextWindow ?? (async () => null),
+			models: async () => [],
 			turnReceipts: overrides.turnReceipts ?? (async () => []),
 			turnTree: overrides.turnTree ?? (async () => null),
 			ensureArtifactsDir: async (workspaceId) =>
@@ -401,12 +427,35 @@ describe("session-insights server descriptor", () => {
 			dataDir: join(root, "inert", "never-created"),
 			log: { info: refuse, warn: refuse },
 			signal: new AbortController().signal,
+			actions: {
+				createWorkspace: refuse,
+				startChat: refuse,
+				sendToChat: refuse,
+				runInWorkspace: refuse,
+				writeWorkspaceFile: refuse,
+				assist: refuse,
+				createContainer: refuse,
+				startOrchestrator: refuse,
+				wakeOrchestrator: refuse,
+				reviewConformance: refuse,
+				addReviewComments: refuse,
+			},
+			events: { subscribe: refuse },
+			publish: refuse,
+			workspaceFacts: refuse,
+			containers: refuse,
+			taskSpecs: refuse,
+			specSection: refuse,
+			openspecTree: refuse,
+			planSummary: refuse,
+			githubProblem: refuse,
 			sessionsRoot: refuse,
 			sessionScope: refuse,
 			childTranscriptDirs: () => Promise.reject(new Error("inert")),
 			sessionStatus: refuse,
 			messageAnchor: refuse,
 			contextWindow: refuse,
+			models: refuse,
 			turnReceipts: refuse,
 			turnTree: refuse,
 			ensureArtifactsDir: refuse,

@@ -60,9 +60,17 @@ core/SPEC.md), not an async wrapper — that would still block the loop in one p
   Indexes cost several MB on a large repo, so the module keeps the four most recently searched roots and
   drops the oldest (an evicted root is rebuilt on its next search). Its hits are core's
   `SpecSectionHit`, re-exported as a type so `search` never imports the package.
+  **`workspaceTaskSpecs(workspaceId, root) → TaskSpecEntry[]`** — the workspace's `task-spec` nodes
+  (`id`, `title` falling back to `id`, `status` or `null`, worktree-relative `path`) through the same
+  per-workspace index `specGraph` reads, `[]` on a failed walk; and **`workspaceSpecSection(workspaceId,
+  root, specId, heading) → string | null`** — the text of one named section of that spec (the heading
+  matched case-insensitively, the shallowest match first, its subsections included), cut along core's
+  `splitSections`, `null` without the spec or the section. These are the extension host's narrow
+  task-spec facts ([[module-extension-api]]): spec-graph reads, never a general file read.
 - **Public surface (barrel):** `specGraph`, `evictSpecIndex`, `projectHasSpecs`, `specSnapshot`,
-  `invalidateSpecSnapshot`, `evictSpecRoot`, `specSections`, `SpecSnapshot`, `SpecSnapshotEntry`,
-  `SpecSections`, `SpecSectionHit`.
+  `invalidateSpecSnapshot`, `evictSpecRoot`, `specSections`, `workspaceTaskSpecs`,
+  `workspaceSpecSection`, `SpecSnapshot`, `SpecSnapshotEntry`, `SpecSections`, `SpecSectionHit`,
+  `TaskSpecEntry`.
 - **Allowed deps:** `persistence` (workspace lookup); `contracts` (DTOs); **`pi-spec-graph/core`** (the
   pi-free read model — the one host-side value-import of the extension package, sanctioned in
   `module-spec-graph`).

@@ -188,3 +188,95 @@ describe("system and failure notices", () => {
 		).toContain('data-testid="agent-try-again"');
 	});
 });
+
+describe("container notes", () => {
+	test("an orchestrator's message shows its own words under its provenance; a wake-up folds its update", () => {
+		const message = renderRow(
+			{
+				kind: "containerNote",
+				id: "n1",
+				note: {
+					kind: "orchestratorMessage",
+					details: {
+						containerId: "c1",
+						containerName: "Docs everywhere",
+						orchestratorSessionId: "o1",
+						mode: "steer",
+						text: "Rebase on **main** first.",
+					},
+				},
+				text: "Message from the orchestrator of the container …",
+			},
+			false,
+		);
+		expect(message).toContain('data-note="orchestratorMessage"');
+		expect(message).toContain("From the orchestrator of “Docs everywhere” · steer");
+		expect(message).toContain("<strong>main</strong>");
+		expect(message).not.toContain("Message from the orchestrator of the container");
+
+		const wake = renderRow(
+			{
+				kind: "containerNote",
+				id: "n2",
+				note: {
+					kind: "wake",
+					details: {
+						containerId: "c1",
+						workspaceId: "w1",
+						workspaceName: "board",
+						reasons: ["chat"],
+					},
+				},
+				text: "Member update · ThinkRail · board",
+			},
+			false,
+		);
+		expect(wake).toContain("Update from board");
+		expect(wake).toContain('aria-expanded="false"');
+		expect(wake).not.toContain("container-note-body");
+
+		const extensionWake = renderRow(
+			{
+				kind: "containerNote",
+				id: "n4",
+				note: {
+					kind: "wake",
+					details: {
+						containerId: "c1",
+						reasons: ["extension"],
+						source: { extension: "board", extensionTitle: "Board", kind: "board-ready" },
+					},
+				},
+				text: "Update from the ThinkRail extension …",
+			},
+			false,
+		);
+		expect(extensionWake).toContain('data-note="wake"');
+		expect(extensionWake).toContain("Update from the Board extension");
+		expect(extensionWake).not.toContain("container-note-body");
+	});
+
+	test("an extension's message shows its own words under the extension's title", () => {
+		const message = renderRow(
+			{
+				kind: "containerNote",
+				id: "n3",
+				note: {
+					kind: "extensionMessage",
+					details: {
+						extension: "board",
+						extensionTitle: "Board",
+						mode: "follow_up",
+						text: "Card **TR-1** was moved back.",
+					},
+				},
+				text: "Message from the ThinkRail extension …",
+			},
+			false,
+		);
+		expect(message).toContain('data-note="extensionMessage"');
+		expect(message).toContain("From the Board extension");
+		expect(message).toContain("<strong>TR-1</strong>");
+		expect(message).not.toContain("Message from the ThinkRail extension");
+	});
+});

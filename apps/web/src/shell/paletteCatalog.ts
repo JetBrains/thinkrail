@@ -27,6 +27,7 @@ import {
 	RiKeyboardLine,
 	RiLayoutBottomLine,
 	RiLayoutColumnLine,
+	RiLayoutGridLine,
 	RiLayoutLeftLine,
 	RiLayoutRightLine,
 	RiListCheck3,
@@ -38,15 +39,21 @@ import {
 	RiSettings3Line,
 	RiShapesLine,
 	RiSparkling2Line,
+	RiStackLine,
 	RiTerminalBoxLine,
 	RiZoomInLine,
 	RiZoomOutLine,
 } from "@remixicon/react";
-import type { EditorInfo, NativePageZoomBridge, Workspace } from "@thinkrail/contracts";
+import type {
+	EditorInfo,
+	ExtensionLayoutToolId,
+	NativePageZoomBridge,
+	Workspace,
+} from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
 import type { Command, CommandShortcut } from "../commands";
-import type { RegisteredPanel } from "../extensions";
+import type { RegisteredPanel, RegisteredView } from "../extensions";
 import {
 	DESKTOP_KEYS,
 	FOCUS_GROUP_BINDINGS,
@@ -58,10 +65,10 @@ import {
 import type { SettingEntry } from "../panels/settingsCatalog";
 import type { SettingsNavGroup } from "../panels/settingsNav";
 import type { PaletteItem } from "../search";
-import type { SettingsSection } from "../store";
-import type { LayoutToolId, TabAction } from "./layout";
+import type { ContainerDialogRequest, SettingsSection } from "../store";
+import type { BuiltinLayoutToolId, TabAction } from "./layout";
 
-export type PaletteTool = Exclude<LayoutToolId, "projects">;
+export type PaletteTool = Exclude<BuiltinLayoutToolId, "projects">;
 
 const TOOL_LABELS: Record<PaletteTool, MessageKey> = {
 	specs: "workbench.tool.specs",
@@ -69,6 +76,7 @@ const TOOL_LABELS: Record<PaletteTool, MessageKey> = {
 	review: "workbench.tool.review",
 	plan: "workbench.tool.plan",
 	artifacts: "workbench.tool.artifacts",
+	orchestrator: "workbench.tool.orchestrator",
 };
 
 const TOOL_ICONS: Record<PaletteTool, RemixiconComponentType> = {
@@ -77,6 +85,7 @@ const TOOL_ICONS: Record<PaletteTool, RemixiconComponentType> = {
 	review: RiFileList3Line,
 	plan: RiListCheck3,
 	artifacts: RiShapesLine,
+	orchestrator: RiSparkling2Line,
 };
 
 export interface PaletteCatalogDeps {
@@ -97,11 +106,27 @@ export interface PaletteCatalogDeps {
 	readonly canSettle: boolean;
 	readonly settled: boolean;
 	readonly settleBlocked: boolean;
+	/** The container the active workspace belongs to (as a member or its orchestrator). */
+	readonly containerId: string | null;
+	/** The active workspace may be grouped into a new container. */
+	readonly canGroup: boolean;
 	readonly settingsGroups: readonly SettingsNavGroup[];
 	readonly settingEntries: readonly SettingEntry[];
 	readonly tabActions: readonly TabAction[];
 	readonly extensionPanels: readonly RegisteredPanel[];
+	/** The extensions' side tools a Show command may reveal: offered ones (their extension on and listed). */
+	readonly extensionTools: readonly PaletteExtensionTool[];
+	/** The extensions' views an Enter command may open: openable ones. */
+	readonly views: readonly RegisteredView[];
+	/** The window's view: its id and, when this build declares it, its declaration. */
+	readonly activeView: { id: string; view: RegisteredView | undefined } | null;
 	readonly actions: PaletteCatalogActions;
+}
+
+export interface PaletteExtensionTool {
+	readonly id: ExtensionLayoutToolId;
+	readonly title: MessageKey;
+	readonly icon: Command["icon"];
 }
 
 export interface PaletteCatalogActions {
@@ -116,7 +141,9 @@ export interface PaletteCatalogActions {
 	readonly toggleLeft: () => void;
 	readonly toggleRight: () => void;
 	readonly toggleBottom: () => void;
-	readonly showTool: (workspaceId: string, tool: PaletteTool) => void;
+	readonly showTool: (workspaceId: string, tool: PaletteTool | ExtensionLayoutToolId) => void;
+	readonly enterView: (view: RegisteredView) => void;
+	readonly exitView: () => void;
 	readonly openExtensionPanel: (workspaceId: string, panel: RegisteredPanel) => void;
 	readonly openExtensionPanelInProject: (projectId: string, panel: RegisteredPanel) => void;
 	readonly showFiles: (mode: "all" | "changed") => void;
@@ -137,6 +164,8 @@ export interface PaletteCatalogActions {
 	readonly openSettings: (section?: SettingsSection, settingId?: string) => void;
 	readonly openShortcuts: () => void;
 	readonly runTabAction: (actionId: string) => void;
+	readonly openContainerDialog: (request: ContainerDialogRequest) => void;
+	readonly openContainerOverview: (containerId: string) => void;
 }
 
 function shortcutOf(
@@ -340,6 +369,37 @@ function pageZoomCommands({ t, pageZoom }: PaletteCatalogDeps): Command[] {
 	];
 }
 
+function extensionViewCommands(deps: PaletteCatalogDeps): Command[] {
+	const { t, actions, activeView } = deps;
+	const commands: Command[] = [];
+	if (activeView) {
+		const { view } = activeView;
+		commands.push({
+			id: "view.extensionView.exit",
+			title: t("commands.view.exitView", {
+				view: view ? t(view.declaration.title) : t("workbench.view.fallback"),
+			}),
+			group: "view",
+			icon: view?.declaration.icon ?? RiLayoutGridLine,
+			keywords: ["view", "workbench", "back", "restore", "leave"],
+			run: actions.exitView,
+		});
+	}
+	if (!deps.activeWorkspace) return commands;
+	for (const view of deps.views) {
+		if (view.id === activeView?.id) continue;
+		commands.push({
+			id: `view.extensionView.enter.${view.id}`,
+			title: t("commands.view.enterView", { view: t(view.declaration.title) }),
+			group: "view",
+			icon: view.declaration.icon,
+			keywords: ["view", "open", view.extension],
+			run: () => actions.enterView(view),
+		});
+	}
+	return commands;
+}
+
 function viewCommands(deps: PaletteCatalogDeps): Command[] {
 	const { t, actions, activeWorkspace } = deps;
 	const commands: Command[] = [];
@@ -379,7 +439,18 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 					: { run: () => actions.showTool(activeWorkspace.id, tool) }),
 			});
 		}
+		for (const tool of deps.extensionTools) {
+			commands.push({
+				id: `view.show.${tool.id}`,
+				title: t("commands.view.showTool", { tool: t(tool.title) }),
+				group: "view",
+				icon: tool.icon,
+				keywords: ["panel", "tool", "extension", t(tool.title)],
+				run: () => actions.showTool(activeWorkspace.id, tool.id),
+			});
+		}
 	}
+	commands.push(...extensionViewCommands(deps));
 	const { contextProjectId } = deps;
 	const openPanel = activeWorkspace
 		? (panel: RegisteredPanel) => actions.openExtensionPanel(activeWorkspace.id, panel)
@@ -473,11 +544,58 @@ function viewCommands(deps: PaletteCatalogDeps): Command[] {
 	return commands;
 }
 
+function containerCommands(deps: PaletteCatalogDeps, workspaceId: string): Command[] {
+	const { t, actions, containerId } = deps;
+	if (containerId === null) {
+		return deps.canGroup
+			? [
+					{
+						id: "container.group",
+						title: t("containers.commands.group"),
+						group: "workspace",
+						icon: RiStackLine,
+						keywords: ["container", "group", "orchestrator", "stack"],
+						mutates: true,
+						run: () => actions.openContainerDialog({ kind: "group", workspaceId }),
+					},
+				]
+			: [];
+	}
+	return [
+		{
+			id: "container.overview",
+			title: t("containers.commands.overview"),
+			group: "workspace",
+			icon: RiLayoutGridLine,
+			keywords: ["container", "overview", "stack", "members"],
+			run: () => actions.openContainerOverview(containerId),
+		},
+		{
+			id: "container.addWorkspace",
+			title: t("containers.commands.addWorkspace"),
+			group: "workspace",
+			icon: RiStackLine,
+			keywords: ["container", "worktree", "stack", "attach"],
+			mutates: true,
+			run: () => actions.openContainerDialog({ kind: "addWorkspace", containerId }),
+		},
+		{
+			id: "container.remove",
+			title: t("containers.commands.remove"),
+			group: "workspace",
+			icon: RiDeleteBinLine,
+			keywords: ["container", "dissolve", "archive"],
+			mutates: true,
+			run: () => actions.openContainerDialog({ kind: "remove", containerId }),
+		},
+	];
+}
+
 function workspaceCommands(deps: PaletteCatalogDeps): Command[] {
 	const { t, actions, activeWorkspace } = deps;
 	if (!activeWorkspace) return [];
 	const workspaceId = activeWorkspace.id;
-	const commands: Command[] = [];
+	const commands: Command[] = [...containerCommands(deps, workspaceId)];
 	if (deps.readAction === "markRead") {
 		commands.push({
 			id: "workspace.markRead",

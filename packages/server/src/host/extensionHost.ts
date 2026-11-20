@@ -1,7 +1,13 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import type { HistoryScope, Project, Workspace } from "@thinkrail/contracts";
+import {
+	chatState,
+	type ExtensionEventPush,
+	type HistoryScope,
+	type Project,
+	type Workspace,
+} from "@thinkrail/contracts";
 import { seedArtifactsDir } from "@thinkrail/shared/artifactsDir";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import {
@@ -9,28 +15,86 @@ import {
 	getPiRuntimeGeneration,
 	hasSession,
 	isPiSessionId,
+	listSessions,
+	listSettledModels,
 	sessionCompletionOf,
 } from "../agent";
+import { listContainers } from "../containers";
 import type {
 	ExtensionArtifactsDir,
+	ExtensionChatFacts,
 	ExtensionHostProject,
 	ExtensionHostServices,
 	ExtensionMessageAnchor,
+	ExtensionModel,
+	ExtensionOpenspecTree,
+	ExtensionPlanSummary,
+	ExtensionPublishScope,
 	ExtensionSessionPlacement,
 	ExtensionSessionView,
+	ExtensionTaskSpec,
 	ExtensionTreeFile,
 	ExtensionTurnReceipt,
 	ExtensionTurnTree,
+	ExtensionWorkspaceFacts,
 } from "../extensions";
 import { gitAsync, nonInteractiveGitEnv, readBlobBytesAtAsync } from "../git";
+import { ghSetupProblem } from "../github";
 import { locateEntry } from "../history";
 import { logger } from "../log";
 import { dataDir } from "../persistence";
 import { listProjects } from "../projects";
+import { getConfig } from "../settings";
+import { workspaceSpecSection, workspaceTaskSpecs } from "../spec";
+import { planSummary as storedPlanSummary, todoCounts } from "../todos";
 import { listTurns } from "../turns";
-import { listAllWorkspaceRecords, listWorkspaceRecords } from "../workspaces";
+import {
+	isChatWorkspace,
+	listAllWorkspaceRecords,
+	listWorkspaceRecords,
+	orchestratorChat,
+	workspaceDiffStats,
+} from "../workspaces";
 import { historyHiddenCwd } from "./chats";
+import { extensionActions, extensionContainer } from "./extensionActions";
+import { createExtensionEventHub } from "./extensionEvents";
 import { buildHistoryScope } from "./historyScope";
+import { lastActions } from "./lastActions";
+import { readOpenspecTree } from "./openspecTree";
+
+export const isExtensionDisabled = (name: string): boolean =>
+	getConfig().disabledExtensions.includes(name);
+
+/** The live host events: `server.ts` emits from inside its existing publishers, never a second one. */
+export const extensionEvents = createExtensionEventHub({
+	isDisabled: isExtensionDisabled,
+	log: (name) => logger(`extension:${name}`),
+});
+
+type ExtensionEventPublisher = (push: ExtensionEventPush, scope: ExtensionPublishScope) => void;
+
+let extensionEventPublisher: ExtensionEventPublisher | null = null;
+
+export function setExtensionEventPublisher(publisher: ExtensionEventPublisher | null): void {
+	extensionEventPublisher = publisher;
+}
+
+const EVENT_TYPE = /^[\w.:-]{1,100}$/;
+
+function publishFor(extension: string): ExtensionHostServices["publish"] {
+	return (type, payload, scope = {}) => {
+		if (typeof type !== "string" || !EVENT_TYPE.test(type))
+			throw new Error(`An extension event type is 1–100 word characters, dots or dashes: ${type}`);
+		if (isExtensionDisabled(extension) || !extensionEventPublisher) return;
+		extensionEventPublisher(
+			{ extension, type, payload },
+			{
+				...(typeof scope.workspaceId === "string" ? { workspaceId: scope.workspaceId } : {}),
+				...(typeof scope.projectId === "string" ? { projectId: scope.projectId } : {}),
+			},
+		);
+	};
+}
 
 function strictlyInside(root: string, path: string): string | null {
 	const rel = relative(root, path);
@@ -156,6 +220,16 @@ export async function modelContextWindow(provider: string, model: string): Promi
 	}
 }
 
+/** The models a new chat can use, as `provider/id` with their catalog name and thinking levels. */
+export async function extensionModels(): Promise<ExtensionModel[]> {
+	return (await listSettledModels()).map((model) => ({
+		id: `${model.provider}/${model.id}`,
+		name: model.name,
+		provider: model.provider,
+		thinkingLevels: model.thinkingLevels,
+	}));
+}
+
 /** A session's turn receipts across the registered workspaces, oldest first; paths stay repo-relative. */
 export async function turnReceipts(sessionId: string): Promise<ExtensionTurnReceipt[]> {
 	return listAllWorkspaceRecords()
@@ -246,11 +320,120 @@ export async function ensureArtifactsDir(
 	}
 }
 
+function chatPlan(workspaceId: string, sessionId: string): ExtensionChatFacts["plan"] {
+	try {
+		const counts = todoCounts({ workspaceId, sessionId });
+		return counts.total > 0 ? counts : null;
+	} catch {
+		return null;
+	}
+}
+
+/** An open workspace's review, diff and chats, from the records, git, the session states and the last actions. */
+export async function workspaceFacts(workspaceId: string): Promise<ExtensionWorkspaceFacts | null> {
+	const workspace = listAllWorkspaceRecords().find((candidate) => candidate.id === workspaceId);
+	if (!workspace) return null;
+	const [diff, chats] = await Promise.all([
+		isChatWorkspace(workspace)
+			? null
+			: workspaceDiffStats(workspace.id).then(
+					({ added, removed }) => ({ added, removed }),
+					() => null,
+				),
+		listSessions(workspace.id, workspace.worktreePath).catch(() => []),
+	]);
+	const { review } = workspace;
+	return {
+		id: workspace.id,
+		projectId: workspace.projectId,
+		name: workspace.name,
+		branch: workspace.branch,
+		baseBranch: workspace.baseBranch,
+		kind: workspace.kind ?? "worktree",
+		review: review
+			? {
+					kind: review.kind,
+					number: review.number,
+					state: review.state ?? "open",
+					...(review.url ? { url: review.url } : {}),
+				}
+			: null,
+		diff,
+		chats: chats.map((chat) => {
+			const lastAction = lastActions.get(chat.sessionId);
+			return {
+				sessionId: chat.sessionId,
+				title: chat.title,
+				state: chatState(chat.state),
+				unread: chat.state?.completionUnread ?? false,
+				plan: chatPlan(workspace.id, chat.sessionId),
+				updatedAt: chat.updatedAt,
+				...(lastAction ? { lastAction } : {}),
+			};
+		}),
+	};
+}
+
+/** An open repository workspace's task-specs from its spec graph; none for a chat, `null` when not open. */
+export async function taskSpecs(workspaceId: string): Promise<ExtensionTaskSpec[] | null> {
+	const workspace = listAllWorkspaceRecords().find((candidate) => candidate.id === workspaceId);
+	if (!workspace) return null;
+	if (isChatWorkspace(workspace)) return [];
+	return workspaceTaskSpecs(workspace.id, workspace.worktreePath);
+}
+
+/** An open repository workspace's `openspec/` markdown and YAML; `null` without it, for a chat or when not open. */
+export async function openspecTree(workspaceId: string): Promise<ExtensionOpenspecTree | null> {
+	const workspace = listAllWorkspaceRecords().find((candidate) => candidate.id === workspaceId);
+	if (!workspace || isChatWorkspace(workspace)) return null;
+	return readOpenspecTree(workspace.worktreePath);
+}
+
+/** One named section of a spec of an open repository workspace, through its spec graph. */
+export async function specSection(
+	workspaceId: string,
+	specId: string,
+	heading: string,
+): Promise<string | null> {
+	if (typeof specId !== "string" || typeof heading !== "string" || !heading.trim()) return null;
+	const workspace = listAllWorkspaceRecords().find((candidate) => candidate.id === workspaceId);
+	if (!workspace || isChatWorkspace(workspace)) return null;
+	return workspaceSpecSection(workspace.id, workspace.worktreePath, specId, heading);
+}
+
+/** A chat's stored TODO plan of an open workspace; `null` when it is not open or the id is no session id. */
+export async function planSummary(
+	workspaceId: string,
+	sessionId: string,
+): Promise<ExtensionPlanSummary | null> {
+	if (typeof sessionId !== "string" || !isPiSessionId(sessionId)) return null;
+	const workspace = listAllWorkspaceRecords().find((candidate) => candidate.id === workspaceId);
+	if (!workspace) return null;
+	try {
+		return storedPlanSummary({ workspaceId: workspace.id, sessionId });
+	} catch {
+		return null;
+	}
+}
+
 export function extensionHostServices(name: string, signal: AbortSignal): ExtensionHostServices {
 	return {
 		dataDir: join(dataDir(), "extensions", name),
 		log: logger(`extension:${name}`),
 		signal,
+		actions: extensionActions(name, signal),
+		events: extensionEvents.bus(name, signal),
+		publish: publishFor(name),
+		workspaceFacts,
+		containers: () =>
+			listContainers().map((container) =>
+				extensionContainer(container, orchestratorChat(container.id)),
+			),
+		taskSpecs,
+		specSection,
+		openspecTree,
+		planSummary,
+		githubProblem: ghSetupProblem,
 		sessionsRoot,
 		sessionScope,
 		childTranscriptDirs,
@@ -260,6 +443,7 @@ export function extensionHostServices(name: string, signal: AbortSignal): Extens
 		}),
 		messageAnchor: (sessionFile, entryId) => messageAnchor(sessionFile, entryId),
 		contextWindow: modelContextWindow,
+		models: extensionModels,
 		turnReceipts,
 		turnTree,
 		ensureArtifactsDir,

@@ -524,20 +524,35 @@ posix(
 );
 
 posix(
-	"an agent's creation keeps its origin on the record for the handoff and returns the chat's model off the wire",
+	"an agent's creation keeps its origin on the record for the handoff, records who started it, and returns the chat's model off the wire",
 	async () => {
 		const model = { provider: "faux", id: "m" } as WireModel;
+		const startedBy = { sessionId: "s-caller", containerId: "box-1" };
 		const seen: unknown[] = [];
-		setWorkspaceCreationHandoff(async (_workspace, kickoff, origin) => {
+		setWorkspaceCreationHandoff(async (workspace, kickoff, origin) => {
 			const [record] = JSON.parse(
 				readFileSync(join(dataDir, "workspace-creations.json"), "utf8"),
-			) as { origin?: string }[];
-			seen.push({ kickoff, origin, persisted: record?.origin });
+			) as { origin?: string; startedBy?: unknown }[];
+			seen.push({
+				kickoff,
+				origin,
+				persisted: record?.origin,
+				startedBy: [record?.startedBy, workspace.startedBy],
+			});
 			return { sessionId: "s-1", model, thinkingLevel: "high" };
 		});
 		const kickoff = { text: "Fix the flaky test" };
-		const handed = await createWorkspaceWithChat("p1", { kickoff, origin: "agent" });
-		expect(seen).toEqual([{ kickoff, origin: "agent", persisted: "agent" }]);
+		const handed = await createWorkspaceWithChat("p1", { kickoff, origin: "agent", startedBy });
+		expect(seen).toEqual([
+			{ kickoff, origin: "agent", persisted: "agent", startedBy: [startedBy, startedBy] },
+		]);
+		expect(handed.workspace.startedBy).toEqual(startedBy);
+		expect(listWorkspaceRecords("p1").find((ws) => ws.id === handed.workspace.id)).toMatchObject({
+			startedBy,
+		});
+		const views = events.filter((event) => event.kind === "changed");
+		expect(views.length).toBeGreaterThan(0);
+		expect(JSON.stringify(views)).not.toContain("s-caller");
 		expect(handed).toMatchObject({ sessionId: "s-1", model, thinkingLevel: "high" });
 		expect(removed()).toEqual([
 			{ id: handed.workspace.id, projectId: "p1", workspace: handed.workspace, sessionId: "s-1" },

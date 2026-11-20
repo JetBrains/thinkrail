@@ -170,6 +170,31 @@ export interface Workspace {
 	deletionPending?: true;
 	/** Where a chat without a project was continued: the workspaces (and their first chats) its summary went to. */
 	continuedTo?: ChatContinuationLink[];
+	/** The chat whose `start_workspace` call created this workspace. */
+	startedBy?: WorkspaceStartedBy;
+	/** On a chat without a project: the container it orchestrates; its folder is that container's home. */
+	orchestratorOf?: string;
+}
+
+export interface WorkspaceStartedBy {
+	sessionId: string;
+	/** Set when the calling chat was a container's orchestrator. */
+	containerId?: string;
+}
+
+/**
+ * A host-owned group of workspaces, possibly from several projects; each member stays one worktree.
+ * A workspace belongs to at most one container, and one that belongs to none has no record.
+ */
+export interface Container {
+	id: string;
+	name: string;
+	/** Ordered members: managed or attached worktrees, never a Default workspace or a chat. */
+	workspaceIds: string[];
+	/** The orchestrator chat's session; that chat's record names this container in `orchestratorOf`. */
+	orchestratorSessionId?: string;
+	createdAt: number;
+	updatedAt: number;
 }
 
 export interface ChatContinuationLink {
@@ -1454,7 +1479,45 @@ export function isFontWeightOffset(value: unknown): value is number {
 	);
 }
 
-export type LayoutToolId = "projects" | "specs" | "files" | "review" | "plan" | "artifacts";
+export const BUILTIN_LAYOUT_TOOL_IDS = [
+	"projects",
+	"specs",
+	"files",
+	"review",
+	"plan",
+	"artifacts",
+	"orchestrator",
+] as const;
+export type BuiltinLayoutToolId = (typeof BUILTIN_LAYOUT_TOOL_IDS)[number];
+/** A singleton side tool an extension's web half declares: `ext:<extension>:<tool>`. */
+export type ExtensionLayoutToolId = `ext:${string}:${string}`;
+export type LayoutToolId = BuiltinLayoutToolId | ExtensionLayoutToolId;
+
+const EXTENSION_LAYOUT_TOOL_ID = /^ext:([a-z0-9][a-z0-9-]{0,63}):([a-z0-9][a-z0-9-]{0,63})$/;
+
+export function isBuiltinLayoutToolId(value: unknown): value is BuiltinLayoutToolId {
+	return BUILTIN_LAYOUT_TOOL_IDS.some((tool) => tool === value);
+}
+
+export function parseExtensionLayoutToolId(
+	value: unknown,
+): { extension: string; tool: string } | null {
+	if (typeof value !== "string") return null;
+	const match = EXTENSION_LAYOUT_TOOL_ID.exec(value);
+	return match?.[1] && match[2] ? { extension: match[1], tool: match[2] } : null;
+}
+
+export function isExtensionLayoutToolId(value: unknown): value is ExtensionLayoutToolId {
+	return parseExtensionLayoutToolId(value) !== null;
+}
+
+export function extensionLayoutToolId(extension: string, tool: string): ExtensionLayoutToolId {
+	return `ext:${extension}:${tool}`;
+}
+
+export function isLayoutToolId(value: unknown): value is LayoutToolId {
+	return isBuiltinLayoutToolId(value) || isExtensionLayoutToolId(value);
+}
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
 
@@ -2302,6 +2365,8 @@ export interface ReviewComment {
 	sessionId?: string;
 	/** Who authored the remark — the human (default, absent) or the plan's reviewer agent. */
 	author?: "user" | "agent";
+	/** A display name for an `agent` remark's author ("Smart review"); never a human, never an approval. */
+	authorLabel?: string;
 	/** Provenance of an agent finding: the plan step (in its session) and the newest reviewed commit sha. */
 	origin?: { todoId: string; reviewedSha: string; sessionId: string };
 	/** Server-derived for the client, never persisted: the reviewed code was overwritten after review. */

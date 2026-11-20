@@ -96,16 +96,12 @@ function freshFolder(root: string, now: Date): string {
 	}
 }
 
-/** Creates the chat's folder and record; the session that owns the folder is the host's to start. */
-export function createChatRecord(now = new Date()): Workspace {
-	const container = ensureChatsContainer();
-	const folder = freshFolder(container.path, now);
-	mkdirSync(folder);
-	const workspace: Workspace = {
+function chatRecord(projectId: string, folder: string, name: string, now: Date): Workspace {
+	return {
 		id: randomUUID(),
-		projectId: container.id,
+		projectId,
 		kind: "chat",
-		name: CHAT_WORKSPACE_NAME,
+		name,
 		branch: "",
 		worktreePath: folder,
 		baseBranch: "",
@@ -113,12 +109,48 @@ export function createChatRecord(now = new Date()): Workspace {
 		initialTerminalPending: true,
 		lastActiveAt: now.getTime(),
 	};
-	const all = loadWorkspaces();
+}
+
+function addChatRecord(all: Workspace[], workspace: Workspace): Workspace {
 	all.push(workspace);
 	saveWorkspaces(all);
 	knownChatIds().add(workspace.id);
 	publishers?.workspace({ kind: "created", workspace });
 	return workspace;
+}
+
+/** Creates the chat's folder and record; the session that owns the folder is the host's to start. */
+export function createChatRecord(now = new Date()): Workspace {
+	const container = ensureChatsContainer();
+	const folder = freshFolder(container.path, now);
+	mkdirSync(folder);
+	return addChatRecord(
+		loadWorkspaces(),
+		chatRecord(container.id, folder, CHAT_WORKSPACE_NAME, now),
+	);
+}
+
+/** A container's orchestrator chat: its folder is the container's existing home, and one chat at most owns it. */
+export function createOrchestratorChatRecord(
+	containerId: string,
+	home: string,
+	name: string,
+	now = new Date(),
+): Workspace {
+	const chats = ensureChatsContainer();
+	const all = loadWorkspaces();
+	if (all.some((workspace) => workspace.orchestratorOf === containerId))
+		throw new Error(`Container ${containerId} already has an orchestrator chat`);
+	if (all.some((workspace) => workspace.worktreePath === home))
+		throw new Error(`Another workspace already owns ${home}`);
+	return addChatRecord(all, {
+		...chatRecord(chats.id, home, name, now),
+		orchestratorOf: containerId,
+	});
+}
+
+export function orchestratorChat(containerId: string): Workspace | null {
+	return chatWorkspaces().find((workspace) => workspace.orchestratorOf === containerId) ?? null;
 }
 
 export function chatWorkspaces(): Workspace[] {

@@ -190,6 +190,32 @@ export function countOpenTodos(params: { workspaceId: string; sessionId: string 
 	return openTodoCount(storeFor(params.workspaceId, params.sessionId).read());
 }
 
+/** A chat's plan size: its unfinished and all its items (loose and grouped). */
+export function todoCounts(params: { workspaceId: string; sessionId: string }): {
+	open: number;
+	total: number;
+} {
+	const plan = storeFor(params.workspaceId, params.sessionId).read();
+	return { open: openTodoCount(plan), total: flatItems(plan).length };
+}
+
+/** A chat's stored plan as the agent wrote it: each step's title, status and notes, and the plan's summary. */
+export function planSummary(params: { workspaceId: string; sessionId: string }): {
+	summary: string | null;
+	steps: { title: string; status: TodoStatus; summary?: string; verification?: string }[];
+} {
+	const plan = storeFor(params.workspaceId, params.sessionId).read();
+	return {
+		summary: plan.summary?.trim() || null,
+		steps: flatItems(plan).map((item) => ({
+			title: item.title,
+			status: item.status,
+			...(item.summary?.trim() ? { summary: item.summary.trim() } : {}),
+			...(item.verification?.trim() ? { verification: item.verification.trim() } : {}),
+		})),
+	};
+}
+
 export function openTodoCount(plan: StoredPlan): number {
 	return flatItems(plan).filter((item) => item.status !== "done").length;
 }

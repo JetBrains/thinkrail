@@ -1,0 +1,85 @@
+{
+	"changes": [
+		{
+			"changeName": "add-webhook-retries",
+			"schemaName": "spec-driven",
+			"planningHome": {
+				"kind": "repo",
+				"root": "<root>",
+				"changesDir": "<root>/openspec/changes",
+				"defaultSchema": "spec-driven"
+			},
+			"changeRoot": "<root>/openspec/changes/add-webhook-retries",
+			"artifactPaths": {
+				"proposal": {
+					"outputPath": "proposal.md",
+					"resolvedOutputPath": "<root>/openspec/changes/add-webhook-retries/proposal.md",
+					"existingOutputPaths": ["<root>/openspec/changes/add-webhook-retries/proposal.md"]
+				},
+				"specs": {
+					"outputPath": "specs/**/*.md",
+					"resolvedOutputPath": "<root>/openspec/changes/add-webhook-retries/specs/**/*.md",
+					"existingOutputPaths": []
+				},
+				"design": {
+					"outputPath": "design.md",
+					"resolvedOutputPath": "<root>/openspec/changes/add-webhook-retries/design.md",
+					"existingOutputPaths": []
+				},
+				"tasks": {
+					"outputPath": "tasks.md",
+					"resolvedOutputPath": "<root>/openspec/changes/add-webhook-retries/tasks.md",
+					"existingOutputPaths": []
+				}
+			},
+			"isPlanningComplete": false,
+			"isComplete": false,
+			"applyRequires": ["tasks"],
+			"nextSteps": [
+				"Run openspec instructions specs --change \"add-webhook-retries\" --json before writing that artifact."
+			],
+			"actionContext": {
+				"mode": "repo-local",
+				"sourceOfTruth": "repo",
+				"planningArtifacts": ["proposal", "specs", "design", "tasks"],
+				"linkedContext": [],
+				"allowedEditRoots": ["<root>"],
+				"requiresAffectedAreaSelection": false,
+				"constraints": [
+					"Repo-local change artifacts and implementation edits are scoped to this project."
+				]
+			},
+			"artifacts": [
+				{
+					"id": "proposal",
+					"outputPath": "proposal.md",
+					"status": "done",
+					"requires": []
+				},
+				{
+					"id": "specs",
+					"outputPath": "specs/**/*.md",
+					"status": "ready",
+					"requires": ["proposal"]
+				},
+				{
+					"id": "design",
+					"outputPath": "design.md",
+					"status": "ready",
+					"requires": ["proposal"]
+				},
+				{
+					"id": "tasks",
+					"outputPath": "tasks.md",
+					"status": "blocked",
+					"requires": ["specs", "design"],
+					"missingDeps": ["specs", "design"]
+				}
+			]
+		}
+	],
+	"root": {
+		"path": "<root>",
+		"source": "nearest"
+	}
+}

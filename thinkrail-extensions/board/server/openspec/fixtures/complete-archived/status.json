@@ -1,0 +1,86 @@
+{
+	"changes": [
+		{
+			"changeName": "rate-limit-login",
+			"schemaName": "spec-driven",
+			"planningHome": {
+				"kind": "repo",
+				"root": "<root>",
+				"changesDir": "<root>/openspec/changes",
+				"defaultSchema": "spec-driven"
+			},
+			"changeRoot": "<root>/openspec/changes/rate-limit-login",
+			"artifactPaths": {
+				"proposal": {
+					"outputPath": "proposal.md",
+					"resolvedOutputPath": "<root>/openspec/changes/rate-limit-login/proposal.md",
+					"existingOutputPaths": ["<root>/openspec/changes/rate-limit-login/proposal.md"]
+				},
+				"specs": {
+					"outputPath": "specs/**/*.md",
+					"resolvedOutputPath": "<root>/openspec/changes/rate-limit-login/specs/**/*.md",
+					"existingOutputPaths": [
+						"<root>/openspec/changes/rate-limit-login/specs/rate-limits/spec.md"
+					]
+				},
+				"design": {
+					"outputPath": "design.md",
+					"resolvedOutputPath": "<root>/openspec/changes/rate-limit-login/design.md",
+					"existingOutputPaths": ["<root>/openspec/changes/rate-limit-login/design.md"]
+				},
+				"tasks": {
+					"outputPath": "tasks.md",
+					"resolvedOutputPath": "<root>/openspec/changes/rate-limit-login/tasks.md",
+					"existingOutputPaths": ["<root>/openspec/changes/rate-limit-login/tasks.md"]
+				}
+			},
+			"isPlanningComplete": true,
+			"isComplete": true,
+			"applyRequires": ["tasks"],
+			"nextSteps": [
+				"All planning artifacts are complete. Run openspec instructions apply --change \"rate-limit-login\" --json to inspect implementation progress."
+			],
+			"actionContext": {
+				"mode": "repo-local",
+				"sourceOfTruth": "repo",
+				"planningArtifacts": ["proposal", "specs", "design", "tasks"],
+				"linkedContext": [],
+				"allowedEditRoots": ["<root>"],
+				"requiresAffectedAreaSelection": false,
+				"constraints": [
+					"Repo-local change artifacts and implementation edits are scoped to this project."
+				]
+			},
+			"artifacts": [
+				{
+					"id": "proposal",
+					"outputPath": "proposal.md",
+					"status": "done",
+					"requires": []
+				},
+				{
+					"id": "specs",
+					"outputPath": "specs/**/*.md",
+					"status": "done",
+					"requires": ["proposal"]
+				},
+				{
+					"id": "design",
+					"outputPath": "design.md",
+					"status": "done",
+					"requires": ["proposal"]
+				},
+				{
+					"id": "tasks",
+					"outputPath": "tasks.md",
+					"status": "done",
+					"requires": ["specs", "design"]
+				}
+			]
+		}
+	],
+	"root": {
+		"path": "<root>",
+		"source": "nearest"
+	}
+}

@@ -17,8 +17,9 @@ import type { Workspace } from "@thinkrail/contracts";
 import { configurePiRuntime } from "../agent";
 import type { ExtensionSessionPlacement } from "../extensions";
 import { resetChatsStoreForTests } from "../persistence";
+import { resetConfigCache, updateConfig } from "../settings";
 import { createChatRecord, markChatDeletionPending, resetChatIdCache } from "../workspaces";
-import { extensionHostServices, messageAnchor } from "./extensionHost";
+import { extensionHostServices, messageAnchor, setExtensionEventPublisher } from "./extensionHost";
 
 const saved = {
 	data: process.env.THINKRAIL_DATA_DIR,
@@ -72,6 +73,7 @@ beforeAll(() => {
 				branch: "feature-a",
 				worktreePath: managed,
 				baseBranch: "main",
+				review: { kind: "pull-request", number: 7, state: "merged", url: "https://example.test/7" },
 			},
 			{
 				id: "w3",
@@ -308,7 +310,7 @@ describe("extensionHostServices", () => {
 		expect(host.sessionStatus("never-ran")).toEqual({ live: false, completion: null });
 	});
 
-	test("reads a model's context window from the host's model catalog, null when it has none", async () => {
+	test("reads a model's context window and the new-chat models from the host's model catalog", async () => {
 		const runtime = await ModelRuntime.create({
 			credentials: new InMemoryCredentialStore(),
 			allowModelNetwork: false,
@@ -335,6 +337,12 @@ describe("extensionHostServices", () => {
 			const host = extensionHostServices("insights", SIGNAL);
 			expect(await host.contextWindow("acme", "big")).toBe(640_000);
 			expect(await host.contextWindow("acme", "missing")).toBeNull();
+			expect(await host.models()).toContainEqual({
+				id: "acme/big",
+				name: "Big",
+				provider: "acme",
+				thinkingLevels: expect.any(Array),
+			});
 		} finally {
 			configurePiRuntime(null);
 		}
@@ -425,6 +433,58 @@ describe("extensionHostServices", () => {
 		rmSync(join(dataDir, "turns.json"), { force: true });
 	});
 
+	test("reports an open workspace's review, diff and chats as facts, null for one that is not open", async () => {
+		const host = extensionHostServices("board", SIGNAL);
+		expect(await host.workspaceFacts("w2")).toEqual({
+			id: "w2",
+			projectId: "p1",
+			name: "Feature A",
+			branch: "feature-a",
+			baseBranch: "main",
+			kind: "worktree",
+			review: { kind: "pull-request", number: 7, state: "merged", url: "https://example.test/7" },
+			diff: null,
+			chats: [],
+		});
+		expect(await host.workspaceFacts(chat.id)).toMatchObject({
+			kind: "chat",
+			diff: null,
+			review: null,
+		});
+		expect(await host.workspaceFacts("nope")).toBeNull();
+	});
+
+	test("publishes an extension's event in its own name, scoped, and drops it while the extension is off", () => {
+		const pushes: unknown[] = [];
+		setExtensionEventPublisher((push, scope) => pushes.push({ push, scope }));
+		try {
+			const host = extensionHostServices("board", SIGNAL);
+			host.publish(
+				"board.changed",
+				{ projectId: "p1" },
+				{
+					projectId: "p1",
+					workspaceId: 3 as unknown as string,
+				},
+			);
+			expect(pushes).toEqual([
+				{
+					push: { extension: "board", type: "board.changed", payload: { projectId: "p1" } },
+					scope: { projectId: "p1" },
+				},
+			]);
+			expect(() => host.publish("", {})).toThrow();
+			expect(() => host.publish("has space", {})).toThrow();
+			updateConfig({ disabledExtensions: ["board"] });
+			host.publish("board.changed", {});
+			expect(pushes).toHaveLength(1);
+		} finally {
+			updateConfig({ disabledExtensions: [] });
+			resetConfigCache();
+			setExtensionEventPublisher(null);
+		}
+	});
+
 	test("seeds an open workspace's artifacts folder and names it both ways", async () => {
 		const host = extensionHostServices("insights", SIGNAL);
 		mkdirSync(other, { recursive: true });
@@ -436,5 +496,101 @@ describe("extensionHostServices", () => {
 		expect(readFileSync(join(other, ".thinkrail", "context", ".gitignore"), "utf8")).toBe("*\n");
 		expect(await host.ensureArtifactsDir("nope")).toBeNull();
 		expect(existsSync(join(other, ".thinkrail", "context"))).toBe(true);
+	});
+
+	test("lists an open workspace's task-specs and reads one of their sections, none for a chat", async () => {
+		const host = extensionHostServices("board", SIGNAL);
+		mkdirSync(join(repo, ".thinkrail", "context"), { recursive: true });
+		writeFileSync(
+			join(repo, ".thinkrail", "context", "TASK-x.md"),
+			"---\nid: task-x\ntype: task-spec\nstatus: draft\ntitle: Task X\n---\n\n## Deferrals\n\n- Later\n",
+		);
+		try {
+			expect(await host.taskSpecs("w1")).toEqual([
+				{ id: "task-x", title: "Task X", status: "draft", path: ".thinkrail/context/TASK-x.md" },
+			]);
+			expect(await host.specSection("w1", "task-x", "Deferrals")).toBe("- Later");
+			expect(await host.specSection("w1", "task-x", "Request")).toBeNull();
+			expect(await host.taskSpecs(chat.id)).toEqual([]);
+			expect(await host.specSection(chat.id, "task-x", "Deferrals")).toBeNull();
+			expect(await host.taskSpecs("nope")).toBeNull();
+			expect(await host.specSection("nope", "task-x", "Deferrals")).toBeNull();
+		} finally {
+			rmSync(join(repo, ".thinkrail"), { recursive: true, force: true });
+		}
+	});
+
+	test("reads a chat's stored plan: steps with their notes and the plan's summary, none for an unknown workspace or id", async () => {
+		const host = extensionHostServices("board", SIGNAL);
+		const sessionId = "019a0000-0000-7000-8000-000000000001";
+		mkdirSync(join(repo, ".thinkrail", "context", "todos"), { recursive: true });
+		const step = (title: string, status: string, extra: Record<string, string> = {}) => ({
+			id: title,
+			title,
+			status,
+			origin: "agent",
+			createdAt: "2026-01-01T00:00:00Z",
+			updatedAt: "2026-01-01T00:00:00Z",
+			...extra,
+		});
+		writeFileSync(
+			join(repo, ".thinkrail", "context", "todos", `${sessionId}.json`),
+			JSON.stringify({
+				version: 6,
+				summary: "Greeting shipped.",
+				todos: [
+					step("Write the greeting", "done", { summary: "Added hi", verification: "bun test" }),
+				],
+				groups: [{ id: "g", title: "Polish", todos: [step("Tidy", "pending")] }],
+			}),
+		);
+		try {
+			expect(await host.planSummary("w1", sessionId)).toEqual({
+				summary: "Greeting shipped.",
+				steps: [
+					{ title: "Tidy", status: "pending" },
+					{
+						title: "Write the greeting",
+						status: "done",
+						summary: "Added hi",
+						verification: "bun test",
+					},
+				],
+			});
+			expect(await host.planSummary("w1", "../escape")).toBeNull();
+			expect(await host.planSummary("nope", sessionId)).toBeNull();
+		} finally {
+			rmSync(join(repo, ".thinkrail"), { recursive: true, force: true });
+		}
+	});
+
+	test("reads an open workspace's openspec/ tree, none for a chat or a workspace not open", async () => {
+		const host = extensionHostServices("board", SIGNAL);
+		mkdirSync(join(repo, "openspec", "changes", "add-x"), { recursive: true });
+		writeFileSync(join(repo, "openspec", "config.yaml"), "schema: spec-driven\n");
+		writeFileSync(join(repo, "openspec", "changes", "add-x", "tasks.md"), "- [ ] one\n");
+		try {
+			expect(await host.openspecTree("w1")).toEqual({
+				files: [
+					{ path: "openspec/changes/add-x/tasks.md", text: "- [ ] one\n" },
+					{ path: "openspec/config.yaml", text: "schema: spec-driven\n" },
+				],
+			});
+			expect(await host.openspecTree(chat.id)).toBeNull();
+			expect(await host.openspecTree("nope")).toBeNull();
+		} finally {
+			rmSync(join(repo, "openspec"), { recursive: true, force: true });
+		}
+	});
+
+	test("reports no gh problem under the offline seam", async () => {
+		const saved = process.env.THINKRAIL_GH_OFFLINE;
+		process.env.THINKRAIL_GH_OFFLINE = "1";
+		try {
+			expect(await extensionHostServices("board", SIGNAL).githubProblem()).toBeNull();
+		} finally {
+			if (saved === undefined) delete process.env.THINKRAIL_GH_OFFLINE;
+			else process.env.THINKRAIL_GH_OFFLINE = saved;
+		}
 	});
 });

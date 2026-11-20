@@ -6,6 +6,7 @@ import {
 	type ResourceFileReviewProps,
 	type ResourceHost,
 	ResourceHostProvider,
+	type ResourcePeekTarget,
 	type ResourcePreferences,
 	ResourcePreferencesProvider,
 	type ResourceReviewSendProps,
@@ -21,8 +22,10 @@ import { resourceBytesUrl } from "../panels/resourcePane";
 import { SendReviewButton } from "../panels/SendReviewButton";
 import { useFileReview } from "../panels/useReviewCommenting";
 import {
+	type PeekEntry,
 	selectFileChangeSince,
 	selectHostSearchReady,
+	selectPeekEntry,
 	selectWorkspaceById,
 	useAppStore,
 } from "../store";
@@ -48,7 +51,14 @@ function ReviewSend({ workspaceId, paths, sessionId }: ResourceReviewSendProps) 
 	return <SendReviewButton workspaceId={workspaceId} path={paths} chatSessionId={sessionId} />;
 }
 
-const HOST: ResourceHost = {
+function peekEntry(target: ResourcePeekTarget, sessionId: string | undefined): PeekEntry {
+	const opener = sessionId ? { sessionId } : {};
+	return target.before === undefined
+		? { kind: "file", path: target.path, ...opener }
+		: { kind: "compare", before: target.before, after: target.path, ...opener };
+}
+
+const BASE_HOST: ResourceHost = {
 	markdown: Markdown,
 	code: {
 		languages: CODE_LANGUAGES,
@@ -73,6 +83,19 @@ const HOST: ResourceHost = {
 	FileReview,
 	ReviewSend,
 	OpenInBrowser: OpenInBrowserButton,
+};
+
+export const HOST: ResourceHost = {
+	...BASE_HOST,
+	peek: (workspaceId, target, options) => {
+		const state = useAppStore.getState();
+		const entry = peekEntry(target, options?.sessionId);
+		if (options?.follow) {
+			state.followPeek(workspaceId, peekEntry(options.follow, options.sessionId), entry);
+		} else {
+			state.requestPeek(workspaceId, entry);
+		}
+	},
 };
 
 function cappedBytesUrl(workspaceId: string, path: string, oid?: string | null): string {
@@ -108,6 +131,19 @@ export const PALETTE_PREVIEW_HOST: ResourceHost = {
 			const paths = selectFileChangeSince(state, previous, workspaceId);
 			if (paths !== undefined) onChange(paths);
 		}),
+};
+
+export const PEEK_HOST: ResourceHost = {
+	...BASE_HOST,
+	openFile: (workspaceId, path, options) => {
+		if (options?.keep) {
+			BASE_HOST.openFile(workspaceId, path, options);
+			return;
+		}
+		const state = useAppStore.getState();
+		const sessionId = selectPeekEntry(state, workspaceId)?.sessionId;
+		state.requestPeek(workspaceId, { kind: "file", path, ...(sessionId ? { sessionId } : {}) });
+	},
 };
 
 export function AppResourceHost({ children }: { children: ReactNode }) {

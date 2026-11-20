@@ -1,0 +1,39 @@
+{
+	"name": "@thinkrail/ext-board",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./server": "./server/index.ts",
+		"./web": "./web/index.ts",
+		"./package.json": "./package.json"
+	},
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@dnd-kit/core": "catalog:",
+		"@remixicon/react": "catalog:",
+		"@thinkrail/contracts": "workspace:*",
+		"@thinkrail/extension-api": "workspace:*",
+		"@thinkrail/locales": "workspace:*",
+		"@thinkrail/ui": "workspace:*",
+		"@xyflow/react": "catalog:",
+		"react": "catalog:",
+		"typebox": "catalog:"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "catalog:",
+		"@types/bun": "catalog:",
+		"@types/react": "catalog:",
+		"@types/react-dom": "catalog:",
+		"react-dom": "catalog:",
+		"typescript": "catalog:"
+	},
+	"pi": {
+		"skills": [
+			"./skills"
+		]
+	}
+}

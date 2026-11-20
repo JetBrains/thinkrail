@@ -21,8 +21,12 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   `ToolInteractionState`, `ToolPlacement`, `WebExtension`, `GlobalOverlayProps`, `ExtensionCommand`,
   `ExtensionChord`, `ExtensionShortcut`, `ExtensionShortcutKey`, `defineWebExtension`, the panel contract
   (`PanelDeclaration`, `PanelChatAction`, `PanelRail`, `PanelProps`, `PanelHost`, `PanelChatTarget`,
-  `PanelChatAnchor`, `PanelToolCall`, `PanelHostScope`, `PanelScope`), and the pure argument/result readers from `toolHelpers` and
-  `toolResultContent`.
+  `PanelChatAnchor`, `PanelChatSession`, `PanelToolCall`, `PanelHostScope`, `PanelScope`,
+  `PanelWorkspaceTarget`, `PanelPeekEntry`, `PanelEventListener`), the side-tool contract
+  (`SideToolDeclaration`), the status-item contract (`StatusItemDeclaration`, `StatusItemProps`,
+  `StatusItemHost`), the container-section contract (`ContainerSectionDeclaration`,
+  `ContainerSectionProps`), the view contract (`ViewDeclaration`), and the pure argument/result readers
+  from `toolHelpers` and `toolResultContent`.
 - **Images are references.** `parseToolResultContent(result).images` returns `contracts`' `WireImage`s,
   in block order.
   - A host reference (`ref` plus optional `width`/`height`) is accepted when its `ref` lies under
@@ -92,7 +96,7 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   through and may change with the chat (a renderer must tolerate their absence). Its DOM-typed members
   are the reason the package's `lib` includes `DOM`; the package still never touches the DOM.
 - `WebExtension` is `{ name, title?, description?, toolRenderers?, globalOverlay?, commands?, shortcuts?,
-  panels? }`.
+  panels?, sideTools?, statusItems?, containerSections?, views? }`.
   Each tool-name entry carries a `renderer` and optional `ToolRegistrationOptions` under `options`;
   `toolRenderers` is optional because a web-only extension renders no tool. `title` / `description` are
   `MessageKey`s for the Settings row of an extension the server catalog lacks; `title` also names a
@@ -165,7 +169,57 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   tool of `scope`'s workspace (where an extension's writes through `ensureArtifactsDir` appear); it is
   optional so a panel offers the action only on a host that has one. `scope` is the workspace whose view
   holds the tab. `hostProtocol` and `hostApiVersion` (the server half's declared `apiVersion`) let a
-  panel degrade against an older host or server half.
+  panel degrade against an older host or server half. `openWorkspace(target)` (`PanelWorkspaceTarget {
+  workspaceId, projectId, sessionId?, peek?, reveal? }`) switches to that workspace, on one of its chats when given — every
+  panel and side tool follows the switch — and shows `peek` (a `PanelPeekEntry`, `peek`'s rules) in that
+  workspace's Peek, since Peek belongs to one workspace; `reveal: "review"` also reveals that workspace's Review
+  tool (the board's *Open review comments*), the one built-in tool a panel may name. `peek(entry)` (`PanelPeekEntry`) shows an entry in `scope`'s
+  workspace's Peek: a panel of the caller's **own** extension (`{ kind: "extension", panel, params?, title? }`,
+  `title` naming its crumb; an undeclared panel is ignored) or a workspace-relative `file` (at `line`) or
+  `compare` pair. `onEvent(type, listener)` (`PanelEventListener`) hears the extension's own
+  `extension.event`s of `type` published after the call — never the channel's replayed last push —, nothing
+  below the event gate or while the extension is off, and returns the unsubscribe; it is how a panel
+  re-reads what its server half's `host.publish` says changed. `renderChat({ workspaceId, sessionId })`
+  (`PanelChatSession`) is that session's **live, interactive chat** — the host's own chat view with its
+  transcript, interactive tool cards (an `ask_user_question` answered there) and composer —, its runtime
+  loaded on demand, inside its own error boundary, with no workspace switch, so a panel shows another
+  workspace's chat where it is (the board card's Chat tab in Peek, the first consumer). A file the chat
+  links opens in that chat's workspace's Peek. `openView(view)` enters one of the extension's own
+  `views` (nothing for another extension's or without a workspace).
+- **Side tools are singleton tools of the workbench's rails**, like Files or Review: a
+  `sideTools` entry (`SideToolDeclaration { title, icon, defaultSide: "left" | "right", load }`) becomes the
+  layout tool `ext:<extension>:<id>` ([[module-contracts]]' bounded `ExtensionLayoutToolId`). It waits as a
+  dimmed rail entry at `defaultSide` until placed, its first reveal opening a pane there, and then moves,
+  folds and rides presets like a built-in tool. Its body is the same props-driven `PanelProps` component a
+  panel is, `params` empty, its `PanelHost.scope` the active workspace and its project — a tool's pane
+  survives workspace switches, so the scope (and the host object) changes under it. A switched-off, missing
+  or too-old extension's placed tool shows the panels' placeholders in its pane; the layout is never reset
+  ([[submodule-web-shell]] § Extension side tools).
+- **Status items are topbar readouts**: a `statusItems` entry (`StatusItemDeclaration { load }`) is a lazy
+  `ComponentType<StatusItemProps>` the shell mounts in the topbar's action cluster, before the host's own
+  status readouts, while the extension is on, served and listed by the host (the panels' rule) — never a
+  placeholder. It renders nothing while it has nothing to say. Its `StatusItemHost` is a `PanelHost`'s
+  `query`, `onEvent`, `openChat`, `openWorkspace`, `peek`, `openView`, `hostProtocol` and `hostApiVersion` for its own
+  extension, with `scope` the active workspace and its project or `null` (Project Home, Welcome), where
+  `peek` shows nothing; there is no tab, file or tool-call rendering, since the topbar holds no
+  workspace view. The precedent is `globalOverlay`'s mount; a component was preferred to a declarative
+  count so an extension decides its own popover.
+- **Container sections are a container's facts in its overview**: a `containerSections` entry
+  (`ContainerSectionDeclaration { load }`) is a lazy `ComponentType<ContainerSectionProps { host, containerId
+  }>` the shell mounts at the top of a container's overview in Peek under the status items' rule (on,
+  served, listed; never a placeholder), with the status item's host; it renders nothing while it has
+  nothing to say about that container (the board's initiative and autopilot are its first consumer).
+- **Views give the extension the whole workbench**: a `views` entry (`ViewDeclaration { title, icon,
+  center, left?, bottom?, layout?, peekEmpty? }`) names one of its `panels` as the **center** — shown in
+  place of the workspace's center groups, which stay untouched underneath — and up to two of its
+  `sideTools`, each leading a pane of its own on the **left** and in the **bottom** panel (`layout`: the
+  left's width and the bottom's height as workbench-wide ratios); Peek stays open on the right, saying
+  `peekEmpty` while it shows nothing. The shell keeps the replaced frame in the window's preferences and
+  restores it exactly on exit; the user enters and leaves from one rail toggle per view, the palette and
+  the shell's *Back to workbench* ([[submodule-web-shell]] § Extension views), the extension from
+  `openView`. A view's side tools are offered nowhere else. It replaced `layoutPresets` (side arrangements
+  with the chat kept in the center), which could not give a panel the center: the board's compact side tool
+  and Board mode went with it.
 - `./server` exposes `ServerExtension` and `defineServerExtension`, with pi `ExtensionFactory` types
   only. Descriptors carry `name` (the identity — the Settings on/off switch and `disabledExtensions` key
   on it), optional display copy `title` / `description` for the Settings catalog, `extensions`, optional
@@ -174,9 +228,11 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   and the Settings copy is the app's locale keys), optional `childExtensions`, optional
   `skillPackages` specifiers and optional `supersedesPackages` (npm names of vanilla pi packages whose
   extensions the host leaves out of its sessions while this extension is on — a user's vanilla install of
-  the same capability), plus optional `apiVersion` and `queries`. Its identity
+  the same capability), plus optional `apiVersion`, `queries` and `hostService`. Its identity
   helper preserves factories, order and optional-field absence; loading and skill resolution remain host
-  responsibilities.
+  responsibilities. It re-exports, as types, the contracts shapes its services carry (`SessionStateRecord`,
+  `Workspace`, `Container`, `ChatState`, `ThinkingLevel`, `BranchReviewState`, `GhSetupProblem`), because
+  an extension's `server/**` imports only this SDK.
 - `queries(host: ExtensionHostServices)` returns `ExtensionQuery` methods by name — queries (reads, and
   writes only to the extension's own data folder or the workspace's Artifacts); the contract
   is in [[module-thinkrail-extensions]] § Shape. **A table lives while its extension is on**: `signal`
@@ -198,7 +254,9 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   message without text (a tool result, a tool-call-only assistant message) — or its nearest shown
   ancestor with `exact: false`; `null` for a file outside `sessionsRoot()`) and `contextWindow(provider,
   model)` (a model's context window from the host's model catalog with its overrides, `null` when unknown)
-  and `turnReceipts(sessionId)` (`ExtensionTurnReceipt[]`: the run change sets the host recorded for that
+  and `models()` (`ExtensionModel[]`: the models a new chat can use — `id` as `provider/id`, the form
+  `createWorkspace`'s `kickoff.model` takes —, `name`, `provider` and its `thinkingLevels`; host facts for a
+  picker, never credentials) and `turnReceipts(sessionId)` (`ExtensionTurnReceipt[]`: the run change sets the host recorded for that
   session, oldest first — start, settle and each changed path, workspace-relative as git reports it, with
   its status and line counts; empty when it kept none) and `turnTree(sessionId, startedAt, limits)`
   (`ExtensionTurnTree`: the workspace as that receipt's run left it — its recorded tree's regular files as
@@ -206,8 +264,85 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   `null` when the host no longer has the tree) and `ensureArtifactsDir(workspaceId)`
   (`ExtensionArtifactsDir`: an open workspace's artifacts folder, absolute and worktree-relative,
   recreated with its self-ignoring `.gitignore` when missing — the session-level `workspaceFiles` rule,
-  addressed by workspace id since queries have no session; `null` for a workspace that is not open).
+  addressed by workspace id since queries have no session; `null` for a workspace that is not open) and
+  `workspaceFacts(workspaceId)` (`ExtensionWorkspaceFacts`: an open workspace's last-known review, its diff
+  stats against the base and its chats as `ExtensionChatFacts` — contracts' `chatState`, unread, the TODO
+  plan's open/total and, for a live chat, `lastAction? { tool, target?, at }`: its most recent tool start as
+  the host saw it in pi's event stream, never parsed from the transcript, with a short, safe target (a
+  workspace-relative path for `read` / `edit` / `write`, omitted outside the worktree; the first 60
+  characters of a `bash` command, the worktree and home folders shortened; else none), kept in memory and
+  gone once the session is disposed —, `null` for a workspace that is not open) and `taskSpecs(workspaceId)`
+  (`ExtensionTaskSpec[]`: the `task-spec` nodes of an open workspace's spec graph — `id`, `title`, `status`
+  or `null`, the worktree-relative `path` —, none for a chat, `null` for a workspace that is not open) and
+  `specSection(workspaceId, specId, heading)` (the text of one named section of a spec of that graph, its
+  subsections included, `null` without the spec or the section — a spec-graph read, never a general file
+  read) and `planSummary(workspaceId, sessionId)` (`ExtensionPlanSummary { summary, steps[{ title, status,
+  summary?, verification? }] }`: a chat's stored TODO plan as the agent wrote it, loose and grouped steps in
+  order, and the plan's completion summary — host facts for the board's review packet; `null` for a workspace
+  that is not open or a session id that is none) and `openspecTree(workspaceId)` (`ExtensionOpenspecTree { files: ExtensionTextFile[], truncated? }`:
+  an open repository workspace's `openspec/**` `.md`, `.yaml` and `.yml` files as worktree-relative paths
+  and text, sorted, at most 2 MiB and 2,000 files in all — `truncated` once the cap stopped the read —, no
+  symlink followed (the `openspec/` folder itself included), nothing outside `openspec/`; `null` without
+  the folder, for a chat or a workspace that is not open — the board's OpenSpec reader) and `githubProblem()` (contracts' `GhSetupProblem`: why the user's own `gh` cannot run now,
+  `missing` or `unauthenticated`, else `null` — the host's `gh auth status` probe, no credentials) and
+  `containers()` (`ExtensionContainer { id, name, workspaceIds, orchestrator { projectId, workspaceId,
+  sessionId } | null }`: every container with its members and, once one started, its orchestrator chat).
   A service is added with the consumer that needs it.
+- **Queries read; actions write through named host actions.** `ExtensionHostServices.actions`
+  (`ExtensionHostActions`) are the only writes an extension makes outside its own data folder and the
+  Artifacts, each a named host operation with contracts-shaped params, never a shell or a host internal:
+  `createWorkspace({ projectId, baseRef?, into?, name?, kickoff: { text, model?, thinkingLevel? } })` →
+  `{ workspaceId, sessionId, branch, kickoffError? }` (the New Workspace dialog's creation, marked as the
+  extension's), `startChat({ workspaceId, kickoff: { text, model?, thinkingLevel? } })` → `{ workspaceId,
+  sessionId, kickoffError? }` (a new chat in an open workspace of a repository project, its first prompt the
+  kickoff as internal work — a New chat with a prompt; `kickoffError` when the chat started but the prompt was
+  not taken, e.g. no model), `sendToChat({ sessionId, text, mode })` (a follow-up or steer the transcript shows as the
+  extension's message under its title), `runInWorkspace({ workspaceId, argv, timeoutMs })` →
+  `{ ok, out, err, timedOut }` (one program by `argv` in a repository workspace's worktree, stopped once
+  those services' `signal` aborts), `writeWorkspaceFile({ workspaceId, path, content })` →
+  `ExtensionWrittenFile { workspaceId, path, bytes }` (`ExtensionWriteWorkspaceFileParams`: one UTF-8 text
+  file at a worktree-relative `/`-separated path of a repository workspace, missing folders created and the
+  file left uncommitted for the user — never an absolute path, `.`, `..` or an empty segment, nothing under
+  `.git`, no symlink or non-folder on the way, a target that is a regular file or none, at most 1 MiB of
+  content (`FILE_TOO_LARGE`); the board's Publish and its OpenSpec Apply are its consumers), and `assist({ prompt, maxTokens? })` → `{ text } | null` (a one-shot ask
+  on the host's own assist model through pi — never a second runtime —, the prompt up to 20,000 characters,
+  `maxTokens` 1–1,024 (256 by default), stopped once the services' `signal` aborts; `null` when no model is
+  configured, it timed out or the answer was empty, so a caller skips silently), and the container
+  actions the board's autopilot uses: `createContainer({ name?, workspaceIds })` → `ExtensionContainer`
+  (`container.create`'s rules: at least one member, none in another container; two or more get their
+  orchestrator), `startOrchestrator({ containerId })` → `ExtensionStartedOrchestrator { containerId,
+  projectId, workspaceId, sessionId }` (`container.startOrchestrator`: started, seeded with no turn, or
+  answered as it is) and `wakeOrchestrator(ExtensionWakeOrchestratorParams { containerId, kind, text })` (a
+  turn-starting `container-wake` from the extension — `kind` 1–40 lowercase letters, digits or dashes, the
+  text at most 20,000 characters — coalesced and queued like the host's member updates, one per kind in
+  flight; refused for an unknown container, `CONTAINER_UNKNOWN`, or one without an orchestrator), and the smart-review pair:
+  `reviewConformance(ExtensionReviewConformanceParams { workspaceId, sessionId?, requirements[{ id, text,
+  scenarios? }], context })` → `ExtensionConformanceResult { items[{ id, verdict: met | unmet | untested,
+  evidence[{ path, line?, note }], tests[] }], summary }` (an independent, read-only check of a repository
+  workspace's change against the requirements — plan review's hidden reviewer subagent on the reviewer model,
+  under the named chat or the workspace's latest, never editing anything and approving nothing; 1–200 requirements
+  with unique ids, the context at most 20,000 characters; one at a time per workspace; stopped once the services'
+  `signal` aborts; the reviewer's verdict validated, one item per requirement in their order) and
+  `addReviewComments({ workspaceId, comments[{ path, line, side, text }], author? })` → `{ comments[{ id, path,
+  line, anchored }] }` (1–100 remarks filed in the workspace's Review as agent comments labelled `author` — at
+  most 40 characters, the extension's title by default —, all or nothing; a line that does not resolve becomes a
+  review-level remark naming it, `anchored: false`). Every action
+  is refused with `EXTENSION_DISABLED` while the extension is off.
+- **Host lifetime.** `ServerExtension.hostService?(host)` returns an `ExtensionHostService { stop? }`; the
+  host starts it once its publishers are wired and whenever the extension is switched back on, and stops
+  it when the extension is switched off and when the host stops, so it must return promptly. Each run gets
+  services of its own whose `signal` aborts once that run stopped, as a query table's does on a switch-off.
+  `host.events.subscribe(type, listener)` (`ExtensionHostEventBus`) returns the unsubscribe, ends with
+  those services' `signal`, and delivers
+  `ExtensionHostEvents`: `session.state` (`SessionStateRecord`), `workspace.created` / `workspace.updated`
+  (`Workspace`, the review refresh included) / `workspace.removed` (`{ projectId, id }`), `agent.settled`
+  (`{ workspaceId, sessionId }`, pi's `agent_settled`), `agent.tool` (`{ workspaceId, sessionId }`, pi's
+  `tool_execution_start`: the chat's `lastAction` fact changed), `project.opened` / `project.closed`
+  (`{ projectId }`, a project joining or leaving the open ones) and `container.updated` / `container.removed`. Each
+  listener gets its own copy; a throw or a rejection is logged and never reaches the host.
+  `host.publish(type, payload, scope?)` pushes contracts' `extension.event { extension, type, payload }`
+  to the clients that may see `scope` (`ExtensionPublishScope { workspaceId?, projectId? }`), dropped while
+  the extension is off; `type` is 1–100 word characters, dots or dashes.
 - `sessionExtensions(session: ExtensionSessionServices) => ExtensionFactory[]` is how an extension uses
   per-session state the host owns: the host calls it once per parent session with that session's
   services: `setting(key)` (the extension's own declared setting, read inside a factory body so a pi
@@ -225,8 +360,8 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   - `awaitToolResponse(toolCallId, signal)` resolves a `ToolResponse`: `{kind: "response", value}`,
     `{kind: "deferred"}` or `{kind: "abandoned"}`.
 - The root is browser-safe and exposes only the web contract; it never re-exports the server half.
-- Workspace dependencies are `contracts` (types, now also `HistoryScope`, `SessionCompletion` and
-  `Workspace` for the host services) and, type-only, `@thinkrail/locales`' `MessageKey` and
+- Workspace dependencies are `contracts` (types, including `HistoryScope`, `SessionCompletion`,
+  `Workspace` and the event, action and facts shapes for the host services) and, type-only, `@thinkrail/locales`' `MessageKey` and
   `@thinkrail/locales/react`'s `Translator`.
   React and pi are type-only contract dependencies; there are no React components, registry, DOM access,
   host imports, or pi runtime values.

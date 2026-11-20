@@ -1,0 +1,30 @@
+{
+	"items": [
+		{
+			"id": "add-2fa-login",
+			"type": "change",
+			"valid": true,
+			"issues": [],
+			"durationMs": 31
+		}
+	],
+	"summary": {
+		"totals": {
+			"items": 1,
+			"passed": 1,
+			"failed": 0
+		},
+		"byType": {
+			"change": {
+				"items": 1,
+				"passed": 1,
+				"failed": 0
+			}
+		}
+	},
+	"version": "1.0",
+	"root": {
+		"path": "<root>",
+		"source": "nearest"
+	}
+}

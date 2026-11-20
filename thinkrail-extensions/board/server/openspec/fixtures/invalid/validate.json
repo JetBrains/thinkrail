@@ -1,0 +1,53 @@
+{
+	"items": [
+		{
+			"id": "drop-legacy-sms",
+			"type": "change",
+			"valid": false,
+			"issues": [
+				{
+					"level": "WARNING",
+					"path": "notifications/spec.md",
+					"message": "ADDED \"Push channel\" should contain SHALL or MUST (RFC 2119 best practice for English specs)"
+				},
+				{
+					"level": "ERROR",
+					"path": "notifications/spec.md",
+					"message": "ADDED \"Push channel\" must include at least one scenario"
+				}
+			],
+			"durationMs": 28
+		},
+		{
+			"id": "notifications",
+			"type": "spec",
+			"valid": true,
+			"issues": [],
+			"durationMs": 8
+		}
+	],
+	"summary": {
+		"totals": {
+			"items": 2,
+			"passed": 1,
+			"failed": 1
+		},
+		"byType": {
+			"change": {
+				"items": 1,
+				"passed": 0,
+				"failed": 1
+			},
+			"spec": {
+				"items": 1,
+				"passed": 1,
+				"failed": 0
+			}
+		}
+	},
+	"version": "1.0",
+	"root": {
+		"path": "<root>",
+		"source": "nearest"
+	}
+}

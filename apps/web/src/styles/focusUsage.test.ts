@@ -82,6 +82,12 @@ const SUPPRESSION_DRAWN_ELSEWHERE: Record<string, { match: string; reason: strin
 			reason: "region root: the active region's accent line marks it",
 		},
 	],
+	"shell/layout/workbenchShared.tsx": [
+		{
+			match: "h-full min-h-0 min-w-0 flex-col overflow-hidden bg-container-content-bg",
+			reason: "region root: the active region's accent line marks it",
+		},
+	],
 	"shell/layout/workbenchSide.tsx": [
 		{
 			match: "relative flex h-full min-h-0 flex-col overflow-hidden bg-container-sidebar-bg",

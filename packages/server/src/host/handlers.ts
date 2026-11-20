@@ -70,7 +70,6 @@ import {
 	removeCustomEndpoint,
 	removeQueuedSession,
 	removeSession,
-	removeWorkspaceSessions,
 	renameSession,
 	replyMcpProbe,
 	resolveExtUi,
@@ -98,7 +97,6 @@ import {
 	discardArtifact,
 	listArtifacts,
 	prepareArtifactsDestination,
-	removeWorkspaceArtifacts,
 	restoreArtifact,
 	withUserRemoval,
 } from "../artifacts";
@@ -118,7 +116,13 @@ import {
 	updateJbcentral,
 } from "../auth";
 import { providerFromRemoteUrl } from "../branch-review";
-import { forgetWorkspaceChanges, revertChange, undoChange } from "../changes";
+import { revertChange, undoChange } from "../changes";
+import {
+	listContainers,
+	removeContainer,
+	removeContainerWorkspace,
+	renameContainer,
+} from "../containers";
 import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
 import { hostEnvironmentStatus, updateHostEnvironment } from "../environment";
@@ -201,14 +205,13 @@ import {
 	markCommentsSent,
 	markFileDone,
 	REVIEW_LEVEL_KEY,
-	removeWorkspaceReviews,
 	reviewSessionKey,
 	rollbackSend,
 	sendableComments,
 	updateComment,
 } from "../reviews";
 import { getConfig, noteRecentModel, setSubagentEnabled, updateConfig } from "../settings";
-import { evictSpecIndex, evictSpecRoot, projectHasSpecs, specGraph } from "../spec";
+import { projectHasSpecs, specGraph } from "../spec";
 import { cancelSpeechInstall, installSpeech, removeSpeech } from "../speech";
 import {
 	deleteTemplate,
@@ -220,7 +223,6 @@ import {
 import {
 	attachTerminal,
 	closeTerminalTab,
-	closeWorkspaceTerminals,
 	listTerminals,
 	reserveTerminal,
 	resizeTerminal,
@@ -237,12 +239,11 @@ import {
 	removeTodo,
 	requestTodoFix,
 	rollbackTodoFix,
-	settleChangeArtifacts,
 	type TodoReviewRecord,
 	updateTodo,
 } from "../todos";
-import { forgetWorkspaceTurns, listTurns } from "../turns";
-import { ensureWatch, notifyWorkspacePathsChanged, stopWatch } from "../watch";
+import { listTurns } from "../turns";
+import { ensureWatch, notifyWorkspacePathsChanged } from "../watch";
 import {
 	assertNotChatsContainer,
 	assertNotChatWorkspace,
@@ -250,7 +251,6 @@ import {
 	type CreationHandoff,
 	createWorkspace,
 	dismissWorkspaceCreation,
-	forgetWorkspace,
 	getWorkspace,
 	isChatsContainer,
 	isChatsContainerId,
@@ -262,7 +262,6 @@ import {
 	listWorkspaceRecords,
 	listWorkspaces,
 	openExistingWorktree,
-	reclaimWorktree,
 	recordWorkspaceActivity,
 	renameWorkspace,
 	resolveWorkspacePath,
@@ -279,7 +278,7 @@ import {
 } from "../workspaces";
 import { ackSend } from "./ackSend";
 import { sessionProviderAnalytics } from "./authAnalytics";
-import { startChatSession } from "./chatSession";
+import { awaitKickoff, startChatSession } from "./chatSession";
 import {
 	assertChatOpen,
 	assertSessionDeletable,
@@ -291,7 +290,7 @@ import {
 	seesChats,
 } from "./chats";
 import { continuationStatus, startContinuation } from "./continuations";
-import { extensionHostServices } from "./extensionHost";
+import { extensionHostServices, isExtensionDisabled } from "./extensionHost";
 import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { provisionInitialTerminal } from "./initialTerminal";
@@ -315,6 +314,13 @@ import {
 	mcpUpdate,
 } from "./mcp";
 import { resolveNewChatModel } from "./newChatModel";
+import {
+	addContainerWorkspaceOrchestrated,
+	createContainerOrchestrated,
+	recoverOrchestratorSession,
+	startContainerOrchestrator,
+} from "./orchestrator";
+import { recordOpenedReview } from "./orchestratorTools";
 import {
 	packagesCheckUpdates,
 	packagesInstall,
@@ -353,11 +359,12 @@ import {
 	markClientStale,
 	releaseItemFix,
 } from "./todoReview";
+import { archiveWorkspace } from "./workspaceArchive";
 
 const log = logger("host");
 
 const extensionQueries = createExtensionQueries({
-	isDisabled: (name) => getConfig().disabledExtensions.includes(name),
+	isDisabled: isExtensionDisabled,
 	services: extensionHostServices,
 });
 
@@ -379,16 +386,6 @@ type WsHandler<M extends WsMethodName> = (
 ) => WsResult<M> | Promise<WsResult<M>>;
 
 type WsHandlers = { [M in WsMethodName]: WsHandler<M> };
-
-async function archiveTeardown(ws: Workspace): Promise<void> {
-	try {
-		await removeWorkspaceSessions(ws.id, ws.worktreePath);
-		await settleChangeArtifacts(ws.id);
-		await reclaimWorktree(ws);
-	} catch {
-		log.warn(`workspace archive teardown failed for ${ws.id}`);
-	}
-}
 
 async function sendUserMessage(
 	mode: SendMode,
@@ -412,13 +409,32 @@ async function sendUserMessage(
 
 const creationClients = new Map<string, string>();
 
-export const workspaceCreationHandoff: CreationHandoff = async (workspace, kickoff, origin) => {
+function joinCreatedWorkspace(containerId: string, workspace: Workspace): void {
+	try {
+		addContainerWorkspaceOrchestrated(containerId, workspace.id);
+	} catch (error) {
+		log.warn(`workspace ${workspace.id} could not join its container ${containerId}`, error);
+	}
+}
+
+function requireContainer(containerId: string): void {
+	if (!listContainers().some((container) => container.id === containerId))
+		throw new CodedError("CONTAINER_UNKNOWN", `Unknown container: ${containerId}`);
+}
+
+export const workspaceCreationHandoff: CreationHandoff = async (
+	workspace,
+	kickoff,
+	origin,
+	into,
+) => {
 	const clientKey = creationClients.get(workspace.id) ?? "";
 	creationClients.delete(workspace.id);
+	if (into) joinCreatedWorkspace(into, workspace);
 	provisionInitialTerminal(workspace);
 	if (!kickoff) return {};
 	await ensureWatch(workspace.id, { prewarm: false });
-	const internal = origin === "agent";
+	const internal = origin !== undefined;
 	const chat = await startChatSession(
 		workspace,
 		{
@@ -429,22 +445,13 @@ export const workspaceCreationHandoff: CreationHandoff = async (workspace, kicko
 	);
 	const { sessionId } = chat;
 	if (!kickoff.text && !kickoff.images?.length) return chat;
-	let preflighted: () => void = () => {};
-	const preflight = new Promise<void>((resolve) => {
-		preflighted = resolve;
+	const kickoffError = await awaitKickoff((onPreflight) => {
+		const send = () => promptSession(sessionId, kickoff.text, kickoff.images, { onPreflight });
+		return internal
+			? ackSend(runObservation.send(sessionId, "internal", send))
+			: sendUserMessage("prompt", sessionId, kickoff.text, clientKey, send);
 	});
-	const send = () =>
-		promptSession(sessionId, kickoff.text, kickoff.images, { onPreflight: preflighted });
-	const sent = internal
-		? ackSend(runObservation.send(sessionId, "internal", send))
-		: sendUserMessage("prompt", sessionId, kickoff.text, clientKey, send);
-	sent.catch(() => {});
-	try {
-		await Promise.race([preflight, sent]);
-		return chat;
-	} catch (err) {
-		return { ...chat, kickoffError: err instanceof Error ? err.message : String(err) };
-	}
+	return kickoffError ? { ...chat, kickoffError } : chat;
 };
 
 function revealDataFolder(dir: string) {
@@ -738,10 +745,12 @@ const handlers: WsHandlers = {
 	"workspace.create": (p) =>
 		observeSetupAction("worktree_create", () => createWorkspace(p.projectId, p.name, p.baseRef)),
 	"workspace.startCreate": (p, ctx) => {
+		if (p.into) requireContainer(p.into);
 		const creation = startWorkspaceCreation(p.projectId, {
 			...(p.name ? { name: p.name } : {}),
 			...(p.baseRef ? { baseRef: p.baseRef } : {}),
 			...(p.kickoff ? { kickoff: p.kickoff } : {}),
+			...(p.into ? { into: p.into } : {}),
 		});
 		creationClients.set(creation.id, ctx.clientKey);
 		void observeSetupAction("worktree_create", () => awaitWorkspaceCreation(creation.id)).catch(
@@ -861,22 +870,23 @@ const handlers: WsHandlers = {
 		records: await markWorkspaceRead(sessionStateWorkspace(getWorkspace(params.id))),
 	}),
 	"workspace.remove": (params) => {
-		const id = params.id;
-		const ws = forgetWorkspace(id);
-		if (ws) {
-			evictSpecIndex(ws.id);
-			evictSpecRoot(ws.worktreePath);
-			removeWorkspaceReviews(ws.id);
-			forgetWorkspaceChanges(ws.id);
-			forgetWorkspaceTurns(ws.id);
-			removeWorkspaceArtifacts(ws.id);
-			stopWatch(ws.id);
-			closeWorkspaceTerminals(ws.id);
-			void archiveTeardown(ws);
-		}
+		archiveWorkspace(params.id);
 		return { ok: true } as const;
 	},
 	"workspace.diffStats": (params) => workspaceDiffStats(params.id),
+	"container.list": () => listContainers(),
+	"container.create": (params) => createContainerOrchestrated(params),
+	"container.rename": (params) => renameContainer(params.containerId, params.name),
+	"container.addWorkspace": (params) =>
+		addContainerWorkspaceOrchestrated(params.containerId, params.workspaceId),
+	"container.removeWorkspace": (params) =>
+		removeContainerWorkspace(params.containerId, params.workspaceId),
+	"container.remove": async (params) => {
+		await removeContainer(params.containerId);
+		return { ok: true } as const;
+	},
+	"container.startOrchestrator": ({ containerId, ...requested }) =>
+		startContainerOrchestrator(containerId, requested),
 	"chat.create": (params) => createChat(params),
 	"chat.delete": async (params) => {
 		await deleteChat(params.workspaceId);
@@ -932,17 +942,7 @@ const handlers: WsHandlers = {
 	"pr.open": async (p) => {
 		recordWorkspaceActivity(p.workspaceId);
 		const { branch, ...result } = await observePrAction(() => openPr(p), p.source ?? "other");
-		if (result.review) {
-			setWorkspaceReview(
-				p.workspaceId,
-				{
-					...result.review,
-					state: "open",
-					...(result.url ? { url: result.url } : {}),
-				},
-				branch,
-			);
-		}
+		recordOpenedReview(p.workspaceId, result, branch);
 		return result;
 	},
 	"dialog.selectDirectory": () =>
@@ -1330,7 +1330,9 @@ const handlers: WsHandlers = {
 	"session.create": async (p) => {
 		const ws = getWorkspace(p.workspaceId);
 		if (isChatWorkspace(ws)) {
-			const { workspace: _workspace, ...created } = await recoverChatSession(ws.id, p);
+			const { workspace: _workspace, ...created } = ws.orchestratorOf
+				? await recoverOrchestratorSession(ws, p)
+				: await recoverChatSession(ws.id, p);
 			return created;
 		}
 		return startChatSession(ws, p, { pick: true });

@@ -8,6 +8,7 @@ import type {
 	BranchStatus,
 	ChangeReceipt,
 	CompletionDelivery,
+	Container,
 	DelegationRunStatus,
 	DetectedAccount,
 	DiffStats,
@@ -145,7 +146,9 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 128;
+export const PROTOCOL_VERSION = 130;
+export const EXTENSION_EVENT_PROTOCOL_VERSION = 130;
+export const CONTAINER_PROTOCOL_VERSION = 129;
 export const EXTENSION_QUERY_PROTOCOL_VERSION = 128;
 export const SUBAGENT_CATALOG_PROTOCOL_VERSION = 127;
 export const SERVER_FALLBACK_PROTOCOL_VERSION = 126;
@@ -360,6 +363,136 @@ export interface WorkspaceRemoved {
 	id: string;
 }
 
+export interface ContainerRemoved {
+	id: string;
+}
+
+/** An extension server half's `host.publish`: for its own web half, which filters by `extension`. */
+export interface ExtensionEventPush {
+	extension: string;
+	type: string;
+	payload: unknown;
+}
+
+/** A container's orchestrator: its chat without a project (whose folder is the container's home) and that chat's session. */
+export interface ContainerOrchestrator {
+	container: Container;
+	workspace: Workspace;
+	sessionId: string;
+}
+
+export const CONTAINER_BRIEF_CUSTOM_TYPE = "container-brief";
+
+/** The orchestrator's first card: a summary of the container's members that adds context and starts no turn. */
+export interface ContainerBriefDetails {
+	containerId: string;
+}
+
+export const CONTAINER_WAKE_CUSTOM_TYPE = "container-wake";
+
+/**
+ * What woke the orchestrator: one of a member's chats settled, started needing the human or failed
+ * (`chat`), a member's PR changed state (`review`), or an extension sent an update (`extension`).
+ */
+export type ContainerWakeReason = "chat" | "review" | "extension";
+
+/** The extension behind a wake-up: its descriptor `name`, its Settings title and the update's kind (`board-ready`). */
+export interface ContainerWakeSource {
+	extension: string;
+	extensionTitle: string;
+	kind: string;
+}
+
+/** The host's card that wakes an orchestrator (starts its turn): about one member workspace, or an extension's update. */
+export interface ContainerWakeDetails {
+	containerId: string;
+	/** The member it is about; absent on an extension's wake-up. */
+	workspaceId?: string;
+	workspaceName?: string;
+	reasons: ContainerWakeReason[];
+	/** An extension's wake-up (reason `extension`). */
+	source?: ContainerWakeSource;
+}
+
+export const ORCHESTRATOR_MESSAGE_CUSTOM_TYPE = "orchestrator-message";
+
+/** An orchestrator's `message_chat` in a member chat: another agent's message, never the human's. */
+export interface OrchestratorMessageDetails {
+	containerId: string;
+	containerName: string;
+	orchestratorSessionId: string;
+	mode: "follow_up" | "steer";
+	/** The orchestrator's own words; the message `content` frames them for the member's agent. */
+	text: string;
+}
+
+export const EXTENSION_MESSAGE_CUSTOM_TYPE = "extension-message";
+
+/** An extension's `sendToChat` host action in a chat: the extension's message, never the human's. */
+export interface ExtensionMessageDetails {
+	/** The extension's descriptor `name`. */
+	extension: string;
+	/** Its Settings title, the label the card shows. */
+	extensionTitle: string;
+	mode: "follow_up" | "steer";
+	/** The extension's own words; the message `content` frames them for the agent. */
+	text: string;
+}
+
+/** The host cards a chat transcript shows: the brief, a wake-up, an orchestrator's or an extension's message. */
+export type ContainerNote =
+	| { kind: "brief"; details: ContainerBriefDetails }
+	| { kind: "wake"; details: ContainerWakeDetails }
+	| { kind: "orchestratorMessage"; details: OrchestratorMessageDetails }
+	| { kind: "extensionMessage"; details: ExtensionMessageDetails };
+
+function isStringRecord(value: unknown, keys: readonly string[]): value is Record<string, string> {
+	if (!value || typeof value !== "object") return false;
+	const record = value as Record<string, unknown>;
+	return keys.every((key) => typeof record[key] === "string");
+}
+
+export function readContainerNote(message: unknown): ContainerNote | null {
+	if (!message || typeof message !== "object") return null;
+	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
+	if (m.role !== "custom") return null;
+	const { details } = m;
+	if (m.customType === CONTAINER_BRIEF_CUSTOM_TYPE && isStringRecord(details, ["containerId"]))
+		return { kind: "brief", details: details as unknown as ContainerBriefDetails };
+	if (
+		m.customType === CONTAINER_WAKE_CUSTOM_TYPE &&
+		isStringRecord(details, ["containerId"]) &&
+		Array.isArray((details as { reasons?: unknown }).reasons) &&
+		(isStringRecord(details, ["workspaceId", "workspaceName"]) ||
+			isStringRecord((details as { source?: unknown }).source, [
+				"extension",
+				"extensionTitle",
+				"kind",
+			]))
+	)
+		return { kind: "wake", details: details as unknown as ContainerWakeDetails };
+	if (
+		m.customType === ORCHESTRATOR_MESSAGE_CUSTOM_TYPE &&
+		isStringRecord(details, [
+			"containerId",
+			"containerName",
+			"orchestratorSessionId",
+			"mode",
+			"text",
+		])
+	)
+		return {
+			kind: "orchestratorMessage",
+			details: details as unknown as OrchestratorMessageDetails,
+		};
+	if (
+		m.customType === EXTENSION_MESSAGE_CUSTOM_TYPE &&
+		isStringRecord(details, ["extension", "extensionTitle", "mode", "text"])
+	)
+		return { kind: "extensionMessage", details: details as unknown as ExtensionMessageDetails };
+	return null;
+}
+
 export type WorkspaceCreationState = "running" | "interrupted" | "failed";
 export type WorkspaceCreationPhase = "preparing" | "checking-out";
 
@@ -439,6 +572,13 @@ export const WS_METHODS = {
 	workspaceSetSubagentsOverride: "workspace.setSubagentsOverride",
 	workspaceSetSubagentMaxConcurrent: "workspace.setSubagentMaxConcurrent",
 	workspaceSetDiffBase: "workspace.setDiffBase",
+	containerList: "container.list",
+	containerCreate: "container.create",
+	containerRename: "container.rename",
+	containerAddWorkspace: "container.addWorkspace",
+	containerRemoveWorkspace: "container.removeWorkspace",
+	containerRemove: "container.remove",
+	containerStartOrchestrator: "container.startOrchestrator",
 	chatCreate: "chat.create",
 	chatDelete: "chat.delete",
 	chatInspect: "chat.inspect",
@@ -639,6 +779,9 @@ export const WS_CHANNELS = {
 	workspaceArtifactsChanged: "workspace.artifactsChanged",
 	workspaceCreationChanged: "workspace.creationChanged",
 	workspaceCreationRemoved: "workspace.creationRemoved",
+	containerUpdated: "container.updated",
+	containerRemoved: "container.removed",
+	extensionEvent: "extension.event",
 	chatContinuation: "chat.continuation",
 	searchTextResults: "search.textResults",
 	settingsChanged: "settings.changed",
@@ -801,10 +944,12 @@ export function opensChatRound(message: unknown): boolean {
 	if (role === "user") return !isControlMessage(plainText(content));
 	if (isBackgroundCommandCompletionMessage(message) || isSubagentCompletionMessage(message))
 		return completionDelivery(message.details) !== "run";
+	const note = readContainerNote(message);
 	return (
 		isTodoReviewFixMessage(message) ||
 		isContinueInWorkspaceRequestMessage(message) ||
-		isChatHandoffMessage(message)
+		isChatHandoffMessage(message) ||
+		(note !== null && note.kind !== "brief")
 	);
 }
 
@@ -1026,7 +1171,14 @@ export interface WsMethodMap {
 		result: Workspace;
 	};
 	"workspace.startCreate": {
-		params: { projectId: string; name?: string; baseRef?: string; kickoff?: WorkspaceKickoff };
+		params: {
+			projectId: string;
+			name?: string;
+			baseRef?: string;
+			kickoff?: WorkspaceKickoff;
+			/** A container the new workspace joins as its creation hands it over (v129). */
+			into?: string;
+		};
 		result: WorkspaceCreation;
 	};
 	"workspace.listCreations": { params: Record<string, never>; result: WorkspaceCreation[] };
@@ -1066,6 +1218,22 @@ export interface WsMethodMap {
 		result: Ack;
 	};
 	"workspace.remove": { params: { id: string }; result: Ack };
+	"container.list": { params: Record<string, never>; result: Container[] };
+	"container.create": { params: { name?: string; workspaceIds: string[] }; result: Container };
+	"container.rename": { params: { containerId: string; name: string }; result: Container };
+	"container.addWorkspace": {
+		params: { containerId: string; workspaceId: string };
+		result: Container;
+	};
+	"container.removeWorkspace": {
+		params: { containerId: string; workspaceId: string };
+		result: Container | null;
+	};
+	"container.remove": { params: { containerId: string }; result: Ack };
+	"container.startOrchestrator": {
+		params: { containerId: string; model?: WireModel; thinkingLevel?: ThinkingLevel };
+		result: ContainerOrchestrator;
+	};
 	"chat.create": {
 		params: { model?: WireModel; thinkingLevel?: ThinkingLevel };
 		result: ChatCreateResult;
@@ -1705,6 +1873,11 @@ export type WsErrorCode =
 	| "SERVER_FALLBACK_STILL_ON"
 	| "EXTENSION_DISABLED"
 	| "UNKNOWN_EXTENSION_QUERY"
+	| "CONTAINER_UNKNOWN"
+	| "CONTAINER_EMPTY"
+	| "CONTAINER_MEMBER_TAKEN"
+	| "CONTAINER_MEMBER_REFUSED"
+	| "CONTAINERS_STORE_UNAVAILABLE"
 	| SpeechErrorCode;
 
 export interface WsResponse {

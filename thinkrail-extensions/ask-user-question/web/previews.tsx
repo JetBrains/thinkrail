@@ -14,6 +14,7 @@ import { useT } from "@thinkrail/locales/react";
 import type { AskUserQuestionPreviewFields } from "@thinkrail/pi-ask-user-question/core";
 import {
 	FramedResourcePreview,
+	type ResourcePeekTarget,
 	useOptionalResourceHost,
 	useResourceScope,
 } from "@thinkrail/resource-renderers";
@@ -21,7 +22,7 @@ import { Button, IconButton } from "@thinkrail/ui/button";
 import { focusAndReveal, scrollsVertically } from "@thinkrail/ui/focus";
 import { Keycaps } from "@thinkrail/ui/keycaps";
 import { cn } from "@thinkrail/ui/utils";
-import { type FocusEvent, useLayoutEffect, useRef, useState } from "react";
+import { type FocusEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useGhostPage, useTestId } from "./ghost";
 
 export type PreviewSource =
@@ -86,14 +87,34 @@ function fileTitle(source: FilePreviewSource): string {
 	return source.before === undefined ? source.path : `${source.before} → ${source.path}`;
 }
 
+function usePeekFollow(source: PreviewSource | null): (peeked: ResourcePeekTarget) => void {
+	const host = useOptionalResourceHost();
+	const scope = useResourceScope();
+	const peeked = useRef<ResourcePeekTarget | null>(null);
+	const path = source?.kind === "file" ? source.path : undefined;
+	const before = source?.kind === "file" ? source.before : undefined;
+	useEffect(() => {
+		const follow = peeked.current;
+		if (!follow || path === undefined || !scope || !host?.peek) return;
+		if (follow.path === path && follow.before === before) return;
+		peeked.current = { path, before };
+		host.peek(scope.workspaceId, peeked.current, { sessionId: scope.sessionId, follow });
+	}, [before, host, path, scope]);
+	return (target) => {
+		peeked.current = target;
+	};
+}
+
 function FileFrame({
 	source,
 	onOpenFile,
 	onFullscreen,
+	onPeeked,
 }: {
 	source: FilePreviewSource;
 	onOpenFile?: ((path: string) => void) | undefined;
 	onFullscreen?: (() => void) | undefined;
+	onPeeked?: (() => void) | undefined;
 }) {
 	const ghost = useGhostPage();
 	const host = useOptionalResourceHost();
@@ -110,6 +131,7 @@ function FileFrame({
 			frameFocus="manual"
 			testIdPrefix="ask-preview"
 			onFullscreen={onFullscreen}
+			onPeeked={onPeeked}
 		/>
 	);
 }
@@ -305,6 +327,7 @@ export function OptionPreviewPane({
 	const tid = useTestId();
 	const ghost = useGhostPage();
 	const [inFrame, setInFrame] = useState(false);
+	const followPeek = usePeekFollow(source);
 	const html = isHtmlSource(source);
 	const onFocus = (event: FocusEvent<HTMLFieldSetElement>) => {
 		if (event.target instanceof HTMLIFrameElement) setInFrame(true);
@@ -380,6 +403,7 @@ export function OptionPreviewPane({
 						source={source}
 						onOpenFile={onOpenFile}
 						onFullscreen={onFullscreen}
+						onPeeked={() => followPeek({ path: source.path, before: source.before })}
 					/>
 				)}
 				{inFrame ? <FrameReturn onReturn={onReturn} /> : null}

@@ -13,6 +13,7 @@ import {
 } from "../agent";
 import { removeWorkspaceArtifacts } from "../artifacts";
 import { forgetWorkspaceChanges } from "../changes";
+import { forgetContainerOrchestrator } from "../containers";
 import { logger } from "../log";
 import { removeWorkspaceReviews } from "../reviews";
 import { evictSpecIndex } from "../spec";
@@ -23,6 +24,7 @@ import { stopWatch } from "../watch";
 import {
 	chatWorkspaces,
 	createChatRecord,
+	createOrchestratorChatRecord,
 	dropChatRecord,
 	getChatWorkspace,
 	isChatWorkspaceId,
@@ -47,13 +49,15 @@ export function seesChats(protocolVersion: number | undefined): boolean {
 
 /** The transcripts no history read may show: a chat's whose deletion did not finish, and every chat's to an older client. */
 export function historyHiddenCwd(protocolVersion: number | undefined): (cwd: string) => boolean {
+	const chats = chatWorkspaces();
 	const pending = new Set(
-		chatWorkspaces()
-			.filter((chat) => chat.deletionPending === true)
-			.map((chat) => chat.worktreePath),
+		chats.filter((chat) => chat.deletionPending === true).map((chat) => chat.worktreePath),
 	);
 	const everyChat = !seesChats(protocolVersion);
-	return (cwd) => pending.has(cwd) || (everyChat && isUnderChatsRoot(cwd));
+	const homes = new Set(
+		chats.filter((chat) => chat.orchestratorOf !== undefined).map((chat) => chat.worktreePath),
+	);
+	return (cwd) => pending.has(cwd) || (everyChat && (isUnderChatsRoot(cwd) || homes.has(cwd)));
 }
 
 type ChatClaim =
@@ -79,6 +83,20 @@ export function assertChatOpen(workspaceId: string): void {
 /** The chat's folder, record and the one session that owns it, in one operation. */
 export function createChat(requested: NewChatModelRequest = {}): Promise<ChatCreateResult> {
 	return claimStart(provisionInitialTerminal(createChatRecord()), requested, false);
+}
+
+/** A container's orchestrator: a chat whose folder is the container's home, with the one session it owns. */
+export function createOrchestratorChat(
+	containerId: string,
+	home: string,
+	name: string,
+	requested: NewChatModelRequest = {},
+): Promise<ChatCreateResult> {
+	return claimStart(
+		provisionInitialTerminal(createOrchestratorChatRecord(containerId, home, name)),
+		requested,
+		false,
+	);
 }
 
 /** A chat whose session never came up (crash between folder and session) gets it here; a start in flight is joined. */
@@ -195,5 +213,15 @@ async function runChatDeletion(workspace: Workspace): Promise<void> {
 	if (isUnderChatsRoot(cwd) && existsSync(cwd)) await trashFile(cwd);
 	dropChatRecord(id);
 	removeWorkspaceArtifacts(id);
+	if (workspace.orchestratorOf) {
+		try {
+			forgetContainerOrchestrator(workspace.orchestratorOf);
+		} catch (error) {
+			log.warn(
+				`container ${workspace.orchestratorOf} kept the link to its deleted orchestrator`,
+				error,
+			);
+		}
+	}
 	log.info(`deleted chat ${id}`);
 }

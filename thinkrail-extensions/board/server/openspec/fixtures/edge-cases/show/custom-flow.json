@@ -1,0 +1,9 @@
+{
+	"status": [
+		{
+			"severity": "error",
+			"code": "show_error",
+			"message": "Change \"custom-flow\" has no proposal.md yet. Run \"openspec status --change custom-flow\" to see which artifact comes next."
+		}
+	]
+}

@@ -1,0 +1,26 @@
+name: research-first
+version: 1
+description: Research before planning, tasks split across files
+artifacts:
+  - id: research
+    generates: research.md
+    description: What we learned
+    template: research.md
+    requires: []
+  - id: plan
+    generates: plan.md
+    description: The plan
+    template: plan.md
+    instruction: |
+      Write the plan.
+      # Not a comment: block scalar text.
+    requires: [research]
+  - id: tasks
+    generates: "tasks/*.md"
+    description: The tasks, one file per area
+    template: tasks.md
+    requires:
+      - plan
+apply:
+  requires: [tasks]
+  tracks: "tasks/*.md"
