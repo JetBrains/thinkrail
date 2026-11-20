@@ -43,7 +43,7 @@ and the routes a computer sends replace its saved entry in place. Welcome fits o
 ## Boundary
 
 - **Owns:** a small React/Vite UI — `App.tsx` (pairing, host reconnect, the drill-down route, deep links via
-  `@capacitor/app` `appUrlOpen` + `getLaunchUrl`, which pair automatically), `Welcome.tsx` (first run, no
+  `@capacitor/app` `appUrlOpen` + `getLaunchUrl`, which pair automatically; `launchLink.ts` remembers the link it handled, so the launch URL — the same on every mount and restart, its token single-use — never pairs twice, nor one for a computer already kept), `Welcome.tsx` (first run, no
   paired host), and three tabs under a bottom `TabBar.tsx` — **Devices · Sessions · Settings** — with
 the screens pushed over them as a stack (`navigation.ts`). **Devices** (`ComputersScreen.tsx`, `ProjectTree.tsx`): the
 IDE project tree with the paired computers as its top level, all on one screen — nothing about it opens a
