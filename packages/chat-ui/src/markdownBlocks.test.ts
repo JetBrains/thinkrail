@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { longMarkdown } from "../../../e2e/perf/longMarkdown";
-import { seededRandom } from "../../../e2e/perf/seededRandom";
 import { createMarkdownSplitter, type MarkdownSplit, splitMarkdown } from "./markdownBlocks";
-import { MARKDOWN_EDGE_FIXTURES } from "./markdownFixtures.test";
+import { longMarkdown, MARKDOWN_EDGE_FIXTURES, seededRandom } from "./markdownFixtures.test";
 
 function normalize(text: string) {
 	return text.replace(/\r\n?/g, "\n");

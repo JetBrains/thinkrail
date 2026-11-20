@@ -55,3 +55,67 @@ export const MARKDOWN_EDGE_FIXTURES: Readonly<Record<string, string>> = {
 	openFenceInList: "- step\n  ```ts\n  const a = 1;\n\n  const b = 2;\n\nNext para",
 	definitionInProse: "Intro paragraph.\n\n[Warning]: The build fails on Windows.\n\nNext.\n\nMore.",
 };
+
+export function seededRandom(seed: number): () => number {
+	let state = seed >>> 0;
+	return () => {
+		state = (state + 0x6d2b79f5) >>> 0;
+		let value = state;
+		value = Math.imul(value ^ (value >>> 15), value | 1);
+		value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+		return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296;
+	};
+}
+
+const WORDS = ["the", "session", "renderer", "commits", "each", "delta", "while", "store", "rows"];
+
+function sentence(random: () => number): string {
+	const words = Array.from(
+		{ length: 8 + Math.floor(random() * 10) },
+		() => WORDS[Math.floor(random() * WORDS.length)] ?? "word",
+	);
+	const at = Math.floor(random() * words.length);
+	const pick = random();
+	if (pick < 0.3) words[at] = `\`${words[at]}()\``;
+	else if (pick < 0.5) words[at] = `[${words[at]}](https://example.com/${words[at]})`;
+	else if (pick < 0.65) words[at] = `**${words[at]}**`;
+	return `${words.join(" ")}.`;
+}
+
+const paragraph = (random: () => number) =>
+	Array.from({ length: 3 + Math.floor(random() * 3) }, () => sentence(random)).join(" ");
+
+const FENCES = [
+	"```ts\nexport function step(input: number): number {\n\treturn input * 2;\n}\n```",
+	"```py\ndef step(value: int) -> int:\n    return value * 2\n```",
+	"```bash\nbun run build && echo done | tee build.log\n```",
+	'```json\n{\n  "enabled": true,\n  "weight": 3\n}\n```',
+	"```mermaid\nflowchart LR\n  Store --> Chat --> Markdown\n```",
+];
+
+const TABLE =
+	"| Component | Renders | Note |\n| --- | ---: | --- |\n| `Row` | 12 | stable |\n| `Turn` | 3 | streamed |";
+
+export function longMarkdown(targetChars = 25_000, seed = 29): string {
+	const random = seededRandom(seed);
+	const blocks = [`# Render report\n\n${paragraph(random)}`];
+	for (let section = 1, length = 0; length < targetChars; section += 1) {
+		const list = Array.from(
+			{ length: 3 + Math.floor(random() * 3) },
+			(_, item) =>
+				`${section % 2 === 0 ? `${item + 1}.` : "-"} ${sentence(random)}${random() < 0.4 ? `\n   - ${sentence(random)}` : ""}`,
+		).join("\n");
+		const block = [
+			`## Section ${section}`,
+			paragraph(random),
+			list,
+			FENCES[section % FENCES.length],
+			...(section % 4 === 0 ? [TABLE] : []),
+			paragraph(random),
+		].join("\n\n");
+		blocks.push(block);
+		length += block.length + 2;
+	}
+	blocks.push("That is all.");
+	return blocks.join("\n\n");
+}
