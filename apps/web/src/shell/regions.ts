@@ -344,8 +344,10 @@ export function focusToolBody(
 			`${REGION_SELECTOR} [data-tool-body="${tool}"]`,
 		);
 		if (!body || !isShown(body) || !ready(body)) return null;
-		if (body.querySelector(BUSY_SELECTOR) && patience-- > 0) return null;
 		const preferred = prefer ? firstFocusableIn(body, prefer) : null;
+		const waiting =
+			body.querySelector(BUSY_SELECTOR) !== null || (prefer !== undefined && preferred === null);
+		if (waiting && patience-- > 0) return null;
 		return preferred ?? focusInsideTarget(body);
 	});
 }

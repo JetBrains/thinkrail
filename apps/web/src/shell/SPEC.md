@@ -566,11 +566,13 @@ theirs. The terminal and an editable Monaco keep their Esc; from there F6 or Mod
 (`leavesFile`): a bare Esc no owner took (not `defaultPrevented`, no claim, no layer) whose target is
 inside a file tab (`FilePane`'s `[data-file-pane]`) and is a non-text element — a reading surface, the
 Markdown block cursor, the toolbar — or the text of a read-only editor (`[data-text-entry="false"]`,
-[[module-resource-renderers]]) runs `showFiles("all", { activeRow: true })`: Files in All mode, focus on
-the active file's row (`aria-current`) rather than the row last focused there, so Esc and Enter toggle
-file ↔ row. Element-level steps still win because they prevent first: a Markdown range clears, a review
-composer cancels, Monaco closes its find widget or message. A text field in the file leaves to its
-region as above.
+[[module-resource-renderers]]) runs `showFiles("all", { activeRow: true })`: Files in All mode, the active
+file revealed (`revealInFiles` reopens its collapsed folders) and focus on its row (`aria-current`) rather
+than the row last focused there, so Esc and Enter toggle file ↔ row. `focusToolBody` waits for such a
+preferred target within its busy budget (the row mounts a few frames after its folders open), then takes
+the tool's usual landing. Element-level steps still win because they prevent first: a Markdown range
+clears, a review composer cancels, Monaco closes its find widget or message. A text field in the file
+leaves to its region as above.
 
 **The main area** is the last center group focus entered (the region tracker records it), else the
 first shown center group in ring order, else Project Home's main pane (`[data-main-area]`, which is no

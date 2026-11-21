@@ -1,7 +1,12 @@
 import { FOCUS_GROUP_BINDINGS, type KeybindingId } from "../keybindings";
 import { openChatInTab } from "../panels/openChat";
 import { SETTING_ATTR } from "../settingsKit";
-import { selectChatAttended, selectHistoryTarget, useAppStore } from "../store";
+import {
+	selectActiveFilePath,
+	selectChatAttended,
+	selectHistoryTarget,
+	useAppStore,
+} from "../store";
 import {
 	focusCenterRegion,
 	focusPreviousRegion,
@@ -90,10 +95,12 @@ export function showFiles(mode: "all" | "changed", { activeRow = false } = {}): 
 	if (!workspaceId) return;
 	state.setFilesMode(mode);
 	state.requestToolView(workspaceId, "files");
+	const activePath = activeRow && mode === "all" ? selectActiveFilePath(state, workspaceId) : null;
+	if (activePath !== null) state.revealInFiles(workspaceId, activePath);
 	focusToolBody(
 		"files",
 		(body) => body.querySelector(`[data-files-mode="${mode}"]`) !== null,
-		activeRow ? ACTIVE_FILE_ROW : undefined,
+		activePath !== null ? ACTIVE_FILE_ROW : undefined,
 	);
 }
 

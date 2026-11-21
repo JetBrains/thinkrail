@@ -1035,12 +1035,15 @@ questionnaire) keep their Tab order and never compete for a region's landing.
 - **Read-only Monaco** (`MonacoEditor`, `readCode`): while the editor is read-only and its text has
   focus (`hasTextFocus`, so the find widget and a focused hover keep every key), ↑/↓ and j/k scroll the
   view one code line and move the caret with it (the caret moves first, then the scroll is set: Monaco's
-  cursor reveal would undo an earlier scroll), Space/Shift+Space page (`cursorPageDown`/`Up`), g/G and
-  Home/End go to the file's ends (`cursorTop`/`Bottom`), h/l move the caret like ←/→; PgUp/PgDn and ←/→
-  stay Monaco's. The press is consumed before Monaco types it, so no "Cannot edit" message. The container
-  carries `data-key-scope="reader"` and, while the read-only text has focus, `data-text-entry="false"`: the
-  app's text-entry rule then lets plain keys through (hint mode's `F`), and its Esc ladder takes Esc back to
-  the Files tree ([[submodule-web-shell]]). An editable editor keeps typing every letter.
+  cursor reveal would undo an earlier scroll). A caret off the completely visible lines (a wheel scrolled
+  away from it) first re-anchors to the first of them going down, the last going up
+  (`support/codeReading.ts`), so the step and Shift+Mod+M stay on the text in view. Space/Shift+Space
+  page (`cursorPageDown`/`Up`), g/G and Home/End go to the file's ends (`cursorTop`/`Bottom`), h/l move
+  the caret like ←/→; PgUp/PgDn and ←/→ stay Monaco's. The press is consumed before Monaco types it, so
+  no "Cannot edit" message. The container carries `data-key-scope="reader"` and, while the read-only text
+  has focus, `data-text-entry="false"`: the app's text-entry rule then lets plain keys through (hint
+  mode's `F`), and its Esc ladder takes Esc back to the Files tree ([[submodule-web-shell]]). An editable
+  editor keeps typing every letter.
 - **HTML, images, SVG and LFS/binary cards** have no reading surface and no `data-focus-default`, so
   a keyboard open lands on the tab button and F6 on the region's usual target. An HTML frame must never be
   a landing: once focused it owns every key, and F6, Esc, Mod+Shift+E and the global chords die inside it

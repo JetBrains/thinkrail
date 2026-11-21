@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
@@ -48,6 +48,8 @@ async function openReadingFolder(page: Page): Promise<string> {
 	writeFileSync(join(root, "data.csv"), `${[header.join(","), ...rows].join("\n")}\n`);
 	const paragraphs = Array.from({ length: 80 }, (_, index) => `<p>Paragraph ${index + 1}</p>`);
 	writeFileSync(join(root, "page.html"), `<!doctype html><body>${paragraphs.join("")}</body>\n`);
+	mkdirSync(join(root, "nested"));
+	writeFileSync(join(root, "nested", "deep.md"), "# Deep file\n\nInside a folder.\n");
 	await revealWorkbenchTool(page, "files");
 	await expect(fileRow(page, "LONG.md")).toBeVisible();
 	return root;
@@ -97,6 +99,31 @@ test("Enter in the Files tree opens the file and moves focus into it, a click ke
 	await query.press("Enter");
 	const table = pane(page).locator('[data-testid="csv-view"] [data-virtuoso-scroller]');
 	await expect(table).toBeFocused();
+});
+
+test("Esc from a file whose folder was collapsed opens the folder again and lands on the file's row", async ({
+	page,
+}) => {
+	await openReadingFolder(page);
+	const folder = filesTree(page)
+		.getByTestId("file-node")
+		.filter({ hasText: /^nested/ });
+	await folder.click();
+	await expect(folder).toHaveAttribute("aria-expanded", "true");
+	await openByKeyboard(page, "deep.md");
+	const cursor = pane(page).getByTestId("markdown-preview").getByTestId("review-cursor");
+	await expect(cursor).toBeFocused();
+
+	await folder.click();
+	await expect(folder).toHaveAttribute("aria-expanded", "false");
+	await expect(fileRow(page, "deep.md")).toHaveCount(0);
+	await pressPlatformShortcut(page, "1");
+	await expect(cursor).toBeFocused();
+
+	await page.keyboard.press("Escape");
+	await expect(fileRow(page, "deep.md")).toBeFocused();
+	await expect(fileRow(page, "deep.md")).toHaveAttribute("aria-current", "true");
+	await expect(folder).toHaveAttribute("aria-expanded", "true");
 });
 
 function focusedPlace(page: Page) {
@@ -288,4 +315,66 @@ test("read-only code reads with j/k, Space and g/G, F labels the page, and Esc r
 
 	await page.keyboard.press("Escape");
 	await expect(fileRow(page, "app.ts")).toBeFocused();
+});
+
+async function shownLines(editor: Locator) {
+	return editor.evaluate((root) => {
+		const view = root.getBoundingClientRect();
+		const shown: number[] = [];
+		for (const number of root.querySelectorAll<HTMLElement>(
+			".margin-view-overlays .line-numbers",
+		)) {
+			const box = (number.parentElement ?? number).getBoundingClientRect();
+			if (box.top >= view.top - 0.5 && box.bottom <= view.bottom + 0.5) {
+				shown.push(Number(number.textContent));
+			}
+		}
+		shown.sort((a, b) => a - b);
+		return { first: shown[0] ?? 0, last: shown.at(-1) ?? 0 };
+	});
+}
+
+async function wheelAndSettle(page: Page, editor: Locator, notches: number) {
+	const before = await shownLines(editor);
+	for (let notch = 0; notch < notches; notch += 1) await page.mouse.wheel(0, 100);
+	await expect.poll(async () => (await shownLines(editor)).first).not.toBe(before.first);
+	let settled = await shownLines(editor);
+	for (let round = 0; round < 20; round += 1) {
+		await page.waitForTimeout(150);
+		const now = await shownLines(editor);
+		if (now.first === settled.first && now.last === settled.last) break;
+		settled = now;
+	}
+	return settled;
+}
+
+test("in read-only code scrolled away from its caret, j and ↑ step from the visible lines and Shift+Mod+M comments there", async ({
+	page,
+}) => {
+	await openReadingFolder(page);
+	await openByKeyboard(page, "app.ts");
+	const editor = pane(page).locator(".monaco-editor");
+	await expect.poll(async () => (await editorState(editor)).focused).toBe(true);
+	await expect.poll(async () => (await editorState(editor)).line).toBe(1);
+	await editor.locator(".margin").hover();
+
+	const below = await wheelAndSettle(page, editor, 6);
+	expect(below.first).toBeGreaterThan(2);
+	await page.keyboard.press("j");
+	await expect.poll(async () => (await shownLines(editor)).first).toBe(below.first + 1);
+	await expect.poll(async () => (await editorState(editor)).line).toBe(below.first + 1);
+
+	await pressPlatformShortcut(page, "Shift+M");
+	const composer = page.getByTestId("review-composer");
+	await expect(composer).toContainText(`Line ${below.first + 1}`);
+	await expect(page.getByTestId("review-composer-input")).toBeFocused();
+	await page.keyboard.press("Escape");
+	await expect(composer).toHaveCount(0);
+	await expect.poll(async () => (await editorState(editor)).focused).toBe(true);
+
+	const further = await wheelAndSettle(page, editor, 12);
+	expect(further.first).toBeGreaterThan(below.first + 1);
+	await page.keyboard.press("ArrowUp");
+	await expect.poll(async () => (await shownLines(editor)).last).toBe(further.last - 1);
+	await expect.poll(async () => (await editorState(editor)).line).toBe(further.last - 1);
 });

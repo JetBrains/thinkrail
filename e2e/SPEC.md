@@ -477,16 +477,17 @@ a Files row, the file's tab and a terminal tab land in its Monaco editor with th
 Esc in that read-only editor goes back to the file's row; a dialog's button closes the dialog and climbs no further; on Project Home the
 Projects tree lands in the main pane.
 `keyboard-reading.spec.ts` pins reading files from the keyboard: Enter on a Files row opens the file with
-focus in it (the Markdown block cursor), Esc returns to the row, a click on a row keeps focus in the tree,
-and a search-palette file pick lands focus in the file (a CSV's table); in a Markdown preview j walks the
-blocks, ↓ scrolls a tall fenced block 40 px at a time before the cursor moves on (only once its end
-shows), Space / Shift+Space page and Shift+G / g reach the ends with the cursor on the last / first block;
-a CSV scrolls by j (40 px), Space (a page) and l / h sideways, Shift+G reaches the bottom and Esc returns
-to its row; and a read-only code file moves the caret with the view on j / k (no "Cannot edit" message),
-pages on Space, reaches its last / first line on Shift+G / g, shows hint labels on `F` (hint mode's Esc
-keeps the editor) and returns to the tree on the next Esc; an HTML file opened with Enter leaves focus on
-its tab, never in the frame, so F6 / Shift+F6, the Esc ladder (toolbar, then the row), Mod+1 and
-Mod+Shift+E all still move it.
+focus in it (the Markdown block cursor), Esc returns to the row (reopening its folder if it was collapsed
+meanwhile), a click on a row keeps focus in the tree, and a search-palette file pick lands focus in the file
+(a CSV's table); in a Markdown preview j walks the blocks, ↓ scrolls a tall fenced block 40 px at a time
+before the cursor moves on (only once its end shows), Space / Shift+Space page and Shift+G / g reach the ends
+with the cursor on the last / first block; a CSV scrolls by j (40 px), Space (a page) and l / h sideways,
+Shift+G reaches the bottom and Esc returns to its row; and a read-only code file moves the caret with the view
+on j / k (no "Cannot edit" message), pages on Space, reaches its last / first line on Shift+G / g, shows hint
+labels on `F` (hint mode's Esc keeps the editor) and returns to the tree on the next Esc, and once a wheel
+scrolls away from the caret, j / ↑ step from the first / last visible line instead, so Shift+Mod+M comments on
+the text in view; an HTML file opened with Enter leaves focus on its tab, never in the frame, so F6 /
+Shift+F6, the Esc ladder (toolbar, then the row), Mod+1 and Mod+Shift+E all still move it.
 `settings-keyboard.spec.ts` pins the Settings frame's keys: opening lands on the current section's tab, and
 Tab goes search → the one tab stop of the section list → the section's first row, which is the content's
 one row stop before any row is focused, after a section change too; ↑/↓, j/k and Home/End open a section
