@@ -17,6 +17,7 @@ import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	isControlMessage,
 	isSpeechModel,
+	PR_COMPARE_BODY_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
@@ -918,9 +919,22 @@ const handlers: WsHandlers = {
 		await reopenPr(p);
 		return { ok: true } as const;
 	},
-	"pr.open": async (p) => {
+	"pr.open": async (p, ctx) => {
 		recordWorkspaceActivity(p.workspaceId);
-		const { branch, ...result } = await observePrAction(() => openPr(p), p.source ?? "other");
+		const { branch, ...result } = await observePrAction(async () => {
+			const opened = await openPr(p);
+			if (
+				opened.action === "compare" &&
+				opened.omittedBody !== undefined &&
+				ctx.protocolVersion !== undefined &&
+				ctx.protocolVersion < PR_COMPARE_BODY_PROTOCOL_VERSION
+			) {
+				throw new Error(
+					"Your branch was pushed, but the review page was not opened: the description is too long for the link and this client cannot show it separately. Copy or save your description before reloading ThinkRail, then try again.",
+				);
+			}
+			return opened;
+		}, p.source ?? "other");
 		if (result.review) {
 			setWorkspaceReview(
 				p.workspaceId,

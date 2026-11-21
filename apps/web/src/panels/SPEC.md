@@ -1933,7 +1933,10 @@ own section. The kebab menu (`plan-menu`, a
   opens `PrSetupDialog` instead of the tab (`compare-body`, or the `gh` variant carrying the same body) so
   the full text sits in a selectable box with a copy button — no auto-open, no claim that the form is
   prefilled. The copy button is a convenience: it reports "copied" only from `copyText`'s own answer, so a
-  plain-HTTP remote client or a denied permission leaves the text on screen, per `lib/SPEC.md`.
+  plain-HTTP remote client or a denied permission leaves the text on screen, per `lib/SPEC.md`. When the
+  `gh` setup dialog shows the omitted body, it does not also show the prefill hint. An older browser
+  that receives the host's compatibility error keeps its edits through the ordinary submit-error
+  path; reloading is not a draft save.
   The `pr.open` request runs with a **180s timeout** (push + gh mutation can outlast the transport's
   60s default) and the header button wears a spinner while any PR work is in flight — the
   **Pushing…** label only during the actual submit (a preview fetch is not a push, and its failure

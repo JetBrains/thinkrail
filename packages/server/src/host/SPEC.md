@@ -960,7 +960,11 @@ enabled/confirmed choice before entering analytics attribution.
   advertised protocol (absent for in-process callers, who speak the current one); `workspace.openReview`
   (and `workspace.branchStatus`, whose callers are always newer) answers a client older than `WORKSPACE_SETTLE_PROTOCOL_VERSION` with `null` for a merged or closed
   review, because such a client reads any review as an open PR and its plan pane would offer *Push
-  updates* that creates a new PR — the host snapshot itself still records the true state. **Branch status / push / generate (v87):**
+  updates* that creates a new PR — the host snapshot itself still records the true state. For `pr.open`,
+  a compare hand-off with `omittedBody` requires `PR_COMPARE_BODY_PROTOCOL_VERSION`. An older client
+  receives an error after the push rather than a link it would open without the description; the error
+  asks the user to save their edits before reloading. Compare links with a complete body and direct
+  forge results are unaffected. **Branch status / push / generate (v87):**
   `workspace.branchStatus` composes the same review lookup + divergence as `openReview` with `git`'s
   `commitsAheadOf` (ahead of the base), `pr`'s `onBaseBranch`, and the provider of origin's push URL (`originUrls`, as `pr.open` reads it); for an
   origin whose push URL differs from its fetch URL the divergence is `countPushTargetDivergence` against the

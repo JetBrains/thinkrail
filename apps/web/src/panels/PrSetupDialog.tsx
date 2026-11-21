@@ -233,7 +233,7 @@ export function PrSetupDialog({
 								<DescriptionBox body={state.omittedBody} />
 							</>
 						)}
-						{state.compareUrl ? (
+						{state.compareUrl && state.omittedBody === undefined ? (
 							<p className="tr-text-ui text-text-muted">{t("panels.prSetup.compareHint")}</p>
 						) : null}
 					</>
