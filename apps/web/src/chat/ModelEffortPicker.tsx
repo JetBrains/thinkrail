@@ -37,7 +37,15 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
-import { type CSSProperties, forwardRef, useImperativeHandle, useMemo, useState } from "react";
+import {
+	type CSSProperties,
+	forwardRef,
+	type KeyboardEvent,
+	useImperativeHandle,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { ModelEffortPill, TONE_TEXT } from "./ModelEffortLabel";
 import {
 	CENTRAL_KIND_TAG,
@@ -73,6 +81,7 @@ import type { ModelPreferences } from "./useModelPreferences";
 
 export interface ModelEffortPickerHandle {
 	open: (query?: string) => void;
+	focus: () => void;
 }
 
 export interface DefaultPairOption {
@@ -101,6 +110,7 @@ export interface ModelEffortPickerProps {
 	canSetDefault?: boolean;
 	tabIndex?: number;
 	fitContainer?: boolean;
+	onTriggerKeyDown?: (event: KeyboardEvent<HTMLButtonElement>) => void;
 }
 
 const FIT_PADDING = 8;
@@ -325,10 +335,12 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 			canSetDefault = true,
 			tabIndex,
 			fitContainer = false,
+			onTriggerKeyDown,
 		},
 		handleRef,
 	) {
 		const t = useT();
+		const triggerRef = useRef<HTMLButtonElement>(null);
 		const [open, setOpen] = useState(false);
 		const [query, setQuery] = useState("");
 		const [showAll, setShowAll] = useState(false);
@@ -343,7 +355,10 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 			onRefresh(false);
 		};
 
-		useImperativeHandle(handleRef, () => ({ open: (q = "") => openWith(q) }));
+		useImperativeHandle(handleRef, () => ({
+			open: (q = "") => openWith(q),
+			focus: () => triggerRef.current?.focus(),
+		}));
 
 		const close = () => {
 			setOpen(false);
@@ -474,9 +489,11 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 		return (
 			<Popover open={open} onOpenChange={(next) => (next ? openWith("") : close())}>
 				<PopoverTrigger
+					ref={triggerRef}
 					data-testid="model-selector"
 					data-open={open}
 					tabIndex={tabIndex}
+					onKeyDown={onTriggerKeyDown}
 					className={cn(
 						"flex h-32 min-w-0 items-center gap-8 rounded-sm px-8 tr-text-ui text-text-default transition-colors hover:bg-control-bg-hovered focus-visible:focus-ring data-[open=true]:bg-control-bg-selected",
 						className,

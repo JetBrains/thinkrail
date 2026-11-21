@@ -303,9 +303,11 @@ roster's catalog reads ([[submodule-web-panels]]).
   that survives the chat tab's unmount; written only by `chat` through `setChatReadingAnchor`) /
   **`composerFocusWonOver`** (browser-local: the tool call the session's host was waiting on when its last
   composer-focus request was served, else `null`; written only by `serveComposerFocusRequest`) /
-  **`promptImages`** (the composer's transient ready images, pending decodes, errors and a fresh generation
-  token; the pure model `PromptImagesState` + `newPromptImagesState` is the store's own
-  `promptImageState.ts`, so runtime creation runs no `chat` code). `updateChatPromptImages(sessionId, update)` changes
+  **`promptImages`** (the composer's transient ready images, file attachments with the path each was
+  already copied to, pending decodes, errors, the in-flight upload's `AbortController` and a fresh generation
+  token; the pure model `PromptImagesState` + `newPromptImagesState` and its transitions
+  `withoutPromptChips` / `withCopiedPromptFile` are the store's own `promptImageState.ts`, so runtime
+  creation runs no `chat` code). `updateChatPromptImages(sessionId, update)` changes
   that draft atomically through the same existing-runtime-only boundary as text drafts. Remounts and
   transcript reconciliation retain it; closing the runtime or clearing its workspace releases it.
   A new runtime gets a different generation even when its session id is reused, so old decodes cannot

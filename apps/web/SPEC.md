@@ -416,11 +416,13 @@ themselves.
 - **Every host route the app composes is proxied by the Vite dev server.** The app reaches the host
   over the `/ws` and `/speech` sockets (the dictation stream, `transport/speech.ts`), over the two byte routes `/files` and `/blob` (images, PDFs, notebooks, markdown-relative
   images), always composed through one function (`panels/resourcePane.resourceBytesUrl`), over
-  `/fonts/` (custom font files and uploads, composed by `transport/fonts.ts`), and over `/images/` (chat
+  `/fonts/` (custom font files and uploads, composed by `transport/fonts.ts`), over `/attachments/` (chat
+  file uploads, `transport/attachments.ts`), and over `/images/` (chat
   image references, resolved with `hostUrl`), all on the transport's HTTP origin. Under `bun run dev` that origin is Vite, and a route Vite does not proxy answers the SPA
   `index.html` with status 200 — an `<img>` shows nothing and a PDF fetch "succeeds" with HTML, while the
-  host-served build and the e2e suite stay green. `vite.config.ts` therefore proxies `/files`, `/blob`,
-  `/fonts` and `/images` beside `/ws` and `/speech` (an unproxied socket upgrade is simply never answered, so dictation
+  host-served build and the e2e suite stay green (an unproxied `PUT /attachments/` never reaches the host, so
+  every dev upload failed). `vite.config.ts` therefore proxies `/files`, `/blob`,
+  `/fonts`, `/attachments` and `/images` beside `/ws` and `/speech` (an unproxied socket upgrade is simply never answered, so dictation
   hung on "starting"), and `devProxy.test.ts` pins the list to the composers' constants.
 - **Focus recovery is markup, not per-surface code.** A surface whose action can remove, replace or
   disable the focused control emits the shell engine's vocabulary ([[submodule-web-shell]], *Focus

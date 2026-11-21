@@ -18,6 +18,7 @@ import {
 	type WireModel,
 	WORKSPACE_CREATION_PROTOCOL_VERSION,
 	type Workspace,
+	withAttachedFiles,
 } from "@thinkrail/contracts";
 import { i18n, T, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
@@ -50,7 +51,12 @@ import {
 	trustGrantParams,
 	untrustedNoticeText,
 } from "@/chat/projectTrust";
-import { imagePasteDropHandlers, PromptImageChips, usePromptImages } from "@/chat/promptImages";
+import {
+	AttachFilesButton,
+	attachmentPasteDropHandlers,
+	PromptImageChips,
+	usePromptImages,
+} from "@/chat/promptImages";
 import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
 import { useModelCatalog } from "@/chat/useModelCatalog";
@@ -82,7 +88,14 @@ import {
 	useAppStore,
 	type WorkspaceRetryDraft,
 } from "@/store";
-import { createSessionWithSkillBaseline, errorText, getTransport } from "@/transport";
+import {
+	attachmentFailureText,
+	createSessionWithSkillBaseline,
+	errorText,
+	getTransport,
+	supportsChatAttachments,
+	uploadPromptFiles,
+} from "@/transport";
 import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
 import { canStartProjectlessChat, startProjectlessChat } from "./chatActions";
@@ -154,7 +167,7 @@ export function NewWorkspaceDialog({
 		pendingDefault.current = null;
 		setExplicitPair(true);
 	}, []);
-	const attachedImages = usePromptImages();
+	const attachedImages = usePromptImages(undefined, supportsChatAttachments(protocolVersion));
 	const [creating, setCreating] = useState(false);
 	const [trusting, setTrusting] = useState(false);
 	const [manageSkills, setManageSkills] = useState(false);
@@ -413,10 +426,26 @@ export function NewWorkspaceDialog({
 	});
 	const submitEnabled = !creating && !templatePending && attachedImages.pending === 0;
 
+	const uploadFiles = async (): Promise<string[] | null> => {
+		try {
+			return await uploadPromptFiles(null, attachedImages.files, {
+				onCopied: attachedImages.markCopied,
+			});
+		} catch (error) {
+			toast.error(attachmentFailureText(error));
+			return null;
+		}
+	};
+
 	const create = async () => {
 		if (!submitEnabled) return;
 		setCreating(true);
-		const text = finalizeTemplateSlotSession(prompt, slotSession).trim();
+		const paths = await uploadFiles();
+		if (paths === null) {
+			setCreating(false);
+			return;
+		}
+		const text = withAttachedFiles(finalizeTemplateSlotSession(prompt, slotSession).trim(), paths);
 		const attachments = attachedImages.images.map(({ name, content }) => ({ name, content }));
 		if (target === "chat") {
 			const started = await startProjectlessChat({
@@ -690,7 +719,13 @@ export function NewWorkspaceDialog({
 							<span className="min-w-0 wrap-anywhere">{promptNote}</span>
 						</p>
 					) : null}
-					<PromptImageChips controller={attachedImages} testId="ws-prompt-images" className="" />
+					<PromptImageChips
+						controller={attachedImages}
+						testId="ws-prompt-images"
+						className=""
+						filesTo="dataDir"
+						onField={() => promptRef.current?.focus()}
+					/>
 				</div>
 
 				<div className="relative shrink-0">
@@ -699,7 +734,7 @@ export function NewWorkspaceDialog({
 						data-testid="ws-prompt"
 						value={prompt}
 						disabled={creating}
-						{...imagePasteDropHandlers(attachedImages)}
+						{...attachmentPasteDropHandlers(attachedImages, toast.info)}
 						onChange={(e) => {
 							const next = e.target.value;
 							const nextSlotSession = slotSession
@@ -767,6 +802,12 @@ export function NewWorkspaceDialog({
 
 				<div className="flex shrink-0 flex-wrap items-center gap-8">
 					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-8">
+						<AttachFilesButton
+							testId="ws-attach"
+							disabled={creating}
+							onFiles={attachedImages.addFiles}
+							onPicked={() => promptRef.current?.focus()}
+						/>
 						<ModelEffortPicker
 							models={models}
 							current={model}

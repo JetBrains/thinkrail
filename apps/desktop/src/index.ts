@@ -29,6 +29,7 @@ import { deliverDeepLinkWhenReady } from "./deepLinkBootstrap";
 import { desktopError, setDesktopErrorReporter } from "./errorReporting";
 import { installExternalNavigation, windowNavigationRules } from "./externalNavigation";
 import { createKeyStateReader } from "./keyState";
+import { readNativeClipboard } from "./nativeClipboard";
 import {
 	type DesktopDialogLabels,
 	readDialogLabels,
@@ -403,6 +404,12 @@ async function start(): Promise<void> {
 						...(input.silent === undefined ? {} : { silent: input.silent }),
 					});
 				},
+				readClipboard: () =>
+					readNativeClipboard({
+						availableFormats: () => Utils.clipboardAvailableFormats(),
+						readImage: () => Utils.clipboardReadImage(),
+						readText: () => Utils.clipboardReadText(),
+					}),
 			},
 			messages: {
 				titleBarDoubleClick: () => {

@@ -48,6 +48,8 @@ import {
 	useSlashCommandCompletion,
 } from "@/prompt";
 import { DICTATION_EVENT } from "@/speech";
+import type { PromptFile } from "@/store";
+import { withoutSentDraft, withRestoredDraft } from "./attachments";
 import { FileChip } from "./FileChip";
 import {
 	ModelEffortPicker,
@@ -56,7 +58,9 @@ import {
 } from "./ModelEffortPicker";
 import { isModelCommand, parseModelCommand } from "./nativeCommands";
 import {
-	imagePasteDropHandlers,
+	AttachFilesButton,
+	attachmentPasteDropHandlers,
+	type PromptChipsHandle,
 	PromptImageChips,
 	type PromptImagesOwner,
 	usePromptImages,
@@ -68,6 +72,11 @@ import type { ModelPreferences } from "./useModelPreferences";
 export type SubmitBehavior = "send" | "steer" | "followUp" | "interrupt";
 
 export type ComposerSubmitDisposition = { accepted: true } | { accepted: false; reason: string };
+
+export interface ComposerUpload {
+	signal: AbortSignal;
+	onCopied: (id: string, path: string) => void;
+}
 
 const COMPOSER_EDITOR_LIMIT_CLASS = {
 	compact: "max-h-[calc(6lh+var(--space-8)+var(--space-8))]",
@@ -174,7 +183,10 @@ function highlightTint(state: SlotHighlightState): string {
 interface ComposerProps {
 	value: string;
 	onChange: (value: string) => void;
+	readDraft: () => string;
 	imageOwner?: PromptImagesOwner;
+	acceptsFiles: boolean;
+	onAttachmentNotice: (message: string) => void;
 	isStreaming: boolean;
 	awaitingResponse: boolean;
 	growthLimit: ComposerGrowthLimit;
@@ -196,7 +208,9 @@ interface ComposerProps {
 		text: string,
 		attachments: ChatAttachment[],
 		behavior: SubmitBehavior,
-	) => ComposerSubmitDisposition;
+		files: PromptFile[],
+		upload: ComposerUpload,
+	) => ComposerSubmitDisposition | Promise<ComposerSubmitDisposition>;
 	onAbort: () => void;
 	onEnterTranscript?: () => void;
 	onShiftTabOut?: () => boolean;
@@ -223,7 +237,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	{
 		value,
 		onChange,
+		readDraft,
 		imageOwner,
+		acceptsFiles,
+		onAttachmentNotice,
 		isStreaming,
 		awaitingResponse,
 		growthLimit,
@@ -257,14 +274,16 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const keys = useLocalKeys("composer", LOCAL_KEY_DEFAULTS.composer);
 	const ref = useRef<HTMLTextAreaElement>(null);
 	const pickerRef = useRef<ModelEffortPickerHandle>(null);
+	const chipsRef = useRef<PromptChipsHandle>(null);
 	const [caret, setCaret] = useState(0);
-	const attachedImages = usePromptImages(imageOwner);
-	const { images } = attachedImages;
+	const attachedImages = usePromptImages(imageOwner, acceptsFiles);
+	const { images, files, errors: attachmentErrors, uploading } = attachedImages;
 	const [submitError, setSubmitError] = useState<string | null>(null);
 	const pendingImages = attachedImages.pending;
+	const attachmentCount = images.length + files.length;
 	useEffect(() => {
-		if (images.length === 0) setSubmitError(null);
-	}, [images.length]);
+		if (attachmentCount === 0) setSubmitError(null);
+	}, [attachmentCount]);
 	const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
 	const [mentionDismissed, setMentionDismissed] = useState(false);
 	const [sendMenuOpen, setSendMenuOpen] = useState(false);
@@ -356,7 +375,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	}, []);
 
 	const canSubmit = (raw: string) =>
-		!dictating && !templatePending && pendingImages === 0 && (!!raw.trim() || images.length > 0);
+		!dictating &&
+		!templatePending &&
+		pendingImages === 0 &&
+		!uploading &&
+		(!!raw.trim() || attachmentCount > 0);
 	const canSend = canSubmit(value);
 
 	const openModelPicker = (query: string) => {
@@ -372,21 +395,51 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			openModelPicker(modelQuery);
 			return;
 		}
-		const disposition = onSubmit(
-			text,
-			images.map(({ name, content }) => ({ name, content })),
-			behavior,
-		);
-		if (!disposition.accepted) {
-			setSubmitError(disposition.reason);
+		const sentDraft = value;
+		const sentChips = [...attachmentErrors, ...images, ...files].map((chip) => chip.id);
+		const upload = new AbortController();
+		const failed: ComposerSubmitDisposition = {
+			accepted: false,
+			reason: t("chat.composer.submitFailed"),
+		};
+		const settle = (disposition: ComposerSubmitDisposition) => {
+			if (!disposition.accepted) {
+				if (!upload.signal.aborted) setSubmitError(disposition.reason);
+				return;
+			}
+			setSubmitError(null);
+			onChange(withoutSentDraft(readDraft(), sentDraft));
+			attachedImages.clearSent(sentChips);
+			recallIdxRef.current = null;
+			setSlotSession(null);
+		};
+		let disposition: ComposerSubmitDisposition | Promise<ComposerSubmitDisposition>;
+		try {
+			disposition = onSubmit(
+				text,
+				images.map(({ name, content }) => ({ name, content })),
+				behavior,
+				files,
+				{ signal: upload.signal, onCopied: attachedImages.markCopied },
+			);
+		} catch {
+			disposition = failed;
+		}
+		if (!(disposition instanceof Promise)) {
+			settle(disposition);
 			return;
 		}
-		setSubmitError(null);
-		onChange("");
-		attachedImages.reset();
-		recallIdxRef.current = null;
-		setSlotSession(null);
+		const release = attachedImages.holdForUpload(upload);
+		void disposition
+			.catch(() => failed)
+			.then((settled) => {
+				release();
+				settle(settled);
+			})
+			.finally(release);
 	};
+
+	const holdText = (text: string) => onChange(withRestoredDraft(text, readDraft()));
 
 	const pickMention = (c: MentionCandidate) => {
 		const before = value.slice(0, start);
@@ -418,8 +471,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	};
 
 	useImperativeHandle(handleRef, () => ({
-		insertText: (text: string) => replaceDraft(text),
+		insertText: (text: string) => (uploading ? holdText(text) : replaceDraft(text)),
 		insertAtCaret: (text: string) => {
+			if (uploading) {
+				holdText(text);
+				return;
+			}
 			const at = Math.min(caret, value.length);
 			const before = value.slice(0, at);
 			const after = value.slice(at);
@@ -446,9 +503,17 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			);
 		},
 		insertAndSubmit: (text: string, behavior: SubmitBehavior) =>
-			canSubmit(text) ? submitText(text, behavior) : replaceDraft(text),
+			uploading
+				? holdText(text)
+				: canSubmit(text)
+					? submitText(text, behavior)
+					: replaceDraft(text),
 		insertTemplate: (parsed: ParsedTemplate) => {
 			const transition = beginTemplateSlotSession(parsed);
+			if (uploading) {
+				holdText(transition.value);
+				return;
+			}
 			recallIdxRef.current = null;
 			setSubmitError(null);
 			onChange(transition.value);
@@ -470,7 +535,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		ownsEscape: () =>
 			ref.current !== null &&
 			ref.current === document.activeElement &&
-			(menuOpen || slots !== null),
+			(menuOpen || slots !== null || uploading),
 	}));
 
 	const submit = (behavior: SubmitBehavior) => {
@@ -487,6 +552,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
 		if (isImeComposing(e.nativeEvent)) return;
+		if (uploading && e.key === "Escape" && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+			e.preventDefault();
+			attachedImages.cancelUpload();
+			return;
+		}
 		const local = keys.match(e.nativeEvent);
 		if (onEnterTranscript && local === "composer.enterTranscript") {
 			e.preventDefault();
@@ -539,7 +609,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			}
 		}
 		if (fixed && slashCompletion.handleKeyDown(e)) return;
-		if (composerShiftTabOut(e, menuOpen || slots !== null) && onShiftTabOut?.()) {
+		const shiftTabOut = composerShiftTabOut(e, menuOpen || slots !== null);
+		if (shiftTabOut && (onShiftTabOut?.() || chipsRef.current?.focus())) {
 			e.preventDefault();
 			return;
 		}
@@ -593,7 +664,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		}
 	};
 
-	const { onPaste, onDrop } = imagePasteDropHandlers(attachedImages);
+	const { onPaste, onDragOver, onDrop } = attachmentPasteDropHandlers(
+		attachedImages,
+		onAttachmentNotice,
+	);
+	const refocusField = () => focusSelection(caret);
 
 	return (
 		<fieldset
@@ -601,6 +676,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			data-expanded={expanded}
 			data-streaming={isStreaming}
 			aria-label={t("chat.composer.label")}
+			onDragOver={onDragOver}
+			onDrop={onDrop}
 			onMouseDown={(e) => {
 				if (isComposerDeadZone(e, shellRef.current)) {
 					e.preventDefault();
@@ -667,6 +744,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
 			<PromptImageChips
 				controller={attachedImages}
+				handleRef={chipsRef}
+				onField={refocusField}
+				onTabOut={(backward) => (backward ? pickerRef.current?.focus() : refocusField())}
 				leading={
 					submitError ? (
 						<FileChip
@@ -692,6 +772,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					<div className="col-start-1 row-start-2 flex min-w-0 items-center self-end">
 						<ModelEffortPicker
 							ref={pickerRef}
+							onTriggerKeyDown={(e) => {
+								if (isImeComposing(e.nativeEvent) || e.key !== "Tab" || e.shiftKey) return;
+								if (e.altKey || e.ctrlKey || e.metaKey) return;
+								if (chipsRef.current?.focus()) e.preventDefault();
+							}}
 							models={models}
 							current={currentModel}
 							level={thinkingLevel}
@@ -763,7 +848,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							onClick={(e) => setCaret(e.currentTarget.selectionStart)}
 							onKeyDown={onKeyDown}
 							onPaste={onPaste}
-							onDrop={onDrop}
+							readOnly={uploading}
 							rows={1}
 							placeholder={
 								awaitingResponse
@@ -781,6 +866,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						/>
 					</div>
 					<div className="col-start-3 row-start-2 flex shrink-0 items-center gap-4 self-end">
+						<AttachFilesButton
+							testId="composer-attach"
+							disabled={uploading}
+							onFiles={attachedImages.addFiles}
+							onPicked={refocusField}
+						/>
 						<IconButton
 							icon={History}
 							data-testid="history-open"

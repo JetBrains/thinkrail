@@ -13,6 +13,7 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	ARTIFACTS_PROTOCOL_VERSION,
+	CHAT_ATTACHMENTS_ROUTE,
 	CONTINUATION_PROTOCOL_VERSION,
 	FEEDBACK_SURVEY_PROTOCOL_VERSION,
 	FONTS_PROTOCOL_VERSION,
@@ -195,6 +196,7 @@ import {
 	type WorkspaceLifecycleEvent,
 } from "../workspaces";
 import { createArtifactEventMapper } from "./artifactEvents";
+import { serveChatAttachments } from "./attachments";
 import { seesChats } from "./chats";
 import { continueToolHost, observeContinuation, setContinuationPublisher } from "./continuations";
 import {
@@ -488,6 +490,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			}
 			if (url.pathname.startsWith(USER_FONTS_ROUTE)) {
 				return serveUserFonts(req, url.pathname);
+			}
+			if (url.pathname.startsWith(CHAT_ATTACHMENTS_ROUTE)) {
+				return serveChatAttachments(req, url);
 			}
 			if (url.pathname.startsWith(WORKSPACE_VIEW_ROUTE)) {
 				return serveWorktreeView(req.method, url);
