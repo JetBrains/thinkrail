@@ -716,8 +716,16 @@ a project picker, the prompt hero, and the reused
   `session.create({ workspaceId, model?, thinkingLevel? })` → fire-and-forget `prompt` with an optimistic user
   turn, as before. That legacy path shows only the dialog's own *Creating…* button state — the old sidebar
   pending-row counter was removed with the host-owned creations, a deliberate gap for the transition window
-  in which a newer web meets an older host. The prompt hero accepts **image paste/drop** through the shared `usePromptImages`
-  controller (same `imageAttachment` decode/downscale + chip surface as the chat `Composer`); submit is
+  in which a newer web meets an older host. The prompt hero accepts **any file** — the paperclip beside the model pill, paste and
+  drop — through the shared `usePromptImages` controller (same classification, image decode/downscale and
+  chip strip as the chat `Composer`, [[submodule-web-chat]]); with no worktree yet, Create first copies the
+  file attachments into the host data dir (`uploadPromptFiles(null, …)`; a failure toasts and keeps the
+  dialog, and files already copied keep their paths so the next Create skips them). That copy holds the
+  controller as the composer's send does (`holdForUpload`: the "Copying files…" chip, additions, paste and
+  drop refused), and Esc or the chip's × stops it, leaving the dialog as it was without a toast; the chips
+  stay locked (`PromptImageChips` `locked`: × and Delete inert) until Create settles, so the start carries
+  exactly the chips on screen. The file chips name
+  ThinkRail's attachments folder rather than the workspace, and the kick-off text lists their absolute paths; submit is
   **held while any image is still decoding**, and a start with **only images and no text** is a valid
   kick-off. An **empty prompt with no images still lands the user in a chat** — the host starts it without a
   prompt (folder mode: the same tail after entering Default). A **rejected** kick-off prompt (a bad model /

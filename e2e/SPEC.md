@@ -370,6 +370,15 @@ unchanged 40px workbench origin, the header's resolved `-webkit-app-region`, and
 and Settings all live inside the `no-drag` action cluster. In a plain browser the properties are unset, so
 the first scenario pins the zero-inset, `no-drag` baseline and the theme-token header colour.
 
+**Linux paste** (`composer-attachments.spec.ts`) has no WebKitGTK. Its stand-in for the desktop's clipboard
+bridge answers through the desktop's own `readNativeClipboard` over a modelled X clipboard (a fake `xclip`
+serving the targets a screenshot tool, a file manager or a text owner offers; a smaller image budget), so it
+answers what the real reader would. Each paste is the event WebKitGTK delivers: an emptied one for files and
+images, a real Ctrl+V from headless Chromium's own clipboard for text. Timing cases swap in a deferred
+bridge the test answers by hand, so a send or a chat switch lands while a read is still pending, or hold one
+socket method's request or reply in a `routeWebSocket` proxy (a slow `attachments.copyLocal`, a pending
+`workspace.startCreate`), releasing it after a cancel; the page's ack of a held reply marks it handled.
+
 Workbench scenarios exercise the normalized frontend-local frame rather than only the pure model: frame
 geometry/tool placement survives workspace switches while resource tabs and attention differ; closing a final
 resource retains its empty group; explicit group removal rehomes hidden-workspace resources; reload restores
@@ -704,7 +713,7 @@ lands in the sandbox and a new detection source is pinned everywhere at once.
   `WebAssembly` from the page and its workers alike, and pins that a diff, a phone-class code file, Monaco
   and a chat fence still show their source as plain text.
 - **Consumes:** the built web artifact, the host's public boot/wire behavior, sanctioned server test-fixture
-  exports, CLI binary, the locator, ready-document poller and `within` deadline from [[module-artifact-tests]], shared
+  exports, the desktop's clipboard reader (`apps/desktop/src/nativeClipboard.ts`, with a fake helper spawner), CLI binary, the locator, ready-document poller and `within` deadline from [[module-artifact-tests]], shared
   retrying teardown helper, git, Chromium, and Playwright. Standalone native/installer smoke and shared
   artifact probes are owned by that test workspace, outside Playwright discovery.
 - **Forbidden:** fake application backends, provider fakes in production boot paths, browser imports into

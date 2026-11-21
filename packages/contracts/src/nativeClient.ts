@@ -112,6 +112,27 @@ export interface NativePageZoomBridge {
 	request(action: NativePageZoomAction): void;
 }
 
+/** A local file a file manager put on the clipboard; `image` carries an image file's bytes (base64) within the read's budget. */
+export interface NativeClipboardFile {
+	path: string;
+	name: string;
+	size: number;
+	image?: { mimeType: string; data: string };
+}
+
+/** `oversized`: an image past the read's byte budget; `unreadable`: content the desktop could not read. */
+export type NativeClipboardContent =
+	| { kind: "image"; mimeType: string; data: string }
+	| { kind: "files"; files: NativeClipboardFile[] }
+	| { kind: "oversized" }
+	| { kind: "unreadable" }
+	| { kind: "none" };
+
+/** The system clipboard read natively, for a webview that hides pasted files (Linux). */
+export interface NativeClipboardBridge {
+	read(): Promise<NativeClipboardContent>;
+}
+
 /** Translated labels for the desktop's custom native menu items, keyed by catalog key. */
 export interface NativeMenuBridge {
 	setLabels(labels: Readonly<Record<string, string>>): void;

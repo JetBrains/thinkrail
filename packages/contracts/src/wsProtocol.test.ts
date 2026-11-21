@@ -22,6 +22,7 @@ import {
 	CACHE_WARMING_MODES,
 	CACHE_WARMING_SETTINGS_PROTOCOL_VERSION,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
+	CHAT_ATTACHMENTS_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	CHATS_PROTOCOL_VERSION,
 	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
@@ -310,6 +311,12 @@ test("Files tree copy and delete are pinned to v118", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(FS_MUTATIONS_PROTOCOL_VERSION);
 	expect(WS_METHODS.fsCopy).toBe("fs.copy");
 	expect(WS_METHODS.fsDelete).toBe("fs.delete");
+});
+
+test("chat file attachments are pinned to v129", () => {
+	expect(CHAT_ATTACHMENTS_PROTOCOL_VERSION).toBe(129);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(CHAT_ATTACHMENTS_PROTOCOL_VERSION);
+	expect(WS_METHODS.attachmentsCopyLocal).toBe("attachments.copyLocal");
 });
 
 test("published artifact outputs are pinned to v128", () => {

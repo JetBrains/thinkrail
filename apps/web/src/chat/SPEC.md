@@ -1322,6 +1322,65 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   the line says each request lists at most `SKILL_LISTING_MAX_TOKENS` of it and the agent searches for the
   rest, since the model's window sets the budget in between. Past that ceiling it turns warning colour with
   a hint to switch unused groups off. All props-driven; behavior detail lives in the components' jsdoc.
+- **Attachments (`promptImages.tsx`, `attachments.ts`)** — any file, picked, pasted or dropped, joins one
+  draft beside the images (`PromptImagesState.files`: picked bytes or a local path; browser-local, never
+  persisted). **Classification:** contracts' `attachmentImageType` — a raster image by type or extension,
+  HEIC, TIFF and AVIF included, so one the webview cannot decode keeps its error chip on every path — takes
+  the image path above and goes to the model only, never to disk; SVG and every other file becomes a file chip (kind icon, name, size, "→ workspace"), refused onto an error chip over
+  `CHAT_ATTACHMENT_MAX_BYTES` (100 MB) or on a host below `CHAT_ATTACHMENTS_PROTOCOL_VERSION` (images still
+  work there). **The paperclip** (`AttachFilesButton`, composer bottom row and New Workspace) is an
+  `IconButton` (an explicit `tabIndex={0}`, the tab stop WebKit's Tab needs) over a hidden
+  `<input type="file" multiple>`: the webview's own chooser (GtkFileChooserNative
+  on Linux), never Electrobun's synchronous `openFileDialog`, which would block the in-process host. Open
+  returns focus to the field, the input's `cancel` event to the paperclip. **Send:** `Composer.onSubmit` may
+  answer a promise; until it settles the draft is held (field read-only, chips locked, a "Copying files…"
+  chip, sends refused) under an `AbortController` kept on the draft (`PromptImagesState.upload`, so a
+  remounted composer still reaches it). Esc in the field or the chip's × aborts it: the upload stops, nothing
+  is sent, the draft stays as it was — at once, also while a pasted file's host copy is still out (its late
+  answer only records the path, so the retry doesn't copy it twice; [[submodule-web-transport]]). The field's own editing keys are inert meanwhile — ↑/↓ recall, the `@` and
+  `/` menus (hidden) and template-slot Tab — so a cancel gives back exactly the held text; Esc, Shift+Tab to
+  the chips and the other focus moves still work. Whatever reaches the composer meanwhile merges instead of being lost —
+  restored queue text (Stop, Edit on a queued message, a failed queued send) goes above the held text
+  (`withRestoredDraft`, the one rule), restored images join as new chips, history Insert / Insert-and-send,
+  a suggestion and a template add their text the same way, and an extension's composer edit waits for the
+  hold to end. An accepted answer removes only what it sent — the held text (`withoutSentDraft`) and the
+  chips present at submit; a refused one, or `onSubmit` throwing (*Couldn't send*), keeps everything with
+  the reason on the command-error chip, and each file the host already wrote keeps its path
+  (`PromptFile.copied`), so a retry does not copy it twice. `ChatView` hands the files to transport's `uploadPromptFiles` in order —
+  picked bytes over HTTP (`PUT /attachments/`, never the socket), a pasted local path by name
+  (`attachments.copyLocal`) — then sends the text with contracts' `withAttachedFiles` trailer (the
+  `start_workspace` format) listing the worktree-relative paths. New Workspace has no worktree yet, so it
+  copies into the host data dir, lists absolute paths, and its file chips name ThinkRail's attachments
+  folder ("→ attachments"), never the workspace. `/compact` and `/name` refuse a draft with files as
+  they refuse one with images. The sent bubble shows the trailer as plain text. **Keyboard:** the strip is one
+  horizontal `listbox` stop with a roving active option (`chipKeyAction`: ←/→/Home/End move, Delete lands on
+  the chip that takes the removed one's place, Backspace on the one before, the last removal or Esc returns
+  to the field); × is `tabIndex=-1`, for the mouse and hint mode. In New Workspace the strip precedes the
+  field in DOM, so the browser's order holds. The composer's strip sits above the shell in DOM while its Tab
+  place is between the model picker and the field, so there it leaves the browser's sequence and the
+  composer routes it: field Shift+Tab → chips (after a waiting question's claim), chips Shift+Tab → picker,
+  picker Tab → chips (the picker forwards its trigger's keys, `onTriggerKeyDown`, only outside an IME
+  composition), chips Tab → field. **Paste and drop** (`attachmentPasteDropHandlers`): drop works
+  anywhere on the composer (`onDragOver` on the fieldset). WebKitGTK ≥ 2.50.3 empties pasted and dropped
+  files (CVE-2025-13947), so a paste without files asks the optional native clipboard
+  (`__THINKRAIL_NATIVE_CLIPBOARD__`, feature-detected — the web has no desktop branch) only when it may hide
+  files (`pasteMayHideFiles`: a `Files`, `text/uri-list` or image type, empty text, or text that is a file
+  list by contracts' `copiedFilePaths` — `file://` URIs or GNOME's copied-files text, never bare paths, which
+  paste as text); that paste is taken over and, when the bridge has nothing, its own
+  text is inserted with `execCommand("insertText")` (undo intact), and announced files the desktop could not
+  list toast "Couldn't read the copied files" (a rejected read counts as `unreadable`). The read is pending work on the
+  draft it was pasted into (`reserve()`: the "Attaching…" chip, sends refused, so Enter cannot send the text
+  ahead of the screenshot) until its answer is applied; a paste during an upload is ignored. A late answer
+  applies only to that draft's generation, so a reset or reopened draft drops it; a chat switched away from
+  still gets its chips (the paste's owner), while the text fallback needs its own field still mounted —
+  otherwise it is dropped rather than typed into whichever field has focus. A copied image becomes `image.<subtype>` (`image.png` for a
+  screenshot); copied files arrive with their image bytes or as local paths, and an image file the desktop
+  sent without bytes (past its budget) or an `oversized` image lands on the error chip "too large to paste",
+  never in the workspace. A drop that announces `Files`, or a URI list it hands over empty
+  (WebKitGTK's view of a file-manager drag, `dropHidesFiles`), carries nothing and toasts — "Drag and drop
+  isn't available on Linux" where the desktop bridge is present, else the neutral "The dropped files didn't
+  come through" (a WebKitGTK browser, say); the composer accepts such drags (`dragMayCarryFiles`) and cancels a link
+  dropped outside the field. Removal gate: [[electrobun-compatibility]].
 - **Live session telemetry follows Pi's finalized boundaries.** `SessionStatsBar` renders only the host's
   authoritative `session.getStats` snapshot; the web never derives billed totals or context usage from
   message content. Totals include delegated subagent spend, which the host records into the parent as pi
@@ -2062,7 +2121,7 @@ Unknown custom messages retain their existing behavior.
   (the hidden-models persistence seam `main.tsx` starts once: hydrates `store.hiddenModels` and writes it
   back through the stable client-preference adapter or host-qualified localStorage — the store itself
   touches no storage). `promptImages.tsx` is not an integration file: its one `store` import is the pure
-  prompt-image draft model. `useModelCatalog` is the shared
+  prompt-image draft model, and uploads reach it only through `Composer.onSubmit`. `useModelCatalog` is the shared
   models-catalog seam `panels/NewWorkspaceDialog` also imports per-file, so the two pickers cannot
   drift; on activation it **drops catalog authority synchronously** (a flag an earlier consumer set says
   nothing about the list this one inherited) and reads `model.list` only when the shared list is **empty** —
