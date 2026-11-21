@@ -67,6 +67,9 @@ async function mount({ initial = "", ...overrides }: Overrides) {
 				<Composer
 					value={value}
 					onChange={setValue}
+					readDraft={() => value}
+					acceptsFiles={false}
+					onAttachmentNotice={() => {}}
 					isStreaming={false}
 					awaitingResponse={false}
 					growthLimit="half-chat"
@@ -130,7 +133,7 @@ async function mount({ initial = "", ...overrides }: Overrides) {
 
 test("/model opens the host's external picker with its query instead of sending", async () => {
 	const opened: (string | undefined)[] = [];
-	const picker: ModelEffortPickerHandle = { open: (query) => opened.push(query) };
+	const picker: ModelEffortPickerHandle = { open: (query) => opened.push(query), focus: () => {} };
 	const composer = await mount({ initial: "/model sonnet", externalModelPicker: picker });
 	expect(composer.container.querySelector('[data-testid="model-selector"]')).toBeNull();
 	await composer.press("Enter");

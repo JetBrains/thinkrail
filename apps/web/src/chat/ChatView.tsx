@@ -1,4 +1,3 @@
-import { withRestoredDraft } from "@thinkrail/chat-ui/attachments";
 import type { ResultTarget } from "@thinkrail/chat-ui/ChatActions";
 import { ChatMediaContext } from "@thinkrail/chat-ui/ChatImage";
 import {

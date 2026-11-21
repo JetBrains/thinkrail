@@ -45,6 +45,12 @@ Host seams, each a context or a prop the host fills:
 - `Composer`'s `localKeyDefaults` — the host's composer shortcuts (follow-up, interrupt, into the
   transcript), matched through `@thinkrail/ui/local-keys`; the IDE passes its `keybindings` defaults, the phone
   none. `composerKeys` holds the pure step rules those keys follow.
+- `Composer`'s file attachments — `acceptsFiles` (whether the host can take files into its workspace:
+  the IDE on a host from `CHAT_ATTACHMENTS_PROTOCOL_VERSION`, the phone never, since the upload route is
+  the host's HTTP door), `onAttachmentNotice` (a refusal or note the host toasts), `readDraft` (the live
+  draft, so a send restores around what was typed since) and `onSubmit`'s `files` + `ComposerUpload`; the
+  host uploads and answers the submit. `attachments` holds the pure rules (size refusal, chip keys, paste
+  and drop sniffing, the native clipboard bridge read) and `promptImageState` the draft model.
 - `ChatImage`'s `ChatMediaContext` — `resolveUrl` for a host image reference plus a `retryEpoch` the host
   advances after a reconnect; without it a referenced image renders as unavailable (inline data still shows).
 - `ChatActions` / `InteractionStatesContext` / `PendingExtUiContext` — the calls a host makes on the user's

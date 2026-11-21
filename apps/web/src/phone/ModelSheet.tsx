@@ -9,7 +9,7 @@ import { formatContext } from "@thinkrail/chat-ui/modelPicker";
 import { ProviderGlyph } from "@thinkrail/chat-ui/ProviderGlyph";
 import { sameModel, type ThinkingLevel, type WireModel } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
-import { forwardRef, useImperativeHandle, useState } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { modelSections, SEARCH_THRESHOLD } from "./modelSections";
 import { PageSheet } from "./sheet";
 
@@ -34,11 +34,12 @@ export const ModelSheet = forwardRef<ModelEffortPickerHandle, ModelSheetProps>(f
 	const t = useT();
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState("");
+	const triggerRef = useRef<HTMLButtonElement>(null);
 	const show = (next = ""): void => {
 		setQuery(next);
 		setOpen(true);
 	};
-	useImperativeHandle(handle, () => ({ open: show }));
+	useImperativeHandle(handle, () => ({ open: show, focus: () => triggerRef.current?.focus() }));
 
 	const sections = modelSections(t, models, current, query);
 	/** The catalog entry carries the model's effort levels even when the chat's own copy lags. */
@@ -48,6 +49,7 @@ export const ModelSheet = forwardRef<ModelEffortPickerHandle, ModelSheetProps>(f
 	return (
 		<>
 			<button
+				ref={triggerRef}
 				type="button"
 				data-testid="model-selector"
 				data-open={open}
