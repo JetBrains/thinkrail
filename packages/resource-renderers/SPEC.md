@@ -1041,7 +1041,9 @@ questionnaire) keep their Tab order and never compete for a region's landing.
   carries `data-key-scope="reader"` and, while the read-only text has focus, `data-text-entry="false"`: the
   app's text-entry rule then lets plain keys through (hint mode's `F`), and its Esc ladder takes Esc back to
   the Files tree ([[submodule-web-shell]]). An editable editor keeps typing every letter.
-- **HTML** has no reading handler: a sandboxed frame owns its keys once focused, so under a focus home
-  the frame itself is the `data-focus-default` target (`tabIndex=0`) and scrolls natively with the arrows,
-  Space and PgUp/PgDn; j/k, g/G and Esc cannot reach the host from inside it (F6 or Mod+Shift+E leave).
-  Images, SVG and LFS/binary cards have no reading surface (regions keep their own keys).
+- **HTML, images, SVG and LFS/binary cards** have no reading surface and no `data-focus-default`, so
+  a keyboard open lands on the tab button and F6 on the region's usual target. An HTML frame must never be
+  a landing: once focused it owns every key, and F6, Esc, Mod+Shift+E and the global chords die inside it
+  (the desktop has no native F6 either). Nor can a focusable wrapper read it: the single view's
+  `sandbox=""` frame has an opaque origin and no scroll bridge, so the host cannot scroll it.
+  The frame keeps its natural Tab stop (or `frameFocus`'s) and scrolls natively once entered.

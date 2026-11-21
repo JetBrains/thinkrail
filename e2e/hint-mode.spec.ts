@@ -1,8 +1,12 @@
+import { realpathSync, rmSync } from "node:fs";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import type { SessionResources, WsClientMessage, WsParams } from "@thinkrail/contracts";
 import {
 	closeSettings,
 	createWorkspaceViaDialog,
+	enterDefaultWorkspace,
 	openFixtureProject,
+	openPersistedChat,
 	openSettingsSection,
 	pressPlatformShortcut,
 	revealWorkbenchTool,
@@ -10,6 +14,8 @@ import {
 	visibleTerminal,
 	waitTerminalReady,
 } from "./fixtures/app";
+import { E2E_FIXTURE_REPO } from "./fixtures/paths";
+import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const overlay = (page: Page) => page.getByTestId("hint-mode");
 const labels = (page: Page) => page.getByTestId("hint-label");
@@ -277,6 +283,65 @@ test("labels reveal hover-only buttons: a tab's × label closes that tab and foc
 			.getByTestId("editor-tab-close")
 			.evaluate((element) => getComputedStyle(element).opacity),
 	).toBe("0");
+});
+
+test("Shift on a hidden Resources row action's label focuses it, and it stays shown", async ({
+	page,
+}) => {
+	const stops: string[] = [];
+	await page.routeWebSocket(/\/ws(\?|$)/, (browser) => {
+		const server = browser.connectToServer();
+		browser.onMessage((message) => {
+			const frame = JSON.parse(message.toString()) as WsClientMessage;
+			if ("method" in frame && frame.method === "session.resources") {
+				const scope = frame.params as WsParams<"session.resources">;
+				const result: SessionResources = {
+					...scope,
+					commands: [
+						{
+							id: "cmd-watch",
+							sessionId: scope.sessionId,
+							name: "watcher",
+							command: "bun run watch",
+							status: "running",
+							startedAt: Date.now() - 60_000,
+						},
+					],
+					subagents: [],
+				};
+				browser.send(JSON.stringify({ id: frame.id, ok: true, result }));
+				return;
+			}
+			if ("method" in frame && frame.method === "backgroundCommand.stop") stops.push(frame.id);
+			server.send(message);
+		});
+	});
+	await openFixtureProject(page);
+	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "Hint resources",
+		messages: [{ role: "user", text: "Watch the build.", timestamp: Date.now() }],
+	});
+	try {
+		await enterDefaultWorkspace(page);
+		await openPersistedChat(page, "Hint resources");
+		const row = page.getByTestId("resources-dock").getByTestId("resource-command");
+		await expect(row).toHaveAttribute("data-status", "running");
+		const stop = row.getByTestId("resource-stop");
+		await page.mouse.move(5, 5);
+		await page.getByTestId("open-search").focus();
+		await expect(stop).toBeHidden();
+
+		await page.keyboard.press("f");
+		await expect(overlay(page)).toBeVisible();
+		await expect(stop).toBeEnabled();
+		await typeLabel(page, await labelFor(page, stop), { shift: true });
+		await expect(overlay(page)).toHaveCount(0);
+		await expect(stop).toBeFocused();
+		await expect(stop).toBeVisible();
+		expect(stops).toEqual([]);
+	} finally {
+		rmSync(session.path, { force: true });
+	}
 });
 
 test("with a dialog open only its controls are labelled, and Escape leaves the dialog open", async ({

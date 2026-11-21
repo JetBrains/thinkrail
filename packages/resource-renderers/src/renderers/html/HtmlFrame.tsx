@@ -9,7 +9,6 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { useFocusHome } from "../../host";
 import type { FrameFocus } from "../../registry";
 import { useElementSize } from "../../support/useElementSize";
 import { HTML_INTERACTIVE_FRAME_CSP } from "./htmlDocument";
@@ -101,7 +100,6 @@ function InteractiveIframe({
 			{...INTERACTIVE_FRAME}
 			srcDoc={document}
 			tabIndex={tabIndex}
-			data-focus-default={tabIndex === 0 || undefined}
 			onLoad={onLoad}
 			data-interactive=""
 			className={className}
@@ -129,7 +127,6 @@ function StaticIframe({
 			sandbox={scrollLink ? "allow-same-origin" : ""}
 			srcDoc={document}
 			tabIndex={tabIndex}
-			data-focus-default={tabIndex === 0 || undefined}
 			onLoad={scrollLink ? (event) => attach(event.currentTarget) : undefined}
 			className={className}
 		/>
@@ -176,8 +173,7 @@ export function HtmlFrame({
 	frameFocus?: FrameFocus | undefined;
 }) {
 	const { ref: boxRef, size } = useElementSize<HTMLDivElement>();
-	const home = useFocusHome();
-	const frameTabIndex = frameFocus === "manual" ? -1 : home ? 0 : undefined;
+	const frameTabIndex = frameFocus === "manual" ? -1 : undefined;
 	const [run, setRun] = useState({ document, generation: 0, left: false });
 	if (run.document !== document) setRun({ document, generation: run.generation + 1, left: false });
 	const box = size ?? NO_BOX;

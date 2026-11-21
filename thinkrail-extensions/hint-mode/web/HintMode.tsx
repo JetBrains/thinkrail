@@ -113,10 +113,13 @@ export function HintMode(props: GlobalOverlayProps) {
 			viewport: { width: window.innerWidth, height: window.innerHeight },
 		});
 		const root = document.documentElement;
-		const exit = () => {
-			root.removeAttribute(REVEAL_ATTRIBUTE);
+		const leave = () => {
 			store.set(null);
 			host.current.claimKeyboard(false);
+		};
+		const exit = () => {
+			root.removeAttribute(REVEAL_ATTRIBUTE);
+			leave();
 		};
 		const start = () => {
 			root.setAttribute(REVEAL_ATTRIBUTE, "");
@@ -129,12 +132,13 @@ export function HintMode(props: GlobalOverlayProps) {
 			store.set({ targets, boxes, labels: hintLabels(targets.length), typed: "" });
 		};
 		const choose = (current: HintSession, index: number, focusOnly: boolean) => {
-			exit();
+			leave();
 			const target = current.targets[index];
 			const box = current.boxes[index];
 			if (target?.element.isConnected && box) {
 				activate(target.element, target.action, focusOnly, box);
 			}
+			root.removeAttribute(REVEAL_ATTRIBUTE);
 		};
 		const onCommand = (id: string) => {
 			if (id !== SHOW_HINTS.id) return;

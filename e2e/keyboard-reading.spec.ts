@@ -46,6 +46,8 @@ async function openReadingFolder(page: Page): Promise<string> {
 		header.map((_name, col) => `row ${row + 1} cell ${col + 1}`).join(","),
 	);
 	writeFileSync(join(root, "data.csv"), `${[header.join(","), ...rows].join("\n")}\n`);
+	const paragraphs = Array.from({ length: 80 }, (_, index) => `<p>Paragraph ${index + 1}</p>`);
+	writeFileSync(join(root, "page.html"), `<!doctype html><body>${paragraphs.join("")}</body>\n`);
 	await revealWorkbenchTool(page, "files");
 	await expect(fileRow(page, "LONG.md")).toBeVisible();
 	return root;
@@ -95,6 +97,48 @@ test("Enter in the Files tree opens the file and moves focus into it, a click ke
 	await query.press("Enter");
 	const table = pane(page).locator('[data-testid="csv-view"] [data-virtuoso-scroller]');
 	await expect(table).toBeFocused();
+});
+
+function focusedPlace(page: Page) {
+	return page.evaluate(() => {
+		const active = document.activeElement;
+		return {
+			tag: active?.tagName ?? null,
+			region: active?.closest("[data-region]")?.getAttribute("data-region-kind") ?? null,
+		};
+	});
+}
+
+test("an HTML file opened with Enter never takes the keyboard into its frame: F6, Esc and the chords still leave", async ({
+	page,
+}) => {
+	await openReadingFolder(page);
+	await openByKeyboard(page, "page.html");
+	const frame = pane(page).locator('[data-testid="html-frame-box"] iframe');
+	await expect(frame.contentFrame().getByText("Paragraph 1", { exact: true })).toBeVisible();
+	const tab = page.getByTestId("editor-tab").filter({ hasText: "page.html" }).getByRole("tab");
+	await expect(tab).toBeFocused({ timeout: 10_000 });
+
+	await page.keyboard.press("F6");
+	await expect.poll(() => focusedPlace(page)).toMatchObject({ tag: "BUTTON" });
+	expect((await focusedPlace(page)).region).not.toBe("center");
+	await page.keyboard.press("Shift+F6");
+	await expect(tab).toBeFocused();
+
+	const inPane = () =>
+		pane(page).evaluate((element) => ({
+			inside: element.contains(document.activeElement),
+			tag: document.activeElement?.tagName ?? null,
+		}));
+	await page.keyboard.press("Escape");
+	await expect.poll(inPane).toEqual({ inside: true, tag: "BUTTON" });
+	await page.keyboard.press("Escape");
+	await expect(fileRow(page, "page.html")).toBeFocused();
+
+	await pressPlatformShortcut(page, "1");
+	await expect.poll(inPane).toEqual({ inside: true, tag: "BUTTON" });
+	await pressPlatformShortcut(page, "Shift+E");
+	await expect(fileRow(page, "page.html")).toBeFocused();
 });
 
 test("j/k, Space and g/G read a Markdown file, and ↓ scrolls a tall block before the cursor moves on", async ({

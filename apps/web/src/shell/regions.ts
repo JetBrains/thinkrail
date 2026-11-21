@@ -1,4 +1,9 @@
-import { TABBABLE_SELECTOR } from "@thinkrail/ui/focus";
+import {
+	canFocus,
+	defaultFocusTarget,
+	FOCUS_DEFAULT_SELECTOR,
+	focusTarget,
+} from "@thinkrail/ui/focus";
 import { hasLayer, MODAL_LAYER_SELECTOR } from "../lib";
 import type { LayoutToolId } from "./layout";
 
@@ -36,7 +41,6 @@ const FLASH_ATTRIBUTE = "data-region-flash";
 const FLASH_MS = 1500;
 const STILL_FLASH_MS = 1000;
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
-const FOCUS_DEFAULT_SELECTOR = "[data-focus-default]";
 export const FOCUS_CLAIM_SELECTOR = "[data-focus-claim]";
 const FOCUS_PARK_SELECTOR = "[data-focus-park]";
 const MAIN_AREA_SELECTOR = "[data-main-area]";
@@ -69,24 +73,6 @@ function isShown(element: HTMLElement): boolean {
 	return rect.width > 0 && rect.height > 0;
 }
 
-export function canFocus(element: HTMLElement): boolean {
-	return (
-		element.isConnected &&
-		element.getClientRects().length > 0 &&
-		element.closest("[inert]") === null &&
-		!element.matches(":disabled") &&
-		(element.matches(TABBABLE_SELECTOR) || element.hasAttribute("tabindex"))
-	);
-}
-
-export function focusTarget(element: HTMLElement): HTMLElement | null {
-	if (canFocus(element)) return element;
-	for (const candidate of element.querySelectorAll<HTMLElement>(TABBABLE_SELECTOR)) {
-		if (canFocus(candidate)) return candidate;
-	}
-	return null;
-}
-
 function rememberedIn(container: HTMLElement): HTMLElement | null {
 	const region = container.closest<HTMLElement>(REGION_SELECTOR);
 	const remembered = region ? lastFocused.get(region) : undefined;
@@ -95,19 +81,6 @@ function rememberedIn(container: HTMLElement): HTMLElement | null {
 		(remembered.matches(ROVING_ITEM_SELECTOR) && remembered.tabIndex < 0) ||
 		remembered.matches(STALE_TRANSCRIPT_ITEM_SELECTOR);
 	return stale ? null : remembered;
-}
-
-function defaultTarget(container: HTMLElement): HTMLElement | null {
-	const defaults = Array.from(container.querySelectorAll<HTMLElement>(FOCUS_DEFAULT_SELECTOR));
-	const innermostFirst = [
-		...defaults.filter((element) => element.querySelector(FOCUS_DEFAULT_SELECTOR) === null),
-		...defaults.filter((element) => element.querySelector(FOCUS_DEFAULT_SELECTOR) !== null),
-	];
-	for (const preferred of innermostFirst) {
-		const target = focusTarget(preferred);
-		if (target) return target;
-	}
-	return null;
 }
 
 export interface LandingLookup<T> {
@@ -143,7 +116,7 @@ function landingTarget(region: HTMLElement): HTMLElement | null {
 	return resolveLanding({
 		claim: () => claimIn(region),
 		remembered: () => rememberedIn(region),
-		preferred: () => defaultTarget(region),
+		preferred: () => defaultFocusTarget(region),
 		selectedTab: () => {
 			const tab = region.querySelector<HTMLElement>(SELECTED_TAB_SELECTOR);
 			return tab && canFocus(tab) ? tab : null;
@@ -176,7 +149,7 @@ export function regionLandingTarget(lastRegion: HTMLElement | null): HTMLElement
 }
 
 function focusInsideTarget(container: HTMLElement): HTMLElement | null {
-	return rememberedIn(container) ?? defaultTarget(container) ?? focusTarget(container);
+	return rememberedIn(container) ?? defaultFocusTarget(container) ?? focusTarget(container);
 }
 
 export interface EscapeLandingLookup<T> {

@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { revealDelta, revealHorizontally } from "./focus";
+import {
+	defaultFocusTarget,
+	FOCUS_DEFAULT_SELECTOR,
+	revealDelta,
+	revealHorizontally,
+	TABBABLE_SELECTOR,
+} from "./focus";
 
 describe("how far a scroller moves to reveal the focused control", () => {
 	const view = { top: 100, bottom: 400 };
@@ -124,5 +130,113 @@ describe("revealing a tab chip in a horizontally scrolling strip", () => {
 		const chip = box(400, 80, { parentElement: strip });
 		revealHorizontally(asElement(chip));
 		expect([row.scrollLeft, strip.scrollLeft]).toEqual([0, 0]);
+	});
+});
+
+interface FakeInit {
+	marked?: boolean;
+	tabbable?: boolean;
+	shown?: boolean;
+	connected?: boolean;
+	inert?: boolean;
+	disabled?: boolean;
+}
+
+class FakeElement {
+	readonly name: string;
+	readonly init: FakeInit;
+	readonly children: FakeElement[];
+	parent: FakeElement | null = null;
+
+	constructor(name: string, init: FakeInit, children: FakeElement[]) {
+		this.name = name;
+		this.init = init;
+		this.children = children;
+		for (const child of children) child.parent = this;
+	}
+
+	get isConnected(): boolean {
+		return this.init.connected !== false && (this.parent?.isConnected ?? true);
+	}
+
+	getClientRects(): { length: number } {
+		return { length: this.init.shown === false ? 0 : 1 };
+	}
+
+	closest(selector: string): FakeElement | null {
+		if (selector !== "[inert]") throw new Error(`unexpected selector ${selector}`);
+		return this.init.inert ? this : (this.parent?.closest(selector) ?? null);
+	}
+
+	matches(selector: string): boolean {
+		if (selector === ":disabled") return this.init.disabled === true;
+		if (selector === TABBABLE_SELECTOR) return this.init.tabbable === true;
+		throw new Error(`unexpected selector ${selector}`);
+	}
+
+	hasAttribute(): boolean {
+		return false;
+	}
+
+	descendants(): FakeElement[] {
+		return this.children.flatMap((child) => [child, ...child.descendants()]);
+	}
+
+	querySelectorAll(selector: string): FakeElement[] {
+		const all = this.descendants();
+		if (selector === FOCUS_DEFAULT_SELECTOR) return all.filter((element) => element.init.marked);
+		if (selector === TABBABLE_SELECTOR) return all.filter((element) => element.init.tabbable);
+		throw new Error(`unexpected selector ${selector}`);
+	}
+
+	querySelector(selector: string): FakeElement | null {
+		return this.querySelectorAll(selector)[0] ?? null;
+	}
+}
+
+const el = (name: string, init: FakeInit = {}, children: FakeElement[] = []) =>
+	new FakeElement(name, init, children);
+
+const target = (root: FakeElement) =>
+	(defaultFocusTarget(root as unknown as HTMLElement) as unknown as FakeElement | null)?.name ??
+	null;
+
+describe("the default-focus rule the regions and a keyboard open share", () => {
+	it("prefers the innermost marker over an outer one's earlier control", () => {
+		const root = el("root", {}, [
+			el("outer", { marked: true }, [
+				el("toolbar", { tabbable: true }),
+				el("reader", { marked: true, tabbable: true }),
+			]),
+		]);
+		expect(target(root)).toBe("reader");
+	});
+
+	it("takes a marker's first focusable control when the marker itself is not focusable", () => {
+		const root = el("root", {}, [
+			el("home", { marked: true }, [
+				el("hidden", { tabbable: true, shown: false }),
+				el("locked", { tabbable: true, disabled: true }),
+				el("asleep", { inert: true }, [el("inside", { tabbable: true })]),
+				el("cursor", { tabbable: true }),
+			]),
+		]);
+		expect(target(root)).toBe("cursor");
+	});
+
+	it("falls back to an outer marker when the inner one has nothing focusable yet", () => {
+		const root = el("root", {}, [
+			el("outer", { marked: true }, [
+				el("toolbar", { tabbable: true }),
+				el("loading", { marked: true }),
+			]),
+		]);
+		expect(target(root)).toBe("toolbar");
+	});
+
+	it("skips a disconnected marker and finds nothing without a marker", () => {
+		const gone = el("root", {}, [el("stale", { marked: true, tabbable: true, connected: false })]);
+		expect(target(gone)).toBeNull();
+		expect(target(el("root", {}, [el("button", { tabbable: true })]))).toBeNull();
 	});
 });

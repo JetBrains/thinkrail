@@ -9,6 +9,39 @@ export const TABBABLE_SELECTOR = [
 	'[tabindex]:not([tabindex="-1"])',
 ].join(",");
 
+export const FOCUS_DEFAULT_SELECTOR = "[data-focus-default]";
+
+export function canFocus(element: HTMLElement): boolean {
+	return (
+		element.isConnected &&
+		element.getClientRects().length > 0 &&
+		element.closest("[inert]") === null &&
+		!element.matches(":disabled") &&
+		(element.matches(TABBABLE_SELECTOR) || element.hasAttribute("tabindex"))
+	);
+}
+
+export function focusTarget(element: HTMLElement): HTMLElement | null {
+	if (canFocus(element)) return element;
+	for (const candidate of element.querySelectorAll<HTMLElement>(TABBABLE_SELECTOR)) {
+		if (canFocus(candidate)) return candidate;
+	}
+	return null;
+}
+
+export function defaultFocusTarget(container: HTMLElement): HTMLElement | null {
+	const defaults = Array.from(container.querySelectorAll<HTMLElement>(FOCUS_DEFAULT_SELECTOR));
+	const innermostFirst = [
+		...defaults.filter((element) => element.querySelector(FOCUS_DEFAULT_SELECTOR) === null),
+		...defaults.filter((element) => element.querySelector(FOCUS_DEFAULT_SELECTOR) !== null),
+	];
+	for (const preferred of innermostFirst) {
+		const target = focusTarget(preferred);
+		if (target) return target;
+	}
+	return null;
+}
+
 export function focusFirstControl(container: Element): boolean {
 	const control = container.querySelector<HTMLElement>(TABBABLE_SELECTOR);
 	control?.focus({ preventScroll: true });

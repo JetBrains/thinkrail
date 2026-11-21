@@ -1,6 +1,6 @@
 import { type CollisionDetection, pointerWithin, useDroppable } from "@dnd-kit/core";
 import type { Translator } from "@thinkrail/locales/react";
-import { TABBABLE_SELECTOR } from "@thinkrail/ui/focus";
+import { defaultFocusTarget } from "@thinkrail/ui/focus";
 import {
 	type ImperativePanelGroupHandle,
 	ResizableHandle,
@@ -445,30 +445,6 @@ function focusRestsInSelectedPanel(tab: HTMLElement | null, active: Element | nu
 }
 
 const CONTENT_FOCUS_FRAMES = 120;
-const FOCUS_DEFAULT_SELECTOR = "[data-focus-default]";
-
-function focusable(element: HTMLElement): boolean {
-	return (
-		element.getClientRects().length > 0 &&
-		element.closest("[inert]") === null &&
-		!element.matches(":disabled") &&
-		(element.matches(TABBABLE_SELECTOR) || element.hasAttribute("tabindex"))
-	);
-}
-
-export function contentFocusTarget(panel: HTMLElement): HTMLElement | null {
-	const defaults = Array.from(panel.querySelectorAll<HTMLElement>(FOCUS_DEFAULT_SELECTOR));
-	for (const preferred of defaults.filter(
-		(element) => !element.querySelector(FOCUS_DEFAULT_SELECTOR),
-	)) {
-		if (focusable(preferred)) return preferred;
-		const inner = Array.from(preferred.querySelectorAll<HTMLElement>(TABBABLE_SELECTOR)).find(
-			focusable,
-		);
-		if (inner) return inner;
-	}
-	return null;
-}
 
 function focusTabContent(tab: HTMLElement, fallback: () => void): () => void {
 	const origin = globalThis.document.activeElement;
@@ -481,7 +457,7 @@ function focusTabContent(tab: HTMLElement, fallback: () => void): () => void {
 		if (active !== origin && !isFocusLost(active)) return;
 		const panelId = tab.getAttribute("aria-controls");
 		const panel = panelId ? globalThis.document.getElementById(panelId) : null;
-		const target = panel ? contentFocusTarget(panel) : null;
+		const target = panel ? defaultFocusTarget(panel) : null;
 		if (target) target.focus();
 		else if (frames-- > 0) frame = requestAnimationFrame(attempt);
 		else fallback();

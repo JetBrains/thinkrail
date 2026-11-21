@@ -49,7 +49,11 @@ knows a press edits nothing, as the history search's `Delete` at the end of its 
 the one tabbable-control selector (`TABBABLE_SELECTOR`, which includes a `<details>` element's own
 `<summary>`, natively tabbable), `focusFirstControl(container)` (the first
 control, focused with `preventScroll`), shared by the app's focus recovery and reveal moves and the
-resource renderers' reveal of a comment card, and `focusAndReveal(element)` — focus with `preventScroll`,
+resource renderers' reveal of a comment card, the one default-focus rule — `canFocus` (connected,
+rendered, not inert or disabled, tabbable or carrying a `tabindex`), `focusTarget` (the element, else its
+first such control) and `defaultFocusTarget(container)` (the innermost `FOCUS_DEFAULT_SELECTOR`
+marker's target, then an outer one's), which the shell's region landings and a keyboard open's tab
+content share — and `focusAndReveal(element)` — focus with `preventScroll`,
 then scroll only the nearest vertically scrolling ancestor just enough (`revealDelta`, the outline
 included) to show it, never `scrollIntoView`'s every ancestor — which the ask card, the chat and the
 shell's Esc landing use for a waiting question's controls (`scrollsVertically` is its scroller test) —

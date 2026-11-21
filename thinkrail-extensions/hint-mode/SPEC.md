@@ -82,9 +82,11 @@ Collected once per activation from `activeLayer()`, so an open dialog or menu sc
 - **Hover-only controls are revealed** (user, 2026-11-20). A control the pointer reveals on hover
   (`opacity-0 group-hover:…`, or `hidden group-hover:inline-flex`) carries the opt-in `data-hint-reveal`
   (`="inline-flex"` where it is `display: none` at rest). Starting sets `data-hint-mode` on `<html>` before
-  collecting, and every exit removes it; the app's stylesheet (`apps/web/src/index.css`) shows those
-  controls while it is set — opacity 1, no transition (so `checkVisibility` already sees them), a dashed
-  `primary` outline — so they pass the visibility filter and take labels. Marked today: the workbench tab
+  collecting, and every exit removes it — a chosen label's only after its press or focus, since a
+  `display: none` control cannot take focus (once focused, its row's `focus-within` keeps it shown). The
+  app's stylesheet (`apps/web/src/index.css`) shows those controls while it is set — opacity 1, no
+  transition (so `checkVisibility` already sees them), a dashed `primary` outline — so they pass the
+  visibility filter and take labels. Marked today: the workbench tab
   ×, a message's Copy, a todo's remove, the history overlay's delete / save-as-template / jump, the review
   panel's draft and resolved-comment actions, the Resources row actions, the model picker's pin and the
   plan's Check it. A tab ×'s label closes that tab and the workbench's close focus lands on the
@@ -101,7 +103,7 @@ Collected once per activation from `activeLayer()`, so an open dialog or menu sc
 
 ## Verification
 
-E2E also checks the reveal (a tab ×'s label closes its tab). Unit: label generation, in-mode key handling (Cyrillic layout, IME, repeat, letters over the trigger,
+E2E also checks the reveal (a tab ×'s label closes its tab; Shift on a Resources row's Stop label leaves Stop focused). Unit: label generation, in-mode key handling (Cyrillic layout, IME, repeat, letters over the trigger,
 exit on a non-letter trigger), letter typing, and
 the target filter on a small fake DOM (visibility, inert, clipping, widgets — a listbox or slider without a
 `tabindex` gets no label —, shadow roots, tree duplicates, the review proxy, re-measuring). E2E

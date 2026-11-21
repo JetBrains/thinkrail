@@ -432,7 +432,8 @@ Files row; an open Settings dialog scopes the labels and survives the Esc that l
 labels Settings from a section tab, a content row and a search result, and typing a label presses it
 (nothing in Settings binds `F`); while labels show a tab's hover-only × is revealed (opacity 1, a dashed
 outline) and labelled, its label closes that tab and focus lands on the neighbouring tab, and the × hides
-again; and
+again; Shift on a Resources row's revealed Stop label (a mocked running command) focuses Stop, which
+stays shown, without stopping it; and
 Settings → Extensions & skills lists Hint mode without tool chips, switching it off silences both keys and drops
 its cheatsheet rows until it is switched back on. A label is found by its position at the target's
 top-left; a target must be scrolled into view and its panel's entrance animation finished before the
@@ -483,7 +484,9 @@ shows), Space / Shift+Space page and Shift+G / g reach the ends with the cursor 
 a CSV scrolls by j (40 px), Space (a page) and l / h sideways, Shift+G reaches the bottom and Esc returns
 to its row; and a read-only code file moves the caret with the view on j / k (no "Cannot edit" message),
 pages on Space, reaches its last / first line on Shift+G / g, shows hint labels on `F` (hint mode's Esc
-keeps the editor) and returns to the tree on the next Esc.
+keeps the editor) and returns to the tree on the next Esc; an HTML file opened with Enter leaves focus on
+its tab, never in the frame, so F6 / Shift+F6, the Esc ladder (toolbar, then the row), Mod+1 and
+Mod+Shift+E all still move it.
 `settings-keyboard.spec.ts` pins the Settings frame's keys: opening lands on the current section's tab, and
 Tab goes search → the one tab stop of the section list → the section's first row, which is the content's
 one row stop before any row is focused, after a section change too; ↑/↓, j/k and Home/End open a section

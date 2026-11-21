@@ -130,7 +130,8 @@ the opened tab's button by default. A keyboard open from a tree — Enter on a r
 (`panels`' `KEYBOARD_OPEN` / `treeOpenFocus`, through `openFileInTab`'s options, `LayoutOpenOptions.focus`
 and the `open` intent into a content focus request, [[submodule-web-shell-layout]]): focus lands on
 the tab's `[data-focus-default]` target once it renders — a reading surface, the Markdown block cursor or
-the read-only editor ([[module-resource-renderers]]). A pointer click from a tree opens with
+the read-only editor ([[module-resource-renderers]]); a view with none keeps the tab button (an image,
+and HTML, whose frame would swallow every key). A pointer click from a tree opens with
 `focus: "none"`, so focus stays on the row; a double click keeps today's tab-button focus. The trees
 that share it: Files, Specs and Artifacts (their Outputs too); Changes opens diffs and keeps the
 tab-button focus.
