@@ -17,7 +17,9 @@ test("the agent ends a finished turn with suggest_next_steps and the chips send 
 	await expect(done).toHaveCount(1, { timeout: 120_000 });
 	const chips = page.getByTestId("composer-suggestion");
 	await expect(chips.first()).toBeVisible({ timeout: 20_000 });
-	const first = ((await chips.first().textContent()) ?? "").trim();
+	const first = (
+		(await chips.first().getByTestId("composer-suggestion-text").textContent()) ?? ""
+	).trim();
 	expect(first.length).toBeGreaterThan(0);
 
 	const userTurns = page.locator('[data-testid="chat-message"][data-role="user"]');

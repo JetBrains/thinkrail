@@ -783,7 +783,9 @@ the Mod+L remount race, and a Mod+L question that does not claim again after a t
 the Esc ladder from a Files row to the question; `i` into an HTML frame and Tab back, `c` into compare and Esc back, the collapsed
 chords, Skip in the ↓ ring and ←/→ on the footer, arrows, Home/End, a parked note and the footer keys
 scrolling a tall docked question's body just enough to show the focused control while the transcript and
-the dock stay put, a rebound `d` and a Discuss rebound onto a Mod chord
+the dock stay put, an 8-question card in a narrow dock keeping the open question's tab fully in its strip
+on every page change and after a remount while the transcript and page stay put, → past the last question
+(option, last tab, card, single question) focusing Submit or asking for a choice, a rebound `d` and a Discuss rebound onto a Mod chord
 (over the host wire), a Russian-layout `d` and the card's Settings → Keyboard section; `fixtures/ask.ts` seeds the pending questions for the three card specs.
 These four specs, `settings-keyboard.spec.ts` (Settings' tab stops and its Esc hold, which overrides
 `defaultPrevented` for Radix alone) and `settings-search.spec.ts` also run in a **`webkit` Playwright project**: the macOS desktop

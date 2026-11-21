@@ -2540,7 +2540,7 @@
 	"tools.ask.hintEnterToggle": "· Enter 切换",
 	"tools.ask.hintMove": "↑↓ 移动",
 	"tools.ask.hintPreviewScroll": "· PgUp/PgDn 预览",
-	"tools.ask.hintQuestions": "· ←→ 切换问题",
+	"tools.ask.hintQuestions": "· ←→ 切换问题，最后提交",
 	"tools.ask.hintSkip": "· {{key}} 跳过",
 	"tools.ask.hintSpaceNote": "· 空格 备注",
 	"tools.ask.hintSubmit": "· {{key}} 提交",

@@ -36,6 +36,14 @@ export function scrollsVertically(element: Element): boolean {
 	);
 }
 
+export function scrollsHorizontally(element: Element): boolean {
+	const { overflowX } = getComputedStyle(element);
+	return (
+		(overflowX === "auto" || overflowX === "scroll") &&
+		element.scrollWidth > element.clientWidth + 1
+	);
+}
+
 function outlineExtent(element: Element): number {
 	const { outlineStyle, outlineWidth, outlineOffset } = getComputedStyle(element);
 	if (outlineStyle === "none") return 0;
@@ -56,5 +64,18 @@ export function focusAndReveal(element: HTMLElement): void {
 	scroller.scrollTop += revealDelta(
 		{ top, bottom: top + scroller.clientHeight },
 		{ top: box.top - ring, bottom: box.bottom + ring },
+	);
+}
+
+export function revealHorizontally(element: HTMLElement): void {
+	let scroller = element.parentElement;
+	while (scroller && !scrollsHorizontally(scroller)) scroller = scroller.parentElement;
+	if (!scroller) return;
+	const left = scroller.getBoundingClientRect().left + scroller.clientLeft;
+	const box = element.getBoundingClientRect();
+	const ring = outlineExtent(element);
+	scroller.scrollLeft += revealDelta(
+		{ top: left, bottom: left + scroller.clientWidth },
+		{ top: box.left - ring, bottom: box.right + ring },
 	);
 }

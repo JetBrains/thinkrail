@@ -151,7 +151,7 @@ export function QuestionBody({
 	const rowKeys = (source: PreviewSource | null) =>
 		[
 			ROW_KEYS,
-			pageKeys ? "ArrowLeft ArrowRight" : "",
+			pageKeys ? "ArrowLeft ArrowRight" : "ArrowRight",
 			scrollsWithPage(source) ? "PageUp PageDown" : "",
 			keys.aria(
 				...[

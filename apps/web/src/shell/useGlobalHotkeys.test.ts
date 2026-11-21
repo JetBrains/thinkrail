@@ -12,6 +12,7 @@ const key = (
 		altKey: boolean;
 		shiftKey: boolean;
 		isComposing: boolean;
+		keyCode: number;
 	}> = {},
 ) => ({
 	code,
@@ -324,7 +325,7 @@ describe("routing a press", () => {
 	const at = (
 		desktop: ShortcutPlatform,
 		keybindings: ResolvedKeybindings,
-		place: { inTerminal?: boolean; textEntry?: boolean; localScopes?: readonly string[] } = {},
+		place: Partial<Parameters<typeof routeHotkey>[2]> = {},
 	): Parameters<typeof routeHotkey>[2] => ({
 		keybindings,
 		desktop,
@@ -333,6 +334,8 @@ describe("routing a press", () => {
 		localScopes: [],
 		inTerminal: false,
 		inEditorFind: false,
+		inCodeEditor: false,
+		hasSuggestion: () => false,
 		...place,
 	});
 	const azertyCtrlW = key("KeyZ", { key: "w" });
@@ -507,6 +510,87 @@ describe("routing a press", () => {
 		const defaults = resolveKeybindings({ platform: "Linux" });
 		expect(routeHotkey(key("KeyR"), all, at("linux", defaults, { inTerminal: true }))).toBeNull();
 		expect(routeHotkey(key("KeyR"), all, at("linux", defaults))).toEqual({ kind: "history" });
+	});
+
+	describe("next-step chips", () => {
+		const defaults = resolveKeybindings({ platform: "Linux" });
+		const altDigit = (n: number, extra: Parameters<typeof key>[1] = {}) =>
+			key(`Digit${n}`, { key: String(n), ctrlKey: false, altKey: true, ...extra });
+		const chips = (count: number) => (index: number) => index < count;
+
+		test("Alt+N sends and Shift+Alt+N edits chip N from anywhere, only while that chip is shown", () => {
+			const shown = { hasSuggestion: chips(2) };
+			expect(routeHotkey(altDigit(2), all, at("browser", defaults, shown))).toEqual({
+				kind: "suggestion",
+				index: 1,
+				edit: false,
+			});
+			expect(
+				routeHotkey(altDigit(1, { shiftKey: true }), all, at("browser", defaults, shown)),
+			).toEqual({ kind: "suggestion", index: 0, edit: true });
+			for (const place of [
+				{ localScopes: ["trees"] },
+				{ localScopes: ["tabs"] },
+				{ localScopes: ["ask-user-question.card"] },
+				{ localScopes: ["composer"], textEntry: true },
+			]) {
+				expect(
+					routeHotkey(altDigit(1), all, at("browser", defaults, { ...shown, ...place })),
+				).toEqual({ kind: "suggestion", index: 0, edit: false });
+			}
+			expect(routeHotkey(altDigit(3), all, at("browser", defaults, shown))).toBeNull();
+			expect(routeHotkey(altDigit(1), all, at("browser", defaults))).toBeNull();
+		});
+
+		test("the terminal, the code editor, a modal and IME composition keep the key", () => {
+			const shown = { hasSuggestion: chips(9) };
+			for (const place of [{ inTerminal: true }, { inCodeEditor: true }, { modalOpen: true }]) {
+				expect(
+					routeHotkey(altDigit(1), all, at("browser", defaults, { ...shown, ...place })),
+				).toBeNull();
+			}
+			expect(
+				routeHotkey(altDigit(1, { isComposing: true }), all, at("browser", defaults, shown)),
+			).toBeNull();
+			expect(
+				routeHotkey(altDigit(1, { keyCode: 229 }), all, at("browser", defaults, shown)),
+			).toBeNull();
+			expect(
+				routeHotkey(
+					altDigit(1, { shiftKey: true, keyCode: 229 }),
+					all,
+					at("browser", defaults, shown),
+				),
+			).toBeNull();
+		});
+
+		test("a rebound chip key acts on its new chord, and a focused element's local key wins it", () => {
+			const shown = { hasSuggestion: chips(9) };
+			const moved = resolveKeybindings({
+				platform: "Linux",
+				overrides: { "suggestions.send1": ["Mod+Alt+Digit1"] },
+			});
+			expect(routeHotkey(altDigit(1), all, at("browser", moved, shown))).toBeNull();
+			expect(routeHotkey(altDigit(1, { ctrlKey: true }), all, at("browser", moved, shown))).toEqual(
+				{ kind: "suggestion", index: 0, edit: false },
+			);
+			const treeTakesIt = resolveKeybindings({
+				platform: "Linux",
+				overrides: { "trees.search": ["Alt+Digit1"] },
+			});
+			expect(
+				routeHotkey(
+					altDigit(1),
+					all,
+					at("browser", treeTakesIt, { ...shown, localScopes: ["trees"] }),
+				),
+			).toBeNull();
+			expect(routeHotkey(altDigit(1), all, at("browser", treeTakesIt, shown))).toEqual({
+				kind: "suggestion",
+				index: 0,
+				edit: false,
+			});
+		});
 	});
 
 	test("chat history rebound off Ctrl+R waits out IME composition; the literal Ctrl+R still wins it", () => {

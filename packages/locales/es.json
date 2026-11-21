@@ -2487,7 +2487,7 @@
 	"tools.ask.hintEnterToggle": "· Enter alternar",
 	"tools.ask.hintMove": "↑↓ mover",
 	"tools.ask.hintPreviewScroll": "· PgUp/PgDn vista previa",
-	"tools.ask.hintQuestions": "· ←→ preguntas",
+	"tools.ask.hintQuestions": "· ←→ preguntas, luego Enviar",
 	"tools.ask.hintSkip": "· {{key}} omitir",
 	"tools.ask.hintSpaceNote": "· Space nota",
 	"tools.ask.hintSubmit": "· {{key}} enviar",

@@ -716,15 +716,22 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   input, else at the remembered caret with a separating space) and focuses it, sending nothing. A chip
   used by click or keyboard vanishes with the row; the shell's focus recovery then lands on the input,
   the chat region's `data-focus-default`, so the row needs no focus-list markup of its own. The keys
-  are the rebindable local commands `suggestions.send1…9` (`Alt+1…9`) and `suggestions.edit1…9`
-  (`Shift+Alt+1…9`, [[submodule-web-keybindings]]) of the shared scope both the input and the transcript
-  include. One native `keydown` listener on the chat root matches them through
-  `useLocalKeys` with the focused element's scope — the transcript feed's, else the input's for the input
-  and the chip row (which declares `data-key-scope="composer"`, so the binder yields there too) — and
-  nowhere else in the chat. It consumes the press (`preventDefault`, a repeat does nothing) only when
-  that chip is shown, so with no chip an Option chord still types its character. Each chip's tooltip
-  caps and `aria-keyshortcuts` come from the same keys. The copy is host keys (`chat.suggestions.*`):
-  the row is generic, and the extension supplies only the strings.
+  are the rebindable **global** chords `suggestions.send1…9` (`Alt+1…9`) and `suggestions.edit1…9`
+  (`Shift+Alt+1…9`, [[submodule-web-keybindings]]) and act **from anywhere except the terminal, the code
+  editor (Monaco), an open dialog and hint mode** (user, 2026-11-20 — this reverses the earlier "only in
+  the chat's input or conversation" rule, under which a chip could not be sent from the Files tree, a tab
+  strip or the question card). Every mounted `ChatView` registers its chips — session, root element,
+  strings, send and edit — in `suggestionTargets.ts` (`registerSuggestionTarget`, dropped on unmount);
+  `shell`'s binder resolves the **target chat** at the press (`suggestionTargetFor`): the chat containing
+  focus — even one without chips, so a press in one chat never sends another's — else the chat the shell's
+  Mod+L / history target names (`selectHistoryTarget`: the active center tab when it is a chat, else the
+  workspace's last chat tab), and consumes the press (`preventDefault`, a repeat does nothing) only when
+  that chat shows chip N, so with no chip an Option chord still types its character
+  ([[submodule-web-shell]], *Global chords*). A send leaves focus where it was; an edit focuses the input.
+  Each chip leads with a small muted number (`Keycaps`, `aria-hidden`, so its name stays the text), and its
+  tooltip caps and `aria-keyshortcuts` come from the resolved global chords, which `shell` passes down
+  (`suggestionShortcuts`, like `landingChord`). The copy is host keys (`chat.suggestions.*`): the row is
+  generic, and the extension supplies only the strings.
 - **Structured tool-file navigation** — `ChatView` accepts an optional `onOpenFile(path)` from the shell and
   passes it through every `ToolRenderProps` path (routine, primary, card, or bare). The shared tool-file
   primitive offers that action only for a non-empty relative path or an absolute path contained by
