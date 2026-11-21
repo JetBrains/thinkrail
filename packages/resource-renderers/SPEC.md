@@ -1045,9 +1045,13 @@ questionnaire) keep their Tab order and never compete for a region's landing.
   Shift+Mod+M stay on the text in view. The check compares line and column against
   `getVisibleRanges()`, so a caret on the scrolled-away rows of a long wrapped line is off too; a range
   ending at a wrap column ends before it (that column starts the next, hidden row). Space/Shift+Space
-  page (`cursorPageDown`/`Up`), g/G and Home/End go to the file's ends (`cursorTop`/`Bottom`), h/l move
-  the caret like ←/→; PgUp/PgDn and ←/→ stay Monaco's. The press is consumed before Monaco types it, so
-  no "Cannot edit" message. The container carries `data-key-scope="reader"` and, while the read-only text
+  scroll the view a `readingPage` from where it is (clamped to the file's ends), not from the caret:
+  Monaco's `cursorPageDown`/`Up` move the caret a page and only reveal it, so a wheel-scrolled view jumped
+  back to it. As in the Markdown preview, the caret stays while it shows, else moves to the start of the
+  first completely visible row (`readingAnchor` going down); the scroll is set again after that, since the
+  caret's reveal keeps sticky-scroll context lines above it. g/G and Home/End go to the file's ends
+  (`cursorTop`/`Bottom`), h/l move the caret like ←/→; PgUp/PgDn and ←/→ stay Monaco's. The press is
+  consumed before Monaco types it, so no "Cannot edit" message. The container carries `data-key-scope="reader"` and, while the read-only text
   has focus, `data-text-entry="false"`: the app's text-entry rule then lets plain keys through (hint
   mode's `F`), and its Esc ladder takes Esc back to the Files tree ([[submodule-web-shell]]). An editable
   editor keeps typing every letter.

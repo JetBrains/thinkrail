@@ -41,6 +41,10 @@ async function openReadingFolder(page: Page): Promise<string> {
 		join(root, "app.ts"),
 		`${Array.from({ length: 200 }, (_, index) => `export const value${index + 1} = ${index + 1};`).join("\n")}\n`,
 	);
+	writeFileSync(
+		join(root, "pages.ts"),
+		`${Array.from({ length: 600 }, (_, index) => `export const line${index + 1} = ${index + 1};`).join("\n")}\n`,
+	);
 	const header = Array.from({ length: 16 }, (_, col) => `column_${col + 1}_with_a_long_heading`);
 	const rows = Array.from({ length: 120 }, (_, row) =>
 		header.map((_name, col) => `row ${row + 1} cell ${col + 1}`).join(","),
@@ -497,4 +501,78 @@ test("in read-only code scrolled down a long wrapped line, j and ↑ step from i
 	const back = await wrappedView(editor);
 	expect(back.caretTop).not.toBeNull();
 	expect(back.caretTop ?? 0).toBeGreaterThan(back.height - 3 * lineHeight);
+});
+
+async function settledScroll(page: Page, editor: Locator): Promise<number> {
+	let settled = (await wrappedView(editor)).scrolled;
+	for (let round = 0; round < 20; round += 1) {
+		await page.waitForTimeout(150);
+		const now = (await wrappedView(editor)).scrolled;
+		if (now === settled) break;
+		settled = now;
+	}
+	return settled;
+}
+
+test("Space and Shift+Space page read-only code from the lines in view, also after a wheel, and bring the caret onto them", async ({
+	page,
+}) => {
+	await openReadingFolder(page);
+	await openByKeyboard(page, "pages.ts");
+	const editor = pane(page).locator(".monaco-editor");
+	await expect.poll(async () => (await editorState(editor)).focused).toBe(true);
+	await expect.poll(async () => (await editorState(editor)).line).toBe(1);
+	const caretLine = async () => (await editorState(editor)).line;
+	const offBy = (target: number) => async () =>
+		Math.abs((await wrappedView(editor)).scrolled - target);
+	const lineHeight = await editor.evaluate(
+		(root) => root.querySelector<HTMLElement>(".view-line")?.getBoundingClientRect().height ?? 0,
+	);
+	expect(lineHeight).toBeGreaterThan(0);
+	const { height } = await wrappedView(editor);
+	const pageBy = height - LINE;
+	const start = await shownLines(editor);
+	expect(start.first).toBe(1);
+
+	await page.keyboard.press("Space");
+	await expect.poll(offBy(pageBy)).toBeLessThanOrEqual(1);
+	const paged = await shownLines(editor);
+	expect(paged.first).toBeGreaterThanOrEqual(start.last - 2);
+	expect(paged.first).toBeLessThanOrEqual(start.last);
+	await expect.poll(caretLine).toBe(paged.first);
+
+	await editor.locator(".margin").hover();
+	const away = await wheelAndSettle(page, editor, 12);
+	const awayTop = (await wrappedView(editor)).scrolled;
+	expect(away.first).toBeGreaterThan(paged.last);
+	expect(awayTop).toBeGreaterThan(pageBy);
+	await page.keyboard.press("Space");
+	await expect.poll(offBy(awayTop + pageBy)).toBeLessThanOrEqual(1);
+	const onward = await shownLines(editor);
+	expect(onward.first).toBeGreaterThanOrEqual(away.last - 2);
+	expect(onward.first).toBeLessThanOrEqual(away.last);
+	await expect.poll(caretLine).toBe(onward.first);
+
+	await page.keyboard.press("Shift+Space");
+	await expect.poll(offBy(awayTop)).toBeLessThanOrEqual(1);
+	expect(await shownLines(editor)).toEqual(away);
+	expect(await caretLine()).toBe(onward.first);
+	await page.keyboard.press("Shift+Space");
+	await expect.poll(offBy(awayTop - pageBy)).toBeLessThanOrEqual(1);
+	const back = await shownLines(editor);
+	await expect.poll(caretLine).toBe(back.first);
+	await page.keyboard.press("j");
+	await expect.poll(caretLine).toBe(back.first + 1);
+	await expect.poll(async () => (await shownLines(editor)).first).toBe(back.first + 1);
+
+	await page.keyboard.press("Shift+G");
+	await expect.poll(caretLine).toBe(601);
+	const end = await settledScroll(page, editor);
+	await page.keyboard.press("k");
+	await page.keyboard.press("k");
+	await expect.poll(caretLine).toBe(599);
+	await expect.poll(offBy(end - 2 * lineHeight)).toBeLessThanOrEqual(1);
+	await page.keyboard.press("Space");
+	await expect.poll(offBy(end)).toBeLessThanOrEqual(1);
+	expect(await caretLine()).toBe(599);
 });

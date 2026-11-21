@@ -490,8 +490,11 @@ on j / k (no "Cannot edit" message), pages on Space, reaches its last / first li
 labels on `F` (hint mode's Esc keeps the editor) and returns to the tree on the next Esc, and once a wheel
 scrolls away from the caret, j / ↑ step from the first / last visible line instead, so Shift+Mod+M comments on
 the text in view — also down one long wrapped line, where the caret's line is on screen but its row is not
-(j leaves the caret on the top row, ↑ near the bottom); an HTML file opened with Enter leaves focus on its tab, never in the frame, so F6 /
-Shift+F6, the Esc ladder (toolbar, then the row), Mod+1 and Mod+Shift+E all still move it.
+(j leaves the caret on the top row, ↑ near the bottom); in a 600-line code file Space / Shift+Space scroll
+the view by the viewport less 40 px from where it is, also after a wheel scrolled away from the caret, keep
+the caret while it shows and else put it on the first fully visible line (j steps from there), and Space
+near the end stops at the end with the caret kept; an HTML file opened with Enter leaves focus on its tab,
+never in the frame, so F6 / Shift+F6, the Esc ladder (toolbar, then the row), Mod+1 and Mod+Shift+E all still move it.
 `settings-keyboard.spec.ts` pins the Settings frame's keys: opening lands on the current section's tab, and
 Tab goes search → the one tab stop of the section list → the section's first row, which is the content's
 one row stop before any row is focused, after a section change too; ↑/↓, j/k and Home/End open a section
