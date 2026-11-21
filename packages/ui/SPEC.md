@@ -32,7 +32,9 @@ the arrows and their twins, Space/Shift+Space, PgUp/PgDn, Home/End and g/G; modi
 presses pass), `READING_LINE` (40 px) and `readingPage` (the viewport less a line), the pure
 scroll-before-step geometry — `scrollBeforeStep` (scroll a line, clamped to the item's far edge, until
 that edge shows; then 0 and the cursor steps) and `stepRevealDelta` (the least scroll showing a stepped-to
-item: all of it when it fits, else its near edge plus a line) over `ReadingSpan`s, `spansOverlap` — and
+item: all of it when it fits, else its near edge plus a line) over `ReadingSpan`s, `spansOverlap`,
+`ownReadingSpan(stop, next)` (a stop's own extent: its box, ended where the next stop begins when that
+stop is nested inside it, so a parent never counts its children's height) — and
 `readingScrollTarget` / `scrollReading` for a plain scroller. `./local-keys` is the seam an element matches its
 rebindable local keys through, whoever renders it (the app, resource renderers, an extension card):
 `useLocalKeys(scope, defaults)` returns `{ match(event, { ignoreShift, textEntry }), caps(id), label(id),

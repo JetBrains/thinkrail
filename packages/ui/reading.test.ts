@@ -2,8 +2,10 @@ import { describe, expect, it } from "bun:test";
 import { ARROW_TWIN_COMMANDS } from "./keyboard";
 import { localKeys } from "./local-keys";
 import {
+	ownReadingSpan,
 	READING_COMMANDS,
 	READING_LINE,
+	type ReadingStop,
 	readingCommand,
 	readingPage,
 	readingScrollTarget,
@@ -106,6 +108,39 @@ describe("scroll before step", () => {
 		expect(scrollBeforeStep(view, { top: 120, bottom: 501 }, 1)).toBe(0);
 		expect(scrollBeforeStep(view, { top: 100, bottom: 900 }, -1)).toBe(0);
 		expect(scrollBeforeStep(view, { top: 120, bottom: 1200 }, -1)).toBe(0);
+	});
+});
+
+interface Stop extends ReadingStop<Stop> {}
+
+function stop(top: number, bottom: number, inside: readonly Stop[] = []): Stop {
+	const self: Stop = {
+		getBoundingClientRect: () => ({ top, bottom }),
+		contains: (other) => other === self || inside.some((child) => child.contains(other)),
+	};
+	return self;
+}
+
+describe("a stop's own reading span", () => {
+	it("is the whole box when the next stop is outside it or there is none", () => {
+		const item = stop(100, 160);
+		expect(ownReadingSpan(item, stop(160, 200))).toEqual({ top: 100, bottom: 160 });
+		expect(ownReadingSpan(item, null)).toEqual({ top: 100, bottom: 160 });
+		expect(ownReadingSpan(item, undefined)).toEqual({ top: 100, bottom: 160 });
+		expect(ownReadingSpan(item, item)).toEqual({ top: 100, bottom: 160 });
+	});
+
+	it("ends where the first stop nested inside it begins, however tall its descendants are", () => {
+		const grandchild = stop(150, 170);
+		const child = stop(124, 2000, [grandchild]);
+		const parent = stop(100, 2100, [child]);
+		expect(ownReadingSpan(parent, child)).toEqual({ top: 100, bottom: 124 });
+		expect(ownReadingSpan(child, grandchild)).toEqual({ top: 124, bottom: 150 });
+	});
+
+	it("never ends above its own top", () => {
+		const child = stop(90, 140);
+		expect(ownReadingSpan(stop(100, 300, [child]), child)).toEqual({ top: 100, bottom: 100 });
 	});
 });
 

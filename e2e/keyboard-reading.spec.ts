@@ -1,12 +1,14 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import type { KeybindingOverrides } from "@thinkrail/contracts";
 import {
 	createWorkspaceViaDialog,
 	openFixtureProject,
 	pressPlatformShortcut,
 	revealWorkbenchTool,
 } from "./fixtures/app";
+import { resetKeybindings, setKeybindings } from "./fixtures/keybindings";
 
 test.use({ viewport: { width: 1280, height: 760 } });
 
@@ -32,11 +34,28 @@ function longMarkdown(): string {
 	].join("\n\n");
 }
 
-async function openReadingFolder(page: Page): Promise<string> {
+function nestedMarkdown(): string {
+	const children = Array.from({ length: 80 }, (_, index) => `  - Child ${index + 1}`);
+	return [
+		"# Nested list",
+		"",
+		"Before the list.",
+		"",
+		"- Parent item",
+		...children,
+		"- Sibling item",
+		"",
+		"After the list.",
+	].join("\n");
+}
+
+async function openReadingFolder(page: Page, keybindings?: KeybindingOverrides): Promise<string> {
 	await openFixtureProject(page);
+	if (keybindings) await setKeybindings(page, keybindings);
 	const workspace = await createWorkspaceViaDialog(page);
 	const root = workspace.worktreePath;
 	writeFileSync(join(root, "LONG.md"), `${longMarkdown()}\n`);
+	writeFileSync(join(root, "NESTED.md"), `${nestedMarkdown()}\n`);
 	writeFileSync(
 		join(root, "app.ts"),
 		`${Array.from({ length: 200 }, (_, index) => `export const value${index + 1} = ${index + 1};`).join("\n")}\n`,
@@ -246,6 +265,123 @@ test("j/k, Space and g/G read a Markdown file, and ↓ scrolls a tall block befo
 	await expect.poll(() => scrollTop(preview)).toBe(0);
 	await expect(block).toHaveText("Reading keys");
 	await expect(cursor).toBeFocused();
+});
+
+function topInView(element: Locator): Promise<number> {
+	return element.evaluate((node) => {
+		const scroller = node.closest<HTMLElement>('[data-testid="markdown-preview"]');
+		if (!scroller) throw new Error("no scroller");
+		return node.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+	});
+}
+
+test("a parent bullet reads only its own line: j and k walk its nested list once, and the cursor lands on the children in view", async ({
+	page,
+}) => {
+	await openReadingFolder(page);
+	await fileRow(page, "NESTED.md").click();
+	const preview = pane(page).getByTestId("markdown-preview");
+	const cursor = preview.getByTestId("review-cursor");
+	const block = preview.locator("[data-review-block-cursor]");
+	const parent = preview.locator("li:has(li)");
+	await expect(preview.getByText("Child 80", { exact: true })).toBeAttached();
+	await preview.hover();
+	await page.mouse.wheel(0, 600);
+	await expect.poll(() => scrollTop(preview)).toBeGreaterThan(400);
+	await expect.poll(() => topInView(parent)).toBeLessThan(-200);
+	await page.getByTestId("editor-tab").filter({ hasText: "NESTED.md" }).getByRole("tab").click();
+	for (let press = 0; press < 20; press += 1) {
+		if (await cursor.evaluate((node) => node === document.activeElement)) break;
+		await page.keyboard.press("Tab");
+	}
+	await expect(cursor).toBeFocused();
+	await expect(block).toHaveText(/^Child \d+$/);
+	await expect(block).toBeInViewport();
+
+	await page.keyboard.press("g");
+	await expect.poll(() => scrollTop(preview)).toBe(0);
+	await expect(block).toHaveText("Nested list");
+	await page.keyboard.press("j");
+	await expect(block).toHaveText("Before the list.");
+	await page.keyboard.press("j");
+	await expect(block).toHaveText(/^Parent item/);
+	const atParent = await scrollTop(preview);
+	await page.keyboard.press("j");
+	await expect(block).toHaveText("Child 1");
+	expect(await scrollTop(preview)).toBe(atParent);
+	let previous = atParent;
+	for (let child = 2; child <= 80; child += 1) {
+		await page.keyboard.press("j");
+		await expect(block).toHaveText(`Child ${child}`);
+		const now = await scrollTop(preview);
+		expect(now).toBeGreaterThanOrEqual(previous);
+		previous = now;
+	}
+	await expect(block).toBeInViewport();
+	await page.keyboard.press("j");
+	await expect(block).toHaveText("Sibling item");
+
+	await page.keyboard.press("g");
+	await expect.poll(() => scrollTop(preview)).toBe(0);
+	await page.keyboard.press("j");
+	await page.keyboard.press("j");
+	await expect(block).toHaveText(/^Parent item/);
+	await page.keyboard.press("Space");
+	await expect.poll(() => scrollTop(preview)).toBeGreaterThan(0);
+	await expect(block).toHaveText(/^Child \d+$/);
+	await expect(block).toBeInViewport();
+	const paged = Number((await block.textContent())?.replace("Child ", ""));
+	if ((await topInView(block)) < -1) {
+		await page.keyboard.press("k");
+		await expect.poll(() => topInView(block)).toBeGreaterThanOrEqual(-1);
+		await expect(block).toHaveText(`Child ${paged}`);
+	}
+	for (let child = paged - 1; child >= 1; child -= 1) {
+		await page.keyboard.press("k");
+		await expect(block).toHaveText(`Child ${child}`);
+	}
+	await page.keyboard.press("k");
+	await expect(block).toHaveText(/^Parent item/);
+	await expect.poll(() => topInView(parent)).toBeGreaterThanOrEqual(-1);
+	await expect(cursor).toBeFocused();
+});
+
+test.describe("rebound reading keys", () => {
+	test.afterEach(async ({ page }) => resetKeybindings(page));
+
+	test("the end key rebound onto Shift+J goes to a Markdown file's end from the block cursor instead of extending its range, and Shift+K still extends", async ({
+		page,
+	}) => {
+		await openReadingFolder(page, { "reading.bottom": ["Shift+KeyJ"] });
+		await openByKeyboard(page, "LONG.md");
+		const preview = pane(page).getByTestId("markdown-preview");
+		const cursor = preview.getByTestId("review-cursor");
+		const block = preview.locator("[data-review-block-cursor]");
+		const range = preview.locator("[data-review-block-range]");
+		await expect(cursor).toBeFocused();
+		await expect(block).toHaveText("Reading keys");
+
+		await page.keyboard.press("Shift+J");
+		await expect
+			.poll(() =>
+				preview.evaluate(
+					(element) => element.scrollHeight - element.clientHeight - element.scrollTop,
+				),
+			)
+			.toBeLessThanOrEqual(1);
+		await expect(block).toHaveText("The last block.");
+		await expect(range).toHaveCount(0);
+
+		await page.keyboard.press("Shift+K");
+		await expect(block).toHaveText("Closing paragraph 20.");
+		await expect(range).toHaveCount(2);
+		await page.keyboard.press("Escape");
+		await expect(range).toHaveCount(0);
+		await page.keyboard.press("Shift+G");
+		await page.keyboard.press("k");
+		await expect(block).toHaveText("Closing paragraph 19.");
+		await expect(cursor).toBeFocused();
+	});
 });
 
 test("a table scrolls by line, page and sideways, then Esc goes back to its row", async ({

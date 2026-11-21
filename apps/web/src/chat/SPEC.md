@@ -484,8 +484,8 @@ content and their own controls, which a treeitem's name would flatten and its ro
   so a move can target a row Virtuoso unmounted. The sidebar trees' rule (`lib`'s `resolveTreeMove`)
   resolves → and l (expand, else first child), ← and h (collapse, else parent); Enter toggles.
 - **Reading keys** (user, 2026-11-20; `@thinkrail/ui/reading`, [[module-ui]]). ↓/j and ↑/k **scroll
-  before they step**: while the current item's own extent (up to its first nested item, so an expanded
-  group's header steps into its steps) reaches past the viewport edge in that direction, the feed
+  before they step**: while the current item's own extent (`ownReadingSpan`: up to its first nested item,
+  so an expanded group's header steps into its steps) reaches past the viewport edge in that direction, the feed
   scrolls `READING_LINE` (40 px), clamped so the edge lands exactly in view; only then does the cursor
   move to the neighbouring item, revealed minimally (a short item whole, a tall one its near edge plus a
   line), so a tall message is read to its end instead of skipped. A cursor item wholly off screen

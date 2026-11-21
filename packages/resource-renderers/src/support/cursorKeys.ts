@@ -5,6 +5,7 @@ import {
 	twinArrow,
 } from "@thinkrail/ui/keyboard";
 import { type LocalKeyEvent, type LocalKeys, useLocalKeys } from "@thinkrail/ui/local-keys";
+import { type ReadingCommand, readingCommand } from "@thinkrail/ui/reading";
 
 type CursorDirection = "up" | "down" | "left" | "right";
 
@@ -85,6 +86,24 @@ export function cursorCommand(event: CursorKeyEvent, keys: CursorKeys): CursorCo
 	}
 	const direction = DIRECTIONS[twin?.arrow ?? event.key];
 	return direction ? { kind: "move", direction, extend: twin?.extend ?? event.shiftKey } : null;
+}
+
+export type ReadingCursorKey =
+	| { readonly kind: "cursor"; readonly command: CursorCommand }
+	| { readonly kind: "reading"; readonly command: ReadingCommand };
+
+export function readingCursorKey(
+	event: CursorKeyEvent,
+	keys: CursorKeys,
+	readerKeys: CursorKeys,
+): ReadingCursorKey | null {
+	const command = cursorCommand(event, keys);
+	if (command?.kind === "comment" || command?.kind === "escape") return { kind: "cursor", command };
+	const reader = readerKeys.match(event);
+	const reading =
+		reader !== null || !command?.extend ? readingCommand(event, readerKeys, reader) : null;
+	if (reading) return { kind: "reading", command: reading };
+	return command ? { kind: "cursor", command } : null;
 }
 
 export function composerSubmit(event: CursorKeyEvent, keys: CursorKeys): "save" | "send" | null {

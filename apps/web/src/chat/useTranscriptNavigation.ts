@@ -2,8 +2,8 @@ import { focusAndReveal, TABBABLE_SELECTOR } from "@thinkrail/ui/focus";
 import { isImeComposing } from "@thinkrail/ui/keyboard";
 import { type LocalKeys, useLocalKeys } from "@thinkrail/ui/local-keys";
 import {
+	ownReadingSpan,
 	type ReadingDirection,
-	type ReadingSpan,
 	scrollBeforeStep,
 	spansOverlap,
 	stepRevealDelta,
@@ -290,17 +290,8 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 		return owner && nested(owner) ? ACTIVITY_BREADCRUMB_HEIGHT : 0;
 	};
 
-	const ownSpan = (target: HTMLElement, next: HTMLElement | null): ReadingSpan => {
-		const rect = target.getBoundingClientRect();
-		const bottom =
-			next && next !== target && target.contains(next)
-				? next.getBoundingClientRect().top
-				: rect.bottom;
-		return { top: rect.top, bottom: Math.max(rect.top, bottom) };
-	};
-
 	const spanAt = (list: TranscriptNavItem[], index: number, target: HTMLElement) =>
-		ownSpan(target, element(list[index + 1]?.id ?? ""));
+		ownReadingSpan(target, element(list[index + 1]?.id ?? ""));
 
 	const visibleEnd = (list: TranscriptNavItem[], direction: ReadingDirection) => {
 		if (!scroller) return null;
@@ -314,7 +305,7 @@ export function createTranscriptNavigation(): TranscriptNavigationController {
 		const shown = list.flatMap((item, index) => {
 			const target = mounted.get(item.id);
 			if (!target) return [];
-			const span = ownSpan(target, mounted.get(list[index + 1]?.id ?? "") ?? null);
+			const span = ownReadingSpan(target, mounted.get(list[index + 1]?.id ?? ""));
 			return spansOverlap(span, viewportBounds(view, insetOf(target))) ? [{ index, target }] : [];
 		});
 		return (direction > 0 ? shown[0] : shown.at(-1)) ?? null;

@@ -492,7 +492,12 @@ focus in it (the Markdown block cursor), Esc returns to the row (reopening its f
 meanwhile), a click on a row keeps focus in the tree, and a search-palette file pick lands focus in the file
 (a CSV's table); in a Markdown preview j walks the blocks, ↓ scrolls a tall fenced block 40 px at a time
 before the cursor moves on (only once its end shows), Space / Shift+Space page and Shift+G / g reach the ends
-with the cursor on the last / first block; a CSV scrolls by j (40 px), Space (a page) and l / h sideways,
+with the cursor on the last / first block; a parent bullet with 80 nested bullets reads as its own line —
+j steps onto child 1 without scrolling and walks the children with the view only ever moving down, Space
+from the parent puts the cursor on a child in view, k from child 1 brings the parent's line back into view,
+and a focus after a wheel lands on the first child in view, never on the parent; with `reading.bottom`
+rebound to Shift+J, Shift+J on the block cursor goes to the file's end with no range while Shift+K still
+extends one and Shift+G no longer acts; a CSV scrolls by j (40 px), Space (a page) and l / h sideways,
 Shift+G reaches the bottom and Esc returns to its row, and in a 300-row CSV whose last rows are multiline
 Shift+G still reaches the true bottom (settled) and g the top; and a read-only code file moves the caret with the view
 on j / k (no "Cannot edit" message), pages on Space, reaches its last / first line on Shift+G / g, shows hint
